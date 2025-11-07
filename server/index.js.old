@@ -1,0 +1,357 @@
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import { createClerkClient } from '@clerk/backend';
+import * as k8s from '@kubernetes/client-node';
+import { createRemoteJWKSet, jwtVerify } from 'jose';
+
+dotenv.config();
+
+const app = express();
+const PORT = process.env.PORT || 3001;
+
+const clerkClient = createClerkClient({
+  secretKey: process.env.CLERK_SECRET_KEY,
+  publishableKey: process.env.VITE_CLERK_PUBLISHABLE_KEY
+});
+
+const publishableKey = process.env.VITE_CLERK_PUBLISHABLE_KEY;
+const decoded = Buffer.from(publishableKey.replace('pk_test_', '').replace('pk_live_', ''), 'base64').toString('utf-8');
+const frontendApi = decoded.replace('$', '');
+const jwksUrl = `https://${frontendApi}/.well-known/jwks.json`;
+const JWKS = createRemoteJWKSet(new URL(jwksUrl));
+
+app.use(cors({
+  origin: process.env.FRONTEND_URL || 'http://localhost:5173',
+  credentials: true
+}));
+
+app.use(express.json());
+
+async function authenticateUser(req, res, next) {
+  try {
+    const authHeader = req.headers.authorization;
+    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+      return res.status(401).json({ error: 'Unauthorized - No token provided' });
+    }
+
+    const token = authHeader.substring(7);
+    const { payload } = await jwtVerify(token, JWKS);
+
+    req.auth = { userId: payload.sub };
+    next();
+  } catch (error) {
+    console.error('Authentication error:', error);
+    return res.status(401).json({ error: 'Unauthorized - Invalid token' });
+  }
+}
+
+let kc;
+
+try {
+  kc = new k8s.KubeConfig();
+  if (process.env.KUBECONFIG_PATH) {
+    console.log('[K8s] Loading kubeconfig from:', process.env.KUBECONFIG_PATH);
+    kc.loadFromFile(process.env.KUBECONFIG_PATH);
+  } else {
+    console.log('[K8s] Loading default kubeconfig');
+    kc.loadFromDefault();
+  }
+  console.log('[K8s] Successfully loaded kubeconfig');
+  console.log('[K8s] Current context:', kc.getCurrentContext());
+} catch (error) {
+  console.error('[K8s] Error loading kubeconfig:', error.message);
+  console.warn('[K8s] Make sure KUBECONFIG_PATH is set or ~/.kube/config exists');
+  kc = null;
+}
+
+app.get('/api/health', (req, res) => {
+  res.json({ status: 'ok', message: 'Server is running' });
+});
+
+app.get('/api/pods', authenticateUser, async (req, res) => {
+  try {
+    if (!kc) {
+      return res.status(503).json({ 
+        error: 'Kubernetes API not available',
+        message: 'Kubeconfig could not be loaded. Check server logs for details.'
+      });
+    }
+    
+    const namespace = String(req.query.namespace || 'midnight-staging').trim();
+    
+    if (!namespace || namespace.length === 0) {
+      return res.status(400).json({ error: 'Namespace parameter is required' });
+    }
+    
+    console.log('[API] Fetching pods from namespace:', namespace);
+    
+    const api = kc.makeApiClient(k8s.CoreV1Api);
+    const response = await api.listNamespacedPod({ namespace });
+    
+    const podList = response.body || response;
+    const pods = podList.items.map(pod => ({
+      name: pod.metadata.name,
+      namespace: pod.metadata.namespace,
+      status: pod.status.phase,
+      podIP: pod.status.podIP,
+      hostIP: pod.status.hostIP,
+      startTime: pod.status.startTime,
+      conditions: pod.status.conditions,
+      containerStatuses: pod.status.containerStatuses?.map(container => ({
+        name: container.name,
+        ready: container.ready,
+        restartCount: container.restartCount,
+        image: container.image,
+        state: container.state
+      })),
+      labels: pod.metadata.labels,
+      annotations: pod.metadata.annotations
+    }));
+
+    res.json({
+      namespace,
+      podCount: pods.length,
+      pods
+    });
+
+  } catch (error) {
+    console.error('Error fetching pods:', error);
+    
+    if (error.response) {
+      return res.status(error.response.statusCode || 500).json({
+        error: 'Failed to fetch pods from Kubernetes',
+        message: error.response.body?.message || error.message,
+        details: error.response.body
+      });
+    }
+    
+    res.status(500).json({
+      error: 'Failed to fetch pods',
+      message: error.message
+    });
+  }
+});
+
+app.get('/api/pods/:podName', authenticateUser, async (req, res) => {
+  try {
+    if (!kc) {
+      return res.status(503).json({ 
+        error: 'Kubernetes API not available',
+        message: 'Kubeconfig could not be loaded. Check server logs for details.'
+      });
+    }
+
+    const namespace = String(req.query.namespace || 'midnight-staging').trim();
+    const podName = String(req.params.podName).trim();
+    
+    console.log('[API] Fetching pod:', podName, 'from namespace:', namespace);
+    
+    const api = kc.makeApiClient(k8s.CoreV1Api);
+    const response = await api.readNamespacedPod({ name: podName, namespace });
+    
+    res.json(response.body || response);
+
+  } catch (error) {
+    console.error('Error fetching pod:', error);
+    
+    if (error.response?.statusCode === 404) {
+      const namespace = req.query.namespace || 'midnight-staging';
+      return res.status(404).json({
+        error: 'Pod not found',
+        message: `Pod ${req.params.podName} not found in namespace ${namespace}`
+      });
+    }
+    
+    res.status(500).json({
+      error: 'Failed to fetch pod',
+      message: error.message
+    });
+  }
+});
+
+app.get('/api/pods/:podName/logs', authenticateUser, async (req, res) => {
+  try {
+    if (!kc) {
+      return res.status(503).json({ 
+        error: 'Kubernetes API not available',
+        message: 'Kubeconfig could not be loaded. Check server logs for details.'
+      });
+    }
+
+    const namespace = String(req.query.namespace || 'midnight-staging').trim();
+    const podName = String(req.params.podName).trim();
+    const containerName = req.query.container ? String(req.query.container).trim() : '';
+    const tailLines = parseInt(req.query.tailLines) || 100;
+    
+    console.log('[API] Fetching logs for pod:', podName, 'container:', containerName || '(default)', 'from namespace:', namespace);
+    
+    const api = kc.makeApiClient(k8s.CoreV1Api);
+    const podResponse = await api.readNamespacedPod({ name: podName, namespace });
+    const pod = podResponse.body || podResponse;
+    const containers = pod.spec?.containers?.map(c => c.name) || [];
+    
+    if (containers.length === 0) {
+      return res.status(400).json({
+        error: 'No containers found',
+        message: `Pod "${podName}" has no containers`
+      });
+    }
+    
+    if (!containerName && containers.length > 1) {
+      return res.status(400).json({
+        error: 'Container name required',
+        message: `Pod "${podName}" has multiple containers. Please specify one.`,
+        availableContainers: containers
+      });
+    }
+    
+    const targetContainer = containerName || containers[0];
+    
+    if (containerName && !containers.includes(containerName)) {
+      return res.status(400).json({
+        error: 'Container not found',
+        message: `Container "${containerName}" not found in pod "${podName}"`,
+        availableContainers: containers
+      });
+    }
+    
+    console.log('[API] Fetching logs for container:', targetContainer);
+    
+    try {
+      const logResponse = await api.readNamespacedPodLog({
+        name: podName,
+        namespace: namespace,
+        container: targetContainer,
+        tailLines: tailLines,
+        timestamps: true
+      });
+      
+      const logs = logResponse.body || logResponse;
+      
+      res.json({
+        podName,
+        container: targetContainer,
+        namespace,
+        logs: logs,
+        tailLines: tailLines
+      });
+    } catch (logError) {
+      console.error('[API] Log fetch error details:', {
+        message: logError.message,
+        code: logError.code,
+        statusCode: logError.response?.statusCode,
+        body: logError.response?.body
+      });
+      
+      return res.status(logError.response?.statusCode || 400).json({
+        error: 'Failed to fetch logs',
+        message: logError.response?.body?.message || logError.message || 'Error occurred in log request',
+        availableContainers: containers,
+        targetContainer: targetContainer,
+        podStatus: pod.status?.phase,
+        containerStatuses: pod.status?.containerStatuses?.map(cs => ({
+          name: cs.name,
+          ready: cs.ready,
+          state: Object.keys(cs.state || {})[0],
+          restartCount: cs.restartCount
+        })),
+        hint: 'The container may not be running or may not have generated any logs yet'
+      });
+    }
+
+  } catch (error) {
+    console.error('Error fetching logs:', error);
+    res.status(500).json({
+      error: 'Failed to fetch logs',
+      message: error.message
+    });
+  }
+});
+
+app.get('/api/endpoints', authenticateUser, async (req, res) => {
+  try {
+    if (!kc) {
+      return res.status(503).json({ 
+        error: 'Kubernetes API not available',
+        message: 'Kubeconfig could not be loaded. Check server logs for details.'
+      });
+    }
+    
+    const namespace = req.query.namespace ? String(req.query.namespace).trim() : undefined;
+    
+    console.log('[API] Fetching endpoints', namespace ? `from namespace: ${namespace}` : 'from all namespaces');
+    
+    const api = kc.makeApiClient(k8s.CoreV1Api);
+    
+    let response;
+    if (namespace) {
+      response = await api.listNamespacedEndpoints({ namespace });
+    } else {
+      response = await api.listEndpointsForAllNamespaces();
+    }
+    
+    const endpointList = response.body || response;
+    const endpoints = endpointList.items.map(endpoint => ({
+      name: endpoint.metadata.name,
+      namespace: endpoint.metadata.namespace,
+      subsets: endpoint.subsets?.map(subset => ({
+        addresses: subset.addresses?.map(addr => ({
+          ip: addr.ip,
+          hostname: addr.hostname,
+          nodeName: addr.nodeName,
+          targetRef: addr.targetRef ? {
+            kind: addr.targetRef.kind,
+            name: addr.targetRef.name,
+            namespace: addr.targetRef.namespace
+          } : undefined
+        })),
+        notReadyAddresses: subset.notReadyAddresses?.map(addr => ({
+          ip: addr.ip,
+          hostname: addr.hostname,
+          nodeName: addr.nodeName,
+          targetRef: addr.targetRef ? {
+            kind: addr.targetRef.kind,
+            name: addr.targetRef.name,
+            namespace: addr.targetRef.namespace
+          } : undefined
+        })),
+        ports: subset.ports?.map(port => ({
+          name: port.name,
+          port: port.port,
+          protocol: port.protocol
+        }))
+      })),
+      labels: endpoint.metadata.labels,
+      annotations: endpoint.metadata.annotations
+    }));
+
+    res.json({
+      namespace: namespace || 'all',
+      endpointCount: endpoints.length,
+      endpoints
+    });
+
+  } catch (error) {
+    console.error('Error fetching endpoints:', error);
+    
+    if (error.response) {
+      return res.status(error.response.statusCode || 500).json({
+        error: 'Failed to fetch endpoints from Kubernetes',
+        message: error.response.body?.message || error.message,
+        details: error.response.body
+      });
+    }
+    
+    res.status(500).json({
+      error: 'Failed to fetch endpoints',
+      message: error.message
+    });
+  }
+});
+
+app.listen(PORT, () => {
+  console.log(`Server running on http://localhost:${PORT}`);
+  console.log(`Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
+});
+

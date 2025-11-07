@@ -1,0 +1,1080 @@
+import { Injectable, BadRequestException, Inject, forwardRef, Optional } from '@nestjs/common';
+import { spawn } from 'child_process';
+import { promisify } from 'util';
+import { exec } from 'child_process';
+import * as path from 'path';
+import * as fs from 'fs/promises';
+import * as os from 'os';
+import * as crypto from 'crypto';
+import { PrismaService } from '../prisma/prisma.service';
+import { ImageBuilderService } from './image-builder.service';
+
+const execAsync = promisify(exec);
+
+type BuildType = 'dockerfile' | 'railpack';
+type BuildMode = 'local' | 'kubernetes';
+
+interface BuildOptions {
+  repoUrl: string;
+  branch: string;
+  dockerfilePath: string;
+  imageName: string;
+  tag?: string;
+  deploymentId?: string;
+  accessToken?: string;
+  target?: string;
+  buildFromRoot?: boolean;
+  buildType?: BuildType;
+  buildMode?: BuildMode;
+}
+
+@Injectable()
+export class DockerService {
+  private readonly harborRegistryPush = process.env.DOCKER_REGISTRY_PUSH || '178.156.144.127';
+  private readonly harborRegistryPull = process.env.DOCKER_REGISTRY_PULL || 'harbor.1mp.dev';
+  private readonly harborProject = 'orchard';
+  private activeBuilds = 0;
+  private buildsSincePrune = 0;
+  private pendingPrune = false;
+  private pruneLock: Promise<void> = Promise.resolve();
+
+  // Default build mode - can be overridden per-build or via environment variable
+  private readonly defaultBuildMode: BuildMode = (process.env.BUILD_MODE as BuildMode) || 'kubernetes';
+
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly imageBuilderService?: ImageBuilderService,
+  ) {}
+
+  private async appendLog(deploymentId: string | undefined, message: string, level: 'INFO' | 'ERROR' | 'WARNING' = 'INFO') {
+    if (!deploymentId) return;
+
+    try {
+      const deployment = await this.prisma.deployment.findUnique({
+        where: { id: deploymentId },
+        select: { buildLogs: true },
+      });
+
+      const currentLogs = deployment?.buildLogs || '';
+      const timestamp = Date.now();
+      const formattedMessage = `[${timestamp}] [${level}] ${message}`;
+      const newLogs = currentLogs + formattedMessage + '\n';
+
+      await this.prisma.deployment.update({
+        where: { id: deploymentId },
+        data: { buildLogs: newLogs },
+      });
+    } catch (error) {
+      console.error('[Docker Service] Failed to append log:', error);
+    }
+  }
+
+  private stepStartTimes = new Map<string, number>();
+
+  private async setBuildStep(deploymentId: string | undefined, step: string) {
+    if (!deploymentId) return;
+
+    try {
+      this.stepStartTimes.set(`${deploymentId}:${step}`, Date.now());
+      await this.prisma.deployment.update({
+        where: { id: deploymentId },
+        data: { buildStep: step },
+      });
+    } catch (error) {
+      console.error('[Docker Service] Failed to set build step:', error);
+    }
+  }
+
+  private getStepElapsedTime(deploymentId: string | undefined, step: string): number | null {
+    if (!deploymentId) return null;
+    const startTime = this.stepStartTimes.get(`${deploymentId}:${step}`);
+    if (!startTime) return null;
+    return Math.floor((Date.now() - startTime) / 1000);
+  }
+
+  private async computeSecretsHash(deploymentId?: string): Promise<string> {
+    const secrets: string[] = [];
+    
+    if (deploymentId) {
+      try {
+        const deployment = await this.prisma.deployment.findUnique({
+          where: { id: deploymentId },
+          select: { envVars: true },
+        });
+
+        if (deployment?.envVars && Array.isArray(deployment.envVars)) {
+          for (const envVar of deployment.envVars) {
+            if (envVar.value && typeof envVar.value === 'string') {
+              secrets.push(`${envVar.key}=${envVar.value}`);
+            }
+          }
+        }
+      } catch (error) {
+        console.error('[Docker Service] Failed to get deployment secrets:', error);
+      }
+    }
+
+    if (secrets.length === 0) {
+      return '';
+    }
+
+    const secretsString = secrets.sort().join('\n');
+    return crypto.createHash('sha256').update(secretsString).digest('hex');
+  }
+
+  async cloneRepository(repoUrl: string, branch: string, accessToken?: string, deploymentId?: string): Promise<string> {
+    const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'orchard-build-'));
+
+    let cloneUrl = repoUrl;
+    if (accessToken && repoUrl.includes('github.com')) {
+      // GitHub App installation tokens start with 'ghs_' and need x-access-token format
+      // User OAuth tokens can use the simpler format
+      if (accessToken.startsWith('ghs_')) {
+        cloneUrl = repoUrl.replace('https://github.com/', `https://x-access-token:${accessToken}@github.com/`);
+      } else {
+        cloneUrl = repoUrl.replace('https://github.com/', `https://${accessToken}@github.com/`);
+      }
+    }
+
+    const startTime = Date.now();
+    await this.setBuildStep(deploymentId, 'cloning');
+    await this.appendLog(deploymentId, `Cloning repository ${repoUrl} (branch: ${branch})...`);
+
+    return new Promise((resolve, reject) => {
+        const cloneProcess = spawn('git', ['clone', '--progress', '--depth', '1', '--branch', branch, cloneUrl, tempDir], {
+          env: {
+            ...process.env,
+            PATH: process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+            GIT_TERMINAL_PROMPT: '0',
+          },
+        });
+
+        let stdout = '';
+        let stderr = '';
+        let totalObjects = 0;
+        let receivedObjects = 0;
+        let totalSize = 0;
+        let receivedSize = 0;
+        let lastProgressUpdate = Date.now();
+
+        cloneProcess.stderr.on('data', async (data) => {
+          const message = data.toString();
+          stderr += message;
+          console.log('[Git Clone]', message.trim());
+
+          const lines = message.split('\n');
+          for (const line of lines) {
+            if (line.includes('remote: Counting objects')) {
+              const match = line.match(/(\d+)/);
+              if (match) {
+                totalObjects = parseInt(match[1], 10);
+                await this.appendLog(deploymentId, `Counting objects: ${totalObjects}`);
+              }
+            } else if (line.includes('remote: Compressing objects')) {
+              const match = line.match(/(\d+)%/);
+              if (match) {
+                const percent = match[1];
+                await this.appendLog(deploymentId, `Compressing objects: ${percent}%`);
+              }
+            } else if (line.includes('Receiving objects')) {
+              const match = line.match(/(\d+)%\s*\((\d+)\/(\d+)\)\s*\|?\s*([\d.]+\s*[KMGT]?i?B)\/?\s*([\d.]+\s*[KMGT]?i?B\/s)?/);
+              if (match) {
+                receivedObjects = parseInt(match[2], 10);
+                totalObjects = parseInt(match[3], 10);
+                const receivedSizeStr = match[4];
+                receivedSize = this.parseSize(receivedSizeStr);
+                
+                if (match[5]) {
+                  const speed = match[5].trim();
+                  const progress = totalObjects > 0 ? (receivedObjects / totalObjects) * 100 : 0;
+                  const progressBar = this.createProgressBar(progress);
+                  
+                  const now = Date.now();
+                  if (now - lastProgressUpdate > 500) {
+                    const remainingMB = (totalSize - receivedSize) / (1024 * 1024);
+                    const remainingMsg = totalSize > receivedSize ? ` (${remainingMB.toFixed(2)} MB remaining)` : '';
+                    await this.appendLog(deploymentId, `Receiving objects: ${progressBar} ${progress.toFixed(1)}% (${receivedObjects}/${totalObjects}) ${receivedSizeStr} @ ${speed}${remainingMsg}`);
+                    lastProgressUpdate = now;
+                  }
+                }
+              }
+              const sizeMatch = line.match(/Receiving objects:\s*\d+%\s*\([\d/]+\)\s*\|?\s*[\d.]+\s*([KMGT]?i?B)\s*\|?\s*([\d.]+)\s*([KMGT]?i?B)/);
+              if (sizeMatch) {
+                const totalSizeStr = sizeMatch[2] + sizeMatch[3];
+                totalSize = this.parseSize(totalSizeStr);
+              }
+            } else if (line.includes('Resolving deltas')) {
+              const match = line.match(/(\d+)%\s*\((\d+)\/(\d+)\)/);
+              if (match) {
+                const percent = match[1];
+                const current = match[2];
+                const total = match[3];
+                await this.appendLog(deploymentId, `Resolving deltas: ${percent}% (${current}/${total})`);
+              }
+            } else if (line.trim() && !line.includes('Cloning into')) {
+              await this.appendLog(deploymentId, line.trim());
+            }
+          }
+        });
+
+        cloneProcess.stdout.on('data', async (data) => {
+          const message = data.toString();
+          stdout += message;
+        });
+
+        cloneProcess.on('close', async (code) => {
+          const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+          
+          if (code === 0) {
+            const successMsg = `Repository cloned successfully in ${elapsedTime}s`;
+            console.log('[Git Clone]', successMsg);
+            await this.appendLog(deploymentId, successMsg);
+            resolve(tempDir);
+          } else {
+            const errorMsg = `Failed to clone repository (took ${elapsedTime}s): ${stderr || 'Unknown error'}`;
+            await this.appendLog(deploymentId, errorMsg, 'ERROR');
+            await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+            reject(new BadRequestException(errorMsg));
+          }
+        });
+
+        cloneProcess.on('error', async (error) => {
+          const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+          const errorMsg = `Failed to start git clone (took ${elapsedTime}s): ${error.message}`;
+          await this.appendLog(deploymentId, errorMsg, 'ERROR');
+          await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
+          reject(new BadRequestException(errorMsg));
+        });
+      });
+  }
+
+  async buildImage(buildDir: string, dockerfilePath: string, imageName: string, deploymentId?: string, target?: string, buildFromRoot?: boolean): Promise<void> {
+    const fullImageName = `${this.harborRegistryPush}/${this.harborProject}/${imageName}`;
+    const dockerfileFull = path.join(buildDir, dockerfilePath);
+
+    const dockerfileExists = await fs.access(dockerfileFull).then(() => true).catch(() => false);
+    if (!dockerfileExists) {
+      const errorMsg = `Dockerfile not found at ${dockerfilePath}`;
+      await this.appendLog(deploymentId, errorMsg, 'ERROR');
+      throw new BadRequestException(errorMsg);
+    }
+
+    let envVars: Record<string, string> = {};
+    if (deploymentId) {
+      try {
+        const deployment = await this.prisma.deployment.findUnique({
+          where: { id: deploymentId },
+          include: { envVars: true },
+        });
+
+        if (deployment?.envVars && Array.isArray(deployment.envVars)) {
+          envVars = deployment.envVars.reduce((acc, envVar) => {
+            acc[envVar.key] = envVar.value;
+            return acc;
+          }, {} as Record<string, string>);
+        }
+      } catch (error) {
+        console.error('[Docker Service] Failed to get deployment env vars:', error);
+      }
+    }
+
+    const startTime = Date.now();
+    await this.setBuildStep(deploymentId, 'building');
+    const targetMsg = target ? ` (target: ${target})` : '';
+    await this.appendLog(deploymentId, `Building image ${fullImageName} for linux/amd64 using Docker${targetMsg}...`);
+
+    return new Promise((resolve, reject) => {
+      const buildContext = buildFromRoot ? buildDir : path.dirname(path.join(buildDir, dockerfilePath));
+      const dockerfileArg = buildFromRoot ? dockerfilePath : path.basename(dockerfilePath);
+
+      const buildArgs = ['build', '--progress=plain', '--platform', 'linux/amd64', '-t', fullImageName, '-f', dockerfileArg];
+      if (target) {
+        buildArgs.push('--target', target);
+      }
+
+      for (const [key, value] of Object.entries(envVars)) {
+        if (value !== undefined && value !== null) {
+          buildArgs.push('--build-arg', `${key}=${value}`);
+        }
+      }
+
+      buildArgs.push('.');
+
+      const buildProcess = spawn('docker', buildArgs, {
+        cwd: buildContext,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          DOCKER_HOST: process.env.DOCKER_HOST || 'unix:///var/run/docker.sock',
+          NO_PROXY: `${process.env.NO_PROXY || ''},178.156.144.127,harbor.1mp.dev,harbor-core.harbor.svc.cluster.local`.replace(/^,/, ''),
+          no_proxy: `${process.env.no_proxy || ''},178.156.144.127,harbor.1mp.dev,harbor-core.harbor.svc.cluster.local`.replace(/^,/, ''),
+          HTTP_PROXY: '',
+          HTTPS_PROXY: '',
+          http_proxy: '',
+          https_proxy: '',
+          PATH: process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        },
+      });
+
+      let stdout = '';
+      let stderr = '';
+      const layerProgress = new Map<string, { current: number; total: number; step?: number }>();
+      const stepProgress = new Map<number, { name: string; status: string }>();
+      let currentStep = 0;
+      let lastProgressUpdate = Date.now();
+      let totalSteps = 0;
+
+      const processBuildOutput = async (message: string) => {
+        const lines = message.split('\n');
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          const lowerLine = line.toLowerCase();
+          let logLevel: 'INFO' | 'ERROR' | 'WARNING' = 'INFO';
+          let shouldLog = false;
+
+          if ((line.includes('#') && (line.includes('FROM') || line.includes('RUN') || line.includes('COPY') || line.includes('ADD') || line.includes('WORKDIR') || line.includes('ENV') || line.includes('EXPOSE') || line.includes('CMD') || line.includes('ENTRYPOINT'))) || line.startsWith('#')) {
+            const stepMatch = line.match(/#(\d+)\s+(.+)/);
+            if (stepMatch) {
+              const stepNum = parseInt(stepMatch[1], 10);
+              const stepName = stepMatch[2].trim();
+              currentStep = stepNum;
+              totalSteps = Math.max(totalSteps, stepNum);
+              stepProgress.set(stepNum, { name: stepName, status: 'running' });
+              const stepInfo = totalSteps > 0 ? `${stepNum}/${totalSteps}` : stepNum.toString();
+              await this.appendLog(deploymentId, `Step ${stepInfo}: ${stepName}`);
+            }
+          } else if (line.includes('Step') && line.includes('/')) {
+            const stepMatch = line.match(/Step\s+(\d+)\/(\d+)/);
+            if (stepMatch) {
+              const [, step, total] = stepMatch;
+              totalSteps = parseInt(total, 10);
+              currentStep = parseInt(step, 10);
+              const progress = (currentStep / totalSteps) * 100;
+              const progressBar = this.createProgressBar(progress);
+              await this.appendLog(deploymentId, `Build progress: ${progressBar} ${progress.toFixed(1)}% (Step ${step}/${total})`);
+            }
+          } else if (line.includes('Pulling') || line.includes('Downloading')) {
+            await this.appendLog(deploymentId, line.trim());
+          } else if (line.includes('Pull complete') || line.includes('Download complete') || line.includes('Extracting')) {
+            const layerMatch = line.match(/([a-f0-9]+):/);
+            if (layerMatch) {
+              const layerId = layerMatch[1];
+              const entry = layerProgress.get(layerId);
+              if (entry) {
+                layerProgress.set(layerId, { current: entry.total, total: entry.total, step: entry.step });
+              }
+            }
+            await this.appendLog(deploymentId, line.trim());
+          } else if (line.includes('CACHED') || line.includes('DONE')) {
+            const stepMatch = line.match(/#(\d+)/);
+            if (stepMatch) {
+              const stepNum = parseInt(stepMatch[1], 10);
+              const existing = stepProgress.get(stepNum);
+              if (existing) {
+                existing.status = 'completed';
+              }
+            }
+            await this.appendLog(deploymentId, line.trim());
+          } else {
+            shouldLog = true;
+            if (lowerLine.includes('error') || lowerLine.includes('failed') || lowerLine.includes('fatal')) {
+              logLevel = 'ERROR';
+            } else if (lowerLine.includes('warn') || lowerLine.includes('warning') || lowerLine.includes('[warning]')) {
+              logLevel = 'WARNING';
+            }
+          }
+
+          const pullingMatch = line.match(/([a-f0-9]+):\s*Pulling\s+fs layer.*?(\d+\.?\d*[KMGB]*B)\/(\d+\.?\d*[KMGB]*B)/);
+          if (pullingMatch) {
+            const [, layerId, currentStr, totalStr] = pullingMatch;
+            const current = this.parseSize(currentStr);
+            const total = this.parseSize(totalStr);
+            layerProgress.set(layerId, { current, total, step: currentStep });
+          }
+
+          const downloadingMatch = line.match(/([a-f0-9]+):\s*Downloading.*?(\d+\.?\d*[KMGB]*B)\/(\d+\.?\d*[KMGB]*B)/);
+          if (downloadingMatch) {
+            const [, layerId, currentStr, totalStr] = downloadingMatch;
+            const current = this.parseSize(currentStr);
+            const total = this.parseSize(totalStr);
+            const existing = layerProgress.get(layerId) || { current: 0, total: 0, step: currentStep };
+            layerProgress.set(layerId, { current, total, step: existing.step || currentStep });
+          }
+
+          if (shouldLog && !line.match(/^sha256:/) && !line.match(/^\d+\.\d+\s/)) {
+            await this.appendLog(deploymentId, line.trim(), logLevel);
+          }
+        }
+      };
+
+      buildProcess.stdout.on('data', async (data) => {
+        const message = data.toString();
+        stdout += message;
+        console.log('[Docker Build]', message.trim());
+        await processBuildOutput(message);
+      });
+
+      buildProcess.stderr.on('data', async (data) => {
+        const message = data.toString();
+        stderr += message;
+        console.log('[Docker Build]', message.trim());
+        await processBuildOutput(message);
+        
+        const now = Date.now();
+        if (now - lastProgressUpdate > 1000 && layerProgress.size > 0) {
+          const totalCurrent = Array.from(layerProgress.values()).reduce((sum, l) => sum + l.current, 0);
+          const totalSize = Array.from(layerProgress.values()).reduce((sum, l) => sum + l.total, 0);
+          
+          if (totalSize > 0) {
+            const progress = (totalCurrent / totalSize) * 100;
+            const remainingMB = (totalSize - totalCurrent) / (1024 * 1024);
+            const progressBar = this.createProgressBar(progress);
+            const stepProgressInfo = totalSteps > 0 && currentStep > 0 ? ` (Step ${currentStep}/${totalSteps})` : '';
+            await this.appendLog(deploymentId, `Downloading layers: ${progressBar} ${progress.toFixed(1)}%${stepProgressInfo} (${remainingMB.toFixed(2)} MB remaining)`);
+          }
+          lastProgressUpdate = now;
+        }
+      });
+
+      buildProcess.on('close', async (code) => {
+        const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+        
+        if (code === 0) {
+          const successMsg = `Successfully built image: ${fullImageName} (took ${elapsedTime}s)`;
+          console.log('[Docker Build]', successMsg);
+          await this.appendLog(deploymentId, successMsg);
+          resolve();
+        } else {
+          const errorMsg = `Docker build failed with code ${code} (took ${elapsedTime}s)`;
+          await this.appendLog(deploymentId, errorMsg, 'ERROR');
+          if (stderr) await this.appendLog(deploymentId, stderr, 'ERROR');
+          reject(new BadRequestException(`${errorMsg}: ${stderr || stdout}`));
+        }
+      });
+
+      buildProcess.on('error', async (error) => {
+        const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+        const errorMsg = `Failed to start docker build (took ${elapsedTime}s): ${error.message}`;
+        await this.appendLog(deploymentId, errorMsg, 'ERROR');
+        reject(new BadRequestException(errorMsg));
+      });
+    });
+  }
+
+  async buildImageWithRailpack(buildDir: string, imageName: string, deploymentId?: string): Promise<void> {
+    const fullImageName = `${this.harborRegistryPush}/${this.harborProject}/${imageName}`;
+
+    const startTime = Date.now();
+    await this.setBuildStep(deploymentId, 'building');
+    await this.appendLog(deploymentId, `Building image ${fullImageName} for linux/amd64 using Railpack...`);
+
+    const planPath = path.join(buildDir, 'railpack-plan.json');
+    const infoPath = path.join(buildDir, 'railpack-info.json');
+
+    await this.appendLog(deploymentId, 'Preparing build with Railpack...');
+    
+    let envVars: Record<string, string> = {};
+    if (deploymentId) {
+      try {
+        const deployment = await this.prisma.deployment.findUnique({
+          where: { id: deploymentId },
+          include: { envVars: true },
+        });
+
+        if (deployment?.envVars && Array.isArray(deployment.envVars)) {
+          envVars = deployment.envVars.reduce((acc, envVar) => {
+            acc[envVar.key] = envVar.value;
+            return acc;
+          }, {} as Record<string, string>);
+        }
+      } catch (error) {
+        console.error('[Docker Service] Failed to get deployment env vars:', error);
+      }
+    }
+    
+    try {
+      const prepareArgs = [
+        'prepare',
+        buildDir,
+        '--plan-out', planPath,
+        '--info-out', infoPath,
+      ];
+
+      for (const [key, value] of Object.entries(envVars)) {
+        if (value && typeof value === 'string') {
+          prepareArgs.push('--env', `${key}=${value}`);
+        }
+      }
+
+      await new Promise<void>((resolve, reject) => {
+        const prepareProcess = spawn('railpack', prepareArgs, {
+          cwd: buildDir,
+          stdio: ['ignore', 'pipe', 'pipe'],
+          env: {
+            ...process.env,
+            PATH: process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+          },
+        });
+
+        let stdout = '';
+        let stderr = '';
+
+        prepareProcess.stdout.on('data', async (data) => {
+          const message = data.toString();
+          stdout += message;
+          await this.appendLog(deploymentId, message.trim());
+        });
+
+        prepareProcess.stderr.on('data', async (data) => {
+          const message = data.toString();
+          stderr += message;
+          await this.appendLog(deploymentId, message.trim());
+        });
+
+        prepareProcess.on('close', (code) => {
+          if (code === 0) {
+            resolve();
+          } else {
+            reject(new Error(`Railpack prepare failed with code ${code}: ${stderr || stdout}`));
+          }
+        });
+
+        prepareProcess.on('error', (error) => {
+          reject(new Error(`Failed to start railpack prepare: ${error.message}`));
+        });
+      });
+
+      await this.appendLog(deploymentId, 'Build plan generated successfully');
+    } catch (error) {
+      const errorMsg = `Failed to prepare build with Railpack: ${error.message}`;
+      await this.appendLog(deploymentId, errorMsg, 'ERROR');
+      throw new BadRequestException(errorMsg);
+    }
+
+    const secretsHash = await this.computeSecretsHash(deploymentId);
+
+    return new Promise((resolve, reject) => {
+      const buildArgs = [
+        'buildx', 'build',
+        '--progress=plain',
+        '--platform', 'linux/amd64',
+        '-t', fullImageName,
+        '--build-arg', 'BUILDKIT_SYNTAX=ghcr.io/railwayapp/railpack-frontend',
+        '-f', planPath,
+      ];
+
+      if (secretsHash) {
+        buildArgs.push('--build-arg', `secrets-hash=${secretsHash}`);
+      }
+
+      for (const [key, value] of Object.entries(envVars)) {
+        if (value && typeof value === 'string') {
+          buildArgs.push('--secret', `id=${key},env=${key}`);
+        }
+      }
+
+      buildArgs.push('--output', 'type=docker', buildDir);
+
+      const buildEnv = {
+        ...process.env,
+        ...envVars,
+        DOCKER_BUILDKIT: '1',
+        DOCKER_HOST: process.env.DOCKER_HOST || 'unix:///var/run/docker.sock',
+        NO_PROXY: `${process.env.NO_PROXY || ''},178.156.144.127,harbor.1mp.dev,harbor-core.harbor.svc.cluster.local,ghcr.io`.replace(/^,/, ''),
+        no_proxy: `${process.env.no_proxy || ''},178.156.144.127,harbor.1mp.dev,harbor-core.harbor.svc.cluster.local,ghcr.io`.replace(/^,/, ''),
+        HTTP_PROXY: '',
+        HTTPS_PROXY: '',
+        http_proxy: '',
+        https_proxy: '',
+        PATH: process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+      };
+
+      const buildProcess = spawn('docker', buildArgs, {
+        cwd: buildDir,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: buildEnv,
+      });
+
+      let stdout = '';
+      let stderr = '';
+      let lastProgressUpdate = Date.now();
+      let currentStep = 0;
+      let totalSteps = 0;
+
+      const processRailpackOutput = async (message: string) => {
+        const lines = message.split('\n');
+        for (const line of lines) {
+          if (!line.trim()) continue;
+
+          const lowerLine = line.toLowerCase();
+          let logLevel: 'INFO' | 'ERROR' | 'WARNING' = 'INFO';
+          let shouldLog = false;
+
+          // Railpack/BuildKit outputs build steps and progress info
+          if (line.includes('#') && (line.includes('[') || line.match(/#\d+/))) {
+            const stepMatch = line.match(/#(\d+)\s+(.+)/);
+            if (stepMatch) {
+              const stepNum = parseInt(stepMatch[1], 10);
+              const stepName = stepMatch[2].trim();
+              currentStep = stepNum;
+              totalSteps = Math.max(totalSteps, stepNum);
+              await this.appendLog(deploymentId, `Step ${stepNum}: ${stepName}`);
+            }
+          } else if (line.includes('Step') && line.includes('/')) {
+            const stepMatch = line.match(/Step\s+(\d+)\/(\d+)/);
+            if (stepMatch) {
+              const [, step, total] = stepMatch;
+              totalSteps = parseInt(total, 10);
+              currentStep = parseInt(step, 10);
+              const progress = (currentStep / totalSteps) * 100;
+              const progressBar = this.createProgressBar(progress);
+              await this.appendLog(deploymentId, `Build progress: ${progressBar} ${progress.toFixed(1)}% (Step ${step}/${total})`);
+            }
+          }
+
+          // Check for Railpack-specific output
+          if (lowerLine.includes('detected') || lowerLine.includes('installing') || lowerLine.includes('railpack')) {
+            await this.appendLog(deploymentId, line.trim());
+          } else if (lowerLine.includes('error') || lowerLine.includes('failed') || lowerLine.includes('fatal')) {
+            logLevel = 'ERROR';
+            await this.appendLog(deploymentId, line.trim(), logLevel);
+          } else if (lowerLine.includes('warn') || lowerLine.includes('warning')) {
+            logLevel = 'WARNING';
+            await this.appendLog(deploymentId, line.trim(), logLevel);
+          } else if (lowerLine.includes('done') || lowerLine.includes('complete') || lowerLine.includes('cached') || lowerLine.includes('exporting')) {
+            await this.appendLog(deploymentId, line.trim());
+          } else if (line.includes('CACHED') || line.includes('DONE')) {
+            await this.appendLog(deploymentId, line.trim());
+          } else {
+            shouldLog = true;
+          }
+
+          // Log other output but throttle to avoid spam
+          if (shouldLog && !line.match(/^sha256:/) && !line.match(/^\d+\.\d+\s/)) {
+            const now = Date.now();
+            if (now - lastProgressUpdate > 500) {
+              await this.appendLog(deploymentId, line.trim());
+              lastProgressUpdate = now;
+            }
+          }
+        }
+      };
+
+      buildProcess.stdout.on('data', async (data) => {
+        const message = data.toString();
+        stdout += message;
+        console.log('[Railpack Build]', message.trim());
+        await processRailpackOutput(message);
+      });
+
+      buildProcess.stderr.on('data', async (data) => {
+        const message = data.toString();
+        stderr += message;
+        console.log('[Railpack Build]', message.trim());
+        await processRailpackOutput(message);
+      });
+
+      buildProcess.on('close', async (code) => {
+        const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+
+        await fs.unlink(planPath).catch(() => {});
+        await fs.unlink(infoPath).catch(() => {});
+
+        if (code === 0) {
+          const successMsg = `Successfully built image with Railpack: ${fullImageName} (took ${elapsedTime}s)`;
+          console.log('[Railpack Build]', successMsg);
+          await this.appendLog(deploymentId, successMsg);
+          resolve();
+        } else {
+          const errorMsg = `Railpack build failed with code ${code} (took ${elapsedTime}s)`;
+          await this.appendLog(deploymentId, errorMsg, 'ERROR');
+          if (stderr) await this.appendLog(deploymentId, stderr, 'ERROR');
+          reject(new BadRequestException(`${errorMsg}: ${stderr || stdout}`));
+        }
+      });
+
+      buildProcess.on('error', async (error) => {
+        const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+        await fs.unlink(planPath).catch(() => {});
+        await fs.unlink(infoPath).catch(() => {});
+        const errorMsg = `Failed to start railpack build (took ${elapsedTime}s): ${error.message}`;
+        await this.appendLog(deploymentId, errorMsg, 'ERROR');
+        reject(new BadRequestException(errorMsg));
+      });
+    });
+  }
+
+  async pushImage(imageName: string, deploymentId?: string): Promise<void> {
+    const fullImageName = `${this.harborRegistryPush}/${this.harborProject}/${imageName}`;
+
+    await this.setBuildStep(deploymentId, 'pushing');
+
+    // Login to registry before pushing
+    const harborUsername = process.env.HARBOR_USERNAME;
+    const harborPassword = process.env.HARBOR_PASSWORD;
+
+    if (harborUsername && harborPassword) {
+      await this.appendLog(deploymentId, `Logging in to registry ${this.harborRegistryPush}...`);
+      try {
+        await execAsync(`echo "${harborPassword}" | docker login ${this.harborRegistryPush} -u ${harborUsername} --password-stdin`, {
+          env: {
+            ...process.env,
+            DOCKER_HOST: process.env.DOCKER_HOST || 'unix:///var/run/docker.sock',
+            PATH: process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+          },
+        });
+        await this.appendLog(deploymentId, `Successfully logged in to registry`);
+      } catch (error) {
+        const errorMsg = `Failed to login to registry: ${error.message}`;
+        await this.appendLog(deploymentId, errorMsg, 'ERROR');
+        throw new BadRequestException(errorMsg);
+      }
+    } else {
+      await this.appendLog(deploymentId, `No registry credentials found, attempting anonymous push...`, 'WARNING');
+    }
+
+    const startTime = Date.now();
+    await this.appendLog(deploymentId, `Pushing image to ${this.harborRegistryPush} using Docker...`);
+
+    return new Promise((resolve, reject) => {
+      const pushProcess = spawn('docker', ['push', fullImageName], {
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          DOCKER_HOST: process.env.DOCKER_HOST || 'unix:///var/run/docker.sock',
+          NO_PROXY: `${process.env.NO_PROXY || ''},178.156.144.127,harbor.1mp.dev,harbor-core.harbor.svc.cluster.local`.replace(/^,/, ''),
+          no_proxy: `${process.env.no_proxy || ''},178.156.144.127,harbor.1mp.dev,harbor-core.harbor.svc.cluster.local`.replace(/^,/, ''),
+          HTTP_PROXY: '',
+          HTTPS_PROXY: '',
+          http_proxy: '',
+          https_proxy: '',
+          PATH: process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        },
+      });
+
+      let stdout = '';
+      let stderr = '';
+      const layerProgress = new Map<string, { current: number; total: number }>();
+      let lastProgressUpdate = Date.now();
+
+      pushProcess.stdout.on('data', async (data) => {
+        const message = data.toString();
+        stdout += message;
+        
+        const lines = message.split('\n');
+        for (const line of lines) {
+          if (line.includes('Pushing') && line.includes('/')) {
+            const match = line.match(/([a-f0-9]+):\s*Pushing.*?(\d+\.?\d*[KMGB]*B)\/(\d+\.?\d*[KMGB]*B)/);
+            if (match) {
+              const [, layerId, currentStr, totalStr] = match;
+              const current = this.parseSize(currentStr);
+              const total = this.parseSize(totalStr);
+              layerProgress.set(layerId, { current, total });
+            }
+          } else if (line.includes('Pushed') && line.match(/^[a-f0-9]+: Pushed/)) {
+            const layerId = line.split(':')[0];
+            const entry = layerProgress.get(layerId);
+            if (entry) {
+              layerProgress.set(layerId, { current: entry.total, total: entry.total });
+            }
+          }
+        }
+        
+        const now = Date.now();
+        if (now - lastProgressUpdate > 1000) {
+          const progress = this.calculatePushProgress(layerProgress);
+          const totalCurrent = Array.from(layerProgress.values()).reduce((sum, l) => sum + l.current, 0);
+          const totalSize = Array.from(layerProgress.values()).reduce((sum, l) => sum + l.total, 0);
+          
+          if (totalSize > 0 && progress > 0) {
+            const pushedMB = (totalCurrent / (1024 * 1024)).toFixed(2);
+            const totalMB = (totalSize / (1024 * 1024)).toFixed(2);
+            const remainingMB = ((totalSize - totalCurrent) / (1024 * 1024)).toFixed(2);
+            const progressBar = this.createProgressBar(progress);
+            await this.appendLog(deploymentId, `Push progress: ${progressBar} ${progress.toFixed(1)}% (${pushedMB} MB / ${totalMB} MB pushed, ${remainingMB} MB remaining)`);
+          }
+          lastProgressUpdate = now;
+        }
+        
+        console.log('[Docker Push]', message.trim());
+      });
+
+      pushProcess.stderr.on('data', async (data) => {
+        const message = data.toString();
+        stderr += message;
+        console.error('[Docker Push Error]', message.trim());
+        const lowerMessage = message.toLowerCase();
+        const logLevel = lowerMessage.includes('error') || lowerMessage.includes('failed') ? 'ERROR' : lowerMessage.includes('warn') ? 'WARNING' : 'INFO';
+        await this.appendLog(deploymentId, message.trim(), logLevel);
+      });
+
+      pushProcess.on('close', async (code) => {
+        const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+        
+        if (code === 0) {
+          const successMsg = `Successfully pushed image: ${fullImageName} (took ${elapsedTime}s)`;
+          console.log('[Docker Push]', successMsg);
+          await this.appendLog(deploymentId, successMsg);
+          resolve();
+        } else {
+          const errorMsg = `Docker push failed with code ${code} (took ${elapsedTime}s)`;
+          await this.appendLog(deploymentId, errorMsg, 'ERROR');
+          if (stderr) await this.appendLog(deploymentId, `Error details: ${stderr}`, 'ERROR');
+          reject(new BadRequestException(`${errorMsg}: ${stderr || stdout}`));
+        }
+      });
+
+      pushProcess.on('error', async (error) => {
+        const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+        const errorMsg = `Failed to start docker push (took ${elapsedTime}s): ${error.message}`;
+        await this.appendLog(deploymentId, errorMsg, 'ERROR');
+        reject(new BadRequestException(errorMsg));
+      });
+    });
+  }
+
+  getImagePath(imageName: string, tag: string = 'latest'): string {
+    return `${this.harborRegistryPull}/${this.harborProject}/${imageName}:${tag}`;
+  }
+
+  async buildAndPushFromGitHub(options: BuildOptions): Promise<string> {
+    const {
+      repoUrl,
+      branch,
+      dockerfilePath,
+      imageName,
+      tag = 'latest',
+      deploymentId,
+      accessToken,
+      target,
+      buildFromRoot,
+      buildType = 'dockerfile',
+      buildMode = this.defaultBuildMode,
+    } = options;
+
+    // Use Kubernetes-based BuildKit builder if available and requested
+    if (buildMode === 'kubernetes' && this.imageBuilderService) {
+      return this.buildWithKubernetes(options);
+    }
+
+    // Fall back to local Docker build
+    return this.buildWithLocalDocker(options);
+  }
+
+  /**
+   * Build using Kubernetes-based BuildKit pods with S3 cache
+   */
+  private async buildWithKubernetes(options: BuildOptions): Promise<string> {
+    const {
+      repoUrl,
+      branch,
+      dockerfilePath,
+      imageName,
+      tag = 'latest',
+      deploymentId,
+      accessToken,
+      target,
+      buildFromRoot,
+      buildType = 'dockerfile',
+    } = options;
+
+    if (!this.imageBuilderService) {
+      throw new BadRequestException('ImageBuilderService not available for Kubernetes builds');
+    }
+
+    await this.appendLog(deploymentId, `Using Kubernetes BuildKit builder for ${repoUrl}@${branch}`);
+
+    // Get environment variables for the build
+    let envVars: Record<string, string> = {};
+    if (deploymentId) {
+      try {
+        const deployment = await this.prisma.deployment.findUnique({
+          where: { id: deploymentId },
+          include: { envVars: true },
+        });
+
+        if (deployment?.envVars && Array.isArray(deployment.envVars)) {
+          envVars = deployment.envVars.reduce((acc, envVar) => {
+            acc[envVar.key] = envVar.value;
+            return acc;
+          }, {} as Record<string, string>);
+        }
+      } catch (error) {
+        console.error('[Docker Service] Failed to get deployment env vars:', error);
+      }
+    }
+
+    // Ensure the service account and RBAC are set up
+    await this.imageBuilderService.ensureServiceAccount();
+
+    // Delegate to the ImageBuilderService
+    return this.imageBuilderService.buildAndPush({
+      repoUrl,
+      branch,
+      dockerfilePath,
+      imageName,
+      tag,
+      deploymentId,
+      accessToken,
+      target,
+      buildFromRoot,
+      buildType,
+      envVars,
+    });
+  }
+
+  /**
+   * Build using local Docker daemon (legacy mode)
+   */
+  private async buildWithLocalDocker(options: BuildOptions): Promise<string> {
+    const {
+      repoUrl,
+      branch,
+      dockerfilePath,
+      imageName,
+      tag = 'latest',
+      deploymentId,
+      accessToken,
+      target,
+      buildFromRoot,
+      buildType = 'dockerfile',
+    } = options;
+
+    const imageFullName = tag ? `${imageName}:${tag}` : imageName;
+    let buildDir: string | null = null;
+    this.activeBuilds += 1;
+
+    try {
+      const buildMethodLabel = buildType === 'railpack' ? 'Railpack' : 'Dockerfile';
+      await this.appendLog(deploymentId, `Starting ${buildMethodLabel} build for ${repoUrl}@${branch} (local Docker)`);
+
+      buildDir = await this.cloneRepository(repoUrl, branch, accessToken, deploymentId);
+
+      if (buildType === 'railpack') {
+        // Railpack automatically detects language/framework and builds
+        await this.buildImageWithRailpack(buildDir, imageFullName, deploymentId);
+      } else {
+        // Traditional Dockerfile build
+        await this.buildImage(buildDir, dockerfilePath, imageFullName, deploymentId, target, buildFromRoot);
+      }
+
+      await this.pushImage(imageFullName, deploymentId);
+
+      const fullImagePath = `${this.harborRegistryPull}/${this.harborProject}/${imageFullName}`;
+      await this.appendLog(deploymentId, `Build and push completed successfully!`);
+      await this.appendLog(deploymentId, `Image available at: ${fullImagePath}`);
+
+      return fullImagePath;
+    } catch (error) {
+      const errorMsg = `Build failed: ${error.message}`;
+      console.error('[Docker Service]', errorMsg);
+      await this.appendLog(deploymentId, errorMsg, 'ERROR');
+
+      // Update deployment with error
+      if (deploymentId) {
+        await this.prisma.deployment.update({
+          where: { id: deploymentId },
+          data: {
+            status: 'failed',
+            buildError: error.message,
+          },
+        });
+      }
+
+      throw error;
+    } finally {
+      this.activeBuilds = Math.max(0, this.activeBuilds - 1);
+      if (buildDir) {
+        await fs.rm(buildDir, { recursive: true, force: true }).catch((err) => {
+          console.error('[Docker Service] Failed to cleanup build directory:', err);
+        });
+      }
+      await this.maybePruneDocker(deploymentId);
+    }
+  }
+
+  private async maybePruneDocker(deploymentId?: string) {
+    const enabled = (process.env.DOCKER_PRUNE_AFTER_BUILD || 'false').toLowerCase() === 'true';
+    if (!enabled) return;
+
+    const parsedPruneEvery = Number(process.env.DOCKER_PRUNE_EVERY || '2');
+    const pruneEvery = Number.isFinite(parsedPruneEvery) ? Math.max(1, parsedPruneEvery) : 2;
+    this.buildsSincePrune += 1;
+    if (this.buildsSincePrune >= pruneEvery) {
+      this.pendingPrune = true;
+    }
+    if (!this.pendingPrune || this.activeBuilds > 0) {
+      return;
+    }
+
+    this.pendingPrune = false;
+    this.buildsSincePrune = 0;
+
+    this.pruneLock = this.pruneLock
+      .then(() => this.runDockerPrune(deploymentId))
+      .catch((error) => {
+        console.error('[Docker Service] Prune failed:', error);
+      });
+    await this.pruneLock;
+  }
+
+  private async runDockerPrune(deploymentId?: string) {
+    await this.appendLog(deploymentId, 'Pruning Docker build cache and dangling images...');
+    const env = {
+      ...process.env,
+      DOCKER_HOST: process.env.DOCKER_HOST || 'unix:///var/run/docker.sock',
+      PATH: process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+    };
+    try {
+      await execAsync('docker builder prune -af', { env });
+      await execAsync('docker image prune -af', { env });
+      await this.appendLog(deploymentId, 'Docker prune completed');
+    } catch (error) {
+      await this.appendLog(deploymentId, `Docker prune failed: ${error.message}`, 'WARNING');
+    }
+  }
+
+  private parseSize(sizeStr: string): number {
+    const match = sizeStr.match(/(\d+\.?\d*)([KMGB]*B?)/);
+    if (!match) return 0;
+    
+    const [, num, unit] = match;
+    const value = parseFloat(num);
+    
+    switch (unit.toUpperCase()) {
+      case 'GB':
+      case 'G':
+        return value * 1024 * 1024 * 1024;
+      case 'MB':
+      case 'M':
+        return value * 1024 * 1024;
+      case 'KB':
+      case 'K':
+        return value * 1024;
+      default:
+        return value;
+    }
+  }
+
+  private calculatePushProgress(layerProgress: Map<string, { current: number; total: number }>): number {
+    if (layerProgress.size === 0) return 0;
+    
+    let totalCurrent = 0;
+    let totalSize = 0;
+    
+    for (const { current, total } of layerProgress.values()) {
+      totalCurrent += current;
+      totalSize += total;
+    }
+    
+    return totalSize > 0 ? (totalCurrent / totalSize) * 100 : 0;
+  }
+
+  private createProgressBar(percentage: number, width: number = 30): string {
+    const filled = Math.round((percentage / 100) * width);
+    const empty = width - filled;
+    const bar = '█'.repeat(filled) + '░'.repeat(empty);
+    return `[${bar}]`;
+  }
+}

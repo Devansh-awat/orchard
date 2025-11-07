@@ -1,0 +1,19 @@
+{
+  "name": "orchard",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel --stream --filter frontend --filter server dev",
+    "dev:lif": "pnpm --filter lif dev",
+    "dev:server": "pnpm --filter server dev",
+    "build": "pnpm --parallel run build",
+    "build:lif": "pnpm --filter lif build",
+    "build:server": "pnpm --filter server build",
+    "prisma:generate": "pnpm --filter server prisma:generate"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "esbuild"
+    ]
+  }
+}

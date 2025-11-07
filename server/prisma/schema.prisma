@@ -1,0 +1,511 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model User {
+  id                String   @id @default(uuid()) @db.Uuid
+  hackClubId        String?  @unique @map("hackclub_id") @db.VarChar(255)
+  email             String   @unique @db.VarChar(255)
+  username          String   @unique @db.VarChar(100)
+  passwordHash      String?  @map("password_hash") @db.VarChar(255)
+  firstName         String?  @map("first_name") @db.VarChar(100)
+  lastName          String?  @map("last_name") @db.VarChar(100)
+  imageUrl          String?  @map("image_url") @db.VarChar(500)
+  githubId          String?  @unique @map("github_id") @db.VarChar(255)
+  githubUsername    String?  @map("github_username") @db.VarChar(255)
+  githubAccessToken String?  @map("github_access_token") @db.Text
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  createdWorkspaces            Workspace[]              @relation("WorkspaceCreator")
+  workspaceMembers             WorkspaceMember[]
+  workspaceInvitations         WorkspaceInvitation[]    @relation("InvitedBy")
+  receivedWorkspaceInvitations WorkspaceInvitation[]    @relation("InvitedUser")
+  createdProjects              Project[]                @relation("ProjectCreator")
+  createdDeployments           Deployment[]             @relation("DeploymentCreator")
+  addedWorkspaceMembers        WorkspaceMember[]        @relation("MemberAdder")
+  createdOrganizations         Organization[]           @relation("OrganizationCreator")
+  organizationMembers          OrganizationMember[]
+  orgInvitationsSent           OrganizationInvitation[] @relation("OrgInvitationInviter")
+  passkeys                     Passkey[]
+  githubAppInstallations       GitHubAppInstallation[]
+
+  @@map("users")
+}
+
+// GitHub App installations - tracks when users install the GitHub App on their repos
+model GitHubAppInstallation {
+  id               String   @id @default(uuid()) @db.Uuid
+  userId           String   @map("user_id") @db.Uuid
+  installationId   BigInt   @unique @map("installation_id") // GitHub's installation ID
+  accountLogin     String   @map("account_login") @db.VarChar(255) // GitHub username or org name
+  accountId        BigInt   @map("account_id") // GitHub account ID
+  accountType      String   @map("account_type") @db.VarChar(50) // "User" or "Organization"
+  accessToken      String?  @map("access_token") @db.Text // Installation access token (short-lived, refreshed as needed)
+  tokenExpiresAt   DateTime? @map("token_expires_at") @db.Timestamp(6)
+  repositorySelection String @default("all") @map("repository_selection") @db.VarChar(50) // "all" or "selected"
+  suspendedAt      DateTime? @map("suspended_at") @db.Timestamp(6)
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_github_app_installations_user")
+  @@index([accountLogin], map: "idx_github_app_installations_account")
+  @@map("github_app_installations")
+}
+
+// OTP codes for email-based authentication
+model OtpCode {
+  id        String   @id @default(uuid()) @db.Uuid
+  email     String   @db.VarChar(255)
+  code      String   @db.VarChar(64) // Hashed OTP code
+  expiresAt DateTime @map("expires_at") @db.Timestamp(6)
+  attempts  Int      @default(0) // Track verification attempts
+  used      Boolean  @default(false)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  @@index([email], map: "idx_otp_codes_email")
+  @@index([expiresAt], map: "idx_otp_codes_expires")
+  @@map("otp_codes")
+}
+
+// Rate limiting records for brute force protection
+model RateLimitRecord {
+  id         String   @id @default(uuid()) @db.Uuid
+  identifier String   @db.VarChar(255) // Email or IP address
+  type       String   @db.VarChar(50) // "email" or "ip"
+  action     String   @db.VarChar(50) // "otp_request", "otp_verify", "passkey_auth"
+  count      Int      @default(1)
+  windowStart DateTime @default(now()) @map("window_start") @db.Timestamp(6)
+  blockedUntil DateTime? @map("blocked_until") @db.Timestamp(6)
+
+  @@unique([identifier, type, action])
+  @@index([identifier, type, action], map: "idx_rate_limit_lookup")
+  @@index([windowStart], map: "idx_rate_limit_window")
+  @@map("rate_limit_records")
+}
+
+// WebAuthn Passkeys for passwordless authentication
+model Passkey {
+  id                  String   @id @default(uuid()) @db.Uuid
+  userId              String   @map("user_id") @db.Uuid
+  credentialId        String   @unique @map("credential_id") @db.Text // Base64URL encoded credential ID
+  publicKey           String   @map("public_key") @db.Text // Base64URL encoded public key
+  counter             BigInt   @default(0) // Sign count for replay protection
+  deviceType          String   @map("device_type") @db.VarChar(32) // "singleDevice" or "multiDevice"
+  backedUp            Boolean  @default(false) @map("backed_up")
+  transports          String[] @default([]) // Array of transport hints (usb, ble, nfc, internal)
+  aaguid              String?  @db.VarChar(36) // Authenticator AAGUID
+  friendlyName        String?  @map("friendly_name") @db.VarChar(255) // User-provided name for the passkey
+  lastUsedAt          DateTime? @map("last_used_at") @db.Timestamp(6)
+  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_passkeys_user")
+  @@index([credentialId], map: "idx_passkeys_credential")
+  @@map("passkeys")
+}
+
+// WebAuthn challenges for registration and authentication
+model WebAuthnChallenge {
+  id        String   @id @default(uuid()) @db.Uuid
+  challenge String   @unique @db.Text // Base64URL encoded challenge
+  type      String   @db.VarChar(20) // "registration" or "authentication"
+  email     String?  @db.VarChar(255) // Email for registration/auth flow
+  userId    String?  @map("user_id") @db.Uuid // User ID if known
+  expiresAt DateTime @map("expires_at") @db.Timestamp(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  @@index([challenge], map: "idx_webauthn_challenges_challenge")
+  @@index([expiresAt], map: "idx_webauthn_challenges_expires")
+  @@map("webauthn_challenges")
+}
+
+model Organization {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @db.VarChar(255)
+  slug        String   @unique @db.VarChar(100)
+  description String?  @db.Text
+  avatarUrl   String?  @map("avatar_url") @db.VarChar(500)
+  createdBy   String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  creator     User?                    @relation("OrganizationCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  members     OrganizationMember[]
+  invitations OrganizationInvitation[]
+  workspaces  Workspace[]
+
+  @@map("organizations")
+}
+
+enum OrganizationRole {
+  owner
+  admin
+  member
+
+  @@map("organization_role")
+}
+
+model OrganizationMember {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
+  role           OrganizationRole @default(member)
+  addedAt        DateTime         @default(now()) @map("added_at") @db.Timestamp(6)
+  addedBy        String?          @map("added_by") @db.Uuid
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([organizationId], map: "idx_organization_members_org")
+  @@index([userId], map: "idx_organization_members_user")
+  @@map("organization_members")
+}
+
+model OrganizationInvitation {
+  id             String           @id @default(uuid()) @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  email          String           @db.VarChar(255)
+  role           OrganizationRole @default(member)
+  token          String           @unique @db.VarChar(255)
+  invitedBy      String           @map("invited_by") @db.Uuid
+  expiresAt      DateTime         @map("expires_at") @db.Timestamp(6)
+  createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamp(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  inviter      User         @relation("OrgInvitationInviter", fields: [invitedBy], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, email])
+  @@index([organizationId], map: "idx_organization_invitations_org")
+  @@index([email], map: "idx_organization_invitations_email")
+  @@index([token], map: "idx_organization_invitations_token")
+  @@map("organization_invitations")
+}
+
+model Workspace {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(255)
+  slug           String   @db.VarChar(100)
+  description    String?  @db.Text
+  createdBy      String?  @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator      User?                 @relation("WorkspaceCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  members      WorkspaceMember[]
+  invitations  WorkspaceInvitation[]
+  projects     Project[]
+
+  @@unique([organizationId, slug])
+  @@index([organizationId], map: "idx_workspaces_organization")
+  @@map("workspaces")
+}
+
+model Role {
+  id          String   @id @default(uuid()) @db.Uuid
+  name        String   @unique @db.VarChar(50)
+  description String?  @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  workspaceMembers     WorkspaceMember[]
+  workspaceInvitations WorkspaceInvitation[]
+
+  @@map("roles")
+}
+
+model WorkspaceMember {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  roleId      String   @map("role_id") @db.Uuid
+  addedAt     DateTime @default(now()) @map("added_at") @db.Timestamp(6)
+  addedBy     String?  @map("added_by") @db.Uuid
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role      Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  adder     User?     @relation("MemberAdder", fields: [addedBy], references: [id], onDelete: SetNull)
+
+  @@unique([workspaceId, userId, roleId])
+  @@index([workspaceId], map: "idx_workspace_members_workspace")
+  @@index([userId], map: "idx_workspace_members_user")
+  @@map("workspace_members")
+}
+
+model WorkspaceInvitation {
+  id          String   @id @default(uuid()) @db.Uuid
+  workspaceId String   @map("workspace_id") @db.Uuid
+  userId      String   @map("user_id") @db.Uuid
+  roleId      String   @map("role_id") @db.Uuid
+  invitedBy   String   @map("invited_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  user      User      @relation("InvitedUser", fields: [userId], references: [id], onDelete: Cascade)
+  role      Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  inviter   User      @relation("InvitedBy", fields: [invitedBy], references: [id], onDelete: Cascade)
+
+  @@unique([workspaceId, userId])
+  @@index([workspaceId], map: "idx_workspace_invitations_workspace")
+  @@index([userId], map: "idx_workspace_invitations_user")
+  @@map("workspace_invitations")
+}
+
+model Project {
+  id            String   @id @default(uuid()) @db.Uuid
+  workspaceId   String   @map("workspace_id") @db.Uuid
+  name          String   @db.VarChar(255)
+  slug          String   @db.VarChar(100)
+  description   String?  @db.Text
+  repositoryUrl String?  @map("repository_url") @db.VarChar(500)
+  namespace     String   @db.VarChar(100)
+  createdBy     String?  @map("created_by") @db.Uuid
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
+  creator     User?        @relation("ProjectCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  deployments Deployment[]
+  ingresses   Ingress[]
+
+  @@unique([workspaceId, slug])
+  @@index([workspaceId], map: "idx_projects_workspace")
+  @@map("projects")
+}
+
+model Deployment {
+  id             String     @id @default(uuid()) @db.Uuid
+  projectId      String     @map("project_id") @db.Uuid
+  name           String     @db.VarChar(255)
+  namespace      String     @db.VarChar(100)
+  image          String?    @db.VarChar(500)
+  replicas       Int        @default(1)
+  status         String     @default("pending") @db.VarChar(50)
+  buildStep      String?    @map("build_step") @db.VarChar(50)
+  buildType      BuildType  @default(dockerfile) @map("build_type")
+  githubRepo     String?    @map("github_repo") @db.VarChar(500)
+  githubBranch   String?    @map("github_branch") @db.VarChar(255)
+  dockerfilePath String?    @map("dockerfile_path") @db.VarChar(500)
+  buildFromRoot  Boolean    @default(false) @map("build_from_root")
+  buildLogs      String?    @map("build_logs") @db.Text
+  buildError     String?    @map("build_error") @db.Text
+  createdBy      String?    @map("created_by") @db.Uuid
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  // Auto-deploy configuration
+  autoDeployEnabled  Boolean  @default(false) @map("auto_deploy_enabled")
+  autoDeployBranch   String?  @map("auto_deploy_branch") @db.VarChar(255)
+
+  project            Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator            User?                @relation("DeploymentCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  pods               Pod[]
+  services           Service[]
+  envVars            DeploymentEnvVar[]
+  ingresses          Ingress[]
+  imageHistory       ImageHistory[]
+  volumes            DeploymentVolume[]
+  githubDeployments  GitHubDeployment[]
+
+  @@unique([projectId, name])
+  @@index([projectId], map: "idx_deployments_project")
+  @@map("deployments")
+}
+
+// Track GitHub Deployments API entries for showing status on GitHub
+model GitHubDeployment {
+  id                 String   @id @default(uuid()) @db.Uuid
+  deploymentId       String   @map("deployment_id") @db.Uuid
+  githubDeploymentId BigInt   @map("github_deployment_id")
+  owner              String   @db.VarChar(255)
+  repo               String   @db.VarChar(255)
+  ref                String   @db.VarChar(255) // branch or commit sha
+  commitSha          String   @map("commit_sha") @db.VarChar(100)
+  environment        String   @default("production") @db.VarChar(100)
+  status             String   @default("pending") @db.VarChar(50) // pending, in_progress, success, failure, error
+  logUrl             String?  @map("log_url") @db.VarChar(500)
+  environmentUrl     String?  @map("environment_url") @db.VarChar(500)
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  deployment Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+
+  @@unique([deploymentId, githubDeploymentId])
+  @@index([deploymentId], map: "idx_github_deployments_deployment")
+  @@index([owner, repo], map: "idx_github_deployments_repo")
+  @@map("github_deployments")
+}
+
+model ImageHistory {
+  id           String   @id @default(uuid()) @db.Uuid
+  deploymentId String   @map("deployment_id") @db.Uuid
+  image        String   @db.VarChar(500)
+  tag          String   @db.VarChar(100)
+  commitSha    String?  @map("commit_sha") @db.VarChar(100)
+  branch       String?  @db.VarChar(255)
+  buildLogs    String?  @map("build_logs") @db.Text
+  isActive     Boolean  @default(false) @map("is_active")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  deployment Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+
+  @@index([deploymentId], map: "idx_image_history_deployment")
+  @@index([deploymentId, createdAt], map: "idx_image_history_deployment_date")
+  @@map("image_history")
+}
+
+model DeploymentEnvVar {
+  id           String   @id @default(uuid()) @db.Uuid
+  deploymentId String   @map("deployment_id") @db.Uuid
+  key          String   @db.VarChar(255)
+  value        String   @db.Text
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  deployment Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+
+  @@unique([deploymentId, key])
+  @@index([deploymentId], map: "idx_deployment_env_vars_deployment")
+  @@map("deployment_env_vars")
+}
+
+model Pod {
+  id           String   @id @default(uuid()) @db.Uuid
+  deploymentId String   @map("deployment_id") @db.Uuid
+  name         String   @db.VarChar(255)
+  podIp        String?  @map("pod_ip") @db.VarChar(45)
+  nodeName     String?  @map("node_name") @db.VarChar(255)
+  status       String   @default("pending") @db.VarChar(50)
+  restartCount Int      @default(0) @map("restart_count")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  deployment Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+
+  @@unique([deploymentId, name])
+  @@index([deploymentId], map: "idx_pods_deployment")
+  @@map("pods")
+}
+
+enum ServiceType {
+  internal
+  external
+  ingress
+
+  @@map("service_type")
+}
+
+model Service {
+  id           String      @id @default(uuid()) @db.Uuid
+  deploymentId String      @map("deployment_id") @db.Uuid
+  name         String      @db.VarChar(255)
+  type         ServiceType
+  port         Int
+  targetPort   Int         @map("target_port")
+  protocol     String      @default("TCP") @db.VarChar(10)
+  externalIp   String?     @map("external_ip") @db.VarChar(45)
+  nodePort     Int?        @map("node_port")
+  domain       String?     @db.VarChar(255)
+  createdAt    DateTime    @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt    DateTime    @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  deployment Deployment    @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  ports      ServicePort[]
+  ingresses  Ingress[]
+
+  @@unique([deploymentId, name])
+  @@index([deploymentId], map: "idx_services_deployment")
+  @@index([type], map: "idx_services_type")
+  @@map("services")
+}
+
+model Ingress {
+  id            String   @id @default(uuid()) @db.Uuid
+  projectId     String   @map("project_id") @db.Uuid
+  deploymentId  String?  @map("deployment_id") @db.Uuid
+  serviceId     String?  @map("service_id") @db.Uuid
+  name          String   @db.VarChar(255)
+  namespace     String   @db.VarChar(100)
+  host          String   @db.VarChar(255)
+  path          String   @default("/") @db.VarChar(255)
+  pathType      String   @default("Prefix") @map("path_type") @db.VarChar(32)
+  tlsSecretName String?  @map("tls_secret_name") @db.VarChar(255)
+  tlsHosts      String[] @default([]) @map("tls_hosts")
+  ingressClass  String?  @map("ingress_class") @db.VarChar(100)
+  entrypoints   String[] @default([])
+  clusterIssuer String?  @map("cluster_issuer") @db.VarChar(255)
+  annotations   Json?    @db.Json
+  statusAddress String?  @map("status_address") @db.VarChar(255)
+  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  project    Project     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  deployment Deployment? @relation(fields: [deploymentId], references: [id], onDelete: SetNull)
+  service    Service?    @relation(fields: [serviceId], references: [id], onDelete: SetNull)
+
+  @@unique([namespace, name])
+  @@index([projectId], map: "idx_ingresses_project")
+  @@index([deploymentId], map: "idx_ingresses_deployment")
+  @@index([serviceId], map: "idx_ingresses_service")
+  @@map("ingresses")
+}
+
+model ServicePort {
+  id         String  @id @default(uuid()) @db.Uuid
+  serviceId  String  @map("service_id") @db.Uuid
+  name       String? @db.VarChar(63)
+  port       Int
+  targetPort Int     @map("target_port")
+  protocol   String  @default("TCP") @db.VarChar(10)
+  nodePort   Int?    @map("node_port")
+
+  service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
+
+  @@index([serviceId], map: "idx_service_ports_service")
+  @@map("service_ports")
+}
+
+enum VolumeType {
+  pvc
+  hostPath
+  emptyDir
+
+  @@map("volume_type")
+}
+
+enum BuildType {
+  dockerfile
+  railpack
+
+  @@map("build_type")
+}
+
+model DeploymentVolume {
+  id           String     @id @default(uuid()) @db.Uuid
+  deploymentId String     @map("deployment_id") @db.Uuid
+  name         String     @db.VarChar(255)
+  type         VolumeType
+  mountPath    String     @map("mount_path") @db.VarChar(500)
+  pvcName      String?    @map("pvc_name") @db.VarChar(255)
+  hostPath     String?    @map("host_path") @db.VarChar(500)
+  readOnly     Boolean    @default(false) @map("read_only")
+  createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt    DateTime   @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  deployment Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+
+  @@unique([deploymentId, name])
+  @@index([deploymentId], map: "idx_deployment_volumes_deployment")
+  @@map("deployment_volumes")
+}
