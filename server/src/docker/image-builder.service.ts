@@ -718,11 +718,22 @@ fi
       },
     };
 
+    console.log(`[ImageBuilder] Creating job ${jobName} in namespace ${this.builderNamespace}`, {
+      imageName: fullImageName,
+      repoUrl: repoUrl.replace(/\/\/[^@]+@/, '//***@'),
+      branch,
+      dockerfilePath,
+      buildType,
+      initContainerCount: initContainers.length,
+      hasCacheEnabled: this.s3CacheEnabled,
+      envVarsCount: Object.keys(envVars).length,
+    });
+
     try {
-      await batchApi.createNamespacedJob(this.builderNamespace, job);
+      const jobCreationResult = await batchApi.createNamespacedJob(this.builderNamespace, job);
+      console.log(`[ImageBuilder] Job ${jobName} created successfully. UID: ${jobCreationResult.body.metadata?.uid}`);
       await this.appendLog(deploymentId, `Build job ${jobName} created successfully`);
 
-      // Store the job name in deployment metadata for tracking
       if (deploymentId) {
         await this.prisma.deployment.update({
           where: { id: deploymentId },
@@ -736,8 +747,19 @@ fi
     } catch (error) {
       const errorDetails = error.body ? JSON.stringify(error.body, null, 2) : error.message;
       const errorMsg = `Failed to create build job: ${error.message}${error.body ? `\nDetails: ${errorDetails}` : ''}`;
+      
+      console.error('[ImageBuilder] Job creation failed:', {
+        jobName,
+        namespace: this.builderNamespace,
+        error: error.message,
+        statusCode: error.statusCode,
+        errorBody: error.body,
+        errorStack: error.stack,
+      });
+      
       await this.appendLog(deploymentId, errorMsg, 'ERROR');
-      console.error('[ImageBuilder] Job creation error:', errorDetails);
+      await this.appendLog(deploymentId, `Job creation error details: ${errorDetails}`, 'ERROR');
+      
       throw new BadRequestException(`Failed to create build job: ${error.message}`);
     }
   }
@@ -905,6 +927,15 @@ fi
       const job = await batchApi.readNamespacedJob(jobName, this.builderNamespace);
       const jobSpec = job.body;
 
+      console.log(`[ImageBuilder] Job ${jobName} status:`, JSON.stringify({
+        succeeded: jobSpec.status?.succeeded,
+        failed: jobSpec.status?.failed,
+        active: jobSpec.status?.active,
+        conditions: jobSpec.status?.conditions,
+        startTime: jobSpec.status?.startTime,
+        completionTime: jobSpec.status?.completionTime,
+      }));
+
       let status: BuildJobStatus['status'] = 'unknown';
       let logs = '';
 
@@ -912,13 +943,13 @@ fi
         status = 'succeeded';
       } else if (jobSpec.status?.failed && jobSpec.status.failed > 0) {
         status = 'failed';
+        console.error(`[ImageBuilder] Job ${jobName} failed. Conditions:`, JSON.stringify(jobSpec.status?.conditions));
       } else if (jobSpec.status?.active && jobSpec.status.active > 0) {
         status = 'running';
       } else {
         status = 'pending';
       }
 
-      // Try to get logs from the pod
       try {
         const pods = await coreApi.listNamespacedPod(
           this.builderNamespace,
@@ -929,29 +960,126 @@ fi
           `job-name=${jobName}`
         );
 
+        console.log(`[ImageBuilder] Found ${pods.body.items.length} pods for job ${jobName}`);
+
         if (pods.body.items.length > 0) {
-          const podName = pods.body.items[0].metadata?.name;
+          const pod = pods.body.items[0];
+          const podName = pod.metadata?.name;
+          const podPhase = pod.status?.phase;
+          const podConditions = pod.status?.conditions;
+          const containerStatuses = pod.status?.containerStatuses;
+          const initContainerStatuses = pod.status?.initContainerStatuses;
+
+          console.log(`[ImageBuilder] Pod ${podName} details:`, JSON.stringify({
+            phase: podPhase,
+            conditions: podConditions,
+            containerStatuses: containerStatuses?.map(cs => ({
+              name: cs.name,
+              ready: cs.ready,
+              state: cs.state,
+              lastState: cs.lastState,
+            })),
+            initContainerStatuses: initContainerStatuses?.map(ics => ({
+              name: ics.name,
+              ready: ics.ready,
+              state: ics.state,
+              lastState: ics.lastState,
+            })),
+          }));
+
+          if (status === 'failed' || podPhase === 'Failed') {
+            const failureReasons: string[] = [];
+            
+            if (containerStatuses) {
+              for (const cs of containerStatuses) {
+                if (cs.state?.terminated) {
+                  failureReasons.push(`Container ${cs.name} terminated: ${cs.state.terminated.reason || 'Unknown'} - ${cs.state.terminated.message || 'No message'}`);
+                  console.error(`[ImageBuilder] Container failure:`, JSON.stringify(cs.state.terminated));
+                }
+                if (cs.state?.waiting) {
+                  failureReasons.push(`Container ${cs.name} waiting: ${cs.state.waiting.reason || 'Unknown'} - ${cs.state.waiting.message || 'No message'}`);
+                  console.error(`[ImageBuilder] Container waiting:`, JSON.stringify(cs.state.waiting));
+                }
+              }
+            }
+
+            if (initContainerStatuses) {
+              for (const ics of initContainerStatuses) {
+                if (ics.state?.terminated && ics.state.terminated.exitCode !== 0) {
+                  failureReasons.push(`Init container ${ics.name} failed with exit code ${ics.state.terminated.exitCode}: ${ics.state.terminated.reason || 'Unknown'} - ${ics.state.terminated.message || 'No message'}`);
+                  console.error(`[ImageBuilder] Init container failure:`, JSON.stringify(ics.state.terminated));
+                }
+                if (ics.state?.waiting) {
+                  failureReasons.push(`Init container ${ics.name} waiting: ${ics.state.waiting.reason || 'Unknown'} - ${ics.state.waiting.message || 'No message'}`);
+                  console.error(`[ImageBuilder] Init container waiting:`, JSON.stringify(ics.state.waiting));
+                }
+              }
+            }
+
+            if (failureReasons.length > 0) {
+              logs = `Build job failed with the following reasons:\n${failureReasons.join('\n')}\n\n`;
+            }
+          }
+
           if (podName) {
-            const logResponse = await coreApi.readNamespacedPodLog(
-              podName,
-              this.builderNamespace,
-              'buildkit',
-              undefined,
-              undefined,
-              undefined,
-              undefined,
-              undefined,
-              undefined,
-              5000 // tail last 5000 lines
-            );
-            logs = logResponse.body;
+            try {
+              const logResponse = await coreApi.readNamespacedPodLog(
+                podName,
+                this.builderNamespace,
+                'buildkit',
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                undefined,
+                5000
+              );
+              logs += logResponse.body;
+            } catch (buildkitLogError) {
+              console.warn(`[ImageBuilder] Could not fetch buildkit logs for pod ${podName}:`, buildkitLogError.message);
+              
+              try {
+                const allContainerLogs: string[] = [];
+                
+                if (initContainerStatuses) {
+                  for (const ics of initContainerStatuses) {
+                    try {
+                      const initLogResponse = await coreApi.readNamespacedPodLog(
+                        podName,
+                        this.builderNamespace,
+                        ics.name,
+                        undefined,
+                        undefined,
+                        undefined,
+                        undefined,
+                        undefined,
+                        undefined,
+                        1000
+                      );
+                      allContainerLogs.push(`\n=== Init Container: ${ics.name} ===\n${initLogResponse.body}`);
+                    } catch (initLogErr) {
+                      console.warn(`[ImageBuilder] Could not fetch logs for init container ${ics.name}:`, initLogErr.message);
+                    }
+                  }
+                }
+
+                if (allContainerLogs.length > 0) {
+                  logs += allContainerLogs.join('\n');
+                }
+              } catch (fallbackError) {
+                console.error(`[ImageBuilder] Failed to fetch any container logs:`, fallbackError.message);
+              }
+            }
           }
         }
       } catch (logError) {
-        console.warn(`[ImageBuilder] Could not fetch logs for job ${jobName}:`, logError.message);
+        console.error(`[ImageBuilder] Error fetching pod details for job ${jobName}:`, logError.message);
+        if (logError.body) {
+          console.error(`[ImageBuilder] Error body:`, JSON.stringify(logError.body));
+        }
       }
 
-      // Extract image reference from job annotations
       const imageRef = jobSpec.metadata?.annotations?.['orchard.dev/full-image'];
 
       return {
@@ -962,11 +1090,16 @@ fi
       };
     } catch (error) {
       if (error.statusCode === 404) {
+        console.warn(`[ImageBuilder] Job ${jobName} not found (404)`);
         return {
           jobName,
           status: 'unknown',
           logs: 'Job not found',
         };
+      }
+      console.error(`[ImageBuilder] Error reading job ${jobName}:`, error.message);
+      if (error.body) {
+        console.error(`[ImageBuilder] Error body:`, JSON.stringify(error.body));
       }
       throw error;
     }
@@ -974,45 +1107,99 @@ fi
 
   async waitForBuildJob(jobName: string, deploymentId?: string, timeoutMs: number = 1800000): Promise<BuildJobStatus> {
     const startTime = Date.now();
-    const pollInterval = 5000; // 5 seconds
+    const pollInterval = 5000;
+    let lastLoggedStatus = '';
+    let pollCount = 0;
 
+    console.log(`[ImageBuilder] Starting to wait for build job ${jobName} (timeout: ${timeoutMs / 1000}s, deploymentId: ${deploymentId})`);
     await this.appendLog(deploymentId, `Waiting for build job ${jobName} to complete...`);
 
     while (Date.now() - startTime < timeoutMs) {
-      const status = await this.getBuildJobStatus(jobName);
-
-      if (status.status === 'succeeded') {
-        await this.appendLog(deploymentId, `Build job ${jobName} completed successfully`);
-        if (status.logs) {
-          // Log the last portion of the build output
-          const logLines = status.logs.split('\n').slice(-50).join('\n');
-          await this.appendLog(deploymentId, `Build output:\n${logLines}`);
+      pollCount++;
+      const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
+      
+      try {
+        const status = await this.getBuildJobStatus(jobName);
+        
+        if (status.status !== lastLoggedStatus) {
+          console.log(`[ImageBuilder] Job ${jobName} status changed: ${lastLoggedStatus} -> ${status.status} (poll #${pollCount}, elapsed: ${elapsedSeconds}s)`);
+          lastLoggedStatus = status.status;
         }
-        return status;
-      }
 
-      if (status.status === 'failed') {
-        await this.appendLog(deploymentId, `Build job ${jobName} failed`, 'ERROR');
-        if (status.logs) {
-          await this.appendLog(deploymentId, `Build logs:\n${status.logs}`, 'ERROR');
+        if (status.status === 'succeeded') {
+          console.log(`[ImageBuilder] Build job ${jobName} completed successfully after ${elapsedSeconds}s`);
+          await this.appendLog(deploymentId, `Build job ${jobName} completed successfully`);
+          if (status.logs) {
+            const logLines = status.logs.split('\n').slice(-50).join('\n');
+            await this.appendLog(deploymentId, `Build output:\n${logLines}`);
+          }
+          return status;
         }
-        throw new BadRequestException(`Build job failed: ${status.logs || 'Unknown error'}`);
-      }
 
-      // Log progress for running builds
-      if (status.status === 'running' && status.logs) {
-        const logLines = status.logs.split('\n');
-        const recentLines = logLines.slice(-5).join('\n');
-        if (recentLines.trim()) {
-          await this.appendLog(deploymentId, `Build progress:\n${recentLines}`);
+        if (status.status === 'failed') {
+          const errorMsg = status.logs || 'Unknown error - no logs available';
+          console.error(`[ImageBuilder] Build job ${jobName} failed after ${elapsedSeconds}s. Error: ${errorMsg.substring(0, 500)}`);
+          await this.appendLog(deploymentId, `Build job ${jobName} failed`, 'ERROR');
+          
+          if (status.logs) {
+            await this.appendLog(deploymentId, `Build failure details:\n${status.logs}`, 'ERROR');
+          } else {
+            await this.appendLog(deploymentId, 'No build logs available - this may indicate a pod scheduling or initialization failure', 'ERROR');
+          }
+
+          const detailedError = status.logs 
+            ? `Build job failed: ${status.logs}` 
+            : 'Build job failed: No logs available. This typically indicates a pod scheduling failure, image pull error, or init container failure. Check Kubernetes pod events for more details.';
+          
+          throw new BadRequestException(detailedError);
         }
+
+        if (status.status === 'running' && status.logs) {
+          const logLines = status.logs.split('\n');
+          const recentLines = logLines.slice(-5).join('\n');
+          if (recentLines.trim()) {
+            await this.appendLog(deploymentId, `Build progress:\n${recentLines}`);
+          }
+        }
+
+        if (status.status === 'pending' && elapsedSeconds > 60) {
+          console.warn(`[ImageBuilder] Job ${jobName} still pending after ${elapsedSeconds}s - possible scheduling issue`);
+          if (elapsedSeconds % 30 === 0) {
+            await this.appendLog(deploymentId, `Build job still pending after ${elapsedSeconds}s - waiting for pod to be scheduled...`, 'WARNING');
+          }
+        }
+
+      } catch (error) {
+        console.error(`[ImageBuilder] Error polling build job ${jobName} status (poll #${pollCount}):`, error.message);
+        if (error.body) {
+          console.error(`[ImageBuilder] Error details:`, JSON.stringify(error.body));
+        }
+        
+        if (error instanceof BadRequestException) {
+          throw error;
+        }
+        
+        await this.appendLog(deploymentId, `Warning: Error checking build status: ${error.message}`, 'WARNING');
       }
 
       await new Promise(resolve => setTimeout(resolve, pollInterval));
     }
 
-    await this.appendLog(deploymentId, `Build job ${jobName} timed out after ${timeoutMs / 1000}s`, 'ERROR');
-    throw new BadRequestException(`Build job timed out after ${timeoutMs / 1000} seconds`);
+    const finalElapsed = Math.floor((Date.now() - startTime) / 1000);
+    console.error(`[ImageBuilder] Build job ${jobName} timed out after ${finalElapsed}s (${pollCount} polls)`);
+    await this.appendLog(deploymentId, `Build job ${jobName} timed out after ${finalElapsed}s`, 'ERROR');
+    
+    try {
+      const finalStatus = await this.getBuildJobStatus(jobName);
+      await this.appendLog(deploymentId, `Final status: ${finalStatus.status}`, 'ERROR');
+      if (finalStatus.logs) {
+        await this.appendLog(deploymentId, `Final logs:\n${finalStatus.logs}`, 'ERROR');
+      }
+    } catch (finalCheckError) {
+      console.error(`[ImageBuilder] Could not fetch final status:`, finalCheckError.message);
+    }
+    
+    throw new BadRequestException(`Build job timed out after ${finalElapsed} seconds (last status: ${lastLoggedStatus})`);
   }
 
   async deleteBuildJob(jobName: string): Promise<void> {
@@ -1038,43 +1225,72 @@ fi
   }
 
   async buildAndPush(options: BuildJobOptions): Promise<string> {
-    const { imageName, tag = 'latest', deploymentId } = options;
+    const { imageName, tag = 'latest', deploymentId, repoUrl, branch, buildType = 'dockerfile' } = options;
+
+    console.log(`[ImageBuilder] buildAndPush called with:`, {
+      imageName,
+      tag,
+      deploymentId,
+      repoUrl,
+      branch,
+      dockerfilePath: options.dockerfilePath,
+      buildType,
+      target: options.target,
+      buildFromRoot: options.buildFromRoot,
+      hasAccessToken: !!options.accessToken,
+      envVarsCount: Object.keys(options.envVars || {}).length,
+    });
 
     try {
-      await this.appendLog(deploymentId, `Starting BuildKit build for ${options.repoUrl}@${options.branch}`);
+      await this.appendLog(deploymentId, `Starting BuildKit build for ${repoUrl}@${branch} (type: ${buildType})`);
       await this.setBuildStep(deploymentId, 'starting');
 
-      // Create the build job
       const jobName = await this.createBuildJob(options);
+      console.log(`[ImageBuilder] Created build job: ${jobName}`);
 
-      // Wait for it to complete
       const status = await this.waitForBuildJob(jobName, deploymentId);
 
-      // Get the final image reference
       const fullImagePath = `${this.harborRegistryPull}/${this.harborProject}/${imageName}:${tag}`;
 
+      console.log(`[ImageBuilder] Build completed successfully: ${fullImagePath}`);
       await this.appendLog(deploymentId, `Build and push completed successfully!`);
       await this.appendLog(deploymentId, `Image available at: ${fullImagePath}`);
       await this.setBuildStep(deploymentId, 'completed');
 
-      // Cleanup the job (optional, since TTL will also clean it up)
       await this.deleteBuildJob(jobName);
 
       return fullImagePath;
     } catch (error) {
       const errorMsg = `Build failed: ${error.message}`;
-      console.error('[ImageBuilder]', errorMsg);
+      const errorStack = error.stack || 'No stack trace available';
+      
+      console.error('[ImageBuilder] Build failed:', {
+        deploymentId,
+        imageName,
+        tag,
+        error: errorMsg,
+        stack: errorStack,
+        errorType: error.constructor.name,
+        statusCode: error.statusCode || error.status,
+        responseBody: error.body || error.response,
+      });
+
       await this.appendLog(deploymentId, errorMsg, 'ERROR');
+      await this.appendLog(deploymentId, `Error type: ${error.constructor.name}`, 'ERROR');
       await this.setBuildStep(deploymentId, 'failed');
 
       if (deploymentId) {
-        await this.prisma.deployment.update({
-          where: { id: deploymentId },
-          data: {
-            status: 'failed',
-            buildError: error.message,
-          },
-        });
+        try {
+          await this.prisma.deployment.update({
+            where: { id: deploymentId },
+            data: {
+              status: 'failed',
+              buildError: error.message,
+            },
+          });
+        } catch (dbError) {
+          console.error('[ImageBuilder] Failed to update deployment status:', dbError.message);
+        }
       }
 
       throw error;

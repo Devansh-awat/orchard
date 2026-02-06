@@ -86,6 +86,7 @@ let inviting = $state(false);
 let joining = $state(false);
 let leaving = $state(false);
 let roles = $state<Array<{ id: string; name: string }>>([]);
+let currentOrgMembership = $state<OrgMember | null>(null);
 
 	const currentUserId = $derived($user?.id);
 	const currentUserMember = $derived.by(() => {
@@ -93,6 +94,11 @@ let roles = $state<Array<{ id: string; name: string }>>([]);
 		return workspace.members?.find(m => m.user.id === currentUserId);
 	});
 	const isWorkspaceAdmin = $derived(currentUserMember?.role?.name === 'admin');
+	const isOrgAdminOrOwner = $derived(
+		currentOrgMembership && 
+		(currentOrgMembership.role === 'owner' || currentOrgMembership.role === 'admin')
+	);
+	const canManageMembers = $derived(isWorkspaceAdmin || isOrgAdminOrOwner);
 	const isMember = $derived(!!currentUserMember);
 
 	let filteredProjects = $derived.by(() => {
@@ -159,12 +165,25 @@ let roles = $state<Array<{ id: string; name: string }>>([]);
 		}
 	}
 
-	async function inviteMember() {
+	async function fetchCurrentOrgMembership() {
+		if (!workspace?.organization?.id) return;
+
+		try {
+			const response = await apiFetch(`/apiv1/organizations/${workspace.organization.id}/members/me`);
+			if (response.ok) {
+				currentOrgMembership = await response.json();
+			}
+		} catch (e) {
+			console.error('Failed to fetch current org membership:', e);
+		}
+	}
+
+	async function addMember() {
 		if (!workspace || !selectedUserId || !selectedRoleId || inviting) return;
 
 		inviting = true;
 		try {
-			const response = await apiFetch(`/apiv1/workspaces/${workspace.id}/invite`, {
+			const response = await apiFetch(`/apiv1/workspaces/${workspace.id}/members`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
@@ -175,11 +194,11 @@ let roles = $state<Array<{ id: string; name: string }>>([]);
 
 			if (!response.ok) {
 				const data = await response.json();
-				throw new Error(data.message || 'Failed to invite member');
+				throw new Error(data.message || 'Failed to add member');
 			}
 
 			toasts.add({
-				title: 'Member invited',
+				title: 'Member added successfully',
 				color: 'success'
 			});
 
@@ -190,7 +209,7 @@ let roles = $state<Array<{ id: string; name: string }>>([]);
 		} catch (e) {
 			toasts.add({
 				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to invite member',
+				description: e instanceof Error ? e.message : 'Failed to add member',
 				color: 'error'
 			});
 		} finally {
@@ -279,6 +298,7 @@ let roles = $state<Array<{ id: string; name: string }>>([]);
 		await user.fetchUser();
 		await fetchWorkspace();
 		await fetchRoles();
+		await fetchCurrentOrgMembership();
 	});
 
 	
@@ -523,7 +543,7 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 					<h2 class="text-lg font-semibold" style="color: var(--center-channel-color);">
 						Members ({workspace.members?.length ?? 0})
 					</h2>
-					{#if isWorkspaceAdmin}
+					{#if canManageMembers}
 						<button
 							class="btn btn-sm btn-primary"
 							onclick={() => {
@@ -532,7 +552,7 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 							}}
 						>
 							<UserPlus class="h-4 w-4" />
-							Invite
+							Add Member
 						</button>
 					{/if}
 				</div>
@@ -621,7 +641,7 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 			style="background-color: var(--surface-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
 		>
 			<div class="mb-4 flex items-center justify-between">
-				<h2 class="text-lg font-semibold">Invite Member</h2>
+				<h2 class="text-lg font-semibold">Add Member to Workspace</h2>
 				<button
 					class="btn btn-ghost btn-sm"
 					onclick={() => {
@@ -690,7 +710,7 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 					</button>
 					<button
 						class="btn btn-primary flex-1"
-						onclick={inviteMember}
+						onclick={addMember}
 						disabled={!selectedUserId || !selectedRoleId || inviting}
 					>
 						{#if inviting}
@@ -698,7 +718,7 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 						{:else}
 							<UserPlus class="h-4 w-4" />
 						{/if}
-						Invite
+						Add Member
 					</button>
 				</div>
 			</div>

@@ -853,12 +853,25 @@ export class DockerService {
       buildMode = this.defaultBuildMode,
     } = options;
 
-    // Use Kubernetes-based BuildKit builder if available and requested
+    console.log('[Docker Service] buildAndPushFromGitHub called:', {
+      repoUrl,
+      branch,
+      dockerfilePath,
+      imageName,
+      tag,
+      deploymentId,
+      buildType,
+      buildMode,
+      defaultBuildMode: this.defaultBuildMode,
+      hasImageBuilderService: !!this.imageBuilderService,
+    });
+
     if (buildMode === 'kubernetes' && this.imageBuilderService) {
+      console.log('[Docker Service] Using Kubernetes build mode');
       return this.buildWithKubernetes(options);
     }
 
-    // Fall back to local Docker build
+    console.log('[Docker Service] Falling back to local Docker build');
     return this.buildWithLocalDocker(options);
   }
 
@@ -879,13 +892,27 @@ export class DockerService {
       buildType = 'dockerfile',
     } = options;
 
+    console.log('[Docker Service] buildWithKubernetes called:', {
+      repoUrl,
+      branch,
+      dockerfilePath,
+      imageName,
+      tag,
+      deploymentId,
+      hasAccessToken: !!accessToken,
+      target,
+      buildFromRoot,
+      buildType,
+    });
+
     if (!this.imageBuilderService) {
-      throw new BadRequestException('ImageBuilderService not available for Kubernetes builds');
+      const error = 'ImageBuilderService not available for Kubernetes builds';
+      console.error('[Docker Service]', error);
+      throw new BadRequestException(error);
     }
 
     await this.appendLog(deploymentId, `Using Kubernetes BuildKit builder for ${repoUrl}@${branch}`);
 
-    // Get environment variables for the build
     let envVars: Record<string, string> = {};
     if (deploymentId) {
       try {
@@ -899,29 +926,49 @@ export class DockerService {
             acc[envVar.key] = envVar.value;
             return acc;
           }, {} as Record<string, string>);
+          console.log(`[Docker Service] Loaded ${Object.keys(envVars).length} environment variables for deployment ${deploymentId}`);
         }
       } catch (error) {
-        console.error('[Docker Service] Failed to get deployment env vars:', error);
+        console.error('[Docker Service] Failed to get deployment env vars:', {
+          deploymentId,
+          error: error.message,
+          stack: error.stack,
+        });
       }
     }
 
-    // Ensure the service account and RBAC are set up
-    await this.imageBuilderService.ensureServiceAccount();
+    try {
+      console.log('[Docker Service] Ensuring service account is set up...');
+      await this.imageBuilderService.ensureServiceAccount();
+      console.log('[Docker Service] Service account ready, delegating to ImageBuilderService');
 
-    // Delegate to the ImageBuilderService
-    return this.imageBuilderService.buildAndPush({
-      repoUrl,
-      branch,
-      dockerfilePath,
-      imageName,
-      tag,
-      deploymentId,
-      accessToken,
-      target,
-      buildFromRoot,
-      buildType,
-      envVars,
-    });
+      const result = await this.imageBuilderService.buildAndPush({
+        repoUrl,
+        branch,
+        dockerfilePath,
+        imageName,
+        tag,
+        deploymentId,
+        accessToken,
+        target,
+        buildFromRoot,
+        buildType,
+        envVars,
+      });
+
+      console.log('[Docker Service] Build completed successfully:', result);
+      return result;
+    } catch (error) {
+      console.error('[Docker Service] Build failed in buildWithKubernetes:', {
+        deploymentId,
+        imageName,
+        tag,
+        error: error.message,
+        errorType: error.constructor.name,
+        stack: error.stack,
+      });
+      throw error;
+    }
   }
 
   /**

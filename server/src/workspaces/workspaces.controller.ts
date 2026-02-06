@@ -69,6 +69,29 @@ export class WorkspacesController {
     return this.workspacesService.deleteWorkspace(id, req.user.sub);
   }
 
+  @Post(':id/members')
+  @UseGuards(AuthGuard)
+  async addMemberToWorkspace(
+    @Param('id') workspaceId: string,
+    @Body('userId') userId: string,
+    @Body('roleId') roleId: string,
+    @Request() req
+  ) {
+    return this.workspacesService.addMemberToWorkspace(
+      workspaceId,
+      userId,
+      roleId,
+      req.user.sub,
+      {
+        email: req.user.email,
+        username: req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        imageUrl: req.user.imageUrl,
+      }
+    );
+  }
+
   @Post(':id/invite')
   @UseGuards(AuthGuard)
   async inviteMemberToWorkspace(

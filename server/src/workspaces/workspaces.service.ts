@@ -447,6 +447,113 @@ export class WorkspacesService {
     });
   }
 
+  async addMemberToWorkspace(
+    workspaceId: string,
+    userId: string,
+    roleId: string,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const adder = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!adder) {
+      throw new NotFoundException('User not found');
+    }
+
+    const workspace = await this.prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      include: {
+        organization: true,
+        members: {
+          where: { userId: adder.id },
+          include: { role: true },
+        },
+      },
+    });
+
+    if (!workspace) {
+      throw new NotFoundException('Workspace not found');
+    }
+
+    const isWorkspaceAdmin = workspace.members.some(m => m.role.name === 'admin' && m.userId === adder.id);
+    const orgMembership = await this.prisma.organizationMember.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId: workspace.organizationId,
+          userId: adder.id,
+        },
+      },
+    });
+
+    const isOrgAdminOrOwner = orgMembership && (orgMembership.role === 'owner' || orgMembership.role === 'admin');
+
+    if (!isWorkspaceAdmin && !isOrgAdminOrOwner) {
+      throw new ForbiddenException('Only workspace admins or organization admins/owners can add members');
+    }
+
+    const orgMember = await this.prisma.organizationMember.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId: workspace.organizationId,
+          userId,
+        },
+      },
+    });
+
+    if (!orgMember) {
+      throw new BadRequestException('User must be an organization member first');
+    }
+
+    const existingMember = await this.prisma.workspaceMember.findFirst({
+      where: {
+        workspaceId,
+        userId,
+      },
+    });
+
+    if (existingMember) {
+      throw new BadRequestException('User is already a member of this workspace');
+    }
+
+    const member = await this.prisma.workspaceMember.create({
+      data: {
+        workspaceId,
+        userId,
+        roleId,
+        addedBy: adder.id,
+      },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            username: true,
+            firstName: true,
+            lastName: true,
+            imageUrl: true,
+            hackClubId: true,
+          },
+        },
+        role: true,
+      },
+    });
+
+    if (!member.user.imageUrl && member.user.hackClubId) {
+      const imageUrl = await this.usersService.syncImageUrlFromClerk(member.user.hackClubId);
+      if (imageUrl) {
+        member.user.imageUrl = imageUrl;
+      }
+    }
+
+    return member;
+  }
+
   async inviteMemberToWorkspace(
     workspaceId: string,
     userId: string,
@@ -494,7 +601,7 @@ export class WorkspacesService {
     const isOrgAdminOrOwner = orgMembership && (orgMembership.role === 'owner' || orgMembership.role === 'admin');
 
     if (!isWorkspaceAdmin && !isOrgAdminOrOwner) {
-      throw new ForbiddenException('Only workspace admins can invite members');
+      throw new ForbiddenException('Only workspace admins or organization admins/owners can invite members');
     }
 
     const orgMember = await this.prisma.organizationMember.findUnique({

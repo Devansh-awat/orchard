@@ -901,8 +901,16 @@ export class ProjectsService {
 
     try {
       const buildTypeLabel = data.buildType === 'railpack' ? 'Railpack' : 'Dockerfile';
-      console.log(`[Projects] Building image from GitHub using ${buildTypeLabel}: ${data.repoUrl}@${data.branch} -> ${data.imageName}:${data.tag}${data.target ? ` (target: ${data.target})` : ''}`);
+      console.log(`[Projects] Building image from GitHub using ${buildTypeLabel}: ${data.repoUrl}@${data.branch} -> ${data.imageName}:${data.tag}${data.target ? ` (target: ${data.target})` : ''}`, {
+        deploymentId,
+        dockerfilePath: data.dockerfilePath,
+        buildFromRoot: data.buildFromRoot,
+        hasAccessToken: !!githubAccessToken,
+        isRebuild: data.isRebuild,
+      });
 
+      const buildStartTime = Date.now();
+      
       const image = await this.dockerService.buildAndPushFromGitHub({
         repoUrl: data.repoUrl,
         branch: data.branch,
@@ -916,7 +924,8 @@ export class ProjectsService {
         accessToken: githubAccessToken,
       });
 
-      console.log(`[Projects] Built and pushed image: ${image}, ${data.isRebuild ? 'updating' : 'creating'} Kubernetes resources`);
+      const buildDuration = Math.floor((Date.now() - buildStartTime) / 1000);
+      console.log(`[Projects] Built and pushed image: ${image}, ${data.isRebuild ? 'updating' : 'creating'} Kubernetes resources (build took ${buildDuration}s)`);
 
       // Update deployment with final image
       await this.prisma.deployment.update({
@@ -1237,24 +1246,51 @@ export class ProjectsService {
         }
       }
     } catch (error) {
-      // Clear the log update interval
       if (logUpdateInterval) {
         clearInterval(logUpdateInterval);
         logUpdateInterval = null;
       }
 
-      console.error(`[Projects] Build failed for deployment ${deploymentId}:`, error);
+      const errorDetails = {
+        deploymentId,
+        imageName: data.imageName,
+        tag: data.tag,
+        repoUrl: data.repoUrl,
+        branch: data.branch,
+        buildType: data.buildType,
+        errorMessage: error.message,
+        errorType: error.constructor.name,
+        errorStack: error.stack,
+        statusCode: error.statusCode || error.status,
+        response: error.response,
+        isRebuild: data.isRebuild,
+      };
 
-      await this.prisma.deployment.update({
-        where: { id: deploymentId },
-        data: {
-          status: 'failed',
-          buildError: error.message,
-          buildLogs: (await this.prisma.deployment.findUnique({ where: { id: deploymentId }, select: { buildLogs: true } }))?.buildLogs + `\n❌ Error: ${error.message}`,
-        },
-      }).catch(err => {
-        console.error(`[Projects] Failed to update error status:`, err);
-      });
+      console.error(`[Projects] Build failed for deployment ${deploymentId}:`, errorDetails);
+
+      try {
+        const currentDeployment = await this.prisma.deployment.findUnique({
+          where: { id: deploymentId },
+          select: { buildLogs: true, buildStep: true },
+        });
+
+        const errorLogEntry = `\n❌ Build failed at step '${currentDeployment?.buildStep || 'unknown'}'\nError: ${error.message}\nError Type: ${error.constructor.name}\n`;
+        
+        await this.prisma.deployment.update({
+          where: { id: deploymentId },
+          data: {
+            status: 'failed',
+            buildError: error.message,
+            buildLogs: (currentDeployment?.buildLogs || '') + errorLogEntry,
+          },
+        });
+      } catch (dbErr) {
+        console.error(`[Projects] Failed to update error status in database:`, {
+          deploymentId,
+          dbError: dbErr.message,
+          originalError: error.message,
+        });
+      }
 
       // Update GitHub deployment status to failure (legacy - user token)
       if (data.githubDeploymentId && data.repoInfo && data.githubAccessToken) {
