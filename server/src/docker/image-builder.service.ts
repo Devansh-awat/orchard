@@ -370,6 +370,69 @@ ${registryConfigs}
     ];
   }
 
+  private generateBuildScriptWithCacheFallback(buildctlArgs: string[]): string {
+    const cacheArgs = this.buildCacheArgs();
+    const hasCacheEnabled = cacheArgs.length > 0;
+
+    const argsWithCache = [...buildctlArgs].map(arg => 
+      arg.includes(' ') || arg.includes('"') ? `"${arg.replace(/"/g, '\\"')}"` : arg
+    ).join(' ');
+
+    if (!hasCacheEnabled) {
+      return `buildctl-daemonless.sh ${argsWithCache}`;
+    }
+
+    const argsWithoutCache = buildctlArgs.filter((arg, idx, arr) => {
+      if (arg === '--import-cache' || arg === '--export-cache') {
+        return false;
+      }
+      if (idx > 0 && (arr[idx - 1] === '--import-cache' || arr[idx - 1] === '--export-cache')) {
+        return false;
+      }
+      return true;
+    }).map(arg => 
+      arg.includes(' ') || arg.includes('"') ? `"${arg.replace(/"/g, '\\"')}"` : arg
+    ).join(' ');
+
+    return `
+set +e
+
+echo "=== Attempting build with S3 cache enabled ==="
+BUILD_OUTPUT=$(mktemp)
+buildctl-daemonless.sh ${argsWithCache} 2>&1 | tee "$BUILD_OUTPUT"
+BUILD_EXIT_CODE=\${PIPESTATUS[0]}
+
+if [ $BUILD_EXIT_CODE -eq 0 ]; then
+  echo "=== Build completed successfully with cache ==="
+  rm -f "$BUILD_OUTPUT"
+  exit 0
+fi
+
+echo "=== Build with cache failed (exit code: $BUILD_EXIT_CODE) ==="
+
+if grep -qi "failed to check file presence in cache\\|BadRequest\\|Bad Request\\|operation error S3\\|api error BadRequest" "$BUILD_OUTPUT"; then
+  echo "=================================================="
+  echo "WARNING: S3 cache operation failed"
+  echo "Failed to save/load cache - skipping cache"
+  echo "Retrying without cache..."
+  echo "=================================================="
+  
+  rm -f "$BUILD_OUTPUT"
+  
+  echo "=== Retrying build without cache ==="
+  set -e
+  buildctl-daemonless.sh ${argsWithoutCache}
+  
+  echo "=== Build completed successfully (without cache) ==="
+  exit 0
+else
+  echo "=== Build failed with non-cache error ==="
+  rm -f "$BUILD_OUTPUT"
+  exit $BUILD_EXIT_CODE
+fi
+`.trim();
+  }
+
   async createBuildJob(options: BuildJobOptions): Promise<string> {
     this.ensureKubeConfig();
 
@@ -627,8 +690,9 @@ fi
                   privileged: true,
                 },
                 // Use buildctl-daemonless.sh - handles daemon startup internally
-                command: ['buildctl-daemonless.sh'],
-                args: buildctlArgs,
+                // Wrap with cache error handling
+                command: ['/bin/sh', '-c'],
+                args: [this.generateBuildScriptWithCacheFallback(buildctlArgs)],
                 workingDir: '/workspace',
                 env: [
                   { name: 'DOCKER_CONFIG', value: '/root/.docker' },
