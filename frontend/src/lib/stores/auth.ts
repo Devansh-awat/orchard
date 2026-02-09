@@ -12,6 +12,7 @@ export interface User {
 	imageUrl?: string;
 	fullName?: string;
 	primaryEmailAddress?: { emailAddress: string };
+	isSuperAdmin?: boolean;
 }
 
 function createAuthStore() {
@@ -78,3 +79,4 @@ function createAuthStore() {
 export const user = createAuthStore();
 export const isSignedIn = derived(user, ($user) => $user !== null);
 export const isLoaded = derived(user.loading, ($loading) => !$loading);
+export const isSuperAdmin = derived(user, ($user) => $user?.isSuperAdmin === true);

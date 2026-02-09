@@ -12,7 +12,6 @@
 		ExternalLink,
 		Trash2,
 		RefreshCw,
-		Users,
 		Globe,
 		Server
 	} from 'lucide-svelte';
@@ -228,13 +227,23 @@
 </script>
 
 <div class="p-6">
-	<button
-		onclick={() => window.history.back()}
-		class="mb-6 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 cursor-pointer"
-	>
-		<ArrowLeft class="h-4 w-4" />
-		Back to workspace
-	</button>
+	{#if project?.workspace?.slug}
+		<button
+			onclick={() => goto(`/workspaces/${project.workspace.slug}`)}
+			class="mb-6 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 cursor-pointer"
+		>
+			<ArrowLeft class="h-4 w-4" />
+			Back to workspace
+		</button>
+	{:else}
+		<button
+			onclick={() => goto('/')}
+			class="mb-6 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 cursor-pointer"
+		>
+			<ArrowLeft class="h-4 w-4" />
+			Back to home
+		</button>
+	{/if}
 
 	{#if error}
 		<div class="alert alert-error mb-6">{error}</div>
@@ -294,12 +303,6 @@
 						>
 							{project.deployments?.length ?? 0} deployments
 						</span>
-						<span
-							class="rounded-full px-3 py-1 font-medium"
-							style="background-color: var(--control-bg); border: 1px solid var(--surface-border); color: var(--center-channel-color);"
-						>
-							{project.members?.length ?? 0} members
-						</span>
 					</div>
 				</div>
 				<div class="mt-4 flex flex-wrap items-center justify-between gap-3">
@@ -331,9 +334,9 @@
 				</div>
 			</div>
 
-			<div class="grid gap-6 lg:grid-cols-3">
+			<div>
 				<!-- Deployments Section -->
-				<div class="lg:col-span-2">
+				<div>
 					<div class="mb-4 flex items-center justify-between">
 						<h2 class="text-lg font-semibold" style="color: var(--center-channel-color);">
 							Deployments ({project.deployments?.length ?? 0})
@@ -457,50 +460,6 @@
 							{/if}
 						</div>
 					{/if}
-				</div>
-
-				<!-- Members Section -->
-				<div class="space-y-3">
-					<h2 class="text-lg font-semibold" style="color: var(--center-channel-color);">
-						Members ({project.members?.length ?? 0})
-					</h2>
-					<div class="card">
-						<div class="divide-y" style="border-color: var(--surface-border);">
-							{#if project.members?.length}
-								{#each project.members as member}
-									<div class="flex items-center gap-3 p-3">
-										{#if member.user.imageUrl}
-											<img
-												src={member.user.imageUrl}
-												alt={member.user.firstName || member.user.email}
-												class="h-8 w-8 rounded-full object-cover"
-											/>
-										{:else}
-											<div
-												class="flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium"
-												style="background-color: color-mix(in srgb, var(--surface-border) 80%, var(--center-channel-bg)); color: var(--center-channel-color);"
-											>
-												{member.user.firstName?.[0] || member.user.email[0].toUpperCase()}
-											</div>
-										{/if}
-										<div class="flex-1 min-w-0">
-											<p class="truncate text-sm font-medium" style="color: var(--center-channel-color);">
-												{member.user.firstName} {member.user.lastName || ''}
-											</p>
-											<p class="truncate text-xs" style="color: var(--surface-muted);">{member.user.email}</p>
-										</div>
-										<span class="badge badge-neutral text-xs">
-											{member.role}
-										</span>
-									</div>
-								{/each}
-							{:else}
-								<div class="p-4 text-center text-sm" style="color: var(--surface-muted);">
-									No members
-								</div>
-							{/if}
-						</div>
-					</div>
 				</div>
 			</div>
 		{/if}

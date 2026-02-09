@@ -1457,4 +1457,129 @@ fi
   getImagePath(imageName: string, tag: string = 'latest'): string {
     return `${this.harborRegistryPull}/${this.harborProject}/${imageName}:${tag}`;
   }
+
+  /**
+   * Parse an image string (e.g. harbor.1mp.dev/orchard/namespace-name:tag)
+   * and return the repo name (without project prefix) and tag.
+   */
+  private parseImageRef(image: string): { repoName: string; tag: string | null } {
+    const tagIndex = image.lastIndexOf(':');
+    const imagePath = tagIndex !== -1 ? image.substring(0, tagIndex) : image;
+    const tag = tagIndex !== -1 ? image.substring(tagIndex + 1) : null;
+
+    const registryPrefixes = [this.harborRegistryPush, this.harborRegistryPull];
+    let repo = imagePath;
+    for (const prefix of registryPrefixes) {
+      if (repo.startsWith(prefix + '/')) {
+        repo = repo.substring(prefix.length + 1);
+        break;
+      }
+    }
+    const repoName = repo.replace(`${this.harborProject}/`, '');
+    return { repoName, tag };
+  }
+
+  private getHarborAuth(): { authHeader: string; registryUrl: string } | null {
+    const harborUsername = process.env.HARBOR_USERNAME;
+    const harborPassword = process.env.HARBOR_PASSWORD;
+    if (!harborUsername || !harborPassword) {
+      console.warn('[ImageBuilder] Harbor credentials not configured, skipping registry image deletion');
+      return null;
+    }
+    const authHeader = 'Basic ' + Buffer.from(`${harborUsername}:${harborPassword}`).toString('base64');
+    const registryUrl = this.harborRegistryPull.startsWith('http')
+      ? this.harborRegistryPull
+      : `https://${this.harborRegistryPull}`;
+    return { authHeader, registryUrl };
+  }
+
+  /**
+   * Delete a specific artifact (tag) from a Harbor repository.
+   * Used when pruning old images while keeping the repository intact.
+   */
+  async deleteArtifactFromRegistry(image: string): Promise<void> {
+    try {
+      const { repoName, tag } = this.parseImageRef(image);
+      if (!tag) {
+        console.warn(`[ImageBuilder] Cannot delete artifact without tag: ${image}`);
+        return;
+      }
+
+      const auth = this.getHarborAuth();
+      if (!auth) return;
+
+      const deleteUrl = `${auth.registryUrl}/api/v2.0/projects/${this.harborProject}/repositories/${encodeURIComponent(repoName)}/artifacts/${encodeURIComponent(tag)}`;
+
+      const response = await fetch(deleteUrl, {
+        method: 'DELETE',
+        headers: { 'Authorization': auth.authHeader },
+      });
+
+      if (response.ok) {
+        console.log(`[ImageBuilder] Deleted artifact from registry: ${this.harborProject}/${repoName}:${tag}`);
+      } else if (response.status === 404) {
+        console.warn(`[ImageBuilder] Artifact not found in registry (already deleted?): ${this.harborProject}/${repoName}:${tag}`);
+      } else {
+        const body = await response.text();
+        console.error(`[ImageBuilder] Failed to delete artifact: ${this.harborProject}/${repoName}:${tag}, status: ${response.status}, body: ${body}`);
+      }
+    } catch (error) {
+      console.error(`[ImageBuilder] Error deleting artifact from registry: ${image}`, error);
+    }
+  }
+
+  /**
+   * Delete an entire repository from Harbor.
+   * Used when a deployment is fully deleted and all images should be removed.
+   */
+  async deleteRepositoryFromRegistry(image: string): Promise<void> {
+    try {
+      const { repoName } = this.parseImageRef(image);
+
+      const auth = this.getHarborAuth();
+      if (!auth) return;
+
+      const deleteUrl = `${auth.registryUrl}/api/v2.0/projects/${this.harborProject}/repositories/${encodeURIComponent(repoName)}`;
+
+      const response = await fetch(deleteUrl, {
+        method: 'DELETE',
+        headers: { 'Authorization': auth.authHeader },
+      });
+
+      if (response.ok) {
+        console.log(`[ImageBuilder] Deleted repository from registry: ${this.harborProject}/${repoName}`);
+      } else if (response.status === 404) {
+        console.warn(`[ImageBuilder] Repository not found in registry (already deleted?): ${this.harborProject}/${repoName}`);
+      } else {
+        const body = await response.text();
+        console.error(`[ImageBuilder] Failed to delete repository: ${this.harborProject}/${repoName}, status: ${response.status}, body: ${body}`);
+      }
+    } catch (error) {
+      console.error(`[ImageBuilder] Error deleting repository from registry: ${image}`, error);
+    }
+  }
+
+  /**
+   * Delete specific artifacts (tags) from Harbor.
+   */
+  async deleteArtifactsFromRegistry(images: string[]): Promise<void> {
+    for (const image of images) {
+      await this.deleteArtifactFromRegistry(image);
+    }
+  }
+
+  /**
+   * Delete entire repositories from Harbor.
+   * Deduplicates by repo name so the same repository isn't deleted multiple times.
+   */
+  async deleteRepositoriesFromRegistry(images: string[]): Promise<void> {
+    const seenRepos = new Set<string>();
+    for (const image of images) {
+      const { repoName } = this.parseImageRef(image);
+      if (!seenRepos.has(repoName)) {
+        seenRepos.add(repoName);
+        await this.deleteRepositoryFromRegistry(image);
+      }
+    }
+  }
 }

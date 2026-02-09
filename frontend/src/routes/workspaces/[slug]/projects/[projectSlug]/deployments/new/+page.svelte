@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { apiFetch, toasts, refreshTree } from '$lib/stores';
-	import { ArrowLeft, Loader2, Container, Github, Plus, Trash2, HardDrive } from 'lucide-svelte';
+	import { ArrowLeft, Loader2, Container, Github, Plus, Trash2, HardDrive, Eye, EyeOff } from 'lucide-svelte';
 
 	function handleClickOutside(event: MouseEvent, dropdownType: 'repo' | 'branch' | 'dockerfile') {
 		const target = event.target as HTMLElement;
@@ -84,6 +84,16 @@
 	let ports = $state([{ name: 'http', containerPort: 80, servicePort: 80, protocol: 'TCP' }]);
 	let envVars = $state([{ key: '', value: '' }]);
 	let envPasteText = $state('');
+	let revealedIndices = $state<Set<number>>(new Set());
+
+	function toggleReveal(index: number) {
+		revealedIndices = new Set(revealedIndices);
+		if (revealedIndices.has(index)) {
+			revealedIndices.delete(index);
+		} else {
+			revealedIndices.add(index);
+		}
+	}
 	let volumes = $state<Array<{ name: string; type: 'pvc' | 'hostPath' | 'emptyDir'; mountPath: string; pvcName?: string; hostPath?: string; readOnly: boolean }>>([]);
 
 	const workspaceSlug = $derived($page.params.slug);
@@ -955,9 +965,27 @@
 				</div>
 				<div class="space-y-2 max-h-64 overflow-y-auto max-w-2xl">
 					{#each envVars as env, index}
+						{@const isRevealed = revealedIndices.has(index)}
 						<div class="flex items-center gap-2">
 							<input type="text" bind:value={env.key} placeholder="KEY" class="input w-64 font-mono" />
-							<input type="text" bind:value={env.value} placeholder="value" class="input flex-1 font-mono" />
+							<input
+								type={isRevealed ? 'text' : 'password'}
+								bind:value={env.value}
+								placeholder="value"
+								class="input flex-1 font-mono"
+							/>
+							<button
+								type="button"
+								onclick={() => toggleReveal(index)}
+								class="btn btn-ghost shrink-0"
+								aria-label={isRevealed ? 'Hide value' : 'Show value'}
+							>
+								{#if isRevealed}
+									<EyeOff class="h-4 w-4" />
+								{:else}
+									<Eye class="h-4 w-4" />
+								{/if}
+							</button>
 							<button onclick={() => removeEnvVar(index)} disabled={envVars.length <= 1} class="btn btn-ghost">
 								<Trash2 class="h-4 w-4" />
 							</button>

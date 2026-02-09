@@ -10,6 +10,7 @@ import { UsersModule } from './users/users.module';
 import { GitHubModule } from './github/github.module';
 import { DockerModule } from './docker/docker.module';
 import { EmailModule } from './email/email.module';
+import { AdminModule } from './admin/admin.module';
 
 @Module({
   imports: [
@@ -24,6 +25,7 @@ import { EmailModule } from './email/email.module';
     GitHubModule,
     DockerModule,
     EmailModule,
+    AdminModule,
   ],
 })
 export class AppModule {}

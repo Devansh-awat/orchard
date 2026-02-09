@@ -22,9 +22,7 @@
 		Users,
 		FolderKanban,
 		ArrowRight,
-		Mail,
-		KeyRound,
-		ShieldCheck
+		KeyRound
 	} from 'lucide-svelte';
 
 interface Workspace {
@@ -342,208 +340,177 @@ let passkeySupportReason = $state<string | null>(null);
 
 <div class="p-6">
 	{#if !$isSignedIn}
-		<!-- Landing page for unauthenticated users -->
-		<div class="min-h-[90vh] px-2 py-6 sm:px-8 sm:py-12">
-			<div class="mx-auto grid w-full max-w-5xl gap-6 lg:grid-cols-[1.1fr,0.9fr]">
-				<section
-					class="rounded-3xl border p-8 shadow-sm"
-					style="background-color: var(--surface-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
+		<div class="login-page">
+			<div class="login-panel">
+				<h1 class="login-title">Orchard</h1>
+				<button class="login-primary" onclick={() => user.signIn()}>
+					Continue with Hack Club
+				</button>
+				<div class="login-divider">
+					<span>or</span>
+				</div>
+				<form
+					class="login-form"
+					novalidate
+					onsubmit={(e) => {
+						e.preventDefault();
+						if (otpStep === 'email') requestOtp();
+						else verifyOtp();
+					}}
 				>
-					<div class="inline-flex items-center gap-2 rounded-full px-3 py-1 text-xs font-semibold uppercase tracking-wide"
-						style="background-color: var(--control-bg); color: var(--surface-muted); border: 1px solid var(--surface-border);">
-						<ShieldCheck class="h-4 w-4" />
-						Secure Access
-					</div>
-					<div class="mt-6 space-y-4">
-						<h1 class="text-3xl font-bold leading-tight">
-							Welcome to Orchard
-						</h1>
-						<p class="text-base" style="color: var(--surface-muted);">
-							Orchard keeps Kubernetes approachable with guided workspaces, observability, and automated deployments.
-							Choose the sign-in method that works best for you.
-						</p>
-					</div>
-					<ul class="mt-8 space-y-4 text-sm">
-						<li class="flex items-start gap-3">
-							<div class="rounded-full bg-primary-600/10 p-2 text-primary-600">
-								<FolderKanban class="h-4 w-4" />
-							</div>
-							<div>
-								<p class="font-semibold">Collaborative workspaces</p>
-								<p class="text-sm" style="color: var(--surface-muted);">
-									Share clusters, manage deployments, and keep your team on the same page.
-								</p>
-							</div>
-						</li>
-						<li class="flex items-start gap-3">
-							<div class="rounded-full bg-primary-600/10 p-2 text-primary-600">
-								<Users class="h-4 w-4" />
-							</div>
-							<div>
-								<p class="font-semibold">Flexible authentication</p>
-								<p class="text-sm" style="color: var(--surface-muted);">
-									Use email OTPs, passkeys, or continue with Hack Club login.
-								</p>
-							</div>
-						</li>
-					</ul>
-					<div class="mt-10 flex flex-col gap-3 sm:flex-row">
-						<button class="btn btn-primary w-full sm:w-auto px-6 py-3 text-base" onclick={() => user.signIn()}>
-							Continue with Hack Club
-						</button>
-					</div>
-				</section>
-
-				<div class="space-y-4">
-					<div class="card p-6 space-y-5">
-						<div class="flex items-center gap-3">
-							<div class="rounded-2xl bg-primary-600/10 p-3 text-primary-600">
-								<Mail class="h-5 w-5" />
-							</div>
-							<div>
-								<p class="text-sm font-semibold uppercase" style="color: var(--surface-muted);">
-									Email sign-in
-								</p>
-								<h2 class="text-xl font-semibold">One-time passcode</h2>
-							</div>
-						</div>
-							<form
-								class="space-y-4"
-								novalidate
-								onsubmit={(event) => {
-								event.preventDefault();
-								if (otpStep === 'email') {
-									requestOtp();
-								} else {
-									verifyOtp();
-								}
-							}}
-						>
-								<div class="space-y-1">
-									<label
-										for="otp-email"
-										class="text-xs uppercase tracking-wide"
-										style="color: var(--surface-muted);"
-									>
-										Work email
-									</label>
-									<input
-										class="input"
-										type="email"
-										placeholder="you@company.com"
-										id="otp-email"
-										bind:value={otpEmail}
-										autocomplete="email"
-										required
-									/>
-								</div>
-								{#if otpStep === 'code'}
-									<div class="space-y-1">
-										<div class="flex items-center justify-between text-xs uppercase tracking-wide" style="color: var(--surface-muted);">
-											<label for="otp-code">6-digit code</label>
-											<button
-												type="button"
-												class="text-[11px] font-semibold uppercase text-primary-600 hover:text-primary-700"
-											onclick={() => {
-												otpStep = 'email';
-												otpCode = '';
-												otpMessage = null;
-											}}
-										>
-											Use another email
-											</button>
-										</div>
-										<input
-											class="input"
-											type="text"
-											inputmode="numeric"
-											maxlength="6"
-											placeholder="••••••"
-											id="otp-code"
-											bind:value={otpCode}
-											autocomplete="one-time-code"
-										/>
-									</div>
-								{/if}
-
-							{#if otpError}
-								<p class="text-sm text-red-500">{otpError}</p>
-							{/if}
-							{#if otpMessage}
-								<p class="text-sm text-green-600">{otpMessage}</p>
-							{/if}
-
-							<button
-								class="btn btn-primary w-full"
-								type="submit"
-								disabled={otpRequesting || otpVerifying}
-							>
-								{#if otpRequesting || otpVerifying}
-									<Loader2 class="h-4 w-4 animate-spin" />
-								{/if}
-								{otpStep === 'email' ? 'Send code' : 'Verify and sign in'}
+					<input
+						class="input login-input"
+						type="email"
+						placeholder="Email"
+						id="otp-email"
+						bind:value={otpEmail}
+						autocomplete="email"
+						required
+					/>
+					{#if otpStep === 'code'}
+						<div class="login-otp-row">
+							<input
+								class="input login-input login-code"
+								type="text"
+								inputmode="numeric"
+								maxlength="6"
+								placeholder="Code"
+								id="otp-code"
+								bind:value={otpCode}
+								autocomplete="one-time-code"
+							/>
+							<button type="button" class="login-back" onclick={() => { otpStep = 'email'; otpCode = ''; otpMessage = null; }}>
+								Back
 							</button>
-						</form>
-					</div>
-
-					<div class="card p-6 space-y-5">
-						<div class="flex items-center gap-3">
-							<div class="rounded-2xl bg-primary-600/10 p-3 text-primary-600">
-								<KeyRound class="h-5 w-5" />
-							</div>
-							<div>
-								<p class="text-sm font-semibold uppercase" style="color: var(--surface-muted);">
-									Passkey
-								</p>
-								<h2 class="text-xl font-semibold">Use a saved device</h2>
-							</div>
 						</div>
-						{#if passkeySupported}
-							<div class="space-y-3">
-								<div class="space-y-1">
-									<label
-										for="passkey-email"
-										class="text-xs uppercase tracking-wide"
-										style="color: var(--surface-muted);"
-									>
-										Account email (optional)
-									</label>
-									<input
-										class="input"
-										type="email"
-										placeholder="Helps us pick the right passkey"
-										id="passkey-email"
-										bind:value={passkeyEmail}
-									/>
-								</div>
-								<button
-									class="btn btn-secondary w-full"
-									type="button"
-									onclick={signInWithPasskey}
-									disabled={passkeyLoading}
-								>
-									{#if passkeyLoading}
-										<Loader2 class="h-4 w-4 animate-spin" />
-									{/if}
-									Use passkey
-								</button>
-								{#if passkeyError}
-									<p class="text-sm text-red-500">{passkeyError}</p>
-								{/if}
-								<p class="text-xs" style="color: var(--surface-muted);">
-									Use Touch ID, Face ID, or Windows Hello. Need to register one? Sign in and add it from your settings.
-								</p>
-							</div>
-						{:else}
-							<p class="text-sm" style="color: var(--surface-muted);">
-								{passkeySupportReason ??
-									'Passkeys aren’t available in this browser. Try Chrome, Safari, or Edge on a device with Face ID, Touch ID, or Windows Hello support.'}
-							</p>
+					{/if}
+					{#if otpError}
+						<p class="login-error">{otpError}</p>
+					{/if}
+					{#if otpMessage}
+						<p class="login-success">{otpMessage}</p>
+					{/if}
+					<button class="btn btn-primary login-submit" type="submit" disabled={otpRequesting || otpVerifying}>
+						{#if otpRequesting || otpVerifying}
+							<Loader2 class="h-4 w-4 animate-spin" />
+						{/if}
+						{otpStep === 'email' ? 'Send code' : 'Verify'}
+					</button>
+				</form>
+				{#if passkeySupported}
+					<div class="login-passkey">
+						<input
+							class="input login-input"
+							type="email"
+							placeholder="Email (optional)"
+							id="passkey-email"
+							bind:value={passkeyEmail}
+						/>
+						<button class="btn btn-secondary login-passkey-btn" type="button" onclick={signInWithPasskey} disabled={passkeyLoading}>
+							{#if passkeyLoading}
+								<Loader2 class="h-4 w-4 animate-spin" />
+							{/if}
+							<KeyRound class="h-4 w-4" />
+							Passkey
+						</button>
+						{#if passkeyError}
+							<p class="login-error">{passkeyError}</p>
 						{/if}
 					</div>
-				</div>
+				{:else if passkeySupportReason}
+					<p class="login-muted">{passkeySupportReason}</p>
+				{/if}
 			</div>
 		</div>
+		<style>
+			.login-page {
+				min-height: 100vh;
+				display: flex;
+				align-items: center;
+				justify-content: center;
+				padding: 1.5rem;
+				background: linear-gradient(165deg, var(--surface-bg) 0%, var(--control-bg) 100%);
+			}
+			.login-panel {
+				width: 100%;
+				max-width: 22rem;
+				padding: 2.5rem;
+				border-radius: 1.25rem;
+				border: 1px solid var(--surface-border);
+				background: var(--surface-bg);
+				box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.08);
+			}
+			.login-title {
+				font-size: 1.75rem;
+				font-weight: 700;
+				letter-spacing: -0.02em;
+				color: var(--center-channel-color);
+				text-align: center;
+				margin-bottom: 1.75rem;
+			}
+			.login-primary {
+				width: 100%;
+				padding: 0.75rem 1.25rem;
+				font-size: 0.9375rem;
+				font-weight: 600;
+				color: white;
+				background: var(--button-bg);
+				border: none;
+				border-radius: 0.75rem;
+				cursor: pointer;
+				transition: opacity 0.15s, transform 0.1s;
+			}
+			.login-primary:hover { opacity: 0.95; }
+			.login-primary:active { transform: scale(0.99); }
+			.login-divider {
+				display: flex;
+				align-items: center;
+				gap: 1rem;
+				margin: 1.5rem 0;
+			}
+			.login-divider::before,
+			.login-divider::after {
+				content: '';
+				flex: 1;
+				height: 1px;
+				background: var(--surface-border);
+			}
+			.login-divider span {
+				font-size: 0.75rem;
+				font-weight: 500;
+				text-transform: uppercase;
+				letter-spacing: 0.05em;
+				color: var(--surface-muted);
+			}
+			.login-form, .login-passkey {
+				display: flex;
+				flex-direction: column;
+				gap: 0.75rem;
+			}
+			.login-passkey { margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid var(--surface-border); }
+			.login-input {
+				width: 100%;
+				padding: 0.625rem 0.875rem;
+				font-size: 0.9375rem;
+				border-radius: 0.5rem;
+			}
+			.login-code { max-width: 6ch; }
+			.login-otp-row { display: flex; align-items: center; gap: 0.5rem; }
+			.login-back {
+				font-size: 0.8125rem;
+				font-weight: 500;
+				color: var(--surface-muted);
+				background: none;
+				border: none;
+				cursor: pointer;
+				padding: 0.25rem;
+			}
+			.login-back:hover { color: var(--link-color); }
+			.login-submit, .login-passkey-btn { width: 100%; justify-content: center; gap: 0.5rem; }
+			.login-error { font-size: 0.8125rem; color: var(--error-text-color); }
+			.login-success { font-size: 0.8125rem; color: #16a34a; }
+			.login-muted { font-size: 0.75rem; color: var(--surface-muted); margin-top: 0.5rem; }
+		</style>
 	{:else}
 		<!-- Dashboard for authenticated users -->
 			<div class="mb-6 flex items-center justify-between">

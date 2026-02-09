@@ -1,4 +1,4 @@
-export { user, isSignedIn, isLoaded, type User } from './auth';
+export { user, isSignedIn, isLoaded, isSuperAdmin, type User } from './auth';
 export { apiBase, apiFetch, initApiBase } from './api';
 export { toasts, type Toast } from './toast';
 export {

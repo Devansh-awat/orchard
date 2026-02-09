@@ -24,9 +24,13 @@
 		Check,
 		HardDrive,
 		ChevronDown,
-		Pencil
+		Pencil,
+		Eye,
+		EyeOff
 	} from 'lucide-svelte';
-	import { scale } from 'svelte/transition';
+	import { scale, fade } from 'svelte/transition';
+	import { Clock, Minimize2, Maximize2 } from 'lucide-svelte';
+	import DeploymentProgress from '$lib/components/DeploymentProgress.svelte';
 
 	interface Pod {
 		name: string;
@@ -326,6 +330,16 @@
 
 	let envVars = $state<Array<{ key: string; value: string }>>([{ key: '', value: '' }]);
 	let envPasteText = $state('');
+	let revealedIndices = $state<Set<number>>(new Set());
+
+	function toggleReveal(index: number) {
+		revealedIndices = new Set(revealedIndices);
+		if (revealedIndices.has(index)) {
+			revealedIndices.delete(index);
+		} else {
+			revealedIndices.add(index);
+		}
+	}
 	let volumes = $state<Array<{ name: string; type: 'pvc' | 'hostPath' | 'emptyDir'; mountPath: string; pvcName?: string; hostPath?: string; readOnly: boolean }>>([]);
 	let showServiceForm = $state(false);
 	let newServiceForm = $state<ServiceFormState>({
@@ -350,6 +364,136 @@
 	let copiedUrlId = $state<string | null>(null);
 	let isEditingEnv = $state(false);
 	let isEditingServices = $state(false);
+
+	// Build modal state
+	let showBuildModal = $state(false);
+	let showBuildCard = $state(false);
+	let buildStartTime = $state<number>(0);
+	let buildElapsed = $state(0);
+	let accumulatedBuildLogs = $state<string | null>(null);
+	let buildPollInterval: ReturnType<typeof setInterval> | null = null;
+	let buildElapsedInterval: ReturnType<typeof setInterval> | null = null;
+	let buildModalStatus = $state<string>('pending');
+	let buildModalStep = $state<string | null>(null);
+	let buildModalError = $state<string | null>(null);
+	let buildModalWarnings = $state<Array<{ podName: string; message: string; timestamp: string }>>([]);
+	let cancelingBuild = $state(false);
+
+	function formatBuildElapsed(seconds: number): string {
+		const m = Math.floor(seconds / 60);
+		const s = seconds % 60;
+		if (m > 0) return `${m}m ${s}s`;
+		return `${s}s`;
+	}
+
+	function startBuildPolling() {
+		buildStartTime = Date.now();
+		buildElapsed = 0;
+		accumulatedBuildLogs = null;
+		buildModalStatus = 'pending';
+		buildModalStep = null;
+		buildModalError = null;
+		buildModalWarnings = [];
+
+		buildElapsedInterval = setInterval(() => {
+			buildElapsed = Math.floor((Date.now() - buildStartTime) / 1000);
+		}, 1000);
+
+		buildPollInterval = setInterval(async () => {
+			try {
+				const response = await apiFetch(`/apiv1/deployments/${deploymentId}`);
+				if (!response.ok) return;
+				const data = await response.json();
+
+				buildModalStatus = data.status;
+				buildModalStep = data.buildStep ?? null;
+				buildModalError = data.buildError ?? null;
+				buildModalWarnings = data.warnings ?? [];
+				if (data.buildLogs) {
+					accumulatedBuildLogs = data.buildLogs;
+				}
+
+				if (data.status === 'running') {
+					stopBuildPolling();
+					// Brief delay to show completion state
+					setTimeout(() => {
+						showBuildModal = false;
+						showBuildCard = false;
+						fetchDeployment();
+					}, 1500);
+				} else if (data.status === 'failed') {
+					if (buildElapsedInterval) {
+						clearInterval(buildElapsedInterval);
+						buildElapsedInterval = null;
+					}
+				}
+			} catch {}
+		}, 2000);
+	}
+
+	function stopBuildPolling() {
+		if (buildPollInterval) {
+			clearInterval(buildPollInterval);
+			buildPollInterval = null;
+		}
+		if (buildElapsedInterval) {
+			clearInterval(buildElapsedInterval);
+			buildElapsedInterval = null;
+		}
+	}
+
+	function minimizeBuildModal() {
+		showBuildModal = false;
+		showBuildCard = true;
+	}
+
+	function expandBuildCard() {
+		showBuildCard = false;
+		showBuildModal = true;
+	}
+
+	async function cancelBuildFromModal() {
+		if (cancelingBuild) return;
+		cancelingBuild = true;
+		try {
+			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/cancel`, {
+				method: 'POST'
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to cancel build');
+			}
+			toasts.add({
+				title: 'Build cancelled',
+				description: 'The build has been cancelled successfully',
+				color: 'success'
+			});
+			stopBuildPolling();
+			showBuildModal = false;
+			showBuildCard = false;
+			fetchDeployment();
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to cancel build',
+				color: 'error'
+			});
+		} finally {
+			cancelingBuild = false;
+		}
+	}
+
+	const buildProgressValue = $derived(() => {
+		const steps = ['cloning', 'building', 'pushing', 'deploying', 'complete'];
+		if (buildModalStatus === 'running' || buildModalStep === 'complete') return 100;
+		if (!buildModalStep) return 0;
+		const idx = steps.indexOf(buildModalStep);
+		if (idx < 0) return 0;
+		if (buildModalStatus === 'failed') return ((idx + 1) / steps.length) * 100;
+		return ((idx + 0.5) / steps.length) * 100;
+	});
+
+	const canCancelBuild = $derived(buildModalStatus === 'building' || buildModalStatus === 'pending');
 
 	const deploymentId = $derived($page.params.id);
 
@@ -617,7 +761,8 @@
 			const data = await response.json();
 
 			// Redirect to progress page if deployment is still building (GitHub deployments only)
-			if (data.status === 'building' && data.githubRepo) {
+			// Skip redirect if build modal/card is active (rebuild was triggered from this page)
+			if (data.status === 'building' && data.githubRepo && !showBuildModal && !showBuildCard) {
 				goto(`/deployments/${deploymentId}/progress`, { replaceState: true });
 				return;
 			}
@@ -633,6 +778,7 @@
 			}
 
 			if (!isEditingEnv) {
+				revealedIndices = new Set();
 				if (data.envVars && Array.isArray(data.envVars) && data.envVars.length > 0) {
 					envVars = [
 						...data.envVars.map((ev: { key: string; value: string }) => ({
@@ -787,7 +933,10 @@
 				description: 'Building new image from repository',
 				color: 'success'
 			});
-			fetchDeployment();
+			// Open the build modal instead of redirecting to progress page
+			showBuildModal = true;
+			showBuildCard = false;
+			startBuildPolling();
 		} catch (e) {
 			toasts.add({
 				title: 'Error',
@@ -809,7 +958,8 @@
 				method: 'DELETE'
 			});
 			if (!response.ok) {
-				throw new Error('Failed to delete deployment');
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to delete deployment');
 			}
 			toasts.add({
 				title: 'Deployment deleted',
@@ -1423,15 +1573,33 @@
 		}
 	});
 
-	onMount(() => {
-		fetchDeployment();
-		deploymentInterval = setInterval(fetchDeployment, 10000);
-		podInterval = setInterval(() => {
-			if (selectedPod && selectedContainer) {
-				fetchLogs();
+	$effect(() => {
+		if (deploymentId) {
+			loading = true;
+			error = null;
+			deployment = null;
+			
+			if (deploymentInterval) {
+				clearInterval(deploymentInterval);
 			}
-		}, 5000);
+			if (podInterval) {
+				clearInterval(podInterval);
+			}
+			if (buildLogsInterval) {
+				clearInterval(buildLogsInterval);
+			}
+			
+			fetchDeployment();
+			deploymentInterval = setInterval(fetchDeployment, 10000);
+			podInterval = setInterval(() => {
+				if (selectedPod && selectedContainer) {
+					fetchLogs();
+				}
+			}, 5000);
+		}
+	});
 
+	onMount(() => {
 		function handleClickOutside(event: MouseEvent) {
 			const target = event.target as HTMLElement;
 			if (!target.closest('.custom-dropdown-container')) {
@@ -1455,17 +1623,28 @@
 		if (buildLogsInterval) {
 			clearInterval(buildLogsInterval);
 		}
+		stopBuildPolling();
 	});
 </script>
 
 <div class="deployment-page p-6">
-	<button
-		onclick={() => window.history.back()}
-		class="mb-4 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 cursor-pointer"
-	>
-		<ArrowLeft class="h-4 w-4" />
-		<span>Back to workspace</span>
-	</button>
+	{#if deployment?.project?.workspace?.slug && deployment?.project?.slug}
+		<button
+			onclick={() => goto(`/workspaces/${deployment.project.workspace.slug}/projects/${deployment.project.slug}`)}
+			class="mb-4 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 cursor-pointer"
+		>
+			<ArrowLeft class="h-4 w-4" />
+			<span>Back to project</span>
+		</button>
+	{:else}
+		<button
+			onclick={() => goto('/')}
+			class="mb-4 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 cursor-pointer"
+		>
+			<ArrowLeft class="h-4 w-4" />
+			<span>Back to home</span>
+		</button>
+	{/if}
 
 	{#if error}
 		<div class="alert alert-error mb-6">{error}</div>
@@ -1976,9 +2155,30 @@
 									</div>
 								</details>
 								{#each envVars as env, index}
+									{@const isRevealed = revealedIndices.has(index)}
 									<div class="grid gap-3 md:grid-cols-[250px_1fr_auto]">
 										<input type="text" bind:value={env.key} placeholder="KEY" class="input font-mono" onfocus={() => isEditingEnv = true} />
-										<input type="text" bind:value={env.value} placeholder="value" class="input font-mono" onfocus={() => isEditingEnv = true} />
+										<div class="flex gap-2">
+											<input
+												type={isRevealed ? 'text' : 'password'}
+												bind:value={env.value}
+												placeholder="value"
+												class="input font-mono flex-1"
+												onfocus={() => isEditingEnv = true}
+											/>
+											<button
+												type="button"
+												onclick={() => toggleReveal(index)}
+												class="btn btn-ghost shrink-0"
+												aria-label={isRevealed ? 'Hide value' : 'Show value'}
+											>
+												{#if isRevealed}
+													<EyeOff class="h-4 w-4" />
+												{:else}
+													<Eye class="h-4 w-4" />
+												{/if}
+											</button>
+										</div>
 										<button onclick={() => removeEnvRow(index)} class="btn btn-ghost" aria-label="Remove row">
 											<X class="h-4 w-4" />
 										</button>
@@ -2971,6 +3171,129 @@
 	{/if}
 </div>
 
+<!-- Build Progress Modal -->
+{#if showBuildModal}
+	<div
+		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+		transition:fade={{ duration: 150 }}
+		role="dialog"
+		aria-modal="true"
+		aria-label="Build progress"
+		onclick={(e) => { if (e.target === e.currentTarget) minimizeBuildModal(); }}
+		onkeydown={(e) => { if (e.key === 'Escape') minimizeBuildModal(); }}
+	>
+		<div
+			class="build-modal card w-full max-w-2xl rounded-2xl shadow-2xl"
+			transition:scale={{ duration: 150, start: 0.95 }}
+		>
+			<div class="flex items-center justify-between border-b px-6 py-4" style="border-color: var(--surface-border);">
+				<div class="flex items-center gap-3">
+					<h2 class="text-lg font-semibold">Rebuilding {deployment?.name ?? 'deployment'}</h2>
+					<div class="flex items-center gap-1.5 text-sm" style="color: var(--surface-muted);">
+						<Clock class="h-3.5 w-3.5" />
+						<span class="font-mono">{formatBuildElapsed(buildElapsed)}</span>
+					</div>
+				</div>
+				<button
+					onclick={minimizeBuildModal}
+					class="btn-icon rounded-lg p-1.5 transition-colors"
+					title="Minimize"
+				>
+					<Minimize2 class="h-4 w-4" />
+				</button>
+			</div>
+
+			<div class="p-6">
+				<DeploymentProgress
+					status={buildModalStatus}
+					buildStep={buildModalStep}
+					buildLogs={accumulatedBuildLogs}
+					buildError={buildModalError}
+					isGitHubDeploy={true}
+					warnings={buildModalWarnings}
+				/>
+			</div>
+
+			<div class="flex justify-end gap-3 border-t px-6 py-4" style="border-color: var(--surface-border);">
+				{#if buildModalStatus === 'failed'}
+					<button
+						onclick={() => { showBuildModal = false; showBuildCard = false; stopBuildPolling(); }}
+						class="btn btn-secondary text-sm"
+					>
+						Close
+					</button>
+				{:else if canCancelBuild}
+					<button
+						onclick={cancelBuildFromModal}
+						disabled={cancelingBuild}
+						class="btn btn-danger text-sm"
+					>
+						{#if cancelingBuild}
+							<Loader2 class="h-3.5 w-3.5 animate-spin" />
+							Cancelling...
+						{:else}
+							<X class="h-3.5 w-3.5" />
+							Cancel build
+						{/if}
+					</button>
+				{/if}
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Floating Build Card -->
+{#if showBuildCard && !showBuildModal}
+	<button
+		class="build-card fixed bottom-6 right-6 z-40 w-72 cursor-pointer rounded-xl shadow-lg transition-all hover:shadow-xl"
+		transition:scale={{ duration: 200, start: 0.9 }}
+		onclick={expandBuildCard}
+	>
+		<div class="flex items-center justify-between px-4 py-3">
+			<div class="flex items-center gap-2 min-w-0">
+				{#if buildModalStatus === 'building' || buildModalStatus === 'pending'}
+					<Loader2 class="h-4 w-4 animate-spin shrink-0 text-primary-500" />
+				{:else if buildModalStatus === 'failed'}
+					<X class="h-4 w-4 shrink-0 text-red-500" />
+				{:else if buildModalStatus === 'running'}
+					<Check class="h-4 w-4 shrink-0 text-green-500" />
+				{/if}
+				<span class="truncate text-sm font-medium">{deployment?.name ?? 'Build'}</span>
+			</div>
+			<div class="flex items-center gap-2 shrink-0">
+				<div class="flex items-center gap-1 text-xs font-mono" style="color: var(--surface-muted);">
+					<Clock class="h-3 w-3" />
+					{formatBuildElapsed(buildElapsed)}
+				</div>
+				<Maximize2 class="h-3.5 w-3.5" style="color: var(--surface-muted);" />
+			</div>
+		</div>
+		<div class="px-4 pb-3">
+			<div class="build-card-track h-1.5 w-full overflow-hidden rounded-full">
+				<div
+					class="h-full transition-all duration-500 ease-out rounded-full {buildModalStatus === 'failed' ? 'bg-red-500' : buildModalStatus === 'running' ? 'bg-green-500' : 'bg-primary-500'}"
+					style="width: {buildProgressValue()}%"
+				></div>
+			</div>
+			<p class="mt-1.5 text-xs" style="color: var(--surface-muted);">
+				{#if buildModalStatus === 'building'}
+					{buildModalStep === 'cloning' ? 'Cloning repository...' :
+					 buildModalStep === 'building' ? 'Building image...' :
+					 buildModalStep === 'pushing' ? 'Pushing image...' :
+					 buildModalStep === 'deploying' ? 'Creating deployment...' :
+					 'Building...'}
+				{:else if buildModalStatus === 'pending'}
+					Starting build...
+				{:else if buildModalStatus === 'failed'}
+					Build failed
+				{:else if buildModalStatus === 'running'}
+					Build complete
+				{/if}
+			</p>
+		</div>
+	</button>
+{/if}
+
 <style>
 	.tabs-trigger {
 		border: 1px solid transparent;
@@ -3167,6 +3490,40 @@
 	.deployment-page :global(.text-gray-500),
 	.deployment-page :global(.text-gray-400) {
 		color: var(--surface-muted);
+	}
+
+	.build-modal {
+		background-color: var(--surface-bg);
+		border: 1px solid var(--surface-border);
+		color: var(--center-channel-color);
+		max-height: 85vh;
+		overflow-y: auto;
+	}
+
+	.btn-icon {
+		color: var(--surface-muted);
+		background: transparent;
+		border: none;
+		cursor: pointer;
+	}
+
+	.btn-icon:hover {
+		color: var(--center-channel-color);
+		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
+	}
+
+	.build-card {
+		background-color: var(--surface-bg);
+		border: 1px solid var(--surface-border);
+		color: var(--center-channel-color);
+	}
+
+	.build-card:hover {
+		border-color: color-mix(in srgb, var(--surface-border) 50%, var(--center-channel-color));
+	}
+
+	.build-card-track {
+		background-color: var(--surface-border);
 	}
 
 	@media (prefers-reduced-motion: reduce) {

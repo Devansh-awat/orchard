@@ -1,0 +1,542 @@
+<script lang="ts">
+	import { onMount } from 'svelte';
+	import { apiFetch, toasts } from '$lib/stores';
+	import {
+		Loader2,
+		Search,
+		Trash2,
+		Pencil,
+		Plus,
+		X,
+		ChevronLeft,
+		ChevronRight,
+	} from 'lucide-svelte';
+
+	interface OrgItem {
+		id: string;
+		name: string;
+		slug: string;
+		description?: string;
+		avatarUrl?: string;
+		plan?: string;
+		createdAt: string;
+		creator?: {
+			id: string;
+			email: string;
+			username: string;
+			firstName?: string;
+			lastName?: string;
+		};
+		_count: {
+			members: number;
+			workspaces: number;
+		};
+	}
+
+	let organizations = $state<OrgItem[]>([]);
+	let loading = $state(true);
+	let total = $state(0);
+	let currentPage = $state(1);
+	let totalPages = $state(1);
+	let searchQuery = $state('');
+	let searchTimeout: ReturnType<typeof setTimeout>;
+
+	const PLAN_OPTIONS = ['free', 'pro', 'enterprise'] as const;
+
+	// Create modal
+	let showCreate = $state(false);
+	let createName = $state('');
+	let createSlug = $state('');
+	let createDescription = $state('');
+	let createImageUrl = $state('');
+	let createPlan = $state<string>('');
+	let createPrimaryOwnerEmail = $state('');
+	let creating = $state(false);
+
+	// Edit modal
+	let editingOrg = $state<OrgItem | null>(null);
+	let editName = $state('');
+	let editDescription = $state('');
+	let saving = $state(false);
+
+	// Delete confirmation
+	let deletingOrg = $state<OrgItem | null>(null);
+	let deleting = $state(false);
+
+	async function fetchOrganizations(page: number = 1) {
+		loading = true;
+		try {
+			const params = new URLSearchParams({ page: String(page), limit: '20' });
+			if (searchQuery) params.set('search', searchQuery);
+			const response = await apiFetch(`/apiv1/admin/organizations?${params}`);
+			if (!response.ok) throw new Error('Failed to fetch organizations');
+			const data = await response.json();
+			organizations = data.organizations;
+			total = data.total;
+			currentPage = data.page;
+			totalPages = data.totalPages;
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to fetch organizations',
+				color: 'error',
+			});
+		} finally {
+			loading = false;
+		}
+	}
+
+	function handleSearch() {
+		clearTimeout(searchTimeout);
+		searchTimeout = setTimeout(() => {
+			fetchOrganizations(1);
+		}, 300);
+	}
+
+	function generateSlug() {
+		createSlug = createName
+			.toLowerCase()
+			.replace(/[^a-z0-9]+/g, '-')
+			.replace(/^-|-$/g, '');
+	}
+
+	function openCreateModal() {
+		showCreate = true;
+		createName = '';
+		createSlug = '';
+		createDescription = '';
+		createImageUrl = '';
+		createPlan = '';
+		createPrimaryOwnerEmail = '';
+	}
+
+	async function createOrganization() {
+		if (!createName || !createSlug) return;
+		creating = true;
+		try {
+			const response = await apiFetch('/apiv1/admin/organizations', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					name: createName,
+					slug: createSlug,
+					description: createDescription || undefined,
+					avatarUrl: createImageUrl || undefined,
+					plan: createPlan || undefined,
+					primaryOwnerEmail: createPrimaryOwnerEmail.trim() || undefined,
+				}),
+			});
+			if (!response.ok) {
+				const data = await response.json();
+				throw new Error(data.message || 'Failed to create organization');
+			}
+			const data = await response.json();
+			const inviteLink = data.inviteLink;
+			toasts.add({
+				title: 'Organization created',
+				description: inviteLink
+					? 'Share the invite link with the primary owner so they can join.'
+					: undefined,
+				color: 'success',
+			});
+			if (inviteLink) {
+				await navigator.clipboard.writeText(inviteLink);
+				toasts.add({ title: 'Invite link copied to clipboard', color: 'success' });
+			}
+			showCreate = false;
+			createName = '';
+			createSlug = '';
+			createDescription = '';
+			createImageUrl = '';
+			createPlan = '';
+			createPrimaryOwnerEmail = '';
+			fetchOrganizations(1);
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to create organization',
+				color: 'error',
+			});
+		} finally {
+			creating = false;
+		}
+	}
+
+	function openEdit(org: OrgItem) {
+		editingOrg = org;
+		editName = org.name;
+		editDescription = org.description || '';
+	}
+
+	function closeEdit() {
+		editingOrg = null;
+	}
+
+	async function saveOrg() {
+		if (!editingOrg) return;
+		saving = true;
+		try {
+			const response = await apiFetch(`/apiv1/admin/organizations/${editingOrg.id}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ name: editName, description: editDescription }),
+			});
+			if (!response.ok) {
+				const data = await response.json();
+				throw new Error(data.message || 'Failed to update organization');
+			}
+			toasts.add({ title: 'Organization updated', color: 'success' });
+			closeEdit();
+			fetchOrganizations(currentPage);
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to update organization',
+				color: 'error',
+			});
+		} finally {
+			saving = false;
+		}
+	}
+
+	async function confirmDelete() {
+		if (!deletingOrg) return;
+		deleting = true;
+		try {
+			const response = await apiFetch(`/apiv1/admin/organizations/${deletingOrg.id}`, {
+				method: 'DELETE',
+			});
+			if (!response.ok) {
+				const data = await response.json();
+				throw new Error(data.message || 'Failed to delete organization');
+			}
+			toasts.add({ title: 'Organization deleted', color: 'success' });
+			deletingOrg = null;
+			fetchOrganizations(currentPage);
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to delete organization',
+				color: 'error',
+			});
+		} finally {
+			deleting = false;
+		}
+	}
+
+	onMount(() => {
+		fetchOrganizations();
+	});
+</script>
+
+<!-- Search + Create -->
+<div class="mb-4 flex items-center gap-3">
+	<div class="relative flex-1">
+		<Search
+			class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2"
+			style="color: var(--surface-muted);"
+		/>
+		<input
+			type="text"
+			bind:value={searchQuery}
+			oninput={handleSearch}
+			placeholder="Search organizations by name or slug..."
+			class="input w-full pl-10"
+		/>
+	</div>
+	<span class="text-sm whitespace-nowrap" style="color: var(--surface-muted);">
+		{total} total
+	</span>
+	<button onclick={openCreateModal} class="btn btn-primary whitespace-nowrap">
+		<Plus class="h-4 w-4" />
+		Create
+	</button>
+</div>
+
+<!-- Table -->
+<div
+	class="rounded-2xl border overflow-hidden"
+	style="border-color: var(--surface-border); background-color: var(--surface-bg);"
+>
+	{#if loading}
+		<div class="flex justify-center py-12">
+			<Loader2 class="h-6 w-6 animate-spin text-primary-600" />
+		</div>
+	{:else if organizations.length === 0}
+		<div class="p-8 text-center" style="color: var(--surface-muted);">
+			No organizations found
+		</div>
+	{:else}
+		<div class="overflow-x-auto">
+			<table class="w-full text-sm">
+				<thead>
+					<tr style="border-bottom: 1px solid var(--surface-border); color: var(--surface-muted);">
+						<th class="px-4 py-3 text-left font-medium">Organization</th>
+						<th class="px-4 py-3 text-left font-medium">Slug</th>
+						<th class="px-4 py-3 text-left font-medium">Members</th>
+						<th class="px-4 py-3 text-left font-medium">Workspaces</th>
+						<th class="px-4 py-3 text-left font-medium">Creator</th>
+						<th class="px-4 py-3 text-left font-medium">Created</th>
+						<th class="px-4 py-3 text-right font-medium">Actions</th>
+					</tr>
+				</thead>
+				<tbody>
+					{#each organizations as org}
+						<tr
+							style="border-bottom: 1px solid var(--surface-border); color: var(--center-channel-color);"
+							class="transition hover:bg-[color-mix(in_srgb,var(--surface-border)_20%,transparent)]"
+						>
+							<td class="px-4 py-3">
+								<div class="flex items-center gap-3">
+									{#if org.avatarUrl}
+										<img
+											src={org.avatarUrl}
+											alt={org.name}
+											class="h-8 w-8 rounded-lg object-cover"
+										/>
+									{:else}
+										<div
+											class="flex h-8 w-8 items-center justify-center rounded-lg text-xs font-semibold"
+											style="background-color: var(--control-bg); color: var(--center-channel-color);"
+										>
+											{org.name[0].toUpperCase()}
+										</div>
+									{/if}
+									<div>
+										<p class="font-medium">{org.name}</p>
+										{#if org.description}
+											<p
+												class="text-xs truncate max-w-[200px]"
+												style="color: var(--surface-muted);"
+											>
+												{org.description}
+											</p>
+										{/if}
+									</div>
+								</div>
+							</td>
+							<td class="px-4 py-3 font-mono text-xs">{org.slug}</td>
+							<td class="px-4 py-3">{org._count.members}</td>
+							<td class="px-4 py-3">{org._count.workspaces}</td>
+							<td class="px-4 py-3 text-xs" style="color: var(--surface-muted);">
+								{#if org.creator}
+									{org.creator.firstName || org.creator.username || org.creator.email}
+								{:else}
+									<span class="italic">System</span>
+								{/if}
+							</td>
+							<td class="px-4 py-3 text-xs" style="color: var(--surface-muted);">
+								{new Date(org.createdAt).toLocaleDateString()}
+							</td>
+							<td class="px-4 py-3">
+								<div class="flex items-center justify-end gap-1">
+									<button
+										onclick={() => openEdit(org)}
+										class="btn btn-ghost btn-sm"
+										title="Edit organization"
+									>
+										<Pencil class="h-4 w-4" />
+									</button>
+									<button
+										onclick={() => (deletingOrg = org)}
+										class="btn btn-ghost btn-sm text-red-500"
+										title="Delete organization"
+									>
+										<Trash2 class="h-4 w-4" />
+									</button>
+								</div>
+							</td>
+						</tr>
+					{/each}
+				</tbody>
+			</table>
+		</div>
+	{/if}
+</div>
+
+<!-- Pagination -->
+{#if totalPages > 1}
+	<div class="mt-4 flex items-center justify-center gap-2">
+		<button
+			onclick={() => fetchOrganizations(currentPage - 1)}
+			disabled={currentPage <= 1}
+			class="btn btn-ghost btn-sm"
+		>
+			<ChevronLeft class="h-4 w-4" />
+		</button>
+		<span class="text-sm" style="color: var(--surface-muted);">
+			Page {currentPage} of {totalPages}
+		</span>
+		<button
+			onclick={() => fetchOrganizations(currentPage + 1)}
+			disabled={currentPage >= totalPages}
+			class="btn btn-ghost btn-sm"
+		>
+			<ChevronRight class="h-4 w-4" />
+		</button>
+	</div>
+{/if}
+
+<!-- Create Modal -->
+{#if showCreate}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+		<div
+			class="w-full max-w-md rounded-2xl border p-6 shadow-xl"
+			style="background-color: var(--center-channel-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
+		>
+			<div class="flex items-center justify-between mb-4">
+				<h3 class="text-lg font-semibold">Create Organization</h3>
+				<button onclick={() => (showCreate = false)} class="btn btn-ghost btn-sm">
+					<X class="h-4 w-4" />
+				</button>
+			</div>
+
+			<div class="space-y-4">
+				<div>
+					<label class="block text-sm font-medium mb-1">Name</label>
+					<input
+						type="text"
+						bind:value={createName}
+						oninput={generateSlug}
+						placeholder="My Organization"
+						class="input w-full"
+					/>
+				</div>
+				<div>
+					<label class="block text-sm font-medium mb-1">Slug</label>
+					<input
+						type="text"
+						bind:value={createSlug}
+						placeholder="my-organization"
+						class="input w-full font-mono text-sm"
+					/>
+				</div>
+				<div>
+					<label class="block text-sm font-medium mb-1">Description (optional)</label>
+					<textarea
+						bind:value={createDescription}
+						rows="3"
+						placeholder="A brief description..."
+						class="input w-full"
+					></textarea>
+				</div>
+				<div>
+					<label class="block text-sm font-medium mb-1">Image URL (optional)</label>
+					<input
+						type="url"
+						bind:value={createImageUrl}
+						placeholder="https://..."
+						class="input w-full"
+					/>
+				</div>
+				<div>
+					<label class="block text-sm font-medium mb-1">Plan (optional)</label>
+					<select bind:value={createPlan} class="input w-full">
+						<option value="">None</option>
+						{#each PLAN_OPTIONS as opt}
+							<option value={opt}>{opt}</option>
+						{/each}
+					</select>
+				</div>
+				<div>
+					<label for="create-primary-owner-email" class="block text-sm font-medium mb-1">Primary owner email (optional)</label>
+					<input
+						id="create-primary-owner-email"
+						type="email"
+						bind:value={createPrimaryOwnerEmail}
+						placeholder="client@example.com"
+						class="input w-full"
+					/>
+					<p class="text-xs mt-1" style="color: var(--surface-muted);">
+						If they have an account, they become owner now. Otherwise they’re invited and become owner when they accept.
+					</p>
+				</div>
+			</div>
+
+			<div class="mt-6 flex justify-end gap-2">
+				<button onclick={() => (showCreate = false)} class="btn btn-secondary">Cancel</button>
+				<button
+					onclick={createOrganization}
+					disabled={creating || !createName || !createSlug}
+					class="btn btn-primary"
+				>
+					{#if creating}
+						<Loader2 class="h-4 w-4 animate-spin" />
+					{/if}
+					Create
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Edit Modal -->
+{#if editingOrg}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+		<div
+			class="w-full max-w-md rounded-2xl border p-6 shadow-xl"
+			style="background-color: var(--center-channel-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
+		>
+			<div class="flex items-center justify-between mb-4">
+				<h3 class="text-lg font-semibold">Edit Organization</h3>
+				<button onclick={closeEdit} class="btn btn-ghost btn-sm">
+					<X class="h-4 w-4" />
+				</button>
+			</div>
+
+			<div class="space-y-4">
+				<div>
+					<label class="block text-sm font-medium mb-1">Name</label>
+					<input type="text" bind:value={editName} class="input w-full" />
+				</div>
+				<div>
+					<label class="block text-sm font-medium mb-1">Description</label>
+					<textarea bind:value={editDescription} rows="3" class="input w-full"></textarea>
+				</div>
+			</div>
+
+			<div class="mt-6 flex justify-end gap-2">
+				<button onclick={closeEdit} class="btn btn-secondary">Cancel</button>
+				<button onclick={saveOrg} disabled={saving} class="btn btn-primary">
+					{#if saving}
+						<Loader2 class="h-4 w-4 animate-spin" />
+					{/if}
+					Save Changes
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}
+
+<!-- Delete Confirmation -->
+{#if deletingOrg}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+		<div
+			class="w-full max-w-sm rounded-2xl border p-6 shadow-xl"
+			style="background-color: var(--center-channel-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
+		>
+			<h3 class="text-lg font-semibold mb-2">Delete Organization</h3>
+			<p class="text-sm mb-1" style="color: var(--surface-muted);">
+				Are you sure you want to delete this organization?
+			</p>
+			<p class="text-sm font-medium mb-4">{deletingOrg.name} ({deletingOrg.slug})</p>
+			<p class="text-xs text-red-500 mb-4">
+				This will permanently delete the organization and all its workspaces, projects, and
+				deployments.
+			</p>
+			<div class="flex justify-end gap-2">
+				<button onclick={() => (deletingOrg = null)} class="btn btn-secondary">Cancel</button>
+				<button
+					onclick={confirmDelete}
+					disabled={deleting}
+					class="btn bg-red-600 text-white hover:bg-red-700"
+				>
+					{#if deleting}
+						<Loader2 class="h-4 w-4 animate-spin" />
+					{/if}
+					Delete
+				</button>
+			</div>
+		</div>
+	</div>
+{/if}

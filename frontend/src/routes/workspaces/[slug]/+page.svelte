@@ -351,11 +351,11 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 
 <div class="p-6">
 	<button
-		onclick={() => window.history.back()}
+		onclick={() => goto('/')}
 		class="mb-6 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 cursor-pointer"
 	>
 		<ArrowLeft class="h-4 w-4" />
-		Back to workspace
+		Back to home
 	</button>
 
 	{#if error}

@@ -1409,6 +1409,44 @@ export class KubernetesService {
     }
   }
 
+  async deleteService(namespace: string, name: string) {
+    this.ensureKubeConfig();
+
+    const cleanNamespace = String(namespace || '').trim();
+    const cleanName = String(name || '').trim();
+
+    if (!cleanNamespace || !cleanName) return;
+
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+
+    try {
+      await coreApi.deleteNamespacedService(cleanName, cleanNamespace);
+    } catch (error) {
+      if (error.response?.statusCode !== 404) {
+        console.error(`Failed to delete service ${cleanName} in ${cleanNamespace}:`, error);
+      }
+    }
+  }
+
+  async deletePVC(namespace: string, name: string) {
+    this.ensureKubeConfig();
+
+    const cleanNamespace = String(namespace || '').trim();
+    const cleanName = String(name || '').trim();
+
+    if (!cleanNamespace || !cleanName) return;
+
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+
+    try {
+      await coreApi.deleteNamespacedPersistentVolumeClaim(cleanName, cleanNamespace);
+    } catch (error) {
+      if (error.response?.statusCode !== 404) {
+        console.error(`Failed to delete PVC ${cleanName} in ${cleanNamespace}:`, error);
+      }
+    }
+  }
+
   async updateDeploymentEnv(options: UpdateDeploymentEnvOptions) {
     this.ensureKubeConfig();
 

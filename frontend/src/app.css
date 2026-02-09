@@ -327,7 +327,7 @@ select.input:focus {
 
 /* Sidebar styles */
 .sidebar {
-	@apply flex h-full w-64 flex-col border-r;
+	@apply flex h-full w-64 flex-col border-r overflow-visible;
 	background-color: var(--sidebar-bg);
 	color: var(--sidebar-text);
 	border-color: color-mix(in srgb, var(--sidebar-bg) 70%, #000);
@@ -342,6 +342,7 @@ select.input:focus {
 .sidebar-team-bar {
 	background-color: var(--sidebar-team-bar-bg);
 	border-bottom: 1px solid color-mix(in srgb, var(--sidebar-team-bar-bg) 70%, #000000);
+	overflow: visible;
 }
 
 .sidebar-nav {
@@ -459,6 +460,11 @@ select.input:focus {
 	background-color: var(--dropdown-hover-bg);
 }
 
+.workspaces-menu {
+	position: relative;
+	width: 100%;
+}
+
 .org-menu-trigger {
 	@apply flex w-full items-center justify-between gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all text-left;
 	background-color: var(--org-trigger-bg);
@@ -473,34 +479,69 @@ select.input:focus {
 	transform: translateY(1px);
 }
 
+.org-menu-trigger-avatar {
+	@apply h-8 w-8 shrink-0 rounded-lg object-cover;
+}
+
+.org-menu-trigger-icon {
+	@apply flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400;
+}
+
+.org-menu-trigger-name {
+	@apply min-w-0 flex-1 truncate text-left text-sm font-medium;
+	color: var(--sidebar-text);
+}
+
 .org-menu-panel {
-	@apply flex flex-col gap-2 rounded-xl border p-4 text-sm shadow-lg;
+	position: absolute;
+	left: 0;
+	top: 100%;
+	margin-top: 0.375rem;
+	width: 100%;
+	z-index: 100;
+	@apply flex flex-col rounded-xl border p-3 text-sm shadow-lg;
 	background-color: var(--dropdown-bg);
 	border-color: var(--dropdown-border);
 	color: var(--sidebar-text);
 }
 
+.org-menu-list {
+	@apply flex flex-col gap-0.5;
+}
+
 .org-menu-item {
-	@apply flex w-full items-center gap-3 rounded-lg px-2 py-2 text-left text-sm transition;
+	@apply flex w-full items-center gap-3 rounded-lg px-3 py-2.5 text-left text-sm transition;
 	color: inherit;
+	min-width: 0;
 }
 
 .org-menu-item:hover {
 	background-color: var(--dropdown-hover-bg);
 }
 
-.org-menu-divider {
-	@apply border-t;
-	border-color: var(--divider-color);
+.org-menu-item-avatar {
+	@apply h-6 w-6 shrink-0 rounded object-cover;
+}
+
+.org-menu-item-icon {
+	@apply flex h-6 w-6 shrink-0 items-center justify-center rounded bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400;
+}
+
+.org-menu-item-name {
+	@apply min-w-0 flex-1 break-words text-left;
+}
+
+.org-menu-item-dot {
+	@apply h-2 w-2 shrink-0 rounded-full bg-primary-500;
 }
 
 .org-menu-footer {
-	@apply pt-2;
+	@apply mt-1 pt-2;
 	border-top: 1px solid var(--divider-color);
 }
 
 .org-menu-footer a {
-	@apply flex items-center gap-2 px-2 py-2 text-sm transition;
+	@apply flex items-center gap-2 rounded-lg px-3 py-2 text-sm transition;
 	color: color-mix(in srgb, var(--sidebar-text) 85%, var(--center-channel-bg));
 }
 

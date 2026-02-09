@@ -19,6 +19,7 @@ model User {
   githubId          String?  @unique @map("github_id") @db.VarChar(255)
   githubUsername    String?  @map("github_username") @db.VarChar(255)
   githubAccessToken String?  @map("github_access_token") @db.Text
+  isSuperAdmin      Boolean  @default(false) @map("is_super_admin")
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
@@ -134,6 +135,7 @@ model Organization {
   slug        String   @unique @db.VarChar(100)
   description String?  @db.Text
   avatarUrl   String?  @map("avatar_url") @db.VarChar(500)
+  plan        String?  @db.VarChar(50)
   createdBy   String?  @map("created_by") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(6)

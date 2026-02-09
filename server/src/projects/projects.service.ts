@@ -933,7 +933,7 @@ export class ProjectsService {
         data: { image },
       });
 
-      // Save image history
+      // Save image history and enforce max 10 images per deployment
       await this.prisma.$transaction(async (tx) => {
         // Mark all previous images as inactive
         await tx.imageHistory.updateMany({
@@ -957,6 +957,28 @@ export class ProjectsService {
             isActive: true,
           },
         });
+
+        // Remove oldest images if we exceed max 10
+        const allImages = await tx.imageHistory.findMany({
+          where: { deploymentId },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, image: true },
+        });
+
+        if (allImages.length > 10) {
+          const imagesToRemove = allImages.slice(10);
+          const idsToRemove = imagesToRemove.map((img) => img.id);
+
+          await tx.imageHistory.deleteMany({
+            where: { id: { in: idsToRemove } },
+          });
+
+          // Delete old artifact tags from the registry in the background
+          const imageRefs = imagesToRemove.map((img) => img.image);
+          this.dockerService.deleteArtifactsFromRegistry(imageRefs).catch((err) => {
+            console.error(`[Projects] Failed to delete old artifacts from registry:`, err);
+          });
+        }
       });
 
       let deploymentResult: any;
@@ -3619,10 +3641,15 @@ export class ProjectsService {
       throw new ForbiddenException('You do not have permission to delete deployments');
     }
 
-    const ingresses = await this.prisma.ingress.findMany({
-      where: { deploymentId },
-    });
+    // Fetch all related resources before deleting
+    const [ingresses, services, volumes, imageHistoryEntries] = await Promise.all([
+      this.prisma.ingress.findMany({ where: { deploymentId } }),
+      this.prisma.service.findMany({ where: { deploymentId } }),
+      this.prisma.deploymentVolume.findMany({ where: { deploymentId } }),
+      this.prisma.imageHistory.findMany({ where: { deploymentId }, select: { image: true } }),
+    ]);
 
+    // Delete all ingresses from Kubernetes
     for (const ingress of ingresses) {
       try {
         await this.kubernetesService.deleteIngress(ingress.namespace, ingress.name);
@@ -3631,11 +3658,41 @@ export class ProjectsService {
       }
     }
 
+    // Delete all services from Kubernetes
+    for (const service of services) {
+      try {
+        await this.kubernetesService.deleteService(deployment.namespace, service.name);
+      } catch (error) {
+        console.error(`Failed to delete service ${service.name} from Kubernetes:`, error);
+      }
+    }
+
+    // Delete all PVCs from Kubernetes
+    for (const volume of volumes) {
+      if (volume.type === 'pvc' && volume.pvcName) {
+        try {
+          await this.kubernetesService.deletePVC(deployment.namespace, volume.pvcName);
+        } catch (error) {
+          console.error(`Failed to delete PVC ${volume.pvcName} from Kubernetes:`, error);
+        }
+      }
+    }
+
+    // Delete the K8s deployment itself
     await this.kubernetesService.deleteDeployment(deployment.name, deployment.namespace);
 
+    // Delete the DB record (cascades to pods, services, envVars, ingresses, volumes, imageHistory)
     await this.prisma.deployment.delete({
       where: { id: deploymentId },
     });
+
+    // Delete all associated repositories from Harbor in the background
+    if (imageHistoryEntries.length > 0) {
+      const imageRefs = imageHistoryEntries.map((entry) => entry.image);
+      this.dockerService.deleteRepositoriesFromRegistry(imageRefs).catch((err) => {
+        console.error(`[Projects] Failed to delete repositories from registry for deployment ${deploymentId}:`, err);
+      });
+    }
 
     return {
       success: true,

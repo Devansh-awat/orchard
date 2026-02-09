@@ -1124,4 +1124,26 @@ export class DockerService {
     const bar = '█'.repeat(filled) + '░'.repeat(empty);
     return `[${bar}]`;
   }
+
+  /**
+   * Delete specific artifacts (tags) from Harbor. Used for pruning old images.
+   */
+  async deleteArtifactsFromRegistry(images: string[]): Promise<void> {
+    if (this.imageBuilderService) {
+      await this.imageBuilderService.deleteArtifactsFromRegistry(images);
+    } else {
+      console.warn('[Docker] ImageBuilderService not available, skipping registry artifact deletion');
+    }
+  }
+
+  /**
+   * Delete entire repositories from Harbor. Used when a deployment is deleted.
+   */
+  async deleteRepositoriesFromRegistry(images: string[]): Promise<void> {
+    if (this.imageBuilderService) {
+      await this.imageBuilderService.deleteRepositoriesFromRegistry(images);
+    } else {
+      console.warn('[Docker] ImageBuilderService not available, skipping registry repository deletion');
+    }
+  }
 }

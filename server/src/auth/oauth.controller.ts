@@ -99,6 +99,7 @@ export class OAuthController {
         lastName: user.lastName,
         imageUrl: user.imageUrl,
         hackClubId: payload.hackClubId || user.hackClubId,
+        isSuperAdmin: user.isSuperAdmin,
       };
     } catch (err) {
       throw new HttpException('Invalid session', HttpStatus.UNAUTHORIZED);
