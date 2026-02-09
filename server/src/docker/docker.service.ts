@@ -1161,4 +1161,16 @@ export class DockerService {
       console.warn('[Docker] ImageBuilderService not available, skipping registry repository deletion');
     }
   }
+
+  /**
+   * Cancel running build jobs for a deployment by deleting the Kubernetes Job and its pods.
+   */
+  async cancelBuildJobsByDeploymentId(deploymentId: string): Promise<void> {
+    if (this.imageBuilderService) {
+      console.log(`[Docker] Cancelling build jobs for deployment ${deploymentId}`);
+      await this.imageBuilderService.cancelBuildJobsByDeploymentId(deploymentId);
+    } else {
+      console.warn('[Docker] ImageBuilderService not available, cannot cancel Kubernetes build jobs');
+    }
+  }
 }

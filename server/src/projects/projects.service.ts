@@ -853,6 +853,14 @@ export class ProjectsService {
     },
     githubAccessToken?: string,
   ) {
+    console.log(`[Projects] Starting buildAndDeployAsync for deployment ${deploymentId}`);
+    
+    try {
+      await this.dockerService.cancelBuildJobsByDeploymentId(deploymentId);
+    } catch (error) {
+      console.warn(`[Projects] Failed to cancel existing build jobs:`, error);
+    }
+
     // Set up periodic log updates to GitHub Check Run
     let logUpdateInterval: NodeJS.Timeout | null = null;
     let lastLogLength = 0;
@@ -1479,11 +1487,23 @@ export class ProjectsService {
       throw new ForbiddenException('You do not have permission to rebuild deployments');
     }
 
+    if (deployment.status === 'building' || deployment.status === 'pending') {
+      throw new BadRequestException('A build is already in progress for this deployment. Please cancel it before starting a new build.');
+    }
+
+    console.log(`[Projects] Cancelling any existing build jobs for deployment ${deploymentId}`);
+    try {
+      await this.dockerService.cancelBuildJobsByDeploymentId(deploymentId);
+    } catch (error) {
+      console.error(`[Projects] Error cancelling existing build jobs:`, error);
+    }
+
     // Reset deployment to building status
     await this.prisma.deployment.update({
       where: { id: deploymentId },
       data: {
         status: 'building',
+        buildStep: null,
         buildLogs: `🔄 Rebuilding deployment from ${deployment.githubRepo}@${deployment.githubBranch}\n`,
         buildError: null,
       },
@@ -3574,11 +3594,20 @@ export class ProjectsService {
       throw new ForbiddenException('You do not have permission to cancel deployments');
     }
 
+    try {
+      console.log(`[Projects] Cancelling build jobs for deployment ${deploymentId}`);
+      await this.dockerService.cancelBuildJobsByDeploymentId(deploymentId);
+      console.log(`[Projects] Successfully cancelled build jobs for deployment ${deploymentId}`);
+    } catch (error) {
+      console.error(`[Projects] Error cancelling build jobs for deployment ${deploymentId}:`, error);
+    }
+
     const currentLogs = deployment.buildLogs || '';
     await this.prisma.deployment.update({
       where: { id: deploymentId },
       data: {
         status: 'failed',
+        buildStep: null,
         buildError: 'Build cancelled by user',
         buildLogs: currentLogs + `[${Date.now()}] [INFO] Build cancelled by user\n`,
       },

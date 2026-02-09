@@ -471,7 +471,9 @@
 			stopBuildPolling();
 			showBuildModal = false;
 			showBuildCard = false;
-			fetchDeployment();
+			
+			await new Promise(resolve => setTimeout(resolve, 1000));
+			await fetchDeployment();
 		} catch (e) {
 			toasts.add({
 				title: 'Error',
@@ -926,14 +928,22 @@
 				method: 'POST'
 			});
 			if (!response.ok) {
-				throw new Error('Failed to rebuild deployment');
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to rebuild deployment');
 			}
 			toasts.add({
 				title: 'Rebuild started',
 				description: 'Building new image from repository',
 				color: 'success'
 			});
-			// Open the build modal instead of redirecting to progress page
+			
+			accumulatedBuildLogs = '';
+			buildModalStatus = 'building';
+			buildModalStep = null;
+			buildModalError = null;
+			buildModalWarnings = [];
+			buildStartTime = Date.now();
+			
 			showBuildModal = true;
 			showBuildCard = false;
 			startBuildPolling();

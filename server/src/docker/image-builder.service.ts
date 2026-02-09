@@ -1289,6 +1289,95 @@ fi
     }
   }
 
+  async cancelBuildJobsByDeploymentId(deploymentId: string): Promise<void> {
+    this.ensureKubeConfig();
+    const batchApi = this.kc!.makeApiClient(k8s.BatchV1Api);
+    const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
+
+    try {
+      const labelSelector = `orchard.dev/deployment-id=${deploymentId}`;
+      console.log(`[ImageBuilder] Looking for build jobs with label selector: ${labelSelector}`);
+
+      const jobs = await batchApi.listNamespacedJob(
+        this.builderNamespace,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        labelSelector
+      );
+
+      if (jobs.body.items.length === 0) {
+        console.log(`[ImageBuilder] No build jobs found for deployment ${deploymentId}`);
+        return;
+      }
+
+      console.log(`[ImageBuilder] Found ${jobs.body.items.length} build job(s) for deployment ${deploymentId}`);
+
+      for (const job of jobs.body.items) {
+        const jobName = job.metadata?.name;
+        if (!jobName) continue;
+
+        try {
+          console.log(`[ImageBuilder] Deleting build job ${jobName} for deployment ${deploymentId}`);
+          
+          const pods = await coreApi.listNamespacedPod(
+            this.builderNamespace,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            `job-name=${jobName}`
+          );
+
+          for (const pod of pods.body.items) {
+            const podName = pod.metadata?.name;
+            if (podName) {
+              console.log(`[ImageBuilder] Force deleting pod ${podName} for job ${jobName}`);
+              try {
+                await coreApi.deleteNamespacedPod(
+                  podName,
+                  this.builderNamespace,
+                  undefined,
+                  undefined,
+                  0,
+                  undefined,
+                  'Background'
+                );
+              } catch (podDeleteError) {
+                if (podDeleteError.statusCode !== 404) {
+                  console.warn(`[ImageBuilder] Failed to delete pod ${podName}:`, podDeleteError.message);
+                }
+              }
+            }
+          }
+          
+          await batchApi.deleteNamespacedJob(
+            jobName,
+            this.builderNamespace,
+            undefined,
+            undefined,
+            0,
+            undefined,
+            'Background',
+            {
+              propagationPolicy: 'Background'
+            }
+          );
+
+          console.log(`[ImageBuilder] Successfully deleted build job ${jobName} and its pods`);
+        } catch (deleteError) {
+          if (deleteError.statusCode !== 404) {
+            console.error(`[ImageBuilder] Failed to delete job ${jobName}:`, deleteError.message);
+          }
+        }
+      }
+    } catch (error) {
+      console.error(`[ImageBuilder] Error cancelling build jobs for deployment ${deploymentId}:`, error.message);
+      throw error;
+    }
+  }
+
   async buildAndPush(options: BuildJobOptions): Promise<string> {
     const { imageName, tag = 'latest', deploymentId, repoUrl, branch, buildType = 'dockerfile' } = options;
 
