@@ -399,10 +399,11 @@ set +e
 
 echo "=== Attempting build with S3 cache enabled ==="
 BUILD_OUTPUT=$(mktemp)
-buildctl-daemonless.sh ${argsWithCache} 2>&1 | tee "$BUILD_OUTPUT"
-BUILD_EXIT_CODE=\${PIPESTATUS[0]}
+buildctl-daemonless.sh ${argsWithCache} > "$BUILD_OUTPUT" 2>&1
+BUILD_EXIT_CODE=$?
+cat "$BUILD_OUTPUT"
 
-if [ $BUILD_EXIT_CODE -eq 0 ]; then
+if [ "$BUILD_EXIT_CODE" -eq 0 ]; then
   echo "=== Build completed successfully with cache ==="
   rm -f "$BUILD_OUTPUT"
   exit 0

@@ -161,7 +161,7 @@
 				<DeploymentProgress
 					status={deployment.status}
 					buildStep={deployment.buildStep}
-					buildLogs={accumulatedLogs}
+					buildLogs={deployment.buildLogs ?? accumulatedLogs}
 					buildError={deployment.buildError}
 					{isGitHubDeploy}
 					warnings={deployment.warnings}

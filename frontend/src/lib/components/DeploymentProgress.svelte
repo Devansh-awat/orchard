@@ -367,10 +367,10 @@
 			>
 				{#if showLogs}
 					<ChevronUp class="h-4 w-4" />
-					Hide logs
+					{status === 'failed' ? 'Hide last build logs' : 'Hide logs'}
 				{:else}
 					<ChevronDown class="h-4 w-4" />
-					Show logs
+					{status === 'failed' ? 'Show last build logs' : 'Show logs'}
 				{/if}
 			</button>
 

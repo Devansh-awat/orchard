@@ -1771,6 +1771,18 @@
 	<section {...tabs.getContent(tab.id)} hidden={undefined} class="tab-panel mt-2">
 					{#if tab.id === 'overview'}
 						<div class="space-y-6">
+							{#if deployment.status === 'failed' && (deployment.buildError || deployment.buildLogs)}
+								<div class="rounded-2xl border border-red-200 bg-red-50/80 p-4 dark:border-red-400/30 dark:bg-red-500/10">
+									<p class="text-sm font-semibold text-red-900 dark:text-red-100">Last build logs</p>
+									{#if deployment.buildError}
+										<p class="mt-2 text-sm font-medium text-red-800 dark:text-red-200">Error</p>
+										<pre class="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg bg-red-900/10 p-3 text-xs font-mono text-red-900 dark:text-red-100">{deployment.buildError}</pre>
+									{/if}
+									{#if deployment.buildLogs}
+										<pre class="mt-3 max-h-80 overflow-y-auto whitespace-pre-wrap rounded-lg bg-black/10 p-3 text-xs font-mono text-gray-900 dark:text-gray-100">{deployment.buildLogs}</pre>
+									{/if}
+								</div>
+							{/if}
 							<div class="grid gap-6 lg:grid-cols-3">
 								<div class="card rounded-2xl p-6 lg:col-span-2" style="background-color: var(--center-channel-bg);">
 									<div class="mb-6">
