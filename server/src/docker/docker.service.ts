@@ -707,10 +707,10 @@ export class DockerService {
 
   async pushImage(imageName: string, deploymentId?: string): Promise<void> {
     const fullImageName = `${this.harborRegistryPush}/${this.harborProject}/${imageName}`;
-
+    const maxRetries = 3;
+    
     await this.setBuildStep(deploymentId, 'pushing');
 
-    // Login to registry before pushing
     const harborUsername = process.env.HARBOR_USERNAME;
     const harborPassword = process.env.HARBOR_PASSWORD;
 
@@ -749,104 +749,139 @@ export class DockerService {
       await this.appendLog(deploymentId, `No registry credentials found, attempting anonymous push...`, 'WARNING');
     }
 
-    const startTime = Date.now();
-    await this.appendLog(deploymentId, `Pushing image to ${this.harborRegistryPush} using Docker...`);
+    let lastError: Error | null = null;
+    
+    for (let attempt = 1; attempt <= maxRetries; attempt++) {
+      const startTime = Date.now();
+      const attemptMsg = attempt > 1 ? ` (attempt ${attempt}/${maxRetries})` : '';
+      await this.appendLog(deploymentId, `Pushing image to ${this.harborRegistryPush} using Docker${attemptMsg}...`);
 
-    return new Promise((resolve, reject) => {
-      const pushProcess = spawn('docker', ['push', fullImageName], {
-        stdio: ['ignore', 'pipe', 'pipe'],
-        env: {
-          ...process.env,
-          DOCKER_HOST: process.env.DOCKER_HOST || 'unix:///var/run/docker.sock',
-          NO_PROXY: `${process.env.NO_PROXY || ''},178.156.144.127,harbor.1mp.dev,harbor-core.harbor.svc.cluster.local`.replace(/^,/, ''),
-          no_proxy: `${process.env.no_proxy || ''},178.156.144.127,harbor.1mp.dev,harbor-core.harbor.svc.cluster.local`.replace(/^,/, ''),
-          HTTP_PROXY: '',
-          HTTPS_PROXY: '',
-          http_proxy: '',
-          https_proxy: '',
-          PATH: process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
-        },
-      });
+      try {
+        await new Promise<void>((resolve, reject) => {
+          const pushProcess = spawn('docker', ['push', fullImageName], {
+            stdio: ['ignore', 'pipe', 'pipe'],
+            env: {
+              ...process.env,
+              DOCKER_HOST: process.env.DOCKER_HOST || 'unix:///var/run/docker.sock',
+              NO_PROXY: `${process.env.NO_PROXY || ''},178.156.144.127,harbor.1mp.dev,harbor-core.harbor.svc.cluster.local`.replace(/^,/, ''),
+              no_proxy: `${process.env.no_proxy || ''},178.156.144.127,harbor.1mp.dev,harbor-core.harbor.svc.cluster.local`.replace(/^,/, ''),
+              HTTP_PROXY: '',
+              HTTPS_PROXY: '',
+              http_proxy: '',
+              https_proxy: '',
+              PATH: process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+            },
+          });
 
-      let stdout = '';
-      let stderr = '';
-      const layerProgress = new Map<string, { current: number; total: number }>();
-      let lastProgressUpdate = Date.now();
+          let stdout = '';
+          let stderr = '';
+          const layerProgress = new Map<string, { current: number; total: number }>();
+          let lastProgressUpdate = Date.now();
 
-      pushProcess.stdout.on('data', async (data) => {
-        const message = data.toString();
-        stdout += message;
-        
-        const lines = message.split('\n');
-        for (const line of lines) {
-          if (line.includes('Pushing') && line.includes('/')) {
-            const match = line.match(/([a-f0-9]+):\s*Pushing.*?(\d+\.?\d*[KMGB]*B)\/(\d+\.?\d*[KMGB]*B)/);
-            if (match) {
-              const [, layerId, currentStr, totalStr] = match;
-              const current = this.parseSize(currentStr);
-              const total = this.parseSize(totalStr);
-              layerProgress.set(layerId, { current, total });
+          pushProcess.stdout.on('data', async (data) => {
+            const message = data.toString();
+            stdout += message;
+            
+            const lines = message.split('\n');
+            for (const line of lines) {
+              if (line.includes('Pushing') && line.includes('/')) {
+                const match = line.match(/([a-f0-9]+):\s*Pushing.*?(\d+\.?\d*[KMGB]*B)\/(\d+\.?\d*[KMGB]*B)/);
+                if (match) {
+                  const [, layerId, currentStr, totalStr] = match;
+                  const current = this.parseSize(currentStr);
+                  const total = this.parseSize(totalStr);
+                  layerProgress.set(layerId, { current, total });
+                }
+              } else if (line.includes('Pushed') && line.match(/^[a-f0-9]+: Pushed/)) {
+                const layerId = line.split(':')[0];
+                const entry = layerProgress.get(layerId);
+                if (entry) {
+                  layerProgress.set(layerId, { current: entry.total, total: entry.total });
+                }
+              }
             }
-          } else if (line.includes('Pushed') && line.match(/^[a-f0-9]+: Pushed/)) {
-            const layerId = line.split(':')[0];
-            const entry = layerProgress.get(layerId);
-            if (entry) {
-              layerProgress.set(layerId, { current: entry.total, total: entry.total });
+            
+            const now = Date.now();
+            if (now - lastProgressUpdate > 1000) {
+              const progress = this.calculatePushProgress(layerProgress);
+              const totalCurrent = Array.from(layerProgress.values()).reduce((sum, l) => sum + l.current, 0);
+              const totalSize = Array.from(layerProgress.values()).reduce((sum, l) => sum + l.total, 0);
+              
+              if (totalSize > 0 && progress > 0) {
+                const pushedMB = (totalCurrent / (1024 * 1024)).toFixed(2);
+                const totalMB = (totalSize / (1024 * 1024)).toFixed(2);
+                const remainingMB = ((totalSize - totalCurrent) / (1024 * 1024)).toFixed(2);
+                const progressBar = this.createProgressBar(progress);
+                await this.appendLog(deploymentId, `Push progress: ${progressBar} ${progress.toFixed(1)}% (${pushedMB} MB / ${totalMB} MB pushed, ${remainingMB} MB remaining)`);
+              }
+              lastProgressUpdate = now;
             }
-          }
-        }
-        
-        const now = Date.now();
-        if (now - lastProgressUpdate > 1000) {
-          const progress = this.calculatePushProgress(layerProgress);
-          const totalCurrent = Array.from(layerProgress.values()).reduce((sum, l) => sum + l.current, 0);
-          const totalSize = Array.from(layerProgress.values()).reduce((sum, l) => sum + l.total, 0);
-          
-          if (totalSize > 0 && progress > 0) {
-            const pushedMB = (totalCurrent / (1024 * 1024)).toFixed(2);
-            const totalMB = (totalSize / (1024 * 1024)).toFixed(2);
-            const remainingMB = ((totalSize - totalCurrent) / (1024 * 1024)).toFixed(2);
-            const progressBar = this.createProgressBar(progress);
-            await this.appendLog(deploymentId, `Push progress: ${progressBar} ${progress.toFixed(1)}% (${pushedMB} MB / ${totalMB} MB pushed, ${remainingMB} MB remaining)`);
-          }
-          lastProgressUpdate = now;
-        }
-        
-        console.log('[Docker Push]', message.trim());
-      });
+            
+            console.log('[Docker Push]', message.trim());
+          });
 
-      pushProcess.stderr.on('data', async (data) => {
-        const message = data.toString();
-        stderr += message;
-        console.error('[Docker Push Error]', message.trim());
-        const lowerMessage = message.toLowerCase();
-        const logLevel = lowerMessage.includes('error') || lowerMessage.includes('failed') ? 'ERROR' : lowerMessage.includes('warn') ? 'WARNING' : 'INFO';
-        await this.appendLog(deploymentId, message.trim(), logLevel);
-      });
+          pushProcess.stderr.on('data', async (data) => {
+            const message = data.toString();
+            stderr += message;
+            console.error('[Docker Push Error]', message.trim());
+            const lowerMessage = message.toLowerCase();
+            const logLevel = lowerMessage.includes('error') || lowerMessage.includes('failed') ? 'ERROR' : lowerMessage.includes('warn') ? 'WARNING' : 'INFO';
+            await this.appendLog(deploymentId, message.trim(), logLevel);
+          });
 
-      pushProcess.on('close', async (code) => {
-        const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+          pushProcess.on('close', async (code) => {
+            const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+            
+            if (code === 0) {
+              const successMsg = `Successfully pushed image: ${fullImageName} (took ${elapsedTime}s)`;
+              console.log('[Docker Push]', successMsg);
+              await this.appendLog(deploymentId, successMsg);
+              resolve();
+            } else {
+              const errorMsg = `Docker push failed with code ${code} (took ${elapsedTime}s)`;
+              await this.appendLog(deploymentId, errorMsg, 'ERROR');
+              if (stderr) await this.appendLog(deploymentId, `Error details: ${stderr}`, 'ERROR');
+              reject(new BadRequestException(`${errorMsg}: ${stderr || stdout}`));
+            }
+          });
+
+          pushProcess.on('error', async (error) => {
+            const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
+            const errorMsg = `Failed to start docker push (took ${elapsedTime}s): ${error.message}`;
+            await this.appendLog(deploymentId, errorMsg, 'ERROR');
+            reject(new BadRequestException(errorMsg));
+          });
+        });
+
+        return;
+      } catch (error) {
+        lastError = error;
         
-        if (code === 0) {
-          const successMsg = `Successfully pushed image: ${fullImageName} (took ${elapsedTime}s)`;
-          console.log('[Docker Push]', successMsg);
-          await this.appendLog(deploymentId, successMsg);
-          resolve();
+        const isRetryable = error.message && (
+          error.message.includes('timeout') ||
+          error.message.includes('connection refused') ||
+          error.message.includes('connection reset') ||
+          error.message.includes('proxyconnect') ||
+          error.message.includes('network') ||
+          error.message.includes('dial tcp') ||
+          error.message.includes('i/o timeout') ||
+          error.message.includes('EOF')
+        );
+
+        if (isRetryable && attempt < maxRetries) {
+          const waitSeconds = Math.pow(2, attempt);
+          await this.appendLog(deploymentId, `Push failed with retryable error, waiting ${waitSeconds}s before retry...`, 'WARNING');
+          await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000));
+          continue;
         } else {
-          const errorMsg = `Docker push failed with code ${code} (took ${elapsedTime}s)`;
-          await this.appendLog(deploymentId, errorMsg, 'ERROR');
-          if (stderr) await this.appendLog(deploymentId, `Error details: ${stderr}`, 'ERROR');
-          reject(new BadRequestException(`${errorMsg}: ${stderr || stdout}`));
+          throw error;
         }
-      });
+      }
+    }
 
-      pushProcess.on('error', async (error) => {
-        const elapsedTime = ((Date.now() - startTime) / 1000).toFixed(2);
-        const errorMsg = `Failed to start docker push (took ${elapsedTime}s): ${error.message}`;
-        await this.appendLog(deploymentId, errorMsg, 'ERROR');
-        reject(new BadRequestException(errorMsg));
-      });
-    });
+    if (lastError) {
+      throw lastError;
+    }
   }
 
   getImagePath(imageName: string, tag: string = 'latest'): string {

@@ -379,7 +379,7 @@ ${registryConfigs}
     ).join(' ');
 
     if (!hasCacheEnabled) {
-      return `buildctl-daemonless.sh ${argsWithCache}`;
+      return this.generateRetryScript(`buildctl-daemonless.sh ${argsWithCache}`);
     }
 
     const argsWithoutCache = buildctlArgs.filter((arg, idx, arr) => {
@@ -399,17 +399,41 @@ set +e
 
 echo "=== Attempting build with S3 cache enabled ==="
 BUILD_OUTPUT=$(mktemp)
-buildctl-daemonless.sh ${argsWithCache} > "$BUILD_OUTPUT" 2>&1
-BUILD_EXIT_CODE=$?
-cat "$BUILD_OUTPUT"
 
-if [ "$BUILD_EXIT_CODE" -eq 0 ]; then
-  echo "=== Build completed successfully with cache ==="
-  rm -f "$BUILD_OUTPUT"
-  exit 0
-fi
+MAX_RETRIES=3
+RETRY_DELAY=2
 
-echo "=== Build with cache failed (exit code: $BUILD_EXIT_CODE) ==="
+for attempt in $(seq 1 $MAX_RETRIES); do
+  if [ $attempt -gt 1 ]; then
+    WAIT_TIME=$((RETRY_DELAY * (2 ** (attempt - 2))))
+    echo "=== Retry attempt $attempt/$MAX_RETRIES (waiting \${WAIT_TIME}s) ==="
+    sleep $WAIT_TIME
+  fi
+  
+  buildctl-daemonless.sh ${argsWithCache} > "$BUILD_OUTPUT" 2>&1
+  BUILD_EXIT_CODE=$?
+  cat "$BUILD_OUTPUT"
+  
+  if [ "$BUILD_EXIT_CODE" -eq 0 ]; then
+    echo "=== Build completed successfully with cache ==="
+    rm -f "$BUILD_OUTPUT"
+    exit 0
+  fi
+  
+  echo "=== Build with cache failed (exit code: $BUILD_EXIT_CODE) ==="
+  
+  if grep -qi "timeout\\|connection refused\\|connection reset\\|proxyconnect\\|network\\|dial tcp\\|i/o timeout\\|EOF" "$BUILD_OUTPUT"; then
+    if [ $attempt -lt $MAX_RETRIES ]; then
+      echo "=================================================="
+      echo "WARNING: Network/timeout error detected"
+      echo "Retrying..."
+      echo "=================================================="
+      continue
+    fi
+  fi
+  
+  break
+done
 
 if grep -qi "failed to check file presence in cache\\|BadRequest\\|Bad Request\\|operation error S3\\|api error BadRequest" "$BUILD_OUTPUT"; then
   echo "=================================================="
@@ -419,18 +443,94 @@ if grep -qi "failed to check file presence in cache\\|BadRequest\\|Bad Request\\
   echo "=================================================="
   
   rm -f "$BUILD_OUTPUT"
+  BUILD_OUTPUT=$(mktemp)
   
   echo "=== Retrying build without cache ==="
-  set -e
-  buildctl-daemonless.sh ${argsWithoutCache}
   
-  echo "=== Build completed successfully (without cache) ==="
-  exit 0
+  for attempt in $(seq 1 $MAX_RETRIES); do
+    if [ $attempt -gt 1 ]; then
+      WAIT_TIME=$((RETRY_DELAY * (2 ** (attempt - 2))))
+      echo "=== Retry attempt $attempt/$MAX_RETRIES (waiting \${WAIT_TIME}s) ==="
+      sleep $WAIT_TIME
+    fi
+    
+    buildctl-daemonless.sh ${argsWithoutCache} > "$BUILD_OUTPUT" 2>&1
+    BUILD_EXIT_CODE=$?
+    cat "$BUILD_OUTPUT"
+    
+    if [ "$BUILD_EXIT_CODE" -eq 0 ]; then
+      echo "=== Build completed successfully (without cache) ==="
+      rm -f "$BUILD_OUTPUT"
+      exit 0
+    fi
+    
+    echo "=== Build without cache failed (exit code: $BUILD_EXIT_CODE) ==="
+    
+    if grep -qi "timeout\\|connection refused\\|connection reset\\|proxyconnect\\|network\\|dial tcp\\|i/o timeout\\|EOF" "$BUILD_OUTPUT"; then
+      if [ $attempt -lt $MAX_RETRIES ]; then
+        echo "=================================================="
+        echo "WARNING: Network/timeout error detected"
+        echo "Retrying..."
+        echo "=================================================="
+        continue
+      fi
+    fi
+    
+    break
+  done
+  
+  rm -f "$BUILD_OUTPUT"
+  exit $BUILD_EXIT_CODE
 else
   echo "=== Build failed with non-cache error ==="
   rm -f "$BUILD_OUTPUT"
   exit $BUILD_EXIT_CODE
 fi
+`.trim();
+  }
+
+  private generateRetryScript(command: string): string {
+    return `
+set +e
+
+MAX_RETRIES=3
+RETRY_DELAY=2
+BUILD_OUTPUT=$(mktemp)
+
+for attempt in $(seq 1 $MAX_RETRIES); do
+  if [ $attempt -gt 1 ]; then
+    WAIT_TIME=$((RETRY_DELAY * (2 ** (attempt - 2))))
+    echo "=== Retry attempt $attempt/$MAX_RETRIES (waiting \${WAIT_TIME}s) ==="
+    sleep $WAIT_TIME
+  fi
+  
+  ${command} > "$BUILD_OUTPUT" 2>&1
+  EXIT_CODE=$?
+  cat "$BUILD_OUTPUT"
+  
+  if [ "$EXIT_CODE" -eq 0 ]; then
+    echo "=== Build completed successfully ==="
+    rm -f "$BUILD_OUTPUT"
+    exit 0
+  fi
+  
+  echo "=== Build failed (exit code: $EXIT_CODE) ==="
+  
+  if grep -qi "timeout\\|connection refused\\|connection reset\\|proxyconnect\\|network\\|dial tcp\\|i/o timeout\\|EOF" "$BUILD_OUTPUT"; then
+    if [ $attempt -lt $MAX_RETRIES ]; then
+      echo "=================================================="
+      echo "WARNING: Network/timeout error detected"
+      echo "Retrying..."
+      echo "=================================================="
+      continue
+    fi
+  fi
+  
+  break
+done
+
+rm -f "$BUILD_OUTPUT"
+exit $EXIT_CODE
 `.trim();
   }
 
