@@ -717,12 +717,27 @@ export class DockerService {
     if (harborUsername && harborPassword) {
       await this.appendLog(deploymentId, `Logging in to registry ${this.harborRegistryPush}...`);
       try {
-        await execAsync(`echo "${harborPassword}" | docker login ${this.harborRegistryPush} -u ${harborUsername} --password-stdin`, {
-          env: {
-            ...process.env,
-            DOCKER_HOST: process.env.DOCKER_HOST || 'unix:///var/run/docker.sock',
-            PATH: process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
-          },
+        await new Promise<void>((resolve, reject) => {
+          const loginProcess = spawn(
+            'docker',
+            ['login', this.harborRegistryPush, '-u', harborUsername, '--password-stdin'],
+            {
+              stdio: ['pipe', 'pipe', 'pipe'],
+              env: {
+                ...process.env,
+                DOCKER_HOST: process.env.DOCKER_HOST || 'unix:///var/run/docker.sock',
+                PATH: process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+              },
+            }
+          );
+          const stderrChunks: Buffer[] = [];
+          loginProcess.stderr?.on('data', (chunk) => stderrChunks.push(chunk));
+          loginProcess.on('error', reject);
+          loginProcess.on('close', (code, signal) => {
+            if (code === 0) resolve();
+            else reject(new Error(Buffer.concat(stderrChunks).toString('utf8') || `Exit ${code ?? signal}`));
+          });
+          loginProcess.stdin?.end(harborPassword, 'utf8');
         });
         await this.appendLog(deploymentId, `Successfully logged in to registry`);
       } catch (error) {
