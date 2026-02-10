@@ -399,6 +399,8 @@ set +e
 
 echo "=== Attempting build with S3 cache enabled ==="
 BUILD_OUTPUT=$(mktemp)
+FIFO=$(mktemp -u)
+mkfifo "$FIFO"
 
 MAX_RETRIES=3
 RETRY_DELAY=2
@@ -409,14 +411,18 @@ for attempt in $(seq 1 $MAX_RETRIES); do
     echo "=== Retry attempt $attempt/$MAX_RETRIES (waiting \${WAIT_TIME}s) ==="
     sleep $WAIT_TIME
   fi
+  [ -p "$FIFO" ] || mkfifo "$FIFO"
   
-  buildctl-daemonless.sh ${argsWithCache} > "$BUILD_OUTPUT" 2>&1
+  buildctl-daemonless.sh ${argsWithCache} > "$FIFO" 2>&1 &
+  BUILD_PID=$!
+  tee "$BUILD_OUTPUT" < "$FIFO"
+  wait $BUILD_PID
   BUILD_EXIT_CODE=$?
-  cat "$BUILD_OUTPUT"
+  rm -f "$FIFO"
   
   if [ "$BUILD_EXIT_CODE" -eq 0 ]; then
     echo "=== Build completed successfully with cache ==="
-    rm -f "$BUILD_OUTPUT"
+    rm -f "$BUILD_OUTPUT" "$FIFO"
     exit 0
   fi
   
@@ -444,6 +450,8 @@ if grep -qi "failed to check file presence in cache\\|BadRequest\\|Bad Request\\
   
   rm -f "$BUILD_OUTPUT"
   BUILD_OUTPUT=$(mktemp)
+  FIFO=$(mktemp -u)
+  mkfifo "$FIFO"
   
   echo "=== Retrying build without cache ==="
   
@@ -453,14 +461,18 @@ if grep -qi "failed to check file presence in cache\\|BadRequest\\|Bad Request\\
       echo "=== Retry attempt $attempt/$MAX_RETRIES (waiting \${WAIT_TIME}s) ==="
       sleep $WAIT_TIME
     fi
+    rm -f "$FIFO"
+    mkfifo "$FIFO"
     
-    buildctl-daemonless.sh ${argsWithoutCache} > "$BUILD_OUTPUT" 2>&1
+    buildctl-daemonless.sh ${argsWithoutCache} > "$FIFO" 2>&1 &
+    BUILD_PID=$!
+    tee "$BUILD_OUTPUT" < "$FIFO"
+    wait $BUILD_PID
     BUILD_EXIT_CODE=$?
-    cat "$BUILD_OUTPUT"
     
     if [ "$BUILD_EXIT_CODE" -eq 0 ]; then
       echo "=== Build completed successfully (without cache) ==="
-      rm -f "$BUILD_OUTPUT"
+      rm -f "$BUILD_OUTPUT" "$FIFO"
       exit 0
     fi
     
@@ -479,11 +491,11 @@ if grep -qi "failed to check file presence in cache\\|BadRequest\\|Bad Request\\
     break
   done
   
-  rm -f "$BUILD_OUTPUT"
+  rm -f "$BUILD_OUTPUT" "$FIFO"
   exit $BUILD_EXIT_CODE
 else
   echo "=== Build failed with non-cache error ==="
-  rm -f "$BUILD_OUTPUT"
+  rm -f "$BUILD_OUTPUT" "$FIFO"
   exit $BUILD_EXIT_CODE
 fi
 `.trim();
@@ -496,6 +508,7 @@ set +e
 MAX_RETRIES=3
 RETRY_DELAY=2
 BUILD_OUTPUT=$(mktemp)
+FIFO=$(mktemp -u)
 
 for attempt in $(seq 1 $MAX_RETRIES); do
   if [ $attempt -gt 1 ]; then
@@ -503,10 +516,14 @@ for attempt in $(seq 1 $MAX_RETRIES); do
     echo "=== Retry attempt $attempt/$MAX_RETRIES (waiting \${WAIT_TIME}s) ==="
     sleep $WAIT_TIME
   fi
+  mkfifo "$FIFO"
   
-  ${command} > "$BUILD_OUTPUT" 2>&1
+  ( ${command} > "$FIFO" 2>&1 ) &
+  BUILD_PID=$!
+  tee "$BUILD_OUTPUT" < "$FIFO"
+  wait $BUILD_PID
   EXIT_CODE=$?
-  cat "$BUILD_OUTPUT"
+  rm -f "$FIFO"
   
   if [ "$EXIT_CODE" -eq 0 ]; then
     echo "=== Build completed successfully ==="
@@ -529,7 +546,7 @@ for attempt in $(seq 1 $MAX_RETRIES); do
   break
 done
 
-rm -f "$BUILD_OUTPUT"
+rm -f "$BUILD_OUTPUT" "$FIFO"
 exit $EXIT_CODE
 `.trim();
   }
