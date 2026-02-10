@@ -92,10 +92,58 @@ export class ProjectsController {
       host: string;
       tlsEnabled?: boolean;
       routes: Array<{ path: string; serviceName: string; servicePort: number }>;
+      basicAuth?: {
+        enabled: boolean;
+        username: string;
+        password: string;
+      };
     },
     @Request() req
   ) {
     return this.projectsService.createProjectIngress(id, body, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl,
+    });
+  }
+
+  @Put(':id/ingresses/:ingressId')
+  @UseGuards(AuthGuard)
+  async updateProjectIngress(
+    @Param('id') id: string,
+    @Param('ingressId') ingressId: string,
+    @Body()
+    body: {
+      host: string;
+      tlsEnabled?: boolean;
+      routes: Array<{ path: string; serviceName: string; servicePort: number }>;
+      basicAuth?: {
+        enabled: boolean;
+        username: string;
+        password: string;
+      };
+    },
+    @Request() req
+  ) {
+    return this.projectsService.updateProjectIngress(id, ingressId, body, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl,
+    });
+  }
+
+  @Get(':id/ingresses/:ingressId')
+  @UseGuards(AuthGuard)
+  async getProjectIngress(
+    @Param('id') id: string,
+    @Param('ingressId') ingressId: string,
+    @Request() req
+  ) {
+    return this.projectsService.getProjectIngress(id, ingressId, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
@@ -392,6 +440,11 @@ export class DeploymentsController {
       tlsEnabled?: boolean;
       annotations?: Record<string, string>;
       routes?: Array<{ path: string; serviceName: string; servicePort: number }>;
+      basicAuth?: {
+        enabled: boolean;
+        username: string;
+        password: string;
+      };
     },
     @Request() req
   ) {
@@ -422,6 +475,11 @@ export class DeploymentsController {
       servicePort?: number;
       tlsEnabled?: boolean;
       annotations?: Record<string, string>;
+      basicAuth?: {
+        enabled: boolean;
+        username?: string;
+        password?: string;
+      };
     },
     @Request() req
   ) {

@@ -26,7 +26,8 @@
 		ChevronDown,
 		Pencil,
 		Eye,
-		EyeOff
+		EyeOff,
+		Lock
 	} from 'lucide-svelte';
 	import { scale, fade } from 'svelte/transition';
 	import { Clock, Minimize2, Maximize2 } from 'lucide-svelte';
@@ -63,6 +64,12 @@
 		internalUrls?: string[];
 	}
 
+	interface IngressRoute {
+		path: string;
+		serviceName: string;
+		servicePort: number;
+	}
+
 	interface Ingress {
 		id: string;
 		name: string;
@@ -70,6 +77,8 @@
 		path: string;
 		tlsEnabled: boolean;
 		address?: string;
+		annotations?: Record<string, any>;
+		routes?: IngressRoute[];
 		service?: {
 			id: string;
 			name: string;
@@ -260,6 +269,10 @@
 		serviceId: string;
 		servicePort: number;
 		tlsEnabled: boolean;
+		basicAuthEnabled: boolean;
+		basicAuthUsername: string;
+		basicAuthPassword: string;
+		basicAuthShowPassword: boolean;
 	} | null>(null);
 	let savingIngress = $state(false);
 
@@ -1025,6 +1038,7 @@
 
 	function startEditIngress(ingress: Ingress) {
 		const service = deployment?.services?.find((s) => s.id === ingress.service?.id);
+		const hasBasicAuth = ingress.annotations?.['traefik.ingress.kubernetes.io/router.middlewares']?.includes('auth@kubernetescrd');
 		editingIngress = ingress.id;
 		editingIngressForm = {
 			host: ingress.host,
@@ -1032,6 +1046,10 @@
 			serviceId: service?.id || '',
 			servicePort: service?.port || 80,
 			tlsEnabled: ingress.tlsEnabled ?? true,
+			basicAuthEnabled: hasBasicAuth ?? false,
+			basicAuthUsername: '',
+			basicAuthPassword: '',
+			basicAuthShowPassword: false,
 		};
 	}
 
@@ -1048,6 +1066,17 @@
 			return;
 		}
 
+		if (editingIngressForm.basicAuthEnabled) {
+			if (!editingIngressForm.basicAuthUsername.trim()) {
+				toasts.add({ title: 'Basic auth username is required', color: 'error' });
+				return;
+			}
+			if (!editingIngressForm.basicAuthPassword.trim()) {
+				toasts.add({ title: 'Basic auth password is required', color: 'error' });
+				return;
+			}
+		}
+
 		savingIngress = true;
 		try {
 			const service = deployment?.services?.find((s) => s.id === editingIngressForm.serviceId);
@@ -1059,7 +1088,12 @@
 					path: editingIngressForm.path || '/',
 					serviceName: service?.name,
 					servicePort: editingIngressForm.servicePort,
-					tlsEnabled: editingIngressForm.tlsEnabled
+					tlsEnabled: editingIngressForm.tlsEnabled,
+					basicAuth: editingIngressForm.basicAuthEnabled ? {
+						enabled: true,
+						username: editingIngressForm.basicAuthUsername,
+						password: editingIngressForm.basicAuthPassword
+					} : { enabled: false }
 				})
 			});
 			if (!response.ok) {
@@ -2873,98 +2907,57 @@
 										{#if deployment.ingresses?.length}
 											{#each deployment.ingresses as ingress}
 												<div class="surface-tile rounded-xl p-4">
-													{#if editingIngress === ingress.id && editingIngressForm}
-														<div class="space-y-4">
-															<div class="grid gap-4 md:grid-cols-2">
-																<input type="text" bind:value={editingIngressForm.host} placeholder="example.com" class="input" />
-																<input type="text" bind:value={editingIngressForm.path} placeholder="/" class="input" />
-																<div class="relative custom-dropdown-container">
-																	<button
-																		type="button"
-																		onclick={() => (serviceDropdownOpen = !serviceDropdownOpen)}
-																		class="flex w-full items-center justify-between overflow-hidden rounded-xl border px-3 py-2 text-sm transition"
-																		style="background-color: var(--control-bg); color: var(--center-channel-color); border-color: var(--surface-border);"
-																	>
-																		<span>
-																			{deployment.services?.find((s) => s.id === editingIngressForm.serviceId)
-																				? `${deployment.services.find((s) => s.id === editingIngressForm.serviceId)?.name} (${deployment.services.find((s) => s.id === editingIngressForm.serviceId)?.port})`
-																				: 'Select service'}
-																		</span>
-																		<ChevronDown class="h-4 w-4 shrink-0" />
-																	</button>
-																	{#if serviceDropdownOpen}
-																		<div
-																			class="absolute z-20 mt-1 w-full rounded-xl border p-2 shadow"
-																			style="background-color: var(--surface-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
-																			transition:scale={{ duration: 150, start: 0.96 }}
-																		>
-																			{#each deployment.services ?? [] as service}
-																				<button
-																					type="button"
-																					onclick={() => {
-																						editingIngressForm.serviceId = service.id;
-																						editingIngressForm.servicePort = service.port;
-																						serviceDropdownOpen = false;
-																					}}
-																					class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]"
-																				>
-																					<span>{service.name} ({service.port})</span>
-																					{#if editingIngressForm.serviceId === service.id}
-																						<Check class="h-4 w-4 text-primary-600" />
-																					{/if}
-																				</button>
-																			{/each}
-																		</div>
-																	{/if}
-																</div>
-																<label class="surface-checkbox flex items-center gap-2 rounded-xl px-3 py-2 text-sm">
-																	<input type="checkbox" bind:checked={editingIngressForm.tlsEnabled} />
-																	<span>Enable TLS</span>
-																</label>
-															</div>
-															<div class="flex justify-end gap-3">
-																<button onclick={cancelEditIngress} class="btn btn-ghost btn-sm">
-																	Cancel
-																</button>
-																<button onclick={() => saveIngress(ingress.id)} disabled={savingIngress} class="btn btn-primary btn-sm">
-																	{#if savingIngress}
-																		<Loader2 class="h-4 w-4 animate-spin" />
-																	{/if}
-																	<span>Save</span>
-																</button>
-															</div>
-														</div>
-													{:else}
-														<div class="flex flex-wrap items-center justify-between gap-4">
-															<div>
-																<p class="font-medium text-gray-900 dark:text-gray-50">
-																	{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}{ingress.path}
+													<div class="flex flex-wrap items-center justify-between gap-4">
+														<div class="flex-1 min-w-0">
+															{#if ingress.annotations?.['traefik.ingress.kubernetes.io/router.middlewares']?.includes('auth@kubernetescrd')}
+																<p class="text-xs text-amber-500 mb-1">
+																	<Lock class="inline h-3 w-3 mr-1" />
+																	Basic Auth Enabled
 																</p>
-																{#if ingress.address}
-																	<p class="text-xs text-gray-500">{ingress.address}</p>
-																{/if}
-															</div>
-															<div class="flex gap-2">
+															{/if}
+															{#if ingress.routes && ingress.routes.length > 1}
+																<p class="font-medium text-gray-900 dark:text-gray-50 mb-1">
+																	{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}
+																</p>
+																<div class="space-y-1">
+																	{#each ingress.routes as route}
+																		<p class="text-sm text-gray-600 dark:text-gray-400">
+																			<span class="font-mono">{route.path}</span>
+																			<span class="text-xs ml-1">→ {route.serviceName}:{route.servicePort}</span>
+																		</p>
+																	{/each}
+																</div>
+															{:else}
+																<p class="font-medium text-gray-900 dark:text-gray-50">
+																	{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}{ingress.routes?.[0]?.path ?? ingress.path}
+																</p>
+															{/if}
+															{#if ingress.address}
+																<p class="text-xs text-gray-500 mt-1">{ingress.address}</p>
+															{/if}
+														</div>
+														<div class="flex gap-2">
+															{#if deployment.project?.workspace?.slug && deployment.project?.slug}
 																<button
-																	onclick={() => startEditIngress(ingress)}
+																	onclick={() => goto(`/workspaces/${deployment.project.workspace.slug}/projects/${deployment.project.slug}/ingresses/${ingress.id}`)}
 																	class="btn btn-ghost btn-sm"
 																>
 																	<Pencil class="h-4 w-4" />
 																</button>
-																<button
-																	onclick={() => deleteIngress(ingress.id)}
-																	disabled={deletingIngress === ingress.id}
-																	class="btn btn-ghost btn-sm text-red-500"
-																>
-																	{#if deletingIngress === ingress.id}
-																		<Loader2 class="h-4 w-4 animate-spin" />
-																	{:else}
-																		<Trash2 class="h-4 w-4" />
-																	{/if}
-																</button>
-															</div>
+															{/if}
+															<button
+																onclick={() => deleteIngress(ingress.id)}
+																disabled={deletingIngress === ingress.id}
+																class="btn btn-ghost btn-sm text-red-500"
+															>
+																{#if deletingIngress === ingress.id}
+																	<Loader2 class="h-4 w-4 animate-spin" />
+																{:else}
+																	<Trash2 class="h-4 w-4" />
+																{/if}
+															</button>
 														</div>
-													{/if}
+													</div>
 												</div>
 											{/each}
 										{:else}

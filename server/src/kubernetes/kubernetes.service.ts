@@ -98,6 +98,12 @@ type CreateIngressOptions = {
   ingressClassName?: string;
   entrypoints?: string[];
   annotations?: Record<string, string>;
+  basicAuth?: {
+    enabled: boolean;
+    username: string;
+    password: string;
+    secretName?: string;
+  };
 };
 
 @Injectable()
@@ -1067,6 +1073,160 @@ export class KubernetesService {
     };
   }
 
+  async createBasicAuthSecret(namespace: string, name: string, username: string, password: string): Promise<void> {
+    this.ensureKubeConfig();
+
+    const cleanNamespace = String(namespace || '').trim();
+    const cleanName = String(name || '').trim();
+
+    if (!cleanNamespace) {
+      throw new BadRequestException('Namespace parameter is required');
+    }
+
+    if (!cleanName) {
+      throw new BadRequestException('Secret name is required');
+    }
+
+    if (!username || !password) {
+      throw new BadRequestException('Username and password are required');
+    }
+
+    const bcrypt = require('bcrypt');
+    const hashedPassword = bcrypt.hashSync(password, 10);
+    const authString = `${username}:${hashedPassword}`;
+
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+
+    const secretBody: k8s.V1Secret = {
+      metadata: {
+        name: cleanName,
+        namespace: cleanNamespace,
+        labels: {
+          'leaf.dev/managed': 'true',
+          'leaf.dev/type': 'basic-auth'
+        }
+      },
+      type: 'Opaque',
+      stringData: {
+        users: authString
+      }
+    };
+
+    try {
+      await coreApi.createNamespacedSecret(cleanNamespace, secretBody);
+    } catch (error) {
+      if (error.response?.statusCode === 409) {
+        await coreApi.replaceNamespacedSecret(cleanName, cleanNamespace, secretBody);
+      } else {
+        throw new BadRequestException({
+          error: 'Failed to create basic auth secret',
+          message: error.response?.body?.message || error.message,
+          details: error.response?.body
+        });
+      }
+    }
+  }
+
+  async deleteBasicAuthSecret(namespace: string, name: string): Promise<void> {
+    this.ensureKubeConfig();
+
+    const cleanNamespace = String(namespace || '').trim();
+    const cleanName = String(name || '').trim();
+
+    if (!cleanNamespace || !cleanName) return;
+
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+
+    try {
+      await coreApi.deleteNamespacedSecret(cleanName, cleanNamespace);
+    } catch (error) {
+      if (error.response?.statusCode !== 404) {
+        console.error(`Failed to delete basic auth secret ${cleanName} in ${cleanNamespace}:`, error);
+      }
+    }
+  }
+
+  async createBasicAuthMiddleware(namespace: string, name: string, secretName: string): Promise<void> {
+    this.ensureKubeConfig();
+
+    const cleanNamespace = String(namespace || '').trim();
+    const cleanName = String(name || '').trim();
+
+    if (!cleanNamespace || !cleanName) return;
+
+    const customObjectsApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+
+    const middlewareBody = {
+      apiVersion: 'traefik.io/v1alpha1',
+      kind: 'Middleware',
+      metadata: {
+        name: `${cleanName}-auth`,
+        namespace: cleanNamespace,
+        labels: {
+          'leaf.dev/managed': 'true',
+          'leaf.dev/type': 'basic-auth-middleware'
+        }
+      },
+      spec: {
+        basicAuth: {
+          secret: secretName
+        }
+      }
+    };
+
+    try {
+      await customObjectsApi.createNamespacedCustomObject(
+        'traefik.io',
+        'v1alpha1',
+        cleanNamespace,
+        'middlewares',
+        middlewareBody
+      );
+    } catch (error) {
+      if (error.response?.statusCode === 409) {
+        try {
+          await customObjectsApi.replaceNamespacedCustomObject(
+            'traefik.io',
+            'v1alpha1',
+            cleanNamespace,
+            'middlewares',
+            `${cleanName}-auth`,
+            middlewareBody
+          );
+        } catch (replaceError) {
+          console.error(`Failed to update basic auth middleware: ${replaceError.message}`);
+        }
+      } else {
+        console.error(`Failed to create basic auth middleware: ${error.message}`);
+      }
+    }
+  }
+
+  async deleteBasicAuthMiddleware(namespace: string, name: string): Promise<void> {
+    this.ensureKubeConfig();
+
+    const cleanNamespace = String(namespace || '').trim();
+    const cleanName = String(name || '').trim();
+
+    if (!cleanNamespace || !cleanName) return;
+
+    const customObjectsApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+
+    try {
+      await customObjectsApi.deleteNamespacedCustomObject(
+        'traefik.io',
+        'v1alpha1',
+        cleanNamespace,
+        'middlewares',
+        `${cleanName}-auth`
+      );
+    } catch (error) {
+      if (error.response?.statusCode !== 404) {
+        console.error(`Failed to delete basic auth middleware ${cleanName}-auth in ${cleanNamespace}:`, error);
+      }
+    }
+  }
+
   async createIngress(options: CreateIngressOptions) {
     this.ensureKubeConfig();
 
@@ -1129,6 +1289,25 @@ export class KubernetesService {
           annotations['traefik.ingress.kubernetes.io/router.entrypoints'] =
             normalizedEntrypoints.join(',');
         }
+      }
+    }
+
+    if (options.basicAuth?.enabled && options.basicAuth.username && options.basicAuth.password) {
+      const basicAuthSecretName = options.basicAuth.secretName || `${name}-basic-auth`;
+      try {
+        await this.createBasicAuthSecret(
+          namespace,
+          basicAuthSecretName,
+          options.basicAuth.username,
+          options.basicAuth.password
+        );
+
+        await this.createBasicAuthMiddleware(namespace, name, basicAuthSecretName);
+
+        annotations['traefik.ingress.kubernetes.io/router.middlewares'] =
+          `${namespace}-${name}-auth@kubernetescrd`;
+      } catch (error) {
+        console.error('[K8s] Failed to create basic auth:', error);
       }
     }
 
@@ -1222,8 +1401,8 @@ export class KubernetesService {
     const namespace = String(options.namespace || '').trim();
     const name = String(options.name || '').trim();
     const host = String(options.host || '').trim().toLowerCase();
-    const serviceName = String(options.serviceName || '').trim();
-    const servicePort = Number(options.servicePort);
+    const ingressClassName =
+      String(options.ingressClassName || '').trim() || undefined;
 
     if (!namespace) {
       throw new BadRequestException('Namespace parameter is required');
@@ -1237,19 +1416,26 @@ export class KubernetesService {
       throw new BadRequestException('Host is required');
     }
 
-    if (!serviceName) {
-      throw new BadRequestException('Service name is required');
+    const pathBackends = Array.isArray(options.paths) && options.paths.length > 0
+      ? options.paths
+      : [{
+          path: String(options.path || '/').trim() || '/',
+          pathType: String(options.pathType || 'Prefix').trim() || 'Prefix',
+          serviceName: String(options.serviceName || '').trim(),
+          servicePort: Number(options.servicePort)
+        }];
+
+    if (!pathBackends[0].serviceName || !Number.isInteger(pathBackends[0].servicePort) || pathBackends[0].servicePort <= 0) {
+      throw new BadRequestException('Service name and port are required');
     }
 
-    if (!Number.isInteger(servicePort) || servicePort <= 0) {
-      throw new BadRequestException('Service port must be a positive integer');
+    for (const pb of pathBackends) {
+      const svcName = String(pb.serviceName || '').trim();
+      const svcPort = Number(pb.servicePort);
+      if (!svcName || !Number.isInteger(svcPort) || svcPort <= 0) {
+        throw new BadRequestException('Each path must have a valid service name and port');
+      }
     }
-
-    const path = String(options.path || '/').trim() || '/';
-    const pathTypeRaw = String(options.pathType || 'Prefix').trim();
-    const pathType = pathTypeRaw ? pathTypeRaw : 'Prefix';
-    const ingressClassName =
-      String(options.ingressClassName || '').trim() || undefined;
 
     const annotations: Record<string, string> = {};
 
@@ -1274,6 +1460,34 @@ export class KubernetesService {
       }
     }
 
+    if (options.basicAuth?.enabled && options.basicAuth.username && options.basicAuth.password) {
+      const basicAuthSecretName = options.basicAuth.secretName || `${name}-basic-auth`;
+      try {
+        await this.createBasicAuthSecret(
+          namespace,
+          basicAuthSecretName,
+          options.basicAuth.username,
+          options.basicAuth.password
+        );
+
+        await this.createBasicAuthMiddleware(namespace, name, basicAuthSecretName);
+
+        annotations['traefik.ingress.kubernetes.io/router.middlewares'] =
+          `${namespace}-${name}-auth@kubernetescrd`;
+      } catch (error) {
+        console.error('[K8s] Failed to create basic auth:', error);
+      }
+    } else if (options.basicAuth?.enabled === false) {
+      try {
+        const basicAuthSecretName = options.basicAuth.secretName || `${name}-basic-auth`;
+        await this.deleteBasicAuthSecret(namespace, basicAuthSecretName);
+        await this.deleteBasicAuthMiddleware(namespace, name);
+        delete annotations['traefik.ingress.kubernetes.io/router.middlewares'];
+      } catch (error) {
+        console.error('[K8s] Failed to remove basic auth:', error);
+      }
+    }
+
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
 
     const tlsHosts =
@@ -1282,6 +1496,21 @@ export class KubernetesService {
             ? options.tlsHosts
             : [host])
         : [];
+
+    const httpPaths = pathBackends.map((pb) => {
+      const path = String(pb.path || '/').trim() || '/';
+      const pathType = String(pb.pathType || 'Prefix').trim() || 'Prefix';
+      return {
+        path,
+        pathType,
+        backend: {
+          service: {
+            name: String(pb.serviceName).trim(),
+            port: { number: Number(pb.servicePort) }
+          }
+        }
+      };
+    });
 
     const ingressBody: k8s.V1Ingress = {
       metadata: {
@@ -1297,20 +1526,7 @@ export class KubernetesService {
           {
             host,
             http: {
-              paths: [
-                {
-                  path,
-                  pathType,
-                  backend: {
-                    service: {
-                      name: serviceName,
-                      port: {
-                        number: servicePort
-                      }
-                    }
-                  }
-                }
-              ]
+              paths: httpPaths
             }
           }
         ]
@@ -1359,6 +1575,20 @@ export class KubernetesService {
     }
   }
 
+  async readIngress(namespace: string, name: string) {
+    this.ensureKubeConfig();
+    const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
+    try {
+      const response = await networkingApi.readNamespacedIngress(name, namespace);
+      return response.body;
+    } catch (error) {
+      if (error.response?.statusCode === 404) {
+        return null;
+      }
+      throw error;
+    }
+  }
+
   async deleteIngress(namespace: string, name: string) {
     this.ensureKubeConfig();
 
@@ -1377,6 +1607,9 @@ export class KubernetesService {
 
     try {
       await networkingApi.deleteNamespacedIngress(cleanName, cleanNamespace);
+
+      await this.deleteBasicAuthSecret(cleanNamespace, `${cleanName}-basic-auth`);
+      await this.deleteBasicAuthMiddleware(cleanNamespace, cleanName);
 
       return {
         success: true,

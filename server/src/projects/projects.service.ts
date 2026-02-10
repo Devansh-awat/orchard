@@ -1776,6 +1776,11 @@ export class ProjectsService {
       tlsEnabled?: boolean;
       annotations?: Record<string, string>;
       routes?: Array<{ path: string; serviceName: string; servicePort: number }>;
+      basicAuth?: {
+        enabled: boolean;
+        username: string;
+        password: string;
+      };
     },
     clerkId: string,
     userData?: {
@@ -2106,6 +2111,7 @@ export class ProjectsService {
       ingressClassName,
       entrypoints,
       annotations: sanitizedAnnotations,
+      basicAuth: data.basicAuth?.enabled ? data.basicAuth : undefined,
     });
 
     const statusRecord = Array.isArray(
@@ -2183,6 +2189,11 @@ export class ProjectsService {
       tlsEnabled?: boolean;
       annotations?: Record<string, string>;
       routes: Array<{ path: string; serviceName: string; servicePort: number }>;
+      basicAuth?: {
+        enabled: boolean;
+        username: string;
+        password: string;
+      };
     },
     clerkId: string,
     userData?: {
@@ -2326,6 +2337,7 @@ export class ProjectsService {
       ingressClassName: 'traefik',
       entrypoints,
       annotations: sanitizedAnnotations,
+      basicAuth: data.basicAuth?.enabled ? data.basicAuth : undefined,
     });
 
     const statusRecord = Array.isArray(ingressResult.status?.loadBalancer?.ingress)
@@ -2382,6 +2394,11 @@ export class ProjectsService {
       host: string;
       tlsEnabled?: boolean;
       routes: Array<{ path: string; serviceName: string; servicePort: number }>;
+      basicAuth?: {
+        enabled: boolean;
+        username: string;
+        password: string;
+      };
     },
     clerkId: string,
     userData?: {
@@ -2541,6 +2558,7 @@ export class ProjectsService {
       ingressClassName: 'traefik',
       entrypoints,
       annotations: sanitizedAnnotations,
+      basicAuth: data.basicAuth?.enabled ? data.basicAuth : undefined,
     });
 
     const statusRecord = Array.isArray(ingressResult.status?.loadBalancer?.ingress)
@@ -2567,6 +2585,296 @@ export class ProjectsService {
         clusterIssuer,
         annotations: Object.keys(sanitizedAnnotations).length > 0 ? (sanitizedAnnotations as Prisma.JsonObject) : undefined,
         statusAddress,
+      },
+    });
+
+    for (const pb of pathBackends) {
+      const svc = allServices.find((s) => s.id === pb.serviceId);
+      if (svc && !svc.domain) {
+        await this.prisma.service.update({
+          where: { id: pb.serviceId },
+          data: { domain: rawHost },
+        });
+      }
+    }
+
+    return this.getProject(projectId, clerkId, userData);
+  }
+
+  async getProjectIngress(
+    projectId: string,
+    ingressId: string,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const ingress = await this.prisma.ingress.findUnique({
+      where: { id: ingressId },
+      include: {
+        project: {
+          include: {
+            workspace: true,
+            deployments: {
+              include: {
+                services: { include: { ports: true } },
+              },
+            },
+          },
+        },
+        service: true,
+      },
+    });
+
+    if (!ingress) {
+      throw new NotFoundException(`Ingress ${ingressId} not found`);
+    }
+
+    if (ingress.projectId !== projectId) {
+      throw new BadRequestException('Ingress does not belong to this project');
+    }
+
+    const membership = await this.prisma.workspaceMember.findFirst({
+      where: {
+        workspaceId: ingress.project.workspaceId,
+        userId: user.id,
+      },
+      include: { role: true },
+    });
+
+    if (!membership) {
+      throw new ForbiddenException('You are not a member of this workspace');
+    }
+
+    // Read the actual K8s ingress to get all routes
+    let k8sRoutes: Array<{ path: string; serviceName: string; servicePort: number }> = [];
+    try {
+      const k8sIngress = await this.kubernetesService.readIngress(ingress.namespace, ingress.name);
+      const rules = k8sIngress?.spec?.rules ?? [];
+      if (rules.length > 0 && rules[0].http?.paths) {
+        k8sRoutes = rules[0].http.paths.map((p: any) => ({
+          path: p.path || '/',
+          serviceName: p.backend?.service?.name || '',
+          servicePort: p.backend?.service?.port?.number || 0,
+        }));
+      }
+    } catch (error) {
+      // If we can't read K8s, fall back to DB record
+      k8sRoutes = [{
+        path: ingress.path,
+        serviceName: ingress.service?.name || '',
+        servicePort: ingress.service?.port || 0,
+      }];
+    }
+
+    const hasBasicAuth = typeof ingress.annotations === 'object' && ingress.annotations !== null
+      && (ingress.annotations as any)['traefik.ingress.kubernetes.io/router.middlewares']?.includes('auth@kubernetescrd');
+
+    return {
+      id: ingress.id,
+      name: ingress.name,
+      host: ingress.host,
+      path: ingress.path,
+      tlsEnabled: !!ingress.tlsSecretName,
+      routes: k8sRoutes,
+      basicAuthEnabled: hasBasicAuth,
+      project: ingress.project,
+    };
+  }
+
+  async updateProjectIngress(
+    projectId: string,
+    ingressId: string,
+    data: {
+      host: string;
+      tlsEnabled?: boolean;
+      routes: Array<{ path: string; serviceName: string; servicePort: number }>;
+      basicAuth?: {
+        enabled: boolean;
+        username: string;
+        password: string;
+      };
+    },
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const ingress = await this.prisma.ingress.findUnique({
+      where: { id: ingressId },
+      include: {
+        project: {
+          include: {
+            workspace: true,
+            deployments: {
+              include: {
+                services: { include: { ports: true } },
+                ingresses: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!ingress) {
+      throw new NotFoundException(`Ingress ${ingressId} not found`);
+    }
+
+    if (ingress.projectId !== projectId) {
+      throw new BadRequestException('Ingress does not belong to this project');
+    }
+
+    const project = ingress.project;
+
+    const membership = await this.prisma.workspaceMember.findFirst({
+      where: {
+        workspaceId: project.workspaceId,
+        userId: user.id,
+      },
+      include: { role: true },
+    });
+
+    if (!membership) {
+      throw new ForbiddenException('You are not a member of this workspace');
+    }
+    if (membership.role.name === 'viewer') {
+      throw new ForbiddenException('You do not have permission to manage ingress resources');
+    }
+
+    const rawHost = String(data.host || '').trim().toLowerCase();
+    if (!rawHost) {
+      throw new BadRequestException('Host is required');
+    }
+    if (rawHost.length > 253) {
+      throw new BadRequestException('Host exceeds maximum length');
+    }
+    const hostPattern = /^(?=.{1,253}$)([a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)(\.[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?)*$/;
+    if (!hostPattern.test(rawHost)) {
+      throw new BadRequestException('Host is invalid');
+    }
+
+    const routes = Array.isArray(data.routes) && data.routes.length > 0 ? data.routes : null;
+    if (!routes || routes.length === 0) {
+      throw new BadRequestException('At least one route is required');
+    }
+
+    const allServices = project.deployments.flatMap((d) => (d.services ?? []).map((s) => ({ ...s, deploymentId: d.id })));
+
+    if (allServices.length === 0) {
+      throw new BadRequestException('Project has no services');
+    }
+
+    const pathPattern = /^\/[A-Za-z0-9\-._/]*$/;
+    const pathBackends: Array<{ path: string; pathType: string; serviceName: string; servicePort: number; serviceId: string; deploymentId: string }> = [];
+
+    for (const route of routes) {
+      let path = String(route.path || '/').trim() || '/';
+      if (!path.startsWith('/')) {
+        path = `/${path}`;
+      }
+      if (path.length > 255) {
+        throw new BadRequestException(`Path ${path} exceeds maximum length`);
+      }
+      if (!pathPattern.test(path)) {
+        throw new BadRequestException(`Path ${path} contains invalid characters`);
+      }
+
+      const targetService = allServices.find((s) => s.name === String(route.serviceName || '').trim());
+      if (!targetService) {
+        throw new BadRequestException(`Service ${route.serviceName} not found in project`);
+      }
+
+      const port = Number(route.servicePort);
+      if (!Number.isInteger(port) || port <= 0) {
+        throw new BadRequestException(`Invalid service port for ${route.serviceName}`);
+      }
+
+      const servicePorts = Array.isArray((targetService as any).ports) ? (targetService as any).ports : [];
+      const hasPort = servicePorts.some((p: any) => Number(p.port) === port) || Number(targetService.port) === port;
+      if (!hasPort) {
+        throw new BadRequestException(`Port ${port} not found on service ${route.serviceName}`);
+      }
+
+      pathBackends.push({
+        path,
+        pathType: 'Prefix',
+        serviceName: targetService.name,
+        servicePort: port,
+        serviceId: targetService.id,
+        deploymentId: (targetService as any).deploymentId,
+      });
+    }
+
+    const tlsEnabled = data.tlsEnabled !== false;
+    let tlsSecretName: string | null = ingress.tlsSecretName;
+    if (tlsEnabled && !tlsSecretName) {
+      tlsSecretName = `leaf-cert-${randomUUID()}`;
+    } else if (!tlsEnabled) {
+      tlsSecretName = null;
+    }
+    const tlsHosts = tlsSecretName ? [rawHost] : [];
+    const clusterIssuer = tlsEnabled ? 'letsencrypt-prod' : null;
+    const entrypoints = tlsEnabled ? ['websecure'] : ['web'];
+
+    const sanitizedAnnotations: Record<string, string> = {};
+    sanitizedAnnotations['traefik.ingress.kubernetes.io/router.entrypoints'] = entrypoints.join(',');
+    if (clusterIssuer) {
+      sanitizedAnnotations['cert-manager.io/cluster-issuer'] = clusterIssuer;
+    }
+
+    try {
+      await this.kubernetesService.updateIngress({
+        namespace: ingress.namespace,
+        name: ingress.name,
+        host: rawHost,
+        paths: pathBackends.map((pb) => ({ path: pb.path, pathType: pb.pathType, serviceName: pb.serviceName, servicePort: pb.servicePort })),
+        tlsSecretName: tlsSecretName || undefined,
+        tlsHosts,
+        ingressClassName: 'traefik',
+        entrypoints,
+        annotations: sanitizedAnnotations,
+        basicAuth: data.basicAuth?.enabled ? data.basicAuth : data.basicAuth?.enabled === false ? { enabled: false, username: '', password: '' } : undefined,
+      });
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+      throw new BadRequestException(`Failed to update ingress in Kubernetes: ${error.message}`);
+    }
+
+    const firstRoute = pathBackends[0];
+
+    await this.prisma.ingress.update({
+      where: { id: ingressId },
+      data: {
+        deploymentId: firstRoute.deploymentId,
+        serviceId: firstRoute.serviceId,
+        host: rawHost,
+        path: firstRoute.path,
+        tlsSecretName,
+        tlsHosts,
+        entrypoints,
+        clusterIssuer,
+        annotations: Object.keys(sanitizedAnnotations).length > 0 ? (sanitizedAnnotations as Prisma.JsonObject) : undefined,
       },
     });
 
@@ -2689,6 +2997,11 @@ export class ProjectsService {
       servicePort?: number;
       tlsEnabled?: boolean;
       annotations?: Record<string, string>;
+      basicAuth?: {
+        enabled: boolean;
+        username?: string;
+        password?: string;
+      };
     },
     clerkId: string,
     userData?: {
@@ -2952,6 +3265,12 @@ export class ProjectsService {
     const tlsHosts = tlsSecretName ? [rawHost] : [];
 
     try {
+      const basicAuthConfig = data.basicAuth?.enabled && data.basicAuth.username && data.basicAuth.password
+        ? data.basicAuth
+        : data.basicAuth?.enabled === false
+        ? { enabled: false, username: '', password: '' }
+        : undefined;
+
       await this.kubernetesService.updateIngress({
         namespace: ingress.namespace,
         name: ingress.name,
@@ -2966,6 +3285,7 @@ export class ProjectsService {
         ingressClassName,
         entrypoints,
         annotations: sanitizedAnnotations,
+        basicAuth: basicAuthConfig as any,
       });
     } catch (error) {
       if (error instanceof BadRequestException) {
@@ -3470,6 +3790,65 @@ export class ProjectsService {
     }
 
     const deploymentWithInternalUrls = this.addInternalUrlsToDeployment(deployment);
+
+    // Include project-level ingresses that may be linked to a different deployment
+    // but have routes targeting this deployment's services
+    if (deployment.projectId && deployment.namespace) {
+      const existingIngressIds: string[] = (deploymentWithInternalUrls.ingresses ?? []).map((i: any) => i.id);
+      const projectIngresses = await this.prisma.ingress.findMany({
+        where: {
+          projectId: deployment.projectId,
+          id: { notIn: existingIngressIds },
+        },
+        include: { service: true },
+      });
+
+      const serviceNames = new Set(
+        (deployment.services ?? []).map((s: any) => s.name)
+      );
+
+      for (const pi of projectIngresses) {
+        try {
+          const k8sIngress = await this.kubernetesService.readIngress(deployment.namespace, pi.name);
+          const rules = k8sIngress?.spec?.rules ?? [];
+          const k8sPaths = rules.length > 0 && rules[0].http?.paths ? rules[0].http.paths : [];
+          const hasRouteForDeployment = k8sPaths.some((p: any) =>
+            serviceNames.has(p.backend?.service?.name || '')
+          );
+          if (hasRouteForDeployment) {
+            deploymentWithInternalUrls.ingresses = [
+              ...(deploymentWithInternalUrls.ingresses ?? []),
+              pi,
+            ];
+          }
+        } catch {
+          // skip if K8s read fails
+        }
+      }
+    }
+
+    // Enrich ingresses with actual K8s routes
+    if (deploymentWithInternalUrls.ingresses && deployment.namespace) {
+      const enrichedIngresses = await Promise.all(
+        deploymentWithInternalUrls.ingresses.map(async (ingress: any) => {
+          try {
+            const k8sIngress = await this.kubernetesService.readIngress(deployment.namespace, ingress.name);
+            const rules = k8sIngress?.spec?.rules ?? [];
+            const routes = rules.length > 0 && rules[0].http?.paths
+              ? rules[0].http.paths.map((p: any) => ({
+                  path: p.path || '/',
+                  serviceName: p.backend?.service?.name || '',
+                  servicePort: p.backend?.service?.port?.number || 0,
+                }))
+              : [{ path: ingress.path, serviceName: ingress.service?.name || '', servicePort: ingress.service?.port || 0 }];
+            return { ...ingress, routes };
+          } catch {
+            return { ...ingress, routes: [{ path: ingress.path, serviceName: ingress.service?.name || '', servicePort: ingress.service?.port || 0 }] };
+          }
+        })
+      );
+      deploymentWithInternalUrls.ingresses = enrichedIngresses;
+    }
 
     let computedStatus = deployment.status;
     
