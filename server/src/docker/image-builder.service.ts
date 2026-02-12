@@ -98,6 +98,22 @@ export class ImageBuilderService {
     return `image-builder-${sanitized}-${hash}`;
   }
 
+  private sanitizeLogMessage(message: string): string {
+    let sanitized = message;
+    
+    sanitized = sanitized.replace(/(x-access-token:|ghs_|ghp_|github_pat_)[a-zA-Z0-9_]+/gi, '***REDACTED***');
+    
+    sanitized = sanitized.replace(/https?:\/\/[^:@\s]+:[^@\s]+@github\.com/gi, 'https://***@github.com');
+    
+    sanitized = sanitized.replace(/https?:\/\/[^@\s]+@github\.com/gi, 'https://***@github.com');
+    
+    sanitized = sanitized.replace(/(Bearer|Token|Authorization:)\s+[a-zA-Z0-9_\-\.]+/gi, '$1 ***REDACTED***');
+    
+    sanitized = sanitized.replace(/(password|passwd|pwd|secret|key|token)[\s]*[=:]['"]?([^\s'"]+)/gi, '$1=***REDACTED***');
+    
+    return sanitized;
+  }
+
   private async appendLog(deploymentId: string | undefined, message: string, level: 'INFO' | 'ERROR' | 'WARNING' = 'INFO') {
     if (!deploymentId) return;
 
@@ -109,7 +125,8 @@ export class ImageBuilderService {
 
       const currentLogs = deployment?.buildLogs || '';
       const timestamp = Date.now();
-      const formattedMessage = `[${timestamp}] [${level}] ${message}`;
+      const sanitizedMessage = this.sanitizeLogMessage(message);
+      const formattedMessage = `[${timestamp}] [${level}] ${sanitizedMessage}`;
       const newLogs = currentLogs + formattedMessage + '\n';
 
       await this.prisma.deployment.update({
@@ -617,12 +634,17 @@ exit $EXIT_CODE
         image: 'alpine/git:latest',
         command: ['/bin/sh', '-c'],
         args: [
-          `set -ex
+          `set -e
 echo "=== Cloning repository ==="
-echo "Repository: ${cloneUrl.replace(/\/\/[^@]+@/, '//***@')}"
+CLONE_URL="${cloneUrl}"
+MASKED_URL="\${CLONE_URL//:\\/\\/x-access-token:*@/:\/\/x-access-token:***@}"
+MASKED_URL="\${MASKED_URL//:\\/\\/ghs_*@/:\/\/***@}"
+MASKED_URL="\${MASKED_URL//:\\/\\/ghp_*@/:\/\/***@}"
+MASKED_URL="\${MASKED_URL//:\\/\\/github_pat_*@/:\/\/***@}"
+echo "Repository: \$MASKED_URL"
 echo "Branch: ${branch}"
 
-git clone --depth 1 --branch "${branch}" "${cloneUrl}" /workspace
+GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch "${branch}" "\$CLONE_URL" /workspace 2>&1 | sed -E 's/(x-access-token:|ghs_|ghp_|github_pat_)[^ @]*/***REDACTED***/g'
 
 echo "=== Repository cloned successfully ==="
 ls -la /workspace
@@ -902,7 +924,7 @@ fi
 
     console.log(`[ImageBuilder] Creating job ${jobName} in namespace ${this.builderNamespace}`, {
       imageName: fullImageName,
-      repoUrl: repoUrl.replace(/\/\/[^@]+@/, '//***@'),
+      repoUrl: this.sanitizeLogMessage(repoUrl),
       branch,
       dockerfilePath,
       buildType,

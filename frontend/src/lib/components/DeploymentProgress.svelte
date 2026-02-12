@@ -13,6 +13,27 @@
 
 	let { status, buildStep, buildLogs, buildError, isGitHubDeploy, warnings }: Props = $props();
 
+	function sanitizeLogs(logs: string | null | undefined): string {
+		if (!logs) return '';
+		
+		let sanitized = logs;
+		
+		sanitized = sanitized.replace(/(x-access-token:|ghs_|ghp_|github_pat_)[a-zA-Z0-9_]+/gi, '***REDACTED***');
+		
+		sanitized = sanitized.replace(/https?:\/\/[^:@\s]+:[^@\s]+@github\.com/gi, 'https://***@github.com');
+		
+		sanitized = sanitized.replace(/https?:\/\/[^@\s]+@github\.com/gi, 'https://***@github.com');
+		
+		sanitized = sanitized.replace(/(Bearer|Token|Authorization:)\s+[a-zA-Z0-9_\-\.]+/gi, '$1 ***REDACTED***');
+		
+		sanitized = sanitized.replace(/(password|passwd|pwd|secret|key|token)[\s]*[=:]['"]?([^\s'"]+)/gi, '$1=***REDACTED***');
+		
+		return sanitized;
+	}
+
+	const sanitizedBuildLogs = $derived(sanitizeLogs(buildLogs));
+	const sanitizedBuildError = $derived(sanitizeLogs(buildError));
+
 	let showLogs = $state(true); // Default to showing logs
 	let logsPanel: HTMLDivElement | undefined = $state();
 	let previousLogsLength = $state(0);
@@ -22,7 +43,7 @@
 
 	// Track step start times - extract from logs first, then track new steps
 	$effect(() => {
-		if (buildLogs) {
+		if (sanitizedBuildLogs) {
 			// Extract start times from logs for all steps
 			const stepsToCheck = ['cloning', 'building', 'pushing', 'deploying'];
 			for (const stepId of stepsToCheck) {
@@ -54,7 +75,7 @@
 
 	// Auto-scroll to bottom when new logs arrive
 	$effect(() => {
-		if (buildLogs && logsPanel && buildLogs.length > previousLogsLength) {
+		if (sanitizedBuildLogs && logsPanel && sanitizedBuildLogs.length > previousLogsLength) {
 			// Use setTimeout to ensure DOM has updated
 			setTimeout(() => {
 				if (logsPanel) {
@@ -62,7 +83,7 @@
 				}
 			}, 0);
 		}
-		previousLogsLength = buildLogs?.length ?? 0;
+		previousLogsLength = sanitizedBuildLogs?.length ?? 0;
 	});
 
 	// Define steps for GitHub deployments
@@ -102,7 +123,7 @@
 	}
 
 	function getStepStartTimeFromLogs(stepId: string): number | null {
-		if (!buildLogs) return null;
+		if (!sanitizedBuildLogs) return null;
 		
 		const stepStartPatterns: Record<string, RegExp> = {
 			cloning: /\[INFO\] Cloning repository/i,
@@ -114,7 +135,7 @@
 		const pattern = stepStartPatterns[stepId];
 		if (!pattern) return null;
 
-		const lines = buildLogs.split('\n');
+		const lines = sanitizedBuildLogs.split('\n');
 		for (const line of lines) {
 			if (pattern.test(line)) {
 				// Extract timestamp from log line: [timestamp] [LEVEL] message
@@ -129,7 +150,7 @@
 	}
 
 	function extractStepDuration(stepId: string): string | null {
-		if (!buildLogs) return null;
+		if (!sanitizedBuildLogs) return null;
 		
 		// First try to extract from completion messages with explicit durations
 		const stepPatterns: Record<string, RegExp[]> = {
@@ -150,7 +171,7 @@
 		const patterns = stepPatterns[stepId];
 		if (patterns) {
 			for (const pattern of patterns) {
-				const match = buildLogs.match(pattern);
+				const match = sanitizedBuildLogs.match(pattern);
 				if (match && match[1]) {
 					const seconds = parseFloat(match[1]);
 					return formatDuration(seconds);
@@ -172,7 +193,7 @@
 		const endPattern = stepEndPatterns[stepId];
 		if (!endPattern) return null;
 
-		const lines = buildLogs.split('\n');
+		const lines = sanitizedBuildLogs.split('\n');
 		let endTime: number | null = null;
 
 		for (const line of lines) {
@@ -333,7 +354,7 @@
 		<div class="error-box mt-4 rounded-lg p-4">
 			<p class="text-sm font-medium">Error</p>
 			<p class="mt-1 text-sm font-mono whitespace-pre-wrap">
-				{buildError}
+				{sanitizedBuildError}
 			</p>
 		</div>
 	{/if}
@@ -379,7 +400,7 @@
 					bind:this={logsPanel}
 					class="logs-panel mt-2 max-h-80 overflow-y-auto rounded-lg p-4 text-xs font-mono"
 				>
-					{#each (buildLogs?.split('\n').filter(l => l.trim()) || []) as line}
+					{#each (sanitizedBuildLogs?.split('\n').filter(l => l.trim()) || []) as line}
 						{@const match = line.match(/^\[(\d+)\]\s*\[(INFO|ERROR|WARNING)\]\s*(.+)$/)}
 						{#if match}
 							{@const [_, timestamp, level, message] = match}

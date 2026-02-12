@@ -966,27 +966,29 @@
 				<div class="space-y-2 max-h-64 overflow-y-auto max-w-2xl">
 					{#each envVars as env, index}
 						{@const isRevealed = revealedIndices.has(index)}
-						<div class="flex items-center gap-2">
-							<input type="text" bind:value={env.key} placeholder="KEY" class="input w-64 font-mono" />
-							<input
-								type={isRevealed ? 'text' : 'password'}
-								bind:value={env.value}
-								placeholder="value"
-								class="input flex-1 font-mono"
-							/>
-							<button
-								type="button"
-								onclick={() => toggleReveal(index)}
-								class="btn btn-ghost shrink-0"
-								aria-label={isRevealed ? 'Hide value' : 'Show value'}
-							>
-								{#if isRevealed}
-									<EyeOff class="h-4 w-4" />
-								{:else}
-									<Eye class="h-4 w-4" />
-								{/if}
-							</button>
-							<button onclick={() => removeEnvVar(index)} disabled={envVars.length <= 1} class="btn btn-ghost">
+						<div class="grid gap-2 grid-cols-[140px_1fr_auto]">
+							<input type="text" bind:value={env.key} placeholder="KEY" class="input font-mono min-w-0" />
+							<div class="flex gap-2 min-w-0">
+								<input
+									type={isRevealed ? 'text' : 'password'}
+									bind:value={env.value}
+									placeholder="value"
+									class="input font-mono flex-1 min-w-0"
+								/>
+								<button
+									type="button"
+									onclick={() => toggleReveal(index)}
+									class="btn btn-ghost shrink-0"
+									aria-label={isRevealed ? 'Hide value' : 'Show value'}
+								>
+									{#if isRevealed}
+										<EyeOff class="h-4 w-4" />
+									{:else}
+										<Eye class="h-4 w-4" />
+									{/if}
+								</button>
+							</div>
+							<button onclick={() => removeEnvVar(index)} disabled={envVars.length <= 1} class="btn btn-ghost shrink-0">
 								<Trash2 class="h-4 w-4" />
 							</button>
 						</div>

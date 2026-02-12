@@ -863,6 +863,24 @@
 		}
 	}
 
+	function sanitizeLogs(logs: string): string {
+		if (!logs) return logs;
+		
+		let sanitized = logs;
+		
+		sanitized = sanitized.replace(/(x-access-token:|ghs_|ghp_|github_pat_)[a-zA-Z0-9_]+/gi, '***REDACTED***');
+		
+		sanitized = sanitized.replace(/https?:\/\/[^:@\s]+:[^@\s]+@github\.com/gi, 'https://***@github.com');
+		
+		sanitized = sanitized.replace(/https?:\/\/[^@\s]+@github\.com/gi, 'https://***@github.com');
+		
+		sanitized = sanitized.replace(/(Bearer|Token|Authorization:)\s+[a-zA-Z0-9_\-\.]+/gi, '$1 ***REDACTED***');
+		
+		sanitized = sanitized.replace(/(password|passwd|pwd|secret|key|token)[\s]*[=:]['"]?([^\s'"]+)/gi, '$1=***REDACTED***');
+		
+		return sanitized;
+	}
+
 	async function fetchBuildLogs() {
 		if (!deployment || deployment.status !== 'building') return;
 
@@ -871,7 +889,7 @@
 			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/build-logs`);
 			if (response.ok) {
 				const data = await response.json();
-				buildLogs = data.logs || '';
+				buildLogs = sanitizeLogs(data.logs || '');
 			}
 		} catch (e) {
 			console.error('Failed to fetch build logs:', e);
@@ -1820,10 +1838,10 @@
 									<p class="text-sm font-semibold text-red-900 dark:text-red-100">Last build logs</p>
 									{#if deployment.buildError}
 										<p class="mt-2 text-sm font-medium text-red-800 dark:text-red-200">Error</p>
-										<pre class="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg bg-red-900/10 p-3 text-xs font-mono text-red-900 dark:text-red-100">{deployment.buildError}</pre>
+										<pre class="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg bg-red-900/10 p-3 text-xs font-mono text-red-900 dark:text-red-100">{sanitizeLogs(deployment.buildError)}</pre>
 									{/if}
 									{#if deployment.buildLogs}
-										<pre class="mt-3 max-h-80 overflow-y-auto whitespace-pre-wrap rounded-lg bg-black/10 p-3 text-xs font-mono text-gray-900 dark:text-gray-100">{deployment.buildLogs}</pre>
+										<pre class="mt-3 max-h-80 overflow-y-auto whitespace-pre-wrap rounded-lg bg-black/10 p-3 text-xs font-mono text-gray-900 dark:text-gray-100">{sanitizeLogs(deployment.buildLogs)}</pre>
 									{/if}
 								</div>
 							{/if}
