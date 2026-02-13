@@ -1964,26 +1964,26 @@
 							</div>
 
 							{#if deployment.warnings?.length}
-							<div class="card rounded-2xl border-amber-200 bg-amber-50/50 p-6 dark:border-amber-400/30 dark:bg-amber-500/10">
+							<div class="warning-box rounded-2xl border p-6 shadow-sm">
 								<div class="flex items-start gap-3">
-									<div class="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-amber-500/20">
-										<svg class="h-5 w-5 text-amber-600 dark:text-amber-400" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+									<div class="warning-icon-box flex h-8 w-8 shrink-0 items-center justify-center rounded-lg">
+										<svg class="h-5 w-5" style="color: var(--warning-text)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
 											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
 										</svg>
 									</div>
 									<div class="flex-1 min-w-0">
-										<p class="text-sm font-semibold text-amber-900 dark:text-amber-100">Pod Warnings</p>
-										<p class="text-xs text-amber-900/80 dark:text-amber-200/80 mb-3">Issues detected with running containers</p>
+										<p class="text-sm font-semibold" style="color: var(--warning-text)">Pod Warnings</p>
+										<p class="text-xs mb-3" style="color: var(--warning-text); opacity: 0.8">Issues detected with running containers</p>
 										<div class="space-y-2">
 											{#each deployment.warnings as warning}
-												<div class="rounded-lg bg-white/50 p-3 dark:bg-black/20">
+												<div class="warning-item rounded-lg p-3 shadow-sm">
 													<div class="flex items-start gap-2">
 														<div class="flex-1 min-w-0">
-															<p class="font-mono text-xs font-medium text-amber-900 dark:text-amber-100">{warning.podName}</p>
-															<p class="mt-1 text-xs text-amber-800 dark:text-amber-200">{warning.message}</p>
+															<p class="font-mono text-xs font-medium" style="color: var(--warning-text)">{warning.podName}</p>
+															<p class="mt-1 text-xs" style="color: var(--warning-text); opacity: 0.85">{warning.message}</p>
 														</div>
 														{#if warning.timestamp}
-															<span class="shrink-0 text-xs text-amber-600 dark:text-amber-400">
+															<span class="shrink-0 text-xs" style="color: var(--warning-text); opacity: 0.7">
 																{new Date(warning.timestamp).toLocaleTimeString()}
 															</span>
 														{/if}
@@ -3567,5 +3567,19 @@
 			transform: none;
 			box-shadow: none;
 		}
+	}
+
+	.warning-box {
+		background-color: var(--warning-bg);
+		border-color: var(--warning-border);
+		color: var(--warning-text);
+	}
+
+	.warning-icon-box {
+		background-color: color-mix(in srgb, var(--warning-border) 25%, transparent);
+	}
+
+	.warning-item {
+		background-color: color-mix(in srgb, var(--warning-bg) 50%, var(--surface-bg));
 	}
 </style>

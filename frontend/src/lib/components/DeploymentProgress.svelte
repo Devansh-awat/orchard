@@ -478,9 +478,9 @@
 	}
 
 	.warning-box {
-		background-color: rgba(245, 158, 11, 0.1);
-		border: 1px solid rgba(245, 158, 11, 0.3);
-		color: rgb(245, 158, 11);
+		background-color: var(--warning-bg);
+		border: 1px solid var(--warning-border);
+		color: var(--warning-text);
 	}
 
 	.logs-toggle {

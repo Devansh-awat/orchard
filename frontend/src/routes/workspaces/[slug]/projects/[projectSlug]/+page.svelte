@@ -278,7 +278,7 @@
 							{#if project.namespace}
 								<div class="flex items-center gap-1">
 									<Server class="h-4 w-4" />
-									<code class="rounded bg-gray-100 px-1.5 py-0.5 text-xs dark:bg-gray-800">
+									<code class="rounded px-1.5 py-0.5 text-xs" style="background-color: var(--control-bg); color: var(--control-text); border: 1px solid var(--surface-border);">
 										{project.namespace}
 									</code>
 								</div>

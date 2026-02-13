@@ -41,6 +41,9 @@
 	--mention-highlight-bg: #fce8ea;
 	--mention-highlight-link: #962b3a;
 	--code-theme: github;
+	--warning-bg: #fef3c7;
+	--warning-border: #f59e0b;
+	--warning-text: #92400e;
 	--surface-bg: #ffffff;
 	--surface-border: #f3dfe2;
 	--surface-muted: #857073;
@@ -83,6 +86,9 @@
 	--mention-highlight-bg: #2d2d2f;
 	--mention-highlight-link: #f3a8b2;
 	--code-theme: monokai;
+	--warning-bg: #451a03;
+	--warning-border: #f59e0b;
+	--warning-text: #fef3c7;
 	--surface-bg: #1d1d1f;
 	--surface-border: #262627;
 	--surface-muted: #dcb8be;
