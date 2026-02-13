@@ -4109,6 +4109,124 @@ export class ProjectsService {
     };
   }
 
+  async scaleDeployment(
+    deploymentId: string,
+    replicas: number,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: {
+            workspace: true,
+          },
+        },
+      },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    const membership = await this.prisma.workspaceMember.findFirst({
+      where: {
+        workspaceId: deployment.project.workspaceId,
+        userId: user.id,
+      },
+      include: {
+        role: true,
+      },
+    });
+
+    if (!membership) {
+      throw new ForbiddenException('You are not a member of this workspace');
+    }
+
+    if (membership.role.name === 'viewer') {
+      throw new ForbiddenException('You do not have permission to scale deployments');
+    }
+
+    const result = await this.kubernetesService.scaleDeployment(
+      deployment.name,
+      deployment.namespace,
+      replicas
+    );
+
+    await this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: { replicas },
+    });
+
+    return result;
+  }
+
+  async restartDeployment(
+    deploymentId: string,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: {
+            workspace: true,
+          },
+        },
+      },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    const membership = await this.prisma.workspaceMember.findFirst({
+      where: {
+        workspaceId: deployment.project.workspaceId,
+        userId: user.id,
+      },
+      include: {
+        role: true,
+      },
+    });
+
+    if (!membership) {
+      throw new ForbiddenException('You are not a member of this workspace');
+    }
+
+    if (membership.role.name === 'viewer') {
+      throw new ForbiddenException('You do not have permission to restart deployments');
+    }
+
+    return await this.kubernetesService.restartDeployment(deployment.name, deployment.namespace);
+  }
+
   async updateDeploymentEnvVars(
     deploymentId: string,
     env: { key: string; value: string }[],

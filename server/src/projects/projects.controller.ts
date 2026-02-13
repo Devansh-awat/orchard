@@ -321,6 +321,46 @@ export class DeploymentsController {
     );
   }
 
+  @Post(':id/scale')
+  @UseGuards(AuthGuard)
+  async scaleDeployment(
+    @Param('id') id: string,
+    @Body() body: { replicas: number },
+    @Request() req
+  ) {
+    return this.projectsService.scaleDeployment(
+      id,
+      body.replicas,
+      req.user.sub,
+      {
+        email: req.user.email,
+        username: req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        imageUrl: req.user.imageUrl,
+      }
+    );
+  }
+
+  @Post(':id/restart')
+  @UseGuards(AuthGuard)
+  async restartDeployment(
+    @Param('id') id: string,
+    @Request() req
+  ) {
+    return this.projectsService.restartDeployment(
+      id,
+      req.user.sub,
+      {
+        email: req.user.email,
+        username: req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        imageUrl: req.user.imageUrl,
+      }
+    );
+  }
+
   @Get(':id/image-history')
   @UseGuards(AuthGuard)
   async getImageHistory(@Param('id') id: string) {
