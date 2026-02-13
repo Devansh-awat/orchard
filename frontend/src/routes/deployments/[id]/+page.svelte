@@ -2171,32 +2171,7 @@
 								{/if}
 							</div>
 
-							{#if deployment.status === 'building'}
-								<div class="rounded-2xl border border-amber-200 bg-amber-50/80 p-4 dark:border-amber-400/30 dark:bg-amber-500/10">
-									<div class="flex flex-wrap items-center justify-between gap-4">
-										<div>
-											<p class="text-sm font-semibold text-amber-900 dark:text-amber-100">Build logs</p>
-											<p class="text-xs text-amber-900/80 dark:text-amber-200/80">Image build is in progress</p>
-										</div>
-										<button onclick={fetchBuildLogs} disabled={buildLogsLoading} class="btn btn-secondary btn-sm">
-											{#if buildLogsLoading}
-												<Loader2 class="h-4 w-4 animate-spin" />
-											{:else}
-												<RefreshCw class="h-4 w-4" />
-											{/if}
-											<span>Refresh</span>
-										</button>
-									</div>
-									<div class="log-panel max-h-80 overflow-y-auto rounded-xl p-4 text-xs text-green-200">
-										{#if buildLogs}
-											<pre class="whitespace-pre-wrap">{buildLogs}</pre>
-										{:else}
-											<p class="text-amber-200">Waiting for builder output...</p>
-										{/if}
-									</div>
-								</div>
-							{/if}
-						</div>
+													</div>
 					{:else if tab.id === 'environment'}
 						<div class="card rounded-2xl p-6">
 							<div class="flex flex-wrap items-center justify-between gap-4">
