@@ -1574,13 +1574,22 @@ fi
 
       if (deploymentId) {
         try {
-          await this.prisma.deployment.update({
+          // Don't overwrite a successful deployment status from a newer build
+          const currentDeployment = await this.prisma.deployment.findUnique({
             where: { id: deploymentId },
-            data: {
-              status: 'failed',
-              buildError: error.message,
-            },
+            select: { status: true },
           });
+          if (currentDeployment?.status === 'running') {
+            console.log(`[ImageBuilder] Deployment ${deploymentId} is already running (likely from a newer build), skipping error status update`);
+          } else {
+            await this.prisma.deployment.update({
+              where: { id: deploymentId },
+              data: {
+                status: 'failed',
+                buildError: error.message,
+              },
+            });
+          }
         } catch (dbError) {
           console.error('[ImageBuilder] Failed to update deployment status:', dbError.message);
         }

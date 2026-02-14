@@ -1301,11 +1301,17 @@ export class ProjectsService {
       try {
         const currentDeployment = await this.prisma.deployment.findUnique({
           where: { id: deploymentId },
-          select: { buildLogs: true, buildStep: true },
+          select: { buildLogs: true, buildStep: true, status: true },
         });
 
+        // Don't overwrite a successful deployment status from a newer build
+        if (currentDeployment?.status === 'running') {
+          console.log(`[Projects] Deployment ${deploymentId} is already running (likely from a newer build), skipping error status update`);
+          return;
+        }
+
         const errorLogEntry = `\n❌ Build failed at step '${currentDeployment?.buildStep || 'unknown'}'\nError: ${error.message}\nError Type: ${error.constructor.name}\n`;
-        
+
         await this.prisma.deployment.update({
           where: { id: deploymentId },
           data: {
@@ -5487,6 +5493,11 @@ export class ProjectsService {
 
     if (!deployment.githubRepo || !deployment.githubBranch) {
       throw new BadRequestException('This deployment was not created from GitHub');
+    }
+
+    if (deployment.status === 'building' || deployment.status === 'pending') {
+      console.log(`[Projects] Skipping auto-deploy for deployment ${deploymentId}: build already in progress (status: ${deployment.status})`);
+      throw new BadRequestException('A build is already in progress for this deployment');
     }
 
     // Parse repo info for GitHub API calls
