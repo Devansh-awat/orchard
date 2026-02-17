@@ -375,6 +375,17 @@ select.input:focus {
 	color: var(--info-text);
 }
 
+.webhook-empty-state {
+	background-color: var(--control-bg);
+	border: 1px solid var(--surface-border);
+	color: var(--surface-muted);
+}
+
+.webhook-empty-state svg {
+	color: var(--surface-muted);
+	opacity: 0.8;
+}
+
 /* Melt UI toggle */
 [data-melt-toggle-trigger] {
 	@apply inline-flex items-center justify-center rounded-md border border-gray-200 bg-white p-2 text-gray-700 shadow-sm transition-colors hover:bg-gray-100 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800;

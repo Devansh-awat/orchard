@@ -415,6 +415,7 @@
 	}
 	let webhookTokens = $state<WebhookToken[]>([]);
 	let webhookTokensLoading = $state(false);
+	let webhookTokensFetched = $state(false);
 	let creatingWebhookToken = $state(false);
 	let deletingWebhookTokenId = $state<string | null>(null);
 	let newWebhookLabel = $state('');
@@ -1718,14 +1719,19 @@
 		stopBuildPolling();
 	});
 
-	// Load webhook tokens when tab is selected
 	$effect(() => {
-		if (tabs.value === 'webhooks' && webhookTokens.length === 0 && !webhookTokensLoading) {
+		if (deploymentId) {
+			webhookTokens = [];
+			webhookTokensFetched = false;
+		}
+	});
+
+	$effect(() => {
+		if (tabs.value === 'webhooks' && !webhookTokensFetched) {
 			fetchWebhookTokens();
 		}
 	});
 
-	// Webhook functions
 	async function fetchWebhookTokens() {
 		webhookTokensLoading = true;
 		try {
@@ -1737,6 +1743,7 @@
 			// silent
 		} finally {
 			webhookTokensLoading = false;
+			webhookTokensFetched = true;
 		}
 	}
 
@@ -3241,9 +3248,9 @@
 											<Loader2 class="h-6 w-6 animate-spin text-gray-400" />
 										</div>
 									{:else if webhookTokens.length === 0}
-										<div class="rounded-xl bg-gray-50 px-4 py-8 text-center dark:bg-gray-800/50">
-											<Webhook class="mx-auto h-8 w-8 text-gray-300 dark:text-gray-600" />
-											<p class="mt-2 text-sm text-gray-500">No webhook tokens yet. Create one to get started.</p>
+										<div class="webhook-empty-state rounded-xl px-4 py-8 text-center">
+											<Webhook class="mx-auto h-8 w-8" />
+											<p class="mt-2 text-sm">No webhook tokens yet. Create one to get started.</p>
 										</div>
 									{:else}
 										<div class="space-y-3">
