@@ -1,5 +1,6 @@
 import { Controller, Get, Param, UseGuards, Post, Body, Request, Delete, Put, Patch } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
+import { WebhooksService } from '../webhooks/webhooks.service';
 import { AuthGuard } from '../auth/auth.guard';
 
 @Controller('projects')
@@ -248,7 +249,10 @@ export class ProjectsController {
 
 @Controller('deployments')
 export class DeploymentsController {
-  constructor(private readonly projectsService: ProjectsService) {}
+  constructor(
+    private readonly projectsService: ProjectsService,
+    private readonly webhooksService: WebhooksService,
+  ) {}
 
   @Get(':id')
   @UseGuards(AuthGuard)
@@ -724,5 +728,33 @@ export class DeploymentsController {
   @UseGuards(AuthGuard)
   async getGitHubDeployments(@Param('id') id: string) {
     return this.projectsService.getGitHubDeployments(id);
+  }
+
+  // Webhook token management endpoints
+
+  @Get(':id/webhook-tokens')
+  @UseGuards(AuthGuard)
+  async listWebhookTokens(@Param('id') id: string, @Request() req) {
+    return this.webhooksService.listWebhookTokens(id, req.user.sub);
+  }
+
+  @Post(':id/webhook-tokens')
+  @UseGuards(AuthGuard)
+  async createWebhookToken(
+    @Param('id') id: string,
+    @Body() body: { label?: string },
+    @Request() req,
+  ) {
+    return this.webhooksService.createWebhookToken(id, req.user.sub, body?.label);
+  }
+
+  @Delete(':id/webhook-tokens/:tokenId')
+  @UseGuards(AuthGuard)
+  async deleteWebhookToken(
+    @Param('id') id: string,
+    @Param('tokenId') tokenId: string,
+    @Request() req,
+  ) {
+    return this.webhooksService.deleteWebhookToken(id, tokenId, req.user.sub);
   }
 }

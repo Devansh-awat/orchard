@@ -319,6 +319,7 @@ model Deployment {
   imageHistory       ImageHistory[]
   volumes            DeploymentVolume[]
   githubDeployments  GitHubDeployment[]
+  webhookTokens      DeploymentWebhookToken[]
 
   @@unique([projectId, name])
   @@index([projectId], map: "idx_deployments_project")
@@ -365,6 +366,20 @@ model ImageHistory {
   @@index([deploymentId], map: "idx_image_history_deployment")
   @@index([deploymentId, createdAt], map: "idx_image_history_deployment_date")
   @@map("image_history")
+}
+
+model DeploymentWebhookToken {
+  id           String    @id @default(uuid()) @db.Uuid
+  deploymentId String    @map("deployment_id") @db.Uuid
+  token        String    @unique @db.VarChar(128)
+  label        String?   @db.VarChar(100)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  lastUsedAt   DateTime? @map("last_used_at") @db.Timestamp(6)
+
+  deployment Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+
+  @@index([deploymentId], map: "idx_webhook_tokens_deployment")
+  @@map("deployment_webhook_tokens")
 }
 
 model DeploymentEnvVar {

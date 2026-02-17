@@ -11,6 +11,7 @@ import { GitHubModule } from './github/github.module';
 import { DockerModule } from './docker/docker.module';
 import { EmailModule } from './email/email.module';
 import { AdminModule } from './admin/admin.module';
+import { WebhooksModule } from './webhooks/webhooks.module';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { AdminModule } from './admin/admin.module';
     DockerModule,
     EmailModule,
     AdminModule,
+    WebhooksModule,
   ],
 })
 export class AppModule {}

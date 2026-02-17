@@ -89,6 +89,30 @@ export class PasswordlessController {
   }
 
   /**
+   * Check if a user has access to the platform (member of any org or has pending invitations).
+   * SuperAdmins always have access.
+   */
+  private async hasPrivateBetaAccess(userId: string, email: string): Promise<boolean> {
+    const dbUser = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (dbUser?.isSuperAdmin) return true;
+
+    const membership = await this.prisma.organizationMember.findFirst({
+      where: { userId },
+    });
+    if (membership) return true;
+
+    const invitation = await this.prisma.organizationInvitation.findFirst({
+      where: {
+        email: email.toLowerCase(),
+        expiresAt: { gt: new Date() },
+      },
+    });
+    if (invitation) return true;
+
+    return false;
+  }
+
+  /**
    * Resolve the internal UUID user from the request subject (which may be a Hack Club ID).
    */
   private async resolveInternalUser(userId: string) {
@@ -172,6 +196,12 @@ export class PasswordlessController {
 
     // Find or create user
     const user = await this.findOrCreateUserByEmail(result.email);
+
+    // Private beta: reject users not invited to any organization
+    const hasAccess = await this.hasPrivateBetaAccess(user.id, user.email);
+    if (!hasAccess) {
+      throw new HttpException('private_beta', HttpStatus.FORBIDDEN);
+    }
 
     // Generate session token
     const displayName = user.firstName
@@ -311,6 +341,12 @@ export class PasswordlessController {
 
     if (!user) {
       throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+    }
+
+    // Private beta: reject users not invited to any organization
+    const hasAccess = await this.hasPrivateBetaAccess(user.id, user.email);
+    if (!hasAccess) {
+      throw new HttpException('private_beta', HttpStatus.FORBIDDEN);
     }
 
     // Generate session token

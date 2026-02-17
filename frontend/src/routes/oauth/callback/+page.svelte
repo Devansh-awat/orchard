@@ -4,15 +4,20 @@
 	import { page } from '$app/stores';
 	import { browser } from '$app/environment';
 	import { user } from '$lib/stores';
-	import { Loader2, AlertCircle } from 'lucide-svelte';
+	import { Loader2, AlertCircle, Lock } from 'lucide-svelte';
 
 	let error = $state<string | null>(null);
+	let isPrivateBeta = $state(false);
 
 	onMount(async () => {
 		// Check for error in URL params
 		const errorParam = $page.url.searchParams.get('error');
 		if (errorParam) {
-			error = errorParam;
+			if (errorParam === 'private_beta') {
+				isPrivateBeta = true;
+			} else {
+				error = errorParam;
+			}
 			return;
 		}
 
@@ -40,7 +45,18 @@
 
 <div class="flex min-h-screen items-center justify-center" style="background-color: var(--center-channel-bg);">
 	<div class="text-center">
-		{#if error}
+		{#if isPrivateBeta}
+			<div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full" style="background-color: var(--control-bg);">
+				<Lock class="h-6 w-6" style="color: var(--surface-muted);" />
+			</div>
+			<h1 class="mb-2 text-xl font-semibold" style="color: var(--center-channel-color);">
+				Private Beta
+			</h1>
+			<p class="mb-4" style="color: var(--surface-muted);">Orchard is currently in private beta. You need an invitation from an existing organization to access the platform.</p>
+			<a href="/" class="btn btn-primary">
+				Return Home
+			</a>
+		{:else if error}
 			<div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
 				<AlertCircle class="h-6 w-6 text-red-600 dark:text-red-400" />
 			</div>

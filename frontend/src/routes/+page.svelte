@@ -64,6 +64,8 @@ let passkeySupportReason = $state<string | null>(null);
 	let passkeyLoading = $state(false);
 	let passkeyError = $state<string | null>(null);
 
+	let privateBetaBlocked = $state(false);
+
 	async function fetchWorkspaces() {
 		loading = true;
 		error = null;
@@ -253,6 +255,10 @@ let passkeySupportReason = $state<string | null>(null);
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
+				if (response.status === 403 && data?.message === 'private_beta') {
+					privateBetaBlocked = true;
+					return;
+				}
 				throw new Error(data?.message || 'Invalid OTP code.');
 			}
 
@@ -321,6 +327,10 @@ let passkeySupportReason = $state<string | null>(null);
 
 			if (!verifyResponse.ok) {
 				const data = await verifyResponse.json().catch(() => ({}));
+				if (verifyResponse.status === 403 && data?.message === 'private_beta') {
+					privateBetaBlocked = true;
+					return;
+				}
 				throw new Error(data?.message || 'Passkey authentication failed.');
 			}
 
@@ -341,6 +351,21 @@ let passkeySupportReason = $state<string | null>(null);
 <div class="p-6">
 	{#if !$isSignedIn}
 		<div class="login-page">
+			{#if privateBetaBlocked}
+				<div class="login-panel" style="text-align: center;">
+					<h1 class="login-title">Orchard</h1>
+					<div style="margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: center;">
+						<div style="width: 3rem; height: 3rem; border-radius: 9999px; background-color: var(--control-bg); display: flex; align-items: center; justify-content: center;">
+							<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color: var(--surface-muted);"><rect width="18" height="11" x="3" y="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+						</div>
+					</div>
+					<h2 style="font-size: 1.125rem; font-weight: 600; color: var(--center-channel-color); margin-bottom: 0.5rem;">Private Beta</h2>
+					<p style="font-size: 0.875rem; color: var(--surface-muted); margin-bottom: 1.5rem;">Orchard is currently in private beta. You need an invitation from an existing organization to access the platform.</p>
+					<button class="btn btn-primary" style="width: 100%;" onclick={() => { privateBetaBlocked = false; }}>
+						Back to Sign In
+					</button>
+				</div>
+			{:else}
 			<div class="login-panel">
 				<h1 class="login-title">Orchard</h1>
 				<button class="login-primary" onclick={() => user.signIn()}>
@@ -421,6 +446,7 @@ let passkeySupportReason = $state<string | null>(null);
 					<p class="login-muted">{passkeySupportReason}</p>
 				{/if}
 			</div>
+			{/if}
 		</div>
 		<style>
 			.login-page {

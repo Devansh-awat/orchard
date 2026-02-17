@@ -2,13 +2,39 @@ import { Controller, Get, Patch, Query, Body, Res, Req, HttpException, HttpStatu
 import { Response } from 'express';
 import { OAuthService } from './oauth.service';
 import { UsersService } from '../users/users.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 @Controller('auth')
 export class OAuthController {
   constructor(
     private readonly oauthService: OAuthService,
     private readonly usersService: UsersService,
+    private readonly prisma: PrismaService,
   ) {}
+
+  /**
+   * Check if a user has access to the platform (member of any org or has pending invitations).
+   * SuperAdmins always have access.
+   */
+  private async hasPrivateBetaAccess(userId: string, email: string): Promise<boolean> {
+    const dbUser = await this.prisma.user.findUnique({ where: { id: userId } });
+    if (dbUser?.isSuperAdmin) return true;
+
+    const membership = await this.prisma.organizationMember.findFirst({
+      where: { userId },
+    });
+    if (membership) return true;
+
+    const invitation = await this.prisma.organizationInvitation.findFirst({
+      where: {
+        email: email.toLowerCase(),
+        expiresAt: { gt: new Date() },
+      },
+    });
+    if (invitation) return true;
+
+    return false;
+  }
 
   @Get('login')
   login(@Res() res: Response) {
@@ -36,6 +62,14 @@ export class OAuthController {
       const hackClubUser = await this.oauthService.getUserInfo(accessToken);
 
       const user = await this.usersService.findOrCreateByHackClubId(hackClubUser);
+
+      // Private beta: reject users not invited to any organization
+      const hasAccess = await this.hasPrivateBetaAccess(user.id, user.email);
+      if (!hasAccess) {
+        return res.redirect(
+          `${process.env.FRONTEND_URL || 'http://localhost:3000'}/oauth/callback?error=${encodeURIComponent('private_beta')}`
+        );
+      }
 
       const sessionToken = await this.oauthService.generateSessionToken(hackClubUser);
 

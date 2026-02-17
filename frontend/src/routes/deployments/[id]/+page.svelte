@@ -27,7 +27,8 @@
 		Pencil,
 		Eye,
 		EyeOff,
-		Lock
+		Lock,
+		Webhook
 	} from 'lucide-svelte';
 	import { scale, fade } from 'svelte/transition';
 	import { Clock, Minimize2, Maximize2 } from 'lucide-svelte';
@@ -219,6 +220,12 @@
 			icon: History
 		},
 		{
+			id: 'webhooks',
+			label: 'Webhooks',
+			description: 'Deploy triggers & tokens',
+			icon: Webhook
+		},
+		{
 			id: 'advanced',
 			label: 'Advanced',
 			description: 'Build options & settings',
@@ -227,6 +234,12 @@
 	] as const;
 
 	type TabId = (typeof tabSections)[number]['id'];
+
+	// Docker image deployments (no githubRepo) get the webhooks tab
+	const isDockerImageDeployment = $derived(!deployment?.githubRepo);
+	const visibleTabs = $derived(
+		tabSections.filter((tab) => tab.id !== 'webhooks' || isDockerImageDeployment)
+	);
 
 	const tabs = new Tabs<TabId>({
 		value: 'overview',
@@ -391,6 +404,23 @@
 	let buildModalError = $state<string | null>(null);
 	let buildModalWarnings = $state<Array<{ podName: string; message: string; timestamp: string }>>([]);
 	let cancelingBuild = $state(false);
+
+	// Webhook state
+	interface WebhookToken {
+		id: string;
+		label: string | null;
+		createdAt: string;
+		lastUsedAt: string | null;
+		token?: string; // Only present on creation
+	}
+	let webhookTokens = $state<WebhookToken[]>([]);
+	let webhookTokensLoading = $state(false);
+	let creatingWebhookToken = $state(false);
+	let deletingWebhookTokenId = $state<string | null>(null);
+	let newWebhookLabel = $state('');
+	let newlyCreatedToken = $state<string | null>(null);
+	let copiedWebhookToken = $state(false);
+	let copiedWebhookUrl = $state(false);
 
 	function formatBuildElapsed(seconds: number): string {
 		const m = Math.floor(seconds / 60);
@@ -1687,6 +1717,105 @@
 		}
 		stopBuildPolling();
 	});
+
+	// Load webhook tokens when tab is selected
+	$effect(() => {
+		if (tabs.value === 'webhooks' && webhookTokens.length === 0 && !webhookTokensLoading) {
+			fetchWebhookTokens();
+		}
+	});
+
+	// Webhook functions
+	async function fetchWebhookTokens() {
+		webhookTokensLoading = true;
+		try {
+			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/webhook-tokens`);
+			if (response.ok) {
+				webhookTokens = await response.json();
+			}
+		} catch {
+			// silent
+		} finally {
+			webhookTokensLoading = false;
+		}
+	}
+
+	async function createWebhookToken() {
+		creatingWebhookToken = true;
+		newlyCreatedToken = null;
+		try {
+			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/webhook-tokens`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ label: newWebhookLabel || undefined })
+			});
+			if (response.ok) {
+				const data = await response.json();
+				newlyCreatedToken = data.token;
+				newWebhookLabel = '';
+				await fetchWebhookTokens();
+				toasts.add({ title: 'Webhook token created', color: 'success' });
+			} else {
+				toasts.add({ title: 'Failed to create webhook token', color: 'error' });
+			}
+		} catch {
+			toasts.add({ title: 'Failed to create webhook token', color: 'error' });
+		} finally {
+			creatingWebhookToken = false;
+		}
+	}
+
+	async function deleteWebhookToken(tokenId: string) {
+		deletingWebhookTokenId = tokenId;
+		try {
+			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/webhook-tokens/${tokenId}`, {
+				method: 'DELETE'
+			});
+			if (response.ok) {
+				await fetchWebhookTokens();
+				toasts.add({ title: 'Webhook token deleted', color: 'success' });
+			} else {
+				toasts.add({ title: 'Failed to delete webhook token', color: 'error' });
+			}
+		} catch {
+			toasts.add({ title: 'Failed to delete webhook token', color: 'error' });
+		} finally {
+			deletingWebhookTokenId = null;
+		}
+	}
+
+	function copyToClipboard(text: string, type: 'token' | 'url') {
+		navigator.clipboard.writeText(text);
+		if (type === 'token') {
+			copiedWebhookToken = true;
+			setTimeout(() => (copiedWebhookToken = false), 2000);
+		} else {
+			copiedWebhookUrl = true;
+			setTimeout(() => (copiedWebhookUrl = false), 2000);
+		}
+	}
+
+	function getWebhookUrl(token: string): string {
+		const base = window.location.origin;
+		return `${base}/apiv1/webhooks/deploy/${token}`;
+	}
+
+	const webhookExamples = {
+		restart: `curl -X POST YOUR_WEBHOOK_URL`,
+		updateTag: `curl -X POST YOUR_WEBHOOK_URL \\
+  -H "Content-Type: application/json" \\
+  -d '{"tag": "v1.2.3"}'`,
+		updateImage: `curl -X POST YOUR_WEBHOOK_URL \\
+  -H "Content-Type: application/json" \\
+  -d '{"image": "ghcr.io/org/app", "tag": "sha-abc123"}'`,
+		githubActions: `# .github/workflows/deploy.yml
+- name: Trigger deploy
+  run: |
+    curl -s -X POST \\
+      \${{ secrets.WEBHOOK_URL }} \\
+      -H "Content-Type: application/json" \\
+      -d '{"tag": "\${{ github.sha }}"}'`
+	};
 </script>
 
 <div class="deployment-page p-6">
@@ -1815,8 +1944,8 @@
 			</div>
 
 			<section class="card rounded-3xl p-2 shadow-sm" {...tabs.triggerList}>
-				<div class="grid gap-2 md:grid-cols-3 lg:grid-cols-5">
-				{#each tabSections as tab}
+				<div class="grid gap-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-4">
+				{#each visibleTabs as tab}
 					{@const Icon = tab.icon}
 					<button class="tabs-trigger flex items-start gap-3 rounded-2xl px-4 py-3 text-left transition" {...tabs.getTrigger(tab.id)}>
 						<Icon class="mt-1 h-4 w-4 text-gray-400" />
@@ -1829,7 +1958,7 @@
 				</div>
 			</section>
 
-{#each tabSections as tab}
+{#each visibleTabs as tab}
 	<section {...tabs.getContent(tab.id)} hidden={undefined} class="tab-panel mt-2">
 					{#if tab.id === 'overview'}
 						<div class="space-y-6">
@@ -2993,6 +3122,163 @@
 							{:else}
 								<p class="mt-4 text-sm text-gray-500">No image history available.</p>
 							{/if}
+						</div>
+					{:else if tab.id === 'webhooks'}
+						<div class="space-y-6">
+							<!-- Docs card -->
+							<div class="card rounded-2xl p-6">
+								<p class="text-lg font-semibold text-gray-900 dark:text-gray-50">Deploy Webhooks</p>
+								<p class="mt-2 text-sm text-gray-500">
+									Webhook tokens let you trigger redeployments from CI/CD pipelines like GitHub Actions without needing to log in. Each token is a secret URL you can call to restart your deployment or update its image.
+								</p>
+
+								<div class="webhook-usage-section mt-4 rounded-xl p-4">
+									<p class="webhook-usage-label mb-2 text-xs font-semibold uppercase tracking-wide">Usage</p>
+									<div class="space-y-3 text-sm">
+										<div>
+											<p class="font-medium">Restart (no image change):</p>
+											<pre class="webhook-code-block mt-1 overflow-x-auto rounded-lg p-3 text-xs font-mono"><code>{webhookExamples.restart}</code></pre>
+										</div>
+										<div>
+											<p class="font-medium">Update image tag:</p>
+											<pre class="webhook-code-block mt-1 overflow-x-auto rounded-lg p-3 text-xs font-mono"><code>{webhookExamples.updateTag}</code></pre>
+										</div>
+										<div>
+											<p class="font-medium">Update full image:</p>
+											<pre class="webhook-code-block mt-1 overflow-x-auto rounded-lg p-3 text-xs font-mono"><code>{webhookExamples.updateImage}</code></pre>
+										</div>
+									</div>
+								</div>
+
+								<div class="webhook-info-card mt-4 rounded-xl p-4">
+									<p class="mb-2 text-xs font-semibold uppercase tracking-wide">GitHub Actions Example</p>
+									<pre class="webhook-code-block overflow-x-auto rounded-lg p-3 text-xs font-mono"><code>{webhookExamples.githubActions}</code></pre>
+								</div>
+							</div>
+
+							<!-- Token management card -->
+							<div class="card rounded-2xl p-6">
+								<div class="flex items-center justify-between">
+									<div>
+										<p class="text-lg font-semibold text-gray-900 dark:text-gray-50">Webhook Tokens</p>
+										<p class="mt-1 text-sm text-gray-500">Create and manage webhook tokens for this deployment.</p>
+									</div>
+								</div>
+
+								<!-- Create new token -->
+								<div class="mt-4 flex gap-3">
+									<input
+										type="text"
+										class="input flex-1"
+										placeholder="Token label (e.g. github-actions)"
+										bind:value={newWebhookLabel}
+									/>
+									<button
+										class="btn btn-primary"
+										onclick={createWebhookToken}
+										disabled={creatingWebhookToken}
+									>
+										{#if creatingWebhookToken}
+											<Loader2 class="mr-2 h-4 w-4 animate-spin" />
+										{:else}
+											<Plus class="mr-2 h-4 w-4" />
+										{/if}
+										Create Token
+									</button>
+								</div>
+
+								<!-- Newly created token (show once) -->
+								{#if newlyCreatedToken}
+									<div class="webhook-success-card mt-4 rounded-xl p-4" transition:scale={{ duration: 200 }}>
+										<p class="text-sm font-semibold">Token created! Copy it now — it won't be shown again.</p>
+										<div class="mt-2 space-y-2">
+											<div>
+												<p class="webhook-success-muted mb-1 text-xs font-medium">Token</p>
+												<div class="flex items-center gap-2">
+													<code class="flex-1 break-all rounded-lg px-3 py-2 font-mono text-xs">{newlyCreatedToken}</code>
+													<button
+														class="btn btn-ghost btn-sm"
+														onclick={() => copyToClipboard(newlyCreatedToken!, 'token')}
+													>
+														{#if copiedWebhookToken}
+															<Check class="h-4 w-4 text-[var(--success-muted)]" />
+														{:else}
+															<Copy class="h-4 w-4" />
+														{/if}
+													</button>
+												</div>
+											</div>
+											<div>
+												<p class="webhook-success-muted mb-1 text-xs font-medium">Webhook URL</p>
+												<div class="flex items-center gap-2">
+													<code class="flex-1 break-all rounded-lg px-3 py-2 font-mono text-xs">{getWebhookUrl(newlyCreatedToken)}</code>
+													<button
+														class="btn btn-ghost btn-sm"
+														onclick={() => copyToClipboard(getWebhookUrl(newlyCreatedToken!), 'url')}
+													>
+														{#if copiedWebhookUrl}
+															<Check class="h-4 w-4 text-[var(--success-muted)]" />
+														{:else}
+															<Copy class="h-4 w-4" />
+														{/if}
+													</button>
+												</div>
+											</div>
+										</div>
+										<button
+											class="btn btn-ghost btn-sm mt-3"
+											onclick={() => (newlyCreatedToken = null)}
+										>
+											Dismiss
+										</button>
+									</div>
+								{/if}
+
+								<!-- Token list -->
+								<div class="mt-4">
+									{#if webhookTokensLoading}
+										<div class="flex items-center justify-center py-8">
+											<Loader2 class="h-6 w-6 animate-spin text-gray-400" />
+										</div>
+									{:else if webhookTokens.length === 0}
+										<div class="rounded-xl bg-gray-50 px-4 py-8 text-center dark:bg-gray-800/50">
+											<Webhook class="mx-auto h-8 w-8 text-gray-300 dark:text-gray-600" />
+											<p class="mt-2 text-sm text-gray-500">No webhook tokens yet. Create one to get started.</p>
+										</div>
+									{:else}
+										<div class="space-y-3">
+											{#each webhookTokens as token}
+												<div class="surface-tile flex items-center justify-between rounded-xl p-4">
+													<div>
+														<p class="text-sm font-medium text-gray-900 dark:text-gray-50">
+															{token.label || 'Unnamed token'}
+														</p>
+														<p class="text-xs text-gray-500">
+															Created {new Date(token.createdAt).toLocaleDateString()}
+															{#if token.lastUsedAt}
+																&middot; Last used {new Date(token.lastUsedAt).toLocaleDateString()}
+															{:else}
+																&middot; Never used
+															{/if}
+														</p>
+													</div>
+													<button
+														class="btn btn-destructive btn-sm"
+														onclick={() => deleteWebhookToken(token.id)}
+														disabled={deletingWebhookTokenId === token.id}
+													>
+														{#if deletingWebhookTokenId === token.id}
+															<Loader2 class="h-4 w-4 animate-spin" />
+														{:else}
+															<Trash2 class="h-4 w-4" />
+														{/if}
+													</button>
+												</div>
+											{/each}
+										</div>
+									{/if}
+								</div>
+							</div>
 						</div>
 					{:else if tab.id === 'advanced'}
 						<div class="card rounded-2xl p-6">
