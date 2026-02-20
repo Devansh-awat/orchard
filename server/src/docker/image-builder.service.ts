@@ -297,19 +297,17 @@ export class ImageBuilderService {
 
     const configMapName = 'buildkit-config';
 
-    // Build unique registry entries (avoid duplicates)
-    const registries = new Set<string>([
+    // Internal registries that use plain HTTP (no TLS)
+    const httpRegistries = new Set<string>([
       'harbor-core.harbor.svc.cluster.local',
       '178.156.144.127',
     ]);
-    if (this.harborRegistryPush && !registries.has(this.harborRegistryPush)) {
-      registries.add(this.harborRegistryPush);
-    }
 
     // For plain HTTP registries, use ONLY http=true
     // insecure=true means "HTTPS with self-signed cert", NOT "allow HTTP"
     // See: https://github.com/moby/buildkit/issues/4458
-    const registryConfigs = Array.from(registries)
+    // External registries (e.g. OVH, Docker Hub) use HTTPS and should NOT have http=true
+    const registryConfigs = Array.from(httpRegistries)
       .map(reg => `[registry."${reg}"]
   http = true`)
       .join('\n\n');
