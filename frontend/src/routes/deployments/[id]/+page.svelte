@@ -130,6 +130,18 @@
 		buildError?: string;
 		autoDeployEnabled?: boolean;
 		autoDeployBranch?: string;
+		healthCheckEnabled?: boolean;
+		healthCheckPath?: string;
+		healthCheckPort?: number;
+		healthCheckType?: string;
+		healthCheckCommand?: string;
+		livenessEnabled?: boolean;
+		readinessEnabled?: boolean;
+		startupEnabled?: boolean;
+		healthCheckInterval?: number;
+		healthCheckTimeout?: number;
+		healthCheckRetries?: number;
+		startupFailureThreshold?: number;
 		warnings?: Array<{ podName: string; message: string; timestamp: string }>;
 		project?: {
 			id: string;
@@ -273,6 +285,21 @@
 	let githubDeployments = $state<GitHubDeploymentRecord[]>([]);
 	let githubAppInstallUrl = $state<string | null>(null);
 	let loadingAppInstallUrl = $state(false);
+
+	// Health check state
+	let healthCheckEnabled = $state(false);
+	let healthCheckType = $state('http');
+	let healthCheckPath = $state('/');
+	let healthCheckPort = $state(80);
+	let healthCheckCommand = $state('');
+	let livenessEnabled = $state(true);
+	let readinessEnabled = $state(true);
+	let startupEnabled = $state(false);
+	let healthCheckInterval = $state(30);
+	let healthCheckTimeout = $state(5);
+	let healthCheckRetries = $state(3);
+	let startupFailureThreshold = $state(30);
+	let savingHealthCheck = $state(false);
 
 	let deletingIngress = $state<string | null>(null);
 	let editingIngress = $state<string | null>(null);
@@ -861,6 +888,22 @@
 			if (data.buildFromRoot !== undefined) {
 				buildFromRoot = data.buildFromRoot;
 			}
+
+			// Initialize health check state from deployment data
+			if (data.healthCheckEnabled !== undefined) {
+				healthCheckEnabled = data.healthCheckEnabled;
+				healthCheckType = data.healthCheckType || 'http';
+				healthCheckPath = data.healthCheckPath || '/';
+				healthCheckPort = data.healthCheckPort || 80;
+				healthCheckCommand = data.healthCheckCommand || '';
+				livenessEnabled = data.livenessEnabled ?? true;
+				readinessEnabled = data.readinessEnabled ?? true;
+				startupEnabled = data.startupEnabled ?? false;
+				healthCheckInterval = data.healthCheckInterval ?? 30;
+				healthCheckTimeout = data.healthCheckTimeout ?? 5;
+				healthCheckRetries = data.healthCheckRetries ?? 3;
+				startupFailureThreshold = data.startupFailureThreshold ?? 30;
+			}
 		} catch (e) {
 			if (!deployment) {
 				error = e instanceof Error ? e.message : 'Failed to fetch deployment';
@@ -1440,6 +1483,54 @@
 			});
 		} finally {
 			savingAdvanced = false;
+		}
+	}
+
+	async function saveHealthCheck() {
+		if (!deployment) return;
+
+		savingHealthCheck = true;
+		try {
+			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/health-check`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					healthCheckEnabled,
+					healthCheckType,
+					healthCheckPath,
+					healthCheckPort,
+					healthCheckCommand,
+					livenessEnabled,
+					readinessEnabled,
+					startupEnabled,
+					healthCheckInterval,
+					healthCheckTimeout,
+					healthCheckRetries,
+					startupFailureThreshold
+				})
+			});
+
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to update health check settings');
+			}
+
+			const updated = await response.json();
+			deployment = updated;
+
+			toasts.add({
+				title: 'Settings updated',
+				description: 'Health check configuration has been updated',
+				color: 'success'
+			});
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to update health check settings',
+				color: 'error'
+			});
+		} finally {
+			savingHealthCheck = false;
 		}
 	}
 
@@ -3464,6 +3555,194 @@
 							{:else}
 								<p class="text-sm text-gray-500">Auto-deploy is only available for deployments created from GitHub repositories.</p>
 							{/if}
+						</div>
+
+						<!-- Health Check Section -->
+						<div class="card rounded-2xl p-6 mt-6">
+							<div class="mb-6">
+								<p class="text-lg font-semibold text-gray-900 dark:text-gray-50">Health Checks</p>
+								<p class="text-sm text-gray-500 mt-1">Configure liveness, readiness, and startup probes for your deployment</p>
+							</div>
+
+							<div class="space-y-6">
+								<div>
+									<label class="flex items-center gap-3">
+										<input type="checkbox" bind:checked={healthCheckEnabled} class="rounded" />
+										<div>
+											<span class="font-medium">Enable health checks</span>
+											<p class="text-xs text-gray-500">Kubernetes will monitor your container's health and restart it if it becomes unhealthy</p>
+										</div>
+									</label>
+								</div>
+
+								{#if healthCheckEnabled}
+									<div class="space-y-5">
+										<!-- Probe type selector -->
+										<div>
+											<label class="block text-sm font-medium mb-2">Check type</label>
+											<div class="flex gap-2">
+												<button
+													onclick={() => healthCheckType = 'http'}
+													class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {healthCheckType === 'http' ? 'bg-[var(--sidebar-text-active-bg)] text-[var(--sidebar-text-active-color)] border border-[var(--sidebar-text-active-border)]' : 'bg-[var(--control-bg)] text-[var(--control-text)] border border-[var(--surface-border)] hover:bg-[var(--control-hover-bg)]'}"
+												>
+													HTTP
+												</button>
+												<button
+													onclick={() => healthCheckType = 'tcp'}
+													class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {healthCheckType === 'tcp' ? 'bg-[var(--sidebar-text-active-bg)] text-[var(--sidebar-text-active-color)] border border-[var(--sidebar-text-active-border)]' : 'bg-[var(--control-bg)] text-[var(--control-text)] border border-[var(--surface-border)] hover:bg-[var(--control-hover-bg)]'}"
+												>
+													TCP
+												</button>
+												<button
+													onclick={() => healthCheckType = 'exec'}
+													class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {healthCheckType === 'exec' ? 'bg-[var(--sidebar-text-active-bg)] text-[var(--sidebar-text-active-color)] border border-[var(--sidebar-text-active-border)]' : 'bg-[var(--control-bg)] text-[var(--control-text)] border border-[var(--surface-border)] hover:bg-[var(--control-hover-bg)]'}"
+												>
+													Command
+												</button>
+											</div>
+											<p class="text-xs text-gray-500 mt-1">
+												{#if healthCheckType === 'http'}
+													Sends an HTTP GET request to the specified path and port
+												{:else if healthCheckType === 'tcp'}
+													Checks if a TCP connection can be established on the specified port
+												{:else}
+													Executes a command inside the container
+												{/if}
+											</p>
+										</div>
+
+										<!-- Type-specific fields -->
+										{#if healthCheckType === 'http'}
+											<div class="grid grid-cols-2 gap-4">
+												<div>
+													<label class="block text-sm font-medium mb-2">Path</label>
+													<input
+														type="text"
+														bind:value={healthCheckPath}
+														placeholder="/health"
+														class="input w-full font-mono"
+													/>
+												</div>
+												<div>
+													<label class="block text-sm font-medium mb-2">Port</label>
+													<input
+														type="number"
+														bind:value={healthCheckPort}
+														placeholder="80"
+														class="input w-full font-mono"
+													/>
+												</div>
+											</div>
+										{:else if healthCheckType === 'tcp'}
+											<div>
+												<label class="block text-sm font-medium mb-2">Port</label>
+												<input
+													type="number"
+													bind:value={healthCheckPort}
+													placeholder="80"
+													class="input w-full font-mono"
+												/>
+											</div>
+										{:else}
+											<div>
+												<label class="block text-sm font-medium mb-2">Command</label>
+												<input
+													type="text"
+													bind:value={healthCheckCommand}
+													placeholder="cat /tmp/healthy"
+													class="input w-full font-mono"
+												/>
+												<p class="text-xs text-gray-500 mt-1">Command will be split by spaces and executed in the container</p>
+											</div>
+										{/if}
+
+										<!-- Which probes to enable -->
+										<div>
+											<label class="block text-sm font-medium mb-3">Probe types</label>
+											<div class="space-y-3">
+												<label class="flex items-center gap-3">
+													<input type="checkbox" bind:checked={livenessEnabled} class="rounded" />
+													<div>
+														<span class="font-medium text-sm">Liveness probe</span>
+														<p class="text-xs text-gray-500">Restarts the container if it becomes unresponsive</p>
+													</div>
+												</label>
+												<label class="flex items-center gap-3">
+													<input type="checkbox" bind:checked={readinessEnabled} class="rounded" />
+													<div>
+														<span class="font-medium text-sm">Readiness probe</span>
+														<p class="text-xs text-gray-500">Stops routing traffic to the container until it's ready</p>
+													</div>
+												</label>
+												<label class="flex items-center gap-3">
+													<input type="checkbox" bind:checked={startupEnabled} class="rounded" />
+													<div>
+														<span class="font-medium text-sm">Startup probe</span>
+														<p class="text-xs text-gray-500">Gives slow-starting containers extra time before liveness checks begin</p>
+													</div>
+												</label>
+											</div>
+										</div>
+
+										<!-- Timing settings -->
+										<div>
+											<label class="block text-sm font-medium mb-3">Timing</label>
+											<div class="surface-muted-panel rounded-lg p-4 space-y-4">
+												<div class="grid grid-cols-3 gap-4">
+													<div>
+														<label class="block text-xs text-gray-500 mb-1">Interval (seconds)</label>
+														<input
+															type="number"
+															bind:value={healthCheckInterval}
+															min="1"
+															class="input w-full font-mono text-sm"
+														/>
+													</div>
+													<div>
+														<label class="block text-xs text-gray-500 mb-1">Timeout (seconds)</label>
+														<input
+															type="number"
+															bind:value={healthCheckTimeout}
+															min="1"
+															class="input w-full font-mono text-sm"
+														/>
+													</div>
+													<div>
+														<label class="block text-xs text-gray-500 mb-1">Failure threshold</label>
+														<input
+															type="number"
+															bind:value={healthCheckRetries}
+															min="1"
+															class="input w-full font-mono text-sm"
+														/>
+													</div>
+												</div>
+												{#if startupEnabled}
+													<div>
+														<label class="block text-xs text-gray-500 mb-1">Startup failure threshold</label>
+														<input
+															type="number"
+															bind:value={startupFailureThreshold}
+															min="1"
+															class="input w-full font-mono text-sm"
+														/>
+														<p class="text-xs text-gray-500 mt-1">Number of failures allowed during startup before the container is killed</p>
+													</div>
+												{/if}
+											</div>
+										</div>
+									</div>
+								{/if}
+
+								<div class="mt-6 flex flex-wrap justify-end gap-3">
+									<button onclick={saveHealthCheck} disabled={savingHealthCheck} class="btn btn-primary">
+										{#if savingHealthCheck}
+											<Loader2 class="h-4 w-4 animate-spin" />
+										{/if}
+										<span>Save changes</span>
+									</button>
+								</div>
+							</div>
 						</div>
 					{/if}
 				</section>

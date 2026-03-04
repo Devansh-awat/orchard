@@ -440,6 +440,41 @@ export class DeploymentsController {
     );
   }
 
+  @Put(':id/health-check')
+  @UseGuards(AuthGuard)
+  async updateDeploymentHealthCheck(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      healthCheckEnabled: boolean;
+      healthCheckType: string;
+      healthCheckPath?: string;
+      healthCheckPort?: number;
+      healthCheckCommand?: string;
+      livenessEnabled: boolean;
+      readinessEnabled: boolean;
+      startupEnabled: boolean;
+      healthCheckInterval: number;
+      healthCheckTimeout: number;
+      healthCheckRetries: number;
+      startupFailureThreshold: number;
+    },
+    @Request() req
+  ) {
+    return this.projectsService.updateDeploymentHealthCheck(
+      id,
+      body,
+      req.user.sub,
+      {
+        email: req.user.email,
+        username: req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        imageUrl: req.user.imageUrl,
+      }
+    );
+  }
+
   @Put(':id/volumes')
   @UseGuards(AuthGuard)
   async updateDeploymentVolumes(

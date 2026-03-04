@@ -310,6 +310,20 @@ model Deployment {
   autoDeployEnabled  Boolean  @default(false) @map("auto_deploy_enabled")
   autoDeployBranch   String?  @map("auto_deploy_branch") @db.VarChar(255)
 
+  // Health check configuration
+  healthCheckEnabled      Boolean  @default(false) @map("health_check_enabled")
+  healthCheckPath         String?  @map("health_check_path") @db.VarChar(500)
+  healthCheckPort         Int?     @map("health_check_port")
+  healthCheckType         String   @default("http") @map("health_check_type") @db.VarChar(20)
+  healthCheckCommand      String?  @map("health_check_command") @db.VarChar(500)
+  livenessEnabled         Boolean  @default(true)  @map("liveness_enabled")
+  readinessEnabled        Boolean  @default(true)  @map("readiness_enabled")
+  startupEnabled          Boolean  @default(false) @map("startup_enabled")
+  healthCheckInterval     Int      @default(30)    @map("health_check_interval")
+  healthCheckTimeout      Int      @default(5)     @map("health_check_timeout")
+  healthCheckRetries      Int      @default(3)     @map("health_check_retries")
+  startupFailureThreshold Int      @default(30)    @map("startup_failure_threshold")
+
   project            Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
   creator            User?                @relation("DeploymentCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   pods               Pod[]

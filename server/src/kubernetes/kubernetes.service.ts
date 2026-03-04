@@ -40,6 +40,20 @@ type CreateDeploymentOptions = {
     hostPath?: string;
     readOnly?: boolean;
   }[];
+  healthCheck?: {
+    enabled: boolean;
+    type: string;
+    path?: string | null;
+    port?: number | null;
+    command?: string | null;
+    livenessEnabled: boolean;
+    readinessEnabled: boolean;
+    startupEnabled: boolean;
+    interval: number;
+    timeout: number;
+    retries: number;
+    startupFailureThreshold: number;
+  };
 };
 
 type UpdateDeploymentEnvOptions = {
@@ -929,6 +943,29 @@ export class KubernetesService {
         volumeMounts: volumeMounts.length > 0 ? volumeMounts : undefined,
       };
 
+      // Apply health checks if configured
+      if (options.healthCheck?.enabled) {
+        const hc = options.healthCheck;
+        const buildProbe = (failureThreshold?: number): k8s.V1Probe => {
+          const probe: k8s.V1Probe = {
+            periodSeconds: hc.interval,
+            timeoutSeconds: hc.timeout,
+            failureThreshold: failureThreshold ?? hc.retries,
+          };
+          if (hc.type === 'http') {
+            probe.httpGet = { path: hc.path || '/', port: hc.port || 80 };
+          } else if (hc.type === 'tcp') {
+            probe.tcpSocket = { port: hc.port || 80 };
+          } else if (hc.type === 'exec') {
+            probe.exec = { command: hc.command ? hc.command.split(' ') : ['/bin/sh', '-c', 'exit 0'] };
+          }
+          return probe;
+        };
+        if (hc.livenessEnabled) container.livenessProbe = buildProbe();
+        if (hc.readinessEnabled) container.readinessProbe = buildProbe();
+        if (hc.startupEnabled) container.startupProbe = buildProbe(hc.startupFailureThreshold);
+      }
+
       const deploymentBody: k8s.V1Deployment = {
         metadata: {
           name: cleanName,
@@ -1797,6 +1834,140 @@ export class KubernetesService {
       throw new BadRequestException({
         error: 'Failed to update deployment environment',
         message: error.message
+      });
+    }
+  }
+
+  async updateDeploymentHealthCheck(options: {
+    namespace: string;
+    deploymentName: string;
+    enabled: boolean;
+    type: string;
+    path?: string | null;
+    port?: number | null;
+    command?: string | null;
+    livenessEnabled: boolean;
+    readinessEnabled: boolean;
+    startupEnabled: boolean;
+    interval: number;
+    timeout: number;
+    retries: number;
+    startupFailureThreshold: number;
+  }) {
+    const cleanName = String(options.deploymentName || '').trim();
+    const cleanNamespace = String(options.namespace || '').trim();
+
+    try {
+      const appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
+      const existing = await appsApi.readNamespacedDeployment(cleanName, cleanNamespace);
+
+      const containers = existing.body.spec?.template?.spec?.containers;
+      if (!containers || containers.length === 0) {
+        throw new BadRequestException({
+          error: 'No containers found',
+          message: `Deployment "${cleanName}" has no containers`
+        });
+      }
+
+      const containerName = containers[0].name;
+
+      let livenessProbe: k8s.V1Probe | null = null;
+      let readinessProbe: k8s.V1Probe | null = null;
+      let startupProbe: k8s.V1Probe | null = null;
+
+      if (options.enabled) {
+        const buildProbe = (failureThreshold?: number): k8s.V1Probe => {
+          const probe: k8s.V1Probe = {
+            periodSeconds: options.interval,
+            timeoutSeconds: options.timeout,
+            failureThreshold: failureThreshold ?? options.retries,
+          };
+
+          if (options.type === 'http') {
+            probe.httpGet = {
+              path: options.path || '/',
+              port: options.port || 80,
+            };
+          } else if (options.type === 'tcp') {
+            probe.tcpSocket = {
+              port: options.port || 80,
+            };
+          } else if (options.type === 'exec') {
+            probe.exec = {
+              command: options.command ? options.command.split(' ') : ['/bin/sh', '-c', 'exit 0'],
+            };
+          }
+
+          return probe;
+        };
+
+        if (options.livenessEnabled) {
+          livenessProbe = buildProbe();
+        }
+        if (options.readinessEnabled) {
+          readinessProbe = buildProbe();
+        }
+        if (options.startupEnabled) {
+          startupProbe = buildProbe(options.startupFailureThreshold);
+        }
+      }
+
+      const patch = {
+        spec: {
+          template: {
+            metadata: {
+              annotations: {
+                'orchard.dev/health-check-updated-at': new Date().toISOString()
+              }
+            },
+            spec: {
+              containers: [
+                {
+                  name: containerName,
+                  livenessProbe,
+                  readinessProbe,
+                  startupProbe,
+                }
+              ]
+            }
+          }
+        }
+      };
+
+      await appsApi.patchNamespacedDeployment(
+        cleanName,
+        cleanNamespace,
+        patch,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        {
+          headers: { 'Content-Type': 'application/strategic-merge-patch+json' }
+        }
+      );
+
+      return {
+        success: true,
+        deployment: cleanName,
+        namespace: cleanNamespace,
+      };
+    } catch (error) {
+      if (error instanceof BadRequestException || error instanceof NotFoundException) {
+        throw error;
+      }
+
+      if (error.response?.statusCode === 404) {
+        throw new NotFoundException({
+          error: 'Deployment not found',
+          message: `Deployment ${cleanName} not found in namespace ${cleanNamespace}`
+        });
+      }
+
+      throw new BadRequestException({
+        error: 'Failed to update deployment health check',
+        message: error.response?.body?.message || error.message,
       });
     }
   }

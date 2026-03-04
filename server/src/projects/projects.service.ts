@@ -4413,6 +4413,114 @@ export class ProjectsService {
     return this.getDeployment(deploymentId);
   }
 
+  async updateDeploymentHealthCheck(
+    deploymentId: string,
+    healthCheck: {
+      healthCheckEnabled: boolean;
+      healthCheckType: string;
+      healthCheckPath?: string;
+      healthCheckPort?: number;
+      healthCheckCommand?: string;
+      livenessEnabled: boolean;
+      readinessEnabled: boolean;
+      startupEnabled: boolean;
+      healthCheckInterval: number;
+      healthCheckTimeout: number;
+      healthCheckRetries: number;
+      startupFailureThreshold: number;
+    },
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: {
+            workspace: true,
+          },
+        },
+      },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    const membership = await this.prisma.workspaceMember.findFirst({
+      where: {
+        workspaceId: deployment.project.workspaceId,
+        userId: user.id,
+      },
+      include: {
+        role: true,
+      },
+    });
+
+    if (!membership) {
+      throw new ForbiddenException('You are not a member of this workspace');
+    }
+
+    if (membership.role.name === 'viewer') {
+      throw new ForbiddenException('You do not have permission to update deployments');
+    }
+
+    await this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: {
+        healthCheckEnabled: healthCheck.healthCheckEnabled,
+        healthCheckType: healthCheck.healthCheckType,
+        healthCheckPath: healthCheck.healthCheckPath || null,
+        healthCheckPort: healthCheck.healthCheckPort || null,
+        healthCheckCommand: healthCheck.healthCheckCommand || null,
+        livenessEnabled: healthCheck.livenessEnabled,
+        readinessEnabled: healthCheck.readinessEnabled,
+        startupEnabled: healthCheck.startupEnabled,
+        healthCheckInterval: healthCheck.healthCheckInterval,
+        healthCheckTimeout: healthCheck.healthCheckTimeout,
+        healthCheckRetries: healthCheck.healthCheckRetries,
+        startupFailureThreshold: healthCheck.startupFailureThreshold,
+      },
+    });
+
+    // Apply to the live Kubernetes deployment
+    try {
+      await this.kubernetesService.updateDeploymentHealthCheck({
+        namespace: deployment.namespace,
+        deploymentName: deployment.name,
+        enabled: healthCheck.healthCheckEnabled,
+        type: healthCheck.healthCheckType,
+        path: healthCheck.healthCheckPath,
+        port: healthCheck.healthCheckPort,
+        command: healthCheck.healthCheckCommand,
+        livenessEnabled: healthCheck.livenessEnabled,
+        readinessEnabled: healthCheck.readinessEnabled,
+        startupEnabled: healthCheck.startupEnabled,
+        interval: healthCheck.healthCheckInterval,
+        timeout: healthCheck.healthCheckTimeout,
+        retries: healthCheck.healthCheckRetries,
+        startupFailureThreshold: healthCheck.startupFailureThreshold,
+      });
+    } catch (error) {
+      // Log but don't fail - the DB is updated, K8s will sync on next restart/rebuild
+      console.error('Failed to apply health check to Kubernetes deployment:', error.message);
+    }
+
+    return this.getDeployment(deploymentId);
+  }
+
   async updateDeploymentVolumes(
     deploymentId: string,
     volumes: {
