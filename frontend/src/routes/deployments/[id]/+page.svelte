@@ -300,6 +300,7 @@
 	let healthCheckRetries = $state(3);
 	let startupFailureThreshold = $state(30);
 	let savingHealthCheck = $state(false);
+	let isEditingHealthCheck = $state(false);
 
 	let deletingIngress = $state<string | null>(null);
 	let editingIngress = $state<string | null>(null);
@@ -833,49 +834,78 @@
 			}
 			const data = await response.json();
 
-			// Redirect to progress page if deployment is still building (GitHub deployments only)
-			// Skip redirect if build modal/card is active (rebuild was triggered from this page)
+			// If deployment is building and modal/card isn't already showing, open the build modal
+			// (The full-screen progress page is only used for first-time builds via the new deployment flow)
 			if (data.status === 'building' && data.githubRepo && !showBuildModal && !showBuildCard) {
-				goto(`/deployments/${deploymentId}/progress`, { replaceState: true });
-				return;
+				showBuildModal = true;
+				showBuildCard = false;
+				stopBuildPolling();
+				startBuildPolling();
 			}
 
 			deployment = data;
-			if (data.replicas !== undefined && data.replicas !== null) {
-				scaleReplicas = data.replicas;
-			} else {
-				scaleReplicas = 1;
-			}
-			if (!showServiceForm) {
-				resetNewServiceForm();
-			}
 
-			if (!isEditingEnv) {
-				revealedIndices = new Set();
-				if (data.envVars && Array.isArray(data.envVars) && data.envVars.length > 0) {
-					envVars = [
-						...data.envVars.map((ev: { key: string; value: string }) => ({
-							key: ev.key || '',
-							value: ev.value || ''
-						})),
-						{ key: '', value: '' }
-					];
+			// Skip overwriting form state while a build is in progress so the user can
+			// keep editing settings. Form state will refresh when the build finishes.
+			const buildActive = showBuildModal || showBuildCard;
+
+			if (!buildActive) {
+				if (data.replicas !== undefined && data.replicas !== null) {
+					scaleReplicas = data.replicas;
 				} else {
-					envVars = [{ key: '', value: '' }];
+					scaleReplicas = 1;
 				}
-			}
+				if (!showServiceForm) {
+					resetNewServiceForm();
+				}
 
-			if (data.volumes && Array.isArray(data.volumes) && data.volumes.length > 0) {
-				volumes = data.volumes.map((vol: Volume) => ({
-					name: vol.name || '',
-					type: vol.type || 'pvc',
-					mountPath: vol.mountPath || '',
-					pvcName: vol.pvcName || '',
-					hostPath: vol.hostPath || '',
-					readOnly: vol.readOnly || false
-				}));
-			} else {
-				volumes = [];
+				if (!isEditingEnv) {
+					revealedIndices = new Set();
+					if (data.envVars && Array.isArray(data.envVars) && data.envVars.length > 0) {
+						envVars = [
+							...data.envVars.map((ev: { key: string; value: string }) => ({
+								key: ev.key || '',
+								value: ev.value || ''
+							})),
+							{ key: '', value: '' }
+						];
+					} else {
+						envVars = [{ key: '', value: '' }];
+					}
+				}
+
+				if (data.volumes && Array.isArray(data.volumes) && data.volumes.length > 0) {
+					volumes = data.volumes.map((vol: Volume) => ({
+						name: vol.name || '',
+						type: vol.type || 'pvc',
+						mountPath: vol.mountPath || '',
+						pvcName: vol.pvcName || '',
+						hostPath: vol.hostPath || '',
+						readOnly: vol.readOnly || false
+					}));
+				} else {
+					volumes = [];
+				}
+
+				if (data.buildFromRoot !== undefined) {
+					buildFromRoot = data.buildFromRoot;
+				}
+
+				// Initialize health check state from deployment data
+				if (data.healthCheckEnabled !== undefined && !isEditingHealthCheck) {
+					healthCheckEnabled = data.healthCheckEnabled;
+					healthCheckType = data.healthCheckType || 'http';
+					healthCheckPath = data.healthCheckPath || '/';
+					healthCheckPort = data.healthCheckPort || 80;
+					healthCheckCommand = data.healthCheckCommand || '';
+					livenessEnabled = data.livenessEnabled ?? true;
+					readinessEnabled = data.readinessEnabled ?? true;
+					startupEnabled = data.startupEnabled ?? false;
+					healthCheckInterval = data.healthCheckInterval ?? 30;
+					healthCheckTimeout = data.healthCheckTimeout ?? 5;
+					healthCheckRetries = data.healthCheckRetries ?? 3;
+					startupFailureThreshold = data.startupFailureThreshold ?? 30;
+				}
 			}
 
 			if (data.pods?.length && !selectedPod) {
@@ -883,26 +913,6 @@
 				if (data.pods[0].containers?.length) {
 					selectedContainer = data.pods[0].containers[0].name;
 				}
-			}
-
-			if (data.buildFromRoot !== undefined) {
-				buildFromRoot = data.buildFromRoot;
-			}
-
-			// Initialize health check state from deployment data
-			if (data.healthCheckEnabled !== undefined) {
-				healthCheckEnabled = data.healthCheckEnabled;
-				healthCheckType = data.healthCheckType || 'http';
-				healthCheckPath = data.healthCheckPath || '/';
-				healthCheckPort = data.healthCheckPort || 80;
-				healthCheckCommand = data.healthCheckCommand || '';
-				livenessEnabled = data.livenessEnabled ?? true;
-				readinessEnabled = data.readinessEnabled ?? true;
-				startupEnabled = data.startupEnabled ?? false;
-				healthCheckInterval = data.healthCheckInterval ?? 30;
-				healthCheckTimeout = data.healthCheckTimeout ?? 5;
-				healthCheckRetries = data.healthCheckRetries ?? 3;
-				startupFailureThreshold = data.startupFailureThreshold ?? 30;
 			}
 		} catch (e) {
 			if (!deployment) {
@@ -1531,6 +1541,7 @@
 			});
 		} finally {
 			savingHealthCheck = false;
+			isEditingHealthCheck = false;
 		}
 	}
 
@@ -3558,7 +3569,8 @@
 						</div>
 
 						<!-- Health Check Section -->
-						<div class="card rounded-2xl p-6 mt-6">
+						<!-- svelte-ignore a11y_no_static_element_interactions -->
+						<div class="card rounded-2xl p-6 mt-6" onchange={() => isEditingHealthCheck = true} oninput={() => isEditingHealthCheck = true} onclick={() => isEditingHealthCheck = true}>
 							<div class="mb-6">
 								<p class="text-lg font-semibold text-gray-900 dark:text-gray-50">Health Checks</p>
 								<p class="text-sm text-gray-500 mt-1">Configure liveness, readiness, and startup probes for your deployment</p>
