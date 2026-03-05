@@ -1,0 +1,6 @@
+<svg preserveAspectRatio="none" width="100%" height="100%" overflow="visible" style="display: block;" viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+<g id="App Icon">
+<rect id="Rectangle 2" width="16" height="16" rx="4" fill="var(--fill-0, #FFC197)"/>
+<path id="Polygon 1" d="M7.25 3.01074C7.7141 2.74279 8.2859 2.74279 8.75 3.01074L11.9463 4.85547C12.4103 5.12335 12.6961 5.61856 12.6963 6.1543V9.8457C12.6961 10.3814 12.4103 10.8766 11.9463 11.1445L8.75 12.9893C8.2859 13.2572 7.7141 13.2572 7.25 12.9893L4.05371 11.1445C3.58974 10.8766 3.30385 10.3814 3.30371 9.8457V6.1543C3.30385 5.61856 3.58974 5.12335 4.05371 4.85547L7.25 3.01074Z" stroke="var(--stroke-0, black)"/>
+</g>
+</svg>

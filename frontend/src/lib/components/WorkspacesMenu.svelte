@@ -20,7 +20,6 @@
 				aria-label="Toggle organization menu"
 				{...collapsible.trigger}
 				class="org-menu-trigger relative z-10"
-				class:shadow-md={collapsible.open}
 			>
 				<div class="flex items-center gap-3 min-w-0 flex-1">
 					{#if $selectedOrganization}
@@ -37,17 +36,19 @@
 						{/if}
 						<span class="org-menu-trigger-name">{$selectedOrganization.name}</span>
 					{:else}
-						<div class="org-menu-trigger-icon" style="background-color: var(--sidebar-text-hover-bg); color: var(--sidebar-text);">
+						<div class="org-menu-trigger-icon">
 							<Building2 class="h-4 w-4" />
 						</div>
-						<span class="text-sm" style="color: var(--surface-muted);">Select organization</span>
+						<span class="org-menu-trigger-placeholder">Select organization</span>
 					{/if}
 				</div>
-				{#if collapsible.open}
-					<X class="h-4 w-4 shrink-0" style="color: var(--sidebar-text);" />
-				{:else}
-					<ChevronsUpDown class="h-4 w-4 shrink-0" style="color: var(--surface-muted);" />
-				{/if}
+				<span class="org-menu-trigger-chevron" class:is-open={collapsible.open}>
+					{#if collapsible.open}
+						<X class="h-4 w-4" />
+					{:else}
+						<ChevronsUpDown class="h-4 w-4" />
+					{/if}
+				</span>
 			</button>
 
 			{#if collapsible.open}
@@ -85,7 +86,7 @@
 						<div class="org-menu-footer">
 							<a href="/organizations/{$selectedOrganization.slug}/settings">
 								<Settings class="h-4 w-4" />
-								Settings
+								Organization Settings
 							</a>
 						</div>
 					{/if}

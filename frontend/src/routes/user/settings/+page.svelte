@@ -2,29 +2,53 @@
 	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
 	import { user, apiFetch, toasts } from '$lib/stores';
-	import { ArrowLeft, Github, Loader2, Link2, Unlink, KeyRound, Pencil, Trash2 } from 'lucide-svelte';
+	import { ArrowLeft, Github, Loader2, Link2, Unlink, KeyRound, Pencil, Trash2, User, ChevronRight, Eye, EyeOff } from 'lucide-svelte';
 
 	let githubLinked = $state(false);
 	let githubUsername = $state<string | null>(null);
 	let loading = $state(true);
 	let unlinking = $state(false);
-let passkeys = $state<PasskeyRecord[]>([]);
-let passkeysLoading = $state(true);
-let passkeyListError = $state<string | null>(null);
-let registerLoading = $state(false);
-let newPasskeyName = $state('');
-let editingPasskeyId = $state<string | null>(null);
-let renameValue = $state('');
-let renaming = $state(false);
-let deletingPasskeyId = $state<string | null>(null);
-let passkeyEnvWarning = $state<string | null>(null);
+	let passkeys = $state<PasskeyRecord[]>([]);
+	let passkeysLoading = $state(true);
+	let passkeyListError = $state<string | null>(null);
+	let registerLoading = $state(false);
+	let newPasskeyName = $state('');
+	let editingPasskeyId = $state<string | null>(null);
+	let renameValue = $state('');
+	let renaming = $state(false);
+	let deletingPasskeyId = $state<string | null>(null);
+	let passkeyEnvWarning = $state<string | null>(null);
 
-// Profile editing state
-let editingProfile = $state(false);
-let profileFirstName = $state('');
-let profileLastName = $state('');
-let profileUsername = $state('');
-let savingProfile = $state(false);
+	// Profile editing state
+	let editingProfile = $state(false);
+	let profileFirstName = $state('');
+	let profileLastName = $state('');
+	let profileUsername = $state('');
+	let savingProfile = $state(false);
+
+	// Email visibility
+	let emailRevealed = $state(false);
+
+	function censorEmail(email: string): string {
+		const [local, domain] = email.split('@');
+		if (!domain) return '••••••';
+		const visibleStart = local.slice(0, 2);
+		const visibleDomain = domain;
+		return `${visibleStart}${'•'.repeat(Math.max(local.length - 2, 3))}@${visibleDomain}`;
+	}
+
+	let displayEmail = $derived.by(() => {
+		const email = $user?.email || '';
+		if (!email) return '';
+		return emailRevealed ? email : censorEmail(email);
+	});
+
+	// Section collapse state
+	let expandedSection = $state<string | null>(null);
+
+	function toggleSection(section: string) {
+		expandedSection = expandedSection === section ? null : section;
+	}
 
 	interface PasskeyRecord {
 		id: string;
@@ -378,422 +402,577 @@ let savingProfile = $state(false);
 	}
 </script>
 
-<div class="p-6">
-	<div class="mb-6">
-		<button
-			onclick={() => window.history.back()}
-			class="mb-4 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 cursor-pointer"
-		>
-			<ArrowLeft class="h-4 w-4" />
-			Back to workspace
-		</button>
-	</div>
-
-	<div class="space-y-6">
+<div class="settings-page">
+	<div class="settings-container">
 		<!-- Header -->
-		<div
-			class="rounded-3xl border p-6 shadow-sm"
-			style="background-color: var(--surface-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
-		>
-			<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-				<div class="flex items-center gap-4">
-					<div class="relative">
-						{#if $user?.imageUrl}
-							<img
-								src={$user.imageUrl}
-								alt={$user.name || 'User'}
-								class="h-14 w-14 rounded-2xl object-cover ring-2 ring-gray-200 dark:ring-gray-700"
-							/>
-						{:else}
-							<div
-								class="flex h-14 w-14 items-center justify-center rounded-2xl ring-2 ring-gray-200 dark:ring-gray-700"
-								style="background-color: color-mix(in srgb, var(--surface-border) 80%, var(--center-channel-bg)); color: var(--center-channel-color);"
-							>
-								<span class="text-lg font-semibold">
-									{$user?.firstName?.[0] || $user?.name?.[0] || 'U'}
-								</span>
-							</div>
-						{/if}
-					</div>
-					<div>
-						<p class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">User</p>
-						<h1 class="text-2xl font-bold" style="color: var(--center-channel-color);">
-							{#if $user?.firstName || $user?.lastName}
-								{$user?.firstName || ''} {$user?.lastName || ''}
-							{:else}
-								{$user?.name || $user?.username || 'User'}
-							{/if}
-						</h1>
-						<p class="mt-1 text-sm" style="color: var(--surface-muted);">
-							{$user?.email || 'No email'}
-						</p>
-						{#if $user?.username}
-							<p class="text-sm" style="color: var(--surface-muted);">@{$user.username}</p>
-						{/if}
-					</div>
+		<div class="settings-header">
+			<button
+				onclick={() => window.history.back()}
+				class="settings-back-btn"
+			>
+				<ArrowLeft class="h-4 w-4" />
+				Back
+			</button>
+
+			<div class="settings-title-row">
+				<div class="settings-avatar">
+					{#if $user?.imageUrl}
+						<img
+							src={$user.imageUrl}
+							alt={$user.name || 'User'}
+							class="settings-avatar-img"
+						/>
+					{:else}
+						<span class="settings-avatar-letter">
+							{$user?.firstName?.[0] || $user?.name?.[0] || 'U'}
+						</span>
+					{/if}
 				</div>
-				<div class="flex flex-wrap gap-3 text-xs" style="color: var(--surface-muted);">
-					<span
-						class="rounded-full px-3 py-1 font-medium"
-						style="background-color: var(--control-bg); border: 1px solid var(--surface-border); color: var(--center-channel-color);"
-					>
-						Email verified
-					</span>
-					<span
-						class="rounded-full px-3 py-1 font-medium"
-						style="background-color: var(--control-bg); border: 1px solid var(--surface-border); color: var(--center-channel-color);"
-					>
-						Account active
-					</span>
+				<div>
+					<h1 class="settings-title">
+						{#if $user?.firstName || $user?.lastName}
+							{$user?.firstName || ''} {$user?.lastName || ''}
+						{:else}
+							{$user?.name || $user?.username || 'User'}
+						{/if}
+					</h1>
+					<p class="settings-subtitle">
+						{displayEmail}
+						<button
+							class="settings-reveal-btn"
+							onclick={() => emailRevealed = !emailRevealed}
+							aria-label={emailRevealed ? 'Hide email' : 'Show email'}
+						>
+							{#if emailRevealed}
+								<EyeOff class="h-3 w-3" />
+							{:else}
+								<Eye class="h-3 w-3" />
+							{/if}
+						</button>
+					</p>
 				</div>
 			</div>
 		</div>
 
-		<div class="grid gap-6 lg:grid-cols-[1.4fr,1fr]">
-			<!-- Profile -->
-			<div class="space-y-6">
-				<div class="card">
-					<div class="card-header flex items-center justify-between">
-						<h2 class="font-semibold">Profile</h2>
-						{#if !editingProfile}
-							<button onclick={startEditingProfile} class="btn btn-secondary btn-sm">
-								<Pencil class="h-4 w-4" />
-								Edit
-							</button>
-						{/if}
-					</div>
-					<div class="card-body">
-						<div class="grid gap-4 sm:grid-cols-2">
-							<!-- First name -->
-							<div class="rounded-2xl border p-4" style="background-color: var(--surface-bg); border-color: var(--surface-border);">
-								<label for="profile-first-name" class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">First name</label>
-								{#if editingProfile}
-									<input
-										id="profile-first-name"
-										type="text"
-										class="mt-1 w-full border-0 bg-transparent p-0 font-semibold outline-none focus:ring-0"
-										style="color: var(--center-channel-color);"
-										bind:value={profileFirstName}
-										placeholder="First name"
-									/>
-								{:else}
-									<p class="mt-2 font-semibold" style="color: var(--center-channel-color);">
-										{$user?.firstName || '—'}
-									</p>
-								{/if}
-							</div>
-							<!-- Last name -->
-							<div class="rounded-2xl border p-4" style="background-color: var(--surface-bg); border-color: var(--surface-border);">
-								<label for="profile-last-name" class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">Last name</label>
-								{#if editingProfile}
-									<input
-										id="profile-last-name"
-										type="text"
-										class="mt-1 w-full border-0 bg-transparent p-0 font-semibold outline-none focus:ring-0"
-										style="color: var(--center-channel-color);"
-										bind:value={profileLastName}
-										placeholder="Last name"
-									/>
-								{:else}
-									<p class="mt-2 font-semibold" style="color: var(--center-channel-color);">
-										{$user?.lastName || '—'}
-									</p>
-								{/if}
-							</div>
-							<!-- Email (always read-only) -->
-							<div class="rounded-2xl border p-4" style="background-color: var(--surface-bg); border-color: var(--surface-border);">
-								<p class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">Email</p>
-								<p class="mt-2 font-semibold" style="color: var(--center-channel-color);">
-									{$user?.email || '—'}
-								</p>
-							</div>
-							<!-- Username -->
-							<div class="rounded-2xl border p-4" style="background-color: var(--surface-bg); border-color: var(--surface-border);">
-								<label for="profile-username" class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">Username</label>
-								{#if editingProfile}
-									<input
-										id="profile-username"
-										type="text"
-										class="mt-1 w-full border-0 bg-transparent p-0 font-mono text-sm outline-none focus:ring-0"
-										style="color: var(--center-channel-color);"
-										bind:value={profileUsername}
-										placeholder="username"
-									/>
-								{:else}
-									<p class="mt-2 font-mono text-sm" style="color: var(--center-channel-color);">
-										{$user?.username || '—'}
-									</p>
-								{/if}
-							</div>
-						</div>
-						{#if editingProfile}
-							<div class="mt-4 flex gap-3">
-								<button onclick={cancelEditingProfile} class="btn btn-secondary">
-									Cancel
-								</button>
-								<button onclick={saveProfile} disabled={savingProfile} class="btn btn-primary">
-									{#if savingProfile}
-										<Loader2 class="h-4 w-4 animate-spin" />
-									{/if}
-									Save changes
-								</button>
-							</div>
-						{/if}
+		<!-- Profile Section -->
+		<section class="settings-section">
+			<button class="settings-section-trigger" onclick={() => toggleSection('profile')}>
+				<div class="settings-section-trigger-left">
+					<User class="h-4 w-4" />
+					<div>
+						<p class="settings-section-label">Profile</p>
+						<p class="settings-section-desc">Name, email, and username</p>
 					</div>
 				</div>
+				<span class="settings-section-chevron" class:is-open={expandedSection === 'profile'}><ChevronRight class="h-4 w-4" /></span>
+			</button>
 
-				<!-- GitHub Integration -->
-				<div class="card">
-					<div class="card-header">
-						<div class="flex items-center gap-2">
-							<Github class="h-5 w-5" />
-							<h2 class="text-lg font-semibold">GitHub Integration</h2>
-						</div>
-					</div>
-					<div class="card-body space-y-4">
-						{#if loading}
-							<div class="flex items-center justify-center py-10">
-								<Loader2 class="h-6 w-6 animate-spin text-primary-600" />
+			{#if expandedSection === 'profile'}
+				<div class="settings-section-content">
+					{#if editingProfile}
+						<div class="settings-field-grid">
+							<div class="settings-field">
+								<label for="profile-first-name" class="settings-field-label">First name</label>
+								<input
+									id="profile-first-name"
+									type="text"
+									class="input"
+									bind:value={profileFirstName}
+									placeholder="First name"
+								/>
 							</div>
-						{:else if githubLinked}
-							<div
-								class="flex items-center justify-between rounded-2xl border p-4"
-								style="background-color: var(--control-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
-							>
-								<div class="flex items-center gap-3">
-									<div class="flex h-10 w-10 items-center justify-center rounded-full bg-gray-900 dark:bg-white">
-										<Github class="h-5 w-5 text-white dark:text-gray-900" />
-									</div>
-									<div>
-										<p class="font-semibold" style="color: var(--center-channel-color);">
-											Connected to GitHub
-										</p>
-										{#if githubUsername}
-											<p class="text-sm" style="color: var(--surface-muted);">
-												@{githubUsername}
+							<div class="settings-field">
+								<label for="profile-last-name" class="settings-field-label">Last name</label>
+								<input
+									id="profile-last-name"
+									type="text"
+									class="input"
+									bind:value={profileLastName}
+									placeholder="Last name"
+								/>
+							</div>
+							<div class="settings-field">
+								<label class="settings-field-label">Email</label>
+								<p class="settings-field-value">{displayEmail || '—'}</p>
+							</div>
+							<div class="settings-field">
+								<label for="profile-username" class="settings-field-label">Username</label>
+								<input
+									id="profile-username"
+									type="text"
+									class="input font-mono text-sm"
+									bind:value={profileUsername}
+									placeholder="username"
+								/>
+							</div>
+						</div>
+						<div class="settings-actions">
+							<button onclick={cancelEditingProfile} class="btn btn-secondary">Cancel</button>
+							<button onclick={saveProfile} disabled={savingProfile} class="btn btn-primary">
+								{#if savingProfile}<Loader2 class="h-4 w-4 animate-spin" />{/if}
+								Save
+							</button>
+						</div>
+					{:else}
+						<div class="settings-field-grid">
+							<div class="settings-field">
+								<p class="settings-field-label">First name</p>
+								<p class="settings-field-value">{$user?.firstName || '—'}</p>
+							</div>
+							<div class="settings-field">
+								<p class="settings-field-label">Last name</p>
+								<p class="settings-field-value">{$user?.lastName || '—'}</p>
+							</div>
+							<div class="settings-field">
+								<p class="settings-field-label">Email</p>
+								<p class="settings-field-value">{displayEmail || '—'}</p>
+							</div>
+							<div class="settings-field">
+								<p class="settings-field-label">Username</p>
+								<p class="settings-field-value font-mono text-sm">{$user?.username || '—'}</p>
+							</div>
+						</div>
+						<div class="settings-actions">
+							<button onclick={startEditingProfile} class="btn btn-secondary">
+								<Pencil class="h-4 w-4" />
+								Edit profile
+							</button>
+						</div>
+					{/if}
+				</div>
+			{/if}
+		</section>
+
+		<!-- GitHub Section -->
+		<section class="settings-section">
+			<button class="settings-section-trigger" onclick={() => toggleSection('github')}>
+				<div class="settings-section-trigger-left">
+					<Github class="h-4 w-4" />
+					<div>
+						<p class="settings-section-label">GitHub</p>
+						<p class="settings-section-desc">
+							{#if loading}
+								Checking status...
+							{:else if githubLinked}
+								Connected as @{githubUsername}
+							{:else}
+								Not connected
+							{/if}
+						</p>
+					</div>
+				</div>
+				<div class="flex items-center gap-2">
+					{#if !loading}
+						<span class="settings-status-dot" class:is-connected={githubLinked}></span>
+					{/if}
+					<span class="settings-section-chevron" class:is-open={expandedSection === 'github'}><ChevronRight class="h-4 w-4" /></span>
+				</div>
+			</button>
+
+			{#if expandedSection === 'github'}
+				<div class="settings-section-content">
+					{#if loading}
+						<div class="flex items-center justify-center py-6">
+							<Loader2 class="h-5 w-5 animate-spin text-primary-600" />
+						</div>
+					{:else if githubLinked}
+						<div class="settings-connected-row">
+							<div class="flex items-center gap-3">
+								<div class="settings-github-avatar">
+									<Github class="h-4 w-4" />
+								</div>
+								<p class="settings-field-value">@{githubUsername}</p>
+							</div>
+							<button onclick={unlinkGitHub} disabled={unlinking} class="btn btn-secondary">
+								{#if unlinking}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Unlink class="h-4 w-4" />{/if}
+								Disconnect
+							</button>
+						</div>
+					{:else}
+						<div class="settings-empty-state">
+							<p class="settings-field-value">Connect GitHub to deploy from your repos</p>
+							<p class="settings-field-label">Auto-build images from commits and view deployment history</p>
+							<button onclick={linkGitHub} class="btn btn-primary mt-3">
+								<Link2 class="h-4 w-4" />
+								Connect GitHub
+							</button>
+						</div>
+					{/if}
+				</div>
+			{/if}
+		</section>
+
+		<!-- Passkeys Section -->
+		<section class="settings-section">
+			<button class="settings-section-trigger" onclick={() => toggleSection('passkeys')}>
+				<div class="settings-section-trigger-left">
+					<KeyRound class="h-4 w-4" />
+					<div>
+						<p class="settings-section-label">Passkeys</p>
+						<p class="settings-section-desc">
+							{#if passkeysLoading}
+								Loading...
+							{:else}
+								{passkeys.length} registered
+							{/if}
+						</p>
+					</div>
+				</div>
+				<span class="settings-section-chevron" class:is-open={expandedSection === 'passkeys'}><ChevronRight class="h-4 w-4" /></span>
+			</button>
+
+			{#if expandedSection === 'passkeys'}
+				<div class="settings-section-content">
+					<p class="settings-hint">
+						Sign in without OTP emails using Touch ID, Face ID, or Windows Hello.
+					</p>
+
+					{#if passkeyEnvWarning}
+						<div class="alert alert-warning">{passkeyEnvWarning}</div>
+					{/if}
+
+					{#if passkeyListError}
+						<div class="alert alert-error">{passkeyListError}</div>
+					{/if}
+
+					<!-- Add passkey -->
+					<div class="settings-passkey-add">
+						<input
+							class="input flex-1"
+							type="text"
+							placeholder="Device name (optional)"
+							bind:value={newPasskeyName}
+						/>
+						<button
+							class="btn btn-primary"
+							type="button"
+							onclick={registerPasskey}
+							disabled={registerLoading}
+						>
+							{#if registerLoading}<Loader2 class="h-4 w-4 animate-spin" />{/if}
+							Add passkey
+						</button>
+					</div>
+
+					{#if passkeysLoading}
+						<div class="flex items-center justify-center py-6">
+							<Loader2 class="h-5 w-5 animate-spin text-primary-600" />
+						</div>
+					{:else if passkeys.length === 0}
+						<p class="settings-hint" style="text-align: center; padding: 1rem 0;">No passkeys registered yet.</p>
+					{:else}
+						<div class="settings-passkey-list">
+							{#each passkeys as passkey}
+								<div class="settings-passkey-item">
+									<div class="flex-1 min-w-0">
+										{#if editingPasskeyId === passkey.id}
+											<div class="flex items-center gap-2">
+												<input
+													class="input flex-1"
+													type="text"
+													placeholder="Friendly name"
+													bind:value={renameValue}
+												/>
+												<button class="btn btn-primary" type="button" onclick={savePasskeyName} disabled={renaming}>
+													{#if renaming}<Loader2 class="h-4 w-4 animate-spin" />{/if}
+													Save
+												</button>
+												<button class="btn btn-secondary" type="button" onclick={cancelRenaming}>Cancel</button>
+											</div>
+										{:else}
+											<p class="settings-field-value">{passkey.friendlyName || 'Passkey'}</p>
+											<p class="settings-field-label">
+												Last used {formatTimestamp(passkey.lastUsedAt)} · Added {formatTimestamp(passkey.createdAt)}
 											</p>
 										{/if}
 									</div>
-								</div>
-								<button onclick={unlinkGitHub} disabled={unlinking} class="btn btn-secondary">
-									{#if unlinking}
-										<Loader2 class="h-4 w-4 animate-spin" />
-									{:else}
-										<Unlink class="h-4 w-4" />
-									{/if}
-									Disconnect
-								</button>
-							</div>
-							<div class="rounded-2xl border p-4" style="background-color: var(--surface-bg); border-color: var(--surface-border);">
-								<p class="text-sm font-medium" style="color: var(--center-channel-color);">
-									You can now:
-								</p>
-								<ul class="mt-2 list-inside list-disc text-sm" style="color: var(--surface-muted);">
-									<li>Deploy directly from your GitHub repositories</li>
-									<li>Auto-build images from commits</li>
-									<li>View deployment history with commit info</li>
-								</ul>
-							</div>
-						{:else}
-							<div
-								class="rounded-2xl border-2 border-dashed p-6 text-center"
-								style="border-color: var(--surface-border); color: var(--center-channel-color);"
-							>
-								<Github class="mx-auto h-12 w-12 text-gray-400" />
-								<h3 class="mt-4 font-semibold" style="color: var(--center-channel-color);">
-									Connect your GitHub account
-								</h3>
-								<p class="mt-2 text-sm" style="color: var(--surface-muted);">
-									Link GitHub to deploy straight from your repos.
-								</p>
-								<button onclick={linkGitHub} class="btn btn-primary mt-4">
-									<Link2 class="h-4 w-4" />
-									Connect GitHub
-								</button>
-							</div>
-							<div class="rounded-2xl border p-4" style="background-color: var(--surface-bg); border-color: var(--surface-border);">
-								<p class="text-sm font-medium" style="color: var(--center-channel-color);">
-									Why connect GitHub?
-								</p>
-								<ul class="mt-2 list-inside list-disc text-sm" style="color: var(--surface-muted);">
-									<li>Deploy directly from your repositories</li>
-									<li>Automatic image builds from commits</li>
-									<li>View deployment history with commit information</li>
-								</ul>
-							</div>
-						{/if}
-					</div>
-				</div>
-
-				<!-- Passkeys -->
-				<div class="card">
-					<div class="card-header space-y-3 md:space-y-0">
-						<div class="flex items-center gap-2">
-							<KeyRound class="h-5 w-5" />
-							<h2 class="text-lg font-semibold">Passkeys</h2>
-						</div>
-						<div class="mt-4 flex flex-col gap-3 md:mt-0 md:flex-row md:items-center">
-							<input
-								class="input md:max-w-xs"
-								type="text"
-								placeholder="Device name (optional)"
-								bind:value={newPasskeyName}
-							/>
-							<button
-								class="btn btn-primary"
-								type="button"
-								onclick={registerPasskey}
-								disabled={registerLoading}
-							>
-								{#if registerLoading}
-									<Loader2 class="h-4 w-4 animate-spin" />
-								{/if}
-								Register passkey
-							</button>
-						</div>
-					</div>
-						<div class="card-body space-y-4">
-							<p class="text-sm" style="color: var(--surface-muted);">
-								Use passkeys to sign in without waiting for OTP emails. They work great with Touch ID, Face ID, and Windows Hello.
-							</p>
-
-							{#if passkeyEnvWarning}
-								<div class="rounded-2xl border border-yellow-200 bg-yellow-50/80 p-3 text-sm text-yellow-900 dark:border-yellow-900/40 dark:bg-yellow-900/20 dark:text-yellow-100">
-									{passkeyEnvWarning}
-								</div>
-							{/if}
-
-							{#if passkeyListError}
-								<div
-									class="rounded-2xl border p-4 text-sm"
-								style="border-color: rgba(220,53,69,0.4); color: var(--error-text-color); background-color: color-mix(in srgb, var(--error-text-color) 7%, transparent);"
-							>
-								{passkeyListError}
-							</div>
-						{/if}
-
-						{#if passkeysLoading}
-							<div class="flex items-center justify-center py-8">
-								<Loader2 class="h-5 w-5 animate-spin text-primary-600" />
-							</div>
-						{:else if passkeys.length === 0}
-							<div
-								class="rounded-2xl border-2 border-dashed p-6 text-center"
-								style="border-color: var(--surface-border); color: var(--surface-muted);"
-							>
-								<p class="font-semibold" style="color: var(--center-channel-color);">
-									No passkeys yet
-								</p>
-								<p class="mt-1 text-sm">
-									Register a passkey on a device that supports Touch ID, Face ID, or Windows Hello.
-								</p>
-							</div>
-						{:else}
-							<div class="space-y-3">
-								{#each passkeys as passkey}
-									<div
-										class="rounded-2xl border p-4"
-										style="background-color: var(--surface-bg); border-color: var(--surface-border);"
-									>
-										<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-											<div class="flex-1 space-y-1">
-												<p class="text-sm font-semibold" style="color: var(--center-channel-color);">
-													{passkey.friendlyName || 'Passkey'}
-												</p>
-												<p class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">
-													Last used {formatTimestamp(passkey.lastUsedAt)}
-												</p>
-												<p class="text-xs" style="color: var(--surface-muted);">
-													Added {formatTimestamp(passkey.createdAt)} · {passkey.deviceType === 'multiDevice' ? 'Synced device' : 'Device specific'}
-												</p>
-											</div>
-											<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-												{#if editingPasskeyId === passkey.id}
-													<div class="flex flex-col gap-2 sm:flex-row sm:items-center">
-														<input
-															class="input sm:w-48"
-															type="text"
-															placeholder="Friendly name"
-															bind:value={renameValue}
-														/>
-														<div class="flex gap-2">
-															<button
-																class="btn btn-primary"
-																type="button"
-																onclick={savePasskeyName}
-																disabled={renaming}
-															>
-																{#if renaming}
-																	<Loader2 class="h-4 w-4 animate-spin" />
-																{/if}
-																Save
-															</button>
-															<button class="btn btn-secondary" type="button" onclick={cancelRenaming}>
-																Cancel
-															</button>
-														</div>
-													</div>
+									{#if editingPasskeyId !== passkey.id}
+										<div class="flex gap-1">
+											<button class="btn btn-ghost" type="button" onclick={() => startRenaming(passkey)} title="Rename">
+												<Pencil class="h-3.5 w-3.5" />
+											</button>
+											<button
+												class="btn btn-ghost"
+												type="button"
+												onclick={() => deletePasskey(passkey)}
+												disabled={deletingPasskeyId === passkey.id}
+												title="Remove"
+												style="color: var(--error-text-color);"
+											>
+												{#if deletingPasskeyId === passkey.id}
+													<Loader2 class="h-3.5 w-3.5 animate-spin" />
 												{:else}
-													<div class="flex gap-2">
-														<button class="btn btn-secondary" type="button" onclick={() => startRenaming(passkey)}>
-															<Pencil class="h-4 w-4" />
-															Rename
-														</button>
-														<button
-															class="btn btn-ghost text-red-600"
-															type="button"
-															onclick={() => deletePasskey(passkey)}
-															disabled={deletingPasskeyId === passkey.id}
-														>
-															{#if deletingPasskeyId === passkey.id}
-																<Loader2 class="h-4 w-4 animate-spin" />
-															{:else}
-																<Trash2 class="h-4 w-4" />
-															{/if}
-															Remove
-														</button>
-													</div>
+													<Trash2 class="h-3.5 w-3.5" />
 												{/if}
-											</div>
+											</button>
 										</div>
-									</div>
-								{/each}
-							</div>
-						{/if}
-					</div>
-				</div>
-			</div>
-
-			<!-- Quick actions -->
-			<div class="space-y-6">
-				<div class="card">
-					<div class="card-header">
-						<h2 class="font-semibold">Security</h2>
-					</div>
-					<div class="card-body space-y-3">
-						<div class="rounded-2xl border p-4" style="background-color: var(--control-bg); border-color: var(--surface-border);">
-							<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Two-factor authentication</p>
-							<p class="text-sm" style="color: var(--surface-muted);">Manage 2FA from your identity provider.</p>
+									{/if}
+								</div>
+							{/each}
 						</div>
-						<div class="rounded-2xl border p-4" style="background-color: var(--control-bg); border-color: var(--surface-border);">
-							<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Sessions</p>
-							<p class="text-sm" style="color: var(--surface-muted);">Sign out from other devices in account settings.</p>
-						</div>
-					</div>
+					{/if}
 				</div>
-
-				<div class="card">
-					<div class="card-header">
-						<h2 class="font-semibold">Support</h2>
-					</div>
-					<div class="card-body space-y-2">
-						<p class="text-sm" style="color: var(--surface-muted);">
-							Need help or want to revoke access? Contact support and we’ll assist.
-						</p>
-						<a href="mailto:support@orchard.dev" class="btn btn-secondary w-full justify-center">Email support</a>
-					</div>
-				</div>
-			</div>
-		</div>
+			{/if}
+		</section>
 	</div>
 </div>
+
+<style>
+	.settings-page {
+		padding: 2rem;
+		max-width: 42rem;
+		margin: 0 auto;
+	}
+
+	.settings-container {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+
+	.settings-header {
+		margin-bottom: 1.5rem;
+	}
+
+	.settings-back-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.875rem;
+		color: var(--surface-muted);
+		cursor: pointer;
+		margin-bottom: 1rem;
+		transition: color 120ms ease;
+	}
+
+	.settings-back-btn:hover {
+		color: var(--center-channel-color);
+	}
+
+	.settings-title-row {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+	}
+
+	.settings-avatar {
+		width: 3rem;
+		height: 3rem;
+		border-radius: 0.75rem;
+		overflow: hidden;
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background-color: color-mix(in srgb, var(--surface-border) 80%, var(--center-channel-bg));
+		color: var(--center-channel-color);
+	}
+
+	.settings-avatar-img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+
+	.settings-avatar-letter {
+		font-size: 1.125rem;
+		font-weight: 600;
+	}
+
+	.settings-title {
+		font-size: 1.125rem;
+		font-weight: 600;
+		color: var(--center-channel-color);
+		line-height: 1.3;
+	}
+
+	.settings-subtitle {
+		font-size: 0.875rem;
+		color: var(--surface-muted);
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+	}
+
+	.settings-reveal-btn {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.125rem;
+		border-radius: 0.25rem;
+		color: var(--surface-muted);
+		background: transparent;
+		cursor: pointer;
+		transition: color 120ms ease, background-color 120ms ease;
+	}
+
+	.settings-reveal-btn:hover {
+		color: var(--center-channel-color);
+		background-color: var(--control-hover-bg);
+	}
+
+	/* Sections */
+	.settings-section {
+		border: 1px solid var(--surface-border);
+		border-radius: 1rem;
+		overflow: hidden;
+		background-color: var(--surface-bg);
+		margin-bottom: 0.5rem;
+	}
+
+	.settings-section-trigger {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		width: 100%;
+		padding: 1rem 1.25rem;
+		cursor: pointer;
+		background: transparent;
+		color: var(--center-channel-color);
+		transition: background-color 120ms ease;
+	}
+
+	.settings-section-trigger:hover {
+		background-color: var(--control-hover-bg);
+	}
+
+	.settings-section-trigger-left {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.settings-section-label {
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--center-channel-color);
+		text-align: left;
+	}
+
+	.settings-section-desc {
+		font-size: 0.75rem;
+		color: var(--surface-muted);
+		text-align: left;
+	}
+
+	.settings-section-chevron {
+		color: var(--surface-muted);
+		transition: transform 200ms ease;
+		flex-shrink: 0;
+	}
+
+	.settings-section-chevron.is-open {
+		transform: rotate(90deg);
+	}
+
+	.settings-section-content {
+		padding: 0 1.25rem 1.25rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+		border-top: 1px solid var(--surface-border);
+		padding-top: 1rem;
+	}
+
+	/* Fields */
+	.settings-field-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 0.75rem;
+	}
+
+	@media (max-width: 480px) {
+		.settings-field-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+
+	.settings-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+
+	.settings-field-label {
+		font-size: 0.6875rem;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--surface-muted);
+	}
+
+	.settings-field-value {
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--center-channel-color);
+	}
+
+	.settings-actions {
+		display: flex;
+		gap: 0.5rem;
+		padding-top: 0.25rem;
+	}
+
+	.settings-hint {
+		font-size: 0.8125rem;
+		color: var(--surface-muted);
+	}
+
+	/* Status dot */
+	.settings-status-dot {
+		width: 0.5rem;
+		height: 0.5rem;
+		border-radius: 50%;
+		background-color: var(--surface-muted);
+	}
+
+	.settings-status-dot.is-connected {
+		background-color: var(--online-indicator);
+	}
+
+	/* GitHub */
+	.settings-connected-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+
+	.settings-github-avatar {
+		width: 2rem;
+		height: 2rem;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background-color: var(--center-channel-color);
+		color: var(--center-channel-bg);
+		flex-shrink: 0;
+	}
+
+	.settings-empty-state {
+		text-align: center;
+		padding: 0.5rem 0;
+	}
+
+	/* Passkeys */
+	.settings-passkey-add {
+		display: flex;
+		gap: 0.5rem;
+	}
+
+	.settings-passkey-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+
+	.settings-passkey-item {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		padding: 0.75rem;
+		border-radius: 0.5rem;
+		border: 1px solid var(--surface-border);
+	}
+</style>

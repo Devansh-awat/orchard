@@ -14,14 +14,11 @@
 		showPendingInvitationsModal
 	} from '$lib/stores';
 	import type { User } from '$lib/stores';
-	import { mergeAttrs } from 'melt';
-	import { SpatialMenu } from 'melt/builders';
 	import {
 		Loader2,
 		Plus,
 		Users,
 		FolderKanban,
-		ArrowRight,
 		KeyRound
 	} from 'lucide-svelte';
 
@@ -39,11 +36,6 @@ interface Workspace {
 	};
 	createdAt: string;
 }
-
-	const spatialMenu = new SpatialMenu<Workspace>({
-		wrap: true,
-		crossAxis: true
-	});
 
 	let workspaces = $state<Workspace[]>([]);
 	let loading = $state(true);
@@ -448,222 +440,93 @@ let passkeySupportReason = $state<string | null>(null);
 			</div>
 			{/if}
 		</div>
-		<style>
-			.login-page {
-				min-height: 100vh;
-				display: flex;
-				align-items: center;
-				justify-content: center;
-				padding: 1.5rem;
-				background: linear-gradient(165deg, var(--surface-bg) 0%, var(--control-bg) 100%);
-			}
-			.login-panel {
-				width: 100%;
-				max-width: 22rem;
-				padding: 2.5rem;
-				border-radius: 1.25rem;
-				border: 1px solid var(--surface-border);
-				background: var(--surface-bg);
-				box-shadow: 0 25px 50px -12px rgb(0 0 0 / 0.08);
-			}
-			.login-title {
-				font-size: 1.75rem;
-				font-weight: 700;
-				letter-spacing: -0.02em;
-				color: var(--center-channel-color);
-				text-align: center;
-				margin-bottom: 1.75rem;
-			}
-			.login-primary {
-				width: 100%;
-				padding: 0.75rem 1.25rem;
-				font-size: 0.9375rem;
-				font-weight: 600;
-				color: white;
-				background: var(--button-bg);
-				border: none;
-				border-radius: 0.75rem;
-				cursor: pointer;
-				transition: opacity 0.15s, transform 0.1s;
-			}
-			.login-primary:hover { opacity: 0.95; }
-			.login-primary:active { transform: scale(0.99); }
-			.login-divider {
-				display: flex;
-				align-items: center;
-				gap: 1rem;
-				margin: 1.5rem 0;
-			}
-			.login-divider::before,
-			.login-divider::after {
-				content: '';
-				flex: 1;
-				height: 1px;
-				background: var(--surface-border);
-			}
-			.login-divider span {
-				font-size: 0.75rem;
-				font-weight: 500;
-				text-transform: uppercase;
-				letter-spacing: 0.05em;
-				color: var(--surface-muted);
-			}
-			.login-form, .login-passkey {
-				display: flex;
-				flex-direction: column;
-				gap: 0.75rem;
-			}
-			.login-passkey { margin-top: 1.25rem; padding-top: 1.25rem; border-top: 1px solid var(--surface-border); }
-			.login-input {
-				width: 100%;
-				padding: 0.625rem 0.875rem;
-				font-size: 0.9375rem;
-				border-radius: 0.5rem;
-			}
-			.login-code { max-width: 6ch; }
-			.login-otp-row { display: flex; align-items: center; gap: 0.5rem; }
-			.login-back {
-				font-size: 0.8125rem;
-				font-weight: 500;
-				color: var(--surface-muted);
-				background: none;
-				border: none;
-				cursor: pointer;
-				padding: 0.25rem;
-			}
-			.login-back:hover { color: var(--link-color); }
-			.login-submit, .login-passkey-btn { width: 100%; justify-content: center; gap: 0.5rem; }
-			.login-error { font-size: 0.8125rem; color: var(--error-text-color); }
-			.login-success { font-size: 0.8125rem; color: #16a34a; }
-			.login-muted { font-size: 0.75rem; color: var(--surface-muted); margin-top: 0.5rem; }
-		</style>
 	{:else}
 		<!-- Dashboard for authenticated users -->
-			<div class="mb-6 flex items-center justify-between">
-				<div>
-					<h1 class="text-2xl font-bold" style="color: var(--center-channel-color);">
-						Workspaces
-					</h1>
-					<p style="color: var(--surface-muted);">
-						Manage your workspaces and projects
-					</p>
-				</div>
-			<a href="/workspaces/new" class="btn btn-primary">
-				<Plus class="h-4 w-4" />
-				New Workspace
-			</a>
-		</div>
+		<div class="hp">
+			{#if error}
+				<div class="hp-error">{error}</div>
+			{/if}
 
-		{#if error}
-			<div class="alert alert-error mb-6">{error}</div>
-		{/if}
-
-		{#if loading}
-			<div class="flex justify-center py-12">
-				<div class="text-center">
-					<Loader2 class="mx-auto h-8 w-8 animate-spin text-primary-600" />
-					<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Loading workspaces...</p>
-				</div>
-			</div>
-		{:else if filteredWorkspaces.length === 0}
-			<div class="card p-12 text-center">
-				<div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full" style="background-color: var(--control-bg);">
-					<FolderKanban class="h-6 w-6" style="color: var(--surface-muted);" />
-				</div>
-				<h3 class="mb-2 text-lg font-medium" style="color: var(--center-channel-color);">
-					No workspaces yet
-				</h3>
-				<p class="mb-4" style="color: var(--surface-muted);">
-					Create your first workspace to get started with your projects.
-				</p>
-				<a href="/workspaces/new" class="btn btn-primary">
-					<Plus class="h-4 w-4" />
-					Create Workspace
-				</a>
-			</div>
-		{:else}
-				<div class="flex flex-col gap-4" {...spatialMenu.root}>
-					<label
-						class="workspace-search flex items-center gap-3 rounded-2xl border px-4 py-2 text-sm shadow-sm transition"
-					>
-						<span class="text-xs font-semibold uppercase tracking-wide">
-							Search
-						</span>
+			<div class="hp-header">
+				<h1 class="hp-title">Workspaces</h1>
+				<div class="hp-actions">
+					{#if organizationWorkspaces.length}
 						<input
 							type="search"
-							placeholder="Filter workspaces..."
-							class="flex-1 bg-transparent text-base focus:outline-none"
+							placeholder="Search..."
+							class="hp-search"
 							bind:value={searchQuery}
-							{...spatialMenu.input}
 						/>
-					</label>
-
-					{#if filteredWorkspaces.length > 0}
-						<div class="max-h-[70vh] overflow-y-auto pr-1">
-							<div
-								class="grid gap-4 p-1"
-								style:grid-template-columns="repeat(auto-fill,minmax(220px,1fr))"
-							>
-								{#each filteredWorkspaces as workspace}
-									{@const href = `/workspaces/${workspace.slug}`}
-									{@const item = spatialMenu.getItem(workspace, {
-										onSelect: () => openWorkspace(workspace.slug)
-									})}
-									<a
-										class={`workspace-card group flex h-full flex-col gap-4 rounded-2xl border p-4 text-left shadow-sm transition-all ${
-											item.highlighted ? 'workspace-card--highlight' : ''
-										}`}
-										{...mergeAttrs(item.attrs, {
-											href,
-											onclick: event => handleWorkspaceClick(event as MouseEvent, workspace.slug)
-										})}
-									>
-										<div class="flex items-start justify-between gap-4">
-											<div>
-												<p class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">
-													Workspace
-												</p>
-												<h3
-													class="mt-1 text-lg font-semibold transition-colors"
-													style="color: var(--center-channel-color);"
-												>
-													{workspace.name}
-												</h3>
-											</div>
-											<ArrowRight
-												class="h-5 w-5 transition-all group-hover:translate-x-1"
-												style="color: var(--surface-muted);"
-											/>
-										</div>
-										{#if workspace.description}
-											<p class="line-clamp-3 text-sm" style="color: var(--surface-muted);">
-												{workspace.description}
-											</p>
-										{/if}
-										<div
-											class="mt-auto flex items-center justify-between text-sm"
-											style="color: var(--surface-muted);"
-										>
-											<div class="flex items-center gap-1">
-												<Users class="h-4 w-4" />
-												<span>{workspace._count?.members ?? workspace.members?.length ?? 0} members</span>
-										</div>
-										<div class="flex items-center gap-1">
-											<FolderKanban class="h-4 w-4" />
-											<span>{workspace._count?.projects ?? workspace.projects?.length ?? 0} projects</span>
-										</div>
-									</div>
-								</a>
-							{/each}
-						</div>
-					</div>
-				{:else}
-					<div class="rounded-xl border border-dashed border-gray-300 p-8 text-center text-gray-600 dark:border-gray-700 dark:text-gray-400">
-						<p class="text-lg font-medium">No workspaces match “{searchQuery}”.</p>
-						<p class="mt-1 text-sm">Try a different search or clear the filter.</p>
-					</div>
-				{/if}
+					{/if}
+					<a href="/workspaces/new" class="hp-new-btn">
+						<Plus size={16} />
+						New Workspace
+					</a>
+				</div>
 			</div>
-		{/if}
+
+			{#if loading}
+				<div class="hp-grid">
+					{#each Array(6) as _}
+						<div class="hp-card hp-skeleton-card">
+							<div class="hp-card-top">
+								<div class="skeleton skeleton-icon"></div>
+								<div class="hp-card-counts">
+									<div class="skeleton skeleton-badge"></div>
+									<div class="skeleton skeleton-badge"></div>
+								</div>
+							</div>
+							<div class="hp-card-body">
+								<div class="skeleton skeleton-title"></div>
+								<div class="skeleton skeleton-desc"></div>
+							</div>
+						</div>
+					{/each}
+				</div>
+			{:else if !organizationWorkspaces.length}
+				<div class="hp-empty hp-empty--dashed">
+					<FolderKanban size={40} />
+					<p>No workspaces yet</p>
+					<a href="/workspaces/new" class="hp-new-btn">
+						<Plus size={16} />
+						Create Workspace
+					</a>
+				</div>
+			{:else if filteredWorkspaces.length}
+				<div class="hp-grid">
+					{#each filteredWorkspaces as workspace}
+						<a
+							href={`/workspaces/${workspace.slug}`}
+							onclick={(event) => handleWorkspaceClick(event, workspace.slug)}
+							class="hp-card"
+						>
+							<div class="hp-card-top">
+								<div class="hp-card-icon">
+									<FolderKanban size={20} />
+								</div>
+								<div class="hp-card-counts">
+									<span class="hp-card-count">
+										<FolderKanban size={12} /> {workspace._count?.projects ?? workspace.projects?.length ?? 0}
+									</span>
+									<span class="hp-card-count">
+										<Users size={12} /> {workspace._count?.members ?? workspace.members?.length ?? 0}
+									</span>
+								</div>
+							</div>
+							<div class="hp-card-body">
+								<span class="hp-card-name">{workspace.name}</span>
+								{#if workspace.description}
+									<span class="hp-card-desc">{workspace.description}</span>
+								{/if}
+							</div>
+						</a>
+					{/each}
+				</div>
+			{:else}
+				<div class="hp-empty">
+					<p>No workspaces match "{searchQuery}"</p>
+				</div>
+			{/if}
+		</div>
 	{/if}
 </div>

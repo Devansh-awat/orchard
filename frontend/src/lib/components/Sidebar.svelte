@@ -2,11 +2,11 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { Tree } from 'melt/builders';
-	import { PanelLeftClose, PanelLeft, FolderKanban, Package, Rocket, Loader2, ArrowUpRight, Search } from 'lucide-svelte';
+	import { PanelLeftClose, PanelLeft, FolderKanban, Rocket, Loader2, ArrowUpRight, Search, Folder, Pin } from 'lucide-svelte';
 	import WorkspacesMenu from './WorkspacesMenu.svelte';
 	import UserMenu from './UserMenu.svelte';
 	import QuickSearch from './QuickSearch.svelte';
-	import { tree, treeLoading, treeError, type TreeItem, isSignedIn, selectedOrganization } from '$lib/stores';
+	import { tree, treeLoading, treeError, type TreeItem, isSignedIn, selectedOrganization, pinnedItems } from '$lib/stores';
 	import { slide } from 'svelte/transition';
 
 	let quickSearchRef: QuickSearch;
@@ -76,11 +76,24 @@
 			case 'workspace':
 				return FolderKanban;
 			case 'project':
-				return Package;
+				return Folder;
 			case 'deployment':
 				return Rocket;
 			default:
 				return FolderKanban;
+		}
+	}
+
+	function getIconBadgeColor(type: TreeItem['type']) {
+		switch (type) {
+			case 'workspace':
+				return 'var(--sidebar-text-active-border)';
+			case 'project':
+				return '#4a8aff';
+			case 'deployment':
+				return '#f5a623';
+			default:
+				return 'var(--sidebar-text-active-border)';
 		}
 	}
 
@@ -89,7 +102,13 @@
 	}
 
 
+	let lastPathname = $state('');
+
 	$effect(() => {
+		const pathname = $page.url.pathname;
+		if (pathname === lastPathname) return;
+		lastPathname = pathname;
+
 		const findActiveItem = (items: TreeItem[]): TreeItem | null => {
 			for (const item of items) {
 				if (isActive(item.href)) {
@@ -260,41 +279,116 @@
 						No workspaces yet
 					</div>
 				{:else}
-					<ul {...treeBuilder.root} class="space-y-1 list-none p-0 m-0">
+					{#if $pinnedItems.length > 0}
+						<div class="pinned-section">
+							<div class="pinned-section-header">
+								<Pin size={11} />
+								<span>Pinned</span>
+							</div>
+							<ul class="tree-root list-none p-0 m-0">
+								{#each $pinnedItems as pinned (pinned.id)}
+									{@const PinnedIcon = getIcon(pinned.type)}
+									{@const pinnedBadgeColor = getIconBadgeColor(pinned.type)}
+									<li>
+										<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+										<div
+											class="tree-node-content"
+											class:is-active={isActive(pinned.href)}
+											onclick={() => goto(pinned.href)}
+										>
+											<div class="tree-icon-badge" style="background-color: {pinnedBadgeColor}">
+												<PinnedIcon size={10} class="tree-icon-svg" />
+											</div>
+											<span class="tree-node-label">{pinned.name}</span>
+											<button
+												type="button"
+												class="tree-pin-btn is-pinned"
+												onclick={(event) => {
+													event.stopPropagation();
+													pinnedItems.unpin(pinned.id);
+												}}
+												aria-label="Unpin {pinned.name}"
+											>
+												<Pin size={12} />
+											</button>
+										</div>
+									</li>
+								{/each}
+							</ul>
+						</div>
+					{/if}
+
+					<ul {...treeBuilder.root} class="tree-root list-none p-0 m-0">
 						{#snippet treeBranch(items: typeof treeBuilder['children'], depth: number = 0)}
-							{#each items as item (item.id)}
+							{#each items as item, idx (item.id)}
 								{@const node = item.item as TreeItem}
 								{@const Icon = node ? getIcon(node.type) : FolderKanban}
 								{@const isExpanded = item.expanded}
 								{@const isSelected = item.selected}
 								{@const hasChildren = !!(node?.children && node.children.length > 0)}
 								{@const isItemActive = node ? isActive(node.href) : false}
+								{@const isLast = idx === items.length - 1}
+								{@const badgeColor = node ? getIconBadgeColor(node.type) : 'var(--sidebar-text-active-border)'}
 								<li
 									{...item.attrs}
 									onkeydown={(event) => handleItemKeydown(event, node, item, hasChildren)}
-									class="cursor-pointer rounded-sm !outline-none first:mt-0 focus-visible:outline-none [&:focus-visible>.tree-row>div]:ring-4"
+									class="cursor-pointer !outline-none focus-visible:outline-none"
 								>
+									<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
 									<div
-										class="tree-row py-1"
-										style={`padding-left: ${depth}rem`}
+										class="tree-node-content"
+										class:is-active={isSelected || isItemActive}
 										onclick={(event) => {
 											if (event.button !== 0 || event.defaultPrevented) return;
 											if (hasChildren) {
 												item.toggleExpand();
+											} else if (node?.href) {
+												if ($page.url.pathname === node.href) {
+													const el = event.currentTarget as HTMLElement;
+													el.classList.remove('tree-nudge');
+													void el.offsetWidth;
+													el.classList.add('tree-nudge');
+												} else {
+													selectedId = item.id;
+													goto(node.href);
+												}
 											}
 										}}
 									>
-										<div
-											class={`sidebar-nav-pill ${isSelected || isItemActive ? 'is-active' : ''} ring-primary-500 flex items-center gap-2 rounded-xl px-3 py-1 text-sm transition ring-offset-2`}
-										>
-											<div class="flex items-center gap-2 min-w-0">
-												<svelte:component this={Icon} class="h-4 w-4 flex-shrink-0" />
-												<span class="select-none truncate">{node?.name || item.id}</span>
-											</div>
-											{#if node?.href}
+										<div class="tree-icon-badge" style="background-color: {badgeColor}">
+											<Icon size={10} class="tree-icon-svg" />
+										</div>
+										<span class="tree-node-label">{node?.name || item.id}</span>
+										<div class="tree-node-actions">
+											{#if node}
 												<button
 													type="button"
-													class="ml-auto sidebar-action rounded-md p-1"
+													class="tree-pin-btn"
+													class:is-pinned={pinnedItems.isPinned(node.id)}
+													onclick={(event) => {
+														event.stopPropagation();
+														if (!node) return;
+														const btn = event.currentTarget as HTMLElement;
+														const row = btn.closest('.tree-node-content') as HTMLElement;
+														btn.classList.remove('pin-pop');
+														void btn.offsetWidth;
+														btn.classList.add('pin-pop');
+														if (!pinnedItems.isPinned(node.id) && row) {
+															row.classList.remove('pin-flash');
+															void row.offsetWidth;
+															row.classList.add('pin-flash');
+														}
+														pinnedItems.toggle({ id: node.id, name: node.name, type: node.type, href: node.href });
+													}}
+													aria-label="{pinnedItems.isPinned(node.id) ? 'Unpin' : 'Pin'} {node.name}"
+												>
+													<Pin size={12} />
+												</button>
+											{/if}
+											{#if node?.href && hasChildren}
+												<button
+													type="button"
+													class="tree-node-action"
 													onclick={(event) => {
 														event.stopPropagation();
 														if (!node?.href) return;
@@ -302,7 +396,7 @@
 														goto(node.href);
 													}}
 												>
-													<ArrowUpRight class="h-4 w-4" />
+													<ArrowUpRight class="h-3.5 w-3.5" />
 												</button>
 											{/if}
 										</div>
@@ -310,12 +404,9 @@
 									{#if hasChildren}
 										<ul
 											{...treeBuilder.group}
-											class={`relative list-none p-0 ml-0 origin-left ${isExpanded ? '' : 'pointer-events-none'}`}
+											class="tree-children list-none p-0 m-0"
+											class:pointer-events-none={!isExpanded}
 										>
-											<div
-												class="absolute bottom-2 top-2 w-px bg-gray-200 dark:bg-gray-700"
-												style={`left: ${0.5 + depth}rem`}
-											></div>
 											{#if isExpanded}
 												<div transition:slide>
 													{@render treeBranch(item.children ?? [], depth + 1)}

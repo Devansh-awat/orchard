@@ -1931,7 +1931,7 @@
 	{#if deployment?.project?.workspace?.slug && deployment?.project?.slug}
 		<button
 			onclick={() => goto(`/workspaces/${deployment.project.workspace.slug}/projects/${deployment.project.slug}`)}
-			class="mb-4 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 cursor-pointer"
+			class="mb-4 inline-flex items-center gap-2 text-sm cursor-pointer" style="color: var(--surface-muted);"
 		>
 			<ArrowLeft class="h-4 w-4" />
 			<span>Back to project</span>
@@ -1939,7 +1939,7 @@
 	{:else}
 		<button
 			onclick={() => goto('/')}
-			class="mb-4 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 cursor-pointer"
+			class="mb-4 inline-flex items-center gap-2 text-sm cursor-pointer" style="color: var(--surface-muted);"
 		>
 			<ArrowLeft class="h-4 w-4" />
 			<span>Back to home</span>
@@ -1951,258 +1951,98 @@
 	{/if}
 
 	{#if loading}
-		<div class="flex justify-center py-12">
-			<div class="text-center">
-				<Loader2 class="mx-auto h-8 w-8 animate-spin text-primary-600" />
-				<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Loading deployment...</p>
-			</div>
-		</div>
-	{:else if deployment}
-		<div class="space-y-8">
+		<!-- Skeleton -->
+		<div class="space-y-6 animate-pulse">
 			<section class="card rounded-3xl p-6 shadow-sm">
 				<div class="flex flex-wrap items-start justify-between gap-6">
-					<div>
-						<p class="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Deployment</p>
-						<div class="mt-2 flex items-center gap-3">
-							<h1 class="text-3xl font-bold text-gray-900 dark:text-gray-50">{deployment.name}</h1>
-							<span class="badge {getStatusColor(deployment.status)}">{deployment.status}</span>
+					<div class="flex-1">
+						<div class="flex items-center gap-3">
+							<div class="h-8 w-48 rounded" style="background-color: var(--surface-border);"></div>
+							<div class="h-6 w-16 rounded-full" style="background-color: var(--surface-border);"></div>
 						</div>
-							<div class="mt-4 flex flex-wrap items-center gap-4 text-sm" style="color: var(--surface-muted);">
-								{#if deployment.namespace}
-									<span class="surface-pill font-mono text-xs">
-										{deployment.namespace}
-									</span>
-								{/if}
-							{#if deployment.githubRepo}
-								<span class="truncate font-mono text-xs" style="color: var(--center-channel-color);">
-									{deployment.githubRepo}
-								</span>
-								{#if deployment.buildType}
-									<span class="rounded-full px-2 py-0.5 text-xs font-medium {deployment.buildType === 'railpack' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}">
-										{deployment.buildType === 'railpack' ? 'Railpack' : 'Dockerfile'}
-									</span>
-								{/if}
-							{:else if deployment.image}
-								<span class="truncate font-mono text-xs" style="color: var(--center-channel-color);">
-									{deployment.image}
-								</span>
-							{/if}
-							{#if branch}
-								<span class="rounded-full px-3 py-1 text-xs font-medium" style="background-color: var(--sidebar-text-active-bg); color: var(--sidebar-text-active-color);">
-									{branch}
-								</span>
-							{/if}
+						<div class="mt-3 flex flex-wrap items-center gap-3">
+							<div class="h-5 w-24 rounded-full" style="background-color: var(--surface-border);"></div>
+							<div class="h-4 w-40 rounded" style="background-color: var(--surface-border);"></div>
+							<div class="h-5 w-16 rounded-full" style="background-color: var(--surface-border);"></div>
+						</div>
+						<div class="mt-4 flex gap-6">
+							{#each Array(4) as _}
+								<div class="flex items-center gap-2">
+									<div class="h-3 w-16 rounded" style="background-color: var(--surface-border);"></div>
+									<div class="h-5 w-8 rounded" style="background-color: var(--surface-border);"></div>
+								</div>
+							{/each}
 						</div>
 					</div>
-					<div class="flex flex-wrap justify-end gap-2">
-						{#if repoUrl}
-							<button onclick={rebuild} disabled={rebuilding} class="btn btn-secondary">
-								{#if rebuilding}
-									<Loader2 class="h-4 w-4 animate-spin" />
-								{:else}
-									<RefreshCw class="h-4 w-4" />
-								{/if}
-								<span>Rebuild</span>
-							</button>
-						{/if}
-						<button onclick={restart} disabled={restarting} class="btn btn-secondary">
-							{#if restarting}
-								<Loader2 class="h-4 w-4 animate-spin" />
-							{:else}
-								<Play class="h-4 w-4" />
-							{/if}
-							<span>Restart</span>
-						</button>
-						<button onclick={deleteDeployment} disabled={deleting} class="btn btn-danger">
-							{#if deleting}
-								<Loader2 class="h-4 w-4 animate-spin" />
-							{:else}
-								<Trash2 class="h-4 w-4" />
-							{/if}
-							<span>Delete</span>
-						</button>
+					<div class="flex gap-2">
+						<div class="h-9 w-24 rounded-lg" style="background-color: var(--surface-border);"></div>
+						<div class="h-9 w-24 rounded-lg" style="background-color: var(--surface-border);"></div>
 					</div>
 				</div>
 			</section>
+			<section class="card rounded-3xl p-2 shadow-sm">
+				<div class="flex gap-1 overflow-x-auto p-1">
+					{#each Array(6) as _}
+						<div class="h-10 w-28 shrink-0 rounded-xl" style="background-color: var(--surface-border);"></div>
+					{/each}
+				</div>
+			</section>
+		</div>
+	{:else if deployment}
+		<div class="space-y-6">
+			<!-- Header -->
+			<section class="card rounded-2xl px-5 py-4 flex flex-wrap items-center justify-between gap-3">
+				<div class="flex items-center gap-3 min-w-0">
+					<h1 class="text-lg font-semibold truncate" style="color: var(--center-channel-color);">{deployment.name}</h1>
+					<span class="badge {getStatusColor(deployment.status)} text-[11px]">{deployment.status}</span>
+					{#if deployment.githubRepo}
+						<a href={deployment.githubRepo} target="_blank" class="hidden sm:inline-flex items-center gap-1 font-mono text-xs hover:underline" style="color: var(--surface-muted);">
+							{deployment.githubRepo.replace('https://github.com/', '')}
+							<ExternalLink class="h-2.5 w-2.5" />
+						</a>
+					{:else if deployment.image}
+						<span class="hidden sm:inline truncate font-mono text-xs" style="color: var(--surface-muted);">{deployment.image}</span>
+					{/if}
+					{#if branch}
+						<span class="hidden sm:inline rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--sidebar-text-active-bg); color: var(--sidebar-text-active-color);">{branch}</span>
+					{/if}
+				</div>
+				<div class="flex items-center gap-1.5">
+					{#if repoUrl}
+						<button onclick={rebuild} disabled={rebuilding} class="btn btn-secondary btn-sm">
+							{#if rebuilding}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw class="h-3.5 w-3.5" />{/if}
+							<span>Rebuild</span>
+						</button>
+					{/if}
+					<button onclick={restart} disabled={restarting} class="btn btn-secondary btn-sm">
+						{#if restarting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Play class="h-3.5 w-3.5" />{/if}
+						<span>Restart</span>
+					</button>
+					<button onclick={deleteDeployment} disabled={deleting} class="btn btn-danger btn-sm">
+						{#if deleting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2 class="h-3.5 w-3.5" />{/if}
+					</button>
+				</div>
+			</section>
 
-			<div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
-				<div class="card rounded-2xl p-4">
-					<p class="text-xs uppercase tracking-wide text-gray-500">Desired replicas</p>
-					<p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
-						{deployment.replicas ?? 0}
-					</p>
-				</div>
-				<div class="card rounded-2xl p-4">
-					<p class="text-xs uppercase tracking-wide text-gray-500">Available replicas</p>
-					<p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
-						{deployment.availableReplicas ?? 0}
-					</p>
-				</div>
-				<div class="card rounded-2xl p-4">
-					<p class="text-xs uppercase tracking-wide text-gray-500">Pods</p>
-					<p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
-						{deployment.pods?.length ?? 0}
-					</p>
-				</div>
-				<div class="card rounded-2xl p-4">
-					<p class="text-xs uppercase tracking-wide text-gray-500">Services</p>
-					<p class="mt-2 text-2xl font-semibold text-gray-900 dark:text-white">
-						{deployment.services?.length ?? 0}
-					</p>
-				</div>
-			</div>
-
-			<section class="card rounded-3xl p-2 shadow-sm" {...tabs.triggerList}>
-				<div class="grid gap-2 md:grid-cols-4 lg:grid-cols-4 xl:grid-cols-4">
-				{#each visibleTabs as tab}
-					{@const Icon = tab.icon}
-					<button class="tabs-trigger flex items-start gap-3 rounded-2xl px-4 py-3 text-left transition" {...tabs.getTrigger(tab.id)}>
-						<Icon class="mt-1 h-4 w-4 text-gray-400" />
-							<div>
-								<p class="text-sm font-semibold text-gray-900 dark:text-gray-50">{tab.label}</p>
-								<p class="text-xs text-gray-500">{tab.description}</p>
-							</div>
+			<!-- Compact tab nav -->
+			<section class="card rounded-2xl p-1.5 shadow-sm" {...tabs.triggerList}>
+				<div class="flex gap-1 overflow-x-auto">
+					{#each visibleTabs as tab}
+						{@const Icon = tab.icon}
+						<button class="tabs-trigger inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium whitespace-nowrap transition" {...tabs.getTrigger(tab.id)}>
+							<Icon class="h-4 w-4" />
+							<span>{tab.label}</span>
 						</button>
 					{/each}
 				</div>
 			</section>
 
 {#each visibleTabs as tab}
-	<section {...tabs.getContent(tab.id)} hidden={undefined} class="tab-panel mt-2">
+	<section {...tabs.getContent(tab.id)} hidden={undefined} class="tab-panel">
 					{#if tab.id === 'overview'}
 						<div class="space-y-6">
-							{#if deployment.status === 'failed' && (deployment.buildError || deployment.buildLogs)}
-								<div class="rounded-2xl border border-red-200 bg-red-50/80 p-4 dark:border-red-400/30 dark:bg-red-500/10">
-									<p class="text-sm font-semibold text-red-900 dark:text-red-100">Last build logs</p>
-									{#if deployment.buildError}
-										<p class="mt-2 text-sm font-medium text-red-800 dark:text-red-200">Error</p>
-										<pre class="mt-1 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg bg-red-900/10 p-3 text-xs font-mono text-red-900 dark:text-red-100">{sanitizeLogs(deployment.buildError)}</pre>
-									{/if}
-									{#if deployment.buildLogs}
-										<pre class="mt-3 max-h-80 overflow-y-auto whitespace-pre-wrap rounded-lg bg-black/10 p-3 text-xs font-mono text-gray-900 dark:text-gray-100">{sanitizeLogs(deployment.buildLogs)}</pre>
-									{/if}
-								</div>
-							{/if}
-							<div class="grid gap-6 lg:grid-cols-3">
-								<div class="card rounded-2xl p-6 lg:col-span-2" style="background-color: var(--center-channel-bg);">
-									<div class="mb-6">
-										<div class="flex items-center justify-between mb-4">
-											<label class="text-sm font-medium" style="color: var(--center-channel-color);">
-												Desired replicas
-											</label>
-											<span class="text-2xl font-bold font-mono" style="color: var(--center-channel-color);">
-												{scaleReplicas}
-											</span>
-										</div>
-										<div class="slider-container" style="padding: 12px 0;">
-											<div 
-												bind:this={sliderRef}
-												class="slider-wrapper"
-												class:dragging={isDragging}
-												role="slider"
-												tabindex="0"
-												aria-valuemin="0"
-												aria-valuemax="20"
-												aria-valuenow={scaleReplicas}
-												aria-label="Desired replicas"
-												onpointerdown={handlePointerDown}
-												onpointermove={handlePointerMove}
-												onpointerup={handlePointerUp}
-												onpointercancel={handlePointerCancel}
-												onclick={handleTrackClick}
-												onkeydown={(e) => {
-													if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
-														e.preventDefault();
-														scaleReplicas = Math.max(0, scaleReplicas - 1);
-													} else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
-														e.preventDefault();
-														scaleReplicas = Math.min(20, scaleReplicas + 1);
-													}
-												}}
-											>
-												<div class="slider-track">
-													<div class="slider-range" style="width: {sliderPercentage}%;"></div>
-												</div>
-												<div 
-													class="slider-thumb"
-													class:dragging={isDragging}
-													style="left: {sliderPercentage}%;"
-												></div>
-											</div>
-										</div>
-										<div class="flex items-center justify-between mt-2 text-xs" style="color: var(--surface-muted);">
-											<span>0</span>
-											<span>20</span>
-										</div>
-									</div>
-
-									<div class="flex items-center justify-end gap-3 pt-4 border-t" style="border-color: var(--divider-color);">
-										<button
-											onclick={scaleDeployment}
-											disabled={scaling || scaleReplicas === deployment.replicas}
-											class="btn btn-primary"
-										>
-											{#if scaling}
-												<Loader2 class="h-4 w-4 animate-spin" />
-											{/if}
-											Apply changes
-										</button>
-									</div>
-								</div>
-								<div class="card rounded-2xl p-6">
-									<dl class="space-y-4 text-sm">
-										<div>
-											<dt class="text-xs uppercase tracking-wide text-gray-500">Namespace</dt>
-											<dd class="font-mono text-gray-900 dark:text-gray-100">
-												{deployment.namespace ?? 'Not assigned'}
-											</dd>
-										</div>
-										{#if deployment.project}
-											<div>
-												<dt class="text-xs uppercase tracking-wide text-gray-500">Project</dt>
-												<dd class="text-gray-900 dark:text-gray-100">{deployment.project.name}</dd>
-											</div>
-										{/if}
-										{#if repoUrl}
-											<div>
-												<dt class="text-xs uppercase tracking-wide text-gray-500">Repository</dt>
-												<dd class="flex items-center gap-2 text-sm text-primary-600 dark:text-primary-300">
-													<a href={repoUrl} target="_blank" class="inline-flex items-center gap-1 hover:underline">
-														<span>Open</span>
-														<ExternalLink class="h-3.5 w-3.5" />
-													</a>
-												</dd>
-											</div>
-										{/if}
-										{#if deployment.githubRepo}
-											<div>
-												<dt class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">Repository</dt>
-												<dd class="truncate font-mono text-xs" style="color: var(--center-channel-color);">
-													{deployment.githubRepo}
-												</dd>
-											</div>
-											{#if branch}
-												<div>
-													<dt class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">Branch</dt>
-													<dd class="truncate font-mono text-xs" style="color: var(--center-channel-color);">
-														{branch}
-													</dd>
-												</div>
-											{/if}
-										{:else if deployment.image}
-											<div>
-												<dt class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">Image</dt>
-												<dd class="truncate font-mono text-xs" style="color: var(--center-channel-color);">
-													{deployment.image}
-												</dd>
-											</div>
-										{/if}
-									</dl>
-								</div>
-							</div>
-
 							{#if deployment.warnings?.length}
-							<div class="warning-box rounded-2xl border p-6 shadow-sm">
+							<div class="warning-box rounded-2xl border p-5 shadow-sm">
 								<div class="flex items-start gap-3">
 									<div class="warning-icon-box flex h-8 w-8 shrink-0 items-center justify-center rounded-lg">
 										<svg class="h-5 w-5" style="color: var(--warning-text)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -2211,8 +2051,7 @@
 									</div>
 									<div class="flex-1 min-w-0">
 										<p class="text-sm font-semibold" style="color: var(--warning-text)">Pod Warnings</p>
-										<p class="text-xs mb-3" style="color: var(--warning-text); opacity: 0.8">Issues detected with running containers</p>
-										<div class="space-y-2">
+										<div class="mt-2 space-y-2">
 											{#each deployment.warnings as warning}
 												<div class="warning-item rounded-lg p-3 shadow-sm">
 													<div class="flex items-start gap-2">
@@ -2234,386 +2073,399 @@
 							</div>
 							{/if}
 
-							<div class="card rounded-2xl p-6">
-								<div class="flex flex-wrap items-center justify-between gap-4">
-									<div>
-										<p class="text-lg font-semibold text-gray-900 dark:text-gray-50">Pods</p>
-										<p class="text-sm text-gray-500">Live Kubernetes workloads</p>
+							{#if deployment.status === 'failed' && (deployment.buildError || deployment.buildLogs)}
+								<div class="rounded-2xl border border-red-200 bg-red-50/80 p-4 dark:border-red-400/30 dark:bg-red-500/10">
+									<p class="text-sm font-semibold text-red-900 dark:text-red-100">Last build failed</p>
+									{#if deployment.buildError}
+										<pre class="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg bg-red-900/10 p-3 text-xs font-mono text-red-900 dark:text-red-100">{sanitizeLogs(deployment.buildError)}</pre>
+									{/if}
+									{#if deployment.buildLogs}
+										<details class="mt-2">
+											<summary class="cursor-pointer text-xs font-medium text-red-800 dark:text-red-200">Show full build logs</summary>
+											<pre class="mt-2 max-h-80 overflow-y-auto whitespace-pre-wrap rounded-lg bg-black/10 p-3 text-xs font-mono text-gray-900 dark:text-gray-100">{sanitizeLogs(deployment.buildLogs)}</pre>
+										</details>
+									{/if}
+								</div>
+							{/if}
+
+							<!-- Two-column layout: pods + details -->
+							<div class="grid gap-6 lg:grid-cols-3">
+								<!-- Pods -->
+								<div class="card rounded-2xl p-5 lg:col-span-2">
+									<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+										<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Pods</p>
+										<div class="flex gap-3 text-xs" style="color: var(--surface-muted);">
+											<span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-green-500"></span> {deployment.pods?.filter((pod) => pod.status?.toLowerCase() === 'ready').length ?? 0} ready</span>
+											<span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-yellow-500"></span> {deployment.pods?.filter((pod) => pod.status?.toLowerCase() === 'scheduled').length ?? 0} scheduled</span>
+											<span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-gray-400"></span> {deployment.pods?.filter((pod) => pod.status?.toLowerCase() === 'pending').length ?? 0} pending</span>
+										</div>
 									</div>
-									<div class="flex gap-4 text-xs text-gray-500">
-										<span>Ready {deployment.pods?.filter((pod) => pod.status?.toLowerCase() === 'ready').length ?? 0}</span>
-										<span>|</span>
-										<span>Scheduled {deployment.pods?.filter((pod) => pod.status?.toLowerCase() === 'scheduled').length ?? 0}</span>
-										<span>|</span>
-										<span>Pending {deployment.pods?.filter((pod) => pod.status?.toLowerCase() === 'pending').length ?? 0}</span>
+									{#if deployment.pods?.length}
+										<div class="space-y-2">
+											{#each deployment.pods as pod}
+												<div class="flex items-center justify-between gap-3 rounded-xl p-3" style="background-color: var(--control-bg);">
+													<div class="flex items-center gap-3 min-w-0">
+														<Container class="surface-icon h-8 w-8 rounded-lg p-1.5 shrink-0" />
+														<div class="min-w-0">
+															<p class="font-mono text-sm truncate" style="color: var(--center-channel-color);">{pod.name}</p>
+															{#if pod.ip}
+																<p class="text-xs" style="color: var(--surface-muted);">{pod.ip}</p>
+															{/if}
+														</div>
+													</div>
+													<span class="badge {getStatusColor(pod.status)} shrink-0">{pod.status}</span>
+												</div>
+											{/each}
+										</div>
+									{:else}
+										<p class="surface-muted-panel rounded-xl py-6 text-center text-sm">No pods reporting yet.</p>
+									{/if}
+								</div>
+
+								<!-- Details sidebar -->
+								<div class="space-y-4">
+									<!-- Deployment details -->
+									<div class="card rounded-2xl p-5">
+										<p class="text-sm font-semibold mb-3" style="color: var(--center-channel-color);">Details</p>
+										<dl class="space-y-3 text-sm">
+											<div class="flex items-center justify-between gap-3">
+												<dt class="shrink-0" style="color: var(--surface-muted);">Namespace</dt>
+												<dd class="font-mono text-xs truncate min-w-0" style="color: var(--center-channel-color);">{deployment.namespace ?? '—'}</dd>
+											</div>
+											{#if deployment.project}
+												<div class="flex items-center justify-between">
+													<dt style="color: var(--surface-muted);">Project</dt>
+													<dd style="color: var(--center-channel-color);">{deployment.project.name}</dd>
+												</div>
+											{/if}
+											<div class="flex items-center justify-between">
+												<dt style="color: var(--surface-muted);">Replicas</dt>
+												<dd class="font-mono text-xs" style="color: var(--center-channel-color);">{deployment.availableReplicas ?? 0} / {deployment.replicas ?? 0}</dd>
+											</div>
+											{#if deployment.githubRepo}
+												<div class="flex items-center justify-between">
+													<dt style="color: var(--surface-muted);">Branch</dt>
+													<dd class="font-mono text-xs" style="color: var(--center-channel-color);">{branch ?? '—'}</dd>
+												</div>
+											{:else if deployment.image}
+												<div>
+													<dt style="color: var(--surface-muted);">Image</dt>
+													<dd class="font-mono text-xs mt-1 break-all" style="color: var(--center-channel-color);">{deployment.image}</dd>
+												</div>
+											{/if}
+										</dl>
+									</div>
+
+									<!-- Services quick view -->
+									<div class="card rounded-2xl p-5">
+										<div class="flex items-center justify-between mb-3">
+											<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Services</p>
+											<span class="text-xs font-mono" style="color: var(--surface-muted);">{deployment.services?.length ?? 0}</span>
+										</div>
+										{#if deployment.services?.length}
+											<div class="space-y-2">
+												{#each deployment.services as service}
+													<div class="flex items-center justify-between gap-2 rounded-lg p-2" style="background-color: var(--control-bg);">
+														<div class="min-w-0">
+															<p class="text-sm font-medium truncate" style="color: var(--center-channel-color);">{service.name}</p>
+															<p class="text-xs font-mono" style="color: var(--surface-muted);">:{service.port}</p>
+														</div>
+														<span class="surface-pill text-xs shrink-0">{service.type === 'external' ? 'NodePort' : 'ClusterIP'}</span>
+													</div>
+												{/each}
+											</div>
+										{:else}
+											<p class="text-xs text-center py-2" style="color: var(--surface-muted);">No services</p>
+										{/if}
+									</div>
+
+									<!-- Ingresses quick view -->
+									{#if deployment.ingresses?.length}
+										<div class="card rounded-2xl p-5">
+											<p class="text-sm font-semibold mb-3" style="color: var(--center-channel-color);">Domains</p>
+											<div class="space-y-2">
+												{#each deployment.ingresses as ingress}
+													<a href="{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}" target="_blank" class="flex items-center gap-2 rounded-lg p-2 text-sm transition hover:underline" style="background-color: var(--control-bg); color: var(--link-color);">
+														<Globe class="h-3.5 w-3.5 shrink-0" />
+														<span class="truncate">{ingress.host}</span>
+														<ExternalLink class="h-3 w-3 shrink-0 ml-auto" />
+													</a>
+												{/each}
+											</div>
+										</div>
+									{/if}
+								</div>
+							</div>
+
+							<!-- Scaling -->
+							<div class="card rounded-2xl p-5">
+								<div class="flex items-center justify-between mb-3">
+									<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Scale</p>
+									<span class="text-lg font-bold font-mono" style="color: var(--center-channel-color);">{scaleReplicas}</span>
+								</div>
+								<div class="slider-container" style="padding: 6px 0;">
+									<div
+										bind:this={sliderRef}
+										class="slider-wrapper"
+										class:dragging={isDragging}
+										role="slider"
+										tabindex="0"
+										aria-valuemin="0"
+										aria-valuemax="20"
+										aria-valuenow={scaleReplicas}
+										aria-label="Desired replicas"
+										onpointerdown={handlePointerDown}
+										onpointermove={handlePointerMove}
+										onpointerup={handlePointerUp}
+										onpointercancel={handlePointerCancel}
+										onclick={handleTrackClick}
+										onkeydown={(e) => {
+											if (e.key === 'ArrowLeft' || e.key === 'ArrowDown') {
+												e.preventDefault();
+												scaleReplicas = Math.max(0, scaleReplicas - 1);
+											} else if (e.key === 'ArrowRight' || e.key === 'ArrowUp') {
+												e.preventDefault();
+												scaleReplicas = Math.min(20, scaleReplicas + 1);
+											}
+										}}
+									>
+										<div class="slider-track">
+											<div class="slider-range" style="width: {sliderPercentage}%;"></div>
+										</div>
+										<div
+											class="slider-thumb"
+											class:dragging={isDragging}
+											style="left: {sliderPercentage}%;"
+										></div>
 									</div>
 								</div>
-								{#if deployment.pods?.length}
-									<div class="mt-4 divide-y divide-gray-200 dark:divide-gray-800">
-										{#each deployment.pods as pod}
-											<div class="flex flex-wrap items-center justify-between gap-4 py-4">
-												<div class="flex items-center gap-3">
-													<Container class="surface-icon h-10 w-10 rounded-xl p-2" />
-													<div>
-														<p class="font-mono text-sm text-gray-900 dark:text-gray-50">{pod.name}</p>
-														{#if pod.ip}
-															<p class="text-xs text-gray-500">{pod.ip}</p>
-														{/if}
-													</div>
-												</div>
-												<div class="flex items-center gap-3">
-													<span class="badge {getStatusColor(pod.status)}">{pod.status}</span>
-													<a href="/pods/{pod.name}?namespace={deployment.namespace}" class="btn btn-ghost btn-sm" aria-label="Open pod details">
-														<ExternalLink class="h-4 w-4" />
-													</a>
-												</div>
-											</div>
-										{/each}
+								<div class="flex items-center justify-between text-xs" style="color: var(--surface-muted);">
+									<span>0</span>
+									<span>20</span>
+								</div>
+								{#if scaleReplicas !== deployment.replicas}
+									<div class="flex items-center justify-end gap-3 pt-3 mt-3 border-t" style="border-color: var(--surface-border);">
+										<button onclick={scaleDeployment} disabled={scaling} class="btn btn-primary">
+											{#if scaling}<Loader2 class="h-4 w-4 animate-spin" />{/if}
+											Apply
+										</button>
 									</div>
-								{:else}
-											<p class="surface-muted-panel mt-4 rounded-xl py-6 text-center text-sm">No pods are reporting yet.</p>
 								{/if}
 							</div>
 						</div>
 					{:else if tab.id === 'logs'}
-						<div class="space-y-6">
-							<div class="card rounded-2xl p-6">
-							<div class="grid gap-4 md:grid-cols-4">
-								<div>
-									<label class="text-xs font-semibold uppercase tracking-wide text-gray-500">Pod</label>
-									<div class="relative mt-2 custom-dropdown-container">
-										<button
-											type="button"
-											onclick={() => (podDropdownOpen = !podDropdownOpen)}
-											class="flex w-full items-center justify-between overflow-hidden rounded-xl border px-3 py-2 text-sm transition"
-											style="background-color: var(--control-bg); color: var(--center-channel-color); border-color: var(--surface-border);"
-										>
-											<span>{selectedPod || 'Select pod'}</span>
-											<ChevronDown class="h-4 w-4 shrink-0" />
-										</button>
-										{#if podDropdownOpen}
-											<div
-												class="absolute z-20 mt-1 w-full rounded-xl border p-2 shadow"
-												style="background-color: var(--surface-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
-												transition:scale={{ duration: 150, start: 0.96 }}
-											>
-												<button
-													type="button"
-													onclick={() => {
-														selectedPod = '';
-														podDropdownOpen = false;
-													}}
-													class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]"
-												>
-													<span>Select pod</span>
-													{#if !selectedPod}
-														<Check class="h-4 w-4 text-primary-600" />
-													{/if}
+						<div class="log-panel rounded-2xl overflow-hidden">
+							<!-- Toolbar -->
+							<div class="log-toolbar flex flex-wrap items-center gap-2 px-4 py-2.5">
+								<div class="relative custom-dropdown-container">
+									<button type="button" onclick={() => (podDropdownOpen = !podDropdownOpen)}
+										class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-mono transition hover:bg-[rgba(128,128,128,0.15)]">
+										<span class="truncate max-w-[200px]">{selectedPod || 'Select pod'}</span>
+										<ChevronDown class="h-3 w-3 shrink-0 opacity-50" />
+									</button>
+									{#if podDropdownOpen}
+										<div class="absolute z-20 mt-1 min-w-[220px] rounded-xl border p-1.5 shadow-lg" style="background-color: var(--surface-bg); border-color: var(--surface-border);" transition:scale={{ duration: 150, start: 0.96 }}>
+											{#each deployment.pods ?? [] as pod}
+												<button type="button" onclick={() => { selectedPod = pod.name; podDropdownOpen = false; }}
+													class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-mono transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]" style="color: var(--center-channel-color);">
+													<span class="truncate">{pod.name}</span>
+													{#if selectedPod === pod.name}<Check class="h-3.5 w-3.5 text-primary-600 shrink-0" />{/if}
 												</button>
-												{#each deployment.pods ?? [] as pod}
-													<button
-														type="button"
-														onclick={() => {
-															selectedPod = pod.name;
-															podDropdownOpen = false;
-														}}
-														class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]"
-													>
-														<span>{pod.name}</span>
-														{#if selectedPod === pod.name}
-															<Check class="h-4 w-4 text-primary-600" />
-														{/if}
-													</button>
-												{/each}
-											</div>
-										{/if}
-									</div>
+											{/each}
+										</div>
+									{/if}
 								</div>
-								<div>
-									<label class="text-xs font-semibold uppercase tracking-wide text-gray-500">Container</label>
-									<div class="relative mt-2 custom-dropdown-container">
-										<button
-											type="button"
-											onclick={() => (containerDropdownOpen = !containerDropdownOpen)}
-											class="flex w-full items-center justify-between overflow-hidden rounded-xl border px-3 py-2 text-sm transition"
-											style="background-color: var(--control-bg); color: var(--center-channel-color); border-color: var(--surface-border);"
-										>
-											<span>{selectedContainer || 'Select container'}</span>
-											<ChevronDown class="h-4 w-4 shrink-0" />
-										</button>
-										{#if containerDropdownOpen}
-											<div
-												class="absolute z-20 mt-1 w-full rounded-xl border p-2 shadow"
-												style="background-color: var(--surface-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
-												transition:scale={{ duration: 150, start: 0.96 }}
-											>
-												<button
-													type="button"
-													onclick={() => {
-														selectedContainer = '';
-														containerDropdownOpen = false;
-													}}
-													class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]"
-												>
-													<span>Select container</span>
-													{#if !selectedContainer}
-														<Check class="h-4 w-4 text-primary-600" />
-													{/if}
+
+								<span class="text-xs opacity-30">/</span>
+
+								<div class="relative custom-dropdown-container">
+									<button type="button" onclick={() => (containerDropdownOpen = !containerDropdownOpen)}
+										class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-mono transition hover:bg-[rgba(128,128,128,0.15)]">
+										<span class="truncate max-w-[160px]">{selectedContainer || 'container'}</span>
+										<ChevronDown class="h-3 w-3 shrink-0 opacity-50" />
+									</button>
+									{#if containerDropdownOpen}
+										<div class="absolute z-20 mt-1 min-w-[180px] rounded-xl border p-1.5 shadow-lg" style="background-color: var(--surface-bg); border-color: var(--surface-border);" transition:scale={{ duration: 150, start: 0.96 }}>
+											{#each deployment.pods?.find((p) => p.name === selectedPod)?.containers ?? [] as container}
+												<button type="button" onclick={() => { selectedContainer = container.name; containerDropdownOpen = false; }}
+													class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-mono transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]" style="color: var(--center-channel-color);">
+													<span>{container.name}</span>
+													{#if selectedContainer === container.name}<Check class="h-3.5 w-3.5 text-primary-600 shrink-0" />{/if}
 												</button>
-												{#each deployment.pods?.find((p) => p.name === selectedPod)?.containers ?? [] as container}
-													<button
-														type="button"
-														onclick={() => {
-															selectedContainer = container.name;
-															containerDropdownOpen = false;
-														}}
-														class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]"
-													>
-														<span>{container.name}</span>
-														{#if selectedContainer === container.name}
-															<Check class="h-4 w-4 text-primary-600" />
-														{/if}
-													</button>
-												{/each}
-											</div>
-										{/if}
-									</div>
+											{/each}
+										</div>
+									{/if}
 								</div>
-									<div>
-										<label class="text-xs font-semibold uppercase tracking-wide text-gray-500">Tail lines</label>
-										<input type="number" bind:value={tailLines} min="10" step="10" class="input mt-2 w-full" />
+
+								<div class="ml-auto flex items-center gap-2">
+									<div class="flex items-center gap-1.5">
+										<span class="text-[10px] uppercase tracking-wide opacity-40">Lines</span>
+										<input type="number" bind:value={tailLines} min="10" step="10"
+											class="log-lines-input w-16 rounded-lg border px-2 py-1 text-xs font-mono text-center" />
 									</div>
-									<div class="flex items-end justify-end">
-										<button onclick={fetchLogs} disabled={logsLoading} class="btn btn-secondary w-full">
-											{#if logsLoading}
-												<Loader2 class="h-4 w-4 animate-spin" />
-											{:else}
-												<RefreshCw class="h-4 w-4" />
-											{/if}
-											<span>Refresh logs</span>
-										</button>
-									</div>
+									<button onclick={fetchLogs} disabled={logsLoading}
+										class="rounded-lg p-1.5 transition hover:bg-[rgba(128,128,128,0.15)]">
+										{#if logsLoading}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw class="h-3.5 w-3.5" />{/if}
+									</button>
 								</div>
 							</div>
 
-							<div class="log-panel rounded-2xl p-4 text-green-200 shadow-inner">
+							<!-- Log output -->
+							<div class="px-4 py-3">
 								{#if logsLoading && !logs}
-									<div class="flex items-center justify-center gap-2 text-sm">
-										<Loader2 class="h-4 w-4 animate-spin" />
-										<span>Loading logs...</span>
+									<div class="flex items-center justify-center gap-2 py-12 text-xs opacity-50">
+										<Loader2 class="h-3.5 w-3.5 animate-spin" />
+										<span>Loading...</span>
 									</div>
 								{:else if logs}
-									<pre class="max-h-[500px] overflow-y-auto whitespace-pre-wrap text-xs">{logs}</pre>
+									<pre class="max-h-[650px] overflow-y-auto whitespace-pre-wrap text-[11px] leading-[1.6] font-mono">{logs}</pre>
 								{:else}
-									<p class="text-center text-sm text-gray-400">Select a pod and container to start streaming logs.</p>
+									<p class="text-center text-xs py-12 opacity-40">Select a pod to view logs</p>
 								{/if}
 							</div>
-
-													</div>
+						</div>
 					{:else if tab.id === 'environment'}
-						<div class="card rounded-2xl p-6">
-							<div class="flex flex-wrap items-center justify-between gap-4">
-								<div>
-									<p class="text-lg font-semibold text-gray-900 dark:text-gray-50">Environment variables</p>
-									<p class="text-sm text-gray-500">Variables will restart pods on save</p>
+						<div class="card rounded-2xl p-5">
+							<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+								<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Environment variables</p>
+								<div class="flex gap-2">
+									<button onclick={addEnvRow} class="btn btn-secondary btn-sm">
+										<Plus class="h-4 w-4" />
+										<span>Add</span>
+									</button>
 								</div>
-								<button onclick={addEnvRow} class="btn btn-secondary btn-sm">
-									<Plus class="h-4 w-4" />
-									<span>Add variable</span>
-								</button>
 							</div>
-							<div class="mt-6 space-y-4 max-w-2xl">
-								<details class="group">
-									<summary class="cursor-pointer text-sm text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 mb-2">
-										Paste from file (key=value format)
-									</summary>
-									<div class="mt-2 space-y-2 mb-4">
-										<textarea
-											bind:value={envPasteText}
-											placeholder="KEY1=value1&#10;KEY2=value2&#10;# Comments are ignored"
-											class="input font-mono text-sm min-h-[100px]"
-										></textarea>
-										<div class="flex items-center justify-between">
-											<p class="text-xs text-gray-500 dark:text-gray-400">Paste your .env file content here. Each line should be in KEY=value format.</p>
-											<button onclick={parseEnvVars} disabled={!envPasteText.trim()} class="btn btn-secondary btn-sm">
-												Parse
-											</button>
-										</div>
+							<details class="group mb-4">
+								<summary class="cursor-pointer text-xs mb-1" style="color: var(--surface-muted);">
+									Paste from .env file
+								</summary>
+								<div class="mt-2 space-y-2">
+									<textarea
+										bind:value={envPasteText}
+										placeholder="KEY1=value1&#10;KEY2=value2&#10;# Comments are ignored"
+										class="input font-mono text-xs min-h-[80px]"
+									></textarea>
+									<div class="flex justify-end">
+										<button onclick={parseEnvVars} disabled={!envPasteText.trim()} class="btn btn-secondary btn-sm">Parse</button>
 									</div>
-								</details>
+								</div>
+							</details>
+							<div class="space-y-2">
 								{#each envVars as env, index}
 									{@const isRevealed = revealedIndices.has(index)}
-									<div class="grid gap-3 md:grid-cols-[250px_1fr_auto]">
-										<input type="text" bind:value={env.key} placeholder="KEY" class="input font-mono" onfocus={() => isEditingEnv = true} />
-										<div class="flex gap-2">
-											<input
-												type={isRevealed ? 'text' : 'password'}
-												bind:value={env.value}
-												placeholder="value"
-												class="input font-mono flex-1"
-												onfocus={() => isEditingEnv = true}
-											/>
-											<button
-												type="button"
-												onclick={() => toggleReveal(index)}
-												class="btn btn-ghost shrink-0"
-												aria-label={isRevealed ? 'Hide value' : 'Show value'}
-											>
-												{#if isRevealed}
-													<EyeOff class="h-4 w-4" />
-												{:else}
-													<Eye class="h-4 w-4" />
-												{/if}
-											</button>
-										</div>
-										<button onclick={() => removeEnvRow(index)} class="btn btn-ghost" aria-label="Remove row">
-											<X class="h-4 w-4" />
+									<div class="flex gap-2 items-center">
+										<input type="text" bind:value={env.key} placeholder="KEY" class="input font-mono text-sm flex-[2]" onfocus={() => isEditingEnv = true} />
+										<input
+											type={isRevealed ? 'text' : 'password'}
+											bind:value={env.value}
+											placeholder="value"
+											class="input font-mono text-sm flex-[3]"
+											onfocus={() => isEditingEnv = true}
+										/>
+										<button type="button" onclick={() => toggleReveal(index)} class="btn btn-ghost btn-sm shrink-0" aria-label={isRevealed ? 'Hide' : 'Show'}>
+											{#if isRevealed}<EyeOff class="h-3.5 w-3.5" />{:else}<Eye class="h-3.5 w-3.5" />{/if}
+										</button>
+										<button onclick={() => removeEnvRow(index)} class="btn btn-ghost btn-sm shrink-0" aria-label="Remove">
+											<X class="h-3.5 w-3.5" />
 										</button>
 									</div>
 								{/each}
 							</div>
-							<div class="mt-6 flex flex-wrap justify-end gap-3">
+							<div class="mt-4 flex justify-end">
 								<button onclick={saveEnv} disabled={savingEnv} class="btn btn-primary">
-									{#if savingEnv}
-										<Loader2 class="h-4 w-4 animate-spin" />
-									{/if}
-									<span>Save changes</span>
+									{#if savingEnv}<Loader2 class="h-4 w-4 animate-spin" />{/if}
+									<span>Save</span>
 								</button>
 							</div>
+							<p class="mt-2 text-xs" style="color: var(--surface-muted);">Saving will restart pods with new variables.</p>
 						</div>
 					{:else if tab.id === 'volumes'}
-						<div class="card rounded-2xl p-6">
-							<div class="flex flex-wrap items-center justify-between gap-4">
-								<div>
-									<p class="text-lg font-semibold text-gray-900 dark:text-gray-50">Volumes</p>
-									<p class="text-sm text-gray-500">Volumes will restart pods on save</p>
-								</div>
+						<div class="card rounded-2xl p-5">
+							<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+								<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Volumes</p>
 								<button onclick={addVolume} class="btn btn-secondary btn-sm">
 									<Plus class="h-4 w-4" />
-									<span>Add volume</span>
+									<span>Add</span>
 								</button>
 							</div>
-							<div class="mt-6 space-y-4">
+							<div class="space-y-3">
 								{#each volumes as volume, index}
-									<div class="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-3">
-										<div class="flex items-center justify-between">
-											<h3 class="font-medium text-sm">Volume {index + 1}</h3>
-											<button onclick={() => removeVolume(index)} class="btn btn-ghost btn-sm">
-												<Trash2 class="h-4 w-4" />
-											</button>
+									<div class="rounded-xl p-4" style="background-color: var(--control-bg); border: 1px solid var(--surface-border);">
+										<div class="flex items-center justify-between mb-3">
+											<span class="text-sm font-medium" style="color: var(--center-channel-color);">Volume {index + 1}</span>
+											<button onclick={() => removeVolume(index)} class="btn btn-ghost btn-sm"><Trash2 class="h-3.5 w-3.5" /></button>
 										</div>
 										<div class="grid gap-3 md:grid-cols-2">
 											<div>
-												<label class="block text-xs font-medium text-gray-500 mb-1">Name</label>
-												<input type="text" bind:value={volume.name} placeholder="data" class="input" />
+												<p class="text-xs mb-1" style="color: var(--surface-muted);">Name</p>
+												<input type="text" bind:value={volume.name} placeholder="data" class="input text-sm" />
 											</div>
 											<div>
-												<label class="block text-xs font-medium text-gray-500 mb-1">Type</label>
+												<p class="text-xs mb-1" style="color: var(--surface-muted);">Type</p>
 												<div class="relative custom-dropdown-container">
 													<button
 														type="button"
 														onclick={() => (volumeTypeDropdownOpen = volumeTypeDropdownOpen === index ? null : index)}
 														class="flex w-full items-center justify-between overflow-hidden rounded-xl border px-3 py-2 text-sm transition"
-														style="background-color: var(--control-bg); color: var(--center-channel-color); border-color: var(--surface-border);"
+														style="background-color: var(--surface-bg); color: var(--center-channel-color); border-color: var(--surface-border);"
 													>
-														<span>
-															{volume.type === 'pvc' ? 'Persistent Volume Claim (PVC)' : volume.type === 'hostPath' ? 'Host Path' : 'Empty Directory'}
-														</span>
+														<span>{volume.type === 'pvc' ? 'PVC' : volume.type === 'hostPath' ? 'Host Path' : 'Empty Dir'}</span>
 														<ChevronDown class="h-4 w-4 shrink-0" />
 													</button>
 													{#if volumeTypeDropdownOpen === index}
-														<div
-															class="absolute z-20 mt-1 w-full rounded-xl border p-2 shadow"
-															style="background-color: var(--surface-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
-															transition:scale={{ duration: 150, start: 0.96 }}
-														>
-															<button
-																type="button"
-																onclick={() => {
-																	volume.type = 'pvc';
-																	volumeTypeDropdownOpen = null;
-																}}
-																class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]"
-															>
-																<span>Persistent Volume Claim (PVC)</span>
-																{#if volume.type === 'pvc'}
-																	<Check class="h-4 w-4 text-primary-600" />
-																{/if}
-															</button>
-															<button
-																type="button"
-																onclick={() => {
-																	volume.type = 'hostPath';
-																	volumeTypeDropdownOpen = null;
-																}}
-																class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]"
-															>
-																<span>Host Path</span>
-																{#if volume.type === 'hostPath'}
-																	<Check class="h-4 w-4 text-primary-600" />
-																{/if}
-															</button>
-															<button
-																type="button"
-																onclick={() => {
-																	volume.type = 'emptyDir';
-																	volumeTypeDropdownOpen = null;
-																}}
-																class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]"
-															>
-																<span>Empty Directory</span>
-																{#if volume.type === 'emptyDir'}
-																	<Check class="h-4 w-4 text-primary-600" />
-																{/if}
-															</button>
+														<div class="absolute z-20 mt-1 w-full rounded-xl border p-1.5 shadow-lg" style="background-color: var(--surface-bg); border-color: var(--surface-border);" transition:scale={{ duration: 150, start: 0.96 }}>
+															{#each [{ val: 'pvc', label: 'PVC' }, { val: 'hostPath', label: 'Host Path' }, { val: 'emptyDir', label: 'Empty Dir' }] as opt}
+																<button type="button" onclick={() => { volume.type = opt.val as any; volumeTypeDropdownOpen = null; }}
+																	class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]">
+																	<span>{opt.label}</span>
+																	{#if volume.type === opt.val}<Check class="h-4 w-4 text-primary-600" />{/if}
+																</button>
+															{/each}
 														</div>
 													{/if}
 												</div>
 											</div>
 											<div class="md:col-span-2">
-												<label class="block text-xs font-medium text-gray-500 mb-1">Mount Path</label>
-												<input type="text" bind:value={volume.mountPath} placeholder="/data" class="input font-mono" />
+												<p class="text-xs mb-1" style="color: var(--surface-muted);">Mount Path</p>
+												<input type="text" bind:value={volume.mountPath} placeholder="/data" class="input font-mono text-sm" />
 											</div>
 											{#if volume.type === 'pvc'}
 												<div class="md:col-span-2">
-													<label class="block text-xs font-medium text-gray-500 mb-1">PVC Name</label>
-													<input type="text" bind:value={volume.pvcName} placeholder="my-pvc" class="input font-mono" />
+													<p class="text-xs mb-1" style="color: var(--surface-muted);">PVC Name</p>
+													<input type="text" bind:value={volume.pvcName} placeholder="my-pvc" class="input font-mono text-sm" />
 												</div>
 											{:else if volume.type === 'hostPath'}
 												<div class="md:col-span-2">
-													<label class="block text-xs font-medium text-gray-500 mb-1">Host Path</label>
-													<input type="text" bind:value={volume.hostPath} placeholder="/host/path" class="input font-mono" />
+													<p class="text-xs mb-1" style="color: var(--surface-muted);">Host Path</p>
+													<input type="text" bind:value={volume.hostPath} placeholder="/host/path" class="input font-mono text-sm" />
 												</div>
 											{/if}
 											<div class="md:col-span-2">
-												<label class="flex items-center gap-2">
+												<label class="flex items-center gap-2 text-sm">
 													<input type="checkbox" bind:checked={volume.readOnly} class="rounded" />
-													<span class="text-sm">Read-only</span>
+													<span>Read-only</span>
 												</label>
 											</div>
 										</div>
 									</div>
 								{:else}
-									<p class="text-sm text-gray-500 text-center py-4">No volumes configured</p>
+									<p class="text-sm text-center py-6" style="color: var(--surface-muted);">No volumes configured</p>
 								{/each}
 							</div>
-							<div class="mt-6 flex flex-wrap justify-end gap-3">
+							<div class="mt-4 flex justify-end">
 								<button onclick={saveVolumes} disabled={savingVolumes} class="btn btn-primary">
-									{#if savingVolumes}
-										<Loader2 class="h-4 w-4 animate-spin" />
-									{/if}
-									<span>Save changes</span>
+									{#if savingVolumes}<Loader2 class="h-4 w-4 animate-spin" />{/if}
+									<span>Save</span>
 								</button>
 							</div>
+							<p class="mt-2 text-xs" style="color: var(--surface-muted);">Saving will restart pods with new volume configuration.</p>
 						</div>
 					{:else if tab.id === 'network'}
-						<div class="grid gap-6 lg:grid-cols-2">
-							<div class="card rounded-2xl p-6">
-								<div class="flex items-center justify-between">
-									<div>
-										<p class="text-lg font-semibold" style="color: var(--center-channel-color);">Services</p>
-										<p class="text-sm" style="color: var(--surface-muted);">Manage how traffic enters the deployment</p>
-									</div>
+						<div class="space-y-5">
+							<!-- Services -->
+							<div class="card rounded-2xl p-5">
+								<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+									<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Services</p>
 									<button
 										type="button"
 										class="btn btn-secondary btn-sm"
@@ -2633,19 +2485,19 @@
 											<span>Close</span>
 										{:else}
 											<Plus class="h-4 w-4" />
-											<span>Add service</span>
+											<span>Add</span>
 										{/if}
 									</button>
 								</div>
 
 								{#if showServiceForm}
-									<div class="surface-form mt-4 rounded-2xl border border-dashed p-4">
-										<div class="grid gap-4 md:grid-cols-2">
-											<div>
-												<label class="mb-2 block text-sm font-medium">Service name</label>
+									<div class="surface-form rounded-xl border border-dashed p-4 mb-4">
+										<div class="flex flex-wrap gap-3 items-end">
+											<div class="flex-[2] min-w-[160px]">
+												<p class="text-xs mb-1" style="color: var(--surface-muted);">Service name</p>
 												<input
 													type="text"
-													class="input"
+													class="input text-sm"
 													placeholder="api-service"
 													value={newServiceForm.name}
 													oninput={(event) =>
@@ -2654,9 +2506,8 @@
 															name: (event.currentTarget as HTMLInputElement).value
 														})}
 												/>
-												<p class="mt-1 text-xs" style="color: var(--surface-muted);">Lowercase letters, numbers, and dashes only.</p>
 											</div>
-											<label class="surface-checkbox flex items-center gap-3 rounded-2xl px-3 py-2 text-sm">
+											<label class="flex items-center gap-2 text-sm py-2">
 												<input
 													type="checkbox"
 													checked={newServiceForm.exposePublic}
@@ -2665,449 +2516,198 @@
 															...newServiceForm,
 															exposePublic: (event.currentTarget as HTMLInputElement).checked
 														})}
+													class="rounded"
 												/>
-												<span>
-													<span class="font-medium" style="color: var(--center-channel-color);">Expose publicly</span>
-													<span class="mt-0.5 block text-xs" style="color: var(--surface-muted);">
-														Uses a NodePort so the service is reachable outside the cluster.
-													</span>
-												</span>
+												<span>Expose publicly</span>
 											</label>
 										</div>
 
-										<div class="mt-4 space-y-3">
+										<div class="mt-3 space-y-2">
 											{#each newServiceForm.ports as port, index}
-												<div class="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]">
-													<div>
-														<label class="text-xs opacity-70 mb-1 block">Name</label>
-														<input
-															type="text"
-															class="input"
-															placeholder="http"
-															value={port.name}
-															oninput={(event) =>
-																updateNewServicePort(index, {
-																	name: (event.currentTarget as HTMLInputElement).value
-																})}
-														/>
+												<div class="flex flex-wrap gap-2 items-end">
+													<div class="flex-1 min-w-[80px]">
+														<p class="text-xs mb-1" style="color: var(--surface-muted);">Name</p>
+														<input type="text" class="input text-sm" placeholder="http" value={port.name}
+															oninput={(event) => updateNewServicePort(index, { name: (event.currentTarget as HTMLInputElement).value })} />
 													</div>
-													<div>
-														<label class="text-xs opacity-70 mb-1 block">Container Port</label>
-														<input
-															type="number"
-															min="1"
-															class="input"
-															placeholder="8080"
-															value={port.containerPort}
-															oninput={(event) =>
-																updateNewServicePort(index, {
-																	containerPort: Number(
-																		(event.currentTarget as HTMLInputElement).value
-																	)
-																})}
-														/>
+													<div class="flex-1 min-w-[80px]">
+														<p class="text-xs mb-1" style="color: var(--surface-muted);">Container</p>
+														<input type="number" min="1" class="input text-sm" placeholder="8080" value={port.containerPort}
+															oninput={(event) => updateNewServicePort(index, { containerPort: Number((event.currentTarget as HTMLInputElement).value) })} />
 													</div>
-													<div>
-														<label class="text-xs opacity-70 mb-1 block">Service Port</label>
-														<input
-															type="number"
-															min="1"
-															class="input"
-															placeholder="80"
-															value={port.servicePort}
-															oninput={(event) =>
-																updateNewServicePort(index, {
-																	servicePort: Number(
-																		(event.currentTarget as HTMLInputElement).value
-																	)
-																})}
-														/>
+													<div class="flex-1 min-w-[80px]">
+														<p class="text-xs mb-1" style="color: var(--surface-muted);">Service</p>
+														<input type="number" min="1" class="input text-sm" placeholder="80" value={port.servicePort}
+															oninput={(event) => updateNewServicePort(index, { servicePort: Number((event.currentTarget as HTMLInputElement).value) })} />
 													</div>
-													<div>
-														<label class="text-xs opacity-70 mb-1 block">Protocol</label>
-														<div class="flex gap-2">
-															<div class="relative flex-1 custom-dropdown-container">
-																<button
-																	type="button"
-																	onclick={() => (protocolDropdownOpen = protocolDropdownOpen === `new-${index}` ? null : `new-${index}`)}
-																	class="flex w-full items-center justify-between overflow-hidden rounded-xl border px-3 py-2 text-sm transition"
-																	style="background-color: var(--control-bg); color: var(--center-channel-color); border-color: var(--surface-border);"
-																>
-																	<span>{port.protocol}</span>
-																	<ChevronDown class="h-4 w-4 shrink-0" />
-																</button>
-																{#if protocolDropdownOpen === `new-${index}`}
-																	<div
-																		class="absolute z-20 mt-1 w-full rounded-xl border p-2 shadow"
-																		style="background-color: var(--surface-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
-																		transition:scale={{ duration: 150, start: 0.96 }}
-																	>
-																		<button
-																			type="button"
-																			onclick={() => {
-																				updateNewServicePort(index, { protocol: 'TCP' });
-																				protocolDropdownOpen = null;
-																			}}
-																			class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]"
-																		>
-																			<span>TCP</span>
-																			{#if port.protocol === 'TCP'}
-																				<Check class="h-4 w-4 text-primary-600" />
-																			{/if}
-																		</button>
-																		<button
-																			type="button"
-																			onclick={() => {
-																				updateNewServicePort(index, { protocol: 'UDP' });
-																				protocolDropdownOpen = null;
-																			}}
-																			class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]"
-																		>
-																			<span>UDP</span>
-																			{#if port.protocol === 'UDP'}
-																				<Check class="h-4 w-4 text-primary-600" />
-																			{/if}
-																		</button>
-																	</div>
-																{/if}
-															</div>
-															<button
-																type="button"
-																class="btn btn-ghost btn-sm"
-																onclick={() => removeNewServicePortRow(index)}
-															>
-																<Trash2 class="h-4 w-4" />
+													<div class="w-[90px]">
+														<p class="text-xs mb-1" style="color: var(--surface-muted);">Protocol</p>
+														<div class="relative custom-dropdown-container">
+															<button type="button"
+																onclick={() => (protocolDropdownOpen = protocolDropdownOpen === `new-${index}` ? null : `new-${index}`)}
+																class="flex w-full items-center justify-between overflow-hidden rounded-xl border px-2 py-2 text-sm transition"
+																style="background-color: var(--surface-bg); color: var(--center-channel-color); border-color: var(--surface-border);">
+																<span>{port.protocol}</span>
+																<ChevronDown class="h-3.5 w-3.5 shrink-0" />
 															</button>
+															{#if protocolDropdownOpen === `new-${index}`}
+																<div class="absolute z-20 mt-1 w-full rounded-xl border p-1.5 shadow-lg" style="background-color: var(--surface-bg); border-color: var(--surface-border);" transition:scale={{ duration: 150, start: 0.96 }}>
+																	{#each ['TCP', 'UDP'] as proto}
+																		<button type="button" onclick={() => { updateNewServicePort(index, { protocol: proto }); protocolDropdownOpen = null; }}
+																			class="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]">
+																			<span>{proto}</span>
+																			{#if port.protocol === proto}<Check class="h-3.5 w-3.5 text-primary-600" />{/if}
+																		</button>
+																	{/each}
+																</div>
+															{/if}
 														</div>
 													</div>
+													<button type="button" class="btn btn-ghost btn-sm" onclick={() => removeNewServicePortRow(index)}>
+														<Trash2 class="h-3.5 w-3.5" />
+													</button>
 													{#if newServiceForm.exposePublic}
-														<div class="md:col-span-4">
-															<label class="text-xs opacity-70 mb-1 block">External Port (NodePort, optional)</label>
-															<input
-																type="number"
-																min="30000"
-																max="32767"
-																class="input"
-																placeholder="30000-32767"
-																value={port.nodePort ?? ''}
-																oninput={(event) =>
-																	updateNewServicePort(index, {
-																		nodePort:
-																			(event.currentTarget as HTMLInputElement).value === ''
-																				? null
-																				: Number(
-																						(event.currentTarget as HTMLInputElement).value
-																				  )
-																	})}
-															/>
+														<div class="w-full">
+															<p class="text-xs mb-1" style="color: var(--surface-muted);">NodePort (optional)</p>
+															<input type="number" min="30000" max="32767" class="input text-sm" placeholder="30000-32767" value={port.nodePort ?? ''}
+																oninput={(event) => updateNewServicePort(index, { nodePort: (event.currentTarget as HTMLInputElement).value === '' ? null : Number((event.currentTarget as HTMLInputElement).value) })} />
 														</div>
 													{/if}
 												</div>
 											{/each}
 											<button type="button" class="btn btn-secondary btn-sm" onclick={addNewServicePortRow}>
-												<Plus class="h-4 w-4" />
-												Add port
+												<Plus class="h-3.5 w-3.5" /> Add port
 											</button>
 										</div>
 
 										{#if serviceFormError}
-											<div class="alert alert-error mt-4">{serviceFormError}</div>
+											<div class="alert alert-error mt-3">{serviceFormError}</div>
 										{/if}
 
-										<div class="mt-4 flex justify-end gap-3">
-											<button
-												type="button"
-												class="btn btn-secondary"
-												onclick={() => {
-													showServiceForm = false;
-													resetNewServiceForm();
-												}}
-											>
-												Cancel
-											</button>
-											<button
-												type="button"
-												class="btn btn-primary"
-												onclick={createService}
-												disabled={creatingService}
-											>
-												{#if creatingService}
-													<Loader2 class="h-4 w-4 animate-spin" />
-												{/if}
-												Create service
+										<div class="mt-3 flex justify-end gap-2">
+											<button type="button" class="btn btn-secondary btn-sm" onclick={() => { showServiceForm = false; resetNewServiceForm(); }}>Cancel</button>
+											<button type="button" class="btn btn-primary btn-sm" onclick={createService} disabled={creatingService}>
+												{#if creatingService}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+												Create
 											</button>
 										</div>
 									</div>
 								{/if}
 
-								<div class="mt-6 space-y-4">
+								<div class="space-y-3">
 									{#if deployment.services?.length}
 										{#each deployment.services as service}
 											{@const displayedPorts =
 												service.ports && service.ports.length
 													? service.ports
-													: [
-															{
-																name: service.name,
-																port: service.port,
-																targetPort: service.targetPort,
-																protocol: service.protocol,
-																nodePort: service.nodePort ?? null
-															}
-													  ]}
-											<div class="surface-tile rounded-2xl p-6">
-												<div class="flex items-start justify-between gap-4 mb-4">
-													<div class="flex-1 min-w-0">
-														<h3 class="text-lg font-semibold mb-2" style="color: var(--center-channel-color);">{service.name}</h3>
-														<div class="flex flex-wrap items-center gap-3">
-															<span class="surface-pill rounded-full px-3 py-1 text-xs font-medium">
-																{service.type === 'external' ? 'NodePort' : 'ClusterIP'}
-															</span>
-															{#if service.externalIp}
-																<span class="text-sm" style="color: var(--surface-muted);">
-																	External IP: <span class="font-mono">{service.externalIp}</span>
-																</span>
-															{/if}
-															{#if service.domain}
-																<span class="text-sm" style="color: var(--surface-muted);">
-																	Domain: <span class="font-mono">{service.domain}</span>
-																</span>
-															{/if}
-														</div>
+													: [{ name: service.name, port: service.port, targetPort: service.targetPort, protocol: service.protocol, nodePort: service.nodePort ?? null }]}
+											<div class="rounded-xl p-4" style="background-color: var(--control-bg); border: 1px solid var(--surface-border);">
+												<div class="flex items-center justify-between gap-3 mb-2">
+													<div class="flex items-center gap-2 min-w-0">
+														<span class="text-sm font-medium" style="color: var(--center-channel-color);">{service.name}</span>
+														<span class="surface-pill rounded-full px-2 py-0.5 text-xs">{service.type === 'external' ? 'NodePort' : 'ClusterIP'}</span>
+														{#if service.externalIp}
+															<span class="text-xs font-mono" style="color: var(--surface-muted);">{service.externalIp}</span>
+														{/if}
 													</div>
-													<div class="flex gap-2 shrink-0">
-														<button
-															type="button"
-															class="btn btn-ghost btn-sm"
-															onclick={() => toggleServiceEdit(service)}
-														>
-															{#if serviceEditForms[service.id]}
-																<X class="h-4 w-4" />
-																<span class="hidden sm:inline">Close</span>
-															{:else}
-																<Settings class="h-4 w-4" />
-																<span class="hidden sm:inline">Edit</span>
-															{/if}
+													<div class="flex gap-1 shrink-0">
+														<button type="button" class="btn btn-ghost btn-sm" onclick={() => toggleServiceEdit(service)}>
+															{#if serviceEditForms[service.id]}<X class="h-3.5 w-3.5" />{:else}<Settings class="h-3.5 w-3.5" />{/if}
 														</button>
-														<button
-															type="button"
-															class="btn btn-ghost btn-sm text-red-500"
-															onclick={() => deleteService(service.id)}
-															disabled={serviceDeletingId === service.id}
-														>
-															{#if serviceDeletingId === service.id}
-																<Loader2 class="h-4 w-4 animate-spin" />
-															{:else}
-																<Trash2 class="h-4 w-4" />
-															{/if}
+														<button type="button" class="btn btn-ghost btn-sm text-red-500" onclick={() => deleteService(service.id)} disabled={serviceDeletingId === service.id}>
+															{#if serviceDeletingId === service.id}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2 class="h-3.5 w-3.5" />{/if}
 														</button>
 													</div>
 												</div>
 
 												{#if service.internalUrl}
-													<div class="mb-4 p-3 rounded-lg border" style="border-color: var(--divider-color); background-color: var(--surface-color);">
-														<div class="flex items-center justify-between gap-3">
-															<div class="flex-1 min-w-0">
-																<p class="text-xs mb-1 font-medium" style="color: var(--surface-muted);">Internal URL</p>
-																<p class="text-sm font-mono break-all" style="color: var(--center-channel-color);">{service.internalUrl}</p>
-															</div>
-															<button
-																type="button"
-																class="btn btn-ghost btn-sm shrink-0"
-																onclick={() => copyInternalUrl(service.internalUrl, service.id)}
-																title="Copy internal URL"
-															>
-																{#if copiedUrlId === service.id}
-																	<Check class="h-4 w-4 text-green-500" />
-																{:else}
-																	<Copy class="h-4 w-4" />
-																{/if}
-															</button>
-														</div>
+													<div class="flex items-center gap-2 mb-2 text-xs font-mono" style="color: var(--surface-muted);">
+														<span class="truncate">{service.internalUrl}</span>
+														<button type="button" class="btn btn-ghost btn-sm shrink-0" onclick={() => copyInternalUrl(service.internalUrl, service.id)}>
+															{#if copiedUrlId === service.id}<Check class="h-3 w-3 text-green-500" />{:else}<Copy class="h-3 w-3" />{/if}
+														</button>
 													</div>
 												{/if}
 
-												<div class="space-y-2">
-													<p class="text-xs font-medium mb-2" style="color: var(--surface-muted);">Ports</p>
+												<div class="space-y-1">
 													{#each displayedPorts as port}
-														<div class="flex flex-wrap items-center gap-3 p-2 rounded-lg" style="background-color: var(--surface-color);">
-															<span class="font-mono text-sm font-medium" style="color: var(--center-channel-color);">{port.name ?? 'port'}</span>
-															<div class="flex flex-wrap items-center gap-2 text-sm" style="color: var(--surface-muted);">
-																<span class="inline-flex items-center gap-1">
-																	<span class="text-xs opacity-70">Container:</span>
-																	<span class="font-mono">{port.targetPort}</span>
-																</span>
-																<span>→</span>
-																<span class="inline-flex items-center gap-1">
-																	<span class="text-xs opacity-70">Service:</span>
-																	<span class="font-mono">{port.port}</span>
-																</span>
-																{#if port.nodePort}
-																	<span>→</span>
-																	<span class="inline-flex items-center gap-1">
-																		<span class="text-xs opacity-70">External:</span>
-																		<span class="font-mono">{port.nodePort}</span>
-																	</span>
-																{/if}
-																<span class="surface-pill rounded-full px-2 py-0.5 text-xs ml-1">{port.protocol}</span>
-															</div>
+														<div class="flex items-center gap-2 text-xs" style="color: var(--surface-muted);">
+															<span class="font-mono font-medium" style="color: var(--center-channel-color);">{port.name ?? 'port'}</span>
+															<span class="font-mono">{port.targetPort}</span>
+															<span>→</span>
+															<span class="font-mono">{port.port}</span>
+															{#if port.nodePort}<span>→</span><span class="font-mono">{port.nodePort}</span>{/if}
+															<span class="surface-pill rounded-full px-1.5 py-0 text-[10px]">{port.protocol}</span>
 														</div>
 													{/each}
 												</div>
+
 												{#if serviceEditForms[service.id]}
-													<div class="mt-4 border-t border-dashed pt-4" style="border-color: var(--divider-color);">
-														<div class="space-y-3">
+													<div class="mt-3 border-t border-dashed pt-3" style="border-color: var(--surface-border);">
+														<div class="space-y-2">
 															{#each serviceEditForms[service.id].ports as port, index}
-																<div class="grid gap-3 md:grid-cols-[1fr_1fr_1fr_auto]">
-																	<div>
-																		<label class="text-xs opacity-70 mb-1 block">Name</label>
-																		<input
-																			type="text"
-																			class="input"
-																			placeholder="port name"
-																			value={port.name}
-																			oninput={(event) =>
-																				updateServiceEditPort(service.id, index, {
-																					name: (event.currentTarget as HTMLInputElement).value
-																				})}
-																		/>
+																<div class="flex flex-wrap gap-2 items-end">
+																	<div class="flex-1 min-w-[80px]">
+																		<p class="text-xs mb-1" style="color: var(--surface-muted);">Name</p>
+																		<input type="text" class="input text-sm" placeholder="port name" value={port.name}
+																			oninput={(event) => updateServiceEditPort(service.id, index, { name: (event.currentTarget as HTMLInputElement).value })} />
 																	</div>
-																	<div>
-																		<label class="text-xs opacity-70 mb-1 block">Container Port</label>
-																		<input
-																			type="number"
-																			min="1"
-																			class="input"
-																			placeholder="8080"
-																			value={port.containerPort}
-																			oninput={(event) =>
-																				updateServiceEditPort(service.id, index, {
-																					containerPort: Number(
-																						(event.currentTarget as HTMLInputElement).value
-																					)
-																				})}
-																		/>
+																	<div class="flex-1 min-w-[80px]">
+																		<p class="text-xs mb-1" style="color: var(--surface-muted);">Container</p>
+																		<input type="number" min="1" class="input text-sm" placeholder="8080" value={port.containerPort}
+																			oninput={(event) => updateServiceEditPort(service.id, index, { containerPort: Number((event.currentTarget as HTMLInputElement).value) })} />
 																	</div>
-																	<div>
-																		<label class="text-xs opacity-70 mb-1 block">Service Port</label>
-																		<input
-																			type="number"
-																			min="1"
-																			class="input"
-																			placeholder="80"
-																			value={port.servicePort}
-																			oninput={(event) =>
-																				updateServiceEditPort(service.id, index, {
-																					servicePort: Number(
-																						(event.currentTarget as HTMLInputElement).value
-																					)
-																				})}
-																		/>
+																	<div class="flex-1 min-w-[80px]">
+																		<p class="text-xs mb-1" style="color: var(--surface-muted);">Service</p>
+																		<input type="number" min="1" class="input text-sm" placeholder="80" value={port.servicePort}
+																			oninput={(event) => updateServiceEditPort(service.id, index, { servicePort: Number((event.currentTarget as HTMLInputElement).value) })} />
 																	</div>
-																	<div>
-																		<label class="text-xs opacity-70 mb-1 block">Protocol</label>
-																		<div class="flex gap-2">
-																			<div class="relative flex-1 custom-dropdown-container">
-																				<button
-																					type="button"
-																					onclick={() => (protocolDropdownOpen = protocolDropdownOpen === `${service.id}-${index}` ? null : `${service.id}-${index}`)}
-																					class="flex w-full items-center justify-between overflow-hidden rounded-xl border px-3 py-2 text-sm transition"
-																					style="background-color: var(--control-bg); color: var(--center-channel-color); border-color: var(--surface-border);"
-																				>
-																					<span>{port.protocol}</span>
-																					<ChevronDown class="h-4 w-4 shrink-0" />
-																				</button>
-																				{#if protocolDropdownOpen === `${service.id}-${index}`}
-																					<div
-																						class="absolute z-20 mt-1 w-full rounded-xl border p-2 shadow"
-																						style="background-color: var(--surface-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
-																						transition:scale={{ duration: 150, start: 0.96 }}
-																					>
-																						<button
-																							type="button"
-																							onclick={() => {
-																								updateServiceEditPort(service.id, index, { protocol: 'TCP' });
-																								protocolDropdownOpen = null;
-																							}}
-																							class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]"
-																						>
-																							<span>TCP</span>
-																							{#if port.protocol === 'TCP'}
-																								<Check class="h-4 w-4 text-primary-600" />
-																							{/if}
-																						</button>
-																						<button
-																							type="button"
-																							onclick={() => {
-																								updateServiceEditPort(service.id, index, { protocol: 'UDP' });
-																								protocolDropdownOpen = null;
-																							}}
-																							class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]"
-																						>
-																							<span>UDP</span>
-																							{#if port.protocol === 'UDP'}
-																								<Check class="h-4 w-4 text-primary-600" />
-																							{/if}
-																						</button>
-																					</div>
-																				{/if}
-																			</div>
-																			<button
-																				type="button"
-																				class="btn btn-ghost btn-sm"
-																				onclick={() => removeServiceEditPortRow(service.id, index)}
-																			>
-																				<Trash2 class="h-4 w-4" />
+																	<div class="w-[90px]">
+																		<p class="text-xs mb-1" style="color: var(--surface-muted);">Protocol</p>
+																		<div class="relative custom-dropdown-container">
+																			<button type="button"
+																				onclick={() => (protocolDropdownOpen = protocolDropdownOpen === `${service.id}-${index}` ? null : `${service.id}-${index}`)}
+																				class="flex w-full items-center justify-between overflow-hidden rounded-xl border px-2 py-2 text-sm transition"
+																				style="background-color: var(--surface-bg); color: var(--center-channel-color); border-color: var(--surface-border);">
+																				<span>{port.protocol}</span>
+																				<ChevronDown class="h-3.5 w-3.5 shrink-0" />
 																			</button>
+																			{#if protocolDropdownOpen === `${service.id}-${index}`}
+																				<div class="absolute z-20 mt-1 w-full rounded-xl border p-1.5 shadow-lg" style="background-color: var(--surface-bg); border-color: var(--surface-border);" transition:scale={{ duration: 150, start: 0.96 }}>
+																					{#each ['TCP', 'UDP'] as proto}
+																						<button type="button" onclick={() => { updateServiceEditPort(service.id, index, { protocol: proto }); protocolDropdownOpen = null; }}
+																							class="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]">
+																							<span>{proto}</span>
+																							{#if port.protocol === proto}<Check class="h-3.5 w-3.5 text-primary-600" />{/if}
+																						</button>
+																					{/each}
+																				</div>
+																			{/if}
 																		</div>
 																	</div>
+																	<button type="button" class="btn btn-ghost btn-sm" onclick={() => removeServiceEditPortRow(service.id, index)}>
+																		<Trash2 class="h-3.5 w-3.5" />
+																	</button>
 																	{#if serviceEditForms[service.id].exposePublic}
-																		<div class="md:col-span-4">
-																			<label class="text-xs opacity-70 mb-1 block">External Port (NodePort, optional)</label>
-																			<input
-																				type="number"
-																				min="30000"
-																				max="32767"
-																				class="input"
-																				placeholder="30000-32767"
-																				value={port.nodePort ?? ''}
-																				oninput={(event) =>
-																					updateServiceEditPort(service.id, index, {
-																						nodePort:
-																							(event.currentTarget as HTMLInputElement).value === ''
-																								? null
-																								: Number(
-																										(event.currentTarget as HTMLInputElement).value
-																								  )
-																					})}
-																			/>
+																		<div class="w-full">
+																			<p class="text-xs mb-1" style="color: var(--surface-muted);">NodePort (optional)</p>
+																			<input type="number" min="30000" max="32767" class="input text-sm" placeholder="30000-32767" value={port.nodePort ?? ''}
+																				oninput={(event) => updateServiceEditPort(service.id, index, { nodePort: (event.currentTarget as HTMLInputElement).value === '' ? null : Number((event.currentTarget as HTMLInputElement).value) })} />
 																		</div>
 																	{/if}
 																</div>
 															{/each}
-															<button
-																type="button"
-																class="btn btn-secondary btn-sm"
-																onclick={() => addServiceEditPortRow(service.id)}
-															>
-																<Plus class="h-4 w-4" />
-																Add port
+															<button type="button" class="btn btn-secondary btn-sm" onclick={() => addServiceEditPortRow(service.id)}>
+																<Plus class="h-3.5 w-3.5" /> Add port
 															</button>
 														</div>
 														{#if serviceEditErrors[service.id]}
-															<div class="alert alert-error mt-3">{serviceEditErrors[service.id]}</div>
+															<div class="alert alert-error mt-2">{serviceEditErrors[service.id]}</div>
 														{/if}
-														<div class="mt-3 flex justify-end gap-3">
-															<button
-																type="button"
-																class="btn btn-primary btn-sm"
-																onclick={() => saveServicePorts(service.id)}
-																disabled={serviceSavingId === service.id}
-															>
-																{#if serviceSavingId === service.id}
-																	<Loader2 class="h-4 w-4 animate-spin" />
-																{/if}
-																Save ports
+														<div class="mt-2 flex justify-end">
+															<button type="button" class="btn btn-primary btn-sm" onclick={() => saveServicePorts(service.id)} disabled={serviceSavingId === service.id}>
+																{#if serviceSavingId === service.id}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+																Save
 															</button>
 														</div>
 													</div>
@@ -3115,645 +2715,422 @@
 											</div>
 										{/each}
 									{:else}
-										<p class="surface-muted-panel rounded-xl px-3 py-3 text-center text-sm">
-											No services configured.
-										</p>
+										<p class="text-sm text-center py-4" style="color: var(--surface-muted);">No services configured</p>
 									{/if}
 								</div>
 							</div>
-								<div class="card rounded-2xl p-6">
-									<div class="flex items-center justify-between">
-										<p class="text-lg font-semibold text-gray-900 dark:text-gray-50">Ingresses</p>
-										{#if deployment.project?.workspace?.slug && deployment.project?.slug}
-											<button 
-												onclick={() => goto(`/workspaces/${deployment.project.workspace.slug}/projects/${deployment.project.slug}/ingresses/new?deployment=${deploymentId}`)} 
-												class="btn btn-secondary btn-sm"
-											>
-												<Plus class="h-4 w-4" />
-												<span>Add ingress</span>
-											</button>
-										{/if}
-									</div>
-									<div class="mt-4 space-y-4">
-										{#if deployment.ingresses?.length}
-											{#each deployment.ingresses as ingress}
-												<div class="surface-tile rounded-xl p-4">
-													<div class="flex flex-wrap items-center justify-between gap-4">
-														<div class="flex-1 min-w-0">
-															{#if ingress.annotations?.['traefik.ingress.kubernetes.io/router.middlewares']?.includes('auth@kubernetescrd')}
-																<p class="text-xs text-amber-500 mb-1">
-																	<Lock class="inline h-3 w-3 mr-1" />
-																	Basic Auth Enabled
-																</p>
-															{/if}
-															{#if ingress.routes && ingress.routes.length > 1}
-																<p class="font-medium text-gray-900 dark:text-gray-50 mb-1">
-																	{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}
-																</p>
-																<div class="space-y-1">
-																	{#each ingress.routes as route}
-																		<p class="text-sm text-gray-600 dark:text-gray-400">
-																			<span class="font-mono">{route.path}</span>
-																			<span class="text-xs ml-1">→ {route.serviceName}:{route.servicePort}</span>
-																		</p>
-																	{/each}
-																</div>
-															{:else}
-																<p class="font-medium text-gray-900 dark:text-gray-50">
-																	{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}{ingress.routes?.[0]?.path ?? ingress.path}
-																</p>
-															{/if}
-															{#if ingress.address}
-																<p class="text-xs text-gray-500 mt-1">{ingress.address}</p>
-															{/if}
-														</div>
-														<div class="flex gap-2">
-															{#if deployment.project?.workspace?.slug && deployment.project?.slug}
-																<button
-																	onclick={() => goto(`/workspaces/${deployment.project.workspace.slug}/projects/${deployment.project.slug}/ingresses/${ingress.id}`)}
-																	class="btn btn-ghost btn-sm"
-																>
-																	<Pencil class="h-4 w-4" />
-																</button>
-															{/if}
-															<button
-																onclick={() => deleteIngress(ingress.id)}
-																disabled={deletingIngress === ingress.id}
-																class="btn btn-ghost btn-sm text-red-500"
-															>
-																{#if deletingIngress === ingress.id}
-																	<Loader2 class="h-4 w-4 animate-spin" />
-																{:else}
-																	<Trash2 class="h-4 w-4" />
-																{/if}
+
+							<!-- Ingresses -->
+							<div class="card rounded-2xl p-5">
+								<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+									<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Ingresses</p>
+									{#if deployment.project?.workspace?.slug && deployment.project?.slug}
+										<button
+											onclick={() => goto(`/workspaces/${deployment.project.workspace.slug}/projects/${deployment.project.slug}/ingresses/new?deployment=${deploymentId}`)}
+											class="btn btn-secondary btn-sm"
+										>
+											<Plus class="h-4 w-4" />
+											<span>Add</span>
+										</button>
+									{/if}
+								</div>
+								<div class="space-y-2">
+									{#if deployment.ingresses?.length}
+										{#each deployment.ingresses as ingress}
+											<div class="rounded-xl p-3" style="background-color: var(--control-bg); border: 1px solid var(--surface-border);">
+												<div class="flex flex-wrap items-center justify-between gap-3">
+													<div class="flex-1 min-w-0">
+														{#if ingress.annotations?.['traefik.ingress.kubernetes.io/router.middlewares']?.includes('auth@kubernetescrd')}
+															<p class="text-xs text-amber-500 mb-1">
+																<Lock class="inline h-3 w-3 mr-1" />
+																Auth
+															</p>
+														{/if}
+														{#if ingress.routes && ingress.routes.length > 1}
+															<p class="text-sm font-medium" style="color: var(--center-channel-color);">
+																{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}
+															</p>
+															<div class="mt-1 space-y-0.5">
+																{#each ingress.routes as route}
+																	<p class="text-xs" style="color: var(--surface-muted);">
+																		<span class="font-mono">{route.path}</span> → {route.serviceName}:{route.servicePort}
+																	</p>
+																{/each}
+															</div>
+														{:else}
+															<p class="text-sm font-medium" style="color: var(--center-channel-color);">
+																{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}{ingress.routes?.[0]?.path ?? ingress.path}
+															</p>
+														{/if}
+														{#if ingress.address}
+															<p class="text-xs mt-0.5" style="color: var(--surface-muted);">{ingress.address}</p>
+														{/if}
+													</div>
+													<div class="flex gap-1">
+														{#if deployment.project?.workspace?.slug && deployment.project?.slug}
+															<button onclick={() => goto(`/workspaces/${deployment.project.workspace.slug}/projects/${deployment.project.slug}/ingresses/${ingress.id}`)} class="btn btn-ghost btn-sm">
+																<Pencil class="h-3.5 w-3.5" />
 															</button>
-														</div>
+														{/if}
+														<button onclick={() => deleteIngress(ingress.id)} disabled={deletingIngress === ingress.id} class="btn btn-ghost btn-sm text-red-500">
+															{#if deletingIngress === ingress.id}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2 class="h-3.5 w-3.5" />{/if}
+														</button>
 													</div>
 												</div>
-											{/each}
-										{:else}
-											<p class="surface-muted-panel rounded-xl px-3 py-2 text-sm">No ingresses yet.</p>
-										{/if}
-									</div>
+											</div>
+										{/each}
+									{:else}
+										<p class="text-sm text-center py-4" style="color: var(--surface-muted);">No ingresses configured</p>
+									{/if}
 								</div>
+							</div>
 						</div>
 					{:else if tab.id === 'history'}
-						<div class="card rounded-2xl p-6">
-							<p class="text-lg font-semibold text-gray-900 dark:text-gray-50">Image history</p>
+						<div class="card rounded-2xl p-5">
+							<p class="text-sm font-semibold mb-4" style="color: var(--center-channel-color);">Image History</p>
 							{#if deployment.imageHistory?.length}
-									<div class="mt-4 space-y-4">
-										{#each deployment.imageHistory as history}
-											<div class="surface-tile rounded-2xl p-4">
-											<div class="flex flex-wrap items-center justify-between gap-4">
-												<div>
-													<p class="truncate font-mono text-sm text-gray-900 dark:text-gray-100">{history.image}</p>
-													<div class="mt-1 flex flex-wrap gap-3 text-xs text-gray-500">
-														{#if history.branch}
-															<span>{history.branch}</span>
-														{/if}
-														{#if history.commit}
-															<code>{history.commit.slice(0, 7)}</code>
-														{/if}
-														<span>{new Date(history.createdAt).toLocaleString()}</span>
-													</div>
+								<div class="space-y-2">
+									{#each deployment.imageHistory as history}
+										<div class="flex items-center justify-between gap-3 rounded-xl p-3" style="background-color: var(--control-bg); border: 1px solid var(--surface-border);">
+											<div class="flex-1 min-w-0">
+												<p class="truncate font-mono text-sm" style="color: var(--center-channel-color);">{history.image}</p>
+												<div class="mt-1 flex flex-wrap items-center gap-2 text-xs" style="color: var(--surface-muted);">
+													{#if history.branch}
+														<span class="surface-pill rounded-full px-2 py-0 text-[10px]">{history.branch}</span>
+													{/if}
+													{#if history.commit}
+														<code class="font-mono">{history.commit.slice(0, 7)}</code>
+													{/if}
+													<span>{new Date(history.createdAt).toLocaleString()}</span>
 												</div>
-												{#if history.isActive}
-													<span class="badge badge-success">Active</span>
-												{:else}
-													<button onclick={() => rollbackToImage(history.id)} class="btn btn-secondary btn-sm">
-														Roll back
-													</button>
-												{/if}
 											</div>
+											{#if history.isActive}
+												<span class="badge badge-success text-xs">Active</span>
+											{:else}
+												<button onclick={() => rollbackToImage(history.id)} class="btn btn-secondary btn-sm">Roll back</button>
+											{/if}
 										</div>
 									{/each}
 								</div>
 							{:else}
-								<p class="mt-4 text-sm text-gray-500">No image history available.</p>
+								<p class="text-sm text-center py-4" style="color: var(--surface-muted);">No image history available</p>
 							{/if}
 						</div>
 					{:else if tab.id === 'webhooks'}
-						<div class="space-y-6">
-							<!-- Docs card -->
-							<div class="card rounded-2xl p-6">
-								<p class="text-lg font-semibold text-gray-900 dark:text-gray-50">Deploy Webhooks</p>
-								<p class="mt-2 text-sm text-gray-500">
-									Webhook tokens let you trigger redeployments from CI/CD pipelines like GitHub Actions without needing to log in. Each token is a secret URL you can call to restart your deployment or update its image.
-								</p>
+						<div class="space-y-5">
+							<!-- Tokens -->
+							<div class="card rounded-2xl p-5">
+								<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+									<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Webhook Tokens</p>
+								</div>
 
-								<div class="webhook-usage-section mt-4 rounded-xl p-4">
-									<p class="webhook-usage-label mb-2 text-xs font-semibold uppercase tracking-wide">Usage</p>
-									<div class="space-y-3 text-sm">
-										<div>
-											<p class="font-medium">Restart (no image change):</p>
-											<pre class="webhook-code-block mt-1 overflow-x-auto rounded-lg p-3 text-xs font-mono"><code>{webhookExamples.restart}</code></pre>
+								<div class="flex gap-2 mb-4">
+									<input type="text" class="input text-sm flex-1" placeholder="Token label (e.g. github-actions)" bind:value={newWebhookLabel} />
+									<button class="btn btn-primary btn-sm" onclick={createWebhookToken} disabled={creatingWebhookToken}>
+										{#if creatingWebhookToken}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Plus class="h-3.5 w-3.5" />{/if}
+										<span>Create</span>
+									</button>
+								</div>
+
+								{#if newlyCreatedToken}
+									<div class="webhook-success-card rounded-xl p-4 mb-4" transition:scale={{ duration: 200 }}>
+										<p class="text-sm font-semibold">Copy now — won't be shown again.</p>
+										<div class="mt-2 space-y-2">
+											<div>
+												<p class="webhook-success-muted text-xs font-medium mb-1">Token</p>
+												<div class="flex items-center gap-2">
+													<code class="flex-1 break-all rounded-lg px-2 py-1.5 font-mono text-xs">{newlyCreatedToken}</code>
+													<button class="btn btn-ghost btn-sm" onclick={() => copyToClipboard(newlyCreatedToken!, 'token')}>
+														{#if copiedWebhookToken}<Check class="h-3.5 w-3.5 text-[var(--success-muted)]" />{:else}<Copy class="h-3.5 w-3.5" />{/if}
+													</button>
+												</div>
+											</div>
+											<div>
+												<p class="webhook-success-muted text-xs font-medium mb-1">URL</p>
+												<div class="flex items-center gap-2">
+													<code class="flex-1 break-all rounded-lg px-2 py-1.5 font-mono text-xs">{getWebhookUrl(newlyCreatedToken)}</code>
+													<button class="btn btn-ghost btn-sm" onclick={() => copyToClipboard(getWebhookUrl(newlyCreatedToken!), 'url')}>
+														{#if copiedWebhookUrl}<Check class="h-3.5 w-3.5 text-[var(--success-muted)]" />{:else}<Copy class="h-3.5 w-3.5" />{/if}
+													</button>
+												</div>
+											</div>
 										</div>
-										<div>
-											<p class="font-medium">Update image tag:</p>
-											<pre class="webhook-code-block mt-1 overflow-x-auto rounded-lg p-3 text-xs font-mono"><code>{webhookExamples.updateTag}</code></pre>
+										<button class="btn btn-ghost btn-sm mt-2" onclick={() => (newlyCreatedToken = null)}>Dismiss</button>
+									</div>
+								{/if}
+
+								<div class="space-y-2">
+									{#if webhookTokensLoading}
+										<div class="flex items-center justify-center py-6">
+											<Loader2 class="h-5 w-5 animate-spin" style="color: var(--surface-muted);" />
 										</div>
-										<div>
-											<p class="font-medium">Update full image:</p>
-											<pre class="webhook-code-block mt-1 overflow-x-auto rounded-lg p-3 text-xs font-mono"><code>{webhookExamples.updateImage}</code></pre>
-										</div>
+									{:else if webhookTokens.length === 0}
+										<p class="text-sm text-center py-4" style="color: var(--surface-muted);">No tokens yet</p>
+									{:else}
+										{#each webhookTokens as token}
+											<div class="flex items-center justify-between rounded-xl p-3" style="background-color: var(--control-bg); border: 1px solid var(--surface-border);">
+												<div>
+													<p class="text-sm font-medium" style="color: var(--center-channel-color);">{token.label || 'Unnamed token'}</p>
+													<p class="text-xs" style="color: var(--surface-muted);">
+														Created {new Date(token.createdAt).toLocaleDateString()}
+														{#if token.lastUsedAt}&middot; Used {new Date(token.lastUsedAt).toLocaleDateString()}{:else}&middot; Never used{/if}
+													</p>
+												</div>
+												<button class="btn btn-destructive btn-sm" onclick={() => deleteWebhookToken(token.id)} disabled={deletingWebhookTokenId === token.id}>
+													{#if deletingWebhookTokenId === token.id}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2 class="h-3.5 w-3.5" />{/if}
+												</button>
+											</div>
+										{/each}
+									{/if}
+								</div>
+							</div>
+
+							<!-- Usage docs -->
+							<div class="card rounded-2xl p-5">
+								<p class="text-sm font-semibold mb-3" style="color: var(--center-channel-color);">Usage</p>
+								<div class="space-y-3 text-sm">
+									<div>
+										<p class="text-xs font-medium mb-1" style="color: var(--surface-muted);">Restart</p>
+										<pre class="webhook-code-block overflow-x-auto rounded-lg p-2.5 text-xs font-mono"><code>{webhookExamples.restart}</code></pre>
+									</div>
+									<div>
+										<p class="text-xs font-medium mb-1" style="color: var(--surface-muted);">Update image tag</p>
+										<pre class="webhook-code-block overflow-x-auto rounded-lg p-2.5 text-xs font-mono"><code>{webhookExamples.updateTag}</code></pre>
+									</div>
+									<div>
+										<p class="text-xs font-medium mb-1" style="color: var(--surface-muted);">Update full image</p>
+										<pre class="webhook-code-block overflow-x-auto rounded-lg p-2.5 text-xs font-mono"><code>{webhookExamples.updateImage}</code></pre>
 									</div>
 								</div>
 
 								<div class="webhook-info-card mt-4 rounded-xl p-4">
-									<p class="mb-2 text-xs font-semibold uppercase tracking-wide">GitHub Actions Example</p>
-									<pre class="webhook-code-block overflow-x-auto rounded-lg p-3 text-xs font-mono"><code>{webhookExamples.githubActions}</code></pre>
-								</div>
-							</div>
-
-							<!-- Token management card -->
-							<div class="card rounded-2xl p-6">
-								<div class="flex items-center justify-between">
-									<div>
-										<p class="text-lg font-semibold text-gray-900 dark:text-gray-50">Webhook Tokens</p>
-										<p class="mt-1 text-sm text-gray-500">Create and manage webhook tokens for this deployment.</p>
-									</div>
-								</div>
-
-								<!-- Create new token -->
-								<div class="mt-4 flex gap-3">
-									<input
-										type="text"
-										class="input flex-1"
-										placeholder="Token label (e.g. github-actions)"
-										bind:value={newWebhookLabel}
-									/>
-									<button
-										class="btn btn-primary"
-										onclick={createWebhookToken}
-										disabled={creatingWebhookToken}
-									>
-										{#if creatingWebhookToken}
-											<Loader2 class="mr-2 h-4 w-4 animate-spin" />
-										{:else}
-											<Plus class="mr-2 h-4 w-4" />
-										{/if}
-										Create Token
-									</button>
-								</div>
-
-								<!-- Newly created token (show once) -->
-								{#if newlyCreatedToken}
-									<div class="webhook-success-card mt-4 rounded-xl p-4" transition:scale={{ duration: 200 }}>
-										<p class="text-sm font-semibold">Token created! Copy it now — it won't be shown again.</p>
-										<div class="mt-2 space-y-2">
-											<div>
-												<p class="webhook-success-muted mb-1 text-xs font-medium">Token</p>
-												<div class="flex items-center gap-2">
-													<code class="flex-1 break-all rounded-lg px-3 py-2 font-mono text-xs">{newlyCreatedToken}</code>
-													<button
-														class="btn btn-ghost btn-sm"
-														onclick={() => copyToClipboard(newlyCreatedToken!, 'token')}
-													>
-														{#if copiedWebhookToken}
-															<Check class="h-4 w-4 text-[var(--success-muted)]" />
-														{:else}
-															<Copy class="h-4 w-4" />
-														{/if}
-													</button>
-												</div>
-											</div>
-											<div>
-												<p class="webhook-success-muted mb-1 text-xs font-medium">Webhook URL</p>
-												<div class="flex items-center gap-2">
-													<code class="flex-1 break-all rounded-lg px-3 py-2 font-mono text-xs">{getWebhookUrl(newlyCreatedToken)}</code>
-													<button
-														class="btn btn-ghost btn-sm"
-														onclick={() => copyToClipboard(getWebhookUrl(newlyCreatedToken!), 'url')}
-													>
-														{#if copiedWebhookUrl}
-															<Check class="h-4 w-4 text-[var(--success-muted)]" />
-														{:else}
-															<Copy class="h-4 w-4" />
-														{/if}
-													</button>
-												</div>
-											</div>
-										</div>
-										<button
-											class="btn btn-ghost btn-sm mt-3"
-											onclick={() => (newlyCreatedToken = null)}
-										>
-											Dismiss
-										</button>
-									</div>
-								{/if}
-
-								<!-- Token list -->
-								<div class="mt-4">
-									{#if webhookTokensLoading}
-										<div class="flex items-center justify-center py-8">
-											<Loader2 class="h-6 w-6 animate-spin text-gray-400" />
-										</div>
-									{:else if webhookTokens.length === 0}
-										<div class="webhook-empty-state rounded-xl px-4 py-8 text-center">
-											<Webhook class="mx-auto h-8 w-8" />
-											<p class="mt-2 text-sm">No webhook tokens yet. Create one to get started.</p>
-										</div>
-									{:else}
-										<div class="space-y-3">
-											{#each webhookTokens as token}
-												<div class="surface-tile flex items-center justify-between rounded-xl p-4">
-													<div>
-														<p class="text-sm font-medium text-gray-900 dark:text-gray-50">
-															{token.label || 'Unnamed token'}
-														</p>
-														<p class="text-xs text-gray-500">
-															Created {new Date(token.createdAt).toLocaleDateString()}
-															{#if token.lastUsedAt}
-																&middot; Last used {new Date(token.lastUsedAt).toLocaleDateString()}
-															{:else}
-																&middot; Never used
-															{/if}
-														</p>
-													</div>
-													<button
-														class="btn btn-destructive btn-sm"
-														onclick={() => deleteWebhookToken(token.id)}
-														disabled={deletingWebhookTokenId === token.id}
-													>
-														{#if deletingWebhookTokenId === token.id}
-															<Loader2 class="h-4 w-4 animate-spin" />
-														{:else}
-															<Trash2 class="h-4 w-4" />
-														{/if}
-													</button>
-												</div>
-											{/each}
-										</div>
-									{/if}
+									<p class="text-xs font-semibold uppercase tracking-wide mb-2">GitHub Actions Example</p>
+									<pre class="webhook-code-block overflow-x-auto rounded-lg p-2.5 text-xs font-mono"><code>{webhookExamples.githubActions}</code></pre>
 								</div>
 							</div>
 						</div>
 					{:else if tab.id === 'advanced'}
-						<div class="card rounded-2xl p-6">
-							<div class="mb-6">
-								<p class="text-lg font-semibold text-gray-900 dark:text-gray-50">Build Options</p>
-								<p class="text-sm text-gray-500 mt-1">Configure build settings</p>
-							</div>
-
-							{#if deployment.githubRepo}
-								<div class="space-y-6">
-									<div>
-										<label class="flex items-center gap-3">
-											<input type="checkbox" bind:checked={buildFromRoot} class="rounded" />
-											<div>
-												<span class="font-medium">Build from root</span>
-												<p class="text-xs text-gray-500">Build from the repository root instead of the Dockerfile directory</p>
-											</div>
-										</label>
-									</div>
+						<div class="card rounded-2xl overflow-hidden">
+							<!-- Build Options -->
+							<div class="p-5">
+								<div class="flex items-center justify-between mb-1">
+									<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Build</p>
+									{#if deployment.githubRepo}
+										<button onclick={saveAdvanced} disabled={savingAdvanced} class="btn btn-primary btn-sm">
+											{#if savingAdvanced}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+											<span>Save</span>
+										</button>
+									{/if}
 								</div>
-
-								<div class="mt-6 flex flex-wrap justify-end gap-3">
-									<button onclick={saveAdvanced} disabled={savingAdvanced} class="btn btn-primary">
-										{#if savingAdvanced}
-											<Loader2 class="h-4 w-4 animate-spin" />
-										{/if}
-										<span>Save changes</span>
-									</button>
-								</div>
-							{:else}
-								<p class="text-sm text-gray-500">Build options are only available for deployments created from GitHub repositories.</p>
-							{/if}
-						</div>
-
-						<!-- Auto-deploy Section -->
-						<div class="card rounded-2xl p-6 mt-6">
-							<div class="mb-6">
-								<p class="text-lg font-semibold text-gray-900 dark:text-gray-50">Auto-Deploy</p>
-								<p class="text-sm text-gray-500 mt-1">Automatically deploy on push to a branch</p>
-							</div>
-
-							{#if deployment.githubRepo}
-								{#if autoDeployLoading}
-									<div class="flex items-center justify-center py-8">
-										<Loader2 class="h-6 w-6 animate-spin text-gray-400" />
-									</div>
-								{:else if autoDeployStatus?.enabled}
-									<!-- Auto-deploy is enabled -->
-									<div class="space-y-4">
-										<div class="flex items-center gap-2 text-green-600 dark:text-green-400">
-											<Check class="h-5 w-5" />
-											<span class="font-medium">Auto-deploy is enabled</span>
-										</div>
-
-										<div class="surface-muted-panel rounded-lg p-4 space-y-3">
-											<div class="flex items-center justify-between">
-												<span class="text-sm text-gray-600 dark:text-gray-400">Branch</span>
-												<span class="font-mono text-sm">{autoDeployStatus.branch}</span>
-											</div>
-										</div>
-
-										<p class="text-xs text-gray-500">
-											Pushes to <code class="bg-gray-100 dark:bg-gray-800 px-1 rounded">{autoDeployStatus.branch}</code> will automatically trigger a new deployment.
-											Deployment status will appear on your commits in GitHub.
-										</p>
-
-										<div class="flex justify-end">
-											<button onclick={disableAutoDeploy} disabled={disablingAutoDeploy} class="btn btn-destructive">
-												{#if disablingAutoDeploy}
-													<Loader2 class="h-4 w-4 animate-spin" />
-												{/if}
-												<span>Disable auto-deploy</span>
-											</button>
-										</div>
-									</div>
-								{:else if !autoDeployStatus?.appInstalled}
-									<!-- GitHub App not installed -->
-									<div class="space-y-4">
-										<div class="surface-muted-panel rounded-lg p-4 border-2 border-dashed border-gray-300 dark:border-gray-600">
-											<div class="text-center space-y-3">
-												<div class="mx-auto w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-													<svg class="h-6 w-6 text-gray-400" viewBox="0 0 98 96" xmlns="http://www.w3.org/2000/svg">
-														<path fill-rule="evenodd" clip-rule="evenodd" d="M48.854 0C21.839 0 0 22 0 49.217c0 21.756 13.993 40.172 33.405 46.69 2.427.49 3.316-1.059 3.316-2.362 0-1.141-.08-5.052-.08-9.127-13.59 2.934-16.42-5.867-16.42-5.867-2.184-5.704-5.42-7.17-5.42-7.17-4.448-3.015.324-3.015.324-3.015 4.934.326 7.523 5.052 7.523 5.052 4.367 7.496 11.404 5.378 14.235 4.074.404-3.178 1.699-5.378 3.074-6.6-10.839-1.141-22.243-5.378-22.243-24.283 0-5.378 1.94-9.778 5.014-13.2-.485-1.222-2.184-6.275.486-13.038 0 0 4.125-1.304 13.426 5.052a46.97 46.97 0 0 1 12.214-1.63c4.125 0 8.33.571 12.213 1.63 9.302-6.356 13.427-5.052 13.427-5.052 2.67 6.763.97 11.816.485 13.038 3.155 3.422 5.015 7.822 5.015 13.2 0 18.905-11.404 23.06-22.324 24.283 1.78 1.548 3.316 4.481 3.316 9.126 0 6.6-.08 11.897-.08 13.526 0 1.304.89 2.853 3.316 2.364 19.412-6.52 33.405-24.935 33.405-46.691C97.707 22 75.788 0 48.854 0z" fill="currentColor"/>
-													</svg>
-												</div>
-												<div>
-													<p class="text-sm font-medium">Install the GitHub App</p>
-													<p class="text-xs text-gray-500 mt-1">
-														To enable auto-deploy, you need to install the Leaf GitHub App on your repository.
-													</p>
-												</div>
-												<button
-													onclick={openGitHubAppInstall}
-													disabled={!githubAppInstallUrl || loadingAppInstallUrl}
-													class="btn btn-primary"
-												>
-													{#if loadingAppInstallUrl}
-														<Loader2 class="h-4 w-4 animate-spin" />
-													{/if}
-													<ExternalLink class="h-4 w-4" />
-													<span>Install GitHub App</span>
-												</button>
-											</div>
-										</div>
-										<p class="text-xs text-gray-500">
-											After installing the app, refresh this page to enable auto-deploy.
-										</p>
-									</div>
+								{#if deployment.githubRepo}
+									<label class="flex items-center gap-2 text-sm cursor-pointer">
+										<input type="checkbox" bind:checked={buildFromRoot} class="rounded" />
+										<span>Build from repository root</span>
+										<span class="text-xs" style="color: var(--surface-muted);">instead of Dockerfile directory</span>
+									</label>
 								{:else}
-									<!-- Auto-deploy is disabled but app is installed -->
-									<div class="space-y-4">
-										<p class="text-sm text-gray-600 dark:text-gray-400">
-											Enable auto-deploy to automatically trigger a deployment whenever you push to a specific branch.
-											This works like Cloudflare Workers - deployment status and logs will be shown on your commits in GitHub.
-										</p>
+									<p class="text-xs" style="color: var(--surface-muted);">Only available for GitHub deployments.</p>
+								{/if}
+							</div>
 
-										<div>
-											<label class="block text-sm font-medium mb-2">Deploy branch</label>
-											<input
-												type="text"
-												bind:value={autoDeployBranch}
-												placeholder={deployment.githubBranch || 'main'}
-												class="input w-full font-mono"
-											/>
-											<p class="text-xs text-gray-500 mt-1">The branch that will trigger auto-deployments when pushed to</p>
+							<div class="advanced-divider"></div>
+
+							<!-- Auto-deploy -->
+							<div class="p-5">
+								<div class="flex items-center justify-between mb-2">
+									<div class="flex items-center gap-2">
+										<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Auto-Deploy</p>
+										{#if deployment.githubRepo && autoDeployStatus?.enabled}
+											<span class="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium bg-green-500/10 text-green-600 dark:text-green-400">
+												<span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>
+												Active
+											</span>
+										{/if}
+									</div>
+									{#if deployment.githubRepo && autoDeployStatus?.enabled}
+										<button onclick={disableAutoDeploy} disabled={disablingAutoDeploy} class="btn btn-destructive btn-sm">
+											{#if disablingAutoDeploy}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+											<span>Disable</span>
+										</button>
+									{/if}
+								</div>
+								{#if deployment.githubRepo}
+									{#if autoDeployLoading}
+										<div class="flex items-center justify-center py-4">
+											<Loader2 class="h-4 w-4 animate-spin" style="color: var(--surface-muted);" />
 										</div>
-
-										<div class="flex justify-end">
-											<button onclick={enableAutoDeploy} disabled={enablingAutoDeploy || !autoDeployBranch} class="btn btn-primary">
-												{#if enablingAutoDeploy}
-													<Loader2 class="h-4 w-4 animate-spin" />
-												{/if}
-												<span>Enable auto-deploy</span>
+									{:else if autoDeployStatus?.enabled}
+										<p class="text-xs" style="color: var(--surface-muted);">
+											Pushes to <code class="font-mono rounded px-1 py-0.5" style="background-color: var(--control-bg);">{autoDeployStatus.branch}</code> trigger a new deployment.
+										</p>
+									{:else if !autoDeployStatus?.appInstalled}
+										<div class="flex items-center justify-between gap-3 rounded-xl p-3" style="background-color: var(--control-bg); border: 1px dashed var(--surface-border);">
+											<div>
+												<p class="text-sm font-medium" style="color: var(--center-channel-color);">GitHub App required</p>
+												<p class="text-xs" style="color: var(--surface-muted);">Install it on your repo to enable auto-deploy.</p>
+											</div>
+											<button onclick={openGitHubAppInstall} disabled={!githubAppInstallUrl || loadingAppInstallUrl} class="btn btn-primary btn-sm shrink-0">
+												{#if loadingAppInstallUrl}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+												<ExternalLink class="h-3.5 w-3.5" />
+												<span>Install</span>
 											</button>
 										</div>
-									</div>
-								{/if}
+									{:else}
+										<div class="flex gap-2 items-end">
+											<div class="flex-1">
+												<p class="text-xs mb-1" style="color: var(--surface-muted);">Deploy on push to</p>
+												<input type="text" bind:value={autoDeployBranch} placeholder={deployment.githubBranch || 'main'} class="input text-sm font-mono" />
+											</div>
+											<button onclick={enableAutoDeploy} disabled={enablingAutoDeploy || !autoDeployBranch} class="btn btn-primary btn-sm">
+												{#if enablingAutoDeploy}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+												<span>Enable</span>
+											</button>
+										</div>
+									{/if}
 
-								<!-- GitHub Deployments History -->
-								{#if githubDeployments.length > 0}
-									<div class="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
-										<p class="text-sm font-medium mb-3">Recent GitHub Deployments</p>
-										<div class="space-y-2">
-											{#each githubDeployments.slice(0, 5) as ghDeployment}
-												<div class="surface-muted-panel rounded-lg p-3 flex items-center justify-between">
-													<div class="flex items-center gap-3">
-														<div class="flex-shrink-0">
+									{#if githubDeployments.length > 0}
+										<details class="mt-3 group">
+											<summary class="cursor-pointer text-xs font-medium" style="color: var(--surface-muted);">
+												Recent deployments ({githubDeployments.length})
+											</summary>
+											<div class="mt-2 space-y-1">
+												{#each githubDeployments.slice(0, 5) as ghDeployment}
+													<div class="flex items-center justify-between rounded-lg px-2.5 py-1.5" style="background-color: var(--control-bg);">
+														<div class="flex items-center gap-2">
 															{#if ghDeployment.status === 'success'}
-																<div class="h-2 w-2 rounded-full bg-green-500"></div>
+																<div class="h-1.5 w-1.5 rounded-full bg-green-500"></div>
 															{:else if ghDeployment.status === 'failure' || ghDeployment.status === 'error'}
-																<div class="h-2 w-2 rounded-full bg-red-500"></div>
+																<div class="h-1.5 w-1.5 rounded-full bg-red-500"></div>
 															{:else if ghDeployment.status === 'in_progress'}
-																<div class="h-2 w-2 rounded-full bg-yellow-500 animate-pulse"></div>
+																<div class="h-1.5 w-1.5 rounded-full bg-yellow-500 animate-pulse"></div>
 															{:else}
-																<div class="h-2 w-2 rounded-full bg-gray-400"></div>
+																<div class="h-1.5 w-1.5 rounded-full" style="background-color: var(--surface-muted);"></div>
+															{/if}
+															<code class="text-[11px] font-mono">{ghDeployment.commitSha.substring(0, 7)}</code>
+															<span class="text-[11px]" style="color: var(--surface-muted);">{ghDeployment.ref}</span>
+														</div>
+														<div class="flex items-center gap-1.5 text-[11px]" style="color: var(--surface-muted);">
+															<span>{new Date(ghDeployment.createdAt).toLocaleDateString()}</span>
+															{#if ghDeployment.logUrl}
+																<a href={ghDeployment.logUrl} class="text-blue-500 hover:underline" target="_blank"><ExternalLink class="h-2.5 w-2.5" /></a>
 															{/if}
 														</div>
-														<div>
-															<code class="text-xs font-mono">{ghDeployment.commitSha.substring(0, 7)}</code>
-															<span class="text-xs text-gray-500 ml-2">{ghDeployment.ref}</span>
-														</div>
 													</div>
-													<div class="flex items-center gap-2 text-xs text-gray-500">
-														<span>{new Date(ghDeployment.createdAt).toLocaleString()}</span>
-														{#if ghDeployment.logUrl}
-															<a href={ghDeployment.logUrl} class="text-blue-500 hover:underline" target="_blank">
-																<ExternalLink class="h-3 w-3" />
-															</a>
-														{/if}
-													</div>
-												</div>
-											{/each}
-										</div>
-									</div>
+												{/each}
+											</div>
+										</details>
+									{/if}
+								{:else}
+									<p class="text-xs" style="color: var(--surface-muted);">Only available for GitHub deployments.</p>
 								{/if}
-							{:else}
-								<p class="text-sm text-gray-500">Auto-deploy is only available for deployments created from GitHub repositories.</p>
-							{/if}
-						</div>
-
-						<!-- Health Check Section -->
-						<!-- svelte-ignore a11y_no_static_element_interactions -->
-						<div class="card rounded-2xl p-6 mt-6" onchange={() => isEditingHealthCheck = true} oninput={() => isEditingHealthCheck = true} onclick={() => isEditingHealthCheck = true}>
-							<div class="mb-6">
-								<p class="text-lg font-semibold text-gray-900 dark:text-gray-50">Health Checks</p>
-								<p class="text-sm text-gray-500 mt-1">Configure liveness, readiness, and startup probes for your deployment</p>
 							</div>
 
-							<div class="space-y-6">
-								<div>
-									<label class="flex items-center gap-3">
-										<input type="checkbox" bind:checked={healthCheckEnabled} class="rounded" />
-										<div>
-											<span class="font-medium">Enable health checks</span>
-											<p class="text-xs text-gray-500">Kubernetes will monitor your container's health and restart it if it becomes unhealthy</p>
-										</div>
-									</label>
+							<div class="advanced-divider"></div>
+
+							<!-- Health Checks -->
+							<!-- svelte-ignore a11y_no_static_element_interactions -->
+							<div class="p-5" onchange={() => isEditingHealthCheck = true} oninput={() => isEditingHealthCheck = true} onclick={() => isEditingHealthCheck = true}>
+								<div class="flex items-center justify-between mb-3">
+									<div class="flex items-center gap-3">
+										<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Health Checks</p>
+										<label class="relative inline-flex items-center cursor-pointer">
+											<input type="checkbox" bind:checked={healthCheckEnabled} class="sr-only peer" />
+											<div class="w-8 h-[18px] rounded-full transition-colors peer-checked:bg-green-500" style="background-color: var(--surface-border);"></div>
+											<div class="absolute left-[3px] top-[3px] h-3 w-3 rounded-full bg-white transition-transform peer-checked:translate-x-3.5 shadow-sm"></div>
+										</label>
+									</div>
+									<button onclick={saveHealthCheck} disabled={savingHealthCheck} class="btn btn-primary btn-sm">
+										{#if savingHealthCheck}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+										<span>Save</span>
+									</button>
 								</div>
 
 								{#if healthCheckEnabled}
-									<div class="space-y-5">
-										<!-- Probe type selector -->
-										<div>
-											<label class="block text-sm font-medium mb-2">Check type</label>
-											<div class="flex gap-2">
-												<button
-													onclick={() => healthCheckType = 'http'}
-													class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {healthCheckType === 'http' ? 'bg-[var(--sidebar-text-active-bg)] text-[var(--sidebar-text-active-color)] border border-[var(--sidebar-text-active-border)]' : 'bg-[var(--control-bg)] text-[var(--control-text)] border border-[var(--surface-border)] hover:bg-[var(--control-hover-bg)]'}"
-												>
-													HTTP
-												</button>
-												<button
-													onclick={() => healthCheckType = 'tcp'}
-													class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {healthCheckType === 'tcp' ? 'bg-[var(--sidebar-text-active-bg)] text-[var(--sidebar-text-active-color)] border border-[var(--sidebar-text-active-border)]' : 'bg-[var(--control-bg)] text-[var(--control-text)] border border-[var(--surface-border)] hover:bg-[var(--control-hover-bg)]'}"
-												>
-													TCP
-												</button>
-												<button
-													onclick={() => healthCheckType = 'exec'}
-													class="px-4 py-2 rounded-lg text-sm font-medium transition-colors {healthCheckType === 'exec' ? 'bg-[var(--sidebar-text-active-bg)] text-[var(--sidebar-text-active-color)] border border-[var(--sidebar-text-active-border)]' : 'bg-[var(--control-bg)] text-[var(--control-text)] border border-[var(--surface-border)] hover:bg-[var(--control-hover-bg)]'}"
-												>
-													Command
-												</button>
+									<div class="space-y-4">
+										<div class="flex flex-wrap items-end gap-3">
+											<!-- Check type pills -->
+											<div>
+												<p class="text-xs mb-1.5" style="color: var(--surface-muted);">Type</p>
+												<div class="flex gap-1">
+													{#each [{ val: 'http', label: 'HTTP' }, { val: 'tcp', label: 'TCP' }, { val: 'exec', label: 'Cmd' }] as opt}
+														<button onclick={() => healthCheckType = opt.val}
+															class="px-2.5 py-1 rounded-lg text-xs font-medium transition-colors {healthCheckType === opt.val ? 'bg-[var(--sidebar-text-active-bg)] text-[var(--sidebar-text-active-color)] border border-[var(--sidebar-text-active-border)]' : 'bg-[var(--control-bg)] text-[var(--control-text)] border border-[var(--surface-border)] hover:bg-[var(--control-hover-bg)]'}">
+															{opt.label}
+														</button>
+													{/each}
+												</div>
 											</div>
-											<p class="text-xs text-gray-500 mt-1">
-												{#if healthCheckType === 'http'}
-													Sends an HTTP GET request to the specified path and port
-												{:else if healthCheckType === 'tcp'}
-													Checks if a TCP connection can be established on the specified port
-												{:else}
-													Executes a command inside the container
-												{/if}
-											</p>
+
+											<!-- Inline config fields -->
+											{#if healthCheckType === 'http'}
+												<div class="flex-1 min-w-[120px]">
+													<p class="text-xs mb-1" style="color: var(--surface-muted);">Path</p>
+													<input type="text" bind:value={healthCheckPath} placeholder="/health" class="input text-sm font-mono" />
+												</div>
+												<div class="w-20">
+													<p class="text-xs mb-1" style="color: var(--surface-muted);">Port</p>
+													<input type="number" bind:value={healthCheckPort} placeholder="80" class="input text-sm font-mono" />
+												</div>
+											{:else if healthCheckType === 'tcp'}
+												<div class="w-24">
+													<p class="text-xs mb-1" style="color: var(--surface-muted);">Port</p>
+													<input type="number" bind:value={healthCheckPort} placeholder="80" class="input text-sm font-mono" />
+												</div>
+											{:else}
+												<div class="flex-1 min-w-[200px]">
+													<p class="text-xs mb-1" style="color: var(--surface-muted);">Command</p>
+													<input type="text" bind:value={healthCheckCommand} placeholder="cat /tmp/healthy" class="input text-sm font-mono" />
+												</div>
+											{/if}
 										</div>
 
-										<!-- Type-specific fields -->
-										{#if healthCheckType === 'http'}
-											<div class="grid grid-cols-2 gap-4">
-												<div>
-													<label class="block text-sm font-medium mb-2">Path</label>
-													<input
-														type="text"
-														bind:value={healthCheckPath}
-														placeholder="/health"
-														class="input w-full font-mono"
-													/>
-												</div>
-												<div>
-													<label class="block text-sm font-medium mb-2">Port</label>
-													<input
-														type="number"
-														bind:value={healthCheckPort}
-														placeholder="80"
-														class="input w-full font-mono"
-													/>
-												</div>
-											</div>
-										{:else if healthCheckType === 'tcp'}
-											<div>
-												<label class="block text-sm font-medium mb-2">Port</label>
-												<input
-													type="number"
-													bind:value={healthCheckPort}
-													placeholder="80"
-													class="input w-full font-mono"
-												/>
-											</div>
-										{:else}
-											<div>
-												<label class="block text-sm font-medium mb-2">Command</label>
-												<input
-													type="text"
-													bind:value={healthCheckCommand}
-													placeholder="cat /tmp/healthy"
-													class="input w-full font-mono"
-												/>
-												<p class="text-xs text-gray-500 mt-1">Command will be split by spaces and executed in the container</p>
-											</div>
-										{/if}
-
-										<!-- Which probes to enable -->
-										<div>
-											<label class="block text-sm font-medium mb-3">Probe types</label>
-											<div class="space-y-3">
-												<label class="flex items-center gap-3">
-													<input type="checkbox" bind:checked={livenessEnabled} class="rounded" />
-													<div>
-														<span class="font-medium text-sm">Liveness probe</span>
-														<p class="text-xs text-gray-500">Restarts the container if it becomes unresponsive</p>
-													</div>
-												</label>
-												<label class="flex items-center gap-3">
-													<input type="checkbox" bind:checked={readinessEnabled} class="rounded" />
-													<div>
-														<span class="font-medium text-sm">Readiness probe</span>
-														<p class="text-xs text-gray-500">Stops routing traffic to the container until it's ready</p>
-													</div>
-												</label>
-												<label class="flex items-center gap-3">
-													<input type="checkbox" bind:checked={startupEnabled} class="rounded" />
-													<div>
-														<span class="font-medium text-sm">Startup probe</span>
-														<p class="text-xs text-gray-500">Gives slow-starting containers extra time before liveness checks begin</p>
-													</div>
-												</label>
-											</div>
+										<!-- Probes as inline toggles -->
+										<div class="flex flex-wrap gap-x-5 gap-y-2">
+											<label class="flex items-center gap-1.5 text-xs cursor-pointer">
+												<input type="checkbox" bind:checked={livenessEnabled} class="rounded" />
+												<span class="font-medium">Liveness</span>
+											</label>
+											<label class="flex items-center gap-1.5 text-xs cursor-pointer">
+												<input type="checkbox" bind:checked={readinessEnabled} class="rounded" />
+												<span class="font-medium">Readiness</span>
+											</label>
+											<label class="flex items-center gap-1.5 text-xs cursor-pointer">
+												<input type="checkbox" bind:checked={startupEnabled} class="rounded" />
+												<span class="font-medium">Startup</span>
+											</label>
 										</div>
 
-										<!-- Timing settings -->
-										<div>
-											<label class="block text-sm font-medium mb-3">Timing</label>
-											<div class="surface-muted-panel rounded-lg p-4 space-y-4">
-												<div class="grid grid-cols-3 gap-4">
-													<div>
-														<label class="block text-xs text-gray-500 mb-1">Interval (seconds)</label>
-														<input
-															type="number"
-															bind:value={healthCheckInterval}
-															min="1"
-															class="input w-full font-mono text-sm"
-														/>
-													</div>
-													<div>
-														<label class="block text-xs text-gray-500 mb-1">Timeout (seconds)</label>
-														<input
-															type="number"
-															bind:value={healthCheckTimeout}
-															min="1"
-															class="input w-full font-mono text-sm"
-														/>
-													</div>
-													<div>
-														<label class="block text-xs text-gray-500 mb-1">Failure threshold</label>
-														<input
-															type="number"
-															bind:value={healthCheckRetries}
-															min="1"
-															class="input w-full font-mono text-sm"
-														/>
-													</div>
+										<!-- Timing - compact inline -->
+										<div class="flex flex-wrap gap-2">
+											<div class="w-20">
+												<p class="text-[10px] mb-0.5 uppercase tracking-wide" style="color: var(--surface-muted);">Interval</p>
+												<div class="flex items-center gap-1">
+													<input type="number" bind:value={healthCheckInterval} min="1" class="input text-sm font-mono" />
+													<span class="text-[10px] shrink-0" style="color: var(--surface-muted);">s</span>
 												</div>
-												{#if startupEnabled}
-													<div>
-														<label class="block text-xs text-gray-500 mb-1">Startup failure threshold</label>
-														<input
-															type="number"
-															bind:value={startupFailureThreshold}
-															min="1"
-															class="input w-full font-mono text-sm"
-														/>
-														<p class="text-xs text-gray-500 mt-1">Number of failures allowed during startup before the container is killed</p>
-													</div>
-												{/if}
 											</div>
+											<div class="w-20">
+												<p class="text-[10px] mb-0.5 uppercase tracking-wide" style="color: var(--surface-muted);">Timeout</p>
+												<div class="flex items-center gap-1">
+													<input type="number" bind:value={healthCheckTimeout} min="1" class="input text-sm font-mono" />
+													<span class="text-[10px] shrink-0" style="color: var(--surface-muted);">s</span>
+												</div>
+											</div>
+											<div class="w-20">
+												<p class="text-[10px] mb-0.5 uppercase tracking-wide" style="color: var(--surface-muted);">Retries</p>
+												<input type="number" bind:value={healthCheckRetries} min="1" class="input text-sm font-mono" />
+											</div>
+											{#if startupEnabled}
+												<div class="w-24">
+													<p class="text-[10px] mb-0.5 uppercase tracking-wide" style="color: var(--surface-muted);">Start retries</p>
+													<input type="number" bind:value={startupFailureThreshold} min="1" class="input text-sm font-mono" />
+												</div>
+											{/if}
 										</div>
 									</div>
+								{:else}
+									<p class="text-xs" style="color: var(--surface-muted);">Kubernetes will not monitor container health.</p>
 								{/if}
-
-								<div class="mt-6 flex flex-wrap justify-end gap-3">
-									<button onclick={saveHealthCheck} disabled={savingHealthCheck} class="btn btn-primary">
-										{#if savingHealthCheck}
-											<Loader2 class="h-4 w-4 animate-spin" />
-										{/if}
-										<span>Save changes</span>
-									</button>
-								</div>
 							</div>
 						</div>
 					{/if}
@@ -4063,9 +3440,41 @@
 	}
 
 	.log-panel {
-		background-color: color-mix(in srgb, var(--center-channel-bg) 75%, #050202);
+		background-color: #1a1a2e;
 		border: 1px solid color-mix(in srgb, var(--surface-border) 60%, transparent);
-		color: var(--center-channel-color);
+		color: #e0e0e8;
+	}
+
+	:global(:root:not(.dark)) .log-panel {
+		background-color: #fafafa;
+		border: 1px solid var(--surface-border);
+		color: #2a2a3a;
+	}
+
+	.log-toolbar {
+		border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+		color: inherit;
+	}
+
+	:global(:root:not(.dark)) .log-toolbar {
+		border-bottom-color: rgba(0, 0, 0, 0.08);
+	}
+
+	.log-lines-input {
+		background-color: transparent;
+		color: inherit;
+		border-color: rgba(255, 255, 255, 0.15);
+	}
+
+	:global(:root:not(.dark)) .log-lines-input {
+		border-color: rgba(0, 0, 0, 0.15);
+	}
+
+	.advanced-divider {
+		height: 1px;
+		background-color: var(--surface-border);
+		opacity: 0.5;
+		margin: 0 1.25rem;
 	}
 
 	.deployment-page {

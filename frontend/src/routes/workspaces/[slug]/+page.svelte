@@ -5,7 +5,7 @@ import { onMount } from 'svelte';
 import { apiFetch, user, toasts, selectedOrganization, refreshTree } from '$lib/stores';
 import { mergeAttrs } from 'melt';
 import { SpatialMenu } from 'melt/builders';
-import { ArrowLeft, Loader2, Plus, FolderKanban, Calendar, User, Trash2, UserPlus, LogOut, Check, X } from 'lucide-svelte';
+import { ArrowLeft, Loader2, Plus, FolderKanban, Calendar, User, Trash2, UserPlus, LogOut, Check, X, Users, Boxes } from 'lucide-svelte';
 
 interface Project {
 	id: string;
@@ -95,7 +95,7 @@ let currentOrgMembership = $state<OrgMember | null>(null);
 	});
 	const isWorkspaceAdmin = $derived(currentUserMember?.role?.name === 'admin');
 	const isOrgAdminOrOwner = $derived(
-		currentOrgMembership && 
+		currentOrgMembership &&
 		(currentOrgMembership.role === 'owner' || currentOrgMembership.role === 'admin')
 	);
 	const canManageMembers = $derived(isWorkspaceAdmin || isOrgAdminOrOwner);
@@ -229,7 +229,7 @@ let currentOrgMembership = $state<OrgMember | null>(null);
 			if (!response.ok) {
 				const data = await response.json();
 				const errorMessage = data.message || 'Failed to join workspace';
-				
+
 				if (errorMessage.includes('already a member')) {
 					toasts.add({
 						title: 'Already a member',
@@ -239,7 +239,7 @@ let currentOrgMembership = $state<OrgMember | null>(null);
 					await fetchWorkspace();
 					return;
 				}
-				
+
 				throw new Error(errorMessage);
 			}
 
@@ -262,7 +262,7 @@ let currentOrgMembership = $state<OrgMember | null>(null);
 
 	async function leaveWorkspace() {
 		if (!workspace || leaving) return;
-		
+
 		const confirmLeave = window.confirm('Leave this workspace? You will need to be invited again to rejoin.');
 		if (!confirmLeave) return;
 
@@ -301,7 +301,7 @@ let currentOrgMembership = $state<OrgMember | null>(null);
 		await fetchCurrentOrgMembership();
 	});
 
-	
+
 	function openProject(projectSlug: string) {
 		return goto(`/workspaces/${slug}/projects/${projectSlug}`);
 	}
@@ -349,301 +349,276 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 	}
 </script>
 
-<div class="p-6">
-	<button
-		onclick={() => goto('/')}
-		class="mb-6 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 cursor-pointer"
-	>
-		<ArrowLeft class="h-4 w-4" />
-		Back to home
-	</button>
-
+<div class="ws-page">
 	{#if error}
-		<div class="alert alert-error mb-6">{error}</div>
+		<div class="ws-error">{error}</div>
 	{/if}
 
 	{#if loading}
-		<div class="flex justify-center py-12">
-			<div class="text-center">
-				<Loader2 class="mx-auto h-8 w-8 animate-spin text-primary-600" />
-				<p class="mt-2 text-sm text-gray-600 dark:text-gray-400">Loading workspace...</p>
+		<!-- Skeleton: Header -->
+		<div class="ws-header">
+			<div class="ws-header-top">
+				<div class="ws-header-info">
+					<div class="skeleton" style="height: 1.5rem; width: 40%; margin-bottom: 0.375rem;"></div>
+					<div class="skeleton" style="height: 0.875rem; width: 60%;"></div>
+				</div>
+			</div>
+		</div>
+		<!-- Skeleton: Stats -->
+		<div class="ws-stats">
+			{#each Array(3) as _}
+				<div class="skeleton" style="height: 1.75rem; width: 5.5rem; border-radius: 0.5rem;"></div>
+			{/each}
+		</div>
+		<!-- Skeleton: Projects header -->
+		<div class="ws-projects-header">
+			<div class="skeleton" style="height: 1.125rem; width: 5rem;"></div>
+		</div>
+		<!-- Skeleton: Project cards -->
+		<div class="ws-project-grid">
+			{#each Array(4) as _}
+				<div class="ws-project-card" style="pointer-events: none;">
+					<div class="ws-project-card-top">
+						<div class="skeleton skeleton-icon"></div>
+						<div class="skeleton skeleton-badge"></div>
+					</div>
+					<div class="ws-project-card-body">
+						<div class="skeleton skeleton-title"></div>
+						<div class="skeleton skeleton-desc"></div>
+					</div>
+				</div>
+			{/each}
+		</div>
+		<!-- Skeleton: Team -->
+		<div class="ws-team">
+			<div class="ws-team-header">
+				<div class="skeleton" style="height: 0.75rem; width: 4rem;"></div>
+			</div>
+			<div class="ws-team-avatars">
+				{#each Array(3) as _}
+					<div class="skeleton" style="width: 5rem; height: 1.875rem; border-radius: 9999px;"></div>
+				{/each}
 			</div>
 		</div>
 	{:else if workspace}
-		<!-- Workspace Header -->
-		<div
-			class="mb-8 rounded-3xl border p-6 shadow-sm"
-			style="background-color: var(--surface-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
-		>
-			<div class="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-				<div>
-					<p class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">Workspace</p>
-					<h1 class="text-2xl font-bold" style="color: var(--center-channel-color);">
-						{workspace.name}
-					</h1>
+		<!-- Header -->
+		<div class="ws-header">
+			<div class="ws-header-top">
+				<div class="ws-header-info">
+					<h1 class="ws-title">{workspace.name}</h1>
 					{#if workspace.description}
-						<p class="mt-2 text-sm" style="color: var(--surface-muted);">
-							{workspace.description}
-						</p>
+						<p class="ws-description">{workspace.description}</p>
 					{/if}
-					<div class="mt-3 flex flex-wrap items-center gap-4 text-xs" style="color: var(--surface-muted);">
-						{#if workspace.createdBy}
-							<div class="flex items-center gap-1">
-								<User class="h-4 w-4" />
-								<span>Created by {workspace.createdBy.firstName || workspace.createdBy.email}</span>
-							</div>
+				</div>
+				{#if canManageMembers}
+					<button
+						class="ws-btn ws-btn-danger"
+						onclick={deleteWorkspace}
+						disabled={deletingWorkspace}
+					>
+						{#if deletingWorkspace}
+							<Loader2 class="h-4 w-4 animate-spin" />
+						{:else}
+							<Trash2 class="h-4 w-4" />
 						{/if}
-						<div class="flex items-center gap-1">
-							<Calendar class="h-4 w-4" />
-							<span>{new Date(workspace.createdAt).toLocaleDateString()}</span>
-						</div>
+						Delete
+					</button>
+				{/if}
+			</div>
+			{#if deleteError}
+				<div class="ws-error" style="margin-top: 0.75rem;">{deleteError}</div>
+			{/if}
+		</div>
+
+		<!-- Stats Row -->
+		<div class="ws-stats">
+			<div class="ws-stat">
+				<FolderKanban class="h-4 w-4" />
+				<span class="ws-stat-value">{workspace.projects?.length ?? 0}</span>
+				<span class="ws-stat-label">Projects</span>
+			</div>
+			<div class="ws-stat">
+				<Users class="h-4 w-4" />
+				<span class="ws-stat-value">{workspace.members?.length ?? 0}</span>
+				<span class="ws-stat-label">Members</span>
+			</div>
+			<div class="ws-stat">
+				<Calendar class="h-4 w-4" />
+				<span class="ws-stat-label">{new Date(workspace.createdAt).toLocaleDateString()}</span>
+			</div>
+			{#if workspace.createdBy}
+				<div class="ws-stat">
+					<User class="h-4 w-4" />
+					<span class="ws-stat-label">by {workspace.createdBy.firstName || workspace.createdBy.email}</span>
+				</div>
+			{/if}
+		</div>
+
+		<!-- Projects -->
+		<div class="ws-projects-header">
+			<h2 class="ws-section-title">Projects</h2>
+			<div class="ws-projects-toolbar">
+				{#if workspace.projects?.length}
+					<div class="ws-project-search-bar" {...projectMenu.root}>
+						<input
+							type="search"
+							placeholder="Search projects..."
+							class="ws-search-input"
+							bind:value={projectSearch}
+							{...projectMenu.input}
+						/>
 					</div>
-				</div>
-				<div class="flex flex-wrap gap-3 text-xs md:justify-end" style="color: var(--surface-muted);">
-					<span
-						class="rounded-full px-3 py-1 font-medium"
-						style="background-color: var(--control-bg); border: 1px solid var(--surface-border); color: var(--center-channel-color);"
-					>
-						{workspace.projects?.length ?? 0} projects
-					</span>
-					<span
-						class="rounded-full px-3 py-1 font-medium"
-						style="background-color: var(--control-bg); border: 1px solid var(--surface-border); color: var(--center-channel-color);"
-					>
-						{workspace.members?.length ?? 0} members
-					</span>
-				</div>
+				{/if}
+				<a href="/workspaces/{slug}/projects/new" class="ws-btn ws-btn-primary">
+					<Plus class="h-4 w-4" />
+					New Project
+				</a>
 			</div>
 		</div>
 
-		<div class="grid gap-6 lg:grid-cols-3">
-			<!-- Projects Section -->
-			<div class="lg:col-span-2">
-				<div class="mb-4 flex items-center justify-between">
-					<h2 class="text-lg font-semibold" style="color: var(--center-channel-color);">
-						Projects ({workspace.projects?.length ?? 0})
-					</h2>
-					<a href="/workspaces/{slug}/projects/new" class="btn btn-primary">
-						<Plus class="h-4 w-4" />
-						New Project
-					</a>
-				</div>
-
-				{#if !workspace.projects?.length}
-					<div class="card p-8 text-center">
-						<FolderKanban class="mx-auto h-12 w-12 text-gray-400" />
-						<h3 class="mt-4 font-medium" style="color: var(--center-channel-color);">No projects yet</h3>
-						<p class="mt-2 text-sm" style="color: var(--surface-muted);">
-							Create your first project to start deploying.
-						</p>
-						<a href="/workspaces/{slug}/projects/new" class="btn btn-primary mt-4">
-							<Plus class="h-4 w-4" />
-							Create Project
-						</a>
-						<button
-							class="btn btn-secondary mt-3 inline-flex items-center justify-center gap-2"
-							onclick={deleteWorkspace}
-							disabled={deletingWorkspace}
-						>
-							{#if deletingWorkspace}
-								<Loader2 class="h-4 w-4 animate-spin" />
-							{:else}
-								<Trash2 class="h-4 w-4" />
-							{/if}
-							Delete workspace
-						</button>
-						{#if deleteError}
-							<div class="alert alert-error mt-3">{deleteError}</div>
-						{/if}
-					</div>
-				{:else}
-					<div class="flex flex-col gap-4" {...projectMenu.root}>
-						<label class="workspace-search flex items-center gap-3 rounded-2xl border px-4 py-2 text-sm shadow-sm transition">
-							<span class="text-xs font-semibold uppercase tracking-wide">Search</span>
-							<input
-								type="search"
-								placeholder="Filter projects..."
-								class="flex-1 bg-transparent text-base focus:outline-none"
-								bind:value={projectSearch}
-								{...projectMenu.input}
-							/>
-						</label>
-
-						{#if filteredProjects.length}
-							<div class="max-h-[70vh] overflow-y-auto pr-1">
-								<div
-									class="grid gap-4 p-1"
-									style:grid-template-columns="repeat(auto-fill,minmax(220px,1fr))"
-								>
-									{#each filteredProjects as project}
-										{@const href = `/workspaces/${slug}/projects/${project.slug}`}
-										{@const item = projectMenu.getItem(project, {
-											onSelect: () => openProject(project.slug)
-										})}
-										<a
-											class={`workspace-card group flex h-full flex-col gap-4 rounded-2xl border p-4 text-left shadow-sm transition-all ${
-												item.highlighted ? 'workspace-card--highlight' : ''
-											}`}
-											{...mergeAttrs(item.attrs, {
-												href,
-												onclick: event => handleProjectClick(event as MouseEvent, project.slug)
-											})}
-										>
-											<div class="flex items-start justify-between gap-4">
-												<div>
-													<p class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">
-														Project
-													</p>
-													<h3 class="mt-1 text-lg font-semibold" style="color: var(--center-channel-color);">
-														{project.name}
-													</h3>
-												</div>
-											</div>
-											{#if project.description}
-												<p class="line-clamp-3 text-sm" style="color: var(--surface-muted);">
-													{project.description}
-												</p>
-											{/if}
-											{#if project.repositoryUrl}
-												<p class="truncate text-xs font-mono" style="color: var(--surface-muted);">
-													{project.repositoryUrl}
-												</p>
-											{/if}
-											<div
-												class="mt-auto flex items-center gap-4 text-sm"
-												style="color: var(--surface-muted);"
-											>
-												<div class="flex items-center gap-1">
-													<FolderKanban class="h-4 w-4" />
-													<span>{project._count?.deployments ?? 0} deployments</span>
-												</div>
-											</div>
-										</a>
-									{/each}
-								</div>
-							</div>
-						{:else}
-							<div
-								class="rounded-2xl border border-dashed p-8 text-center"
-								style="border-color: var(--surface-border); color: var(--surface-muted);"
-							>
-								<p class="text-lg font-medium" style="color: var(--center-channel-color);">
-									No projects match “{projectSearch}”.
-								</p>
-								<p class="mt-1 text-sm">Try adjusting your search.</p>
-							</div>
-						{/if}
-					</div>
-				{/if}
+		{#if !workspace.projects?.length}
+			<div class="ws-empty-card">
+				<span style:color="var(--surface-muted)"><FolderKanban class="h-10 w-10" /></span>
+				<p>No projects yet</p>
+				<a href="/workspaces/{slug}/projects/new" class="ws-btn ws-btn-primary ws-btn-mt">
+					<Plus class="h-4 w-4" />
+					Create Project
+				</a>
 			</div>
+		{:else if filteredProjects.length}
+			<div class="ws-project-grid">
+				{#each filteredProjects as project}
+					{@const href = `/workspaces/${slug}/projects/${project.slug}`}
+					{@const item = projectMenu.getItem(project, {
+						onSelect: () => openProject(project.slug)
+					})}
+					<a
+						class="ws-project-card"
+						class:is-highlighted={item.highlighted}
+						{...mergeAttrs(item.attrs, {
+							href,
+							onclick: (event: Event) => handleProjectClick(event as MouseEvent, project.slug)
+						})}
+					>
+						<div class="ws-project-card-top">
+							<div class="ws-project-icon">
+								<FolderKanban class="h-6 w-6" />
+							</div>
+							<div class="ws-project-deploy-badge">
+								<span class="ws-project-deploy-count">
+									{project._count?.deployments ?? 0}
+								</span>
+								<span>deployments</span>
+							</div>
+						</div>
+						<div class="ws-project-card-body">
+							<span class="ws-project-name">{project.name}</span>
+							{#if project.description}
+								<span class="ws-project-desc">{project.description}</span>
+							{/if}
+						</div>
+					</a>
+				{/each}
+			</div>
+		{:else}
+			<div class="ws-empty-card">
+				<p>No projects match "{projectSearch}"</p>
+			</div>
+		{/if}
 
-			<!-- Members Section -->
-			<div class="space-y-3">
-				<div class="flex items-center justify-between">
-					<h2 class="text-lg font-semibold" style="color: var(--center-channel-color);">
-						Members ({workspace.members?.length ?? 0})
-					</h2>
+		<!-- Team -->
+		<div class="ws-team">
+			<div class="ws-team-header">
+				<h3 class="ws-team-title">
+					<Users class="h-3.5 w-3.5" />
+					Team ({workspace.members?.length ?? 0})
+				</h3>
+				<div class="ws-team-actions">
+					{#if $user && currentUserId}
+						{#if !isMember}
+							<button
+								class="ws-btn ws-btn-primary ws-btn-sm"
+								onclick={joinWorkspace}
+								disabled={joining}
+							>
+								{#if joining}
+									<Loader2 class="h-3 w-3 animate-spin" />
+								{:else}
+									<Check class="h-3 w-3" />
+								{/if}
+								Join
+							</button>
+						{:else if !isWorkspaceAdmin}
+							<button
+								class="ws-btn ws-btn-ghost ws-btn-sm"
+								onclick={leaveWorkspace}
+								disabled={leaving}
+							>
+								{#if leaving}
+									<Loader2 class="h-3 w-3 animate-spin" />
+								{:else}
+									<LogOut class="h-3 w-3" />
+								{/if}
+								Leave
+							</button>
+						{/if}
+					{/if}
 					{#if canManageMembers}
 						<button
-							class="btn btn-sm btn-primary"
+							class="ws-btn ws-btn-secondary ws-btn-sm"
 							onclick={() => {
 								showInviteDialog = true;
 								fetchOrgMembers();
 							}}
 						>
-							<UserPlus class="h-4 w-4" />
-							Add Member
+							<UserPlus class="h-3 w-3" />
+							Add
 						</button>
 					{/if}
 				</div>
-				<div class="card">
-					<div class="divide-y" style="border-color: var(--surface-border);">
-						{#if workspace.members?.length}
-							{#each workspace.members as member}
-								<div class="flex items-center gap-3 p-3">
-									{#if member.user.imageUrl}
-										<img
-											src={member.user.imageUrl}
-											alt={member.user.firstName || member.user.email}
-											class="h-8 w-8 rounded-full object-cover"
-										/>
-									{:else}
-										<div
-											class="flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium"
-											style="background-color: color-mix(in srgb, var(--surface-border) 80%, var(--center-channel-bg)); color: var(--center-channel-color);"
-										>
-											{member.user.firstName?.[0] || member.user.email[0].toUpperCase()}
-										</div>
-									{/if}
-									<div class="min-w-0 flex-1">
-										<p class="truncate text-sm font-medium" style="color: var(--center-channel-color);">
-											{member.user.firstName} {member.user.lastName || ''}
-										</p>
-										<p class="truncate text-xs" style="color: var(--surface-muted);">{member.user.email}</p>
-									</div>
-									<span class="badge badge-neutral text-xs">
-										{member.role.name}
-									</span>
-								</div>
-							{/each}
-						{:else}
-							<div class="p-4 text-center text-sm" style="color: var(--surface-muted);">
-								No members
-							</div>
-						{/if}
-					</div>
-				</div>
-				{#if $user && currentUserId}
-					{#if !isMember}
-						<button
-							class="btn btn-primary w-full"
-							onclick={joinWorkspace}
-							disabled={joining}
-						>
-							{#if joining}
-								<Loader2 class="h-4 w-4 animate-spin" />
-							{:else}
-								<Check class="h-4 w-4" />
-							{/if}
-							Join Workspace
-						</button>
-					{:else if !isWorkspaceAdmin}
-						<button
-							class="btn btn-secondary w-full"
-							onclick={leaveWorkspace}
-							disabled={leaving}
-						>
-							{#if leaving}
-								<Loader2 class="h-4 w-4 animate-spin" />
-							{:else}
-								<LogOut class="h-4 w-4" />
-							{/if}
-							Leave Workspace
-						</button>
-					{/if}
-				{/if}
 			</div>
+
+			{#if workspace.members?.length}
+				<div class="ws-team-avatars">
+					{#each workspace.members as member}
+						<div class="ws-team-member" title="{member.user.firstName || ''} {member.user.lastName || ''} ({member.role.name})">
+							{#if member.user.imageUrl}
+								<img
+									src={member.user.imageUrl}
+									alt={member.user.firstName || member.user.email}
+									class="ws-team-avatar"
+								/>
+							{:else}
+								<div class="ws-team-avatar-fallback">
+									{member.user.firstName?.[0] || member.user.email[0].toUpperCase()}
+								</div>
+							{/if}
+							<span class="ws-team-name">{member.user.firstName || member.user.email.split('@')[0]}</span>
+							<span class="ws-team-role">{member.role.name}</span>
+						</div>
+					{/each}
+				</div>
+			{:else}
+				<p class="ws-team-empty">No members yet</p>
+			{/if}
 		</div>
 	{/if}
 </div>
 
 {#if showInviteDialog}
 	<div
-		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
+		class="ws-dialog-overlay"
 		onclick={(e) => {
 			if (e.target === e.currentTarget) showInviteDialog = false;
 		}}
 		role="dialog"
 		aria-modal="true"
 	>
-		<div
-			class="w-full max-w-md rounded-2xl border p-6 shadow-lg"
-			style="background-color: var(--surface-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
-		>
-			<div class="mb-4 flex items-center justify-between">
-				<h2 class="text-lg font-semibold">Add Member to Workspace</h2>
+		<div class="ws-dialog">
+			<div class="ws-dialog-header">
+				<h2>Add Member</h2>
 				<button
-					class="btn btn-ghost btn-sm"
+					class="ws-btn ws-btn-ghost"
 					onclick={() => {
 						showInviteDialog = false;
 						selectedUserId = '';
@@ -654,20 +629,20 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 				</button>
 			</div>
 
-			<div class="space-y-4">
-				<div>
-					<label class="mb-2 block text-sm font-medium">Organization Member</label>
+			<div class="ws-dialog-body">
+				<div class="ws-field">
+					<label class="ws-label">Organization Member</label>
 					{#if loadingOrgMembers}
-						<p class="text-sm text-gray-500">Loading members...</p>
+						<p class="ws-field-hint">Loading members...</p>
 					{:else if orgMembers.length === 0}
-						<p class="text-sm text-gray-500">No organization members found. There may be an issue loading members.</p>
+						<p class="ws-field-hint">No organization members found.</p>
 					{:else}
 						{@const availableMembers = orgMembers.filter(om => !workspace?.members?.some(m => m.user.id === om.user.id))}
 						{#if availableMembers.length === 0}
-							<p class="text-sm text-gray-500">All organization members are already in this workspace. Add more members to your organization first.</p>
+							<p class="ws-field-hint">All organization members are already in this workspace.</p>
 						{:else}
 							<select
-								class="select select-bordered w-full"
+								class="ws-select"
 								bind:value={selectedUserId}
 								disabled={inviting}
 							>
@@ -682,10 +657,10 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 					{/if}
 				</div>
 
-				<div>
-					<label class="mb-2 block text-sm font-medium">Role</label>
+				<div class="ws-field">
+					<label class="ws-label">Role</label>
 					<select
-						class="select select-bordered w-full"
+						class="ws-select"
 						bind:value={selectedRoleId}
 						disabled={inviting}
 					>
@@ -696,9 +671,9 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 					</select>
 				</div>
 
-				<div class="flex gap-3">
+				<div class="ws-dialog-actions">
 					<button
-						class="btn btn-secondary flex-1"
+						class="ws-btn ws-btn-secondary"
 						onclick={() => {
 							showInviteDialog = false;
 							selectedUserId = '';
@@ -709,7 +684,7 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 						Cancel
 					</button>
 					<button
-						class="btn btn-primary flex-1"
+						class="ws-btn ws-btn-primary"
 						onclick={addMember}
 						disabled={!selectedUserId || !selectedRoleId || inviting}
 					>
@@ -725,3 +700,473 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 		</div>
 	</div>
 {/if}
+
+<style>
+	.ws-page {
+		max-width: 52rem;
+		margin: 0 auto;
+		padding: 2rem 1.5rem;
+	}
+
+	.ws-loading {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 3rem 0;
+		color: var(--surface-muted);
+		font-size: 0.875rem;
+	}
+
+	.ws-error {
+		padding: 0.75rem 1rem;
+		border-radius: 0.75rem;
+		font-size: 0.875rem;
+		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
+		color: var(--error-text-color);
+		border: 1px solid color-mix(in srgb, var(--error-text-color) 25%, transparent);
+		margin-bottom: 1.5rem;
+	}
+
+	/* Header */
+	.ws-header {
+		margin-bottom: 1.5rem;
+	}
+
+	.ws-header-top {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+
+	.ws-header-info {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.ws-title {
+		font-size: 1.125rem;
+		font-weight: 600;
+		color: var(--center-channel-color);
+		margin: 0;
+	}
+
+	.ws-description {
+		font-size: 0.875rem;
+		color: var(--surface-muted);
+		margin: 0.25rem 0 0;
+	}
+
+	/* Stats */
+	.ws-stats {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		margin-bottom: 1.5rem;
+	}
+
+	.ws-stat {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.375rem 0.75rem;
+		border-radius: 0.5rem;
+		font-size: 0.8125rem;
+		color: var(--surface-muted);
+		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);
+	}
+
+	.ws-stat-value {
+		font-weight: 600;
+		color: var(--center-channel-color);
+	}
+
+	/* Projects header */
+	.ws-projects-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-bottom: 1rem;
+	}
+
+	.ws-section-title {
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--center-channel-color);
+		margin: 0;
+	}
+
+	.ws-projects-toolbar {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.ws-project-search-bar {
+		width: 14rem;
+	}
+
+	.ws-search-input {
+		width: 100%;
+		padding: 0.4375rem 0.75rem;
+		border-radius: 0.5rem;
+		border: 1px solid var(--surface-border);
+		background-color: var(--center-channel-bg);
+		color: var(--center-channel-color);
+		font-size: 0.8125rem;
+	}
+
+	.ws-search-input::placeholder {
+		color: var(--surface-muted);
+	}
+
+	.ws-search-input:focus {
+		outline: none;
+		border-color: var(--sidebar-text-active-border);
+	}
+
+	/* Project grid */
+	.ws-project-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(16rem, 1fr));
+		gap: 0.75rem;
+		margin-bottom: 1.5rem;
+	}
+
+	.ws-project-card {
+		display: flex;
+		flex-direction: column;
+		gap: 0.875rem;
+		padding: 1.125rem;
+		border: 1px solid var(--surface-border);
+		border-radius: 1rem;
+		background-color: var(--surface-bg);
+		text-decoration: none;
+		color: var(--center-channel-color);
+		transition: border-color 0.15s, box-shadow 0.15s;
+		cursor: pointer;
+	}
+
+	.ws-project-card:hover,
+	.ws-project-card.is-highlighted {
+		border-color: var(--sidebar-text-active-border);
+		box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-text-active-border) 25%, transparent);
+	}
+
+	.ws-project-card-top {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+	}
+
+	.ws-project-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 3rem;
+		height: 3rem;
+		border-radius: 0.75rem;
+		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
+		color: var(--sidebar-text-active-border);
+		flex-shrink: 0;
+	}
+
+	.ws-project-deploy-badge {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		font-size: 0.75rem;
+		color: var(--surface-muted);
+		padding: 0.25rem 0.5rem;
+		border-radius: 9999px;
+		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);
+	}
+
+	.ws-project-deploy-count {
+		font-weight: 700;
+		color: var(--center-channel-color);
+	}
+
+	.ws-project-card-body {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+
+	.ws-project-name {
+		font-size: 0.9375rem;
+		font-weight: 600;
+		color: var(--center-channel-color);
+	}
+
+	.ws-project-desc {
+		font-size: 0.8125rem;
+		color: var(--surface-muted);
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+		overflow: hidden;
+	}
+
+	/* Empty card */
+	.ws-empty-card {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 3rem 1rem;
+		color: var(--surface-muted);
+		font-size: 0.875rem;
+		border: 1px dashed var(--surface-border);
+		border-radius: 1rem;
+		margin-bottom: 1.5rem;
+	}
+
+	/* Team (secondary/compact) */
+	.ws-team {
+		margin-top: 0.5rem;
+		padding: 0.875rem 1rem;
+		border: 1px solid color-mix(in srgb, var(--surface-border) 60%, transparent);
+		border-radius: 1rem;
+		background-color: color-mix(in srgb, var(--surface-bg) 50%, transparent);
+	}
+
+	.ws-team-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 0.625rem;
+	}
+
+	.ws-team-title {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--surface-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+		margin: 0;
+	}
+
+	.ws-team-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+	}
+
+	.ws-team-avatars {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+	}
+
+	.ws-team-member {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.25rem 0.5rem 0.25rem 0.25rem;
+		border-radius: 9999px;
+		background-color: color-mix(in srgb, var(--surface-border) 35%, transparent);
+		transition: background-color 0.15s;
+		cursor: default;
+	}
+
+	.ws-team-member:hover {
+		background-color: color-mix(in srgb, var(--surface-border) 55%, transparent);
+	}
+
+	.ws-team-avatar {
+		width: 1.375rem;
+		height: 1.375rem;
+		border-radius: 50%;
+		object-fit: cover;
+		flex-shrink: 0;
+	}
+
+	.ws-team-avatar-fallback {
+		width: 1.375rem;
+		height: 1.375rem;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		font-size: 0.625rem;
+		font-weight: 600;
+		background-color: color-mix(in srgb, var(--surface-border) 80%, var(--center-channel-bg));
+		color: var(--center-channel-color);
+		flex-shrink: 0;
+	}
+
+	.ws-team-name {
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: var(--center-channel-color);
+	}
+
+	.ws-team-role {
+		font-size: 0.625rem;
+		color: var(--surface-muted);
+		text-transform: capitalize;
+	}
+
+	.ws-team-empty {
+		font-size: 0.75rem;
+		color: var(--surface-muted);
+		margin: 0;
+	}
+
+	/* Buttons */
+	.ws-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.4375rem 0.875rem;
+		border-radius: 0.5rem;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		border: none;
+		cursor: pointer;
+		text-decoration: none;
+		transition: opacity 0.15s;
+		white-space: nowrap;
+	}
+
+	.ws-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.ws-btn-primary {
+		background-color: var(--sidebar-text-active-border);
+		color: #fff;
+	}
+
+	.ws-btn-primary:hover:not(:disabled) {
+		opacity: 0.9;
+	}
+
+	.ws-btn-mt {
+		margin-top: 0.5rem;
+	}
+
+	.ws-btn-secondary {
+		background-color: color-mix(in srgb, var(--surface-border) 60%, transparent);
+		color: var(--center-channel-color);
+	}
+
+	.ws-btn-secondary:hover:not(:disabled) {
+		background-color: color-mix(in srgb, var(--surface-border) 90%, transparent);
+	}
+
+	.ws-btn-danger {
+		background-color: color-mix(in srgb, var(--error-text-color) 12%, transparent);
+		color: var(--error-text-color);
+	}
+
+	.ws-btn-danger:hover:not(:disabled) {
+		background-color: color-mix(in srgb, var(--error-text-color) 20%, transparent);
+	}
+
+	.ws-btn-ghost {
+		background: none;
+		color: var(--surface-muted);
+		padding: 0.375rem;
+		border-radius: 0.375rem;
+	}
+
+	.ws-btn-ghost:hover {
+		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
+	}
+
+	.ws-btn-sm {
+		padding: 0.3125rem 0.625rem;
+		font-size: 0.75rem;
+		gap: 0.25rem;
+	}
+
+	.ws-btn-full {
+		width: 100%;
+		justify-content: center;
+	}
+
+	/* Dialog */
+	.ws-dialog-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 50;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background-color: rgba(0, 0, 0, 0.5);
+		padding: 1rem;
+	}
+
+	.ws-dialog {
+		width: 100%;
+		max-width: 28rem;
+		border-radius: 1rem;
+		border: 1px solid var(--surface-border);
+		background-color: var(--surface-bg);
+		color: var(--center-channel-color);
+		box-shadow: 0 20px 60px rgba(0, 0, 0, 0.15);
+	}
+
+	.ws-dialog-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 1rem;
+		border-bottom: 1px solid var(--surface-border);
+		font-weight: 600;
+	}
+
+	.ws-dialog-body {
+		padding: 1rem;
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.ws-dialog-actions {
+		display: flex;
+		gap: 0.5rem;
+		justify-content: flex-end;
+		padding-top: 0.5rem;
+	}
+
+	.ws-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+	}
+
+	.ws-label {
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--center-channel-color);
+	}
+
+	.ws-field-hint {
+		font-size: 0.8125rem;
+		color: var(--surface-muted);
+	}
+
+	.ws-select {
+		width: 100%;
+		padding: 0.5rem 0.75rem;
+		border-radius: 0.5rem;
+		border: 1px solid var(--surface-border);
+		background-color: var(--center-channel-bg);
+		color: var(--center-channel-color);
+		font-size: 0.8125rem;
+	}
+
+	.ws-select:focus {
+		outline: none;
+		border-color: var(--sidebar-text-active-border);
+	}
+</style>

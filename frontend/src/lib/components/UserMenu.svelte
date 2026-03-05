@@ -62,13 +62,19 @@
 			return () => document.removeEventListener('click', handleClickOutside);
 		}
 	});
+
+	function isThemeActive(mode: 'light' | 'dark' | 'system') {
+		if (mode === 'system') return !activeThemeId;
+		if (mode === 'light') return displayMode === 'light' && activeThemeId === 'light';
+		if (mode === 'dark') return displayMode === 'dark' && activeThemeId === 'dark';
+		return false;
+	}
 </script>
 
 <div class="user-menu relative">
 	<button
 		onclick={() => (open = !open)}
-		class="user-menu-trigger flex w-full items-center gap-3 rounded-xl px-4 py-2 text-sm font-medium transition-all text-left"
-		class:shadow-md={open}
+		class="user-menu-trigger flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-left"
 	>
 		{#if $user?.imageUrl}
 			<img
@@ -77,101 +83,74 @@
 				class="h-8 w-8 rounded-lg object-cover"
 			/>
 		{:else}
-			<div
-				class="flex h-8 w-8 items-center justify-center rounded-lg"
-				style="background-color: var(--sidebar-text-hover-bg); color: var(--sidebar-text);"
-			>
+			<div class="user-menu-avatar-fallback">
 				<User class="h-4 w-4" />
 			</div>
 		{/if}
 		<div class="flex-1 text-left min-w-0">
-			<p class="truncate text-sm font-medium" style="color: var(--sidebar-text);">
-				{$user?.name || $user?.firstName || $user?.username || 'User'}
-			</p>
-			<p class="truncate text-xs" style="color: var(--surface-muted);">
-				{$user?.email || ''}
+			<p class="user-menu-name truncate text-sm font-medium">
+				{$user?.username || $user?.name || $user?.firstName || 'User'}
 			</p>
 		</div>
-		<span class="transition-transform duration-200 {open ? 'rotate-180' : ''}">
-			<ChevronUp
-				class="h-4 w-4"
-				style="color: var(--surface-muted);"
-			/>
+		<span class="user-menu-chevron" class:is-open={open}>
+			<ChevronUp class="h-4 w-4" />
 		</span>
 	</button>
 
 	{#if open}
 		<div
-			class="user-menu-panel absolute bottom-full left-0 right-0 z-50 mb-1 flex flex-col gap-2 rounded-xl border p-4 text-sm shadow-lg"
+			class="user-menu-panel absolute bottom-full left-0 right-0 z-50 mb-1 flex flex-col rounded-xl border p-3 text-sm shadow-lg"
 			transition:slide={{ axis: 'y', duration: 200 }}
 		>
-			<div class="pb-2 border-b" style="border-color: var(--divider-color);">
-				<p class="text-sm font-medium" style="color: var(--sidebar-text);">
-					{$user?.name || $user?.username}
+			<div class="user-menu-section-header">
+				<p class="user-menu-name text-sm font-medium">
+					{$user?.name || $user?.firstName || $user?.username}
 				</p>
-				<p class="text-xs" style="color: var(--surface-muted);">
-					{$user?.email}
+				<p class="user-menu-email text-xs">
+					@{$user?.username || $user?.name || 'user'}
 				</p>
 			</div>
 
-			<div class="py-2">
-				<div class="flex items-center justify-between px-2 py-1">
-					<p class="text-xs font-medium uppercase" style="color: var(--surface-muted);">
-						Theme
-					</p>
-					<a
-						href="/user/settings/theme"
-						class="text-xs font-medium transition-colors"
-						style="color: var(--link-color);"
-						onclick={() => (open = false)}
-					>
-						<span class="flex items-center gap-1">
-							<Palette class="h-3 w-3" />
-							Customize
-						</span>
-					</a>
-				</div>
-				<div class="flex gap-1">
-					<button
-						onclick={() => applyQuickTheme('light')}
-						class="user-menu-theme-btn flex flex-1 items-center justify-center gap-1 rounded px-2 py-1.5 text-xs transition {displayMode === 'light' && activeThemeId === 'light' ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' : ''}"
-						style={!(displayMode === 'light' && activeThemeId === 'light') ? 'color: var(--sidebar-text);' : ''}
-					>
-						<Sun class="h-3 w-3" />
-						Light
-					</button>
-					<button
-						onclick={() => applyQuickTheme('dark')}
-						class="user-menu-theme-btn flex flex-1 items-center justify-center gap-1 rounded px-2 py-1.5 text-xs transition {displayMode === 'dark' && activeThemeId === 'dark' ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' : ''}"
-						style={!(displayMode === 'dark' && activeThemeId === 'dark') ? 'color: var(--sidebar-text);' : ''}
-					>
-						<Moon class="h-3 w-3" />
-						Dark
-					</button>
-					<button
-						onclick={() => applyQuickTheme('system')}
-						class="user-menu-theme-btn flex flex-1 items-center justify-center gap-1 rounded px-2 py-1.5 text-xs transition {!activeThemeId ? 'bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400' : ''}"
-						style={activeThemeId ? 'color: var(--sidebar-text);' : ''}
-					>
-						<Monitor class="h-3 w-3" />
-						System
-					</button>
+			<div class="user-menu-section">
+				<p class="user-menu-label px-1 pb-2">Theme</p>
+				<div class="user-menu-theme-group">
+					{#each [
+						{ mode: 'light' as const, icon: Sun, label: 'Light' },
+						{ mode: 'dark' as const, icon: Moon, label: 'Dark' },
+						{ mode: 'system' as const, icon: Monitor, label: 'System' }
+					] as { mode, icon: Icon, label }}
+						<button
+							onclick={() => applyQuickTheme(mode)}
+							class="user-menu-theme-btn"
+							class:is-active={isThemeActive(mode)}
+						>
+							<Icon class="h-3 w-3" />
+							{label}
+						</button>
+					{/each}
 				</div>
 			</div>
 
-			<div class="border-t pt-2" style="border-color: var(--divider-color);">
+			<div class="user-menu-section-footer">
 				<a
 					href="/user/settings"
-					class="user-menu-item flex items-center gap-2 px-2 py-2 text-sm transition rounded-lg"
-					style="color: color-mix(in srgb, var(--sidebar-text) 85%, var(--center-channel-bg));"
+					class="user-menu-item"
+					onclick={() => (open = false)}
 				>
 					<Settings class="h-4 w-4" />
-					Settings
+					User Settings
+				</a>
+				<a
+					href="/user/settings/theme"
+					class="user-menu-item"
+					onclick={() => (open = false)}
+				>
+					<Palette class="h-4 w-4" />
+					Customize Theme
 				</a>
 				<button
 					onclick={() => user.signOut()}
-					class="user-menu-item flex w-full items-center gap-2 px-2 py-2 text-sm transition rounded-lg"
-					style="color: var(--error-text-color);"
+					class="user-menu-item is-danger"
 				>
 					<LogOut class="h-4 w-4" />
 					Sign out
