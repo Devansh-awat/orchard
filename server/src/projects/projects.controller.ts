@@ -793,3 +793,20 @@ export class DeploymentsController {
     return this.webhooksService.deleteWebhookToken(id, tokenId, req.user.sub);
   }
 }
+
+@Controller('ingresses')
+export class IngressesController {
+  constructor(private readonly projectsService: ProjectsService) {}
+
+  @Get(':id')
+  @UseGuards(AuthGuard)
+  async getIngress(@Param('id') id: string, @Request() req) {
+    return this.projectsService.getIngressById(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl,
+    });
+  }
+}

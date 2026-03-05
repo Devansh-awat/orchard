@@ -1,5 +1,6 @@
 <script lang="ts">
     import { organizations, selectedOrganization, type Organization } from '$lib/stores';
+	import { goto } from '$app/navigation';
 	import { ChevronsUpDown, X, Settings, Building2 } from 'lucide-svelte';
     import { Collapsible } from 'melt/components';
     import { slide } from 'svelte/transition';
@@ -9,6 +10,7 @@
     function selectOrg(org: Organization) {
         organizations.setSelected(org);
         open = false;
+        goto(`/${org.slug}`);
     }
 </script>
 
@@ -84,7 +86,7 @@
 					</div>
 					{#if $selectedOrganization}
 						<div class="org-menu-footer">
-							<a href="/organizations/{$selectedOrganization.slug}/settings">
+							<a href="/{$selectedOrganization.slug}/settings">
 								<Settings class="h-4 w-4" />
 								Organization Settings
 							</a>

@@ -8,6 +8,13 @@ export interface Deployment {
 	name: string;
 	slug?: string;
 	status?: string;
+	ingresses?: IngressSummary[];
+}
+
+export interface IngressSummary {
+	id: string;
+	name: string;
+	host: string;
 }
 
 export interface Project {
@@ -16,6 +23,7 @@ export interface Project {
 	slug: string;
 	description?: string;
 	deployments?: Deployment[];
+	ingresses?: IngressSummary[];
 }
 
 export interface Workspace {
@@ -30,7 +38,7 @@ export interface Workspace {
 export interface TreeItem {
 	id: string;
 	name: string;
-	type: 'workspace' | 'project' | 'deployment';
+	type: 'workspace' | 'project' | 'deployment' | 'ingress';
 	href: string;
 	children?: TreeItem[];
 }
@@ -64,25 +72,57 @@ async function fetchProjectDetails(projectId: string): Promise<Project | null> {
 	}
 }
 
-function transformToTreeItems(workspaces: Workspace[]): TreeItem[] {
+function transformToTreeItems(workspaces: Workspace[], orgSlug: string): TreeItem[] {
 	return workspaces.map((workspace) => {
 		const workspaceItem: TreeItem = {
 			id: `workspace-${workspace.id}`,
 			name: workspace.name,
 			type: 'workspace',
-			href: `/workspaces/${workspace.slug}`,
+			href: `/${orgSlug}/workspaces/${workspace.slug}`,
 			children: workspace.projects?.map((project) => {
+				const deploymentItems: TreeItem[] = project.deployments?.map((deployment) => ({
+					id: `deployment-${deployment.id}`,
+					name: deployment.name || deployment.slug || `Deployment ${deployment.id.slice(0, 8)}`,
+					type: 'deployment' as const,
+					href: `/${orgSlug}/deployments/${deployment.id}`
+				})) ?? [];
+
+				// Collect ingresses: prefer project-level, fall back to deployment-nested
+				const seenIngressIds = new Set<string>();
+				const ingressItems: TreeItem[] = [];
+
+				for (const ing of project.ingresses ?? []) {
+					if (!seenIngressIds.has(ing.id)) {
+						seenIngressIds.add(ing.id);
+						ingressItems.push({
+							id: `ingress-${ing.id}`,
+							name: ing.host || ing.name,
+							type: 'ingress' as const,
+							href: `/${orgSlug}/ingresses/${ing.id}`
+						});
+					}
+				}
+
+				for (const deployment of project.deployments ?? []) {
+					for (const ing of deployment.ingresses ?? []) {
+						if (!seenIngressIds.has(ing.id)) {
+							seenIngressIds.add(ing.id);
+							ingressItems.push({
+								id: `ingress-${ing.id}`,
+								name: ing.host || ing.name,
+								type: 'ingress' as const,
+								href: `/${orgSlug}/ingresses/${ing.id}`
+							});
+						}
+					}
+				}
+
 				const projectItem: TreeItem = {
 					id: `project-${project.id}`,
 					name: project.name,
 					type: 'project',
-					href: `/workspaces/${workspace.slug}/projects/${project.slug}`,
-					children: project.deployments?.map((deployment) => ({
-						id: `deployment-${deployment.id}`,
-						name: deployment.name || deployment.slug || `Deployment ${deployment.id.slice(0, 8)}`,
-						type: 'deployment' as const,
-						href: `/deployments/${deployment.id}`
-					}))
+					href: `/${orgSlug}/workspaces/${workspace.slug}/projects/${project.slug}`,
+					children: [...deploymentItems, ...ingressItems]
 				};
 				return projectItem;
 			})
@@ -124,7 +164,8 @@ async function fetchTreeData() {
 			})
 		);
 
-		const treeItems = transformToTreeItems(workspacesWithDetails);
+		const orgSlug = selectedOrg?.slug ?? '';
+		const treeItems = transformToTreeItems(workspacesWithDetails, orgSlug);
 		treeData.set(treeItems);
 	} catch (e) {
 		error.set(e instanceof Error ? e.message : 'Failed to fetch tree data');

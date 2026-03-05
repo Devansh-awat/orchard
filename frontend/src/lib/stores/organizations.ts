@@ -61,6 +61,19 @@ function initializeSelected() {
 	}
 }
 
+function getDefaultSlug(): string | null {
+	const storedId = loadSelectedFromStorage();
+	const orgs = get(organizationsList);
+
+	if (storedId) {
+		const org = orgs.find((o) => o.id === storedId);
+		if (org) return org.slug;
+	}
+
+	if (orgs.length > 0) return orgs[0].slug;
+	return null;
+}
+
 export const organizations = {
 	subscribe: organizationsList.subscribe,
 	set: organizationsList.set,
@@ -68,6 +81,7 @@ export const organizations = {
 	setSelected,
 	selectById,
 	initializeSelected,
+	getDefaultSlug,
 	setLoading: loadingState.set
 };
 

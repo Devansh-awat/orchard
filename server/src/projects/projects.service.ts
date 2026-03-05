@@ -2607,6 +2607,84 @@ export class ProjectsService {
     return this.getProject(projectId, clerkId, userData);
   }
 
+  async getIngressById(
+    ingressId: string,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const ingress = await this.prisma.ingress.findUnique({
+      where: { id: ingressId },
+      include: {
+        project: {
+          include: {
+            workspace: true,
+            deployments: {
+              include: {
+                services: { include: { ports: true } },
+              },
+            },
+          },
+        },
+        deployment: true,
+        service: true,
+      },
+    });
+
+    if (!ingress) {
+      throw new NotFoundException(`Ingress ${ingressId} not found`);
+    }
+
+    const membership = await this.prisma.workspaceMember.findFirst({
+      where: {
+        workspaceId: ingress.project.workspaceId,
+        userId: user.id,
+      },
+      include: { role: true },
+    });
+
+    if (!membership) {
+      throw new ForbiddenException('You are not a member of this workspace');
+    }
+
+    // Read the actual K8s ingress to get all routes
+    let k8sRoutes: Array<{ path: string; serviceName: string; servicePort: number }> = [];
+    try {
+      const k8sIngress = await this.kubernetesService.readIngress(ingress.namespace, ingress.name);
+      const rules = k8sIngress?.spec?.rules ?? [];
+      if (rules.length > 0 && rules[0].http?.paths) {
+        k8sRoutes = rules[0].http.paths.map((p: any) => ({
+          path: p.path || '/',
+          serviceName: p.backend?.service?.name || '',
+          servicePort: p.backend?.service?.port?.number || 0,
+        }));
+      }
+    } catch {
+      k8sRoutes = [{
+        path: ingress.path,
+        serviceName: ingress.service?.name || '',
+        servicePort: ingress.service?.port || 0,
+      }];
+    }
+
+    return {
+      ...ingress,
+      tlsEnabled: !!ingress.tlsSecretName,
+      address: ingress.statusAddress,
+      routes: k8sRoutes,
+    };
+  }
+
   async getProjectIngress(
     projectId: string,
     ingressId: string,
@@ -3482,6 +3560,13 @@ export class ProjectsService {
             },
           },
         },
+        ingresses: {
+          select: {
+            id: true,
+            name: true,
+            host: true,
+          },
+        },
       },
     });
 
@@ -3594,6 +3679,13 @@ export class ProjectsService {
                 services: true,
               },
             },
+          },
+        },
+        ingresses: {
+          select: {
+            id: true,
+            name: true,
+            host: true,
           },
         },
       },

@@ -2,7 +2,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { Tree } from 'melt/builders';
-	import { PanelLeftClose, PanelLeft, FolderKanban, Rocket, Loader2, ArrowUpRight, Search, Folder, Pin } from 'lucide-svelte';
+	import { PanelLeftClose, PanelLeft, FolderKanban, Rocket, Loader2, ArrowUpRight, Search, Folder, Pin, Globe, Leaf } from 'lucide-svelte';
 	import WorkspacesMenu from './WorkspacesMenu.svelte';
 	import UserMenu from './UserMenu.svelte';
 	import QuickSearch from './QuickSearch.svelte';
@@ -79,6 +79,8 @@
 				return Folder;
 			case 'deployment':
 				return Rocket;
+			case 'ingress':
+				return Globe;
 			default:
 				return FolderKanban;
 		}
@@ -92,6 +94,8 @@
 				return '#4a8aff';
 			case 'deployment':
 				return '#f5a623';
+			case 'ingress':
+				return '#a78bfa';
 			default:
 				return 'var(--sidebar-text-active-border)';
 		}
@@ -126,7 +130,7 @@
 		if (activeItem) {
 			selectedId = activeItem.id;
 			treeBuilder.expand(activeItem.id);
-			if (activeItem.type === 'deployment') {
+			if (activeItem.type === 'deployment' || activeItem.type === 'ingress') {
 				const parentProject = findParentProject(treeItems, activeItem.id);
 				if (parentProject) {
 					treeBuilder.expand(parentProject.id);
@@ -148,7 +152,7 @@
 		for (const item of items) {
 			if (item.children) {
 				for (const child of item.children) {
-					if (child.id === childId && child.type === 'deployment') {
+					if (child.id === childId && (child.type === 'deployment' || child.type === 'ingress')) {
 						return item;
 					}
 					if (child.children) {
@@ -196,7 +200,7 @@
 						</button>
 					</div>
 					{#if $selectedOrganization}
-						<a href="/organizations/{$selectedOrganization.slug}/settings" class="flex justify-center">
+						<a href="/{$selectedOrganization.slug}/settings" class="flex justify-center">
 							{#if $selectedOrganization.avatarUrl}
 								<img
 									src={$selectedOrganization.avatarUrl}
@@ -220,6 +224,14 @@
 					>
 						<Search class="h-5 w-5" />
 					</button>
+					<a
+						href="/{$selectedOrganization?.slug ?? ''}"
+						class="sidebar-action rounded p-1 flex justify-center"
+						aria-label="Home"
+						title="Home"
+					>
+						<Leaf class="h-5 w-5" />
+					</a>
 				</div>
 			{:else}
 				<div class="flex items-center gap-2">
@@ -238,29 +250,35 @@
 		</div>
 
 		{#if !collapsed}
-			<div class="px-3 pt-3 pb-3">
+			<div class="px-3 pt-3 pb-1">
 				<button
 					type="button"
 					onclick={() => quickSearchRef?.openSearch()}
 					class="sidebar-search-trigger w-full"
 				>
-					<Search class="h-4 w-4" />
-					<span class="sidebar-search-placeholder">Search...</span>
-					<div class="sidebar-search-shortcut">
-						{#if isMac}
-							<span class="sidebar-search-key">⌘</span>
-							<span class="sidebar-search-key">K</span>
-						{:else}
-							<span class="sidebar-search-key">Ctrl</span>
-							<span class="sidebar-search-key">K</span>
-						{/if}
+					<div class="sidebar-search-icon-wrapper">
+						<Search class="h-3.5 w-3.5" />
 					</div>
+					<span class="sidebar-search-placeholder">Search</span>
+					<kbd class="sidebar-search-kbd">{isMac ? '⌘' : 'Ctrl'}K</kbd>
 				</button>
+			</div>
+			<div class="px-3 pt-4">
+				<a
+					href="/{$selectedOrganization?.slug ?? ''}"
+					class="tree-node-content"
+					class:is-active={$page.url.pathname === '/' + ($selectedOrganization?.slug ?? '')}
+				>
+					<div class="tree-icon-badge" style="background-color: #22c55e">
+						<Leaf size={10} class="tree-icon-svg" />
+					</div>
+					<span class="tree-node-label">Home</span>
+				</a>
 			</div>
 		{/if}
 
 		{#if !collapsed}
-			<nav class="sidebar-nav flex-1 overflow-y-auto p-3">
+			<nav class="sidebar-nav flex-1 overflow-y-auto px-3 pb-3 pt-0">
 				{#if !$isSignedIn}
 					<div class="sidebar-muted p-4 text-center text-sm">
 						Sign in to view workspaces

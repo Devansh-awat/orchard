@@ -132,6 +132,11 @@ let passkeySupportReason = $state<string | null>(null);
 		}
 
 		if ($isSignedIn) {
+			const slug = organizations.getDefaultSlug();
+			if (slug) {
+				goto(`/${slug}`, { replaceState: true });
+				return;
+			}
 			fetchWorkspaces();
 		} else {
 			loading = false;
@@ -165,12 +170,17 @@ let passkeySupportReason = $state<string | null>(null);
 		await refreshUserContext(Boolean(signedInUser));
 
 		if (get(isSignedIn)) {
-			await fetchWorkspaces();
-
 			// Check for pending invitations after login
 			const pending = await pendingInvitations.fetchPending();
 			if (pending.length > 0) {
 				showPendingInvitationsModal.show();
+			}
+
+			const slug = organizations.getDefaultSlug();
+			if (slug) {
+				toasts.add({ title: message, color: 'success' });
+				goto(`/${slug}`, { replaceState: true });
+				return;
 			}
 		}
 
