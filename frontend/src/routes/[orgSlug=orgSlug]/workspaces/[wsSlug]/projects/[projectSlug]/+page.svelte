@@ -15,7 +15,8 @@
 		Globe,
 		Server,
 		Boxes,
-		GitBranch
+		GitBranch,
+		Database
 	} from 'lucide-svelte';
 
 	interface Deployment {
@@ -361,6 +362,13 @@
 						/>
 					</div>
 				{/if}
+				<a
+					href="/{orgSlug}/workspaces/{workspaceSlug}/projects/{projectSlug}/databases/new"
+					class="pj-btn pj-btn-secondary"
+				>
+					<Database class="h-4 w-4" />
+					New Database
+				</a>
 				<a
 					href="/{orgSlug}/workspaces/{workspaceSlug}/projects/{projectSlug}/ingresses/new"
 					class="pj-btn pj-btn-secondary"

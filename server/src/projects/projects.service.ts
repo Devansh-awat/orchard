@@ -3567,6 +3567,13 @@ export class ProjectsService {
             host: true,
           },
         },
+        databases: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+          },
+        },
       },
     });
 
@@ -5904,5 +5911,163 @@ export class ProjectsService {
       orderBy: { createdAt: 'desc' },
       take: 20,
     });
+  }
+
+  // ── Database (PostgreSQL) Management ──
+
+  private generatePassword(length = 24): string {
+    const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
+    const bytes = require('crypto').randomBytes(length);
+    return Array.from(bytes as Buffer, (b: number) => chars[b % chars.length]).join('');
+  }
+
+  async createDatabase(
+    projectId: string,
+    data: { name: string },
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: { workspace: true },
+    });
+    if (!project) throw new NotFoundException(`Project ${projectId} not found`);
+
+    const membership = await this.prisma.workspaceMember.findFirst({
+      where: { workspaceId: project.workspaceId, userId: user.id },
+      include: { role: true },
+    });
+    if (!membership) throw new ForbiddenException('You are not a member of this workspace');
+    if (membership.role.name === 'viewer') throw new ForbiddenException('You do not have permission to create databases');
+
+    const nameInput = String(data.name || '').trim();
+    if (!nameInput) throw new BadRequestException('Database name is required');
+
+    const slug = this.formatSlug(nameInput);
+    if (!slug) throw new BadRequestException('Invalid database name');
+
+    // Generate unique db name, user, and password
+    const dbName = `db_${slug.replace(/-/g, '_')}`;
+    const dbUser = `u_${slug.replace(/-/g, '_')}`;
+    const dbPassword = this.generatePassword();
+
+    // Check uniqueness in our records
+    const existing = await this.prisma.database.findUnique({
+      where: { projectId_name: { projectId, name: nameInput } },
+    });
+    if (existing) throw new BadRequestException('A database with this name already exists in this project');
+
+    const dbNameExists = await this.prisma.database.findUnique({
+      where: { dbName },
+    });
+    if (dbNameExists) throw new BadRequestException('A database with this identifier already exists');
+
+    // Create the actual PostgreSQL database
+    await this.kubernetesService.createPostgresDatabase(dbName, dbUser, dbPassword);
+
+    // Store in our database
+    const database = await this.prisma.database.create({
+      data: {
+        projectId,
+        name: nameInput,
+        dbName,
+        dbUser,
+        dbPassword,
+        status: 'ready',
+        createdBy: user.id,
+      },
+      include: {
+        creator: {
+          select: { id: true, email: true, username: true, firstName: true, lastName: true },
+        },
+      },
+    });
+
+    return database;
+  }
+
+  async getDatabase(databaseId: string) {
+    const database = await this.prisma.database.findUnique({
+      where: { id: databaseId },
+      include: {
+        project: { include: { workspace: { include: { organization: true } } } },
+        creator: {
+          select: { id: true, email: true, username: true, firstName: true, lastName: true },
+        },
+      },
+    });
+
+    if (!database) throw new NotFoundException('Database not found');
+
+    // Get live status from PostgreSQL
+    const liveStatus = await this.kubernetesService.getPostgresDatabaseStatus(database.dbName);
+
+    return {
+      ...database,
+      connectionString: `postgresql://${database.dbUser}:${database.dbPassword}@${database.host}:${database.port}/${database.dbName}`,
+      internalHost: `${database.host}:${database.port}`,
+      liveStatus,
+    };
+  }
+
+  async getProjectDatabases(projectId: string) {
+    return this.prisma.database.findMany({
+      where: { projectId },
+      include: {
+        creator: {
+          select: { id: true, email: true, username: true, firstName: true, lastName: true },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async deleteDatabase(
+    databaseId: string,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+
+    const database = await this.prisma.database.findUnique({
+      where: { id: databaseId },
+      include: { project: { include: { workspace: true } } },
+    });
+    if (!database) throw new NotFoundException('Database not found');
+
+    const membership = await this.prisma.workspaceMember.findFirst({
+      where: { workspaceId: database.project.workspaceId, userId: user.id },
+      include: { role: true },
+    });
+    if (!membership) throw new ForbiddenException('You are not a member of this workspace');
+    if (membership.role.name === 'viewer') throw new ForbiddenException('You do not have permission to delete databases');
+
+    // Delete from PostgreSQL
+    try {
+      await this.kubernetesService.deletePostgresDatabase(database.dbName, database.dbUser);
+    } catch (e) {
+      console.error(`[DB] Failed to delete PostgreSQL database: ${e.message}`);
+    }
+
+    // Delete from our records
+    await this.prisma.database.delete({ where: { id: databaseId } });
+
+    return { success: true, message: `Database "${database.name}" deleted` };
   }
 }

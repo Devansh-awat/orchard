@@ -5,12 +5,12 @@ import { GitHubModule } from '../github/github.module';
 import { DockerModule } from '../docker/docker.module';
 import { WebhooksModule } from '../webhooks/webhooks.module';
 import { ProjectsService } from './projects.service';
-import { ProjectsController, DeploymentsController, IngressesController } from './projects.controller';
+import { ProjectsController, DeploymentsController, IngressesController, DatabasesController } from './projects.controller';
 
 @Module({
   imports: [KubernetesModule, UsersModule, forwardRef(() => GitHubModule), DockerModule, WebhooksModule],
   providers: [ProjectsService],
-  controllers: [ProjectsController, DeploymentsController, IngressesController],
+  controllers: [ProjectsController, DeploymentsController, IngressesController, DatabasesController],
   exports: [ProjectsService],
 })
 export class ProjectsModule {}

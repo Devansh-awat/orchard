@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { tree, type TreeItem } from '$lib/stores';
-	import { FolderKanban, Package, Rocket, Search, X } from 'lucide-svelte';
+	import { FolderKanban, Package, Rocket, Search, X, Database } from 'lucide-svelte';
 	import { onMount } from 'svelte';
 	import { fade, scale } from 'svelte/transition';
 
@@ -25,6 +25,8 @@
 				return Package;
 			case 'deployment':
 				return Rocket;
+			case 'database':
+				return Database;
 			default:
 				return FolderKanban;
 		}

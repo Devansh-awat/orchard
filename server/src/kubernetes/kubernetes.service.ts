@@ -3573,4 +3573,138 @@ export class KubernetesService {
 
     return sanitized;
   }
+
+  // ── PostgreSQL Database Management (via kubectl exec into CNPG pod) ──
+
+  private readonly CNPG_NAMESPACE = 'postgresql';
+  private readonly CNPG_POD = 'postgresql-cluster-1';
+  private readonly CNPG_CONTAINER = 'postgres';
+
+  private async execPsql(sql: string): Promise<string> {
+    if (!this.kc) {
+      throw new ServiceUnavailableException('Kubeconfig not loaded');
+    }
+
+    const exec = new k8s.Exec(this.kc);
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+
+    // Find the primary pod dynamically
+    let podName = this.CNPG_POD;
+    try {
+      const { body: podList } = await coreApi.listNamespacedPod(
+        this.CNPG_NAMESPACE,
+        undefined, undefined, undefined, undefined,
+        'cnpg.io/instanceRole=primary'
+      );
+      if (podList.items.length > 0) {
+        podName = podList.items[0].metadata!.name!;
+      }
+    } catch {
+      // Fall back to default pod name
+    }
+
+    return new Promise<string>((resolve, reject) => {
+      const chunks: Buffer[] = [];
+      const errChunks: Buffer[] = [];
+
+      const stdout = new (require('stream').PassThrough)();
+      const stderr = new (require('stream').PassThrough)();
+
+      stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+      stderr.on('data', (chunk: Buffer) => errChunks.push(chunk));
+
+      exec.exec(
+        this.CNPG_NAMESPACE,
+        podName,
+        this.CNPG_CONTAINER,
+        ['psql', '-U', 'postgres', '-d', 'postgres', '-t', '-A', '-c', sql],
+        stdout,
+        stderr,
+        null,
+        false,
+        (status) => {
+          const output = Buffer.concat(chunks).toString('utf-8').trim();
+          const errOutput = Buffer.concat(errChunks).toString('utf-8').trim();
+
+          if (status.status === 'Success') {
+            resolve(output);
+          } else {
+            reject(new BadRequestException(
+              `PostgreSQL command failed: ${errOutput || status.message || 'Unknown error'}`
+            ));
+          }
+        },
+      );
+    });
+  }
+
+  async createPostgresDatabase(dbName: string, dbUser: string, dbPassword: string): Promise<void> {
+    console.log(`[K8s/PG] Creating database "${dbName}" with user "${dbUser}"`);
+
+    // Create the role
+    await this.execPsql(
+      `DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${dbUser}') THEN CREATE ROLE "${dbUser}" LOGIN PASSWORD '${dbPassword.replace(/'/g, "''")}'; END IF; END $$;`
+    );
+
+    // Create the database
+    // Can't use IF NOT EXISTS in DO block for CREATE DATABASE, so check first
+    const exists = await this.execPsql(
+      `SELECT 1 FROM pg_database WHERE datname = '${dbName}';`
+    );
+
+    if (!exists) {
+      await this.execPsql(`CREATE DATABASE "${dbName}" OWNER "${dbUser}";`);
+    } else {
+      throw new BadRequestException(`Database "${dbName}" already exists`);
+    }
+
+    // Grant privileges
+    await this.execPsql(`GRANT ALL PRIVILEGES ON DATABASE "${dbName}" TO "${dbUser}";`);
+
+    console.log(`[K8s/PG] Database "${dbName}" created successfully`);
+  }
+
+  async deletePostgresDatabase(dbName: string, dbUser: string): Promise<void> {
+    console.log(`[K8s/PG] Deleting database "${dbName}" and user "${dbUser}"`);
+
+    // Terminate existing connections
+    await this.execPsql(
+      `SELECT pg_terminate_backend(pid) FROM pg_stat_activity WHERE datname = '${dbName}' AND pid <> pg_backend_pid();`
+    );
+
+    // Drop database and role
+    const dbExists = await this.execPsql(
+      `SELECT 1 FROM pg_database WHERE datname = '${dbName}';`
+    );
+    if (dbExists) {
+      await this.execPsql(`DROP DATABASE "${dbName}";`);
+    }
+
+    const roleExists = await this.execPsql(
+      `SELECT 1 FROM pg_roles WHERE rolname = '${dbUser}';`
+    );
+    if (roleExists) {
+      await this.execPsql(`DROP ROLE "${dbUser}";`);
+    }
+
+    console.log(`[K8s/PG] Database "${dbName}" and user "${dbUser}" deleted`);
+  }
+
+  async getPostgresDatabaseStatus(dbName: string): Promise<{ exists: boolean; size?: string; connections?: number }> {
+    try {
+      const sizeResult = await this.execPsql(
+        `SELECT pg_size_pretty(pg_database_size('${dbName}'));`
+      );
+      const connResult = await this.execPsql(
+        `SELECT count(*) FROM pg_stat_activity WHERE datname = '${dbName}';`
+      );
+      return {
+        exists: true,
+        size: sizeResult || '0 bytes',
+        connections: parseInt(connResult) || 0,
+      };
+    } catch {
+      return { exists: false };
+    }
+  }
 }

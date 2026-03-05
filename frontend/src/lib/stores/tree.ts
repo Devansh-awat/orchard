@@ -17,6 +17,12 @@ export interface IngressSummary {
 	host: string;
 }
 
+export interface DatabaseSummary {
+	id: string;
+	name: string;
+	status: string;
+}
+
 export interface Project {
 	id: string;
 	name: string;
@@ -24,6 +30,7 @@ export interface Project {
 	description?: string;
 	deployments?: Deployment[];
 	ingresses?: IngressSummary[];
+	databases?: DatabaseSummary[];
 }
 
 export interface Workspace {
@@ -38,7 +45,7 @@ export interface Workspace {
 export interface TreeItem {
 	id: string;
 	name: string;
-	type: 'workspace' | 'project' | 'deployment' | 'ingress';
+	type: 'workspace' | 'project' | 'deployment' | 'ingress' | 'database';
 	href: string;
 	children?: TreeItem[];
 }
@@ -117,12 +124,19 @@ function transformToTreeItems(workspaces: Workspace[], orgSlug: string): TreeIte
 					}
 				}
 
+				const databaseItems: TreeItem[] = (project.databases ?? []).map((db) => ({
+					id: `database-${db.id}`,
+					name: db.name,
+					type: 'database' as const,
+					href: `/${orgSlug}/databases/${db.id}`
+				}));
+
 				const projectItem: TreeItem = {
 					id: `project-${project.id}`,
 					name: project.name,
 					type: 'project',
 					href: `/${orgSlug}/workspaces/${workspace.slug}/projects/${project.slug}`,
-					children: [...deploymentItems, ...ingressItems]
+					children: [...deploymentItems, ...ingressItems, ...databaseItems]
 				};
 				return projectItem;
 			})

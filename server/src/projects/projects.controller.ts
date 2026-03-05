@@ -84,6 +84,28 @@ export class ProjectsController {
     return this.projectsService.getProjectDeployments(id);
   }
 
+  @Post(':id/databases')
+  @UseGuards(AuthGuard)
+  async createDatabase(
+    @Param('id') id: string,
+    @Body() body: { name: string },
+    @Request() req
+  ) {
+    return this.projectsService.createDatabase(id, body, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl,
+    });
+  }
+
+  @Get(':id/databases')
+  @UseGuards(AuthGuard)
+  async getProjectDatabases(@Param('id') id: string) {
+    return this.projectsService.getProjectDatabases(id);
+  }
+
   @Post(':id/ingresses')
   @UseGuards(AuthGuard)
   async createProjectIngress(
@@ -802,6 +824,29 @@ export class IngressesController {
   @UseGuards(AuthGuard)
   async getIngress(@Param('id') id: string, @Request() req) {
     return this.projectsService.getIngressById(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl,
+    });
+  }
+}
+
+@Controller('databases')
+export class DatabasesController {
+  constructor(private readonly projectsService: ProjectsService) {}
+
+  @Get(':id')
+  @UseGuards(AuthGuard)
+  async getDatabase(@Param('id') id: string) {
+    return this.projectsService.getDatabase(id);
+  }
+
+  @Delete(':id')
+  @UseGuards(AuthGuard)
+  async deleteDatabase(@Param('id') id: string, @Request() req) {
+    return this.projectsService.deleteDatabase(id, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,

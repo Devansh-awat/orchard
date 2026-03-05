@@ -2,7 +2,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { Tree } from 'melt/builders';
-	import { PanelLeftClose, PanelLeft, FolderKanban, Rocket, Loader2, ArrowUpRight, Search, Folder, Pin, Globe, Leaf } from 'lucide-svelte';
+	import { PanelLeftClose, PanelLeft, FolderKanban, Rocket, Loader2, ArrowUpRight, Search, Folder, Pin, Globe, Leaf, Database } from 'lucide-svelte';
 	import WorkspacesMenu from './WorkspacesMenu.svelte';
 	import UserMenu from './UserMenu.svelte';
 	import QuickSearch from './QuickSearch.svelte';
@@ -81,6 +81,8 @@
 				return Rocket;
 			case 'ingress':
 				return Globe;
+			case 'database':
+				return Database;
 			default:
 				return FolderKanban;
 		}
@@ -96,6 +98,8 @@
 				return '#f5a623';
 			case 'ingress':
 				return '#a78bfa';
+			case 'database':
+				return '#22c55e';
 			default:
 				return 'var(--sidebar-text-active-border)';
 		}
@@ -130,7 +134,7 @@
 		if (activeItem) {
 			selectedId = activeItem.id;
 			treeBuilder.expand(activeItem.id);
-			if (activeItem.type === 'deployment' || activeItem.type === 'ingress') {
+			if (activeItem.type === 'deployment' || activeItem.type === 'ingress' || activeItem.type === 'database') {
 				const parentProject = findParentProject(treeItems, activeItem.id);
 				if (parentProject) {
 					treeBuilder.expand(parentProject.id);
@@ -152,7 +156,7 @@
 		for (const item of items) {
 			if (item.children) {
 				for (const child of item.children) {
-					if (child.id === childId && (child.type === 'deployment' || child.type === 'ingress')) {
+					if (child.id === childId && (child.type === 'deployment' || child.type === 'ingress' || child.type === 'database')) {
 						return item;
 					}
 					if (child.children) {
