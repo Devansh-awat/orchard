@@ -30,7 +30,19 @@
 		Webhook
 	} from 'lucide-svelte';
 	import { scale, fade } from 'svelte/transition';
-	import { Clock, Minimize2, Maximize2 } from 'lucide-svelte';
+	import { Clock, Minimize2, Maximize2, Cpu, MemoryStick } from 'lucide-svelte';
+	import { browser } from '$app/environment';
+
+	let Line: any = $state(null);
+
+	if (browser) {
+		import('chart.js').then(({ Chart, LinearScale, PointElement, LineElement, Filler, Tooltip }) => {
+			Chart.register(LinearScale, PointElement, LineElement, Filler, Tooltip);
+		});
+		import('svelte5-chartjs').then((mod) => {
+			Line = mod.Line;
+		});
+	}
 	import DeploymentProgress from '$lib/components/DeploymentProgress.svelte';
 
 	interface Pod {
@@ -38,7 +50,23 @@
 		status: string;
 		ip?: string;
 		startTime?: string;
+		cpuUsage?: number | null;
+		memoryUsage?: number | null;
 		containers?: Array<{ name: string; image: string; ready: boolean }>;
+	}
+
+	function formatCpu(millicores: number | null | undefined): string {
+		if (millicores == null) return 'N/A';
+		if (millicores >= 1000) return `${(millicores / 1000).toFixed(1)} cores`;
+		return `${millicores}m`;
+	}
+
+	function formatMemory(bytes: number | null | undefined): string {
+		if (bytes == null) return 'N/A';
+		if (bytes >= 1024 * 1024 * 1024) return `${(bytes / (1024 * 1024 * 1024)).toFixed(1)} GB`;
+		if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
+		if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
+		return `${bytes} B`;
 	}
 
 	interface ServicePortConfig {
@@ -261,6 +289,113 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
+	// Metrics history for time-series charts
+	let metricsHistory = $state<Array<{ time: Date; cpu: number | null; memory: number | null }>>([]);
+	let metricsTimeRange = $state<'5m' | '15m' | '30m' | '1h'>('30m');
+
+	const timeRangeMs = $derived({
+		'5m': 5 * 60 * 1000,
+		'15m': 15 * 60 * 1000,
+		'30m': 30 * 60 * 1000,
+		'1h': 60 * 60 * 1000,
+	}[metricsTimeRange]);
+
+	const filteredMetrics = $derived(
+		metricsHistory.filter(p => p.time.getTime() > Date.now() - timeRangeMs)
+	);
+
+	// Build chart data with numeric X timestamps so we can set min/max on the axis
+	const cpuChartData = $derived({
+		labels: filteredMetrics.map(p => p.time.getTime()),
+		datasets: [{
+			label: 'CPU (millicores)',
+			data: filteredMetrics.map(p => p.cpu),
+			borderColor: '#b33346',
+			backgroundColor: 'rgba(179, 51, 70, 0.15)',
+			fill: true,
+		}],
+	});
+
+	const memoryChartData = $derived({
+		labels: filteredMetrics.map(p => p.time.getTime()),
+		datasets: [{
+			label: 'Memory (MB)',
+			data: filteredMetrics.map(p => p.memory != null ? p.memory / (1024 * 1024) : null),
+			borderColor: '#e87485',
+			backgroundColor: 'rgba(232, 116, 133, 0.15)',
+			fill: true,
+		}],
+	});
+
+	function getThemeColors() {
+		if (typeof document === 'undefined') return { muted: '#888', gridLine: 'rgba(128,128,128,0.1)' };
+		const style = getComputedStyle(document.documentElement);
+		const muted = style.getPropertyValue('--surface-muted').trim() || '#888';
+		const border = style.getPropertyValue('--surface-border').trim() || 'rgba(128,128,128,0.1)';
+		return { muted, gridLine: border };
+	}
+
+	function makeChartOptions(yTickSuffix: string) {
+		const now = Date.now();
+		const theme = getThemeColors();
+		return {
+			responsive: true,
+			maintainAspectRatio: false,
+			animation: { duration: 0 } as const,
+			scales: {
+				x: {
+					type: 'linear' as const,
+					display: true,
+					min: now - timeRangeMs,
+					max: now,
+					ticks: {
+						maxTicksToShow: 6,
+						maxRotation: 0,
+						font: { size: 10 },
+						color: theme.muted,
+						callback: (value: number) => {
+							const d = new Date(value);
+							return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+						},
+					},
+					grid: { display: false },
+					border: { display: false },
+				},
+				y: {
+					display: true,
+					beginAtZero: true,
+					ticks: { font: { size: 10 }, color: theme.muted, callback: (v: number) => v + yTickSuffix },
+					grid: { color: theme.gridLine },
+					border: { display: false },
+				},
+			},
+			plugins: {
+				tooltip: {
+					mode: 'index' as const,
+					intersect: false,
+					backgroundColor: 'rgba(0,0,0,0.8)',
+					titleFont: { size: 11 },
+					bodyFont: { size: 11 },
+					padding: 8,
+					callbacks: {
+						title: (items: any[]) => {
+							if (!items.length) return '';
+							const d = new Date(items[0].parsed.x);
+							return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+						},
+					},
+				},
+			},
+			elements: {
+				point: { radius: 0, hoverRadius: 4 },
+				line: { tension: 0.3, borderWidth: 2 },
+			},
+		};
+	}
+
+	const cpuChartOptions = $derived(makeChartOptions('m'));
+	const memoryChartOptions = $derived(makeChartOptions(' MB'));
+
 	// Computed properties for template compatibility with API field names
 	const repoUrl = $derived(deployment?.githubRepo);
 	const branch = $derived(deployment?.githubBranch);
@@ -367,7 +502,8 @@
 	const sliderPercentage = $derived((scaleReplicas / 20) * 100);
 
 	let envVars = $state<Array<{ key: string; value: string }>>([{ key: '', value: '' }]);
-	let envPasteText = $state('');
+	let envViewMode = $state<'ui' | 'raw'>('ui');
+	let envRawText = $state('');
 	let revealedIndices = $state<Set<number>>(new Set());
 
 	function toggleReveal(index: number) {
@@ -830,6 +966,20 @@
 
 			deployment = data;
 
+			// Seed metrics history from DB on first load, then append from polls
+			if (data.metricsHistory?.length && metricsHistory.length === 0) {
+				metricsHistory = data.metricsHistory.map((p: any) => ({
+					time: new Date(p.time),
+					cpu: p.cpu,
+					memory: p.memory,
+				}));
+			} else if (data.totalCpuUsage != null || data.totalMemoryUsage != null) {
+				metricsHistory = [
+					...metricsHistory,
+					{ time: new Date(), cpu: data.totalCpuUsage, memory: data.totalMemoryUsage }
+				].slice(-360); // keep max 1 hour at 10s intervals
+			}
+
 			// Skip overwriting form state while a build is in progress so the user can
 			// keep editing settings. Form state will refresh when the build finishes.
 			const buildActive = showBuildModal || showBuildCard;
@@ -1096,6 +1246,10 @@
 		savingEnv = true;
 		isEditingEnv = false;
 		try {
+			if (envViewMode === 'raw') {
+				const parsed = rawToEnvVars(envRawText);
+				envVars = [...parsed, { key: '', value: '' }];
+			}
 			const filteredEnv = envVars.filter((e) => e.key.trim());
 			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/env`, {
 				method: 'PUT',
@@ -1268,10 +1422,8 @@
 
 	async function rollbackToImage(historyId: string) {
 		try {
-			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/rollback`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ imageHistoryId: historyId })
+			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/rollback/${historyId}`, {
+				method: 'POST'
 			});
 			if (!response.ok) {
 				throw new Error('Failed to rollback');
@@ -1300,35 +1452,35 @@
 		envVars = envVars.filter((_, i) => i !== index);
 	}
 
-	function parseEnvVars() {
-		if (!envPasteText.trim()) return;
-		
-		const lines = envPasteText.split('\n');
+	function envVarsToRaw(vars: Array<{ key: string; value: string }>): string {
+		return vars.filter((e) => e.key.trim()).map((e) => `${e.key}=${e.value}`).join('\n');
+	}
+
+	function rawToEnvVars(raw: string): Array<{ key: string; value: string }> {
+		const lines = raw.split('\n');
 		const parsed: Array<{ key: string; value: string }> = [];
-		
 		for (const line of lines) {
 			const trimmed = line.trim();
-			if (!trimmed || trimmed.startsWith('#')) {
-				continue;
-			}
-			
+			if (!trimmed || trimmed.startsWith('#')) continue;
 			const equalIndex = trimmed.indexOf('=');
-			if (equalIndex === -1) {
-				continue;
-			}
-			
+			if (equalIndex === -1) continue;
 			const key = trimmed.substring(0, equalIndex).trim();
 			const value = trimmed.substring(equalIndex + 1).trim();
-			
-			if (key) {
-				parsed.push({ key, value });
-			}
+			if (key) parsed.push({ key, value });
 		}
-		
-		if (parsed.length > 0) {
-			envVars = parsed;
-			envPasteText = '';
+		return parsed;
+	}
+
+	function switchEnvView(mode: 'ui' | 'raw') {
+		if (mode === envViewMode) return;
+		isEditingEnv = true;
+		if (mode === 'raw') {
+			envRawText = envVarsToRaw(envVars);
+		} else {
+			const parsed = rawToEnvVars(envRawText);
+			envVars = [...parsed, { key: '', value: '' }];
 		}
+		envViewMode = mode;
 	}
 
 	function addVolume() {
@@ -1966,38 +2118,136 @@
 								</div>
 							{/if}
 
-							<!-- Two-column layout: pods + details -->
+							<!-- Two-column layout: resource usage + details -->
 							<div class="grid gap-6 lg:grid-cols-3">
-								<!-- Pods -->
-								<div class="card rounded-2xl p-5 lg:col-span-2">
-									<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-										<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Pods</p>
-										<div class="flex gap-3 text-xs" style="color: var(--surface-muted);">
-											<span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-green-500"></span> {deployment.pods?.filter((pod) => pod.status?.toLowerCase() === 'ready').length ?? 0} ready</span>
-											<span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-yellow-500"></span> {deployment.pods?.filter((pod) => pod.status?.toLowerCase() === 'scheduled').length ?? 0} scheduled</span>
-											<span class="inline-flex items-center gap-1.5"><span class="h-2 w-2 rounded-full bg-gray-400"></span> {deployment.pods?.filter((pod) => pod.status?.toLowerCase() === 'pending').length ?? 0} pending</span>
+								<!-- Resource Usage + Pods -->
+								<div class="flex flex-col gap-4 lg:col-span-2">
+									<!-- Resource Usage Charts -->
+									<div class="card rounded-2xl p-5 flex flex-col flex-1">
+										<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+											<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Resource Usage</p>
+											<div class="flex gap-1 rounded-lg p-0.5" style="background-color: var(--control-bg);">
+												<button
+													class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors"
+													style={metricsTimeRange === '5m'
+														? 'background-color: var(--button-bg); color: var(--button-color);'
+														: 'color: var(--surface-muted);'}
+													onclick={() => { metricsTimeRange = '5m'; }}
+												>5m</button>
+												<button
+													class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors"
+													style={metricsTimeRange === '15m'
+														? 'background-color: var(--button-bg); color: var(--button-color);'
+														: 'color: var(--surface-muted);'}
+													onclick={() => { metricsTimeRange = '15m'; }}
+												>15m</button>
+												<button
+													class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors"
+													style={metricsTimeRange === '30m'
+														? 'background-color: var(--button-bg); color: var(--button-color);'
+														: 'color: var(--surface-muted);'}
+													onclick={() => { metricsTimeRange = '30m'; }}
+												>30m</button>
+												<button
+													class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors"
+													style={metricsTimeRange === '1h'
+														? 'background-color: var(--button-bg); color: var(--button-color);'
+														: 'color: var(--surface-muted);'}
+													onclick={() => { metricsTimeRange = '1h'; }}
+												>1h</button>
+											</div>
 										</div>
+										{#if filteredMetrics.length > 1}
+											<div class="grid grid-cols-2 gap-4 flex-1 min-h-0">
+												<div class="flex flex-col">
+													<div class="flex items-center justify-between mb-2">
+														<div class="flex items-center gap-1.5">
+															<Cpu class="h-3.5 w-3.5" style="color: #b33346;" />
+															<span class="text-xs font-medium" style="color: var(--surface-muted);">CPU</span>
+														</div>
+														<span class="text-xs font-mono font-semibold" style="color: var(--center-channel-color);">{formatCpu(deployment.totalCpuUsage)}</span>
+													</div>
+													<div class="flex-1 min-h-[200px]">
+														{#if Line}
+															<svelte:component this={Line} data={cpuChartData} options={cpuChartOptions} />
+														{/if}
+													</div>
+												</div>
+												<div class="flex flex-col">
+													<div class="flex items-center justify-between mb-2">
+														<div class="flex items-center gap-1.5">
+															<MemoryStick class="h-3.5 w-3.5" style="color: #e87485;" />
+															<span class="text-xs font-medium" style="color: var(--surface-muted);">Memory</span>
+														</div>
+														<span class="text-xs font-mono font-semibold" style="color: var(--center-channel-color);">{formatMemory(deployment.totalMemoryUsage)}</span>
+													</div>
+													<div class="flex-1 min-h-[200px]">
+														{#if Line}
+															<svelte:component this={Line} data={memoryChartData} options={memoryChartOptions} />
+														{/if}
+													</div>
+												</div>
+											</div>
+										{:else}
+											<div class="grid grid-cols-2 gap-4 flex-1 min-h-0">
+												<div class="rounded-xl p-4 flex flex-col justify-center" style="background-color: var(--control-bg);">
+													<div class="flex items-center gap-2 mb-2">
+														<Cpu class="h-4 w-4 shrink-0" style="color: var(--surface-muted);" />
+														<span class="text-xs font-medium" style="color: var(--surface-muted);">CPU</span>
+													</div>
+													<p class="text-2xl font-semibold font-mono" style="color: var(--center-channel-color);">
+														{formatCpu(deployment.totalCpuUsage)}
+													</p>
+													<p class="text-xs mt-1" style="color: var(--surface-muted);">Collecting data...</p>
+												</div>
+												<div class="rounded-xl p-4 flex flex-col justify-center" style="background-color: var(--control-bg);">
+													<div class="flex items-center gap-2 mb-2">
+														<MemoryStick class="h-4 w-4 shrink-0" style="color: var(--surface-muted);" />
+														<span class="text-xs font-medium" style="color: var(--surface-muted);">Memory</span>
+													</div>
+													<p class="text-2xl font-semibold font-mono" style="color: var(--center-channel-color);">
+														{formatMemory(deployment.totalMemoryUsage)}
+													</p>
+													<p class="text-xs mt-1" style="color: var(--surface-muted);">Collecting data...</p>
+												</div>
+											</div>
+										{/if}
 									</div>
-									{#if deployment.pods?.length}
-										<div class="space-y-2">
-											{#each deployment.pods as pod}
-												<div class="flex items-center justify-between gap-3 rounded-xl p-3" style="background-color: var(--control-bg);">
-													<div class="flex items-center gap-3 min-w-0">
-														<Container class="surface-icon h-8 w-8 rounded-lg p-1.5 shrink-0" />
-														<div class="min-w-0">
-															<p class="font-mono text-sm truncate" style="color: var(--center-channel-color);">{pod.name}</p>
-															{#if pod.ip}
-																<p class="text-xs" style="color: var(--surface-muted);">{pod.ip}</p>
+
+									<!-- Compact Pods -->
+									<div class="card rounded-2xl p-5">
+										<div class="flex flex-wrap items-center justify-between gap-3 mb-3">
+											<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Pods</p>
+											<div class="flex gap-3 text-xs" style="color: var(--surface-muted);">
+												<span class="inline-flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-green-500"></span> {deployment.pods?.filter((pod) => pod.status?.toLowerCase() === 'ready').length ?? 0}</span>
+												<span class="inline-flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-yellow-500"></span> {deployment.pods?.filter((pod) => pod.status?.toLowerCase() === 'scheduled').length ?? 0}</span>
+												<span class="inline-flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-gray-400"></span> {deployment.pods?.filter((pod) => pod.status?.toLowerCase() === 'pending').length ?? 0}</span>
+											</div>
+										</div>
+										{#if deployment.pods?.length}
+											<div class="space-y-1">
+												{#each deployment.pods as pod}
+													<div class="flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5" style="background-color: var(--control-bg);">
+														<div class="flex items-center gap-2 min-w-0">
+															<span class="h-1.5 w-1.5 rounded-full shrink-0 {pod.status?.toLowerCase() === 'ready' ? 'bg-green-500' : pod.status?.toLowerCase() === 'scheduled' ? 'bg-yellow-500' : 'bg-gray-400'}"></span>
+															<span class="font-mono text-xs truncate" style="color: var(--center-channel-color);">{pod.name}</span>
+														</div>
+														<div class="flex items-center gap-3 shrink-0 text-xs font-mono" style="color: var(--surface-muted);">
+															{#if pod.cpuUsage != null}
+																<span>{formatCpu(pod.cpuUsage)}</span>
 															{/if}
+															{#if pod.memoryUsage != null}
+																<span>{formatMemory(pod.memoryUsage)}</span>
+															{/if}
+															<span class="badge {getStatusColor(pod.status)} text-[10px] px-1.5 py-0.5">{pod.status}</span>
 														</div>
 													</div>
-													<span class="badge {getStatusColor(pod.status)} shrink-0">{pod.status}</span>
-												</div>
-											{/each}
-										</div>
-									{:else}
-										<p class="surface-muted-panel rounded-xl py-6 text-center text-sm">No pods reporting yet.</p>
-									{/if}
+												{/each}
+											</div>
+										{:else}
+											<p class="text-xs text-center py-3" style="color: var(--surface-muted);">No pods reporting yet.</p>
+										{/if}
+									</div>
 								</div>
 
 								<!-- Details sidebar -->
@@ -2206,49 +2456,63 @@
 						<div class="card rounded-2xl p-5">
 							<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
 								<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Environment variables</p>
-								<div class="flex gap-2">
-									<button onclick={addEnvRow} class="btn btn-secondary btn-sm">
-										<Plus class="h-4 w-4" />
-										<span>Add</span>
-									</button>
+								<div class="flex items-center gap-2">
+									{#if envViewMode === 'ui'}
+										<button onclick={addEnvRow} class="btn btn-secondary btn-sm">
+											<Plus class="h-4 w-4" />
+											<span>Add</span>
+										</button>
+									{/if}
+									<div class="relative flex rounded-lg p-0.5" style="background-color: var(--control-bg);">
+										<div
+											class="absolute top-0.5 bottom-0.5 rounded-md shadow-sm transition-all duration-200 ease-in-out"
+											style="background-color: var(--surface-bg); width: calc(50% - 2px); left: {envViewMode === 'ui' ? '2px' : 'calc(50% + 0px)'};"
+										></div>
+										<button
+											onclick={() => switchEnvView('ui')}
+											class="relative z-10 px-3 py-1 text-xs font-medium rounded-md transition-colors duration-200"
+											style="color: {envViewMode === 'ui' ? 'var(--center-channel-color)' : 'var(--surface-muted)'};"
+										>UI</button>
+										<button
+											onclick={() => switchEnvView('raw')}
+											class="relative z-10 px-3 py-1 text-xs font-medium rounded-md transition-colors duration-200"
+											style="color: {envViewMode === 'raw' ? 'var(--center-channel-color)' : 'var(--surface-muted)'};"
+										>Raw</button>
+									</div>
 								</div>
 							</div>
-							<details class="group mb-4">
-								<summary class="cursor-pointer text-xs mb-1" style="color: var(--surface-muted);">
-									Paste from .env file
-								</summary>
-								<div class="mt-2 space-y-2">
+							{#if envViewMode === 'ui'}
+								<div class="space-y-2" transition:fade={{ duration: 150 }}>
+									{#each envVars as env, index}
+										{@const isRevealed = revealedIndices.has(index)}
+										<div class="flex gap-2 items-center">
+											<input type="text" bind:value={env.key} placeholder="KEY" class="input font-mono text-sm flex-[2]" onfocus={() => isEditingEnv = true} />
+											<input
+												type={isRevealed ? 'text' : 'password'}
+												bind:value={env.value}
+												placeholder="value"
+												class="input font-mono text-sm flex-[3]"
+												onfocus={() => isEditingEnv = true}
+											/>
+											<button type="button" onclick={() => toggleReveal(index)} class="btn btn-ghost btn-sm shrink-0" aria-label={isRevealed ? 'Hide' : 'Show'}>
+												{#if isRevealed}<EyeOff class="h-3.5 w-3.5" />{:else}<Eye class="h-3.5 w-3.5" />{/if}
+											</button>
+											<button onclick={() => removeEnvRow(index)} class="btn btn-ghost btn-sm shrink-0" aria-label="Remove">
+												<X class="h-3.5 w-3.5" />
+											</button>
+										</div>
+									{/each}
+								</div>
+							{:else}
+								<div transition:fade={{ duration: 150 }}>
 									<textarea
-										bind:value={envPasteText}
+										bind:value={envRawText}
 										placeholder="KEY1=value1&#10;KEY2=value2&#10;# Comments are ignored"
-										class="input font-mono text-xs min-h-[80px]"
+										class="input font-mono text-xs min-h-[200px] w-full"
+										onfocus={() => isEditingEnv = true}
 									></textarea>
-									<div class="flex justify-end">
-										<button onclick={parseEnvVars} disabled={!envPasteText.trim()} class="btn btn-secondary btn-sm">Parse</button>
-									</div>
 								</div>
-							</details>
-							<div class="space-y-2">
-								{#each envVars as env, index}
-									{@const isRevealed = revealedIndices.has(index)}
-									<div class="flex gap-2 items-center">
-										<input type="text" bind:value={env.key} placeholder="KEY" class="input font-mono text-sm flex-[2]" onfocus={() => isEditingEnv = true} />
-										<input
-											type={isRevealed ? 'text' : 'password'}
-											bind:value={env.value}
-											placeholder="value"
-											class="input font-mono text-sm flex-[3]"
-											onfocus={() => isEditingEnv = true}
-										/>
-										<button type="button" onclick={() => toggleReveal(index)} class="btn btn-ghost btn-sm shrink-0" aria-label={isRevealed ? 'Hide' : 'Show'}>
-											{#if isRevealed}<EyeOff class="h-3.5 w-3.5" />{:else}<Eye class="h-3.5 w-3.5" />{/if}
-										</button>
-										<button onclick={() => removeEnvRow(index)} class="btn btn-ghost btn-sm shrink-0" aria-label="Remove">
-											<X class="h-3.5 w-3.5" />
-										</button>
-									</div>
-								{/each}
-							</div>
+							{/if}
 							<div class="mt-4 flex justify-end">
 								<button onclick={saveEnv} disabled={savingEnv} class="btn btn-primary">
 									{#if savingEnv}<Loader2 class="h-4 w-4 animate-spin" />{/if}

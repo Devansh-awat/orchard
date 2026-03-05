@@ -1,4 +1,5 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Inject, forwardRef } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Inject, forwardRef, Logger } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { Prisma, ServiceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
@@ -19,6 +20,52 @@ export class ProjectsService {
     @Inject(forwardRef(() => GitHubService))
     private readonly githubService: GitHubService
   ) {}
+
+  private readonly metricsLogger = new Logger('MetricsCollector');
+
+  @Cron('*/3 * * * *')
+  async collectAllDeploymentMetrics() {
+    const deployments = await this.prisma.deployment.findMany({
+      where: {
+        status: 'running',
+        name: { not: '' },
+        namespace: { not: '' },
+      },
+      select: { id: true, name: true, namespace: true },
+    });
+
+    if (deployments.length === 0) return;
+
+    const results = await Promise.allSettled(
+      deployments.map(async (dep) => {
+        const livePods = await this.kubernetesService.getDeploymentPods(dep.name, dep.namespace);
+        const cpu = livePods?.totalCpuUsage ?? null;
+        const mem = livePods?.totalMemoryUsage ?? null;
+
+        if (cpu != null || mem != null) {
+          await this.prisma.deploymentMetric.create({
+            data: {
+              deploymentId: dep.id,
+              cpuUsage: cpu,
+              memoryUsage: mem != null ? BigInt(mem) : null,
+            },
+          });
+          return true;
+        }
+        return false;
+      })
+    );
+
+    const saved = results.filter(r => r.status === 'fulfilled' && r.value).length;
+    const failed = results.filter(r => r.status === 'rejected').length;
+    this.metricsLogger.log(`Collected metrics for ${saved}/${deployments.length} deployments${failed > 0 ? ` (${failed} failed)` : ''}`);
+
+    // Clean up old metrics
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    await this.prisma.deploymentMetric.deleteMany({
+      where: { createdAt: { lt: oneHourAgo } },
+    }).catch(err => this.metricsLogger.error('Failed to clean old metrics:', err.message));
+  }
 
   private formatSlug(value: string) {
     if (!value) {
@@ -57,6 +104,8 @@ export class ProjectsService {
       restartCount: typeof pod.restartCount === 'number' ? pod.restartCount : 0,
       startTime: pod.createdAt,
       createdAt: pod.createdAt,
+      cpuUsage: pod.cpuUsage ?? null,
+      memoryUsage: pod.memoryUsage ?? null,
       containers:
         pod.containers?.map((container) => ({
           name: container.name,
@@ -3860,6 +3909,8 @@ export class ProjectsService {
     let pods: any = deployment.pods;
     let availableReplicas = 0;
     let warnings: any[] = [];
+    let totalCpuUsage: number | null = null;
+    let totalMemoryUsage: number | null = null;
 
     if (deployment.name && deployment.namespace) {
       try {
@@ -3869,7 +3920,9 @@ export class ProjectsService {
         );
         pods = this.formatLivePods(livePods?.pods);
         warnings = livePods?.warnings || [];
-        
+        totalCpuUsage = livePods?.totalCpuUsage ?? null;
+        totalMemoryUsage = livePods?.totalMemoryUsage ?? null;
+
         try {
           const k8sDeployment = await this.kubernetesService.getKubernetesDeployment(
             deployment.name,
@@ -3973,11 +4026,47 @@ export class ProjectsService {
       }
     }
 
+    // Fire-and-forget: save metrics + clean up old ones
+    if (totalCpuUsage != null || totalMemoryUsage != null) {
+      this.prisma.deploymentMetric.create({
+        data: {
+          deploymentId,
+          cpuUsage: totalCpuUsage,
+          memoryUsage: totalMemoryUsage != null ? BigInt(totalMemoryUsage) : null,
+        },
+      }).catch(err => console.error('[ProjectsService] Failed to save deployment metric:', err.message));
+
+      const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+      this.prisma.deploymentMetric.deleteMany({
+        where: { deploymentId, createdAt: { lt: oneHourAgo } },
+      }).catch(err => console.error('[ProjectsService] Failed to clean old metrics:', err.message));
+    }
+
+    // Fetch metrics history (last 1 hour)
+    const metricsHistory = await this.prisma.deploymentMetric.findMany({
+      where: {
+        deploymentId,
+        createdAt: { gte: new Date(Date.now() - 60 * 60 * 1000) },
+      },
+      orderBy: { createdAt: 'asc' },
+      select: { cpuUsage: true, memoryUsage: true, createdAt: true },
+    }).then(rows => rows.map(r => ({
+      time: r.createdAt.toISOString(),
+      cpu: r.cpuUsage,
+      memory: r.memoryUsage != null ? Number(r.memoryUsage) : null,
+    }))).catch(err => {
+      console.error('[ProjectsService] Failed to fetch metrics history:', err.message);
+      return [];
+    });
+
     return {
       ...deploymentWithInternalUrls,
       pods,
       availableReplicas,
       warnings,
+      totalCpuUsage,
+      totalMemoryUsage,
+      metricsHistory,
       status: computedStatus,
     };
   }
@@ -5938,7 +6027,7 @@ export class ProjectsService {
 
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      include: { workspace: true },
+      include: { workspace: { include: { organization: true } } },
     });
     if (!project) throw new NotFoundException(`Project ${projectId} not found`);
 
@@ -5955,9 +6044,17 @@ export class ProjectsService {
     const slug = this.formatSlug(nameInput);
     if (!slug) throw new BadRequestException('Invalid database name');
 
-    // Generate unique db name, user, and password
-    const dbName = `db_${slug.replace(/-/g, '_')}`;
-    const dbUser = `u_${slug.replace(/-/g, '_')}`;
+    // Generate unique db name from org-workspace-project-dbname
+    const orgSlug = project.workspace.organization.slug.replace(/-/g, '_');
+    const wsSlug = project.workspace.slug.replace(/-/g, '_');
+    const projSlug = project.slug.replace(/-/g, '_');
+    const nameSlug = slug.replace(/-/g, '_');
+    const fullDbName = `${orgSlug}_${wsSlug}_${projSlug}_${nameSlug}`;
+    // PostgreSQL identifiers are limited to 63 characters; dbUser has "u_" prefix so max 61 for the base
+    const maxLen = 61;
+    const dbBase = fullDbName.length > maxLen ? fullDbName.substring(0, maxLen) : fullDbName;
+    const dbName = dbBase;
+    const dbUser = `u_${dbBase}`;
     const dbPassword = this.generatePassword();
 
     // Check uniqueness in our records

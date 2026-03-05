@@ -21,6 +21,15 @@
 	const projectSlug = $derived($page.params.projectSlug);
 	const orgSlug = $derived($page.params.orgSlug);
 
+	const generatedDbName = $derived(() => {
+		const o = orgSlug.replace(/-/g, '_');
+		const w = workspaceSlug.replace(/-/g, '_');
+		const p = projectSlug.replace(/-/g, '_');
+		const n = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_') || 'name';
+		const full = `${o}_${w}_${p}_${n}`;
+		return full.length > 61 ? full.substring(0, 61) : full;
+	});
+
 	async function fetchProject() {
 		loading = true;
 		try {
@@ -116,7 +125,7 @@
 					required
 					disabled={submitting}
 				/>
-				<p class="db-hint">A slug-friendly name. The actual PostgreSQL database and user will be derived from this.</p>
+				<p class="db-hint">A slug-friendly name. The database will be created as <code>{generatedDbName()}</code></p>
 			</div>
 
 			<button type="submit" class="db-btn db-btn-primary" disabled={submitting || !name.trim()}>

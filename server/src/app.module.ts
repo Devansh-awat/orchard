@@ -1,4 +1,5 @@
 import { Module } from '@nestjs/common';
+import { ScheduleModule } from '@nestjs/schedule';
 import { HealthModule } from './health/health.module';
 import { KubernetesModule } from './kubernetes/kubernetes.module';
 import { AuthModule } from './auth/auth.module';
@@ -15,6 +16,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
 
 @Module({
   imports: [
+    ScheduleModule.forRoot(),
     PrismaModule,
     AuthModule,
     UsersModule,

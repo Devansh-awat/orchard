@@ -3357,20 +3357,80 @@ export class KubernetesService {
     }
   }
 
+  async getPodMetrics(namespace: string, labelSelector: string): Promise<Map<string, { cpuUsage: number; memoryUsage: number }>> {
+    try {
+      const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+      const response = await customApi.listNamespacedCustomObject(
+        'metrics.k8s.io',
+        'v1beta1',
+        namespace,
+        'pods',
+        undefined, // pretty
+        undefined, // allowWatchBookmarks
+        undefined, // continue
+        undefined, // fieldSelector
+        labelSelector
+      );
+
+      const metricsMap = new Map<string, { cpuUsage: number; memoryUsage: number }>();
+      const items = (response.body as any)?.items ?? [];
+
+      for (const item of items) {
+        const podName = item.metadata?.name;
+        if (!podName) continue;
+
+        let totalCpu = 0;
+        let totalMemory = 0;
+
+        for (const container of item.containers ?? []) {
+          const cpuStr: string = container.usage?.cpu ?? '0';
+          const memStr: string = container.usage?.memory ?? '0';
+
+          // Parse CPU: could be "123n" (nanocores) or "100m" (millicores)
+          if (cpuStr.endsWith('n')) {
+            totalCpu += parseInt(cpuStr) / 1_000_000; // nanocores to millicores
+          } else if (cpuStr.endsWith('m')) {
+            totalCpu += parseInt(cpuStr);
+          } else {
+            totalCpu += parseFloat(cpuStr) * 1000; // cores to millicores
+          }
+
+          // Parse memory: could be "123Ki", "456Mi", "789Gi", or plain bytes
+          if (memStr.endsWith('Ki')) {
+            totalMemory += parseInt(memStr) * 1024;
+          } else if (memStr.endsWith('Mi')) {
+            totalMemory += parseInt(memStr) * 1024 * 1024;
+          } else if (memStr.endsWith('Gi')) {
+            totalMemory += parseInt(memStr) * 1024 * 1024 * 1024;
+          } else {
+            totalMemory += parseInt(memStr);
+          }
+        }
+
+        metricsMap.set(podName, { cpuUsage: Math.round(totalCpu), memoryUsage: totalMemory });
+      }
+
+      return metricsMap;
+    } catch (error) {
+      console.warn('[API] Failed to fetch pod metrics (metrics-server may not be available):', error.message);
+      return new Map();
+    }
+  }
+
   async getDeploymentPods(deploymentName: string, namespace: string = 'midnight-staging') {
     this.ensureKubeConfig();
-    
+
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
     const cleanDeploymentName = String(deploymentName).trim();
-    
+
     console.log('[API] Fetching pods for deployment:', cleanDeploymentName, 'in namespace:', cleanNamespace);
-    
+
     try {
       const appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
       const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
-      
+
       const k8sDeployment = await appsApi.readNamespacedDeployment(cleanDeploymentName, cleanNamespace);
-      
+
       const selector = k8sDeployment.body.spec.selector;
       const labelSelector = selector.matchLabels
         ? Object.entries(selector.matchLabels)
@@ -3479,12 +3539,29 @@ export class KubernetesService {
         }));
       });
       
+      // Fetch metrics and attach to pods
+      const metricsMap = await this.getPodMetrics(cleanNamespace, labelSelector);
+      const podsWithMetrics = pods.map(pod => {
+        const metrics = metricsMap.get(pod.name);
+        return {
+          ...pod,
+          cpuUsage: metrics?.cpuUsage ?? null,
+          memoryUsage: metrics?.memoryUsage ?? null,
+        };
+      });
+
+      const totalCpuUsage = podsWithMetrics.reduce((sum, p) => sum + (p.cpuUsage ?? 0), 0);
+      const totalMemoryUsage = podsWithMetrics.reduce((sum, p) => sum + (p.memoryUsage ?? 0), 0);
+      const hasMetrics = metricsMap.size > 0;
+
       return {
         deployment: cleanDeploymentName,
         namespace: cleanNamespace,
-        podCount: pods.length,
-        pods,
+        podCount: podsWithMetrics.length,
+        pods: podsWithMetrics,
         warnings: warnings.slice(0, 10),
+        totalCpuUsage: hasMetrics ? totalCpuUsage : null,
+        totalMemoryUsage: hasMetrics ? totalMemoryUsage : null,
       };
     } catch (error) {
       if (error.response?.statusCode === 404) {
@@ -3495,6 +3572,8 @@ export class KubernetesService {
           podCount: 0,
           pods: [],
           warnings: [],
+          totalCpuUsage: null,
+          totalMemoryUsage: null,
         };
       }
       

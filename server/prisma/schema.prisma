@@ -336,6 +336,7 @@ model Deployment {
   volumes            DeploymentVolume[]
   githubDeployments  GitHubDeployment[]
   webhookTokens      DeploymentWebhookToken[]
+  metrics            DeploymentMetric[]
 
   @@unique([projectId, name])
   @@index([projectId], map: "idx_deployments_project")
@@ -564,4 +565,17 @@ model Database {
   @@unique([dbName])
   @@index([projectId], map: "idx_databases_project")
   @@map("databases")
+}
+
+model DeploymentMetric {
+  id             String     @id @default(uuid()) @db.Uuid
+  deploymentId   String     @map("deployment_id") @db.Uuid
+  cpuUsage       Int?       @map("cpu_usage")
+  memoryUsage    BigInt?    @map("memory_usage")
+  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamp(6)
+
+  deployment     Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+
+  @@index([deploymentId, createdAt], map: "idx_deployment_metrics_lookup")
+  @@map("deployment_metrics")
 }
