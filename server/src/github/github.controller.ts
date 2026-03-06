@@ -92,15 +92,16 @@ export class GitHubController {
   @Post('link')
   async linkAccount(@Req() req: any, @Body('code') code: string) {
     const hackClubId = req.user.sub;
-    
+
     if (!code) {
       throw new HttpException('Code is required', HttpStatus.BAD_REQUEST);
     }
 
-    const user = await this.usersService.findByHackClubId(hackClubId);
-    if (!user) {
-      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
-    }
+    const user = await this.usersService.findOrCreateByHackClubId({
+      id: hackClubId,
+      email: req.user.email,
+      name: req.user.name,
+    });
 
     await this.githubService.linkGitHubAccount(user.id, code);
 
@@ -110,11 +111,12 @@ export class GitHubController {
   @Delete('unlink')
   async unlinkAccount(@Req() req: any) {
     const hackClubId = req.user.sub;
-    
-    const user = await this.usersService.findByHackClubId(hackClubId);
-    if (!user) {
-      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
-    }
+
+    const user = await this.usersService.findOrCreateByHackClubId({
+      id: hackClubId,
+      email: req.user.email,
+      name: req.user.name,
+    });
 
     await this.githubService.unlinkGitHubAccount(user.id);
 
@@ -124,11 +126,11 @@ export class GitHubController {
   @Get('status')
   async getStatus(@Req() req: any) {
     const hackClubId = req.user.sub;
-    const user = await this.usersService.findByHackClubId(hackClubId);
-
-    if (!user) {
-      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
-    }
+    const user = await this.usersService.findOrCreateByHackClubId({
+      id: hackClubId,
+      email: req.user.email,
+      name: req.user.name,
+    });
 
     return {
       linked: !!user.githubId,
@@ -139,11 +141,11 @@ export class GitHubController {
   @Get('repositories')
   async getRepositories(@Req() req: any, @Query('all') all?: string): Promise<GitHubRepo[]> {
     const hackClubId = req.user.sub;
-    const user = await this.usersService.findByHackClubId(hackClubId);
-
-    if (!user) {
-      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
-    }
+    const user = await this.usersService.findOrCreateByHackClubId({
+      id: hackClubId,
+      email: req.user.email,
+      name: req.user.name,
+    });
 
     if (!user.githubAccessToken) {
       throw new HttpException('GitHub account not linked', HttpStatus.BAD_REQUEST);
@@ -162,11 +164,11 @@ export class GitHubController {
     @Param('repo') repo: string
   ): Promise<GitHubBranch[]> {
     const hackClubId = req.user.sub;
-    const user = await this.usersService.findByHackClubId(hackClubId);
-
-    if (!user) {
-      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
-    }
+    const user = await this.usersService.findOrCreateByHackClubId({
+      id: hackClubId,
+      email: req.user.email,
+      name: req.user.name,
+    });
 
     if (!user.githubAccessToken) {
       throw new HttpException('GitHub account not linked', HttpStatus.BAD_REQUEST);
@@ -185,11 +187,11 @@ export class GitHubController {
     @Query('branch') branch?: string
   ): Promise<string[]> {
     const hackClubId = req.user.sub;
-    const user = await this.usersService.findByHackClubId(hackClubId);
-
-    if (!user) {
-      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
-    }
+    const user = await this.usersService.findOrCreateByHackClubId({
+      id: hackClubId,
+      email: req.user.email,
+      name: req.user.name,
+    });
 
     if (!user.githubAccessToken) {
       throw new HttpException('GitHub account not linked', HttpStatus.BAD_REQUEST);
@@ -214,11 +216,11 @@ export class GitHubController {
     @Query('branch') branch?: string
   ): Promise<GitHubContent[]> {
     const hackClubId = req.user.sub;
-    const user = await this.usersService.findByHackClubId(hackClubId);
-
-    if (!user) {
-      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
-    }
+    const user = await this.usersService.findOrCreateByHackClubId({
+      id: hackClubId,
+      email: req.user.email,
+      name: req.user.name,
+    });
 
     if (!user.githubAccessToken) {
       throw new HttpException('GitHub account not linked', HttpStatus.BAD_REQUEST);
@@ -244,11 +246,11 @@ export class GitHubController {
     @Query('branch') branch?: string
   ): Promise<string[]> {
     const hackClubId = req.user.sub;
-    const user = await this.usersService.findByHackClubId(hackClubId);
-
-    if (!user) {
-      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
-    }
+    const user = await this.usersService.findOrCreateByHackClubId({
+      id: hackClubId,
+      email: req.user.email,
+      name: req.user.name,
+    });
 
     if (!user.githubAccessToken) {
       throw new HttpException('GitHub account not linked', HttpStatus.BAD_REQUEST);
@@ -412,11 +414,11 @@ export class GitHubController {
   @Get('app/installations')
   async getUserInstallations(@Req() req: any) {
     const hackClubId = req.user.sub;
-    const user = await this.usersService.findByHackClubId(hackClubId);
-
-    if (!user) {
-      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
-    }
+    const user = await this.usersService.findOrCreateByHackClubId({
+      id: hackClubId,
+      email: req.user.email,
+      name: req.user.name,
+    });
 
     const installations = await this.githubService.getUserInstallations(user.id);
 
@@ -431,11 +433,11 @@ export class GitHubController {
   @Get('app/repositories')
   async getAppRepositories(@Req() req: any) {
     const hackClubId = req.user.sub;
-    const user = await this.usersService.findByHackClubId(hackClubId);
-
-    if (!user) {
-      throw new HttpException('User not found', HttpStatus.NOT_FOUND);
-    }
+    const user = await this.usersService.findOrCreateByHackClubId({
+      id: hackClubId,
+      email: req.user.email,
+      name: req.user.name,
+    });
 
     const installations = await this.githubService.getUserInstallations(user.id);
 

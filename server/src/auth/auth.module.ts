@@ -8,13 +8,15 @@ import { PasswordlessController } from './passwordless.controller';
 import { OtpService } from './otp.service';
 import { PasskeyService } from './passkey.service';
 import { RateLimitService } from './rate-limit.service';
+import { ApiTokensService } from './api-tokens.service';
+import { ApiTokensController } from './api-tokens.controller';
 import { UsersModule } from '../users/users.module';
 import { EmailModule } from '../email/email.module';
 import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
   imports: [UsersModule, EmailModule, PrismaModule],
-  controllers: [OAuthController, PasswordlessController],
+  controllers: [OAuthController, PasswordlessController, ApiTokensController],
   providers: [
     AuthGuard,
     SuperAdminGuard,
@@ -22,12 +24,13 @@ import { PrismaModule } from '../prisma/prisma.module';
     OtpService,
     PasskeyService,
     RateLimitService,
+    ApiTokensService,
     {
       provide: APP_GUARD,
       useClass: SuperAdminGuard,
     },
   ],
-  exports: [AuthGuard, SuperAdminGuard, OAuthService, OtpService, PasskeyService, RateLimitService],
+  exports: [AuthGuard, SuperAdminGuard, OAuthService, OtpService, PasskeyService, RateLimitService, ApiTokensService],
 })
 export class AuthModule {}
 

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { user } from '$lib/stores';
 	import { themeStore } from '$lib/stores/theme';
-	import { User, Settings, LogOut, Sun, Moon, Monitor, ChevronUp, Palette } from 'lucide-svelte';
+	import { User, Settings, LogOut, Sun, Moon, Monitor, ChevronUp, Palette, KeyRound } from 'lucide-svelte';
 	import { browser } from '$app/environment';
 	import { slide } from 'svelte/transition';
 	import { get } from 'svelte/store';
@@ -139,6 +139,14 @@
 				>
 					<Settings class="h-4 w-4" />
 					User Settings
+				</a>
+				<a
+					href="/user/api-tokens"
+					class="user-menu-item"
+					onclick={() => (open = false)}
+				>
+					<KeyRound class="h-4 w-4" />
+					API Tokens
 				</a>
 				<a
 					href="/user/settings/theme"

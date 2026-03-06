@@ -112,8 +112,50 @@ export class UsersService {
     }
   }
 
-  async findOrCreateByClerkId(identifier: string, userData?: any) {
-    return this.findByIdOrHackClubId(identifier);
+  async findOrCreateByClerkId(identifier: string, userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }) {
+    let user = await this.findByIdOrHackClubId(identifier);
+
+    if (!user && userData?.email) {
+      // Try to find by email first
+      user = await this.prisma.user.findUnique({
+        where: { email: userData.email },
+      });
+
+      if (user) {
+        // Link the hackClubId to the existing user
+        user = await this.prisma.user.update({
+          where: { id: user.id },
+          data: {
+            hackClubId: identifier,
+            ...(userData.firstName && { firstName: userData.firstName }),
+            ...(userData.lastName && { lastName: userData.lastName }),
+            ...(userData.imageUrl && { imageUrl: userData.imageUrl }),
+          },
+        });
+      } else {
+        // Create a new user
+        let username = userData.username || userData.email.split('@')[0];
+        let counter = 1;
+
+        while (await this.prisma.user.findUnique({ where: { username } })) {
+          username = `${userData.username || userData.email.split('@')[0]}${counter}`;
+          counter++;
+        }
+
+        user = await this.prisma.user.create({
+          data: {
+            hackClubId: identifier,
+            email: userData.email,
+            username,
+            firstName: userData.firstName || null,
+            lastName: userData.lastName || null,
+            imageUrl: userData.imageUrl || null,
+          },
+        });
+      }
+    }
+
+    return user;
   }
 
   async syncImageUrlFromClerk(hackClubId: string): Promise<string | null> {

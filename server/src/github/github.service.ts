@@ -383,6 +383,23 @@ export class GitHubService {
     return await response.text();
   }
 
+  parseExposedPort(dockerfileContent: string): number | null {
+    const lines = dockerfileContent.split('\n');
+    let lastExposedPort: number | null = null;
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.toUpperCase().startsWith('EXPOSE')) {
+        const match = trimmed.match(/EXPOSE\s+(\d+)/i);
+        if (match) {
+          lastExposedPort = parseInt(match[1], 10);
+        }
+      }
+    }
+
+    return lastExposedPort;
+  }
+
   parseDockerfileStages(dockerfileContent: string): string[] {
     const stages: string[] = [];
     const lines = dockerfileContent.split('\n');

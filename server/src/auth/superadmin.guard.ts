@@ -21,13 +21,21 @@ export class SuperAdminGuard implements CanActivate {
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    // Check @Public() — skip all auth
-    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+    // Check @Auth() on handler or class — method-level @Auth() overrides class-level @Public()
+    const requiresAuth = this.reflector.getAllAndOverride<boolean>(REQUIRES_AUTH_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
-    if (isPublic) {
-      return true;
+
+    // Check @Public() — skip all auth (unless the specific method requires it)
+    if (!requiresAuth) {
+      const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]);
+      if (isPublic) {
+        return true;
+      }
     }
 
     // Extract and verify JWT token
@@ -38,24 +46,69 @@ export class SuperAdminGuard implements CanActivate {
       throw new UnauthorizedException('No token provided');
     }
 
+    // Try JWT first, then fall back to API token
+    let authenticated = false;
+
     try {
       const { payload } = await jwtVerify(token, this.jwtSecret);
-      request['auth'] = { userId: payload.sub };
+
+      // Resolve the real DB user ID for OAuth users (where sub is a Hack Club ID, not a UUID)
+      let dbUserId = payload.sub as string;
+      if (payload.hackClubId) {
+        const dbUser = await this.prisma.user.findUnique({
+          where: { hackClubId: payload.hackClubId as string },
+          select: { id: true },
+        });
+        if (dbUser) {
+          dbUserId = dbUser.id;
+        }
+      }
+
+      request['auth'] = { userId: dbUserId };
       request['user'] = {
-        sub: payload.sub,
+        sub: dbUserId,
         email: payload.email,
         name: payload.name,
         hackClubId: payload.hackClubId,
       };
+      authenticated = true;
     } catch {
-      throw new UnauthorizedException('Invalid token');
+      // JWT failed — try API token lookup
+    }
+
+    if (!authenticated) {
+      const apiToken = await this.prisma.apiToken.findUnique({
+        where: { token },
+        include: { user: { select: { id: true, email: true, username: true, firstName: true, lastName: true, hackClubId: true } } },
+      });
+
+      if (!apiToken) {
+        throw new UnauthorizedException('Invalid token');
+      }
+
+      if (apiToken.expiresAt && apiToken.expiresAt < new Date()) {
+        throw new UnauthorizedException('API token has expired');
+      }
+
+      const user = apiToken.user;
+      const name = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.username;
+
+      request['auth'] = { userId: user.id };
+      request['user'] = {
+        sub: user.id,
+        email: user.email,
+        name,
+        hackClubId: user.hackClubId,
+      };
+
+      // Update lastUsedAt in the background
+      this.prisma.apiToken.update({
+        where: { id: apiToken.id },
+        data: { lastUsedAt: new Date() },
+      }).catch(() => {});
     }
 
     // Check @Auth() — JWT verified, no superadmin check needed
-    const requiresAuth = this.reflector.getAllAndOverride<boolean>(REQUIRES_AUTH_KEY, [
-      context.getHandler(),
-      context.getClass(),
-    ]);
     if (requiresAuth) {
       return true;
     }

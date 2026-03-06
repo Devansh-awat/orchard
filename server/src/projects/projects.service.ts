@@ -690,8 +690,12 @@ export class ProjectsService {
 
     const nameInput = String(data.name || '').trim();
     const replicas = data.replicas && Number.isInteger(data.replicas) && data.replicas > 0 ? data.replicas : 1;
-    const repoUrl = String(data.repoUrl || '').trim();
-    const branch = String(data.branch || '').trim();
+    let repoUrl = String(data.repoUrl || data['githubRepo'] || '').trim();
+    // Accept owner/repo shorthand and convert to full URL
+    if (repoUrl && !repoUrl.startsWith('http')) {
+      repoUrl = `https://github.com/${repoUrl}`;
+    }
+    const branch = String(data.branch || 'main').trim();
     const dockerfilePath = String(data.dockerfilePath || '').trim();
     const tag = data.tag ? String(data.tag).trim() : 'latest';
     const buildType = data.buildType === 'railpack' ? 'railpack' : 'dockerfile';
@@ -760,13 +764,41 @@ export class ProjectsService {
 
     const exposePublic = Boolean(data.exposePublic);
 
+    // Auto-detect port from Dockerfile EXPOSE directive if no port specified
+    let detectedPort: number | null = null;
+    const hasExplicitPort = (data.port && Number.isInteger(data.port) && data.port > 0) ||
+      (Array.isArray(data.ports) && data.ports.length > 0);
+
+    if (!hasExplicitPort && repoUrl && dockerfilePath) {
+      try {
+        const repoInfo = this.githubService.parseRepoUrl(repoUrl);
+        if (repoInfo && user.githubAccessToken) {
+          const dockerfileContent = await this.githubService.getFileContent(
+            user.githubAccessToken,
+            repoInfo.owner,
+            repoInfo.repo,
+            dockerfilePath,
+            branch,
+          );
+          detectedPort = this.githubService.parseExposedPort(dockerfileContent);
+          if (detectedPort) {
+            console.log(`[Projects] Auto-detected EXPOSE port ${detectedPort} from ${dockerfilePath}`);
+          }
+        }
+      } catch (error) {
+        console.warn(`[Projects] Failed to auto-detect port from Dockerfile:`, error.message);
+      }
+    }
+
+    const defaultPort = detectedPort || 80;
+
     const rawPorts = Array.isArray(data.ports) && data.ports.length > 0
       ? data.ports
       : [
           {
             name: 'http',
-            containerPort: data.port && Number.isInteger(data.port) && data.port > 0 ? data.port : 80,
-            servicePort: data.port && Number.isInteger(data.port) && data.port > 0 ? data.port : 80,
+            containerPort: data.port && Number.isInteger(data.port) && data.port > 0 ? data.port : defaultPort,
+            servicePort: data.port && Number.isInteger(data.port) && data.port > 0 ? data.port : defaultPort,
             protocol: 'TCP',
           },
         ];
@@ -3118,6 +3150,76 @@ export class ProjectsService {
       },
     });
     return this.addInternalUrlsToDeployment(result);
+  }
+
+  async deleteProjectIngress(
+    projectId: string,
+    ingressId: string,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const ingress = await this.prisma.ingress.findUnique({
+      where: { id: ingressId },
+      include: {
+        project: {
+          include: {
+            workspace: true,
+          },
+        },
+      },
+    });
+
+    if (!ingress) {
+      throw new NotFoundException(`Ingress ${ingressId} not found`);
+    }
+
+    if (ingress.projectId !== projectId) {
+      throw new BadRequestException('Ingress does not belong to project');
+    }
+
+    const membership = await this.prisma.workspaceMember.findFirst({
+      where: {
+        workspaceId: ingress.project.workspaceId,
+        userId: user.id,
+      },
+      include: {
+        role: true,
+      },
+    });
+
+    if (!membership) {
+      throw new ForbiddenException('You are not a member of this workspace');
+    }
+
+    if (membership.role.name === 'viewer') {
+      throw new ForbiddenException('You do not have permission to manage ingress resources');
+    }
+
+    try {
+      await this.kubernetesService.deleteIngress(ingress.namespace, ingress.name);
+    } catch (error) {
+      if (error instanceof BadRequestException) {
+        throw error;
+      }
+    }
+
+    await this.prisma.ingress.delete({
+      where: { id: ingressId },
+    });
+
+    return { success: true };
   }
 
   async updateDeploymentIngress(

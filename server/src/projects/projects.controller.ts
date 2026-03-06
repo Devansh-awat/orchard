@@ -36,12 +36,12 @@ export class ProjectsController {
     return this.projectsService.createProject(
       workspaceId,
       { name, slug, description, repositoryUrl },
-      req.user.sub,
+      req.user.hackClubId || req.user.sub,
       {
         email: req.user.email,
         username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
+        firstName: req.user.firstName || req.user.name?.split(' ')[0],
+        lastName: req.user.lastName || req.user.name?.split(' ').slice(1).join(' '),
         imageUrl: req.user.imageUrl,
       }
     );
@@ -176,6 +176,22 @@ export class ProjectsController {
     });
   }
 
+  @Delete(':id/ingresses/:ingressId')
+
+  async deleteProjectIngress(
+    @Param('id') id: string,
+    @Param('ingressId') ingressId: string,
+    @Request() req
+  ) {
+    return this.projectsService.deleteProjectIngress(id, ingressId, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl,
+    });
+  }
+
   @Post(':id/deployments')
 
   async createDeployment(
@@ -227,8 +243,9 @@ export class ProjectsController {
     @Body()
     body: {
       name: string;
-      repoUrl: string;
-      branch: string;
+      repoUrl?: string;
+      githubRepo?: string;
+      branch?: string;
       dockerfilePath?: string;
       target?: string;
       tag?: string;
@@ -258,12 +275,12 @@ export class ProjectsController {
     return this.projectsService.createDeploymentFromGitHub(
       id,
       body,
-      req.user.sub,
+      req.user.hackClubId || req.user.sub,
       {
         email: req.user.email,
         username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
+        firstName: req.user.firstName || req.user.name?.split(' ')[0],
+        lastName: req.user.lastName || req.user.name?.split(' ').slice(1).join(' '),
         imageUrl: req.user.imageUrl,
       }
     );
