@@ -1,12 +1,12 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards, Request, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Param, Body, Request, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { OrganizationsService } from './organizations.service';
-import { AuthGuard } from '../auth/auth.guard';
 import { OrganizationRole } from '@prisma/client';
 import { StorageService } from './storage.service';
+import { Auth } from '../auth/decorators';
 
+@Auth()
 @Controller('organizations')
-@UseGuards(AuthGuard)
 export class OrganizationsController {
   constructor(
     private readonly organizationsService: OrganizationsService,

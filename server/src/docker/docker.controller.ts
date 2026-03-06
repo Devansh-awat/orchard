@@ -1,9 +1,9 @@
-import { Controller, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Body } from '@nestjs/common';
 import { DockerService } from './docker.service';
-import { AuthGuard } from '../auth/auth.guard';
+import { Auth } from '../auth/decorators';
 
+@Auth()
 @Controller('docker')
-@UseGuards(AuthGuard)
 export class DockerController {
   constructor(private readonly dockerService: DockerService) {}
 
@@ -18,11 +18,10 @@ export class DockerController {
     buildFromRoot?: boolean;
   }) {
     const image = await this.dockerService.buildAndPushFromGitHub(body);
-    
+
     return {
       success: true,
       image,
     };
   }
 }
-

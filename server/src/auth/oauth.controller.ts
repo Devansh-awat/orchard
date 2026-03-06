@@ -3,7 +3,9 @@ import { Response } from 'express';
 import { OAuthService } from './oauth.service';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { Public, Auth } from './decorators';
 
+@Public()
 @Controller('auth')
 export class OAuthController {
   constructor(
@@ -100,74 +102,60 @@ export class OAuthController {
     return res.redirect(process.env.FRONTEND_URL || 'http://localhost:3000');
   }
 
+  @Auth()
   @Get('me')
   async me(@Req() req: any) {
-    const token = req.cookies?.session_token;
+    const userId = req.user.sub;
 
-    if (!token) {
-      throw new HttpException('Not authenticated', HttpStatus.UNAUTHORIZED);
-    }
-
-    try {
-      const payload = await this.oauthService.verifySessionToken(token);
-      
-      let user;
-      if (payload.authMethod === 'oauth' && payload.hackClubId) {
-        user = await this.usersService.findOrCreateByHackClubId({
-          id: payload.hackClubId,
-          email: payload.email,
-          name: payload.name,
-        });
-      } else {
-        user = await this.usersService.findByIdOrHackClubId(payload.sub);
-        if (!user) {
-          throw new HttpException('User not found', HttpStatus.NOT_FOUND);
-        }
+    let user;
+    if (req.user.hackClubId) {
+      user = await this.usersService.findOrCreateByHackClubId({
+        id: req.user.hackClubId,
+        email: req.user.email,
+        name: req.user.name,
+      });
+    } else {
+      user = await this.usersService.findByIdOrHackClubId(userId);
+      if (!user) {
+        throw new HttpException('User not found', HttpStatus.NOT_FOUND);
       }
-
-      return {
-        id: user.id,
-        email: user.email,
-        username: user.username,
-        firstName: user.firstName,
-        lastName: user.lastName,
-        imageUrl: user.imageUrl,
-        hackClubId: payload.hackClubId || user.hackClubId,
-        isSuperAdmin: user.isSuperAdmin,
-      };
-    } catch (err) {
-      throw new HttpException('Invalid session', HttpStatus.UNAUTHORIZED);
     }
+
+    return {
+      id: user.id,
+      email: user.email,
+      username: user.username,
+      firstName: user.firstName,
+      lastName: user.lastName,
+      imageUrl: user.imageUrl,
+      hackClubId: req.user.hackClubId || user.hackClubId,
+      isSuperAdmin: user.isSuperAdmin,
+    };
   }
 
+  @Auth()
   @Patch('me')
   async updateMe(
     @Req() req: any,
     @Body() body: { firstName?: string; lastName?: string; username?: string },
   ) {
-    const token = req.cookies?.session_token;
+    const userId = req.user.sub;
 
-    if (!token) {
-      throw new HttpException('Not authenticated', HttpStatus.UNAUTHORIZED);
+    let user;
+    if (req.user.hackClubId) {
+      user = await this.usersService.findOrCreateByHackClubId({
+        id: req.user.hackClubId,
+        email: req.user.email,
+        name: req.user.name,
+      });
+    } else {
+      user = await this.usersService.findByIdOrHackClubId(userId);
+      if (!user) {
+        throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+      }
     }
 
     try {
-      const payload = await this.oauthService.verifySessionToken(token);
-
-      let user;
-      if (payload.authMethod === 'oauth' && payload.hackClubId) {
-        user = await this.usersService.findOrCreateByHackClubId({
-          id: payload.hackClubId,
-          email: payload.email,
-          name: payload.name,
-        });
-      } else {
-        user = await this.usersService.findByIdOrHackClubId(payload.sub);
-        if (!user) {
-          throw new HttpException('User not found', HttpStatus.NOT_FOUND);
-        }
-      }
-
       const updatedUser = await this.usersService.updateProfile(user.id, {
         firstName: body.firstName,
         lastName: body.lastName,
@@ -179,7 +167,6 @@ export class OAuthController {
       if (err instanceof HttpException) {
         throw err;
       }
-      // Handle specific error messages
       if (err instanceof Error && err.message === 'Username is already taken') {
         throw new HttpException('Username is already taken', HttpStatus.CONFLICT);
       }

@@ -1,14 +1,15 @@
-import { Controller, Get, Param, UseGuards, Post, Body, Request, Delete, Put, Patch } from '@nestjs/common';
+import { Controller, Get, Param, Post, Body, Request, Delete, Put, Patch } from '@nestjs/common';
 import { ProjectsService } from './projects.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
-import { AuthGuard } from '../auth/auth.guard';
+import { Auth } from '../auth/decorators';
 
+@Auth()
 @Controller('projects')
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
 
   @Post('ingresses/validate-dns')
-  @UseGuards(AuthGuard)
+
   async validateIngressDns(
     @Body()
     body: {
@@ -19,7 +20,7 @@ export class ProjectsController {
   }
 
   @Post()
-  @UseGuards(AuthGuard)
+
   async createProject(
     @Body()
     body: {
@@ -47,7 +48,7 @@ export class ProjectsController {
   }
 
   @Delete(':id')
-  @UseGuards(AuthGuard)
+
   async deleteProject(@Param('id') id: string, @Request() req) {
     return this.projectsService.deleteProject(
       id,
@@ -63,7 +64,7 @@ export class ProjectsController {
   }
 
   @Get(':id')
-  @UseGuards(AuthGuard)
+
   async getProject(@Param('id') id: string, @Request() req) {
     return this.projectsService.getProject(
       id,
@@ -79,13 +80,13 @@ export class ProjectsController {
   }
 
   @Get(':id/deployments')
-  @UseGuards(AuthGuard)
+
   async getProjectDeployments(@Param('id') id: string) {
     return this.projectsService.getProjectDeployments(id);
   }
 
   @Post(':id/databases')
-  @UseGuards(AuthGuard)
+
   async createDatabase(
     @Param('id') id: string,
     @Body() body: { name: string },
@@ -101,13 +102,13 @@ export class ProjectsController {
   }
 
   @Get(':id/databases')
-  @UseGuards(AuthGuard)
+
   async getProjectDatabases(@Param('id') id: string) {
     return this.projectsService.getProjectDatabases(id);
   }
 
   @Post(':id/ingresses')
-  @UseGuards(AuthGuard)
+
   async createProjectIngress(
     @Param('id') id: string,
     @Body()
@@ -133,7 +134,7 @@ export class ProjectsController {
   }
 
   @Put(':id/ingresses/:ingressId')
-  @UseGuards(AuthGuard)
+
   async updateProjectIngress(
     @Param('id') id: string,
     @Param('ingressId') ingressId: string,
@@ -160,7 +161,7 @@ export class ProjectsController {
   }
 
   @Get(':id/ingresses/:ingressId')
-  @UseGuards(AuthGuard)
+
   async getProjectIngress(
     @Param('id') id: string,
     @Param('ingressId') ingressId: string,
@@ -176,7 +177,7 @@ export class ProjectsController {
   }
 
   @Post(':id/deployments')
-  @UseGuards(AuthGuard)
+
   async createDeployment(
     @Param('id') id: string,
     @Body()
@@ -220,7 +221,7 @@ export class ProjectsController {
   }
 
   @Post(':id/deployments/from-github')
-  @UseGuards(AuthGuard)
+
   async createDeploymentFromGitHub(
     @Param('id') id: string,
     @Body()
@@ -269,6 +270,7 @@ export class ProjectsController {
   }
 }
 
+@Auth()
 @Controller('deployments')
 export class DeploymentsController {
   constructor(
@@ -277,13 +279,13 @@ export class DeploymentsController {
   ) {}
 
   @Get(':id')
-  @UseGuards(AuthGuard)
+
   async getDeployment(@Param('id') id: string) {
     return this.projectsService.getDeployment(id);
   }
 
   @Get(':id/logs')
-  @UseGuards(AuthGuard)
+
   async getDeploymentLogs(@Param('id') id: string) {
     const deployment = await this.projectsService.getDeployment(id);
     return {
@@ -294,7 +296,7 @@ export class DeploymentsController {
   }
 
   @Post(':id/cancel')
-  @UseGuards(AuthGuard)
+
   async cancelDeploymentBuild(@Param('id') id: string, @Request() req) {
     return this.projectsService.cancelDeploymentBuild(
       id,
@@ -310,7 +312,7 @@ export class DeploymentsController {
   }
 
   @Delete(':id')
-  @UseGuards(AuthGuard)
+
   async deleteDeployment(@Param('id') id: string, @Request() req) {
     return this.projectsService.deleteDeployment(
       id,
@@ -326,13 +328,13 @@ export class DeploymentsController {
   }
 
   @Get(':id/pods')
-  @UseGuards(AuthGuard)
+
   async getDeploymentPods(@Param('id') id: string) {
     return this.projectsService.getDeploymentPods(id);
   }
 
   @Post(':id/rebuild')
-  @UseGuards(AuthGuard)
+
   async rebuildDeployment(@Param('id') id: string, @Request() req) {
     return this.projectsService.rebuildDeployment(
       id,
@@ -348,7 +350,7 @@ export class DeploymentsController {
   }
 
   @Post(':id/scale')
-  @UseGuards(AuthGuard)
+
   async scaleDeployment(
     @Param('id') id: string,
     @Body() body: { replicas: number },
@@ -369,7 +371,7 @@ export class DeploymentsController {
   }
 
   @Post(':id/restart')
-  @UseGuards(AuthGuard)
+
   async restartDeployment(
     @Param('id') id: string,
     @Request() req
@@ -388,13 +390,13 @@ export class DeploymentsController {
   }
 
   @Get(':id/image-history')
-  @UseGuards(AuthGuard)
+
   async getImageHistory(@Param('id') id: string) {
     return this.projectsService.getImageHistory(id);
   }
 
   @Post(':id/rollback/:imageHistoryId')
-  @UseGuards(AuthGuard)
+
   async rollbackToImage(
     @Param('id') id: string,
     @Param('imageHistoryId') imageHistoryId: string,
@@ -415,7 +417,7 @@ export class DeploymentsController {
   }
 
   @Put(':id/env')
-  @UseGuards(AuthGuard)
+
   async updateDeploymentEnvVars(
     @Param('id') id: string,
     @Body()
@@ -439,7 +441,7 @@ export class DeploymentsController {
   }
 
   @Put(':id/build-from-root')
-  @UseGuards(AuthGuard)
+
   async updateDeploymentBuildFromRoot(
     @Param('id') id: string,
     @Body()
@@ -463,7 +465,7 @@ export class DeploymentsController {
   }
 
   @Put(':id/health-check')
-  @UseGuards(AuthGuard)
+
   async updateDeploymentHealthCheck(
     @Param('id') id: string,
     @Body()
@@ -498,7 +500,7 @@ export class DeploymentsController {
   }
 
   @Put(':id/volumes')
-  @UseGuards(AuthGuard)
+
   async updateDeploymentVolumes(
     @Param('id') id: string,
     @Body()
@@ -529,7 +531,7 @@ export class DeploymentsController {
   }
 
   @Post(':id/ingresses')
-  @UseGuards(AuthGuard)
+
   async createDeploymentIngress(
     @Param('id') id: string,
     @Body()
@@ -564,7 +566,7 @@ export class DeploymentsController {
   }
 
   @Put(':deploymentId/ingresses/:ingressId')
-  @UseGuards(AuthGuard)
+
   async updateDeploymentIngress(
     @Param('deploymentId') deploymentId: string,
     @Param('ingressId') ingressId: string,
@@ -600,7 +602,7 @@ export class DeploymentsController {
   }
 
   @Delete(':deploymentId/ingresses/:ingressId')
-  @UseGuards(AuthGuard)
+
   async deleteDeploymentIngress(
     @Param('deploymentId') deploymentId: string,
     @Param('ingressId') ingressId: string,
@@ -621,7 +623,7 @@ export class DeploymentsController {
   }
 
   @Post(':deploymentId/services')
-  @UseGuards(AuthGuard)
+
   async createDeploymentService(
     @Param('deploymentId') deploymentId: string,
     @Body()
@@ -654,7 +656,7 @@ export class DeploymentsController {
   }
 
   @Put(':deploymentId/services/:serviceId')
-  @UseGuards(AuthGuard)
+
   async updateServiceConfiguration(
     @Param('deploymentId') deploymentId: string,
     @Param('serviceId') serviceId: string,
@@ -690,7 +692,7 @@ export class DeploymentsController {
   }
 
   @Delete(':deploymentId/services/:serviceId')
-  @UseGuards(AuthGuard)
+
   async deleteDeploymentService(
     @Param('deploymentId') deploymentId: string,
     @Param('serviceId') serviceId: string,
@@ -711,7 +713,7 @@ export class DeploymentsController {
   }
 
   @Patch(':deploymentId/services/:serviceId/exposure')
-  @UseGuards(AuthGuard)
+
   async updateServiceExposure(
     @Param('deploymentId') deploymentId: string,
     @Param('serviceId') serviceId: string,
@@ -739,13 +741,13 @@ export class DeploymentsController {
   // Auto-deploy endpoints
 
   @Get(':id/auto-deploy')
-  @UseGuards(AuthGuard)
+
   async getAutoDeployStatus(@Param('id') id: string) {
     return this.projectsService.getAutoDeployStatus(id);
   }
 
   @Post(':id/auto-deploy/enable')
-  @UseGuards(AuthGuard)
+
   async enableAutoDeploy(
     @Param('id') id: string,
     @Body() body: { branch: string },
@@ -766,7 +768,7 @@ export class DeploymentsController {
   }
 
   @Post(':id/auto-deploy/disable')
-  @UseGuards(AuthGuard)
+
   async disableAutoDeploy(@Param('id') id: string, @Request() req) {
     return this.projectsService.disableAutoDeploy(
       id,
@@ -782,7 +784,7 @@ export class DeploymentsController {
   }
 
   @Get(':id/github-deployments')
-  @UseGuards(AuthGuard)
+
   async getGitHubDeployments(@Param('id') id: string) {
     return this.projectsService.getGitHubDeployments(id);
   }
@@ -790,13 +792,13 @@ export class DeploymentsController {
   // Webhook token management endpoints
 
   @Get(':id/webhook-tokens')
-  @UseGuards(AuthGuard)
+
   async listWebhookTokens(@Param('id') id: string, @Request() req) {
     return this.webhooksService.listWebhookTokens(id, req.user.sub);
   }
 
   @Post(':id/webhook-tokens')
-  @UseGuards(AuthGuard)
+
   async createWebhookToken(
     @Param('id') id: string,
     @Body() body: { label?: string },
@@ -806,7 +808,7 @@ export class DeploymentsController {
   }
 
   @Delete(':id/webhook-tokens/:tokenId')
-  @UseGuards(AuthGuard)
+
   async deleteWebhookToken(
     @Param('id') id: string,
     @Param('tokenId') tokenId: string,
@@ -816,12 +818,13 @@ export class DeploymentsController {
   }
 }
 
+@Auth()
 @Controller('ingresses')
 export class IngressesController {
   constructor(private readonly projectsService: ProjectsService) {}
 
   @Get(':id')
-  @UseGuards(AuthGuard)
+
   async getIngress(@Param('id') id: string, @Request() req) {
     return this.projectsService.getIngressById(id, req.user.sub, {
       email: req.user.email,
@@ -833,18 +836,19 @@ export class IngressesController {
   }
 }
 
+@Auth()
 @Controller('databases')
 export class DatabasesController {
   constructor(private readonly projectsService: ProjectsService) {}
 
   @Get(':id')
-  @UseGuards(AuthGuard)
+
   async getDatabase(@Param('id') id: string) {
     return this.projectsService.getDatabase(id);
   }
 
   @Delete(':id')
-  @UseGuards(AuthGuard)
+
   async deleteDatabase(@Param('id') id: string, @Request() req) {
     return this.projectsService.deleteDatabase(id, req.user.sub, {
       email: req.user.email,

@@ -1,19 +1,20 @@
-import { Controller, Get, Param, Query, Post, Body, UseGuards, Patch } from '@nestjs/common';
+import { Controller, Get, Param, Query, Post, Body, Patch } from '@nestjs/common';
 import { KubernetesService } from './kubernetes.service';
-import { AuthGuard } from '../auth/auth.guard';
+import { Auth } from '../auth/decorators';
 
+@Auth()
 @Controller()
 export class KubernetesController {
   constructor(private readonly kubernetesService: KubernetesService) {}
 
   @Get('pods')
-  @UseGuards(AuthGuard)
+
   async listPods(@Query('namespace') namespace?: string) {
     return this.kubernetesService.listPods(namespace);
   }
 
   @Get('pods/:podName')
-  @UseGuards(AuthGuard)
+
   async getPod(
     @Param('podName') podName: string,
     @Query('namespace') namespace?: string
@@ -22,7 +23,7 @@ export class KubernetesController {
   }
 
   @Get('pods/:podName/logs')
-  @UseGuards(AuthGuard)
+
   async getPodLogs(
     @Param('podName') podName: string,
     @Query('namespace') namespace?: string,
@@ -34,25 +35,25 @@ export class KubernetesController {
   }
 
   @Get('endpoints')
-  @UseGuards(AuthGuard)
+
   async listEndpoints(@Query('namespace') namespace?: string) {
     return this.kubernetesService.listEndpoints(namespace);
   }
 
   @Get('deployments')
-  @UseGuards(AuthGuard)
+
   async listDeployments(@Query('namespace') namespace?: string) {
     return this.kubernetesService.listDeployments(namespace);
   }
 
   @Get('sync/:namespace')
-  @UseGuards(AuthGuard)
+
   async syncNamespace(@Param('namespace') namespace: string) {
     return this.kubernetesService.syncNamespaceToDatabase(namespace);
   }
 
   @Post('deployments/:deploymentName/restart')
-  @UseGuards(AuthGuard)
+
   async restartDeployment(
     @Param('deploymentName') deploymentName: string,
     @Query('namespace') namespace?: string
@@ -61,7 +62,7 @@ export class KubernetesController {
   }
 
   @Patch('deployments/:deploymentName/scale')
-  @UseGuards(AuthGuard)
+
   async scaleDeployment(
     @Param('deploymentName') deploymentName: string,
     @Body('replicas') replicas: number,
@@ -71,7 +72,7 @@ export class KubernetesController {
   }
 
   @Get('deployments/:deploymentName/pods')
-  @UseGuards(AuthGuard)
+
   async getDeploymentPods(
     @Param('deploymentName') deploymentName: string,
     @Query('namespace') namespace?: string

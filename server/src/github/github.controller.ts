@@ -1,11 +1,12 @@
-import { Controller, Get, Post, Query, Param, UseGuards, Req, Body, Delete, HttpException, HttpStatus, Res, Headers, RawBodyRequest } from '@nestjs/common';
+import { Controller, Get, Post, Query, Param, Req, Body, Delete, HttpException, HttpStatus, Res, Headers, RawBodyRequest } from '@nestjs/common';
 import { Request, Response } from 'express';
 import { GitHubService, GitHubRepo, GitHubBranch, GitHubContent, GitHubWebhookPayload } from './github.service';
-import { AuthGuard } from '../auth/auth.guard';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
+import { Public, Auth } from '../auth/decorators';
 
+@Auth()
 @Controller('github')
 export class GitHubController {
   constructor(
@@ -15,6 +16,7 @@ export class GitHubController {
     private readonly projectsService: ProjectsService,
   ) {}
 
+  @Public()
   @Get('link')
   async initiateLink(@Req() req: any, @Res() res: Response) {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -39,6 +41,7 @@ export class GitHubController {
     return res.redirect(authUrl);
   }
 
+  @Public()
   @Get('callback')
   async handleCallback(
     @Query('code') code: string,
@@ -87,7 +90,6 @@ export class GitHubController {
   }
 
   @Post('link')
-  @UseGuards(AuthGuard)
   async linkAccount(@Req() req: any, @Body('code') code: string) {
     const hackClubId = req.user.sub;
     
@@ -106,7 +108,6 @@ export class GitHubController {
   }
 
   @Delete('unlink')
-  @UseGuards(AuthGuard)
   async unlinkAccount(@Req() req: any) {
     const hackClubId = req.user.sub;
     
@@ -121,7 +122,6 @@ export class GitHubController {
   }
 
   @Get('status')
-  @UseGuards(AuthGuard)
   async getStatus(@Req() req: any) {
     const hackClubId = req.user.sub;
     const user = await this.usersService.findByHackClubId(hackClubId);
@@ -137,7 +137,6 @@ export class GitHubController {
   }
 
   @Get('repositories')
-  @UseGuards(AuthGuard)
   async getRepositories(@Req() req: any, @Query('all') all?: string): Promise<GitHubRepo[]> {
     const hackClubId = req.user.sub;
     const user = await this.usersService.findByHackClubId(hackClubId);
@@ -157,7 +156,6 @@ export class GitHubController {
   }
 
   @Get('repositories/:owner/:repo/branches')
-  @UseGuards(AuthGuard)
   async getBranches(
     @Req() req: any,
     @Param('owner') owner: string,
@@ -180,7 +178,6 @@ export class GitHubController {
   }
 
   @Get('repositories/:owner/:repo/dockerfiles')
-  @UseGuards(AuthGuard)
   async getDockerfiles(
     @Req() req: any,
     @Param('owner') owner: string,
@@ -209,7 +206,6 @@ export class GitHubController {
   }
 
   @Get('repositories/:owner/:repo/contents')
-  @UseGuards(AuthGuard)
   async getContents(
     @Req() req: any,
     @Param('owner') owner: string,
@@ -240,7 +236,6 @@ export class GitHubController {
   }
 
   @Get('repositories/:owner/:repo/dockerfile-stages')
-  @UseGuards(AuthGuard)
   async getDockerfileStages(
     @Req() req: any,
     @Param('owner') owner: string,
@@ -274,7 +269,7 @@ export class GitHubController {
     return stages;
   }
 
-  // GitHub App webhook endpoint - receives all events from GitHub App
+  @Public()
   @Post('app/webhook')
   async handleAppWebhook(
     @Headers('x-github-event') event: string,
@@ -404,9 +399,7 @@ export class GitHubController {
     return { received: true, action: 'ignored', reason: `unhandled event type: ${event}` };
   }
 
-  // Get GitHub App installation URL
   @Get('app/install')
-  @UseGuards(AuthGuard)
   async getAppInstallUrl() {
     try {
       const url = this.githubService.getAppInstallationUrl();
@@ -416,9 +409,7 @@ export class GitHubController {
     }
   }
 
-  // Get user's GitHub App installations
   @Get('app/installations')
-  @UseGuards(AuthGuard)
   async getUserInstallations(@Req() req: any) {
     const hackClubId = req.user.sub;
     const user = await this.usersService.findByHackClubId(hackClubId);
@@ -437,9 +428,7 @@ export class GitHubController {
     }));
   }
 
-  // Get repositories accessible through GitHub App installations
   @Get('app/repositories')
-  @UseGuards(AuthGuard)
   async getAppRepositories(@Req() req: any) {
     const hackClubId = req.user.sub;
     const user = await this.usersService.findByHackClubId(hackClubId);

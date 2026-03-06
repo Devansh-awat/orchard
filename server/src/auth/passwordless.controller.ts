@@ -7,7 +7,6 @@ import {
   Param,
   Req,
   Res,
-  UseGuards,
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
@@ -16,9 +15,9 @@ import { OtpService } from './otp.service';
 import { PasskeyService } from './passkey.service';
 import { OAuthService } from './oauth.service';
 import { UsersService } from '../users/users.service';
-import { AuthGuard } from './auth.guard';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
+import { Public, Auth } from './decorators';
 
 // DTOs
 interface RequestOtpDto {
@@ -43,6 +42,7 @@ interface UpdatePasskeyDto {
   friendlyName: string;
 }
 
+@Public()
 @Controller('auth')
 export class PasswordlessController {
   constructor(
@@ -258,8 +258,8 @@ export class PasswordlessController {
    * Requires authentication (must be signed in via OTP or OAuth first).
    * POST /auth/passkey/register/options
    */
+  @Auth()
   @Post('passkey/register/options')
-  @UseGuards(AuthGuard)
   async getRegistrationOptions(@Req() req: any) {
     const email = req.user.email;
     const user = await this.resolveInternalUser(req.user.sub);
@@ -276,8 +276,8 @@ export class PasswordlessController {
    * Verify passkey registration and store the passkey.
    * POST /auth/passkey/register/verify
    */
+  @Auth()
   @Post('passkey/register/verify')
-  @UseGuards(AuthGuard)
   async verifyRegistration(
     @Body() body: RegisterPasskeyDto,
     @Req() req: any,
@@ -385,8 +385,8 @@ export class PasswordlessController {
    * List user's passkeys.
    * GET /auth/passkeys
    */
+  @Auth()
   @Get('passkeys')
-  @UseGuards(AuthGuard)
   async listPasskeys(@Req() req: any) {
     const user = await this.resolveInternalUser(req.user.sub);
 
@@ -398,8 +398,8 @@ export class PasswordlessController {
    * Delete a passkey.
    * DELETE /auth/passkeys/:id
    */
+  @Auth()
   @Delete('passkeys/:id')
-  @UseGuards(AuthGuard)
   async deletePasskey(
     @Param('id') passkeyId: string,
     @Req() req: any,
@@ -414,8 +414,8 @@ export class PasswordlessController {
    * Update a passkey's friendly name.
    * PATCH /auth/passkeys/:id
    */
+  @Auth()
   @Post('passkeys/:id/rename')
-  @UseGuards(AuthGuard)
   async updatePasskey(
     @Param('id') passkeyId: string,
     @Body() body: UpdatePasskeyDto,

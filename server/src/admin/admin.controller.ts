@@ -8,13 +8,10 @@ import {
   Param,
   Body,
   Req,
-  UseGuards,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
-import { SuperAdminGuard } from '../auth/superadmin.guard';
 
 @Controller('admin')
-@UseGuards(SuperAdminGuard)
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
 

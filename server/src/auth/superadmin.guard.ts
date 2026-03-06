@@ -1,13 +1,18 @@
 import { Injectable, CanActivate, ExecutionContext, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { Reflector } from '@nestjs/core';
 import { jwtVerify } from 'jose';
 import { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
+import { IS_PUBLIC_KEY, REQUIRES_AUTH_KEY } from './decorators';
 
 @Injectable()
 export class SuperAdminGuard implements CanActivate {
   private jwtSecret: Uint8Array;
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly reflector: Reflector,
+  ) {
     const jwtSecretString = process.env.JWT_SECRET;
     if (!jwtSecretString) {
       throw new Error('JWT_SECRET environment variable is required');
@@ -16,14 +21,18 @@ export class SuperAdminGuard implements CanActivate {
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
+    // Check @Public() — skip all auth
+    const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (isPublic) {
+      return true;
+    }
+
+    // Extract and verify JWT token
     const request = context.switchToHttp().getRequest<Request>();
-
-    const authHeader = request.headers.authorization;
-    const cookieToken = request.cookies?.session_token;
-
-    const token = authHeader?.startsWith('Bearer ')
-      ? authHeader.substring(7)
-      : cookieToken;
+    const token = this.extractToken(request);
 
     if (!token) {
       throw new UnauthorizedException('No token provided');
@@ -42,7 +51,16 @@ export class SuperAdminGuard implements CanActivate {
       throw new UnauthorizedException('Invalid token');
     }
 
-    // Check superadmin status from database
+    // Check @Auth() — JWT verified, no superadmin check needed
+    const requiresAuth = this.reflector.getAllAndOverride<boolean>(REQUIRES_AUTH_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+    if (requiresAuth) {
+      return true;
+    }
+
+    // Default: require superadmin
     const userId = request['user'].sub as string;
     const user = await this.prisma.user.findFirst({
       where: {
@@ -62,5 +80,14 @@ export class SuperAdminGuard implements CanActivate {
     request['auth'] = { userId: user.id };
 
     return true;
+  }
+
+  private extractToken(request: Request): string | undefined {
+    const authHeader = request.headers.authorization;
+    const cookieToken = request.cookies?.session_token;
+
+    return authHeader?.startsWith('Bearer ')
+      ? authHeader.substring(7)
+      : cookieToken;
   }
 }
