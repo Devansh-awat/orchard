@@ -1,0 +1,59 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: redis
+  displayName: Redis Cache
+  description: In-memory Redis cache for your applications. Internal-only, no public exposure.
+  icon: database
+  version: "1.0.0"
+  category: database
+  tags: ["redis", "cache", "memory", "key-value"]
+
+parameters:
+  - name: appName
+    displayName: App Name
+    description: Name for the Redis deployment
+    type: string
+    default: redis
+    required: true
+    validation:
+      pattern: "^[a-z][a-z0-9-]{1,58}[a-z0-9]$"
+      message: Must be lowercase alphanumeric with hyphens, 3-60 chars
+
+  - name: redisImage
+    displayName: Redis Image
+    type: string
+    default: "redis:7-alpine"
+
+  - name: maxMemory
+    displayName: Max Memory
+    description: Maximum memory Redis can use
+    type: select
+    default: "64mb"
+    options:
+      - label: "64 MB"
+        value: "64mb"
+      - label: "128 MB"
+        value: "128mb"
+      - label: "256 MB"
+        value: "256mb"
+      - label: "512 MB"
+        value: "512mb"
+
+resources:
+  - name: app
+    type: deployment
+    config:
+      name: "{{ params.appName }}"
+      image: "{{ params.redisImage }}"
+      replicas: 1
+      ports:
+        - name: redis
+          containerPort: 6379
+          servicePort: 6379
+          protocol: TCP
+      env:
+        - key: REDIS_MAXMEMORY
+          value: "{{ params.maxMemory }}"
+        - key: REDIS_MAXMEMORY_POLICY
+          value: allkeys-lru

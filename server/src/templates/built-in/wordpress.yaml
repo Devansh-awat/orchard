@@ -1,0 +1,86 @@
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: wordpress
+  displayName: WordPress
+  description: Full WordPress CMS with a PostgreSQL database and public ingress. Ready to use out of the box.
+  icon: wordpress
+  version: "1.0.0"
+  category: cms
+  tags: ["blog", "cms", "php", "wordpress"]
+
+parameters:
+  - name: appName
+    displayName: App Name
+    description: Name prefix for all resources
+    type: string
+    default: wordpress
+    required: true
+    validation:
+      pattern: "^[a-z][a-z0-9-]{1,58}[a-z0-9]$"
+      message: Must be lowercase alphanumeric with hyphens, 3-60 chars
+
+  - name: wordpressImage
+    displayName: WordPress Image
+    description: Docker image for WordPress
+    type: string
+    default: "wordpress:6-apache"
+
+  - name: replicas
+    displayName: Replicas
+    description: Number of WordPress instances
+    type: number
+    default: 1
+    validation:
+      min: 1
+      max: 10
+
+  - name: domain
+    displayName: Domain
+    description: Public domain for your WordPress site
+    type: string
+    required: true
+    placeholder: "blog.example.com"
+
+  - name: enableTls
+    displayName: Enable HTTPS
+    description: Enable TLS encryption with Let's Encrypt
+    type: boolean
+    default: true
+
+resources:
+  - name: db
+    type: database
+    config:
+      name: "{{ params.appName }}-db"
+
+  - name: app
+    type: deployment
+    config:
+      name: "{{ params.appName }}"
+      image: "{{ params.wordpressImage }}"
+      replicas: "{{ params.replicas }}"
+      ports:
+        - name: http
+          containerPort: 80
+          servicePort: 80
+          protocol: TCP
+      env:
+        - key: WORDPRESS_DB_HOST
+          value: "{{ resources.db.host }}"
+        - key: WORDPRESS_DB_NAME
+          value: "{{ resources.db.dbName }}"
+        - key: WORDPRESS_DB_USER
+          value: "{{ resources.db.dbUser }}"
+        - key: WORDPRESS_DB_PASSWORD
+          value: "{{ resources.db.dbPassword }}"
+
+  - name: ingress
+    type: ingress
+    config:
+      host: "{{ params.domain }}"
+      tlsEnabled: "{{ params.enableTls }}"
+      routes:
+        - path: /
+          serviceName: "{{ resources.app.serviceName }}"
+          servicePort: 80

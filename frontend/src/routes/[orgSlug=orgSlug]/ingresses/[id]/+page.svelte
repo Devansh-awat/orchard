@@ -26,6 +26,7 @@
 		X
 	} from 'lucide-svelte';
 	import { scale } from 'svelte/transition';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 
 	interface IngressRoute {
 		path: string;
@@ -160,6 +161,7 @@
 	let serviceDropdownOpen = $state<string | null>(null);
 	let originalBasicAuthEnabled = $state(false);
 	let showDnsModal = $state(false);
+	let showDeleteModal = $state(false);
 	let dnsModalEntryIndex = $state<number | null>(null);
 
 	const hasBasicAuth = $derived(
@@ -519,8 +521,6 @@
 
 	async function deleteIngress() {
 		if (!ingress) return;
-		if (!confirm('Are you sure you want to delete this ingress? This cannot be undone.')) return;
-
 		deleting = true;
 
 		try {
@@ -972,7 +972,7 @@
 								<p class="text-sm mb-4" style="color: var(--surface-muted);">
 									Permanently delete this ingress and remove it from Kubernetes. This action cannot be undone.
 								</p>
-								<button onclick={deleteIngress} disabled={deleting} class="btn btn-danger btn-sm">
+								<button onclick={() => (showDeleteModal = true)} disabled={deleting} class="btn btn-danger btn-sm">
 									{#if deleting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2 class="h-3.5 w-3.5" />{/if}
 									<span>Delete ingress</span>
 								</button>
@@ -1071,6 +1071,17 @@
 			</div>
 		</div>
 	</div>
+{/if}
+
+{#if ingress}
+	<ConfirmModal
+		bind:open={showDeleteModal}
+		title="Delete this ingress?"
+		description='This will permanently <strong>delete this ingress</strong> and its routing rules. This cannot be undone.'
+		confirmLabel="Delete Ingress"
+		onconfirm={deleteIngress}
+		oncancel={() => {}}
+	/>
 {/if}
 
 <style>

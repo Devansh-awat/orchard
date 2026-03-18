@@ -9,6 +9,7 @@
 	} from '$lib/stores/theme';
 	import { toasts } from '$lib/stores';
 	import ThemeEditor from '$lib/components/ThemeEditor.svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import {
 		ArrowLeft,
 		Palette,
@@ -49,6 +50,8 @@
 	});
 
 	let editingTheme = $state<Theme | null>(null);
+	let showDeleteThemeModal = $state(false);
+	let themeToDelete = $state<Theme | null>(null);
 	let showImportModal = $state(false);
 	let importJson = $state('');
 	let importError = $state<string | null>(null);
@@ -100,12 +103,13 @@
 		}
 	}
 
-	function deleteTheme(theme: Theme) {
+	function confirmDeleteTheme(theme: Theme) {
 		if (theme.isBuiltIn) return;
+		themeToDelete = theme;
+		showDeleteThemeModal = true;
+	}
 
-		const confirmed = window.confirm(`Delete "${theme.name}"? This cannot be undone.`);
-		if (!confirmed) return;
-
+	function deleteTheme(theme: Theme) {
 		themeStore.deleteTheme(theme.id);
 		toasts.add({
 			title: 'Theme deleted',
@@ -493,7 +497,7 @@
 											<button
 												type="button"
 												class="btn btn-ghost text-red-600"
-												onclick={() => deleteTheme(theme)}
+												onclick={() => confirmDeleteTheme(theme)}
 												title="Delete"
 											>
 												<Trash2 class="h-4 w-4" />
@@ -578,4 +582,16 @@
 			</div>
 		</div>
 	</div>
+{/if}
+
+{#if themeToDelete}
+	<ConfirmModal
+		bind:open={showDeleteThemeModal}
+		title='Delete "{themeToDelete.name}"?'
+		description='This theme will be permanently deleted. This cannot be undone.'
+		confirmLabel="Delete Theme"
+		danger
+		onconfirm={() => { deleteTheme(themeToDelete!); themeToDelete = null; }}
+		oncancel={() => { themeToDelete = null; }}
+	/>
 {/if}

@@ -109,6 +109,15 @@
 		</div>
 		<p class="db-subtitle">Create a PostgreSQL database on the shared cluster. A unique user and password will be generated automatically.</p>
 
+		<!-- Template banner -->
+		<a
+			href="/{orgSlug}/workspaces/{workspaceSlug}/projects/{projectSlug}/templates"
+			class="db-template-banner"
+		>
+			<span class="db-template-cta">Looking for a complete app setup?</span>
+			<span class="db-template-desc">Browse Templates to deploy pre-configured stacks with deployments and ingresses.</span>
+		</a>
+
 		{#if error}
 			<div class="db-error">{error}</div>
 		{/if}
@@ -274,5 +283,34 @@
 
 	.db-btn-primary:hover:not(:disabled) {
 		opacity: 0.9;
+	}
+
+	.db-template-banner {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		padding: 0.875rem 1.25rem;
+		border-radius: 0.75rem;
+		background-color: color-mix(in srgb, #ec4899 8%, transparent);
+		border: 1px solid color-mix(in srgb, #ec4899 20%, transparent);
+		text-decoration: none;
+		color: var(--center-channel-color);
+		transition: border-color 0.15s;
+		margin-bottom: 0.5rem;
+	}
+
+	.db-template-banner:hover {
+		border-color: #ec4899;
+	}
+
+	.db-template-cta {
+		font-size: 0.875rem;
+		color: #ec4899;
+		font-weight: 500;
+	}
+
+	.db-template-desc {
+		font-size: 0.8125rem;
+		color: var(--surface-muted);
 	}
 </style>

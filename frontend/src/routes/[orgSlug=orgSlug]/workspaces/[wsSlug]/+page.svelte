@@ -6,6 +6,7 @@ import { apiFetch, user, toasts, selectedOrganization, refreshTree } from '$lib/
 import { mergeAttrs } from 'melt';
 import { SpatialMenu } from 'melt/builders';
 import { ArrowLeft, Loader2, Plus, FolderKanban, Calendar, User, Trash2, UserPlus, LogOut, Check, X, Users, Boxes } from 'lucide-svelte';
+import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 
 interface Project {
 	id: string;
@@ -85,6 +86,8 @@ let selectedRoleId = $state<string>('');
 let inviting = $state(false);
 let joining = $state(false);
 let leaving = $state(false);
+let showLeaveModal = $state(false);
+let showDeleteWorkspaceModal = $state(false);
 let roles = $state<Array<{ id: string; name: string }>>([]);
 let currentOrgMembership = $state<OrgMember | null>(null);
 
@@ -264,9 +267,6 @@ let currentOrgMembership = $state<OrgMember | null>(null);
 	async function leaveWorkspace() {
 		if (!workspace || leaving) return;
 
-		const confirmLeave = window.confirm('Leave this workspace? You will need to be invited again to rejoin.');
-		if (!confirmLeave) return;
-
 		leaving = true;
 		try {
 			const response = await apiFetch(`/apiv1/workspaces/${workspace.id}/leave`, {
@@ -324,8 +324,6 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 
 	async function deleteWorkspace() {
 		if (!workspace || deletingWorkspace) return;
-		const confirmDelete = window.confirm('Delete this workspace? This action cannot be undone.');
-		if (!confirmDelete) return;
 
 		deletingWorkspace = true;
 		deleteError = null;
@@ -414,7 +412,7 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 				{#if canManageMembers}
 					<button
 						class="ws-btn ws-btn-danger"
-						onclick={deleteWorkspace}
+						onclick={() => { showDeleteWorkspaceModal = true; }}
 						disabled={deletingWorkspace}
 					>
 						{#if deletingWorkspace}
@@ -552,7 +550,7 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 						{:else if !isWorkspaceAdmin}
 							<button
 								class="ws-btn ws-btn-ghost ws-btn-sm"
-								onclick={leaveWorkspace}
+								onclick={() => { showLeaveModal = true; }}
 								disabled={leaving}
 							>
 								{#if leaving}
@@ -700,6 +698,26 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 			</div>
 		</div>
 	</div>
+{/if}
+
+{#if workspace}
+	<ConfirmModal
+		bind:open={showLeaveModal}
+		title="Leave this workspace?"
+		description="You will need to be <strong>invited again</strong> to rejoin this workspace."
+		confirmLabel="Leave"
+		danger={false}
+		onconfirm={leaveWorkspace}
+		oncancel={() => {}}
+	/>
+	<ConfirmModal
+		bind:open={showDeleteWorkspaceModal}
+		title='Delete "{workspace.name}"?'
+		description='This will permanently <strong>delete this workspace</strong> and all its projects, deployments, databases, and ingresses. This cannot be undone.'
+		confirmLabel="Delete Workspace"
+		onconfirm={deleteWorkspace}
+		oncancel={() => {}}
+	/>
 {/if}
 
 <style>

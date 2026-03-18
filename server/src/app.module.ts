@@ -13,6 +13,7 @@ import { DockerModule } from './docker/docker.module';
 import { EmailModule } from './email/email.module';
 import { AdminModule } from './admin/admin.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
+import { TemplatesModule } from './templates/templates.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { WebhooksModule } from './webhooks/webhooks.module';
     EmailModule,
     AdminModule,
     WebhooksModule,
+    TemplatesModule,
   ],
 })
 export class AppModule {}

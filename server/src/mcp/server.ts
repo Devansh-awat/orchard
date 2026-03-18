@@ -8,6 +8,7 @@ import { registerNetworkingTools } from './tools/networking';
 import { registerDatabaseTools } from './tools/databases';
 import { registerLogTools } from './tools/logs';
 import { registerGitHubTools } from './tools/github';
+import { registerTemplateTools } from './tools/templates';
 
 export function createOrchardMcpServer(token?: string) {
   const server = new McpServer({
@@ -27,6 +28,7 @@ export function createOrchardMcpServer(token?: string) {
   registerDatabaseTools(server, client);
   registerLogTools(server, client);
   registerGitHubTools(server, client);
+  registerTemplateTools(server, client);
 
   return server;
 }

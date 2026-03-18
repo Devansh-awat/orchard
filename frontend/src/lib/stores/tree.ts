@@ -23,6 +23,15 @@ export interface DatabaseSummary {
 	status: string;
 }
 
+export interface TemplateInstanceSummary {
+	id: string;
+	name: string;
+	status: string;
+	template?: {
+		displayName: string;
+	};
+}
+
 export interface Project {
 	id: string;
 	name: string;
@@ -31,6 +40,7 @@ export interface Project {
 	deployments?: Deployment[];
 	ingresses?: IngressSummary[];
 	databases?: DatabaseSummary[];
+	templateInstances?: TemplateInstanceSummary[];
 }
 
 export interface Workspace {
@@ -45,7 +55,7 @@ export interface Workspace {
 export interface TreeItem {
 	id: string;
 	name: string;
-	type: 'workspace' | 'project' | 'deployment' | 'ingress' | 'database';
+	type: 'workspace' | 'project' | 'deployment' | 'ingress' | 'database' | 'templateInstance';
 	href: string;
 	children?: TreeItem[];
 }
@@ -136,7 +146,12 @@ function transformToTreeItems(workspaces: Workspace[], orgSlug: string): TreeIte
 					name: project.name,
 					type: 'project',
 					href: `/${orgSlug}/workspaces/${workspace.slug}/projects/${project.slug}`,
-					children: [...deploymentItems, ...ingressItems, ...databaseItems]
+					children: [...deploymentItems, ...ingressItems, ...databaseItems, ...(project.templateInstances ?? []).map((ti) => ({
+					id: `template-instance-${ti.id}`,
+					name: ti.name,
+					type: 'templateInstance' as const,
+					href: `/${orgSlug}/template-instances/${ti.id}`
+				}))]
 				};
 				return projectItem;
 			})

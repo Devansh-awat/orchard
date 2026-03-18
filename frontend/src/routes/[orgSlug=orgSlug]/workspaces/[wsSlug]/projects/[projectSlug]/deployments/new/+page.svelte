@@ -555,6 +555,15 @@
 		<div class="mx-auto max-w-3xl space-y-6">
 			<h1 class="text-2xl font-bold">New Deployment</h1>
 
+			<!-- Template banner -->
+			<a
+				href="/{orgSlug}/workspaces/{$page.params.wsSlug}/projects/{$page.params.projectSlug}/templates"
+				style="display: flex; align-items: center; gap: 0.75rem; padding: 0.875rem 1.25rem; border-radius: 0.75rem; background-color: color-mix(in srgb, #ec4899 8%, transparent); border: 1px solid color-mix(in srgb, #ec4899 20%, transparent); text-decoration: none; color: var(--center-channel-color); transition: border-color 0.15s;"
+			>
+				<span style="font-size: 0.875rem; color: #ec4899; font-weight: 500;">Looking for a complete app setup?</span>
+				<span style="font-size: 0.8125rem; color: var(--surface-muted);">Browse Templates to deploy pre-configured stacks with databases and ingresses.</span>
+			</a>
+
 			<!-- Deployment Source -->
 			<div class="card p-6">
 				<h2 class="text-lg font-semibold mb-4">Deployment Source</h2>

@@ -512,7 +512,7 @@ export class ProjectsService {
           namespace: project.namespace,
           image,
           replicas,
-          status: 'pending',
+          status: 'running',
           createdBy: user.id,
         },
       });
@@ -3724,6 +3724,19 @@ export class ProjectsService {
             name: true,
             status: true,
           },
+        },
+        templateInstances: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            template: {
+              select: {
+                displayName: true,
+              },
+            },
+          },
+          orderBy: { createdAt: 'desc' },
         },
       },
     });

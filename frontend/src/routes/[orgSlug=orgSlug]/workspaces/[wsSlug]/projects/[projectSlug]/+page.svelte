@@ -16,8 +16,10 @@
 		Server,
 		Boxes,
 		GitBranch,
-		Database
+		Database,
+		LayoutTemplate
 	} from 'lucide-svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 
 	interface Deployment {
 		id: string;
@@ -57,16 +59,35 @@
 		};
 	}
 
+	interface TemplateInstanceSummary {
+		id: string;
+		name: string;
+		status: string;
+		createdAt: string;
+		template: {
+			id: string;
+			name: string;
+			displayName: string;
+			icon?: string;
+			category?: string;
+		};
+		deployments: { id: string }[];
+		databases: { id: string }[];
+		ingresses: { id: string }[];
+	}
+
 	const deploymentMenu = new SpatialMenu<Deployment>({
 		wrap: true,
 		crossAxis: true
 	});
 
 	let project = $state<Project | null>(null);
+	let templateInstances = $state<TemplateInstanceSummary[]>([]);
 	let loading = $state(true);
 	let syncing = $state(false);
 	let deleting = $state(false);
 	let error = $state<string | null>(null);
+	let showDeleteModal = $state(false);
 	let deploymentSearch = $state('');
 
 	let filteredDeployments = $derived.by(() => {
@@ -114,6 +135,16 @@
 			if (project?.namespace) {
 				syncNamespace();
 			}
+
+			// Fetch template instances
+			if (project?.id) {
+				try {
+					const tiRes = await apiFetch(`/apiv1/projects/${project.id}/template-instances`);
+					if (tiRes.ok) {
+						templateInstances = await tiRes.json();
+					}
+				} catch { /* ignore */ }
+			}
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to fetch project';
 		} finally {
@@ -140,10 +171,6 @@
 
 	async function deleteProject() {
 		if (!project) return;
-		if (!confirm(`Are you sure you want to delete ${project.name}? This action cannot be undone.`)) {
-			return;
-		}
-
 		deleting = true;
 		try {
 			const response = await apiFetch(`/apiv1/projects/${project.id}`, {
@@ -306,7 +333,7 @@
 						Sync
 					</button>
 					<button
-						onclick={deleteProject}
+						onclick={() => (showDeleteModal = true)}
 						disabled={deleting}
 						class="pj-btn pj-btn-danger"
 					>
@@ -362,6 +389,13 @@
 						/>
 					</div>
 				{/if}
+				<a
+					href="/{orgSlug}/workspaces/{workspaceSlug}/projects/{projectSlug}/templates"
+					class="pj-btn pj-btn-template"
+				>
+					<LayoutTemplate class="h-4 w-4" />
+					Templates
+				</a>
 				<a
 					href="/{orgSlug}/workspaces/{workspaceSlug}/projects/{projectSlug}/databases/new"
 					class="pj-btn pj-btn-secondary"
@@ -448,8 +482,55 @@
 				<p>No deployments match "{deploymentSearch}"</p>
 			</div>
 		{/if}
+
+		<!-- Template Instances -->
+		{#if templateInstances.length}
+			<div class="pj-deployments-header" style="margin-top: 1rem;">
+				<h2 class="pj-section-title">
+					<LayoutTemplate class="h-4 w-4" style="color: #ec4899; display: inline;" />
+					Template Instances
+				</h2>
+			</div>
+			<div class="pj-deployment-grid">
+				{#each templateInstances as ti}
+					<a
+						href="/{orgSlug}/template-instances/{ti.id}"
+						class="pj-deployment-card"
+					>
+						<div class="pj-deployment-card-top">
+							<div class="pj-deployment-indicator" style="background-color: color-mix(in srgb, #ec4899 12%, transparent)">
+								<LayoutTemplate class="h-5 w-5" style="color: #ec4899" />
+							</div>
+							<span class="pj-deployment-status-badge" style="background-color: color-mix(in srgb, {ti.status === 'active' ? '#22c55e' : ti.status === 'failed' ? 'var(--error-text-color)' : '#f59e0b'} 15%, transparent); color: {ti.status === 'active' ? '#22c55e' : ti.status === 'failed' ? 'var(--error-text-color)' : '#f59e0b'}">
+								{ti.status}
+							</span>
+						</div>
+						<div class="pj-deployment-card-body">
+							<span class="pj-deployment-name">{ti.name}</span>
+							<span class="pj-deployment-detail">{ti.template.displayName}</span>
+						</div>
+						<div class="pj-deployment-card-footer">
+							<span class="pj-deployment-replicas">
+								{ti.deployments.length + ti.databases.length + ti.ingresses.length} resources
+							</span>
+						</div>
+					</a>
+				{/each}
+			</div>
+		{/if}
 	{/if}
 </div>
+
+{#if project}
+	<ConfirmModal
+		bind:open={showDeleteModal}
+		title='Delete "{project.name}"?'
+		description='This will permanently <strong>delete this project</strong> and all its resources (deployments, databases, ingresses). This cannot be undone.'
+		confirmLabel="Delete Project"
+		onconfirm={deleteProject}
+		oncancel={() => {}}
+	/>
+{/if}
 
 <style>
 	.pj-page {
@@ -825,6 +906,15 @@
 
 	.pj-btn-secondary:hover:not(:disabled) {
 		background-color: color-mix(in srgb, var(--surface-border) 90%, transparent);
+	}
+
+	.pj-btn-template {
+		background-color: color-mix(in srgb, #ec4899 15%, transparent);
+		color: #ec4899;
+	}
+
+	.pj-btn-template:hover:not(:disabled) {
+		background-color: color-mix(in srgb, #ec4899 25%, transparent);
 	}
 
 	.pj-btn-danger {

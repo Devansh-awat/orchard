@@ -2,6 +2,7 @@
 	import { onMount } from 'svelte';
 	import { apiFetch, toasts } from '$lib/stores';
 	import { ArrowLeft, KeyRound, Plus, Loader2, Trash2, Copy, Check, ChevronRight } from 'lucide-svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 
 	interface ApiToken {
 		id: string;
@@ -24,6 +25,8 @@
 
 	// Delete state
 	let deletingId = $state<string | null>(null);
+	let showRevokeModal = $state(false);
+	let tokenToRevoke = $state<ApiToken | null>(null);
 
 	async function fetchTokens() {
 		loading = true;
@@ -86,10 +89,12 @@
 		copied = false;
 	}
 
-	async function revokeToken(token: ApiToken) {
-		const confirmed = window.confirm(`Revoke "${token.name}"? Any tools using this token will stop working.`);
-		if (!confirmed) return;
+	function confirmRevokeToken(token: ApiToken) {
+		tokenToRevoke = token;
+		showRevokeModal = true;
+	}
 
+	async function revokeToken(token: ApiToken) {
 		deletingId = token.id;
 		try {
 			const response = await apiFetch(`/apiv1/auth/tokens/${token.id}`, {
@@ -249,7 +254,7 @@
 								</div>
 								<button
 									class="btn btn-ghost"
-									onclick={() => revokeToken(token)}
+									onclick={() => confirmRevokeToken(token)}
 									disabled={deletingId === token.id}
 									title="Revoke token"
 									style="color: var(--error-text-color);"
@@ -303,6 +308,17 @@
 		</section>
 	</div>
 </div>
+
+{#if tokenToRevoke}
+	<ConfirmModal
+		bind:open={showRevokeModal}
+		title='Revoke "{tokenToRevoke.name}"?'
+		description='Any tools or integrations using this token will <strong>stop working</strong> immediately.'
+		confirmLabel="Revoke Token"
+		onconfirm={() => revokeToken(tokenToRevoke!)}
+		oncancel={() => { tokenToRevoke = null; }}
+	/>
+{/if}
 
 <style>
 	.settings-page {

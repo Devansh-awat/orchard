@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte';
 	import { user, apiFetch, toasts } from '$lib/stores';
 	import { ArrowLeft, Github, Loader2, Link2, Unlink, KeyRound, Pencil, Trash2, User, ChevronRight, Eye, EyeOff } from 'lucide-svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 
 	let githubLinked = $state(false);
 	let githubUsername = $state<string | null>(null);
@@ -25,6 +26,10 @@
 	let profileLastName = $state('');
 	let profileUsername = $state('');
 	let savingProfile = $state(false);
+
+	// Delete passkey modal state
+	let showDeletePasskeyModal = $state(false);
+	let passkeyToDelete = $state<PasskeyRecord | null>(null);
 
 	// Email visibility
 	let emailRevealed = $state(false);
@@ -282,11 +287,13 @@
 		}
 	}
 
+	function confirmDeletePasskey(passkey: PasskeyRecord) {
+		passkeyToDelete = passkey;
+		showDeletePasskeyModal = true;
+	}
+
 	async function deletePasskey(passkey: PasskeyRecord) {
 		if (deletingPasskeyId) return;
-
-		const confirmed = window.confirm(`Remove "${passkey.friendlyName || 'this passkey'}"?`);
-		if (!confirmed) return;
 
 		deletingPasskeyId = passkey.id;
 
@@ -694,7 +701,7 @@
 											<button
 												class="btn btn-ghost"
 												type="button"
-												onclick={() => deletePasskey(passkey)}
+												onclick={() => confirmDeletePasskey(passkey)}
 												disabled={deletingPasskeyId === passkey.id}
 												title="Remove"
 												style="color: var(--error-text-color);"
@@ -716,6 +723,18 @@
 		</section>
 	</div>
 </div>
+
+{#if passkeyToDelete}
+	<ConfirmModal
+		bind:open={showDeletePasskeyModal}
+		title='Remove "{passkeyToDelete.friendlyName || "this passkey"}"?'
+		description="This passkey will be permanently removed. You will no longer be able to use it to sign in."
+		confirmLabel="Remove Passkey"
+		danger
+		onconfirm={() => deletePasskey(passkeyToDelete!)}
+		oncancel={() => { passkeyToDelete = null; }}
+	/>
+{/if}
 
 <style>
 	.settings-page {

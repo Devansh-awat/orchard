@@ -35,6 +35,7 @@
 	import { scale, fade } from 'svelte/transition';
 	import { Clock, Minimize2, Maximize2, Cpu, MemoryStick } from 'lucide-svelte';
 	import { browser } from '$app/environment';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 
 	let Line: any = $state(null);
 
@@ -412,6 +413,7 @@
 	let restarting = $state(false);
 	let scaling = $state(false);
 	let deleting = $state(false);
+	let showDeleteModal = $state(false);
 	let rebuilding = $state(false);
 	let savingEnv = $state(false);
 	let savingVolumes = $state(false);
@@ -1219,8 +1221,6 @@
 
 	async function deleteDeployment() {
 		if (!deployment) return;
-		if (!confirm(`Delete ${deployment.name}? This cannot be undone.`)) return;
-
 		deleting = true;
 		try {
 			const response = await apiFetch(`/apiv1/deployments/${deploymentId}`, {
@@ -2133,7 +2133,7 @@
 						{#if restarting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Play class="h-3.5 w-3.5" />{/if}
 						<span>Restart</span>
 					</button>
-					<button onclick={deleteDeployment} disabled={deleting} class="btn btn-danger btn-sm">
+					<button onclick={() => (showDeleteModal = true)} disabled={deleting} class="btn btn-danger btn-sm">
 						{#if deleting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2 class="h-3.5 w-3.5" />{/if}
 					</button>
 				</div>
@@ -3421,6 +3421,17 @@
 			</p>
 		</div>
 	</button>
+{/if}
+
+{#if deployment}
+	<ConfirmModal
+		bind:open={showDeleteModal}
+		title='Delete "{deployment.name}"?'
+		description='This will permanently <strong>delete this deployment</strong> and all its associated services and ingresses. This cannot be undone.'
+		confirmLabel="Delete Deployment"
+		onconfirm={deleteDeployment}
+		oncancel={() => {}}
+	/>
 {/if}
 
 <style>

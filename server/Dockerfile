@@ -55,10 +55,6 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && apt-get install -y --no-install-recommends docker-ce-cli \
     && rm -rf /var/lib/apt/lists/*
 
-# Install Railway CLI with pinned version and retry logic to avoid GitHub API rate limits
-RUN RAILWAY_VERSION=3.16.0 curl -fsSL https://railway.app/install.sh | sh || \
-    (echo "Retry 1/2..." && sleep 5 && RAILWAY_VERSION=3.16.0 curl -fsSL https://railway.app/install.sh | sh) || \
-    (echo "Retry 2/2..." && sleep 10 && RAILWAY_VERSION=3.16.0 curl -fsSL https://railway.app/install.sh | sh)
 
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY --from=builder /app/server/package.json ./server/package.json
