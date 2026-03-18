@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query, Post, Body, Patch } from '@nestjs/common';
+import { Controller, Get, Param, Query } from '@nestjs/common';
 import { KubernetesService } from './kubernetes.service';
 import { Auth } from '../auth/decorators';
 
@@ -40,44 +40,10 @@ export class KubernetesController {
     return this.kubernetesService.listEndpoints(namespace);
   }
 
-  @Get('deployments')
-
-  async listDeployments(@Query('namespace') namespace?: string) {
-    return this.kubernetesService.listDeployments(namespace);
-  }
-
   @Get('sync/:namespace')
 
   async syncNamespace(@Param('namespace') namespace: string) {
     return this.kubernetesService.syncNamespaceToDatabase(namespace);
-  }
-
-  @Post('deployments/:deploymentName/restart')
-
-  async restartDeployment(
-    @Param('deploymentName') deploymentName: string,
-    @Query('namespace') namespace?: string
-  ) {
-    return this.kubernetesService.restartDeployment(deploymentName, namespace);
-  }
-
-  @Patch('deployments/:deploymentName/scale')
-
-  async scaleDeployment(
-    @Param('deploymentName') deploymentName: string,
-    @Body('replicas') replicas: number,
-    @Query('namespace') namespace?: string
-  ) {
-    return this.kubernetesService.scaleDeployment(deploymentName, namespace, replicas);
-  }
-
-  @Get('deployments/:deploymentName/pods')
-
-  async getDeploymentPods(
-    @Param('deploymentName') deploymentName: string,
-    @Query('namespace') namespace?: string
-  ) {
-    return this.kubernetesService.getDeploymentPods(deploymentName, namespace);
   }
 }
 

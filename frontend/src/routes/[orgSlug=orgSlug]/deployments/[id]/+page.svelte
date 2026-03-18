@@ -27,7 +27,10 @@
 		Eye,
 		EyeOff,
 		Lock,
-		Webhook
+		Webhook,
+		Bell,
+		AlertTriangle,
+		CircleX
 	} from 'lucide-svelte';
 	import { scale, fade } from 'svelte/transition';
 	import { Clock, Minimize2, Maximize2, Cpu, MemoryStick } from 'lucide-svelte';
@@ -399,6 +402,12 @@
 	// Computed properties for template compatibility with API field names
 	const repoUrl = $derived(deployment?.githubRepo);
 	const branch = $derived(deployment?.githubBranch);
+
+	let notificationsOpen = $state(false);
+	const notificationCount = $derived(
+		(deployment?.warnings?.length ?? 0) +
+		(deployment?.status === 'failed' && (deployment?.buildError || deployment?.buildLogs) ? 1 : 0)
+	);
 
 	let restarting = $state(false);
 	let scaling = $state(false);
@@ -2038,6 +2047,82 @@
 					{/if}
 				</div>
 				<div class="flex items-center gap-1.5">
+					{#if notificationCount > 0}
+						<div class="relative">
+							<button
+								class="btn btn-secondary btn-sm relative"
+								onclick={() => notificationsOpen = !notificationsOpen}
+							>
+								<Bell class="h-3.5 w-3.5" />
+								<span class="notification-badge">{notificationCount}</span>
+							</button>
+
+							{#if notificationsOpen}
+								<!-- svelte-ignore a11y_click_events_have_key_events -->
+								<!-- svelte-ignore a11y_no_static_element_interactions -->
+								<div class="notification-backdrop" onclick={() => notificationsOpen = false}></div>
+								<div class="notification-panel" transition:fade={{ duration: 150 }}>
+									<div class="flex items-center justify-between px-4 py-3" style="border-bottom: 1px solid var(--surface-border);">
+										<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Notifications</p>
+										<button class="btn-icon rounded-md p-1" onclick={() => notificationsOpen = false}>
+											<X class="h-3.5 w-3.5" />
+										</button>
+									</div>
+									<div class="notification-scroll">
+										{#if deployment.status === 'failed' && (deployment.buildError || deployment.buildLogs)}
+											<div class="notification-item">
+												<div class="flex items-start gap-3">
+													<div class="notification-icon notification-icon-error">
+														<CircleX class="h-4 w-4" />
+													</div>
+													<div class="flex-1 min-w-0">
+														<p class="text-xs font-semibold" style="color: var(--error-text-color);">Build failed</p>
+														{#if deployment.buildError}
+															<p class="mt-1 text-xs font-mono truncate" style="color: var(--surface-muted);">{sanitizeLogs(deployment.buildError).split('\n')[0]}</p>
+														{/if}
+														{#if deployment.buildLogs}
+															<button
+																class="mt-1.5 text-[11px] font-medium hover:underline"
+																style="color: var(--primary-color);"
+																onclick={() => {
+																	notificationsOpen = false;
+																	buildModalStatus = 'failed';
+																	buildModalError = deployment.buildError ?? null;
+																	accumulatedBuildLogs = deployment.buildLogs ?? null;
+																	buildModalStep = null;
+																	buildModalWarnings = [];
+																	showBuildModal = true;
+																}}
+															>View build logs</button>
+														{/if}
+													</div>
+												</div>
+											</div>
+										{/if}
+										{#if deployment.warnings?.length}
+											{#each deployment.warnings as warning}
+												<div class="notification-item">
+													<div class="flex items-start gap-3">
+														<div class="notification-icon notification-icon-warning">
+															<AlertTriangle class="h-4 w-4" />
+														</div>
+														<div class="flex-1 min-w-0">
+															<p class="text-xs font-semibold" style="color: var(--warning-text);">Pod warning</p>
+															<p class="mt-0.5 font-mono text-[11px]" style="color: var(--surface-muted);">{warning.podName}</p>
+															<p class="mt-0.5 text-xs" style="color: var(--center-channel-color); opacity: 0.75;">{warning.message}</p>
+															{#if warning.timestamp}
+																<p class="mt-1 text-[10px]" style="color: var(--surface-muted);">{new Date(warning.timestamp).toLocaleTimeString()}</p>
+															{/if}
+														</div>
+													</div>
+												</div>
+											{/each}
+										{/if}
+									</div>
+								</div>
+							{/if}
+						</div>
+					{/if}
 					{#if repoUrl}
 						<button onclick={rebuild} disabled={rebuilding} class="btn btn-secondary btn-sm">
 							{#if rebuilding}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw class="h-3.5 w-3.5" />{/if}
@@ -2071,53 +2156,6 @@
 	<section {...tabs.getContent(tab.id)} hidden={undefined} class="tab-panel">
 					{#if tab.id === 'overview'}
 						<div class="space-y-6">
-							{#if deployment.warnings?.length}
-							<div class="warning-box rounded-2xl border p-5 shadow-sm">
-								<div class="flex items-start gap-3">
-									<div class="warning-icon-box flex h-8 w-8 shrink-0 items-center justify-center rounded-lg">
-										<svg class="h-5 w-5" style="color: var(--warning-text)" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
-										</svg>
-									</div>
-									<div class="flex-1 min-w-0">
-										<p class="text-sm font-semibold" style="color: var(--warning-text)">Pod Warnings</p>
-										<div class="mt-2 space-y-2">
-											{#each deployment.warnings as warning}
-												<div class="warning-item rounded-lg p-3 shadow-sm">
-													<div class="flex items-start gap-2">
-														<div class="flex-1 min-w-0">
-															<p class="font-mono text-xs font-medium" style="color: var(--warning-text)">{warning.podName}</p>
-															<p class="mt-1 text-xs" style="color: var(--warning-text); opacity: 0.85">{warning.message}</p>
-														</div>
-														{#if warning.timestamp}
-															<span class="shrink-0 text-xs" style="color: var(--warning-text); opacity: 0.7">
-																{new Date(warning.timestamp).toLocaleTimeString()}
-															</span>
-														{/if}
-													</div>
-												</div>
-											{/each}
-										</div>
-									</div>
-								</div>
-							</div>
-							{/if}
-
-							{#if deployment.status === 'failed' && (deployment.buildError || deployment.buildLogs)}
-								<div class="rounded-2xl border border-red-200 bg-red-50/80 p-4 dark:border-red-400/30 dark:bg-red-500/10">
-									<p class="text-sm font-semibold text-red-900 dark:text-red-100">Last build failed</p>
-									{#if deployment.buildError}
-										<pre class="mt-2 max-h-40 overflow-y-auto whitespace-pre-wrap rounded-lg bg-red-900/10 p-3 text-xs font-mono text-red-900 dark:text-red-100">{sanitizeLogs(deployment.buildError)}</pre>
-									{/if}
-									{#if deployment.buildLogs}
-										<details class="mt-2">
-											<summary class="cursor-pointer text-xs font-medium text-red-800 dark:text-red-200">Show full build logs</summary>
-											<pre class="mt-2 max-h-80 overflow-y-auto whitespace-pre-wrap rounded-lg bg-black/10 p-3 text-xs font-mono text-gray-900 dark:text-gray-100">{sanitizeLogs(deployment.buildLogs)}</pre>
-										</details>
-									{/if}
-								</div>
-							{/if}
-
 							<!-- Two-column layout: resource usage + details -->
 							<div class="grid gap-6 lg:grid-cols-3">
 								<!-- Resource Usage + Pods -->
@@ -3659,17 +3697,75 @@
 		}
 	}
 
-	.warning-box {
-		background-color: var(--warning-bg);
-		border-color: var(--warning-border);
+	.notification-badge {
+		position: absolute;
+		top: -4px;
+		right: -4px;
+		min-width: 16px;
+		height: 16px;
+		padding: 0 4px;
+		border-radius: 9999px;
+		background-color: var(--error-text-color);
+		color: #fff;
+		font-size: 10px;
+		font-weight: 600;
+		line-height: 16px;
+		text-align: center;
+	}
+
+	.notification-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 40;
+	}
+
+	.notification-panel {
+		position: absolute;
+		top: calc(100% + 8px);
+		right: 0;
+		z-index: 50;
+		width: 360px;
+		max-height: 420px;
+		border-radius: 1rem;
+		border: 1px solid var(--surface-border);
+		background-color: var(--card-bg);
+		box-shadow: 0 8px 30px rgba(0, 0, 0, 0.12);
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
+	}
+
+	.notification-scroll {
+		overflow-y: auto;
+		flex: 1;
+	}
+
+	.notification-item {
+		padding: 0.75rem 1rem;
+		border-bottom: 1px solid var(--surface-border);
+	}
+
+	.notification-item:last-child {
+		border-bottom: none;
+	}
+
+	.notification-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		border-radius: 8px;
+		flex-shrink: 0;
+	}
+
+	.notification-icon-error {
+		background-color: color-mix(in srgb, var(--error-text-color) 12%, transparent);
+		color: var(--error-text-color);
+	}
+
+	.notification-icon-warning {
+		background-color: color-mix(in srgb, var(--warning-text) 12%, transparent);
 		color: var(--warning-text);
-	}
-
-	.warning-icon-box {
-		background-color: color-mix(in srgb, var(--warning-border) 25%, transparent);
-	}
-
-	.warning-item {
-		background-color: color-mix(in srgb, var(--warning-bg) 50%, var(--surface-bg));
 	}
 </style>
