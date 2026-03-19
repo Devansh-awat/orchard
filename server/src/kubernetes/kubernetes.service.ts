@@ -37,6 +37,7 @@ type CreateDeploymentOptions = {
     type: 'pvc' | 'hostPath' | 'emptyDir';
     mountPath: string;
     pvcName?: string;
+    storageSize?: string;
     hostPath?: string;
     readOnly?: boolean;
   }[];
@@ -902,7 +903,14 @@ export class KubernetesService {
       };
 
       const volumes = Array.isArray(options.volumes) ? options.volumes : [];
-      
+
+      // Create PVCs in Kubernetes before referencing them
+      for (const vol of volumes) {
+        if (vol.type === 'pvc' && vol.pvcName) {
+          await this.createPVC(cleanNamespace, vol.pvcName, vol.storageSize || '1Gi');
+        }
+      }
+
       const volumeMounts: k8s.V1VolumeMount[] = volumes.map((vol) => ({
         name: vol.name,
         mountPath: vol.mountPath,
@@ -1717,6 +1725,50 @@ export class KubernetesService {
     }
   }
 
+  async createPVC(namespace: string, name: string, storageSize: string = '1Gi') {
+    this.ensureKubeConfig();
+
+    const cleanNamespace = String(namespace || '').trim();
+    const cleanName = String(name || '').trim();
+
+    if (!cleanNamespace || !cleanName) return;
+
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+
+    // Check if PVC already exists
+    try {
+      await coreApi.readNamespacedPersistentVolumeClaim(cleanName, cleanNamespace);
+      // PVC already exists, no need to create
+      return;
+    } catch (error) {
+      if (error.response?.statusCode !== 404) {
+        throw error;
+      }
+      // 404 = doesn't exist, proceed to create
+    }
+
+    const pvc: k8s.V1PersistentVolumeClaim = {
+      metadata: {
+        name: cleanName,
+        namespace: cleanNamespace,
+        labels: {
+          'app.kubernetes.io/managed-by': 'orchard',
+        },
+      },
+      spec: {
+        accessModes: ['ReadWriteOnce'],
+        storageClassName: 'longhorn',
+        resources: {
+          requests: {
+            storage: storageSize,
+          },
+        },
+      },
+    };
+
+    await coreApi.createNamespacedPersistentVolumeClaim(cleanNamespace, pvc);
+  }
+
   async updateDeploymentEnv(options: UpdateDeploymentEnvOptions) {
     this.ensureKubeConfig();
 
@@ -1980,6 +2032,7 @@ export class KubernetesService {
       type: 'pvc' | 'hostPath' | 'emptyDir';
       mountPath: string;
       pvcName?: string | null;
+      storageSize?: string | null;
       hostPath?: string | null;
       readOnly?: boolean;
     }[];
@@ -1998,6 +2051,13 @@ export class KubernetesService {
     }
 
     const volumesList = Array.isArray(options.volumes) ? options.volumes : [];
+
+    // Create PVCs in Kubernetes before referencing them
+    for (const vol of volumesList) {
+      if (vol.type === 'pvc' && vol.pvcName) {
+        await this.createPVC(cleanNamespace, vol.pvcName, vol.storageSize || '1Gi');
+      }
+    }
 
     const volumeMounts: k8s.V1VolumeMount[] = volumesList.map((vol) => ({
       name: vol.name,

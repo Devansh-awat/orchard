@@ -75,6 +75,7 @@ Available context fields: id, serviceName
         type: pvc                     # pvc | hostPath | emptyDir
         mountPath: /data
         pvcName: my-pvc
+        storageSize: 1Gi              # default: 1Gi
     exposePublic: true                # optional, creates external service
 \`\`\`
 

@@ -9,6 +9,7 @@ import { registerDatabaseTools } from './tools/databases';
 import { registerLogTools } from './tools/logs';
 import { registerGitHubTools } from './tools/github';
 import { registerTemplateTools } from './tools/templates';
+import { registerVolumeTools } from './tools/volumes';
 
 export function createOrchardMcpServer(token?: string) {
   const server = new McpServer({
@@ -29,6 +30,7 @@ export function createOrchardMcpServer(token?: string) {
   registerLogTools(server, client);
   registerGitHubTools(server, client);
   registerTemplateTools(server, client);
+  registerVolumeTools(server, client);
 
   return server;
 }

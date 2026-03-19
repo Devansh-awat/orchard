@@ -215,6 +215,7 @@ export class ProjectsController {
         type: 'pvc' | 'hostPath' | 'emptyDir';
         mountPath: string;
         pvcName?: string;
+        storageSize?: string;
         hostPath?: string;
         readOnly?: boolean;
       }[];
@@ -266,6 +267,7 @@ export class ProjectsController {
         type: 'pvc' | 'hostPath' | 'emptyDir';
         mountPath: string;
         pvcName?: string;
+        storageSize?: string;
         hostPath?: string;
         readOnly?: boolean;
       }[];
@@ -527,6 +529,7 @@ export class DeploymentsController {
         type: 'pvc' | 'hostPath' | 'emptyDir';
         mountPath: string;
         pvcName?: string;
+        storageSize?: string;
         hostPath?: string;
         readOnly?: boolean;
       }[];

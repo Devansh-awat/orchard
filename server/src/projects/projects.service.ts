@@ -379,6 +379,7 @@ export class ProjectsService {
         type: 'pvc' | 'hostPath' | 'emptyDir';
         mountPath: string;
         pvcName?: string;
+        storageSize?: string;
         hostPath?: string;
         readOnly?: boolean;
       }[];
@@ -535,6 +536,7 @@ export class ProjectsService {
             type: vol.type === 'pvc' ? 'pvc' : vol.type === 'hostPath' ? 'hostPath' : 'emptyDir',
             mountPath: vol.mountPath.trim(),
             pvcName: vol.type === 'pvc' && vol.pvcName ? vol.pvcName.trim() : null,
+            storageSize: vol.type === 'pvc' && vol.storageSize ? vol.storageSize.trim() : null,
             hostPath: vol.type === 'hostPath' && vol.hostPath ? vol.hostPath.trim() : null,
             readOnly: Boolean(vol.readOnly),
           })),
@@ -640,6 +642,7 @@ export class ProjectsService {
         type: 'pvc' | 'hostPath' | 'emptyDir';
         mountPath: string;
         pvcName?: string;
+        storageSize?: string;
         hostPath?: string;
         readOnly?: boolean;
       }[];
@@ -844,6 +847,7 @@ export class ProjectsService {
           type: vol.type === 'pvc' ? 'pvc' : vol.type === 'hostPath' ? 'hostPath' : 'emptyDir',
           mountPath: vol.mountPath.trim(),
           pvcName: vol.type === 'pvc' && vol.pvcName ? vol.pvcName.trim() : null,
+          storageSize: vol.type === 'pvc' && vol.storageSize ? vol.storageSize.trim() : null,
           hostPath: vol.type === 'hostPath' && vol.hostPath ? vol.hostPath.trim() : null,
           readOnly: Boolean(vol.readOnly),
         })),
@@ -1625,6 +1629,7 @@ export class ProjectsService {
       type: vol.type as 'pvc' | 'hostPath' | 'emptyDir',
       mountPath: vol.mountPath,
       pvcName: vol.pvcName || undefined,
+      storageSize: vol.storageSize || undefined,
       hostPath: vol.hostPath || undefined,
       readOnly: vol.readOnly,
     }));
@@ -4831,6 +4836,7 @@ export class ProjectsService {
       type: 'pvc' | 'hostPath' | 'emptyDir';
       mountPath: string;
       pvcName?: string;
+      storageSize?: string;
       hostPath?: string;
       readOnly?: boolean;
     }[],
@@ -4887,6 +4893,7 @@ export class ProjectsService {
       type: 'pvc' | 'hostPath' | 'emptyDir';
       mountPath: string;
       pvcName?: string | null;
+      storageSize?: string | null;
       hostPath?: string | null;
       readOnly?: boolean;
     }> = Array.isArray(volumes)
@@ -4899,6 +4906,7 @@ export class ProjectsService {
               type: volType,
               mountPath: vol.mountPath.trim(),
               pvcName: vol.type === 'pvc' && vol.pvcName ? vol.pvcName.trim() : null,
+              storageSize: vol.type === 'pvc' && vol.storageSize ? vol.storageSize.trim() : null,
               hostPath: vol.type === 'hostPath' && vol.hostPath ? vol.hostPath.trim() : null,
               readOnly: Boolean(vol.readOnly),
             };
@@ -4931,6 +4939,7 @@ export class ProjectsService {
             type: vol.type as 'pvc' | 'hostPath' | 'emptyDir',
             mountPath: vol.mountPath,
             pvcName: vol.pvcName,
+            storageSize: vol.storageSize,
             hostPath: vol.hostPath,
             readOnly: vol.readOnly,
           })),
@@ -6038,6 +6047,7 @@ export class ProjectsService {
       type: vol.type as 'pvc' | 'hostPath' | 'emptyDir',
       mountPath: vol.mountPath,
       pvcName: vol.pvcName || undefined,
+      storageSize: vol.storageSize || undefined,
       hostPath: vol.hostPath || undefined,
       readOnly: vol.readOnly,
     }));

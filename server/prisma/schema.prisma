@@ -560,6 +560,7 @@ model DeploymentVolume {
   type         VolumeType
   mountPath    String     @map("mount_path") @db.VarChar(500)
   pvcName      String?    @map("pvc_name") @db.VarChar(255)
+  storageSize  String?    @map("storage_size") @db.VarChar(20)
   hostPath     String?    @map("host_path") @db.VarChar(500)
   readOnly     Boolean    @default(false) @map("read_only")
   createdAt    DateTime   @default(now()) @map("created_at") @db.Timestamp(6)
