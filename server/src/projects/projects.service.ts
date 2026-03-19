@@ -2739,8 +2739,17 @@ export class ProjectsService {
       include: { role: true },
     });
 
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+    const orgMembership = await this.prisma.organizationMember.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId: ingress.project.workspace.organizationId,
+          userId: user.id,
+        },
+      },
+    });
+
+    if (!membership && !orgMembership) {
+      throw new ForbiddenException('You are not a member of this workspace or organization');
     }
 
     // Read the actual K8s ingress to get all routes
@@ -2821,8 +2830,17 @@ export class ProjectsService {
       include: { role: true },
     });
 
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+    const orgMembership = await this.prisma.organizationMember.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId: ingress.project.workspace.organizationId,
+          userId: user.id,
+        },
+      },
+    });
+
+    if (!membership && !orgMembership) {
+      throw new ForbiddenException('You are not a member of this workspace or organization');
     }
 
     // Read the actual K8s ingress to get all routes
