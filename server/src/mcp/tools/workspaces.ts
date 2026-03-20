@@ -62,13 +62,15 @@ export function registerWorkspaceTools(server: McpServer, client: OrchardClient)
   server.registerTool(
     'delete_workspace',
     {
-      description: 'Delete a workspace. WARNING: This will delete all projects and deployments in the workspace.',
+      description: 'Delete a workspace. Use force=true to cascade delete all projects and their resources.',
       inputSchema: {
         workspaceId: z.string().describe('The workspace UUID to delete'),
+        force: z.boolean().optional().describe('If true, cascade delete all projects and resources in the workspace. Default: false'),
       },
     },
-    async ({ workspaceId }) => {
-      await client.delete(`/workspaces/${workspaceId}`);
+    async ({ workspaceId, force }) => {
+      const qs = force ? '?force=true' : '';
+      await client.delete(`/workspaces/${workspaceId}${qs}`);
       return { content: [{ type: 'text', text: 'Workspace deleted successfully.' }] };
     },
   );

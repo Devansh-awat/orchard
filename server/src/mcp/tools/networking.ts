@@ -134,16 +134,21 @@ The user must point their domain's DNS to the cluster before creating the ingres
         deploymentId: z.string().describe('The deployment UUID'),
         name: z.string().describe('Service name'),
         type: z.enum(['internal', 'external']).describe('Service type: internal (ClusterIP) or external (NodePort/LoadBalancer)'),
-        port: z.number().describe('Service port'),
+        port: z.number().describe('Service port (the port exposed by the service)'),
         targetPort: z.number().describe('Container port to route to'),
       },
     },
     async ({ deploymentId, name, type, port, targetPort }) => {
       const service = await client.post(`/deployments/${deploymentId}/services`, {
         name,
-        type,
-        port,
-        targetPort,
+        exposePublic: type === 'external',
+        ports: [
+          {
+            containerPort: Number(targetPort),
+            servicePort: Number(port),
+            protocol: 'TCP',
+          },
+        ],
       });
       return { content: [{ type: 'text', text: JSON.stringify(service, null, 2) }] };
     },

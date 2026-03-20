@@ -26,22 +26,28 @@ export class TemplatesService implements OnModuleInit {
   ) {}
 
   async onModuleInit() {
+    this.logger.log('onModuleInit: starting seedBuiltInTemplates...');
     await this.seedBuiltInTemplates();
+    this.logger.log('onModuleInit: seedBuiltInTemplates complete');
   }
 
   private async seedBuiltInTemplates() {
     const builtInDir = path.join(__dirname, 'built-in');
+    this.logger.log(`Looking for built-in templates in: ${builtInDir}`);
     if (!fs.existsSync(builtInDir)) {
       this.logger.warn(`Built-in templates directory not found: ${builtInDir}`);
       return;
     }
 
     const files = fs.readdirSync(builtInDir).filter((f) => f.endsWith('.yaml') || f.endsWith('.yml'));
+    this.logger.log(`Found ${files.length} template files: ${files.join(', ')}`);
 
     for (const file of files) {
       try {
+        this.logger.log(`Processing template file: ${file}`);
         const yamlContent = fs.readFileSync(path.join(builtInDir, file), 'utf-8');
         const parsed = this.templateEngine.parseTemplate(yamlContent);
+        this.logger.log(`Parsed template: ${parsed.metadata.name}, upserting to DB...`);
 
         await this.prisma.template.upsert({
           where: { name: parsed.metadata.name },
@@ -317,7 +323,14 @@ export class TemplatesService implements OnModuleInit {
               },
             ];
 
-            const ingresses = await this.projectsService.createProjectIngress(
+            // Get ingresses before creation to diff afterwards
+            const ingressesBefore = await this.prisma.ingress.findMany({
+              where: { projectId },
+              select: { id: true },
+            });
+            const beforeIds = new Set(ingressesBefore.map((i) => i.id));
+
+            await this.projectsService.createProjectIngress(
               projectId,
               {
                 host: config.host,
@@ -329,19 +342,23 @@ export class TemplatesService implements OnModuleInit {
               userData,
             );
 
-            // Link all created ingresses to template instance
-            const createdIngresses = Array.isArray(ingresses) ? ingresses : [ingresses];
-            for (const ing of createdIngresses) {
-              if (ing?.id) {
-                await this.prisma.ingress.update({
-                  where: { id: ing.id },
-                  data: { templateInstanceId: instance.id },
-                });
-              }
+            // Find newly created ingresses by diffing
+            const ingressesAfter = await this.prisma.ingress.findMany({
+              where: { projectId },
+              select: { id: true, host: true },
+            });
+            const newIngresses = ingressesAfter.filter((i) => !beforeIds.has(i.id));
+
+            // Link new ingresses to template instance
+            for (const ing of newIngresses) {
+              await this.prisma.ingress.update({
+                where: { id: ing.id },
+                data: { templateInstanceId: instance.id },
+              });
             }
 
             context.resources[resource.name] = {
-              id: createdIngresses[0]?.id,
+              id: newIngresses[0]?.id,
               host: config.host,
             };
             break;

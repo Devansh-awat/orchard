@@ -299,7 +299,7 @@ export class WorkspacesService {
     return workspace;
   }
 
-  async deleteWorkspace(workspaceId: string, clerkId: string) {
+  async deleteWorkspace(workspaceId: string, clerkId: string, force: boolean = false) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId);
 
     if (!user) {
@@ -321,10 +321,6 @@ export class WorkspacesService {
       throw new NotFoundException(`Workspace ${workspaceId} not found`);
     }
 
-    if (workspace._count.projects > 0) {
-      throw new BadRequestException('Workspaces with projects cannot be deleted');
-    }
-
     const membership = await this.prisma.organizationMember.findUnique({
       where: {
         organizationId_userId: {
@@ -336,6 +332,45 @@ export class WorkspacesService {
 
     if (!membership || (membership.role !== 'owner' && membership.role !== 'admin')) {
       throw new ForbiddenException('Only organization owners and admins can delete workspaces');
+    }
+
+    if (workspace._count.projects > 0 && !force) {
+      throw new BadRequestException(
+        `Workspace has ${workspace._count.projects} project(s). Delete them first, or use force=true to cascade delete all projects and their resources.`
+      );
+    }
+
+    if (workspace._count.projects > 0 && force) {
+      // Cascade: delete all projects and their resources
+      const projects = await this.prisma.project.findMany({
+        where: { workspaceId },
+        select: { id: true },
+      });
+
+      for (const project of projects) {
+        // Delete ingresses, services, deployments, databases etc. in correct order
+        await this.prisma.ingress.deleteMany({ where: { projectId: project.id } });
+
+        const deployments = await this.prisma.deployment.findMany({
+          where: { projectId: project.id },
+          select: { id: true },
+        });
+
+        for (const dep of deployments) {
+          await this.prisma.servicePort.deleteMany({
+            where: { service: { deploymentId: dep.id } },
+          });
+          await this.prisma.service.deleteMany({ where: { deploymentId: dep.id } });
+          await this.prisma.envVar.deleteMany({ where: { deploymentId: dep.id } });
+          await this.prisma.pod.deleteMany({ where: { deploymentId: dep.id } });
+          await this.prisma.volume.deleteMany({ where: { deploymentId: dep.id } });
+        }
+
+        await this.prisma.deployment.deleteMany({ where: { projectId: project.id } });
+        await this.prisma.database.deleteMany({ where: { projectId: project.id } });
+        await this.prisma.templateInstance.deleteMany({ where: { projectId: project.id } });
+        await this.prisma.project.delete({ where: { id: project.id } });
+      }
     }
 
     await this.prisma.$transaction([

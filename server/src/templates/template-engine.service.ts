@@ -1,5 +1,6 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
 import * as yaml from 'js-yaml';
+import { randomBytes } from 'crypto';
 
 export interface ParameterValidation {
   pattern?: string;
@@ -17,7 +18,7 @@ export interface ParameterDef {
   name: string;
   displayName: string;
   description?: string;
-  type: 'string' | 'number' | 'boolean' | 'select';
+  type: 'string' | 'number' | 'boolean' | 'select' | 'secret';
   default?: any;
   required?: boolean;
   placeholder?: string;
@@ -120,6 +121,12 @@ export class TemplateEngineService {
     for (const def of definitions) {
       let value = values[def.name];
 
+      // Auto-generate secret if not provided
+      if (def.type === 'secret' && (value === undefined || value === null || value === '')) {
+        const length = def.validation?.min && def.validation.min > 0 ? Math.max(def.validation.min, 16) : 32;
+        value = randomBytes(Math.ceil(length / 2)).toString('hex').slice(0, length);
+      }
+
       // Apply default
       if (value === undefined || value === null || value === '') {
         if (def.default !== undefined) {
@@ -168,6 +175,19 @@ export class TemplateEngineService {
                     `Parameter "${def.displayName}" does not match the required format`,
                 );
               }
+            }
+            break;
+          case 'secret':
+            value = String(value);
+            if (def.validation?.min !== undefined && value.length < def.validation.min) {
+              throw new BadRequestException(
+                `Parameter "${def.displayName}" must be at least ${def.validation.min} characters`,
+              );
+            }
+            if (def.validation?.max !== undefined && value.length > def.validation.max) {
+              throw new BadRequestException(
+                `Parameter "${def.displayName}" must be at most ${def.validation.max} characters`,
+              );
             }
             break;
         }

@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, Body, Request, Delete } from '@nestjs/common';
+import { Controller, Get, Param, Post, Body, Request, Delete, Query } from '@nestjs/common';
 import { WorkspacesService } from './workspaces.service';
 import { Auth } from '../auth/decorators';
 
@@ -66,8 +66,8 @@ export class WorkspacesController {
 
   @Delete(':id')
 
-  async deleteWorkspace(@Param('id') id: string, @Request() req) {
-    return this.workspacesService.deleteWorkspace(id, req.user.sub);
+  async deleteWorkspace(@Param('id') id: string, @Query('force') force: string, @Request() req) {
+    return this.workspacesService.deleteWorkspace(id, req.user.sub, force === 'true');
   }
 
   @Post(':id/members')

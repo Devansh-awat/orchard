@@ -20,14 +20,21 @@ export function registerLogTools(server: McpServer, client: OrchardClient) {
   server.registerTool(
     'list_pods',
     {
-      description: 'List all running pods for a deployment (each pod is a running instance)',
+      description: 'List all running pods for a deployment (each pod is a running instance). The response includes the namespace which you should pass to get_pod_logs.',
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
       },
     },
     async ({ deploymentId }) => {
-      const pods = await client.get(`/deployments/${deploymentId}/pods`);
-      return { content: [{ type: 'text', text: JSON.stringify(pods, null, 2) }] };
+      const [pods, deployment] = await Promise.all([
+        client.get(`/deployments/${deploymentId}/pods`),
+        client.get(`/deployments/${deploymentId}`),
+      ]);
+      const result = {
+        namespace: deployment?.namespace,
+        pods,
+      };
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );
 
@@ -37,10 +44,16 @@ export function registerLogTools(server: McpServer, client: OrchardClient) {
       description: 'Get runtime logs from a specific pod. Use list_pods first to get pod names.',
       inputSchema: {
         podName: z.string().describe('The pod name (from list_pods)'),
+        namespace: z.string().optional().describe('Kubernetes namespace (defaults to deployment namespace). Get this from the deployment details or list_pods.'),
+        tailLines: z.number().optional().describe('Number of log lines to return (default: 100)'),
       },
     },
-    async ({ podName }) => {
-      const logs = await client.get(`/pods/${podName}/logs`);
+    async ({ podName, namespace, tailLines }) => {
+      const params = new URLSearchParams();
+      if (namespace) params.set('namespace', namespace);
+      if (tailLines) params.set('tailLines', String(tailLines));
+      const qs = params.toString();
+      const logs = await client.get(`/pods/${podName}/logs${qs ? `?${qs}` : ''}`);
       return { content: [{ type: 'text', text: typeof logs === 'string' ? logs : JSON.stringify(logs, null, 2) }] };
     },
   );

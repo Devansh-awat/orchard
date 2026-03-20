@@ -26,15 +26,15 @@ parameters:                   # user-configurable inputs
   - name: paramName           # variable name, referenced as {{ params.paramName }}
     displayName: Param Label
     description: Help text
-    type: string              # string | number | boolean | select
+    type: string              # string | number | boolean | select | secret
     default: value            # optional default
     required: true            # defaults to false
     placeholder: hint         # optional
     validation:               # optional
       pattern: "^regex$"      # for strings
       message: "error msg"
-      min: 1                  # for numbers
-      max: 100
+      min: 1                  # for numbers / min length for secrets
+      max: 100                # for numbers / max length for secrets
 
 resources:                    # infrastructure to create (order matters!)
   - name: resourceName        # referenced as {{ resources.resourceName.field }}
@@ -153,6 +153,12 @@ parameters:
     type: string
     required: true
     placeholder: "api.example.com"
+
+  - name: dbPassword
+    displayName: Database Password
+    type: secret             # auto-generates a strong password if not provided
+    validation:
+      min: 16                # minimum length (default: 32)
 
   - name: enableTls
     displayName: Enable HTTPS
