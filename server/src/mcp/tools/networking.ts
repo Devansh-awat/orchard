@@ -6,13 +6,14 @@ export function registerNetworkingTools(server: McpServer, client: OrchardClient
   server.registerTool(
     'list_ingresses',
     {
-      description: 'List all ingresses (public domains/routes) for a project',
+      description: 'List all ingresses (public domains/routes) for a deployment',
       inputSchema: {
-        projectId: z.string().describe('The project UUID'),
+        deploymentId: z.string().describe('The deployment UUID'),
       },
     },
-    async ({ projectId }) => {
-      const ingresses = await client.get(`/projects/${projectId}/ingresses`);
+    async ({ deploymentId }) => {
+      const deployment = await client.get(`/deployments/${deploymentId}`);
+      const ingresses = deployment.ingresses || [];
       return { content: [{ type: 'text', text: JSON.stringify(ingresses, null, 2) }] };
     },
   );
@@ -37,16 +38,14 @@ export function registerNetworkingTools(server: McpServer, client: OrchardClient
       description: `Create a public ingress (domain route) for a deployment. This makes the deployment accessible via a domain name with automatic TLS.
 The user must point their domain's DNS to the cluster before creating the ingress. Use validate_dns to check.`,
       inputSchema: {
-        projectId: z.string().describe('The project UUID'),
         deploymentId: z.string().describe('The deployment UUID to route traffic to'),
         host: z.string().describe('The domain name (e.g. myapp.example.com)'),
         path: z.string().optional().describe('URL path prefix (default: /)'),
         servicePort: z.number().optional().describe('The service port to route to (default: 80)'),
       },
     },
-    async ({ projectId, deploymentId, host, path, servicePort }) => {
+    async ({ deploymentId, host, path, servicePort }) => {
       const ingress = await client.post(`/deployments/${deploymentId}/ingresses`, {
-        projectId,
         host,
         path: path ?? '/',
         servicePort: servicePort ?? 80,
@@ -62,14 +61,15 @@ The user must point their domain's DNS to the cluster before creating the ingres
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
         ingressId: z.string().describe('The ingress UUID to update'),
-        host: z.string().optional().describe('New domain name'),
-        path: z.string().optional().describe('New URL path prefix'),
+        host: z.string().describe('The domain name (e.g. myapp.example.com)'),
+        path: z.string().optional().describe('URL path prefix'),
+        servicePort: z.number().optional().describe('The service port to route to'),
       },
     },
-    async ({ deploymentId, ingressId, host, path }) => {
-      const body: any = {};
-      if (host !== undefined) body.host = host;
+    async ({ deploymentId, ingressId, host, path, servicePort }) => {
+      const body: Record<string, any> = { host };
       if (path !== undefined) body.path = path;
+      if (servicePort !== undefined) body.servicePort = servicePort;
       const ingress = await client.put(`/deployments/${deploymentId}/ingresses/${ingressId}`, body);
       return { content: [{ type: 'text', text: JSON.stringify(ingress, null, 2) }] };
     },

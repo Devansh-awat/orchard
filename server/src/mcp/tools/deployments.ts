@@ -34,19 +34,28 @@ export function registerDeploymentTools(server: McpServer, client: OrchardClient
   server.registerTool(
     'create_deployment',
     {
-      description: 'Create a new deployment from a Docker image in a project',
+      description: `Create a new deployment from a Docker image in a project.
+This also creates an internal ClusterIP service targeting the specified port.
+If no port is specified, it defaults to 80. Make sure the port matches the port your container listens on.`,
       inputSchema: {
         projectId: z.string().describe('The project UUID'),
         name: z.string().describe('Deployment name'),
         image: z.string().describe('Docker image (e.g. nginx:latest, ghcr.io/user/app:v1)'),
         replicas: z.number().optional().describe('Number of replicas (default: 1)'),
+        port: z.number().optional().describe('Port the container listens on (default: 80). The created service will target this port.'),
+        env: z.array(z.object({
+          key: z.string().describe('Environment variable name'),
+          value: z.string().describe('Environment variable value'),
+        })).optional().describe('Environment variables to set on the deployment'),
       },
     },
-    async ({ projectId, name, image, replicas }) => {
+    async ({ projectId, name, image, replicas, port, env }) => {
       const deployment = await client.post(`/projects/${projectId}/deployments`, {
         name,
         image,
         replicas: replicas ?? 1,
+        ...(port && { port }),
+        ...(env && { env }),
       });
       return { content: [{ type: 'text', text: JSON.stringify(deployment, null, 2) }] };
     },
@@ -73,9 +82,13 @@ Before using this tool:
         dockerfilePath: z.string().optional().describe('Path to Dockerfile relative to repo root (default: Dockerfile)'),
         buildFromRoot: z.boolean().optional().describe('Whether to use repo root as build context (default: false)'),
         port: z.number().optional().describe('Port the application listens on. If not specified, auto-detected from Dockerfile EXPOSE directive, falling back to 80'),
+        env: z.array(z.object({
+          key: z.string().describe('Environment variable name'),
+          value: z.string().describe('Environment variable value'),
+        })).optional().describe('Environment variables to set on the deployment'),
       },
     },
-    async ({ projectId, name, githubRepo, branch, dockerfilePath, buildFromRoot, port }) => {
+    async ({ projectId, name, githubRepo, branch, dockerfilePath, buildFromRoot, port, env }) => {
       const deployment = await client.post(`/projects/${projectId}/deployments/from-github`, {
         name,
         githubRepo,
@@ -83,6 +96,7 @@ Before using this tool:
         dockerfilePath,
         buildFromRoot: buildFromRoot ?? false,
         ...(port && { port }),
+        ...(env && { env }),
       });
       return { content: [{ type: 'text', text: JSON.stringify(deployment, null, 2) }] };
     },
@@ -194,10 +208,11 @@ Before using this tool:
       description: 'Enable auto-deploy for a deployment. When enabled, pushes to the configured branch will automatically trigger a rebuild.',
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
+        branch: z.string().describe('The branch to auto-deploy from (e.g. main)'),
       },
     },
-    async ({ deploymentId }) => {
-      const result = await client.post(`/deployments/${deploymentId}/auto-deploy/enable`);
+    async ({ deploymentId, branch }) => {
+      const result = await client.post(`/deployments/${deploymentId}/auto-deploy/enable`, { branch });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

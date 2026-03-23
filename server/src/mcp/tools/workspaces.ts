@@ -82,7 +82,7 @@ export function registerWorkspaceTools(server: McpServer, client: OrchardClient)
       inputSchema: {},
     },
     async () => {
-      const orgs = await client.get('/organizations');
+      const orgs = await client.get('/organizations/user');
       return { content: [{ type: 'text', text: JSON.stringify(orgs, null, 2) }] };
     },
   );

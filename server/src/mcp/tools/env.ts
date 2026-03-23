@@ -33,7 +33,7 @@ Common env vars to suggest: DATABASE_URL (if using a database), PORT, NODE_ENV, 
       },
     },
     async ({ deploymentId, envVars }) => {
-      const result = await client.put(`/deployments/${deploymentId}/env`, { envVars });
+      const result = await client.put(`/deployments/${deploymentId}/env`, { env: envVars });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );
