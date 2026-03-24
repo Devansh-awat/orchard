@@ -37,4 +37,70 @@ Common env vars to suggest: DATABASE_URL (if using a database), PORT, NODE_ENV, 
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );
+
+  server.registerTool(
+    'add_env_vars',
+    {
+      description: `Add or update specific environment variables on a deployment without affecting other existing vars.
+This fetches the current env vars, merges in the provided ones (overwriting any with the same key), and applies the result. The deployment will restart.`,
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        envVars: z.array(z.object({
+          key: z.string().describe('Environment variable name'),
+          value: z.string().describe('Environment variable value'),
+        })).describe('Array of environment variable key-value pairs to add or update'),
+      },
+    },
+    async ({ deploymentId, envVars }) => {
+      const deployment = await client.get(`/deployments/${deploymentId}`);
+      const existing: { key: string; value: string }[] = (deployment.envVars || []).map(
+        (v: { key: string; value: string }) => ({ key: v.key, value: v.value }),
+      );
+
+      const newKeys = new Set(envVars.map((v) => v.key));
+      const merged = [
+        ...existing.filter((v) => !newKeys.has(v.key)),
+        ...envVars,
+      ];
+
+      const result = await client.put(`/deployments/${deploymentId}/env`, { env: merged });
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    'delete_env_vars',
+    {
+      description: `Delete specific environment variables from a deployment by key name.
+This fetches the current env vars, removes the specified keys, and applies the result. The deployment will restart.`,
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        keys: z.array(z.string()).describe('Array of environment variable names to delete'),
+      },
+    },
+    async ({ deploymentId, keys }) => {
+      const deployment = await client.get(`/deployments/${deploymentId}`);
+      const existing: { key: string; value: string }[] = (deployment.envVars || []).map(
+        (v: { key: string; value: string }) => ({ key: v.key, value: v.value }),
+      );
+
+      const keysToDelete = new Set(keys);
+      const filtered = existing.filter((v) => !keysToDelete.has(v.key));
+
+      const removed = keys.filter((k) => existing.some((v) => v.key === k));
+      const notFound = keys.filter((k) => !existing.some((v) => v.key === k));
+
+      const result = await client.put(`/deployments/${deploymentId}/env`, { env: filtered });
+      return {
+        content: [{
+          type: 'text',
+          text: JSON.stringify({
+            removed,
+            notFound: notFound.length > 0 ? notFound : undefined,
+            deployment: result,
+          }, null, 2),
+        }],
+      };
+    },
+  );
 }

@@ -12,6 +12,10 @@
       {
         "include": "templates/built-in/*.yaml",
         "watchAssets": true
+      },
+      {
+        "include": "email/templates/*.mjml",
+        "watchAssets": true
       }
     ]
   }

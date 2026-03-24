@@ -1,0 +1,67 @@
+<mjml>
+  <mj-head>
+    <mj-attributes>
+      <mj-all font-family="'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif" />
+      <mj-text font-size="15px" color="#5d3a3f" line-height="160%" padding="0" />
+      <mj-section padding="0" />
+    </mj-attributes>
+    <mj-font name="Inter" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" />
+    <mj-style>
+      .otp-code {
+        font-family: 'SF Mono', 'Fira Code', 'Courier New', monospace;
+        font-size: 32px;
+        font-weight: 700;
+        letter-spacing: 10px;
+        color: #962b3a;
+        background-color: #fce8ea;
+        border: 1px solid #f3dfe2;
+        padding: 14px 28px;
+        border-radius: 10px;
+        display: inline-block;
+      }
+    </mj-style>
+  </mj-head>
+  <mj-body background-color="#f8f4f5" width="520px">
+    <mj-section padding="40px 0 24px 0">
+      <mj-column>
+        <mj-text align="center" font-size="22px" font-weight="700" color="#c93a4f" letter-spacing="-0.5px">
+          Orchard
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <mj-section background-color="#ffffff" border-radius="12px" padding="40px 36px 36px 36px" css-class="card">
+      <mj-column>
+        <mj-text align="center" font-size="22px" font-weight="600" color="#2c1a1d" letter-spacing="-0.5px" padding-bottom="8px">
+          Your verification code
+        </mj-text>
+
+        <mj-text align="center" font-size="15px" color="#857073" padding-bottom="28px">
+          Enter this code to sign in to your Orchard account.
+        </mj-text>
+
+        <mj-text align="center" padding-bottom="28px">
+          <div class="otp-code">{{otpCode}}</div>
+        </mj-text>
+
+        <mj-text align="center" font-size="13px" color="#857073" padding-bottom="24px">
+          This code expires in <strong style="color: #5d3a3f;">{{expiryMinutes}} minutes</strong>.
+        </mj-text>
+
+        <mj-divider border-color="#f3dfe2" border-width="1px" padding="0 0 24px 0" />
+
+        <mj-text font-size="13px" color="#857073" line-height="150%">
+          <strong style="color: #5d3a3f;">Security tip:</strong> Never share this code with anyone. Orchard will never ask for this code via phone, text, or another email.
+        </mj-text>
+      </mj-column>
+    </mj-section>
+
+    <mj-section padding="24px 0 40px 0">
+      <mj-column>
+        <mj-text align="center" font-size="12px" color="#857073">
+          Sent to {{recipientEmail}}. If you didn't request this code, you can safely ignore this email.
+        </mj-text>
+      </mj-column>
+    </mj-section>
+  </mj-body>
+</mjml>
