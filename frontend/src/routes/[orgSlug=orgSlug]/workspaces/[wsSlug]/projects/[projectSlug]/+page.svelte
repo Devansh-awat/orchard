@@ -25,6 +25,7 @@
 		id: string;
 		name: string;
 		status: string;
+		buildStatus?: string;
 		replicas: number;
 		image?: string;
 		githubRepo?: string;
@@ -220,13 +221,29 @@
 			case 'running':
 				return 'pj-status-running';
 			case 'pending':
-			case 'building':
+			case 'restarting':
+			case 'scaling':
 				return 'pj-status-pending';
 			case 'failed':
 			case 'error':
+			case 'stopped':
+			case 'unhealthy':
 				return 'pj-status-error';
 			default:
 				return 'pj-status-neutral';
+		}
+	}
+
+	function getStatusLabel(status: string) {
+		switch (status?.toLowerCase()) {
+			case 'running': return 'Running';
+			case 'restarting': return 'Restarting';
+			case 'scaling': return 'Scaling';
+			case 'failed': return 'Failed';
+			case 'stopped': return 'Stopped';
+			case 'unhealthy': return 'Unhealthy';
+			case 'pending': return 'Pending';
+			default: return status || 'Unknown';
 		}
 	}
 
@@ -452,8 +469,13 @@
 								<div class="pj-deployment-status-dot {getStatusColor(deployment.status)}"></div>
 							</div>
 							<span class="pj-deployment-status-badge {getStatusColor(deployment.status)}">
-								{deployment.status || 'unknown'}
+								{getStatusLabel(deployment.status)}
 							</span>
+							{#if deployment.buildStatus && deployment.buildStatus !== 'none' && deployment.buildStatus !== 'succeeded'}
+								<span class="pj-deployment-build-badge pj-build-{deployment.buildStatus}">
+									Build: {deployment.buildStatus === 'building' ? 'Building' : deployment.buildStatus === 'failed' ? 'Failed' : deployment.buildStatus}
+								</span>
+							{/if}
 						</div>
 						<div class="pj-deployment-card-body">
 							<span class="pj-deployment-name">{deployment.name}</span>
@@ -501,7 +523,7 @@
 							<div class="pj-deployment-indicator" style="background-color: color-mix(in srgb, #ec4899 12%, transparent)">
 								<LayoutTemplate class="h-5 w-5" style="color: #ec4899" />
 							</div>
-							<span class="pj-deployment-status-badge" style="background-color: color-mix(in srgb, {ti.status === 'active' ? '#22c55e' : ti.status === 'failed' ? 'var(--error-text-color)' : '#f59e0b'} 15%, transparent); color: {ti.status === 'active' ? '#22c55e' : ti.status === 'failed' ? 'var(--error-text-color)' : '#f59e0b'}">
+							<span class="pj-deployment-status-badge" style="background-color: color-mix(in srgb, {ti.status === 'active' ? 'var(--pj-color-green)' : ti.status === 'failed' ? 'var(--pj-color-red)' : 'var(--pj-color-amber)'} 15%, transparent); color: {ti.status === 'active' ? 'var(--pj-color-green)' : ti.status === 'failed' ? 'var(--pj-color-red)' : 'var(--pj-color-amber)'}">
 								{ti.status}
 							</span>
 						</div>
@@ -533,10 +555,22 @@
 {/if}
 
 <style>
+	:global(:root) {
+		--pj-color-green: #15803d;
+		--pj-color-amber: #b45309;
+		--pj-color-red: #b91c1c;
+	}
+
+	:global(:root.dark) {
+		--pj-color-green: #4ade80;
+		--pj-color-amber: #fbbf24;
+		--pj-color-red: #f87171;
+	}
+
 	.pj-page {
 		max-width: 52rem;
 		margin: 0 auto;
-		padding: 2rem 1.5rem;
+		padding: 2.5rem 2.5rem 3rem;
 	}
 
 	.pj-loading {
@@ -596,10 +630,11 @@
 	}
 
 	.pj-title {
-		font-size: 1.125rem;
-		font-weight: 600;
+		font-size: 1.25rem;
+		font-weight: 700;
 		color: var(--center-channel-color);
 		margin: 0;
+		letter-spacing: -0.02em;
 	}
 
 	.pj-description {
@@ -645,7 +680,7 @@
 
 	.pj-stat-code {
 		font-size: 0.75rem;
-		font-family: monospace;
+		font-family: var(--font-mono);
 		color: var(--center-channel-color);
 	}
 
@@ -660,9 +695,11 @@
 	}
 
 	.pj-section-title {
-		font-size: 0.875rem;
+		font-size: 0.8125rem;
 		font-weight: 600;
-		color: var(--center-channel-color);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--surface-muted);
 		margin: 0;
 	}
 
@@ -707,7 +744,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.875rem;
-		padding: 1.125rem;
+		padding: 1.25rem;
 		border: 1px solid var(--surface-border);
 		border-radius: 1rem;
 		background-color: var(--surface-bg);
@@ -715,6 +752,9 @@
 		color: var(--center-channel-color);
 		transition: border-color 0.15s, box-shadow 0.15s;
 		cursor: pointer;
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
 	}
 
 	.pj-deployment-card:hover,
@@ -740,15 +780,15 @@
 	}
 
 	.pj-deployment-indicator.pj-status-running {
-		background-color: color-mix(in srgb, #22c55e 12%, transparent);
+		background-color: color-mix(in srgb, var(--pj-color-green) 12%, transparent);
 	}
 
 	.pj-deployment-indicator.pj-status-pending {
-		background-color: color-mix(in srgb, #f59e0b 12%, transparent);
+		background-color: color-mix(in srgb, var(--pj-color-amber) 12%, transparent);
 	}
 
 	.pj-deployment-indicator.pj-status-error {
-		background-color: color-mix(in srgb, var(--error-text-color) 12%, transparent);
+		background-color: color-mix(in srgb, var(--pj-color-red) 12%, transparent);
 	}
 
 	.pj-deployment-indicator.pj-status-neutral {
@@ -762,18 +802,18 @@
 	}
 
 	.pj-deployment-status-dot.pj-status-running {
-		background-color: #22c55e;
-		box-shadow: 0 0 6px color-mix(in srgb, #22c55e 50%, transparent);
+		background-color: var(--pj-color-green);
+		box-shadow: 0 0 6px color-mix(in srgb, var(--pj-color-green) 50%, transparent);
 	}
 
 	.pj-deployment-status-dot.pj-status-pending {
-		background-color: #f59e0b;
-		box-shadow: 0 0 6px color-mix(in srgb, #f59e0b 50%, transparent);
+		background-color: var(--pj-color-amber);
+		box-shadow: 0 0 6px color-mix(in srgb, var(--pj-color-amber) 50%, transparent);
 	}
 
 	.pj-deployment-status-dot.pj-status-error {
-		background-color: var(--error-text-color);
-		box-shadow: 0 0 6px color-mix(in srgb, var(--error-text-color) 50%, transparent);
+		background-color: var(--pj-color-red);
+		box-shadow: 0 0 6px color-mix(in srgb, var(--pj-color-red) 50%, transparent);
 	}
 
 	.pj-deployment-status-dot.pj-status-neutral {
@@ -795,7 +835,7 @@
 	.pj-deployment-detail {
 		font-size: 0.8125rem;
 		color: var(--surface-muted);
-		font-family: monospace;
+		font-family: var(--font-mono);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -832,18 +872,18 @@
 	}
 
 	.pj-deployment-status-badge.pj-status-running {
-		background-color: color-mix(in srgb, #22c55e 15%, transparent);
-		color: #22c55e;
+		background-color: color-mix(in srgb, var(--pj-color-green) 15%, transparent);
+		color: var(--pj-color-green);
 	}
 
 	.pj-deployment-status-badge.pj-status-pending {
-		background-color: color-mix(in srgb, #f59e0b 15%, transparent);
-		color: #f59e0b;
+		background-color: color-mix(in srgb, var(--pj-color-amber) 15%, transparent);
+		color: var(--pj-color-amber);
 	}
 
 	.pj-deployment-status-badge.pj-status-error {
-		background-color: color-mix(in srgb, var(--error-text-color) 15%, transparent);
-		color: var(--error-text-color);
+		background-color: color-mix(in srgb, var(--pj-color-red) 15%, transparent);
+		color: var(--pj-color-red);
 	}
 
 	.pj-deployment-status-badge.pj-status-neutral {
@@ -851,13 +891,31 @@
 		color: var(--surface-muted);
 	}
 
+	.pj-deployment-build-badge {
+		font-size: 0.7rem;
+		font-weight: 500;
+		padding: 0.2rem 0.5rem;
+		border-radius: 9999px;
+		flex-shrink: 0;
+	}
+
+	.pj-deployment-build-badge.pj-build-building {
+		background-color: color-mix(in srgb, var(--pj-color-amber) 15%, transparent);
+		color: var(--pj-color-amber);
+	}
+
+	.pj-deployment-build-badge.pj-build-failed {
+		background-color: color-mix(in srgb, var(--pj-color-red) 15%, transparent);
+		color: var(--pj-color-red);
+	}
+
 	/* Empty state */
 	.pj-empty-card {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 0.5rem;
-		padding: 3rem 1rem;
+		gap: 0.75rem;
+		padding: 4rem 1.5rem;
 		color: var(--surface-muted);
 		font-size: 0.875rem;
 		border: 1px dashed var(--surface-border);
@@ -889,10 +947,17 @@
 	.pj-btn-primary {
 		background-color: var(--sidebar-text-active-border);
 		color: #fff;
+		box-shadow:
+			0 1px 2px rgb(0 0 0 / 0.08),
+			0 1px 1px rgb(0 0 0 / 0.04);
 	}
 
 	.pj-btn-primary:hover:not(:disabled) {
-		opacity: 0.9;
+		opacity: 0.95;
+		transform: translateY(-0.5px);
+		box-shadow:
+			0 2px 4px rgb(0 0 0 / 0.08),
+			0 4px 12px rgb(0 0 0 / 0.06);
 	}
 
 	.pj-btn-mt {
@@ -900,12 +965,15 @@
 	}
 
 	.pj-btn-secondary {
-		background-color: color-mix(in srgb, var(--surface-border) 60%, transparent);
-		color: var(--center-channel-color);
+		background-color: transparent;
+		color: var(--surface-muted);
+		border: 1px solid var(--surface-border);
 	}
 
 	.pj-btn-secondary:hover:not(:disabled) {
-		background-color: color-mix(in srgb, var(--surface-border) 90%, transparent);
+		background-color: var(--control-hover-bg);
+		color: var(--center-channel-color);
+		border-color: color-mix(in srgb, var(--surface-border) 60%, var(--center-channel-color));
 	}
 
 	.pj-btn-template {

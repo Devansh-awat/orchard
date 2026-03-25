@@ -4,6 +4,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { Tabs } from 'melt/builders';
 	import { apiFetch, toasts, refreshTree } from '$lib/stores';
+	import { AnsiUp } from 'ansi_up';
 	import {
 		ArrowLeft,
 		Loader2,
@@ -71,6 +72,75 @@
 		if (bytes >= 1024 * 1024) return `${(bytes / (1024 * 1024)).toFixed(0)} MB`;
 		if (bytes >= 1024) return `${(bytes / 1024).toFixed(0)} KB`;
 		return `${bytes} B`;
+	}
+
+	function formatRelativeTime(date: Date): string {
+		const now = Date.now();
+		const diffMs = now - date.getTime();
+		const diffS = Math.floor(diffMs / 1000);
+		if (diffS < 5) return 'just now';
+		if (diffS < 60) return `${diffS}s ago`;
+		const diffM = Math.floor(diffS / 60);
+		if (diffM < 60) return `${diffM}m ago`;
+		const diffH = Math.floor(diffM / 60);
+		if (diffH < 24) return `${diffH}h ${diffM % 60}m ago`;
+		const diffD = Math.floor(diffH / 24);
+		return `${diffD}d ago`;
+	}
+
+	const ansi = new AnsiUp();
+	ansi.use_classes = false;
+
+	// ANSI escape code → HTML with color spans
+	function ansiToHtml(text: string): string {
+		if (!text) return '';
+
+		// Strip lines that contain only a timestamp (and optional whitespace/ANSI codes)
+		// The raw format has alternating lines: "TIMESTAMP \n" then "TIMESTAMP <content>\n"
+		let cleaned = text.replace(/\r/g, '').split('\n').filter(line => {
+			// Remove ANSI codes and ISO timestamps, then check if anything visible remains
+			const stripped = line
+				.replace(/\x1b\[[0-9;]*m/g, '')
+				.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, '')
+				.trim();
+			return stripped.length > 0;
+		}).join('\n');
+
+		// Convert ANSI to HTML (ansi_up handles escaping and all ANSI codes)
+		let result = ansi.ansi_to_html(cleaned);
+
+		// Replace ISO timestamps with compact local-time pills with rich tooltip
+		// Matches: 2026-03-25T04:26:10.578977993Z or 2026-03-25T04:26:10Z or 2026-03-25T04:26:10.578Z
+		result = result.replace(
+			/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g,
+			(ts) => {
+				try {
+					const d = new Date(ts);
+					const h = d.getHours().toString().padStart(2, '0');
+					const m = d.getMinutes().toString().padStart(2, '0');
+					const s = d.getSeconds().toString().padStart(2, '0');
+					const ms = d.getMilliseconds().toString().padStart(3, '0');
+
+					// Tooltip data
+					const fullLocal = d.toLocaleString(undefined, {
+						weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
+						hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3
+					});
+					const utcStr = d.toLocaleString(undefined, {
+						hour: '2-digit', minute: '2-digit', second: '2-digit',
+						timeZone: 'UTC', timeZoneName: 'short'
+					});
+					const ago = formatRelativeTime(d);
+					const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+					return `<span class="log-ts" data-tooltip-local="${fullLocal}" data-tooltip-utc="${utcStr}" data-tooltip-ago="${ago}" data-tooltip-tz="${tz}" data-tooltip-raw="${ts}">${h}:${m}:${s}<span class="log-ts-ms">.${ms}</span></span>`;
+				} catch {
+					return ts;
+				}
+			}
+		);
+
+		return result;
 	}
 
 	interface ServicePortConfig {
@@ -141,6 +211,7 @@
 		id: string;
 		name: string;
 		status: string;
+		buildStatus?: string;
 		buildStep?: string | null;
 		replicas: number;
 		availableReplicas: number;
@@ -159,6 +230,7 @@
 		buildFromRoot?: boolean;
 		buildLogs?: string;
 		buildError?: string;
+		buildStepTimestamps?: Record<string, number> | null;
 		autoDeployEnabled?: boolean;
 		autoDeployBranch?: string;
 		healthCheckEnabled?: boolean;
@@ -173,6 +245,8 @@
 		healthCheckTimeout?: number;
 		healthCheckRetries?: number;
 		startupFailureThreshold?: number;
+		totalCpuUsage?: number | null;
+		totalMemoryUsage?: number | null;
 		warnings?: Array<{ podName: string; message: string; timestamp: string }>;
 		project?: {
 			id: string;
@@ -229,14 +303,8 @@
 		{
 			id: 'overview',
 			label: 'Overview',
-			description: 'Runtime status & pods',
+			description: 'Console, status & pods',
 			icon: Server
-		},
-		{
-			id: 'logs',
-			label: 'Logs',
-			description: 'Streaming & build output',
-			icon: Terminal
 		},
 		{
 			id: 'environment',
@@ -405,9 +473,15 @@
 	const branch = $derived(deployment?.githubBranch);
 
 	let notificationsOpen = $state(false);
+	let notifBtnEl: HTMLButtonElement | undefined = $state();
+	let notifPanelPos = $derived.by(() => {
+		if (!notificationsOpen || !notifBtnEl) return { top: 0, left: 0 };
+		const rect = notifBtnEl.getBoundingClientRect();
+		return { top: rect.bottom, left: Math.max(8, rect.right - 380) };
+	});
 	const notificationCount = $derived(
 		(deployment?.warnings?.length ?? 0) +
-		(deployment?.status === 'failed' && (deployment?.buildError || deployment?.buildLogs) ? 1 : 0)
+		(deployment?.buildStatus === 'failed' && (deployment?.buildError || deployment?.buildLogs) ? 1 : 0)
 	);
 
 	let restarting = $state(false);
@@ -552,6 +626,37 @@
 
 	// Build modal state
 	let showBuildModal = $state(false);
+	let consoleExpanded = $state(false);
+	let consoleAnimating = $state(false);
+	let consoleRef = $state<HTMLDivElement | null>(null);
+	let consoleInlineRect = $state<{ top: number; left: number; width: number; height: number } | null>(null);
+
+	function toggleConsoleExpand() {
+		if (consoleAnimating) return;
+
+		if (!consoleExpanded) {
+			// Expanding: capture current inline rect, then animate to fullscreen
+			if (consoleRef) {
+				const r = consoleRef.getBoundingClientRect();
+				consoleInlineRect = { top: r.top, left: r.left, width: r.width, height: r.height };
+			}
+			consoleAnimating = true;
+			// Force a frame so the starting position renders before we transition
+			requestAnimationFrame(() => {
+				consoleExpanded = true;
+				// Clear animating after transition ends
+				setTimeout(() => { consoleAnimating = false; }, 300);
+			});
+		} else {
+			// Collapsing: animate back to inline rect, then remove fixed
+			consoleAnimating = true;
+			consoleExpanded = false;
+			setTimeout(() => {
+				consoleInlineRect = null;
+				consoleAnimating = false;
+			}, 300);
+		}
+	}
 	let showBuildCard = $state(false);
 	let buildStartTime = $state<number>(0);
 	let buildElapsed = $state(0);
@@ -562,6 +667,7 @@
 	let buildModalStep = $state<string | null>(null);
 	let buildModalError = $state<string | null>(null);
 	let buildModalWarnings = $state<Array<{ podName: string; message: string; timestamp: string }>>([]);
+	let buildModalTimestamps = $state<Record<string, number> | null>(null);
 	let cancelingBuild = $state(false);
 
 	// Webhook state
@@ -597,6 +703,7 @@
 		buildModalStep = null;
 		buildModalError = null;
 		buildModalWarnings = [];
+		buildModalTimestamps = null;
 
 		buildElapsedInterval = setInterval(() => {
 			buildElapsed = Math.floor((Date.now() - buildStartTime) / 1000);
@@ -608,15 +715,16 @@
 				if (!response.ok) return;
 				const data = await response.json();
 
-				buildModalStatus = data.status;
+				buildModalStatus = data.buildStatus ?? data.status;
 				buildModalStep = data.buildStep ?? null;
 				buildModalError = data.buildError ?? null;
 				buildModalWarnings = data.warnings ?? [];
+				buildModalTimestamps = data.buildStepTimestamps ?? null;
 				if (data.buildLogs) {
 					accumulatedBuildLogs = data.buildLogs;
 				}
 
-				if (data.status === 'running') {
+				if (data.buildStatus === 'succeeded') {
 					stopBuildPolling();
 					// Brief delay to show completion state
 					setTimeout(() => {
@@ -624,7 +732,7 @@
 						showBuildCard = false;
 						fetchDeployment();
 					}, 1500);
-				} else if (data.status === 'failed') {
+				} else if (data.buildStatus === 'failed') {
 					if (buildElapsedInterval) {
 						clearInterval(buildElapsedInterval);
 						buildElapsedInterval = null;
@@ -968,7 +1076,7 @@
 
 			// If deployment is building and modal/card isn't already showing, open the build modal
 			// (The full-screen progress page is only used for first-time builds via the new deployment flow)
-			if (data.status === 'building' && data.githubRepo && !showBuildModal && !showBuildCard) {
+			if (data.buildStatus === 'building' && data.githubRepo && !showBuildModal && !showBuildCard) {
 				showBuildModal = true;
 				showBuildCard = false;
 				stopBuildPolling();
@@ -1085,6 +1193,7 @@
 			);
 			if (response.ok) {
 				const data = await response.json();
+				console.log('[RAW LOGS]', data.logs);
 				logs = data.logs || '';
 			}
 		} catch (e) {
@@ -1203,6 +1312,7 @@
 			buildModalStep = null;
 			buildModalError = null;
 			buildModalWarnings = [];
+			buildModalTimestamps = null;
 			buildStartTime = Date.now();
 			
 			showBuildModal = true;
@@ -1773,19 +1883,57 @@
 			case 'running':
 				return 'badge-success';
 			case 'scheduled':
+			case 'scaling':
+			case 'restarting':
+			case 'pending':
 				return 'badge-warning';
-			case 'warning':
+			case 'unhealthy':
 				return 'badge-warning';
 			case 'stopped':
-				return 'badge-error';
-			case 'pending':
-			case 'building':
-				return 'badge-warning';
 			case 'failed':
 			case 'error':
 				return 'badge-error';
 			default:
 				return 'badge-neutral';
+		}
+	}
+
+	function getDeploymentStatusLabel(status: string) {
+		switch (status?.toLowerCase()) {
+			case 'running': return 'Running';
+			case 'restarting': return 'Restarting';
+			case 'scaling': return 'Scaling';
+			case 'failed': return 'Failed';
+			case 'stopped': return 'Stopped';
+			case 'unhealthy': return 'Unhealthy';
+			case 'pending': return 'Pending';
+			default: return status || 'Unknown';
+		}
+	}
+
+	function getBuildStatusColor(buildStatus: string) {
+		switch (buildStatus?.toLowerCase()) {
+			case 'succeeded':
+				return 'badge-success';
+			case 'building':
+				return 'badge-warning';
+			case 'failed':
+				return 'badge-error';
+			default:
+				return 'badge-neutral';
+		}
+	}
+
+	function getBuildStatusLabel(buildStatus: string) {
+		switch (buildStatus?.toLowerCase()) {
+			case 'succeeded':
+				return 'Succeeded';
+			case 'building':
+				return 'Building';
+			case 'failed':
+				return 'Failed';
+			default:
+				return 'None';
 		}
 	}
 
@@ -1796,7 +1944,7 @@
 	});
 
 	$effect(() => {
-		if (deployment?.status === 'building') {
+		if (deployment?.buildStatus === 'building') {
 			if (!buildLogsInterval) {
 				fetchBuildLogs();
 				buildLogsInterval = setInterval(fetchBuildLogs, 5000);
@@ -1812,7 +1960,12 @@
 			loading = true;
 			error = null;
 			deployment = null;
-			
+			selectedPod = '';
+			selectedContainer = '';
+			logs = '';
+			buildLogs = '';
+			accumulatedBuildLogs = null;
+
 			if (deploymentInterval) {
 				clearInterval(deploymentInterval);
 			}
@@ -1822,7 +1975,7 @@
 			if (buildLogsInterval) {
 				clearInterval(buildLogsInterval);
 			}
-			
+
 			fetchDeployment();
 			deploymentInterval = setInterval(fetchDeployment, 10000);
 			podInterval = setInterval(() => {
@@ -1846,8 +1999,30 @@
 		}
 
 		document.addEventListener('click', handleClickOutside);
+
+		function handleKeydown(event: KeyboardEvent) {
+			if (event.key === 'Escape' && consoleExpanded) {
+				toggleConsoleExpand();
+			}
+		}
+		document.addEventListener('keydown', handleKeydown);
+
+		// Position timestamp tooltips using fixed positioning to escape overflow:auto
+		function handleTsPointer(event: Event) {
+			const target = event.target;
+			if (!(target instanceof HTMLElement)) return;
+			const ts = target.closest('.log-ts') as HTMLElement | null;
+			if (!ts) return;
+			const rect = ts.getBoundingClientRect();
+			ts.style.setProperty('--tt-x', `${rect.left + rect.width / 2 - 130}px`);
+			ts.style.setProperty('--tt-y', `${rect.top - 8}px`);
+		}
+		document.addEventListener('mouseover', handleTsPointer, true);
+
 		return () => {
 			document.removeEventListener('click', handleClickOutside);
+			document.removeEventListener('keydown', handleKeydown);
+			document.removeEventListener('mouseover', handleTsPointer, true);
 		};
 	});
 
@@ -2028,349 +2203,342 @@
 			</section>
 		</div>
 	{:else if deployment}
-		<div class="space-y-6">
-			<!-- Header -->
-			<section class="card rounded-2xl px-5 py-4 flex flex-wrap items-center justify-between gap-3">
-				<div class="flex items-center gap-3 min-w-0">
-					<h1 class="text-lg font-semibold truncate" style="color: var(--center-channel-color);">{deployment.name}</h1>
-					<span class="badge {getStatusColor(deployment.status)} text-[11px]">{deployment.status}</span>
+		<div class="space-y-5">
+			<!-- Header: deployment identity + status + actions -->
+			<section class="dep-header">
+				<div class="dep-header-top">
+					<div class="dep-header-identity">
+					<h1 class="dep-header-name">{deployment.name}</h1>
+					<span class="badge {getStatusColor(deployment.status)} text-[11px]">{getDeploymentStatusLabel(deployment.status)}</span>
+					{#if deployment.buildStatus && deployment.buildStatus !== 'none'}
+						<span class="badge {getBuildStatusColor(deployment.buildStatus)} text-[11px]">Build: {getBuildStatusLabel(deployment.buildStatus)}</span>
+					{/if}
+						{#if notificationCount > 0}
+							<div class="relative">
+								<button
+									bind:this={notifBtnEl}
+									class="dep-notif-btn"
+									onclick={() => notificationsOpen = !notificationsOpen}
+								>
+									<Bell class="h-3.5 w-3.5" />
+									<span class="notification-badge">{notificationCount}</span>
+								</button>
+
+								{#if notificationsOpen}
+									<!-- svelte-ignore a11y_click_events_have_key_events -->
+									<!-- svelte-ignore a11y_no_static_element_interactions -->
+									<div class="notification-backdrop" onclick={() => notificationsOpen = false}></div>
+									<div class="notification-panel" style="top: {notifPanelPos.top}px; left: {notifPanelPos.left}px;" transition:fade={{ duration: 150 }}>
+										<div class="flex items-center justify-between px-4 py-3" style="border-bottom: 1px solid var(--surface-border);">
+											<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Notifications</p>
+											<button class="btn-icon rounded-md p-1" onclick={() => notificationsOpen = false}>
+												<X class="h-3.5 w-3.5" />
+											</button>
+										</div>
+										<div class="notification-scroll">
+											{#if deployment.buildStatus === 'failed' && (deployment.buildError || deployment.buildLogs)}
+												<div class="notification-item">
+													<div class="flex items-start gap-3">
+														<div class="notification-icon notification-icon-error">
+															<CircleX class="h-4 w-4" />
+														</div>
+														<div class="flex-1 min-w-0">
+															<p class="text-xs font-semibold" style="color: var(--error-text-color);">Build failed</p>
+															{#if deployment.buildError}
+																<p class="mt-1 text-xs font-mono truncate" style="color: var(--surface-muted);">{sanitizeLogs(deployment.buildError).split('\n')[0]}</p>
+															{/if}
+															{#if deployment.buildLogs}
+																<button
+																	class="mt-1.5 text-[11px] font-medium hover:underline"
+																	style="color: var(--primary-color);"
+																	onclick={() => {
+																		notificationsOpen = false;
+																		buildModalStatus = 'failed';
+																		buildModalError = deployment.buildError ?? null;
+																		accumulatedBuildLogs = deployment.buildLogs ?? null;
+																		buildModalStep = null;
+																		buildModalWarnings = [];
+																		buildModalTimestamps = deployment.buildStepTimestamps ?? null;
+																		showBuildModal = true;
+																	}}
+																>View build logs</button>
+															{/if}
+														</div>
+													</div>
+												</div>
+											{/if}
+											{#if deployment.warnings?.length}
+												{#each deployment.warnings as warning}
+													<div class="notification-item">
+														<div class="flex items-start gap-3">
+															<div class="notification-icon notification-icon-warning">
+																<AlertTriangle class="h-4 w-4" />
+															</div>
+															<div class="flex-1 min-w-0">
+																<p class="text-xs font-semibold" style="color: var(--warning-text);">Pod warning</p>
+																<p class="mt-0.5 font-mono text-xs font-medium" style="color: var(--surface-muted);">{warning.podName}</p>
+																<p class="mt-0.5 text-xs" style="color: var(--center-channel-color); opacity: 0.75;">{warning.message}</p>
+																{#if warning.timestamp}
+																	<p class="mt-1 text-[10px]" style="color: var(--surface-muted);">{new Date(warning.timestamp).toLocaleTimeString()}</p>
+																{/if}
+															</div>
+														</div>
+													</div>
+												{/each}
+											{/if}
+										</div>
+									</div>
+								{/if}
+							</div>
+						{/if}
+					</div>
+					<div class="dep-header-actions">
+						{#if repoUrl}
+							<button onclick={rebuild} disabled={rebuilding} class="btn btn-secondary btn-sm">
+								{#if rebuilding}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw class="h-3.5 w-3.5" />{/if}
+								<span>Rebuild</span>
+							</button>
+						{/if}
+						<button onclick={restart} disabled={restarting} class="btn btn-secondary btn-sm">
+							{#if restarting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Play class="h-3.5 w-3.5" />{/if}
+							<span>Restart</span>
+						</button>
+						<button onclick={() => (showDeleteModal = true)} disabled={deleting} class="btn btn-ghost btn-sm dep-delete-btn">
+							{#if deleting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2 class="h-3.5 w-3.5" />{/if}
+						</button>
+					</div>
+				</div>
+				<!-- Context line: source + replicas + key info without labels -->
+				<div class="dep-header-meta">
 					{#if deployment.githubRepo}
-						<a href={deployment.githubRepo} target="_blank" class="hidden sm:inline-flex items-center gap-1 font-mono text-xs hover:underline" style="color: var(--surface-muted);">
+						<a href={deployment.githubRepo} target="_blank" class="dep-meta-source">
 							{deployment.githubRepo.replace('https://github.com/', '')}
 							<ExternalLink class="h-2.5 w-2.5" />
 						</a>
 					{:else if deployment.image}
-						<span class="hidden sm:inline truncate font-mono text-xs" style="color: var(--surface-muted);">{deployment.image}</span>
+						<span class="dep-meta-source">{deployment.image}</span>
 					{/if}
 					{#if branch}
-						<span class="hidden sm:inline rounded-full px-2 py-0.5 text-[11px] font-medium" style="background-color: var(--sidebar-text-active-bg); color: var(--sidebar-text-active-color);">{branch}</span>
+						<span class="dep-meta-pill">{branch}</span>
 					{/if}
-				</div>
-				<div class="flex items-center gap-1.5">
-					{#if notificationCount > 0}
-						<div class="relative">
-							<button
-								class="btn btn-secondary btn-sm relative"
-								onclick={() => notificationsOpen = !notificationsOpen}
-							>
-								<Bell class="h-3.5 w-3.5" />
-								<span class="notification-badge">{notificationCount}</span>
-							</button>
-
-							{#if notificationsOpen}
-								<!-- svelte-ignore a11y_click_events_have_key_events -->
-								<!-- svelte-ignore a11y_no_static_element_interactions -->
-								<div class="notification-backdrop" onclick={() => notificationsOpen = false}></div>
-								<div class="notification-panel" transition:fade={{ duration: 150 }}>
-									<div class="flex items-center justify-between px-4 py-3" style="border-bottom: 1px solid var(--surface-border);">
-										<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Notifications</p>
-										<button class="btn-icon rounded-md p-1" onclick={() => notificationsOpen = false}>
-											<X class="h-3.5 w-3.5" />
-										</button>
-									</div>
-									<div class="notification-scroll">
-										{#if deployment.status === 'failed' && (deployment.buildError || deployment.buildLogs)}
-											<div class="notification-item">
-												<div class="flex items-start gap-3">
-													<div class="notification-icon notification-icon-error">
-														<CircleX class="h-4 w-4" />
-													</div>
-													<div class="flex-1 min-w-0">
-														<p class="text-xs font-semibold" style="color: var(--error-text-color);">Build failed</p>
-														{#if deployment.buildError}
-															<p class="mt-1 text-xs font-mono truncate" style="color: var(--surface-muted);">{sanitizeLogs(deployment.buildError).split('\n')[0]}</p>
-														{/if}
-														{#if deployment.buildLogs}
-															<button
-																class="mt-1.5 text-[11px] font-medium hover:underline"
-																style="color: var(--primary-color);"
-																onclick={() => {
-																	notificationsOpen = false;
-																	buildModalStatus = 'failed';
-																	buildModalError = deployment.buildError ?? null;
-																	accumulatedBuildLogs = deployment.buildLogs ?? null;
-																	buildModalStep = null;
-																	buildModalWarnings = [];
-																	showBuildModal = true;
-																}}
-															>View build logs</button>
-														{/if}
-													</div>
-												</div>
-											</div>
-										{/if}
-										{#if deployment.warnings?.length}
-											{#each deployment.warnings as warning}
-												<div class="notification-item">
-													<div class="flex items-start gap-3">
-														<div class="notification-icon notification-icon-warning">
-															<AlertTriangle class="h-4 w-4" />
-														</div>
-														<div class="flex-1 min-w-0">
-															<p class="text-xs font-semibold" style="color: var(--warning-text);">Pod warning</p>
-															<p class="mt-0.5 font-mono text-[11px]" style="color: var(--surface-muted);">{warning.podName}</p>
-															<p class="mt-0.5 text-xs" style="color: var(--center-channel-color); opacity: 0.75;">{warning.message}</p>
-															{#if warning.timestamp}
-																<p class="mt-1 text-[10px]" style="color: var(--surface-muted);">{new Date(warning.timestamp).toLocaleTimeString()}</p>
-															{/if}
-														</div>
-													</div>
-												</div>
-											{/each}
-										{/if}
-									</div>
-								</div>
-							{/if}
-						</div>
+					{#if deployment.ingresses?.length}
+						{#each deployment.ingresses.slice(0, 2) as ingress}
+							<a href="/{orgSlug}/ingresses/{ingress.id}" class="dep-meta-domain">
+								<Globe class="h-3 w-3" />
+								{ingress.host}
+							</a>
+						{/each}
 					{/if}
-					{#if repoUrl}
-						<button onclick={rebuild} disabled={rebuilding} class="btn btn-secondary btn-sm">
-							{#if rebuilding}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw class="h-3.5 w-3.5" />{/if}
-							<span>Rebuild</span>
-						</button>
-					{/if}
-					<button onclick={restart} disabled={restarting} class="btn btn-secondary btn-sm">
-						{#if restarting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Play class="h-3.5 w-3.5" />{/if}
-						<span>Restart</span>
-					</button>
-					<button onclick={() => (showDeleteModal = true)} disabled={deleting} class="btn btn-danger btn-sm">
-						{#if deleting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2 class="h-3.5 w-3.5" />{/if}
-					</button>
 				</div>
 			</section>
 
-			<!-- Compact tab nav -->
-			<section class="card rounded-2xl p-1.5 shadow-sm" {...tabs.triggerList}>
-				<div class="flex gap-1 overflow-x-auto">
+			<!-- Tab nav -->
+			<nav class="dep-tabs" {...tabs.triggerList}>
+				<div class="dep-tabs-inner">
 					{#each visibleTabs as tab}
 						{@const Icon = tab.icon}
-						<button class="tabs-trigger inline-flex items-center gap-2 rounded-xl px-4 py-2.5 text-sm font-medium whitespace-nowrap transition" {...tabs.getTrigger(tab.id)}>
-							<Icon class="h-4 w-4" />
+						<button class="tabs-trigger dep-tab" {...tabs.getTrigger(tab.id)}>
+							<Icon class="h-3.5 w-3.5" />
 							<span>{tab.label}</span>
 						</button>
 					{/each}
 				</div>
-			</section>
+			</nav>
 
 {#each visibleTabs as tab}
 	<section {...tabs.getContent(tab.id)} hidden={undefined} class="tab-panel">
 					{#if tab.id === 'overview'}
-						<div class="space-y-6">
-							<!-- Two-column layout: resource usage + details -->
-							<div class="grid gap-6 lg:grid-cols-3">
-								<!-- Resource Usage + Pods -->
-								<div class="flex flex-col gap-4 lg:col-span-2">
-									<!-- Resource Usage Charts -->
-									<div class="card rounded-2xl p-5 flex flex-col flex-1">
-										<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-											<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Resource Usage</p>
-											<div class="flex gap-1 rounded-lg p-0.5" style="background-color: var(--control-bg);">
-												<button
-													class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors"
-													style={metricsTimeRange === '5m'
-														? 'background-color: var(--button-bg); color: var(--button-color);'
-														: 'color: var(--surface-muted);'}
-													onclick={() => { metricsTimeRange = '5m'; }}
-												>5m</button>
-												<button
-													class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors"
-													style={metricsTimeRange === '15m'
-														? 'background-color: var(--button-bg); color: var(--button-color);'
-														: 'color: var(--surface-muted);'}
-													onclick={() => { metricsTimeRange = '15m'; }}
-												>15m</button>
-												<button
-													class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors"
-													style={metricsTimeRange === '30m'
-														? 'background-color: var(--button-bg); color: var(--button-color);'
-														: 'color: var(--surface-muted);'}
-													onclick={() => { metricsTimeRange = '30m'; }}
-												>30m</button>
-												<button
-													class="px-2.5 py-1 text-xs font-medium rounded-md transition-colors"
-													style={metricsTimeRange === '1h'
-														? 'background-color: var(--button-bg); color: var(--button-color);'
-														: 'color: var(--surface-muted);'}
-													onclick={() => { metricsTimeRange = '1h'; }}
-												>1h</button>
+						<div class="grid gap-5 lg:grid-cols-[1fr_280px] items-start">
+							<!-- Left: Console (hero) -->
+							<div class="flex flex-col gap-5 min-w-0">
+								<!-- Console / Logs -->
+								<div
+									bind:this={consoleRef}
+									class="console-panel"
+									class:console-expanded={consoleExpanded || consoleAnimating}
+									class:console-animating={consoleAnimating}
+									class:console-at-fullscreen={consoleExpanded}
+									style={consoleInlineRect && !consoleExpanded
+										? `top:${consoleInlineRect.top}px;left:${consoleInlineRect.left}px;width:${consoleInlineRect.width}px;height:${consoleInlineRect.height}px;`
+										: consoleInlineRect && consoleExpanded
+										? ''
+										: ''}
+								>
+									<!-- Console toolbar -->
+									<div class="console-toolbar">
+										<div class="console-toolbar-left">
+											<Terminal class="h-3.5 w-3.5 shrink-0 opacity-50" />
+											<div class="relative custom-dropdown-container">
+												<button type="button" onclick={() => (podDropdownOpen = !podDropdownOpen)}
+													class="console-dropdown-btn">
+													<span class="truncate max-w-[180px]">{selectedPod || 'Select pod'}</span>
+													<ChevronDown class="h-3 w-3 shrink-0 opacity-40" />
+												</button>
+												{#if podDropdownOpen}
+													<div class="console-dropdown" transition:scale={{ duration: 150, start: 0.96 }}>
+														{#each deployment.pods ?? [] as pod}
+															<button type="button" onclick={() => { selectedPod = pod.name; podDropdownOpen = false; }}
+																class="console-dropdown-item">
+																<span class="truncate">{pod.name}</span>
+																{#if selectedPod === pod.name}<Check class="h-3.5 w-3.5 text-primary-600 shrink-0" />{/if}
+															</button>
+														{/each}
+													</div>
+												{/if}
+											</div>
+
+											<span class="console-separator">/</span>
+
+											<div class="relative custom-dropdown-container">
+												<button type="button" onclick={() => (containerDropdownOpen = !containerDropdownOpen)}
+													class="console-dropdown-btn">
+													<span class="truncate max-w-[140px]">{selectedContainer || 'container'}</span>
+													<ChevronDown class="h-3 w-3 shrink-0 opacity-40" />
+												</button>
+												{#if containerDropdownOpen}
+													<div class="console-dropdown" transition:scale={{ duration: 150, start: 0.96 }}>
+														{#each deployment.pods?.find((p) => p.name === selectedPod)?.containers ?? [] as container}
+															<button type="button" onclick={() => { selectedContainer = container.name; containerDropdownOpen = false; }}
+																class="console-dropdown-item">
+																<span>{container.name}</span>
+																{#if selectedContainer === container.name}<Check class="h-3.5 w-3.5 text-primary-600 shrink-0" />{/if}
+															</button>
+														{/each}
+													</div>
+												{/if}
 											</div>
 										</div>
-										{#if filteredMetrics.length > 1}
-											<div class="grid grid-cols-2 gap-4 flex-1 min-h-0">
-												<div class="flex flex-col">
-													<div class="flex items-center justify-between mb-2">
-														<div class="flex items-center gap-1.5">
-															<Cpu class="h-3.5 w-3.5" style="color: #b33346;" />
-															<span class="text-xs font-medium" style="color: var(--surface-muted);">CPU</span>
-														</div>
-														<span class="text-xs font-mono font-semibold" style="color: var(--center-channel-color);">{formatCpu(deployment.totalCpuUsage)}</span>
-													</div>
-													<div class="flex-1 min-h-[200px]">
-														{#if Line}
-															<svelte:component this={Line} data={cpuChartData} options={cpuChartOptions} />
-														{/if}
-													</div>
-												</div>
-												<div class="flex flex-col">
-													<div class="flex items-center justify-between mb-2">
-														<div class="flex items-center gap-1.5">
-															<MemoryStick class="h-3.5 w-3.5" style="color: #e87485;" />
-															<span class="text-xs font-medium" style="color: var(--surface-muted);">Memory</span>
-														</div>
-														<span class="text-xs font-mono font-semibold" style="color: var(--center-channel-color);">{formatMemory(deployment.totalMemoryUsage)}</span>
-													</div>
-													<div class="flex-1 min-h-[200px]">
-														{#if Line}
-															<svelte:component this={Line} data={memoryChartData} options={memoryChartOptions} />
-														{/if}
-													</div>
-												</div>
-											</div>
-										{:else}
-											<div class="grid grid-cols-2 gap-4 flex-1 min-h-0">
-												<div class="rounded-xl p-4 flex flex-col justify-center" style="background-color: var(--control-bg);">
-													<div class="flex items-center gap-2 mb-2">
-														<Cpu class="h-4 w-4 shrink-0" style="color: var(--surface-muted);" />
-														<span class="text-xs font-medium" style="color: var(--surface-muted);">CPU</span>
-													</div>
-													<p class="text-2xl font-semibold font-mono" style="color: var(--center-channel-color);">
-														{formatCpu(deployment.totalCpuUsage)}
-													</p>
-													<p class="text-xs mt-1" style="color: var(--surface-muted);">Collecting data...</p>
-												</div>
-												<div class="rounded-xl p-4 flex flex-col justify-center" style="background-color: var(--control-bg);">
-													<div class="flex items-center gap-2 mb-2">
-														<MemoryStick class="h-4 w-4 shrink-0" style="color: var(--surface-muted);" />
-														<span class="text-xs font-medium" style="color: var(--surface-muted);">Memory</span>
-													</div>
-													<p class="text-2xl font-semibold font-mono" style="color: var(--center-channel-color);">
-														{formatMemory(deployment.totalMemoryUsage)}
-													</p>
-													<p class="text-xs mt-1" style="color: var(--surface-muted);">Collecting data...</p>
-												</div>
-											</div>
-										{/if}
+										<div class="console-toolbar-right">
+											<input type="number" bind:value={tailLines} min="10" step="10"
+												class="console-lines-input" title="Tail lines" />
+											<button onclick={fetchLogs} disabled={logsLoading}
+												class="console-icon-btn" title="Refresh logs">
+												{#if logsLoading}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw class="h-3.5 w-3.5" />{/if}
+											</button>
+											<button
+												onclick={toggleConsoleExpand}
+												class="console-icon-btn"
+												title={consoleExpanded ? 'Collapse' : 'Expand'}
+											>
+												{#if consoleExpanded}<Minimize2 class="h-3.5 w-3.5" />{:else}<Maximize2 class="h-3.5 w-3.5" />{/if}
+											</button>
+										</div>
 									</div>
 
-									<!-- Compact Pods -->
-									<div class="card rounded-2xl p-5">
-										<div class="flex flex-wrap items-center justify-between gap-3 mb-3">
-											<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Pods</p>
-											<div class="flex gap-3 text-xs" style="color: var(--surface-muted);">
-												<span class="inline-flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-green-500"></span> {deployment.pods?.filter((pod) => pod.status?.toLowerCase() === 'ready').length ?? 0}</span>
-												<span class="inline-flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-yellow-500"></span> {deployment.pods?.filter((pod) => pod.status?.toLowerCase() === 'scheduled').length ?? 0}</span>
-												<span class="inline-flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-gray-400"></span> {deployment.pods?.filter((pod) => pod.status?.toLowerCase() === 'pending').length ?? 0}</span>
+									<!-- Log output -->
+									<div class="console-body">
+										{#if logsLoading && !logs}
+											<div class="console-empty">
+												<Loader2 class="h-4 w-4 animate-spin" />
+												<span>Loading logs...</span>
 											</div>
-										</div>
-										{#if deployment.pods?.length}
-											<div class="space-y-1">
-												{#each deployment.pods as pod}
-													<div class="flex items-center justify-between gap-2 rounded-lg px-2.5 py-1.5" style="background-color: var(--control-bg);">
-														<div class="flex items-center gap-2 min-w-0">
-															<span class="h-1.5 w-1.5 rounded-full shrink-0 {pod.status?.toLowerCase() === 'ready' ? 'bg-green-500' : pod.status?.toLowerCase() === 'scheduled' ? 'bg-yellow-500' : 'bg-gray-400'}"></span>
-															<span class="font-mono text-xs truncate" style="color: var(--center-channel-color);">{pod.name}</span>
-														</div>
-														<div class="flex items-center gap-3 shrink-0 text-xs font-mono" style="color: var(--surface-muted);">
-															{#if pod.cpuUsage != null}
-																<span>{formatCpu(pod.cpuUsage)}</span>
-															{/if}
-															{#if pod.memoryUsage != null}
-																<span>{formatMemory(pod.memoryUsage)}</span>
-															{/if}
-															<span class="badge {getStatusColor(pod.status)} text-[10px] px-1.5 py-0.5">{pod.status}</span>
-														</div>
-													</div>
-												{/each}
-											</div>
+										{:else if logs}
+											<pre class="console-output">{@html ansiToHtml(logs)}</pre>
 										{:else}
-											<p class="text-xs text-center py-3" style="color: var(--surface-muted);">No pods reporting yet.</p>
+											<div class="console-empty">
+												<Terminal class="h-4 w-4 opacity-30" />
+												<span>{selectedPod ? 'No output yet' : 'Select a pod to view logs'}</span>
+											</div>
 										{/if}
 									</div>
 								</div>
 
-								<!-- Details sidebar -->
-								<div class="space-y-4">
-									<!-- Deployment details -->
-									<div class="card rounded-2xl p-5">
-										<p class="text-sm font-semibold mb-3" style="color: var(--center-channel-color);">Details</p>
-										<dl class="space-y-3 text-sm">
-											<div class="flex items-center justify-between gap-3">
-												<dt class="shrink-0" style="color: var(--surface-muted);">Namespace</dt>
-												<dd class="font-mono text-xs truncate min-w-0" style="color: var(--center-channel-color);">{deployment.namespace ?? '—'}</dd>
-											</div>
-											{#if deployment.project}
-												<div class="flex items-center justify-between">
-													<dt style="color: var(--surface-muted);">Project</dt>
-													<dd style="color: var(--center-channel-color);">{deployment.project.name}</dd>
-												</div>
-											{/if}
-											<div class="flex items-center justify-between">
-												<dt style="color: var(--surface-muted);">Replicas</dt>
-												<dd class="font-mono text-xs" style="color: var(--center-channel-color);">{deployment.availableReplicas ?? 0} / {deployment.replicas ?? 0}</dd>
-											</div>
-											{#if deployment.githubRepo}
-												<div class="flex items-center justify-between">
-													<dt style="color: var(--surface-muted);">Branch</dt>
-													<dd class="font-mono text-xs" style="color: var(--center-channel-color);">{branch ?? '—'}</dd>
-												</div>
-											{:else if deployment.image}
-												<div>
-													<dt style="color: var(--surface-muted);">Image</dt>
-													<dd class="font-mono text-xs mt-1 break-all" style="color: var(--center-channel-color);">{deployment.image}</dd>
-												</div>
-											{/if}
-										</dl>
-									</div>
-
-									<!-- Services quick view -->
-									<div class="card rounded-2xl p-5">
-										<div class="flex items-center justify-between mb-3">
-											<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Services</p>
-											<span class="text-xs font-mono" style="color: var(--surface-muted);">{deployment.services?.length ?? 0}</span>
+								<!-- Pods -->
+								<div class="card rounded-2xl p-4">
+									<div class="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+										<div class="flex items-center gap-2">
+											<p class="text-xs font-semibold uppercase tracking-wide" style="color: var(--surface-muted);">Pods</p>
+											<span class="text-xs font-mono" style="color: var(--surface-muted);">{deployment.pods?.length ?? 0}</span>
 										</div>
-										{#if deployment.services?.length}
-											<div class="space-y-2">
-												{#each deployment.services as service}
-													<div class="flex items-center justify-between gap-2 rounded-lg p-2" style="background-color: var(--control-bg);">
-														<div class="min-w-0">
-															<p class="text-sm font-medium truncate" style="color: var(--center-channel-color);">{service.name}</p>
-															<p class="text-xs font-mono" style="color: var(--surface-muted);">:{service.port}</p>
-														</div>
-														<span class="surface-pill text-xs shrink-0">{service.type === 'external' ? 'NodePort' : 'ClusterIP'}</span>
+										<div class="flex gap-2.5 text-[11px]" style="color: var(--surface-muted);">
+											<span class="inline-flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>{deployment.pods?.filter((pod) => pod.status?.toLowerCase() === 'ready').length ?? 0} ready</span>
+											{#if (deployment.pods?.filter((pod) => !['ready'].includes(pod.status?.toLowerCase() ?? '')).length ?? 0) > 0}
+												<span class="inline-flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-yellow-500"></span>{deployment.pods?.filter((pod) => !['ready'].includes(pod.status?.toLowerCase() ?? '')).length ?? 0} other</span>
+											{/if}
+										</div>
+									</div>
+									{#if deployment.pods?.length}
+										<div class="space-y-1">
+											{#each deployment.pods as pod}
+												<button
+													class="console-pod-row"
+													class:console-pod-row--active={selectedPod === pod.name}
+													onclick={() => { selectedPod = pod.name; if (pod.containers?.length) selectedContainer = pod.containers[0].name; }}
+												>
+													<div class="flex items-center gap-2 min-w-0">
+														<span class="h-1.5 w-1.5 rounded-full shrink-0 {pod.status?.toLowerCase() === 'ready' ? 'bg-green-500' : pod.status?.toLowerCase() === 'scheduled' ? 'bg-yellow-500' : 'bg-gray-400'}"></span>
+														<span class="font-mono text-xs truncate">{pod.name}</span>
 													</div>
-												{/each}
-											</div>
-										{:else}
-											<p class="text-xs text-center py-2" style="color: var(--surface-muted);">No services</p>
-										{/if}
-									</div>
-
-									<!-- Ingresses quick view -->
-									{#if deployment.ingresses?.length}
-										<div class="card rounded-2xl p-5">
-											<p class="text-sm font-semibold mb-3" style="color: var(--center-channel-color);">Domains</p>
-											<div class="space-y-2">
-												{#each deployment.ingresses as ingress}
-													<button onclick={() => goto(`/${orgSlug}/ingresses/${ingress.id}`)} class="flex w-full items-center gap-2 rounded-lg p-2 text-sm transition hover:underline text-left" style="background-color: var(--control-bg); color: var(--link-color);">
-														<Globe class="h-3.5 w-3.5 shrink-0" />
-														<span class="truncate">{ingress.host}</span>
-														<ExternalLink class="h-3 w-3 shrink-0 ml-auto" />
-													</button>
-												{/each}
-											</div>
+													<div class="flex items-center gap-3 shrink-0 text-xs font-mono" style="color: var(--surface-muted);">
+														{#if pod.cpuUsage != null}<span>{formatCpu(pod.cpuUsage)}</span>{/if}
+														{#if pod.memoryUsage != null}<span>{formatMemory(pod.memoryUsage)}</span>{/if}
+														<span class="badge {getStatusColor(pod.status)} text-[10px] px-1.5 py-0.5">{pod.status}</span>
+													</div>
+												</button>
+											{/each}
 										</div>
+									{:else}
+										<p class="text-xs text-center py-3" style="color: var(--surface-muted);">No pods reporting yet</p>
 									{/if}
 								</div>
 							</div>
 
-							<!-- Scaling -->
-							<div class="card rounded-2xl p-5">
-								<div class="flex items-center justify-between mb-3">
-									<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Scale</p>
-									<span class="text-lg font-bold font-mono" style="color: var(--center-channel-color);">{scaleReplicas}</span>
+							<!-- Right sidebar: stats + scale -->
+							<div class="flex flex-col gap-4">
+								<!-- Resource stats as compact cards -->
+								<div class="stat-card">
+									<div class="stat-card-header">
+										<Cpu class="h-3.5 w-3.5" style="color: #b33346;" />
+										<span class="stat-card-label">CPU</span>
+									</div>
+									<p class="stat-card-value">{formatCpu(deployment.totalCpuUsage)}</p>
+									{#if filteredMetrics.length > 1}
+										<div class="stat-card-chart">
+											{#if Line}
+												<svelte:component this={Line} data={cpuChartData} options={cpuChartOptions} />
+											{/if}
+										</div>
+									{/if}
 								</div>
-								<div class="slider-container" style="padding: 6px 0;">
-									<div
+
+								<div class="stat-card">
+									<div class="stat-card-header">
+										<MemoryStick class="h-3.5 w-3.5" style="color: #e87485;" />
+										<span class="stat-card-label">Memory</span>
+									</div>
+									<p class="stat-card-value">{formatMemory(deployment.totalMemoryUsage)}</p>
+									{#if filteredMetrics.length > 1}
+										<div class="stat-card-chart">
+											{#if Line}
+												<svelte:component this={Line} data={memoryChartData} options={memoryChartOptions} />
+											{/if}
+										</div>
+									{/if}
+								</div>
+
+								<!-- Time range selector -->
+								{#if filteredMetrics.length > 1}
+									<div class="flex justify-center gap-0.5 rounded-lg p-0.5" style="background-color: var(--control-bg);">
+										{#each ['5m', '15m', '30m', '1h'] as range}
+											<button
+												class="px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors flex-1"
+												style={metricsTimeRange === range
+													? 'background-color: var(--button-bg); color: var(--button-color);'
+													: 'color: var(--surface-muted);'}
+												onclick={() => { metricsTimeRange = range as any; }}
+											>{range}</button>
+										{/each}
+									</div>
+								{/if}
+
+								<!-- Scale -->
+								<div class="card rounded-2xl p-4">
+									<div class="flex items-center justify-between mb-2">
+										<p class="text-xs font-semibold uppercase tracking-wide" style="color: var(--surface-muted);">Replicas</p>
+										<span class="text-lg font-bold font-mono" style="color: var(--center-channel-color);">{scaleReplicas}</span>
+									</div>
+									<div class="slider-container" style="padding: 4px 0;">
+										<div
 										bind:this={sliderRef}
 										class="slider-wrapper"
 										class:dragging={isDragging}
@@ -2405,89 +2573,19 @@
 										></div>
 									</div>
 								</div>
-								<div class="flex items-center justify-between text-xs" style="color: var(--surface-muted);">
+								<div class="flex items-center justify-between text-[10px]" style="color: var(--surface-muted);">
 									<span>0</span>
 									<span>20</span>
 								</div>
 								{#if scaleReplicas !== deployment.replicas}
-									<div class="flex items-center justify-end gap-3 pt-3 mt-3 border-t" style="border-color: var(--surface-border);">
-										<button onclick={scaleDeployment} disabled={scaling} class="btn btn-primary">
-											{#if scaling}<Loader2 class="h-4 w-4 animate-spin" />{/if}
-											Apply
+									<div class="flex items-center justify-end pt-2.5 mt-2.5 border-t" style="border-color: var(--surface-border);">
+										<button onclick={scaleDeployment} disabled={scaling} class="btn btn-primary btn-sm w-full">
+											{#if scaling}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+											Scale to {scaleReplicas}
 										</button>
 									</div>
 								{/if}
-							</div>
-						</div>
-					{:else if tab.id === 'logs'}
-						<div class="log-panel rounded-2xl overflow-hidden">
-							<!-- Toolbar -->
-							<div class="log-toolbar flex flex-wrap items-center gap-2 px-4 py-2.5">
-								<div class="relative custom-dropdown-container">
-									<button type="button" onclick={() => (podDropdownOpen = !podDropdownOpen)}
-										class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-mono transition hover:bg-[rgba(128,128,128,0.15)]">
-										<span class="truncate max-w-[200px]">{selectedPod || 'Select pod'}</span>
-										<ChevronDown class="h-3 w-3 shrink-0 opacity-50" />
-									</button>
-									{#if podDropdownOpen}
-										<div class="absolute z-20 mt-1 min-w-[220px] rounded-xl border p-1.5 shadow-lg" style="background-color: var(--surface-bg); border-color: var(--surface-border);" transition:scale={{ duration: 150, start: 0.96 }}>
-											{#each deployment.pods ?? [] as pod}
-												<button type="button" onclick={() => { selectedPod = pod.name; podDropdownOpen = false; }}
-													class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-mono transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]" style="color: var(--center-channel-color);">
-													<span class="truncate">{pod.name}</span>
-													{#if selectedPod === pod.name}<Check class="h-3.5 w-3.5 text-primary-600 shrink-0" />{/if}
-												</button>
-											{/each}
-										</div>
-									{/if}
 								</div>
-
-								<span class="text-xs opacity-30">/</span>
-
-								<div class="relative custom-dropdown-container">
-									<button type="button" onclick={() => (containerDropdownOpen = !containerDropdownOpen)}
-										class="flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-xs font-mono transition hover:bg-[rgba(128,128,128,0.15)]">
-										<span class="truncate max-w-[160px]">{selectedContainer || 'container'}</span>
-										<ChevronDown class="h-3 w-3 shrink-0 opacity-50" />
-									</button>
-									{#if containerDropdownOpen}
-										<div class="absolute z-20 mt-1 min-w-[180px] rounded-xl border p-1.5 shadow-lg" style="background-color: var(--surface-bg); border-color: var(--surface-border);" transition:scale={{ duration: 150, start: 0.96 }}>
-											{#each deployment.pods?.find((p) => p.name === selectedPod)?.containers ?? [] as container}
-												<button type="button" onclick={() => { selectedContainer = container.name; containerDropdownOpen = false; }}
-													class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-xs font-mono transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]" style="color: var(--center-channel-color);">
-													<span>{container.name}</span>
-													{#if selectedContainer === container.name}<Check class="h-3.5 w-3.5 text-primary-600 shrink-0" />{/if}
-												</button>
-											{/each}
-										</div>
-									{/if}
-								</div>
-
-								<div class="ml-auto flex items-center gap-2">
-									<div class="flex items-center gap-1.5">
-										<span class="text-[10px] uppercase tracking-wide opacity-40">Lines</span>
-										<input type="number" bind:value={tailLines} min="10" step="10"
-											class="log-lines-input w-16 rounded-lg border px-2 py-1 text-xs font-mono text-center" />
-									</div>
-									<button onclick={fetchLogs} disabled={logsLoading}
-										class="rounded-lg p-1.5 transition hover:bg-[rgba(128,128,128,0.15)]">
-										{#if logsLoading}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw class="h-3.5 w-3.5" />{/if}
-									</button>
-								</div>
-							</div>
-
-							<!-- Log output -->
-							<div class="px-4 py-3">
-								{#if logsLoading && !logs}
-									<div class="flex items-center justify-center gap-2 py-12 text-xs opacity-50">
-										<Loader2 class="h-3.5 w-3.5 animate-spin" />
-										<span>Loading...</span>
-									</div>
-								{:else if logs}
-									<pre class="max-h-[650px] overflow-y-auto whitespace-pre-wrap text-[11px] leading-[1.6] font-mono">{logs}</pre>
-								{:else}
-									<p class="text-center text-xs py-12 opacity-40">Select a pod to view logs</p>
-								{/if}
 							</div>
 						</div>
 					{:else if tab.id === 'environment'}
@@ -3070,10 +3168,10 @@
 							</div>
 						</div>
 					{:else if tab.id === 'advanced'}
-						<div class="card rounded-2xl overflow-hidden">
+						<div class="space-y-5">
 							<!-- Build Options -->
-							<div class="p-5">
-								<div class="flex items-center justify-between mb-1">
+							<div class="card rounded-2xl p-5">
+								<div class="flex items-center justify-between mb-3">
 									<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Build</p>
 									{#if deployment.githubRepo}
 										<button onclick={saveAdvanced} disabled={savingAdvanced} class="btn btn-primary btn-sm">
@@ -3083,21 +3181,29 @@
 									{/if}
 								</div>
 								{#if deployment.githubRepo}
-									<label class="flex items-center gap-2 text-sm cursor-pointer">
-										<input type="checkbox" bind:checked={buildFromRoot} class="rounded" />
-										<span>Build from repository root</span>
-										<span class="text-xs" style="color: var(--surface-muted);">instead of Dockerfile directory</span>
-									</label>
+									<!-- svelte-ignore a11y_click_events_have_key_events -->
+									<!-- svelte-ignore a11y_no_static_element_interactions -->
+									<div
+										class="adv-toggle-row"
+										onclick={() => { buildFromRoot = !buildFromRoot; }}
+									>
+										<div class="adv-toggle-info">
+											<span class="adv-toggle-label">Build from repository root</span>
+											<span class="adv-toggle-desc">Use the repo root as Docker build context instead of the Dockerfile directory</span>
+										</div>
+										<label class="adv-switch" onclick={(e) => e.stopPropagation()}>
+											<input type="checkbox" bind:checked={buildFromRoot} />
+											<span class="adv-switch-track"></span>
+										</label>
+									</div>
 								{:else}
-									<p class="text-xs" style="color: var(--surface-muted);">Only available for GitHub deployments.</p>
+									<p class="text-xs" style="color: var(--surface-muted);">Build settings are only available for GitHub deployments.</p>
 								{/if}
 							</div>
 
-							<div class="advanced-divider"></div>
-
 							<!-- Auto-deploy -->
-							<div class="p-5">
-								<div class="flex items-center justify-between mb-2">
+							<div class="card rounded-2xl p-5">
+								<div class="flex items-center justify-between mb-3">
 									<div class="flex items-center gap-2">
 										<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Auto-Deploy</p>
 										{#if deployment.githubRepo && autoDeployStatus?.enabled}
@@ -3108,7 +3214,7 @@
 										{/if}
 									</div>
 									{#if deployment.githubRepo && autoDeployStatus?.enabled}
-										<button onclick={disableAutoDeploy} disabled={disablingAutoDeploy} class="btn btn-destructive btn-sm">
+										<button onclick={disableAutoDeploy} disabled={disablingAutoDeploy} class="btn btn-ghost btn-sm" style="color: var(--error-text-color);">
 											{#if disablingAutoDeploy}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
 											<span>Disable</span>
 										</button>
@@ -3120,14 +3226,14 @@
 											<Loader2 class="h-4 w-4 animate-spin" style="color: var(--surface-muted);" />
 										</div>
 									{:else if autoDeployStatus?.enabled}
-										<p class="text-xs" style="color: var(--surface-muted);">
-											Pushes to <code class="font-mono rounded px-1 py-0.5" style="background-color: var(--control-bg);">{autoDeployStatus.branch}</code> trigger a new deployment.
+										<p class="text-sm" style="color: var(--surface-muted);">
+											Pushes to <code class="font-mono rounded px-1.5 py-0.5 text-xs" style="background-color: var(--control-bg); color: var(--center-channel-color);">{autoDeployStatus.branch}</code> trigger a new deployment automatically.
 										</p>
 									{:else if !autoDeployStatus?.appInstalled}
-										<div class="flex items-center justify-between gap-3 rounded-xl p-3" style="background-color: var(--control-bg); border: 1px dashed var(--surface-border);">
+										<div class="flex items-center justify-between gap-3 rounded-xl p-4" style="background-color: var(--control-bg); border: 1px dashed var(--surface-border);">
 											<div>
 												<p class="text-sm font-medium" style="color: var(--center-channel-color);">GitHub App required</p>
-												<p class="text-xs" style="color: var(--surface-muted);">Install it on your repo to enable auto-deploy.</p>
+												<p class="text-xs mt-0.5" style="color: var(--surface-muted);">Install it on your repository to enable automatic deployments.</p>
 											</div>
 											<button onclick={openGitHubAppInstall} disabled={!githubAppInstallUrl || loadingAppInstallUrl} class="btn btn-primary btn-sm shrink-0">
 												{#if loadingAppInstallUrl}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
@@ -3138,7 +3244,7 @@
 									{:else}
 										<div class="flex gap-2 items-end">
 											<div class="flex-1">
-												<p class="text-xs mb-1" style="color: var(--surface-muted);">Deploy on push to</p>
+												<p class="text-xs mb-1.5 font-medium" style="color: var(--surface-muted);">Deploy on push to branch</p>
 												<input type="text" bind:value={autoDeployBranch} placeholder={deployment.githubBranch || 'main'} class="input text-sm font-mono" />
 											</div>
 											<button onclick={enableAutoDeploy} disabled={enablingAutoDeploy || !autoDeployBranch} class="btn btn-primary btn-sm">
@@ -3149,7 +3255,7 @@
 									{/if}
 
 									{#if githubDeployments.length > 0}
-										<details class="mt-3 group">
+										<details class="mt-4 group">
 											<summary class="cursor-pointer text-xs font-medium" style="color: var(--surface-muted);">
 												Recent deployments ({githubDeployments.length})
 											</summary>
@@ -3185,111 +3291,158 @@
 								{/if}
 							</div>
 
-							<div class="advanced-divider"></div>
-
 							<!-- Health Checks -->
 							<!-- svelte-ignore a11y_no_static_element_interactions -->
-							<div class="p-5" onchange={() => isEditingHealthCheck = true} oninput={() => isEditingHealthCheck = true} onclick={() => isEditingHealthCheck = true}>
-								<div class="flex items-center justify-between mb-3">
-									<div class="flex items-center gap-3">
+							<div class="card rounded-2xl overflow-hidden" onchange={() => isEditingHealthCheck = true} oninput={() => isEditingHealthCheck = true}>
+								<div class="p-5">
+									<div class="flex items-center justify-between mb-1">
 										<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Health Checks</p>
-										<label class="relative inline-flex items-center cursor-pointer">
-											<input type="checkbox" bind:checked={healthCheckEnabled} class="sr-only peer" />
-											<div class="w-8 h-[18px] rounded-full transition-colors peer-checked:bg-green-500" style="background-color: var(--surface-border);"></div>
-											<div class="absolute left-[3px] top-[3px] h-3 w-3 rounded-full bg-white transition-transform peer-checked:translate-x-3.5 shadow-sm"></div>
+										<button onclick={saveHealthCheck} disabled={savingHealthCheck} class="btn btn-primary btn-sm">
+											{#if savingHealthCheck}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+											<span>Save</span>
+										</button>
+									</div>
+									<p class="text-xs mb-4" style="color: var(--surface-muted);">Configure how Kubernetes monitors your container health.</p>
+
+									<!-- Master toggle -->
+									<!-- svelte-ignore a11y_click_events_have_key_events -->
+									<!-- svelte-ignore a11y_no_static_element_interactions -->
+									<div
+										class="adv-toggle-row"
+										onclick={() => { healthCheckEnabled = !healthCheckEnabled; isEditingHealthCheck = true; }}
+									>
+										<div class="adv-toggle-info">
+											<span class="adv-toggle-label">Enable health checks</span>
+											<span class="adv-toggle-desc">
+												{#if healthCheckEnabled}
+													Kubernetes will monitor container health using the configured probes
+												{:else}
+													Containers will not be health-checked — Kubernetes won't restart unhealthy pods
+												{/if}
+											</span>
+										</div>
+										<label class="adv-switch" onclick={(e) => e.stopPropagation()}>
+											<input type="checkbox" bind:checked={healthCheckEnabled} onchange={() => isEditingHealthCheck = true} />
+											<span class="adv-switch-track"></span>
 										</label>
 									</div>
-									<button onclick={saveHealthCheck} disabled={savingHealthCheck} class="btn btn-primary btn-sm">
-										{#if savingHealthCheck}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
-										<span>Save</span>
-									</button>
 								</div>
 
 								{#if healthCheckEnabled}
-									<div class="space-y-4">
-										<div class="flex flex-wrap items-end gap-3">
-											<!-- Check type pills -->
-											<div>
-												<p class="text-xs mb-1.5" style="color: var(--surface-muted);">Type</p>
-												<div class="flex gap-1">
-													{#each [{ val: 'http', label: 'HTTP' }, { val: 'tcp', label: 'TCP' }, { val: 'exec', label: 'Cmd' }] as opt}
-														<button onclick={() => healthCheckType = opt.val}
-															class="px-2.5 py-1 rounded-lg text-xs font-medium transition-colors {healthCheckType === opt.val ? 'bg-[var(--sidebar-text-active-bg)] text-[var(--sidebar-text-active-color)] border border-[var(--sidebar-text-active-border)]' : 'bg-[var(--control-bg)] text-[var(--control-text)] border border-[var(--surface-border)] hover:bg-[var(--control-hover-bg)]'}">
-															{opt.label}
-														</button>
-													{/each}
-												</div>
-											</div>
+									<div class="adv-divider"></div>
 
-											<!-- Inline config fields -->
+									<!-- Check type + endpoint -->
+									<div class="p-5 space-y-5">
+										<div>
+											<p class="text-xs font-medium mb-2" style="color: var(--surface-muted);">Check type</p>
+											<div class="flex gap-1.5">
+												{#each [{ val: 'http', label: 'HTTP', desc: 'GET request to a path' }, { val: 'tcp', label: 'TCP', desc: 'TCP socket connection' }, { val: 'exec', label: 'Command', desc: 'Run a command in container' }] as opt}
+													<button onclick={() => { healthCheckType = opt.val; isEditingHealthCheck = true; }}
+														class="adv-type-btn"
+														class:adv-type-btn--active={healthCheckType === opt.val}
+													>
+														<span class="adv-type-btn-label">{opt.label}</span>
+														<span class="adv-type-btn-desc">{opt.desc}</span>
+													</button>
+												{/each}
+											</div>
+										</div>
+
+										<!-- Endpoint config based on type -->
+										<div class="adv-field-group">
 											{#if healthCheckType === 'http'}
-												<div class="flex-1 min-w-[120px]">
-													<p class="text-xs mb-1" style="color: var(--surface-muted);">Path</p>
+												<div class="flex-[3] min-w-[140px]">
+													<p class="text-xs font-medium mb-1.5" style="color: var(--surface-muted);">Endpoint path</p>
 													<input type="text" bind:value={healthCheckPath} placeholder="/health" class="input text-sm font-mono" />
 												</div>
-												<div class="w-20">
-													<p class="text-xs mb-1" style="color: var(--surface-muted);">Port</p>
+												<div class="w-24">
+													<p class="text-xs font-medium mb-1.5" style="color: var(--surface-muted);">Port</p>
 													<input type="number" bind:value={healthCheckPort} placeholder="80" class="input text-sm font-mono" />
 												</div>
 											{:else if healthCheckType === 'tcp'}
-												<div class="w-24">
-													<p class="text-xs mb-1" style="color: var(--surface-muted);">Port</p>
+												<div class="w-28">
+													<p class="text-xs font-medium mb-1.5" style="color: var(--surface-muted);">Port</p>
 													<input type="number" bind:value={healthCheckPort} placeholder="80" class="input text-sm font-mono" />
 												</div>
 											{:else}
 												<div class="flex-1 min-w-[200px]">
-													<p class="text-xs mb-1" style="color: var(--surface-muted);">Command</p>
+													<p class="text-xs font-medium mb-1.5" style="color: var(--surface-muted);">Command</p>
 													<input type="text" bind:value={healthCheckCommand} placeholder="cat /tmp/healthy" class="input text-sm font-mono" />
 												</div>
 											{/if}
 										</div>
 
-										<!-- Probes as inline toggles -->
-										<div class="flex flex-wrap gap-x-5 gap-y-2">
-											<label class="flex items-center gap-1.5 text-xs cursor-pointer">
-												<input type="checkbox" bind:checked={livenessEnabled} class="rounded" />
-												<span class="font-medium">Liveness</span>
-											</label>
-											<label class="flex items-center gap-1.5 text-xs cursor-pointer">
-												<input type="checkbox" bind:checked={readinessEnabled} class="rounded" />
-												<span class="font-medium">Readiness</span>
-											</label>
-											<label class="flex items-center gap-1.5 text-xs cursor-pointer">
-												<input type="checkbox" bind:checked={startupEnabled} class="rounded" />
-												<span class="font-medium">Startup</span>
-											</label>
+										<!-- Probes -->
+										<div>
+											<p class="text-xs font-medium mb-2" style="color: var(--surface-muted);">Active probes</p>
+											<div class="flex flex-wrap gap-2">
+												<!-- svelte-ignore a11y_click_events_have_key_events -->
+												<!-- svelte-ignore a11y_no_static_element_interactions -->
+												<div
+													class="adv-probe-chip"
+													class:adv-probe-chip--active={livenessEnabled}
+													onclick={() => { livenessEnabled = !livenessEnabled; isEditingHealthCheck = true; }}
+												>
+													<span class="adv-probe-dot" class:adv-probe-dot--on={livenessEnabled}></span>
+													<span>Liveness</span>
+													<span class="adv-probe-hint">Restarts unhealthy</span>
+												</div>
+												<!-- svelte-ignore a11y_click_events_have_key_events -->
+												<!-- svelte-ignore a11y_no_static_element_interactions -->
+												<div
+													class="adv-probe-chip"
+													class:adv-probe-chip--active={readinessEnabled}
+													onclick={() => { readinessEnabled = !readinessEnabled; isEditingHealthCheck = true; }}
+												>
+													<span class="adv-probe-dot" class:adv-probe-dot--on={readinessEnabled}></span>
+													<span>Readiness</span>
+													<span class="adv-probe-hint">Stops traffic if failing</span>
+												</div>
+												<!-- svelte-ignore a11y_click_events_have_key_events -->
+												<!-- svelte-ignore a11y_no_static_element_interactions -->
+												<div
+													class="adv-probe-chip"
+													class:adv-probe-chip--active={startupEnabled}
+													onclick={() => { startupEnabled = !startupEnabled; isEditingHealthCheck = true; }}
+												>
+													<span class="adv-probe-dot" class:adv-probe-dot--on={startupEnabled}></span>
+													<span>Startup</span>
+													<span class="adv-probe-hint">Slow-start grace period</span>
+												</div>
+											</div>
 										</div>
 
-										<!-- Timing - compact inline -->
-										<div class="flex flex-wrap gap-2">
-											<div class="w-20">
-												<p class="text-[10px] mb-0.5 uppercase tracking-wide" style="color: var(--surface-muted);">Interval</p>
-												<div class="flex items-center gap-1">
-													<input type="number" bind:value={healthCheckInterval} min="1" class="input text-sm font-mono" />
-													<span class="text-[10px] shrink-0" style="color: var(--surface-muted);">s</span>
+										<!-- Timing -->
+										<div>
+											<p class="text-xs font-medium mb-2" style="color: var(--surface-muted);">Timing</p>
+											<div class="adv-field-group">
+												<div class="adv-timing-field">
+													<p class="adv-timing-label">Interval</p>
+													<div class="adv-timing-input-row">
+														<input type="number" bind:value={healthCheckInterval} min="1" class="input text-sm font-mono" />
+														<span class="adv-timing-unit">sec</span>
+													</div>
 												</div>
-											</div>
-											<div class="w-20">
-												<p class="text-[10px] mb-0.5 uppercase tracking-wide" style="color: var(--surface-muted);">Timeout</p>
-												<div class="flex items-center gap-1">
-													<input type="number" bind:value={healthCheckTimeout} min="1" class="input text-sm font-mono" />
-													<span class="text-[10px] shrink-0" style="color: var(--surface-muted);">s</span>
+												<div class="adv-timing-field">
+													<p class="adv-timing-label">Timeout</p>
+													<div class="adv-timing-input-row">
+														<input type="number" bind:value={healthCheckTimeout} min="1" class="input text-sm font-mono" />
+														<span class="adv-timing-unit">sec</span>
+													</div>
 												</div>
-											</div>
-											<div class="w-20">
-												<p class="text-[10px] mb-0.5 uppercase tracking-wide" style="color: var(--surface-muted);">Retries</p>
-												<input type="number" bind:value={healthCheckRetries} min="1" class="input text-sm font-mono" />
-											</div>
-											{#if startupEnabled}
-												<div class="w-24">
-													<p class="text-[10px] mb-0.5 uppercase tracking-wide" style="color: var(--surface-muted);">Start retries</p>
-													<input type="number" bind:value={startupFailureThreshold} min="1" class="input text-sm font-mono" />
+												<div class="adv-timing-field">
+													<p class="adv-timing-label">Retries</p>
+													<input type="number" bind:value={healthCheckRetries} min="1" class="input text-sm font-mono" />
 												</div>
-											{/if}
+												{#if startupEnabled}
+													<div class="adv-timing-field">
+														<p class="adv-timing-label">Startup retries</p>
+														<input type="number" bind:value={startupFailureThreshold} min="1" class="input text-sm font-mono" />
+													</div>
+												{/if}
+											</div>
 										</div>
 									</div>
-								{:else}
-									<p class="text-xs" style="color: var(--surface-muted);">Kubernetes will not monitor container health.</p>
 								{/if}
 							</div>
 						</div>
@@ -3334,12 +3487,14 @@
 
 			<div class="p-6">
 				<DeploymentProgress
-					status={buildModalStatus}
+					status={deployment?.status ?? 'pending'}
+					buildStatus={buildModalStatus}
 					buildStep={buildModalStep}
 					buildLogs={accumulatedBuildLogs}
 					buildError={buildModalError}
 					isGitHubDeploy={true}
 					warnings={buildModalWarnings}
+					buildStepTimestamps={buildModalTimestamps}
 				/>
 			</div>
 
@@ -3614,6 +3769,7 @@
 		background-color: #1a1a2e;
 		border: 1px solid color-mix(in srgb, var(--surface-border) 60%, transparent);
 		color: #e0e0e8;
+		font-weight: 400;
 	}
 
 	:global(:root:not(.dark)) .log-panel {
@@ -3664,6 +3820,183 @@
 		color: var(--surface-muted);
 	}
 
+	/* ===== Deployment header ===== */
+	.dep-header {
+		padding: 0.25rem 0;
+	}
+
+	.dep-header-top {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 1rem;
+		flex-wrap: wrap;
+	}
+
+	.dep-header-identity {
+		display: flex;
+		align-items: center;
+		gap: 0.625rem;
+		min-width: 0;
+		flex-wrap: wrap;
+	}
+
+	.dep-header-name {
+		font-size: 1.25rem;
+		font-weight: 700;
+		letter-spacing: -0.02em;
+		color: var(--center-channel-color);
+		margin: 0;
+		line-height: 1.3;
+	}
+
+	.dep-header-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		flex-shrink: 0;
+	}
+
+	.dep-delete-btn {
+		color: var(--surface-muted) !important;
+		opacity: 0.6;
+		transition: opacity 0.15s;
+	}
+	.dep-delete-btn:hover {
+		opacity: 1;
+		color: var(--error-text-color) !important;
+	}
+
+	.dep-notif-btn {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.375rem;
+		border-radius: 0.5rem;
+		border: none;
+		background: transparent;
+		color: var(--surface-muted);
+		cursor: pointer;
+		transition: background 0.12s, color 0.12s;
+	}
+	.dep-notif-btn:hover {
+		background: var(--control-hover-bg);
+		color: var(--center-channel-color);
+	}
+
+	.dep-header-meta {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+		margin-top: 0.5rem;
+		font-size: 0.75rem;
+	}
+
+	.dep-meta-source {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+		color: var(--surface-muted);
+		text-decoration: none;
+		transition: color 0.12s;
+	}
+	a.dep-meta-source:hover {
+		color: var(--link-color);
+	}
+
+	.dep-meta-pill {
+		display: inline-flex;
+		padding: 0.125rem 0.5rem;
+		border-radius: 9999px;
+		font-size: 0.6875rem;
+		font-weight: 550;
+		background-color: var(--sidebar-text-active-bg);
+		color: var(--sidebar-text-active-color);
+	}
+
+	.dep-meta-item {
+		color: var(--surface-muted);
+		font-size: 0.75rem;
+	}
+	.dep-meta-item::before {
+		content: '·';
+		margin-right: 0.5rem;
+		opacity: 0.4;
+	}
+
+	.dep-meta-domain {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		color: var(--link-color);
+		text-decoration: none;
+		font-size: 0.75rem;
+		font-weight: 500;
+		transition: opacity 0.12s;
+	}
+	.dep-meta-domain:hover {
+		opacity: 0.8;
+	}
+
+	/* ===== Tab nav ===== */
+	.dep-tabs {
+		border-bottom: 1px solid color-mix(in srgb, var(--surface-border) 60%, transparent);
+		position: relative;
+	}
+
+	.dep-tabs-inner {
+		display: flex;
+		gap: 0.125rem;
+		overflow-x: auto;
+		scrollbar-width: none;
+	}
+	.dep-tabs-inner::-webkit-scrollbar {
+		display: none;
+	}
+
+	.dep-tab {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.625rem 0.875rem;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		white-space: nowrap;
+		border: none;
+		border-radius: 0;
+		background: transparent;
+		color: var(--surface-muted);
+		cursor: pointer;
+		position: relative;
+		transition: color 0.12s;
+	}
+
+	.dep-tab:hover {
+		color: var(--center-channel-color);
+		background: transparent;
+	}
+
+	.dep-tab[data-active] {
+		color: var(--center-channel-color);
+		background: transparent;
+		border: none;
+		box-shadow: none;
+	}
+	.dep-tab[data-active]::after {
+		content: '';
+		position: absolute;
+		bottom: -1px;
+		left: 0.5rem;
+		right: 0.5rem;
+		height: 2px;
+		border-radius: 2px 2px 0 0;
+		background-color: var(--sidebar-text-active-border);
+	}
+
 	.build-modal {
 		background-color: var(--surface-bg);
 		border: 1px solid var(--surface-border);
@@ -3688,6 +4021,7 @@
 		background-color: var(--surface-bg);
 		border: 1px solid var(--surface-border);
 		color: var(--center-channel-color);
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.02);
 	}
 
 	.build-card:hover {
@@ -3731,9 +4065,7 @@
 	}
 
 	.notification-panel {
-		position: absolute;
-		top: calc(100% + 8px);
-		right: 0;
+		position: fixed;
 		z-index: 50;
 		width: 360px;
 		max-height: 420px;
@@ -3778,5 +4110,569 @@
 	.notification-icon-warning {
 		background-color: color-mix(in srgb, var(--warning-text) 12%, transparent);
 		color: var(--warning-text);
+	}
+
+	/* ===== Log timestamp pills ===== */
+	.console-output :global(.log-ts) {
+		display: inline-block;
+		padding: 0 0.375rem;
+		border-radius: 0.25rem;
+		font-size: 0.625rem;
+		font-weight: 500;
+		line-height: 1.6;
+		letter-spacing: 0.01em;
+		background: rgba(255, 255, 255, 0.06);
+		color: rgba(255, 255, 255, 0.4);
+		vertical-align: baseline;
+		user-select: none;
+		margin-right: 0.125rem;
+		position: relative;
+		cursor: default;
+		transition: background 0.1s, color 0.1s;
+	}
+	.console-output :global(.log-ts:hover) {
+		background: rgba(255, 255, 255, 0.12);
+		color: rgba(255, 255, 255, 0.7);
+	}
+	.console-output :global(.log-ts-ms) {
+		opacity: 0.5;
+		font-size: 0.5625rem;
+	}
+
+	/* Tooltip — built from data attributes via ::after.
+	   Uses position:fixed computed by JS to escape overflow:auto parents. */
+	.console-output :global(.log-ts::after) {
+		content: attr(data-tooltip-local) '\A' 'UTC: ' attr(data-tooltip-utc) '\A' attr(data-tooltip-ago) ' · ' attr(data-tooltip-tz) '\A\A' attr(data-tooltip-raw);
+		white-space: pre-wrap;
+		position: fixed;
+		padding: 0.5rem 0.625rem;
+		border-radius: 0.5rem;
+		font-size: 0.6875rem;
+		font-weight: 400;
+		font-family: var(--font-mono);
+		line-height: 1.55;
+		color: #e6edf3;
+		background: #1c2128;
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+		pointer-events: none;
+		opacity: 0;
+		transition: opacity 0.12s, transform 0.12s;
+		z-index: 9999;
+		min-width: 220px;
+		max-width: 320px;
+		/* Positioned by JS via custom props; top is the pill's top edge */
+		left: var(--tt-x, -9999px);
+		top: var(--tt-y, -9999px);
+		transform: translateY(-100%) scale(0.96);
+	}
+	.console-output :global(.log-ts:hover::after) {
+		opacity: 1;
+		transform: translateY(-100%) scale(1);
+	}
+
+	/* ===== ANSI color classes ===== */
+	.console-output :global(.ansi-bold) { font-weight: 700; }
+	.console-output :global(.ansi-dim) { opacity: 0.6; }
+	.console-output :global(.ansi-italic) { font-style: italic; }
+	.console-output :global(.ansi-underline) { text-decoration: underline; }
+	.console-output :global(.ansi-strike) { text-decoration: line-through; }
+
+	/* Standard colors — tuned for dark terminal background */
+	.console-output :global(.ansi-black) { color: #586069; }
+	.console-output :global(.ansi-red) { color: #f97583; }
+	.console-output :global(.ansi-green) { color: #85e89d; }
+	.console-output :global(.ansi-yellow) { color: #ffea7f; }
+	.console-output :global(.ansi-blue) { color: #79b8ff; }
+	.console-output :global(.ansi-magenta) { color: #b392f0; }
+	.console-output :global(.ansi-cyan) { color: #73e3ff; }
+	.console-output :global(.ansi-white) { color: #d1d5da; }
+
+	/* Bright / high-intensity */
+	.console-output :global(.ansi-bright-black) { color: #6a737d; }
+	.console-output :global(.ansi-bright-red) { color: #fdaeb7; }
+	.console-output :global(.ansi-bright-green) { color: #bef5cb; }
+	.console-output :global(.ansi-bright-yellow) { color: #fff5b1; }
+	.console-output :global(.ansi-bright-blue) { color: #c8e1ff; }
+	.console-output :global(.ansi-bright-magenta) { color: #d2b3ff; }
+	.console-output :global(.ansi-bright-cyan) { color: #a5f3fc; }
+	.console-output :global(.ansi-bright-white) { color: #fafbfc; }
+
+	/* Background colors */
+	.console-output :global(.ansi-bg-black) { background-color: #24292e; }
+	.console-output :global(.ansi-bg-red) { background-color: rgba(249, 117, 131, 0.2); }
+	.console-output :global(.ansi-bg-green) { background-color: rgba(133, 232, 157, 0.2); }
+	.console-output :global(.ansi-bg-yellow) { background-color: rgba(255, 234, 127, 0.2); }
+	.console-output :global(.ansi-bg-blue) { background-color: rgba(121, 184, 255, 0.2); }
+	.console-output :global(.ansi-bg-magenta) { background-color: rgba(179, 146, 240, 0.2); }
+	.console-output :global(.ansi-bg-cyan) { background-color: rgba(115, 227, 255, 0.2); }
+	.console-output :global(.ansi-bg-white) { background-color: rgba(209, 213, 218, 0.15); }
+
+	/* ===== Console (Pterodactyl-style) ===== */
+	.console-panel {
+		border-radius: 0.875rem;
+		overflow: hidden;
+		border: 1px solid color-mix(in srgb, var(--surface-border) 50%, transparent);
+		background-color: #0d1117;
+		color: #c9d1d9;
+		display: flex;
+		flex-direction: column;
+		transition: none;
+	}
+
+	:global(:root:not(.dark)) .console-panel {
+		background-color: #1b1f27;
+		color: #d0d7de;
+	}
+
+	/* Expanded: fixed fullscreen overlay with animation */
+	.console-panel.console-expanded {
+		position: fixed;
+		z-index: 100;
+		border: none;
+		transition: top 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+					left 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+					width 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+					height 0.3s cubic-bezier(0.4, 0, 0.2, 1),
+					border-radius 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+	}
+	.console-panel.console-at-fullscreen {
+		top: 0 !important;
+		left: 0 !important;
+		width: 100vw !important;
+		height: 100vh !important;
+		border-radius: 0;
+	}
+	.console-panel.console-expanded .console-body {
+		flex: 1;
+		min-height: 0;
+	}
+	.console-panel.console-expanded .console-output {
+		max-height: none;
+		height: 100%;
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.console-panel.console-expanded {
+			transition: none;
+		}
+	}
+
+	.console-toolbar {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		padding: 0.5rem 0.75rem;
+		border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+		background: rgba(255, 255, 255, 0.02);
+		flex-wrap: wrap;
+	}
+
+	.console-toolbar-left {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		min-width: 0;
+	}
+
+	.console-toolbar-right {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		flex-shrink: 0;
+	}
+
+	.console-dropdown-btn {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.25rem 0.5rem;
+		border-radius: 0.375rem;
+		font-size: 0.75rem;
+		font-family: var(--font-mono);
+		color: inherit;
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		transition: background 0.1s;
+	}
+	.console-dropdown-btn:hover {
+		background: rgba(255, 255, 255, 0.08);
+	}
+
+	.console-dropdown {
+		position: absolute;
+		z-index: 20;
+		margin-top: 0.25rem;
+		min-width: 200px;
+		border-radius: 0.75rem;
+		border: 1px solid var(--surface-border);
+		background-color: var(--surface-bg);
+		padding: 0.375rem;
+		box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+	}
+
+	.console-dropdown-item {
+		display: flex;
+		width: 100%;
+		align-items: center;
+		justify-content: space-between;
+		padding: 0.375rem 0.625rem;
+		border-radius: 0.375rem;
+		font-size: 0.75rem;
+		font-family: var(--font-mono);
+		text-align: left;
+		color: var(--center-channel-color);
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		transition: background 0.1s;
+	}
+	.console-dropdown-item:hover {
+		background: color-mix(in srgb, var(--surface-border) 40%, transparent);
+	}
+
+	.console-separator {
+		font-size: 0.75rem;
+		opacity: 0.2;
+		user-select: none;
+	}
+
+	.console-lines-input {
+		width: 3.5rem;
+		padding: 0.25rem 0.375rem;
+		border-radius: 0.375rem;
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		background: transparent;
+		color: inherit;
+		font-size: 0.6875rem;
+		font-family: var(--font-mono);
+		text-align: center;
+		outline: none;
+	}
+	.console-lines-input:focus {
+		border-color: rgba(255, 255, 255, 0.25);
+	}
+
+	.console-icon-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 0.375rem;
+		border-radius: 0.375rem;
+		background: transparent;
+		border: none;
+		color: inherit;
+		cursor: pointer;
+		opacity: 0.6;
+		transition: opacity 0.1s, background 0.1s;
+	}
+	.console-icon-btn:hover {
+		opacity: 1;
+		background: rgba(255, 255, 255, 0.08);
+	}
+
+	.console-body {
+		flex: 1;
+		min-height: 0;
+		padding: 0.75rem;
+	}
+
+	.console-output {
+		min-height: 440px;
+		max-height: 440px;
+		overflow-y: auto;
+		white-space: pre-wrap;
+		word-break: break-all;
+		font-size: 0.6875rem;
+		line-height: 1.65;
+		font-family: var(--font-mono);
+		font-weight: 400;
+		margin: 0;
+		color: inherit;
+	}
+
+	/* Scrollbar inside console */
+	.console-output::-webkit-scrollbar {
+		width: 6px;
+	}
+	.console-output::-webkit-scrollbar-track {
+		background: transparent;
+	}
+	.console-output::-webkit-scrollbar-thumb {
+		background: rgba(255, 255, 255, 0.15);
+		border-radius: 3px;
+	}
+	.console-output::-webkit-scrollbar-thumb:hover {
+		background: rgba(255, 255, 255, 0.25);
+	}
+
+	.console-empty {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		padding: 3rem 1rem;
+		font-size: 0.75rem;
+		opacity: 0.4;
+	}
+
+	/* Pod rows — clickable to select for console */
+	.console-pod-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		width: 100%;
+		padding: 0.375rem 0.625rem;
+		border-radius: 0.5rem;
+		background: transparent;
+		border: 1px solid transparent;
+		color: var(--center-channel-color);
+		cursor: pointer;
+		text-align: left;
+		transition: background 0.1s, border-color 0.1s;
+	}
+	.console-pod-row:hover {
+		background: var(--control-bg);
+	}
+	.console-pod-row--active {
+		background: var(--control-bg);
+		border-color: color-mix(in srgb, var(--sidebar-text-active-border) 40%, transparent);
+	}
+
+	/* Sidebar stat cards */
+	.stat-card {
+		border-radius: 0.75rem;
+		border: 1px solid color-mix(in srgb, var(--surface-border) 70%, transparent);
+		background: var(--surface-bg);
+		padding: 0.875rem;
+		box-shadow: 0 1px 2px rgb(0 0 0 / 0.02);
+	}
+
+	.stat-card-header {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		margin-bottom: 0.25rem;
+	}
+
+	.stat-card-label {
+		font-size: 0.6875rem;
+		font-weight: 500;
+		color: var(--surface-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+	}
+
+	.stat-card-value {
+		font-size: 1.25rem;
+		font-weight: 700;
+		font-family: var(--font-mono);
+		color: var(--center-channel-color);
+		line-height: 1.2;
+		letter-spacing: -0.02em;
+		margin: 0;
+	}
+
+	.stat-card-chart {
+		margin-top: 0.625rem;
+		height: 64px;
+	}
+
+	/* ===== Advanced tab ===== */
+
+	/* Toggle row — clickable row with label + switch */
+	.adv-toggle-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 0.875rem 1rem;
+		border-radius: 0.75rem;
+		background-color: var(--control-bg);
+		border: 1px solid color-mix(in srgb, var(--surface-border) 60%, transparent);
+		cursor: pointer;
+		transition: border-color 0.12s;
+	}
+	.adv-toggle-row:hover {
+		border-color: var(--surface-border);
+	}
+
+	.adv-toggle-info {
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+		min-width: 0;
+	}
+
+	.adv-toggle-label {
+		font-size: 0.875rem;
+		font-weight: 550;
+		color: var(--center-channel-color);
+	}
+
+	.adv-toggle-desc {
+		font-size: 0.75rem;
+		color: var(--surface-muted);
+		line-height: 1.4;
+	}
+
+	/* Toggle switch */
+	.adv-switch {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+		cursor: pointer;
+		flex-shrink: 0;
+	}
+	.adv-switch input {
+		position: absolute;
+		opacity: 0;
+		width: 0;
+		height: 0;
+	}
+	.adv-switch-track {
+		width: 2.25rem;
+		height: 1.25rem;
+		border-radius: 9999px;
+		background-color: var(--surface-border);
+		transition: background-color 0.15s ease;
+		position: relative;
+	}
+	.adv-switch-track::after {
+		content: '';
+		position: absolute;
+		top: 2.5px;
+		left: 2.5px;
+		width: 0.9375rem;
+		height: 0.9375rem;
+		border-radius: 50%;
+		background: white;
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
+		transition: transform 0.15s ease;
+	}
+	.adv-switch input:checked + .adv-switch-track {
+		background-color: #22c55e;
+	}
+	.adv-switch input:checked + .adv-switch-track::after {
+		transform: translateX(1rem);
+	}
+
+	.adv-divider {
+		height: 1px;
+		background-color: var(--surface-border);
+		opacity: 0.5;
+		margin: 0;
+	}
+
+	/* Health check type selector */
+	.adv-type-btn {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+		padding: 0.625rem 0.75rem;
+		border-radius: 0.625rem;
+		border: 1px solid var(--surface-border);
+		background: var(--control-bg);
+		color: var(--control-text);
+		cursor: pointer;
+		text-align: left;
+		transition: border-color 0.12s, background-color 0.12s;
+	}
+	.adv-type-btn:hover {
+		background: var(--control-hover-bg);
+	}
+	.adv-type-btn--active {
+		border-color: var(--sidebar-text-active-border);
+		background: var(--sidebar-text-active-bg);
+		color: var(--sidebar-text-active-color);
+	}
+	.adv-type-btn--active:hover {
+		background: var(--sidebar-text-active-bg);
+	}
+	.adv-type-btn-label {
+		font-size: 0.8125rem;
+		font-weight: 600;
+	}
+	.adv-type-btn-desc {
+		font-size: 0.6875rem;
+		opacity: 0.7;
+	}
+
+	/* Field group — inline flex for config fields */
+	.adv-field-group {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.75rem;
+		align-items: flex-end;
+	}
+
+	/* Probe chips — clickable toggle chips with status dot */
+	.adv-probe-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.5rem 0.75rem;
+		border-radius: 0.5rem;
+		border: 1px solid var(--surface-border);
+		background: var(--control-bg);
+		color: var(--surface-muted);
+		font-size: 0.8125rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: border-color 0.12s, background-color 0.12s, color 0.12s;
+		user-select: none;
+	}
+	.adv-probe-chip:hover {
+		border-color: color-mix(in srgb, var(--surface-border) 50%, var(--center-channel-color));
+	}
+	.adv-probe-chip--active {
+		border-color: color-mix(in srgb, #22c55e 40%, var(--surface-border));
+		background: color-mix(in srgb, #22c55e 6%, var(--surface-bg));
+		color: var(--center-channel-color);
+	}
+
+	.adv-probe-dot {
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
+		background-color: var(--surface-border);
+		transition: background-color 0.12s;
+		flex-shrink: 0;
+	}
+	.adv-probe-dot--on {
+		background-color: #22c55e;
+		box-shadow: 0 0 4px #22c55e44;
+	}
+
+	.adv-probe-hint {
+		font-size: 0.6875rem;
+		opacity: 0.6;
+		margin-left: 0.125rem;
+	}
+
+	/* Timing fields */
+	.adv-timing-field {
+		width: 5.5rem;
+	}
+	.adv-timing-label {
+		font-size: 0.6875rem;
+		font-weight: 500;
+		color: var(--surface-muted);
+		margin-bottom: 0.25rem;
+	}
+	.adv-timing-input-row {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+	}
+	.adv-timing-unit {
+		font-size: 0.6875rem;
+		color: var(--surface-muted);
+		flex-shrink: 0;
 	}
 </style>

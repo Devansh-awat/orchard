@@ -308,7 +308,7 @@
 	.dp-page {
 		max-width: 40rem;
 		margin: 0 auto;
-		padding: 2rem 1.5rem;
+		padding: 2.5rem 2.5rem 3rem;
 	}
 
 	.dp-loading {
@@ -347,8 +347,9 @@
 	}
 
 	.dp-title {
-		font-size: 1.125rem;
-		font-weight: 600;
+		font-size: 1.25rem;
+		font-weight: 700;
+		letter-spacing: -0.02em;
 		color: var(--center-channel-color);
 		margin: 0;
 	}
@@ -419,9 +420,11 @@
 	}
 
 	.dp-section-title {
-		font-size: 0.875rem;
+		font-size: 0.8125rem;
 		font-weight: 600;
-		color: var(--center-channel-color);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--surface-muted);
 		margin: 0;
 		padding-bottom: 0.5rem;
 		border-bottom: 1px solid var(--surface-border);
@@ -548,9 +551,12 @@
 	.dp-btn-primary {
 		background-color: #ec4899;
 		color: #fff;
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.1), 0 1px 2px rgb(0 0 0 / 0.06);
 	}
 
 	.dp-btn-primary:hover:not(:disabled) {
 		opacity: 0.9;
+		transform: translateY(-0.5px);
+		box-shadow: 0 4px 6px rgb(0 0 0 / 0.1), 0 2px 4px rgb(0 0 0 / 0.06);
 	}
 </style>

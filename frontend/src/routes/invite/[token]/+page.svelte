@@ -195,6 +195,10 @@
 
 <div class="flex min-h-screen items-center justify-center p-6" style="background-color: var(--center-channel-bg);">
 	<div class="w-full max-w-md">
+		<div class="mb-8 text-center">
+			<img src="/logo/logocompact.svg" alt="Orchard" class="mx-auto h-8 logo-light" />
+			<img src="/logo/logocompactdm.svg" alt="Orchard" class="mx-auto h-8 logo-dark" />
+		</div>
 		{#if loading}
 			<div class="text-center">
 				<Loader2 class="mx-auto h-8 w-8 animate-spin text-primary-600" />

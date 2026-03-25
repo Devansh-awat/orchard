@@ -604,12 +604,12 @@
 
 <style>
 	.os-page {
-		padding: 2rem;
+		padding: 2.5rem 2.5rem 3rem;
 		max-width: 52rem;
 		margin: 0 auto;
 		display: flex;
 		flex-direction: column;
-		gap: 1.25rem;
+		gap: 1.5rem;
 	}
 
 	.os-back {
@@ -694,49 +694,54 @@
 	}
 
 	.os-title {
-		font-size: 1.125rem;
-		font-weight: 600;
+		font-size: 1.25rem;
+		font-weight: 700;
 		color: var(--center-channel-color);
 		line-height: 1.2;
+		letter-spacing: -0.02em;
 	}
 
 	.os-slug {
 		font-size: 0.8125rem;
-		font-family: monospace;
+		font-family: var(--font-mono);
 		color: var(--surface-muted);
+		margin-top: 0.125rem;
 	}
 
 	/* Stats */
 	.os-stats {
 		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(8rem, 1fr));
-		gap: 0.75rem;
+		grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
+		gap: 0.875rem;
 	}
 
 	.os-stat {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
-		padding: 0.875rem;
-		border-radius: 1rem;
+		gap: 0.875rem;
+		padding: 1rem 1.125rem;
+		border-radius: 0.875rem;
 		border: 1px solid var(--surface-border);
 		background-color: var(--surface-bg);
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
 	}
 
 	.os-stat-icon {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 2.25rem;
-		height: 2.25rem;
-		border-radius: 0.5rem;
+		width: 2.5rem;
+		height: 2.5rem;
+		border-radius: 0.625rem;
 		flex-shrink: 0;
-		background-color: color-mix(in srgb, var(--surface-border) 60%, var(--center-channel-bg));
-		color: var(--center-channel-color);
+		background-color: color-mix(in srgb, var(--surface-border) 50%, var(--center-channel-bg));
+		color: var(--surface-muted);
 	}
 
 	.os-stat-value {
-		font-size: 1rem;
+		font-size: 1.0625rem;
 		font-weight: 700;
 		color: var(--center-channel-color);
 		line-height: 1.2;
@@ -746,8 +751,9 @@
 		font-size: 0.6875rem;
 		color: var(--surface-muted);
 		text-transform: uppercase;
-		letter-spacing: 0.04em;
+		letter-spacing: 0.05em;
 		font-weight: 500;
+		margin-top: 0.0625rem;
 	}
 
 	/* Cards */
@@ -756,33 +762,38 @@
 		border-radius: 1rem;
 		background-color: var(--surface-bg);
 		overflow: hidden;
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
 	}
 
 	.os-card-header {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 1rem 1.25rem;
+		padding: 1.125rem 1.375rem;
 		border-bottom: 1px solid var(--surface-border);
 	}
 
 	.os-card-title {
-		font-size: 0.875rem;
+		font-size: 0.8125rem;
 		font-weight: 600;
-		color: var(--center-channel-color);
+		color: var(--surface-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
 	}
 
 	.os-card-count {
 		font-size: 0.75rem;
 		font-weight: 600;
-		padding: 0.125rem 0.5rem;
+		padding: 0.1875rem 0.5rem;
 		border-radius: 9999px;
-		background-color: color-mix(in srgb, var(--surface-border) 60%, var(--center-channel-bg));
+		background-color: color-mix(in srgb, var(--surface-border) 50%, var(--center-channel-bg));
 		color: var(--surface-muted);
 	}
 
 	.os-card-body {
-		padding: 1.25rem;
+		padding: 1.375rem;
 	}
 
 	/* Edit form */
@@ -802,7 +813,7 @@
 		font-size: 0.75rem;
 		font-weight: 500;
 		text-transform: uppercase;
-		letter-spacing: 0.04em;
+		letter-spacing: 0.05em;
 		color: var(--surface-muted);
 	}
 
@@ -816,9 +827,9 @@
 	.os-invite-bar {
 		display: flex;
 		gap: 0.5rem;
-		padding: 0.75rem 1.25rem;
+		padding: 1rem 1.375rem;
 		border-bottom: 1px solid var(--surface-border);
-		background-color: color-mix(in srgb, var(--surface-border) 20%, var(--surface-bg));
+		background-color: color-mix(in srgb, var(--surface-border) 15%, var(--surface-bg));
 	}
 
 	/* Member list */
@@ -831,13 +842,13 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 0.75rem;
-		padding: 0.75rem 1.25rem;
-		border-bottom: 1px solid var(--surface-border);
+		gap: 1rem;
+		padding: 0.875rem 1.375rem;
+		border-bottom: 1px solid color-mix(in srgb, var(--surface-border) 70%, transparent);
 		transition: background-color 80ms ease;
 	}
 	.os-member:last-child { border-bottom: none; }
-	.os-member:hover { background-color: color-mix(in srgb, var(--surface-border) 20%, var(--surface-bg)); }
+	.os-member:hover { background-color: color-mix(in srgb, var(--surface-border) 15%, var(--surface-bg)); }
 
 	.os-member-left {
 		display: flex;

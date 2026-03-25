@@ -116,6 +116,89 @@ export class ProjectsService {
     }));
   }
 
+  /**
+   * Compute the runtime deployment status from Kubernetes state.
+   * Possible values: 'running' | 'restarting' | 'scaling' | 'failed' | 'stopped' | 'unhealthy' | 'pending'
+   */
+  private async computeDeploymentStatus(deployment: any): Promise<string> {
+    if (deployment.replicas === 0) {
+      return 'stopped';
+    }
+
+    if (!deployment.name || !deployment.namespace) {
+      return deployment.status;
+    }
+
+    try {
+      const livePods = await this.kubernetesService.getDeploymentPods(
+        deployment.name,
+        deployment.namespace
+      );
+      const pods = this.formatLivePods(livePods?.pods);
+      const warnings = livePods?.warnings || [];
+
+      const readyPods = pods?.filter((pod: any) => pod.status?.toLowerCase() === 'ready') ?? [];
+      const allPods = pods ?? [];
+      const desiredReplicas = deployment.replicas || 1;
+
+      if (allPods.length === 0) {
+        return 'pending';
+      }
+
+      const hasBackOffWarning = warnings.some(warning =>
+        warning.message?.toLowerCase().includes('back-off') ||
+        warning.message?.toLowerCase().includes('backoff') ||
+        warning.message?.toLowerCase().includes('crashloop')
+      );
+
+      const hasCrashingPods = allPods.some((pod: any) => {
+        const restartCount = typeof pod.restartCount === 'number' ? pod.restartCount : 0;
+        return restartCount > 5 && pod.status?.toLowerCase() !== 'ready';
+      });
+
+      const hasAnyRestarts = allPods.some((pod: any) => {
+        const restartCount = typeof pod.restartCount === 'number' ? pod.restartCount : 0;
+        return restartCount > 0;
+      });
+
+      // No ready pods at all
+      if (readyPods.length === 0) {
+        if (hasBackOffWarning || hasCrashingPods) {
+          return 'failed';
+        }
+        // Pods exist but none ready and no crash loops — starting up or restarting
+        return hasAnyRestarts ? 'restarting' : 'pending';
+      }
+
+      // Some pods ready, some not
+      if (readyPods.length < desiredReplicas) {
+        if (hasBackOffWarning || hasCrashingPods) {
+          return 'unhealthy';
+        }
+        // Pods cycling with restarts = rolling restart, otherwise scaling up
+        return hasAnyRestarts ? 'restarting' : 'scaling';
+      }
+
+      // More total pods than desired = scaling down or rolling restart in progress
+      if (allPods.length > desiredReplicas) {
+        return hasAnyRestarts ? 'restarting' : 'scaling';
+      }
+
+      // All desired replicas are ready
+      if (hasBackOffWarning) {
+        return 'unhealthy';
+      }
+
+      return 'running';
+    } catch (error) {
+      console.error(
+        `[ProjectsService] Failed to compute status for deployment ${deployment.id}:`,
+        error instanceof Error ? error.message : error
+      );
+      return deployment.status;
+    }
+  }
+
   private addInternalUrlsToServices(services: any[], namespace: string) {
     if (!Array.isArray(services) || !namespace) {
       return services;
@@ -806,7 +889,7 @@ export class ProjectsService {
           },
         ];
 
-    // Create deployment record immediately with status='building'
+    // Create deployment record with buildStatus='building' and status='pending'
     const buildMethodLabel = buildType === 'railpack' ? 'Railpack' : 'Dockerfile';
     const deployment = await this.prisma.deployment.create({
       data: {
@@ -815,7 +898,8 @@ export class ProjectsService {
         namespace: project.namespace,
         image: `${this.dockerService.getImagePath(imageName, uniqueTag)}`, // Placeholder, will be updated
         replicas,
-        status: 'building',
+        status: 'pending',
+        buildStatus: 'building',
         buildType,
         githubRepo: repoUrl,
         githubBranch: branch,
@@ -1077,12 +1161,16 @@ export class ProjectsService {
       let deploymentResult: any;
 
       // Set buildStep to deploying
-      const currentLogs = (await this.prisma.deployment.findUnique({ where: { id: deploymentId }, select: { buildLogs: true } }))?.buildLogs || '';
+      const currentDeploymentData = await this.prisma.deployment.findUnique({ where: { id: deploymentId }, select: { buildLogs: true, buildStepTimestamps: true } });
+      const currentLogs = currentDeploymentData?.buildLogs || '';
+      const currentTimestamps = (currentDeploymentData?.buildStepTimestamps as Record<string, number> | null) || {};
+      currentTimestamps['deploying'] = Date.now();
       await this.prisma.deployment.update({
         where: { id: deploymentId },
         data: {
           buildStep: 'deploying',
           buildLogs: currentLogs + '[INFO] Creating Kubernetes deployment...\n',
+          buildStepTimestamps: currentTimestamps,
         },
       });
 
@@ -1210,23 +1298,33 @@ export class ProjectsService {
           }
 
           // Update deployment status to success
+          const txDeployData = await tx.deployment.findUnique({ where: { id: deploymentId }, select: { buildLogs: true, buildStepTimestamps: true } });
+          const txTimestamps = (txDeployData?.buildStepTimestamps as Record<string, number> | null) || {};
+          txTimestamps['complete'] = Date.now();
           await tx.deployment.update({
             where: { id: deploymentId },
             data: {
               status: 'running',
+              buildStatus: 'succeeded',
               buildStep: 'complete',
-              buildLogs: (await tx.deployment.findUnique({ where: { id: deploymentId }, select: { buildLogs: true } }))?.buildLogs + '\n✅ Deployment created successfully!',
+              buildLogs: (txDeployData?.buildLogs || '') + '\n✅ Deployment created successfully!',
+              buildStepTimestamps: txTimestamps,
             },
           });
         });
       } else {
         // For rebuilds where deployment already existed, just update the status
+        const rebuildData = await this.prisma.deployment.findUnique({ where: { id: deploymentId }, select: { buildLogs: true, buildStepTimestamps: true } });
+        const rebuildTimestamps = (rebuildData?.buildStepTimestamps as Record<string, number> | null) || {};
+        rebuildTimestamps['complete'] = Date.now();
         await this.prisma.deployment.update({
           where: { id: deploymentId },
           data: {
             status: 'running',
+            buildStatus: 'succeeded',
             buildStep: 'complete',
-            buildLogs: (await this.prisma.deployment.findUnique({ where: { id: deploymentId }, select: { buildLogs: true } }))?.buildLogs + '\n✅ Rebuild completed successfully!',
+            buildLogs: (rebuildData?.buildLogs || '') + '\n✅ Rebuild completed successfully!',
+            buildStepTimestamps: rebuildTimestamps,
           },
         });
       }
@@ -1386,12 +1484,12 @@ export class ProjectsService {
       try {
         const currentDeployment = await this.prisma.deployment.findUnique({
           where: { id: deploymentId },
-          select: { buildLogs: true, buildStep: true, status: true },
+          select: { buildLogs: true, buildStep: true, status: true, buildStatus: true },
         });
 
-        // Don't overwrite a successful deployment status from a newer build
-        if (currentDeployment?.status === 'running') {
-          console.log(`[Projects] Deployment ${deploymentId} is already running (likely from a newer build), skipping error status update`);
+        // Don't overwrite a successful build status from a newer build
+        if (currentDeployment?.buildStatus === 'succeeded') {
+          console.log(`[Projects] Deployment ${deploymentId} already has a succeeded build (likely from a newer build), skipping error status update`);
           return;
         }
 
@@ -1400,7 +1498,7 @@ export class ProjectsService {
         await this.prisma.deployment.update({
           where: { id: deploymentId },
           data: {
-            status: 'failed',
+            buildStatus: 'failed',
             buildError: error.message,
             buildLogs: (currentDeployment?.buildLogs || '') + errorLogEntry,
           },
@@ -1578,7 +1676,7 @@ export class ProjectsService {
       throw new ForbiddenException('You do not have permission to rebuild deployments');
     }
 
-    if (deployment.status === 'building' || deployment.status === 'pending') {
+    if (deployment.buildStatus === 'building') {
       throw new BadRequestException('A build is already in progress for this deployment. Please cancel it before starting a new build.');
     }
 
@@ -1589,12 +1687,13 @@ export class ProjectsService {
       console.error(`[Projects] Error cancelling existing build jobs:`, error);
     }
 
-    // Reset deployment to building status
+    // Reset build status to building
     await this.prisma.deployment.update({
       where: { id: deploymentId },
       data: {
-        status: 'building',
+        buildStatus: 'building',
         buildStep: null,
+        buildStepTimestamps: {},
         buildLogs: `🔄 Rebuilding deployment from ${deployment.githubRepo}@${deployment.githubBranch}\n`,
         buildError: null,
       },
@@ -3791,37 +3890,7 @@ export class ProjectsService {
     // Compute status for each deployment
     const deploymentsWithComputedStatus = await Promise.all(
       project.deployments.map(async (deployment) => {
-        let computedStatus = deployment.status;
-
-        if (deployment.name && deployment.namespace && deployment.status === 'running') {
-          try {
-            const livePods = await this.kubernetesService.getDeploymentPods(
-              deployment.name,
-              deployment.namespace
-            );
-            const pods = this.formatLivePods(livePods?.pods);
-            const warnings = livePods?.warnings || [];
-
-            const hasReadyPods = pods?.some((pod: any) => pod.status?.toLowerCase() === 'ready') ?? false;
-
-            const hasBackOffWarning = warnings.some(warning => 
-              warning.message?.toLowerCase().includes('back-off') || 
-              warning.message?.toLowerCase().includes('backoff') ||
-              warning.message?.toLowerCase().includes('crashloop')
-            );
-
-            if (!hasReadyPods && pods?.length > 0) {
-              computedStatus = 'stopped';
-            } else if (hasBackOffWarning && hasReadyPods) {
-              computedStatus = 'warning';
-            }
-          } catch (error) {
-            console.error(
-              `[ProjectsService] Failed to fetch live pods for deployment ${deployment.id}:`,
-              error instanceof Error ? error.message : error
-            );
-          }
-        }
+        const computedStatus = await this.computeDeploymentStatus(deployment);
 
         return {
           ...deployment,
@@ -3892,37 +3961,7 @@ export class ProjectsService {
     // Compute status for each deployment
     const deploymentsWithComputedStatus = await Promise.all(
       project.deployments.map(async (deployment) => {
-        let computedStatus = deployment.status;
-
-        if (deployment.name && deployment.namespace && deployment.status === 'running') {
-          try {
-            const livePods = await this.kubernetesService.getDeploymentPods(
-              deployment.name,
-              deployment.namespace
-            );
-            const pods = this.formatLivePods(livePods?.pods);
-            const warnings = livePods?.warnings || [];
-
-            const hasReadyPods = pods?.some((pod: any) => pod.status?.toLowerCase() === 'ready') ?? false;
-
-            const hasBackOffWarning = warnings.some(warning => 
-              warning.message?.toLowerCase().includes('back-off') || 
-              warning.message?.toLowerCase().includes('backoff') ||
-              warning.message?.toLowerCase().includes('crashloop')
-            );
-
-            if (!hasReadyPods && pods?.length > 0) {
-              computedStatus = 'stopped';
-            } else if (hasBackOffWarning && hasReadyPods) {
-              computedStatus = 'warning';
-            }
-          } catch (error) {
-            console.error(
-              `[ProjectsService] Failed to fetch live pods for deployment ${deployment.id}:`,
-              error instanceof Error ? error.message : error
-            );
-          }
-        }
+        const computedStatus = await this.computeDeploymentStatus(deployment);
 
         return {
           ...deployment,
@@ -3968,9 +4007,8 @@ export class ProjectsService {
       deployments.map(async (deployment) => {
         let pods: any = deployment.pods;
         let warnings: any[] = [];
-        let computedStatus = deployment.status;
 
-        if (deployment.name && deployment.namespace && deployment.status === 'running') {
+        if (deployment.name && deployment.namespace) {
           try {
             const livePods = await this.kubernetesService.getDeploymentPods(
               deployment.name,
@@ -3978,20 +4016,6 @@ export class ProjectsService {
             );
             pods = this.formatLivePods(livePods?.pods);
             warnings = livePods?.warnings || [];
-
-            const hasReadyPods = pods?.some((pod: any) => pod.status?.toLowerCase() === 'ready') ?? false;
-
-            const hasBackOffWarning = warnings.some(warning => 
-              warning.message?.toLowerCase().includes('back-off') || 
-              warning.message?.toLowerCase().includes('backoff') ||
-              warning.message?.toLowerCase().includes('crashloop')
-            );
-
-            if (!hasReadyPods && pods?.length > 0) {
-              computedStatus = 'stopped';
-            } else if (hasBackOffWarning && hasReadyPods) {
-              computedStatus = 'warning';
-            }
           } catch (error) {
             console.error(
               `[ProjectsService] Failed to fetch live pods for deployment ${deployment.id}:`,
@@ -3999,6 +4023,8 @@ export class ProjectsService {
             );
           }
         }
+
+        const computedStatus = await this.computeDeploymentStatus(deployment);
 
         return {
           ...deployment,
@@ -4146,23 +4172,7 @@ export class ProjectsService {
       deploymentWithInternalUrls.ingresses = enrichedIngresses;
     }
 
-    let computedStatus = deployment.status;
-    
-    if (deployment.status === 'running') {
-      const hasReadyPods = pods?.some((pod: any) => pod.status?.toLowerCase() === 'ready') ?? false;
-
-      const hasBackOffWarning = warnings.some(warning => 
-        warning.message?.toLowerCase().includes('back-off') || 
-        warning.message?.toLowerCase().includes('backoff') ||
-        warning.message?.toLowerCase().includes('crashloop')
-      );
-
-      if (!hasReadyPods && pods?.length > 0) {
-        computedStatus = 'stopped';
-      } else if (hasBackOffWarning && hasReadyPods) {
-        computedStatus = 'warning';
-      }
-    }
+    const computedStatus = await this.computeDeploymentStatus(deployment);
 
     // Fire-and-forget: save metrics + clean up old ones
     if (totalCpuUsage != null || totalMemoryUsage != null) {
@@ -4206,6 +4216,7 @@ export class ProjectsService {
       totalMemoryUsage,
       metricsHistory,
       status: computedStatus,
+      buildStatus: deployment.buildStatus,
     };
   }
 
@@ -4283,7 +4294,7 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    if (deployment.status !== 'building' && deployment.status !== 'pending') {
+    if (deployment.buildStatus !== 'building') {
       throw new BadRequestException('Deployment is not in a buildable state');
     }
 
@@ -4317,7 +4328,7 @@ export class ProjectsService {
     await this.prisma.deployment.update({
       where: { id: deploymentId },
       data: {
-        status: 'failed',
+        buildStatus: 'failed',
         buildStep: null,
         buildError: 'Build cancelled by user',
         buildLogs: currentLogs + `[${Date.now()}] [INFO] Build cancelled by user\n`,
@@ -5933,8 +5944,8 @@ export class ProjectsService {
       throw new BadRequestException('This deployment was not created from GitHub');
     }
 
-    if (deployment.status === 'building' || deployment.status === 'pending') {
-      console.log(`[Projects] Skipping auto-deploy for deployment ${deploymentId}: build already in progress (status: ${deployment.status})`);
+    if (deployment.buildStatus === 'building') {
+      console.log(`[Projects] Skipping auto-deploy for deployment ${deploymentId}: build already in progress (buildStatus: ${deployment.buildStatus})`);
       throw new BadRequestException('A build is already in progress for this deployment');
     }
 
@@ -6026,11 +6037,12 @@ export class ProjectsService {
       }
     }
 
-    // Reset deployment to building status
+    // Reset build status to building
     await this.prisma.deployment.update({
       where: { id: deploymentId },
       data: {
-        status: 'building',
+        buildStatus: 'building',
+        buildStepTimestamps: {},
         buildLogs: `🚀 Auto-deploy triggered by push to ${deployment.autoDeployBranch || deployment.githubBranch}\n📝 Commit: ${commitSha?.substring(0, 7)} - ${commitMessage.split('\n')[0]}\n\n`,
         buildError: null,
       },

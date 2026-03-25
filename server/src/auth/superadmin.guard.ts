@@ -21,13 +21,16 @@ export class SuperAdminGuard implements CanActivate {
   }
 
   async canActivate(context: ExecutionContext): Promise<boolean> {
-    // Check @Auth() on handler or class — method-level @Auth() overrides class-level @Public()
+    const handlerIsPublic = this.reflector.get<boolean>(IS_PUBLIC_KEY, context.getHandler());
+    if (handlerIsPublic) {
+      return true;
+    }
+
     const requiresAuth = this.reflector.getAllAndOverride<boolean>(REQUIRES_AUTH_KEY, [
       context.getHandler(),
       context.getClass(),
     ]);
 
-    // Check @Public() — skip all auth (unless the specific method requires it)
     if (!requiresAuth) {
       const isPublic = this.reflector.getAllAndOverride<boolean>(IS_PUBLIC_KEY, [
         context.getHandler(),

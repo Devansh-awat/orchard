@@ -20,6 +20,7 @@ model User {
   githubUsername    String?  @map("github_username") @db.VarChar(255)
   githubAccessToken String?  @map("github_access_token") @db.Text
   isSuperAdmin      Boolean  @default(false) @map("is_super_admin")
+  setupCompleted    Boolean  @default(false) @map("setup_completed")
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
@@ -316,6 +317,7 @@ model Deployment {
   image          String?    @db.VarChar(500)
   replicas       Int        @default(1)
   status         String     @default("pending") @db.VarChar(50)
+  buildStatus    String     @default("none") @map("build_status") @db.VarChar(50)
   buildStep      String?    @map("build_step") @db.VarChar(50)
   buildType      BuildType  @default(dockerfile) @map("build_type")
   githubRepo     String?    @map("github_repo") @db.VarChar(500)
@@ -324,6 +326,7 @@ model Deployment {
   buildFromRoot  Boolean    @default(false) @map("build_from_root")
   buildLogs      String?    @map("build_logs") @db.Text
   buildError     String?    @map("build_error") @db.Text
+  buildStepTimestamps Json?  @map("build_step_timestamps") @db.JsonB
   createdBy      String?    @map("created_by") @db.Uuid
   createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamp(6)

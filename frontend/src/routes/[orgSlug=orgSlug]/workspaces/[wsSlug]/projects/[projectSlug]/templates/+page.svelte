@@ -217,7 +217,7 @@
 	.tpl-page {
 		max-width: 52rem;
 		margin: 0 auto;
-		padding: 2rem 1.5rem;
+		padding: 2.5rem 2.5rem 3rem;
 	}
 
 	.tpl-back {
@@ -263,16 +263,20 @@
 		background-color: #ec4899;
 		color: #fff;
 		text-decoration: none;
-		transition: opacity 0.15s;
+		transition: opacity 0.15s, transform 0.15s, box-shadow 0.15s;
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.1), 0 1px 2px rgb(0 0 0 / 0.06);
 	}
 
 	.tpl-create-btn:hover {
 		opacity: 0.9;
+		transform: translateY(-0.5px);
+		box-shadow: 0 4px 6px rgb(0 0 0 / 0.1), 0 2px 4px rgb(0 0 0 / 0.06);
 	}
 
 	.tpl-title {
-		font-size: 1.125rem;
-		font-weight: 600;
+		font-size: 1.25rem;
+		font-weight: 700;
+		letter-spacing: -0.02em;
 		color: var(--center-channel-color);
 		margin: 0;
 	}
@@ -391,6 +395,7 @@
 		text-decoration: none;
 		color: var(--center-channel-color);
 		transition: border-color 0.15s, box-shadow 0.15s;
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.02);
 		cursor: pointer;
 	}
 

@@ -2,6 +2,7 @@
 	import '../app.css';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
+	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import {
 		user,
@@ -10,21 +11,20 @@
 		apiFetch,
 		initApiBase,
 		pendingInvitations,
-		showPendingInvitationsModal,
 		themeStore
 	} from '$lib/stores';
-	import { Sidebar, ToastContainer, PendingInvitationsModal, OnboardingModal } from '$lib/components';
-	import { Loader2 } from 'lucide-svelte';
+	import { Sidebar, ToastContainer, OnboardingModal } from '$lib/components';
+	import QuickSearch from '$lib/components/QuickSearch.svelte';
 
 	let { children } = $props();
 
 	let loading = $state(true);
 
-	// Don't check for pending invitations on these routes
-	const skipInvitationCheckRoutes = ['/invite', '/oauth/callback'];
+	// Don't check for pending invitations or redirect on these routes
+	const skipRoutes = ['/invite', '/oauth/callback', '/setup'];
 
-	function shouldSkipInvitationCheck(pathname: string): boolean {
-		return skipInvitationCheckRoutes.some((route) => pathname.startsWith(route));
+	function shouldSkipChecks(pathname: string): boolean {
+		return skipRoutes.some((route) => pathname.startsWith(route));
 	}
 
 	onMount(async () => {
@@ -42,19 +42,23 @@
 
 		// If user is signed in, fetch organizations and check for pending invitations
 		if ($isSignedIn) {
+			// Redirect to setup if not completed (unless already on setup/invite/callback)
+			if ($user?.setupCompleted === false && !shouldSkipChecks($page.url.pathname)) {
+				goto('/setup', { replaceState: true });
+				loading = false;
+				return;
+			}
+
 			try {
 				const response = await apiFetch('/apiv1/organizations/user');
 				if (response.ok) {
 					const orgs = await response.json();
 					organizations.set(orgs);
 					organizations.initializeSelected();
-				}
 
-				// Check for pending invitations (unless on invite or callback routes)
-				if (!shouldSkipInvitationCheck($page.url.pathname)) {
-					const pending = await pendingInvitations.fetchPending();
-					if (pending.length > 0) {
-						showPendingInvitationsModal.show();
+					// Fetch pending invitations (only for users who completed setup)
+					if (!shouldSkipChecks($page.url.pathname) && $user?.setupCompleted) {
+						await pendingInvitations.fetchPending();
 					}
 				}
 			} catch (e) {
@@ -73,10 +77,16 @@
 {#if loading}
 	<div class="flex h-screen items-center justify-center" style="background-color: var(--center-channel-bg);">
 		<div class="text-center">
-			<Loader2 class="mx-auto h-8 w-8 animate-spin text-primary-600" />
-			<p class="mt-2 text-sm" style="color: var(--surface-muted);">Loading...</p>
+			<div class="bouncing-dots">
+				<span class="bouncing-dot"></span>
+				<span class="bouncing-dot"></span>
+				<span class="bouncing-dot"></span>
+			</div>
+			<p class="mt-3 text-sm" style="color: var(--surface-muted);">Loading...</p>
 		</div>
 	</div>
+{:else if $isSignedIn && $page.url.pathname.startsWith('/setup')}
+	{@render children()}
 {:else if $isSignedIn}
 	<div class="flex h-screen overflow-hidden">
 		<Sidebar />
@@ -91,5 +101,5 @@
 {/if}
 
 <ToastContainer />
-<PendingInvitationsModal />
 <OnboardingModal />
+<QuickSearch />

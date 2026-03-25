@@ -191,7 +191,7 @@
 	.nw-page {
 		max-width: 32rem;
 		margin: 0 auto;
-		padding: 1.5rem;
+		padding: 2rem;
 		min-height: 100%;
 		display: flex;
 		flex-direction: column;
@@ -202,8 +202,8 @@
 	.nw-header {
 		display: flex;
 		align-items: center;
-		gap: 0.875rem;
-		margin-bottom: 1.75rem;
+		gap: 1rem;
+		margin-bottom: 2rem;
 	}
 
 	.nw-header-icon {
@@ -212,23 +212,26 @@
 		justify-content: center;
 		width: 3rem;
 		height: 3rem;
-		border-radius: 0.75rem;
-		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
+		border-radius: 0.875rem;
+		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 10%, transparent);
 		color: var(--sidebar-text-active-border);
 		flex-shrink: 0;
 	}
 
 	.nw-title {
-		font-size: 1.125rem;
-		font-weight: 600;
+		font-size: 1.25rem;
+		font-weight: 700;
 		color: var(--center-channel-color);
 		margin: 0;
+		letter-spacing: -0.02em;
+		line-height: 1.2;
 	}
 
 	.nw-subtitle {
-		font-size: 0.8125rem;
+		font-size: 0.875rem;
 		color: var(--surface-muted);
-		margin: 0.125rem 0 0;
+		margin: 0.25rem 0 0;
+		line-height: 1.4;
 	}
 
 	/* Card */
@@ -236,7 +239,10 @@
 		border: 1px solid var(--surface-border);
 		border-radius: 1rem;
 		background-color: var(--surface-bg);
-		padding: 1.5rem;
+		padding: 1.75rem;
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
 	}
 
 	/* Error */
@@ -254,10 +260,10 @@
 	.nw-form {
 		display: flex;
 		flex-direction: column;
-		gap: 1.25rem;
+		gap: 1.5rem;
 	}
 
-	/* Field */
+	/* Field — clear spacing between label/input groups */
 	.nw-field {
 		display: flex;
 		flex-direction: column;
@@ -268,7 +274,7 @@
 	.nw-label {
 		font-size: 0.8125rem;
 		font-weight: 500;
-		color: var(--center-channel-color);
+		color: var(--surface-muted);
 		display: flex;
 		align-items: center;
 		gap: 0.375rem;
@@ -277,13 +283,14 @@
 	.nw-optional {
 		font-size: 0.6875rem;
 		font-weight: 400;
-		color: var(--surface-muted);
+		color: color-mix(in srgb, var(--surface-muted) 60%, transparent);
 	}
 
 	.nw-hint {
 		font-size: 0.75rem;
-		color: var(--surface-muted);
+		color: color-mix(in srgb, var(--surface-muted) 75%, transparent);
 		margin: 0;
+		line-height: 1.4;
 	}
 
 	/* Input */
@@ -309,7 +316,7 @@
 	}
 
 	.nw-input-mono {
-		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+		font-family: var(--font-mono);
 	}
 
 	/* Org display */
@@ -343,7 +350,7 @@
 
 	.nw-preview-value {
 		font-size: 0.8125rem;
-		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+		font-family: var(--font-mono);
 		color: var(--sidebar-text-active-border);
 	}
 
@@ -351,24 +358,24 @@
 	.nw-actions {
 		display: flex;
 		justify-content: flex-end;
-		gap: 0.5rem;
-		margin-top: 1.5rem;
-		padding-top: 1.25rem;
-		border-top: 1px solid var(--surface-border);
+		gap: 0.625rem;
+		margin-top: 1.75rem;
+		padding-top: 1.5rem;
+		border-top: 1px solid color-mix(in srgb, var(--surface-border) 60%, transparent);
 	}
 
-	/* Buttons */
+	/* Buttons — primary/secondary hierarchy */
 	.nw-btn {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
-		padding: 0.4375rem 0.875rem;
+		gap: 0.5rem;
+		padding: 0.5rem 1rem;
 		border-radius: 0.5rem;
 		font-size: 0.8125rem;
-		font-weight: 500;
+		font-weight: 600;
 		border: none;
 		cursor: pointer;
-		transition: opacity 0.15s;
+		transition: all 0.2s ease;
 		white-space: nowrap;
 	}
 
@@ -380,18 +387,28 @@
 	.nw-btn-primary {
 		background-color: var(--sidebar-text-active-border);
 		color: #fff;
+		box-shadow:
+			0 1px 2px rgb(0 0 0 / 0.08),
+			0 1px 1px rgb(0 0 0 / 0.04);
 	}
 
 	.nw-btn-primary:hover:not(:disabled) {
-		opacity: 0.9;
+		opacity: 0.95;
+		transform: translateY(-0.5px);
+		box-shadow:
+			0 2px 4px rgb(0 0 0 / 0.08),
+			0 4px 12px rgb(0 0 0 / 0.06);
 	}
 
 	.nw-btn-secondary {
-		background-color: color-mix(in srgb, var(--surface-border) 60%, transparent);
-		color: var(--center-channel-color);
+		background-color: transparent;
+		color: var(--surface-muted);
+		border: 1px solid var(--surface-border);
 	}
 
 	.nw-btn-secondary:hover:not(:disabled) {
-		background-color: color-mix(in srgb, var(--surface-border) 90%, transparent);
+		background-color: var(--control-hover-bg);
+		color: var(--center-channel-color);
+		border-color: color-mix(in srgb, var(--surface-border) 60%, var(--center-channel-color));
 	}
 </style>

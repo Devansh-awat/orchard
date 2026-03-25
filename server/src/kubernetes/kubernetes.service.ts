@@ -874,6 +874,9 @@ export class KubernetesService {
     if (!uniqueEnv.has('HOST')) {
       uniqueEnv.set('HOST', '0.0.0.0');
     }
+    if (!uniqueEnv.has('FORCE_COLOR')) {
+      uniqueEnv.set('FORCE_COLOR', '1');
+    }
 
     const envList = Array.from(uniqueEnv.entries()).map(([key, value]) => ({
       name: key,
@@ -1800,6 +1803,9 @@ export class KubernetesService {
 
     if (!uniqueEnv.has('HOST')) {
       uniqueEnv.set('HOST', '0.0.0.0');
+    }
+    if (!uniqueEnv.has('FORCE_COLOR')) {
+      uniqueEnv.set('FORCE_COLOR', '1');
     }
 
     const envList = Array.from(uniqueEnv.entries()).map(([key, value]) => ({
@@ -2897,16 +2903,21 @@ export class KubernetesService {
         const image = k8sDeployment.spec.template.spec.containers[0]?.image;
         const replicas = k8sDeployment.spec.replicas || 1;
         const availableReplicas = k8sDeployment.status.availableReplicas || 0;
-        
+        const unavailableReplicas = k8sDeployment.status.unavailableReplicas || 0;
+
         let status = 'pending';
-        if (availableReplicas === replicas && replicas > 0) {
+        if (replicas === 0) {
+          status = 'stopped';
+        } else if (availableReplicas === replicas && replicas > 0) {
           status = 'running';
-        } else if (availableReplicas > 0) {
-          status = 'pending';
-        } else {
+        } else if (availableReplicas > 0 && availableReplicas < replicas) {
+          status = 'scaling';
+        } else if (availableReplicas === 0 && unavailableReplicas > 0) {
           status = 'failed';
+        } else {
+          status = 'pending';
         }
-        
+
         const deploymentRecord = await this.prisma.deployment.upsert({
           where: {
             projectId_name: {
@@ -3119,7 +3130,7 @@ export class KubernetesService {
       const dbDeployments = await this.prisma.deployment.findMany({
         where: { 
           projectId: project.id,
-          status: { notIn: ['building'] }
+          buildStatus: { notIn: ['building'] }
         }
       });
       

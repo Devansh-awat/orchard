@@ -5,11 +5,8 @@
 	import { PanelLeftClose, PanelLeft, FolderKanban, Rocket, Loader2, ArrowUpRight, Search, Folder, Pin, Globe, Leaf, Database, LayoutTemplate } from 'lucide-svelte';
 	import WorkspacesMenu from './WorkspacesMenu.svelte';
 	import UserMenu from './UserMenu.svelte';
-	import QuickSearch from './QuickSearch.svelte';
-	import { tree, treeLoading, treeError, type TreeItem, isSignedIn, selectedOrganization, pinnedItems } from '$lib/stores';
+	import { tree, treeLoading, treeError, type TreeItem, isSignedIn, selectedOrganization, pinnedItems, pendingInvitations } from '$lib/stores';
 	import { slide } from 'svelte/transition';
-
-	let quickSearchRef: QuickSearch;
 
 	let collapsed = $state(false);
 	let selectedId = $state<string | undefined>(undefined);
@@ -173,6 +170,19 @@
 		return null;
 	}
 
+	function flattenTree(items: TreeItem[]): TreeItem[] {
+		const result: TreeItem[] = [];
+		for (const item of items) {
+			result.push(item);
+			if (item.children) {
+				result.push(...flattenTree(item.children));
+			}
+		}
+		return result;
+	}
+
+	let flatItems = $derived(flattenTree(treeItems));
+
 	function findParentWorkspace(items: TreeItem[], childId: string): TreeItem | null {
 		for (const item of items) {
 			if (item.children) {
@@ -193,40 +203,36 @@
 	}
 </script>
 
-<aside class="sidebar transition-all duration-200" style="width: {collapsed ? '4rem' : '16rem'};">
-	<div class="flex h-full flex-col">
-		<div class="sidebar-team-bar p-3">
+<aside class="sidebar transition-all duration-200" style="width: {collapsed ? '4.5rem' : '16.5rem'};">
+	<div class="sidebar-inner">
+		<div class="sidebar-team-bar">
 			{#if collapsed}
-				<div class="flex flex-col gap-2">
-					<div class="flex justify-center">
-						<button
-							onclick={() => collapsed = !collapsed}
-							class="sidebar-action rounded p-1"
-							aria-label="Expand sidebar"
-						>
-							<PanelLeft class="h-5 w-5" />
-						</button>
-					</div>
+				<div class="flex flex-col gap-2 items-center">
+					<button
+						onclick={() => collapsed = !collapsed}
+						class="sidebar-action"
+						aria-label="Expand sidebar"
+					>
+						<PanelLeft class="h-5 w-5" />
+					</button>
 					{#if $selectedOrganization}
-						<a href="/{$selectedOrganization.slug}/settings" class="flex justify-center">
+						<a href="/{$selectedOrganization.slug}/settings" class="sidebar-org-avatar-link">
 							{#if $selectedOrganization.avatarUrl}
 								<img
 									src={$selectedOrganization.avatarUrl}
 									alt={$selectedOrganization.name}
-									class="h-8 w-8 rounded-lg object-cover"
+									class="sidebar-org-avatar"
 								/>
 							{:else}
-								<div
-									class="flex h-8 w-8 items-center justify-center rounded-lg bg-primary-100 text-primary-700 dark:bg-primary-900/30 dark:text-primary-400"
-								>
+								<div class="sidebar-org-avatar-fallback">
 									<FolderKanban class="h-4 w-4" />
 								</div>
 							{/if}
 						</a>
 					{/if}
 					<button
-						onclick={() => quickSearchRef?.openSearch()}
-						class="sidebar-action rounded p-1 flex justify-center"
+						onclick={() => window.dispatchEvent(new CustomEvent('open-quick-search'))}
+						class="sidebar-action"
 						aria-label="Search"
 						title="Search ({shortcutKey}K)"
 					>
@@ -234,11 +240,11 @@
 					</button>
 					<a
 						href="/{$selectedOrganization?.slug ?? ''}"
-						class="sidebar-action rounded p-1 flex justify-center"
+						class="sidebar-logo-link"
 						aria-label="Home"
 						title="Home"
 					>
-						<Leaf class="h-5 w-5" />
+						<img src="/logo/logoiconcolor.svg" alt="Orchard" class="h-7 w-7" />
 					</a>
 				</div>
 			{:else}
@@ -248,7 +254,7 @@
 					</div>
 					<button
 						onclick={() => collapsed = !collapsed}
-						class="sidebar-action rounded p-1"
+						class="sidebar-action"
 						aria-label="Collapse sidebar"
 					>
 						<PanelLeftClose class="h-5 w-5" />
@@ -258,11 +264,11 @@
 		</div>
 
 		{#if !collapsed}
-			<div class="px-3 pt-3 pb-1">
+			<div class="sidebar-search-area">
 				<button
 					type="button"
-					onclick={() => quickSearchRef?.openSearch()}
-					class="sidebar-search-trigger w-full"
+					onclick={() => window.dispatchEvent(new CustomEvent('open-quick-search'))}
+					class="sidebar-search-trigger"
 				>
 					<div class="sidebar-search-icon-wrapper">
 						<Search class="h-3.5 w-3.5" />
@@ -271,7 +277,7 @@
 					<kbd class="sidebar-search-kbd">{isMac ? '⌘' : 'Ctrl'}K</kbd>
 				</button>
 			</div>
-			<div class="px-3 pt-4">
+			<div class="sidebar-home-link">
 				<a
 					href="/{$selectedOrganization?.slug ?? ''}"
 					class="tree-node-content"
@@ -286,7 +292,7 @@
 		{/if}
 
 		{#if !collapsed}
-			<nav class="sidebar-nav flex-1 overflow-y-auto px-3 pb-3 pt-0">
+			<nav class="sidebar-nav">
 				{#if !$isSignedIn}
 					<div class="sidebar-muted p-4 text-center text-sm">
 						Sign in to view workspaces
@@ -448,23 +454,48 @@
 				{/if}
 			</nav>
 		{:else}
-			<div class="flex-1"></div>
+			<!-- Collapsed nav: show all tree items as icons -->
+			{#if $isSignedIn && !$treeLoading && !$treeError && flatItems.length > 0}
+				<div class="sidebar-collapsed-nav">
+					{#each flatItems as item (item.id)}
+						{@const Icon = getIcon(item.type)}
+						{@const badgeColor = getIconBadgeColor(item.type)}
+						{@const active = isActive(item.href)}
+						<a
+							href={item.href}
+							class="sidebar-collapsed-icon"
+							class:is-active={active}
+							onclick={(e) => {
+								if (e.button !== 0 || e.metaKey || e.ctrlKey) return;
+								e.preventDefault();
+								goto(item.href);
+							}}
+						>
+							<div class="tree-icon-badge" style="background-color: {badgeColor}">
+								<Icon size={11} class="tree-icon-svg" />
+							</div>
+							<span class="sidebar-collapsed-tooltip">{item.name}</span>
+						</a>
+					{/each}
+				</div>
+			{:else}
+				<div class="flex-1"></div>
+			{/if}
 		{/if}
 
-		<div class="sidebar-footer p-3 mt-auto">
+		<div class="sidebar-footer">
 			{#if collapsed}
-				<a href="/user/settings" class="flex justify-center">
-					<div
-						class="flex h-8 w-8 items-center justify-center rounded-full"
-						style="background-color: var(--sidebar-text-hover-bg); color: var(--sidebar-text);"
-					>
+				<a href="/user/settings" class="sidebar-footer-avatar-link relative">
+					<div class="sidebar-footer-avatar">
 						<span class="text-sm font-medium">U</span>
 					</div>
+					{#if $pendingInvitations.length > 0}
+						<span class="sidebar-notification-dot"></span>
+					{/if}
 				</a>
 			{:else}
 				<UserMenu />
 			{/if}
 		</div>
 	</div>
-	<QuickSearch bind:this={quickSearchRef} />
 </aside>

@@ -69,27 +69,25 @@ export class DockerService {
     }
   }
 
-  private stepStartTimes = new Map<string, number>();
-
   private async setBuildStep(deploymentId: string | undefined, step: string) {
     if (!deploymentId) return;
 
     try {
-      this.stepStartTimes.set(`${deploymentId}:${step}`, Date.now());
+      const deployment = await this.prisma.deployment.findUnique({
+        where: { id: deploymentId },
+        select: { buildStepTimestamps: true },
+      });
+
+      const timestamps = (deployment?.buildStepTimestamps as Record<string, number> | null) || {};
+      timestamps[step] = Date.now();
+
       await this.prisma.deployment.update({
         where: { id: deploymentId },
-        data: { buildStep: step },
+        data: { buildStep: step, buildStepTimestamps: timestamps },
       });
     } catch (error) {
       console.error('[Docker Service] Failed to set build step:', error);
     }
-  }
-
-  private getStepElapsedTime(deploymentId: string | undefined, step: string): number | null {
-    if (!deploymentId) return null;
-    const startTime = this.stepStartTimes.get(`${deploymentId}:${step}`);
-    if (!startTime) return null;
-    return Math.floor((Date.now() - startTime) / 1000);
   }
 
   private async computeSecretsHash(deploymentId?: string): Promise<string> {

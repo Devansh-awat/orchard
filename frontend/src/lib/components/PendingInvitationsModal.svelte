@@ -19,6 +19,8 @@
 	const invitations = $derived($pendingInvitations);
 	const isOpen = $derived($showPendingInvitationsModal);
 
+
+
 	function getRoleBadgeColor(role: string): string {
 		switch (role) {
 			case 'owner':

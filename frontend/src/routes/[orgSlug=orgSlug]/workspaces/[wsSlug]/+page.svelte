@@ -724,7 +724,7 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 	.ws-page {
 		max-width: 52rem;
 		margin: 0 auto;
-		padding: 2rem 1.5rem;
+		padding: 2.5rem 2.5rem 3rem;
 	}
 
 	.ws-loading {
@@ -765,8 +765,9 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 	}
 
 	.ws-title {
-		font-size: 1.125rem;
-		font-weight: 600;
+		font-size: 1.25rem;
+		font-weight: 700;
+		letter-spacing: -0.02em;
 		color: var(--center-channel-color);
 		margin: 0;
 	}
@@ -811,9 +812,11 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 	}
 
 	.ws-section-title {
-		font-size: 0.875rem;
+		font-size: 0.8125rem;
 		font-weight: 600;
-		color: var(--center-channel-color);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--surface-muted);
 		margin: 0;
 	}
 
@@ -865,6 +868,7 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 		text-decoration: none;
 		color: var(--center-channel-color);
 		transition: border-color 0.15s, box-shadow 0.15s;
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.02);
 		cursor: pointer;
 	}
 
@@ -967,7 +971,7 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 		font-weight: 600;
 		color: var(--surface-muted);
 		text-transform: uppercase;
-		letter-spacing: 0.03em;
+		letter-spacing: 0.05em;
 		margin: 0;
 	}
 
@@ -1062,10 +1066,13 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 	.ws-btn-primary {
 		background-color: var(--sidebar-text-active-border);
 		color: #fff;
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.1), 0 1px 2px rgb(0 0 0 / 0.06);
 	}
 
 	.ws-btn-primary:hover:not(:disabled) {
 		opacity: 0.9;
+		transform: translateY(-0.5px);
+		box-shadow: 0 4px 6px rgb(0 0 0 / 0.1), 0 2px 4px rgb(0 0 0 / 0.06);
 	}
 
 	.ws-btn-mt {

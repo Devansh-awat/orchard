@@ -127,8 +127,10 @@
 
 	onMount(() => {
 		window.addEventListener('keydown', handleKeydown);
+		window.addEventListener('open-quick-search', openSearch);
 		return () => {
 			window.removeEventListener('keydown', handleKeydown);
+			window.removeEventListener('open-quick-search', openSearch);
 		};
 	});
 </script>

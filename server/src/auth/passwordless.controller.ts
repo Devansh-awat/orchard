@@ -227,6 +227,7 @@ export class PasswordlessController {
         firstName: user.firstName,
         lastName: user.lastName,
         imageUrl: user.imageUrl,
+        setupCompleted: user.setupCompleted,
       },
     });
   }
@@ -373,6 +374,7 @@ export class PasswordlessController {
         firstName: user.firstName,
         lastName: user.lastName,
         imageUrl: user.imageUrl,
+        setupCompleted: user.setupCompleted,
       },
     });
   }

@@ -270,7 +270,7 @@
 	.ti-page {
 		max-width: 44rem;
 		margin: 0 auto;
-		padding: 2rem 1.5rem;
+		padding: 2.5rem 2.5rem 3rem;
 	}
 
 	.ti-loading {
@@ -328,10 +328,11 @@
 	}
 
 	.ti-title {
-		font-size: 1.125rem;
-		font-weight: 600;
+		font-size: 1.25rem;
+		font-weight: 700;
 		color: var(--center-channel-color);
 		margin: 0;
+		letter-spacing: -0.02em;
 	}
 
 	.ti-meta {
@@ -400,10 +401,12 @@
 	.ti-section-title {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
-		font-size: 0.875rem;
+		gap: 0.5rem;
+		font-size: 0.8125rem;
 		font-weight: 600;
-		color: var(--center-channel-color);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--surface-muted);
 		margin: 0 0 0.75rem;
 	}
 
@@ -418,13 +421,16 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 1rem;
-		padding: 0.75rem 1rem;
+		padding: 0.875rem 1.125rem;
 		border: 1px solid var(--surface-border);
 		border-radius: 0.75rem;
 		background-color: var(--surface-bg);
 		text-decoration: none;
 		color: var(--center-channel-color);
-		transition: border-color 0.15s;
+		transition: border-color 0.15s, box-shadow 0.15s;
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
 	}
 
 	.ti-resource-card:hover {
@@ -446,7 +452,7 @@
 	.ti-resource-detail {
 		font-size: 0.75rem;
 		color: var(--surface-muted);
-		font-family: monospace;
+		font-family: var(--font-mono);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -486,13 +492,13 @@
 		font-weight: 500;
 		color: var(--surface-muted);
 		text-transform: uppercase;
-		letter-spacing: 0.025em;
+		letter-spacing: 0.05em;
 	}
 
 	.ti-param-value {
 		font-size: 0.875rem;
 		color: var(--center-channel-color);
-		font-family: monospace;
+		font-family: var(--font-mono);
 		word-break: break-all;
 	}
 </style>

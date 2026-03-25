@@ -839,7 +839,7 @@ resources:
 	.nt-page {
 		max-width: 48rem;
 		margin: 0 auto;
-		padding: 2rem 1.5rem 4rem;
+		padding: 2.5rem 2.5rem 4rem;
 	}
 
 	.nt-back {
@@ -860,14 +860,15 @@ resources:
 	.nt-header {
 		display: flex;
 		align-items: flex-start;
-		gap: 0.5rem;
-		margin-bottom: 1.5rem;
+		gap: 0.75rem;
+		margin-bottom: 2rem;
 	}
 	.nt-title {
-		font-size: 1.125rem;
-		font-weight: 600;
+		font-size: 1.25rem;
+		font-weight: 700;
 		color: var(--center-channel-color);
 		margin: 0;
+		letter-spacing: -0.02em;
 	}
 	.nt-subtitle {
 		font-size: 0.875rem;
@@ -940,7 +941,7 @@ resources:
 		border: 1px solid var(--surface-border);
 		background-color: var(--center-channel-bg);
 		color: var(--center-channel-color);
-		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+		font-family: var(--font-mono);
 		font-size: 0.8125rem;
 		line-height: 1.6;
 		resize: vertical;
@@ -957,11 +958,14 @@ resources:
 	.nt-section {
 		border: 1px solid var(--surface-border);
 		border-radius: 1rem;
-		padding: 1.25rem;
+		padding: 1.5rem;
 		background-color: var(--surface-bg);
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		gap: 1.125rem;
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
 	}
 	.nt-section-header {
 		display: flex;
@@ -969,9 +973,11 @@ resources:
 		justify-content: space-between;
 	}
 	.nt-section-title {
-		font-size: 0.875rem;
+		font-size: 0.8125rem;
 		font-weight: 600;
-		color: var(--center-channel-color);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--surface-muted);
 		margin: 0;
 	}
 	.nt-section-desc {
@@ -992,7 +998,7 @@ resources:
 	.nt-label {
 		font-size: 0.8125rem;
 		font-weight: 500;
-		color: var(--center-channel-color);
+		color: var(--surface-muted);
 	}
 	.nt-label-sm {
 		font-size: 0.75rem;
@@ -1021,7 +1027,7 @@ resources:
 	.nt-input-sm { padding: 0.375rem 0.625rem; font-size: 0.8125rem; }
 	.nt-input-xs { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
 	.nt-input-mono {
-		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+		font-family: var(--font-mono);
 	}
 	.nt-select { cursor: pointer; }
 
@@ -1238,6 +1244,18 @@ resources:
 		transition: opacity 0.15s;
 	}
 	.nt-btn:disabled { opacity: 0.5; cursor: not-allowed; }
-	.nt-btn-primary { background-color: #ec4899; color: #fff; }
-	.nt-btn-primary:hover:not(:disabled) { opacity: 0.9; }
+	.nt-btn-primary {
+		background-color: #ec4899;
+		color: #fff;
+		box-shadow:
+			0 1px 2px rgb(0 0 0 / 0.08),
+			0 1px 1px rgb(0 0 0 / 0.04);
+	}
+	.nt-btn-primary:hover:not(:disabled) {
+		opacity: 0.95;
+		transform: translateY(-0.5px);
+		box-shadow:
+			0 2px 4px rgb(0 0 0 / 0.08),
+			0 4px 12px rgb(0 0 0 / 0.06);
+	}
 </style>

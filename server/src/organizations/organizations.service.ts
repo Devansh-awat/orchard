@@ -501,7 +501,7 @@ export class OrganizationsService {
       organizationName: organization.name,
       inviterName,
       role,
-      inviteUrl: `${frontendUrl}/invite/${token}`,
+      loginUrl: frontendUrl,
     }).catch(err => {
       console.error('Failed to send organization invite email:', err);
     });
@@ -822,7 +822,7 @@ export class OrganizationsService {
       organizationName: invitation.organization.name,
       inviterName,
       role: invitation.role,
-      inviteUrl: `${frontendUrl}/invite/${invitation.token}`,
+      loginUrl: frontendUrl,
     }).catch(err => {
       console.error('Failed to resend organization invite email:', err);
     });
@@ -860,6 +860,18 @@ export class OrganizationsService {
     await this.prisma.organizationMember.delete({
       where: { id: memberId }
     });
+
+    // If user no longer belongs to any organization, reset their setup
+    const remainingMemberships = await this.prisma.organizationMember.count({
+      where: { userId: member.userId }
+    });
+
+    if (remainingMemberships === 0) {
+      await this.prisma.user.update({
+        where: { id: member.userId },
+        data: { setupCompleted: false }
+      });
+    }
 
     return { success: true, message: 'Member removed from organization' };
   }

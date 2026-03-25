@@ -60,16 +60,12 @@ export class UsersService {
         });
       }
     } else {
-      const nameParts = hackClubUser.name.split(' ');
-      const firstName = nameParts[0];
-      const lastName = nameParts.slice(1).join(' ') || null;
-
+      // Only sync email; do not overwrite firstName/lastName
+      // as the user may have manually updated them via profile settings.
       user = await this.prisma.user.update({
         where: { hackClubId: hackClubUser.id },
         data: {
           email: hackClubUser.email,
-          firstName,
-          lastName,
         }
       });
     }
@@ -162,7 +158,7 @@ export class UsersService {
     return null;
   }
 
-  async updateProfile(userId: string, data: { firstName?: string; lastName?: string; username?: string }) {
+  async updateProfile(userId: string, data: { firstName?: string | null; lastName?: string | null; username?: string; setupCompleted?: boolean }) {
     // If username is being updated, check for uniqueness
     if (data.username !== undefined) {
       const existingUser = await this.prisma.user.findUnique({
@@ -179,6 +175,7 @@ export class UsersService {
         ...(data.firstName !== undefined && { firstName: data.firstName }),
         ...(data.lastName !== undefined && { lastName: data.lastName }),
         ...(data.username !== undefined && { username: data.username }),
+        ...(data.setupCompleted !== undefined && { setupCompleted: data.setupCompleted }),
       },
       select: {
         id: true,
@@ -188,6 +185,7 @@ export class UsersService {
         lastName: true,
         imageUrl: true,
         hackClubId: true,
+        setupCompleted: true,
       }
     });
   }

@@ -26,12 +26,13 @@ ENV NODE_ENV=production
 ENV PORT=3000
 ENV HOST=0.0.0.0
 
-COPY --from=builder /app/frontend/build ./build
-COPY --from=builder /app/frontend/node_modules ./node_modules
-COPY --from=builder /app/frontend/package.json ./package.json
+COPY --from=builder /app/node_modules ./node_modules
+COPY --from=builder /app/frontend/package.json ./frontend/package.json
+COPY --from=builder /app/frontend/node_modules ./frontend/node_modules
+COPY --from=builder /app/frontend/build ./frontend/build
 
 EXPOSE 3000
 
-WORKDIR /app/build
+WORKDIR /app/frontend/build
 CMD ["node", "index.js"]
 

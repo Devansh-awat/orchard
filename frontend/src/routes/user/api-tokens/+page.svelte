@@ -322,7 +322,7 @@
 
 <style>
 	.settings-page {
-		padding: 2rem;
+		padding: 2.5rem 2.5rem 3rem;
 		max-width: 42rem;
 		margin: 0 auto;
 	}
@@ -330,11 +330,11 @@
 	.settings-container {
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
+		gap: 0.5rem;
 	}
 
 	.settings-header {
-		margin-bottom: 1.5rem;
+		margin-bottom: 2rem;
 	}
 
 	.settings-back-btn {
@@ -372,10 +372,11 @@
 	}
 
 	.settings-title {
-		font-size: 1.125rem;
-		font-weight: 600;
+		font-size: 1.25rem;
+		font-weight: 700;
 		color: var(--center-channel-color);
-		line-height: 1.3;
+		line-height: 1.2;
+		letter-spacing: -0.02em;
 	}
 
 	.settings-subtitle {
@@ -390,6 +391,9 @@
 		overflow: hidden;
 		background-color: var(--surface-bg);
 		margin-bottom: 0.5rem;
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
 	}
 
 	.settings-section-trigger {
@@ -397,7 +401,7 @@
 		align-items: center;
 		justify-content: space-between;
 		width: 100%;
-		padding: 1rem 1.25rem;
+		padding: 1.125rem 1.375rem;
 		cursor: pointer;
 		background: transparent;
 		color: var(--center-channel-color);
@@ -419,6 +423,7 @@
 		font-weight: 600;
 		color: var(--center-channel-color);
 		text-align: left;
+		letter-spacing: -0.01em;
 	}
 
 	.settings-section-desc {
@@ -438,19 +443,19 @@
 	}
 
 	.settings-section-content {
-		padding: 0 1.25rem 1.25rem;
+		padding: 0 1.375rem 1.375rem;
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
+		gap: 0.875rem;
 		border-top: 1px solid var(--surface-border);
-		padding-top: 1rem;
+		padding-top: 1.125rem;
 	}
 
 	.settings-field-label {
 		font-size: 0.6875rem;
 		font-weight: 500;
 		text-transform: uppercase;
-		letter-spacing: 0.04em;
+		letter-spacing: 0.05em;
 		color: var(--surface-muted);
 	}
 
@@ -468,13 +473,14 @@
 	/* Token created banner */
 	.token-created-banner {
 		border: 1px solid var(--online-indicator);
+		border-left-width: 3px;
 		border-radius: 1rem;
-		padding: 1.25rem;
+		padding: 1.375rem;
 		margin-bottom: 0.5rem;
 		background-color: color-mix(in srgb, var(--online-indicator) 8%, var(--center-channel-bg));
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
+		gap: 0.875rem;
 	}
 
 	.token-created-header {
@@ -500,7 +506,7 @@
 	.token-created-value {
 		flex: 1;
 		font-size: 0.75rem;
-		font-family: monospace;
+		font-family: var(--font-mono);
 		padding: 0.625rem 0.75rem;
 		border-radius: 0.5rem;
 		background-color: var(--surface-bg);
@@ -520,17 +526,22 @@
 	.token-list {
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
+		gap: 0.375rem;
 	}
 
 	.token-item {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 0.75rem;
-		padding: 0.75rem;
-		border-radius: 0.5rem;
+		gap: 1rem;
+		padding: 0.875rem 1rem;
+		border-radius: 0.625rem;
 		border: 1px solid var(--surface-border);
+		transition: background-color 120ms ease;
+	}
+
+	.token-item:hover {
+		background-color: color-mix(in srgb, var(--center-channel-color) 2%, transparent);
 	}
 
 	/* Usage blocks */
@@ -542,15 +553,15 @@
 
 	.usage-code {
 		font-size: 0.75rem;
-		font-family: monospace;
-		padding: 0.75rem 1rem;
-		border-radius: 0.5rem;
+		font-family: var(--font-mono);
+		padding: 0.875rem 1.125rem;
+		border-radius: 0.625rem;
 		background-color: color-mix(in srgb, var(--surface-border) 30%, var(--center-channel-bg));
 		border: 1px solid var(--surface-border);
 		color: var(--center-channel-color);
 		overflow-x: auto;
 		white-space: pre;
-		line-height: 1.5;
+		line-height: 1.6;
 		margin: 0;
 	}
 </style>

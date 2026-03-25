@@ -380,7 +380,7 @@
 	.db-page {
 		max-width: 52rem;
 		margin: 0 auto;
-		padding: 2rem 1.5rem;
+		padding: 2.5rem 2.5rem 3rem;
 	}
 
 	.db-loading {
@@ -452,10 +452,11 @@
 	}
 
 	.db-title {
-		font-size: 1.125rem;
-		font-weight: 600;
+		font-size: 1.25rem;
+		font-weight: 700;
 		color: var(--center-channel-color);
 		margin: 0;
+		letter-spacing: -0.02em;
 	}
 
 	.db-status {
@@ -491,18 +492,21 @@
 	.db-stat {
 		display: flex;
 		flex-direction: column;
-		gap: 0.125rem;
-		padding: 0.625rem 1rem;
+		gap: 0.25rem;
+		padding: 0.75rem 1.125rem;
 		border-radius: 0.75rem;
 		background-color: var(--surface-bg);
 		border: 1px solid var(--surface-border);
 		min-width: 6rem;
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
 	}
 
 	.db-stat-label {
 		font-size: 0.6875rem;
 		text-transform: uppercase;
-		letter-spacing: 0.03em;
+		letter-spacing: 0.05em;
 		color: var(--surface-muted);
 	}
 
@@ -517,9 +521,11 @@
 	}
 
 	.db-section-title {
-		font-size: 0.875rem;
+		font-size: 0.8125rem;
 		font-weight: 600;
-		color: var(--center-channel-color);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--surface-muted);
 		margin: 0 0 0.75rem;
 	}
 
@@ -529,6 +535,9 @@
 		border: 1px solid var(--surface-border);
 		border-radius: 0.75rem;
 		overflow: hidden;
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
 	}
 
 	.db-cred-row {
@@ -561,7 +570,7 @@
 
 	.db-cred-value {
 		font-size: 0.8125rem;
-		font-family: monospace;
+		font-family: var(--font-mono);
 		color: var(--center-channel-color);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -592,16 +601,19 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.75rem 1rem;
+		padding: 0.875rem 1.125rem;
 		border: 1px solid var(--surface-border);
 		border-radius: 0.75rem;
 		background-color: var(--surface-bg);
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
 	}
 
 	.db-connstr {
 		flex: 1;
 		font-size: 0.8125rem;
-		font-family: monospace;
+		font-family: var(--font-mono);
 		color: var(--center-channel-color);
 		word-break: break-all;
 	}
@@ -627,7 +639,7 @@
 		background-color: var(--surface-bg);
 		border: 1px solid var(--surface-border);
 		font-size: 0.8125rem;
-		font-family: monospace;
+		font-family: var(--font-mono);
 		color: var(--center-channel-color);
 		overflow-x: auto;
 	}
@@ -676,10 +688,12 @@
 		background-color: var(--center-channel-bg);
 		border: 1px solid var(--surface-border);
 		border-radius: 1rem;
-		padding: 1.5rem;
+		padding: 1.75rem;
 		width: 100%;
 		max-width: 26rem;
-		box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+		box-shadow:
+			0 4px 12px rgb(0 0 0 / 0.08),
+			0 20px 60px rgb(0 0 0 / 0.2);
 	}
 
 	.modal-header {

@@ -4,30 +4,32 @@
 
 	interface Props {
 		status: string;
+		buildStatus?: string;
 		buildStep?: string | null;
 		buildLogs?: string | null;
 		buildError?: string | null;
 		isGitHubDeploy: boolean;
 		warnings?: Array<{ podName: string; message: string; timestamp: string }>;
+		buildStepTimestamps?: Record<string, number> | null;
 	}
 
-	let { status, buildStep, buildLogs, buildError, isGitHubDeploy, warnings }: Props = $props();
+	let { status, buildStatus = 'none', buildStep, buildLogs, buildError, isGitHubDeploy, warnings, buildStepTimestamps }: Props = $props();
 
 	function sanitizeLogs(logs: string | null | undefined): string {
 		if (!logs) return '';
-		
+
 		let sanitized = logs;
-		
+
 		sanitized = sanitized.replace(/(x-access-token:|ghs_|ghp_|github_pat_)[a-zA-Z0-9_]+/gi, '***REDACTED***');
-		
+
 		sanitized = sanitized.replace(/https?:\/\/[^:@\s]+:[^@\s]+@github\.com/gi, 'https://***@github.com');
-		
+
 		sanitized = sanitized.replace(/https?:\/\/[^@\s]+@github\.com/gi, 'https://***@github.com');
-		
+
 		sanitized = sanitized.replace(/(Bearer|Token|Authorization:)\s+[a-zA-Z0-9_\-\.]+/gi, '$1 ***REDACTED***');
-		
+
 		sanitized = sanitized.replace(/(password|passwd|pwd|secret|key|token)[\s]*[=:]['"]?([^\s'"]+)/gi, '$1=***REDACTED***');
-		
+
 		return sanitized;
 	}
 
@@ -37,33 +39,7 @@
 	let showLogs = $state(true); // Default to showing logs
 	let logsPanel: HTMLDivElement | undefined = $state();
 	let previousLogsLength = $state(0);
-	let stepStartTimes = $state<Map<string, number>>(new Map());
 	let currentTime = $state(Date.now());
-	let previousBuildStep = $state<string | null | undefined>(null);
-
-	// Track step start times - extract from logs first, then track new steps
-	$effect(() => {
-		if (sanitizedBuildLogs) {
-			// Extract start times from logs for all steps
-			const stepsToCheck = ['cloning', 'building', 'pushing', 'deploying'];
-			for (const stepId of stepsToCheck) {
-				const logStartTime = getStepStartTimeFromLogs(stepId);
-				if (logStartTime && !stepStartTimes.has(stepId)) {
-					stepStartTimes.set(stepId, logStartTime);
-				}
-			}
-		}
-
-		// For current step, ensure we have a start time
-		if (buildStep) {
-			const stepId = buildStep;
-			if (!stepStartTimes.has(stepId)) {
-				// If we couldn't find it in logs, use current time as fallback
-				stepStartTimes.set(stepId, Date.now());
-			}
-			previousBuildStep = stepId;
-		}
-	});
 
 	// Update current time every second to update elapsed time display
 	$effect(() => {
@@ -72,6 +48,10 @@
 		}, 1000);
 		return () => clearInterval(interval);
 	});
+
+	function getStepTimestamp(stepId: string): number | null {
+		return buildStepTimestamps?.[stepId] ?? null;
+	}
 
 	// Auto-scroll to bottom when new logs arrive
 	$effect(() => {
@@ -112,7 +92,7 @@
 	const currentStepIndex = $derived(getStepIndex(buildStep));
 
 	function getStepStatus(index: number): 'completed' | 'current' | 'pending' | 'error' {
-		if (status === 'failed') {
+		if (buildStatus === 'failed') {
 			if (index < currentStepIndex) return 'completed';
 			if (index === currentStepIndex) return 'error';
 			return 'pending';
@@ -120,98 +100,6 @@
 		if (index < currentStepIndex) return 'completed';
 		if (index === currentStepIndex) return 'current';
 		return 'pending';
-	}
-
-	function getStepStartTimeFromLogs(stepId: string): number | null {
-		if (!sanitizedBuildLogs) return null;
-		
-		const stepStartPatterns: Record<string, RegExp> = {
-			cloning: /\[INFO\] Cloning repository/i,
-			building: /\[INFO\] Building image/i,
-			pushing: /\[INFO\] Pushing image to/i,
-			deploying: /\[INFO\] Creating Kubernetes deployment/i
-		};
-
-		const pattern = stepStartPatterns[stepId];
-		if (!pattern) return null;
-
-		const lines = sanitizedBuildLogs.split('\n');
-		for (const line of lines) {
-			if (pattern.test(line)) {
-				// Extract timestamp from log line: [timestamp] [LEVEL] message
-				const timestampMatch = line.match(/^\[(\d+)\]/);
-				if (timestampMatch && timestampMatch[1]) {
-					return parseInt(timestampMatch[1], 10);
-				}
-			}
-		}
-
-		return null;
-	}
-
-	function extractStepDuration(stepId: string): string | null {
-		if (!sanitizedBuildLogs) return null;
-		
-		// First try to extract from completion messages with explicit durations
-		const stepPatterns: Record<string, RegExp[]> = {
-			cloning: [
-				/\[INFO\] Repository cloned successfully in ([\d.]+)s/i,
-				/\[ERROR\] Failed to clone repository.*?took ([\d.]+)s/i
-			],
-			building: [
-				/\[INFO\] Successfully built image:.*?\(took ([\d.]+)s\)/i,
-				/\[ERROR\] Docker build failed.*?\(took ([\d.]+)s\)/i
-			],
-			pushing: [
-				/\[INFO\] Successfully pushed image:.*?\(took ([\d.]+)s\)/i,
-				/\[ERROR\] Docker push failed.*?\(took ([\d.]+)s\)/i
-			]
-		};
-
-		const patterns = stepPatterns[stepId];
-		if (patterns) {
-			for (const pattern of patterns) {
-				const match = sanitizedBuildLogs.match(pattern);
-				if (match && match[1]) {
-					const seconds = parseFloat(match[1]);
-					return formatDuration(seconds);
-				}
-			}
-		}
-
-		// If no explicit duration found, calculate from start to end timestamps
-		const startTime = getStepStartTimeFromLogs(stepId);
-		if (!startTime) return null;
-
-		const stepEndPatterns: Record<string, RegExp> = {
-			cloning: /\[(INFO|ERROR)\] Repository cloned|Failed to clone repository/i,
-			building: /\[(INFO|ERROR)\] Successfully built image|Docker build failed/i,
-			pushing: /\[(INFO|ERROR)\] Successfully pushed image|Docker push failed/i,
-			deploying: /\[(INFO|ERROR)\] Deployment created|Failed to create deployment/i
-		};
-
-		const endPattern = stepEndPatterns[stepId];
-		if (!endPattern) return null;
-
-		const lines = sanitizedBuildLogs.split('\n');
-		let endTime: number | null = null;
-
-		for (const line of lines) {
-			if (endPattern.test(line)) {
-				const timestampMatch = line.match(/^\[(\d+)\]/);
-				if (timestampMatch && timestampMatch[1]) {
-					endTime = parseInt(timestampMatch[1], 10);
-					break;
-				}
-			}
-		}
-
-		if (endTime) {
-			const duration = (endTime - startTime) / 1000;
-			return formatDuration(duration);
-		}
-
-		return null;
 	}
 
 	function formatDuration(seconds: number): string {
@@ -226,8 +114,8 @@
 
 	// Progress percentage
 	const progressValue = $derived(() => {
-		if (status === 'running' || status === 'warning' || status === 'stopped' || buildStep === 'complete') return 100;
-		if (status === 'failed') return ((currentStepIndex + 1) / steps.length) * 100;
+		if (buildStatus === 'succeeded' || buildStep === 'complete') return 100;
+		if (buildStatus === 'failed') return ((currentStepIndex + 1) / steps.length) * 100;
 		if (currentStepIndex < 0) return 0;
 		return ((currentStepIndex + 0.5) / steps.length) * 100;
 	});
@@ -247,16 +135,12 @@
 					<Container class="h-5 w-5 icon-muted" />
 				{/if}
 				<span class="text-sm font-medium">
-					{#if status === 'building'}
+					{#if buildStatus === 'building'}
 						Building deployment..
-					{:else if status === 'pending'}
-						Provisioning...
-					{:else if status === 'failed'}
-						Deployment failed
-					{:else if status === 'warning'}
-						Deployment has warnings
-					{:else if status === 'stopped'}
-						Deployment stopped
+					{:else if buildStatus === 'failed'}
+						Build failed
+					{:else if buildStatus === 'succeeded'}
+						Build succeeded
 					{:else}
 						Deployment ready
 					{/if}
@@ -271,10 +155,8 @@
 		>
 			<div
 				{...progress.progress}
-				class="h-full transition-all duration-500 ease-out {status === 'failed' || status === 'stopped'
+				class="h-full transition-all duration-500 ease-out {buildStatus === 'failed'
 					? 'bg-red-500'
-					: status === 'warning'
-					? 'bg-amber-500'
 					: 'bg-primary-500'}"
 				style="width: {progressValue()}%"
 			></div>
@@ -318,24 +200,21 @@
 							{step.label}
 						</p>
 						{#if stepStatus === 'completed'}
-							{@const duration = extractStepDuration(step.id)}
-							{#if duration}
-								<span class="step-duration text-xs font-mono muted-text">{duration}</span>
-							{:else}
-								{@const startTime = stepStartTimes.get(step.id) || getStepStartTimeFromLogs(step.id)}
-								{#if startTime}
-									{@const nextStepIndex = index + 1}
-									{@const nextStepStartTime = nextStepIndex < steps.length ? (stepStartTimes.get(steps[nextStepIndex].id) || getStepStartTimeFromLogs(steps[nextStepIndex].id)) : null}
-									{#if nextStepStartTime}
-										{@const duration = Math.floor((nextStepStartTime - startTime) / 1000)}
-										<span class="step-duration text-xs font-mono muted-text">{formatDuration(duration)}</span>
-									{/if}
+							{@const startTime = getStepTimestamp(step.id)}
+							{#if startTime}
+								{@const nextStepIndex = index + 1}
+								{@const nextStepStartTime = nextStepIndex < steps.length ? getStepTimestamp(steps[nextStepIndex].id) : getStepTimestamp('complete')}
+								{#if nextStepStartTime}
+									{@const duration = Math.max(0, Math.floor((nextStepStartTime - startTime) / 1000))}
+									<span class="step-duration text-xs font-mono muted-text">{formatDuration(duration)}</span>
 								{/if}
 							{/if}
 						{:else if stepStatus === 'current' && buildStep === step.id}
-							{@const startTime = stepStartTimes.get(step.id) || getStepStartTimeFromLogs(step.id) || Date.now()}
-							{@const elapsed = Math.max(0, Math.floor((currentTime - startTime) / 1000))}
-							<span class="step-duration text-xs font-mono text-primary-600">{formatDuration(elapsed)}</span>
+							{@const startTime = getStepTimestamp(step.id)}
+							{#if startTime}
+								{@const elapsed = Math.max(0, Math.floor((currentTime - startTime) / 1000))}
+								<span class="step-duration text-xs font-mono text-primary-600">{formatDuration(elapsed)}</span>
+							{/if}
 						{/if}
 					</div>
 					<p
@@ -350,7 +229,7 @@
 		{/each}
 	</div>
 
-	{#if buildError && status === 'failed'}
+	{#if buildError && buildStatus === 'failed'}
 		<div class="error-box mt-4 rounded-lg p-4">
 			<p class="text-sm font-medium">Error</p>
 			<p class="mt-1 text-sm font-mono whitespace-pre-wrap">
@@ -359,7 +238,7 @@
 		</div>
 	{/if}
 
-	{#if warnings?.length && (status === 'running' || status === 'warning' || status === 'stopped')}
+	{#if warnings?.length && buildStatus !== 'building'}
 		<div class="warning-box mt-4 rounded-lg p-4">
 			<div class="flex items-start gap-2 mb-2">
 				<svg class="h-5 w-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -388,10 +267,10 @@
 			>
 				{#if showLogs}
 					<ChevronUp class="h-4 w-4" />
-					{status === 'failed' ? 'Hide last build logs' : 'Hide logs'}
+					{buildStatus === 'failed' ? 'Hide last build logs' : 'Hide logs'}
 				{:else}
 					<ChevronDown class="h-4 w-4" />
-					{status === 'failed' ? 'Show last build logs' : 'Show logs'}
+					{buildStatus === 'failed' ? 'Show last build logs' : 'Show logs'}
 				{/if}
 			</button>
 
@@ -495,6 +374,7 @@
 		background-color: var(--control-bg);
 		color: var(--center-channel-color);
 		border: 1px solid var(--surface-border);
+		font-weight: 400;
 	}
 
 	.log-line {
@@ -534,6 +414,7 @@
 		flex: 1;
 		color: var(--center-channel-color);
 		word-break: break-word;
+		font-weight: 400;
 	}
 
 	.log-error .log-message {

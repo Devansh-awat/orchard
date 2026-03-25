@@ -10,9 +10,11 @@
 		id: string;
 		name: string;
 		status: string;
+		buildStatus?: string;
 		buildStep?: string | null;
 		buildLogs?: string | null;
 		buildError?: string | null;
+		buildStepTimestamps?: Record<string, number> | null;
 		githubRepo?: string | null;
 		githubBranch?: string | null;
 		buildType?: 'dockerfile' | 'railpack' | null;
@@ -54,8 +56,8 @@
 
 			deployment = data;
 
-			// If deployment is ready (running), redirect to main deployment page
-			if (data.status === 'running') {
+			// If build succeeded, redirect to main deployment page
+			if (data.buildStatus === 'succeeded' || data.status === 'running') {
 				goto(`/${orgSlug}/deployments/${deploymentId}`, { replaceState: true });
 			}
 		} catch (e) {
@@ -161,11 +163,13 @@
 
 				<DeploymentProgress
 					status={deployment.status}
+					buildStatus={deployment.buildStatus}
 					buildStep={deployment.buildStep}
 					buildLogs={deployment.buildLogs ?? accumulatedLogs}
 					buildError={deployment.buildError}
 					{isGitHubDeploy}
 					warnings={deployment.warnings}
+					buildStepTimestamps={deployment.buildStepTimestamps}
 				/>
 
 				<div class="mt-8 flex justify-center gap-3">
@@ -226,6 +230,7 @@
 		background-color: var(--surface-bg);
 		border: 1px solid var(--surface-border);
 		color: var(--center-channel-color);
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.02);
 	}
 
 	.error-box {

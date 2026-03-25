@@ -13,6 +13,7 @@ export interface User {
 	fullName?: string;
 	primaryEmailAddress?: { emailAddress: string };
 	isSuperAdmin?: boolean;
+	setupCompleted?: boolean;
 }
 
 function createAuthStore() {

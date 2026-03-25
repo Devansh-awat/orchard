@@ -45,6 +45,7 @@
 
 <div class="flex min-h-screen items-center justify-center" style="background-color: var(--center-channel-bg);">
 	<div class="text-center">
+		<img src="/logo/logoiconcolor.svg" alt="Orchard" class="mx-auto mb-6 h-12 w-12" />
 		{#if isPrivateBeta}
 			<div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full" style="background-color: var(--control-bg);">
 				<Lock class="h-6 w-6" style="color: var(--surface-muted);" />

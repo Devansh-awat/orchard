@@ -11,7 +11,7 @@ export interface OrganizationInviteEmailData {
   organizationName: string;
   inviterName: string;
   role: string;
-  inviteUrl: string;
+  loginUrl: string;
 }
 
 export interface WorkspaceInviteEmailData {
@@ -101,7 +101,8 @@ export class EmailService {
       organizationName: data.organizationName,
       inviterName: data.inviterName,
       role: data.role.charAt(0).toUpperCase() + data.role.slice(1),
-      inviteUrl: data.inviteUrl,
+      loginUrl: data.loginUrl,
+      frontendUrl: this.frontendUrl,
     });
 
     const mailOptions = {
@@ -140,6 +141,7 @@ export class EmailService {
       inviterName: data.inviterName,
       role: data.role.charAt(0).toUpperCase() + data.role.slice(1),
       inviteUrl: data.inviteUrl,
+      frontendUrl: this.frontendUrl,
     });
 
     const mailOptions = {
@@ -171,6 +173,7 @@ export class EmailService {
       recipientEmail: data.recipientEmail,
       otpCode: data.otpCode,
       expiryMinutes: String(data.expiryMinutes),
+      frontendUrl: this.frontendUrl,
     });
 
     const mailOptions = {

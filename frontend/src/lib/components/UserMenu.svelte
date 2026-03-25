@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { user } from '$lib/stores';
+	import { user, pendingInvitations } from '$lib/stores';
 	import { themeStore } from '$lib/stores/theme';
-	import { User, Settings, LogOut, Sun, Moon, Monitor, ChevronUp, Palette, KeyRound } from 'lucide-svelte';
+	import { User, Settings, LogOut, Sun, Moon, Monitor, ChevronUp, Palette, KeyRound, Mail } from 'lucide-svelte';
 	import { browser } from '$app/environment';
 	import { slide } from 'svelte/transition';
 	import { get } from 'svelte/store';
@@ -76,17 +76,22 @@
 		onclick={() => (open = !open)}
 		class="user-menu-trigger flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-left"
 	>
-		{#if $user?.imageUrl}
-			<img
-				src={$user.imageUrl}
-				alt={$user.name || $user.username || 'User'}
-				class="h-8 w-8 rounded-lg object-cover"
-			/>
-		{:else}
-			<div class="user-menu-avatar-fallback">
-				<User class="h-4 w-4" />
-			</div>
-		{/if}
+		<div class="relative">
+			{#if $user?.imageUrl}
+				<img
+					src={$user.imageUrl}
+					alt={$user.name || $user.username || 'User'}
+					class="h-8 w-8 rounded-lg object-cover"
+				/>
+			{:else}
+				<div class="user-menu-avatar-fallback">
+					<User class="h-4 w-4" />
+				</div>
+			{/if}
+			{#if $pendingInvitations.length > 0}
+				<span class="user-menu-notification-dot"></span>
+			{/if}
+		</div>
 		<div class="flex-1 text-left min-w-0">
 			<p class="user-menu-name truncate text-sm font-medium">
 				{$user?.username || $user?.name || $user?.firstName || 'User'}
@@ -99,20 +104,34 @@
 
 	{#if open}
 		<div
-			class="user-menu-panel absolute bottom-full left-0 right-0 z-50 mb-1 flex flex-col rounded-xl border p-3 text-sm shadow-lg"
+			class="user-menu-panel absolute bottom-full left-0 right-0 z-50 mb-1 flex flex-col rounded-xl border p-4 text-sm"
 			transition:slide={{ axis: 'y', duration: 200 }}
 		>
-			<div class="user-menu-section-header">
-				<p class="user-menu-name text-sm font-medium">
-					{$user?.name || $user?.firstName || $user?.username}
-				</p>
-				<p class="user-menu-email text-xs">
-					@{$user?.username || $user?.name || 'user'}
-				</p>
+			<!-- User info -->
+			<div class="user-menu-profile">
+				{#if $user?.imageUrl}
+					<img
+						src={$user.imageUrl}
+						alt={$user.name || $user.username || 'User'}
+						class="user-menu-profile-avatar"
+					/>
+				{:else}
+					<div class="user-menu-profile-avatar-fallback">
+						<User class="h-5 w-5" />
+					</div>
+				{/if}
+				<div class="user-menu-profile-info">
+					<p class="user-menu-name text-sm font-semibold">
+						{$user?.name || $user?.firstName || $user?.username}
+					</p>
+					<p class="user-menu-email text-xs">
+						@{$user?.username || $user?.name || 'user'}
+					</p>
+				</div>
 			</div>
 
+			<!-- Theme switcher -->
 			<div class="user-menu-section">
-				<p class="user-menu-label px-1 pb-2">Theme</p>
 				<div class="user-menu-theme-group">
 					{#each [
 						{ mode: 'light' as const, icon: Sun, label: 'Light' },
@@ -123,14 +142,30 @@
 							onclick={() => applyQuickTheme(mode)}
 							class="user-menu-theme-btn"
 							class:is-active={isThemeActive(mode)}
+							title={label}
 						>
-							<Icon class="h-3 w-3" />
-							{label}
+							<Icon class="h-3.5 w-3.5" />
 						</button>
 					{/each}
 				</div>
 			</div>
 
+			<!-- Pending invitations banner -->
+			{#if $pendingInvitations.length > 0}
+				<div class="user-menu-section-footer">
+					<a
+						href="/user/settings#invitations"
+						class="user-menu-item user-menu-item--highlight"
+						onclick={() => (open = false)}
+					>
+						<Mail class="h-4 w-4" />
+						{$pendingInvitations.length} pending invitation{$pendingInvitations.length === 1 ? '' : 's'}
+						<span class="user-menu-invite-dot"></span>
+					</a>
+				</div>
+			{/if}
+
+			<!-- Navigation links -->
 			<div class="user-menu-section-footer">
 				<a
 					href="/user/settings"
@@ -156,6 +191,10 @@
 					<Palette class="h-4 w-4" />
 					Customize Theme
 				</a>
+			</div>
+
+			<!-- Sign out -->
+			<div class="user-menu-signout">
 				<button
 					onclick={() => user.signOut()}
 					class="user-menu-item is-danger"

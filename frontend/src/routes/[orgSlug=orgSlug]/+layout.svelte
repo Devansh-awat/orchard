@@ -1,23 +1,30 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
-	import { organizations, selectedOrganization } from '$lib/stores';
+	import { organizations, selectedOrganization, isSignedIn } from '$lib/stores';
+	import ErrorPage from '$lib/components/ErrorPage.svelte';
 
 	let { children } = $props();
 
 	const orgSlug = $derived($page.params.orgSlug);
+	let notFound = $state(false);
 
 	$effect(() => {
 		const orgs = $organizations;
+		const signedIn = $isSignedIn;
 		const org = orgs.find((o: { slug: string }) => o.slug === orgSlug);
 		if (org) {
+			notFound = false;
 			if ($selectedOrganization?.id !== org.id) {
 				organizations.setSelected(org);
 			}
-		} else if (orgs.length > 0) {
-			goto('/', { replaceState: true });
+		} else if (orgs.length > 0 || !signedIn) {
+			notFound = true;
 		}
 	});
 </script>
 
-{@render children()}
+{#if notFound}
+	<ErrorPage status={404} />
+{:else}
+	{@render children()}
+{/if}

@@ -109,11 +109,14 @@ export class OAuthController {
 
     let user;
     if (req.user.hackClubId) {
-      user = await this.usersService.findOrCreateByHackClubId({
-        id: req.user.hackClubId,
-        email: req.user.email,
-        name: req.user.name,
-      });
+      user = await this.usersService.findByHackClubId(req.user.hackClubId);
+      if (!user) {
+        user = await this.usersService.findOrCreateByHackClubId({
+          id: req.user.hackClubId,
+          email: req.user.email,
+          name: req.user.name,
+        });
+      }
     } else {
       user = await this.usersService.findByIdOrHackClubId(userId);
       if (!user) {
@@ -130,6 +133,7 @@ export class OAuthController {
       imageUrl: user.imageUrl,
       hackClubId: req.user.hackClubId || user.hackClubId,
       isSuperAdmin: user.isSuperAdmin,
+      setupCompleted: user.setupCompleted,
     };
   }
 
@@ -137,17 +141,20 @@ export class OAuthController {
   @Patch('me')
   async updateMe(
     @Req() req: any,
-    @Body() body: { firstName?: string; lastName?: string; username?: string },
+    @Body() body: { firstName?: string | null; lastName?: string | null; username?: string; setupCompleted?: boolean },
   ) {
     const userId = req.user.sub;
 
     let user;
     if (req.user.hackClubId) {
-      user = await this.usersService.findOrCreateByHackClubId({
-        id: req.user.hackClubId,
-        email: req.user.email,
-        name: req.user.name,
-      });
+      user = await this.usersService.findByHackClubId(req.user.hackClubId);
+      if (!user) {
+        user = await this.usersService.findOrCreateByHackClubId({
+          id: req.user.hackClubId,
+          email: req.user.email,
+          name: req.user.name,
+        });
+      }
     } else {
       user = await this.usersService.findByIdOrHackClubId(userId);
       if (!user) {
@@ -160,6 +167,7 @@ export class OAuthController {
         firstName: body.firstName,
         lastName: body.lastName,
         username: body.username,
+        setupCompleted: body.setupCompleted,
       });
 
       return updatedUser;

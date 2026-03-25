@@ -142,9 +142,17 @@ export class ImageBuilderService {
     if (!deploymentId) return;
 
     try {
+      const deployment = await this.prisma.deployment.findUnique({
+        where: { id: deploymentId },
+        select: { buildStepTimestamps: true },
+      });
+
+      const timestamps = (deployment?.buildStepTimestamps as Record<string, number> | null) || {};
+      timestamps[step] = Date.now();
+
       await this.prisma.deployment.update({
         where: { id: deploymentId },
-        data: { buildStep: step },
+        data: { buildStep: step, buildStepTimestamps: timestamps },
       });
     } catch (error) {
       console.error('[ImageBuilder] Failed to set build step:', error);
@@ -937,10 +945,17 @@ fi
       await this.appendLog(deploymentId, `Build job ${jobName} created successfully`);
 
       if (deploymentId) {
+        const dep = await this.prisma.deployment.findUnique({
+          where: { id: deploymentId },
+          select: { buildStepTimestamps: true },
+        });
+        const ts = (dep?.buildStepTimestamps as Record<string, number> | null) || {};
+        ts['building'] = Date.now();
         await this.prisma.deployment.update({
           where: { id: deploymentId },
           data: {
             buildStep: 'building',
+            buildStepTimestamps: ts,
           },
         });
       }
@@ -1572,18 +1587,18 @@ fi
 
       if (deploymentId) {
         try {
-          // Don't overwrite a successful deployment status from a newer build
+          // Don't overwrite a successful build status from a newer build
           const currentDeployment = await this.prisma.deployment.findUnique({
             where: { id: deploymentId },
-            select: { status: true },
+            select: { buildStatus: true },
           });
-          if (currentDeployment?.status === 'running') {
-            console.log(`[ImageBuilder] Deployment ${deploymentId} is already running (likely from a newer build), skipping error status update`);
+          if (currentDeployment?.buildStatus === 'succeeded') {
+            console.log(`[ImageBuilder] Deployment ${deploymentId} already has a succeeded build (likely from a newer build), skipping error status update`);
           } else {
             await this.prisma.deployment.update({
               where: { id: deploymentId },
               data: {
-                status: 'failed',
+                buildStatus: 'failed',
                 buildError: error.message,
               },
             });

@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
-	import { user, apiFetch, toasts } from '$lib/stores';
-	import { ArrowLeft, Github, Loader2, Link2, Unlink, KeyRound, Pencil, Trash2, User, ChevronRight, Eye, EyeOff } from 'lucide-svelte';
+	import { user, apiFetch, toasts, pendingInvitations, organizations, type PendingInvitation } from '$lib/stores';
+	import { ArrowLeft, Github, Loader2, Unlink, Trash2, Eye, EyeOff, Check, X, Plus, Fingerprint, ChevronRight, Pencil, Mail, Building2 } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 
 	let githubLinked = $state(false);
@@ -20,26 +20,63 @@
 	let deletingPasskeyId = $state<string | null>(null);
 	let passkeyEnvWarning = $state<string | null>(null);
 
-	// Profile editing state
-	let editingProfile = $state(false);
-	let profileFirstName = $state('');
-	let profileLastName = $state('');
-	let profileUsername = $state('');
-	let savingProfile = $state(false);
+	// Inline field editing
+	let editingField = $state<string | null>(null);
+	let editValue = $state('');
+	let savingField = $state(false);
 
-	// Delete passkey modal state
+	// Delete passkey modal
 	let showDeletePasskeyModal = $state(false);
 	let passkeyToDelete = $state<PasskeyRecord | null>(null);
 
 	// Email visibility
 	let emailRevealed = $state(false);
 
+	// Add passkey flow
+	let showAddPasskey = $state(false);
+
+	// Invitations
+	let acceptingInvitation = $state<string | null>(null);
+	let decliningInvitation = $state<string | null>(null);
+	const invitations = $derived($pendingInvitations);
+
+	async function handleAcceptInvitation(invitation: PendingInvitation) {
+		if (acceptingInvitation || decliningInvitation) return;
+		acceptingInvitation = invitation.token;
+		try {
+			await pendingInvitations.accept(invitation.token);
+			const orgsResponse = await apiFetch('/apiv1/organizations/user');
+			if (orgsResponse.ok) {
+				const orgs = await orgsResponse.json();
+				organizations.set(orgs);
+				organizations.initializeSelected();
+			}
+			toasts.add({ title: 'Welcome!', description: `You've joined ${invitation.organization.name}`, color: 'success' });
+		} catch (e) {
+			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to accept invitation', color: 'error' });
+		} finally {
+			acceptingInvitation = null;
+		}
+	}
+
+	async function handleDeclineInvitation(invitation: PendingInvitation) {
+		if (acceptingInvitation || decliningInvitation) return;
+		decliningInvitation = invitation.token;
+		try {
+			await pendingInvitations.decline(invitation.token);
+			toasts.add({ title: 'Invitation declined', color: 'success' });
+		} catch (e) {
+			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to decline invitation', color: 'error' });
+		} finally {
+			decliningInvitation = null;
+		}
+	}
+
 	function censorEmail(email: string): string {
 		const [local, domain] = email.split('@');
 		if (!domain) return '••••••';
 		const visibleStart = local.slice(0, 2);
-		const visibleDomain = domain;
-		return `${visibleStart}${'•'.repeat(Math.max(local.length - 2, 3))}@${visibleDomain}`;
+		return `${visibleStart}${'•'.repeat(Math.max(local.length - 2, 3))}@${domain}`;
 	}
 
 	let displayEmail = $derived.by(() => {
@@ -47,13 +84,6 @@
 		if (!email) return '';
 		return emailRevealed ? email : censorEmail(email);
 	});
-
-	// Section collapse state
-	let expandedSection = $state<string | null>(null);
-
-	function toggleSection(section: string) {
-		expandedSection = expandedSection === section ? null : section;
-	}
 
 	interface PasskeyRecord {
 		id: string;
@@ -63,6 +93,60 @@
 		deviceType?: string | null;
 		backedUp?: boolean;
 		transports?: string[];
+	}
+
+	function startEditField(field: string) {
+		if (field === 'firstName') editValue = $user?.firstName || '';
+		else if (field === 'lastName') editValue = $user?.lastName || '';
+		else if (field === 'username') editValue = $user?.username || '';
+		editingField = field;
+	}
+
+	function cancelEditField() {
+		editingField = null;
+		editValue = '';
+	}
+
+	async function saveField() {
+		if (savingField || !editingField) return;
+
+		const trimmed = editValue.trim();
+		if (editingField === 'username' && trimmed && !/^[a-zA-Z0-9_-]+$/.test(trimmed)) {
+			toasts.add({ title: 'Invalid username', description: 'Letters, numbers, underscores, and hyphens only', color: 'error' });
+			return;
+		}
+
+		savingField = true;
+		try {
+			const body: Record<string, string | undefined> = {};
+			body[editingField] = trimmed || undefined;
+
+			const response = await apiFetch('/apiv1/auth/me', {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(body)
+			});
+
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data?.message || 'Failed to update');
+			}
+
+			const updatedUser = await response.json();
+			user.set({ ...$user, ...updatedUser });
+			toasts.add({ title: 'Updated', color: 'success' });
+			editingField = null;
+			editValue = '';
+		} catch (e) {
+			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to update', color: 'error' });
+		} finally {
+			savingField = false;
+		}
+	}
+
+	function handleFieldKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter') saveField();
+		else if (e.key === 'Escape') cancelEditField();
 	}
 
 	async function checkGitHubStatus() {
@@ -81,35 +165,18 @@
 		}
 	}
 
-	async function linkGitHub() {
-		window.location.href = '/apiv1/github/link';
-	}
+	async function linkGitHub() { window.location.href = '/apiv1/github/link'; }
 
 	async function unlinkGitHub() {
 		unlinking = true;
 		try {
-			const response = await apiFetch('/apiv1/github/unlink', {
-				method: 'DELETE'
-			});
-
-			if (!response.ok) {
-				throw new Error('Failed to unlink GitHub account');
-			}
-
+			const response = await apiFetch('/apiv1/github/unlink', { method: 'DELETE' });
+			if (!response.ok) throw new Error('Failed to unlink GitHub account');
 			githubLinked = false;
 			githubUsername = null;
-
-			toasts.add({
-				title: 'GitHub Unlinked',
-				description: 'Your GitHub account has been disconnected',
-				color: 'success'
-			});
+			toasts.add({ title: 'GitHub Unlinked', description: 'Your GitHub account has been disconnected', color: 'success' });
 		} catch (e) {
-			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to unlink GitHub',
-				color: 'error'
-			});
+			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to unlink GitHub', color: 'error' });
 		} finally {
 			unlinking = false;
 		}
@@ -117,23 +184,25 @@
 
 	onMount(() => {
 		if (browser && typeof window !== 'undefined' && !window.isSecureContext) {
-			passkeyEnvWarning = `Passkeys require a secure origin (https:// or http://localhost). You're on ${window.location.origin}.`;
+			passkeyEnvWarning = `Passkeys require a secure origin. You're on ${window.location.origin}.`;
 		}
-
 		checkGitHubStatus();
 		fetchPasskeys();
+
+		// Scroll to #invitations if hash is present
+		if (browser && window.location.hash === '#invitations') {
+			requestAnimationFrame(() => {
+				document.getElementById('invitations')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+			});
+		}
 	});
 
 	async function fetchPasskeys() {
 		passkeysLoading = true;
 		passkeyListError = null;
-
 		try {
 			const response = await apiFetch('/apiv1/auth/passkeys');
-			if (!response.ok) {
-				throw new Error('Failed to load passkeys');
-			}
-
+			if (!response.ok) throw new Error('Failed to load passkeys');
 			const data = await response.json();
 			passkeys = data.passkeys ?? [];
 		} catch (err) {
@@ -145,582 +214,355 @@
 
 	async function registerPasskey() {
 		if (registerLoading) return;
-
-		if (!browser || typeof window === 'undefined') {
-			toasts.add({
-				title: 'Unsupported',
-				description: 'Passkeys are not available in this environment.',
-				color: 'error'
-			});
-			return;
-		}
-
-		if (!window.isSecureContext) {
-			toasts.add({
-				title: 'Use a secure origin',
-				description: 'Passkeys require https:// or http://localhost.',
-				color: 'error'
-			});
-			return;
-		}
-
-		if (!window.PublicKeyCredential) {
-			toasts.add({
-				title: 'Unsupported',
-				description: 'Passkeys are not available on this device.',
-				color: 'error'
-			});
-			return;
-		}
+		if (!browser || typeof window === 'undefined') { toasts.add({ title: 'Unsupported', description: 'Passkeys are not available in this environment.', color: 'error' }); return; }
+		if (!window.isSecureContext) { toasts.add({ title: 'Use a secure origin', description: 'Passkeys require https:// or http://localhost.', color: 'error' }); return; }
+		if (!window.PublicKeyCredential) { toasts.add({ title: 'Unsupported', description: 'Passkeys are not available on this device.', color: 'error' }); return; }
 
 		registerLoading = true;
-
 		try {
-			const optionsResponse = await apiFetch('/apiv1/auth/passkey/register/options', {
-				method: 'POST'
-			});
-
-			if (!optionsResponse.ok) {
-				throw new Error('Could not create passkey challenge');
-			}
-
+			const optionsResponse = await apiFetch('/apiv1/auth/passkey/register/options', { method: 'POST' });
+			if (!optionsResponse.ok) throw new Error('Could not create passkey challenge');
 			const options = await optionsResponse.json();
 			const { startRegistration } = await import('@simplewebauthn/browser');
-			const credential = await startRegistration({
-				optionsJSON: options
-			});
-
+			const credential = await startRegistration({ optionsJSON: options });
 			const verifyResponse = await apiFetch('/apiv1/auth/passkey/register/verify', {
 				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({
-					response: credential,
-					friendlyName: newPasskeyName.trim() || undefined
-				})
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ response: credential, friendlyName: newPasskeyName.trim() || undefined })
 			});
-
 			if (!verifyResponse.ok) {
 				const data = await verifyResponse.json().catch(() => ({}));
 				throw new Error(data?.message || 'Passkey registration failed');
 			}
-
-			toasts.add({
-				title: 'Passkey added',
-				description: 'You can now sign in with this device.',
-				color: 'success'
-			});
-
+			toasts.add({ title: 'Passkey added', description: 'You can now sign in with this device.', color: 'success' });
 			newPasskeyName = '';
+			showAddPasskey = false;
 			await fetchPasskeys();
 		} catch (err) {
-			const description =
-				err instanceof Error
-					? err.name === 'NotAllowedError'
-						? 'Passkey prompt was cancelled.'
-						: err.message
-					: 'Failed to register passkey.';
-
-			toasts.add({
-				title: 'Unable to register passkey',
-				description,
-				color: 'error'
-			});
+			const description = err instanceof Error ? (err.name === 'NotAllowedError' ? 'Passkey prompt was cancelled.' : err.message) : 'Failed to register passkey.';
+			toasts.add({ title: 'Unable to register passkey', description, color: 'error' });
 		} finally {
 			registerLoading = false;
 		}
 	}
 
-	function startRenaming(passkey: PasskeyRecord) {
-		editingPasskeyId = passkey.id;
-		renameValue = passkey.friendlyName || '';
-	}
-
-	function cancelRenaming() {
-		editingPasskeyId = null;
-		renameValue = '';
-	}
+	function startRenaming(passkey: PasskeyRecord) { editingPasskeyId = passkey.id; renameValue = passkey.friendlyName || ''; }
+	function cancelRenaming() { editingPasskeyId = null; renameValue = ''; }
 
 	async function savePasskeyName() {
 		if (!editingPasskeyId) return;
-
 		const friendlyName = renameValue.trim();
-		if (!friendlyName) {
-			toasts.add({
-				title: 'Name required',
-				description: 'Give this passkey a short name to recognize it later.',
-				color: 'error'
-			});
-			return;
-		}
-
+		if (!friendlyName) { toasts.add({ title: 'Name required', description: 'Give this passkey a short name.', color: 'error' }); return; }
 		renaming = true;
 		try {
 			const response = await apiFetch(`/apiv1/auth/passkeys/${editingPasskeyId}/rename`, {
-				method: 'POST',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({ friendlyName })
+				method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ friendlyName })
 			});
-
-			if (!response.ok) {
-				throw new Error('Failed to rename passkey');
-			}
-
-			toasts.add({
-				title: 'Passkey renamed',
-				color: 'success'
-			});
-
+			if (!response.ok) throw new Error('Failed to rename passkey');
+			toasts.add({ title: 'Passkey renamed', color: 'success' });
 			cancelRenaming();
 			await fetchPasskeys();
 		} catch (err) {
-			toasts.add({
-				title: 'Rename failed',
-				description: err instanceof Error ? err.message : 'Could not update name',
-				color: 'error'
-			});
+			toasts.add({ title: 'Rename failed', description: err instanceof Error ? err.message : 'Could not update name', color: 'error' });
 		} finally {
 			renaming = false;
 		}
 	}
 
-	function confirmDeletePasskey(passkey: PasskeyRecord) {
-		passkeyToDelete = passkey;
-		showDeletePasskeyModal = true;
-	}
+	function confirmDeletePasskey(passkey: PasskeyRecord) { passkeyToDelete = passkey; showDeletePasskeyModal = true; }
 
 	async function deletePasskey(passkey: PasskeyRecord) {
 		if (deletingPasskeyId) return;
-
 		deletingPasskeyId = passkey.id;
-
 		try {
-			const response = await apiFetch(`/apiv1/auth/passkeys/${passkey.id}`, {
-				method: 'DELETE'
-			});
-
-			if (!response.ok) {
-				throw new Error('Failed to delete passkey');
-			}
-
-			toasts.add({
-				title: 'Passkey removed',
-				color: 'success'
-			});
-
-			if (editingPasskeyId === passkey.id) {
-				cancelRenaming();
-			}
-
+			const response = await apiFetch(`/apiv1/auth/passkeys/${passkey.id}`, { method: 'DELETE' });
+			if (!response.ok) throw new Error('Failed to delete passkey');
+			toasts.add({ title: 'Passkey removed', color: 'success' });
+			if (editingPasskeyId === passkey.id) cancelRenaming();
 			await fetchPasskeys();
 		} catch (err) {
-			toasts.add({
-				title: 'Unable to remove passkey',
-				description: err instanceof Error ? err.message : 'Something went wrong',
-				color: 'error'
-			});
+			toasts.add({ title: 'Unable to remove passkey', description: err instanceof Error ? err.message : 'Something went wrong', color: 'error' });
 		} finally {
 			deletingPasskeyId = null;
 		}
 	}
 
 	function formatTimestamp(value?: string | null) {
-		if (!value) return 'Not used yet';
-		return new Date(value).toLocaleString(undefined, {
-			dateStyle: 'medium',
-			timeStyle: 'short'
-		});
-	}
-
-	function startEditingProfile() {
-		profileFirstName = $user?.firstName || '';
-		profileLastName = $user?.lastName || '';
-		profileUsername = $user?.username || '';
-		editingProfile = true;
-	}
-
-	function cancelEditingProfile() {
-		editingProfile = false;
-		profileFirstName = '';
-		profileLastName = '';
-		profileUsername = '';
-	}
-
-	async function saveProfile() {
-		if (savingProfile) return;
-
-		// Validate username
-		const trimmedUsername = profileUsername.trim();
-		if (trimmedUsername && !/^[a-zA-Z0-9_-]+$/.test(trimmedUsername)) {
-			toasts.add({
-				title: 'Invalid username',
-				description: 'Username can only contain letters, numbers, underscores, and hyphens',
-				color: 'error'
-			});
-			return;
-		}
-
-		savingProfile = true;
-
-		try {
-			const response = await apiFetch('/apiv1/auth/me', {
-				method: 'PATCH',
-				headers: {
-					'Content-Type': 'application/json'
-				},
-				body: JSON.stringify({
-					firstName: profileFirstName.trim() || undefined,
-					lastName: profileLastName.trim() || undefined,
-					username: trimmedUsername || undefined
-				})
-			});
-
-			if (!response.ok) {
-				const data = await response.json().catch(() => ({}));
-				throw new Error(data?.message || 'Failed to update profile');
-			}
-
-			const updatedUser = await response.json();
-
-			// Update the user store with the new data
-			user.set({
-				...$user,
-				...updatedUser
-			});
-
-			toasts.add({
-				title: 'Profile updated',
-				color: 'success'
-			});
-
-			editingProfile = false;
-		} catch (e) {
-			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to update profile',
-				color: 'error'
-			});
-		} finally {
-			savingProfile = false;
-		}
+		if (!value) return 'Never';
+		return new Date(value).toLocaleString(undefined, { dateStyle: 'medium', timeStyle: 'short' });
 	}
 </script>
 
-<div class="settings-page">
-	<div class="settings-container">
-		<!-- Header -->
-		<div class="settings-header">
-			<button
-				onclick={() => window.history.back()}
-				class="settings-back-btn"
-			>
-				<ArrowLeft class="h-4 w-4" />
-				Back
-			</button>
+<div class="us-page">
+	<div class="us-grid-fade"></div>
 
-			<div class="settings-title-row">
-				<div class="settings-avatar">
+	<div class="us-content">
+		<button onclick={() => window.history.back()} class="us-back">
+			<ArrowLeft class="h-3.5 w-3.5" />
+			Back
+		</button>
+
+		<!-- Single card for everything -->
+		<div class="us-card">
+			<!-- Profile -->
+			<div class="us-identity">
+				<div class="us-avatar">
 					{#if $user?.imageUrl}
-						<img
-							src={$user.imageUrl}
-							alt={$user.name || 'User'}
-							class="settings-avatar-img"
-						/>
+						<img src={$user.imageUrl} alt={$user.name || 'User'} class="us-avatar-img" />
 					{:else}
-						<span class="settings-avatar-letter">
+						<span class="us-avatar-letter">
 							{$user?.firstName?.[0] || $user?.name?.[0] || 'U'}
 						</span>
 					{/if}
 				</div>
-				<div>
-					<h1 class="settings-title">
+				<div class="us-identity-text">
+					<h1 class="us-name">
 						{#if $user?.firstName || $user?.lastName}
 							{$user?.firstName || ''} {$user?.lastName || ''}
 						{:else}
 							{$user?.name || $user?.username || 'User'}
 						{/if}
 					</h1>
-					<p class="settings-subtitle">
+					<p class="us-email">
 						{displayEmail}
 						<button
-							class="settings-reveal-btn"
+							class="us-reveal"
 							onclick={() => emailRevealed = !emailRevealed}
 							aria-label={emailRevealed ? 'Hide email' : 'Show email'}
 						>
-							{#if emailRevealed}
-								<EyeOff class="h-3 w-3" />
-							{:else}
-								<Eye class="h-3 w-3" />
-							{/if}
+							{#if emailRevealed}<EyeOff class="h-3 w-3" />{:else}<Eye class="h-3 w-3" />{/if}
 						</button>
 					</p>
 				</div>
 			</div>
-		</div>
 
-		<!-- Profile Section -->
-		<section class="settings-section">
-			<button class="settings-section-trigger" onclick={() => toggleSection('profile')}>
-				<div class="settings-section-trigger-left">
-					<User class="h-4 w-4" />
-					<div>
-						<p class="settings-section-label">Profile</p>
-						<p class="settings-section-desc">Name, email, and username</p>
-					</div>
-				</div>
-				<span class="settings-section-chevron" class:is-open={expandedSection === 'profile'}><ChevronRight class="h-4 w-4" /></span>
-			</button>
+			<div class="us-card-divider"></div>
 
-			{#if expandedSection === 'profile'}
-				<div class="settings-section-content">
-					{#if editingProfile}
-						<div class="settings-field-grid">
-							<div class="settings-field">
-								<label for="profile-first-name" class="settings-field-label">First name</label>
+			<!-- Inline-editable fields in columns -->
+			<div class="us-fields-grid">
+				{#each [
+					{ key: 'firstName', label: 'First name', value: $user?.firstName || '—', mono: false },
+					{ key: 'lastName', label: 'Last name', value: $user?.lastName || '—', mono: false },
+					{ key: 'username', label: 'Username', value: $user?.username || '—', mono: true }
+				] as field}
+					<div class="us-field-cell" class:us-field-cell--editing={editingField === field.key}>
+						<span class="us-label">{field.label}</span>
+						{#if editingField === field.key}
+							<div class="us-inline-edit">
 								<input
-									id="profile-first-name"
+									class="us-inline-input"
+									class:us-inline-input--mono={field.mono}
 									type="text"
-									class="input"
-									bind:value={profileFirstName}
-									placeholder="First name"
+									bind:value={editValue}
+									onkeydown={handleFieldKeydown}
+									autofocus
 								/>
-							</div>
-							<div class="settings-field">
-								<label for="profile-last-name" class="settings-field-label">Last name</label>
-								<input
-									id="profile-last-name"
-									type="text"
-									class="input"
-									bind:value={profileLastName}
-									placeholder="Last name"
-								/>
-							</div>
-							<div class="settings-field">
-								<label class="settings-field-label">Email</label>
-								<p class="settings-field-value">{displayEmail || '—'}</p>
-							</div>
-							<div class="settings-field">
-								<label for="profile-username" class="settings-field-label">Username</label>
-								<input
-									id="profile-username"
-									type="text"
-									class="input font-mono text-sm"
-									bind:value={profileUsername}
-									placeholder="username"
-								/>
-							</div>
-						</div>
-						<div class="settings-actions">
-							<button onclick={cancelEditingProfile} class="btn btn-secondary">Cancel</button>
-							<button onclick={saveProfile} disabled={savingProfile} class="btn btn-primary">
-								{#if savingProfile}<Loader2 class="h-4 w-4 animate-spin" />{/if}
-								Save
-							</button>
-						</div>
-					{:else}
-						<div class="settings-field-grid">
-							<div class="settings-field">
-								<p class="settings-field-label">First name</p>
-								<p class="settings-field-value">{$user?.firstName || '—'}</p>
-							</div>
-							<div class="settings-field">
-								<p class="settings-field-label">Last name</p>
-								<p class="settings-field-value">{$user?.lastName || '—'}</p>
-							</div>
-							<div class="settings-field">
-								<p class="settings-field-label">Email</p>
-								<p class="settings-field-value">{displayEmail || '—'}</p>
-							</div>
-							<div class="settings-field">
-								<p class="settings-field-label">Username</p>
-								<p class="settings-field-value font-mono text-sm">{$user?.username || '—'}</p>
-							</div>
-						</div>
-						<div class="settings-actions">
-							<button onclick={startEditingProfile} class="btn btn-secondary">
-								<Pencil class="h-4 w-4" />
-								Edit profile
-							</button>
-						</div>
-					{/if}
-				</div>
-			{/if}
-		</section>
-
-		<!-- GitHub Section -->
-		<section class="settings-section">
-			<button class="settings-section-trigger" onclick={() => toggleSection('github')}>
-				<div class="settings-section-trigger-left">
-					<Github class="h-4 w-4" />
-					<div>
-						<p class="settings-section-label">GitHub</p>
-						<p class="settings-section-desc">
-							{#if loading}
-								Checking status...
-							{:else if githubLinked}
-								Connected as @{githubUsername}
-							{:else}
-								Not connected
-							{/if}
-						</p>
-					</div>
-				</div>
-				<div class="flex items-center gap-2">
-					{#if !loading}
-						<span class="settings-status-dot" class:is-connected={githubLinked}></span>
-					{/if}
-					<span class="settings-section-chevron" class:is-open={expandedSection === 'github'}><ChevronRight class="h-4 w-4" /></span>
-				</div>
-			</button>
-
-			{#if expandedSection === 'github'}
-				<div class="settings-section-content">
-					{#if loading}
-						<div class="flex items-center justify-center py-6">
-							<Loader2 class="h-5 w-5 animate-spin text-primary-600" />
-						</div>
-					{:else if githubLinked}
-						<div class="settings-connected-row">
-							<div class="flex items-center gap-3">
-								<div class="settings-github-avatar">
-									<Github class="h-4 w-4" />
+								<div class="us-inline-btns">
+									<button class="us-inline-btn us-inline-btn--save" onclick={saveField} disabled={savingField}>
+										{#if savingField}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Check class="h-3 w-3" />{/if}
+									</button>
+									<button class="us-inline-btn" onclick={cancelEditField}><X class="h-3 w-3" /></button>
 								</div>
-								<p class="settings-field-value">@{githubUsername}</p>
 							</div>
-							<button onclick={unlinkGitHub} disabled={unlinking} class="btn btn-secondary">
-								{#if unlinking}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Unlink class="h-4 w-4" />{/if}
-								Disconnect
-							</button>
-						</div>
-					{:else}
-						<div class="settings-empty-state">
-							<p class="settings-field-value">Connect GitHub to deploy from your repos</p>
-							<p class="settings-field-label">Auto-build images from commits and view deployment history</p>
-							<button onclick={linkGitHub} class="btn btn-primary mt-3">
-								<Link2 class="h-4 w-4" />
-								Connect GitHub
-							</button>
-						</div>
-					{/if}
-				</div>
-			{/if}
-		</section>
+						{:else}
+							<div class="us-field-value-row">
+								<span class="us-value" class:us-value--mono={field.mono}>{field.value}</span>
+								<button class="us-field-edit" onclick={() => startEditField(field.key)}>
+									<Pencil class="h-3 w-3" />
+								</button>
+							</div>
+						{/if}
+					</div>
+				{/each}
+			</div>
 
-		<!-- Passkeys Section -->
-		<section class="settings-section">
-			<button class="settings-section-trigger" onclick={() => toggleSection('passkeys')}>
-				<div class="settings-section-trigger-left">
-					<KeyRound class="h-4 w-4" />
-					<div>
-						<p class="settings-section-label">Passkeys</p>
-						<p class="settings-section-desc">
-							{#if passkeysLoading}
-								Loading...
-							{:else}
-								{passkeys.length} registered
-							{/if}
-						</p>
+			{#if invitations.length > 0}
+				<div class="us-card-divider"></div>
+
+				<!-- Invitations -->
+				<div class="us-card-section" id="invitations">
+					<div class="us-section-head">
+						<div class="us-section-icon us-section-icon--invitations">
+							<Mail class="h-4 w-4" />
+						</div>
+						<div class="us-section-title-group">
+							<h2 class="us-section-title">Pending Invitations</h2>
+							<p class="us-section-desc">{invitations.length} organization{invitations.length === 1 ? '' : 's'} invited you</p>
+						</div>
+						<span class="us-count">{invitations.length}</span>
+					</div>
+
+					<div class="us-invitations-list">
+						{#each invitations as invitation (invitation.id)}
+							<div class="us-invitation">
+								<div class="us-invitation-icon">
+									{#if invitation.organization.avatarUrl}
+										<img src={invitation.organization.avatarUrl} alt={invitation.organization.name} class="us-invitation-avatar" />
+									{:else}
+										<Building2 class="h-5 w-5" />
+									{/if}
+								</div>
+								<div class="us-invitation-body">
+									<span class="us-invitation-name">{invitation.organization.name}</span>
+									<span class="us-invitation-meta">
+										Invited by {pendingInvitations.getInviterName(invitation.inviter)} · {invitation.role}
+									</span>
+								</div>
+								<div class="us-invitation-actions">
+									<button
+										class="us-btn us-btn-ghost"
+										onclick={() => handleDeclineInvitation(invitation)}
+										disabled={acceptingInvitation !== null || decliningInvitation !== null}
+									>
+										{#if decliningInvitation === invitation.token}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+										Decline
+									</button>
+									<button
+										class="us-btn us-btn-solid"
+										onclick={() => handleAcceptInvitation(invitation)}
+										disabled={acceptingInvitation !== null || decliningInvitation !== null}
+									>
+										{#if acceptingInvitation === invitation.token}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+										Accept
+									</button>
+								</div>
+							</div>
+						{/each}
 					</div>
 				</div>
-				<span class="settings-section-chevron" class:is-open={expandedSection === 'passkeys'}><ChevronRight class="h-4 w-4" /></span>
-			</button>
+			{/if}
 
-			{#if expandedSection === 'passkeys'}
-				<div class="settings-section-content">
-					<p class="settings-hint">
-						Sign in without OTP emails using Touch ID, Face ID, or Windows Hello.
-					</p>
+			<div class="us-card-divider"></div>
 
-					{#if passkeyEnvWarning}
-						<div class="alert alert-warning">{passkeyEnvWarning}</div>
+			<!-- GitHub -->
+			<div class="us-card-section">
+				<div class="us-section-head">
+					<div class="us-section-icon us-section-icon--github">
+						<Github class="h-4 w-4" />
+					</div>
+					<div class="us-section-title-group">
+						<h2 class="us-section-title">GitHub</h2>
+						<p class="us-section-desc">Deploy directly from your repositories</p>
+					</div>
+					{#if !loading}
+						<div class="us-pill" class:us-pill--active={githubLinked}>
+							<span class="us-pill-dot"></span>
+							{githubLinked ? 'Connected' : 'Not connected'}
+						</div>
 					{/if}
+				</div>
 
-					{#if passkeyListError}
-						<div class="alert alert-error">{passkeyListError}</div>
-					{/if}
-
-					<!-- Add passkey -->
-					<div class="settings-passkey-add">
-						<input
-							class="input flex-1"
-							type="text"
-							placeholder="Device name (optional)"
-							bind:value={newPasskeyName}
-						/>
-						<button
-							class="btn btn-primary"
-							type="button"
-							onclick={registerPasskey}
-							disabled={registerLoading}
-						>
-							{#if registerLoading}<Loader2 class="h-4 w-4 animate-spin" />{/if}
-							Add passkey
+				{#if loading}
+					<div class="us-loading"><Loader2 class="h-4 w-4 animate-spin" /></div>
+				{:else if githubLinked}
+					<div class="us-integration-row">
+						<div class="us-gh-badge">
+							<Github class="h-4 w-4" />
+							<span class="us-gh-name">@{githubUsername}</span>
+						</div>
+						<button onclick={unlinkGitHub} disabled={unlinking} class="us-btn us-btn-danger">
+							{#if unlinking}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Unlink class="h-3.5 w-3.5" />{/if}
+							Disconnect
 						</button>
 					</div>
-
-					{#if passkeysLoading}
-						<div class="flex items-center justify-center py-6">
-							<Loader2 class="h-5 w-5 animate-spin text-primary-600" />
+				{:else}
+					<button onclick={linkGitHub} class="us-connect-btn">
+						<div class="us-connect-icon">
+							<Github class="h-5 w-5" />
 						</div>
-					{:else if passkeys.length === 0}
-						<p class="settings-hint" style="text-align: center; padding: 1rem 0;">No passkeys registered yet.</p>
-					{:else}
-						<div class="settings-passkey-list">
+						<div class="us-connect-text">
+							<span class="us-connect-label">Connect GitHub</span>
+							<span class="us-connect-hint">Auto-build images from commits and view deployment history</span>
+						</div>
+						<ChevronRight class="h-4 w-4 us-connect-arrow" />
+					</button>
+				{/if}
+			</div>
+
+			<div class="us-card-divider"></div>
+
+			<!-- Passkeys -->
+			<div class="us-card-section">
+				<div class="us-section-head">
+					<div class="us-section-icon us-section-icon--passkey">
+						<Fingerprint class="h-4 w-4" />
+					</div>
+					<div class="us-section-title-group">
+						<h2 class="us-section-title">Passkeys</h2>
+						<p class="us-section-desc">Sign in with Touch ID, Face ID, or Windows Hello</p>
+					</div>
+					{#if !passkeysLoading && passkeys.length > 0}
+						<span class="us-count">{passkeys.length}</span>
+					{/if}
+				</div>
+
+				{#if passkeyEnvWarning}
+					<div class="us-warning">{passkeyEnvWarning}</div>
+				{/if}
+
+				{#if passkeyListError}
+					<div class="us-error">{passkeyListError}</div>
+				{/if}
+
+				{#if passkeysLoading}
+					<div class="us-loading"><Loader2 class="h-4 w-4 animate-spin" /></div>
+				{:else}
+					{#if passkeys.length > 0}
+						<div class="us-passkey-list">
 							{#each passkeys as passkey}
-								<div class="settings-passkey-item">
-									<div class="flex-1 min-w-0">
+								<div class="us-passkey">
+									<div class="us-passkey-dot"></div>
+									<div class="us-passkey-body">
 										{#if editingPasskeyId === passkey.id}
-											<div class="flex items-center gap-2">
-												<input
-													class="input flex-1"
-													type="text"
-													placeholder="Friendly name"
-													bind:value={renameValue}
-												/>
-												<button class="btn btn-primary" type="button" onclick={savePasskeyName} disabled={renaming}>
-													{#if renaming}<Loader2 class="h-4 w-4 animate-spin" />{/if}
-													Save
+											<div class="us-passkey-edit-row">
+												<input class="us-inline-input us-inline-input--sm" type="text" placeholder="Friendly name" bind:value={renameValue} />
+												<button class="us-inline-btn us-inline-btn--save" type="button" onclick={savePasskeyName} disabled={renaming}>
+													{#if renaming}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Check class="h-3 w-3" />{/if}
 												</button>
-												<button class="btn btn-secondary" type="button" onclick={cancelRenaming}>Cancel</button>
+												<button class="us-inline-btn" type="button" onclick={cancelRenaming}><X class="h-3 w-3" /></button>
 											</div>
 										{:else}
-											<p class="settings-field-value">{passkey.friendlyName || 'Passkey'}</p>
-											<p class="settings-field-label">
+											<span class="us-passkey-name">{passkey.friendlyName || 'Passkey'}</span>
+											<span class="us-passkey-meta">
 												Last used {formatTimestamp(passkey.lastUsedAt)} · Added {formatTimestamp(passkey.createdAt)}
-											</p>
+											</span>
 										{/if}
 									</div>
 									{#if editingPasskeyId !== passkey.id}
-										<div class="flex gap-1">
-											<button class="btn btn-ghost" type="button" onclick={() => startRenaming(passkey)} title="Rename">
-												<Pencil class="h-3.5 w-3.5" />
+										<div class="us-passkey-actions">
+											<button class="us-icon-btn" type="button" onclick={() => startRenaming(passkey)} title="Rename">
+												<Pencil class="h-3 w-3" />
 											</button>
-											<button
-												class="btn btn-ghost"
-												type="button"
-												onclick={() => confirmDeletePasskey(passkey)}
-												disabled={deletingPasskeyId === passkey.id}
-												title="Remove"
-												style="color: var(--error-text-color);"
-											>
-												{#if deletingPasskeyId === passkey.id}
-													<Loader2 class="h-3.5 w-3.5 animate-spin" />
-												{:else}
-													<Trash2 class="h-3.5 w-3.5" />
-												{/if}
+											<button class="us-icon-btn us-icon-btn--danger" type="button" onclick={() => confirmDeletePasskey(passkey)} disabled={deletingPasskeyId === passkey.id} title="Remove">
+												{#if deletingPasskeyId === passkey.id}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Trash2 class="h-3 w-3" />{/if}
 											</button>
 										</div>
 									{/if}
 								</div>
 							{/each}
 						</div>
+					{:else}
+						<p class="us-empty-hint">No passkeys yet. Add one to skip email codes when signing in.</p>
 					{/if}
-				</div>
-			{/if}
-		</section>
+
+					{#if showAddPasskey}
+						<div class="us-add-passkey-row">
+							<input class="us-inline-input" type="text" placeholder="Device name (optional)" bind:value={newPasskeyName} />
+							<button class="us-btn us-btn-solid" type="button" onclick={registerPasskey} disabled={registerLoading}>
+								{#if registerLoading}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+								Register
+							</button>
+							<button class="us-btn us-btn-ghost" type="button" onclick={() => { showAddPasskey = false; newPasskeyName = ''; }}>Cancel</button>
+						</div>
+					{:else}
+						<button class="us-add-btn" onclick={() => (showAddPasskey = true)}>
+							<Plus class="h-3.5 w-3.5" />
+							Add passkey
+						</button>
+					{/if}
+				{/if}
+			</div>
+		</div>
 	</div>
 </div>
 
@@ -737,261 +579,683 @@
 {/if}
 
 <style>
-	.settings-page {
-		padding: 2rem;
+	/* ── Page ── */
+	.us-page {
+		position: relative;
+		min-height: 100%;
+		overflow-y: auto;
+	}
+
+	.us-grid-fade {
+		position: fixed;
+		inset: 0;
+		pointer-events: none;
+		z-index: 0;
+		background-image:
+			linear-gradient(color-mix(in srgb, var(--surface-border) 50%, transparent) 1px, transparent 1px),
+			linear-gradient(90deg, color-mix(in srgb, var(--surface-border) 50%, transparent) 1px, transparent 1px);
+		background-size: 80px 80px;
+		opacity: 0.35;
+		mask-image: radial-gradient(ellipse 70% 40% at 50% 0%, black 0%, transparent 100%);
+		-webkit-mask-image: radial-gradient(ellipse 70% 40% at 50% 0%, black 0%, transparent 100%);
+	}
+
+	.us-content {
+		position: relative;
+		z-index: 1;
 		max-width: 42rem;
 		margin: 0 auto;
+		padding: 2.5rem 2rem 4rem;
 	}
 
-	.settings-container {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-	}
-
-	.settings-header {
-		margin-bottom: 1.5rem;
-	}
-
-	.settings-back-btn {
+	/* ── Back ── */
+	.us-back {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.5rem;
-		font-size: 0.875rem;
+		gap: 0.375rem;
+		font-size: 0.8125rem;
+		font-weight: 450;
 		color: var(--surface-muted);
+		background: none;
+		border: none;
 		cursor: pointer;
-		margin-bottom: 1rem;
-		transition: color 120ms ease;
+		padding: 0;
+		margin-bottom: 2rem;
+		transition: color 120ms;
+	}
+	.us-back:hover { color: var(--center-channel-color); }
+
+	/* ── Card ── */
+	.us-card {
+		border: 1px solid var(--surface-border);
+		border-radius: 1rem;
+		background-color: var(--surface-bg);
+		overflow: hidden;
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
 	}
 
-	.settings-back-btn:hover {
-		color: var(--center-channel-color);
+	.us-card-divider {
+		height: 1px;
+		background-color: var(--surface-border);
 	}
 
-	.settings-title-row {
+	/* ── Identity (inside card) ── */
+	.us-identity {
 		display: flex;
 		align-items: center;
-		gap: 1rem;
+		gap: 1.125rem;
+		padding: 1.75rem 2rem;
 	}
 
-	.settings-avatar {
-		width: 3rem;
-		height: 3rem;
-		border-radius: 0.75rem;
+	.us-avatar {
+		width: 3.5rem;
+		height: 3.5rem;
+		border-radius: 0.875rem;
 		overflow: hidden;
 		flex-shrink: 0;
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background-color: color-mix(in srgb, var(--surface-border) 80%, var(--center-channel-bg));
-		color: var(--center-channel-color);
+		background: linear-gradient(135deg, color-mix(in srgb, var(--button-bg) 18%, transparent), color-mix(in srgb, var(--button-bg) 6%, transparent));
+		color: var(--button-bg);
 	}
 
-	.settings-avatar-img {
+	.us-avatar-img { width: 100%; height: 100%; object-fit: cover; }
+	.us-avatar-letter { font-size: 1.25rem; font-weight: 700; }
+
+	.us-identity-text { flex: 1; min-width: 0; }
+
+	.us-name {
+		font-size: 1.25rem;
+		font-weight: 700;
+		color: var(--center-channel-color);
+		letter-spacing: -0.02em;
+		line-height: 1.2;
+		margin: 0;
+	}
+
+	.us-email {
+		font-size: 0.8125rem;
+		color: var(--surface-muted);
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		margin-top: 0.125rem;
+	}
+
+	.us-reveal {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.2rem;
+		border-radius: 0.25rem;
+		color: var(--surface-muted);
+		background: none;
+		border: none;
+		cursor: pointer;
+		transition: color 120ms;
+	}
+	.us-reveal:hover { color: var(--center-channel-color); }
+
+	/* ── Fields grid (3 columns inside card) ── */
+	.us-fields-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr 1fr;
+		padding: 0;
+	}
+
+	.us-field-cell {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		padding: 1.25rem 2rem;
+		position: relative;
+		transition: background-color 120ms;
+	}
+
+	.us-field-cell:not(:first-child)::before {
+		content: '';
+		position: absolute;
+		left: 0;
+		top: 1.25rem;
+		bottom: 1.25rem;
+		width: 1px;
+		background-color: color-mix(in srgb, var(--surface-border) 60%, transparent);
+	}
+
+	.us-field-cell:not(.us-field-cell--editing):hover {
+		background-color: color-mix(in srgb, var(--center-channel-color) 2.5%, transparent);
+	}
+
+	.us-field-cell:not(.us-field-cell--editing):hover .us-field-edit {
+		opacity: 1;
+	}
+
+	.us-label {
+		font-size: 0.6875rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--surface-muted);
+	}
+
+	.us-field-value-row {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		min-height: 1.625rem;
+	}
+
+	.us-value {
+		flex: 1;
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--center-channel-color);
+		min-width: 0;
+	}
+
+	.us-value--mono {
+		font-family: var(--font-mono);
+		font-size: 0.8125rem;
+		font-weight: 400;
+	}
+
+	.us-field-edit {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.5rem;
+		height: 1.5rem;
+		border-radius: 0.375rem;
+		border: none;
+		background: none;
+		color: var(--surface-muted);
+		cursor: pointer;
+		opacity: 0;
+		transition: all 120ms;
+		flex-shrink: 0;
+	}
+
+	.us-field-edit:hover {
+		color: var(--center-channel-color);
+		background-color: color-mix(in srgb, var(--center-channel-color) 6%, transparent);
+	}
+
+	/* ── Inline edit ── */
+	.us-inline-edit {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+		min-width: 0;
+	}
+
+	.us-inline-btns {
+		display: flex;
+		gap: 0.125rem;
+	}
+
+	.us-inline-input {
+		width: 100%;
+		min-width: 0;
+		padding: 0.3125rem 0.5rem;
+		font-size: 0.875rem;
+		border: 1px solid var(--sidebar-text-active-border);
+		border-radius: 0.375rem;
+		background-color: var(--surface-bg);
+		color: var(--center-channel-color);
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--sidebar-text-active-border) 10%, transparent);
+		transition: border-color 150ms, box-shadow 150ms;
+		line-height: 1.5;
+	}
+	.us-inline-input:focus { outline: none; }
+	.us-inline-input::placeholder { color: color-mix(in srgb, var(--surface-muted) 55%, transparent); }
+	.us-inline-input--mono { font-family: var(--font-mono); font-size: 0.8125rem; font-weight: 400; }
+	.us-inline-input--sm { padding: 0.3125rem 0.5rem; font-size: 0.8125rem; }
+
+	.us-inline-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.5rem;
+		height: 1.5rem;
+		border-radius: 0.375rem;
+		border: none;
+		background: none;
+		color: var(--surface-muted);
+		cursor: pointer;
+		flex-shrink: 0;
+		transition: all 120ms;
+	}
+	.us-inline-btn:hover {
+		color: var(--center-channel-color);
+		background-color: color-mix(in srgb, var(--center-channel-color) 6%, transparent);
+	}
+	.us-inline-btn--save {
+		color: var(--button-bg);
+	}
+	.us-inline-btn--save:hover {
+		color: var(--button-bg);
+		background-color: color-mix(in srgb, var(--button-bg) 10%, transparent);
+	}
+	.us-inline-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+	/* ── Card section (GitHub, Passkeys inside the card) ── */
+	.us-card-section {
+		display: flex;
+		flex-direction: column;
+		gap: 1.125rem;
+		padding: 1.5rem 2rem;
+	}
+
+	.us-section-head {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.us-section-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		border-radius: 0.5rem;
+		flex-shrink: 0;
+	}
+
+	.us-section-icon--github {
+		background-color: color-mix(in srgb, var(--center-channel-color) 8%, transparent);
+		color: var(--center-channel-color);
+	}
+	.us-section-icon--passkey {
+		background-color: color-mix(in srgb, var(--button-bg) 10%, transparent);
+		color: var(--button-bg);
+	}
+	.us-section-icon--invitations {
+		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 10%, transparent);
+		color: var(--sidebar-text-active-border);
+	}
+
+	/* ── Invitations ── */
+	.us-invitations-list {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.us-invitation {
+		display: flex;
+		align-items: center;
+		gap: 0.875rem;
+		padding: 0.875rem 1rem;
+		border-radius: 0.625rem;
+		border: 1px solid color-mix(in srgb, var(--surface-border) 60%, transparent);
+		background-color: color-mix(in srgb, var(--center-channel-color) 2%, transparent);
+	}
+
+	.us-invitation + .us-invitation {
+		margin-top: 0.5rem;
+	}
+
+	.us-invitation-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.5rem;
+		height: 2.5rem;
+		border-radius: 0.625rem;
+		flex-shrink: 0;
+		background-color: color-mix(in srgb, var(--button-bg) 8%, transparent);
+		color: var(--button-bg);
+		overflow: hidden;
+	}
+
+	.us-invitation-avatar {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
 	}
 
-	.settings-avatar-letter {
-		font-size: 1.125rem;
-		font-weight: 600;
+	.us-invitation-body {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
 	}
 
-	.settings-title {
-		font-size: 1.125rem;
+	.us-invitation-name {
+		font-size: 0.875rem;
 		font-weight: 600;
 		color: var(--center-channel-color);
-		line-height: 1.3;
 	}
 
-	.settings-subtitle {
-		font-size: 0.875rem;
+	.us-invitation-meta {
+		font-size: 0.6875rem;
 		color: var(--surface-muted);
+	}
+
+	.us-invitation-actions {
 		display: flex;
-		align-items: center;
 		gap: 0.375rem;
-	}
-
-	.settings-reveal-btn {
-		display: inline-flex;
-		align-items: center;
-		padding: 0.125rem;
-		border-radius: 0.25rem;
-		color: var(--surface-muted);
-		background: transparent;
-		cursor: pointer;
-		transition: color 120ms ease, background-color 120ms ease;
-	}
-
-	.settings-reveal-btn:hover {
-		color: var(--center-channel-color);
-		background-color: var(--control-hover-bg);
-	}
-
-	/* Sections */
-	.settings-section {
-		border: 1px solid var(--surface-border);
-		border-radius: 1rem;
-		overflow: hidden;
-		background-color: var(--surface-bg);
-		margin-bottom: 0.5rem;
-	}
-
-	.settings-section-trigger {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		width: 100%;
-		padding: 1rem 1.25rem;
-		cursor: pointer;
-		background: transparent;
-		color: var(--center-channel-color);
-		transition: background-color 120ms ease;
-	}
-
-	.settings-section-trigger:hover {
-		background-color: var(--control-hover-bg);
-	}
-
-	.settings-section-trigger-left {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-	}
-
-	.settings-section-label {
-		font-size: 0.875rem;
-		font-weight: 600;
-		color: var(--center-channel-color);
-		text-align: left;
-	}
-
-	.settings-section-desc {
-		font-size: 0.75rem;
-		color: var(--surface-muted);
-		text-align: left;
-	}
-
-	.settings-section-chevron {
-		color: var(--surface-muted);
-		transition: transform 200ms ease;
 		flex-shrink: 0;
 	}
 
-	.settings-section-chevron.is-open {
-		transform: rotate(90deg);
-	}
+	.us-section-title-group { flex: 1; min-width: 0; }
 
-	.settings-section-content {
-		padding: 0 1.25rem 1.25rem;
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-		border-top: 1px solid var(--surface-border);
-		padding-top: 1rem;
-	}
-
-	/* Fields */
-	.settings-field-grid {
-		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 0.75rem;
-	}
-
-	@media (max-width: 480px) {
-		.settings-field-grid {
-			grid-template-columns: 1fr;
-		}
-	}
-
-	.settings-field {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-	}
-
-	.settings-field-label {
-		font-size: 0.6875rem;
-		font-weight: 500;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-		color: var(--surface-muted);
-	}
-
-	.settings-field-value {
-		font-size: 0.875rem;
-		font-weight: 500;
+	.us-section-title {
+		font-size: 0.9375rem;
+		font-weight: 650;
 		color: var(--center-channel-color);
+		margin: 0;
+		line-height: 1.3;
 	}
 
-	.settings-actions {
+	.us-section-desc {
+		font-size: 0.75rem;
+		color: var(--surface-muted);
+		margin: 0.0625rem 0 0;
+	}
+
+	/* ── Pill ── */
+	.us-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.1875rem 0.625rem;
+		border-radius: 2rem;
+		font-size: 0.6875rem;
+		font-weight: 550;
+		flex-shrink: 0;
+		background-color: color-mix(in srgb, var(--surface-muted) 8%, transparent);
+		color: var(--surface-muted);
+	}
+	.us-pill--active {
+		background-color: color-mix(in srgb, var(--online-indicator) 10%, transparent);
+		color: var(--online-indicator);
+	}
+	.us-pill-dot {
+		width: 0.375rem;
+		height: 0.375rem;
+		border-radius: 50%;
+		background-color: currentColor;
+	}
+
+	/* ── Loading ── */
+	.us-loading {
 		display: flex;
-		gap: 0.5rem;
-		padding-top: 0.25rem;
-	}
-
-	.settings-hint {
-		font-size: 0.8125rem;
+		align-items: center;
+		justify-content: center;
+		padding: 1.5rem 0;
 		color: var(--surface-muted);
 	}
 
-	/* Status dot */
-	.settings-status-dot {
-		width: 0.5rem;
-		height: 0.5rem;
-		border-radius: 50%;
-		background-color: var(--surface-muted);
-	}
-
-	.settings-status-dot.is-connected {
-		background-color: var(--online-indicator);
-	}
-
-	/* GitHub */
-	.settings-connected-row {
+	/* ── GitHub connected ── */
+	.us-integration-row {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 1rem;
+		padding: 0.75rem 1rem;
+		border-radius: 0.625rem;
+		border: 1px solid color-mix(in srgb, var(--surface-border) 60%, transparent);
+		background-color: color-mix(in srgb, var(--center-channel-color) 2%, transparent);
 	}
 
-	.settings-github-avatar {
-		width: 2rem;
-		height: 2rem;
-		border-radius: 50%;
+	.us-gh-badge {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		color: var(--center-channel-color);
+	}
+
+	.us-gh-name {
+		font-size: 0.875rem;
+		font-weight: 550;
+		font-family: var(--font-mono);
+	}
+
+	/* ── GitHub connect button ── */
+	.us-connect-btn {
+		display: flex;
+		align-items: center;
+		gap: 0.875rem;
+		width: 100%;
+		padding: 0.875rem 1rem;
+		border-radius: 0.75rem;
+		border: 1px dashed color-mix(in srgb, var(--surface-border) 80%, transparent);
+		background: none;
+		cursor: pointer;
+		color: var(--center-channel-color);
+		text-align: left;
+		transition: all 150ms;
+	}
+	.us-connect-btn:hover {
+		border-color: var(--button-bg);
+		border-style: solid;
+		background-color: color-mix(in srgb, var(--button-bg) 4%, transparent);
+	}
+	.us-connect-btn:hover .us-connect-arrow {
+		color: var(--button-bg);
+		transform: translateX(2px);
+	}
+
+	.us-connect-icon {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background-color: var(--center-channel-color);
-		color: var(--center-channel-bg);
+		width: 2.25rem;
+		height: 2.25rem;
+		border-radius: 0.625rem;
+		background-color: color-mix(in srgb, var(--center-channel-color) 7%, transparent);
+		color: var(--center-channel-color);
 		flex-shrink: 0;
 	}
+	.us-connect-text { flex: 1; display: flex; flex-direction: column; gap: 0.0625rem; }
+	.us-connect-label { font-size: 0.875rem; font-weight: 550; }
+	.us-connect-hint { font-size: 0.75rem; color: var(--surface-muted); }
+	.us-connect-arrow { color: var(--surface-muted); flex-shrink: 0; transition: all 150ms; }
 
-	.settings-empty-state {
-		text-align: center;
-		padding: 0.5rem 0;
+	/* ── Count ── */
+	.us-count {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 1.25rem;
+		height: 1.25rem;
+		padding: 0 0.375rem;
+		border-radius: 2rem;
+		font-size: 0.6875rem;
+		font-weight: 650;
+		flex-shrink: 0;
+		background-color: color-mix(in srgb, var(--button-bg) 10%, transparent);
+		color: var(--button-bg);
 	}
 
-	/* Passkeys */
-	.settings-passkey-add {
-		display: flex;
-		gap: 0.5rem;
+	/* ── Buttons ── */
+	.us-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.4375rem 0.875rem;
+		border-radius: 0.5rem;
+		font-size: 0.8125rem;
+		font-weight: 550;
+		border: none;
+		cursor: pointer;
+		transition: all 120ms;
+		white-space: nowrap;
+		flex-shrink: 0;
+	}
+	.us-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+
+	.us-btn-solid {
+		background-color: var(--button-bg);
+		color: var(--button-color);
+	}
+	.us-btn-solid:hover:not(:disabled) { opacity: 0.9; }
+
+	.us-btn-ghost {
+		background: none;
+		color: var(--surface-muted);
+	}
+	.us-btn-ghost:hover:not(:disabled) {
+		color: var(--center-channel-color);
+		background-color: color-mix(in srgb, var(--center-channel-color) 5%, transparent);
 	}
 
-	.settings-passkey-list {
+	.us-btn-danger {
+		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
+		color: var(--error-text-color);
+	}
+	.us-btn-danger:hover:not(:disabled) {
+		background-color: color-mix(in srgb, var(--error-text-color) 16%, transparent);
+	}
+
+	/* ── Passkeys ── */
+	.us-passkey-list {
 		display: flex;
 		flex-direction: column;
+	}
+
+	.us-passkey {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.75rem;
+		padding: 0.875rem 0;
+		border-bottom: 1px solid color-mix(in srgb, var(--surface-border) 40%, transparent);
+	}
+	.us-passkey:last-child { border-bottom: none; }
+
+	.us-passkey-dot {
+		width: 0.5rem;
+		height: 0.5rem;
+		border-radius: 50%;
+		background-color: var(--button-bg);
+		flex-shrink: 0;
+		margin-top: 0.4375rem;
+		opacity: 0.6;
+	}
+
+	.us-passkey-body {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+	}
+
+	.us-passkey-name {
+		font-size: 0.875rem;
+		font-weight: 550;
+		color: var(--center-channel-color);
+	}
+
+	.us-passkey-meta {
+		font-size: 0.6875rem;
+		color: var(--surface-muted);
+	}
+
+	.us-passkey-edit-row {
+		display: flex;
+		align-items: center;
 		gap: 0.25rem;
 	}
 
-	.settings-passkey-item {
+	.us-passkey-actions {
 		display: flex;
+		gap: 0.125rem;
+		flex-shrink: 0;
+		margin-top: 0.125rem;
+	}
+
+	.us-icon-btn {
+		display: inline-flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: 0.75rem;
-		padding: 0.75rem;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: 0.375rem;
+		border: none;
+		background: none;
+		color: var(--surface-muted);
+		cursor: pointer;
+		transition: all 120ms;
+	}
+	.us-icon-btn:hover {
+		color: var(--center-channel-color);
+		background-color: color-mix(in srgb, var(--center-channel-color) 6%, transparent);
+	}
+	.us-icon-btn--danger:hover {
+		color: var(--error-text-color);
+		background-color: color-mix(in srgb, var(--error-text-color) 8%, transparent);
+	}
+	.us-icon-btn:disabled { opacity: 0.4; cursor: not-allowed; }
+
+	/* ── Add passkey ── */
+	.us-add-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		font-size: 0.8125rem;
+		font-weight: 550;
+		color: var(--button-bg);
+		background: none;
+		border: none;
+		cursor: pointer;
+		padding: 0.25rem 0;
+		transition: opacity 120ms;
+	}
+	.us-add-btn:hover { opacity: 0.75; }
+
+	.us-add-passkey-row {
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
+	}
+
+	/* ── Alerts ── */
+	.us-empty-hint {
+		font-size: 0.8125rem;
+		color: var(--surface-muted);
+		padding: 0.5rem 0;
+	}
+
+	.us-warning {
+		padding: 0.625rem 0.875rem;
 		border-radius: 0.5rem;
-		border: 1px solid var(--surface-border);
+		font-size: 0.8125rem;
+		background-color: color-mix(in srgb, var(--warning-text) 8%, transparent);
+		color: var(--warning-text);
+		border: 1px solid color-mix(in srgb, var(--warning-text) 20%, transparent);
+	}
+
+	.us-error {
+		padding: 0.625rem 0.875rem;
+		border-radius: 0.5rem;
+		font-size: 0.8125rem;
+		background-color: color-mix(in srgb, var(--error-text-color) 8%, transparent);
+		color: var(--error-text-color);
+		border: 1px solid color-mix(in srgb, var(--error-text-color) 20%, transparent);
+	}
+
+	/* ── Responsive ── */
+	@media (max-width: 640px) {
+		.us-content { padding: 1.5rem 1rem 3rem; }
+
+		.us-fields-grid { grid-template-columns: 1fr; }
+
+		.us-field-cell:not(:first-child)::before {
+			display: none;
+		}
+
+		.us-field-cell:not(:first-child) {
+			border-top: 1px solid color-mix(in srgb, var(--surface-border) 40%, transparent);
+		}
+
+		.us-integration-row { flex-direction: column; align-items: flex-start; }
+		.us-add-passkey-row { flex-direction: column; align-items: stretch; }
+		.us-invitation { flex-wrap: wrap; }
+		.us-invitation-actions { width: 100%; margin-top: 0.25rem; }
 	}
 </style>
