@@ -370,13 +370,21 @@ ${registryConfigs}
     }
   }
 
-  private buildCacheArgs(): string[] {
+  private buildCacheArgs(imageName?: string): string[] {
     if (!this.s3CacheEnabled || !this.s3Endpoint || !this.s3Bucket) {
       console.log('[ImageBuilder] S3 cache disabled or not configured');
       return [];
     }
 
-    console.log(`[ImageBuilder] S3 cache enabled - endpoint: ${this.s3Endpoint}, bucket: ${this.s3Bucket}`);
+    // Namespace cache per image to prevent cross-deployment cache contamination.
+    // Without this, BuildKit can resolve a multi-stage build's final image config
+    // from cached layers of a different deployment sharing the same base image,
+    // resulting in missing CMD/WORKDIR/ENTRYPOINT from the runner stage.
+    const cachePrefix = imageName
+      ? `${this.s3CachePrefix}${imageName.replace(/[^a-z0-9-]/gi, '-')}/`
+      : this.s3CachePrefix;
+
+    console.log(`[ImageBuilder] S3 cache enabled - endpoint: ${this.s3Endpoint}, bucket: ${this.s3Bucket}, prefix: ${cachePrefix}`);
 
     // BuildKit S3 cache format for Cloudflare R2
     // R2 is S3-compatible but requires specific settings:
@@ -384,8 +392,8 @@ ${registryConfigs}
     // - region should be 'auto' for R2
     // - use_path_style should be true for R2
     // Note: buildctl uses --import-cache and --export-cache (not --cache-from/--cache-to)
-    const importCache = `type=s3,endpoint_url=${this.s3Endpoint},bucket=${this.s3Bucket},region=${this.s3Region},prefix=${this.s3CachePrefix},use_path_style=true`;
-    const exportCache = `type=s3,endpoint_url=${this.s3Endpoint},bucket=${this.s3Bucket},region=${this.s3Region},prefix=${this.s3CachePrefix},mode=max,use_path_style=true`;
+    const importCache = `type=s3,endpoint_url=${this.s3Endpoint},bucket=${this.s3Bucket},region=${this.s3Region},prefix=${cachePrefix},use_path_style=true`;
+    const exportCache = `type=s3,endpoint_url=${this.s3Endpoint},bucket=${this.s3Bucket},region=${this.s3Region},prefix=${cachePrefix},mode=max,use_path_style=true`;
 
     return [
       '--import-cache', importCache,
@@ -1037,8 +1045,8 @@ fi
       args.push('--opt', `build-arg:${key}=${value}`);
     }
 
-    // Add cache arguments
-    const cacheArgs = this.buildCacheArgs();
+    // Add cache arguments (namespaced per image to prevent cross-deployment contamination)
+    const cacheArgs = this.buildCacheArgs(fullImageName);
     for (const cacheArg of cacheArgs) {
       args.push(cacheArg);
     }
@@ -1083,7 +1091,7 @@ fi
       args.push('--secret', `id=${key},env=${key}`);
     }
 
-    const cacheArgs = this.buildCacheArgs();
+    const cacheArgs = this.buildCacheArgs(fullImageName);
     for (const cacheArg of cacheArgs) {
       args.push(cacheArg);
     }
