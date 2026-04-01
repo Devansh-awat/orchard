@@ -123,6 +123,20 @@
 	const progress = new Progress({
 		value: () => progressValue()
 	});
+
+	function getTotalBuildDuration(): string | null {
+		if (!buildStepTimestamps) return null;
+		// Find earliest step timestamp
+		const stepKeys = Object.keys(buildStepTimestamps);
+		if (stepKeys.length === 0) return null;
+		const startTime = Math.min(...stepKeys.map(k => buildStepTimestamps![k]));
+		const endTime = buildStepTimestamps['complete'];
+		if (!endTime) return null;
+		const seconds = Math.max(0, Math.floor((endTime - startTime) / 1000));
+		return formatDuration(seconds);
+	}
+
+	const totalDuration = $derived(getTotalBuildDuration());
 </script>
 
 <div class="deployment-progress">
@@ -140,7 +154,11 @@
 					{:else if buildStatus === 'failed'}
 						Build failed
 					{:else if buildStatus === 'succeeded'}
-						Build succeeded
+						{#if totalDuration}
+							Build completed in {totalDuration}
+						{:else}
+							Build succeeded
+						{/if}
 					{:else}
 						Deployment ready
 					{/if}

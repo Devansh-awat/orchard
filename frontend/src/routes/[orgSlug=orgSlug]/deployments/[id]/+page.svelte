@@ -49,6 +49,7 @@
 		});
 	}
 	import DeploymentProgress from '$lib/components/DeploymentProgress.svelte';
+	import PodTerminal from '$lib/components/PodTerminal.svelte';
 
 	interface Pod {
 		name: string;
@@ -525,13 +526,90 @@
 
 	let selectedPod = $state<string>('');
 	let selectedContainer = $state<string>('');
+	let manualPodSelection = $state(false);
 	let tailLines = $state(100);
 	let logs = $state<string>('');
 	let logsLoading = $state(false);
+	let logsOutputRef = $state<HTMLPreElement | null>(null);
 	let buildLogs = $state<string>('');
 	let buildLogsLoading = $state(false);
 	let podDropdownOpen = $state(false);
 	let containerDropdownOpen = $state(false);
+
+	// Console tab management: 'logs' or a terminal tab id
+	let activeConsoleTab = $state<string>('logs');
+	let showNewShellMenu = $state(false);
+	let showLogsPodMenu = $state(false);
+
+	interface TerminalTabInfo {
+		id: string;
+		podName: string;
+		container: string;
+		label: string;
+	}
+	let terminalTabs = $state<TerminalTabInfo[]>([]);
+	let terminalCounter = 0;
+
+	function podLabel(podName: string): string {
+		// "backend-cb974cb4c-vjvfb" → "vjvfb"
+		const parts = podName.split('-');
+		return parts.length >= 2 ? parts[parts.length - 1] : podName;
+	}
+
+	function handleNewShell() {
+		const allCombos: { podName: string; container: string }[] = [];
+		for (const pod of deployment?.pods ?? []) {
+			for (const c of pod.containers ?? []) {
+				allCombos.push({ podName: pod.name, container: c.name });
+			}
+		}
+		if (allCombos.length === 0) return;
+		if (allCombos.length === 1) {
+			openShell(allCombos[0].podName, allCombos[0].container);
+			return;
+		}
+		showNewShellMenu = !showNewShellMenu;
+	}
+
+	function openShell(podName: string, container: string) {
+		terminalCounter++;
+		const id = `term-${Date.now()}`;
+		const label = `Shell ${terminalCounter}`;
+		terminalTabs = [...terminalTabs, { id, podName, container, label }];
+		activeConsoleTab = id;
+		showNewShellMenu = false;
+	}
+
+	function closeTerminalTab(id: string) {
+		terminalTabs = terminalTabs.filter((t) => t.id !== id);
+		if (activeConsoleTab === id) {
+			activeConsoleTab = terminalTabs.length > 0 ? terminalTabs[terminalTabs.length - 1].id : 'logs';
+		}
+	}
+
+	function selectLogsPod(podName: string, containerName?: string) {
+		selectedPod = podName;
+		const pod = (deployment?.pods ?? []).find((p) => p.name === podName);
+		selectedContainer = containerName || pod?.containers?.[0]?.name || '';
+		manualPodSelection = true;
+		showLogsPodMenu = false;
+		fetchLogs();
+	}
+
+	function getNewestPod(pods: Pod[]): Pod | null {
+		if (!pods.length) return null;
+		return pods.reduce((newest, pod) => {
+			if (!newest.startTime) return pod;
+			if (!pod.startTime) return newest;
+			return new Date(pod.startTime) > new Date(newest.startTime) ? pod : newest;
+		});
+	}
+
+	function scrollLogsToBottom() {
+		if (logsOutputRef) {
+			logsOutputRef.scrollTop = logsOutputRef.scrollHeight;
+		}
+	}
 	let volumeTypeDropdownOpen = $state<number | null>(null);
 	let protocolDropdownOpen = $state<string | null>(null);
 	let serviceDropdownOpen = $state(false);
@@ -1165,10 +1243,28 @@
 				}
 			}
 
-			if (data.pods?.length && !selectedPod) {
-				selectedPod = data.pods[0].name;
-				if (data.pods[0].containers?.length) {
-					selectedContainer = data.pods[0].containers[0].name;
+			if (data.pods?.length) {
+				if (!manualPodSelection) {
+					const newest = getNewestPod(data.pods);
+					if (newest && newest.name !== selectedPod) {
+						selectedPod = newest.name;
+						selectedContainer = newest.containers?.[0]?.name || '';
+					}
+				} else if (!selectedPod) {
+					// First load, no manual selection yet
+					const newest = getNewestPod(data.pods);
+					if (newest) {
+						selectedPod = newest.name;
+						selectedContainer = newest.containers?.[0]?.name || '';
+					}
+				} else if (!data.pods.find((p: Pod) => p.name === selectedPod)) {
+					// Selected pod was deleted, fall back to newest
+					manualPodSelection = false;
+					const newest = getNewestPod(data.pods);
+					if (newest) {
+						selectedPod = newest.name;
+						selectedContainer = newest.containers?.[0]?.name || '';
+					}
 				}
 			}
 		} catch (e) {
@@ -1927,10 +2023,32 @@
 		}
 	}
 
+	function formatBuildDuration(seconds: number): string {
+		if (seconds < 60) {
+			return `${seconds}s`;
+		}
+		const minutes = Math.floor(seconds / 60);
+		const remainingSeconds = Math.floor(seconds % 60);
+		return `${minutes}m ${remainingSeconds}s`;
+	}
+
+	function getBuildDuration(): string | null {
+		const ts = deployment?.buildStepTimestamps as Record<string, number> | null;
+		if (!ts) return null;
+		const keys = Object.keys(ts);
+		if (keys.length === 0) return null;
+		const startTime = Math.min(...keys.map(k => ts[k]));
+		const endTime = ts['complete'];
+		if (!endTime) return null;
+		return formatBuildDuration(Math.max(0, Math.floor((endTime - startTime) / 1000)));
+	}
+
 	function getBuildStatusLabel(buildStatus: string) {
 		switch (buildStatus?.toLowerCase()) {
-			case 'succeeded':
-				return 'Succeeded';
+			case 'succeeded': {
+				const dur = getBuildDuration();
+				return dur ? `Completed in ${dur}` : 'Succeeded';
+			}
 			case 'building':
 				return 'Building';
 			case 'failed':
@@ -1943,6 +2061,13 @@
 	$effect(() => {
 		if (selectedPod && selectedContainer) {
 			fetchLogs();
+		}
+	});
+
+	// Auto-scroll logs to bottom when they change
+	$effect(() => {
+		if (logs) {
+			requestAnimationFrame(scrollLogsToBottom);
 		}
 	});
 
@@ -1965,6 +2090,7 @@
 			deployment = null;
 			selectedPod = '';
 			selectedContainer = '';
+			manualPodSelection = false;
 			logs = '';
 			buildLogs = '';
 			accumulatedBuildLogs = null;
@@ -1998,6 +2124,8 @@
 				volumeTypeDropdownOpen = null;
 				protocolDropdownOpen = null;
 				serviceDropdownOpen = false;
+				showNewShellMenu = false;
+				showLogsPodMenu = false;
 			}
 		}
 
@@ -2354,7 +2482,7 @@
 						<div class="grid gap-5 lg:grid-cols-[1fr_280px] items-start">
 							<!-- Left: Console (hero) -->
 							<div class="flex flex-col gap-5 min-w-0">
-								<!-- Console / Logs -->
+								<!-- Console / Logs + Terminal -->
 								<div
 									bind:this={consoleRef}
 									class="console-panel"
@@ -2367,57 +2495,92 @@
 										? ''
 										: ''}
 								>
-									<!-- Console toolbar -->
+								<!-- Console toolbar -->
 									<div class="console-toolbar">
 										<div class="console-toolbar-left">
-											<Terminal class="h-3.5 w-3.5 shrink-0 opacity-50" />
-											<div class="relative custom-dropdown-container">
-												<button type="button" onclick={() => (podDropdownOpen = !podDropdownOpen)}
-													class="console-dropdown-btn">
-													<span class="truncate max-w-[180px]">{selectedPod || 'Select pod'}</span>
-													<ChevronDown class="h-3 w-3 shrink-0 opacity-40" />
-												</button>
-												{#if podDropdownOpen}
-													<div class="console-dropdown" transition:scale={{ duration: 150, start: 0.96 }}>
-														{#each deployment.pods ?? [] as pod}
-															<button type="button" onclick={() => { selectedPod = pod.name; podDropdownOpen = false; }}
-																class="console-dropdown-item">
-																<span class="truncate">{pod.name}</span>
-																{#if selectedPod === pod.name}<Check class="h-3.5 w-3.5 text-primary-600 shrink-0" />{/if}
-															</button>
-														{/each}
-													</div>
-												{/if}
-											</div>
+											<!-- Logs tab with source picker -->
+											<button
+												class="console-tab-btn"
+												class:console-tab-btn--active={activeConsoleTab === 'logs'}
+												onclick={() => (activeConsoleTab = 'logs')}
+											>Logs</button>
 
-											<span class="console-separator">/</span>
-
-											<div class="relative custom-dropdown-container">
-												<button type="button" onclick={() => (containerDropdownOpen = !containerDropdownOpen)}
-													class="console-dropdown-btn">
-													<span class="truncate max-w-[140px]">{selectedContainer || 'container'}</span>
-													<ChevronDown class="h-3 w-3 shrink-0 opacity-40" />
+											<!-- Terminal tabs -->
+											{#each terminalTabs as ttab (ttab.id)}
+												<button
+													class="console-tab-btn"
+													class:console-tab-btn--active={activeConsoleTab === ttab.id}
+													onclick={() => (activeConsoleTab = ttab.id)}
+												>
+													{ttab.label}
+													<span
+														class="console-tab-close"
+														role="button"
+														tabindex="-1"
+														onclick={(e) => { e.stopPropagation(); closeTerminalTab(ttab.id); }}
+														onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); closeTerminalTab(ttab.id); } }}
+													>
+														<X class="h-2.5 w-2.5" />
+													</span>
 												</button>
-												{#if containerDropdownOpen}
-													<div class="console-dropdown" transition:scale={{ duration: 150, start: 0.96 }}>
-														{#each deployment.pods?.find((p) => p.name === selectedPod)?.containers ?? [] as container}
-															<button type="button" onclick={() => { selectedContainer = container.name; containerDropdownOpen = false; }}
-																class="console-dropdown-item">
-																<span>{container.name}</span>
-																{#if selectedContainer === container.name}<Check class="h-3.5 w-3.5 text-primary-600 shrink-0" />{/if}
-															</button>
-														{/each}
-													</div>
-												{/if}
-											</div>
+											{/each}
 										</div>
+
 										<div class="console-toolbar-right">
-											<input type="number" bind:value={tailLines} min="10" step="10"
-												class="console-lines-input" title="Tail lines" />
-											<button onclick={fetchLogs} disabled={logsLoading}
-												class="console-icon-btn" title="Refresh logs">
-												{#if logsLoading}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw class="h-3.5 w-3.5" />{/if}
-											</button>
+											{#if activeConsoleTab === 'logs'}
+												<!-- Pod / container picker -->
+												<div class="relative custom-dropdown-container">
+													<button
+														class="console-source-btn"
+														onclick={() => (showLogsPodMenu = !showLogsPodMenu)}
+													>
+														<Container class="h-3 w-3 opacity-40" />
+														<span>{podLabel(selectedPod)}{selectedContainer ? ` / ${selectedContainer}` : ''}</span>
+														<ChevronDown class="h-2.5 w-2.5 opacity-40" />
+													</button>
+													{#if showLogsPodMenu}
+														<div class="console-compact-menu" transition:scale={{ duration: 150, start: 0.96 }}>
+															{#each deployment.pods ?? [] as pod}
+																{#each pod.containers ?? [] as cont}
+																	<button type="button" onclick={() => selectLogsPod(pod.name, cont.name)}
+																		class="console-compact-item"
+																		class:console-compact-item--active={selectedPod === pod.name && selectedContainer === cont.name}>
+																		<Container class="h-2.5 w-2.5 shrink-0 opacity-30" />
+																		{podLabel(pod.name)}<span class="console-compact-sep">/</span><span class="console-compact-hl">{cont.name}</span>
+																	</button>
+																{/each}
+															{/each}
+														</div>
+													{/if}
+												</div>
+
+												<button onclick={fetchLogs} disabled={logsLoading}
+													class="console-icon-btn" title="Refresh">
+													{#if logsLoading}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw class="h-3.5 w-3.5" />{/if}
+												</button>
+											{/if}
+
+											<!-- New shell -->
+											<div class="relative custom-dropdown-container">
+												<button class="console-action-btn" onclick={handleNewShell} title="Open shell in pod">
+													<Terminal class="h-3 w-3" />
+													Shell
+												</button>
+												{#if showNewShellMenu}
+													<div class="console-compact-menu" transition:scale={{ duration: 150, start: 0.96 }}>
+														{#each deployment.pods ?? [] as pod}
+															{#each pod.containers ?? [] as cont}
+																<button type="button" onclick={() => openShell(pod.name, cont.name)}
+																	class="console-compact-item">
+																	<Terminal class="h-2.5 w-2.5 shrink-0 opacity-40" />
+																	{podLabel(pod.name)}<span class="console-compact-sep">/</span><span class="console-compact-hl">{cont.name}</span>
+																</button>
+															{/each}
+														{/each}
+													</div>
+												{/if}
+											</div>
+
 											<button
 												onclick={toggleConsoleExpand}
 												class="console-icon-btn"
@@ -2428,20 +2591,31 @@
 										</div>
 									</div>
 
-									<!-- Log output -->
+									<!-- Console body -->
 									<div class="console-body">
-										{#if logsLoading && !logs}
-											<div class="console-empty">
-												<Loader2 class="h-4 w-4 animate-spin" />
-												<span>Loading logs...</span>
-											</div>
-										{:else if logs}
-											<pre class="console-output">{@html ansiToHtml(logs)}</pre>
+										{#if activeConsoleTab === 'logs'}
+											{#if logsLoading && !logs}
+												<div class="console-empty">
+													<Loader2 class="h-4 w-4 animate-spin" />
+													<span>Loading logs...</span>
+												</div>
+											{:else if logs}
+												<pre class="console-output" bind:this={logsOutputRef}>{@html ansiToHtml(logs)}</pre>
+											{:else}
+												<div class="console-empty">
+													<Terminal class="h-4 w-4 opacity-30" />
+													<span>{selectedPod ? 'No output yet' : 'Select a pod to view logs'}</span>
+												</div>
+											{/if}
 										{:else}
-											<div class="console-empty">
-												<Terminal class="h-4 w-4 opacity-30" />
-												<span>{selectedPod ? 'No output yet' : 'Select a pod to view logs'}</span>
-											</div>
+											{#each terminalTabs as ttab (ttab.id)}
+												<PodTerminal
+													podName={ttab.podName}
+													namespace={deployment.namespace || 'default'}
+													container={ttab.container}
+													visible={activeConsoleTab === ttab.id}
+												/>
+											{/each}
 										{/if}
 									</div>
 								</div>
@@ -2466,13 +2640,14 @@
 												<button
 													class="console-pod-row"
 													class:console-pod-row--active={selectedPod === pod.name}
-													onclick={() => { selectedPod = pod.name; if (pod.containers?.length) selectedContainer = pod.containers[0].name; }}
+													onclick={() => { selectedPod = pod.name; if (pod.containers?.length) selectedContainer = pod.containers[0].name; manualPodSelection = true; }}
 												>
 													<div class="flex items-center gap-2 min-w-0">
 														<span class="h-1.5 w-1.5 rounded-full shrink-0 {pod.status?.toLowerCase() === 'ready' ? 'bg-green-500' : pod.status?.toLowerCase() === 'scheduled' ? 'bg-yellow-500' : 'bg-gray-400'}"></span>
-														<span class="font-mono text-xs truncate">{pod.name}</span>
+														<span class="font-mono text-xs truncate">{podLabel(pod.name)}</span>
 													</div>
 													<div class="flex items-center gap-3 shrink-0 text-xs font-mono" style="color: var(--surface-muted);">
+														{#if pod.startTime}<span>{formatRelativeTime(new Date(pod.startTime))}</span>{/if}
 														{#if pod.cpuUsage != null}<span>{formatCpu(pod.cpuUsage)}</span>{/if}
 														{#if pod.memoryUsage != null}<span>{formatMemory(pod.memoryUsage)}</span>{/if}
 														<span class="badge {getStatusColor(pod.status)} text-[10px] px-1.5 py-0.5">{pod.status}</span>
@@ -4230,15 +4405,18 @@
 
 	/* ===== Console (Pterodactyl-style) ===== */
 	.console-panel {
+		position: relative;
 		border-radius: 0.875rem;
-		overflow: hidden;
+		overflow: visible;
 		border: 1px solid color-mix(in srgb, var(--surface-border) 50%, transparent);
 		background-color: #0d1117;
 		color: #c9d1d9;
 		display: flex;
 		flex-direction: column;
+		height: 510px;
 		transition: none;
 	}
+
 
 	:global(:root:not(.dark)) .console-panel {
 		background-color: #1b1f27;
@@ -4283,17 +4461,154 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 0.5rem;
-		padding: 0.5rem 0.75rem;
+		padding: 0.375rem 0.5rem;
 		border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 		background: rgba(255, 255, 255, 0.02);
-		flex-wrap: wrap;
 	}
 
 	.console-toolbar-left {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.25rem;
 		min-width: 0;
+	}
+
+	.console-tab-btn {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.3rem 0.5rem;
+		border: none;
+		background: transparent;
+		color: rgba(201, 209, 217, 0.5);
+		font-size: 0.6875rem;
+		font-family: var(--font-mono);
+		cursor: pointer;
+		border-radius: 0.375rem;
+		transition: background 0.1s, color 0.1s;
+		white-space: nowrap;
+		flex-shrink: 0;
+	}
+	.console-tab-btn:hover {
+		background: rgba(255, 255, 255, 0.06);
+		color: rgba(201, 209, 217, 0.8);
+	}
+	.console-tab-btn--active {
+		background: rgba(255, 255, 255, 0.08);
+		color: #c9d1d9;
+	}
+
+	.console-source-btn {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.25rem 0.5rem;
+		border: none;
+		background: transparent;
+		color: rgba(201, 209, 217, 0.5);
+		font-size: 0.625rem;
+		font-family: var(--font-mono);
+		cursor: pointer;
+		border-radius: 0.375rem;
+		transition: background 0.1s, color 0.1s;
+		white-space: nowrap;
+	}
+	.console-source-btn:hover {
+		background: rgba(255, 255, 255, 0.06);
+		color: rgba(201, 209, 217, 0.8);
+	}
+
+	.console-action-btn {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.25rem 0.5rem;
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		background: rgba(255, 255, 255, 0.03);
+		color: rgba(201, 209, 217, 0.6);
+		font-size: 0.625rem;
+		font-family: var(--font-mono);
+		cursor: pointer;
+		border-radius: 0.375rem;
+		transition: background 0.1s, color 0.1s, border-color 0.1s;
+		white-space: nowrap;
+	}
+	.console-action-btn:hover {
+		background: rgba(255, 255, 255, 0.06);
+		color: #c9d1d9;
+		border-color: rgba(255, 255, 255, 0.15);
+	}
+
+	.console-dropdown--right {
+		right: 0;
+		left: auto;
+	}
+
+	.console-compact-menu {
+		position: absolute;
+		right: 0;
+		z-index: 30;
+		margin-top: 0.25rem;
+		border-radius: 0.5rem;
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		background: #161b22;
+		padding: 0.25rem;
+		box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+		min-width: 0;
+		white-space: nowrap;
+	}
+
+	.console-compact-item {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		width: 100%;
+		padding: 0.25rem 0.5rem;
+		border-radius: 0.25rem;
+		font-size: 0.625rem;
+		font-family: var(--font-mono);
+		color: rgba(201, 209, 217, 0.7);
+		background: transparent;
+		border: none;
+		cursor: pointer;
+		transition: background 0.1s, color 0.1s;
+		text-align: left;
+	}
+	.console-compact-item:hover {
+		background: rgba(255, 255, 255, 0.06);
+		color: #c9d1d9;
+	}
+	.console-compact-item--active {
+		background: rgba(255, 255, 255, 0.05);
+		color: #c9d1d9;
+	}
+
+	.console-compact-sep {
+		opacity: 0.25;
+		margin: 0 0.125rem;
+	}
+
+	.console-compact-hl {
+		color: #58a6ff;
+	}
+
+	.console-dropdown-item--active {
+		background: rgba(255, 255, 255, 0.06);
+	}
+
+	.console-tab-close {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		padding: 1px;
+		border-radius: 3px;
+		opacity: 0.4;
+		cursor: pointer;
+		transition: opacity 0.1s, background 0.1s;
+	}
+	.console-tab-close:hover {
+		opacity: 1;
+		background: rgba(255, 255, 255, 0.1);
 	}
 
 	.console-toolbar-right {
@@ -4397,11 +4712,14 @@
 		flex: 1;
 		min-height: 0;
 		padding: 0.75rem;
+		display: flex;
+		flex-direction: column;
+		overflow: hidden;
 	}
 
 	.console-output {
-		min-height: 440px;
-		max-height: 440px;
+		flex: 1;
+		min-height: 0;
 		overflow-y: auto;
 		white-space: pre-wrap;
 		word-break: break-all;
