@@ -12,14 +12,13 @@
 		ExternalLink,
 		Trash2,
 		RefreshCw,
-		Globe,
 		Server,
 		Boxes,
 		GitBranch,
-		Database,
 		LayoutTemplate
 	} from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import NewResourceModal from '$lib/components/NewResourceModal.svelte';
 
 	interface Deployment {
 		id: string;
@@ -90,6 +89,7 @@
 	let error = $state<string | null>(null);
 	let showDeleteModal = $state(false);
 	let deploymentSearch = $state('');
+	let showNewResourceModal = $state(false);
 
 	let filteredDeployments = $derived.by(() => {
 		const deployments = project?.deployments ?? [];
@@ -406,34 +406,13 @@
 						/>
 					</div>
 				{/if}
-				<a
-					href="/{orgSlug}/workspaces/{workspaceSlug}/projects/{projectSlug}/templates"
-					class="pj-btn pj-btn-template"
-				>
-					<LayoutTemplate class="h-4 w-4" />
-					Templates
-				</a>
-				<a
-					href="/{orgSlug}/workspaces/{workspaceSlug}/projects/{projectSlug}/databases/new"
-					class="pj-btn pj-btn-secondary"
-				>
-					<Database class="h-4 w-4" />
-					New Database
-				</a>
-				<a
-					href="/{orgSlug}/workspaces/{workspaceSlug}/projects/{projectSlug}/ingresses/new"
-					class="pj-btn pj-btn-secondary"
-				>
-					<Globe class="h-4 w-4" />
-					New Ingress
-				</a>
-				<a
-					href="/{orgSlug}/workspaces/{workspaceSlug}/projects/{projectSlug}/deployments/new"
+				<button
 					class="pj-btn pj-btn-primary"
+					onclick={() => (showNewResourceModal = true)}
 				>
 					<Plus class="h-4 w-4" />
-					New Deployment
-				</a>
+					New
+				</button>
 			</div>
 		</div>
 
@@ -441,13 +420,13 @@
 			<div class="pj-empty-card">
 				<span style:color="var(--surface-muted)"><Server class="h-10 w-10" /></span>
 				<p>No deployments yet</p>
-				<a
-					href="/{orgSlug}/workspaces/{workspaceSlug}/projects/{projectSlug}/deployments/new"
+				<button
 					class="pj-btn pj-btn-primary pj-btn-mt"
+					onclick={() => (showNewResourceModal = true)}
 				>
 					<Plus class="h-4 w-4" />
-					Create Deployment
-				</a>
+					Create Resource
+				</button>
 			</div>
 		{:else if filteredDeployments.length}
 			<div class="pj-deployment-grid">
@@ -542,6 +521,13 @@
 		{/if}
 	{/if}
 </div>
+
+<NewResourceModal
+	bind:open={showNewResourceModal}
+	orgSlug={orgSlug ?? ''}
+	workspaceSlug={workspaceSlug ?? ''}
+	projectSlug={projectSlug ?? ''}
+/>
 
 {#if project}
 	<ConfirmModal
@@ -974,15 +960,6 @@
 		background-color: var(--control-hover-bg);
 		color: var(--center-channel-color);
 		border-color: color-mix(in srgb, var(--surface-border) 60%, var(--center-channel-color));
-	}
-
-	.pj-btn-template {
-		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 15%, transparent);
-		color: var(--sidebar-text-active-border);
-	}
-
-	.pj-btn-template:hover:not(:disabled) {
-		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 25%, transparent);
 	}
 
 	.pj-btn-danger {

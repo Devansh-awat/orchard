@@ -48,7 +48,8 @@
 	let error = $state<string | null>(null);
 	let formError = $state<string | null>(null);
 
-	// Deployment source
+	// Deployment source — read from ?source= query param, default to 'image'
+	const initialSource = $derived(($page.url.searchParams.get('source') === 'github') ? 'github' as const : 'image' as const);
 	let deploymentSource = $state<'image' | 'github'>('image');
 	let githubLinked = $state(false);
 	let repositories = $state<Repository[]>([]);
@@ -230,7 +231,7 @@
 
 	async function fetchDockerfileStages(repo: Repository, branchName: string, dockerfile: string) {
 		if (!dockerfile) return;
-		
+
 		loadingStages = true;
 		dockerfileStages = [];
 		selectedStage = '';
@@ -339,29 +340,29 @@
 
 	function parseEnvVars() {
 		if (!envPasteText.trim()) return;
-		
+
 		const lines = envPasteText.split('\n');
 		const parsed: Array<{ key: string; value: string }> = [];
-		
+
 		for (const line of lines) {
 			const trimmed = line.trim();
 			if (!trimmed || trimmed.startsWith('#')) {
 				continue;
 			}
-			
+
 			const equalIndex = trimmed.indexOf('=');
 			if (equalIndex === -1) {
 				continue;
 			}
-			
+
 			const key = trimmed.substring(0, equalIndex).trim();
 			const value = trimmed.substring(equalIndex + 1).trim();
-			
+
 			if (key) {
 				parsed.push({ key, value });
 			}
 		}
-		
+
 		if (parsed.length > 0) {
 			envVars = parsed;
 			envPasteText = '';
@@ -520,6 +521,7 @@
 	});
 
 	onMount(() => {
+		deploymentSource = initialSource;
 		fetchProjectData();
 		checkGitHubStatus();
 	});
@@ -536,509 +538,997 @@
 	});
 </script>
 
-<div class="p-6">
-	<button
-		onclick={() => window.history.back()}
-		class="mb-6 inline-flex items-center gap-2 text-sm text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-gray-100 cursor-pointer"
-	>
-		<ArrowLeft class="h-4 w-4" />
-		Back to project
-	</button>
-
+<div class="nd-page">
 	{#if error}
-		<div class="alert alert-error mb-6">{error}</div>
+		<div class="nd-error">{error}</div>
 	{/if}
 
 	{#if loading}
-		<div class="flex justify-center py-12">
-			<Loader2 class="h-8 w-8 animate-spin text-primary-600" />
+		<!-- Skeleton -->
+		<div class="skeleton" style="height: 0.8125rem; width: 6rem; margin-bottom: 1rem;"></div>
+		<div class="skeleton" style="height: 1.5rem; width: 12rem; margin-bottom: 1.5rem;"></div>
+		<div class="nd-card">
+			<div class="skeleton" style="height: 1rem; width: 8rem; margin-bottom: 1rem;"></div>
+			<div class="nd-grid-2">
+				<div class="skeleton" style="height: 2.25rem; border-radius: 0.5rem;"></div>
+				<div class="skeleton" style="height: 2.25rem; border-radius: 0.5rem;"></div>
+			</div>
 		</div>
 	{:else if project}
-		<div class="mx-auto max-w-3xl space-y-6">
-			<h1 class="text-2xl font-bold">New Deployment</h1>
+		<button
+			onclick={() => window.history.back()}
+			class="nd-back"
+		>
+			<ArrowLeft class="h-4 w-4" />
+			Back to project
+		</button>
 
-			<!-- Template banner -->
-			<a
-				href="/{orgSlug}/workspaces/{$page.params.wsSlug}/projects/{$page.params.projectSlug}/templates"
-				style="display: flex; align-items: center; gap: 0.75rem; padding: 0.875rem 1.25rem; border-radius: 0.75rem; background-color: color-mix(in srgb, var(--sidebar-text-active-border) 8%, transparent); border: 1px solid color-mix(in srgb, var(--sidebar-text-active-border) 20%, transparent); text-decoration: none; color: var(--center-channel-color); transition: border-color 0.15s;"
+		<div class="nd-header">
+			<h1 class="nd-title">New Deployment</h1>
+			<p class="nd-subtitle">
+				{#if deploymentSource === 'github'}
+					Build and deploy from a GitHub repository
+				{:else}
+					Deploy a container image from a registry
+				{/if}
+			</p>
+		</div>
+
+		<!-- Source Switcher -->
+		<div class="nd-source-switcher">
+			<button
+				class="nd-source-tab"
+				class:nd-source-active={deploymentSource === 'image'}
+				onclick={() => (deploymentSource = 'image')}
 			>
-				<span style="font-size: 0.875rem; color: var(--sidebar-text-active-border); font-weight: 500;">Looking for a complete app setup?</span>
-				<span style="font-size: 0.8125rem; color: var(--surface-muted);">Browse Templates to deploy pre-configured stacks with databases and ingresses.</span>
-			</a>
+				<Container class="h-4 w-4" />
+				Docker Image
+			</button>
+			<button
+				class="nd-source-tab"
+				class:nd-source-active={deploymentSource === 'github'}
+				onclick={() => (deploymentSource = 'github')}
+			>
+				<Github class="h-4 w-4" />
+				GitHub
+			</button>
+		</div>
 
-			<!-- Deployment Source -->
-			<div class="card p-6">
-				<h2 class="text-lg font-semibold mb-4">Deployment Source</h2>
-				<div class="flex gap-4">
-					<button
-						onclick={() => (deploymentSource = 'image')}
-						class="flex-1 rounded-lg border-2 p-4 text-left transition-all {deploymentSource === 'image'
-							? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-							: 'border-gray-200 dark:border-gray-700 hover:border-gray-300'}"
-					>
-						<div class="flex items-start gap-3">
-							<Container class="h-6 w-6 mt-0.5" />
-							<div>
-								<h3 class="font-semibold">Docker Image</h3>
-								<p class="text-sm text-gray-600 dark:text-gray-400">Deploy from a Docker registry</p>
-							</div>
-						</div>
-					</button>
-					<button
-						onclick={() => (deploymentSource = 'github')}
-						class="flex-1 rounded-lg border-2 p-4 text-left transition-all {deploymentSource === 'github'
-							? 'border-primary-500 bg-primary-50 dark:bg-primary-900/20'
-							: 'border-gray-200 dark:border-gray-700 hover:border-gray-300'}"
-					>
-						<div class="flex items-start gap-3">
-							<Github class="h-6 w-6 mt-0.5" />
-							<div>
-								<h3 class="font-semibold">GitHub Repository</h3>
-								<p class="text-sm text-gray-600 dark:text-gray-400">Build and deploy from GitHub</p>
-							</div>
-						</div>
-					</button>
+		<!-- Deployment Details -->
+		<div class="nd-card">
+			<h2 class="nd-card-title">Deployment Details</h2>
+
+			<div class="nd-grid-2">
+				<div class="nd-field">
+					<label class="nd-label">Deployment name</label>
+					<input type="text" bind:value={name} placeholder="backend" class="nd-input" />
+				</div>
+				<div class="nd-field">
+					<label class="nd-label">Replicas</label>
+					<input type="number" bind:value={replicas} min="1" class="nd-input" />
 				</div>
 			</div>
 
-			<!-- Deployment Details -->
-			<div class="card p-6 space-y-6">
-				<h2 class="text-lg font-semibold">Deployment Details</h2>
-
-				<div class="grid gap-4 md:grid-cols-2">
-					<div>
-						<label class="block text-sm font-medium mb-2">Deployment name</label>
-						<input type="text" bind:value={name} placeholder="backend" class="input" />
-					</div>
-					<div>
-						<label class="block text-sm font-medium mb-2">Replicas</label>
-						<input type="number" bind:value={replicas} min="1" class="input" />
-					</div>
+			{#if deploymentSource === 'image'}
+				<div class="nd-field">
+					<label class="nd-label">Docker image</label>
+					<input type="text" bind:value={image} placeholder="ghcr.io/org/app:latest" class="nd-input nd-mono" />
 				</div>
-
-				{#if deploymentSource === 'image'}
-					<div>
-						<label class="block text-sm font-medium mb-2">Docker image</label>
-						<input type="text" bind:value={image} placeholder="ghcr.io/org/app:latest" class="input font-mono" />
+			{:else}
+				{#if !githubLinked}
+					<div class="nd-warning">
+						<p class="nd-warning-title">GitHub account not connected</p>
+						<p class="nd-warning-desc">Link your GitHub account to deploy from repositories.</p>
+						<a href="/user/settings" class="nd-btn nd-btn-secondary" style="margin-top: 0.5rem;">Connect GitHub</a>
 					</div>
 				{:else}
-					{#if !githubLinked}
-						<div class="rounded-lg bg-yellow-50 dark:bg-yellow-900/20 p-4 border border-yellow-200 dark:border-yellow-800">
-							<p class="font-medium text-yellow-900 dark:text-yellow-100">GitHub account not connected</p>
-							<p class="text-sm text-yellow-700 dark:text-yellow-300 mt-1">
-								Link your GitHub account to deploy from repositories.
-							</p>
-							<a href="/user/settings" class="btn btn-secondary mt-2">Connect GitHub</a>
+					<div class="nd-field nd-relative" data-repo-dropdown>
+						<label class="nd-label">Repository</label>
+						<div class="nd-relative">
+							<input
+								type="text"
+								bind:value={repoSearch}
+								oninput={(e) => handleRepoSearchInput((e.target as HTMLInputElement).value)}
+								onfocus={() => { if (!selectedRepo) showRepoDropdown = repoSearch.length > 0; }}
+								placeholder={loadingRepos ? "Loading repositories..." : selectedRepo ? selectedRepo.full_name : "Search repositories..."}
+								class="nd-input"
+								disabled={loadingRepos}
+								readonly={selectedRepo !== null || loadingRepos}
+								style={selectedRepo ? "opacity: 0.7;" : ""}
+							/>
+							{#if loadingRepos}
+								<div class="nd-input-suffix">
+									<Loader2 class="h-4 w-4 animate-spin" />
+								</div>
+							{:else if selectedRepo}
+								<button onclick={clearRepoSelection} class="nd-input-suffix nd-input-clear" type="button">
+									<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+										<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+									</svg>
+								</button>
+							{/if}
 						</div>
-					{:else}
-						<div class="relative" data-repo-dropdown>
-							<label class="block text-sm font-medium mb-2">Repository</label>
-							<div class="relative">
+						{#if showRepoDropdown && repoSearch && !loadingRepos && !selectedRepo}
+							<div class="nd-dropdown">
+								{#each repositories.filter((r) => r.full_name.toLowerCase().includes(repoSearch.toLowerCase())) as repo}
+									<button onclick={() => selectRepo(repo)} class="nd-dropdown-item">
+										<div class="nd-dropdown-item-content">
+											<Github class="h-4 w-4 shrink-0" />
+											<span class="nd-truncate">{repo.full_name}</span>
+											{#if repo.private}
+												<span class="nd-badge">Private</span>
+											{/if}
+										</div>
+									</button>
+								{/each}
+							</div>
+						{/if}
+					</div>
+
+					{#if selectedRepo}
+						<div class="nd-field nd-relative" data-branch-dropdown>
+							<label class="nd-label">Branch</label>
+							<div class="nd-relative">
 								<input
 									type="text"
-									bind:value={repoSearch}
-									oninput={(e) => handleRepoSearchInput((e.target as HTMLInputElement).value)}
-									onfocus={() => { if (!selectedRepo) showRepoDropdown = repoSearch.length > 0; }}
-									placeholder={loadingRepos ? "Loading repositories..." : selectedRepo ? selectedRepo.full_name : "Search repositories..."}
-									class="input"
-									disabled={loadingRepos}
-									readonly={selectedRepo !== null || loadingRepos}
-									style={selectedRepo ? "cursor: not-allowed; opacity: 0.7;" : ""}
+									bind:value={branchSearch}
+									oninput={(e) => handleBranchSearchInput((e.target as HTMLInputElement).value)}
+									onfocus={() => { if (!selectedBranch) showBranchDropdown = branchSearch.length > 0; }}
+									placeholder={selectedBranch ? selectedBranch.name : "Search branches..."}
+									class="nd-input"
+									disabled={loadingBranches}
+									readonly={selectedBranch !== null}
+									style={selectedBranch ? "opacity: 0.7;" : ""}
 								/>
-								{#if loadingRepos}
-									<div class="absolute right-3 top-1/2 -translate-y-1/2">
-										<Loader2 class="h-4 w-4 animate-spin text-primary-600" />
-									</div>
-								{:else if selectedRepo}
-									<button
-										onclick={clearRepoSelection}
-										class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-										type="button"
-									>
+								{#if selectedBranch}
+									<button onclick={clearBranchSelection} class="nd-input-suffix nd-input-clear" type="button">
 										<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
 											<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
 										</svg>
 									</button>
 								{/if}
 							</div>
-							{#if showRepoDropdown && repoSearch && !loadingRepos && !selectedRepo}
-								<div
-									class="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border p-2 shadow"
-									style="background-color: var(--surface-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
-								>
-									{#each repositories.filter((r) => r.full_name.toLowerCase().includes(repoSearch.toLowerCase())) as repo}
-										<button
-											onclick={() => selectRepo(repo)}
-											class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]"
-										>
-											<div class="flex items-center gap-2 min-w-0 flex-1">
-												<Github class="h-4 w-4 shrink-0" />
-												<span class="truncate">{repo.full_name}</span>
-												{#if repo.private}
-													<span class="badge badge-neutral text-xs shrink-0">Private</span>
-												{/if}
-											</div>
-											{#if selectedRepo?.id === repo.id}
-												<svg class="h-4 w-4 shrink-0 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-													<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-												</svg>
-											{/if}
+							{#if showBranchDropdown && branchSearch && !loadingBranches && !selectedBranch}
+								<div class="nd-dropdown">
+									{#each branches.filter((b) => b.name.toLowerCase().includes(branchSearch.toLowerCase())) as b}
+										<button onclick={() => selectBranch(b)} class="nd-dropdown-item">
+											<span class="nd-truncate">{b.name}</span>
 										</button>
 									{/each}
 								</div>
 							{/if}
 						</div>
+					{/if}
 
-						{#if selectedRepo}
-							<div class="relative" data-branch-dropdown>
-								<label class="block text-sm font-medium mb-2">Branch</label>
-								<div class="relative">
+					{#if selectedBranch}
+						<!-- Build Type Selector -->
+						<div class="nd-field">
+							<label class="nd-label">Build Method</label>
+							<div class="nd-grid-2">
+								<button
+									type="button"
+									onclick={() => buildType = 'dockerfile'}
+									class="nd-build-option"
+									class:nd-build-active={buildType === 'dockerfile'}
+								>
+									<Container class="h-5 w-5" />
+									<div>
+										<div class="nd-build-label">Dockerfile</div>
+										<p class="nd-build-desc">Build from a Dockerfile</p>
+									</div>
+								</button>
+								<button
+									type="button"
+									onclick={() => buildType = 'railpack'}
+									class="nd-build-option"
+									class:nd-build-active={buildType === 'railpack'}
+								>
+									<svg class="h-5 w-5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+										<path d="M12 2L2 7l10 5 10-5-10-5z" />
+										<path d="M2 17l10 5 10-5" />
+										<path d="M2 12l10 5 10-5" />
+									</svg>
+									<div>
+										<div class="nd-build-label">Railpack</div>
+										<p class="nd-build-desc">Auto-detect & build</p>
+									</div>
+								</button>
+							</div>
+							{#if buildType === 'railpack'}
+								<p class="nd-hint" style="margin-top: 0.5rem;">Railpack automatically detects your app's language and framework to build an optimized container image.</p>
+							{/if}
+						</div>
+
+						<!-- Dockerfile-specific fields -->
+						{#if buildType === 'dockerfile'}
+							<div class="nd-field nd-relative" data-dockerfile-dropdown>
+								<label class="nd-label">Dockerfile</label>
+								<div class="nd-relative">
 									<input
 										type="text"
-										bind:value={branchSearch}
-										oninput={(e) => handleBranchSearchInput((e.target as HTMLInputElement).value)}
-										onfocus={() => { if (!selectedBranch) showBranchDropdown = branchSearch.length > 0; }}
-										placeholder={selectedBranch ? selectedBranch.name : "Search branches..."}
-										class="input"
-										disabled={loadingBranches}
-										readonly={selectedBranch !== null}
-										style={selectedBranch ? "cursor: not-allowed; opacity: 0.7;" : ""}
+										bind:value={dockerfileSearch}
+										oninput={(e) => handleDockerfileInput((e.target as HTMLInputElement).value)}
+										placeholder="Dockerfile"
+										class="nd-input nd-mono"
 									/>
-									{#if selectedBranch}
-										<button
-											onclick={clearBranchSelection}
-											class="absolute right-2 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 dark:hover:text-gray-300"
-											type="button"
-										>
-											<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-												<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
-											</svg>
-										</button>
+									{#if loadingDockerfiles}
+										<div class="nd-input-suffix">
+											<Loader2 class="h-4 w-4 animate-spin" />
+										</div>
 									{/if}
 								</div>
-								{#if showBranchDropdown && branchSearch && !loadingBranches && !selectedBranch}
-									<div
-										class="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border p-2 shadow"
-										style="background-color: var(--surface-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
-									>
-										{#each branches.filter((b) => b.name.toLowerCase().includes(branchSearch.toLowerCase())) as b}
-											<button
-												onclick={() => selectBranch(b)}
-												class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]"
-											>
-												<span class="truncate">{b.name}</span>
-												{#if selectedBranch?.name === b.name}
-													<svg class="h-4 w-4 shrink-0 text-primary-600" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-														<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7" />
-													</svg>
-												{/if}
+								{#if showDockerfileDropdown && dockerfileSearch && !loadingDockerfiles && dockerfiles.length > 0}
+									<div class="nd-dropdown">
+										{#each dockerfiles.filter((d) => d.toLowerCase().includes(dockerfileSearch.toLowerCase())) as df}
+											<button onclick={() => selectDockerfile(df)} class="nd-dropdown-item nd-mono">
+												<span class="nd-truncate">{df}</span>
 											</button>
 										{/each}
 									</div>
 								{/if}
 							</div>
-						{/if}
-
-						{#if selectedBranch}
-							<!-- Build Type Selector -->
-							<div>
-								<label class="block text-sm font-medium mb-2">Build Method</label>
-								<div class="grid grid-cols-2 gap-3">
-									<button
-										type="button"
-										onclick={() => buildType = 'dockerfile'}
-										class="flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all {buildType === 'dockerfile' ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'}"
-									>
-										<Container class="h-6 w-6 {buildType === 'dockerfile' ? 'text-primary-600' : 'text-gray-400'}" />
-										<div class="text-center">
-											<div class="font-medium text-sm {buildType === 'dockerfile' ? 'text-primary-700 dark:text-primary-400' : ''}">Dockerfile</div>
-											<p class="text-xs text-gray-500 mt-0.5">Build from a Dockerfile</p>
-										</div>
-									</button>
-									<button
-										type="button"
-										onclick={() => buildType = 'railpack'}
-										class="flex flex-col items-center gap-2 rounded-xl border-2 p-4 transition-all {buildType === 'railpack' ? 'border-primary-500 bg-primary-50 dark:bg-primary-950/20' : 'border-gray-200 dark:border-gray-700 hover:border-gray-300 dark:hover:border-gray-600'}"
-									>
-										<svg class="h-6 w-6 {buildType === 'railpack' ? 'text-primary-600' : 'text-gray-400'}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-											<path d="M12 2L2 7l10 5 10-5-10-5z" />
-											<path d="M2 17l10 5 10-5" />
-											<path d="M2 12l10 5 10-5" />
-										</svg>
-										<div class="text-center">
-											<div class="font-medium text-sm {buildType === 'railpack' ? 'text-primary-700 dark:text-primary-400' : ''}">Railpack</div>
-											<p class="text-xs text-gray-500 mt-0.5">Auto-detect & build</p>
-										</div>
-									</button>
+							{#if dockerfilePath && dockerfileStages.length > 0}
+								<div class="nd-field">
+									<label class="nd-label">Build Stage</label>
+									<select class="nd-input" value={selectedStage} onchange={(e) => { selectedStage = (e.target as HTMLSelectElement).value; }}>
+										{#each dockerfileStages as stage}
+											<option value={stage}>{stage}</option>
+										{/each}
+									</select>
+									<p class="nd-hint">Select which stage to build from the multi-stage Dockerfile</p>
 								</div>
-								{#if buildType === 'railpack'}
-									<p class="text-xs text-gray-500 mt-2">Railpack automatically detects your app's language and framework to build an optimized container image.</p>
-								{/if}
-							</div>
-
-							<!-- Dockerfile-specific fields -->
-							{#if buildType === 'dockerfile'}
-								<div class="relative" data-dockerfile-dropdown>
-									<label class="block text-sm font-medium mb-2">Dockerfile</label>
-									<div class="relative">
-										<input
-											type="text"
-											bind:value={dockerfileSearch}
-											oninput={(e) => handleDockerfileInput((e.target as HTMLInputElement).value)}
-											placeholder="Dockerfile"
-											class="input font-mono"
-										/>
-										{#if loadingDockerfiles}
-											<div class="absolute right-3 top-1/2 -translate-y-1/2">
-												<Loader2 class="h-4 w-4 animate-spin text-primary-600" />
-											</div>
-										{/if}
-									</div>
-									{#if showDockerfileDropdown && dockerfileSearch && !loadingDockerfiles && dockerfiles.length > 0}
-										<div
-											class="absolute z-20 mt-1 max-h-48 w-full overflow-y-auto rounded-xl border p-2 shadow"
-											style="background-color: var(--surface-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
-										>
-											{#each dockerfiles.filter((d) => d.toLowerCase().includes(dockerfileSearch.toLowerCase())) as df}
-												<button
-													onclick={() => selectDockerfile(df)}
-													class="flex w-full items-center rounded-lg px-3 py-2 text-left text-sm transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)] font-mono"
-												>
-													<span class="truncate">{df}</span>
-												</button>
-											{/each}
-										</div>
-									{/if}
-								</div>
-								{#if dockerfilePath && dockerfileStages.length > 0}
+							{/if}
+							{#if dockerfilePath}
+								<label class="nd-checkbox-row">
+									<input type="checkbox" bind:checked={buildFromRoot} class="nd-checkbox" />
 									<div>
-										<label class="block text-sm font-medium mb-2">Build Stage</label>
-										<select class="input" value={selectedStage} onchange={(e) => { selectedStage = (e.target as HTMLSelectElement).value; }}>
-											{#each dockerfileStages as stage}
-												<option value={stage}>{stage}</option>
-											{/each}
-										</select>
-										<p class="text-xs text-gray-500 mt-1">Select which stage to build from the multi-stage Dockerfile</p>
+										<span class="nd-checkbox-label">Build from root</span>
+										<p class="nd-hint">Build from the repository root instead of the Dockerfile directory</p>
 									</div>
-								{/if}
-								{#if dockerfilePath}
-									<label class="flex items-center gap-3">
-										<input type="checkbox" bind:checked={buildFromRoot} class="rounded" />
-										<div>
-											<span class="font-medium">Build from root</span>
-											<p class="text-xs text-gray-500">Build from the repository root instead of the Dockerfile directory</p>
-										</div>
-									</label>
-								{/if}
+								</label>
 							{/if}
 						{/if}
 					{/if}
 				{/if}
-
-				<label class="flex items-center gap-3">
-					<input type="checkbox" bind:checked={exposePublic} class="rounded" />
-					<div>
-						<span class="font-medium">Expose service publicly</span>
-						<p class="text-xs text-gray-500">Creates a NodePort service for external access</p>
-					</div>
-				</label>
-			</div>
-
-			<!-- Ports -->
-			<div class="card p-6">
-				<div class="flex items-center justify-between mb-4">
-					<h2 class="text-lg font-semibold">Ports</h2>
-					<button onclick={addPort} class="btn btn-secondary btn-sm">
-						<Plus class="h-4 w-4" />
-						Add port
-					</button>
-				</div>
-				<div class="space-y-3">
-					{#each ports as port, index}
-						<div class="grid gap-3 md:grid-cols-5 items-end">
-							<div>
-								<label class="block text-xs font-medium text-gray-500 mb-1">Name</label>
-								<input type="text" bind:value={port.name} placeholder="http" class="input" />
-							</div>
-							<div>
-								<label class="block text-xs font-medium text-gray-500 mb-1">Container</label>
-								<input type="number" bind:value={port.containerPort} min="1" class="input" />
-							</div>
-							<div>
-								<label class="block text-xs font-medium text-gray-500 mb-1">Service</label>
-								<input type="number" bind:value={port.servicePort} min="1" class="input" />
-							</div>
-							<div>
-								<label class="block text-xs font-medium text-gray-500 mb-1">Protocol</label>
-								<select bind:value={port.protocol} class="input">
-									<option value="TCP">TCP</option>
-									<option value="UDP">UDP</option>
-								</select>
-							</div>
-							<button onclick={() => removePort(index)} disabled={ports.length <= 1} class="btn btn-ghost">
-								<Trash2 class="h-4 w-4" />
-							</button>
-						</div>
-					{/each}
-				</div>
-			</div>
-
-			<!-- Volumes -->
-			<div class="card p-6">
-				<div class="flex items-center justify-between mb-4">
-					<h2 class="text-lg font-semibold flex items-center gap-2">
-						<HardDrive class="h-5 w-5" />
-						Volumes
-					</h2>
-					<button onclick={addVolume} class="btn btn-secondary btn-sm">
-						<Plus class="h-4 w-4" />
-						Add volume
-					</button>
-				</div>
-				<div class="space-y-4">
-					{#each volumes as volume, index}
-						<div class="rounded-lg border border-gray-200 dark:border-gray-700 p-4 space-y-3">
-							<div class="flex items-center justify-between">
-								<h3 class="font-medium text-sm">Volume {index + 1}</h3>
-								<button onclick={() => removeVolume(index)} class="btn btn-ghost btn-sm">
-									<Trash2 class="h-4 w-4" />
-								</button>
-							</div>
-							<div class="grid gap-3 md:grid-cols-2">
-								<div>
-									<label class="block text-xs font-medium text-gray-500 mb-1">Name</label>
-									<input type="text" bind:value={volume.name} placeholder="data" class="input" />
-								</div>
-								<div>
-									<label class="block text-xs font-medium text-gray-500 mb-1">Type</label>
-									<select bind:value={volume.type} class="input">
-										<option value="pvc">Persistent Volume Claim (PVC)</option>
-										<option value="hostPath">Host Path</option>
-										<option value="emptyDir">Empty Directory</option>
-									</select>
-								</div>
-								<div class="md:col-span-2">
-									<label class="block text-xs font-medium text-gray-500 mb-1">Mount Path</label>
-									<input type="text" bind:value={volume.mountPath} placeholder="/data" class="input font-mono" />
-								</div>
-								{#if volume.type === 'pvc'}
-									<div class="md:col-span-2">
-										<label class="block text-xs font-medium text-gray-500 mb-1">PVC Name</label>
-										<input type="text" bind:value={volume.pvcName} placeholder="my-pvc" class="input font-mono" />
-									</div>
-								{:else if volume.type === 'hostPath'}
-									<div class="md:col-span-2">
-										<label class="block text-xs font-medium text-gray-500 mb-1">Host Path</label>
-										<input type="text" bind:value={volume.hostPath} placeholder="/host/path" class="input font-mono" />
-									</div>
-								{/if}
-								<div class="md:col-span-2">
-									<label class="flex items-center gap-2">
-										<input type="checkbox" bind:checked={volume.readOnly} class="rounded" />
-										<span class="text-sm">Read-only</span>
-									</label>
-								</div>
-							</div>
-						</div>
-					{:else}
-						<p class="text-sm text-gray-500 text-center py-4">No volumes configured</p>
-					{/each}
-				</div>
-			</div>
-
-			<!-- Environment Variables -->
-			<div class="card p-6">
-				<div class="flex items-center justify-between mb-4">
-					<h2 class="text-lg font-semibold">Environment Variables</h2>
-					<button onclick={addEnvVar} class="btn btn-secondary btn-sm">
-						<Plus class="h-4 w-4" />
-						Add variable
-					</button>
-				</div>
-				<div class="mb-4 max-w-2xl">
-					<details class="group">
-						<summary class="cursor-pointer text-sm text-gray-600 hover:text-gray-900 mb-2">
-							Paste from file (key=value format)
-						</summary>
-						<div class="mt-2 space-y-2">
-							<textarea
-								bind:value={envPasteText}
-								placeholder="KEY1=value1&#10;KEY2=value2&#10;# Comments are ignored"
-								class="input font-mono text-sm min-h-[100px]"
-							></textarea>
-							<div class="flex items-center justify-between">
-								<p class="text-xs text-gray-500">Paste your .env file content here. Each line should be in KEY=value format.</p>
-								<button onclick={parseEnvVars} disabled={!envPasteText.trim()} class="btn btn-secondary btn-sm">
-									Parse
-								</button>
-							</div>
-						</div>
-					</details>
-				</div>
-				<div class="space-y-2 max-h-64 overflow-y-auto max-w-2xl">
-					{#each envVars as env, index}
-						{@const isRevealed = revealedIndices.has(index)}
-						<div class="grid gap-2 grid-cols-[140px_1fr_auto]">
-							<input type="text" bind:value={env.key} placeholder="KEY" class="input font-mono min-w-0" />
-							<div class="flex gap-2 min-w-0">
-								<input
-									type={isRevealed ? 'text' : 'password'}
-									bind:value={env.value}
-									placeholder="value"
-									class="input font-mono flex-1 min-w-0"
-								/>
-								<button
-									type="button"
-									onclick={() => toggleReveal(index)}
-									class="btn btn-ghost shrink-0"
-									aria-label={isRevealed ? 'Hide value' : 'Show value'}
-								>
-									{#if isRevealed}
-										<EyeOff class="h-4 w-4" />
-									{:else}
-										<Eye class="h-4 w-4" />
-									{/if}
-								</button>
-							</div>
-							<button onclick={() => removeEnvVar(index)} disabled={envVars.length <= 1} class="btn btn-ghost shrink-0">
-								<Trash2 class="h-4 w-4" />
-							</button>
-						</div>
-					{/each}
-				</div>
-			</div>
-
-			<!-- Advanced (Superadmin only) -->
-			{#if $isSuperAdmin && deploymentSource === 'github'}
-				<div class="card p-6">
-					<details>
-						<summary class="cursor-pointer text-lg font-semibold">Advanced</summary>
-						<div class="mt-4 space-y-3">
-							<label class="flex items-center gap-3">
-								<input type="checkbox" bind:checked={buildWithDepot} class="rounded" />
-								<div>
-									<span class="font-medium">Orchard's Super Builds</span>
-									<p class="text-xs text-gray-500">Use Orchard's high-performance hosted builders for faster builds</p>
-								</div>
-							</label>
-						</div>
-					</details>
-				</div>
 			{/if}
 
-			{#if formError}
-				<div class="alert alert-error">{formError}</div>
-			{/if}
+			<label class="nd-checkbox-row">
+				<input type="checkbox" bind:checked={exposePublic} class="nd-checkbox" />
+				<div>
+					<span class="nd-checkbox-label">Expose service publicly</span>
+					<p class="nd-hint">Creates a NodePort service for external access</p>
+				</div>
+			</label>
+		</div>
 
-			<div class="flex justify-end gap-3">
-				<a href="/{orgSlug}/workspaces/{workspaceSlug}/projects/{projectSlug}" class="btn btn-secondary">Cancel</a>
-				<button onclick={submit} disabled={submitting} class="btn btn-primary">
-					{#if submitting}
-						<Loader2 class="h-4 w-4 animate-spin" />
-					{/if}
-					Create deployment
+		<!-- Ports -->
+		<div class="nd-card">
+			<div class="nd-card-header">
+				<h2 class="nd-card-title">Ports</h2>
+				<button onclick={addPort} class="nd-btn nd-btn-secondary nd-btn-sm">
+					<Plus class="h-4 w-4" />
+					Add port
 				</button>
 			</div>
+			<div class="nd-stack">
+				{#each ports as port, index}
+					<div class="nd-port-row">
+						<div class="nd-field">
+							<label class="nd-label-sm">Name</label>
+							<input type="text" bind:value={port.name} placeholder="http" class="nd-input" />
+						</div>
+						<div class="nd-field">
+							<label class="nd-label-sm">Container</label>
+							<input type="number" bind:value={port.containerPort} min="1" class="nd-input" />
+						</div>
+						<div class="nd-field">
+							<label class="nd-label-sm">Service</label>
+							<input type="number" bind:value={port.servicePort} min="1" class="nd-input" />
+						</div>
+						<div class="nd-field">
+							<label class="nd-label-sm">Protocol</label>
+							<select bind:value={port.protocol} class="nd-input">
+								<option value="TCP">TCP</option>
+								<option value="UDP">UDP</option>
+							</select>
+						</div>
+						<button onclick={() => removePort(index)} disabled={ports.length <= 1} class="nd-icon-btn nd-icon-btn-danger">
+							<Trash2 class="h-4 w-4" />
+						</button>
+					</div>
+				{/each}
+			</div>
+		</div>
+
+		<!-- Volumes -->
+		<div class="nd-card">
+			<div class="nd-card-header">
+				<h2 class="nd-card-title">
+					<HardDrive class="h-4 w-4" style="display: inline; vertical-align: -2px;" />
+					Volumes
+				</h2>
+				<button onclick={addVolume} class="nd-btn nd-btn-secondary nd-btn-sm">
+					<Plus class="h-4 w-4" />
+					Add volume
+				</button>
+			</div>
+			<div class="nd-stack">
+				{#each volumes as volume, index}
+					<div class="nd-volume-item">
+						<div class="nd-volume-header">
+							<span class="nd-volume-num">Volume {index + 1}</span>
+							<button onclick={() => removeVolume(index)} class="nd-icon-btn nd-icon-btn-danger">
+								<Trash2 class="h-4 w-4" />
+							</button>
+						</div>
+						<div class="nd-grid-2">
+							<div class="nd-field">
+								<label class="nd-label-sm">Name</label>
+								<input type="text" bind:value={volume.name} placeholder="data" class="nd-input" />
+							</div>
+							<div class="nd-field">
+								<label class="nd-label-sm">Type</label>
+								<select bind:value={volume.type} class="nd-input">
+									<option value="pvc">Persistent Volume Claim (PVC)</option>
+									<option value="hostPath">Host Path</option>
+									<option value="emptyDir">Empty Directory</option>
+								</select>
+							</div>
+						</div>
+						<div class="nd-field">
+							<label class="nd-label-sm">Mount Path</label>
+							<input type="text" bind:value={volume.mountPath} placeholder="/data" class="nd-input nd-mono" />
+						</div>
+						{#if volume.type === 'pvc'}
+							<div class="nd-field">
+								<label class="nd-label-sm">PVC Name</label>
+								<input type="text" bind:value={volume.pvcName} placeholder="my-pvc" class="nd-input nd-mono" />
+							</div>
+						{:else if volume.type === 'hostPath'}
+							<div class="nd-field">
+								<label class="nd-label-sm">Host Path</label>
+								<input type="text" bind:value={volume.hostPath} placeholder="/host/path" class="nd-input nd-mono" />
+							</div>
+						{/if}
+						<label class="nd-checkbox-row">
+							<input type="checkbox" bind:checked={volume.readOnly} class="nd-checkbox" />
+							<span class="nd-checkbox-label-sm">Read-only</span>
+						</label>
+					</div>
+				{:else}
+					<p class="nd-empty-text">No volumes configured</p>
+				{/each}
+			</div>
+		</div>
+
+		<!-- Environment Variables -->
+		<div class="nd-card">
+			<div class="nd-card-header">
+				<h2 class="nd-card-title">Environment Variables</h2>
+				<button onclick={addEnvVar} class="nd-btn nd-btn-secondary nd-btn-sm">
+					<Plus class="h-4 w-4" />
+					Add variable
+				</button>
+			</div>
+			<div class="nd-env-paste">
+				<details>
+					<summary class="nd-env-paste-toggle">Paste from file (key=value format)</summary>
+					<div class="nd-env-paste-body">
+						<textarea
+							bind:value={envPasteText}
+							placeholder="KEY1=value1&#10;KEY2=value2&#10;# Comments are ignored"
+							class="nd-input nd-mono nd-textarea"
+						></textarea>
+						<div class="nd-env-paste-footer">
+							<p class="nd-hint">Paste your .env file content here. Each line should be in KEY=value format.</p>
+							<button onclick={parseEnvVars} disabled={!envPasteText.trim()} class="nd-btn nd-btn-secondary nd-btn-sm">
+								Parse
+							</button>
+						</div>
+					</div>
+				</details>
+			</div>
+			<div class="nd-env-list">
+				{#each envVars as env, index}
+					{@const isRevealed = revealedIndices.has(index)}
+					<div class="nd-env-row">
+						<input type="text" bind:value={env.key} placeholder="KEY" class="nd-input nd-mono nd-env-key" />
+						<div class="nd-env-value-wrap">
+							<input
+								type={isRevealed ? 'text' : 'password'}
+								bind:value={env.value}
+								placeholder="value"
+								class="nd-input nd-mono"
+							/>
+							<button
+								type="button"
+								onclick={() => toggleReveal(index)}
+								class="nd-icon-btn"
+								aria-label={isRevealed ? 'Hide value' : 'Show value'}
+							>
+								{#if isRevealed}
+									<EyeOff class="h-4 w-4" />
+								{:else}
+									<Eye class="h-4 w-4" />
+								{/if}
+							</button>
+						</div>
+						<button onclick={() => removeEnvVar(index)} disabled={envVars.length <= 1} class="nd-icon-btn nd-icon-btn-danger">
+							<Trash2 class="h-4 w-4" />
+						</button>
+					</div>
+				{/each}
+			</div>
+		</div>
+
+		<!-- Advanced (Superadmin only) -->
+		{#if $isSuperAdmin && deploymentSource === 'github'}
+			<div class="nd-card">
+				<details>
+					<summary class="nd-card-title" style="cursor: pointer;">Advanced</summary>
+					<div style="margin-top: 1rem;">
+						<label class="nd-checkbox-row">
+							<input type="checkbox" bind:checked={buildWithDepot} class="nd-checkbox" />
+							<div>
+								<span class="nd-checkbox-label">Orchard's Super Builds</span>
+								<p class="nd-hint">Use Orchard's high-performance hosted builders for faster builds</p>
+							</div>
+						</label>
+					</div>
+				</details>
+			</div>
+		{/if}
+
+		{#if formError}
+			<div class="nd-error">{formError}</div>
+		{/if}
+
+		<div class="nd-actions">
+			<a href="/{orgSlug}/workspaces/{workspaceSlug}/projects/{projectSlug}" class="nd-btn nd-btn-secondary">Cancel</a>
+			<button onclick={submit} disabled={submitting} class="nd-btn nd-btn-primary">
+				{#if submitting}
+					<Loader2 class="h-4 w-4 animate-spin" />
+				{/if}
+				Create deployment
+			</button>
 		</div>
 	{/if}
 </div>
+
+<style>
+	.nd-page {
+		max-width: 52rem;
+		margin: 0 auto;
+		padding: 2.5rem 2.5rem 3rem;
+	}
+
+	/* Back link */
+	.nd-back {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		font-size: 0.8125rem;
+		color: var(--surface-muted);
+		background: none;
+		border: none;
+		cursor: pointer;
+		padding: 0;
+		margin-bottom: 1rem;
+		transition: color 0.15s;
+	}
+
+	.nd-back:hover {
+		color: var(--center-channel-color);
+	}
+
+	/* Header */
+	.nd-header {
+		margin-bottom: 1.5rem;
+	}
+
+	.nd-title {
+		font-size: 1.25rem;
+		font-weight: 700;
+		color: var(--center-channel-color);
+		margin: 0;
+		letter-spacing: -0.02em;
+	}
+
+	.nd-subtitle {
+		font-size: 0.875rem;
+		color: var(--surface-muted);
+		margin: 0.25rem 0 0;
+	}
+
+	/* Source Switcher */
+	.nd-source-switcher {
+		display: flex;
+		gap: 0.25rem;
+		padding: 0.25rem;
+		border-radius: 0.625rem;
+		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);
+		margin-bottom: 1.5rem;
+		width: fit-content;
+	}
+
+	.nd-source-tab {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.4375rem 1rem;
+		border-radius: 0.5rem;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		border: none;
+		cursor: pointer;
+		background: transparent;
+		color: var(--surface-muted);
+		transition: all 0.15s;
+	}
+
+	.nd-source-tab:hover:not(.nd-source-active) {
+		color: var(--center-channel-color);
+	}
+
+	.nd-source-active {
+		background-color: var(--center-channel-bg);
+		color: var(--center-channel-color);
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.06);
+	}
+
+	/* Cards */
+	.nd-card {
+		border: 1px solid var(--surface-border);
+		border-radius: 1rem;
+		background-color: var(--surface-bg);
+		padding: 1.25rem;
+		margin-bottom: 1rem;
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.nd-card-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.nd-card-title {
+		font-size: 0.9375rem;
+		font-weight: 600;
+		color: var(--center-channel-color);
+		margin: 0;
+	}
+
+	/* Fields */
+	.nd-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+	}
+
+	.nd-label {
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--center-channel-color);
+	}
+
+	.nd-label-sm {
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: var(--surface-muted);
+	}
+
+	.nd-input {
+		width: 100%;
+		padding: 0.4375rem 0.75rem;
+		border-radius: 0.5rem;
+		border: 1px solid var(--surface-border);
+		background-color: var(--center-channel-bg);
+		color: var(--center-channel-color);
+		font-size: 0.8125rem;
+		transition: border-color 0.15s;
+	}
+
+	.nd-input::placeholder {
+		color: var(--surface-muted);
+	}
+
+	.nd-input:focus {
+		outline: none;
+		border-color: var(--sidebar-text-active-border);
+	}
+
+	.nd-input:disabled {
+		opacity: 0.5;
+	}
+
+	.nd-mono {
+		font-family: var(--font-mono);
+	}
+
+	.nd-textarea {
+		min-height: 6rem;
+		resize: vertical;
+	}
+
+	.nd-hint {
+		font-size: 0.75rem;
+		color: var(--surface-muted);
+		margin: 0;
+	}
+
+	/* Grid */
+	.nd-grid-2 {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 0.75rem;
+	}
+
+	.nd-relative {
+		position: relative;
+	}
+
+	.nd-truncate {
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	/* Dropdown */
+	.nd-dropdown {
+		position: absolute;
+		z-index: 20;
+		margin-top: 0.25rem;
+		max-height: 12rem;
+		width: 100%;
+		overflow-y: auto;
+		border-radius: 0.75rem;
+		border: 1px solid var(--surface-border);
+		padding: 0.375rem;
+		background-color: var(--surface-bg);
+		box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
+	}
+
+	.nd-dropdown-item {
+		display: flex;
+		align-items: center;
+		width: 100%;
+		border-radius: 0.5rem;
+		padding: 0.4375rem 0.75rem;
+		text-align: left;
+		font-size: 0.8125rem;
+		border: none;
+		background: none;
+		color: var(--center-channel-color);
+		cursor: pointer;
+		transition: background-color 0.1s;
+	}
+
+	.nd-dropdown-item:hover {
+		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);
+	}
+
+	.nd-dropdown-item-content {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-width: 0;
+		flex: 1;
+	}
+
+	.nd-badge {
+		font-size: 0.6875rem;
+		padding: 0.0625rem 0.375rem;
+		border-radius: 0.25rem;
+		background-color: color-mix(in srgb, var(--surface-border) 60%, transparent);
+		color: var(--surface-muted);
+		flex-shrink: 0;
+	}
+
+	.nd-input-suffix {
+		position: absolute;
+		right: 0.75rem;
+		top: 50%;
+		transform: translateY(-50%);
+		color: var(--surface-muted);
+		display: flex;
+	}
+
+	.nd-input-clear {
+		background: none;
+		border: none;
+		cursor: pointer;
+		padding: 0;
+	}
+
+	.nd-input-clear:hover {
+		color: var(--center-channel-color);
+	}
+
+	/* Build method cards */
+	.nd-build-option {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.875rem;
+		border: 1px solid var(--surface-border);
+		border-radius: 0.75rem;
+		background: transparent;
+		cursor: pointer;
+		text-align: left;
+		color: var(--surface-muted);
+		transition: border-color 0.15s, box-shadow 0.15s;
+	}
+
+	.nd-build-option:hover {
+		border-color: color-mix(in srgb, var(--surface-border) 60%, var(--center-channel-color));
+	}
+
+	.nd-build-active {
+		border-color: var(--sidebar-text-active-border);
+		box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-text-active-border) 25%, transparent);
+		color: var(--sidebar-text-active-border);
+	}
+
+	.nd-build-label {
+		font-size: 0.8125rem;
+		font-weight: 600;
+		color: var(--center-channel-color);
+	}
+
+	.nd-build-active .nd-build-label {
+		color: var(--sidebar-text-active-border);
+	}
+
+	.nd-build-desc {
+		font-size: 0.6875rem;
+		color: var(--surface-muted);
+		margin: 0;
+	}
+
+	/* Checkbox */
+	.nd-checkbox-row {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.75rem;
+		cursor: pointer;
+	}
+
+	.nd-checkbox {
+		margin-top: 0.125rem;
+		border-radius: 0.25rem;
+	}
+
+	.nd-checkbox-label {
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--center-channel-color);
+	}
+
+	.nd-checkbox-label-sm {
+		font-size: 0.8125rem;
+		color: var(--center-channel-color);
+	}
+
+	/* Warning */
+	.nd-warning {
+		padding: 1rem;
+		border-radius: 0.75rem;
+		background-color: color-mix(in srgb, #f59e0b 8%, transparent);
+		border: 1px solid color-mix(in srgb, #f59e0b 25%, transparent);
+	}
+
+	.nd-warning-title {
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--center-channel-color);
+		margin: 0;
+	}
+
+	.nd-warning-desc {
+		font-size: 0.8125rem;
+		color: var(--surface-muted);
+		margin: 0.25rem 0 0;
+	}
+
+	/* Ports */
+	.nd-stack {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.nd-port-row {
+		display: grid;
+		grid-template-columns: 1fr 1fr 1fr 1fr auto;
+		gap: 0.5rem;
+		align-items: end;
+	}
+
+	/* Volumes */
+	.nd-volume-item {
+		border: 1px solid var(--surface-border);
+		border-radius: 0.75rem;
+		padding: 1rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.nd-volume-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+	}
+
+	.nd-volume-num {
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--center-channel-color);
+	}
+
+	.nd-empty-text {
+		font-size: 0.8125rem;
+		color: var(--surface-muted);
+		text-align: center;
+		padding: 1rem 0;
+		margin: 0;
+	}
+
+	/* Env */
+	.nd-env-paste {
+		margin-bottom: 0.5rem;
+	}
+
+	.nd-env-paste-toggle {
+		font-size: 0.8125rem;
+		color: var(--surface-muted);
+		cursor: pointer;
+	}
+
+	.nd-env-paste-toggle:hover {
+		color: var(--center-channel-color);
+	}
+
+	.nd-env-paste-body {
+		margin-top: 0.5rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+
+	.nd-env-paste-footer {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+	}
+
+	.nd-env-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+		max-height: 16rem;
+		overflow-y: auto;
+	}
+
+	.nd-env-row {
+		display: grid;
+		grid-template-columns: 9rem 1fr auto;
+		gap: 0.375rem;
+		align-items: center;
+	}
+
+	.nd-env-key {
+		min-width: 0;
+	}
+
+	.nd-env-value-wrap {
+		display: flex;
+		gap: 0.375rem;
+		min-width: 0;
+	}
+
+	.nd-env-value-wrap .nd-input {
+		flex: 1;
+		min-width: 0;
+	}
+
+	/* Buttons */
+	.nd-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.4375rem 0.875rem;
+		border-radius: 0.5rem;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		border: none;
+		cursor: pointer;
+		text-decoration: none;
+		transition: opacity 0.15s;
+		white-space: nowrap;
+	}
+
+	.nd-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.nd-btn-primary {
+		background-color: var(--sidebar-text-active-border);
+		color: #fff;
+		box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 1px 1px rgb(0 0 0 / 0.04);
+	}
+
+	.nd-btn-primary:hover:not(:disabled) {
+		opacity: 0.95;
+	}
+
+	.nd-btn-secondary {
+		background-color: transparent;
+		color: var(--surface-muted);
+		border: 1px solid var(--surface-border);
+	}
+
+	.nd-btn-secondary:hover:not(:disabled) {
+		background-color: var(--control-hover-bg);
+		color: var(--center-channel-color);
+	}
+
+	.nd-btn-sm {
+		padding: 0.3125rem 0.625rem;
+		font-size: 0.75rem;
+	}
+
+	.nd-icon-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		border-radius: 0.375rem;
+		border: none;
+		background: none;
+		color: var(--surface-muted);
+		cursor: pointer;
+		transition: color 0.15s, background-color 0.15s;
+		flex-shrink: 0;
+	}
+
+	.nd-icon-btn:hover {
+		color: var(--center-channel-color);
+		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
+	}
+
+	.nd-icon-btn:disabled {
+		opacity: 0.3;
+		cursor: not-allowed;
+	}
+
+	.nd-icon-btn-danger:hover:not(:disabled) {
+		color: var(--error-text-color);
+		background-color: color-mix(in srgb, var(--error-text-color) 12%, transparent);
+	}
+
+	/* Actions footer */
+	.nd-actions {
+		display: flex;
+		justify-content: flex-end;
+		gap: 0.5rem;
+		margin-top: 0.5rem;
+	}
+
+	/* Error */
+	.nd-error {
+		padding: 0.75rem 1rem;
+		border-radius: 0.75rem;
+		font-size: 0.875rem;
+		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
+		color: var(--error-text-color);
+		border: 1px solid color-mix(in srgb, var(--error-text-color) 25%, transparent);
+		margin-bottom: 1rem;
+	}
+</style>
