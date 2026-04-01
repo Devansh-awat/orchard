@@ -416,56 +416,69 @@ ${registryConfigs}
   }): k8s.V1Container {
     const { dockerfilePath, fullImageName, target, buildFromRoot, buildType, envVars } = opts;
 
-    // Build depot build command
-    const depotArgs: string[] = ['depot', 'build'];
+    // Determine context directory and dockerfile flag
+    let contextDir = '.';
+    let dockerfileFlag = dockerfilePath;
 
     if (buildType === 'railpack') {
-      // For railpack builds, use the generated Dockerfile from railpack prepare
-      depotArgs.push('-f', 'Dockerfile');
-    } else {
-      depotArgs.push('-f', buildFromRoot ? dockerfilePath : dockerfilePath);
+      dockerfileFlag = 'Dockerfile';
+      contextDir = '.';
+    } else if (!buildFromRoot && dockerfilePath.includes('/')) {
+      contextDir = dockerfilePath.substring(0, dockerfilePath.lastIndexOf('/'));
+      dockerfileFlag = dockerfilePath.substring(dockerfilePath.lastIndexOf('/') + 1);
     }
 
-    depotArgs.push('-t', fullImageName);
-    depotArgs.push('--push');
+    // Build the depot build command parts safely
+    const buildArgLines = Object.entries(envVars)
+      .map(([key]) => `--build-arg "${key}=\${${key}}"`)
+      .join(' ');
 
-    if (target) {
-      depotArgs.push('--target', target);
-    }
-
-    // Add build args
-    for (const [key, value] of Object.entries(envVars)) {
-      depotArgs.push('--build-arg', `${key}=${value}`);
-    }
-
-    // Build context
-    if (buildType === 'railpack') {
-      depotArgs.push('.');
-    } else if (buildFromRoot) {
-      depotArgs.push('.');
-    } else {
-      const contextDir = dockerfilePath.includes('/') ? dockerfilePath.substring(0, dockerfilePath.lastIndexOf('/')) : '.';
-      depotArgs.push(contextDir);
-    }
+    const targetFlag = target ? `--target "${target}"` : '';
 
     const depotScript = `set -e
-echo "=== Building with Depot ==="
+echo "=== Installing Super Build tools ==="
+apt-get update -qq && apt-get install -y -qq curl >/dev/null 2>&1
 curl -L https://depot.dev/install-cli.sh | sh
-export PATH="$PATH:/root/.depot/bin:/usr/local/bin"
-${depotArgs.join(' ')}
-echo "=== Depot build completed ==="
+export PATH="/root/.depot/bin:$PATH"
+
+# Create docker config with registry credentials for Depot to use when pushing
+mkdir -p /tmp/.docker
+cat > /tmp/.docker/config.json << 'DOCKERCFG'
+{"auths":{"$REGISTRY_HOST":{"username":"$REGISTRY_USER","password":"$REGISTRY_PASS","auth":"$(echo -n $REGISTRY_USER:$REGISTRY_PASS | base64)"}}}
+DOCKERCFG
+# Re-expand env vars in the config
+REGISTRY_AUTH=$(echo -n "$REGISTRY_USER:$REGISTRY_PASS" | base64)
+cat > /tmp/.docker/config.json << EOF
+{"auths":{"$REGISTRY_HOST":{"username":"$REGISTRY_USER","password":"$REGISTRY_PASS","auth":"$REGISTRY_AUTH"}}}
+EOF
+export DOCKER_CONFIG=/tmp/.docker
+
+echo "=== Building with Super Builds ==="
+depot build \\
+  --platform linux/amd64 \\
+  -f "${dockerfileFlag}" \\
+  -t "${fullImageName}" \\
+  --push \\
+  ${targetFlag} \\
+  ${buildArgLines} \\
+  "${contextDir}" 2>&1 | sed -e 's/\\[depot\\]/[super-build]/gi' -e 's|https://depot\\.dev/[^ ]*||g' -e 's/depot build/super build/gi'
+
+echo "=== Super Build completed ==="
 `;
 
     return {
       name: 'depot-build',
-      image: 'docker:latest',
+      image: 'debian:bookworm-slim',
       command: ['/bin/sh', '-c'],
       args: [depotScript],
       workingDir: '/workspace',
       env: [
-        { name: 'DOCKER_CONFIG', value: '/root/.docker' },
         { name: 'DEPOT_TOKEN', value: this.depotToken || '' },
         ...(this.depotProjectId ? [{ name: 'DEPOT_PROJECT_ID', value: this.depotProjectId }] : []),
+        { name: 'REGISTRY_HOST', value: this.harborRegistryPush },
+        { name: 'REGISTRY_USER', value: process.env.HARBOR_USERNAME || 'admin' },
+        { name: 'REGISTRY_PASS', value: process.env.HARBOR_PASSWORD || '' },
+        // Pass env vars so build-args can reference them via ${KEY}
         ...Object.entries(envVars).map(([key, value]) => ({
           name: key,
           value: value,
@@ -475,11 +488,6 @@ echo "=== Depot build completed ==="
         {
           name: 'workspace',
           mountPath: '/workspace',
-        },
-        {
-          name: 'docker-config',
-          mountPath: '/root/.docker',
-          readOnly: true,
         },
       ],
       resources: {
@@ -702,7 +710,7 @@ exit $EXIT_CODE
     const fullImageName = `${this.harborRegistryPush}/${this.harborProject}/${imageName}:${tag}`;
 
     const buildMethodLabel = buildType === 'railpack' ? 'Railpack' : 'Dockerfile';
-    const builderLabel = buildWithDepot ? 'Depot' : 'BuildKit';
+    const builderLabel = buildWithDepot ? 'Super Builds' : 'BuildKit';
     await this.appendLog(deploymentId, `Creating image-builder pod: ${jobName} (${buildMethodLabel} via ${builderLabel})`);
     await this.setBuildStep(deploymentId, 'creating-builder');
 

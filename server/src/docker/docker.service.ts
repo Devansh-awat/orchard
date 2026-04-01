@@ -461,6 +461,123 @@ export class DockerService {
     });
   }
 
+  async buildImageWithDepot(
+    buildDir: string,
+    dockerfilePath: string,
+    imageName: string,
+    deploymentId?: string,
+    target?: string,
+    buildFromRoot?: boolean,
+    buildType?: string,
+  ): Promise<void> {
+    const fullImageName = `${this.harborRegistryPush}/${this.harborProject}/${imageName}`;
+
+    let envVars: Record<string, string> = {};
+    if (deploymentId) {
+      try {
+        const deployment = await this.prisma.deployment.findUnique({
+          where: { id: deploymentId },
+          include: { envVars: true },
+        });
+        if (deployment?.envVars && Array.isArray(deployment.envVars)) {
+          envVars = deployment.envVars.reduce((acc, envVar) => {
+            acc[envVar.key] = envVar.value;
+            return acc;
+          }, {} as Record<string, string>);
+        }
+      } catch (error) {
+        console.error('[Docker Service] Failed to get deployment env vars:', error);
+      }
+    }
+
+    const startTime = Date.now();
+    await this.setBuildStep(deploymentId, 'building');
+    await this.appendLog(deploymentId, `Building image ${fullImageName} using Super Builds...`);
+
+    return new Promise((resolve, reject) => {
+      const buildContext = buildFromRoot ? buildDir : path.dirname(path.join(buildDir, dockerfilePath));
+      const dockerfileArg = buildFromRoot ? dockerfilePath : path.basename(dockerfilePath);
+
+      const depotArgs = ['build', '--progress=plain', '--platform', 'linux/amd64', '-t', fullImageName, '-f', dockerfileArg, '--push'];
+      if (target) {
+        depotArgs.push('--target', target);
+      }
+      for (const [key, value] of Object.entries(envVars)) {
+        if (value !== undefined && value !== null) {
+          depotArgs.push('--build-arg', `${key}=${value}`);
+        }
+      }
+      depotArgs.push('.');
+
+      console.log('[Docker Service] Running depot build:', {
+        args: depotArgs.map(a => a.startsWith('--build-arg') ? '--build-arg' : a),
+        cwd: buildContext,
+      });
+
+      const buildProcess = spawn('depot', depotArgs, {
+        cwd: buildContext,
+        stdio: ['ignore', 'pipe', 'pipe'],
+        env: {
+          ...process.env,
+          DEPOT_TOKEN: process.env.DEPOT_TOKEN || '',
+          DEPOT_PROJECT_ID: process.env.DEPOT_PROJECT_ID || '',
+          PATH: process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
+        },
+      });
+
+      let stdout = '';
+      let stderr = '';
+
+      const rebrandLine = (line: string): string => {
+        return line
+          .replace(/\[depot\]/gi, '[super-build]')
+          .replace(/https:\/\/depot\.dev\/\S+/g, '')
+          .replace(/depot build/gi, 'super build')
+          .trim();
+      };
+
+      buildProcess.stdout.on('data', async (data: Buffer) => {
+        const message = data.toString();
+        stdout += message;
+        for (const line of message.split('\n')) {
+          const rebranded = rebrandLine(line);
+          if (rebranded) {
+            await this.appendLog(deploymentId, rebranded);
+          }
+        }
+      });
+
+      buildProcess.stderr.on('data', async (data: Buffer) => {
+        const message = data.toString();
+        stderr += message;
+        for (const line of message.split('\n')) {
+          const rebranded = rebrandLine(line);
+          if (rebranded) {
+            await this.appendLog(deploymentId, rebranded);
+          }
+        }
+      });
+
+      buildProcess.on('close', async (code) => {
+        const duration = Math.floor((Date.now() - startTime) / 1000);
+        if (code === 0) {
+          await this.appendLog(deploymentId, `Super Build completed in ${duration}s`);
+          resolve();
+        } else {
+          const errorMsg = `Super Build failed with exit code ${code}:\n${stderr || stdout}`;
+          await this.appendLog(deploymentId, errorMsg, 'ERROR');
+          reject(new Error(errorMsg));
+        }
+      });
+
+      buildProcess.on('error', async (err) => {
+        const errorMsg = `Failed to start Super Build process: ${err.message}. Is the build CLI installed?`;
+        await this.appendLog(deploymentId, errorMsg, 'ERROR');
+        reject(new Error(errorMsg));
+      });
+    });
+  }
+
   async buildImageWithRailpack(buildDir: string, imageName: string, deploymentId?: string): Promise<void> {
     const fullImageName = `${this.harborRegistryPush}/${this.harborProject}/${imageName}`;
 
@@ -1048,7 +1165,10 @@ export class DockerService {
 
       buildDir = await this.cloneRepository(repoUrl, branch, accessToken, deploymentId);
 
-      if (buildType === 'railpack') {
+      if (options.buildWithDepot) {
+        // Depot handles build + push in one step
+        await this.buildImageWithDepot(buildDir, dockerfilePath, imageFullName, deploymentId, target, buildFromRoot, buildType);
+      } else if (buildType === 'railpack') {
         // Railpack automatically detects language/framework and builds
         await this.buildImageWithRailpack(buildDir, imageFullName, deploymentId);
       } else {
@@ -1056,7 +1176,9 @@ export class DockerService {
         await this.buildImage(buildDir, dockerfilePath, imageFullName, deploymentId, target, buildFromRoot);
       }
 
-      await this.pushImage(imageFullName, deploymentId);
+      if (!options.buildWithDepot) {
+        await this.pushImage(imageFullName, deploymentId);
+      }
 
       const fullImagePath = `${this.harborRegistryPull}/${this.harborProject}/${imageFullName}`;
       await this.appendLog(deploymentId, `Build and push completed successfully!`);

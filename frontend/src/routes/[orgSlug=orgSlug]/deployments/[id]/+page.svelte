@@ -1146,9 +1146,7 @@
 				if (data.buildFromRoot !== undefined) {
 					buildFromRoot = data.buildFromRoot;
 				}
-				if (data.buildWithDepot !== undefined) {
-					buildWithDepot = data.buildWithDepot;
-				}
+				buildWithDepot = data.buildWithDepot ?? false;
 
 				// Initialize health check state from deployment data
 				if (data.healthCheckEnabled !== undefined && !isEditingHealthCheck) {
