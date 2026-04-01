@@ -26,6 +26,7 @@ interface BuildOptions {
   buildFromRoot?: boolean;
   buildType?: BuildType;
   buildMode?: BuildMode;
+  buildWithDepot?: boolean;
 }
 
 @Injectable()
@@ -1002,6 +1003,7 @@ export class DockerService {
         buildFromRoot,
         buildType,
         envVars,
+        buildWithDepot: options.buildWithDepot,
       });
 
       console.log('[Docker Service] Build completed successfully:', result);

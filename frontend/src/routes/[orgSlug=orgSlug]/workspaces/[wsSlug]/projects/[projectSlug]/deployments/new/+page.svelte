@@ -2,7 +2,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { apiFetch, toasts, refreshTree } from '$lib/stores';
+	import { apiFetch, toasts, refreshTree, isSuperAdmin } from '$lib/stores';
 	import { ArrowLeft, Loader2, Container, Github, Plus, Trash2, HardDrive, Eye, EyeOff } from 'lucide-svelte';
 
 	function handleClickOutside(event: MouseEvent, dropdownType: 'repo' | 'branch' | 'dockerfile') {
@@ -83,6 +83,7 @@
 	let exposePublic = $state(false);
 	let ports = $state([{ name: 'http', containerPort: 80, servicePort: 80, protocol: 'TCP' }]);
 	let envVars = $state([{ key: '', value: '' }]);
+	let buildWithDepot = $state(false);
 	let envPasteText = $state('');
 	let revealedIndices = $state<Set<number>>(new Set());
 
@@ -467,6 +468,7 @@
 				body.repoUrl = repoUrl;
 				body.branch = branch;
 				body.buildType = buildType;
+				body.buildWithDepot = buildWithDepot;
 				if (buildType === 'dockerfile') {
 					body.dockerfilePath = dockerfilePath;
 					body.buildFromRoot = buildFromRoot;
@@ -558,9 +560,9 @@
 			<!-- Template banner -->
 			<a
 				href="/{orgSlug}/workspaces/{$page.params.wsSlug}/projects/{$page.params.projectSlug}/templates"
-				style="display: flex; align-items: center; gap: 0.75rem; padding: 0.875rem 1.25rem; border-radius: 0.75rem; background-color: color-mix(in srgb, #ec4899 8%, transparent); border: 1px solid color-mix(in srgb, #ec4899 20%, transparent); text-decoration: none; color: var(--center-channel-color); transition: border-color 0.15s;"
+				style="display: flex; align-items: center; gap: 0.75rem; padding: 0.875rem 1.25rem; border-radius: 0.75rem; background-color: color-mix(in srgb, var(--sidebar-text-active-border) 8%, transparent); border: 1px solid color-mix(in srgb, var(--sidebar-text-active-border) 20%, transparent); text-decoration: none; color: var(--center-channel-color); transition: border-color 0.15s;"
 			>
-				<span style="font-size: 0.875rem; color: #ec4899; font-weight: 500;">Looking for a complete app setup?</span>
+				<span style="font-size: 0.875rem; color: var(--sidebar-text-active-border); font-weight: 500;">Looking for a complete app setup?</span>
 				<span style="font-size: 0.8125rem; color: var(--surface-muted);">Browse Templates to deploy pre-configured stacks with databases and ingresses.</span>
 			</a>
 
@@ -1005,6 +1007,24 @@
 					{/each}
 				</div>
 			</div>
+
+			<!-- Advanced (Superadmin only) -->
+			{#if $isSuperAdmin && deploymentSource === 'github'}
+				<div class="card p-6">
+					<details>
+						<summary class="cursor-pointer text-lg font-semibold">Advanced</summary>
+						<div class="mt-4 space-y-3">
+							<label class="flex items-center gap-3">
+								<input type="checkbox" bind:checked={buildWithDepot} class="rounded" />
+								<div>
+									<span class="font-medium">Orchard's Super Builds</span>
+									<p class="text-xs text-gray-500">Use Orchard's high-performance hosted builders for faster builds</p>
+								</div>
+							</label>
+						</div>
+					</details>
+				</div>
+			{/if}
 
 			{#if formError}
 				<div class="alert alert-error">{formError}</div>

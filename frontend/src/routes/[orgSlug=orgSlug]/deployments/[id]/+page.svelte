@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
 	import { Tabs } from 'melt/builders';
-	import { apiFetch, toasts, refreshTree } from '$lib/stores';
+	import { apiFetch, toasts, refreshTree, isSuperAdmin } from '$lib/stores';
 	import { AnsiUp } from 'ansi_up';
 	import {
 		ArrowLeft,
@@ -228,6 +228,7 @@
 		buildType?: 'dockerfile' | 'railpack';
 		dockerfilePath?: string;
 		buildFromRoot?: boolean;
+		buildWithDepot?: boolean;
 		buildLogs?: string;
 		buildError?: string;
 		buildStepTimestamps?: Record<string, number> | null;
@@ -494,6 +495,7 @@
 	let savingAdvanced = $state(false);
 	let savingService = $state(false);
 	let buildFromRoot = $state(false);
+	let buildWithDepot = $state(false);
 
 	// Auto-deploy state
 	let autoDeployStatus = $state<AutoDeployStatus | null>(null);
@@ -1144,6 +1146,9 @@
 				if (data.buildFromRoot !== undefined) {
 					buildFromRoot = data.buildFromRoot;
 				}
+				if (data.buildWithDepot !== undefined) {
+					buildWithDepot = data.buildWithDepot;
+				}
 
 				// Initialize health check state from deployment data
 				if (data.healthCheckEnabled !== undefined && !isEditingHealthCheck) {
@@ -1618,7 +1623,7 @@
 			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/build-from-root`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ buildFromRoot })
+				body: JSON.stringify({ buildFromRoot, buildWithDepot })
 			});
 
 			if (!response.ok) {
@@ -3196,6 +3201,23 @@
 											<span class="adv-switch-track"></span>
 										</label>
 									</div>
+									{#if $isSuperAdmin}
+										<!-- svelte-ignore a11y_click_events_have_key_events -->
+										<!-- svelte-ignore a11y_no_static_element_interactions -->
+										<div
+											class="adv-toggle-row"
+											onclick={() => { buildWithDepot = !buildWithDepot; }}
+										>
+											<div class="adv-toggle-info">
+												<span class="adv-toggle-label">Orchard's Super Builds</span>
+												<span class="adv-toggle-desc">Use Orchard's high-performance hosted builders for faster builds</span>
+											</div>
+											<label class="adv-switch" onclick={(e) => e.stopPropagation()}>
+												<input type="checkbox" bind:checked={buildWithDepot} />
+												<span class="adv-switch-track"></span>
+											</label>
+										</div>
+									{/if}
 								{:else}
 									<p class="text-xs" style="color: var(--surface-muted);">Build settings are only available for GitHub deployments.</p>
 								{/if}

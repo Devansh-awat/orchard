@@ -121,7 +121,7 @@
 		<div class="ti-header">
 			<div class="ti-header-info">
 				<div class="ti-header-icon">
-					<LayoutTemplate class="h-5 w-5" style="color: #ec4899" />
+					<LayoutTemplate class="h-5 w-5" style="color: var(--sidebar-text-active-border)" />
 				</div>
 				<div>
 					<h1 class="ti-title">{instance.name}</h1>
@@ -323,7 +323,7 @@
 		width: 2.5rem;
 		height: 2.5rem;
 		border-radius: 0.75rem;
-		background-color: color-mix(in srgb, #ec4899 12%, transparent);
+		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
 		flex-shrink: 0;
 	}
 

@@ -15,6 +15,7 @@ interface BuildJobOptions {
   buildFromRoot?: boolean;
   buildType?: 'dockerfile' | 'railpack';
   envVars?: Record<string, string>;
+  buildWithDepot?: boolean;
 }
 
 interface BuildJobStatus {
@@ -32,6 +33,10 @@ export class ImageBuilderService {
   private readonly harborRegistryPush = process.env.DOCKER_REGISTRY_PUSH || 'harbor-core.harbor.svc.cluster.local';
   private readonly harborRegistryPull = process.env.DOCKER_REGISTRY_PULL || 'harbor.1mp.dev';
   private readonly harborProject = 'orchard';
+
+  // Depot configuration
+  private readonly depotToken = process.env.DEPOT_TOKEN;
+  private readonly depotProjectId = process.env.DEPOT_PROJECT_ID;
 
   // S3/R2 cache configuration
   // For Cloudflare R2, the endpoint format is: https://<ACCOUNT_ID>.r2.cloudflarestorage.com
@@ -401,6 +406,95 @@ ${registryConfigs}
     ];
   }
 
+  private createDepotContainer(opts: {
+    dockerfilePath: string;
+    fullImageName: string;
+    target?: string;
+    buildFromRoot: boolean;
+    buildType: string;
+    envVars: Record<string, string>;
+  }): k8s.V1Container {
+    const { dockerfilePath, fullImageName, target, buildFromRoot, buildType, envVars } = opts;
+
+    // Build depot build command
+    const depotArgs: string[] = ['depot', 'build'];
+
+    if (buildType === 'railpack') {
+      // For railpack builds, use the generated Dockerfile from railpack prepare
+      depotArgs.push('-f', 'Dockerfile');
+    } else {
+      depotArgs.push('-f', buildFromRoot ? dockerfilePath : dockerfilePath);
+    }
+
+    depotArgs.push('-t', fullImageName);
+    depotArgs.push('--push');
+
+    if (target) {
+      depotArgs.push('--target', target);
+    }
+
+    // Add build args
+    for (const [key, value] of Object.entries(envVars)) {
+      depotArgs.push('--build-arg', `${key}=${value}`);
+    }
+
+    // Build context
+    if (buildType === 'railpack') {
+      depotArgs.push('.');
+    } else if (buildFromRoot) {
+      depotArgs.push('.');
+    } else {
+      const contextDir = dockerfilePath.includes('/') ? dockerfilePath.substring(0, dockerfilePath.lastIndexOf('/')) : '.';
+      depotArgs.push(contextDir);
+    }
+
+    const depotScript = `set -e
+echo "=== Building with Depot ==="
+curl -L https://depot.dev/install-cli.sh | sh
+export PATH="$PATH:/root/.depot/bin:/usr/local/bin"
+${depotArgs.join(' ')}
+echo "=== Depot build completed ==="
+`;
+
+    return {
+      name: 'depot-build',
+      image: 'docker:latest',
+      command: ['/bin/sh', '-c'],
+      args: [depotScript],
+      workingDir: '/workspace',
+      env: [
+        { name: 'DOCKER_CONFIG', value: '/root/.docker' },
+        { name: 'DEPOT_TOKEN', value: this.depotToken || '' },
+        ...(this.depotProjectId ? [{ name: 'DEPOT_PROJECT_ID', value: this.depotProjectId }] : []),
+        ...Object.entries(envVars).map(([key, value]) => ({
+          name: key,
+          value: value,
+        })),
+      ],
+      volumeMounts: [
+        {
+          name: 'workspace',
+          mountPath: '/workspace',
+        },
+        {
+          name: 'docker-config',
+          mountPath: '/root/.docker',
+          readOnly: true,
+        },
+      ],
+      resources: {
+        requests: {
+          cpu: '200m',
+          memory: '512Mi',
+        },
+        limits: {
+          cpu: '1',
+          memory: '2Gi',
+        },
+      },
+    };
+  }
+
   private generateBuildScriptWithCacheFallback(buildctlArgs: string[]): string {
     const cacheArgs = this.buildCacheArgs();
     const hasCacheEnabled = cacheArgs.length > 0;
@@ -597,6 +691,7 @@ exit $EXIT_CODE
       buildFromRoot = false,
       buildType = 'dockerfile',
       envVars = {},
+      buildWithDepot = false,
     } = options;
 
     await this.ensureBuilderNamespace();
@@ -607,7 +702,8 @@ exit $EXIT_CODE
     const fullImageName = `${this.harborRegistryPush}/${this.harborProject}/${imageName}:${tag}`;
 
     const buildMethodLabel = buildType === 'railpack' ? 'Railpack' : 'Dockerfile';
-    await this.appendLog(deploymentId, `Creating image-builder pod: ${jobName} (${buildMethodLabel})`);
+    const builderLabel = buildWithDepot ? 'Depot' : 'BuildKit';
+    await this.appendLog(deploymentId, `Creating image-builder pod: ${jobName} (${buildMethodLabel} via ${builderLabel})`);
     await this.setBuildStep(deploymentId, 'creating-builder');
 
     // Build the git clone URL with optional access token
@@ -658,7 +754,20 @@ MASKED_URL="\${MASKED_URL//:\\/\\/github_pat_*@/:\/\/***@}"
 echo "Repository: \$MASKED_URL"
 echo "Branch: ${branch}"
 
-GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch "${branch}" "\$CLONE_URL" /workspace 2>&1 | sed -E 's/(x-access-token:|ghs_|ghp_|github_pat_)[^ @]*/***REDACTED***/g'
+CLONE_OUTPUT=$(GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch "${branch}" "\$CLONE_URL" /workspace 2>&1) || {
+  SANITIZED_OUTPUT=$(echo "\$CLONE_OUTPUT" | sed -E 's/(x-access-token:|ghs_|ghp_|github_pat_)[^ @]*/***REDACTED***/g')
+  echo "\$SANITIZED_OUTPUT"
+  if echo "\$CLONE_OUTPUT" | grep -q "terminal prompts disabled\\|could not read Username\\|Authentication failed\\|403"; then
+    echo ""
+    echo "========================================="
+    echo "ERROR: GitHub authentication failed."
+    echo "Your GitHub account is not connected or does not have access to this repository."
+    echo "Please connect your GitHub account in User Settings > GitHub."
+    echo "========================================="
+  fi
+  exit 1
+}
+echo "\$CLONE_OUTPUT" | sed -E 's/(x-access-token:|ghs_|ghp_|github_pat_)[^ @]*/***REDACTED***/g'
 
 echo "=== Repository cloned successfully ==="
 ls -la /workspace
@@ -801,6 +910,76 @@ fi
       });
     }
 
+    // Build the main container spec based on build method (Depot vs BuildKit)
+    const mainContainer: k8s.V1Container = buildWithDepot
+      ? this.createDepotContainer({ dockerfilePath, fullImageName, target, buildFromRoot, buildType, envVars })
+      : {
+          name: 'buildkit',
+          image: 'moby/buildkit:latest',
+          securityContext: {
+            privileged: true,
+          },
+          command: ['/bin/sh', '-c'],
+          args: [this.generateBuildScriptWithCacheFallback(buildctlArgs)],
+          workingDir: '/workspace',
+          env: [
+            { name: 'DOCKER_CONFIG', value: '/root/.docker' },
+            { name: 'BUILDKITD_FLAGS', value: '--config /etc/buildkit/buildkitd.toml' },
+            ...(this.s3CacheEnabled ? [
+              {
+                name: 'AWS_ACCESS_KEY_ID',
+                valueFrom: {
+                  secretKeyRef: {
+                    name: 'buildkit-s3-cache-creds',
+                    key: 'AWS_ACCESS_KEY_ID',
+                    optional: true,
+                  }
+                }
+              },
+              {
+                name: 'AWS_SECRET_ACCESS_KEY',
+                valueFrom: {
+                  secretKeyRef: {
+                    name: 'buildkit-s3-cache-creds',
+                    key: 'AWS_SECRET_ACCESS_KEY',
+                    optional: true,
+                  }
+                }
+              },
+            ] : []),
+            ...Object.entries(envVars).map(([key, value]) => ({
+              name: key,
+              value: value,
+            })),
+          ],
+          volumeMounts: [
+            {
+              name: 'workspace',
+              mountPath: '/workspace',
+            },
+            {
+              name: 'docker-config',
+              mountPath: '/root/.docker',
+              readOnly: true,
+            },
+            {
+              name: 'buildkit-config',
+              mountPath: '/etc/buildkit',
+              readOnly: true,
+            },
+          ],
+          resources: {
+            requests: {
+              cpu: '500m',
+              memory: '1Gi',
+            },
+            limits: {
+              cpu: '4',
+              memory: '8Gi',
+            },
+          },
+        };
+
     // Create the build job with init containers and daemonless buildkit
     const job: k8s.V1Job = {
       apiVersion: 'batch/v1',
@@ -836,77 +1015,7 @@ fi
             restartPolicy: 'Never',
             serviceAccountName: 'image-builder',
             initContainers,
-            containers: [
-              {
-                name: 'buildkit',
-                image: 'moby/buildkit:latest',
-                securityContext: {
-                  privileged: true,
-                },
-                // Use buildctl-daemonless.sh - handles daemon startup internally
-                // Wrap with cache error handling
-                command: ['/bin/sh', '-c'],
-                args: [this.generateBuildScriptWithCacheFallback(buildctlArgs)],
-                workingDir: '/workspace',
-                env: [
-                  { name: 'DOCKER_CONFIG', value: '/root/.docker' },
-                  { name: 'BUILDKITD_FLAGS', value: '--config /etc/buildkit/buildkitd.toml' },
-                  ...(this.s3CacheEnabled ? [
-                    {
-                      name: 'AWS_ACCESS_KEY_ID',
-                      valueFrom: {
-                        secretKeyRef: {
-                          name: 'buildkit-s3-cache-creds',
-                          key: 'AWS_ACCESS_KEY_ID',
-                          optional: true,
-                        }
-                      }
-                    },
-                    {
-                      name: 'AWS_SECRET_ACCESS_KEY',
-                      valueFrom: {
-                        secretKeyRef: {
-                          name: 'buildkit-s3-cache-creds',
-                          key: 'AWS_SECRET_ACCESS_KEY',
-                          optional: true,
-                        }
-                      }
-                    },
-                  ] : []),
-                  // Pass build environment variables (needed for Railpack secrets and Dockerfile build-args)
-                  ...Object.entries(envVars).map(([key, value]) => ({
-                    name: key,
-                    value: value,
-                  })),
-                ],
-                volumeMounts: [
-                  {
-                    name: 'workspace',
-                    mountPath: '/workspace',
-                  },
-                  {
-                    name: 'docker-config',
-                    mountPath: '/root/.docker',
-                    readOnly: true,
-                  },
-                  {
-                    name: 'buildkit-config',
-                    mountPath: '/etc/buildkit',
-                    readOnly: true,
-                  },
-                ],
-                resources: {
-                  requests: {
-                    cpu: '500m',
-                    memory: '1Gi',
-                  },
-                  limits: {
-                    cpu: '4',
-                    memory: '8Gi',
-                  },
-                },
-              },
-            ],
+            containers: [mainContainer],
             volumes: [
               {
                 name: 'workspace',

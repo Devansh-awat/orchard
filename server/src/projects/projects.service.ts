@@ -709,6 +709,7 @@ export class ProjectsService {
       target?: string;
       tag?: string;
       buildFromRoot?: boolean;
+      buildWithDepot?: boolean;
       buildType?: 'dockerfile' | 'railpack';
       port?: number;
       ports?: {
@@ -905,6 +906,7 @@ export class ProjectsService {
         githubBranch: branch,
         dockerfilePath: buildType === 'dockerfile' ? dockerfilePath : null,
         buildFromRoot: data.buildFromRoot ?? false,
+        buildWithDepot: data.buildWithDepot ?? false,
         createdBy: user.id,
         buildLogs: `[INFO] Starting ${buildMethodLabel} build for ${repoUrl}@${branch}\n`,
       },
@@ -949,6 +951,7 @@ export class ProjectsService {
         dockerfilePath,
         target: data.target,
         buildFromRoot: data.buildFromRoot,
+        buildWithDepot: data.buildWithDepot,
         buildType,
         imageName,
         tag: uniqueTag,
@@ -1000,6 +1003,7 @@ export class ProjectsService {
       dockerfilePath?: string;
       target?: string;
       buildFromRoot?: boolean;
+      buildWithDepot?: boolean;
       buildType?: 'dockerfile' | 'railpack';
       imageName: string;
       tag: string;
@@ -1094,6 +1098,7 @@ export class ProjectsService {
         dockerfilePath: data.dockerfilePath || 'Dockerfile',
         target: data.target,
         buildFromRoot: data.buildFromRoot,
+        buildWithDepot: data.buildWithDepot,
         buildType: data.buildType,
         imageName: data.imageName,
         tag: data.tag,
@@ -1741,6 +1746,7 @@ export class ProjectsService {
         branch: deployment.githubBranch,
         dockerfilePath: deployment.dockerfilePath,
         buildFromRoot: deployment.buildFromRoot ?? false,
+        buildWithDepot: deployment.buildWithDepot ?? false,
         buildType: deployment.buildType as 'dockerfile' | 'railpack',
         imageName,
         tag: uniqueTag,
@@ -4701,7 +4707,8 @@ export class ProjectsService {
       firstName?: string;
       lastName?: string;
       imageUrl?: string;
-    }
+    },
+    buildWithDepot?: boolean,
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
 
@@ -4744,7 +4751,10 @@ export class ProjectsService {
 
     await this.prisma.deployment.update({
       where: { id: deploymentId },
-      data: { buildFromRoot },
+      data: {
+        buildFromRoot,
+        ...(buildWithDepot !== undefined && { buildWithDepot }),
+      },
     });
 
     return this.getDeployment(deploymentId);

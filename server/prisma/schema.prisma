@@ -324,6 +324,7 @@ model Deployment {
   githubBranch   String?    @map("github_branch") @db.VarChar(255)
   dockerfilePath String?    @map("dockerfile_path") @db.VarChar(500)
   buildFromRoot  Boolean    @default(false) @map("build_from_root")
+  buildWithDepot Boolean    @default(false) @map("build_with_depot")
   buildLogs      String?    @map("build_logs") @db.Text
   buildError     String?    @map("build_error") @db.Text
   buildStepTimestamps Json?  @map("build_step_timestamps") @db.JsonB

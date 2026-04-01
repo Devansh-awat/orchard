@@ -2,8 +2,9 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { apiFetch } from '$lib/stores';
-	import { ArrowLeft, Loader2, Search, LayoutTemplate, Database, Globe, Server, Plus } from 'lucide-svelte';
+	import { apiFetch, toasts } from '$lib/stores';
+	import { ArrowLeft, Loader2, Search, LayoutTemplate, Database, Globe, Server, Plus, Package, Trash2 } from 'lucide-svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 
 	interface Template {
 		id: string;
@@ -22,6 +23,9 @@
 	let error = $state<string | null>(null);
 	let search = $state('');
 	let selectedCategory = $state<string | null>(null);
+	let showDeleteModal = $state(false);
+	let templateToDelete = $state<Template | null>(null);
+	let deleting = $state(false);
 
 	const orgSlug = $derived($page.params.orgSlug);
 	const wsSlug = $derived($page.params.wsSlug);
@@ -95,75 +99,182 @@
 		}
 	}
 
+	function confirmDelete(template: Template, event: MouseEvent) {
+		event.preventDefault();
+		event.stopPropagation();
+		templateToDelete = template;
+		showDeleteModal = true;
+	}
+
+	async function deleteTemplate() {
+		if (!templateToDelete) return;
+		deleting = true;
+		try {
+			const response = await apiFetch(`/apiv1/templates/${templateToDelete.id}`, {
+				method: 'DELETE'
+			});
+			if (!response.ok) {
+				let msg = 'Failed to delete template';
+				try {
+					const data = await response.json();
+					if (data.message) msg = data.message;
+				} catch {}
+				throw new Error(msg);
+			}
+			toasts.add({
+				title: 'Template deleted',
+				description: `${templateToDelete.displayName} has been deleted`,
+				color: 'success'
+			});
+			templates = templates.filter((t) => t.id !== templateToDelete!.id);
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to delete template',
+				color: 'error'
+			});
+		} finally {
+			deleting = false;
+			templateToDelete = null;
+		}
+	}
+
 	onMount(fetchTemplates);
 </script>
 
 <div class="tpl-page">
-	<button
-		onclick={() => goto(`/${orgSlug}/workspaces/${wsSlug}/projects/${projectSlug}`)}
-		class="tpl-back"
-	>
-		<ArrowLeft class="h-4 w-4" />
-		Back to Project
-	</button>
-
-	<div class="tpl-header">
-		<div class="tpl-header-left">
-			<LayoutTemplate class="h-6 w-6" style="color: #ec4899" />
-			<h1 class="tpl-title">Templates</h1>
-		</div>
-		<a
-			href="/{orgSlug}/workspaces/{wsSlug}/projects/{projectSlug}/templates/new"
-			class="tpl-create-btn"
-		>
-			<Plus class="h-4 w-4" />
-			Create Template
-		</a>
-	</div>
-	<p class="tpl-subtitle">
-		Deploy pre-configured application stacks with a single click. All resources are linked for
-		easy management.
-	</p>
-
 	{#if error}
 		<div class="tpl-error">{error}</div>
 	{/if}
 
 	{#if loading}
-		<div class="tpl-loading">
-			<Loader2 class="h-6 w-6 animate-spin" />
-			<span>Loading templates...</span>
-		</div>
-	{:else}
-		<!-- Filters -->
-		<div class="tpl-filters">
-			<div class="tpl-search-wrap">
-				<Search class="h-4 w-4 tpl-search-icon" />
-				<input
-					type="search"
-					placeholder="Search templates..."
-					class="tpl-search"
-					bind:value={search}
-				/>
+		<!-- Skeleton: Back link -->
+		<div class="skeleton" style="height: 0.8125rem; width: 6rem; margin-bottom: 1rem;"></div>
+		<!-- Skeleton: Header -->
+		<div class="tpl-header">
+			<div class="tpl-header-info">
+				<div class="skeleton" style="height: 1.5rem; width: 10rem; margin-bottom: 0.375rem;"></div>
+				<div class="skeleton" style="height: 0.875rem; width: 24rem;"></div>
 			</div>
-			<div class="tpl-categories">
-				<button
-					class="tpl-cat-btn"
-					class:tpl-cat-active={!selectedCategory}
-					onclick={() => (selectedCategory = null)}
-				>
-					All
-				</button>
-				{#each categories() as cat}
-					<button
-						class="tpl-cat-btn"
-						class:tpl-cat-active={selectedCategory === cat}
-						onclick={() => (selectedCategory = selectedCategory === cat ? null : cat)}
-					>
-						{cat}
-					</button>
+			<div class="tpl-header-actions">
+				<div class="skeleton" style="height: 2rem; width: 7rem; border-radius: 0.5rem;"></div>
+			</div>
+		</div>
+		<!-- Skeleton: Filters -->
+		<div class="tpl-filters">
+			<div class="skeleton" style="height: 2.25rem; width: 100%; border-radius: 0.5rem;"></div>
+			<div style="display: flex; gap: 0.375rem;">
+				{#each Array(4) as _}
+					<div class="skeleton" style="height: 1.75rem; width: 4rem; border-radius: 9999px;"></div>
 				{/each}
 			</div>
+		</div>
+		<!-- Skeleton: Cards -->
+		<div class="tpl-grid">
+			{#each Array(6) as _}
+				<div class="tpl-card" style="pointer-events: none;">
+					<div class="tpl-card-top">
+						<div class="skeleton" style="width: 2.75rem; height: 2.75rem; border-radius: 0.75rem;"></div>
+						<div class="skeleton" style="height: 1.25rem; width: 3.5rem; border-radius: 9999px;"></div>
+					</div>
+					<div class="tpl-card-body">
+						<div class="skeleton" style="height: 0.9375rem; width: 60%;"></div>
+						<div class="skeleton" style="height: 0.8125rem; width: 90%;"></div>
+						<div class="skeleton" style="height: 0.8125rem; width: 70%;"></div>
+					</div>
+					<div class="tpl-card-tags">
+						{#each Array(3) as _}
+							<div class="skeleton" style="height: 1.125rem; width: 3rem; border-radius: 0.25rem;"></div>
+						{/each}
+					</div>
+				</div>
+			{/each}
+		</div>
+	{:else}
+		<!-- Back link -->
+		<button
+			onclick={() => goto(`/${orgSlug}/workspaces/${wsSlug}/projects/${projectSlug}`)}
+			class="tpl-back"
+		>
+			<ArrowLeft class="h-4 w-4" />
+			Back to Project
+		</button>
+
+		<!-- Header -->
+		<div class="tpl-header">
+			<div class="tpl-header-info">
+				<h1 class="tpl-title">Templates</h1>
+				<p class="tpl-subtitle">
+					Deploy pre-configured application stacks with a single click.
+				</p>
+			</div>
+			<div class="tpl-header-actions">
+				<a
+					href="/{orgSlug}/workspaces/{wsSlug}/projects/{projectSlug}/templates/new"
+					class="tpl-btn tpl-btn-primary"
+				>
+					<Plus class="h-4 w-4" />
+					Create Template
+				</a>
+			</div>
+		</div>
+
+		<!-- Stats -->
+		<div class="tpl-stats">
+			<div class="tpl-stat">
+				<Package class="h-4 w-4" />
+				<span class="tpl-stat-value">{templates.length}</span>
+				<span class="tpl-stat-label">Available</span>
+			</div>
+			{#if templates.filter(t => t.isBuiltIn).length}
+				<div class="tpl-stat">
+					<LayoutTemplate class="h-4 w-4" />
+					<span class="tpl-stat-value">{templates.filter(t => t.isBuiltIn).length}</span>
+					<span class="tpl-stat-label">Built-in</span>
+				</div>
+			{/if}
+			{#if categories().length}
+				<div class="tpl-stat">
+					<span class="tpl-stat-value">{categories().length}</span>
+					<span class="tpl-stat-label">Categories</span>
+				</div>
+			{/if}
+		</div>
+
+		<!-- Filters -->
+		<div class="tpl-section-header">
+			<h2 class="tpl-section-title">Browse Templates</h2>
+			<div class="tpl-toolbar">
+				<div class="tpl-search-wrap">
+					<Search class="h-4 w-4 tpl-search-icon" />
+					<input
+						type="search"
+						placeholder="Search templates..."
+						class="tpl-search"
+						bind:value={search}
+					/>
+				</div>
+			</div>
+		</div>
+
+		<div class="tpl-categories">
+			<button
+				class="tpl-cat-btn"
+				class:tpl-cat-active={!selectedCategory}
+				onclick={() => (selectedCategory = null)}
+			>
+				All
+			</button>
+			{#each categories() as cat}
+				<button
+					class="tpl-cat-btn"
+					class:tpl-cat-active={selectedCategory === cat}
+					style={selectedCategory === cat ? `background-color: ${getCategoryColor(cat)}; border-color: ${getCategoryColor(cat)};` : ''}
+					onclick={() => (selectedCategory = selectedCategory === cat ? null : cat)}
+				>
+					{cat}
+				</button>
+			{/each}
 		</div>
 
 		<!-- Grid -->
@@ -180,12 +291,11 @@
 						href="/{orgSlug}/workspaces/{wsSlug}/projects/{projectSlug}/templates/deploy/{template.id}"
 						class="tpl-card"
 					>
-						<div class="tpl-card-icon" style="background-color: color-mix(in srgb, {getCategoryColor(template.category)} 12%, transparent)">
-							<Icon class="h-5 w-5" style="color: {getCategoryColor(template.category)}" />
-						</div>
-						<div class="tpl-card-body">
-							<div class="tpl-card-top">
-								<span class="tpl-card-name">{template.displayName}</span>
+						<div class="tpl-card-top">
+							<div class="tpl-card-icon" style="background-color: color-mix(in srgb, {getCategoryColor(template.category)} 12%, transparent)">
+								<Icon class="h-5 w-5" style="color: {getCategoryColor(template.category)}" />
+							</div>
+							<div class="tpl-card-top-right">
 								{#if template.category}
 									<span
 										class="tpl-card-badge"
@@ -194,24 +304,47 @@
 										{template.category}
 									</span>
 								{/if}
+								{#if !template.isBuiltIn}
+									<button
+										class="tpl-card-delete"
+										onclick={(e) => confirmDelete(template, e)}
+										title="Delete template"
+									>
+										<Trash2 class="h-3.5 w-3.5" />
+									</button>
+								{/if}
 							</div>
+						</div>
+						<div class="tpl-card-body">
+							<span class="tpl-card-name">{template.displayName}</span>
 							{#if template.description}
 								<p class="tpl-card-desc">{template.description}</p>
 							{/if}
-							{#if template.tags.length}
-								<div class="tpl-card-tags">
-									{#each template.tags.slice(0, 4) as tag}
-										<span class="tpl-card-tag">{tag}</span>
-									{/each}
-								</div>
-							{/if}
 						</div>
+						{#if template.tags.length}
+							<div class="tpl-card-tags">
+								{#each template.tags.slice(0, 4) as tag}
+									<span class="tpl-card-tag">{tag}</span>
+								{/each}
+							</div>
+						{/if}
 					</a>
 				{/each}
 			</div>
 		{/if}
 	{/if}
 </div>
+
+{#if templateToDelete}
+	<ConfirmModal
+		bind:open={showDeleteModal}
+		title='Delete "{templateToDelete.displayName}"?'
+		description='This will permanently <strong>delete this template</strong>. Any existing instances will not be affected, but no new deployments can be made from it.'
+		confirmLabel="Delete Template"
+		onconfirm={deleteTemplate}
+		oncancel={() => (templateToDelete = null)}
+	/>
+{/if}
 
 <style>
 	.tpl-page {
@@ -230,7 +363,7 @@
 		border: none;
 		cursor: pointer;
 		padding: 0;
-		margin-bottom: 1.5rem;
+		margin-bottom: 1rem;
 		transition: color 0.15s;
 	}
 
@@ -238,39 +371,24 @@
 		color: var(--center-channel-color);
 	}
 
+	/* Header — matches project page layout */
 	.tpl-header {
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
 		justify-content: space-between;
-		gap: 0.5rem;
-		margin-bottom: 0.5rem;
+		gap: 1rem;
+		margin-bottom: 1.5rem;
 	}
 
-	.tpl-header-left {
+	.tpl-header-info {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.tpl-header-actions {
 		display: flex;
-		align-items: center;
 		gap: 0.5rem;
-	}
-
-	.tpl-create-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.4375rem 1rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		font-weight: 500;
-		background-color: #ec4899;
-		color: #fff;
-		text-decoration: none;
-		transition: opacity 0.15s, transform 0.15s, box-shadow 0.15s;
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.1), 0 1px 2px rgb(0 0 0 / 0.06);
-	}
-
-	.tpl-create-btn:hover {
-		opacity: 0.9;
-		transform: translateY(-0.5px);
-		box-shadow: 0 4px 6px rgb(0 0 0 / 0.1), 0 2px 4px rgb(0 0 0 / 0.06);
+		flex-shrink: 0;
 	}
 
 	.tpl-title {
@@ -284,7 +402,56 @@
 	.tpl-subtitle {
 		font-size: 0.875rem;
 		color: var(--surface-muted);
-		margin: 0 0 1.5rem;
+		margin: 0.25rem 0 0;
+	}
+
+	/* Stats — matches project page stats row */
+	.tpl-stats {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		margin-bottom: 1.5rem;
+	}
+
+	.tpl-stat {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.375rem 0.75rem;
+		border-radius: 0.5rem;
+		font-size: 0.8125rem;
+		color: var(--surface-muted);
+		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);
+	}
+
+	.tpl-stat-value {
+		font-weight: 600;
+		color: var(--center-channel-color);
+	}
+
+	/* Section header — matches project page deployments header */
+	.tpl-section-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-bottom: 0.75rem;
+		flex-wrap: wrap;
+	}
+
+	.tpl-section-title {
+		font-size: 0.8125rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--surface-muted);
+		margin: 0;
+	}
+
+	.tpl-toolbar {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
 	}
 
 	.tpl-error {
@@ -297,16 +464,6 @@
 		margin-bottom: 1.5rem;
 	}
 
-	.tpl-loading {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 3rem 0;
-		color: var(--surface-muted);
-		font-size: 0.875rem;
-	}
-
 	/* Filters */
 	.tpl-filters {
 		display: flex;
@@ -317,6 +474,7 @@
 
 	.tpl-search-wrap {
 		position: relative;
+		width: 14rem;
 	}
 
 	.tpl-search-wrap :global(.tpl-search-icon) {
@@ -330,12 +488,16 @@
 
 	.tpl-search {
 		width: 100%;
-		padding: 0.5rem 0.75rem 0.5rem 2.25rem;
+		padding: 0.4375rem 0.75rem 0.4375rem 2.25rem;
 		border-radius: 0.5rem;
 		border: 1px solid var(--surface-border);
 		background-color: var(--center-channel-bg);
 		color: var(--center-channel-color);
-		font-size: 0.875rem;
+		font-size: 0.8125rem;
+	}
+
+	.tpl-search::placeholder {
+		color: var(--surface-muted);
 	}
 
 	.tpl-search:focus {
@@ -347,6 +509,7 @@
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.375rem;
+		margin-bottom: 1rem;
 	}
 
 	.tpl-cat-btn {
@@ -374,20 +537,20 @@
 	}
 
 	.tpl-cat-active:hover {
-		border-color: var(--sidebar-text-active-border);
 		color: #fff;
 	}
 
-	/* Grid */
+	/* Grid — card layout matching project deployment cards */
 	.tpl-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(22rem, 1fr));
+		grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
 		gap: 0.75rem;
 	}
 
 	.tpl-card {
 		display: flex;
-		gap: 1rem;
+		flex-direction: column;
+		gap: 0.875rem;
 		padding: 1.25rem;
 		border: 1px solid var(--surface-border);
 		border-radius: 1rem;
@@ -395,13 +558,19 @@
 		text-decoration: none;
 		color: var(--center-channel-color);
 		transition: border-color 0.15s, box-shadow 0.15s;
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.02);
 		cursor: pointer;
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.02);
 	}
 
 	.tpl-card:hover {
-		border-color: #ec4899;
-		box-shadow: 0 0 0 1px color-mix(in srgb, #ec4899 25%, transparent);
+		border-color: var(--sidebar-text-active-border);
+		box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-text-active-border) 25%, transparent);
+	}
+
+	.tpl-card-top {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
 	}
 
 	.tpl-card-icon {
@@ -415,23 +584,45 @@
 	}
 
 	.tpl-card-body {
-		flex: 1;
-		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 0.375rem;
-	}
-
-	.tpl-card-top {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.5rem;
+		gap: 0.25rem;
 	}
 
 	.tpl-card-name {
 		font-size: 0.9375rem;
 		font-weight: 600;
+		color: var(--center-channel-color);
+	}
+
+	.tpl-card-top-right {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+	}
+
+	.tpl-card-delete {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: 0.375rem;
+		border: none;
+		background: none;
+		color: var(--surface-muted);
+		cursor: pointer;
+		opacity: 0;
+		transition: opacity 0.15s, color 0.15s, background-color 0.15s;
+	}
+
+	.tpl-card:hover .tpl-card-delete {
+		opacity: 1;
+	}
+
+	.tpl-card-delete:hover {
+		color: var(--error-text-color);
+		background-color: color-mix(in srgb, var(--error-text-color) 12%, transparent);
 	}
 
 	.tpl-card-badge {
@@ -457,7 +648,7 @@
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.25rem;
-		margin-top: 0.25rem;
+		margin-top: auto;
 	}
 
 	.tpl-card-tag {
@@ -468,13 +659,41 @@
 		color: var(--surface-muted);
 	}
 
+	/* Buttons — matches project page button system */
+	.tpl-btn {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.4375rem 0.875rem;
+		border-radius: 0.5rem;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		border: none;
+		cursor: pointer;
+		text-decoration: none;
+		transition: opacity 0.15s, transform 0.15s, box-shadow 0.15s;
+		white-space: nowrap;
+	}
+
+	.tpl-btn-primary {
+		background-color: var(--sidebar-text-active-border);
+		color: #fff;
+		box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 1px 1px rgb(0 0 0 / 0.04);
+	}
+
+	.tpl-btn-primary:hover {
+		opacity: 0.95;
+		transform: translateY(-0.5px);
+		box-shadow: 0 2px 4px rgb(0 0 0 / 0.08), 0 4px 12px rgb(0 0 0 / 0.06);
+	}
+
 	/* Empty */
 	.tpl-empty {
 		display: flex;
 		flex-direction: column;
 		align-items: center;
-		gap: 0.5rem;
-		padding: 3rem 1rem;
+		gap: 0.75rem;
+		padding: 4rem 1.5rem;
 		color: var(--surface-muted);
 		font-size: 0.875rem;
 		border: 1px dashed var(--surface-border);

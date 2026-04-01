@@ -429,7 +429,7 @@ resources:
 	</button>
 
 	<div class="nt-header">
-		<LayoutTemplate class="h-6 w-6" style="color: #ec4899" />
+		<LayoutTemplate class="h-6 w-6" style="color: var(--sidebar-text-active-border)" />
 		<div>
 			<h1 class="nt-title">New Template</h1>
 			<p class="nt-subtitle">Create a reusable application stack template</p>
@@ -903,7 +903,7 @@ resources:
 		border-right: 1px solid var(--surface-border);
 	}
 	.nt-mode-active {
-		background-color: #ec4899;
+		background-color: var(--sidebar-text-active-border);
 		color: #fff;
 	}
 
@@ -927,7 +927,7 @@ resources:
 	.nt-link {
 		background: none;
 		border: none;
-		color: #ec4899;
+		color: var(--sidebar-text-active-border);
 		cursor: pointer;
 		font-size: inherit;
 		padding: 0;
@@ -1140,8 +1140,8 @@ resources:
 		transition: all 0.15s;
 	}
 	.nt-add-btn:hover {
-		border-color: #ec4899;
-		color: #ec4899;
+		border-color: var(--sidebar-text-active-border);
+		color: var(--sidebar-text-active-border);
 	}
 
 	.nt-add-btn-sm {
@@ -1158,8 +1158,8 @@ resources:
 		transition: all 0.15s;
 	}
 	.nt-add-btn-sm:hover {
-		border-color: #ec4899;
-		color: #ec4899;
+		border-color: var(--sidebar-text-active-border);
+		color: var(--sidebar-text-active-border);
 	}
 
 	.nt-remove-btn {
@@ -1245,7 +1245,7 @@ resources:
 	}
 	.nt-btn:disabled { opacity: 0.5; cursor: not-allowed; }
 	.nt-btn-primary {
-		background-color: #ec4899;
+		background-color: var(--sidebar-text-active-border);
 		color: #fff;
 		box-shadow:
 			0 1px 2px rgb(0 0 0 / 0.08),

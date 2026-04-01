@@ -187,7 +187,7 @@
 		</button>
 
 		<div class="dp-header">
-			<LayoutTemplate class="h-6 w-6" style="color: #ec4899" />
+			<LayoutTemplate class="h-6 w-6" style="color: var(--sidebar-text-active-border)" />
 			<div>
 				<h1 class="dp-title">Deploy {template.displayName}</h1>
 				{#if template.description}
@@ -513,7 +513,7 @@
 	}
 
 	.dp-toggle input:checked + .dp-toggle-slider {
-		background-color: #ec4899;
+		background-color: var(--sidebar-text-active-border);
 	}
 
 	.dp-toggle input:checked + .dp-toggle-slider::after {
@@ -549,7 +549,7 @@
 	}
 
 	.dp-btn-primary {
-		background-color: #ec4899;
+		background-color: var(--sidebar-text-active-border);
 		color: #fff;
 		box-shadow: 0 1px 3px rgb(0 0 0 / 0.1), 0 1px 2px rgb(0 0 0 / 0.06);
 	}

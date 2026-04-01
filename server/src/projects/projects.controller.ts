@@ -251,6 +251,7 @@ export class ProjectsController {
       target?: string;
       tag?: string;
       buildFromRoot?: boolean;
+      buildWithDepot?: boolean;
       buildType?: 'dockerfile' | 'railpack';
       port?: number;
       ports?: {
@@ -466,6 +467,7 @@ export class DeploymentsController {
     @Body()
     body: {
       buildFromRoot: boolean;
+      buildWithDepot?: boolean;
     },
     @Request() req
   ) {
@@ -479,7 +481,8 @@ export class DeploymentsController {
         firstName: req.user.firstName,
         lastName: req.user.lastName,
         imageUrl: req.user.imageUrl,
-      }
+      },
+      body.buildWithDepot,
     );
   }
 

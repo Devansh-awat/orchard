@@ -295,8 +295,8 @@
 		gap: 0.25rem;
 		padding: 0.875rem 1.25rem;
 		border-radius: 0.75rem;
-		background-color: color-mix(in srgb, #ec4899 8%, transparent);
-		border: 1px solid color-mix(in srgb, #ec4899 20%, transparent);
+		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 8%, transparent);
+		border: 1px solid color-mix(in srgb, var(--sidebar-text-active-border) 20%, transparent);
 		text-decoration: none;
 		color: var(--center-channel-color);
 		transition: border-color 0.15s;
@@ -304,12 +304,12 @@
 	}
 
 	.db-template-banner:hover {
-		border-color: #ec4899;
+		border-color: var(--sidebar-text-active-border);
 	}
 
 	.db-template-cta {
 		font-size: 0.875rem;
-		color: #ec4899;
+		color: var(--sidebar-text-active-border);
 		font-weight: 500;
 	}
 

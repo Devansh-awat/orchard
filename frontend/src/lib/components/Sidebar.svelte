@@ -100,7 +100,7 @@
 			case 'database':
 				return '#22c55e';
 			case 'templateInstance':
-				return '#ec4899';
+				return '#c2724e';
 			default:
 				return 'var(--sidebar-text-active-border)';
 		}

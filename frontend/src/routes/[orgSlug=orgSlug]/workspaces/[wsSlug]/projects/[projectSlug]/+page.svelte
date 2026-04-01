@@ -509,7 +509,7 @@
 		{#if templateInstances.length}
 			<div class="pj-deployments-header" style="margin-top: 1rem;">
 				<h2 class="pj-section-title">
-					<LayoutTemplate class="h-4 w-4" style="color: #ec4899; display: inline;" />
+					<LayoutTemplate class="h-4 w-4" style="color: var(--sidebar-text-active-border); display: inline;" />
 					Template Instances
 				</h2>
 			</div>
@@ -520,8 +520,8 @@
 						class="pj-deployment-card"
 					>
 						<div class="pj-deployment-card-top">
-							<div class="pj-deployment-indicator" style="background-color: color-mix(in srgb, #ec4899 12%, transparent)">
-								<LayoutTemplate class="h-5 w-5" style="color: #ec4899" />
+							<div class="pj-deployment-indicator" style="background-color: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent)">
+								<LayoutTemplate class="h-5 w-5" style="color: var(--sidebar-text-active-border)" />
 							</div>
 							<span class="pj-deployment-status-badge" style="background-color: color-mix(in srgb, {ti.status === 'active' ? 'var(--pj-color-green)' : ti.status === 'failed' ? 'var(--pj-color-red)' : 'var(--pj-color-amber)'} 15%, transparent); color: {ti.status === 'active' ? 'var(--pj-color-green)' : ti.status === 'failed' ? 'var(--pj-color-red)' : 'var(--pj-color-amber)'}">
 								{ti.status}
@@ -977,12 +977,12 @@
 	}
 
 	.pj-btn-template {
-		background-color: color-mix(in srgb, #ec4899 15%, transparent);
-		color: #ec4899;
+		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 15%, transparent);
+		color: var(--sidebar-text-active-border);
 	}
 
 	.pj-btn-template:hover:not(:disabled) {
-		background-color: color-mix(in srgb, #ec4899 25%, transparent);
+		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 25%, transparent);
 	}
 
 	.pj-btn-danger {
