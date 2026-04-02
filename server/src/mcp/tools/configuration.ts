@@ -1,0 +1,167 @@
+import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
+import { z } from 'zod';
+import { OrchardClient } from '../client';
+
+export function registerConfigurationTools(server: McpServer, client: OrchardClient) {
+  // ── Environment Variables ─────────────────────────────────────────
+
+  server.registerTool(
+    'set_env_vars',
+    {
+      description: `Set or update environment variables on a deployment. This will restart the deployment to apply changes.
+Provide the full list of env vars — any existing vars not included will be removed.
+Common env vars to suggest: DATABASE_URL (if using a database), PORT, NODE_ENV, etc.`,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        envVars: z.array(z.object({
+          key: z.string().describe('Environment variable name'),
+          value: z.string().describe('Environment variable value'),
+        })).describe('Array of environment variable key-value pairs'),
+      },
+    },
+    async ({ deploymentId, envVars }) => {
+      const result = await client.put(`/deployments/${deploymentId}/env`, { env: envVars });
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    'add_env_vars',
+    {
+      description: `Add or update specific environment variables on a deployment without affecting other existing vars.
+This fetches the current env vars, merges in the provided ones (overwriting any with the same key), and applies the result. The deployment will restart.`,
+      annotations: { readOnlyHint: false, destructiveHint: false },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        envVars: z.array(z.object({
+          key: z.string().describe('Environment variable name'),
+          value: z.string().describe('Environment variable value'),
+        })).describe('Array of environment variable key-value pairs to add or update'),
+      },
+    },
+    async ({ deploymentId, envVars }) => {
+      const deployment = await client.get(`/deployments/${deploymentId}`);
+      const existing: { key: string; value: string }[] = (deployment.envVars || []).map(
+        (v: { key: string; value: string }) => ({ key: v.key, value: v.value }),
+      );
+
+      const newKeys = new Set(envVars.map((v) => v.key));
+      const merged = [
+        ...existing.filter((v) => !newKeys.has(v.key)),
+        ...envVars,
+      ];
+
+      const result = await client.put(`/deployments/${deploymentId}/env`, { env: merged });
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
+  // ── Volumes ───────────────────────────────────────────────────────
+
+  server.registerTool(
+    'update_deployment_volumes',
+    {
+      description: `Update the volumes for a deployment. This replaces all existing volumes with the provided list.
+Supported volume types:
+- pvc: Persistent Volume Claim - persistent storage that survives pod restarts. Requires pvcName and optional storageSize (default: 1Gi). The PVC is automatically created in Kubernetes with the longhorn storage class.
+- hostPath: Mount a file or directory from the host node's filesystem. Requires hostPath.
+- emptyDir: Temporary storage that is created when a pod is assigned to a node and deleted when the pod is removed.
+
+To remove all volumes, pass an empty array.`,
+      annotations: { readOnlyHint: false, destructiveHint: false },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        volumes: z.array(z.object({
+          name: z.string().describe('Volume name (unique within deployment)'),
+          type: z.enum(['pvc', 'hostPath', 'emptyDir']).describe('Volume type'),
+          mountPath: z.string().describe('Path inside the container to mount the volume'),
+          pvcName: z.string().optional().describe('PVC name (required for pvc type). The PVC will be auto-created if it does not exist.'),
+          storageSize: z.string().optional().describe('Storage size for PVC (e.g. 1Gi, 5Gi, 10Gi). Default: 1Gi'),
+          hostPath: z.string().optional().describe('Host path (required for hostPath type)'),
+          readOnly: z.boolean().optional().describe('Mount as read-only (default: false)'),
+        })).describe('List of volumes to attach'),
+      },
+    },
+    async ({ deploymentId, volumes }) => {
+      const result = await client.put(`/deployments/${deploymentId}/volumes`, { volumes });
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
+  // ── Networking ────────────────────────────────────────────────────
+
+  server.registerTool(
+    'create_ingress',
+    {
+      description: `Create a public ingress (domain route) for a deployment. This makes the deployment accessible via a domain name with automatic TLS.
+The user must point their domain's DNS to the cluster before creating the ingress. Use validate_dns to check.`,
+      annotations: { readOnlyHint: false, destructiveHint: false },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID to route traffic to'),
+        host: z.string().describe('The domain name (e.g. myapp.example.com)'),
+        path: z.string().optional().describe('URL path prefix (default: /)'),
+        servicePort: z.number().optional().describe('The service port to route to (default: 80)'),
+      },
+    },
+    async ({ deploymentId, host, path, servicePort }) => {
+      const ingress = await client.post(`/deployments/${deploymentId}/ingresses`, {
+        host,
+        path: path ?? '/',
+        servicePort: servicePort ?? 80,
+      });
+      return { content: [{ type: 'text', text: JSON.stringify(ingress, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    'update_ingress',
+    {
+      description: 'Update an existing ingress configuration',
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        ingressId: z.string().describe('The ingress UUID to update'),
+        host: z.string().describe('The domain name (e.g. myapp.example.com)'),
+        path: z.string().optional().describe('URL path prefix'),
+        servicePort: z.number().optional().describe('The service port to route to'),
+      },
+    },
+    async ({ deploymentId, ingressId, host, path, servicePort }) => {
+      const body: Record<string, any> = { host };
+      if (path !== undefined) body.path = path;
+      if (servicePort !== undefined) body.servicePort = servicePort;
+      const ingress = await client.put(`/deployments/${deploymentId}/ingresses/${ingressId}`, body);
+      return { content: [{ type: 'text', text: JSON.stringify(ingress, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    'create_service',
+    {
+      description: 'Create an internal or external service for a deployment to expose ports',
+      annotations: { readOnlyHint: false, destructiveHint: false },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        name: z.string().describe('Service name'),
+        type: z.enum(['internal', 'external']).describe('Service type: internal (ClusterIP) or external (NodePort/LoadBalancer)'),
+        port: z.number().describe('Service port (the port exposed by the service)'),
+        targetPort: z.number().describe('Container port to route to'),
+      },
+    },
+    async ({ deploymentId, name, type, port, targetPort }) => {
+      const service = await client.post(`/deployments/${deploymentId}/services`, {
+        name,
+        exposePublic: type === 'external',
+        ports: [
+          {
+            containerPort: Number(targetPort),
+            servicePort: Number(port),
+            protocol: 'TCP',
+          },
+        ],
+      });
+      return { content: [{ type: 'text', text: JSON.stringify(service, null, 2) }] };
+    },
+  );
+}

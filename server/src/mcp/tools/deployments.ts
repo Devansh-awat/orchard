@@ -4,39 +4,12 @@ import { OrchardClient } from '../client';
 
 export function registerDeploymentTools(server: McpServer, client: OrchardClient) {
   server.registerTool(
-    'list_deployments',
-    {
-      description: 'List all deployments in a project',
-      inputSchema: {
-        projectId: z.string().describe('The project UUID'),
-      },
-    },
-    async ({ projectId }) => {
-      const deployments = await client.get(`/projects/${projectId}/deployments`);
-      return { content: [{ type: 'text', text: JSON.stringify(deployments, null, 2) }] };
-    },
-  );
-
-  server.registerTool(
-    'get_deployment',
-    {
-      description: 'Get deployment details including status, image, replicas, env vars, services, and ingresses',
-      inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
-      },
-    },
-    async ({ deploymentId }) => {
-      const deployment = await client.get(`/deployments/${deploymentId}`);
-      return { content: [{ type: 'text', text: JSON.stringify(deployment, null, 2) }] };
-    },
-  );
-
-  server.registerTool(
     'create_deployment',
     {
       description: `Create a new deployment from a Docker image in a project.
 This also creates an internal ClusterIP service targeting the specified port.
 If no port is specified, it defaults to 80. Make sure the port matches the port your container listens on.`,
+      annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
         projectId: z.string().describe('The project UUID'),
         name: z.string().describe('Deployment name'),
@@ -74,6 +47,7 @@ Before using this tool:
 - If the repo needs additional services like Redis, inform the user
 - IMPORTANT: If no port is specified, the server will try to auto-detect the port from the Dockerfile's EXPOSE directive. If the Dockerfile has no EXPOSE directive, it defaults to port 80. If you are unsure about the port, check the Dockerfile first using get_repo_contents or ask the user what port their app listens on.
 - If the Dockerfile copies files from the repo root (e.g. pnpm-workspace.yaml, package.json), set buildFromRoot to true`,
+      annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
         projectId: z.string().describe('The project UUID'),
         name: z.string().describe('Deployment name'),
@@ -103,23 +77,10 @@ Before using this tool:
   );
 
   server.registerTool(
-    'delete_deployment',
-    {
-      description: 'Delete a deployment and all associated resources',
-      inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID to delete'),
-      },
-    },
-    async ({ deploymentId }) => {
-      await client.delete(`/deployments/${deploymentId}`);
-      return { content: [{ type: 'text', text: 'Deployment deleted successfully.' }] };
-    },
-  );
-
-  server.registerTool(
     'restart_deployment',
     {
       description: 'Restart a deployment (rolling restart of all pods)',
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID to restart'),
       },
@@ -134,6 +95,7 @@ Before using this tool:
     'rebuild_deployment',
     {
       description: 'Rebuild a deployment from source (triggers a new build from the GitHub repo)',
+      annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID to rebuild'),
       },
@@ -148,6 +110,7 @@ Before using this tool:
     'scale_deployment',
     {
       description: 'Scale a deployment to a specific number of replicas',
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
         replicas: z.number().min(0).max(10).describe('Number of replicas (0 to pause, max 10)'),
@@ -163,6 +126,7 @@ Before using this tool:
     'rollback_deployment',
     {
       description: 'Rollback a deployment to a previous image version. Use get_image_history to see available versions.',
+      annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
         imageHistoryId: z.string().describe('The image history entry UUID to rollback to'),
@@ -175,23 +139,10 @@ Before using this tool:
   );
 
   server.registerTool(
-    'get_image_history',
-    {
-      description: 'Get the image version history for a deployment (for rollback purposes)',
-      inputSchema: {
-        deploymentId: z.string().describe('The deployment UUID'),
-      },
-    },
-    async ({ deploymentId }) => {
-      const history = await client.get(`/deployments/${deploymentId}/image-history`);
-      return { content: [{ type: 'text', text: JSON.stringify(history, null, 2) }] };
-    },
-  );
-
-  server.registerTool(
     'cancel_build',
     {
       description: 'Cancel an in-progress build for a deployment',
+      annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
       },
@@ -206,6 +157,7 @@ Before using this tool:
     'enable_auto_deploy',
     {
       description: 'Enable auto-deploy for a deployment. When enabled, pushes to the configured branch will automatically trigger a rebuild.',
+      annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
         branch: z.string().describe('The branch to auto-deploy from (e.g. main)'),
@@ -221,6 +173,7 @@ Before using this tool:
     'disable_auto_deploy',
     {
       description: 'Disable auto-deploy for a deployment',
+      annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
       },

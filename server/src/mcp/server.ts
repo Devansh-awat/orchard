@@ -1,15 +1,10 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { OrchardClient } from './client';
-import { registerWorkspaceTools } from './tools/workspaces';
-import { registerProjectTools } from './tools/projects';
+import { registerQueryTools } from './tools/query';
 import { registerDeploymentTools } from './tools/deployments';
-import { registerEnvTools } from './tools/env';
-import { registerNetworkingTools } from './tools/networking';
-import { registerDatabaseTools } from './tools/databases';
-import { registerLogTools } from './tools/logs';
-import { registerGitHubTools } from './tools/github';
-import { registerTemplateTools } from './tools/templates';
-import { registerVolumeTools } from './tools/volumes';
+import { registerConfigurationTools } from './tools/configuration';
+import { registerResourceTools } from './tools/resources';
+import { registerDangerousTools } from './tools/dangerous';
 
 export function createOrchardMcpServer(token?: string) {
   const server = new McpServer({
@@ -21,16 +16,20 @@ export function createOrchardMcpServer(token?: string) {
     ? new OrchardClient(process.env.ORCHARD_API_URL, token)
     : new OrchardClient();
 
-  registerWorkspaceTools(server, client);
-  registerProjectTools(server, client);
+  // Read-only queries (list, get, inspect)
+  registerQueryTools(server, client);
+
+  // Deployment lifecycle (create, restart, rebuild, scale, rollback, auto-deploy)
   registerDeploymentTools(server, client);
-  registerEnvTools(server, client);
-  registerNetworkingTools(server, client);
-  registerDatabaseTools(server, client);
-  registerLogTools(server, client);
-  registerGitHubTools(server, client);
-  registerTemplateTools(server, client);
-  registerVolumeTools(server, client);
+
+  // Configuration (env vars, volumes, networking create/update)
+  registerConfigurationTools(server, client);
+
+  // Resource creation (workspaces, projects, databases, templates)
+  registerResourceTools(server, client);
+
+  // Destructive operations (all deletes)
+  registerDangerousTools(server, client);
 
   return server;
 }
