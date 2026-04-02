@@ -27,12 +27,8 @@ export class McpOAuthService {
     return process.env.MCP_BASE_URL || 'http://localhost:3100';
   }
 
-  private get hackClubClientId(): string {
-    return process.env.HACKCLUB_CLIENT_ID!;
-  }
-
-  private get hackClubClientSecret(): string {
-    return process.env.HACKCLUB_CLIENT_SECRET!;
+  private get frontendUrl(): string {
+    return process.env.FRONTEND_URL || 'http://localhost:5173';
   }
 
   private getJwtSecret(): Uint8Array {
@@ -114,8 +110,8 @@ export class McpOAuthService {
       return { error: 'unsupported_response_type' };
     }
 
-    const oauthState = randomBytes(16).toString('hex');
-    this.authCodes.set(`pending_${oauthState}`, {
+    const mcpState = randomBytes(16).toString('hex');
+    this.authCodes.set(`pending_${mcpState}`, {
       clientId: query.client_id,
       redirectUri: query.redirect_uri,
       codeChallenge: query.code_challenge,
@@ -123,95 +119,63 @@ export class McpOAuthService {
       orchardToken: '',
       expiresAt: Date.now() + 10 * 60 * 1000,
     });
-    this.authCodes.set(`client_state_${oauthState}`, {
+    this.authCodes.set(`client_state_${mcpState}`, {
       clientId: query.state || '',
       redirectUri: '',
       orchardToken: '',
       expiresAt: Date.now() + 10 * 60 * 1000,
     });
 
+    // Redirect to Orchard frontend login page with MCP state
     const params = new URLSearchParams({
-      client_id: this.hackClubClientId,
-      redirect_uri: `${this.baseUrl}/oauth/callback`,
-      scope: 'email name',
-      response_type: 'code',
-      state: oauthState,
+      mcp_state: mcpState,
+      mcp_server: this.baseUrl,
     });
 
     return {
-      redirectUrl: `https://account.hackclub.com/oauth/authorize?${params.toString()}`,
+      redirectUrl: `${this.frontendUrl}/mcp/authorize?${params.toString()}`,
     };
   }
 
-  async handleOAuthCallback(query: {
-    code?: string;
-    state?: string;
-    error?: string;
+  async completeAuthorization(body: {
+    mcp_state: string;
+    session_token: string;
   }): Promise<{ error?: string; redirectUrl?: string }> {
-    const { code, state: oauthState, error } = query;
-    console.error(`[MCP OAuth] Callback: state=${oauthState}, has_code=${!!code}, error=${error}`);
+    const { mcp_state, session_token } = body;
+    console.error(`[MCP OAuth] Complete authorization: mcp_state=${mcp_state}`);
 
-    if (error || !code || !oauthState) {
-      console.error(`[MCP OAuth] Callback failed: missing params`);
-      return { error: 'Authorization failed' };
-    }
-
-    const pending = this.authCodes.get(`pending_${oauthState}`);
-    const clientStateEntry = this.authCodes.get(`client_state_${oauthState}`);
-    console.error(`[MCP OAuth] Callback: pending found=${!!pending}, clientState found=${!!clientStateEntry}, authCodes size=${this.authCodes.size}`);
+    const pending = this.authCodes.get(`pending_${mcp_state}`);
+    const clientStateEntry = this.authCodes.get(`client_state_${mcp_state}`);
 
     if (!pending || pending.expiresAt < Date.now()) {
-      console.error(`[MCP OAuth] Callback failed: expired or not found`);
+      console.error(`[MCP OAuth] Complete auth failed: pending not found or expired`);
       return { error: 'Authorization request expired' };
     }
 
-    const tokenParams = new URLSearchParams({
-      client_id: this.hackClubClientId,
-      client_secret: this.hackClubClientSecret,
-      redirect_uri: `${this.baseUrl}/oauth/callback`,
-      code,
-      grant_type: 'authorization_code',
-    });
-
-    const tokenRes = await fetch(
-      'https://account.hackclub.com/oauth/token',
-      {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: tokenParams.toString(),
-      },
-    );
-
-    if (!tokenRes.ok) {
-      throw new Error(
-        `HC token exchange failed: ${await tokenRes.text()}`,
-      );
+    // Validate the Orchard session token (same JWT_SECRET)
+    let payload: any;
+    try {
+      const result = await jwtVerify(session_token, this.getJwtSecret());
+      payload = result.payload;
+      console.error(`[MCP OAuth] Session token valid: sub=${payload.sub}, email=${payload.email}`);
+    } catch (err) {
+      console.error(`[MCP OAuth] Session token invalid: ${err instanceof Error ? err.message : err}`);
+      return { error: 'Invalid session token' };
     }
 
-    const hcAccessToken = (await tokenRes.json()).access_token;
-    console.error(`[MCP OAuth] HC token exchange succeeded, fetching user info...`);
-
-    const userRes = await fetch('https://account.hackclub.com/api/v1/me', {
-      headers: { Authorization: `Bearer ${hcAccessToken}` },
-    });
-    if (!userRes.ok) throw new Error('Failed to fetch HC user info');
-
-    const identity = (await userRes.json()).identity;
-    console.error(`[MCP OAuth] HC user: email=${identity.primary_email}, id=${identity.id}`);
-
+    // Create MCP access token JWT using the same user info from the session
     const orchardToken = await new SignJWT({
-      email: identity.primary_email,
-      name: `${identity.first_name} ${identity.last_name}`,
-      hackClubId: identity.id,
-      authMethod: 'oauth',
+      email: payload.email,
+      name: payload.name,
+      hackClubId: payload.hackClubId,
+      authMethod: payload.authMethod || 'otp',
     })
       .setProtectedHeader({ alg: 'HS256' })
-      .setSubject(identity.id)
+      .setSubject(payload.sub)
       .setIssuedAt()
       .setExpirationTime('7d')
       .sign(this.getJwtSecret());
 
-    console.error(`[MCP OAuth] Orchard JWT created, length=${orchardToken.length}`);
     const mcpAuthCode = randomBytes(32).toString('hex');
     console.error(`[MCP OAuth] MCP auth code created, redirecting to ${pending.redirectUri}`);
     this.authCodes.set(mcpAuthCode, {
@@ -223,8 +187,8 @@ export class McpOAuthService {
       expiresAt: Date.now() + 5 * 60 * 1000,
     });
 
-    this.authCodes.delete(`pending_${oauthState}`);
-    this.authCodes.delete(`client_state_${oauthState}`);
+    this.authCodes.delete(`pending_${mcp_state}`);
+    this.authCodes.delete(`client_state_${mcp_state}`);
 
     const redirectUrl = new URL(pending.redirectUri);
     redirectUrl.searchParams.set('code', mcpAuthCode);

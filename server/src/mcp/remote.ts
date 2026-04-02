@@ -9,8 +9,7 @@ app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
 const MCP_BASE_URL = process.env.MCP_BASE_URL || 'http://localhost:3100';
-const HACKCLUB_CLIENT_ID = process.env.HACKCLUB_CLIENT_ID;
-const HACKCLUB_CLIENT_SECRET = process.env.HACKCLUB_CLIENT_SECRET;
+const FRONTEND_URL = process.env.FRONTEND_URL || 'http://localhost:5173';
 
 function getJwtSecret(): Uint8Array {
   const secret = process.env.JWT_SECRET;
@@ -79,6 +78,7 @@ app.post('/register', (req, res) => {
 });
 
 // --- Authorization Endpoint ---
+// Redirects to Orchard frontend login page with MCP state
 app.get('/authorize', (req, res) => {
   const { client_id, redirect_uri, response_type, state, code_challenge, code_challenge_method } =
     req.query as Record<string, string>;
@@ -87,8 +87,8 @@ app.get('/authorize', (req, res) => {
     return res.status(400).json({ error: 'unsupported_response_type' });
   }
 
-  const oauthState = randomBytes(16).toString('hex');
-  authCodes.set(`pending_${oauthState}`, {
+  const mcpState = randomBytes(16).toString('hex');
+  authCodes.set(`pending_${mcpState}`, {
     clientId: client_id,
     redirectUri: redirect_uri,
     codeChallenge: code_challenge,
@@ -96,7 +96,7 @@ app.get('/authorize', (req, res) => {
     orchardToken: '',
     expiresAt: Date.now() + 10 * 60 * 1000,
   });
-  authCodes.set(`client_state_${oauthState}`, {
+  authCodes.set(`client_state_${mcpState}`, {
     clientId: state || '',
     redirectUri: '',
     orchardToken: '',
@@ -104,95 +104,71 @@ app.get('/authorize', (req, res) => {
   });
 
   const params = new URLSearchParams({
-    client_id: HACKCLUB_CLIENT_ID!,
-    redirect_uri: `${MCP_BASE_URL}/oauth/callback`,
-    scope: 'email name',
-    response_type: 'code',
-    state: oauthState,
+    mcp_state: mcpState,
+    mcp_server: MCP_BASE_URL,
   });
 
-  res.redirect(`https://account.hackclub.com/oauth/authorize?${params.toString()}`);
+  res.redirect(`${FRONTEND_URL}/mcp/authorize?${params.toString()}`);
 });
 
-// --- Hack Club OAuth Callback ---
-app.get('/oauth/callback', async (req, res) => {
-  const { code, state: oauthState, error } = req.query as Record<string, string>;
+// --- Authorize Complete ---
+// Called by frontend after user logs in, with session token
+app.post('/authorize/complete', async (req, res) => {
+  const { mcp_state, session_token } = req.body;
 
-  if (error || !code || !oauthState) {
-    return res.status(400).send('Authorization failed');
+  if (!mcp_state || !session_token) {
+    return res.status(400).json({ error: 'Missing mcp_state or session_token' });
   }
 
-  const pending = authCodes.get(`pending_${oauthState}`);
-  const clientStateEntry = authCodes.get(`client_state_${oauthState}`);
+  const pending = authCodes.get(`pending_${mcp_state}`);
+  const clientStateEntry = authCodes.get(`client_state_${mcp_state}`);
 
   if (!pending || pending.expiresAt < Date.now()) {
-    return res.status(400).send('Authorization request expired');
+    return res.status(400).json({ error: 'Authorization request expired' });
   }
 
+  // Validate the Orchard session token (same JWT_SECRET)
+  let payload: any;
   try {
-    const tokenParams = new URLSearchParams({
-      client_id: HACKCLUB_CLIENT_ID!,
-      client_secret: HACKCLUB_CLIENT_SECRET!,
-      redirect_uri: `${MCP_BASE_URL}/oauth/callback`,
-      code,
-      grant_type: 'authorization_code',
-    });
-
-    const tokenRes = await fetch('https://account.hackclub.com/oauth/token', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-      body: tokenParams.toString(),
-    });
-
-    if (!tokenRes.ok) throw new Error(`HC token exchange failed: ${await tokenRes.text()}`);
-
-    const hcAccessToken = (await tokenRes.json()).access_token;
-
-    const userRes = await fetch('https://account.hackclub.com/api/v1/me', {
-      headers: { Authorization: `Bearer ${hcAccessToken}` },
-    });
-    if (!userRes.ok) throw new Error('Failed to fetch HC user info');
-
-    const identity = (await userRes.json()).identity;
-
-    // Generate Orchard JWT
-    const orchardToken = await new SignJWT({
-      email: identity.primary_email,
-      name: `${identity.first_name} ${identity.last_name}`,
-      hackClubId: identity.id,
-      authMethod: 'oauth',
-    })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setSubject(identity.id)
-      .setIssuedAt()
-      .setExpirationTime('7d')
-      .sign(getJwtSecret());
-
-    // Generate MCP auth code
-    const mcpAuthCode = randomBytes(32).toString('hex');
-    authCodes.set(mcpAuthCode, {
-      clientId: pending.clientId,
-      redirectUri: pending.redirectUri,
-      codeChallenge: pending.codeChallenge,
-      codeChallengeMethod: pending.codeChallengeMethod,
-      orchardToken,
-      expiresAt: Date.now() + 5 * 60 * 1000,
-    });
-
-    authCodes.delete(`pending_${oauthState}`);
-    authCodes.delete(`client_state_${oauthState}`);
-
-    const redirectUrl = new URL(pending.redirectUri);
-    redirectUrl.searchParams.set('code', mcpAuthCode);
-    if (clientStateEntry?.clientId) {
-      redirectUrl.searchParams.set('state', clientStateEntry.clientId);
-    }
-
-    res.redirect(redirectUrl.toString());
-  } catch (err) {
-    console.error('OAuth callback error:', err);
-    res.status(500).send('Authentication failed');
+    const result = await jwtVerify(session_token, getJwtSecret());
+    payload = result.payload;
+  } catch {
+    return res.status(400).json({ error: 'Invalid session token' });
   }
+
+  // Create MCP access token JWT
+  const orchardToken = await new SignJWT({
+    email: payload.email,
+    name: payload.name,
+    hackClubId: payload.hackClubId,
+    authMethod: payload.authMethod || 'otp',
+  })
+    .setProtectedHeader({ alg: 'HS256' })
+    .setSubject(payload.sub as string)
+    .setIssuedAt()
+    .setExpirationTime('7d')
+    .sign(getJwtSecret());
+
+  const mcpAuthCode = randomBytes(32).toString('hex');
+  authCodes.set(mcpAuthCode, {
+    clientId: pending.clientId,
+    redirectUri: pending.redirectUri,
+    codeChallenge: pending.codeChallenge,
+    codeChallengeMethod: pending.codeChallengeMethod,
+    orchardToken,
+    expiresAt: Date.now() + 5 * 60 * 1000,
+  });
+
+  authCodes.delete(`pending_${mcp_state}`);
+  authCodes.delete(`client_state_${mcp_state}`);
+
+  const redirectUrl = new URL(pending.redirectUri);
+  redirectUrl.searchParams.set('code', mcpAuthCode);
+  if (clientStateEntry?.clientId) {
+    redirectUrl.searchParams.set('state', clientStateEntry.clientId);
+  }
+
+  res.json({ redirect_url: redirectUrl.toString() });
 });
 
 // --- Token Endpoint ---

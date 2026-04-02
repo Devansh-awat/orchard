@@ -41,25 +41,22 @@ export class McpOAuthController {
     return res.redirect(result.redirectUrl!);
   }
 
-  @Get('oauth/callback')
-  async oauthCallback(@Req() req: Request, @Res() res: Response) {
-    const query = req.query as Record<string, string>;
-
+  @Post('authorize/complete')
+  async completeAuthorization(@Req() req: Request, @Res() res: Response) {
     try {
-      const result = await this.oauthService.handleOAuthCallback({
-        code: query.code,
-        state: query.state,
-        error: query.error,
+      const result = await this.oauthService.completeAuthorization({
+        mcp_state: req.body.mcp_state,
+        session_token: req.body.session_token,
       });
 
       if (result.error) {
-        return res.status(HttpStatus.BAD_REQUEST).send(result.error);
+        return res.status(HttpStatus.BAD_REQUEST).json({ error: result.error });
       }
 
-      return res.redirect(result.redirectUrl!);
+      return res.json({ redirect_url: result.redirectUrl });
     } catch (err) {
-      console.error('OAuth callback error:', err);
-      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).send('Authentication failed');
+      console.error('MCP authorize/complete error:', err);
+      return res.status(HttpStatus.INTERNAL_SERVER_ERROR).json({ error: 'Authorization failed' });
     }
   }
 

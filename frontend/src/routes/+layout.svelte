@@ -21,7 +21,7 @@
 	let loading = $state(true);
 
 	// Don't check for pending invitations or redirect on these routes
-	const skipRoutes = ['/invite', '/oauth/callback', '/setup'];
+	const skipRoutes = ['/invite', '/oauth/callback', '/setup', '/mcp/authorize'];
 
 	function shouldSkipChecks(pathname: string): boolean {
 		return skipRoutes.some((route) => pathname.startsWith(route));

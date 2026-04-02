@@ -435,6 +435,34 @@ export class PasswordlessController {
   }
 
   // =====================================
+  // MCP Authorization
+  // =====================================
+
+  /**
+   * Generate a short-lived session token for MCP authorization.
+   * The user must already be authenticated (session cookie).
+   * POST /auth/mcp-token
+   */
+  @Auth()
+  @Post('mcp-token')
+  async getMcpToken(@Req() req: any, @Res() res: Response) {
+    const user = await this.resolveInternalUser(req.user.sub);
+
+    const displayName = user.firstName
+      ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}`
+      : user.username;
+
+    const token = await this.oauthService.generateSessionTokenForUser(
+      user.id,
+      user.email,
+      displayName,
+      req.user.authMethod || 'otp',
+    );
+
+    res.status(200).json({ token });
+  }
+
+  // =====================================
   // Helper Methods
   // =====================================
 
