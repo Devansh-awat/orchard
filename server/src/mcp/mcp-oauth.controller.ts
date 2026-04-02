@@ -65,9 +65,11 @@ export class McpOAuthController {
 
   @Post('token')
   exchangeToken(@Req() req: Request, @Res() res: Response) {
+    console.error(`[MCP OAuth] Token exchange: grant_type=${req.body.grant_type}, client_id=${req.body.client_id}, code_length=${req.body.code?.length || 0}`);
     const result = this.oauthService.exchangeToken(req.body);
 
     if (result.error) {
+      console.error(`[MCP OAuth] Token exchange failed: ${result.error} ${result.error_description || ''}`);
       return res.status(HttpStatus.BAD_REQUEST).json({
         error: result.error,
         ...(result.error_description && {
@@ -76,6 +78,7 @@ export class McpOAuthController {
       });
     }
 
+    console.error(`[MCP OAuth] Token exchange succeeded, access_token length: ${result.token_response?.access_token?.length || 0}`);
     return res.json(result.token_response);
   }
 }

@@ -234,7 +234,7 @@ app.post('/token', (req, res) => {
 
   res.json({
     access_token: orchardToken,
-    token_type: 'bearer',
+    token_type: 'Bearer',
     expires_in: 7 * 24 * 60 * 60,
     scope: 'mcp:access',
   });

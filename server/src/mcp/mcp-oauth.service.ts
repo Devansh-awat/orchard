@@ -75,6 +75,7 @@ export class McpOAuthService {
     response_types?: string[];
     token_endpoint_auth_method?: string;
   }) {
+    console.error(`[MCP OAuth] Register client: name=${body.client_name}, redirect_uris=${JSON.stringify(body.redirect_uris)}`);
     const clientId = `mcp_${randomBytes(16).toString('hex')}`;
     const clientSecret =
       body.token_endpoint_auth_method === 'client_secret_post'
@@ -107,7 +108,9 @@ export class McpOAuthService {
     code_challenge?: string;
     code_challenge_method?: string;
   }): { error?: string; redirectUrl?: string } {
+    console.error(`[MCP OAuth] Authorize: client_id=${query.client_id}, redirect_uri=${query.redirect_uri}, state=${query.state}`);
     if (query.response_type !== 'code') {
+      console.error(`[MCP OAuth] Authorize failed: unsupported_response_type=${query.response_type}`);
       return { error: 'unsupported_response_type' };
     }
 
@@ -146,15 +149,19 @@ export class McpOAuthService {
     error?: string;
   }): Promise<{ error?: string; redirectUrl?: string }> {
     const { code, state: oauthState, error } = query;
+    console.error(`[MCP OAuth] Callback: state=${oauthState}, has_code=${!!code}, error=${error}`);
 
     if (error || !code || !oauthState) {
+      console.error(`[MCP OAuth] Callback failed: missing params`);
       return { error: 'Authorization failed' };
     }
 
     const pending = this.authCodes.get(`pending_${oauthState}`);
     const clientStateEntry = this.authCodes.get(`client_state_${oauthState}`);
+    console.error(`[MCP OAuth] Callback: pending found=${!!pending}, clientState found=${!!clientStateEntry}, authCodes size=${this.authCodes.size}`);
 
     if (!pending || pending.expiresAt < Date.now()) {
+      console.error(`[MCP OAuth] Callback failed: expired or not found`);
       return { error: 'Authorization request expired' };
     }
 
@@ -182,6 +189,7 @@ export class McpOAuthService {
     }
 
     const hcAccessToken = (await tokenRes.json()).access_token;
+    console.error(`[MCP OAuth] HC token exchange succeeded, fetching user info...`);
 
     const userRes = await fetch('https://account.hackclub.com/api/v1/me', {
       headers: { Authorization: `Bearer ${hcAccessToken}` },
@@ -189,6 +197,7 @@ export class McpOAuthService {
     if (!userRes.ok) throw new Error('Failed to fetch HC user info');
 
     const identity = (await userRes.json()).identity;
+    console.error(`[MCP OAuth] HC user: email=${identity.primary_email}, id=${identity.id}`);
 
     const orchardToken = await new SignJWT({
       email: identity.primary_email,
@@ -202,7 +211,9 @@ export class McpOAuthService {
       .setExpirationTime('7d')
       .sign(this.getJwtSecret());
 
+    console.error(`[MCP OAuth] Orchard JWT created, length=${orchardToken.length}`);
     const mcpAuthCode = randomBytes(32).toString('hex');
+    console.error(`[MCP OAuth] MCP auth code created, redirecting to ${pending.redirectUri}`);
     this.authCodes.set(mcpAuthCode, {
       clientId: pending.clientId,
       redirectUri: pending.redirectUri,
@@ -231,32 +242,40 @@ export class McpOAuthService {
     client_id: string;
     code_verifier?: string;
   }): { error?: string; error_description?: string; token_response?: any } {
+    console.error(`[MCP OAuth] Token exchange: grant_type=${body.grant_type}, client_id=${body.client_id}, code_length=${body.code?.length}, redirect_uri=${body.redirect_uri}`);
     if (body.grant_type !== 'authorization_code') {
+      console.error(`[MCP OAuth] Token exchange failed: unsupported_grant_type`);
       return { error: 'unsupported_grant_type' };
     }
 
     const authCode = this.authCodes.get(body.code);
+    console.error(`[MCP OAuth] Token exchange: authCode found=${!!authCode}, authCodes size=${this.authCodes.size}`);
     if (!authCode || authCode.expiresAt < Date.now()) {
+      console.error(`[MCP OAuth] Token exchange failed: invalid_grant (not found or expired)`);
       this.authCodes.delete(body.code);
       return { error: 'invalid_grant' };
     }
 
     if (authCode.clientId !== body.client_id) {
+      console.error(`[MCP OAuth] Token exchange failed: invalid_client (expected=${authCode.clientId}, got=${body.client_id})`);
       return { error: 'invalid_client' };
     }
 
     if (authCode.redirectUri && authCode.redirectUri !== body.redirect_uri) {
+      console.error(`[MCP OAuth] Token exchange failed: redirect_uri mismatch (expected=${authCode.redirectUri}, got=${body.redirect_uri})`);
       return { error: 'invalid_grant', error_description: 'redirect_uri mismatch' };
     }
 
     if (authCode.codeChallenge) {
       if (!body.code_verifier) {
+        console.error(`[MCP OAuth] Token exchange failed: code_verifier required`);
         return { error: 'invalid_grant', error_description: 'code_verifier required' };
       }
       const expectedChallenge = createHash('sha256')
         .update(body.code_verifier)
         .digest('base64url');
       if (expectedChallenge !== authCode.codeChallenge) {
+        console.error(`[MCP OAuth] Token exchange failed: code_verifier mismatch`);
         return { error: 'invalid_grant', error_description: 'code_verifier mismatch' };
       }
     }
@@ -267,7 +286,7 @@ export class McpOAuthService {
     return {
       token_response: {
         access_token: orchardToken,
-        token_type: 'bearer',
+        token_type: 'Bearer',
         expires_in: 7 * 24 * 60 * 60,
         scope: 'mcp:access',
       },
@@ -275,12 +294,18 @@ export class McpOAuthService {
   }
 
   async validateBearerToken(authHeader?: string): Promise<string | null> {
-    if (!authHeader?.startsWith('Bearer ')) return null;
+    if (!authHeader?.startsWith('Bearer ')) {
+      console.error('[MCP OAuth] No Bearer token in header');
+      return null;
+    }
     const token = authHeader.substring(7);
+    console.error(`[MCP OAuth] Token length: ${token.length}, prefix: ${token.substring(0, 20)}...`);
     try {
-      await jwtVerify(token, this.getJwtSecret());
+      const result = await jwtVerify(token, this.getJwtSecret());
+      console.error(`[MCP OAuth] Token valid, sub: ${result.payload.sub}, exp: ${result.payload.exp}`);
       return token;
-    } catch {
+    } catch (err) {
+      console.error(`[MCP OAuth] Token verification failed: ${err instanceof Error ? err.message : err}`);
       return null;
     }
   }
