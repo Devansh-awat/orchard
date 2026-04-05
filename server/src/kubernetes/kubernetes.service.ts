@@ -1275,6 +1275,88 @@ export class KubernetesService {
     }
   }
 
+  async createHttpsRedirectMiddleware(namespace: string, name: string): Promise<void> {
+    this.ensureKubeConfig();
+
+    const cleanNamespace = String(namespace || '').trim();
+    const cleanName = String(name || '').trim();
+
+    if (!cleanNamespace || !cleanName) return;
+
+    const customObjectsApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+
+    const middlewareBody = {
+      apiVersion: 'traefik.io/v1alpha1',
+      kind: 'Middleware',
+      metadata: {
+        name: `${cleanName}-redirect-https`,
+        namespace: cleanNamespace,
+        labels: {
+          'leaf.dev/managed': 'true',
+          'leaf.dev/type': 'redirect-https-middleware'
+        }
+      },
+      spec: {
+        redirectScheme: {
+          scheme: 'https',
+          permanent: true
+        }
+      }
+    };
+
+    try {
+      await customObjectsApi.createNamespacedCustomObject(
+        'traefik.io',
+        'v1alpha1',
+        cleanNamespace,
+        'middlewares',
+        middlewareBody
+      );
+    } catch (error) {
+      if (error.response?.statusCode === 409) {
+        try {
+          await customObjectsApi.replaceNamespacedCustomObject(
+            'traefik.io',
+            'v1alpha1',
+            cleanNamespace,
+            'middlewares',
+            `${cleanName}-redirect-https`,
+            middlewareBody
+          );
+        } catch (replaceError) {
+          console.error(`Failed to update HTTPS redirect middleware: ${replaceError.message}`);
+        }
+      } else {
+        console.error(`Failed to create HTTPS redirect middleware: ${error.message}`);
+      }
+    }
+  }
+
+  async deleteHttpsRedirectMiddleware(namespace: string, name: string): Promise<void> {
+    this.ensureKubeConfig();
+
+    const cleanNamespace = String(namespace || '').trim();
+    const cleanName = String(name || '').trim();
+
+    if (!cleanNamespace || !cleanName) return;
+
+    const customObjectsApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+
+    try {
+      await customObjectsApi.deleteNamespacedCustomObject(
+        'traefik.io',
+        'v1alpha1',
+        cleanNamespace,
+        'middlewares',
+        `${cleanName}-redirect-https`
+      );
+    } catch (error) {
+      if (error.response?.statusCode !== 404) {
+        console.error(`Failed to delete HTTPS redirect middleware ${cleanName}-redirect-https in ${cleanNamespace}:`, error);
+      }
+    }
+  }
+
   async createIngress(options: CreateIngressOptions) {
     this.ensureKubeConfig();
 
@@ -1351,22 +1433,41 @@ export class KubernetesService {
         );
 
         await this.createBasicAuthMiddleware(namespace, name, basicAuthSecretName);
-
-        annotations['traefik.ingress.kubernetes.io/router.middlewares'] =
-          `${namespace}-${name}-auth@kubernetescrd`;
       } catch (error) {
         console.error('[K8s] Failed to create basic auth:', error);
       }
     }
 
+    const hasTls = options.tlsSecretName && options.tlsSecretName.trim().length > 0;
+
+    if (hasTls) {
+      try {
+        await this.createHttpsRedirectMiddleware(namespace, name);
+      } catch (error) {
+        console.error('[K8s] Failed to create HTTPS redirect middleware:', error);
+      }
+
+      annotations['traefik.ingress.kubernetes.io/router.entrypoints'] = 'web,websecure';
+    }
+
+    const middlewares: string[] = [];
+    if (hasTls) {
+      middlewares.push(`${namespace}-${name}-redirect-https@kubernetescrd`);
+    }
+    if (options.basicAuth?.enabled && options.basicAuth.username && options.basicAuth.password) {
+      middlewares.push(`${namespace}-${name}-auth@kubernetescrd`);
+    }
+    if (middlewares.length > 0) {
+      annotations['traefik.ingress.kubernetes.io/router.middlewares'] = middlewares.join(',');
+    }
+
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
 
-    const tlsHosts =
-      options.tlsSecretName && options.tlsSecretName.trim().length > 0
-        ? (options.tlsHosts && options.tlsHosts.length > 0
-            ? options.tlsHosts
-            : [host])
-        : [];
+    const tlsHosts = hasTls
+      ? (options.tlsHosts && options.tlsHosts.length > 0
+          ? options.tlsHosts
+          : [host])
+      : [];
 
     const httpPaths = pathBackends.map((pb) => {
       const path = String(pb.path || '/').trim() || '/';
@@ -1404,7 +1505,7 @@ export class KubernetesService {
       }
     };
 
-    if (options.tlsSecretName && options.tlsSecretName.trim().length > 0) {
+    if (hasTls) {
       ingressBody.spec.tls = [
         {
           hosts: tlsHosts,
@@ -1519,9 +1620,6 @@ export class KubernetesService {
         );
 
         await this.createBasicAuthMiddleware(namespace, name, basicAuthSecretName);
-
-        annotations['traefik.ingress.kubernetes.io/router.middlewares'] =
-          `${namespace}-${name}-auth@kubernetescrd`;
       } catch (error) {
         console.error('[K8s] Failed to create basic auth:', error);
       }
@@ -1530,20 +1628,47 @@ export class KubernetesService {
         const basicAuthSecretName = options.basicAuth.secretName || `${name}-basic-auth`;
         await this.deleteBasicAuthSecret(namespace, basicAuthSecretName);
         await this.deleteBasicAuthMiddleware(namespace, name);
-        delete annotations['traefik.ingress.kubernetes.io/router.middlewares'];
       } catch (error) {
         console.error('[K8s] Failed to remove basic auth:', error);
       }
     }
 
+    const hasTls = options.tlsSecretName && options.tlsSecretName.trim().length > 0;
+
+    if (hasTls) {
+      try {
+        await this.createHttpsRedirectMiddleware(namespace, name);
+      } catch (error) {
+        console.error('[K8s] Failed to create HTTPS redirect middleware:', error);
+      }
+
+      annotations['traefik.ingress.kubernetes.io/router.entrypoints'] = 'web,websecure';
+    } else {
+      try {
+        await this.deleteHttpsRedirectMiddleware(namespace, name);
+      } catch (error) {
+        console.error('[K8s] Failed to delete HTTPS redirect middleware:', error);
+      }
+    }
+
+    const middlewares: string[] = [];
+    if (hasTls) {
+      middlewares.push(`${namespace}-${name}-redirect-https@kubernetescrd`);
+    }
+    if (options.basicAuth?.enabled && options.basicAuth.username && options.basicAuth.password) {
+      middlewares.push(`${namespace}-${name}-auth@kubernetescrd`);
+    }
+    if (middlewares.length > 0) {
+      annotations['traefik.ingress.kubernetes.io/router.middlewares'] = middlewares.join(',');
+    }
+
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
 
-    const tlsHosts =
-      options.tlsSecretName && options.tlsSecretName.trim().length > 0
-        ? (options.tlsHosts && options.tlsHosts.length > 0
-            ? options.tlsHosts
-            : [host])
-        : [];
+    const tlsHosts = hasTls
+      ? (options.tlsHosts && options.tlsHosts.length > 0
+          ? options.tlsHosts
+          : [host])
+      : [];
 
     const httpPaths = pathBackends.map((pb) => {
       const path = String(pb.path || '/').trim() || '/';
@@ -1581,7 +1706,7 @@ export class KubernetesService {
       }
     };
 
-    if (options.tlsSecretName && options.tlsSecretName.trim().length > 0) {
+    if (hasTls) {
       ingressBody.spec.tls = [
         {
           hosts: tlsHosts,
@@ -1658,6 +1783,7 @@ export class KubernetesService {
 
       await this.deleteBasicAuthSecret(cleanNamespace, `${cleanName}-basic-auth`);
       await this.deleteBasicAuthMiddleware(cleanNamespace, cleanName);
+      await this.deleteHttpsRedirectMiddleware(cleanNamespace, cleanName);
 
       return {
         success: true,
