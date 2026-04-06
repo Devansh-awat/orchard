@@ -33,6 +33,7 @@
 		AlertTriangle,
 		CircleX
 	} from 'lucide-svelte';
+	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import { scale, fade } from 'svelte/transition';
 	import { Clock, Minimize2, Maximize2, Cpu, MemoryStick } from 'lucide-svelte';
 	import { browser } from '$app/environment';
@@ -193,9 +194,16 @@
 		id: string;
 		image: string;
 		branch?: string;
-		commit?: string;
+		commitSha?: string;
 		createdAt: string;
 		isActive: boolean;
+		triggerType?: string;
+		triggeredBy?: {
+			id: string;
+			username: string;
+			firstName?: string;
+			lastName?: string;
+		};
 	}
 
 	interface Volume {
@@ -328,8 +336,8 @@
 		},
 		{
 			id: 'history',
-			label: 'History',
-			description: 'Images & rollbacks',
+			label: 'Build History',
+			description: 'Builds & rollbacks',
 			icon: History
 		},
 		{
@@ -706,6 +714,9 @@
 
 	// Build modal state
 	let showBuildModal = $state(false);
+	let expandedBuildLogId = $state<string | null>(null);
+	let buildLogCache = $state<Record<string, string>>({});
+	let buildLogLoading = $state<string | null>(null);
 	let consoleExpanded = $state(false);
 	let consoleAnimating = $state(false);
 	let consoleRef = $state<HTMLDivElement | null>(null);
@@ -1638,6 +1649,26 @@
 		}
 	}
 
+	async function toggleBuildLogs(historyId: string) {
+		if (expandedBuildLogId === historyId) {
+			expandedBuildLogId = null;
+			return;
+		}
+		expandedBuildLogId = historyId;
+		if (buildLogCache[historyId]) return;
+		buildLogLoading = historyId;
+		try {
+			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/image-history/${historyId}/logs`);
+			if (!response.ok) throw new Error('Failed to fetch build logs');
+			const data = await response.json();
+			buildLogCache[historyId] = data.logs || 'No logs available.';
+		} catch {
+			buildLogCache[historyId] = 'Failed to load build logs.';
+		} finally {
+			buildLogLoading = null;
+		}
+	}
+
 	async function rollbackToImage(historyId: string) {
 		try {
 			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/rollback/${historyId}`, {
@@ -2274,21 +2305,21 @@
 
 <div class="deployment-page p-6">
 	{#if deployment?.project?.workspace?.slug && deployment?.project?.slug}
-		<button
-			onclick={() => goto(`/${orgSlug}/workspaces/${deployment.project.workspace.slug}/projects/${deployment.project.slug}`)}
-			class="mb-4 inline-flex items-center gap-2 text-sm cursor-pointer" style="color: var(--surface-muted);"
-		>
-			<ArrowLeft class="h-4 w-4" />
-			<span>Back to project</span>
-		</button>
+		<div class="mb-4">
+			<Breadcrumb crumbs={[
+				{ label: 'Home', href: `/${orgSlug}` },
+				{ label: deployment.project.workspace.slug, href: `/${orgSlug}/workspaces/${deployment.project.workspace.slug}` },
+				{ label: deployment.project.name || deployment.project.slug, href: `/${orgSlug}/workspaces/${deployment.project.workspace.slug}/projects/${deployment.project.slug}` },
+				{ label: deployment.name }
+			]} />
+		</div>
 	{:else}
-		<button
-			onclick={() => goto(`/${orgSlug}`)}
-			class="mb-4 inline-flex items-center gap-2 text-sm cursor-pointer" style="color: var(--surface-muted);"
-		>
-			<ArrowLeft class="h-4 w-4" />
-			<span>Back to home</span>
-		</button>
+		<div class="mb-4">
+			<Breadcrumb crumbs={[
+				{ label: 'Home', href: `/${orgSlug}` },
+				{ label: deployment?.name || 'Deployment' }
+			]} />
+		</div>
 	{/if}
 
 	{#if error}
@@ -3223,33 +3254,84 @@
 						</div>
 					{:else if tab.id === 'history'}
 						<div class="card rounded-2xl p-5">
-							<p class="text-sm font-semibold mb-4" style="color: var(--center-channel-color);">Image History</p>
+							<p class="text-sm font-semibold mb-4" style="color: var(--center-channel-color);">Build History</p>
 							{#if deployment.imageHistory?.length}
 								<div class="space-y-2">
 									{#each deployment.imageHistory as history}
-										<div class="flex items-center justify-between gap-3 rounded-xl p-3" style="background-color: var(--control-bg); border: 1px solid var(--surface-border);">
-											<div class="flex-1 min-w-0">
-												<p class="truncate font-mono text-sm" style="color: var(--center-channel-color);">{history.image}</p>
-												<div class="mt-1 flex flex-wrap items-center gap-2 text-xs" style="color: var(--surface-muted);">
-													{#if history.branch}
-														<span class="surface-pill rounded-full px-2 py-0 text-[10px]">{history.branch}</span>
+										<div class="rounded-xl overflow-hidden" style="background-color: var(--control-bg); border: 1px solid var(--surface-border);">
+											<div class="flex items-center justify-between gap-3 p-3">
+												<div class="flex-1 min-w-0">
+													<div class="flex items-center gap-2">
+														<span class="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full" style="background-color: var(--success-bg, rgba(34,197,94,0.1)); color: var(--success-color, #22c55e);">
+															<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+															Success
+														</span>
+														<p class="text-sm font-medium" style="color: var(--center-channel-color);">
+															Built on {new Date(history.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {new Date(history.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
+														</p>
+													</div>
+													<div class="mt-1 flex flex-wrap items-center gap-2 text-xs" style="color: var(--surface-muted);">
+														{#if history.triggerType === 'manual' && history.triggeredBy}
+															<span class="inline-flex items-center gap-1">
+																<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+																Deployed manually by {history.triggeredBy.firstName ? `${history.triggeredBy.firstName}${history.triggeredBy.lastName ? ' ' + history.triggeredBy.lastName : ''}` : history.triggeredBy.username}
+															</span>
+															<span>·</span>
+														{:else if history.triggerType === 'auto'}
+															<span class="inline-flex items-center gap-1">
+																<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2"/><path d="m2 12 5.1 2.8"/><path d="m22 12-5.1 2.8"/><path d="m8.6 8.6 2.8 5.1"/><path d="m15.4 8.6-2.8 5.1"/></svg>
+																Auto-deployed from GitHub
+															</span>
+															<span>·</span>
+														{/if}
+														{#if history.branch}
+															<span class="surface-pill rounded-full px-2 py-0 text-[10px]">{history.branch}</span>
+														{/if}
+														{#if history.commitSha}
+															<span class="font-mono inline-flex items-center gap-1">
+																<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><line x1="3" y1="12" x2="9" y2="12"/><line x1="15" y1="12" x2="21" y2="12"/></svg>
+																{history.commitSha.slice(0, 7)}
+															</span>
+														{/if}
+														{#if history.isActive}
+															<span class="badge badge-success text-xs">Active</span>
+														{/if}
+													</div>
+												</div>
+												<div class="flex items-center gap-2">
+													<button
+														onclick={() => toggleBuildLogs(history.id)}
+														class="btn btn-ghost btn-sm text-xs"
+													>
+														{#if buildLogLoading === history.id}
+															<svg class="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+														{:else if expandedBuildLogId === history.id}
+															Hide Logs
+														{:else}
+															View Logs
+														{/if}
+													</button>
+													{#if !history.isActive}
+														<button onclick={() => rollbackToImage(history.id)} class="btn btn-secondary btn-sm">Rollback</button>
 													{/if}
-													{#if history.commit}
-														<code class="font-mono">{history.commit.slice(0, 7)}</code>
-													{/if}
-													<span>{new Date(history.createdAt).toLocaleString()}</span>
 												</div>
 											</div>
-											{#if history.isActive}
-												<span class="badge badge-success text-xs">Active</span>
-											{:else}
-												<button onclick={() => rollbackToImage(history.id)} class="btn btn-secondary btn-sm">Roll back</button>
+											{#if expandedBuildLogId === history.id}
+												<div class="border-t px-3 py-3" style="border-color: var(--surface-border);">
+													{#if buildLogLoading === history.id}
+														<div class="flex items-center justify-center py-4">
+															<svg class="animate-spin h-5 w-5" style="color: var(--surface-muted);" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
+														</div>
+													{:else if buildLogCache[history.id]}
+														<pre class="text-xs font-mono whitespace-pre-wrap overflow-x-auto max-h-80 overflow-y-auto rounded-lg p-3" style="background-color: var(--sidebar-bg, #1a1a2e); color: var(--sidebar-text, #e0e0e0);">{buildLogCache[history.id]}</pre>
+													{/if}
+												</div>
 											{/if}
 										</div>
 									{/each}
 								</div>
 							{:else}
-								<p class="text-sm text-center py-4" style="color: var(--surface-muted);">No image history available</p>
+								<p class="text-sm text-center py-4" style="color: var(--surface-muted);">No build history available</p>
 							{/if}
 						</div>
 					{:else if tab.id === 'webhooks'}

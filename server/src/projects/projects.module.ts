@@ -4,12 +4,14 @@ import { UsersModule } from '../users/users.module';
 import { GitHubModule } from '../github/github.module';
 import { DockerModule } from '../docker/docker.module';
 import { WebhooksModule } from '../webhooks/webhooks.module';
+import { OrganizationsModule } from '../organizations/organizations.module';
 import { ProjectsService } from './projects.service';
+import { FaviconService } from './favicon.service';
 import { ProjectsController, DeploymentsController, IngressesController, DatabasesController } from './projects.controller';
 
 @Module({
-  imports: [KubernetesModule, UsersModule, forwardRef(() => GitHubModule), DockerModule, WebhooksModule],
-  providers: [ProjectsService],
+  imports: [KubernetesModule, UsersModule, forwardRef(() => GitHubModule), DockerModule, WebhooksModule, OrganizationsModule],
+  providers: [ProjectsService, FaviconService],
   controllers: [ProjectsController, DeploymentsController, IngressesController, DatabasesController],
   exports: [ProjectsService],
 })

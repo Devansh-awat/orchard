@@ -1,0 +1,31 @@
+# NetworkPolicy to allow the backend server to fetch favicons from external sites.
+# The favicon service needs outbound HTTPS (port 443) to fetch site HTML and icons,
+# plus DNS (port 53) for domain resolution.
+#
+# Apply with: kubectl apply -f favicon-network-policy.yaml
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: backend-favicon-egress
+  namespace: leafycorp-thething-the-thing
+  labels:
+    app.kubernetes.io/managed-by: leaf
+    purpose: favicon-fetching
+spec:
+  podSelector:
+    matchLabels:
+      app: backend
+  policyTypes:
+    - Egress
+  egress:
+    # DNS resolution
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # HTTPS to external sites (favicon fetching) and R2 storage
+    - ports:
+        - port: 443
+          protocol: TCP

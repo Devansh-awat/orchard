@@ -334,7 +334,7 @@ export class GitHubController {
         include: {
           project: {
             include: {
-              workspace: true,
+              organization: true,
             },
           },
         },
@@ -354,7 +354,7 @@ export class GitHubController {
           include: {
             project: {
               include: {
-                workspace: true,
+                organization: true,
               },
             },
           },

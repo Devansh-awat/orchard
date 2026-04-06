@@ -8,16 +8,15 @@ export class AdminService {
   constructor(private readonly prisma: PrismaService) {}
 
   async getStats() {
-    const [userCount, orgCount, workspaceCount, projectCount, deploymentCount] =
+    const [userCount, orgCount, projectCount, deploymentCount] =
       await Promise.all([
         this.prisma.user.count(),
         this.prisma.organization.count(),
-        this.prisma.workspace.count(),
         this.prisma.project.count(),
         this.prisma.deployment.count(),
       ]);
 
-    return { userCount, orgCount, workspaceCount, projectCount, deploymentCount };
+    return { userCount, orgCount, projectCount, deploymentCount };
   }
 
   // --- Users ---
@@ -52,7 +51,7 @@ export class AdminService {
           _count: {
             select: {
               organizationMembers: true,
-              workspaceMembers: true,
+              projectMembers: true,
             },
           },
         },
@@ -85,9 +84,9 @@ export class AdminService {
         organizationMembers: {
           include: { organization: { select: { id: true, name: true, slug: true } } },
         },
-        workspaceMembers: {
+        projectMembers: {
           include: {
-            workspace: { select: { id: true, name: true, slug: true } },
+            project: { select: { id: true, name: true, slug: true } },
             role: { select: { name: true } },
           },
         },
@@ -179,7 +178,7 @@ export class AdminService {
           _count: {
             select: {
               members: true,
-              workspaces: true,
+              projects: true,
             },
           },
         },

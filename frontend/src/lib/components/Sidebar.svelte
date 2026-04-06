@@ -2,7 +2,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { Tree } from 'melt/builders';
-	import { PanelLeftClose, PanelLeft, FolderKanban, Rocket, Loader2, ArrowUpRight, Search, Folder, Pin, Globe, Leaf, Database, LayoutTemplate } from 'lucide-svelte';
+	import { PanelLeftClose, PanelLeft, FolderKanban, Rocket, Loader2, ArrowUpRight, Search, Folder, Pin, Globe, Leaf, Database, LayoutTemplate, Boxes } from 'lucide-svelte';
 	import WorkspacesMenu from './WorkspacesMenu.svelte';
 	import UserMenu from './UserMenu.svelte';
 	import { tree, treeLoading, treeError, type TreeItem, isSignedIn, selectedOrganization, pinnedItems, pendingInvitations } from '$lib/stores';
@@ -70,8 +70,6 @@
 
 	function getIcon(type: TreeItem['type']) {
 		switch (type) {
-			case 'workspace':
-				return FolderKanban;
 			case 'project':
 				return Folder;
 			case 'deployment':
@@ -83,14 +81,12 @@
 			case 'templateInstance':
 				return LayoutTemplate;
 			default:
-				return FolderKanban;
+				return Folder;
 		}
 	}
 
 	function getIconBadgeColor(type: TreeItem['type']) {
 		switch (type) {
-			case 'workspace':
-				return 'var(--sidebar-text-active-border)';
 			case 'project':
 				return '#4a8aff';
 			case 'deployment':
@@ -136,18 +132,10 @@
 			selectedId = activeItem.id;
 			treeBuilder.expand(activeItem.id);
 			if (activeItem.type === 'deployment' || activeItem.type === 'ingress' || activeItem.type === 'database' || activeItem.type === 'templateInstance') {
+				// Find parent project and expand it
 				const parentProject = findParentProject(treeItems, activeItem.id);
 				if (parentProject) {
 					treeBuilder.expand(parentProject.id);
-					const parentWorkspace = findParentWorkspace(treeItems, parentProject.id);
-					if (parentWorkspace) {
-						treeBuilder.expand(parentWorkspace.id);
-					}
-				}
-			} else if (activeItem.type === 'project') {
-				const parentWorkspace = findParentWorkspace(treeItems, activeItem.id);
-				if (parentWorkspace) {
-					treeBuilder.expand(parentWorkspace.id);
 				}
 			}
 		}
@@ -183,7 +171,8 @@
 
 	let flatItems = $derived(flattenTree(treeItems));
 
-	function findParentWorkspace(items: TreeItem[], childId: string): TreeItem | null {
+	// Kept for potential future use but no longer called for workspace nesting
+	function _findParentWorkspace(items: TreeItem[], childId: string): TreeItem | null {
 		for (const item of items) {
 			if (item.children) {
 				for (const child of item.children) {
@@ -191,7 +180,7 @@
 						return item;
 					}
 					if (child.children) {
-						const found = findParentWorkspace(child.children, childId);
+						const found = _findParentWorkspace(child.children, childId);
 						if (found) {
 							return item;
 						}
@@ -308,7 +297,7 @@
 					</div>
 				{:else if treeItems.length === 0}
 					<div class="sidebar-muted p-4 text-center text-sm">
-						No workspaces yet
+						No projects yet
 					</div>
 				{:else}
 					{#if $pinnedItems.length > 0}

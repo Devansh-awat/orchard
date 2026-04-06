@@ -57,7 +57,7 @@ export class OrganizationsService {
       include: {
         _count: {
           select: {
-            workspaces: true,
+            projects: true,
             members: true
           }
         }
@@ -72,7 +72,7 @@ export class OrganizationsService {
     const organization = await this.prisma.organization.findUnique({
       where: { id: organizationId },
       include: {
-        workspaces: {
+        projects: {
           include: {
             _count: {
               select: {
@@ -159,7 +159,7 @@ export class OrganizationsService {
     const organization = await this.prisma.organization.findUnique({
       where: { slug },
       include: {
-        workspaces: {
+        projects: {
           include: {
             _count: {
               select: {
@@ -248,7 +248,7 @@ export class OrganizationsService {
       where: { id: organizationId },
       data: updateData,
       include: {
-        workspaces: {
+        projects: {
           include: {
             _count: {
               select: {
@@ -313,7 +313,7 @@ export class OrganizationsService {
       where: { id: organizationId },
       data: { avatarUrl },
       include: {
-        workspaces: {
+        projects: {
           include: {
             _count: {
               select: {
@@ -375,7 +375,7 @@ export class OrganizationsService {
       where: { id: organizationId },
       data: { avatarUrl: null },
       include: {
-        workspaces: {
+        projects: {
           include: {
             _count: {
               select: {
@@ -921,94 +921,5 @@ export class OrganizationsService {
     });
   }
 
-  async addMemberToWorkspace(
-    workspaceId: string,
-    userId: string,
-    roleId: string,
-    addedBy: string,
-    userData?: any
-  ) {
-    const adder = await this.usersService.findOrCreateByClerkId(addedBy, userData);
-    
-    if (!adder) {
-      throw new NotFoundException('User adding member not found');
-    }
-
-    const workspace = await this.prisma.workspace.findUnique({
-      where: { id: workspaceId },
-      include: {
-        organization: true,
-        members: {
-          where: { userId: adder.id },
-          include: { role: true },
-        },
-      },
-    });
-
-    if (!workspace) {
-      throw new NotFoundException('Workspace not found');
-    }
-
-    const isWorkspaceOwner = workspace.members.some(m => m.role.name === 'owner' && m.userId === adder.id);
-    const orgMembership = await this.prisma.organizationMember.findUnique({
-      where: {
-        organizationId_userId: {
-          organizationId: workspace.organizationId,
-          userId: adder.id,
-        },
-      },
-    });
-
-    const isOrgAdminOrOwner = orgMembership && (orgMembership.role === 'owner' || orgMembership.role === 'admin');
-
-    if (!isWorkspaceOwner && !isOrgAdminOrOwner) {
-      throw new ForbiddenException('Only workspace owners can add members');
-    }
-
-    const orgMember = await this.prisma.organizationMember.findUnique({
-      where: {
-        organizationId_userId: {
-          organizationId: workspace.organizationId,
-          userId
-        }
-      }
-    });
-
-    if (!orgMember) {
-      throw new BadRequestException('User must be an organization member first');
-    }
-
-    const existingMember = await this.prisma.workspaceMember.findFirst({
-      where: {
-        workspaceId,
-        userId
-      }
-    });
-
-    if (existingMember) {
-      throw new BadRequestException('User is already a member of this workspace');
-    }
-
-    return this.prisma.workspaceMember.create({
-      data: {
-        workspaceId,
-        userId,
-        roleId,
-        addedBy: adder.id
-      },
-      include: {
-        user: {
-          select: {
-            id: true,
-            email: true,
-            username: true,
-            firstName: true,
-            lastName: true
-          }
-        },
-        role: true
-      }
-    });
-  }
 }
 

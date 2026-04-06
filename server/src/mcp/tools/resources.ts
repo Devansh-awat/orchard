@@ -3,40 +3,21 @@ import { z } from 'zod';
 import { OrchardClient } from '../client';
 
 export function registerResourceTools(server: McpServer, client: OrchardClient) {
-  // ── Workspaces ────────────────────────────────────────────────────
-
-  server.registerTool(
-    'create_workspace',
-    {
-      description: 'Create a new workspace in an organization',
-      annotations: { readOnlyHint: false, destructiveHint: false },
-      inputSchema: {
-        name: z.string().describe('Workspace name'),
-        organizationId: z.string().describe('Organization UUID to create the workspace in'),
-        description: z.string().optional().describe('Workspace description'),
-      },
-    },
-    async ({ name, organizationId, description }) => {
-      const workspace = await client.post('/workspaces', { name, organizationId, description });
-      return { content: [{ type: 'text', text: JSON.stringify(workspace, null, 2) }] };
-    },
-  );
-
   // ── Projects ──────────────────────────────────────────────────────
 
   server.registerTool(
     'create_project',
     {
-      description: 'Create a new project in a workspace. A project groups deployments, databases, and networking.',
+      description: 'Create a new project in an organization. A project groups deployments, databases, and networking.',
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
-        workspaceId: z.string().describe('The workspace UUID'),
+        organizationId: z.string().describe('Organization UUID to create the project in'),
         name: z.string().describe('Project name'),
         description: z.string().optional().describe('Project description'),
       },
     },
-    async ({ workspaceId, name, description }) => {
-      const project = await client.post('/projects', { workspaceId, name, description });
+    async ({ organizationId, name, description }) => {
+      const project = await client.post('/projects', { organizationId, name, description });
       return { content: [{ type: 'text', text: JSON.stringify(project, null, 2) }] };
     },
   );

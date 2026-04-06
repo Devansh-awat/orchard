@@ -4,7 +4,7 @@ import { browser } from '$app/environment';
 export interface PinnedItem {
 	id: string;
 	name: string;
-	type: 'workspace' | 'project' | 'deployment';
+	type: 'project' | 'deployment';
 	href: string;
 }
 

@@ -31,64 +31,20 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
     },
   );
 
-  // ── Workspaces ────────────────────────────────────────────────────
-
-  server.registerTool(
-    'list_workspaces',
-    {
-      description: 'List all workspaces the authenticated user has access to',
-      annotations: { readOnlyHint: true, destructiveHint: false },
-      inputSchema: {},
-    },
-    async () => {
-      const workspaces = await client.get('/workspaces');
-      return { content: [{ type: 'text', text: JSON.stringify(workspaces, null, 2) }] };
-    },
-  );
-
-  server.registerTool(
-    'get_workspace',
-    {
-      description: 'Get workspace details by ID',
-      annotations: { readOnlyHint: true, destructiveHint: false },
-      inputSchema: {
-        workspaceId: z.string().describe('The workspace UUID'),
-      },
-    },
-    async ({ workspaceId }) => {
-      const workspace = await client.get(`/workspaces/${workspaceId}`);
-      return { content: [{ type: 'text', text: JSON.stringify(workspace, null, 2) }] };
-    },
-  );
-
-  server.registerTool(
-    'get_workspace_by_slug',
-    {
-      description: 'Get workspace details by slug',
-      annotations: { readOnlyHint: true, destructiveHint: false },
-      inputSchema: {
-        slug: z.string().describe('The workspace slug'),
-      },
-    },
-    async ({ slug }) => {
-      const workspace = await client.get(`/workspaces/slug/${slug}`);
-      return { content: [{ type: 'text', text: JSON.stringify(workspace, null, 2) }] };
-    },
-  );
-
   // ── Projects ──────────────────────────────────────────────────────
 
   server.registerTool(
     'list_projects',
     {
-      description: 'List all projects in a workspace',
+      description: 'List all projects in an organization',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
-        workspaceId: z.string().describe('The workspace UUID'),
+        organizationId: z.string().optional().describe('Organization UUID to filter by (optional)'),
       },
     },
-    async ({ workspaceId }) => {
-      const projects = await client.get(`/workspaces/${workspaceId}/projects`);
+    async ({ organizationId }) => {
+      const url = organizationId ? `/projects?orgId=${organizationId}` : '/projects';
+      const projects = await client.get(url);
       return { content: [{ type: 'text', text: JSON.stringify(projects, null, 2) }] };
     },
   );

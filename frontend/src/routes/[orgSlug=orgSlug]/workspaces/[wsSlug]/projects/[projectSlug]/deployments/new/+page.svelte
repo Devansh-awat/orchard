@@ -3,7 +3,8 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { apiFetch, toasts, refreshTree, isSuperAdmin } from '$lib/stores';
-	import { ArrowLeft, Loader2, Container, Github, Plus, Trash2, HardDrive, Eye, EyeOff } from 'lucide-svelte';
+	import { Loader2, Container, Github, Plus, Trash2, HardDrive, Eye, EyeOff } from 'lucide-svelte';
+	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 
 	function handleClickOutside(event: MouseEvent, dropdownType: 'repo' | 'branch' | 'dockerfile') {
 		const target = event.target as HTMLElement;
@@ -555,13 +556,12 @@
 			</div>
 		</div>
 	{:else if project}
-		<button
-			onclick={() => window.history.back()}
-			class="nd-back"
-		>
-			<ArrowLeft class="h-4 w-4" />
-			Back to project
-		</button>
+		<Breadcrumb crumbs={[
+			{ label: 'Home', href: `/${orgSlug}` },
+			{ label: workspace?.name || workspaceSlug || '', href: `/${orgSlug}/workspaces/${workspaceSlug}` },
+			{ label: project?.name || projectSlug || '', href: `/${orgSlug}/workspaces/${workspaceSlug}/projects/${projectSlug}` },
+			{ label: 'New Deployment' }
+		]} />
 
 		<div class="nd-header">
 			<h1 class="nd-title">New Deployment</h1>
@@ -1000,25 +1000,6 @@
 		max-width: 52rem;
 		margin: 0 auto;
 		padding: 2.5rem 2.5rem 3rem;
-	}
-
-	/* Back link */
-	.nd-back {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		font-size: 0.8125rem;
-		color: var(--surface-muted);
-		background: none;
-		border: none;
-		cursor: pointer;
-		padding: 0;
-		margin-bottom: 1rem;
-		transition: color 0.15s;
-	}
-
-	.nd-back:hover {
-		color: var(--center-channel-color);
 	}
 
 	/* Header */

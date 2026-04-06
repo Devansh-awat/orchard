@@ -318,7 +318,7 @@ export class ProjectsService {
   }
 
   async createProject(
-    workspaceId: string,
+    organizationId: string,
     data: { name: string; slug?: string; description?: string; repositoryUrl?: string },
     clerkId: string,
     userData?: {
@@ -335,33 +335,21 @@ export class ProjectsService {
       throw new NotFoundException('User not found');
     }
 
-    const workspace = await this.prisma.workspace.findUnique({
-      where: { id: workspaceId },
-      include: {
-        organization: true,
-      },
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
     });
 
-    if (!workspace) {
-      throw new NotFoundException('Workspace not found');
+    if (!organization) {
+      throw new NotFoundException('Organization not found');
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
-      where: {
-        workspaceId,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
+    // Check org membership
+    const orgMembership = await this.prisma.organizationMember.findFirst({
+      where: { organizationId, userId: user.id },
     });
 
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to create projects');
+    if (!orgMembership) {
+      throw new ForbiddenException('You are not a member of this organization');
     }
 
     const name = String(data.name || '').trim();
@@ -379,20 +367,19 @@ export class ProjectsService {
 
     const existing = await this.prisma.project.findUnique({
       where: {
-        workspaceId_slug: {
-          workspaceId,
+        organizationId_slug: {
+          organizationId,
           slug,
         },
       },
     });
 
     if (existing) {
-      throw new BadRequestException('A project with this slug already exists in the workspace');
+      throw new BadRequestException('A project with this slug already exists');
     }
 
     const namespace = this.buildNamespace([
-      workspace.organization.slug,
-      workspace.slug,
+      organization.slug,
       slug,
     ]);
 
@@ -410,18 +397,28 @@ export class ProjectsService {
       throw new BadRequestException('Kubernetes namespace already exists');
     }
 
+    // Create project and add creator as owner
+    const adminRole = await this.prisma.role.findFirst({ where: { name: 'admin' } });
+
     const project = await this.prisma.project.create({
       data: {
-        workspaceId,
+        organizationId,
         name,
         slug,
         description: data.description?.trim() || null,
         repositoryUrl: data.repositoryUrl?.trim() || null,
         namespace,
         createdBy: user.id,
+        members: adminRole ? {
+          create: {
+            userId: user.id,
+            roleId: adminRole.id,
+            addedBy: user.id,
+          },
+        } : undefined,
       },
       include: {
-        workspace: true,
+        organization: true,
         creator: {
           select: {
             id: true,
@@ -485,7 +482,7 @@ export class ProjectsService {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
       include: {
-        workspace: true,
+        organization: true,
       },
     });
 
@@ -493,9 +490,9 @@ export class ProjectsService {
       throw new NotFoundException(`Project ${projectId} not found`);
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: project.workspaceId,
+        projectId: project.id,
         userId: user.id,
       },
       include: {
@@ -504,7 +501,7 @@ export class ProjectsService {
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     if (membership.role.name === 'viewer') {
@@ -689,7 +686,7 @@ export class ProjectsService {
           },
           project: {
             include: {
-              workspace: true,
+              organization: true,
             },
           },
         },
@@ -749,7 +746,7 @@ export class ProjectsService {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
       include: {
-        workspace: true,
+        organization: true,
       },
     });
 
@@ -757,9 +754,9 @@ export class ProjectsService {
       throw new NotFoundException(`Project ${projectId} not found`);
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: project.workspaceId,
+        projectId: project.id,
         userId: user.id,
       },
       include: {
@@ -768,7 +765,7 @@ export class ProjectsService {
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     if (membership.role.name === 'viewer') {
@@ -963,6 +960,8 @@ export class ProjectsService {
         exposePublic,
         volumes,
         isRebuild: false,
+        triggerType: 'manual',
+        triggeredById: user.id,
       },
       user.githubAccessToken,
     ).catch((error) => {
@@ -987,7 +986,7 @@ export class ProjectsService {
         },
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
       },
@@ -1023,6 +1022,9 @@ export class ProjectsService {
       // GitHub Checks API support (new - via App)
       checkRunId?: number | null;
       installationId?: string | null;
+      // Build trigger info
+      triggerType?: string;
+      triggeredById?: string;
     },
     githubAccessToken?: string,
   ) {
@@ -1136,6 +1138,8 @@ export class ProjectsService {
             tag: data.tag,
             branch: data.branch,
             buildLogs: deployment?.buildLogs || null,
+            triggerType: data.triggerType || null,
+            triggeredById: data.triggeredById || null,
             isActive: true,
           },
         });
@@ -1637,7 +1641,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
         envVars: true,
@@ -1663,9 +1667,9 @@ export class ProjectsService {
       throw new BadRequestException('Dockerfile path is missing for this deployment');
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: deployment.project.workspaceId,
+        projectId: deployment.project.id,
         userId: user.id,
       },
       include: {
@@ -1674,7 +1678,7 @@ export class ProjectsService {
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     if (membership.role.name === 'viewer') {
@@ -1758,6 +1762,8 @@ export class ProjectsService {
         exposePublic: service?.type === 'external',
         volumes,
         isRebuild: true,
+        triggerType: 'manual',
+        triggeredById: user.id,
       },
       user.githubAccessToken,
     ).catch((error) => {
@@ -1781,7 +1787,7 @@ export class ProjectsService {
         },
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
       },
@@ -1802,6 +1808,19 @@ export class ProjectsService {
       where: { deploymentId },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async getImageHistoryLogs(deploymentId: string, imageHistoryId: string) {
+    const entry = await this.prisma.imageHistory.findUnique({
+      where: { id: imageHistoryId },
+      select: { deploymentId: true, buildLogs: true },
+    });
+
+    if (!entry || entry.deploymentId !== deploymentId) {
+      throw new NotFoundException(`Image history entry not found`);
+    }
+
+    return { logs: entry.buildLogs || '' };
   }
 
   async rollbackToImage(
@@ -1827,7 +1846,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
       },
@@ -1837,9 +1856,9 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: deployment.project.workspaceId,
+        projectId: deployment.project.id,
         userId: user.id,
       },
       include: {
@@ -1848,7 +1867,7 @@ export class ProjectsService {
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     if (membership.role.name === 'viewer') {
@@ -1911,7 +1930,7 @@ export class ProjectsService {
         },
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
       },
@@ -1999,7 +2018,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
         services: {
@@ -2015,9 +2034,9 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: deployment.project.workspaceId,
+        projectId: deployment.project.id,
         userId: user.id,
       },
       include: {
@@ -2026,7 +2045,7 @@ export class ProjectsService {
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     if (membership.role.name === 'viewer') {
@@ -2371,7 +2390,7 @@ export class ProjectsService {
         },
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
       },
@@ -2404,7 +2423,7 @@ export class ProjectsService {
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
       include: {
-        project: { include: { workspace: true } },
+        project: { include: { organization: true } },
         services: { include: { ports: true } },
         ingresses: true,
       },
@@ -2419,16 +2438,16 @@ export class ProjectsService {
       throw new NotFoundException('User not found');
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: deployment.project.workspaceId,
+        projectId: deployment.project.id,
         userId: user.id,
       },
       include: { role: true },
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
     if (membership.role.name === 'viewer') {
       throw new ForbiddenException('You do not have permission to manage ingress resources');
@@ -2575,7 +2594,7 @@ export class ProjectsService {
     const result = await this.prisma.deployment.findUnique({
       where: { id: deployment.id },
       include: {
-        project: { include: { workspace: true } },
+        project: { include: { organization: true } },
         pods: true,
         services: { include: { ports: true } },
         envVars: true,
@@ -2614,7 +2633,7 @@ export class ProjectsService {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
       include: {
-        workspace: true,
+        organization: true,
         deployments: {
           include: {
             services: { include: { ports: true } },
@@ -2628,16 +2647,16 @@ export class ProjectsService {
       throw new NotFoundException(`Project ${projectId} not found`);
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: project.workspaceId,
+        projectId: project.id,
         userId: user.id,
       },
       include: { role: true },
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
     if (membership.role.name === 'viewer') {
       throw new ForbiddenException('You do not have permission to manage ingress resources');
@@ -2819,7 +2838,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
             deployments: {
               include: {
                 services: { include: { ports: true } },
@@ -2836,9 +2855,9 @@ export class ProjectsService {
       throw new NotFoundException(`Ingress ${ingressId} not found`);
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: ingress.project.workspaceId,
+        projectId: ingress.project.id,
         userId: user.id,
       },
       include: { role: true },
@@ -2847,14 +2866,14 @@ export class ProjectsService {
     const orgMembership = await this.prisma.organizationMember.findUnique({
       where: {
         organizationId_userId: {
-          organizationId: ingress.project.workspace.organizationId,
+          organizationId: ingress.project.organization.organizationId,
           userId: user.id,
         },
       },
     });
 
     if (!membership && !orgMembership) {
-      throw new ForbiddenException('You are not a member of this workspace or organization');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     // Read the actual K8s ingress to get all routes
@@ -2907,7 +2926,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
             deployments: {
               include: {
                 services: { include: { ports: true } },
@@ -2927,9 +2946,9 @@ export class ProjectsService {
       throw new BadRequestException('Ingress does not belong to this project');
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: ingress.project.workspaceId,
+        projectId: ingress.project.id,
         userId: user.id,
       },
       include: { role: true },
@@ -2938,14 +2957,14 @@ export class ProjectsService {
     const orgMembership = await this.prisma.organizationMember.findUnique({
       where: {
         organizationId_userId: {
-          organizationId: ingress.project.workspace.organizationId,
+          organizationId: ingress.project.organization.organizationId,
           userId: user.id,
         },
       },
     });
 
     if (!membership && !orgMembership) {
-      throw new ForbiddenException('You are not a member of this workspace or organization');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     // Read the actual K8s ingress to get all routes
@@ -3016,7 +3035,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
             deployments: {
               include: {
                 services: { include: { ports: true } },
@@ -3038,16 +3057,16 @@ export class ProjectsService {
 
     const project = ingress.project;
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: project.workspaceId,
+        projectId: project.id,
         userId: user.id,
       },
       include: { role: true },
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
     if (membership.role.name === 'viewer') {
       throw new ForbiddenException('You do not have permission to manage ingress resources');
@@ -3209,7 +3228,7 @@ export class ProjectsService {
           include: {
             project: {
               include: {
-                workspace: true,
+                organization: true,
               },
             },
           },
@@ -3225,9 +3244,9 @@ export class ProjectsService {
       throw new BadRequestException('Ingress does not belong to deployment');
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: ingress.deployment.project.workspaceId,
+        projectId: ingress.deployment.project.id,
         userId: user.id,
       },
       include: {
@@ -3236,7 +3255,7 @@ export class ProjectsService {
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     if (membership.role.name === 'viewer') {
@@ -3260,7 +3279,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
         pods: true,
@@ -3303,7 +3322,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
       },
@@ -3317,9 +3336,9 @@ export class ProjectsService {
       throw new BadRequestException('Ingress does not belong to project');
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: ingress.project.workspaceId,
+        projectId: ingress.project.id,
         userId: user.id,
       },
       include: {
@@ -3328,7 +3347,7 @@ export class ProjectsService {
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     if (membership.role.name === 'viewer') {
@@ -3388,7 +3407,7 @@ export class ProjectsService {
           include: {
             project: {
               include: {
-                workspace: true,
+                organization: true,
               },
             },
             services: {
@@ -3412,9 +3431,9 @@ export class ProjectsService {
 
     const deployment = ingress.deployment;
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: deployment.project.workspaceId,
+        projectId: deployment.project.id,
         userId: user.id,
       },
       include: {
@@ -3423,7 +3442,7 @@ export class ProjectsService {
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     if (membership.role.name === 'viewer') {
@@ -3702,7 +3721,7 @@ export class ProjectsService {
         },
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
       },
@@ -3729,22 +3748,16 @@ export class ProjectsService {
 
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      include: {
-        workspace: {
-          include: {
-            organization: true,
-          },
-        },
-      },
+      include: { organization: true },
     });
 
     if (!project) {
       throw new NotFoundException(`Project ${projectId} not found`);
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: project.workspaceId,
+        projectId: project.id,
         userId: user.id,
       },
       include: {
@@ -3755,20 +3768,20 @@ export class ProjectsService {
     const orgMembership = await this.prisma.organizationMember.findUnique({
       where: {
         organizationId_userId: {
-          organizationId: project.workspace.organizationId,
+          organizationId: project.organizationId,
           userId: user.id,
         },
       },
     });
 
-    const isWorkspaceOwnerOrAdmin = membership && (membership.role.name === 'owner' || membership.role.name === 'admin');
+    const isProjectOwnerOrAdmin = membership && (membership.role.name === 'owner' || membership.role.name === 'admin');
     const isOrgOwnerOrAdmin = orgMembership && (orgMembership.role === 'owner' || orgMembership.role === 'admin');
 
-    if (!isWorkspaceOwnerOrAdmin && !isOrgOwnerOrAdmin) {
+    if (!isProjectOwnerOrAdmin && !isOrgOwnerOrAdmin) {
       if (!membership && !orgMembership) {
-        throw new ForbiddenException('You are not a member of this workspace or organization');
+        throw new ForbiddenException('You are not a member of this project');
       }
-      throw new ForbiddenException('Only workspace owners/admins or organization owners/admins can delete projects');
+      throw new ForbiddenException('Only project admins or organization admins can delete projects');
     }
 
     await this.kubernetesService.deleteNamespace(project.namespace);
@@ -3804,9 +3817,13 @@ export class ProjectsService {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
       include: {
-        workspace: {
+        organization: true,
+        members: {
           include: {
-            organization: true,
+            role: true,
+            user: {
+              select: { id: true, email: true, username: true, firstName: true, lastName: true, imageUrl: true },
+            },
           },
         },
         creator: {
@@ -3873,9 +3890,9 @@ export class ProjectsService {
       throw new NotFoundException(`Project ${projectId} not found`);
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: project.workspaceId,
+        projectId: project.id,
         userId: user.id,
       },
     });
@@ -3883,14 +3900,14 @@ export class ProjectsService {
     const orgMembership = await this.prisma.organizationMember.findUnique({
       where: {
         organizationId_userId: {
-          organizationId: project.workspace.organizationId,
+          organizationId: project.organization.organizationId,
           userId: user.id,
         },
       },
     });
 
     if (!membership && !orgMembership) {
-      throw new ForbiddenException('You are not a member of this workspace or organization');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     // Compute status for each deployment
@@ -3911,16 +3928,16 @@ export class ProjectsService {
     };
   }
 
-  async getProjectBySlug(workspaceId: string, slug: string) {
+  async getProjectBySlug(organizationId: string, slug: string) {
     const project = await this.prisma.project.findUnique({
       where: {
-        workspaceId_slug: {
-          workspaceId,
+        organizationId_slug: {
+          organizationId,
           slug,
         },
       },
       include: {
-        workspace: true,
+        organization: true,
         creator: {
           select: {
             id: true,
@@ -3961,7 +3978,7 @@ export class ProjectsService {
     });
 
     if (!project) {
-      throw new NotFoundException(`Project with slug ${slug} not found in workspace`);
+      throw new NotFoundException(`Project with slug ${slug} not found`);
     }
 
     // Compute status for each deployment
@@ -3980,6 +3997,219 @@ export class ProjectsService {
       ...project,
       deployments: deploymentsWithComputedStatus,
     };
+  }
+
+  async listProjects(userId: string, orgId?: string) {
+    const where: any = {};
+
+    if (orgId) {
+      where.organizationId = orgId;
+    } else {
+      const orgMemberships = await this.prisma.organizationMember.findMany({
+        where: { userId },
+        select: { organizationId: true },
+      });
+      const orgIds = orgMemberships.map((m) => m.organizationId);
+      if (orgIds.length === 0) return [];
+      where.organizationId = { in: orgIds };
+    }
+
+    return this.prisma.project.findMany({
+      where,
+      include: {
+        organization: { select: { id: true, name: true, slug: true } },
+        members: {
+          include: {
+            role: true,
+            user: {
+              select: { id: true, email: true, firstName: true, lastName: true, imageUrl: true },
+            },
+          },
+        },
+        deployments: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            ingresses: { select: { id: true, host: true } },
+          },
+        },
+        _count: {
+          select: { deployments: true, databases: true, ingresses: true },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+  }
+
+  /**
+   * Lightweight bulk fetch of all deployments the user has access to.
+   * Returns only the fields needed for the overview page — NO k8s calls.
+   */
+  async listDeploymentsSummary(userId: string, orgId?: string) {
+    const whereClause: any = {};
+
+    if (orgId) {
+      whereClause.project = {
+        organizationId: orgId,
+      };
+    } else {
+      const orgMemberships = await this.prisma.organizationMember.findMany({
+        where: { userId },
+        select: { organizationId: true },
+      });
+      const orgIds = orgMemberships.map((m) => m.organizationId);
+
+      if (orgIds.length === 0) return [];
+
+      whereClause.project = {
+        organizationId: { in: orgIds },
+      };
+    }
+
+    const deployments = await this.prisma.deployment.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        name: true,
+        status: true,
+        buildStatus: true,
+        image: true,
+        githubRepo: true,
+        githubBranch: true,
+        updatedAt: true,
+        replicas: true,
+        ingresses: {
+          select: {
+            id: true,
+            host: true,
+          },
+        },
+        services: {
+          select: {
+            ingresses: {
+              select: {
+                id: true,
+                host: true,
+              },
+            },
+          },
+        },
+        project: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            organizationId: true,
+          },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    // Merge direct ingresses and service-linked ingresses, deduplicating by id
+    return deployments.map(({ services, ingresses, ...rest }) => {
+      const serviceIngresses = services.flatMap((s) => s.ingresses);
+      const allIngresses = [...ingresses, ...serviceIngresses];
+      const seen = new Set<string>();
+      const uniqueIngresses = allIngresses.filter((i) => {
+        if (seen.has(i.id)) return false;
+        seen.add(i.id);
+        return true;
+      });
+      return { ...rest, ingresses: uniqueIngresses };
+    });
+  }
+
+  async listRecentBuilds(userId: string, orgId?: string, limit = 5) {
+    const orgFilter: any = {};
+
+    if (orgId) {
+      orgFilter.project = {
+        organizationId: orgId,
+      };
+    } else {
+      const orgMemberships = await this.prisma.organizationMember.findMany({
+        where: { userId },
+        select: { organizationId: true },
+      });
+      const orgIds = orgMemberships.map((m) => m.organizationId);
+      if (orgIds.length === 0) return { active: [], recent: [] };
+
+      orgFilter.project = {
+        organizationId: { in: orgIds },
+      };
+    }
+
+    // Currently building deployments
+    const activeBuilds = await this.prisma.deployment.findMany({
+      where: {
+        ...orgFilter,
+        buildStatus: { in: ['building', 'pending'] },
+      },
+      select: {
+        id: true,
+        name: true,
+        image: true,
+        status: true,
+        buildStatus: true,
+        buildStep: true,
+        updatedAt: true,
+        githubRepo: true,
+        githubBranch: true,
+        ingresses: { select: { host: true }, take: 1 },
+        project: { select: { name: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: limit,
+    });
+
+    // Recent completed builds from image history
+    const ihWhere: any = {};
+    if (orgId) {
+      ihWhere.deployment = {
+        project: {
+          organizationId: orgId,
+        },
+      };
+    } else {
+      const orgIds = (await this.prisma.organizationMember.findMany({
+        where: { userId },
+        select: { organizationId: true },
+      })).map((m) => m.organizationId);
+
+      ihWhere.deployment = {
+        project: {
+          organizationId: { in: orgIds },
+        },
+      };
+    }
+
+    const recentBuilds = await this.prisma.imageHistory.findMany({
+      where: ihWhere,
+      select: {
+        id: true,
+        commitSha: true,
+        branch: true,
+        triggerType: true,
+        isActive: true,
+        createdAt: true,
+        deployment: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+            buildStatus: true,
+            ingresses: { select: { host: true }, take: 1 },
+            project: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+
+    return { active: activeBuilds, recent: recentBuilds };
   }
 
   async getProjectDeployments(projectId: string) {
@@ -4050,7 +4280,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
         pods: true,
@@ -4068,6 +4298,24 @@ export class ProjectsService {
         },
         imageHistory: {
           orderBy: { createdAt: 'desc' },
+          select: {
+            id: true,
+            image: true,
+            tag: true,
+            commitSha: true,
+            branch: true,
+            isActive: true,
+            createdAt: true,
+            triggerType: true,
+            triggeredBy: {
+              select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
         },
       },
     });
@@ -4290,7 +4538,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
       },
@@ -4304,9 +4552,9 @@ export class ProjectsService {
       throw new BadRequestException('Deployment is not in a buildable state');
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: deployment.project.workspaceId,
+        projectId: deployment.project.id,
         userId: user.id,
       },
       include: {
@@ -4315,7 +4563,7 @@ export class ProjectsService {
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     if (membership.role.name === 'viewer') {
@@ -4370,7 +4618,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
       },
@@ -4380,9 +4628,9 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: deployment.project.workspaceId,
+        projectId: deployment.project.id,
         userId: user.id,
       },
       include: {
@@ -4391,7 +4639,7 @@ export class ProjectsService {
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     if (membership.role.name === 'viewer') {
@@ -4481,7 +4729,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
       },
@@ -4491,9 +4739,9 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: deployment.project.workspaceId,
+        projectId: deployment.project.id,
         userId: user.id,
       },
       include: {
@@ -4502,7 +4750,7 @@ export class ProjectsService {
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     if (membership.role.name === 'viewer') {
@@ -4545,7 +4793,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
       },
@@ -4555,9 +4803,9 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: deployment.project.workspaceId,
+        projectId: deployment.project.id,
         userId: user.id,
       },
       include: {
@@ -4566,7 +4814,7 @@ export class ProjectsService {
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     if (membership.role.name === 'viewer') {
@@ -4599,7 +4847,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
       },
@@ -4609,9 +4857,9 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: deployment.project.workspaceId,
+        projectId: deployment.project.id,
         userId: user.id,
       },
       include: {
@@ -4620,7 +4868,7 @@ export class ProjectsService {
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     if (membership.role.name === 'viewer') {
@@ -4675,7 +4923,7 @@ export class ProjectsService {
         include: {
           project: {
             include: {
-              workspace: true,
+              organization: true,
             },
           },
           pods: true,
@@ -4721,7 +4969,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
       },
@@ -4731,9 +4979,9 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: deployment.project.workspaceId,
+        projectId: deployment.project.id,
         userId: user.id,
       },
       include: {
@@ -4742,7 +4990,7 @@ export class ProjectsService {
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     if (membership.role.name === 'viewer') {
@@ -4796,7 +5044,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
       },
@@ -4806,9 +5054,9 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: deployment.project.workspaceId,
+        projectId: deployment.project.id,
         userId: user.id,
       },
       include: {
@@ -4817,7 +5065,7 @@ export class ProjectsService {
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     if (membership.role.name === 'viewer') {
@@ -4899,7 +5147,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
       },
@@ -4909,9 +5157,9 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: deployment.project.workspaceId,
+        projectId: deployment.project.id,
         userId: user.id,
       },
       include: {
@@ -4920,7 +5168,7 @@ export class ProjectsService {
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     if (membership.role.name === 'viewer') {
@@ -4990,7 +5238,7 @@ export class ProjectsService {
         include: {
           project: {
             include: {
-              workspace: true,
+              organization: true,
             },
           },
           pods: true,
@@ -5047,7 +5295,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
         services: {
@@ -5062,9 +5310,9 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: deployment.project.workspaceId,
+        projectId: deployment.project.id,
         userId: user.id,
       },
       include: {
@@ -5073,7 +5321,7 @@ export class ProjectsService {
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     if (membership.role.name === 'viewer') {
@@ -5180,7 +5428,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
         pods: true,
@@ -5236,7 +5484,7 @@ export class ProjectsService {
           include: {
             project: {
               include: {
-                workspace: true,
+                organization: true,
               },
             },
           },
@@ -5253,9 +5501,9 @@ export class ProjectsService {
       throw new BadRequestException('Service does not belong to deployment');
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: service.deployment.project.workspaceId,
+        projectId: service.deployment.project.id,
         userId: user.id,
       },
       include: {
@@ -5264,7 +5512,7 @@ export class ProjectsService {
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     if (membership.role.name === 'viewer') {
@@ -5427,7 +5675,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
         pods: true,
@@ -5472,7 +5720,7 @@ export class ProjectsService {
           include: {
             project: {
               include: {
-                workspace: true,
+                organization: true,
               },
             },
             services: {
@@ -5499,9 +5747,9 @@ export class ProjectsService {
       throw new BadRequestException('Delete associated ingresses before removing the service');
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: service.deployment.project.workspaceId,
+        projectId: service.deployment.project.id,
         userId: user.id,
       },
       include: {
@@ -5510,7 +5758,7 @@ export class ProjectsService {
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     if (membership.role.name === 'viewer') {
@@ -5574,7 +5822,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
         pods: true,
@@ -5620,7 +5868,7 @@ export class ProjectsService {
           include: {
             project: {
               include: {
-                workspace: true,
+                organization: true,
               },
             },
           },
@@ -5637,9 +5885,9 @@ export class ProjectsService {
       throw new BadRequestException('Service does not belong to deployment');
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: service.deployment.project.workspaceId,
+        projectId: service.deployment.project.id,
         userId: user.id,
       },
       include: {
@@ -5648,7 +5896,7 @@ export class ProjectsService {
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     if (membership.role.name === 'viewer') {
@@ -5724,7 +5972,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
         pods: true,
@@ -5769,7 +6017,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
       },
@@ -5783,9 +6031,9 @@ export class ProjectsService {
       throw new BadRequestException('This deployment was not created from GitHub');
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: deployment.project.workspaceId,
+        projectId: deployment.project.id,
         userId: user.id,
       },
       include: {
@@ -5794,7 +6042,7 @@ export class ProjectsService {
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     if (membership.role.name === 'viewer') {
@@ -5825,7 +6073,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
         pods: true,
@@ -5868,7 +6116,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
       },
@@ -5878,9 +6126,9 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    const membership = await this.prisma.workspaceMember.findFirst({
+    const membership = await this.prisma.projectMember.findFirst({
       where: {
-        workspaceId: deployment.project.workspaceId,
+        projectId: deployment.project.id,
         userId: user.id,
       },
       include: {
@@ -5889,7 +6137,7 @@ export class ProjectsService {
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     if (membership.role.name === 'viewer') {
@@ -5905,7 +6153,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
         pods: true,
@@ -5933,7 +6181,7 @@ export class ProjectsService {
       include: {
         project: {
           include: {
-            workspace: true,
+            organization: true,
           },
         },
         envVars: true,
@@ -6116,6 +6364,7 @@ export class ProjectsService {
         checkRunId,
         installationId: installationId ? installationId.toString() : null,
         repoInfo,
+        triggerType: 'auto',
       },
       installationAccessToken, // Use GitHub App installation token for cloning
     ).catch((error) => {
@@ -6192,15 +6441,15 @@ export class ProjectsService {
 
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      include: { workspace: { include: { organization: true } } },
+      include: { organization: true },
     });
     if (!project) throw new NotFoundException(`Project ${projectId} not found`);
 
-    const membership = await this.prisma.workspaceMember.findFirst({
-      where: { workspaceId: project.workspaceId, userId: user.id },
+    const membership = await this.prisma.projectMember.findFirst({
+      where: { projectId: project.id, userId: user.id },
       include: { role: true },
     });
-    if (!membership) throw new ForbiddenException('You are not a member of this workspace');
+    if (!membership) throw new ForbiddenException('You are not a member of this project');
     if (membership.role.name === 'viewer') throw new ForbiddenException('You do not have permission to create databases');
 
     const nameInput = String(data.name || '').trim();
@@ -6209,9 +6458,9 @@ export class ProjectsService {
     const slug = this.formatSlug(nameInput);
     if (!slug) throw new BadRequestException('Invalid database name');
 
-    // Generate unique db name from org-workspace-project-dbname
-    const orgSlug = project.workspace.organization.slug.replace(/-/g, '_');
-    const wsSlug = project.workspace.slug.replace(/-/g, '_');
+    // Generate unique db name from org-project-dbname
+    const orgSlug = project.organization.organization.slug.replace(/-/g, '_');
+    const wsSlug = project.organization.slug.replace(/-/g, '_');
     const projSlug = project.slug.replace(/-/g, '_');
     const nameSlug = slug.replace(/-/g, '_');
     const fullDbName = `${orgSlug}_${wsSlug}_${projSlug}_${nameSlug}`;
@@ -6261,7 +6510,7 @@ export class ProjectsService {
     const database = await this.prisma.database.findUnique({
       where: { id: databaseId },
       include: {
-        project: { include: { workspace: { include: { organization: true } } } },
+        project: { include: { organization: true } },
         creator: {
           select: { id: true, email: true, username: true, firstName: true, lastName: true },
         },
@@ -6309,15 +6558,15 @@ export class ProjectsService {
 
     const database = await this.prisma.database.findUnique({
       where: { id: databaseId },
-      include: { project: { include: { workspace: true } } },
+      include: { project: { include: { organization: true } } },
     });
     if (!database) throw new NotFoundException('Database not found');
 
-    const membership = await this.prisma.workspaceMember.findFirst({
-      where: { workspaceId: database.project.workspaceId, userId: user.id },
+    const membership = await this.prisma.projectMember.findFirst({
+      where: { projectId: database.project.id, userId: user.id },
       include: { role: true },
     });
-    if (!membership) throw new ForbiddenException('You are not a member of this workspace');
+    if (!membership) throw new ForbiddenException('You are not a member of this project');
     if (membership.role.name === 'viewer') throw new ForbiddenException('You do not have permission to delete databases');
 
     // Delete from PostgreSQL

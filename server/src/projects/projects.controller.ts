@@ -1,5 +1,7 @@
-import { Controller, Get, Param, Post, Body, Request, Delete, Put, Patch } from '@nestjs/common';
+import { Controller, Get, Param, Post, Body, Request, Delete, Put, Patch, Query, Res, HttpStatus } from '@nestjs/common';
+import { Response } from 'express';
 import { ProjectsService } from './projects.service';
+import { FaviconService } from './favicon.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { Auth } from '../auth/decorators';
 
@@ -7,6 +9,18 @@ import { Auth } from '../auth/decorators';
 @Controller('projects')
 export class ProjectsController {
   constructor(private readonly projectsService: ProjectsService) {}
+
+  @Get()
+
+  async listProjects(@Request() req, @Query('orgId') orgId?: string) {
+    return this.projectsService.listProjects(req.user.sub, orgId);
+  }
+
+  @Get('slug/:slug')
+
+  async getProjectBySlug(@Param('slug') slug: string, @Query('orgId') orgId: string) {
+    return this.projectsService.getProjectBySlug(orgId, slug);
+  }
 
   @Post('ingresses/validate-dns')
 
@@ -24,7 +38,7 @@ export class ProjectsController {
   async createProject(
     @Body()
     body: {
-      workspaceId: string;
+      organizationId: string;
       name: string;
       slug?: string;
       description?: string;
@@ -32,9 +46,9 @@ export class ProjectsController {
     },
     @Request() req
   ) {
-    const { workspaceId, name, slug, description, repositoryUrl } = body;
+    const { organizationId, name, slug, description, repositoryUrl } = body;
     return this.projectsService.createProject(
-      workspaceId,
+      organizationId,
       { name, slug, description, repositoryUrl },
       req.user.hackClubId || req.user.sub,
       {
@@ -296,7 +310,35 @@ export class DeploymentsController {
   constructor(
     private readonly projectsService: ProjectsService,
     private readonly webhooksService: WebhooksService,
+    private readonly faviconService: FaviconService,
   ) {}
+
+  @Get()
+
+  async listDeployments(@Request() req, @Query('orgId') orgId?: string) {
+    return this.projectsService.listDeploymentsSummary(req.user.sub, orgId);
+  }
+
+  @Get('recent-builds')
+
+  async listRecentBuilds(@Request() req, @Query('orgId') orgId?: string) {
+    return this.projectsService.listRecentBuilds(req.user.sub, orgId);
+  }
+
+  @Get('favicon')
+
+  async getFavicon(@Query('domain') domain: string, @Res() res: Response) {
+    if (!domain || !/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain)) {
+      return res.status(HttpStatus.BAD_REQUEST).json({ error: 'Invalid domain' });
+    }
+
+    const url = await this.faviconService.getFavicon(domain);
+    if (url) {
+      // Redirect to the R2-cached image with long browser cache
+      return res.redirect(301, url);
+    }
+    return res.status(HttpStatus.NOT_FOUND).json({ error: 'No favicon found' });
+  }
 
   @Get(':id')
 
@@ -413,6 +455,15 @@ export class DeploymentsController {
 
   async getImageHistory(@Param('id') id: string) {
     return this.projectsService.getImageHistory(id);
+  }
+
+  @Get(':id/image-history/:imageHistoryId/logs')
+
+  async getImageHistoryLogs(
+    @Param('id') id: string,
+    @Param('imageHistoryId') imageHistoryId: string,
+  ) {
+    return this.projectsService.getImageHistoryLogs(id, imageHistoryId);
   }
 
   @Post(':id/rollback/:imageHistoryId')

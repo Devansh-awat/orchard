@@ -6,3 +6,4 @@ export { default as UserMenu } from './UserMenu.svelte';
 export { default as PendingInvitationsModal } from './PendingInvitationsModal.svelte';
 export { default as OnboardingModal } from './OnboardingModal.svelte';
 export { default as InvitationWelcome } from './InvitationWelcome.svelte';
+export { default as Breadcrumb } from './Breadcrumb.svelte';

@@ -24,13 +24,12 @@ model User {
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  createdWorkspaces            Workspace[]              @relation("WorkspaceCreator")
-  workspaceMembers             WorkspaceMember[]
-  workspaceInvitations         WorkspaceInvitation[]    @relation("InvitedBy")
-  receivedWorkspaceInvitations WorkspaceInvitation[]    @relation("InvitedUser")
   createdProjects              Project[]                @relation("ProjectCreator")
+  projectMembers               ProjectMember[]
+  projectInvitations           ProjectInvitation[]      @relation("ProjectInvitedBy")
+  receivedProjectInvitations   ProjectInvitation[]      @relation("ProjectInvitedUser")
+  addedProjectMembers          ProjectMember[]          @relation("ProjectMemberAdder")
   createdDeployments           Deployment[]             @relation("DeploymentCreator")
-  addedWorkspaceMembers        WorkspaceMember[]        @relation("MemberAdder")
   createdOrganizations         Organization[]           @relation("OrganizationCreator")
   organizationMembers          OrganizationMember[]
   orgInvitationsSent           OrganizationInvitation[] @relation("OrgInvitationInviter")
@@ -39,6 +38,7 @@ model User {
   createdDatabases             Database[]               @relation("DatabaseCreator")
   apiTokens                    ApiToken[]
   createdTemplateInstances     TemplateInstance[]        @relation("TemplateInstanceCreator")
+  triggeredBuilds              ImageHistory[]
 
   @@map("users")
 }
@@ -164,7 +164,7 @@ model Organization {
   creator     User?                    @relation("OrganizationCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   members     OrganizationMember[]
   invitations OrganizationInvitation[]
-  workspaces  Workspace[]
+  projects    Project[]
 
   @@map("organizations")
 }
@@ -214,99 +214,80 @@ model OrganizationInvitation {
   @@map("organization_invitations")
 }
 
-model Workspace {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
-  name           String   @db.VarChar(255)
-  slug           String   @db.VarChar(100)
-  description    String?  @db.Text
-  createdBy      String?  @map("created_by") @db.Uuid
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
-
-  organization Organization          @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  creator      User?                 @relation("WorkspaceCreator", fields: [createdBy], references: [id], onDelete: SetNull)
-  members      WorkspaceMember[]
-  invitations  WorkspaceInvitation[]
-  projects     Project[]
-
-  @@unique([organizationId, slug])
-  @@index([organizationId], map: "idx_workspaces_organization")
-  @@map("workspaces")
-}
-
 model Role {
   id          String   @id @default(uuid()) @db.Uuid
   name        String   @unique @db.VarChar(50)
   description String?  @db.Text
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
 
-  workspaceMembers     WorkspaceMember[]
-  workspaceInvitations WorkspaceInvitation[]
+  projectMembers     ProjectMember[]
+  projectInvitations ProjectInvitation[]
 
   @@map("roles")
 }
 
-model WorkspaceMember {
-  id          String   @id @default(uuid()) @db.Uuid
-  workspaceId String   @map("workspace_id") @db.Uuid
-  userId      String   @map("user_id") @db.Uuid
-  roleId      String   @map("role_id") @db.Uuid
-  addedAt     DateTime @default(now()) @map("added_at") @db.Timestamp(6)
-  addedBy     String?  @map("added_by") @db.Uuid
-
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
-  role      Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  adder     User?     @relation("MemberAdder", fields: [addedBy], references: [id], onDelete: SetNull)
-
-  @@unique([workspaceId, userId, roleId])
-  @@index([workspaceId], map: "idx_workspace_members_workspace")
-  @@index([userId], map: "idx_workspace_members_user")
-  @@map("workspace_members")
-}
-
-model WorkspaceInvitation {
-  id          String   @id @default(uuid()) @db.Uuid
-  workspaceId String   @map("workspace_id") @db.Uuid
-  userId      String   @map("user_id") @db.Uuid
-  roleId      String   @map("role_id") @db.Uuid
-  invitedBy   String   @map("invited_by") @db.Uuid
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-
-  workspace Workspace @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  user      User      @relation("InvitedUser", fields: [userId], references: [id], onDelete: Cascade)
-  role      Role      @relation(fields: [roleId], references: [id], onDelete: Cascade)
-  inviter   User      @relation("InvitedBy", fields: [invitedBy], references: [id], onDelete: Cascade)
-
-  @@unique([workspaceId, userId])
-  @@index([workspaceId], map: "idx_workspace_invitations_workspace")
-  @@index([userId], map: "idx_workspace_invitations_user")
-  @@map("workspace_invitations")
-}
-
 model Project {
-  id            String   @id @default(uuid()) @db.Uuid
-  workspaceId   String   @map("workspace_id") @db.Uuid
-  name          String   @db.VarChar(255)
-  slug          String   @db.VarChar(100)
-  description   String?  @db.Text
-  repositoryUrl String?  @map("repository_url") @db.VarChar(500)
-  namespace     String   @db.VarChar(100)
-  createdBy     String?  @map("created_by") @db.Uuid
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(255)
+  slug           String   @db.VarChar(100)
+  description    String?  @db.Text
+  repositoryUrl  String?  @map("repository_url") @db.VarChar(500)
+  namespace      String   @db.VarChar(100)
+  createdBy      String?  @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  workspace   Workspace    @relation(fields: [workspaceId], references: [id], onDelete: Cascade)
-  creator     User?        @relation("ProjectCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  organization  Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator       User?              @relation("ProjectCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  members       ProjectMember[]
+  invitations   ProjectInvitation[]
   deployments       Deployment[]
   ingresses         Ingress[]
   databases         Database[]
   templateInstances TemplateInstance[]
 
-  @@unique([workspaceId, slug])
-  @@index([workspaceId], map: "idx_projects_workspace")
+  @@unique([organizationId, slug])
+  @@index([organizationId], map: "idx_projects_organization")
   @@map("projects")
+}
+
+model ProjectMember {
+  id        String   @id @default(uuid()) @db.Uuid
+  projectId String   @map("project_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  roleId    String   @map("role_id") @db.Uuid
+  addedAt   DateTime @default(now()) @map("added_at") @db.Timestamp(6)
+  addedBy   String?  @map("added_by") @db.Uuid
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  role    Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  adder   User?   @relation("ProjectMemberAdder", fields: [addedBy], references: [id], onDelete: SetNull)
+
+  @@unique([projectId, userId, roleId])
+  @@index([projectId], map: "idx_project_members_project")
+  @@index([userId], map: "idx_project_members_user")
+  @@map("project_members")
+}
+
+model ProjectInvitation {
+  id        String   @id @default(uuid()) @db.Uuid
+  projectId String   @map("project_id") @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  roleId    String   @map("role_id") @db.Uuid
+  invitedBy String   @map("invited_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  project Project @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  user    User    @relation("ProjectInvitedUser", fields: [userId], references: [id], onDelete: Cascade)
+  role    Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
+  inviter User    @relation("ProjectInvitedBy", fields: [invitedBy], references: [id], onDelete: Cascade)
+
+  @@unique([projectId, userId])
+  @@index([projectId], map: "idx_project_invitations_project")
+  @@index([userId], map: "idx_project_invitations_user")
+  @@map("project_invitations")
 }
 
 model Deployment {
@@ -396,17 +377,20 @@ model GitHubDeployment {
 }
 
 model ImageHistory {
-  id           String   @id @default(uuid()) @db.Uuid
-  deploymentId String   @map("deployment_id") @db.Uuid
-  image        String   @db.VarChar(500)
-  tag          String   @db.VarChar(100)
-  commitSha    String?  @map("commit_sha") @db.VarChar(100)
-  branch       String?  @db.VarChar(255)
-  buildLogs    String?  @map("build_logs") @db.Text
-  isActive     Boolean  @default(false) @map("is_active")
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  id              String   @id @default(uuid()) @db.Uuid
+  deploymentId    String   @map("deployment_id") @db.Uuid
+  image           String   @db.VarChar(500)
+  tag             String   @db.VarChar(100)
+  commitSha       String?  @map("commit_sha") @db.VarChar(100)
+  branch          String?  @db.VarChar(255)
+  buildLogs       String?  @map("build_logs") @db.Text
+  triggerType      String?  @map("trigger_type") @db.VarChar(20)
+  triggeredById    String?  @map("triggered_by_id") @db.Uuid
+  isActive        Boolean  @default(false) @map("is_active")
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp(6)
 
-  deployment Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  deployment  Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  triggeredBy User?      @relation(fields: [triggeredById], references: [id], onDelete: SetNull)
 
   @@index([deploymentId], map: "idx_image_history_deployment")
   @@index([deploymentId, createdAt], map: "idx_image_history_deployment_date")

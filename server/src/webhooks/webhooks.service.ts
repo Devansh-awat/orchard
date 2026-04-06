@@ -27,14 +27,14 @@ export class WebhooksService {
 
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      include: { project: { include: { workspace: true } } },
+      include: { project: true },
     });
 
     if (!deployment) {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    await this.verifyMembership(deployment.project.workspaceId, user.id);
+    await this.verifyMembership(deployment.projectId, user.id);
 
     const token = crypto.randomBytes(32).toString('hex');
 
@@ -59,14 +59,14 @@ export class WebhooksService {
 
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      include: { project: { include: { workspace: true } } },
+      include: { project: true },
     });
 
     if (!deployment) {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    await this.verifyMembership(deployment.project.workspaceId, user.id);
+    await this.verifyMembership(deployment.projectId, user.id);
 
     return this.prisma.deploymentWebhookToken.findMany({
       where: { deploymentId },
@@ -89,14 +89,14 @@ export class WebhooksService {
 
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      include: { project: { include: { workspace: true } } },
+      include: { project: true },
     });
 
     if (!deployment) {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    await this.verifyMembership(deployment.project.workspaceId, user.id);
+    await this.verifyMembership(deployment.projectId, user.id);
 
     const tokenRecord = await this.prisma.deploymentWebhookToken.findFirst({
       where: { id: tokenId, deploymentId },
@@ -226,14 +226,14 @@ export class WebhooksService {
     return user;
   }
 
-  private async verifyMembership(workspaceId: string, userId: string) {
-    const membership = await this.prisma.workspaceMember.findFirst({
-      where: { workspaceId, userId },
+  private async verifyMembership(projectId: string, userId: string) {
+    const membership = await this.prisma.projectMember.findFirst({
+      where: { projectId, userId },
       include: { role: true },
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this workspace');
+      throw new ForbiddenException('You are not a member of this project');
     }
 
     if (membership.role.name === 'viewer') {

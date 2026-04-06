@@ -17,11 +17,10 @@
 	interface Props {
 		open: boolean;
 		orgSlug: string;
-		workspaceSlug: string;
 		projectSlug: string;
 	}
 
-	let { open = $bindable(false), orgSlug, workspaceSlug, projectSlug }: Props = $props();
+	let { open = $bindable(false), orgSlug, projectSlug }: Props = $props();
 
 	interface Template {
 		id: string;
@@ -39,7 +38,7 @@
 	let loadingTemplates = $state(false);
 	let search = $state('');
 
-	const basePath = $derived(`/${orgSlug}/workspaces/${workspaceSlug}/projects/${projectSlug}`);
+	const basePath = $derived(`/${orgSlug}/projects/${projectSlug}`);
 
 	const quickActions = [
 		{

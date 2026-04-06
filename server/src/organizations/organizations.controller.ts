@@ -249,26 +249,5 @@ export class OrganizationsController {
     );
   }
 
-  @Post('workspaces/:workspaceId/members')
-  async addMemberToWorkspace(
-    @Param('workspaceId') workspaceId: string,
-    @Body('userId') userId: string,
-    @Body('roleId') roleId: string,
-    @Request() req
-  ) {
-    return this.organizationsService.addMemberToWorkspace(
-      workspaceId,
-      userId,
-      roleId,
-      req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName,
-        lastName: req.user.lastName,
-        imageUrl: req.user.imageUrl,
-      }
-    );
-  }
 }
 

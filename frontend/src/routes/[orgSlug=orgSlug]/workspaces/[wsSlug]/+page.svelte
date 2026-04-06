@@ -5,8 +5,9 @@ import { onMount } from 'svelte';
 import { apiFetch, user, toasts, selectedOrganization, refreshTree } from '$lib/stores';
 import { mergeAttrs } from 'melt';
 import { SpatialMenu } from 'melt/builders';
-import { ArrowLeft, Loader2, Plus, FolderKanban, Calendar, User, Trash2, UserPlus, LogOut, Check, X, Users, Boxes } from 'lucide-svelte';
+import { Loader2, Plus, FolderKanban, Calendar, User, Trash2, UserPlus, LogOut, Check, X, Users, Boxes } from 'lucide-svelte';
 import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 
 interface Project {
 	id: string;
@@ -133,6 +134,20 @@ let currentOrgMembership = $state<OrgMember | null>(null);
 				throw new Error('Failed to fetch workspace');
 			}
 			workspace = await response.json();
+
+			// If workspace has a project with the same slug, redirect to the project page
+			// This merges the workspace/project abstraction for the user
+			const matchingProject = workspace?.projects?.find(p => p.slug === wsSlug);
+			if (matchingProject) {
+				goto(`/${orgSlug}/workspaces/${wsSlug}/projects/${matchingProject.slug}`, { replaceState: true });
+				return;
+			}
+
+			// If workspace has exactly one project, redirect to it
+			if (workspace?.projects?.length === 1) {
+				goto(`/${orgSlug}/workspaces/${wsSlug}/projects/${workspace.projects[0].slug}`, { replaceState: true });
+				return;
+			}
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to fetch workspace';
 		} finally {
@@ -400,6 +415,11 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 			</div>
 		</div>
 	{:else if workspace}
+		<Breadcrumb crumbs={[
+			{ label: 'Home', href: `/${orgSlug}` },
+			{ label: workspace.name }
+		]} />
+
 		<!-- Header -->
 		<div class="ws-header">
 			<div class="ws-header-top">

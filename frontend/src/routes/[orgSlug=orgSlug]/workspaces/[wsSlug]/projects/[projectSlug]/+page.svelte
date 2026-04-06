@@ -6,7 +6,6 @@
 	import { mergeAttrs } from 'melt';
 	import { SpatialMenu } from 'melt/builders';
 	import {
-		ArrowLeft,
 		Loader2,
 		Plus,
 		ExternalLink,
@@ -15,10 +14,13 @@
 		Server,
 		Boxes,
 		GitBranch,
-		LayoutTemplate
+		LayoutTemplate,
+		Users,
+		UserPlus
 	} from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import NewResourceModal from '$lib/components/NewResourceModal.svelte';
+	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 
 	interface Deployment {
 		id: string;
@@ -81,6 +83,18 @@
 		crossAxis: true
 	});
 
+	interface WorkspaceMember {
+		id: string;
+		role: { name: string };
+		user: {
+			id: string;
+			firstName?: string;
+			lastName?: string;
+			email: string;
+			imageUrl?: string;
+		};
+	}
+
 	let project = $state<Project | null>(null);
 	let templateInstances = $state<TemplateInstanceSummary[]>([]);
 	let loading = $state(true);
@@ -90,6 +104,8 @@
 	let showDeleteModal = $state(false);
 	let deploymentSearch = $state('');
 	let showNewResourceModal = $state(false);
+	let wsMembers = $state<WorkspaceMember[]>([]);
+	let wsId = $state<string | null>(null);
 
 	let filteredDeployments = $derived.by(() => {
 		const deployments = project?.deployments ?? [];
@@ -121,6 +137,8 @@
 				throw new Error('Failed to fetch workspace');
 			}
 			const workspace = await wsResponse.json();
+			wsId = workspace.id;
+			wsMembers = workspace.members ?? [];
 
 			const matchedProject = workspace.projects?.find((p: Project) => p.slug === projectSlug);
 			if (!matchedProject) {
@@ -320,16 +338,12 @@
 			{/each}
 		</div>
 	{:else if project}
-		<!-- Back link -->
-		{#if project.workspace?.slug}
-			<button
-				onclick={() => goto(`/${orgSlug}/workspaces/${project.workspace.slug}`)}
-				class="pj-back"
-			>
-				<ArrowLeft class="h-4 w-4" />
-				{project.workspace.name}
-			</button>
-		{/if}
+		<!-- Breadcrumb -->
+		<Breadcrumb crumbs={[
+			{ label: 'Home', href: `/${orgSlug}` },
+			...(project.workspace?.slug ? [{ label: project.workspace.name || project.workspace.slug, href: `/${orgSlug}/workspaces/${project.workspace.slug}` }] : []),
+			{ label: project.name }
+		]} />
 
 		<!-- Header -->
 		<div class="pj-header">
@@ -519,6 +533,37 @@
 				{/each}
 			</div>
 		{/if}
+
+		<!-- Members -->
+		{#if wsMembers.length > 0}
+			<div class="pj-members-section">
+				<div class="pj-deployments-header">
+					<h2 class="pj-section-title"><Users size={16} /> Members</h2>
+				</div>
+				<div class="pj-members-list">
+					{#each wsMembers as m (m.id)}
+						<div class="pj-member">
+							{#if m.user.imageUrl}
+								<img src={m.user.imageUrl} alt="" class="pj-member-avatar" />
+							{:else}
+								<div class="pj-member-avatar pj-member-avatar--letter">
+									{(m.user.firstName ?? m.user.email).charAt(0).toUpperCase()}
+								</div>
+							{/if}
+							<div class="pj-member-info">
+								<span class="pj-member-name">
+									{#if m.user.firstName}{m.user.firstName}{#if m.user.lastName} {m.user.lastName}{/if}{:else}{m.user.email}{/if}
+								</span>
+								{#if m.user.firstName}
+									<span class="pj-member-email">{m.user.email}</span>
+								{/if}
+							</div>
+							<span class="pj-member-role">{m.role.name}</span>
+						</div>
+					{/each}
+				</div>
+			</div>
+		{/if}
 	{/if}
 </div>
 
@@ -577,25 +622,6 @@
 		color: var(--error-text-color);
 		border: 1px solid color-mix(in srgb, var(--error-text-color) 25%, transparent);
 		margin-bottom: 1.5rem;
-	}
-
-	/* Back link */
-	.pj-back {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		font-size: 0.8125rem;
-		color: var(--surface-muted);
-		background: none;
-		border: none;
-		cursor: pointer;
-		padding: 0;
-		margin-bottom: 1rem;
-		transition: color 0.15s;
-	}
-
-	.pj-back:hover {
-		color: var(--center-channel-color);
 	}
 
 	/* Header */
@@ -969,5 +995,76 @@
 
 	.pj-btn-danger:hover:not(:disabled) {
 		background-color: color-mix(in srgb, var(--error-text-color) 20%, transparent);
+	}
+
+	/* Members */
+	.pj-members-section {
+		margin-top: 2rem;
+	}
+
+	.pj-members-list {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.pj-member {
+		display: flex;
+		align-items: center;
+		gap: 0.625rem;
+		padding: 0.5rem 0;
+	}
+
+	.pj-member + .pj-member {
+		border-top: 1px solid color-mix(in srgb, var(--surface-border) 40%, transparent);
+	}
+
+	.pj-member-avatar {
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: 50%;
+		flex-shrink: 0;
+		object-fit: cover;
+	}
+
+	.pj-member-avatar--letter {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
+		color: var(--sidebar-text-active-border);
+		font-size: 0.6875rem;
+		font-weight: 700;
+	}
+
+	.pj-member-info {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.pj-member-name {
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--center-channel-color);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.pj-member-email {
+		font-size: 0.6875rem;
+		color: var(--surface-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.pj-member-role {
+		font-size: 0.6875rem;
+		font-weight: 500;
+		color: var(--surface-muted);
+		text-transform: capitalize;
+		flex-shrink: 0;
 	}
 </style>

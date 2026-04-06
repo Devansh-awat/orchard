@@ -11,7 +11,7 @@ import { StorageService } from './storage.service';
   imports: [PrismaModule, AuthModule, UsersModule],
   controllers: [OrganizationsController, InvitationsController],
   providers: [OrganizationsService, StorageService],
-  exports: [OrganizationsService]
+  exports: [OrganizationsService, StorageService]
 })
 export class OrganizationsModule {}
 

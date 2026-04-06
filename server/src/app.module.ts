@@ -4,7 +4,6 @@ import { HealthModule } from './health/health.module';
 import { KubernetesModule } from './kubernetes/kubernetes.module';
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
-import { WorkspacesModule } from './workspaces/workspaces.module';
 import { ProjectsModule } from './projects/projects.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { UsersModule } from './users/users.module';
@@ -23,7 +22,6 @@ import { TemplatesModule } from './templates/templates.module';
     UsersModule,
     HealthModule,
     KubernetesModule,
-    WorkspacesModule,
     ProjectsModule,
     OrganizationsModule,
     GitHubModule,

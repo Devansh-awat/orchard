@@ -4,23 +4,6 @@ import { OrchardClient } from '../client';
 
 export function registerDangerousTools(server: McpServer, client: OrchardClient) {
   server.registerTool(
-    'delete_workspace',
-    {
-      description: 'DANGEROUS: Delete a workspace. Use force=true to cascade delete all projects and their resources.',
-      annotations: { destructiveHint: true, readOnlyHint: false, idempotentHint: false },
-      inputSchema: {
-        workspaceId: z.string().describe('The workspace UUID to delete'),
-        force: z.boolean().optional().describe('If true, cascade delete all projects and resources in the workspace. Default: false'),
-      },
-    },
-    async ({ workspaceId, force }) => {
-      const qs = force ? '?force=true' : '';
-      await client.delete(`/workspaces/${workspaceId}${qs}`);
-      return { content: [{ type: 'text', text: 'Workspace deleted successfully.' }] };
-    },
-  );
-
-  server.registerTool(
     'delete_project',
     {
       description: 'DANGEROUS: Delete a project and ALL its deployments, databases, and ingresses.',

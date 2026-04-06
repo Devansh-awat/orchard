@@ -37,25 +37,22 @@ export interface Project {
 	name: string;
 	slug: string;
 	description?: string;
+	organizationId: string;
 	deployments?: Deployment[];
 	ingresses?: IngressSummary[];
 	databases?: DatabaseSummary[];
 	templateInstances?: TemplateInstanceSummary[];
-}
-
-export interface Workspace {
-	id: string;
-	name: string;
-	slug: string;
-	description?: string;
-	organizationId: string;
-	projects?: Project[];
+	organization?: {
+		id: string;
+		name: string;
+		slug: string;
+	};
 }
 
 export interface TreeItem {
 	id: string;
 	name: string;
-	type: 'workspace' | 'project' | 'deployment' | 'ingress' | 'database' | 'templateInstance';
+	type: 'project' | 'deployment' | 'ingress' | 'database' | 'templateInstance';
 	href: string;
 	children?: TreeItem[];
 }
@@ -64,99 +61,73 @@ const treeData = writable<TreeItem[]>([]);
 const loading = writable(false);
 const error = writable<string | null>(null);
 
-async function fetchWorkspaceDetails(workspace: Workspace): Promise<Workspace> {
-	try {
-		const response = await apiFetch(`/apiv1/workspaces/slug/${workspace.slug}`);
-		if (!response.ok) {
-			return workspace;
-		}
-		const detailedWorkspace = await response.json();
-		return detailedWorkspace;
-	} catch {
-		return workspace;
-	}
-}
-
 async function fetchProjectDetails(projectId: string): Promise<Project | null> {
 	try {
 		const response = await apiFetch(`/apiv1/projects/${projectId}`);
-		if (!response.ok) {
-			return null;
-		}
+		if (!response.ok) return null;
 		return await response.json();
 	} catch {
 		return null;
 	}
 }
 
-function transformToTreeItems(workspaces: Workspace[], orgSlug: string): TreeItem[] {
-	return workspaces.map((workspace) => {
-		const workspaceItem: TreeItem = {
-			id: `workspace-${workspace.id}`,
-			name: workspace.name,
-			type: 'workspace',
-			href: `/${orgSlug}/workspaces/${workspace.slug}`,
-			children: workspace.projects?.map((project) => {
-				const deploymentItems: TreeItem[] = project.deployments?.map((deployment) => ({
-					id: `deployment-${deployment.id}`,
-					name: deployment.name || deployment.slug || `Deployment ${deployment.id.slice(0, 8)}`,
-					type: 'deployment' as const,
-					href: `/${orgSlug}/deployments/${deployment.id}`
-				})) ?? [];
+function transformToTreeItems(projects: Project[], orgSlug: string): TreeItem[] {
+	return projects.map((project) => {
+		const deploymentItems: TreeItem[] = project.deployments?.map((deployment) => ({
+			id: `deployment-${deployment.id}`,
+			name: deployment.name || deployment.slug || `Deployment ${deployment.id.slice(0, 8)}`,
+			type: 'deployment' as const,
+			href: `/${orgSlug}/deployments/${deployment.id}`
+		})) ?? [];
 
-				// Collect ingresses: prefer project-level, fall back to deployment-nested
-				const seenIngressIds = new Set<string>();
-				const ingressItems: TreeItem[] = [];
+		const seenIngressIds = new Set<string>();
+		const ingressItems: TreeItem[] = [];
 
-				for (const ing of project.ingresses ?? []) {
-					if (!seenIngressIds.has(ing.id)) {
-						seenIngressIds.add(ing.id);
-						ingressItems.push({
-							id: `ingress-${ing.id}`,
-							name: ing.host || ing.name,
-							type: 'ingress' as const,
-							href: `/${orgSlug}/ingresses/${ing.id}`
-						});
-					}
+		for (const ing of project.ingresses ?? []) {
+			if (!seenIngressIds.has(ing.id)) {
+				seenIngressIds.add(ing.id);
+				ingressItems.push({
+					id: `ingress-${ing.id}`,
+					name: ing.host || ing.name,
+					type: 'ingress' as const,
+					href: `/${orgSlug}/ingresses/${ing.id}`
+				});
+			}
+		}
+
+		for (const deployment of project.deployments ?? []) {
+			for (const ing of deployment.ingresses ?? []) {
+				if (!seenIngressIds.has(ing.id)) {
+					seenIngressIds.add(ing.id);
+					ingressItems.push({
+						id: `ingress-${ing.id}`,
+						name: ing.host || ing.name,
+						type: 'ingress' as const,
+						href: `/${orgSlug}/ingresses/${ing.id}`
+					});
 				}
+			}
+		}
 
-				for (const deployment of project.deployments ?? []) {
-					for (const ing of deployment.ingresses ?? []) {
-						if (!seenIngressIds.has(ing.id)) {
-							seenIngressIds.add(ing.id);
-							ingressItems.push({
-								id: `ingress-${ing.id}`,
-								name: ing.host || ing.name,
-								type: 'ingress' as const,
-								href: `/${orgSlug}/ingresses/${ing.id}`
-							});
-						}
-					}
-				}
+		const databaseItems: TreeItem[] = (project.databases ?? []).map((db) => ({
+			id: `database-${db.id}`,
+			name: db.name,
+			type: 'database' as const,
+			href: `/${orgSlug}/databases/${db.id}`
+		}));
 
-				const databaseItems: TreeItem[] = (project.databases ?? []).map((db) => ({
-					id: `database-${db.id}`,
-					name: db.name,
-					type: 'database' as const,
-					href: `/${orgSlug}/databases/${db.id}`
-				}));
-
-				const projectItem: TreeItem = {
-					id: `project-${project.id}`,
-					name: project.name,
-					type: 'project',
-					href: `/${orgSlug}/workspaces/${workspace.slug}/projects/${project.slug}`,
-					children: [...deploymentItems, ...ingressItems, ...databaseItems, ...(project.templateInstances ?? []).map((ti) => ({
-					id: `template-instance-${ti.id}`,
-					name: ti.name,
-					type: 'templateInstance' as const,
-					href: `/${orgSlug}/template-instances/${ti.id}`
-				}))]
-				};
-				return projectItem;
-			})
+		return {
+			id: `project-${project.id}`,
+			name: project.name,
+			type: 'project' as const,
+			href: `/${orgSlug}/projects/${project.slug}`,
+			children: [...deploymentItems, ...ingressItems, ...databaseItems, ...(project.templateInstances ?? []).map((ti) => ({
+				id: `template-instance-${ti.id}`,
+				name: ti.name,
+				type: 'templateInstance' as const,
+				href: `/${orgSlug}/template-instances/${ti.id}`
+			}))]
 		};
-		return workspaceItem;
 	});
 }
 
@@ -165,36 +136,27 @@ async function fetchTreeData() {
 	error.set(null);
 
 	try {
-		const response = await apiFetch('/apiv1/workspaces');
-		if (!response.ok) {
-			throw new Error('Failed to fetch workspaces');
-		}
-
-		let workspaces: Workspace[] = await response.json();
-
 		const selectedOrg = get(selectedOrganization);
-		if (selectedOrg) {
-			workspaces = workspaces.filter((w) => w.organizationId === selectedOrg.id);
+		const orgId = selectedOrg?.id;
+		const url = orgId ? `/apiv1/projects?orgId=${orgId}` : '/apiv1/projects';
+
+		const response = await apiFetch(url);
+		if (!response.ok) {
+			throw new Error('Failed to fetch projects');
 		}
 
-		const workspacesWithDetails = await Promise.all(
-			workspaces.map(async (workspace) => {
-				const detailed = await fetchWorkspaceDetails(workspace);
-				if (detailed.projects && detailed.projects.length > 0) {
-					const projectsWithDeployments = await Promise.all(
-						detailed.projects.map(async (project) => {
-							const projectDetails = await fetchProjectDetails(project.id);
-							return projectDetails || project;
-						})
-					);
-					detailed.projects = projectsWithDeployments;
-				}
-				return detailed;
+		let projects: Project[] = await response.json();
+
+		// Fetch detailed project info (deployments, etc.)
+		const projectsWithDetails = await Promise.all(
+			projects.map(async (project) => {
+				const details = await fetchProjectDetails(project.id);
+				return details || project;
 			})
 		);
 
 		const orgSlug = selectedOrg?.slug ?? '';
-		const treeItems = transformToTreeItems(workspacesWithDetails, orgSlug);
+		const treeItems = transformToTreeItems(projectsWithDetails, orgSlug);
 		treeData.set(treeItems);
 	} catch (e) {
 		error.set(e instanceof Error ? e.message : 'Failed to fetch tree data');
@@ -222,4 +184,3 @@ if (typeof window !== 'undefined') {
 		}
 	});
 }
-
