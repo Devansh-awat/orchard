@@ -13,6 +13,7 @@ import { EmailModule } from './email/email.module';
 import { AdminModule } from './admin/admin.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { TemplatesModule } from './templates/templates.module';
+import { SsoModule } from './sso/sso.module';
 
 @Module({
   imports: [
@@ -30,6 +31,7 @@ import { TemplatesModule } from './templates/templates.module';
     AdminModule,
     WebhooksModule,
     TemplatesModule,
+    SsoModule,
   ],
 })
 export class AppModule {}

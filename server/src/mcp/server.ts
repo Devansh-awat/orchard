@@ -25,7 +25,7 @@ export function createOrchardMcpServer(token?: string) {
   // Configuration (env vars, volumes, networking create/update)
   registerConfigurationTools(server, client);
 
-  // Resource creation (workspaces, projects, databases, templates)
+  // Resource creation (projects, databases, templates)
   registerResourceTools(server, client);
 
   // Destructive operations (all deletes)

@@ -23,9 +23,6 @@
 			id: string;
 			name: string;
 			slug: string;
-			workspace?: {
-				slug: string;
-			};
 		};
 	}
 
@@ -125,7 +122,7 @@
 			class="back-link mb-8 inline-flex items-center gap-2 text-sm cursor-pointer"
 		>
 			<ArrowLeft class="h-4 w-4" />
-			<span>Back to workspace</span>
+			<span>Back to project</span>
 		</button>
 
 		{#if error}

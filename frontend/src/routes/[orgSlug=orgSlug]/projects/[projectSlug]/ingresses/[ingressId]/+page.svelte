@@ -62,7 +62,6 @@
 	let ingressName = $state<string>('');
 	let originalBasicAuthEnabled = $state(false);
 
-	const workspaceSlug = $derived($page.params.wsSlug);
 	const projectSlug = $derived($page.params.projectSlug);
 	const ingressId = $derived($page.params.ingressId);
 	const orgSlug = $derived($page.params.orgSlug);
@@ -229,14 +228,15 @@
 		error = null;
 
 		try {
-			const wsResponse = await apiFetch(`/apiv1/workspaces/slug/${workspaceSlug}`);
-			if (!wsResponse.ok) throw new Error('Failed to fetch workspace');
-			const workspace = await wsResponse.json();
+			const orgRes = await apiFetch(`/apiv1/organizations/slug/${orgSlug}`);
+			if (!orgRes.ok) throw new Error('Organization not found');
+			const org = await orgRes.json();
 
-			const matchedProject = workspace.projects?.find((p: Project) => p.slug === projectSlug);
-			if (!matchedProject) throw new Error('Project not found');
+			const slugRes = await apiFetch(`/apiv1/projects/slug/${projectSlug}?orgId=${org.id}`);
+			if (!slugRes.ok) throw new Error('Project not found');
+			const projData = await slugRes.json();
 
-			const projResponse = await apiFetch(`/apiv1/projects/${matchedProject.id}`);
+			const projResponse = await apiFetch(`/apiv1/projects/${projData.id}`);
 			if (!projResponse.ok) throw new Error('Failed to fetch project');
 			project = await projResponse.json();
 
@@ -410,7 +410,7 @@
 				color: 'success'
 			});
 
-			goto(`/${orgSlug}/workspaces/${workspaceSlug}/projects/${projectSlug}`);
+			goto(`/${orgSlug}/projects/${projectSlug}`);
 		} catch (e) {
 			formError = e instanceof Error ? e.message : 'Failed to update ingress';
 		} finally {
@@ -721,7 +721,7 @@
 					{/if}
 
 					<div class="flex flex-wrap justify-end gap-3 border-t border-gray-200 pt-4 dark:border-gray-700">
-						<a href="/{orgSlug}/workspaces/{workspaceSlug}/projects/{projectSlug}" class="btn btn-secondary">
+						<a href="/{orgSlug}/projects/{projectSlug}" class="btn btn-secondary">
 							Cancel
 						</a>
 						<button type="button" onclick={submit} disabled={submitting} class="btn btn-primary">

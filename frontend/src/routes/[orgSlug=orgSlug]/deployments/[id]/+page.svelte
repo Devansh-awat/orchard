@@ -262,9 +262,6 @@
 			id: string;
 			name: string;
 			slug: string;
-			workspace?: {
-				slug: string;
-			};
 		};
 	}
 
@@ -1455,8 +1452,8 @@
 				color: 'success'
 			});
 			refreshTree();
-			if (deployment.project?.workspace?.slug && deployment.project?.slug) {
-				goto(`/${orgSlug}/workspaces/${deployment.project.workspace.slug}/projects/${deployment.project.slug}`);
+			if (deployment.project?.slug) {
+				goto(`/${orgSlug}/projects/${deployment.project.slug}`);
 			} else {
 				goto(`/${orgSlug}`);
 			}
@@ -2304,12 +2301,11 @@
 </script>
 
 <div class="deployment-page p-6">
-	{#if deployment?.project?.workspace?.slug && deployment?.project?.slug}
+	{#if deployment?.project?.slug}
 		<div class="mb-4">
 			<Breadcrumb crumbs={[
 				{ label: 'Home', href: `/${orgSlug}` },
-				{ label: deployment.project.workspace.slug, href: `/${orgSlug}/workspaces/${deployment.project.workspace.slug}` },
-				{ label: deployment.project.name || deployment.project.slug, href: `/${orgSlug}/workspaces/${deployment.project.workspace.slug}/projects/${deployment.project.slug}` },
+				{ label: deployment.project.name || deployment.project.slug, href: `/${orgSlug}/projects/${deployment.project.slug}` },
 				{ label: deployment.name }
 			]} />
 		</div>
@@ -3211,9 +3207,9 @@
 							<div class="card rounded-2xl p-5">
 								<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
 									<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Ingresses</p>
-									{#if deployment.project?.workspace?.slug && deployment.project?.slug}
+									{#if deployment.project?.slug}
 										<button
-											onclick={() => goto(`/${orgSlug}/workspaces/${deployment.project.workspace.slug}/projects/${deployment.project.slug}/ingresses/new?deployment=${deploymentId}`)}
+											onclick={() => goto(`/${orgSlug}/projects/${deployment.project.slug}/ingresses/new?deployment=${deploymentId}`)}
 											class="btn btn-secondary btn-sm"
 										>
 											<Plus class="h-4 w-4" />

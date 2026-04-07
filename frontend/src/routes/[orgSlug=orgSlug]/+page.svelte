@@ -4,7 +4,7 @@
 	import {
 		Plus, Search, Sparkles, GitBranch, Star, MoreVertical, ExternalLink,
 		RefreshCw, Pin, PinOff, Copy, ChevronDown, Loader2, CheckCircle2,
-		XCircle, Clock, Timer
+		XCircle, Clock, Timer, LayoutGrid, List
 	} from 'lucide-svelte';
 	import { onDestroy } from 'svelte';
 
@@ -78,6 +78,11 @@
 
 	function fmtDuration(s: number): string { if (s < 60) return `${s}s`; const m = Math.floor(s / 60); return m < 60 ? `${m}m ${s % 60}s` : `${Math.floor(m / 60)}h ${m % 60}m`; }
 	function elapsed(d: string): number { return Math.max(0, Math.floor((now - new Date(d).getTime()) / 1000)); }
+
+	// ── View mode ──
+	type ViewMode = 'by-project' | 'list-all';
+	let viewMode = $state<ViewMode>((typeof localStorage !== 'undefined' && localStorage.getItem('overview-view') as ViewMode) || 'by-project');
+	$effect(() => { if (typeof localStorage !== 'undefined') localStorage.setItem('overview-view', viewMode); });
 
 	// ── Filtering ──
 	let searchQuery = $state('');
@@ -235,10 +240,14 @@
 				<Search size={13} class="search-ic" />
 				<input type="search" placeholder="Search deployments..." class="search" bind:value={searchQuery} />
 			</div>
+			<div class="view-toggle">
+				<button class="view-btn" class:view-btn--active={viewMode === 'by-project'} onclick={() => viewMode = 'by-project'} aria-label="Group by project"><LayoutGrid size={14} /></button>
+				<button class="view-btn" class:view-btn--active={viewMode === 'list-all'} onclick={() => viewMode = 'list-all'} aria-label="List all"><List size={14} /></button>
+			</div>
 			<a href="/{orgSlug}/new" class="btn-new-project"><Plus size={13} /> New Project</a>
 		</div>
 
-		<!-- Favourites -->
+		<!-- Favourites (shown in both views) -->
 		{#if favDeps.length > 0}
 			<section class="section">
 				<h2 class="label"><Star size={11} /> Favourites</h2>
@@ -250,21 +259,36 @@
 			</section>
 		{/if}
 
-		<!-- Projects -->
-		{#if projectGroups.length > 0}
-			{#each projectGroups as group (group.id)}
+		{#if viewMode === 'by-project'}
+			<!-- Group by Project -->
+			{#if projectGroups.length > 0}
+				{#each projectGroups as group (group.id)}
+					<section class="section">
+						<a href="/{orgSlug}/projects/{group.slug}" class="group-head">
+							<span class="group-name">{group.name}</span>
+							<span class="group-count">{group.deps.length} {group.deps.length === 1 ? 'deployment' : 'deployments'}</span>
+						</a>
+						<div class="grid">
+							{#each group.deps as dep (dep.id)}
+								{@render card(dep, false)}
+							{/each}
+						</div>
+					</section>
+				{/each}
+			{/if}
+		{:else}
+			<!-- List All -->
+			{@const nonFav = filtered.filter(d => !favouriteIds.has(d.id))}
+			{#if nonFav.length > 0}
 				<section class="section">
-					<a href="/{orgSlug}/projects/{group.slug}" class="group-head">
-						<span class="group-name">{group.name}</span>
-						<span class="group-count">{group.deps.length} {group.deps.length === 1 ? 'deployment' : 'deployments'}</span>
-					</a>
+					<h2 class="label">All Deployments</h2>
 					<div class="grid">
-						{#each group.deps as dep (dep.id)}
+						{#each nonFav as dep (dep.id)}
 							{@render card(dep, false)}
 						{/each}
 					</div>
 				</section>
-			{/each}
+			{/if}
 		{/if}
 
 		{#if filtered.length === 0}
@@ -328,7 +352,9 @@
 				{#if dep.ingresses.length > 0}
 					<span class="card-sub">{dep.ingresses[0].host.split('/')[0]}</span>
 				{:else if dep.githubRepo}
-					<span class="card-sub">{dep.githubRepo}</span>
+					<span class="card-sub">{dep.githubRepo}{#if dep.githubBranch} / {dep.githubBranch}{/if}</span>
+				{:else if dep.image}
+					<span class="card-sub">{dep.image}</span>
 				{/if}
 			</div>
 			<div class="card-acts">
@@ -348,9 +374,6 @@
 				</div>
 			</div>
 		</div>
-		{#if dep.githubRepo}
-			<span class="card-repo"><GitBranch size={11} /> {dep.githubRepo}{#if dep.githubBranch} / {dep.githubBranch}{/if}</span>
-		{/if}
 		<div class="card-bot">
 			<span class="card-status"><span class="dot {dotClass(dep.status, dep.buildStatus)}"></span> {statusText(dep.status, dep.buildStatus)}</span>
 			<span class="card-meta">{timeAgo(dep.updatedAt)}</span>
@@ -367,7 +390,7 @@
 	.btn-primary {
 		display: inline-flex; align-items: center; gap: 0.375rem;
 		padding: 0.5rem 1rem; border-radius: 0.5rem; font-size: 0.8125rem; font-weight: 600;
-		background: var(--center-channel-color); color: var(--center-channel-bg);
+		background: var(--button-bg); color: var(--button-color);
 		text-decoration: none; border: none; cursor: pointer; transition: opacity 0.15s;
 	}
 	.btn-primary:hover { opacity: 0.85; }
@@ -399,6 +422,23 @@
 	.search::placeholder { color: var(--surface-muted); }
 	.search:focus { outline: none; border-color: var(--surface-muted); background: var(--center-channel-bg); }
 
+	/* View toggle */
+	.view-toggle {
+		display: inline-flex; align-items: center; gap: 0;
+		border-radius: 0.5rem; overflow: hidden;
+		border: 1px solid color-mix(in srgb, var(--surface-border) 60%, transparent);
+	}
+	.view-btn {
+		display: flex; align-items: center; justify-content: center;
+		width: 2rem; height: 2rem; border: none; background: none;
+		color: var(--surface-muted); cursor: pointer; transition: all 0.12s;
+	}
+	.view-btn:hover { color: var(--center-channel-color); background: color-mix(in srgb, var(--surface-border) 25%, transparent); }
+	.view-btn--active {
+		color: var(--sidebar-text-active-border);
+		background: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
+	}
+
 	/* Section labels */
 	.section { margin-bottom: 1.75rem; }
 	.label {
@@ -421,33 +461,44 @@
 	}
 
 	/* Card grid */
-	.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(16.5rem, 1fr)); gap: 0.75rem; }
+	.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); gap: 0.875rem; }
 
-	/* Card */
+	/* Card — two-part shadow, no border */
 	.card {
-		display: flex; flex-direction: column; gap: 0.375rem;
-		padding: 0.875rem; border-radius: 0.625rem; background: var(--center-channel-bg);
+		display: flex; flex-direction: column; gap: 0.5rem;
+		padding: 1rem; border-radius: 0.625rem; background: var(--center-channel-bg); min-height: 8rem;
 		text-decoration: none; color: var(--center-channel-color);
-		box-shadow: 0 0 0 1px color-mix(in srgb, var(--surface-border) 50%, transparent), 0 1px 3px rgba(0,0,0,0.04);
-		transition: box-shadow 0.15s; cursor: pointer;
+		box-shadow:
+			0 1px 2px rgba(0,0,0,0.04),
+			0 3px 8px rgba(0,0,0,0.03);
+		transition: box-shadow 0.15s, transform 0.15s; cursor: pointer;
 	}
-	.card:hover { box-shadow: 0 0 0 1px color-mix(in srgb, var(--surface-border) 75%, transparent), 0 4px 12px rgba(0,0,0,0.07); }
-	.card--fav { box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-text-active-border) 20%, var(--surface-border)), 0 1px 3px rgba(0,0,0,0.04); }
+	.card:hover {
+		box-shadow:
+			0 2px 4px rgba(0,0,0,0.06),
+			0 6px 16px rgba(0,0,0,0.07);
+		transform: translateY(-1px);
+	}
+	.card--fav {
+		box-shadow:
+			0 0 0 1.5px color-mix(in srgb, var(--sidebar-text-active-border) 25%, transparent),
+			0 1px 2px rgba(0,0,0,0.04),
+			0 3px 8px rgba(0,0,0,0.03);
+	}
 	.card--skel { pointer-events: none; }
 
 	.card-top { display: flex; align-items: center; gap: 0.5rem; }
-	.card-ic { width: 2rem; height: 2rem; border-radius: 0.375rem; flex-shrink: 0; object-fit: contain; }
+	.card-ic { width: 2.25rem; height: 2.25rem; border-radius: 0.5rem; flex-shrink: 0; object-fit: contain; }
 	.card-av {
-		width: 2rem; height: 2rem; border-radius: 0.375rem; flex-shrink: 0;
+		width: 2.25rem; height: 2.25rem; border-radius: 0.5rem; flex-shrink: 0;
 		display: flex; align-items: center; justify-content: center;
 		background: linear-gradient(135deg, color-mix(in srgb, var(--sidebar-text-active-border) 15%, transparent), color-mix(in srgb, var(--sidebar-text-active-border) 5%, transparent));
-		color: var(--sidebar-text-active-border); font-size: 0.8125rem; font-weight: 700;
+		color: var(--sidebar-text-active-border); font-size: 0.75rem; font-weight: 700;
 	}
 	.card-text { flex: 1; min-width: 0; }
-	.card-name { display: block; font-size: 0.8125rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-	.card-sub { display: block; font-size: 0.6875rem; color: var(--surface-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-	.card-repo { display: block; font-size: 0.6875rem; color: var(--surface-muted); font-family: var(--font-mono, monospace); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-	.card-bot { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.125rem; }
+	.card-name { display: block; font-size: 0.9375rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.card-sub { display: block; font-size: 0.75rem; color: var(--surface-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 0.0625rem; }
+	.card-bot { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: auto; padding-top: 0.5rem; }
 	.card-status { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.6875rem; color: var(--surface-muted); font-weight: 500; }
 	.card-meta { font-size: 0.6875rem; color: var(--surface-muted); white-space: nowrap; }
 
@@ -530,7 +581,7 @@
 	:global(.spin) { animation: spin 1s linear infinite; }
 
 	/* Skeletons */
-	.sk-icon { width: 2rem; height: 2rem; border-radius: 0.375rem; }
+	.sk-icon { width: 1.75rem; height: 1.75rem; border-radius: 0.375rem; }
 	.sk-col { display: flex; flex-direction: column; gap: 0.3rem; flex: 1; }
 	:global(.sk) {
 		background: linear-gradient(90deg, color-mix(in srgb, var(--surface-border) 40%, transparent) 25%, color-mix(in srgb, var(--surface-border) 18%, transparent) 50%, color-mix(in srgb, var(--surface-border) 40%, transparent) 75%);

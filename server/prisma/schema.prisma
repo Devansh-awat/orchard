@@ -157,6 +157,7 @@ model Organization {
   description String?  @db.Text
   avatarUrl   String?  @map("avatar_url") @db.VarChar(500)
   plan        String?  @db.VarChar(50)
+  subdomain   String?  @unique @db.VarChar(100)
   createdBy   String?  @map("created_by") @db.Uuid
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
@@ -165,6 +166,7 @@ model Organization {
   members     OrganizationMember[]
   invitations OrganizationInvitation[]
   projects    Project[]
+  ssoConfig   SsoConfig?
 
   @@map("organizations")
 }
@@ -643,4 +645,42 @@ model TemplateInstance {
   @@index([projectId], map: "idx_template_instances_project")
   @@index([templateId], map: "idx_template_instances_template")
   @@map("template_instances")
+}
+
+model SsoConfig {
+  id                String   @id @default(uuid()) @db.Uuid
+  organizationId    String   @unique @map("organization_id") @db.Uuid
+
+  // Provider type: "oidc" or "saml"
+  provider          String   @db.VarChar(10)
+
+  // OIDC configuration
+  oidcIssuerUrl     String?  @map("oidc_issuer_url") @db.VarChar(500)
+  oidcClientId      String?  @map("oidc_client_id") @db.VarChar(255)
+  oidcClientSecret  String?  @map("oidc_client_secret") @db.Text
+  oidcScopes        String?  @map("oidc_scopes") @db.VarChar(500)
+
+  // SAML configuration
+  samlEntryPoint    String?  @map("saml_entry_point") @db.VarChar(500)
+  samlIssuer        String?  @map("saml_issuer") @db.VarChar(500)
+  samlCertificate   String?  @map("saml_certificate") @db.Text
+  samlMetadataUrl   String?  @map("saml_metadata_url") @db.VarChar(500)
+
+  // Login page customization
+  loginLogoUrl      String?  @map("login_logo_url") @db.VarChar(500)
+  loginPrimaryColor String?  @map("login_primary_color") @db.VarChar(7)
+  loginBgColor      String?  @map("login_bg_color") @db.VarChar(7)
+  loginWelcomeText  String?  @map("login_welcome_text") @db.VarChar(500)
+
+  // State
+  enabled           Boolean  @default(false)
+  enforced          Boolean  @default(false)
+
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId], map: "idx_sso_config_org")
+  @@map("sso_configs")
 }

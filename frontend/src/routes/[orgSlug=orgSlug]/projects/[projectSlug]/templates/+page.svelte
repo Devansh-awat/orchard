@@ -28,7 +28,6 @@
 	let deleting = $state(false);
 
 	const orgSlug = $derived($page.params.orgSlug);
-	const wsSlug = $derived($page.params.wsSlug);
 	const projectSlug = $derived($page.params.projectSlug);
 
 	const categories = $derived(() => {
@@ -193,7 +192,7 @@
 	{:else}
 		<!-- Back link -->
 		<button
-			onclick={() => goto(`/${orgSlug}/workspaces/${wsSlug}/projects/${projectSlug}`)}
+			onclick={() => goto(`/${orgSlug}/projects/${projectSlug}`)}
 			class="tpl-back"
 		>
 			<ArrowLeft class="h-4 w-4" />
@@ -210,7 +209,7 @@
 			</div>
 			<div class="tpl-header-actions">
 				<a
-					href="/{orgSlug}/workspaces/{wsSlug}/projects/{projectSlug}/templates/new"
+					href="/{orgSlug}/projects/{projectSlug}/templates/new"
 					class="tpl-btn tpl-btn-primary"
 				>
 					<Plus class="h-4 w-4" />
@@ -288,7 +287,7 @@
 				{#each filteredTemplates as template}
 					{@const Icon = getIconForTemplate(template.icon)}
 					<a
-						href="/{orgSlug}/workspaces/{wsSlug}/projects/{projectSlug}/templates/deploy/{template.id}"
+						href="/{orgSlug}/projects/{projectSlug}/templates/deploy/{template.id}"
 						class="tpl-card"
 					>
 						<div class="tpl-card-top">

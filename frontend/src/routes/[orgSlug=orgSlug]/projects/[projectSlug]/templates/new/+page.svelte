@@ -68,7 +68,6 @@
 	}
 
 	const orgSlug = $derived($page.params.orgSlug);
-	const wsSlug = $derived($page.params.wsSlug);
 	const projectSlug = $derived($page.params.projectSlug);
 
 	let mode = $state<'visual' | 'yaml'>('visual');
@@ -409,7 +408,7 @@ resources:
 				color: 'success'
 			});
 
-			goto(`/${orgSlug}/workspaces/${wsSlug}/projects/${projectSlug}/templates`);
+			goto(`/${orgSlug}/projects/${projectSlug}/templates`);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to create template';
 		} finally {
@@ -421,7 +420,7 @@ resources:
 <div class="nt-page">
 	<button
 		onclick={() =>
-			goto(`/${orgSlug}/workspaces/${wsSlug}/projects/${projectSlug}/templates`)}
+			goto(`/${orgSlug}/projects/${projectSlug}/templates`)}
 		class="nt-back"
 	>
 		<ArrowLeft class="h-4 w-4" />

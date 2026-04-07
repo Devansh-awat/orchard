@@ -56,7 +56,6 @@
 	let paramValues = $state<Record<string, any>>({});
 
 	const orgSlug = $derived($page.params.orgSlug);
-	const wsSlug = $derived($page.params.wsSlug);
 	const projectSlug = $derived($page.params.projectSlug);
 	const templateId = $derived($page.params.templateId);
 
@@ -106,15 +105,15 @@
 			}
 
 			// Fetch project
-			const wsRes = await apiFetch(`/apiv1/workspaces/slug/${wsSlug}`);
-			if (!wsRes.ok) throw new Error('Failed to fetch workspace');
-			const workspace = await wsRes.json();
-			const matched = workspace.projects?.find(
-				(p: { slug: string }) => p.slug === projectSlug
-			);
-			if (!matched) throw new Error('Project not found');
+			const orgRes = await apiFetch(`/apiv1/organizations/slug/${orgSlug}`);
+			if (!orgRes.ok) throw new Error('Organization not found');
+			const org = await orgRes.json();
 
-			const projRes = await apiFetch(`/apiv1/projects/${matched.id}`);
+			const slugRes = await apiFetch(`/apiv1/projects/slug/${projectSlug}?orgId=${org.id}`);
+			if (!slugRes.ok) throw new Error('Project not found');
+			const projData = await slugRes.json();
+
+			const projRes = await apiFetch(`/apiv1/projects/${projData.id}`);
 			if (!projRes.ok) throw new Error('Failed to fetch project');
 			project = await projRes.json();
 		} catch (e) {
@@ -178,7 +177,7 @@
 		<button
 			onclick={() =>
 				goto(
-					`/${orgSlug}/workspaces/${wsSlug}/projects/${projectSlug}/templates`
+					`/${orgSlug}/projects/${projectSlug}/templates`
 				)}
 			class="dp-back"
 		>

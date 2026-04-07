@@ -53,13 +53,12 @@
 		namespace?: string;
 		repositoryUrl?: string;
 		deployments?: Deployment[];
-		members?: Member[];
+		members?: ProjectMember[];
 		organization?: {
 			id: string;
 			name: string;
 			slug: string;
 		};
-		members?: WorkspaceMember[];
 	}
 
 	interface TemplateInstanceSummary {
@@ -84,7 +83,7 @@
 		crossAxis: true
 	});
 
-	interface WorkspaceMember {
+	interface ProjectMember {
 		id: string;
 		role: { name: string };
 		user: {
@@ -105,9 +104,8 @@
 	let showDeleteModal = $state(false);
 	let deploymentSearch = $state('');
 	let showNewResourceModal = $state(false);
-	let wsMembers = $state<WorkspaceMember[]>([]);
-	let wsId = $state<string | null>(null);
-
+	let projectMembers = $state<ProjectMember[]>([]);
+	
 	let filteredDeployments = $derived.by(() => {
 		const deployments = project?.deployments ?? [];
 		const query = deploymentSearch.trim().toLowerCase();
@@ -145,7 +143,7 @@
 			const fullRes = await apiFetch(`/apiv1/projects/${projData.id}`);
 			if (!fullRes.ok) throw new Error('Failed to fetch project');
 			project = await fullRes.json();
-			wsMembers = project?.members ?? [];
+			projectMembers = project?.members ?? [];
 
 			if (project?.namespace) {
 				syncNamespace();
@@ -531,13 +529,13 @@
 		{/if}
 
 		<!-- Members -->
-		{#if wsMembers.length > 0}
+		{#if projectMembers.length > 0}
 			<div class="pj-members-section">
 				<div class="pj-deployments-header">
 					<h2 class="pj-section-title"><Users size={16} /> Members</h2>
 				</div>
 				<div class="pj-members-list">
-					{#each wsMembers as m (m.id)}
+					{#each projectMembers as m (m.id)}
 						<div class="pj-member">
 							{#if m.user.imageUrl}
 								<img src={m.user.imageUrl} alt="" class="pj-member-avatar" />

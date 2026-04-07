@@ -17,12 +17,6 @@
 		}
 	}
 
-	interface Workspace {
-		id: string;
-		name: string;
-		slug: string;
-	}
-
 	interface Project {
 		id: string;
 		name: string;
@@ -42,7 +36,6 @@
 		protected: boolean;
 	}
 
-	let workspace = $state<Workspace | null>(null);
 	let project = $state<Project | null>(null);
 	let loading = $state(true);
 	let submitting = $state(false);

@@ -3900,7 +3900,7 @@ export class ProjectsService {
     const orgMembership = await this.prisma.organizationMember.findUnique({
       where: {
         organizationId_userId: {
-          organizationId: project.organization.organizationId,
+          organizationId: project.organizationId,
           userId: user.id,
         },
       },
@@ -6459,11 +6459,10 @@ export class ProjectsService {
     if (!slug) throw new BadRequestException('Invalid database name');
 
     // Generate unique db name from org-project-dbname
-    const orgSlug = project.organization.organization.slug.replace(/-/g, '_');
-    const wsSlug = project.organization.slug.replace(/-/g, '_');
+    const orgSlug = project.organization.slug.replace(/-/g, '_');
     const projSlug = project.slug.replace(/-/g, '_');
     const nameSlug = slug.replace(/-/g, '_');
-    const fullDbName = `${orgSlug}_${wsSlug}_${projSlug}_${nameSlug}`;
+    const fullDbName = `${orgSlug}_${projSlug}_${nameSlug}`;
     // PostgreSQL identifiers are limited to 63 characters; dbUser has "u_" prefix so max 61 for the base
     const maxLen = 61;
     const dbBase = fullDbName.length > maxLen ? fullDbName.substring(0, maxLen) : fullDbName;

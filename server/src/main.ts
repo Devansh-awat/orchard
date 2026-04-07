@@ -29,9 +29,27 @@ async function bootstrap() {
 
   app.use(cookieParser());
 
+  const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
+  const baseDomain = process.env.BASE_DOMAIN; // e.g. "orchard.my"
+
   app.enableCors({
-    origin: process.env.FRONTEND_URL || 'http://localhost:5173',
-    credentials: true
+    origin: (origin, callback) => {
+      // Allow requests with no origin (e.g. server-to-server, curl)
+      if (!origin) return callback(null, true);
+
+      // Allow the main frontend URL
+      if (origin === frontendUrl) return callback(null, true);
+
+      // Allow any subdomain of the base domain
+      if (baseDomain) {
+        const escapedDomain = baseDomain.replace(/\./g, '\\.');
+        const subdomainPattern = new RegExp(`^https?://[a-z0-9-]+\\.${escapedDomain}$`);
+        if (subdomainPattern.test(origin)) return callback(null, true);
+      }
+
+      callback(new Error('Not allowed by CORS'));
+    },
+    credentials: true,
   });
 
   const port = process.env.PORT || 3001;

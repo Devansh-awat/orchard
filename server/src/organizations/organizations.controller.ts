@@ -24,14 +24,14 @@ export class OrganizationsController {
     });
   }
 
-  @Get(':id')
-  async getOrganization(@Param('id') id: string) {
-    return this.organizationsService.getOrganization(id);
-  }
-
   @Get('slug/:slug')
   async getOrganizationBySlug(@Param('slug') slug: string) {
     return this.organizationsService.getOrganizationBySlug(slug);
+  }
+
+  @Get(':id')
+  async getOrganization(@Param('id') id: string) {
+    return this.organizationsService.getOrganization(id);
   }
 
   @Post(':id/avatar')

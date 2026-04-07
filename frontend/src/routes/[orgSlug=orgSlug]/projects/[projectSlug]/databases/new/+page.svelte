@@ -17,30 +17,29 @@
 	let error = $state<string | null>(null);
 	let name = $state('');
 
-	const workspaceSlug = $derived($page.params.wsSlug);
 	const projectSlug = $derived($page.params.projectSlug);
 	const orgSlug = $derived($page.params.orgSlug);
 
 	const generatedDbName = $derived(() => {
 		const o = orgSlug.replace(/-/g, '_');
-		const w = workspaceSlug.replace(/-/g, '_');
 		const p = projectSlug.replace(/-/g, '_');
 		const n = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_') || 'name';
-		const full = `${o}_${w}_${p}_${n}`;
+		const full = `${o}_${p}_${n}`;
 		return full.length > 61 ? full.substring(0, 61) : full;
 	});
 
 	async function fetchProject() {
 		loading = true;
 		try {
-			const wsResponse = await apiFetch(`/apiv1/workspaces/slug/${workspaceSlug}`);
-			if (!wsResponse.ok) throw new Error('Failed to fetch workspace');
-			const workspace = await wsResponse.json();
+			const orgRes = await apiFetch(`/apiv1/organizations/slug/${orgSlug}`);
+			if (!orgRes.ok) throw new Error('Organization not found');
+			const org = await orgRes.json();
 
-			const matched = workspace.projects?.find((p: Project) => p.slug === projectSlug);
-			if (!matched) throw new Error('Project not found');
+			const slugRes = await apiFetch(`/apiv1/projects/slug/${projectSlug}?orgId=${org.id}`);
+			if (!slugRes.ok) throw new Error('Project not found');
+			const projData = await slugRes.json();
 
-			const projResponse = await apiFetch(`/apiv1/projects/${matched.id}`);
+			const projResponse = await apiFetch(`/apiv1/projects/${projData.id}`);
 			if (!projResponse.ok) throw new Error('Failed to fetch project');
 			project = await projResponse.json();
 		} catch (e) {
@@ -96,7 +95,7 @@
 		</div>
 	{:else if project}
 		<button
-			onclick={() => goto(`/${orgSlug}/workspaces/${workspaceSlug}/projects/${projectSlug}`)}
+			onclick={() => goto(`/${orgSlug}/projects/${projectSlug}`)}
 			class="db-back"
 		>
 			<ArrowLeft class="h-4 w-4" />
@@ -111,7 +110,7 @@
 
 		<!-- Template banner -->
 		<a
-			href="/{orgSlug}/workspaces/{workspaceSlug}/projects/{projectSlug}/templates"
+			href="/{orgSlug}/projects/{projectSlug}/templates"
 			class="db-template-banner"
 		>
 			<span class="db-template-cta">Looking for a complete app setup?</span>

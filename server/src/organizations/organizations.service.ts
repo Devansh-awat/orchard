@@ -76,7 +76,7 @@ export class OrganizationsService {
           include: {
             _count: {
               select: {
-                projects: true,
+                deployments: true,
                 members: true
               }
             }
@@ -163,7 +163,7 @@ export class OrganizationsService {
           include: {
             _count: {
               select: {
-                projects: true,
+                deployments: true,
                 members: true
               }
             }
@@ -252,7 +252,7 @@ export class OrganizationsService {
           include: {
             _count: {
               select: {
-                projects: true,
+                deployments: true,
                 members: true
               }
             }
@@ -317,7 +317,7 @@ export class OrganizationsService {
           include: {
             _count: {
               select: {
-                projects: true,
+                deployments: true,
                 members: true
               }
             }
@@ -379,7 +379,7 @@ export class OrganizationsService {
           include: {
             _count: {
               select: {
-                projects: true,
+                deployments: true,
                 members: true
               }
             }
