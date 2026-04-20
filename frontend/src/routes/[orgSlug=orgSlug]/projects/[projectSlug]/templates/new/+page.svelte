@@ -1,9 +1,8 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { apiFetch, toasts } from '$lib/stores';
+	import { apiFetch, toasts, buildBasePath } from '$lib/stores';
 	import {
-		ArrowLeft,
 		Loader2,
 		LayoutTemplate,
 		Plus,
@@ -13,6 +12,7 @@
 		ChevronDown,
 		ChevronUp
 	} from 'lucide-svelte';
+	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 
 	type ParamType = 'string' | 'number' | 'boolean' | 'select';
 	type ResourceType = 'deployment' | 'database' | 'ingress';
@@ -67,8 +67,10 @@
 		routes: Route[];
 	}
 
-	const orgSlug = $derived($page.params.orgSlug);
-	const projectSlug = $derived($page.params.projectSlug);
+	const orgSlug = $derived($page.params.orgSlug ?? '');
+	const projectSlug = $derived($page.params.projectSlug ?? '');
+	const wsSlug = $derived($page.params.wsSlug);
+	const basePath = $derived(buildBasePath({ orgSlug, projectSlug, wsSlug }));
 
 	let mode = $state<'visual' | 'yaml'>('visual');
 	let saving = $state(false);
@@ -408,7 +410,7 @@ resources:
 				color: 'success'
 			});
 
-			goto(`/${orgSlug}/projects/${projectSlug}/templates`);
+			goto(`${basePath}/templates`);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to create template';
 		} finally {
@@ -418,14 +420,11 @@ resources:
 </script>
 
 <div class="nt-page">
-	<button
-		onclick={() =>
-			goto(`/${orgSlug}/projects/${projectSlug}/templates`)}
-		class="nt-back"
-	>
-		<ArrowLeft class="h-4 w-4" />
-		Templates
-	</button>
+	<Breadcrumb crumbs={[
+		{ label: 'Home', href: `/${orgSlug}` },
+		{ label: 'Templates', href: `${basePath}/templates` },
+		{ label: 'New Template' }
+	]} />
 
 	<div class="nt-header">
 		<LayoutTemplate class="h-6 w-6" style="color: var(--sidebar-text-active-border)" />

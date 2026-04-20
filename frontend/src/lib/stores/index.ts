@@ -27,3 +27,8 @@ export {
 	type ThemeColors,
 	type SimpleThemeColors
 } from './theme';
+export {
+	fetchProjectContext,
+	buildBasePath,
+	type ProjectContext
+} from './project-context';

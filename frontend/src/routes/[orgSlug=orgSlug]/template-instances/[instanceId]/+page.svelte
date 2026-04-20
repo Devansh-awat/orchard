@@ -226,7 +226,12 @@
 					</h2>
 					<div class="ti-resource-list">
 						{#each instance.ingresses as ing}
-							<a href="/{orgSlug}/ingresses/{ing.id}" class="ti-resource-card">
+							<a
+								href="https://{ing.host}{ing.path}"
+								target="_blank"
+								rel="noopener noreferrer"
+								class="ti-resource-card"
+							>
 								<div class="ti-resource-info">
 									<span class="ti-resource-name">{ing.host}{ing.path}</span>
 								</div>

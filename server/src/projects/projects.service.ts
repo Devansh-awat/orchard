@@ -2701,11 +2701,6 @@ export class ProjectsService {
         throw new BadRequestException(`Path ${path} contains invalid characters`);
       }
 
-      const existing = allIngresses.find((e) => e.host === rawHost && e.path === path);
-      if (existing) {
-        throw new BadRequestException(`An ingress for ${rawHost}${path} already exists`);
-      }
-
       const targetService = allServices.find((s) => s.name === String(route.serviceName || '').trim());
       if (!targetService) {
         throw new BadRequestException(`Service ${route.serviceName} not found in project`);
@@ -2730,6 +2725,88 @@ export class ProjectsService {
         serviceId: targetService.id,
         deploymentId: (targetService as any).deploymentId,
       });
+    }
+
+    const existingForHost = allIngresses.filter((e) => e.host === rawHost);
+    const mergeTarget = existingForHost[0] ?? null;
+
+    if (mergeTarget) {
+      const k8sIngress = await this.kubernetesService.readIngress(
+        mergeTarget.namespace,
+        mergeTarget.name
+      );
+      const existingPaths: Array<{ path: string; pathType: string; serviceName: string; servicePort: number }> =
+        (k8sIngress?.spec?.rules?.[0]?.http?.paths ?? []).map((p: any) => ({
+          path: p.path || '/',
+          pathType: p.pathType || 'Prefix',
+          serviceName: p.backend?.service?.name || '',
+          servicePort: p.backend?.service?.port?.number || 0,
+        }));
+
+      for (const pb of pathBackends) {
+        if (existingPaths.some((ep) => ep.path === pb.path)) {
+          throw new BadRequestException(
+            `Domain ${rawHost} already routes ${pb.path} to another service. Use a different path.`
+          );
+        }
+      }
+
+      const mergedPaths = [...existingPaths, ...pathBackends.map((pb) => ({
+        path: pb.path,
+        pathType: pb.pathType,
+        serviceName: pb.serviceName,
+        servicePort: pb.servicePort,
+      }))];
+
+      const existingAnnotations = (mergeTarget.annotations as Record<string, string> | null) ?? {};
+      const existingEntrypoints = Array.isArray(mergeTarget.entrypoints) ? mergeTarget.entrypoints : [];
+      const mergedTlsEnabled = !!mergeTarget.tlsSecretName;
+
+      await this.kubernetesService.updateIngress({
+        namespace: mergeTarget.namespace,
+        name: mergeTarget.name,
+        host: rawHost,
+        paths: mergedPaths,
+        tlsSecretName: mergeTarget.tlsSecretName || undefined,
+        tlsHosts: mergeTarget.tlsHosts ?? (mergedTlsEnabled ? [rawHost] : []),
+        ingressClassName: mergeTarget.ingressClass || 'traefik',
+        entrypoints: existingEntrypoints,
+        annotations: existingAnnotations,
+      });
+
+      for (const pb of pathBackends) {
+        await this.prisma.ingress.create({
+          data: {
+            projectId: project.id,
+            deploymentId: pb.deploymentId,
+            serviceId: pb.serviceId,
+            name: mergeTarget.name,
+            namespace: mergeTarget.namespace,
+            host: rawHost,
+            path: pb.path,
+            pathType: pb.pathType,
+            tlsSecretName: mergeTarget.tlsSecretName,
+            tlsHosts: mergeTarget.tlsHosts ?? [],
+            ingressClass: mergeTarget.ingressClass || 'traefik',
+            entrypoints: existingEntrypoints,
+            clusterIssuer: mergeTarget.clusterIssuer,
+            annotations: Object.keys(existingAnnotations).length > 0
+              ? (existingAnnotations as Prisma.JsonObject)
+              : undefined,
+            statusAddress: mergeTarget.statusAddress,
+          },
+        });
+
+        const svc = allServices.find((s) => s.id === pb.serviceId);
+        if (svc && !svc.domain) {
+          await this.prisma.service.update({
+            where: { id: pb.serviceId },
+            data: { domain: rawHost },
+          });
+        }
+      }
+
+      return this.getProject(projectId, clerkId, userData);
     }
 
     const tlsEnabled = data.tlsEnabled !== false;
@@ -2782,29 +2859,27 @@ export class ProjectsService {
       : null;
     const statusAddress = statusRecord?.ip || statusRecord?.hostname || null;
 
-    const firstRoute = pathBackends[0];
-
-    await this.prisma.ingress.create({
-      data: {
-        projectId: project.id,
-        deploymentId: firstRoute.deploymentId,
-        serviceId: firstRoute.serviceId,
-        name: ingressName,
-        namespace: project.namespace,
-        host: rawHost,
-        path: firstRoute.path,
-        pathType: 'Prefix',
-        tlsSecretName,
-        tlsHosts,
-        ingressClass: 'traefik',
-        entrypoints,
-        clusterIssuer,
-        annotations: Object.keys(sanitizedAnnotations).length > 0 ? (sanitizedAnnotations as Prisma.JsonObject) : undefined,
-        statusAddress,
-      },
-    });
-
     for (const pb of pathBackends) {
+      await this.prisma.ingress.create({
+        data: {
+          projectId: project.id,
+          deploymentId: pb.deploymentId,
+          serviceId: pb.serviceId,
+          name: ingressName,
+          namespace: project.namespace,
+          host: rawHost,
+          path: pb.path,
+          pathType: pb.pathType,
+          tlsSecretName,
+          tlsHosts,
+          ingressClass: 'traefik',
+          entrypoints,
+          clusterIssuer,
+          annotations: Object.keys(sanitizedAnnotations).length > 0 ? (sanitizedAnnotations as Prisma.JsonObject) : undefined,
+          statusAddress,
+        },
+      });
+
       const svc = allServices.find((s) => s.id === pb.serviceId);
       if (svc && !svc.domain) {
         await this.prisma.service.update({
@@ -2866,7 +2941,7 @@ export class ProjectsService {
     const orgMembership = await this.prisma.organizationMember.findUnique({
       where: {
         organizationId_userId: {
-          organizationId: ingress.project.organization.organizationId,
+          organizationId: ingress.project.organizationId,
           userId: user.id,
         },
       },
@@ -2957,7 +3032,7 @@ export class ProjectsService {
     const orgMembership = await this.prisma.organizationMember.findUnique({
       where: {
         organizationId_userId: {
-          organizationId: ingress.project.organization.organizationId,
+          organizationId: ingress.project.organizationId,
           userId: user.id,
         },
       },
@@ -3354,11 +3429,58 @@ export class ProjectsService {
       throw new ForbiddenException('You do not have permission to manage ingress resources');
     }
 
-    try {
-      await this.kubernetesService.deleteIngress(ingress.namespace, ingress.name);
-    } catch (error) {
-      if (error instanceof BadRequestException) {
-        throw error;
+    const siblings = await this.prisma.ingress.findMany({
+      where: {
+        namespace: ingress.namespace,
+        name: ingress.name,
+        id: { not: ingress.id },
+      },
+    });
+
+    if (siblings.length > 0) {
+      try {
+        const k8sIngress = await this.kubernetesService.readIngress(
+          ingress.namespace,
+          ingress.name
+        );
+        const remainingPaths = (k8sIngress?.spec?.rules?.[0]?.http?.paths ?? [])
+          .filter((p: any) => (p.path || '/') !== ingress.path)
+          .map((p: any) => ({
+            path: p.path || '/',
+            pathType: p.pathType || 'Prefix',
+            serviceName: p.backend?.service?.name || '',
+            servicePort: p.backend?.service?.port?.number || 0,
+          }));
+
+        if (remainingPaths.length > 0) {
+          const existingAnnotations =
+            (ingress.annotations as Record<string, string> | null) ?? {};
+          const existingEntrypoints = Array.isArray(ingress.entrypoints) ? ingress.entrypoints : [];
+
+          await this.kubernetesService.updateIngress({
+            namespace: ingress.namespace,
+            name: ingress.name,
+            host: ingress.host,
+            paths: remainingPaths,
+            tlsSecretName: ingress.tlsSecretName || undefined,
+            tlsHosts: ingress.tlsHosts ?? [],
+            ingressClassName: ingress.ingressClass || 'traefik',
+            entrypoints: existingEntrypoints,
+            annotations: existingAnnotations,
+          });
+        }
+      } catch (error) {
+        if (error instanceof BadRequestException) {
+          throw error;
+        }
+      }
+    } else {
+      try {
+        await this.kubernetesService.deleteIngress(ingress.namespace, ingress.name);
+      } catch (error) {
+        if (error instanceof BadRequestException) {
+          throw error;
+        }
       }
     }
 
@@ -3861,6 +3983,7 @@ export class ProjectsService {
             id: true,
             name: true,
             host: true,
+            tlsSecretName: true,
           },
         },
         databases: {

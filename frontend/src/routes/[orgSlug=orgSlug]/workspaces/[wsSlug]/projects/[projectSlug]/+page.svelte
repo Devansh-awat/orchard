@@ -570,7 +570,6 @@
 <NewResourceModal
 	bind:open={showNewResourceModal}
 	orgSlug={orgSlug ?? ''}
-	workspaceSlug={workspaceSlug ?? ''}
 	projectSlug={projectSlug ?? ''}
 />
 
@@ -934,6 +933,7 @@
 		border-radius: 1rem;
 		margin-bottom: 1.5rem;
 	}
+
 
 	/* Buttons */
 	.pj-btn {

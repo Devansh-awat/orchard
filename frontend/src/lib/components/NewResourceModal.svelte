@@ -11,7 +11,6 @@
 		LayoutTemplate,
 		Server
 	} from 'lucide-svelte';
-	import { onMount } from 'svelte';
 	import { apiFetch } from '$lib/stores';
 
 	interface Props {
@@ -42,20 +41,18 @@
 
 	const quickActions = [
 		{
-			id: 'github',
+			id: 'deployment-github',
 			label: 'GitHub Repository',
-			description: 'Deploy from a GitHub repo',
+			description: 'Build and deploy from a GitHub repo',
 			icon: Github,
 			color: '#6e5494',
-			href: () => `${basePath}/deployments/new?source=github`
 		},
 		{
-			id: 'docker',
+			id: 'deployment-image',
 			label: 'Docker Image',
 			description: 'Deploy a container image',
 			icon: Container,
 			color: '#2496ed',
-			href: () => `${basePath}/deployments/new?source=image`
 		},
 		{
 			id: 'database',
@@ -63,15 +60,6 @@
 			description: 'Create a managed database',
 			icon: Database,
 			color: '#f59e0b',
-			href: () => `${basePath}/databases/new`
-		},
-		{
-			id: 'ingress',
-			label: 'Ingress',
-			description: 'Expose a service publicly',
-			icon: Globe,
-			color: '#22c55e',
-			href: () => `${basePath}/ingresses/new`
 		}
 	];
 
@@ -83,6 +71,14 @@
 				t.displayName.toLowerCase().includes(q) ||
 				t.description?.toLowerCase().includes(q) ||
 				t.tags.some((tag) => tag.toLowerCase().includes(q))
+		);
+	});
+
+	const filteredActions = $derived.by(() => {
+		const q = search.trim().toLowerCase();
+		if (!q) return quickActions;
+		return quickActions.filter(
+			(a) => a.label.toLowerCase().includes(q) || a.description.toLowerCase().includes(q)
 		);
 	});
 
@@ -111,9 +107,14 @@
 		}
 	}
 
-	function navigate(href: string) {
+	function navigateToNew(type: string) {
 		open = false;
-		goto(href);
+		goto(`/${orgSlug}/new?type=${type}&project=${projectSlug}`);
+	}
+
+	function navigateToTemplate(templateId: string) {
+		open = false;
+		goto(`${basePath}/templates/deploy/${templateId}`);
 	}
 
 	async function fetchTemplates() {
@@ -141,7 +142,6 @@
 	$effect(() => {
 		if (open) {
 			search = '';
-			// Focus search on open
 			setTimeout(() => searchInput?.focus(), 50);
 		}
 	});
@@ -176,20 +176,16 @@
 			</div>
 
 			<div class="nr-body">
-				<!-- Quick Actions (always visible unless search filters them out) -->
-				{#if !search.trim() || quickActions.some((a) => a.label.toLowerCase().includes(search.trim().toLowerCase()) || a.description.toLowerCase().includes(search.trim().toLowerCase()))}
+				<!-- Quick Actions -->
+				{#if filteredActions.length > 0}
 					<div class="nr-section">
 						<h3 class="nr-section-title">Quick Start</h3>
 						<div class="nr-quick-grid">
-							{#each quickActions.filter((a) => {
-								const q = search.trim().toLowerCase();
-								if (!q) return true;
-								return a.label.toLowerCase().includes(q) || a.description.toLowerCase().includes(q);
-							}) as action}
+							{#each filteredActions as action}
 								{@const Icon = action.icon}
 								<button
 									class="nr-quick-card"
-									onclick={() => navigate(action.href())}
+									onclick={() => navigateToNew(action.id)}
 								>
 									<div
 										class="nr-quick-icon"
@@ -213,7 +209,7 @@
 						<h3 class="nr-section-title">Templates</h3>
 						<button
 							class="nr-browse-link"
-							onclick={() => navigate(`${basePath}/templates`)}
+							onclick={() => { open = false; goto(`${basePath}/templates`); }}
 						>
 							Browse all
 						</button>
@@ -242,7 +238,7 @@
 								{@const Icon = getIconForTemplate(template.icon)}
 								<button
 									class="nr-tpl-card"
-									onclick={() => navigate(`${basePath}/templates/deploy/${template.id}`)}
+									onclick={() => navigateToTemplate(template.id)}
 								>
 									<div
 										class="nr-tpl-icon"
@@ -404,7 +400,7 @@
 		text-decoration: underline;
 	}
 
-	/* Quick start grid — 2x2 prominent cards */
+	/* Quick start grid */
 	.nr-quick-grid {
 		display: grid;
 		grid-template-columns: repeat(2, 1fr);
@@ -456,7 +452,7 @@
 		color: var(--surface-muted);
 	}
 
-	/* Template list — compact rows */
+	/* Template list */
 	.nr-tpl-grid {
 		display: flex;
 		flex-direction: column;

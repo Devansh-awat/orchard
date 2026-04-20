@@ -368,6 +368,41 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
+	let deletingIngressId = $state<string | null>(null);
+	let projectIngresses = $state<Array<{ id: string; host: string; path?: string; deploymentId?: string | null }>>([]);
+
+	let showDomainForm = $state(false);
+	let newDomainHost = $state('');
+	let newDomainPath = $state('/');
+	let newDomainTlsEnabled = $state(true);
+	let newDomainServiceKey = $state('');
+	let showDomainAdvanced = $state(false);
+	let creatingDomain = $state(false);
+	let domainFormError = $state<string | null>(null);
+
+	const domainServiceOptions = $derived.by(() => {
+		const opts: Array<{ key: string; label: string; serviceName: string; port: number }> = [];
+		for (const s of deployment?.services ?? []) {
+			opts.push({ key: `${s.id}::${s.port}`, label: `${s.name}:${s.port}`, serviceName: s.name, port: s.port });
+		}
+		return opts;
+	});
+
+	const newDomainNormalizedHost = $derived(newDomainHost.trim().toLowerCase());
+	const newDomainNormalizedPath = $derived.by(() => {
+		const p = newDomainPath.trim() || '/';
+		return p.startsWith('/') ? p : `/${p}`;
+	});
+
+	const newDomainConflict = $derived.by(() => {
+		if (!newDomainNormalizedHost) return null;
+		const sameHost = projectIngresses.filter((i) => i.host === newDomainNormalizedHost);
+		if (sameHost.length === 0) return null;
+		const otherDeployment = sameHost.find((i) => i.deploymentId !== deployment?.id);
+		const pathCollision = sameHost.find((i) => (i.path || '/') === newDomainNormalizedPath);
+		return { otherDeployment: !!otherDeployment, pathCollision: !!pathCollision };
+	});
+
 	// Metrics history for time-series charts
 	let metricsHistory = $state<Array<{ time: Date; cpu: number | null; memory: number | null }>>([]);
 	let metricsTimeRange = $state<'5m' | '15m' | '30m' | '1h'>('30m');
@@ -1646,6 +1681,127 @@
 		}
 	}
 
+	async function fetchProjectIngresses() {
+		if (!deployment?.project?.id) return;
+		try {
+			const response = await apiFetch(`/apiv1/projects/${deployment.project.id}`);
+			if (!response.ok) return;
+			const projectData = await response.json();
+			const deploymentIngresses = (projectData.deployments ?? []).flatMap(
+				(d: { id: string; ingresses?: Array<{ id: string; host: string; path?: string }> }) =>
+					(d.ingresses ?? []).map((i) => ({
+						id: i.id,
+						host: i.host,
+						path: i.path ?? '/',
+						deploymentId: d.id
+					}))
+			);
+			projectIngresses = deploymentIngresses;
+		} catch {
+			/* silent */
+		}
+	}
+
+	async function deleteIngress(ingressId: string) {
+		if (!deployment?.project?.id) return;
+		if (!confirm('Remove this domain? This cannot be undone.')) return;
+
+		deletingIngressId = ingressId;
+		try {
+			const response = await apiFetch(
+				`/apiv1/projects/${deployment.project.id}/ingresses/${ingressId}`,
+				{ method: 'DELETE' }
+			);
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to remove domain');
+			}
+			toasts.add({ title: 'Domain removed', color: 'success' });
+			await fetchDeployment();
+			await fetchProjectIngresses();
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to remove domain',
+				color: 'error'
+			});
+		} finally {
+			deletingIngressId = null;
+		}
+	}
+
+	function resetDomainForm() {
+		newDomainHost = '';
+		newDomainPath = '/';
+		newDomainTlsEnabled = true;
+		newDomainServiceKey = domainServiceOptions[0]?.key ?? '';
+		showDomainAdvanced = false;
+		domainFormError = null;
+	}
+
+	function generateRandomDomainForNew() {
+		const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
+		let randomPart = '';
+		for (let i = 0; i < 6; i++) {
+			randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
+		}
+		newDomainHost = `${randomPart}.a.lfdl.ink`;
+	}
+
+	async function createDomain() {
+		if (!deployment?.project?.id) return;
+		if (!newDomainNormalizedHost) {
+			domainFormError = 'Domain is required';
+			return;
+		}
+		if (newDomainConflict?.pathCollision) {
+			domainFormError = `${newDomainNormalizedHost}${newDomainNormalizedPath} is already in use. Use a different path.`;
+			return;
+		}
+		const option = domainServiceOptions.find((o) => o.key === newDomainServiceKey);
+		if (!option) {
+			domainFormError = 'Select a service';
+			return;
+		}
+
+		creatingDomain = true;
+		domainFormError = null;
+
+		try {
+			const response = await apiFetch(`/apiv1/projects/${deployment.project.id}/ingresses`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					host: newDomainNormalizedHost,
+					tlsEnabled: newDomainTlsEnabled,
+					routes: [
+						{ path: newDomainNormalizedPath, serviceName: option.serviceName, servicePort: option.port }
+					]
+				})
+			});
+
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to add domain');
+			}
+
+			toasts.add({
+				title: newDomainConflict ? 'Route added' : 'Domain added',
+				description: `${newDomainNormalizedHost}${newDomainNormalizedPath === '/' ? '' : newDomainNormalizedPath}`,
+				color: 'success'
+			});
+
+			showDomainForm = false;
+			resetDomainForm();
+			await fetchDeployment();
+			await fetchProjectIngresses();
+		} catch (e) {
+			domainFormError = e instanceof Error ? e.message : 'Failed to add domain';
+		} finally {
+			creatingDomain = false;
+		}
+	}
+
 	async function toggleBuildLogs(historyId: string) {
 		if (expandedBuildLogId === historyId) {
 			expandedBuildLogId = null;
@@ -2112,6 +2268,18 @@
 	});
 
 	$effect(() => {
+		const projectId = deployment?.project?.id;
+		if (!projectId) return;
+		fetchProjectIngresses();
+	});
+
+	$effect(() => {
+		if (showDomainForm && !newDomainServiceKey) {
+			newDomainServiceKey = domainServiceOptions[0]?.key ?? '';
+		}
+	});
+
+	$effect(() => {
 		if (deploymentId) {
 			loading = true;
 			error = null;
@@ -2481,7 +2649,12 @@
 					{/if}
 					{#if deployment.ingresses?.length}
 						{#each deployment.ingresses.slice(0, 2) as ingress}
-							<a href="/{orgSlug}/ingresses/{ingress.id}" class="dep-meta-domain">
+							<a
+								href="{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}{ingress.path}"
+								target="_blank"
+								rel="noopener noreferrer"
+								class="dep-meta-domain"
+							>
 								<Globe class="h-3 w-3" />
 								{ingress.host}
 							</a>
@@ -3203,29 +3376,160 @@
 								</div>
 							</div>
 
-							<!-- Ingresses -->
+							<!-- Domains -->
 							<div class="card rounded-2xl p-5">
 								<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-									<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Ingresses</p>
-									{#if deployment.project?.slug}
+									<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Domains</p>
+									{#if deployment.project?.id}
 										<button
-											onclick={() => goto(`/${orgSlug}/projects/${deployment.project.slug}/ingresses/new?deployment=${deploymentId}`)}
+											type="button"
 											class="btn btn-secondary btn-sm"
+											onclick={() => {
+												showDomainForm = !showDomainForm;
+												if (!showDomainForm) resetDomainForm();
+											}}
 										>
-											<Plus class="h-4 w-4" />
-											<span>Add</span>
+											{#if showDomainForm}
+												<X class="h-4 w-4" />
+												<span>Close</span>
+											{:else}
+												<Plus class="h-4 w-4" />
+												<span>Add</span>
+											{/if}
 										</button>
 									{/if}
 								</div>
+
+								{#if showDomainForm}
+									<div class="surface-form rounded-xl border border-dashed p-4 mb-4">
+										<div class="flex flex-wrap gap-2 items-end">
+											<div class="flex-[2] min-w-[160px]">
+												<p class="text-xs mb-1" style="color: var(--surface-muted);">Domain</p>
+												<input
+													type="text"
+													class="input text-sm"
+													placeholder="example.com"
+													bind:value={newDomainHost}
+													oninput={() => (domainFormError = null)}
+												/>
+											</div>
+											<button
+												type="button"
+												class="btn btn-secondary btn-sm"
+												onclick={generateRandomDomainForNew}
+												title="Generate a free *.a.lfdl.ink domain"
+											>
+												<RefreshCw class="h-3.5 w-3.5" />
+												Auto
+											</button>
+										</div>
+										<p class="text-xs mt-1" style="color: var(--surface-muted);">
+											For custom domains, point a CNAME record to <code>ingress.lfdl.ink</code>.
+										</p>
+
+										{#if domainServiceOptions.length > 1}
+											<div class="mt-3">
+												<p class="text-xs mb-1" style="color: var(--surface-muted);">Forward to</p>
+												<select
+													class="input text-sm"
+													bind:value={newDomainServiceKey}
+												>
+													{#each domainServiceOptions as option}
+														<option value={option.key}>{option.label}</option>
+													{/each}
+												</select>
+											</div>
+										{/if}
+
+										<label class="dm-toggle-row">
+											<div class="dm-toggle-text">
+												<span class="dm-toggle-label">Enable SSL</span>
+												<span class="dm-toggle-hint">Automatically provisions a Let's Encrypt certificate</span>
+											</div>
+											<input type="checkbox" class="dm-toggle-input" bind:checked={newDomainTlsEnabled} />
+											<span class="dm-toggle-track"><span class="dm-toggle-thumb"></span></span>
+										</label>
+
+										<button
+											type="button"
+											class="mt-3 text-xs font-medium inline-flex items-center gap-1"
+											style="color: var(--surface-muted); background: none; border: none; cursor: pointer; padding: 0;"
+											onclick={() => (showDomainAdvanced = !showDomainAdvanced)}
+										>
+											<ChevronDown class="h-3 w-3" style={showDomainAdvanced ? '' : 'transform: rotate(-90deg);'} />
+											Advanced
+										</button>
+
+										{#if showDomainAdvanced}
+											<div class="mt-2">
+												<p class="text-xs mb-1" style="color: var(--surface-muted);">Path</p>
+												<input
+													type="text"
+													class="input text-sm font-mono"
+													placeholder="/"
+													bind:value={newDomainPath}
+													oninput={() => (domainFormError = null)}
+												/>
+												<p class="text-xs mt-1" style="color: var(--surface-muted);">
+													Route a specific path here (e.g. <code>/api</code>). Leave as <code>/</code> to catch all traffic.
+												</p>
+											</div>
+										{/if}
+
+										{#if newDomainConflict}
+											<div
+												class="mt-3 p-2 rounded-lg text-xs border"
+												style="background-color: color-mix(in srgb, {newDomainConflict.pathCollision ? 'var(--error-text-color)' : 'var(--sidebar-text-active-border)'} 10%, transparent); border-color: color-mix(in srgb, {newDomainConflict.pathCollision ? 'var(--error-text-color)' : 'var(--sidebar-text-active-border)'} 25%, transparent); color: var(--center-channel-color);"
+											>
+												{#if newDomainConflict.pathCollision}
+													<strong>Path in use.</strong>
+													<code>{newDomainNormalizedHost}{newDomainNormalizedPath}</code> is already routed. Choose a different path under Advanced.
+												{:else if newDomainConflict.otherDeployment}
+													<strong>Sharing domain.</strong>
+													{newDomainNormalizedHost} already routes to another deployment. Traffic to <code>{newDomainNormalizedPath}</code> will be added to the existing ingress.
+												{:else}
+													Adding <code>{newDomainNormalizedPath}</code> to the existing {newDomainNormalizedHost} ingress.
+												{/if}
+											</div>
+										{/if}
+
+										{#if domainFormError}
+											<div class="alert alert-error mt-3">{domainFormError}</div>
+										{/if}
+
+										<div class="mt-3 flex justify-end gap-2">
+											<button
+												type="button"
+												class="btn btn-secondary btn-sm"
+												onclick={() => { showDomainForm = false; resetDomainForm(); }}
+											>
+												Cancel
+											</button>
+											<button
+												type="button"
+												class="btn btn-primary btn-sm"
+												onclick={createDomain}
+												disabled={creatingDomain || !newDomainNormalizedHost || !newDomainServiceKey || newDomainConflict?.pathCollision}
+											>
+												{#if creatingDomain}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+												Create
+											</button>
+										</div>
+									</div>
+								{/if}
 								<div class="space-y-2">
 									{#if deployment.ingresses?.length}
 										{#each deployment.ingresses as ingress}
-											<button
-												onclick={() => goto(`/${orgSlug}/ingresses/${ingress.id}`)}
-												class="flex w-full items-center justify-between gap-3 rounded-xl p-3 text-left transition hover:opacity-80"
+											<div
+												class="flex w-full items-center justify-between gap-3 rounded-xl p-3 text-left"
 												style="background-color: var(--control-bg); border: 1px solid var(--surface-border);"
 											>
-												<div class="flex-1 min-w-0">
+												<a
+													href="{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}{ingress.path}"
+													target="_blank"
+													rel="noopener noreferrer"
+													class="flex-1 min-w-0 text-left no-underline transition hover:opacity-80"
+												>
 													{#if ingress.annotations?.['traefik.ingress.kubernetes.io/router.middlewares']?.includes('auth@kubernetescrd')}
 														<p class="text-xs text-amber-500 mb-1">
 															<Lock class="inline h-3 w-3 mr-1" />
@@ -3238,12 +3542,25 @@
 													{#if ingress.address}
 														<p class="text-xs mt-0.5" style="color: var(--surface-muted);">{ingress.address}</p>
 													{/if}
-												</div>
-												<ExternalLink class="h-3.5 w-3.5 shrink-0" style="color: var(--surface-muted);" />
-											</button>
+												</a>
+												<button
+													type="button"
+													onclick={(e) => { e.stopPropagation(); deleteIngress(ingress.id); }}
+													disabled={deletingIngressId === ingress.id}
+													class="btn btn-sm"
+													style="background-color: transparent; border: 1px solid var(--surface-border); color: var(--surface-muted);"
+													aria-label="Remove domain"
+												>
+													{#if deletingIngressId === ingress.id}
+														<Loader2 class="h-4 w-4 animate-spin" />
+													{:else}
+														<Trash2 class="h-4 w-4" />
+													{/if}
+												</button>
+											</div>
 										{/each}
 									{:else}
-										<p class="text-sm text-center py-4" style="color: var(--surface-muted);">No ingresses configured</p>
+										<p class="text-sm text-center py-4" style="color: var(--surface-muted);">No domains configured</p>
 									{/if}
 								</div>
 							</div>
@@ -3862,7 +4179,85 @@
 	/>
 {/if}
 
+
 <style>
+	.dm-toggle-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		margin-top: 0.75rem;
+		padding: 0.5rem 0.625rem;
+		border-radius: 0.5rem;
+		cursor: pointer;
+		transition: background-color 0.15s;
+	}
+
+	.dm-toggle-row:hover {
+		background-color: color-mix(in srgb, var(--surface-border) 25%, transparent);
+	}
+
+	.dm-toggle-text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+		min-width: 0;
+	}
+
+	.dm-toggle-label {
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--center-channel-color);
+	}
+
+	.dm-toggle-hint {
+		font-size: 0.6875rem;
+		color: var(--surface-muted);
+	}
+
+	.dm-toggle-input {
+		position: absolute;
+		opacity: 0;
+		width: 0;
+		height: 0;
+		pointer-events: none;
+	}
+
+	.dm-toggle-track {
+		position: relative;
+		flex-shrink: 0;
+		width: 2.25rem;
+		height: 1.25rem;
+		border-radius: 0.625rem;
+		background-color: color-mix(in srgb, var(--surface-border) 80%, var(--center-channel-color));
+		transition: background-color 0.2s;
+	}
+
+	.dm-toggle-input:checked + .dm-toggle-track {
+		background-color: var(--sidebar-text-active-border);
+	}
+
+	.dm-toggle-thumb {
+		position: absolute;
+		top: 0.125rem;
+		left: 0.125rem;
+		width: 1rem;
+		height: 1rem;
+		border-radius: 50%;
+		background-color: #fff;
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
+		transition: transform 0.2s;
+	}
+
+	.dm-toggle-input:checked + .dm-toggle-track .dm-toggle-thumb {
+		transform: translateX(1rem);
+	}
+
+	.dm-toggle-input:focus-visible + .dm-toggle-track {
+		outline: 2px solid var(--sidebar-text-active-border);
+		outline-offset: 2px;
+	}
+
 	.tabs-trigger {
 		border: 1px solid transparent;
 		background-color: transparent;

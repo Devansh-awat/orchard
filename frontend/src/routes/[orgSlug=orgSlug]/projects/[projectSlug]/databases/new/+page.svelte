@@ -2,46 +2,35 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { apiFetch, toasts, refreshTree } from '$lib/stores';
-	import { ArrowLeft, Loader2, Database } from 'lucide-svelte';
+	import { apiFetch, toasts, refreshTree, fetchProjectContext, buildBasePath, type ProjectContext } from '$lib/stores';
+	import { Loader2, Database } from 'lucide-svelte';
+	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
+	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
 
-	interface Project {
-		id: string;
-		name: string;
-		slug: string;
-	}
-
-	let project = $state<Project | null>(null);
+	let project = $state<ProjectContext | null>(null);
 	let loading = $state(true);
 	let submitting = $state(false);
 	let error = $state<string | null>(null);
 	let name = $state('');
 
-	const projectSlug = $derived($page.params.projectSlug);
-	const orgSlug = $derived($page.params.orgSlug);
+	const projectSlug = $derived($page.params.projectSlug ?? '');
+	const orgSlug = $derived($page.params.orgSlug ?? '');
+	const wsSlug = $derived($page.params.wsSlug);
+	const basePath = $derived(buildBasePath({ orgSlug, projectSlug, wsSlug }));
 
 	const generatedDbName = $derived(() => {
 		const o = orgSlug.replace(/-/g, '_');
 		const p = projectSlug.replace(/-/g, '_');
 		const n = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_') || 'name';
-		const full = `${o}_${p}_${n}`;
+		const parts = wsSlug ? [o, wsSlug.replace(/-/g, '_'), p, n] : [o, p, n];
+		const full = parts.join('_');
 		return full.length > 61 ? full.substring(0, 61) : full;
 	});
 
 	async function fetchProject() {
 		loading = true;
 		try {
-			const orgRes = await apiFetch(`/apiv1/organizations/slug/${orgSlug}`);
-			if (!orgRes.ok) throw new Error('Organization not found');
-			const org = await orgRes.json();
-
-			const slugRes = await apiFetch(`/apiv1/projects/slug/${projectSlug}?orgId=${org.id}`);
-			if (!slugRes.ok) throw new Error('Project not found');
-			const projData = await slugRes.json();
-
-			const projResponse = await apiFetch(`/apiv1/projects/${projData.id}`);
-			if (!projResponse.ok) throw new Error('Failed to fetch project');
-			project = await projResponse.json();
+			project = await fetchProjectContext({ orgSlug, projectSlug, wsSlug });
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load project';
 		} finally {
@@ -87,233 +76,222 @@
 	onMount(fetchProject);
 </script>
 
-<div class="db-page">
+<div class="nd-page">
 	{#if loading}
-		<div class="db-loading">
-			<Loader2 class="h-6 w-6 animate-spin" />
-			<span>Loading...</span>
+		<div class="skeleton" style="height: 0.8125rem; width: 6rem; margin-bottom: 1rem;"></div>
+		<div class="skeleton" style="height: 1.5rem; width: 12rem; margin-bottom: 1.5rem;"></div>
+		<div class="nd-card">
+			<div class="skeleton" style="height: 1rem; width: 8rem; margin-bottom: 1rem;"></div>
+			<div class="skeleton" style="height: 2.25rem; border-radius: 0.5rem;"></div>
 		</div>
 	{:else if project}
-		<button
-			onclick={() => goto(`/${orgSlug}/projects/${projectSlug}`)}
-			class="db-back"
-		>
-			<ArrowLeft class="h-4 w-4" />
-			{project.name}
-		</button>
+		<Breadcrumb crumbs={[
+			{ label: 'Home', href: `/${orgSlug}` },
+			{ label: project?.name || projectSlug || '', href: basePath },
+			{ label: 'New Database' }
+		]} />
 
-		<div class="db-header">
-			<Database class="h-6 w-6" style="color: #22c55e" />
-			<h1 class="db-title">New Database</h1>
+		<div class="nd-header">
+			<div class="nd-header-top">
+				<h1 class="nd-title">New Database</h1>
+				<ProjectSwitcher
+					currentProjectName={project?.name || projectSlug}
+					pathSuffix="/databases/new"
+				/>
+			</div>
+			<p class="nd-subtitle">Create a PostgreSQL database on the shared cluster. A unique user and password will be generated automatically.</p>
 		</div>
-		<p class="db-subtitle">Create a PostgreSQL database on the shared cluster. A unique user and password will be generated automatically.</p>
-
-		<!-- Template banner -->
-		<a
-			href="/{orgSlug}/projects/{projectSlug}/templates"
-			class="db-template-banner"
-		>
-			<span class="db-template-cta">Looking for a complete app setup?</span>
-			<span class="db-template-desc">Browse Templates to deploy pre-configured stacks with deployments and ingresses.</span>
-		</a>
 
 		{#if error}
-			<div class="db-error">{error}</div>
+			<div class="nd-error">{error}</div>
 		{/if}
 
-		<form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }} class="db-form">
-			<div class="db-field">
-				<label for="db-name" class="db-label">Database Name</label>
-				<input
-					id="db-name"
-					type="text"
-					bind:value={name}
-					placeholder="my-app-db"
-					class="db-input"
-					required
-					disabled={submitting}
-				/>
-				<p class="db-hint">A slug-friendly name. The database will be created as <code>{generatedDbName()}</code></p>
+		<form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
+			<div class="nd-card">
+				<h2 class="nd-card-title">Database Details</h2>
+
+				<div class="nd-field">
+					<label for="db-name" class="nd-label">Database Name</label>
+					<input
+						id="db-name"
+						type="text"
+						bind:value={name}
+						placeholder="my-app-db"
+						class="nd-input"
+						required
+						disabled={submitting}
+					/>
+					<p class="nd-hint">A slug-friendly name. The database will be created as <code class="nd-mono">{generatedDbName()}</code></p>
+				</div>
 			</div>
 
-			<button type="submit" class="db-btn db-btn-primary" disabled={submitting || !name.trim()}>
-				{#if submitting}
-					<Loader2 class="h-4 w-4 animate-spin" />
-					Creating...
-				{:else}
-					<Database class="h-4 w-4" />
-					Create Database
-				{/if}
-			</button>
+			<div class="nd-actions">
+				<a href={basePath} class="nd-btn nd-btn-secondary">Cancel</a>
+				<button type="submit" class="nd-btn nd-btn-primary" disabled={submitting || !name.trim()}>
+					{#if submitting}
+						<Loader2 class="h-4 w-4 animate-spin" />
+						Creating...
+					{:else}
+						<Database class="h-4 w-4" />
+						Create Database
+					{/if}
+				</button>
+			</div>
 		</form>
 	{/if}
 </div>
 
 <style>
-	.db-page {
+	.nd-page {
 		max-width: 36rem;
 		margin: 0 auto;
 		padding: 2.5rem 2.5rem 3rem;
 	}
 
-	.db-loading {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 3rem 0;
-		color: var(--surface-muted);
-		font-size: 0.875rem;
-	}
-
-	.db-back {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		font-size: 0.8125rem;
-		color: var(--surface-muted);
-		background: none;
-		border: none;
-		cursor: pointer;
-		padding: 0;
+	.nd-header {
 		margin-bottom: 1.5rem;
-		transition: color 0.15s;
 	}
 
-	.db-back:hover {
-		color: var(--center-channel-color);
-	}
-
-	.db-header {
+	.nd-header-top {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		margin-bottom: 0.5rem;
+		justify-content: space-between;
+		gap: 0.75rem;
 	}
 
-	.db-title {
+	.nd-title {
 		font-size: 1.25rem;
 		font-weight: 700;
+		color: var(--center-channel-color);
+		margin: 0;
 		letter-spacing: -0.02em;
+	}
+
+	.nd-subtitle {
+		font-size: 0.875rem;
+		color: var(--surface-muted);
+		margin: 0.25rem 0 0;
+	}
+
+	.nd-card {
+		border: 1px solid var(--surface-border);
+		border-radius: 1rem;
+		background-color: var(--surface-bg);
+		padding: 1.25rem;
+		margin-bottom: 1rem;
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.nd-card-title {
+		font-size: 0.9375rem;
+		font-weight: 600;
 		color: var(--center-channel-color);
 		margin: 0;
 	}
 
-	.db-subtitle {
-		font-size: 0.875rem;
-		color: var(--surface-muted);
-		margin: 0 0 1.5rem;
+	.nd-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
 	}
 
-	.db-error {
+	.nd-label {
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--center-channel-color);
+	}
+
+	.nd-input {
+		width: 100%;
+		padding: 0.4375rem 0.75rem;
+		border-radius: 0.5rem;
+		border: 1px solid var(--surface-border);
+		background-color: var(--center-channel-bg);
+		color: var(--center-channel-color);
+		font-size: 0.8125rem;
+		transition: border-color 0.15s;
+	}
+
+	.nd-input::placeholder {
+		color: var(--surface-muted);
+	}
+
+	.nd-input:focus {
+		outline: none;
+		border-color: var(--sidebar-text-active-border);
+	}
+
+	.nd-input:disabled {
+		opacity: 0.5;
+	}
+
+	.nd-mono {
+		font-family: var(--font-mono);
+	}
+
+	.nd-hint {
+		font-size: 0.75rem;
+		color: var(--surface-muted);
+		margin: 0;
+	}
+
+	.nd-error {
 		padding: 0.75rem 1rem;
 		border-radius: 0.75rem;
 		font-size: 0.875rem;
 		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
 		color: var(--error-text-color);
 		border: 1px solid color-mix(in srgb, var(--error-text-color) 25%, transparent);
-		margin-bottom: 1.5rem;
+		margin-bottom: 1rem;
 	}
 
-	.db-form {
+	.nd-actions {
 		display: flex;
-		flex-direction: column;
-		gap: 1.5rem;
+		justify-content: flex-end;
+		gap: 0.5rem;
+		margin-top: 0.5rem;
 	}
 
-	.db-field {
-		display: flex;
-		flex-direction: column;
-		gap: 0.375rem;
-	}
-
-	.db-label {
-		font-size: 0.8125rem;
-		font-weight: 500;
-		color: var(--center-channel-color);
-	}
-
-	.db-input {
-		padding: 0.5rem 0.75rem;
-		border-radius: 0.5rem;
-		border: 1px solid var(--surface-border);
-		background-color: var(--center-channel-bg);
-		color: var(--center-channel-color);
-		font-size: 0.875rem;
-	}
-
-	.db-input:focus {
-		outline: none;
-		border-color: var(--sidebar-text-active-border);
-	}
-
-	.db-input:disabled {
-		opacity: 0.5;
-	}
-
-	.db-hint {
-		font-size: 0.75rem;
-		color: var(--surface-muted);
-		margin: 0;
-	}
-
-	.db-btn {
+	.nd-btn {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.375rem;
-		padding: 0.5rem 1rem;
+		padding: 0.4375rem 0.875rem;
 		border-radius: 0.5rem;
-		font-size: 0.875rem;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		border: none;
 		cursor: pointer;
+		text-decoration: none;
 		transition: opacity 0.15s;
-		width: fit-content;
+		white-space: nowrap;
 	}
 
-	.db-btn:disabled {
+	.nd-btn:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
 	}
 
-	.db-btn-primary {
-		background-color: #22c55e;
+	.nd-btn-primary {
+		background-color: var(--sidebar-text-active-border);
 		color: #fff;
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.1), 0 1px 2px rgb(0 0 0 / 0.06);
+		box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 1px 1px rgb(0 0 0 / 0.04);
 	}
 
-	.db-btn-primary:hover:not(:disabled) {
-		opacity: 0.9;
-		transform: translateY(-0.5px);
-		box-shadow: 0 4px 6px rgb(0 0 0 / 0.1), 0 2px 4px rgb(0 0 0 / 0.06);
+	.nd-btn-primary:hover:not(:disabled) {
+		opacity: 0.95;
 	}
 
-	.db-template-banner {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-		padding: 0.875rem 1.25rem;
-		border-radius: 0.75rem;
-		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 8%, transparent);
-		border: 1px solid color-mix(in srgb, var(--sidebar-text-active-border) 20%, transparent);
-		text-decoration: none;
-		color: var(--center-channel-color);
-		transition: border-color 0.15s;
-		margin-bottom: 0.5rem;
-	}
-
-	.db-template-banner:hover {
-		border-color: var(--sidebar-text-active-border);
-	}
-
-	.db-template-cta {
-		font-size: 0.875rem;
-		color: var(--sidebar-text-active-border);
-		font-weight: 500;
-	}
-
-	.db-template-desc {
-		font-size: 0.8125rem;
+	.nd-btn-secondary {
+		background-color: transparent;
 		color: var(--surface-muted);
+		border: 1px solid var(--surface-border);
+	}
+
+	.nd-btn-secondary:hover:not(:disabled) {
+		background-color: var(--control-hover-bg);
+		color: var(--center-channel-color);
 	}
 </style>
