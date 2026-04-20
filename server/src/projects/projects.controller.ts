@@ -99,11 +99,74 @@ export class ProjectsController {
     return this.projectsService.getProjectDeployments(id);
   }
 
+  @Post(':id/members')
+  async addProjectMember(
+    @Param('id') id: string,
+    @Body() body: { email: string; role: string },
+    @Request() req
+  ) {
+    return this.projectsService.addProjectMember(
+      id,
+      body.email,
+      body.role,
+      req.user.sub,
+      {
+        email: req.user.email,
+        username: req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        imageUrl: req.user.imageUrl,
+      }
+    );
+  }
+
+  @Delete(':id/members/:memberId')
+  async removeProjectMember(
+    @Param('id') id: string,
+    @Param('memberId') memberId: string,
+    @Request() req
+  ) {
+    return this.projectsService.removeProjectMember(
+      id,
+      memberId,
+      req.user.sub,
+      {
+        email: req.user.email,
+        username: req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        imageUrl: req.user.imageUrl,
+      }
+    );
+  }
+
+  @Patch(':id/members/:memberId')
+  async updateProjectMemberRole(
+    @Param('id') id: string,
+    @Param('memberId') memberId: string,
+    @Body('role') role: string,
+    @Request() req
+  ) {
+    return this.projectsService.updateProjectMemberRole(
+      id,
+      memberId,
+      role,
+      req.user.sub,
+      {
+        email: req.user.email,
+        username: req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        imageUrl: req.user.imageUrl,
+      }
+    );
+  }
+
   @Post(':id/databases')
 
   async createDatabase(
     @Param('id') id: string,
-    @Body() body: { name: string },
+    @Body() body: { name: string; storageSize?: string },
     @Request() req
   ) {
     return this.projectsService.createDatabase(id, body, req.user.sub, {
@@ -915,6 +978,11 @@ export class IngressesController {
 export class DatabasesController {
   constructor(private readonly projectsService: ProjectsService) {}
 
+  @Get()
+  async listDatabases(@Request() req, @Query('orgId') orgId?: string) {
+    return this.projectsService.listDatabasesSummary(req.user.sub, orgId);
+  }
+
   @Get(':id')
 
   async getDatabase(@Param('id') id: string) {
@@ -930,6 +998,147 @@ export class DatabasesController {
       firstName: req.user.firstName,
       lastName: req.user.lastName,
       imageUrl: req.user.imageUrl,
+    });
+  }
+
+  @Get(':id/backups')
+  async listBackups(@Param('id') id: string, @Request() req) {
+    return this.projectsService.listDatabaseBackups(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl,
+    });
+  }
+
+  @Post(':id/backups')
+  async createBackup(
+    @Param('id') id: string,
+    @Body() body: { label?: string; type?: 'full' | 'diff' | 'incr' },
+    @Request() req
+  ) {
+    return this.projectsService.createDatabaseBackup(id, body || {}, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl,
+    });
+  }
+
+  @Post(':id/restore')
+  async restoreBackup(
+    @Param('id') id: string,
+    @Body() body: { backupId?: string },
+    @Request() req
+  ) {
+    return this.projectsService.restoreDatabaseBackup(id, body?.backupId, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl,
+    });
+  }
+
+  @Get(':id/extensions')
+  async listExtensions(@Param('id') id: string, @Request() req) {
+    return this.projectsService.listDatabaseExtensions(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+  }
+
+  @Post(':id/extensions')
+  async installExtension(
+    @Param('id') id: string,
+    @Body() body: { name: string; addToPreload?: boolean },
+    @Request() req,
+  ) {
+    return this.projectsService.installDatabaseExtension(id, body, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+  }
+
+  @Delete(':id/extensions/:name')
+  async uninstallExtension(
+    @Param('id') id: string,
+    @Param('name') name: string,
+    @Query('removeFromPreload') removeFromPreload: string,
+    @Request() req,
+  ) {
+    return this.projectsService.uninstallDatabaseExtension(
+      id, { name, removeFromPreload: removeFromPreload === 'true' }, req.user.sub,
+      {
+        email: req.user.email, username: req.user.username,
+        firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      },
+    );
+  }
+
+  @Get(':id/settings')
+  async getSettings(@Param('id') id: string, @Request() req) {
+    return this.projectsService.getDatabaseSettings(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+  }
+
+  @Post(':id/public')
+  async enablePublic(@Param('id') id: string, @Request() req) {
+    return this.projectsService.enableDatabasePublic(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+  }
+
+  @Delete(':id/public')
+  async disablePublic(@Param('id') id: string, @Request() req) {
+    return this.projectsService.disableDatabasePublic(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+  }
+
+  @Get(':id/backup-schedule')
+  async getBackupSchedule(@Param('id') id: string, @Request() req) {
+    return this.projectsService.getBackupSchedule(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+  }
+
+  @Put(':id/backup-schedule')
+  async setBackupSchedule(
+    @Param('id') id: string,
+    @Body() body: { cron: string },
+    @Request() req,
+  ) {
+    return this.projectsService.setBackupSchedule(id, body, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+  }
+
+  @Delete(':id/backup-schedule')
+  async clearBackupSchedule(@Param('id') id: string, @Request() req) {
+    return this.projectsService.deleteBackupSchedule(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+  }
+
+  @Patch(':id/settings')
+  async updateSettings(
+    @Param('id') id: string,
+    @Body() body: { parameters: Record<string, string> },
+    @Request() req,
+  ) {
+    return this.projectsService.updateDatabaseSettings(id, body, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
   }
 }

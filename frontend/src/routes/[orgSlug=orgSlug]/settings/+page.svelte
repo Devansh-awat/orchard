@@ -113,6 +113,7 @@
 
 				if (roleData.role === 'owner' || roleData.role === 'admin') {
 					await fetchInvitations();
+					await fetchBackupSettings();
 				}
 				// Load SSO config for enterprise orgs
 				if (data.plan === 'enterprise') {
@@ -336,6 +337,127 @@
 			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to cancel invitation', color: 'error' });
 		} finally {
 			cancellingInvitationId = null;
+		}
+	}
+
+	// Backup (R2) settings state
+	let backupLoading = $state(false);
+	let backupSaving = $state(false);
+	let backupEndpoint = $state('');
+	let backupBucket = $state('');
+	let backupRegion = $state('auto');
+	let backupAccessKey = $state('');
+	let backupSecretKey = $state('');
+	let backupSecretConfigured = $state(false);
+
+	// Shared public IP for database exposure
+	let publicIp = $state('');
+	let publicIpSaving = $state(false);
+
+	async function fetchBackupSettings() {
+		if (!organization) return;
+		backupLoading = true;
+		try {
+			const response = await apiFetch(`/apiv1/organizations/${organization.id}/backup-settings`);
+			if (!response.ok) return;
+			const data = await response.json();
+			backupEndpoint = data.endpoint || '';
+			backupBucket = data.bucket || '';
+			backupRegion = data.region || 'auto';
+			backupAccessKey = data.accessKey || '';
+			backupSecretConfigured = Boolean(data.secretKeyConfigured);
+			backupSecretKey = '';
+			publicIp = data.databasePublicIp || '';
+		} finally {
+			backupLoading = false;
+		}
+	}
+
+	async function savePublicIp() {
+		if (!organization) return;
+		publicIpSaving = true;
+		try {
+			const response = await apiFetch(`/apiv1/organizations/${organization.id}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ databasePublicIp: publicIp.trim() || null }),
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to save');
+			}
+			toasts.add({
+				title: publicIp.trim() ? 'Public IP saved' : 'Public IP cleared',
+				color: 'success',
+			});
+			await fetchBackupSettings();
+		} catch (e) {
+			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to save', color: 'error' });
+		} finally {
+			publicIpSaving = false;
+		}
+	}
+
+	async function saveBackupSettings() {
+		if (!organization) return;
+		backupSaving = true;
+		try {
+			const body: Record<string, string | null> = {
+				backupR2Endpoint: backupEndpoint.trim() || null,
+				backupR2Bucket: backupBucket.trim() || null,
+				backupR2Region: backupRegion.trim() || null,
+				backupR2AccessKey: backupAccessKey.trim() || null,
+			};
+			if (backupSecretKey.trim()) {
+				body.backupR2SecretKey = backupSecretKey.trim();
+			}
+			const response = await apiFetch(`/apiv1/organizations/${organization.id}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(body),
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to save');
+			}
+			toasts.add({ title: 'Backup settings saved', color: 'success' });
+			backupSecretKey = '';
+			await fetchBackupSettings();
+		} catch (e) {
+			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to save', color: 'error' });
+		} finally {
+			backupSaving = false;
+		}
+	}
+
+	async function clearBackupSettings() {
+		if (!organization) return;
+		if (!confirm('Clear R2 backup configuration? Existing backups remain but new ones will be disabled.')) return;
+		backupSaving = true;
+		try {
+			const response = await apiFetch(`/apiv1/organizations/${organization.id}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					backupR2Endpoint: null,
+					backupR2Bucket: null,
+					backupR2Region: null,
+					backupR2AccessKey: null,
+					backupR2SecretKey: null,
+				}),
+			});
+			if (!response.ok) throw new Error('Failed to clear');
+			toasts.add({ title: 'Backup settings cleared', color: 'success' });
+			backupEndpoint = '';
+			backupBucket = '';
+			backupRegion = 'auto';
+			backupAccessKey = '';
+			backupSecretKey = '';
+			backupSecretConfigured = false;
+		} catch (e) {
+			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to clear', color: 'error' });
+		} finally {
+			backupSaving = false;
 		}
 	}
 
@@ -768,6 +890,127 @@
 						</div>
 					{/each}
 				</div>
+			</div>
+		{/if}
+
+		<!-- Public Database IP -->
+		{#if canEditOrg}
+			<div class="os-card">
+				<div class="os-card-header">
+					<h2 class="os-card-title">
+						<Globe class="h-4 w-4" />
+						Public Database IP
+					</h2>
+				</div>
+
+				<p class="os-sso-hint" style="margin-bottom: 1rem;">
+					Shared external IP used to expose databases publicly. Databases opted into public
+					exposure will share this IP with unique ports per database.
+				</p>
+
+				<div class="os-sso-section">
+					<h3 class="os-sso-section-title">IPv4 / IPv6 Address</h3>
+					<div style="display: flex; gap: 0.5rem; align-items: center;">
+						<input
+							type="text"
+							class="input"
+							placeholder="e.g. 203.0.113.10"
+							bind:value={publicIp}
+							style="flex: 1;"
+						/>
+						<button onclick={savePublicIp} disabled={publicIpSaving} class="btn btn-primary">
+							{#if publicIpSaving}<Loader2 class="h-4 w-4 animate-spin" />{/if}
+							Save
+						</button>
+					</div>
+				</div>
+			</div>
+		{/if}
+
+		<!-- Database Backups (R2) -->
+		{#if canEditOrg}
+			<div class="os-card">
+				<div class="os-card-header">
+					<h2 class="os-card-title">
+						<Shield class="h-4 w-4" />
+						Database Backups
+					</h2>
+				</div>
+
+				<p class="os-sso-hint" style="margin-bottom: 1rem;">
+					Configure a Cloudflare R2 bucket to enable pgBackRest backups and restores for databases in this organization.
+				</p>
+
+				{#if backupLoading}
+					<div class="os-sso-loading"><Loader2 class="h-5 w-5 animate-spin" /></div>
+				{:else}
+					<div class="os-sso-section">
+						<h3 class="os-sso-section-title">R2 Endpoint</h3>
+						<input
+							type="text"
+							class="input"
+							placeholder="https://<account-id>.r2.cloudflarestorage.com"
+							bind:value={backupEndpoint}
+						/>
+					</div>
+
+					<div class="os-sso-section">
+						<h3 class="os-sso-section-title">Bucket</h3>
+						<input
+							type="text"
+							class="input"
+							placeholder="orchard-backups"
+							bind:value={backupBucket}
+						/>
+					</div>
+
+					<div class="os-sso-section">
+						<h3 class="os-sso-section-title">Region</h3>
+						<input
+							type="text"
+							class="input"
+							placeholder="auto"
+							bind:value={backupRegion}
+						/>
+					</div>
+
+					<div class="os-sso-section">
+						<h3 class="os-sso-section-title">Access Key ID</h3>
+						<input
+							type="text"
+							class="input"
+							placeholder="R2 access key"
+							bind:value={backupAccessKey}
+						/>
+					</div>
+
+					<div class="os-sso-section">
+						<h3 class="os-sso-section-title">
+							Secret Access Key
+							{#if backupSecretConfigured}
+								<span class="os-sso-hint" style="font-weight: 400; margin-left: 0.5rem;">(configured · leave empty to keep)</span>
+							{/if}
+						</h3>
+						<input
+							type="password"
+							class="input"
+							placeholder={backupSecretConfigured ? '••••••••••••' : 'R2 secret key'}
+							bind:value={backupSecretKey}
+						/>
+					</div>
+
+					<div class="os-sso-section" style="display: flex; gap: 0.5rem;">
+						<button onclick={saveBackupSettings} disabled={backupSaving} class="btn btn-primary">
+							{#if backupSaving}<Loader2 class="h-4 w-4 animate-spin" />{/if}
+							Save backup settings
+						</button>
+						{#if backupSecretConfigured}
+							<button onclick={clearBackupSettings} disabled={backupSaving} class="btn btn-secondary">
+								Clear
+							</button>
+						{/if}
+					</div>
+				{/if}
 			</div>
 		{/if}
 

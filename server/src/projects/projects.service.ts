@@ -4051,6 +4051,150 @@ export class ProjectsService {
     };
   }
 
+  private async assertProjectAdmin(projectId: string, userId: string) {
+    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) throw new NotFoundException('Project not found');
+
+    const membership = await this.prisma.projectMember.findFirst({
+      where: { projectId, userId },
+      include: { role: true },
+    });
+    const orgMembership = await this.prisma.organizationMember.findUnique({
+      where: {
+        organizationId_userId: {
+          organizationId: project.organizationId,
+          userId,
+        },
+      },
+    });
+
+    const isProjectAdmin = membership?.role.name === 'admin';
+    const isOrgAdminOrOwner = orgMembership && (orgMembership.role === 'owner' || orgMembership.role === 'admin');
+
+    if (!isProjectAdmin && !isOrgAdminOrOwner) {
+      throw new ForbiddenException('Only project admins or organization admins can manage project members');
+    }
+
+    return project;
+  }
+
+  async addProjectMember(
+    projectId: string,
+    email: string,
+    roleName: string,
+    addedByClerkId: string,
+    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }
+  ) {
+    const adder = await this.usersService.findOrCreateByClerkId(addedByClerkId, userData);
+    if (!adder) throw new NotFoundException('User adding member not found');
+
+    await this.assertProjectAdmin(projectId, adder.id);
+
+    const normalizedEmail = email.toLowerCase().trim();
+    if (!normalizedEmail) throw new BadRequestException('Email is required');
+
+    const role = await this.prisma.role.findUnique({ where: { name: roleName } });
+    if (!role) throw new BadRequestException(`Invalid role: ${roleName}`);
+
+    const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
+    if (!user) throw new NotFoundException('No user with that email exists');
+
+    const existing = await this.prisma.projectMember.findFirst({
+      where: { projectId, userId: user.id },
+    });
+    if (existing) throw new BadRequestException('User is already a member of this project');
+
+    return this.prisma.projectMember.create({
+      data: {
+        projectId,
+        userId: user.id,
+        roleId: role.id,
+        addedBy: adder.id,
+      },
+      include: {
+        role: true,
+        user: {
+          select: { id: true, email: true, username: true, firstName: true, lastName: true, imageUrl: true },
+        },
+      },
+    });
+  }
+
+  async removeProjectMember(
+    projectId: string,
+    memberId: string,
+    removedByClerkId: string,
+    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }
+  ) {
+    const remover = await this.usersService.findOrCreateByClerkId(removedByClerkId, userData);
+    if (!remover) throw new NotFoundException('User removing member not found');
+
+    await this.assertProjectAdmin(projectId, remover.id);
+
+    const member = await this.prisma.projectMember.findUnique({
+      where: { id: memberId },
+    });
+    if (!member || member.projectId !== projectId) {
+      throw new NotFoundException('Member not found in this project');
+    }
+
+    const adminRole = await this.prisma.role.findUnique({ where: { name: 'admin' } });
+    if (adminRole && member.roleId === adminRole.id) {
+      const adminCount = await this.prisma.projectMember.count({
+        where: { projectId, roleId: adminRole.id },
+      });
+      if (adminCount <= 1) {
+        throw new BadRequestException('Cannot remove the last admin of a project');
+      }
+    }
+
+    await this.prisma.projectMember.delete({ where: { id: memberId } });
+
+    return { success: true, message: 'Member removed from project' };
+  }
+
+  async updateProjectMemberRole(
+    projectId: string,
+    memberId: string,
+    roleName: string,
+    updatedByClerkId: string,
+    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }
+  ) {
+    const updater = await this.usersService.findOrCreateByClerkId(updatedByClerkId, userData);
+    if (!updater) throw new NotFoundException('User updating role not found');
+
+    await this.assertProjectAdmin(projectId, updater.id);
+
+    const role = await this.prisma.role.findUnique({ where: { name: roleName } });
+    if (!role) throw new BadRequestException(`Invalid role: ${roleName}`);
+
+    const member = await this.prisma.projectMember.findUnique({ where: { id: memberId } });
+    if (!member || member.projectId !== projectId) {
+      throw new NotFoundException('Member not found in this project');
+    }
+
+    const adminRole = await this.prisma.role.findUnique({ where: { name: 'admin' } });
+    if (adminRole && member.roleId === adminRole.id && role.id !== adminRole.id) {
+      const adminCount = await this.prisma.projectMember.count({
+        where: { projectId, roleId: adminRole.id },
+      });
+      if (adminCount <= 1) {
+        throw new BadRequestException('Cannot demote the last admin of a project');
+      }
+    }
+
+    return this.prisma.projectMember.update({
+      where: { id: memberId },
+      data: { roleId: role.id },
+      include: {
+        role: true,
+        user: {
+          select: { id: true, email: true, username: true, firstName: true, lastName: true, imageUrl: true },
+        },
+      },
+    });
+  }
+
   async getProjectBySlug(organizationId: string, slug: string) {
     const project = await this.prisma.project.findUnique({
       where: {
@@ -4169,6 +4313,44 @@ export class ProjectsService {
    * Lightweight bulk fetch of all deployments the user has access to.
    * Returns only the fields needed for the overview page — NO k8s calls.
    */
+  async listDatabasesSummary(userId: string, orgId?: string) {
+    const whereClause: any = {};
+
+    if (orgId) {
+      whereClause.project = { organizationId: orgId };
+    } else {
+      const orgMemberships = await this.prisma.organizationMember.findMany({
+        where: { userId },
+        select: { organizationId: true },
+      });
+      const orgIds = orgMemberships.map((m) => m.organizationId);
+      if (orgIds.length === 0) return [];
+      whereClause.project = { organizationId: { in: orgIds } };
+    }
+
+    return this.prisma.database.findMany({
+      where: whereClause,
+      select: {
+        id: true,
+        name: true,
+        dbName: true,
+        status: true,
+        mode: true,
+        createdAt: true,
+        updatedAt: true,
+        project: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            organizationId: true,
+          },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+  }
+
   async listDeploymentsSummary(userId: string, orgId?: string) {
     const whereClause: any = {};
 
@@ -6549,7 +6731,7 @@ export class ProjectsService {
 
   async createDatabase(
     projectId: string,
-    data: { name: string },
+    data: { name: string; storageSize?: string },
     clerkId: string,
     userData?: {
       email?: string;
@@ -6604,10 +6786,35 @@ export class ProjectsService {
     });
     if (dbNameExists) throw new BadRequestException('A database with this identifier already exists');
 
-    // Create the actual PostgreSQL database
-    await this.kubernetesService.createPostgresDatabase(dbName, dbUser, dbPassword);
+    // New databases get a dedicated CNPG Cluster in the project namespace.
+    // K8s resource name must match DNS-1123 (lowercase, hyphens, ≤53 chars to leave room for suffixes).
+    const clusterName = `pg-${this.formatSlug(nameInput).substring(0, 48)}`.replace(/^-+|-+$/g, '');
+    const namespace = project.namespace;
 
-    // Store in our database
+    const org = await this.prisma.organization.findUnique({ where: { id: project.organizationId } });
+    const r2 = org?.backupR2Endpoint && org?.backupR2Bucket && org?.backupR2AccessKey && org?.backupR2SecretKey
+      ? {
+          endpoint: org.backupR2Endpoint,
+          bucket: org.backupR2Bucket,
+          region: org.backupR2Region || 'auto',
+          accessKey: org.backupR2AccessKey,
+          secretKey: org.backupR2SecretKey,
+        }
+      : undefined;
+
+    const sizeRaw = typeof data.storageSize === 'string' ? data.storageSize.trim() : '';
+    const storageSize = /^\d+(Mi|Gi|Ti)$/.test(sizeRaw) ? sizeRaw : '1Gi';
+
+    const { host, port } = await this.kubernetesService.createCnpgCluster({
+      namespace,
+      clusterName,
+      dbName,
+      dbUser,
+      dbPassword,
+      storageSize,
+      r2,
+    });
+
     const database = await this.prisma.database.create({
       data: {
         projectId,
@@ -6615,7 +6822,13 @@ export class ProjectsService {
         dbName,
         dbUser,
         dbPassword,
-        status: 'ready',
+        status: 'provisioning',
+        mode: 'cnpg',
+        namespace,
+        clusterName,
+        storageSize,
+        host,
+        port,
         createdBy: user.id,
       },
       include: {
@@ -6641,14 +6854,73 @@ export class ProjectsService {
 
     if (!database) throw new NotFoundException('Database not found');
 
-    // Get live status from PostgreSQL
-    const liveStatus = await this.kubernetesService.getPostgresDatabaseStatus(database.dbName);
+    let liveStatus: any;
+    let pods: any[] = [];
+    if (database.mode === 'cnpg' && database.namespace && database.clusterName) {
+      liveStatus = await this.kubernetesService.getCnpgClusterStatus(database.namespace, database.clusterName);
+      try {
+        const podList = await this.kubernetesService.listPods(database.namespace);
+        pods = (podList?.pods || []).filter((p: any) =>
+          p.labels?.['cnpg.io/cluster'] === database.clusterName,
+        );
+      } catch { /* ignore */ }
+
+      // Reconcile stored status with live cluster state.
+      if (liveStatus.ready && database.status !== 'ready' && database.status !== 'restoring') {
+        try {
+          await this.prisma.database.update({ where: { id: database.id }, data: { status: 'ready' } });
+          database.status = 'ready';
+        } catch { /* ignore */ }
+      } else if (!liveStatus.exists && database.status !== 'error') {
+        try {
+          await this.prisma.database.update({ where: { id: database.id }, data: { status: 'error' } });
+          database.status = 'error';
+        } catch { /* ignore */ }
+      }
+    } else if (database.mode === 'container' && database.namespace && database.containerName) {
+      liveStatus = await this.kubernetesService.getPostgresContainerStatus(
+        database.namespace,
+        database.containerName,
+        database.dbName,
+        database.dbUser,
+      );
+      try {
+        const podData = await this.kubernetesService.getDeploymentPods(
+          database.containerName,
+          database.namespace,
+        );
+        pods = podData?.pods || [];
+      } catch { /* ignore */ }
+    } else {
+      liveStatus = await this.kubernetesService.getPostgresDatabaseStatus(database.dbName);
+    }
+
+    const org = await this.prisma.organization.findUnique({ where: { id: database.project.organizationId } });
+    const backupsEnabled = Boolean(
+      (database.mode === 'cnpg' || database.mode === 'container') &&
+      org?.backupR2Endpoint && org?.backupR2Bucket && org?.backupR2AccessKey && org?.backupR2SecretKey
+    );
+
+    let publicHostname: string | null = null;
+    let publicConnectionString: string | null = null;
+    if (database.publicEnabled && database.publicIp && database.publicPort && database.mode === 'cnpg' && database.clusterName && database.namespace) {
+      publicHostname = this.kubernetesService.publicTlsHostname(database.clusterName);
+      publicConnectionString = `postgresql://${database.dbUser}:${database.dbPassword}@${publicHostname}:${database.publicPort}/${database.dbName}?sslmode=verify-full&sslrootcert=system`;
+      // Opportunistically refresh the local TLS secret copy if cert-manager rotated it.
+      try {
+        await this.kubernetesService.syncPublicTlsSecret(database.namespace);
+      } catch { /* ignore */ }
+    }
 
     return {
       ...database,
       connectionString: `postgresql://${database.dbUser}:${database.dbPassword}@${database.host}:${database.port}/${database.dbName}`,
       internalHost: `${database.host}:${database.port}`,
+      publicHostname,
+      publicConnectionString,
       liveStatus,
+      backupsEnabled,
+      pods,
     };
   }
 
@@ -6691,16 +6963,614 @@ export class ProjectsService {
     if (!membership) throw new ForbiddenException('You are not a member of this project');
     if (membership.role.name === 'viewer') throw new ForbiddenException('You do not have permission to delete databases');
 
-    // Delete from PostgreSQL
     try {
-      await this.kubernetesService.deletePostgresDatabase(database.dbName, database.dbUser);
+      if (database.mode === 'cnpg' && database.namespace && database.clusterName) {
+        try { await this.kubernetesService.deleteScheduledBackup(database.namespace, database.clusterName); } catch { /* ignore */ }
+        try { await this.kubernetesService.unexposeCnpgCluster(database.namespace, database.clusterName); } catch { /* ignore */ }
+        await this.kubernetesService.deleteCnpgCluster(database.namespace, database.clusterName);
+      } else if (database.mode === 'container' && database.namespace && database.containerName) {
+        await this.kubernetesService.deletePostgresContainer(database.namespace, database.containerName);
+      } else {
+        await this.kubernetesService.deletePostgresDatabase(database.dbName, database.dbUser);
+      }
     } catch (e) {
       console.error(`[DB] Failed to delete PostgreSQL database: ${e.message}`);
     }
 
-    // Delete from our records
     await this.prisma.database.delete({ where: { id: databaseId } });
 
     return { success: true, message: `Database "${database.name}" deleted` };
   }
+
+  // ── Database backup management ──
+
+  private async assertDatabaseEditor(databaseId: string, clerkId: string, userData?: any) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+
+    const database = await this.prisma.database.findUnique({
+      where: { id: databaseId },
+      include: { project: { include: { organization: true } } },
+    });
+    if (!database) throw new NotFoundException('Database not found');
+
+    const membership = await this.prisma.projectMember.findFirst({
+      where: { projectId: database.project.id, userId: user.id },
+      include: { role: true },
+    });
+    if (!membership) throw new ForbiddenException('You are not a member of this project');
+    if (membership.role.name === 'viewer') throw new ForbiddenException('You do not have permission to manage backups');
+
+    return { user, database };
+  }
+
+  private async getOrgR2Config(organizationId: string) {
+    const org = await this.prisma.organization.findUnique({ where: { id: organizationId } });
+    if (!org?.backupR2Endpoint || !org?.backupR2Bucket || !org?.backupR2AccessKey || !org?.backupR2SecretKey) {
+      throw new BadRequestException('R2 backup storage is not configured for this organization');
+    }
+    return org;
+  }
+
+  async listDatabaseBackups(databaseId: string, clerkId: string, userData?: any) {
+    const { database } = await this.assertDatabaseEditor(databaseId, clerkId, userData);
+    const records = await this.prisma.databaseBackup.findMany({
+      where: { databaseId: database.id },
+      orderBy: { createdAt: 'desc' },
+    });
+
+    // For CNPG, reconcile our records with live status from the Backup CRs.
+    // Also, pick up any scheduled backups created directly by CNPG that we don't yet have a record for.
+    if (database.mode === 'cnpg' && database.namespace && database.clusterName) {
+      let anyNewlyCompleted = false;
+
+      const runningOrPending = records.filter((r) => r.status === 'running' || r.status === 'pending');
+      for (const r of runningOrPending) {
+        try {
+          const live = await this.kubernetesService.getCnpgBackup(database.namespace, r.backupName);
+          if (!live) continue;
+          const phase: string | undefined = live.status?.phase;
+          if (!phase) continue;
+          let newStatus: string | null = null;
+          if (phase === 'completed') newStatus = 'completed';
+          else if (phase === 'failed') newStatus = 'failed';
+          else if (phase === 'running' || phase === 'started') newStatus = 'running';
+          if (newStatus && newStatus !== r.status) {
+            const completedAt = newStatus === 'completed' || newStatus === 'failed' ? new Date() : r.completedAt;
+            const errorMessage = newStatus === 'failed' ? (live.status?.error || '').substring(0, 2000) : r.errorMessage;
+            await this.prisma.databaseBackup.update({
+              where: { id: r.id },
+              data: { status: newStatus, completedAt, errorMessage },
+            });
+            r.status = newStatus;
+            r.completedAt = completedAt || null;
+            if (errorMessage !== undefined) r.errorMessage = errorMessage || null;
+            if (newStatus === 'completed') anyNewlyCompleted = true;
+          }
+        } catch { /* ignore */ }
+      }
+
+      try {
+        const liveBackups = await this.kubernetesService.listCnpgBackups(database.namespace, database.clusterName);
+        const known = new Set(records.map((r) => r.backupName));
+        for (const lb of liveBackups) {
+          const name: string | undefined = lb.metadata?.name;
+          if (!name || known.has(name)) continue;
+          const phase: string | undefined = lb.status?.phase;
+          const status = phase === 'completed' ? 'completed' : phase === 'failed' ? 'failed' : 'running';
+          const completedAt = (status === 'completed' || status === 'failed') ? new Date(lb.status?.stoppedAt || Date.now()) : null;
+          try {
+            const created = await this.prisma.databaseBackup.create({
+              data: {
+                databaseId: database.id,
+                label: name,
+                backupName: name,
+                type: lb.metadata?.labels?.['cnpg.io/scheduled-backup'] ? 'scheduled' : 'full',
+                status,
+                completedAt,
+                createdAt: new Date(lb.metadata?.creationTimestamp || Date.now()),
+              },
+            });
+            records.unshift(created);
+            if (status === 'completed') anyNewlyCompleted = true;
+          } catch { /* race: another request created it */ }
+        }
+      } catch { /* ignore */ }
+
+      if (anyNewlyCompleted) {
+        await this.pruneOldBackups({ id: database.id, namespace: database.namespace, clusterName: database.clusterName });
+      }
+    }
+
+    return records;
+  }
+
+  private readonly MAX_COMPLETED_BACKUPS = 10;
+
+  private async pruneOldBackups(database: { id: string; namespace: string | null; clusterName: string | null }) {
+    if (!database.namespace || !database.clusterName) return;
+    const completed = await this.prisma.databaseBackup.findMany({
+      where: { databaseId: database.id, status: 'completed' },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (completed.length <= this.MAX_COMPLETED_BACKUPS) return;
+    const toDelete = completed.slice(this.MAX_COMPLETED_BACKUPS);
+    for (const b of toDelete) {
+      try {
+        await this.kubernetesService.deleteCnpgBackup(database.namespace, b.backupName);
+      } catch (e: any) {
+        console.error(`[DB/backup] Failed to delete old backup CR ${b.backupName}: ${e?.message}`);
+      }
+      try {
+        await this.prisma.databaseBackup.delete({ where: { id: b.id } });
+      } catch (e: any) {
+        console.error(`[DB/backup] Failed to delete old backup record ${b.id}: ${e?.message}`);
+      }
+    }
+  }
+
+  async createDatabaseBackup(
+    databaseId: string,
+    data: { label?: string; type?: 'full' | 'diff' | 'incr' },
+    clerkId: string,
+    userData?: any
+  ) {
+    const { user, database } = await this.assertDatabaseEditor(databaseId, clerkId, userData);
+    if (database.mode !== 'cnpg') {
+      throw new BadRequestException('Backups are only supported for CNPG-backed databases. Recreate this database to enable backups.');
+    }
+    if (!database.namespace || !database.clusterName) {
+      throw new BadRequestException('Database is missing cluster metadata');
+    }
+    await this.getOrgR2Config(database.project.organizationId);
+
+    await this.pruneOldBackups({ id: database.id, namespace: database.namespace, clusterName: database.clusterName });
+
+    const backupName = (data.label || `backup-${new Date().toISOString().replace(/[:.]/g, '-').toLowerCase()}`)
+      .trim()
+      .replace(/[^a-z0-9-]/g, '-')
+      .replace(/-+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .substring(0, 63);
+
+    const record = await this.prisma.databaseBackup.create({
+      data: {
+        databaseId: database.id,
+        label: backupName,
+        backupName,
+        type: 'full',
+        status: 'running',
+        createdBy: user.id,
+      },
+    });
+
+    try {
+      await this.kubernetesService.createCnpgBackup(database.namespace, database.clusterName, backupName);
+    } catch (e: any) {
+      await this.prisma.databaseBackup.update({
+        where: { id: record.id },
+        data: { status: 'failed', completedAt: new Date(), errorMessage: String(e?.message || e).substring(0, 2000) },
+      });
+      throw new BadRequestException(`Failed to start backup: ${e?.message || e}`);
+    }
+
+    return record;
+  }
+
+  // ── Backup schedule (one cron per database) ──
+
+  private isValidCron(expr: string): boolean {
+    // CNPG accepts "quartz" 6-field cron ("seconds minutes hours day month weekday")
+    // and also supports 5-field via the standard scheduler; we require 5 or 6 fields.
+    const trimmed = expr.trim();
+    if (!trimmed) return false;
+    const parts = trimmed.split(/\s+/);
+    if (parts.length !== 5 && parts.length !== 6) return false;
+    return parts.every((p) => /^[\d*/,\-?LW#]+$/.test(p));
+  }
+
+  private toQuartzCron(expr: string): string {
+    const parts = expr.trim().split(/\s+/);
+    if (parts.length === 5) return `0 ${parts.join(' ')}`;
+    return expr.trim();
+  }
+
+  async getBackupSchedule(databaseId: string, clerkId: string, userData?: any) {
+    const { database } = await this.assertDatabaseEditor(databaseId, clerkId, userData);
+    return { cron: database.backupScheduleCron || null };
+  }
+
+  async setBackupSchedule(
+    databaseId: string,
+    data: { cron: string },
+    clerkId: string,
+    userData?: any,
+  ) {
+    const { database } = await this.assertDatabaseEditor(databaseId, clerkId, userData);
+    if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
+      throw new BadRequestException('Scheduled backups require a CNPG-backed database');
+    }
+    await this.getOrgR2Config(database.project.organizationId);
+
+    const cron = (data.cron || '').trim();
+    if (!this.isValidCron(cron)) {
+      throw new BadRequestException('Invalid cron expression. Expected 5 or 6 space-separated fields.');
+    }
+
+    const quartz = this.toQuartzCron(cron);
+    await this.kubernetesService.upsertScheduledBackup(database.namespace, database.clusterName, quartz);
+    await this.prisma.database.update({
+      where: { id: database.id },
+      data: { backupScheduleCron: cron },
+    });
+    return { cron };
+  }
+
+  async deleteBackupSchedule(databaseId: string, clerkId: string, userData?: any) {
+    const { database } = await this.assertDatabaseEditor(databaseId, clerkId, userData);
+    if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
+      return { success: true };
+    }
+    try {
+      await this.kubernetesService.deleteScheduledBackup(database.namespace, database.clusterName);
+    } catch (e: any) {
+      console.error(`[DB/schedule] Failed to delete ScheduledBackup: ${e?.message}`);
+    }
+    await this.prisma.database.update({
+      where: { id: database.id },
+      data: { backupScheduleCron: null },
+    });
+    return { success: true };
+  }
+
+  async restoreDatabaseBackup(
+    databaseId: string,
+    backupId: string | undefined,
+    clerkId: string,
+    userData?: any
+  ) {
+    const { database } = await this.assertDatabaseEditor(databaseId, clerkId, userData);
+    if (database.mode !== 'cnpg') {
+      throw new BadRequestException('Restore is only supported for CNPG-backed databases');
+    }
+    if (!database.namespace || !database.clusterName) {
+      throw new BadRequestException('Database is missing cluster metadata');
+    }
+    if (!backupId) throw new BadRequestException('backupId is required');
+
+    const org = await this.getOrgR2Config(database.project.organizationId);
+
+    const backup = await this.prisma.databaseBackup.findUnique({ where: { id: backupId } });
+    if (!backup || backup.databaseId !== database.id) throw new NotFoundException('Backup not found');
+    if (backup.status !== 'completed') throw new BadRequestException('Backup is not completed yet');
+
+    const oldClusterName = database.clusterName;
+
+    await this.prisma.database.update({ where: { id: database.id }, data: { status: 'restoring' } });
+
+    (async () => {
+      try {
+        const { newClusterName, host, port } = await this.kubernetesService.restoreCnpgCluster(
+          database.namespace!, oldClusterName, backup.backupName,
+          {
+            dbName: database.dbName,
+            dbUser: database.dbUser,
+            dbPassword: database.dbPassword,
+            storageSize: database.storageSize || '1Gi',
+            parameters: (database.pgParameters as Record<string, string> | null) || undefined,
+            sharedPreloadLibraries: (database.sharedPreloadLibs as string[] | null) || undefined,
+            r2: {
+              endpoint: org.backupR2Endpoint!,
+              bucket: org.backupR2Bucket!,
+              region: org.backupR2Region || 'auto',
+              accessKey: org.backupR2AccessKey!,
+              secretKey: org.backupR2SecretKey!,
+            },
+          },
+        );
+
+        // Wait for the new cluster to come up healthy before cutting over.
+        const deadline = Date.now() + 10 * 60 * 1000;
+        let healthy = false;
+        while (Date.now() < deadline) {
+          await new Promise((r) => setTimeout(r, 5000));
+          const status = await this.kubernetesService.getCnpgClusterStatus(database.namespace!, newClusterName);
+          if (status.exists && status.ready) { healthy = true; break; }
+        }
+        if (!healthy) {
+          throw new Error('Restore cluster did not become healthy within timeout');
+        }
+
+        await this.prisma.database.update({
+          where: { id: database.id },
+          data: { clusterName: newClusterName, host, port, status: 'ready' },
+        });
+
+        try {
+          await this.kubernetesService.deleteCnpgCluster(database.namespace!, oldClusterName);
+        } catch (e: any) {
+          console.error(`[DB] Failed to delete old cluster ${oldClusterName}: ${e?.message}`);
+        }
+      } catch (e: any) {
+        console.error(`[DB] Restore failed: ${e?.message}`);
+        await this.prisma.database.update({ where: { id: database.id }, data: { status: 'error' } });
+      }
+    })();
+
+    return { success: true, message: 'Restore initiated — a new cluster will be provisioned from the backup and cut over when ready.' };
+  }
+
+  // ── Extensions ──
+
+  async listDatabaseExtensions(databaseId: string, clerkId: string, userData?: any) {
+    const { database } = await this.assertDatabaseEditor(databaseId, clerkId, userData);
+    if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
+      return { extensions: [], sharedPreloadLibraries: [] };
+    }
+    const extensions = await this.kubernetesService.listCnpgExtensions(
+      database.namespace, database.clusterName, database.dbName,
+    );
+    return {
+      extensions,
+      sharedPreloadLibraries: (database.sharedPreloadLibs as string[] | null) || [],
+    };
+  }
+
+  async installDatabaseExtension(
+    databaseId: string,
+    data: { name: string; addToPreload?: boolean },
+    clerkId: string,
+    userData?: any,
+  ) {
+    const { database } = await this.assertDatabaseEditor(databaseId, clerkId, userData);
+    if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
+      throw new BadRequestException('Extensions require a CNPG-backed database');
+    }
+    if (!data.name) throw new BadRequestException('name is required');
+
+    let preloadAdded = false;
+    if (data.addToPreload) {
+      const existing = ((database.sharedPreloadLibs as string[] | null) || []).slice();
+      if (!existing.includes(data.name)) {
+        existing.push(data.name);
+        await this.kubernetesService.updateCnpgParameters(
+          database.namespace, database.clusterName,
+          (database.pgParameters as Record<string, string> | null) || {},
+          existing,
+        );
+        await this.prisma.database.update({
+          where: { id: database.id },
+          data: { sharedPreloadLibs: existing },
+        });
+        preloadAdded = true;
+      }
+    }
+
+    const result = await this.kubernetesService.installCnpgExtension(
+      database.namespace, database.clusterName, database.dbName, data.name,
+    );
+    if (!result.success) {
+      return { success: false, output: result.output, preloadAdded };
+    }
+    return { success: true, output: result.output, preloadAdded };
+  }
+
+  async uninstallDatabaseExtension(
+    databaseId: string,
+    data: { name: string; removeFromPreload?: boolean },
+    clerkId: string,
+    userData?: any,
+  ) {
+    const { database } = await this.assertDatabaseEditor(databaseId, clerkId, userData);
+    if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
+      throw new BadRequestException('Extensions require a CNPG-backed database');
+    }
+    if (!data.name) throw new BadRequestException('name is required');
+
+    const result = await this.kubernetesService.uninstallCnpgExtension(
+      database.namespace, database.clusterName, database.dbName, data.name,
+    );
+
+    if (data.removeFromPreload) {
+      const existing = ((database.sharedPreloadLibs as string[] | null) || []).filter((x) => x !== data.name);
+      await this.kubernetesService.updateCnpgParameters(
+        database.namespace, database.clusterName,
+        (database.pgParameters as Record<string, string> | null) || {},
+        existing,
+      );
+      await this.prisma.database.update({
+        where: { id: database.id },
+        data: { sharedPreloadLibs: existing },
+      });
+    }
+
+    return { success: result.success, output: result.output };
+  }
+
+  // ── Settings ──
+
+  async getDatabaseSettings(databaseId: string, clerkId: string, userData?: any) {
+    const { database } = await this.assertDatabaseEditor(databaseId, clerkId, userData);
+    if (database.mode !== 'cnpg') {
+      return { parameters: {}, sharedPreloadLibraries: [] };
+    }
+    return {
+      parameters: (database.pgParameters as Record<string, string> | null) || {},
+      sharedPreloadLibraries: (database.sharedPreloadLibs as string[] | null) || [],
+    };
+  }
+
+  async updateDatabaseSettings(
+    databaseId: string,
+    data: { parameters: Record<string, string> },
+    clerkId: string,
+    userData?: any,
+  ) {
+    const { database } = await this.assertDatabaseEditor(databaseId, clerkId, userData);
+    if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
+      throw new BadRequestException('Settings require a CNPG-backed database');
+    }
+
+    const bounds = this.PG_PARAM_BOUNDS;
+    const sanitized: Record<string, string> = {};
+    for (const [key, rawVal] of Object.entries(data.parameters || {})) {
+      const bound = bounds[key];
+      if (!bound) continue;
+      const v = String(rawVal).trim();
+      if (!v) continue;
+      if (bound.kind === 'int') {
+        const n = parseInt(v, 10);
+        if (!Number.isFinite(n) || n < bound.min || n > bound.max) {
+          throw new BadRequestException(`${key} must be between ${bound.min} and ${bound.max}`);
+        }
+        sanitized[key] = String(n);
+      } else if (bound.kind === 'memory') {
+        if (!/^\d+(kB|MB|GB)$/.test(v)) {
+          throw new BadRequestException(`${key} must be a memory size like "128MB"`);
+        }
+        sanitized[key] = v;
+      } else if (bound.kind === 'string') {
+        if (bound.enum && !bound.enum.includes(v)) {
+          throw new BadRequestException(`${key} must be one of: ${bound.enum.join(', ')}`);
+        }
+        sanitized[key] = v;
+      }
+    }
+
+    const existingPreload = (database.sharedPreloadLibs as string[] | null) || [];
+    await this.kubernetesService.updateCnpgParameters(
+      database.namespace, database.clusterName, sanitized, existingPreload,
+    );
+    await this.prisma.database.update({
+      where: { id: database.id },
+      data: { pgParameters: sanitized },
+    });
+
+    return { success: true, parameters: sanitized };
+  }
+
+  // ── Public (MetalLB) exposure ──
+
+  private readonly PUBLIC_PORT_MIN = 30000;
+  private readonly PUBLIC_PORT_MAX = 32767;
+
+  private async pickFreePublicPort(ip: string): Promise<number> {
+    const dbPortsRaw = await this.prisma.database.findMany({
+      where: { publicIp: ip, publicPort: { not: null } },
+      select: { publicPort: true },
+    });
+    const dbPorts = new Set(dbPortsRaw.map((r) => r.publicPort).filter((n): n is number => typeof n === 'number'));
+
+    let livePorts = new Set<number>();
+    try {
+      livePorts = new Set(await this.kubernetesService.listInUsePortsOnIp(ip));
+    } catch (e: any) {
+      console.error(`[DB/public] Failed to list in-use ports on ${ip}: ${e?.message}`);
+    }
+
+    for (let i = 0; i < 200; i++) {
+      const port = Math.floor(Math.random() * (this.PUBLIC_PORT_MAX - this.PUBLIC_PORT_MIN + 1)) + this.PUBLIC_PORT_MIN;
+      if (dbPorts.has(port) || livePorts.has(port)) continue;
+      return port;
+    }
+    throw new BadRequestException('Could not find a free public port after 200 attempts');
+  }
+
+  async enableDatabasePublic(databaseId: string, clerkId: string, userData?: any) {
+    const { database } = await this.assertDatabaseEditor(databaseId, clerkId, userData);
+    if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
+      throw new BadRequestException('Public exposure requires a CNPG-backed database');
+    }
+
+    const org = await this.prisma.organization.findUnique({ where: { id: database.project.organizationId } });
+    const ip = (org?.databasePublicIp || '').trim();
+    if (!ip) {
+      throw new BadRequestException('This organization does not have a public database IP configured. Set one in organization settings.');
+    }
+
+    if (database.publicEnabled && database.publicIp === ip && database.publicPort) {
+      return {
+        enabled: true,
+        host: database.publicIp,
+        port: database.publicPort,
+        connectionString: `postgresql://${database.dbUser}:${database.dbPassword}@${database.publicIp}:${database.publicPort}/${database.dbName}`,
+      };
+    }
+
+    const port = database.publicIp === ip && database.publicPort
+      ? database.publicPort
+      : await this.pickFreePublicPort(ip);
+
+    await this.kubernetesService.exposeCnpgClusterPublic({
+      namespace: database.namespace,
+      clusterName: database.clusterName,
+      loadBalancerIp: ip,
+      port,
+    });
+
+    // Punch a hole in the namespace's default-deny-all NetworkPolicy so external
+    // clients can actually reach port 5432 on the primary pod.
+    try {
+      await this.kubernetesService.upsertPublicDatabaseNetworkPolicy(database.namespace, database.clusterName);
+    } catch (e: any) {
+      console.error(`[DB/public] Failed to create ingress NetworkPolicy: ${e?.message}`);
+    }
+
+    // Copy the wildcard TLS secret into the project namespace and wire it into the CNPG Cluster
+    // so Postgres serves the Let's Encrypt cert instead of its self-signed default.
+    const hostname = this.kubernetesService.publicTlsHostname(database.clusterName);
+    try {
+      await this.kubernetesService.syncPublicTlsSecret(database.namespace);
+      await this.kubernetesService.patchCnpgClusterTls(database.namespace, database.clusterName, [hostname]);
+    } catch (e: any) {
+      console.error(`[DB/public] Failed to configure TLS: ${e?.message}`);
+    }
+
+    await this.prisma.database.update({
+      where: { id: database.id },
+      data: { publicEnabled: true, publicIp: ip, publicPort: port },
+    });
+
+    return {
+      enabled: true,
+      host: hostname,
+      ip,
+      port,
+      connectionString: `postgresql://${database.dbUser}:${database.dbPassword}@${hostname}:${port}/${database.dbName}?sslmode=verify-full&sslrootcert=system`,
+    };
+  }
+
+  async disableDatabasePublic(databaseId: string, clerkId: string, userData?: any) {
+    const { database } = await this.assertDatabaseEditor(databaseId, clerkId, userData);
+    if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
+      return { enabled: false };
+    }
+    try {
+      await this.kubernetesService.unexposeCnpgCluster(database.namespace, database.clusterName);
+    } catch (e: any) {
+      console.error(`[DB/public] Failed to delete public Service: ${e?.message}`);
+    }
+    try {
+      await this.kubernetesService.clearCnpgClusterTls(database.namespace, database.clusterName);
+    } catch (e: any) {
+      console.error(`[DB/public] Failed to clear TLS on Cluster: ${e?.message}`);
+    }
+    await this.prisma.database.update({
+      where: { id: database.id },
+      data: { publicEnabled: false, publicIp: null, publicPort: null },
+    });
+    return { enabled: false };
+  }
+
+  private readonly PG_PARAM_BOUNDS: Record<string, any> = {
+    max_connections: { kind: 'int', min: 10, max: 500, requiresRestart: true },
+    shared_buffers: { kind: 'memory', requiresRestart: true },
+    work_mem: { kind: 'memory' },
+    maintenance_work_mem: { kind: 'memory' },
+    effective_cache_size: { kind: 'memory' },
+    log_min_duration_statement: { kind: 'int', min: -1, max: 600000 },
+    statement_timeout: { kind: 'int', min: 0, max: 3600000 },
+    idle_in_transaction_session_timeout: { kind: 'int', min: 0, max: 3600000 },
+    synchronous_commit: { kind: 'string', enum: ['on', 'off', 'local', 'remote_write', 'remote_apply'] },
+  };
 }

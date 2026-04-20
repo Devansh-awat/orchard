@@ -12,6 +12,7 @@
 	let submitting = $state(false);
 	let error = $state<string | null>(null);
 	let name = $state('');
+	let storageSizeGi = $state(1);
 
 	const projectSlug = $derived($page.params.projectSlug ?? '');
 	const orgSlug = $derived($page.params.orgSlug ?? '');
@@ -45,10 +46,11 @@
 		error = null;
 
 		try {
+			const size = Math.max(1, Math.floor(Number(storageSizeGi) || 1));
 			const response = await apiFetch(`/apiv1/projects/${project.id}/databases`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ name: name.trim() })
+				body: JSON.stringify({ name: name.trim(), storageSize: `${size}Gi` })
 			});
 
 			if (!response.ok) {
@@ -122,6 +124,21 @@
 						disabled={submitting}
 					/>
 					<p class="nd-hint">A slug-friendly name. The database will be created as <code class="nd-mono">{generatedDbName()}</code></p>
+				</div>
+
+				<div class="nd-field">
+					<label for="db-size" class="nd-label">Storage Size (GiB)</label>
+					<input
+						id="db-size"
+						type="number"
+						min="1"
+						max="1024"
+						step="1"
+						bind:value={storageSizeGi}
+						class="nd-input"
+						disabled={submitting}
+					/>
+					<p class="nd-hint">Persistent volume size for this database. Defaults to 1 GiB.</p>
 				</div>
 			</div>
 

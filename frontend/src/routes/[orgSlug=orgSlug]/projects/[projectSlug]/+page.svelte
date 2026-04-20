@@ -16,7 +16,7 @@
 		GitBranch,
 		LayoutTemplate,
 		Users,
-		UserPlus
+		Database as DatabaseIcon
 	} from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import NewResourceModal from '$lib/components/NewResourceModal.svelte';
@@ -97,6 +97,16 @@
 
 	let project = $state<Project | null>(null);
 	let templateInstances = $state<TemplateInstanceSummary[]>([]);
+
+	interface DatabaseSummary {
+		id: string;
+		name: string;
+		dbName: string;
+		status: string;
+		mode?: string;
+		createdAt: string;
+	}
+	let databases = $state<DatabaseSummary[]>([]);
 	let loading = $state(true);
 	let syncing = $state(false);
 	let deleting = $state(false);
@@ -105,7 +115,40 @@
 	let deploymentSearch = $state('');
 	let showNewResourceModal = $state(false);
 	let projectMembers = $state<ProjectMember[]>([]);
-	
+	let newMemberRole = $state<'member' | 'admin' | 'viewer'>('member');
+	let addingMember = $state(false);
+	let removingMemberId = $state<string | null>(null);
+
+	interface OrgMember {
+		id: string;
+		role: string;
+		user: {
+			id: string;
+			email: string;
+			firstName?: string;
+			lastName?: string;
+			imageUrl?: string;
+		};
+	}
+	let orgMembers = $state<OrgMember[]>([]);
+	let memberSearch = $state('');
+	let pickerOpen = $state(false);
+	let pickerInput = $state<HTMLInputElement | null>(null);
+
+	const availableOrgMembers = $derived.by(() => {
+		const existingUserIds = new Set(projectMembers.map((m) => m.user.id));
+		return orgMembers.filter((m) => !existingUserIds.has(m.user.id));
+	});
+
+	const filteredOrgMembers = $derived.by(() => {
+		const query = memberSearch.trim().toLowerCase();
+		if (!query) return availableOrgMembers;
+		return availableOrgMembers.filter((m) => {
+			const name = `${m.user.firstName ?? ''} ${m.user.lastName ?? ''}`.toLowerCase();
+			return name.includes(query) || m.user.email.toLowerCase().includes(query);
+		});
+	});
+
 	let filteredDeployments = $derived.by(() => {
 		const deployments = project?.deployments ?? [];
 		const query = deploymentSearch.trim().toLowerCase();
@@ -144,6 +187,7 @@
 			if (!fullRes.ok) throw new Error('Failed to fetch project');
 			project = await fullRes.json();
 			projectMembers = project?.members ?? [];
+			fetchOrgMembers();
 
 			if (project?.namespace) {
 				syncNamespace();
@@ -155,6 +199,13 @@
 					const tiRes = await apiFetch(`/apiv1/projects/${project.id}/template-instances`);
 					if (tiRes.ok) {
 						templateInstances = await tiRes.json();
+					}
+				} catch { /* ignore */ }
+
+				try {
+					const dbRes = await apiFetch(`/apiv1/projects/${project.id}/databases`);
+					if (dbRes.ok) {
+						databases = await dbRes.json();
 					}
 				} catch { /* ignore */ }
 			}
@@ -225,6 +276,71 @@
 			});
 		} finally {
 			deleting = false;
+		}
+	}
+
+	async function fetchOrgMembers() {
+		if (!project?.organization?.id) return;
+		try {
+			const response = await apiFetch(`/apiv1/organizations/${project.organization.id}/members`);
+			if (response.ok) {
+				orgMembers = await response.json();
+			}
+		} catch (e) {
+			console.error('Failed to fetch org members:', e);
+		}
+	}
+
+	async function addMember(email: string) {
+		if (!project || !email) return;
+		addingMember = true;
+		try {
+			const response = await apiFetch(`/apiv1/projects/${project.id}/members`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ email, role: newMemberRole })
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to add member');
+			}
+			toasts.add({ title: 'Member added', color: 'success' });
+			memberSearch = '';
+			pickerOpen = false;
+			newMemberRole = 'member';
+			await fetchProject();
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to add member',
+				color: 'error'
+			});
+		} finally {
+			addingMember = false;
+		}
+	}
+
+	async function removeMember(memberId: string) {
+		if (!project) return;
+		removingMemberId = memberId;
+		try {
+			const response = await apiFetch(`/apiv1/projects/${project.id}/members/${memberId}`, {
+				method: 'DELETE'
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to remove member');
+			}
+			toasts.add({ title: 'Member removed', color: 'success' });
+			await fetchProject();
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to remove member',
+				color: 'error'
+			});
+		} finally {
+			removingMemberId = null;
 		}
 	}
 
@@ -492,6 +608,42 @@
 			</div>
 		{/if}
 
+		<!-- Databases -->
+		{#if databases.length}
+			<div class="pj-deployments-header" style="margin-top: 1rem;">
+				<h2 class="pj-section-title">
+					<DatabaseIcon class="h-4 w-4" style="color: var(--pj-color-green); display: inline;" />
+					Databases
+				</h2>
+			</div>
+			<div class="pj-deployment-grid">
+				{#each databases as db}
+					<a
+						href="/{orgSlug}/databases/{db.id}"
+						class="pj-deployment-card"
+					>
+						<div class="pj-deployment-card-top">
+							<div class="pj-deployment-indicator" style="background-color: color-mix(in srgb, var(--pj-color-green) 12%, transparent)">
+								<DatabaseIcon class="h-5 w-5" style="color: var(--pj-color-green)" />
+							</div>
+							<span class="pj-deployment-status-badge" style="background-color: color-mix(in srgb, {db.status === 'ready' ? 'var(--pj-color-green)' : db.status === 'error' ? 'var(--pj-color-red)' : 'var(--pj-color-amber)'} 15%, transparent); color: {db.status === 'ready' ? 'var(--pj-color-green)' : db.status === 'error' ? 'var(--pj-color-red)' : 'var(--pj-color-amber)'}">
+								{db.status}
+							</span>
+						</div>
+						<div class="pj-deployment-card-body">
+							<span class="pj-deployment-name">{db.name}</span>
+							<span class="pj-deployment-detail">{db.dbName}</span>
+						</div>
+						<div class="pj-deployment-card-footer">
+							<span class="pj-deployment-replicas">
+								PostgreSQL {db.mode === 'container' ? '· container' : '· shared'}
+							</span>
+						</div>
+					</a>
+				{/each}
+			</div>
+		{/if}
+
 		<!-- Template Instances -->
 		{#if templateInstances.length}
 			<div class="pj-deployments-header" style="margin-top: 1rem;">
@@ -529,11 +681,64 @@
 		{/if}
 
 		<!-- Members -->
-		{#if projectMembers.length > 0}
-			<div class="pj-members-section">
-				<div class="pj-deployments-header">
-					<h2 class="pj-section-title"><Users size={16} /> Members</h2>
+		<div class="pj-members-section">
+			<div class="pj-deployments-header">
+				<h2 class="pj-section-title"><Users size={16} /> Members</h2>
+			</div>
+
+			<div class="pj-member-invite">
+				<div class="pj-picker">
+					<input
+						type="text"
+						bind:this={pickerInput}
+						bind:value={memberSearch}
+						placeholder="Search organization members..."
+						class="pj-invite-input"
+						onfocus={() => (pickerOpen = true)}
+						onblur={() => setTimeout(() => (pickerOpen = false), 150)}
+					/>
+					{#if pickerOpen && filteredOrgMembers.length > 0}
+						<div class="pj-picker-dropdown">
+							{#each filteredOrgMembers as om (om.id)}
+								<button
+									type="button"
+									class="pj-picker-item"
+									onmousedown={(e) => e.preventDefault()}
+									onclick={() => addMember(om.user.email)}
+									disabled={addingMember}
+								>
+									{#if om.user.imageUrl}
+										<img src={om.user.imageUrl} alt="" class="pj-member-avatar" />
+									{:else}
+										<div class="pj-member-avatar pj-member-avatar--letter">
+											{(om.user.firstName ?? om.user.email).charAt(0).toUpperCase()}
+										</div>
+									{/if}
+									<div class="pj-member-info">
+										<span class="pj-member-name">
+											{#if om.user.firstName}{om.user.firstName}{#if om.user.lastName}&nbsp;{om.user.lastName}{/if}{:else}{om.user.email}{/if}
+										</span>
+										{#if om.user.firstName}
+											<span class="pj-member-email">{om.user.email}</span>
+										{/if}
+									</div>
+								</button>
+							{/each}
+						</div>
+					{:else if pickerOpen && memberSearch.trim() && filteredOrgMembers.length === 0}
+						<div class="pj-picker-dropdown">
+							<div class="pj-picker-empty">No matching org members</div>
+						</div>
+					{/if}
 				</div>
+				<select bind:value={newMemberRole} class="pj-invite-role">
+					<option value="member">Member</option>
+					<option value="admin">Admin</option>
+					<option value="viewer">Viewer</option>
+				</select>
+			</div>
+
+			{#if projectMembers.length > 0}
 				<div class="pj-members-list">
 					{#each projectMembers as m (m.id)}
 						<div class="pj-member">
@@ -546,18 +751,30 @@
 							{/if}
 							<div class="pj-member-info">
 								<span class="pj-member-name">
-									{#if m.user.firstName}{m.user.firstName}{#if m.user.lastName} {m.user.lastName}{/if}{:else}{m.user.email}{/if}
+									{#if m.user.firstName}{m.user.firstName}{#if m.user.lastName}&nbsp;{m.user.lastName}{/if}{:else}{m.user.email}{/if}
 								</span>
 								{#if m.user.firstName}
 									<span class="pj-member-email">{m.user.email}</span>
 								{/if}
 							</div>
 							<span class="pj-member-role">{m.role.name}</span>
+							<button
+								class="pj-member-remove"
+								title="Remove member"
+								onclick={() => removeMember(m.id)}
+								disabled={removingMemberId === m.id}
+							>
+								{#if removingMemberId === m.id}
+									<Loader2 class="h-3.5 w-3.5 animate-spin" />
+								{:else}
+									<Trash2 class="h-3.5 w-3.5" />
+								{/if}
+							</button>
 						</div>
 					{/each}
 				</div>
-			</div>
-		{/if}
+			{/if}
+		</div>
 	{/if}
 </div>
 
@@ -1059,5 +1276,120 @@
 		color: var(--surface-muted);
 		text-transform: capitalize;
 		flex-shrink: 0;
+	}
+
+	.pj-member-remove {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: 0.375rem;
+		border: 1px solid transparent;
+		background: transparent;
+		color: var(--surface-muted);
+		cursor: pointer;
+		flex-shrink: 0;
+		transition: background-color 0.15s, color 0.15s, border-color 0.15s;
+	}
+
+	.pj-member-remove:hover:not(:disabled) {
+		background-color: color-mix(in srgb, var(--error-text-color) 12%, transparent);
+		color: var(--error-text-color);
+		border-color: color-mix(in srgb, var(--error-text-color) 25%, transparent);
+	}
+
+	.pj-member-remove:disabled {
+		opacity: 0.6;
+		cursor: not-allowed;
+	}
+
+	.pj-member-invite {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-bottom: 0.75rem;
+		flex-wrap: nowrap;
+		position: relative;
+	}
+
+	.pj-invite-input {
+		width: 100%;
+		box-sizing: border-box;
+		padding: 0.4375rem 0.75rem;
+		border-radius: 0.5rem;
+		border: 1px solid var(--surface-border);
+		background-color: var(--center-channel-bg);
+		color: var(--center-channel-color);
+		font-size: 0.8125rem;
+	}
+
+	.pj-invite-input::placeholder {
+		color: var(--surface-muted);
+	}
+
+	.pj-invite-input:focus {
+		outline: none;
+		border-color: var(--sidebar-text-active-border);
+	}
+
+	.pj-invite-role {
+		padding: 0.4375rem 0.5rem;
+		border-radius: 0.5rem;
+		border: 1px solid var(--surface-border);
+		background-color: var(--center-channel-bg);
+		color: var(--center-channel-color);
+		font-size: 0.8125rem;
+	}
+
+	.pj-picker {
+		position: relative;
+		flex: 1;
+	}
+
+	.pj-picker-dropdown {
+		position: absolute;
+		top: calc(100% + 0.25rem);
+		left: 0;
+		right: 0;
+		z-index: 20;
+		max-height: 16rem;
+		overflow-y: auto;
+		border-radius: 0.625rem;
+		border: 1px solid var(--surface-border);
+		background-color: var(--center-channel-bg);
+		box-shadow:
+			0 4px 12px rgb(0 0 0 / 0.08),
+			0 2px 4px rgb(0 0 0 / 0.04);
+		padding: 0.25rem;
+	}
+
+	.pj-picker-item {
+		display: flex;
+		align-items: center;
+		gap: 0.625rem;
+		width: 100%;
+		padding: 0.5rem;
+		border: none;
+		background: transparent;
+		border-radius: 0.5rem;
+		cursor: pointer;
+		text-align: left;
+	}
+
+	.pj-picker-item:hover:not(:disabled) {
+		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);
+	}
+
+	.pj-picker-item:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+
+	.pj-picker-empty {
+		padding: 0.75rem;
+		font-size: 0.8125rem;
+		color: var(--surface-muted);
+		text-align: center;
 	}
 </style>

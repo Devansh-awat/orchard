@@ -111,14 +111,22 @@ export class OrganizationsController {
   @Patch(':id')
   async updateOrganization(
     @Param('id') organizationId: string,
-    @Body('name') name: string,
-    @Body('description') description: string,
+    @Body() body: {
+      name?: string;
+      description?: string;
+      backupR2Endpoint?: string | null;
+      backupR2Bucket?: string | null;
+      backupR2Region?: string | null;
+      backupR2AccessKey?: string | null;
+      backupR2SecretKey?: string | null;
+      databasePublicIp?: string | null;
+    },
     @Request() req
   ) {
     return this.organizationsService.updateOrganization(
       organizationId,
       req.user.sub,
-      { name, description },
+      body || {},
       {
         email: req.user.email,
         username: req.user.username,
@@ -127,6 +135,17 @@ export class OrganizationsController {
         imageUrl: req.user.imageUrl,
       }
     );
+  }
+
+  @Get(':id/backup-settings')
+  async getBackupSettings(@Param('id') organizationId: string, @Request() req) {
+    return this.organizationsService.getBackupSettings(organizationId, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl,
+    });
   }
 
   @Post(':id/members')

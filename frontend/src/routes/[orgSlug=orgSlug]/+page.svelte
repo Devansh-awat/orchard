@@ -32,6 +32,17 @@
 
 	let deployments = $state<DeploymentSummary[]>([]);
 
+	interface DatabaseSummary {
+		id: string;
+		name: string;
+		dbName: string;
+		status: string;
+		mode?: string;
+		updatedAt: string;
+		project: { id: string; name: string; slug: string; organizationId: string };
+	}
+	let databases = $state<DatabaseSummary[]>([]);
+
 	async function fetchDeployments() {
 		loading = true;
 		try {
@@ -41,6 +52,15 @@
 			if (res.ok) deployments = await res.json();
 		} catch (e) { console.error('Failed to fetch deployments:', e); }
 		finally { loading = false; }
+	}
+
+	async function fetchDatabases() {
+		try {
+			const orgId = $selectedOrganization?.id;
+			const url = orgId ? `/apiv1/databases?orgId=${orgId}` : '/apiv1/databases';
+			const res = await apiFetch(url);
+			if (res.ok) databases = await res.json();
+		} catch (e) { console.error('Failed to fetch databases:', e); }
 	}
 
 	// ── Builds ──
@@ -104,12 +124,24 @@
 
 	let favDeps = $derived(filtered.filter(d => favouriteIds.has(d.id)));
 
+	let filteredDbs = $derived.by(() => {
+		const q = searchQuery.trim().toLowerCase();
+		let r = databases;
+		if (q) r = r.filter(d =>
+			d.name.toLowerCase().includes(q) ||
+			d.dbName.toLowerCase().includes(q) ||
+			(d.project?.name?.toLowerCase().includes(q) ?? false)
+		);
+		return [...r].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+	});
+
 	// Group non-fav deployments by project, preserving project order by most recent deployment
 	interface ProjectGroup {
 		id: string;
 		name: string;
 		slug: string;
 		deps: DeploymentSummary[];
+		dbs: DatabaseSummary[];
 	}
 
 	let projectGroups = $derived.by(() => {
@@ -119,15 +151,28 @@
 			const p = d.project;
 			if (!p) continue;
 			if (!map.has(p.id)) {
-				map.set(p.id, { id: p.id, name: p.name, slug: p.slug, deps: [] });
+				map.set(p.id, { id: p.id, name: p.name, slug: p.slug, deps: [], dbs: [] });
 			}
 			map.get(p.id)!.deps.push(d);
 		}
-		// Sort groups by most recent deployment
+		for (const db of filteredDbs) {
+			const p = db.project;
+			if (!p) continue;
+			if (!map.has(p.id)) {
+				map.set(p.id, { id: p.id, name: p.name, slug: p.slug, deps: [], dbs: [] });
+			}
+			map.get(p.id)!.dbs.push(db);
+		}
+		// Sort groups by most recent deployment or database activity
 		return Array.from(map.values()).sort((a, b) => {
-			const aT = Math.max(...a.deps.map(d => new Date(d.updatedAt).getTime()));
-			const bT = Math.max(...b.deps.map(d => new Date(d.updatedAt).getTime()));
-			return bT - aT;
+			const latestOf = (g: ProjectGroup) => {
+				const times = [
+					...g.deps.map(d => new Date(d.updatedAt).getTime()),
+					...g.dbs.map(d => new Date(d.updatedAt).getTime()),
+				];
+				return times.length ? Math.max(...times) : 0;
+			};
+			return latestOf(b) - latestOf(a);
 		});
 	});
 
@@ -202,7 +247,7 @@
 		return null;
 	}
 
-	$effect(() => { if ($selectedOrganization?.id) { fetchDeployments(); fetchBuilds(); } });
+	$effect(() => { if ($selectedOrganization?.id) { fetchDeployments(); fetchBuilds(); fetchDatabases(); } });
 </script>
 
 <svelte:window onclick={closeAll} />
@@ -263,14 +308,19 @@
 			<!-- Group by Project -->
 			{#if projectGroups.length > 0}
 				{#each projectGroups as group (group.id)}
+					{@const depLabel = `${group.deps.length} ${group.deps.length === 1 ? 'deployment' : 'deployments'}`}
+					{@const dbLabel = group.dbs.length ? `${group.dbs.length} ${group.dbs.length === 1 ? 'database' : 'databases'}` : ''}
 					<section class="section">
 						<a href="/{orgSlug}/projects/{group.slug}" class="group-head">
 							<span class="group-name">{group.name}</span>
-							<span class="group-count">{group.deps.length} {group.deps.length === 1 ? 'deployment' : 'deployments'}</span>
+							<span class="group-count">{depLabel}{dbLabel ? ` · ${dbLabel}` : ''}</span>
 						</a>
 						<div class="grid">
 							{#each group.deps as dep (dep.id)}
 								{@render card(dep, false)}
+							{/each}
+							{#each group.dbs as db (db.id)}
+								{@render dbCard(db)}
 							{/each}
 						</div>
 					</section>
@@ -289,10 +339,20 @@
 					</div>
 				</section>
 			{/if}
+			{#if filteredDbs.length > 0}
+				<section class="section">
+					<h2 class="label">All Databases</h2>
+					<div class="grid">
+						{#each filteredDbs as db (db.id)}
+							{@render dbCard(db)}
+						{/each}
+					</div>
+				</section>
+			{/if}
 		{/if}
 
-		{#if filtered.length === 0}
-			<p class="no-results">{searchQuery ? `No results for "${searchQuery}"` : 'No deployments here'}</p>
+		{#if filtered.length === 0 && filteredDbs.length === 0}
+			<p class="no-results">{searchQuery ? `No results for "${searchQuery}"` : 'Nothing here yet'}</p>
 		{/if}
 	{/if}
 	</main>
@@ -377,6 +437,26 @@
 		<div class="card-bot">
 			<span class="card-status"><span class="dot {dotClass(dep.status, dep.buildStatus)}"></span> {statusText(dep.status, dep.buildStatus)}</span>
 			<span class="card-meta">{timeAgo(dep.updatedAt)}</span>
+		</div>
+	</a>
+{/snippet}
+
+{#snippet dbCard(db: DatabaseSummary)}
+	{@const dbIcon = IMG_ICONS.postgres}
+	<a href="/{orgSlug}/databases/{db.id}" class="card">
+		<div class="card-top">
+			<img src={dbIcon} alt="" class="card-ic" />
+			<div class="card-text">
+				<span class="card-name">{db.name}</span>
+				<span class="card-sub">{db.dbName}</span>
+			</div>
+		</div>
+		<div class="card-bot">
+			<span class="card-status">
+				<span class="dot {db.status === 'ready' ? 'dot--green' : db.status === 'error' ? 'dot--red' : 'dot--amber'}"></span>
+				{db.status === 'ready' ? 'Running' : db.status.charAt(0).toUpperCase() + db.status.slice(1)}
+			</span>
+			<span class="card-meta">{timeAgo(db.updatedAt)}</span>
 		</div>
 	</a>
 {/snippet}

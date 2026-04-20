@@ -68,6 +68,39 @@ export class OrganizationsService {
     });
   }
 
+  private scrubOrgSecrets<T extends { backupR2SecretKey?: string | null }>(org: T | null): T | null {
+    if (!org) return org;
+    const hasSecret = Boolean(org.backupR2SecretKey);
+    const clone: any = { ...org, backupR2SecretKey: null, backupR2SecretKeyConfigured: hasSecret };
+    return clone;
+  }
+
+  async getBackupSettings(organizationId: string, clerkId: string, userData?: any) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+    await this.checkPermission(organizationId, user.id, 'admin');
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: {
+        backupR2Endpoint: true,
+        backupR2Bucket: true,
+        backupR2Region: true,
+        backupR2AccessKey: true,
+        backupR2SecretKey: true,
+        databasePublicIp: true,
+      },
+    });
+    if (!org) throw new NotFoundException('Organization not found');
+    return {
+      endpoint: org.backupR2Endpoint,
+      bucket: org.backupR2Bucket,
+      region: org.backupR2Region,
+      accessKey: org.backupR2AccessKey,
+      secretKeyConfigured: Boolean(org.backupR2SecretKey),
+      databasePublicIp: org.databasePublicIp,
+    };
+  }
+
   async getOrganization(organizationId: string) {
     const organization = await this.prisma.organization.findUnique({
       where: { id: organizationId },
@@ -113,7 +146,7 @@ export class OrganizationsService {
       }
     }
 
-    return organization;
+    return this.scrubOrgSecrets(organization as any);
   }
 
   async getOrganizationMembers(organizationId: string) {
@@ -200,7 +233,7 @@ export class OrganizationsService {
       }
     }
 
-    return organization;
+    return this.scrubOrgSecrets(organization as any);
   }
 
   async getMembershipByUserId(organizationId: string, clerkId: string, userData?: any) {
@@ -229,11 +262,20 @@ export class OrganizationsService {
   async updateOrganization(
     organizationId: string,
     clerkId: string,
-    data: { name?: string; description?: string },
+    data: {
+      name?: string;
+      description?: string;
+      backupR2Endpoint?: string | null;
+      backupR2Bucket?: string | null;
+      backupR2Region?: string | null;
+      backupR2AccessKey?: string | null;
+      backupR2SecretKey?: string | null;
+      databasePublicIp?: string | null;
+    },
     userData?: any
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
-    
+
     if (!user) {
       throw new NotFoundException('User not found');
     }
@@ -243,8 +285,20 @@ export class OrganizationsService {
     const updateData: any = {};
     if (data.name !== undefined) updateData.name = data.name;
     if (data.description !== undefined) updateData.description = data.description;
+    if (data.backupR2Endpoint !== undefined) updateData.backupR2Endpoint = data.backupR2Endpoint || null;
+    if (data.backupR2Bucket !== undefined) updateData.backupR2Bucket = data.backupR2Bucket || null;
+    if (data.backupR2Region !== undefined) updateData.backupR2Region = data.backupR2Region || null;
+    if (data.backupR2AccessKey !== undefined) updateData.backupR2AccessKey = data.backupR2AccessKey || null;
+    if (data.backupR2SecretKey !== undefined) updateData.backupR2SecretKey = data.backupR2SecretKey || null;
+    if (data.databasePublicIp !== undefined) {
+      const ip = data.databasePublicIp === null ? null : String(data.databasePublicIp).trim() || null;
+      if (ip && !/^(\d{1,3}\.){3}\d{1,3}$/.test(ip) && !/^[0-9a-fA-F:]+$/.test(ip)) {
+        throw new BadRequestException('databasePublicIp must be a valid IPv4 or IPv6 address');
+      }
+      updateData.databasePublicIp = ip;
+    }
 
-    return this.prisma.organization.update({
+    const updated = await this.prisma.organization.update({
       where: { id: organizationId },
       data: updateData,
       include: {
@@ -274,6 +328,7 @@ export class OrganizationsService {
         }
       }
     });
+    return this.scrubOrgSecrets(updated as any);
   }
 
   async uploadAvatar(

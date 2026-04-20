@@ -162,6 +162,14 @@ model Organization {
   createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
+  backupR2Endpoint  String? @map("backup_r2_endpoint") @db.VarChar(500)
+  backupR2Bucket    String? @map("backup_r2_bucket") @db.VarChar(255)
+  backupR2Region    String? @map("backup_r2_region") @db.VarChar(100)
+  backupR2AccessKey String? @map("backup_r2_access_key") @db.VarChar(255)
+  backupR2SecretKey String? @map("backup_r2_secret_key") @db.VarChar(500)
+
+  databasePublicIp  String? @map("database_public_ip") @db.VarChar(45)
+
   creator     User?                    @relation("OrganizationCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   members     OrganizationMember[]
   invitations OrganizationInvitation[]
@@ -573,6 +581,18 @@ model Database {
   status        String   @default("pending") @db.VarChar(50)
   host          String   @default("postgresql-cluster-rw.postgresql.svc.cluster.local") @db.VarChar(255)
   port          Int      @default(5432)
+  mode              String   @default("shared") @db.VarChar(20)
+  namespace         String?  @db.VarChar(100)
+  containerName     String?  @map("container_name") @db.VarChar(100)
+  storageSize       String?  @map("storage_size") @db.VarChar(20)
+  clusterName       String?  @map("cluster_name") @db.VarChar(100)
+  pgParameters      Json?    @map("pg_parameters")
+  sharedPreloadLibs Json?    @map("shared_preload_libs")
+  installedExtensions Json?  @map("installed_extensions")
+  backupScheduleCron String?  @map("backup_schedule_cron") @db.VarChar(100)
+  publicEnabled      Boolean  @default(false) @map("public_enabled")
+  publicIp           String?  @map("public_ip") @db.VarChar(45)
+  publicPort         Int?     @map("public_port")
   createdBy     String?  @map("created_by") @db.Uuid
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
@@ -582,12 +602,33 @@ model Database {
   project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   creator          User?             @relation("DatabaseCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   templateInstance TemplateInstance? @relation(fields: [templateInstanceId], references: [id], onDelete: SetNull)
+  backups          DatabaseBackup[]
 
   @@unique([projectId, name])
   @@unique([dbName])
   @@index([projectId], map: "idx_databases_project")
   @@index([templateInstanceId], map: "idx_databases_template_instance")
+  @@index([publicIp, publicPort], map: "idx_databases_public_endpoint")
   @@map("databases")
+}
+
+model DatabaseBackup {
+  id          String   @id @default(uuid()) @db.Uuid
+  databaseId  String   @map("database_id") @db.Uuid
+  label       String   @db.VarChar(255)
+  backupName  String   @map("backup_name") @db.VarChar(255)
+  type        String   @default("full") @db.VarChar(20)
+  status      String   @default("pending") @db.VarChar(20)
+  sizeBytes   BigInt?  @map("size_bytes")
+  errorMessage String? @map("error_message") @db.Text
+  createdBy   String?  @map("created_by") @db.Uuid
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  completedAt DateTime? @map("completed_at") @db.Timestamp(6)
+
+  database Database @relation(fields: [databaseId], references: [id], onDelete: Cascade)
+
+  @@index([databaseId, createdAt], map: "idx_database_backups_lookup")
+  @@map("database_backups")
 }
 
 model DeploymentMetric {
