@@ -254,18 +254,11 @@ export class TemplatesService implements OnModuleInit {
           case 'database': {
             const db = await this.projectsService.createDatabase(
               projectId,
-              { name: config.name },
+              { name: config.name, templateInstanceId: instance.id },
               clerkId,
               userData,
             );
 
-            // Link to template instance
-            await this.prisma.database.update({
-              where: { id: db.id },
-              data: { templateInstanceId: instance.id },
-            });
-
-            // Store in context for cross-references
             context.resources[resource.name] = {
               id: db.id,
               host: db.host,
@@ -287,6 +280,7 @@ export class TemplatesService implements OnModuleInit {
               env: config.env,
               volumes: config.volumes,
               exposePublic: config.exposePublic ?? false,
+              templateInstanceId: instance.id,
             };
 
             const deployment = await this.projectsService.createDeployment(
@@ -296,13 +290,6 @@ export class TemplatesService implements OnModuleInit {
               userData,
             );
 
-            // Link to template instance
-            await this.prisma.deployment.update({
-              where: { id: deployment.id },
-              data: { templateInstanceId: instance.id },
-            });
-
-            // Get the service name for cross-references
             const services = await this.prisma.service.findMany({
               where: { deploymentId: deployment.id },
             });
@@ -323,13 +310,6 @@ export class TemplatesService implements OnModuleInit {
               },
             ];
 
-            // Get ingresses before creation to diff afterwards
-            const ingressesBefore = await this.prisma.ingress.findMany({
-              where: { projectId },
-              select: { id: true },
-            });
-            const beforeIds = new Set(ingressesBefore.map((i) => i.id));
-
             await this.projectsService.createProjectIngress(
               projectId,
               {
@@ -337,28 +317,19 @@ export class TemplatesService implements OnModuleInit {
                 tlsEnabled: config.tlsEnabled !== false,
                 routes,
                 basicAuth: config.basicAuth,
+                templateInstanceId: instance.id,
               },
               clerkId,
               userData,
             );
 
-            // Find newly created ingresses by diffing
-            const ingressesAfter = await this.prisma.ingress.findMany({
-              where: { projectId },
-              select: { id: true, host: true },
+            const linkedIngress = await this.prisma.ingress.findFirst({
+              where: { projectId, templateInstanceId: instance.id, host: config.host },
+              select: { id: true },
             });
-            const newIngresses = ingressesAfter.filter((i) => !beforeIds.has(i.id));
-
-            // Link new ingresses to template instance
-            for (const ing of newIngresses) {
-              await this.prisma.ingress.update({
-                where: { id: ing.id },
-                data: { templateInstanceId: instance.id },
-              });
-            }
 
             context.resources[resource.name] = {
-              id: newIngresses[0]?.id,
+              id: linkedIngress?.id,
               host: config.host,
             };
             break;
@@ -366,7 +337,6 @@ export class TemplatesService implements OnModuleInit {
         }
       }
 
-      // Mark as active
       await this.prisma.templateInstance.update({
         where: { id: instance.id },
         data: { status: 'active' },
@@ -374,11 +344,18 @@ export class TemplatesService implements OnModuleInit {
 
       return this.getTemplateInstance(instance.id);
     } catch (e) {
-      // Mark as failed but keep created resources
       await this.prisma.templateInstance.update({
         where: { id: instance.id },
         data: { status: 'failed' },
-      });
+      }).catch(() => { /* ignore */ });
+
+      try {
+        await this.deleteTemplateInstance(instance.id, clerkId, userData);
+      } catch (rollbackErr: any) {
+        this.logger.error(
+          `Rollback of failed template instance ${instance.id} incomplete: ${rollbackErr?.message}`,
+        );
+      }
 
       throw new BadRequestException(
         `Template deployment failed: ${e.message}`,
@@ -520,12 +497,18 @@ export class TemplatesService implements OnModuleInit {
       }
     }
 
-    // Delete the instance record
-    await this.prisma.templateInstance.delete({ where: { id: instanceId } });
-
     if (errors.length > 0) {
-      this.logger.warn(`Template instance ${instanceId} deleted with errors: ${errors.join('; ')}`);
+      this.logger.warn(`Template instance ${instanceId} cleanup had errors: ${errors.join('; ')}`);
+      await this.prisma.templateInstance.update({
+        where: { id: instanceId },
+        data: { status: 'failed' },
+      });
+      throw new BadRequestException(
+        `Template instance cleanup failed: ${errors.join('; ')}`,
+      );
     }
+
+    await this.prisma.templateInstance.delete({ where: { id: instanceId } });
 
     return { success: true, errors };
   }

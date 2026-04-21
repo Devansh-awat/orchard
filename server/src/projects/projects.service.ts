@@ -463,6 +463,7 @@ export class ProjectsService {
         hostPath?: string;
         readOnly?: boolean;
       }[];
+      templateInstanceId?: string;
     },
     clerkId: string,
     userData?: {
@@ -585,7 +586,9 @@ export class ProjectsService {
       volumes,
     });
 
-    const createdDeployment = await this.prisma.$transaction(async (tx) => {
+    let createdDeployment;
+    try {
+      createdDeployment = await this.prisma.$transaction(async (tx) => {
       const deployment = await tx.deployment.create({
         data: {
           projectId: project.id,
@@ -595,6 +598,7 @@ export class ProjectsService {
           replicas,
           status: 'running',
           createdBy: user.id,
+          templateInstanceId: data.templateInstanceId ?? null,
         },
       });
 
@@ -691,7 +695,12 @@ export class ProjectsService {
           },
         },
       });
-    });
+      });
+    } catch (e) {
+      try { await this.kubernetesService.deleteDeployment(name, project.namespace); } catch { /* ignore */ }
+      try { await this.kubernetesService.deleteService(project.namespace, name); } catch { /* ignore */ }
+      throw e;
+    }
 
     return createdDeployment;
   }
@@ -2615,6 +2624,7 @@ export class ProjectsService {
         username: string;
         password: string;
       };
+      templateInstanceId?: string;
     },
     clerkId: string,
     userData?: {
@@ -2794,6 +2804,7 @@ export class ProjectsService {
               ? (existingAnnotations as Prisma.JsonObject)
               : undefined,
             statusAddress: mergeTarget.statusAddress,
+            templateInstanceId: data.templateInstanceId ?? null,
           },
         });
 
@@ -2859,34 +2870,43 @@ export class ProjectsService {
       : null;
     const statusAddress = statusRecord?.ip || statusRecord?.hostname || null;
 
-    for (const pb of pathBackends) {
-      await this.prisma.ingress.create({
-        data: {
-          projectId: project.id,
-          deploymentId: pb.deploymentId,
-          serviceId: pb.serviceId,
-          name: ingressName,
-          namespace: project.namespace,
-          host: rawHost,
-          path: pb.path,
-          pathType: pb.pathType,
-          tlsSecretName,
-          tlsHosts,
-          ingressClass: 'traefik',
-          entrypoints,
-          clusterIssuer,
-          annotations: Object.keys(sanitizedAnnotations).length > 0 ? (sanitizedAnnotations as Prisma.JsonObject) : undefined,
-          statusAddress,
-        },
-      });
-
-      const svc = allServices.find((s) => s.id === pb.serviceId);
-      if (svc && !svc.domain) {
-        await this.prisma.service.update({
-          where: { id: pb.serviceId },
-          data: { domain: rawHost },
+    try {
+      for (const pb of pathBackends) {
+        await this.prisma.ingress.create({
+          data: {
+            projectId: project.id,
+            deploymentId: pb.deploymentId,
+            serviceId: pb.serviceId,
+            name: ingressName,
+            namespace: project.namespace,
+            host: rawHost,
+            path: pb.path,
+            pathType: pb.pathType,
+            tlsSecretName,
+            tlsHosts,
+            ingressClass: 'traefik',
+            entrypoints,
+            clusterIssuer,
+            annotations: Object.keys(sanitizedAnnotations).length > 0 ? (sanitizedAnnotations as Prisma.JsonObject) : undefined,
+            statusAddress,
+            templateInstanceId: data.templateInstanceId ?? null,
+          },
         });
+
+        const svc = allServices.find((s) => s.id === pb.serviceId);
+        if (svc && !svc.domain) {
+          await this.prisma.service.update({
+            where: { id: pb.serviceId },
+            data: { domain: rawHost },
+          });
+        }
       }
+    } catch (e) {
+      try { await this.kubernetesService.deleteIngress(project.namespace, ingressName); } catch { /* ignore */ }
+      await this.prisma.ingress.deleteMany({
+        where: { namespace: project.namespace, name: ingressName },
+      });
+      throw e;
     }
 
     return this.getProject(projectId, clerkId, userData);
@@ -6731,7 +6751,7 @@ export class ProjectsService {
 
   async createDatabase(
     projectId: string,
-    data: { name: string; storageSize?: string },
+    data: { name: string; storageSize?: string; templateInstanceId?: string },
     clerkId: string,
     userData?: {
       email?: string;
@@ -6815,28 +6835,37 @@ export class ProjectsService {
       r2,
     });
 
-    const database = await this.prisma.database.create({
-      data: {
-        projectId,
-        name: nameInput,
-        dbName,
-        dbUser,
-        dbPassword,
-        status: 'provisioning',
-        mode: 'cnpg',
-        namespace,
-        clusterName,
-        storageSize,
-        host,
-        port,
-        createdBy: user.id,
-      },
-      include: {
-        creator: {
-          select: { id: true, email: true, username: true, firstName: true, lastName: true },
+    let database;
+    try {
+      database = await this.prisma.database.create({
+        data: {
+          projectId,
+          name: nameInput,
+          dbName,
+          dbUser,
+          dbPassword,
+          status: 'provisioning',
+          mode: 'cnpg',
+          namespace,
+          clusterName,
+          storageSize,
+          host,
+          port,
+          createdBy: user.id,
+          templateInstanceId: data.templateInstanceId ?? null,
         },
-      },
-    });
+        include: {
+          creator: {
+            select: { id: true, email: true, username: true, firstName: true, lastName: true },
+          },
+        },
+      });
+    } catch (e) {
+      try { await this.kubernetesService.deleteScheduledBackup(namespace, clusterName); } catch { /* ignore */ }
+      try { await this.kubernetesService.unexposeCnpgCluster(namespace, clusterName); } catch { /* ignore */ }
+      try { await this.kubernetesService.deleteCnpgCluster(namespace, clusterName); } catch { /* ignore */ }
+      throw e;
+    }
 
     return database;
   }
@@ -6963,18 +6992,14 @@ export class ProjectsService {
     if (!membership) throw new ForbiddenException('You are not a member of this project');
     if (membership.role.name === 'viewer') throw new ForbiddenException('You do not have permission to delete databases');
 
-    try {
-      if (database.mode === 'cnpg' && database.namespace && database.clusterName) {
-        try { await this.kubernetesService.deleteScheduledBackup(database.namespace, database.clusterName); } catch { /* ignore */ }
-        try { await this.kubernetesService.unexposeCnpgCluster(database.namespace, database.clusterName); } catch { /* ignore */ }
-        await this.kubernetesService.deleteCnpgCluster(database.namespace, database.clusterName);
-      } else if (database.mode === 'container' && database.namespace && database.containerName) {
-        await this.kubernetesService.deletePostgresContainer(database.namespace, database.containerName);
-      } else {
-        await this.kubernetesService.deletePostgresDatabase(database.dbName, database.dbUser);
-      }
-    } catch (e) {
-      console.error(`[DB] Failed to delete PostgreSQL database: ${e.message}`);
+    if (database.mode === 'cnpg' && database.namespace && database.clusterName) {
+      try { await this.kubernetesService.deleteScheduledBackup(database.namespace, database.clusterName); } catch { /* ignore */ }
+      try { await this.kubernetesService.unexposeCnpgCluster(database.namespace, database.clusterName); } catch { /* ignore */ }
+      await this.kubernetesService.deleteCnpgCluster(database.namespace, database.clusterName);
+    } else if (database.mode === 'container' && database.namespace && database.containerName) {
+      await this.kubernetesService.deletePostgresContainer(database.namespace, database.containerName);
+    } else {
+      await this.kubernetesService.deletePostgresDatabase(database.dbName, database.dbUser);
     }
 
     await this.prisma.database.delete({ where: { id: databaseId } });
