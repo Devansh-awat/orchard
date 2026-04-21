@@ -321,38 +321,63 @@ export class GitHubService {
     repo: string,
     branch?: string
   ): Promise<string[]> {
-    const dockerfiles: string[] = [];
-    
-    const searchQueue: string[] = [''];
-    const visited = new Set<string>();
+    // Use Git Trees API with recursive flag - single API call for entire repo
+    const ref = branch || 'HEAD';
+    const url = `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`;
 
-    while (searchQueue.length > 0 && dockerfiles.length < 100) {
-      const currentPath = searchQueue.shift();
-      
-      if (visited.has(currentPath)) {
-        continue;
+    try {
+      const response = await fetch(url, {
+        headers: {
+          'Authorization': `Bearer ${accessToken}`,
+          'Accept': 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+      });
+
+      if (!response.ok) {
+        // Fallback to root-only scan if tree API fails
+        return this.findDockerfilesFallback(accessToken, owner, repo, branch);
       }
-      visited.add(currentPath);
 
-      try {
-        const contents = await this.getRepoContents(accessToken, owner, repo, currentPath, branch);
-        
-        for (const item of contents) {
-          if (item.type === 'file') {
-            const fileName = item.name.toLowerCase();
-            if (fileName === 'dockerfile' || fileName.startsWith('dockerfile.')) {
-              dockerfiles.push(item.path);
-            }
-          } else if (item.type === 'dir' && !item.path.includes('node_modules') && !item.path.includes('.git')) {
-            searchQueue.push(item.path);
-          }
+      const tree = await response.json();
+      const dockerfiles: string[] = [];
+
+      for (const item of tree.tree) {
+        if (item.type !== 'blob') continue;
+        // Skip node_modules and .git paths
+        if (item.path.includes('node_modules/') || item.path.includes('.git/')) continue;
+
+        const fileName = item.path.split('/').pop()?.toLowerCase() ?? '';
+        if (fileName === 'dockerfile' || fileName.startsWith('dockerfile.')) {
+          dockerfiles.push(item.path);
         }
-      } catch (error) {
-        console.error(`Error scanning ${currentPath}:`, error.message);
       }
-    }
 
-    return dockerfiles;
+      return dockerfiles;
+    } catch (error) {
+      console.error('Git tree API failed, falling back:', error.message);
+      return this.findDockerfilesFallback(accessToken, owner, repo, branch);
+    }
+  }
+
+  private async findDockerfilesFallback(
+    accessToken: string,
+    owner: string,
+    repo: string,
+    branch?: string
+  ): Promise<string[]> {
+    try {
+      const contents = await this.getRepoContents(accessToken, owner, repo, '', branch);
+      return contents
+        .filter((item) => {
+          if (item.type !== 'file') return false;
+          const name = item.name.toLowerCase();
+          return name === 'dockerfile' || name.startsWith('dockerfile.');
+        })
+        .map((item) => item.path);
+    } catch {
+      return [];
+    }
   }
 
   async getFileContent(
@@ -398,6 +423,85 @@ export class GitHubService {
     }
 
     return lastExposedPort;
+  }
+
+  parseExposedPorts(dockerfileContent: string): number[] {
+    const ports: number[] = [];
+    const lines = dockerfileContent.split('\n');
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.toUpperCase().startsWith('EXPOSE')) {
+        // EXPOSE can have multiple ports: EXPOSE 80 443 8080/tcp
+        const portMatches = trimmed.matchAll(/(\d+)(?:\/\w+)?/g);
+        for (const m of portMatches) {
+          const port = parseInt(m[1], 10);
+          if (port > 0 && !ports.includes(port)) {
+            ports.push(port);
+          }
+        }
+      }
+    }
+
+    return ports;
+  }
+
+  parseEnvVars(dockerfileContent: string): { key: string; value: string }[] {
+    const envVars: { key: string; value: string }[] = [];
+    const lines = dockerfileContent.split('\n');
+    const seenKeys = new Set<string>();
+
+    for (const line of lines) {
+      const trimmed = line.trim();
+      if (trimmed.toUpperCase().startsWith('ENV ')) {
+        const rest = trimmed.substring(4).trim();
+        // Handle ENV KEY=VALUE KEY2=VALUE2 format
+        const kvMatches = rest.matchAll(/([A-Za-z_][A-Za-z0-9_]*)=("(?:[^"\\]|\\.)*"|'(?:[^'\\]|\\.)*'|\S+)/g);
+        let matched = false;
+        for (const m of kvMatches) {
+          matched = true;
+          const key = m[1];
+          let value = m[2];
+          // Strip surrounding quotes
+          if ((value.startsWith('"') && value.endsWith('"')) || (value.startsWith("'") && value.endsWith("'"))) {
+            value = value.slice(1, -1);
+          }
+          if (!seenKeys.has(key)) {
+            seenKeys.add(key);
+            envVars.push({ key, value });
+          }
+        }
+        // Handle ENV KEY VALUE format (single key-value, no equals sign)
+        if (!matched) {
+          const spaceMatch = rest.match(/^([A-Za-z_][A-Za-z0-9_]*)\s+(.+)$/);
+          if (spaceMatch) {
+            const key = spaceMatch[1];
+            const value = spaceMatch[2].trim();
+            if (!seenKeys.has(key)) {
+              seenKeys.add(key);
+              envVars.push({ key, value });
+            }
+          }
+        }
+      }
+    }
+
+    return envVars;
+  }
+
+  async getDockerfileInfo(
+    accessToken: string,
+    owner: string,
+    repo: string,
+    dockerfilePath: string,
+    branch?: string
+  ): Promise<{ exposedPorts: number[]; envVars: { key: string; value: string }[]; stages: string[] }> {
+    const content = await this.getFileContent(accessToken, owner, repo, dockerfilePath, branch);
+    return {
+      exposedPorts: this.parseExposedPorts(content),
+      envVars: this.parseEnvVars(content),
+      stages: this.parseDockerfileStages(content),
+    };
   }
 
   parseDockerfileStages(dockerfileContent: string): string[] {

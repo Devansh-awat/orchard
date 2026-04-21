@@ -14,6 +14,7 @@ export interface TokenPayload {
   name: string;
   hackClubId?: string;
   authMethod?: 'oauth' | 'otp' | 'passkey';
+  sessionId?: string;
   iat: number;
   exp: number;
 }
@@ -105,13 +106,16 @@ export class OAuthService {
     };
   }
 
-  async generateSessionToken(user: HackClubUser): Promise<string> {
-    const token = await new SignJWT({
+  async generateSessionToken(user: HackClubUser, sessionId?: string): Promise<string> {
+    const payload: Record<string, unknown> = {
       email: user.email,
       name: user.name,
       hackClubId: user.id,
       authMethod: 'oauth',
-    })
+    };
+    if (sessionId) payload.sessionId = sessionId;
+
+    const token = await new SignJWT(payload)
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(user.id)
       .setIssuedAt()
@@ -129,12 +133,16 @@ export class OAuthService {
     email: string,
     name: string,
     authMethod: 'otp' | 'passkey',
+    sessionId?: string,
   ): Promise<string> {
-    const token = await new SignJWT({
+    const payload: Record<string, unknown> = {
       email,
       name,
       authMethod,
-    })
+    };
+    if (sessionId) payload.sessionId = sessionId;
+
+    const token = await new SignJWT(payload)
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(userId)
       .setIssuedAt()
@@ -165,6 +173,7 @@ export class OAuthService {
         name: payload.name as string,
         hackClubId: payload.hackClubId as string | undefined,
         authMethod: (payload.authMethod as 'oauth' | 'otp' | 'passkey') || 'oauth',
+        sessionId: payload.sessionId as string | undefined,
         iat: payload.iat as number,
         exp: payload.exp as number,
       };

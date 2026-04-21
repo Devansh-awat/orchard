@@ -271,6 +271,38 @@ export class GitHubController {
     return stages;
   }
 
+  @Get('repositories/:owner/:repo/dockerfile-info')
+  async getDockerfileInfo(
+    @Req() req: any,
+    @Param('owner') owner: string,
+    @Param('repo') repo: string,
+    @Query('dockerfilePath') dockerfilePath: string,
+    @Query('branch') branch?: string
+  ): Promise<{ exposedPorts: number[]; envVars: { key: string; value: string }[]; stages: string[] }> {
+    const hackClubId = req.user.sub;
+    const user = await this.usersService.findOrCreateByHackClubId({
+      id: hackClubId,
+      email: req.user.email,
+      name: req.user.name,
+    });
+
+    if (!user.githubAccessToken) {
+      throw new HttpException('GitHub account not linked', HttpStatus.BAD_REQUEST);
+    }
+
+    if (!dockerfilePath) {
+      throw new HttpException('Dockerfile path is required', HttpStatus.BAD_REQUEST);
+    }
+
+    return this.githubService.getDockerfileInfo(
+      user.githubAccessToken,
+      owner,
+      repo,
+      dockerfilePath,
+      branch
+    );
+  }
+
   @Public()
   @Post('app/webhook')
   async handleAppWebhook(

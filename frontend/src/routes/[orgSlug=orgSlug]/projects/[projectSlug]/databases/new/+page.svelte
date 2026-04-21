@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
 	import { apiFetch, toasts, refreshTree, fetchProjectContext, buildBasePath, type ProjectContext } from '$lib/stores';
 	import { Loader2, Database } from 'lucide-svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
@@ -75,7 +74,12 @@
 		}
 	}
 
-	onMount(fetchProject);
+	$effect(() => {
+		orgSlug; projectSlug; wsSlug;
+		if (orgSlug && projectSlug) {
+			fetchProject();
+		}
+	});
 </script>
 
 <div class="nd-page">

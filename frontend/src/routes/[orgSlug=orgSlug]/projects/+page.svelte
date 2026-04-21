@@ -25,6 +25,7 @@
 	let newName = $state('');
 	let showCreate = $state(false);
 	let deleteTarget = $state<Project | null>(null);
+	let deleteModalOpen = $state(false);
 	let deleting = $state(false);
 
 	function toSlug(n: string) { return n.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
@@ -75,6 +76,16 @@
 
 	async function deleteProject() {
 		if (!deleteTarget || deleting) return;
+		const deploymentCount = deleteTarget.deployments?.length ?? 0;
+		if (deploymentCount > 0) {
+			toasts.add({
+				title: `Can't delete "${deleteTarget.name}"`,
+				description: `Remove its ${deploymentCount} deployment${deploymentCount === 1 ? '' : 's'} first.`,
+				color: 'error'
+			});
+			deleteTarget = null;
+			return;
+		}
 		deleting = true;
 		try {
 			const res = await apiFetch(`/apiv1/projects/${deleteTarget.id}`, { method: 'DELETE' });
@@ -131,7 +142,14 @@
 	{:else}
 		<div class="grid">
 			{#each projects as proj (proj.id)}
-				<a href="/{orgSlug}/projects/{proj.slug}" class="card">
+				<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
+				<div
+					class="card"
+					role="link"
+					tabindex="0"
+					onclick={() => goto(`/${orgSlug}/projects/${proj.slug}`)}
+					onkeydown={(e) => { if (e.key === 'Enter') goto(`/${orgSlug}/projects/${proj.slug}`); }}
+				>
 					<div class="card-top">
 						<div class="card-av"><Folder size={14} /></div>
 						<div class="card-text">
@@ -142,7 +160,7 @@
 						</div>
 						<button
 							class="card-del"
-							onclick={(e) => { e.preventDefault(); e.stopPropagation(); deleteTarget = proj; }}
+							onclick={(e) => { e.stopPropagation(); deleteTarget = proj; deleteModalOpen = true; }}
 							aria-label="Delete"
 						>
 							<Trash2 size={13} />
@@ -153,20 +171,25 @@
 						<span class="card-stat"><Globe size={11} /> {proj.ingresses?.length ?? 0}</span>
 						<span class="card-stat"><Database size={11} /> {proj.databases?.length ?? 0}</span>
 					</div>
-				</a>
+				</div>
 			{/each}
 		</div>
 	{/if}
 </div>
 
 {#if deleteTarget}
+	{@const deploymentCount = deleteTarget.deployments?.length ?? 0}
+	{@const hasDeployments = deploymentCount > 0}
 	<ConfirmModal
-		bind:open={() => !!deleteTarget, (v) => { if (!v) deleteTarget = null; }}
-		title='Delete "{deleteTarget.name}"?'
-		description="This will permanently delete this project and all its deployments, databases, and ingresses. This cannot be undone."
-		confirmLabel="Delete Project"
-		onconfirm={deleteProject}
-		oncancel={() => deleteTarget = null}
+		bind:open={deleteModalOpen}
+		title={hasDeployments ? `Can't delete "${deleteTarget.name}"` : `Delete "${deleteTarget.name}"?`}
+		description={hasDeployments
+			? `This project has ${deploymentCount} deployment${deploymentCount === 1 ? '' : 's'}. Delete them first before removing the project.`
+			: 'This will permanently delete this project and all its databases and ingresses. This cannot be undone.'}
+		confirmLabel={hasDeployments ? 'OK' : 'Delete Project'}
+		danger={!hasDeployments}
+		onconfirm={hasDeployments ? (() => { deleteTarget = null; }) : deleteProject}
+		oncancel={() => { deleteTarget = null; }}
 	/>
 {/if}
 

@@ -1,6 +1,9 @@
-import { Controller, Get, Patch, Query, Body, Res, Req, HttpException, HttpStatus } from '@nestjs/common';
-import { Response } from 'express';
+import { Controller, Get, Patch, Post, Delete, Query, Body, Res, Req, HttpException, HttpStatus, UseInterceptors, UploadedFile } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { Request, Response } from 'express';
 import { OAuthService } from './oauth.service';
+import { SessionsService } from './sessions.service';
+import { StorageService } from '../organizations/storage.service';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { Public, Auth } from './decorators';
@@ -10,6 +13,8 @@ import { Public, Auth } from './decorators';
 export class OAuthController {
   constructor(
     private readonly oauthService: OAuthService,
+    private readonly sessionsService: SessionsService,
+    private readonly storageService: StorageService,
     private readonly usersService: UsersService,
     private readonly prisma: PrismaService,
   ) {}
@@ -45,10 +50,18 @@ export class OAuthController {
     return res.redirect(authUrl);
   }
 
+  private getClientIp(req: Request): string {
+    const forwarded = req.headers['x-forwarded-for'];
+    if (typeof forwarded === 'string') return forwarded.split(',')[0].trim();
+    if (Array.isArray(forwarded)) return forwarded[0];
+    return req.ip || req.socket.remoteAddress || 'unknown';
+  }
+
   @Get('callback')
   async callback(
     @Query('code') code: string,
     @Query('error') error: string,
+    @Req() req: Request,
     @Res() res: Response,
   ) {
     if (error) {
@@ -73,7 +86,14 @@ export class OAuthController {
         );
       }
 
-      const sessionToken = await this.oauthService.generateSessionToken(hackClubUser);
+      const sessionId = await this.sessionsService.createSession({
+        userId: user.id,
+        ipAddress: this.getClientIp(req),
+        userAgent: req.headers['user-agent'],
+        authMethod: 'oauth',
+      });
+
+      const sessionToken = await this.oauthService.generateSessionToken(hackClubUser, sessionId);
 
       res.cookie('session_token', sessionToken, {
         httpOnly: true,
@@ -94,7 +114,30 @@ export class OAuthController {
   }
 
   @Get('logout')
-  logout(@Res() res: Response) {
+  async logout(@Req() req: Request, @Res() res: Response) {
+    // Try to revoke the session if there's a valid token
+    try {
+      const token = req.cookies?.session_token;
+      if (token) {
+        const oauthService = this.oauthService;
+        const payload = await oauthService.verifySessionToken(token);
+        if (payload.sessionId) {
+          // Resolve user ID
+          let userId = payload.sub;
+          if (payload.hackClubId) {
+            const dbUser = await this.prisma.user.findUnique({
+              where: { hackClubId: payload.hackClubId },
+              select: { id: true },
+            });
+            if (dbUser) userId = dbUser.id;
+          }
+          await this.sessionsService.revokeSession(userId, payload.sessionId);
+        }
+      }
+    } catch {
+      // Best-effort session revocation
+    }
+
     res.clearCookie('session_token', {
       path: '/',
       domain: process.env.COOKIE_DOMAIN || undefined,
@@ -180,5 +223,65 @@ export class OAuthController {
       }
       throw new HttpException('Failed to update profile', HttpStatus.INTERNAL_SERVER_ERROR);
     }
+  }
+
+  private async resolveUser(req: any) {
+    if (req.user.hackClubId) {
+      const user = await this.usersService.findByHackClubId(req.user.hackClubId);
+      if (user) return user;
+      return this.usersService.findOrCreateByHackClubId({
+        id: req.user.hackClubId,
+        email: req.user.email,
+        name: req.user.name,
+      });
+    }
+    const user = await this.usersService.findByIdOrHackClubId(req.user.sub);
+    if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
+    return user;
+  }
+
+  @Auth()
+  @Post('me/avatar')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadAvatar(
+    @UploadedFile() file: Express.Multer.File,
+    @Req() req: any,
+  ) {
+    if (!file) {
+      throw new HttpException('No file provided', HttpStatus.BAD_REQUEST);
+    }
+
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+    if (!allowedTypes.includes(file.mimetype)) {
+      throw new HttpException('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed', HttpStatus.BAD_REQUEST);
+    }
+
+    if (file.size > 5 * 1024 * 1024) {
+      throw new HttpException('File size exceeds 5MB limit', HttpStatus.BAD_REQUEST);
+    }
+
+    const user = await this.resolveUser(req);
+
+    const imageUrl = await this.storageService.uploadFile(file, 'users');
+
+    if (user.imageUrl) {
+      await this.storageService.deleteFile(user.imageUrl).catch(() => {});
+    }
+
+    const updatedUser = await this.usersService.updateProfile(user.id, { imageUrl });
+    return updatedUser;
+  }
+
+  @Auth()
+  @Delete('me/avatar')
+  async deleteAvatar(@Req() req: any) {
+    const user = await this.resolveUser(req);
+
+    if (user.imageUrl) {
+      await this.storageService.deleteFile(user.imageUrl).catch(() => {});
+    }
+
+    const updatedUser = await this.usersService.updateProfile(user.id, { imageUrl: null });
+    return updatedUser;
   }
 }

@@ -1,48 +1,154 @@
 <script lang="ts">
 	import { toasts } from '$lib/stores';
-	import { X, CheckCircle, AlertCircle, AlertTriangle, Info } from 'lucide-svelte';
+	import { fly, fade } from 'svelte/transition';
+	import { X, CheckCircle2, AlertCircle, AlertTriangle, Info } from 'lucide-svelte';
 
 	const iconMap = {
-		success: CheckCircle,
+		success: CheckCircle2,
 		error: AlertCircle,
 		warning: AlertTriangle,
 		info: Info
 	};
-
-	const colorMap = {
-		success: 'bg-green-50 border-green-200 text-green-800 dark:bg-green-900/20 dark:border-green-800 dark:text-green-300',
-		error: 'bg-red-50 border-red-200 text-red-800 dark:bg-red-900/20 dark:border-red-800 dark:text-red-300',
-		warning: 'bg-yellow-50 border-yellow-200 text-yellow-800 dark:bg-yellow-900/20 dark:border-yellow-800 dark:text-yellow-300',
-		info: 'bg-blue-50 border-blue-200 text-blue-800 dark:bg-blue-900/20 dark:border-blue-800 dark:text-blue-300'
-	};
-
-	const iconColorMap = {
-		success: 'text-green-500',
-		error: 'text-red-500',
-		warning: 'text-yellow-500',
-		info: 'text-blue-500'
-	};
 </script>
 
-<div class="fixed bottom-4 right-4 z-50 flex flex-col gap-2">
+<div class="toast-stack">
 	{#each $toasts as toast (toast.id)}
 		<div
-			class="flex items-start gap-3 rounded-lg border p-4 shadow-lg min-w-[300px] max-w-md {colorMap[toast.color]}"
+			class="toast toast-{toast.color}"
 			role="alert"
+			in:fly={{ x: 24, duration: 200 }}
+			out:fade={{ duration: 150 }}
 		>
-			<svelte:component this={iconMap[toast.color]} class="h-5 w-5 flex-shrink-0 {iconColorMap[toast.color]}" />
-			<div class="flex-1">
-				<p class="font-medium">{toast.title}</p>
+			<div class="toast-icon">
+				<svelte:component this={iconMap[toast.color]} size={16} />
+			</div>
+			<div class="toast-body">
+				<p class="toast-title">{toast.title}</p>
 				{#if toast.description}
-					<p class="mt-1 text-sm opacity-80">{toast.description}</p>
+					<p class="toast-desc">{toast.description}</p>
 				{/if}
 			</div>
 			<button
+				class="toast-close"
 				onclick={() => toasts.remove(toast.id)}
-				class="flex-shrink-0 opacity-60 hover:opacity-100"
+				aria-label="Dismiss notification"
 			>
-				<X class="h-4 w-4" />
+				<X size={14} />
 			</button>
 		</div>
 	{/each}
 </div>
+
+<style>
+	.toast-stack {
+		position: fixed;
+		bottom: 1rem;
+		right: 1rem;
+		z-index: 1000;
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		pointer-events: none;
+		max-width: calc(100vw - 2rem);
+	}
+
+	.toast {
+		pointer-events: auto;
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		min-width: 18rem;
+		max-width: 22rem;
+		padding: 0.75rem 0.875rem;
+		background-color: var(--surface-bg);
+		border: 1px solid var(--surface-border);
+		border-radius: 0.75rem;
+		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+		color: var(--center-channel-color);
+	}
+
+	:global(.dark) .toast {
+		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.25);
+	}
+
+	.toast-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: 0.5rem;
+		flex-shrink: 0;
+	}
+
+	.toast-success .toast-icon {
+		background-color: color-mix(in srgb, var(--success-text) 14%, transparent);
+		color: var(--success-text);
+	}
+
+	:global(.dark) .toast-success .toast-icon {
+		background-color: color-mix(in srgb, var(--success-muted) 18%, transparent);
+		color: var(--success-muted);
+	}
+
+	.toast-error .toast-icon {
+		background-color: color-mix(in srgb, var(--error-text-color) 14%, transparent);
+		color: var(--error-text-color);
+	}
+
+	.toast-warning .toast-icon {
+		background-color: color-mix(in srgb, #f59e0b 16%, transparent);
+		color: #d97706;
+	}
+
+	:global(.dark) .toast-warning .toast-icon {
+		color: #f59e0b;
+	}
+
+	.toast-info .toast-icon {
+		background-color: color-mix(in srgb, var(--info-text) 14%, transparent);
+		color: var(--info-text);
+	}
+
+	.toast-body {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.toast-title {
+		font-size: 0.8125rem;
+		font-weight: 600;
+		color: var(--center-channel-color);
+		margin: 0;
+		line-height: 1.35;
+		overflow-wrap: anywhere;
+	}
+
+	.toast-desc {
+		font-size: 0.75rem;
+		color: var(--surface-muted);
+		margin: 0.1875rem 0 0;
+		line-height: 1.45;
+		overflow-wrap: anywhere;
+	}
+
+	.toast-close {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.5rem;
+		height: 1.5rem;
+		border-radius: 0.375rem;
+		border: none;
+		background: none;
+		color: var(--surface-muted);
+		cursor: pointer;
+		flex-shrink: 0;
+		transition: color 0.15s, background-color 0.15s;
+	}
+
+	.toast-close:hover {
+		color: var(--center-channel-color);
+		background-color: color-mix(in srgb, var(--surface-border) 60%, transparent);
+	}
+</style>

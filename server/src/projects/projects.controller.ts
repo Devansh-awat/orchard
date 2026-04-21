@@ -1,14 +1,19 @@
-import { Controller, Get, Param, Post, Body, Request, Delete, Put, Patch, Query, Res, HttpStatus } from '@nestjs/common';
+import { Controller, Get, Param, Post, Body, Request, Delete, Put, Patch, Query, Res, HttpStatus, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { ProjectsService } from './projects.service';
 import { FaviconService } from './favicon.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
+import { StorageService } from '../organizations/storage.service';
 import { Auth } from '../auth/decorators';
 
 @Auth()
 @Controller('projects')
 export class ProjectsController {
-  constructor(private readonly projectsService: ProjectsService) {}
+  constructor(
+    private readonly projectsService: ProjectsService,
+    private readonly storageService: StorageService,
+  ) {}
 
   @Get()
 
@@ -20,6 +25,26 @@ export class ProjectsController {
 
   async getProjectBySlug(@Param('slug') slug: string, @Query('orgId') orgId: string) {
     return this.projectsService.getProjectBySlug(orgId, slug);
+  }
+
+  @Get('by-slugs/:orgSlug/:projectSlug')
+  async getProjectBySlugsFull(
+    @Param('orgSlug') orgSlug: string,
+    @Param('projectSlug') projectSlug: string,
+    @Request() req,
+  ) {
+    return this.projectsService.getProjectBySlugsFull(
+      orgSlug,
+      projectSlug,
+      req.user.sub,
+      {
+        email: req.user.email,
+        username: req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        imageUrl: req.user.imageUrl,
+      },
+    );
   }
 
   @Post('ingresses/validate-dns')
@@ -43,13 +68,15 @@ export class ProjectsController {
       slug?: string;
       description?: string;
       repositoryUrl?: string;
+      icon?: string;
+      backgroundImage?: string;
     },
     @Request() req
   ) {
-    const { organizationId, name, slug, description, repositoryUrl } = body;
+    const { organizationId, name, slug, description, repositoryUrl, icon, backgroundImage } = body;
     return this.projectsService.createProject(
       organizationId,
-      { name, slug, description, repositoryUrl },
+      { name, slug, description, repositoryUrl, icon, backgroundImage },
       req.user.hackClubId || req.user.sub,
       {
         email: req.user.email,
@@ -58,6 +85,89 @@ export class ProjectsController {
         lastName: req.user.lastName || req.user.name?.split(' ').slice(1).join(' '),
         imageUrl: req.user.imageUrl,
       }
+    );
+  }
+
+  @Patch(':id')
+  async updateProject(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      name?: string;
+      description?: string;
+      repositoryUrl?: string | null;
+      icon?: string | null;
+      backgroundImage?: string | null;
+    },
+    @Request() req
+  ) {
+    return this.projectsService.updateProject(
+      id,
+      body,
+      req.user.sub,
+      {
+        email: req.user.email,
+        username: req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        imageUrl: req.user.imageUrl,
+      }
+    );
+  }
+
+  @Post(':id/icon')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadProjectIcon(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req,
+  ) {
+    if (!file) throw new BadRequestException('No file provided');
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+    if (!allowed.includes(file.mimetype)) {
+      throw new BadRequestException('Invalid file type. Only JPEG, PNG, GIF, WebP, and SVG are allowed');
+    }
+    if (file.size > 2 * 1024 * 1024) {
+      throw new BadRequestException('File size exceeds 2MB limit');
+    }
+    return this.projectsService.uploadProjectAsset(
+      id, 'icon', file, this.storageService,
+      req.user.sub,
+      {
+        email: req.user.email,
+        username: req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        imageUrl: req.user.imageUrl,
+      },
+    );
+  }
+
+  @Post(':id/background-image')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadProjectBackground(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req,
+  ) {
+    if (!file) throw new BadRequestException('No file provided');
+    const allowed = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowed.includes(file.mimetype)) {
+      throw new BadRequestException('Invalid file type. Only JPEG, PNG, and WebP are allowed');
+    }
+    if (file.size > 8 * 1024 * 1024) {
+      throw new BadRequestException('File size exceeds 8MB limit');
+    }
+    return this.projectsService.uploadProjectAsset(
+      id, 'backgroundImage', file, this.storageService,
+      req.user.sub,
+      {
+        email: req.user.email,
+        username: req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        imageUrl: req.user.imageUrl,
+      },
     );
   }
 

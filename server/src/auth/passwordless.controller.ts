@@ -14,6 +14,7 @@ import { Request, Response } from 'express';
 import { OtpService } from './otp.service';
 import { PasskeyService } from './passkey.service';
 import { OAuthService } from './oauth.service';
+import { SessionsService } from './sessions.service';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
@@ -49,6 +50,7 @@ export class PasswordlessController {
     private readonly otpService: OtpService,
     private readonly passkeyService: PasskeyService,
     private readonly oauthService: OAuthService,
+    private readonly sessionsService: SessionsService,
     private readonly usersService: UsersService,
     private readonly prisma: PrismaService,
   ) {}
@@ -203,6 +205,14 @@ export class PasswordlessController {
       throw new HttpException('private_beta', HttpStatus.FORBIDDEN);
     }
 
+    // Create session
+    const sessionId = await this.sessionsService.createSession({
+      userId: user.id,
+      ipAddress: ipAddress,
+      userAgent: req.headers['user-agent'],
+      authMethod: 'otp',
+    });
+
     // Generate session token
     const displayName = user.firstName
       ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}`
@@ -213,6 +223,7 @@ export class PasswordlessController {
       user.email,
       displayName,
       'otp',
+      sessionId,
     );
 
     // Set cookie and respond
@@ -350,6 +361,14 @@ export class PasswordlessController {
       throw new HttpException('private_beta', HttpStatus.FORBIDDEN);
     }
 
+    // Create session
+    const sessionId = await this.sessionsService.createSession({
+      userId: user.id,
+      ipAddress: ipAddress,
+      userAgent: req.headers['user-agent'],
+      authMethod: 'passkey',
+    });
+
     // Generate session token
     const displayName = user.firstName
       ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}`
@@ -360,6 +379,7 @@ export class PasswordlessController {
       user.email,
       displayName,
       'passkey',
+      sessionId,
     );
 
     // Set cookie and respond
@@ -460,6 +480,80 @@ export class PasswordlessController {
     );
 
     res.status(200).json({ token });
+  }
+
+  // =====================================
+  // Session Management Endpoints
+  // =====================================
+
+  /**
+   * List all active sessions for the current user.
+   * GET /auth/sessions
+   */
+  @Auth()
+  @Get('sessions')
+  async listSessions(@Req() req: any) {
+    const user = await this.resolveInternalUser(req.user.sub);
+    const sessions = await this.sessionsService.getUserSessions(user.id);
+
+    // Mark the current session
+    const currentSessionId = req.user.sessionId;
+    return {
+      sessions: sessions.map((s) => ({
+        ...s,
+        isCurrent: s.id === currentSessionId,
+      })),
+    };
+  }
+
+  /**
+   * Revoke a specific session.
+   * DELETE /auth/sessions/:id
+   */
+  @Auth()
+  @Delete('sessions/:id')
+  async revokeSession(
+    @Param('id') sessionId: string,
+    @Req() req: any,
+  ) {
+    const user = await this.resolveInternalUser(req.user.sub);
+
+    // Prevent revoking current session via this endpoint
+    if (sessionId === req.user.sessionId) {
+      throw new HttpException(
+        'Use logout to end your current session',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    const revoked = await this.sessionsService.revokeSession(
+      user.id,
+      sessionId,
+    );
+
+    if (!revoked) {
+      throw new HttpException('Session not found', HttpStatus.NOT_FOUND);
+    }
+
+    return { success: true };
+  }
+
+  /**
+   * Revoke all sessions except the current one.
+   * POST /auth/sessions/revoke-all
+   */
+  @Auth()
+  @Post('sessions/revoke-all')
+  async revokeAllSessions(@Req() req: any) {
+    const user = await this.resolveInternalUser(req.user.sub);
+    const currentSessionId = req.user.sessionId;
+
+    const count = await this.sessionsService.revokeAllSessions(
+      user.id,
+      currentSessionId,
+    );
+
+    return { success: true, revokedCount: count };
   }
 
   // =====================================

@@ -34,7 +34,7 @@
 		CircleX
 	} from 'lucide-svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
-	import { scale, fade } from 'svelte/transition';
+	import { scale, fade, slide } from 'svelte/transition';
 	import { Clock, Minimize2, Maximize2, Cpu, MemoryStick } from 'lucide-svelte';
 	import { browser } from '$app/environment';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
@@ -195,6 +195,7 @@
 		image: string;
 		branch?: string;
 		commitSha?: string;
+		commitMessage?: string;
 		createdAt: string;
 		isActive: boolean;
 		triggerType?: string;
@@ -212,6 +213,7 @@
 		type: 'pvc' | 'hostPath' | 'emptyDir';
 		mountPath: string;
 		pvcName?: string | null;
+		storageSize?: string | null;
 		hostPath?: string | null;
 		readOnly: boolean;
 	}
@@ -262,6 +264,7 @@
 			id: string;
 			name: string;
 			slug: string;
+			backgroundImage?: string | null;
 		};
 	}
 
@@ -321,14 +324,14 @@
 		},
 		{
 			id: 'volumes',
-			label: 'Volumes',
-			description: 'Storage & mounts',
+			label: 'Storage',
+			description: 'Persistent storage',
 			icon: HardDrive
 		},
 		{
 			id: 'network',
 			label: 'Network',
-			description: 'Services & ingress',
+			description: 'Ports & domains',
 			icon: Globe
 		},
 		{
@@ -367,6 +370,7 @@
 	let deployment = $state<Deployment | null>(null);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
+	let projectBgImage = $derived(deployment?.project?.backgroundImage ?? null);
 
 	let deletingIngressId = $state<string | null>(null);
 	let projectIngresses = $state<Array<{ id: string; host: string; path?: string; deploymentId?: string | null }>>([]);
@@ -383,7 +387,7 @@
 	const domainServiceOptions = $derived.by(() => {
 		const opts: Array<{ key: string; label: string; serviceName: string; port: number }> = [];
 		for (const s of deployment?.services ?? []) {
-			opts.push({ key: `${s.id}::${s.port}`, label: `${s.name}:${s.port}`, serviceName: s.name, port: s.port });
+			opts.push({ key: `${s.id}::${s.port}`, label: `Port ${s.port}`, serviceName: s.name, port: s.port });
 		}
 		return opts;
 	});
@@ -650,7 +654,6 @@
 			logsOutputRef.scrollTop = logsOutputRef.scrollHeight;
 		}
 	}
-	let volumeTypeDropdownOpen = $state<number | null>(null);
 	let protocolDropdownOpen = $state<string | null>(null);
 	let serviceDropdownOpen = $state(false);
 	let scaleReplicas = $state(1);
@@ -719,7 +722,7 @@
 			revealedIndices.add(index);
 		}
 	}
-	let volumes = $state<Array<{ name: string; type: 'pvc' | 'hostPath' | 'emptyDir'; mountPath: string; pvcName?: string; hostPath?: string; readOnly: boolean }>>([]);
+	let volumes = $state<Array<{ name: string; type: 'pvc' | 'hostPath' | 'emptyDir'; mountPath: string; pvcName?: string; storageSize?: string; hostPath?: string; readOnly: boolean }>>([]);
 	let showServiceForm = $state(false);
 	let newServiceForm = $state<ServiceFormState>({
 		name: '',
@@ -946,10 +949,8 @@
 	}
 
 	function resetNewServiceForm() {
-		const serviceCount = deployment?.services?.length ?? 0;
-		const defaultName = deployment?.name ? `${deployment.name}-${serviceCount + 1}` : '';
 		newServiceForm = {
-			name: defaultName,
+			name: '',
 			exposePublic: false,
 			ports: [createPortRow()]
 		};
@@ -1257,6 +1258,7 @@
 						type: vol.type || 'pvc',
 						mountPath: vol.mountPath || '',
 						pvcName: vol.pvcName || '',
+						storageSize: vol.storageSize || '1Gi',
 						hostPath: vol.hostPath || '',
 						readOnly: vol.readOnly || false
 					}));
@@ -1539,16 +1541,20 @@
 	}
 
 	async function createService() {
-		const serviceName = newServiceForm.name.trim().toLowerCase();
-		if (!serviceName) {
-			serviceFormError = 'Service name is required';
-			return;
-		}
-
 		const { payload, error } = buildPortPayloadFromForm(newServiceForm);
 		if (error) {
 			serviceFormError = error;
 			return;
+		}
+
+		// Auto-generate service name from first port
+		const firstPort = newServiceForm.ports[0]?.containerPort ?? 80;
+		const existingNames = new Set((deployment?.services ?? []).map((s: Service) => s.name));
+		let serviceName = `port-${firstPort}`;
+		let suffix = 2;
+		while (existingNames.has(serviceName)) {
+			serviceName = `port-${firstPort}-${suffix}`;
+			suffix++;
 		}
 
 		serviceFormError = null;
@@ -1574,8 +1580,8 @@
 			deployment = updated;
 
 			toasts.add({
-				title: 'Service created',
-				description: `${serviceName} is now routing traffic`,
+				title: 'Port added',
+				description: `Port ${newServiceForm.ports[0]?.containerPort ?? ''} is now routing traffic`,
 				color: 'success'
 			});
 
@@ -1631,8 +1637,8 @@
 			}
 
 			toasts.add({
-				title: 'Service updated',
-				description: 'Ports updated successfully',
+				title: 'Port updated',
+				description: 'Port configuration saved',
 				color: 'success'
 			});
 		} catch (e) {
@@ -1662,7 +1668,7 @@
 			deployment = updated;
 
 			toasts.add({
-				title: 'Service deleted',
+				title: 'Port removed',
 				color: 'success'
 			});
 
@@ -1673,7 +1679,7 @@
 		} catch (e) {
 			toasts.add({
 				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to delete service',
+				description: e instanceof Error ? e.message : 'Failed to remove port',
 				color: 'error'
 			});
 		} finally {
@@ -1802,24 +1808,35 @@
 		}
 	}
 
-	async function toggleBuildLogs(historyId: string) {
-		if (expandedBuildLogId === historyId) {
-			expandedBuildLogId = null;
-			return;
-		}
-		expandedBuildLogId = historyId;
-		if (buildLogCache[historyId]) return;
-		buildLogLoading = historyId;
+	let logModalId = $state<string | null>(null);
+	let logModalContent = $state<string | null>(null);
+	let logModalLoading = $state(false);
+
+	async function openLogModal(historyId: string) {
+		logModalId = historyId;
+		logModalContent = buildLogCache[historyId] ?? null;
+		if (logModalContent) return;
+		logModalLoading = true;
 		try {
 			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/image-history/${historyId}/logs`);
 			if (!response.ok) throw new Error('Failed to fetch build logs');
 			const data = await response.json();
-			buildLogCache[historyId] = data.logs || 'No logs available.';
+			const logs = data.logs || 'No logs available.';
+			buildLogCache[historyId] = logs;
+			logModalContent = logs;
 		} catch {
-			buildLogCache[historyId] = 'Failed to load build logs.';
+			const fallback = 'Failed to load build logs.';
+			buildLogCache[historyId] = fallback;
+			logModalContent = fallback;
 		} finally {
-			buildLogLoading = null;
+			logModalLoading = false;
 		}
+	}
+
+	function closeLogModal() {
+		logModalId = null;
+		logModalContent = null;
+		logModalLoading = false;
 	}
 
 	async function rollbackToImage(historyId: string) {
@@ -1886,7 +1903,7 @@
 	}
 
 	function addVolume() {
-		volumes = [...volumes, { name: '', type: 'pvc', mountPath: '', pvcName: '', readOnly: false }];
+		volumes = [...volumes, { name: '', type: 'pvc', mountPath: '', pvcName: '', storageSize: '1Gi', readOnly: false }];
 	}
 
 	function removeVolume(index: number) {
@@ -2111,26 +2128,15 @@
 		savingVolumes = true;
 		try {
 			const filteredVolumes = volumes
-				.filter((v) => v.name.trim() && v.mountPath.trim())
-				.map((v) => {
-					const vol: any = {
-						name: v.name.trim(),
-						type: v.type,
-						mountPath: v.mountPath.trim(),
-						readOnly: v.readOnly
-					};
-					if (v.type === 'pvc' && v.pvcName) {
-						vol.pvcName = v.pvcName.trim();
-					} else if (v.type === 'hostPath' && v.hostPath) {
-						vol.hostPath = v.hostPath.trim();
-					}
-					return vol;
-				})
-				.filter((v) => {
-					if (v.type === 'pvc' && !v.pvcName) return false;
-					if (v.type === 'hostPath' && !v.hostPath) return false;
-					return true;
-				});
+				.filter((v) => v.pvcName?.trim() && v.mountPath.trim())
+				.map((v) => ({
+					name: v.pvcName!.trim(),
+					type: 'pvc' as const,
+					mountPath: v.mountPath.trim(),
+					readOnly: v.readOnly,
+					pvcName: v.pvcName!.trim(),
+					storageSize: v.storageSize?.trim() || '1Gi'
+				}));
 
 			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/volumes`, {
 				method: 'PUT',
@@ -2143,16 +2149,16 @@
 			}
 
 			toasts.add({
-				title: 'Volumes updated',
-				description: 'Deployment will restart with new volume configuration',
+				title: 'Storage updated',
+				description: 'Your app will restart with the new storage configuration.',
 				color: 'success'
 			});
 
 			await fetchDeployment();
 		} catch (e) {
 			toasts.add({
-				title: 'Failed to update volumes',
-				description: e instanceof Error ? e.message : 'Failed to update volumes',
+				title: 'Failed to update storage',
+				description: e instanceof Error ? e.message : 'Failed to update storage',
 				color: 'error'
 			});
 		} finally {
@@ -2317,7 +2323,6 @@
 			if (!target.closest('.custom-dropdown-container')) {
 				podDropdownOpen = false;
 				containerDropdownOpen = false;
-				volumeTypeDropdownOpen = null;
 				protocolDropdownOpen = null;
 				serviceDropdownOpen = false;
 				showNewShellMenu = false;
@@ -2468,7 +2473,7 @@
 	};
 </script>
 
-<div class="deployment-page p-6">
+<div class="deployment-page p-6 max-w-[100rem] mx-auto">
 	{#if deployment?.project?.slug}
 		<div class="mb-4">
 			<Breadcrumb crumbs={[
@@ -2531,14 +2536,26 @@
 	{:else if deployment}
 		<div class="space-y-5">
 			<!-- Header: deployment identity + status + actions -->
-			<section class="dep-header">
+			<section class="dep-header dep-header-card" class:dep-header-card--hasbg={!!projectBgImage}>
+				{#if projectBgImage}
+					<div class="dep-header-backdrop" aria-hidden="true">
+						<div class="dep-header-bg dep-header-bg--1" style="background-image: url({JSON.stringify(projectBgImage)});"></div>
+						<div class="dep-header-bg dep-header-bg--2" style="background-image: url({JSON.stringify(projectBgImage)});"></div>
+						<div class="dep-header-bg dep-header-bg--3" style="background-image: url({JSON.stringify(projectBgImage)});"></div>
+						<div class="dep-header-veil"></div>
+					</div>
+				{/if}
 				<div class="dep-header-top">
 					<div class="dep-header-identity">
-					<h1 class="dep-header-name">{deployment.name}</h1>
-					<span class="badge {getStatusColor(deployment.status)} text-[11px]">{getDeploymentStatusLabel(deployment.status)}</span>
-					{#if deployment.buildStatus && deployment.buildStatus !== 'none'}
-						<span class="badge {getBuildStatusColor(deployment.buildStatus)} text-[11px]">Build: {getBuildStatusLabel(deployment.buildStatus)}</span>
-					{/if}
+						<div class="dep-header-title-row">
+							<h1 class="dep-header-name">{deployment.name}</h1>
+						</div>
+						<div class="dep-header-badges">
+							<span class="badge {getStatusColor(deployment.status)} text-[10px]">{getDeploymentStatusLabel(deployment.status)}</span>
+							{#if deployment.buildStatus && deployment.buildStatus !== 'none'}
+								<span class="badge {getBuildStatusColor(deployment.buildStatus)} text-[10px]">Build: {getBuildStatusLabel(deployment.buildStatus)}</span>
+							{/if}
+						</div>
 						{#if notificationCount > 0}
 							<div class="relative">
 								<button
@@ -2629,7 +2646,7 @@
 							{#if restarting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Play class="h-3.5 w-3.5" />{/if}
 							<span>Restart</span>
 						</button>
-						<button onclick={() => (showDeleteModal = true)} disabled={deleting} class="btn btn-ghost btn-sm dep-delete-btn">
+						<button onclick={() => (showDeleteModal = true)} disabled={deleting} class="btn btn-sm dep-delete-btn">
 							{#if deleting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2 class="h-3.5 w-3.5" />{/if}
 						</button>
 					</div>
@@ -2970,158 +2987,141 @@
 						<div class="card rounded-2xl p-5">
 							<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
 								<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Environment variables</p>
-								<div class="flex items-center gap-2">
-									{#if envViewMode === 'ui'}
-										<button onclick={addEnvRow} class="btn btn-secondary btn-sm">
-											<Plus class="h-4 w-4" />
-											<span>Add</span>
-										</button>
-									{/if}
-									<div class="relative flex rounded-lg p-0.5" style="background-color: var(--control-bg);">
-										<div
-											class="absolute top-0.5 bottom-0.5 rounded-md shadow-sm transition-all duration-200 ease-in-out"
-											style="background-color: var(--surface-bg); width: calc(50% - 2px); left: {envViewMode === 'ui' ? '2px' : 'calc(50% + 0px)'};"
-										></div>
-										<button
-											onclick={() => switchEnvView('ui')}
-											class="relative z-10 px-3 py-1 text-xs font-medium rounded-md transition-colors duration-200"
-											style="color: {envViewMode === 'ui' ? 'var(--center-channel-color)' : 'var(--surface-muted)'};"
-										>UI</button>
-										<button
-											onclick={() => switchEnvView('raw')}
-											class="relative z-10 px-3 py-1 text-xs font-medium rounded-md transition-colors duration-200"
-											style="color: {envViewMode === 'raw' ? 'var(--center-channel-color)' : 'var(--surface-muted)'};"
-										>Raw</button>
-									</div>
+								<div class="relative flex rounded-lg p-0.5" style="background-color: var(--control-bg);">
+									<div
+										class="absolute top-0.5 bottom-0.5 rounded-md shadow-sm transition-all duration-200 ease-in-out"
+										style="background-color: var(--surface-bg); width: calc(50% - 2px); left: {envViewMode === 'ui' ? '2px' : 'calc(50% + 0px)'};"
+									></div>
+									<button
+										onclick={() => switchEnvView('ui')}
+										class="relative z-10 px-3 py-1 text-xs font-medium rounded-md transition-colors duration-200"
+										style="color: {envViewMode === 'ui' ? 'var(--center-channel-color)' : 'var(--surface-muted)'};"
+									>UI</button>
+									<button
+										onclick={() => switchEnvView('raw')}
+										class="relative z-10 px-3 py-1 text-xs font-medium rounded-md transition-colors duration-200"
+										style="color: {envViewMode === 'raw' ? 'var(--center-channel-color)' : 'var(--surface-muted)'};"
+									>Raw</button>
 								</div>
 							</div>
-							{#if envViewMode === 'ui'}
-								<div class="space-y-2" transition:fade={{ duration: 150 }}>
+							<div class="env-container">
+								{#if envViewMode === 'ui'}
 									{#each envVars as env, index}
 										{@const isRevealed = revealedIndices.has(index)}
-										<div class="flex gap-2 items-center">
-											<input type="text" bind:value={env.key} placeholder="KEY" class="input font-mono text-sm flex-[2]" onfocus={() => isEditingEnv = true} />
-											<input
-												type={isRevealed ? 'text' : 'password'}
-												bind:value={env.value}
-												placeholder="value"
-												class="input font-mono text-sm flex-[3]"
-												onfocus={() => isEditingEnv = true}
-											/>
-											<button type="button" onclick={() => toggleReveal(index)} class="btn btn-ghost btn-sm shrink-0" aria-label={isRevealed ? 'Hide' : 'Show'}>
-												{#if isRevealed}<EyeOff class="h-3.5 w-3.5" />{:else}<Eye class="h-3.5 w-3.5" />{/if}
-											</button>
-											<button onclick={() => removeEnvRow(index)} class="btn btn-ghost btn-sm shrink-0" aria-label="Remove">
-												<X class="h-3.5 w-3.5" />
-											</button>
+										{@const hasKey = env.key.trim().length > 0}
+										<div class="env-row" transition:slide={{ duration: 150 }}>
+											<div class="env-row-inner">
+												<div class="env-key-col">
+													<input
+														type="text"
+														bind:value={env.key}
+														placeholder="KEY"
+														class="env-key-input"
+														onfocus={() => isEditingEnv = true}
+													/>
+												</div>
+												<div class="env-val-col">
+													<input
+														type={isRevealed ? 'text' : 'password'}
+														bind:value={env.value}
+														placeholder={hasKey ? 'value' : ''}
+														class="env-val-input"
+														onfocus={() => isEditingEnv = true}
+													/>
+												</div>
+												<div class="env-actions">
+													<button type="button" onclick={() => toggleReveal(index)} class="env-action-btn" aria-label={isRevealed ? 'Hide' : 'Show'}>
+														{#if isRevealed}<EyeOff class="h-3.5 w-3.5" />{:else}<Eye class="h-3.5 w-3.5" />{/if}
+													</button>
+													<button onclick={() => removeEnvRow(index)} class="env-action-btn env-action-delete" aria-label="Remove">
+														<Trash2 class="h-3.5 w-3.5" />
+													</button>
+												</div>
+											</div>
 										</div>
 									{/each}
-								</div>
-							{:else}
-								<div transition:fade={{ duration: 150 }}>
+									<button onclick={addEnvRow} class="env-add-btn">
+										<Plus class="h-4 w-4" />
+										<span>Add variable</span>
+									</button>
+								{:else}
 									<textarea
 										bind:value={envRawText}
 										placeholder="KEY1=value1&#10;KEY2=value2&#10;# Comments are ignored"
-										class="input font-mono text-xs min-h-[200px] w-full"
+										class="env-raw-textarea"
 										onfocus={() => isEditingEnv = true}
 									></textarea>
-								</div>
-							{/if}
-							<div class="mt-4 flex justify-end">
+								{/if}
+							</div>
+							<div class="env-footer">
+								<p class="env-footer-hint">Saving will restart pods with new variables.</p>
 								<button onclick={saveEnv} disabled={savingEnv} class="btn btn-primary">
 									{#if savingEnv}<Loader2 class="h-4 w-4 animate-spin" />{/if}
 									<span>Save</span>
 								</button>
 							</div>
-							<p class="mt-2 text-xs" style="color: var(--surface-muted);">Saving will restart pods with new variables.</p>
 						</div>
 					{:else if tab.id === 'volumes'}
 						<div class="card rounded-2xl p-5">
 							<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-								<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Volumes</p>
+								<div>
+									<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Persistent Storage</p>
+									<p class="text-xs mt-0.5" style="color: var(--surface-muted);">Attach storage that persists across restarts and redeployments.</p>
+								</div>
 								<button onclick={addVolume} class="btn btn-secondary btn-sm">
 									<Plus class="h-4 w-4" />
-									<span>Add</span>
+									<span>Add Storage</span>
 								</button>
 							</div>
 							<div class="space-y-3">
 								{#each volumes as volume, index}
-									<div class="rounded-xl p-4" style="background-color: var(--control-bg); border: 1px solid var(--surface-border);">
-										<div class="flex items-center justify-between mb-3">
-											<span class="text-sm font-medium" style="color: var(--center-channel-color);">Volume {index + 1}</span>
-											<button onclick={() => removeVolume(index)} class="btn btn-ghost btn-sm"><Trash2 class="h-3.5 w-3.5" /></button>
-										</div>
-										<div class="grid gap-3 md:grid-cols-2">
-											<div>
-												<p class="text-xs mb-1" style="color: var(--surface-muted);">Name</p>
-												<input type="text" bind:value={volume.name} placeholder="data" class="input text-sm" />
-											</div>
-											<div>
-												<p class="text-xs mb-1" style="color: var(--surface-muted);">Type</p>
-												<div class="relative custom-dropdown-container">
-													<button
-														type="button"
-														onclick={() => (volumeTypeDropdownOpen = volumeTypeDropdownOpen === index ? null : index)}
-														class="flex w-full items-center justify-between overflow-hidden rounded-xl border px-3 py-2 text-sm transition"
-														style="background-color: var(--surface-bg); color: var(--center-channel-color); border-color: var(--surface-border);"
-													>
-														<span>{volume.type === 'pvc' ? 'PVC' : volume.type === 'hostPath' ? 'Host Path' : 'Empty Dir'}</span>
-														<ChevronDown class="h-4 w-4 shrink-0" />
-													</button>
-													{#if volumeTypeDropdownOpen === index}
-														<div class="absolute z-20 mt-1 w-full rounded-xl border p-1.5 shadow-lg" style="background-color: var(--surface-bg); border-color: var(--surface-border);" transition:scale={{ duration: 150, start: 0.96 }}>
-															{#each [{ val: 'pvc', label: 'PVC' }, { val: 'hostPath', label: 'Host Path' }, { val: 'emptyDir', label: 'Empty Dir' }] as opt}
-																<button type="button" onclick={() => { volume.type = opt.val as any; volumeTypeDropdownOpen = null; }}
-																	class="flex w-full items-center justify-between rounded-lg px-3 py-2 text-left text-sm transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]">
-																	<span>{opt.label}</span>
-																	{#if volume.type === opt.val}<Check class="h-4 w-4 text-primary-600" />{/if}
-																</button>
-															{/each}
-														</div>
-													{/if}
+									<div class="vol-card" transition:slide={{ duration: 200 }}>
+										<div class="vol-card-header">
+											<div class="vol-card-number">{index + 1}</div>
+											<div class="vol-card-fields">
+												<div class="vol-field">
+													<input type="text" bind:value={volume.pvcName} placeholder="Storage name" class="vol-input" />
+												</div>
+												<span class="vol-arrow">→</span>
+												<div class="vol-field">
+													<input type="text" bind:value={volume.mountPath} placeholder="/data" class="vol-input vol-input-mono" />
+												</div>
+												<div class="vol-field vol-field--size">
+													<input type="text" bind:value={volume.storageSize} placeholder="1Gi" class="vol-input" />
 												</div>
 											</div>
-											<div class="md:col-span-2">
-												<p class="text-xs mb-1" style="color: var(--surface-muted);">Mount Path</p>
-												<input type="text" bind:value={volume.mountPath} placeholder="/data" class="input font-mono text-sm" />
-											</div>
-											{#if volume.type === 'pvc'}
-												<div class="md:col-span-2">
-													<p class="text-xs mb-1" style="color: var(--surface-muted);">PVC Name</p>
-													<input type="text" bind:value={volume.pvcName} placeholder="my-pvc" class="input font-mono text-sm" />
-												</div>
-											{:else if volume.type === 'hostPath'}
-												<div class="md:col-span-2">
-													<p class="text-xs mb-1" style="color: var(--surface-muted);">Host Path</p>
-													<input type="text" bind:value={volume.hostPath} placeholder="/host/path" class="input font-mono text-sm" />
-												</div>
-											{/if}
-											<div class="md:col-span-2">
-												<label class="flex items-center gap-2 text-sm">
-													<input type="checkbox" bind:checked={volume.readOnly} class="rounded" />
-													<span>Read-only</span>
+											<div class="vol-card-actions">
+												<label class="dm-toggle-row vol-toggle">
+													<span class="vol-toggle-label">Read-only</span>
+													<input type="checkbox" class="dm-toggle-input" bind:checked={volume.readOnly} />
+													<span class="dm-toggle-track"><span class="dm-toggle-thumb"></span></span>
 												</label>
+												<button onclick={() => removeVolume(index)} class="btn btn-ghost btn-sm vol-remove"><Trash2 class="h-3.5 w-3.5" /></button>
 											</div>
 										</div>
 									</div>
 								{:else}
-									<p class="text-sm text-center py-6" style="color: var(--surface-muted);">No volumes configured</p>
+									<div class="text-center py-8" transition:fade={{ duration: 150 }}>
+										<HardDrive class="h-8 w-8 mx-auto mb-2" style="color: var(--surface-muted);" />
+										<p class="text-sm font-medium" style="color: var(--center-channel-color);">No storage attached</p>
+										<p class="text-xs mt-1" style="color: var(--surface-muted);">Add persistent storage to keep files across restarts.</p>
+									</div>
 								{/each}
 							</div>
-							<div class="mt-4 flex justify-end">
+							<div class="mt-4 flex items-center justify-between">
+								<p class="text-xs" style="color: var(--surface-muted);">Saving will restart your app with the new storage config.</p>
 								<button onclick={saveVolumes} disabled={savingVolumes} class="btn btn-primary">
 									{#if savingVolumes}<Loader2 class="h-4 w-4 animate-spin" />{/if}
 									<span>Save</span>
 								</button>
 							</div>
-							<p class="mt-2 text-xs" style="color: var(--surface-muted);">Saving will restart pods with new volume configuration.</p>
 						</div>
 					{:else if tab.id === 'network'}
 						<div class="space-y-5">
-							<!-- Services -->
+							<!-- Ports -->
 							<div class="card rounded-2xl p-5">
 								<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-									<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Services</p>
+									<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Ports</p>
 									<button
 										type="button"
 										class="btn btn-secondary btn-sm"
@@ -3147,231 +3147,89 @@
 								</div>
 
 								{#if showServiceForm}
-									<div class="surface-form rounded-xl border border-dashed p-4 mb-4">
-										<div class="flex flex-wrap gap-3 items-end">
-											<div class="flex-[2] min-w-[160px]">
-												<p class="text-xs mb-1" style="color: var(--surface-muted);">Service name</p>
-												<input
-													type="text"
-													class="input text-sm"
-													placeholder="api-service"
-													value={newServiceForm.name}
-													oninput={(event) =>
-														(newServiceForm = {
-															...newServiceForm,
-															name: (event.currentTarget as HTMLInputElement).value
-														})}
-												/>
+									<div class="surface-form rounded-xl border border-dashed p-4 mb-4" transition:slide={{ duration: 200 }}>
+										<div class="flex items-center gap-2">
+											<div style="flex: 1; min-width: 80px; max-width: 120px;">
+												<input type="number" min="1" class="input text-sm" placeholder="80" value={newServiceForm.ports[0].containerPort}
+													oninput={(event) => {
+														const val = Number((event.currentTarget as HTMLInputElement).value);
+														updateNewServicePort(0, { containerPort: val, servicePort: val });
+													}} />
 											</div>
-											<label class="flex items-center gap-2 text-sm py-2">
-												<input
-													type="checkbox"
-													checked={newServiceForm.exposePublic}
-													onchange={(event) =>
-														(newServiceForm = {
-															...newServiceForm,
-															exposePublic: (event.currentTarget as HTMLInputElement).checked
-														})}
-													class="rounded"
-												/>
-												<span>Expose publicly</span>
-											</label>
-										</div>
-
-										<div class="mt-3 space-y-2">
-											{#each newServiceForm.ports as port, index}
-												<div class="flex flex-wrap gap-2 items-end">
-													<div class="flex-1 min-w-[80px]">
-														<p class="text-xs mb-1" style="color: var(--surface-muted);">Name</p>
-														<input type="text" class="input text-sm" placeholder="http" value={port.name}
-															oninput={(event) => updateNewServicePort(index, { name: (event.currentTarget as HTMLInputElement).value })} />
-													</div>
-													<div class="flex-1 min-w-[80px]">
-														<p class="text-xs mb-1" style="color: var(--surface-muted);">Container</p>
-														<input type="number" min="1" class="input text-sm" placeholder="8080" value={port.containerPort}
-															oninput={(event) => updateNewServicePort(index, { containerPort: Number((event.currentTarget as HTMLInputElement).value) })} />
-													</div>
-													<div class="flex-1 min-w-[80px]">
-														<p class="text-xs mb-1" style="color: var(--surface-muted);">Service</p>
-														<input type="number" min="1" class="input text-sm" placeholder="80" value={port.servicePort}
-															oninput={(event) => updateNewServicePort(index, { servicePort: Number((event.currentTarget as HTMLInputElement).value) })} />
-													</div>
-													<div class="w-[90px]">
-														<p class="text-xs mb-1" style="color: var(--surface-muted);">Protocol</p>
-														<div class="relative custom-dropdown-container">
-															<button type="button"
-																onclick={() => (protocolDropdownOpen = protocolDropdownOpen === `new-${index}` ? null : `new-${index}`)}
-																class="flex w-full items-center justify-between overflow-hidden rounded-xl border px-2 py-2 text-sm transition"
-																style="background-color: var(--surface-bg); color: var(--center-channel-color); border-color: var(--surface-border);">
-																<span>{port.protocol}</span>
-																<ChevronDown class="h-3.5 w-3.5 shrink-0" />
-															</button>
-															{#if protocolDropdownOpen === `new-${index}`}
-																<div class="absolute z-20 mt-1 w-full rounded-xl border p-1.5 shadow-lg" style="background-color: var(--surface-bg); border-color: var(--surface-border);" transition:scale={{ duration: 150, start: 0.96 }}>
-																	{#each ['TCP', 'UDP'] as proto}
-																		<button type="button" onclick={() => { updateNewServicePort(index, { protocol: proto }); protocolDropdownOpen = null; }}
-																			class="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]">
-																			<span>{proto}</span>
-																			{#if port.protocol === proto}<Check class="h-3.5 w-3.5 text-primary-600" />{/if}
-																		</button>
-																	{/each}
-																</div>
-															{/if}
-														</div>
-													</div>
-													<button type="button" class="btn btn-ghost btn-sm" onclick={() => removeNewServicePortRow(index)}>
-														<Trash2 class="h-3.5 w-3.5" />
-													</button>
-													{#if newServiceForm.exposePublic}
-														<div class="w-full">
-															<p class="text-xs mb-1" style="color: var(--surface-muted);">NodePort (optional)</p>
-															<input type="number" min="30000" max="32767" class="input text-sm" placeholder="30000-32767" value={port.nodePort ?? ''}
-																oninput={(event) => updateNewServicePort(index, { nodePort: (event.currentTarget as HTMLInputElement).value === '' ? null : Number((event.currentTarget as HTMLInputElement).value) })} />
-														</div>
-													{/if}
-												</div>
-											{/each}
-											<button type="button" class="btn btn-secondary btn-sm" onclick={addNewServicePortRow}>
-												<Plus class="h-3.5 w-3.5" /> Add port
+											<div class="svc-protocol-toggle">
+												<button type="button" class="svc-proto-btn" class:svc-proto-active={newServiceForm.ports[0].protocol === 'TCP'}
+													onclick={() => updateNewServicePort(0, { protocol: 'TCP' })}>TCP</button>
+												<button type="button" class="svc-proto-btn" class:svc-proto-active={newServiceForm.ports[0].protocol === 'UDP'}
+													onclick={() => updateNewServicePort(0, { protocol: 'UDP' })}>UDP</button>
+											</div>
+											<div class="flex-1"></div>
+											<button type="button" class="btn btn-secondary btn-sm" onclick={() => { showServiceForm = false; resetNewServiceForm(); }}>Cancel</button>
+											<button type="button" class="btn btn-primary btn-sm" onclick={createService} disabled={creatingService}>
+												{#if creatingService}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+												Add
 											</button>
 										</div>
 
 										{#if serviceFormError}
-											<div class="alert alert-error mt-3">{serviceFormError}</div>
+											<div class="alert alert-error mt-2">{serviceFormError}</div>
 										{/if}
-
-										<div class="mt-3 flex justify-end gap-2">
-											<button type="button" class="btn btn-secondary btn-sm" onclick={() => { showServiceForm = false; resetNewServiceForm(); }}>Cancel</button>
-											<button type="button" class="btn btn-primary btn-sm" onclick={createService} disabled={creatingService}>
-												{#if creatingService}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
-												Create
-											</button>
-										</div>
 									</div>
 								{/if}
 
-								<div class="space-y-3">
+								<div class="space-y-2">
 									{#if deployment.services?.length}
 										{#each deployment.services as service}
 											{@const displayedPorts =
 												service.ports && service.ports.length
 													? service.ports
 													: [{ name: service.name, port: service.port, targetPort: service.targetPort, protocol: service.protocol, nodePort: service.nodePort ?? null }]}
-											<div class="rounded-xl p-4" style="background-color: var(--control-bg); border: 1px solid var(--surface-border);">
-												<div class="flex items-center justify-between gap-3 mb-2">
-													<div class="flex items-center gap-2 min-w-0">
-														<span class="text-sm font-medium" style="color: var(--center-channel-color);">{service.name}</span>
-														<span class="surface-pill rounded-full px-2 py-0.5 text-xs">{service.type === 'external' ? 'NodePort' : 'ClusterIP'}</span>
-														{#if service.externalIp}
-															<span class="text-xs font-mono" style="color: var(--surface-muted);">{service.externalIp}</span>
-														{/if}
-													</div>
-													<div class="flex gap-1 shrink-0">
+											{#each displayedPorts as port, portIndex}
+												<div class="svc-port-row flex items-center gap-2 rounded-xl px-4 py-3" class:svc-port-editing={serviceEditForms[service.id]} style="background-color: var(--control-bg); border: 1px solid var(--surface-border);">
+													{#if serviceEditForms[service.id]}
+														<div style="flex: 1; min-width: 80px; max-width: 120px;">
+															<input type="number" min="1" class="input text-sm" placeholder="80"
+																value={serviceEditForms[service.id].ports[portIndex]?.containerPort ?? port.targetPort}
+																oninput={(event) => {
+																	const val = Number((event.currentTarget as HTMLInputElement).value);
+																	updateServiceEditPort(service.id, portIndex, { containerPort: val, servicePort: val });
+																}} />
+														</div>
+														<div class="svc-protocol-toggle">
+															<button type="button" class="svc-proto-btn" class:svc-proto-active={(serviceEditForms[service.id].ports[portIndex]?.protocol ?? port.protocol) === 'TCP'}
+																onclick={() => updateServiceEditPort(service.id, portIndex, { protocol: 'TCP' })}>TCP</button>
+															<button type="button" class="svc-proto-btn" class:svc-proto-active={(serviceEditForms[service.id].ports[portIndex]?.protocol ?? port.protocol) === 'UDP'}
+																onclick={() => updateServiceEditPort(service.id, portIndex, { protocol: 'UDP' })}>UDP</button>
+														</div>
+													{:else}
+														<span class="text-sm font-mono font-medium" style="color: var(--center-channel-color);">{port.targetPort}</span>
+														<span class="surface-pill rounded-full px-1.5 py-0.5 text-[10px]">{port.protocol}</span>
+													{/if}
+													<div class="flex-1"></div>
+													{#if !serviceEditForms[service.id]}
 														<button type="button" class="btn btn-ghost btn-sm" onclick={() => toggleServiceEdit(service)}>
-															{#if serviceEditForms[service.id]}<X class="h-3.5 w-3.5" />{:else}<Settings class="h-3.5 w-3.5" />{/if}
+															<Settings class="h-3.5 w-3.5" />
 														</button>
-														<button type="button" class="btn btn-ghost btn-sm text-red-500" onclick={() => deleteService(service.id)} disabled={serviceDeletingId === service.id}>
-															{#if serviceDeletingId === service.id}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2 class="h-3.5 w-3.5" />{/if}
-														</button>
-													</div>
+													{/if}
+													<button type="button" class="btn btn-ghost btn-sm text-red-500" onclick={() => deleteService(service.id)} disabled={serviceDeletingId === service.id}>
+														{#if serviceDeletingId === service.id}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2 class="h-3.5 w-3.5" />{/if}
+													</button>
 												</div>
-
-												{#if service.internalUrl}
-													<div class="flex items-center gap-2 mb-2 text-xs font-mono" style="color: var(--surface-muted);">
-														<span class="truncate">{service.internalUrl}</span>
-														<button type="button" class="btn btn-ghost btn-sm shrink-0" onclick={() => copyInternalUrl(service.internalUrl, service.id)}>
-															{#if copiedUrlId === service.id}<Check class="h-3 w-3 text-green-500" />{:else}<Copy class="h-3 w-3" />{/if}
-														</button>
-													</div>
-												{/if}
-
-												<div class="space-y-1">
-													{#each displayedPorts as port}
-														<div class="flex items-center gap-2 text-xs" style="color: var(--surface-muted);">
-															<span class="font-mono font-medium" style="color: var(--center-channel-color);">{port.name ?? 'port'}</span>
-															<span class="font-mono">{port.targetPort}</span>
-															<span>→</span>
-															<span class="font-mono">{port.port}</span>
-															{#if port.nodePort}<span>→</span><span class="font-mono">{port.nodePort}</span>{/if}
-															<span class="surface-pill rounded-full px-1.5 py-0 text-[10px]">{port.protocol}</span>
-														</div>
-													{/each}
+											{/each}
+											{#if serviceEditForms[service.id]}
+												<div class="flex justify-end gap-2 pb-1" transition:slide={{ duration: 150 }}>
+													<button type="button" class="btn btn-secondary btn-sm" onclick={() => toggleServiceEdit(service)}>Cancel</button>
+													<button type="button" class="btn btn-primary btn-sm" onclick={() => saveServicePorts(service.id)} disabled={serviceSavingId === service.id}>
+														{#if serviceSavingId === service.id}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+														Save
+													</button>
 												</div>
-
-												{#if serviceEditForms[service.id]}
-													<div class="mt-3 border-t border-dashed pt-3" style="border-color: var(--surface-border);">
-														<div class="space-y-2">
-															{#each serviceEditForms[service.id].ports as port, index}
-																<div class="flex flex-wrap gap-2 items-end">
-																	<div class="flex-1 min-w-[80px]">
-																		<p class="text-xs mb-1" style="color: var(--surface-muted);">Name</p>
-																		<input type="text" class="input text-sm" placeholder="port name" value={port.name}
-																			oninput={(event) => updateServiceEditPort(service.id, index, { name: (event.currentTarget as HTMLInputElement).value })} />
-																	</div>
-																	<div class="flex-1 min-w-[80px]">
-																		<p class="text-xs mb-1" style="color: var(--surface-muted);">Container</p>
-																		<input type="number" min="1" class="input text-sm" placeholder="8080" value={port.containerPort}
-																			oninput={(event) => updateServiceEditPort(service.id, index, { containerPort: Number((event.currentTarget as HTMLInputElement).value) })} />
-																	</div>
-																	<div class="flex-1 min-w-[80px]">
-																		<p class="text-xs mb-1" style="color: var(--surface-muted);">Service</p>
-																		<input type="number" min="1" class="input text-sm" placeholder="80" value={port.servicePort}
-																			oninput={(event) => updateServiceEditPort(service.id, index, { servicePort: Number((event.currentTarget as HTMLInputElement).value) })} />
-																	</div>
-																	<div class="w-[90px]">
-																		<p class="text-xs mb-1" style="color: var(--surface-muted);">Protocol</p>
-																		<div class="relative custom-dropdown-container">
-																			<button type="button"
-																				onclick={() => (protocolDropdownOpen = protocolDropdownOpen === `${service.id}-${index}` ? null : `${service.id}-${index}`)}
-																				class="flex w-full items-center justify-between overflow-hidden rounded-xl border px-2 py-2 text-sm transition"
-																				style="background-color: var(--surface-bg); color: var(--center-channel-color); border-color: var(--surface-border);">
-																				<span>{port.protocol}</span>
-																				<ChevronDown class="h-3.5 w-3.5 shrink-0" />
-																			</button>
-																			{#if protocolDropdownOpen === `${service.id}-${index}`}
-																				<div class="absolute z-20 mt-1 w-full rounded-xl border p-1.5 shadow-lg" style="background-color: var(--surface-bg); border-color: var(--surface-border);" transition:scale={{ duration: 150, start: 0.96 }}>
-																					{#each ['TCP', 'UDP'] as proto}
-																						<button type="button" onclick={() => { updateServiceEditPort(service.id, index, { protocol: proto }); protocolDropdownOpen = null; }}
-																							class="flex w-full items-center justify-between rounded-lg px-2 py-1.5 text-left text-sm transition hover:bg-[color-mix(in_srgb,var(--surface-border)_40%,transparent)]">
-																							<span>{proto}</span>
-																							{#if port.protocol === proto}<Check class="h-3.5 w-3.5 text-primary-600" />{/if}
-																						</button>
-																					{/each}
-																				</div>
-																			{/if}
-																		</div>
-																	</div>
-																	<button type="button" class="btn btn-ghost btn-sm" onclick={() => removeServiceEditPortRow(service.id, index)}>
-																		<Trash2 class="h-3.5 w-3.5" />
-																	</button>
-																	{#if serviceEditForms[service.id].exposePublic}
-																		<div class="w-full">
-																			<p class="text-xs mb-1" style="color: var(--surface-muted);">NodePort (optional)</p>
-																			<input type="number" min="30000" max="32767" class="input text-sm" placeholder="30000-32767" value={port.nodePort ?? ''}
-																				oninput={(event) => updateServiceEditPort(service.id, index, { nodePort: (event.currentTarget as HTMLInputElement).value === '' ? null : Number((event.currentTarget as HTMLInputElement).value) })} />
-																		</div>
-																	{/if}
-																</div>
-															{/each}
-															<button type="button" class="btn btn-secondary btn-sm" onclick={() => addServiceEditPortRow(service.id)}>
-																<Plus class="h-3.5 w-3.5" /> Add port
-															</button>
-														</div>
-														{#if serviceEditErrors[service.id]}
-															<div class="alert alert-error mt-2">{serviceEditErrors[service.id]}</div>
-														{/if}
-														<div class="mt-2 flex justify-end">
-															<button type="button" class="btn btn-primary btn-sm" onclick={() => saveServicePorts(service.id)} disabled={serviceSavingId === service.id}>
-																{#if serviceSavingId === service.id}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
-																Save
-															</button>
-														</div>
-													</div>
+												{#if serviceEditErrors[service.id]}
+													<div class="alert alert-error">{serviceEditErrors[service.id]}</div>
 												{/if}
-											</div>
+											{/if}
 										{/each}
 									{:else}
-										<p class="text-sm text-center py-4" style="color: var(--surface-muted);">No services configured</p>
+										<p class="text-sm text-center py-4" style="color: var(--surface-muted);">No ports configured</p>
 									{/if}
 								</div>
 							</div>
@@ -3401,7 +3259,7 @@
 								</div>
 
 								{#if showDomainForm}
-									<div class="surface-form rounded-xl border border-dashed p-4 mb-4">
+									<div class="surface-form rounded-xl border border-dashed p-4 mb-4" transition:slide={{ duration: 200 }}>
 										<div class="flex flex-wrap gap-2 items-end">
 											<div class="flex-[2] min-w-[160px]">
 												<p class="text-xs mb-1" style="color: var(--surface-muted);">Domain</p>
@@ -3461,7 +3319,7 @@
 										</button>
 
 										{#if showDomainAdvanced}
-											<div class="mt-2">
+											<div class="mt-2" transition:slide={{ duration: 150 }}>
 												<p class="text-xs mb-1" style="color: var(--surface-muted);">Path</p>
 												<input
 													type="text"
@@ -3521,7 +3379,7 @@
 									{#if deployment.ingresses?.length}
 										{#each deployment.ingresses as ingress}
 											<div
-												class="flex w-full items-center justify-between gap-3 rounded-xl p-3 text-left"
+												class="svc-port-row flex w-full items-center justify-between gap-3 rounded-xl p-3 text-left"
 												style="background-color: var(--control-bg); border: 1px solid var(--surface-border);"
 											>
 												<a
@@ -3568,175 +3426,245 @@
 					{:else if tab.id === 'history'}
 						<div class="card rounded-2xl p-5">
 							<p class="text-sm font-semibold mb-4" style="color: var(--center-channel-color);">Build History</p>
-							{#if deployment.imageHistory?.length}
+							{#if (deployment.imageHistory?.length ?? 0) > 0 || deployment.buildStatus === 'failed'}
 								<div class="space-y-2">
+									{#if deployment.buildStatus === 'failed'}
+										<div class="bh-card bh-card-fail" transition:slide={{ duration: 150 }}>
+											<div class="bh-card-left">
+												<div class="bh-status-dot bh-dot-red"></div>
+											</div>
+											<div class="bh-card-body">
+												<div class="bh-card-top">
+													<span class="bh-card-title" style="color: #ef4444;">Build failed</span>
+												</div>
+												{#if deployment.buildError}
+													<p class="bh-card-sub" style="color: color-mix(in srgb, #ef4444 60%, var(--surface-muted));">{deployment.buildError}</p>
+												{/if}
+											</div>
+										</div>
+									{/if}
 									{#each deployment.imageHistory as history}
-										<div class="rounded-xl overflow-hidden" style="background-color: var(--control-bg); border: 1px solid var(--surface-border);">
-											<div class="flex items-center justify-between gap-3 p-3">
-												<div class="flex-1 min-w-0">
-													<div class="flex items-center gap-2">
-														<span class="inline-flex items-center gap-1 text-xs font-medium px-2 py-0.5 rounded-full" style="background-color: var(--success-bg, rgba(34,197,94,0.1)); color: var(--success-color, #22c55e);">
-															<svg xmlns="http://www.w3.org/2000/svg" width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
-															Success
-														</span>
-														<p class="text-sm font-medium" style="color: var(--center-channel-color);">
-															Built on {new Date(history.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })} at {new Date(history.createdAt).toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}
-														</p>
-													</div>
-													<div class="mt-1 flex flex-wrap items-center gap-2 text-xs" style="color: var(--surface-muted);">
-														{#if history.triggerType === 'manual' && history.triggeredBy}
-															<span class="inline-flex items-center gap-1">
-																<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
-																Deployed manually by {history.triggeredBy.firstName ? `${history.triggeredBy.firstName}${history.triggeredBy.lastName ? ' ' + history.triggeredBy.lastName : ''}` : history.triggeredBy.username}
-															</span>
-															<span>·</span>
-														{:else if history.triggerType === 'auto'}
-															<span class="inline-flex items-center gap-1">
-																<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2C6.5 2 2 6.5 2 12s4.5 10 10 10 10-4.5 10-10S17.5 2 12 2"/><path d="m2 12 5.1 2.8"/><path d="m22 12-5.1 2.8"/><path d="m8.6 8.6 2.8 5.1"/><path d="m15.4 8.6-2.8 5.1"/></svg>
-																Auto-deployed from GitHub
-															</span>
-															<span>·</span>
+										{@const timeAgo = (() => {
+											const diff = Date.now() - new Date(history.createdAt).getTime();
+											const mins = Math.floor(diff / 60000);
+											if (mins < 1) return 'just now';
+											if (mins < 60) return `${mins}m ago`;
+											const hrs = Math.floor(mins / 60);
+											if (hrs < 24) return `${hrs}h ago`;
+											const days = Math.floor(hrs / 24);
+											if (days < 30) return `${days}d ago`;
+											return new Date(history.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+										})()}
+										<div class="bh-card" class:bh-card-active={history.isActive} transition:slide={{ duration: 150 }}>
+											<div class="bh-card-left">
+												<div class="bh-status-dot bh-dot-green" class:bh-dot-glow={history.isActive}></div>
+											</div>
+											<div class="bh-card-body">
+												<div class="bh-card-top">
+													<div class="bh-card-info">
+														{#if history.commitSha}
+															<code class="bh-card-sha">{history.commitSha.slice(0, 7)}</code>
 														{/if}
 														{#if history.branch}
-															<span class="surface-pill rounded-full px-2 py-0 text-[10px]">{history.branch}</span>
-														{/if}
-														{#if history.commitSha}
-															<span class="font-mono inline-flex items-center gap-1">
-																<svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><line x1="3" y1="12" x2="9" y2="12"/><line x1="15" y1="12" x2="21" y2="12"/></svg>
-																{history.commitSha.slice(0, 7)}
-															</span>
+															<span class="bh-card-branch">{history.branch}</span>
 														{/if}
 														{#if history.isActive}
-															<span class="badge badge-success text-xs">Active</span>
+															<span class="bh-card-live">Live</span>
+														{/if}
+													</div>
+													<div class="bh-card-actions">
+														<button onclick={() => openLogModal(history.id)} class="btn btn-ghost btn-sm" title="View logs">
+															<Terminal class="h-3.5 w-3.5" />
+														</button>
+														{#if !history.isActive}
+															<button onclick={() => rollbackToImage(history.id)} class="btn btn-ghost btn-sm" title="Rollback">
+																<RefreshCw class="h-3.5 w-3.5" />
+															</button>
 														{/if}
 													</div>
 												</div>
-												<div class="flex items-center gap-2">
-													<button
-														onclick={() => toggleBuildLogs(history.id)}
-														class="btn btn-ghost btn-sm text-xs"
-													>
-														{#if buildLogLoading === history.id}
-															<svg class="animate-spin h-3 w-3" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-														{:else if expandedBuildLogId === history.id}
-															Hide Logs
-														{:else}
-															View Logs
-														{/if}
-													</button>
-													{#if !history.isActive}
-														<button onclick={() => rollbackToImage(history.id)} class="btn btn-secondary btn-sm">Rollback</button>
+												{#if history.commitMessage}
+													<p class="bh-card-commit-msg">{history.commitMessage}</p>
+												{/if}
+												<p class="bh-card-sub">
+													{#if history.triggerType === 'manual' && history.triggeredBy}
+														Deployed manually by <span class="bh-card-user">@{history.triggeredBy.username}</span>
+													{:else if history.triggerType === 'auto'}
+														Auto-deployed from GitHub
+													{:else}
+														Deployed
 													{/if}
-												</div>
+													<span class="bh-card-time">&middot; {timeAgo}</span>
+												</p>
 											</div>
-											{#if expandedBuildLogId === history.id}
-												<div class="border-t px-3 py-3" style="border-color: var(--surface-border);">
-													{#if buildLogLoading === history.id}
-														<div class="flex items-center justify-center py-4">
-															<svg class="animate-spin h-5 w-5" style="color: var(--surface-muted);" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>
-														</div>
-													{:else if buildLogCache[history.id]}
-														<pre class="text-xs font-mono whitespace-pre-wrap overflow-x-auto max-h-80 overflow-y-auto rounded-lg p-3" style="background-color: var(--sidebar-bg, #1a1a2e); color: var(--sidebar-text, #e0e0e0);">{buildLogCache[history.id]}</pre>
-													{/if}
-												</div>
-											{/if}
 										</div>
 									{/each}
 								</div>
 							{:else}
-								<p class="text-sm text-center py-4" style="color: var(--surface-muted);">No build history available</p>
+								<div class="text-center py-8">
+									<History class="h-8 w-8 mx-auto mb-2" style="color: var(--surface-muted);" />
+									<p class="text-sm font-medium" style="color: var(--center-channel-color);">No builds yet</p>
+									<p class="text-xs mt-1" style="color: var(--surface-muted);">Builds will appear here after your first deploy.</p>
+								</div>
 							{/if}
 						</div>
 					{:else if tab.id === 'webhooks'}
 						<div class="space-y-5">
-							<!-- Tokens -->
-							<div class="card rounded-2xl p-5">
-								<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-									<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Webhook Tokens</p>
+							<!-- Intro + Create -->
+							<div class="card rounded-2xl overflow-hidden">
+								<div class="p-5">
+									<div class="flex items-start gap-3 mb-4">
+										<div class="wh-icon-wrap">
+											<Webhook class="h-5 w-5" />
+										</div>
+										<div>
+											<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Deploy with webhooks</p>
+											<p class="text-xs mt-0.5" style="color: var(--surface-muted);">Trigger deployments from CI/CD pipelines, GitHub Actions, or any HTTP client. Create a token, then POST to the webhook URL to deploy.</p>
+										</div>
+									</div>
+
+									<!-- Create token -->
+									<div class="wh-create-row">
+										<input type="text" class="input text-sm flex-1" placeholder="Label this token (e.g. github-actions, ci-prod)" bind:value={newWebhookLabel} />
+										<button class="btn btn-primary btn-sm" onclick={createWebhookToken} disabled={creatingWebhookToken}>
+											{#if creatingWebhookToken}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Plus class="h-3.5 w-3.5" />{/if}
+											<span>Create token</span>
+										</button>
+									</div>
 								</div>
 
-								<div class="flex gap-2 mb-4">
-									<input type="text" class="input text-sm flex-1" placeholder="Token label (e.g. github-actions)" bind:value={newWebhookLabel} />
-									<button class="btn btn-primary btn-sm" onclick={createWebhookToken} disabled={creatingWebhookToken}>
-										{#if creatingWebhookToken}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Plus class="h-3.5 w-3.5" />{/if}
-										<span>Create</span>
-									</button>
-								</div>
-
+								<!-- Newly created token banner -->
 								{#if newlyCreatedToken}
-									<div class="webhook-success-card rounded-xl p-4 mb-4" transition:scale={{ duration: 200 }}>
-										<p class="text-sm font-semibold">Copy now — won't be shown again.</p>
-										<div class="mt-2 space-y-2">
+									<div class="wh-new-token-banner" transition:slide={{ duration: 150 }}>
+										<div class="wh-new-token-header">
+											<div class="wh-new-token-alert">
+												<AlertTriangle class="h-4 w-4" />
+												<span class="text-sm font-semibold">Save your token now</span>
+											</div>
+											<p class="text-xs mt-0.5" style="opacity: 0.85;">This is the only time the token value will be shown. Copy it somewhere safe.</p>
+										</div>
+										<div class="wh-new-token-fields">
 											<div>
-												<p class="webhook-success-muted text-xs font-medium mb-1">Token</p>
-												<div class="flex items-center gap-2">
-													<code class="flex-1 break-all rounded-lg px-2 py-1.5 font-mono text-xs">{newlyCreatedToken}</code>
-													<button class="btn btn-ghost btn-sm" onclick={() => copyToClipboard(newlyCreatedToken!, 'token')}>
-														{#if copiedWebhookToken}<Check class="h-3.5 w-3.5 text-[var(--success-muted)]" />{:else}<Copy class="h-3.5 w-3.5" />{/if}
+												<p class="wh-new-token-label">Token</p>
+												<div class="wh-new-token-value-row">
+													<code class="wh-new-token-code">{newlyCreatedToken}</code>
+													<button class="btn btn-ghost btn-sm wh-copy-btn" onclick={() => copyToClipboard(newlyCreatedToken!, 'token')}>
+														{#if copiedWebhookToken}<Check class="h-3.5 w-3.5" /><span>Copied</span>{:else}<Copy class="h-3.5 w-3.5" /><span>Copy</span>{/if}
 													</button>
 												</div>
 											</div>
 											<div>
-												<p class="webhook-success-muted text-xs font-medium mb-1">URL</p>
-												<div class="flex items-center gap-2">
-													<code class="flex-1 break-all rounded-lg px-2 py-1.5 font-mono text-xs">{getWebhookUrl(newlyCreatedToken)}</code>
-													<button class="btn btn-ghost btn-sm" onclick={() => copyToClipboard(getWebhookUrl(newlyCreatedToken!), 'url')}>
-														{#if copiedWebhookUrl}<Check class="h-3.5 w-3.5 text-[var(--success-muted)]" />{:else}<Copy class="h-3.5 w-3.5" />{/if}
+												<p class="wh-new-token-label">Webhook URL</p>
+												<div class="wh-new-token-value-row">
+													<code class="wh-new-token-code">{getWebhookUrl(newlyCreatedToken)}</code>
+													<button class="btn btn-ghost btn-sm wh-copy-btn" onclick={() => copyToClipboard(getWebhookUrl(newlyCreatedToken!), 'url')}>
+														{#if copiedWebhookUrl}<Check class="h-3.5 w-3.5" /><span>Copied</span>{:else}<Copy class="h-3.5 w-3.5" /><span>Copy</span>{/if}
 													</button>
 												</div>
 											</div>
 										</div>
-										<button class="btn btn-ghost btn-sm mt-2" onclick={() => (newlyCreatedToken = null)}>Dismiss</button>
+										<button class="btn btn-ghost btn-sm wh-dismiss-btn" onclick={() => (newlyCreatedToken = null)}>
+											<X class="h-3.5 w-3.5" />
+											<span>Dismiss</span>
+										</button>
 									</div>
 								{/if}
 
-								<div class="space-y-2">
+								<!-- Token list -->
+								<div class="adv-divider"></div>
+								<div class="p-5">
 									{#if webhookTokensLoading}
-										<div class="flex items-center justify-center py-6">
+										<div class="flex items-center justify-center py-8">
 											<Loader2 class="h-5 w-5 animate-spin" style="color: var(--surface-muted);" />
 										</div>
-									{:else if webhookTokens.length === 0}
-										<p class="text-sm text-center py-4" style="color: var(--surface-muted);">No tokens yet</p>
-									{:else}
-										{#each webhookTokens as token}
-											<div class="flex items-center justify-between rounded-xl p-3" style="background-color: var(--control-bg); border: 1px solid var(--surface-border);">
-												<div>
-													<p class="text-sm font-medium" style="color: var(--center-channel-color);">{token.label || 'Unnamed token'}</p>
-													<p class="text-xs" style="color: var(--surface-muted);">
-														Created {new Date(token.createdAt).toLocaleDateString()}
-														{#if token.lastUsedAt}&middot; Used {new Date(token.lastUsedAt).toLocaleDateString()}{:else}&middot; Never used{/if}
-													</p>
-												</div>
-												<button class="btn btn-destructive btn-sm" onclick={() => deleteWebhookToken(token.id)} disabled={deletingWebhookTokenId === token.id}>
-													{#if deletingWebhookTokenId === token.id}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2 class="h-3.5 w-3.5" />{/if}
-												</button>
+									{:else if webhookTokens.length === 0 && !newlyCreatedToken}
+										<div class="wh-empty-state">
+											<div class="wh-empty-icon">
+												<Lock class="h-5 w-5" />
 											</div>
-										{/each}
+											<p class="text-sm font-medium" style="color: var(--center-channel-color);">No tokens yet</p>
+											<p class="text-xs" style="color: var(--surface-muted);">Create a token above to get started with webhook deploys.</p>
+										</div>
+									{:else}
+										<div class="space-y-2">
+											{#each webhookTokens as token}
+												<div class="wh-token-card" transition:slide={{ duration: 120 }}>
+													<div class="wh-token-icon">
+														<Lock class="h-3.5 w-3.5" />
+													</div>
+													<div class="wh-token-info">
+														<p class="wh-token-name">{token.label || 'Unnamed token'}</p>
+														<p class="wh-token-meta">
+															Created {new Date(token.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' })}
+															{#if token.lastUsedAt}
+																<span class="wh-token-sep">&middot;</span> Last used {new Date(token.lastUsedAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' })}
+															{:else}
+																<span class="wh-token-sep">&middot;</span> <span class="wh-token-unused">Never used</span>
+															{/if}
+														</p>
+													</div>
+													<button class="btn btn-ghost btn-sm wh-delete-btn" onclick={() => deleteWebhookToken(token.id)} disabled={deletingWebhookTokenId === token.id} title="Delete token">
+														{#if deletingWebhookTokenId === token.id}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2 class="h-3.5 w-3.5" />{/if}
+													</button>
+												</div>
+											{/each}
+										</div>
 									{/if}
 								</div>
 							</div>
 
-							<!-- Usage docs -->
-							<div class="card rounded-2xl p-5">
-								<p class="text-sm font-semibold mb-3" style="color: var(--center-channel-color);">Usage</p>
-								<div class="space-y-3 text-sm">
-									<div>
-										<p class="text-xs font-medium mb-1" style="color: var(--surface-muted);">Restart</p>
-										<pre class="webhook-code-block overflow-x-auto rounded-lg p-2.5 text-xs font-mono"><code>{webhookExamples.restart}</code></pre>
-									</div>
-									<div>
-										<p class="text-xs font-medium mb-1" style="color: var(--surface-muted);">Update image tag</p>
-										<pre class="webhook-code-block overflow-x-auto rounded-lg p-2.5 text-xs font-mono"><code>{webhookExamples.updateTag}</code></pre>
-									</div>
-									<div>
-										<p class="text-xs font-medium mb-1" style="color: var(--surface-muted);">Update full image</p>
-										<pre class="webhook-code-block overflow-x-auto rounded-lg p-2.5 text-xs font-mono"><code>{webhookExamples.updateImage}</code></pre>
-									</div>
+							<!-- Quick reference -->
+							<div class="card rounded-2xl overflow-hidden">
+								<div class="p-5 pb-0">
+									<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Quick reference</p>
+									<p class="text-xs mt-0.5 mb-4" style="color: var(--surface-muted);">Replace <code class="wh-inline-code">YOUR_WEBHOOK_URL</code> with the URL from your token above.</p>
 								</div>
 
-								<div class="webhook-info-card mt-4 rounded-xl p-4">
-									<p class="text-xs font-semibold uppercase tracking-wide mb-2">GitHub Actions Example</p>
-									<pre class="webhook-code-block overflow-x-auto rounded-lg p-2.5 text-xs font-mono"><code>{webhookExamples.githubActions}</code></pre>
+								<div class="wh-examples">
+									<!-- svelte-ignore a11y_click_events_have_key_events -->
+									<!-- svelte-ignore a11y_no_static_element_interactions -->
+									<details class="wh-example-item" open>
+										<summary class="wh-example-summary">
+											<div class="wh-example-summary-left">
+												<RefreshCw class="h-3.5 w-3.5" style="color: var(--surface-muted);" />
+												<span class="wh-example-title">Restart deployment</span>
+											</div>
+											<span class="wh-example-method">POST</span>
+										</summary>
+										<pre class="wh-code-block"><code>{webhookExamples.restart}</code></pre>
+									</details>
+
+									<details class="wh-example-item">
+										<summary class="wh-example-summary">
+											<div class="wh-example-summary-left">
+												<RefreshCw class="h-3.5 w-3.5" style="color: var(--surface-muted);" />
+												<span class="wh-example-title">Update to a specific tag</span>
+											</div>
+											<span class="wh-example-method">POST + JSON</span>
+										</summary>
+										<pre class="wh-code-block"><code>{webhookExamples.updateTag}</code></pre>
+									</details>
+
+									<details class="wh-example-item">
+										<summary class="wh-example-summary">
+											<div class="wh-example-summary-left">
+												<Container class="h-3.5 w-3.5" style="color: var(--surface-muted);" />
+												<span class="wh-example-title">Update image and tag</span>
+											</div>
+											<span class="wh-example-method">POST + JSON</span>
+										</summary>
+										<pre class="wh-code-block"><code>{webhookExamples.updateImage}</code></pre>
+									</details>
+								</div>
+
+								<!-- GitHub Actions highlight -->
+								<div class="wh-gh-actions-section">
+									<div class="wh-gh-actions-header">
+										<ExternalLink class="h-3.5 w-3.5" />
+										<span class="text-xs font-semibold">GitHub Actions</span>
+									</div>
+									<p class="text-xs mb-3" style="color: var(--surface-muted);">Add this step to your workflow. Store the webhook URL as a repository secret named <code class="wh-inline-code">WEBHOOK_URL</code>.</p>
+									<pre class="wh-code-block"><code>{webhookExamples.githubActions}</code></pre>
 								</div>
 							</div>
 						</div>
@@ -3892,22 +3820,30 @@
 											<span>Save</span>
 										</button>
 									</div>
-									<p class="text-xs mb-4" style="color: var(--surface-muted);">Configure how Kubernetes monitors your container health.</p>
+									<p class="text-xs mb-4" style="color: var(--surface-muted);">Automatically restart your app if it becomes unresponsive.</p>
 
 									<!-- Master toggle -->
 									<!-- svelte-ignore a11y_click_events_have_key_events -->
 									<!-- svelte-ignore a11y_no_static_element_interactions -->
 									<div
-										class="adv-toggle-row"
+										class="hc-toggle-card"
+										class:hc-toggle-card--on={healthCheckEnabled}
 										onclick={() => { healthCheckEnabled = !healthCheckEnabled; isEditingHealthCheck = true; }}
 									>
-										<div class="adv-toggle-info">
-											<span class="adv-toggle-label">Enable health checks</span>
-											<span class="adv-toggle-desc">
+										<div class="hc-toggle-icon-wrap" class:hc-toggle-icon-wrap--on={healthCheckEnabled}>
+											{#if healthCheckEnabled}
+												<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"/></svg>
+											{:else}
+												<svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-20"/></svg>
+											{/if}
+										</div>
+										<div class="hc-toggle-text">
+											<span class="hc-toggle-title">{healthCheckEnabled ? 'Health checks are on' : 'Health checks are off'}</span>
+											<span class="hc-toggle-subtitle">
 												{#if healthCheckEnabled}
-													Kubernetes will monitor container health using the configured probes
+													Your app will be automatically restarted if it stops responding
 												{:else}
-													Containers will not be health-checked — Kubernetes won't restart unhealthy pods
+													Turn on to automatically detect and recover from crashes
 												{/if}
 											</span>
 										</div>
@@ -3921,117 +3857,197 @@
 								{#if healthCheckEnabled}
 									<div class="adv-divider"></div>
 
-									<!-- Check type + endpoint -->
 									<div class="p-5 space-y-5">
+										<!-- How to check -->
 										<div>
-											<p class="text-xs font-medium mb-2" style="color: var(--surface-muted);">Check type</p>
-											<div class="flex gap-1.5">
-												{#each [{ val: 'http', label: 'HTTP', desc: 'GET request to a path' }, { val: 'tcp', label: 'TCP', desc: 'TCP socket connection' }, { val: 'exec', label: 'Command', desc: 'Run a command in container' }] as opt}
-													<button onclick={() => { healthCheckType = opt.val; isEditingHealthCheck = true; }}
-														class="adv-type-btn"
-														class:adv-type-btn--active={healthCheckType === opt.val}
-													>
-														<span class="adv-type-btn-label">{opt.label}</span>
-														<span class="adv-type-btn-desc">{opt.desc}</span>
-													</button>
-												{/each}
+											<p class="text-xs font-semibold mb-1" style="color: var(--center-channel-color);">How should we check your app?</p>
+											<p class="text-xs mb-3" style="color: var(--surface-muted);">Pick the method that matches your app setup.</p>
+											<div class="hc-method-grid">
+												<!-- svelte-ignore a11y_click_events_have_key_events -->
+												<!-- svelte-ignore a11y_no_static_element_interactions -->
+												<div
+													class="hc-method-card"
+													class:hc-method-card--active={healthCheckType === 'http'}
+													onclick={() => { healthCheckType = 'http'; isEditingHealthCheck = true; }}
+												>
+													<div class="hc-method-top">
+														<span class="hc-method-icon"><Globe class="h-5 w-5" /></span>
+														<span class="hc-method-badge">Recommended</span>
+													</div>
+													<span class="hc-method-label">Web endpoint</span>
+													<span class="hc-method-desc">Ping a URL path on your app</span>
+												</div>
+												<!-- svelte-ignore a11y_click_events_have_key_events -->
+												<!-- svelte-ignore a11y_no_static_element_interactions -->
+												<div
+													class="hc-method-card"
+													class:hc-method-card--active={healthCheckType === 'tcp'}
+													onclick={() => { healthCheckType = 'tcp'; isEditingHealthCheck = true; }}
+												>
+													<div class="hc-method-top">
+														<span class="hc-method-icon"><Server class="h-5 w-5" /></span>
+													</div>
+													<span class="hc-method-label">Port check</span>
+													<span class="hc-method-desc">Check if a port is accepting connections</span>
+												</div>
+												<!-- svelte-ignore a11y_click_events_have_key_events -->
+												<!-- svelte-ignore a11y_no_static_element_interactions -->
+												<div
+													class="hc-method-card"
+													class:hc-method-card--active={healthCheckType === 'exec'}
+													onclick={() => { healthCheckType = 'exec'; isEditingHealthCheck = true; }}
+												>
+													<div class="hc-method-top">
+														<span class="hc-method-icon"><Terminal class="h-5 w-5" /></span>
+													</div>
+													<span class="hc-method-label">Custom command</span>
+													<span class="hc-method-desc">Run a command inside your container</span>
+												</div>
 											</div>
 										</div>
 
 										<!-- Endpoint config based on type -->
-										<div class="adv-field-group">
+										<div class="hc-config-section">
 											{#if healthCheckType === 'http'}
-												<div class="flex-[3] min-w-[140px]">
-													<p class="text-xs font-medium mb-1.5" style="color: var(--surface-muted);">Endpoint path</p>
-													<input type="text" bind:value={healthCheckPath} placeholder="/health" class="input text-sm font-mono" />
-												</div>
-												<div class="w-24">
-													<p class="text-xs font-medium mb-1.5" style="color: var(--surface-muted);">Port</p>
-													<input type="number" bind:value={healthCheckPort} placeholder="80" class="input text-sm font-mono" />
+												<div class="hc-config-row">
+													<div class="flex-[3] min-w-[140px]">
+														<label class="hc-field-label" for="hc-path">URL path to check</label>
+														<div class="hc-input-with-hint">
+															<input id="hc-path" type="text" bind:value={healthCheckPath} placeholder="/health" class="input text-sm font-mono" />
+															<span class="hc-input-hint">We'll send a GET request here to see if your app is alive</span>
+														</div>
+													</div>
+													<div class="w-24">
+														<label class="hc-field-label" for="hc-port">Port</label>
+														<input id="hc-port" type="number" bind:value={healthCheckPort} placeholder="80" class="input text-sm font-mono" />
+													</div>
 												</div>
 											{:else if healthCheckType === 'tcp'}
-												<div class="w-28">
-													<p class="text-xs font-medium mb-1.5" style="color: var(--surface-muted);">Port</p>
-													<input type="number" bind:value={healthCheckPort} placeholder="80" class="input text-sm font-mono" />
+												<div class="hc-config-row">
+													<div class="w-28">
+														<label class="hc-field-label" for="hc-tcp-port">Port to check</label>
+														<div class="hc-input-with-hint">
+															<input id="hc-tcp-port" type="number" bind:value={healthCheckPort} placeholder="80" class="input text-sm font-mono" />
+															<span class="hc-input-hint">We'll try to open a connection to this port</span>
+														</div>
+													</div>
 												</div>
 											{:else}
-												<div class="flex-1 min-w-[200px]">
-													<p class="text-xs font-medium mb-1.5" style="color: var(--surface-muted);">Command</p>
-													<input type="text" bind:value={healthCheckCommand} placeholder="cat /tmp/healthy" class="input text-sm font-mono" />
+												<div class="hc-config-row">
+													<div class="flex-1 min-w-[200px]">
+														<label class="hc-field-label" for="hc-cmd">Command to run</label>
+														<div class="hc-input-with-hint">
+															<input id="hc-cmd" type="text" bind:value={healthCheckCommand} placeholder="cat /tmp/healthy" class="input text-sm font-mono" />
+															<span class="hc-input-hint">Should exit with code 0 when healthy</span>
+														</div>
+													</div>
 												</div>
 											{/if}
 										</div>
 
-										<!-- Probes -->
+										<!-- What should happen — friendly probe toggles -->
 										<div>
-											<p class="text-xs font-medium mb-2" style="color: var(--surface-muted);">Active probes</p>
-											<div class="flex flex-wrap gap-2">
+											<p class="text-xs font-semibold mb-1" style="color: var(--center-channel-color);">What should happen when the check fails?</p>
+											<p class="text-xs mb-3" style="color: var(--surface-muted);">Choose the recovery behaviors you want.</p>
+											<div class="hc-behavior-list">
 												<!-- svelte-ignore a11y_click_events_have_key_events -->
 												<!-- svelte-ignore a11y_no_static_element_interactions -->
 												<div
-													class="adv-probe-chip"
-													class:adv-probe-chip--active={livenessEnabled}
+													class="hc-behavior-item"
+													class:hc-behavior-item--active={livenessEnabled}
 													onclick={() => { livenessEnabled = !livenessEnabled; isEditingHealthCheck = true; }}
 												>
-													<span class="adv-probe-dot" class:adv-probe-dot--on={livenessEnabled}></span>
-													<span>Liveness</span>
-													<span class="adv-probe-hint">Restarts unhealthy</span>
+													<div class="hc-behavior-check" class:hc-behavior-check--on={livenessEnabled}>
+														{#if livenessEnabled}
+															<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+														{/if}
+													</div>
+													<div class="hc-behavior-text">
+														<span class="hc-behavior-title">Restart if unhealthy</span>
+														<span class="hc-behavior-desc">Automatically restart the container if it stops responding</span>
+													</div>
 												</div>
 												<!-- svelte-ignore a11y_click_events_have_key_events -->
 												<!-- svelte-ignore a11y_no_static_element_interactions -->
 												<div
-													class="adv-probe-chip"
-													class:adv-probe-chip--active={readinessEnabled}
+													class="hc-behavior-item"
+													class:hc-behavior-item--active={readinessEnabled}
 													onclick={() => { readinessEnabled = !readinessEnabled; isEditingHealthCheck = true; }}
 												>
-													<span class="adv-probe-dot" class:adv-probe-dot--on={readinessEnabled}></span>
-													<span>Readiness</span>
-													<span class="adv-probe-hint">Stops traffic if failing</span>
+													<div class="hc-behavior-check" class:hc-behavior-check--on={readinessEnabled}>
+														{#if readinessEnabled}
+															<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+														{/if}
+													</div>
+													<div class="hc-behavior-text">
+														<span class="hc-behavior-title">Stop sending traffic if failing</span>
+														<span class="hc-behavior-desc">Temporarily stop routing requests to this container while it recovers</span>
+													</div>
 												</div>
 												<!-- svelte-ignore a11y_click_events_have_key_events -->
 												<!-- svelte-ignore a11y_no_static_element_interactions -->
 												<div
-													class="adv-probe-chip"
-													class:adv-probe-chip--active={startupEnabled}
+													class="hc-behavior-item"
+													class:hc-behavior-item--active={startupEnabled}
 													onclick={() => { startupEnabled = !startupEnabled; isEditingHealthCheck = true; }}
 												>
-													<span class="adv-probe-dot" class:adv-probe-dot--on={startupEnabled}></span>
-													<span>Startup</span>
-													<span class="adv-probe-hint">Slow-start grace period</span>
+													<div class="hc-behavior-check" class:hc-behavior-check--on={startupEnabled}>
+														{#if startupEnabled}
+															<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"/></svg>
+														{/if}
+													</div>
+													<div class="hc-behavior-text">
+														<span class="hc-behavior-title">Allow extra time on startup</span>
+														<span class="hc-behavior-desc">Give your app more time to start up before checking its health</span>
+													</div>
 												</div>
 											</div>
 										</div>
 
-										<!-- Timing -->
-										<div>
-											<p class="text-xs font-medium mb-2" style="color: var(--surface-muted);">Timing</p>
-											<div class="adv-field-group">
-												<div class="adv-timing-field">
-													<p class="adv-timing-label">Interval</p>
-													<div class="adv-timing-input-row">
-														<input type="number" bind:value={healthCheckInterval} min="1" class="input text-sm font-mono" />
-														<span class="adv-timing-unit">sec</span>
+										<!-- Timing — collapsible advanced -->
+										<details class="hc-advanced-details">
+											<summary class="hc-advanced-summary">
+												<Settings class="h-3.5 w-3.5" style="color: var(--surface-muted);" />
+												<span>Advanced timing settings</span>
+												<ChevronDown class="h-3.5 w-3.5 hc-advanced-chevron" style="color: var(--surface-muted);" />
+											</summary>
+											<div class="hc-timing-grid">
+												<div class="hc-timing-card">
+													<label class="hc-timing-card-label" for="hc-interval">Check every</label>
+													<div class="hc-timing-input-wrap">
+														<input id="hc-interval" type="number" bind:value={healthCheckInterval} min="1" class="input text-sm font-mono hc-timing-input" />
+														<span class="hc-timing-suffix">seconds</span>
 													</div>
+													<span class="hc-timing-card-hint">How often to run the health check</span>
 												</div>
-												<div class="adv-timing-field">
-													<p class="adv-timing-label">Timeout</p>
-													<div class="adv-timing-input-row">
-														<input type="number" bind:value={healthCheckTimeout} min="1" class="input text-sm font-mono" />
-														<span class="adv-timing-unit">sec</span>
+												<div class="hc-timing-card">
+													<label class="hc-timing-card-label" for="hc-timeout">Wait up to</label>
+													<div class="hc-timing-input-wrap">
+														<input id="hc-timeout" type="number" bind:value={healthCheckTimeout} min="1" class="input text-sm font-mono hc-timing-input" />
+														<span class="hc-timing-suffix">seconds</span>
 													</div>
+													<span class="hc-timing-card-hint">Max time to wait for a response</span>
 												</div>
-												<div class="adv-timing-field">
-													<p class="adv-timing-label">Retries</p>
-													<input type="number" bind:value={healthCheckRetries} min="1" class="input text-sm font-mono" />
+												<div class="hc-timing-card">
+													<label class="hc-timing-card-label" for="hc-retries">Fail after</label>
+													<div class="hc-timing-input-wrap">
+														<input id="hc-retries" type="number" bind:value={healthCheckRetries} min="1" class="input text-sm font-mono hc-timing-input" />
+														<span class="hc-timing-suffix">failures</span>
+													</div>
+													<span class="hc-timing-card-hint">Consecutive failures before taking action</span>
 												</div>
 												{#if startupEnabled}
-													<div class="adv-timing-field">
-														<p class="adv-timing-label">Startup retries</p>
-														<input type="number" bind:value={startupFailureThreshold} min="1" class="input text-sm font-mono" />
+													<div class="hc-timing-card">
+														<label class="hc-timing-card-label" for="hc-startup-retries">Startup grace</label>
+														<div class="hc-timing-input-wrap">
+															<input id="hc-startup-retries" type="number" bind:value={startupFailureThreshold} min="1" class="input text-sm font-mono hc-timing-input" />
+															<span class="hc-timing-suffix">attempts</span>
+														</div>
+														<span class="hc-timing-card-hint">Extra attempts allowed during startup</span>
 													</div>
 												{/if}
 											</div>
-										</div>
+										</details>
 									</div>
 								{/if}
 							</div>
@@ -4179,6 +4195,30 @@
 	/>
 {/if}
 
+{#if logModalId}
+	<div class="log-modal-backdrop" onclick={closeLogModal} transition:fade={{ duration: 150 }}>
+		<div class="log-modal" onclick={(e) => e.stopPropagation()} transition:scale={{ duration: 200, start: 0.96 }}>
+			<div class="log-modal-header">
+				<div class="log-modal-header-left">
+					<Terminal class="h-4 w-4" style="color: var(--sidebar-text, #e0e0e0); opacity: 0.5;" />
+					<p class="log-modal-title">Build Logs</p>
+				</div>
+				<button class="log-modal-close" onclick={closeLogModal}>
+					<X class="h-4 w-4" />
+				</button>
+			</div>
+			<div class="log-modal-body">
+				{#if logModalLoading}
+					<div class="log-modal-loading">
+						<Loader2 class="h-5 w-5 animate-spin" style="color: rgba(255,255,255,0.3);" />
+					</div>
+				{:else if logModalContent}
+					<pre class="log-modal-pre">{logModalContent}</pre>
+				{/if}
+			</div>
+		</div>
+	</div>
+{/if}
 
 <style>
 	.dm-toggle-row {
@@ -4493,9 +4533,59 @@
 		padding: 0.25rem 0;
 	}
 
+	.dep-header-card {
+		position: relative;
+		padding: 1.5rem 1.75rem 0.75rem;
+		border: 1px solid var(--surface-border);
+		border-radius: 1rem;
+		background-color: var(--surface-bg);
+		overflow: hidden;
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
+	}
+	.dep-header-card--hasbg {
+		border-color: transparent;
+		background: none;
+	}
+	.dep-header-card--hasbg .dep-header-top,
+	.dep-header-card--hasbg .dep-header-meta {
+		position: relative; z-index: 1; color: #fff;
+	}
+	.dep-header-card--hasbg .dep-header-name { color: #fff; }
+	.dep-header-card--hasbg .dep-meta-source,
+	.dep-header-card--hasbg .dep-meta-pill,
+	.dep-header-card--hasbg .dep-meta-domain { color: rgba(255,255,255,0.8); }
+	.dep-header-card--hasbg .dep-meta-domain:hover { color: #fff; }
+	.dep-header-card--hasbg .dep-header-meta { border-top-color: rgba(255,255,255,0.15); }
+	.dep-header-card--hasbg .badge { border-color: rgba(255,255,255,0.25); }
+	.dep-header-card--hasbg .dep-meta-pill {
+		background: rgba(255,255,255,0.18);
+		color: rgba(255,255,255,0.9);
+	}
+
+	.dep-header-backdrop {
+		position: absolute; inset: 0;
+		overflow: hidden; pointer-events: none;
+		border-radius: inherit;
+	}
+	.dep-header-bg {
+		position: absolute; inset: -40%;
+		background-size: cover; background-position: center;
+		filter: blur(48px) saturate(1.6);
+		transform-origin: 50% 50%;
+	}
+	.dep-header-bg--1 { transform: scale(1.6); opacity: 0.9; }
+	.dep-header-bg--2 { transform: scale(2.1) translate(8%, -6%) rotate(70deg); opacity: 0.55; }
+	.dep-header-bg--3 { transform: scale(2.6) translate(-10%, 9%) rotate(140deg); opacity: 0.4; }
+	.dep-header-veil {
+		position: absolute; inset: 0;
+		background: linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.35) 100%);
+	}
+
 	.dep-header-top {
 		display: flex;
-		align-items: flex-start;
+		align-items: center;
 		justify-content: space-between;
 		gap: 1rem;
 		flex-wrap: wrap;
@@ -4509,8 +4599,21 @@
 		flex-wrap: wrap;
 	}
 
+	.dep-header-title-row {
+		display: flex;
+		align-items: center;
+		gap: 0.625rem;
+	}
+
+	.dep-header-badges {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		flex-wrap: wrap;
+	}
+
 	.dep-header-name {
-		font-size: 1.25rem;
+		font-size: 1.375rem;
 		font-weight: 700;
 		letter-spacing: -0.02em;
 		color: var(--center-channel-color);
@@ -4521,18 +4624,20 @@
 	.dep-header-actions {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		flex-shrink: 0;
 	}
 
 	.dep-delete-btn {
-		color: var(--surface-muted) !important;
-		opacity: 0.6;
-		transition: opacity 0.15s;
+		color: #ef4444 !important;
+		border: 1px solid #ef4444 !important;
+		background-color: rgba(239, 68, 68, 0.1) !important;
+		opacity: 1 !important;
+		transition: background-color 0.15s;
 	}
 	.dep-delete-btn:hover {
-		opacity: 1;
-		color: var(--error-text-color) !important;
+		background-color: rgba(239, 68, 68, 0.2) !important;
+		color: #ef4444 !important;
 	}
 
 	.dep-notif-btn {
@@ -4556,10 +4661,12 @@
 	.dep-header-meta {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 0.75rem;
 		flex-wrap: wrap;
-		margin-top: 0.5rem;
-		font-size: 0.75rem;
+		margin-top: 1.5rem;
+		padding-top: 0.625rem;
+		border-top: 1px solid var(--surface-border);
+		font-size: 0.6875rem;
 	}
 
 	.dep-meta-source {
@@ -4567,7 +4674,7 @@
 		align-items: center;
 		gap: 0.25rem;
 		font-family: var(--font-mono);
-		font-size: 0.75rem;
+		font-size: 0.6875rem;
 		color: var(--surface-muted);
 		text-decoration: none;
 		transition: color 0.12s;
@@ -4578,9 +4685,9 @@
 
 	.dep-meta-pill {
 		display: inline-flex;
-		padding: 0.125rem 0.5rem;
+		padding: 0.0625rem 0.375rem;
 		border-radius: 9999px;
-		font-size: 0.6875rem;
+		font-size: 0.625rem;
 		font-weight: 550;
 		background-color: var(--sidebar-text-active-bg);
 		color: var(--sidebar-text-active-color);
@@ -4602,7 +4709,7 @@
 		gap: 0.25rem;
 		color: var(--link-color);
 		text-decoration: none;
-		font-size: 0.75rem;
+		font-size: 0.6875rem;
 		font-weight: 500;
 		transition: opacity 0.12s;
 	}
@@ -5379,111 +5486,1103 @@
 		margin: 0;
 	}
 
-	/* Health check type selector */
-	.adv-type-btn {
-		flex: 1;
+	/* Health check toggle card */
+	.hc-toggle-card {
+		display: flex;
+		align-items: center;
+		gap: 0.875rem;
+		padding: 1rem 1.125rem;
+		border-radius: 0.875rem;
+		background-color: var(--control-bg);
+		border: 1px solid color-mix(in srgb, var(--surface-border) 60%, transparent);
+		cursor: pointer;
+		transition: border-color 0.15s, background-color 0.15s;
+	}
+	.hc-toggle-card:hover {
+		border-color: var(--surface-border);
+	}
+	.hc-toggle-card--on {
+		border-color: color-mix(in srgb, #22c55e 30%, var(--surface-border));
+		background: color-mix(in srgb, #22c55e 4%, var(--control-bg));
+	}
+	.hc-toggle-icon-wrap {
+		width: 2.5rem;
+		height: 2.5rem;
+		border-radius: 0.75rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		background: color-mix(in srgb, var(--surface-border) 40%, transparent);
+		color: var(--surface-muted);
+		transition: background-color 0.15s, color 0.15s;
+	}
+	.hc-toggle-icon-wrap--on {
+		background: color-mix(in srgb, #22c55e 15%, transparent);
+		color: #22c55e;
+	}
+	.hc-toggle-text {
 		display: flex;
 		flex-direction: column;
 		gap: 0.125rem;
-		padding: 0.625rem 0.75rem;
-		border-radius: 0.625rem;
-		border: 1px solid var(--surface-border);
-		background: var(--control-bg);
-		color: var(--control-text);
-		cursor: pointer;
-		text-align: left;
-		transition: border-color 0.12s, background-color 0.12s;
+		flex: 1;
+		min-width: 0;
 	}
-	.adv-type-btn:hover {
-		background: var(--control-hover-bg);
-	}
-	.adv-type-btn--active {
-		border-color: var(--sidebar-text-active-border);
-		background: var(--sidebar-text-active-bg);
-		color: var(--sidebar-text-active-color);
-	}
-	.adv-type-btn--active:hover {
-		background: var(--sidebar-text-active-bg);
-	}
-	.adv-type-btn-label {
-		font-size: 0.8125rem;
+	.hc-toggle-title {
+		font-size: 0.875rem;
 		font-weight: 600;
+		color: var(--center-channel-color);
 	}
-	.adv-type-btn-desc {
-		font-size: 0.6875rem;
-		opacity: 0.7;
+	.hc-toggle-subtitle {
+		font-size: 0.75rem;
+		color: var(--surface-muted);
+		line-height: 1.4;
 	}
 
-	/* Field group — inline flex for config fields */
-	.adv-field-group {
+	/* Method selection cards */
+	.hc-method-grid {
+		display: grid;
+		grid-template-columns: repeat(3, 1fr);
+		gap: 0.625rem;
+	}
+	.hc-method-card {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		padding: 0.875rem;
+		border-radius: 0.75rem;
+		border: 1.5px solid var(--surface-border);
+		background: var(--control-bg);
+		cursor: pointer;
+		transition: border-color 0.15s, background-color 0.15s, box-shadow 0.15s;
+		user-select: none;
+	}
+	.hc-method-card:hover {
+		border-color: color-mix(in srgb, var(--surface-border) 50%, var(--center-channel-color));
+		background: var(--control-hover-bg);
+	}
+	.hc-method-card--active {
+		border-color: var(--sidebar-text-active-border);
+		background: var(--sidebar-text-active-bg);
+		box-shadow: 0 0 0 1px var(--sidebar-text-active-border);
+	}
+	.hc-method-card--active:hover {
+		background: var(--sidebar-text-active-bg);
+	}
+	.hc-method-top {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 0.25rem;
+	}
+	.hc-method-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--surface-muted);
+	}
+	.hc-method-card--active .hc-method-icon {
+		color: var(--sidebar-text-active-color);
+	}
+	.hc-method-badge {
+		font-size: 0.625rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: #22c55e;
+		background: color-mix(in srgb, #22c55e 10%, transparent);
+		padding: 0.125rem 0.375rem;
+		border-radius: 0.375rem;
+	}
+	.hc-method-label {
+		font-size: 0.8125rem;
+		font-weight: 600;
+		color: var(--center-channel-color);
+	}
+	.hc-method-desc {
+		font-size: 0.6875rem;
+		color: var(--surface-muted);
+		line-height: 1.4;
+	}
+
+	/* Config section */
+	.hc-config-section {
+		padding: 1rem;
+		border-radius: 0.75rem;
+		background: color-mix(in srgb, var(--surface-border) 15%, transparent);
+	}
+	.hc-config-row {
 		display: flex;
 		flex-wrap: wrap;
 		gap: 0.75rem;
-		align-items: flex-end;
+		align-items: flex-start;
+	}
+	.hc-field-label {
+		display: block;
+		font-size: 0.75rem;
+		font-weight: 550;
+		color: var(--center-channel-color);
+		margin-bottom: 0.375rem;
+	}
+	.hc-input-with-hint {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+	}
+	.hc-input-hint {
+		font-size: 0.6875rem;
+		color: var(--surface-muted);
+		line-height: 1.3;
 	}
 
-	/* Probe chips — clickable toggle chips with status dot */
-	.adv-probe-chip {
-		display: inline-flex;
+	/* Behavior items (replaces probe chips) */
+	.hc-behavior-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+	.hc-behavior-item {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.75rem;
+		padding: 0.75rem 0.875rem;
+		border-radius: 0.75rem;
+		border: 1px solid color-mix(in srgb, var(--surface-border) 60%, transparent);
+		background: var(--control-bg);
+		cursor: pointer;
+		transition: border-color 0.15s, background-color 0.15s;
+		user-select: none;
+	}
+	.hc-behavior-item:hover {
+		border-color: var(--surface-border);
+	}
+	.hc-behavior-item--active {
+		border-color: color-mix(in srgb, #22c55e 35%, var(--surface-border));
+		background: color-mix(in srgb, #22c55e 4%, var(--control-bg));
+	}
+	.hc-behavior-check {
+		width: 1.25rem;
+		height: 1.25rem;
+		border-radius: 0.375rem;
+		border: 1.5px solid var(--surface-border);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		margin-top: 0.0625rem;
+		transition: border-color 0.15s, background-color 0.15s;
+		color: white;
+	}
+	.hc-behavior-check--on {
+		background: #22c55e;
+		border-color: #22c55e;
+	}
+	.hc-behavior-text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.0625rem;
+	}
+	.hc-behavior-title {
+		font-size: 0.8125rem;
+		font-weight: 550;
+		color: var(--center-channel-color);
+	}
+	.hc-behavior-desc {
+		font-size: 0.6875rem;
+		color: var(--surface-muted);
+		line-height: 1.4;
+	}
+
+	/* Advanced timing section */
+	.hc-advanced-details {
+		border-radius: 0.75rem;
+		overflow: hidden;
+	}
+	.hc-advanced-details[open] .hc-advanced-chevron {
+		transform: rotate(180deg);
+	}
+	.hc-advanced-summary {
+		display: flex;
 		align-items: center;
 		gap: 0.375rem;
 		padding: 0.5rem 0.75rem;
-		border-radius: 0.5rem;
-		border: 1px solid var(--surface-border);
-		background: var(--control-bg);
-		color: var(--surface-muted);
-		font-size: 0.8125rem;
-		font-weight: 500;
+		border-radius: 0.625rem;
+		background: color-mix(in srgb, var(--surface-border) 15%, transparent);
 		cursor: pointer;
-		transition: border-color 0.12s, background-color 0.12s, color 0.12s;
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: var(--surface-muted);
 		user-select: none;
+		list-style: none;
+		transition: background-color 0.12s;
 	}
-	.adv-probe-chip:hover {
-		border-color: color-mix(in srgb, var(--surface-border) 50%, var(--center-channel-color));
+	.hc-advanced-summary::-webkit-details-marker {
+		display: none;
 	}
-	.adv-probe-chip--active {
-		border-color: color-mix(in srgb, #22c55e 40%, var(--surface-border));
-		background: color-mix(in srgb, #22c55e 6%, var(--surface-bg));
+	.hc-advanced-summary:hover {
+		background: color-mix(in srgb, var(--surface-border) 25%, transparent);
+	}
+	.hc-advanced-chevron {
+		margin-left: auto;
+		transition: transform 0.2s ease;
+	}
+	.hc-timing-grid {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 0.625rem;
+		padding-top: 0.75rem;
+	}
+	.hc-timing-card {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+		padding: 0.75rem;
+		border-radius: 0.625rem;
+		background: color-mix(in srgb, var(--surface-border) 12%, transparent);
+	}
+	.hc-timing-card-label {
+		font-size: 0.6875rem;
+		font-weight: 600;
 		color: var(--center-channel-color);
 	}
+	.hc-timing-input-wrap {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+	}
+	.hc-timing-input {
+		width: 100%;
+		min-width: 0;
+		flex: 1;
+	}
+	.hc-timing-suffix {
+		font-size: 0.6875rem;
+		color: var(--surface-muted);
+		white-space: nowrap;
+	}
+	.hc-timing-card-hint {
+		font-size: 0.625rem;
+		color: var(--surface-muted);
+		opacity: 0.8;
+		line-height: 1.3;
+	}
 
-	.adv-probe-dot {
-		width: 6px;
-		height: 6px;
-		border-radius: 50%;
-		background-color: var(--surface-border);
-		transition: background-color 0.12s;
+
+	/* Webhook styles */
+	.wh-icon-wrap {
+		width: 2.25rem;
+		height: 2.25rem;
+		border-radius: 0.625rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		flex-shrink: 0;
+		background: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
+		color: var(--sidebar-text-active-border);
 	}
-	.adv-probe-dot--on {
-		background-color: #22c55e;
-		box-shadow: 0 0 4px #22c55e44;
-	}
-
-	.adv-probe-hint {
-		font-size: 0.6875rem;
-		opacity: 0.6;
-		margin-left: 0.125rem;
+	.wh-create-row {
+		display: flex;
+		gap: 0.5rem;
+		align-items: center;
 	}
 
-	/* Timing fields */
-	.adv-timing-field {
-		width: 5.5rem;
+	/* New token banner */
+	.wh-new-token-banner {
+		background: var(--success-bg);
+		border-top: 1px solid var(--success-border);
+		border-bottom: 1px solid var(--success-border);
+		padding: 1.25rem;
 	}
-	.adv-timing-label {
+	.wh-new-token-header {
+		margin-bottom: 1rem;
+	}
+	.wh-new-token-alert {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		color: var(--success-text);
+	}
+	.wh-new-token-fields {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+	.wh-new-token-label {
 		font-size: 0.6875rem;
-		font-weight: 500;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--success-muted);
+		margin-bottom: 0.375rem;
+	}
+	.wh-new-token-value-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.wh-new-token-code {
+		flex: 1;
+		font-family: var(--font-mono, monospace);
+		font-size: 0.75rem;
+		line-height: 1.5;
+		padding: 0.5rem 0.625rem;
+		border-radius: 0.5rem;
+		background: color-mix(in srgb, var(--success-border) 30%, transparent);
+		color: var(--success-text);
+		word-break: break-all;
+	}
+	.wh-copy-btn {
+		flex-shrink: 0;
+		gap: 0.25rem !important;
+	}
+	.wh-dismiss-btn {
+		margin-top: 0.75rem;
+		gap: 0.25rem !important;
+		opacity: 0.7;
+	}
+	.wh-dismiss-btn:hover {
+		opacity: 1;
+	}
+
+	/* Empty state */
+	.wh-empty-state {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 2rem 1rem;
+	}
+	.wh-empty-icon {
+		width: 2.5rem;
+		height: 2.5rem;
+		border-radius: 0.75rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: color-mix(in srgb, var(--surface-border) 30%, transparent);
 		color: var(--surface-muted);
 		margin-bottom: 0.25rem;
 	}
-	.adv-timing-input-row {
+
+	/* Token list */
+	.wh-token-card {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.75rem 0.875rem;
+		border-radius: 0.75rem;
+		border: 1px solid color-mix(in srgb, var(--surface-border) 60%, transparent);
+		background: var(--control-bg);
+		transition: border-color 0.12s;
+	}
+	.wh-token-card:hover {
+		border-color: var(--surface-border);
+	}
+	.wh-token-icon {
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: 0.5rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		background: color-mix(in srgb, var(--surface-border) 30%, transparent);
+		color: var(--surface-muted);
+	}
+	.wh-token-info {
+		flex: 1;
+		min-width: 0;
+	}
+	.wh-token-name {
+		font-size: 0.8125rem;
+		font-weight: 600;
+		color: var(--center-channel-color);
+	}
+	.wh-token-meta {
+		font-size: 0.6875rem;
+		color: var(--surface-muted);
+		margin-top: 0.0625rem;
+	}
+	.wh-token-sep {
+		margin: 0 0.125rem;
+	}
+	.wh-token-unused {
+		opacity: 0.6;
+		font-style: italic;
+	}
+	.wh-delete-btn {
+		flex-shrink: 0;
+		opacity: 0;
+		transition: opacity 0.12s;
+	}
+	.wh-token-card:hover .wh-delete-btn {
+		opacity: 1;
+	}
+
+	/* Quick reference examples */
+	.wh-examples {
+		border-top: 1px solid color-mix(in srgb, var(--surface-border) 50%, transparent);
+	}
+	.wh-example-item {
+		border-bottom: 1px solid color-mix(in srgb, var(--surface-border) 50%, transparent);
+	}
+	.wh-example-item:last-child {
+		border-bottom: none;
+	}
+	.wh-example-summary {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 0.75rem 1.25rem;
+		cursor: pointer;
+		user-select: none;
+		list-style: none;
+		transition: background-color 0.1s;
+	}
+	.wh-example-summary::-webkit-details-marker {
+		display: none;
+	}
+	.wh-example-summary:hover {
+		background: color-mix(in srgb, var(--surface-border) 10%, transparent);
+	}
+	.wh-example-summary-left {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.wh-example-title {
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--center-channel-color);
+	}
+	.wh-example-method {
+		font-size: 0.625rem;
+		font-weight: 600;
+		font-family: var(--font-mono, monospace);
+		text-transform: uppercase;
+		letter-spacing: 0.03em;
+		padding: 0.125rem 0.375rem;
+		border-radius: 0.25rem;
+		background: color-mix(in srgb, var(--surface-border) 25%, transparent);
+		color: var(--surface-muted);
+	}
+	.wh-code-block {
+		margin: 0 1.25rem 1rem;
+		padding: 0.75rem 0.875rem;
+		border-radius: 0.625rem;
+		background: var(--code-bg);
+		color: var(--code-text);
+		font-size: 0.75rem;
+		line-height: 1.6;
+		overflow-x: auto;
+		white-space: pre;
+	}
+	.wh-inline-code {
+		font-family: var(--font-mono, monospace);
+		font-size: 0.6875rem;
+		padding: 0.0625rem 0.3125rem;
+		border-radius: 0.25rem;
+		background: color-mix(in srgb, var(--surface-border) 25%, transparent);
+		color: var(--center-channel-color);
+	}
+
+	/* GitHub Actions section */
+	.wh-gh-actions-section {
+		margin: 0 1.25rem 1.25rem;
+		padding: 1rem;
+		border-radius: 0.75rem;
+		background: var(--info-bg);
+		border: 1px solid var(--info-border);
+	}
+	.wh-gh-actions-header {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		color: var(--info-text);
+		margin-bottom: 0.375rem;
+	}
+	.wh-gh-actions-section .wh-code-block {
+		margin: 0;
+		background: color-mix(in srgb, var(--info-border) 20%, var(--code-bg));
+	}
+
+	/* Volume cards */
+	.vol-card {
+		padding: 0.875rem 1rem;
+		border-radius: 0.75rem;
+		background-color: var(--control-bg);
+		border: 1px solid var(--surface-border);
+		transition: border-color 0.2s, box-shadow 0.2s;
+	}
+
+	.vol-card:hover {
+		border-color: color-mix(in srgb, var(--surface-border) 60%, var(--center-channel-color));
+	}
+
+	.vol-card-header {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+	}
+
+	.vol-card-number {
+		flex-shrink: 0;
+		width: 1.5rem;
+		height: 1.5rem;
+		border-radius: 0.375rem;
+		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 15%, transparent);
+		color: var(--sidebar-text-active-border);
+		font-size: 0.6875rem;
+		font-weight: 600;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+	}
+
+	.vol-card-fields {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-width: 0;
+		flex-wrap: wrap;
+	}
+
+	.vol-field {
+		flex: 1;
+		min-width: 120px;
+	}
+
+	.vol-field--size {
+		flex: 0 0 5rem;
+		min-width: 5rem;
+	}
+
+	.vol-arrow {
+		color: var(--surface-muted);
+		font-size: 0.875rem;
+		flex-shrink: 0;
+	}
+
+	.vol-input {
+		width: 100%;
+		padding: 0.375rem 0.625rem;
+		border-radius: 0.5rem;
+		border: 1px solid var(--surface-border);
+		background-color: var(--surface-bg);
+		color: var(--center-channel-color);
+		font-size: 0.8125rem;
+		transition: border-color 0.15s;
+		outline: none;
+	}
+
+	.vol-input:focus {
+		border-color: var(--sidebar-text-active-border);
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--sidebar-text-active-border) 20%, transparent);
+	}
+
+	.vol-input::placeholder {
+		color: var(--surface-muted);
+	}
+
+	.vol-input-mono {
+		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	}
+
+	.vol-card-actions {
 		display: flex;
 		align-items: center;
 		gap: 0.25rem;
-	}
-	.adv-timing-unit {
-		font-size: 0.6875rem;
-		color: var(--surface-muted);
 		flex-shrink: 0;
 	}
+
+	.vol-toggle {
+		margin-top: 0;
+		padding: 0.25rem 0.5rem;
+		gap: 0.5rem;
+		border-radius: 0.375rem;
+	}
+
+	.vol-toggle-label {
+		font-size: 0.6875rem;
+		color: var(--surface-muted);
+		white-space: nowrap;
+	}
+
+	.vol-remove {
+		opacity: 0.4;
+		transition: opacity 0.15s;
+	}
+
+	.vol-card:hover .vol-remove {
+		opacity: 1;
+	}
+
+	/* Port protocol toggle */
+	.svc-protocol-toggle {
+		display: flex;
+		border-radius: 0.5rem;
+		overflow: hidden;
+		border: 1px solid var(--surface-border);
+	}
+
+	.svc-proto-btn {
+		padding: 0.375rem 0.75rem;
+		font-size: 0.75rem;
+		font-weight: 500;
+		background: transparent;
+		color: var(--surface-muted);
+		border: none;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.svc-proto-btn:first-child {
+		border-right: 1px solid var(--surface-border);
+	}
+
+	:global(.svc-proto-active) {
+		background-color: var(--sidebar-text-active-border) !important;
+		color: #fff !important;
+	}
+
+	.svc-port-row {
+		transition: border-color 0.2s, box-shadow 0.2s;
+	}
+
+	.svc-port-editing {
+		border-color: var(--sidebar-text-active-border) !important;
+		box-shadow: 0 0 0 1px var(--sidebar-text-active-border);
+	}
+
+	/* ── Environment variables ── */
+	.env-container {
+		border: 1px solid var(--surface-border);
+		border-radius: 0.75rem;
+		overflow: hidden;
+		background-color: var(--control-bg);
+	}
+
+	.env-row {
+		border-bottom: 1px solid var(--surface-border);
+		transition: background-color 0.12s;
+	}
+
+	.env-row:hover,
+	.env-row:focus-within {
+		background-color: color-mix(in srgb, var(--surface-border) 20%, transparent);
+	}
+
+	.env-row-inner {
+		display: flex;
+		align-items: center;
+		gap: 0;
+		min-height: 2.75rem;
+	}
+
+	.env-key-col {
+		flex: 2;
+		min-width: 0;
+	}
+
+	.env-val-col {
+		flex: 3;
+		min-width: 0;
+		border-left: 1px solid var(--surface-border);
+	}
+
+	.env-key-input,
+	.env-val-input {
+		width: 100%;
+		padding: 0.5rem 0.75rem;
+		font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+		font-size: 0.8125rem;
+		background: transparent;
+		border: none;
+		outline: none;
+		color: var(--center-channel-color);
+	}
+
+	.env-key-input {
+		font-weight: 600;
+		letter-spacing: 0.01em;
+	}
+
+	.env-val-input {
+		color: var(--surface-muted);
+	}
+
+	.env-key-input::placeholder {
+		color: var(--surface-muted);
+		opacity: 0.5;
+		font-weight: 400;
+	}
+
+	.env-val-input::placeholder {
+		color: var(--surface-muted);
+		opacity: 0.4;
+	}
+
+	.env-actions {
+		display: flex;
+		align-items: center;
+		gap: 0;
+		flex-shrink: 0;
+		padding-right: 0.25rem;
+		opacity: 0;
+		transition: opacity 0.15s;
+	}
+
+	.env-row:hover .env-actions,
+	.env-row:focus-within .env-actions {
+		opacity: 1;
+	}
+
+	.env-action-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		border-radius: 0.375rem;
+		background: transparent;
+		border: none;
+		color: var(--surface-muted);
+		cursor: pointer;
+		transition: color 0.15s, background-color 0.15s;
+	}
+
+	.env-action-btn:hover {
+		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
+		color: var(--center-channel-color);
+	}
+
+	.env-action-delete:hover {
+		color: var(--error-text-color, #ef4444);
+		background-color: color-mix(in srgb, var(--error-text-color, #ef4444) 8%, transparent);
+	}
+
+	.env-add-btn {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		width: 100%;
+		padding: 0.625rem 0.75rem;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--surface-muted);
+		background: transparent;
+		border: none;
+		border-top: 1px dashed var(--surface-border);
+		cursor: pointer;
+		transition: color 0.15s, background-color 0.15s;
+	}
+
+	.env-add-btn:hover {
+		color: var(--sidebar-text-active-border);
+		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 6%, transparent);
+	}
+
+	.env-raw-textarea {
+		display: block;
+		width: 100%;
+		min-height: 280px;
+		padding: 0.75rem;
+		font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+		font-size: 0.8125rem;
+		line-height: 1.7;
+		color: var(--center-channel-color);
+		background: transparent;
+		border: none;
+		outline: none;
+		resize: vertical;
+	}
+
+	.env-raw-textarea::placeholder {
+		color: var(--surface-muted);
+		opacity: 0.5;
+	}
+
+	.env-footer {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-top: 1rem;
+		gap: 1rem;
+	}
+
+	.env-footer-hint {
+		font-size: 0.75rem;
+		color: var(--surface-muted);
+	}
+
+	/* ── Build history cards ── */
+	.bh-card {
+		display: flex;
+		align-items: stretch;
+		gap: 0;
+		border-radius: 0.75rem;
+		background-color: var(--control-bg);
+		border: 1px solid var(--surface-border);
+		overflow: hidden;
+		transition: border-color 0.15s, box-shadow 0.15s;
+	}
+
+	.bh-card:hover {
+		border-color: color-mix(in srgb, var(--surface-border) 60%, var(--center-channel-color));
+	}
+
+	.bh-card-active {
+		border-color: color-mix(in srgb, #22c55e 30%, var(--surface-border));
+	}
+
+	.bh-card-active:hover {
+		border-color: color-mix(in srgb, #22c55e 50%, var(--surface-border));
+	}
+
+	.bh-card-fail {
+		border-color: color-mix(in srgb, #ef4444 25%, var(--surface-border));
+	}
+
+	.bh-card-fail:hover {
+		border-color: color-mix(in srgb, #ef4444 45%, var(--surface-border));
+	}
+
+	/* Left accent strip with dot */
+	.bh-card-left {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.25rem;
+		flex-shrink: 0;
+	}
+
+	/* Status dot */
+	.bh-status-dot {
+		width: 0.5rem;
+		height: 0.5rem;
+		border-radius: 50%;
+		flex-shrink: 0;
+	}
+
+	.bh-dot-green {
+		background-color: #22c55e;
+	}
+
+	.bh-dot-glow {
+		box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
+	}
+
+	.bh-dot-red {
+		background-color: #ef4444;
+		box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+	}
+
+	/* Card body */
+	.bh-card-body {
+		flex: 1;
+		min-width: 0;
+		padding: 0.75rem 1rem 0.75rem 0;
+	}
+
+	.bh-card-top {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+	}
+
+	.bh-card-info {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		min-width: 0;
+		flex-wrap: wrap;
+	}
+
+	.bh-card-title {
+		font-size: 0.8125rem;
+		font-weight: 600;
+	}
+
+	.bh-card-sha {
+		font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+		font-size: 0.8125rem;
+		font-weight: 700;
+		color: var(--center-channel-color);
+		background: none;
+		padding: 0;
+		letter-spacing: 0.02em;
+	}
+
+	.bh-card-branch {
+		font-size: 0.6875rem;
+		font-weight: 600;
+		padding: 0.0625rem 0.5rem;
+		border-radius: 1rem;
+		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
+		color: var(--sidebar-text-active-border);
+		border: 1px solid color-mix(in srgb, var(--sidebar-text-active-border) 25%, transparent);
+	}
+
+	.bh-card-live {
+		font-size: 0.5625rem;
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		padding: 0.125rem 0.375rem;
+		border-radius: 0.25rem;
+		background-color: #22c55e;
+		color: #fff;
+	}
+
+	.bh-card-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.125rem;
+		flex-shrink: 0;
+		opacity: 0;
+		transition: opacity 0.15s;
+	}
+
+	.bh-card:hover .bh-card-actions {
+		opacity: 1;
+	}
+
+	.bh-card-commit-msg {
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--center-channel-color);
+		margin-top: 0.125rem;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		max-width: 20rem;
+	}
+	.bh-card-sub {
+		font-size: 0.75rem;
+		color: var(--surface-muted);
+		margin-top: 0.1875rem;
+	}
+
+	.bh-card-user {
+		font-weight: 600;
+		color: var(--center-channel-color);
+	}
+
+	.bh-card-time {
+		opacity: 0.7;
+	}
+
+	/* ── Log modal ── */
+	.log-modal-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 100;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background-color: rgba(0, 0, 0, 0.6);
+		backdrop-filter: blur(4px);
+		-webkit-backdrop-filter: blur(4px);
+		padding: 2rem;
+	}
+
+	.log-modal {
+		display: flex;
+		flex-direction: column;
+		width: 100%;
+		max-width: 56rem;
+		max-height: 80vh;
+		border-radius: 0.75rem;
+		overflow: hidden;
+		background-color: #111827;
+		border: 1px solid rgba(255, 255, 255, 0.08);
+		box-shadow:
+			0 0 0 1px rgba(0, 0, 0, 0.3),
+			0 25px 50px -12px rgba(0, 0, 0, 0.6);
+	}
+
+	.log-modal-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		padding: 0.75rem 1rem;
+		background-color: rgba(255, 255, 255, 0.03);
+		border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+	}
+
+	.log-modal-header-left {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.log-modal-title {
+		font-size: 0.8125rem;
+		font-weight: 600;
+		color: rgba(255, 255, 255, 0.8);
+	}
+
+	.log-modal-close {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: 0.375rem;
+		background: transparent;
+		border: none;
+		color: rgba(255, 255, 255, 0.4);
+		cursor: pointer;
+		transition: color 0.15s, background-color 0.15s;
+	}
+
+	.log-modal-close:hover {
+		color: rgba(255, 255, 255, 0.9);
+		background-color: rgba(255, 255, 255, 0.08);
+	}
+
+	.log-modal-body {
+		flex: 1;
+		overflow-y: auto;
+		min-height: 12rem;
+	}
+
+	.log-modal-body::-webkit-scrollbar {
+		width: 6px;
+	}
+
+	.log-modal-body::-webkit-scrollbar-track {
+		background: transparent;
+	}
+
+	.log-modal-body::-webkit-scrollbar-thumb {
+		background-color: rgba(255, 255, 255, 0.1);
+		border-radius: 3px;
+	}
+
+	.log-modal-body::-webkit-scrollbar-thumb:hover {
+		background-color: rgba(255, 255, 255, 0.2);
+	}
+
+	.log-modal-loading {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 4rem 0;
+	}
+
+	.log-modal-pre {
+		font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+		font-size: 0.75rem;
+		line-height: 1.7;
+		white-space: pre-wrap;
+		word-break: break-all;
+		padding: 1rem 1.25rem;
+		margin: 0;
+		color: #d1d5db;
+		tab-size: 4;
+	}
+
 </style>

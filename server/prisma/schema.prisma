@@ -34,6 +34,7 @@ model User {
   organizationMembers          OrganizationMember[]
   orgInvitationsSent           OrganizationInvitation[] @relation("OrgInvitationInviter")
   passkeys                     Passkey[]
+  sessions                     Session[]
   githubAppInstallations       GitHubAppInstallation[]
   createdDatabases             Database[]               @relation("DatabaseCreator")
   apiTokens                    ApiToken[]
@@ -58,6 +59,26 @@ model ApiToken {
   @@index([userId], map: "idx_api_tokens_user")
   @@index([token], map: "idx_api_tokens_token")
   @@map("api_tokens")
+}
+
+model Session {
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  ipAddress    String?   @map("ip_address") @db.VarChar(45)
+  userAgent    String?   @map("user_agent") @db.Text
+  deviceName   String?   @map("device_name") @db.VarChar(255)
+  location     String?   @db.VarChar(255)
+  authMethod   String?   @map("auth_method") @db.VarChar(20)
+  lastActiveAt DateTime  @default(now()) @map("last_active_at") @db.Timestamp(6)
+  expiresAt    DateTime  @map("expires_at") @db.Timestamp(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  revokedAt    DateTime? @map("revoked_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_sessions_user")
+  @@index([expiresAt], map: "idx_sessions_expires")
+  @@map("sessions")
 }
 
 // GitHub App installations - tracks when users install the GitHub App on their repos
@@ -237,13 +258,15 @@ model Role {
 }
 
 model Project {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
-  name           String   @db.VarChar(255)
-  slug           String   @db.VarChar(100)
-  description    String?  @db.Text
-  repositoryUrl  String?  @map("repository_url") @db.VarChar(500)
-  namespace      String   @db.VarChar(100)
+  id              String   @id @default(uuid()) @db.Uuid
+  organizationId  String   @map("organization_id") @db.Uuid
+  name            String   @db.VarChar(255)
+  slug            String   @db.VarChar(100)
+  description     String?  @db.Text
+  repositoryUrl   String?  @map("repository_url") @db.VarChar(500)
+  icon            String?  @db.VarChar(500)
+  backgroundImage String?  @map("background_image") @db.VarChar(1000)
+  namespace       String   @db.VarChar(100)
   createdBy      String?  @map("created_by") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
@@ -392,6 +415,7 @@ model ImageHistory {
   image           String   @db.VarChar(500)
   tag             String   @db.VarChar(100)
   commitSha       String?  @map("commit_sha") @db.VarChar(100)
+  commitMessage   String?  @map("commit_message") @db.VarChar(500)
   branch          String?  @db.VarChar(255)
   buildLogs       String?  @map("build_logs") @db.Text
   triggerType      String?  @map("trigger_type") @db.VarChar(20)

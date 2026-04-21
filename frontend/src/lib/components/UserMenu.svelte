@@ -6,6 +6,11 @@
 	import { slide } from 'svelte/transition';
 	import { get } from 'svelte/store';
 
+	interface Props {
+		collapsed?: boolean;
+	}
+	let { collapsed = false }: Props = $props();
+
 	let open = $state(false);
 	let activeThemeId = $state<string | null>(null);
 	let activeTheme = $state<typeof import('$lib/stores/theme').defaultLightTheme | null>(null);
@@ -71,40 +76,76 @@
 	}
 </script>
 
-<div class="user-menu relative">
-	<button
-		onclick={() => (open = !open)}
-		class="user-menu-trigger flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-left"
-	>
-		<div class="relative">
+<div class="user-menu relative" class:is-collapsed={collapsed}>
+	{#if collapsed}
+		<button
+			onclick={() => (open = !open)}
+			class="user-menu-trigger-collapsed"
+			class:is-open={open}
+			aria-label="User menu"
+		>
 			{#if $user?.imageUrl}
 				<img
 					src={$user.imageUrl}
 					alt={$user.name || $user.username || 'User'}
-					class="h-8 w-8 rounded-lg object-cover"
+					class="h-9 w-9 rounded-xl object-cover"
 				/>
 			{:else}
-				<div class="user-menu-avatar-fallback">
-					<User class="h-4 w-4" />
+				<div class="sidebar-footer-avatar">
+					{#if $user?.username || $user?.name || $user?.firstName}
+						<span class="text-sm font-medium">{($user?.username || $user?.name || $user?.firstName || 'U').charAt(0).toUpperCase()}</span>
+					{:else}
+						<User class="h-4 w-4" />
+					{/if}
 				</div>
 			{/if}
 			{#if $pendingInvitations.length > 0}
-				<span class="user-menu-notification-dot"></span>
+				<span class="sidebar-notification-dot"></span>
 			{/if}
-		</div>
-		<div class="flex-1 text-left min-w-0">
-			<p class="user-menu-name truncate text-sm font-medium">
-				{$user?.username || $user?.name || $user?.firstName || 'User'}
-			</p>
-		</div>
-		<span class="user-menu-chevron" class:is-open={open}>
-			<ChevronUp class="h-4 w-4" />
-		</span>
-	</button>
+			{#if !open}
+				<span class="sidebar-collapsed-tooltip">
+					{$user?.username || $user?.name || $user?.firstName || 'User'}
+				</span>
+			{/if}
+		</button>
+	{:else}
+		<button
+			onclick={() => (open = !open)}
+			class="user-menu-trigger flex w-full items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium text-left"
+		>
+			<div class="relative">
+				{#if $user?.imageUrl}
+					<img
+						src={$user.imageUrl}
+						alt={$user.name || $user.username || 'User'}
+						class="h-8 w-8 rounded-lg object-cover"
+					/>
+				{:else}
+					<div class="user-menu-avatar-fallback">
+						<User class="h-4 w-4" />
+					</div>
+				{/if}
+				{#if $pendingInvitations.length > 0}
+					<span class="user-menu-notification-dot"></span>
+				{/if}
+			</div>
+			<div class="flex-1 text-left min-w-0">
+				<p class="user-menu-name truncate text-sm font-medium">
+					{$user?.username || $user?.name || $user?.firstName || 'User'}
+				</p>
+			</div>
+			<span class="user-menu-chevron" class:is-open={open}>
+				<ChevronUp class="h-4 w-4" />
+			</span>
+		</button>
+	{/if}
 
 	{#if open}
 		<div
-			class="user-menu-panel absolute bottom-full left-0 right-0 z-50 mb-1 flex flex-col rounded-xl border p-4 text-sm"
+			class="user-menu-panel absolute bottom-full z-50 mb-1 flex flex-col rounded-xl border p-4 text-sm"
+			class:user-menu-panel-collapsed={collapsed}
+			class:left-0={!collapsed}
+			class:right-0={!collapsed}
 			transition:slide={{ axis: 'y', duration: 200 }}
 		>
 			<!-- User info -->

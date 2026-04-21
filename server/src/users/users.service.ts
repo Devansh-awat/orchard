@@ -158,7 +158,7 @@ export class UsersService {
     return null;
   }
 
-  async updateProfile(userId: string, data: { firstName?: string | null; lastName?: string | null; username?: string; setupCompleted?: boolean }) {
+  async updateProfile(userId: string, data: { firstName?: string | null; lastName?: string | null; username?: string; setupCompleted?: boolean; imageUrl?: string | null }) {
     // If username is being updated, check for uniqueness
     if (data.username !== undefined) {
       const existingUser = await this.prisma.user.findUnique({
@@ -176,6 +176,7 @@ export class UsersService {
         ...(data.lastName !== undefined && { lastName: data.lastName }),
         ...(data.username !== undefined && { username: data.username }),
         ...(data.setupCompleted !== undefined && { setupCompleted: data.setupCompleted }),
+        ...(data.imageUrl !== undefined && { imageUrl: data.imageUrl }),
       },
       select: {
         id: true,

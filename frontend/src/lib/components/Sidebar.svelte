@@ -1,11 +1,9 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { PanelLeftClose, PanelLeft, FolderKanban, Search, Leaf, Folder } from 'lucide-svelte';
+	import { PanelLeftClose, PanelLeft, Search, Leaf, Folder } from 'lucide-svelte';
 	import WorkspacesMenu from './WorkspacesMenu.svelte';
 	import UserMenu from './UserMenu.svelte';
-	import { isSignedIn, selectedOrganization, pendingInvitations } from '$lib/stores';
-
-	let collapsed = $state(false);
+	import { selectedOrganization, sidebarCollapsed } from '$lib/stores';
 
 	const isMac = $derived.by(() => {
 		if (typeof window === 'undefined') return false;
@@ -14,49 +12,19 @@
 	const shortcutKey = $derived(isMac ? '⌘' : 'Ctrl');
 </script>
 
-<aside class="sidebar transition-all duration-200" style="width: {collapsed ? '4.5rem' : '16.5rem'};">
+<aside class="sidebar transition-all duration-200" style="width: {$sidebarCollapsed ? '4.5rem' : '16.5rem'};">
 	<div class="sidebar-inner">
-		<div class="sidebar-team-bar">
-			{#if collapsed}
-				<div class="flex flex-col gap-2 items-center">
+		<div class="sidebar-team-bar" class:is-collapsed={$sidebarCollapsed}>
+			{#if $sidebarCollapsed}
+				<div class="flex flex-col gap-1.5 items-center">
 					<button
-						onclick={() => collapsed = !collapsed}
+						onclick={() => sidebarCollapsed.toggle()}
 						class="sidebar-action"
 						aria-label="Expand sidebar"
 					>
 						<PanelLeft class="h-5 w-5" />
 					</button>
-					{#if $selectedOrganization}
-						<a href="/{$selectedOrganization.slug}/settings" class="sidebar-org-avatar-link">
-							{#if $selectedOrganization.avatarUrl}
-								<img
-									src={$selectedOrganization.avatarUrl}
-									alt={$selectedOrganization.name}
-									class="sidebar-org-avatar"
-								/>
-							{:else}
-								<div class="sidebar-org-avatar-fallback">
-									<FolderKanban class="h-4 w-4" />
-								</div>
-							{/if}
-						</a>
-					{/if}
-					<button
-						onclick={() => window.dispatchEvent(new CustomEvent('open-quick-search'))}
-						class="sidebar-action"
-						aria-label="Search"
-						title="Search ({shortcutKey}K)"
-					>
-						<Search class="h-5 w-5" />
-					</button>
-					<a
-						href="/{$selectedOrganization?.slug ?? ''}"
-						class="sidebar-logo-link"
-						aria-label="Overview"
-						title="Overview"
-					>
-						<img src="/logo/logoiconcolor.svg" alt="Orchard" class="h-7 w-7" />
-					</a>
+					<WorkspacesMenu collapsed />
 				</div>
 			{:else}
 				<div class="flex items-center gap-2">
@@ -64,7 +32,7 @@
 						<WorkspacesMenu />
 					</div>
 					<button
-						onclick={() => collapsed = !collapsed}
+						onclick={() => sidebarCollapsed.toggle()}
 						class="sidebar-action"
 						aria-label="Collapse sidebar"
 					>
@@ -74,7 +42,7 @@
 			{/if}
 		</div>
 
-		{#if !collapsed}
+		{#if !$sidebarCollapsed}
 			<div class="sidebar-search-area">
 				<button
 					type="button"
@@ -110,23 +78,46 @@
 					<span class="tree-node-label">Projects</span>
 				</a>
 			</div>
+		{:else}
+			<div class="sidebar-collapsed-nav">
+				<button
+					type="button"
+					onclick={() => window.dispatchEvent(new CustomEvent('open-quick-search'))}
+					class="sidebar-collapsed-icon"
+					aria-label="Search"
+				>
+					<Search class="h-[18px] w-[18px]" />
+					<span class="sidebar-collapsed-tooltip">Search <kbd class="sidebar-collapsed-tooltip-kbd">{shortcutKey}K</kbd></span>
+				</button>
+				<a
+					href="/{$selectedOrganization?.slug ?? ''}"
+					class="sidebar-collapsed-icon"
+					class:is-active={$page.url.pathname === '/' + ($selectedOrganization?.slug ?? '')}
+					aria-label="Overview"
+				>
+					<div class="tree-icon-badge" style="background-color: #22c55e">
+						<Leaf size={11} class="tree-icon-svg" />
+					</div>
+					<span class="sidebar-collapsed-tooltip">Overview</span>
+				</a>
+				<a
+					href="/{$selectedOrganization?.slug ?? ''}/projects"
+					class="sidebar-collapsed-icon"
+					class:is-active={$page.url.pathname.startsWith('/' + ($selectedOrganization?.slug ?? '') + '/projects')}
+					aria-label="Projects"
+				>
+					<div class="tree-icon-badge" style="background-color: #4a8aff">
+						<Folder size={11} class="tree-icon-svg" />
+					</div>
+					<span class="sidebar-collapsed-tooltip">Projects</span>
+				</a>
+			</div>
 		{/if}
 
 		<div class="flex-1"></div>
 
-		<div class="sidebar-footer">
-			{#if collapsed}
-				<a href="/user/settings" class="sidebar-footer-avatar-link relative">
-					<div class="sidebar-footer-avatar">
-						<span class="text-sm font-medium">U</span>
-					</div>
-					{#if $pendingInvitations.length > 0}
-						<span class="sidebar-notification-dot"></span>
-					{/if}
-				</a>
-			{:else}
-				<UserMenu />
-			{/if}
+		<div class="sidebar-footer" class:is-collapsed={$sidebarCollapsed}>
+			<UserMenu collapsed={$sidebarCollapsed} />
 		</div>
 	</div>
 </aside>

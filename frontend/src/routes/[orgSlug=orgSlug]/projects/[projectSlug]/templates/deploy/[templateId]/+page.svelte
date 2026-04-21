@@ -72,8 +72,7 @@
 		}
 	}
 
-	async function fetchData() {
-		loading = true;
+	async function fetchTemplate() {
 		try {
 			const tplRes = await apiFetch(`/apiv1/templates/${templateId}`);
 			if (!tplRes.ok) throw new Error('Failed to fetch template');
@@ -88,13 +87,23 @@
 					paramValues[param.name] = '';
 				}
 			}
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to load template';
+		}
+	}
 
+	async function fetchProject() {
+		try {
 			project = await fetchProjectContext({ orgSlug, projectSlug, wsSlug });
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load data';
-		} finally {
-			loading = false;
+			error = e instanceof Error ? e.message : 'Failed to load project';
 		}
+	}
+
+	async function fetchData() {
+		loading = true;
+		await Promise.all([fetchTemplate(), fetchProject()]);
+		loading = false;
 	}
 
 	async function deploy() {
@@ -139,6 +148,18 @@
 	}
 
 	onMount(fetchData);
+
+	let didInit = $state(false);
+	$effect(() => {
+		orgSlug; projectSlug; wsSlug;
+		if (!didInit) {
+			didInit = true;
+			return;
+		}
+		if (orgSlug && projectSlug) {
+			fetchProject();
+		}
+	});
 </script>
 
 <div class="td-page">

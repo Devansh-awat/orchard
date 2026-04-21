@@ -6,6 +6,7 @@ import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { UsersService } from '../users/users.service';
 import { DockerService } from '../docker/docker.service';
 import { GitHubService } from '../github/github.service';
+import { FaviconService } from './favicon.service';
 import { randomUUID } from 'crypto';
 import * as dns from 'dns';
 import { promisify } from 'util';
@@ -18,8 +19,22 @@ export class ProjectsService {
     private readonly usersService: UsersService,
     private readonly dockerService: DockerService,
     @Inject(forwardRef(() => GitHubService))
-    private readonly githubService: GitHubService
+    private readonly githubService: GitHubService,
+    private readonly faviconService: FaviconService
   ) {}
+
+  private async resolveProjectIconFallback(
+    deployments: Array<{ ingresses?: Array<{ host?: string | null }> | null }> | null | undefined
+  ): Promise<string | null> {
+    if (!deployments?.length) return null;
+    for (const dep of deployments) {
+      const host = dep.ingresses?.[0]?.host;
+      if (!host) continue;
+      const url = await this.faviconService.getFavicon(host);
+      if (url) return url;
+    }
+    return null;
+  }
 
   private readonly metricsLogger = new Logger('MetricsCollector');
 
@@ -319,7 +334,7 @@ export class ProjectsService {
 
   async createProject(
     organizationId: string,
-    data: { name: string; slug?: string; description?: string; repositoryUrl?: string },
+    data: { name: string; slug?: string; description?: string; repositoryUrl?: string; icon?: string; backgroundImage?: string },
     clerkId: string,
     userData?: {
       email?: string;
@@ -407,6 +422,8 @@ export class ProjectsService {
         slug,
         description: data.description?.trim() || null,
         repositoryUrl: data.repositoryUrl?.trim() || null,
+        icon: data.icon?.trim() || null,
+        backgroundImage: data.backgroundImage?.trim() || null,
         namespace,
         createdBy: user.id,
         members: adminRole ? {
@@ -1025,6 +1042,7 @@ export class ProjectsService {
       isRebuild?: boolean;
       // GitHub Deployments API support (legacy)
       commitSha?: string;
+      commitMessage?: string;
       githubDeploymentId?: number | null;
       githubAccessToken?: string | null;
       repoInfo?: { owner: string; repo: string } | null;
@@ -1145,6 +1163,8 @@ export class ProjectsService {
             deploymentId,
             image,
             tag: data.tag,
+            commitSha: data.commitSha || null,
+            commitMessage: data.commitMessage || null,
             branch: data.branch,
             buildLogs: deployment?.buildLogs || null,
             triggerType: data.triggerType || null,
@@ -4010,7 +4030,10 @@ export class ProjectsService {
           select: {
             id: true,
             name: true,
+            dbName: true,
             status: true,
+            mode: true,
+            createdAt: true,
           },
         },
         templateInstances: {
@@ -4018,9 +4041,21 @@ export class ProjectsService {
             id: true,
             name: true,
             status: true,
+            createdAt: true,
             template: {
               select: {
+                id: true,
+                name: true,
                 displayName: true,
+                icon: true,
+                category: true,
+              },
+            },
+            _count: {
+              select: {
+                deployments: true,
+                databases: true,
+                ingresses: true,
               },
             },
           },
@@ -4065,10 +4100,82 @@ export class ProjectsService {
       })
     );
 
+    const icon = project.icon ?? (await this.resolveProjectIconFallback(project.deployments));
+
     return {
       ...project,
+      icon,
       deployments: deploymentsWithComputedStatus,
     };
+  }
+
+  async updateProject(
+    projectId: string,
+    data: { name?: string; description?: string; repositoryUrl?: string | null; icon?: string | null; backgroundImage?: string | null },
+    clerkId: string,
+    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+
+    await this.assertProjectAdmin(projectId, user.id);
+
+    const updates: Prisma.ProjectUpdateInput = {};
+    if (data.name !== undefined) {
+      const name = String(data.name).trim();
+      if (!name) throw new BadRequestException('Project name cannot be empty');
+      updates.name = name;
+    }
+    if (data.description !== undefined) {
+      updates.description = data.description?.toString().trim() || null;
+    }
+    if (data.repositoryUrl !== undefined) {
+      updates.repositoryUrl = data.repositoryUrl?.toString().trim() || null;
+    }
+    if (data.icon !== undefined) {
+      const v = data.icon?.toString().trim();
+      updates.icon = v ? v : null;
+    }
+    if (data.backgroundImage !== undefined) {
+      const v = data.backgroundImage?.toString().trim();
+      updates.backgroundImage = v ? v : null;
+    }
+
+    return this.prisma.project.update({
+      where: { id: projectId },
+      data: updates,
+    });
+  }
+
+  async uploadProjectAsset(
+    projectId: string,
+    field: 'icon' | 'backgroundImage',
+    file: Express.Multer.File,
+    storageService: { uploadFile: (f: Express.Multer.File, folder: string) => Promise<string>; deleteFile: (url: string) => Promise<void> },
+    clerkId: string,
+    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string },
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+
+    await this.assertProjectAdmin(projectId, user.id);
+
+    const existing = await this.prisma.project.findUnique({ where: { id: projectId } });
+    if (!existing) throw new NotFoundException('Project not found');
+
+    const folder = field === 'icon' ? 'project-icons' : 'project-backgrounds';
+    const url = await storageService.uploadFile(file, folder);
+
+    const previous = existing[field];
+    if (previous) {
+      try { await storageService.deleteFile(previous); }
+      catch (e) { console.error(`Failed to delete old ${field}:`, e); }
+    }
+
+    return this.prisma.project.update({
+      where: { id: projectId },
+      data: { [field]: url },
+    });
   }
 
   private async assertProjectAdmin(projectId: string, userId: string) {
@@ -4280,8 +4387,124 @@ export class ProjectsService {
       })
     );
 
+    const icon = project.icon ?? (await this.resolveProjectIconFallback(project.deployments));
+
     return {
       ...project,
+      icon,
+      deployments: deploymentsWithComputedStatus,
+    };
+  }
+
+  async getProjectBySlugsFull(
+    orgSlug: string,
+    projectSlug: string,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const organization = await this.prisma.organization.findUnique({
+      where: { slug: orgSlug },
+      select: { id: true, slug: true, name: true },
+    });
+    if (!organization) {
+      throw new NotFoundException(`Organization ${orgSlug} not found`);
+    }
+
+    const project = await this.prisma.project.findUnique({
+      where: {
+        organizationId_slug: {
+          organizationId: organization.id,
+          slug: projectSlug,
+        },
+      },
+      include: {
+        organization: true,
+        members: {
+          include: {
+            role: true,
+            user: {
+              select: { id: true, email: true, username: true, firstName: true, lastName: true, imageUrl: true },
+            },
+          },
+        },
+        creator: {
+          select: { id: true, email: true, username: true, firstName: true, lastName: true },
+        },
+        deployments: {
+          include: {
+            services: { include: { ports: true } },
+            ingresses: { include: { service: true } },
+            envVars: true,
+            _count: { select: { pods: true, services: true } },
+          },
+        },
+        ingresses: {
+          select: { id: true, name: true, host: true, tlsSecretName: true },
+        },
+        databases: {
+          select: { id: true, name: true, dbName: true, status: true, mode: true, createdAt: true },
+        },
+        templateInstances: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            createdAt: true,
+            template: {
+              select: { id: true, name: true, displayName: true, icon: true, category: true },
+            },
+            _count: { select: { deployments: true, databases: true, ingresses: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        },
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(`Project ${projectSlug} not found`);
+    }
+
+    const [membership, orgMembership] = await Promise.all([
+      this.prisma.projectMember.findFirst({
+        where: { projectId: project.id, userId: user.id },
+      }),
+      this.prisma.organizationMember.findUnique({
+        where: {
+          organizationId_userId: {
+            organizationId: project.organizationId,
+            userId: user.id,
+          },
+        },
+      }),
+    ]);
+
+    if (!membership && !orgMembership) {
+      throw new ForbiddenException('You are not a member of this project');
+    }
+
+    const deploymentsWithComputedStatus = await Promise.all(
+      project.deployments.map(async (deployment) => {
+        const computedStatus = await this.computeDeploymentStatus(deployment);
+        return { ...deployment, status: computedStatus };
+      })
+    );
+
+    const icon = project.icon ?? (await this.resolveProjectIconFallback(project.deployments));
+
+    return {
+      ...project,
+      icon,
       deployments: deploymentsWithComputedStatus,
     };
   }
@@ -4301,7 +4524,7 @@ export class ProjectsService {
       where.organizationId = { in: orgIds };
     }
 
-    return this.prisma.project.findMany({
+    const projects = await this.prisma.project.findMany({
       where,
       include: {
         organization: { select: { id: true, name: true, slug: true } },
@@ -4327,6 +4550,13 @@ export class ProjectsService {
       },
       orderBy: { updatedAt: 'desc' },
     });
+
+    return Promise.all(
+      projects.map(async (p) => ({
+        ...p,
+        icon: p.icon ?? (await this.resolveProjectIconFallback(p.deployments)),
+      }))
+    );
   }
 
   /**
@@ -4628,6 +4858,7 @@ export class ProjectsService {
             image: true,
             tag: true,
             commitSha: true,
+            commitMessage: true,
             branch: true,
             isActive: true,
             createdAt: true,
@@ -6685,6 +6916,7 @@ export class ProjectsService {
         volumes,
         isRebuild: true,
         commitSha,
+        commitMessage: commitMessage.split('\n')[0],
         // GitHub Check Run info (uses App, not user)
         checkRunId,
         installationId: installationId ? installationId.toString() : null,

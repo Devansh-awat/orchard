@@ -3,6 +3,7 @@ import { Reflector } from '@nestjs/core';
 import { jwtVerify } from 'jose';
 import { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
+import { SessionsService } from './sessions.service';
 import { IS_PUBLIC_KEY, REQUIRES_AUTH_KEY } from './decorators';
 
 @Injectable()
@@ -11,6 +12,7 @@ export class SuperAdminGuard implements CanActivate {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly sessionsService: SessionsService,
     private readonly reflector: Reflector,
   ) {
     const jwtSecretString = process.env.JWT_SECRET;
@@ -67,12 +69,24 @@ export class SuperAdminGuard implements CanActivate {
         }
       }
 
+      // Validate session if sessionId is present in the token
+      const sessionId = payload.sessionId as string | undefined;
+      if (sessionId) {
+        const sessionValid = await this.sessionsService.validateSession(sessionId);
+        if (!sessionValid) {
+          throw new UnauthorizedException('Session has been revoked');
+        }
+        // Touch session in background
+        this.sessionsService.touchSession(sessionId).catch(() => {});
+      }
+
       request['auth'] = { userId: dbUserId };
       request['user'] = {
         sub: dbUserId,
         email: payload.email,
         name: payload.name,
         hackClubId: payload.hackClubId,
+        sessionId,
       };
       authenticated = true;
     } catch {

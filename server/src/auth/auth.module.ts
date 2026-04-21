@@ -10,6 +10,8 @@ import { PasskeyService } from './passkey.service';
 import { RateLimitService } from './rate-limit.service';
 import { ApiTokensService } from './api-tokens.service';
 import { ApiTokensController } from './api-tokens.controller';
+import { SessionsService } from './sessions.service';
+import { StorageService } from '../organizations/storage.service';
 import { UsersModule } from '../users/users.module';
 import { EmailModule } from '../email/email.module';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -25,12 +27,14 @@ import { PrismaModule } from '../prisma/prisma.module';
     PasskeyService,
     RateLimitService,
     ApiTokensService,
+    SessionsService,
+    StorageService,
     {
       provide: APP_GUARD,
       useClass: SuperAdminGuard,
     },
   ],
-  exports: [AuthGuard, SuperAdminGuard, OAuthService, OtpService, PasskeyService, RateLimitService, ApiTokensService],
+  exports: [AuthGuard, SuperAdminGuard, OAuthService, OtpService, PasskeyService, RateLimitService, ApiTokensService, SessionsService],
 })
 export class AuthModule {}
 

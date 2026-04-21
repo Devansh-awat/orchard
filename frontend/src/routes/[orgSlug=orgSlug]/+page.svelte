@@ -3,10 +3,11 @@
 	import { apiFetch, selectedOrganization, pinnedItems, toasts } from '$lib/stores';
 	import {
 		Plus, Search, Sparkles, GitBranch, Star, MoreVertical, ExternalLink,
-		RefreshCw, Pin, PinOff, Copy, ChevronDown, Loader2, CheckCircle2,
-		XCircle, Clock, Timer, LayoutGrid, List
+		RefreshCw, Pin, PinOff, Copy, ChevronRight, Loader2, CheckCircle2,
+		XCircle, Clock, Timer, LayoutGrid, List, Folder, Rocket, Database, ArrowRight
 	} from 'lucide-svelte';
 	import { onDestroy } from 'svelte';
+	import { slide } from 'svelte/transition';
 
 	const orgSlug = $derived($page.params.orgSlug);
 	let loading = $state(true);
@@ -42,6 +43,30 @@
 		project: { id: string; name: string; slug: string; organizationId: string };
 	}
 	let databases = $state<DatabaseSummary[]>([]);
+
+	interface ProjectMeta {
+		id: string;
+		name: string;
+		slug: string;
+		description?: string;
+		icon?: string | null;
+		backgroundImage?: string | null;
+	}
+	let projectMetas = $state<Map<string, ProjectMeta>>(new Map());
+
+	async function fetchProjects() {
+		try {
+			const orgId = $selectedOrganization?.id;
+			const url = orgId ? `/apiv1/projects?orgId=${orgId}` : '/apiv1/projects';
+			const res = await apiFetch(url);
+			if (res.ok) {
+				const list: ProjectMeta[] = await res.json();
+				const m = new Map<string, ProjectMeta>();
+				for (const p of list) m.set(p.id, p);
+				projectMetas = m;
+			}
+		} catch (e) { console.error('Failed to fetch projects:', e); }
+	}
 
 	async function fetchDeployments() {
 		loading = true;
@@ -103,6 +128,23 @@
 	type ViewMode = 'by-project' | 'list-all';
 	let viewMode = $state<ViewMode>((typeof localStorage !== 'undefined' && localStorage.getItem('overview-view') as ViewMode) || 'by-project');
 	$effect(() => { if (typeof localStorage !== 'undefined') localStorage.setItem('overview-view', viewMode); });
+
+	// ── Expand state (persisted) ──
+	const EXPAND_KEY = 'overview-expanded-projects';
+	let expandedProjects = $state<Set<string>>(
+		typeof localStorage !== 'undefined'
+			? new Set(JSON.parse(localStorage.getItem(EXPAND_KEY) ?? '[]'))
+			: new Set()
+	);
+	function toggleExpand(id: string, e: Event) {
+		e.preventDefault(); e.stopPropagation();
+		const next = new Set(expandedProjects);
+		if (next.has(id)) next.delete(id); else next.add(id);
+		expandedProjects = next;
+		if (typeof localStorage !== 'undefined') {
+			localStorage.setItem(EXPAND_KEY, JSON.stringify([...next]));
+		}
+	}
 
 	// ── Filtering ──
 	let searchQuery = $state('');
@@ -177,6 +219,21 @@
 	});
 
 	// ── Helpers ──
+	function projectStatusSummary(g: ProjectGroup) {
+		let green = 0, amber = 0, red = 0;
+		const bump = (cls: string) => {
+			if (cls === 'dot--green') green++;
+			else if (cls === 'dot--amber') amber++;
+			else if (cls === 'dot--red') red++;
+		};
+		for (const d of g.deps) bump(dotClass(d.status, d.buildStatus));
+		for (const db of g.dbs) {
+			bump(db.status === 'ready' ? 'dot--green' : db.status === 'error' ? 'dot--red' : 'dot--amber');
+		}
+		if (!green && !amber && !red) return null;
+		return { green, amber, red };
+	}
+
 	function dotClass(s?: string, bs?: string) {
 		if (bs === 'building') return 'dot--amber';
 		if (!s) return 'dot--gray';
@@ -247,7 +304,7 @@
 		return null;
 	}
 
-	$effect(() => { if ($selectedOrganization?.id) { fetchDeployments(); fetchBuilds(); fetchDatabases(); } });
+	$effect(() => { if ($selectedOrganization?.id) { fetchDeployments(); fetchBuilds(); fetchDatabases(); fetchProjects(); } });
 </script>
 
 <svelte:window onclick={closeAll} />
@@ -256,7 +313,7 @@
 	<!-- Header -->
 	<header class="header">
 		<h1 class="title">Overview</h1>
-		<a href="/{orgSlug}/new" class="btn-primary"><Plus size={15} /> Add New...</a>
+		<a href="/{orgSlug}/new?autoCreate=1" class="btn-primary"><Plus size={15} /> Add New...</a>
 	</header>
 
 	<div class="layout">
@@ -289,7 +346,6 @@
 				<button class="view-btn" class:view-btn--active={viewMode === 'by-project'} onclick={() => viewMode = 'by-project'} aria-label="Group by project"><LayoutGrid size={14} /></button>
 				<button class="view-btn" class:view-btn--active={viewMode === 'list-all'} onclick={() => viewMode = 'list-all'} aria-label="List all"><List size={14} /></button>
 			</div>
-			<a href="/{orgSlug}/new" class="btn-new-project"><Plus size={13} /> New Project</a>
 		</div>
 
 		<!-- Favourites (shown in both views) -->
@@ -308,20 +364,89 @@
 			<!-- Group by Project -->
 			{#if projectGroups.length > 0}
 				{#each projectGroups as group (group.id)}
-					{@const depLabel = `${group.deps.length} ${group.deps.length === 1 ? 'deployment' : 'deployments'}`}
-					{@const dbLabel = group.dbs.length ? `${group.dbs.length} ${group.dbs.length === 1 ? 'database' : 'databases'}` : ''}
+					{@const expanded = expandedProjects.has(group.id)}
+					{@const meta = projectMetas.get(group.id)}
+					{@const summary = projectStatusSummary(group)}
 					<section class="section">
-						<a href="/{orgSlug}/projects/{group.slug}" class="group-head">
-							<span class="group-name">{group.name}</span>
-							<span class="group-count">{depLabel}{dbLabel ? ` · ${dbLabel}` : ''}</span>
-						</a>
-						<div class="grid">
-							{#each group.deps as dep (dep.id)}
-								{@render card(dep, false)}
-							{/each}
-							{#each group.dbs as db (db.id)}
-								{@render dbCard(db)}
-							{/each}
+						<div
+							class="proj-card"
+							class:proj-card--expanded={expanded}
+							class:proj-card--hasbg={!!meta?.backgroundImage}
+						>
+							{#if meta?.backgroundImage}
+								<div class="proj-card-backdrop" aria-hidden="true">
+									<div class="proj-body-bg proj-body-bg--1" style="background-image: url({JSON.stringify(meta.backgroundImage)});"></div>
+									<div class="proj-body-bg proj-body-bg--2" style="background-image: url({JSON.stringify(meta.backgroundImage)});"></div>
+									<div class="proj-body-bg proj-body-bg--3" style="background-image: url({JSON.stringify(meta.backgroundImage)});"></div>
+									<div class="proj-body-veil"></div>
+								</div>
+							{/if}
+							<button
+								class="proj-head"
+								onclick={(e) => toggleExpand(group.id, e)}
+								aria-expanded={expanded}
+								aria-label={expanded ? `Collapse ${group.name}` : `Expand ${group.name}`}
+							>
+								<div class="proj-chev" class:proj-chev--open={expanded}><ChevronRight size={16} /></div>
+								<div class="proj-av">
+									{#if meta?.icon}
+										{#if /^https?:\/\//.test(meta.icon)}
+											<img src={meta.icon} alt="" class="proj-av-img" />
+										{:else}
+											<span class="proj-av-emoji">{meta.icon}</span>
+										{/if}
+									{:else}
+										<Folder size={16} />
+									{/if}
+								</div>
+								<div class="proj-text">
+									<span class="proj-name">{group.name}</span>
+									{#if meta?.description}
+										<span class="proj-sub">{meta.description}</span>
+									{/if}
+								</div>
+								<div class="proj-stats">
+									<span class="proj-stat" title="Deployments"><Rocket size={12} /> {group.deps.length}</span>
+									{#if group.dbs.length > 0}
+										<span class="proj-stat" title="Databases"><Database size={12} /> {group.dbs.length}</span>
+									{/if}
+									{#if summary}
+										<span class="proj-summary">
+											{#if summary.green > 0}<span class="dot dot--green"></span>{summary.green}{/if}
+											{#if summary.amber > 0}<span class="dot dot--amber"></span>{summary.amber}{/if}
+											{#if summary.red > 0}<span class="dot dot--red"></span>{summary.red}{/if}
+										</span>
+									{/if}
+								</div>
+								<a
+									href="/{orgSlug}/new?projectSlug={group.slug}"
+									class="proj-new"
+									onclick={(e) => e.stopPropagation()}
+									aria-label="Add new to this project"
+								>
+									<Plus size={12} /> New
+								</a>
+								<a
+									href="/{orgSlug}/projects/{group.slug}"
+									class="proj-open"
+									onclick={(e) => e.stopPropagation()}
+									aria-label="Open project"
+								>
+									<ArrowRight size={14} />
+								</a>
+							</button>
+							{#if expanded}
+								<div class="proj-body" transition:slide={{ duration: 200 }}>
+									<div class="grid">
+										{#each group.deps as dep (dep.id)}
+											{@render card(dep, false)}
+										{/each}
+										{#each group.dbs as db (db.id)}
+											{@render dbCard(db)}
+										{/each}
+									</div>
+								</div>
+							{/if}
 						</div>
 					</section>
 				{/each}
@@ -482,16 +607,7 @@
 	/* Toolbar */
 	.bar { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; }
 
-	.btn-new-project {
-		display: inline-flex; align-items: center; gap: 0.25rem;
-		padding: 0.4375rem 0.75rem; border-radius: 0.5rem; font-size: 0.75rem; font-weight: 500;
-		border: 1px dashed color-mix(in srgb, var(--surface-border) 80%, transparent);
-		background: none; color: var(--surface-muted);
-		text-decoration: none; cursor: pointer; transition: all 0.12s; white-space: nowrap;
-	}
-	.btn-new-project:hover { border-color: var(--sidebar-text-active-border); color: var(--sidebar-text-active-border); }
-
-	.search-box { position: relative; flex: 1; max-width: 18rem; }
+.search-box { position: relative; flex: 1; max-width: 18rem; }
 	:global(.search-ic) { position: absolute; left: 0.625rem; top: 50%; transform: translateY(-50%); color: var(--surface-muted); pointer-events: none; }
 	.search {
 		width: 100%; padding: 0.4375rem 0.75rem 0.4375rem 2rem;
@@ -526,18 +642,155 @@
 		color: var(--surface-muted); margin: 0 0 0.75rem; display: flex; align-items: center; gap: 0.3rem;
 	}
 
-	/* Project group header */
-	.group-head {
-		display: flex; align-items: baseline; gap: 0.375rem;
-		margin-bottom: 0.625rem; text-decoration: none; color: var(--center-channel-color); transition: opacity 0.12s;
+	/* Project card (expandable) */
+	.proj-card {
+		position: relative;
+		border-radius: 0.75rem; background: var(--center-channel-bg);
+		box-shadow:
+			0 1px 2px rgba(0,0,0,0.04),
+			0 3px 8px rgba(0,0,0,0.03);
+		transition: box-shadow 0.15s;
+		overflow: hidden;
 	}
-	.group-head:hover { opacity: 0.7; }
-	.group-name { font-size: 0.8125rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 20rem; }
-	.group-ws { font-size: 0.6875rem; font-weight: 400; color: var(--surface-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 10rem; }
-	.group-count {
-		font-size: 0.5625rem; font-weight: 600; color: var(--surface-muted);
-		background: color-mix(in srgb, var(--surface-border) 50%, transparent);
-		padding: 0.0625rem 0.3125rem; border-radius: 9999px; flex-shrink: 0;
+	.proj-card:hover {
+		box-shadow:
+			0 2px 4px rgba(0,0,0,0.06),
+			0 6px 16px rgba(0,0,0,0.07);
+	}
+	.proj-card--expanded {
+		box-shadow:
+			0 0 0 1px color-mix(in srgb, var(--surface-border) 55%, transparent),
+			0 2px 4px rgba(0,0,0,0.05),
+			0 8px 20px rgba(0,0,0,0.06);
+	}
+	.proj-card--hasbg { color: #fff; }
+	.proj-card-backdrop {
+		position: absolute; top: 0; left: 0; right: 0;
+		height: 7.5rem;
+		overflow: hidden; pointer-events: none;
+		border-radius: inherit;
+	}
+	.proj-card--expanded .proj-card-backdrop {
+		border-bottom-left-radius: 0; border-bottom-right-radius: 0;
+	}
+	.proj-card--hasbg .proj-head { position: relative; z-index: 1; color: #fff; }
+	.proj-card--hasbg .proj-name { color: #fff; }
+	.proj-card--hasbg .proj-sub,
+	.proj-card--hasbg .proj-stat,
+	.proj-card--hasbg .proj-chev,
+	.proj-card--hasbg .proj-open { color: rgba(255,255,255,0.78); }
+	.proj-card--hasbg .proj-chev--open { color: #fff; }
+	.proj-card--hasbg .proj-summary { border-left-color: rgba(255,255,255,0.25); color: rgba(255,255,255,0.85); }
+	.proj-card--hasbg .proj-new { color: #fff; border-color: rgba(255,255,255,0.45); }
+	.proj-card--hasbg .proj-new:hover { color: #fff; background: rgba(255,255,255,0.15); border-color: #fff; }
+	/* Body wrapper — holds the optional blurred backdrop + the actual grid card */
+	.proj-body-wrap { position: relative; }
+
+	.proj-body-bg {
+		position: absolute; inset: -40%;
+		background-size: cover; background-position: center;
+		filter: blur(48px) saturate(1.6);
+		will-change: transform;
+		transform-origin: 50% 50%;
+	}
+	.proj-body-bg--1 { transform: scale(1.6) rotate(0deg); animation: proj-spin-a 28s linear infinite; opacity: 0.9; }
+	.proj-body-bg--2 {
+		transform: scale(2.1) translate(8%, -6%) rotate(70deg);
+		animation: proj-spin-b 44s linear infinite;
+		opacity: 0.55;
+	}
+	.proj-body-bg--3 {
+		transform: scale(2.6) translate(-10%, 9%) rotate(140deg);
+		animation: proj-spin-c 60s linear infinite;
+		opacity: 0.4;
+	}
+	.proj-body-veil {
+		position: absolute; inset: 0;
+		background: linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.35) 100%);
+	}
+
+	@keyframes proj-spin-a { from { transform: scale(1.6) rotate(0deg); } to { transform: scale(1.6) rotate(360deg); } }
+	@keyframes proj-spin-b { from { transform: scale(2.1) translate(8%, -6%) rotate(70deg); } to { transform: scale(2.1) translate(8%, -6%) rotate(430deg); } }
+	@keyframes proj-spin-c { from { transform: scale(2.6) translate(-10%, 9%) rotate(140deg); } to { transform: scale(2.6) translate(-10%, 9%) rotate(-220deg); } }
+
+	@media (prefers-reduced-motion: reduce) {
+		.proj-body-bg--1, .proj-body-bg--2, .proj-body-bg--3 { animation: none; }
+	}
+
+	.proj-card--hasbg .proj-body {
+		position: relative; z-index: 1;
+		background: var(--center-channel-bg);
+		color: var(--center-channel-color);
+		padding: 1rem 1.125rem 1.125rem;
+		border-radius: 0 0 0.75rem 0.75rem;
+	}
+
+	/* Inner deployment/database cards over a banner — solid surface like the rest of the app */
+	.proj-card--hasbg .proj-body :global(.card) {
+		background: var(--center-channel-bg);
+		box-shadow: 0 2px 8px rgba(0,0,0,0.08), 0 10px 24px rgba(0,0,0,0.12);
+	}
+	.proj-card--hasbg .proj-body :global(.card:hover) {
+		box-shadow: 0 4px 12px rgba(0,0,0,0.1), 0 14px 32px rgba(0,0,0,0.16);
+	}
+
+	.proj-av-img { width: 100%; height: 100%; object-fit: contain; border-radius: 0.375rem; }
+	.proj-av-emoji { font-size: 1.125rem; line-height: 1; }
+
+	.proj-head {
+		display: flex; align-items: center; gap: 0.75rem;
+		width: 100%; min-height: 7.5rem; padding: 2rem 1.125rem;
+		border: none; background: none; color: var(--center-channel-color);
+		cursor: pointer; text-align: left; font: inherit;
+	}
+	.proj-chev {
+		display: flex; align-items: center; justify-content: center;
+		width: 1.25rem; height: 1.25rem; flex-shrink: 0;
+		color: var(--surface-muted); transition: transform 0.18s ease;
+	}
+	.proj-chev--open { transform: rotate(90deg); color: var(--center-channel-color); }
+	.proj-av {
+		width: 2.25rem; height: 2.25rem; border-radius: 0.5rem; flex-shrink: 0;
+		display: flex; align-items: center; justify-content: center;
+		background: #4a8aff;
+		color: #fff;
+	}
+	.proj-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.125rem; }
+	.proj-name { font-size: 0.9375rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.proj-sub { font-size: 0.75rem; color: var(--surface-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.proj-stats {
+		display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0;
+	}
+	.proj-stat {
+		display: inline-flex; align-items: center; gap: 0.25rem;
+		font-size: 0.75rem; color: var(--surface-muted); font-variant-numeric: tabular-nums;
+	}
+	.proj-summary {
+		display: inline-flex; align-items: center; gap: 0.25rem;
+		font-size: 0.75rem; color: var(--surface-muted); font-variant-numeric: tabular-nums;
+		padding-left: 0.75rem;
+		border-left: 1px solid color-mix(in srgb, var(--surface-border) 45%, transparent);
+	}
+	.proj-summary .dot { margin-right: 0.0625rem; }
+	.proj-new {
+		display: inline-flex; align-items: center; gap: 0.25rem;
+		padding: 0.3125rem 0.625rem; border-radius: 0.375rem;
+		font-size: 0.75rem; font-weight: 500;
+		color: var(--surface-muted); text-decoration: none; flex-shrink: 0;
+		border: 1px dashed color-mix(in srgb, var(--surface-border) 80%, transparent);
+		background: none; transition: all 0.12s; white-space: nowrap;
+	}
+	.proj-new:hover { color: var(--sidebar-text-active-border); border-color: var(--sidebar-text-active-border); }
+	.proj-open {
+		display: flex; align-items: center; justify-content: center;
+		width: 1.75rem; height: 1.75rem; border-radius: 0.375rem;
+		color: var(--surface-muted); text-decoration: none; flex-shrink: 0;
+		transition: all 0.12s;
+	}
+	.proj-open:hover { color: var(--sidebar-text-active-border); background: color-mix(in srgb, var(--sidebar-text-active-border) 10%, transparent); }
+
+	.proj-body {
+		padding: 0 1.125rem 1.125rem;
 	}
 
 	/* Card grid */

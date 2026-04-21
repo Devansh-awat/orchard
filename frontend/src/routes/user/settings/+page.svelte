@@ -2,7 +2,7 @@
 	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
 	import { user, apiFetch, toasts, pendingInvitations, organizations, type PendingInvitation } from '$lib/stores';
-	import { ArrowLeft, Github, Loader2, Unlink, Trash2, Eye, EyeOff, Check, X, Plus, Fingerprint, ChevronRight, Pencil, Mail, Building2 } from 'lucide-svelte';
+	import { ArrowLeft, Github, Loader2, Unlink, Trash2, Eye, EyeOff, Check, X, Plus, Fingerprint, ChevronRight, Pencil, Mail, Building2, Monitor, Smartphone, Globe, LogOut, Camera } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 
 	let githubLinked = $state(false);
@@ -32,6 +32,11 @@
 	// Email visibility
 	let emailRevealed = $state(false);
 
+	// Avatar upload
+	let uploadingAvatar = $state(false);
+	let deletingAvatar = $state(false);
+	let avatarInput: HTMLInputElement;
+
 	// Add passkey flow
 	let showAddPasskey = $state(false);
 
@@ -39,6 +44,26 @@
 	let acceptingInvitation = $state<string | null>(null);
 	let decliningInvitation = $state<string | null>(null);
 	const invitations = $derived($pendingInvitations);
+
+	// Sessions
+	interface SessionRecord {
+		id: string;
+		ipAddress?: string | null;
+		deviceName?: string | null;
+		location?: string | null;
+		authMethod?: string | null;
+		lastActiveAt: string;
+		createdAt: string;
+		isCurrent: boolean;
+	}
+	let sessions = $state<SessionRecord[]>([]);
+	let sessionsLoading = $state(true);
+	let sessionsError = $state<string | null>(null);
+	let revokingSessionId = $state<string | null>(null);
+	let revokingAll = $state(false);
+	let showRevokeAllModal = $state(false);
+	let sessionToRevoke = $state<SessionRecord | null>(null);
+	let showRevokeSessionModal = $state(false);
 
 	async function handleAcceptInvitation(invitation: PendingInvitation) {
 		if (acceptingInvitation || decliningInvitation) return;
@@ -149,6 +174,53 @@
 		else if (e.key === 'Escape') cancelEditField();
 	}
 
+	async function uploadAvatar(event: Event) {
+		const input = event.target as HTMLInputElement;
+		const file = input.files?.[0];
+		if (!file) return;
+
+		const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+		if (!allowedTypes.includes(file.type)) {
+			toasts.add({ title: 'Invalid file type', description: 'Only JPEG, PNG, GIF, and WebP images are allowed', color: 'error' });
+			return;
+		}
+		if (file.size > 5 * 1024 * 1024) {
+			toasts.add({ title: 'File too large', description: 'Maximum file size is 5MB', color: 'error' });
+			return;
+		}
+
+		uploadingAvatar = true;
+		try {
+			const formData = new FormData();
+			formData.append('file', file);
+			const response = await apiFetch('/apiv1/auth/me/avatar', { method: 'POST', body: formData });
+			if (!response.ok) throw new Error('Failed to upload avatar');
+			const updated = await response.json();
+			user.set({ ...$user, ...updated });
+			toasts.add({ title: 'Avatar updated', color: 'success' });
+		} catch (e) {
+			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to upload avatar', color: 'error' });
+		} finally {
+			uploadingAvatar = false;
+			if (avatarInput) avatarInput.value = '';
+		}
+	}
+
+	async function deleteAvatar() {
+		deletingAvatar = true;
+		try {
+			const response = await apiFetch('/apiv1/auth/me/avatar', { method: 'DELETE' });
+			if (!response.ok) throw new Error('Failed to remove avatar');
+			const updated = await response.json();
+			user.set({ ...$user, ...updated });
+			toasts.add({ title: 'Avatar removed', color: 'success' });
+		} catch (e) {
+			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to remove avatar', color: 'error' });
+		} finally {
+			deletingAvatar = false;
+		}
+	}
+
 	async function checkGitHubStatus() {
 		loading = true;
 		try {
@@ -182,12 +254,89 @@
 		}
 	}
 
+	async function fetchSessions() {
+		sessionsLoading = true;
+		sessionsError = null;
+		try {
+			const response = await apiFetch('/apiv1/auth/sessions');
+			if (!response.ok) throw new Error('Failed to load sessions');
+			const data = await response.json();
+			sessions = data.sessions ?? [];
+		} catch (err) {
+			sessionsError = err instanceof Error ? err.message : 'Could not load sessions';
+		} finally {
+			sessionsLoading = false;
+		}
+	}
+
+	function confirmRevokeSession(session: SessionRecord) {
+		sessionToRevoke = session;
+		showRevokeSessionModal = true;
+	}
+
+	async function revokeSession(session: SessionRecord) {
+		if (revokingSessionId) return;
+		revokingSessionId = session.id;
+		try {
+			const response = await apiFetch(`/apiv1/auth/sessions/${session.id}`, { method: 'DELETE' });
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data?.message || 'Failed to revoke session');
+			}
+			toasts.add({ title: 'Session revoked', color: 'success' });
+			await fetchSessions();
+		} catch (err) {
+			toasts.add({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to revoke session', color: 'error' });
+		} finally {
+			revokingSessionId = null;
+		}
+	}
+
+	async function revokeAllSessions() {
+		if (revokingAll) return;
+		revokingAll = true;
+		try {
+			const response = await apiFetch('/apiv1/auth/sessions/revoke-all', { method: 'POST' });
+			if (!response.ok) throw new Error('Failed to revoke sessions');
+			const data = await response.json();
+			toasts.add({ title: 'Sessions revoked', description: `${data.revokedCount} session${data.revokedCount === 1 ? '' : 's'} signed out`, color: 'success' });
+			await fetchSessions();
+		} catch (err) {
+			toasts.add({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to revoke sessions', color: 'error' });
+		} finally {
+			revokingAll = false;
+			showRevokeAllModal = false;
+		}
+	}
+
+	function getDeviceIcon(deviceName?: string | null): 'monitor' | 'smartphone' {
+		if (!deviceName) return 'monitor';
+		const lower = deviceName.toLowerCase();
+		if (lower.includes('iphone') || lower.includes('android') || lower.includes('mobile') || lower.includes('ipad')) return 'smartphone';
+		return 'monitor';
+	}
+
+	function formatRelativeTime(dateStr: string): string {
+		const now = Date.now();
+		const date = new Date(dateStr).getTime();
+		const diffMs = now - date;
+		const diffMin = Math.floor(diffMs / 60000);
+		if (diffMin < 1) return 'Just now';
+		if (diffMin < 60) return `${diffMin}m ago`;
+		const diffHr = Math.floor(diffMin / 60);
+		if (diffHr < 24) return `${diffHr}h ago`;
+		const diffDay = Math.floor(diffHr / 24);
+		if (diffDay < 7) return `${diffDay}d ago`;
+		return new Date(dateStr).toLocaleDateString(undefined, { dateStyle: 'medium' });
+	}
+
 	onMount(() => {
 		if (browser && typeof window !== 'undefined' && !window.isSecureContext) {
 			passkeyEnvWarning = `Passkeys require a secure origin. You're on ${window.location.origin}.`;
 		}
 		checkGitHubStatus();
 		fetchPasskeys();
+		fetchSessions();
 
 		// Scroll to #invitations if hash is present
 		if (browser && window.location.hash === '#invitations') {
@@ -305,15 +454,44 @@
 		<!-- Single card for everything -->
 		<div class="us-card">
 			<!-- Profile -->
+			<input
+				bind:this={avatarInput}
+				type="file"
+				accept="image/jpeg,image/png,image/gif,image/webp"
+				class="us-hidden-input"
+				onchange={uploadAvatar}
+			/>
 			<div class="us-identity">
-				<div class="us-avatar">
-					{#if $user?.imageUrl}
-						<img src={$user.imageUrl} alt={$user.name || 'User'} class="us-avatar-img" />
-					{:else}
-						<span class="us-avatar-letter">
-							{$user?.firstName?.[0] || $user?.name?.[0] || 'U'}
-						</span>
-					{/if}
+				<div class="us-avatar-wrapper">
+					<div class="us-avatar">
+						{#if $user?.imageUrl}
+							<img src={$user.imageUrl} alt={$user.name || 'User'} class="us-avatar-img" />
+						{:else}
+							<span class="us-avatar-letter">
+								{$user?.firstName?.[0] || $user?.name?.[0] || 'U'}
+							</span>
+						{/if}
+					</div>
+					<div class="us-avatar-actions">
+						<button
+							class="us-avatar-btn"
+							onclick={() => avatarInput?.click()}
+							disabled={uploadingAvatar}
+							title="Upload photo"
+						>
+							{#if uploadingAvatar}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Camera class="h-3 w-3" />{/if}
+						</button>
+						{#if $user?.imageUrl}
+							<button
+								class="us-avatar-btn us-avatar-btn--danger"
+								onclick={deleteAvatar}
+								disabled={deletingAvatar}
+								title="Remove photo"
+							>
+								{#if deletingAvatar}<Loader2 class="h-3 w-3 animate-spin" />{:else}<X class="h-3 w-3" />{/if}
+							</button>
+						{/if}
+					</div>
 				</div>
 				<div class="us-identity-text">
 					<h1 class="us-name">
@@ -562,9 +740,117 @@
 					{/if}
 				{/if}
 			</div>
+			<div class="us-card-divider"></div>
+
+			<!-- Sessions -->
+			<div class="us-card-section">
+				<div class="us-section-head">
+					<div class="us-section-icon us-section-icon--sessions">
+						<Globe class="h-4 w-4" />
+					</div>
+					<div class="us-section-title-group">
+						<h2 class="us-section-title">Active Sessions</h2>
+						<p class="us-section-desc">Devices where you're currently signed in</p>
+					</div>
+					{#if !sessionsLoading && sessions.length > 0}
+						<span class="us-count">{sessions.length}</span>
+					{/if}
+				</div>
+
+				{#if sessionsError}
+					<div class="us-error">{sessionsError}</div>
+				{/if}
+
+				{#if sessionsLoading}
+					<div class="us-loading"><Loader2 class="h-4 w-4 animate-spin" /></div>
+				{:else}
+					{#if sessions.length > 0}
+						<div class="us-session-list">
+							{#each sessions as session (session.id)}
+								<div class="us-session" class:us-session--current={session.isCurrent}>
+									<div class="us-session-icon">
+										{#if getDeviceIcon(session.deviceName) === 'smartphone'}
+											<Smartphone class="h-4 w-4" />
+										{:else}
+											<Monitor class="h-4 w-4" />
+										{/if}
+									</div>
+									<div class="us-session-body">
+										<div class="us-session-top">
+											<span class="us-session-device">
+												{session.deviceName || 'Unknown Device'}
+												{#if session.isCurrent}
+													<span class="us-session-current-badge">This device</span>
+												{/if}
+											</span>
+										</div>
+										<div class="us-session-meta">
+											{#if session.location}
+												<span>{session.location}</span>
+												<span class="us-session-sep">·</span>
+											{/if}
+											{#if session.ipAddress}
+												<span>{session.ipAddress}</span>
+												<span class="us-session-sep">·</span>
+											{/if}
+											<span>Active {formatRelativeTime(session.lastActiveAt)}</span>
+										</div>
+									</div>
+									{#if !session.isCurrent}
+										<button
+											class="us-icon-btn us-icon-btn--danger"
+											type="button"
+											onclick={() => confirmRevokeSession(session)}
+											disabled={revokingSessionId === session.id}
+											title="Sign out this device"
+										>
+											{#if revokingSessionId === session.id}
+												<Loader2 class="h-3 w-3 animate-spin" />
+											{:else}
+												<LogOut class="h-3 w-3" />
+											{/if}
+										</button>
+									{/if}
+								</div>
+							{/each}
+						</div>
+
+						{#if sessions.length > 1}
+							<button class="us-btn us-btn-danger us-btn--full" onclick={() => (showRevokeAllModal = true)}>
+								<LogOut class="h-3.5 w-3.5" />
+								Sign out all other devices
+							</button>
+						{/if}
+					{:else}
+						<p class="us-empty-hint">No active sessions found.</p>
+					{/if}
+				{/if}
+			</div>
 		</div>
 	</div>
 </div>
+
+{#if sessionToRevoke}
+	<ConfirmModal
+		bind:open={showRevokeSessionModal}
+		title="Sign out this device?"
+		description="This will immediately end the session on {sessionToRevoke.deviceName || 'this device'}. They will need to sign in again."
+		confirmLabel="Sign Out"
+		danger
+		onconfirm={() => revokeSession(sessionToRevoke!)}
+		oncancel={() => { sessionToRevoke = null; }}
+	/>
+{/if}
+
+<ConfirmModal
+	bind:open={showRevokeAllModal}
+	title="Sign out all other devices?"
+	description="This will end all sessions except your current one. Other devices will need to sign in again."
+	confirmLabel="Sign Out All"
+	danger
+	onconfirm={revokeAllSessions}
+	oncancel={() => { showRevokeAllModal = false; }}
+/>
 
 {#if passkeyToDelete}
 	<ConfirmModal
@@ -641,6 +927,14 @@
 		background-color: var(--surface-border);
 	}
 
+	.us-hidden-input {
+		position: absolute;
+		width: 0;
+		height: 0;
+		opacity: 0;
+		pointer-events: none;
+	}
+
 	/* ── Identity (inside card) ── */
 	.us-identity {
 		display: flex;
@@ -660,6 +954,45 @@
 		justify-content: center;
 		background: linear-gradient(135deg, color-mix(in srgb, var(--button-bg) 18%, transparent), color-mix(in srgb, var(--button-bg) 6%, transparent));
 		color: var(--button-bg);
+	}
+
+	.us-avatar-wrapper {
+		position: relative;
+		flex-shrink: 0;
+	}
+
+	.us-avatar-wrapper:hover .us-avatar-actions {
+		opacity: 1;
+	}
+
+	.us-avatar-actions {
+		position: absolute;
+		bottom: -0.25rem;
+		right: -0.25rem;
+		display: flex;
+		gap: 0.125rem;
+		opacity: 0;
+		transition: opacity 150ms;
+	}
+
+	.us-avatar-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.375rem;
+		height: 1.375rem;
+		border-radius: 50%;
+		border: 1.5px solid var(--surface-bg);
+		background-color: var(--button-bg);
+		color: var(--button-color);
+		cursor: pointer;
+		transition: all 120ms;
+		padding: 0;
+	}
+	.us-avatar-btn:hover:not(:disabled) { opacity: 0.85; }
+	.us-avatar-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+	.us-avatar-btn--danger {
+		background-color: var(--error-text-color);
 	}
 
 	.us-avatar-img { width: 100%; height: 100%; object-fit: cover; }
@@ -875,6 +1208,10 @@
 	.us-section-icon--invitations {
 		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 10%, transparent);
 		color: var(--sidebar-text-active-border);
+	}
+	.us-section-icon--sessions {
+		background-color: color-mix(in srgb, var(--online-indicator) 10%, transparent);
+		color: var(--online-indicator);
 	}
 
 	/* ── Invitations ── */
@@ -1212,6 +1549,92 @@
 		display: flex;
 		gap: 0.5rem;
 		align-items: center;
+	}
+
+	/* ── Sessions ── */
+	.us-session-list {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.us-session {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.875rem 0;
+		border-bottom: 1px solid color-mix(in srgb, var(--surface-border) 40%, transparent);
+	}
+	.us-session:last-child { border-bottom: none; }
+
+	.us-session-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		border-radius: 0.5rem;
+		flex-shrink: 0;
+		background-color: color-mix(in srgb, var(--center-channel-color) 6%, transparent);
+		color: var(--surface-muted);
+	}
+
+	.us-session--current .us-session-icon {
+		background-color: color-mix(in srgb, var(--online-indicator) 10%, transparent);
+		color: var(--online-indicator);
+	}
+
+	.us-session-body {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+	}
+
+	.us-session-top {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.us-session-device {
+		font-size: 0.875rem;
+		font-weight: 550;
+		color: var(--center-channel-color);
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.us-session-current-badge {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.0625rem 0.4375rem;
+		border-radius: 2rem;
+		font-size: 0.625rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		background-color: color-mix(in srgb, var(--online-indicator) 12%, transparent);
+		color: var(--online-indicator);
+	}
+
+	.us-session-meta {
+		font-size: 0.6875rem;
+		color: var(--surface-muted);
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 0.125rem;
+	}
+
+	.us-session-sep {
+		margin: 0 0.125rem;
+	}
+
+	.us-btn--full {
+		width: 100%;
+		justify-content: center;
 	}
 
 	/* ── Alerts ── */

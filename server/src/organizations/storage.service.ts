@@ -51,6 +51,7 @@ export class StorageService {
       Key: fileName,
       Body: file.buffer,
       ContentType: file.mimetype,
+      CacheControl: 'public, max-age=31536000, immutable',
     });
 
     await this.s3Client.send(command);

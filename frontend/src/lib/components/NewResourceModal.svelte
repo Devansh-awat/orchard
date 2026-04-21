@@ -109,7 +109,17 @@
 
 	function navigateToNew(type: string) {
 		open = false;
-		goto(`/${orgSlug}/new?type=${type}&project=${projectSlug}`);
+		switch (type) {
+			case 'deployment-github':
+				goto(`${basePath}/deployments/new?source=github`);
+				break;
+			case 'deployment-image':
+				goto(`${basePath}/deployments/new?source=image`);
+				break;
+			case 'database':
+				goto(`${basePath}/databases/new`);
+				break;
+		}
 	}
 
 	function navigateToTemplate(templateId: string) {

@@ -13,6 +13,8 @@
 	const selectedOrgId = $derived($selectedOrganization?.id ?? '');
 
 	const preselectedType = $derived($page.url.searchParams.get('type') as ResourceType | null);
+	const preselectedProjectSlug = $derived($page.url.searchParams.get('projectSlug'));
+	const autoCreateProject = $derived($page.url.searchParams.get('autoCreate') === '1');
 
 	interface Template {
 		id: string;
@@ -96,30 +98,43 @@
 		finally { loading = false; }
 	}
 
+	function toSlug(n: string) { return n.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
+
+	async function createProject(name: string): Promise<string> {
+		const baseSlug = toSlug(name) || 'project';
+		const existingSlugs = new Set(projects.map(p => p.slug));
+		let slug = baseSlug;
+		let i = 2;
+		while (existingSlugs.has(slug)) { slug = `${baseSlug}-${i++}`; }
+		const projRes = await apiFetch('/apiv1/projects', {
+			method: 'POST', headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ name, slug, organizationId: selectedOrgId })
+		});
+		if (!projRes.ok) {
+			const d = await projRes.json().catch(() => ({}));
+			throw new Error(d.message || 'Failed to create project');
+		}
+		const proj = await projRes.json();
+		refreshTree();
+		return proj.slug;
+	}
+
+	async function resolveProjectSlug(): Promise<string> {
+		if (preselectedProjectSlug && projects.some(p => p.slug === preselectedProjectSlug)) {
+			return preselectedProjectSlug;
+		}
+		if (projects.length === 0) {
+			return createProject('Default');
+		}
+		return projects[0].slug;
+	}
+
 	async function selectResourceAndGo(type: ResourceType) {
 		selectedResource = type;
 		navigating = true;
 
 		try {
-			// Need at least one project. If none, create a default one.
-			let projSlug: string;
-
-			if (projects.length === 0) {
-				const projRes = await apiFetch('/apiv1/projects', {
-					method: 'POST', headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ name: 'My Project', slug: 'my-project', organizationId: selectedOrgId })
-				});
-				if (!projRes.ok) {
-					const d = await projRes.json().catch(() => ({}));
-					throw new Error(d.message || 'Failed to create project');
-				}
-				const proj = await projRes.json();
-				projSlug = proj.slug;
-				refreshTree();
-			} else {
-				projSlug = projects[0].slug;
-			}
-
+			const projSlug = await resolveProjectSlug();
 			const base = `/${orgSlug}/projects/${projSlug}`;
 			switch (type) {
 				case 'deployment-github': goto(`${base}/deployments/new?source=github`); break;
@@ -135,19 +150,7 @@
 	async function deployTemplate(templateId: string) {
 		navigating = true;
 		try {
-			let projSlug: string;
-			if (projects.length === 0) {
-				const projRes = await apiFetch('/apiv1/projects', {
-					method: 'POST', headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ name: 'My Project', slug: 'my-project', organizationId: selectedOrgId })
-				});
-				if (!projRes.ok) throw new Error('Failed to create project');
-				const proj = await projRes.json();
-				projSlug = proj.slug;
-				refreshTree();
-			} else {
-				projSlug = projects[0].slug;
-			}
+			const projSlug = await resolveProjectSlug();
 			goto(`/${orgSlug}/projects/${projSlug}/templates/deploy/${templateId}`);
 		} catch (e) {
 			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Something went wrong', color: 'error' });

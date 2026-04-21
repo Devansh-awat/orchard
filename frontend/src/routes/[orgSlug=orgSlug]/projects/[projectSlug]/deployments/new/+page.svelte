@@ -2,8 +2,8 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { apiFetch, toasts, refreshTree, isSuperAdmin, fetchProjectContext, buildBasePath, type ProjectContext } from '$lib/stores';
-	import { Loader2, Container, Github, Plus, Trash2, Eye, EyeOff } from 'lucide-svelte';
+	import { apiFetch, toasts, refreshTree, isSuperAdmin, fetchProjectContext, buildBasePath, selectedOrganization, type ProjectContext } from '$lib/stores';
+	import { Loader2, Container, Github, Plus, Trash2, Eye, EyeOff, HardDrive } from 'lucide-svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
 
 	function handleClickOutside(event: MouseEvent, dropdownType: 'repo' | 'branch' | 'dockerfile') {
@@ -35,6 +35,7 @@
 	let submitting = $state(false);
 	let error = $state<string | null>(null);
 	let formError = $state<string | null>(null);
+	let pendingProjectName = $state<string | null>(null);
 
 	// Deployment source — read from ?source= query param, default to 'image'
 	const initialSource = $derived(($page.url.searchParams.get('source') === 'github') ? 'github' as const : 'image' as const);
@@ -56,6 +57,7 @@
 	let loadingStages = $state(false);
 	let selectedStage = $state<string>('');
 	let dockerfileInputTimeout: ReturnType<typeof setTimeout> | null = null;
+	let repoInputTimeout: ReturnType<typeof setTimeout> | null = null;
 	let showRepoDropdown = $state(false);
 	let showBranchDropdown = $state(false);
 	let showDockerfileDropdown = $state(false);
@@ -71,7 +73,9 @@
 	let replicas = $state(1);
 	let exposePublic = $state(false);
 	let ports = $state([{ name: 'http', containerPort: 80, servicePort: 80, protocol: 'TCP' }]);
+	let portsManuallyEdited = $state(false);
 	let envVars = $state([{ key: '', value: '' }]);
+	let envsManuallyEdited = $state(false);
 	let buildWithDepot = $state(false);
 	let envPasteText = $state('');
 	let envPasteMode = $state(false);
@@ -182,19 +186,29 @@
 		}
 	}
 
+	function getOwnerRepo(): { owner: string; repo: string } | null {
+		if (selectedRepo) {
+			const [owner, repo] = selectedRepo.full_name.split('/');
+			return { owner, repo };
+		}
+		const parsed = parseRepoInput(repoSearch.trim());
+		if (parsed) return { owner: parsed.owner, repo: parsed.repo };
+		return null;
+	}
+
 	function handleDockerfileInput(value: string) {
 		dockerfileSearch = value;
 		dockerfilePath = value;
-		showDockerfileDropdown = value.length > 0 && dockerfiles.length > 0;
+		showDockerfileDropdown = dockerfiles.length > 0;
 
 		if (dockerfileInputTimeout) {
 			clearTimeout(dockerfileInputTimeout);
 		}
 
-		if (selectedRepo && branch && value.trim()) {
-			const repo = selectedRepo;
+		const ownerRepo = getOwnerRepo();
+		if (ownerRepo && branch && value.trim()) {
 			dockerfileInputTimeout = setTimeout(() => {
-				fetchDockerfileStages(repo, branch, value);
+				fetchDockerfileInfo(ownerRepo.owner, ownerRepo.repo, branch, value);
 			}, 500);
 		} else {
 			dockerfileStages = [];
@@ -206,32 +220,49 @@
 		dockerfileSearch = df;
 		dockerfilePath = df;
 		showDockerfileDropdown = false;
-		if (selectedRepo) {
-			fetchDockerfileStages(selectedRepo, branch, df);
+		const ownerRepo = getOwnerRepo();
+		if (ownerRepo && branch) {
+			fetchDockerfileInfo(ownerRepo.owner, ownerRepo.repo, branch, df);
 		}
 	}
 
-	async function fetchDockerfileStages(repo: Repository, branchName: string, dockerfile: string) {
+	async function fetchDockerfileInfo(owner: string, repo: string, branchName: string, dockerfile: string) {
 		if (!dockerfile) return;
 
 		loadingStages = true;
-		dockerfileStages = [];
-		selectedStage = '';
 
 		try {
-			const [owner, repoName] = repo.full_name.split('/');
 			const response = await apiFetch(
-				`/apiv1/github/repositories/${owner}/${repoName}/dockerfile-stages?dockerfilePath=${encodeURIComponent(dockerfile)}&branch=${encodeURIComponent(branchName)}`
+				`/apiv1/github/repositories/${owner}/${repo}/dockerfile-info?dockerfilePath=${encodeURIComponent(dockerfile)}&branch=${encodeURIComponent(branchName)}`
 			);
 			if (response.ok) {
-				const stages = await response.json();
-				dockerfileStages = stages;
-				if (stages.length > 0) {
-					selectedStage = stages[0];
+				const info: { exposedPorts: number[]; envVars: { key: string; value: string }[]; stages: string[] } = await response.json();
+
+				// Set stages
+				dockerfileStages = info.stages;
+				if (info.stages.length > 0) {
+					selectedStage = info.stages[0];
+				} else {
+					selectedStage = '';
+				}
+
+				// Auto-fill ports from EXPOSE directives (only if user hasn't edited them)
+				if (info.exposedPorts.length > 0 && !portsManuallyEdited) {
+					ports = info.exposedPorts.map((p, i) => ({
+						name: `port-${i + 1}`,
+						containerPort: p,
+						servicePort: p,
+						protocol: 'TCP'
+					}));
+				}
+
+				// Auto-fill env vars from ENV directives (only if user hasn't edited them)
+				if (info.envVars.length > 0 && !envsManuallyEdited) {
+					envVars = info.envVars.map((e) => ({ key: e.key, value: e.value }));
 				}
 			}
 		} catch (e) {
-			console.error('Failed to fetch Dockerfile stages:', e);
+			console.error('Failed to fetch Dockerfile info:', e);
 		} finally {
 			loadingStages = false;
 		}
@@ -264,10 +295,78 @@
 		showDockerfileDropdown = false;
 	}
 
+	function parseRepoInput(value: string): { owner: string; repo: string; url: string } | null {
+		// Match full GitHub URL: https://github.com/owner/repo(.git)
+		const urlMatch = value.match(/(?:https?:\/\/)?github\.com\/([^\/\s]+)\/([^\/\s#?.]+)/);
+		if (urlMatch) {
+			const owner = urlMatch[1];
+			const repo = urlMatch[2].replace(/\.git$/, '');
+			return { owner, repo, url: `https://github.com/${owner}/${repo}.git` };
+		}
+		// Match owner/repo shorthand
+		const shortMatch = value.match(/^([A-Za-z0-9_.-]+)\/([A-Za-z0-9_.-]+)$/);
+		if (shortMatch) {
+			return { owner: shortMatch[1], repo: shortMatch[2], url: `https://github.com/${shortMatch[1]}/${shortMatch[2]}.git` };
+		}
+		return null;
+	}
+
+	async function fetchBranchesManual(owner: string, repoName: string) {
+		loadingBranches = true;
+		branches = [];
+		selectedBranch = null;
+		dockerfiles = [];
+		dockerfilePath = '';
+		dockerfileSearch = '';
+		buildFromRoot = false;
+
+		try {
+			const response = await apiFetch(`/apiv1/github/repositories/${owner}/${repoName}/branches`);
+			if (response.ok) {
+				branches = await response.json();
+				if (branches.length > 0) {
+					// Try to find main/master, otherwise use first branch
+					const defaultBranch = branches.find((b) => b.name === 'main') ?? branches.find((b) => b.name === 'master') ?? branches[0];
+					selectedBranch = defaultBranch;
+					branch = defaultBranch.name;
+					branchSearch = defaultBranch.name;
+					// Fetch dockerfiles using owner/repo directly
+					const dfResponse = await apiFetch(
+						`/apiv1/github/repositories/${owner}/${repoName}/dockerfiles?branch=${encodeURIComponent(defaultBranch.name)}`
+					);
+					if (dfResponse.ok) {
+						dockerfiles = await dfResponse.json();
+					}
+				}
+			}
+		} catch (e) {
+			// Repo doesn't exist or no access — that's fine, user can still proceed with manual branch
+			console.error('Failed to fetch branches:', e);
+		} finally {
+			loadingBranches = false;
+		}
+	}
+
 	function handleRepoSearchInput(value: string) {
 		if (selectedRepo) return;
 		repoSearch = value;
-		showRepoDropdown = value.length > 0;
+		showRepoDropdown = value.length > 0 && repositories.length > 0;
+
+		if (repoInputTimeout) {
+			clearTimeout(repoInputTimeout);
+		}
+
+		// Set repoUrl from manual input (owner/repo or full URL)
+		const parsed = parseRepoInput(value.trim());
+		if (parsed) {
+			repoUrl = parsed.url;
+			// Debounce fetching branches for the manually entered repo
+			repoInputTimeout = setTimeout(() => {
+				fetchBranchesManual(parsed.owner, parsed.repo);
+			}, 500);
+		} else {
+			repoUrl = '';
+		}
 	}
 
 	function selectBranch(b: Branch) {
@@ -297,24 +396,29 @@
 	function handleBranchSearchInput(value: string) {
 		if (selectedBranch) return;
 		branchSearch = value;
-		showBranchDropdown = value.length > 0;
+		branch = value;
+		showBranchDropdown = value.length > 0 && branches.length > 0;
 	}
 
 	function addPort() {
+		portsManuallyEdited = true;
 		ports = [...ports, { name: `port-${ports.length + 1}`, containerPort: 80, servicePort: 80, protocol: 'TCP' }];
 	}
 
 	function removePort(index: number) {
+		portsManuallyEdited = true;
 		if (ports.length > 1) {
 			ports = ports.filter((_, i) => i !== index);
 		}
 	}
 
 	function addEnvVar() {
+		envsManuallyEdited = true;
 		envVars = [...envVars, { key: '', value: '' }];
 	}
 
 	function removeEnvVar(index: number) {
+		envsManuallyEdited = true;
 		if (envVars.length > 1) {
 			envVars = envVars.filter((_, i) => i !== index);
 		}
@@ -346,21 +450,40 @@
 		}
 
 		if (parsed.length > 0) {
+			envsManuallyEdited = true;
 			envVars = parsed;
 			envPasteText = '';
 		}
 	}
 
 	function addVolume() {
-		volumes = [...volumes, { name: `volume-${volumes.length + 1}`, type: 'pvc', mountPath: '', pvcName: '', readOnly: false }];
+		volumes = [...volumes, { name: '', type: 'pvc', mountPath: '', pvcName: '', readOnly: false }];
 	}
 
 	function removeVolume(index: number) {
 		volumes = volumes.filter((_, i) => i !== index);
 	}
 
+	async function createPendingProject(): Promise<{ id: string; name: string; slug: string } | null> {
+		const orgId = $selectedOrganization?.id;
+		if (!orgId) {
+			formError = 'No organization selected';
+			return null;
+		}
+		const res = await apiFetch('/apiv1/projects', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ organizationId: orgId, name: pendingProjectName })
+		});
+		const data = await res.json().catch(() => ({}));
+		if (!res.ok) {
+			throw new Error(data?.message || 'Failed to create project');
+		}
+		return data;
+	}
+
 	async function submit() {
-		if (!project) {
+		if (!project && !pendingProjectName) {
 			formError = 'Project not loaded';
 			return;
 		}
@@ -394,9 +517,9 @@
 		const validPorts = ports
 			.filter((p) => p.containerPort > 0)
 			.map((p, i) => ({
-				name: p.name.trim() || `port-${i + 1}`,
+				name: `port-${i + 1}`,
 				containerPort: Number(p.containerPort),
-				servicePort: Number(p.servicePort || p.containerPort),
+				servicePort: Number(p.containerPort),
 				protocol: p.protocol
 			}));
 
@@ -408,35 +531,43 @@
 		const validEnv = envVars.filter((e) => e.key.trim()).map((e) => ({ key: e.key.trim(), value: e.value }));
 
 		const validVolumes = volumes
-			.filter((v) => v.name.trim() && v.mountPath.trim())
-			.map((v) => {
-				const vol: any = {
-					name: v.name.trim(),
-					type: v.type,
-					mountPath: v.mountPath.trim(),
-					readOnly: v.readOnly
-				};
-				if (v.type === 'pvc' && v.pvcName) {
-					vol.pvcName = v.pvcName.trim();
-				} else if (v.type === 'hostPath' && v.hostPath) {
-					vol.hostPath = v.hostPath.trim();
-				}
-				return vol;
-			})
-			.filter((v) => {
-				if (v.type === 'pvc' && !v.pvcName) return false;
-				if (v.type === 'hostPath' && !v.hostPath) return false;
-				return true;
-			});
+			.filter((v) => v.pvcName?.trim() && v.mountPath.trim())
+			.map((v) => ({
+				name: v.pvcName!.trim(),
+				type: 'pvc' as const,
+				mountPath: v.mountPath.trim(),
+				readOnly: v.readOnly,
+				pvcName: v.pvcName!.trim()
+			}));
 
 		submitting = true;
 		formError = null;
 
 		try {
+			// Materialize pending project first, so we don't leave orphan projects
+			// behind if the deployment form fails validation. By this point we've
+			// already validated every deployment-side field above.
+			let targetProjectId = project?.id;
+			if (pendingProjectName) {
+				const created = await createPendingProject();
+				if (!created) {
+					submitting = false;
+					return;
+				}
+				targetProjectId = created.id;
+				project = { ...(project ?? {}), id: created.id, name: created.name, slug: created.slug } as ProjectContext;
+				pendingProjectName = null;
+				refreshTree();
+			}
+
+			if (!targetProjectId) {
+				throw new Error('Project not available');
+			}
+
 			const endpoint =
 				deploymentSource === 'github'
-					? `/apiv1/projects/${project.id}/deployments/from-github`
-					: `/apiv1/projects/${project.id}/deployments`;
+					? `/apiv1/projects/${targetProjectId}/deployments/from-github`
+					: `/apiv1/projects/${targetProjectId}/deployments`;
 
 			const body: Record<string, unknown> = {
 				name: name.trim(),
@@ -504,8 +635,15 @@
 
 	onMount(() => {
 		deploymentSource = initialSource;
-		fetchProjectData();
 		checkGitHubStatus();
+	});
+
+	$effect(() => {
+		// Re-run whenever the route params change so the UI matches the new project
+		orgSlug; projectSlug; wsSlug;
+		if (orgSlug && projectSlug) {
+			fetchProjectData();
+		}
 	});
 
 	$effect(() => {
@@ -537,21 +675,32 @@
 			</div>
 		</div>
 	{:else if project}
-		<h1 class="nd-page-title">New Deployment</h1>
+		<div class="nd-hero">
+			<h1 class="nd-page-title">New Deployment</h1>
+			<p class="nd-page-subtitle">Configure and launch a new service.</p>
+		</div>
 
 		<!-- ═══ Source card ═══ -->
 		<div class="nd-main-card">
-			<div class="nd-tabs">
-				<button class="nd-tab" class:nd-tab-active={deploymentSource === 'image'} onclick={() => (deploymentSource = 'image')}>
-					<Container class="h-4 w-4" /> Docker Image
-				</button>
-				<button class="nd-tab" class:nd-tab-active={deploymentSource === 'github'} onclick={() => (deploymentSource = 'github')}>
-					<Github class="h-4 w-4" /> GitHub
-				</button>
+			<div class="nd-source-picker">
+				<span class="nd-source-label">Source</span>
+				<div class="nd-pill-group">
+					<button class="nd-pill" class:nd-pill-active={deploymentSource === 'image'} onclick={() => (deploymentSource = 'image')}>
+						<Container class="h-3.5 w-3.5" /> Image
+					</button>
+					<button class="nd-pill" class:nd-pill-active={deploymentSource === 'github'} onclick={() => (deploymentSource = 'github')}>
+						<Github class="h-3.5 w-3.5" /> GitHub
+					</button>
+				</div>
 			</div>
 
 			<div class="nd-owner-row">
-				<ProjectSwitcher currentProjectName={project?.name || projectSlug} pathSuffix={`/deployments/new?source=${deploymentSource}`} />
+				<ProjectSwitcher
+					currentProjectName={project?.name || projectSlug}
+					pathSuffix={`/deployments/new?source=${deploymentSource}`}
+					{pendingProjectName}
+					onPendingProjectChange={(n) => (pendingProjectName = n)}
+				/>
 				<span class="nd-slash">/</span>
 				<input type="text" bind:value={name} placeholder="deployment-name" class="nd-name-input" />
 			</div>
@@ -575,11 +724,11 @@
 							<div class="nd-relative">
 								<input type="text" bind:value={repoSearch}
 									oninput={(e) => handleRepoSearchInput((e.target as HTMLInputElement).value)}
-									onfocus={() => { if (!selectedRepo) showRepoDropdown = repoSearch.length > 0; }}
-									placeholder={loadingRepos ? "Loading repositories..." : selectedRepo ? selectedRepo.full_name : "Search repositories..."}
-									class="nd-input" disabled={loadingRepos} readonly={selectedRepo !== null || loadingRepos}
+									onfocus={() => { if (!selectedRepo) showRepoDropdown = repoSearch.length > 0 && repositories.length > 0; }}
+									placeholder="owner/repo or GitHub URL"
+									class="nd-input" readonly={selectedRepo !== null}
 									style={selectedRepo ? "opacity: 0.7;" : ""} />
-								{#if loadingRepos}
+								{#if loadingRepos || loadingBranches}
 									<div class="nd-input-suffix"><Loader2 class="h-4 w-4 animate-spin" /></div>
 								{:else if selectedRepo}
 									<button onclick={clearRepoSelection} class="nd-input-suffix nd-input-clear" type="button">
@@ -602,14 +751,14 @@
 							{/if}
 						</div>
 
-						{#if selectedRepo}
+						{#if selectedRepo || repoUrl}
 							<div class="nd-field nd-relative" data-branch-dropdown>
 								<label class="nd-label">Branch</label>
 								<div class="nd-relative">
 									<input type="text" bind:value={branchSearch}
 										oninput={(e) => handleBranchSearchInput((e.target as HTMLInputElement).value)}
-										onfocus={() => { if (!selectedBranch) showBranchDropdown = branchSearch.length > 0; }}
-										placeholder={selectedBranch ? selectedBranch.name : "Search branches..."}
+										onfocus={() => { if (!selectedBranch) showBranchDropdown = branchSearch.length > 0 && branches.length > 0; }}
+										placeholder="main"
 										class="nd-input" disabled={loadingBranches} readonly={selectedBranch !== null}
 										style={selectedBranch ? "opacity: 0.7;" : ""} />
 									{#if selectedBranch}
@@ -628,7 +777,7 @@
 							</div>
 						{/if}
 
-						{#if selectedBranch}
+						{#if selectedBranch || branch}
 							<div class="nd-field">
 								<label class="nd-label">Build Method</label>
 								<div class="nd-grid-2">
@@ -650,10 +799,10 @@
 								<div class="nd-field nd-relative" data-dockerfile-dropdown>
 									<label class="nd-label">Dockerfile</label>
 									<div class="nd-relative">
-										<input type="text" bind:value={dockerfileSearch} oninput={(e) => handleDockerfileInput((e.target as HTMLInputElement).value)} placeholder="Dockerfile" class="nd-input nd-mono" />
+										<input type="text" bind:value={dockerfileSearch} oninput={(e) => handleDockerfileInput((e.target as HTMLInputElement).value)} onfocus={() => { if (dockerfiles.length > 0) showDockerfileDropdown = true; }} placeholder="Dockerfile" class="nd-input nd-mono" />
 										{#if loadingDockerfiles}<div class="nd-input-suffix"><Loader2 class="h-4 w-4 animate-spin" /></div>{/if}
 									</div>
-									{#if showDockerfileDropdown && dockerfileSearch && !loadingDockerfiles && dockerfiles.length > 0}
+									{#if showDockerfileDropdown && !loadingDockerfiles && dockerfiles.length > 0}
 										<div class="nd-dropdown">
 											{#each dockerfiles.filter((d) => d.toLowerCase().includes(dockerfileSearch.toLowerCase())) as df}
 												<button onclick={() => selectDockerfile(df)} class="nd-dropdown-item nd-mono"><span class="nd-truncate">{df}</span></button>
@@ -680,30 +829,18 @@
 		<!-- ═══ Networking ═══ -->
 		<div class="nd-card">
 			<div class="nd-card-header">
-				<h2 class="nd-card-title">Networking</h2>
+				<h2 class="nd-card-title">Ports</h2>
 				<button onclick={addPort} class="nd-btn nd-btn-secondary nd-btn-sm"><Plus class="h-4 w-4" /> Add port</button>
 			</div>
 			<div class="nd-stack">
 				{#each ports as port, index}
-					<div class="nd-port-row">
-						<div class="nd-field">
-							<label class="nd-label-sm">Name</label>
-							<input type="text" bind:value={port.name} placeholder="http" class="nd-input" />
+					<div class="nd-port-row-simple">
+						<div class="nd-field" style="flex: 1; min-width: 80px; max-width: 120px;">
+							<input type="number" bind:value={port.containerPort} oninput={() => portsManuallyEdited = true} min="1" placeholder="80" class="nd-input" />
 						</div>
-						<div class="nd-field">
-							<label class="nd-label-sm">Container</label>
-							<input type="number" bind:value={port.containerPort} min="1" class="nd-input" />
-						</div>
-						<div class="nd-field">
-							<label class="nd-label-sm">Service</label>
-							<input type="number" bind:value={port.servicePort} min="1" class="nd-input" />
-						</div>
-						<div class="nd-field">
-							<label class="nd-label-sm">Protocol</label>
-							<select bind:value={port.protocol} class="nd-input">
-								<option value="TCP">TCP</option>
-								<option value="UDP">UDP</option>
-							</select>
+						<div class="nd-protocol-toggle">
+							<button type="button" class="nd-proto-btn" class:nd-proto-active={port.protocol === 'TCP'} onclick={() => { port.protocol = 'TCP'; portsManuallyEdited = true; }}>TCP</button>
+							<button type="button" class="nd-proto-btn" class:nd-proto-active={port.protocol === 'UDP'} onclick={() => { port.protocol = 'UDP'; portsManuallyEdited = true; }}>UDP</button>
 						</div>
 						<button onclick={() => removePort(index)} disabled={ports.length <= 1} class="nd-icon-btn nd-icon-btn-danger">
 							<Trash2 class="h-4 w-4" />
@@ -741,9 +878,9 @@
 					{#each envVars as env, index}
 						{@const isRevealed = revealedIndices.has(index)}
 						<div class="nd-env-row">
-							<input type="text" bind:value={env.key} placeholder="KEY" class="nd-input nd-mono nd-env-key" />
+							<input type="text" bind:value={env.key} oninput={() => envsManuallyEdited = true} placeholder="KEY" class="nd-input nd-mono nd-env-key" />
 							<div class="nd-env-value-wrap">
-								<input type={isRevealed ? 'text' : 'password'} bind:value={env.value} placeholder="value" class="nd-input nd-mono" />
+								<input type={isRevealed ? 'text' : 'password'} bind:value={env.value} oninput={() => envsManuallyEdited = true} placeholder="value" class="nd-input nd-mono" />
 								<button type="button" onclick={() => toggleReveal(index)} class="nd-icon-btn" aria-label={isRevealed ? 'Hide value' : 'Show value'}>
 									{#if isRevealed}<EyeOff class="h-4 w-4" />{:else}<Eye class="h-4 w-4" />{/if}
 								</button>
@@ -763,52 +900,41 @@
 		<!-- ═══ Storage ═══ -->
 		<div class="nd-card">
 			<div class="nd-card-header">
-				<h2 class="nd-card-title">Storage</h2>
-				<button onclick={addVolume} class="nd-btn nd-btn-secondary nd-btn-sm"><Plus class="h-4 w-4" /> Add volume</button>
+				<div>
+					<h2 class="nd-card-title">Persistent Storage</h2>
+					<p class="nd-hint" style="margin-top: 0.125rem;">Attach storage that persists across restarts.</p>
+				</div>
+				<button onclick={addVolume} class="nd-btn nd-btn-secondary nd-btn-sm"><Plus class="h-4 w-4" /> Add Storage</button>
 			</div>
 			<div class="nd-stack">
 				{#each volumes as volume, index}
-					<div class="nd-volume-item">
-						<div class="nd-volume-header">
-							<span class="nd-volume-num">Volume {index + 1}</span>
-							<button onclick={() => removeVolume(index)} class="nd-icon-btn nd-icon-btn-danger"><Trash2 class="h-4 w-4" /></button>
+					<div class="nd-vol-card">
+						<div class="nd-vol-row">
+							<div class="nd-vol-num">{index + 1}</div>
+							<div class="nd-vol-fields">
+								<div class="nd-vol-field">
+									<input type="text" bind:value={volume.pvcName} placeholder="Storage name" class="nd-vol-input" />
+								</div>
+								<span class="nd-vol-arrow">→</span>
+								<div class="nd-vol-field">
+									<input type="text" bind:value={volume.mountPath} placeholder="/data" class="nd-vol-input nd-mono" />
+								</div>
+							</div>
+							<div class="nd-vol-actions">
+								<label class="nd-vol-toggle">
+									<span class="nd-vol-toggle-label">Read-only</span>
+									<input type="checkbox" class="nd-toggle-input" bind:checked={volume.readOnly} />
+									<span class="nd-toggle-track"><span class="nd-toggle-thumb"></span></span>
+								</label>
+								<button onclick={() => removeVolume(index)} class="nd-icon-btn nd-vol-remove"><Trash2 class="h-3.5 w-3.5" /></button>
+							</div>
 						</div>
-						<div class="nd-grid-2">
-							<div class="nd-field">
-								<label class="nd-label-sm">Name</label>
-								<input type="text" bind:value={volume.name} placeholder="data" class="nd-input" />
-							</div>
-							<div class="nd-field">
-								<label class="nd-label-sm">Type</label>
-								<select bind:value={volume.type} class="nd-input">
-									<option value="pvc">Persistent Volume Claim</option>
-									<option value="hostPath">Host Path</option>
-									<option value="emptyDir">Empty Directory</option>
-								</select>
-							</div>
-						</div>
-						<div class="nd-field">
-							<label class="nd-label-sm">Mount Path</label>
-							<input type="text" bind:value={volume.mountPath} placeholder="/data" class="nd-input nd-mono" />
-						</div>
-						{#if volume.type === 'pvc'}
-							<div class="nd-field">
-								<label class="nd-label-sm">PVC Name</label>
-								<input type="text" bind:value={volume.pvcName} placeholder="my-pvc" class="nd-input nd-mono" />
-							</div>
-						{:else if volume.type === 'hostPath'}
-							<div class="nd-field">
-								<label class="nd-label-sm">Host Path</label>
-								<input type="text" bind:value={volume.hostPath} placeholder="/host/path" class="nd-input nd-mono" />
-							</div>
-						{/if}
-						<label class="nd-checkbox-row">
-							<input type="checkbox" bind:checked={volume.readOnly} class="nd-checkbox" />
-							<span class="nd-checkbox-label-sm">Read-only</span>
-						</label>
 					</div>
 				{:else}
-					<p class="nd-empty-text">No volumes configured</p>
+					<div class="nd-vol-empty">
+												<p class="nd-vol-empty-title">No storage attached</p>
+						<p class="nd-hint">Add persistent storage to keep files across restarts.</p>
+					</div>
 				{/each}
 			</div>
 		</div>
@@ -861,11 +987,11 @@
 
 		<div class="nd-actions">
 			<a href={basePath} class="nd-btn nd-btn-secondary">Cancel</a>
-			<button onclick={submit} disabled={submitting} class="nd-btn nd-btn-primary">
+			<button onclick={submit} disabled={submitting} class="nd-btn nd-btn-primary nd-btn-create">
 				{#if submitting}
 					<Loader2 class="h-4 w-4 animate-spin" />
 				{/if}
-				Create deployment
+				Deploy
 			</button>
 		</div>
 	{/if}
@@ -875,60 +1001,91 @@
 	.nd-page {
 		max-width: 44rem;
 		margin: 0 auto;
-		padding: 2.5rem 2.5rem 3rem;
+		padding: 1.5rem 2.5rem 3rem;
 	}
 
-	/* Page title */
+	/* Hero header with gradient */
+	.nd-hero {
+		padding: 2rem 0 1.75rem;
+		margin-bottom: 0.25rem;
+	}
+
 	.nd-page-title {
-		font-size: 1.375rem;
+		font-size: 1.5rem;
 		font-weight: 700;
 		color: var(--center-channel-color);
-		margin: 0 0 1.25rem;
-		letter-spacing: -0.02em;
+		margin: 0;
+		letter-spacing: -0.025em;
+		background: linear-gradient(135deg, var(--sidebar-text-active-border), color-mix(in srgb, var(--sidebar-text-active-border) 60%, #a855f7));
+		-webkit-background-clip: text;
+		-webkit-text-fill-color: transparent;
+		background-clip: text;
 	}
 
-	/* Main card — contains tabs, owner row, form */
+	.nd-page-subtitle {
+		font-size: 0.8125rem;
+		color: var(--surface-muted);
+		margin: 0.25rem 0 0;
+	}
+
+	/* Main card */
 	.nd-main-card {
 		border: 1px solid var(--surface-border);
-		border-radius: 0.75rem;
+		border-radius: 0.875rem;
 		background-color: var(--surface-bg);
-		margin-bottom: 1.25rem;
+		margin-bottom: 1rem;
 		display: flex;
 		flex-direction: column;
-		overflow: hidden;
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.04), 0 1px 2px rgb(0 0 0 / 0.02);
 	}
 
-	/* Tabs inside card */
-	.nd-tabs {
+	/* Source picker */
+	.nd-source-picker {
 		display: flex;
-		background-color: color-mix(in srgb, var(--surface-border) 20%, transparent);
+		align-items: center;
+		justify-content: space-between;
+		padding: 0.875rem 1.5rem;
 		border-bottom: 1px solid var(--surface-border);
 	}
 
-	.nd-tab {
+	.nd-source-label {
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: var(--surface-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+	}
+
+	.nd-pill-group {
+		display: flex;
+		border-radius: 0.5rem;
+		padding: 0.1875rem;
+		background-color: color-mix(in srgb, var(--surface-border) 30%, transparent);
+	}
+
+	.nd-pill {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.375rem;
-		padding: 0.6875rem 1.25rem;
-		font-size: 0.8125rem;
+		padding: 0.3125rem 0.75rem;
+		border-radius: 0.375rem;
+		font-size: 0.75rem;
 		font-weight: 500;
 		border: none;
 		cursor: pointer;
 		background: transparent;
 		color: var(--surface-muted);
-		border-bottom: 2px solid transparent;
-		margin-bottom: -1px;
-		transition: color 0.15s, background-color 0.15s;
+		transition: all 0.15s;
 	}
 
-	.nd-tab:hover {
+	.nd-pill:hover {
 		color: var(--center-channel-color);
 	}
 
-	.nd-tab-active {
-		color: var(--sidebar-text-active-border);
-		border-bottom-color: var(--sidebar-text-active-border);
+	.nd-pill-active {
 		background-color: var(--surface-bg);
+		color: var(--center-channel-color);
+		box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
 	}
 
 	/* Owner / Name row */
@@ -976,18 +1133,20 @@
 	.nd-name-input:focus {
 		outline: none;
 		border-color: var(--sidebar-text-active-border);
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--sidebar-text-active-border) 15%, transparent);
 	}
 
 	/* Cards */
 	.nd-card {
 		border: 1px solid var(--surface-border);
-		border-radius: 0.75rem;
+		border-radius: 0.875rem;
 		background-color: var(--surface-bg);
 		padding: 1.25rem;
 		margin-bottom: 1rem;
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.04), 0 1px 2px rgb(0 0 0 / 0.02);
 	}
 
 	.nd-card-header {
@@ -1040,6 +1199,7 @@
 	.nd-input:focus {
 		outline: none;
 		border-color: var(--sidebar-text-active-border);
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--sidebar-text-active-border) 15%, transparent);
 	}
 
 	.nd-input:disabled {
@@ -1081,6 +1241,8 @@
 	/* Dropdown */
 	.nd-dropdown {
 		position: absolute;
+		top: 100%;
+		left: 0;
 		z-index: 20;
 		margin-top: 0.25rem;
 		max-height: 12rem;
@@ -1090,7 +1252,7 @@
 		border: 1px solid var(--surface-border);
 		padding: 0.375rem;
 		background-color: var(--surface-bg);
-		box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
+		box-shadow: 0 4px 16px rgb(0 0 0 / 0.08), 0 8px 24px rgb(0 0 0 / 0.04);
 	}
 
 	.nd-dropdown-item {
@@ -1172,6 +1334,7 @@
 		border-color: var(--sidebar-text-active-border);
 		box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-text-active-border) 25%, transparent);
 		color: var(--sidebar-text-active-border);
+		background: color-mix(in srgb, var(--sidebar-text-active-border) 4%, transparent);
 	}
 
 	.nd-build-label {
@@ -1249,35 +1412,208 @@
 		align-items: end;
 	}
 
-	/* Volumes */
-	.nd-volume-item {
-		border: 1px solid var(--surface-border);
-		border-radius: 0.75rem;
-		padding: 1rem;
+	.nd-port-row-simple {
 		display: flex;
-		flex-direction: column;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.nd-protocol-toggle {
+		display: flex;
+		border-radius: 0.5rem;
+		overflow: hidden;
+		border: 1px solid var(--surface-border);
+	}
+
+	.nd-proto-btn {
+		padding: 0.375rem 0.75rem;
+		font-size: 0.75rem;
+		font-weight: 500;
+		background: transparent;
+		color: var(--surface-muted);
+		border: none;
+		cursor: pointer;
+		transition: all 0.15s;
+	}
+
+	.nd-proto-btn:first-child {
+		border-right: 1px solid var(--surface-border);
+	}
+
+	.nd-proto-active {
+		background-color: var(--sidebar-text-active-border);
+		color: #fff;
+	}
+
+	/* Volumes — inline card style */
+	.nd-vol-card {
+		padding: 0.875rem 1rem;
+		border-radius: 0.75rem;
+		background-color: color-mix(in srgb, var(--surface-border) 15%, transparent);
+		border: 1px solid var(--surface-border);
+		transition: border-color 0.15s;
+	}
+
+	.nd-vol-card:hover {
+		border-color: color-mix(in srgb, var(--surface-border) 60%, var(--center-channel-color));
+	}
+
+	.nd-vol-row {
+		display: flex;
+		align-items: center;
 		gap: 0.75rem;
 	}
 
-	.nd-volume-header {
+	.nd-vol-num {
+		flex-shrink: 0;
+		width: 1.5rem;
+		height: 1.5rem;
+		border-radius: 0.375rem;
+		background: linear-gradient(135deg, var(--sidebar-text-active-border), color-mix(in srgb, var(--sidebar-text-active-border) 60%, #a855f7));
+		color: #fff;
+		font-size: 0.6875rem;
+		font-weight: 600;
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
+		justify-content: center;
 	}
 
-	.nd-volume-num {
+	.nd-vol-fields {
+		flex: 1;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		min-width: 0;
+		flex-wrap: wrap;
+	}
+
+	.nd-vol-field {
+		flex: 1;
+		min-width: 100px;
+	}
+
+	.nd-vol-arrow {
+		color: var(--surface-muted);
+		font-size: 0.875rem;
+		flex-shrink: 0;
+	}
+
+	.nd-vol-input {
+		width: 100%;
+		padding: 0.375rem 0.625rem;
+		border-radius: 0.5rem;
+		border: 1px solid var(--surface-border);
+		background-color: var(--surface-bg);
+		color: var(--center-channel-color);
+		font-size: 0.8125rem;
+		transition: border-color 0.15s;
+		outline: none;
+	}
+
+	.nd-vol-input:focus {
+		border-color: var(--sidebar-text-active-border);
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--sidebar-text-active-border) 15%, transparent);
+	}
+
+	.nd-vol-input::placeholder {
+		color: var(--surface-muted);
+	}
+
+	.nd-vol-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		flex-shrink: 0;
+	}
+
+	.nd-vol-toggle {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.25rem 0.5rem;
+		border-radius: 0.375rem;
+		cursor: pointer;
+	}
+
+	.nd-vol-toggle-label {
+		font-size: 0.6875rem;
+		color: var(--surface-muted);
+		white-space: nowrap;
+	}
+
+	.nd-vol-remove {
+		opacity: 0.4;
+		transition: opacity 0.15s;
+	}
+
+	.nd-vol-card:hover .nd-vol-remove {
+		opacity: 1;
+	}
+
+	/* Toggle switch */
+	.nd-toggle-input {
+		position: absolute;
+		opacity: 0;
+		width: 0;
+		height: 0;
+		pointer-events: none;
+	}
+
+	.nd-toggle-track {
+		position: relative;
+		flex-shrink: 0;
+		width: 2.25rem;
+		height: 1.25rem;
+		border-radius: 0.625rem;
+		background-color: color-mix(in srgb, var(--surface-border) 80%, var(--center-channel-color));
+		transition: background-color 0.2s;
+	}
+
+	.nd-toggle-input:checked + .nd-toggle-track {
+		background-color: var(--sidebar-text-active-border);
+	}
+
+	.nd-toggle-thumb {
+		position: absolute;
+		top: 0.125rem;
+		left: 0.125rem;
+		width: 1rem;
+		height: 1rem;
+		border-radius: 50%;
+		background-color: #fff;
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
+		transition: transform 0.2s;
+	}
+
+	.nd-toggle-input:checked + .nd-toggle-track .nd-toggle-thumb {
+		transform: translateX(1rem);
+	}
+
+	.nd-toggle-input:focus-visible + .nd-toggle-track {
+		outline: 2px solid var(--sidebar-text-active-border);
+		outline-offset: 2px;
+	}
+
+	/* Empty state */
+	.nd-vol-empty {
+		text-align: center;
+		padding: 2rem 0;
+	}
+
+	.nd-vol-empty-icon {
+		width: 2rem;
+		height: 2rem;
+		margin: 0 auto 0.5rem;
+		color: var(--surface-muted);
+	}
+
+	.nd-vol-empty-title {
 		font-size: 0.8125rem;
 		font-weight: 500;
 		color: var(--center-channel-color);
+		margin: 0 0 0.25rem;
 	}
 
-	.nd-empty-text {
-		font-size: 0.8125rem;
-		color: var(--surface-muted);
-		text-align: center;
-		padding: 1rem 0;
-		margin: 0;
-	}
 
 	/* Env tabs */
 	.nd-env-tabs {
@@ -1379,13 +1715,20 @@
 	}
 
 	.nd-btn-primary {
-		background-color: var(--sidebar-text-active-border);
+		background: linear-gradient(135deg, var(--sidebar-text-active-border), color-mix(in srgb, var(--sidebar-text-active-border) 70%, #a855f7));
 		color: #fff;
-		box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 1px 1px rgb(0 0 0 / 0.04);
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.1), 0 1px 2px rgb(0 0 0 / 0.06);
 	}
 
 	.nd-btn-primary:hover:not(:disabled) {
-		opacity: 0.95;
+		opacity: 0.92;
+		box-shadow: 0 2px 6px rgb(0 0 0 / 0.15);
+	}
+
+	.nd-btn-create {
+		padding: 0.5rem 1.5rem;
+		font-size: 0.875rem;
+		font-weight: 600;
 	}
 
 	.nd-btn-secondary {
@@ -1438,8 +1781,9 @@
 	.nd-actions {
 		display: flex;
 		justify-content: flex-end;
-		gap: 0.5rem;
-		margin-top: 0.5rem;
+		gap: 0.75rem;
+		margin-top: 1rem;
+		padding-top: 1rem;
 	}
 
 	/* Error */
