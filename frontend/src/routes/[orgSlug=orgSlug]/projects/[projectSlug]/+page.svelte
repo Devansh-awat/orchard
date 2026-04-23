@@ -772,14 +772,16 @@
 								{/if}
 								<span class="pj-deployment-favicon-dot {getStatusColor(deployment.status)}"></span>
 							</div>
-							<span class="pj-deployment-status-badge {getStatusColor(deployment.status)}">
-								{getStatusLabel(deployment.status)}
-							</span>
-							{#if deployment.buildStatus && deployment.buildStatus !== 'none' && deployment.buildStatus !== 'succeeded'}
-								<span class="pj-deployment-build-badge pj-build-{deployment.buildStatus}">
-									Build: {deployment.buildStatus === 'building' ? 'Building' : deployment.buildStatus === 'failed' ? 'Failed' : deployment.buildStatus}
+							<div class="pj-deployment-badges">
+								<span class="pj-deployment-status-badge {getStatusColor(deployment.status)}">
+									{getStatusLabel(deployment.status)}
 								</span>
-							{/if}
+								{#if deployment.buildStatus && deployment.buildStatus !== 'none' && deployment.buildStatus !== 'succeeded'}
+									<span class="pj-deployment-build-badge pj-build-{deployment.buildStatus}">
+										Build: {deployment.buildStatus === 'building' ? 'Building' : deployment.buildStatus === 'failed' ? 'Failed' : deployment.buildStatus}
+									</span>
+								{/if}
+							</div>
 						</div>
 						<div class="pj-deployment-card-body">
 							<span class="pj-deployment-name">{deployment.name}</span>
@@ -1547,6 +1549,14 @@
 		display: flex;
 		align-items: flex-start;
 		justify-content: space-between;
+	}
+
+	.pj-deployment-badges {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		flex-wrap: wrap;
+		justify-content: flex-end;
 	}
 
 	.pj-deployment-indicator {

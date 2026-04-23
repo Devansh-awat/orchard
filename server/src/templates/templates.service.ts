@@ -217,6 +217,10 @@ export class TemplatesService implements OnModuleInit {
       lastName?: string;
       imageUrl?: string;
     },
+    resourceOverride?: {
+      cpuRequestMilli?: number | null;
+      memoryRequestBytes?: number | null;
+    },
   ) {
     const template = await this.prisma.template.findUnique({ where: { id: templateId } });
     if (!template) throw new NotFoundException('Template not found');
@@ -254,7 +258,12 @@ export class TemplatesService implements OnModuleInit {
           case 'database': {
             const db = await this.projectsService.createDatabase(
               projectId,
-              { name: config.name, templateInstanceId: instance.id },
+              {
+                name: config.name,
+                templateInstanceId: instance.id,
+                cpuRequestMilli: resourceOverride?.cpuRequestMilli ?? null,
+                memoryRequestBytes: resourceOverride?.memoryRequestBytes ?? null,
+              },
               clerkId,
               userData,
             );
@@ -281,6 +290,8 @@ export class TemplatesService implements OnModuleInit {
               volumes: config.volumes,
               exposePublic: config.exposePublic ?? false,
               templateInstanceId: instance.id,
+              cpuRequestMilli: resourceOverride?.cpuRequestMilli ?? null,
+              memoryRequestBytes: resourceOverride?.memoryRequestBytes ?? null,
             };
 
             const deployment = await this.projectsService.createDeployment(

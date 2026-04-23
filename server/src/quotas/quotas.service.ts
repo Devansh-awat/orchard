@@ -2,6 +2,7 @@ import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/commo
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { parseCpu, parseMemory } from '../kubernetes/quantity';
+import { DEFAULT_CPU_MILLI, DEFAULT_MEMORY_BYTES } from '../kubernetes/presets';
 
 export type Caps = {
   cpuLimitMilli: number | null;
@@ -76,6 +77,24 @@ export class QuotasService {
         ? Number(project.organization.defaultPodMemoryBytes)
         : null,
     };
+  }
+
+  // Resolve the per-pod resources for a deployment/db/template resource.
+  // Precedence: explicit override on the resource → org default → hardcoded fallback.
+  async resolvePodResources(
+    projectId: string,
+    override?: { cpuRequestMilli?: number | null; memoryRequestBytes?: number | null },
+  ): Promise<{ cpuMilli: number; memoryBytes: number }> {
+    const { defaultPodCpuMilli, defaultPodMemoryBytes } = await this.resolveProjectCaps(projectId);
+    const cpu =
+      override?.cpuRequestMilli ??
+      defaultPodCpuMilli ??
+      DEFAULT_CPU_MILLI;
+    const mem =
+      override?.memoryRequestBytes ??
+      defaultPodMemoryBytes ??
+      DEFAULT_MEMORY_BYTES;
+    return { cpuMilli: cpu, memoryBytes: mem };
   }
 
   // Push the effective caps for a project to Kubernetes (ResourceQuota + LimitRange).

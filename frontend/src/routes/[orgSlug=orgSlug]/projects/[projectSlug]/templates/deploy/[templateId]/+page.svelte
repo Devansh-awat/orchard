@@ -5,6 +5,7 @@
 	import { apiFetch, toasts, refreshTree, fetchProjectContext, buildBasePath } from '$lib/stores';
 	import { Loader2, Rocket, Database, Server, Globe, LayoutTemplate } from 'lucide-svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
+	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
 
 	interface ParameterDef {
 		name: string;
@@ -47,6 +48,8 @@
 	let deploying = $state(false);
 	let error = $state<string | null>(null);
 	let paramValues = $state<Record<string, any>>({});
+	let resourceCpuMilli = $state<number | null>(null);
+	let resourceMemoryBytes = $state<number | null>(null);
 
 	const orgSlug = $derived($page.params.orgSlug ?? '');
 	const projectSlug = $derived($page.params.projectSlug ?? '');
@@ -120,7 +123,9 @@
 					headers: { 'Content-Type': 'application/json' },
 					body: JSON.stringify({
 						templateId: template.id,
-						parameters: paramValues
+						parameters: paramValues,
+						cpuRequestMilli: resourceCpuMilli,
+						memoryRequestBytes: resourceMemoryBytes,
 					})
 				}
 			);
@@ -226,15 +231,14 @@
 		</div>
 
 		<!-- Configuration card -->
-		{#if template.parameters.length > 0}
-			<div class="td-card">
-				<h2 class="td-card-title">Configuration</h2>
+		<div class="td-card">
+			<h2 class="td-card-title">Configuration</h2>
 
-				<form
-					onsubmit={(e) => { e.preventDefault(); deploy(); }}
-					class="td-form"
-				>
-					{#each template.parameters as param}
+			<form
+				onsubmit={(e) => { e.preventDefault(); deploy(); }}
+				class="td-form"
+			>
+				{#each template.parameters as param}
 						<div class="td-field">
 							{#if param.type === 'boolean'}
 								<label class="td-toggle-row">
@@ -287,6 +291,16 @@
 						</div>
 					{/each}
 
+					<div class="td-field">
+						<span class="td-label">Resources</span>
+						<p class="td-hint" style="margin-top: 0;">Applies to every deployment and database created by this template.</p>
+						<ResourcePicker
+							bind:cpuMilli={resourceCpuMilli}
+							bind:memoryBytes={resourceMemoryBytes}
+							disabled={deploying}
+						/>
+					</div>
+
 					{#if error}
 						<div class="td-error">{error}</div>
 					{/if}
@@ -305,26 +319,8 @@
 					</div>
 				</form>
 			</div>
-		{:else}
-			<!-- No params — just deploy -->
-			{#if error}
-				<div class="td-error">{error}</div>
-			{/if}
-			<div class="td-actions">
-				<a href={basePath} class="td-btn td-btn-secondary">Cancel</a>
-				<button class="td-btn td-btn-primary" onclick={deploy} disabled={deploying}>
-					{#if deploying}
-						<Loader2 class="h-4 w-4 animate-spin" />
-						Deploying...
-					{:else}
-						<Rocket class="h-4 w-4" />
-						Deploy
-					{/if}
-				</button>
-			</div>
 		{/if}
-	{/if}
-</div>
+	</div>
 
 <style>
 	.td-page {

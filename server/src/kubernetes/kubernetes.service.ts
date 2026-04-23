@@ -2,7 +2,7 @@ import { Injectable, ServiceUnavailableException, NotFoundException, BadRequestE
 import * as k8s from '@kubernetes/client-node';
 import { ServiceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
-import { parseCpu, parseMemory } from './quantity';
+import { parseCpu, parseMemory, cpuMilliToK8s, memoryBytesToK8s } from './quantity';
 
 function buildNodeAffinity(
   allowedNodes: string[] | null | undefined,
@@ -56,6 +56,10 @@ type CreateDeploymentOptions = {
   serviceType?: 'ClusterIP' | 'LoadBalancer' | 'NodePort';
   allowedNodes?: string[] | null;
   deniedNodes?: string[];
+  resources?: {
+    cpuMilli: number;
+    memoryBytes: number;
+  };
   volumes?: {
     name: string;
     type: 'pvc' | 'hostPath' | 'emptyDir';
@@ -401,6 +405,152 @@ export class KubernetesService {
       console.error('[K8s] getOrgUsage failed:', message);
     }
     return { cpuMilli, memoryBytes, pods, services };
+  }
+
+  // Patch resources on a CNPG Cluster (rolling update of postgres pods).
+  async updateCnpgClusterResources(
+    namespace: string,
+    clusterName: string,
+    resources: { cpuMilli: number; memoryBytes: number },
+  ) {
+    this.ensureKubeConfig();
+    if (!this.kc) return;
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    const cpuStr = cpuMilliToK8s(resources.cpuMilli);
+    const memStr = memoryBytesToK8s(resources.memoryBytes);
+    const patch = [
+      {
+        op: 'replace',
+        path: '/spec/resources',
+        value: {
+          requests: { cpu: cpuStr, memory: memStr },
+          limits: { cpu: cpuStr, memory: memStr },
+        },
+      },
+    ];
+    try {
+      await customApi.patchNamespacedCustomObject(
+        'postgresql.cnpg.io',
+        'v1',
+        namespace,
+        'clusters',
+        clusterName,
+        patch,
+        undefined,
+        undefined,
+        undefined,
+        { headers: { 'Content-Type': 'application/json-patch+json' } },
+      );
+    } catch (err: any) {
+      // If /spec/resources doesn't exist yet, use "add" op instead.
+      if (err?.response?.body?.message?.includes('not found')) {
+        const addPatch = [{ ...patch[0], op: 'add' }];
+        await customApi.patchNamespacedCustomObject(
+          'postgresql.cnpg.io',
+          'v1',
+          namespace,
+          'clusters',
+          clusterName,
+          addPatch,
+          undefined,
+          undefined,
+          undefined,
+          { headers: { 'Content-Type': 'application/json-patch+json' } },
+        );
+      } else {
+        throw err;
+      }
+    }
+  }
+
+  // Patch a deployment's pod-template container resources (triggers rolling restart).
+  async updateDeploymentResources(
+    namespace: string,
+    deploymentName: string,
+    resources: { cpuMilli: number; memoryBytes: number },
+  ) {
+    this.ensureKubeConfig();
+    if (!this.kc) return;
+    const appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
+    const cpuStr = cpuMilliToK8s(resources.cpuMilli);
+    const memStr = memoryBytesToK8s(resources.memoryBytes);
+    const existing = await appsApi.readNamespacedDeployment(deploymentName, namespace);
+    const containers = existing.body.spec?.template?.spec?.containers;
+    if (!containers || containers.length === 0) {
+      throw new NotFoundException(`Deployment ${deploymentName} has no containers`);
+    }
+    const containerName = containers[0].name;
+    const patch = {
+      spec: {
+        template: {
+          spec: {
+            containers: [
+              {
+                name: containerName,
+                resources: {
+                  requests: { cpu: cpuStr, memory: memStr },
+                  limits: { cpu: cpuStr, memory: memStr },
+                },
+              },
+            ],
+          },
+        },
+      },
+    };
+    await appsApi.patchNamespacedDeployment(
+      deploymentName,
+      namespace,
+      patch,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } },
+    );
+  }
+
+  async removeDeploymentResources(
+    namespace: string,
+    deploymentName: string,
+  ) {
+    this.ensureKubeConfig();
+    if (!this.kc) return;
+    const appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
+    const existing = await appsApi.readNamespacedDeployment(deploymentName, namespace);
+    const containers = existing.body.spec?.template?.spec?.containers;
+    if (!containers || containers.length === 0) {
+      throw new NotFoundException(`Deployment ${deploymentName} has no containers`);
+    }
+    const containerName = containers[0].name;
+    const patch = {
+      spec: {
+        template: {
+          spec: {
+            containers: [
+              {
+                name: containerName,
+                resources: {
+                  requests: {},
+                  limits: {},
+                },
+              },
+            ],
+          },
+        },
+      },
+    };
+    await appsApi.patchNamespacedDeployment(
+      deploymentName,
+      namespace,
+      patch,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } },
+    );
   }
 
   async listClusterNodes(): Promise<k8s.V1Node[]> {
@@ -1195,6 +1345,16 @@ export class KubernetesService {
         env: envList,
         volumeMounts: volumeMounts.length > 0 ? volumeMounts : undefined,
       };
+
+      // requests == limits → Guaranteed QoS. Quota usage matches real-world usage.
+      if (options.resources) {
+        const cpuStr = cpuMilliToK8s(options.resources.cpuMilli);
+        const memStr = memoryBytesToK8s(options.resources.memoryBytes);
+        container.resources = {
+          requests: { cpu: cpuStr, memory: memStr },
+          limits: { cpu: cpuStr, memory: memStr },
+        };
+      }
 
       // Apply health checks if configured
       if (options.healthCheck?.enabled) {
@@ -3799,6 +3959,62 @@ export class KubernetesService {
     }
   }
 
+  // Cluster-wide pod labels. Returns Map<"namespace/podName", labels>.
+  async getAllPodLabels(): Promise<Map<string, Record<string, string>>> {
+    const out = new Map<string, Record<string, string>>();
+    this.ensureKubeConfig();
+    if (!this.kc) return out;
+    try {
+      const api = this.kc.makeApiClient(k8s.CoreV1Api);
+      const res = await api.listPodForAllNamespaces();
+      for (const pod of res.body.items) {
+        const ns = pod.metadata?.namespace;
+        const name = pod.metadata?.name;
+        if (!ns || !name) continue;
+        out.set(`${ns}/${name}`, (pod.metadata?.labels || {}) as Record<string, string>);
+      }
+    } catch (err) {
+      console.error('[K8s] getAllPodLabels failed:', err instanceof Error ? err.message : err);
+    }
+    return out;
+  }
+
+  // Cluster-wide pod metrics. Returns Map<"namespace/podName", {cpuMilli, memBytes}>.
+  async getAllPodMetrics(): Promise<Map<string, { cpuMilli: number; memoryBytes: number; namespace: string; podName: string }>> {
+    const out = new Map<string, { cpuMilli: number; memoryBytes: number; namespace: string; podName: string }>();
+    this.ensureKubeConfig();
+    if (!this.kc) return out;
+    try {
+      const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+      const response = await customApi.listClusterCustomObject('metrics.k8s.io', 'v1beta1', 'pods');
+      const items = (response.body as any)?.items ?? [];
+      for (const item of items) {
+        const ns = item.metadata?.namespace as string | undefined;
+        const pod = item.metadata?.name as string | undefined;
+        if (!ns || !pod) continue;
+        let cpu = 0;
+        let mem = 0;
+        for (const c of item.containers ?? []) {
+          const cpuStr: string = c.usage?.cpu ?? '0';
+          const memStr: string = c.usage?.memory ?? '0';
+          if (cpuStr.endsWith('n')) cpu += parseInt(cpuStr) / 1_000_000;
+          else if (cpuStr.endsWith('u')) cpu += parseInt(cpuStr) / 1000;
+          else if (cpuStr.endsWith('m')) cpu += parseInt(cpuStr);
+          else cpu += parseFloat(cpuStr) * 1000;
+          if (memStr.endsWith('Ki')) mem += parseInt(memStr) * 1024;
+          else if (memStr.endsWith('Mi')) mem += parseInt(memStr) * 1024 * 1024;
+          else if (memStr.endsWith('Gi')) mem += parseInt(memStr) * 1024 * 1024 * 1024;
+          else mem += parseInt(memStr);
+        }
+        out.set(`${ns}/${pod}`, { cpuMilli: Math.round(cpu), memoryBytes: mem, namespace: ns, podName: pod });
+      }
+    } catch (err) {
+      const m = err instanceof Error ? err.message : String(err);
+      console.error('[K8s] getAllPodMetrics failed:', m);
+    }
+    return out;
+  }
+
   async getPodMetrics(namespace: string, labelSelector: string): Promise<Map<string, { cpuUsage: number; memoryUsage: number }>> {
     try {
       const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
@@ -4272,6 +4488,7 @@ export class KubernetesService {
     dbPassword: string;
     storageSize?: string;
     r2?: { endpoint: string; bucket: string; region?: string; accessKey: string; secretKey: string };
+    resources?: { cpuMilli: number; memoryBytes: number };
   }): Promise<{ host: string; port: number }> {
     this.ensureKubeConfig();
 
@@ -4427,6 +4644,15 @@ export class KubernetesService {
         failureThreshold: 6,
       },
     };
+
+    if (options.resources) {
+      const cpuStr = cpuMilliToK8s(options.resources.cpuMilli);
+      const memStr = memoryBytesToK8s(options.resources.memoryBytes);
+      postgresContainer.resources = {
+        requests: { cpu: cpuStr, memory: memStr },
+        limits: { cpu: cpuStr, memory: memStr },
+      };
+    }
 
     const pgbackrestContainer: k8s.V1Container = {
       name: 'pgbackrest',
@@ -4746,6 +4972,7 @@ export class KubernetesService {
     sharedPreloadLibraries?: string[];
     imageName?: string;
     r2?: { endpoint: string; bucket: string; region?: string; accessKey: string; secretKey: string };
+    resources?: { cpuMilli: number; memoryBytes: number };
   }): Promise<{ host: string; port: number }> {
     this.ensureKubeConfig();
     const ns = options.namespace.trim();
@@ -4807,6 +5034,15 @@ export class KubernetesService {
       },
       enableSuperuserAccess: true,
     };
+
+    if (options.resources) {
+      const cpuStr = cpuMilliToK8s(options.resources.cpuMilli);
+      const memStr = memoryBytesToK8s(options.resources.memoryBytes);
+      clusterSpec.resources = {
+        requests: { cpu: cpuStr, memory: memStr },
+        limits: { cpu: cpuStr, memory: memStr },
+      };
+    }
 
     if (options.r2 && r2SecretName) {
       const host = options.r2.endpoint.replace(/^https?:\/\//, '').replace(/\/$/, '');

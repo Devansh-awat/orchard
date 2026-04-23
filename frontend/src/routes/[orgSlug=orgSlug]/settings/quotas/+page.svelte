@@ -141,13 +141,13 @@
 		<div class="flex justify-center py-12"><Loader2 class="h-8 w-8 animate-spin" /></div>
 	{:else if orgQuota}
 		<!-- Org usage summary -->
+		{@const cpuCap = orgQuota.org.cpuLimitMilli}
+		{@const memCap = orgQuota.org.memoryLimitBytes}
+		{@const podsCap = orgQuota.org.maxPods}
+		{@const svcCap = orgQuota.org.maxServices}
 		<div class="rounded-2xl border p-5 mb-6" style="border-color: var(--surface-border); background-color: var(--surface-bg);">
 			<h2 class="text-sm font-semibold mb-3">Organization total</h2>
 			<div class="grid grid-cols-4 gap-4">
-				{@const cpuCap = orgQuota.org.cpuLimitMilli}
-				{@const memCap = orgQuota.org.memoryLimitBytes}
-				{@const podsCap = orgQuota.org.maxPods}
-				{@const svcCap = orgQuota.org.maxServices}
 				<div>
 					<p class="text-xs" style="color: var(--surface-muted);">CPU</p>
 					<p class="text-lg font-bold">

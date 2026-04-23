@@ -172,7 +172,7 @@ export class ProjectsService {
       const warnings = livePods?.warnings || [];
 
       const readyPods = pods?.filter((pod: any) => pod.status?.toLowerCase() === 'ready') ?? [];
-      const allPods = pods ?? [];
+      const allPods = (pods ?? []).filter((pod: any) => pod.status?.toLowerCase() !== 'succeeded');
       const desiredReplicas = deployment.replicas || 1;
 
       if (allPods.length === 0) {
@@ -480,6 +480,89 @@ export class ProjectsService {
     return project;
   }
 
+  async updateDeploymentResources(
+    deploymentId: string,
+    data: { cpuRequestMilli: number | null; memoryRequestBytes: number | null },
+  ) {
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: { project: true },
+    });
+    if (!deployment) throw new NotFoundException('Deployment not found');
+
+    // Unlimited mode: cpuRequestMilli === 0 means remove all resource constraints.
+    const isUnlimited = data.cpuRequestMilli === 0 && data.memoryRequestBytes === 0;
+
+    if (isUnlimited) {
+      await this.kubernetesService.removeDeploymentResources(
+        deployment.namespace,
+        deployment.name,
+      );
+    } else {
+      const resolved = await this.quotasService.resolvePodResources(deployment.projectId, {
+        cpuRequestMilli: data.cpuRequestMilli,
+        memoryRequestBytes: data.memoryRequestBytes,
+      });
+
+      // Org-wide delta check.
+      await this.quotasService.enforceOrgCapForNewPod(deployment.project.organizationId, {
+        cpuMilli: resolved.cpuMilli * (deployment.replicas || 1),
+        memoryBytes: resolved.memoryBytes * (deployment.replicas || 1),
+      });
+
+      await this.kubernetesService.updateDeploymentResources(
+        deployment.namespace,
+        deployment.name,
+        resolved,
+      );
+    }
+
+    return this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: {
+        cpuRequestMilli: data.cpuRequestMilli,
+        memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
+      },
+    });
+  }
+
+  async updateDatabaseResources(
+    databaseId: string,
+    data: { cpuRequestMilli: number | null; memoryRequestBytes: number | null },
+  ) {
+    const database = await this.prisma.database.findUnique({
+      where: { id: databaseId },
+      include: { project: true },
+    });
+    if (!database) throw new NotFoundException('Database not found');
+    if (database.mode !== 'cnpg' || !database.clusterName || !database.namespace) {
+      throw new BadRequestException('Database does not support resource updates');
+    }
+
+    const resolved = await this.quotasService.resolvePodResources(database.projectId, {
+      cpuRequestMilli: data.cpuRequestMilli,
+      memoryRequestBytes: data.memoryRequestBytes,
+    });
+    await this.quotasService.enforceOrgCapForNewPod(database.project.organizationId, {
+      cpuMilli: resolved.cpuMilli,
+      memoryBytes: resolved.memoryBytes,
+    });
+
+    await this.kubernetesService.updateCnpgClusterResources(
+      database.namespace,
+      database.clusterName,
+      resolved,
+    );
+
+    return this.prisma.database.update({
+      where: { id: databaseId },
+      data: {
+        cpuRequestMilli: data.cpuRequestMilli,
+        memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
+      },
+    });
+  }
+
   async createDeployment(
     projectId: string,
     data: {
@@ -505,6 +588,8 @@ export class ProjectsService {
         readOnly?: boolean;
       }[];
       templateInstanceId?: string;
+      cpuRequestMilli?: number | null;
+      memoryRequestBytes?: number | null;
     },
     clerkId: string,
     userData?: {
@@ -616,13 +701,15 @@ export class ProjectsService {
 
     const volumes = Array.isArray(data.volumes) ? data.volumes : [];
 
-    // Enforce org-wide quota against expected additional usage (one new pod per replica).
-    const { defaultPodCpuMilli, defaultPodMemoryBytes } = await this.quotasService.resolveProjectCaps(project.id);
-    const perPodCpu = defaultPodCpuMilli ?? 100;
-    const perPodMem = defaultPodMemoryBytes ?? 128 * 1024 * 1024;
+    // Resolve per-pod resources (explicit override → org default → fallback).
+    const podResources = await this.quotasService.resolvePodResources(project.id, {
+      cpuRequestMilli: data.cpuRequestMilli ?? null,
+      memoryRequestBytes: data.memoryRequestBytes ?? null,
+    });
+
     await this.quotasService.enforceOrgCapForNewPod(project.organizationId, {
-      cpuMilli: perPodCpu * replicas,
-      memoryBytes: perPodMem * replicas,
+      cpuMilli: podResources.cpuMilli * replicas,
+      memoryBytes: podResources.memoryBytes * replicas,
     });
     // Make sure the namespace ResourceQuota/LimitRange reflect current caps.
     await this.quotasService.applyProjectQuota(project.id).catch((err) => {
@@ -641,6 +728,7 @@ export class ProjectsService {
       volumes,
       allowedNodes: placement.allowedNodes,
       deniedNodes: placement.deniedNodes,
+      resources: podResources,
     });
 
     let createdDeployment;
@@ -656,6 +744,8 @@ export class ProjectsService {
           status: 'running',
           createdBy: user.id,
           templateInstanceId: data.templateInstanceId ?? null,
+          cpuRequestMilli: data.cpuRequestMilli ?? null,
+          memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
         },
       });
 
@@ -793,6 +883,8 @@ export class ProjectsService {
         hostPath?: string;
         readOnly?: boolean;
       }[];
+      cpuRequestMilli?: number | null;
+      memoryRequestBytes?: number | null;
     },
     clerkId: string,
     userData?: {
@@ -972,6 +1064,8 @@ export class ProjectsService {
         buildWithDepot: data.buildWithDepot ?? false,
         createdBy: user.id,
         buildLogs: `[INFO] Starting ${buildMethodLabel} build for ${repoUrl}@${branch}\n`,
+        cpuRequestMilli: data.cpuRequestMilli ?? null,
+        memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
       },
     });
 
@@ -1255,21 +1349,29 @@ export class ProjectsService {
       // Resolve node placement rules for this deployment's org once.
       const deploymentRow = await this.prisma.deployment.findUnique({
         where: { id: deploymentId },
-        select: { projectId: true, replicas: true, project: { select: { organizationId: true } } },
+        select: {
+          projectId: true,
+          replicas: true,
+          cpuRequestMilli: true,
+          memoryRequestBytes: true,
+          project: { select: { organizationId: true } },
+        },
       });
       const deployPlacement = deploymentRow
         ? await this.resolvePlacementForProject(deploymentRow.projectId)
         : { allowedNodes: null as string[] | null, deniedNodes: [] as string[] };
 
-      if (deploymentRow) {
-        const { defaultPodCpuMilli, defaultPodMemoryBytes } = await this.quotasService.resolveProjectCaps(
-          deploymentRow.projectId,
-        );
-        const perPodCpu = defaultPodCpuMilli ?? 100;
-        const perPodMem = defaultPodMemoryBytes ?? 128 * 1024 * 1024;
+      let rebuildResources: { cpuMilli: number; memoryBytes: number } | undefined;
+      const isUnlimitedDeploy = deploymentRow?.cpuRequestMilli === 0 &&
+        (deploymentRow?.memoryRequestBytes === BigInt(0) || deploymentRow?.memoryRequestBytes === null);
+      if (deploymentRow && !isUnlimitedDeploy) {
+        rebuildResources = await this.quotasService.resolvePodResources(deploymentRow.projectId, {
+          cpuRequestMilli: deploymentRow.cpuRequestMilli,
+          memoryRequestBytes: deploymentRow.memoryRequestBytes ? Number(deploymentRow.memoryRequestBytes) : null,
+        });
         await this.quotasService.enforceOrgCapForNewPod(deploymentRow.project.organizationId, {
-          cpuMilli: perPodCpu * (deploymentRow.replicas || 1),
-          memoryBytes: perPodMem * (deploymentRow.replicas || 1),
+          cpuMilli: rebuildResources.cpuMilli * (deploymentRow.replicas || 1),
+          memoryBytes: rebuildResources.memoryBytes * (deploymentRow.replicas || 1),
         });
         await this.quotasService.applyProjectQuota(deploymentRow.projectId).catch((err) => {
           console.error('[Projects] applyProjectQuota failed:', err);
@@ -1313,6 +1415,7 @@ export class ProjectsService {
             volumes: data.volumes || [],
             allowedNodes: deployPlacement.allowedNodes,
             deniedNodes: deployPlacement.deniedNodes,
+            resources: rebuildResources,
           });
         } else {
           // Update existing Kubernetes deployment with new image
@@ -7155,7 +7258,13 @@ export class ProjectsService {
 
   async createDatabase(
     projectId: string,
-    data: { name: string; storageSize?: string; templateInstanceId?: string },
+    data: {
+      name: string;
+      storageSize?: string;
+      templateInstanceId?: string;
+      cpuRequestMilli?: number | null;
+      memoryRequestBytes?: number | null;
+    },
     clerkId: string,
     userData?: {
       email?: string;
@@ -7229,6 +7338,18 @@ export class ProjectsService {
     const sizeRaw = typeof data.storageSize === 'string' ? data.storageSize.trim() : '';
     const storageSize = /^\d+(Mi|Gi|Ti)$/.test(sizeRaw) ? sizeRaw : '1Gi';
 
+    const dbResources = await this.quotasService.resolvePodResources(projectId, {
+      cpuRequestMilli: data.cpuRequestMilli ?? null,
+      memoryRequestBytes: data.memoryRequestBytes ?? null,
+    });
+    await this.quotasService.enforceOrgCapForNewPod(project.organizationId, {
+      cpuMilli: dbResources.cpuMilli,
+      memoryBytes: dbResources.memoryBytes,
+    });
+    await this.quotasService.applyProjectQuota(projectId).catch((err) => {
+      console.error('[Projects] applyProjectQuota (db) failed:', err);
+    });
+
     const { host, port } = await this.kubernetesService.createCnpgCluster({
       namespace,
       clusterName,
@@ -7237,6 +7358,7 @@ export class ProjectsService {
       dbPassword,
       storageSize,
       r2,
+      resources: dbResources,
     });
 
     let database;
@@ -7253,6 +7375,8 @@ export class ProjectsService {
           namespace,
           clusterName,
           storageSize,
+          cpuRequestMilli: data.cpuRequestMilli ?? null,
+          memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
           host,
           port,
           createdBy: user.id,

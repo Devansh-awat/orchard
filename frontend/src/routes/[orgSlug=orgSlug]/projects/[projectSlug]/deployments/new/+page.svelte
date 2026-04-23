@@ -5,6 +5,7 @@
 	import { apiFetch, toasts, refreshTree, isSuperAdmin, fetchProjectContext, buildBasePath, selectedOrganization, type ProjectContext } from '$lib/stores';
 	import { Loader2, Container, Github, Plus, Trash2, Eye, EyeOff, HardDrive } from 'lucide-svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
+	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
 
 	function handleClickOutside(event: MouseEvent, dropdownType: 'repo' | 'branch' | 'dockerfile') {
 		const target = event.target as HTMLElement;
@@ -72,6 +73,8 @@
 	let buildFromRoot = $state(false);
 	let replicas = $state(1);
 	let exposePublic = $state(false);
+	let resourceCpuMilli = $state<number | null>(null);
+	let resourceMemoryBytes = $state<number | null>(null);
 	let ports = $state([{ name: 'http', containerPort: 80, servicePort: 80, protocol: 'TCP' }]);
 	let portsManuallyEdited = $state(false);
 	let envVars = $state([{ key: '', value: '' }]);
@@ -575,7 +578,9 @@
 				ports: validPorts,
 				env: validEnv,
 				exposePublic,
-				volumes: validVolumes
+				volumes: validVolumes,
+				cpuRequestMilli: resourceCpuMilli,
+				memoryRequestBytes: resourceMemoryBytes,
 			};
 
 			if (deploymentSource === 'github') {
@@ -937,6 +942,18 @@
 					</div>
 				{/each}
 			</div>
+		</div>
+
+		<!-- ═══ Resources ═══ -->
+		<div class="nd-card">
+			<div class="nd-card-title">Resources</div>
+			<p class="nd-hint" style="margin-top:-0.25rem; margin-bottom:0.75rem;">
+				Pick a size for the container. Requests = limits, so what you pick is what it gets.
+			</p>
+			<ResourcePicker
+				bind:cpuMilli={resourceCpuMilli}
+				bind:memoryBytes={resourceMemoryBytes}
+			/>
 		</div>
 
 		<!-- ═══ Advanced ═══ -->

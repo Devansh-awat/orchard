@@ -2,6 +2,7 @@ import {
   Controller,
   Get,
   Patch,
+  Post,
   Param,
   Body,
   Req,
@@ -9,6 +10,7 @@ import {
   forwardRef,
 } from '@nestjs/common';
 import { QuotasService } from './quotas.service';
+import { QuotaBackfillService } from './backfill.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { Auth } from '../auth/decorators';
 
@@ -34,6 +36,34 @@ export class AdminQuotasController {
   @Patch(':id/quota')
   async updateOrgQuota(@Param('id') id: string, @Body() body: CapBody) {
     return this.quotas.updateOrgCaps(id, body);
+  }
+}
+
+// Super-admin: backfill resources on pre-existing deployments + databases.
+@Controller('admin/backfill')
+export class AdminBackfillController {
+  constructor(private readonly backfill: QuotaBackfillService) {}
+
+  @Get('candidates')
+  async list() {
+    return this.backfill.listCandidates();
+  }
+
+  @Post('apply')
+  async apply(
+    @Body()
+    body: {
+      kind: 'deployment' | 'database';
+      id: string;
+      cpuMilli: number;
+      memoryBytes: number;
+    },
+  ) {
+    await this.backfill.apply(
+      { kind: body.kind, id: body.id },
+      { cpuMilli: body.cpuMilli, memoryBytes: body.memoryBytes },
+    );
+    return { success: true };
   }
 }
 

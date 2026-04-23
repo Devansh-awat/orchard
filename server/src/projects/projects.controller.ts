@@ -276,7 +276,12 @@ export class ProjectsController {
 
   async createDatabase(
     @Param('id') id: string,
-    @Body() body: { name: string; storageSize?: string },
+    @Body() body: {
+      name: string;
+      storageSize?: string;
+      cpuRequestMilli?: number | null;
+      memoryRequestBytes?: number | null;
+    },
     @Request() req
   ) {
     return this.projectsService.createDatabase(id, body, req.user.sub, {
@@ -406,13 +411,15 @@ export class ProjectsController {
         hostPath?: string;
         readOnly?: boolean;
       }[];
+      cpuRequestMilli?: number | null;
+      memoryRequestBytes?: number | null;
     },
     @Request() req
   ) {
-    const { name, image, port, ports, replicas, env, exposePublic, volumes } = body;
+    const { name, image, port, ports, replicas, env, exposePublic, volumes, cpuRequestMilli, memoryRequestBytes } = body;
     return this.projectsService.createDeployment(
       id,
-      { name, image, port, ports, replicas, env, exposePublic, volumes },
+      { name, image, port, ports, replicas, env, exposePublic, volumes, cpuRequestMilli, memoryRequestBytes },
       req.user.sub,
       {
         email: req.user.email,
@@ -459,6 +466,8 @@ export class ProjectsController {
         hostPath?: string;
         readOnly?: boolean;
       }[];
+      cpuRequestMilli?: number | null;
+      memoryRequestBytes?: number | null;
     },
     @Request() req
   ) {
@@ -485,6 +494,17 @@ export class DeploymentsController {
     private readonly webhooksService: WebhooksService,
     private readonly faviconService: FaviconService,
   ) {}
+
+  @Patch(':id/resources')
+  async updateResources(
+    @Param('id') id: string,
+    @Body() body: { cpuRequestMilli?: number | null; memoryRequestBytes?: number | null },
+  ) {
+    return this.projectsService.updateDeploymentResources(id, {
+      cpuRequestMilli: body.cpuRequestMilli ?? null,
+      memoryRequestBytes: body.memoryRequestBytes ?? null,
+    });
+  }
 
   @Get()
 
@@ -1129,6 +1149,17 @@ export class DatabasesController {
 
   async getDatabase(@Param('id') id: string) {
     return this.projectsService.getDatabase(id);
+  }
+
+  @Patch(':id/resources')
+  async updateDatabaseResources(
+    @Param('id') id: string,
+    @Body() body: { cpuRequestMilli?: number | null; memoryRequestBytes?: number | null },
+  ) {
+    return this.projectsService.updateDatabaseResources(id, {
+      cpuRequestMilli: body.cpuRequestMilli ?? null,
+      memoryRequestBytes: body.memoryRequestBytes ?? null,
+    });
   }
 
   @Delete(':id')

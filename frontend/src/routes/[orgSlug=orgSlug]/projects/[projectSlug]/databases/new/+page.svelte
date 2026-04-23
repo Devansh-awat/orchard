@@ -5,6 +5,7 @@
 	import { Loader2, Database } from 'lucide-svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
+	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
 
 	let project = $state<ProjectContext | null>(null);
 	let loading = $state(true);
@@ -12,6 +13,8 @@
 	let error = $state<string | null>(null);
 	let name = $state('');
 	let storageSizeGi = $state(1);
+	let resourceCpuMilli = $state<number | null>(null);
+	let resourceMemoryBytes = $state<number | null>(null);
 
 	const projectSlug = $derived($page.params.projectSlug ?? '');
 	const orgSlug = $derived($page.params.orgSlug ?? '');
@@ -49,7 +52,12 @@
 			const response = await apiFetch(`/apiv1/projects/${project.id}/databases`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ name: name.trim(), storageSize: `${size}Gi` })
+				body: JSON.stringify({
+					name: name.trim(),
+					storageSize: `${size}Gi`,
+					cpuRequestMilli: resourceCpuMilli,
+					memoryRequestBytes: resourceMemoryBytes,
+				})
 			});
 
 			if (!response.ok) {
@@ -143,6 +151,15 @@
 						disabled={submitting}
 					/>
 					<p class="nd-hint">Persistent volume size for this database. Defaults to 1 GiB.</p>
+				</div>
+
+				<div class="nd-field" style="grid-column: 1 / -1;">
+					<span class="nd-label">Resources</span>
+					<ResourcePicker
+						bind:cpuMilli={resourceCpuMilli}
+						bind:memoryBytes={resourceMemoryBytes}
+						disabled={submitting}
+					/>
 				</div>
 			</div>
 

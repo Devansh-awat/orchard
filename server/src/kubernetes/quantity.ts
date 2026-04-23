@@ -35,6 +35,17 @@ export function formatCpuMilli(milli: number): string {
   return `${milli}m`;
 }
 
+// K8s-compatible quantity strings for use inside pod specs.
+export function cpuMilliToK8s(milli: number): string {
+  return `${Math.max(1, Math.round(milli))}m`;
+}
+
+export function memoryBytesToK8s(bytes: number): string {
+  // Prefer Mi if it divides cleanly, else raw bytes.
+  if (bytes % (1024 * 1024) === 0) return `${bytes / (1024 * 1024)}Mi`;
+  return `${Math.max(1, Math.round(bytes))}`;
+}
+
 export function formatMemoryBytes(bytes: number): string {
   const units = [
     ['Ti', 1024 ** 4],

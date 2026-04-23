@@ -40,7 +40,12 @@ export class TemplatesController {
   @Post('projects/:projectId/template-instances')
   async deployTemplate(
     @Param('projectId') projectId: string,
-    @Body() body: { templateId: string; parameters: Record<string, any> },
+    @Body() body: {
+      templateId: string;
+      parameters: Record<string, any>;
+      cpuRequestMilli?: number | null;
+      memoryRequestBytes?: number | null;
+    },
     @Request() req,
   ) {
     return this.templatesService.deployTemplate(
@@ -54,6 +59,10 @@ export class TemplatesController {
         firstName: req.user.firstName || req.user.name?.split(' ')[0],
         lastName: req.user.lastName || req.user.name?.split(' ').slice(1).join(' '),
         imageUrl: req.user.imageUrl,
+      },
+      {
+        cpuRequestMilli: body.cpuRequestMilli ?? null,
+        memoryRequestBytes: body.memoryRequestBytes ?? null,
       },
     );
   }

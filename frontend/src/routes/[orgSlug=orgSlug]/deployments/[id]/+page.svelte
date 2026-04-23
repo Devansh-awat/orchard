@@ -38,6 +38,8 @@
 	import { Clock, Minimize2, Maximize2, Cpu, MemoryStick } from 'lucide-svelte';
 	import { browser } from '$app/environment';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
+	import { formatCpu as fmtCpuPreset, formatMemory as fmtMemoryPreset } from '$lib/presets';
 
 	let Line: any = $state(null);
 
@@ -51,6 +53,15 @@
 	}
 	import DeploymentProgress from '$lib/components/DeploymentProgress.svelte';
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
+
+	function portal(node: HTMLElement) {
+		document.body.appendChild(node);
+		return {
+			destroy() {
+				node.remove();
+			}
+		};
+	}
 
 	interface Pod {
 		name: string;
@@ -260,6 +271,8 @@
 		healthCheckTimeout?: number;
 		healthCheckRetries?: number;
 		startupFailureThreshold?: number;
+		cpuRequestMilli?: number | null;
+		memoryRequestBytes?: number | null;
 		totalCpuUsage?: number | null;
 		totalMemoryUsage?: number | null;
 		warnings?: Array<{ podName: string; message: string; timestamp: string }>;
@@ -324,6 +337,12 @@
 			label: 'Environment',
 			description: 'Config & secrets',
 			icon: Settings
+		},
+		{
+			id: 'resources',
+			label: 'Resources',
+			description: 'CPU & memory',
+			icon: Cpu
 		},
 		{
 			id: 'volumes',
@@ -532,6 +551,7 @@
 		(deployment?.warnings?.length ?? 0) +
 		(deployment?.buildStatus === 'failed' && (deployment?.buildError || deployment?.buildLogs) ? 1 : 0)
 	);
+	const activePods = $derived(deployment?.pods?.filter((pod) => pod.status?.toLowerCase() !== 'succeeded') ?? []);
 
 	let restarting = $state(false);
 	let scaling = $state(false);
@@ -570,6 +590,40 @@
 	let startupFailureThreshold = $state(30);
 	let savingHealthCheck = $state(false);
 	let isEditingHealthCheck = $state(false);
+
+	// Resources (CPU/memory request). Null = inherit org default.
+	let resourceCpuMilli = $state<number | null>(null);
+	let resourceMemoryBytes = $state<number | null>(null);
+	let orgDefaultCpuMilli = $state<number | null>(null);
+	let orgDefaultMemoryBytes = $state<number | null>(null);
+	let savingResources = $state(false);
+	let resourcesDirty = $state(false);
+
+	async function saveResources() {
+		if (!deployment) return;
+		savingResources = true;
+		try {
+			const res = await apiFetch(`/apiv1/deployments/${deployment.id}/resources`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					cpuRequestMilli: resourceCpuMilli,
+					memoryRequestBytes: resourceMemoryBytes,
+				}),
+			});
+			if (!res.ok) {
+				const data = await res.json().catch(() => null);
+				throw new Error(data?.message || 'Failed to update resources');
+			}
+			toasts.add({ title: 'Resources updated', description: 'Pods will roll to pick up the new values.', color: 'success' });
+			resourcesDirty = false;
+			await fetchDeployment();
+		} catch (e) {
+			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed', color: 'error' });
+		} finally {
+			savingResources = false;
+		}
+	}
 
 	let selectedPod = $state<string>('');
 	let selectedContainer = $state<string>('');
@@ -644,8 +698,9 @@
 	}
 
 	function getNewestPod(pods: Pod[]): Pod | null {
-		if (!pods.length) return null;
-		return pods.reduce((newest, pod) => {
+		const active = pods.filter(p => p.status?.toLowerCase() !== 'succeeded');
+		if (!active.length) return null;
+		return active.reduce((newest, pod) => {
 			if (!newest.startTime) return pod;
 			if (!pod.startTime) return newest;
 			return new Date(pod.startTime) > new Date(newest.startTime) ? pod : newest;
@@ -1288,6 +1343,28 @@
 					healthCheckTimeout = data.healthCheckTimeout ?? 5;
 					healthCheckRetries = data.healthCheckRetries ?? 3;
 					startupFailureThreshold = data.startupFailureThreshold ?? 30;
+				}
+
+				// Sync resource state (unless user has unsaved edits).
+				if (!resourcesDirty) {
+					resourceCpuMilli = data.cpuRequestMilli ?? null;
+					resourceMemoryBytes = data.memoryRequestBytes != null ? Number(data.memoryRequestBytes) : null;
+				}
+
+				// Fetch org defaults once (for the "Default" card hint).
+				if (orgDefaultCpuMilli === null && orgDefaultMemoryBytes === null && orgSlug) {
+					apiFetch(`/apiv1/organizations/slug/${orgSlug}`)
+						.then((r) => (r.ok ? r.json() : null))
+						.then((org) => {
+							if (!org?.id) return;
+							return apiFetch(`/apiv1/organizations/${org.id}/quota`).then((r) => (r.ok ? r.json() : null));
+						})
+						.then((q) => {
+							if (!q?.org) return;
+							orgDefaultCpuMilli = q.org.defaultPodCpuMilli ?? null;
+							orgDefaultMemoryBytes = q.org.defaultPodMemoryBytes ?? null;
+						})
+						.catch(() => {});
 				}
 			}
 
@@ -2608,8 +2685,8 @@
 								{#if notificationsOpen}
 									<!-- svelte-ignore a11y_click_events_have_key_events -->
 									<!-- svelte-ignore a11y_no_static_element_interactions -->
-									<div class="notification-backdrop" onclick={() => notificationsOpen = false}></div>
-									<div class="notification-panel" style="top: {notifPanelPos.top}px; left: {notifPanelPos.left}px;" transition:fade={{ duration: 150 }}>
+									<div class="notification-backdrop" use:portal onclick={() => notificationsOpen = false}></div>
+									<div class="notification-panel" use:portal style="top: {notifPanelPos.top}px; left: {notifPanelPos.left}px;" transition:fade={{ duration: 150 }}>
 										<div class="flex items-center justify-between px-4 py-3" style="border-bottom: 1px solid var(--surface-border);">
 											<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Notifications</p>
 											<button class="btn-icon rounded-md p-1" onclick={() => notificationsOpen = false}>
@@ -2880,18 +2957,18 @@
 									<div class="flex flex-wrap items-center justify-between gap-2 mb-2.5">
 										<div class="flex items-center gap-2">
 											<p class="text-xs font-semibold uppercase tracking-wide" style="color: var(--surface-muted);">Pods</p>
-											<span class="text-xs font-mono" style="color: var(--surface-muted);">{deployment.pods?.length ?? 0}</span>
+											<span class="text-xs font-mono" style="color: var(--surface-muted);">{activePods.length}</span>
 										</div>
 										<div class="flex gap-2.5 text-[11px]" style="color: var(--surface-muted);">
-											<span class="inline-flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>{deployment.pods?.filter((pod) => pod.status?.toLowerCase() === 'ready').length ?? 0} ready</span>
-											{#if (deployment.pods?.filter((pod) => !['ready'].includes(pod.status?.toLowerCase() ?? '')).length ?? 0) > 0}
-												<span class="inline-flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-yellow-500"></span>{deployment.pods?.filter((pod) => !['ready'].includes(pod.status?.toLowerCase() ?? '')).length ?? 0} other</span>
+											<span class="inline-flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>{activePods.filter((pod) => pod.status?.toLowerCase() === 'ready').length} ready</span>
+											{#if activePods.filter((pod) => !['ready'].includes(pod.status?.toLowerCase() ?? '')).length > 0}
+												<span class="inline-flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-yellow-500"></span>{activePods.filter((pod) => !['ready'].includes(pod.status?.toLowerCase() ?? '')).length} other</span>
 											{/if}
 										</div>
 									</div>
-									{#if deployment.pods?.length}
+									{#if activePods.length}
 										<div class="space-y-1">
-											{#each deployment.pods as pod}
+											{#each activePods as pod}
 												<button
 													class="console-pod-row"
 													class:console-pod-row--active={selectedPod === pod.name}
@@ -3096,6 +3173,54 @@
 								<button onclick={saveEnv} disabled={savingEnv} class="btn btn-primary">
 									{#if savingEnv}<Loader2 class="h-4 w-4 animate-spin" />{/if}
 									<span>Save</span>
+								</button>
+							</div>
+						</div>
+					{:else if tab.id === 'resources'}
+						<div class="card rounded-2xl p-5">
+							<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+								<div>
+									<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Container resources</p>
+									<p class="text-xs mt-0.5" style="color: var(--surface-muted);">
+										Pick a preset or set custom CPU and memory. Saving triggers a rolling restart of this deployment.
+									</p>
+								</div>
+								<div class="text-xs" style="color: var(--surface-muted);">
+									{#if resourceCpuMilli === 0 && resourceMemoryBytes === 0}
+										Current: <strong style="color: #f59e0b;">Unlimited</strong>
+									{:else if resourceCpuMilli != null && resourceMemoryBytes != null}
+										Current: <strong style="color: var(--center-channel-color);">{fmtCpuPreset(resourceCpuMilli)} · {fmtMemoryPreset(resourceMemoryBytes)}</strong>
+									{:else}
+										Current: <strong style="color: var(--center-channel-color);">Organization default</strong>
+									{/if}
+								</div>
+							</div>
+							<ResourcePicker
+								bind:cpuMilli={resourceCpuMilli}
+								bind:memoryBytes={resourceMemoryBytes}
+								defaultCpuMilli={orgDefaultCpuMilli}
+								defaultMemoryBytes={orgDefaultMemoryBytes}
+								showUnlimited={$isSuperAdmin}
+								onchange={() => { resourcesDirty = true; }}
+							/>
+							<div class="mt-4 flex justify-end gap-2">
+								<button
+									class="btn btn-secondary"
+									disabled={!resourcesDirty || savingResources}
+									onclick={() => {
+										resourceCpuMilli = deployment?.cpuRequestMilli ?? null;
+										resourceMemoryBytes = deployment?.memoryRequestBytes != null ? Number(deployment.memoryRequestBytes) : null;
+										resourcesDirty = false;
+									}}
+								>
+									Reset
+								</button>
+								<button
+									class="btn btn-primary"
+									disabled={!resourcesDirty || savingResources}
+									onclick={saveResources}
+								>
+									{savingResources ? 'Saving…' : 'Save resources'}
 								</button>
 							</div>
 						</div>
@@ -3519,10 +3644,27 @@
 											</div>
 											<div class="bh-card-body">
 												<div class="bh-card-top">
-													<span class="bh-card-title" style="color: #ef4444;">Build failed</span>
+													<div class="bh-card-info">
+														<span class="bh-card-title" style="color: #ef4444;">Build failed</span>
+													</div>
+													{#if deployment.buildLogs || deployment.buildError}
+														<div class="bh-card-actions">
+															<button onclick={() => {
+																buildModalStatus = 'failed';
+																buildModalError = deployment.buildError ?? null;
+																accumulatedBuildLogs = deployment.buildLogs ?? null;
+																buildModalStep = null;
+																buildModalWarnings = [];
+																buildModalTimestamps = deployment.buildStepTimestamps ?? null;
+																showBuildModal = true;
+															}} class="btn btn-ghost btn-sm" title="View logs">
+																<Terminal class="h-3.5 w-3.5" />
+															</button>
+														</div>
+													{/if}
 												</div>
 												{#if deployment.buildError}
-													<p class="bh-card-sub" style="color: color-mix(in srgb, #ef4444 60%, var(--surface-muted));">{deployment.buildError}</p>
+													<p class="bh-card-sub" style="color: color-mix(in srgb, #ef4444 60%, var(--surface-muted));">{deployment.buildError.split('\n')[0]}</p>
 												{/if}
 											</div>
 										</div>
@@ -4713,15 +4855,15 @@
 	}
 
 	.dep-delete-btn {
-		color: #ef4444 !important;
-		border: 1px solid #ef4444 !important;
-		background-color: rgba(239, 68, 68, 0.1) !important;
+		color: #fff !important;
+		border: 1px solid #dc2626 !important;
+		background-color: #ef4444 !important;
 		opacity: 1 !important;
 		transition: background-color 0.15s;
 	}
 	.dep-delete-btn:hover {
-		background-color: rgba(239, 68, 68, 0.2) !important;
-		color: #ef4444 !important;
+		background-color: #dc2626 !important;
+		color: #fff !important;
 	}
 
 	.dep-notif-btn {
@@ -4920,12 +5062,12 @@
 	.notification-backdrop {
 		position: fixed;
 		inset: 0;
-		z-index: 40;
+		z-index: 99;
 	}
 
 	.notification-panel {
 		position: fixed;
-		z-index: 50;
+		z-index: 100;
 		width: 360px;
 		max-height: 420px;
 		border-radius: 1rem;

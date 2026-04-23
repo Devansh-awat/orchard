@@ -346,6 +346,10 @@ model Deployment {
   namespace      String     @db.VarChar(100)
   image          String?    @db.VarChar(500)
   replicas       Int        @default(1)
+  // Per-container resource request (== limit; Guaranteed QoS).
+  // Null means fall back to org defaultPodCpuMilli/defaultPodMemoryBytes, then 100m/128Mi.
+  cpuRequestMilli    Int?    @map("cpu_request_milli")
+  memoryRequestBytes BigInt? @map("memory_request_bytes")
   status         String     @default("pending") @db.VarChar(50)
   buildStatus    String     @default("none") @map("build_status") @db.VarChar(50)
   buildStep      String?    @map("build_step") @db.VarChar(50)
@@ -635,6 +639,8 @@ model Database {
   publicEnabled      Boolean  @default(false) @map("public_enabled")
   publicIp           String?  @map("public_ip") @db.VarChar(45)
   publicPort         Int?     @map("public_port")
+  cpuRequestMilli    Int?     @map("cpu_request_milli")
+  memoryRequestBytes BigInt?  @map("memory_request_bytes")
   createdBy     String?  @map("created_by") @db.Uuid
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamp(6)

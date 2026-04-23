@@ -407,24 +407,24 @@ select.input:focus {
 }
 
 .badge-success {
-	@apply bg-green-200/70 text-green-800 dark:bg-green-900 dark:text-green-100;
+	@apply bg-green-200 text-green-800 dark:bg-green-900 dark:text-green-100;
 }
 
 .badge-warning {
-	background-color: rgb(253 230 138 / 0.7);
+	background-color: rgb(253 230 138);
 	color: #92400e;
 }
 :root.dark .badge-warning {
-	background-color: rgb(113 63 18 / 0.3);
+	background-color: rgb(113 63 18);
 	color: #facc15;
 }
 
 .badge-error {
-	background-color: rgb(254 202 202 / 0.7);
+	background-color: rgb(254 202 202);
 	color: #991b1b;
 }
 :root.dark .badge-error {
-	background-color: rgb(127 29 29 / 0.3);
+	background-color: rgb(127 29 29);
 	color: #f87171;
 }
 
