@@ -1,3 +1,8 @@
+<script module lang="ts">
+	// Module-scoped cache: stale-while-revalidate for instant back-navigation.
+	const overviewCache = new Map<string, { deployments: any[]; databases: any[]; projects: Map<string, any>; builds: any }>();
+</script>
+
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { apiFetch, selectedOrganization, pinnedItems, toasts } from '$lib/stores';
@@ -69,14 +74,12 @@
 	}
 
 	async function fetchDeployments() {
-		loading = true;
 		try {
 			const orgId = $selectedOrganization?.id;
 			const url = orgId ? `/apiv1/deployments?orgId=${orgId}` : '/apiv1/deployments';
 			const res = await apiFetch(url);
 			if (res.ok) deployments = await res.json();
 		} catch (e) { console.error('Failed to fetch deployments:', e); }
-		finally { loading = false; }
 	}
 
 	async function fetchDatabases() {
@@ -304,7 +307,45 @@
 		return null;
 	}
 
-	$effect(() => { if ($selectedOrganization?.id) { fetchDeployments(); fetchBuilds(); fetchDatabases(); fetchProjects(); } });
+	$effect(() => {
+		if ($selectedOrganization?.id) {
+			const cacheKey = $selectedOrganization.id;
+			const cached = overviewCache.get(cacheKey);
+			if (cached) {
+				// Serve from cache instantly, then revalidate in background
+				deployments = cached.deployments;
+				databases = cached.databases;
+				projectMetas = cached.projects;
+				if (cached.builds) {
+					activeBuilds = cached.builds.active ?? [];
+					recentBuilds = cached.builds.recent ?? [];
+					buildsLoading = false;
+				}
+				loading = false;
+				// Background revalidate
+				revalidateOverview(cacheKey);
+			} else {
+				loading = true;
+				buildsLoading = true;
+				Promise.all([fetchDeployments(), fetchBuilds(), fetchDatabases(), fetchProjects()])
+					.finally(() => { loading = false; updateCache(cacheKey); });
+			}
+		}
+	});
+
+	async function revalidateOverview(cacheKey: string) {
+		await Promise.all([fetchDeployments(), fetchBuilds(), fetchDatabases(), fetchProjects()]);
+		updateCache(cacheKey);
+	}
+
+	function updateCache(cacheKey: string) {
+		overviewCache.set(cacheKey, {
+			deployments: [...deployments],
+			databases: [...databases],
+			projects: new Map(projectMetas),
+			builds: { active: [...activeBuilds], recent: [...recentBuilds] }
+		});
+	}
 </script>
 
 <svelte:window onclick={closeAll} />

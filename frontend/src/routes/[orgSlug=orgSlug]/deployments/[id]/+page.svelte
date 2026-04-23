@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
 	import { Tabs } from 'melt/builders';
-	import { apiFetch, toasts, refreshTree, isSuperAdmin } from '$lib/stores';
+	import { apiFetch, toasts, refreshTree, isSuperAdmin, selectedOrganization } from '$lib/stores';
 	import { AnsiUp } from 'ansi_up';
 	import {
 		ArrowLeft,
@@ -1245,7 +1245,7 @@
 	}
 
 	let deploymentInterval: ReturnType<typeof setInterval>;
-	let podInterval: ReturnType<typeof setInterval>;
+	let podInterval: ReturnType<typeof setInterval> | null = null;
 	let buildLogsInterval: ReturnType<typeof setInterval> | null = null;
 
 	async function fetchDeployment() {
@@ -1351,21 +1351,7 @@
 					resourceMemoryBytes = data.memoryRequestBytes != null ? Number(data.memoryRequestBytes) : null;
 				}
 
-				// Fetch org defaults once (for the "Default" card hint).
-				if (orgDefaultCpuMilli === null && orgDefaultMemoryBytes === null && orgSlug) {
-					apiFetch(`/apiv1/organizations/slug/${orgSlug}`)
-						.then((r) => (r.ok ? r.json() : null))
-						.then((org) => {
-							if (!org?.id) return;
-							return apiFetch(`/apiv1/organizations/${org.id}/quota`).then((r) => (r.ok ? r.json() : null));
-						})
-						.then((q) => {
-							if (!q?.org) return;
-							orgDefaultCpuMilli = q.org.defaultPodCpuMilli ?? null;
-							orgDefaultMemoryBytes = q.org.defaultPodMemoryBytes ?? null;
-						})
-						.catch(() => {});
-				}
+				// Org quota defaults are fetched lazily when the resources tab is opened.
 			}
 
 			if (data.pods?.length) {
@@ -1398,12 +1384,6 @@
 			}
 		} finally {
 			loading = false;
-
-			// Load auto-deploy status if GitHub deployment
-			if (deployment?.githubRepo && !autoDeployStatus) {
-				loadAutoDeployStatus();
-				loadGitHubDeployments();
-			}
 		}
 	}
 
@@ -2388,10 +2368,35 @@
 		}
 	});
 
+	// Only poll logs when overview tab is active
+	$effect(() => {
+		if (tabs.value === 'overview' && selectedPod && selectedContainer) {
+			fetchLogs();
+			podInterval = setInterval(() => {
+				if (selectedPod && selectedContainer) {
+					fetchLogs();
+				}
+			}, 5000);
+		} else if (podInterval) {
+			clearInterval(podInterval);
+			podInterval = null;
+		}
+		return () => {
+			if (podInterval) {
+				clearInterval(podInterval);
+				podInterval = null;
+			}
+		};
+	});
+
+	let projectIngressesFetched = false;
 	$effect(() => {
 		const projectId = deployment?.project?.id;
 		if (!projectId) return;
-		fetchProjectIngresses();
+		if (tabs.value === 'network') {
+			fetchProjectIngresses();
+			projectIngressesFetched = true;
+		}
 	});
 
 	$effect(() => {
@@ -2411,6 +2416,8 @@
 			logs = '';
 			buildLogs = '';
 			accumulatedBuildLogs = null;
+			autoDeployFetched = false;
+			projectIngressesFetched = false;
 
 			if (deploymentInterval) {
 				clearInterval(deploymentInterval);
@@ -2424,11 +2431,6 @@
 
 			fetchDeployment();
 			deploymentInterval = setInterval(fetchDeployment, 10000);
-			podInterval = setInterval(() => {
-				if (selectedPod && selectedContainer) {
-					fetchLogs();
-				}
-			}, 5000);
 		}
 	});
 
@@ -2492,6 +2494,35 @@
 	$effect(() => {
 		if (tabs.value === 'webhooks' && !webhookTokensFetched) {
 			fetchWebhookTokens();
+		}
+	});
+
+	// Lazy-load auto-deploy status when advanced tab is opened
+	let autoDeployFetched = false;
+	$effect(() => {
+		if (tabs.value === 'advanced' && deployment?.githubRepo && !autoDeployFetched) {
+			autoDeployFetched = true;
+			loadAutoDeployStatus();
+			loadGitHubDeployments();
+		}
+	});
+
+	// Lazy-load org quota defaults when resources tab is opened
+	let orgQuotaFetched = false;
+	$effect(() => {
+		if (tabs.value === 'resources' && !orgQuotaFetched) {
+			orgQuotaFetched = true;
+			const orgId = $selectedOrganization?.id;
+			if (orgId) {
+				apiFetch(`/apiv1/organizations/${orgId}/quota`)
+					.then((r) => (r.ok ? r.json() : null))
+					.then((q) => {
+						if (!q?.org) return;
+						orgDefaultCpuMilli = q.org.defaultPodCpuMilli ?? null;
+						orgDefaultMemoryBytes = q.org.defaultPodMemoryBytes ?? null;
+					})
+					.catch(() => {});
+			}
 		}
 	});
 

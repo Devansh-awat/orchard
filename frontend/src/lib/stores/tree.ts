@@ -61,16 +61,6 @@ const treeData = writable<TreeItem[]>([]);
 const loading = writable(false);
 const error = writable<string | null>(null);
 
-async function fetchProjectDetails(projectId: string): Promise<Project | null> {
-	try {
-		const response = await apiFetch(`/apiv1/projects/${projectId}`);
-		if (!response.ok) return null;
-		return await response.json();
-	} catch {
-		return null;
-	}
-}
-
 function transformToTreeItems(projects: Project[], orgSlug: string): TreeItem[] {
 	return projects.map((project) => {
 		const deploymentItems: TreeItem[] = project.deployments?.map((deployment) => ({
@@ -145,18 +135,10 @@ async function fetchTreeData() {
 			throw new Error('Failed to fetch projects');
 		}
 
-		let projects: Project[] = await response.json();
-
-		// Fetch detailed project info (deployments, etc.)
-		const projectsWithDetails = await Promise.all(
-			projects.map(async (project) => {
-				const details = await fetchProjectDetails(project.id);
-				return details || project;
-			})
-		);
+		const projects: Project[] = await response.json();
 
 		const orgSlug = selectedOrg?.slug ?? '';
-		const treeItems = transformToTreeItems(projectsWithDetails, orgSlug);
+		const treeItems = transformToTreeItems(projects, orgSlug);
 		treeData.set(treeItems);
 	} catch (e) {
 		error.set(e instanceof Error ? e.message : 'Failed to fetch tree data');

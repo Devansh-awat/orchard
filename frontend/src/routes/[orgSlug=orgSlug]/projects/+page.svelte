@@ -17,6 +17,7 @@
 		deployments?: Array<{ id: string; name: string }>;
 		ingresses?: Array<{ id: string; host: string }>;
 		databases?: Array<{ id: string; name: string }>;
+		_count?: { deployments: number; ingresses: number; databases: number };
 	}
 
 	let projects = $state<Project[]>([]);
@@ -37,17 +38,7 @@
 			const url = orgId ? `/apiv1/projects?orgId=${orgId}` : '/apiv1/projects';
 			const res = await apiFetch(url);
 			if (!res.ok) throw new Error();
-			const list: Project[] = await res.json();
-
-			// Fetch details for each project
-			const detailed = await Promise.all(list.map(async (p) => {
-				try {
-					const r = await apiFetch(`/apiv1/projects/${p.id}`);
-					return r.ok ? await r.json() : p;
-				} catch { return p; }
-			}));
-
-			projects = detailed;
+			projects = await res.json();
 		} catch { /* */ }
 		finally { loading = false; }
 	}
@@ -167,9 +158,9 @@
 						</button>
 					</div>
 					<div class="card-bot">
-						<span class="card-stat"><Rocket size={11} /> {proj.deployments?.length ?? 0}</span>
-						<span class="card-stat"><Globe size={11} /> {proj.ingresses?.length ?? 0}</span>
-						<span class="card-stat"><Database size={11} /> {proj.databases?.length ?? 0}</span>
+						<span class="card-stat"><Rocket size={11} /> {proj._count?.deployments ?? proj.deployments?.length ?? 0}</span>
+						<span class="card-stat"><Globe size={11} /> {proj._count?.ingresses ?? proj.ingresses?.length ?? 0}</span>
+						<span class="card-stat"><Database size={11} /> {proj._count?.databases ?? proj.databases?.length ?? 0}</span>
 					</div>
 				</div>
 			{/each}
