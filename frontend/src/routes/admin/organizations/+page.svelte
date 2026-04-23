@@ -10,7 +10,9 @@
 		X,
 		ChevronLeft,
 		ChevronRight,
+		Gauge,
 	} from 'lucide-svelte';
+	import { formatCpuMilli, formatMemoryBytes } from '$lib/quantity';
 
 	interface OrgItem {
 		id: string;
@@ -62,6 +64,82 @@
 	// Delete confirmation
 	let deletingOrg = $state<OrgItem | null>(null);
 	let deleting = $state(false);
+
+	// Quota modal
+	let quotaOrg = $state<OrgItem | null>(null);
+	let quotaLoading = $state(false);
+	let quotaSaving = $state(false);
+	let quotaUsage = $state<{ cpuMilli: number; memoryBytes: number; pods: number; services: number } | null>(null);
+	let qCpu = $state<string>('');
+	let qMemMi = $state<string>('');
+	let qPods = $state<string>('');
+	let qServices = $state<string>('');
+	let qDefaultCpu = $state<string>('');
+	let qDefaultMemMi = $state<string>('');
+
+	async function openQuota(org: OrgItem) {
+		quotaOrg = org;
+		quotaLoading = true;
+		quotaUsage = null;
+		qCpu = qMemMi = qPods = qServices = qDefaultCpu = qDefaultMemMi = '';
+		try {
+			const res = await apiFetch(`/apiv1/admin/organizations/${org.id}/quota`);
+			if (!res.ok) throw new Error('Failed to load quota');
+			const data = await res.json();
+			quotaUsage = data.usage;
+			qCpu = data.org.cpuLimitMilli ? String(data.org.cpuLimitMilli) : '';
+			qMemMi = data.org.memoryLimitBytes ? String(Math.round(data.org.memoryLimitBytes / (1024 * 1024))) : '';
+			qPods = data.org.maxPods ? String(data.org.maxPods) : '';
+			qServices = data.org.maxServices ? String(data.org.maxServices) : '';
+			qDefaultCpu = data.org.defaultPodCpuMilli ? String(data.org.defaultPodCpuMilli) : '';
+			qDefaultMemMi = data.org.defaultPodMemoryBytes ? String(Math.round(data.org.defaultPodMemoryBytes / (1024 * 1024))) : '';
+		} catch (e) {
+			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed', color: 'error' });
+			quotaOrg = null;
+		} finally {
+			quotaLoading = false;
+		}
+	}
+
+	function closeQuota() {
+		quotaOrg = null;
+	}
+
+	function parseIntOrNull(v: string): number | null {
+		const t = v.trim();
+		if (!t) return null;
+		const n = parseInt(t, 10);
+		return Number.isFinite(n) && n > 0 ? n : null;
+	}
+
+	async function saveQuota() {
+		if (!quotaOrg) return;
+		quotaSaving = true;
+		try {
+			const memMi = parseIntOrNull(qMemMi);
+			const defMemMi = parseIntOrNull(qDefaultMemMi);
+			const body = {
+				cpuLimitMilli: parseIntOrNull(qCpu),
+				memoryLimitBytes: memMi === null ? null : memMi * 1024 * 1024,
+				maxPods: parseIntOrNull(qPods),
+				maxServices: parseIntOrNull(qServices),
+				defaultPodCpuMilli: parseIntOrNull(qDefaultCpu),
+				defaultPodMemoryBytes: defMemMi === null ? null : defMemMi * 1024 * 1024,
+			};
+			const res = await apiFetch(`/apiv1/admin/organizations/${quotaOrg.id}/quota`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(body),
+			});
+			if (!res.ok) throw new Error('Save failed');
+			toasts.add({ title: 'Saved', description: 'Quotas applied to cluster', color: 'success' });
+			closeQuota();
+		} catch (e) {
+			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed', color: 'error' });
+		} finally {
+			quotaSaving = false;
+		}
+	}
 
 	async function fetchOrganizations(page: number = 1) {
 		loading = true;
@@ -331,6 +409,13 @@
 							<td class="px-4 py-3">
 								<div class="flex items-center justify-end gap-1">
 									<button
+										onclick={() => openQuota(org)}
+										class="btn btn-ghost btn-sm"
+										title="Resource quotas"
+									>
+										<Gauge class="h-4 w-4" />
+									</button>
+									<button
 										onclick={() => openEdit(org)}
 										class="btn btn-ghost btn-sm"
 										title="Edit organization"
@@ -540,3 +625,84 @@
 		</div>
 	</div>
 {/if}
+
+<!-- Quota Modal -->
+{#if quotaOrg}
+	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
+		<div
+			class="w-full max-w-lg rounded-2xl border p-6 shadow-xl"
+			style="background-color: var(--center-channel-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
+		>
+			<div class="flex items-center justify-between mb-4">
+				<div>
+					<h3 class="text-lg font-semibold">Resource quotas</h3>
+					<p class="text-xs" style="color: var(--surface-muted);">{quotaOrg.name}</p>
+				</div>
+				<button onclick={closeQuota} class="btn btn-ghost btn-sm"><X class="h-4 w-4" /></button>
+			</div>
+
+			{#if quotaLoading}
+				<div class="flex justify-center py-10"><Loader2 class="h-6 w-6 animate-spin" /></div>
+			{:else}
+				{#if quotaUsage}
+					<div class="rounded-xl border p-3 mb-4" style="border-color: var(--surface-border);">
+						<p class="text-xs font-medium mb-1" style="color: var(--surface-muted);">Current usage</p>
+						<div class="grid grid-cols-2 gap-2 text-sm">
+							<div>CPU: <strong>{formatCpuMilli(quotaUsage.cpuMilli)}</strong></div>
+							<div>Memory: <strong>{formatMemoryBytes(quotaUsage.memoryBytes)}</strong></div>
+							<div>Pods: <strong>{quotaUsage.pods}</strong></div>
+							<div>Services: <strong>{quotaUsage.services}</strong></div>
+						</div>
+					</div>
+				{/if}
+
+				<p class="text-xs mb-3" style="color: var(--surface-muted);">
+					Leave blank = unlimited. Limits apply across all projects in this org. Kubernetes enforces them at pod-admission time.
+				</p>
+
+				<div class="grid grid-cols-2 gap-3">
+					<label class="text-xs">
+						CPU (millicores)
+						<input type="number" bind:value={qCpu} placeholder="unlimited" class="input w-full mt-1" />
+					</label>
+					<label class="text-xs">
+						Memory (MiB)
+						<input type="number" bind:value={qMemMi} placeholder="unlimited" class="input w-full mt-1" />
+					</label>
+					<label class="text-xs">
+						Max pods
+						<input type="number" bind:value={qPods} placeholder="unlimited" class="input w-full mt-1" />
+					</label>
+					<label class="text-xs">
+						Max services
+						<input type="number" bind:value={qServices} placeholder="unlimited" class="input w-full mt-1" />
+					</label>
+				</div>
+
+				<h4 class="text-sm font-semibold mt-4 mb-2">Per-pod defaults (LimitRange)</h4>
+				<p class="text-xs mb-2" style="color: var(--surface-muted);">
+					Applied to containers that don't specify requests. Required if CPU/memory quotas are set.
+				</p>
+				<div class="grid grid-cols-2 gap-3">
+					<label class="text-xs">
+						Default CPU / pod (millicores)
+						<input type="number" bind:value={qDefaultCpu} placeholder="100" class="input w-full mt-1" />
+					</label>
+					<label class="text-xs">
+						Default memory / pod (MiB)
+						<input type="number" bind:value={qDefaultMemMi} placeholder="128" class="input w-full mt-1" />
+					</label>
+				</div>
+
+				<div class="mt-6 flex justify-end gap-2">
+					<button onclick={closeQuota} class="btn btn-secondary">Cancel</button>
+					<button onclick={saveQuota} disabled={quotaSaving} class="btn btn-primary">
+						{#if quotaSaving}<Loader2 class="h-4 w-4 animate-spin" />{/if}
+						Save quotas
+					</button>
+				</div>
+			{/if}
+		</div>
+	</div>
+{/if}
+

@@ -1,0 +1,27 @@
+---
+# Shared L4 Gateway for managed-database TCP traffic.
+#
+# Listeners for individual databases are appended at runtime by the server
+# (see KubernetesService.ensureDbGatewayListener). The placeholder listener
+# below exists only so the Gateway has a non-empty spec at bootstrap time;
+# it accepts no routes and should not be removed.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: db-gateway
+  namespace: network
+  labels:
+    leaf.dev/managed: "true"
+    leaf.dev/role: db
+spec:
+  gatewayClassName: traefik
+  listeners:
+    - name: placeholder
+      protocol: TCP
+      port: 1
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              leaf.dev/never-match: "true"

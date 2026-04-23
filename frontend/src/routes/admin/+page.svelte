@@ -1,12 +1,12 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { apiFetch } from '$lib/stores';
-	import { Loader2, Users, Building2, FolderKanban, Package, Rocket } from 'lucide-svelte';
+	import { Loader2, Users, Building2, Package, Rocket } from 'lucide-svelte';
 
 	interface Stats {
 		userCount: number;
 		orgCount: number;
-		workspaceCount: number;
+		workspaceCount?: number;
 		projectCount: number;
 		deploymentCount: number;
 	}
@@ -20,10 +20,9 @@
 			? [
 					{ label: 'Users', value: stats.userCount, icon: Users, href: '/admin/users' },
 					{ label: 'Organizations', value: stats.orgCount, icon: Building2, href: '/admin/organizations' },
-					{ label: 'Workspaces', value: stats.workspaceCount, icon: FolderKanban, href: null },
 					{ label: 'Projects', value: stats.projectCount, icon: Package, href: null },
 					{ label: 'Deployments', value: stats.deploymentCount, icon: Rocket, href: null },
-				]
+				].filter((c) => typeof c.value === 'number')
 			: []
 	);
 

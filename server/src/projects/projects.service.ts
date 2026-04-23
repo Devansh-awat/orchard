@@ -7,6 +7,8 @@ import { UsersService } from '../users/users.service';
 import { DockerService } from '../docker/docker.service';
 import { GitHubService } from '../github/github.service';
 import { FaviconService } from './favicon.service';
+import { NodesService } from '../nodes/nodes.service';
+import { QuotasService } from '../quotas/quotas.service';
 import { randomUUID } from 'crypto';
 import * as dns from 'dns';
 import { promisify } from 'util';
@@ -20,8 +22,25 @@ export class ProjectsService {
     private readonly dockerService: DockerService,
     @Inject(forwardRef(() => GitHubService))
     private readonly githubService: GitHubService,
-    private readonly faviconService: FaviconService
+    private readonly faviconService: FaviconService,
+    @Inject(forwardRef(() => NodesService))
+    private readonly nodesService: NodesService,
+    @Inject(forwardRef(() => QuotasService))
+    private readonly quotasService: QuotasService,
   ) {}
+
+  private async resolvePlacementForProject(projectId: string): Promise<{
+    allowedNodes: string[] | null;
+    deniedNodes: string[];
+  }> {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { organizationId: true },
+    });
+    if (!project) return { allowedNodes: null, deniedNodes: [] };
+    const placement = await this.nodesService.getPlacementForOrg(project.organizationId);
+    return { allowedNodes: placement.allowedNodes, deniedNodes: placement.deniedNodes };
+  }
 
   private async resolveProjectIconFallback(
     deployments: Array<{ ingresses?: Array<{ host?: string | null }> | null }> | null | undefined
@@ -453,6 +472,11 @@ export class ProjectsService {
       },
     });
 
+    // Push the effective ResourceQuota/LimitRange to the new namespace.
+    await this.quotasService.applyProjectQuota(project.id).catch((err) => {
+      console.error('[Projects] initial applyProjectQuota failed:', err);
+    });
+
     return project;
   }
 
@@ -592,6 +616,20 @@ export class ProjectsService {
 
     const volumes = Array.isArray(data.volumes) ? data.volumes : [];
 
+    // Enforce org-wide quota against expected additional usage (one new pod per replica).
+    const { defaultPodCpuMilli, defaultPodMemoryBytes } = await this.quotasService.resolveProjectCaps(project.id);
+    const perPodCpu = defaultPodCpuMilli ?? 100;
+    const perPodMem = defaultPodMemoryBytes ?? 128 * 1024 * 1024;
+    await this.quotasService.enforceOrgCapForNewPod(project.organizationId, {
+      cpuMilli: perPodCpu * replicas,
+      memoryBytes: perPodMem * replicas,
+    });
+    // Make sure the namespace ResourceQuota/LimitRange reflect current caps.
+    await this.quotasService.applyProjectQuota(project.id).catch((err) => {
+      console.error('[Projects] applyProjectQuota failed:', err);
+    });
+
+    const placement = await this.resolvePlacementForProject(project.id);
     const deploymentResult = await this.kubernetesService.createDeployment({
       namespace: project.namespace,
       name,
@@ -601,6 +639,8 @@ export class ProjectsService {
       env,
       serviceType: exposePublic ? 'NodePort' : 'ClusterIP',
       volumes,
+      allowedNodes: placement.allowedNodes,
+      deniedNodes: placement.deniedNodes,
     });
 
     let createdDeployment;
@@ -1212,6 +1252,30 @@ export class ProjectsService {
         },
       });
 
+      // Resolve node placement rules for this deployment's org once.
+      const deploymentRow = await this.prisma.deployment.findUnique({
+        where: { id: deploymentId },
+        select: { projectId: true, replicas: true, project: { select: { organizationId: true } } },
+      });
+      const deployPlacement = deploymentRow
+        ? await this.resolvePlacementForProject(deploymentRow.projectId)
+        : { allowedNodes: null as string[] | null, deniedNodes: [] as string[] };
+
+      if (deploymentRow) {
+        const { defaultPodCpuMilli, defaultPodMemoryBytes } = await this.quotasService.resolveProjectCaps(
+          deploymentRow.projectId,
+        );
+        const perPodCpu = defaultPodCpuMilli ?? 100;
+        const perPodMem = defaultPodMemoryBytes ?? 128 * 1024 * 1024;
+        await this.quotasService.enforceOrgCapForNewPod(deploymentRow.project.organizationId, {
+          cpuMilli: perPodCpu * (deploymentRow.replicas || 1),
+          memoryBytes: perPodMem * (deploymentRow.replicas || 1),
+        });
+        await this.quotasService.applyProjectQuota(deploymentRow.projectId).catch((err) => {
+          console.error('[Projects] applyProjectQuota failed:', err);
+        });
+      }
+
       let shouldCreateNew = false;
       if (data.isRebuild) {
         // Check if Kubernetes deployment actually exists
@@ -1247,6 +1311,8 @@ export class ProjectsService {
             env: data.env,
             serviceType: data.exposePublic ? 'NodePort' : 'ClusterIP',
             volumes: data.volumes || [],
+            allowedNodes: deployPlacement.allowedNodes,
+            deniedNodes: deployPlacement.deniedNodes,
           });
         } else {
           // Update existing Kubernetes deployment with new image
@@ -5239,6 +5305,17 @@ export class ProjectsService {
       }
     }
 
+    try {
+      await this.kubernetesService.unexposeAllDeploymentPortsPublic(deployment.namespace, deployment.name);
+    } catch (error) {
+      console.error(`Failed to unexpose public ports for ${deployment.name}:`, error);
+    }
+    try {
+      await this.kubernetesService.deletePublicDeploymentNetworkPolicy(deployment.namespace, deployment.name);
+    } catch (error) {
+      console.error(`Failed to delete public NetworkPolicy for ${deployment.name}:`, error);
+    }
+
     // Delete the K8s deployment itself
     await this.kubernetesService.deleteDeployment(deployment.name, deployment.namespace);
 
@@ -6183,6 +6260,23 @@ export class ProjectsService {
         ? updateResult.externalIp
         : service.externalIp;
 
+    const priorPublic = new Map<
+      string,
+      { publicEnabled: boolean; publicPort: number | null; targetPort: number; protocol: string }
+    >();
+    if (portsPayload) {
+      for (const p of service.ports) {
+        if (p.publicEnabled && p.publicPort) {
+          priorPublic.set(`${p.port}:${p.protocol.toUpperCase()}`, {
+            publicEnabled: true,
+            publicPort: p.publicPort,
+            targetPort: p.targetPort,
+            protocol: p.protocol,
+          });
+        }
+      }
+    }
+
     await this.prisma.$transaction(async (tx) => {
       const data: Prisma.ServiceUpdateInput = {};
 
@@ -6213,18 +6307,75 @@ export class ProjectsService {
 
         if (resolvedPorts.length > 0) {
           await tx.servicePort.createMany({
-            data: resolvedPorts.map((port) => ({
-              serviceId: service.id,
-              name: port.name,
-              port: port.servicePort,
-              targetPort: port.containerPort,
-              protocol: port.protocol,
-              nodePort: port.nodePort,
-            })),
+            data: resolvedPorts.map((port) => {
+              const key = `${port.servicePort}:${port.protocol.toUpperCase()}`;
+              const prior = priorPublic.get(key);
+              return {
+                serviceId: service.id,
+                name: port.name,
+                port: port.servicePort,
+                targetPort: port.containerPort,
+                protocol: port.protocol,
+                nodePort: port.nodePort,
+                publicEnabled: prior ? prior.publicEnabled : false,
+                publicPort: prior ? prior.publicPort : null,
+              };
+            }),
           });
         }
       }
     });
+
+    if (portsPayload && priorPublic.size > 0) {
+      const keptKeys = new Set(
+        resolvedPorts.map((p) => `${p.servicePort}:${p.protocol.toUpperCase()}`),
+      );
+      for (const [key, prior] of priorPublic) {
+        if (keptKeys.has(key)) {
+          if (prior.publicPort) {
+            const kept = resolvedPorts.find(
+              (p) => `${p.servicePort}:${p.protocol.toUpperCase()}` === key,
+            );
+            if (kept && kept.containerPort !== prior.targetPort) {
+              try {
+                const org = await this.prisma.organization.findUnique({
+                  where: { id: service.deployment.project.organizationId },
+                });
+                const ip = (org?.databasePublicIp || '').trim();
+                if (ip) {
+                  await this.kubernetesService.exposeDeploymentPortPublic({
+                    namespace: service.deployment.namespace,
+                    deploymentName: service.deployment.name,
+                    loadBalancerIp: ip,
+                    publicPort: prior.publicPort,
+                    targetPort: kept.containerPort,
+                    protocol: prior.protocol,
+                  });
+                }
+              } catch (e: any) {
+                console.error(`[Deployment/public] Failed to re-expose port on update: ${e?.message}`);
+              }
+            }
+          }
+        } else if (prior.publicPort) {
+          try {
+            await this.kubernetesService.unexposeDeploymentPortPublic({
+              namespace: service.deployment.namespace,
+              deploymentName: service.deployment.name,
+              publicPort: prior.publicPort,
+              protocol: prior.protocol,
+            });
+          } catch (e: any) {
+            console.error(`[Deployment/public] Failed to unexpose removed port: ${e?.message}`);
+          }
+        }
+      }
+      await this.syncPublicDeploymentNetworkPolicy(
+        service.deployment.namespace,
+        service.deployment.name,
+        service.deployment.id,
+      );
+    }
 
     const result = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
@@ -6356,6 +6507,21 @@ export class ProjectsService {
       remainingPortsInput.push(...servicePorts);
     }
 
+    for (const p of service.ports) {
+      if (p.publicEnabled && p.publicPort) {
+        try {
+          await this.kubernetesService.unexposeDeploymentPortPublic({
+            namespace: service.deployment.namespace,
+            deploymentName: service.deployment.name,
+            publicPort: p.publicPort,
+            protocol: p.protocol,
+          });
+        } catch (e: any) {
+          console.error(`[Deployment/public] Failed to unexpose port on service delete: ${e?.message}`);
+        }
+      }
+    }
+
     await this.kubernetesService.deleteDeploymentService({
       namespace: service.deployment.namespace,
       deploymentName: service.deployment.name,
@@ -6372,6 +6538,12 @@ export class ProjectsService {
         where: { id: service.id },
       });
     });
+
+    await this.syncPublicDeploymentNetworkPolicy(
+      service.deployment.namespace,
+      service.deployment.name,
+      service.deployment.id,
+    );
 
     const result = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
@@ -7816,6 +7988,172 @@ export class ProjectsService {
       where: { id: database.id },
       data: { publicEnabled: false, publicIp: null, publicPort: null },
     });
+    return { enabled: false };
+  }
+
+  // ── Public deployment-port exposure ──
+
+  private async assertServicePortEditor(
+    deploymentId: string,
+    serviceId: string,
+    portId: string,
+    clerkId: string,
+    userData?: any,
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+
+    const port = await this.prisma.servicePort.findUnique({
+      where: { id: portId },
+      include: {
+        service: {
+          include: {
+            deployment: {
+              include: { project: { include: { organization: true } } },
+            },
+          },
+        },
+      },
+    });
+    if (!port) throw new NotFoundException('Port not found');
+    if (port.serviceId !== serviceId) throw new BadRequestException('Port does not belong to service');
+    if (port.service.deploymentId !== deploymentId) throw new BadRequestException('Service does not belong to deployment');
+
+    const deployment = port.service.deployment;
+    const membership = await this.prisma.projectMember.findFirst({
+      where: { projectId: deployment.project.id, userId: user.id },
+      include: { role: true },
+    });
+    if (!membership) throw new ForbiddenException('You are not a member of this project');
+    if (membership.role.name === 'viewer') throw new ForbiddenException('You do not have permission to update services');
+
+    return { user, port, service: port.service, deployment };
+  }
+
+  private async pickFreePublicDeploymentPort(ip: string): Promise<number> {
+    const dbPortsRaw = await this.prisma.database.findMany({
+      where: { publicIp: ip, publicPort: { not: null } },
+      select: { publicPort: true },
+    });
+    const svcPortsRaw = await this.prisma.servicePort.findMany({
+      where: { publicEnabled: true, publicPort: { not: null } },
+      select: { publicPort: true },
+    });
+    const taken = new Set<number>();
+    for (const r of dbPortsRaw) if (typeof r.publicPort === 'number') taken.add(r.publicPort);
+    for (const r of svcPortsRaw) if (typeof r.publicPort === 'number') taken.add(r.publicPort);
+
+    try {
+      const live = await this.kubernetesService.listInUsePortsOnIp(ip);
+      for (const p of live) taken.add(p);
+    } catch (e: any) {
+      console.error(`[Deployment/public] Failed to list in-use ports on ${ip}: ${e?.message}`);
+    }
+
+    const MIN = 30000;
+    const MAX = 32767;
+    for (let i = 0; i < 200; i++) {
+      const port = Math.floor(Math.random() * (MAX - MIN + 1)) + MIN;
+      if (!taken.has(port)) return port;
+    }
+    throw new BadRequestException('Could not find a free public port after 200 attempts');
+  }
+
+  private async syncPublicDeploymentNetworkPolicy(namespace: string, deploymentName: string, deploymentId: string) {
+    const publicPorts = await this.prisma.servicePort.findMany({
+      where: {
+        publicEnabled: true,
+        service: { deploymentId },
+      },
+      select: { targetPort: true, protocol: true },
+    });
+    const deduped = new Map<string, { port: number; protocol: string }>();
+    for (const p of publicPorts) {
+      const proto = p.protocol?.toUpperCase() === 'UDP' ? 'UDP' : 'TCP';
+      deduped.set(`${proto}:${p.targetPort}`, { port: p.targetPort, protocol: proto });
+    }
+    try {
+      await this.kubernetesService.upsertPublicDeploymentNetworkPolicy(
+        namespace,
+        deploymentName,
+        Array.from(deduped.values()),
+      );
+    } catch (e: any) {
+      console.error(`[Deployment/public] Failed to sync NetworkPolicy: ${e?.message}`);
+    }
+  }
+
+  async enableServicePortPublic(
+    deploymentId: string,
+    serviceId: string,
+    portId: string,
+    clerkId: string,
+    userData?: any,
+  ) {
+    const { port, deployment } = await this.assertServicePortEditor(deploymentId, serviceId, portId, clerkId, userData);
+
+    const org = await this.prisma.organization.findUnique({ where: { id: deployment.project.organizationId } });
+    const ip = (org?.databasePublicIp || '').trim();
+    if (!ip) {
+      throw new BadRequestException('This organization does not have a public IP configured. Set one in organization settings.');
+    }
+
+    if (port.publicEnabled && port.publicPort) {
+      const host = this.kubernetesService.publicDeploymentBaseDomain();
+      return { enabled: true, host, ip, port: port.publicPort, protocol: port.protocol };
+    }
+
+    const publicPort = await this.pickFreePublicDeploymentPort(ip);
+
+    await this.kubernetesService.exposeDeploymentPortPublic({
+      namespace: deployment.namespace,
+      deploymentName: deployment.name,
+      loadBalancerIp: ip,
+      publicPort,
+      targetPort: port.targetPort,
+      protocol: port.protocol,
+    });
+
+    await this.prisma.servicePort.update({
+      where: { id: port.id },
+      data: { publicEnabled: true, publicPort },
+    });
+
+    await this.syncPublicDeploymentNetworkPolicy(deployment.namespace, deployment.name, deployment.id);
+
+    const host = this.kubernetesService.publicDeploymentBaseDomain();
+    return { enabled: true, host, ip, port: publicPort, protocol: port.protocol };
+  }
+
+  async disableServicePortPublic(
+    deploymentId: string,
+    serviceId: string,
+    portId: string,
+    clerkId: string,
+    userData?: any,
+  ) {
+    const { port, deployment } = await this.assertServicePortEditor(deploymentId, serviceId, portId, clerkId, userData);
+
+    if (port.publicEnabled && port.publicPort) {
+      try {
+        await this.kubernetesService.unexposeDeploymentPortPublic({
+          namespace: deployment.namespace,
+          deploymentName: deployment.name,
+          publicPort: port.publicPort,
+          protocol: port.protocol,
+        });
+      } catch (e: any) {
+        console.error(`[Deployment/public] Failed to delete public Service: ${e?.message}`);
+      }
+    }
+
+    await this.prisma.servicePort.update({
+      where: { id: port.id },
+      data: { publicEnabled: false, publicPort: null },
+    });
+
+    await this.syncPublicDeploymentNetworkPolicy(deployment.namespace, deployment.name, deployment.id);
+
     return { enabled: false };
   }
 

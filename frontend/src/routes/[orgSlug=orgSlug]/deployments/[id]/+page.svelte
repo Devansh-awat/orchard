@@ -146,11 +146,14 @@
 	}
 
 	interface ServicePortConfig {
+		id?: string;
 		name?: string;
 		port: number;
 		targetPort: number;
 		protocol: string;
 		nodePort?: number | null;
+		publicEnabled?: boolean;
+		publicPort?: number | null;
 	}
 
 	interface Service {
@@ -1594,6 +1597,41 @@
 			serviceFormError = e instanceof Error ? e.message : 'Failed to create service';
 		} finally {
 			creatingService = false;
+		}
+	}
+
+	let portPublicBusyId: string | null = $state(null);
+
+	async function togglePortPublic(serviceId: string, portId: string, currentlyEnabled: boolean) {
+		portPublicBusyId = portId;
+		try {
+			const method = currentlyEnabled ? 'DELETE' : 'POST';
+			const response = await apiFetch(
+				`/apiv1/deployments/${deploymentId}/services/${serviceId}/ports/${portId}/public`,
+				{ method }
+			);
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to toggle public exposure');
+			}
+			const res = await response.json();
+			await fetchDeployment();
+			toasts.add({
+				title: currentlyEnabled ? 'Port unexposed' : 'Port exposed publicly',
+				description:
+					!currentlyEnabled && res?.host && res?.port
+						? `Reachable at ${res.host}:${res.port}`
+						: undefined,
+				color: 'success'
+			});
+		} catch (e) {
+			toasts.add({
+				title: 'Public exposure failed',
+				description: e instanceof Error ? e.message : 'Unknown error',
+				color: 'danger'
+			});
+		} finally {
+			portPublicBusyId = null;
 		}
 	}
 
@@ -3203,10 +3241,56 @@
 													{:else}
 														<span class="text-sm font-mono font-medium" style="color: var(--center-channel-color);">{port.targetPort}</span>
 														<span class="surface-pill rounded-full px-1.5 py-0.5 text-[10px]">{port.protocol}</span>
+														{#if port.publicEnabled && port.publicPort}
+															{@const pubEndpoint = `public.orchard.my:${port.publicPort}`}
+															<button
+																type="button"
+																class="svc-public-pill flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-mono"
+																onclick={() => { navigator.clipboard.writeText(pubEndpoint); toasts.add({ title: 'Copied public endpoint', description: pubEndpoint, color: 'success' }); }}
+																title="Click to copy public endpoint"
+															>
+																<Globe class="h-3 w-3" />
+																<span>{pubEndpoint}</span>
+																<Copy class="h-3 w-3 opacity-60" />
+															</button>
+														{/if}
 													{/if}
 													<div class="flex-1"></div>
+													{#if !serviceEditForms[service.id] && port.id}
+														{#if port.publicEnabled}
+															<button
+																type="button"
+																class="btn btn-ghost btn-sm"
+																onclick={() => togglePortPublic(service.id, port.id, true)}
+																disabled={portPublicBusyId === port.id}
+																title="Stop exposing this port publicly"
+															>
+																{#if portPublicBusyId === port.id}
+																	<Loader2 class="h-3.5 w-3.5 animate-spin" />
+																{:else}
+																	<Lock class="h-3.5 w-3.5" />
+																{/if}
+																<span class="ml-1 text-xs">Unexpose</span>
+															</button>
+														{:else}
+															<button
+																type="button"
+																class="btn btn-secondary btn-sm"
+																onclick={() => togglePortPublic(service.id, port.id, false)}
+																disabled={portPublicBusyId === port.id}
+																title="Expose this port to the public internet"
+															>
+																{#if portPublicBusyId === port.id}
+																	<Loader2 class="h-3.5 w-3.5 animate-spin" />
+																{:else}
+																	<Globe class="h-3.5 w-3.5" />
+																{/if}
+																<span class="ml-1 text-xs">Expose publicly</span>
+															</button>
+														{/if}
+													{/if}
 													{#if !serviceEditForms[service.id]}
-														<button type="button" class="btn btn-ghost btn-sm" onclick={() => toggleServiceEdit(service)}>
+														<button type="button" class="btn btn-ghost btn-sm" title="Edit port" onclick={() => toggleServiceEdit(service)}>
 															<Settings class="h-3.5 w-3.5" />
 														</button>
 													{/if}
@@ -6153,6 +6237,17 @@
 	.svc-port-editing {
 		border-color: var(--sidebar-text-active-border) !important;
 		box-shadow: 0 0 0 1px var(--sidebar-text-active-border);
+	}
+
+	.svc-public-pill {
+		background-color: color-mix(in srgb, var(--denim-button-bg) 12%, transparent);
+		color: var(--denim-button-bg);
+		border: 1px solid color-mix(in srgb, var(--denim-button-bg) 35%, transparent);
+		transition: background-color 0.15s;
+	}
+
+	.svc-public-pill:hover {
+		background-color: color-mix(in srgb, var(--denim-button-bg) 20%, transparent);
 	}
 
 	/* ── Environment variables ── */

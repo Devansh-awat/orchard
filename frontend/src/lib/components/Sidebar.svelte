@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { PanelLeftClose, PanelLeft, Search, Leaf, Folder } from 'lucide-svelte';
+	import { PanelLeftClose, PanelLeft, Search, Leaf, Folder, Activity } from 'lucide-svelte';
 	import WorkspacesMenu from './WorkspacesMenu.svelte';
 	import UserMenu from './UserMenu.svelte';
 	import { selectedOrganization, sidebarCollapsed } from '$lib/stores';
@@ -77,6 +77,16 @@
 					</div>
 					<span class="tree-node-label">Projects</span>
 				</a>
+				<a
+					href="/{$selectedOrganization?.slug ?? ''}/usage"
+					class="tree-node-content"
+					class:is-active={$page.url.pathname.startsWith('/' + ($selectedOrganization?.slug ?? '') + '/usage')}
+				>
+					<div class="tree-icon-badge" style="background-color: #f59e0b">
+						<Activity size={10} class="tree-icon-svg" />
+					</div>
+					<span class="tree-node-label">Usage</span>
+				</a>
 			</div>
 		{:else}
 			<div class="sidebar-collapsed-nav">
@@ -110,6 +120,17 @@
 						<Folder size={11} class="tree-icon-svg" />
 					</div>
 					<span class="sidebar-collapsed-tooltip">Projects</span>
+				</a>
+				<a
+					href="/{$selectedOrganization?.slug ?? ''}/usage"
+					class="sidebar-collapsed-icon"
+					class:is-active={$page.url.pathname.startsWith('/' + ($selectedOrganization?.slug ?? '') + '/usage')}
+					aria-label="Usage"
+				>
+					<div class="tree-icon-badge" style="background-color: #f59e0b">
+						<Activity size={11} class="tree-icon-svg" />
+					</div>
+					<span class="sidebar-collapsed-tooltip">Usage</span>
 				</a>
 			</div>
 		{/if}

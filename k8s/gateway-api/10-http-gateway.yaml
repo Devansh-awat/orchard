@@ -1,0 +1,40 @@
+---
+# Shared L7 Gateway for all app HTTP/HTTPS traffic.
+#
+# Listeners:
+#   - http           :80   accepts all hostnames (redirect + ACME HTTP-01 challenges)
+#   - https-wildcard :443  terminates TLS for *.a.lfdl.ink using the pre-issued wildcard cert
+#
+# Custom-domain HTTPS listeners are appended to this Gateway at runtime by the
+# server (see KubernetesService.ensureCustomDomainListener). Do not hand-edit
+# those listeners here — they are reconciled from application state.
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: http-gateway
+  namespace: network
+  labels:
+    leaf.dev/managed: "true"
+    leaf.dev/role: http
+spec:
+  gatewayClassName: traefik
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: https-wildcard
+      protocol: HTTPS
+      port: 443
+      hostname: "*.a.lfdl.ink"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            group: ""
+            name: wildcard-a-lfdl-ink-tls
+      allowedRoutes:
+        namespaces:
+          from: All

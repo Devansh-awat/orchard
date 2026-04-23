@@ -2,6 +2,28 @@ import { Injectable, ServiceUnavailableException, NotFoundException, BadRequestE
 import * as k8s from '@kubernetes/client-node';
 import { ServiceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { parseCpu, parseMemory } from './quantity';
+
+function buildNodeAffinity(
+  allowedNodes: string[] | null | undefined,
+  deniedNodes: string[] | undefined,
+): k8s.V1Affinity | null {
+  const terms: k8s.V1NodeSelectorRequirement[] = [];
+  if (allowedNodes && allowedNodes.length > 0) {
+    terms.push({ key: 'kubernetes.io/hostname', operator: 'In', values: allowedNodes });
+  }
+  if (deniedNodes && deniedNodes.length > 0) {
+    terms.push({ key: 'kubernetes.io/hostname', operator: 'NotIn', values: deniedNodes });
+  }
+  if (terms.length === 0) return null;
+  return {
+    nodeAffinity: {
+      requiredDuringSchedulingIgnoredDuringExecution: {
+        nodeSelectorTerms: [{ matchExpressions: terms }],
+      },
+    },
+  };
+}
 
 type DeploymentEnvVarInput = {
   key: string;
@@ -32,6 +54,8 @@ type CreateDeploymentOptions = {
   ports?: DeploymentPortInput[];
   env?: DeploymentEnvVarInput[];
   serviceType?: 'ClusterIP' | 'LoadBalancer' | 'NodePort';
+  allowedNodes?: string[] | null;
+  deniedNodes?: string[];
   volumes?: {
     name: string;
     type: 'pvc' | 'hostPath' | 'emptyDir';
@@ -225,6 +249,224 @@ export class KubernetesService {
       console.error('[K8s] Failed to fetch node IP:', message);
     }
     return null;
+  }
+
+  // Apply (or remove) a ResourceQuota + LimitRange in a namespace.
+  // Pass nulls to remove the resource.
+  async applyNamespaceQuota(options: {
+    namespace: string;
+    cpuLimitMilli?: number | null;
+    memoryLimitBytes?: number | null;
+    maxPods?: number | null;
+    maxServices?: number | null;
+    defaultPodCpuMilli?: number | null;
+    defaultPodMemoryBytes?: number | null;
+  }) {
+    this.ensureKubeConfig();
+    if (!this.kc) return;
+    const api = this.kc.makeApiClient(k8s.CoreV1Api);
+    const ns = options.namespace;
+    const quotaName = 'orchard-org-quota';
+    const limitName = 'orchard-defaults';
+
+    const hardQuota: Record<string, string> = {};
+    if (options.cpuLimitMilli && options.cpuLimitMilli > 0) {
+      hardQuota['requests.cpu'] = `${options.cpuLimitMilli}m`;
+      hardQuota['limits.cpu'] = `${options.cpuLimitMilli}m`;
+    }
+    if (options.memoryLimitBytes && options.memoryLimitBytes > 0) {
+      hardQuota['requests.memory'] = String(options.memoryLimitBytes);
+      hardQuota['limits.memory'] = String(options.memoryLimitBytes);
+    }
+    if (options.maxPods && options.maxPods > 0) {
+      hardQuota['pods'] = String(options.maxPods);
+    }
+    if (options.maxServices && options.maxServices > 0) {
+      hardQuota['services'] = String(options.maxServices);
+    }
+
+    // ResourceQuota
+    if (Object.keys(hardQuota).length === 0) {
+      try {
+        await api.deleteNamespacedResourceQuota(quotaName, ns);
+      } catch (error: any) {
+        if (error?.response?.statusCode !== 404) {
+          console.error('[K8s] delete ResourceQuota failed:', error?.message || error);
+        }
+      }
+    } else {
+      const quotaBody: k8s.V1ResourceQuota = {
+        metadata: { name: quotaName, labels: { 'app.kubernetes.io/managed-by': 'orchard' } },
+        spec: { hard: hardQuota },
+      };
+      try {
+        await api.replaceNamespacedResourceQuota(quotaName, ns, quotaBody);
+      } catch (error: any) {
+        if (error?.response?.statusCode === 404) {
+          await api.createNamespacedResourceQuota(ns, quotaBody);
+        } else {
+          throw error;
+        }
+      }
+    }
+
+    // LimitRange — required for per-container defaults so ResourceQuota admission succeeds
+    // for pods that don't specify requests. Also caps per-container to org defaults.
+    const hasDefaults =
+      (options.defaultPodCpuMilli && options.defaultPodCpuMilli > 0) ||
+      (options.defaultPodMemoryBytes && options.defaultPodMemoryBytes > 0);
+    // If we set any ResourceQuota with requests.cpu/memory, a LimitRange with defaults is required.
+    const needLimitRange =
+      hasDefaults ||
+      (hardQuota['requests.cpu'] !== undefined || hardQuota['requests.memory'] !== undefined);
+    if (!needLimitRange) {
+      try {
+        await api.deleteNamespacedLimitRange(limitName, ns);
+      } catch (error: any) {
+        if (error?.response?.statusCode !== 404) {
+          console.error('[K8s] delete LimitRange failed:', error?.message || error);
+        }
+      }
+      return;
+    }
+
+    const defaultReq: Record<string, string> = {};
+    const defaultLim: Record<string, string> = {};
+    const cpuDefault = options.defaultPodCpuMilli && options.defaultPodCpuMilli > 0
+      ? options.defaultPodCpuMilli
+      : 100; // 100m
+    const memDefault = options.defaultPodMemoryBytes && options.defaultPodMemoryBytes > 0
+      ? options.defaultPodMemoryBytes
+      : 128 * 1024 * 1024; // 128Mi
+    defaultReq['cpu'] = `${cpuDefault}m`;
+    defaultReq['memory'] = String(memDefault);
+    defaultLim['cpu'] = `${cpuDefault * 4}m`;
+    defaultLim['memory'] = String(memDefault * 4);
+
+    const limitBody: k8s.V1LimitRange = {
+      metadata: { name: limitName, labels: { 'app.kubernetes.io/managed-by': 'orchard' } },
+      spec: {
+        limits: [
+          {
+            type: 'Container',
+            default: defaultLim,
+            defaultRequest: defaultReq,
+          },
+        ],
+      },
+    };
+
+    try {
+      await api.replaceNamespacedLimitRange(limitName, ns, limitBody);
+    } catch (error: any) {
+      if (error?.response?.statusCode === 404) {
+        await api.createNamespacedLimitRange(ns, limitBody);
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  // Aggregate resource requests for an org across all its namespaces.
+  async getOrgUsage(namespaces: string[]): Promise<{ cpuMilli: number; memoryBytes: number; pods: number; services: number }> {
+    this.ensureKubeConfig();
+    if (!this.kc || namespaces.length === 0) return { cpuMilli: 0, memoryBytes: 0, pods: 0, services: 0 };
+    const api = this.kc.makeApiClient(k8s.CoreV1Api);
+    const nsSet = new Set(namespaces);
+    let cpuMilli = 0;
+    let memoryBytes = 0;
+    let pods = 0;
+    let services = 0;
+    try {
+      const podRes = await api.listPodForAllNamespaces();
+      for (const pod of podRes.body.items) {
+        const ns = pod.metadata?.namespace;
+        if (!ns || !nsSet.has(ns)) continue;
+        const phase = pod.status?.phase;
+        if (phase === 'Succeeded' || phase === 'Failed') continue;
+        pods += 1;
+        for (const c of pod.spec?.containers || []) {
+          const req = c.resources?.requests || {};
+          if (req.cpu) cpuMilli += parseCpu(String(req.cpu));
+          if (req.memory) memoryBytes += parseMemory(String(req.memory));
+        }
+      }
+      const svcRes = await api.listServiceForAllNamespaces();
+      for (const s of svcRes.body.items) {
+        const ns = s.metadata?.namespace;
+        if (ns && nsSet.has(ns)) services += 1;
+      }
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('[K8s] getOrgUsage failed:', message);
+    }
+    return { cpuMilli, memoryBytes, pods, services };
+  }
+
+  async listClusterNodes(): Promise<k8s.V1Node[]> {
+    this.ensureKubeConfig();
+    if (!this.kc) return [];
+    try {
+      const api = this.kc.makeApiClient(k8s.CoreV1Api);
+      const res = await api.listNode();
+      return res.body.items;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('[K8s] listClusterNodes failed:', message);
+      return [];
+    }
+  }
+
+  // Returns per-node aggregated requests for all pods in the cluster.
+  async getClusterPodUsage(): Promise<
+    Array<{
+      nodeName: string | null;
+      namespace: string;
+      podName: string;
+      cpuRequestMilli: number;
+      memoryRequestBytes: number;
+      labels: Record<string, string>;
+    }>
+  > {
+    this.ensureKubeConfig();
+    if (!this.kc) return [];
+    try {
+      const api = this.kc.makeApiClient(k8s.CoreV1Api);
+      const res = await api.listPodForAllNamespaces();
+      const out: Array<{
+        nodeName: string | null;
+        namespace: string;
+        podName: string;
+        cpuRequestMilli: number;
+        memoryRequestBytes: number;
+        labels: Record<string, string>;
+      }> = [];
+      for (const pod of res.body.items) {
+        const phase = pod.status?.phase;
+        if (phase === 'Succeeded' || phase === 'Failed') continue;
+        const containers = pod.spec?.containers || [];
+        let cpuMilli = 0;
+        let memBytes = 0;
+        for (const c of containers) {
+          const req = c.resources?.requests || {};
+          if (req.cpu) cpuMilli += parseCpu(String(req.cpu));
+          if (req.memory) memBytes += parseMemory(String(req.memory));
+        }
+        out.push({
+          nodeName: pod.spec?.nodeName || null,
+          namespace: pod.metadata?.namespace || '',
+          podName: pod.metadata?.name || '',
+          cpuRequestMilli: cpuMilli,
+          memoryRequestBytes: memBytes,
+          labels: pod.metadata?.labels || {},
+        });
+      }
+      return out;
+    } catch (error) {
+      const message = error instanceof Error ? error.message : String(error);
+      console.error('[K8s] getClusterPodUsage failed:', message);
+      return [];
+    }
   }
 
   private mapServicePorts(
@@ -977,6 +1219,8 @@ export class KubernetesService {
         if (hc.startupEnabled) container.startupProbe = buildProbe(hc.startupFailureThreshold);
       }
 
+      const affinity = buildNodeAffinity(options.allowedNodes, options.deniedNodes);
+
       const deploymentBody: k8s.V1Deployment = {
         metadata: {
           name: cleanName,
@@ -994,6 +1238,7 @@ export class KubernetesService {
             spec: {
               containers: [container],
               volumes: k8sVolumes.length > 0 ? k8sVolumes : undefined,
+              affinity: affinity || undefined,
             }
           }
         }
@@ -5251,6 +5496,181 @@ export class KubernetesService {
     this.ensureKubeConfig();
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
     const name = this.publicDatabaseNetworkPolicyName(clusterName);
+    try {
+      await networkingApi.deleteNamespacedNetworkPolicy(name, namespace);
+    } catch (e: any) {
+      if (e.response?.statusCode !== 404) throw e;
+    }
+  }
+
+  // ── Public deployment-port exposure (MetalLB LoadBalancer, TCP/UDP passthrough) ──
+
+  private readonly PUBLIC_DEPLOYMENT_BASE_DOMAIN = 'public.orchard.my';
+
+  publicDeploymentBaseDomain(): string {
+    return this.PUBLIC_DEPLOYMENT_BASE_DOMAIN;
+  }
+
+  private publicDeploymentServiceName(deploymentName: string, port: number, protocol: string): string {
+    const proto = protocol.toLowerCase() === 'udp' ? 'u' : 't';
+    return `${deploymentName}-pub-${proto}${port}`.substring(0, 63);
+  }
+
+  async exposeDeploymentPortPublic(options: {
+    namespace: string;
+    deploymentName: string;
+    loadBalancerIp: string;
+    publicPort: number;
+    targetPort: number;
+    protocol: string;
+  }): Promise<void> {
+    this.ensureKubeConfig();
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    const protocol = options.protocol.toUpperCase() === 'UDP' ? 'UDP' : 'TCP';
+    const svcName = this.publicDeploymentServiceName(options.deploymentName, options.publicPort, protocol);
+
+    const body: k8s.V1Service = {
+      metadata: {
+        name: svcName,
+        namespace: options.namespace,
+        labels: {
+          'app.kubernetes.io/managed-by': 'orchard',
+          'app.kubernetes.io/name': options.deploymentName,
+          'orchard.dev/public-deployment': options.deploymentName,
+        },
+        annotations: {
+          'metallb.universe.tf/allow-shared-ip': this.sharedIpAnnotation(options.loadBalancerIp),
+        },
+      },
+      spec: {
+        type: 'LoadBalancer',
+        loadBalancerIP: options.loadBalancerIp,
+        externalTrafficPolicy: 'Cluster',
+        selector: {
+          'app.kubernetes.io/name': options.deploymentName,
+        },
+        ports: [
+          {
+            name: `pub-${protocol.toLowerCase()}-${options.publicPort}`,
+            port: options.publicPort,
+            targetPort: options.targetPort,
+            protocol,
+          },
+        ],
+      },
+    };
+
+    try {
+      await coreApi.readNamespacedService(svcName, options.namespace);
+      await coreApi.replaceNamespacedService(svcName, options.namespace, body);
+    } catch (e: any) {
+      if (e.response?.statusCode === 404) {
+        await coreApi.createNamespacedService(options.namespace, body);
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  async unexposeDeploymentPortPublic(options: {
+    namespace: string;
+    deploymentName: string;
+    publicPort: number;
+    protocol: string;
+  }): Promise<void> {
+    this.ensureKubeConfig();
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    const protocol = options.protocol.toUpperCase() === 'UDP' ? 'UDP' : 'TCP';
+    const svcName = this.publicDeploymentServiceName(options.deploymentName, options.publicPort, protocol);
+    try {
+      await coreApi.deleteNamespacedService(svcName, options.namespace);
+    } catch (e: any) {
+      if (e.response?.statusCode !== 404) throw e;
+    }
+  }
+
+  async unexposeAllDeploymentPortsPublic(namespace: string, deploymentName: string): Promise<void> {
+    this.ensureKubeConfig();
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    try {
+      const { body } = await coreApi.listNamespacedService(
+        namespace, undefined, undefined, undefined, undefined,
+        `orchard.dev/public-deployment=${deploymentName}`,
+      );
+      for (const svc of body.items) {
+        const n = svc.metadata?.name;
+        if (!n) continue;
+        try {
+          await coreApi.deleteNamespacedService(n, namespace);
+        } catch (e: any) {
+          if (e.response?.statusCode !== 404) throw e;
+        }
+      }
+    } catch (e: any) {
+      if (e.response?.statusCode !== 404) throw e;
+    }
+  }
+
+  private publicDeploymentNetworkPolicyName(deploymentName: string): string {
+    return `${deploymentName}-allow-public`.substring(0, 63);
+  }
+
+  async upsertPublicDeploymentNetworkPolicy(
+    namespace: string,
+    deploymentName: string,
+    ports: { port: number; protocol: string }[],
+  ): Promise<void> {
+    this.ensureKubeConfig();
+    const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
+    const name = this.publicDeploymentNetworkPolicyName(deploymentName);
+
+    if (ports.length === 0) {
+      await this.deletePublicDeploymentNetworkPolicy(namespace, deploymentName);
+      return;
+    }
+
+    const body: k8s.V1NetworkPolicy = {
+      metadata: {
+        name,
+        namespace,
+        labels: {
+          'app.kubernetes.io/managed-by': 'orchard',
+          'app.kubernetes.io/name': deploymentName,
+        },
+      },
+      spec: {
+        podSelector: {
+          matchLabels: { 'app.kubernetes.io/name': deploymentName },
+        },
+        policyTypes: ['Ingress'],
+        ingress: [
+          {
+            from: [{ ipBlock: { cidr: '0.0.0.0/0' } }],
+            ports: ports.map((p) => ({
+              protocol: p.protocol.toUpperCase() === 'UDP' ? 'UDP' : 'TCP',
+              port: p.port,
+            })),
+          },
+        ],
+      },
+    };
+
+    try {
+      await networkingApi.readNamespacedNetworkPolicy(name, namespace);
+      await networkingApi.replaceNamespacedNetworkPolicy(name, namespace, body);
+    } catch (e: any) {
+      if (e.response?.statusCode === 404) {
+        await networkingApi.createNamespacedNetworkPolicy(namespace, body);
+      } else {
+        throw e;
+      }
+    }
+  }
+
+  async deletePublicDeploymentNetworkPolicy(namespace: string, deploymentName: string): Promise<void> {
+    this.ensureKubeConfig();
+    const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
+    const name = this.publicDeploymentNetworkPolicyName(deploymentName);
     try {
       await networkingApi.deleteNamespacedNetworkPolicy(name, namespace);
     } catch (e: any) {

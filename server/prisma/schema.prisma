@@ -191,11 +191,22 @@ model Organization {
 
   databasePublicIp  String? @map("database_public_ip") @db.VarChar(45)
 
+  // Org-wide resource caps (null = unlimited). CPU in millicores, memory in bytes.
+  cpuLimitMilli    Int?    @map("cpu_limit_milli")
+  memoryLimitBytes BigInt? @map("memory_limit_bytes")
+  maxPods          Int?    @map("max_pods")
+  maxServices      Int?    @map("max_services")
+
+  // Per-project defaults applied via LimitRange (null = no default).
+  defaultPodCpuMilli     Int?    @map("default_pod_cpu_milli")
+  defaultPodMemoryBytes  BigInt? @map("default_pod_memory_bytes")
+
   creator     User?                    @relation("OrganizationCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   members     OrganizationMember[]
   invitations OrganizationInvitation[]
   projects    Project[]
   ssoConfig   SsoConfig?
+  nodeAssignments OrgNodeAssignment[]
 
   @@map("organizations")
 }
@@ -267,6 +278,11 @@ model Project {
   icon            String?  @db.VarChar(500)
   backgroundImage String?  @map("background_image") @db.VarChar(1000)
   namespace       String   @db.VarChar(100)
+  // Per-project caps — override the org-level share (null = inherit from org).
+  cpuLimitMilli    Int?    @map("cpu_limit_milli")
+  memoryLimitBytes BigInt? @map("memory_limit_bytes")
+  maxPods          Int?    @map("max_pods")
+  maxServices      Int?    @map("max_services")
   createdBy      String?  @map("created_by") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
@@ -546,13 +562,15 @@ model Ingress {
 }
 
 model ServicePort {
-  id         String  @id @default(uuid()) @db.Uuid
-  serviceId  String  @map("service_id") @db.Uuid
-  name       String? @db.VarChar(63)
-  port       Int
-  targetPort Int     @map("target_port")
-  protocol   String  @default("TCP") @db.VarChar(10)
-  nodePort   Int?    @map("node_port")
+  id            String  @id @default(uuid()) @db.Uuid
+  serviceId     String  @map("service_id") @db.Uuid
+  name          String? @db.VarChar(63)
+  port          Int
+  targetPort    Int     @map("target_port")
+  protocol      String  @default("TCP") @db.VarChar(10)
+  nodePort      Int?    @map("node_port")
+  publicEnabled Boolean @default(false) @map("public_enabled")
+  publicPort    Int?    @map("public_port")
 
   service Service @relation(fields: [serviceId], references: [id], onDelete: Cascade)
 
@@ -748,4 +766,51 @@ model SsoConfig {
 
   @@index([organizationId], map: "idx_sso_config_org")
   @@map("sso_configs")
+}
+
+// Cluster nodes managed by admins. Synced from Kubernetes on demand.
+model Node {
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String   @unique @db.VarChar(255)
+  labels       Json?    @db.JsonB
+  schedulable  Boolean  @default(true)
+  notes        String?  @db.Text
+  // Optional admin-set caps (overrides measured capacity when enforcing quotas)
+  cpuCapacity     String? @map("cpu_capacity") @db.VarChar(32)
+  memoryCapacity  String? @map("memory_capacity") @db.VarChar(32)
+  lastSeenAt      DateTime? @map("last_seen_at") @db.Timestamp(6)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  assignments OrgNodeAssignment[]
+
+  @@map("nodes")
+}
+
+enum NodeAssignmentMode {
+  allow
+  deny
+}
+
+// Per-(org, node) placement + quota rule.
+// If an org has any ALLOW rows, it can only place on those nodes. DENY excludes a node.
+model OrgNodeAssignment {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  nodeId         String   @map("node_id") @db.Uuid
+  mode           NodeAssignmentMode @default(allow)
+  // Quota (nullable = unlimited). CPU in cores (e.g. "2"), memory (e.g. "4Gi").
+  cpuLimit       String?  @map("cpu_limit") @db.VarChar(32)
+  memoryLimit    String?  @map("memory_limit") @db.VarChar(32)
+  maxServices    Int?     @map("max_services")
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  node         Node         @relation(fields: [nodeId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, nodeId])
+  @@index([nodeId], map: "idx_org_node_assignments_node")
+  @@index([organizationId], map: "idx_org_node_assignments_org")
+  @@map("org_node_assignments")
 }

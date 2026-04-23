@@ -985,6 +985,38 @@ export class DeploymentsController {
     );
   }
 
+  @Post(':deploymentId/services/:serviceId/ports/:portId/public')
+  async enableServicePortPublic(
+    @Param('deploymentId') deploymentId: string,
+    @Param('serviceId') serviceId: string,
+    @Param('portId') portId: string,
+    @Request() req,
+  ) {
+    return this.projectsService.enableServicePortPublic(
+      deploymentId, serviceId, portId, req.user.sub,
+      {
+        email: req.user.email, username: req.user.username,
+        firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      },
+    );
+  }
+
+  @Delete(':deploymentId/services/:serviceId/ports/:portId/public')
+  async disableServicePortPublic(
+    @Param('deploymentId') deploymentId: string,
+    @Param('serviceId') serviceId: string,
+    @Param('portId') portId: string,
+    @Request() req,
+  ) {
+    return this.projectsService.disableServicePortPublic(
+      deploymentId, serviceId, portId, req.user.sub,
+      {
+        email: req.user.email, username: req.user.username,
+        firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+      },
+    );
+  }
+
   // Auto-deploy endpoints
 
   @Get(':id/auto-deploy')

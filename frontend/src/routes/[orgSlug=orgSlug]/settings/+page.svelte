@@ -743,6 +743,21 @@
 			{/if}
 		</div>
 
+		<!-- Resource quotas -->
+		{#if isOwner || currentUserRole === 'admin'}
+			<a
+				class="os-card block hover:shadow-md transition"
+				href={`/${organizationSlug}/settings/quotas`}
+			>
+				<div class="os-card-header">
+					<h2 class="os-card-title">Resource quotas</h2>
+				</div>
+				<p class="text-sm" style="color: var(--surface-muted);">
+					View usage and set per-project CPU, memory, and pod caps.
+				</p>
+			</a>
+		{/if}
+
 		<!-- Members -->
 		<div class="os-card">
 			<div class="os-card-header">

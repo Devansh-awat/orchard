@@ -14,6 +14,8 @@ import { AdminModule } from './admin/admin.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { TemplatesModule } from './templates/templates.module';
 import { SsoModule } from './sso/sso.module';
+import { NodesModule } from './nodes/nodes.module';
+import { QuotasModule } from './quotas/quotas.module';
 
 @Module({
   imports: [
@@ -32,6 +34,8 @@ import { SsoModule } from './sso/sso.module';
     WebhooksModule,
     TemplatesModule,
     SsoModule,
+    NodesModule,
+    QuotasModule,
   ],
 })
 export class AppModule {}
