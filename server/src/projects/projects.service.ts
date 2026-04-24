@@ -3139,26 +3139,7 @@ export class ProjectsService {
       throw new NotFoundException(`Ingress ${ingressId} not found`);
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: ingress.project.id,
-        userId: user.id,
-      },
-      include: { role: true },
-    });
-
-    const orgMembership = await this.prisma.organizationMember.findUnique({
-      where: {
-        organizationId_userId: {
-          organizationId: ingress.project.organizationId,
-          userId: user.id,
-        },
-      },
-    });
-
-    if (!membership && !orgMembership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
+    await this.assertProjectAccess(ingress.project.id, user.id, ingress.project.organizationId);
 
     // Read the actual K8s ingress to get all routes
     let k8sRoutes: Array<{ path: string; serviceName: string; servicePort: number }> = [];
@@ -3230,26 +3211,7 @@ export class ProjectsService {
       throw new BadRequestException('Ingress does not belong to this project');
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: ingress.project.id,
-        userId: user.id,
-      },
-      include: { role: true },
-    });
-
-    const orgMembership = await this.prisma.organizationMember.findUnique({
-      where: {
-        organizationId_userId: {
-          organizationId: ingress.project.organizationId,
-          userId: user.id,
-        },
-      },
-    });
-
-    if (!membership && !orgMembership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
+    await this.assertProjectAccess(ingress.project.id, user.id, ingress.project.organizationId);
 
     // Read the actual K8s ingress to get all routes
     let k8sRoutes: Array<{ path: string; serviceName: string; servicePort: number }> = [];
@@ -4237,25 +4199,13 @@ export class ProjectsService {
       throw new NotFoundException(`Project ${projectId} not found`);
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: project.id,
-        userId: user.id,
-      },
-    });
+    const { orgMembership, projectMembership } = await this.assertProjectAccess(
+      project.id, user.id, project.organizationId,
+    );
 
-    const orgMembership = await this.prisma.organizationMember.findUnique({
-      where: {
-        organizationId_userId: {
-          organizationId: project.organizationId,
-          userId: user.id,
-        },
-      },
-    });
-
-    if (!membership && !orgMembership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
+    const isOrgAdminOrOwner = orgMembership.role === 'owner' || orgMembership.role === 'admin';
+    const isProjectAdmin = projectMembership?.role.name === 'admin';
+    const canEdit = isOrgAdminOrOwner || !!projectMembership;
 
     // Compute status for each deployment
     const deploymentsWithComputedStatus = await Promise.all(
@@ -4275,6 +4225,11 @@ export class ProjectsService {
       ...project,
       icon,
       deployments: deploymentsWithComputedStatus,
+      currentUserRole: {
+        orgRole: orgMembership.role,
+        projectRole: projectMembership?.role.name ?? null,
+        canEdit,
+      },
     };
   }
 
@@ -4287,7 +4242,9 @@ export class ProjectsService {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
     if (!user) throw new NotFoundException('User not found');
 
-    await this.assertProjectAdmin(projectId, user.id);
+    const project = await this.prisma.project.findUnique({ where: { id: projectId } });
+    if (!project) throw new NotFoundException('Project not found');
+    await this.assertProjectAccess(projectId, user.id, project.organizationId);
 
     const updates: Prisma.ProjectUpdateInput = {};
     if (data.name !== undefined) {
@@ -4327,10 +4284,9 @@ export class ProjectsService {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
     if (!user) throw new NotFoundException('User not found');
 
-    await this.assertProjectAdmin(projectId, user.id);
-
     const existing = await this.prisma.project.findUnique({ where: { id: projectId } });
     if (!existing) throw new NotFoundException('Project not found');
+    await this.assertProjectAccess(projectId, user.id, existing.organizationId);
 
     const folder = field === 'icon' ? 'project-icons' : 'project-backgrounds';
     const url = await storageService.uploadFile(file, folder);
@@ -4345,6 +4301,67 @@ export class ProjectsService {
       where: { id: projectId },
       data: { [field]: url },
     });
+  }
+
+  /**
+   * Build a Prisma `where` filter for Project queries that respects RBAC:
+   * - Org owner/admin → all projects in the org
+   * - Org member → only projects where user is a ProjectMember
+   */
+  private async buildProjectAccessFilter(userId: string, orgId?: string) {
+    const orgMemberships = await this.prisma.organizationMember.findMany({
+      where: orgId ? { userId, organizationId: orgId } : { userId },
+      select: { organizationId: true, role: true },
+    });
+    if (orgMemberships.length === 0) return null;
+
+    const adminOrgIds = orgMemberships
+      .filter((m) => m.role === 'owner' || m.role === 'admin')
+      .map((m) => m.organizationId);
+    const memberOrgIds = orgMemberships
+      .filter((m) => m.role === 'member')
+      .map((m) => m.organizationId);
+
+    const conditions: any[] = [];
+    if (adminOrgIds.length > 0) {
+      conditions.push({ organizationId: { in: adminOrgIds } });
+    }
+    if (memberOrgIds.length > 0) {
+      conditions.push({
+        organizationId: { in: memberOrgIds },
+        members: { some: { userId } },
+      });
+    }
+    if (conditions.length === 0) return null;
+    return conditions.length === 1 ? conditions[0] : { OR: conditions };
+  }
+
+  /**
+   * Assert the user can access a project. Org owner/admin can access any project
+   * in their org. Regular org members must be a ProjectMember.
+   * Returns { orgMembership, projectMembership } for further role checks.
+   */
+  private async assertProjectAccess(projectId: string, userId: string, organizationId: string) {
+    const [projectMembership, orgMembership] = await Promise.all([
+      this.prisma.projectMember.findFirst({
+        where: { projectId, userId },
+        include: { role: true },
+      }),
+      this.prisma.organizationMember.findUnique({
+        where: { organizationId_userId: { organizationId, userId } },
+      }),
+    ]);
+
+    if (!orgMembership) {
+      throw new ForbiddenException('You are not a member of this organization');
+    }
+
+    const isOrgAdminOrOwner = orgMembership.role === 'owner' || orgMembership.role === 'admin';
+    if (!isOrgAdminOrOwner && !projectMembership) {
+      throw new ForbiddenException('You are not a member of this project');
+    }
+
+    return { orgMembership, projectMembership };
   }
 
   private async assertProjectAdmin(projectId: string, userId: string) {
@@ -4644,23 +4661,13 @@ export class ProjectsService {
       throw new NotFoundException(`Project ${projectSlug} not found`);
     }
 
-    const [membership, orgMembership] = await Promise.all([
-      this.prisma.projectMember.findFirst({
-        where: { projectId: project.id, userId: user.id },
-      }),
-      this.prisma.organizationMember.findUnique({
-        where: {
-          organizationId_userId: {
-            organizationId: project.organizationId,
-            userId: user.id,
-          },
-        },
-      }),
-    ]);
+    const { orgMembership, projectMembership } = await this.assertProjectAccess(
+      project.id, user.id, project.organizationId,
+    );
 
-    if (!membership && !orgMembership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
+    const isOrgAdminOrOwner = orgMembership.role === 'owner' || orgMembership.role === 'admin';
+    const isProjectAdmin = projectMembership?.role.name === 'admin';
+    const canEdit = isOrgAdminOrOwner || !!projectMembership;
 
     const deploymentsWithComputedStatus = await Promise.all(
       project.deployments.map(async (deployment) => {
@@ -4675,23 +4682,17 @@ export class ProjectsService {
       ...project,
       icon,
       deployments: deploymentsWithComputedStatus,
+      currentUserRole: {
+        orgRole: orgMembership.role,
+        projectRole: projectMembership?.role.name ?? null,
+        canEdit,
+      },
     };
   }
 
   async listProjects(userId: string, orgId?: string) {
-    const where: any = {};
-
-    if (orgId) {
-      where.organizationId = orgId;
-    } else {
-      const orgMemberships = await this.prisma.organizationMember.findMany({
-        where: { userId },
-        select: { organizationId: true },
-      });
-      const orgIds = orgMemberships.map((m) => m.organizationId);
-      if (orgIds.length === 0) return [];
-      where.organizationId = { in: orgIds };
-    }
+    const where = await this.buildProjectAccessFilter(userId, orgId);
+    if (!where) return [];
 
     const projects = await this.prisma.project.findMany({
       where,
@@ -4733,22 +4734,11 @@ export class ProjectsService {
    * Returns only the fields needed for the overview page — NO k8s calls.
    */
   async listDatabasesSummary(userId: string, orgId?: string) {
-    const whereClause: any = {};
-
-    if (orgId) {
-      whereClause.project = { organizationId: orgId };
-    } else {
-      const orgMemberships = await this.prisma.organizationMember.findMany({
-        where: { userId },
-        select: { organizationId: true },
-      });
-      const orgIds = orgMemberships.map((m) => m.organizationId);
-      if (orgIds.length === 0) return [];
-      whereClause.project = { organizationId: { in: orgIds } };
-    }
+    const projectFilter = await this.buildProjectAccessFilter(userId, orgId);
+    if (!projectFilter) return [];
 
     return this.prisma.database.findMany({
-      where: whereClause,
+      where: { project: projectFilter },
       select: {
         id: true,
         name: true,
@@ -4771,28 +4761,11 @@ export class ProjectsService {
   }
 
   async listDeploymentsSummary(userId: string, orgId?: string) {
-    const whereClause: any = {};
-
-    if (orgId) {
-      whereClause.project = {
-        organizationId: orgId,
-      };
-    } else {
-      const orgMemberships = await this.prisma.organizationMember.findMany({
-        where: { userId },
-        select: { organizationId: true },
-      });
-      const orgIds = orgMemberships.map((m) => m.organizationId);
-
-      if (orgIds.length === 0) return [];
-
-      whereClause.project = {
-        organizationId: { in: orgIds },
-      };
-    }
+    const projectFilter = await this.buildProjectAccessFilter(userId, orgId);
+    if (!projectFilter) return [];
 
     const deployments = await this.prisma.deployment.findMany({
-      where: whereClause,
+      where: { project: projectFilter },
       select: {
         id: true,
         name: true,
@@ -4846,29 +4819,13 @@ export class ProjectsService {
   }
 
   async listRecentBuilds(userId: string, orgId?: string, limit = 5) {
-    const orgFilter: any = {};
-
-    if (orgId) {
-      orgFilter.project = {
-        organizationId: orgId,
-      };
-    } else {
-      const orgMemberships = await this.prisma.organizationMember.findMany({
-        where: { userId },
-        select: { organizationId: true },
-      });
-      const orgIds = orgMemberships.map((m) => m.organizationId);
-      if (orgIds.length === 0) return { active: [], recent: [] };
-
-      orgFilter.project = {
-        organizationId: { in: orgIds },
-      };
-    }
+    const projectFilter = await this.buildProjectAccessFilter(userId, orgId);
+    if (!projectFilter) return { active: [], recent: [] };
 
     // Currently building deployments
     const activeBuilds = await this.prisma.deployment.findMany({
       where: {
-        ...orgFilter,
+        project: projectFilter,
         buildStatus: { in: ['building', 'pending'] },
       },
       select: {
@@ -4889,28 +4846,8 @@ export class ProjectsService {
     });
 
     // Recent completed builds from image history
-    const ihWhere: any = {};
-    if (orgId) {
-      ihWhere.deployment = {
-        project: {
-          organizationId: orgId,
-        },
-      };
-    } else {
-      const orgIds = (await this.prisma.organizationMember.findMany({
-        where: { userId },
-        select: { organizationId: true },
-      })).map((m) => m.organizationId);
-
-      ihWhere.deployment = {
-        project: {
-          organizationId: { in: orgIds },
-        },
-      };
-    }
-
     const recentBuilds = await this.prisma.imageHistory.findMany({
-      where: ihWhere,
+      where: { deployment: { project: projectFilter } },
       select: {
         id: true,
         commitSha: true,

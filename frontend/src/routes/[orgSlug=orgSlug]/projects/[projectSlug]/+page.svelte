@@ -72,6 +72,11 @@
 			name: string;
 			slug: string;
 		};
+		currentUserRole?: {
+			orgRole: string;
+			projectRole: string | null;
+			canEdit: boolean;
+		};
 	}
 
 	interface TemplateInstanceSummary {
@@ -110,6 +115,7 @@
 	}
 
 	let project = $state<Project | null>(null);
+	const canEdit = $derived(project?.currentUserRole?.canEdit ?? false);
 	let templateInstances = $state<TemplateInstanceSummary[]>([]);
 
 	interface DatabaseSummary {
@@ -643,16 +649,20 @@
 						{/if}
 					</div>
 					<div class="pj-header-actions">
+						{#if canEdit}
 						<button onclick={openCustomize} class="pj-btn pj-btn-secondary pj-btn--onhero">
 							<Palette class="h-4 w-4" /> Customize
 						</button>
+						{/if}
 						<button onclick={syncNamespace} disabled={syncing} class="pj-btn pj-btn-secondary pj-btn--onhero">
 							<RefreshCw class="h-4 w-4 {syncing ? 'animate-spin' : ''}" /> Sync
 						</button>
+						{#if canEdit}
 						<button onclick={() => (showDeleteModal = true)} disabled={deleting} class="pj-btn pj-btn-danger">
 							{#if deleting}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Trash2 class="h-4 w-4" />{/if}
 							Delete
 						</button>
+						{/if}
 					</div>
 				</div>
 			</div>
@@ -677,16 +687,20 @@
 						{/if}
 					</div>
 					<div class="pj-header-actions">
+						{#if canEdit}
 						<button onclick={openCustomize} class="pj-btn pj-btn-secondary">
 							<Palette class="h-4 w-4" /> Customize
 						</button>
+						{/if}
 						<button onclick={syncNamespace} disabled={syncing} class="pj-btn pj-btn-secondary">
 							<RefreshCw class="h-4 w-4 {syncing ? 'animate-spin' : ''}" /> Sync
 						</button>
+						{#if canEdit}
 						<button onclick={() => (showDeleteModal = true)} disabled={deleting} class="pj-btn pj-btn-danger">
 							{#if deleting}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Trash2 class="h-4 w-4" />{/if}
 							Delete
 						</button>
+						{/if}
 					</div>
 				</div>
 			</div>
@@ -892,6 +906,7 @@
 						<span>Members</span>
 						<span class="pj-members-count">{projectMembers.length}</span>
 					</div>
+					{#if canEdit}
 					<div class="pj-picker">
 						<input
 							type="text"
@@ -936,6 +951,7 @@
 							</div>
 						{/if}
 					</div>
+					{/if}
 				</div>
 
 				{#if projectMembers.length > 0}
@@ -956,6 +972,7 @@
 									<span class="pj-member-email">{m.user.email}</span>
 								</div>
 								<span class="pj-role-chip pj-role-chip--{m.role.name}">{m.role.name}</span>
+								{#if canEdit}
 								<button
 									class="pj-member-remove"
 									title="Remove member"
@@ -969,6 +986,7 @@
 										<Trash2 class="h-3.5 w-3.5" />
 									{/if}
 								</button>
+								{/if}
 							</li>
 						{/each}
 					</ul>
