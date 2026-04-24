@@ -46,10 +46,10 @@
 	if (browser) {
 		import('chart.js').then(({ Chart, LinearScale, PointElement, LineElement, Filler, Tooltip }) => {
 			Chart.register(LinearScale, PointElement, LineElement, Filler, Tooltip);
-		});
+		}).catch(() => { /* chunk may be stale after deploy */ });
 		import('svelte5-chartjs').then((mod) => {
 			Line = mod.Line;
-		});
+		}).catch(() => { /* chunk may be stale after deploy */ });
 	}
 	import DeploymentProgress from '$lib/components/DeploymentProgress.svelte';
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
@@ -552,6 +552,26 @@
 		(deployment?.buildStatus === 'failed' && (deployment?.buildError || deployment?.buildLogs) ? 1 : 0)
 	);
 	const activePods = $derived(deployment?.pods?.filter((pod) => pod.status?.toLowerCase() !== 'succeeded') ?? []);
+
+	let deletingPod = $state<string | null>(null);
+
+	async function deletePod(podName: string) {
+		if (!deployment?.namespace || deletingPod) return;
+		deletingPod = podName;
+		try {
+			const res = await apiFetch(`/apiv1/pods/${podName}?namespace=${deployment.namespace}`, { method: 'DELETE' });
+			if (!res.ok) {
+				const d = await res.json().catch(() => ({}));
+				throw new Error(d.message || 'Failed to delete pod');
+			}
+			toasts.add({ title: 'Pod deleted', description: podName, color: 'success' });
+			await fetchDeployment();
+		} catch (e) {
+			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to delete pod', color: 'error' });
+		} finally {
+			deletingPod = null;
+		}
+	}
 
 	let restarting = $state(false);
 	let scaling = $state(false);
@@ -2430,7 +2450,7 @@
 			}
 
 			fetchDeployment();
-			deploymentInterval = setInterval(fetchDeployment, 10000);
+			deploymentInterval = setInterval(fetchDeployment, 5000);
 		}
 	});
 
@@ -3000,22 +3020,36 @@
 									{#if activePods.length}
 										<div class="space-y-1">
 											{#each activePods as pod}
-												<button
-													class="console-pod-row"
-													class:console-pod-row--active={selectedPod === pod.name}
-													onclick={() => { selectedPod = pod.name; if (pod.containers?.length) selectedContainer = pod.containers[0].name; manualPodSelection = true; }}
-												>
-													<div class="flex items-center gap-2 min-w-0">
-														<span class="h-1.5 w-1.5 rounded-full shrink-0 {pod.status?.toLowerCase() === 'ready' ? 'bg-green-500' : pod.status?.toLowerCase() === 'scheduled' ? 'bg-yellow-500' : 'bg-gray-400'}"></span>
-														<span class="font-mono text-xs truncate">{podLabel(pod.name)}</span>
-													</div>
-													<div class="flex items-center gap-3 shrink-0 text-xs font-mono" style="color: var(--surface-muted);">
-														{#if pod.startTime}<span>{formatRelativeTime(new Date(pod.startTime))}</span>{/if}
-														{#if pod.cpuUsage != null}<span>{formatCpu(pod.cpuUsage)}</span>{/if}
-														{#if pod.memoryUsage != null}<span>{formatMemory(pod.memoryUsage)}</span>{/if}
-														<span class="badge {getStatusColor(pod.status)} text-[10px] px-1.5 py-0.5">{pod.status}</span>
-													</div>
-												</button>
+												<div class="console-pod-row-wrap">
+													<button
+														class="console-pod-row"
+														class:console-pod-row--active={selectedPod === pod.name}
+														onclick={() => { selectedPod = pod.name; if (pod.containers?.length) selectedContainer = pod.containers[0].name; manualPodSelection = true; }}
+													>
+														<div class="flex items-center gap-2 min-w-0">
+															<span class="h-1.5 w-1.5 rounded-full shrink-0 {pod.status?.toLowerCase() === 'ready' ? 'bg-green-500' : pod.status?.toLowerCase() === 'scheduled' ? 'bg-yellow-500' : 'bg-gray-400'}"></span>
+															<span class="font-mono text-xs truncate">{podLabel(pod.name)}</span>
+														</div>
+														<div class="flex items-center gap-3 shrink-0 text-xs font-mono" style="color: var(--surface-muted);">
+															{#if pod.startTime}<span>{formatRelativeTime(new Date(pod.startTime))}</span>{/if}
+															{#if pod.cpuUsage != null}<span>{formatCpu(pod.cpuUsage)}</span>{/if}
+															{#if pod.memoryUsage != null}<span>{formatMemory(pod.memoryUsage)}</span>{/if}
+															<span class="badge {getStatusColor(pod.status)} text-[10px] px-1.5 py-0.5">{pod.status}</span>
+														</div>
+													</button>
+													<button
+														class="pod-delete-btn"
+														title="Delete pod"
+														onclick={() => deletePod(pod.name)}
+														disabled={deletingPod === pod.name}
+													>
+														{#if deletingPod === pod.name}
+															<Loader2 class="h-3 w-3 animate-spin" />
+														{:else}
+															<Trash2 class="h-3 w-3" />
+														{/if}
+													</button>
+												</div>
 											{/each}
 										</div>
 									{:else}
@@ -5595,12 +5629,21 @@
 	}
 
 	/* Pod rows — clickable to select for console */
+	.console-pod-row-wrap {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+	}
+	.console-pod-row-wrap:hover .pod-delete-btn {
+		opacity: 1;
+	}
 	.console-pod-row {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 0.5rem;
-		width: 100%;
+		flex: 1;
+		min-width: 0;
 		padding: 0.375rem 0.625rem;
 		border-radius: 0.5rem;
 		background: transparent;
@@ -5616,6 +5659,29 @@
 	.console-pod-row--active {
 		background: var(--control-bg);
 		border-color: color-mix(in srgb, var(--sidebar-text-active-border) 40%, transparent);
+	}
+	.pod-delete-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.5rem;
+		height: 1.5rem;
+		border-radius: 0.375rem;
+		border: none;
+		background: transparent;
+		color: var(--surface-muted);
+		cursor: pointer;
+		opacity: 0;
+		transition: opacity 0.15s, color 0.15s, background 0.15s;
+		flex-shrink: 0;
+	}
+	.pod-delete-btn:hover:not(:disabled) {
+		background: color-mix(in srgb, var(--error-text) 15%, transparent);
+		color: var(--error-text);
+	}
+	.pod-delete-btn:disabled {
+		opacity: 1;
+		cursor: not-allowed;
 	}
 
 	/* Sidebar stat cards */

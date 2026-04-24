@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Query } from '@nestjs/common';
+import { Controller, Delete, Get, Param, Query } from '@nestjs/common';
 import { KubernetesService } from './kubernetes.service';
 import { Auth } from '../auth/decorators';
 
@@ -20,6 +20,15 @@ export class KubernetesController {
     @Query('namespace') namespace?: string
   ) {
     return this.kubernetesService.getPod(podName, namespace);
+  }
+
+  @Delete('pods/:podName')
+
+  async deletePod(
+    @Param('podName') podName: string,
+    @Query('namespace') namespace?: string
+  ) {
+    return this.kubernetesService.deletePod(podName, namespace);
   }
 
   @Get('pods/:podName/logs')

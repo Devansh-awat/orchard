@@ -429,7 +429,7 @@
 								aria-label={expanded ? `Collapse ${group.name}` : `Expand ${group.name}`}
 							>
 								<div class="proj-chev" class:proj-chev--open={expanded}><ChevronRight size={16} /></div>
-								<div class="proj-av">
+								<div class="proj-av" class:proj-av--fallback={!meta?.icon || !/^https?:\/\//.test(meta.icon)}>
 									{#if meta?.icon}
 										{#if /^https?:\/\//.test(meta.icon)}
 											<img src={meta.icon} alt="" class="proj-av-img" />
@@ -775,7 +775,7 @@
 		box-shadow: 0 4px 12px rgba(0,0,0,0.1), 0 14px 32px rgba(0,0,0,0.16);
 	}
 
-	.proj-av-img { width: 100%; height: 100%; object-fit: contain; border-radius: 0.375rem; }
+	.proj-av-img { width: 100%; height: 100%; object-fit: cover; }
 	.proj-av-emoji { font-size: 1.125rem; line-height: 1; }
 
 	.proj-head {
@@ -793,6 +793,9 @@
 	.proj-av {
 		width: 2.25rem; height: 2.25rem; border-radius: 0.5rem; flex-shrink: 0;
 		display: flex; align-items: center; justify-content: center;
+		overflow: hidden;
+	}
+	.proj-av--fallback {
 		background: #4a8aff;
 		color: #fff;
 	}
@@ -862,7 +865,7 @@
 	.card--skel { pointer-events: none; }
 
 	.card-top { display: flex; align-items: center; gap: 0.5rem; }
-	.card-ic { width: 2.25rem; height: 2.25rem; border-radius: 0.5rem; flex-shrink: 0; object-fit: contain; }
+	.card-ic { width: 2.25rem; height: 2.25rem; border-radius: 0.5rem; flex-shrink: 0; object-fit: cover; }
 	.card-av {
 		width: 2.25rem; height: 2.25rem; border-radius: 0.5rem; flex-shrink: 0;
 		display: flex; align-items: center; justify-content: center;
@@ -905,7 +908,7 @@
 	.menu-item--on { font-weight: 600; color: var(--sidebar-text-active-border); }
 
 	/* Dots */
-	.dot { width: 0.375rem; height: 0.375rem; border-radius: 50%; flex-shrink: 0; display: inline-block; }
+	.dot { width: 0.375rem; height: 0.375rem; border-radius: 0.5rem; flex-shrink: 0; display: inline-block; }
 	.dot--green { background: #22c55e; box-shadow: 0 0 5px color-mix(in srgb, #22c55e 35%, transparent); }
 	.dot--amber { background: #f59e0b; box-shadow: 0 0 5px color-mix(in srgb, #f59e0b 35%, transparent); }
 	.dot--red { background: #ef4444; box-shadow: 0 0 5px color-mix(in srgb, #ef4444 35%, transparent); }

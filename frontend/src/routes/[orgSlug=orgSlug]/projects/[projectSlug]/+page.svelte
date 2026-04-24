@@ -1800,7 +1800,7 @@
 		background: var(--center-channel-bg);
 		border: 1px solid color-mix(in srgb, var(--surface-border) 55%, transparent);
 		border-radius: 0.875rem;
-		overflow: hidden;
+		overflow: visible;
 		box-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 4px 14px rgba(0,0,0,0.04);
 	}
 
@@ -1946,7 +1946,7 @@
 		left: 0;
 		right: 0;
 		z-index: 20;
-		max-height: 16rem;
+		max-height: 10rem;
 		overflow-y: auto;
 		border-radius: 0.625rem;
 		border: 1px solid var(--surface-border);

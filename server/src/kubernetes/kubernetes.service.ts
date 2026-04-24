@@ -1003,6 +1003,30 @@ export class KubernetesService {
     }
   }
 
+  async deletePod(podName: string, namespace: string = 'midnight-staging') {
+    this.ensureKubeConfig();
+
+    const cleanNamespace = String(namespace || 'midnight-staging').trim();
+    const cleanPodName = String(podName).trim();
+
+    try {
+      const api = this.kc.makeApiClient(k8s.CoreV1Api);
+      await api.deleteNamespacedPod(cleanPodName, cleanNamespace);
+      return { success: true, message: `Pod ${cleanPodName} deleted` };
+    } catch (error) {
+      if (error.response?.statusCode === 404) {
+        throw new NotFoundException({
+          error: 'Pod not found',
+          message: `Pod ${cleanPodName} not found in namespace ${cleanNamespace}`,
+        });
+      }
+      throw new BadRequestException({
+        error: 'Failed to delete pod',
+        message: error.message,
+      });
+    }
+  }
+
   async getPodLogs(podName: string, namespace: string = 'midnight-staging', containerName?: string, tailLines: number = 100) {
     this.ensureKubeConfig();
 
