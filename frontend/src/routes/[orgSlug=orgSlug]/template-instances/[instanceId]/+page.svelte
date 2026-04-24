@@ -107,9 +107,18 @@
 
 <div class="ti-page">
 	{#if loading}
-		<div class="ti-loading">
-			<Loader2 class="h-6 w-6 animate-spin" />
-			<span>Loading...</span>
+		<div class="ti-skeleton">
+			<div class="skeleton" style="width: 3.5rem; height: 0.875rem; margin-bottom: 1.5rem;"></div>
+			<div style="display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 1.5rem;">
+				<div class="skeleton" style="width: 2.5rem; height: 2.5rem; border-radius: 0.75rem;"></div>
+				<div>
+					<div class="skeleton" style="width: 10rem; height: 1.25rem; margin-bottom: 0.375rem;"></div>
+					<div class="skeleton" style="width: 8rem; height: 0.75rem;"></div>
+				</div>
+			</div>
+			<div class="skeleton" style="width: 6rem; height: 0.75rem; margin-bottom: 0.75rem;"></div>
+			<div class="skeleton" style="width: 100%; height: 3.5rem; border-radius: 0.75rem; margin-bottom: 0.5rem;"></div>
+			<div class="skeleton" style="width: 100%; height: 3.5rem; border-radius: 0.75rem;"></div>
 		</div>
 	{:else if instance}
 		<button onclick={() => history.back()} class="ti-back">
@@ -278,14 +287,8 @@
 		padding: 2.5rem 2.5rem 3rem;
 	}
 
-	.ti-loading {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 3rem 0;
-		color: var(--surface-muted);
-		font-size: 0.875rem;
+	.ti-skeleton {
+		padding: 2.5rem 0;
 	}
 
 	.ti-back {

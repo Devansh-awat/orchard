@@ -76,13 +76,8 @@
 
 {#if loading}
 	<div class="flex h-screen items-center justify-center" style="background-color: var(--center-channel-bg);">
-		<div class="text-center">
-			<div class="bouncing-dots">
-				<span class="bouncing-dot"></span>
-				<span class="bouncing-dot"></span>
-				<span class="bouncing-dot"></span>
-			</div>
-			<p class="mt-3 text-sm" style="color: var(--surface-muted);">Loading...</p>
+		<div class="lds-ellipsis" style="color: var(--button-bg);">
+			<div></div><div></div><div></div><div></div>
 		</div>
 	</div>
 {:else if $isSignedIn && $page.url.pathname.startsWith('/setup')}

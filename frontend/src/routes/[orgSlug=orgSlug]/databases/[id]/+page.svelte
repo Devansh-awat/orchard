@@ -754,9 +754,22 @@
 
 <div class="db-page">
 	{#if loading}
-		<div class="db-loading">
-			<Loader2 class="h-6 w-6 animate-spin" />
-			<span>Loading...</span>
+		<div class="db-skeleton">
+			<div class="skeleton" style="width: 4rem; height: 0.875rem; margin-bottom: 1.5rem;"></div>
+			<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
+				<div style="display: flex; align-items: center; gap: 0.75rem;">
+					<div class="skeleton" style="width: 2rem; height: 2rem; border-radius: 0.5rem;"></div>
+					<div class="skeleton" style="width: 10rem; height: 1.25rem;"></div>
+					<div class="skeleton" style="width: 3.5rem; height: 1rem; border-radius: 9999px;"></div>
+				</div>
+				<div class="skeleton" style="width: 5rem; height: 2rem; border-radius: 0.5rem;"></div>
+			</div>
+			<div style="display: flex; gap: 0.75rem; margin-bottom: 1.5rem;">
+				<div class="skeleton" style="flex: 1; height: 4rem; border-radius: 0.75rem;"></div>
+				<div class="skeleton" style="flex: 1; height: 4rem; border-radius: 0.75rem;"></div>
+				<div class="skeleton" style="flex: 1; height: 4rem; border-radius: 0.75rem;"></div>
+			</div>
+			<div class="skeleton" style="width: 100%; height: 12rem; border-radius: 0.75rem;"></div>
 		</div>
 	{:else if error}
 		<div class="db-error">{error}</div>
@@ -1474,14 +1487,8 @@
 		padding: 2.5rem 2.5rem 3rem;
 	}
 
-	.db-loading {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 3rem 0;
-		color: var(--surface-muted);
-		font-size: 0.875rem;
+	.db-skeleton {
+		padding: 2.5rem 0;
 	}
 
 	.db-error {

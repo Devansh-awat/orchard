@@ -239,10 +239,23 @@
 		{/if}
 
 		{#if loading}
-			<div class="flex justify-center py-12">
-				<div class="text-center">
-					<Loader2 class="mx-auto h-8 w-8 animate-spin text-primary-600" />
-					<p class="mt-2 text-sm" style="color: var(--surface-muted);">Loading...</p>
+			<div class="mx-auto max-w-2xl space-y-6">
+				<div class="rounded-3xl border p-6 shadow-sm" style="background-color: var(--surface-bg); border-color: var(--surface-border);">
+					<div class="skeleton" style="width: 3rem; height: 0.75rem; margin-bottom: 0.5rem;"></div>
+					<div class="skeleton" style="width: 10rem; height: 1.5rem; margin-bottom: 0.5rem;"></div>
+					<div class="skeleton" style="width: 14rem; height: 0.875rem;"></div>
+				</div>
+				<div class="card">
+					<div class="card-body">
+						<div style="display: flex; flex-direction: column; gap: 1.5rem;">
+							{#each [1, 2, 3] as _}
+								<div>
+									<div class="skeleton" style="width: 6rem; height: 0.875rem; margin-bottom: 0.5rem;"></div>
+									<div class="skeleton" style="width: 100%; height: 2.5rem; border-radius: 0.75rem;"></div>
+								</div>
+							{/each}
+						</div>
+					</div>
 				</div>
 			</div>
 		{:else if workspace}

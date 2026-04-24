@@ -221,7 +221,7 @@
 						<p class="settings-section-label">Active tokens</p>
 						<p class="settings-section-desc">
 							{#if loading}
-								Loading...
+								<span class="skeleton" style="display: inline-block; width: 4rem; height: 0.75rem;"></span>
 							{:else}
 								{tokens.length} token{tokens.length !== 1 ? 's' : ''}
 							{/if}
@@ -234,8 +234,16 @@
 				{#if error}
 					<div class="alert alert-error">{error}</div>
 				{:else if loading}
-					<div class="flex items-center justify-center py-6">
-						<Loader2 class="h-5 w-5 animate-spin text-primary-600" />
+					<div style="display: flex; flex-direction: column; gap: 0.375rem; padding: 0.25rem 0;">
+						{#each [1, 2] as _}
+							<div style="display: flex; align-items: center; justify-content: space-between; padding: 0.875rem 1rem; border: 1px solid var(--surface-border); border-radius: 0.625rem;">
+								<div style="display: flex; flex-direction: column; gap: 0.375rem; flex: 1;">
+									<div class="skeleton" style="width: 8rem; height: 0.875rem;"></div>
+									<div class="skeleton" style="width: 14rem; height: 0.6875rem;"></div>
+								</div>
+								<div class="skeleton" style="width: 1.75rem; height: 1.75rem; border-radius: 0.375rem;"></div>
+							</div>
+						{/each}
 					</div>
 				{:else if tokens.length === 0}
 					<p class="settings-hint" style="text-align: center; padding: 1rem 0;">No API tokens yet. Create one to get started.</p>
