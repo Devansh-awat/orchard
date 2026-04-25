@@ -16,7 +16,6 @@
 		Plus,
 		ExternalLink,
 		Trash2,
-		RefreshCw,
 		Server,
 		GitBranch,
 		LayoutTemplate,
@@ -128,7 +127,6 @@
 	}
 	let databases = $state<DatabaseSummary[]>([]);
 	let loading = $state(true);
-	let syncing = $state(false);
 	let deleting = $state(false);
 	let error = $state<string | null>(null);
 	let heroImgReady = $state(false);
@@ -376,18 +374,12 @@
 
 	async function syncNamespace() {
 		if (!project?.namespace) return;
-
-		syncing = true;
 		try {
 			await apiFetch(`/apiv1/sync/${project.namespace}`, { method: 'POST' });
 			const response = await apiFetch(`/apiv1/projects/${project.id}`);
-			if (response.ok) {
-				project = await response.json();
-			}
+			if (response.ok) project = await response.json();
 		} catch (e) {
 			console.error('Failed to sync namespace:', e);
-		} finally {
-			syncing = false;
 		}
 	}
 
@@ -654,9 +646,6 @@
 							<Palette class="h-4 w-4" /> Customize
 						</button>
 						{/if}
-						<button onclick={syncNamespace} disabled={syncing} class="pj-btn pj-btn-secondary pj-btn--onhero">
-							<RefreshCw class="h-4 w-4 {syncing ? 'animate-spin' : ''}" /> Sync
-						</button>
 						{#if canEdit}
 						<button onclick={() => (showDeleteModal = true)} disabled={deleting} class="pj-btn pj-btn-danger">
 							{#if deleting}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Trash2 class="h-4 w-4" />{/if}
@@ -692,9 +681,6 @@
 							<Palette class="h-4 w-4" /> Customize
 						</button>
 						{/if}
-						<button onclick={syncNamespace} disabled={syncing} class="pj-btn pj-btn-secondary">
-							<RefreshCw class="h-4 w-4 {syncing ? 'animate-spin' : ''}" /> Sync
-						</button>
 						{#if canEdit}
 						<button onclick={() => (showDeleteModal = true)} disabled={deleting} class="pj-btn pj-btn-danger">
 							{#if deleting}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Trash2 class="h-4 w-4" />{/if}

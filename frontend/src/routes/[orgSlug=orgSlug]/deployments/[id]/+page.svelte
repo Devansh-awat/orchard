@@ -3921,10 +3921,12 @@
 											<div class="bh-card-body">
 												<div class="bh-card-top">
 													<div class="bh-card-info">
-														{#if history.commitSha}
-															<code class="bh-card-sha">{history.commitSha.slice(0, 7)}</code>
+														{#if history.commitMessage}
+															<span class="bh-card-commit-msg">{history.commitMessage}</span>
+														{:else if history.branch}
+															<span class="bh-card-branch">{history.branch}</span>
 														{/if}
-														{#if history.branch}
+														{#if history.commitMessage && history.branch}
 															<span class="bh-card-branch">{history.branch}</span>
 														{/if}
 														{#if history.isActive}
@@ -3942,9 +3944,6 @@
 														{/if}
 													</div>
 												</div>
-												{#if history.commitMessage}
-													<p class="bh-card-commit-msg">{history.commitMessage}</p>
-												{/if}
 												<p class="bh-card-sub">
 													{#if history.triggerType === 'manual' && history.triggeredBy}
 														Deployed manually by <span class="bh-card-user">@{history.triggeredBy.username}</span>
@@ -6907,16 +6906,6 @@
 		font-weight: 600;
 	}
 
-	.bh-card-sha {
-		font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
-		font-size: 0.8125rem;
-		font-weight: 700;
-		color: var(--center-channel-color);
-		background: none;
-		padding: 0;
-		letter-spacing: 0.02em;
-	}
-
 	.bh-card-branch {
 		font-size: 0.6875rem;
 		font-weight: 600;
@@ -6953,13 +6942,12 @@
 
 	.bh-card-commit-msg {
 		font-size: 0.8125rem;
-		font-weight: 500;
+		font-weight: 600;
 		color: var(--center-channel-color);
-		margin-top: 0.125rem;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		max-width: 20rem;
+		min-width: 0;
 	}
 	.bh-card-sub {
 		font-size: 0.75rem;
