@@ -9,6 +9,15 @@
 	let githubUsername = $state<string | null>(null);
 	let loading = $state(true);
 	let unlinking = $state(false);
+
+	// Tailscale
+	let tailscaleLinked = $state(false);
+	let tailscaleTailnet = $state<string | null>(null);
+	let tailscaleLoading = $state(true);
+	let unlinkingTailscale = $state(false);
+	let tailscaleApiKey = $state('');
+	let linkingTailscale = $state(false);
+	let showTailscaleForm = $state(false);
 	let passkeys = $state<PasskeyRecord[]>([]);
 	let passkeysLoading = $state(true);
 	let passkeyListError = $state<string | null>(null);
@@ -254,6 +263,63 @@
 		}
 	}
 
+	async function checkTailscaleStatus() {
+		tailscaleLoading = true;
+		try {
+			const response = await apiFetch('/apiv1/tailscale/status');
+			if (response.ok) {
+				const data = await response.json();
+				tailscaleLinked = data.linked;
+				tailscaleTailnet = data.tailnet || null;
+			}
+		} catch (e) {
+			console.error('Failed to check Tailscale status:', e);
+		} finally {
+			tailscaleLoading = false;
+		}
+	}
+
+	async function linkTailscale() {
+		if (!tailscaleApiKey.trim()) return;
+		linkingTailscale = true;
+		try {
+			const response = await apiFetch('/apiv1/tailscale/link', {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ apiKey: tailscaleApiKey.trim() })
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to connect Tailscale');
+			}
+			const data = await response.json();
+			tailscaleLinked = true;
+			tailscaleTailnet = data.tailnet;
+			tailscaleApiKey = '';
+			showTailscaleForm = false;
+			toasts.add({ title: 'Tailscale Connected', description: `Linked to ${data.tailnet}`, color: 'success' });
+		} catch (e) {
+			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to connect Tailscale', color: 'error' });
+		} finally {
+			linkingTailscale = false;
+		}
+	}
+
+	async function unlinkTailscale() {
+		unlinkingTailscale = true;
+		try {
+			const response = await apiFetch('/apiv1/tailscale/unlink', { method: 'DELETE' });
+			if (!response.ok) throw new Error('Failed to unlink Tailscale account');
+			tailscaleLinked = false;
+			tailscaleTailnet = null;
+			toasts.add({ title: 'Tailscale Disconnected', description: 'Your Tailscale account has been disconnected', color: 'success' });
+		} catch (e) {
+			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to unlink Tailscale', color: 'error' });
+		} finally {
+			unlinkingTailscale = false;
+		}
+	}
+
 	async function fetchSessions() {
 		sessionsLoading = true;
 		sessionsError = null;
@@ -335,6 +401,7 @@
 			passkeyEnvWarning = `Passkeys require a secure origin. You're on ${window.location.origin}.`;
 		}
 		checkGitHubStatus();
+		checkTailscaleStatus();
 		fetchPasskeys();
 		fetchSessions();
 
@@ -651,6 +718,84 @@
 						<div class="us-connect-text">
 							<span class="us-connect-label">Connect GitHub</span>
 							<span class="us-connect-hint">Auto-build images from commits and view deployment history</span>
+						</div>
+						<ChevronRight class="h-4 w-4 us-connect-arrow" />
+					</button>
+				{/if}
+			</div>
+
+			<div class="us-card-divider"></div>
+
+			<!-- Tailscale -->
+			<div class="us-card-section">
+				<div class="us-section-head">
+					<div class="us-section-icon us-section-icon--tailscale">
+						<Globe class="h-4 w-4" />
+					</div>
+					<div class="us-section-title-group">
+						<h2 class="us-section-title">Tailscale</h2>
+						<p class="us-section-desc">Access your deployments on your private network</p>
+					</div>
+					{#if !tailscaleLoading}
+						<div class="us-pill" class:us-pill--active={tailscaleLinked}>
+							<span class="us-pill-dot"></span>
+							{tailscaleLinked ? 'Connected' : 'Not connected'}
+						</div>
+					{/if}
+				</div>
+
+				{#if tailscaleLoading}
+					<div class="us-loading"><Loader2 class="h-4 w-4 animate-spin" /></div>
+				{:else if tailscaleLinked}
+					<div class="us-integration-row">
+						<div class="us-gh-badge">
+							<Globe class="h-4 w-4" />
+							<span class="us-gh-name">{tailscaleTailnet}</span>
+						</div>
+						<button onclick={unlinkTailscale} disabled={unlinkingTailscale} class="us-btn us-btn-danger">
+							{#if unlinkingTailscale}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Unlink class="h-3.5 w-3.5" />{/if}
+							Disconnect
+						</button>
+					</div>
+				{:else if showTailscaleForm}
+					<div class="space-y-3">
+						<div class="space-y-1.5">
+							<p class="text-xs" style="color: var(--surface-muted);">
+								Paste a Tailscale auth key below. To create one:
+							</p>
+							<ol class="text-xs space-y-1 pl-4" style="color: var(--surface-muted); list-style: decimal;">
+								<li>Go to <a href="https://login.tailscale.com/admin/settings/keys" target="_blank" rel="noopener" class="underline" style="color: var(--button-bg);">Tailscale Admin → Settings → Keys</a></li>
+								<li>Click <strong>Generate auth key</strong></li>
+								<li>Enable <strong>Reusable</strong> so it can be used for multiple deployments</li>
+								<li>Set expiration to <strong>90 days</strong> (max)</li>
+								<li>Enable <strong>Ephemeral</strong> so nodes auto-remove when deployments stop</li>
+								<li>Leave <strong>Tags</strong> empty</li>
+								<li>Click <strong>Generate key</strong>, copy it, and paste it here</li>
+							</ol>
+						</div>
+						<div class="flex items-center gap-2">
+							<input
+								type="password"
+								class="input text-sm flex-1"
+								placeholder="tskey-auth-..."
+								bind:value={tailscaleApiKey}
+								onkeydown={(e) => { if (e.key === 'Enter') linkTailscale(); }}
+							/>
+							<button onclick={() => { showTailscaleForm = false; tailscaleApiKey = ''; }} class="btn btn-secondary btn-sm">Cancel</button>
+							<button onclick={linkTailscale} disabled={linkingTailscale || !tailscaleApiKey.trim()} class="btn btn-primary btn-sm">
+								{#if linkingTailscale}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+								Connect
+							</button>
+						</div>
+					</div>
+				{:else}
+					<button onclick={() => (showTailscaleForm = true)} class="us-connect-btn">
+						<div class="us-connect-icon us-section-icon--tailscale">
+							<Globe class="h-5 w-5" />
+						</div>
+						<div class="us-connect-text">
+							<span class="us-connect-label">Connect Tailscale</span>
+							<span class="us-connect-hint">Expose deployments directly to your Tailscale network</span>
 						</div>
 						<ChevronRight class="h-4 w-4 us-connect-arrow" />
 					</button>
@@ -1212,6 +1357,10 @@
 	.us-section-icon--sessions {
 		background-color: color-mix(in srgb, var(--online-indicator) 10%, transparent);
 		color: var(--online-indicator);
+	}
+	.us-section-icon--tailscale {
+		background-color: color-mix(in srgb, var(--center-channel-color) 8%, transparent);
+		color: var(--center-channel-color);
 	}
 
 	/* ── Invitations ── */

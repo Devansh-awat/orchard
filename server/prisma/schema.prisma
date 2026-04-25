@@ -40,8 +40,26 @@ model User {
   apiTokens                    ApiToken[]
   createdTemplateInstances     TemplateInstance[]        @relation("TemplateInstanceCreator")
   triggeredBuilds              ImageHistory[]
+  tailscaleConnection          TailscaleConnection?
 
   @@map("users")
+}
+
+model TailscaleConnection {
+  id              String   @id @default(uuid()) @db.Uuid
+  userId          String   @unique @map("user_id") @db.Uuid
+  accessToken     String   @map("access_token") @db.Text
+  refreshToken    String?  @map("refresh_token") @db.Text
+  tailnet         String   @db.VarChar(255)
+  tailscaleUserId String?  @map("tailscale_user_id") @db.VarChar(255)
+  displayName     String?  @map("display_name") @db.VarChar(255)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId], map: "idx_tailscale_connections_user")
+  @@map("tailscale_connections")
 }
 
 model ApiToken {
@@ -365,6 +383,11 @@ model Deployment {
   createdBy      String?    @map("created_by") @db.Uuid
   createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  // Tailscale integration
+  tailscaleExposed     Boolean  @default(false) @map("tailscale_exposed")
+  tailscaleHostname    String?  @map("tailscale_hostname") @db.VarChar(255)
+  tailscaleExposedBy   String?  @map("tailscale_exposed_by") @db.Uuid
 
   // Auto-deploy configuration
   autoDeployEnabled  Boolean  @default(false) @map("auto_deploy_enabled")

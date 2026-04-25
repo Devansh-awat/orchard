@@ -16,6 +16,7 @@ import { TemplatesModule } from './templates/templates.module';
 import { SsoModule } from './sso/sso.module';
 import { NodesModule } from './nodes/nodes.module';
 import { QuotasModule } from './quotas/quotas.module';
+import { TailscaleModule } from './tailscale/tailscale.module';
 
 @Module({
   imports: [
@@ -36,6 +37,7 @@ import { QuotasModule } from './quotas/quotas.module';
     SsoModule,
     NodesModule,
     QuotasModule,
+    TailscaleModule,
   ],
 })
 export class AppModule {}

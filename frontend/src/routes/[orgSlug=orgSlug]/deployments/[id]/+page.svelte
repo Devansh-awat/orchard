@@ -585,6 +585,14 @@
 	let buildFromRoot = $state(false);
 	let buildWithDepot = $state(false);
 
+	// Tailscale state
+	let tailscaleExposing = $state(false);
+	let tailscaleUnexposing = $state(false);
+	let tailscaleLinked = $state(false);
+	let tailscaleHostname = $state<string | null>(null);
+	let tailscaleIp = $state<string | null>(null);
+	let tailscaleDns = $state<string | null>(null);
+
 	// Auto-deploy state
 	let autoDeployStatus = $state<AutoDeployStatus | null>(null);
 	let autoDeployLoading = $state(false);
@@ -1287,6 +1295,12 @@
 
 			deployment = data;
 
+			// Sync Tailscale state
+			tailscaleHostname = data.tailscaleHostname || null;
+			if (data.tailscaleExposed && !tailscaleDns) {
+				fetchTailscaleDeploymentStatus();
+			}
+
 			// Seed metrics history from DB on first load, then append from polls
 			if (data.metricsHistory?.length && metricsHistory.length === 0) {
 				metricsHistory = data.metricsHistory.map((p: any) => ({
@@ -1484,6 +1498,94 @@
 			});
 		} finally {
 			restarting = false;
+		}
+	}
+
+	async function checkTailscaleStatus() {
+		try {
+			const response = await apiFetch('/apiv1/tailscale/status');
+			if (response.ok) {
+				const data = await response.json();
+				tailscaleLinked = data.linked;
+			}
+		} catch (e) {
+			console.error('Failed to check Tailscale status:', e);
+		}
+	}
+
+	async function fetchTailscaleDeploymentStatus() {
+		if (!deployment?.tailscaleExposed) return;
+		try {
+			const response = await apiFetch(`/apiv1/tailscale/deployment/${deploymentId}`);
+			if (response.ok) {
+				const data = await response.json();
+				tailscaleIp = data.ip;
+				tailscaleDns = data.dns;
+			}
+		} catch (e) {
+			console.error('Failed to fetch Tailscale deployment status:', e);
+		}
+	}
+
+	async function exposeTailscale() {
+		tailscaleExposing = true;
+		try {
+			const response = await apiFetch(`/apiv1/tailscale/expose/${deploymentId}`, {
+				method: 'POST'
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to expose to Tailscale');
+			}
+			const data = await response.json();
+			tailscaleHostname = data.hostname;
+			toasts.add({
+				title: 'Exposed to Tailscale',
+				description: 'Sidecar is starting — address will appear shortly',
+				color: 'success'
+			});
+			fetchDeployment();
+			// Poll for the IP/DNS once the sidecar is ready
+			setTimeout(fetchTailscaleDeploymentStatus, 5000);
+			setTimeout(fetchTailscaleDeploymentStatus, 15000);
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to expose to Tailscale',
+				color: 'error'
+			});
+		} finally {
+			tailscaleExposing = false;
+		}
+	}
+
+	async function unexposeTailscale() {
+		tailscaleUnexposing = true;
+		try {
+			const response = await apiFetch(`/apiv1/tailscale/unexpose/${deploymentId}`, {
+				method: 'POST'
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to remove Tailscale exposure');
+			}
+			tailscaleHostname = null;
+			tailscaleIp = null;
+			tailscaleDns = null;
+			toasts.add({
+				title: 'Tailscale removed',
+				description: 'Deployment is no longer exposed to Tailscale',
+				color: 'success'
+			});
+			fetchDeployment();
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to remove Tailscale exposure',
+				color: 'error'
+			});
+		} finally {
+			tailscaleUnexposing = false;
 		}
 	}
 
@@ -2450,6 +2552,7 @@
 			}
 
 			fetchDeployment();
+			checkTailscaleStatus();
 			deploymentInterval = setInterval(fetchDeployment, 5000);
 		}
 	});
@@ -3346,6 +3449,71 @@
 						</div>
 					{:else if tab.id === 'network'}
 						<div class="space-y-5">
+							<!-- Tailscale -->
+							<div class="card rounded-2xl p-5">
+								<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+									<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Tailscale</p>
+								</div>
+								{#if deployment?.tailscaleExposed}
+									<div class="rounded-xl" style="background-color: var(--control-bg); border: 1px solid var(--surface-border); overflow: hidden;">
+										<div class="flex items-center justify-between gap-3 px-4 py-3">
+											<div class="flex items-center gap-3">
+												<Globe class="h-4 w-4 flex-shrink-0" style="color: var(--button-bg);" />
+												<div>
+													{#if tailscaleDns}
+														<p class="text-sm font-medium" style="color: var(--center-channel-color);">{tailscaleDns}</p>
+													{:else}
+														<p class="text-sm font-medium" style="color: var(--center-channel-color);">{deployment.tailscaleHostname}</p>
+													{/if}
+													{#if tailscaleIp}
+														<p class="text-xs" style="color: var(--surface-muted);">{tailscaleIp}</p>
+													{:else}
+														<p class="text-xs flex items-center gap-1" style="color: var(--surface-muted);">
+															<Loader2 class="h-3 w-3 animate-spin" />
+															Connecting to Tailscale...
+														</p>
+													{/if}
+												</div>
+											</div>
+											<button onclick={unexposeTailscale} disabled={tailscaleUnexposing} class="btn btn-secondary btn-sm">
+												{#if tailscaleUnexposing}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<X class="h-3.5 w-3.5" />{/if}
+												<span>Remove</span>
+											</button>
+										</div>
+										{#if (tailscaleDns || tailscaleIp) && deployment.services?.length}
+											<div style="border-top: 1px solid var(--surface-border);">
+												{#each deployment.services as service}
+													{@const tsHost = tailscaleDns || tailscaleIp}
+													{@const displayedPorts = service.ports?.length ? service.ports : [{ port: service.port, targetPort: service.targetPort, protocol: service.protocol }]}
+													{#each displayedPorts as port}
+														{@const addr = `${tsHost}:${port.targetPort}`}
+														<div class="flex items-center justify-between gap-2 px-4 py-2" style="border-bottom: 1px solid var(--surface-border);">
+															<div class="flex items-center gap-2 min-w-0">
+																<span class="text-xs font-mono truncate" style="color: var(--center-channel-color);">{addr}</span>
+																<span class="text-xs px-1.5 py-0.5 rounded" style="background-color: var(--surface-border); color: var(--surface-muted);">{port.protocol || 'TCP'}</span>
+															</div>
+															<button
+																class="btn btn-ghost btn-sm"
+																onclick={() => { navigator.clipboard.writeText(addr); toasts.add({ title: 'Copied', description: addr, color: 'success' }); }}
+															>
+																<Copy class="h-3.5 w-3.5" />
+															</button>
+														</div>
+													{/each}
+												{/each}
+											</div>
+										{/if}
+									</div>
+								{:else if tailscaleLinked}
+									<button onclick={exposeTailscale} disabled={tailscaleExposing} class="btn btn-secondary btn-sm">
+										{#if tailscaleExposing}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Globe class="h-3.5 w-3.5" />{/if}
+										<span>Expose to Tailscale</span>
+									</button>
+								{:else}
+									<p class="text-xs" style="color: var(--surface-muted);">Connect your Tailscale account in <a href="/user/settings" class="underline">user settings</a> to expose deployments to your private network.</p>
+								{/if}
+							</div>
+
 							<!-- Ports -->
 							<div class="card rounded-2xl p-5">
 								<div class="flex flex-wrap items-center justify-between gap-3 mb-4">

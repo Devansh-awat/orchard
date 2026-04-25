@@ -1,0 +1,218 @@
+import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { KubernetesService } from '../kubernetes/kubernetes.service';
+
+@Injectable()
+export class TailscaleService {
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly kubernetesService: KubernetesService,
+  ) {}
+
+  /**
+   * Link a user's Tailscale account using their reusable auth key.
+   * Auth keys start with "tskey-auth-".
+   */
+  async linkAccount(userId: string, authKey: string): Promise<{ tailnet: string }> {
+    if (!authKey.startsWith('tskey-auth-')) {
+      throw new BadRequestException('Invalid key. Please provide a Tailscale auth key (starts with tskey-auth-).');
+    }
+
+    // We can't easily discover the tailnet from an auth key without registering a device,
+    // so we store it and resolve the tailnet when the first sidecar comes online.
+    // For display, extract the key ID portion.
+    const keyId = authKey.slice(0, 20) + '...';
+
+    await this.prisma.tailscaleConnection.upsert({
+      where: { userId },
+      create: {
+        userId,
+        accessToken: authKey,
+        tailnet: keyId,
+      },
+      update: {
+        accessToken: authKey,
+        tailnet: keyId,
+      },
+    });
+
+    return { tailnet: keyId };
+  }
+
+  async unlinkAccount(userId: string): Promise<void> {
+    // Remove all Tailscale sidecars for deployments this user exposed
+    const exposedDeployments = await this.prisma.deployment.findMany({
+      where: { tailscaleExposedBy: userId, tailscaleExposed: true },
+      include: { services: true },
+    });
+
+    for (const deployment of exposedDeployments) {
+      try {
+        await this.kubernetesService.removeTailscaleSidecar(deployment.namespace, deployment.name);
+      } catch (error) {
+        console.error(`[Tailscale] Failed to remove sidecar from ${deployment.name}:`, error);
+      }
+    }
+
+    await this.prisma.deployment.updateMany({
+      where: { tailscaleExposedBy: userId },
+      data: {
+        tailscaleExposed: false,
+        tailscaleHostname: null,
+        tailscaleExposedBy: null,
+      },
+    });
+
+    await this.prisma.tailscaleConnection.deleteMany({
+      where: { userId },
+    });
+  }
+
+  async getStatus(userId: string): Promise<{ linked: boolean; tailnet?: string }> {
+    const connection = await this.prisma.tailscaleConnection.findUnique({
+      where: { userId },
+    });
+
+    if (!connection) {
+      return { linked: false };
+    }
+
+    return {
+      linked: true,
+      tailnet: connection.tailnet,
+    };
+  }
+
+  async getDeploymentTailscaleStatus(deploymentId: string): Promise<{ exposed: boolean; ip: string | null; dns: string | null; hostname: string | null }> {
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+    });
+
+    if (!deployment || !deployment.tailscaleExposed) {
+      return { exposed: false, ip: null, dns: null, hostname: null };
+    }
+
+    const status = await this.kubernetesService.getTailscaleStatus(deployment.namespace, deployment.name);
+
+    return {
+      exposed: true,
+      ip: status.ip,
+      dns: status.dns,
+      hostname: deployment.tailscaleHostname,
+    };
+  }
+
+  async exposeDeployment(deploymentId: string, userId: string): Promise<{ hostname: string }> {
+    const connection = await this.prisma.tailscaleConnection.findUnique({
+      where: { userId },
+    });
+
+    if (!connection) {
+      throw new BadRequestException('Tailscale account not connected. Connect it in your user settings first.');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: { organization: true },
+        },
+        services: true,
+      },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException('Deployment not found');
+    }
+
+    if (deployment.tailscaleExposed) {
+      throw new BadRequestException('Deployment is already exposed to Tailscale');
+    }
+
+    const hostname = `${deployment.name}-${deployment.namespace}`;
+
+    const servicePorts = deployment.services.map((svc) => ({
+      port: svc.port,
+      targetPort: svc.targetPort,
+      protocol: svc.protocol,
+    }));
+
+    // Pass the user's auth key directly to the sidecar — it registers itself on their tailnet
+    await this.kubernetesService.addTailscaleSidecar(
+      deployment.namespace,
+      deployment.name,
+      connection.accessToken,
+      hostname,
+      servicePorts,
+    );
+
+    await this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: {
+        tailscaleExposed: true,
+        tailscaleHostname: hostname,
+        tailscaleExposedBy: userId,
+      },
+    });
+
+    return { hostname };
+  }
+
+  async unexposeDeployment(deploymentId: string, userId: string): Promise<void> {
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException('Deployment not found');
+    }
+
+    if (!deployment.tailscaleExposed) {
+      throw new BadRequestException('Deployment is not exposed to Tailscale');
+    }
+
+    await this.kubernetesService.removeTailscaleSidecar(deployment.namespace, deployment.name);
+
+    await this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: {
+        tailscaleExposed: false,
+        tailscaleHostname: null,
+        tailscaleExposedBy: null,
+      },
+    });
+  }
+
+  async cleanupNamespace(namespace: string): Promise<void> {
+    const deployments = await this.prisma.deployment.findMany({
+      where: { namespace, tailscaleExposed: true },
+    });
+
+    for (const deployment of deployments) {
+      try {
+        await this.kubernetesService.removeTailscaleSidecar(namespace, deployment.name);
+      } catch (error) {
+        console.error(`[Tailscale] Failed to remove sidecar for ${deployment.name}:`, error);
+      }
+    }
+
+    await this.prisma.deployment.updateMany({
+      where: { namespace, tailscaleExposed: true },
+      data: {
+        tailscaleExposed: false,
+        tailscaleHostname: null,
+        tailscaleExposedBy: null,
+      },
+    });
+  }
+
+  async cleanupDeployment(deployment: { id: string; name: string; namespace: string; tailscaleExposed: boolean }): Promise<void> {
+    if (!deployment.tailscaleExposed) return;
+
+    try {
+      await this.kubernetesService.removeTailscaleSidecar(deployment.namespace, deployment.name);
+    } catch (error) {
+      console.error(`[Tailscale] Failed to remove sidecar for ${deployment.name}:`, error);
+    }
+  }
+}

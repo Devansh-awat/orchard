@@ -9,6 +9,7 @@ import { GitHubService } from '../github/github.service';
 import { FaviconService } from './favicon.service';
 import { NodesService } from '../nodes/nodes.service';
 import { QuotasService } from '../quotas/quotas.service';
+import { TailscaleService } from '../tailscale/tailscale.service';
 import { randomUUID } from 'crypto';
 import * as dns from 'dns';
 import { promisify } from 'util';
@@ -27,6 +28,7 @@ export class ProjectsService {
     private readonly nodesService: NodesService,
     @Inject(forwardRef(() => QuotasService))
     private readonly quotasService: QuotasService,
+    private readonly tailscaleService: TailscaleService,
   ) {}
 
   private async resolvePlacementForProject(projectId: string): Promise<{
@@ -4077,6 +4079,13 @@ export class ProjectsService {
       throw new ForbiddenException('Only project admins or organization admins can delete projects');
     }
 
+    // Clean up Tailscale sidecars before deleting the namespace
+    try {
+      await this.tailscaleService.cleanupNamespace(project.namespace);
+    } catch (error) {
+      console.error(`[Projects] Failed to clean up Tailscale for namespace ${project.namespace}:`, error);
+    }
+
     await this.kubernetesService.deleteNamespace(project.namespace);
 
     await this.prisma.project.delete({
@@ -5354,6 +5363,13 @@ export class ProjectsService {
       await this.kubernetesService.deletePublicDeploymentNetworkPolicy(deployment.namespace, deployment.name);
     } catch (error) {
       console.error(`Failed to delete public NetworkPolicy for ${deployment.name}:`, error);
+    }
+
+    // Clean up Tailscale sidecar if exposed
+    try {
+      await this.tailscaleService.cleanupDeployment(deployment);
+    } catch (error) {
+      console.error(`[Projects] Failed to clean up Tailscale for deployment ${deployment.name}:`, error);
     }
 
     // Delete the K8s deployment itself

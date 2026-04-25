@@ -5938,6 +5938,385 @@ export class KubernetesService {
     }
   }
 
+  /**
+   * Create an isolated Tailscale proxy pod for a deployment.
+   * Runs as a separate Deployment with a NetworkPolicy that ONLY allows
+   * traffic to the target deployment's service — no internet, no other namespaces.
+   */
+  async addTailscaleSidecar(
+    namespace: string,
+    deploymentName: string,
+    authKey: string,
+    hostname: string,
+    servicePorts: { port: number; targetPort: number; protocol: string }[],
+  ): Promise<void> {
+    this.ensureKubeConfig();
+    if (!this.kc) return;
+
+    const appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
+
+    const tsDeployName = `ts-${deploymentName}`;
+    const secretName = `ts-auth-${deploymentName}`;
+
+    const orchardLabels = {
+      'app.kubernetes.io/managed-by': 'orchard',
+      'orchard.dev/tailscale': 'true',
+      'orchard.dev/target-deployment': deploymentName,
+    };
+
+    const podLabels = {
+      ...orchardLabels,
+      'app.kubernetes.io/name': tsDeployName,
+    };
+
+    // 1. Create Secret with the auth key
+    const secretBody: k8s.V1Secret = {
+      metadata: { name: secretName, namespace, labels: orchardLabels },
+      type: 'Opaque',
+      stringData: { TS_AUTHKEY: authKey },
+    };
+    try {
+      await coreApi.createNamespacedSecret(namespace, secretBody);
+    } catch (error: any) {
+      if (error.response?.statusCode === 409) {
+        await coreApi.replaceNamespacedSecret(secretName, namespace, secretBody);
+      } else {
+        throw error;
+      }
+    }
+
+    // 2. Create ServiceAccount
+    const saName = tsDeployName;
+    try {
+      await coreApi.createNamespacedServiceAccount(namespace, {
+        metadata: { name: saName, labels: orchardLabels },
+      });
+    } catch (error: any) {
+      if (error.response?.statusCode !== 409) throw error;
+    }
+
+    // 3. Create RBAC (the Tailscale container needs to read/write its state secret)
+    const rbacApi = this.kc.makeApiClient(k8s.RbacAuthorizationV1Api);
+    try {
+      await rbacApi.createNamespacedRole(namespace, {
+        metadata: { name: tsDeployName, labels: orchardLabels },
+        rules: [
+          {
+            apiGroups: [''],
+            resources: ['secrets'],
+            verbs: ['get', 'update', 'patch'],
+            resourceNames: [secretName],
+          },
+        ],
+      });
+    } catch (error: any) {
+      if (error.response?.statusCode !== 409) throw error;
+    }
+    try {
+      await rbacApi.createNamespacedRoleBinding(namespace, {
+        metadata: { name: tsDeployName, labels: orchardLabels },
+        roleRef: { apiGroup: 'rbac.authorization.k8s.io', kind: 'Role', name: tsDeployName },
+        subjects: [{ kind: 'ServiceAccount', name: saName, namespace }],
+      });
+    } catch (error: any) {
+      if (error.response?.statusCode !== 409) throw error;
+    }
+
+    // 4. Build a Tailscale Serve config to proxy each port to the target service.
+    // TS_SERVE_CONFIG works in userspace mode — no NET_ADMIN needed.
+    const targetPort = servicePorts[0]?.targetPort || 80;
+    const serveConfig = JSON.stringify({
+      TCP: Object.fromEntries(
+        servicePorts.map((p) => [
+          String(p.targetPort),
+          { TCPForward: `${deploymentName}:${p.targetPort}` },
+        ]),
+      ),
+    });
+    const serveConfigName = `ts-serve-${deploymentName}`;
+
+    // Store the serve config in a ConfigMap
+    const configMapBody: k8s.V1ConfigMap = {
+      metadata: { name: serveConfigName, namespace, labels: orchardLabels },
+      data: { 'serve-config.json': serveConfig },
+    };
+    try {
+      await coreApi.createNamespacedConfigMap(namespace, configMapBody);
+    } catch (error: any) {
+      if (error.response?.statusCode === 409) {
+        await coreApi.replaceNamespacedConfigMap(serveConfigName, namespace, configMapBody);
+      } else {
+        throw error;
+      }
+    }
+
+    // 5. Create the Tailscale proxy Deployment (separate pod, NOT a sidecar)
+    const tsDeployBody: k8s.V1Deployment = {
+      metadata: { name: tsDeployName, namespace, labels: orchardLabels },
+      spec: {
+        replicas: 1,
+        selector: { matchLabels: { 'app.kubernetes.io/name': tsDeployName } },
+        template: {
+          metadata: { labels: podLabels },
+          spec: {
+            serviceAccountName: saName,
+            containers: [
+              {
+                name: 'tailscale',
+                image: 'ghcr.io/tailscale/tailscale:latest',
+                imagePullPolicy: 'IfNotPresent',
+                env: [
+                  {
+                    name: 'TS_AUTHKEY',
+                    valueFrom: { secretKeyRef: { name: secretName, key: 'TS_AUTHKEY' } },
+                  },
+                  { name: 'TS_HOSTNAME', value: hostname },
+                  { name: 'TS_STATE_DIR', value: '/var/lib/tailscale' },
+                  { name: 'TS_USERSPACE', value: 'true' },
+                  { name: 'TS_KUBE_SECRET', value: secretName },
+                  { name: 'TS_SERVE_CONFIG', value: '/config/serve-config.json' },
+                ],
+                resources: {
+                  requests: { cpu: '10m', memory: '64Mi' },
+                  limits: { cpu: '100m', memory: '128Mi' },
+                },
+                securityContext: {
+                  runAsUser: 1000,
+                  runAsGroup: 1000,
+                },
+                volumeMounts: [
+                  { name: 'tailscale-state', mountPath: '/var/lib/tailscale' },
+                  { name: 'serve-config', mountPath: '/config', readOnly: true },
+                ],
+              },
+            ],
+            volumes: [
+              { name: 'tailscale-state', emptyDir: {} },
+              {
+                name: 'serve-config',
+                configMap: { name: serveConfigName },
+              },
+            ],
+          },
+        },
+      },
+    };
+
+    try {
+      await appsApi.createNamespacedDeployment(namespace, tsDeployBody);
+    } catch (error: any) {
+      if (error.response?.statusCode === 409) {
+        await appsApi.replaceNamespacedDeployment(tsDeployName, namespace, tsDeployBody);
+      } else {
+        throw error;
+      }
+    }
+
+    // 6. Create a strict NetworkPolicy — the TS proxy pod can ONLY talk to the
+    //    target deployment's pods. No internet, no other namespaces, no DNS even.
+    const netpolName = `ts-isolate-${deploymentName}`;
+    const netpolBody: k8s.V1NetworkPolicy = {
+      metadata: { name: netpolName, namespace, labels: orchardLabels },
+      spec: {
+        podSelector: {
+          matchLabels: { 'app.kubernetes.io/name': tsDeployName },
+        },
+        policyTypes: ['Ingress', 'Egress'],
+        // Ingress: allow nothing from inside the cluster (Tailscale uses DERP/WireGuard UDP from outside)
+        ingress: [],
+        egress: [
+          // Allow traffic ONLY to the target deployment's pods
+          {
+            to: [
+              {
+                podSelector: {
+                  matchLabels: { 'app.kubernetes.io/name': deploymentName },
+                },
+              },
+            ],
+            ports: servicePorts.map((p) => ({
+              port: p.targetPort,
+              protocol: (p.protocol || 'TCP') as any,
+            })),
+          },
+          // Allow DNS resolution (needed for K8s service name → ClusterIP)
+          {
+            to: [],
+            ports: [
+              { port: 53, protocol: 'UDP' as any },
+              { port: 53, protocol: 'TCP' as any },
+            ],
+          },
+          // Allow Tailscale DERP/coordination (external, any IP, specific ports)
+          {
+            to: [
+              {
+                ipBlock: { cidr: '0.0.0.0/0', except: ['10.0.0.0/8', '172.16.0.0/12', '192.168.0.0/16'] },
+              },
+            ],
+            ports: [
+              { port: 443, protocol: 'TCP' as any },    // DERP + coordination
+              { port: 3478, protocol: 'UDP' as any },   // STUN
+              { port: 41641, protocol: 'UDP' as any },  // WireGuard direct
+            ],
+          },
+        ],
+      },
+    };
+
+    try {
+      await networkingApi.createNamespacedNetworkPolicy(namespace, netpolBody);
+    } catch (error: any) {
+      if (error.response?.statusCode === 409) {
+        await networkingApi.replaceNamespacedNetworkPolicy(netpolName, namespace, netpolBody);
+      } else {
+        throw error;
+      }
+    }
+  }
+
+  /**
+   * Remove the isolated Tailscale proxy pod and all associated resources.
+   */
+  async removeTailscaleSidecar(
+    namespace: string,
+    deploymentName: string,
+  ): Promise<void> {
+    this.ensureKubeConfig();
+    if (!this.kc) return;
+
+    const appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    const rbacApi = this.kc.makeApiClient(k8s.RbacAuthorizationV1Api);
+    const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
+
+    const tsDeployName = `ts-${deploymentName}`;
+    const secretName = `ts-auth-${deploymentName}`;
+    const netpolName = `ts-isolate-${deploymentName}`;
+    const serveConfigName = `ts-serve-${deploymentName}`;
+
+    // Delete the Tailscale proxy deployment
+    try {
+      await appsApi.deleteNamespacedDeployment(tsDeployName, namespace);
+    } catch (e: any) {
+      if (e.response?.statusCode !== 404) console.error(`[K8s] Failed to delete TS deployment ${tsDeployName}:`, e);
+    }
+
+    // Delete the NetworkPolicy
+    try {
+      await networkingApi.deleteNamespacedNetworkPolicy(netpolName, namespace);
+    } catch (e: any) {
+      if (e.response?.statusCode !== 404) console.error(`[K8s] Failed to delete NetworkPolicy ${netpolName}:`, e);
+    }
+
+    // Delete the ConfigMap
+    try {
+      await coreApi.deleteNamespacedConfigMap(serveConfigName, namespace);
+    } catch (e: any) {
+      if (e.response?.statusCode !== 404) console.error(`[K8s] Failed to delete ConfigMap ${serveConfigName}:`, e);
+    }
+
+    // Delete RBAC
+    try {
+      await rbacApi.deleteNamespacedRoleBinding(tsDeployName, namespace);
+    } catch (e: any) {
+      if (e.response?.statusCode !== 404) console.error(`[K8s] Failed to delete RoleBinding ${tsDeployName}:`, e);
+    }
+    try {
+      await rbacApi.deleteNamespacedRole(tsDeployName, namespace);
+    } catch (e: any) {
+      if (e.response?.statusCode !== 404) console.error(`[K8s] Failed to delete Role ${tsDeployName}:`, e);
+    }
+
+    // Delete ServiceAccount
+    try {
+      await coreApi.deleteNamespacedServiceAccount(tsDeployName, namespace);
+    } catch (e: any) {
+      if (e.response?.statusCode !== 404) console.error(`[K8s] Failed to delete ServiceAccount ${tsDeployName}:`, e);
+    }
+
+    // Delete the secret
+    try {
+      await coreApi.deleteNamespacedSecret(secretName, namespace);
+    } catch (e: any) {
+      if (e.response?.statusCode !== 404) console.error(`[K8s] Failed to delete Secret ${secretName}:`, e);
+    }
+  }
+
+  /**
+   * Exec into the Tailscale proxy pod for a deployment and return its IP + DNS name.
+   */
+  async getTailscaleStatus(
+    namespace: string,
+    deploymentName: string,
+  ): Promise<{ ip: string | null; dns: string | null }> {
+    this.ensureKubeConfig();
+    if (!this.kc) return { ip: null, dns: null };
+
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    const tsDeployName = `ts-${deploymentName}`;
+
+    // Find the running Tailscale proxy pod
+    const { body: podList } = await coreApi.listNamespacedPod(
+      namespace,
+      undefined, undefined, undefined, undefined,
+      `app.kubernetes.io/name=${tsDeployName}`,
+    );
+
+    const runningPod = podList.items.find((p) => p.status?.phase === 'Running');
+
+    if (!runningPod?.metadata?.name) {
+      return { ip: null, dns: null };
+    }
+
+    const exec = new k8s.Exec(this.kc);
+    const podName = runningPod.metadata.name;
+
+    return new Promise<{ ip: string | null; dns: string | null }>((resolve) => {
+      const chunks: Buffer[] = [];
+      const errChunks: Buffer[] = [];
+
+      const stdout = new (require('stream').PassThrough)();
+      const stderr = new (require('stream').PassThrough)();
+
+      stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
+      stderr.on('data', (chunk: Buffer) => errChunks.push(chunk));
+
+      exec.exec(
+        namespace,
+        podName,
+        'tailscale',
+        ['tailscale', '--socket=/tmp/tailscaled.sock', 'status', '--json'],
+        stdout,
+        stderr,
+        null,
+        false,
+        (status) => {
+          try {
+            const output = Buffer.concat(chunks).toString('utf-8').trim();
+            if (status.status === 'Success' && output) {
+              const data = JSON.parse(output);
+              const selfKey = data.Self;
+              if (selfKey) {
+                const ip = selfKey.TailscaleIPs?.[0] || null;
+                const dns = selfKey.DNSName?.replace(/\.$/, '') || null;
+                resolve({ ip, dns });
+                return;
+              }
+            }
+          } catch {
+            // Parse error — proxy may not be ready yet
+          }
+          resolve({ ip: null, dns: null });
+        },
+      ).catch(() => {
+        resolve({ ip: null, dns: null });
+      });
+    });
+  }
+
   async uninstallCnpgExtension(namespace: string, clusterName: string, dbName: string, extName: string): Promise<{ success: boolean; output: string }> {
     const safe = extName.replace(/[^a-zA-Z0-9_-]/g, '');
     if (!safe) return { success: false, output: 'Invalid extension name' };
