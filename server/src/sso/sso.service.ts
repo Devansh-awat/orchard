@@ -1,7 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { OAuthService } from '../auth/oauth.service';
 import { UsersService } from '../users/users.service';
+import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
 import * as openidClient from 'openid-client';
 import { SAML } from '@node-saml/node-saml';
@@ -14,13 +15,19 @@ const RESERVED_SUBDOMAINS = new Set([
 
 @Injectable()
 export class SsoService {
+  private readonly logger = new Logger(SsoService.name);
   private readonly encryptionKey: Buffer | null;
   private readonly backendUrl: string;
+  private readonly baseDomain: string;
+  private readonly platformNamespace: string;
+  private readonly platformServiceName: string;
+  private readonly platformServicePort: number;
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly oauthService: OAuthService,
     private readonly usersService: UsersService,
+    private readonly kubernetesService: KubernetesService,
   ) {
     const secret = process.env.SSO_ENCRYPTION_KEY;
     if (secret) {
@@ -29,6 +36,10 @@ export class SsoService {
       this.encryptionKey = null;
     }
     this.backendUrl = process.env.BACKEND_URL || process.env.FRONTEND_URL || 'http://localhost:3001';
+    this.baseDomain = process.env.BASE_DOMAIN || 'orchard.my';
+    this.platformNamespace = process.env.PLATFORM_NAMESPACE || 'default';
+    this.platformServiceName = process.env.PLATFORM_SERVICE_NAME || 'leaf-frontend';
+    this.platformServicePort = parseInt(process.env.PLATFORM_SERVICE_PORT || '3000', 10);
   }
 
   // ========== Encryption helpers ==========
@@ -92,6 +103,13 @@ export class SsoService {
   // ========== Subdomain management ==========
 
   async setSubdomain(organizationId: string, subdomain: string | null) {
+    // Get the old subdomain so we can clean up the old ingress
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { subdomain: true },
+    });
+    const oldSubdomain = org?.subdomain ?? null;
+
     if (subdomain !== null) {
       const normalized = subdomain.toLowerCase().trim();
 
@@ -113,16 +131,86 @@ export class SsoService {
         throw new BadRequestException('This subdomain is already taken');
       }
 
-      return this.prisma.organization.update({
+      const result = await this.prisma.organization.update({
         where: { id: organizationId },
         data: { subdomain: normalized },
       });
+
+      // Create/update the SSO ingress for TLS
+      if (oldSubdomain && oldSubdomain !== normalized) {
+        await this.deleteSsoIngress(oldSubdomain);
+      }
+      await this.ensureSsoIngress(normalized);
+
+      return result;
+    }
+
+    // Subdomain is being cleared
+    if (oldSubdomain) {
+      await this.deleteSsoIngress(oldSubdomain);
     }
 
     return this.prisma.organization.update({
       where: { id: organizationId },
       data: { subdomain: null },
     });
+  }
+
+  private ssoIngressName(subdomain: string): string {
+    return `sso-${subdomain}`.substring(0, 63);
+  }
+
+  private async ensureSsoIngress(subdomain: string) {
+    const host = `${subdomain}.${this.baseDomain}`;
+    const ingressName = this.ssoIngressName(subdomain);
+    const tlsSecretName = `sso-tls-${subdomain}`;
+
+    // Let createIngress handle entrypoints + HTTPS redirect middleware
+    // automatically via the TLS path (hasTls = true when tlsSecretName is set).
+    const ingressOpts = {
+      namespace: this.platformNamespace,
+      name: ingressName,
+      host,
+      path: '/',
+      pathType: 'Prefix',
+      serviceName: this.platformServiceName,
+      servicePort: this.platformServicePort,
+      tlsSecretName,
+      tlsHosts: [host],
+      annotations: {
+        'cert-manager.io/cluster-issuer': 'letsencrypt-prod',
+      },
+    };
+
+    try {
+      await this.kubernetesService.createIngress(ingressOpts);
+      this.logger.log(`Created SSO ingress "${ingressName}" for ${host}`);
+    } catch (error) {
+      if (error?.response?.error === 'Ingress already exists') {
+        try {
+          await this.kubernetesService.updateIngress(ingressOpts);
+          this.logger.log(`Updated SSO ingress "${ingressName}" for ${host}`);
+        } catch (updateErr) {
+          this.logger.error(`Failed to update SSO ingress for ${host}:`, updateErr);
+        }
+      } else {
+        this.logger.error(`Failed to create SSO ingress for ${host}:`, error);
+      }
+    }
+  }
+
+  private async deleteSsoIngress(subdomain: string) {
+    const ingressName = this.ssoIngressName(subdomain);
+    try {
+      await this.kubernetesService.deleteIngress(
+        this.platformNamespace,
+        ingressName,
+      );
+      this.logger.log(`Deleted SSO ingress "${ingressName}"`);
+    } catch (error) {
+      // Ignore 404 — ingress may not exist
+      this.logger.warn(`Failed to delete SSO ingress "${ingressName}": ${error?.message}`);
+    }
   }
 
   // ========== SSO Config CRUD ==========

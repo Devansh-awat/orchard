@@ -2,8 +2,8 @@
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { apiFetch, user, toasts } from '$lib/stores';
-	import { ArrowLeft, Loader2, Pencil, Camera, X, UserPlus, Trash2, ChevronDown, Check, Mail, Building2, Users, CreditCard, Shield, Globe, Key, Lock } from 'lucide-svelte';
-	import { fade, scale } from 'svelte/transition';
+	import { Loader2, Pencil, Camera, X, UserPlus, Trash2, ChevronDown, Check, Mail, Users, Shield, Globe, Key, Lock } from 'lucide-svelte';
+	import { fade, scale, fly } from 'svelte/transition';
 	import { Avatar as AvatarBuilder } from 'melt/builders';
 
 	interface Member {
@@ -79,6 +79,7 @@
 	];
 
 	const organizationSlug = $derived($page.params.orgSlug);
+	const activeTab = $derived($page.url.searchParams.get('tab') || 'general');
 	const canEditOrg = $derived(currentUserRole === 'owner' || currentUserRole === 'admin');
 	const canInvite = $derived(currentUserRole === 'owner' || currentUserRole === 'admin');
 	const isOwner = $derived(currentUserRole === 'owner');
@@ -644,621 +645,658 @@
 	</div>
 {:else if organization}
 	<div class="os-page">
-		<button onclick={() => window.history.back()} class="os-back">
-			<ArrowLeft class="h-4 w-4" />
-			Back
-		</button>
+		{#key activeTab}
+		<div class="os-tab-content" in:fly={{ y: 8, duration: 200, delay: 60 }} out:fade={{ duration: 100 }}>
+		<!-- Tab: General -->
+		{#if activeTab === 'general'}
+			<h1 class="os-tab-title">General</h1>
 
-		<!-- Header -->
-		<div class="os-header">
-			<div class="os-header-left">
-				<div class="os-avatar-wrap">
-					<div class="os-avatar">
-						<img {...orgAvatar.image} alt={organization.name} class="os-avatar-img" />
-						<span {...orgAvatar.fallback} class="os-avatar-fallback">
-							{organization.name[0]}
-						</span>
-					</div>
-					{#if canEditOrg}
-						<input bind:this={avatarInput} type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" onchange={uploadAvatar} />
-						<button onclick={() => avatarInput?.click()} disabled={uploadingAvatar} class="os-avatar-edit">
-							{#if uploadingAvatar}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Camera class="h-3 w-3" />{/if}
-						</button>
-						{#if organization.avatarUrl}
-							<button onclick={deleteAvatar} disabled={deletingAvatar} class="os-avatar-remove">
-								{#if deletingAvatar}<Loader2 class="h-3 w-3 animate-spin" />{:else}<X class="h-3 w-3" />{/if}
-							</button>
-						{/if}
-					{/if}
-				</div>
-				<div>
-					<h1 class="os-title">{organization.name}</h1>
-					<p class="os-slug">{organization.slug}</p>
-				</div>
-			</div>
-			{#if canEditOrg && !isEditing}
-				<button onclick={startEditing} class="btn btn-secondary">
-					<Pencil class="h-4 w-4" />
-					Edit
-				</button>
-			{/if}
-		</div>
-
-		<!-- Edit form -->
-		{#if isEditing}
-			<div class="os-card" transition:fade={{ duration: 150 }}>
-				<div class="os-card-body">
-					<div class="os-edit-grid">
-						<div class="os-field">
-							<label for="org-name" class="os-field-label">Name</label>
-							<input id="org-name" type="text" bind:value={editingName} class="input" />
-						</div>
-						<div class="os-field">
-							<label for="org-desc" class="os-field-label">Description</label>
-							<textarea id="org-desc" bind:value={editingDescription} rows="2" class="input"></textarea>
-						</div>
-					</div>
-					<div class="os-edit-actions">
-						<button onclick={cancelEditing} class="btn btn-secondary">Cancel</button>
-						<button onclick={saveOrganization} disabled={updating} class="btn btn-primary">
-							{#if updating}<Loader2 class="h-4 w-4 animate-spin" />{/if}
-							Save
-						</button>
-					</div>
-				</div>
-			</div>
-		{/if}
-
-		<!-- Stats row -->
-		<div class="os-stats">
-			<div class="os-stat">
-				<div class="os-stat-icon"><Building2 class="h-4 w-4" /></div>
-				<div>
-					<p class="os-stat-value">{organization.workspaces?.length || 0}</p>
-					<p class="os-stat-label">Workspaces</p>
-				</div>
-			</div>
-			<div class="os-stat">
-				<div class="os-stat-icon"><Users class="h-4 w-4" /></div>
-				<div>
-					<p class="os-stat-value">{members.length}</p>
-					<p class="os-stat-label">Members</p>
-				</div>
-			</div>
-			<div class="os-stat">
-				<div class="os-stat-icon"><Shield class="h-4 w-4" /></div>
-				<div>
-					<p class="os-stat-value">{formatRole(currentUserRole || 'member')}</p>
-					<p class="os-stat-label">Your role</p>
-				</div>
-			</div>
-			{#if isOwner && organization?.plan}
-				<div class="os-stat">
-					<div class="os-stat-icon"><CreditCard class="h-4 w-4" /></div>
-					<div>
-						<p class="os-stat-value">{organization.plan.charAt(0).toUpperCase() + organization.plan.slice(1)}</p>
-						<p class="os-stat-label">Plan</p>
-					</div>
-				</div>
-			{/if}
-		</div>
-
-		<!-- Resource quotas -->
-		{#if isOwner || currentUserRole === 'admin'}
-			<a
-				class="os-card block hover:shadow-md transition"
-				href={`/${organizationSlug}/settings/quotas`}
-			>
-				<div class="os-card-header">
-					<h2 class="os-card-title">Resource quotas</h2>
-				</div>
-				<p class="text-sm" style="color: var(--surface-muted);">
-					View usage and set per-project CPU, memory, and pod caps.
-				</p>
-			</a>
-		{/if}
-
-		<!-- Members -->
-		<div class="os-card">
-			<div class="os-card-header">
-				<h2 class="os-card-title">Members</h2>
-				<span class="os-card-count">{members.length}</span>
-			</div>
-
-			{#if canInvite}
-				<div class="os-invite-bar">
-					<input
-						type="email"
-						bind:value={newMemberEmail}
-						placeholder="Email address"
-						class="input flex-1"
-					/>
-					<div class="relative">
-						<button
-							type="button"
-							onclick={() => (inviteRoleOpen = !inviteRoleOpen)}
-							class="os-role-trigger"
-						>
-							<span>{roleOptions.find((r) => r.value === newMemberRole)?.label || 'Role'}</span>
-							<ChevronDown class="h-3.5 w-3.5" />
-						</button>
-						{#if inviteRoleOpen}
-							<div class="os-role-dropdown" transition:scale={{ duration: 120, start: 0.96 }}>
-								{#each roleOptions as option}
-									<button
-										type="button"
-										onclick={() => { newMemberRole = option.value; inviteRoleOpen = false; }}
-										class="os-role-option"
-									>
-										<span>{option.label}</span>
-										{#if newMemberRole === option.value}<Check class="h-3.5 w-3.5 text-primary-600" />{/if}
-									</button>
-								{/each}
-							</div>
-						{/if}
-					</div>
-					<button onclick={addMember} disabled={addingMember || !newMemberEmail} class="btn btn-primary">
-						{#if addingMember}<Loader2 class="h-4 w-4 animate-spin" />{:else}<UserPlus class="h-4 w-4" />{/if}
-						Invite
-					</button>
-				</div>
-			{/if}
-
-			<div class="os-member-list">
-				{#each members as member}
-					<div class="os-member">
-						<div class="os-member-left">
-							{#if member.user.imageUrl}
-								<img src={member.user.imageUrl} alt={member.user.firstName || member.user.email} class="os-member-avatar" />
-							{:else}
-								<div class="os-member-avatar-fallback">
-									{member.user.firstName?.[0] || member.user.email[0].toUpperCase()}
-								</div>
-							{/if}
-							<div class="os-member-info">
-								<p class="os-member-name">
-									{member.user.firstName || ''} {member.user.lastName || ''}
-								</p>
-								<p class="os-member-email">{member.user.email}</p>
-							</div>
-						</div>
-						<div class="os-member-right">
-							{#if isOwner}
-								<div class="relative">
-									<button
-										type="button"
-										onclick={() => (memberRoleOpen = memberRoleOpen === member.id ? null : member.id)}
-										class="os-role-trigger"
-									>
-										<span>{formatRole(member.role)}</span>
-										<ChevronDown class="h-3.5 w-3.5" />
-									</button>
-									{#if memberRoleOpen === member.id}
-										<div class="os-role-dropdown" transition:scale={{ duration: 120, start: 0.96 }}>
-											{#each roleOptions as option}
-												<button
-													type="button"
-													onclick={() => { updateMemberRole(member.id, option.value); memberRoleOpen = null; }}
-													class="os-role-option"
-												>
-													<span>{option.label}</span>
-													{#if member.role === option.value}<Check class="h-3.5 w-3.5 text-primary-600" />{/if}
-												</button>
-											{/each}
-										</div>
-									{/if}
-								</div>
-							{:else}
-								<span class="os-role-badge">{formatRole(member.role)}</span>
-							{/if}
-							{#if canInvite && member.role !== 'owner'}
-								<button onclick={() => removeMember(member.id)} class="os-member-remove" title="Remove member">
-									<Trash2 class="h-3.5 w-3.5" />
-								</button>
-							{/if}
-						</div>
-					</div>
-				{/each}
-			</div>
-		</div>
-
-		<!-- Pending Invitations -->
-		{#if canInvite && invitations.length > 0}
+			<!-- Avatar & Org Info -->
 			<div class="os-card">
 				<div class="os-card-header">
-					<h2 class="os-card-title">Pending Invitations</h2>
-					<span class="os-card-count">{invitations.length}</span>
+					<h2 class="os-card-title">Organization</h2>
+					{#if canEditOrg && !isEditing}
+						<button onclick={startEditing} class="btn btn-ghost btn-sm">
+							<Pencil class="h-3.5 w-3.5" />
+							Edit
+						</button>
+					{/if}
 				</div>
+				<div class="os-card-body">
+					<div class="os-general-top">
+						<div class="os-avatar-wrap">
+							<div class="os-avatar">
+								<img {...orgAvatar.image} alt={organization.name} class="os-avatar-img" />
+								<span {...orgAvatar.fallback} class="os-avatar-fallback">
+									{organization.name[0]}
+								</span>
+							</div>
+							{#if canEditOrg}
+								<input bind:this={avatarInput} type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" onchange={uploadAvatar} />
+								<button onclick={() => avatarInput?.click()} disabled={uploadingAvatar} class="os-avatar-edit">
+									{#if uploadingAvatar}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Camera class="h-3 w-3" />{/if}
+								</button>
+								{#if organization.avatarUrl}
+									<button onclick={deleteAvatar} disabled={deletingAvatar} class="os-avatar-remove">
+										{#if deletingAvatar}<Loader2 class="h-3 w-3 animate-spin" />{:else}<X class="h-3 w-3" />{/if}
+									</button>
+								{/if}
+							{/if}
+						</div>
+						{#if !isEditing}
+							<div>
+								<p class="os-detail-value" style="font-size: 1.125rem; font-weight: 700;">{organization.name}</p>
+								<p class="os-detail-label" style="font-family: var(--font-mono);">{organization.slug}</p>
+								{#if organization.description}
+									<p class="os-detail-value" style="margin-top: 0.5rem; font-weight: 400; font-size: 0.8125rem; color: var(--surface-muted);">{organization.description}</p>
+								{/if}
+							</div>
+						{/if}
+					</div>
+					{#if isEditing}
+						<div class="os-edit-grid" style="margin-top: 1rem;" transition:fade={{ duration: 150 }}>
+							<div class="os-field">
+								<label for="org-name" class="os-field-label">Name</label>
+								<input id="org-name" type="text" bind:value={editingName} class="input" />
+							</div>
+							<div class="os-field">
+								<label for="org-desc" class="os-field-label">Description</label>
+								<textarea id="org-desc" bind:value={editingDescription} rows="2" class="input"></textarea>
+							</div>
+							<div class="os-edit-actions">
+								<button onclick={cancelEditing} class="btn btn-secondary">Cancel</button>
+								<button onclick={saveOrganization} disabled={updating} class="btn btn-primary">
+									{#if updating}<Loader2 class="h-4 w-4 animate-spin" />{/if}
+									Save
+								</button>
+							</div>
+						</div>
+					{/if}
+				</div>
+			</div>
+
+			<div class="os-card">
+				<div class="os-card-body">
+					<div class="os-detail-grid">
+						<div class="os-detail">
+							<p class="os-detail-label">Your role</p>
+							<p class="os-detail-value">{formatRole(currentUserRole || 'member')}</p>
+						</div>
+						{#if isOwner && organization?.plan}
+							<div class="os-detail">
+								<p class="os-detail-label">Plan</p>
+								<p class="os-detail-value">{organization.plan.charAt(0).toUpperCase() + organization.plan.slice(1)}</p>
+							</div>
+						{/if}
+					</div>
+				</div>
+			</div>
+		{/if}
+
+		<!-- Tab: Members -->
+		{#if activeTab === 'members'}
+			<h1 class="os-tab-title">Members</h1>
+
+			<div class="os-card">
+				<div class="os-card-header">
+					<h2 class="os-card-title">Members</h2>
+					<span class="os-card-count">{members.length}</span>
+				</div>
+
+				{#if canInvite}
+					<div class="os-invite-bar">
+						<input
+							type="email"
+							bind:value={newMemberEmail}
+							placeholder="Email address"
+							class="input flex-1"
+						/>
+						<div class="relative">
+							<button
+								type="button"
+								onclick={() => (inviteRoleOpen = !inviteRoleOpen)}
+								class="os-role-trigger"
+							>
+								<span>{roleOptions.find((r) => r.value === newMemberRole)?.label || 'Role'}</span>
+								<ChevronDown class="h-3.5 w-3.5" />
+							</button>
+							{#if inviteRoleOpen}
+								<div class="os-role-dropdown" transition:scale={{ duration: 120, start: 0.96 }}>
+									{#each roleOptions as option}
+										<button
+											type="button"
+											onclick={() => { newMemberRole = option.value; inviteRoleOpen = false; }}
+											class="os-role-option"
+										>
+											<span>{option.label}</span>
+											{#if newMemberRole === option.value}<Check class="h-3.5 w-3.5 text-primary-600" />{/if}
+										</button>
+									{/each}
+								</div>
+							{/if}
+						</div>
+						<button onclick={addMember} disabled={addingMember || !newMemberEmail} class="btn btn-primary">
+							{#if addingMember}<Loader2 class="h-4 w-4 animate-spin" />{:else}<UserPlus class="h-4 w-4" />{/if}
+							Invite
+						</button>
+					</div>
+				{/if}
+
 				<div class="os-member-list">
-					{#each invitations as invitation}
+					{#each members as member}
 						<div class="os-member">
 							<div class="os-member-left">
-								<div class="os-member-avatar-fallback os-member-avatar-pending">
-									<Mail class="h-3.5 w-3.5" />
-								</div>
+								{#if member.user.imageUrl}
+									<img src={member.user.imageUrl} alt={member.user.firstName || member.user.email} class="os-member-avatar" />
+								{:else}
+									<div class="os-member-avatar-fallback">
+										{member.user.firstName?.[0] || member.user.email[0].toUpperCase()}
+									</div>
+								{/if}
 								<div class="os-member-info">
-									<p class="os-member-name">{invitation.email}</p>
-									<p class="os-member-email">
-										Invited {new Date(invitation.createdAt).toLocaleDateString()} · Expires {new Date(invitation.expiresAt).toLocaleDateString()}
+									<p class="os-member-name">
+										{member.user.firstName || ''} {member.user.lastName || ''}
 									</p>
+									<p class="os-member-email">{member.user.email}</p>
 								</div>
 							</div>
 							<div class="os-member-right">
-								<span class="os-role-badge">{formatRole(invitation.role)}</span>
-								<button
-									onclick={() => resendInvitation(invitation.id)}
-									disabled={resendingInvitationId === invitation.id}
-									class="os-member-action"
-									title="Resend"
-								>
-									{#if resendingInvitationId === invitation.id}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Mail class="h-3.5 w-3.5" />{/if}
-								</button>
-								<button
-									onclick={() => cancelInvitation(invitation.id)}
-									disabled={cancellingInvitationId === invitation.id}
-									class="os-member-remove"
-									title="Cancel"
-								>
-									{#if cancellingInvitationId === invitation.id}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<X class="h-3.5 w-3.5" />{/if}
-								</button>
+								{#if isOwner}
+									<div class="relative">
+										<button
+											type="button"
+											onclick={() => (memberRoleOpen = memberRoleOpen === member.id ? null : member.id)}
+											class="os-role-trigger"
+										>
+											<span>{formatRole(member.role)}</span>
+											<ChevronDown class="h-3.5 w-3.5" />
+										</button>
+										{#if memberRoleOpen === member.id}
+											<div class="os-role-dropdown" transition:scale={{ duration: 120, start: 0.96 }}>
+												{#each roleOptions as option}
+													<button
+														type="button"
+														onclick={() => { updateMemberRole(member.id, option.value); memberRoleOpen = null; }}
+														class="os-role-option"
+													>
+														<span>{option.label}</span>
+														{#if member.role === option.value}<Check class="h-3.5 w-3.5 text-primary-600" />{/if}
+													</button>
+												{/each}
+											</div>
+										{/if}
+									</div>
+								{:else}
+									<span class="os-role-badge">{formatRole(member.role)}</span>
+								{/if}
+								{#if canInvite && member.role !== 'owner'}
+									<button onclick={() => removeMember(member.id)} class="os-member-remove" title="Remove member">
+										<Trash2 class="h-3.5 w-3.5" />
+									</button>
+								{/if}
 							</div>
 						</div>
 					{/each}
 				</div>
 			</div>
+
+			<!-- Pending Invitations -->
+			{#if canInvite && invitations.length > 0}
+				<div class="os-card">
+					<div class="os-card-header">
+						<h2 class="os-card-title">Pending Invitations</h2>
+						<span class="os-card-count">{invitations.length}</span>
+					</div>
+					<div class="os-member-list">
+						{#each invitations as invitation}
+							<div class="os-member">
+								<div class="os-member-left">
+									<div class="os-member-avatar-fallback os-member-avatar-pending">
+										<Mail class="h-3.5 w-3.5" />
+									</div>
+									<div class="os-member-info">
+										<p class="os-member-name">{invitation.email}</p>
+										<p class="os-member-email">
+											Invited {new Date(invitation.createdAt).toLocaleDateString()} · Expires {new Date(invitation.expiresAt).toLocaleDateString()}
+										</p>
+									</div>
+								</div>
+								<div class="os-member-right">
+									<span class="os-role-badge">{formatRole(invitation.role)}</span>
+									<button
+										onclick={() => resendInvitation(invitation.id)}
+										disabled={resendingInvitationId === invitation.id}
+										class="os-member-action"
+										title="Resend"
+									>
+										{#if resendingInvitationId === invitation.id}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Mail class="h-3.5 w-3.5" />{/if}
+									</button>
+									<button
+										onclick={() => cancelInvitation(invitation.id)}
+										disabled={cancellingInvitationId === invitation.id}
+										class="os-member-remove"
+										title="Cancel"
+									>
+										{#if cancellingInvitationId === invitation.id}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<X class="h-3.5 w-3.5" />{/if}
+									</button>
+								</div>
+							</div>
+						{/each}
+					</div>
+				</div>
+			{/if}
 		{/if}
 
-		<!-- Public Database IP -->
-		{#if canEditOrg}
-			<div class="os-card">
-				<div class="os-card-header">
-					<h2 class="os-card-title">
-						<Globe class="h-4 w-4" />
-						Public Database IP
-					</h2>
-				</div>
+		<!-- Tab: Resource Quotas -->
+		{#if activeTab === 'quotas'}
+			<h1 class="os-tab-title">Resource Quotas</h1>
 
-				<p class="os-sso-hint" style="margin-bottom: 1rem;">
-					Shared external IP used to expose databases publicly. Databases opted into public
-					exposure will share this IP with unique ports per database.
-				</p>
-
-				<div class="os-sso-section">
-					<h3 class="os-sso-section-title">IPv4 / IPv6 Address</h3>
-					<div style="display: flex; gap: 0.5rem; align-items: center;">
-						<input
-							type="text"
-							class="input"
-							placeholder="e.g. 203.0.113.10"
-							bind:value={publicIp}
-							style="flex: 1;"
-						/>
-						<button onclick={savePublicIp} disabled={publicIpSaving} class="btn btn-primary">
-							{#if publicIpSaving}<Loader2 class="h-4 w-4 animate-spin" />{/if}
-							Save
-						</button>
+			{#if isOwner || currentUserRole === 'admin'}
+				<a
+					class="os-card block hover:shadow-md transition"
+					href={`/${organizationSlug}/settings/quotas`}
+				>
+					<div class="os-card-header">
+						<h2 class="os-card-title">Resource quotas</h2>
+					</div>
+					<p class="text-sm" style="color: var(--surface-muted); padding: 0 1.375rem 1.125rem;">
+						View usage and set per-project CPU, memory, and pod caps.
+					</p>
+				</a>
+			{:else}
+				<div class="os-card">
+					<div class="os-card-body">
+						<p class="text-sm" style="color: var(--surface-muted);">Only admins and owners can manage resource quotas.</p>
 					</div>
 				</div>
-			</div>
+			{/if}
 		{/if}
 
-		<!-- Database Backups (R2) -->
-		{#if canEditOrg}
-			<div class="os-card">
-				<div class="os-card-header">
-					<h2 class="os-card-title">
-						<Shield class="h-4 w-4" />
-						Database Backups
-					</h2>
+		<!-- Tab: Database -->
+		{#if activeTab === 'database'}
+			<h1 class="os-tab-title">Database</h1>
+
+			{#if canEditOrg}
+				<div class="os-card">
+					<div class="os-card-header">
+						<h2 class="os-card-title">Public Database IP</h2>
+					</div>
+
+					<div class="os-card-body">
+						<p class="os-sso-hint" style="margin-bottom: 1rem;">
+							Shared external IP used to expose databases publicly. Databases opted into public
+							exposure will share this IP with unique ports per database.
+						</p>
+
+						<div class="os-field">
+							<label class="os-field-label" for="public-ip">IPv4 / IPv6 Address</label>
+							<div style="display: flex; gap: 0.5rem; align-items: center;">
+								<input
+									id="public-ip"
+									type="text"
+									class="input"
+									placeholder="e.g. 203.0.113.10"
+									bind:value={publicIp}
+									style="flex: 1;"
+								/>
+								<button onclick={savePublicIp} disabled={publicIpSaving} class="btn btn-primary">
+									{#if publicIpSaving}<Loader2 class="h-4 w-4 animate-spin" />{/if}
+									Save
+								</button>
+							</div>
+						</div>
+					</div>
 				</div>
-
-				<p class="os-sso-hint" style="margin-bottom: 1rem;">
-					Configure a Cloudflare R2 bucket to enable pgBackRest backups and restores for databases in this organization.
-				</p>
-
-				{#if backupLoading}
-					<div class="os-sso-loading"><Loader2 class="h-5 w-5 animate-spin" /></div>
-				{:else}
-					<div class="os-sso-section">
-						<h3 class="os-sso-section-title">R2 Endpoint</h3>
-						<input
-							type="text"
-							class="input"
-							placeholder="https://<account-id>.r2.cloudflarestorage.com"
-							bind:value={backupEndpoint}
-						/>
+			{:else}
+				<div class="os-card">
+					<div class="os-card-body">
+						<p class="text-sm" style="color: var(--surface-muted);">Only admins and owners can manage database settings.</p>
 					</div>
-
-					<div class="os-sso-section">
-						<h3 class="os-sso-section-title">Bucket</h3>
-						<input
-							type="text"
-							class="input"
-							placeholder="orchard-backups"
-							bind:value={backupBucket}
-						/>
-					</div>
-
-					<div class="os-sso-section">
-						<h3 class="os-sso-section-title">Region</h3>
-						<input
-							type="text"
-							class="input"
-							placeholder="auto"
-							bind:value={backupRegion}
-						/>
-					</div>
-
-					<div class="os-sso-section">
-						<h3 class="os-sso-section-title">Access Key ID</h3>
-						<input
-							type="text"
-							class="input"
-							placeholder="R2 access key"
-							bind:value={backupAccessKey}
-						/>
-					</div>
-
-					<div class="os-sso-section">
-						<h3 class="os-sso-section-title">
-							Secret Access Key
-							{#if backupSecretConfigured}
-								<span class="os-sso-hint" style="font-weight: 400; margin-left: 0.5rem;">(configured · leave empty to keep)</span>
-							{/if}
-						</h3>
-						<input
-							type="password"
-							class="input"
-							placeholder={backupSecretConfigured ? '••••••••••••' : 'R2 secret key'}
-							bind:value={backupSecretKey}
-						/>
-					</div>
-
-					<div class="os-sso-section" style="display: flex; gap: 0.5rem;">
-						<button onclick={saveBackupSettings} disabled={backupSaving} class="btn btn-primary">
-							{#if backupSaving}<Loader2 class="h-4 w-4 animate-spin" />{/if}
-							Save backup settings
-						</button>
-						{#if backupSecretConfigured}
-							<button onclick={clearBackupSettings} disabled={backupSaving} class="btn btn-secondary">
-								Clear
-							</button>
-						{/if}
-					</div>
-				{/if}
-			</div>
+				</div>
+			{/if}
 		{/if}
 
-		<!-- SSO Configuration (Enterprise only) -->
-		{#if isEnterprise && isOwner}
-			<div class="os-card">
-				<div class="os-card-header">
-					<h2 class="os-card-title">
-						<Key class="h-4 w-4" />
-						Single Sign-On (SSO)
-					</h2>
-				</div>
+		<!-- Tab: Backups -->
+		{#if activeTab === 'backups'}
+			<h1 class="os-tab-title">Backups</h1>
 
-				{#if ssoLoading}
-					<div class="os-sso-loading">
-						<Loader2 class="h-5 w-5 animate-spin" />
+			{#if canEditOrg}
+				<div class="os-card">
+					<div class="os-card-header">
+						<h2 class="os-card-title">Database Backups (R2)</h2>
 					</div>
-				{:else}
-					<!-- Subdomain -->
-					<div class="os-sso-section">
-						<h3 class="os-sso-section-title">
-							<Globe class="h-3.5 w-3.5" />
-							Custom Subdomain
-						</h3>
-						<div class="os-sso-subdomain-row">
+
+					<div class="os-card-body">
+						<p class="os-sso-hint" style="margin-bottom: 1rem;">
+							Configure a Cloudflare R2 bucket to enable pgBackRest backups and restores for databases in this organization.
+						</p>
+					</div>
+
+					{#if backupLoading}
+						<div class="os-sso-loading"><Loader2 class="h-5 w-5 animate-spin" /></div>
+					{:else}
+						<div class="os-sso-section">
+							<h3 class="os-sso-section-title">R2 Endpoint</h3>
 							<input
 								type="text"
-								bind:value={ssoSubdomain}
-								placeholder="yourcompany"
-								class="input os-sso-subdomain-input"
+								class="input"
+								placeholder="https://<account-id>.r2.cloudflarestorage.com"
+								bind:value={backupEndpoint}
 							/>
-							<span class="os-sso-subdomain-suffix">.{baseDomain}</span>
-							<button
-								onclick={saveSubdomain}
-								disabled={ssoSubdomainSaving}
-								class="btn btn-secondary"
-							>
-								{#if ssoSubdomainSaving}<Loader2 class="h-4 w-4 animate-spin" />{/if}
-								Save
-							</button>
 						</div>
-						{#if ssoSubdomain}
-							<p class="os-sso-hint">Your login page will be at <strong>https://{ssoSubdomain}.{baseDomain}</strong></p>
-						{/if}
-					</div>
 
-					<!-- SSO tabs -->
-					<div class="os-sso-tabs">
-						<button
-							class="os-sso-tab"
-							class:os-sso-tab-active={ssoTab === 'config'}
-							onclick={() => { ssoTab = 'config'; }}
-						>
-							Provider Configuration
-						</button>
-						<button
-							class="os-sso-tab"
-							class:os-sso-tab-active={ssoTab === 'branding'}
-							onclick={() => { ssoTab = 'branding'; }}
-						>
-							Login Page Customization
-						</button>
-					</div>
-
-					{#if ssoTab === 'config'}
-						<!-- Provider selection -->
 						<div class="os-sso-section">
-							<h3 class="os-sso-section-title">Provider Type</h3>
-							<div class="os-sso-provider-toggle">
-								<button
-									class="os-sso-provider-btn"
-									class:os-sso-provider-active={ssoProvider === 'oidc'}
-									onclick={() => { ssoProvider = 'oidc'; }}
-								>
-									OpenID Connect (OIDC)
-								</button>
-								<button
-									class="os-sso-provider-btn"
-									class:os-sso-provider-active={ssoProvider === 'saml'}
-									onclick={() => { ssoProvider = 'saml'; }}
-								>
-									SAML 2.0
-								</button>
-							</div>
+							<h3 class="os-sso-section-title">Bucket</h3>
+							<input
+								type="text"
+								class="input"
+								placeholder="orchard-backups"
+								bind:value={backupBucket}
+							/>
 						</div>
 
-						<!-- OIDC config -->
-						{#if ssoProvider === 'oidc'}
-							<div class="os-sso-section">
-								<div class="os-sso-field">
-									<label class="os-field-label" for="oidc-issuer">Issuer URL</label>
-									<input id="oidc-issuer" type="url" bind:value={ssoOidcIssuerUrl} placeholder="https://accounts.google.com" class="input" />
-								</div>
-								<div class="os-sso-field">
-									<label class="os-field-label" for="oidc-client-id">Client ID</label>
-									<input id="oidc-client-id" type="text" bind:value={ssoOidcClientId} placeholder="your-client-id" class="input" />
-								</div>
-								<div class="os-sso-field">
-									<label class="os-field-label" for="oidc-client-secret">Client Secret</label>
-									<input id="oidc-client-secret" type="password" bind:value={ssoOidcClientSecret} placeholder={ssoConfig?.oidcClientSecret === '••••••••' ? '(already set, leave blank to keep)' : 'your-client-secret'} class="input" />
-								</div>
-								<div class="os-sso-field">
-									<label class="os-field-label" for="oidc-scopes">Scopes</label>
-									<input id="oidc-scopes" type="text" bind:value={ssoOidcScopes} placeholder="openid email profile" class="input" />
-								</div>
-							</div>
-						{/if}
-
-						<!-- SAML config -->
-						{#if ssoProvider === 'saml'}
-							<div class="os-sso-section">
-								<div class="os-sso-field">
-									<label class="os-field-label" for="saml-metadata">Metadata URL (optional)</label>
-									<input id="saml-metadata" type="url" bind:value={ssoSamlMetadataUrl} placeholder="https://idp.example.com/metadata" class="input" />
-								</div>
-								<div class="os-sso-field">
-									<label class="os-field-label" for="saml-entry">SSO Entry Point URL</label>
-									<input id="saml-entry" type="url" bind:value={ssoSamlEntryPoint} placeholder="https://idp.example.com/sso" class="input" />
-								</div>
-								<div class="os-sso-field">
-									<label class="os-field-label" for="saml-issuer">Issuer</label>
-									<input id="saml-issuer" type="text" bind:value={ssoSamlIssuer} placeholder="urn:idp:example" class="input" />
-								</div>
-								<div class="os-sso-field">
-									<label class="os-field-label" for="saml-cert">IdP Certificate (PEM)</label>
-									<textarea id="saml-cert" bind:value={ssoSamlCertificate} rows="4" placeholder={ssoConfig?.samlCertificate === '(configured)' ? '(already set, leave blank to keep)' : 'Paste the X.509 certificate here...'} class="input"></textarea>
-								</div>
-							</div>
-						{/if}
-
-						<!-- Toggles -->
 						<div class="os-sso-section">
-							<div class="os-sso-toggle-row">
-								<div>
-									<p class="os-sso-toggle-label">Enable SSO</p>
-									<p class="os-sso-toggle-desc">Allow members to sign in via your identity provider</p>
-								</div>
-								<label class="os-sso-switch">
-									<input type="checkbox" bind:checked={ssoEnabled} />
-									<span class="os-sso-slider"></span>
-								</label>
-							</div>
-							<div class="os-sso-toggle-row">
-								<div>
-									<p class="os-sso-toggle-label">Enforce SSO</p>
-									<p class="os-sso-toggle-desc">Require SSO for all members (disables email/passkey login on subdomain)</p>
-								</div>
-								<label class="os-sso-switch">
-									<input type="checkbox" bind:checked={ssoEnforced} />
-									<span class="os-sso-slider"></span>
-								</label>
-							</div>
+							<h3 class="os-sso-section-title">Region</h3>
+							<input
+								type="text"
+								class="input"
+								placeholder="auto"
+								bind:value={backupRegion}
+							/>
 						</div>
 
-						<!-- Actions -->
-						<div class="os-sso-actions">
-							<button onclick={saveSsoConfig} disabled={ssoSaving} class="btn btn-primary">
-								{#if ssoSaving}<Loader2 class="h-4 w-4 animate-spin" />{/if}
-								Save SSO Configuration
+						<div class="os-sso-section">
+							<h3 class="os-sso-section-title">Access Key ID</h3>
+							<input
+								type="text"
+								class="input"
+								placeholder="R2 access key"
+								bind:value={backupAccessKey}
+							/>
+						</div>
+
+						<div class="os-sso-section">
+							<h3 class="os-sso-section-title">
+								Secret Access Key
+								{#if backupSecretConfigured}
+									<span class="os-sso-hint" style="font-weight: 400; margin-left: 0.5rem;">(configured · leave empty to keep)</span>
+								{/if}
+							</h3>
+							<input
+								type="password"
+								class="input"
+								placeholder={backupSecretConfigured ? '••••••••••••' : 'R2 secret key'}
+								bind:value={backupSecretKey}
+							/>
+						</div>
+
+						<div class="os-sso-section" style="display: flex; gap: 0.5rem;">
+							<button onclick={saveBackupSettings} disabled={backupSaving} class="btn btn-primary">
+								{#if backupSaving}<Loader2 class="h-4 w-4 animate-spin" />{/if}
+								Save backup settings
 							</button>
-							<button onclick={testSsoConnection} disabled={ssoTesting} class="btn btn-secondary">
-								{#if ssoTesting}<Loader2 class="h-4 w-4 animate-spin" />{/if}
-								Test Connection
-							</button>
-							{#if ssoConfig}
-								<button onclick={deleteSsoConfig} class="btn btn-secondary" style="color: var(--error-color, #ef4444);">
-									Delete SSO Config
+							{#if backupSecretConfigured}
+								<button onclick={clearBackupSettings} disabled={backupSaving} class="btn btn-secondary">
+									Clear
 								</button>
 							{/if}
 						</div>
+					{/if}
+				</div>
+			{:else}
+				<div class="os-card">
+					<div class="os-card-body">
+						<p class="text-sm" style="color: var(--surface-muted);">Only admins and owners can manage backup settings.</p>
+					</div>
+				</div>
+			{/if}
+		{/if}
 
-						{#if ssoTestResult}
-							<div class="os-sso-test-result" class:os-sso-test-success={ssoTestResult.success} class:os-sso-test-error={!ssoTestResult.success}>
-								{#if ssoTestResult.success}
-									<p>Connection successful. <a href={ssoTestResult.testLoginUrl} target="_blank" rel="noopener">Test login</a></p>
-								{:else}
-									<p>Connection failed: {ssoTestResult.error}</p>
+		<!-- Tab: SSO -->
+		{#if activeTab === 'sso'}
+			<h1 class="os-tab-title">Single Sign-On</h1>
+
+			{#if isEnterprise && isOwner}
+				<div class="os-card">
+					<div class="os-card-header">
+						<h2 class="os-card-title">SSO Configuration</h2>
+					</div>
+
+					{#if ssoLoading}
+						<div class="os-sso-loading">
+							<Loader2 class="h-5 w-5 animate-spin" />
+						</div>
+					{:else}
+						<!-- Subdomain -->
+						<div class="os-sso-section">
+							<h3 class="os-sso-section-title">
+								<Globe class="h-3.5 w-3.5" />
+								Custom Subdomain
+							</h3>
+							<div class="os-sso-subdomain-row">
+								<input
+									type="text"
+									bind:value={ssoSubdomain}
+									placeholder="yourcompany"
+									class="input os-sso-subdomain-input"
+								/>
+								<span class="os-sso-subdomain-suffix">.{baseDomain}</span>
+								<button
+									onclick={saveSubdomain}
+									disabled={ssoSubdomainSaving}
+									class="btn btn-secondary"
+								>
+									{#if ssoSubdomainSaving}<Loader2 class="h-4 w-4 animate-spin" />{/if}
+									Save
+								</button>
+							</div>
+							{#if ssoSubdomain}
+								<p class="os-sso-hint">Your login page will be at <strong>https://{ssoSubdomain}.{baseDomain}</strong></p>
+							{/if}
+						</div>
+
+						<!-- SSO tabs -->
+						<div class="os-sso-tabs">
+							<button
+								class="os-sso-tab"
+								class:os-sso-tab-active={ssoTab === 'config'}
+								onclick={() => { ssoTab = 'config'; }}
+							>
+								Provider Configuration
+							</button>
+							<button
+								class="os-sso-tab"
+								class:os-sso-tab-active={ssoTab === 'branding'}
+								onclick={() => { ssoTab = 'branding'; }}
+							>
+								Login Page Customization
+							</button>
+						</div>
+
+						{#if ssoTab === 'config'}
+							<!-- Provider selection -->
+							<div class="os-sso-section">
+								<h3 class="os-sso-section-title">Provider Type</h3>
+								<div class="os-sso-provider-toggle">
+									<button
+										class="os-sso-provider-btn"
+										class:os-sso-provider-active={ssoProvider === 'oidc'}
+										onclick={() => { ssoProvider = 'oidc'; }}
+									>
+										OpenID Connect (OIDC)
+									</button>
+									<button
+										class="os-sso-provider-btn"
+										class:os-sso-provider-active={ssoProvider === 'saml'}
+										onclick={() => { ssoProvider = 'saml'; }}
+									>
+										SAML 2.0
+									</button>
+								</div>
+							</div>
+
+							<!-- OIDC config -->
+							{#if ssoProvider === 'oidc'}
+								<div class="os-sso-section">
+									<div class="os-sso-field">
+										<label class="os-field-label" for="oidc-issuer">Issuer URL</label>
+										<input id="oidc-issuer" type="url" bind:value={ssoOidcIssuerUrl} placeholder="https://accounts.google.com" class="input" />
+									</div>
+									<div class="os-sso-field">
+										<label class="os-field-label" for="oidc-client-id">Client ID</label>
+										<input id="oidc-client-id" type="text" bind:value={ssoOidcClientId} placeholder="your-client-id" class="input" />
+									</div>
+									<div class="os-sso-field">
+										<label class="os-field-label" for="oidc-client-secret">Client Secret</label>
+										<input id="oidc-client-secret" type="password" bind:value={ssoOidcClientSecret} placeholder={ssoConfig?.oidcClientSecret === '••••••••' ? '(already set, leave blank to keep)' : 'your-client-secret'} class="input" />
+									</div>
+									<div class="os-sso-field">
+										<label class="os-field-label" for="oidc-scopes">Scopes</label>
+										<input id="oidc-scopes" type="text" bind:value={ssoOidcScopes} placeholder="openid email profile" class="input" />
+									</div>
+								</div>
+							{/if}
+
+							<!-- SAML config -->
+							{#if ssoProvider === 'saml'}
+								<div class="os-sso-section">
+									<div class="os-sso-field">
+										<label class="os-field-label" for="saml-metadata">Metadata URL (optional)</label>
+										<input id="saml-metadata" type="url" bind:value={ssoSamlMetadataUrl} placeholder="https://idp.example.com/metadata" class="input" />
+									</div>
+									<div class="os-sso-field">
+										<label class="os-field-label" for="saml-entry">SSO Entry Point URL</label>
+										<input id="saml-entry" type="url" bind:value={ssoSamlEntryPoint} placeholder="https://idp.example.com/sso" class="input" />
+									</div>
+									<div class="os-sso-field">
+										<label class="os-field-label" for="saml-issuer">Issuer</label>
+										<input id="saml-issuer" type="text" bind:value={ssoSamlIssuer} placeholder="urn:idp:example" class="input" />
+									</div>
+									<div class="os-sso-field">
+										<label class="os-field-label" for="saml-cert">IdP Certificate (PEM)</label>
+										<textarea id="saml-cert" bind:value={ssoSamlCertificate} rows="4" placeholder={ssoConfig?.samlCertificate === '(configured)' ? '(already set, leave blank to keep)' : 'Paste the X.509 certificate here...'} class="input"></textarea>
+									</div>
+								</div>
+							{/if}
+
+							<!-- Toggles -->
+							<div class="os-sso-section">
+								<div class="os-sso-toggle-row">
+									<div>
+										<p class="os-sso-toggle-label">Enable SSO</p>
+										<p class="os-sso-toggle-desc">Allow members to sign in via your identity provider</p>
+									</div>
+									<label class="os-sso-switch">
+										<input type="checkbox" bind:checked={ssoEnabled} />
+										<span class="os-sso-slider"></span>
+									</label>
+								</div>
+								<div class="os-sso-toggle-row">
+									<div>
+										<p class="os-sso-toggle-label">Enforce SSO</p>
+										<p class="os-sso-toggle-desc">Require SSO for all members (disables email/passkey login on subdomain)</p>
+									</div>
+									<label class="os-sso-switch">
+										<input type="checkbox" bind:checked={ssoEnforced} />
+										<span class="os-sso-slider"></span>
+									</label>
+								</div>
+							</div>
+
+							<!-- Actions -->
+							<div class="os-sso-actions">
+								<button onclick={saveSsoConfig} disabled={ssoSaving} class="btn btn-primary">
+									{#if ssoSaving}<Loader2 class="h-4 w-4 animate-spin" />{/if}
+									Save SSO Configuration
+								</button>
+								<button onclick={testSsoConnection} disabled={ssoTesting} class="btn btn-secondary">
+									{#if ssoTesting}<Loader2 class="h-4 w-4 animate-spin" />{/if}
+									Test Connection
+								</button>
+								{#if ssoConfig}
+									<button onclick={deleteSsoConfig} class="btn btn-secondary" style="color: var(--error-color, #ef4444);">
+										Delete SSO Config
+									</button>
 								{/if}
+							</div>
+
+							{#if ssoTestResult}
+								<div class="os-sso-test-result" class:os-sso-test-success={ssoTestResult.success} class:os-sso-test-error={!ssoTestResult.success}>
+									{#if ssoTestResult.success}
+										<p>Connection successful. <a href={ssoTestResult.testLoginUrl} target="_blank" rel="noopener">Test login</a></p>
+									{:else}
+										<p>Connection failed: {ssoTestResult.error}</p>
+									{/if}
+								</div>
+							{/if}
+						{/if}
+
+						{#if ssoTab === 'branding'}
+							<div class="os-sso-section">
+								<div class="os-sso-field">
+									<label class="os-field-label" for="sso-logo">Logo URL</label>
+									<input id="sso-logo" type="url" bind:value={ssoLoginLogoUrl} placeholder="https://example.com/logo.png" class="input" />
+								</div>
+								<div class="os-sso-field">
+									<label class="os-field-label" for="sso-welcome">Welcome Text</label>
+									<input id="sso-welcome" type="text" bind:value={ssoLoginWelcomeText} placeholder="Sign in to Your Company" class="input" />
+								</div>
+								<div class="os-sso-color-row">
+									<div class="os-sso-field" style="flex: 1;">
+										<label class="os-field-label" for="sso-primary-color">Primary Color</label>
+										<div class="os-sso-color-input">
+											<input id="sso-primary-color" type="color" bind:value={ssoLoginPrimaryColor} />
+											<input type="text" bind:value={ssoLoginPrimaryColor} placeholder="#6366f1" class="input" style="flex: 1;" />
+										</div>
+									</div>
+									<div class="os-sso-field" style="flex: 1;">
+										<label class="os-field-label" for="sso-bg-color">Background Color</label>
+										<div class="os-sso-color-input">
+											<input id="sso-bg-color" type="color" bind:value={ssoLoginBgColor} />
+											<input type="text" bind:value={ssoLoginBgColor} placeholder="#0a0a0f" class="input" style="flex: 1;" />
+										</div>
+									</div>
+								</div>
+
+								<!-- Preview -->
+								<div class="os-sso-preview" style="background: {ssoLoginBgColor};">
+									<div class="os-sso-preview-card">
+										{#if ssoLoginLogoUrl}
+											<img src={ssoLoginLogoUrl} alt="Logo" class="os-sso-preview-logo" />
+										{:else}
+											<div class="os-sso-preview-icon" style="background: {ssoLoginPrimaryColor}20; color: {ssoLoginPrimaryColor};">
+												<Lock class="h-5 w-5" />
+											</div>
+										{/if}
+										<p class="os-sso-preview-text">{ssoLoginWelcomeText || `Sign in to ${organization?.name || 'Organization'}`}</p>
+										<div class="os-sso-preview-btn" style="background: {ssoLoginPrimaryColor};">Sign in with SSO</div>
+									</div>
+								</div>
+
+								<button onclick={saveSsoConfig} disabled={ssoSaving} class="btn btn-primary">
+									{#if ssoSaving}<Loader2 class="h-4 w-4 animate-spin" />{/if}
+									Save Branding
+								</button>
 							</div>
 						{/if}
 					{/if}
-
-					{#if ssoTab === 'branding'}
-						<div class="os-sso-section">
-							<div class="os-sso-field">
-								<label class="os-field-label" for="sso-logo">Logo URL</label>
-								<input id="sso-logo" type="url" bind:value={ssoLoginLogoUrl} placeholder="https://example.com/logo.png" class="input" />
-							</div>
-							<div class="os-sso-field">
-								<label class="os-field-label" for="sso-welcome">Welcome Text</label>
-								<input id="sso-welcome" type="text" bind:value={ssoLoginWelcomeText} placeholder="Sign in to Your Company" class="input" />
-							</div>
-							<div class="os-sso-color-row">
-								<div class="os-sso-field" style="flex: 1;">
-									<label class="os-field-label" for="sso-primary-color">Primary Color</label>
-									<div class="os-sso-color-input">
-										<input id="sso-primary-color" type="color" bind:value={ssoLoginPrimaryColor} />
-										<input type="text" bind:value={ssoLoginPrimaryColor} placeholder="#6366f1" class="input" style="flex: 1;" />
-									</div>
-								</div>
-								<div class="os-sso-field" style="flex: 1;">
-									<label class="os-field-label" for="sso-bg-color">Background Color</label>
-									<div class="os-sso-color-input">
-										<input id="sso-bg-color" type="color" bind:value={ssoLoginBgColor} />
-										<input type="text" bind:value={ssoLoginBgColor} placeholder="#0a0a0f" class="input" style="flex: 1;" />
-									</div>
-								</div>
-							</div>
-
-							<!-- Preview -->
-							<div class="os-sso-preview" style="background: {ssoLoginBgColor};">
-								<div class="os-sso-preview-card">
-									{#if ssoLoginLogoUrl}
-										<img src={ssoLoginLogoUrl} alt="Logo" class="os-sso-preview-logo" />
-									{:else}
-										<div class="os-sso-preview-icon" style="background: {ssoLoginPrimaryColor}20; color: {ssoLoginPrimaryColor};">
-											<Lock class="h-5 w-5" />
-										</div>
-									{/if}
-									<p class="os-sso-preview-text">{ssoLoginWelcomeText || `Sign in to ${organization?.name || 'Organization'}`}</p>
-									<div class="os-sso-preview-btn" style="background: {ssoLoginPrimaryColor};">Sign in with SSO</div>
-								</div>
-							</div>
-
-							<button onclick={saveSsoConfig} disabled={ssoSaving} class="btn btn-primary">
-								{#if ssoSaving}<Loader2 class="h-4 w-4 animate-spin" />{/if}
-								Save Branding
-							</button>
-						</div>
-					{/if}
-				{/if}
-			</div>
+				</div>
+			{:else}
+				<div class="os-card">
+					<div class="os-card-body">
+						<p class="text-sm" style="color: var(--surface-muted);">
+							{#if !isEnterprise}
+								SSO is available on the Enterprise plan.
+							{:else}
+								Only the organization owner can manage SSO settings.
+							{/if}
+						</p>
+					</div>
+				</div>
+			{/if}
 		{/if}
+		</div>
+		{/key}
 	</div>
 {/if}
 
@@ -1272,30 +1310,65 @@
 		gap: 1.5rem;
 	}
 
-	.os-back {
-		display: inline-flex;
+	.os-tab-content {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+	}
+
+	.os-tab-content > :global(*) {
+		animation: tab-card-in 250ms ease both;
+	}
+	.os-tab-content > :global(*:nth-child(1)) { animation-delay: 0ms; }
+	.os-tab-content > :global(*:nth-child(2)) { animation-delay: 50ms; }
+	.os-tab-content > :global(*:nth-child(3)) { animation-delay: 100ms; }
+	.os-tab-content > :global(*:nth-child(4)) { animation-delay: 150ms; }
+
+	@keyframes tab-card-in {
+		from {
+			opacity: 0;
+			transform: translateY(6px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
+	}
+
+	.os-tab-title {
+		font-size: 1.25rem;
+		font-weight: 700;
+		color: var(--center-channel-color);
+		letter-spacing: -0.02em;
+		margin: 0;
+	}
+
+	.os-general-top {
+		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		font-size: 0.875rem;
+		gap: 1rem;
+	}
+
+	.os-detail-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 1rem;
+	}
+
+	.os-detail-label {
+		font-size: 0.6875rem;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
 		color: var(--surface-muted);
-		cursor: pointer;
-		transition: color 120ms ease;
-		align-self: flex-start;
-	}
-	.os-back:hover { color: var(--center-channel-color); }
-
-	/* Header */
-	.os-header {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 1rem;
+		margin: 0 0 0.125rem;
 	}
 
-	.os-header-left {
-		display: flex;
-		align-items: center;
-		gap: 1rem;
+	.os-detail-value {
+		font-size: 0.875rem;
+		font-weight: 500;
+		color: var(--center-channel-color);
+		margin: 0;
 	}
 
 	.os-avatar-wrap {
@@ -1351,69 +1424,6 @@
 		right: -0.25rem;
 		background-color: var(--center-channel-color);
 		color: var(--center-channel-bg);
-	}
-
-	.os-title {
-		font-size: 1.25rem;
-		font-weight: 700;
-		color: var(--center-channel-color);
-		line-height: 1.2;
-		letter-spacing: -0.02em;
-	}
-
-	.os-slug {
-		font-size: 0.8125rem;
-		font-family: var(--font-mono);
-		color: var(--surface-muted);
-		margin-top: 0.125rem;
-	}
-
-	/* Stats */
-	.os-stats {
-		display: grid;
-		grid-template-columns: repeat(auto-fit, minmax(9rem, 1fr));
-		gap: 0.875rem;
-	}
-
-	.os-stat {
-		display: flex;
-		align-items: center;
-		gap: 0.875rem;
-		padding: 1rem 1.125rem;
-		border-radius: 0.875rem;
-		border: 1px solid var(--surface-border);
-		background-color: var(--surface-bg);
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.03),
-			0 1px 2px rgb(0 0 0 / 0.02);
-	}
-
-	.os-stat-icon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 2.5rem;
-		height: 2.5rem;
-		border-radius: 0.625rem;
-		flex-shrink: 0;
-		background-color: color-mix(in srgb, var(--surface-border) 50%, var(--center-channel-bg));
-		color: var(--surface-muted);
-	}
-
-	.os-stat-value {
-		font-size: 1.0625rem;
-		font-weight: 700;
-		color: var(--center-channel-color);
-		line-height: 1.2;
-	}
-
-	.os-stat-label {
-		font-size: 0.6875rem;
-		color: var(--surface-muted);
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		font-weight: 500;
-		margin-top: 0.0625rem;
 	}
 
 	/* Cards */
@@ -1660,11 +1670,11 @@
 	}
 
 	@media (max-width: 640px) {
-		.os-header { flex-direction: column; align-items: flex-start; }
 		.os-invite-bar { flex-direction: column; }
 		.os-member { flex-direction: column; align-items: flex-start; }
 		.os-member-right { align-self: flex-end; }
-		.os-stats { grid-template-columns: 1fr 1fr; }
+		.os-detail-grid { grid-template-columns: 1fr; }
+		.os-general-top { flex-direction: column; align-items: flex-start; }
 	}
 
 	/* SSO Styles */

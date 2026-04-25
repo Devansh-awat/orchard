@@ -6,9 +6,10 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { AuthModule } from '../auth/auth.module';
 import { UsersModule } from '../users/users.module';
 import { OrganizationsModule } from '../organizations/organizations.module';
+import { KubernetesModule } from '../kubernetes/kubernetes.module';
 
 @Module({
-  imports: [PrismaModule, AuthModule, UsersModule, OrganizationsModule],
+  imports: [PrismaModule, AuthModule, UsersModule, OrganizationsModule, KubernetesModule],
   controllers: [SsoController, SsoConfigController],
   providers: [SsoService],
   exports: [SsoService],
