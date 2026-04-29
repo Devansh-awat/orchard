@@ -31,7 +31,11 @@
 		Webhook,
 		Bell,
 		AlertTriangle,
-		CircleX
+		CircleX,
+		GitBranch,
+		GitCommit,
+		Rocket,
+		User as UserIcon
 	} from 'lucide-svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import { scale, fade, slide } from 'svelte/transition';
@@ -358,7 +362,7 @@
 		},
 		{
 			id: 'history',
-			label: 'Build History',
+			label: 'Deployments',
 			description: 'Builds & rollbacks',
 			icon: History
 		},
@@ -392,6 +396,14 @@
 	let deployment = $state<Deployment | null>(null);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
+
+	let initialTabSet = $state(false);
+	$effect(() => {
+		if (!initialTabSet && deployment) {
+			if (deployment.githubRepo) tabs.value = 'history';
+			initialTabSet = true;
+		}
+	});
 	let projectBgImage = $derived(deployment?.project?.backgroundImage ?? null);
 
 	let deletingIngressId = $state<string | null>(null);
@@ -2803,9 +2815,18 @@
 			</section>
 		</div>
 	{:else if deployment}
+		{@const _activeBuild = deployment.imageHistory?.find((h) => h.isActive)}
+		{@const _isBuilding = deployment.buildStatus === 'building' || deployment.buildStatus === 'queued' || deployment.buildStatus === 'pending'}
+		{@const _buildFailed = deployment.buildStatus === 'failed'}
 		<div class="space-y-5">
-			<!-- Header: deployment identity + status + actions -->
-			<section class="dep-header dep-header-card" class:dep-header-card--hasbg={!!projectBgImage}>
+			<!-- Header: deployment identity + status + actions + active build -->
+			<section
+				class="dep-header dep-header-card"
+				class:dep-header-card--hasbg={!!projectBgImage}
+				class:dep-header-card--live={!projectBgImage && deployment.githubRepo && _activeBuild}
+				class:dep-header-card--building={!projectBgImage && deployment.githubRepo && _isBuilding}
+				class:dep-header-card--failed={!projectBgImage && deployment.githubRepo && _buildFailed && !_activeBuild}
+			>
 				{#if projectBgImage}
 					<div class="dep-header-backdrop" aria-hidden="true">
 						<div class="dep-header-bg dep-header-bg--1" style="background-image: url({JSON.stringify(projectBgImage)});"></div>
@@ -2816,13 +2837,31 @@
 				{/if}
 				<div class="dep-header-top">
 					<div class="dep-header-identity">
-						<div class="dep-header-title-row">
-							<h1 class="dep-header-name">{deployment.name}</h1>
-						</div>
-						<div class="dep-header-badges">
-							<span class="badge {getStatusColor(deployment.status)} text-[10px]">{getDeploymentStatusLabel(deployment.status)}</span>
-							{#if deployment.buildStatus && deployment.buildStatus !== 'none'}
-								<span class="badge {getBuildStatusColor(deployment.buildStatus)} text-[10px]">Build: {getBuildStatusLabel(deployment.buildStatus)}</span>
+						<div class="dep-header-headline">
+							{#if deployment.githubRepo}
+								{#if _activeBuild}
+									{@const fallbackMsg = _activeBuild.commitSha
+										? deployment.imageHistory?.find((h) => h.commitMessage && h.commitSha === _activeBuild.commitSha)?.commitMessage
+										: undefined}
+									{@const displayMsg = _activeBuild.commitMessage || fallbackMsg}
+									{#if displayMsg}
+										<h1 class="dep-header-commit-msg">{displayMsg}</h1>
+									{:else if _activeBuild.branch}
+										<h1 class="dep-header-commit-msg dep-header-commit-msg--muted">Deployed from {_activeBuild.branch}</h1>
+									{:else}
+										<h1 class="dep-header-commit-msg dep-header-commit-msg--muted">Deployment {_activeBuild.id.replace(/-/g, '').slice(0, 9)}</h1>
+									{/if}
+								{:else if _isBuilding}
+									<h1 class="dep-header-commit-msg">Building from {deployment.githubBranch || 'main'}…</h1>
+								{:else if _buildFailed}
+									<h1 class="dep-header-commit-msg dep-header-commit-msg--muted">No active deployment — last build failed</h1>
+								{:else}
+									<h1 class="dep-header-commit-msg dep-header-commit-msg--muted">No deployments yet</h1>
+								{/if}
+							{:else if deployment.image}
+								<h1 class="dep-header-commit-msg dep-header-commit-msg--mono">{deployment.image}</h1>
+							{:else}
+								<h1 class="dep-header-commit-msg">{deployment.name}</h1>
 							{/if}
 						</div>
 						{#if notificationCount > 0}
@@ -2906,9 +2945,9 @@
 					</div>
 					<div class="dep-header-actions">
 						{#if repoUrl}
-							<button onclick={rebuild} disabled={rebuilding} class="btn btn-secondary btn-sm">
+							<button onclick={rebuild} disabled={rebuilding || _isBuilding} class="btn btn-secondary btn-sm">
 								{#if rebuilding}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw class="h-3.5 w-3.5" />{/if}
-								<span>Rebuild</span>
+								<span>Redeploy</span>
 							</button>
 						{/if}
 						<button onclick={restart} disabled={restarting} class="btn btn-secondary btn-sm">
@@ -2920,31 +2959,84 @@
 						</button>
 					</div>
 				</div>
-				<!-- Context line: source + replicas + key info without labels -->
-				<div class="dep-header-meta">
-					{#if deployment.githubRepo}
-						<a href={deployment.githubRepo} target="_blank" class="dep-meta-source">
-							{deployment.githubRepo.replace('https://github.com/', '')}
-							<ExternalLink class="h-2.5 w-2.5" />
-						</a>
-					{:else if deployment.image}
-						<span class="dep-meta-source">{deployment.image}</span>
-					{/if}
-					{#if branch}
-						<span class="dep-meta-pill">{branch}</span>
-					{/if}
-					{#if deployment.ingresses?.length}
-						{#each deployment.ingresses.slice(0, 2) as ingress}
-							<a
-								href="{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}{ingress.path}"
-								target="_blank"
-								rel="noopener noreferrer"
-								class="dep-meta-domain"
-							>
-								<Globe class="h-3 w-3" />
-								{ingress.host}
+
+				<!-- Body: meta + domains -->
+				<div class="dep-header-body">
+					<p class="dep-header-meta">
+						{#if deployment.githubRepo}
+							<a href={deployment.githubRepo} target="_blank" rel="noopener noreferrer" class="dep-meta-link">
+								{deployment.githubRepo.replace('https://github.com/', '').replace(/\.git$/, '')}
 							</a>
-						{/each}
+						{/if}
+						{#if _activeBuild?.branch || branch}
+							{#if deployment.githubRepo}<span class="dep-meta-dot">·</span>{/if}
+							<span class="dep-meta-mono">{_activeBuild?.branch || branch}</span>
+						{/if}
+						{#if _activeBuild?.commitSha}
+							<span class="dep-meta-dot">·</span>
+							{#if deployment.githubRepo}
+								<a
+									href="{deployment.githubRepo}/commit/{_activeBuild.commitSha}"
+									target="_blank"
+									rel="noopener noreferrer"
+									class="dep-meta-link dep-meta-mono"
+								>{_activeBuild.commitSha.slice(0, 7)}</a>
+							{:else}
+								<span class="dep-meta-mono">{_activeBuild.commitSha.slice(0, 7)}</span>
+							{/if}
+						{/if}
+						{#if _activeBuild}
+							<span class="dep-meta-dot">·</span>
+							<span>{(() => {
+								const diff = Date.now() - new Date(_activeBuild.createdAt).getTime();
+								const mins = Math.floor(diff / 60000);
+								if (mins < 1) return 'just now';
+								if (mins < 60) return `${mins}m ago`;
+								const hrs = Math.floor(mins / 60);
+								if (hrs < 24) return `${hrs}h ago`;
+								const days = Math.floor(hrs / 24);
+								if (days < 30) return `${days}d ago`;
+								return new Date(_activeBuild.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+							})()}</span>
+							{#if _activeBuild.triggerType === 'manual' && _activeBuild.triggeredBy}
+								<span>by</span>
+								<span class="dep-meta-strong">@{_activeBuild.triggeredBy.username}</span>
+							{:else if _activeBuild.triggerType === 'auto'}
+								<span>via GitHub</span>
+							{/if}
+						{/if}
+						{#if _buildFailed && (deployment.buildLogs || deployment.buildError)}
+							{@const dep = deployment}
+							<span class="dep-meta-dot">·</span>
+							<button
+								class="dep-meta-link dep-meta-button"
+								onclick={() => {
+									buildModalStatus = 'failed';
+									buildModalError = dep.buildError ?? null;
+									accumulatedBuildLogs = dep.buildLogs ?? null;
+									buildModalStep = null;
+									buildModalWarnings = [];
+									buildModalTimestamps = dep.buildStepTimestamps ?? null;
+									showBuildModal = true;
+								}}
+							>View build logs</button>
+						{/if}
+					</p>
+
+					{#if deployment.ingresses?.length}
+						<div class="dep-header-domains">
+							{#each deployment.ingresses.slice(0, 4) as ingress}
+								<a
+									href="{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}{ingress.path}"
+									target="_blank"
+									rel="noopener noreferrer"
+									class="dep-meta-domain"
+								>
+									{ingress.host}
+									<ExternalLink class="dep-meta-domain-icon h-3 w-3" />
+								</a>
+							{/each}
+						</div>
 					{/if}
 				</div>
 			</section>
@@ -3866,43 +3958,114 @@
 							</div>
 						</div>
 					{:else if tab.id === 'history'}
-						<div class="card rounded-2xl p-5">
-							<p class="text-sm font-semibold mb-4" style="color: var(--center-channel-color);">Build History</p>
-							{#if (deployment.imageHistory?.length ?? 0) > 0 || deployment.buildStatus === 'failed'}
-								<div class="space-y-2">
-									{#if deployment.buildStatus === 'failed'}
-										<div class="bh-card bh-card-fail" transition:slide={{ duration: 150 }}>
-											<div class="bh-card-left">
-												<div class="bh-status-dot bh-dot-red"></div>
+						<div class="card rounded-2xl overflow-hidden">
+							<div class="dep-list-header">
+								<div>
+									<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Deployments</p>
+									<p class="text-xs mt-0.5" style="color: var(--surface-muted);">
+										{#if deployment.githubRepo}
+											History of every build for <span class="font-mono">{deployment.githubRepo.replace('https://github.com/', '')}</span>
+										{:else}
+											History of every build
+										{/if}
+									</p>
+								</div>
+								{#if deployment.githubRepo}
+									<button onclick={rebuild} disabled={rebuilding} class="btn btn-secondary btn-sm">
+										{#if rebuilding}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw class="h-3.5 w-3.5" />{/if}
+										<span>Redeploy</span>
+									</button>
+								{/if}
+							</div>
+
+							{#if (deployment.imageHistory?.length ?? 0) > 0 || deployment.buildStatus === 'failed' || deployment.buildStatus === 'building' || deployment.buildStatus === 'queued' || deployment.buildStatus === 'pending'}
+								<div class="dep-list-table">
+									<div class="dep-list-row dep-list-row--head">
+										<div class="dep-col-status">Status</div>
+										<div class="dep-col-id">Deployment</div>
+										<div class="dep-col-env">Environment</div>
+										<div class="dep-col-commit">Commit</div>
+										<div class="dep-col-meta">Created</div>
+										<div class="dep-col-actions"></div>
+									</div>
+
+									{#if deployment.buildStatus === 'building' || deployment.buildStatus === 'queued' || deployment.buildStatus === 'pending'}
+										<div class="dep-list-row dep-list-row--building" transition:slide={{ duration: 150 }}>
+											<div class="dep-col-status">
+												<span class="dep-status">
+													<span class="dep-status-dot dep-status-dot--building"></span>
+													<span class="dep-status-label">Building</span>
+												</span>
 											</div>
-											<div class="bh-card-body">
-												<div class="bh-card-top">
-													<div class="bh-card-info">
-														<span class="bh-card-title" style="color: #ef4444;">Build failed</span>
+											<div class="dep-col-id">
+												<span class="dep-short-id dep-short-id--placeholder">—</span>
+											</div>
+											<div class="dep-col-env">
+												<span class="dep-env-pill dep-env-pill--preview">Preview</span>
+											</div>
+											<div class="dep-col-commit">
+												<div class="dep-commit-stack">
+													<span class="dep-commit-msg dep-commit-msg--muted">Build in progress…</span>
+													<div class="dep-commit-meta">
+														<span class="dep-mini-chip"><GitBranch class="h-2.5 w-2.5" />{deployment.githubBranch || 'main'}</span>
 													</div>
-													{#if deployment.buildLogs || deployment.buildError}
-														<div class="bh-card-actions">
-															<button onclick={() => {
-																buildModalStatus = 'failed';
-																buildModalError = deployment.buildError ?? null;
-																accumulatedBuildLogs = deployment.buildLogs ?? null;
-																buildModalStep = null;
-																buildModalWarnings = [];
-																buildModalTimestamps = deployment.buildStepTimestamps ?? null;
-																showBuildModal = true;
-															}} class="btn btn-ghost btn-sm" title="View logs">
-																<Terminal class="h-3.5 w-3.5" />
-															</button>
+												</div>
+											</div>
+											<div class="dep-col-meta">
+												<span class="dep-meta-text">just now</span>
+											</div>
+											<div class="dep-col-actions">
+												<Loader2 class="h-3.5 w-3.5 animate-spin" style="color: var(--surface-muted);" />
+											</div>
+										</div>
+									{/if}
+
+									{#if deployment.buildStatus === 'failed'}
+										<div class="dep-list-row dep-list-row--failed" transition:slide={{ duration: 150 }}>
+											<div class="dep-col-status">
+												<span class="dep-status">
+													<span class="dep-status-dot dep-status-dot--failed"></span>
+													<span class="dep-status-label" style="color: #ef4444;">Error</span>
+												</span>
+											</div>
+											<div class="dep-col-id">
+												<span class="dep-short-id dep-short-id--placeholder">—</span>
+											</div>
+											<div class="dep-col-env">
+												<span class="dep-env-pill dep-env-pill--preview">Preview</span>
+											</div>
+											<div class="dep-col-commit">
+												<div class="dep-commit-stack">
+													<span class="dep-commit-msg" style="color: #ef4444;">Build failed</span>
+													{#if deployment.buildError}
+														<div class="dep-commit-meta">
+															<span class="dep-meta-text font-mono" style="color: color-mix(in srgb, #ef4444 60%, var(--surface-muted)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">{deployment.buildError.split('\n')[0]}</span>
 														</div>
 													{/if}
 												</div>
-												{#if deployment.buildError}
-													<p class="bh-card-sub" style="color: color-mix(in srgb, #ef4444 60%, var(--surface-muted));">{deployment.buildError.split('\n')[0]}</p>
+											</div>
+											<div class="dep-col-meta">
+												<span class="dep-meta-text">recently</span>
+											</div>
+											<div class="dep-col-actions">
+												{#if deployment.buildLogs || deployment.buildError}
+													<button onclick={() => {
+														buildModalStatus = 'failed';
+														buildModalError = deployment.buildError ?? null;
+														accumulatedBuildLogs = deployment.buildLogs ?? null;
+														buildModalStep = null;
+														buildModalWarnings = [];
+														buildModalTimestamps = deployment.buildStepTimestamps ?? null;
+														showBuildModal = true;
+													}} class="dep-action-btn" title="View build logs">
+														<Terminal class="h-3.5 w-3.5" />
+													</button>
 												{/if}
 											</div>
 										</div>
 									{/if}
-									{#each deployment.imageHistory as history}
+
+									{#each deployment.imageHistory ?? [] as history}
 										{@const timeAgo = (() => {
 											const diff = Date.now() - new Date(history.createdAt).getTime();
 											const mins = Math.floor(diff / 60000);
@@ -3914,55 +4077,98 @@
 											if (days < 30) return `${days}d ago`;
 											return new Date(history.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 										})()}
-										<div class="bh-card" class:bh-card-active={history.isActive} transition:slide={{ duration: 150 }}>
-											<div class="bh-card-left">
-												<div class="bh-status-dot bh-dot-green" class:bh-dot-glow={history.isActive}></div>
+										{@const shortId = history.id.replace(/-/g, '').slice(0, 9)}
+										{@const rowFallbackMsg = history.commitSha
+											? deployment.imageHistory?.find((h) => h.commitMessage && h.commitSha === history.commitSha)?.commitMessage
+											: undefined}
+										{@const rowDisplayMsg = history.commitMessage || rowFallbackMsg}
+										<div class="dep-list-row" class:dep-list-row--active={history.isActive} transition:slide={{ duration: 150 }}>
+											<div class="dep-col-status">
+												<span class="dep-status">
+													<span class="dep-status-dot dep-status-dot--ready" class:dep-status-dot--live={history.isActive}></span>
+													<span class="dep-status-label">Ready</span>
+												</span>
 											</div>
-											<div class="bh-card-body">
-												<div class="bh-card-top">
-													<div class="bh-card-info">
-														{#if history.commitMessage}
-															<span class="bh-card-commit-msg">{history.commitMessage}</span>
-														{:else if history.branch}
-															<span class="bh-card-branch">{history.branch}</span>
+											<div class="dep-col-id">
+												<span class="dep-short-id">{shortId}</span>
+												{#if history.isActive}
+													<span class="dep-current-pill">Current</span>
+												{/if}
+											</div>
+											<div class="dep-col-env">
+												<span class="dep-env-pill" class:dep-env-pill--production={history.isActive} class:dep-env-pill--preview={!history.isActive}>
+													{history.isActive ? 'Production' : 'Preview'}
+												</span>
+											</div>
+											<div class="dep-col-commit">
+												<div class="dep-commit-stack">
+													{#if rowDisplayMsg}
+														<span class="dep-commit-msg">{rowDisplayMsg}</span>
+													{:else if history.branch}
+														<span class="dep-commit-msg dep-commit-msg--muted">Deployed from {history.branch}</span>
+													{:else}
+														<span class="dep-commit-msg dep-commit-msg--muted">Image build</span>
+													{/if}
+													<div class="dep-commit-meta">
+														{#if history.branch}
+															<span class="dep-mini-chip"><GitBranch class="h-2.5 w-2.5" />{history.branch}</span>
 														{/if}
-														{#if history.commitMessage && history.branch}
-															<span class="bh-card-branch">{history.branch}</span>
-														{/if}
-														{#if history.isActive}
-															<span class="bh-card-live">Live</span>
-														{/if}
-													</div>
-													<div class="bh-card-actions">
-														<button onclick={() => openLogModal(history.id)} class="btn btn-ghost btn-sm" title="View logs">
-															<Terminal class="h-3.5 w-3.5" />
-														</button>
-														{#if !history.isActive}
-															<button onclick={() => rollbackToImage(history.id)} class="btn btn-ghost btn-sm" title="Rollback">
-																<RefreshCw class="h-3.5 w-3.5" />
-															</button>
+														{#if history.commitSha && deployment.githubRepo}
+															<a
+																href="{deployment.githubRepo}/commit/{history.commitSha}"
+																target="_blank"
+																rel="noopener noreferrer"
+																class="dep-mini-chip dep-mini-chip--link"
+																onclick={(e) => e.stopPropagation()}
+															>
+																<GitCommit class="h-2.5 w-2.5" />
+																<span class="font-mono">{history.commitSha.slice(0, 7)}</span>
+															</a>
+														{:else if history.commitSha}
+															<span class="dep-mini-chip">
+																<GitCommit class="h-2.5 w-2.5" />
+																<span class="font-mono">{history.commitSha.slice(0, 7)}</span>
+															</span>
 														{/if}
 													</div>
 												</div>
-												<p class="bh-card-sub">
+											</div>
+											<div class="dep-col-meta">
+												<span class="dep-meta-text">{timeAgo}</span>
+												<span class="dep-meta-sub">
 													{#if history.triggerType === 'manual' && history.triggeredBy}
-														Deployed manually by <span class="bh-card-user">@{history.triggeredBy.username}</span>
+														by <span class="dep-meta-user">@{history.triggeredBy.username}</span>
 													{:else if history.triggerType === 'auto'}
-														Auto-deployed from GitHub
+														via GitHub
 													{:else}
-														Deployed
+														manual
 													{/if}
-													<span class="bh-card-time">&middot; {timeAgo}</span>
-												</p>
+												</span>
+											</div>
+											<div class="dep-col-actions">
+												<button onclick={() => openLogModal(history.id)} class="dep-action-btn" title="View logs">
+													<Terminal class="h-3.5 w-3.5" />
+												</button>
+												{#if !history.isActive}
+													<button onclick={() => rollbackToImage(history.id)} class="dep-action-btn dep-action-btn--primary" title="Promote to production">
+														<RefreshCw class="h-3.5 w-3.5" />
+													</button>
+												{/if}
 											</div>
 										</div>
 									{/each}
 								</div>
 							{:else}
-								<div class="text-center py-8">
+								<div class="dep-list-empty">
 									<History class="h-8 w-8 mx-auto mb-2" style="color: var(--surface-muted);" />
-									<p class="text-sm font-medium" style="color: var(--center-channel-color);">No builds yet</p>
-									<p class="text-xs mt-1" style="color: var(--surface-muted);">Builds will appear here after your first deploy.</p>
+									<p class="text-sm font-medium" style="color: var(--center-channel-color);">No deployments yet</p>
+									<p class="text-xs mt-1" style="color: var(--surface-muted);">
+										{#if deployment.githubRepo}
+											Push a commit to {deployment.githubBranch || 'main'} to trigger your first deployment.
+										{:else}
+											Builds will appear here after your first deploy.
+										{/if}
+									</p>
 								</div>
 							{/if}
 						</div>
@@ -4993,7 +5199,7 @@
 
 	.dep-header-card {
 		position: relative;
-		padding: 1.5rem 1.75rem 0.75rem;
+		padding: 1.125rem 1.25rem;
 		border: 1px solid var(--surface-border);
 		border-radius: 1rem;
 		background-color: var(--surface-bg);
@@ -5007,19 +5213,42 @@
 		background: none;
 	}
 	.dep-header-card--hasbg .dep-header-top,
-	.dep-header-card--hasbg .dep-header-meta {
-		position: relative; z-index: 1; color: #fff;
+	.dep-header-card--hasbg .dep-header-body,
+	.dep-header-card--hasbg .dep-header-meta,
+	.dep-header-card--hasbg .dep-header-domains {
+		position: relative; z-index: 1;
 	}
-	.dep-header-card--hasbg .dep-header-name { color: #fff; }
-	.dep-header-card--hasbg .dep-meta-source,
-	.dep-header-card--hasbg .dep-meta-pill,
-	.dep-header-card--hasbg .dep-meta-domain { color: rgba(255,255,255,0.8); }
-	.dep-header-card--hasbg .dep-meta-domain:hover { color: #fff; }
-	.dep-header-card--hasbg .dep-header-meta { border-top-color: rgba(255,255,255,0.15); }
-	.dep-header-card--hasbg .badge { border-color: rgba(255,255,255,0.25); }
-	.dep-header-card--hasbg .dep-meta-pill {
-		background: rgba(255,255,255,0.18);
-		color: rgba(255,255,255,0.9);
+	/* Hierarchy on colored backgrounds: hand-pick light shades, no flat greys.
+	   commit msg = full white (primary)
+	   domains    = bright but distinct from primary (secondary, clickable)
+	   meta       = clearly muted (tertiary, info-only) */
+	.dep-header-card--hasbg .dep-header-commit-msg {
+		color: #fff;
+	}
+	.dep-header-card--hasbg .dep-header-commit-msg--muted {
+		color: rgba(255,255,255,0.6);
+	}
+	.dep-header-card--hasbg .dep-header-meta {
+		color: rgba(255,255,255,0.55);
+	}
+	.dep-header-card--hasbg .dep-meta-mono {
+		color: rgba(255,255,255,0.78);
+	}
+	.dep-header-card--hasbg .dep-meta-strong { color: #fff; }
+	.dep-header-card--hasbg .dep-meta-link {
+		color: rgba(255,255,255,0.78);
+	}
+	.dep-header-card--hasbg .dep-meta-link:hover {
+		color: #fff;
+	}
+	.dep-header-card--hasbg .dep-meta-domain {
+		color: rgba(255,255,255,0.92);
+	}
+	.dep-header-card--hasbg .dep-meta-domain:hover {
+		color: #fff;
+	}
+	.dep-header-card--hasbg .dep-meta-domain-icon {
+		opacity: 0.55;
 	}
 
 	.dep-header-backdrop {
@@ -5054,36 +5283,59 @@
 		align-items: center;
 		gap: 0.625rem;
 		min-width: 0;
-		flex-wrap: wrap;
+		flex: 1;
 	}
 
-	.dep-header-title-row {
-		display: flex;
-		align-items: center;
-		gap: 0.625rem;
-	}
-
-	.dep-header-badges {
-		display: flex;
-		align-items: center;
-		gap: 0.375rem;
-		flex-wrap: wrap;
-	}
-
-	.dep-header-name {
-		font-size: 1.375rem;
-		font-weight: 700;
-		letter-spacing: -0.02em;
-		color: var(--center-channel-color);
-		margin: 0;
-		line-height: 1.3;
+	.dep-header-headline {
+		min-width: 0;
+		flex: 1;
 	}
 
 	.dep-header-actions {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: 0.375rem;
 		flex-shrink: 0;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+	}
+
+	/* Body: meta + domains, sit just below the commit message */
+	.dep-header-body {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		margin-top: 0.5rem;
+	}
+
+	/* HERO: the live commit message */
+	.dep-header-commit-msg {
+		font-size: 1.0625rem;
+		font-weight: 700;
+		color: var(--center-channel-color);
+		line-height: 1.35;
+		margin: 0;
+		letter-spacing: -0.01em;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.dep-header-commit-msg--muted {
+		font-weight: 600;
+		opacity: 0.7;
+	}
+
+	.dep-header-commit-msg--mono {
+		font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+		font-size: 0.9375rem;
+		font-weight: 600;
+	}
+
+	.dep-header-domains {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.375rem 1rem;
 	}
 
 	.dep-delete-btn {
@@ -5116,63 +5368,73 @@
 		color: var(--center-channel-color);
 	}
 
+	/* Meta: single line of supporting text. Same baseline, no chips, no borders. */
 	.dep-header-meta {
 		display: flex;
-		align-items: center;
-		gap: 0.75rem;
+		align-items: baseline;
+		gap: 0.4375rem;
 		flex-wrap: wrap;
-		margin-top: 1.5rem;
-		padding-top: 0.625rem;
-		border-top: 1px solid var(--surface-border);
-		font-size: 0.6875rem;
+		font-size: 0.8125rem;
+		line-height: 1.5;
+		color: color-mix(in srgb, var(--center-channel-color) 55%, transparent);
+		margin: 0;
 	}
 
-	.dep-meta-source {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.25rem;
-		font-family: var(--font-mono);
-		font-size: 0.6875rem;
-		color: var(--surface-muted);
+	.dep-meta-mono {
+		font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+		font-weight: 600;
+		color: color-mix(in srgb, var(--center-channel-color) 80%, transparent);
+	}
+
+	.dep-meta-dot {
+		opacity: 0.6;
+	}
+
+	.dep-meta-strong {
+		font-weight: 600;
+		color: var(--center-channel-color);
+	}
+
+	.dep-meta-link {
+		color: color-mix(in srgb, var(--center-channel-color) 80%, transparent);
 		text-decoration: none;
+		font-weight: 600;
 		transition: color 0.12s;
 	}
-	a.dep-meta-source:hover {
-		color: var(--link-color);
+	.dep-meta-link:hover {
+		color: var(--center-channel-color);
+		text-decoration: underline;
+		text-underline-offset: 3px;
 	}
 
-	.dep-meta-pill {
-		display: inline-flex;
-		padding: 0.0625rem 0.375rem;
-		border-radius: 9999px;
-		font-size: 0.625rem;
-		font-weight: 550;
-		background-color: var(--sidebar-text-active-bg);
-		color: var(--sidebar-text-active-color);
-	}
-
-	.dep-meta-item {
-		color: var(--surface-muted);
-		font-size: 0.75rem;
-	}
-	.dep-meta-item::before {
-		content: '·';
-		margin-right: 0.5rem;
-		opacity: 0.4;
+	.dep-meta-button {
+		background: none;
+		border: none;
+		padding: 0;
+		font: inherit;
+		cursor: pointer;
 	}
 
 	.dep-meta-domain {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.25rem;
-		color: var(--link-color);
+		gap: 0.3125rem;
+		color: var(--center-channel-color);
 		text-decoration: none;
-		font-size: 0.6875rem;
+		font-size: 0.8125rem;
 		font-weight: 500;
 		transition: opacity 0.12s;
 	}
+	.dep-meta-domain-icon {
+		opacity: 0.5;
+		transition: opacity 0.12s;
+	}
 	.dep-meta-domain:hover {
-		opacity: 0.8;
+		text-decoration: underline;
+		text-underline-offset: 4px;
+	}
+	.dep-meta-domain:hover .dep-meta-domain-icon {
+		opacity: 1;
 	}
 
 	/* ===== Tab nav ===== */
@@ -6815,6 +7077,309 @@
 	.env-footer-hint {
 		font-size: 0.75rem;
 		color: var(--surface-muted);
+	}
+
+	/* ── Active deployment (merged into dep-header card) ── */
+	.dep-header-card--live {
+		border-left: 4px solid #22c55e;
+	}
+
+	.dep-header-card--building {
+		border-left: 4px solid #f59e0b;
+	}
+
+	.dep-header-card--failed {
+		border-left: 4px solid #ef4444;
+	}
+
+	/* ── Deployments list (Vercel-style) ── */
+	.dep-list-header {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 1rem 1.25rem;
+		border-bottom: 1px solid var(--surface-border);
+	}
+
+	.dep-list-table {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.dep-list-row {
+		display: grid;
+		grid-template-columns: 96px 140px 110px minmax(0, 1fr) 130px 80px;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.875rem 1.25rem;
+		border-bottom: 1px solid var(--surface-border);
+		transition: background-color 0.15s;
+		min-width: 0;
+	}
+
+	.dep-list-row:last-child {
+		border-bottom: none;
+	}
+
+	.dep-list-row:not(.dep-list-row--head):hover {
+		background-color: color-mix(in srgb, var(--surface-border) 25%, transparent);
+	}
+
+	.dep-list-row--head {
+		font-size: 0.6875rem;
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--surface-muted);
+		padding: 0.625rem 1.25rem;
+		background-color: color-mix(in srgb, var(--surface-border) 15%, transparent);
+	}
+
+	.dep-list-row--head:hover {
+		background-color: color-mix(in srgb, var(--surface-border) 15%, transparent);
+	}
+
+	.dep-list-row--active {
+		background-color: color-mix(in srgb, #22c55e 5%, transparent);
+	}
+
+	.dep-list-row--active:hover {
+		background-color: color-mix(in srgb, #22c55e 10%, transparent);
+	}
+
+	.dep-status {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4375rem;
+		min-width: 0;
+	}
+
+	.dep-status-dot {
+		width: 0.5rem;
+		height: 0.5rem;
+		border-radius: 50%;
+		flex-shrink: 0;
+	}
+
+	.dep-status-dot--ready {
+		background-color: #22c55e;
+	}
+
+	.dep-status-dot--live {
+		box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.2);
+	}
+
+	.dep-status-dot--failed {
+		background-color: #ef4444;
+		box-shadow: 0 0 0 3px rgba(239, 68, 68, 0.15);
+	}
+
+	.dep-status-dot--building {
+		background-color: #f59e0b;
+		box-shadow: 0 0 0 3px rgba(245, 158, 11, 0.18);
+		animation: dep-pulse 1.4s ease-in-out infinite;
+	}
+
+	@keyframes dep-pulse {
+		0%, 100% { opacity: 1; }
+		50% { opacity: 0.4; }
+	}
+
+	.dep-status-label {
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--center-channel-color);
+	}
+
+	.dep-col-id {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		min-width: 0;
+	}
+
+	.dep-short-id {
+		font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+		font-size: 0.8125rem;
+		font-weight: 600;
+		color: var(--center-channel-color);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.dep-short-id--placeholder {
+		color: var(--surface-muted);
+		font-weight: 400;
+	}
+
+	.dep-current-pill {
+		font-size: 0.5625rem;
+		font-weight: 800;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		padding: 0.125rem 0.375rem;
+		border-radius: 0.25rem;
+		background-color: color-mix(in srgb, #22c55e 18%, transparent);
+		color: #15803d;
+		border: 1px solid color-mix(in srgb, #22c55e 35%, transparent);
+	}
+
+	.dep-env-pill {
+		display: inline-flex;
+		align-items: center;
+		font-size: 0.6875rem;
+		font-weight: 600;
+		padding: 0.1875rem 0.5rem;
+		border-radius: 0.375rem;
+		border: 1px solid var(--surface-border);
+		background-color: color-mix(in srgb, var(--surface-border) 30%, transparent);
+		color: var(--center-channel-color);
+	}
+
+	.dep-env-pill--production {
+		background-color: color-mix(in srgb, #22c55e 12%, transparent);
+		border-color: color-mix(in srgb, #22c55e 30%, transparent);
+		color: #15803d;
+	}
+
+	.dep-env-pill--preview {
+		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
+		color: var(--surface-muted);
+	}
+
+	.dep-commit-stack {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+		min-width: 0;
+	}
+
+	.dep-commit-msg {
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--center-channel-color);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.dep-commit-msg--muted {
+		color: var(--surface-muted);
+		font-style: italic;
+	}
+
+	.dep-commit-meta {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		flex-wrap: wrap;
+		min-width: 0;
+	}
+
+	.dep-mini-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.1875rem;
+		font-size: 0.625rem;
+		font-weight: 600;
+		padding: 0.0625rem 0.3125rem;
+		border-radius: 0.25rem;
+		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);
+		border: 1px solid var(--surface-border);
+		color: var(--center-channel-color);
+		opacity: 0.8;
+		text-decoration: none;
+	}
+
+	.dep-mini-chip--link:hover {
+		opacity: 1;
+		border-color: color-mix(in srgb, var(--sidebar-text-active-border) 40%, var(--surface-border));
+	}
+
+	.dep-meta-text {
+		font-size: 0.75rem;
+		color: var(--center-channel-color);
+		opacity: 0.85;
+		display: block;
+	}
+
+	.dep-meta-sub {
+		font-size: 0.6875rem;
+		color: var(--surface-muted);
+		display: block;
+		margin-top: 0.125rem;
+	}
+
+	.dep-meta-user {
+		font-weight: 600;
+		color: var(--center-channel-color);
+		opacity: 0.9;
+	}
+
+	.dep-col-actions {
+		display: flex;
+		align-items: center;
+		justify-content: flex-end;
+		gap: 0.25rem;
+		opacity: 0.4;
+		transition: opacity 0.15s;
+	}
+
+	.dep-list-row:hover .dep-col-actions {
+		opacity: 1;
+	}
+
+	.dep-action-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: 0.375rem;
+		background: transparent;
+		border: 1px solid transparent;
+		color: var(--center-channel-color);
+		cursor: pointer;
+		transition: background-color 0.12s, border-color 0.12s;
+	}
+
+	.dep-action-btn:hover {
+		background-color: color-mix(in srgb, var(--surface-border) 60%, transparent);
+		border-color: var(--surface-border);
+	}
+
+	.dep-action-btn--primary:hover {
+		border-color: color-mix(in srgb, var(--sidebar-text-active-border) 50%, var(--surface-border));
+		color: var(--sidebar-text-active-border);
+	}
+
+	.dep-list-empty {
+		text-align: center;
+		padding: 3rem 1.5rem;
+	}
+
+	@media (max-width: 900px) {
+		.dep-list-row {
+			grid-template-columns: 90px 1fr 70px;
+			grid-template-areas:
+				'status id actions'
+				'status commit commit'
+				'status meta meta';
+			row-gap: 0.375rem;
+		}
+		.dep-list-row--head .dep-col-env,
+		.dep-list-row--head .dep-col-commit,
+		.dep-list-row--head .dep-col-meta {
+			display: none;
+		}
+		.dep-col-status { grid-area: status; align-self: start; }
+		.dep-col-id { grid-area: id; }
+		.dep-col-env { display: none; }
+		.dep-col-commit { grid-area: commit; }
+		.dep-col-meta { grid-area: meta; }
+		.dep-col-actions { grid-area: actions; }
 	}
 
 	/* ── Build history cards ── */
