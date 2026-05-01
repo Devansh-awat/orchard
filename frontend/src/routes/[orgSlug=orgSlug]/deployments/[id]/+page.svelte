@@ -47,9 +47,65 @@
 
 	let Line: any = $state(null);
 
+	// Cached hatch pattern for "pending" regions (drawn over the parts of the
+	// chart x-range that are outside the available data extent).
+	let hatchPattern: CanvasPattern | null = null;
+	let hatchPatternStroke: string | null = null;
+	function getHatchPattern(ctx: CanvasRenderingContext2D, stroke: string): CanvasPattern | null {
+		if (hatchPattern && hatchPatternStroke === stroke) return hatchPattern;
+		const tile = document.createElement('canvas');
+		tile.width = 8;
+		tile.height = 8;
+		const tctx = tile.getContext('2d');
+		if (!tctx) return null;
+		tctx.strokeStyle = stroke;
+		tctx.lineWidth = 1;
+		tctx.beginPath();
+		tctx.moveTo(-1, 9); tctx.lineTo(9, -1);
+		tctx.moveTo(-1, 17); tctx.lineTo(17, -1);
+		tctx.moveTo(-9, 1); tctx.lineTo(1, -9);
+		tctx.stroke();
+		hatchPattern = ctx.createPattern(tile, 'repeat');
+		hatchPatternStroke = stroke;
+		return hatchPattern;
+	}
+
+	const pendingRegionsPlugin = {
+		id: 'pendingRegions',
+		beforeDatasetsDraw(chart: any, _args: any, options: any) {
+			if (!options) return;
+			const { ctx, chartArea, scales } = chart;
+			const xs = scales?.x;
+			if (!xs || !chartArea) return;
+			const { top, bottom } = chartArea;
+			const xMin = xs.min as number;
+			const xMax = xs.max as number;
+			const dataMin = options.dataMin as number | null | undefined;
+			const dataMax = options.dataMax as number | null | undefined;
+			const stroke = options.stroke as string;
+			const pattern = getHatchPattern(ctx, stroke);
+			if (!pattern) return;
+			ctx.save();
+			ctx.fillStyle = pattern;
+			// Left pending region: from xMin to first data point (or full range if no data)
+			if (dataMin == null || dataMin > xMin) {
+				const left = xs.getPixelForValue(xMin);
+				const right = xs.getPixelForValue(dataMin ?? xMax);
+				if (right > left) ctx.fillRect(left, top, right - left, bottom - top);
+			}
+			// Right pending region: from last data point to xMax (always = now)
+			if (dataMax != null && dataMax < xMax) {
+				const left = xs.getPixelForValue(dataMax);
+				const right = xs.getPixelForValue(xMax);
+				if (right > left) ctx.fillRect(left, top, right - left, bottom - top);
+			}
+			ctx.restore();
+		},
+	};
+
 	if (browser) {
 		import('chart.js').then(({ Chart, LinearScale, PointElement, LineElement, Filler, Tooltip }) => {
-			Chart.register(LinearScale, PointElement, LineElement, Filler, Tooltip);
+			Chart.register(LinearScale, PointElement, LineElement, Filler, Tooltip, pendingRegionsPlugin);
 		}).catch(() => { /* chunk may be stale after deploy */ });
 		import('svelte5-chartjs').then((mod) => {
 			Line = mod.Line;
@@ -103,6 +159,13 @@
 		if (diffH < 24) return `${diffH}h ${diffM % 60}m ago`;
 		const diffD = Math.floor(diffH / 24);
 		return `${diffD}d ago`;
+	}
+
+	function formatBuildDurationBetween(startedAt?: string, completedAt?: string): string | null {
+		if (!startedAt || !completedAt) return null;
+		const ms = new Date(completedAt).getTime() - new Date(startedAt).getTime();
+		if (!isFinite(ms) || ms < 0) return null;
+		return formatBuildDuration(Math.round(ms / 1000));
 	}
 
 	const ansi = new AnsiUp();
@@ -214,6 +277,10 @@
 		branch?: string;
 		commitSha?: string;
 		commitMessage?: string;
+		commitAuthorName?: string;
+		commitAuthorUsername?: string;
+		buildStartedAt?: string;
+		buildCompletedAt?: string;
 		createdAt: string;
 		isActive: boolean;
 		triggerType?: string;
@@ -444,6 +511,7 @@
 	// Metrics history for time-series charts
 	let metricsHistory = $state<Array<{ time: Date; cpu: number | null; memory: number | null }>>([]);
 	let metricsTimeRange = $state<'5m' | '15m' | '30m' | '1h'>('30m');
+	let expandedMetric = $state<'cpu' | 'memory' | null>(null);
 
 	const timeRangeMs = $derived({
 		'5m': 5 * 60 * 1000,
@@ -487,9 +555,13 @@
 		return { muted, gridLine: border };
 	}
 
-	function makeChartOptions(yTickSuffix: string) {
+	function makeChartOptions(yTickSuffix: string, yAxisLabel: string, verbose: boolean) {
 		const now = Date.now();
 		const theme = getThemeColors();
+		const dataMin = filteredMetrics.length ? filteredMetrics[0].time.getTime() : null;
+		const dataMax = filteredMetrics.length ? filteredMetrics[filteredMetrics.length - 1].time.getTime() : null;
+		// canvas patterns can't resolve CSS color-mix() — use a fixed muted stroke
+		const hatchFallback = 'rgba(140, 140, 140, 0.35)';
 		return {
 			responsive: true,
 			maintainAspectRatio: false,
@@ -497,9 +569,10 @@
 			scales: {
 				x: {
 					type: 'linear' as const,
-					display: true,
+					display: verbose,
 					min: now - timeRangeMs,
 					max: now,
+					title: verbose ? { display: true, text: 'Time', font: { size: 11, weight: '500' as const }, color: theme.muted } : undefined,
 					ticks: {
 						maxTicksToShow: 6,
 						maxRotation: 0,
@@ -514,10 +587,11 @@
 					border: { display: false },
 				},
 				y: {
-					display: true,
+					display: verbose,
 					beginAtZero: true,
+					title: verbose ? { display: true, text: yAxisLabel, font: { size: 11, weight: '500' as const }, color: theme.muted } : undefined,
 					ticks: { font: { size: 10 }, color: theme.muted, callback: (v: number) => v + yTickSuffix },
-					grid: { color: theme.gridLine },
+					grid: { color: theme.gridLine, display: verbose },
 					border: { display: false },
 				},
 			},
@@ -537,6 +611,11 @@
 						},
 					},
 				},
+				pendingRegions: {
+					dataMin,
+					dataMax,
+					stroke: hatchFallback,
+				},
 			},
 			elements: {
 				point: { radius: 0, hoverRadius: 4 },
@@ -545,8 +624,10 @@
 		};
 	}
 
-	const cpuChartOptions = $derived(makeChartOptions('m'));
-	const memoryChartOptions = $derived(makeChartOptions(' MB'));
+	const cpuChartOptions = $derived(makeChartOptions('m', 'CPU (millicores)', false));
+	const memoryChartOptions = $derived(makeChartOptions(' MB', 'Memory (MB)', false));
+	const cpuChartOptionsExpanded = $derived(makeChartOptions('m', 'CPU (millicores)', true));
+	const memoryChartOptionsExpanded = $derived(makeChartOptions(' MB', 'Memory (MB)', true));
 
 	// Computed properties for template compatibility with API field names
 	const repoUrl = $derived(deployment?.githubRepo);
@@ -559,10 +640,63 @@
 		const rect = notifBtnEl.getBoundingClientRect();
 		return { top: rect.bottom, left: Math.max(8, rect.right - 380) };
 	});
-	const notificationCount = $derived(
-		(deployment?.warnings?.length ?? 0) +
-		(deployment?.buildStatus === 'failed' && (deployment?.buildError || deployment?.buildLogs) ? 1 : 0)
-	);
+
+	let dismissedNotifications = $state<Set<string>>(new Set());
+
+	function dismissedStorageKey(): string | null {
+		return deployment?.id ? `dismissedNotifs:${deployment.id}` : null;
+	}
+
+	function loadDismissedNotifications() {
+		if (!browser) return;
+		const key = dismissedStorageKey();
+		if (!key) return;
+		try {
+			const raw = localStorage.getItem(key);
+			dismissedNotifications = new Set(raw ? (JSON.parse(raw) as string[]) : []);
+		} catch {
+			dismissedNotifications = new Set();
+		}
+	}
+
+	function persistDismissedNotifications() {
+		if (!browser) return;
+		const key = dismissedStorageKey();
+		if (!key) return;
+		try {
+			localStorage.setItem(key, JSON.stringify([...dismissedNotifications]));
+		} catch {
+			// ignore quota errors
+		}
+	}
+
+	function dismissNotification(id: string) {
+		const next = new Set(dismissedNotifications);
+		next.add(id);
+		dismissedNotifications = next;
+		persistDismissedNotifications();
+	}
+
+	function buildFailedNotifId(d: { buildError?: string | null; buildLogs?: string | null } | null | undefined): string {
+		const err = (d?.buildError ?? '').trim().slice(0, 120);
+		const logsLen = d?.buildLogs?.length ?? 0;
+		return `bf:${err}:${logsLen}`;
+	}
+
+	function podWarningNotifId(w: { podName: string; message: string; timestamp?: string }): string {
+		return `pw:${w.podName}:${w.message}:${w.timestamp ?? ''}`;
+	}
+
+	const notificationCount = $derived.by(() => {
+		let n = 0;
+		if (deployment?.buildStatus === 'failed' && (deployment?.buildError || deployment?.buildLogs)) {
+			if (!dismissedNotifications.has(buildFailedNotifId(deployment))) n++;
+		}
+		for (const w of deployment?.warnings ?? []) {
+			if (!dismissedNotifications.has(podWarningNotifId(w))) n++;
+		}
+		return n;
+	});
 	const activePods = $derived(deployment?.pods?.filter((pod) => pod.status?.toLowerCase() !== 'succeeded') ?? []);
 
 	let deletingPod = $state<string | null>(null);
@@ -1305,7 +1439,9 @@
 				startBuildPolling();
 			}
 
+			const wasUnloaded = !deployment;
 			deployment = data;
+			if (wasUnloaded) loadDismissedNotifications();
 
 			// Sync Tailscale state
 			tailscaleHostname = data.tailscaleHostname || null;
@@ -2818,6 +2954,17 @@
 		{@const _activeBuild = deployment.imageHistory?.find((h) => h.isActive)}
 		{@const _isBuilding = deployment.buildStatus === 'building' || deployment.buildStatus === 'queued' || deployment.buildStatus === 'pending'}
 		{@const _buildFailed = deployment.buildStatus === 'failed'}
+		{@const _activeFallbackMsg = _activeBuild?.commitSha
+			? deployment.imageHistory?.find((h) => h.commitMessage && h.commitSha === _activeBuild.commitSha)?.commitMessage
+			: undefined}
+		{@const _commitLead = deployment.githubRepo
+			? (_activeBuild
+				? (_activeBuild.commitMessage || _activeFallbackMsg || null)
+				: (_isBuilding
+					? `Building from ${deployment.githubBranch || 'main'}…`
+					: (_buildFailed ? 'Last build failed' : null)))
+			: (deployment.image || null)}
+		{@const _commitLeadMono = !deployment.githubRepo && !!deployment.image}
 		<div class="space-y-5">
 			<!-- Header: deployment identity + status + actions + active build -->
 			<section
@@ -2837,33 +2984,9 @@
 				{/if}
 				<div class="dep-header-top">
 					<div class="dep-header-identity">
-						<div class="dep-header-headline">
-							{#if deployment.githubRepo}
-								{#if _activeBuild}
-									{@const fallbackMsg = _activeBuild.commitSha
-										? deployment.imageHistory?.find((h) => h.commitMessage && h.commitSha === _activeBuild.commitSha)?.commitMessage
-										: undefined}
-									{@const displayMsg = _activeBuild.commitMessage || fallbackMsg}
-									{#if displayMsg}
-										<h1 class="dep-header-commit-msg">{displayMsg}</h1>
-									{:else if _activeBuild.branch}
-										<h1 class="dep-header-commit-msg dep-header-commit-msg--muted">Deployed from {_activeBuild.branch}</h1>
-									{:else}
-										<h1 class="dep-header-commit-msg dep-header-commit-msg--muted">Deployment {_activeBuild.id.replace(/-/g, '').slice(0, 9)}</h1>
-									{/if}
-								{:else if _isBuilding}
-									<h1 class="dep-header-commit-msg">Building from {deployment.githubBranch || 'main'}…</h1>
-								{:else if _buildFailed}
-									<h1 class="dep-header-commit-msg dep-header-commit-msg--muted">No active deployment — last build failed</h1>
-								{:else}
-									<h1 class="dep-header-commit-msg dep-header-commit-msg--muted">No deployments yet</h1>
-								{/if}
-							{:else if deployment.image}
-								<h1 class="dep-header-commit-msg dep-header-commit-msg--mono">{deployment.image}</h1>
-							{:else}
-								<h1 class="dep-header-commit-msg">{deployment.name}</h1>
-							{/if}
-						</div>
+						<h1 class="dep-header-name">{deployment.name}</h1>
+					</div>
+					<div class="dep-header-actions">
 						{#if notificationCount > 0}
 							<div class="relative">
 								<button
@@ -2888,62 +3011,85 @@
 										</div>
 										<div class="notification-scroll">
 											{#if deployment.buildStatus === 'failed' && (deployment.buildError || deployment.buildLogs)}
-												<div class="notification-item">
-													<div class="flex items-start gap-3">
-														<div class="notification-icon notification-icon-error">
-															<CircleX class="h-4 w-4" />
-														</div>
-														<div class="flex-1 min-w-0">
-															<p class="text-xs font-semibold" style="color: var(--error-text-color);">Build failed</p>
-															{#if deployment.buildError}
-																<p class="mt-1 text-xs font-mono truncate" style="color: var(--surface-muted);">{sanitizeLogs(deployment.buildError).split('\n')[0]}</p>
-															{/if}
-															{#if deployment.buildLogs}
-																<button
-																	class="mt-1.5 text-[11px] font-medium hover:underline"
-																	style="color: var(--primary-color);"
-																	onclick={() => {
-																		notificationsOpen = false;
-																		buildModalStatus = 'failed';
-																		buildModalError = deployment.buildError ?? null;
-																		accumulatedBuildLogs = deployment.buildLogs ?? null;
-																		buildModalStep = null;
-																		buildModalWarnings = [];
-																		buildModalTimestamps = deployment.buildStepTimestamps ?? null;
-																		showBuildModal = true;
-																	}}
-																>View build logs</button>
-															{/if}
+												{@const _bfId = buildFailedNotifId(deployment)}
+												{#if !dismissedNotifications.has(_bfId)}
+													<div class="notification-item">
+														<div class="flex items-start gap-3">
+															<div class="notification-icon notification-icon-error">
+																<CircleX class="h-4 w-4" />
+															</div>
+															<div class="flex-1 min-w-0">
+																<p class="text-xs font-semibold" style="color: var(--error-text-color);">Build failed</p>
+																{#if deployment.buildError}
+																	<p class="mt-1 text-xs font-mono truncate" style="color: var(--surface-muted);">{sanitizeLogs(deployment.buildError).split('\n')[0]}</p>
+																{/if}
+																{#if deployment.buildLogs}
+																	<button
+																		class="mt-1.5 text-[11px] font-medium hover:underline"
+																		style="color: var(--primary-color);"
+																		onclick={() => {
+																			notificationsOpen = false;
+																			buildModalStatus = 'failed';
+																			buildModalError = deployment.buildError ?? null;
+																			accumulatedBuildLogs = deployment.buildLogs ?? null;
+																			buildModalStep = null;
+																			buildModalWarnings = [];
+																			buildModalTimestamps = deployment.buildStepTimestamps ?? null;
+																			showBuildModal = true;
+																		}}
+																	>View build logs</button>
+																{/if}
+															</div>
+															<button
+																class="notification-dismiss"
+																title="Dismiss"
+																aria-label="Dismiss notification"
+																onclick={() => dismissNotification(_bfId)}
+															>
+																<X class="h-3 w-3" />
+															</button>
 														</div>
 													</div>
-												</div>
+												{/if}
 											{/if}
 											{#if deployment.warnings?.length}
 												{#each deployment.warnings as warning}
-													<div class="notification-item">
-														<div class="flex items-start gap-3">
-															<div class="notification-icon notification-icon-warning">
-																<AlertTriangle class="h-4 w-4" />
-															</div>
-															<div class="flex-1 min-w-0">
-																<p class="text-xs font-semibold" style="color: var(--warning-text);">Pod warning</p>
-																<p class="mt-0.5 font-mono text-xs font-medium" style="color: var(--surface-muted);">{warning.podName}</p>
-																<p class="mt-0.5 text-xs" style="color: var(--center-channel-color); opacity: 0.75;">{warning.message}</p>
-																{#if warning.timestamp}
-																	<p class="mt-1 text-[10px]" style="color: var(--surface-muted);">{new Date(warning.timestamp).toLocaleTimeString()}</p>
-																{/if}
+													{@const _pwId = podWarningNotifId(warning)}
+													{#if !dismissedNotifications.has(_pwId)}
+														<div class="notification-item">
+															<div class="flex items-start gap-3">
+																<div class="notification-icon notification-icon-warning">
+																	<AlertTriangle class="h-4 w-4" />
+																</div>
+																<div class="flex-1 min-w-0">
+																	<p class="text-xs font-semibold" style="color: var(--warning-text);">Pod warning</p>
+																	<p class="mt-0.5 font-mono text-xs font-medium" style="color: var(--surface-muted);">{warning.podName}</p>
+																	<p class="mt-0.5 text-xs" style="color: var(--center-channel-color); opacity: 0.75;">{warning.message}</p>
+																	{#if warning.timestamp}
+																		<p class="mt-1 text-[10px]" style="color: var(--surface-muted);">{new Date(warning.timestamp).toLocaleTimeString()}</p>
+																	{/if}
+																</div>
+																<button
+																	class="notification-dismiss"
+																	title="Dismiss"
+																	aria-label="Dismiss notification"
+																	onclick={() => dismissNotification(_pwId)}
+																>
+																	<X class="h-3 w-3" />
+																</button>
 															</div>
 														</div>
-													</div>
+													{/if}
 												{/each}
+											{/if}
+											{#if notificationCount === 0}
+												<p class="notification-empty">No notifications</p>
 											{/if}
 										</div>
 									</div>
 								{/if}
 							</div>
 						{/if}
-					</div>
-					<div class="dep-header-actions">
 						{#if repoUrl}
 							<button onclick={rebuild} disabled={rebuilding || _isBuilding} class="btn btn-secondary btn-sm">
 								{#if rebuilding}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw class="h-3.5 w-3.5" />{/if}
@@ -2963,27 +3109,28 @@
 				<!-- Body: meta + domains -->
 				<div class="dep-header-body">
 					<p class="dep-header-meta">
+						{#if _commitLead}
+							{#if deployment.githubRepo && _activeBuild?.commitSha}
+								<a
+									href="{deployment.githubRepo.replace(/\.git$/, '')}/commit/{_activeBuild.commitSha}"
+									target="_blank"
+									rel="noopener noreferrer"
+									class="dep-meta-lead dep-meta-lead-link"
+									class:dep-meta-mono={_commitLeadMono}
+								>{_commitLead}</a>
+							{:else}
+								<span class="dep-meta-lead" class:dep-meta-mono={_commitLeadMono}>{_commitLead}</span>
+							{/if}
+						{/if}
 						{#if deployment.githubRepo}
-							<a href={deployment.githubRepo} target="_blank" rel="noopener noreferrer" class="dep-meta-link">
+							{#if _commitLead}<span class="dep-meta-dot">·</span>{/if}
+							<a href={deployment.githubRepo.replace(/\.git$/, '')} target="_blank" rel="noopener noreferrer" class="dep-meta-link">
 								{deployment.githubRepo.replace('https://github.com/', '').replace(/\.git$/, '')}
 							</a>
 						{/if}
 						{#if _activeBuild?.branch || branch}
 							{#if deployment.githubRepo}<span class="dep-meta-dot">·</span>{/if}
 							<span class="dep-meta-mono">{_activeBuild?.branch || branch}</span>
-						{/if}
-						{#if _activeBuild?.commitSha}
-							<span class="dep-meta-dot">·</span>
-							{#if deployment.githubRepo}
-								<a
-									href="{deployment.githubRepo}/commit/{_activeBuild.commitSha}"
-									target="_blank"
-									rel="noopener noreferrer"
-									class="dep-meta-link dep-meta-mono"
-								>{_activeBuild.commitSha.slice(0, 7)}</a>
-							{:else}
-								<span class="dep-meta-mono">{_activeBuild.commitSha.slice(0, 7)}</span>
-							{/if}
 						{/if}
 						{#if _activeBuild}
 							<span class="dep-meta-dot">·</span>
@@ -3260,30 +3407,58 @@
 									<div class="stat-card-header">
 										<Cpu class="h-3.5 w-3.5" style="color: #b33346;" />
 										<span class="stat-card-label">CPU</span>
+										<button
+											class="stat-card-expand"
+											title="Expand"
+											aria-label="Expand CPU chart"
+											onclick={() => (expandedMetric = 'cpu')}
+										>
+											<Maximize2 class="h-3 w-3" />
+										</button>
 									</div>
 									<p class="stat-card-value">{formatCpu(deployment.totalCpuUsage)}</p>
-									{#if filteredMetrics.length > 1}
-										<div class="stat-card-chart">
-											{#if Line}
-												<svelte:component this={Line} data={cpuChartData} options={cpuChartOptions} />
-											{/if}
-										</div>
-									{/if}
+									<div class="stat-card-chart">
+										{#if filteredMetrics.length > 1 && Line}
+											<svelte:component this={Line} data={cpuChartData} options={cpuChartOptions} />
+										{:else}
+											<div class="stat-card-pending" aria-live="polite">
+												<div class="stat-card-pending-grid" aria-hidden="true"></div>
+												<div class="stat-card-pending-label">
+													<Loader2 class="h-3 w-3 animate-spin" />
+													<span>{filteredMetrics.length === 0 ? 'Waiting for first metric…' : 'Collecting metrics…'}</span>
+												</div>
+											</div>
+										{/if}
+									</div>
 								</div>
 
 								<div class="stat-card">
 									<div class="stat-card-header">
 										<MemoryStick class="h-3.5 w-3.5" style="color: #e87485;" />
 										<span class="stat-card-label">Memory</span>
+										<button
+											class="stat-card-expand"
+											title="Expand"
+											aria-label="Expand memory chart"
+											onclick={() => (expandedMetric = 'memory')}
+										>
+											<Maximize2 class="h-3 w-3" />
+										</button>
 									</div>
 									<p class="stat-card-value">{formatMemory(deployment.totalMemoryUsage)}</p>
-									{#if filteredMetrics.length > 1}
-										<div class="stat-card-chart">
-											{#if Line}
-												<svelte:component this={Line} data={memoryChartData} options={memoryChartOptions} />
-											{/if}
-										</div>
-									{/if}
+									<div class="stat-card-chart">
+										{#if filteredMetrics.length > 1 && Line}
+											<svelte:component this={Line} data={memoryChartData} options={memoryChartOptions} />
+										{:else}
+											<div class="stat-card-pending" aria-live="polite">
+												<div class="stat-card-pending-grid" aria-hidden="true"></div>
+												<div class="stat-card-pending-label">
+													<Loader2 class="h-3 w-3 animate-spin" />
+													<span>{filteredMetrics.length === 0 ? 'Waiting for first metric…' : 'Collecting metrics…'}</span>
+												</div>
+											</div>
+										{/if}
+									</div>
 								</div>
 
 								<!-- Time range selector -->
@@ -3964,7 +4139,7 @@
 									<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Deployments</p>
 									<p class="text-xs mt-0.5" style="color: var(--surface-muted);">
 										{#if deployment.githubRepo}
-											History of every build for <span class="font-mono">{deployment.githubRepo.replace('https://github.com/', '')}</span>
+											History of every build for <span class="font-mono">{deployment.githubRepo.replace('https://github.com/', '').replace(/\.git$/, '')}</span>
 										{:else}
 											History of every build
 										{/if}
@@ -3982,9 +4157,9 @@
 								<div class="dep-list-table">
 									<div class="dep-list-row dep-list-row--head">
 										<div class="dep-col-status">Status</div>
-										<div class="dep-col-id">Deployment</div>
-										<div class="dep-col-env">Environment</div>
 										<div class="dep-col-commit">Commit</div>
+										<div class="dep-col-built">Built</div>
+										<div class="dep-col-author">Author</div>
 										<div class="dep-col-meta">Created</div>
 										<div class="dep-col-actions"></div>
 									</div>
@@ -3997,12 +4172,6 @@
 													<span class="dep-status-label">Building</span>
 												</span>
 											</div>
-											<div class="dep-col-id">
-												<span class="dep-short-id dep-short-id--placeholder">—</span>
-											</div>
-											<div class="dep-col-env">
-												<span class="dep-env-pill dep-env-pill--preview">Preview</span>
-											</div>
 											<div class="dep-col-commit">
 												<div class="dep-commit-stack">
 													<span class="dep-commit-msg dep-commit-msg--muted">Build in progress…</span>
@@ -4010,6 +4179,12 @@
 														<span class="dep-mini-chip"><GitBranch class="h-2.5 w-2.5" />{deployment.githubBranch || 'main'}</span>
 													</div>
 												</div>
+											</div>
+											<div class="dep-col-built">
+												<span class="dep-meta-text dep-meta-text--placeholder">—</span>
+											</div>
+											<div class="dep-col-author">
+												<span class="dep-meta-text dep-meta-text--placeholder">—</span>
 											</div>
 											<div class="dep-col-meta">
 												<span class="dep-meta-text">just now</span>
@@ -4028,12 +4203,6 @@
 													<span class="dep-status-label" style="color: #ef4444;">Error</span>
 												</span>
 											</div>
-											<div class="dep-col-id">
-												<span class="dep-short-id dep-short-id--placeholder">—</span>
-											</div>
-											<div class="dep-col-env">
-												<span class="dep-env-pill dep-env-pill--preview">Preview</span>
-											</div>
 											<div class="dep-col-commit">
 												<div class="dep-commit-stack">
 													<span class="dep-commit-msg" style="color: #ef4444;">Build failed</span>
@@ -4043,6 +4212,12 @@
 														</div>
 													{/if}
 												</div>
+											</div>
+											<div class="dep-col-built">
+												<span class="dep-meta-text dep-meta-text--placeholder">—</span>
+											</div>
+											<div class="dep-col-author">
+												<span class="dep-meta-text dep-meta-text--placeholder">—</span>
 											</div>
 											<div class="dep-col-meta">
 												<span class="dep-meta-text">recently</span>
@@ -4077,28 +4252,21 @@
 											if (days < 30) return `${days}d ago`;
 											return new Date(history.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 										})()}
-										{@const shortId = history.id.replace(/-/g, '').slice(0, 9)}
 										{@const rowFallbackMsg = history.commitSha
 											? deployment.imageHistory?.find((h) => h.commitMessage && h.commitSha === history.commitSha)?.commitMessage
 											: undefined}
 										{@const rowDisplayMsg = history.commitMessage || rowFallbackMsg}
+										{@const rowBuildDuration = formatBuildDurationBetween(history.buildStartedAt, history.buildCompletedAt)}
+										{@const rowAuthor = history.commitAuthorUsername || history.commitAuthorName || null}
 										<div class="dep-list-row" class:dep-list-row--active={history.isActive} transition:slide={{ duration: 150 }}>
 											<div class="dep-col-status">
 												<span class="dep-status">
 													<span class="dep-status-dot dep-status-dot--ready" class:dep-status-dot--live={history.isActive}></span>
 													<span class="dep-status-label">Ready</span>
 												</span>
-											</div>
-											<div class="dep-col-id">
-												<span class="dep-short-id">{shortId}</span>
 												{#if history.isActive}
 													<span class="dep-current-pill">Current</span>
 												{/if}
-											</div>
-											<div class="dep-col-env">
-												<span class="dep-env-pill" class:dep-env-pill--production={history.isActive} class:dep-env-pill--preview={!history.isActive}>
-													{history.isActive ? 'Production' : 'Preview'}
-												</span>
 											</div>
 											<div class="dep-col-commit">
 												<div class="dep-commit-stack">
@@ -4115,7 +4283,7 @@
 														{/if}
 														{#if history.commitSha && deployment.githubRepo}
 															<a
-																href="{deployment.githubRepo}/commit/{history.commitSha}"
+																href="{deployment.githubRepo.replace(/\.git$/, '')}/commit/{history.commitSha}"
 																target="_blank"
 																rel="noopener noreferrer"
 																class="dep-mini-chip dep-mini-chip--link"
@@ -4132,6 +4300,22 @@
 														{/if}
 													</div>
 												</div>
+											</div>
+											<div class="dep-col-built">
+												{#if rowBuildDuration}
+													<span class="dep-meta-text dep-meta-text--mono">{rowBuildDuration}</span>
+												{:else}
+													<span class="dep-meta-text dep-meta-text--placeholder">—</span>
+												{/if}
+											</div>
+											<div class="dep-col-author">
+												{#if rowAuthor}
+													<span class="dep-meta-text dep-meta-author">
+														{history.commitAuthorUsername ? `@${history.commitAuthorUsername}` : rowAuthor}
+													</span>
+												{:else}
+													<span class="dep-meta-text dep-meta-text--placeholder">—</span>
+												{/if}
 											</div>
 											<div class="dep-col-meta">
 												<span class="dep-meta-text">{timeAgo}</span>
@@ -4859,6 +5043,71 @@
 	/>
 {/if}
 
+{#if expandedMetric}
+	<div
+		class="metric-modal-backdrop"
+		transition:fade={{ duration: 150 }}
+		role="dialog"
+		aria-modal="true"
+		aria-label="{expandedMetric === 'cpu' ? 'CPU' : 'Memory'} metrics"
+		onclick={(e) => { if (e.target === e.currentTarget) expandedMetric = null; }}
+		onkeydown={(e) => { if (e.key === 'Escape') expandedMetric = null; }}
+	>
+		<div class="metric-modal" transition:scale={{ duration: 180, start: 0.96 }}>
+			<div class="metric-modal-header">
+				<div class="metric-modal-title">
+					{#if expandedMetric === 'cpu'}
+						<Cpu class="h-4 w-4" style="color: #b33346;" />
+						<span>CPU usage</span>
+						<span class="metric-modal-value">{formatCpu(deployment?.totalCpuUsage)}</span>
+					{:else}
+						<MemoryStick class="h-4 w-4" style="color: #e87485;" />
+						<span>Memory usage</span>
+						<span class="metric-modal-value">{formatMemory(deployment?.totalMemoryUsage)}</span>
+					{/if}
+				</div>
+				<div class="metric-modal-actions">
+					<div class="metric-modal-range">
+						{#each ['5m', '15m', '30m', '1h'] as range}
+							<button
+								class="metric-modal-range-btn"
+								class:metric-modal-range-btn--active={metricsTimeRange === range}
+								onclick={() => { metricsTimeRange = range as any; }}
+							>{range}</button>
+						{/each}
+					</div>
+					<button class="metric-modal-close" onclick={() => (expandedMetric = null)} aria-label="Close">
+						<X class="h-4 w-4" />
+					</button>
+				</div>
+			</div>
+			<div class="metric-modal-body">
+				{#if Line}
+					<svelte:component
+						this={Line}
+						data={expandedMetric === 'cpu' ? cpuChartData : memoryChartData}
+						options={expandedMetric === 'cpu' ? cpuChartOptionsExpanded : memoryChartOptionsExpanded}
+					/>
+					{#if filteredMetrics.length === 0}
+						<div class="metric-modal-empty-label" aria-live="polite">
+							<Loader2 class="h-3.5 w-3.5 animate-spin" />
+							<span>Waiting for first metric…</span>
+						</div>
+					{/if}
+				{:else}
+					<div class="stat-card-pending" aria-live="polite">
+						<div class="stat-card-pending-grid" aria-hidden="true"></div>
+						<div class="stat-card-pending-label">
+							<Loader2 class="h-3.5 w-3.5 animate-spin" />
+							<span>Loading chart…</span>
+						</div>
+					</div>
+				{/if}
+			</div>
+		</div>
+	</div>
+{/if}
+
 {#if logModalId}
 	<div class="log-modal-backdrop" onclick={closeLogModal} transition:fade={{ duration: 150 }}>
 		<div class="log-modal" onclick={(e) => e.stopPropagation()} transition:scale={{ duration: 200, start: 0.96 }}>
@@ -5222,11 +5471,11 @@
 	   commit msg = full white (primary)
 	   domains    = bright but distinct from primary (secondary, clickable)
 	   meta       = clearly muted (tertiary, info-only) */
-	.dep-header-card--hasbg .dep-header-commit-msg {
+	.dep-header-card--hasbg .dep-header-name {
 		color: #fff;
 	}
-	.dep-header-card--hasbg .dep-header-commit-msg--muted {
-		color: rgba(255,255,255,0.6);
+	.dep-header-card--hasbg .dep-meta-lead {
+		color: rgba(255,255,255,0.92);
 	}
 	.dep-header-card--hasbg .dep-header-meta {
 		color: rgba(255,255,255,0.55);
@@ -5286,11 +5535,6 @@
 		flex: 1;
 	}
 
-	.dep-header-headline {
-		min-width: 0;
-		flex: 1;
-	}
-
 	.dep-header-actions {
 		display: flex;
 		align-items: center;
@@ -5300,36 +5544,25 @@
 		justify-content: flex-end;
 	}
 
-	/* Body: meta + domains, sit just below the commit message */
+	/* Body: meta + domains, sit just below the deployment name */
 	.dep-header-body {
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
-		margin-top: 0.5rem;
+		margin-top: 0.375rem;
 	}
 
-	/* HERO: the live commit message */
-	.dep-header-commit-msg {
-		font-size: 1.0625rem;
+	/* HERO: the deployment name */
+	.dep-header-name {
+		font-size: 1.625rem;
 		font-weight: 700;
 		color: var(--center-channel-color);
-		line-height: 1.35;
+		line-height: 1.2;
 		margin: 0;
-		letter-spacing: -0.01em;
+		letter-spacing: -0.02em;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-	}
-
-	.dep-header-commit-msg--muted {
-		font-weight: 600;
-		opacity: 0.7;
-	}
-
-	.dep-header-commit-msg--mono {
-		font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
-		font-size: 0.9375rem;
-		font-weight: 600;
 	}
 
 	.dep-header-domains {
@@ -5359,13 +5592,13 @@
 		border-radius: 0.5rem;
 		border: none;
 		background: transparent;
-		color: var(--surface-muted);
+		color: #fff;
 		cursor: pointer;
 		transition: background 0.12s, color 0.12s;
 	}
 	.dep-notif-btn:hover {
 		background: var(--control-hover-bg);
-		color: var(--center-channel-color);
+		color: #fff;
 	}
 
 	/* Meta: single line of supporting text. Same baseline, no chips, no borders. */
@@ -5378,6 +5611,29 @@
 		line-height: 1.5;
 		color: color-mix(in srgb, var(--center-channel-color) 55%, transparent);
 		margin: 0;
+	}
+
+	/* Lead: commit message at the start of the meta line — strongest tier in the row */
+	.dep-meta-lead {
+		font-weight: 600;
+		color: color-mix(in srgb, var(--center-channel-color) 90%, transparent);
+		max-width: min(28rem, 60%);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	a.dep-meta-lead-link {
+		text-decoration: none;
+		transition: color 0.12s;
+	}
+	a.dep-meta-lead-link:hover {
+		color: var(--center-channel-color);
+		text-decoration: underline;
+		text-underline-offset: 2px;
+	}
+	.dep-header-card--hasbg a.dep-meta-lead-link:hover {
+		color: #fff;
 	}
 
 	.dep-meta-mono {
@@ -5605,6 +5861,39 @@
 	.notification-icon-warning {
 		background-color: color-mix(in srgb, var(--warning-text) 12%, transparent);
 		color: var(--warning-text);
+	}
+
+	.notification-dismiss {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 22px;
+		height: 22px;
+		border-radius: 6px;
+		border: none;
+		background: transparent;
+		color: var(--surface-muted);
+		cursor: pointer;
+		flex-shrink: 0;
+		opacity: 0;
+		transition: opacity 0.12s, background-color 0.12s, color 0.12s;
+	}
+
+	.notification-item:hover .notification-dismiss {
+		opacity: 1;
+	}
+
+	.notification-dismiss:hover {
+		background-color: color-mix(in srgb, var(--surface-border) 60%, transparent);
+		color: var(--center-channel-color);
+	}
+
+	.notification-empty {
+		padding: 2rem 1rem;
+		text-align: center;
+		font-size: 0.8125rem;
+		color: var(--surface-muted);
+		margin: 0;
 	}
 
 	/* ===== Log timestamp pills ===== */
@@ -6120,6 +6409,7 @@
 		background: var(--surface-bg);
 		padding: 0.875rem;
 		box-shadow: 0 1px 2px rgb(0 0 0 / 0.02);
+		transition: box-shadow 0.18s ease;
 	}
 
 	.stat-card-header {
@@ -6135,6 +6425,31 @@
 		color: var(--surface-muted);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
+		flex: 1;
+	}
+
+	.stat-card-expand {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 22px;
+		height: 22px;
+		border-radius: 6px;
+		border: none;
+		background: transparent;
+		color: var(--surface-muted);
+		cursor: pointer;
+		opacity: 0.6;
+		transition: background-color 0.12s, color 0.12s, opacity 0.12s;
+	}
+
+	.stat-card:hover .stat-card-expand {
+		opacity: 1;
+	}
+
+	.stat-card-expand:hover {
+		background-color: color-mix(in srgb, var(--surface-border) 60%, transparent);
+		color: var(--center-channel-color);
 	}
 
 	.stat-card-value {
@@ -6150,6 +6465,172 @@
 	.stat-card-chart {
 		margin-top: 0.625rem;
 		height: 64px;
+		position: relative;
+	}
+
+	/* Pending state — Datadog-style empty placeholder */
+	.stat-card-pending {
+		position: relative;
+		width: 100%;
+		height: 100%;
+		border-radius: 0.5rem;
+		overflow: hidden;
+		background: color-mix(in srgb, var(--surface-border) 18%, transparent);
+	}
+
+	.stat-card-pending-grid {
+		position: absolute;
+		inset: 0;
+		background-image:
+			linear-gradient(to right, color-mix(in srgb, var(--surface-border) 60%, transparent) 1px, transparent 1px),
+			linear-gradient(to bottom, color-mix(in srgb, var(--surface-border) 60%, transparent) 1px, transparent 1px);
+		background-size: 32px 24px;
+		opacity: 0.45;
+		mask-image: linear-gradient(to bottom, rgba(0,0,0,0.9), rgba(0,0,0,0.4));
+		-webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,0.9), rgba(0,0,0,0.4));
+		animation: stat-pending-shimmer 2.4s ease-in-out infinite;
+	}
+
+	@keyframes stat-pending-shimmer {
+		0%, 100% { opacity: 0.32; }
+		50% { opacity: 0.5; }
+	}
+
+	.stat-card-pending-label {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.4375rem;
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: var(--surface-muted);
+		letter-spacing: 0.01em;
+	}
+
+	/* Metric modal — expanded chart view */
+	.metric-modal-backdrop {
+		position: fixed;
+		inset: 0;
+		z-index: 60;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: 1.5rem;
+		background-color: rgba(0, 0, 0, 0.55);
+	}
+
+	.metric-modal {
+		width: 100%;
+		max-width: 1080px;
+		max-height: calc(100vh - 3rem);
+		display: flex;
+		flex-direction: column;
+		border-radius: 1rem;
+		border: 1px solid var(--surface-border);
+		background-color: var(--card-bg);
+		box-shadow: 0 24px 60px rgba(0, 0, 0, 0.35);
+		overflow: hidden;
+	}
+
+	.metric-modal-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1rem;
+		padding: 0.875rem 1.25rem;
+		border-bottom: 1px solid var(--surface-border);
+	}
+
+	.metric-modal-title {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.9375rem;
+		font-weight: 600;
+		color: var(--center-channel-color);
+	}
+
+	.metric-modal-value {
+		margin-left: 0.375rem;
+		font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
+		font-weight: 700;
+		color: color-mix(in srgb, var(--center-channel-color) 80%, transparent);
+	}
+
+	.metric-modal-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.metric-modal-range {
+		display: inline-flex;
+		gap: 0.125rem;
+		padding: 0.125rem;
+		border-radius: 0.5rem;
+		background-color: var(--control-bg);
+	}
+
+	.metric-modal-range-btn {
+		padding: 0.25rem 0.625rem;
+		font-size: 0.75rem;
+		font-weight: 500;
+		border-radius: 0.375rem;
+		border: none;
+		background: transparent;
+		color: var(--surface-muted);
+		cursor: pointer;
+		transition: background-color 0.12s, color 0.12s;
+	}
+
+	.metric-modal-range-btn:hover {
+		color: var(--center-channel-color);
+	}
+
+	.metric-modal-range-btn--active {
+		background-color: var(--button-bg);
+		color: var(--button-color);
+	}
+
+	.metric-modal-close {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		border-radius: 0.5rem;
+		border: none;
+		background: transparent;
+		color: var(--surface-muted);
+		cursor: pointer;
+		transition: background-color 0.12s, color 0.12s;
+	}
+
+	.metric-modal-close:hover {
+		background-color: color-mix(in srgb, var(--surface-border) 60%, transparent);
+		color: var(--center-channel-color);
+	}
+
+	.metric-modal-body {
+		flex: 1;
+		min-height: 360px;
+		padding: 1.25rem;
+		position: relative;
+	}
+
+	.metric-modal-empty-label {
+		position: absolute;
+		inset: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.4375rem;
+		pointer-events: none;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--surface-muted);
 	}
 
 	/* ===== Advanced tab ===== */
@@ -7109,7 +7590,7 @@
 
 	.dep-list-row {
 		display: grid;
-		grid-template-columns: 96px 140px 110px minmax(0, 1fr) 130px 80px;
+		grid-template-columns: 140px minmax(0, 1fr) 90px 140px 130px 80px;
 		align-items: center;
 		gap: 0.75rem;
 		padding: 0.875rem 1.25rem;
@@ -7192,26 +7673,36 @@
 		color: var(--center-channel-color);
 	}
 
-	.dep-col-id {
+	.dep-col-status {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		min-width: 0;
 	}
 
-	.dep-short-id {
+	.dep-col-built,
+	.dep-col-author {
+		min-width: 0;
+		display: flex;
+		align-items: center;
+	}
+
+	.dep-meta-text--mono {
 		font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
-		font-size: 0.8125rem;
 		font-weight: 600;
-		color: var(--center-channel-color);
+	}
+
+	.dep-meta-text--placeholder {
+		color: var(--surface-muted);
+		opacity: 0.6;
+	}
+
+	.dep-meta-author {
+		font-weight: 500;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-	}
-
-	.dep-short-id--placeholder {
-		color: var(--surface-muted);
-		font-weight: 400;
+		max-width: 100%;
 	}
 
 	.dep-current-pill {
@@ -7224,29 +7715,6 @@
 		background-color: color-mix(in srgb, #22c55e 18%, transparent);
 		color: #15803d;
 		border: 1px solid color-mix(in srgb, #22c55e 35%, transparent);
-	}
-
-	.dep-env-pill {
-		display: inline-flex;
-		align-items: center;
-		font-size: 0.6875rem;
-		font-weight: 600;
-		padding: 0.1875rem 0.5rem;
-		border-radius: 0.375rem;
-		border: 1px solid var(--surface-border);
-		background-color: color-mix(in srgb, var(--surface-border) 30%, transparent);
-		color: var(--center-channel-color);
-	}
-
-	.dep-env-pill--production {
-		background-color: color-mix(in srgb, #22c55e 12%, transparent);
-		border-color: color-mix(in srgb, #22c55e 30%, transparent);
-		color: #15803d;
-	}
-
-	.dep-env-pill--preview {
-		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
-		color: var(--surface-muted);
 	}
 
 	.dep-commit-stack {
@@ -7362,22 +7830,23 @@
 
 	@media (max-width: 900px) {
 		.dep-list-row {
-			grid-template-columns: 90px 1fr 70px;
+			grid-template-columns: 130px 1fr 70px;
 			grid-template-areas:
-				'status id actions'
-				'status commit commit'
-				'status meta meta';
+				'status commit actions'
+				'status built meta'
+				'status author meta';
 			row-gap: 0.375rem;
 		}
-		.dep-list-row--head .dep-col-env,
+		.dep-list-row--head .dep-col-built,
+		.dep-list-row--head .dep-col-author,
 		.dep-list-row--head .dep-col-commit,
 		.dep-list-row--head .dep-col-meta {
 			display: none;
 		}
 		.dep-col-status { grid-area: status; align-self: start; }
-		.dep-col-id { grid-area: id; }
-		.dep-col-env { display: none; }
 		.dep-col-commit { grid-area: commit; }
+		.dep-col-built { grid-area: built; }
+		.dep-col-author { grid-area: author; }
 		.dep-col-meta { grid-area: meta; }
 		.dep-col-actions { grid-area: actions; }
 	}

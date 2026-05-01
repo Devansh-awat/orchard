@@ -1179,6 +1179,8 @@ export class ProjectsService {
       // GitHub Deployments API support (legacy)
       commitSha?: string;
       commitMessage?: string;
+      commitAuthorName?: string;
+      commitAuthorUsername?: string;
       githubDeploymentId?: number | null;
       githubAccessToken?: string | null;
       repoInfo?: { owner: string; repo: string } | null;
@@ -1271,7 +1273,8 @@ export class ProjectsService {
         accessToken: githubAccessToken,
       });
 
-      const buildDuration = Math.floor((Date.now() - buildStartTime) / 1000);
+      const buildCompletedAt = new Date();
+      const buildDuration = Math.floor((buildCompletedAt.getTime() - buildStartTime) / 1000);
       console.log(`[Projects] Built and pushed image: ${image}, ${data.isRebuild ? 'updating' : 'creating'} Kubernetes resources (build took ${buildDuration}s)`);
 
       // Update deployment with final image
@@ -1301,8 +1304,12 @@ export class ProjectsService {
             tag: data.tag,
             commitSha: data.commitSha || null,
             commitMessage: data.commitMessage || null,
+            commitAuthorName: data.commitAuthorName || null,
+            commitAuthorUsername: data.commitAuthorUsername || null,
             branch: data.branch,
             buildLogs: deployment?.buildLogs || null,
+            buildStartedAt: new Date(buildStartTime),
+            buildCompletedAt,
             triggerType: data.triggerType || null,
             triggeredById: data.triggeredById || null,
             isActive: true,
@@ -6959,7 +6966,13 @@ export class ProjectsService {
   }
 
   // Called by the webhook handler to trigger a deploy
-  async triggerAutoDeploy(deploymentId: string, commitSha: string, commitMessage: string) {
+  async triggerAutoDeploy(
+    deploymentId: string,
+    commitSha: string,
+    commitMessage: string,
+    commitAuthorName?: string,
+    commitAuthorUsername?: string,
+  ) {
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
       include: {
@@ -7145,6 +7158,8 @@ export class ProjectsService {
         isRebuild: true,
         commitSha,
         commitMessage: commitMessage.split('\n')[0],
+        commitAuthorName,
+        commitAuthorUsername,
         // GitHub Check Run info (uses App, not user)
         checkRunId,
         installationId: installationId ? installationId.toString() : null,

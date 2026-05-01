@@ -346,6 +346,8 @@ export class GitHubController {
       const pushedBranch = body.ref?.replace('refs/heads/', '');
       const commitSha = body.after || body.head_commit?.id;
       const commitMessage = body.head_commit?.message || 'No commit message';
+      const commitAuthorName = body.head_commit?.author?.name as string | undefined;
+      const commitAuthorUsername = body.head_commit?.author?.username as string | undefined;
 
       if (!repoFullName || !pushedBranch) {
         return { received: true, action: 'ignored', reason: 'missing repo or branch info' };
@@ -408,7 +410,13 @@ export class GitHubController {
       const results = await Promise.allSettled(
         deployments.map(async (deployment) => {
           console.log(`[GitHub App] Auto-deploying ${deployment.name} from commit ${commitSha?.substring(0, 7)}`);
-          await this.projectsService.triggerAutoDeploy(deployment.id, commitSha, commitMessage);
+          await this.projectsService.triggerAutoDeploy(
+            deployment.id,
+            commitSha,
+            commitMessage,
+            commitAuthorName,
+            commitAuthorUsername,
+          );
           return deployment.name;
         })
       );

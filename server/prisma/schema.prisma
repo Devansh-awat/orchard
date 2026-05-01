@@ -453,18 +453,22 @@ model GitHubDeployment {
 }
 
 model ImageHistory {
-  id              String   @id @default(uuid()) @db.Uuid
-  deploymentId    String   @map("deployment_id") @db.Uuid
-  image           String   @db.VarChar(500)
-  tag             String   @db.VarChar(100)
-  commitSha       String?  @map("commit_sha") @db.VarChar(100)
-  commitMessage   String?  @map("commit_message") @db.VarChar(500)
-  branch          String?  @db.VarChar(255)
-  buildLogs       String?  @map("build_logs") @db.Text
-  triggerType      String?  @map("trigger_type") @db.VarChar(20)
-  triggeredById    String?  @map("triggered_by_id") @db.Uuid
-  isActive        Boolean  @default(false) @map("is_active")
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  id                   String    @id @default(uuid()) @db.Uuid
+  deploymentId         String    @map("deployment_id") @db.Uuid
+  image                String    @db.VarChar(500)
+  tag                  String    @db.VarChar(100)
+  commitSha            String?   @map("commit_sha") @db.VarChar(100)
+  commitMessage        String?   @map("commit_message") @db.VarChar(500)
+  commitAuthorName     String?   @map("commit_author_name") @db.VarChar(255)
+  commitAuthorUsername String?   @map("commit_author_username") @db.VarChar(255)
+  branch               String?   @db.VarChar(255)
+  buildLogs            String?   @map("build_logs") @db.Text
+  buildStartedAt       DateTime? @map("build_started_at") @db.Timestamp(6)
+  buildCompletedAt     DateTime? @map("build_completed_at") @db.Timestamp(6)
+  triggerType          String?   @map("trigger_type") @db.VarChar(20)
+  triggeredById        String?   @map("triggered_by_id") @db.Uuid
+  isActive             Boolean   @default(false) @map("is_active")
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
 
   deployment  Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
   triggeredBy User?      @relation(fields: [triggeredById], references: [id], onDelete: SetNull)
