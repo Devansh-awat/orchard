@@ -1156,6 +1156,18 @@ export class ProjectsService {
     return this.addInternalUrlsToDeployment(result);
   }
 
+  private async getDeploymentProgressUrl(deploymentId: string): Promise<string> {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { project: { select: { organization: { select: { slug: true } } } } },
+    });
+    const orgSlug = deployment?.project?.organization?.slug;
+    return orgSlug
+      ? `${frontendUrl}/${orgSlug}/deployments/${deploymentId}/progress`
+      : `${frontendUrl}/deployments/${deploymentId}/progress`;
+  }
+
   private async buildAndDeployAsync(
     deploymentId: string,
     data: {
@@ -1568,7 +1580,7 @@ export class ProjectsService {
             data.githubDeploymentId,
             'success',
             {
-              logUrl: `${frontendUrl}/deployments/${deploymentId}/progress`,
+              logUrl: await this.getDeploymentProgressUrl(deploymentId),
               environmentUrl,
               description: 'Deployment successful!',
             }
@@ -1659,7 +1671,7 @@ export class ProjectsService {
               Number(ghDeployment.githubDeploymentId),
               'success',
               {
-                logUrl: `${frontendUrl}/deployments/${deploymentId}/progress`,
+                logUrl: await this.getDeploymentProgressUrl(deploymentId),
                 environmentUrl,
                 description: 'Deployment successful!',
               }
@@ -1740,7 +1752,7 @@ export class ProjectsService {
             data.githubDeploymentId,
             'failure',
             {
-              logUrl: `${frontendUrl}/deployments/${deploymentId}/progress`,
+              logUrl: await this.getDeploymentProgressUrl(deploymentId),
               description: `Build failed: ${error.message?.substring(0, 100)}`,
             }
           );
@@ -1777,7 +1789,7 @@ export class ProjectsService {
               Number(ghDeployment.githubDeploymentId),
               'failure',
               {
-                logUrl: `${frontendUrl}/deployments/${deploymentId}/progress`,
+                logUrl: await this.getDeploymentProgressUrl(deploymentId),
                 description: `Build failed: ${error.message?.substring(0, 100)}`,
               }
             );
@@ -7024,7 +7036,10 @@ export class ProjectsService {
           installationAccessToken = await this.githubService.getOrRefreshInstallationToken(installationId);
 
           const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
-          const logUrl = `${frontendUrl}/deployments/${deploymentId}/progress`;
+          const orgSlug = deployment.project?.organization?.slug;
+          const logUrl = orgSlug
+            ? `${frontendUrl}/${orgSlug}/deployments/${deploymentId}/progress`
+            : `${frontendUrl}/deployments/${deploymentId}/progress`;
 
           // Create a GitHub Check Run (appears under "Checks" on the commit, authored by the app)
           const checkRun = await this.githubService.createCheckRun(
