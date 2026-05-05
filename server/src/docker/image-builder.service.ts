@@ -519,9 +519,10 @@ echo "=== Super Build completed ==="
     const cacheArgs = this.buildCacheArgs();
     const hasCacheEnabled = cacheArgs.length > 0;
 
-    const argsWithCache = [...buildctlArgs].map(arg => 
-      arg.includes(' ') || arg.includes('"') ? `"${arg.replace(/"/g, '\\"')}"` : arg
-    ).join(' ');
+    const shellQuote = (arg: string) =>
+      /^[A-Za-z0-9_\-./:=@,+%]+$/.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`;
+
+    const argsWithCache = buildctlArgs.map(shellQuote).join(' ');
 
     if (!hasCacheEnabled) {
       return this.generateRetryScript(`buildctl-daemonless.sh ${argsWithCache}`);
@@ -535,9 +536,7 @@ echo "=== Super Build completed ==="
         return false;
       }
       return true;
-    }).map(arg => 
-      arg.includes(' ') || arg.includes('"') ? `"${arg.replace(/"/g, '\\"')}"` : arg
-    ).join(' ');
+    }).map(shellQuote).join(' ');
 
     return `
 set +e

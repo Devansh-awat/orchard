@@ -7162,6 +7162,7 @@ export class ProjectsService {
         branch: deployment.autoDeployBranch || deployment.githubBranch,
         dockerfilePath: deployment.dockerfilePath,
         buildFromRoot: deployment.buildFromRoot ?? false,
+        buildWithDepot: deployment.buildWithDepot ?? false,
         buildType: deployment.buildType as 'dockerfile' | 'railpack',
         imageName,
         tag: uniqueTag,
