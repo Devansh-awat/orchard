@@ -87,13 +87,9 @@
 			if (!pattern) return;
 			ctx.save();
 			ctx.fillStyle = pattern;
-			// Left pending region: from xMin to first data point (or full range if no data)
-			if (dataMin == null || dataMin > xMin) {
-				const left = xs.getPixelForValue(xMin);
-				const right = xs.getPixelForValue(dataMin ?? xMax);
-				if (right > left) ctx.fillRect(left, top, right - left, bottom - top);
-			}
-			// Right pending region: from last data point to xMax (always = now)
+			// Right pending region: from last data point to xMax (always = now).
+			// We intentionally don't draw a left pending region — when the deployment
+			// is younger than the selected window, the missing left side isn't "pending."
 			if (dataMax != null && dataMax < xMax) {
 				const left = xs.getPixelForValue(dataMax);
 				const right = xs.getPixelForValue(xMax);
@@ -513,9 +509,21 @@
 		'1h': 60 * 60 * 1000,
 	}[metricsTimeRange]);
 
-	const filteredMetrics = $derived(
-		metricsHistory.filter(p => p.time.getTime() > Date.now() - timeRangeMs)
-	);
+	// Include the most recent point before the window as a leading anchor so the
+	// chart still draws a line into the visible range (clipped at xMin by chart.js).
+	// If no points fall inside the window, extend the anchor to "now" so a flat
+	// line at the last known value is shown across the cropped range.
+	const filteredMetrics = $derived.by(() => {
+		const cutoff = Date.now() - timeRangeMs;
+		const inWindow = metricsHistory.filter(p => p.time.getTime() > cutoff);
+		const beforeWindow = metricsHistory.filter(p => p.time.getTime() <= cutoff);
+		const anchor = beforeWindow.length ? beforeWindow[beforeWindow.length - 1] : null;
+		if (!anchor) return inWindow;
+		if (inWindow.length === 0) {
+			return [anchor, { time: new Date(), cpu: anchor.cpu, memory: anchor.memory }];
+		}
+		return [anchor, ...inWindow];
+	});
 
 	// Build chart data with numeric X timestamps so we can set min/max on the axis
 	const cpuChartData = $derived({
@@ -1423,16 +1431,17 @@
 			}
 			const data = await response.json();
 
-			// If deployment is building and modal/card isn't already showing, open the build modal
-			// (The full-screen progress page is only used for first-time builds via the new deployment flow)
-			if (data.buildStatus === 'building' && data.githubRepo && !showBuildModal && !showBuildCard) {
+			const wasUnloaded = !deployment;
+
+			// If deployment transitions to building during the session, open the build modal.
+			// Skip on the first fetch so opening the page on an already-running build doesn't pop the modal.
+			if (!wasUnloaded && data.buildStatus === 'building' && data.githubRepo && !showBuildModal && !showBuildCard) {
 				showBuildModal = true;
 				showBuildCard = false;
 				stopBuildPolling();
 				startBuildPolling();
 			}
 
-			const wasUnloaded = !deployment;
 			deployment = data;
 			if (wasUnloaded) loadDismissedNotifications();
 
@@ -3416,8 +3425,15 @@
 											<div class="stat-card-pending" aria-live="polite">
 												<div class="stat-card-pending-grid" aria-hidden="true"></div>
 												<div class="stat-card-pending-label">
-													<Loader2 class="h-3 w-3 animate-spin" />
-													<span>{filteredMetrics.length === 0 ? 'Waiting for first metric…' : 'Collecting metrics…'}</span>
+													{#if metricsHistory.length === 0}
+														<Loader2 class="h-3 w-3 animate-spin" />
+														<span>Waiting for first metric…</span>
+													{:else if filteredMetrics.length === 0}
+														<span>No data in this range</span>
+													{:else}
+														<Loader2 class="h-3 w-3 animate-spin" />
+														<span>Collecting metrics…</span>
+													{/if}
 												</div>
 											</div>
 										{/if}
@@ -3445,8 +3461,15 @@
 											<div class="stat-card-pending" aria-live="polite">
 												<div class="stat-card-pending-grid" aria-hidden="true"></div>
 												<div class="stat-card-pending-label">
-													<Loader2 class="h-3 w-3 animate-spin" />
-													<span>{filteredMetrics.length === 0 ? 'Waiting for first metric…' : 'Collecting metrics…'}</span>
+													{#if metricsHistory.length === 0}
+														<Loader2 class="h-3 w-3 animate-spin" />
+														<span>Waiting for first metric…</span>
+													{:else if filteredMetrics.length === 0}
+														<span>No data in this range</span>
+													{:else}
+														<Loader2 class="h-3 w-3 animate-spin" />
+														<span>Collecting metrics…</span>
+													{/if}
 												</div>
 											</div>
 										{/if}
@@ -3454,7 +3477,7 @@
 								</div>
 
 								<!-- Time range selector -->
-								{#if filteredMetrics.length > 1}
+								{#if metricsHistory.length > 0}
 									<div class="flex justify-center gap-0.5 rounded-lg p-0.5" style="background-color: var(--control-bg);">
 										{#each ['5m', '15m', '30m', '1h'] as range}
 											<button
@@ -5095,8 +5118,12 @@
 					/>
 					{#if filteredMetrics.length === 0}
 						<div class="metric-modal-empty-label" aria-live="polite">
-							<Loader2 class="h-3.5 w-3.5 animate-spin" />
-							<span>Waiting for first metric…</span>
+							{#if metricsHistory.length === 0}
+								<Loader2 class="h-3.5 w-3.5 animate-spin" />
+								<span>Waiting for first metric…</span>
+							{:else}
+								<span>No data in this range</span>
+							{/if}
 						</div>
 					{/if}
 				{:else}
