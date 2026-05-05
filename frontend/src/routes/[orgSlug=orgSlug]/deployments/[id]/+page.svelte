@@ -4587,6 +4587,19 @@
 										<p class="text-sm" style="color: var(--surface-muted);">
 											Pushes to <code class="font-mono rounded px-1.5 py-0.5 text-xs" style="background-color: var(--control-bg); color: var(--center-channel-color);">{autoDeployStatus.branch}</code> trigger a new deployment automatically.
 										</p>
+										{#if !autoDeployStatus?.appInstalled}
+											<div class="mt-3 flex items-center justify-between gap-3 rounded-xl p-4" style="background-color: var(--control-bg); border: 1px dashed var(--error-text-color);">
+												<div>
+													<p class="text-sm font-medium" style="color: var(--error-text-color);">GitHub App can't access this repository</p>
+													<p class="text-xs mt-0.5" style="color: var(--surface-muted);">Auto-deploy is enabled, but the App isn't installed on this repo or "Only select repositories" doesn't include it. Pushes won't trigger deployments until access is granted.</p>
+												</div>
+												<button onclick={openGitHubAppInstall} disabled={!githubAppInstallUrl || loadingAppInstallUrl} class="btn btn-primary btn-sm shrink-0">
+													{#if loadingAppInstallUrl}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+													<ExternalLink class="h-3.5 w-3.5" />
+													<span>Configure</span>
+												</button>
+											</div>
+										{/if}
 									{:else if !autoDeployStatus?.appInstalled}
 										<div class="flex items-center justify-between gap-3 rounded-xl p-4" style="background-color: var(--control-bg); border: 1px dashed var(--surface-border);">
 											<div>
