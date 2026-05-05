@@ -1523,7 +1523,7 @@ export class ProjectsService {
               status: 'running',
               buildStatus: 'succeeded',
               buildStep: 'complete',
-              buildLogs: (txDeployData?.buildLogs || '') + '\n✅ Deployment created successfully!',
+              buildLogs: (txDeployData?.buildLogs || '') + '\nDeployment is live.',
               buildStepTimestamps: txTimestamps,
             },
           });
@@ -1539,7 +1539,7 @@ export class ProjectsService {
             status: 'running',
             buildStatus: 'succeeded',
             buildStep: 'complete',
-            buildLogs: (rebuildData?.buildLogs || '') + '\n✅ Rebuild completed successfully!',
+            buildLogs: (rebuildData?.buildLogs || '') + '\nRebuild complete. Deployment is live.',
             buildStepTimestamps: rebuildTimestamps,
           },
         });
@@ -1619,7 +1619,9 @@ export class ProjectsService {
               conclusion: 'success',
               output: {
                 title: 'Deployment Successful',
-                summary: `✅ Successfully deployed \`${data.name}\`${environmentUrl ? ` to [${environmentUrl}](${environmentUrl})` : ''}`,
+                summary: environmentUrl
+                  ? `\`${data.name}\` is live at [${environmentUrl}](${environmentUrl}).`
+                  : `\`${data.name}\` deployed successfully.`,
                 text: this.githubService.formatLogsForCheck(buildLogs),
               },
             }
@@ -7098,7 +7100,7 @@ export class ProjectsService {
       data: {
         buildStatus: 'building',
         buildStepTimestamps: {},
-        buildLogs: `🚀 Auto-deploy triggered by push to ${deployment.autoDeployBranch || deployment.githubBranch}\n📝 Commit: ${commitSha?.substring(0, 7)} - ${commitMessage.split('\n')[0]}\n\n`,
+        buildLogs: `Auto-deploy triggered by push to ${deployment.autoDeployBranch || deployment.githubBranch}\nCommit: ${commitSha?.substring(0, 7)} - ${commitMessage.split('\n')[0]}\n\n`,
         buildError: null,
       },
     });

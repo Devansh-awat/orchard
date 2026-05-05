@@ -464,13 +464,6 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 
-	let initialTabSet = $state(false);
-	$effect(() => {
-		if (!initialTabSet && deployment) {
-			if (deployment.githubRepo) tabs.value = 'history';
-			initialTabSet = true;
-		}
-	});
 	let projectBgImage = $derived(deployment?.project?.backgroundImage ?? null);
 
 	let deletingIngressId = $state<string | null>(null);
@@ -1478,7 +1471,6 @@
 				}
 
 				if (!isEditingEnv) {
-					revealedIndices = new Set();
 					if (data.envVars && Array.isArray(data.envVars) && data.envVars.length > 0) {
 						envVars = [
 							...data.envVars.map((ev: { key: string; value: string }) => ({

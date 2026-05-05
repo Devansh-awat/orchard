@@ -105,17 +105,29 @@ export class ImageBuilderService {
 
   private sanitizeLogMessage(message: string): string {
     let sanitized = message;
-    
+
     sanitized = sanitized.replace(/(x-access-token:|ghs_|ghp_|github_pat_)[a-zA-Z0-9_]+/gi, '***REDACTED***');
-    
+
     sanitized = sanitized.replace(/https?:\/\/[^:@\s]+:[^@\s]+@github\.com/gi, 'https://***@github.com');
-    
+
     sanitized = sanitized.replace(/https?:\/\/[^@\s]+@github\.com/gi, 'https://***@github.com');
-    
+
     sanitized = sanitized.replace(/(Bearer|Token|Authorization:)\s+[a-zA-Z0-9_\-\.]+/gi, '$1 ***REDACTED***');
-    
+
     sanitized = sanitized.replace(/(password|passwd|pwd|secret|key|token)[\s]*[=:]['"]?([^\s'"]+)/gi, '$1=***REDACTED***');
-    
+
+    // Redact internal registry hostnames so the registry URL never leaks into user-visible logs.
+    const registryHosts = new Set<string>();
+    for (const reg of [this.harborRegistryPush, this.harborRegistryPull]) {
+      if (!reg) continue;
+      const host = reg.replace(/^https?:\/\//, '').split('/')[0];
+      if (host) registryHosts.add(host);
+    }
+    for (const host of registryHosts) {
+      const escaped = host.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      sanitized = sanitized.replace(new RegExp(escaped, 'g'), '***registry***');
+    }
+
     return sanitized;
   }
 
@@ -1684,8 +1696,9 @@ fi
       const fullImagePath = `${this.harborRegistryPull}/${this.harborProject}/${imageName}:${tag}`;
 
       console.log(`[ImageBuilder] Build completed successfully: ${fullImagePath}`);
-      await this.appendLog(deploymentId, `Build and push completed successfully!`);
-      await this.appendLog(deploymentId, `Image available at: ${fullImagePath}`);
+      await this.appendLog(deploymentId, `Build and push completed successfully.`);
+      const imageRef = fullImagePath.split('/').slice(-1)[0] || fullImagePath;
+      await this.appendLog(deploymentId, `Image: ${imageRef}`);
       await this.setBuildStep(deploymentId, 'completed');
 
       await this.deleteBuildJob(jobName);

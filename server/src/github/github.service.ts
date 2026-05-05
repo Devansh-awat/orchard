@@ -1169,9 +1169,6 @@ export class GitHubService {
 
     if (options.status) {
       body.status = options.status;
-      if (options.status === 'in_progress' && !body.started_at) {
-        body.started_at = new Date().toISOString();
-      }
     }
 
     if (options.conclusion) {
