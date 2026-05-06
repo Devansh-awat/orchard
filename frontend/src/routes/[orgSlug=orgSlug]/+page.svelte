@@ -284,8 +284,13 @@
 
 	$effect(() => {
 		const overviewPromise = data.overview;
-		loading = true;
-		buildsLoading = true;
+		// First load shows skeletons; revalidations (from SSE invalidation) swap
+		// silently to prevent flicker.
+		const isInitial = deployments.length === 0 && databases.length === 0 && projectMetas.size === 0;
+		if (isInitial) {
+			loading = true;
+			buildsLoading = true;
+		}
 		overviewPromise
 			.then((payload) => {
 				applyOverview(payload);
@@ -301,8 +306,10 @@
 			})
 			.catch((e) => {
 				console.error('Failed to load overview:', e);
-				loading = false;
-				buildsLoading = false;
+				if (isInitial) {
+					loading = false;
+					buildsLoading = false;
+				}
 			});
 	});
 

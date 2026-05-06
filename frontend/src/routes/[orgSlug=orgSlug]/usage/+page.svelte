@@ -54,7 +54,8 @@
 
 	$effect(() => {
 		const promise = data.usagePromise;
-		loading = true;
+		const isInitial = orgQuota === null;
+		if (isInitial) loading = true;
 		promise
 			.then((p) => {
 				orgQuota = p.orgQuota;
@@ -69,12 +70,14 @@
 				);
 			})
 			.catch((e) => {
-				loading = false;
-				toasts.add({
-					title: 'Error',
-					description: e instanceof Error ? e.message : 'Failed to load usage',
-					color: 'error',
-				});
+				if (isInitial) {
+					loading = false;
+					toasts.add({
+						title: 'Error',
+						description: e instanceof Error ? e.message : 'Failed to load usage',
+						color: 'error',
+					});
+				}
 			});
 	});
 
