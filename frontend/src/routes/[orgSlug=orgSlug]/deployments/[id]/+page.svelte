@@ -805,7 +805,12 @@
 	let selectedPod = $state<string>('');
 	let selectedContainer = $state<string>('');
 	let manualPodSelection = $state(false);
-	let tailLines = $state(100);
+	const LOG_PAGE_SIZE = 500;
+	const LOG_INITIAL_LINES = 100;
+	const LOG_MAX_LINES = 50_000;
+	let tailLines = $state(LOG_INITIAL_LINES);
+	let logsAtMax = $state(false);
+	let loadingMoreLogs = $state(false);
 	let logs = $state<string>('');
 	let logsLoading = $state(false);
 	let logsOutputRef = $state<HTMLPreElement | null>(null);
@@ -1566,8 +1571,14 @@
 		}
 	}
 
-	async function fetchLogs() {
+	async function fetchLogs(opts?: { preserveScroll?: boolean }) {
 		if (!selectedPod || !selectedContainer) return;
+
+		const preserveScroll = opts?.preserveScroll === true;
+		// Capture scroll geometry before swap so we can re-anchor after.
+		const el = logsOutputRef;
+		const prevScrollHeight = preserveScroll && el ? el.scrollHeight : 0;
+		const prevScrollTop = preserveScroll && el ? el.scrollTop : 0;
 
 		logsLoading = true;
 		try {
@@ -1576,13 +1587,52 @@
 			);
 			if (response.ok) {
 				const data = await response.json();
-				console.log('[RAW LOGS]', data.logs);
-				logs = data.logs || '';
+				const next: string = data.logs || '';
+				const prevLineCount = logs ? logs.split('\n').length : 0;
+				const nextLineCount = next ? next.split('\n').length : 0;
+				logs = next;
+				// k8s caps `tailLines` at total pod log buffer; if we asked for more
+				// than is available, line count won't grow. Mark as exhausted so we
+				// stop trying.
+				if (preserveScroll && nextLineCount <= prevLineCount) {
+					logsAtMax = true;
+				}
+				if (preserveScroll && el) {
+					requestAnimationFrame(() => {
+						const cur = logsOutputRef;
+						if (!cur) return;
+						const delta = cur.scrollHeight - prevScrollHeight;
+						cur.scrollTop = prevScrollTop + delta;
+					});
+				}
 			}
 		} catch (e) {
 		} finally {
 			logsLoading = false;
 		}
+	}
+
+	let lastLoadMoreAt = 0;
+	function onLogsScroll(e: Event) {
+		const el = e.currentTarget as HTMLPreElement;
+		if (loadingMoreLogs || logsAtMax || tailLines >= LOG_MAX_LINES) return;
+		// Trigger a bit before reaching the very top so it feels seamless.
+		if (el.scrollTop > 80) return;
+		// Throttle so a fast scroll doesn't fire two requests.
+		const now = Date.now();
+		if (now - lastLoadMoreAt < 400) return;
+		lastLoadMoreAt = now;
+
+		loadingMoreLogs = true;
+		tailLines = Math.min(tailLines + LOG_PAGE_SIZE, LOG_MAX_LINES);
+		fetchLogs({ preserveScroll: true }).finally(() => {
+			loadingMoreLogs = false;
+		});
+	}
+
+	function resetLogPagination() {
+		tailLines = LOG_INITIAL_LINES;
+		logsAtMax = false;
 	}
 
 	function sanitizeLogs(logs: string): string {
@@ -2612,13 +2662,16 @@
 
 	$effect(() => {
 		if (selectedPod && selectedContainer) {
+			resetLogPagination();
 			fetchLogs();
 		}
 	});
 
-	// Auto-scroll logs to bottom when they change
+	// Auto-scroll logs to bottom when they change — but only on initial load /
+	// fresh tail, not when the user is scrolling up to load more historical lines
+	// (that path manages its own scroll position).
 	$effect(() => {
-		if (logs) {
+		if (logs && !loadingMoreLogs) {
 			requestAnimationFrame(scrollLogsToBottom);
 		}
 	});
@@ -2636,6 +2689,7 @@
 	// on tab activation, container switch, or manual refresh.
 	$effect(() => {
 		if (tabs.value === 'overview' && selectedPod && selectedContainer) {
+			resetLogPagination();
 			fetchLogs();
 		}
 	});
@@ -3330,7 +3384,11 @@
 													<span>Loading logs...</span>
 												</div>
 											{:else if logs}
-												<pre class="console-output" bind:this={logsOutputRef}>{@html ansiToHtml(logs)}</pre>
+												<pre
+													class="console-output"
+													bind:this={logsOutputRef}
+													onscroll={onLogsScroll}
+												>{#if loadingMoreLogs}<div class="logs-loading-more"><Loader2 class="h-3 w-3 animate-spin" /> Loading earlier logs…</div>{:else if logsAtMax || tailLines >= LOG_MAX_LINES}<div class="logs-loading-more logs-loading-more--end">— start of available logs —</div>{/if}{@html ansiToHtml(logs)}</pre>
 											{:else}
 												<div class="console-empty">
 													<Terminal class="h-4 w-4 opacity-30" />
@@ -6354,6 +6412,21 @@
 		font-weight: 400;
 		margin: 0;
 		color: inherit;
+	}
+
+	.logs-loading-more {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.375rem;
+		padding: 0.5rem 0;
+		color: var(--surface-muted);
+		font-size: 0.6875rem;
+		opacity: 0.75;
+	}
+	.logs-loading-more--end {
+		opacity: 0.5;
+		font-style: italic;
 	}
 
 	/* Scrollbar inside console */
