@@ -475,18 +475,12 @@
 
 	$effect(() => {
 		const promise = data.projectPromise;
-		// Only show the skeleton on the first load. Subsequent revalidations
-		// (triggered by SSE → invalidate) swap data silently to avoid flicker.
-		const isInitial = project === null;
-		if (isInitial) {
-			error = null;
-			loading = true;
-		}
+		error = null;
+		loading = true;
 		promise
 			.then((p) => {
 				applyProjectData(p);
 				loading = false;
-				error = null;
 				if (p?.namespace) syncNamespace();
 				const orgIdValue = p?.organization?.id;
 				if (orgIdValue) {
@@ -507,11 +501,8 @@
 				}
 			})
 			.catch((e) => {
-				if (isInitial) {
-					error = e instanceof Error ? e.message : 'Failed to fetch project';
-					loading = false;
-				}
-				// Silent failure on revalidation: keep showing stale data.
+				error = e instanceof Error ? e.message : 'Failed to fetch project';
+				loading = false;
 			});
 	});
 

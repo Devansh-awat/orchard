@@ -87,8 +87,7 @@
 
 	$effect(() => {
 		const promise = data.projectsPromise;
-		const isInitial = projects.length === 0;
-		if (isInitial) loading = true;
+		loading = true;
 		promise
 			.then(({ organizationId, projects: list }) => {
 				orgId = organizationId;
@@ -103,7 +102,7 @@
 			})
 			.catch((e) => {
 				console.error('Failed to load projects:', e);
-				if (isInitial) loading = false;
+				loading = false;
 			});
 	});
 
