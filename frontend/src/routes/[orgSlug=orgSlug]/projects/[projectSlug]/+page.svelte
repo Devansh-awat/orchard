@@ -1,14 +1,8 @@
-<script module lang="ts">
-	// Module-scoped cache persists across navigations within the SPA lifetime.
-	// Stale-while-revalidate: serve instantly from memory, refresh in background.
-	const projectCache = new Map<string, any>();
-</script>
-
 <script lang="ts">
-	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
-	import { apiFetch, toasts, refreshTree } from '$lib/stores';
+	import { goto, invalidate } from '$app/navigation';
+	import { onDestroy } from 'svelte';
+	import { apiFetch, toasts, refreshTree, subscribeOrgEvents } from '$lib/stores';
+	import type { PageData } from './$types';
 	import { mergeAttrs } from 'melt';
 	import { SpatialMenu } from 'melt/builders';
 	import {
@@ -309,35 +303,12 @@
 		});
 	});
 
-	const orgSlug = $derived($page.params.orgSlug);
-	const projectSlug = $derived($page.params.projectSlug);
+	let { data } = $props<{ data: PageData }>();
+	const orgSlug = $derived(data.orgSlug);
+	const projectSlug = $derived(data.projectSlug);
 
 	async function fetchProject() {
-		error = null;
-		const cacheKey = `${orgSlug}/${projectSlug}`;
-		const cached = projectCache.get(cacheKey);
-
-		// Serve cache instantly, then revalidate in the background.
-		if (cached) {
-			applyProjectData(cached);
-			loading = false;
-			revalidateProject(cacheKey);
-			return;
-		}
-
-		loading = true;
-		try {
-			const fullRes = await apiFetch(`/apiv1/projects/by-slugs/${orgSlug}/${projectSlug}`);
-			if (!fullRes.ok) throw new Error('Failed to fetch project');
-			const fullProject = await fullRes.json();
-			projectCache.set(cacheKey, fullProject);
-			applyProjectData(fullProject);
-			if (fullProject?.namespace) syncNamespace();
-		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to fetch project';
-		} finally {
-			loading = false;
-		}
+		await invalidate(`project:${orgSlug}/${projectSlug}`);
 	}
 
 	function applyProjectData(p: any) {
@@ -345,19 +316,6 @@
 		projectMembers = p.members ?? [];
 		templateInstances = p.templateInstances ?? [];
 		databases = p.databases ?? [];
-	}
-
-	async function revalidateProject(cacheKey: string) {
-		try {
-			const res = await apiFetch(`/apiv1/projects/by-slugs/${orgSlug}/${projectSlug}`);
-			if (!res.ok) return;
-			const fresh = await res.json();
-			projectCache.set(cacheKey, fresh);
-			applyProjectData(fresh);
-			if (fresh?.namespace) syncNamespace();
-		} catch {
-			// Revalidation failures are silent; stale data is still shown.
-		}
 	}
 
 	let orgMembersLoaded = false;
@@ -513,9 +471,42 @@
 		}
 	}
 
-	onMount(() => {
-		fetchProject();
+	let unsub: (() => void) | null = null;
+
+	$effect(() => {
+		const promise = data.projectPromise;
+		error = null;
+		loading = true;
+		promise
+			.then((p) => {
+				applyProjectData(p);
+				loading = false;
+				if (p?.namespace) syncNamespace();
+				const orgIdValue = p?.organization?.id;
+				if (orgIdValue) {
+					unsub?.();
+					unsub = subscribeOrgEvents(
+						orgIdValue,
+						(ev) => {
+							if (
+								ev.projectId === p.id ||
+								ev.type === 'project.changed' ||
+								ev.type === 'membership.changed'
+							) {
+								invalidate(`project:${orgSlug}/${projectSlug}`);
+							}
+						},
+						{ invalidateDependencies: [] },
+					);
+				}
+			})
+			.catch((e) => {
+				error = e instanceof Error ? e.message : 'Failed to fetch project';
+				loading = false;
+			});
 	});
+
+	onDestroy(() => unsub?.());
 
 	function openDeployment(id: string) {
 		return goto(`/${orgSlug}/deployments/${id}`);

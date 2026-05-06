@@ -4099,6 +4099,73 @@ export class KubernetesService {
     }
   }
 
+  /**
+   * Lightweight batch fetch: lists all pods in a namespace in one API call and
+   * groups them by their `app` label. Skips per-pod event fetches and metrics —
+   * intended for status-badge computation across many deployments.
+   */
+  async listNamespacePodsByApp(
+    namespace: string,
+  ): Promise<Map<string, { pods: any[]; warnings: any[] }> | null> {
+    this.ensureKubeConfig();
+    const cleanNamespace = String(namespace || 'midnight-staging').trim();
+    const result = new Map<string, { pods: any[]; warnings: any[] }>();
+    try {
+      const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+      const podList = await coreApi.listNamespacedPod(cleanNamespace);
+      for (const pod of podList.body.items) {
+        const appLabel = pod.metadata?.labels?.app;
+        if (!appLabel) continue;
+
+        const containerStatuses = pod.status?.containerStatuses ?? [];
+        const totalRestartCount = containerStatuses.reduce(
+          (sum, c) => sum + (c.restartCount ?? 0),
+          0,
+        );
+
+        const podPhase = pod.status?.phase?.toLowerCase() || 'pending';
+        const conditions = pod.status?.conditions || [];
+        const isScheduled = conditions.some((c) => c.type === 'PodScheduled' && c.status === 'True');
+        const isReady = conditions.some((c) => c.type === 'Ready' && c.status === 'True');
+        const allContainersReady =
+          containerStatuses.length > 0 && containerStatuses.every((c) => c.ready === true);
+        let computedStatus = podPhase;
+        if (podPhase === 'running') {
+          computedStatus = isReady && allContainersReady ? 'ready' : isScheduled ? 'scheduled' : 'pending';
+        } else if (podPhase === 'pending' && isScheduled) {
+          computedStatus = 'scheduled';
+        }
+
+        const warnings: any[] = [];
+        for (const cs of containerStatuses) {
+          const waiting = cs.state?.waiting;
+          if (waiting?.reason === 'CrashLoopBackOff' || waiting?.reason === 'ImagePullBackOff') {
+            warnings.push({
+              podName: pod.metadata?.name,
+              message: `${cs.name}: ${waiting.message || waiting.reason}`,
+            });
+          }
+        }
+
+        const entry = result.get(appLabel) ?? { pods: [], warnings: [] };
+        entry.pods.push({
+          name: pod.metadata?.name,
+          status: computedStatus,
+          restartCount: totalRestartCount,
+        });
+        entry.warnings.push(...warnings);
+        result.set(appLabel, entry);
+      }
+    } catch (error) {
+      if (error?.response?.statusCode === 404) {
+        return result;
+      }
+      console.warn('[API] listNamespacePodsByApp failed:', error?.message ?? error);
+      return null;
+    }
+    return result;
+  }
+
   async getDeploymentPods(deploymentName: string, namespace: string = 'midnight-staging') {
     this.ensureKubeConfig();
 

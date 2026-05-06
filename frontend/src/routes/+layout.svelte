@@ -15,6 +15,18 @@
 	} from '$lib/stores';
 	import { Sidebar, ToastContainer, OnboardingModal } from '$lib/components';
 	import QuickSearch from '$lib/components/QuickSearch.svelte';
+	import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query';
+
+	const queryClient = new QueryClient({
+		defaultOptions: {
+			queries: {
+				staleTime: 30_000,
+				gcTime: 5 * 60_000,
+				refetchOnWindowFocus: false,
+				retry: 1,
+			},
+		},
+	});
 
 	let { children } = $props();
 
@@ -74,27 +86,29 @@
 	<title>Orchard Dashboard</title>
 </svelte:head>
 
-{#if loading}
-	<div class="flex h-screen items-center justify-center" style="background-color: var(--center-channel-bg);">
-		<div class="lds-ellipsis" style="color: var(--button-bg);">
-			<div></div><div></div><div></div><div></div>
+<QueryClientProvider client={queryClient}>
+	{#if loading}
+		<div class="flex h-screen items-center justify-center" style="background-color: var(--center-channel-bg);">
+			<div class="lds-ellipsis" style="color: var(--button-bg);">
+				<div></div><div></div><div></div><div></div>
+			</div>
 		</div>
-	</div>
-{:else if $isSignedIn && $page.url.pathname.startsWith('/setup')}
-	{@render children()}
-{:else if $isSignedIn}
-	<div class="flex h-screen overflow-hidden">
-		<Sidebar />
-		<main class="flex-1 overflow-y-auto overflow-x-hidden" style="overscroll-behavior: none;">
+	{:else if $isSignedIn && $page.url.pathname.startsWith('/setup')}
+		{@render children()}
+	{:else if $isSignedIn}
+		<div class="flex h-screen overflow-hidden">
+			<Sidebar />
+			<main class="flex-1 overflow-y-auto overflow-x-hidden" style="overscroll-behavior: none;">
+				{@render children()}
+			</main>
+		</div>
+	{:else}
+		<main class="min-h-screen">
 			{@render children()}
 		</main>
-	</div>
-{:else}
-	<main class="min-h-screen">
-		{@render children()}
-	</main>
-{/if}
+	{/if}
 
-<ToastContainer />
-<OnboardingModal />
-<QuickSearch />
+	<ToastContainer />
+	<OnboardingModal />
+	<QuickSearch />
+</QueryClientProvider>

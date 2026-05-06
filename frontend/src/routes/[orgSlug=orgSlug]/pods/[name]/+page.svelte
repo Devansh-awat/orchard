@@ -1,8 +1,10 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { onMount } from 'svelte';
-	import { apiFetch } from '$lib/stores';
+	import { onMount, onDestroy } from 'svelte';
+	import { invalidate } from '$app/navigation';
+	import { apiFetch, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
 	import { ArrowLeft, Loader2, RefreshCw, Container } from 'lucide-svelte';
+	import type { PageData } from './$types';
 
 	interface ContainerStatus {
 		name: string;
@@ -41,9 +43,11 @@
 	let selectedContainer = $state<string>('');
 	let tailLines = $state(100);
 
-	const podName = $derived($page.params.name);
+	let { data } = $props<{ data: PageData }>();
+	const podName = $derived(data.podName);
 	const orgSlug = $derived($page.params.orgSlug);
-	const namespace = $derived($page.url.searchParams.get('namespace') || 'default');
+	const namespace = $derived(data.namespace);
+	let podSseUnsub: (() => void) | null = null;
 
 	async function fetchPodDetails() {
 		loading = true;
@@ -111,8 +115,33 @@
 	});
 
 	onMount(() => {
+		data.podPromise
+			.then((seed: any) => {
+				if (!pod) {
+					pod = seed;
+					if (pod?.spec?.containers?.length && !selectedContainer) {
+						selectedContainer = pod.spec.containers[0].name;
+					}
+					loading = false;
+				}
+			})
+			.catch(() => {});
 		fetchPodDetails();
+		const orgIdForSse = $selectedOrganization?.id;
+		if (orgIdForSse) {
+			podSseUnsub = subscribeOrgEvents(
+				orgIdForSse,
+				(ev) => {
+					if (ev.type === 'pod.changed' || ev.type === 'deployment.changed') {
+						fetchPodDetails();
+					}
+				},
+				{ invalidateDependencies: [`pod:${namespace}/${podName}`] },
+			);
+		}
 	});
+
+	onDestroy(() => podSseUnsub?.());
 </script>
 
 <div class="p-6">

@@ -1,0 +1,222 @@
+import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { MembershipCacheService } from '../auth/membership-cache.service';
+import { OrgEventsService, OrgEventType } from './org-events.service';
+
+/**
+ * Bridges Prisma write operations into OrgEvents (for SSE) and invalidates the
+ * membership cache. Uses $extends (Prisma 5+/6+) and rebinds the per-model
+ * accessors on PrismaService so every existing call site flows through the hook
+ * with no caller changes.
+ */
+const WATCHED_MODELS = [
+  'deployment',
+  'database',
+  'databaseBackup',
+  'imageHistory',
+  'pod',
+  'project',
+  'ingress',
+  'organizationMember',
+] as const;
+
+const WRITE_OPS = new Set([
+  'create',
+  'createMany',
+  'createManyAndReturn',
+  'update',
+  'updateMany',
+  'updateManyAndReturn',
+  'upsert',
+  'delete',
+  'deleteMany',
+]);
+
+@Injectable()
+export class PrismaEventsBridge implements OnModuleInit {
+  private readonly logger = new Logger(PrismaEventsBridge.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly orgEvents: OrgEventsService,
+    private readonly membershipCache: MembershipCacheService,
+  ) {}
+
+  onModuleInit() {
+    const self = this;
+    const extended = this.prisma.$extends({
+      query: {
+        $allModels: {
+          async $allOperations({ args, model, operation, query }) {
+            const result = await query(args);
+            if (WRITE_OPS.has(operation)) {
+              self
+                .handle({ model, action: operation, args }, result)
+                .catch((err) =>
+                  self.logger.warn(
+                    `event bridge failed for ${model}.${operation}: ${err?.message ?? err}`,
+                  ),
+                );
+            }
+            return result;
+          },
+        },
+      },
+    });
+
+    // Replace per-model accessors on the original PrismaService instance so that
+    // existing `this.prisma.deployment.update(...)` calls flow through the hook.
+    for (const m of WATCHED_MODELS) {
+      const value = (extended as any)[m];
+      if (!value) continue;
+      Object.defineProperty(this.prisma, m, {
+        value,
+        configurable: true,
+        writable: true,
+      });
+    }
+  }
+
+  private async handle(params: { model?: string; action: string; args: any }, result: any) {
+    if (!params.model) return;
+    if (!WRITE_OPS.has(params.action)) return;
+
+    switch (params.model) {
+      case 'Deployment':
+        return this.emitForDeployment(params, result);
+      case 'Database':
+        return this.emitForDatabase(params, result);
+      case 'DatabaseBackup':
+        return this.emitForDatabaseBackup(params, result);
+      case 'ImageHistory':
+        return this.emitForImageHistory(params, result);
+      case 'Pod':
+        return this.emitForPod(params, result);
+      case 'Project':
+        return this.emitForProject(params, result);
+      case 'Ingress':
+        return this.emitForIngress(params, result);
+      case 'OrganizationMember':
+        return this.emitForMembership(params, result);
+    }
+  }
+
+  private async resolveOrgIdFromDeployment(deploymentId?: string): Promise<{ orgId: string; projectId: string } | null> {
+    if (!deploymentId) return null;
+    const dep = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { projectId: true, project: { select: { organizationId: true } } },
+    });
+    if (!dep) return null;
+    return { orgId: dep.project.organizationId, projectId: dep.projectId };
+  }
+
+  private async resolveOrgIdFromProject(projectId?: string): Promise<string | null> {
+    if (!projectId) return null;
+    const p = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { organizationId: true },
+    });
+    return p?.organizationId ?? null;
+  }
+
+  private idFromArgs(params: any, result: any): string | undefined {
+    return result?.id ?? params?.args?.where?.id ?? params?.args?.data?.id;
+  }
+
+  private async emitForDeployment(params: any, result: any) {
+    const id = this.idFromArgs(params, result);
+    const ctx = id ? await this.resolveOrgIdFromDeployment(id) : null;
+    if (!ctx) return;
+    const data = params?.args?.data ?? {};
+    const isBuild = 'buildStatus' in data || 'buildStep' in data;
+    const type: OrgEventType = isBuild ? 'build.changed' : 'deployment.changed';
+    this.orgEvents.emit({ organizationId: ctx.orgId, type, id, projectId: ctx.projectId });
+  }
+
+  private async emitForDatabase(params: any, result: any) {
+    const id = this.idFromArgs(params, result);
+    if (!id) return;
+    const db = await this.prisma.database.findUnique({
+      where: { id },
+      select: { projectId: true, project: { select: { organizationId: true } } },
+    });
+    if (!db) return;
+    this.orgEvents.emit({
+      organizationId: db.project.organizationId,
+      type: 'database.changed',
+      id,
+      projectId: db.projectId,
+    });
+  }
+
+  private async emitForDatabaseBackup(params: any, result: any) {
+    const databaseId = result?.databaseId ?? params?.args?.data?.databaseId ?? params?.args?.where?.databaseId;
+    if (!databaseId) return;
+    const db = await this.prisma.database.findUnique({
+      where: { id: databaseId },
+      select: { projectId: true, project: { select: { organizationId: true } } },
+    });
+    if (!db) return;
+    this.orgEvents.emit({
+      organizationId: db.project.organizationId,
+      type: 'database.changed',
+      id: databaseId,
+      projectId: db.projectId,
+    });
+  }
+
+  private async emitForImageHistory(params: any, result: any) {
+    const deploymentId = result?.deploymentId ?? params?.args?.data?.deploymentId;
+    const ctx = await this.resolveOrgIdFromDeployment(deploymentId);
+    if (!ctx) return;
+    this.orgEvents.emit({
+      organizationId: ctx.orgId,
+      type: 'build.changed',
+      id: deploymentId,
+      projectId: ctx.projectId,
+    });
+  }
+
+  private async emitForPod(params: any, result: any) {
+    const deploymentId = result?.deploymentId ?? params?.args?.data?.deploymentId ?? params?.args?.where?.deploymentId;
+    if (!deploymentId) return;
+    const ctx = await this.resolveOrgIdFromDeployment(deploymentId);
+    if (!ctx) return;
+    this.orgEvents.emit({
+      organizationId: ctx.orgId,
+      type: 'pod.changed',
+      id: result?.id,
+      projectId: ctx.projectId,
+    });
+  }
+
+  private async emitForProject(params: any, result: any) {
+    const id = this.idFromArgs(params, result);
+    const orgId = result?.organizationId ?? (id ? await this.resolveOrgIdFromProject(id) : null);
+    if (!orgId) return;
+    this.orgEvents.emit({ organizationId: orgId, type: 'project.changed', id });
+  }
+
+  private async emitForIngress(params: any, result: any) {
+    const deploymentId = result?.deploymentId ?? params?.args?.data?.deploymentId;
+    const ctx = await this.resolveOrgIdFromDeployment(deploymentId);
+    if (!ctx) return;
+    this.orgEvents.emit({
+      organizationId: ctx.orgId,
+      type: 'deployment.changed',
+      id: deploymentId,
+      projectId: ctx.projectId,
+    });
+  }
+
+  private async emitForMembership(params: any, result: any) {
+    // Invalidate membership cache for affected user(s)
+    const userId = result?.userId ?? params?.args?.where?.userId ?? params?.args?.data?.userId;
+    const orgId = result?.organizationId ?? params?.args?.where?.organizationId ?? params?.args?.data?.organizationId;
+    if (userId) this.membershipCache.invalidateUser(userId);
+    else if (orgId) this.membershipCache.invalidateOrg(orgId);
+    else this.membershipCache.invalidateAll();
+    if (orgId) this.orgEvents.emit({ organizationId: orgId, type: 'membership.changed', id: userId });
+  }
+}

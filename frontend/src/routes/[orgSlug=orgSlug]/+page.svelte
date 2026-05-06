@@ -1,11 +1,6 @@
-<script module lang="ts">
-	// Module-scoped cache: stale-while-revalidate for instant back-navigation.
-	const overviewCache = new Map<string, { deployments: any[]; databases: any[]; projects: Map<string, any>; builds: any }>();
-</script>
-
 <script lang="ts">
-	import { page } from '$app/stores';
-	import { apiFetch, selectedOrganization, pinnedItems, toasts } from '$lib/stores';
+	import { invalidate } from '$app/navigation';
+	import { apiFetch, pinnedItems, toasts, subscribeOrgEvents } from '$lib/stores';
 	import {
 		Plus, Search, Sparkles, GitBranch, Star, MoreVertical, ExternalLink,
 		RefreshCw, Pin, PinOff, Copy, ChevronRight, Loader2, CheckCircle2,
@@ -13,9 +8,10 @@
 	} from 'lucide-svelte';
 	import { onDestroy } from 'svelte';
 	import { slide } from 'svelte/transition';
+	import type { PageData } from './$types';
 
-	const orgSlug = $derived($page.params.orgSlug);
-	let loading = $state(true);
+	let { data } = $props<{ data: PageData }>();
+	const orgSlug = $derived(data.orgSlug);
 
 	interface DeploymentSummary {
 		id: string;
@@ -37,6 +33,9 @@
 	}
 
 	let deployments = $state<DeploymentSummary[]>([]);
+	let loading = $state(true);
+	let buildsLoading = $state(true);
+	let orgId = $state<string | null>(null);
 
 	interface DatabaseSummary {
 		id: string;
@@ -59,36 +58,21 @@
 	}
 	let projectMetas = $state<Map<string, ProjectMeta>>(new Map());
 
-	async function fetchProjects() {
-		try {
-			const orgId = $selectedOrganization?.id;
-			const url = orgId ? `/apiv1/projects?orgId=${orgId}` : '/apiv1/projects';
-			const res = await apiFetch(url);
-			if (res.ok) {
-				const list: ProjectMeta[] = await res.json();
-				const m = new Map<string, ProjectMeta>();
-				for (const p of list) m.set(p.id, p);
-				projectMetas = m;
-			}
-		} catch (e) { console.error('Failed to fetch projects:', e); }
-	}
-
 	async function fetchDeployments() {
-		try {
-			const orgId = $selectedOrganization?.id;
-			const url = orgId ? `/apiv1/deployments?orgId=${orgId}` : '/apiv1/deployments';
-			const res = await apiFetch(url);
-			if (res.ok) deployments = await res.json();
-		} catch (e) { console.error('Failed to fetch deployments:', e); }
+		// Used by single-deployment actions (e.g. restart) to refresh after a mutation
+		// without waiting for the SSE round-trip. Pulls from the aggregated endpoint.
+		await invalidate(`org:${orgSlug}:overview`);
 	}
 
-	async function fetchDatabases() {
-		try {
-			const orgId = $selectedOrganization?.id;
-			const url = orgId ? `/apiv1/databases?orgId=${orgId}` : '/apiv1/databases';
-			const res = await apiFetch(url);
-			if (res.ok) databases = await res.json();
-		} catch (e) { console.error('Failed to fetch databases:', e); }
+	function applyOverview(payload: any) {
+		deployments = payload.deployments ?? [];
+		databases = payload.databases ?? [];
+		const m = new Map<string, ProjectMeta>();
+		for (const p of payload.projects ?? []) m.set(p.id, p);
+		projectMetas = m;
+		activeBuilds = payload.builds?.active ?? [];
+		recentBuilds = payload.builds?.recent ?? [];
+		orgId = payload.organization?.id ?? null;
 	}
 
 	// ── Builds ──
@@ -105,7 +89,6 @@
 
 	let activeBuilds = $state<ActiveBuild[]>([]);
 	let recentBuilds = $state<RecentBuild[]>([]);
-	let buildsLoading = $state(true);
 	let now = $state(Date.now());
 	let timerInterval: ReturnType<typeof setInterval> | null = null;
 	function startTimer() { if (!timerInterval) timerInterval = setInterval(() => { now = Date.now(); }, 1000); }
@@ -113,16 +96,6 @@
 	$effect(() => { if (activeBuilds.length > 0) startTimer(); else stopTimer(); });
 	onDestroy(() => stopTimer());
 
-	async function fetchBuilds() {
-		buildsLoading = true;
-		try {
-			const orgId = $selectedOrganization?.id;
-			const url = orgId ? `/apiv1/deployments/recent-builds?orgId=${orgId}` : '/apiv1/deployments/recent-builds';
-			const res = await apiFetch(url);
-			if (res.ok) { const d = await res.json(); activeBuilds = d.active ?? []; recentBuilds = d.recent ?? []; }
-		} catch (e) { console.error('Failed to fetch builds:', e); }
-		finally { buildsLoading = false; }
-	}
 
 	function fmtDuration(s: number): string { if (s < 60) return `${s}s`; const m = Math.floor(s / 60); return m < 60 ? `${m}m ${s % 60}s` : `${Math.floor(m / 60)}h ${m % 60}m`; }
 	function elapsed(d: string): number { return Math.max(0, Math.floor((now - new Date(d).getTime()) / 1000)); }
@@ -307,45 +280,33 @@
 		return null;
 	}
 
+	let unsub: (() => void) | null = null;
+
 	$effect(() => {
-		if ($selectedOrganization?.id) {
-			const cacheKey = $selectedOrganization.id;
-			const cached = overviewCache.get(cacheKey);
-			if (cached) {
-				// Serve from cache instantly, then revalidate in background
-				deployments = cached.deployments;
-				databases = cached.databases;
-				projectMetas = cached.projects;
-				if (cached.builds) {
-					activeBuilds = cached.builds.active ?? [];
-					recentBuilds = cached.builds.recent ?? [];
-					buildsLoading = false;
-				}
+		const overviewPromise = data.overview;
+		loading = true;
+		buildsLoading = true;
+		overviewPromise
+			.then((payload) => {
+				applyOverview(payload);
 				loading = false;
-				// Background revalidate
-				revalidateOverview(cacheKey);
-			} else {
-				loading = true;
-				buildsLoading = true;
-				Promise.all([fetchDeployments(), fetchBuilds(), fetchDatabases(), fetchProjects()])
-					.finally(() => { loading = false; updateCache(cacheKey); });
-			}
-		}
+				buildsLoading = false;
+				if (orgId) {
+					unsub?.();
+					const id = orgId;
+					unsub = subscribeOrgEvents(id, () => {
+						invalidate(`org:${orgSlug}:overview`);
+					}, { invalidateDependencies: [`org:${orgSlug}:overview`] });
+				}
+			})
+			.catch((e) => {
+				console.error('Failed to load overview:', e);
+				loading = false;
+				buildsLoading = false;
+			});
 	});
 
-	async function revalidateOverview(cacheKey: string) {
-		await Promise.all([fetchDeployments(), fetchBuilds(), fetchDatabases(), fetchProjects()]);
-		updateCache(cacheKey);
-	}
-
-	function updateCache(cacheKey: string) {
-		overviewCache.set(cacheKey, {
-			deployments: [...deployments],
-			databases: [...databases],
-			projects: new Map(projectMetas),
-			builds: { active: [...activeBuilds], recent: [...recentBuilds] }
-		});
-	}
+	onDestroy(() => { unsub?.(); });
 </script>
 
 <svelte:window onclick={closeAll} />

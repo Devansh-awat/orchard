@@ -10,6 +10,7 @@ import { FaviconService } from './favicon.service';
 import { NodesService } from '../nodes/nodes.service';
 import { QuotasService } from '../quotas/quotas.service';
 import { TailscaleService } from '../tailscale/tailscale.service';
+import { MembershipCacheService } from '../auth/membership-cache.service';
 import { randomUUID } from 'crypto';
 import * as dns from 'dns';
 import { promisify } from 'util';
@@ -29,6 +30,7 @@ export class ProjectsService {
     @Inject(forwardRef(() => QuotasService))
     private readonly quotasService: QuotasService,
     private readonly tailscaleService: TailscaleService,
+    private readonly membershipCache: MembershipCacheService,
   ) {}
 
   private async resolvePlacementForProject(projectId: string): Promise<{
@@ -156,7 +158,10 @@ export class ProjectsService {
    * Compute the runtime deployment status from Kubernetes state.
    * Possible values: 'running' | 'restarting' | 'scaling' | 'failed' | 'stopped' | 'unhealthy' | 'pending'
    */
-  private async computeDeploymentStatus(deployment: any): Promise<string> {
+  private async computeDeploymentStatus(
+    deployment: any,
+    prefetched?: { pods: any[]; warnings: any[] },
+  ): Promise<string> {
     if (deployment.replicas === 0) {
       return 'stopped';
     }
@@ -166,12 +171,19 @@ export class ProjectsService {
     }
 
     try {
-      const livePods = await this.kubernetesService.getDeploymentPods(
-        deployment.name,
-        deployment.namespace
-      );
-      const pods = this.formatLivePods(livePods?.pods);
-      const warnings = livePods?.warnings || [];
+      let pods: any[];
+      let warnings: any[];
+      if (prefetched) {
+        pods = prefetched.pods ?? [];
+        warnings = prefetched.warnings ?? [];
+      } else {
+        const livePods = await this.kubernetesService.getDeploymentPods(
+          deployment.name,
+          deployment.namespace,
+        );
+        pods = this.formatLivePods(livePods?.pods) ?? [];
+        warnings = livePods?.warnings || [];
+      }
 
       const readyPods = pods?.filter((pod: any) => pod.status?.toLowerCase() === 'ready') ?? [];
       const allPods = (pods ?? []).filter((pod: any) => pod.status?.toLowerCase() !== 'succeeded');
@@ -4339,10 +4351,8 @@ export class ProjectsService {
    * - Org member → only projects where user is a ProjectMember
    */
   private async buildProjectAccessFilter(userId: string, orgId?: string) {
-    const orgMemberships = await this.prisma.organizationMember.findMany({
-      where: orgId ? { userId, organizationId: orgId } : { userId },
-      select: { organizationId: true, role: true },
-    });
+    const all = await this.membershipCache.getMemberships(userId);
+    const orgMemberships = orgId ? all.filter((m) => m.organizationId === orgId) : all;
     if (orgMemberships.length === 0) return null;
 
     const adminOrgIds = orgMemberships
@@ -4699,11 +4709,36 @@ export class ProjectsService {
     const isProjectAdmin = projectMembership?.role.name === 'admin';
     const canEdit = isOrgAdminOrOwner || !!projectMembership;
 
+    // Batch-fetch pods for every deployment by namespace: one listNamespacedPod
+    // call per unique namespace, grouped by `app` label. Replaces N+1 K8s reads.
+    const namespaces = Array.from(
+      new Set(
+        project.deployments
+          .map((d) => d.namespace)
+          .filter((ns): ns is string => !!ns),
+      ),
+    );
+    const podsByNsByApp = new Map<string, Map<string, { pods: any[]; warnings: any[] }> | null>();
+    await Promise.all(
+      namespaces.map(async (ns) => {
+        const map = await this.kubernetesService.listNamespacePodsByApp(ns);
+        podsByNsByApp.set(ns, map);
+      }),
+    );
+
     const deploymentsWithComputedStatus = await Promise.all(
       project.deployments.map(async (deployment) => {
-        const computedStatus = await this.computeDeploymentStatus(deployment);
+        const ns = deployment.namespace;
+        const nsMap = ns ? podsByNsByApp.get(ns) : undefined;
+        // null = batch fetch failed → fall back to per-deployment fetch (original behavior).
+        // empty entry = batch succeeded, no pods for this deployment → 'pending'.
+        const prefetched =
+          nsMap === null || nsMap === undefined
+            ? undefined
+            : (nsMap.get(deployment.name) ?? { pods: [], warnings: [] });
+        const computedStatus = await this.computeDeploymentStatus(deployment, prefetched);
         return { ...deployment, status: computedStatus };
-      })
+      }),
     );
 
     const icon = project.icon ?? (await this.resolveProjectIconFallback(project.deployments));
@@ -4903,6 +4938,32 @@ export class ProjectsService {
     return { active: activeBuilds, recent: recentBuilds };
   }
 
+  /**
+   * Single-roundtrip overview aggregator. Looks up org by slug, runs RBAC once
+   * (via cached memberships), and fans out the four list queries in parallel.
+   */
+  async getOrgOverviewBySlug(userId: string, orgSlug: string) {
+    const org = await this.prisma.organization.findUnique({
+      where: { slug: orgSlug },
+      select: { id: true, slug: true, name: true },
+    });
+    if (!org) throw new NotFoundException('Organization not found');
+
+    const memberships = await this.membershipCache.getMembershipsForOrg(userId, org.id);
+    if (memberships.length === 0) {
+      throw new ForbiddenException('Not a member of this organization');
+    }
+
+    const [projects, deployments, databases, builds] = await Promise.all([
+      this.listProjects(userId, org.id),
+      this.listDeploymentsSummary(userId, org.id),
+      this.listDatabasesSummary(userId, org.id),
+      this.listRecentBuilds(userId, org.id),
+    ]);
+
+    return { organization: org, projects, deployments, databases, builds };
+  }
+
   async getProjectDeployments(projectId: string) {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
@@ -4974,7 +5035,6 @@ export class ProjectsService {
             organization: true,
           },
         },
-        pods: true,
         services: {
           include: {
             ports: true,
@@ -4989,6 +5049,7 @@ export class ProjectsService {
         },
         imageHistory: {
           orderBy: { createdAt: 'desc' },
+          take: 20,
           select: {
             id: true,
             image: true,
@@ -5016,7 +5077,7 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    let pods: any = deployment.pods;
+    let pods: any = [];
     let availableReplicas = 0;
     let warnings: any[] = [];
     let totalCpuUsage: number | null = null;
@@ -5059,63 +5120,68 @@ export class ProjectsService {
 
     const deploymentWithInternalUrls = this.addInternalUrlsToDeployment(deployment);
 
-    // Include project-level ingresses that may be linked to a different deployment
-    // but have routes targeting this deployment's services
-    if (deployment.projectId && deployment.namespace) {
-      const existingIngressIds: string[] = (deploymentWithInternalUrls.ingresses ?? []).map((i: any) => i.id);
-      const projectIngresses = await this.prisma.ingress.findMany({
-        where: {
-          projectId: deployment.projectId,
-          id: { notIn: existingIngressIds },
-        },
-        include: { service: true },
-      });
+    // Discover project-level ingresses that route to this deployment's services,
+    // and enrich every ingress with K8s routes — all in a single parallel pass.
+    // Each unique ingress name is read from K8s exactly once.
+    if (deployment.namespace) {
+      const namespace = deployment.namespace;
+      const directIngresses: any[] = deploymentWithInternalUrls.ingresses ?? [];
+      const existingIds = new Set(directIngresses.map((i: any) => i.id));
 
-      const serviceNames = new Set(
-        (deployment.services ?? []).map((s: any) => s.name)
-      );
+      const projectIngresses = deployment.projectId
+        ? await this.prisma.ingress.findMany({
+            where: { projectId: deployment.projectId, id: { notIn: Array.from(existingIds) } },
+            include: { service: true },
+          })
+        : [];
 
-      for (const pi of projectIngresses) {
-        try {
-          const k8sIngress = await this.kubernetesService.readIngress(deployment.namespace, pi.name);
-          const rules = k8sIngress?.spec?.rules ?? [];
-          const k8sPaths = rules.length > 0 && rules[0].http?.paths ? rules[0].http.paths : [];
-          const hasRouteForDeployment = k8sPaths.some((p: any) =>
-            serviceNames.has(p.backend?.service?.name || '')
-          );
-          if (hasRouteForDeployment) {
-            deploymentWithInternalUrls.ingresses = [
-              ...(deploymentWithInternalUrls.ingresses ?? []),
-              pi,
-            ];
-          }
-        } catch {
-          // skip if K8s read fails
-        }
-      }
-    }
-
-    // Enrich ingresses with actual K8s routes
-    if (deploymentWithInternalUrls.ingresses && deployment.namespace) {
-      const enrichedIngresses = await Promise.all(
-        deploymentWithInternalUrls.ingresses.map(async (ingress: any) => {
+      const candidateIngresses = [...directIngresses, ...projectIngresses];
+      const k8sByName = new Map<string, any>();
+      await Promise.all(
+        candidateIngresses.map(async (ing: any) => {
+          if (k8sByName.has(ing.name)) return;
           try {
-            const k8sIngress = await this.kubernetesService.readIngress(deployment.namespace, ingress.name);
-            const rules = k8sIngress?.spec?.rules ?? [];
-            const routes = rules.length > 0 && rules[0].http?.paths
-              ? rules[0].http.paths.map((p: any) => ({
-                  path: p.path || '/',
-                  serviceName: p.backend?.service?.name || '',
-                  servicePort: p.backend?.service?.port?.number || 0,
-                }))
-              : [{ path: ingress.path, serviceName: ingress.service?.name || '', servicePort: ingress.service?.port || 0 }];
-            return { ...ingress, routes };
+            const k8sIngress = await this.kubernetesService.readIngress(namespace, ing.name);
+            k8sByName.set(ing.name, k8sIngress);
           } catch {
-            return { ...ingress, routes: [{ path: ingress.path, serviceName: ingress.service?.name || '', servicePort: ingress.service?.port || 0 }] };
+            k8sByName.set(ing.name, null);
           }
-        })
+        }),
       );
-      deploymentWithInternalUrls.ingresses = enrichedIngresses;
+
+      const serviceNames = new Set((deployment.services ?? []).map((s: any) => s.name));
+      const enrich = (ing: any) => {
+        const k8sIngress = k8sByName.get(ing.name);
+        const rules = k8sIngress?.spec?.rules ?? [];
+        const k8sPaths = rules.length > 0 && rules[0].http?.paths ? rules[0].http.paths : [];
+        const routes = k8sPaths.length
+          ? k8sPaths.map((p: any) => ({
+              path: p.path || '/',
+              serviceName: p.backend?.service?.name || '',
+              servicePort: p.backend?.service?.port?.number || 0,
+            }))
+          : [
+              {
+                path: ing.path,
+                serviceName: ing.service?.name || '',
+                servicePort: ing.service?.port || 0,
+              },
+            ];
+        return { ingress: { ...ing, routes }, k8sPaths };
+      };
+
+      const directEnriched = directIngresses.map((ing) => enrich(ing).ingress);
+      const projectExtras = projectIngresses
+        .map((pi: any) => {
+          const { ingress, k8sPaths } = enrich(pi);
+          const hasRouteForDeployment = k8sPaths.some((p: any) =>
+            serviceNames.has(p.backend?.service?.name || ''),
+          );
+          return hasRouteForDeployment ? ingress : null;
+        })
+        .filter((i): i is any => !!i);
+
+      deploymentWithInternalUrls.ingresses = [...directEnriched, ...projectExtras];
     }
 
     const computedStatus = await this.computeDeploymentStatus(deployment);

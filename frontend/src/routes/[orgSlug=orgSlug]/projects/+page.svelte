@@ -1,12 +1,13 @@
 <script lang="ts">
-	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
-	import { apiFetch, selectedOrganization, toasts, refreshTree } from '$lib/stores';
+	import { goto, invalidate } from '$app/navigation';
+	import { onDestroy } from 'svelte';
+	import { apiFetch, toasts, refreshTree, subscribeOrgEvents } from '$lib/stores';
 	import { Plus, Loader2, Folder, Trash2, Rocket, Globe, Database } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import type { PageData } from './$types';
 
-	const orgSlug = $derived($page.params.orgSlug);
+	let { data } = $props<{ data: PageData }>();
+	const orgSlug = $derived(data.orgSlug);
 
 	interface Project {
 		id: string;
@@ -22,6 +23,7 @@
 
 	let projects = $state<Project[]>([]);
 	let loading = $state(true);
+	let orgId = $state<string | null>(null);
 	let creating = $state(false);
 	let newName = $state('');
 	let showCreate = $state(false);
@@ -32,15 +34,7 @@
 	function toSlug(n: string) { return n.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
 
 	async function fetchProjects() {
-		loading = true;
-		try {
-			const orgId = $selectedOrganization?.id;
-			const url = orgId ? `/apiv1/projects?orgId=${orgId}` : '/apiv1/projects';
-			const res = await apiFetch(url);
-			if (!res.ok) throw new Error();
-			projects = await res.json();
-		} catch { /* */ }
-		finally { loading = false; }
+		await invalidate(`org:${orgSlug}:overview`);
 	}
 
 	async function createProject() {
@@ -49,7 +43,6 @@
 		creating = true;
 		try {
 			const slug = toSlug(name);
-			const orgId = $selectedOrganization?.id;
 			const res = await apiFetch('/apiv1/projects', {
 				method: 'POST', headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ name, slug, organizationId: orgId })
@@ -90,7 +83,30 @@
 		} finally { deleting = false; }
 	}
 
-	onMount(fetchProjects);
+	let unsub: (() => void) | null = null;
+
+	$effect(() => {
+		const promise = data.projectsPromise;
+		loading = true;
+		promise
+			.then(({ organizationId, projects: list }) => {
+				orgId = organizationId;
+				projects = list ?? [];
+				loading = false;
+				unsub?.();
+				unsub = subscribeOrgEvents(
+					organizationId,
+					() => invalidate(`org:${orgSlug}:overview`),
+					{ invalidateDependencies: [`org:${orgSlug}:overview`] },
+				);
+			})
+			.catch((e) => {
+				console.error('Failed to load projects:', e);
+				loading = false;
+			});
+	});
+
+	onDestroy(() => unsub?.());
 </script>
 
 <div class="page">

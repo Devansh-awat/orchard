@@ -1,9 +1,10 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
-	import { page } from '$app/stores';
-	import { apiFetch, toasts } from '$lib/stores';
+	import { onDestroy } from 'svelte';
+	import { invalidate } from '$app/navigation';
+	import { apiFetch, toasts, subscribeOrgEvents } from '$lib/stores';
 	import { formatCpuMilli, formatMemoryBytes } from '$lib/quantity';
 	import { Loader2, Activity } from 'lucide-svelte';
+	import type { PageData } from './$types';
 
 	interface OrgQuota {
 		org: {
@@ -29,39 +30,13 @@
 		usage: { cpuMilli: number; memoryBytes: number; pods: number };
 	}
 
+	let { data } = $props<{ data: PageData }>();
 	let orgQuota = $state<OrgQuota | null>(null);
 	let projects = $state<ProjectRow[]>([]);
 	let loading = $state(true);
+	let orgId = $state<string | null>(null);
 
-	const orgSlug = $derived($page.params.orgSlug);
-
-	async function load() {
-		loading = true;
-		try {
-			const orgRes = await apiFetch(`/apiv1/organizations/slug/${orgSlug}`);
-			if (!orgRes.ok) throw new Error('Failed to load organization');
-			const orgData = await orgRes.json();
-			const orgId: string = orgData.id;
-
-			const [qRes, pRes] = await Promise.all([
-				apiFetch(`/apiv1/organizations/${orgId}/quota`),
-				apiFetch(`/apiv1/organizations/${orgId}/quota/projects`),
-			]);
-			if (!qRes.ok) throw new Error('Failed to load usage');
-			if (!pRes.ok) throw new Error('Failed to load project usage');
-			orgQuota = await qRes.json();
-			const pdata = await pRes.json();
-			projects = pdata.projects;
-		} catch (e) {
-			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to load usage',
-				color: 'error',
-			});
-		} finally {
-			loading = false;
-		}
-	}
+	const orgSlug = $derived(data.orgSlug);
 
 	function pct(used: number, cap: number | null): number | null {
 		if (!cap || cap <= 0) return null;
@@ -75,7 +50,35 @@
 	const cpuPct = $derived(orgQuota ? pct(orgQuota.usage.cpuMilli, cpuCap) : null);
 	const memPct = $derived(orgQuota ? pct(orgQuota.usage.memoryBytes, memCap) : null);
 
-	onMount(load);
+	let usageUnsub: (() => void) | null = null;
+
+	$effect(() => {
+		const promise = data.usagePromise;
+		loading = true;
+		promise
+			.then((p) => {
+				orgQuota = p.orgQuota;
+				projects = p.projects;
+				orgId = p.orgId;
+				loading = false;
+				usageUnsub?.();
+				usageUnsub = subscribeOrgEvents(
+					p.orgId,
+					() => invalidate(`org:${orgSlug}:usage`),
+					{ invalidateDependencies: [`org:${orgSlug}:usage`] },
+				);
+			})
+			.catch((e) => {
+				loading = false;
+				toasts.add({
+					title: 'Error',
+					description: e instanceof Error ? e.message : 'Failed to load usage',
+					color: 'error',
+				});
+			});
+	});
+
+	onDestroy(() => usageUnsub?.());
 </script>
 
 <div class="p-6 max-w-6xl mx-auto">

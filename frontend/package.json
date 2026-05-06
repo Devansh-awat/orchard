@@ -30,6 +30,7 @@
 	"dependencies": {
 		"@number-flow/svelte": "^0.3.9",
 		"@simplewebauthn/browser": "^13.2.2",
+		"@tanstack/svelte-query": "^6.1.28",
 		"ansi_up": "^6.0.6",
 		"chart.js": "^4.5.1",
 		"ghostty-web": "^0.4.0",

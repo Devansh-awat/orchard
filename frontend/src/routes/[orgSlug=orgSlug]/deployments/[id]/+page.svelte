@@ -3,7 +3,9 @@
 	import { goto } from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
 	import { Tabs } from 'melt/builders';
-	import { apiFetch, toasts, refreshTree, isSuperAdmin, selectedOrganization } from '$lib/stores';
+	import { apiFetch, toasts, refreshTree, isSuperAdmin, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
+	import { invalidate } from '$app/navigation';
+	import type { PageData } from './$types';
 	import { AnsiUp } from 'ansi_up';
 	import {
 		ArrowLeft,
@@ -1020,7 +1022,6 @@
 	let buildStartTime = $state<number>(0);
 	let buildElapsed = $state(0);
 	let accumulatedBuildLogs = $state<string | null>(null);
-	let buildPollInterval: ReturnType<typeof setInterval> | null = null;
 	let buildElapsedInterval: ReturnType<typeof setInterval> | null = null;
 	let buildModalStatus = $state<string>('pending');
 	let buildModalStep = $state<string | null>(null);
@@ -1064,48 +1065,44 @@
 		buildModalWarnings = [];
 		buildModalTimestamps = null;
 
+		// Local UI tick for the elapsed timer; not a network poll.
 		buildElapsedInterval = setInterval(() => {
 			buildElapsed = Math.floor((Date.now() - buildStartTime) / 1000);
 		}, 1000);
 
-		buildPollInterval = setInterval(async () => {
-			try {
-				const response = await apiFetch(`/apiv1/deployments/${deploymentId}`);
-				if (!response.ok) return;
-				const data = await response.json();
+		// Build status, step, logs, and warnings all flow through SSE
+		// (`build.changed` → fetchDeployment → syncBuildModalFromDeployment).
+		// No client polling.
+	}
 
-				buildModalStatus = data.buildStatus ?? data.status;
-				buildModalStep = data.buildStep ?? null;
-				buildModalError = data.buildError ?? null;
-				buildModalWarnings = data.warnings ?? [];
-				buildModalTimestamps = data.buildStepTimestamps ?? null;
-				if (data.buildLogs) {
-					accumulatedBuildLogs = data.buildLogs;
-				}
+	function syncBuildModalFromDeployment() {
+		if (!deployment) return;
+		buildModalStatus = (deployment.buildStatus ?? deployment.status) as any;
+		buildModalStep = (deployment.buildStep ?? null) as any;
+		buildModalError = (deployment.buildError ?? null) as any;
+		buildModalWarnings = ((deployment as any).warnings ?? []) as any;
+		buildModalTimestamps = ((deployment as any).buildStepTimestamps ?? null) as any;
+		if ((deployment as any).buildLogs) {
+			accumulatedBuildLogs = (deployment as any).buildLogs;
+		}
 
-				if (data.buildStatus === 'succeeded') {
-					stopBuildPolling();
-					// Brief delay to show completion state
-					setTimeout(() => {
-						showBuildModal = false;
-						showBuildCard = false;
-						fetchDeployment();
-					}, 1500);
-				} else if (data.buildStatus === 'failed') {
-					if (buildElapsedInterval) {
-						clearInterval(buildElapsedInterval);
-						buildElapsedInterval = null;
-					}
-				}
-			} catch {}
-		}, 2000);
+		if (deployment.buildStatus === 'succeeded') {
+			stopBuildPolling();
+			setTimeout(() => {
+				showBuildModal = false;
+				showBuildCard = false;
+				fetchDeployment();
+			}, 1500);
+		} else if (
+			deployment.buildStatus === 'failed' ||
+			(deployment.buildStatus as any) === 'cancelled' ||
+			(deployment.buildStatus as any) === 'canceled'
+		) {
+			stopBuildPolling();
+		}
 	}
 
 	function stopBuildPolling() {
-		if (buildPollInterval) {
-			clearInterval(buildPollInterval);
-			buildPollInterval = null;
-		}
 		if (buildElapsedInterval) {
 			clearInterval(buildElapsedInterval);
 			buildElapsedInterval = null;
@@ -1167,7 +1164,9 @@
 
 	const canCancelBuild = $derived(buildModalStatus === 'building' || buildModalStatus === 'pending');
 
-	const deploymentId = $derived($page.params.id);
+	let { data } = $props<{ data: PageData }>();
+	const deploymentId = $derived(data.deploymentId);
+	let sseUnsub: (() => void) | null = null;
 	const orgSlug = $derived($page.params.orgSlug);
 
 	function createPortRow(overrides?: Partial<ServicePortForm>): ServicePortForm {
@@ -1419,10 +1418,6 @@
 		return { payload };
 	}
 
-	let deploymentInterval: ReturnType<typeof setInterval>;
-	let podInterval: ReturnType<typeof setInterval> | null = null;
-	let buildLogsInterval: ReturnType<typeof setInterval> | null = null;
-
 	async function fetchDeployment() {
 		try {
 			const response = await apiFetch(`/apiv1/deployments/${deploymentId}`);
@@ -1444,6 +1439,7 @@
 
 			deployment = data;
 			if (wasUnloaded) loadDismissedNotifications();
+			if (showBuildModal || showBuildCard) syncBuildModalFromDeployment();
 
 			// Sync Tailscale state
 			tailscaleHostname = data.tailscaleHostname || null;
@@ -2627,37 +2623,21 @@
 		}
 	});
 
+	// Build logs are refreshed by fetchDeployment, which is triggered by SSE
+	// `build.changed` events. Just kick off a single fetch on transition.
 	$effect(() => {
 		if (deployment?.buildStatus === 'building') {
-			if (!buildLogsInterval) {
-				fetchBuildLogs();
-				buildLogsInterval = setInterval(fetchBuildLogs, 5000);
-			}
-		} else if (buildLogsInterval) {
-			clearInterval(buildLogsInterval);
-			buildLogsInterval = null;
+			fetchBuildLogs();
 		}
 	});
 
-	// Only poll logs when overview tab is active
+	// Pod logs: fetch once when the overview tab is active and selection changes.
+	// Live tailing via SSE is a separate piece of work; for now logs only refresh
+	// on tab activation, container switch, or manual refresh.
 	$effect(() => {
 		if (tabs.value === 'overview' && selectedPod && selectedContainer) {
 			fetchLogs();
-			podInterval = setInterval(() => {
-				if (selectedPod && selectedContainer) {
-					fetchLogs();
-				}
-			}, 5000);
-		} else if (podInterval) {
-			clearInterval(podInterval);
-			podInterval = null;
 		}
-		return () => {
-			if (podInterval) {
-				clearInterval(podInterval);
-				podInterval = null;
-			}
-		};
 	});
 
 	let projectIngressesFetched = false;
@@ -2690,19 +2670,47 @@
 			autoDeployFetched = false;
 			projectIngressesFetched = false;
 
-			if (deploymentInterval) {
-				clearInterval(deploymentInterval);
-			}
-			if (podInterval) {
-				clearInterval(podInterval);
-			}
-			if (buildLogsInterval) {
-				clearInterval(buildLogsInterval);
-			}
-
+			// Seed from streamed loader (instant render on hover-prefetched nav).
+			// All live updates come via SSE — no client-side polling.
+			data.deploymentPromise
+				.then((seed: any) => {
+					if (!deployment && deploymentId === data.deploymentId) {
+						deployment = seed;
+						loading = false;
+						loadDismissedNotifications();
+					}
+				})
+				.catch(() => {});
 			fetchDeployment();
 			checkTailscaleStatus();
-			deploymentInterval = setInterval(fetchDeployment, 5000);
+
+			sseUnsub?.();
+			const orgIdForSse = $selectedOrganization?.id;
+			if (orgIdForSse) {
+				sseUnsub = subscribeOrgEvents(
+					orgIdForSse,
+					(ev) => {
+						if (ev.type === 'deployment.metrics' && ev.id === deploymentId) {
+							// Push metrics directly to the chart; no full deployment refetch.
+							const cpu = ev.payload?.cpu;
+							const memory = ev.payload?.memory;
+							if (cpu == null && memory == null) return;
+							metricsHistory = [
+								...metricsHistory,
+								{ time: new Date(ev.ts), cpu, memory },
+							].slice(-360);
+							if (deployment) {
+								deployment = { ...deployment, totalCpuUsage: cpu, totalMemoryUsage: memory } as any;
+							}
+							return;
+						}
+						if (ev.id === deploymentId || ev.projectId === deployment?.projectId) {
+							fetchDeployment();
+						}
+					},
+					{ invalidateDependencies: [`deployment:${deploymentId}`] },
+				);
+			}
 		}
 	});
 
@@ -2748,12 +2756,8 @@
 	});
 
 	onDestroy(() => {
-		clearInterval(deploymentInterval);
-		clearInterval(podInterval);
-		if (buildLogsInterval) {
-			clearInterval(buildLogsInterval);
-		}
 		stopBuildPolling();
+		sseUnsub?.();
 	});
 
 	$effect(() => {

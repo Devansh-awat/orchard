@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
-	import { apiFetch, toasts, refreshTree } from '$lib/stores';
+	import { goto, invalidate } from '$app/navigation';
+	import { onMount, onDestroy } from 'svelte';
+	import { apiFetch, toasts, refreshTree, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
+	import type { PageData } from './$types';
 	import {
 		ArrowLeft,
 		Loader2,
@@ -151,8 +152,6 @@
 		}
 	}
 	let restoringBackupId = $state<string | null>(null);
-	let backupRefreshInterval = $state<ReturnType<typeof setInterval> | null>(null);
-	let statusRefreshInterval = $state<ReturnType<typeof setInterval> | null>(null);
 
 	// Backup schedule
 	const SCHEDULE_PRESETS: Array<{ id: string; label: string; cron: string; description: string }> = [
@@ -522,8 +521,10 @@
 	let deleteTimerInterval = $state<ReturnType<typeof setInterval> | null>(null);
 	let deleteProgress = $derived(((10 - deleteCountdown) / 10) * 100);
 
-	const dbId = $derived($page.params.id);
+	let { data } = $props<{ data: PageData }>();
+	const dbId = $derived(data.dbId);
 	const orgSlug = $derived($page.params.orgSlug);
+	let dbSseUnsub: (() => void) | null = null;
 
 	async function fetchDatabase(silent = false) {
 		if (!silent) loading = true;
@@ -544,15 +545,8 @@
 	}
 
 	function scheduleStatusRefresh() {
-		if (database?.mode !== 'container') return;
-		const ls = database?.liveStatus;
-		const isTransient = !ls?.ready || database?.status === 'restoring';
-		if (isTransient && !statusRefreshInterval) {
-			statusRefreshInterval = setInterval(() => fetchDatabase(true), 4000);
-		} else if (!isTransient && statusRefreshInterval) {
-			clearInterval(statusRefreshInterval);
-			statusRefreshInterval = null;
-		}
+		// Status updates flow via SSE (`pod.changed` / `database.changed`).
+		// No client polling.
 	}
 
 	function podStateLabel(): { label: string; kind: 'ready' | 'pending' | 'error' } {
@@ -636,15 +630,9 @@
 	}
 
 	function startBackupRefresh() {
-		if (backupRefreshInterval) return;
-		backupRefreshInterval = setInterval(async () => {
-			await fetchBackups();
-			const anyRunning = backups.some((b) => b.status === 'running' || b.status === 'pending');
-			if (!anyRunning && backupRefreshInterval) {
-				clearInterval(backupRefreshInterval);
-				backupRefreshInterval = null;
-			}
-		}, 4000);
+		// Backup status updates flow via SSE (`database.changed` fires when a
+		// DatabaseBackup row is created/updated). The page's SSE handler calls
+		// fetchBackups; nothing client-side to schedule.
 	}
 
 	function formatBytes(bytes: number | null): string {
@@ -738,16 +726,32 @@
 	}
 
 	onMount(() => {
+		data.databasePromise
+			.then((seed: any) => {
+				if (!database) {
+					database = seed;
+					loading = false;
+					if (database?.backupsEnabled) fetchBackups();
+					scheduleStatusRefresh();
+				}
+			})
+			.catch(() => {});
 		fetchDatabase();
+		const orgIdForSse = $selectedOrganization?.id;
+		if (orgIdForSse) {
+			dbSseUnsub = subscribeOrgEvents(
+				orgIdForSse,
+				(ev) => {
+					if (ev.id === dbId) {
+						fetchDatabase(true);
+						if (database?.backupsEnabled) fetchBackups();
+					}
+				},
+				{ invalidateDependencies: [`database:${dbId}`] },
+			);
+		}
 		return () => {
-			if (backupRefreshInterval) {
-				clearInterval(backupRefreshInterval);
-				backupRefreshInterval = null;
-			}
-			if (statusRefreshInterval) {
-				clearInterval(statusRefreshInterval);
-				statusRefreshInterval = null;
-			}
+			dbSseUnsub?.();
 		};
 	});
 </script>
