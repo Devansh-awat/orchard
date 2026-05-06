@@ -254,11 +254,8 @@ export class GitHubService {
   }
 
   async getRepoBranches(accessToken: string, owner: string, repo: string): Promise<GitHubBranch[]> {
-    const branches: GitHubBranch[] = [];
-    let page = 1;
-    let hasMore = true;
-
-    while (hasMore && page <= 10) {
+    const MAX_PAGES = 10;
+    const fetchPage = async (page: number): Promise<GitHubBranch[]> => {
       const response = await fetch(
         `https://api.github.com/repos/${owner}/${repo}/branches?per_page=100&page=${page}`,
         {
@@ -267,24 +264,24 @@ export class GitHubService {
             'Accept': 'application/vnd.github+json',
             'X-GitHub-Api-Version': '2022-11-28',
           },
-        }
+        },
       );
+      if (!response.ok) throw new BadRequestException('Failed to fetch repository branches');
+      return response.json();
+    };
 
-      if (!response.ok) {
-        throw new BadRequestException('Failed to fetch repository branches');
-      }
-
-      const data = await response.json();
-      
-      if (data.length === 0) {
-        hasMore = false;
-      } else {
-        branches.push(...data);
-        page++;
-      }
+    // Probe page 1 first; if it's full, fan out the rest in parallel.
+    const first = await fetchPage(1);
+    if (first.length < 100) return first;
+    const rest = await Promise.all(
+      Array.from({ length: MAX_PAGES - 1 }, (_, i) => fetchPage(i + 2)),
+    );
+    const all = [first];
+    for (const page of rest) {
+      if (page.length === 0) break;
+      all.push(page);
     }
-
-    return branches;
+    return all.flat();
   }
 
   async getRepoContents(

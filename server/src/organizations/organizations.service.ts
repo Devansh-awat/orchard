@@ -137,14 +137,14 @@ export class OrganizationsService {
       throw new NotFoundException(`Organization ${organizationId} not found`);
     }
 
-    for (const member of organization.members) {
-      if (!member.user.imageUrl && member.user.hackClubId) {
-        const imageUrl = await this.usersService.syncImageUrlFromClerk(member.user.hackClubId);
-        if (imageUrl) {
-          member.user.imageUrl = imageUrl;
+    await Promise.all(
+      organization.members.map(async (member) => {
+        if (!member.user.imageUrl && member.user.hackClubId) {
+          const imageUrl = await this.usersService.syncImageUrlFromClerk(member.user.hackClubId);
+          if (imageUrl) member.user.imageUrl = imageUrl;
         }
-      }
-    }
+      }),
+    );
 
     return this.scrubOrgSecrets(organization as any);
   }
@@ -176,14 +176,14 @@ export class OrganizationsService {
       orderBy: { addedAt: 'asc' },
     });
 
-    for (const member of members) {
-      if (!member.user.imageUrl && member.user.hackClubId) {
-        const imageUrl = await this.usersService.syncImageUrlFromClerk(member.user.hackClubId);
-        if (imageUrl) {
-          member.user.imageUrl = imageUrl;
+    await Promise.all(
+      members.map(async (member) => {
+        if (!member.user.imageUrl && member.user.hackClubId) {
+          const imageUrl = await this.usersService.syncImageUrlFromClerk(member.user.hackClubId);
+          if (imageUrl) member.user.imageUrl = imageUrl;
         }
-      }
-    }
+      }),
+    );
 
     return members;
   }
@@ -224,14 +224,14 @@ export class OrganizationsService {
       throw new NotFoundException(`Organization with slug ${slug} not found`);
     }
 
-    for (const member of organization.members) {
-      if (!member.user.imageUrl && member.user.hackClubId) {
-        const imageUrl = await this.usersService.syncImageUrlFromClerk(member.user.hackClubId);
-        if (imageUrl) {
-          member.user.imageUrl = imageUrl;
+    await Promise.all(
+      organization.members.map(async (member) => {
+        if (!member.user.imageUrl && member.user.hackClubId) {
+          const imageUrl = await this.usersService.syncImageUrlFromClerk(member.user.hackClubId);
+          if (imageUrl) member.user.imageUrl = imageUrl;
         }
-      }
-    }
+      }),
+    );
 
     return this.scrubOrgSecrets(organization as any);
   }

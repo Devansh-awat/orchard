@@ -46,16 +46,15 @@ export class ProjectsService {
     return { allowedNodes: placement.allowedNodes, deniedNodes: placement.deniedNodes };
   }
 
+  /**
+   * NOTE: Used to resolve a per-deployment favicon as the project icon fallback.
+   * That fired N sequential HTTP/disk lookups on every page load and blocked
+   * `getProjectBySlugsFull` and `listProjects`. Now a no-op — the frontend
+   * decides its own fallback (Folder icon) when `project.icon` is null.
+   */
   private async resolveProjectIconFallback(
-    deployments: Array<{ ingresses?: Array<{ host?: string | null }> | null }> | null | undefined
+    _deployments: Array<{ ingresses?: Array<{ host?: string | null }> | null }> | null | undefined,
   ): Promise<string | null> {
-    if (!deployments?.length) return null;
-    for (const dep of deployments) {
-      const host = dep.ingresses?.[0]?.host;
-      if (!host) continue;
-      const url = await this.faviconService.getFavicon(host);
-      if (url) return url;
-    }
     return null;
   }
 

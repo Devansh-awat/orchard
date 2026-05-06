@@ -122,11 +122,13 @@ export class QuotasService {
       where: { organizationId },
       select: { id: true },
     });
-    for (const p of projects) {
-      await this.applyProjectQuota(p.id).catch((err) => {
-        console.error(`[Quotas] Failed to apply quota for project ${p.id}:`, err);
-      });
-    }
+    await Promise.allSettled(
+      projects.map((p) =>
+        this.applyProjectQuota(p.id).catch((err) => {
+          console.error(`[Quotas] Failed to apply quota for project ${p.id}:`, err);
+        }),
+      ),
+    );
   }
 
   // Org-wide admission check used at deploy time. Throws if the requested delta would push

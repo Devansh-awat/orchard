@@ -751,7 +751,7 @@
 			</div>
 		{:else if filteredDeployments.length}
 			<div class="pj-deployment-grid">
-				{#each filteredDeployments as deployment}
+				{#each filteredDeployments as deployment (deployment.id)}
 					{@const href = `/${orgSlug}/deployments/${deployment.id}`}
 					{@const item = deploymentMenu.getItem(deployment, {
 						onSelect: () => openDeployment(deployment.id)
@@ -826,7 +826,7 @@
 				</h2>
 			</div>
 			<div class="pj-deployment-grid">
-				{#each databases as db}
+				{#each databases as db (db.id)}
 					<a
 						href="/{orgSlug}/databases/{db.id}"
 						class="pj-deployment-card"
@@ -862,7 +862,7 @@
 				</h2>
 			</div>
 			<div class="pj-deployment-grid">
-				{#each templateInstances as ti}
+				{#each templateInstances as ti (ti.id)}
 					<a
 						href="/{orgSlug}/template-instances/{ti.id}"
 						class="pj-deployment-card"
