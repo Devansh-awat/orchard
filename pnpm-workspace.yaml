@@ -2,3 +2,4 @@ packages:
   - 'lif'
   - 'server'
   - 'frontend'
+  - 'gateway'
