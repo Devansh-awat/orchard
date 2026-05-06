@@ -747,7 +747,8 @@
 						if (database?.backupsEnabled) fetchBackups();
 					}
 				},
-				{ invalidateDependencies: [`database:${dbId}`] },
+				// SSE handler refetches silently; don't re-run the loader.
+				{ invalidateDependencies: [] },
 			);
 		}
 		return () => {

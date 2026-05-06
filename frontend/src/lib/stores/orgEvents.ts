@@ -70,6 +70,11 @@ export function subscribeOrgEvents(
 	opts?: { queryClient?: QueryClient; invalidateDependencies?: string[] },
 ): () => void {
 	if (!browser) return () => {};
+	// Diagnostic kill-switch: ?nosse in the URL disables SSE entirely so we
+	// can confirm whether SSE is what's freezing the tab.
+	if (typeof location !== 'undefined' && location.search.includes('nosse')) {
+		return () => {};
+	}
 
 	let sub = subscriptions.get(orgId);
 	if (!sub) {

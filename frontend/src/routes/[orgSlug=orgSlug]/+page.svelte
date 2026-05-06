@@ -281,28 +281,39 @@
 	}
 
 	let unsub: (() => void) | null = null;
+	// Plain `let` (not $state) so the effect below doesn't subscribe to it.
+	// applyOverview writes to deployments/databases/projectMetas; if this flag
+	// were $state, the effect would re-run on every microtask and infinite-loop.
+	let hasLoadedOnce = false;
 
 	$effect(() => {
 		const overviewPromise = data.overview;
-		loading = true;
-		buildsLoading = true;
+		const isInitial = !hasLoadedOnce;
+		if (isInitial) {
+			loading = true;
+			buildsLoading = true;
+		}
 		overviewPromise
 			.then((payload) => {
 				applyOverview(payload);
+				hasLoadedOnce = true;
 				loading = false;
 				buildsLoading = false;
 				if (orgId) {
 					unsub?.();
 					const id = orgId;
-					unsub = subscribeOrgEvents(id, () => {
+					unsub = subscribeOrgEvents(id, (ev) => {
+						if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
 						invalidate(`org:${orgSlug}:overview`);
-					}, { invalidateDependencies: [`org:${orgSlug}:overview`] });
+					}, { invalidateDependencies: [] });
 				}
 			})
 			.catch((e) => {
 				console.error('Failed to load overview:', e);
-				loading = false;
-				buildsLoading = false;
+				if (isInitial) {
+					loading = false;
+					buildsLoading = false;
+				}
 			});
 	});
 

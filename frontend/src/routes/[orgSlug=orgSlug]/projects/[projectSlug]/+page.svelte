@@ -330,8 +330,13 @@
 		}
 	}
 
+	let lastSyncedNamespace: string | null = null;
 	async function syncNamespace() {
 		if (!project?.namespace) return;
+		// Only sync once per namespace per page mount. Without this guard, every
+		// SSE-triggered project refetch re-runs sync, which spams the endpoint.
+		if (project.namespace === lastSyncedNamespace) return;
+		lastSyncedNamespace = project.namespace;
 		try {
 			await apiFetch(`/apiv1/sync/${project.namespace}`, { method: 'POST' });
 			const response = await apiFetch(`/apiv1/projects/${project.id}`);
@@ -472,15 +477,22 @@
 	}
 
 	let unsub: (() => void) | null = null;
+	let hasLoadedOnce = false;
 
 	$effect(() => {
 		const promise = data.projectPromise;
-		error = null;
-		loading = true;
+		const isInitial = !hasLoadedOnce;
+		if (isInitial) {
+			error = null;
+			loading = true;
+		}
 		promise
 			.then((p) => {
+				if (!p) return;
 				applyProjectData(p);
+				hasLoadedOnce = true;
 				loading = false;
+				error = null;
 				if (p?.namespace) syncNamespace();
 				const orgIdValue = p?.organization?.id;
 				if (orgIdValue) {
@@ -488,6 +500,7 @@
 					unsub = subscribeOrgEvents(
 						orgIdValue,
 						(ev) => {
+							if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
 							if (
 								ev.projectId === p.id ||
 								ev.type === 'project.changed' ||
@@ -501,8 +514,10 @@
 				}
 			})
 			.catch((e) => {
-				error = e instanceof Error ? e.message : 'Failed to fetch project';
-				loading = false;
+				if (isInitial) {
+					error = e instanceof Error ? e.message : 'Failed to fetch project';
+					loading = false;
+				}
 			});
 	});
 

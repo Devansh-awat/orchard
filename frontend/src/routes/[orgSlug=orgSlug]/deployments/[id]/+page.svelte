@@ -1172,6 +1172,9 @@
 	let { data } = $props<{ data: PageData }>();
 	const deploymentId = $derived(data.deploymentId);
 	let sseUnsub: (() => void) | null = null;
+	// Track the last deploymentId we hard-reset for so SSE-driven loader
+	// revalidations don't blow away page state (selected pod/container/logs).
+	let lastSeenDeploymentId: string | null = null;
 	const orgSlug = $derived($page.params.orgSlug);
 
 	function createPortRow(overrides?: Partial<ServicePortForm>): ServicePortForm {
@@ -2711,60 +2714,72 @@
 	});
 
 	$effect(() => {
-		if (deploymentId) {
-			loading = true;
-			error = null;
-			deployment = null;
-			selectedPod = '';
-			selectedContainer = '';
-			manualPodSelection = false;
-			logs = '';
-			buildLogs = '';
-			accumulatedBuildLogs = null;
-			autoDeployFetched = false;
-			projectIngressesFetched = false;
+		if (!deploymentId) return;
 
-			// Seed from streamed loader (instant render on hover-prefetched nav).
-			// All live updates come via SSE — no client-side polling.
-			data.deploymentPromise
-				.then((seed: any) => {
-					if (!deployment && deploymentId === data.deploymentId) {
-						deployment = seed;
-						loading = false;
-						loadDismissedNotifications();
+		const isNewRoute = deploymentId !== lastSeenDeploymentId;
+		if (!isNewRoute) {
+			// Loader re-ran because of an SSE-triggered invalidate(). The SSE
+			// handler already calls fetchDeployment to refresh data; we don't
+			// need to reset page state or re-subscribe.
+			return;
+		}
+		lastSeenDeploymentId = deploymentId;
+
+		loading = true;
+		error = null;
+		deployment = null;
+		selectedPod = '';
+		selectedContainer = '';
+		manualPodSelection = false;
+		logs = '';
+		buildLogs = '';
+		accumulatedBuildLogs = null;
+		autoDeployFetched = false;
+		projectIngressesFetched = false;
+
+		// Seed from streamed loader (instant render on hover-prefetched nav).
+		// All live updates come via SSE — no client-side polling.
+		data.deploymentPromise
+			.then((seed: any) => {
+				if (!deployment && deploymentId === data.deploymentId) {
+					deployment = seed;
+					loading = false;
+					loadDismissedNotifications();
+				}
+			})
+			.catch(() => {});
+		fetchDeployment();
+		checkTailscaleStatus();
+
+		sseUnsub?.();
+		const orgIdForSse = $selectedOrganization?.id;
+		if (orgIdForSse) {
+			sseUnsub = subscribeOrgEvents(
+				orgIdForSse,
+				(ev) => {
+					if (ev.type === 'deployment.metrics' && ev.id === deploymentId) {
+						// Push metrics directly to the chart; no full deployment refetch.
+						const cpu = ev.payload?.cpu;
+						const memory = ev.payload?.memory;
+						if (cpu == null && memory == null) return;
+						metricsHistory = [
+							...metricsHistory,
+							{ time: new Date(ev.ts), cpu, memory },
+						].slice(-360);
+						if (deployment) {
+							deployment = { ...deployment, totalCpuUsage: cpu, totalMemoryUsage: memory } as any;
+						}
+						return;
 					}
-				})
-				.catch(() => {});
-			fetchDeployment();
-			checkTailscaleStatus();
-
-			sseUnsub?.();
-			const orgIdForSse = $selectedOrganization?.id;
-			if (orgIdForSse) {
-				sseUnsub = subscribeOrgEvents(
-					orgIdForSse,
-					(ev) => {
-						if (ev.type === 'deployment.metrics' && ev.id === deploymentId) {
-							// Push metrics directly to the chart; no full deployment refetch.
-							const cpu = ev.payload?.cpu;
-							const memory = ev.payload?.memory;
-							if (cpu == null && memory == null) return;
-							metricsHistory = [
-								...metricsHistory,
-								{ time: new Date(ev.ts), cpu, memory },
-							].slice(-360);
-							if (deployment) {
-								deployment = { ...deployment, totalCpuUsage: cpu, totalMemoryUsage: memory } as any;
-							}
-							return;
-						}
-						if (ev.id === deploymentId || ev.projectId === deployment?.projectId) {
-							fetchDeployment();
-						}
-					},
-					{ invalidateDependencies: [`deployment:${deploymentId}`] },
-				);
-			}
+					if (ev.id === deploymentId || ev.projectId === deployment?.projectId) {
+						fetchDeployment();
+					}
+				},
+				// No invalidateDependencies: the SSE handler refetches directly.
+				// Re-running the loader would force the $effect to redo a hard
+				// reset and flicker the skeleton.
+				{ invalidateDependencies: [] },
+			);
 		}
 	});
 

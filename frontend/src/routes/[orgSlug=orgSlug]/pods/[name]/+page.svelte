@@ -49,9 +49,12 @@
 	const namespace = $derived(data.namespace);
 	let podSseUnsub: (() => void) | null = null;
 
-	async function fetchPodDetails() {
-		loading = true;
-		error = null;
+	async function fetchPodDetails(opts?: { silent?: boolean }) {
+		const silent = opts?.silent === true;
+		if (!silent) {
+			loading = true;
+			error = null;
+		}
 
 		try {
 			const response = await apiFetch(`/apiv1/pods/${podName}?namespace=${namespace}`);
@@ -66,9 +69,11 @@
 				await fetchLogs();
 			}
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to fetch pod details';
+			if (!silent) {
+				error = e instanceof Error ? e.message : 'Failed to fetch pod details';
+			}
 		} finally {
-			loading = false;
+			if (!silent) loading = false;
 		}
 	}
 
@@ -133,10 +138,11 @@
 				orgIdForSse,
 				(ev) => {
 					if (ev.type === 'pod.changed' || ev.type === 'deployment.changed') {
-						fetchPodDetails();
+						fetchPodDetails({ silent: true });
 					}
 				},
-				{ invalidateDependencies: [`pod:${namespace}/${podName}`] },
+				// SSE handler refetches directly; don't also re-run the loader.
+				{ invalidateDependencies: [] },
 			);
 		}
 	});

@@ -2,7 +2,7 @@
 // front-end /apiv1 → backend, everything else → frontend on the same origin.
 //
 // Usage:
-//   go run .                 # listens on :8080, proxies localhost:3000/3001
+//   go run .                 # listens on :4000, proxies localhost:3000/3001
 //   GATEWAY_LISTEN=:80 go run .
 //   go run . --listen :9000 --backend http://localhost:4000
 package main
@@ -18,7 +18,7 @@ import (
 )
 
 func main() {
-	listen := flagOrEnv("listen", "GATEWAY_LISTEN", ":8080")
+	listen := flagOrEnv("listen", "GATEWAY_LISTEN", ":4000")
 	frontend := flagOrEnv("frontend", "GATEWAY_FRONTEND", "http://localhost:3000")
 	backend := flagOrEnv("backend", "GATEWAY_BACKEND", "http://localhost:3001")
 	flag.Parse()

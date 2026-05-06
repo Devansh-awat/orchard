@@ -85,24 +85,30 @@
 
 	let unsub: (() => void) | null = null;
 
+	let hasLoadedOnce = false;
 	$effect(() => {
 		const promise = data.projectsPromise;
-		loading = true;
+		const isInitial = !hasLoadedOnce;
+		if (isInitial) loading = true;
 		promise
 			.then(({ organizationId, projects: list }) => {
 				orgId = organizationId;
 				projects = list ?? [];
+				hasLoadedOnce = true;
 				loading = false;
 				unsub?.();
 				unsub = subscribeOrgEvents(
 					organizationId,
-					() => invalidate(`org:${orgSlug}:overview`),
-					{ invalidateDependencies: [`org:${orgSlug}:overview`] },
+					(ev) => {
+						if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
+						invalidate(`org:${orgSlug}:overview`);
+					},
+					{ invalidateDependencies: [] },
 				);
 			})
 			.catch((e) => {
 				console.error('Failed to load projects:', e);
-				loading = false;
+				if (isInitial) loading = false;
 			});
 	});
 

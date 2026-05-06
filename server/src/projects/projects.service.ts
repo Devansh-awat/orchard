@@ -4668,10 +4668,23 @@ export class ProjectsService {
           select: { id: true, email: true, username: true, firstName: true, lastName: true },
         },
         deployments: {
-          include: {
+          select: {
+            id: true,
+            name: true,
+            status: true,
+            buildStatus: true,
+            buildStep: true,
+            replicas: true,
+            namespace: true,
+            image: true,
+            githubRepo: true,
+            githubBranch: true,
+            projectId: true,
+            updatedAt: true,
+            createdAt: true,
             services: { include: { ports: true } },
             ingresses: { include: { service: true } },
-            envVars: true,
+            // envVars omitted — large per-deployment, only needed on deployment detail.
             _count: { select: { pods: true, services: true } },
           },
         },

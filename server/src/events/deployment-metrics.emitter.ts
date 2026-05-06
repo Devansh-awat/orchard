@@ -37,10 +37,9 @@ export class DeploymentMetricsEmitter {
   }
 
   private async scrapeAndEmit(orgIds: string[]) {
-    const deployments = await this.prisma.deployment.findMany({
+    const rows = await this.prisma.deployment.findMany({
       where: {
         replicas: { gt: 0 },
-        namespace: { not: null },
         project: { organizationId: { in: orgIds } },
       },
       select: {
@@ -51,6 +50,8 @@ export class DeploymentMetricsEmitter {
         project: { select: { organizationId: true } },
       },
     });
+    // Prisma 6 rejects `{ not: null }`; filter in JS instead of NOT.
+    const deployments = rows.filter((d): d is typeof d & { namespace: string } => !!d.namespace);
     if (deployments.length === 0) return;
 
     // Group by namespace for one metrics fetch per namespace.

@@ -52,29 +52,37 @@
 
 	let usageUnsub: (() => void) | null = null;
 
+	let hasLoadedOnce = false;
 	$effect(() => {
 		const promise = data.usagePromise;
-		loading = true;
+		const isInitial = !hasLoadedOnce;
+		if (isInitial) loading = true;
 		promise
 			.then((p) => {
 				orgQuota = p.orgQuota;
 				projects = p.projects;
 				orgId = p.orgId;
+				hasLoadedOnce = true;
 				loading = false;
 				usageUnsub?.();
 				usageUnsub = subscribeOrgEvents(
 					p.orgId,
-					() => invalidate(`org:${orgSlug}:usage`),
-					{ invalidateDependencies: [`org:${orgSlug}:usage`] },
+					(ev) => {
+						if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
+						invalidate(`org:${orgSlug}:usage`);
+					},
+					{ invalidateDependencies: [] },
 				);
 			})
 			.catch((e) => {
-				loading = false;
-				toasts.add({
-					title: 'Error',
-					description: e instanceof Error ? e.message : 'Failed to load usage',
-					color: 'error',
-				});
+				if (isInitial) {
+					loading = false;
+					toasts.add({
+						title: 'Error',
+						description: e instanceof Error ? e.message : 'Failed to load usage',
+						color: 'error',
+					});
+				}
 			});
 	});
 
