@@ -8,6 +8,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { UsersService } from '../users/users.service';
+import { AuditService } from '../audit/audit.service';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -16,6 +17,7 @@ export class WebhooksService {
     private readonly prisma: PrismaService,
     private readonly kubernetesService: KubernetesService,
     private readonly usersService: UsersService,
+    private readonly audit: AuditService,
   ) {}
 
   async createWebhookToken(
@@ -44,6 +46,18 @@ export class WebhooksService {
         token,
         label: label || null,
       },
+    });
+
+    void this.audit.log({
+      action: 'webhook_token.created',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'webhook_token',
+      targetId: record.id,
+      targetLabel: label || record.id,
     });
 
     return {
@@ -108,6 +122,18 @@ export class WebhooksService {
 
     await this.prisma.deploymentWebhookToken.delete({
       where: { id: tokenId },
+    });
+
+    void this.audit.log({
+      action: 'webhook_token.deleted',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'webhook_token',
+      targetId: tokenId,
+      targetLabel: tokenRecord.label || tokenId,
     });
 
     return { ok: true };

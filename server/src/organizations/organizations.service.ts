@@ -4,6 +4,7 @@ import { OrganizationRole } from '@prisma/client';
 import { UsersService } from '../users/users.service';
 import { StorageService } from './storage.service';
 import { EmailService } from '../email/email.service';
+import { AuditService } from '../audit/audit.service';
 import { randomBytes } from 'crypto';
 
 @Injectable()
@@ -11,7 +12,8 @@ export class OrganizationsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
-    private readonly emailService: EmailService
+    private readonly emailService: EmailService,
+    private readonly audit: AuditService,
   ) {}
 
   async checkPermission(organizationId: string, userId: string, requiredRole: 'owner' | 'admin') {
@@ -282,6 +284,11 @@ export class OrganizationsService {
 
     await this.checkPermission(organizationId, user.id, 'admin');
 
+    const before = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { name: true, description: true, backupR2Endpoint: true, backupR2Bucket: true, backupR2Region: true, backupR2AccessKey: true, databasePublicIp: true },
+    });
+
     const updateData: any = {};
     if (data.name !== undefined) updateData.name = data.name;
     if (data.description !== undefined) updateData.description = data.description;
@@ -328,6 +335,33 @@ export class OrganizationsService {
         }
       }
     });
+
+    const changedFields = Object.keys(updateData);
+    // Track which secret-bearing fields changed without leaking values.
+    const secretFields = ['backupR2SecretKey'];
+    const meta: Record<string, any> = {};
+    if (before) {
+      for (const f of changedFields) {
+        if (secretFields.includes(f)) {
+          meta[f] = ['***', '***'];
+        } else {
+          meta[f] = [(before as any)[f] ?? null, (updateData as any)[f] ?? null];
+        }
+      }
+    }
+    if (changedFields.length > 0) {
+      void this.audit.log({
+        action: 'org.updated',
+        actorUserId: user.id,
+        actorEmail: user.email,
+        organizationId,
+        targetType: 'organization',
+        targetId: organizationId,
+        targetLabel: updated.name,
+        metadata: meta,
+      });
+    }
+
     return this.scrubOrgSecrets(updated as any);
   }
 
@@ -561,6 +595,17 @@ export class OrganizationsService {
       console.error('Failed to send organization invite email:', err);
     });
 
+    void this.audit.log({
+      action: 'org.member.invited',
+      actorUserId: inviter.id,
+      actorEmail: inviter.email,
+      organizationId,
+      targetType: 'invitation',
+      targetId: invitation.id,
+      targetLabel: normalizedEmail,
+      metadata: { email: normalizedEmail, role },
+    });
+
     return invitation;
   }
 
@@ -632,6 +677,17 @@ export class OrganizationsService {
       await tx.organizationInvitation.delete({ where: { id: invitation.id } });
 
       return newMember;
+    });
+
+    void this.audit.log({
+      action: 'org.member.joined',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: invitation.organizationId,
+      targetType: 'user',
+      targetId: user.id,
+      targetLabel: user.email,
+      metadata: { role: invitation.role, via: 'invitation' },
     });
 
     return member;
@@ -830,6 +886,16 @@ export class OrganizationsService {
 
     await this.prisma.organizationInvitation.delete({ where: { id: invitationId } });
 
+    void this.audit.log({
+      action: 'org.invitation.cancelled',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: invitation.organizationId,
+      targetType: 'invitation',
+      targetId: invitationId,
+      targetLabel: invitation.email,
+    });
+
     return { success: true, message: 'Invitation cancelled' };
   }
 
@@ -916,6 +982,17 @@ export class OrganizationsService {
       where: { id: memberId }
     });
 
+    void this.audit.log({
+      action: 'org.member.removed',
+      actorUserId: remover.id,
+      actorEmail: remover.email,
+      organizationId,
+      targetType: 'user',
+      targetId: member.userId,
+      targetLabel: member.user.email,
+      metadata: { role: member.role },
+    });
+
     // If user no longer belongs to any organization, reset their setup
     const remainingMemberships = await this.prisma.organizationMember.count({
       where: { userId: member.userId }
@@ -958,7 +1035,7 @@ export class OrganizationsService {
       throw new BadRequestException('Cannot change owner role. Transfer ownership instead.');
     }
 
-    return this.prisma.organizationMember.update({
+    const updated = await this.prisma.organizationMember.update({
       where: { id: memberId },
       data: { role: newRole },
       include: {
@@ -974,6 +1051,19 @@ export class OrganizationsService {
         }
       }
     });
+
+    void this.audit.log({
+      action: 'org.member.role_changed',
+      actorUserId: updater.id,
+      actorEmail: updater.email,
+      organizationId,
+      targetType: 'user',
+      targetId: member.userId,
+      targetLabel: updated.user.email,
+      metadata: { role: [member.role, newRole] },
+    });
+
+    return updated;
   }
 
 }

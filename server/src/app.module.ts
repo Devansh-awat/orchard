@@ -19,6 +19,7 @@ import { QuotasModule } from './quotas/quotas.module';
 import { TailscaleModule } from './tailscale/tailscale.module';
 import { EventsModule } from './events/events.module';
 import { MetricsModule } from './metrics/metrics.module';
+import { AuditModule } from './audit/audit.module';
 
 @Module({
   imports: [
@@ -42,6 +43,7 @@ import { MetricsModule } from './metrics/metrics.module';
     TailscaleModule,
     EventsModule,
     MetricsModule,
+    AuditModule,
   ],
 })
 export class AppModule {}

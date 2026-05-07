@@ -1,10 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import { randomBytes } from 'crypto';
 
 @Injectable()
 export class ApiTokensService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   async create(userId: string, name: string, expiresAt?: Date) {
     const token = `orch_${randomBytes(32).toString('hex')}`;
@@ -16,6 +20,15 @@ export class ApiTokensService {
         userId,
         expiresAt,
       },
+    });
+
+    void this.audit.log({
+      action: 'api_token.created',
+      actorUserId: userId,
+      targetType: 'api_token',
+      targetId: apiToken.id,
+      targetLabel: name,
+      metadata: { expiresAt: expiresAt ? expiresAt.toISOString() : null },
     });
 
     // Return the raw token only on creation
@@ -46,6 +59,15 @@ export class ApiTokensService {
     }
 
     await this.prisma.apiToken.delete({ where: { id: tokenId } });
+
+    void this.audit.log({
+      action: 'api_token.revoked',
+      actorUserId: userId,
+      targetType: 'api_token',
+      targetId: tokenId,
+      targetLabel: token.name,
+    });
+
     return true;
   }
 }

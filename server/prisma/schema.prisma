@@ -787,6 +787,35 @@ model SsoConfig {
   @@map("sso_configs")
 }
 
+// Append-only audit ledger. Pruned at 180 days by AuditService.
+// Lightweight by design: no full row snapshots, metadata is small JSON.
+model AuditLog {
+  id             String   @id @default(uuid()) @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  // Verb-style action key, e.g. "deployment.created", "org.member.role_changed".
+  action         String   @db.VarChar(80)
+  // Who did it. Null = system / unauthenticated action.
+  actorUserId    String?  @map("actor_user_id") @db.Uuid
+  actorEmail     String?  @map("actor_email") @db.VarChar(255)
+  // Scoping. All three nullable — a global event has no org, a project event has no deployment, etc.
+  organizationId String?  @map("organization_id") @db.Uuid
+  projectId      String?  @map("project_id") @db.Uuid
+  deploymentId   String?  @map("deployment_id") @db.Uuid
+  // Generic target reference for things outside the three FKs (e.g. user, member, token).
+  targetType     String?  @map("target_type") @db.VarChar(40)
+  targetId       String?  @map("target_id") @db.VarChar(64)
+  targetLabel    String?  @map("target_label") @db.VarChar(255)
+  // Small structured context, e.g. {"role":["member","admin"]}. Capped at ~2KB by service.
+  metadata       Json?    @db.JsonB
+
+  @@index([createdAt(sort: Desc)], map: "idx_audit_logs_created")
+  @@index([organizationId, createdAt(sort: Desc)], map: "idx_audit_logs_org")
+  @@index([projectId, createdAt(sort: Desc)], map: "idx_audit_logs_project")
+  @@index([deploymentId, createdAt(sort: Desc)], map: "idx_audit_logs_deployment")
+  @@index([actorUserId, createdAt(sort: Desc)], map: "idx_audit_logs_actor")
+  @@map("audit_logs")
+}
+
 // Cluster nodes managed by admins. Synced from Kubernetes on demand.
 model Node {
   id           String   @id @default(uuid()) @db.Uuid

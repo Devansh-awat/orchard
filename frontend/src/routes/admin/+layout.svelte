@@ -2,7 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { isSuperAdmin, isLoaded } from '$lib/stores';
-	import { Shield, Users, Building2, LayoutDashboard, Server, Activity, Gauge } from 'lucide-svelte';
+	import { Shield, Users, Building2, LayoutDashboard, Server, Activity, Gauge, ScrollText } from 'lucide-svelte';
 
 	let { children } = $props();
 
@@ -19,6 +19,7 @@
 		{ href: '/admin/nodes', label: 'Nodes', icon: Server, exact: false },
 		{ href: '/admin/usage', label: 'Usage', icon: Activity, exact: false },
 		{ href: '/admin/backfill', label: 'Backfill', icon: Gauge, exact: false },
+		{ href: '/admin/audit-logs', label: 'Audit Log', icon: ScrollText, exact: false },
 	];
 
 	function isActive(href: string, exact: boolean) {

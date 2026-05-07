@@ -11,6 +11,7 @@ import { NodesService } from '../nodes/nodes.service';
 import { QuotasService } from '../quotas/quotas.service';
 import { TailscaleService } from '../tailscale/tailscale.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
+import { AuditService } from '../audit/audit.service';
 import { randomUUID } from 'crypto';
 import * as dns from 'dns';
 import { promisify } from 'util';
@@ -31,6 +32,7 @@ export class ProjectsService {
     private readonly quotasService: QuotasService,
     private readonly tailscaleService: TailscaleService,
     private readonly membershipCache: MembershipCacheService,
+    private readonly audit: AuditService,
   ) {}
 
   private async resolvePlacementForProject(projectId: string): Promise<{
@@ -444,6 +446,18 @@ export class ProjectsService {
       console.error('[Projects] initial applyProjectQuota failed:', err);
     });
 
+    void this.audit.log({
+      action: 'project.created',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId,
+      projectId: project.id,
+      targetType: 'project',
+      targetId: project.id,
+      targetLabel: project.name,
+      metadata: { slug: project.slug, namespace: project.namespace },
+    });
+
     return project;
   }
 
@@ -816,6 +830,21 @@ export class ProjectsService {
       throw e;
     }
 
+    if (createdDeployment) {
+      void this.audit.log({
+        action: 'deployment.created',
+        actorUserId: user.id,
+        actorEmail: user.email,
+        organizationId: project.organizationId,
+        projectId: project.id,
+        deploymentId: createdDeployment.id,
+        targetType: 'deployment',
+        targetId: createdDeployment.id,
+        targetLabel: createdDeployment.name,
+        metadata: { image, replicas, source: 'image' },
+      });
+    }
+
     return createdDeployment;
   }
 
@@ -1065,7 +1094,20 @@ export class ProjectsService {
     }
 
     console.log(`[Projects] Created deployment record ${deployment.id}, starting async build`);
-    
+
+    void this.audit.log({
+      action: 'deployment.created',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: project.organizationId,
+      projectId: project.id,
+      deploymentId: deployment.id,
+      targetType: 'deployment',
+      targetId: deployment.id,
+      targetLabel: deployment.name,
+      metadata: { source: 'github', repoUrl, branch, buildType },
+    });
+
     // Start build process asynchronously - don't await!
     this.buildAndDeployAsync(
       deployment.id,
@@ -1956,6 +1998,19 @@ export class ProjectsService {
       console.error(`[Projects] Rebuild failed for deployment ${deploymentId}:`, error);
     });
 
+    void this.audit.log({
+      action: 'deployment.redeployed',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+      metadata: { repo: deployment.githubRepo, branch: deployment.githubBranch, tag: uniqueTag },
+    });
+
     const result = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
       include: {
@@ -2121,6 +2176,20 @@ export class ProjectsService {
         },
       },
     });
+
+    void this.audit.log({
+      action: 'deployment.rolled_back',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+      metadata: { image: [deployment.image, imageHistory.image] },
+    });
+
     return this.addInternalUrlsToDeployment(result);
   }
 
@@ -2581,6 +2650,19 @@ export class ProjectsService {
         },
       },
     });
+
+    void this.audit.log({
+      action: 'ingress.created',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId: deployment.id,
+      targetType: 'ingress',
+      targetLabel: rawHost + path,
+      metadata: { host: rawHost, path, tls: tlsEnabled, service: targetService.name },
+    });
+
     return this.addInternalUrlsToDeployment(result);
   }
 
@@ -2787,6 +2869,19 @@ export class ProjectsService {
         ingresses: { include: { service: true } },
       },
     });
+
+    void this.audit.log({
+      action: 'ingress.created',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId: deployment.id,
+      targetType: 'ingress',
+      targetLabel: rawHost,
+      metadata: { host: rawHost, routes: data.routes.map((r) => r.path).join(','), tls: tlsEnabled },
+    });
+
     return this.addInternalUrlsToDeployment(result);
   }
 
@@ -2994,6 +3089,17 @@ export class ProjectsService {
         }
       }
 
+      void this.audit.log({
+        action: 'ingress.updated',
+        actorUserId: user.id,
+        actorEmail: user.email,
+        organizationId: project.organizationId,
+        projectId,
+        targetType: 'ingress',
+        targetLabel: rawHost,
+        metadata: { host: rawHost, addedPaths: pathBackends.map((p) => p.path).join(','), scope: 'project_merge' },
+      });
+
       return this.getProject(projectId, clerkId, userData);
     }
 
@@ -3085,6 +3191,17 @@ export class ProjectsService {
       });
       throw e;
     }
+
+    void this.audit.log({
+      action: 'ingress.created',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: project.organizationId,
+      projectId,
+      targetType: 'ingress',
+      targetLabel: rawHost,
+      metadata: { host: rawHost, routes: pathBackends.map((p) => p.path).join(','), tls: tlsEnabled, scope: 'project' },
+    });
 
     return this.getProject(projectId, clerkId, userData);
   }
@@ -3434,6 +3551,22 @@ export class ProjectsService {
       }
     }
 
+    void this.audit.log({
+      action: 'ingress.updated',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: project.organizationId,
+      projectId,
+      targetType: 'ingress',
+      targetId: ingressId,
+      targetLabel: rawHost,
+      metadata: {
+        host: [ingress.host, rawHost],
+        path: [ingress.path, pathBackends[0]?.path ?? null],
+        tls: [Boolean(ingress.tlsSecretName), tlsEnabled],
+      },
+    });
+
     return this.getProject(projectId, clerkId, userData);
   }
 
@@ -3530,6 +3663,19 @@ export class ProjectsService {
         },
       },
     });
+
+    void this.audit.log({
+      action: 'ingress.deleted',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: ingress.deployment.project.organizationId,
+      projectId: ingress.deployment.projectId,
+      deploymentId,
+      targetType: 'ingress',
+      targetId: ingressId,
+      targetLabel: ingress.host + ingress.path,
+    });
+
     return this.addInternalUrlsToDeployment(result);
   }
 
@@ -3645,6 +3791,18 @@ export class ProjectsService {
 
     await this.prisma.ingress.delete({
       where: { id: ingressId },
+    });
+
+    void this.audit.log({
+      action: 'ingress.deleted',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: ingress.project.organizationId,
+      projectId,
+      targetType: 'ingress',
+      targetId: ingressId,
+      targetLabel: ingress.host + ingress.path,
+      metadata: { scope: 'project' },
     });
 
     return { success: true };
@@ -4007,6 +4165,20 @@ export class ProjectsService {
         },
       },
     });
+
+    void this.audit.log({
+      action: 'ingress.updated',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'ingress',
+      targetId: ingressId,
+      targetLabel: rawHost,
+      metadata: { host: [ingress.host, rawHost], path: [ingress.path, path] },
+    });
+
     return this.addInternalUrlsToDeployment(result);
   }
 
@@ -4076,6 +4248,17 @@ export class ProjectsService {
 
     await this.prisma.project.delete({
       where: { id: projectId },
+    });
+
+    void this.audit.log({
+      action: 'project.deleted',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: project.organizationId,
+      targetType: 'project',
+      targetId: projectId,
+      targetLabel: project.name,
+      metadata: { slug: project.slug, namespace: project.namespace },
     });
 
     return {
@@ -4262,10 +4445,31 @@ export class ProjectsService {
       updates.backgroundImage = v ? v : null;
     }
 
-    return this.prisma.project.update({
+    const before = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { name: true, description: true, repositoryUrl: true, organizationId: true },
+    });
+    const updated = await this.prisma.project.update({
       where: { id: projectId },
       data: updates,
     });
+
+    const meta = this.audit.diff(before as any, updates, ['name', 'description', 'repositoryUrl']);
+    if (meta) {
+      void this.audit.log({
+        action: 'project.updated',
+        actorUserId: user.id,
+        actorEmail: user.email,
+        organizationId: before?.organizationId,
+        projectId,
+        targetType: 'project',
+        targetId: projectId,
+        targetLabel: updated.name,
+        metadata: meta,
+      });
+    }
+
+    return updated;
   }
 
   async uploadProjectAsset(
@@ -4410,7 +4614,7 @@ export class ProjectsService {
     });
     if (existing) throw new BadRequestException('User is already a member of this project');
 
-    return this.prisma.projectMember.create({
+    const created = await this.prisma.projectMember.create({
       data: {
         projectId,
         userId: user.id,
@@ -4424,6 +4628,21 @@ export class ProjectsService {
         },
       },
     });
+
+    const project = await this.prisma.project.findUnique({ where: { id: projectId }, select: { organizationId: true } });
+    void this.audit.log({
+      action: 'project.member.added',
+      actorUserId: adder.id,
+      actorEmail: adder.email,
+      organizationId: project?.organizationId,
+      projectId,
+      targetType: 'user',
+      targetId: user.id,
+      targetLabel: user.email,
+      metadata: { role: role.name },
+    });
+
+    return created;
   }
 
   async removeProjectMember(
@@ -4454,7 +4673,24 @@ export class ProjectsService {
       }
     }
 
+    const memberFull = await this.prisma.projectMember.findUnique({
+      where: { id: memberId },
+      include: { user: { select: { id: true, email: true } }, role: { select: { name: true } } },
+    });
     await this.prisma.projectMember.delete({ where: { id: memberId } });
+
+    const project = await this.prisma.project.findUnique({ where: { id: projectId }, select: { organizationId: true } });
+    void this.audit.log({
+      action: 'project.member.removed',
+      actorUserId: remover.id,
+      actorEmail: remover.email,
+      organizationId: project?.organizationId,
+      projectId,
+      targetType: 'user',
+      targetId: memberFull?.user.id ?? member.userId,
+      targetLabel: memberFull?.user.email,
+      metadata: { role: memberFull?.role.name ?? null },
+    });
 
     return { success: true, message: 'Member removed from project' };
   }
@@ -4489,7 +4725,8 @@ export class ProjectsService {
       }
     }
 
-    return this.prisma.projectMember.update({
+    const oldRole = await this.prisma.role.findUnique({ where: { id: member.roleId }, select: { name: true } });
+    const updated = await this.prisma.projectMember.update({
       where: { id: memberId },
       data: { roleId: role.id },
       include: {
@@ -4499,6 +4736,21 @@ export class ProjectsService {
         },
       },
     });
+
+    const project = await this.prisma.project.findUnique({ where: { id: projectId }, select: { organizationId: true } });
+    void this.audit.log({
+      action: 'project.member.role_changed',
+      actorUserId: updater.id,
+      actorEmail: updater.email,
+      organizationId: project?.organizationId,
+      projectId,
+      targetType: 'user',
+      targetId: member.userId,
+      targetLabel: updated.user.email,
+      metadata: { role: [oldRole?.name ?? null, role.name] },
+    });
+
+    return updated;
   }
 
   async getProjectBySlug(organizationId: string, slug: string) {
@@ -5279,6 +5531,18 @@ export class ProjectsService {
       },
     });
 
+    void this.audit.log({
+      action: 'deployment.build_cancelled',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+    });
+
     return {
       success: true,
       deploymentId,
@@ -5407,6 +5671,18 @@ export class ProjectsService {
       });
     }
 
+    void this.audit.log({
+      action: 'deployment.deleted',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+    });
+
     return {
       success: true,
       deploymentId,
@@ -5476,6 +5752,19 @@ export class ProjectsService {
       data: { replicas },
     });
 
+    void this.audit.log({
+      action: 'deployment.scaled',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+      metadata: { replicas: [deployment.replicas, replicas] },
+    });
+
     return result;
   }
 
@@ -5529,7 +5818,21 @@ export class ProjectsService {
       throw new ForbiddenException('You do not have permission to restart deployments');
     }
 
-    return await this.kubernetesService.restartDeployment(deployment.name, deployment.namespace);
+    const result = await this.kubernetesService.restartDeployment(deployment.name, deployment.namespace);
+
+    void this.audit.log({
+      action: 'deployment.restarted',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+    });
+
+    return result;
   }
 
   async updateDeploymentEnvVars(
@@ -5609,6 +5912,21 @@ export class ProjectsService {
       env: envList,
     });
 
+    const previousEnvVars = await this.prisma.deploymentEnvVar.findMany({
+      where: { deploymentId: deployment.id },
+      select: { key: true, value: true },
+    });
+    const prevMap = new Map(previousEnvVars.map((e) => [e.key, e.value]));
+    const newMap = new Map(envList.map((e) => [e.key, e.value]));
+    const added: string[] = [];
+    const removed: string[] = [];
+    const changed: string[] = [];
+    for (const [k, v] of newMap) {
+      if (!prevMap.has(k)) added.push(k);
+      else if (prevMap.get(k) !== v) changed.push(k);
+    }
+    for (const k of prevMap.keys()) if (!newMap.has(k)) removed.push(k);
+
     const updatedDeployment = await this.prisma.$transaction(async (tx) => {
       await tx.deploymentEnvVar.deleteMany({
         where: {
@@ -5649,6 +5967,22 @@ export class ProjectsService {
         },
       });
     });
+
+    if (added.length || removed.length || changed.length) {
+      void this.audit.log({
+        action: 'deployment.env.updated',
+        actorUserId: user.id,
+        actorEmail: user.email,
+        organizationId: deployment.project.organizationId,
+        projectId: deployment.projectId,
+        deploymentId: deployment.id,
+        targetType: 'deployment',
+        targetId: deployment.id,
+        targetLabel: deployment.name,
+        // Keys only — never values.
+        metadata: { added: added.join(',') || null, removed: removed.join(',') || null, changed: changed.join(',') || null },
+      });
+    }
 
     return updatedDeployment;
   }
@@ -5710,6 +6044,22 @@ export class ProjectsService {
       data: {
         buildFromRoot,
         ...(buildWithDepot !== undefined && { buildWithDepot }),
+      },
+    });
+
+    void this.audit.log({
+      action: 'deployment.build_options.updated',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+      metadata: {
+        buildFromRoot: [deployment.buildFromRoot, buildFromRoot],
+        ...(buildWithDepot !== undefined ? { buildWithDepot: [deployment.buildWithDepot, buildWithDepot] } : {}),
       },
     });
 
@@ -5820,6 +6170,23 @@ export class ProjectsService {
       // Log but don't fail - the DB is updated, K8s will sync on next restart/rebuild
       console.error('Failed to apply health check to Kubernetes deployment:', error.message);
     }
+
+    void this.audit.log({
+      action: 'deployment.health_check.updated',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+      metadata: {
+        enabled: [deployment.healthCheckEnabled, healthCheck.healthCheckEnabled],
+        type: [deployment.healthCheckType, healthCheck.healthCheckType],
+        path: [deployment.healthCheckPath, healthCheck.healthCheckPath ?? null],
+      },
+    });
 
     return this.getDeployment(deploymentId);
   }
@@ -5964,6 +6331,19 @@ export class ProjectsService {
           },
         },
       });
+    });
+
+    void this.audit.log({
+      action: 'deployment.volumes.updated',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+      metadata: { count: volumesList.length, names: volumesList.map((v) => v.name).join(',') || null },
     });
 
     return updatedDeployment;
@@ -6792,6 +7172,20 @@ export class ProjectsService {
         },
       },
     });
+
+    void this.audit.log({
+      action: exposePublic ? 'service.exposure.enabled' : 'service.exposure.disabled',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: service.deployment.project.organizationId,
+      projectId: service.deployment.projectId,
+      deploymentId,
+      targetType: 'service',
+      targetId: serviceId,
+      targetLabel: service.name,
+      metadata: { type: [service.type, exposePublic ? 'external' : 'internal'] },
+    });
+
     return this.addInternalUrlsToDeployment(result);
   }
 
@@ -7379,6 +7773,18 @@ export class ProjectsService {
       throw e;
     }
 
+    void this.audit.log({
+      action: 'database.created',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: project.organizationId,
+      projectId,
+      targetType: 'database',
+      targetId: database.id,
+      targetLabel: database.name,
+      metadata: { mode: 'cnpg', storageSize },
+    });
+
     return database;
   }
 
@@ -7515,6 +7921,17 @@ export class ProjectsService {
     }
 
     await this.prisma.database.delete({ where: { id: databaseId } });
+
+    void this.audit.log({
+      action: 'database.deleted',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: database.project.organizationId,
+      projectId: database.projectId,
+      targetType: 'database',
+      targetId: databaseId,
+      targetLabel: database.name,
+    });
 
     return { success: true, message: `Database "${database.name}" deleted` };
   }
@@ -7691,6 +8108,18 @@ export class ProjectsService {
       throw new BadRequestException(`Failed to start backup: ${e?.message || e}`);
     }
 
+    void this.audit.log({
+      action: 'database.backup.created',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: database.project.organizationId,
+      projectId: database.projectId,
+      targetType: 'database_backup',
+      targetId: record.id,
+      targetLabel: backupName,
+      metadata: { database: database.name },
+    });
+
     return record;
   }
 
@@ -7766,7 +8195,7 @@ export class ProjectsService {
     clerkId: string,
     userData?: any
   ) {
-    const { database } = await this.assertDatabaseEditor(databaseId, clerkId, userData);
+    const { user, database } = await this.assertDatabaseEditor(databaseId, clerkId, userData);
     if (database.mode !== 'cnpg') {
       throw new BadRequestException('Restore is only supported for CNPG-backed databases');
     }
@@ -7784,6 +8213,18 @@ export class ProjectsService {
     const oldClusterName = database.clusterName;
 
     await this.prisma.database.update({ where: { id: database.id }, data: { status: 'restoring' } });
+
+    void this.audit.log({
+      action: 'database.backup.restored',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: database.project.organizationId,
+      projectId: database.projectId,
+      targetType: 'database',
+      targetId: database.id,
+      targetLabel: database.name,
+      metadata: { backupId, backupName: backup.backupName },
+    });
 
     (async () => {
       try {
@@ -8198,7 +8639,7 @@ export class ProjectsService {
     clerkId: string,
     userData?: any,
   ) {
-    const { port, deployment } = await this.assertServicePortEditor(deploymentId, serviceId, portId, clerkId, userData);
+    const { user, port, deployment } = await this.assertServicePortEditor(deploymentId, serviceId, portId, clerkId, userData);
 
     const org = await this.prisma.organization.findUnique({ where: { id: deployment.project.organizationId } });
     const ip = (org?.databasePublicIp || '').trim();
@@ -8229,6 +8670,19 @@ export class ProjectsService {
 
     await this.syncPublicDeploymentNetworkPolicy(deployment.namespace, deployment.name, deployment.id);
 
+    void this.audit.log({
+      action: 'service.port.public_enabled',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId: deployment.id,
+      targetType: 'service_port',
+      targetId: port.id,
+      targetLabel: `${deployment.name}:${port.targetPort}`,
+      metadata: { publicPort, protocol: port.protocol, ip },
+    });
+
     const host = this.kubernetesService.publicDeploymentBaseDomain();
     return { enabled: true, host, ip, port: publicPort, protocol: port.protocol };
   }
@@ -8240,7 +8694,8 @@ export class ProjectsService {
     clerkId: string,
     userData?: any,
   ) {
-    const { port, deployment } = await this.assertServicePortEditor(deploymentId, serviceId, portId, clerkId, userData);
+    const { user, port, deployment } = await this.assertServicePortEditor(deploymentId, serviceId, portId, clerkId, userData);
+    const previousPublicPort = port.publicPort;
 
     if (port.publicEnabled && port.publicPort) {
       try {
@@ -8261,6 +8716,19 @@ export class ProjectsService {
     });
 
     await this.syncPublicDeploymentNetworkPolicy(deployment.namespace, deployment.name, deployment.id);
+
+    void this.audit.log({
+      action: 'service.port.public_disabled',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId: deployment.id,
+      targetType: 'service_port',
+      targetId: port.id,
+      targetLabel: `${deployment.name}:${port.targetPort}`,
+      metadata: { previousPublicPort, protocol: port.protocol },
+    });
 
     return { enabled: false };
   }

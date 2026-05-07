@@ -2,10 +2,14 @@ import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/commo
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { randomBytes } from 'crypto';
+import { AuditService } from '../audit/audit.service';
 
 @Injectable()
 export class AdminService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   async getStats() {
     const [userCount, orgCount, projectCount, deploymentCount] =
@@ -114,7 +118,7 @@ export class AdminService {
       throw new NotFoundException('User not found');
     }
 
-    return this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id: userId },
       data: {
         ...(data.firstName !== undefined && { firstName: data.firstName }),
@@ -130,6 +134,18 @@ export class AdminService {
         isSuperAdmin: true,
       },
     });
+
+    if (data.isSuperAdmin !== undefined && data.isSuperAdmin !== user.isSuperAdmin) {
+      void this.audit.log({
+        action: data.isSuperAdmin ? 'user.superadmin.granted' : 'user.superadmin.revoked',
+        actorUserId: requesterId,
+        targetType: 'user',
+        targetId: userId,
+        targetLabel: user.email,
+      });
+    }
+
+    return updated;
   }
 
   async deleteUser(userId: string, requesterId: string) {
@@ -143,6 +159,15 @@ export class AdminService {
     }
 
     await this.prisma.user.delete({ where: { id: userId } });
+
+    void this.audit.log({
+      action: 'user.deleted',
+      actorUserId: requesterId,
+      targetType: 'user',
+      targetId: userId,
+      targetLabel: user.email,
+    });
+
     return { success: true };
   }
 
@@ -229,6 +254,16 @@ export class AdminService {
       },
     });
 
+    void this.audit.log({
+      action: 'org.created',
+      actorUserId: inviterId ?? null,
+      organizationId: org.id,
+      targetType: 'organization',
+      targetId: org.id,
+      targetLabel: org.name,
+      metadata: { slug: org.slug, plan: org.plan ?? null },
+    });
+
     if (primaryOwnerId) {
       await this.prisma.organizationMember.create({
         data: {
@@ -236,6 +271,14 @@ export class AdminService {
           userId: primaryOwnerId,
           role: 'owner',
         },
+      });
+      void this.audit.log({
+        action: 'org.member.added',
+        actorUserId: inviterId ?? null,
+        organizationId: org.id,
+        targetType: 'user',
+        targetId: primaryOwnerId,
+        metadata: { role: 'owner', via: 'admin_create' },
       });
       return { organization: org };
     }
@@ -269,13 +312,29 @@ export class AdminService {
       throw new NotFoundException('Organization not found');
     }
 
-    return this.prisma.organization.update({
+    const updated = await this.prisma.organization.update({
       where: { id: orgId },
       data: {
         ...(data.name !== undefined && { name: data.name }),
         ...(data.description !== undefined && { description: data.description }),
       },
     });
+
+    const meta: Record<string, [unknown, unknown]> = {};
+    if (data.name !== undefined && data.name !== org.name) meta.name = [org.name, data.name];
+    if (data.description !== undefined && data.description !== org.description) meta.description = [org.description, data.description];
+    if (Object.keys(meta).length) {
+      void this.audit.log({
+        action: 'org.updated',
+        organizationId: orgId,
+        targetType: 'organization',
+        targetId: orgId,
+        targetLabel: updated.name,
+        metadata: meta,
+      });
+    }
+
+    return updated;
   }
 
   async deleteOrganization(orgId: string) {
@@ -285,6 +344,16 @@ export class AdminService {
     }
 
     await this.prisma.organization.delete({ where: { id: orgId } });
+
+    // Log to global ledger only (organizationId is null because the org no longer exists / cascade safety).
+    void this.audit.log({
+      action: 'org.deleted',
+      targetType: 'organization',
+      targetId: orgId,
+      targetLabel: org.name,
+      metadata: { slug: org.slug },
+    });
+
     return { success: true };
   }
 }

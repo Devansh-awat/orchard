@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { animate } from 'motion';
-	import { Leaf, Folder, Shield, Globe } from 'lucide-svelte';
+	import { Leaf, Folder, Shield, Globe, ScrollText } from 'lucide-svelte';
 	import {
 		PanelLeftClose,
 		PanelRightClose,
@@ -26,6 +26,7 @@
 	const orgSlug = $derived($selectedOrganization?.slug ?? '');
 	const isSettingsRoute = $derived($page.url.pathname.startsWith('/' + orgSlug + '/settings'));
 	const settingsTab = $derived($page.url.searchParams.get('tab') || 'general');
+	const isAuditLogsRoute = $derived($page.url.pathname.startsWith('/' + orgSlug + '/settings/audit-logs'));
 	// Org overview has an `auto-fill` grid whose column count flips mid-spring
 	// when the sidebar width swings ~192px, snapping every card to a new cell.
 	// On just that page, fall back to the original short CSS width transition.
@@ -277,6 +278,18 @@
 								<Key size={10} class="tree-icon-svg" />
 							</div>
 							<span class="tree-node-label">SSO</span>
+						</a>
+						<a
+							href="/{orgSlug}/settings/audit-logs"
+							class="tree-node-content"
+							class:is-active={isAuditLogsRoute}
+							{@attach navStagger(6)}
+							{@attach springHover({ lift: -1 })}
+						>
+							<div class="tree-icon-badge" style="background-color: #475569">
+								<ScrollText size={10} class="tree-icon-svg" />
+							</div>
+							<span class="tree-node-label">Audit Log</span>
 						</a>
 					</div>
 				</div>

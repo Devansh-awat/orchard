@@ -56,6 +56,7 @@
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
 	import DeploymentMetrics from '$lib/components/DeploymentMetrics.svelte';
+	import AuditLogList from '$lib/components/AuditLogList.svelte';
 	import { formatCpu as fmtCpuPreset, formatMemory as fmtMemoryPreset } from '$lib/presets';
 
 	import DeploymentProgress from '$lib/components/DeploymentProgress.svelte';
@@ -670,6 +671,12 @@
 			label: 'Webhooks',
 			description: 'Deploy triggers & tokens',
 			icon: Webhook
+		},
+		{
+			id: 'audit',
+			label: 'Audit Log',
+			description: 'Recent activity on this deployment',
+			icon: History
 		},
 		{
 			id: 'advanced',
@@ -4763,6 +4770,10 @@
 									<pre class="wh-code-block"><code>{webhookExamples.githubActions}</code></pre>
 								</div>
 							</div>
+						</div>
+					{:else if tab.id === 'audit'}
+						<div class="space-y-5">
+							<AuditLogList scope={{ deploymentId: deployment.id }} title="Recent activity" />
 						</div>
 					{:else if tab.id === 'advanced'}
 						<div class="space-y-5">
