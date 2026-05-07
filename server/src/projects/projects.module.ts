@@ -10,13 +10,14 @@ import { QuotasModule } from '../quotas/quotas.module';
 import { TailscaleModule } from '../tailscale/tailscale.module';
 import { AuthModule } from '../auth/auth.module';
 import { EventsModule } from '../events/events.module';
+import { MetricsModule } from '../metrics/metrics.module';
 import { ProjectsService } from './projects.service';
 import { FaviconService } from './favicon.service';
 import { ProjectsController, DeploymentsController, IngressesController, DatabasesController } from './projects.controller';
 import { OverviewController } from './overview.controller';
 
 @Module({
-  imports: [KubernetesModule, UsersModule, forwardRef(() => GitHubModule), DockerModule, WebhooksModule, OrganizationsModule, forwardRef(() => NodesModule), forwardRef(() => QuotasModule), TailscaleModule, AuthModule, EventsModule],
+  imports: [KubernetesModule, UsersModule, forwardRef(() => GitHubModule), DockerModule, WebhooksModule, OrganizationsModule, forwardRef(() => NodesModule), forwardRef(() => QuotasModule), TailscaleModule, AuthModule, EventsModule, MetricsModule],
   providers: [ProjectsService, FaviconService],
   controllers: [ProjectsController, DeploymentsController, IngressesController, DatabasesController, OverviewController],
   exports: [ProjectsService],

@@ -2,13 +2,249 @@
 	import { invalidate } from '$app/navigation';
 	import { apiFetch, pinnedItems, toasts, subscribeOrgEvents } from '$lib/stores';
 	import {
-		Plus, Search, Sparkles, GitBranch, Star, MoreVertical, ExternalLink,
-		RefreshCw, Pin, PinOff, Copy, ChevronRight, Loader2, CheckCircle2,
-		XCircle, Clock, Timer, LayoutGrid, List, Folder, Rocket, Database, ArrowRight
+		Plus,
+		Search,
+		Sparkles,
+		GitBranch,
+		Star,
+		MoreVertical,
+		ExternalLink,
+		RefreshCw,
+		Pin,
+		PinOff,
+		Copy,
+		ChevronRight,
+		Loader2,
+		CheckCircle2,
+		XCircle,
+		Clock,
+		Timer,
+		Folder,
+		Rocket,
+		Database,
+		ArrowRight
 	} from 'lucide-svelte';
-	import { onDestroy } from 'svelte';
-	import { slide } from 'svelte/transition';
+	import { onDestroy, untrack } from 'svelte';
+	import { animate } from 'motion';
 	import type { PageData } from './$types';
+
+	// ── Physics-based animation helpers (see physics-ui.md) ──
+	function motionStagger(
+		opts: {
+			index?: number;
+			stride?: number;
+			from?: { y?: number; opacity?: number; scale?: number };
+			stiffness?: number;
+			damping?: number;
+			mass?: number;
+			axis?: 'x' | 'y';
+		} = {}
+	) {
+		const i = opts.index ?? 0;
+		const stride = opts.stride ?? 0.04;
+		const from = {
+			y: opts.from?.y ?? 8,
+			opacity: opts.from?.opacity ?? 0,
+			scale: opts.from?.scale ?? 0.985
+		};
+		const axis = opts.axis ?? 'y';
+		return (el: Element) => {
+			const target = el as HTMLElement;
+			const kf: Record<string, number[]> = { opacity: [from.opacity, 1], scale: [from.scale, 1] };
+			kf[axis] = [from.y, 0];
+			animate(target, kf, {
+				type: 'spring',
+				stiffness: opts.stiffness ?? 260,
+				damping: opts.damping ?? 22,
+				mass: opts.mass ?? 0.9,
+				delay: i * stride
+			});
+		};
+	}
+	function springHover(
+		opts: { rest?: number; lift?: number; stiffness?: number; damping?: number } = {}
+	) {
+		const rest = opts.rest ?? 0;
+		const lift = opts.lift ?? -3;
+		const stiffness = opts.stiffness ?? 380;
+		const damping = opts.damping ?? 22;
+		return (el: Element) => {
+			const target = el as HTMLElement;
+			const enter = () => animate(target, { y: lift }, { type: 'spring', stiffness, damping });
+			const leave = () =>
+				animate(
+					target,
+					{ y: rest },
+					{ type: 'spring', stiffness: stiffness * 0.8, damping: damping + 4 }
+				);
+			const press = () =>
+				animate(target, { scale: 0.98 }, { type: 'spring', stiffness: 600, damping: 28 });
+			const release = () =>
+				animate(target, { scale: 1 }, { type: 'spring', stiffness: 420, damping: 18 });
+			target.addEventListener('mouseenter', enter);
+			target.addEventListener('mouseleave', leave);
+			target.addEventListener('pointerdown', press);
+			target.addEventListener('pointerup', release);
+			target.addEventListener('pointerleave', release);
+			return () => {
+				target.removeEventListener('mouseenter', enter);
+				target.removeEventListener('mouseleave', leave);
+				target.removeEventListener('pointerdown', press);
+				target.removeEventListener('pointerup', release);
+				target.removeEventListener('pointerleave', release);
+			};
+		};
+	}
+	function cardTilt(
+		opts: { max?: number; stiffness?: number; damping?: number; mass?: number } = {}
+	) {
+		const max = opts.max ?? 4;
+		const stiffness = opts.stiffness ?? 380;
+		const damping = opts.damping ?? 28;
+		const mass = opts.mass ?? 0.5;
+		return (el: Element) => {
+			const target = el as HTMLElement;
+			target.style.transformStyle = 'preserve-3d';
+			target.style.perspective = '900px';
+			let rect: DOMRect | null = null;
+			const onEnter = () => {
+				rect = target.getBoundingClientRect();
+			};
+			const onMove = (e: PointerEvent) => {
+				if (!rect) rect = target.getBoundingClientRect();
+				const x = (e.clientX - rect.left) / rect.width - 0.5;
+				const y = (e.clientY - rect.top) / rect.height - 0.5;
+				animate(
+					target,
+					{ rotateX: -y * max, rotateY: x * max },
+					{ type: 'spring', stiffness, damping, mass }
+				);
+			};
+			const onLeave = () => {
+				animate(
+					target,
+					{ rotateX: 0, rotateY: 0 },
+					{ type: 'spring', stiffness: stiffness * 0.7, damping: damping + 4, mass }
+				);
+				rect = null;
+			};
+			target.addEventListener('pointerenter', onEnter);
+			target.addEventListener('pointermove', onMove);
+			target.addEventListener('pointerleave', onLeave);
+			return () => {
+				target.removeEventListener('pointerenter', onEnter);
+				target.removeEventListener('pointermove', onMove);
+				target.removeEventListener('pointerleave', onLeave);
+			};
+		};
+	}
+	function springPop(active: () => boolean) {
+		return (el: Element) => {
+			const target = el as HTMLElement;
+			let prev = active();
+			$effect(() => {
+				const next = active();
+				if (next && !prev) {
+					animate(
+						target,
+						{ scale: [0.9, 1.06, 1] },
+						{ type: 'spring', stiffness: 480, damping: 16, mass: 0.85 }
+					);
+				}
+				prev = next;
+			});
+		};
+	}
+	function motionPopover(opts: {
+		from?: { opacity?: number; scale?: number; y?: number };
+		stiffness?: number;
+		damping?: number;
+		mass?: number;
+		closing: () => boolean;
+		onClosed: () => void;
+	}) {
+		const from = {
+			opacity: opts.from?.opacity ?? 0,
+			scale: opts.from?.scale ?? 0.94,
+			y: opts.from?.y ?? -6
+		};
+		const stiffness = opts.stiffness ?? 520;
+		const damping = opts.damping ?? 30;
+		const mass = opts.mass ?? 0.85;
+		return (el: Element) => {
+			const target = el as HTMLElement;
+			animate(
+				target,
+				{ opacity: [from.opacity, 1], scale: [from.scale, 1], y: [from.y, 0] },
+				{ type: 'spring', stiffness, damping, mass }
+			);
+			let firstRun = true;
+			$effect(() => {
+				const closing = opts.closing();
+				if (firstRun) {
+					firstRun = false;
+					return;
+				}
+				if (closing) {
+					animate(
+						target,
+						{ opacity: from.opacity, scale: from.scale, y: from.y },
+						{ type: 'spring', stiffness: stiffness * 1.1, damping: damping + 6, mass }
+					).finished.then(() => {
+						if (opts.closing()) opts.onClosed();
+					});
+				} else {
+					animate(
+						target,
+						{ opacity: 1, scale: 1, y: 0 },
+						{ type: 'spring', stiffness, damping, mass }
+					);
+				}
+			});
+		};
+	}
+	// Spring-driven rotation between two angles when `active()` flips.
+	function springRotate(
+		active: () => boolean,
+		opts: { rest?: number; on?: number; stiffness?: number; damping?: number; mass?: number } = {}
+	) {
+		const rest = opts.rest ?? 0;
+		const on = opts.on ?? 90;
+		const stiffness = opts.stiffness ?? 380;
+		const damping = opts.damping ?? 24;
+		const mass = opts.mass ?? 0.7;
+		return (el: Element) => {
+			const target = el as HTMLElement;
+			target.style.transform = `rotate(${active() ? on : rest}deg)`;
+			let prev = active();
+			$effect(() => {
+				const next = active();
+				if (next === prev) return;
+				prev = next;
+				animate(target, { rotate: next ? on : rest }, { type: 'spring', stiffness, damping, mass });
+			});
+		};
+	}
+
+	function springScale(
+		getScale: () => number,
+		opts: { stiffness?: number; damping?: number; mass?: number } = {}
+	) {
+		const stiffness = opts.stiffness ?? 480;
+		const damping = opts.damping ?? 18;
+		const mass = opts.mass ?? 0.7;
+		return (el: Element) => {
+			const target = el as HTMLElement;
+			let prev = getScale();
+			target.style.transform = `scale(${prev})`;
+			$effect(() => {
+				const next = getScale();
+				if (next === prev) return;
+				prev = next;
+				animate(target, { scale: next }, { type: 'spring', stiffness, damping, mass });
+			});
+		};
+	}
 
 	let { data } = $props<{ data: PageData }>();
 	const orgSlug = $derived(data.orgSlug);
@@ -77,33 +313,65 @@
 
 	// ── Builds ──
 	interface ActiveBuild {
-		id: string; name: string; image?: string; status: string; buildStatus: string;
-		buildStep: string | null; updatedAt: string; githubRepo?: string; githubBranch?: string;
-		ingresses: Array<{ host: string }>; project?: { name: string };
+		id: string;
+		name: string;
+		image?: string;
+		status: string;
+		buildStatus: string;
+		buildStep: string | null;
+		updatedAt: string;
+		githubRepo?: string;
+		githubBranch?: string;
+		ingresses: Array<{ host: string }>;
+		project?: { name: string };
 	}
 	interface RecentBuild {
-		id: string; commitSha: string | null; branch: string | null; triggerType: string | null;
-		isActive: boolean; createdAt: string;
-		deployment: { id: string; name: string; image?: string; buildStatus: string; ingresses: Array<{ host: string }>; project?: { name: string } };
+		id: string;
+		commitSha: string | null;
+		branch: string | null;
+		triggerType: string | null;
+		isActive: boolean;
+		createdAt: string;
+		deployment: {
+			id: string;
+			name: string;
+			image?: string;
+			buildStatus: string;
+			ingresses: Array<{ host: string }>;
+			project?: { name: string };
+		};
 	}
 
 	let activeBuilds = $state<ActiveBuild[]>([]);
 	let recentBuilds = $state<RecentBuild[]>([]);
 	let now = $state(Date.now());
 	let timerInterval: ReturnType<typeof setInterval> | null = null;
-	function startTimer() { if (!timerInterval) timerInterval = setInterval(() => { now = Date.now(); }, 1000); }
-	function stopTimer() { if (timerInterval) { clearInterval(timerInterval); timerInterval = null; } }
-	$effect(() => { if (activeBuilds.length > 0) startTimer(); else stopTimer(); });
+	function startTimer() {
+		if (!timerInterval)
+			timerInterval = setInterval(() => {
+				now = Date.now();
+			}, 1000);
+	}
+	function stopTimer() {
+		if (timerInterval) {
+			clearInterval(timerInterval);
+			timerInterval = null;
+		}
+	}
+	$effect(() => {
+		if (activeBuilds.length > 0) startTimer();
+		else stopTimer();
+	});
 	onDestroy(() => stopTimer());
 
-
-	function fmtDuration(s: number): string { if (s < 60) return `${s}s`; const m = Math.floor(s / 60); return m < 60 ? `${m}m ${s % 60}s` : `${Math.floor(m / 60)}h ${m % 60}m`; }
-	function elapsed(d: string): number { return Math.max(0, Math.floor((now - new Date(d).getTime()) / 1000)); }
-
-	// ── View mode ──
-	type ViewMode = 'by-project' | 'list-all';
-	let viewMode = $state<ViewMode>((typeof localStorage !== 'undefined' && localStorage.getItem('overview-view') as ViewMode) || 'by-project');
-	$effect(() => { if (typeof localStorage !== 'undefined') localStorage.setItem('overview-view', viewMode); });
+	function fmtDuration(s: number): string {
+		if (s < 60) return `${s}s`;
+		const m = Math.floor(s / 60);
+		return m < 60 ? `${m}m ${s % 60}s` : `${Math.floor(m / 60)}h ${m % 60}m`;
+	}
+	function elapsed(d: string): number {
+		return Math.max(0, Math.floor((now - new Date(d).getTime()) / 1000));
+	}
 
 	// ── Expand state (persisted) ──
 	const EXPAND_KEY = 'overview-expanded-projects';
@@ -112,44 +380,182 @@
 			? new Set(JSON.parse(localStorage.getItem(EXPAND_KEY) ?? '[]'))
 			: new Set()
 	);
+	// Per-project body refs + render flags so we can keep the element mounted
+	// long enough to animate the collapse with Motion.
+	const projectBodyEls = new Map<string, HTMLElement>();
+	let renderedProjectBodies = $state<Set<string>>(new Set());
+	$effect(() => {
+		// Whenever a project is expanded, mark its body as rendered.
+		// untrack the read+write of renderedProjectBodies so we don't loop.
+		const exp = expandedProjects;
+		untrack(() => {
+			let changed = false;
+			const next = new Set(renderedProjectBodies);
+			for (const id of exp) {
+				if (!next.has(id)) {
+					next.add(id);
+					changed = true;
+				}
+			}
+			if (changed) renderedProjectBodies = next;
+		});
+	});
 	function toggleExpand(id: string, e: Event) {
-		e.preventDefault(); e.stopPropagation();
+		e.preventDefault();
+		e.stopPropagation();
 		const next = new Set(expandedProjects);
-		if (next.has(id)) next.delete(id); else next.add(id);
+		if (next.has(id)) next.delete(id);
+		else next.add(id);
 		expandedProjects = next;
 		if (typeof localStorage !== 'undefined') {
 			localStorage.setItem(EXPAND_KEY, JSON.stringify([...next]));
 		}
 	}
 
+	function bodyAttach(id: string) {
+		return (el: Element) => {
+			const target = el as HTMLElement;
+			projectBodyEls.set(id, target);
+			target.style.overflow = 'hidden';
+			target.style.willChange = 'height';
+			let firstEffect = true;
+			const measure = () => {
+				const cur = target.style.height;
+				target.style.height = 'auto';
+				const h = target.scrollHeight;
+				target.style.height = cur;
+				return h;
+			};
+			// Sympathetic squish on the inner grid — propagates the parent's
+			// bounce into the children so they "feel" the weight.
+			const sympathy = (compress: boolean) => {
+				const grid = target.querySelector<HTMLElement>('.grid');
+				if (grid) {
+					const yKick = compress ? 8 : -6;
+					animate(
+						grid,
+						{ y: [yKick, 0], scaleY: [compress ? 0.94 : 0.96, 1] },
+						{ type: 'spring', stiffness: 200, damping: 13, mass: 1, delay: 0.04 }
+					);
+				}
+			};
+			$effect(() => {
+				const open = expandedProjects.has(id);
+				if (firstEffect) {
+					firstEffect = false;
+					target.style.opacity = '0';
+					target.style.height = '0px';
+					void target.offsetHeight;
+					const h = target.scrollHeight;
+					animate(
+						target,
+						{ height: h, opacity: 1 },
+						{ type: 'spring', stiffness: 220, damping: 16, mass: 0.9 }
+					).finished.then(() => {
+						target.style.height = 'auto';
+					});
+					sympathy(false);
+					return;
+				}
+				if (open) {
+					const cur = target.getBoundingClientRect().height;
+					target.style.height = `${cur}px`;
+					void target.offsetHeight;
+					const h = measure();
+					animate(
+						target,
+						{ height: h, opacity: 1 },
+						{ type: 'spring', stiffness: 220, damping: 16, mass: 0.9 }
+					).finished.then(() => {
+						target.style.height = 'auto';
+					});
+					sympathy(false);
+				} else {
+					const cur = target.getBoundingClientRect().height;
+					target.style.height = `${cur}px`;
+					void target.offsetHeight;
+					const card = target.closest('.proj-card') as HTMLElement | null;
+					if (card) card.style.transformOrigin = 'top center';
+					// Inner grid pre-compresses while parent collapses (transform only).
+					const grid = target.querySelector<HTMLElement>('.grid');
+					if (grid) {
+						animate(
+							grid,
+							{ y: 6, scaleY: 0.96, opacity: 0.8 },
+							{ duration: 0.22, ease: [0.4, 0, 1, 1] }
+						);
+					}
+					// Body close — fixed-duration ease-in. The squish on the parent
+					// card fires the moment .finished resolves, so the impact lines
+					// up with the actual close end regardless of duration drift.
+					animate(
+						target,
+						{ height: 0, opacity: 0 },
+						{ duration: 0.24, ease: [0.4, 0, 1, 1] }
+					).finished.then(() => {
+						if (card) {
+							// Card "lifts" the moment the body closes (weight removed).
+							// Spring params match the open dropdown bounce so both ends
+							// feel like the same physical system.
+							animate(
+								card,
+								{ y: [-5, 0] },
+								{ type: 'spring', stiffness: 120, damping: 10, mass: 1 }
+							);
+						}
+						if (!expandedProjects.has(id)) {
+							renderedProjectBodies = new Set([...renderedProjectBodies].filter((x) => x !== id));
+							projectBodyEls.delete(id);
+						}
+					});
+				}
+			});
+			return () => {
+				projectBodyEls.delete(id);
+			};
+		};
+	}
+
 	// ── Filtering ──
 	let searchQuery = $state('');
 	let openMenuId = $state<string | null>(null);
+	let renderMenuId = $state<string | null>(null);
+	$effect(() => {
+		if (openMenuId !== null) renderMenuId = openMenuId;
+	});
 
 	let favouriteIds = $state<Set<string>>(new Set());
-	pinnedItems.subscribe(items => { favouriteIds = new Set(items.filter(i => i.type === 'deployment').map(i => i.id)); });
+	pinnedItems.subscribe((items) => {
+		favouriteIds = new Set(items.filter((i) => i.type === 'deployment').map((i) => i.id));
+	});
 
 	// Filtered deployments
 	let filtered = $derived.by(() => {
 		let r = deployments;
 		const q = searchQuery.trim().toLowerCase();
-		if (q) r = r.filter(d =>
-			d.name.toLowerCase().includes(q) || (d.project?.name?.toLowerCase().includes(q) ?? false) ||
-			(d.githubRepo?.toLowerCase().includes(q) ?? false) || d.ingresses.some(i => i.host.toLowerCase().includes(q))
-		);
+		if (q)
+			r = r.filter(
+				(d) =>
+					d.name.toLowerCase().includes(q) ||
+					(d.project?.name?.toLowerCase().includes(q) ?? false) ||
+					(d.githubRepo?.toLowerCase().includes(q) ?? false) ||
+					d.ingresses.some((i) => i.host.toLowerCase().includes(q))
+			);
 		return [...r].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 	});
 
-	let favDeps = $derived(filtered.filter(d => favouriteIds.has(d.id)));
+	let favDeps = $derived(filtered.filter((d) => favouriteIds.has(d.id)));
 
 	let filteredDbs = $derived.by(() => {
 		const q = searchQuery.trim().toLowerCase();
 		let r = databases;
-		if (q) r = r.filter(d =>
-			d.name.toLowerCase().includes(q) ||
-			d.dbName.toLowerCase().includes(q) ||
-			(d.project?.name?.toLowerCase().includes(q) ?? false)
-		);
+		if (q)
+			r = r.filter(
+				(d) =>
+					d.name.toLowerCase().includes(q) ||
+					d.dbName.toLowerCase().includes(q) ||
+					(d.project?.name?.toLowerCase().includes(q) ?? false)
+			);
 		return [...r].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
 	});
 
@@ -163,7 +569,7 @@
 	}
 
 	let projectGroups = $derived.by(() => {
-		const nonFav = filtered.filter(d => !favouriteIds.has(d.id));
+		const nonFav = filtered.filter((d) => !favouriteIds.has(d.id));
 		const map = new Map<string, ProjectGroup>();
 		for (const d of nonFav) {
 			const p = d.project;
@@ -185,8 +591,8 @@
 		return Array.from(map.values()).sort((a, b) => {
 			const latestOf = (g: ProjectGroup) => {
 				const times = [
-					...g.deps.map(d => new Date(d.updatedAt).getTime()),
-					...g.dbs.map(d => new Date(d.updatedAt).getTime()),
+					...g.deps.map((d) => new Date(d.updatedAt).getTime()),
+					...g.dbs.map((d) => new Date(d.updatedAt).getTime())
 				];
 				return times.length ? Math.max(...times) : 0;
 			};
@@ -196,7 +602,9 @@
 
 	// ── Helpers ──
 	function projectStatusSummary(g: ProjectGroup) {
-		let green = 0, amber = 0, red = 0;
+		let green = 0,
+			amber = 0,
+			red = 0;
 		const bump = (cls: string) => {
 			if (cls === 'dot--green') green++;
 			else if (cls === 'dot--amber') amber++;
@@ -204,7 +612,9 @@
 		};
 		for (const d of g.deps) bump(dotClass(d.status, d.buildStatus));
 		for (const db of g.dbs) {
-			bump(db.status === 'ready' ? 'dot--green' : db.status === 'error' ? 'dot--red' : 'dot--amber');
+			bump(
+				db.status === 'ready' ? 'dot--green' : db.status === 'error' ? 'dot--red' : 'dot--amber'
+			);
 		}
 		if (!green && !amber && !red) return null;
 		return { green, amber, red };
@@ -228,55 +638,111 @@
 		if (!d) return '';
 		const s = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
 		if (s < 60) return 'just now';
-		const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`;
-		const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`;
-		const dy = Math.floor(h / 24); if (dy < 30) return `${dy}d ago`;
+		const m = Math.floor(s / 60);
+		if (m < 60) return `${m}m ago`;
+		const h = Math.floor(m / 60);
+		if (h < 24) return `${h}h ago`;
+		const dy = Math.floor(h / 24);
+		if (dy < 30) return `${dy}d ago`;
 		return new Date(d).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
 	}
 
 	const IMG_ICONS: Record<string, string> = {
-		postgres: 'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/postgresql/postgresql-original.svg',
-		postgresql: 'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/postgresql/postgresql-original.svg',
+		postgres:
+			'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/postgresql/postgresql-original.svg',
+		postgresql:
+			'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/postgresql/postgresql-original.svg',
 		mysql: 'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/mysql/mysql-original.svg',
 		redis: 'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/redis/redis-original.svg',
 		mongo: 'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/mongodb/mongodb-original.svg',
-		mongodb: 'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/mongodb/mongodb-original.svg',
+		mongodb:
+			'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/mongodb/mongodb-original.svg',
 		nginx: 'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/nginx/nginx-original.svg',
 		node: 'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/nodejs/nodejs-original.svg',
 		python: 'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/python/python-original.svg',
 		go: 'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/go/go-original.svg',
 		rust: 'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/rust/rust-original.svg',
-		grafana: 'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/grafana/grafana-original.svg',
+		grafana:
+			'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/grafana/grafana-original.svg'
 	};
 	function knownIcon(img?: string): string | null {
 		if (!img) return null;
-		const n = img.replace(/^[^/]+\.[^/]+\//, '').split(':')[0].split('/').pop()?.toLowerCase() ?? '';
+		const n =
+			img
+				.replace(/^[^/]+\.[^/]+\//, '')
+				.split(':')[0]
+				.split('/')
+				.pop()
+				?.toLowerCase() ?? '';
 		if (IMG_ICONS[n]) return IMG_ICONS[n];
-		for (const [k, v] of Object.entries(IMG_ICONS)) { if (n.startsWith(k) || n.includes(k)) return v; }
+		for (const [k, v] of Object.entries(IMG_ICONS)) {
+			if (n.startsWith(k) || n.includes(k)) return v;
+		}
 		return null;
 	}
 
 	let failedFav = $state<Set<string>>(new Set());
-	function favUrl(host: string) { return `/apiv1/deployments/favicon?domain=${encodeURIComponent(host)}`; }
-	function favErr(id: string) { failedFav = new Set(failedFav).add(id); }
+	function favUrl(host: string) {
+		return `/apiv1/deployments/favicon?domain=${encodeURIComponent(host)}`;
+	}
+	function favErr(id: string) {
+		failedFav = new Set(failedFav).add(id);
+	}
 
 	function toggleFav(dep: DeploymentSummary, e: Event) {
-		e.preventDefault(); e.stopPropagation();
-		pinnedItems.toggle({ id: dep.id, name: dep.name, type: 'deployment', href: `/${orgSlug}/deployments/${dep.id}` });
+		e.preventDefault();
+		e.stopPropagation();
+		pinnedItems.toggle({
+			id: dep.id,
+			name: dep.name,
+			type: 'deployment',
+			href: `/${orgSlug}/deployments/${dep.id}`
+		});
 	}
-	function toggleMenu(id: string, e: Event) { e.preventDefault(); e.stopPropagation(); openMenuId = openMenuId === id ? null : id; }
-	function closeAll() { openMenuId = null; }
+	function toggleMenu(id: string, e: Event) {
+		e.preventDefault();
+		e.stopPropagation();
+		openMenuId = openMenuId === id ? null : id;
+	}
+	function closeAll() {
+		openMenuId = null;
+	}
 	async function restart(dep: DeploymentSummary, e: Event) {
-		e.preventDefault(); e.stopPropagation(); openMenuId = null;
-		try { const r = await apiFetch(`/apiv1/deployments/${dep.id}/restart`, { method: 'POST' }); if (r.ok) { toasts.add({ title: `Restarting ${dep.name}...`, color: 'success' }); fetchDeployments(); } else toasts.add({ title: 'Restart failed', color: 'error' }); }
-		catch { toasts.add({ title: 'Restart failed', color: 'error' }); }
+		e.preventDefault();
+		e.stopPropagation();
+		openMenuId = null;
+		try {
+			const r = await apiFetch(`/apiv1/deployments/${dep.id}/restart`, { method: 'POST' });
+			if (r.ok) {
+				toasts.add({ title: `Restarting ${dep.name}...`, color: 'success' });
+				fetchDeployments();
+			} else toasts.add({ title: 'Restart failed', color: 'error' });
+		} catch {
+			toasts.add({ title: 'Restart failed', color: 'error' });
+		}
 	}
-	function cpUrl(dep: DeploymentSummary, e: Event) { e.preventDefault(); e.stopPropagation(); openMenuId = null; if (dep.ingresses.length) { navigator.clipboard.writeText(`https://${dep.ingresses[0].host.split('/')[0]}`); toasts.add({ title: 'Copied', color: 'success' }); } }
-	function visit(dep: DeploymentSummary, e: Event) { e.preventDefault(); e.stopPropagation(); openMenuId = null; if (dep.ingresses.length) window.open(`https://${dep.ingresses[0].host.split('/')[0]}`, '_blank'); }
+	function cpUrl(dep: DeploymentSummary, e: Event) {
+		e.preventDefault();
+		e.stopPropagation();
+		openMenuId = null;
+		if (dep.ingresses.length) {
+			navigator.clipboard.writeText(`https://${dep.ingresses[0].host.split('/')[0]}`);
+			toasts.add({ title: 'Copied', color: 'success' });
+		}
+	}
+	function visit(dep: DeploymentSummary, e: Event) {
+		e.preventDefault();
+		e.stopPropagation();
+		openMenuId = null;
+		if (dep.ingresses.length)
+			window.open(`https://${dep.ingresses[0].host.split('/')[0]}`, '_blank');
+	}
 
-	function buildIcon(img?: string, ings?: Array<{host:string}>, id?: string) {
-		const k = knownIcon(img); if (k) return k;
-		if (ings?.length && !failedFav.has('b-'+(id??''))) return favUrl(ings[0].host.split('/')[0]);
+	function buildIcon(img?: string, ings?: Array<{ host: string }>, id?: string) {
+		const k = knownIcon(img);
+		if (k) return k;
+		if (ings?.length && !failedFav.has('b-' + (id ?? '')))
+			return favUrl(ings[0].host.split('/')[0]);
 		return null;
 	}
 
@@ -302,10 +768,14 @@
 				if (orgId) {
 					unsub?.();
 					const id = orgId;
-					unsub = subscribeOrgEvents(id, (ev) => {
-						if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
-						invalidate(`org:${orgSlug}:overview`);
-					}, { invalidateDependencies: [] });
+					unsub = subscribeOrgEvents(
+						id,
+						(ev) => {
+							if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
+							invalidate(`org:${orgSlug}:overview`);
+						},
+						{ invalidateDependencies: [] }
+					);
 				}
 			})
 			.catch((e) => {
@@ -317,231 +787,324 @@
 			});
 	});
 
-	onDestroy(() => { unsub?.(); });
+	onDestroy(() => {
+		unsub?.();
+	});
 </script>
 
 <svelte:window onclick={closeAll} />
 
 <div class="page">
 	<!-- Header -->
-	<header class="header">
+	<header class="header" {@attach motionStagger({ index: 0, from: { y: -6 } })}>
 		<h1 class="title">Overview</h1>
-		<a href="/{orgSlug}/new?autoCreate=1" class="btn-primary"><Plus size={15} /> Add New...</a>
+		<a
+			href="/{orgSlug}/new?autoCreate=1"
+			class="btn-primary"
+			{@attach springHover({ lift: -1, stiffness: 480, damping: 26 })}
+			><Plus size={15} /> Add New...</a
+		>
 	</header>
 
 	<div class="layout">
-	<main class="main">
-
-	{#if loading}
-		<div class="grid">
-			{#each Array(6) as _}
-				<div class="card card--skel">
-					<div class="card-top"><div class="sk sk-icon"></div><div class="sk-col"><div class="sk" style="width:7rem;height:0.7rem"></div><div class="sk" style="width:10rem;height:0.5rem"></div></div></div>
-					<div class="card-bot"><div class="sk" style="width:4rem;height:0.5rem"></div><div class="sk" style="width:3rem;height:0.5rem"></div></div>
-				</div>
-			{/each}
-		</div>
-	{:else if deployments.length === 0}
-		<div class="empty">
-			<div class="empty-icon"><Sparkles size={28} /></div>
-			<h3 class="empty-h">Deploy your first app</h3>
-			<p class="empty-p">Import a GitHub repo or deploy a Docker image.</p>
-			<a href="/{orgSlug}/new" class="btn-primary" style="margin-top:0.5rem"><Plus size={15} /> New Deployment</a>
-		</div>
-	{:else}
-		<!-- Toolbar -->
-		<div class="bar">
-			<div class="search-box">
-				<Search size={13} class="search-ic" />
-				<input type="search" placeholder="Search deployments..." class="search" bind:value={searchQuery} />
-			</div>
-			<div class="view-toggle">
-				<button class="view-btn" class:view-btn--active={viewMode === 'by-project'} onclick={() => viewMode = 'by-project'} aria-label="Group by project"><LayoutGrid size={14} /></button>
-				<button class="view-btn" class:view-btn--active={viewMode === 'list-all'} onclick={() => viewMode = 'list-all'} aria-label="List all"><List size={14} /></button>
-			</div>
-		</div>
-
-		<!-- Favourites (shown in both views) -->
-		{#if favDeps.length > 0}
-			<section class="section">
-				<h2 class="label"><Star size={11} /> Favourites</h2>
+		<main class="main">
+			{#if loading}
 				<div class="grid">
-					{#each favDeps as dep (dep.id)}
-						{@render card(dep, true)}
+					{#each Array(6) as _}
+						<div class="card card--skel">
+							<div class="card-top">
+								<div class="sk sk-icon"></div>
+								<div class="sk-col">
+									<div class="sk" style="width:7rem;height:0.7rem"></div>
+									<div class="sk" style="width:10rem;height:0.5rem"></div>
+								</div>
+							</div>
+							<div class="card-bot">
+								<div class="sk" style="width:4rem;height:0.5rem"></div>
+								<div class="sk" style="width:3rem;height:0.5rem"></div>
+							</div>
+						</div>
 					{/each}
 				</div>
-			</section>
-		{/if}
+			{:else if deployments.length === 0}
+				<div class="empty">
+					<div class="empty-icon"><Sparkles size={28} /></div>
+					<h3 class="empty-h">Deploy your first app</h3>
+					<p class="empty-p">Import a GitHub repo or deploy a Docker image.</p>
+					<a href="/{orgSlug}/new" class="btn-primary" style="margin-top:0.5rem"
+						><Plus size={15} /> New Deployment</a
+					>
+				</div>
+			{:else}
+				<!-- Toolbar -->
+				<div class="bar" {@attach motionStagger({ index: 1, from: { y: 6 } })}>
+					<div class="search-box">
+						<Search size={13} class="search-ic" />
+						<input
+							type="search"
+							placeholder="Search deployments..."
+							class="search"
+							bind:value={searchQuery}
+						/>
+					</div>
+				</div>
 
-		{#if viewMode === 'by-project'}
-			<!-- Group by Project -->
-			{#if projectGroups.length > 0}
-				{#each projectGroups as group (group.id)}
-					{@const expanded = expandedProjects.has(group.id)}
-					{@const meta = projectMetas.get(group.id)}
-					{@const summary = projectStatusSummary(group)}
+				<!-- Favourites -->
+				{#if favDeps.length > 0}
 					<section class="section">
-						<div
-							class="proj-card"
-							class:proj-card--expanded={expanded}
-							class:proj-card--hasbg={!!meta?.backgroundImage}
-						>
-							{#if meta?.backgroundImage}
-								<div class="proj-card-backdrop" aria-hidden="true">
-									<div class="proj-body-bg proj-body-bg--1" style="background-image: url({JSON.stringify(meta.backgroundImage)});"></div>
-									<div class="proj-body-bg proj-body-bg--2" style="background-image: url({JSON.stringify(meta.backgroundImage)});"></div>
-									<div class="proj-body-bg proj-body-bg--3" style="background-image: url({JSON.stringify(meta.backgroundImage)});"></div>
-									<div class="proj-body-veil"></div>
+						<h2 class="label"><Star size={11} /> Favourites</h2>
+						<div class="grid">
+							{#each favDeps as dep, i (dep.id)}
+								<div {@attach motionStagger({ index: i, stride: 0.04, from: { y: 10 } })}>
+									{@render card(dep, true)}
 								</div>
-							{/if}
-							<button
-								class="proj-head"
-								onclick={(e) => toggleExpand(group.id, e)}
-								aria-expanded={expanded}
-								aria-label={expanded ? `Collapse ${group.name}` : `Expand ${group.name}`}
-							>
-								<div class="proj-chev" class:proj-chev--open={expanded}><ChevronRight size={16} /></div>
-								<div class="proj-av" class:proj-av--fallback={!meta?.icon || !/^https?:\/\//.test(meta.icon)}>
-									{#if meta?.icon}
-										{#if /^https?:\/\//.test(meta.icon)}
-											<img src={meta.icon} alt="" class="proj-av-img" />
-										{:else}
-											<span class="proj-av-emoji">{meta.icon}</span>
-										{/if}
-									{:else}
-										<Folder size={16} />
-									{/if}
-								</div>
-								<div class="proj-text">
-									<span class="proj-name">{group.name}</span>
-									{#if meta?.description}
-										<span class="proj-sub">{meta.description}</span>
-									{/if}
-								</div>
-								<div class="proj-stats">
-									<span class="proj-stat" title="Deployments"><Rocket size={12} /> {group.deps.length}</span>
-									{#if group.dbs.length > 0}
-										<span class="proj-stat" title="Databases"><Database size={12} /> {group.dbs.length}</span>
-									{/if}
-									{#if summary}
-										<span class="proj-summary">
-											{#if summary.green > 0}<span class="dot dot--green"></span>{summary.green}{/if}
-											{#if summary.amber > 0}<span class="dot dot--amber"></span>{summary.amber}{/if}
-											{#if summary.red > 0}<span class="dot dot--red"></span>{summary.red}{/if}
-										</span>
-									{/if}
-								</div>
-								<a
-									href="/{orgSlug}/new?projectSlug={group.slug}"
-									class="proj-new"
-									onclick={(e) => e.stopPropagation()}
-									aria-label="Add new to this project"
-								>
-									<Plus size={12} /> New
-								</a>
-								<a
-									href="/{orgSlug}/projects/{group.slug}"
-									class="proj-open"
-									onclick={(e) => e.stopPropagation()}
-									aria-label="Open project"
-								>
-									<ArrowRight size={14} />
-								</a>
-							</button>
-							{#if expanded}
-								<div class="proj-body" transition:slide={{ duration: 200 }}>
-									<div class="grid">
-										{#each group.deps as dep (dep.id)}
-											{@render card(dep, false)}
-										{/each}
-										{#each group.dbs as db (db.id)}
-											{@render dbCard(db)}
-										{/each}
-									</div>
-								</div>
-							{/if}
+							{/each}
 						</div>
 					</section>
+				{/if}
+
+				<!-- Group by Project -->
+				{#if projectGroups.length > 0}
+					{#each projectGroups as group, gi (group.id)}
+							{@const expanded = expandedProjects.has(group.id)}
+							{@const meta = projectMetas.get(group.id)}
+							{@const summary = projectStatusSummary(group)}
+							<section
+								class="section"
+								{@attach motionStagger({ index: gi, stride: 0.05, from: { y: 14 } })}
+							>
+								<div
+									class="proj-card"
+									class:proj-card--expanded={expanded}
+									class:proj-card--hasbg={!!meta?.backgroundImage}
+								>
+									{#if meta?.backgroundImage}
+										<div class="proj-card-backdrop" aria-hidden="true">
+											<div
+												class="proj-body-bg proj-body-bg--1"
+												style="background-image: url({JSON.stringify(meta.backgroundImage)});"
+											></div>
+											<div
+												class="proj-body-bg proj-body-bg--2"
+												style="background-image: url({JSON.stringify(meta.backgroundImage)});"
+											></div>
+											<div
+												class="proj-body-bg proj-body-bg--3"
+												style="background-image: url({JSON.stringify(meta.backgroundImage)});"
+											></div>
+											<div class="proj-body-veil"></div>
+										</div>
+									{/if}
+									<button
+										class="proj-head"
+										onclick={(e) => toggleExpand(group.id, e)}
+										aria-expanded={expanded}
+										aria-label={expanded ? `Collapse ${group.name}` : `Expand ${group.name}`}
+									>
+										<div
+											class="proj-chev"
+											class:proj-chev--open={expanded}
+											{@attach springRotate(() => expanded, { rest: 0, on: 90 })}
+										>
+											<ChevronRight size={16} />
+										</div>
+										<div
+											class="proj-av"
+											class:proj-av--fallback={!meta?.icon || !/^https?:\/\//.test(meta.icon)}
+										>
+											{#if meta?.icon}
+												{#if /^https?:\/\//.test(meta.icon)}
+													<img src={meta.icon} alt="" class="proj-av-img" />
+												{:else}
+													<span class="proj-av-emoji">{meta.icon}</span>
+												{/if}
+											{:else}
+												<Folder size={16} />
+											{/if}
+										</div>
+										<div class="proj-text">
+											<span class="proj-name">{group.name}</span>
+											{#if meta?.description}
+												<span class="proj-sub">{meta.description}</span>
+											{/if}
+										</div>
+										<div class="proj-stats">
+											<span class="proj-stat" title="Deployments"
+												><Rocket size={12} /> {group.deps.length}</span
+											>
+											{#if group.dbs.length > 0}
+												<span class="proj-stat" title="Databases"
+													><Database size={12} /> {group.dbs.length}</span
+												>
+											{/if}
+											{#if summary}
+												<span class="proj-summary">
+													{#if summary.green > 0}<span class="dot dot--green"
+														></span>{summary.green}{/if}
+													{#if summary.amber > 0}<span class="dot dot--amber"
+														></span>{summary.amber}{/if}
+													{#if summary.red > 0}<span class="dot dot--red"></span>{summary.red}{/if}
+												</span>
+											{/if}
+										</div>
+										<a
+											href="/{orgSlug}/new?projectSlug={group.slug}"
+											class="proj-new"
+											onclick={(e) => e.stopPropagation()}
+											aria-label="Add new to this project"
+										>
+											<Plus size={12} /> New
+										</a>
+										<a
+											href="/{orgSlug}/projects/{group.slug}"
+											class="proj-open"
+											onclick={(e) => e.stopPropagation()}
+											aria-label="Open project"
+										>
+											<ArrowRight size={14} />
+										</a>
+									</button>
+									{#if renderedProjectBodies.has(group.id)}
+										<div class="proj-body" {@attach bodyAttach(group.id)}>
+											<div class="grid">
+												{#each group.deps as dep, i (dep.id)}
+													<div {@attach motionStagger({ index: i, stride: 0.04, from: { y: 8 } })}>
+														{@render card(dep, false)}
+													</div>
+												{/each}
+												{#each group.dbs as db, i (db.id)}
+													<div
+														{@attach motionStagger({
+															index: group.deps.length + i,
+															stride: 0.04,
+															from: { y: 8 }
+														})}
+													>
+														{@render dbCard(db)}
+													</div>
+												{/each}
+											</div>
+										</div>
+									{/if}
+								</div>
+							</section>
+						{/each}
+					{/if}
+				{#if filtered.length === 0 && filteredDbs.length === 0}
+					<p class="no-results">
+						{searchQuery ? `No results for "${searchQuery}"` : 'Nothing here yet'}
+					</p>
+				{/if}
+			{/if}
+		</main>
+
+		<!-- Builds sidebar -->
+		<aside class="aside">
+			<h2 class="label aside-label">Recent Builds</h2>
+			{#if buildsLoading}
+				{#each Array(3) as _}
+					<div class="bld bld--skel">
+						<div class="sk" style="width:1.5rem;height:1.5rem;border-radius:0.375rem"></div>
+						<div class="sk-col" style="flex:1">
+							<div class="sk" style="width:5rem;height:0.6rem"></div>
+							<div class="sk" style="width:7rem;height:0.45rem"></div>
+						</div>
+					</div>
+				{/each}
+			{:else if activeBuilds.length === 0 && recentBuilds.length === 0}
+				<p class="aside-empty">No recent builds</p>
+			{:else}
+				{#each activeBuilds as b, i (b.id)}
+					{@const ic = buildIcon(b.image, b.ingresses, b.id)}
+					<a
+						href="/{orgSlug}/deployments/{b.id}"
+						class="bld bld--live"
+						{@attach motionStagger({ index: i, stride: 0.04, from: { y: 6, scale: 1 } })}
+					>
+						<div class="bld-dot bld-dot--building"><Loader2 size={13} class="spin" /></div>
+						<div class="bld-info">
+							<span class="bld-row"
+								>{#if ic}<img
+										src={ic}
+										alt=""
+										class="bld-ic"
+										onerror={() => favErr('b-' + b.id)}
+									/>{/if}<span class="bld-name">{b.name}</span></span
+							>
+							<span class="bld-sub"
+								>{#if b.project?.name}<strong>{b.project.name}</strong> ·
+								{/if}{b.buildStep ?? 'Building'}</span
+							>
+						</div>
+						<span class="bld-time bld-time--live"
+							><Timer size={10} /> {fmtDuration(elapsed(b.updatedAt))}</span
+						>
+					</a>
+				{/each}
+				{#each recentBuilds as b, i (b.id)}
+					{@const ok = b.deployment.buildStatus !== 'failed'}
+					{@const ic = buildIcon(b.deployment.image, b.deployment.ingresses, b.deployment.id)}
+					<a
+						href="/{orgSlug}/deployments/{b.deployment.id}"
+						class="bld"
+						{@attach motionStagger({
+							index: activeBuilds.length + i,
+							stride: 0.04,
+							from: { y: 6, scale: 1 }
+						})}
+					>
+						<div class="bld-dot" class:bld-dot--ok={ok} class:bld-dot--fail={!ok}>
+							{#if ok}<CheckCircle2 size={13} />{:else}<XCircle size={13} />{/if}
+						</div>
+						<div class="bld-info">
+							<span class="bld-row"
+								>{#if ic}<img
+										src={ic}
+										alt=""
+										class="bld-ic"
+										onerror={() => favErr('b-' + b.deployment.id)}
+									/>{/if}<span class="bld-name">{b.deployment.name}</span></span
+							>
+							<span class="bld-sub"
+								>{#if b.deployment.project?.name}<strong>{b.deployment.project.name}</strong
+									>{/if}{#if b.commitSha}{#if b.deployment.project?.name}
+										·
+									{/if}{b.commitSha.slice(
+										0,
+										7
+									)}{/if}{#if b.branch}{#if b.deployment.project?.name || b.commitSha}
+										·
+									{/if}{b.branch}{/if}</span
+							>
+						</div>
+						<span class="bld-time"><Clock size={10} /> {timeAgo(b.createdAt)}</span>
+					</a>
 				{/each}
 			{/if}
-		{:else}
-			<!-- List All -->
-			{@const nonFav = filtered.filter(d => !favouriteIds.has(d.id))}
-			{#if nonFav.length > 0}
-				<section class="section">
-					<h2 class="label">All Deployments</h2>
-					<div class="grid">
-						{#each nonFav as dep (dep.id)}
-							{@render card(dep, false)}
-						{/each}
-					</div>
-				</section>
-			{/if}
-			{#if filteredDbs.length > 0}
-				<section class="section">
-					<h2 class="label">All Databases</h2>
-					<div class="grid">
-						{#each filteredDbs as db (db.id)}
-							{@render dbCard(db)}
-						{/each}
-					</div>
-				</section>
-			{/if}
-		{/if}
-
-		{#if filtered.length === 0 && filteredDbs.length === 0}
-			<p class="no-results">{searchQuery ? `No results for "${searchQuery}"` : 'Nothing here yet'}</p>
-		{/if}
-	{/if}
-	</main>
-
-	<!-- Builds sidebar -->
-	<aside class="aside">
-		<h2 class="label aside-label">Recent Builds</h2>
-		{#if buildsLoading}
-			{#each Array(3) as _}
-				<div class="bld bld--skel"><div class="sk" style="width:1.5rem;height:1.5rem;border-radius:0.375rem"></div><div class="sk-col" style="flex:1"><div class="sk" style="width:5rem;height:0.6rem"></div><div class="sk" style="width:7rem;height:0.45rem"></div></div></div>
-			{/each}
-		{:else if activeBuilds.length === 0 && recentBuilds.length === 0}
-			<p class="aside-empty">No recent builds</p>
-		{:else}
-			{#each activeBuilds as b (b.id)}
-				{@const ic = buildIcon(b.image, b.ingresses, b.id)}
-				<a href="/{orgSlug}/deployments/{b.id}" class="bld bld--live">
-					<div class="bld-dot bld-dot--building"><Loader2 size={13} class="spin" /></div>
-					<div class="bld-info">
-						<span class="bld-row">{#if ic}<img src={ic} alt="" class="bld-ic" onerror={() => favErr('b-'+b.id)} />{/if}<span class="bld-name">{b.name}</span></span>
-						<span class="bld-sub">{#if b.project?.name}<strong>{b.project.name}</strong> · {/if}{b.buildStep ?? 'Building'}</span>
-					</div>
-					<span class="bld-time bld-time--live"><Timer size={10} /> {fmtDuration(elapsed(b.updatedAt))}</span>
-				</a>
-			{/each}
-			{#each recentBuilds as b (b.id)}
-				{@const ok = b.deployment.buildStatus !== 'failed'}
-				{@const ic = buildIcon(b.deployment.image, b.deployment.ingresses, b.deployment.id)}
-				<a href="/{orgSlug}/deployments/{b.deployment.id}" class="bld">
-					<div class="bld-dot" class:bld-dot--ok={ok} class:bld-dot--fail={!ok}>{#if ok}<CheckCircle2 size={13} />{:else}<XCircle size={13} />{/if}</div>
-					<div class="bld-info">
-						<span class="bld-row">{#if ic}<img src={ic} alt="" class="bld-ic" onerror={() => favErr('b-'+b.deployment.id)} />{/if}<span class="bld-name">{b.deployment.name}</span></span>
-						<span class="bld-sub">{#if b.deployment.project?.name}<strong>{b.deployment.project.name}</strong>{/if}{#if b.commitSha}{#if b.deployment.project?.name} · {/if}{b.commitSha.slice(0,7)}{/if}{#if b.branch}{#if b.deployment.project?.name || b.commitSha} · {/if}{b.branch}{/if}</span>
-					</div>
-					<span class="bld-time"><Clock size={10} /> {timeAgo(b.createdAt)}</span>
-				</a>
-			{/each}
-		{/if}
-	</aside>
+		</aside>
 	</div>
 </div>
 
 <!-- Deployment card snippet -->
 {#snippet card(dep: DeploymentSummary, isFav: boolean)}
 	{@const icon = knownIcon(dep.image)}
-	<a href="/{orgSlug}/deployments/{dep.id}" class="card" class:card--fav={isFav}>
+	<a
+		href="/{orgSlug}/deployments/{dep.id}"
+		class="card"
+		class:card--fav={isFav}
+		{@attach springHover({ lift: -3, stiffness: 360, damping: 22 })}
+		{@attach cardTilt({ max: 4 })}
+	>
 		<div class="card-top">
 			{#if icon}
 				<img src={icon} alt="" class="card-ic" />
 			{:else if dep.ingresses.length > 0 && !failedFav.has(dep.id)}
-				<img src={favUrl(dep.ingresses[0].host.split('/')[0])} alt="" class="card-ic" onerror={() => favErr(dep.id)} />
+				<img
+					src={favUrl(dep.ingresses[0].host.split('/')[0])}
+					alt=""
+					class="card-ic"
+					onerror={() => favErr(dep.id)}
+				/>
 			{:else}
 				<div class="card-av">{dep.name.charAt(0).toUpperCase()}</div>
 			{/if}
@@ -550,30 +1113,65 @@
 				{#if dep.ingresses.length > 0}
 					<span class="card-sub">{dep.ingresses[0].host.split('/')[0]}</span>
 				{:else if dep.githubRepo}
-					<span class="card-sub">{dep.githubRepo}{#if dep.githubBranch} / {dep.githubBranch}{/if}</span>
+					<span class="card-sub"
+						>{dep.githubRepo}{#if dep.githubBranch}
+							/ {dep.githubBranch}{/if}</span
+					>
 				{:else if dep.image}
 					<span class="card-sub">{dep.image}</span>
 				{/if}
 			</div>
 			<div class="card-acts">
-				<button class="abtn fav" class:fav--on={favouriteIds.has(dep.id)} onclick={(e) => toggleFav(dep, e)} aria-label="Favourite"><Star size={13} /></button>
+				<button
+					class="abtn fav"
+					class:fav--on={favouriteIds.has(dep.id)}
+					onclick={(e) => toggleFav(dep, e)}
+					aria-label="Favourite"
+					{@attach springPop(() => favouriteIds.has(dep.id))}><Star size={13} /></button
+				>
 				<div class="menu-wrap">
-					<button class="abtn" onclick={(e) => toggleMenu(dep.id, e)} aria-label="More"><MoreVertical size={13} /></button>
-					{#if openMenuId === dep.id}
-						<div class="menu">
+					<button class="abtn" onclick={(e) => toggleMenu(dep.id, e)} aria-label="More"
+						><MoreVertical size={13} /></button
+					>
+					{#if renderMenuId === dep.id}
+						<div
+							class="menu"
+							{@attach motionPopover({
+								from: { y: -6, scale: 0.94 },
+								stiffness: 540,
+								damping: 28,
+								closing: () => openMenuId !== dep.id,
+								onClosed: () => {
+									if (renderMenuId === dep.id) renderMenuId = null;
+								}
+							})}
+						>
 							{#if dep.ingresses.length > 0}
-								<button class="menu-item" onclick={(e) => visit(dep, e)}><ExternalLink size={14} /> Visit</button>
-								<button class="menu-item" onclick={(e) => cpUrl(dep, e)}><Copy size={14} /> Copy URL</button>
+								<button class="menu-item" onclick={(e) => visit(dep, e)}
+									><ExternalLink size={14} /> Visit</button
+								>
+								<button class="menu-item" onclick={(e) => cpUrl(dep, e)}
+									><Copy size={14} /> Copy URL</button
+								>
 							{/if}
-							<button class="menu-item" onclick={(e) => restart(dep, e)}><RefreshCw size={14} /> Restart</button>
-							<button class="menu-item" onclick={(e) => toggleFav(dep, e)}>{#if favouriteIds.has(dep.id)}<PinOff size={14} /> Unfavourite{:else}<Pin size={14} /> Favourite{/if}</button>
+							<button class="menu-item" onclick={(e) => restart(dep, e)}
+								><RefreshCw size={14} /> Restart</button
+							>
+							<button class="menu-item" onclick={(e) => toggleFav(dep, e)}
+								>{#if favouriteIds.has(dep.id)}<PinOff size={14} /> Unfavourite{:else}<Pin
+										size={14}
+									/> Favourite{/if}</button
+							>
 						</div>
 					{/if}
 				</div>
 			</div>
 		</div>
 		<div class="card-bot">
-			<span class="card-status"><span class="dot {dotClass(dep.status, dep.buildStatus)}"></span> {statusText(dep.status, dep.buildStatus)}</span>
+			<span class="card-status"
+				><span class="dot {dotClass(dep.status, dep.buildStatus)}"></span>
+				{statusText(dep.status, dep.buildStatus)}</span
+			>
 			<span class="card-meta">{timeAgo(dep.updatedAt)}</span>
 		</div>
 	</a>
@@ -581,7 +1179,12 @@
 
 {#snippet dbCard(db: DatabaseSummary)}
 	{@const dbIcon = IMG_ICONS.postgres}
-	<a href="/{orgSlug}/databases/{db.id}" class="card">
+	<a
+		href="/{orgSlug}/databases/{db.id}"
+		class="card"
+		{@attach springHover({ lift: -3, stiffness: 360, damping: 22 })}
+		{@attach cardTilt({ max: 4 })}
+	>
 		<div class="card-top">
 			<img src={dbIcon} alt="" class="card-ic" />
 			<div class="card-text">
@@ -591,7 +1194,13 @@
 		</div>
 		<div class="card-bot">
 			<span class="card-status">
-				<span class="dot {db.status === 'ready' ? 'dot--green' : db.status === 'error' ? 'dot--red' : 'dot--amber'}"></span>
+				<span
+					class="dot {db.status === 'ready'
+						? 'dot--green'
+						: db.status === 'error'
+							? 'dot--red'
+							: 'dot--amber'}"
+				></span>
 				{db.status === 'ready' ? 'Running' : db.status.charAt(0).toUpperCase() + db.status.slice(1)}
 			</span>
 			<span class="card-meta">{timeAgo(db.updatedAt)}</span>
@@ -600,113 +1209,199 @@
 {/snippet}
 
 <style>
-	.page { max-width: 80rem; margin: 0 auto; padding: 2.5rem 2.5rem 4rem; }
+	.page {
+		max-width: 80rem;
+		margin: 0 auto;
+		padding: 2.5rem 2.5rem 4rem;
+	}
 
 	/* Header */
-	.header { display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.75rem; }
-	.title { font-size: 1.5rem; font-weight: 700; color: var(--center-channel-color); margin: 0; letter-spacing: -0.02em; }
-	.btn-primary {
-		display: inline-flex; align-items: center; gap: 0.375rem;
-		padding: 0.5rem 1rem; border-radius: 0.5rem; font-size: 0.8125rem; font-weight: 600;
-		background: var(--button-bg); color: var(--button-color);
-		text-decoration: none; border: none; cursor: pointer; transition: opacity 0.15s;
+	.header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		margin-bottom: 1.75rem;
 	}
-	.btn-primary:hover { opacity: 0.85; }
+	.title {
+		font-size: 1.5rem;
+		font-weight: 700;
+		color: var(--center-channel-color);
+		margin: 0;
+		letter-spacing: -0.02em;
+	}
+	.btn-primary {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.5rem 1rem;
+		border-radius: 0.5rem;
+		font-size: 0.8125rem;
+		font-weight: 600;
+		background: var(--button-bg);
+		color: var(--button-color);
+		text-decoration: none;
+		border: none;
+		cursor: pointer;
+		transition: opacity 0.15s;
+	}
+	.btn-primary:hover {
+		opacity: 0.85;
+	}
 
 	/* Layout */
-	.layout { display: flex; gap: 2rem; align-items: flex-start; }
-	.main { flex: 1; min-width: 0; }
+	.layout {
+		display: flex;
+		gap: 2rem;
+		align-items: flex-start;
+	}
+	.main {
+		flex: 1;
+		min-width: 0;
+	}
 
 	/* Toolbar */
-	.bar { display: flex; align-items: center; gap: 0.5rem; margin-bottom: 1.5rem; }
+	.bar {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-bottom: 1.5rem;
+	}
 
-.search-box { position: relative; flex: 1; max-width: 18rem; }
-	:global(.search-ic) { position: absolute; left: 0.625rem; top: 50%; transform: translateY(-50%); color: var(--surface-muted); pointer-events: none; }
+	.search-box {
+		position: relative;
+		flex: 1;
+		max-width: 18rem;
+	}
+	:global(.search-ic) {
+		position: absolute;
+		left: 0.625rem;
+		top: 50%;
+		transform: translateY(-50%);
+		color: var(--surface-muted);
+		pointer-events: none;
+	}
 	.search {
-		width: 100%; padding: 0.4375rem 0.75rem 0.4375rem 2rem;
-		border-radius: 0.5rem; border: 1px solid transparent;
+		width: 100%;
+		padding: 0.4375rem 0.75rem 0.4375rem 2rem;
+		border-radius: 0.5rem;
+		border: 1px solid transparent;
 		background: color-mix(in srgb, var(--surface-border) 30%, var(--center-channel-bg));
-		color: var(--center-channel-color); font-size: 0.8125rem; transition: all 0.15s;
+		color: var(--center-channel-color);
+		font-size: 0.8125rem;
+		transition: all 0.15s;
 	}
-	.search::placeholder { color: var(--surface-muted); }
-	.search:focus { outline: none; border-color: var(--surface-muted); background: var(--center-channel-bg); }
-
-	/* View toggle */
-	.view-toggle {
-		display: inline-flex; align-items: center; gap: 0;
-		border-radius: 0.5rem; overflow: hidden;
-		border: 1px solid color-mix(in srgb, var(--surface-border) 60%, transparent);
+	.search::placeholder {
+		color: var(--surface-muted);
 	}
-	.view-btn {
-		display: flex; align-items: center; justify-content: center;
-		width: 2rem; height: 2rem; border: none; background: none;
-		color: var(--surface-muted); cursor: pointer; transition: all 0.12s;
-	}
-	.view-btn:hover { color: var(--center-channel-color); background: color-mix(in srgb, var(--surface-border) 25%, transparent); }
-	.view-btn--active {
-		color: var(--sidebar-text-active-border);
-		background: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
+	.search:focus {
+		outline: none;
+		border-color: var(--surface-muted);
+		background: var(--center-channel-bg);
 	}
 
 	/* Section labels */
-	.section { margin-bottom: 1.75rem; }
+	.section {
+		margin-bottom: 1.75rem;
+	}
 	.label {
-		font-size: 0.6875rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em;
-		color: var(--surface-muted); margin: 0 0 0.75rem; display: flex; align-items: center; gap: 0.3rem;
+		font-size: 0.6875rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--surface-muted);
+		margin: 0 0 0.75rem;
+		display: flex;
+		align-items: center;
+		gap: 0.3rem;
 	}
 
 	/* Project card (expandable) */
 	.proj-card {
 		position: relative;
-		border-radius: 0.75rem; background: var(--center-channel-bg);
+		border-radius: 0.75rem;
+		background: var(--center-channel-bg);
 		box-shadow:
-			0 1px 2px rgba(0,0,0,0.04),
-			0 3px 8px rgba(0,0,0,0.03);
+			0 1px 2px rgba(0, 0, 0, 0.04),
+			0 3px 8px rgba(0, 0, 0, 0.03);
 		transition: box-shadow 0.15s;
 		overflow: hidden;
 	}
 	.proj-card:hover {
 		box-shadow:
-			0 2px 4px rgba(0,0,0,0.06),
-			0 6px 16px rgba(0,0,0,0.07);
+			0 2px 4px rgba(0, 0, 0, 0.06),
+			0 6px 16px rgba(0, 0, 0, 0.07);
 	}
 	.proj-card--expanded {
 		box-shadow:
 			0 0 0 1px color-mix(in srgb, var(--surface-border) 55%, transparent),
-			0 2px 4px rgba(0,0,0,0.05),
-			0 8px 20px rgba(0,0,0,0.06);
+			0 2px 4px rgba(0, 0, 0, 0.05),
+			0 8px 20px rgba(0, 0, 0, 0.06);
 	}
-	.proj-card--hasbg { color: #fff; }
+	.proj-card--hasbg {
+		color: #fff;
+	}
 	.proj-card-backdrop {
-		position: absolute; top: 0; left: 0; right: 0;
+		position: absolute;
+		top: 0;
+		left: 0;
+		right: 0;
 		height: 7.5rem;
-		overflow: hidden; pointer-events: none;
+		overflow: hidden;
+		pointer-events: none;
 		border-radius: inherit;
 	}
-	.proj-card--expanded .proj-card-backdrop {
-		border-bottom-left-radius: 0; border-bottom-right-radius: 0;
+	/* Backdrop keeps fully-rounded corners always — squaring only the bottom
+	   when expanded caused a square-to-rounded pop the moment the user
+	   clicked collapse (class flips off before the body anim runs). */
+	.proj-card--hasbg .proj-head {
+		position: relative;
+		z-index: 1;
+		color: #fff;
 	}
-	.proj-card--hasbg .proj-head { position: relative; z-index: 1; color: #fff; }
-	.proj-card--hasbg .proj-name { color: #fff; }
+	.proj-card--hasbg .proj-name {
+		color: #fff;
+	}
 	.proj-card--hasbg .proj-sub,
 	.proj-card--hasbg .proj-stat,
 	.proj-card--hasbg .proj-chev,
-	.proj-card--hasbg .proj-open { color: rgba(255,255,255,0.78); }
-	.proj-card--hasbg .proj-chev--open { color: #fff; }
-	.proj-card--hasbg .proj-summary { border-left-color: rgba(255,255,255,0.25); color: rgba(255,255,255,0.85); }
-	.proj-card--hasbg .proj-new { color: #fff; border-color: rgba(255,255,255,0.45); }
-	.proj-card--hasbg .proj-new:hover { color: #fff; background: rgba(255,255,255,0.15); border-color: #fff; }
+	.proj-card--hasbg .proj-open {
+		color: rgba(255, 255, 255, 0.78);
+	}
+	.proj-card--hasbg .proj-chev--open {
+		color: #fff;
+	}
+	.proj-card--hasbg .proj-summary {
+		border-left-color: rgba(255, 255, 255, 0.25);
+		color: rgba(255, 255, 255, 0.85);
+	}
+	.proj-card--hasbg .proj-new {
+		color: #fff;
+		border-color: rgba(255, 255, 255, 0.45);
+	}
+	.proj-card--hasbg .proj-new:hover {
+		color: #fff;
+		background: rgba(255, 255, 255, 0.15);
+		border-color: #fff;
+	}
 	/* Body wrapper — holds the optional blurred backdrop + the actual grid card */
-	.proj-body-wrap { position: relative; }
+	.proj-body-wrap {
+		position: relative;
+	}
 
 	.proj-body-bg {
-		position: absolute; inset: -40%;
-		background-size: cover; background-position: center;
+		position: absolute;
+		inset: -40%;
+		background-size: cover;
+		background-position: center;
 		filter: blur(48px) saturate(1.6);
 		will-change: transform;
 		transform-origin: 50% 50%;
 	}
-	.proj-body-bg--1 { transform: scale(1.6) rotate(0deg); animation: proj-spin-a 28s linear infinite; opacity: 0.9; }
+	.proj-body-bg--1 {
+		transform: scale(1.6) rotate(0deg);
+		animation: proj-spin-a 28s linear infinite;
+		opacity: 0.9;
+	}
 	.proj-body-bg--2 {
 		transform: scale(2.1) translate(8%, -6%) rotate(70deg);
 		animation: proj-spin-b 44s linear infinite;
@@ -718,236 +1413,664 @@
 		opacity: 0.4;
 	}
 	.proj-body-veil {
-		position: absolute; inset: 0;
-		background: linear-gradient(180deg, rgba(0,0,0,0.15) 0%, rgba(0,0,0,0.35) 100%);
+		position: absolute;
+		inset: 0;
+		background: linear-gradient(180deg, rgba(0, 0, 0, 0.15) 0%, rgba(0, 0, 0, 0.35) 100%);
 	}
 
-	@keyframes proj-spin-a { from { transform: scale(1.6) rotate(0deg); } to { transform: scale(1.6) rotate(360deg); } }
-	@keyframes proj-spin-b { from { transform: scale(2.1) translate(8%, -6%) rotate(70deg); } to { transform: scale(2.1) translate(8%, -6%) rotate(430deg); } }
-	@keyframes proj-spin-c { from { transform: scale(2.6) translate(-10%, 9%) rotate(140deg); } to { transform: scale(2.6) translate(-10%, 9%) rotate(-220deg); } }
+	@keyframes proj-spin-a {
+		from {
+			transform: scale(1.6) rotate(0deg);
+		}
+		to {
+			transform: scale(1.6) rotate(360deg);
+		}
+	}
+	@keyframes proj-spin-b {
+		from {
+			transform: scale(2.1) translate(8%, -6%) rotate(70deg);
+		}
+		to {
+			transform: scale(2.1) translate(8%, -6%) rotate(430deg);
+		}
+	}
+	@keyframes proj-spin-c {
+		from {
+			transform: scale(2.6) translate(-10%, 9%) rotate(140deg);
+		}
+		to {
+			transform: scale(2.6) translate(-10%, 9%) rotate(-220deg);
+		}
+	}
 
 	@media (prefers-reduced-motion: reduce) {
-		.proj-body-bg--1, .proj-body-bg--2, .proj-body-bg--3 { animation: none; }
+		.proj-body-bg--1,
+		.proj-body-bg--2,
+		.proj-body-bg--3 {
+			animation: none;
+		}
 	}
 
 	.proj-card--hasbg .proj-body {
-		position: relative; z-index: 1;
+		position: relative;
+		z-index: 1;
 		background: var(--center-channel-bg);
 		color: var(--center-channel-color);
 		padding: 1rem 1.125rem 1.125rem;
 		border-radius: 0 0 0.75rem 0.75rem;
+		box-sizing: border-box;
 	}
 
 	/* Inner deployment/database cards over a banner — solid surface like the rest of the app */
 	.proj-card--hasbg .proj-body :global(.card) {
 		background: var(--center-channel-bg);
-		box-shadow: 0 2px 8px rgba(0,0,0,0.08), 0 10px 24px rgba(0,0,0,0.12);
+		box-shadow:
+			0 2px 8px rgba(0, 0, 0, 0.08),
+			0 10px 24px rgba(0, 0, 0, 0.12);
 	}
 	.proj-card--hasbg .proj-body :global(.card:hover) {
-		box-shadow: 0 4px 12px rgba(0,0,0,0.1), 0 14px 32px rgba(0,0,0,0.16);
+		box-shadow:
+			0 4px 12px rgba(0, 0, 0, 0.1),
+			0 14px 32px rgba(0, 0, 0, 0.16);
 	}
 
-	.proj-av-img { width: 100%; height: 100%; object-fit: cover; }
-	.proj-av-emoji { font-size: 1.125rem; line-height: 1; }
+	.proj-av-img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+	}
+	.proj-av-emoji {
+		font-size: 1.125rem;
+		line-height: 1;
+	}
 
 	.proj-head {
-		display: flex; align-items: center; gap: 0.75rem;
-		width: 100%; min-height: 7.5rem; padding: 2rem 1.125rem;
-		border: none; background: none; color: var(--center-channel-color);
-		cursor: pointer; text-align: left; font: inherit;
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		width: 100%;
+		min-height: 7.5rem;
+		padding: 2rem 1.125rem;
+		border: none;
+		background: none;
+		color: var(--center-channel-color);
+		cursor: pointer;
+		text-align: left;
+		font: inherit;
 	}
 	.proj-chev {
-		display: flex; align-items: center; justify-content: center;
-		width: 1.25rem; height: 1.25rem; flex-shrink: 0;
-		color: var(--surface-muted); transition: transform 0.18s ease;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.25rem;
+		height: 1.25rem;
+		flex-shrink: 0;
+		color: var(--surface-muted);
+		/* rotation owned by Motion (springRotate attachment) */
 	}
-	.proj-chev--open { transform: rotate(90deg); color: var(--center-channel-color); }
+	.proj-chev--open {
+		color: var(--center-channel-color);
+	}
 	.proj-av {
-		width: 2.25rem; height: 2.25rem; border-radius: 0.5rem; flex-shrink: 0;
-		display: flex; align-items: center; justify-content: center;
+		width: 2.25rem;
+		height: 2.25rem;
+		border-radius: 0.5rem;
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		overflow: hidden;
 	}
 	.proj-av--fallback {
 		background: #4a8aff;
 		color: #fff;
 	}
-	.proj-text { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.125rem; }
-	.proj-name { font-size: 0.9375rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-	.proj-sub { font-size: 0.75rem; color: var(--surface-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+	.proj-text {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+	}
+	.proj-name {
+		font-size: 0.9375rem;
+		font-weight: 600;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.proj-sub {
+		font-size: 0.75rem;
+		color: var(--surface-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
 	.proj-stats {
-		display: flex; align-items: center; gap: 0.75rem; flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		flex-shrink: 0;
 	}
 	.proj-stat {
-		display: inline-flex; align-items: center; gap: 0.25rem;
-		font-size: 0.75rem; color: var(--surface-muted); font-variant-numeric: tabular-nums;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		font-size: 0.75rem;
+		color: var(--surface-muted);
+		font-variant-numeric: tabular-nums;
 	}
 	.proj-summary {
-		display: inline-flex; align-items: center; gap: 0.25rem;
-		font-size: 0.75rem; color: var(--surface-muted); font-variant-numeric: tabular-nums;
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		font-size: 0.75rem;
+		color: var(--surface-muted);
+		font-variant-numeric: tabular-nums;
 		padding-left: 0.75rem;
 		border-left: 1px solid color-mix(in srgb, var(--surface-border) 45%, transparent);
 	}
-	.proj-summary .dot { margin-right: 0.0625rem; }
-	.proj-new {
-		display: inline-flex; align-items: center; gap: 0.25rem;
-		padding: 0.3125rem 0.625rem; border-radius: 0.375rem;
-		font-size: 0.75rem; font-weight: 500;
-		color: var(--surface-muted); text-decoration: none; flex-shrink: 0;
-		border: 1px dashed color-mix(in srgb, var(--surface-border) 80%, transparent);
-		background: none; transition: all 0.12s; white-space: nowrap;
+	.proj-summary .dot {
+		margin-right: 0.0625rem;
 	}
-	.proj-new:hover { color: var(--sidebar-text-active-border); border-color: var(--sidebar-text-active-border); }
+	.proj-new {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0.3125rem 0.625rem;
+		border-radius: 0.375rem;
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: var(--surface-muted);
+		text-decoration: none;
+		flex-shrink: 0;
+		border: 1px dashed color-mix(in srgb, var(--surface-border) 80%, transparent);
+		background: none;
+		transition: all 0.12s;
+		white-space: nowrap;
+	}
+	.proj-new:hover {
+		color: var(--sidebar-text-active-border);
+		border-color: var(--sidebar-text-active-border);
+	}
 	.proj-open {
-		display: flex; align-items: center; justify-content: center;
-		width: 1.75rem; height: 1.75rem; border-radius: 0.375rem;
-		color: var(--surface-muted); text-decoration: none; flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: 0.375rem;
+		color: var(--surface-muted);
+		text-decoration: none;
+		flex-shrink: 0;
 		transition: all 0.12s;
 	}
-	.proj-open:hover { color: var(--sidebar-text-active-border); background: color-mix(in srgb, var(--sidebar-text-active-border) 10%, transparent); }
+	.proj-open:hover {
+		color: var(--sidebar-text-active-border);
+		background: color-mix(in srgb, var(--sidebar-text-active-border) 10%, transparent);
+	}
 
 	.proj-body {
 		padding: 0 1.125rem 1.125rem;
+		box-sizing: border-box;
 	}
 
 	/* Card grid */
-	.grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr)); gap: 0.875rem; }
+	.grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
+		gap: 0.875rem;
+		transform-origin: top;
+	}
 
-	/* Card — two-part shadow, no border */
+	/* Card — transform is owned by Motion (springHover + cardTilt). */
 	.card {
-		display: flex; flex-direction: column; gap: 0.5rem;
-		padding: 1rem; border-radius: 0.625rem; background: var(--center-channel-bg); min-height: 8rem;
-		text-decoration: none; color: var(--center-channel-color);
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		padding: 1rem;
+		border-radius: 0.625rem;
+		background: var(--center-channel-bg);
+		min-height: 8rem;
+		text-decoration: none;
+		color: var(--center-channel-color);
 		box-shadow:
-			0 1px 2px rgba(0,0,0,0.04),
-			0 3px 8px rgba(0,0,0,0.03);
-		transition: box-shadow 0.15s, transform 0.15s; cursor: pointer;
+			0 1px 2px rgba(0, 0, 0, 0.04),
+			0 3px 8px rgba(0, 0, 0, 0.03);
+		transition: box-shadow 0.18s ease;
+		cursor: pointer;
 	}
 	.card:hover {
 		box-shadow:
-			0 2px 4px rgba(0,0,0,0.06),
-			0 6px 16px rgba(0,0,0,0.07);
-		transform: translateY(-1px);
+			0 2px 4px rgba(0, 0, 0, 0.06),
+			0 8px 22px rgba(0, 0, 0, 0.09);
 	}
 	.card--fav {
 		box-shadow:
 			0 0 0 1.5px color-mix(in srgb, var(--sidebar-text-active-border) 25%, transparent),
-			0 1px 2px rgba(0,0,0,0.04),
-			0 3px 8px rgba(0,0,0,0.03);
+			0 1px 2px rgba(0, 0, 0, 0.04),
+			0 3px 8px rgba(0, 0, 0, 0.03);
 	}
-	.card--skel { pointer-events: none; }
+	.card--skel {
+		pointer-events: none;
+	}
 
-	.card-top { display: flex; align-items: center; gap: 0.5rem; }
-	.card-ic { width: 2.25rem; height: 2.25rem; border-radius: 0.5rem; flex-shrink: 0; object-fit: cover; }
-	.card-av {
-		width: 2.25rem; height: 2.25rem; border-radius: 0.5rem; flex-shrink: 0;
-		display: flex; align-items: center; justify-content: center;
-		background: linear-gradient(135deg, color-mix(in srgb, var(--sidebar-text-active-border) 15%, transparent), color-mix(in srgb, var(--sidebar-text-active-border) 5%, transparent));
-		color: var(--sidebar-text-active-border); font-size: 0.75rem; font-weight: 700;
+	.card-top {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
 	}
-	.card-text { flex: 1; min-width: 0; }
-	.card-name { display: block; font-size: 0.9375rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-	.card-sub { display: block; font-size: 0.75rem; color: var(--surface-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; margin-top: 0.0625rem; }
-	.card-bot { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: auto; padding-top: 0.5rem; }
-	.card-status { display: inline-flex; align-items: center; gap: 0.3rem; font-size: 0.6875rem; color: var(--surface-muted); font-weight: 500; }
-	.card-meta { font-size: 0.6875rem; color: var(--surface-muted); white-space: nowrap; }
+	.card-ic {
+		width: 2.25rem;
+		height: 2.25rem;
+		border-radius: 0.5rem;
+		flex-shrink: 0;
+		object-fit: cover;
+	}
+	.card-av {
+		width: 2.25rem;
+		height: 2.25rem;
+		border-radius: 0.5rem;
+		flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: linear-gradient(
+			135deg,
+			color-mix(in srgb, var(--sidebar-text-active-border) 15%, transparent),
+			color-mix(in srgb, var(--sidebar-text-active-border) 5%, transparent)
+		);
+		color: var(--sidebar-text-active-border);
+		font-size: 0.75rem;
+		font-weight: 700;
+	}
+	.card-text {
+		flex: 1;
+		min-width: 0;
+	}
+	.card-name {
+		display: block;
+		font-size: 0.9375rem;
+		font-weight: 600;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.card-sub {
+		display: block;
+		font-size: 0.75rem;
+		color: var(--surface-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		margin-top: 0.0625rem;
+	}
+	.card-bot {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		margin-top: auto;
+		padding-top: 0.5rem;
+	}
+	.card-status {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+		font-size: 0.6875rem;
+		color: var(--surface-muted);
+		font-weight: 500;
+	}
+	.card-meta {
+		font-size: 0.6875rem;
+		color: var(--surface-muted);
+		white-space: nowrap;
+	}
 
 	/* Hover actions */
-	.card-acts { display: flex; align-items: center; gap: 0.0625rem; flex-shrink: 0; opacity: 0; transition: opacity 0.1s; }
-	.card:hover .card-acts { opacity: 1; }
-	.fav--on { opacity: 1 !important; }
-	.abtn {
-		display: flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem;
-		border-radius: 0.25rem; border: none; background: none; color: var(--surface-muted); cursor: pointer; transition: all 0.1s;
+	.card-acts {
+		display: flex;
+		align-items: center;
+		gap: 0.0625rem;
+		flex-shrink: 0;
+		opacity: 0;
+		transition: opacity 0.1s;
 	}
-	.abtn:hover { background: color-mix(in srgb, var(--surface-border) 50%, transparent); color: var(--center-channel-color); }
-	.fav--on { color: #eab308; }
-	.fav--on:hover { color: #ca8a04; }
+	.card:hover .card-acts {
+		opacity: 1;
+	}
+	.fav--on {
+		opacity: 1 !important;
+	}
+	.abtn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.5rem;
+		height: 1.5rem;
+		border-radius: 0.25rem;
+		border: none;
+		background: none;
+		color: var(--surface-muted);
+		cursor: pointer;
+		transition: all 0.1s;
+	}
+	.abtn:hover {
+		background: color-mix(in srgb, var(--surface-border) 50%, transparent);
+		color: var(--center-channel-color);
+	}
+	.fav--on {
+		color: #eab308;
+	}
+	.fav--on:hover {
+		color: #ca8a04;
+	}
 
 	/* Menus */
-	.menu-wrap { position: relative; }
+	.menu-wrap {
+		position: relative;
+	}
 	.menu {
-		position: absolute; top: calc(100% + 0.25rem); right: 0; z-index: 50;
-		min-width: 10rem; padding: 0.25rem; border-radius: 0.5rem; background: var(--center-channel-bg);
-		box-shadow: 0 6px 20px rgba(0,0,0,0.12), 0 0 0 1px color-mix(in srgb, var(--surface-border) 45%, transparent);
+		position: absolute;
+		top: calc(100% + 0.25rem);
+		right: 0;
+		z-index: 50;
+		min-width: 10rem;
+		padding: 0.25rem;
+		border-radius: 0.5rem;
+		background: var(--center-channel-bg);
+		box-shadow:
+			0 6px 20px rgba(0, 0, 0, 0.12),
+			0 0 0 1px color-mix(in srgb, var(--surface-border) 45%, transparent);
+		transform-origin: top right;
 	}
-	.menu--left { left: 0; right: auto; max-height: 20rem; overflow-y: auto; min-width: 11rem; }
+	.menu--left {
+		left: 0;
+		right: auto;
+		max-height: 20rem;
+		overflow-y: auto;
+		min-width: 11rem;
+	}
 	.menu-item {
-		display: flex; align-items: center; gap: 0.5rem; width: 100%;
-		padding: 0.4375rem 0.5rem; border: none; border-radius: 0.3rem; background: none;
-		color: var(--center-channel-color); font-size: 0.8125rem; cursor: pointer; text-align: left; transition: background 0.1s;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		width: 100%;
+		padding: 0.4375rem 0.5rem;
+		border: none;
+		border-radius: 0.3rem;
+		background: none;
+		color: var(--center-channel-color);
+		font-size: 0.8125rem;
+		cursor: pointer;
+		text-align: left;
+		transition: background 0.1s;
 	}
-	.menu-item:hover { background: color-mix(in srgb, var(--surface-border) 30%, transparent); }
-	.menu-item--on { font-weight: 600; color: var(--sidebar-text-active-border); }
+	.menu-item:hover {
+		background: color-mix(in srgb, var(--surface-border) 30%, transparent);
+	}
+	.menu-item--on {
+		font-weight: 600;
+		color: var(--sidebar-text-active-border);
+	}
 
 	/* Dots */
-	.dot { width: 0.375rem; height: 0.375rem; border-radius: 0.5rem; flex-shrink: 0; display: inline-block; }
-	.dot--green { background: #22c55e; box-shadow: 0 0 5px color-mix(in srgb, #22c55e 35%, transparent); }
-	.dot--amber { background: #f59e0b; box-shadow: 0 0 5px color-mix(in srgb, #f59e0b 35%, transparent); }
-	.dot--red { background: #ef4444; box-shadow: 0 0 5px color-mix(in srgb, #ef4444 35%, transparent); }
-	.dot--gray { background: var(--surface-muted); opacity: 0.35; }
+	.dot {
+		width: 0.375rem;
+		height: 0.375rem;
+		border-radius: 0.5rem;
+		flex-shrink: 0;
+		display: inline-block;
+	}
+	.dot--green {
+		background: #22c55e;
+		box-shadow: 0 0 5px color-mix(in srgb, #22c55e 35%, transparent);
+	}
+	.dot--amber {
+		background: #f59e0b;
+		box-shadow: 0 0 5px color-mix(in srgb, #f59e0b 35%, transparent);
+	}
+	.dot--red {
+		background: #ef4444;
+		box-shadow: 0 0 5px color-mix(in srgb, #ef4444 35%, transparent);
+	}
+	.dot--gray {
+		background: var(--surface-muted);
+		opacity: 0.35;
+	}
 
 	/* Empty */
-	.empty { display: flex; flex-direction: column; align-items: center; gap: 0.75rem; padding: 5rem 2rem; text-align: center; }
-	.empty-icon { width: 3.5rem; height: 3.5rem; border-radius: 1rem; display: flex; align-items: center; justify-content: center; background: color-mix(in srgb, var(--sidebar-text-active-border) 8%, transparent); color: var(--sidebar-text-active-border); }
-	.empty-h { font-size: 1.125rem; font-weight: 600; color: var(--center-channel-color); margin: 0; }
-	.empty-p { font-size: 0.8125rem; color: var(--surface-muted); max-width: 20rem; margin: 0; line-height: 1.5; }
-	.no-results { text-align: center; padding: 3rem; color: var(--surface-muted); font-size: 0.8125rem; }
+	.empty {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 5rem 2rem;
+		text-align: center;
+	}
+	.empty-icon {
+		width: 3.5rem;
+		height: 3.5rem;
+		border-radius: 1rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		background: color-mix(in srgb, var(--sidebar-text-active-border) 8%, transparent);
+		color: var(--sidebar-text-active-border);
+	}
+	.empty-h {
+		font-size: 1.125rem;
+		font-weight: 600;
+		color: var(--center-channel-color);
+		margin: 0;
+	}
+	.empty-p {
+		font-size: 0.8125rem;
+		color: var(--surface-muted);
+		max-width: 20rem;
+		margin: 0;
+		line-height: 1.5;
+	}
+	.no-results {
+		text-align: center;
+		padding: 3rem;
+		color: var(--surface-muted);
+		font-size: 0.8125rem;
+	}
 
 	/* Builds sidebar */
 	.aside {
-		flex: 0 0 17.5rem; position: sticky; top: 1.5rem; border-radius: 0.625rem;
+		flex: 0 0 17.5rem;
+		position: sticky;
+		top: 1.5rem;
+		border-radius: 0.625rem;
 		background: var(--center-channel-bg);
-		box-shadow: 0 0 0 1px color-mix(in srgb, var(--surface-border) 50%, transparent), 0 1px 3px rgba(0,0,0,0.04);
+		box-shadow:
+			0 0 0 1px color-mix(in srgb, var(--surface-border) 50%, transparent),
+			0 1px 3px rgba(0, 0, 0, 0.04);
 		overflow: hidden;
 	}
-	.aside-label { padding: 0.875rem 0.875rem 0; margin-bottom: 0.375rem; }
-	.aside-empty { padding: 2rem 1rem; text-align: center; color: var(--surface-muted); font-size: 0.75rem; margin: 0; }
+	.aside-label {
+		padding: 0.875rem 0.875rem 0;
+		margin-bottom: 0.375rem;
+	}
+	.aside-empty {
+		padding: 2rem 1rem;
+		text-align: center;
+		color: var(--surface-muted);
+		font-size: 0.75rem;
+		margin: 0;
+	}
 
 	.bld {
-		display: flex; align-items: flex-start; gap: 0.5rem;
-		padding: 0.625rem 0.875rem; text-decoration: none; color: var(--center-channel-color); transition: background 0.1s; cursor: pointer;
+		display: flex;
+		align-items: flex-start;
+		gap: 0.5rem;
+		padding: 0.625rem 0.875rem;
+		text-decoration: none;
+		color: var(--center-channel-color);
+		transition: background 0.1s;
+		cursor: pointer;
 	}
-	.bld + .bld { box-shadow: inset 0 1px 0 color-mix(in srgb, var(--surface-border) 25%, transparent); }
-	.bld:hover { background: color-mix(in srgb, var(--surface-border) 12%, transparent); }
-	.bld--live { background: color-mix(in srgb, #f59e0b 3%, transparent); }
-	.bld--skel { pointer-events: none; }
+	.bld + .bld {
+		box-shadow: inset 0 1px 0 color-mix(in srgb, var(--surface-border) 25%, transparent);
+	}
+	.bld:hover {
+		background: color-mix(in srgb, var(--surface-border) 12%, transparent);
+	}
+	.bld--live {
+		background: color-mix(in srgb, #f59e0b 3%, transparent);
+	}
+	.bld--skel {
+		pointer-events: none;
+	}
 
-	.bld-dot { display: flex; align-items: center; justify-content: center; width: 1.5rem; height: 1.5rem; border-radius: 0.375rem; flex-shrink: 0; }
-	.bld-dot--building { color: #f59e0b; background: color-mix(in srgb, #f59e0b 10%, transparent); }
-	.bld-dot--ok { color: #22c55e; background: color-mix(in srgb, #22c55e 10%, transparent); }
-	.bld-dot--fail { color: #ef4444; background: color-mix(in srgb, #ef4444 10%, transparent); }
+	.bld-dot {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.5rem;
+		height: 1.5rem;
+		border-radius: 0.375rem;
+		flex-shrink: 0;
+	}
+	.bld-dot--building {
+		color: #f59e0b;
+		background: color-mix(in srgb, #f59e0b 10%, transparent);
+	}
+	.bld-dot--ok {
+		color: #22c55e;
+		background: color-mix(in srgb, #22c55e 10%, transparent);
+	}
+	.bld-dot--fail {
+		color: #ef4444;
+		background: color-mix(in srgb, #ef4444 10%, transparent);
+	}
 
-	.bld-info { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.125rem; }
-	.bld-row { display: flex; align-items: center; gap: 0.25rem; min-width: 0; }
-	.bld-ic { width: 0.875rem; height: 0.875rem; border-radius: 0.125rem; flex-shrink: 0; object-fit: contain; }
-	.bld-name { font-size: 0.75rem; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-	.bld-sub { font-size: 0.625rem; color: var(--surface-muted); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-	.bld-sub strong { font-weight: 500; color: color-mix(in srgb, var(--center-channel-color) 65%, transparent); }
+	.bld-info {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+	}
+	.bld-row {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		min-width: 0;
+	}
+	.bld-ic {
+		width: 0.875rem;
+		height: 0.875rem;
+		border-radius: 0.125rem;
+		flex-shrink: 0;
+		object-fit: contain;
+	}
+	.bld-name {
+		font-size: 0.75rem;
+		font-weight: 600;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.bld-sub {
+		font-size: 0.625rem;
+		color: var(--surface-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.bld-sub strong {
+		font-weight: 500;
+		color: color-mix(in srgb, var(--center-channel-color) 65%, transparent);
+	}
 
-	.bld-time { display: inline-flex; align-items: center; gap: 0.1875rem; font-size: 0.625rem; color: var(--surface-muted); white-space: nowrap; flex-shrink: 0; margin-top: 0.125rem; }
-	.bld-time--live { color: #f59e0b; font-weight: 600; font-variant-numeric: tabular-nums; }
+	.bld-time {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.1875rem;
+		font-size: 0.625rem;
+		color: var(--surface-muted);
+		white-space: nowrap;
+		flex-shrink: 0;
+		margin-top: 0.125rem;
+	}
+	.bld-time--live {
+		color: #f59e0b;
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+	}
 
-	:global(.spin) { animation: spin 1s linear infinite; }
+	:global(.spin) {
+		animation: spin 1s linear infinite;
+	}
 
 	/* Skeletons */
-	.sk-icon { width: 1.75rem; height: 1.75rem; border-radius: 0.375rem; }
-	.sk-col { display: flex; flex-direction: column; gap: 0.3rem; flex: 1; }
-	:global(.sk) {
-		background: linear-gradient(90deg, color-mix(in srgb, var(--surface-border) 40%, transparent) 25%, color-mix(in srgb, var(--surface-border) 18%, transparent) 50%, color-mix(in srgb, var(--surface-border) 40%, transparent) 75%);
-		background-size: 200% 100%; animation: shimmer 1.5s infinite; border-radius: 0.25rem;
+	.sk-icon {
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: 0.375rem;
 	}
-	@keyframes shimmer { 0% { background-position: 200% 0; } 100% { background-position: -200% 0; } }
-	@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
+	.sk-col {
+		display: flex;
+		flex-direction: column;
+		gap: 0.3rem;
+		flex: 1;
+	}
+	:global(.sk) {
+		background: linear-gradient(
+			90deg,
+			color-mix(in srgb, var(--surface-border) 40%, transparent) 25%,
+			color-mix(in srgb, var(--surface-border) 18%, transparent) 50%,
+			color-mix(in srgb, var(--surface-border) 40%, transparent) 75%
+		);
+		background-size: 200% 100%;
+		animation: shimmer 1.5s infinite;
+		border-radius: 0.25rem;
+	}
+	@keyframes shimmer {
+		0% {
+			background-position: 200% 0;
+		}
+		100% {
+			background-position: -200% 0;
+		}
+	}
+	@keyframes spin {
+		from {
+			transform: rotate(0deg);
+		}
+		to {
+			transform: rotate(360deg);
+		}
+	}
 
 	/* Responsive */
 	@media (max-width: 64rem) {
-		.layout { flex-direction: column-reverse; }
-		.aside { flex: none; width: 100%; position: static; }
+		.layout {
+			flex-direction: column-reverse;
+		}
+		.aside {
+			flex: none;
+			width: 100%;
+			position: static;
+		}
 	}
 	@media (max-width: 48rem) {
-		.page { padding: 1.5rem 1rem 3rem; }
-		.bar { flex-wrap: wrap; }
-		.search-box { max-width: none; flex: 1; min-width: 8rem; }
-		.grid { grid-template-columns: 1fr; }
+		.page {
+			padding: 1.5rem 1rem 3rem;
+		}
+		.bar {
+			flex-wrap: wrap;
+		}
+		.search-box {
+			max-width: none;
+			flex: 1;
+			min-width: 8rem;
+		}
+		.grid {
+			grid-template-columns: 1fr;
+		}
 	}
 </style>

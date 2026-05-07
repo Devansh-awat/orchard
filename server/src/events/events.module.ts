@@ -4,12 +4,11 @@ import { KubernetesModule } from '../kubernetes/kubernetes.module';
 import { OrgEventsService } from './org-events.service';
 import { EventsController } from './events.controller';
 import { PrismaEventsBridge } from './prisma-events.bridge';
-import { DeploymentMetricsEmitter } from './deployment-metrics.emitter';
 
 @Global()
 @Module({
   imports: [AuthModule, KubernetesModule],
-  providers: [OrgEventsService, PrismaEventsBridge, DeploymentMetricsEmitter],
+  providers: [OrgEventsService, PrismaEventsBridge],
   controllers: [EventsController],
   exports: [OrgEventsService],
 })

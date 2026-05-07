@@ -8,107 +8,56 @@
 	import type { PageData } from './$types';
 	import { AnsiUp } from 'ansi_up';
 	import {
-		ArrowLeft,
 		Loader2,
-		RefreshCw,
-		Trash2,
-		Play,
-		Scale,
-		Settings,
-		Terminal,
-		Globe,
-		History,
 		Plus,
+		Scale,
 		X,
-		Server,
-		Container,
 		ExternalLink,
-		Copy,
-		Check,
-		HardDrive,
-		ChevronDown,
-		Eye,
-		EyeOff,
 		Lock,
 		Webhook,
-		Bell,
-		AlertTriangle,
-		CircleX,
 		GitBranch,
-		GitCommit,
-		Rocket,
-		User as UserIcon
+		GitCommit
 	} from 'lucide-svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
+	// movingicons.dev experiment: animated icons for select tab triggers and action
+	// buttons. Auto-animates on hover via the icon's internal mouseenter handler.
+	import {
+		ArrowLeft,
+		Activity,
+		Bell,
+		Boxes,
+		Check,
+		ChevronDown,
+		CircleX,
+		Clock,
+		Copy,
+		Cpu,
+		Eye,
+		EyeOff,
+		HardDriveDownload,
+		History,
+		Maximize2,
+		Minimize2,
+		Play,
+		RefreshCw,
+		Rocket,
+		ServerCog,
+		Settings,
+		Terminal,
+		Trash2,
+		TriangleAlert,
+		User,
+		Wifi
+	} from '@jis3r/icons';
 	import { scale, fade, slide } from 'svelte/transition';
-	import { Clock, Minimize2, Maximize2, Cpu, MemoryStick } from 'lucide-svelte';
+	import { animate } from 'motion';
+	import { MemoryStick } from 'lucide-svelte';
 	import { browser } from '$app/environment';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
+	import DeploymentMetrics from '$lib/components/DeploymentMetrics.svelte';
 	import { formatCpu as fmtCpuPreset, formatMemory as fmtMemoryPreset } from '$lib/presets';
 
-	let Line: any = $state(null);
-
-	// Cached hatch pattern for "pending" regions (drawn over the parts of the
-	// chart x-range that are outside the available data extent).
-	let hatchPattern: CanvasPattern | null = null;
-	let hatchPatternStroke: string | null = null;
-	function getHatchPattern(ctx: CanvasRenderingContext2D, stroke: string): CanvasPattern | null {
-		if (hatchPattern && hatchPatternStroke === stroke) return hatchPattern;
-		const tile = document.createElement('canvas');
-		tile.width = 8;
-		tile.height = 8;
-		const tctx = tile.getContext('2d');
-		if (!tctx) return null;
-		tctx.strokeStyle = stroke;
-		tctx.lineWidth = 1;
-		tctx.beginPath();
-		tctx.moveTo(-1, 9); tctx.lineTo(9, -1);
-		tctx.moveTo(-1, 17); tctx.lineTo(17, -1);
-		tctx.moveTo(-9, 1); tctx.lineTo(1, -9);
-		tctx.stroke();
-		hatchPattern = ctx.createPattern(tile, 'repeat');
-		hatchPatternStroke = stroke;
-		return hatchPattern;
-	}
-
-	const pendingRegionsPlugin = {
-		id: 'pendingRegions',
-		beforeDatasetsDraw(chart: any, _args: any, options: any) {
-			if (!options) return;
-			const { ctx, chartArea, scales } = chart;
-			const xs = scales?.x;
-			if (!xs || !chartArea) return;
-			const { top, bottom } = chartArea;
-			const xMin = xs.min as number;
-			const xMax = xs.max as number;
-			const dataMin = options.dataMin as number | null | undefined;
-			const dataMax = options.dataMax as number | null | undefined;
-			const stroke = options.stroke as string;
-			const pattern = getHatchPattern(ctx, stroke);
-			if (!pattern) return;
-			ctx.save();
-			ctx.fillStyle = pattern;
-			// Right pending region: from last data point to xMax (always = now).
-			// We intentionally don't draw a left pending region — when the deployment
-			// is younger than the selected window, the missing left side isn't "pending."
-			if (dataMax != null && dataMax < xMax) {
-				const left = xs.getPixelForValue(dataMax);
-				const right = xs.getPixelForValue(xMax);
-				if (right > left) ctx.fillRect(left, top, right - left, bottom - top);
-			}
-			ctx.restore();
-		},
-	};
-
-	if (browser) {
-		import('chart.js').then(({ Chart, LinearScale, PointElement, LineElement, Filler, Tooltip }) => {
-			Chart.register(LinearScale, PointElement, LineElement, Filler, Tooltip, pendingRegionsPlugin);
-		}).catch(() => { /* chunk may be stale after deploy */ });
-		import('svelte5-chartjs').then((mod) => {
-			Line = mod.Line;
-		}).catch(() => { /* chunk may be stale after deploy */ });
-	}
 	import DeploymentProgress from '$lib/components/DeploymentProgress.svelte';
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
 
@@ -118,6 +67,285 @@
 			destroy() {
 				node.remove();
 			}
+		};
+	}
+
+	// ---- Pointer "hardness" tracker -------------------------------------------------
+	// Tracks pointer velocity in real time. On press, callers read `pointerHardness()`
+	// — a 0..1 value derived from velocity (mouse) or pressure (touch/stylus). Used to
+	// modulate spring response: harder push → deeper compress + livelier release.
+	let lastPointerX = 0;
+	let lastPointerY = 0;
+	let lastPointerT = 0;
+	let lastPointerSpeed = 0;
+	let lastPointerPressure = 0;
+	if (browser) {
+		const onPointerMove = (e: PointerEvent) => {
+			const now = performance.now();
+			const dt = Math.max(1, now - lastPointerT);
+			const dx = e.clientX - lastPointerX;
+			const dy = e.clientY - lastPointerY;
+			const speed = Math.sqrt(dx * dx + dy * dy) / dt; // px/ms
+			lastPointerSpeed = lastPointerSpeed * 0.6 + speed * 0.4;
+			lastPointerX = e.clientX;
+			lastPointerY = e.clientY;
+			lastPointerT = now;
+			if (e.pressure && e.pressure > 0 && e.pointerType !== 'mouse') {
+				lastPointerPressure = e.pressure;
+			}
+		};
+		window.addEventListener('pointermove', onPointerMove, { passive: true });
+	}
+	function pointerHardness(e?: PointerEvent): number {
+		if (e && e.pressure && e.pressure > 0 && e.pointerType !== 'mouse') return e.pressure;
+		if (lastPointerPressure > 0) return lastPointerPressure;
+		// Map mouse speed (px/ms) to a 0..1 hardness; ~2 px/ms ≈ a firm flick.
+		return Math.max(0, Math.min(1, lastPointerSpeed / 2));
+	}
+
+	// ---- Motion attachments -----------------------------------------------------------
+	function springHover(opts: { rest?: number; lift?: number; stiffness?: number; damping?: number } = {}) {
+		const rest = opts.rest ?? 0;
+		const lift = opts.lift ?? -3;
+		const stiffness = opts.stiffness ?? 380;
+		const damping = opts.damping ?? 22;
+		return (el: Element) => {
+			const target = el as HTMLElement;
+			const enter = () => animate(target, { y: lift }, { type: 'spring', stiffness, damping });
+			const leave = () => animate(target, { y: rest, scale: 1 }, { type: 'spring', stiffness: stiffness * 0.8, damping: damping + 4 });
+			const press = (e: Event) => {
+				const h = pointerHardness(e as PointerEvent);
+				// 0.97 (soft tap) → 0.92 (hard slam). Higher stiffness on harder press.
+				const compress = 0.97 - h * 0.05;
+				const k = 520 + h * 260;
+				animate(target, { scale: compress }, { type: 'spring', stiffness: k, damping: 26 });
+			};
+			const release = () => {
+				const h = lastPointerSpeed / 2;
+				const overshoot = 1 + Math.max(0, Math.min(1, h)) * 0.025;
+				animate(target, { scale: [null, overshoot, 1] as any }, { type: 'spring', stiffness: 420, damping: 14, mass: 0.7 });
+			};
+			target.addEventListener('mouseenter', enter);
+			target.addEventListener('mouseleave', leave);
+			target.addEventListener('pointerdown', press);
+			target.addEventListener('pointerup', release);
+			target.addEventListener('pointerleave', release);
+			return () => {
+				target.removeEventListener('mouseenter', enter);
+				target.removeEventListener('mouseleave', leave);
+				target.removeEventListener('pointerdown', press);
+				target.removeEventListener('pointerup', release);
+				target.removeEventListener('pointerleave', release);
+			};
+		};
+	}
+
+	function motionStagger(opts: {
+		index?: number;
+		stride?: number;
+		from?: { y?: number; opacity?: number; scale?: number };
+		stiffness?: number;
+		damping?: number;
+		mass?: number;
+	} = {}) {
+		const i = opts.index ?? 0;
+		const stride = opts.stride ?? 0.04;
+		const from = {
+			y: opts.from?.y ?? 8,
+			opacity: opts.from?.opacity ?? 0,
+			scale: opts.from?.scale ?? 0.99
+		};
+		return (el: Element) => {
+			animate(
+				el as HTMLElement,
+				{ opacity: [from.opacity, 1], y: [from.y, 0], scale: [from.scale, 1] },
+				{
+					type: 'spring',
+					stiffness: opts.stiffness ?? 280,
+					damping: opts.damping ?? 24,
+					mass: opts.mass ?? 0.85,
+					delay: i * stride
+				}
+			);
+		};
+	}
+
+	function motionPopover(opts: {
+		from?: { opacity?: number; scale?: number; y?: number };
+		stiffness?: number;
+		damping?: number;
+		mass?: number;
+		closing: () => boolean;
+		onClosed: () => void;
+	}) {
+		const from = {
+			opacity: opts.from?.opacity ?? 0,
+			scale: opts.from?.scale ?? 0.94,
+			y: opts.from?.y ?? -4
+		};
+		const stiffness = opts.stiffness ?? 520;
+		const damping = opts.damping ?? 30;
+		const mass = opts.mass ?? 0.85;
+		return (el: Element) => {
+			const target = el as HTMLElement;
+			animate(
+				target,
+				{ opacity: [from.opacity, 1], scale: [from.scale, 1], y: [from.y, 0] },
+				{ type: 'spring', stiffness, damping, mass }
+			);
+			let firstRun = true;
+			$effect(() => {
+				const closing = opts.closing();
+				if (firstRun) { firstRun = false; return; }
+				if (closing) {
+					animate(
+						target,
+						{ opacity: from.opacity, scale: from.scale, y: from.y },
+						{ type: 'spring', stiffness: stiffness * 1.1, damping: damping + 6, mass }
+					).finished.then(() => {
+						if (opts.closing()) opts.onClosed();
+					});
+				} else {
+					animate(target, { opacity: 1, scale: 1, y: 0 }, { type: 'spring', stiffness, damping, mass });
+				}
+			});
+		};
+	}
+
+	// Backdrop fade — pairs with motionPopover for modals.
+	function motionBackdrop(closing: () => boolean, onClosed: () => void) {
+		return (el: Element) => {
+			const target = el as HTMLElement;
+			animate(target, { opacity: [0, 1] }, { type: 'spring', stiffness: 320, damping: 30 });
+			let firstRun = true;
+			$effect(() => {
+				const c = closing();
+				if (firstRun) { firstRun = false; return; }
+				if (c) {
+					animate(target, { opacity: 0 }, { type: 'spring', stiffness: 360, damping: 32 })
+						.finished.then(() => { if (closing()) onClosed(); });
+				}
+			});
+		};
+	}
+
+	// Cursor-tracking 3D tilt — composes with springHover (different transform components).
+	function cardTilt(opts: { max?: number } = {}) {
+		const max = opts.max ?? 4;
+		return (el: Element) => {
+			const target = el as HTMLElement;
+			target.style.transformStyle = 'preserve-3d';
+			target.style.perspective = '1000px';
+			let rect: DOMRect | null = null;
+			const onEnter = () => { rect = target.getBoundingClientRect(); };
+			const onMove = (e: PointerEvent) => {
+				if (!rect) rect = target.getBoundingClientRect();
+				const x = (e.clientX - rect.left) / rect.width - 0.5;
+				const y = (e.clientY - rect.top) / rect.height - 0.5;
+				animate(target, { rotateX: -y * max, rotateY: x * max }, { type: 'spring', stiffness: 380, damping: 28, mass: 0.5 });
+			};
+			const onLeave = () => {
+				animate(target, { rotateX: 0, rotateY: 0 }, { type: 'spring', stiffness: 250, damping: 32 });
+				rect = null;
+			};
+			target.addEventListener('pointerenter', onEnter);
+			target.addEventListener('pointermove', onMove);
+			target.addEventListener('pointerleave', onLeave);
+			return () => {
+				target.removeEventListener('pointerenter', onEnter);
+				target.removeEventListener('pointermove', onMove);
+				target.removeEventListener('pointerleave', onLeave);
+			};
+		};
+	}
+
+	// Scroll-velocity-aware "rubber" — content micro-shifts based on wheel intensity,
+	// then springs back. Captures the "react to how hard you scroll" feel.
+	function scrollRubber(opts: { axis?: 'y' | 'x'; max?: number; stiffness?: number; damping?: number } = {}) {
+		const axis = opts.axis ?? 'y';
+		const max = opts.max ?? 6;
+		const stiffness = opts.stiffness ?? 420;
+		const damping = opts.damping ?? 22;
+		return (el: Element) => {
+			const target = el as HTMLElement;
+			let raf = 0;
+			let pending = 0;
+			const settle = () => {
+				animate(target, { [axis]: 0 } as any, { type: 'spring', stiffness, damping, mass: 0.6 });
+				raf = 0;
+				pending = 0;
+			};
+			const onWheel = (e: WheelEvent) => {
+				const delta = axis === 'y' ? e.deltaY : e.deltaX;
+				// Only apply rubber when at scroll bounds.
+				const atTop = target.scrollTop <= 0 && delta < 0;
+				const atBottom = target.scrollTop + target.clientHeight >= target.scrollHeight - 1 && delta > 0;
+				if (axis === 'y' && !atTop && !atBottom) return;
+				const intensity = Math.max(-1, Math.min(1, delta / 200));
+				pending = Math.max(-max, Math.min(max, pending - intensity * max * 0.6));
+				animate(target, { [axis]: pending } as any, { type: 'spring', stiffness: 600, damping: 30 });
+				if (raf) clearTimeout(raf);
+				raf = window.setTimeout(settle, 120);
+			};
+			target.addEventListener('wheel', onWheel, { passive: true });
+			return () => {
+				target.removeEventListener('wheel', onWheel);
+				if (raf) clearTimeout(raf);
+			};
+		};
+	}
+
+	// Delegated press-spring for any descendant matching `selector` — wires hover/press
+	// once at mount, so we don't need {@attach} on every button.
+	function pressSpringDelegate(root: HTMLElement, selector: string) {
+		let hovered: HTMLElement | null = null;
+		const onMove = (e: PointerEvent) => {
+			const t = (e.target as HTMLElement | null)?.closest?.(selector) as HTMLElement | null;
+			if (t === hovered) return;
+			if (hovered && !t?.contains(hovered) && !hovered.contains(t as Node)) {
+				animate(hovered, { y: 0, scale: 1 }, { type: 'spring', stiffness: 320, damping: 28 });
+			}
+			if (t && root.contains(t)) {
+				animate(t, { y: -2, scale: 1.02 }, { type: 'spring', stiffness: 380, damping: 22 });
+			}
+			hovered = t;
+		};
+		const onLeaveRoot = () => {
+			if (hovered) {
+				animate(hovered, { y: 0, scale: 1 }, { type: 'spring', stiffness: 320, damping: 28 });
+				hovered = null;
+			}
+		};
+		const onDown = (e: PointerEvent) => {
+			const t = (e.target as HTMLElement | null)?.closest?.(selector) as HTMLElement | null;
+			if (!t || !root.contains(t)) return;
+			const h = pointerHardness(e);
+			// 0.95 (soft tap) → 0.86 (hard slam)
+			const compress = 0.95 - h * 0.09;
+			const k = 540 + h * 320;
+			animate(t, { scale: compress, y: -2 }, { type: 'spring', stiffness: k, damping: 26 });
+		};
+		const onUp = (e: PointerEvent) => {
+			const t = (e.target as HTMLElement | null)?.closest?.(selector) as HTMLElement | null;
+			if (!t || !root.contains(t)) return;
+			const h = Math.max(0, Math.min(1, lastPointerSpeed / 2));
+			// Harder press → bigger overshoot (1.08 → 1.14)
+			const overshoot = 1.08 + h * 0.06;
+			const settle = t === hovered ? 1.02 : 1;
+			const settleY = t === hovered ? -2 : 0;
+			animate(t, { scale: [null, overshoot, settle] as any, y: settleY }, { type: 'spring', stiffness: 380, damping: 12, mass: 0.7 });
+		};
+		root.addEventListener('pointermove', onMove, { passive: true });
+		root.addEventListener('pointerleave', onLeaveRoot);
+		root.addEventListener('pointerdown', onDown);
+		root.addEventListener('pointerup', onUp);
+		root.addEventListener('pointercancel', onUp);
+		return () => {
+			root.removeEventListener('pointermove', onMove);
+			root.removeEventListener('pointerleave', onLeaveRoot);
+			root.removeEventListener('pointerdown', onDown);
+			root.removeEventListener('pointerup', onUp);
+			root.removeEventListener('pointercancel', onUp);
 		};
 	}
 
@@ -399,7 +627,7 @@
 			id: 'overview',
 			label: 'Overview',
 			description: 'Console, status & pods',
-			icon: Server
+			icon: ServerCog
 		},
 		{
 			id: 'environment',
@@ -414,16 +642,22 @@
 			icon: Cpu
 		},
 		{
+			id: 'metrics',
+			label: 'Metrics',
+			description: 'Live charts & history',
+			icon: Activity
+		},
+		{
 			id: 'volumes',
 			label: 'Storage',
 			description: 'Persistent storage',
-			icon: HardDrive
+			icon: HardDriveDownload
 		},
 		{
 			id: 'network',
 			label: 'Network',
 			description: 'Ports & domains',
-			icon: Globe
+			icon: Wifi
 		},
 		{
 			id: 'history',
@@ -457,6 +691,84 @@
 		value: 'overview',
 		loop: true
 	});
+
+	// movingicons.dev animations are gated on each icon's internal mouseenter. We want
+	// the animation to fire when the user hovers the parent button, not just the
+	// 14×14 icon target — so drive the icon's `animate` prop from button-level hover.
+	let tabIconAnim = $state<Record<string, boolean>>({});
+	function triggerTabIconAnim(id: string) {
+		if (tabIconAnim[id]) return;
+		tabIconAnim[id] = true;
+		setTimeout(() => { tabIconAnim[id] = false; }, 650);
+	}
+	let actionAnim = $state<Record<string, boolean>>({});
+	function triggerActionAnim(id: string) {
+		if (actionAnim[id]) return;
+		actionAnim[id] = true;
+		setTimeout(() => { actionAnim[id] = false; }, 650);
+	}
+
+	// Header card collapses (spring) when the user leaves the Overview tab — the
+	// build provenance + domains belong with the overview, while the title and the
+	// Redeploy/Restart/Delete actions stay visible everywhere.
+	const headerCollapsed = $derived(tabs.value !== 'overview');
+
+	// Spring-driven height collapse for the header body. Motion writes height/opacity;
+	// CSS handles overflow:hidden so the content clips cleanly mid-animation.
+	function springCollapse(collapsed: () => boolean) {
+		return (el: Element) => {
+			const target = el as HTMLElement;
+			target.style.overflow = 'hidden';
+			const naturalMargin = parseFloat(getComputedStyle(target).marginTop) || 0;
+			const naturalHeight = () => {
+				const prev = target.style.height;
+				target.style.height = 'auto';
+				const h = target.scrollHeight;
+				target.style.height = prev;
+				return h;
+			};
+			// Arm the spring after a short grace period so any post-hydration noise on
+			// tabs.value (briefly undefined / re-asserted to 'overview') doesn't trigger
+			// a spurious collapse→expand animation on first paint.
+			let armed = false;
+			let last: boolean | null = null;
+			setTimeout(() => {
+				armed = true;
+				last = collapsed();
+				if (last) {
+					target.style.height = '0px';
+					target.style.opacity = '0';
+					target.style.marginTop = '0px';
+				}
+			}, 80);
+			$effect(() => {
+				const isCollapsed = collapsed();
+				if (!armed || isCollapsed === last) return;
+				last = isCollapsed;
+				// Snap margin-top immediately so the inner content sits at its final
+				// vertical offset from frame 1 — animating it alongside height makes the
+				// text appear "too high" until both settle.
+				target.style.marginTop = isCollapsed ? '0px' : `${naturalMargin}px`;
+				const to = isCollapsed ? 0 : naturalHeight();
+				const opts = isCollapsed
+					? { type: 'spring' as const, stiffness: 200, damping: 18, mass: 1.2 }
+					: { type: 'spring' as const, stiffness: 180, damping: 16, mass: 1.3 };
+				const ctrl = animate(
+					target,
+					{ height: to, opacity: isCollapsed ? 0 : 1 },
+					opts
+				);
+				if (!isCollapsed) {
+					ctrl.finished.then(() => {
+						if (!collapsed()) {
+							target.style.height = 'auto';
+							target.style.marginTop = '';
+						}
+					});
+				}
+			});
+		};
+	}
 
 	let deployment = $state<Deployment | null>(null);
 	let loading = $state(true);
@@ -499,149 +811,20 @@
 		return { otherDeployment: !!otherDeployment, pathCollision: !!pathCollision };
 	});
 
-	// Metrics history for time-series charts
-	let metricsHistory = $state<Array<{ time: Date; cpu: number | null; memory: number | null }>>([]);
-	let metricsTimeRange = $state<'5m' | '15m' | '30m' | '1h'>('30m');
-	let expandedMetric = $state<'cpu' | 'memory' | null>(null);
-
-	const timeRangeMs = $derived({
-		'5m': 5 * 60 * 1000,
-		'15m': 15 * 60 * 1000,
-		'30m': 30 * 60 * 1000,
-		'1h': 60 * 60 * 1000,
-	}[metricsTimeRange]);
-
-	// Include the most recent point before the window as a leading anchor so the
-	// chart still draws a line into the visible range (clipped at xMin by chart.js).
-	// If no points fall inside the window, extend the anchor to "now" so a flat
-	// line at the last known value is shown across the cropped range.
-	const filteredMetrics = $derived.by(() => {
-		const cutoff = Date.now() - timeRangeMs;
-		const inWindow = metricsHistory.filter(p => p.time.getTime() > cutoff);
-		const beforeWindow = metricsHistory.filter(p => p.time.getTime() <= cutoff);
-		const anchor = beforeWindow.length ? beforeWindow[beforeWindow.length - 1] : null;
-		if (!anchor) return inWindow;
-		if (inWindow.length === 0) {
-			return [anchor, { time: new Date(), cpu: anchor.cpu, memory: anchor.memory }];
-		}
-		return [anchor, ...inWindow];
-	});
-
-	// Build chart data with numeric X timestamps so we can set min/max on the axis
-	const cpuChartData = $derived({
-		labels: filteredMetrics.map(p => p.time.getTime()),
-		datasets: [{
-			label: 'CPU (millicores)',
-			data: filteredMetrics.map(p => p.cpu),
-			borderColor: '#b33346',
-			backgroundColor: 'rgba(179, 51, 70, 0.15)',
-			fill: true,
-		}],
-	});
-
-	const memoryChartData = $derived({
-		labels: filteredMetrics.map(p => p.time.getTime()),
-		datasets: [{
-			label: 'Memory (MB)',
-			data: filteredMetrics.map(p => p.memory != null ? p.memory / (1024 * 1024) : null),
-			borderColor: '#e87485',
-			backgroundColor: 'rgba(232, 116, 133, 0.15)',
-			fill: true,
-		}],
-	});
-
-	function getThemeColors() {
-		if (typeof document === 'undefined') return { muted: '#888', gridLine: 'rgba(128,128,128,0.1)' };
-		const style = getComputedStyle(document.documentElement);
-		const muted = style.getPropertyValue('--surface-muted').trim() || '#888';
-		const border = style.getPropertyValue('--surface-border').trim() || 'rgba(128,128,128,0.1)';
-		return { muted, gridLine: border };
-	}
-
-	function makeChartOptions(yTickSuffix: string, yAxisLabel: string, verbose: boolean) {
-		const now = Date.now();
-		const theme = getThemeColors();
-		const dataMin = filteredMetrics.length ? filteredMetrics[0].time.getTime() : null;
-		const dataMax = filteredMetrics.length ? filteredMetrics[filteredMetrics.length - 1].time.getTime() : null;
-		// canvas patterns can't resolve CSS color-mix() — use a fixed muted stroke
-		const hatchFallback = 'rgba(140, 140, 140, 0.35)';
-		return {
-			responsive: true,
-			maintainAspectRatio: false,
-			animation: { duration: 0 } as const,
-			scales: {
-				x: {
-					type: 'linear' as const,
-					display: verbose,
-					min: now - timeRangeMs,
-					max: now,
-					title: verbose ? { display: true, text: 'Time', font: { size: 11, weight: '500' as const }, color: theme.muted } : undefined,
-					ticks: {
-						maxTicksToShow: 6,
-						maxRotation: 0,
-						font: { size: 10 },
-						color: theme.muted,
-						callback: (value: number) => {
-							const d = new Date(value);
-							return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-						},
-					},
-					grid: { display: false },
-					border: { display: false },
-				},
-				y: {
-					display: verbose,
-					beginAtZero: true,
-					title: verbose ? { display: true, text: yAxisLabel, font: { size: 11, weight: '500' as const }, color: theme.muted } : undefined,
-					ticks: { font: { size: 10 }, color: theme.muted, callback: (v: number) => v + yTickSuffix },
-					grid: { color: theme.gridLine, display: verbose },
-					border: { display: false },
-				},
-			},
-			plugins: {
-				tooltip: {
-					mode: 'index' as const,
-					intersect: false,
-					backgroundColor: 'rgba(0,0,0,0.8)',
-					titleFont: { size: 11 },
-					bodyFont: { size: 11 },
-					padding: 8,
-					callbacks: {
-						title: (items: any[]) => {
-							if (!items.length) return '';
-							const d = new Date(items[0].parsed.x);
-							return d.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
-						},
-					},
-				},
-				pendingRegions: {
-					dataMin,
-					dataMax,
-					stroke: hatchFallback,
-				},
-			},
-			elements: {
-				point: { radius: 0, hoverRadius: 4 },
-				line: { tension: 0.3, borderWidth: 2 },
-			},
-		};
-	}
-
-	const cpuChartOptions = $derived(makeChartOptions('m', 'CPU (millicores)', false));
-	const memoryChartOptions = $derived(makeChartOptions(' MB', 'Memory (MB)', false));
-	const cpuChartOptionsExpanded = $derived(makeChartOptions('m', 'CPU (millicores)', true));
-	const memoryChartOptionsExpanded = $derived(makeChartOptions(' MB', 'Memory (MB)', true));
-
 	// Computed properties for template compatibility with API field names
 	const repoUrl = $derived(deployment?.githubRepo);
 	const branch = $derived(deployment?.githubBranch);
 
 	let notificationsOpen = $state(false);
+	let notificationsRender = $state(false);
+	$effect(() => { if (notificationsOpen) notificationsRender = true; });
 	let notifBtnEl: HTMLButtonElement | undefined = $state();
-	let notifPanelPos = $derived.by(() => {
-		if (!notificationsOpen || !notifBtnEl) return { top: 0, left: 0 };
-		const rect = notifBtnEl.getBoundingClientRect();
-		return { top: rect.bottom, left: Math.max(8, rect.right - 380) };
+	let notifPanelPos = $state({ top: 0, left: 0 });
+	$effect(() => {
+		if (notificationsOpen && notifBtnEl) {
+			const rect = notifBtnEl.getBoundingClientRect();
+			notifPanelPos = { top: rect.bottom, left: Math.max(8, rect.right - 380) };
+		}
 	});
 
 	let dismissedNotifications = $state<Set<string>>(new Set());
@@ -822,7 +1005,11 @@
 	// Console tab management: 'logs' or a terminal tab id
 	let activeConsoleTab = $state<string>('logs');
 	let showNewShellMenu = $state(false);
+	let showNewShellMenuRender = $state(false);
+	$effect(() => { if (showNewShellMenu) showNewShellMenuRender = true; });
 	let showLogsPodMenu = $state(false);
+	let showLogsPodMenuRender = $state(false);
+	$effect(() => { if (showLogsPodMenu) showLogsPodMenuRender = true; });
 
 	interface TerminalTabInfo {
 		id: string;
@@ -989,6 +1176,8 @@
 
 	// Build modal state
 	let showBuildModal = $state(false);
+	let showBuildModalRender = $state(false);
+	$effect(() => { if (showBuildModal) showBuildModalRender = true; });
 	let expandedBuildLogId = $state<string | null>(null);
 	let buildLogCache = $state<Record<string, string>>({});
 	let buildLogLoading = $state<string | null>(null);
@@ -1024,6 +1213,8 @@
 		}
 	}
 	let showBuildCard = $state(false);
+	let showBuildCardRender = $state(false);
+	$effect(() => { if (showBuildCard && !showBuildModal) showBuildCardRender = true; });
 	let buildStartTime = $state<number>(0);
 	let buildElapsed = $state(0);
 	let accumulatedBuildLogs = $state<string | null>(null);
@@ -1453,20 +1644,6 @@
 			tailscaleHostname = data.tailscaleHostname || null;
 			if (data.tailscaleExposed && !tailscaleDns) {
 				fetchTailscaleDeploymentStatus();
-			}
-
-			// Seed metrics history from DB on first load, then append from polls
-			if (data.metricsHistory?.length && metricsHistory.length === 0) {
-				metricsHistory = data.metricsHistory.map((p: any) => ({
-					time: new Date(p.time),
-					cpu: p.cpu,
-					memory: p.memory,
-				}));
-			} else if (data.totalCpuUsage != null || data.totalMemoryUsage != null) {
-				metricsHistory = [
-					...metricsHistory,
-					{ time: new Date(), cpu: data.totalCpuUsage, memory: data.totalMemoryUsage }
-				].slice(-360); // keep max 1 hour at 10s intervals
 			}
 
 			// Skip overwriting form state while a build is in progress so the user can
@@ -2224,6 +2401,8 @@
 	}
 
 	let logModalId = $state<string | null>(null);
+	let logModalRender = $state(false);
+	$effect(() => { if (logModalId) logModalRender = true; });
 	let logModalContent = $state<string | null>(null);
 	let logModalLoading = $state(false);
 
@@ -2757,20 +2936,6 @@
 			sseUnsub = subscribeOrgEvents(
 				orgIdForSse,
 				(ev) => {
-					if (ev.type === 'deployment.metrics' && ev.id === deploymentId) {
-						// Push metrics directly to the chart; no full deployment refetch.
-						const cpu = ev.payload?.cpu;
-						const memory = ev.payload?.memory;
-						if (cpu == null && memory == null) return;
-						metricsHistory = [
-							...metricsHistory,
-							{ time: new Date(ev.ts), cpu, memory },
-						].slice(-360);
-						if (deployment) {
-							deployment = { ...deployment, totalCpuUsage: cpu, totalMemoryUsage: memory } as any;
-						}
-						return;
-					}
 					if (ev.id === deploymentId || ev.projectId === deployment?.projectId) {
 						fetchDeployment();
 					}
@@ -2784,6 +2949,12 @@
 	});
 
 	onMount(() => {
+		// Reserve scrollbar space so switching between tall/short tabs doesn't shift the
+		// centered max-w container left/right when the scrollbar appears/disappears.
+		const mainEl = document.querySelector<HTMLElement>('main.flex-1');
+		const prevGutter = mainEl?.style.scrollbarGutter ?? '';
+		if (mainEl) mainEl.style.scrollbarGutter = 'stable';
+
 		function handleClickOutside(event: MouseEvent) {
 			const target = event.target as HTMLElement;
 			if (!target.closest('.custom-dropdown-container')) {
@@ -2817,7 +2988,34 @@
 		}
 		document.addEventListener('mouseover', handleTsPointer, true);
 
+		// movingicons.dev: by default each icon only animates when its own 14×14 wrapper
+		// is hovered. Re-fire each icon's mouseenter when the user enters the parent
+		// button/link, so the animation plays on parent hover everywhere.
+		let lastHoverButton: HTMLElement | null = null;
+		const iconHoverSelector = 'button, a, .dep-action-btn, .console-tab-btn, .console-source-btn, .console-action-btn, .console-icon-btn, .console-compact-item, .notification-item, .dep-list-row';
+		const onIconHover = (e: PointerEvent) => {
+			const btn = (e.target as HTMLElement | null)?.closest?.(iconHoverSelector) as HTMLElement | null;
+			if (btn === lastHoverButton) return;
+			lastHoverButton = btn;
+			if (!btn) return;
+			// @jis3r icons render as <div role="img" aria-label="..."> with inner svg.
+			btn.querySelectorAll<HTMLElement>('[role="img"][aria-label]').forEach((iconWrap) => {
+				iconWrap.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
+			});
+		};
+		document.addEventListener('pointermove', onIconHover, { passive: true });
+
+		// Velocity-aware press lift on action buttons + tabs. Hover lifts ~2px;
+		// press compresses proportional to pointer speed at click; release overshoots.
+		const detachPress = pressSpringDelegate(
+			document.body,
+			'.dep-action-btn, .dep-notif-btn, .dep-meta-tabs button, .console-action-btn, .console-icon-btn, .console-source-btn, .btn-icon, .btn, .tabs-trigger, .dep-tab, .console-compact-item, .notification-item, .dep-list-row:not(.dep-list-row--head)'
+		);
+
 		return () => {
+			detachPress();
+			if (mainEl) mainEl.style.scrollbarGutter = prevGutter;
+			document.removeEventListener('pointermove', onIconHover);
 			document.removeEventListener('click', handleClickOutside);
 			document.removeEventListener('keydown', handleKeydown);
 			document.removeEventListener('mouseover', handleTsPointer, true);
@@ -3047,6 +3245,9 @@
 				class:dep-header-card--live={!projectBgImage && deployment.githubRepo && _activeBuild}
 				class:dep-header-card--building={!projectBgImage && deployment.githubRepo && _isBuilding}
 				class:dep-header-card--failed={!projectBgImage && deployment.githubRepo && _buildFailed && !_activeBuild}
+				class:dep-header-card--collapsed={headerCollapsed}
+				{@attach motionStagger({ index: 0, from: { y: 14, scale: 0.985 } })}
+				{@attach cardTilt({ max: 2 })}
 			>
 				{#if projectBgImage}
 					<div class="dep-header-backdrop" aria-hidden="true">
@@ -3068,15 +3269,15 @@
 									class="dep-notif-btn"
 									onclick={() => notificationsOpen = !notificationsOpen}
 								>
-									<Bell class="h-3.5 w-3.5" />
+									<Bell size={14} class="h-3.5 w-3.5" />
 									<span class="notification-badge">{notificationCount}</span>
 								</button>
 
-								{#if notificationsOpen}
+								{#if notificationsRender}
 									<!-- svelte-ignore a11y_click_events_have_key_events -->
 									<!-- svelte-ignore a11y_no_static_element_interactions -->
-									<div class="notification-backdrop" use:portal onclick={() => notificationsOpen = false}></div>
-									<div class="notification-panel" use:portal style="top: {notifPanelPos.top}px; left: {notifPanelPos.left}px;" transition:fade={{ duration: 150 }}>
+									<div class="notification-backdrop" use:portal onclick={() => notificationsOpen = false} {@attach motionBackdrop(() => !notificationsOpen, () => {})}></div>
+									<div class="notification-panel" use:portal style="top: {notifPanelPos.top}px; left: {notifPanelPos.left}px; transform-origin: top right;" {@attach motionPopover({ closing: () => !notificationsOpen, onClosed: () => { notificationsRender = false; }, from: { y: -8, scale: 0.96, opacity: 0 } })}>
 										<div class="flex items-center justify-between px-4 py-3" style="border-bottom: 1px solid var(--surface-border);">
 											<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Notifications</p>
 											<button class="btn-icon rounded-md p-1" onclick={() => notificationsOpen = false}>
@@ -3090,7 +3291,7 @@
 													<div class="notification-item">
 														<div class="flex items-start gap-3">
 															<div class="notification-icon notification-icon-error">
-																<CircleX class="h-4 w-4" />
+																<CircleX size={16} class="h-4 w-4" />
 															</div>
 															<div class="flex-1 min-w-0">
 																<p class="text-xs font-semibold" style="color: var(--error-text-color);">Build failed</p>
@@ -3133,7 +3334,7 @@
 														<div class="notification-item">
 															<div class="flex items-start gap-3">
 																<div class="notification-icon notification-icon-warning">
-																	<AlertTriangle class="h-4 w-4" />
+																	<TriangleAlert size={16} class="h-4 w-4" />
 																</div>
 																<div class="flex-1 min-w-0">
 																	<p class="text-xs font-semibold" style="color: var(--warning-text);">Pod warning</p>
@@ -3165,23 +3366,23 @@
 							</div>
 						{/if}
 						{#if repoUrl}
-							<button onclick={rebuild} disabled={rebuilding || _isBuilding} class="btn btn-secondary btn-sm">
-								{#if rebuilding}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw class="h-3.5 w-3.5" />{/if}
+							<button onclick={rebuild} disabled={rebuilding || _isBuilding} class="btn btn-secondary btn-sm" onmouseenter={() => triggerActionAnim('redeploy')}>
+								{#if rebuilding}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw size={14} animate={actionAnim.redeploy ?? false} />{/if}
 								<span>Redeploy</span>
 							</button>
 						{/if}
-						<button onclick={restart} disabled={restarting} class="btn btn-secondary btn-sm">
-							{#if restarting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Play class="h-3.5 w-3.5" />{/if}
+						<button onclick={restart} disabled={restarting} class="btn btn-secondary btn-sm" onmouseenter={() => triggerActionAnim('restart')}>
+							{#if restarting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Play size={14} animate={actionAnim.restart ?? false} />{/if}
 							<span>Restart</span>
 						</button>
-						<button onclick={() => (showDeleteModal = true)} disabled={deleting} class="btn btn-sm dep-delete-btn">
-							{#if deleting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2 class="h-3.5 w-3.5" />{/if}
+						<button onclick={() => (showDeleteModal = true)} disabled={deleting} class="btn btn-sm dep-delete-btn" onmouseenter={() => triggerActionAnim('delete')}>
+							{#if deleting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2 size={14} animate={actionAnim.delete ?? false} />{/if}
 						</button>
 					</div>
 				</div>
 
-				<!-- Body: meta + domains -->
-				<div class="dep-header-body">
+				<!-- Body: meta + domains. Spring-collapses when the user leaves Overview. -->
+				<div class="dep-header-body" {@attach springCollapse(() => headerCollapsed)}>
 					<p class="dep-header-meta">
 						{#if _commitLead}
 							{#if deployment.githubRepo && _activeBuild?.commitSha}
@@ -3245,6 +3446,7 @@
 					</p>
 
 					{#if deployment.ingresses?.length}
+						<div class="dep-header-divider" aria-hidden="true"></div>
 						<div class="dep-header-domains">
 							{#each deployment.ingresses.slice(0, 4) as ingress}
 								<a
@@ -3265,10 +3467,15 @@
 			<!-- Tab nav -->
 			<nav class="dep-tabs" {...tabs.triggerList}>
 				<div class="dep-tabs-inner">
-					{#each visibleTabs as tab}
+					{#each visibleTabs as tab, _ti}
 						{@const Icon = tab.icon}
-						<button class="tabs-trigger dep-tab" {...tabs.getTrigger(tab.id)}>
-							<Icon class="h-3.5 w-3.5" />
+						<button
+							class="tabs-trigger dep-tab"
+							{...tabs.getTrigger(tab.id)}
+							{@attach motionStagger({ index: _ti, stride: 0.03, from: { y: -6 } })}
+							onmouseenter={() => triggerTabIconAnim(tab.id)}
+						>
+							<Icon class="dep-tab-icon" size={14} animate={tabIconAnim[tab.id] ?? false} />
 							<span>{tab.label}</span>
 						</button>
 					{/each}
@@ -3278,9 +3485,9 @@
 {#each visibleTabs as tab}
 	<section {...tabs.getContent(tab.id)} hidden={undefined} class="tab-panel">
 					{#if tab.id === 'overview'}
-						<div class="grid gap-5 lg:grid-cols-[1fr_280px] items-start">
+						<div class="grid gap-5 lg:grid-cols-[1fr_300px] items-stretch overview-grid">
 							<!-- Left: Console (hero) -->
-							<div class="flex flex-col gap-5 min-w-0">
+							<div class="flex flex-col gap-5 min-w-0 overview-left">
 								<!-- Console / Logs + Terminal -->
 								<div
 									bind:this={consoleRef}
@@ -3333,18 +3540,18 @@
 														class="console-source-btn"
 														onclick={() => (showLogsPodMenu = !showLogsPodMenu)}
 													>
-														<Container class="h-3 w-3 opacity-40" />
+														<Boxes size={12} class="h-3 w-3 opacity-40" />
 														<span>{podLabel(selectedPod)}{selectedContainer ? ` / ${selectedContainer}` : ''}</span>
-														<ChevronDown class="h-2.5 w-2.5 opacity-40" />
+														<ChevronDown size={10} class="h-2.5 w-2.5 opacity-40" />
 													</button>
-													{#if showLogsPodMenu}
-														<div class="console-compact-menu" transition:scale={{ duration: 150, start: 0.96 }}>
+													{#if showLogsPodMenuRender}
+														<div class="console-compact-menu" style="transform-origin: top left;" {@attach motionPopover({ closing: () => !showLogsPodMenu, onClosed: () => { showLogsPodMenuRender = false; }, from: { y: -4, scale: 0.96, opacity: 0 } })}>
 															{#each deployment.pods ?? [] as pod}
 																{#each pod.containers ?? [] as cont}
 																	<button type="button" onclick={() => selectLogsPod(pod.name, cont.name)}
 																		class="console-compact-item"
 																		class:console-compact-item--active={selectedPod === pod.name && selectedContainer === cont.name}>
-																		<Container class="h-2.5 w-2.5 shrink-0 opacity-30" />
+																		<Boxes size={10} class="h-2.5 w-2.5 shrink-0 opacity-30" />
 																		{podLabel(pod.name)}<span class="console-compact-sep">/</span><span class="console-compact-hl">{cont.name}</span>
 																	</button>
 																{/each}
@@ -3355,23 +3562,23 @@
 
 												<button onclick={fetchLogs} disabled={logsLoading}
 													class="console-icon-btn" title="Refresh">
-													{#if logsLoading}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw class="h-3.5 w-3.5" />{/if}
+													{#if logsLoading}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw size={14} class="h-3.5 w-3.5" />{/if}
 												</button>
 											{/if}
 
 											<!-- New shell -->
 											<div class="relative custom-dropdown-container">
 												<button class="console-action-btn" onclick={handleNewShell} title="Open shell in pod">
-													<Terminal class="h-3 w-3" />
+													<Terminal size={12} class="h-3 w-3" />
 													Shell
 												</button>
-												{#if showNewShellMenu}
-													<div class="console-compact-menu" transition:scale={{ duration: 150, start: 0.96 }}>
+												{#if showNewShellMenuRender}
+													<div class="console-compact-menu" style="transform-origin: top left;" {@attach motionPopover({ closing: () => !showNewShellMenu, onClosed: () => { showNewShellMenuRender = false; }, from: { y: -4, scale: 0.96, opacity: 0 } })}>
 														{#each deployment.pods ?? [] as pod}
 															{#each pod.containers ?? [] as cont}
 																<button type="button" onclick={() => openShell(pod.name, cont.name)}
 																	class="console-compact-item">
-																	<Terminal class="h-2.5 w-2.5 shrink-0 opacity-40" />
+																	<Terminal size={10} class="h-2.5 w-2.5 shrink-0 opacity-40" />
 																	{podLabel(pod.name)}<span class="console-compact-sep">/</span><span class="console-compact-hl">{cont.name}</span>
 																</button>
 															{/each}
@@ -3385,7 +3592,7 @@
 												class="console-icon-btn"
 												title={consoleExpanded ? 'Collapse' : 'Expand'}
 											>
-												{#if consoleExpanded}<Minimize2 class="h-3.5 w-3.5" />{:else}<Maximize2 class="h-3.5 w-3.5" />{/if}
+												{#if consoleExpanded}<Minimize2 size={14} class="h-3.5 w-3.5" />{:else}<Maximize2 size={14} class="h-3.5 w-3.5" />{/if}
 											</button>
 										</div>
 									</div>
@@ -3406,7 +3613,7 @@
 												>{#if loadingMoreLogs}<div class="logs-loading-more"><Loader2 class="h-3 w-3 animate-spin" /> Loading earlier logs…</div>{:else if logsAtMax || tailLines >= LOG_MAX_LINES}<div class="logs-loading-more logs-loading-more--end">— start of available logs —</div>{/if}{@html ansiToHtml(logs)}</pre>
 											{:else}
 												<div class="console-empty">
-													<Terminal class="h-4 w-4 opacity-30" />
+													<Terminal size={16} class="h-4 w-4 opacity-30" />
 													<span>{selectedPod ? 'No output yet' : 'Select a pod to view logs'}</span>
 												</div>
 											{/if}
@@ -3423,98 +3630,25 @@
 									</div>
 								</div>
 
-								<!-- Pods -->
-								<div class="card rounded-2xl p-4">
-									<div class="flex flex-wrap items-center justify-between gap-2 mb-2.5">
-										<div class="flex items-center gap-2">
-											<p class="text-xs font-semibold uppercase tracking-wide" style="color: var(--surface-muted);">Pods</p>
-											<span class="text-xs font-mono" style="color: var(--surface-muted);">{activePods.length}</span>
-										</div>
-										<div class="flex gap-2.5 text-[11px]" style="color: var(--surface-muted);">
-											<span class="inline-flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>{activePods.filter((pod) => pod.status?.toLowerCase() === 'ready').length} ready</span>
-											{#if activePods.filter((pod) => !['ready'].includes(pod.status?.toLowerCase() ?? '')).length > 0}
-												<span class="inline-flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-yellow-500"></span>{activePods.filter((pod) => !['ready'].includes(pod.status?.toLowerCase() ?? '')).length} other</span>
-											{/if}
-										</div>
-									</div>
-									{#if activePods.length}
-										<div class="space-y-1">
-											{#each activePods as pod}
-												<div class="console-pod-row-wrap">
-													<button
-														class="console-pod-row"
-														class:console-pod-row--active={selectedPod === pod.name}
-														onclick={() => { selectedPod = pod.name; if (pod.containers?.length) selectedContainer = pod.containers[0].name; manualPodSelection = true; }}
-													>
-														<div class="flex items-center gap-2 min-w-0">
-															<span class="h-1.5 w-1.5 rounded-full shrink-0 {pod.status?.toLowerCase() === 'ready' ? 'bg-green-500' : pod.status?.toLowerCase() === 'scheduled' ? 'bg-yellow-500' : 'bg-gray-400'}"></span>
-															<span class="font-mono text-xs truncate">{podLabel(pod.name)}</span>
-														</div>
-														<div class="flex items-center gap-3 shrink-0 text-xs font-mono" style="color: var(--surface-muted);">
-															{#if pod.startTime}<span>{formatRelativeTime(new Date(pod.startTime))}</span>{/if}
-															{#if pod.cpuUsage != null}<span>{formatCpu(pod.cpuUsage)}</span>{/if}
-															{#if pod.memoryUsage != null}<span>{formatMemory(pod.memoryUsage)}</span>{/if}
-															<span class="badge {getStatusColor(pod.status)} text-[10px] px-1.5 py-0.5">{pod.status}</span>
-														</div>
-													</button>
-													<button
-														class="pod-delete-btn"
-														title="Delete pod"
-														onclick={() => deletePod(pod.name)}
-														disabled={deletingPod === pod.name}
-													>
-														{#if deletingPod === pod.name}
-															<Loader2 class="h-3 w-3 animate-spin" />
-														{:else}
-															<Trash2 class="h-3 w-3" />
-														{/if}
-													</button>
-												</div>
-											{/each}
-										</div>
-									{:else}
-										<p class="text-xs text-center py-3" style="color: var(--surface-muted);">No pods reporting yet</p>
-									{/if}
-								</div>
 							</div>
 
-							<!-- Right sidebar: stats + scale -->
-							<div class="flex flex-col gap-4">
-								<!-- Resource stats as compact cards -->
+							<!-- Right sidebar: stats + scale + pods -->
+							<div class="flex flex-col gap-4 overview-right min-h-0">
+								<!-- Resource stats as compact cards. Charts moved to the Metrics tab. -->
 								<div class="stat-card">
 									<div class="stat-card-header">
-										<Cpu class="h-3.5 w-3.5" style="color: #b33346;" />
+										<Cpu size={14} class="h-3.5 w-3.5" style="color: #b33346;" />
 										<span class="stat-card-label">CPU</span>
 										<button
 											class="stat-card-expand"
-											title="Expand"
-											aria-label="Expand CPU chart"
-											onclick={() => (expandedMetric = 'cpu')}
+											title="Open Metrics tab"
+											aria-label="Open Metrics tab"
+											onclick={() => { tabs.value = 'metrics'; }}
 										>
-											<Maximize2 class="h-3 w-3" />
+											<Activity size={12} class="h-3 w-3" />
 										</button>
 									</div>
 									<p class="stat-card-value">{formatCpu(deployment.totalCpuUsage)}</p>
-									<div class="stat-card-chart">
-										{#if filteredMetrics.length > 1 && Line}
-											<svelte:component this={Line} data={cpuChartData} options={cpuChartOptions} />
-										{:else}
-											<div class="stat-card-pending" aria-live="polite">
-												<div class="stat-card-pending-grid" aria-hidden="true"></div>
-												<div class="stat-card-pending-label">
-													{#if metricsHistory.length === 0}
-														<Loader2 class="h-3 w-3 animate-spin" />
-														<span>Waiting for first metric…</span>
-													{:else if filteredMetrics.length === 0}
-														<span>No data in this range</span>
-													{:else}
-														<Loader2 class="h-3 w-3 animate-spin" />
-														<span>Collecting metrics…</span>
-													{/if}
-												</div>
-											</div>
-										{/if}
-									</div>
 								</div>
 
 								<div class="stat-card">
@@ -3523,50 +3657,15 @@
 										<span class="stat-card-label">Memory</span>
 										<button
 											class="stat-card-expand"
-											title="Expand"
-											aria-label="Expand memory chart"
-											onclick={() => (expandedMetric = 'memory')}
+											title="Open Metrics tab"
+											aria-label="Open Metrics tab"
+											onclick={() => { tabs.value = 'metrics'; }}
 										>
-											<Maximize2 class="h-3 w-3" />
+											<Activity size={12} class="h-3 w-3" />
 										</button>
 									</div>
 									<p class="stat-card-value">{formatMemory(deployment.totalMemoryUsage)}</p>
-									<div class="stat-card-chart">
-										{#if filteredMetrics.length > 1 && Line}
-											<svelte:component this={Line} data={memoryChartData} options={memoryChartOptions} />
-										{:else}
-											<div class="stat-card-pending" aria-live="polite">
-												<div class="stat-card-pending-grid" aria-hidden="true"></div>
-												<div class="stat-card-pending-label">
-													{#if metricsHistory.length === 0}
-														<Loader2 class="h-3 w-3 animate-spin" />
-														<span>Waiting for first metric…</span>
-													{:else if filteredMetrics.length === 0}
-														<span>No data in this range</span>
-													{:else}
-														<Loader2 class="h-3 w-3 animate-spin" />
-														<span>Collecting metrics…</span>
-													{/if}
-												</div>
-											</div>
-										{/if}
-									</div>
 								</div>
-
-								<!-- Time range selector -->
-								{#if metricsHistory.length > 0}
-									<div class="flex justify-center gap-0.5 rounded-lg p-0.5" style="background-color: var(--control-bg);">
-										{#each ['5m', '15m', '30m', '1h'] as range}
-											<button
-												class="px-2.5 py-1 text-[11px] font-medium rounded-md transition-colors flex-1"
-												style={metricsTimeRange === range
-													? 'background-color: var(--button-bg); color: var(--button-color);'
-													: 'color: var(--surface-muted);'}
-												onclick={() => { metricsTimeRange = range as any; }}
-											>{range}</button>
-										{/each}
-									</div>
-								{/if}
 
 								<!-- Scale -->
 								<div class="card rounded-2xl p-4">
@@ -3622,6 +3721,58 @@
 										</button>
 									</div>
 								{/if}
+
+								<!-- Pods (merged into Replicas card) -->
+								<div class="mt-3 pt-3 border-t" style="border-color: var(--surface-border);">
+									<div class="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+										<div class="flex items-center gap-2">
+											<p class="text-xs font-semibold uppercase tracking-wide" style="color: var(--surface-muted);">Pods</p>
+											<span class="text-xs font-mono" style="color: var(--surface-muted);">{activePods.length}</span>
+										</div>
+										<div class="flex gap-2.5 text-[11px]" style="color: var(--surface-muted);">
+											<span class="inline-flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>{activePods.filter((pod) => pod.status?.toLowerCase() === 'ready').length} ready</span>
+											{#if activePods.filter((pod) => !['ready'].includes(pod.status?.toLowerCase() ?? '')).length > 0}
+												<span class="inline-flex items-center gap-1"><span class="h-1.5 w-1.5 rounded-full bg-yellow-500"></span>{activePods.filter((pod) => !['ready'].includes(pod.status?.toLowerCase() ?? '')).length} other</span>
+											{/if}
+										</div>
+									</div>
+								{#if activePods.length}
+									<div class="space-y-1 overview-pods-scroll">
+										{#each activePods as pod}
+											<div class="console-pod-row-wrap">
+												<button
+													class="console-pod-row console-pod-row--compact"
+													class:console-pod-row--active={selectedPod === pod.name}
+													onclick={() => { selectedPod = pod.name; if (pod.containers?.length) selectedContainer = pod.containers[0].name; manualPodSelection = true; }}
+												>
+													<div class="flex items-center gap-2 min-w-0">
+														<span class="h-1.5 w-1.5 rounded-full shrink-0 {pod.status?.toLowerCase() === 'ready' ? 'bg-green-500' : pod.status?.toLowerCase() === 'scheduled' ? 'bg-yellow-500' : 'bg-gray-400'}"></span>
+														<span class="font-mono text-xs truncate">{podLabel(pod.name)}</span>
+													</div>
+													<div class="flex items-center gap-2 shrink-0 text-[10px] font-mono" style="color: var(--surface-muted);">
+														{#if pod.startTime}<span>{formatRelativeTime(new Date(pod.startTime))}</span>{/if}
+														<span class="badge {getStatusColor(pod.status)} text-[9px] px-1 py-0.5">{pod.status}</span>
+													</div>
+												</button>
+												<button
+													class="pod-delete-btn"
+													title="Delete pod"
+													onclick={() => deletePod(pod.name)}
+													disabled={deletingPod === pod.name}
+												>
+													{#if deletingPod === pod.name}
+														<Loader2 class="h-3 w-3 animate-spin" />
+													{:else}
+														<Trash2 size={12} class="h-3 w-3" />
+													{/if}
+												</button>
+											</div>
+										{/each}
+									</div>
+								{:else}
+									<p class="text-xs text-center py-3" style="color: var(--surface-muted);">No pods reporting yet</p>
+								{/if}
+								</div>
 								</div>
 							</div>
 						</div>
@@ -3673,10 +3824,10 @@
 												</div>
 												<div class="env-actions">
 													<button type="button" onclick={() => toggleReveal(index)} class="env-action-btn" aria-label={isRevealed ? 'Hide' : 'Show'}>
-														{#if isRevealed}<EyeOff class="h-3.5 w-3.5" />{:else}<Eye class="h-3.5 w-3.5" />{/if}
+														{#if isRevealed}<EyeOff size={14} class="h-3.5 w-3.5" />{:else}<Eye size={14} class="h-3.5 w-3.5" />{/if}
 													</button>
 													<button onclick={() => removeEnvRow(index)} class="env-action-btn env-action-delete" aria-label="Remove">
-														<Trash2 class="h-3.5 w-3.5" />
+														<Trash2 size={14} class="h-3.5 w-3.5" />
 													</button>
 												</div>
 											</div>
@@ -3751,6 +3902,10 @@
 								</button>
 							</div>
 						</div>
+					{:else if tab.id === 'metrics'}
+						<div class="card rounded-2xl p-5">
+							<DeploymentMetrics deploymentId={deployment?.id ?? null} />
+						</div>
 					{:else if tab.id === 'volumes'}
 						<div class="card rounded-2xl p-5">
 							<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
@@ -3786,13 +3941,13 @@
 													<input type="checkbox" class="dm-toggle-input" bind:checked={volume.readOnly} />
 													<span class="dm-toggle-track"><span class="dm-toggle-thumb"></span></span>
 												</label>
-												<button onclick={() => removeVolume(index)} class="btn btn-ghost btn-sm vol-remove"><Trash2 class="h-3.5 w-3.5" /></button>
+												<button onclick={() => removeVolume(index)} class="btn btn-ghost btn-sm vol-remove"><Trash2 size={14} class="h-3.5 w-3.5" /></button>
 											</div>
 										</div>
 									</div>
 								{:else}
 									<div class="text-center py-8" transition:fade={{ duration: 150 }}>
-										<HardDrive class="h-8 w-8 mx-auto mb-2" style="color: var(--surface-muted);" />
+										<HardDriveDownload size={32} class="h-8 w-8 mx-auto mb-2" style="color: var(--surface-muted);" />
 										<p class="text-sm font-medium" style="color: var(--center-channel-color);">No storage attached</p>
 										<p class="text-xs mt-1" style="color: var(--surface-muted);">Add persistent storage to keep files across restarts.</p>
 									</div>
@@ -3817,7 +3972,7 @@
 									<div class="rounded-xl" style="background-color: var(--control-bg); border: 1px solid var(--surface-border); overflow: hidden;">
 										<div class="flex items-center justify-between gap-3 px-4 py-3">
 											<div class="flex items-center gap-3">
-												<Globe class="h-4 w-4 flex-shrink-0" style="color: var(--button-bg);" />
+												<Wifi size={16} class="h-4 w-4 flex-shrink-0" style="color: var(--button-bg);" />
 												<div>
 													{#if tailscaleDns}
 														<p class="text-sm font-medium" style="color: var(--center-channel-color);">{tailscaleDns}</p>
@@ -3855,7 +4010,7 @@
 																class="btn btn-ghost btn-sm"
 																onclick={() => { navigator.clipboard.writeText(addr); toasts.add({ title: 'Copied', description: addr, color: 'success' }); }}
 															>
-																<Copy class="h-3.5 w-3.5" />
+																<Copy size={14} class="h-3.5 w-3.5" />
 															</button>
 														</div>
 													{/each}
@@ -3865,7 +4020,7 @@
 									</div>
 								{:else if tailscaleLinked}
 									<button onclick={exposeTailscale} disabled={tailscaleExposing} class="btn btn-secondary btn-sm">
-										{#if tailscaleExposing}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Globe class="h-3.5 w-3.5" />{/if}
+										{#if tailscaleExposing}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Wifi size={14} class="h-3.5 w-3.5" />{/if}
 										<span>Expose to Tailscale</span>
 									</button>
 								{:else}
@@ -3966,9 +4121,9 @@
 																onclick={() => { navigator.clipboard.writeText(pubEndpoint); toasts.add({ title: 'Copied public endpoint', description: pubEndpoint, color: 'success' }); }}
 																title="Click to copy public endpoint"
 															>
-																<Globe class="h-3 w-3" />
+																<Wifi size={12} class="h-3 w-3" />
 																<span>{pubEndpoint}</span>
-																<Copy class="h-3 w-3 opacity-60" />
+																<Copy size={12} class="h-3 w-3 opacity-60" />
 															</button>
 														{/if}
 													{/if}
@@ -4000,7 +4155,7 @@
 																{#if portPublicBusyId === port.id}
 																	<Loader2 class="h-3.5 w-3.5 animate-spin" />
 																{:else}
-																	<Globe class="h-3.5 w-3.5" />
+																	<Wifi size={14} class="h-3.5 w-3.5" />
 																{/if}
 																<span class="ml-1 text-xs">Expose publicly</span>
 															</button>
@@ -4008,11 +4163,11 @@
 													{/if}
 													{#if !serviceEditForms[service.id]}
 														<button type="button" class="btn btn-ghost btn-sm" title="Edit port" onclick={() => toggleServiceEdit(service)}>
-															<Settings class="h-3.5 w-3.5" />
+															<Settings size={14} class="h-3.5 w-3.5" />
 														</button>
 													{/if}
 													<button type="button" class="btn btn-ghost btn-sm text-red-500" onclick={() => deleteService(service.id)} disabled={serviceDeletingId === service.id}>
-														{#if serviceDeletingId === service.id}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2 class="h-3.5 w-3.5" />{/if}
+														{#if serviceDeletingId === service.id}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2 size={14} class="h-3.5 w-3.5" />{/if}
 													</button>
 												</div>
 											{/each}
@@ -4078,7 +4233,7 @@
 												onclick={generateRandomDomainForNew}
 												title="Generate a free *.a.lfdl.ink domain"
 											>
-												<RefreshCw class="h-3.5 w-3.5" />
+												<RefreshCw size={14} class="h-3.5 w-3.5" />
 												Auto
 											</button>
 										</div>
@@ -4115,7 +4270,7 @@
 											style="color: var(--surface-muted); background: none; border: none; cursor: pointer; padding: 0;"
 											onclick={() => (showDomainAdvanced = !showDomainAdvanced)}
 										>
-											<ChevronDown class="h-3 w-3" style={showDomainAdvanced ? '' : 'transform: rotate(-90deg);'} />
+											<ChevronDown size={12} class="h-3 w-3" style={showDomainAdvanced ? '' : 'transform: rotate(-90deg);'} />
 											Advanced
 										</button>
 
@@ -4213,7 +4368,7 @@
 													{#if deletingIngressId === ingress.id}
 														<Loader2 class="h-4 w-4 animate-spin" />
 													{:else}
-														<Trash2 class="h-4 w-4" />
+														<Trash2 size={16} class="h-4 w-4" />
 													{/if}
 												</button>
 											</div>
@@ -4239,7 +4394,7 @@
 								</div>
 								{#if deployment.githubRepo}
 									<button onclick={rebuild} disabled={rebuilding} class="btn btn-secondary btn-sm">
-										{#if rebuilding}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw class="h-3.5 w-3.5" />{/if}
+										{#if rebuilding}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw size={14} class="h-3.5 w-3.5" />{/if}
 										<span>Redeploy</span>
 									</button>
 								{/if}
@@ -4325,14 +4480,14 @@
 														buildModalTimestamps = deployment.buildStepTimestamps ?? null;
 														showBuildModal = true;
 													}} class="dep-action-btn" title="View build logs">
-														<Terminal class="h-3.5 w-3.5" />
+														<Terminal size={14} class="h-3.5 w-3.5" />
 													</button>
 												{/if}
 											</div>
 										</div>
 									{/if}
 
-									{#each deployment.imageHistory ?? [] as history}
+									{#each deployment.imageHistory ?? [] as history, _hi}
 										{@const timeAgo = (() => {
 											const diff = Date.now() - new Date(history.createdAt).getTime();
 											const mins = Math.floor(diff / 60000);
@@ -4347,10 +4502,11 @@
 										{@const rowFallbackMsg = history.commitSha
 											? deployment.imageHistory?.find((h) => h.commitMessage && h.commitSha === history.commitSha)?.commitMessage
 											: undefined}
-										{@const rowDisplayMsg = history.commitMessage || rowFallbackMsg}
+										{@const rowDisplayMsgFull = history.commitMessage || rowFallbackMsg}
+										{@const rowDisplayMsg = rowDisplayMsgFull?.split('\n')[0].trim()}
 										{@const rowBuildDuration = formatBuildDurationBetween(history.buildStartedAt, history.buildCompletedAt)}
 										{@const rowAuthor = history.commitAuthorUsername || history.commitAuthorName || null}
-										<div class="dep-list-row" class:dep-list-row--active={history.isActive} transition:slide={{ duration: 150 }}>
+										<div class="dep-list-row" class:dep-list-row--active={history.isActive} {@attach motionStagger({ index: _hi, stride: 0.035, from: { y: 10 } })}>
 											<div class="dep-col-status">
 												<span class="dep-status">
 													<span class="dep-status-dot dep-status-dot--ready" class:dep-status-dot--live={history.isActive}></span>
@@ -4363,7 +4519,7 @@
 											<div class="dep-col-commit">
 												<div class="dep-commit-stack">
 													{#if rowDisplayMsg}
-														<span class="dep-commit-msg">{rowDisplayMsg}</span>
+														<span class="dep-commit-msg" title={rowDisplayMsgFull}>{rowDisplayMsg}</span>
 													{:else if history.branch}
 														<span class="dep-commit-msg dep-commit-msg--muted">Deployed from {history.branch}</span>
 													{:else}
@@ -4423,11 +4579,11 @@
 											</div>
 											<div class="dep-col-actions">
 												<button onclick={() => openLogModal(history.id)} class="dep-action-btn" title="View logs">
-													<Terminal class="h-3.5 w-3.5" />
+													<Terminal size={14} class="h-3.5 w-3.5" />
 												</button>
 												{#if !history.isActive}
 													<button onclick={() => rollbackToImage(history.id)} class="dep-action-btn dep-action-btn--primary" title="Promote to production">
-														<RefreshCw class="h-3.5 w-3.5" />
+														<RefreshCw size={14} class="h-3.5 w-3.5" />
 													</button>
 												{/if}
 											</div>
@@ -4436,7 +4592,7 @@
 								</div>
 							{:else}
 								<div class="dep-list-empty">
-									<History class="h-8 w-8 mx-auto mb-2" style="color: var(--surface-muted);" />
+									<History size={32} class="h-8 w-8 mx-auto mb-2" style="color: var(--surface-muted);" />
 									<p class="text-sm font-medium" style="color: var(--center-channel-color);">No deployments yet</p>
 									<p class="text-xs mt-1" style="color: var(--surface-muted);">
 										{#if deployment.githubRepo}
@@ -4478,7 +4634,7 @@
 									<div class="wh-new-token-banner" transition:slide={{ duration: 150 }}>
 										<div class="wh-new-token-header">
 											<div class="wh-new-token-alert">
-												<AlertTriangle class="h-4 w-4" />
+												<TriangleAlert size={16} class="h-4 w-4" />
 												<span class="text-sm font-semibold">Save your token now</span>
 											</div>
 											<p class="text-xs mt-0.5" style="opacity: 0.85;">This is the only time the token value will be shown. Copy it somewhere safe.</p>
@@ -4489,7 +4645,7 @@
 												<div class="wh-new-token-value-row">
 													<code class="wh-new-token-code">{newlyCreatedToken}</code>
 													<button class="btn btn-ghost btn-sm wh-copy-btn" onclick={() => copyToClipboard(newlyCreatedToken!, 'token')}>
-														{#if copiedWebhookToken}<Check class="h-3.5 w-3.5" /><span>Copied</span>{:else}<Copy class="h-3.5 w-3.5" /><span>Copy</span>{/if}
+														{#if copiedWebhookToken}<Check size={14} class="h-3.5 w-3.5" /><span>Copied</span>{:else}<Copy size={14} class="h-3.5 w-3.5" /><span>Copy</span>{/if}
 													</button>
 												</div>
 											</div>
@@ -4498,7 +4654,7 @@
 												<div class="wh-new-token-value-row">
 													<code class="wh-new-token-code">{getWebhookUrl(newlyCreatedToken)}</code>
 													<button class="btn btn-ghost btn-sm wh-copy-btn" onclick={() => copyToClipboard(getWebhookUrl(newlyCreatedToken!), 'url')}>
-														{#if copiedWebhookUrl}<Check class="h-3.5 w-3.5" /><span>Copied</span>{:else}<Copy class="h-3.5 w-3.5" /><span>Copy</span>{/if}
+														{#if copiedWebhookUrl}<Check size={14} class="h-3.5 w-3.5" /><span>Copied</span>{:else}<Copy size={14} class="h-3.5 w-3.5" /><span>Copy</span>{/if}
 													</button>
 												</div>
 											</div>
@@ -4544,7 +4700,7 @@
 														</p>
 													</div>
 													<button class="btn btn-ghost btn-sm wh-delete-btn" onclick={() => deleteWebhookToken(token.id)} disabled={deletingWebhookTokenId === token.id} title="Delete token">
-														{#if deletingWebhookTokenId === token.id}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2 class="h-3.5 w-3.5" />{/if}
+														{#if deletingWebhookTokenId === token.id}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2 size={14} class="h-3.5 w-3.5" />{/if}
 													</button>
 												</div>
 											{/each}
@@ -4566,7 +4722,7 @@
 									<details class="wh-example-item" open>
 										<summary class="wh-example-summary">
 											<div class="wh-example-summary-left">
-												<RefreshCw class="h-3.5 w-3.5" style="color: var(--surface-muted);" />
+												<RefreshCw size={14} class="h-3.5 w-3.5" style="color: var(--surface-muted);" />
 												<span class="wh-example-title">Restart deployment</span>
 											</div>
 											<span class="wh-example-method">POST</span>
@@ -4577,7 +4733,7 @@
 									<details class="wh-example-item">
 										<summary class="wh-example-summary">
 											<div class="wh-example-summary-left">
-												<RefreshCw class="h-3.5 w-3.5" style="color: var(--surface-muted);" />
+												<RefreshCw size={14} class="h-3.5 w-3.5" style="color: var(--surface-muted);" />
 												<span class="wh-example-title">Update to a specific tag</span>
 											</div>
 											<span class="wh-example-method">POST + JSON</span>
@@ -4588,7 +4744,7 @@
 									<details class="wh-example-item">
 										<summary class="wh-example-summary">
 											<div class="wh-example-summary-left">
-												<Container class="h-3.5 w-3.5" style="color: var(--surface-muted);" />
+												<Boxes size={14} class="h-3.5 w-3.5" style="color: var(--surface-muted);" />
 												<span class="wh-example-title">Update image and tag</span>
 											</div>
 											<span class="wh-example-method">POST + JSON</span>
@@ -4824,7 +4980,7 @@
 													onclick={() => { healthCheckType = 'http'; isEditingHealthCheck = true; }}
 												>
 													<div class="hc-method-top">
-														<span class="hc-method-icon"><Globe class="h-5 w-5" /></span>
+														<span class="hc-method-icon"><Wifi size={20} class="h-5 w-5" /></span>
 														<span class="hc-method-badge">Recommended</span>
 													</div>
 													<span class="hc-method-label">Web endpoint</span>
@@ -4838,7 +4994,7 @@
 													onclick={() => { healthCheckType = 'tcp'; isEditingHealthCheck = true; }}
 												>
 													<div class="hc-method-top">
-														<span class="hc-method-icon"><Server class="h-5 w-5" /></span>
+														<span class="hc-method-icon"><ServerCog size={20} class="h-5 w-5" /></span>
 													</div>
 													<span class="hc-method-label">Port check</span>
 													<span class="hc-method-desc">Check if a port is accepting connections</span>
@@ -4851,7 +5007,7 @@
 													onclick={() => { healthCheckType = 'exec'; isEditingHealthCheck = true; }}
 												>
 													<div class="hc-method-top">
-														<span class="hc-method-icon"><Terminal class="h-5 w-5" /></span>
+														<span class="hc-method-icon"><Terminal size={20} class="h-5 w-5" /></span>
 													</div>
 													<span class="hc-method-label">Custom command</span>
 													<span class="hc-method-desc">Run a command inside your container</span>
@@ -4960,9 +5116,9 @@
 										<!-- Timing — collapsible advanced -->
 										<details class="hc-advanced-details">
 											<summary class="hc-advanced-summary">
-												<Settings class="h-3.5 w-3.5" style="color: var(--surface-muted);" />
+												<Settings size={14} class="h-3.5 w-3.5" style="color: var(--surface-muted);" />
 												<span>Advanced timing settings</span>
-												<ChevronDown class="h-3.5 w-3.5 hc-advanced-chevron" style="color: var(--surface-muted);" />
+												<ChevronDown size={14} class="h-3.5 w-3.5 hc-advanced-chevron" style="color: var(--surface-muted);" />
 											</summary>
 											<div class="hc-timing-grid">
 												<div class="hc-timing-card">
@@ -5013,25 +5169,25 @@
 </div>
 
 <!-- Build Progress Modal -->
-{#if showBuildModal}
+{#if showBuildModalRender}
 	<div
 		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-		transition:fade={{ duration: 150 }}
 		role="dialog"
 		aria-modal="true"
 		aria-label="Build progress"
 		onclick={(e) => { if (e.target === e.currentTarget) minimizeBuildModal(); }}
 		onkeydown={(e) => { if (e.key === 'Escape') minimizeBuildModal(); }}
+		{@attach motionBackdrop(() => !showBuildModal, () => { showBuildModalRender = false; })}
 	>
 		<div
 			class="build-modal card w-full max-w-2xl rounded-2xl shadow-2xl"
-			transition:scale={{ duration: 150, start: 0.95 }}
+			{@attach motionPopover({ closing: () => !showBuildModal, onClosed: () => {}, from: { y: 14, scale: 0.94, opacity: 0 }, stiffness: 460, damping: 30, mass: 0.95 })}
 		>
 			<div class="flex items-center justify-between border-b px-6 py-4" style="border-color: var(--surface-border);">
 				<div class="flex items-center gap-3">
 					<h2 class="text-lg font-semibold">Rebuilding {deployment?.name ?? 'deployment'}</h2>
 					<div class="flex items-center gap-1.5 text-sm" style="color: var(--surface-muted);">
-						<Clock class="h-3.5 w-3.5" />
+						<Clock size={14} class="h-3.5 w-3.5" />
 						<span class="font-mono">{formatBuildElapsed(buildElapsed)}</span>
 					</div>
 				</div>
@@ -5040,7 +5196,7 @@
 					class="btn-icon rounded-lg p-1.5 transition-colors"
 					title="Minimize"
 				>
-					<Minimize2 class="h-4 w-4" />
+					<Minimize2 size={16} class="h-4 w-4" />
 				</button>
 			</div>
 
@@ -5086,11 +5242,12 @@
 {/if}
 
 <!-- Floating Build Card -->
-{#if showBuildCard && !showBuildModal}
+{#if showBuildCardRender}
 	<button
-		class="build-card fixed bottom-6 right-6 z-40 w-72 cursor-pointer rounded-xl shadow-lg transition-all hover:shadow-xl"
-		transition:scale={{ duration: 200, start: 0.9 }}
+		class="build-card fixed bottom-6 right-6 z-40 w-72 cursor-pointer rounded-xl shadow-lg hover:shadow-xl"
+		style="transform-origin: bottom right;"
 		onclick={expandBuildCard}
+		{@attach motionPopover({ closing: () => !(showBuildCard && !showBuildModal), onClosed: () => { showBuildCardRender = false; }, from: { y: 18, scale: 0.86, opacity: 0 }, stiffness: 500, damping: 28, mass: 0.9 })}
 	>
 		<div class="flex items-center justify-between px-4 py-3">
 			<div class="flex items-center gap-2 min-w-0">
@@ -5099,16 +5256,16 @@
 				{:else if buildModalStatus === 'failed'}
 					<X class="h-4 w-4 shrink-0 text-red-500" />
 				{:else if buildModalStatus === 'running'}
-					<Check class="h-4 w-4 shrink-0 text-green-500" />
+					<Check size={16} class="h-4 w-4 shrink-0 text-green-500" />
 				{/if}
 				<span class="truncate text-sm font-medium">{deployment?.name ?? 'Build'}</span>
 			</div>
 			<div class="flex items-center gap-2 shrink-0">
 				<div class="flex items-center gap-1 text-xs font-mono" style="color: var(--surface-muted);">
-					<Clock class="h-3 w-3" />
+					<Clock size={12} class="h-3 w-3" />
 					{formatBuildElapsed(buildElapsed)}
 				</div>
-				<Maximize2 class="h-3.5 w-3.5" style="color: var(--surface-muted);" />
+				<Maximize2 size={14} class="h-3.5 w-3.5" style="color: var(--surface-muted);" />
 			</div>
 		</div>
 		<div class="px-4 pb-3">
@@ -5148,81 +5305,12 @@
 	/>
 {/if}
 
-{#if expandedMetric}
-	<div
-		class="metric-modal-backdrop"
-		transition:fade={{ duration: 150 }}
-		role="dialog"
-		aria-modal="true"
-		aria-label="{expandedMetric === 'cpu' ? 'CPU' : 'Memory'} metrics"
-		onclick={(e) => { if (e.target === e.currentTarget) expandedMetric = null; }}
-		onkeydown={(e) => { if (e.key === 'Escape') expandedMetric = null; }}
-	>
-		<div class="metric-modal" transition:scale={{ duration: 180, start: 0.96 }}>
-			<div class="metric-modal-header">
-				<div class="metric-modal-title">
-					{#if expandedMetric === 'cpu'}
-						<Cpu class="h-4 w-4" style="color: #b33346;" />
-						<span>CPU usage</span>
-						<span class="metric-modal-value">{formatCpu(deployment?.totalCpuUsage)}</span>
-					{:else}
-						<MemoryStick class="h-4 w-4" style="color: #e87485;" />
-						<span>Memory usage</span>
-						<span class="metric-modal-value">{formatMemory(deployment?.totalMemoryUsage)}</span>
-					{/if}
-				</div>
-				<div class="metric-modal-actions">
-					<div class="metric-modal-range">
-						{#each ['5m', '15m', '30m', '1h'] as range}
-							<button
-								class="metric-modal-range-btn"
-								class:metric-modal-range-btn--active={metricsTimeRange === range}
-								onclick={() => { metricsTimeRange = range as any; }}
-							>{range}</button>
-						{/each}
-					</div>
-					<button class="metric-modal-close" onclick={() => (expandedMetric = null)} aria-label="Close">
-						<X class="h-4 w-4" />
-					</button>
-				</div>
-			</div>
-			<div class="metric-modal-body">
-				{#if Line}
-					<svelte:component
-						this={Line}
-						data={expandedMetric === 'cpu' ? cpuChartData : memoryChartData}
-						options={expandedMetric === 'cpu' ? cpuChartOptionsExpanded : memoryChartOptionsExpanded}
-					/>
-					{#if filteredMetrics.length === 0}
-						<div class="metric-modal-empty-label" aria-live="polite">
-							{#if metricsHistory.length === 0}
-								<Loader2 class="h-3.5 w-3.5 animate-spin" />
-								<span>Waiting for first metric…</span>
-							{:else}
-								<span>No data in this range</span>
-							{/if}
-						</div>
-					{/if}
-				{:else}
-					<div class="stat-card-pending" aria-live="polite">
-						<div class="stat-card-pending-grid" aria-hidden="true"></div>
-						<div class="stat-card-pending-label">
-							<Loader2 class="h-3.5 w-3.5 animate-spin" />
-							<span>Loading chart…</span>
-						</div>
-					</div>
-				{/if}
-			</div>
-		</div>
-	</div>
-{/if}
-
-{#if logModalId}
-	<div class="log-modal-backdrop" onclick={closeLogModal} transition:fade={{ duration: 150 }}>
-		<div class="log-modal" onclick={(e) => e.stopPropagation()} transition:scale={{ duration: 200, start: 0.96 }}>
+{#if logModalRender}
+	<div class="log-modal-backdrop" onclick={closeLogModal} {@attach motionBackdrop(() => !logModalId, () => {})}>
+		<div class="log-modal" onclick={(e) => e.stopPropagation()} {@attach motionPopover({ closing: () => !logModalId, onClosed: () => { logModalRender = false; }, from: { y: 12, scale: 0.96, opacity: 0 }, stiffness: 480, damping: 30, mass: 0.9 })}>
 			<div class="log-modal-header">
 				<div class="log-modal-header-left">
-					<Terminal class="h-4 w-4" style="color: var(--sidebar-text, #e0e0e0); opacity: 0.5;" />
+					<Terminal size={16} class="h-4 w-4" style="color: var(--sidebar-text, #e0e0e0); opacity: 0.5;" />
 					<p class="log-modal-title">Build Logs</p>
 				</div>
 				<button class="log-modal-close" onclick={closeLogModal}>
@@ -5367,6 +5455,50 @@
 			opacity: 1;
 			transform: translateY(0) scale(1);
 		}
+	}
+
+	/* Overview: lock to a single viewport. Header card + tabs eat ~340px, leaving the
+	   grid to fill the remainder. Both columns use min-height:0 so internal scrolling
+	   can take over (logs in the console, pod list in the merged card). */
+	.overview-grid {
+		height: calc(100vh - 340px);
+		min-height: 460px;
+	}
+	.overview-left {
+		height: 100%;
+		min-height: 0;
+	}
+	.overview-left > .console-panel {
+		height: auto;
+		flex: 1 1 0;
+		min-height: 0;
+	}
+	.overview-right {
+		height: 100%;
+	}
+	/* Make the last card in the right column (Replicas + Pods) flex-fill the column
+	   so the embedded pod list can scroll inside it instead of overflowing the page. */
+	.overview-right > .card:last-child {
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+		flex: 1 1 auto;
+	}
+	.overview-right > .card:last-child > div:last-child {
+		min-height: 0;
+		display: flex;
+		flex-direction: column;
+		flex: 1 1 auto;
+	}
+	.overview-pods-scroll {
+		flex: 1 1 auto;
+		min-height: 0;
+		overflow-y: auto;
+		overscroll-behavior: contain;
+	}
+	.console-pod-row--compact {
+		padding-top: 0.3rem;
+		padding-bottom: 0.3rem;
 	}
 
 	.surface-pill {
@@ -5538,6 +5670,21 @@
 		color: var(--center-channel-color);
 	}
 
+	/* Glassy breadcrumb pill — mirrors the project page so navigation reads
+	   the same across the org → project → deployment hierarchy. */
+	.deployment-page :global(.bc) {
+		align-self: flex-start;
+		padding: 0.3125rem 0.75rem;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--surface-bg, var(--center-channel-bg)) 70%, transparent);
+		border: 1px solid var(--surface-border);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+		width: fit-content;
+		margin-bottom: 0;
+	}
+
 	.deployment-page :global(.text-gray-900),
 	.deployment-page :global(.text-gray-800),
 	.deployment-page :global(.text-gray-700) {
@@ -5557,7 +5704,7 @@
 
 	.dep-header-card {
 		position: relative;
-		padding: 1.125rem 1.25rem;
+		padding: 1.5rem 1.5rem 1.25rem;
 		border: 1px solid var(--surface-border);
 		border-radius: 1rem;
 		background-color: var(--surface-bg);
@@ -5565,6 +5712,13 @@
 		box-shadow:
 			0 1px 3px rgb(0 0 0 / 0.03),
 			0 1px 2px rgb(0 0 0 / 0.02);
+		transition: padding 320ms cubic-bezier(0.22, 1, 0.36, 1);
+	}
+	/* Compact mode: tighter top/bottom padding, less generous spacing under the title.
+	   Body height is animated by motion; the card pads in sympathy. */
+	.dep-header-card--collapsed {
+		padding-top: 0.875rem;
+		padding-bottom: 0.875rem;
 	}
 	.dep-header-card--hasbg {
 		border-color: transparent;
@@ -5600,13 +5754,13 @@
 		color: #fff;
 	}
 	.dep-header-card--hasbg .dep-meta-domain {
-		color: rgba(255,255,255,0.92);
+		color: rgba(255,255,255,0.55);
 	}
 	.dep-header-card--hasbg .dep-meta-domain:hover {
 		color: #fff;
 	}
 	.dep-header-card--hasbg .dep-meta-domain-icon {
-		opacity: 0.55;
+		opacity: 0.4;
 	}
 
 	.dep-header-backdrop {
@@ -5653,12 +5807,25 @@
 		justify-content: flex-end;
 	}
 
-	/* Body: meta + domains, sit just below the deployment name */
+	/* Body: meta + domains, sit just below the deployment name. Generous gap so the
+	   meta line and the domains row read as distinct groups, not a tight stack. */
 	.dep-header-body {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
-		margin-top: 0.375rem;
+		gap: 0.875rem;
+		margin-top: 0.875rem;
+	}
+
+	/* Single hairline divider that turns "stack of text" into two clear groups:
+	   build provenance (commit/repo/branch/time) above, public addresses below. */
+	.dep-header-divider {
+		height: 1px;
+		background-color: color-mix(in srgb, var(--surface-border) 80%, transparent);
+		margin: 0;
+		border: 0;
+	}
+	.dep-header-card--hasbg .dep-header-divider {
+		background-color: rgba(255, 255, 255, 0.18);
 	}
 
 	/* HERO: the deployment name */
@@ -5784,17 +5951,18 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.3125rem;
-		color: var(--center-channel-color);
+		color: color-mix(in srgb, var(--center-channel-color) 55%, transparent);
 		text-decoration: none;
 		font-size: 0.8125rem;
-		font-weight: 500;
-		transition: opacity 0.12s;
+		font-weight: 400;
+		transition: color 0.12s, opacity 0.12s;
 	}
 	.dep-meta-domain-icon {
-		opacity: 0.5;
+		opacity: 0.4;
 		transition: opacity 0.12s;
 	}
 	.dep-meta-domain:hover {
+		color: var(--center-channel-color);
 		text-decoration: underline;
 		text-underline-offset: 4px;
 	}

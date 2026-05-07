@@ -1,0 +1,110 @@
+# Default-deny baseline + targeted allows. node-exporter runs with
+# hostNetwork=true, so its policy is enforced at the host firewall layer
+# rather than as a pod NetworkPolicy.
+
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: default-deny-all
+  namespace: orchard-metrics
+spec:
+  podSelector: {}
+  policyTypes: [Ingress, Egress]
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: allow-dns-egress
+  namespace: orchard-metrics
+spec:
+  podSelector: {}
+  policyTypes: [Egress]
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels: { kubernetes.io/metadata.name: kube-system }
+          podSelector:
+            matchLabels: { k8s-app: kube-dns }
+      ports:
+        - { protocol: UDP, port: 53 }
+        - { protocol: TCP, port: 53 }
+---
+# VictoriaMetrics: receive writes from vmagent, accept queries from any
+# pod in the cluster (the Orchard backend reads via this).
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: victoriametrics-policy
+  namespace: orchard-metrics
+spec:
+  podSelector:
+    matchLabels: { app: victoriametrics }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app: vmagent }
+      ports:
+        - { protocol: TCP, port: 8428 }
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - { protocol: TCP, port: 8428 }
+---
+# vmagent: scrapes everything in the cluster (kubelet on every node, plus
+# kube-state-metrics, node-exporter, opt-in pods), pushes to VictoriaMetrics.
+# Egress on 443/6443 → kube-apiserver (service discovery), 10250 → kubelet,
+# 8080/8081/9100 → in-namespace exporters, 8428 → VM.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: vmagent-policy
+  namespace: orchard-metrics
+spec:
+  podSelector:
+    matchLabels: { app: vmagent }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - namespaceSelector: {}
+      ports:
+        - { protocol: TCP, port: 8429 }
+  egress:
+    - to:
+        - podSelector:
+            matchLabels: { app: victoriametrics }
+      ports:
+        - { protocol: TCP, port: 8428 }
+    - to:
+        - podSelector:
+            matchLabels: { app: kube-state-metrics }
+      ports:
+        - { protocol: TCP, port: 8080 }
+    # Kubelet + apiserver + node-exporter (host-network) live outside the
+    # pod network, so allow by port to any IP.
+    - ports:
+        - { protocol: TCP, port: 443 }
+        - { protocol: TCP, port: 6443 }
+        - { protocol: TCP, port: 10250 }
+        - { protocol: TCP, port: 9100 }
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: kube-state-metrics-policy
+  namespace: orchard-metrics
+spec:
+  podSelector:
+    matchLabels: { app: kube-state-metrics }
+  policyTypes: [Ingress, Egress]
+  ingress:
+    - from:
+        - podSelector:
+            matchLabels: { app: vmagent }
+      ports:
+        - { protocol: TCP, port: 8080 }
+        - { protocol: TCP, port: 8081 }
+  egress:
+    - ports:
+        - { protocol: TCP, port: 443 }
+        - { protocol: TCP, port: 6443 }

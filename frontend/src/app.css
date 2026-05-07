@@ -192,6 +192,7 @@ main {
 	color: var(--center-channel-color);
 }
 
+
 a {
 	color: var(--link-color);
 }
@@ -699,6 +700,26 @@ select.input:focus {
 }
 .sidebar-collapsed-icon:hover {
 	background-color: var(--sidebar-text-hover-bg);
+}
+
+/* Compact search button — mirrors `.sidebar-search-trigger` styling so the
+   search affordance reads as a search field even when collapsed. */
+.sidebar-collapsed-icon--search {
+	background-color: color-mix(in srgb, var(--sidebar-text-hover-bg) 40%, transparent);
+	border: 1px solid color-mix(in srgb, var(--sidebar-text) 6%, transparent);
+	color: color-mix(in srgb, var(--sidebar-text) 50%, transparent);
+	transition: all 160ms ease;
+}
+.sidebar-collapsed-icon--search:hover {
+	background-color: var(--sidebar-text-hover-bg);
+	border-color: color-mix(in srgb, var(--sidebar-text) 12%, transparent);
+	color: var(--sidebar-text);
+	box-shadow:
+		0 1px 3px color-mix(in srgb, var(--center-channel-color) 4%, transparent),
+		0 4px 8px color-mix(in srgb, var(--center-channel-color) 3%, transparent);
+}
+.sidebar-collapsed-icon--search .sidebar-search-icon-wrapper {
+	color: inherit;
 }
 .sidebar-collapsed-icon.is-active {
 	background-color: var(--sidebar-text-active-bg);

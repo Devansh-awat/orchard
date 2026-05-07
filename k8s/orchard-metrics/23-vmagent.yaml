@@ -1,0 +1,178 @@
+# vmagent: lightweight scraper that reads Prometheus-format scrape configs
+# and remote-writes to VictoriaMetrics. Single replica is fine for this
+# cluster size; bump to 2+ with hashing for HA.
+
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: vmagent-config
+  namespace: orchard-metrics
+data:
+  scrape.yaml: |
+    global:
+      scrape_interval: 15s
+      scrape_timeout: 10s
+      external_labels:
+        cluster: leafycluster
+
+    scrape_configs:
+      # Container metrics (CPU, memory, network, fs) via cAdvisor on each
+      # kubelet. This is the workhorse for per-deployment graphs.
+      - job_name: kubernetes-cadvisor
+        scheme: https
+        tls_config:
+          insecure_skip_verify: true
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - source_labels: [__address__]
+            regex: (.+):(.+)
+            target_label: __address__
+            replacement: $1:10250
+          - target_label: __metrics_path__
+            replacement: /metrics/cadvisor
+          - source_labels: [__meta_kubernetes_node_name]
+            target_label: node
+        metric_relabel_configs:
+          # Drop the firehose: only keep series we actually use.
+          - source_labels: [__name__]
+            regex: 'container_(cpu_usage_seconds_total|memory_working_set_bytes|memory_rss|memory_usage_bytes|network_receive_bytes_total|network_transmit_bytes_total|network_receive_packets_dropped_total|network_transmit_packets_dropped_total|fs_usage_bytes|fs_limit_bytes)'
+            action: keep
+          # Drop the cgroup-parent "POD" duplicates for cpu/memory/fs (they
+          # double-count the pod). Network metrics arrive with empty
+          # container at the pod level — keep those, query-side filters
+          # the per-container ones with container!="".
+          - source_labels: [__name__, container]
+            regex: 'container_(cpu|memory|fs)_.*;POD'
+            action: drop
+
+      # Kubelet's own /metrics (process stats).
+      - job_name: kubernetes-kubelet
+        scheme: https
+        tls_config:
+          insecure_skip_verify: true
+        bearer_token_file: /var/run/secrets/kubernetes.io/serviceaccount/token
+        kubernetes_sd_configs:
+          - role: node
+        relabel_configs:
+          - source_labels: [__address__]
+            regex: (.+):(.+)
+            target_label: __address__
+            replacement: $1:10250
+          - source_labels: [__meta_kubernetes_node_name]
+            target_label: node
+        metric_relabel_configs:
+          - source_labels: [__name__]
+            regex: 'kubelet_(running_pods|running_containers|pod_start_duration_seconds.*)'
+            action: keep
+
+      - job_name: kube-state-metrics
+        kubernetes_sd_configs:
+          - role: endpoints
+            namespaces: { names: [orchard-metrics] }
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+            regex: kube-state-metrics;http-metrics
+            action: keep
+
+      - job_name: node-exporter
+        kubernetes_sd_configs:
+          - role: endpoints
+            namespaces: { names: [orchard-metrics] }
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_service_name, __meta_kubernetes_endpoint_port_name]
+            regex: node-exporter;metrics
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_node_name]
+            target_label: node
+
+      # Opt-in app metrics via prometheus.io/scrape=true annotation.
+      - job_name: kubernetes-pods
+        kubernetes_sd_configs: [{ role: pod }]
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            regex: 'true'
+            action: keep
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vmagent
+  namespace: orchard-metrics
+  labels:
+    app: vmagent
+spec:
+  type: ClusterIP
+  ports:
+    - { name: http, port: 8429, targetPort: 8429 }
+  selector:
+    app: vmagent
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vmagent
+  namespace: orchard-metrics
+  labels:
+    app: vmagent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vmagent
+  template:
+    metadata:
+      labels:
+        app: vmagent
+    spec:
+      serviceAccountName: vmagent
+      containers:
+        - name: vmagent
+          image: victoriametrics/vmagent:v1.106.1
+          args:
+            - "-promscrape.config=/config/scrape.yaml"
+            - "-remoteWrite.url=http://victoriametrics.orchard-metrics.svc.cluster.local:8428/api/v1/write"
+            - "-remoteWrite.tmpDataPath=/tmp/vmagent"
+            - "-remoteWrite.maxDiskUsagePerURL=512MB"
+            - "-memory.allowedPercent=80"
+            - "-httpListenAddr=:8429"
+            - "-loggerLevel=INFO"
+          ports:
+            - { name: http, containerPort: 8429 }
+          volumeMounts:
+            - { name: config, mountPath: /config }
+            - { name: tmp,    mountPath: /tmp/vmagent }
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests: { cpu: "100m", memory: "256Mi" }
+            limits:   { cpu: "500m", memory: "512Mi" }
+          securityContext:
+            runAsNonRoot: true
+            runAsUser: 1000
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: ["ALL"] }
+      volumes:
+        - name: config
+          configMap: { name: vmagent-config }
+        - name: tmp
+          emptyDir: { sizeLimit: 1Gi }

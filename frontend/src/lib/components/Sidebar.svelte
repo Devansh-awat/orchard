@@ -1,7 +1,18 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { fly, fade } from 'svelte/transition';
-	import { PanelLeftClose, PanelLeft, Search, Leaf, Folder, Activity, ArrowLeft, Settings, Users, Shield, Globe, Key, Gauge } from 'lucide-svelte';
+	import { animate } from 'motion';
+	import { Leaf, Folder, Shield, Globe } from 'lucide-svelte';
+	import {
+		PanelLeftClose,
+		PanelRightClose,
+		Search,
+		Activity,
+		ArrowLeft,
+		Settings,
+		Users,
+		Key,
+		Gauge
+	} from '@jis3r/icons';
 	import WorkspacesMenu from './WorkspacesMenu.svelte';
 	import UserMenu from './UserMenu.svelte';
 	import { selectedOrganization, sidebarCollapsed } from '$lib/stores';
@@ -15,9 +26,126 @@
 	const orgSlug = $derived($selectedOrganization?.slug ?? '');
 	const isSettingsRoute = $derived($page.url.pathname.startsWith('/' + orgSlug + '/settings'));
 	const settingsTab = $derived($page.url.searchParams.get('tab') || 'general');
+	// Org overview has an `auto-fill` grid whose column count flips mid-spring
+	// when the sidebar width swings ~192px, snapping every card to a new cell.
+	// On just that page, fall back to the original short CSS width transition.
+	const isHomeRoute = $derived($page.url.pathname === '/' + orgSlug);
+
+	const COLLAPSED_W = '4.5rem';
+	const EXPANDED_W = '16.5rem';
+
+	let asideEl: HTMLElement | undefined = $state();
+	let prevCollapsed = $sidebarCollapsed;
+	let didInitWidth = false;
+
+	// Bouncy spring on the aside width. Motion owns the inline `width` — no
+	// reactive `style="width: ..."` binding, otherwise Svelte would snap the
+	// width on toggle (clobbering the spring) and the instant layout shift
+	// would flicker every card in the sibling main content.
+	//
+	// While the spring is in flight we set `data-sidebar-animating` on <html>.
+	// CSS in app.css uses that to disable pointer-events + box-shadow
+	// transitions on `<main>` for the duration, which kills the cascade of
+	// hover-state flickers that fire as cards shift under the cursor.
+	$effect(() => {
+		const collapsed = $sidebarCollapsed;
+		const home = isHomeRoute;
+		if (!asideEl) return;
+		if (!didInitWidth) {
+			asideEl.style.width = collapsed ? COLLAPSED_W : EXPANDED_W;
+			didInitWidth = true;
+			prevCollapsed = collapsed;
+			return;
+		}
+		if (collapsed === prevCollapsed) return;
+		prevCollapsed = collapsed;
+		if (home) {
+			// Plain CSS transition — see .sidebar--css-transition rule.
+			asideEl.style.width = collapsed ? COLLAPSED_W : EXPANDED_W;
+			return;
+		}
+		animate(
+			asideEl,
+			{ width: collapsed ? COLLAPSED_W : EXPANDED_W },
+			{ type: 'spring', stiffness: 420, damping: 20, mass: 0.85 }
+		);
+	});
+
+	// Mount-time stagger for nav items. Replaces CSS keyframes so timing is
+	// physics-driven and consistent with the project page.
+	function navStagger(index: number, stride = 0.035) {
+		return (el: Element) => {
+			const target = el as HTMLElement;
+			animate(
+				target,
+				{ opacity: [0, 1], x: [-8, 0] },
+				{ type: 'spring', stiffness: 320, damping: 26, mass: 0.7, delay: index * stride }
+			);
+		};
+	}
+
+	// IN spring for the nav container. Pairs with svelte out:fade for the exit
+	// (a snappier, cheaper close — user is done with it, get out of the way).
+	function navIn(el: Element) {
+		const target = el as HTMLElement;
+		animate(
+			target,
+			{ opacity: [0, 1], x: [-10, 0] },
+			{ type: 'spring', stiffness: 300, damping: 28, mass: 0.85 }
+		);
+	}
+
+	// Velocity-aware lift + forwards mouseenter to descendant @jis3r icons so
+	// they auto-animate when the parent (button/row) is hovered, not only when
+	// the cursor lands directly on the icon's hit area.
+	function springHover(opts: { lift?: number; stiffness?: number; damping?: number } = {}) {
+		const { lift = -1, stiffness = 380, damping = 22 } = opts;
+		return (el: Element) => {
+			const t = el as HTMLElement;
+			const enter = () => {
+				animate(t, { y: lift }, { type: 'spring', stiffness, damping });
+				t.querySelectorAll('[role="img"]').forEach((icon) => {
+					icon.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
+				});
+			};
+			const leave = () => animate(t, { y: 0 }, { type: 'spring', stiffness: stiffness * 0.8, damping: damping + 4 });
+			const press = () => animate(t, { scale: 0.94 }, { type: 'spring', stiffness: 600, damping: 28 });
+			const release = () => animate(t, { scale: 1 }, { type: 'spring', stiffness: 420, damping: 18 });
+			t.addEventListener('mouseenter', enter);
+			t.addEventListener('mouseleave', leave);
+			t.addEventListener('pointerdown', press);
+			t.addEventListener('pointerup', release);
+			t.addEventListener('pointerleave', release);
+			return () => {
+				t.removeEventListener('mouseenter', enter);
+				t.removeEventListener('mouseleave', leave);
+				t.removeEventListener('pointerdown', press);
+				t.removeEventListener('pointerup', release);
+				t.removeEventListener('pointerleave', release);
+			};
+		};
+	}
+
+	// One-shot pop whenever the collapsed state flips — gives the toggle button
+	// a satisfying "click landed" feedback that matches the panel motion.
+	function togglePop(el: Element) {
+		const target = el as HTMLElement;
+		let prev = $sidebarCollapsed;
+		$effect(() => {
+			const next = $sidebarCollapsed;
+			if (next !== prev) {
+				animate(
+					target,
+					{ scale: [0.82, 1.08, 1], rotate: [next ? 8 : -8, 0] },
+					{ type: 'spring', stiffness: 480, damping: 16, mass: 0.9 }
+				);
+			}
+			prev = next;
+		});
+	}
 </script>
 
-<aside class="sidebar transition-all duration-200" style="width: {$sidebarCollapsed ? '4.5rem' : '16.5rem'};">
+<aside bind:this={asideEl} class="sidebar" class:sidebar--css-transition={isHomeRoute}>
 	<div class="sidebar-inner">
 		<div class="sidebar-team-bar" class:is-collapsed={$sidebarCollapsed}>
 			{#if $sidebarCollapsed}
@@ -26,8 +154,10 @@
 						onclick={() => sidebarCollapsed.toggle()}
 						class="sidebar-action"
 						aria-label="Expand sidebar"
+						{@attach springHover()}
+						{@attach togglePop}
 					>
-						<PanelLeft class="h-5 w-5" />
+						<PanelRightClose size={20} />
 					</button>
 					{#if !isSettingsRoute}
 						<WorkspacesMenu collapsed />
@@ -36,8 +166,8 @@
 			{:else}
 				{#if isSettingsRoute}
 					<div class="flex items-center gap-2">
-						<a href="/{orgSlug}" class="settings-back-btn">
-							<ArrowLeft class="h-4 w-4" />
+						<a href="/{orgSlug}" class="settings-back-btn" {@attach springHover({ lift: -1 })}>
+							<ArrowLeft size={16} />
 							<span>Back</span>
 						</a>
 						<div class="flex-1"></div>
@@ -45,8 +175,10 @@
 							onclick={() => sidebarCollapsed.toggle()}
 							class="sidebar-action"
 							aria-label="Collapse sidebar"
+							{@attach springHover()}
+							{@attach togglePop}
 						>
-							<PanelLeftClose class="h-5 w-5" />
+							<PanelLeftClose size={20} />
 						</button>
 					</div>
 				{:else}
@@ -58,8 +190,10 @@
 							onclick={() => sidebarCollapsed.toggle()}
 							class="sidebar-action"
 							aria-label="Collapse sidebar"
+							{@attach springHover()}
+							{@attach togglePop}
 						>
-							<PanelLeftClose class="h-5 w-5" />
+							<PanelLeftClose size={20} />
 						</button>
 					</div>
 				{/if}
@@ -69,79 +203,92 @@
 		{#if isSettingsRoute}
 			<!-- Settings sidebar -->
 			{#if !$sidebarCollapsed}
-				<div class="sidebar-nav-animated" in:fly={{ x: -12, duration: 180, delay: 80 }} out:fade={{ duration: 100 }}>
-				<div class="settings-sidebar-title">Organization Settings</div>
-				<div class="sidebar-home-link">
-					<a
-						href="/{orgSlug}/settings?tab=general"
-						class="tree-node-content"
-						class:is-active={settingsTab === 'general'}
-					>
-						<div class="tree-icon-badge" style="background-color: #6b7280">
-							<Settings size={10} class="tree-icon-svg" />
-						</div>
-						<span class="tree-node-label">General</span>
-					</a>
-					<a
-						href="/{orgSlug}/settings?tab=members"
-						class="tree-node-content"
-						class:is-active={settingsTab === 'members'}
-					>
-						<div class="tree-icon-badge" style="background-color: #3b82f6">
-							<Users size={10} class="tree-icon-svg" />
-						</div>
-						<span class="tree-node-label">Members</span>
-					</a>
-					<a
-						href="/{orgSlug}/settings?tab=quotas"
-						class="tree-node-content"
-						class:is-active={settingsTab === 'quotas'}
-					>
-						<div class="tree-icon-badge" style="background-color: #f59e0b">
-							<Gauge size={10} class="tree-icon-svg" />
-						</div>
-						<span class="tree-node-label">Resource Quotas</span>
-					</a>
-					<a
-						href="/{orgSlug}/settings?tab=database"
-						class="tree-node-content"
-						class:is-active={settingsTab === 'database'}
-					>
-						<div class="tree-icon-badge" style="background-color: #10b981">
-							<Globe size={10} class="tree-icon-svg" />
-						</div>
-						<span class="tree-node-label">Database</span>
-					</a>
-					<a
-						href="/{orgSlug}/settings?tab=backups"
-						class="tree-node-content"
-						class:is-active={settingsTab === 'backups'}
-					>
-						<div class="tree-icon-badge" style="background-color: #8b5cf6">
-							<Shield size={10} class="tree-icon-svg" />
-						</div>
-						<span class="tree-node-label">Backups</span>
-					</a>
-					<a
-						href="/{orgSlug}/settings?tab=sso"
-						class="tree-node-content"
-						class:is-active={settingsTab === 'sso'}
-					>
-						<div class="tree-icon-badge" style="background-color: #ef4444">
-							<Key size={10} class="tree-icon-svg" />
-						</div>
-						<span class="tree-node-label">SSO</span>
-					</a>
-				</div>
+				<div class="sidebar-nav-animated" {@attach navIn}>
+					<div class="settings-sidebar-title">Organization Settings</div>
+					<div class="sidebar-home-link">
+						<a
+							href="/{orgSlug}/settings?tab=general"
+							class="tree-node-content"
+							class:is-active={settingsTab === 'general'}
+							{@attach navStagger(0)}
+							{@attach springHover({ lift: -1 })}
+						>
+							<div class="tree-icon-badge" style="background-color: #6b7280">
+								<Settings size={10} class="tree-icon-svg" />
+							</div>
+							<span class="tree-node-label">General</span>
+						</a>
+						<a
+							href="/{orgSlug}/settings?tab=members"
+							class="tree-node-content"
+							class:is-active={settingsTab === 'members'}
+							{@attach navStagger(1)}
+							{@attach springHover({ lift: -1 })}
+						>
+							<div class="tree-icon-badge" style="background-color: #3b82f6">
+								<Users size={10} class="tree-icon-svg" />
+							</div>
+							<span class="tree-node-label">Members</span>
+						</a>
+						<a
+							href="/{orgSlug}/settings?tab=quotas"
+							class="tree-node-content"
+							class:is-active={settingsTab === 'quotas'}
+							{@attach navStagger(2)}
+							{@attach springHover({ lift: -1 })}
+						>
+							<div class="tree-icon-badge" style="background-color: #f59e0b">
+								<Gauge size={10} class="tree-icon-svg" />
+							</div>
+							<span class="tree-node-label">Resource Quotas</span>
+						</a>
+						<a
+							href="/{orgSlug}/settings?tab=database"
+							class="tree-node-content"
+							class:is-active={settingsTab === 'database'}
+							{@attach navStagger(3)}
+							{@attach springHover({ lift: -1 })}
+						>
+							<div class="tree-icon-badge" style="background-color: #10b981">
+								<Globe size={10} class="tree-icon-svg" />
+							</div>
+							<span class="tree-node-label">Database</span>
+						</a>
+						<a
+							href="/{orgSlug}/settings?tab=backups"
+							class="tree-node-content"
+							class:is-active={settingsTab === 'backups'}
+							{@attach navStagger(4)}
+							{@attach springHover({ lift: -1 })}
+						>
+							<div class="tree-icon-badge" style="background-color: #8b5cf6">
+								<Shield size={10} class="tree-icon-svg" />
+							</div>
+							<span class="tree-node-label">Backups</span>
+						</a>
+						<a
+							href="/{orgSlug}/settings?tab=sso"
+							class="tree-node-content"
+							class:is-active={settingsTab === 'sso'}
+							{@attach navStagger(5)}
+							{@attach springHover({ lift: -1 })}
+						>
+							<div class="tree-icon-badge" style="background-color: #ef4444">
+								<Key size={10} class="tree-icon-svg" />
+							</div>
+							<span class="tree-node-label">SSO</span>
+						</a>
+					</div>
 				</div>
 			{:else}
-				<div class="sidebar-collapsed-nav">
+				<div class="sidebar-collapsed-nav" {@attach navIn}>
 					<a
 						href="/{orgSlug}"
 						class="sidebar-collapsed-icon"
 						aria-label="Back"
+						{@attach springHover()}
 					>
-						<ArrowLeft class="h-[18px] w-[18px]" />
+						<ArrowLeft size={18} />
 						<span class="sidebar-collapsed-tooltip">Back</span>
 					</a>
 					<a
@@ -149,6 +296,7 @@
 						class="sidebar-collapsed-icon"
 						class:is-active={settingsTab === 'general'}
 						aria-label="General"
+						{@attach springHover()}
 					>
 						<div class="tree-icon-badge" style="background-color: #6b7280">
 							<Settings size={11} class="tree-icon-svg" />
@@ -160,6 +308,7 @@
 						class="sidebar-collapsed-icon"
 						class:is-active={settingsTab === 'members'}
 						aria-label="Members"
+						{@attach springHover()}
 					>
 						<div class="tree-icon-badge" style="background-color: #3b82f6">
 							<Users size={11} class="tree-icon-svg" />
@@ -171,6 +320,7 @@
 						class="sidebar-collapsed-icon"
 						class:is-active={settingsTab === 'quotas'}
 						aria-label="Resource Quotas"
+						{@attach springHover()}
 					>
 						<div class="tree-icon-badge" style="background-color: #f59e0b">
 							<Gauge size={11} class="tree-icon-svg" />
@@ -182,6 +332,7 @@
 						class="sidebar-collapsed-icon"
 						class:is-active={settingsTab === 'database'}
 						aria-label="Database"
+						{@attach springHover()}
 					>
 						<div class="tree-icon-badge" style="background-color: #10b981">
 							<Globe size={11} class="tree-icon-svg" />
@@ -193,6 +344,7 @@
 						class="sidebar-collapsed-icon"
 						class:is-active={settingsTab === 'backups'}
 						aria-label="Backups"
+						{@attach springHover()}
 					>
 						<div class="tree-icon-badge" style="background-color: #8b5cf6">
 							<Shield size={11} class="tree-icon-svg" />
@@ -204,6 +356,7 @@
 						class="sidebar-collapsed-icon"
 						class:is-active={settingsTab === 'sso'}
 						aria-label="SSO"
+						{@attach springHover()}
 					>
 						<div class="tree-icon-badge" style="background-color: #ef4444">
 							<Key size={11} class="tree-icon-svg" />
@@ -215,62 +368,72 @@
 		{:else}
 			<!-- Normal sidebar -->
 			{#if !$sidebarCollapsed}
-				<div class="sidebar-nav-animated" in:fly={{ x: -12, duration: 180, delay: 80 }} out:fade={{ duration: 100 }}>
-				<div class="sidebar-search-area">
-					<button
-						type="button"
-						onclick={() => window.dispatchEvent(new CustomEvent('open-quick-search'))}
-						class="sidebar-search-trigger"
-					>
-						<div class="sidebar-search-icon-wrapper">
-							<Search class="h-3.5 w-3.5" />
-						</div>
-						<span class="sidebar-search-placeholder">Search</span>
-						<kbd class="sidebar-search-kbd">{isMac ? '⌘' : 'Ctrl'}K</kbd>
-					</button>
-				</div>
-				<div class="sidebar-home-link">
-					<a
-						href="/{orgSlug}"
-						class="tree-node-content"
-						class:is-active={$page.url.pathname === '/' + orgSlug}
-					>
-						<div class="tree-icon-badge" style="background-color: #22c55e">
-							<Leaf size={10} class="tree-icon-svg" />
-						</div>
-						<span class="tree-node-label">Overview</span>
-					</a>
-					<a
-						href="/{orgSlug}/projects"
-						class="tree-node-content"
-						class:is-active={$page.url.pathname.startsWith('/' + orgSlug + '/projects')}
-					>
-						<div class="tree-icon-badge" style="background-color: #4a8aff">
-							<Folder size={10} class="tree-icon-svg" />
-						</div>
-						<span class="tree-node-label">Projects</span>
-					</a>
-					<a
-						href="/{orgSlug}/usage"
-						class="tree-node-content"
-						class:is-active={$page.url.pathname.startsWith('/' + orgSlug + '/usage')}
-					>
-						<div class="tree-icon-badge" style="background-color: #f59e0b">
-							<Activity size={10} class="tree-icon-svg" />
-						</div>
-						<span class="tree-node-label">Usage</span>
-					</a>
-				</div>
+				<div class="sidebar-nav-animated" {@attach navIn}>
+					<div class="sidebar-search-area">
+						<button
+							type="button"
+							onclick={() => window.dispatchEvent(new CustomEvent('open-quick-search'))}
+							class="sidebar-search-trigger"
+							{@attach springHover({ lift: -1 })}
+						>
+							<div class="sidebar-search-icon-wrapper">
+								<Search size={14} />
+							</div>
+							<span class="sidebar-search-placeholder">Search</span>
+							<kbd class="sidebar-search-kbd">{isMac ? '⌘' : 'Ctrl'}K</kbd>
+						</button>
+					</div>
+					<div class="sidebar-home-link">
+						<a
+							href="/{orgSlug}"
+							class="tree-node-content"
+							class:is-active={$page.url.pathname === '/' + orgSlug}
+							{@attach navStagger(0)}
+							{@attach springHover({ lift: -1 })}
+						>
+							<div class="tree-icon-badge" style="background-color: #22c55e">
+								<Leaf size={10} class="tree-icon-svg" />
+							</div>
+							<span class="tree-node-label">Overview</span>
+						</a>
+						<a
+							href="/{orgSlug}/projects"
+							class="tree-node-content"
+							class:is-active={$page.url.pathname.startsWith('/' + orgSlug + '/projects')}
+							{@attach navStagger(1)}
+							{@attach springHover({ lift: -1 })}
+						>
+							<div class="tree-icon-badge" style="background-color: #4a8aff">
+								<Folder size={10} class="tree-icon-svg" />
+							</div>
+							<span class="tree-node-label">Projects</span>
+						</a>
+						<a
+							href="/{orgSlug}/usage"
+							class="tree-node-content"
+							class:is-active={$page.url.pathname.startsWith('/' + orgSlug + '/usage')}
+							{@attach navStagger(2)}
+							{@attach springHover({ lift: -1 })}
+						>
+							<div class="tree-icon-badge" style="background-color: #f59e0b">
+								<Activity size={10} class="tree-icon-svg" />
+							</div>
+							<span class="tree-node-label">Usage</span>
+						</a>
+					</div>
 				</div>
 			{:else}
-				<div class="sidebar-collapsed-nav">
+				<div class="sidebar-collapsed-nav" {@attach navIn}>
 					<button
 						type="button"
 						onclick={() => window.dispatchEvent(new CustomEvent('open-quick-search'))}
-						class="sidebar-collapsed-icon"
+						class="sidebar-collapsed-icon sidebar-collapsed-icon--search"
 						aria-label="Search"
+						{@attach springHover()}
 					>
-						<Search class="h-[18px] w-[18px]" />
+						<div class="sidebar-search-icon-wrapper">
+							<Search size={16} />
+						</div>
 						<span class="sidebar-collapsed-tooltip">Search <kbd class="sidebar-collapsed-tooltip-kbd">{shortcutKey}K</kbd></span>
 					</button>
 					<a
@@ -278,6 +441,7 @@
 						class="sidebar-collapsed-icon"
 						class:is-active={$page.url.pathname === '/' + orgSlug}
 						aria-label="Overview"
+						{@attach springHover()}
 					>
 						<div class="tree-icon-badge" style="background-color: #22c55e">
 							<Leaf size={11} class="tree-icon-svg" />
@@ -289,6 +453,7 @@
 						class="sidebar-collapsed-icon"
 						class:is-active={$page.url.pathname.startsWith('/' + orgSlug + '/projects')}
 						aria-label="Projects"
+						{@attach springHover()}
 					>
 						<div class="tree-icon-badge" style="background-color: #4a8aff">
 							<Folder size={11} class="tree-icon-svg" />
@@ -300,6 +465,7 @@
 						class="sidebar-collapsed-icon"
 						class:is-active={$page.url.pathname.startsWith('/' + orgSlug + '/usage')}
 						aria-label="Usage"
+						{@attach springHover()}
 					>
 						<div class="tree-icon-badge" style="background-color: #f59e0b">
 							<Activity size={11} class="tree-icon-svg" />
@@ -352,25 +518,9 @@
 		flex-direction: column;
 	}
 
-	/* Stagger nav items on enter */
-	.sidebar-nav-animated :global(.tree-node-content) {
-		animation: sidebar-item-in 200ms ease both;
-	}
-	.sidebar-nav-animated :global(.tree-node-content:nth-child(1)) { animation-delay: 30ms; }
-	.sidebar-nav-animated :global(.tree-node-content:nth-child(2)) { animation-delay: 60ms; }
-	.sidebar-nav-animated :global(.tree-node-content:nth-child(3)) { animation-delay: 90ms; }
-	.sidebar-nav-animated :global(.tree-node-content:nth-child(4)) { animation-delay: 120ms; }
-	.sidebar-nav-animated :global(.tree-node-content:nth-child(5)) { animation-delay: 150ms; }
-	.sidebar-nav-animated :global(.tree-node-content:nth-child(6)) { animation-delay: 180ms; }
-
-	@keyframes sidebar-item-in {
-		from {
-			opacity: 0;
-			transform: translateX(-6px);
-		}
-		to {
-			opacity: 1;
-			transform: translateX(0);
-		}
+	/* Home-route fallback: the org overview grid flickers under the long
+	   bouncy spring. Use the original short CSS transition there. */
+	.sidebar--css-transition {
+		transition: width 200ms ease;
 	}
 </style>

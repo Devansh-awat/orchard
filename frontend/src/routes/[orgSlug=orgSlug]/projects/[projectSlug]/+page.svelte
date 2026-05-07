@@ -1,6 +1,248 @@
 <script lang="ts">
 	import { goto, invalidate } from '$app/navigation';
-	import { onDestroy } from 'svelte';
+	import { onDestroy, onMount, tick } from 'svelte';
+	import { animate } from 'motion';
+
+	// Disable native macOS rubber-band overscroll on this page only — restored
+	// on unmount so other pages keep their default behavior.
+	onMount(() => {
+		const main = document.querySelector<HTMLElement>('main.flex-1');
+		if (!main) return;
+		const prev = main.style.overscrollBehavior;
+		main.style.overscrollBehavior = 'none';
+		return () => { main.style.overscrollBehavior = prev; };
+	});
+
+	// Velocity-aware spring lift on hover. Interrupting mid-animation inherits
+	// the current velocity, so the element settles smoothly instead of snapping.
+	function springHover(opts: { rest?: number; lift?: number; stiffness?: number; damping?: number } = {}) {
+		const rest = opts.rest ?? 0;
+		const lift = opts.lift ?? -4;
+		const stiffness = opts.stiffness ?? 380;
+		const damping = opts.damping ?? 22;
+		return (el: Element) => {
+			const target = el as HTMLElement;
+			const enter = () => {
+				animate(target, { y: lift }, { type: 'spring', stiffness, damping });
+			};
+			const leave = () => {
+				animate(target, { y: rest }, { type: 'spring', stiffness: stiffness * 0.8, damping: damping + 4 });
+			};
+			const press = () => {
+				animate(target, { scale: 0.97 }, { type: 'spring', stiffness: 600, damping: 28 });
+			};
+			const release = () => {
+				animate(target, { scale: 1 }, { type: 'spring', stiffness: 420, damping: 18 });
+			};
+			target.addEventListener('mouseenter', enter);
+			target.addEventListener('mouseleave', leave);
+			target.addEventListener('pointerdown', press);
+			target.addEventListener('pointerup', release);
+			target.addEventListener('pointerleave', release);
+			return () => {
+				target.removeEventListener('mouseenter', enter);
+				target.removeEventListener('mouseleave', leave);
+				target.removeEventListener('pointerdown', press);
+				target.removeEventListener('pointerup', release);
+				target.removeEventListener('pointerleave', release);
+			};
+		};
+	}
+
+	// Springs an element's width between two pixel values when `active()` flips.
+	function springWidth(active: () => boolean, opts: { rest: number; on: number; stiffness?: number; damping?: number; mass?: number }) {
+		return (el: Element) => {
+			const target = el as HTMLElement;
+			target.style.width = `${active() ? opts.on : opts.rest}px`;
+			let prev = active();
+			$effect(() => {
+				const next = active();
+				if (next === prev) return;
+				prev = next;
+				animate(
+					target,
+					{ width: `${next ? opts.on : opts.rest}px` },
+					{ type: 'spring', stiffness: opts.stiffness ?? 380, damping: opts.damping ?? 22, mass: opts.mass ?? 0.7 }
+				);
+			});
+		};
+	}
+
+	// Cursor-tracking 3D tilt — small spring-tracked rotation toward the cursor.
+	// Independent transform axes (rotateX/rotateY) compose with springHover's y/scale.
+	function cardTilt(opts: { max?: number; stiffness?: number; damping?: number; mass?: number } = {}) {
+		const max = opts.max ?? 5;
+		const stiffness = opts.stiffness ?? 380;
+		const damping = opts.damping ?? 28;
+		const mass = opts.mass ?? 0.5;
+		return (el: Element) => {
+			const target = el as HTMLElement;
+			target.style.transformStyle = 'preserve-3d';
+			target.style.perspective = '900px';
+			let rect: DOMRect | null = null;
+			const onEnter = () => { rect = target.getBoundingClientRect(); };
+			const onMove = (e: PointerEvent) => {
+				if (!rect) rect = target.getBoundingClientRect();
+				const x = (e.clientX - rect.left) / rect.width - 0.5;
+				const y = (e.clientY - rect.top) / rect.height - 0.5;
+				animate(
+					target,
+					{ rotateX: -y * max, rotateY: x * max },
+					{ type: 'spring', stiffness, damping, mass }
+				);
+			};
+			const onLeave = () => {
+				animate(
+					target,
+					{ rotateX: 0, rotateY: 0 },
+					{ type: 'spring', stiffness: stiffness * 0.7, damping: damping + 4, mass }
+				);
+				rect = null;
+			};
+			target.addEventListener('pointerenter', onEnter);
+			target.addEventListener('pointermove', onMove);
+			target.addEventListener('pointerleave', onLeave);
+			return () => {
+				target.removeEventListener('pointerenter', onEnter);
+				target.removeEventListener('pointermove', onMove);
+				target.removeEventListener('pointerleave', onLeave);
+			};
+		};
+	}
+
+	// Mount-time stagger using Motion. Replaces CSS keyframes so everything is
+	// driven by the same physics engine.
+	function motionStagger(opts: {
+		index?: number;
+		stride?: number;
+		from?: { y?: number; opacity?: number; scale?: number };
+		stiffness?: number;
+		damping?: number;
+		mass?: number;
+		axis?: 'x' | 'y';
+	} = {}) {
+		const i = opts.index ?? 0;
+		const stride = opts.stride ?? 0.05;
+		const from = {
+			y: opts.from?.y ?? 8,
+			opacity: opts.from?.opacity ?? 0,
+			scale: opts.from?.scale ?? 0.985
+		};
+		const axis = opts.axis ?? 'y';
+		return (el: Element) => {
+			const target = el as HTMLElement;
+			const keyframes: Record<string, number[]> = {
+				opacity: [from.opacity, 1],
+				scale: [from.scale, 1]
+			};
+			keyframes[axis] = [from.y, 0];
+			animate(target, keyframes, {
+				type: 'spring',
+				stiffness: opts.stiffness ?? 260,
+				damping: opts.damping ?? 22,
+				mass: opts.mass ?? 0.9,
+				delay: i * stride
+			});
+		};
+	}
+
+	// Portal an element to <body> and pin it under a reference element with
+	// position:fixed. Sidesteps ancestor stacking contexts (backdrop-filter,
+	// transforms) so the popover sits above everything in the document.
+	function portalUnder(getAnchor: () => Element | null | undefined, offset = 6) {
+		return (el: Element) => {
+			const node = el as HTMLElement;
+			const place = () => {
+				const anchor = getAnchor();
+				if (!anchor) return;
+				const r = anchor.getBoundingClientRect();
+				node.style.position = 'fixed';
+				node.style.top = `${r.bottom + offset}px`;
+				node.style.right = `${window.innerWidth - r.right}px`;
+				node.style.left = 'auto';
+				node.style.zIndex = '9999';
+			};
+			place();
+			document.body.appendChild(node);
+			const onResize = () => place();
+			window.addEventListener('resize', onResize);
+			window.addEventListener('scroll', onResize, true);
+			return () => {
+				window.removeEventListener('resize', onResize);
+				window.removeEventListener('scroll', onResize, true);
+				try { node.remove(); } catch { /* already removed */ }
+			};
+		};
+	}
+
+	// Motion-driven popover lifecycle. `isOpen` is reactive; element runs IN spring
+	// on mount, OUT spring when isOpen goes false. The element stays mounted (set
+	// `keepMounted=true` and switch off via getter) until OUT finishes.
+	function motionPopover(opts: {
+		from?: { opacity?: number; scale?: number; y?: number };
+		stiffness?: number;
+		damping?: number;
+		mass?: number;
+		closing: () => boolean;
+		onClosed: () => void;
+	}) {
+		const from = {
+			opacity: opts.from?.opacity ?? 0,
+			scale: opts.from?.scale ?? 0.94,
+			y: opts.from?.y ?? -6
+		};
+		const stiffness = opts.stiffness ?? 520;
+		const damping = opts.damping ?? 30;
+		const mass = opts.mass ?? 0.85;
+		return (el: Element) => {
+			const target = el as HTMLElement;
+			animate(
+				target,
+				{ opacity: [from.opacity, 1], scale: [from.scale, 1], y: [from.y, 0] },
+				{ type: 'spring', stiffness, damping, mass }
+			);
+			let firstRun = true;
+			$effect(() => {
+				const closing = opts.closing();
+				if (firstRun) { firstRun = false; return; }
+				if (closing) {
+					animate(
+						target,
+						{ opacity: from.opacity, scale: from.scale, y: from.y },
+						{ type: 'spring', stiffness: stiffness * 1.1, damping: damping + 6, mass }
+					).finished.then(() => {
+						if (opts.closing()) opts.onClosed();
+					});
+				} else {
+					// Reopened while still rendered — re-run the IN.
+					animate(
+						target,
+						{ opacity: 1, scale: 1, y: 0 },
+						{ type: 'spring', stiffness, damping, mass }
+					);
+				}
+			});
+		};
+	}
+
+	// One-shot pop spring — fires when `active` flips false → true.
+	function springPop(active: () => boolean) {
+		return (el: Element) => {
+			const target = el as HTMLElement;
+			let prev = active();
+			$effect(() => {
+				const next = active();
+				if (next && !prev) {
+					animate(
+						target,
+						{ scale: [0.92, 1.04, 1] },
+						{ type: 'spring', stiffness: 480, damping: 16, mass: 0.9 }
+					);
+				}
+				prev = next;
+			});
+		};
+	}
 	import { apiFetch, toasts, refreshTree, subscribeOrgEvents } from '$lib/stores';
 	import type { PageData } from './$types';
 	import { mergeAttrs } from 'melt';
@@ -19,7 +261,11 @@
 		Upload,
 		Image as ImageIcon,
 		Smile,
-		X as XIcon
+		X as XIcon,
+		Check,
+		ChevronDown,
+		ChevronLeft,
+		ChevronRight,
 	} from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import NewResourceModal from '$lib/components/NewResourceModal.svelte';
@@ -256,6 +502,113 @@
 
 	function clearBg() { bgPreview = null; }
 	let removingMemberId = $state<string | null>(null);
+	let updatingMemberId = $state<string | null>(null);
+	let openRoleMenuId = $state<string | null>(null);
+	let renderRoleMenuId = $state<string | null>(null);
+	$effect(() => {
+		if (openRoleMenuId !== null) renderRoleMenuId = openRoleMenuId;
+	});
+	let activeTab = $state<'resources' | 'members'>('resources');
+	let heroEl = $state<HTMLElement | null>(null);
+	let heroTitleEl = $state<HTMLElement | null>(null);
+	let heroDescEl = $state<HTMLElement | null>(null);
+	let tabsRowEl = $state<HTMLElement | null>(null);
+	let tabPanelEl = $state<HTMLElement | null>(null);
+	let firstTabRun = true;
+
+	$effect(() => {
+		const compact = activeTab === 'members';
+		const heroPx = compact ? 7.5 * 16 : 18 * 16; // rem → px
+		const titlePx = compact ? 1.0625 * 16 : 1.25 * 16;
+		const descOp = compact ? 0 : 1;
+
+		// Hero — heavy, slight overshoot. ζ ≈ 0.6 (was 0.46).
+		if (heroEl) {
+			animate(
+				heroEl,
+				{ height: `${heroPx}px` },
+				{ type: 'spring', stiffness: 180, damping: 19, mass: 1.3 }
+			);
+		}
+		if (heroTitleEl) {
+			animate(
+				heroTitleEl,
+				{ fontSize: `${titlePx}px` },
+				{ type: 'spring', stiffness: 220, damping: 22, mass: 1 }
+			);
+		}
+		if (heroDescEl) {
+			animate(
+				heroDescEl,
+				{ opacity: descOp },
+				{ type: 'spring', stiffness: 260, damping: 26, mass: 0.7 }
+			);
+		}
+
+		// Sympathetic shockwave — softened from ζ≈0.34 to ζ≈0.55.
+		if (firstTabRun) { firstTabRun = false; return; }
+		const dir = compact ? -1 : 1;
+		tick().then(() => {
+			if (tabsRowEl) {
+				animate(
+					tabsRowEl,
+					{ y: [dir * 5, 0] },
+					{ type: 'spring', stiffness: 220, damping: 15, mass: 0.9 }
+				);
+			}
+			if (tabPanelEl) {
+				animate(
+					tabPanelEl,
+					{ y: [dir * 9, 0], opacity: [0.5, 1] },
+					{ type: 'spring', stiffness: 180, damping: 15, mass: 1.2, delay: 0.05 }
+				);
+			}
+		});
+	});
+	let carouselEl = $state<HTMLDivElement | null>(null);
+	let carouselPage = $state(0);
+	let carouselPages = $state(1);
+	function updateCarouselNav() {
+		if (!carouselEl) return;
+		const cw = carouselEl.clientWidth;
+		const sl = carouselEl.scrollLeft;
+		// Pages count is now driven by deployment pairs (deploymentPages.length)
+		// — each page is exactly one viewport wide.
+		carouselPage = cw > 0 ? Math.min(carouselPages - 1, Math.round(sl / cw)) : 0;
+	}
+	function scrollToPage(i: number) {
+		if (!carouselEl) return;
+		const cw = carouselEl.clientWidth;
+		const max = carouselEl.scrollWidth - cw;
+		carouselEl.scrollTo({ left: Math.min(i * cw, max), behavior: 'smooth' });
+	}
+	function carouselWheel(e: WheelEvent) {
+		if (!carouselEl) return;
+		// Mouse-wheel users: redirect vertical wheel to horizontal scroll.
+		// Trackpad horizontal swipes flow through natively.
+		if (Math.abs(e.deltaY) > Math.abs(e.deltaX) && e.deltaY !== 0) {
+			e.preventDefault();
+			carouselEl.scrollBy({ left: e.deltaY, behavior: 'auto' });
+		}
+	}
+	$effect(() => {
+		if (!carouselEl) return;
+		updateCarouselNav();
+		const ro = new ResizeObserver(updateCarouselNav);
+		ro.observe(carouselEl);
+		return () => ro.disconnect();
+	});
+
+	// Keep carouselPages in sync with the actual chunk count.
+	$effect(() => {
+		carouselPages = Math.max(1, deploymentPages.length);
+		if (carouselPage >= carouselPages) carouselPage = carouselPages - 1;
+	});
+	const ROLE_OPTIONS: { value: 'admin' | 'member' | 'viewer'; label: string; desc: string }[] = [
+		{ value: 'admin', label: 'Admin', desc: 'Full access — manage members & resources' },
+		{ value: 'member', label: 'Member', desc: 'Create & edit project resources' },
+		{ value: 'viewer', label: 'Viewer', desc: 'Read-only access' }
+	];
 
 	interface OrgMember {
 		id: string;
@@ -271,6 +624,10 @@
 	let orgMembers = $state<OrgMember[]>([]);
 	let memberSearch = $state('');
 	let pickerOpen = $state(false);
+	let pickerRender = $state(false);
+	$effect(() => {
+		if (pickerOpen) pickerRender = true;
+	});
 	let pickerInput = $state<HTMLInputElement | null>(null);
 
 	const availableOrgMembers = $derived.by(() => {
@@ -301,6 +658,17 @@
 				image.includes(query)
 			);
 		});
+	});
+
+	// Group deployments into pages of two so the carousel snaps in pairs
+	// instead of per card. Single-card pages happen on odd counts.
+	const DEPLOYMENTS_PER_PAGE = 2;
+	const deploymentPages = $derived.by(() => {
+		const out: Deployment[][] = [];
+		for (let i = 0; i < filteredDeployments.length; i += DEPLOYMENTS_PER_PAGE) {
+			out.push(filteredDeployments.slice(i, i + DEPLOYMENTS_PER_PAGE));
+		}
+		return out;
 	});
 
 	let { data } = $props<{ data: PageData }>();
@@ -418,6 +786,33 @@
 			});
 		} finally {
 			addingMember = false;
+		}
+	}
+
+	async function updateMemberRole(memberId: string, role: string, prevRole: string) {
+		if (!project || role === prevRole) return;
+		updatingMemberId = memberId;
+		try {
+			const response = await apiFetch(`/apiv1/projects/${project.id}/members/${memberId}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ role })
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to update role');
+			}
+			toasts.add({ title: 'Role updated', color: 'success' });
+			await fetchProject();
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to update role',
+				color: 'error'
+			});
+			await fetchProject();
+		} finally {
+			updatingMemberId = null;
 		}
 	}
 
@@ -542,6 +937,8 @@
 	}
 </script>
 
+<svelte:window onclick={() => (openRoleMenuId = null)} onkeydown={(e) => { if (e.key === 'Escape') openRoleMenuId = null; }} />
+
 <div class="pj-page" class:pj-page--hasbg={!!project?.backgroundImage}>
 	{#if project?.backgroundImage && heroImgReady}
 		<div class="pj-accent-glow" aria-hidden="true">
@@ -618,7 +1015,11 @@
 					aria-hidden="true"
 				></div>
 			{/if}
-			<div class="pj-hero">
+			<div
+				class="pj-hero"
+				class:pj-hero--compact={activeTab === 'members'}
+				bind:this={heroEl}
+			>
 				<img
 					class="pj-hero-img"
 					src={project.backgroundImage}
@@ -630,7 +1031,10 @@
 				<div class="pj-hero-fade"></div>
 				<div class="pj-hero-content">
 					<div class="pj-header-info">
-						<h1 class="pj-title pj-title--onhero">
+						<h1
+							class="pj-title pj-title--onhero"
+							bind:this={heroTitleEl}
+						>
 							{#if project.icon}
 								<span class="pj-title-icon">
 									{#if /^https?:\/\//.test(project.icon)}
@@ -643,19 +1047,32 @@
 							{project.name}
 						</h1>
 						{#if project.description}
-							<p class="pj-description pj-description--onhero">{project.description}</p>
+							<p
+								class="pj-description pj-description--onhero"
+								bind:this={heroDescEl}
+							>{project.description}</p>
 						{/if}
 					</div>
 					<div class="pj-header-actions">
 						{#if canEdit}
-						<button onclick={openCustomize} class="pj-btn pj-btn-secondary pj-btn--onhero">
-							<Palette class="h-4 w-4" /> Customize
+						<button
+							onclick={openCustomize}
+							class="pj-icon-btn pj-icon-btn--onhero"
+							aria-label="Customize project"
+							title="Customize"
+						>
+							<Palette class="h-4 w-4" />
 						</button>
 						{/if}
 						{#if canEdit}
-						<button onclick={() => (showDeleteModal = true)} disabled={deleting} class="pj-btn pj-btn-danger">
+						<button
+							onclick={() => (showDeleteModal = true)}
+							disabled={deleting}
+							class="pj-icon-btn pj-icon-btn--danger pj-icon-btn--onhero"
+							aria-label="Delete project"
+							title="Delete"
+						>
 							{#if deleting}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Trash2 class="h-4 w-4" />{/if}
-							Delete
 						</button>
 						{/if}
 					</div>
@@ -683,14 +1100,24 @@
 					</div>
 					<div class="pj-header-actions">
 						{#if canEdit}
-						<button onclick={openCustomize} class="pj-btn pj-btn-secondary">
-							<Palette class="h-4 w-4" /> Customize
+						<button
+							onclick={openCustomize}
+							class="pj-icon-btn"
+							aria-label="Customize project"
+							title="Customize"
+						>
+							<Palette class="h-4 w-4" />
 						</button>
 						{/if}
 						{#if canEdit}
-						<button onclick={() => (showDeleteModal = true)} disabled={deleting} class="pj-btn pj-btn-danger">
+						<button
+							onclick={() => (showDeleteModal = true)}
+							disabled={deleting}
+							class="pj-icon-btn pj-icon-btn--danger"
+							aria-label="Delete project"
+							title="Delete"
+						>
 							{#if deleting}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Trash2 class="h-4 w-4" />{/if}
-							Delete
 						</button>
 						{/if}
 					</div>
@@ -698,44 +1125,76 @@
 			</div>
 		{/if}
 
-		{#if project.repositoryUrl}
-			<div class="pj-stats">
-				<a
-					href={project.repositoryUrl}
-					target="_blank"
-					rel="noopener noreferrer"
-					class="pj-stat pj-stat-link"
-				>
-					<ExternalLink class="h-4 w-4" />
-					<span class="pj-stat-label">Repository</span>
-				</a>
-			</div>
-		{/if}
-
-		<!-- Deployments -->
-		<div class="pj-deployments-header">
-			<h2 class="pj-section-title">Deployments</h2>
-			<div class="pj-deployments-toolbar">
-				{#if project.deployments?.length}
-					<div class="pj-deployment-search-bar" {...deploymentMenu.root}>
-						<input
-							type="search"
-							placeholder="Search deployments..."
-							class="pj-search-input"
-							bind:value={deploymentSearch}
-							{...deploymentMenu.input}
-						/>
-					</div>
-				{/if}
+		<!-- Tab bar -->
+		<div class="pj-tabs-row" bind:this={tabsRowEl}>
+			<div class="pj-tabs" role="tablist">
 				<button
-					class="pj-btn pj-btn-primary"
-					onclick={() => (showNewResourceModal = true)}
+					type="button"
+					role="tab"
+					aria-selected={activeTab === 'resources'}
+					class="pj-tab"
+					class:is-active={activeTab === 'resources'}
+					onclick={() => (activeTab = 'resources')}
+					{@attach springPop(() => activeTab === 'resources')}
 				>
-					<Plus class="h-4 w-4" />
-					New
+					<Server class="h-3.5 w-3.5" />
+					Resources
+					<span class="pj-tab-count">
+						{(project.deployments?.length ?? 0) + databases.length + templateInstances.length}
+					</span>
+				</button>
+				<button
+					type="button"
+					role="tab"
+					aria-selected={activeTab === 'members'}
+					class="pj-tab"
+					class:is-active={activeTab === 'members'}
+					onclick={() => (activeTab = 'members')}
+					{@attach springPop(() => activeTab === 'members')}
+				>
+					<Users class="h-3.5 w-3.5" />
+					Members
+					<span class="pj-tab-count">{projectMembers.length}</span>
 				</button>
 			</div>
+			<div class="pj-tabs-actions">
+				{#if project.repositoryUrl}
+					<a
+						href={project.repositoryUrl}
+						target="_blank"
+						rel="noopener noreferrer"
+						class="pj-tab-chip"
+						title="Open repository"
+					>
+						<ExternalLink class="h-3.5 w-3.5" />
+						<span>Repo</span>
+					</a>
+				{/if}
+				{#if activeTab === 'resources'}
+					{#if project.deployments?.length}
+						<div class="pj-deployment-search-bar" {...deploymentMenu.root}>
+							<input
+								type="search"
+								placeholder="Search…"
+								class="pj-search-input"
+								bind:value={deploymentSearch}
+								{...deploymentMenu.input}
+							/>
+						</div>
+					{/if}
+					<button
+						class="pj-btn pj-btn-primary pj-btn--sm"
+						onclick={() => (showNewResourceModal = true)}
+					>
+						<Plus class="h-4 w-4" />
+						New
+					</button>
+				{/if}
+			</div>
 		</div>
+
+		{#if activeTab === 'resources'}
+		<div class="pj-tab-panel" bind:this={tabPanelEl}>
 
 		{#if !project.deployments?.length}
 			<div class="pj-empty-card">
@@ -750,66 +1209,121 @@
 				</button>
 			</div>
 		{:else if filteredDeployments.length}
-			<div class="pj-deployment-grid">
-				{#each filteredDeployments as deployment (deployment.id)}
-					{@const href = `/${orgSlug}/deployments/${deployment.id}`}
-					{@const item = deploymentMenu.getItem(deployment, {
-						onSelect: () => openDeployment(deployment.id)
-					})}
-					{@const host = deployment.ingresses?.[0]?.host?.split('/')[0]}
-					<a
-						class="pj-deployment-card"
-						class:is-highlighted={item.highlighted}
-						{...mergeAttrs(item.attrs, {
-							href,
-							onclick: (event: Event) => handleDeploymentClick(event as MouseEvent, deployment.id)
-						})}
-					>
-						<div class="pj-deployment-card-top">
-							<div class="pj-deployment-favicon">
-								{#if host && !favFailed.has(deployment.id)}
-									<img
-										src={`/apiv1/deployments/favicon?domain=${encodeURIComponent(host)}`}
-										alt=""
-										onerror={() => (favFailed = new Set(favFailed).add(deployment.id))}
-									/>
-								{:else}
-									<span class="pj-deployment-favicon-letter">{deployment.name.charAt(0).toUpperCase()}</span>
-								{/if}
-								<span class="pj-deployment-favicon-dot {getStatusColor(deployment.status)}"></span>
-							</div>
-							<div class="pj-deployment-badges">
-								<span class="pj-deployment-status-badge {getStatusColor(deployment.status)}">
-									{getStatusLabel(deployment.status)}
-								</span>
-								{#if deployment.buildStatus && deployment.buildStatus !== 'none' && deployment.buildStatus !== 'succeeded'}
-									<span class="pj-deployment-build-badge pj-build-{deployment.buildStatus}">
-										Build: {deployment.buildStatus === 'building' ? 'Building' : deployment.buildStatus === 'failed' ? 'Failed' : deployment.buildStatus}
+			<div class="pj-carousel" class:has-prev={carouselPage > 0} class:has-next={carouselPage < carouselPages - 1}>
+				<div class="pj-carousel-viewport">
+					{#if carouselPages > 1}
+						<button
+							type="button"
+							class="pj-carousel-arrow pj-carousel-arrow--prev"
+							aria-label="Previous deployments"
+							onclick={() => scrollToPage(carouselPage - 1)}
+							disabled={carouselPage === 0}
+							{@attach springHover({ lift: 0, stiffness: 480, damping: 26 })}
+						>
+							<ChevronLeft class="h-4 w-4" />
+						</button>
+						<button
+							type="button"
+							class="pj-carousel-arrow pj-carousel-arrow--next"
+							aria-label="Next deployments"
+							onclick={() => scrollToPage(carouselPage + 1)}
+							disabled={carouselPage >= carouselPages - 1}
+							{@attach springHover({ lift: 0, stiffness: 480, damping: 26 })}
+						>
+							<ChevronRight class="h-4 w-4" />
+						</button>
+					{/if}
+				<div
+					class="pj-carousel-track"
+					bind:this={carouselEl}
+					onscroll={updateCarouselNav}
+					onwheel={carouselWheel}
+				>
+				{#each deploymentPages as page, pi (pi)}
+					<div class="pj-carousel-page">
+						{#each page as deployment, j (deployment.id)}
+							{@const i = pi * DEPLOYMENTS_PER_PAGE + j}
+							{@const href = `/${orgSlug}/deployments/${deployment.id}`}
+							{@const item = deploymentMenu.getItem(deployment, {
+								onSelect: () => openDeployment(deployment.id)
+							})}
+							{@const host = deployment.ingresses?.[0]?.host?.split('/')[0]}
+							<a
+								class="pj-deployment-card"
+								class:is-highlighted={item.highlighted}
+								{@attach motionStagger({ index: i, from: { y: 10 } })}
+								{@attach springHover({ lift: -4, stiffness: 360, damping: 22 })}
+								{@attach cardTilt({ max: 5 })}
+								{...mergeAttrs(item.attrs, {
+									href,
+									onclick: (event: Event) => handleDeploymentClick(event as MouseEvent, deployment.id)
+								})}
+							>
+								<div class="pj-deployment-card-top">
+									<div class="pj-deployment-favicon">
+										{#if host && !favFailed.has(deployment.id)}
+											<img
+												src={`/apiv1/deployments/favicon?domain=${encodeURIComponent(host)}`}
+												alt=""
+												onerror={() => (favFailed = new Set(favFailed).add(deployment.id))}
+											/>
+										{:else}
+											<span class="pj-deployment-favicon-letter">{deployment.name.charAt(0).toUpperCase()}</span>
+										{/if}
+										<span class="pj-deployment-favicon-dot {getStatusColor(deployment.status)}"></span>
+									</div>
+									<div class="pj-deployment-badges">
+										<span class="pj-deployment-status-badge {getStatusColor(deployment.status)}">
+											{getStatusLabel(deployment.status)}
+										</span>
+										{#if deployment.buildStatus && deployment.buildStatus !== 'none' && deployment.buildStatus !== 'succeeded'}
+											<span class="pj-deployment-build-badge pj-build-{deployment.buildStatus}">
+												Build: {deployment.buildStatus === 'building' ? 'Building' : deployment.buildStatus === 'failed' ? 'Failed' : deployment.buildStatus}
+											</span>
+										{/if}
+									</div>
+								</div>
+								<div class="pj-deployment-card-body">
+									<span class="pj-deployment-name">{deployment.name}</span>
+									{#if deployment.githubRepo}
+										<span class="pj-deployment-detail">{deployment.githubRepo}</span>
+										{#if deployment.githubBranch}
+											<span class="pj-deployment-branch">
+												<GitBranch class="h-3.5 w-3.5" />
+												{deployment.githubBranch}
+											</span>
+										{/if}
+									{:else if deployment.image}
+										<span class="pj-deployment-detail">{deployment.image}</span>
+									{/if}
+								</div>
+								<div class="pj-deployment-card-footer">
+									<span class="pj-deployment-replicas">
+										{deployment.replicas} replica{deployment.replicas !== 1 ? 's' : ''}
 									</span>
-								{/if}
-							</div>
-						</div>
-						<div class="pj-deployment-card-body">
-							<span class="pj-deployment-name">{deployment.name}</span>
-							{#if deployment.githubRepo}
-								<span class="pj-deployment-detail">{deployment.githubRepo}</span>
-								{#if deployment.githubBranch}
-									<span class="pj-deployment-branch">
-										<GitBranch class="h-3.5 w-3.5" />
-										{deployment.githubBranch}
-									</span>
-								{/if}
-							{:else if deployment.image}
-								<span class="pj-deployment-detail">{deployment.image}</span>
-							{/if}
-						</div>
-						<div class="pj-deployment-card-footer">
-							<span class="pj-deployment-replicas">
-								{deployment.replicas} replica{deployment.replicas !== 1 ? 's' : ''}
-							</span>
-						</div>
-					</a>
+								</div>
+							</a>
+						{/each}
+					</div>
 				{/each}
+				</div>
+				</div>
+				{#if carouselPages > 1}
+					<div class="pj-carousel-dots" role="tablist" aria-label="Carousel pages">
+						{#each Array(carouselPages) as _, i (i)}
+							<button
+								type="button"
+								role="tab"
+								aria-selected={carouselPage === i}
+								aria-label="Go to page {i + 1}"
+								class="pj-carousel-dot"
+								class:is-active={carouselPage === i}
+								onclick={() => scrollToPage(i)}
+								{@attach springWidth(() => carouselPage === i, { rest: 7, on: 18 })}
+							></button>
+						{/each}
+					</div>
+				{/if}
 			</div>
 		{:else}
 			<div class="pj-empty-card">
@@ -826,10 +1340,13 @@
 				</h2>
 			</div>
 			<div class="pj-deployment-grid">
-				{#each databases as db (db.id)}
+				{#each databases as db, i (db.id)}
 					<a
 						href="/{orgSlug}/databases/{db.id}"
 						class="pj-deployment-card"
+						{@attach motionStagger({ index: i, from: { y: 10 } })}
+						{@attach springHover({ lift: -4, stiffness: 360, damping: 22 })}
+						{@attach cardTilt({ max: 5 })}
 					>
 						<div class="pj-deployment-card-top">
 							<div class="pj-deployment-indicator" style="background-color: color-mix(in srgb, var(--pj-color-green) 12%, transparent)">
@@ -862,10 +1379,13 @@
 				</h2>
 			</div>
 			<div class="pj-deployment-grid">
-				{#each templateInstances as ti (ti.id)}
+				{#each templateInstances as ti, i (ti.id)}
 					<a
 						href="/{orgSlug}/template-instances/{ti.id}"
 						class="pj-deployment-card"
+						{@attach motionStagger({ index: i, from: { y: 10 } })}
+						{@attach springHover({ lift: -4, stiffness: 360, damping: 22 })}
+						{@attach cardTilt({ max: 5 })}
 					>
 						<div class="pj-deployment-card-top">
 							<div class="pj-deployment-indicator" style="background-color: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent)">
@@ -889,6 +1409,11 @@
 			</div>
 		{/if}
 
+		</div>
+		{/if}
+
+		{#if activeTab === 'members'}
+		<div class="pj-tab-panel" bind:this={tabPanelEl}>
 		<!-- Members -->
 		<div class="pj-members-section">
 			<div class="pj-members-card">
@@ -909,8 +1434,15 @@
 							onfocus={() => { pickerOpen = true; ensureOrgMembersLoaded(); }}
 							onblur={() => setTimeout(() => (pickerOpen = false), 150)}
 						/>
-						{#if pickerOpen && filteredOrgMembers.length > 0}
-							<div class="pj-picker-dropdown">
+						{#if pickerRender && filteredOrgMembers.length > 0}
+							<div
+								class="pj-picker-dropdown"
+								{@attach motionPopover({
+									from: { y: -8, scale: 0.96 },
+									closing: () => !pickerOpen,
+									onClosed: () => { pickerRender = false; }
+								})}
+							>
 								{#each filteredOrgMembers as om (om.id)}
 									<button
 										type="button"
@@ -937,8 +1469,15 @@
 									</button>
 								{/each}
 							</div>
-						{:else if pickerOpen && memberSearch.trim() && filteredOrgMembers.length === 0}
-							<div class="pj-picker-dropdown">
+						{:else if pickerRender && memberSearch.trim() && filteredOrgMembers.length === 0}
+							<div
+								class="pj-picker-dropdown"
+								{@attach motionPopover({
+									from: { y: -8, scale: 0.96 },
+									closing: () => !pickerOpen,
+									onClosed: () => { pickerRender = false; }
+								})}
+							>
 								<div class="pj-picker-empty">No matching org members</div>
 							</div>
 						{/if}
@@ -948,8 +1487,11 @@
 
 				{#if projectMembers.length > 0}
 					<ul class="pj-members-list">
-						{#each projectMembers as m (m.id)}
-							<li class="pj-member">
+						{#each projectMembers as m, i (m.id)}
+							<li
+								class="pj-member"
+								{@attach motionStagger({ index: i, axis: 'x', from: { y: -10, scale: 1 }, stride: 0.04 })}
+							>
 								{#if m.user.imageUrl}
 									<img src={m.user.imageUrl} alt="" class="pj-member-avatar" />
 								{:else}
@@ -963,7 +1505,75 @@
 									</span>
 									<span class="pj-member-email">{m.user.email}</span>
 								</div>
-								<span class="pj-role-chip pj-role-chip--{m.role.name}">{m.role.name}</span>
+								{#if canEdit}
+									{@const triggerId = `pj-role-trigger-${m.id}`}
+									<div class="pj-role-wrap">
+										<button
+											type="button"
+											id={triggerId}
+											class="pj-role-chip pj-role-chip--{m.role.name} pj-role-trigger"
+											aria-haspopup="listbox"
+											aria-expanded={openRoleMenuId === m.id}
+											aria-label="Change role for {m.user.firstName ?? m.user.email}"
+											disabled={updatingMemberId === m.id}
+											onclick={(e) => {
+												e.stopPropagation();
+												openRoleMenuId = openRoleMenuId === m.id ? null : m.id;
+											}}
+										>
+											{#if updatingMemberId === m.id}
+												<Loader2 class="h-3 w-3 animate-spin" />
+											{:else}
+												<span>{m.role.name}</span>
+												<ChevronDown class="h-3 w-3 pj-role-caret" />
+											{/if}
+										</button>
+										{#if renderRoleMenuId === m.id}
+											<div
+												class="pj-role-menu"
+												role="listbox"
+												onclick={(e) => e.stopPropagation()}
+												{@attach motionPopover({
+													from: { y: -6, scale: 0.9 },
+													stiffness: 540,
+													damping: 30,
+													closing: () => openRoleMenuId !== m.id,
+													onClosed: () => { if (renderRoleMenuId === m.id) renderRoleMenuId = null; }
+												})}
+												{@attach portalUnder(() => document.getElementById(triggerId))}
+											>
+												{#each ROLE_OPTIONS as opt}
+													<button
+														type="button"
+														role="option"
+														class="pj-role-option"
+														class:is-selected={m.role.name === opt.value}
+														aria-selected={m.role.name === opt.value}
+														onclick={() => {
+															openRoleMenuId = null;
+															updateMemberRole(m.id, opt.value, m.role.name);
+														}}
+													>
+														<span class="pj-role-option-check">
+															{#if m.role.name === opt.value}
+																<Check class="h-3.5 w-3.5" />
+															{/if}
+														</span>
+														<span class="pj-role-option-text">
+															<span class="pj-role-option-label">
+																<span class="pj-role-dot pj-role-dot--{opt.value}"></span>
+																{opt.label}
+															</span>
+															<span class="pj-role-option-desc">{opt.desc}</span>
+														</span>
+													</button>
+												{/each}
+											</div>
+										{/if}
+									</div>
+								{:else}
+									<span class="pj-role-chip pj-role-chip--{m.role.name}">{m.role.name}</span>
+								{/if}
 								{#if canEdit}
 								<button
 									class="pj-member-remove"
@@ -987,6 +1597,8 @@
 				{/if}
 			</div>
 		</div>
+		</div>
+		{/if}
 	{/if}
 	</div>
 </div>
@@ -1245,6 +1857,7 @@
 	}
 
 	/* Hero (unblurred banner) */
+	/* Hero height / title size / description fade are driven by Motion (motion.dev). */
 	.pj-hero {
 		position: relative;
 		border-radius: 1rem;
@@ -1254,14 +1867,18 @@
 		box-shadow: 0 10px 30px rgba(0,0,0,0.22);
 		z-index: 1;
 	}
+	.pj-description--onhero {
+		overflow: hidden;
+		margin: 0;
+	}
 	/* Extended bleed — continues the banner image below the hero at low opacity,
 	   slowly fading to the page background over ~50rem. */
 	.pj-hero-bleed {
 		position: absolute;
 		top: 2.5rem; /* matches pj-page top padding so it starts right under the viewport top */
+		bottom: 0;
 		left: 50%; transform: translateX(-50%);
 		width: 100vw;
-		height: 60rem;
 		background-size: cover;
 		background-position: center top;
 		-webkit-mask-image: linear-gradient(180deg,
@@ -1308,8 +1925,25 @@
 	.pj-title--onhero { color: #fff !important; text-shadow: 0 1px 2px rgba(0,0,0,0.4); }
 	.pj-description--onhero { color: rgba(255,255,255,0.9) !important; text-shadow: 0 1px 2px rgba(0,0,0,0.3); }
 
-	/* Breadcrumb sits over the gradient bleed always when a banner exists,
-	   so force it to white regardless of theme. */
+	/* Breadcrumb pill — encapsulated for contrast against page or hero bg */
+	.pj-page :global(.bc) {
+		align-self: flex-start;
+		padding: 0.3125rem 0.75rem;
+		border-radius: 999px;
+		background: color-mix(in srgb, var(--surface-bg, var(--center-channel-bg)) 70%, transparent);
+		border: 1px solid var(--surface-border);
+		backdrop-filter: blur(8px);
+		-webkit-backdrop-filter: blur(8px);
+		box-shadow: 0 1px 2px rgba(0,0,0,0.04);
+		width: fit-content;
+	}
+
+	/* On hero/background variant — translucent white pill so breadcrumb pops over imagery */
+	.pj-page--hasbg :global(.bc) {
+		background: rgba(0, 0, 0, 0.32);
+		border-color: rgba(255, 255, 255, 0.22);
+		box-shadow: 0 2px 12px rgba(0, 0, 0, 0.18);
+	}
 	.pj-page--hasbg :global(.bc-item),
 	.pj-page--hasbg :global(.bc-link),
 	.pj-page--hasbg :global(.bc-current),
@@ -1353,10 +1987,31 @@
 		border-radius: 50%;
 		box-shadow: 0 0 0 2px var(--center-channel-bg);
 	}
+	.pj-deployment-favicon-dot::after {
+		content: '';
+		position: absolute;
+		inset: 0;
+		border-radius: 50%;
+		background: inherit;
+		pointer-events: none;
+	}
 	.pj-deployment-favicon-dot.pj-status-running { background: #22c55e; }
 	.pj-deployment-favicon-dot.pj-status-pending { background: #f59e0b; }
 	.pj-deployment-favicon-dot.pj-status-error { background: #ef4444; }
 	.pj-deployment-favicon-dot.pj-status-neutral { background: #9ca3af; }
+	.pj-deployment-favicon-dot.pj-status-running::after,
+	.pj-deployment-favicon-dot.pj-status-pending::after {
+		animation: pj-dot-pulse 1.8s cubic-bezier(0.22, 1, 0.36, 1) infinite;
+	}
+	.pj-deployment-favicon-dot.pj-status-pending::after { animation-duration: 1.2s; }
+	@keyframes pj-dot-pulse {
+		0%   { transform: scale(1);   opacity: 0.8; }
+		70%  { transform: scale(2.4); opacity: 0; }
+		100% { transform: scale(2.4); opacity: 0; }
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.pj-deployment-favicon-dot::after { animation: none; }
+	}
 
 	.pj-loading {
 		display: flex;
@@ -1532,17 +2187,143 @@
 		margin-bottom: 1.5rem;
 	}
 
+	/* Carousel — horizontal scroll with snap */
+	.pj-carousel {
+		position: relative;
+		margin-top: 1rem;
+		margin-bottom: 1.5rem;
+	}
+
+	/* Wraps just the track + arrows so arrows can center vertically on the
+	   cards without being thrown off by the dots row underneath. */
+	.pj-carousel-viewport {
+		position: relative;
+	}
+
+	/* Glassy round arrow buttons floated on top of the track. They fade in
+	   only when there's actually somewhere to scroll in that direction. */
+	.pj-carousel-arrow {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		margin: auto 0; /* vertical centering without `transform` so Motion's y/scale don't fight it */
+		z-index: 3;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.25rem;
+		height: 2.25rem;
+		border-radius: 999px;
+		border: 1px solid color-mix(in srgb, var(--surface-border) 80%, transparent);
+		background: color-mix(in srgb, var(--surface-bg, var(--center-channel-bg)) 80%, transparent);
+		color: var(--center-channel-color);
+		backdrop-filter: blur(10px) saturate(1.2);
+		-webkit-backdrop-filter: blur(10px) saturate(1.2);
+		box-shadow:
+			0 1px 2px rgba(0, 0, 0, 0.06),
+			0 6px 18px rgba(0, 0, 0, 0.08);
+		cursor: pointer;
+		opacity: 0;
+		pointer-events: none;
+		transition: opacity 180ms ease, background-color 180ms ease, color 180ms ease;
+	}
+	.pj-carousel-arrow--prev { left: -0.5rem; }
+	.pj-carousel-arrow--next { right: -0.5rem; }
+	.pj-carousel.has-prev .pj-carousel-arrow--prev,
+	.pj-carousel.has-next .pj-carousel-arrow--next {
+		opacity: 1;
+		pointer-events: auto;
+	}
+	.pj-carousel-arrow:hover {
+		background: var(--surface-bg, var(--center-channel-bg));
+		color: var(--sidebar-text-active-border);
+	}
+	.pj-carousel-arrow:disabled {
+		opacity: 0;
+		pointer-events: none;
+	}
+	.pj-carousel-track {
+		display: flex;
+		gap: 0.75rem;
+		overflow-x: auto;
+		overflow-y: visible;
+		scroll-snap-type: x mandatory;
+		scroll-padding-inline: 0.25rem;
+		padding: 0.25rem 0.25rem 0.5rem;
+		margin: -0.25rem -0.25rem 0;
+		scrollbar-width: none;
+		overscroll-behavior-x: contain;
+		-webkit-overflow-scrolling: touch;
+	}
+	.pj-carousel-track::-webkit-scrollbar { display: none; }
+
+	/* Each page is one viewport-wide and contains a 2-column grid of cards.
+	   Snapping at the page level (rather than per card) makes the carousel
+	   navigate in pairs, matching the dot count. */
+	.pj-carousel-track > .pj-carousel-page {
+		flex: 0 0 100%;
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0.75rem;
+		scroll-snap-align: start;
+		scroll-snap-stop: always;
+	}
+	.pj-carousel-track > .pj-carousel-page > .pj-deployment-card {
+		min-width: 0;
+	}
+	@media (max-width: 32rem) {
+		.pj-carousel-track > .pj-carousel-page {
+			grid-template-columns: minmax(0, 1fr);
+		}
+	}
+
+	.pj-carousel-dots {
+		display: flex;
+		justify-content: center;
+		align-items: center;
+		gap: 0.4375rem;
+		margin-top: 0.875rem;
+	}
+	.pj-carousel-dot {
+		height: 0.4375rem;
+		border-radius: 999px;
+		border: none;
+		padding: 0;
+		background: color-mix(in srgb, var(--surface-muted) 55%, transparent);
+		cursor: pointer;
+		/* width is driven by Motion (springWidth attachment) */
+		transition:
+			background-color 0.2s ease,
+			transform 0.2s ease;
+	}
+	.pj-carousel-dot:hover {
+		background: color-mix(in srgb, var(--center-channel-color) 35%, transparent);
+		transform: scale(1.15);
+	}
+	.pj-carousel-dot.is-active {
+		background: var(--sidebar-text-active-border);
+	}
+	.pj-carousel-dot:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--sidebar-text-active-border) 35%, transparent);
+	}
+
 	.pj-deployment-card {
 		display: flex;
 		flex-direction: column;
 		gap: 0.875rem;
 		padding: 1.25rem;
-		border: 1px solid var(--surface-border);
+		border: 1px solid color-mix(in srgb, var(--surface-border) 70%, transparent);
 		border-radius: 1rem;
-		background-color: var(--surface-bg);
+		background-color: color-mix(in srgb, var(--surface-bg) 55%, transparent);
+		backdrop-filter: blur(10px) saturate(1.2);
+		-webkit-backdrop-filter: blur(10px) saturate(1.2);
 		text-decoration: none;
 		color: var(--center-channel-color);
-		transition: border-color 0.15s, box-shadow 0.15s;
+		transition:
+			border-color 0.18s ease,
+			box-shadow 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+			transform 0.25s cubic-bezier(0.22, 1, 0.36, 1);
 		cursor: pointer;
 		box-shadow:
 			0 1px 3px rgb(0 0 0 / 0.03),
@@ -1550,9 +2331,17 @@
 	}
 
 	.pj-deployment-card:hover,
-	.pj-deployment-card.is-highlighted {
+	.pj-tabs-row:focus-within ~ .pj-tab-panel .pj-deployment-card.is-highlighted {
 		border-color: var(--sidebar-text-active-border);
-		box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-text-active-border) 25%, transparent);
+		box-shadow:
+			0 0 0 1px color-mix(in srgb, var(--sidebar-text-active-border) 25%, transparent),
+			0 8px 24px -8px color-mix(in srgb, var(--sidebar-text-active-border) 30%, transparent),
+			0 4px 12px rgba(0, 0, 0, 0.06);
+	}
+
+	@media (prefers-reduced-motion: reduce) {
+		.pj-deployment-card { animation: none; }
+		.pj-deployment-card:hover { transform: none; }
 	}
 
 	.pj-deployment-card-top {
@@ -1759,6 +2548,116 @@
 			0 2px 4px rgb(0 0 0 / 0.08),
 			0 4px 12px rgb(0 0 0 / 0.06);
 	}
+	.pj-btn--sm {
+		padding: 0.3125rem 0.625rem;
+		font-size: 0.75rem;
+		border-radius: 0.625rem;
+	}
+
+	/* Tab bar — matches deployment card surface */
+	.pj-tabs-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		margin-bottom: 1rem;
+		padding: 0.375rem;
+		border-radius: 1rem;
+		background-color: color-mix(in srgb, var(--surface-bg) 55%, transparent);
+		border: 1px solid color-mix(in srgb, var(--surface-border) 70%, transparent);
+		backdrop-filter: blur(10px) saturate(1.2);
+		-webkit-backdrop-filter: blur(10px) saturate(1.2);
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
+		flex-wrap: wrap;
+	}
+	.pj-tabs {
+		display: inline-flex;
+		gap: 0.125rem;
+	}
+	.pj-tab {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4375rem;
+		padding: 0.4375rem 0.75rem;
+		border: none;
+		background: transparent;
+		color: var(--pj-text-secondary);
+		border-radius: 0.625rem;
+		font-size: 0.8125rem;
+		font-weight: 600;
+		cursor: pointer;
+		font-family: inherit;
+		transition: color 0.18s ease, background-color 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s cubic-bezier(0.22, 1, 0.36, 1), transform 0.15s ease;
+	}
+	.pj-tab:active { transform: scale(0.97); }
+	.pj-tab:hover {
+		color: var(--center-channel-color);
+		background: color-mix(in srgb, var(--surface-border) 30%, transparent);
+	}
+	.pj-tab.is-active {
+		color: var(--center-channel-color);
+		background: color-mix(in srgb, var(--center-channel-bg) 80%, transparent);
+		box-shadow:
+			0 1px 2px rgba(0,0,0,0.05),
+			0 0 0 1px color-mix(in srgb, var(--surface-border) 60%, transparent);
+	}
+	.pj-tab-count {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 1.125rem;
+		height: 1.125rem;
+		padding: 0 0.3125rem;
+		border-radius: 999px;
+		font-size: 0.625rem;
+		font-weight: 700;
+		background: color-mix(in srgb, var(--surface-border) 55%, transparent);
+		color: var(--pj-text-secondary);
+	}
+	.pj-tab.is-active .pj-tab-count {
+		background: color-mix(in srgb, var(--sidebar-text-active-border) 18%, transparent);
+		color: var(--sidebar-text-active-border);
+	}
+	.pj-tabs-actions {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4375rem;
+		padding-right: 0.25rem;
+	}
+	.pj-tab-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3125rem;
+		padding: 0.3125rem 0.5625rem;
+		border-radius: 0.625rem;
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: var(--pj-text-secondary);
+		background: color-mix(in srgb, var(--surface-border) 35%, transparent);
+		text-decoration: none;
+		transition: background-color 0.18s, color 0.18s, transform 0.15s;
+	}
+	.pj-tab-chip:hover { transform: translateY(-0.5px); }
+	.pj-tab-chip:active { transform: scale(0.97); }
+	.pj-tab-chip:hover {
+		color: var(--center-channel-color);
+		background: color-mix(in srgb, var(--surface-border) 60%, transparent);
+	}
+	.pj-tabs-actions .pj-deployment-search-bar { width: 11rem; }
+	.pj-tabs-actions .pj-search-input {
+		padding: 0.3125rem 0.625rem;
+		font-size: 0.75rem;
+		border-radius: 0.625rem;
+		transition: border-color 0.18s, box-shadow 0.18s;
+	}
+	.pj-tabs-actions .pj-search-input:focus {
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--sidebar-text-active-border) 18%, transparent);
+	}
+
+	/* .pj-tab-panel transform/opacity is owned by Motion (see $effect on activeTab). */
+
 
 	.pj-btn-mt {
 		margin-top: 0.5rem;
@@ -1785,15 +2684,77 @@
 		background-color: color-mix(in srgb, var(--error-text-color) 20%, transparent);
 	}
 
+	.pj-icon-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.875rem;
+		height: 1.875rem;
+		padding: 0;
+		border-radius: 0.5rem;
+		background-color: transparent;
+		color: var(--surface-muted);
+		border: 1px solid var(--surface-border);
+		cursor: pointer;
+		transition: background-color 0.12s, color 0.12s, border-color 0.12s, transform 0.08s;
+	}
+	.pj-icon-btn:hover:not(:disabled) {
+		background-color: var(--control-hover-bg);
+		color: var(--center-channel-color);
+		border-color: color-mix(in srgb, var(--surface-border) 60%, var(--center-channel-color));
+	}
+	.pj-icon-btn:active:not(:disabled) { transform: scale(0.94); }
+	.pj-icon-btn:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--sidebar-text-active-border) 50%, transparent);
+	}
+	.pj-icon-btn:disabled { opacity: 0.6; cursor: not-allowed; }
+
+	.pj-icon-btn--danger {
+		color: var(--error-text-color);
+		border-color: color-mix(in srgb, var(--error-text-color) 25%, transparent);
+		background-color: color-mix(in srgb, var(--error-text-color) 8%, transparent);
+	}
+	.pj-icon-btn--danger:hover:not(:disabled) {
+		background-color: color-mix(in srgb, var(--error-text-color) 18%, transparent);
+		color: var(--error-text-color);
+		border-color: color-mix(in srgb, var(--error-text-color) 45%, transparent);
+	}
+
+	.pj-icon-btn--onhero {
+		background: rgba(255,255,255,0.18);
+		color: #fff;
+		border-color: rgba(255,255,255,0.3);
+		backdrop-filter: blur(10px);
+		-webkit-backdrop-filter: blur(10px);
+	}
+	.pj-icon-btn--onhero:hover:not(:disabled) {
+		background: rgba(255,255,255,0.28);
+		color: #fff;
+		border-color: rgba(255,255,255,0.45);
+	}
+	.pj-icon-btn--onhero.pj-icon-btn--danger {
+		background: color-mix(in srgb, var(--error-text-color) 32%, rgba(255,255,255,0.12));
+		color: #fff;
+		border-color: color-mix(in srgb, var(--error-text-color) 55%, rgba(255,255,255,0.3));
+	}
+	.pj-icon-btn--onhero.pj-icon-btn--danger:hover:not(:disabled) {
+		background: color-mix(in srgb, var(--error-text-color) 50%, rgba(255,255,255,0.15));
+	}
+
 	/* Members */
-	.pj-members-section { margin-top: 2.25rem; }
+	.pj-members-section { margin-top: 0; }
 
 	.pj-members-card {
-		background: var(--center-channel-bg);
-		border: 1px solid color-mix(in srgb, var(--surface-border) 55%, transparent);
-		border-radius: 0.875rem;
+		background-color: color-mix(in srgb, var(--surface-bg) 55%, transparent);
+		border: 1px solid color-mix(in srgb, var(--surface-border) 70%, transparent);
+		border-radius: 1rem;
 		overflow: visible;
-		box-shadow: 0 1px 2px rgba(0,0,0,0.03), 0 4px 14px rgba(0,0,0,0.04);
+		backdrop-filter: blur(10px) saturate(1.2);
+		-webkit-backdrop-filter: blur(10px) saturate(1.2);
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
 	}
 
 	.pj-members-head {
@@ -1823,7 +2784,7 @@
 	.pj-member {
 		display: flex; align-items: center; gap: 0.75rem;
 		padding: 0.625rem 1rem;
-		transition: background-color 0.12s;
+		transition: background-color 0.18s ease;
 	}
 	.pj-member:hover { background: color-mix(in srgb, var(--surface-border) 25%, transparent); }
 	.pj-member + .pj-member {
@@ -1886,6 +2847,119 @@
 		background: color-mix(in srgb, var(--surface-border) 45%, transparent);
 		color: var(--pj-text-secondary);
 	}
+	.pj-role-wrap {
+		position: relative;
+		flex-shrink: 0;
+	}
+	.pj-role-trigger {
+		gap: 0.25rem;
+		cursor: pointer;
+		font-family: inherit;
+		transition: filter 0.12s, transform 0.12s, box-shadow 0.12s;
+	}
+	.pj-role-trigger:hover:not(:disabled) {
+		filter: brightness(1.05);
+		box-shadow: 0 0 0 2px color-mix(in srgb, currentColor 14%, transparent);
+	}
+	.pj-role-trigger:disabled { opacity: 0.65; cursor: wait; }
+	.pj-role-trigger:focus-visible {
+		outline: none;
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--sidebar-text-active-border) 50%, transparent);
+	}
+	.pj-role-caret {
+		opacity: 0.7;
+		transition: transform 0.15s;
+	}
+	.pj-role-trigger[aria-expanded="true"] .pj-role-caret {
+		transform: rotate(180deg);
+		opacity: 1;
+	}
+
+	.pj-role-menu {
+		position: absolute;
+		top: calc(100% + 0.375rem);
+		right: 0;
+		z-index: 50;
+		min-width: 16rem;
+		padding: 0.3125rem;
+		background: var(--center-channel-bg, #fff);
+		border: 1px solid var(--surface-border);
+		border-radius: 0.625rem;
+		box-shadow:
+			0 1px 2px rgba(0, 0, 0, 0.04),
+			0 8px 24px -4px rgba(0, 0, 0, 0.12),
+			0 16px 40px -8px rgba(0, 0, 0, 0.18);
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+		transform-origin: top right;
+	}
+	:global(:root.dark) .pj-role-menu {
+		background: var(--surface-bg, #1f1f23);
+		box-shadow:
+			0 1px 2px rgba(0, 0, 0, 0.4),
+			0 8px 24px -4px rgba(0, 0, 0, 0.5),
+			0 16px 40px -8px rgba(0, 0, 0, 0.55);
+	}
+
+	.pj-role-option {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.5rem;
+		padding: 0.5rem 0.625rem;
+		border: none;
+		background: transparent;
+		border-radius: 0.4375rem;
+		text-align: left;
+		cursor: pointer;
+		color: var(--center-channel-color);
+		font-family: inherit;
+		transition: background-color 0.1s;
+	}
+	.pj-role-option:hover,
+	.pj-role-option:focus-visible {
+		background: color-mix(in srgb, var(--sidebar-text-active-border) 10%, transparent);
+		outline: none;
+	}
+	.pj-role-option.is-selected {
+		background: color-mix(in srgb, var(--sidebar-text-active-border) 8%, transparent);
+	}
+	.pj-role-option-check {
+		width: 0.875rem;
+		flex-shrink: 0;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		color: var(--sidebar-text-active-border);
+		margin-top: 0.0625rem;
+	}
+	.pj-role-option-text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+		min-width: 0;
+	}
+	.pj-role-option-label {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4375rem;
+		font-size: 0.8125rem;
+		font-weight: 600;
+	}
+	.pj-role-option-desc {
+		font-size: 0.6875rem;
+		color: var(--pj-text-secondary);
+		line-height: 1.3;
+	}
+	.pj-role-dot {
+		display: inline-block;
+		width: 0.5rem; height: 0.5rem;
+		border-radius: 999px;
+		flex-shrink: 0;
+	}
+	.pj-role-dot--admin { background: #f59e0b; box-shadow: 0 0 0 2px color-mix(in srgb, #f59e0b 25%, transparent); }
+	.pj-role-dot--member { background: var(--sidebar-text-active-border); box-shadow: 0 0 0 2px color-mix(in srgb, var(--sidebar-text-active-border) 25%, transparent); }
+	.pj-role-dot--viewer { background: var(--surface-muted); box-shadow: 0 0 0 2px color-mix(in srgb, var(--surface-muted) 25%, transparent); }
 
 	.pj-member-remove {
 		display: inline-flex; align-items: center; justify-content: center;
@@ -1947,6 +3021,7 @@
 			0 4px 12px rgb(0 0 0 / 0.08),
 			0 2px 4px rgb(0 0 0 / 0.04);
 		padding: 0.25rem;
+		transform-origin: top center;
 	}
 
 	.pj-picker-item {

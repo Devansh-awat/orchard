@@ -18,6 +18,7 @@ import { NodesModule } from './nodes/nodes.module';
 import { QuotasModule } from './quotas/quotas.module';
 import { TailscaleModule } from './tailscale/tailscale.module';
 import { EventsModule } from './events/events.module';
+import { MetricsModule } from './metrics/metrics.module';
 
 @Module({
   imports: [
@@ -40,6 +41,7 @@ import { EventsModule } from './events/events.module';
     QuotasModule,
     TailscaleModule,
     EventsModule,
+    MetricsModule,
   ],
 })
 export class AppModule {}

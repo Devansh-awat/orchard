@@ -1,0 +1,80 @@
+# VictoriaMetrics single-node: PromQL-compatible TSDB. Single binary, ~7×
+# better compression than Prometheus, hard retention cap, halts ingest
+# before the disk fills.
+#
+# - retentionPeriod=30d  → old data is purged on a fixed schedule
+# - storage.minFreeDiskSpaceBytes=512MB → ingest pauses before disk fills
+
+apiVersion: v1
+kind: Service
+metadata:
+  name: victoriametrics
+  namespace: orchard-metrics
+  labels:
+    app: victoriametrics
+spec:
+  type: ClusterIP
+  ports:
+    - { name: http, port: 8428, targetPort: 8428, protocol: TCP }
+  selector:
+    app: victoriametrics
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: victoriametrics
+  namespace: orchard-metrics
+  labels:
+    app: victoriametrics
+spec:
+  serviceName: victoriametrics
+  replicas: 1
+  selector:
+    matchLabels:
+      app: victoriametrics
+  template:
+    metadata:
+      labels:
+        app: victoriametrics
+    spec:
+      securityContext:
+        fsGroup: 1000
+      containers:
+        - name: victoriametrics
+          image: victoriametrics/victoria-metrics:v1.106.1
+          args:
+            - "-storageDataPath=/data"
+            - "-retentionPeriod=30d"
+            - "-httpListenAddr=:8428"
+            - "-storage.minFreeDiskSpaceBytes=512MB"
+            - "-search.maxConcurrentRequests=16"
+            - "-search.maxQueryDuration=30s"
+            - "-search.maxSeries=300000"
+            - "-search.maxPointsPerTimeseries=30000"
+            - "-search.latencyOffset=15s"
+            - "-memory.allowedPercent=80"
+            - "-loggerLevel=INFO"
+          ports:
+            - { name: http, containerPort: 8428 }
+          volumeMounts:
+            - { name: data, mountPath: /data }
+          readinessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 5
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /health, port: http }
+            initialDelaySeconds: 30
+            periodSeconds: 30
+          resources:
+            requests: { cpu: "200m", memory: "512Mi" }
+            limits:   { cpu: "1",    memory: "1Gi" }
+  volumeClaimTemplates:
+    - metadata:
+        name: data
+      spec:
+        accessModes: ["ReadWriteOnce"]
+        storageClassName: longhorn
+        resources:
+          requests:
+            storage: 5Gi

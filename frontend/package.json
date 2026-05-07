@@ -28,6 +28,7 @@
 		"vite": "^7.2.6"
 	},
 	"dependencies": {
+		"@jis3r/icons": "^2.7.0",
 		"@number-flow/svelte": "^0.3.9",
 		"@simplewebauthn/browser": "^13.2.2",
 		"@tanstack/svelte-query": "^6.1.28",
@@ -36,6 +37,7 @@
 		"ghostty-web": "^0.4.0",
 		"lucide-svelte": "^0.510.0",
 		"melt": "^0.42.0",
+		"motion": "^12.38.0",
 		"svelte5-chartjs": "^1.0.0"
 	}
 }

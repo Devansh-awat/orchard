@@ -6,6 +6,7 @@ import { FaviconService } from './favicon.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { StorageService } from '../organizations/storage.service';
 import { Auth } from '../auth/decorators';
+import { MetricsService } from '../metrics/metrics.service';
 
 @Auth()
 @Controller('projects')
@@ -493,7 +494,35 @@ export class DeploymentsController {
     private readonly projectsService: ProjectsService,
     private readonly webhooksService: WebhooksService,
     private readonly faviconService: FaviconService,
+    private readonly metricsService: MetricsService,
   ) {}
+
+  @Get(':id/metrics')
+  async getDeploymentMetrics(
+    @Param('id') id: string,
+    @Query('start') startStr?: string,
+    @Query('end') endStr?: string,
+    @Query('step') stepStr?: string,
+  ) {
+    const end = Number(endStr) || Date.now();
+    const start = Number(startStr) || end - 60 * 60 * 1000;
+    const step = Math.max(1000, Number(stepStr) || 30_000);
+    if (end <= start) throw new BadRequestException('end must be > start');
+
+    const dep = await this.projectsService.getDeployment(id);
+    if (!dep?.namespace || !dep?.name) {
+      throw new BadRequestException('Deployment has no namespace/name');
+    }
+
+    const data = await this.metricsService.fetchDeploymentMetrics({
+      namespace: dep.namespace,
+      deploymentName: dep.name,
+      startMs: start,
+      endMs: end,
+      stepMs: step,
+    });
+    return { start, end, step, data };
+  }
 
   @Patch(':id/resources')
   async updateResources(

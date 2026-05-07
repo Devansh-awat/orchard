@@ -8,38 +8,58 @@ interface CachedEntry {
 }
 
 const TTL_MS = 30_000;
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 @Injectable()
 export class MembershipCacheService {
   private readonly cache = new Map<string, CachedEntry>();
   private readonly inflight = new Map<string, Promise<CachedEntry['memberships']>>();
+  // sub (JWT subject) → internal UUID. JWT sub may be a Hack Club ID;
+  // organizationMember.userId is a UUID FK so we have to resolve first.
+  private readonly subToInternal = new Map<string, string>();
 
   constructor(private readonly prisma: PrismaService) {}
 
-  async getMemberships(userId: string): Promise<CachedEntry['memberships']> {
+  private async resolveInternalId(sub: string): Promise<string | null> {
+    if (UUID_RE.test(sub)) return sub;
+    const cached = this.subToInternal.get(sub);
+    if (cached) return cached;
+    const user = await this.prisma.user.findFirst({
+      where: { hackClubId: sub },
+      select: { id: true },
+    });
+    if (!user) return null;
+    this.subToInternal.set(sub, user.id);
+    return user.id;
+  }
+
+  async getMemberships(sub: string): Promise<CachedEntry['memberships']> {
     const now = Date.now();
-    const hit = this.cache.get(userId);
+    const hit = this.cache.get(sub);
     if (hit && hit.expiresAt > now) return hit.memberships;
 
-    const pending = this.inflight.get(userId);
+    const pending = this.inflight.get(sub);
     if (pending) return pending;
 
-    const promise = this.prisma.organizationMember
-      .findMany({
-        where: { userId },
-        select: { organizationId: true, role: true },
-      })
-      .then((memberships) => {
-        this.cache.set(userId, { memberships, expiresAt: Date.now() + TTL_MS });
-        this.inflight.delete(userId);
+    const promise = (async () => {
+      try {
+        const internalId = await this.resolveInternalId(sub);
+        if (!internalId) {
+          this.cache.set(sub, { memberships: [], expiresAt: Date.now() + TTL_MS });
+          return [];
+        }
+        const memberships = await this.prisma.organizationMember.findMany({
+          where: { userId: internalId },
+          select: { organizationId: true, role: true },
+        });
+        this.cache.set(sub, { memberships, expiresAt: Date.now() + TTL_MS });
         return memberships;
-      })
-      .catch((err) => {
-        this.inflight.delete(userId);
-        throw err;
-      });
+      } finally {
+        this.inflight.delete(sub);
+      }
+    })();
 
-    this.inflight.set(userId, promise);
+    this.inflight.set(sub, promise);
     return promise;
   }
 

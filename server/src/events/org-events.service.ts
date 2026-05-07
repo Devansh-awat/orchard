@@ -7,8 +7,7 @@ export type OrgEventType =
   | 'build.changed'
   | 'project.changed'
   | 'pod.changed'
-  | 'membership.changed'
-  | 'deployment.metrics';
+  | 'membership.changed';
 
 export interface OrgEvent {
   organizationId: string;
@@ -17,8 +16,6 @@ export interface OrgEvent {
   id?: string;
   /** Optional secondary id (e.g. projectId for a deployment) */
   projectId?: string;
-  /** Optional payload (used by deployment.metrics for cpu/memory). */
-  payload?: any;
   /** Best-effort timestamp */
   ts: number;
 }
