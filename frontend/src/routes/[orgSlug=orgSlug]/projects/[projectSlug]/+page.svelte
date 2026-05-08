@@ -1209,121 +1209,69 @@
 				</button>
 			</div>
 		{:else if filteredDeployments.length}
-			<div class="pj-carousel" class:has-prev={carouselPage > 0} class:has-next={carouselPage < carouselPages - 1}>
-				<div class="pj-carousel-viewport">
-					{#if carouselPages > 1}
-						<button
-							type="button"
-							class="pj-carousel-arrow pj-carousel-arrow--prev"
-							aria-label="Previous deployments"
-							onclick={() => scrollToPage(carouselPage - 1)}
-							disabled={carouselPage === 0}
-							{@attach springHover({ lift: 0, stiffness: 480, damping: 26 })}
-						>
-							<ChevronLeft class="h-4 w-4" />
-						</button>
-						<button
-							type="button"
-							class="pj-carousel-arrow pj-carousel-arrow--next"
-							aria-label="Next deployments"
-							onclick={() => scrollToPage(carouselPage + 1)}
-							disabled={carouselPage >= carouselPages - 1}
-							{@attach springHover({ lift: 0, stiffness: 480, damping: 26 })}
-						>
-							<ChevronRight class="h-4 w-4" />
-						</button>
-					{/if}
-				<div
-					class="pj-carousel-track"
-					bind:this={carouselEl}
-					onscroll={updateCarouselNav}
-					onwheel={carouselWheel}
-				>
-				{#each deploymentPages as page, pi (pi)}
-					<div class="pj-carousel-page">
-						{#each page as deployment, j (deployment.id)}
-							{@const i = pi * DEPLOYMENTS_PER_PAGE + j}
-							{@const href = `/${orgSlug}/deployments/${deployment.id}`}
-							{@const item = deploymentMenu.getItem(deployment, {
-								onSelect: () => openDeployment(deployment.id)
-							})}
-							{@const host = deployment.ingresses?.[0]?.host?.split('/')[0]}
-							<a
-								class="pj-deployment-card"
-								class:is-highlighted={item.highlighted}
-								{@attach motionStagger({ index: i, from: { y: 10 } })}
-								{@attach springHover({ lift: -4, stiffness: 360, damping: 22 })}
-								{@attach cardTilt({ max: 5 })}
-								{...mergeAttrs(item.attrs, {
-									href,
-									onclick: (event: Event) => handleDeploymentClick(event as MouseEvent, deployment.id)
-								})}
-							>
-								<div class="pj-deployment-card-top">
-									<div class="pj-deployment-favicon">
-										{#if host && !favFailed.has(deployment.id)}
-											<img
-												src={`/apiv1/deployments/favicon?domain=${encodeURIComponent(host)}`}
-												alt=""
-												onerror={() => (favFailed = new Set(favFailed).add(deployment.id))}
-											/>
-										{:else}
-											<span class="pj-deployment-favicon-letter">{deployment.name.charAt(0).toUpperCase()}</span>
-										{/if}
-										<span class="pj-deployment-favicon-dot {getStatusColor(deployment.status)}"></span>
-									</div>
-									<div class="pj-deployment-badges">
-										<span class="pj-deployment-status-badge {getStatusColor(deployment.status)}">
-											{getStatusLabel(deployment.status)}
-										</span>
-										{#if deployment.buildStatus && deployment.buildStatus !== 'none' && deployment.buildStatus !== 'succeeded'}
-											<span class="pj-deployment-build-badge pj-build-{deployment.buildStatus}">
-												Build: {deployment.buildStatus === 'building' ? 'Building' : deployment.buildStatus === 'failed' ? 'Failed' : deployment.buildStatus}
-											</span>
-										{/if}
-									</div>
-								</div>
-								<div class="pj-deployment-card-body">
-									<span class="pj-deployment-name">{deployment.name}</span>
-									{#if deployment.githubRepo}
-										<span class="pj-deployment-detail">{deployment.githubRepo}</span>
-										{#if deployment.githubBranch}
-											<span class="pj-deployment-branch">
-												<GitBranch class="h-3.5 w-3.5" />
-												{deployment.githubBranch}
-											</span>
-										{/if}
-									{:else if deployment.image}
-										<span class="pj-deployment-detail">{deployment.image}</span>
-									{/if}
-								</div>
-								<div class="pj-deployment-card-footer">
-									<span class="pj-deployment-replicas">
-										{deployment.replicas} replica{deployment.replicas !== 1 ? 's' : ''}
+			<div class="pj-deployment-grid">
+				{#each filteredDeployments as deployment, i (deployment.id)}
+					{@const href = `/${orgSlug}/deployments/${deployment.id}`}
+					{@const item = deploymentMenu.getItem(deployment, {
+						onSelect: () => openDeployment(deployment.id)
+					})}
+					{@const host = deployment.ingresses?.[0]?.host?.split('/')[0]}
+					<a
+						class="pj-deployment-card"
+						class:is-highlighted={item.highlighted}
+						{@attach motionStagger({ index: i, from: { y: 10 } })}
+						{@attach springHover({ lift: -4, stiffness: 360, damping: 22 })}
+						{@attach cardTilt({ max: 5 })}
+						{...mergeAttrs(item.attrs, {
+							href,
+							onclick: (event: Event) => handleDeploymentClick(event as MouseEvent, deployment.id)
+						})}
+					>
+						<div class="pj-deployment-card-top">
+							<div class="pj-deployment-favicon">
+								{#if host && !favFailed.has(deployment.id)}
+									<img
+										src={`/apiv1/deployments/favicon?domain=${encodeURIComponent(host)}`}
+										alt=""
+										onerror={() => (favFailed = new Set(favFailed).add(deployment.id))}
+									/>
+								{:else}
+									<span class="pj-deployment-favicon-letter">{deployment.name.charAt(0).toUpperCase()}</span>
+								{/if}
+								<span class="pj-deployment-favicon-dot {getStatusColor(deployment.status)}"></span>
+							</div>
+							<div class="pj-deployment-badges">
+								<span class="pj-deployment-status-badge {getStatusColor(deployment.status)}">
+									{getStatusLabel(deployment.status)}
+								</span>
+								{#if deployment.buildStatus && deployment.buildStatus !== 'none' && deployment.buildStatus !== 'succeeded'}
+									<span class="pj-deployment-build-badge pj-build-{deployment.buildStatus}">
+										Build: {deployment.buildStatus === 'building' ? 'Building' : deployment.buildStatus === 'failed' ? 'Failed' : deployment.buildStatus}
 									</span>
-								</div>
-							</a>
-						{/each}
-					</div>
+								{/if}
+							</div>
+						</div>
+						<div class="pj-deployment-card-body">
+							<span class="pj-deployment-name">{deployment.name}</span>
+							{#if deployment.githubRepo}
+								<span class="pj-deployment-detail">{deployment.githubRepo}</span>
+								{#if deployment.githubBranch}
+									<span class="pj-deployment-branch">
+										<GitBranch class="h-3.5 w-3.5" />
+										{deployment.githubBranch}
+									</span>
+								{/if}
+							{:else if deployment.image}
+								<span class="pj-deployment-detail">{deployment.image}</span>
+							{/if}
+						</div>
+						<div class="pj-deployment-card-footer">
+							<span class="pj-deployment-replicas">
+								{deployment.replicas} replica{deployment.replicas !== 1 ? 's' : ''}
+							</span>
+						</div>
+					</a>
 				{/each}
-				</div>
-				</div>
-				{#if carouselPages > 1}
-					<div class="pj-carousel-dots" role="tablist" aria-label="Carousel pages">
-						{#each Array(carouselPages) as _, i (i)}
-							<button
-								type="button"
-								role="tab"
-								aria-selected={carouselPage === i}
-								aria-label="Go to page {i + 1}"
-								class="pj-carousel-dot"
-								class:is-active={carouselPage === i}
-								onclick={() => scrollToPage(i)}
-								{@attach springWidth(() => carouselPage === i, { rest: 7, on: 18 })}
-							></button>
-						{/each}
-					</div>
-				{/if}
 			</div>
 		{:else}
 			<div class="pj-empty-card">
