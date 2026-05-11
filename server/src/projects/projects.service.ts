@@ -361,37 +361,40 @@ export class ProjectsService {
       throw new BadRequestException('Project name is required');
     }
 
-    const slugSource = data.slug && data.slug.trim() ? data.slug : name;
-    const slug = this.formatSlug(slugSource);
+    const slugExplicitlyProvided = !!(data.slug && data.slug.trim());
+    const slugSource = slugExplicitlyProvided ? data.slug! : name;
+    const baseSlug = this.formatSlug(slugSource);
 
-    if (!slug) {
+    if (!baseSlug) {
       throw new BadRequestException('Project slug cannot be empty');
     }
 
-    const existing = await this.prisma.project.findUnique({
-      where: {
-        organizationId_slug: {
-          organizationId,
-          slug,
-        },
-      },
-    });
+    let slug = baseSlug;
+    let namespace = this.buildNamespace([organization.slug, slug]);
+    let suffixCounter = 0;
 
-    if (existing) {
-      throw new BadRequestException('A project with this slug already exists');
-    }
+    while (true) {
+      const slugInUse = await this.prisma.project.findUnique({
+        where: { organizationId_slug: { organizationId, slug } },
+      });
+      const namespaceInUse = slugInUse
+        ? null
+        : await this.prisma.project.findFirst({ where: { namespace } });
 
-    const namespace = this.buildNamespace([
-      organization.slug,
-      slug,
-    ]);
+      if (!slugInUse && !namespaceInUse) {
+        break;
+      }
 
-    const namespaceInUse = await this.prisma.project.findFirst({
-      where: { namespace },
-    });
+      if (slugExplicitlyProvided) {
+        if (slugInUse) {
+          throw new BadRequestException('A project with this slug already exists');
+        }
+        throw new BadRequestException('Generated namespace is already in use');
+      }
 
-    if (namespaceInUse) {
-      throw new BadRequestException('Generated namespace is already in use');
+      suffixCounter += 1;
+      slug = `${baseSlug}-${suffixCounter}`;
+      namespace = this.buildNamespace([organization.slug, slug]);
     }
 
     const namespaceResult = await this.kubernetesService.createNamespace(namespace);

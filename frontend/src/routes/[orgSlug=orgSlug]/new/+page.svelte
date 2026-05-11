@@ -2,7 +2,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { apiFetch, selectedOrganization, toasts, refreshTree } from '$lib/stores';
+	import { apiFetch, selectedOrganization, toasts, refreshTree, user } from '$lib/stores';
 	import {
 		Loader2,
 		Github, Container, Database, Globe, LayoutTemplate, Server, Search
@@ -98,17 +98,11 @@
 		finally { loading = false; }
 	}
 
-	function toSlug(n: string) { return n.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, ''); }
-
 	async function createProject(name: string): Promise<string> {
-		const baseSlug = toSlug(name) || 'project';
-		const existingSlugs = new Set(projects.map(p => p.slug));
-		let slug = baseSlug;
-		let i = 2;
-		while (existingSlugs.has(slug)) { slug = `${baseSlug}-${i++}`; }
+		// Server auto-suffixes on slug collisions, so we just send the name.
 		const projRes = await apiFetch('/apiv1/projects', {
 			method: 'POST', headers: { 'Content-Type': 'application/json' },
-			body: JSON.stringify({ name, slug, organizationId: selectedOrgId })
+			body: JSON.stringify({ name, organizationId: selectedOrgId })
 		});
 		if (!projRes.ok) {
 			const d = await projRes.json().catch(() => ({}));
@@ -119,12 +113,18 @@
 		return proj.slug;
 	}
 
+	function defaultProjectName(): string {
+		const u = $user;
+		const display = u?.username?.trim() || u?.firstName?.trim() || u?.name?.trim() || 'My';
+		return `${display}'s Project`;
+	}
+
 	async function resolveProjectSlug(): Promise<string> {
 		if (preselectedProjectSlug && projects.some(p => p.slug === preselectedProjectSlug)) {
 			return preselectedProjectSlug;
 		}
 		if (projects.length === 0) {
-			return createProject('Default');
+			return createProject(defaultProjectName());
 		}
 		return projects[0].slug;
 	}

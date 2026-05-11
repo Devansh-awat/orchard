@@ -29,6 +29,7 @@
 		Check,
 		ChevronDown,
 		CircleX,
+		ClipboardList,
 		Clock,
 		Copy,
 		Cpu,
@@ -43,6 +44,7 @@
 		Rocket,
 		ServerCog,
 		Settings,
+		SlidersHorizontal,
 		Terminal,
 		Trash2,
 		TriangleAlert,
@@ -676,13 +678,13 @@
 			id: 'audit',
 			label: 'Audit Log',
 			description: 'Recent activity on this deployment',
-			icon: History
+			icon: ClipboardList
 		},
 		{
 			id: 'advanced',
 			label: 'Advanced',
 			description: 'Build options & settings',
-			icon: Settings
+			icon: SlidersHorizontal
 		}
 	] as const;
 
