@@ -29,6 +29,10 @@
 	import type { PageData } from './$types';
 
 	// ── Physics-based animation helpers (see physics-ui.md) ──
+	// Track elements that have already played their entrance animation. Without
+	// this, every SSE-driven re-render re-fires the stagger from y:8/opacity:0
+	// and the whole grid flickers in.
+	const staggered = new WeakSet<Element>();
 	function motionStagger(
 		opts: {
 			index?: number;
@@ -50,6 +54,8 @@
 		const axis = opts.axis ?? 'y';
 		return (el: Element) => {
 			const target = el as HTMLElement;
+			if (staggered.has(target)) return;
+			staggered.add(target);
 			const kf: Record<string, number[]> = { opacity: [from.opacity, 1], scale: [from.scale, 1] };
 			kf[axis] = [from.y, 0];
 			animate(target, kf, {
@@ -300,6 +306,29 @@
 		await invalidate(`org:${orgSlug}:overview`);
 	}
 
+	// Stable display order: captured the first time each id is seen, and only
+	// extended (never re-sorted) on subsequent refreshes. Without this, two
+	// projects building at once keep updating their `updatedAt` and swap places
+	// every SSE event.
+	let depOrder = $state<string[]>([]);
+	let dbOrder = $state<string[]>([]);
+	let projOrder = $state<string[]>([]);
+
+	function mergeOrder<T extends { id: string }>(
+		existing: string[],
+		items: T[],
+		rank: (item: T) => number
+	): string[] {
+		const present = new Set(items.map((x) => x.id));
+		const kept = existing.filter((id) => present.has(id));
+		const known = new Set(kept);
+		const fresh = items
+			.filter((x) => !known.has(x.id))
+			.sort((a, b) => rank(b) - rank(a))
+			.map((x) => x.id);
+		return [...kept, ...fresh];
+	}
+
 	function applyOverview(payload: any) {
 		deployments = payload.deployments ?? [];
 		databases = payload.databases ?? [];
@@ -309,6 +338,21 @@
 		activeBuilds = payload.builds?.active ?? [];
 		recentBuilds = payload.builds?.recent ?? [];
 		orgId = payload.organization?.id ?? null;
+
+		depOrder = mergeOrder(depOrder, deployments, (d) => new Date(d.updatedAt).getTime());
+		dbOrder = mergeOrder(dbOrder, databases, (d) => new Date(d.updatedAt).getTime());
+		const projLatest = new Map<string, number>();
+		for (const d of deployments) {
+			const t = new Date(d.updatedAt).getTime();
+			projLatest.set(d.project.id, Math.max(projLatest.get(d.project.id) ?? 0, t));
+		}
+		for (const d of databases) {
+			if (!d.project) continue;
+			const t = new Date(d.updatedAt).getTime();
+			projLatest.set(d.project.id, Math.max(projLatest.get(d.project.id) ?? 0, t));
+		}
+		const projItems = [...projLatest.entries()].map(([id, t]) => ({ id, t }));
+		projOrder = mergeOrder(projOrder, projItems, (x) => x.t);
 	}
 
 	// ── Builds ──
@@ -529,7 +573,9 @@
 		favouriteIds = new Set(items.filter((i) => i.type === 'deployment').map((i) => i.id));
 	});
 
-	// Filtered deployments
+	// Filtered deployments — ordered by `depOrder` (a stable snapshot from
+	// applyOverview), not by live `updatedAt`, so building deployments don't
+	// keep shuffling.
 	let filtered = $derived.by(() => {
 		let r = deployments;
 		const q = searchQuery.trim().toLowerCase();
@@ -541,7 +587,17 @@
 					(d.githubRepo?.toLowerCase().includes(q) ?? false) ||
 					d.ingresses.some((i) => i.host.toLowerCase().includes(q))
 			);
-		return [...r].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+		const byId = new Map(r.map((d) => [d.id, d]));
+		const ordered: DeploymentSummary[] = [];
+		for (const id of depOrder) {
+			const d = byId.get(id);
+			if (d) {
+				ordered.push(d);
+				byId.delete(id);
+			}
+		}
+		for (const d of byId.values()) ordered.push(d);
+		return ordered;
 	});
 
 	let favDeps = $derived(filtered.filter((d) => favouriteIds.has(d.id)));
@@ -556,7 +612,17 @@
 					d.dbName.toLowerCase().includes(q) ||
 					(d.project?.name?.toLowerCase().includes(q) ?? false)
 			);
-		return [...r].sort((a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime());
+		const byId = new Map(r.map((d) => [d.id, d]));
+		const ordered: DatabaseSummary[] = [];
+		for (const id of dbOrder) {
+			const d = byId.get(id);
+			if (d) {
+				ordered.push(d);
+				byId.delete(id);
+			}
+		}
+		for (const d of byId.values()) ordered.push(d);
+		return ordered;
 	});
 
 	// Group non-fav deployments by project, preserving project order by most recent deployment
@@ -587,17 +653,18 @@
 			}
 			map.get(p.id)!.dbs.push(db);
 		}
-		// Sort groups by most recent deployment or database activity
-		return Array.from(map.values()).sort((a, b) => {
-			const latestOf = (g: ProjectGroup) => {
-				const times = [
-					...g.deps.map((d) => new Date(d.updatedAt).getTime()),
-					...g.dbs.map((d) => new Date(d.updatedAt).getTime())
-				];
-				return times.length ? Math.max(...times) : 0;
-			};
-			return latestOf(b) - latestOf(a);
-		});
+		// Use the stable `projOrder` snapshot. Groups not yet in projOrder (a
+		// race during initial mount) fall through to the end in insertion order.
+		const ordered: ProjectGroup[] = [];
+		for (const id of projOrder) {
+			const g = map.get(id);
+			if (g) {
+				ordered.push(g);
+				map.delete(id);
+			}
+		}
+		for (const g of map.values()) ordered.push(g);
+		return ordered;
 	});
 
 	// ── Helpers ──
