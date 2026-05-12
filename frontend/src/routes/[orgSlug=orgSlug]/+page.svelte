@@ -1,5 +1,4 @@
 <script lang="ts">
-	import { invalidate } from '$app/navigation';
 	import { apiFetch, pinnedItems, toasts, subscribeOrgEvents } from '$lib/stores';
 	import {
 		Plus,
@@ -255,6 +254,13 @@
 	let { data } = $props<{ data: PageData }>();
 	const orgSlug = $derived(data.orgSlug);
 
+	// Current viewer's org role — gates the "create project" CTAs. Guests can
+	// only see projects they were invited to and cannot spawn new ones.
+	let currentOrgRole = $state<'owner' | 'admin' | 'member' | 'guest' | null>(null);
+	const canCreateProjects = $derived(
+		currentOrgRole !== null && currentOrgRole !== 'guest',
+	);
+
 	interface DeploymentSummary {
 		id: string;
 		name: string;
@@ -278,6 +284,12 @@
 	let loading = $state(true);
 	let buildsLoading = $state(true);
 	let orgId = $state<string | null>(null);
+	// Surfaced when loadOverview fails. The most common case we've seen is a
+	// 403 from the backend after navigating away and back — the membership
+	// check in the membership cache returns empty briefly. Showing this
+	// instead of the "Deploy your first app" empty state stops users from
+	// thinking their data is gone.
+	let loadError = $state<{ status: number; message: string } | null>(null);
 
 	interface DatabaseSummary {
 		id: string;
@@ -302,8 +314,43 @@
 
 	async function fetchDeployments() {
 		// Used by single-deployment actions (e.g. restart) to refresh after a mutation
-		// without waiting for the SSE round-trip. Pulls from the aggregated endpoint.
-		await invalidate(`org:${orgSlug}:overview`);
+		// without waiting for the SSE round-trip.
+		await loadOverview();
+	}
+
+	// Direct fetch — the source of truth for refresh. Mirrors the deployment
+	// page pattern: the streamed promise from +page.ts is just a seed for
+	// fast first paint; this function reliably populates state on every
+	// navigation (including browser back) and on every SSE event, without
+	// depending on SvelteKit's load() re-running.
+	async function loadOverview() {
+		const slug = data.orgSlug;
+		if (!slug) return;
+		try {
+			const res = await apiFetch(`/apiv1/overview/orgs/${slug}`);
+			if (!res.ok) {
+				const body = await res.text().catch(() => '');
+				let message = body;
+				try {
+					message = JSON.parse(body)?.message ?? body;
+				} catch {}
+				throw Object.assign(new Error(message || `overview ${res.status}`), {
+					status: res.status,
+				});
+			}
+			const payload = await res.json();
+			// Drop stale result if user navigated to another org meanwhile.
+			if (data.orgSlug !== slug) return;
+			applyOverview(payload);
+			loadError = null;
+			loading = false;
+			buildsLoading = false;
+		} catch (e: any) {
+			console.error('Failed to load overview:', e);
+			loadError = { status: e?.status ?? 0, message: e?.message ?? String(e) };
+			loading = false;
+			buildsLoading = false;
+		}
 	}
 
 	// Stable display order: captured the first time each id is seen, and only
@@ -338,11 +385,23 @@
 		activeBuilds = payload.builds?.active ?? [];
 		recentBuilds = payload.builds?.recent ?? [];
 		orgId = payload.organization?.id ?? null;
+		// Fetch viewer's org role once we know the org id — used to gate the
+		// "create project" CTAs against guests.
+		if (orgId && currentOrgRole === null) {
+			apiFetch(`/apiv1/organizations/${orgId}/members/me`)
+				.then(async (r) => {
+					if (!r.ok) return;
+					const body = await r.json().catch(() => null);
+					if (body?.role) currentOrgRole = body.role;
+				})
+				.catch(() => {});
+		}
 
 		depOrder = mergeOrder(depOrder, deployments, (d) => new Date(d.updatedAt).getTime());
 		dbOrder = mergeOrder(dbOrder, databases, (d) => new Date(d.updatedAt).getTime());
 		const projLatest = new Map<string, number>();
 		for (const d of deployments) {
+			if (!d.project) continue;
 			const t = new Date(d.updatedAt).getTime();
 			projLatest.set(d.project.id, Math.max(projLatest.get(d.project.id) ?? 0, t));
 		}
@@ -814,44 +873,63 @@
 	}
 
 	let unsub: (() => void) | null = null;
-	// Plain `let` (not $state) so the effect below doesn't subscribe to it.
-	// applyOverview writes to deployments/databases/projectMetas; if this flag
-	// were $state, the effect would re-run on every microtask and infinite-loop.
-	let hasLoadedOnce = false;
+	// Tracks which slug the SSE subscription is bound to. Compared with the
+	// current route slug to detect a real org-switch (vs. a re-run of the
+	// effect for the same org) so we can reset state and re-subscribe only
+	// when actually needed.
+	let lastSeenOrgSlug: string | null = null;
 
 	$effect(() => {
-		const overviewPromise = data.overview;
-		const isInitial = !hasLoadedOnce;
-		if (isInitial) {
+		const slug = data.orgSlug;
+		if (!slug) return;
+		const isNewRoute = slug !== lastSeenOrgSlug;
+		if (!isNewRoute) return; // SSE refreshes call loadOverview() directly.
+		loadError = null;
+		if (lastSeenOrgSlug !== null) {
+			// Real org switch — reset to skeleton so the previous org's data
+			// doesn't linger while the new one loads.
 			loading = true;
 			buildsLoading = true;
+			depOrder = [];
+			dbOrder = [];
+			projOrder = [];
+			deployments = [];
+			databases = [];
+			activeBuilds = [];
+			recentBuilds = [];
+			projectMetas = new Map();
 		}
-		overviewPromise
-			.then((payload) => {
-				applyOverview(payload);
-				hasLoadedOnce = true;
-				loading = false;
-				buildsLoading = false;
-				if (orgId) {
-					unsub?.();
-					const id = orgId;
-					unsub = subscribeOrgEvents(
-						id,
-						(ev) => {
-							if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
-							invalidate(`org:${orgSlug}:overview`);
-						},
-						{ invalidateDependencies: [] }
-					);
-				}
-			})
-			.catch((e) => {
-				console.error('Failed to load overview:', e);
-				if (isInitial) {
+		lastSeenOrgSlug = slug;
+
+		// Seed from streamed loader for instant first paint when available.
+		data.overview
+			?.then((payload) => {
+				if (!payload || data.orgSlug !== slug) return;
+				if (deployments.length === 0) {
+					applyOverview(payload);
 					loading = false;
 					buildsLoading = false;
 				}
-			});
+			})
+			.catch(() => {});
+
+		// Authoritative direct fetch. Runs on every real navigation so we
+		// don't depend on SvelteKit's load() re-running on browser back.
+		loadOverview().then(() => {
+			if (data.orgSlug !== slug) return;
+			if (orgId) {
+				unsub?.();
+				const id = orgId;
+				unsub = subscribeOrgEvents(
+					id,
+					(ev) => {
+						if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
+						loadOverview();
+					},
+					{ invalidateDependencies: [] }
+				);
+			}
+		});
 	});
 
 	onDestroy(() => {
@@ -865,12 +943,14 @@
 	<!-- Header -->
 	<header class="header" {@attach motionStagger({ index: 0, from: { y: -6 } })}>
 		<h1 class="title">Overview</h1>
+		{#if canCreateProjects}
 		<a
 			href="/{orgSlug}/new?autoCreate=1"
 			class="btn-primary"
 			{@attach springHover({ lift: -1, stiffness: 480, damping: 26 })}
 			><Plus size={15} /> Add New...</a
 		>
+		{/if}
 	</header>
 
 	<div class="layout">
@@ -893,14 +973,41 @@
 						</div>
 					{/each}
 				</div>
+			{:else if loadError}
+				<div class="empty">
+					<div class="empty-icon"><Sparkles size={28} /></div>
+					<h3 class="empty-h">
+						{loadError.status === 403 ? "Can't load this organization" : 'Failed to load overview'}
+					</h3>
+					<p class="empty-p">
+						{loadError.status === 403
+							? 'The server says you don\'t have access right now. This usually clears on reload.'
+							: loadError.message}
+					</p>
+					<button
+						class="btn-primary"
+						style="margin-top:0.5rem"
+						onclick={() => location.reload()}
+					>
+						<RefreshCw size={15} /> Reload
+					</button>
+				</div>
 			{:else if deployments.length === 0}
 				<div class="empty">
 					<div class="empty-icon"><Sparkles size={28} /></div>
-					<h3 class="empty-h">Deploy your first app</h3>
-					<p class="empty-p">Import a GitHub repo or deploy a Docker image.</p>
+					<h3 class="empty-h">
+						{canCreateProjects ? 'Deploy your first app' : 'No projects to show yet'}
+					</h3>
+					<p class="empty-p">
+						{canCreateProjects
+							? 'Import a GitHub repo or deploy a Docker image.'
+							: 'A project admin needs to invite you to a specific project before anything shows up here.'}
+					</p>
+					{#if canCreateProjects}
 					<a href="/{orgSlug}/new" class="btn-primary" style="margin-top:0.5rem"
 						><Plus size={15} /> New Deployment</a
 					>
+					{/if}
 				</div>
 			{:else}
 				<!-- Toolbar -->

@@ -1,4 +1,4 @@
-import { Controller, Param, Request, ForbiddenException, Sse, MessageEvent } from '@nestjs/common';
+import { Controller, Param, Request, NotFoundException, Sse, MessageEvent } from '@nestjs/common';
 import { Observable, merge, interval, map, finalize, defer } from 'rxjs';
 import { Auth } from '../auth/decorators';
 import { MembershipCacheService } from '../auth/membership-cache.service';
@@ -20,7 +20,7 @@ export class EventsController {
     const userId = req.user.sub;
     const orgMemberships = await this.memberships.getMembershipsForOrg(userId, orgId);
     if (orgMemberships.length === 0) {
-      throw new ForbiddenException('Not a member of this organization');
+      throw new NotFoundException('Organization not found');
     }
 
     // 25s heartbeat so proxies don't kill idle SSE connections.

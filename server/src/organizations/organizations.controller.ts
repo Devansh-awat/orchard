@@ -25,13 +25,25 @@ export class OrganizationsController {
   }
 
   @Get('slug/:slug')
-  async getOrganizationBySlug(@Param('slug') slug: string) {
-    return this.organizationsService.getOrganizationBySlug(slug);
+  async getOrganizationBySlug(@Param('slug') slug: string, @Request() req) {
+    return this.organizationsService.getOrganizationBySlug(slug, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl,
+    });
   }
 
   @Get(':id')
-  async getOrganization(@Param('id') id: string) {
-    return this.organizationsService.getOrganization(id);
+  async getOrganization(@Param('id') id: string, @Request() req) {
+    return this.organizationsService.getOrganization(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl,
+    });
   }
 
   @Post(':id/avatar')
@@ -90,8 +102,14 @@ export class OrganizationsController {
   }
 
   @Get(':id/members')
-  async getOrganizationMembers(@Param('id') organizationId: string) {
-    return this.organizationsService.getOrganizationMembers(organizationId);
+  async getOrganizationMembers(@Param('id') organizationId: string, @Request() req) {
+    return this.organizationsService.getOrganizationMembers(organizationId, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl,
+    });
   }
 
   @Get(':id/members/me')

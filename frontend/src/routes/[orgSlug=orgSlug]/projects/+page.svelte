@@ -85,16 +85,24 @@
 
 	let unsub: (() => void) | null = null;
 
-	let hasLoadedOnce = false;
+	// Only reset state on a real org-switch (previously-loaded slug differs).
+	// On fresh mount, loading defaults to true and projects is [], so the
+	// skeleton already shows until the promise resolves.
+	let loadedOrgSlug: string | null = null;
 	$effect(() => {
+		const slug = data.orgSlug;
 		const promise = data.projectsPromise;
-		const isInitial = !hasLoadedOnce;
-		if (isInitial) loading = true;
+		if (!promise) return;
+		const isOrgSwitch = loadedOrgSlug !== null && loadedOrgSlug !== slug;
+		if (isOrgSwitch) {
+			loading = true;
+			projects = [];
+		}
 		promise
 			.then(({ organizationId, projects: list }) => {
 				orgId = organizationId;
 				projects = list ?? [];
-				hasLoadedOnce = true;
+				loadedOrgSlug = slug;
 				loading = false;
 				unsub?.();
 				unsub = subscribeOrgEvents(
@@ -108,7 +116,7 @@
 			})
 			.catch((e) => {
 				console.error('Failed to load projects:', e);
-				if (isInitial) loading = false;
+				loading = false;
 			});
 	});
 

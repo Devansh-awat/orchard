@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, Body, Request, Delete, Put, Patch, Query, Res, HttpStatus, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Param, Post, Body, Request, Delete, Put, Patch, Query, Res, HttpStatus, UseInterceptors, UploadedFile, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { ProjectsService } from './projects.service';
@@ -24,8 +24,14 @@ export class ProjectsController {
 
   @Get('slug/:slug')
 
-  async getProjectBySlug(@Param('slug') slug: string, @Query('orgId') orgId: string) {
-    return this.projectsService.getProjectBySlug(orgId, slug);
+  async getProjectBySlug(@Param('slug') slug: string, @Query('orgId') orgId: string, @Request() req) {
+    return this.projectsService.getProjectBySlug(orgId, slug, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl,
+    });
   }
 
   @Get('by-slugs/:orgSlug/:projectSlug')
@@ -206,8 +212,14 @@ export class ProjectsController {
 
   @Get(':id/deployments')
 
-  async getProjectDeployments(@Param('id') id: string) {
-    return this.projectsService.getProjectDeployments(id);
+  async getProjectDeployments(@Param('id') id: string, @Request() req) {
+    return this.projectsService.getProjectDeployments(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl,
+    });
   }
 
   @Post(':id/members')
@@ -297,7 +309,14 @@ export class ProjectsController {
 
   @Get(':id/databases')
 
-  async getProjectDatabases(@Param('id') id: string) {
+  async getProjectDatabases(@Param('id') id: string, @Request() req) {
+    await this.projectsService.assertProjectView(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl,
+    });
     return this.projectsService.getProjectDatabases(id);
   }
 
@@ -501,10 +520,15 @@ export class DeploymentsController {
   @Get(':id/metrics')
   async getDeploymentMetrics(
     @Param('id') id: string,
+    @Request() req,
     @Query('start') startStr?: string,
     @Query('end') endStr?: string,
     @Query('step') stepStr?: string,
   ) {
+    await this.projectsService.assertDeploymentView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
     const end = Number(endStr) || Date.now();
     const start = Number(startStr) || end - 60 * 60 * 1000;
     const step = Math.max(1000, Number(stepStr) || 30_000);
@@ -529,7 +553,15 @@ export class DeploymentsController {
   async updateResources(
     @Param('id') id: string,
     @Body() body: { cpuRequestMilli?: number | null; memoryRequestBytes?: number | null },
+    @Request() req,
   ) {
+    const { access } = await this.projectsService.assertDeploymentView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+    if (!access.canEdit) {
+      throw new ForbiddenException('Your role does not allow you to update deployment resources');
+    }
     return this.projectsService.updateDeploymentResources(id, {
       cpuRequestMilli: body.cpuRequestMilli ?? null,
       memoryRequestBytes: body.memoryRequestBytes ?? null,
@@ -565,13 +597,21 @@ export class DeploymentsController {
 
   @Get(':id')
 
-  async getDeployment(@Param('id') id: string) {
+  async getDeployment(@Param('id') id: string, @Request() req) {
+    await this.projectsService.assertDeploymentView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
     return this.projectsService.getDeployment(id);
   }
 
   @Get(':id/logs')
 
-  async getDeploymentLogs(@Param('id') id: string) {
+  async getDeploymentLogs(@Param('id') id: string, @Request() req) {
+    await this.projectsService.assertDeploymentView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
     const deployment = await this.projectsService.getDeployment(id);
     return {
       logs: deployment.buildLogs || '',
@@ -614,7 +654,11 @@ export class DeploymentsController {
 
   @Get(':id/pods')
 
-  async getDeploymentPods(@Param('id') id: string) {
+  async getDeploymentPods(@Param('id') id: string, @Request() req) {
+    await this.projectsService.assertDeploymentView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
     return this.projectsService.getDeploymentPods(id);
   }
 
@@ -676,7 +720,11 @@ export class DeploymentsController {
 
   @Get(':id/image-history')
 
-  async getImageHistory(@Param('id') id: string) {
+  async getImageHistory(@Param('id') id: string, @Request() req) {
+    await this.projectsService.assertDeploymentView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
     return this.projectsService.getImageHistory(id);
   }
 
@@ -685,7 +733,12 @@ export class DeploymentsController {
   async getImageHistoryLogs(
     @Param('id') id: string,
     @Param('imageHistoryId') imageHistoryId: string,
+    @Request() req,
   ) {
+    await this.projectsService.assertDeploymentView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
     return this.projectsService.getImageHistoryLogs(id, imageHistoryId);
   }
 
@@ -1071,7 +1124,11 @@ export class DeploymentsController {
 
   @Get(':id/auto-deploy')
 
-  async getAutoDeployStatus(@Param('id') id: string) {
+  async getAutoDeployStatus(@Param('id') id: string, @Request() req) {
+    await this.projectsService.assertDeploymentView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
     return this.projectsService.getAutoDeployStatus(id);
   }
 
@@ -1114,7 +1171,11 @@ export class DeploymentsController {
 
   @Get(':id/github-deployments')
 
-  async getGitHubDeployments(@Param('id') id: string) {
+  async getGitHubDeployments(@Param('id') id: string, @Request() req) {
+    await this.projectsService.assertDeploymentView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
     return this.projectsService.getGitHubDeployments(id);
   }
 
@@ -1177,7 +1238,11 @@ export class DatabasesController {
 
   @Get(':id')
 
-  async getDatabase(@Param('id') id: string) {
+  async getDatabase(@Param('id') id: string, @Request() req) {
+    await this.projectsService.assertDatabaseView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
     return this.projectsService.getDatabase(id);
   }
 
@@ -1185,7 +1250,15 @@ export class DatabasesController {
   async updateDatabaseResources(
     @Param('id') id: string,
     @Body() body: { cpuRequestMilli?: number | null; memoryRequestBytes?: number | null },
+    @Request() req,
   ) {
+    const { access } = await this.projectsService.assertDatabaseView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+    if (!access.canEdit) {
+      throw new ForbiddenException('Your role does not allow you to update database resources');
+    }
     return this.projectsService.updateDatabaseResources(id, {
       cpuRequestMilli: body.cpuRequestMilli ?? null,
       memoryRequestBytes: body.memoryRequestBytes ?? null,

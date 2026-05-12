@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, BadRequestException, ForbiddenException 
 import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { EmailService } from '../email/email.service';
+import { AuthorizationService } from '../auth/authorization.service';
 import { OrganizationMember, OrganizationRole, Role, WorkspaceMember } from '@prisma/client';
 
 @Injectable()
@@ -9,8 +10,15 @@ export class WorkspacesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
-    private readonly emailService: EmailService
+    private readonly emailService: EmailService,
+    private readonly authz: AuthorizationService,
   ) {}
+
+  private async resolveUserId(clerkId: string, userData?: any): Promise<string> {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+    return user.id;
+  }
 
   private formatSlug(value: string) {
     if (!value) {
@@ -234,7 +242,14 @@ export class WorkspacesService {
     });
   }
 
-  async getWorkspace(workspaceId: string) {
+  async getWorkspace(workspaceId: string, clerkId: string, userData?: any) {
+    const userId = await this.resolveUserId(clerkId, userData);
+    const wsOwner = await this.prisma.workspace.findUnique({
+      where: { id: workspaceId },
+      select: { organizationId: true },
+    });
+    if (!wsOwner) throw new NotFoundException(`Workspace ${workspaceId} not found`);
+    await this.authz.requireOrgMember(wsOwner.organizationId, userId);
     const workspace = await this.prisma.workspace.findUnique({
       where: { id: workspaceId },
       include: {
@@ -385,7 +400,8 @@ export class WorkspacesService {
     return { success: true };
   }
 
-  async getWorkspaceBySlug(slug: string) {
+  async getWorkspaceBySlug(slug: string, clerkId: string, userData?: any) {
+    const userId = await this.resolveUserId(clerkId, userData);
     const workspaces = await this.prisma.workspace.findMany({
       where: { slug },
       include: {
@@ -439,6 +455,7 @@ export class WorkspacesService {
     }
 
     const workspace = workspaces[0];
+    await this.authz.requireOrgMember(workspace.organization.id, userId);
 
     for (const member of workspace.members) {
       if (!member.user.imageUrl && member.user.hackClubId) {
@@ -452,7 +469,8 @@ export class WorkspacesService {
     return workspace;
   }
 
-  async getWorkspaceProjects(workspaceId: string) {
+  async getWorkspaceProjects(workspaceId: string, clerkId: string, userData?: any) {
+    const userId = await this.resolveUserId(clerkId, userData);
     const workspace = await this.prisma.workspace.findUnique({
       where: { id: workspaceId },
     });
@@ -460,6 +478,8 @@ export class WorkspacesService {
     if (!workspace) {
       throw new NotFoundException(`Workspace ${workspaceId} not found`);
     }
+
+    await this.authz.requireOrgMember(workspace.organizationId, userId);
 
     return this.prisma.project.findMany({
       where: { workspaceId },

@@ -45,14 +45,22 @@ export class MembershipCacheService {
       try {
         const internalId = await this.resolveInternalId(sub);
         if (!internalId) {
-          this.cache.set(sub, { memberships: [], expiresAt: Date.now() + TTL_MS });
+          // Don't cache "user not found" — recently-created users would
+          // otherwise be locked out for the full TTL.
           return [];
         }
         const memberships = await this.prisma.organizationMember.findMany({
           where: { userId: internalId },
           select: { organizationId: true, role: true },
         });
-        this.cache.set(sub, { memberships, expiresAt: Date.now() + TTL_MS });
+        // Only cache non-empty results. Caching empty poisoned every membership
+        // check for this user for 30s whenever a transient blip (a stray
+        // invalidateUser landing between request and DB read, a read-replica
+        // lag, etc.) made findMany return [] for a member who is actually
+        // in the org — surfacing as a 403 that "fixed itself on reload."
+        if (memberships.length > 0) {
+          this.cache.set(sub, { memberships, expiresAt: Date.now() + TTL_MS });
+        }
         return memberships;
       } finally {
         this.inflight.delete(sub);
@@ -70,6 +78,20 @@ export class MembershipCacheService {
 
   invalidateUser(userId: string) {
     this.cache.delete(userId);
+  }
+
+  /**
+   * Cache keys are JWT subs (which may be a Hack Club ID, not the internal UUID).
+   * When a mutation knows only the internal UUID, walk the sub→internal map and
+   * drop every sub that resolves to that UUID, plus the UUID itself.
+   */
+  invalidateInternalUserId(internalUserId: string) {
+    this.cache.delete(internalUserId);
+    for (const [sub, internal] of this.subToInternal) {
+      if (internal === internalUserId) {
+        this.cache.delete(sub);
+      }
+    }
   }
 
   invalidateOrg(organizationId: string) {

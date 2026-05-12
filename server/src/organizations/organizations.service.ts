@@ -5,6 +5,8 @@ import { UsersService } from '../users/users.service';
 import { StorageService } from './storage.service';
 import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
+import { AuthorizationService } from '../auth/authorization.service';
+import { MembershipCacheService } from '../auth/membership-cache.service';
 import { randomBytes } from 'crypto';
 
 @Injectable()
@@ -14,31 +16,25 @@ export class OrganizationsService {
     private readonly usersService: UsersService,
     private readonly emailService: EmailService,
     private readonly audit: AuditService,
+    private readonly authz: AuthorizationService,
+    private readonly membershipCache: MembershipCacheService,
   ) {}
 
   async checkPermission(organizationId: string, userId: string, requiredRole: 'owner' | 'admin') {
-    const member = await this.prisma.organizationMember.findUnique({
-      where: {
-        organizationId_userId: {
-          organizationId,
-          userId
-        }
-      }
+    if (requiredRole === 'owner') {
+      await this.authz.requireOrgOwner(organizationId, userId);
+    } else {
+      await this.authz.requireOrgAdmin(organizationId, userId);
+    }
+    return this.prisma.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId, userId } },
     });
+  }
 
-    if (!member) {
-      throw new ForbiddenException('You are not a member of this organization');
-    }
-
-    if (requiredRole === 'owner' && member.role !== 'owner') {
-      throw new ForbiddenException('Only organization owners can perform this action');
-    }
-
-    if (requiredRole === 'admin' && member.role !== 'owner' && member.role !== 'admin') {
-      throw new ForbiddenException('Only organization owners and admins can perform this action');
-    }
-
-    return member;
+  private async resolveUserId(clerkId: string, userData?: any): Promise<string> {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+    return user.id;
   }
 
   async getUserOrganizations(clerkId: string, userData?: any) {
@@ -103,11 +99,15 @@ export class OrganizationsService {
     };
   }
 
-  async getOrganization(organizationId: string) {
+  async getOrganization(organizationId: string, clerkId: string, userData?: any) {
+    const userId = await this.resolveUserId(clerkId, userData);
+    const access = await this.authz.requireOrgMember(organizationId, userId);
+    const visibleProjectIds = await this.authz.listVisibleProjectIds(organizationId, userId);
     const organization = await this.prisma.organization.findUnique({
       where: { id: organizationId },
       include: {
         projects: {
+          where: visibleProjectIds === null ? undefined : { id: { in: visibleProjectIds } },
           include: {
             _count: {
               select: {
@@ -148,10 +148,29 @@ export class OrganizationsService {
       }),
     );
 
+    // Guests only see members who share at least one project with them.
+    if (access.role === 'guest') {
+      const coMemberIds = new Set<string>();
+      coMemberIds.add(userId); // always include self
+      if (visibleProjectIds && visibleProjectIds.length > 0) {
+        const coMembers = await this.prisma.projectMember.findMany({
+          where: { projectId: { in: visibleProjectIds } },
+          select: { userId: true },
+          distinct: ['userId'],
+        });
+        for (const cm of coMembers) coMemberIds.add(cm.userId);
+      }
+      (organization as any).members = organization.members.filter(
+        (m) => coMemberIds.has(m.user.id),
+      );
+    }
+
     return this.scrubOrgSecrets(organization as any);
   }
 
-  async getOrganizationMembers(organizationId: string) {
+  async getOrganizationMembers(organizationId: string, clerkId: string, userData?: any) {
+    const userId = await this.resolveUserId(clerkId, userData);
+    const access = await this.authz.requireOrgMember(organizationId, userId);
     const organization = await this.prisma.organization.findUnique({
       where: { id: organizationId },
     });
@@ -187,14 +206,41 @@ export class OrganizationsService {
       }),
     );
 
+    // Guests only see members who share at least one project with them.
+    if (access.role === 'guest') {
+      const visibleProjectIds = await this.authz.listVisibleProjectIds(organizationId, userId);
+      const coMemberIds = new Set<string>();
+      coMemberIds.add(userId);
+      if (visibleProjectIds && visibleProjectIds.length > 0) {
+        const coMembers = await this.prisma.projectMember.findMany({
+          where: { projectId: { in: visibleProjectIds } },
+          select: { userId: true },
+          distinct: ['userId'],
+        });
+        for (const cm of coMembers) coMemberIds.add(cm.userId);
+      }
+      return members.filter((m) => coMemberIds.has(m.user.id));
+    }
+
     return members;
   }
 
-  async getOrganizationBySlug(slug: string) {
+  async getOrganizationBySlug(slug: string, clerkId: string, userData?: any) {
+    const userId = await this.resolveUserId(clerkId, userData);
+    const orgRow = await this.prisma.organization.findUnique({
+      where: { slug },
+      select: { id: true },
+    });
+    if (!orgRow) {
+      throw new NotFoundException(`Organization with slug ${slug} not found`);
+    }
+    const access = await this.authz.requireOrgMember(orgRow.id, userId);
+    const visibleProjectIds = await this.authz.listVisibleProjectIds(orgRow.id, userId);
     const organization = await this.prisma.organization.findUnique({
       where: { slug },
       include: {
         projects: {
+          where: visibleProjectIds === null ? undefined : { id: { in: visibleProjectIds } },
           include: {
             _count: {
               select: {
@@ -235,6 +281,23 @@ export class OrganizationsService {
       }),
     );
 
+    // Guests only see members who share at least one project with them.
+    if (access.role === 'guest') {
+      const coMemberIds = new Set<string>();
+      coMemberIds.add(userId);
+      if (visibleProjectIds && visibleProjectIds.length > 0) {
+        const coMembers = await this.prisma.projectMember.findMany({
+          where: { projectId: { in: visibleProjectIds } },
+          select: { userId: true },
+          distinct: ['userId'],
+        });
+        for (const cm of coMembers) coMemberIds.add(cm.userId);
+      }
+      (organization as any).members = organization.members.filter(
+        (m) => coMemberIds.has(m.user.id),
+      );
+    }
+
     return this.scrubOrgSecrets(organization as any);
   }
 
@@ -255,7 +318,7 @@ export class OrganizationsService {
     });
 
     if (!membership) {
-      throw new ForbiddenException('You are not a member of this organization');
+      throw new NotFoundException('Organization not found');
     }
 
     return membership;
@@ -505,7 +568,18 @@ export class OrganizationsService {
       throw new NotFoundException('Inviter not found');
     }
 
-    await this.checkPermission(organizationId, inviter.id, 'admin');
+    if (role === 'guest') {
+      throw new BadRequestException(
+        'Guests cannot be invited directly to an organization — invite them to a specific project instead',
+      );
+    }
+
+    const inviterAccess = await this.authz.requireOrgAdmin(organizationId, inviter.id);
+
+    // Only owners can invite with the 'owner' role — admins cannot escalate.
+    if (role === 'owner' && inviterAccess.role !== 'owner') {
+      throw new ForbiddenException('Only organization owners can invite new owners');
+    }
 
     const organization = await this.prisma.organization.findUnique({
       where: { id: organizationId }
@@ -679,6 +753,8 @@ export class OrganizationsService {
       return newMember;
     });
 
+    this.membershipCache.invalidateInternalUserId(user.id);
+
     void this.audit.log({
       action: 'org.member.joined',
       actorUserId: user.id,
@@ -736,6 +812,7 @@ export class OrganizationsService {
           await tx.organizationInvitation.delete({ where: { id: invitation.id } });
         });
 
+        this.membershipCache.invalidateInternalUserId(user.id);
         acceptedOrgs.push(invitation.organization);
       } else {
         // Clean up the invitation if already a member
@@ -978,9 +1055,22 @@ export class OrganizationsService {
       throw new BadRequestException('Cannot remove organization owner');
     }
 
-    await this.prisma.organizationMember.delete({
-      where: { id: memberId }
+    // Remove org membership AND all project memberships in this org atomically
+    // to prevent stale ProjectMember rows from reactivating if the user is later
+    // re-invited (e.g. as a guest — they'd inherit their old project admin roles).
+    await this.prisma.$transaction(async (tx) => {
+      await tx.projectMember.deleteMany({
+        where: {
+          userId: member.userId,
+          project: { organizationId },
+        },
+      });
+      await tx.organizationMember.delete({
+        where: { id: memberId },
+      });
     });
+
+    this.membershipCache.invalidateInternalUserId(member.userId);
 
     void this.audit.log({
       action: 'org.member.removed',
@@ -1034,6 +1124,21 @@ export class OrganizationsService {
     if (member.role === 'owner' && newRole !== 'owner') {
       throw new BadRequestException('Cannot change owner role. Transfer ownership instead.');
     }
+
+    // Guests must have at least one project membership — prevent creating
+    // orphaned guests that violate the lifecycle rule.
+    if (newRole === 'guest') {
+      const projectCount = await this.prisma.projectMember.count({
+        where: { userId: member.userId, project: { organizationId } },
+      });
+      if (projectCount === 0) {
+        throw new BadRequestException(
+          'Cannot set role to guest: user has no project memberships in this organization. Add them to a project first, or remove them from the org.',
+        );
+      }
+    }
+
+    this.membershipCache.invalidateInternalUserId(member.userId);
 
     const updated = await this.prisma.organizationMember.update({
       where: { id: memberId },

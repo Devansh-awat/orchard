@@ -6,7 +6,7 @@ export interface PendingInvitation {
 	id: string;
 	token: string;
 	email: string;
-	role: 'owner' | 'admin' | 'member';
+	role: 'owner' | 'admin' | 'member' | 'guest';
 	expiresAt: string;
 	createdAt: string;
 	organization: {

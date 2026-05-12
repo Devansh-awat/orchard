@@ -11,6 +11,7 @@ import { NodesService } from '../nodes/nodes.service';
 import { QuotasService } from '../quotas/quotas.service';
 import { TailscaleService } from '../tailscale/tailscale.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
+import { AuthorizationService } from '../auth/authorization.service';
 import { AuditService } from '../audit/audit.service';
 import { randomUUID } from 'crypto';
 import * as dns from 'dns';
@@ -33,6 +34,7 @@ export class ProjectsService {
     private readonly tailscaleService: TailscaleService,
     private readonly membershipCache: MembershipCacheService,
     private readonly audit: AuditService,
+    private readonly authz: AuthorizationService,
   ) {}
 
   private async resolvePlacementForProject(projectId: string): Promise<{
@@ -346,14 +348,9 @@ export class ProjectsService {
       throw new NotFoundException('Organization not found');
     }
 
-    // Check org membership
-    const orgMembership = await this.prisma.organizationMember.findFirst({
-      where: { organizationId, userId: user.id },
-    });
-
-    if (!orgMembership) {
-      throw new ForbiddenException('You are not a member of this organization');
-    }
+    // Org membership + creation gate. Guests can be invited into an org per
+    // project but explicitly cannot spawn new projects of their own.
+    await this.authz.requireOrgCanCreateProjects(organizationId, user.id);
 
     const name = String(data.name || '').trim();
 
@@ -601,23 +598,7 @@ export class ProjectsService {
       throw new NotFoundException(`Project ${projectId} not found`);
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: project.id,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to create deployments');
-    }
+    await this.authz.requireProjectEdit(project.id, user.id, 'create deployments');
 
     const nameInput = String(data.name || '').trim();
     const image = String(data.image || '').trim();
@@ -911,23 +892,7 @@ export class ProjectsService {
       throw new NotFoundException(`Project ${projectId} not found`);
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: project.id,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to create deployments');
-    }
+    await this.authz.requireProjectEdit(project.id, user.id, 'create deployments');
 
     const nameInput = String(data.name || '').trim();
     const replicas = data.replicas && Number.isInteger(data.replicas) && data.replicas > 0 ? data.replicas : 1;
@@ -1898,23 +1863,7 @@ export class ProjectsService {
       throw new BadRequestException('Dockerfile path is missing for this deployment');
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: deployment.project.id,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to rebuild deployments');
-    }
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'rebuild deployments');
 
     if (deployment.buildStatus === 'building') {
       throw new BadRequestException('A build is already in progress for this deployment. Please cancel it before starting a new build.');
@@ -2100,23 +2049,7 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: deployment.project.id,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to rollback deployments');
-    }
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'rollback deployments');
 
     const imageHistory = await this.prisma.imageHistory.findUnique({
       where: { id: imageHistoryId },
@@ -2292,23 +2225,7 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: deployment.project.id,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to manage ingress resources');
-    }
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'manage ingress resources');
 
     const rawHost = String(data.host || '').trim().toLowerCase();
 
@@ -2709,20 +2626,7 @@ export class ProjectsService {
       throw new NotFoundException('User not found');
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: deployment.project.id,
-        userId: user.id,
-      },
-      include: { role: true },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to manage ingress resources');
-    }
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'manage ingress resources');
 
     const rawHost = data.host;
     const services = Array.isArray(deployment.services) ? deployment.services : [];
@@ -2932,20 +2836,7 @@ export class ProjectsService {
       throw new NotFoundException(`Project ${projectId} not found`);
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: project.id,
-        userId: user.id,
-      },
-      include: { role: true },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to manage ingress resources');
-    }
+    await this.authz.requireProjectEdit(project.id, user.id, 'manage ingress resources');
 
     const rawHost = String(data.host || '').trim().toLowerCase();
     if (!rawHost) {
@@ -3411,20 +3302,7 @@ export class ProjectsService {
 
     const project = ingress.project;
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: project.id,
-        userId: user.id,
-      },
-      include: { role: true },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to manage ingress resources');
-    }
+    await this.authz.requireProjectEdit(project.id, user.id, 'manage ingress resources');
 
     const rawHost = String(data.host || '').trim().toLowerCase();
     if (!rawHost) {
@@ -3614,23 +3492,7 @@ export class ProjectsService {
       throw new BadRequestException('Ingress does not belong to deployment');
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: ingress.deployment.project.id,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to manage ingress resources');
-    }
+    await this.authz.requireProjectEdit(ingress.deployment.project.id, user.id, 'manage ingress resources');
 
     try {
       await this.kubernetesService.deleteIngress(ingress.namespace, ingress.name);
@@ -3719,23 +3581,7 @@ export class ProjectsService {
       throw new BadRequestException('Ingress does not belong to project');
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: ingress.project.id,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to manage ingress resources');
-    }
+    await this.authz.requireProjectEdit(ingress.project.id, user.id, 'manage ingress resources');
 
     const siblings = await this.prisma.ingress.findMany({
       where: {
@@ -3873,23 +3719,7 @@ export class ProjectsService {
 
     const deployment = ingress.deployment;
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: deployment.project.id,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to manage ingress resources');
-    }
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'manage ingress resources');
 
     const rawHost = String(data.host || '').trim().toLowerCase();
 
@@ -4211,34 +4041,7 @@ export class ProjectsService {
       throw new NotFoundException(`Project ${projectId} not found`);
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: project.id,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    const orgMembership = await this.prisma.organizationMember.findUnique({
-      where: {
-        organizationId_userId: {
-          organizationId: project.organizationId,
-          userId: user.id,
-        },
-      },
-    });
-
-    const isProjectOwnerOrAdmin = membership && (membership.role.name === 'owner' || membership.role.name === 'admin');
-    const isOrgOwnerOrAdmin = orgMembership && (orgMembership.role === 'owner' || orgMembership.role === 'admin');
-
-    if (!isProjectOwnerOrAdmin && !isOrgOwnerOrAdmin) {
-      if (!membership && !orgMembership) {
-        throw new ForbiddenException('You are not a member of this project');
-      }
-      throw new ForbiddenException('Only project admins or organization admins can delete projects');
-    }
+    await this.authz.requireProjectDelete(project.id, user.id);
 
     // Clean up Tailscale sidecars before deleting the namespace
     try {
@@ -4380,13 +4183,9 @@ export class ProjectsService {
       throw new NotFoundException(`Project ${projectId} not found`);
     }
 
-    const { orgMembership, projectMembership } = await this.assertProjectAccess(
+    const { access } = await this.assertProjectAccess(
       project.id, user.id, project.organizationId,
     );
-
-    const isOrgAdminOrOwner = orgMembership.role === 'owner' || orgMembership.role === 'admin';
-    const isProjectAdmin = projectMembership?.role.name === 'admin';
-    const canEdit = isOrgAdminOrOwner || !!projectMembership;
 
     // Compute status for each deployment
     const deploymentsWithComputedStatus = await Promise.all(
@@ -4401,17 +4200,42 @@ export class ProjectsService {
     );
 
     const icon = project.icon ?? (await this.resolveProjectIconFallback(project.deployments));
+    const membersWithOrgRole = await this.attachOrgRoleToMembers(project.organizationId, project.members);
 
     return {
       ...project,
       icon,
+      members: membersWithOrgRole,
       deployments: deploymentsWithComputedStatus,
       currentUserRole: {
-        orgRole: orgMembership.role,
-        projectRole: projectMembership?.role.name ?? null,
-        canEdit,
+        orgRole: access.orgRole,
+        projectRole: access.projectRoleName,
+        source: access.source,
+        canView: access.canView,
+        canEdit: access.canEdit,
+        canManageMembers: access.canManageMembers,
+        canDelete: access.canDelete,
       },
     };
+  }
+
+  /**
+   * Each ProjectMember row only carries the project-level role. To render the
+   * "Guest" pill in the UI we also need the user's org-level role for each
+   * member. One batched query, then merged in-place.
+   */
+  private async attachOrgRoleToMembers<M extends { user: { id: string } }>(
+    organizationId: string,
+    members: M[],
+  ): Promise<Array<M & { orgRole: string | null }>> {
+    if (members.length === 0) return [] as Array<M & { orgRole: string | null }>;
+    const userIds = members.map((m) => m.user.id);
+    const orgMembers = await this.prisma.organizationMember.findMany({
+      where: { organizationId, userId: { in: userIds } },
+      select: { userId: true, role: true },
+    });
+    const byUserId = new Map(orgMembers.map((om) => [om.userId, om.role]));
+    return members.map((m) => ({ ...m, orgRole: byUserId.get(m.user.id) ?? null }));
   }
 
   async updateProject(
@@ -4425,7 +4249,7 @@ export class ProjectsService {
 
     const project = await this.prisma.project.findUnique({ where: { id: projectId } });
     if (!project) throw new NotFoundException('Project not found');
-    await this.assertProjectAccess(projectId, user.id, project.organizationId);
+    await this.authz.requireProjectEdit(projectId, user.id, 'update this project');
 
     const updates: Prisma.ProjectUpdateInput = {};
     if (data.name !== undefined) {
@@ -4488,7 +4312,7 @@ export class ProjectsService {
 
     const existing = await this.prisma.project.findUnique({ where: { id: projectId } });
     if (!existing) throw new NotFoundException('Project not found');
-    await this.assertProjectAccess(projectId, user.id, existing.organizationId);
+    await this.authz.requireProjectEdit(projectId, user.id, 'update project assets');
 
     const folder = field === 'icon' ? 'project-icons' : 'project-backgrounds';
     const url = await storageService.uploadFile(file, folder);
@@ -4508,7 +4332,11 @@ export class ProjectsService {
   /**
    * Build a Prisma `where` filter for Project queries that respects RBAC:
    * - Org owner/admin → all projects in the org
-   * - Org member → only projects where user is a ProjectMember
+   * - Org member or guest → only projects where user is a ProjectMember
+   *
+   * Guests get the same scoping as members here: they're explicit-membership-only.
+   * The difference between member and guest lives at write-side endpoints
+   * (project creation, org settings) — for reads, both see the same slice.
    */
   private async buildProjectAccessFilter(userId: string, orgId?: string) {
     const all = await this.membershipCache.getMemberships(userId);
@@ -4518,17 +4346,17 @@ export class ProjectsService {
     const adminOrgIds = orgMemberships
       .filter((m) => m.role === 'owner' || m.role === 'admin')
       .map((m) => m.organizationId);
-    const memberOrgIds = orgMemberships
-      .filter((m) => m.role === 'member')
+    const explicitOnlyOrgIds = orgMemberships
+      .filter((m) => m.role === 'member' || m.role === 'guest')
       .map((m) => m.organizationId);
 
     const conditions: any[] = [];
     if (adminOrgIds.length > 0) {
       conditions.push({ organizationId: { in: adminOrgIds } });
     }
-    if (memberOrgIds.length > 0) {
+    if (explicitOnlyOrgIds.length > 0) {
       conditions.push({
-        organizationId: { in: memberOrgIds },
+        organizationId: { in: explicitOnlyOrgIds },
         members: { some: { userId } },
       });
     }
@@ -4537,11 +4365,72 @@ export class ProjectsService {
   }
 
   /**
-   * Assert the user can access a project. Org owner/admin can access any project
-   * in their org. Regular org members must be a ProjectMember.
-   * Returns { orgMembership, projectMembership } for further role checks.
+   * Assert the user can read a project. Org owner/admin can access any project
+   * in their org. Regular org members must be a ProjectMember (any role).
+   * Returns { orgMembership, projectMembership, access } for further role checks.
    */
+  /**
+   * Resolve a deployment's owning project, then require the user can view it.
+   * Used as a guard for every deployment-level read endpoint.
+   */
+  async assertDeploymentView(deploymentId: string, clerkId: string, userData?: any) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+    const dep = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { id: true, projectId: true, project: { select: { organizationId: true } } },
+    });
+    if (!dep) throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    const access = await this.authz.resolveProjectAccess(dep.projectId, dep.project.organizationId, user.id);
+    if (!access || !access.canView) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+    return { user, deployment: dep, access };
+  }
+
+  async assertProjectView(projectId: string, clerkId: string, userData?: any) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+    const access = await this.authz.requireProjectView(projectId, user.id);
+    return { user, access };
+  }
+
+  async assertDatabaseView(databaseId: string, clerkId: string, userData?: any) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+    const db = await this.prisma.database.findUnique({
+      where: { id: databaseId },
+      select: { id: true, projectId: true, project: { select: { organizationId: true } } },
+    });
+    if (!db) throw new NotFoundException(`Database ${databaseId} not found`);
+    const access = await this.authz.resolveProjectAccess(db.projectId, db.project.organizationId, user.id);
+    if (!access || !access.canView) {
+      throw new NotFoundException(`Database ${databaseId} not found`);
+    }
+    return { user, database: db, access };
+  }
+
+  async assertIngressView(ingressId: string, clerkId: string, userData?: any) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+    const ing = await this.prisma.ingress.findUnique({
+      where: { id: ingressId },
+      select: { id: true, projectId: true, project: { select: { organizationId: true } } },
+    });
+    if (!ing) throw new NotFoundException(`Ingress ${ingressId} not found`);
+    const access = await this.authz.resolveProjectAccess(ing.projectId, ing.project.organizationId, user.id);
+    if (!access || !access.canView) {
+      throw new NotFoundException(`Ingress ${ingressId} not found`);
+    }
+    return { user, ingress: ing, access };
+  }
+
   private async assertProjectAccess(projectId: string, userId: string, organizationId: string) {
+    const access = await this.authz.resolveProjectAccess(projectId, organizationId, userId);
+    if (!access || !access.canView) {
+      throw new NotFoundException(`Project ${projectId} not found`);
+    }
+    // Backwards-compatible shape for callers that still read these.
     const [projectMembership, orgMembership] = await Promise.all([
       this.prisma.projectMember.findFirst({
         where: { projectId, userId },
@@ -4551,43 +4440,13 @@ export class ProjectsService {
         where: { organizationId_userId: { organizationId, userId } },
       }),
     ]);
-
-    if (!orgMembership) {
-      throw new ForbiddenException('You are not a member of this organization');
-    }
-
-    const isOrgAdminOrOwner = orgMembership.role === 'owner' || orgMembership.role === 'admin';
-    if (!isOrgAdminOrOwner && !projectMembership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    return { orgMembership, projectMembership };
+    return { orgMembership, projectMembership, access };
   }
 
   private async assertProjectAdmin(projectId: string, userId: string) {
     const project = await this.prisma.project.findUnique({ where: { id: projectId } });
     if (!project) throw new NotFoundException('Project not found');
-
-    const membership = await this.prisma.projectMember.findFirst({
-      where: { projectId, userId },
-      include: { role: true },
-    });
-    const orgMembership = await this.prisma.organizationMember.findUnique({
-      where: {
-        organizationId_userId: {
-          organizationId: project.organizationId,
-          userId,
-        },
-      },
-    });
-
-    const isProjectAdmin = membership?.role.name === 'admin';
-    const isOrgAdminOrOwner = orgMembership && (orgMembership.role === 'owner' || orgMembership.role === 'admin');
-
-    if (!isProjectAdmin && !isOrgAdminOrOwner) {
-      throw new ForbiddenException('Only project admins or organization admins can manage project members');
-    }
-
+    await this.authz.requireProjectManageMembers(projectId, userId);
     return project;
   }
 
@@ -4617,6 +4476,31 @@ export class ProjectsService {
     });
     if (existing) throw new BadRequestException('User is already a member of this project');
 
+    // If the invitee isn't already in the org, attach them as a guest. Guests
+    // can only see projects they're explicit members of, so this is the
+    // narrowest membership that still lets them log in and see this project.
+    // Existing members/admins/owners keep their current role — we never
+    // downgrade.
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { organizationId: true },
+    });
+    if (!project) throw new NotFoundException('Project not found');
+    const existingOrgMember = await this.prisma.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId: project.organizationId, userId: user.id } },
+    });
+    if (!existingOrgMember) {
+      await this.prisma.organizationMember.create({
+        data: {
+          organizationId: project.organizationId,
+          userId: user.id,
+          role: 'guest',
+          addedBy: adder.id,
+        },
+      });
+      this.membershipCache.invalidateInternalUserId(user.id);
+    }
+
     const created = await this.prisma.projectMember.create({
       data: {
         projectId,
@@ -4632,12 +4516,11 @@ export class ProjectsService {
       },
     });
 
-    const project = await this.prisma.project.findUnique({ where: { id: projectId }, select: { organizationId: true } });
     void this.audit.log({
       action: 'project.member.added',
       actorUserId: adder.id,
       actorEmail: adder.email,
-      organizationId: project?.organizationId,
+      organizationId: project.organizationId,
       projectId,
       targetType: 'user',
       targetId: user.id,
@@ -4683,6 +4566,26 @@ export class ProjectsService {
     await this.prisma.projectMember.delete({ where: { id: memberId } });
 
     const project = await this.prisma.project.findUnique({ where: { id: projectId }, select: { organizationId: true } });
+
+    // If the removed user was a guest in this org and we just removed their
+    // last project here, drop the org membership entirely — guests have no
+    // standalone relationship with the org, so an orphaned guest membership
+    // is just dead weight.
+    if (project) {
+      const orgMember = await this.prisma.organizationMember.findUnique({
+        where: { organizationId_userId: { organizationId: project.organizationId, userId: member.userId } },
+      });
+      if (orgMember?.role === 'guest') {
+        const remaining = await this.prisma.projectMember.count({
+          where: { userId: member.userId, project: { organizationId: project.organizationId } },
+        });
+        if (remaining === 0) {
+          await this.prisma.organizationMember.delete({ where: { id: orgMember.id } });
+          this.membershipCache.invalidateInternalUserId(member.userId);
+        }
+      }
+    }
+
     void this.audit.log({
       action: 'project.member.removed',
       actorUserId: remover.id,
@@ -4756,7 +4659,17 @@ export class ProjectsService {
     return updated;
   }
 
-  async getProjectBySlug(organizationId: string, slug: string) {
+  async getProjectBySlug(organizationId: string, slug: string, clerkId: string, userData?: any) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+    const proj = await this.prisma.project.findUnique({
+      where: { organizationId_slug: { organizationId, slug } },
+      select: { id: true, organizationId: true },
+    });
+    if (!proj) {
+      throw new NotFoundException(`Project with slug ${slug} not found`);
+    }
+    await this.authz.requireProjectView(proj.id, user.id);
     const project = await this.prisma.project.findUnique({
       where: {
         organizationId_slug: {
@@ -4922,13 +4835,9 @@ export class ProjectsService {
       throw new NotFoundException(`Project ${projectSlug} not found`);
     }
 
-    const { orgMembership, projectMembership } = await this.assertProjectAccess(
+    const { access } = await this.assertProjectAccess(
       project.id, user.id, project.organizationId,
     );
-
-    const isOrgAdminOrOwner = orgMembership.role === 'owner' || orgMembership.role === 'admin';
-    const isProjectAdmin = projectMembership?.role.name === 'admin';
-    const canEdit = isOrgAdminOrOwner || !!projectMembership;
 
     // Batch-fetch pods for every deployment by namespace: one listNamespacedPod
     // call per unique namespace, grouped by `app` label. Replaces N+1 K8s reads.
@@ -4963,15 +4872,21 @@ export class ProjectsService {
     );
 
     const icon = project.icon ?? (await this.resolveProjectIconFallback(project.deployments));
+    const membersWithOrgRole = await this.attachOrgRoleToMembers(project.organizationId, project.members);
 
     return {
       ...project,
       icon,
+      members: membersWithOrgRole,
       deployments: deploymentsWithComputedStatus,
       currentUserRole: {
-        orgRole: orgMembership.role,
-        projectRole: projectMembership?.role.name ?? null,
-        canEdit,
+        orgRole: access.orgRole,
+        projectRole: access.projectRoleName,
+        source: access.source,
+        canView: access.canView,
+        canEdit: access.canEdit,
+        canManageMembers: access.canManageMembers,
+        canDelete: access.canDelete,
       },
     };
   }
@@ -5172,7 +5087,7 @@ export class ProjectsService {
 
     const memberships = await this.membershipCache.getMembershipsForOrg(userId, org.id);
     if (memberships.length === 0) {
-      throw new ForbiddenException('Not a member of this organization');
+      throw new NotFoundException('Organization not found');
     }
 
     const [projects, deployments, databases, builds] = await Promise.all([
@@ -5185,7 +5100,11 @@ export class ProjectsService {
     return { organization: org, projects, deployments, databases, builds };
   }
 
-  async getProjectDeployments(projectId: string) {
+  async getProjectDeployments(projectId: string, clerkId: string, userData?: any) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+    await this.authz.requireProjectView(projectId, user.id);
+
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
     });
@@ -5497,23 +5416,7 @@ export class ProjectsService {
       throw new BadRequestException('Deployment is not in a buildable state');
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: deployment.project.id,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to cancel deployments');
-    }
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'cancel deployments');
 
     try {
       console.log(`[Projects] Cancelling build jobs for deployment ${deploymentId}`);
@@ -5585,23 +5488,7 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: deployment.project.id,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to delete deployments');
-    }
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'delete deployments');
 
     // Fetch all related resources before deleting
     const [ingresses, services, volumes, imageHistoryEntries] = await Promise.all([
@@ -5726,23 +5613,7 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: deployment.project.id,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to scale deployments');
-    }
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'scale deployments');
 
     const result = await this.kubernetesService.scaleDeployment(
       deployment.name,
@@ -5803,23 +5674,7 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: deployment.project.id,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to restart deployments');
-    }
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'restart deployments');
 
     const result = await this.kubernetesService.restartDeployment(deployment.name, deployment.namespace);
 
@@ -5871,23 +5726,7 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: deployment.project.id,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to update deployments');
-    }
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployments');
 
     const envEntries = Array.isArray(env)
       ? env
@@ -6024,23 +5863,7 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: deployment.project.id,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to update deployments');
-    }
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployments');
 
     await this.prisma.deployment.update({
       where: { id: deploymentId },
@@ -6115,23 +5938,7 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: deployment.project.id,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to update deployments');
-    }
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployments');
 
     await this.prisma.deployment.update({
       where: { id: deploymentId },
@@ -6235,23 +6042,7 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: deployment.project.id,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to update deployments');
-    }
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployments');
 
     const volumesList: Array<{
       name: string;
@@ -6401,23 +6192,7 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: deployment.project.id,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to manage services');
-    }
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'manage services');
 
     const rawName = String(data.name || '').trim();
     if (!rawName) {
@@ -6592,23 +6367,7 @@ export class ProjectsService {
       throw new BadRequestException('Service does not belong to deployment');
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: service.deployment.project.id,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to update services');
-    }
+    await this.authz.requireProjectEdit(service.deployment.project.id, user.id, 'update services');
 
     const domainProvided = Object.prototype.hasOwnProperty.call(changes ?? {}, 'domain');
     let normalizedDomain: string | null = null;
@@ -6912,23 +6671,7 @@ export class ProjectsService {
       throw new BadRequestException('Delete associated ingresses before removing the service');
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: service.deployment.project.id,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to update services');
-    }
+    await this.authz.requireProjectEdit(service.deployment.project.id, user.id, 'update services');
 
     const otherServices = service.deployment.services.filter(
       (entry) => entry.id !== service.id
@@ -7071,23 +6814,7 @@ export class ProjectsService {
       throw new BadRequestException('Service does not belong to deployment');
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: service.deployment.project.id,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to update services');
-    }
+    await this.authz.requireProjectEdit(service.deployment.project.id, user.id, 'update services');
 
     const desiredType = exposePublic ? 'NodePort' : 'ClusterIP';
 
@@ -7231,23 +6958,7 @@ export class ProjectsService {
       throw new BadRequestException('This deployment was not created from GitHub');
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: deployment.project.id,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to configure auto-deploy');
-    }
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'configure auto-deploy');
 
     // Parse the repo URL to get owner and repo
     const repoInfo = this.githubService.parseRepoUrl(deployment.githubRepo);
@@ -7326,23 +7037,7 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: {
-        projectId: deployment.project.id,
-        userId: user.id,
-      },
-      include: {
-        role: true,
-      },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException('You do not have permission to configure auto-deploy');
-    }
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'configure auto-deploy');
 
     // Update the deployment
     const updated = await this.prisma.deployment.update({
@@ -7738,12 +7433,7 @@ export class ProjectsService {
     });
     if (!project) throw new NotFoundException(`Project ${projectId} not found`);
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: { projectId: project.id, userId: user.id },
-      include: { role: true },
-    });
-    if (!membership) throw new ForbiddenException('You are not a member of this project');
-    if (membership.role.name === 'viewer') throw new ForbiddenException('You do not have permission to create databases');
+    await this.authz.requireProjectEdit(project.id, user.id, 'create databases');
 
     const nameInput = String(data.name || '').trim();
     if (!nameInput) throw new BadRequestException('Database name is required');
@@ -8017,12 +7707,7 @@ export class ProjectsService {
     });
     if (!database) throw new NotFoundException('Database not found');
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: { projectId: database.project.id, userId: user.id },
-      include: { role: true },
-    });
-    if (!membership) throw new ForbiddenException('You are not a member of this project');
-    if (membership.role.name === 'viewer') throw new ForbiddenException('You do not have permission to delete databases');
+    await this.authz.requireProjectEdit(database.project.id, user.id, 'delete databases');
 
     if (database.mode === 'cnpg' && database.namespace && database.clusterName) {
       try { await this.kubernetesService.deleteScheduledBackup(database.namespace, database.clusterName); } catch { /* ignore */ }
@@ -8062,12 +7747,7 @@ export class ProjectsService {
     });
     if (!database) throw new NotFoundException('Database not found');
 
-    const membership = await this.prisma.projectMember.findFirst({
-      where: { projectId: database.project.id, userId: user.id },
-      include: { role: true },
-    });
-    if (!membership) throw new ForbiddenException('You are not a member of this project');
-    if (membership.role.name === 'viewer') throw new ForbiddenException('You do not have permission to manage backups');
+    await this.authz.requireProjectEdit(database.project.id, user.id, 'manage backups');
 
     return { user, database };
   }
@@ -8683,12 +8363,7 @@ export class ProjectsService {
     if (port.service.deploymentId !== deploymentId) throw new BadRequestException('Service does not belong to deployment');
 
     const deployment = port.service.deployment;
-    const membership = await this.prisma.projectMember.findFirst({
-      where: { projectId: deployment.project.id, userId: user.id },
-      include: { role: true },
-    });
-    if (!membership) throw new ForbiddenException('You are not a member of this project');
-    if (membership.role.name === 'viewer') throw new ForbiddenException('You do not have permission to update services');
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update services');
 
     return { user, port, service: port.service, deployment };
   }

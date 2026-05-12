@@ -48,20 +48,29 @@ export class WorkspacesController {
 
   @Get('slug/:slug')
 
-  async getWorkspaceBySlug(@Param('slug') slug: string) {
-    return this.workspacesService.getWorkspaceBySlug(slug);
+  async getWorkspaceBySlug(@Param('slug') slug: string, @Request() req) {
+    return this.workspacesService.getWorkspaceBySlug(slug, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
   }
 
   @Get(':id')
 
-  async getWorkspace(@Param('id') id: string) {
-    return this.workspacesService.getWorkspace(id);
+  async getWorkspace(@Param('id') id: string, @Request() req) {
+    return this.workspacesService.getWorkspace(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
   }
 
   @Get(':id/projects')
 
-  async getWorkspaceProjects(@Param('id') id: string) {
-    return this.workspacesService.getWorkspaceProjects(id);
+  async getWorkspaceProjects(@Param('id') id: string, @Request() req) {
+    return this.workspacesService.getWorkspaceProjects(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
   }
 
   @Delete(':id')

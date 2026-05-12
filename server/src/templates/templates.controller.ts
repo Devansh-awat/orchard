@@ -20,21 +20,32 @@ export class TemplatesController {
   @Post('templates')
   async createTemplate(
     @Body() body: { yaml: string },
+    @Request() req,
   ) {
-    return this.templatesService.createTemplate(body.yaml);
+    return this.templatesService.createTemplate(body.yaml, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
   }
 
   @Put('templates/:id')
   async updateTemplate(
     @Param('id') id: string,
     @Body() body: { yaml: string },
+    @Request() req,
   ) {
-    return this.templatesService.updateTemplate(id, body.yaml);
+    return this.templatesService.updateTemplate(id, body.yaml, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
   }
 
   @Delete('templates/:id')
-  async deleteTemplate(@Param('id') id: string) {
-    return this.templatesService.deleteTemplate(id);
+  async deleteTemplate(@Param('id') id: string, @Request() req) {
+    return this.templatesService.deleteTemplate(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
   }
 
   @Post('projects/:projectId/template-instances')
@@ -68,13 +79,19 @@ export class TemplatesController {
   }
 
   @Get('projects/:projectId/template-instances')
-  async getProjectTemplateInstances(@Param('projectId') projectId: string) {
-    return this.templatesService.getProjectTemplateInstances(projectId);
+  async getProjectTemplateInstances(@Param('projectId') projectId: string, @Request() req) {
+    return this.templatesService.getProjectTemplateInstances(projectId, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
   }
 
   @Get('template-instances/:id')
-  async getTemplateInstance(@Param('id') id: string) {
-    return this.templatesService.getTemplateInstance(id);
+  async getTemplateInstance(@Param('id') id: string, @Request() req) {
+    return this.templatesService.getTemplateInstance(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
   }
 
   @Delete('template-instances/:id')

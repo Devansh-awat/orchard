@@ -25,8 +25,8 @@ export class SsoConfigController {
     private readonly usersService: UsersService,
   ) {}
 
-  private async requireEnterprisePlan(organizationId: string) {
-    const org = await this.organizationsService.getOrganization(organizationId);
+  private async requireEnterprisePlan(organizationId: string, clerkId: string, userData?: any) {
+    const org = await this.organizationsService.getOrganization(organizationId, clerkId, userData);
     if (org.plan !== 'enterprise') {
       throw new ForbiddenException('SSO features require an enterprise plan');
     }
@@ -49,8 +49,11 @@ export class SsoConfigController {
     @Param('id') organizationId: string,
     @Request() req,
   ) {
-    await this.requireEnterprisePlan(organizationId);
     await this.requireOwner(organizationId, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+    });
+    await this.requireEnterprisePlan(organizationId, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
     });
@@ -85,8 +88,11 @@ export class SsoConfigController {
     },
     @Request() req,
   ) {
-    await this.requireEnterprisePlan(organizationId);
     await this.requireOwner(organizationId, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+    });
+    await this.requireEnterprisePlan(organizationId, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
     });
@@ -103,8 +109,11 @@ export class SsoConfigController {
     @Param('id') organizationId: string,
     @Request() req,
   ) {
-    await this.requireEnterprisePlan(organizationId);
     await this.requireOwner(organizationId, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+    });
+    await this.requireEnterprisePlan(organizationId, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
     });
@@ -123,8 +132,11 @@ export class SsoConfigController {
     @Body('subdomain') subdomain: string | null,
     @Request() req,
   ) {
-    await this.requireEnterprisePlan(organizationId);
     await this.requireOwner(organizationId, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+    });
+    await this.requireEnterprisePlan(organizationId, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
     });
@@ -141,8 +153,11 @@ export class SsoConfigController {
     @Param('id') organizationId: string,
     @Request() req,
   ) {
-    await this.requireEnterprisePlan(organizationId);
     await this.requireOwner(organizationId, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+    });
+    await this.requireEnterprisePlan(organizationId, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
     });

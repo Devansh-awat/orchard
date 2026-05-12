@@ -58,7 +58,7 @@ interface Project {
 	interface OrgMember {
 		id: string;
 		userId: string;
-		role: 'owner' | 'admin' | 'member';
+		role: 'owner' | 'admin' | 'member' | 'guest';
 		user: {
 			id: string;
 			email: string;

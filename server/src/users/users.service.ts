@@ -117,19 +117,35 @@ export class UsersService {
         where: { email: userData.email },
       });
 
+      const uuidRegex =
+        /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+      const identifierIsUuid = uuidRegex.test(identifier);
+
       if (user) {
-        // Link the hackClubId to the existing user
+        // Link the hackClubId to the existing user — but never overwrite it
+        // with a UUID. Callers pass `req.user.sub` here, which SuperAdminGuard
+        // has already resolved to the DB UUID for OAuth users. Writing that
+        // UUID into `hackClubId` clobbers the real Hack Club ID and breaks
+        // every future SuperAdminGuard lookup (`findUnique({ hackClubId })`
+        // returns null → `dbUserId` falls back to `payload.sub` (a HCID) →
+        // membership queries run against a non-UUID userId → 403 "Not a
+        // member of this organization" forever, until the user logs out.
         user = await this.prisma.user.update({
           where: { id: user.id },
           data: {
-            hackClubId: identifier,
+            ...(identifierIsUuid ? {} : { hackClubId: identifier }),
             ...(userData.firstName && { firstName: userData.firstName }),
             ...(userData.lastName && { lastName: userData.lastName }),
             ...(userData.imageUrl && { imageUrl: userData.imageUrl }),
           },
         });
       } else {
-        // Create a new user
+        // No existing record by id, hackClubId, or email. If the identifier
+        // looks like a UUID we cannot legitimately create a Hack Club–linked
+        // user from it — bail out so we don't write garbage into hackClubId.
+        if (identifierIsUuid) return null;
+
+        // Create a new user with the (presumably-real) Hack Club identifier.
         let username = userData.username || userData.email.split('@')[0];
         let counter = 1;
 

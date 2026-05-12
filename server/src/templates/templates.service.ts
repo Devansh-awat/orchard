@@ -2,11 +2,14 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   Logger,
   OnModuleInit,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
+import { AuthorizationService } from '../auth/authorization.service';
+import { UsersService } from '../users/users.service';
 import {
   TemplateEngineService,
   ResolutionContext,
@@ -23,7 +26,27 @@ export class TemplatesService implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly projectsService: ProjectsService,
     private readonly templateEngine: TemplateEngineService,
+    private readonly authz: AuthorizationService,
+    private readonly usersService: UsersService,
   ) {}
+
+  private async resolveUserId(clerkId: string, userData?: any): Promise<string> {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+    return user.id;
+  }
+
+  private async requireSuperAdmin(clerkId: string, userData?: any) {
+    const userId = await this.resolveUserId(clerkId, userData);
+    const u = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { isSuperAdmin: true },
+    });
+    if (!u?.isSuperAdmin) {
+      throw new ForbiddenException('Only superadmins can manage global templates');
+    }
+    return userId;
+  }
 
   async onModuleInit() {
     this.logger.log('onModuleInit: starting seedBuiltInTemplates...');
@@ -114,7 +137,8 @@ export class TemplatesService implements OnModuleInit {
     };
   }
 
-  async createTemplate(yamlContent: string) {
+  async createTemplate(yamlContent: string, clerkId: string, userData?: any) {
+    await this.requireSuperAdmin(clerkId, userData);
     const parsed = this.templateEngine.parseTemplate(yamlContent);
 
     // Check for name conflicts
@@ -146,7 +170,8 @@ export class TemplatesService implements OnModuleInit {
     };
   }
 
-  async updateTemplate(id: string, yamlContent: string) {
+  async updateTemplate(id: string, yamlContent: string, clerkId: string, userData?: any) {
+    await this.requireSuperAdmin(clerkId, userData);
     const existing = await this.prisma.template.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Template not found');
     if (existing.isBuiltIn) {
@@ -184,7 +209,8 @@ export class TemplatesService implements OnModuleInit {
     };
   }
 
-  async deleteTemplate(id: string) {
+  async deleteTemplate(id: string, clerkId: string, userData?: any) {
+    await this.requireSuperAdmin(clerkId, userData);
     const existing = await this.prisma.template.findUnique({ where: { id } });
     if (!existing) throw new NotFoundException('Template not found');
     if (existing.isBuiltIn) {
@@ -225,13 +251,15 @@ export class TemplatesService implements OnModuleInit {
     const template = await this.prisma.template.findUnique({ where: { id: templateId } });
     if (!template) throw new NotFoundException('Template not found');
 
+    // Resolve user up front so we can authorise the project edit before doing
+    // any work; the per-resource calls below also re-check, but failing fast
+    // gives a clean 403 instead of a half-created TemplateInstance row.
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+    await this.authz.requireProjectEdit(projectId, user.id, 'deploy a template');
+
     const parsed = this.templateEngine.parseTemplate(template.yaml);
     const validatedParams = this.templateEngine.validateParameters(parameters, parsed.parameters);
-
-    // Resolve user
-    const user = await this.prisma.user.findFirst({
-      where: { hackClubId: clerkId },
-    });
 
     // Create instance record
     const instance = await this.prisma.templateInstance.create({
@@ -374,7 +402,14 @@ export class TemplatesService implements OnModuleInit {
     }
   }
 
-  async getTemplateInstance(instanceId: string) {
+  async getTemplateInstance(instanceId: string, clerkId: string, userData?: any) {
+    const userId = await this.resolveUserId(clerkId, userData);
+    const owner = await this.prisma.templateInstance.findUnique({
+      where: { id: instanceId },
+      select: { projectId: true },
+    });
+    if (!owner) throw new NotFoundException('Template instance not found');
+    await this.authz.requireProjectView(owner.projectId, userId);
     const instance = await this.prisma.templateInstance.findUnique({
       where: { id: instanceId },
       include: {
@@ -418,7 +453,9 @@ export class TemplatesService implements OnModuleInit {
     return instance;
   }
 
-  async getProjectTemplateInstances(projectId: string) {
+  async getProjectTemplateInstances(projectId: string, clerkId: string, userData?: any) {
+    const userId = await this.resolveUserId(clerkId, userData);
+    await this.authz.requireProjectView(projectId, userId);
     return this.prisma.templateInstance.findMany({
       where: { projectId },
       include: {
@@ -460,6 +497,9 @@ export class TemplatesService implements OnModuleInit {
     });
 
     if (!instance) throw new NotFoundException('Template instance not found');
+
+    const userId = await this.resolveUserId(clerkId, userData);
+    await this.authz.requireProjectEdit(instance.projectId, userId, 'delete a template instance');
 
     await this.prisma.templateInstance.update({
       where: { id: instanceId },

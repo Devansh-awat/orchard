@@ -57,13 +57,23 @@ export class SuperAdminGuard implements CanActivate {
     try {
       const { payload } = await jwtVerify(token, this.jwtSecret);
 
-      // Resolve the real DB user ID for OAuth users (where sub is a Hack Club ID, not a UUID)
+      // Resolve the real DB user ID for OAuth users (where sub is a Hack Club ID, not a UUID).
+      // Fall back to email if hackClubId lookup fails — without this, a user whose
+      // hackClubId column got nulled or overwritten ends up with dbUserId = a Hack Club ID,
+      // and every downstream membership query runs against a non-UUID and returns empty
+      // (surfacing as a permanent 403 on org-scoped endpoints until they log out).
       let dbUserId = payload.sub as string;
       if (payload.hackClubId) {
-        const dbUser = await this.prisma.user.findUnique({
+        let dbUser = await this.prisma.user.findUnique({
           where: { hackClubId: payload.hackClubId as string },
           select: { id: true },
         });
+        if (!dbUser && payload.email) {
+          dbUser = await this.prisma.user.findUnique({
+            where: { email: payload.email as string },
+            select: { id: true },
+          });
+        }
         if (dbUser) {
           dbUserId = dbUser.id;
         }

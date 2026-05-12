@@ -12,7 +12,9 @@ import {
 import { QuotasService } from './quotas.service';
 import { QuotaBackfillService } from './backfill.service';
 import { OrganizationsService } from '../organizations/organizations.service';
+import { PrismaService } from '../prisma/prisma.service';
 import { Auth } from '../auth/decorators';
+import { NotFoundException } from '@nestjs/common';
 
 type CapBody = {
   cpuLimitMilli?: number | null;
@@ -75,6 +77,7 @@ export class OrgQuotasController {
     private readonly quotas: QuotasService,
     @Inject(forwardRef(() => OrganizationsService))
     private readonly orgs: OrganizationsService,
+    private readonly prisma: PrismaService,
   ) {}
 
   @Get()
@@ -97,6 +100,13 @@ export class OrgQuotasController {
     @Req() req: any,
   ) {
     await this.orgs.checkPermission(orgId, req.auth.userId, 'admin');
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { organizationId: true },
+    });
+    if (!project || project.organizationId !== orgId) {
+      throw new NotFoundException('Project not found in this organization');
+    }
     return this.quotas.updateProjectCaps(projectId, body);
   }
 }

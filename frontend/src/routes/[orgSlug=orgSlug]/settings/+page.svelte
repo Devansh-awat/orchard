@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { apiFetch, user, toasts } from '$lib/stores';
 	import { Loader2, Pencil, Camera, X, UserPlus, Trash2, ChevronDown, Check, Mail, Users, Shield, Globe, Key, Lock } from 'lucide-svelte';
@@ -8,7 +9,7 @@
 
 	interface Member {
 		id: string;
-		role: 'owner' | 'admin' | 'member';
+		role: 'owner' | 'admin' | 'member' | 'guest';
 		user: {
 			id: string;
 			firstName?: string;
@@ -32,7 +33,7 @@
 	interface Invitation {
 		id: string;
 		email: string;
-		role: 'owner' | 'admin' | 'member';
+		role: 'owner' | 'admin' | 'member' | 'guest';
 		createdAt: string;
 		expiresAt: string;
 		inviter: {
@@ -48,7 +49,7 @@
 	let invitations = $state<Invitation[]>([]);
 	let loading = $state(true);
 	let error = $state<string | null>(null);
-	let currentUserRole = $state<'owner' | 'admin' | 'member' | null>(null);
+	let currentUserRole = $state<'owner' | 'admin' | 'member' | 'guest' | null>(null);
 
 	// Edit state
 	let isEditing = $state(false);
@@ -115,11 +116,15 @@
 				if (roleData.role === 'owner' || roleData.role === 'admin') {
 					await fetchInvitations();
 					await fetchBackupSettings();
-				}
-				// Load SSO config for enterprise orgs
-				if (data.plan === 'enterprise') {
-					ssoSubdomain = data.subdomain || '';
-					await fetchSsoConfig();
+					// Load SSO config for enterprise orgs
+					if (data.plan === 'enterprise') {
+						ssoSubdomain = data.subdomain || '';
+						await fetchSsoConfig();
+					}
+				} else {
+					// Plain members cannot see org settings — bounce to org overview.
+					await goto(`/${organizationSlug}`, { replaceState: true });
+					return;
 				}
 			}
 		} catch (e) {
@@ -270,7 +275,7 @@
 		}
 	}
 
-	async function updateMemberRole(memberId: string, newRole: 'owner' | 'admin' | 'member') {
+	async function updateMemberRole(memberId: string, newRole: 'owner' | 'admin' | 'member' | 'guest') {
 		if (!organization) return;
 
 		try {
@@ -796,6 +801,9 @@
 								<div class="os-member-info">
 									<p class="os-member-name">
 										{member.user.firstName || ''} {member.user.lastName || ''}
+										{#if member.role === 'guest'}
+											<span class="guest-pill" title="Guests are only members of specific projects, not the whole organization">Guest</span>
+										{/if}
 									</p>
 									<p class="os-member-email">{member.user.email}</p>
 								</div>
@@ -1636,6 +1644,21 @@
 		font-weight: 600;
 		background-color: color-mix(in srgb, var(--surface-border) 50%, var(--center-channel-bg));
 		color: var(--surface-muted);
+	}
+
+	.guest-pill {
+		display: inline-block;
+		margin-left: 0.4rem;
+		padding: 0.1rem 0.45rem;
+		border-radius: 999px;
+		font-size: 0.65rem;
+		font-weight: 600;
+		letter-spacing: 0.02em;
+		text-transform: uppercase;
+		background: color-mix(in srgb, var(--surface-border) 35%, transparent);
+		color: var(--surface-muted);
+		border: 1px solid color-mix(in srgb, var(--surface-border) 70%, transparent);
+		vertical-align: middle;
 	}
 
 	.os-member-action {

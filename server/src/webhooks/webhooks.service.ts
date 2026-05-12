@@ -1,7 +1,6 @@
 import {
   Injectable,
   NotFoundException,
-  ForbiddenException,
   ConflictException,
   BadRequestException,
 } from '@nestjs/common';
@@ -9,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { UsersService } from '../users/users.service';
 import { AuditService } from '../audit/audit.service';
+import { AuthorizationService } from '../auth/authorization.service';
 import * as crypto from 'crypto';
 
 @Injectable()
@@ -18,6 +18,7 @@ export class WebhooksService {
     private readonly kubernetesService: KubernetesService,
     private readonly usersService: UsersService,
     private readonly audit: AuditService,
+    private readonly authz: AuthorizationService,
   ) {}
 
   async createWebhookToken(
@@ -36,7 +37,7 @@ export class WebhooksService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    await this.verifyMembership(deployment.projectId, user.id);
+    await this.authz.requireProjectEdit(deployment.projectId, user.id, 'manage webhook tokens');
 
     const token = crypto.randomBytes(32).toString('hex');
 
@@ -80,7 +81,7 @@ export class WebhooksService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    await this.verifyMembership(deployment.projectId, user.id);
+    await this.authz.requireProjectEdit(deployment.projectId, user.id, 'manage webhook tokens');
 
     return this.prisma.deploymentWebhookToken.findMany({
       where: { deploymentId },
@@ -110,7 +111,7 @@ export class WebhooksService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
-    await this.verifyMembership(deployment.projectId, user.id);
+    await this.authz.requireProjectEdit(deployment.projectId, user.id, 'manage webhook tokens');
 
     const tokenRecord = await this.prisma.deploymentWebhookToken.findFirst({
       where: { id: tokenId, deploymentId },
@@ -252,20 +253,4 @@ export class WebhooksService {
     return user;
   }
 
-  private async verifyMembership(projectId: string, userId: string) {
-    const membership = await this.prisma.projectMember.findFirst({
-      where: { projectId, userId },
-      include: { role: true },
-    });
-
-    if (!membership) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
-
-    if (membership.role.name === 'viewer') {
-      throw new ForbiddenException(
-        'You do not have permission to manage webhook tokens',
-      );
-    }
-  }
 }

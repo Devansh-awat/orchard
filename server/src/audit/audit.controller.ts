@@ -3,6 +3,7 @@ import { Request } from 'express';
 import { Auth } from '../auth/decorators';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from './audit.service';
+import { AuthorizationService } from '../auth/authorization.service';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -12,6 +13,7 @@ export class AuditController {
   constructor(
     private readonly auditService: AuditService,
     private readonly prisma: PrismaService,
+    private readonly authz: AuthorizationService,
   ) {}
 
   // Superadmin-only global ledger.
@@ -45,14 +47,7 @@ export class AuditController {
     @Query('action') action?: string,
   ) {
     const userId = await this.resolveUserId(req);
-    const member = await this.prisma.organizationMember.findUnique({
-      where: { organizationId_userId: { organizationId, userId } },
-    });
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { isSuperAdmin: true } });
-    const allowed = user?.isSuperAdmin || (member && (member.role === 'owner' || member.role === 'admin'));
-    if (!allowed) {
-      throw new ForbiddenException('Only organization admins can view audit logs');
-    }
+    await this.authz.requireOrgAdmin(organizationId, userId);
     return this.auditService.query({
       scope: { kind: 'organization', organizationId },
       cursor: cursor || null,
@@ -77,21 +72,7 @@ export class AuditController {
     });
     if (!deployment) throw new NotFoundException('Deployment not found');
 
-    const [projectMember, orgMember, user] = await Promise.all([
-      this.prisma.projectMember.findFirst({ where: { projectId: deployment.projectId, userId } }),
-      this.prisma.organizationMember.findUnique({
-        where: { organizationId_userId: { organizationId: deployment.project.organizationId, userId } },
-      }),
-      this.prisma.user.findUnique({ where: { id: userId }, select: { isSuperAdmin: true } }),
-    ]);
-
-    const allowed =
-      user?.isSuperAdmin ||
-      Boolean(projectMember) ||
-      (orgMember && (orgMember.role === 'owner' || orgMember.role === 'admin'));
-    if (!allowed) {
-      throw new ForbiddenException('You are not a member of this project');
-    }
+    await this.authz.requireProjectView(deployment.projectId, userId);
 
     return this.auditService.query({
       scope: { kind: 'deployment', deploymentId },

@@ -3,12 +3,14 @@ import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { randomBytes } from 'crypto';
 import { AuditService } from '../audit/audit.service';
+import { AuthorizationService } from '../auth/authorization.service';
 
 @Injectable()
 export class AdminService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly authz: AuthorizationService,
   ) {}
 
   async getStats() {
@@ -136,6 +138,7 @@ export class AdminService {
     });
 
     if (data.isSuperAdmin !== undefined && data.isSuperAdmin !== user.isSuperAdmin) {
+      this.authz.invalidateSuperAdmin(userId);
       void this.audit.log({
         action: data.isSuperAdmin ? 'user.superadmin.granted' : 'user.superadmin.revoked',
         actorUserId: requesterId,

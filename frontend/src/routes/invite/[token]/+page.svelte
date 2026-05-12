@@ -17,7 +17,7 @@
 		id: string;
 		token: string;
 		email: string;
-		role: 'owner' | 'admin' | 'member';
+		role: 'owner' | 'admin' | 'member' | 'guest';
 		expiresAt: string;
 		organization: {
 			id: string;

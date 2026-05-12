@@ -233,6 +233,7 @@ enum OrganizationRole {
   owner
   admin
   member
+  guest
 
   @@map("organization_role")
 }
@@ -332,7 +333,7 @@ model ProjectMember {
   role    Role    @relation(fields: [roleId], references: [id], onDelete: Cascade)
   adder   User?   @relation("ProjectMemberAdder", fields: [addedBy], references: [id], onDelete: SetNull)
 
-  @@unique([projectId, userId, roleId])
+  @@unique([projectId, userId])
   @@index([projectId], map: "idx_project_members_project")
   @@index([userId], map: "idx_project_members_user")
   @@map("project_members")

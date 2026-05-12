@@ -112,6 +112,9 @@
 
 	// Mount-time stagger using Motion. Replaces CSS keyframes so everything is
 	// driven by the same physics engine.
+	// WeakSet guard so SSE-triggered re-renders don't re-fire the entrance
+	// animation on cards that have already played it.
+	const staggered = new WeakSet<Element>();
 	function motionStagger(opts: {
 		index?: number;
 		stride?: number;
@@ -131,6 +134,8 @@
 		const axis = opts.axis ?? 'y';
 		return (el: Element) => {
 			const target = el as HTMLElement;
+			if (staggered.has(target)) return;
+			staggered.add(target);
 			const keyframes: Record<string, number[]> = {
 				opacity: [from.opacity, 1],
 				scale: [from.scale, 1]
@@ -312,9 +317,13 @@
 			slug: string;
 		};
 		currentUserRole?: {
-			orgRole: string;
-			projectRole: string | null;
+			orgRole: 'owner' | 'admin' | 'member' | 'guest' | null;
+			projectRole: 'admin' | 'member' | 'viewer' | null;
+			source?: 'orgAdmin' | 'projectMember' | 'superadmin';
+			canView?: boolean;
 			canEdit: boolean;
+			canManageMembers?: boolean;
+			canDelete?: boolean;
 		};
 	}
 
@@ -344,6 +353,10 @@
 	interface ProjectMember {
 		id: string;
 		role: { name: string };
+		// `orgRole` is the user's role at the organisation level (owner / admin /
+		// member / guest). The server enriches each ProjectMember row with this
+		// so the UI can flag guests without needing a second fetch.
+		orgRole?: 'owner' | 'admin' | 'member' | 'guest' | null;
 		user: {
 			id: string;
 			firstName?: string;
@@ -355,6 +368,8 @@
 
 	let project = $state<Project | null>(null);
 	const canEdit = $derived(project?.currentUserRole?.canEdit ?? false);
+	const canManageMembers = $derived(project?.currentUserRole?.canManageMembers ?? false);
+	const canDelete = $derived(project?.currentUserRole?.canDelete ?? false);
 	let templateInstances = $state<TemplateInstanceSummary[]>([]);
 
 	interface DatabaseSummary {
@@ -872,20 +887,32 @@
 	}
 
 	let unsub: (() => void) | null = null;
-	let hasLoadedOnce = false;
+	// Slug we've finished loading. Only used to detect a real project-switch
+	// (previously-loaded slug differs from current) so we can reset to a
+	// skeleton instead of showing the previous project's content while the
+	// new promise resolves. On fresh mount it's null and we leave state
+	// alone — `loading` defaults to true so the skeleton already shows.
+	let loadedSlug: string | null = null;
 
 	$effect(() => {
+		const slug = data.projectSlug;
 		const promise = data.projectPromise;
-		const isInitial = !hasLoadedOnce;
-		if (isInitial) {
+		if (!promise) return;
+		const isProjectSwitch = loadedSlug !== null && loadedSlug !== slug;
+		if (isProjectSwitch) {
 			error = null;
 			loading = true;
+			project = null;
+			projectMembers = [];
+			templateInstances = [];
+			databases = [];
+			lastSyncedNamespace = null;
 		}
 		promise
 			.then((p) => {
 				if (!p) return;
 				applyProjectData(p);
-				hasLoadedOnce = true;
+				loadedSlug = slug;
 				loading = false;
 				error = null;
 				if (p?.namespace) syncNamespace();
@@ -909,10 +936,8 @@
 				}
 			})
 			.catch((e) => {
-				if (isInitial) {
-					error = e instanceof Error ? e.message : 'Failed to fetch project';
-					loading = false;
-				}
+				error = e instanceof Error ? e.message : 'Failed to fetch project';
+				loading = false;
 			});
 	});
 
@@ -1064,7 +1089,7 @@
 							<Palette class="h-4 w-4" />
 						</button>
 						{/if}
-						{#if canEdit}
+						{#if canDelete}
 						<button
 							onclick={() => (showDeleteModal = true)}
 							disabled={deleting}
@@ -1109,7 +1134,7 @@
 							<Palette class="h-4 w-4" />
 						</button>
 						{/if}
-						{#if canEdit}
+						{#if canDelete}
 						<button
 							onclick={() => (showDeleteModal = true)}
 							disabled={deleting}
@@ -1371,7 +1396,7 @@
 						<span>Members</span>
 						<span class="pj-members-count">{projectMembers.length}</span>
 					</div>
-					{#if canEdit}
+					{#if canManageMembers}
 					<div class="pj-picker">
 						<input
 							type="text"
@@ -1409,6 +1434,9 @@
 										<div class="pj-member-info">
 											<span class="pj-member-name">
 												{#if om.user.firstName}{om.user.firstName}{#if om.user.lastName}&nbsp;{om.user.lastName}{/if}{:else}{om.user.email}{/if}
+												{#if om.role === 'guest'}
+													<span class="guest-pill" title="Guests only see projects they're explicit members of">Guest</span>
+												{/if}
 											</span>
 											{#if om.user.firstName}
 												<span class="pj-member-email">{om.user.email}</span>
@@ -1450,10 +1478,13 @@
 								<div class="pj-member-info">
 									<span class="pj-member-name">
 										{#if m.user.firstName}{m.user.firstName}{#if m.user.lastName}&nbsp;{m.user.lastName}{/if}{:else}{m.user.email}{/if}
+										{#if m.orgRole === 'guest'}
+											<span class="guest-pill" title="Guests are only members of specific projects, not the whole organization">Guest</span>
+										{/if}
 									</span>
 									<span class="pj-member-email">{m.user.email}</span>
 								</div>
-								{#if canEdit}
+								{#if canManageMembers}
 									{@const triggerId = `pj-role-trigger-${m.id}`}
 									<div class="pj-role-wrap">
 										<button
@@ -2762,6 +2793,20 @@
 		font-size: 0.8125rem; font-weight: 600;
 		color: var(--center-channel-color);
 		white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+	}
+	.guest-pill {
+		display: inline-block;
+		margin-left: 0.4rem;
+		padding: 0.05rem 0.4rem;
+		border-radius: 999px;
+		font-size: 0.6rem;
+		font-weight: 600;
+		letter-spacing: 0.02em;
+		text-transform: uppercase;
+		background: color-mix(in srgb, var(--surface-border) 35%, transparent);
+		color: var(--pj-text-secondary);
+		border: 1px solid color-mix(in srgb, var(--surface-border) 70%, transparent);
+		vertical-align: middle;
 	}
 	.pj-member-email {
 		font-size: 0.6875rem;
