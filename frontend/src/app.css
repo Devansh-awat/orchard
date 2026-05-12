@@ -192,6 +192,29 @@ main {
 	color: var(--center-channel-color);
 }
 
+/* While the sidebar is mid-resize, freeze hover/transition activity on the
+   main content. As the sidebar width animates, cards reflow under the user's
+   cursor — every transient enter/leave used to fire a spring + box-shadow
+   transition on the card sitting under the pointer, cascading into visible
+   flicker (most obvious on cards with blurred backdrops because the filter
+   re-rasterizes per frame). The Sidebar component toggles this attribute for
+   the duration of the spring or CSS transition. */
+html[data-sidebar-animating='true'] main {
+	pointer-events: none;
+}
+html[data-sidebar-animating='true'] main * {
+	transition: none !important;
+}
+/* Freeze CSS keyframe animations on the backdrop layers during sidebar
+   resize. The proj-spin-* rotations keep tweening transforms while the
+   parent card reflows, which forces Chrome to re-rasterize the 48px
+   blur filter against changing layer bounds every frame — the flicker
+   the user reports. Pausing for the 200ms resize is imperceptible
+   visually but stops the rasterization churn cold. */
+html[data-sidebar-animating='true'] main .proj-body-bg {
+	animation-play-state: paused !important;
+}
+
 
 a {
 	color: var(--link-color);

@@ -9,6 +9,8 @@
 	let githubUsername = $state<string | null>(null);
 	let loading = $state(true);
 	let unlinking = $state(false);
+	let githubInstallations = $state<Array<{ id: string; installationId: string; accountLogin: string; accountType: string; repositorySelection: string }>>([]);
+	let githubAppInstallUrl = $state<string | null>(null);
 
 	// Tailscale
 	let tailscaleLinked = $state(false);
@@ -238,6 +240,12 @@
 				const data = await response.json();
 				githubLinked = data.linked;
 				githubUsername = data.username || null;
+				githubInstallations = data.installations ?? [];
+			}
+			const installRes = await apiFetch('/apiv1/github/app/install');
+			if (installRes.ok) {
+				const data = await installRes.json();
+				githubAppInstallUrl = data.url;
 			}
 		} catch (e) {
 			console.error('Failed to check GitHub status:', e);
@@ -679,15 +687,15 @@
 
 			<div class="us-card-divider"></div>
 
-			<!-- GitHub -->
+			<!-- GitHub Identity -->
 			<div class="us-card-section">
 				<div class="us-section-head">
 					<div class="us-section-icon us-section-icon--github">
 						<Github class="h-4 w-4" />
 					</div>
 					<div class="us-section-title-group">
-						<h2 class="us-section-title">GitHub</h2>
-						<p class="us-section-desc">Deploy directly from your repositories</p>
+						<h2 class="us-section-title">GitHub Identity</h2>
+						<p class="us-section-desc">Link your GitHub account for identity verification</p>
 					</div>
 					{#if !loading}
 						<div class="us-pill" class:us-pill--active={githubLinked}>
@@ -717,10 +725,63 @@
 						</div>
 						<div class="us-connect-text">
 							<span class="us-connect-label">Connect GitHub</span>
-							<span class="us-connect-hint">Auto-build images from commits and view deployment history</span>
+							<span class="us-connect-hint">Link your GitHub identity — only reads your profile, no repo access</span>
 						</div>
 						<ChevronRight class="h-4 w-4 us-connect-arrow" />
 					</button>
+				{/if}
+			</div>
+
+			<div class="us-card-divider"></div>
+
+			<!-- GitHub App (Repo Access) -->
+			<div class="us-card-section">
+				<div class="us-section-head">
+					<div class="us-section-icon us-section-icon--github">
+						<Github class="h-4 w-4" />
+					</div>
+					<div class="us-section-title-group">
+						<h2 class="us-section-title">GitHub App</h2>
+						<p class="us-section-desc">Grant access to specific repos and orgs for deployments</p>
+					</div>
+					{#if !loading}
+						<div class="us-pill" class:us-pill--active={githubInstallations.length > 0}>
+							<span class="us-pill-dot"></span>
+							{githubInstallations.length > 0 ? `${githubInstallations.length} installed` : 'Not installed'}
+						</div>
+					{/if}
+				</div>
+
+				{#if loading}
+					<div class="us-loading"><Loader2 class="h-4 w-4 animate-spin" /></div>
+				{:else}
+					{#if githubInstallations.length > 0}
+						<div style="display: flex; flex-direction: column; gap: 0.5rem;">
+							{#each githubInstallations as inst}
+								<div class="us-integration-row">
+									<div class="us-gh-badge">
+										<Github class="h-4 w-4" />
+										<span class="us-gh-name">{inst.accountLogin}</span>
+										<span style="font-size: 0.7rem; color: var(--text-secondary); opacity: 0.7;">
+											{inst.repositorySelection === 'all' ? 'All repos' : 'Selected repos'}
+										</span>
+									</div>
+								</div>
+							{/each}
+						</div>
+					{/if}
+					{#if githubAppInstallUrl}
+						<a href={githubAppInstallUrl} target="_blank" class="us-connect-btn" style="margin-top: {githubInstallations.length > 0 ? '0.5rem' : '0'}; text-decoration: none;">
+							<div class="us-connect-icon">
+								<Plus class="h-5 w-5" />
+							</div>
+							<div class="us-connect-text">
+								<span class="us-connect-label">{githubInstallations.length > 0 ? 'Add another org/account' : 'Install GitHub App'}</span>
+								<span class="us-connect-hint">Choose exactly which repositories and organizations to grant access to</span>
+							</div>
+							<ChevronRight class="h-4 w-4 us-connect-arrow" />
+						</a>
+					{/if}
 				{/if}
 			</div>
 

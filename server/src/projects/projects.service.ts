@@ -4803,6 +4803,23 @@ export class ProjectsService {
             projectId: true,
             updatedAt: true,
             createdAt: true,
+            creator: {
+              select: { id: true, username: true, firstName: true, lastName: true, imageUrl: true },
+            },
+            imageHistory: {
+              where: { isActive: true },
+              take: 1,
+              orderBy: { createdAt: 'desc' },
+              select: {
+                buildStartedAt: true,
+                buildCompletedAt: true,
+                commitAuthorName: true,
+                commitAuthorUsername: true,
+                triggeredBy: {
+                  select: { id: true, username: true, firstName: true, lastName: true, imageUrl: true },
+                },
+              },
+            },
             services: { include: { ports: true } },
             ingresses: { include: { service: true } },
             // envVars omitted — large per-deployment, only needed on deployment detail.

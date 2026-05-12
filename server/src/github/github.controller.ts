@@ -34,7 +34,7 @@ export class GitHubController {
 
     const clientId = process.env.GITHUB_CLIENT_ID;
     const redirectUri = process.env.GITHUB_REDIRECT_URI;
-    const scope = 'read:user user:email repo';
+    const scope = 'read:user user:email';
 
     const authUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}`;
 
@@ -132,14 +132,23 @@ export class GitHubController {
       name: req.user.name,
     });
 
+    const installations = await this.githubService.getUserInstallations(user.id);
+
     return {
       linked: !!user.githubId,
       username: user.githubUsername,
+      installations: installations.map(inst => ({
+        id: inst.id,
+        installationId: inst.installationId.toString(),
+        accountLogin: inst.accountLogin,
+        accountType: inst.accountType,
+        repositorySelection: inst.repositorySelection,
+      })),
     };
   }
 
   @Get('repositories')
-  async getRepositories(@Req() req: any, @Query('all') all?: string): Promise<GitHubRepo[]> {
+  async getRepositories(@Req() req: any, @Query('all') all?: string) {
     const hackClubId = req.user.sub;
     const user = await this.usersService.findOrCreateByHackClubId({
       id: hackClubId,
@@ -147,14 +156,24 @@ export class GitHubController {
       name: req.user.name,
     });
 
-    if (!user.githubAccessToken) {
-      throw new HttpException('GitHub account not linked', HttpStatus.BAD_REQUEST);
+    // Prefer App installation repos, fall back to OAuth token
+    const { repos, installations, hasInstallations } = await this.githubService.getAllUserRepositories(user.id);
+
+    if (hasInstallations) {
+      return { repositories: repos, installations, source: 'app' };
     }
 
-    const maxPages = all === 'true' ? 10 : 3;
-    const repos = await this.githubService.getUserRepositories(user.githubAccessToken, maxPages);
+    // Fall back to OAuth token if no installations
+    if (user.githubAccessToken) {
+      const maxPages = all === 'true' ? 10 : 3;
+      const oauthRepos = await this.githubService.getUserRepositories(user.githubAccessToken, maxPages);
+      return { repositories: oauthRepos, installations: [], source: 'oauth' };
+    }
 
-    return repos;
+    throw new HttpException(
+      'No GitHub App installed and no GitHub account linked. Install the GitHub App or link your GitHub account.',
+      HttpStatus.BAD_REQUEST,
+    );
   }
 
   @Get('repositories/:owner/:repo/branches')
@@ -170,13 +189,12 @@ export class GitHubController {
       name: req.user.name,
     });
 
-    if (!user.githubAccessToken) {
-      throw new HttpException('GitHub account not linked', HttpStatus.BAD_REQUEST);
+    const token = await this.githubService.resolveRepoToken(user.id, owner, repo);
+    if (!token) {
+      throw new HttpException('No access to this repository. Install the GitHub App or link your GitHub account.', HttpStatus.BAD_REQUEST);
     }
 
-    const branches = await this.githubService.getRepoBranches(user.githubAccessToken, owner, repo);
-
-    return branches;
+    return this.githubService.getRepoBranches(token, owner, repo);
   }
 
   @Get('repositories/:owner/:repo/dockerfiles')
@@ -193,18 +211,12 @@ export class GitHubController {
       name: req.user.name,
     });
 
-    if (!user.githubAccessToken) {
-      throw new HttpException('GitHub account not linked', HttpStatus.BAD_REQUEST);
+    const token = await this.githubService.resolveRepoToken(user.id, owner, repo);
+    if (!token) {
+      throw new HttpException('No access to this repository. Install the GitHub App or link your GitHub account.', HttpStatus.BAD_REQUEST);
     }
 
-    const dockerfiles = await this.githubService.findDockerfiles(
-      user.githubAccessToken,
-      owner,
-      repo,
-      branch
-    );
-
-    return dockerfiles;
+    return this.githubService.findDockerfiles(token, owner, repo, branch);
   }
 
   @Get('repositories/:owner/:repo/contents')
@@ -222,19 +234,12 @@ export class GitHubController {
       name: req.user.name,
     });
 
-    if (!user.githubAccessToken) {
-      throw new HttpException('GitHub account not linked', HttpStatus.BAD_REQUEST);
+    const token = await this.githubService.resolveRepoToken(user.id, owner, repo);
+    if (!token) {
+      throw new HttpException('No access to this repository. Install the GitHub App or link your GitHub account.', HttpStatus.BAD_REQUEST);
     }
 
-    const contents = await this.githubService.getRepoContents(
-      user.githubAccessToken,
-      owner,
-      repo,
-      path || '',
-      branch
-    );
-
-    return contents;
+    return this.githubService.getRepoContents(token, owner, repo, path || '', branch);
   }
 
   @Get('repositories/:owner/:repo/dockerfile-stages')
@@ -252,23 +257,16 @@ export class GitHubController {
       name: req.user.name,
     });
 
-    if (!user.githubAccessToken) {
-      throw new HttpException('GitHub account not linked', HttpStatus.BAD_REQUEST);
-    }
-
     if (!dockerfilePath) {
       throw new HttpException('Dockerfile path is required', HttpStatus.BAD_REQUEST);
     }
 
-    const stages = await this.githubService.getDockerfileStages(
-      user.githubAccessToken,
-      owner,
-      repo,
-      dockerfilePath,
-      branch
-    );
+    const token = await this.githubService.resolveRepoToken(user.id, owner, repo);
+    if (!token) {
+      throw new HttpException('No access to this repository. Install the GitHub App or link your GitHub account.', HttpStatus.BAD_REQUEST);
+    }
 
-    return stages;
+    return this.githubService.getDockerfileStages(token, owner, repo, dockerfilePath, branch);
   }
 
   @Get('repositories/:owner/:repo/dockerfile-info')
@@ -286,21 +284,16 @@ export class GitHubController {
       name: req.user.name,
     });
 
-    if (!user.githubAccessToken) {
-      throw new HttpException('GitHub account not linked', HttpStatus.BAD_REQUEST);
-    }
-
     if (!dockerfilePath) {
       throw new HttpException('Dockerfile path is required', HttpStatus.BAD_REQUEST);
     }
 
-    return this.githubService.getDockerfileInfo(
-      user.githubAccessToken,
-      owner,
-      repo,
-      dockerfilePath,
-      branch
-    );
+    const token = await this.githubService.resolveRepoToken(user.id, owner, repo);
+    if (!token) {
+      throw new HttpException('No access to this repository. Install the GitHub App or link your GitHub account.', HttpStatus.BAD_REQUEST);
+    }
+
+    return this.githubService.getDockerfileInfo(token, owner, repo, dockerfilePath, branch);
   }
 
   @Public()

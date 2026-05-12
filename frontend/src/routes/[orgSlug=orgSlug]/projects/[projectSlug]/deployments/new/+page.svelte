@@ -42,6 +42,8 @@
 	const initialSource = $derived(($page.url.searchParams.get('source') === 'github') ? 'github' as const : 'image' as const);
 	let deploymentSource = $state<'image' | 'github'>('image');
 	let githubLinked = $state(false);
+	let hasGitHubApp = $state(false);
+	let githubAppInstallUrl = $state<string | null>(null);
 	let repositories = $state<Repository[]>([]);
 	let branches = $state<Branch[]>([]);
 	let dockerfiles = $state<string[]>([]);
@@ -118,9 +120,16 @@
 			if (response.ok) {
 				const status = await response.json();
 				githubLinked = status.linked;
-				if (status.linked && deploymentSource === 'github') {
+				hasGitHubApp = (status.installations?.length ?? 0) > 0;
+				if ((status.linked || hasGitHubApp) && deploymentSource === 'github') {
 					fetchRepositories();
 				}
+			}
+			// Also fetch app install URL for the prompt
+			const installRes = await apiFetch('/apiv1/github/app/install');
+			if (installRes.ok) {
+				const data = await installRes.json();
+				githubAppInstallUrl = data.url;
 			}
 		} catch (e) {
 			console.error('Failed to check GitHub status:', e);
@@ -132,7 +141,12 @@
 		try {
 			const response = await apiFetch('/apiv1/github/repositories');
 			if (response.ok) {
-				repositories = await response.json();
+				const data = await response.json();
+				// Handle both new format { repositories, installations, source } and legacy array format
+				repositories = Array.isArray(data) ? data : (data.repositories ?? []);
+				if (data.source === 'app') {
+					hasGitHubApp = true;
+				}
 			}
 		} catch (e) {
 			console.error('Failed to fetch repositories:', e);
@@ -717,13 +731,27 @@
 						<input type="text" bind:value={image} placeholder="ghcr.io/org/app:latest" class="nd-input nd-mono" />
 					</div>
 				{:else}
-					{#if !githubLinked}
+					{#if !githubLinked && !hasGitHubApp}
 						<div class="nd-warning">
-							<p class="nd-warning-title">GitHub account not connected</p>
-							<p class="nd-warning-desc">Link your GitHub account to deploy from repositories.</p>
-							<a href="/user/settings" class="nd-btn nd-btn-secondary" style="margin-top: 0.5rem;">Connect GitHub</a>
+							<p class="nd-warning-title">GitHub not connected</p>
+							<p class="nd-warning-desc">Install the GitHub App to deploy from your repositories. You can choose which repos and orgs to grant access to.</p>
+							<div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
+								{#if githubAppInstallUrl}
+									<a href={githubAppInstallUrl} target="_blank" class="nd-btn nd-btn-primary">Install GitHub App</a>
+								{/if}
+								<a href="/user/settings" class="nd-btn nd-btn-secondary">Link GitHub Account</a>
+							</div>
 						</div>
-					{:else}
+					{:else if !hasGitHubApp && repositories.length === 0 && !loadingRepos}
+						<div class="nd-warning" style="margin-bottom: 0.75rem;">
+							<p class="nd-warning-title">Install the GitHub App for better access</p>
+							<p class="nd-warning-desc">The GitHub App lets you choose exactly which repos and orgs to grant access to, with minimal permissions.</p>
+							{#if githubAppInstallUrl}
+								<a href={githubAppInstallUrl} target="_blank" class="nd-btn nd-btn-secondary" style="margin-top: 0.5rem;">Install GitHub App</a>
+							{/if}
+						</div>
+					{/if}
+					{#if githubLinked || hasGitHubApp}
 						<div class="nd-field nd-relative" data-repo-dropdown>
 							<label class="nd-label">Repository</label>
 							<div class="nd-relative">

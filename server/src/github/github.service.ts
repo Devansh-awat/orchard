@@ -1050,6 +1050,54 @@ export class GitHubService {
     return this.updateDeploymentStatus(token, owner, repo, deploymentId, state, options);
   }
 
+  // Resolve an access token for a specific repo — prefers App installation token, falls back to user OAuth token.
+  async resolveRepoToken(userId: string, owner: string, repo: string): Promise<string | null> {
+    // Try installation token first
+    const installation = await this.findInstallationForRepo(owner, repo);
+    if (installation) {
+      try {
+        return await this.getOrRefreshInstallationToken(installation.installationId);
+      } catch (e) {
+        console.warn(`[GitHub] Installation token failed for ${owner}/${repo}, trying user token:`, e);
+      }
+    }
+
+    // Fall back to user OAuth token
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { githubAccessToken: true } });
+    return user?.githubAccessToken ?? null;
+  }
+
+  // Get all repos accessible to a user across all their installations + OAuth token
+  async getAllUserRepositories(userId: string): Promise<{ repos: GitHubRepo[]; installations: any[]; hasInstallations: boolean }> {
+    const installations = await this.getUserInstallations(userId);
+    const allRepos: GitHubRepo[] = [];
+    const installationData: any[] = [];
+
+    for (const installation of installations) {
+      try {
+        const repos = await this.getInstallationRepositories(installation.installationId);
+        installationData.push({
+          id: installation.id,
+          installationId: installation.installationId.toString(),
+          accountLogin: installation.accountLogin,
+          accountType: installation.accountType,
+          repositoryCount: repos.length,
+        });
+        for (const repo of repos) {
+          allRepos.push({
+            ...repo,
+            installationId: installation.installationId.toString(),
+            accountLogin: installation.accountLogin,
+          } as any);
+        }
+      } catch (e) {
+        console.error(`[GitHub] Failed to get repos for installation ${installation.installationId}:`, e);
+      }
+    }
+
+    return { repos: allRepos, installations: installationData, hasInstallations: installations.length > 0 };
+  }
+
   // Get user's GitHub App installations
   async getUserInstallations(userId: string) {
     return this.prisma.gitHubAppInstallation.findMany({

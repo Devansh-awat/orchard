@@ -276,6 +276,14 @@
 	import NewResourceModal from '$lib/components/NewResourceModal.svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 
+	interface DeploymentUser {
+		id: string;
+		username?: string;
+		firstName?: string;
+		lastName?: string;
+		imageUrl?: string;
+	}
+
 	interface Deployment {
 		id: string;
 		name: string;
@@ -286,6 +294,14 @@
 		githubRepo?: string;
 		githubBranch?: string;
 		ingresses?: Array<{ id: string; host: string }>;
+		creator?: DeploymentUser;
+		imageHistory?: Array<{
+			buildStartedAt?: string;
+			buildCompletedAt?: string;
+			commitAuthorName?: string;
+			commitAuthorUsername?: string;
+			triggeredBy?: DeploymentUser;
+		}>;
 	}
 
 	interface Member {
@@ -855,6 +871,32 @@
 		}
 	}
 
+	function formatBuildDuration(deployment: Deployment): string | null {
+		const history = deployment.imageHistory?.[0];
+		if (!history?.buildStartedAt || !history?.buildCompletedAt) return null;
+		const ms = new Date(history.buildCompletedAt).getTime() - new Date(history.buildStartedAt).getTime();
+		if (ms < 1000) return '<1s';
+		const seconds = Math.floor(ms / 1000);
+		if (seconds < 60) return `${seconds}s`;
+		const minutes = Math.floor(seconds / 60);
+		const rem = seconds % 60;
+		return `${minutes}m ${rem}s`;
+	}
+
+	function getDeploymentAuthor(deployment: Deployment): string | null {
+		const history = deployment.imageHistory?.[0];
+		if (history?.commitAuthorName) return history.commitAuthorName;
+		if (history?.triggeredBy) {
+			const t = history.triggeredBy;
+			return t.firstName ? `${t.firstName} ${t.lastName ?? ''}`.trim() : t.username ?? null;
+		}
+		if (deployment.creator) {
+			const c = deployment.creator;
+			return c.firstName ? `${c.firstName} ${c.lastName ?? ''}`.trim() : c.username ?? null;
+		}
+		return null;
+	}
+
 	function getStatusColor(status: string) {
 		switch (status?.toLowerCase()) {
 			case 'running':
@@ -1294,6 +1336,12 @@
 							<span class="pj-deployment-replicas">
 								{deployment.replicas} replica{deployment.replicas !== 1 ? 's' : ''}
 							</span>
+							{#if formatBuildDuration(deployment)}
+								<span class="pj-deployment-meta">Built in {formatBuildDuration(deployment)}</span>
+							{/if}
+							{#if getDeploymentAuthor(deployment)}
+								<span class="pj-deployment-meta">{getDeploymentAuthor(deployment)}</span>
+							{/if}
 						</div>
 					</a>
 				{/each}
@@ -2423,11 +2471,26 @@
 
 	.pj-deployment-card-footer {
 		margin-top: auto;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-wrap: wrap;
 	}
 
 	.pj-deployment-replicas {
 		font-size: 0.75rem;
 		color: var(--pj-text-secondary);
+	}
+
+	.pj-deployment-meta {
+		font-size: 0.675rem;
+		color: var(--pj-text-secondary);
+		opacity: 0.7;
+	}
+
+	.pj-deployment-meta::before {
+		content: '·';
+		margin-right: 0.25rem;
 	}
 
 	.pj-deployment-status-badge {

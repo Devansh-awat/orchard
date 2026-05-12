@@ -48,6 +48,23 @@
 	// CSS in app.css uses that to disable pointer-events + box-shadow
 	// transitions on `<main>` for the duration, which kills the cascade of
 	// hover-state flickers that fire as cards shift under the cursor.
+	// Toggle `data-sidebar-animating` on <html> for the duration of any width
+	// change (spring OR CSS transition). Tracks how many animations are in
+	// flight so back-to-back toggles don't drop the flag early. app.css uses
+	// the attribute to disable hover springs + box-shadow transitions on
+	// <main>, killing the flicker cascade as cards shift under the cursor.
+	let animatingDepth = 0;
+	function setAnimating(on: boolean) {
+		if (typeof document === 'undefined') return;
+		if (on) {
+			animatingDepth++;
+			document.documentElement.dataset.sidebarAnimating = 'true';
+		} else {
+			animatingDepth = Math.max(0, animatingDepth - 1);
+			if (animatingDepth === 0) delete document.documentElement.dataset.sidebarAnimating;
+		}
+	}
+
 	$effect(() => {
 		const collapsed = $sidebarCollapsed;
 		const home = isHomeRoute;
@@ -61,14 +78,32 @@
 		if (collapsed === prevCollapsed) return;
 		prevCollapsed = collapsed;
 		if (home) {
-			// Plain CSS transition — see .sidebar--css-transition rule.
+			// Plain CSS transition — see .sidebar--css-transition rule. We pair
+			// transitionend with a safety timeout matching the CSS duration.
+			setAnimating(true);
 			asideEl.style.width = collapsed ? COLLAPSED_W : EXPANDED_W;
+			let done = false;
+			const finish = () => {
+				if (done) return;
+				done = true;
+				setAnimating(false);
+				asideEl?.removeEventListener('transitionend', onEnd);
+			};
+			const onEnd = (e: TransitionEvent) => {
+				if (e.propertyName === 'width') finish();
+			};
+			asideEl.addEventListener('transitionend', onEnd);
+			setTimeout(finish, 450);
 			return;
 		}
+		setAnimating(true);
 		animate(
 			asideEl,
 			{ width: collapsed ? COLLAPSED_W : EXPANDED_W },
 			{ type: 'spring', stiffness: 420, damping: 20, mass: 0.85 }
+		).finished.then(
+			() => setAnimating(false),
+			() => setAnimating(false)
 		);
 	});
 

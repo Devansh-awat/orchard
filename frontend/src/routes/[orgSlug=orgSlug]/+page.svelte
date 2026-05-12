@@ -17,14 +17,15 @@
 		CheckCircle2,
 		XCircle,
 		Clock,
-		Timer,
 		Folder,
 		Rocket,
 		Database,
 		ArrowRight
 	} from 'lucide-svelte';
 	import { onDestroy, untrack } from 'svelte';
+	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { animate } from 'motion';
+	import BuildTimer from '$lib/components/BuildTimer.svelte';
 	import type { PageData } from './$types';
 
 	// ── Physics-based animation helpers (see physics-ui.md) ──
@@ -32,6 +33,66 @@
 	// this, every SSE-driven re-render re-fires the stagger from y:8/opacity:0
 	// and the whole grid flickers in.
 	const staggered = new WeakSet<Element>();
+
+	// Pre-blur project backdrop images on a canvas once per URL, then use the
+	// resulting bitmap as a static background. Firefox doesn't cache filter
+	// output on a compositor layer, so animating a transform on top of a CSS
+	// blur causes per-frame re-rasterization. Pre-blurring sidesteps that — the
+	// running animation becomes a pure transform.
+	const preBlurCache = new Map<string, Promise<string | null>>();
+	function preBlurImage(url: string): Promise<string | null> {
+		let p = preBlurCache.get(url);
+		if (p) return p;
+		p = new Promise((resolve) => {
+			const img = new Image();
+			img.crossOrigin = 'anonymous';
+			img.onload = () => {
+				try {
+					const W = 512;
+					const H = Math.max(1, Math.round((img.naturalHeight / img.naturalWidth) * W));
+					const canvas = document.createElement('canvas');
+					canvas.width = W;
+					canvas.height = H;
+					const ctx = canvas.getContext('2d');
+					if (!ctx) return resolve(null);
+					// Blur radius scales with bitmap size; 48px CSS blur on a ~512px wide
+					// element ≈ ~10% of width. Use the same ratio on the canvas.
+					ctx.filter = 'blur(48px) saturate(1.6)';
+					ctx.drawImage(img, 0, 0, W, H);
+					resolve(canvas.toDataURL('image/jpeg', 0.85));
+				} catch {
+					resolve(null);
+				}
+			};
+			img.onerror = () => resolve(null);
+			img.src = url;
+		});
+		preBlurCache.set(url, p);
+		return p;
+	}
+	function preBlurBg(url: string) {
+		// We own background-image + filter imperatively here. The template MUST
+		// NOT set `style="background-image: ..."` — a reactive Svelte binding
+		// would overwrite the pre-blurred dataURL on any unrelated reactive
+		// update (e.g. sidebar resize / SSE merge), reverting to the full-size
+		// image filtered by CSS blur for a frame. That single-frame swap is the
+		// visible flicker on backdrop cards.
+		return (el: Element) => {
+			const target = el as HTMLElement;
+			let cancelled = false;
+			// Set the original URL immediately so the CSS blur fallback has
+			// something to render before preBlurImage resolves.
+			target.style.backgroundImage = `url("${url}")`;
+			preBlurImage(url).then((dataUrl) => {
+				if (cancelled || !dataUrl) return;
+				target.style.backgroundImage = `url("${dataUrl}")`;
+				target.style.filter = 'none';
+			});
+			return () => {
+				cancelled = true;
+			};
+		};
+	}
 	function motionStagger(
 		opts: {
 			index?: number;
@@ -112,20 +173,34 @@
 			target.style.transformStyle = 'preserve-3d';
 			target.style.perspective = '900px';
 			let rect: DOMRect | null = null;
+			// rAF-coalesce pointermove. Without this, animate() runs 60–120×/sec
+			// per hovered card — each call allocates a new spring (visible as
+			// scopedAnimate/animateSubject/readKeyframes hot frames in the profile).
+			let pendingX = 0;
+			let pendingY = 0;
+			let rafId = 0;
+			const tick = () => {
+				rafId = 0;
+				animate(
+					target,
+					{ rotateX: -pendingY * max, rotateY: pendingX * max },
+					{ type: 'spring', stiffness, damping, mass }
+				);
+			};
 			const onEnter = () => {
 				rect = target.getBoundingClientRect();
 			};
 			const onMove = (e: PointerEvent) => {
 				if (!rect) rect = target.getBoundingClientRect();
-				const x = (e.clientX - rect.left) / rect.width - 0.5;
-				const y = (e.clientY - rect.top) / rect.height - 0.5;
-				animate(
-					target,
-					{ rotateX: -y * max, rotateY: x * max },
-					{ type: 'spring', stiffness, damping, mass }
-				);
+				pendingX = (e.clientX - rect.left) / rect.width - 0.5;
+				pendingY = (e.clientY - rect.top) / rect.height - 0.5;
+				if (!rafId) rafId = requestAnimationFrame(tick);
 			};
 			const onLeave = () => {
+				if (rafId) {
+					cancelAnimationFrame(rafId);
+					rafId = 0;
+				}
 				animate(
 					target,
 					{ rotateX: 0, rotateY: 0 },
@@ -137,6 +212,7 @@
 			target.addEventListener('pointermove', onMove);
 			target.addEventListener('pointerleave', onLeave);
 			return () => {
+				if (rafId) cancelAnimationFrame(rafId);
 				target.removeEventListener('pointerenter', onEnter);
 				target.removeEventListener('pointermove', onMove);
 				target.removeEventListener('pointerleave', onLeave);
@@ -310,7 +386,10 @@
 		icon?: string | null;
 		backgroundImage?: string | null;
 	}
-	let projectMetas = $state<Map<string, ProjectMeta>>(new Map());
+	// SvelteMap so per-key reads (`projectMetas.get(id)`) are fine-grained reactive
+	// dependencies. Combined with the in-place merge below, only cards whose
+	// meta actually changed re-render.
+	const projectMetas = new SvelteMap<string, ProjectMeta>();
 
 	async function fetchDeployments() {
 		// Used by single-deployment actions (e.g. restart) to refresh after a mutation
@@ -376,14 +455,84 @@
 		return [...kept, ...fresh];
 	}
 
+	// Shallow value-equality good enough for our payload fields: scalars are ===,
+	// arrays compare element-wise (one level deep), nested objects compare by
+	// their own top-level keys. We use this to avoid writing fields that didn't
+	// actually change — Svelte 5 fine-grained reactivity then leaves dependent
+	// effects alone instead of marking them dirty.
+	function shallowEq(a: any, b: any): boolean {
+		if (a === b) return true;
+		if (a == null || b == null) return false;
+		if (Array.isArray(a) && Array.isArray(b)) {
+			if (a.length !== b.length) return false;
+			for (let i = 0; i < a.length; i++) if (!shallowEq(a[i], b[i])) return false;
+			return true;
+		}
+		if (typeof a === 'object' && typeof b === 'object') {
+			const ka = Object.keys(a);
+			const kb = Object.keys(b);
+			if (ka.length !== kb.length) return false;
+			for (const k of ka) if ((a as any)[k] !== (b as any)[k]) return false;
+			return true;
+		}
+		return false;
+	}
+
+	// Mutate `list` in place so identity is preserved for items present in both
+	// the old and new payload. Critical for SSE perf: every event used to
+	// replace the array (and every object), forcing every keyed-each item's
+	// bindings to re-evaluate even when the content was identical. With this,
+	// per-card effects only re-run for ids whose fields actually changed.
+	function syncList<T extends { id: string }>(list: T[], next: T[]) {
+		const nextById = new Map(next.map((x) => [x.id, x]));
+		for (let i = list.length - 1; i >= 0; i--) {
+			if (!nextById.has(list[i].id)) list.splice(i, 1);
+		}
+		const curById = new Map<string, T>();
+		for (const x of list) curById.set(x.id, x);
+		for (const n of next) {
+			const cur = curById.get(n.id);
+			if (cur) {
+				for (const k of Object.keys(n) as Array<keyof T>) {
+					if (!shallowEq(cur[k], n[k])) cur[k] = n[k];
+				}
+			} else {
+				list.push(n);
+				curById.set(n.id, n);
+			}
+		}
+	}
+
+	function syncMap<V extends { id: string }>(map: Map<string, V>, next: V[]) {
+		const nextIds = new Set<string>();
+		for (const v of next) nextIds.add(v.id);
+		for (const id of [...map.keys()]) if (!nextIds.has(id)) map.delete(id);
+		for (const v of next) {
+			const cur = map.get(v.id);
+			if (!cur) {
+				map.set(v.id, v);
+				continue;
+			}
+			let changed = false;
+			for (const k of Object.keys(v) as Array<keyof V>) {
+				if (!shallowEq(cur[k], v[k])) {
+					cur[k] = v[k];
+					changed = true;
+				}
+			}
+			if (changed) map.set(v.id, cur); // re-set to notify Map reactivity
+		}
+	}
+
 	function applyOverview(payload: any) {
-		deployments = payload.deployments ?? [];
-		databases = payload.databases ?? [];
-		const m = new Map<string, ProjectMeta>();
-		for (const p of payload.projects ?? []) m.set(p.id, p);
-		projectMetas = m;
-		activeBuilds = payload.builds?.active ?? [];
-		recentBuilds = payload.builds?.recent ?? [];
+		// Merge in place. Replacing arrays/Maps was the SSE bottleneck — every
+		// event invalidated every keyed-each binding because object identities
+		// changed wholesale. Now only ids with actual field deltas trigger work.
+		syncList(deployments, payload.deployments ?? []);
+		syncList(databases, payload.databases ?? []);
+		syncMap(projectMetas, payload.projects ?? []);
+		syncList(activeBuilds, payload.builds?.active ?? []);
+		syncList(recentBuilds, payload.builds?.recent ?? []);
 		orgId = payload.organization?.id ?? null;
 		// Fetch viewer's org role once we know the org id — used to gate the
 		// "create project" CTAs against guests.
@@ -447,34 +596,6 @@
 
 	let activeBuilds = $state<ActiveBuild[]>([]);
 	let recentBuilds = $state<RecentBuild[]>([]);
-	let now = $state(Date.now());
-	let timerInterval: ReturnType<typeof setInterval> | null = null;
-	function startTimer() {
-		if (!timerInterval)
-			timerInterval = setInterval(() => {
-				now = Date.now();
-			}, 1000);
-	}
-	function stopTimer() {
-		if (timerInterval) {
-			clearInterval(timerInterval);
-			timerInterval = null;
-		}
-	}
-	$effect(() => {
-		if (activeBuilds.length > 0) startTimer();
-		else stopTimer();
-	});
-	onDestroy(() => stopTimer());
-
-	function fmtDuration(s: number): string {
-		if (s < 60) return `${s}s`;
-		const m = Math.floor(s / 60);
-		return m < 60 ? `${m}m ${s % 60}s` : `${Math.floor(m / 60)}h ${m % 60}m`;
-	}
-	function elapsed(d: string): number {
-		return Math.max(0, Math.floor((now - new Date(d).getTime()) / 1000));
-	}
 
 	// ── Expand state (persisted) ──
 	const EXPAND_KEY = 'overview-expanded-projects';
@@ -627,9 +748,17 @@
 		if (openMenuId !== null) renderMenuId = openMenuId;
 	});
 
-	let favouriteIds = $state<Set<string>>(new Set());
-	pinnedItems.subscribe((items) => {
-		favouriteIds = new Set(items.filter((i) => i.type === 'deployment').map((i) => i.id));
+	// SvelteSet gives per-key reactivity: `favouriteIds.has(id)` creates a
+	// dependency on that specific id, not the whole set. Combined with mutating
+	// in place (instead of replacing the Set), unrelated cards skip re-evaluation
+	// when one star toggles — which used to invalidate every Star + springPop.
+	const favouriteIds = new SvelteSet<string>();
+	$effect(() => {
+		const next = new Set(
+			$pinnedItems.filter((i) => i.type === 'deployment').map((i) => i.id)
+		);
+		for (const id of favouriteIds) if (!next.has(id)) favouriteIds.delete(id);
+		for (const id of next) if (!favouriteIds.has(id)) favouriteIds.add(id);
 	});
 
 	// Filtered deployments — ordered by `depOrder` (a stable snapshot from
@@ -725,6 +854,31 @@
 		for (const g of map.values()) ordered.push(g);
 		return ordered;
 	});
+
+	// Paginate project groups into tabs of 10. The full list is kept in
+	// `projectGroups` so favourites/search still see everything; only the
+	// rendered grid is sliced. Saves O(N) per-card effect cost when an org
+	// has many projects.
+	const PROJECTS_PER_TAB = 10;
+	let projectTab = $state(0);
+	const totalProjectTabs = $derived(
+		Math.max(1, Math.ceil(projectGroups.length / PROJECTS_PER_TAB))
+	);
+	// Clamp the active tab if groups shrink (search filter, project deleted).
+	$effect(() => {
+		if (projectTab >= totalProjectTabs) projectTab = Math.max(0, totalProjectTabs - 1);
+	});
+	// Reset to first tab whenever the search query changes — the result set
+	// is different so the old tab index doesn't mean anything.
+	$effect(() => {
+		searchQuery;
+		untrack(() => {
+			projectTab = 0;
+		});
+	});
+	const visibleProjectGroups = $derived(
+		projectGroups.slice(projectTab * PROJECTS_PER_TAB, (projectTab + 1) * PROJECTS_PER_TAB)
+	);
 
 	// ── Helpers ──
 	function projectStatusSummary(g: ProjectGroup) {
@@ -893,11 +1047,11 @@
 			depOrder = [];
 			dbOrder = [];
 			projOrder = [];
-			deployments = [];
-			databases = [];
-			activeBuilds = [];
-			recentBuilds = [];
-			projectMetas = new Map();
+			deployments.length = 0;
+			databases.length = 0;
+			activeBuilds.length = 0;
+			recentBuilds.length = 0;
+			projectMetas.clear();
 		}
 		lastSeenOrgSlug = slug;
 
@@ -1039,7 +1193,25 @@
 
 				<!-- Group by Project -->
 				{#if projectGroups.length > 0}
-					{#each projectGroups as group, gi (group.id)}
+					{#if totalProjectTabs > 1}
+						<nav class="proj-tabs" aria-label="Project pages">
+							{#each Array(totalProjectTabs) as _, ti}
+								<button
+									type="button"
+									class="proj-tab"
+									class:proj-tab--active={projectTab === ti}
+									onclick={() => (projectTab = ti)}
+									aria-current={projectTab === ti ? 'page' : undefined}
+								>
+									{ti * PROJECTS_PER_TAB + 1}–{Math.min(
+										(ti + 1) * PROJECTS_PER_TAB,
+										projectGroups.length
+									)}
+								</button>
+							{/each}
+						</nav>
+					{/if}
+					{#each visibleProjectGroups as group, gi (group.id)}
 							{@const expanded = expandedProjects.has(group.id)}
 							{@const meta = projectMetas.get(group.id)}
 							{@const summary = projectStatusSummary(group)}
@@ -1056,15 +1228,15 @@
 										<div class="proj-card-backdrop" aria-hidden="true">
 											<div
 												class="proj-body-bg proj-body-bg--1"
-												style="background-image: url({JSON.stringify(meta.backgroundImage)});"
+												{@attach preBlurBg(meta.backgroundImage)}
 											></div>
 											<div
 												class="proj-body-bg proj-body-bg--2"
-												style="background-image: url({JSON.stringify(meta.backgroundImage)});"
+												{@attach preBlurBg(meta.backgroundImage)}
 											></div>
 											<div
 												class="proj-body-bg proj-body-bg--3"
-												style="background-image: url({JSON.stringify(meta.backgroundImage)});"
+												{@attach preBlurBg(meta.backgroundImage)}
 											></div>
 											<div class="proj-body-veil"></div>
 										</div>
@@ -1211,7 +1383,7 @@
 							>
 						</div>
 						<span class="bld-time bld-time--live"
-							><Timer size={10} /> {fmtDuration(elapsed(b.updatedAt))}</span
+							><BuildTimer updatedAt={b.updatedAt} /></span
 						>
 					</a>
 				{/each}
@@ -1477,6 +1649,33 @@
 	.section {
 		margin-bottom: 1.75rem;
 	}
+	.proj-tabs {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.375rem;
+		margin: 0 0 1rem;
+	}
+	.proj-tab {
+		appearance: none;
+		border: 1px solid var(--center-channel-divider);
+		background: var(--center-channel-bg);
+		color: var(--surface-muted);
+		padding: 0.3rem 0.65rem;
+		border-radius: 999px;
+		font-size: 0.75rem;
+		font-weight: 500;
+		cursor: pointer;
+		transition: color 0.15s ease, background 0.15s ease, border-color 0.15s ease;
+	}
+	.proj-tab:hover {
+		color: var(--center-channel-color);
+		border-color: var(--button-bg);
+	}
+	.proj-tab--active {
+		background: var(--button-bg);
+		border-color: var(--button-bg);
+		color: var(--button-color, #fff);
+	}
 	.label {
 		font-size: 0.6875rem;
 		font-weight: 600;
@@ -1523,6 +1722,13 @@
 		overflow: hidden;
 		pointer-events: none;
 		border-radius: inherit;
+		/* Isolate the filtered layer from parent reflow. Without `contain`,
+		   Chrome treats the backdrop as part of the card's paint tree, so any
+		   reflow on the card (sidebar resize, grid column flip, body
+		   expand/collapse) invalidates the cached blur. With `contain` the
+		   backdrop owns its own paint subtree and isn't repainted on parent
+		   size changes — only on its own. */
+		contain: layout paint;
 	}
 	/* Backdrop keeps fully-rounded corners always — squaring only the bottom
 	   when expanded caused a square-to-rounded pop the moment the user
@@ -1570,6 +1776,13 @@
 		filter: blur(48px) saturate(1.6);
 		will-change: transform;
 		transform-origin: 50% 50%;
+	}
+	/* Firefox doesn't cache filter output to a compositor layer, so a 48px blur
+	   gets re-rasterized on every animation frame. Use a smaller radius there. */
+	@-moz-document url-prefix() {
+		.proj-body-bg {
+			filter: blur(20px) saturate(1.4);
+		}
 	}
 	.proj-body-bg--1 {
 		transform: scale(1.6) rotate(0deg);
