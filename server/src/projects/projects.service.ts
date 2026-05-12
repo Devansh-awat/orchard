@@ -7631,6 +7631,79 @@ export class ProjectsService {
 
   // ── Database (PostgreSQL) Management ──
 
+  private readonly TARGET_PG_MAJOR = 17;
+
+  private async validateImportSource(src: {
+    host: string;
+    port?: number;
+    user: string;
+    password: string;
+    database: string;
+    sslMode?: string;
+  }): Promise<void> {
+    const { Client } = require('pg');
+    const ssl = src.sslMode && src.sslMode !== 'disable'
+      ? { rejectUnauthorized: false }
+      : false;
+    const client = new Client({
+      host: src.host,
+      port: src.port || 5432,
+      user: src.user,
+      password: src.password,
+      database: src.database,
+      ssl,
+      connectionTimeoutMillis: 8000,
+      statement_timeout: 5000,
+      query_timeout: 5000,
+    });
+    try {
+      try {
+        await client.connect();
+      } catch (e: any) {
+        const code = e?.code;
+        const msg = e?.message || String(e);
+        if (code === 'ENOTFOUND' || code === 'EAI_AGAIN') {
+          throw new BadRequestException(`Source database host not found: ${src.host}`);
+        }
+        if (code === 'ECONNREFUSED') {
+          throw new BadRequestException(`Source database refused connection at ${src.host}:${src.port || 5432}`);
+        }
+        if (code === 'ETIMEDOUT' || /timeout/i.test(msg)) {
+          throw new BadRequestException(`Timed out connecting to source database at ${src.host}:${src.port || 5432}`);
+        }
+        if (code === '28P01' || code === '28000') {
+          throw new BadRequestException('Source database rejected credentials (wrong user or password)');
+        }
+        if (code === '3D000') {
+          throw new BadRequestException(`Source database "${src.database}" does not exist`);
+        }
+        if (/self.signed|self-signed|certificate/i.test(msg)) {
+          throw new BadRequestException(`Source database TLS error: ${msg}. Try appending ?sslmode=require to the URL.`);
+        }
+        throw new BadRequestException(`Cannot reach source database: ${msg}`);
+      }
+
+      let versionNum: number | null = null;
+      try {
+        const r = await client.query('SHOW server_version_num');
+        versionNum = Number(r.rows?.[0]?.server_version_num);
+      } catch (e: any) {
+        throw new BadRequestException(`Failed to query source database version: ${e?.message || e}`);
+      }
+      if (!versionNum || Number.isNaN(versionNum)) {
+        throw new BadRequestException('Could not determine source PostgreSQL version');
+      }
+      const sourceMajor = Math.floor(versionNum / 10000);
+      if (sourceMajor > this.TARGET_PG_MAJOR) {
+        throw new BadRequestException(
+          `Source PostgreSQL major version (${sourceMajor}) is newer than the target (${this.TARGET_PG_MAJOR}); import is not supported.`,
+        );
+      }
+    } finally {
+      try { await client.end(); } catch { /* ignore */ }
+    }
+  }
+
   private generatePassword(length = 24): string {
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
     const bytes = require('crypto').randomBytes(length);
@@ -7645,6 +7718,7 @@ export class ProjectsService {
       templateInstanceId?: string;
       cpuRequestMilli?: number | null;
       memoryRequestBytes?: number | null;
+      restoreFromUrl?: string;
     },
     clerkId: string,
     userData?: {
@@ -7731,6 +7805,42 @@ export class ProjectsService {
       console.error('[Projects] applyProjectQuota (db) failed:', err);
     });
 
+    let importFrom: {
+      host: string;
+      port?: number;
+      user: string;
+      password: string;
+      database: string;
+      sslMode?: string;
+    } | undefined;
+    const restoreUrlRaw = typeof data.restoreFromUrl === 'string' ? data.restoreFromUrl.trim() : '';
+    if (restoreUrlRaw) {
+      try {
+        const u = new URL(restoreUrlRaw);
+        if (u.protocol !== 'postgres:' && u.protocol !== 'postgresql:') {
+          throw new Error('protocol must be postgres:// or postgresql://');
+        }
+        const sourceDb = u.pathname.replace(/^\//, '');
+        if (!u.hostname || !u.username || !sourceDb) {
+          throw new Error('URL must include host, user, and database');
+        }
+        importFrom = {
+          host: u.hostname,
+          port: u.port ? Number(u.port) : 5432,
+          user: decodeURIComponent(u.username),
+          password: decodeURIComponent(u.password || ''),
+          database: sourceDb,
+          sslMode: u.searchParams.get('sslmode') || undefined,
+        };
+      } catch (e: any) {
+        throw new BadRequestException(`Invalid restore URL: ${e?.message || 'parse error'}`);
+      }
+    }
+
+    if (importFrom) {
+      await this.validateImportSource(importFrom);
+    }
+
     const { host, port } = await this.kubernetesService.createCnpgCluster({
       namespace,
       clusterName,
@@ -7740,6 +7850,7 @@ export class ProjectsService {
       storageSize,
       r2,
       resources: dbResources,
+      importFrom,
     });
 
     let database;

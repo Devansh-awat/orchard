@@ -282,6 +282,7 @@ export class ProjectsController {
       storageSize?: string;
       cpuRequestMilli?: number | null;
       memoryRequestBytes?: number | null;
+      restoreFromUrl?: string;
     },
     @Request() req
   ) {

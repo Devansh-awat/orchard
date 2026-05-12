@@ -5064,6 +5064,14 @@ export class KubernetesService {
     imageName?: string;
     r2?: { endpoint: string; bucket: string; region?: string; accessKey: string; secretKey: string };
     resources?: { cpuMilli: number; memoryBytes: number };
+    importFrom?: {
+      host: string;
+      port?: number;
+      user: string;
+      password: string;
+      database: string;
+      sslMode?: string;
+    };
   }): Promise<{ host: string; port: number }> {
     this.ensureKubeConfig();
     const ns = options.namespace.trim();
@@ -5132,6 +5140,33 @@ export class KubernetesService {
       clusterSpec.resources = {
         requests: { cpu: cpuStr, memory: memStr },
         limits: { cpu: cpuStr, memory: memStr },
+      };
+    }
+
+    if (options.importFrom) {
+      const importSecretName = `${name}-import-source`;
+      await this.upsertSecret(coreApi, ns, importSecretName, 'Opaque', {
+        password: Buffer.from(options.importFrom.password).toString('base64'),
+      }, labels);
+
+      const sourceName = 'import-source';
+      clusterSpec.externalClusters = [
+        {
+          name: sourceName,
+          connectionParameters: {
+            host: options.importFrom.host,
+            port: String(options.importFrom.port || 5432),
+            user: options.importFrom.user,
+            dbname: options.importFrom.database,
+            sslmode: options.importFrom.sslMode || 'prefer',
+          },
+          password: { name: importSecretName, key: 'password' },
+        },
+      ];
+      clusterSpec.bootstrap.initdb.import = {
+        type: 'microservice',
+        databases: [options.importFrom.database],
+        source: { externalCluster: sourceName },
       };
     }
 
@@ -5220,6 +5255,7 @@ export class KubernetesService {
     ));
     await ignore404(coreApi.deleteNamespacedSecret(this.buildAppSecretName(name), ns));
     await ignore404(coreApi.deleteNamespacedSecret(`${name}-r2`, ns));
+    await ignore404(coreApi.deleteNamespacedSecret(`${name}-import-source`, ns));
   }
 
   async getCnpgClusterStatus(namespace: string, clusterName: string): Promise<any> {

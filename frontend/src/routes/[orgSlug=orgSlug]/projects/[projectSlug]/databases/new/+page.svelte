@@ -15,6 +15,7 @@
 	let storageSizeGi = $state(1);
 	let resourceCpuMilli = $state<number | null>(null);
 	let resourceMemoryBytes = $state<number | null>(null);
+	let restoreFromUrl = $state('');
 
 	const projectSlug = $derived($page.params.projectSlug ?? '');
 	const orgSlug = $derived($page.params.orgSlug ?? '');
@@ -57,6 +58,7 @@
 					storageSize: `${size}Gi`,
 					cpuRequestMilli: resourceCpuMilli,
 					memoryRequestBytes: resourceMemoryBytes,
+					restoreFromUrl: restoreFromUrl.trim() || undefined,
 				})
 			});
 
@@ -151,6 +153,21 @@
 						disabled={submitting}
 					/>
 					<p class="nd-hint">Persistent volume size for this database. Defaults to 1 GiB.</p>
+				</div>
+
+				<div class="nd-field">
+					<label for="db-restore-url" class="nd-label">Restore from existing database (optional)</label>
+					<input
+						id="db-restore-url"
+						type="text"
+						bind:value={restoreFromUrl}
+						placeholder="postgresql://user:password@host:5432/dbname"
+						class="nd-input"
+						disabled={submitting}
+						autocomplete="off"
+						spellcheck="false"
+					/>
+					<p class="nd-hint">If provided, the new database will be bootstrapped by importing data from this PostgreSQL connection URL. The source database must be reachable from the cluster.</p>
 				</div>
 
 				<div class="nd-field" style="grid-column: 1 / -1;">
