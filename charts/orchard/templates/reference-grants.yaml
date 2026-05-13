@@ -1,42 +1,48 @@
 {{- if and .Values.gateway.enabled .Values.gateway.referenceGrants.enabled }}
 {{- $ns := .Values.gateway.namespace -}}
+{{- $sources := .Values.gateway.referenceGrants.fromNamespaces | default list -}}
 
 {{- if .Values.gateway.http.enabled }}
-apiVersion: gateway.networking.k8s.io/v1beta1
-kind: ReferenceGrant
-metadata:
-  name: {{ .Values.gateway.http.name }}-from-all
-  namespace: {{ $ns }}
-  labels:
-    {{- include "orchard.labels" (dict "root" . "name" (printf "%s-from-all" .Values.gateway.http.name)) | nindent 4 }}
-spec:
-  from:
-    - group: gateway.networking.k8s.io
-      kind: HTTPRoute
-      namespace: ""
-  to:
-    - group: gateway.networking.k8s.io
-      kind: Gateway
-      name: {{ .Values.gateway.http.name }}
-{{- end }}
-
-{{- if .Values.gateway.db.enabled }}
+{{- range $src := $sources }}
 ---
 apiVersion: gateway.networking.k8s.io/v1beta1
 kind: ReferenceGrant
 metadata:
-  name: {{ .Values.gateway.db.name }}-from-all
+  name: {{ $.Values.gateway.http.name }}-from-{{ $src }}
   namespace: {{ $ns }}
   labels:
-    {{- include "orchard.labels" (dict "root" . "name" (printf "%s-from-all" .Values.gateway.db.name)) | nindent 4 }}
+    {{- include "orchard.labels" (dict "root" $ "name" (printf "%s-from-%s" $.Values.gateway.http.name $src)) | nindent 4 }}
+spec:
+  from:
+    - group: gateway.networking.k8s.io
+      kind: HTTPRoute
+      namespace: {{ $src }}
+  to:
+    - group: gateway.networking.k8s.io
+      kind: Gateway
+      name: {{ $.Values.gateway.http.name }}
+{{- end }}
+{{- end }}
+
+{{- if .Values.gateway.db.enabled }}
+{{- range $src := $sources }}
+---
+apiVersion: gateway.networking.k8s.io/v1beta1
+kind: ReferenceGrant
+metadata:
+  name: {{ $.Values.gateway.db.name }}-from-{{ $src }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "orchard.labels" (dict "root" $ "name" (printf "%s-from-%s" $.Values.gateway.db.name $src)) | nindent 4 }}
 spec:
   from:
     - group: gateway.networking.k8s.io
       kind: TCPRoute
-      namespace: ""
+      namespace: {{ $src }}
   to:
     - group: gateway.networking.k8s.io
       kind: Gateway
-      name: {{ .Values.gateway.db.name }}
+      name: {{ $.Values.gateway.db.name }}
+{{- end }}
 {{- end }}
 {{- end }}

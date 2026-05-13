@@ -208,7 +208,8 @@ Renders the shared Gateway API `Gateway` objects and `ReferenceGrant`s that used
 | `gateway.http.appWildcardSecretName` | `wildcard-a-lfdl-ink-tls` | Secret holding the wildcard TLS cert for `*.{appDomain}`. Defaults align with the chart-managed `Certificate`. |
 | `gateway.db.enabled` | `true` | Render the L4 TCP Gateway for managed DBs. |
 | `gateway.db.name` | `db-gateway` | Gateway object name. Targeted by the server's `ensureDbGatewayListener`. |
-| `gateway.referenceGrants.enabled` | `true` | Render `ReferenceGrant`s allowing routes in any namespace to attach to the Gateways above. |
+| `gateway.referenceGrants.enabled` | `false` | Render `ReferenceGrant`s. Only needed if Routes reference cross-namespace *backend Services* — not required for parentRefs (covered by `allowedRoutes.namespaces.from: All`). |
+| `gateway.referenceGrants.fromNamespaces` | `[]` | Explicit list of source namespaces. One ReferenceGrant rendered per (namespace × Gateway). Empty = no grants rendered. Gateway API admission rejects empty / wildcard `from.namespace`, so this must be a concrete list. |
 
 ### Certificates (`certificates.*`)
 

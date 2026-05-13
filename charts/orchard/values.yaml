@@ -140,10 +140,15 @@ gateway:
   db:
     enabled: true
     name: db-gateway
-  # Cross-namespace ReferenceGrants so HTTPRoute/TCPRoute resources in app
-  # namespaces can attach to the Gateways in {namespace}.
+  # Cross-namespace ReferenceGrants. Only needed when Routes reference a
+  # backend Service in a different namespace — NOT required for routes to
+  # attach as parentRefs (that's covered by allowedRoutes.namespaces.from: All).
+  # Gateway API admission requires a concrete source namespace per entry; no
+  # wildcard is allowed. Provide an explicit list to render one grant per ns
+  # per Gateway. Defaults to empty (no ReferenceGrants).
   referenceGrants:
-    enabled: true
+    enabled: false
+    fromNamespaces: []
 
 # cert-manager Certificates for cluster wildcards.
 # Requires cert-manager + a working DNS-01 ClusterIssuer (acme-dns in kubeops).
