@@ -1,0 +1,63 @@
+{{- if .Values.gateway.enabled }}
+{{- $ns := .Values.gateway.namespace -}}
+{{- $gcn := .Values.gateway.gatewayClassName -}}
+
+{{- if .Values.gateway.http.enabled }}
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Values.gateway.http.name }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" .Values.gateway.http.name) | nindent 4 }}
+    leaf.dev/managed: "true"
+    leaf.dev/role: http
+spec:
+  gatewayClassName: {{ $gcn }}
+  listeners:
+    - name: http
+      protocol: HTTP
+      port: 80
+      allowedRoutes:
+        namespaces:
+          from: All
+    - name: https-wildcard
+      protocol: HTTPS
+      port: 443
+      hostname: "*.{{ .Values.gateway.http.appDomain }}"
+      tls:
+        mode: Terminate
+        certificateRefs:
+          - kind: Secret
+            group: ""
+            name: {{ .Values.gateway.http.appWildcardSecretName }}
+      allowedRoutes:
+        namespaces:
+          from: All
+{{- end }}
+
+{{- if .Values.gateway.db.enabled }}
+---
+apiVersion: gateway.networking.k8s.io/v1
+kind: Gateway
+metadata:
+  name: {{ .Values.gateway.db.name }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" .Values.gateway.db.name) | nindent 4 }}
+    leaf.dev/managed: "true"
+    leaf.dev/role: db
+spec:
+  gatewayClassName: {{ $gcn }}
+  listeners:
+    - name: placeholder
+      protocol: TCP
+      port: 1
+      allowedRoutes:
+        namespaces:
+          from: Selector
+          selector:
+            matchLabels:
+              leaf.dev/never-match: "true"
+{{- end }}
+{{- end }}

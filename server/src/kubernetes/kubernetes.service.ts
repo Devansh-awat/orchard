@@ -5594,10 +5594,10 @@ export class KubernetesService {
 
   // ── Public TLS (cert-manager wildcard reflection) ──
 
-  private readonly PUBLIC_TLS_SOURCE_NAMESPACE = 'network';
-  private readonly PUBLIC_TLS_SOURCE_SECRET = 'wildcard-db-orchard-my-tls';
+  private readonly PUBLIC_TLS_SOURCE_NAMESPACE = process.env.PUBLIC_DB_TLS_SOURCE_NAMESPACE || 'network';
+  private readonly PUBLIC_TLS_SOURCE_SECRET = process.env.PUBLIC_DB_TLS_SOURCE_SECRET || 'wildcard-db-orchard-my-tls';
   private readonly PUBLIC_TLS_BASE_DOMAIN = process.env.PUBLIC_DB_DOMAIN || 'db.orchard.my';
-  private readonly PUBLIC_TLS_LOCAL_SECRET = 'wildcard-db-tls';
+  private readonly PUBLIC_TLS_LOCAL_SECRET = process.env.PUBLIC_DB_TLS_LOCAL_SECRET || 'wildcard-db-tls';
 
   publicTlsBaseDomain(): string {
     return this.PUBLIC_TLS_BASE_DOMAIN;

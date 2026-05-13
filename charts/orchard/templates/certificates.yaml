@@ -1,0 +1,63 @@
+{{- if .Values.certificates.enabled }}
+{{- $issuer := .Values.certificates.issuer -}}
+{{- $ns := .Values.certificates.namespace -}}
+{{- $duration := .Values.certificates.duration -}}
+{{- $renewBefore := .Values.certificates.renewBefore -}}
+{{- $privateKey := .Values.certificates.privateKey -}}
+
+{{- /* App wildcard — terminates TLS on the shared HTTP gateway. */ -}}
+{{- with .Values.certificates.wildcards.app }}
+{{- if .enabled }}
+{{- $domain := .domain | default $.Values.gateway.http.appDomain -}}
+{{- $secret := .secretName | default $.Values.gateway.http.appWildcardSecretName -}}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ $secret }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "orchard.labels" (dict "root" $ "name" $secret) | nindent 4 }}
+spec:
+  secretName: {{ $secret }}
+  issuerRef:
+    name: {{ $issuer.name }}
+    kind: {{ $issuer.kind }}
+  commonName: "*.{{ $domain }}"
+  dnsNames:
+    - "*.{{ $domain }}"
+    - "{{ $domain }}"
+  privateKey:
+    {{- toYaml $privateKey | nindent 4 }}
+  duration: {{ $duration }}
+  renewBefore: {{ $renewBefore }}
+{{- end }}
+{{- end }}
+
+{{- /* DB wildcard — consumed by syncPublicTlsSecret() for CNPG TLS. */ -}}
+{{- with .Values.certificates.wildcards.db }}
+{{- if .enabled }}
+---
+apiVersion: cert-manager.io/v1
+kind: Certificate
+metadata:
+  name: {{ .secretName }}
+  namespace: {{ $ns }}
+  labels:
+    {{- include "orchard.labels" (dict "root" $ "name" .secretName) | nindent 4 }}
+spec:
+  secretName: {{ .secretName }}
+  issuerRef:
+    name: {{ $issuer.name }}
+    kind: {{ $issuer.kind }}
+  commonName: "*.{{ .domain }}"
+  dnsNames:
+    - "*.{{ .domain }}"
+    - "{{ .domain }}"
+  privateKey:
+    {{- toYaml $privateKey | nindent 4 }}
+  duration: {{ $duration }}
+  renewBefore: {{ $renewBefore }}
+{{- end }}
+{{- end }}
+{{- end }}

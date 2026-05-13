@@ -193,6 +193,53 @@ The chart also creates a ClusterRoleBinding granting the `default` ServiceAccoun
 
 `vmagent`, `kube-state-metrics`, and `node-exporter` versions are pinned inside the chart templates (not exposed). Edit the chart if you need to bump them.
 
+### Gateway (`gateway.*`)
+
+Renders the shared Gateway API `Gateway` objects and `ReferenceGrant`s that used to live in `k8s/gateway-api/`.
+
+| Key | Default | Description |
+|---|---|---|
+| `gateway.enabled` | `true` | Master switch. Disable if you wire routing without Gateway API. |
+| `gateway.namespace` | `network` | Namespace the Gateways + ReferenceGrants live in. Cert Secrets must be readable from here. |
+| `gateway.gatewayClassName` | `traefik` | `GatewayClass` both Gateways attach to. |
+| `gateway.http.enabled` | `true` | Render the L7 HTTP/HTTPS Gateway. |
+| `gateway.http.name` | `http-gateway` | Gateway object name. The server (`ensureCustomDomainListener`) targets this exact name — keep in sync. |
+| `gateway.http.appDomain` | `a.lfdl.ink` | Hostname pattern for autogen user app domains. Must match server `APP_DOMAIN` and frontend `PUBLIC_APP_DOMAIN`. |
+| `gateway.http.appWildcardSecretName` | `wildcard-a-lfdl-ink-tls` | Secret holding the wildcard TLS cert for `*.{appDomain}`. Defaults align with the chart-managed `Certificate`. |
+| `gateway.db.enabled` | `true` | Render the L4 TCP Gateway for managed DBs. |
+| `gateway.db.name` | `db-gateway` | Gateway object name. Targeted by the server's `ensureDbGatewayListener`. |
+| `gateway.referenceGrants.enabled` | `true` | Render `ReferenceGrant`s allowing routes in any namespace to attach to the Gateways above. |
+
+### Certificates (`certificates.*`)
+
+Renders `cert-manager.io/v1 Certificate` resources for the configured wildcards.
+
+| Key | Default | Description |
+|---|---|---|
+| `certificates.enabled` | `true` | Render `Certificate` resources. Set `false` if you pre-provision the TLS Secrets out-of-band. |
+| `certificates.namespace` | `network` | Where Certificates + their Secrets live. Same as `gateway.namespace` in the default layout. |
+| `certificates.issuer.name` | `letsencrypt-dns01-wildcard` | Name of the `ClusterIssuer` (or `Issuer`). **Must support DNS-01** — install acme-dns (see `kubeops/kubernetes/apps/network/acme-dns/SETUP.md`) before enabling. |
+| `certificates.issuer.kind` | `ClusterIssuer` | `ClusterIssuer` or `Issuer`. |
+| `certificates.duration` | `2160h` | Cert lifetime. |
+| `certificates.renewBefore` | `360h` | Renewal lead time. |
+| `certificates.privateKey` | `{algorithm: ECDSA, size: 256, rotationPolicy: Always}` | Passed verbatim to `spec.privateKey`. |
+| `certificates.wildcards.app.enabled` | `true` | Issue the wildcard for autogen app domains. |
+| `certificates.wildcards.app.domain` | `""` (→ `gateway.http.appDomain`) | Hostname pattern. Cert covers `*.{domain}` + `{domain}`. |
+| `certificates.wildcards.app.secretName` | `""` (→ `gateway.http.appWildcardSecretName`) | Secret name. Consumed by the Gateway listener. |
+| `certificates.wildcards.db.enabled` | `true` | Issue the wildcard for public CNPG TLS. |
+| `certificates.wildcards.db.domain` | `db.orchard.my` | Hostname pattern. Matches server `PUBLIC_DB_DOMAIN`. |
+| `certificates.wildcards.db.secretName` | `wildcard-db-orchard-my-tls` | Secret consumed by the server's `syncPublicTlsSecret` reflection. |
+
+### Public TLS reflection (`publicTls.*`)
+
+Exposes the secret-name knobs that the server reads at runtime (`PUBLIC_DB_TLS_*` env vars).
+
+| Key | Default | Description |
+|---|---|---|
+| `publicTls.db.sourceNamespace` | `""` (→ `certificates.namespace`) | Where the server reads the wildcard DB cert FROM. Maps to `PUBLIC_DB_TLS_SOURCE_NAMESPACE`. |
+| `publicTls.db.sourceSecret` | `""` (→ `certificates.wildcards.db.secretName`) | Source Secret name. Maps to `PUBLIC_DB_TLS_SOURCE_SECRET`. |
+| `publicTls.db.localSecret` | `wildcard-db-tls` | Secret name written into each project namespace for CNPG to mount. Maps to `PUBLIC_DB_TLS_LOCAL_SECRET`. |
+
 ---
 
 ### Example: production override

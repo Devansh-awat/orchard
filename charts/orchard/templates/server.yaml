@@ -42,6 +42,16 @@ spec:
             - { name: BUILDKIT_LOCAL_CACHE_PATH, value: {{ .Values.builders.localCache.path | quote }} }
             - { name: BUILDKIT_LOCAL_CACHE_PVC,  value: {{ .Values.builders.localCache.pvcName | quote }} }
             {{- end }}
+            {{- with .Values.publicTls }}
+            {{- if .db }}
+            - name: PUBLIC_DB_TLS_SOURCE_NAMESPACE
+              value: {{ .db.sourceNamespace | default $.Values.certificates.namespace | quote }}
+            - name: PUBLIC_DB_TLS_SOURCE_SECRET
+              value: {{ .db.sourceSecret | default $.Values.certificates.wildcards.db.secretName | quote }}
+            - name: PUBLIC_DB_TLS_LOCAL_SECRET
+              value: {{ .db.localSecret | quote }}
+            {{- end }}
+            {{- end }}
             {{- with .Values.server.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}
