@@ -68,7 +68,10 @@ RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
 WORKDIR /app/server
 RUN pnpm dlx prisma@6.18.0 generate
 
+COPY server/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+RUN chmod +x /usr/local/bin/docker-entrypoint.sh
+
 EXPOSE 3001
 
-CMD ["node", "dist/main"]
+ENTRYPOINT ["/usr/local/bin/docker-entrypoint.sh"]
 
