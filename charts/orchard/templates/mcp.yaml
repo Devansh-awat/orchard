@@ -20,7 +20,7 @@ spec:
       {{- include "orchard.pullSecrets" . | nindent 6 }}
       containers:
         - name: mcp
-          image: {{ include "orchard.image" (list . .Values.mcp.image.name .Values.mcp.image.tag) }}
+          image: {{ include "orchard.image" (list . .Values.mcp.image.name .Values.mcp.image.tag .Values.mcp.image.repository) }}
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           ports:
             - name: http

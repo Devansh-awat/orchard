@@ -45,8 +45,9 @@ mcp:
   enabled: true
   replicas: 1
   image:
-    name: server-mcp
-    tag: ""
+    name: mcp
+    repository: leafdtk/leaf  # overrides global image.repository for the mcp image
+    tag: "latest"
   service:
     port: 3100
   resources:
