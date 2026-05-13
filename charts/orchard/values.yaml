@@ -39,6 +39,35 @@ server:
   env: []
   envFrom: []
 
+# Remote MCP server (server/Dockerfile.mcp). Exposes the Orchard MCP over HTTP
+# on its own domain so external MCP clients can connect.
+mcp:
+  enabled: true
+  replicas: 1
+  image:
+    name: server-mcp
+    tag: ""
+  service:
+    port: 3100
+  resources:
+    requests: { cpu: "100m", memory: "256Mi" }
+    limits: { cpu: "1", memory: "1Gi" }
+  # Extra env vars (DATABASE_URL is injected automatically from the CNPG secret).
+  env: []
+  envFrom: []
+  # Traefik IngressRoute. Set host to the public domain you want the MCP to
+  # respond on (e.g. mcp.orchard.my). Leave empty to skip creating the route.
+  ingress:
+    enabled: true
+    host: ""
+    entryPoints: [websecure]
+    tls:
+      enabled: true
+      # If set, used as IngressRoute tls.secretName. Otherwise Traefik will
+      # fall back to its default cert resolver / wildcard.
+      secretName: ""
+    middlewares: []
+
 # CloudNativePG cluster. The CNPG operator must already be installed in the
 # cluster — this chart only creates the Cluster resource.
 postgres:
