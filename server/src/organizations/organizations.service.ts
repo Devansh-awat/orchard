@@ -39,19 +39,17 @@ export class OrganizationsService {
 
   async getUserOrganizations(clerkId: string, userData?: any) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
-    
+
     if (!user) {
       return [];
     }
 
+    const isSuperAdmin = await this.authz.isSuperAdmin(user.id);
+
     return this.prisma.organization.findMany({
-      where: {
-        members: {
-          some: {
-            userId: user.id
-          }
-        }
-      },
+      where: isSuperAdmin
+        ? undefined
+        : { members: { some: { userId: user.id } } },
       include: {
         _count: {
           select: {
@@ -317,11 +315,22 @@ export class OrganizationsService {
       }
     });
 
-    if (!membership) {
-      throw new NotFoundException('Organization not found');
+    if (membership) {
+      return membership;
     }
 
-    return membership;
+    if (await this.authz.isSuperAdmin(user.id)) {
+      return {
+        id: `superadmin:${user.id}`,
+        organizationId,
+        userId: user.id,
+        role: 'owner' as const,
+        addedAt: new Date(),
+        addedBy: null,
+      };
+    }
+
+    throw new NotFoundException('Organization not found');
   }
 
   async updateOrganization(
@@ -591,7 +600,6 @@ export class OrganizationsService {
 
     const normalizedEmail = email.toLowerCase().trim();
 
-    // Check if user already exists and is already a member
     const existingUser = await this.prisma.user.findUnique({
       where: { email: normalizedEmail }
     });
@@ -609,9 +617,55 @@ export class OrganizationsService {
       if (existingMember) {
         throw new BadRequestException('User is already a member of this organization');
       }
+
+      // User exists — add them directly instead of sending an invitation.
+      const member = await this.prisma.$transaction(async (tx) => {
+        const m = await tx.organizationMember.create({
+          data: {
+            organizationId,
+            userId: existingUser.id,
+            role,
+            addedBy: inviter.id,
+          },
+          include: {
+            user: {
+              select: {
+                id: true,
+                email: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+                imageUrl: true,
+              }
+            },
+            organization: true,
+          },
+        });
+
+        await tx.organizationInvitation.deleteMany({
+          where: { organizationId, email: normalizedEmail },
+        });
+
+        return m;
+      });
+
+      this.membershipCache.invalidateInternalUserId(existingUser.id);
+
+      void this.audit.log({
+        action: 'org.member.added',
+        actorUserId: inviter.id,
+        actorEmail: inviter.email,
+        organizationId,
+        targetType: 'user',
+        targetId: existingUser.id,
+        targetLabel: normalizedEmail,
+        metadata: { email: normalizedEmail, role, via: 'direct_add' },
+      });
+
+      return member;
     }
 
-    // Check for existing pending invitation
+    // User doesn't exist yet — send an invitation.
     const existingInvitation = await this.prisma.organizationInvitation.findUnique({
       where: {
         organizationId_email: {
@@ -625,10 +679,9 @@ export class OrganizationsService {
       throw new BadRequestException('An invitation has already been sent to this email');
     }
 
-    // Generate secure token
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date();
-    expiresAt.setDate(expiresAt.getDate() + 7); // 7 days expiry
+    expiresAt.setDate(expiresAt.getDate() + 7);
 
     const invitation = await this.prisma.organizationInvitation.create({
       data: {

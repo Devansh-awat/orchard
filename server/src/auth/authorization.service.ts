@@ -48,7 +48,7 @@ export class AuthorizationService {
 
   constructor(private readonly prisma: PrismaService) {}
 
-  private async isSuperAdmin(userId: string): Promise<boolean> {
+  async isSuperAdmin(userId: string): Promise<boolean> {
     const now = Date.now();
     const hit = this.superAdminCache.get(userId);
     if (hit && hit.expiresAt > now) return hit.value;
