@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { apiFetch, user, toasts } from '$lib/stores';
+	import { env } from '$env/dynamic/public';
 	import { Loader2, Pencil, Camera, X, UserPlus, Trash2, ChevronDown, Check, Mail, Users, Shield, Globe, Key, Lock } from 'lucide-svelte';
 	import { fade, scale, fly } from 'svelte/transition';
 	import { Avatar as AvatarBuilder } from 'melt/builders';
@@ -493,7 +494,7 @@
 	let ssoTesting = $state(false);
 
 	const isEnterprise = $derived(organization?.plan === 'enterprise');
-	const baseDomain = import.meta.env.VITE_BASE_DOMAIN || 'orchard.my';
+	const baseDomain = env.PUBLIC_BASE_DOMAIN || 'orchard.my';
 
 	async function fetchSsoConfig() {
 		if (!organization || !isEnterprise) return;

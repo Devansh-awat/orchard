@@ -16,6 +16,7 @@
 	import { Sidebar, ToastContainer, OnboardingModal } from '$lib/components';
 	import QuickSearch from '$lib/components/QuickSearch.svelte';
 	import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query';
+	import { env } from '$env/dynamic/public';
 
 	const queryClient = new QueryClient({
 		defaultOptions: {
@@ -46,7 +47,7 @@
 		themeStore.init();
 
 		// Initialize API base from environment or default
-		const apiBase = import.meta.env.VITE_API_BASE || '';
+		const apiBase = env.PUBLIC_API_BASE || '';
 		initApiBase(apiBase);
 
 		// Fetch user data

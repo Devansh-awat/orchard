@@ -4,6 +4,7 @@
 	import { browser } from '$app/environment';
 	import { Loader2, Shield, Lock } from 'lucide-svelte';
 	import { apiFetch, initApiBase } from '$lib/stores';
+	import { env } from '$env/dynamic/public';
 
 	interface Branding {
 		organizationId: string;
@@ -40,7 +41,7 @@
 	onMount(async () => {
 		if (!browser) return;
 
-		const apiBase = import.meta.env.VITE_API_BASE || '';
+		const apiBase = env.PUBLIC_API_BASE || '';
 		initApiBase(apiBase);
 
 		// Check URL error params
@@ -56,7 +57,7 @@
 		} else {
 			// Client-side fallback: detect subdomain from hostname
 			const host = window.location.hostname;
-			const baseDomain = import.meta.env.VITE_BASE_DOMAIN || '';
+			const baseDomain = env.PUBLIC_BASE_DOMAIN || '';
 			if (baseDomain && host.endsWith(`.${baseDomain}`)) {
 				const subdomain = host.replace(`.${baseDomain}`, '');
 				try {
@@ -77,7 +78,7 @@
 		if (!branding) return;
 		ssoLoading = true;
 
-		const apiBase = import.meta.env.VITE_API_BASE || '';
+		const apiBase = env.PUBLIC_API_BASE || '';
 		window.location.href = `${apiBase}/apiv1/sso/${branding.organizationId}/login`;
 	}
 

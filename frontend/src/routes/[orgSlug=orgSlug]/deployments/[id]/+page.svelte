@@ -4,6 +4,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { Tabs } from 'melt/builders';
 	import { apiFetch, toasts, refreshTree, isSuperAdmin, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
+	import { env } from '$env/dynamic/public';
 	import { invalidate } from '$app/navigation';
 	import type { PageData } from './$types';
 	import { AnsiUp } from 'ansi_up';
@@ -73,9 +74,9 @@
 		};
 	}
 
-	const APP_DOMAIN = import.meta.env.VITE_APP_DOMAIN || 'a.lfdl.ink';
-	const INGRESS_CNAME = import.meta.env.VITE_INGRESS_CNAME || 'ingress.lfdl.ink';
-	const PUBLIC_DEPLOYMENT_DOMAIN = import.meta.env.VITE_PUBLIC_DEPLOYMENT_DOMAIN || 'public.orchard.my';
+	const APP_DOMAIN = env.PUBLIC_APP_DOMAIN || 'a.lfdl.ink';
+	const INGRESS_CNAME = env.PUBLIC_INGRESS_CNAME || 'ingress.lfdl.ink';
+	const PUBLIC_DEPLOYMENT_DOMAIN = env.PUBLIC_DEPLOYMENT_DOMAIN || 'public.orchard.my';
 
 	// ---- Pointer "hardness" tracker -------------------------------------------------
 	// Tracks pointer velocity in real time. On press, callers read `pointerHardness()`

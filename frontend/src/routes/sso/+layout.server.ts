@@ -1,4 +1,5 @@
 import type { LayoutServerLoad } from './$types';
+import { env } from '$env/dynamic/public';
 
 export const load: LayoutServerLoad = async ({ locals, fetch }) => {
 	const subdomain = locals.subdomain;
@@ -8,7 +9,7 @@ export const load: LayoutServerLoad = async ({ locals, fetch }) => {
 	}
 
 	try {
-		const apiBase = import.meta.env.VITE_API_BASE || '';
+		const apiBase = env.PUBLIC_API_BASE || '';
 		const res = await fetch(`${apiBase}/apiv1/sso/subdomain/${subdomain}`);
 
 		if (!res.ok) {

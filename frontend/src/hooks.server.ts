@@ -1,6 +1,7 @@
 import type { Handle } from '@sveltejs/kit';
+import { env } from '$env/dynamic/public';
 
-const BASE_DOMAIN = import.meta.env.VITE_BASE_DOMAIN || '';
+const BASE_DOMAIN = env.PUBLIC_BASE_DOMAIN || '';
 
 // Routes that are allowed on SSO subdomains
 const SSO_ALLOWED_PATHS = ['/sso', '/oauth/callback', '/apiv1/'];
