@@ -29,6 +29,10 @@ spec:
             - { name: NODE_ENV, value: production }
             - { name: PORT, value: "3000" }
             - { name: HOST, value: "0.0.0.0" }
+            {{- if and .Values.mcp.enabled .Values.mcp.ingress.enabled .Values.mcp.ingress.host }}
+            - name: PUBLIC_MCP_URL
+              value: {{ printf "%s://%s" (ternary "https" "http" .Values.mcp.ingress.tls.enabled) .Values.mcp.ingress.host | quote }}
+            {{- end }}
             {{- with .Values.frontend.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { ArrowLeft, Copy, Check } from 'lucide-svelte';
+	import { env } from '$env/dynamic/public';
 	import { toasts } from '$lib/stores';
+
+	const MCP_URL = env.PUBLIC_MCP_URL || 'https://mcp.orchard.my';
 
 	let copiedId = $state<string | null>(null);
 
@@ -74,8 +77,8 @@
 				<div class="mcp-field">
 					<p class="settings-field-label">Server URL</p>
 					<div class="mcp-copy-row">
-						<code class="mcp-value">https://mcp.orchard.my</code>
-						<button class="btn btn-ghost btn-sm" onclick={() => copy('https://mcp.orchard.my', 'claude-url')}>
+						<code class="mcp-value">{MCP_URL}</code>
+						<button class="btn btn-ghost btn-sm" onclick={() => copy(MCP_URL, 'claude-url')}>
 							{#if copiedId === 'claude-url'}
 								<Check class="h-3.5 w-3.5" />
 							{:else}
@@ -111,7 +114,7 @@
   "mcpServers": {
     "orchard": {
       "type": "url",
-      "url": "https://mcp.orchard.my"
+      "url": "${MCP_URL}"
     }
   }
 }`, 'claude-code')}>
@@ -126,7 +129,7 @@
   "mcpServers": {
     "orchard": {
       "type": "url",
-      "url": "https://mcp.orchard.my"
+      "url": "${MCP_URL}"
     }
   }
 }`}</pre>
@@ -158,7 +161,7 @@
   "servers": {
     "orchard": {
       "type": "http",
-      "url": "https://mcp.orchard.my"
+      "url": "${MCP_URL}"
     }
   }
 }`, 'vscode')}>
@@ -173,7 +176,7 @@
   "servers": {
     "orchard": {
       "type": "http",
-      "url": "https://mcp.orchard.my"
+      "url": "${MCP_URL}"
     }
   }
 }`}</pre>
@@ -208,7 +211,7 @@
 						<button class="btn btn-ghost btn-sm" onclick={() => copy(`{
   "mcpServers": {
     "orchard": {
-      "url": "https://mcp.orchard.my"
+      "url": "${MCP_URL}"
     }
   }
 }`, 'cursor')}>
@@ -222,7 +225,7 @@
 					<pre class="usage-code">{`{
   "mcpServers": {
     "orchard": {
-      "url": "https://mcp.orchard.my"
+      "url": "${MCP_URL}"
     }
   }
 }`}</pre>
@@ -258,7 +261,7 @@
   "mcpServers": {
     "orchard": {
       "type": "url",
-      "url": "https://mcp.orchard.my",
+      "url": "${MCP_URL}",
       "headers": {
         "Authorization": "Bearer orch_your_token_here"
       }
@@ -276,7 +279,7 @@
   "mcpServers": {
     "orchard": {
       "type": "url",
-      "url": "https://mcp.orchard.my",
+      "url": "${MCP_URL}",
       "headers": {
         "Authorization": "Bearer orch_your_token_here"
       }
