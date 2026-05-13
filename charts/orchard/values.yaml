@@ -16,12 +16,12 @@ frontend:
   replicas: 1
   image:
     name: frontend
-    tag: ""              # falls back to .Chart.AppVersion
+    tag: "" # falls back to .Chart.AppVersion
   service:
     port: 3000
   resources:
     requests: { cpu: "100m", memory: "256Mi" }
-    limits:   { cpu: "1",    memory: "1Gi" }
+    limits: { cpu: "1", memory: "1Gi" }
   env: []
 
 server:
@@ -34,7 +34,7 @@ server:
     port: 3001
   resources:
     requests: { cpu: "200m", memory: "512Mi" }
-    limits:   { cpu: "2",    memory: "2Gi" }
+    limits: { cpu: "2", memory: "2Gi" }
   # Extra env vars (DATABASE_URL is injected automatically from the CNPG secret)
   env: []
   envFrom: []
@@ -45,7 +45,7 @@ postgres:
   enabled: true
   name: orchard-db
   instances: 1
-  imageName: ""           # leave empty to use CNPG default
+  imageName: "" # leave empty to use CNPG default
   database: orchard
   owner: orchard
   storage:
@@ -53,7 +53,7 @@ postgres:
     storageClass: longhorn
   resources:
     requests: { cpu: "200m", memory: "512Mi" }
-    limits:   { cpu: "2",    memory: "2Gi" }
+    limits: { cpu: "2", memory: "2Gi" }
 
 # Traefik IngressRoute connecting frontend (/) and backend (/apiv1).
 ingress:
@@ -62,7 +62,7 @@ ingress:
   entryPoints: [websecure]
   tls:
     enabled: true
-    secretName: ""        # if set, used as IngressRoute tls.secretName
+    secretName: "" # if set, used as IngressRoute tls.secretName
   # extra middlewares (refs) applied to all routes
   middlewares: []
 
@@ -79,6 +79,22 @@ builders:
   r2:
     accessKeyId: ""
     secretAccessKey: ""
+  # Local on-cluster BuildKit cache backed by a PVC. When enabled, the server
+  # configures build jobs to use a `type=local` cache instead of S3/R2.
+  # Pin build jobs to a dedicated node labelled `orchard-builder=true`. When
+  # enabled, jobs also tolerate an `orchard-builder` NoSchedule taint so the
+  # node can be reserved exclusively for builds.
+  #   kubectl label node <name> orchard-builder=true
+  #   kubectl taint node <name> orchard-builder=true:NoSchedule   # optional
+  dedicatedNode:
+    enabled: false
+  localCache:
+    enabled: true
+    size: 25Gi
+    storageClass: longhorn
+    path: /cache/buildkit
+    pvcName: buildkit-cache
+    accessMode: ReadWriteOnce
   quota:
     requestsCpu: "16"
     requestsMemory: "32Gi"

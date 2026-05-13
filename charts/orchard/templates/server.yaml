@@ -34,6 +34,14 @@ spec:
                   name: {{ .Values.postgres.name }}-app
                   key: uri
             {{- end }}
+            {{- if and .Values.builders.enabled .Values.builders.dedicatedNode.enabled }}
+            - { name: BUILDER_DEDICATED_NODE, value: "true" }
+            {{- end }}
+            {{- if and .Values.builders.enabled .Values.builders.localCache.enabled }}
+            - { name: BUILDKIT_LOCAL_CACHE_ENABLED, value: "true" }
+            - { name: BUILDKIT_LOCAL_CACHE_PATH, value: {{ .Values.builders.localCache.path | quote }} }
+            - { name: BUILDKIT_LOCAL_CACHE_PVC,  value: {{ .Values.builders.localCache.pvcName | quote }} }
+            {{- end }}
             {{- with .Values.server.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

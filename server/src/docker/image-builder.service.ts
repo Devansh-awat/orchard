@@ -50,6 +50,16 @@ export class ImageBuilderService {
   private readonly s3SecretAccessKey = process.env.BUILDKIT_S3_SECRET_ACCESS_KEY || process.env.R2_SECRET_ACCESS_KEY;
   private readonly s3CachePrefix = process.env.BUILDKIT_S3_CACHE_PREFIX || 'buildkit-cache/';
 
+  // Local cache configuration — when enabled, overrides S3 cache and uses a
+  // path inside the build pod (optionally backed by a PVC for persistence).
+  private readonly localCacheEnabled = process.env.BUILDKIT_LOCAL_CACHE_ENABLED === 'true';
+  private readonly localCachePath = process.env.BUILDKIT_LOCAL_CACHE_PATH || '/cache/buildkit';
+  private readonly localCachePvc = process.env.BUILDKIT_LOCAL_CACHE_PVC;
+
+  // When enabled, build jobs are pinned to nodes labelled `orchard-builder=true`
+  // (and tolerate a matching `orchard-builder` NoSchedule taint if present).
+  private readonly dedicatedNodeEnabled = process.env.BUILDER_DEDICATED_NODE === 'true';
+
   constructor(private readonly prisma: PrismaService) {
     this.initKubeConfig();
   }
@@ -388,6 +398,18 @@ ${registryConfigs}
   }
 
   private buildCacheArgs(imageName?: string): string[] {
+    if (this.localCacheEnabled) {
+      const sub = imageName ? imageName.replace(/[^a-z0-9-]/gi, '-') : 'default';
+      const cacheDir = `${this.localCachePath}/${sub}`;
+      console.log(`[ImageBuilder] Local cache enabled - path: ${cacheDir}`);
+      const importCache = `type=local,src=${cacheDir}`;
+      const exportCache = `type=local,dest=${cacheDir},mode=max`;
+      return [
+        '--import-cache', importCache,
+        '--export-cache', exportCache,
+      ];
+    }
+
     if (!this.s3CacheEnabled || !this.s3Endpoint || !this.s3Bucket) {
       console.log('[ImageBuilder] S3 cache disabled or not configured');
       return [];
@@ -944,7 +966,7 @@ fi
           env: [
             { name: 'DOCKER_CONFIG', value: '/root/.docker' },
             { name: 'BUILDKITD_FLAGS', value: '--config /etc/buildkit/buildkitd.toml' },
-            ...(this.s3CacheEnabled ? [
+            ...(this.s3CacheEnabled && !this.localCacheEnabled ? [
               {
                 name: 'AWS_ACCESS_KEY_ID',
                 valueFrom: {
@@ -986,6 +1008,10 @@ fi
               mountPath: '/etc/buildkit',
               readOnly: true,
             },
+            ...(this.localCacheEnabled ? [{
+              name: 'buildkit-cache',
+              mountPath: this.localCachePath,
+            }] : []),
           ],
           resources: {
             requests: {
@@ -1033,6 +1059,14 @@ fi
           spec: {
             restartPolicy: 'Never',
             serviceAccountName: 'image-builder',
+            ...(this.dedicatedNodeEnabled ? {
+              nodeSelector: { 'orchard-builder': 'true' },
+              tolerations: [{
+                key: 'orchard-builder',
+                operator: 'Exists',
+                effect: 'NoSchedule',
+              }],
+            } : {}),
             initContainers,
             containers: [mainContainer],
             volumes: [
@@ -1058,6 +1092,12 @@ fi
                   name: 'buildkit-config',
                 },
               },
+              ...(this.localCacheEnabled ? [{
+                name: 'buildkit-cache',
+                ...(this.localCachePvc
+                  ? { persistentVolumeClaim: { claimName: this.localCachePvc } }
+                  : { emptyDir: {} }),
+              }] : []),
             ],
           },
         },
@@ -1071,7 +1111,8 @@ fi
       dockerfilePath,
       buildType,
       initContainerCount: initContainers.length,
-      hasCacheEnabled: this.s3CacheEnabled,
+      hasCacheEnabled: this.localCacheEnabled || this.s3CacheEnabled,
+      cacheBackend: this.localCacheEnabled ? 'local' : (this.s3CacheEnabled ? 's3' : 'none'),
       envVarsCount: Object.keys(envVars).length,
     });
 

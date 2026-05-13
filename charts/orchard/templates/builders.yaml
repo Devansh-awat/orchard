@@ -106,6 +106,26 @@ data:
 
     [registry."178.156.144.127"]
       http = true
+{{- if .Values.builders.localCache.enabled }}
+---
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ .Values.builders.localCache.pvcName }}
+  namespace: {{ $bns }}
+  labels:
+    app.kubernetes.io/name: image-builder
+    app.kubernetes.io/managed-by: leaf
+spec:
+  accessModes:
+    - {{ .Values.builders.localCache.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.builders.localCache.size | quote }}
+  {{- with .Values.builders.localCache.storageClass }}
+  storageClassName: {{ . }}
+  {{- end }}
+{{- end }}
 ---
 apiVersion: v1
 kind: ResourceQuota
