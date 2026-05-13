@@ -28,6 +28,7 @@ interface BuildJobStatus {
 @Injectable()
 export class ImageBuilderService {
   private kc: k8s.KubeConfig | null = null;
+  private buildkitLogOffsets = new Map<string, number>();
   private readonly builderNamespace = process.env.BUILDER_NAMESPACE || 'orchard-builders';
   // Internal Harbor registry for pushing (HTTP on port 80)
   private readonly harborRegistryPush = process.env.DOCKER_REGISTRY_PUSH || 'harbor-core.harbor.svc.cluster.local';
@@ -163,6 +164,38 @@ export class ImageBuilderService {
     } catch (error) {
       console.error('[ImageBuilder] Failed to append log:', error);
     }
+  }
+
+  // Stream raw BuildKit pod output into deployment.buildLogs, appending only
+  // the new chunk since last poll (so the frontend can parse the full #N step
+  // history). Tracks offset per job so re-polling the full pod log doesn't
+  // duplicate content.
+  private async streamBuildkitOutput(deploymentId: string | undefined, jobName: string, fullLogs: string | undefined) {
+    if (!deploymentId || !fullLogs) return;
+    const offset = this.buildkitLogOffsets.get(jobName) ?? 0;
+    if (fullLogs.length <= offset) return;
+    const chunk = fullLogs.slice(offset);
+    this.buildkitLogOffsets.set(jobName, fullLogs.length);
+
+    try {
+      const deployment = await this.prisma.deployment.findUnique({
+        where: { id: deploymentId },
+        select: { buildLogs: true },
+      });
+      const current = deployment?.buildLogs || '';
+      const sanitized = this.sanitizeLogMessage(chunk);
+      const sep = current && !current.endsWith('\n') ? '\n' : '';
+      await this.prisma.deployment.update({
+        where: { id: deploymentId },
+        data: { buildLogs: current + sep + sanitized },
+      });
+    } catch (error) {
+      console.error('[ImageBuilder] Failed to stream buildkit output:', error);
+    }
+  }
+
+  private clearBuildkitOffset(jobName: string) {
+    this.buildkitLogOffsets.delete(jobName);
   }
 
   private async setBuildStep(deploymentId: string | undefined, step: string) {
@@ -1522,38 +1555,33 @@ fi
 
         if (status.status === 'succeeded') {
           console.log(`[ImageBuilder] Build job ${jobName} completed successfully after ${elapsedSeconds}s`);
+          await this.streamBuildkitOutput(deploymentId, jobName, status.logs);
           await this.appendLog(deploymentId, `Build job ${jobName} completed successfully`);
-          if (status.logs) {
-            const logLines = status.logs.split('\n').slice(-50).join('\n');
-            await this.appendLog(deploymentId, `Build output:\n${logLines}`);
-          }
+          this.clearBuildkitOffset(jobName);
           return status;
         }
 
         if (status.status === 'failed') {
           const errorMsg = status.logs || 'Unknown error - no logs available';
           console.error(`[ImageBuilder] Build job ${jobName} failed after ${elapsedSeconds}s. Error: ${errorMsg.substring(0, 500)}`);
+          await this.streamBuildkitOutput(deploymentId, jobName, status.logs);
           await this.appendLog(deploymentId, `Build job ${jobName} failed`, 'ERROR');
-          
-          if (status.logs) {
-            await this.appendLog(deploymentId, `Build failure details:\n${status.logs}`, 'ERROR');
-          } else {
+
+          if (!status.logs) {
             await this.appendLog(deploymentId, 'No build logs available - this may indicate a pod scheduling or initialization failure', 'ERROR');
           }
 
-          const detailedError = status.logs 
-            ? `Build job failed: ${status.logs}` 
+          this.clearBuildkitOffset(jobName);
+
+          const detailedError = status.logs
+            ? `Build job failed: ${status.logs}`
             : 'Build job failed: No logs available. This typically indicates a pod scheduling failure, image pull error, or init container failure. Check Kubernetes pod events for more details.';
-          
+
           throw new BadRequestException(detailedError);
         }
 
-        if (status.status === 'running' && status.logs) {
-          const logLines = status.logs.split('\n');
-          const recentLines = logLines.slice(-5).join('\n');
-          if (recentLines.trim()) {
-            await this.appendLog(deploymentId, `Build progress:\n${recentLines}`);
-          }
+        if (status.status === 'running') {
+          await this.streamBuildkitOutput(deploymentId, jobName, status.logs);
         }
 
         if (status.status === 'pending' && elapsedSeconds > 60) {
@@ -1585,14 +1613,13 @@ fi
     
     try {
       const finalStatus = await this.getBuildJobStatus(jobName);
+      await this.streamBuildkitOutput(deploymentId, jobName, finalStatus.logs);
       await this.appendLog(deploymentId, `Final status: ${finalStatus.status}`, 'ERROR');
-      if (finalStatus.logs) {
-        await this.appendLog(deploymentId, `Final logs:\n${finalStatus.logs}`, 'ERROR');
-      }
     } catch (finalCheckError) {
       console.error(`[ImageBuilder] Could not fetch final status:`, finalCheckError.message);
     }
-    
+
+    this.clearBuildkitOffset(jobName);
     throw new BadRequestException(`Build job timed out after ${finalElapsed} seconds (last status: ${lastLoggedStatus})`);
   }
 

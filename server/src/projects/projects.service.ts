@@ -1041,6 +1041,7 @@ export class ProjectsService {
         buildWithDepot: data.buildWithDepot ?? false,
         createdBy: user.id,
         buildLogs: `[INFO] Starting ${buildMethodLabel} build for ${repoUrl}@${branch}\n`,
+        buildStepTimestamps: { __start: Date.now() },
         cpuRequestMilli: data.cpuRequestMilli ?? null,
         memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
       },
@@ -1895,7 +1896,7 @@ export class ProjectsService {
       data: {
         buildStatus: 'building',
         buildStep: null,
-        buildStepTimestamps: {},
+        buildStepTimestamps: { __start: Date.now() },
         buildLogs: `🔄 Rebuilding deployment from ${deployment.githubRepo}@${deployment.githubBranch}\n`,
         buildError: null,
       },
@@ -7235,7 +7236,7 @@ export class ProjectsService {
       where: { id: deploymentId },
       data: {
         buildStatus: 'building',
-        buildStepTimestamps: {},
+        buildStepTimestamps: { __start: Date.now() },
         buildLogs: `Auto-deploy triggered by push to ${deployment.autoDeployBranch || deployment.githubBranch}\nCommit: ${commitSha?.substring(0, 7)} - ${commitMessage.split('\n')[0]}\n\n`,
         buildError: null,
       },

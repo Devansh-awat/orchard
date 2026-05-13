@@ -63,6 +63,8 @@
 	import { formatCpu as fmtCpuPreset, formatMemory as fmtMemoryPreset } from '$lib/presets';
 
 	import DeploymentProgress from '$lib/components/DeploymentProgress.svelte';
+	import AnimatedNumber from '$lib/components/AnimatedNumber.svelte';
+	import BuildSteps from '$lib/components/BuildSteps.svelte';
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
 
 	function portal(node: HTMLElement) {
@@ -1259,8 +1261,9 @@
 	let copiedWebhookUrl = $state(false);
 
 	function formatBuildElapsed(seconds: number): string {
-		const m = Math.floor(seconds / 60);
-		const s = seconds % 60;
+		const total = Math.round(seconds);
+		const m = Math.floor(total / 60);
+		const s = total % 60;
 		if (m > 0) return `${m}m ${s}s`;
 		return `${s}s`;
 	}
@@ -1275,9 +1278,13 @@
 		buildModalWarnings = [];
 		buildModalTimestamps = null;
 
-		// Local UI tick for the elapsed timer; not a network poll.
+		// Local UI tick for the elapsed timer; not a network poll. Prefer the
+		// server-recorded `__start` timestamp (seeded when build was triggered)
+		// so the counter survives page reloads and matches the real build start.
 		buildElapsedInterval = setInterval(() => {
-			buildElapsed = Math.floor((Date.now() - buildStartTime) / 1000);
+			const serverStart = buildModalTimestamps?.__start;
+			const startMs = serverStart && serverStart > 0 ? serverStart : buildStartTime;
+			buildElapsed = Math.floor((Date.now() - startMs) / 1000);
 		}, 1000);
 
 		// Build status, step, logs, and warnings all flow through SSE
@@ -5206,7 +5213,7 @@
 					<h2 class="text-lg font-semibold">Rebuilding {deployment?.name ?? 'deployment'}</h2>
 					<div class="flex items-center gap-1.5 text-sm" style="color: var(--surface-muted);">
 						<Clock size={14} class="h-3.5 w-3.5" />
-						<span class="font-mono">{formatBuildElapsed(buildElapsed)}</span>
+						<AnimatedNumber value={buildElapsed} format={formatBuildElapsed} class="font-mono" />
 					</div>
 				</div>
 				<button
@@ -5281,7 +5288,7 @@
 			<div class="flex items-center gap-2 shrink-0">
 				<div class="flex items-center gap-1 text-xs font-mono" style="color: var(--surface-muted);">
 					<Clock size={12} class="h-3 w-3" />
-					{formatBuildElapsed(buildElapsed)}
+					<AnimatedNumber value={buildElapsed} format={formatBuildElapsed} />
 				</div>
 				<Maximize2 size={14} class="h-3.5 w-3.5" style="color: var(--surface-muted);" />
 			</div>
@@ -5341,7 +5348,7 @@
 						<Loader2 class="h-5 w-5 animate-spin" style="color: rgba(255,255,255,0.3);" />
 					</div>
 				{:else if logModalContent}
-					<pre class="log-modal-pre">{logModalContent}</pre>
+					<BuildSteps logs={logModalContent} />
 				{/if}
 			</div>
 		</div>
@@ -8381,6 +8388,7 @@
 		flex: 1;
 		overflow-y: auto;
 		min-height: 12rem;
+		padding: 0.75rem 1rem 1rem;
 	}
 
 	.log-modal-body::-webkit-scrollbar {

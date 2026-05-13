@@ -1,6 +1,9 @@
 <script lang="ts">
-	import { Progress } from 'melt/builders';
 	import { Loader2, Check, X, ChevronDown, ChevronUp, Github, Container } from 'lucide-svelte';
+	import { flip } from 'svelte/animate';
+	import { backOut } from 'svelte/easing';
+	import BuildSteps from './BuildSteps.svelte';
+	import AnimatedNumber from './AnimatedNumber.svelte';
 
 	interface Props {
 		status: string;
@@ -112,137 +115,105 @@
 		}
 	}
 
-	// Progress percentage
-	const progressValue = $derived(() => {
-		if (buildStatus === 'succeeded' || buildStep === 'complete') return 100;
-		if (buildStatus === 'failed') return ((currentStepIndex + 1) / steps.length) * 100;
-		if (currentStepIndex < 0) return 0;
-		return ((currentStepIndex + 0.5) / steps.length) * 100;
-	});
-
-	const progress = new Progress({
-		value: () => progressValue()
-	});
-
-	function getTotalBuildDuration(): string | null {
+	function getTotalBuildSeconds(): number | null {
 		if (!buildStepTimestamps) return null;
-		// Find earliest step timestamp
+		// Earliest known timestamp wins — `__start` is seeded by the backend at
+		// build-trigger time so the duration covers the full build, not just
+		// post-cloning.
 		const stepKeys = Object.keys(buildStepTimestamps);
 		if (stepKeys.length === 0) return null;
 		const startTime = Math.min(...stepKeys.map(k => buildStepTimestamps![k]));
 		const endTime = buildStepTimestamps['complete'];
 		if (!endTime) return null;
-		const seconds = Math.max(0, Math.floor((endTime - startTime) / 1000));
-		return formatDuration(seconds);
+		return Math.max(0, Math.floor((endTime - startTime) / 1000));
 	}
 
-	const totalDuration = $derived(getTotalBuildDuration());
+	const totalDurationSeconds = $derived(getTotalBuildSeconds());
 </script>
 
 <div class="deployment-progress">
-	<div class="mb-6">
-		<div class="flex items-center justify-between mb-2">
-			<div class="flex items-center gap-2">
-				{#if isGitHubDeploy}
-					<Github class="h-5 w-5 icon-muted" />
-				{:else}
-					<Container class="h-5 w-5 icon-muted" />
-				{/if}
-				<span class="text-sm font-medium">
-					{#if buildStatus === 'building'}
-						Building deployment..
-					{:else if buildStatus === 'failed'}
-						Build failed
-					{:else if buildStatus === 'succeeded'}
-						{#if totalDuration}
-							Build completed in {totalDuration}
-						{:else}
-							Build succeeded
-						{/if}
+	{#if buildStatus !== 'building'}
+		<div class="mb-3 flex items-center gap-2">
+			{#if isGitHubDeploy}
+				<Github class="h-4 w-4 icon-muted" />
+			{:else}
+				<Container class="h-4 w-4 icon-muted" />
+			{/if}
+			<span class="text-sm font-medium">
+				{#if buildStatus === 'failed'}
+					Build failed
+				{:else if buildStatus === 'succeeded'}
+					{#if totalDurationSeconds !== null}
+						Build completed in <AnimatedNumber value={totalDurationSeconds} format={formatDuration} />
 					{:else}
-						Deployment ready
+						Build succeeded
 					{/if}
-				</span>
-			</div>
-			<span class="text-sm muted-text">{Math.round(progressValue())}%</span>
+				{:else}
+					Deployment ready
+				{/if}
+			</span>
 		</div>
+	{/if}
 
-		<div
-			{...progress.root}
-			class="progress-track relative h-2 w-full overflow-hidden rounded-full"
-		>
-			<div
-				{...progress.progress}
-				class="h-full transition-all duration-500 ease-out {buildStatus === 'failed'
-					? 'bg-red-500'
-					: 'bg-primary-500'}"
-				style="width: {progressValue()}%"
-			></div>
-		</div>
-	</div>
-
-	<div class="space-y-1">
-		{#each steps as step, index}
+	<div class="step-list">
+		{#each steps as step, index (step.id)}
 			{@const stepStatus = getStepStatus(index)}
 			<div
-				class="step-item flex items-start gap-3 rounded-lg px-3 py-2 transition-colors"
+				class="step-row flex items-center gap-2 rounded-md"
 				class:step-current={stepStatus === 'current'}
 				class:step-error={stepStatus === 'error'}
+				class:step-row-active={stepStatus === 'current'}
+				animate:flip={{ duration: 500, easing: backOut }}
 			>
-				<div class="mt-0.5">
-					{#if stepStatus === 'completed'}
-						<div class="flex h-5 w-5 items-center justify-center rounded-full bg-green-500">
-							<Check class="h-3 w-3 text-white" />
-						</div>
-					{:else if stepStatus === 'current'}
-						<div class="flex h-5 w-5 items-center justify-center">
-							<Loader2 class="h-5 w-5 animate-spin text-primary-500" />
-						</div>
-					{:else if stepStatus === 'error'}
-						<div class="flex h-5 w-5 items-center justify-center rounded-full bg-red-500">
-							<X class="h-3 w-3 text-white" />
-						</div>
-					{:else}
-						<div class="step-pending h-5 w-5 rounded-full border-2"></div>
-					{/if}
-				</div>
-				<div class="flex-1 min-w-0">
-					<div class="flex items-center justify-between gap-2">
-						<p
-							class="text-sm font-medium"
-							class:text-primary-600={stepStatus === 'current'}
-							class:text-red-600={stepStatus === 'error'}
-							class:step-text-completed={stepStatus === 'completed'}
-							class:step-text-pending={stepStatus === 'pending'}
-						>
-							{step.label}
-						</p>
-						{#if stepStatus === 'completed'}
-							{@const startTime = getStepTimestamp(step.id)}
-							{#if startTime}
-								{@const nextStepIndex = index + 1}
-								{@const nextStepStartTime = nextStepIndex < steps.length ? getStepTimestamp(steps[nextStepIndex].id) : getStepTimestamp('complete')}
-								{#if nextStepStartTime}
-									{@const duration = Math.max(0, Math.floor((nextStepStartTime - startTime) / 1000))}
-									<span class="step-duration text-xs font-mono muted-text">{formatDuration(duration)}</span>
-								{/if}
-							{/if}
-						{:else if stepStatus === 'current' && buildStep === step.id}
-							{@const startTime = getStepTimestamp(step.id)}
-							{#if startTime}
-								{@const elapsed = Math.max(0, Math.floor((currentTime - startTime) / 1000))}
-								<span class="step-duration text-xs font-mono text-primary-600">{formatDuration(elapsed)}</span>
-							{/if}
-						{/if}
+				{#if stepStatus === 'completed'}
+					<div class="flex h-4 w-4 items-center justify-center rounded-full bg-green-500 shrink-0">
+						<Check class="h-2.5 w-2.5 text-white" />
 					</div>
-					<p
-						class="text-xs"
-						class:muted-text={stepStatus === 'current' || stepStatus === 'completed'}
-						class:step-text-pending={stepStatus === 'pending'}
-					>
-						{step.description}
-					</p>
-				</div>
+				{:else if stepStatus === 'current'}
+					<Loader2 class="h-4 w-4 shrink-0 animate-spin text-primary-500" />
+				{:else if stepStatus === 'error'}
+					<div class="flex h-4 w-4 items-center justify-center rounded-full bg-red-500 shrink-0">
+						<X class="h-2.5 w-2.5 text-white" />
+					</div>
+				{:else}
+					<div class="step-pending h-4 w-4 shrink-0 rounded-full border-2"></div>
+				{/if}
+
+				<span
+					class="step-label flex-1 min-w-0 truncate"
+					class:text-primary-600={stepStatus === 'current'}
+					class:text-red-600={stepStatus === 'error'}
+					class:step-text-completed={stepStatus === 'completed'}
+					class:step-text-pending={stepStatus === 'pending'}
+				>
+					{step.label}
+				</span>
+
+				{#if stepStatus === 'completed'}
+					{@const startTime = getStepTimestamp(step.id)}
+					{#if startTime}
+						{@const nextStepIndex = index + 1}
+						{@const nextStepStartTime = nextStepIndex < steps.length ? getStepTimestamp(steps[nextStepIndex].id) : getStepTimestamp('complete')}
+						{#if nextStepStartTime}
+							{@const duration = Math.max(0, Math.floor((nextStepStartTime - startTime) / 1000))}
+							<AnimatedNumber
+								value={duration}
+								format={formatDuration}
+								class="step-duration text-xs font-mono muted-text shrink-0"
+							/>
+						{/if}
+					{/if}
+				{:else if stepStatus === 'current' && buildStep === step.id}
+					{@const startTime = getStepTimestamp(step.id)}
+					{#if startTime}
+						{@const elapsed = Math.max(0, Math.floor((currentTime - startTime) / 1000))}
+						<AnimatedNumber
+							value={elapsed}
+							format={formatDuration}
+							class="step-duration text-xs font-mono text-primary-600 shrink-0"
+						/>
+					{/if}
+				{/if}
 			</div>
 		{/each}
 	</div>
@@ -293,33 +264,8 @@
 			</button>
 
 			{#if showLogs}
-				<div
-					bind:this={logsPanel}
-					class="logs-panel mt-2 max-h-80 overflow-y-auto rounded-lg p-4 text-xs font-mono"
-				>
-					{#each (sanitizedBuildLogs?.split('\n').filter(l => l.trim()) || []) as line}
-						{@const match = line.match(/^\[(\d+)\]\s*\[(INFO|ERROR|WARNING)\]\s*(.+)$/)}
-						{#if match}
-							{@const [_, timestamp, level, message] = match}
-							<div class="log-line mb-1" class:log-info={level === 'INFO'} class:log-error={level === 'ERROR'} class:log-warning={level === 'WARNING'}>
-								<span class="log-level log-level-{level.toLowerCase()}">{level}</span>
-								<span class="log-message">{message}</span>
-							</div>
-						{:else}
-							{@const oldMatch = line.match(/^\[(INFO|ERROR|WARNING)\]\s*(.+)$/)}
-							{#if oldMatch}
-								{@const [_, level, message] = oldMatch}
-								<div class="log-line mb-1" class:log-info={level === 'INFO'} class:log-error={level === 'ERROR'} class:log-warning={level === 'WARNING'}>
-									<span class="log-level log-level-{level.toLowerCase()}">{level}</span>
-									<span class="log-message">{message}</span>
-								</div>
-							{:else}
-								<div class="log-line mb-1 log-info">
-									<span class="log-message">{line}</span>
-								</div>
-							{/if}
-						{/if}
-					{/each}
+				<div bind:this={logsPanel} class="mt-2">
+					<BuildSteps logs={sanitizedBuildLogs} />
 				</div>
 			{/if}
 		</div>
@@ -339,12 +285,48 @@
 		color: var(--surface-muted);
 	}
 
-	.progress-track {
-		background-color: var(--surface-border);
-	}
-
 	.step-item {
 		background-color: transparent;
+	}
+
+	.step-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+	}
+
+	.step-row {
+		padding: 0.3rem 0.6rem;
+		font-size: 0.8125rem;
+		opacity: 0.55;
+		transition:
+			padding 360ms cubic-bezier(0.34, 1.56, 0.64, 1),
+			font-size 360ms cubic-bezier(0.34, 1.56, 0.64, 1),
+			opacity 280ms ease,
+			background-color 220ms ease;
+	}
+
+	.step-row-active {
+		padding: 0.75rem 0.9rem;
+		font-size: 1rem;
+		font-weight: 600;
+		opacity: 1;
+		background-color: color-mix(in srgb, var(--button-bg) 12%, transparent);
+		box-shadow: 0 4px 16px -8px color-mix(in srgb, var(--button-bg) 50%, transparent);
+	}
+
+	.step-label {
+		font-size: inherit;
+		transition: font-size 360ms cubic-bezier(0.34, 1.56, 0.64, 1);
+	}
+
+	/* Grow icons with width/height — don't touch `transform` or the
+	   Loader2 spin animation breaks. */
+	.step-row-active :global(svg) {
+		width: 1.15rem;
+		height: 1.15rem;
+		transition: width 360ms cubic-bezier(0.34, 1.56, 0.64, 1),
+			height 360ms cubic-bezier(0.34, 1.56, 0.64, 1);
 	}
 
 	.step-current {
@@ -393,54 +375,6 @@
 		color: var(--center-channel-color);
 		border: 1px solid var(--surface-border);
 		font-weight: 400;
-	}
-
-	.log-line {
-		display: flex;
-		gap: 0.5rem;
-		align-items: flex-start;
-		line-height: 1.5;
-		padding: 0.25rem 0;
-	}
-
-	.log-level {
-		flex-shrink: 0;
-		font-weight: 600;
-		padding: 0.125rem 0.5rem;
-		border-radius: 0.25rem;
-		font-size: 0.65rem;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-	}
-
-	.log-level-info {
-		background-color: rgba(59, 130, 246, 0.15);
-		color: rgb(59, 130, 246);
-	}
-
-	.log-level-error {
-		background-color: rgba(239, 68, 68, 0.15);
-		color: rgb(239, 68, 68);
-	}
-
-	.log-level-warning {
-		background-color: rgba(245, 158, 11, 0.15);
-		color: rgb(245, 158, 11);
-	}
-
-	.log-message {
-		flex: 1;
-		color: var(--center-channel-color);
-		word-break: break-word;
-		font-weight: 400;
-	}
-
-	.log-error .log-message {
-		color: rgb(239, 68, 68);
-	}
-
-	.log-warning .log-message {
-		color: rgb(245, 158, 11);
 	}
 
 	.step-duration {
