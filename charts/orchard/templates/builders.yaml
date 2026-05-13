@@ -1,0 +1,196 @@
+{{- if .Values.builders.enabled }}
+{{- $bns := .Values.builders.namespace -}}
+{{- $appNs := .Values.namespace -}}
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $bns }}
+  labels:
+    app.kubernetes.io/managed-by: leaf-image-builder
+    purpose: image-builds
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/warn: privileged
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: image-builder
+  namespace: {{ $bns }}
+  labels:
+    app.kubernetes.io/name: image-builder
+    app.kubernetes.io/managed-by: leaf
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: image-builder-role
+  namespace: {{ $bns }}
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: image-builder-rolebinding
+  namespace: {{ $bns }}
+subjects:
+  - kind: ServiceAccount
+    name: image-builder
+    namespace: {{ $bns }}
+roleRef:
+  kind: Role
+  name: image-builder-role
+  apiGroup: rbac.authorization.k8s.io
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: harbor-registry-creds
+  namespace: {{ $bns }}
+  labels:
+    app.kubernetes.io/name: image-builder
+    app.kubernetes.io/managed-by: leaf
+type: kubernetes.io/dockerconfigjson
+stringData:
+  .dockerconfigjson: |
+    {
+      "auths": {
+{{- $hosts := .Values.builders.harbor.hosts }}
+{{- $user := .Values.builders.harbor.username }}
+{{- $pass := .Values.builders.harbor.password }}
+{{- range $i, $h := $hosts }}
+        {{ if $i }},{{ end }}"{{ $h }}": { "username": "{{ $user }}", "password": "{{ $pass }}" }
+{{- end }}
+      }
+    }
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: buildkit-s3-cache-creds
+  namespace: {{ $bns }}
+  labels:
+    app.kubernetes.io/name: image-builder
+    app.kubernetes.io/managed-by: leaf
+type: Opaque
+stringData:
+  AWS_ACCESS_KEY_ID: {{ .Values.builders.r2.accessKeyId | quote }}
+  AWS_SECRET_ACCESS_KEY: {{ .Values.builders.r2.secretAccessKey | quote }}
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: buildkit-config
+  namespace: {{ $bns }}
+  labels:
+    app.kubernetes.io/name: image-builder
+    app.kubernetes.io/managed-by: leaf
+data:
+  buildkitd.toml: |
+    debug = true
+
+    [worker.oci]
+      max-parallelism = 4
+
+    [worker.containerd]
+      enabled = false
+
+    [registry."harbor-core.harbor.svc.cluster.local"]
+      http = true
+
+    [registry."178.156.144.127"]
+      http = true
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: builder-quota
+  namespace: {{ $bns }}
+spec:
+  hard:
+    requests.cpu: {{ .Values.builders.quota.requestsCpu | quote }}
+    requests.memory: {{ .Values.builders.quota.requestsMemory | quote }}
+    limits.cpu: {{ .Values.builders.quota.limitsCpu | quote }}
+    limits.memory: {{ .Values.builders.quota.limitsMemory | quote }}
+    pods: {{ .Values.builders.quota.pods | quote }}
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: builder-limits
+  namespace: {{ $bns }}
+spec:
+  limits:
+    - default:
+        cpu: "4"
+        memory: "8Gi"
+      defaultRequest:
+        cpu: "500m"
+        memory: "1Gi"
+      type: Container
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: builder-network-policy
+  namespace: {{ $bns }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: image-builder
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []
+  egress:
+    - {}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ .Release.Name }}-image-builder-manager
+  labels:
+    app.kubernetes.io/name: image-builder
+    app.kubernetes.io/managed-by: leaf
+rules:
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "create"]
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets", "configmaps"]
+    verbs: ["get", "list", "create", "update", "patch"]
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
+    verbs: ["get", "create"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "create"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ .Release.Name }}-image-builder-manager
+  labels:
+    app.kubernetes.io/name: image-builder
+    app.kubernetes.io/managed-by: leaf
+subjects:
+  - kind: ServiceAccount
+    name: default
+    namespace: {{ $appNs }}
+roleRef:
+  kind: ClusterRole
+  name: {{ .Release.Name }}-image-builder-manager
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

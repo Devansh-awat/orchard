@@ -1,0 +1,37 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: traefik.io/v1alpha1
+kind: IngressRoute
+metadata:
+  name: orchard
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "ingress") | nindent 4 }}
+spec:
+  entryPoints:
+    {{- toYaml .Values.ingress.entryPoints | nindent 4 }}
+  routes:
+    - kind: Rule
+      match: Host(`{{ .Values.ingress.host }}`) && PathPrefix(`/apiv1`)
+      services:
+        - name: server
+          port: {{ .Values.server.service.port }}
+      {{- with .Values.ingress.middlewares }}
+      middlewares:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+    - kind: Rule
+      match: Host(`{{ .Values.ingress.host }}`)
+      services:
+        - name: frontend
+          port: {{ .Values.frontend.service.port }}
+      {{- with .Values.ingress.middlewares }}
+      middlewares:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    {{- with .Values.ingress.tls.secretName }}
+    secretName: {{ . }}
+    {{- end }}
+  {{- end }}
+{{- end }}

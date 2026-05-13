@@ -1,0 +1,98 @@
+# Where everything is installed.
+# The chart targets a single namespace "orchard" by default (create it with
+# `helm install ... --create-namespace` or set createNamespace=true below).
+namespace: orchard
+createNamespace: true
+
+image:
+  registry: ghcr.io
+  repository: hackclub/leaf
+  # tags default to .Chart.AppVersion; override per-component to pin a sha
+  pullPolicy: IfNotPresent
+  pullSecrets: []
+
+frontend:
+  enabled: true
+  replicas: 1
+  image:
+    name: frontend
+    tag: ""              # falls back to .Chart.AppVersion
+  service:
+    port: 3000
+  resources:
+    requests: { cpu: "100m", memory: "256Mi" }
+    limits:   { cpu: "1",    memory: "1Gi" }
+  env: []
+
+server:
+  enabled: true
+  replicas: 1
+  image:
+    name: server
+    tag: ""
+  service:
+    port: 3001
+  resources:
+    requests: { cpu: "200m", memory: "512Mi" }
+    limits:   { cpu: "2",    memory: "2Gi" }
+  # Extra env vars (DATABASE_URL is injected automatically from the CNPG secret)
+  env: []
+  envFrom: []
+
+# CloudNativePG cluster. The CNPG operator must already be installed in the
+# cluster — this chart only creates the Cluster resource.
+postgres:
+  enabled: true
+  name: orchard-db
+  instances: 1
+  imageName: ""           # leave empty to use CNPG default
+  database: orchard
+  owner: orchard
+  storage:
+    size: 10Gi
+    storageClass: longhorn
+  resources:
+    requests: { cpu: "200m", memory: "512Mi" }
+    limits:   { cpu: "2",    memory: "2Gi" }
+
+# Traefik IngressRoute connecting frontend (/) and backend (/apiv1).
+ingress:
+  enabled: true
+  host: orchard.local
+  entryPoints: [websecure]
+  tls:
+    enabled: true
+    secretName: ""        # if set, used as IngressRoute tls.secretName
+  # extra middlewares (refs) applied to all routes
+  middlewares: []
+
+# Builders namespace + RBAC + secrets (from k8s/image-builder-setup.yaml).
+builders:
+  enabled: true
+  namespace: orchard-builders
+  harbor:
+    username: admin
+    password: Harbor12345
+    hosts:
+      - harbor-core.harbor.svc.cluster.local
+      - harbor.1mp.dev
+  r2:
+    accessKeyId: ""
+    secretAccessKey: ""
+  quota:
+    requestsCpu: "16"
+    requestsMemory: "32Gi"
+    limitsCpu: "32"
+    limitsMemory: "64Gi"
+    pods: "10"
+
+# Orchard-metrics stack (VictoriaMetrics single-node + vmagent + exporters).
+metrics:
+  enabled: true
+  namespace: orchard-metrics
+  victoriametrics:
+    image: victoriametrics/victoria-metrics:v1.106.1
+    retention: 30d
+    storage:
+      size: 5Gi
+      storageClass: longhorn

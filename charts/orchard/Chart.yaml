@@ -1,0 +1,6 @@
+apiVersion: v2
+name: orchard
+description: Orchard — frontend, server, image builders, metrics, and CNPG Postgres
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
