@@ -63,6 +63,10 @@ export class WorkspacesService {
       throw new ForbiddenException('You are not a member of this organization');
     }
 
+    if (membership.role === 'guest') {
+      throw new ForbiddenException('Guests cannot create workspaces');
+    }
+
     const name = String(data.name || '').trim();
 
     if (!name) {
@@ -189,24 +193,28 @@ export class WorkspacesService {
       throw new NotFoundException('User not found');
     }
 
-    const userWorkspaces = await this.prisma.workspaceMember.findMany({
-      where: { userId: user.id },
-      select: { workspaceId: true },
-    });
+    const [userWorkspaces, userOrganizations] = await Promise.all([
+      this.prisma.workspaceMember.findMany({
+        where: { userId: user.id },
+        select: { workspaceId: true },
+      }),
+      this.prisma.organizationMember.findMany({
+        where: { userId: user.id },
+        select: { organizationId: true, role: true },
+      }),
+    ]);
 
     const userWorkspaceIds = userWorkspaces.map(wm => wm.workspaceId);
+    const adminOrgIds = userOrganizations
+      .filter(om => om.role === 'owner' || om.role === 'admin')
+      .map(om => om.organizationId);
 
-    const userOrganizations = await this.prisma.organizationMember.findMany({
-      where: { userId: user.id },
-      select: { organizationId: true, role: true },
-    });
-
-    const orgIds = userOrganizations.map(om => om.organizationId);
-    const isAdminOrOwner = userOrganizations.some(om => om.role === 'owner' || om.role === 'admin');
-
-    const whereClause = isAdminOrOwner
-      ? { organizationId: { in: orgIds } }
-      : { id: { in: userWorkspaceIds } };
+    const whereClause = {
+      OR: [
+        ...(adminOrgIds.length > 0 ? [{ organizationId: { in: adminOrgIds } }] : []),
+        { id: { in: userWorkspaceIds } },
+      ],
+    };
 
     return this.prisma.workspace.findMany({
       where: whereClause,
@@ -480,9 +488,13 @@ export class WorkspacesService {
     }
 
     await this.authz.requireOrgMember(workspace.organizationId, userId);
+    const visibleProjectIds = await this.authz.listVisibleProjectIds(workspace.organizationId, userId);
 
     return this.prisma.project.findMany({
-      where: { workspaceId },
+      where: {
+        workspaceId,
+        ...(visibleProjectIds !== null ? { id: { in: visibleProjectIds } } : {}),
+      },
       include: {
         creator: {
           select: {
