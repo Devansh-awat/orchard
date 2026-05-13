@@ -2130,14 +2130,15 @@ export class ProjectsService {
   }
 
   async validateIngressDns(domain: string): Promise<{ valid: boolean; message: string }> {
-    const expectedCname = 'ingress.lfdl.ink';
+    const expectedCname = process.env.INGRESS_CNAME || 'ingress.lfdl.ink';
+    const appDomain = process.env.APP_DOMAIN || 'a.lfdl.ink';
     const domainToCheck = domain.trim().toLowerCase();
 
     if (!domainToCheck) {
       return { valid: false, message: 'Domain is required' };
     }
 
-    if (domainToCheck.endsWith('.a.lfdl.ink')) {
+    if (domainToCheck.endsWith('.' + appDomain)) {
       return { valid: true, message: 'Auto-generated domain is ready to use' };
     }
 

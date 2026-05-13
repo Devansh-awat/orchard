@@ -5596,7 +5596,7 @@ export class KubernetesService {
 
   private readonly PUBLIC_TLS_SOURCE_NAMESPACE = 'network';
   private readonly PUBLIC_TLS_SOURCE_SECRET = 'wildcard-db-orchard-my-tls';
-  private readonly PUBLIC_TLS_BASE_DOMAIN = 'db.orchard.my';
+  private readonly PUBLIC_TLS_BASE_DOMAIN = process.env.PUBLIC_DB_DOMAIN || 'db.orchard.my';
   private readonly PUBLIC_TLS_LOCAL_SECRET = 'wildcard-db-tls';
 
   publicTlsBaseDomain(): string {
@@ -5868,7 +5868,7 @@ export class KubernetesService {
 
   // ── Public deployment-port exposure (MetalLB LoadBalancer, TCP/UDP passthrough) ──
 
-  private readonly PUBLIC_DEPLOYMENT_BASE_DOMAIN = 'public.orchard.my';
+  private readonly PUBLIC_DEPLOYMENT_BASE_DOMAIN = process.env.PUBLIC_DEPLOYMENT_DOMAIN || 'public.orchard.my';
 
   publicDeploymentBaseDomain(): string {
     return this.PUBLIC_DEPLOYMENT_BASE_DOMAIN;

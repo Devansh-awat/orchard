@@ -73,6 +73,10 @@
 		};
 	}
 
+	const APP_DOMAIN = import.meta.env.VITE_APP_DOMAIN || 'a.lfdl.ink';
+	const INGRESS_CNAME = import.meta.env.VITE_INGRESS_CNAME || 'ingress.lfdl.ink';
+	const PUBLIC_DEPLOYMENT_DOMAIN = import.meta.env.VITE_PUBLIC_DEPLOYMENT_DOMAIN || 'public.orchard.my';
+
 	// ---- Pointer "hardness" tracker -------------------------------------------------
 	// Tracks pointer velocity in real time. On press, callers read `pointerHardness()`
 	// — a 0..1 value derived from velocity (mouse) or pressure (touch/stylus). Used to
@@ -2352,7 +2356,7 @@
 		for (let i = 0; i < 6; i++) {
 			randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
 		}
-		newDomainHost = `${randomPart}.a.lfdl.ink`;
+		newDomainHost = `${randomPart}.${APP_DOMAIN}`;
 	}
 
 	async function createDomain() {
@@ -4123,7 +4127,7 @@
 														<span class="text-sm font-mono font-medium" style="color: var(--center-channel-color);">{port.targetPort}</span>
 														<span class="surface-pill rounded-full px-1.5 py-0.5 text-[10px]">{port.protocol}</span>
 														{#if port.publicEnabled && port.publicPort}
-															{@const pubEndpoint = `public.orchard.my:${port.publicPort}`}
+															{@const pubEndpoint = `${PUBLIC_DEPLOYMENT_DOMAIN}:${port.publicPort}`}
 															<button
 																type="button"
 																class="svc-public-pill flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-mono"
@@ -4240,14 +4244,14 @@
 												type="button"
 												class="btn btn-secondary btn-sm"
 												onclick={generateRandomDomainForNew}
-												title="Generate a free *.a.lfdl.ink domain"
+												title={`Generate a free *.${APP_DOMAIN} domain`}
 											>
 												<RefreshCw size={14} class="h-3.5 w-3.5" />
 												Auto
 											</button>
 										</div>
 										<p class="text-xs mt-1" style="color: var(--surface-muted);">
-											For custom domains, point a CNAME record to <code>ingress.lfdl.ink</code>.
+											For custom domains, point a CNAME record to <code>{INGRESS_CNAME}</code>.
 										</p>
 
 										{#if domainServiceOptions.length > 1}
