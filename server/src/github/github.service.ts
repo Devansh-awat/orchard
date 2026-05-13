@@ -133,7 +133,12 @@ export class GitHubService {
     return this.oauthService.verifySessionToken(token);
   }
 
-  async exchangeCodeForToken(code: string): Promise<string> {
+  async exchangeCodeForToken(code: string): Promise<{
+    accessToken: string;
+    expiresAt: Date | null;
+    refreshToken: string | null;
+    refreshTokenExpiresAt: Date | null;
+  }> {
     const params = new URLSearchParams({
       client_id: this.clientId,
       client_secret: this.clientSecret,
@@ -155,12 +160,120 @@ export class GitHubService {
     }
 
     const data = await response.json();
-    
+
     if (data.error) {
       throw new BadRequestException(`GitHub OAuth error: ${data.error_description || data.error}`);
     }
 
-    return data.access_token;
+    return this.parseTokenResponse(data);
+  }
+
+  private parseTokenResponse(data: any): {
+    accessToken: string;
+    expiresAt: Date | null;
+    refreshToken: string | null;
+    refreshTokenExpiresAt: Date | null;
+  } {
+    const now = Date.now();
+    const expiresIn = typeof data.expires_in === 'number' ? data.expires_in : null;
+    const refreshExpiresIn = typeof data.refresh_token_expires_in === 'number' ? data.refresh_token_expires_in : null;
+    return {
+      accessToken: data.access_token,
+      expiresAt: expiresIn ? new Date(now + expiresIn * 1000) : null,
+      refreshToken: data.refresh_token ?? null,
+      refreshTokenExpiresAt: refreshExpiresIn ? new Date(now + refreshExpiresIn * 1000) : null,
+    };
+  }
+
+  // Refresh a user's GitHub access token using the stored refresh token.
+  // Returns the new access token, or null if refresh failed (user must reauthorize).
+  async refreshUserToken(userId: string): Promise<string | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { githubRefreshToken: true, githubRefreshTokenExpiresAt: true },
+    });
+    if (!user?.githubRefreshToken) return null;
+    if (user.githubRefreshTokenExpiresAt && user.githubRefreshTokenExpiresAt.getTime() <= Date.now()) {
+      return null;
+    }
+
+    const params = new URLSearchParams({
+      client_id: this.clientId,
+      client_secret: this.clientSecret,
+      grant_type: 'refresh_token',
+      refresh_token: user.githubRefreshToken,
+    });
+
+    const response = await fetch('https://github.com/login/oauth/access_token', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/x-www-form-urlencoded',
+        'Accept': 'application/json',
+      },
+      body: params.toString(),
+    });
+
+    if (!response.ok) {
+      console.warn(`[GitHub] Refresh token exchange failed for user ${userId}: ${response.status}`);
+      await this.clearGitHubTokens(userId);
+      return null;
+    }
+
+    const data = await response.json();
+    if (data.error || !data.access_token) {
+      console.warn(`[GitHub] Refresh token error for user ${userId}:`, data.error);
+      await this.clearGitHubTokens(userId);
+      return null;
+    }
+
+    const parsed = this.parseTokenResponse(data);
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        githubAccessToken: parsed.accessToken,
+        githubTokenExpiresAt: parsed.expiresAt,
+        // GitHub rotates the refresh token on each use — only overwrite if returned.
+        ...(parsed.refreshToken ? {
+          githubRefreshToken: parsed.refreshToken,
+          githubRefreshTokenExpiresAt: parsed.refreshTokenExpiresAt,
+        } : {}),
+      },
+    });
+    return parsed.accessToken;
+  }
+
+  // Return a usable access token for the user, refreshing if expired/near-expiry.
+  // Returns null if no token, refresh failed, or refresh token also expired.
+  async getValidUserToken(userId: string): Promise<string | null> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { githubAccessToken: true, githubTokenExpiresAt: true, githubRefreshToken: true },
+    });
+    if (!user?.githubAccessToken) return null;
+
+    // Non-expiring token (app config has "Expire user authorization tokens" off).
+    if (!user.githubTokenExpiresAt) return user.githubAccessToken;
+
+    // Refresh if within 2 minutes of expiry.
+    const bufferMs = 2 * 60 * 1000;
+    if (user.githubTokenExpiresAt.getTime() - bufferMs > Date.now()) {
+      return user.githubAccessToken;
+    }
+
+    if (!user.githubRefreshToken) return null;
+    return this.refreshUserToken(userId);
+  }
+
+  private async clearGitHubTokens(userId: string): Promise<void> {
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: {
+        githubAccessToken: null,
+        githubTokenExpiresAt: null,
+        githubRefreshToken: null,
+        githubRefreshTokenExpiresAt: null,
+      },
+    });
   }
 
   async getGitHubUser(accessToken: string): Promise<GitHubUser> {
@@ -180,15 +293,18 @@ export class GitHubService {
   }
 
   async linkGitHubAccount(userId: string, code: string): Promise<void> {
-    const accessToken = await this.exchangeCodeForToken(code);
-    const githubUser = await this.getGitHubUser(accessToken);
+    const tokens = await this.exchangeCodeForToken(code);
+    const githubUser = await this.getGitHubUser(tokens.accessToken);
 
     await this.prisma.user.update({
       where: { id: userId },
       data: {
         githubId: String(githubUser.id),
         githubUsername: githubUser.login,
-        githubAccessToken: accessToken,
+        githubAccessToken: tokens.accessToken,
+        githubTokenExpiresAt: tokens.expiresAt,
+        githubRefreshToken: tokens.refreshToken,
+        githubRefreshTokenExpiresAt: tokens.refreshTokenExpiresAt,
       },
     });
   }
@@ -200,6 +316,9 @@ export class GitHubService {
         githubId: null,
         githubUsername: null,
         githubAccessToken: null,
+        githubTokenExpiresAt: null,
+        githubRefreshToken: null,
+        githubRefreshTokenExpiresAt: null,
       },
     });
   }
@@ -1050,6 +1169,55 @@ export class GitHubService {
     return this.updateDeploymentStatus(token, owner, repo, deploymentId, state, options);
   }
 
+  // Verify that a specific user (by stored OAuth token) can access a given repo on GitHub.
+  // Uses the user-to-server token: GitHub returns 200 only if the user can see the repo.
+  // Returns false if no token, repo not found, or any non-OK response.
+  async verifyUserCanAccessRepo(userId: string, owner: string, repo: string): Promise<boolean> {
+    const token = await this.getValidUserToken(userId);
+    if (!token) return false;
+
+    const response = await fetch(
+      `https://api.github.com/repos/${owner}/${repo}`,
+      {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Accept': 'application/vnd.github+json',
+          'X-GitHub-Api-Version': '2022-11-28',
+        },
+      }
+    );
+    return response.ok;
+  }
+
+  // List repositories the user can access within a specific installation (intersection
+  // of installation repos and the user's GitHub permissions). Requires user OAuth token.
+  async getUserAccessibleInstallationRepos(userToken: string, installationId: bigint): Promise<GitHubRepo[]> {
+    const repos: GitHubRepo[] = [];
+    let page = 1;
+    const perPage = 100;
+    while (page <= 10) {
+      const response = await fetch(
+        `https://api.github.com/user/installations/${installationId}/repositories?per_page=${perPage}&page=${page}`,
+        {
+          headers: {
+            'Authorization': `Bearer ${userToken}`,
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+          },
+        }
+      );
+      if (!response.ok) {
+        if (response.status === 404) return repos;
+        throw new BadRequestException(`Failed to get user-accessible installation repos: ${await response.text()}`);
+      }
+      const data = await response.json();
+      repos.push(...(data.repositories || []));
+      if ((data.repositories || []).length < perPage) break;
+      page++;
+    }
+    return repos;
+  }
+
   // Resolve an access token for a specific repo — prefers App installation token, falls back to user OAuth token.
   async resolveRepoToken(userId: string, owner: string, repo: string): Promise<string | null> {
     // Try installation token first
@@ -1062,20 +1230,37 @@ export class GitHubService {
       }
     }
 
-    // Fall back to user OAuth token
-    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { githubAccessToken: true } });
-    return user?.githubAccessToken ?? null;
+    // Fall back to user OAuth token (auto-refresh if expired)
+    return this.getValidUserToken(userId);
   }
 
-  // Get all repos accessible to a user across all their installations + OAuth token
-  async getAllUserRepositories(userId: string): Promise<{ repos: GitHubRepo[]; installations: any[]; hasInstallations: boolean }> {
+  // Get all repos accessible to a user across all their installations, intersected with the
+  // repos the user can see on GitHub (via their user OAuth token). Without a user token we
+  // cannot verify access, so we return no repos — the user must link their GitHub identity.
+  async getAllUserRepositories(userId: string): Promise<{ repos: GitHubRepo[]; installations: any[]; hasInstallations: boolean; userLinked: boolean }> {
+    const userToken = await this.getValidUserToken(userId);
+
     const installations = await this.getUserInstallations(userId);
     const allRepos: GitHubRepo[] = [];
     const installationData: any[] = [];
 
+    if (!userToken) {
+      // No way to verify what the user themselves can access — surface installations only.
+      for (const installation of installations) {
+        installationData.push({
+          id: installation.id,
+          installationId: installation.installationId.toString(),
+          accountLogin: installation.accountLogin,
+          accountType: installation.accountType,
+          repositoryCount: 0,
+        });
+      }
+      return { repos: [], installations: installationData, hasInstallations: installations.length > 0, userLinked: false };
+    }
+
     for (const installation of installations) {
       try {
-        const repos = await this.getInstallationRepositories(installation.installationId);
+        const repos = await this.getUserAccessibleInstallationRepos(userToken, installation.installationId);
         installationData.push({
           id: installation.id,
           installationId: installation.installationId.toString(),
@@ -1091,11 +1276,11 @@ export class GitHubService {
           } as any);
         }
       } catch (e) {
-        console.error(`[GitHub] Failed to get repos for installation ${installation.installationId}:`, e);
+        console.error(`[GitHub] Failed to get user-accessible repos for installation ${installation.installationId}:`, e);
       }
     }
 
-    return { repos: allRepos, installations: installationData, hasInstallations: installations.length > 0 };
+    return { repos: allRepos, installations: installationData, hasInstallations: installations.length > 0, userLinked: true };
   }
 
   // Get user's GitHub App installations

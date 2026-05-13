@@ -337,7 +337,7 @@
 								</div>
 								<div>
 									<h2 class="setup-step-title">Connect GitHub</h2>
-									<p class="setup-step-desc">Deploy directly from your repositories</p>
+									<p class="setup-step-desc">Required to deploy. Verifies which repos you can access.</p>
 								</div>
 							</div>
 

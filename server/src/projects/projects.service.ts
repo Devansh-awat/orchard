@@ -918,6 +918,18 @@ export class ProjectsService {
       throw new BadRequestException('Branch is required');
     }
 
+    // Verify the requesting user can actually access this repo on GitHub.
+    const parsed = this.githubService.parseRepoUrl(repoUrl);
+    if (!parsed) {
+      throw new BadRequestException('Could not parse repository URL');
+    }
+    const canAccess = await this.githubService.verifyUserCanAccessRepo(user.id, parsed.owner, parsed.repo);
+    if (!canAccess) {
+      throw new ForbiddenException(
+        'You do not have access to this repository on GitHub. Connect your GitHub account or request access to the repo.'
+      );
+    }
+
     // Dockerfile path is only required for dockerfile builds
     if (buildType === 'dockerfile' && !dockerfilePath) {
       throw new BadRequestException('Dockerfile path is required for Dockerfile builds');
@@ -978,9 +990,10 @@ export class ProjectsService {
     if (!hasExplicitPort && repoUrl && dockerfilePath) {
       try {
         const repoInfo = this.githubService.parseRepoUrl(repoUrl);
-        if (repoInfo && user.githubAccessToken) {
+        const userToken = repoInfo ? await this.githubService.getValidUserToken(user.id) : null;
+        if (repoInfo && userToken) {
           const dockerfileContent = await this.githubService.getFileContent(
-            user.githubAccessToken,
+            userToken,
             repoInfo.owner,
             repoInfo.repo,
             dockerfilePath,
@@ -1100,7 +1113,7 @@ export class ProjectsService {
         triggerType: 'manual',
         triggeredById: user.id,
       },
-      user.githubAccessToken,
+      await this.githubService.getValidUserToken(user.id),
     ).catch((error) => {
       console.error(`[Projects] Async build failed for deployment ${deployment.id}:`, error);
     });
@@ -1945,7 +1958,7 @@ export class ProjectsService {
         triggerType: 'manual',
         triggeredById: user.id,
       },
-      user.githubAccessToken,
+      await this.githubService.getValidUserToken(user.id),
     ).catch((error) => {
       console.error(`[Projects] Rebuild failed for deployment ${deploymentId}:`, error);
     });

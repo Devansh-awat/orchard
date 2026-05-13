@@ -300,7 +300,7 @@
 								<div class="rounded-xl border-2 border-dashed p-6 text-center" style="border-color: var(--surface-border);">
 									<Github class="mx-auto h-10 w-10 text-gray-400" />
 									<p class="mt-3 text-sm" style="color: var(--surface-muted);">
-										Link your GitHub account to deploy from your repositories and enable automatic builds.
+										Sign in with GitHub to deploy from your repositories. We use it to verify which repos you have access to — you can only deploy repos visible to your GitHub account.
 									</p>
 								</div>
 

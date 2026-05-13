@@ -121,7 +121,7 @@
 				const status = await response.json();
 				githubLinked = status.linked;
 				hasGitHubApp = (status.installations?.length ?? 0) > 0;
-				if ((status.linked || hasGitHubApp) && deploymentSource === 'github') {
+				if (status.linked && deploymentSource === 'github') {
 					fetchRepositories();
 				}
 			}
@@ -731,15 +731,15 @@
 						<input type="text" bind:value={image} placeholder="ghcr.io/org/app:latest" class="nd-input nd-mono" />
 					</div>
 				{:else}
-					{#if !githubLinked && !hasGitHubApp}
+					{#if !githubLinked}
 						<div class="nd-warning">
-							<p class="nd-warning-title">GitHub not connected</p>
-							<p class="nd-warning-desc">Install the GitHub App to deploy from your repositories. You can choose which repos and orgs to grant access to.</p>
+							<p class="nd-warning-title">Sign in with GitHub to continue</p>
+							<p class="nd-warning-desc">We use your GitHub account to verify which repositories you can access. You'll only see and deploy repos visible to your GitHub user — no extra scopes are requested.</p>
 							<div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
+								<a href="/user/settings" class="nd-btn nd-btn-primary">Sign in with GitHub</a>
 								{#if githubAppInstallUrl}
-									<a href={githubAppInstallUrl} target="_blank" class="nd-btn nd-btn-primary">Install GitHub App</a>
+									<a href={githubAppInstallUrl} target="_blank" class="nd-btn nd-btn-secondary">Install GitHub App</a>
 								{/if}
-								<a href="/user/settings" class="nd-btn nd-btn-secondary">Link GitHub Account</a>
 							</div>
 						</div>
 					{:else if !hasGitHubApp && repositories.length === 0 && !loadingRepos}
@@ -751,7 +751,7 @@
 							{/if}
 						</div>
 					{/if}
-					{#if githubLinked || hasGitHubApp}
+					{#if githubLinked}
 						<div class="nd-field nd-relative" data-repo-dropdown>
 							<label class="nd-label">Repository</label>
 							<div class="nd-relative">

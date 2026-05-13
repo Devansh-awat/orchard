@@ -34,9 +34,9 @@ export class GitHubController {
 
     const clientId = process.env.GITHUB_CLIENT_ID;
     const redirectUri = process.env.GITHUB_REDIRECT_URI;
-    const scope = 'read:user user:email';
 
-    const authUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&scope=${encodeURIComponent(scope)}`;
+    // GitHub Apps ignore the `scope` param — user-to-server tokens inherit App permissions.
+    const authUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
 
     return res.redirect(authUrl);
   }
@@ -156,24 +156,31 @@ export class GitHubController {
       name: req.user.name,
     });
 
-    // Prefer App installation repos, fall back to OAuth token
+    // We require a linked GitHub account so we can verify per-repo access.
+    if (!user.githubAccessToken) {
+      throw new HttpException(
+        'Connect your GitHub account to view deployable repositories. We use it to verify which repos you have access to.',
+        HttpStatus.BAD_REQUEST,
+      );
+    }
+
+    // Prefer App installation repos (intersected with user-accessible), fall back to OAuth listing.
     const { repos, installations, hasInstallations } = await this.githubService.getAllUserRepositories(user.id);
 
     if (hasInstallations) {
       return { repositories: repos, installations, source: 'app' };
     }
 
-    // Fall back to OAuth token if no installations
-    if (user.githubAccessToken) {
-      const maxPages = all === 'true' ? 10 : 3;
-      const oauthRepos = await this.githubService.getUserRepositories(user.githubAccessToken, maxPages);
-      return { repositories: oauthRepos, installations: [], source: 'oauth' };
+    const maxPages = all === 'true' ? 10 : 3;
+    const userToken = await this.githubService.getValidUserToken(user.id);
+    if (!userToken) {
+      throw new HttpException(
+        'Your GitHub session expired. Please reconnect your GitHub account.',
+        HttpStatus.UNAUTHORIZED,
+      );
     }
-
-    throw new HttpException(
-      'No GitHub App installed and no GitHub account linked. Install the GitHub App or link your GitHub account.',
-      HttpStatus.BAD_REQUEST,
-    );
+    const oauthRepos = await this.githubService.getUserRepositories(userToken, maxPages);
+    return { repositories: oauthRepos, installations: [], source: 'oauth' };
   }
 
   @Get('repositories/:owner/:repo/branches')
@@ -189,6 +196,13 @@ export class GitHubController {
       name: req.user.name,
     });
 
+    if (!user.githubAccessToken) {
+      throw new HttpException('Connect your GitHub account to deploy from repositories. We use it to verify your access.', HttpStatus.BAD_REQUEST);
+    }
+    const canAccess = await this.githubService.verifyUserCanAccessRepo(user.id, owner, repo);
+    if (!canAccess) {
+      throw new HttpException('You do not have access to this repository on GitHub.', HttpStatus.FORBIDDEN);
+    }
     const token = await this.githubService.resolveRepoToken(user.id, owner, repo);
     if (!token) {
       throw new HttpException('No access to this repository. Install the GitHub App or link your GitHub account.', HttpStatus.BAD_REQUEST);
@@ -211,6 +225,13 @@ export class GitHubController {
       name: req.user.name,
     });
 
+    if (!user.githubAccessToken) {
+      throw new HttpException('Connect your GitHub account to deploy from repositories. We use it to verify your access.', HttpStatus.BAD_REQUEST);
+    }
+    const canAccess = await this.githubService.verifyUserCanAccessRepo(user.id, owner, repo);
+    if (!canAccess) {
+      throw new HttpException('You do not have access to this repository on GitHub.', HttpStatus.FORBIDDEN);
+    }
     const token = await this.githubService.resolveRepoToken(user.id, owner, repo);
     if (!token) {
       throw new HttpException('No access to this repository. Install the GitHub App or link your GitHub account.', HttpStatus.BAD_REQUEST);
@@ -234,6 +255,13 @@ export class GitHubController {
       name: req.user.name,
     });
 
+    if (!user.githubAccessToken) {
+      throw new HttpException('Connect your GitHub account to deploy from repositories. We use it to verify your access.', HttpStatus.BAD_REQUEST);
+    }
+    const canAccess = await this.githubService.verifyUserCanAccessRepo(user.id, owner, repo);
+    if (!canAccess) {
+      throw new HttpException('You do not have access to this repository on GitHub.', HttpStatus.FORBIDDEN);
+    }
     const token = await this.githubService.resolveRepoToken(user.id, owner, repo);
     if (!token) {
       throw new HttpException('No access to this repository. Install the GitHub App or link your GitHub account.', HttpStatus.BAD_REQUEST);
@@ -261,6 +289,13 @@ export class GitHubController {
       throw new HttpException('Dockerfile path is required', HttpStatus.BAD_REQUEST);
     }
 
+    if (!user.githubAccessToken) {
+      throw new HttpException('Connect your GitHub account to deploy from repositories. We use it to verify your access.', HttpStatus.BAD_REQUEST);
+    }
+    const canAccess = await this.githubService.verifyUserCanAccessRepo(user.id, owner, repo);
+    if (!canAccess) {
+      throw new HttpException('You do not have access to this repository on GitHub.', HttpStatus.FORBIDDEN);
+    }
     const token = await this.githubService.resolveRepoToken(user.id, owner, repo);
     if (!token) {
       throw new HttpException('No access to this repository. Install the GitHub App or link your GitHub account.', HttpStatus.BAD_REQUEST);
@@ -288,6 +323,13 @@ export class GitHubController {
       throw new HttpException('Dockerfile path is required', HttpStatus.BAD_REQUEST);
     }
 
+    if (!user.githubAccessToken) {
+      throw new HttpException('Connect your GitHub account to deploy from repositories. We use it to verify your access.', HttpStatus.BAD_REQUEST);
+    }
+    const canAccess = await this.githubService.verifyUserCanAccessRepo(user.id, owner, repo);
+    if (!canAccess) {
+      throw new HttpException('You do not have access to this repository on GitHub.', HttpStatus.FORBIDDEN);
+    }
     const token = await this.githubService.resolveRepoToken(user.id, owner, repo);
     if (!token) {
       throw new HttpException('No access to this repository. Install the GitHub App or link your GitHub account.', HttpStatus.BAD_REQUEST);

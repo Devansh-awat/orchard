@@ -687,15 +687,15 @@
 
 			<div class="us-card-divider"></div>
 
-			<!-- GitHub Identity -->
+			<!-- GitHub Account -->
 			<div class="us-card-section">
 				<div class="us-section-head">
 					<div class="us-section-icon us-section-icon--github">
 						<Github class="h-4 w-4" />
 					</div>
 					<div class="us-section-title-group">
-						<h2 class="us-section-title">GitHub Identity</h2>
-						<p class="us-section-desc">Link your GitHub account for identity verification</p>
+						<h2 class="us-section-title">GitHub Account</h2>
+						<p class="us-section-desc">Required to deploy from GitHub. We sign you in with GitHub to verify which repositories you can access — you can only deploy repos visible to your account.</p>
 					</div>
 					{#if !loading}
 						<div class="us-pill" class:us-pill--active={githubLinked}>
@@ -724,8 +724,8 @@
 							<Github class="h-5 w-5" />
 						</div>
 						<div class="us-connect-text">
-							<span class="us-connect-label">Connect GitHub</span>
-							<span class="us-connect-hint">Link your GitHub identity — only reads your profile, no repo access</span>
+							<span class="us-connect-label">Sign in with GitHub</span>
+							<span class="us-connect-hint">Required to deploy. Used to check which repos you can access — no extra scopes requested.</span>
 						</div>
 						<ChevronRight class="h-4 w-4 us-connect-arrow" />
 					</button>
