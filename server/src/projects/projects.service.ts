@@ -7846,6 +7846,170 @@ export class ProjectsService {
     };
   }
 
+  async getDatabaseProvisioning(databaseId: string) {
+    const database = await this.prisma.database.findUnique({
+      where: { id: databaseId },
+    });
+    if (!database) throw new NotFoundException('Database not found');
+
+    // Container-mode and external databases don't go through the CNPG step list.
+    if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
+      return {
+        databaseId,
+        status: database.status,
+        mode: database.mode,
+        done: database.status === 'ready',
+        failed: database.status === 'error',
+        hasImport: false,
+        steps: [],
+        events: [],
+      };
+    }
+
+    const k = await this.kubernetesService.getCnpgProvisioningStatus(
+      database.namespace,
+      database.clusterName,
+      { fetchImportLogs: true },
+    );
+
+    // Mirror the reconciliation that getDatabase() performs so polling this
+    // endpoint alone is enough to flip 'provisioning' → 'ready' once CNPG is up.
+    if (k.ready && database.status !== 'ready' && database.status !== 'restoring') {
+      try {
+        await this.prisma.database.update({ where: { id: database.id }, data: { status: 'ready' } });
+        database.status = 'ready';
+      } catch { /* ignore */ }
+    } else if (!k.exists && database.status !== 'error' && database.status !== 'provisioning') {
+      try {
+        await this.prisma.database.update({ where: { id: database.id }, data: { status: 'error' } });
+        database.status = 'error';
+      } catch { /* ignore */ }
+    }
+
+    type StepStatus = 'pending' | 'running' | 'done' | 'error';
+    interface Step {
+      id: string;
+      label: string;
+      description: string;
+      status: StepStatus;
+      detail?: string;
+    }
+
+    const podWaiting = k.instancePod?.waiting;
+    const podStuck =
+      podWaiting && /(Err|BackOff|Failed|InvalidImage)/i.test(podWaiting.reason || '');
+
+    const steps: Step[] = [];
+
+    steps.push({
+      id: 'cluster',
+      label: 'Cluster resource created',
+      description: 'Registering the Postgres cluster with Kubernetes.',
+      status: k.exists ? 'done' : database.status === 'error' ? 'error' : 'running',
+    });
+
+    steps.push({
+      id: 'storage',
+      label: 'Storage volume attached',
+      description: 'Provisioning and binding the PersistentVolumeClaim.',
+      status: k.pvc.bound
+        ? 'done'
+        : k.pvc.exists
+          ? 'running'
+          : k.exists
+            ? 'running'
+            : 'pending',
+      detail: k.pvc.exists && !k.pvc.bound ? `PVC ${k.pvc.phase || 'Pending'}` : undefined,
+    });
+
+    steps.push({
+      id: 'pod-scheduled',
+      label: 'Pod scheduled to a node',
+      description: 'Kubernetes is placing the Postgres pod onto a worker.',
+      status: k.instancePod?.scheduled
+        ? 'done'
+        : k.instancePod
+          ? 'running'
+          : 'pending',
+      detail: k.instancePod?.nodeName ? `Scheduled on ${k.instancePod.nodeName}` : undefined,
+    });
+
+    steps.push({
+      id: 'pod-running',
+      label: 'Postgres container running',
+      description: 'Pulling the Postgres image and starting the container.',
+      status: k.instancePod?.running
+        ? 'done'
+        : podStuck
+          ? 'error'
+          : k.instancePod?.scheduled
+            ? 'running'
+            : 'pending',
+      detail: podWaiting
+        ? `${podWaiting.reason}${podWaiting.message ? ': ' + podWaiting.message : ''}`
+        : undefined,
+    });
+
+    if (k.hasImport) {
+      steps.push({
+        id: 'import',
+        label: 'Migrating data from source database',
+        description: 'CloudNativePG is dumping the source DB and restoring into this cluster.',
+        status:
+          k.importStatus === 'completed'
+            ? 'done'
+            : k.importStatus === 'failed'
+              ? 'error'
+              : k.importStatus === 'running'
+                ? 'running'
+                : 'pending',
+      });
+    }
+
+    steps.push({
+      id: 'ready',
+      label: 'Database accepting connections',
+      description: 'Bootstrap is complete and the cluster is healthy.',
+      status: k.ready ? 'done' : k.instancePod?.ready ? 'running' : 'pending',
+    });
+
+    // Promote the first non-done step to "running" if everything before it is
+    // done — this gives the UI a clear "current" step even when CNPG hasn't
+    // emitted intermediate signals yet.
+    for (let i = 0; i < steps.length; i++) {
+      if (steps[i].status === 'pending') {
+        const prevDone = steps.slice(0, i).every((s) => s.status === 'done');
+        if (prevDone && !steps.some((s) => s.status === 'error')) {
+          steps[i].status = 'running';
+        }
+        break;
+      }
+    }
+
+    const failed =
+      steps.some((s) => s.status === 'error') ||
+      database.status === 'error' ||
+      (k.hasImport && k.importStatus === 'failed');
+    const done = k.ready && database.status === 'ready';
+
+    return {
+      databaseId,
+      status: database.status,
+      mode: database.mode,
+      done,
+      failed,
+      phase: k.phase,
+      hasImport: k.hasImport,
+      importStatus: k.importStatus,
+      importLogs: k.importLogs,
+      steps,
+      conditions: k.conditions,
+      events: k.events,
+      pod: k.instancePod,
+      importPod: k.importPod,
+    };
+  }
+
   async getProjectDatabases(projectId: string) {
     return this.prisma.database.findMany({
       where: { projectId },

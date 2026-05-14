@@ -5394,6 +5394,185 @@ export class KubernetesService {
     }
   }
 
+  // Detailed provisioning view for the CNPG cluster: PVC, instance pod, optional
+  // import job pod, conditions, and recent warning events. Used by the database
+  // page to show a step-by-step "provisioning" experience while the cluster is
+  // coming up, and to surface migration errors that previously only appeared via
+  // `kubectl logs`.
+  async getCnpgProvisioningStatus(
+    namespace: string,
+    clusterName: string,
+    opts?: { fetchImportLogs?: boolean },
+  ): Promise<any> {
+    this.ensureKubeConfig();
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+
+    let cluster: any = null;
+    try {
+      const { body } = await customApi.getNamespacedCustomObject(
+        this.CNPG_GROUP, this.CNPG_VERSION, namespace, this.CNPG_PLURAL, clusterName,
+      );
+      cluster = body;
+    } catch (e: any) {
+      if (e.response?.statusCode !== 404) throw e;
+    }
+
+    const hasImport = !!cluster?.spec?.bootstrap?.initdb?.import;
+    const phase: string | undefined = cluster?.status?.phase;
+    const readyInstances: number = cluster?.status?.readyInstances || 0;
+    const instances: number = cluster?.status?.instances || cluster?.spec?.instances || 1;
+    const ready = readyInstances >= instances && readyInstances > 0;
+
+    let pods: any[] = [];
+    try {
+      const { body: podList } = await coreApi.listNamespacedPod(
+        namespace, undefined, undefined, undefined, undefined,
+        `cnpg.io/cluster=${clusterName}`,
+      );
+      pods = podList.items || [];
+    } catch { /* ignore */ }
+
+    const importPod = pods.find((p) => {
+      const labels = p.metadata?.labels || {};
+      return labels['cnpg.io/jobRole'] === 'import' ||
+        labels['cnpg.io/jobRole'] === 'full-recovery' ||
+        /-import-\d+$/.test(p.metadata?.name || '');
+    });
+    const instancePod = pods.find((p) => {
+      const labels = p.metadata?.labels || {};
+      return labels['cnpg.io/instanceRole'] === 'primary' ||
+        labels['cnpg.io/instanceRole'] === 'replica' ||
+        labels['role'] === 'primary' ||
+        /-\d+$/.test(p.metadata?.name || '');
+    }) || pods.find((p) => p !== importPod);
+
+    // PVC: CNPG provisions `<cluster>-1` for the first instance.
+    let pvc: { exists: boolean; bound: boolean; phase?: string } = { exists: false, bound: false };
+    try {
+      const { body } = await coreApi.readNamespacedPersistentVolumeClaim(`${clusterName}-1`, namespace);
+      pvc = { exists: true, bound: body.status?.phase === 'Bound', phase: body.status?.phase };
+    } catch (e: any) {
+      if (e.response?.statusCode !== 404) {
+        // Surface non-404 errors as "exists unknown" rather than crashing
+      }
+    }
+
+    const containerStatuses = (instancePod?.status?.containerStatuses || []) as any[];
+    const waiting = containerStatuses
+      .map((c) => c.state?.waiting)
+      .find((w) => w?.reason);
+    const podScheduled = !!instancePod?.spec?.nodeName;
+    const podRunning = instancePod?.status?.phase === 'Running';
+    const podReady = containerStatuses.length > 0 && containerStatuses.every((c) => c.ready);
+
+    // Events scoped to this cluster's objects. Warnings surface things like
+    // FailedScheduling, FailedAttachVolume, BackOff, FailedSync, etc.
+    let events: any[] = [];
+    try {
+      const { body: ev } = await coreApi.listNamespacedEvent(namespace);
+      events = (ev.items || [])
+        .filter((e: any) => {
+          const inv = e.involvedObject || {};
+          const name = inv.name || '';
+          if (inv.kind === 'Cluster' && name === clusterName) return true;
+          if (name === clusterName || name.startsWith(`${clusterName}-`)) return true;
+          return false;
+        })
+        .map((e: any) => ({
+          type: e.type,
+          reason: e.reason,
+          message: e.message,
+          kind: e.involvedObject?.kind,
+          name: e.involvedObject?.name,
+          count: e.count || 1,
+          firstTimestamp: e.firstTimestamp,
+          lastTimestamp: e.lastTimestamp || e.eventTime || e.firstTimestamp,
+        }))
+        .sort((a: any, b: any) => {
+          const tA = a.lastTimestamp ? new Date(a.lastTimestamp).getTime() : 0;
+          const tB = b.lastTimestamp ? new Date(b.lastTimestamp).getTime() : 0;
+          return tA - tB;
+        });
+    } catch { /* ignore */ }
+
+    // Import progress
+    let importStatus: 'pending' | 'running' | 'completed' | 'failed' | undefined;
+    let importLogs: string | undefined;
+    if (hasImport) {
+      if (importPod) {
+        const ipPhase = importPod.status?.phase;
+        if (ipPhase === 'Succeeded') importStatus = 'completed';
+        else if (ipPhase === 'Failed') importStatus = 'failed';
+        else if (ipPhase === 'Running') importStatus = 'running';
+        else importStatus = 'pending';
+
+        // Mark failed if any container is in a CrashLoopBackOff / Error state
+        const ipContainers = (importPod.status?.containerStatuses || []) as any[];
+        const crashy = ipContainers.find((c) =>
+          c.state?.waiting?.reason && /Err|BackOff|Failed/.test(c.state.waiting.reason),
+        );
+        if (crashy) importStatus = 'failed';
+
+        if (opts?.fetchImportLogs && importPod.metadata?.name) {
+          try {
+            const { body } = await coreApi.readNamespacedPodLog(
+              importPod.metadata.name,
+              namespace,
+              undefined,
+              false,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              undefined,
+              500,
+            );
+            importLogs = typeof body === 'string' ? body : String(body ?? '');
+          } catch { /* ignore */ }
+        }
+      } else if (ready) {
+        importStatus = 'completed';
+      } else {
+        importStatus = 'pending';
+      }
+    }
+
+    return {
+      exists: !!cluster,
+      phase,
+      ready,
+      readyInstances,
+      instances,
+      hasImport,
+      pvc,
+      instancePod: instancePod
+        ? {
+            name: instancePod.metadata?.name,
+            phase: instancePod.status?.phase,
+            scheduled: podScheduled,
+            running: podRunning,
+            ready: podReady,
+            waiting: waiting
+              ? { reason: waiting.reason, message: waiting.message }
+              : null,
+            nodeName: instancePod.spec?.nodeName || null,
+          }
+        : null,
+      importPod: importPod
+        ? {
+            name: importPod.metadata?.name,
+            phase: importPod.status?.phase,
+            status: importStatus,
+          }
+        : null,
+      importStatus,
+      importLogs,
+      conditions: cluster?.status?.conditions || [],
+      events,
+    };
+  }
+
   async findCnpgPrimaryPod(namespace: string, clusterName: string): Promise<string> {
     this.ensureKubeConfig();
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);

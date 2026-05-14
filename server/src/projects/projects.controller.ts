@@ -1309,6 +1309,15 @@ export class DatabasesController {
     });
   }
 
+  @Get(':id/provisioning')
+  async getProvisioning(@Param('id') id: string, @Request() req) {
+    await this.projectsService.assertDatabaseView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+    return this.projectsService.getDatabaseProvisioning(id);
+  }
+
   @Get(':id/backups')
   async listBackups(@Param('id') id: string, @Request() req) {
     return this.projectsService.listDatabaseBackups(id, req.user.sub, {

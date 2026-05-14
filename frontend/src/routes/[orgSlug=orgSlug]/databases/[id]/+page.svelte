@@ -30,6 +30,7 @@
 	import { fade, scale } from 'svelte/transition';
 	import { Tabs } from 'melt/builders';
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
+	import DatabaseProvisioning from '$lib/components/DatabaseProvisioning.svelte';
 
 	interface DatabaseDetail {
 		id: string;
@@ -814,6 +815,14 @@
 			</button>
 		</div>
 
+		{#if database.mode === 'cnpg' && (database.status === 'provisioning' || database.status === 'restoring' || (database.status === 'error' && !database.liveStatus?.ready))}
+			<DatabaseProvisioning
+				dbId={dbId}
+				dbName={database.name}
+				onDone={() => fetchDatabase(true)}
+			/>
+		{:else}
+
 		{#if database.liveStatus}
 			{@const state = podStateLabel()}
 			<div class="db-stats">
@@ -1422,6 +1431,7 @@
 				{/if}
 			</div>
 		</section>
+		{/if}
 	{/if}
 </div>
 
