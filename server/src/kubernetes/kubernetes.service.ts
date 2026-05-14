@@ -5300,11 +5300,16 @@ export class KubernetesService {
     }
 
     if (options.r2 && r2SecretName) {
-      const host = options.r2.endpoint.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      // Preserve the scheme from the configured endpoint — when r2-proxy is
+      // enabled the endpoint is http:// (plaintext, in-cluster); when going
+      // direct to R2 it's https://. Stripping then re-prefixing https broke
+      // the proxy path.
+      const endpointRaw = options.r2.endpoint.replace(/\/$/, '');
+      const endpointURL = /^https?:\/\//.test(endpointRaw) ? endpointRaw : `https://${endpointRaw}`;
       clusterSpec.backup = {
         barmanObjectStore: {
           destinationPath: `s3://${options.r2.bucket}/${ns}/${name}`,
-          endpointURL: `https://${host}`,
+          endpointURL,
           s3Credentials: {
             accessKeyId: { name: r2SecretName, key: 'ACCESS_KEY_ID' },
             secretAccessKey: { name: r2SecretName, key: 'ACCESS_SECRET_KEY' },
@@ -5735,11 +5740,13 @@ export class KubernetesService {
     };
 
     if (options.r2 && r2SecretName) {
-      const host = options.r2.endpoint.replace(/^https?:\/\//, '').replace(/\/$/, '');
+      // Preserve scheme (http for in-cluster r2-proxy, https for direct R2).
+      const endpointRaw = options.r2.endpoint.replace(/\/$/, '');
+      const endpointURL = /^https?:\/\//.test(endpointRaw) ? endpointRaw : `https://${endpointRaw}`;
       spec.backup = {
         barmanObjectStore: {
           destinationPath: `s3://${options.r2.bucket}/${namespace}/${newName}`,
-          endpointURL: `https://${host}`,
+          endpointURL,
           s3Credentials: {
             accessKeyId: { name: r2SecretName, key: 'ACCESS_KEY_ID' },
             secretAccessKey: { name: r2SecretName, key: 'ACCESS_SECRET_KEY' },
