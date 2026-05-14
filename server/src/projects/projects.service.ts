@@ -5798,6 +5798,33 @@ export class ProjectsService {
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'scale deployments');
 
+    // Enforce resource quotas when scaling up — N replicas of this deployment
+    // each consume the same per-pod CPU/memory, so a scale to R+Δ adds Δ pods'
+    // worth of usage to the org cap and the project owner's member allowance.
+    // Scaling down or staying flat is always permitted.
+    const currentReplicas = deployment.replicas || 0;
+    const delta = replicas - currentReplicas;
+    if (delta > 0) {
+      const perPod = await this.quotasService.resolvePodResources(deployment.projectId, {
+        cpuRequestMilli: deployment.cpuRequestMilli ?? null,
+        memoryRequestBytes:
+          deployment.memoryRequestBytes != null ? Number(deployment.memoryRequestBytes) : null,
+      });
+      const requested = {
+        cpuMilli: perPod.cpuMilli * delta,
+        memoryBytes: perPod.memoryBytes * delta,
+      };
+      await this.quotasService.enforceOrgCapForNewPod(
+        deployment.project.organizationId,
+        requested,
+      );
+      await this.quotasService.enforceMemberAllowanceForNewPod(
+        deployment.project.organizationId,
+        deployment.project.ownerId,
+        requested,
+      );
+    }
+
     const result = await this.kubernetesService.scaleDeployment(
       deployment.name,
       deployment.namespace,
