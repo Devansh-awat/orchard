@@ -1997,7 +1997,9 @@
 			}
 			toasts.add({
 				title: 'Deployment restarting',
-				description: 'Rolling restart initiated',
+				description: deployment?.deployStrategy === 'recreate'
+					? 'Recreate restart initiated'
+					: 'Rolling restart initiated',
 				color: 'success'
 			});
 			fetchDeployment();
