@@ -64,7 +64,7 @@
 
 	const CARDS: MetricCard[] = [
 		{ id: 'cpu', label: 'CPU usage', color: '#7c5cff', icon: Cpu,
-			formatter: (v) => v < 1 ? `${(v * 1000).toFixed(0)}m` : `${v.toFixed(2)} cores` },
+			formatter: (v) => v >= 1000 ? `${(v / 1000).toFixed(2)} cores` : `${v.toFixed(0)}m` },
 		{ id: 'mem', label: 'Memory', color: '#22c0a8', icon: MemoryStick,
 			formatter: (v) => v >= 1024 ? `${(v / 1024).toFixed(2)} GB` : `${v.toFixed(0)} MB` },
 		{ id: 'rx', label: 'Network in', color: '#3aa8ff', icon: ArrowDown,
@@ -121,7 +121,14 @@
 		const s = step;
 		const id = deploymentId;
 		if (!id) return;
-		untrack(() => loadSeries(start, end, s, id));
+		untrack(() => {
+			// A stale crosshair timestamp from a wider range falls outside
+			// a narrower one and the plugin silently skips drawing it.
+			if (crosshairX != null && (crosshairX < start || crosshairX > end)) {
+				crosshairX = null;
+			}
+			loadSeries(start, end, s, id);
+		});
 	});
 
 	function summarize(s: Series) {
