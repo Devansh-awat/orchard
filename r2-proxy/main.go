@@ -8,20 +8,17 @@
 // only work for that cluster's prefix. The real R2 credentials live only on
 // the proxy (separate namespace, NetworkPolicy-fenced).
 //
+// Bindings come straight from orchard's Postgres `databases` table — there
+// is no ConfigMap to drift from the source of truth. Lookups are cached
+// in-memory for 60s on hit, 5s on miss.
+//
 // Configuration:
 //   PROXY_LISTEN      address to listen on (default :9000)
 //   R2_ENDPOINT       upstream R2 endpoint (https://<acc>.r2.cloudflarestorage.com)
 //   R2_REGION         signing region for upstream (default "auto")
 //   R2_ACCESS_KEY     real R2 access key id
 //   R2_SECRET_KEY     real R2 secret access key
-//   POLICY_PATH       path to JSON policy file (default /etc/r2-proxy/policy.json)
-//
-// Policy file format (hot-reloaded on file mtime change):
-//   {
-//     "bindings": [
-//       {"accessKey":"orch-abc","secret":"...","bucket":"my-r2","prefix":"ns-foo/cluster-bar/"}
-//     ]
-//   }
+//   DATABASE_URL      postgres URL pointing at orchard's database (read-only role recommended)
 //
 // Only the subset of S3 that barman/CNPG actually uses is supported:
 // HEAD bucket, HEAD/PUT/GET/DELETE object, LIST objects v1/v2,
@@ -31,10 +28,11 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -46,79 +44,127 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	_ "github.com/lib/pq"
 )
 
-// ─────────────────────────── policy ───────────────────────────
+// ─────────────────────────── binding resolver ───────────────────────────
 
 type Binding struct {
-	AccessKey string `json:"accessKey"`
-	Secret    string `json:"secret"`
-	Bucket    string `json:"bucket"`
-	Prefix    string `json:"prefix"`
+	AccessKey string
+	Secret    string
+	Bucket    string
+	Prefix    string
 }
 
-type Policy struct {
-	Bindings []Binding `json:"bindings"`
+type cacheEntry struct {
+	binding   Binding
+	found     bool
+	expiresAt time.Time
 }
 
-type policyStore struct {
-	mu        sync.RWMutex
-	byAK      map[string]Binding
-	loadedMod time.Time
+const (
+	hitTTL    = 60 * time.Second
+	missTTL   = 5 * time.Second
+)
+
+// bindingStore resolves access keys to bindings, backed by orchard's Postgres.
+// A small TTL cache absorbs the steady-state load (barman makes many requests
+// per backup) while still picking up new databases within ~missTTL of creation.
+type bindingStore struct {
+	db *sql.DB
+
+	mu    sync.RWMutex
+	cache map[string]cacheEntry
 }
 
-func (s *policyStore) get(ak string) (Binding, bool) {
+func newBindingStore(db *sql.DB) *bindingStore {
+	return &bindingStore{
+		db:    db,
+		cache: map[string]cacheEntry{},
+	}
+}
+
+func (s *bindingStore) get(ak string) (Binding, bool) {
+	now := time.Now()
+
 	s.mu.RLock()
-	defer s.mu.RUnlock()
-	b, ok := s.byAK[ak]
-	return b, ok
-}
+	if hit, ok := s.cache[ak]; ok && hit.expiresAt.After(now) {
+		s.mu.RUnlock()
+		return hit.binding, hit.found
+	}
+	s.mu.RUnlock()
 
-func (s *policyStore) load(path string) error {
-	st, err := os.Stat(path)
+	// Cache miss / expired — hit the DB.
+	b, found, err := s.lookup(ak)
 	if err != nil {
-		return fmt.Errorf("stat policy: %w", err)
-	}
-	if !st.ModTime().After(s.loadedMod) {
-		return nil // unchanged
-	}
-	raw, err := os.ReadFile(path)
-	if err != nil {
-		return fmt.Errorf("read policy: %w", err)
-	}
-	var p Policy
-	if err := json.Unmarshal(raw, &p); err != nil {
-		return fmt.Errorf("parse policy: %w", err)
-	}
-	idx := make(map[string]Binding, len(p.Bindings))
-	for _, b := range p.Bindings {
-		if b.AccessKey == "" || b.Secret == "" || b.Bucket == "" {
-			continue
+		// On DB error, fall through to whatever stale entry we have rather
+		// than locking out an in-flight backup. Log it so it's visible.
+		log.Printf("[r2-proxy] db lookup ak=%s error: %v", ak, err)
+		s.mu.RLock()
+		if hit, ok := s.cache[ak]; ok {
+			s.mu.RUnlock()
+			return hit.binding, hit.found
 		}
-		// Force trailing slash on prefix so "ns-a/db1" doesn't match "ns-a/db10/...".
-		if !strings.HasSuffix(b.Prefix, "/") && b.Prefix != "" {
-			b.Prefix = b.Prefix + "/"
-		}
-		idx[b.AccessKey] = b
+		s.mu.RUnlock()
+		return Binding{}, false
+	}
+
+	ttl := hitTTL
+	if !found {
+		ttl = missTTL
 	}
 	s.mu.Lock()
-	s.byAK = idx
-	s.loadedMod = st.ModTime()
+	s.cache[ak] = cacheEntry{binding: b, found: found, expiresAt: now.Add(ttl)}
 	s.mu.Unlock()
-	log.Printf("[r2-proxy] policy reloaded: %d bindings", len(idx))
-	return nil
+	return b, found
+}
+
+func (s *bindingStore) lookup(ak string) (Binding, bool, error) {
+	const q = `
+		SELECT d.r2_proxy_access_key,
+		       d.r2_proxy_secret,
+		       d.namespace,
+		       d.cluster_name,
+		       o.backup_r2_bucket
+		FROM databases d
+		JOIN projects p      ON p.id = d.project_id
+		JOIN organizations o ON o.id = p.organization_id
+		WHERE d.r2_proxy_access_key = $1
+		  AND d.r2_proxy_access_key IS NOT NULL
+		  AND d.r2_proxy_secret     IS NOT NULL
+		  AND d.namespace           IS NOT NULL
+		  AND d.cluster_name        IS NOT NULL
+		  AND o.backup_r2_bucket    IS NOT NULL
+		LIMIT 1`
+
+	ctx, cancel := context.WithTimeout(context.Background(), 2*time.Second)
+	defer cancel()
+
+	var b Binding
+	var ns, cluster string
+	err := s.db.QueryRowContext(ctx, q, ak).Scan(&b.AccessKey, &b.Secret, &ns, &cluster, &b.Bucket)
+	if errors.Is(err, sql.ErrNoRows) {
+		return Binding{}, false, nil
+	}
+	if err != nil {
+		return Binding{}, false, err
+	}
+	// Trailing slash on the prefix so "ns/db1" doesn't accidentally match "ns/db10/...".
+	b.Prefix = ns + "/" + cluster + "/"
+	return b, true, nil
 }
 
 // ─────────────────────────── proxy ───────────────────────────
 
 type Proxy struct {
-	upstreamURL      *url.URL
-	upstreamRegion   string
-	upstreamAK       string
-	upstreamSK       string
-	upstreamService  string
-	policy           *policyStore
-	client           *http.Client
+	upstreamURL     *url.URL
+	upstreamRegion  string
+	upstreamAK      string
+	upstreamSK      string
+	upstreamService string
+	policy          *bindingStore
+	client          *http.Client
 }
 
 func main() {
@@ -127,27 +173,33 @@ func main() {
 	region := envDefault("R2_REGION", "auto")
 	ak := mustEnv("R2_ACCESS_KEY")
 	sk := mustEnv("R2_SECRET_KEY")
-	policyPath := envDefault("POLICY_PATH", "/etc/r2-proxy/policy.json")
+	dbURL := mustEnv("DATABASE_URL")
 
 	upURL, err := url.Parse(strings.TrimRight(endpoint, "/"))
 	if err != nil || upURL.Host == "" {
 		log.Fatalf("R2_ENDPOINT invalid: %v", err)
 	}
 
-	store := &policyStore{byAK: map[string]Binding{}}
-	if err := store.load(policyPath); err != nil {
-		// Tolerate missing policy file at boot; bindings can be added later.
-		log.Printf("[r2-proxy] initial policy load: %v (continuing)", err)
+	db, err := sql.Open("postgres", dbURL)
+	if err != nil {
+		log.Fatalf("db open: %v", err)
 	}
-	go func() {
-		t := time.NewTicker(5 * time.Second)
-		defer t.Stop()
-		for range t.C {
-			if err := store.load(policyPath); err != nil {
-				log.Printf("[r2-proxy] policy reload: %v", err)
-			}
+	db.SetMaxOpenConns(8)
+	db.SetMaxIdleConns(2)
+	db.SetConnMaxLifetime(10 * time.Minute)
+
+	// Eager-ping so we fail fast if creds are wrong, rather than crash on
+	// first request. Don't fatally exit though — DB blip during boot
+	// shouldn't take the proxy down indefinitely; we'll retry per request.
+	{
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := db.PingContext(ctx); err != nil {
+			log.Printf("[r2-proxy] db ping failed at boot: %v (will retry per-request)", err)
 		}
-	}()
+		cancel()
+	}
+
+	store := newBindingStore(db)
 
 	p := &Proxy{
 		upstreamURL:     upURL,
@@ -181,45 +233,59 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	authz, err := parseAuthHeader(r.Header.Get("Authorization"))
 	if err != nil {
-		s3Error(w, http.StatusForbidden, "AccessDenied", err.Error())
+		denyAndLog(w, r, "", "AccessDenied", err.Error())
 		return
 	}
 
 	binding, ok := p.policy.get(authz.AccessKey)
 	if !ok {
-		s3Error(w, http.StatusForbidden, "InvalidAccessKeyId", "unknown access key")
+		denyAndLog(w, r, authz.AccessKey, "InvalidAccessKeyId", "unknown access key")
 		return
 	}
 
 	// Verify the V4 signature against the stored secret.
 	if err := verifyV4(r, authz, binding.Secret); err != nil {
-		s3Error(w, http.StatusForbidden, "SignatureDoesNotMatch", err.Error())
+		denyAndLog(w, r, authz.AccessKey, "SignatureDoesNotMatch", err.Error())
 		return
 	}
 
 	// Enforce bucket + prefix. Path-style addressing only — barman uses uri-style=path.
 	bucket, key := splitPathStyle(r.URL.Path)
 	if bucket == "" {
-		s3Error(w, http.StatusForbidden, "AccessDenied", "missing bucket in path")
+		denyAndLog(w, r, authz.AccessKey, "AccessDenied", "missing bucket in path")
 		return
 	}
 	if bucket != binding.Bucket {
-		s3Error(w, http.StatusForbidden, "AccessDenied", "bucket not allowed for this key")
+		denyAndLog(w, r, authz.AccessKey, "AccessDenied", "bucket not allowed for this key")
 		return
 	}
-	if binding.Prefix != "" && !strings.HasPrefix(key, binding.Prefix) {
-		// List operations target the bucket itself with prefix= in the query string.
-		// Ensure that prefix= (if present) is inside the binding's prefix scope.
-		if key == "" && r.Method == http.MethodGet {
+	// Object-level operations must target a key inside the binding's prefix.
+	// Bucket-level operations (key=="") get separate handling below.
+	if key != "" && binding.Prefix != "" && !strings.HasPrefix(key, binding.Prefix) {
+		denyAndLog(w, r, authz.AccessKey, "AccessDenied", "key outside policy prefix")
+		return
+	}
+	if key == "" {
+		// Bucket-level: HEAD/GET location/policy/lifecycle/etc. are metadata
+		// ops on the bucket itself — bucket check already passed, allow.
+		// Listing operations (GET with no sub-resource) must have ?prefix=
+		// inside the binding's prefix so the response can't include other
+		// tenants' keys.
+		if r.Method == http.MethodGet {
 			q := r.URL.Query()
-			listPrefix := q.Get("prefix")
-			if !strings.HasPrefix(listPrefix, binding.Prefix) {
-				s3Error(w, http.StatusForbidden, "AccessDenied", "list prefix outside policy scope")
-				return
+			// Treat ?location, ?versioning, ?lifecycle, ?policy, ?acl etc. as
+			// metadata sub-resources and allow them through (bucket-level only,
+			// no tenant data exposure).
+			isMetadataSubresource := q.Get("location") != "" || q.Has("versioning") ||
+				q.Has("lifecycle") || q.Has("policy") || q.Has("acl") ||
+				q.Has("cors") || q.Has("logging") || q.Has("encryption")
+			if !isMetadataSubresource {
+				listPrefix := q.Get("prefix")
+				if binding.Prefix != "" && !strings.HasPrefix(listPrefix, binding.Prefix) {
+					denyAndLog(w, r, authz.AccessKey, "AccessDenied", "list prefix outside policy scope")
+					return
+				}
 			}
-		} else {
-			s3Error(w, http.StatusForbidden, "AccessDenied", "key outside policy prefix")
-			return
 		}
 	}
 
@@ -252,11 +318,12 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	resp, err := p.client.Do(outReq)
 	if err != nil {
-		log.Printf("[r2-proxy] upstream error: %v", err)
+		log.Printf("[r2-proxy] %s %s ak=%s upstream-error: %v", r.Method, r.URL.Path, authz.AccessKey, err)
 		s3Error(w, http.StatusBadGateway, "InternalError", "upstream error")
 		return
 	}
 	defer resp.Body.Close()
+	log.Printf("[r2-proxy] %s %s ak=%s → %d", r.Method, r.URL.Path, authz.AccessKey, resp.StatusCode)
 
 	// Stream response back. Don't add or rewrite headers — barman/aws-sdk
 	// validates ETag, Content-Length, and the various x-amz-* headers it set.
@@ -589,6 +656,11 @@ func copyForwardHeaders(in, out http.Header) {
 		}
 		out[k] = append([]string(nil), v...)
 	}
+}
+
+func denyAndLog(w http.ResponseWriter, r *http.Request, ak, code, msg string) {
+	log.Printf("[r2-proxy] DENY %s %s ak=%s %s: %s", r.Method, r.URL.Path, ak, code, msg)
+	s3Error(w, http.StatusForbidden, code, msg)
 }
 
 func s3Error(w http.ResponseWriter, status int, code, msg string) {

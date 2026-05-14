@@ -3,6 +3,9 @@
 # the real R2 endpoint. Tenant clusters hold per-cluster "fake" credentials
 # that only work via this proxy and only against their own prefix.
 # The real R2 key lives in `r2-proxy-upstream` here and never leaves this ns.
+#
+# Bindings are read directly from orchard's Postgres `databases` table — no
+# ConfigMap to drift out of sync with the source of truth.
 ---
 apiVersion: v1
 kind: Namespace
@@ -11,17 +14,6 @@ metadata:
   labels:
     app.kubernetes.io/managed-by: orchard
     orchard.io/component: r2-proxy
----
-# ConfigMap holds the JSON policy: which fake access-keys map to which bucket+prefix.
-# The orchard server updates this on every Database create/delete.
-apiVersion: v1
-kind: ConfigMap
-metadata:
-  name: r2-proxy-policy
-  namespace: {{ .Values.r2Proxy.namespace }}
-data:
-  policy.json: |
-    {"bindings": []}
 ---
 # Upstream R2 credentials — the only place the real R2 key exists in-cluster.
 # Set via values, or replace with an externally-managed Secret (External Secrets,
@@ -37,6 +29,30 @@ stringData:
   R2_REGION: {{ .Values.r2Proxy.upstream.region | quote }}
   R2_ACCESS_KEY: {{ .Values.r2Proxy.upstream.accessKey | quote }}
   R2_SECRET_KEY: {{ .Values.r2Proxy.upstream.secretKey | quote }}
+---
+# Database URL for binding lookups. By default cloned from the existing CNPG
+# `<cluster>-app` Secret at helm-template time. Override via values if you
+# want to point the proxy at a read-only role (recommended in prod).
+apiVersion: v1
+kind: Secret
+metadata:
+  name: r2-proxy-db
+  namespace: {{ .Values.r2Proxy.namespace }}
+type: Opaque
+stringData:
+{{- if .Values.r2Proxy.databaseUrl }}
+  DATABASE_URL: {{ .Values.r2Proxy.databaseUrl | quote }}
+{{- else }}
+{{- $dbSecretName := printf "%s-app" .Values.postgres.name }}
+{{- $dbSecret := (lookup "v1" "Secret" .Values.namespace $dbSecretName) }}
+{{- if and $dbSecret $dbSecret.data $dbSecret.data.uri }}
+  DATABASE_URL: {{ $dbSecret.data.uri | b64dec | quote }}
+{{- else }}
+  # Set r2Proxy.databaseUrl in values or ensure {{ $dbSecretName }} exists
+  # in the {{ .Values.namespace }} namespace before installing this chart.
+  DATABASE_URL: ""
+{{- end }}
+{{- end }}
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -69,14 +85,11 @@ spec:
               containerPort: 9000
           env:
             - { name: PROXY_LISTEN, value: ":9000" }
-            - { name: POLICY_PATH, value: "/etc/r2-proxy/policy.json" }
           envFrom:
             - secretRef:
                 name: r2-proxy-upstream
-          volumeMounts:
-            - name: policy
-              mountPath: /etc/r2-proxy
-              readOnly: true
+            - secretRef:
+                name: r2-proxy-db
           readinessProbe:
             httpGet: { path: /healthz, port: http }
             initialDelaySeconds: 2
@@ -91,10 +104,6 @@ spec:
             allowPrivilegeEscalation: false
             readOnlyRootFilesystem: true
             capabilities: { drop: [ALL] }
-      volumes:
-        - name: policy
-          configMap:
-            name: r2-proxy-policy
 ---
 apiVersion: v1
 kind: Service
@@ -113,39 +122,6 @@ spec:
     - name: http
       port: 9000
       targetPort: http
----
-# RBAC: the orchard server needs to write the policy ConfigMap (one ConfigMap,
-# one namespace, no get-all-secrets style permissions).
-apiVersion: v1
-kind: ServiceAccount
-metadata:
-  name: orchard-r2-proxy-writer
-  namespace: {{ .Values.namespace }}
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: r2-proxy-policy-writer
-  namespace: {{ .Values.r2Proxy.namespace }}
-rules:
-  - apiGroups: [""]
-    resources: ["configmaps"]
-    resourceNames: ["r2-proxy-policy"]
-    verbs: ["get", "patch", "update"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: orchard-can-write-r2-proxy-policy
-  namespace: {{ .Values.r2Proxy.namespace }}
-subjects:
-  - kind: ServiceAccount
-    name: orchard-r2-proxy-writer
-    namespace: {{ .Values.namespace }}
-roleRef:
-  kind: Role
-  name: r2-proxy-policy-writer
-  apiGroup: rbac.authorization.k8s.io
 {{- if .Values.r2Proxy.networkPolicy.enabled }}
 ---
 # Default-deny + tightly-scoped allow rules for the proxy namespace.

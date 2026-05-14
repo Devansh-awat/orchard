@@ -46,8 +46,6 @@ spec:
             - { name: BACKUP_PROXY_ENABLED, value: "true" }
             - name: BACKUP_PROXY_ENDPOINT
               value: {{ default (printf "http://r2-proxy.%s.svc.cluster.local:9000" .Values.r2Proxy.namespace) .Values.r2Proxy.serviceUrl | quote }}
-            - { name: BACKUP_PROXY_NAMESPACE, value: {{ .Values.r2Proxy.namespace | quote }} }
-            - { name: BACKUP_PROXY_CONFIGMAP, value: "r2-proxy-policy" }
             {{- end }}
             {{- with .Values.publicTls }}
             {{- if .db }}

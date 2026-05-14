@@ -1,7 +1,11 @@
 import { Injectable, Logger, InternalServerErrorException } from '@nestjs/common';
 import * as crypto from 'crypto';
-import { KubernetesService } from './kubernetes.service';
 
+/**
+ * Per-cluster fake R2 credentials. Persisted on the Database row; the proxy
+ * looks them up directly from Postgres so there's no out-of-band ConfigMap
+ * to drift from the source of truth.
+ */
 export interface R2ProxyBinding {
   accessKey: string;
   secret: string;
@@ -9,15 +13,9 @@ export interface R2ProxyBinding {
   prefix: string;
 }
 
-interface PolicyFile {
-  bindings: R2ProxyBinding[];
-}
-
 @Injectable()
 export class R2ProxyService {
   private readonly logger = new Logger(R2ProxyService.name);
-
-  constructor(private readonly kubernetes: KubernetesService) {}
 
   isEnabled(): boolean {
     return process.env.BACKUP_PROXY_ENABLED === 'true';
@@ -33,29 +31,10 @@ export class R2ProxyService {
     return endpoint;
   }
 
-  private getNamespace(): string {
-    const ns = (process.env.BACKUP_PROXY_NAMESPACE || '').trim();
-    if (!ns) {
-      throw new InternalServerErrorException(
-        'BACKUP_PROXY_NAMESPACE is not configured',
-      );
-    }
-    return ns;
-  }
-
-  private getConfigMapName(): string {
-    const name = (process.env.BACKUP_PROXY_CONFIGMAP || '').trim();
-    if (!name) {
-      throw new InternalServerErrorException(
-        'BACKUP_PROXY_CONFIGMAP is not configured',
-      );
-    }
-    return name;
-  }
-
   /**
    * Mint a fresh per-cluster fake AK/SK pair that the cluster will hand to
-   * barman. The proxy translates these to real R2 credentials.
+   * barman. The proxy verifies these against the value stored on the
+   * Database row and translates them to real R2 credentials.
    */
   mintCredentials(): { accessKey: string; secret: string } {
     const accessKey = `orch-${crypto.randomBytes(8).toString('hex')}`;
@@ -64,70 +43,17 @@ export class R2ProxyService {
   }
 
   /**
-   * Add (or replace by accessKey) a binding in the shared r2-proxy policy
-   * ConfigMap. The proxy hot-reloads every 5s.
+   * Binding lifecycle is now implicit: persisting r2ProxyAccessKey on a
+   * Database row IS the binding (the proxy joins databases → projects →
+   * organizations on every cache miss). These methods stay as no-ops so
+   * existing callers in projects.service.ts don't break.
    */
-  async addBinding(opts: R2ProxyBinding): Promise<void> {
-    await this.mutatePolicy((bindings) => {
-      const filtered = bindings.filter((b) => b.accessKey !== opts.accessKey);
-      filtered.push({
-        accessKey: opts.accessKey,
-        secret: opts.secret,
-        bucket: opts.bucket,
-        prefix: opts.prefix,
-      });
-      return filtered;
-    });
+  async addBinding(_opts: R2ProxyBinding): Promise<void> {
+    // intentionally empty — proxy reads from DB
   }
 
-  /**
-   * Remove a binding by accessKey. Idempotent — a no-op if the key is not
-   * present.
-   */
-  async removeBinding(accessKey: string): Promise<void> {
-    await this.mutatePolicy((bindings) =>
-      bindings.filter((b) => b.accessKey !== accessKey),
-    );
-  }
-
-  private async mutatePolicy(
-    mutate: (bindings: R2ProxyBinding[]) => R2ProxyBinding[],
-  ): Promise<void> {
-    const coreApi = this.kubernetes.getCoreV1Api();
-    const namespace = this.getNamespace();
-    const cmName = this.getConfigMapName();
-
-    const read = await coreApi.readNamespacedConfigMap(cmName, namespace);
-    const cm = read.body;
-    const raw = cm.data?.['policy.json'] || '{"bindings":[]}';
-
-    let parsed: PolicyFile;
-    try {
-      parsed = JSON.parse(raw) as PolicyFile;
-      if (!parsed || !Array.isArray(parsed.bindings)) {
-        parsed = { bindings: [] };
-      }
-    } catch (e: any) {
-      this.logger.warn(
-        `[R2Proxy] policy.json was invalid JSON, rebuilding: ${e?.message}`,
-      );
-      parsed = { bindings: [] };
-    }
-
-    const nextBindings = mutate(parsed.bindings);
-    const nextPolicy: PolicyFile = { bindings: nextBindings };
-
-    const nextData = { ...(cm.data || {}), 'policy.json': JSON.stringify(nextPolicy, null, 2) };
-
-    await coreApi.replaceNamespacedConfigMap(cmName, namespace, {
-      metadata: {
-        name: cmName,
-        namespace,
-        labels: cm.metadata?.labels,
-        annotations: cm.metadata?.annotations,
-        resourceVersion: cm.metadata?.resourceVersion,
-      },
-      data: nextData,
-    });
+  async removeBinding(_accessKey: string): Promise<void> {
+    // intentionally empty — proxy reads from DB, removal happens when the
+    // Database row is deleted
   }
 }

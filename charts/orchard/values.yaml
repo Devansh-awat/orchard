@@ -238,6 +238,11 @@ r2Proxy:
   # Service URL the server uses for barman's endpointURL. Defaults to the
   # in-cluster Service DNS based on namespace above.
   serviceUrl: ""   # empty → http://r2-proxy.<r2Proxy.namespace>.svc.cluster.local:9000
+  # Postgres URL the proxy uses to look up per-cluster bindings. When empty,
+  # the chart `lookup`s the existing `<postgres.name>-app` Secret in the
+  # orchard namespace at template time and copies its `uri` value here.
+  # Override to point at a read-only role (recommended in prod).
+  databaseUrl: ""
 
 # Public-TLS reflection — tells the server which Secret to copy from when
 # exposing a CNPG cluster publicly with TLS.
