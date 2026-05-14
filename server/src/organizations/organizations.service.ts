@@ -255,8 +255,9 @@ export class OrganizationsService {
     if (!orgRow) {
       throw new NotFoundException('Organization not found');
     }
+    let access;
     try {
-      await this.authz.requireOrgMember(orgRow.id, userId);
+      access = await this.authz.requireOrgMember(orgRow.id, userId);
     } catch (e) {
       if (e instanceof NotFoundException) {
         throw new NotFoundException('Organization not found');
