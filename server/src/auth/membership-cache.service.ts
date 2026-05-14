@@ -7,7 +7,13 @@ interface CachedEntry {
   expiresAt: number;
 }
 
-const TTL_MS = 30_000;
+// Process-local cache. Cross-pod invalidation isn't broadcast, so a role
+// downgrade in pod A can be honored by pod B only after this TTL expires.
+// 5s is the longest window we're willing to keep an unauthorised user
+// reading projects they shouldn't see; the in-process invalidation path
+// (PrismaEventsBridge → invalidateInternalUserId) makes the same-pod window
+// effectively zero.
+const TTL_MS = 5_000;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 @Injectable()

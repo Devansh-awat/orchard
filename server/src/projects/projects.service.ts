@@ -4307,6 +4307,23 @@ export class ProjectsService {
 
     await this.authz.requireProjectDelete(project.id, user.id);
 
+    // Capture guests on this project who'll be orphaned by its deletion so we
+    // can drop their OrganizationMember rows below. Spec: a guest with zero
+    // project memberships must not persist in the org. removeProjectMember
+    // handles this case directly, but a project delete cascades through the DB
+    // and bypasses that path, so we have to do it explicitly here.
+    const guestsOnProject = await this.prisma.projectMember.findMany({
+      where: {
+        projectId,
+        user: {
+          organizationMembers: {
+            some: { organizationId: project.organizationId, role: 'guest' },
+          },
+        },
+      },
+      select: { userId: true },
+    });
+
     // Clean up Tailscale sidecars before deleting the namespace
     try {
       await this.tailscaleService.cleanupNamespace(project.namespace);
@@ -4319,6 +4336,22 @@ export class ProjectsService {
     await this.prisma.project.delete({
       where: { id: projectId },
     });
+
+    for (const g of guestsOnProject) {
+      const remaining = await this.prisma.projectMember.count({
+        where: { userId: g.userId, project: { organizationId: project.organizationId } },
+      });
+      if (remaining === 0) {
+        await this.prisma.organizationMember.deleteMany({
+          where: {
+            organizationId: project.organizationId,
+            userId: g.userId,
+            role: 'guest',
+          },
+        });
+        this.membershipCache.invalidateInternalUserId(g.userId);
+      }
+    }
 
     void this.audit.log({
       action: 'project.deleted',
@@ -5258,19 +5291,46 @@ export class ProjectsService {
       orderBy: { updatedAt: 'desc' },
     });
 
-    return Promise.all(
-      projects.map(async (p) => {
-        const access = await this.authz.resolveProjectAccess(p.id, p.organization.id, userId);
-        const members = access?.canEdit
-          ? p.members
-          : this.scrubMembersForViewer(p.members as any);
-        return {
-          ...p,
-          members,
-          icon: p.icon ?? (await this.resolveProjectIconFallback(p.deployments)),
-        };
-      })
-    );
+    if (projects.length === 0) return [];
+
+    // Previously resolved access per project via resolveProjectAccess → 2 DB
+    // queries each (org membership + project membership). For N projects that
+    // was 2N round-trips. Now: one membership-cache hit + one batched
+    // projectMember.findMany over the candidate set, then decide canEdit in
+    // memory. Superadmin still short-circuits to canEdit=true.
+    const isSuperAdmin = await this.authz.isSuperAdmin(userId);
+    const orgRoleByOrgId = new Map<string, string>();
+    if (!isSuperAdmin) {
+      const memberships = await this.membershipCache.getMemberships(userId);
+      for (const m of memberships) orgRoleByOrgId.set(m.organizationId, m.role);
+    }
+
+    const projectIds = projects.map((p) => p.id);
+    const projectMembersByProjectId = new Map<string, string>();
+    if (!isSuperAdmin) {
+      const rows = await this.prisma.projectMember.findMany({
+        where: { userId, projectId: { in: projectIds } },
+        select: { projectId: true, role: { select: { name: true } } },
+      });
+      for (const r of rows) projectMembersByProjectId.set(r.projectId, r.role.name);
+    }
+
+    return projects.map((p) => {
+      let canEdit: boolean;
+      if (isSuperAdmin) {
+        canEdit = true;
+      } else {
+        const orgRole = orgRoleByOrgId.get(p.organization.id);
+        if (orgRole === 'owner' || orgRole === 'admin') {
+          canEdit = true;
+        } else {
+          const projRole = projectMembersByProjectId.get(p.id);
+          canEdit = projRole === 'admin' || projRole === 'member';
+        }
+      }
+      const members = canEdit ? p.members : this.scrubMembersForViewer(p.members as any);
+      return { ...p, members, icon: p.icon ?? null };
+    });
   }
 
   /**
@@ -5350,10 +5410,32 @@ export class ProjectsService {
     });
 
     // Reconcile DB status with live pod state so the home page doesn't show
-    // "running" while every pod is still Scheduled / not Ready. Run K8s checks
-    // in parallel; on failure computeDeploymentStatus falls back to db status.
+    // "running" while every pod is still Scheduled / not Ready. Previously this
+    // fired 2 K8s API calls per deployment (readNamespacedDeployment +
+    // listNamespacedPod via getDeploymentPods → 2*N round-trips). Now we list
+    // pods ONCE per namespace and bucket by the app.kubernetes.io/name label,
+    // collapsing it to M (unique namespaces) calls.
+    const uniqueNamespaces = Array.from(
+      new Set(deployments.map((d) => d.namespace).filter((n): n is string => !!n)),
+    );
+    const namespacePodMaps = new Map<
+      string,
+      Map<string, { pods: Array<{ status: string; restartCount: number }>; warnings: Array<{ message: string }> }>
+    >();
+    await Promise.all(
+      uniqueNamespaces.map(async (ns) => {
+        const m = await this.kubernetesService.listPodStatusesByDeploymentInNamespace(ns);
+        namespacePodMaps.set(ns, m);
+      }),
+    );
+
     const computedStatuses = await Promise.all(
-      deployments.map((d) => this.computeDeploymentStatus(d)),
+      deployments.map((d) => {
+        const bucket = d.namespace
+          ? namespacePodMaps.get(d.namespace)?.get(d.name) ?? { pods: [], warnings: [] }
+          : { pods: [], warnings: [] };
+        return this.computeDeploymentStatus(d, bucket);
+      }),
     );
 
     // Merge direct ingresses and service-linked ingresses, deduplicating by id
@@ -5503,7 +5585,13 @@ export class ProjectsService {
           }
         }
 
-        const computedStatus = await this.computeDeploymentStatus(deployment);
+        // Hand the already-fetched pods to computeDeploymentStatus so it doesn't
+        // re-issue the same readNamespacedDeployment + listNamespacedPod calls
+        // we just made above — that doubled the K8s round-trips per deployment.
+        const computedStatus = await this.computeDeploymentStatus(deployment, {
+          pods,
+          warnings,
+        });
 
         const merged = {
           ...deployment,

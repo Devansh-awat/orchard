@@ -5,6 +5,7 @@
 	import { ChevronDown, Check, Plus, X, Sparkles } from 'lucide-svelte';
 	import { onMount, tick } from 'svelte';
 	import { scale } from 'svelte/transition';
+	import { createQuery } from '@tanstack/svelte-query';
 
 	interface Props {
 		currentProjectName: string;
@@ -36,9 +37,28 @@
 		slug: string;
 	}
 
-	let projects = $state<ProjectItem[]>([]);
+	const orgId = $derived($selectedOrganization?.id ?? null);
+
+	// Cached + deduped: every switcher mount across the app shares one fetch
+	// per org, and SSE events for this org (project.changed / membership.changed)
+	// auto-invalidate the key via orgEvents.ts.
+	const projectsQuery = createQuery<ProjectItem[]>(() => ({
+		queryKey: ['projects', orgId],
+		enabled: !!orgId,
+		queryFn: async () => {
+			const res = await apiFetch(`/apiv1/projects?orgId=${orgId}`);
+			if (!res.ok) throw new Error(`projects ${res.status}`);
+			const list = await res.json();
+			return list.map((p: any) => ({ id: p.id, name: p.name, slug: p.slug }));
+		},
+	}));
+
+	// svelte-query v6 returns a Svelte 5 reactive object — read fields directly,
+	// no $-store dereferencing.
+	const projects = $derived(projectsQuery.data ?? []);
+	const loaded = $derived(projectsQuery.data !== undefined);
+
 	let open = $state(false);
-	let loaded = $state(false);
 
 	let creating = $state(false);
 	let newName = $state('');
@@ -69,18 +89,6 @@
 			window.removeEventListener('resize', onScrollOrResize);
 		};
 	});
-
-	async function fetchProjects() {
-		const orgId = $selectedOrganization?.id;
-		if (!orgId) return;
-		try {
-			const res = await apiFetch(`/apiv1/projects?orgId=${orgId}`);
-			if (res.ok) {
-				projects = (await res.json()).map((p: any) => ({ id: p.id, name: p.name, slug: p.slug }));
-			}
-		} catch { /* */ }
-		finally { loaded = true; }
-	}
 
 	function switchProject(slug: string) {
 		open = false;
@@ -149,7 +157,6 @@
 	}
 
 	onMount(() => {
-		fetchProjects();
 		document.addEventListener('click', handleClickOutside);
 		return () => document.removeEventListener('click', handleClickOutside);
 	});

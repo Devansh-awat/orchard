@@ -38,7 +38,10 @@ export interface ProjectAccess {
  * Callers pass the internal user UUID (already resolved via UsersService).
  * Superadmins (User.isSuperAdmin) bypass every check.
  */
-const SUPERADMIN_TTL_MS = 60_000;
+// Process-local cache, same multi-pod caveat as MembershipCacheService.
+// invalidateSuperAdmin is called when the flag is toggled in this process, but
+// other pods only learn about it when this TTL expires.
+const SUPERADMIN_TTL_MS = 5_000;
 
 @Injectable()
 export class AuthorizationService {

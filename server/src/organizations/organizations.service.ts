@@ -932,12 +932,11 @@ export class OrganizationsService {
       }
     });
 
-    if (!invitation) {
+    // Collapse the "not found" and "expired" cases into a single 404. Splitting
+    // them gave a holder of an expired token a way to confirm the invitation
+    // once existed (and therefore that the org exists) without authentication.
+    if (!invitation || invitation.expiresAt < new Date()) {
       throw new NotFoundException('Invitation not found');
-    }
-
-    if (invitation.expiresAt < new Date()) {
-      throw new BadRequestException('Invitation has expired');
     }
 
     return invitation;
@@ -1134,7 +1133,7 @@ export class OrganizationsService {
       throw new NotFoundException('User removing member not found');
     }
 
-    await this.checkPermission(organizationId, remover.id, 'admin');
+    const removerAccess = await this.authz.requireOrgAdmin(organizationId, remover.id);
 
     const member = await this.prisma.organizationMember.findUnique({
       where: { id: memberId },
@@ -1147,6 +1146,13 @@ export class OrganizationsService {
 
     if (member.role === 'owner') {
       throw new BadRequestException('Cannot remove organization owner');
+    }
+
+    // Admins are senior to plain members; only owners can remove them. Without
+    // this, any admin can boot peer admins (or the entire admin tier) and the
+    // sole remaining owner is the only check on org control.
+    if (member.role === 'admin' && removerAccess.role !== 'owner') {
+      throw new ForbiddenException('Only the organization owner can remove an admin');
     }
 
     // Remove org membership AND all project memberships in this org atomically

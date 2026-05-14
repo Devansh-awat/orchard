@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Subject, Observable, filter, map } from 'rxjs';
+import { Subject, Observable, filter, map, takeWhile } from 'rxjs';
 import { AuthorizationService } from '../auth/authorization.service';
 
 export type OrgEventType =
@@ -59,17 +59,26 @@ export class OrgEventsService {
     visibleProjectIds: string[] | null,
   ): Observable<{ data: OrgEvent }> {
     const allowed = visibleProjectIds === null ? null : new Set(visibleProjectIds);
+    let alive = true;
     return this.forOrg(organizationId).pipe(
-      // H3: drop events the user isn't authorized to see (project not in their visible set,
-      // or membership.changed referencing another user — plain members shouldn't see it).
+      // Close the stream as soon as this user's membership changes. The
+      // visible-project set was captured at subscribe time, so anything that
+      // could shift it (role change, project add/remove, removal from the org)
+      // means the snapshot is no longer trustworthy. Forcing reconnect lets
+      // the controller re-evaluate listVisibleProjectIds against current
+      // state. The terminal membership.changed event itself is still
+      // delivered so the client knows why the stream ended.
+      takeWhile(() => alive, true),
       filter((e) => {
+        if (e.type === 'membership.changed' && e.id === userId) {
+          alive = false;
+          return true;
+        }
         if (allowed === null) return true;
         if (e.type === 'membership.changed') {
-          // Plain members: only let through events about themselves.
           return e.id === userId;
         }
         if (!e.projectId) {
-          // Org-level event without project scope — drop for plain members.
           return false;
         }
         return allowed.has(e.projectId);

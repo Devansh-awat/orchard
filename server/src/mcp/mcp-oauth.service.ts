@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { randomBytes, createHash } from 'crypto';
 import { SignJWT, jwtVerify } from 'jose';
+import { SessionsService } from '../auth/sessions.service';
 
 interface OAuthClient {
   clientId: string;
@@ -22,6 +23,8 @@ interface AuthCodeEntry {
 export class McpOAuthService {
   private readonly oauthClients = new Map<string, OAuthClient>();
   private readonly authCodes = new Map<string, AuthCodeEntry>();
+
+  constructor(private readonly sessions: SessionsService) {}
 
   private get baseUrl(): string {
     return process.env.MCP_BASE_URL || 'http://localhost:3100';
@@ -108,6 +111,15 @@ export class McpOAuthService {
     if (query.response_type !== 'code') {
       console.error(`[MCP OAuth] Authorize failed: unsupported_response_type=${query.response_type}`);
       return { error: 'unsupported_response_type' };
+    }
+
+    // Require PKCE with S256. Plain or missing challenges leave the auth code
+    // exchangeable by anyone who intercepts the redirect — the authorization
+    // server metadata only advertises S256, but the request shape must be
+    // enforced here too so a malicious client can't downgrade.
+    if (!query.code_challenge || query.code_challenge_method !== 'S256') {
+      console.error(`[MCP OAuth] Authorize failed: PKCE S256 required`);
+      return { error: 'invalid_request' };
     }
 
     const mcpState = randomBytes(16).toString('hex');
@@ -274,6 +286,25 @@ export class McpOAuthService {
     console.error(`[MCP OAuth] Token length: ${token.length}, prefix: ${token.substring(0, 20)}...`);
     try {
       const result = await jwtVerify(token, this.getJwtSecret());
+
+      // MCP runs in its own Nest app and does NOT pass through SuperAdminGuard,
+      // so the session check has to happen here. Without this, "sign out
+      // everywhere" / session revocation / role downgrade does not invalidate
+      // an MCP access token until its 1-day expiry — the originating sessionId
+      // was carried in the JWT precisely so we could honor revocation, but
+      // nothing was actually checking it.
+      const sessionId = result.payload.sessionId as string | undefined;
+      if (!sessionId) {
+        console.error('[MCP OAuth] Token rejected: missing sessionId binding');
+        return null;
+      }
+      const sessionValid = await this.sessions.validateSession(sessionId);
+      if (!sessionValid) {
+        console.error('[MCP OAuth] Token rejected: session has been revoked');
+        return null;
+      }
+      this.sessions.touchSession(sessionId).catch(() => {});
+
       console.error(`[MCP OAuth] Token valid, sub: ${result.payload.sub}, exp: ${result.payload.exp}`);
       return token;
     } catch (err) {

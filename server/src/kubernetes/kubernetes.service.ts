@@ -4414,6 +4414,81 @@ export class KubernetesService {
     }
   }
 
+  /**
+   * Lightweight batch: one listNamespacedPod call per namespace, bucketed by
+   * the `app.kubernetes.io/name` label (which every orchard-managed Deployment
+   * sets via selectorLabels). Returns just enough shape for
+   * computeDeploymentStatus — pod phase/ready/restarts and a crash-loop flag —
+   * skipping the per-pod events + metrics fetches that getDeploymentPods does.
+   *
+   * Use for list/overview endpoints where you have many deployments in a
+   * shared namespace; collapses 2*N round-trips to a single one.
+   */
+  async listPodStatusesByDeploymentInNamespace(namespace: string): Promise<
+    Map<string, { pods: Array<{ status: string; restartCount: number }>; warnings: Array<{ message: string }> }>
+  > {
+    this.ensureKubeConfig();
+    const cleanNamespace = String(namespace || '').trim();
+    if (!cleanNamespace) return new Map();
+
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    const result = new Map<
+      string,
+      { pods: Array<{ status: string; restartCount: number }>; warnings: Array<{ message: string }> }
+    >();
+
+    try {
+      const podList = await coreApi.listNamespacedPod(
+        cleanNamespace,
+        undefined, undefined, undefined, undefined,
+        'app.kubernetes.io/managed-by=orchard',
+      );
+
+      for (const pod of podList.body.items) {
+        const deploymentName = pod.metadata?.labels?.['app.kubernetes.io/name'];
+        if (!deploymentName) continue;
+
+        const containerStatuses = pod.status?.containerStatuses ?? [];
+        const phase = pod.status?.phase?.toLowerCase() ?? 'pending';
+        const conditions = pod.status?.conditions ?? [];
+        const isReady = conditions.some((c) => c.type === 'Ready' && c.status === 'True');
+        const allContainersReady =
+          containerStatuses.length > 0 && containerStatuses.every((c) => c.ready === true);
+
+        let computedStatus = phase;
+        if (phase === 'running') {
+          computedStatus = isReady && allContainersReady ? 'ready' : 'pending';
+        }
+
+        const totalRestarts = containerStatuses.reduce(
+          (sum, c) => sum + (c.restartCount ?? 0),
+          0,
+        );
+
+        const bucket = result.get(deploymentName) ?? { pods: [], warnings: [] };
+        bucket.pods.push({ status: computedStatus, restartCount: totalRestarts });
+
+        for (const cs of containerStatuses) {
+          const reason = cs.state?.waiting?.reason;
+          if (reason === 'CrashLoopBackOff' || reason === 'ImagePullBackOff') {
+            bucket.warnings.push({
+              message: cs.state?.waiting?.message ?? reason,
+            });
+          }
+        }
+
+        result.set(deploymentName, bucket);
+      }
+    } catch (err: any) {
+      // 404 just means the namespace doesn't exist yet; treat as empty.
+      if (err?.response?.statusCode !== 404) {
+        console.error(`[API] listPodStatusesByDeploymentInNamespace(${cleanNamespace}):`, err?.message ?? err);
+      }
+    }
+
+    return result;
+  }
+
   private sanitizePortEntries(portInputs: DeploymentPortInput[]): SanitizedPortEntry[] {
     const usedNames = new Set<string>();
     let autoCounter = 1;

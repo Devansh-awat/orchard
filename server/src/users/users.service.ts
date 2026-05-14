@@ -8,9 +8,47 @@ export interface HackClubUserData {
   slackId?: string;
 }
 
+// Every authenticated request currently triggers at least two user lookups:
+// SuperAdminGuard does one, then the service-layer findOrCreateByClerkId does
+// another. The User row barely changes (profile edits are rare), so a tiny
+// TTL'd cache keyed by identifier collapses the second hit to memory.
+// Short TTL keeps profile updates visible quickly; invalidateUserCache is
+// called from updateProfile + admin updateUser to drop stale entries on edits.
+const USER_CACHE_TTL_MS = 10_000;
+const USER_CACHE_MAX = 5_000;
+type CachedUser = { value: any; expiresAt: number };
+
 @Injectable()
 export class UsersService {
+  private readonly userCache = new Map<string, CachedUser>();
+
   constructor(private readonly prisma: PrismaService) {}
+
+  private cacheGet(key: string): any | null {
+    const hit = this.userCache.get(key);
+    if (!hit) return null;
+    if (hit.expiresAt < Date.now()) {
+      this.userCache.delete(key);
+      return null;
+    }
+    return hit.value;
+  }
+
+  private cacheSet(key: string, value: any) {
+    if (this.userCache.size >= USER_CACHE_MAX) {
+      // Evict oldest entry (Map insertion order). Crude but bounded.
+      const firstKey = this.userCache.keys().next().value;
+      if (firstKey !== undefined) this.userCache.delete(firstKey);
+    }
+    this.userCache.set(key, { value, expiresAt: Date.now() + USER_CACHE_TTL_MS });
+  }
+
+  invalidateUserCache(user: { id?: string; hackClubId?: string | null; email?: string | null } | null | undefined) {
+    if (!user) return;
+    if (user.id) this.userCache.delete(user.id);
+    if (user.hackClubId) this.userCache.delete(user.hackClubId);
+    if (user.email) this.userCache.delete(`email:${user.email.toLowerCase()}`);
+  }
 
   async findOrCreateByHackClubId(hackClubUser: HackClubUserData) {
     let user = await this.prisma.user.findUnique({
@@ -74,15 +112,25 @@ export class UsersService {
   }
 
   async findByHackClubId(hackClubId: string) {
-    return this.prisma.user.findUnique({
-      where: { hackClubId }
-    });
+    const cached = this.cacheGet(hackClubId);
+    if (cached) return cached;
+    const user = await this.prisma.user.findUnique({ where: { hackClubId } });
+    if (user) {
+      this.cacheSet(hackClubId, user);
+      this.cacheSet(user.id, user);
+    }
+    return user;
   }
 
   async findById(id: string) {
-    return this.prisma.user.findUnique({
-      where: { id }
-    });
+    const cached = this.cacheGet(id);
+    if (cached) return cached;
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (user) {
+      this.cacheSet(id, user);
+      if (user.hackClubId) this.cacheSet(user.hackClubId, user);
+    }
+    return user;
   }
 
   async ensureImageUrl(user: any): Promise<string | null> {
@@ -130,6 +178,7 @@ export class UsersService {
         // returns null → `dbUserId` falls back to `payload.sub` (a HCID) →
         // membership queries run against a non-UUID userId → 403 "Not a
         // member of this organization" forever, until the user logs out.
+        const previous = user;
         user = await this.prisma.user.update({
           where: { id: user.id },
           data: {
@@ -139,6 +188,8 @@ export class UsersService {
             ...(userData.imageUrl && { imageUrl: userData.imageUrl }),
           },
         });
+        this.invalidateUserCache(previous);
+        this.invalidateUserCache(user);
       } else {
         // No existing record by id, hackClubId, or email. If the identifier
         // looks like a UUID we cannot legitimately create a Hack Club–linked
@@ -185,7 +236,7 @@ export class UsersService {
       }
     }
 
-    return this.prisma.user.update({
+    const updated = await this.prisma.user.update({
       where: { id: userId },
       data: {
         ...(data.firstName !== undefined && { firstName: data.firstName }),
@@ -205,6 +256,8 @@ export class UsersService {
         setupCompleted: true,
       }
     });
+    this.invalidateUserCache(updated);
+    return updated;
   }
 }
 

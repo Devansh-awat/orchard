@@ -445,6 +445,7 @@ model Deployment {
   @@unique([projectId, name])
   @@index([projectId], map: "idx_deployments_project")
   @@index([templateInstanceId], map: "idx_deployments_template_instance")
+  @@index([tailscaleExposedBy], map: "idx_deployments_tailscale_exposed_by")
   @@map("deployments")
 }
 
@@ -495,6 +496,7 @@ model ImageHistory {
 
   @@index([deploymentId], map: "idx_image_history_deployment")
   @@index([deploymentId, createdAt], map: "idx_image_history_deployment_date")
+  @@index([deploymentId, isActive], map: "idx_image_history_deployment_active")
   @@map("image_history")
 }
 

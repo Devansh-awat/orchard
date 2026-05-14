@@ -15,19 +15,9 @@
 	} from '$lib/stores';
 	import { Sidebar, ToastContainer, OnboardingModal } from '$lib/components';
 	import QuickSearch from '$lib/components/QuickSearch.svelte';
-	import { QueryClient, QueryClientProvider } from '@tanstack/svelte-query';
+	import { QueryClientProvider } from '@tanstack/svelte-query';
+	import { queryClient } from '$lib/query';
 	import { env } from '$env/dynamic/public';
-
-	const queryClient = new QueryClient({
-		defaultOptions: {
-			queries: {
-				staleTime: 30_000,
-				gcTime: 5 * 60_000,
-				refetchOnWindowFocus: false,
-				retry: 1,
-			},
-		},
-	});
 
 	let { children } = $props();
 
@@ -62,20 +52,25 @@
 				return;
 			}
 
-			try {
-				const response = await apiFetch('/apiv1/organizations/user');
+			// Fire orgs + invitations in parallel — they don't depend on each
+			// other, and serializing them added ~50ms to first paint for no
+			// reason. fetchPending is only relevant once setup is done.
+			const wantInvitations =
+				!shouldSkipChecks($page.url.pathname) && $user?.setupCompleted;
+			const orgsPromise = apiFetch('/apiv1/organizations/user').then(async (response) => {
 				if (response.ok) {
 					const orgs = await response.json();
 					organizations.set(orgs);
 					organizations.initializeSelected();
-
-					// Fetch pending invitations (only for users who completed setup)
-					if (!shouldSkipChecks($page.url.pathname) && $user?.setupCompleted) {
-						await pendingInvitations.fetchPending();
-					}
 				}
+			});
+			const invitationsPromise = wantInvitations
+				? pendingInvitations.fetchPending()
+				: Promise.resolve();
+			try {
+				await Promise.all([orgsPromise, invitationsPromise]);
 			} catch (e) {
-				console.error('Failed to fetch organizations:', e);
+				console.error('Failed to load layout data:', e);
 			}
 		}
 

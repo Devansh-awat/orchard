@@ -3,6 +3,7 @@ import { invalidate } from '$app/navigation';
 import type { QueryClient } from '@tanstack/svelte-query';
 import { get } from 'svelte/store';
 import { apiBase } from './api';
+import { queryClient } from '../query';
 
 export type OrgEventType =
 	| 'deployment.changed'
@@ -26,7 +27,6 @@ export interface OrgEvent {
 interface Subscription {
 	source: EventSource;
 	listeners: Set<(ev: OrgEvent) => void>;
-	queryClient?: QueryClient;
 	orgId: string;
 	dependencies: Set<string>;
 }
@@ -34,9 +34,8 @@ interface Subscription {
 const subscriptions = new Map<string, Subscription>();
 
 function applyEventToCache(sub: Subscription, ev: OrgEvent) {
-	if (!sub.queryClient) return;
 	if (ev.type === 'heartbeat' || ev.type === 'deployment.metrics') return;
-	const qc = sub.queryClient;
+	const qc = queryClient;
 	switch (ev.type) {
 		case 'deployment.changed':
 		case 'build.changed':
@@ -44,11 +43,16 @@ function applyEventToCache(sub: Subscription, ev: OrgEvent) {
 		case 'project.changed':
 		case 'pod.changed':
 			qc.invalidateQueries({ queryKey: ['org', sub.orgId, 'overview'] });
+			qc.invalidateQueries({ queryKey: ['projects', sub.orgId] });
 			if (ev.id) qc.invalidateQueries({ queryKey: ['deployment', ev.id] });
 			if (ev.projectId) qc.invalidateQueries({ queryKey: ['project', ev.projectId] });
 			break;
 		case 'membership.changed':
+			// Membership changes can shift the set of projects the user can see;
+			// drop everything scoped to this org so per-project pages refetch
+			// against the server's authoritative visibility list.
 			qc.invalidateQueries({ queryKey: ['org', sub.orgId] });
+			qc.invalidateQueries({ queryKey: ['projects', sub.orgId] });
 			break;
 	}
 }
@@ -76,6 +80,10 @@ export function subscribeOrgEvents(
 		return () => {};
 	}
 
+	// `opts.queryClient` is retained in the signature for backwards-compat with
+	// existing callers but is ignored; the singleton from $lib/query is the one
+	// the QueryClientProvider mounts, and routing events through anything else
+	// invalidates a cache nobody is reading.
 	let sub = subscriptions.get(orgId);
 	if (!sub) {
 		const base = get(apiBase) ?? '';
@@ -83,7 +91,6 @@ export function subscribeOrgEvents(
 		sub = {
 			source,
 			listeners: new Set(),
-			queryClient: opts?.queryClient,
 			orgId,
 			dependencies: new Set(opts?.invalidateDependencies ?? []),
 		};
@@ -103,7 +110,6 @@ export function subscribeOrgEvents(
 		};
 		subscriptions.set(orgId, sub);
 	} else {
-		if (opts?.queryClient && !sub.queryClient) sub.queryClient = opts.queryClient;
 		if (opts?.invalidateDependencies) {
 			for (const d of opts.invalidateDependencies) sub.dependencies.add(d);
 		}

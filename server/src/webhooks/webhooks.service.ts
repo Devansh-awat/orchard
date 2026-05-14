@@ -193,6 +193,42 @@ export class WebhooksService {
 
     this.enforceTriggerRateLimit(tokenRecord.id);
 
+    const deployment = tokenRecord.deployment;
+    const organizationId = deployment.project.organizationId;
+    const projectId = deployment.projectId;
+
+    // Re-evaluate the token creator's access to this project on every trigger.
+    // Without this, a member who created a webhook token and was later
+    // demoted to viewer / removed from the project continues to mutate the
+    // deployment through the token until it expires. The token is auto-
+    // revoked on the first failed check so a stale CI hook can't keep
+    // hammering the audit log.
+    if (tokenRecord.createdByUserId) {
+      try {
+        await this.authz.requireProjectEdit(
+          projectId,
+          tokenRecord.createdByUserId,
+          'trigger deployment via webhook',
+        );
+      } catch {
+        await this.prisma.deploymentWebhookToken
+          .delete({ where: { id: tokenRecord.id } })
+          .catch(() => {});
+        void this.audit.log({
+          action: 'deployment.webhook_triggered',
+          actorUserId: tokenRecord.createdByUserId,
+          organizationId,
+          projectId,
+          deploymentId: deployment.id,
+          targetType: 'webhook_token',
+          targetId: tokenRecord.id,
+          targetLabel: tokenRecord.label ?? tokenRecord.id,
+          metadata: { outcome: 'failure', action: 'rejected', reason: 'creator_lost_access' },
+        });
+        throw new NotFoundException('Invalid webhook token');
+      }
+    }
+
     // Update lastUsedAt (fire and forget)
     this.prisma.deploymentWebhookToken
       .update({
@@ -200,10 +236,6 @@ export class WebhooksService {
         data: { lastUsedAt: new Date() },
       })
       .catch(() => {});
-
-    const deployment = tokenRecord.deployment;
-    const organizationId = deployment.project.organizationId;
-    const projectId = deployment.projectId;
 
     const writeAudit = (
       outcome: 'success' | 'failure',

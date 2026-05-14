@@ -381,7 +381,7 @@ export class TemplatesService implements OnModuleInit {
         data: { status: 'active' },
       });
 
-      return this.getTemplateInstance(instance.id);
+      return this.getTemplateInstance(instance.id, clerkId, userData);
     } catch (e) {
       await this.prisma.templateInstance.update({
         where: { id: instance.id },
