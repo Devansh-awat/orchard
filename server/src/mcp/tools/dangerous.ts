@@ -49,6 +49,29 @@ export function registerDangerousTools(server: McpServer, client: OrchardClient)
   );
 
   server.registerTool(
+    'restore_database_backup',
+    {
+      description: `DANGEROUS: Restore a database from a previous backup. This REPLACES all current data in the database with the backup's contents. Use list_database_backups to find a backupId.`,
+      annotations: { destructiveHint: true, readOnlyHint: false, idempotentHint: false },
+      inputSchema: {
+        databaseId: z.string().describe('The database UUID to restore into'),
+        backupId: z
+          .string()
+          .optional()
+          .describe(
+            'The backup UUID to restore from. If omitted, the server restores from the latest available backup.',
+          ),
+      },
+    },
+    async ({ databaseId, backupId }) => {
+      const body: Record<string, unknown> = {};
+      if (backupId) body.backupId = backupId;
+      const result = await client.post(`/databases/${databaseId}/restore`, body);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
     'delete_ingress',
     {
       description: 'DANGEROUS: Delete an ingress (remove public access via a domain). Provide either deploymentId or projectId.',

@@ -20,15 +20,33 @@ If no port is specified, it defaults to 80. Make sure the port matches the port 
           key: z.string().describe('Environment variable name'),
           value: z.string().describe('Environment variable value'),
         })).optional().describe('Environment variables to set on the deployment'),
+        cpuRequestMilli: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe(
+            'CPU request in millicores per pod (e.g. 500 = 0.5 CPU). Subject to project / org / per-member quotas — the API will reject the request if the resulting allocation exceeds the caller\'s limit.',
+          ),
+        memoryRequestBytes: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe(
+            'Memory request in bytes per pod (e.g. 536870912 = 512Mi). Subject to project / org / per-member quotas.',
+          ),
       },
     },
-    async ({ projectId, name, image, replicas, port, env }) => {
+    async ({ projectId, name, image, replicas, port, env, cpuRequestMilli, memoryRequestBytes }) => {
       const deployment = await client.post(`/projects/${projectId}/deployments`, {
         name,
         image,
         replicas: replicas ?? 1,
         ...(port && { port }),
         ...(env && { env }),
+        ...(cpuRequestMilli != null && { cpuRequestMilli }),
+        ...(memoryRequestBytes != null && { memoryRequestBytes }),
       });
       return { content: [{ type: 'text', text: JSON.stringify(deployment, null, 2) }] };
     },
@@ -60,9 +78,21 @@ Before using this tool:
           key: z.string().describe('Environment variable name'),
           value: z.string().describe('Environment variable value'),
         })).optional().describe('Environment variables to set on the deployment'),
+        cpuRequestMilli: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe('CPU request in millicores per pod. Subject to project/org/member quotas.'),
+        memoryRequestBytes: z
+          .number()
+          .int()
+          .positive()
+          .optional()
+          .describe('Memory request in bytes per pod. Subject to project/org/member quotas.'),
       },
     },
-    async ({ projectId, name, githubRepo, branch, dockerfilePath, buildFromRoot, port, env }) => {
+    async ({ projectId, name, githubRepo, branch, dockerfilePath, buildFromRoot, port, env, cpuRequestMilli, memoryRequestBytes }) => {
       const deployment = await client.post(`/projects/${projectId}/deployments/from-github`, {
         name,
         githubRepo,
@@ -71,8 +101,44 @@ Before using this tool:
         buildFromRoot: buildFromRoot ?? false,
         ...(port && { port }),
         ...(env && { env }),
+        ...(cpuRequestMilli != null && { cpuRequestMilli }),
+        ...(memoryRequestBytes != null && { memoryRequestBytes }),
       });
       return { content: [{ type: 'text', text: JSON.stringify(deployment, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    'update_deployment_resources',
+    {
+      description: `Update CPU and memory requests for an existing deployment. The deployment will roll its pods to apply the new resources.
+The API enforces project, organization, and per-member resource quotas — if the new values exceed your remaining allowance the call returns an error and nothing changes.
+Pass null for either field to clear it and fall back to the project / org default.`,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        cpuRequestMilli: z
+          .number()
+          .int()
+          .positive()
+          .nullable()
+          .optional()
+          .describe('New CPU request in millicores per pod, or null to clear.'),
+        memoryRequestBytes: z
+          .number()
+          .int()
+          .positive()
+          .nullable()
+          .optional()
+          .describe('New memory request in bytes per pod, or null to clear.'),
+      },
+    },
+    async ({ deploymentId, cpuRequestMilli, memoryRequestBytes }) => {
+      const body: Record<string, unknown> = {};
+      if (cpuRequestMilli !== undefined) body.cpuRequestMilli = cpuRequestMilli;
+      if (memoryRequestBytes !== undefined) body.memoryRequestBytes = memoryRequestBytes;
+      const result = await client.patch(`/deployments/${deploymentId}/resources`, body);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );
 

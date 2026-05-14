@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { onMount, onDestroy } from 'svelte';
-	import { Check, X, Loader2, Database, AlertTriangle, ChevronDown } from 'lucide-svelte';
+	import { Check, X, Loader2, Database, ChevronDown } from 'lucide-svelte';
+	import TriangleAlertIcon from '$lib/components/icons/TriangleAlertIcon.svelte';
 	import { apiFetch } from '$lib/stores';
 
 	type StepStatus = 'pending' | 'running' | 'done' | 'error';
@@ -101,7 +102,123 @@
 		prevLogsLen = logs.length;
 	});
 
-	const warnings = $derived((data?.events ?? []).filter((e) => e.type === 'Warning'));
+	// Plain-English title + hint for the most common kubelet/controller messages
+	// we see during DB provisioning. Falls back to the raw text when nothing
+	// matches.
+	function humanizeWarning(reason: string, msg: string): { title: string; hint: string } | null {
+		const r = (reason || '').toLowerCase();
+		const m = `${reason ?? ''} ${msg ?? ''}`;
+		if (r === 'failedscheduling' || /0\/\d+ nodes are available/i.test(m)) {
+			if (/unbound immediate persistentvolumeclaim/i.test(m)) {
+				return {
+					title: "Waiting for storage to be ready",
+					hint: 'The Postgres pod is waiting on its PersistentVolumeClaim to bind. This usually resolves on its own once Longhorn provisions the volume — give it a few seconds.',
+				};
+			}
+			if (/insufficient (cpu|memory)/i.test(m)) {
+				return {
+					title: "No node has enough free CPU or memory",
+					hint: 'Lower the database resources, or free capacity on the cluster before the pod can schedule.',
+				};
+			}
+			if (/taint|toleration|nodeselector|node\(s\) didn't match/i.test(m)) {
+				return {
+					title: "No node matches the scheduling rules",
+					hint: 'Node selectors or taints are excluding every available worker. Check the cluster\'s node labels and taints.',
+				};
+			}
+			return {
+				title: "Couldn't place the pod on any node",
+				hint: 'Kubernetes will retry — if it persists, capacity is exhausted or scheduling constraints are too strict.',
+			};
+		}
+		if (r === 'failedattachvolume' || r === 'failedmount' || /failed to attach volume|failed to mount/i.test(m)) {
+			return {
+				title: "Couldn't attach the storage volume",
+				hint: 'The PVC may still be detaching from another node, or the storage class is having trouble. Usually self-heals within a minute.',
+			};
+		}
+		if (r === 'provisioningfailed' || /failed to provision volume/i.test(m)) {
+			return {
+				title: 'Storage provisioning failed',
+				hint: 'The storage class (Longhorn) couldn\'t create the underlying volume. Check storage capacity and the Longhorn controller.',
+			};
+		}
+		if (/imagepullbackoff|errimagepull|failed to pull image/i.test(m)) {
+			return {
+				title: "Couldn't pull the Postgres image",
+				hint: 'The image registry is unreachable or the tag is missing. Retries will keep happening with back-off.',
+			};
+		}
+		if (/back-?off.*restarting failed container/i.test(m) || /crashloopbackoff/i.test(m)) {
+			return {
+				title: 'Postgres container keeps crashing on startup',
+				hint: 'See the migration / pod logs below for the actual error. Common causes: corrupt data dir, bad initdb parameters, or a failing import.',
+			};
+		}
+		if (/oomkilled|out of memory/i.test(m)) {
+			return {
+				title: 'Postgres ran out of memory',
+				hint: 'Raise the database\'s memory request, or reduce shared_buffers and work_mem.',
+			};
+		}
+		if (/secret.*not found|configmap.*not found/i.test(m)) {
+			return {
+				title: 'A referenced secret or config is missing',
+				hint: 'The cluster references an object that does not exist in this namespace yet — typically transient during create.',
+			};
+		}
+		if (/dnsconfig|dns/i.test(m) && /fail/i.test(m)) {
+			return {
+				title: 'DNS lookups inside the pod are failing',
+				hint: 'Cluster DNS is unreachable. The import job may not be able to reach the source database.',
+			};
+		}
+		if (/connection refused|could not connect to server/i.test(m)) {
+			return {
+				title: "Can't reach the source database",
+				hint: 'The migration URL host is unreachable from this cluster, or the source server is rejecting the connection.',
+			};
+		}
+		if (/password authentication failed|role .* does not exist/i.test(m)) {
+			return {
+				title: 'Source database rejected our credentials',
+				hint: 'Double-check the user and password in the migration URL.',
+			};
+		}
+		return null;
+	}
+
+	// Collapse identical (reason + message) warnings into a single row with
+	// a count, like the deployment notifications panel.
+	const warnings = $derived.by(() => {
+		const raw = (data?.events ?? []).filter((e) => e.type === 'Warning');
+		const grouped = new Map<string, KEvent & { count: number }>();
+		for (const w of raw) {
+			const key = `${w.reason}::${w.message}`;
+			const prev = grouped.get(key);
+			if (prev) {
+				prev.count = (prev.count ?? 1) + (w.count || 1);
+				const prevTs = prev.lastTimestamp ? new Date(prev.lastTimestamp).getTime() : 0;
+				const curTs = w.lastTimestamp ? new Date(w.lastTimestamp).getTime() : 0;
+				if (curTs > prevTs) prev.lastTimestamp = w.lastTimestamp;
+			} else {
+				grouped.set(key, { ...w, count: w.count || 1 });
+			}
+		}
+		return Array.from(grouped.values()).sort((a, b) => {
+			const tA = a.lastTimestamp ? new Date(a.lastTimestamp).getTime() : 0;
+			const tB = b.lastTimestamp ? new Date(b.lastTimestamp).getTime() : 0;
+			return tB - tA;
+		});
+	});
+
+	let expandedWarningRaw = $state<Set<string>>(new Set());
+	function toggleWarningRaw(id: string) {
+		if (expandedWarningRaw.has(id)) expandedWarningRaw.delete(id);
+		else expandedWarningRaw.add(id);
+		expandedWarningRaw = new Set(expandedWarningRaw);
+	}
 	const overallStatus = $derived.by(() => {
 		if (!data) return 'loading';
 		if (data.failed) return 'failed';
@@ -213,20 +330,52 @@
 			<div class="prov-panel prov-panel-warning">
 				<button class="prov-panel-header" onclick={() => (warningsOpen = !warningsOpen)} type="button">
 					<ChevronDown class="h-3.5 w-3.5 prov-chev" style={warningsOpen ? '' : 'transform: rotate(-90deg)'} />
-					<AlertTriangle class="h-3.5 w-3.5" style="color: rgb(245, 158, 11);" />
-					<span class="prov-panel-title">Kubernetes warnings ({warnings.length})</span>
+					<TriangleAlertIcon size={14} animate={true} class="prov-warn-head-icon" />
+					<span class="prov-panel-title">Heads up</span>
+					<span class="prov-panel-sub">
+						{warnings.length} {warnings.length === 1 ? 'issue' : 'issues'} from Kubernetes
+					</span>
 				</button>
 				{#if warningsOpen}
 					<div class="prov-warnings">
-						{#each warnings.slice(-25) as w}
+						{#each warnings.slice(0, 25) as w (`${w.reason}::${w.message}`)}
+							{@const wid = `${w.reason}::${w.message}`}
+							{@const human = humanizeWarning(w.reason, w.message)}
+							{@const rawOpen = expandedWarningRaw.has(wid)}
 							<div class="prov-warn">
-								<div class="prov-warn-row">
-									<span class="prov-warn-reason">{w.reason}</span>
-									{#if w.kind}<span class="prov-warn-kind">{w.kind}/{w.name}</span>{/if}
-									{#if w.count && w.count > 1}<span class="prov-warn-count">×{w.count}</span>{/if}
-									<span class="prov-warn-time">{relTime(w.lastTimestamp)}</span>
+								<div class="prov-warn-icon" aria-hidden="true">
+									<TriangleAlertIcon size={16} animate={true} />
 								</div>
-								<div class="prov-warn-msg">{w.message}</div>
+								<div class="prov-warn-body">
+									<div class="prov-warn-head-row">
+										{#if human && !rawOpen}
+											<span class="prov-warn-title">{human.title}</span>
+										{:else}
+											<span class="prov-warn-title">{w.reason}</span>
+										{/if}
+										{#if w.count && w.count > 1}
+											<span class="prov-warn-count">×{w.count}</span>
+										{/if}
+										<span class="prov-warn-time">{relTime(w.lastTimestamp)}</span>
+									</div>
+									{#if w.kind && w.name}
+										<div class="prov-warn-kind">{w.kind}/{w.name}</div>
+									{/if}
+									{#if human && !rawOpen}
+										<p class="prov-warn-hint">{human.hint}</p>
+									{:else}
+										<p class="prov-warn-raw">{w.message}</p>
+									{/if}
+									{#if human}
+										<button
+											type="button"
+											class="prov-warn-toggle"
+											onclick={() => toggleWarningRaw(wid)}
+										>
+											{rawOpen ? 'Hide original message' : 'View original message'}
+										</button>
+									{/if}
+								</div>
 							</div>
 						{/each}
 					</div>
@@ -509,27 +658,50 @@
 	.prov-warnings {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
-		padding: 0.75rem 0.875rem;
+		padding: 0.25rem 0;
 	}
 
 	.prov-warn {
+		display: grid;
+		grid-template-columns: auto 1fr;
+		gap: 0.75rem;
+		padding: 0.75rem 0.875rem;
+		border-bottom: 1px solid color-mix(in srgb, var(--surface-border) 50%, transparent);
+	}
+	.prov-warn:last-child {
+		border-bottom: none;
+	}
+
+	.prov-warn-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: 0.5rem;
+		background-color: rgba(245, 158, 11, 0.15);
+		color: rgb(245, 158, 11);
+		flex-shrink: 0;
+	}
+
+	.prov-warn-body {
 		display: flex;
 		flex-direction: column;
 		gap: 0.2rem;
-		font-size: 0.75rem;
+		min-width: 0;
 	}
 
-	.prov-warn-row {
+	.prov-warn-head-row {
 		display: flex;
 		align-items: baseline;
 		gap: 0.5rem;
 		flex-wrap: wrap;
 	}
 
-	.prov-warn-reason {
+	.prov-warn-title {
+		font-size: 0.8125rem;
 		font-weight: 600;
-		color: rgb(245, 158, 11);
+		color: var(--center-channel-color);
 	}
 
 	.prov-warn-kind {
@@ -540,7 +712,11 @@
 
 	.prov-warn-count {
 		font-size: 0.7rem;
-		color: var(--surface-muted);
+		padding: 0.05rem 0.4rem;
+		border-radius: 999px;
+		background-color: color-mix(in srgb, rgb(245, 158, 11) 18%, transparent);
+		color: rgb(245, 158, 11);
+		font-weight: 600;
 	}
 
 	.prov-warn-time {
@@ -549,8 +725,45 @@
 		color: var(--surface-muted);
 	}
 
-	.prov-warn-msg {
+	.prov-warn-hint {
+		margin: 0.125rem 0 0;
+		font-size: 0.75rem;
+		line-height: 1.45;
 		color: var(--center-channel-color);
+		opacity: 0.78;
 		word-break: break-word;
+	}
+
+	.prov-warn-raw {
+		margin: 0.125rem 0 0;
+		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+		font-size: 0.72rem;
+		line-height: 1.45;
+		color: var(--center-channel-color);
+		opacity: 0.85;
+		white-space: pre-wrap;
+		word-break: break-word;
+	}
+
+	.prov-warn-toggle {
+		align-self: flex-start;
+		margin-top: 0.375rem;
+		font-size: 0.7rem;
+		font-weight: 500;
+		padding: 0.1rem 0.45rem;
+		border-radius: 0.3rem;
+		border: 1px solid color-mix(in srgb, var(--surface-border) 80%, transparent);
+		background: transparent;
+		color: var(--surface-muted);
+		cursor: pointer;
+		transition: background-color 120ms, color 120ms;
+	}
+	.prov-warn-toggle:hover {
+		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);
+		color: var(--center-channel-color);
+	}
+
+	:global(.prov-warn-head-icon) {
+		color: rgb(245, 158, 11);
 	}
 </style>

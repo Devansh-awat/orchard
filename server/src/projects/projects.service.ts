@@ -4952,7 +4952,16 @@ export class ProjectsService {
           select: { id: true, name: true, host: true, tlsSecretName: true },
         },
         databases: {
-          select: { id: true, name: true, dbName: true, status: true, mode: true, createdAt: true },
+          select: {
+            id: true,
+            name: true,
+            dbName: true,
+            status: true,
+            mode: true,
+            createdAt: true,
+            namespace: true,
+            clusterName: true,
+          },
         },
         templateInstances: {
           select: {
@@ -5010,6 +5019,32 @@ export class ProjectsService {
       }),
     );
 
+    // Reconcile DB status with live CNPG state for any DB that isn't already
+    // 'ready'. Without this, the project page status pill stays stuck on
+    // 'provisioning' until the user opens the DB detail page.
+    const reconciledDatabases = await Promise.all(
+      (project.databases as any[]).map(async (db) => {
+        if (db.mode !== 'cnpg' || !db.namespace || !db.clusterName) return db;
+        if (db.status === 'ready') return db;
+        try {
+          const live = await this.kubernetesService.getCnpgClusterStatus(db.namespace, db.clusterName);
+          let next = db.status as string;
+          if (live.ready && db.status !== 'ready' && db.status !== 'restoring') {
+            next = 'ready';
+          } else if (!live.exists && db.status !== 'error' && db.status !== 'provisioning') {
+            next = 'error';
+          }
+          if (next !== db.status) {
+            try {
+              await this.prisma.database.update({ where: { id: db.id }, data: { status: next } });
+            } catch { /* ignore */ }
+            return { ...db, status: next };
+          }
+        } catch { /* ignore — keep stored status */ }
+        return db;
+      }),
+    );
+
     const icon = project.icon ?? (await this.resolveProjectIconFallback(project.deployments));
     const membersWithOrgRole = await this.attachOrgRoleToMembers(project.organizationId, project.members);
 
@@ -5018,6 +5053,7 @@ export class ProjectsService {
       icon,
       members: membersWithOrgRole,
       deployments: deploymentsWithComputedStatus,
+      databases: reconciledDatabases,
       currentUserRole: {
         orgRole: access.orgRole,
         projectRole: access.projectRoleName,
