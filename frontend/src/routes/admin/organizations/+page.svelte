@@ -657,25 +657,37 @@
 				{/if}
 
 				<p class="text-xs mb-3" style="color: var(--surface-muted);">
-					Leave blank = unlimited. Limits apply across all projects in this org. Kubernetes enforces them at pod-admission time.
+					Click <strong>Unlimited</strong> or leave blank to remove a cap. Limits apply across all projects in this org. Kubernetes enforces them at pod-admission time.
 				</p>
 
 				<div class="grid grid-cols-2 gap-3">
 					<label class="text-xs">
 						CPU (millicores)
-						<input type="number" bind:value={qCpu} placeholder="unlimited" class="input w-full mt-1" />
+						<div class="flex items-center gap-2 mt-1">
+							<input type="number" bind:value={qCpu} placeholder="unlimited" class="input flex-1" />
+							<button type="button" class="text-xs px-2 py-1 rounded border" style="border-color: var(--surface-border);" onclick={() => (qCpu = '')}>Unlimited</button>
+						</div>
 					</label>
 					<label class="text-xs">
 						Memory (MiB)
-						<input type="number" bind:value={qMemMi} placeholder="unlimited" class="input w-full mt-1" />
+						<div class="flex items-center gap-2 mt-1">
+							<input type="number" bind:value={qMemMi} placeholder="unlimited" class="input flex-1" />
+							<button type="button" class="text-xs px-2 py-1 rounded border" style="border-color: var(--surface-border);" onclick={() => (qMemMi = '')}>Unlimited</button>
+						</div>
 					</label>
 					<label class="text-xs">
 						Max pods
-						<input type="number" bind:value={qPods} placeholder="unlimited" class="input w-full mt-1" />
+						<div class="flex items-center gap-2 mt-1">
+							<input type="number" bind:value={qPods} placeholder="unlimited" class="input flex-1" />
+							<button type="button" class="text-xs px-2 py-1 rounded border" style="border-color: var(--surface-border);" onclick={() => (qPods = '')}>Unlimited</button>
+						</div>
 					</label>
 					<label class="text-xs">
 						Max services
-						<input type="number" bind:value={qServices} placeholder="unlimited" class="input w-full mt-1" />
+						<div class="flex items-center gap-2 mt-1">
+							<input type="number" bind:value={qServices} placeholder="unlimited" class="input flex-1" />
+							<button type="button" class="text-xs px-2 py-1 rounded border" style="border-color: var(--surface-border);" onclick={() => (qServices = '')}>Unlimited</button>
+						</div>
 					</label>
 				</div>
 

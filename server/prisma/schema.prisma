@@ -28,6 +28,7 @@ model User {
   updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
   createdProjects              Project[]                @relation("ProjectCreator")
+  ownedProjects                Project[]                @relation("ProjectOwner")
   projectMembers               ProjectMember[]
   projectInvitations           ProjectInvitation[]      @relation("ProjectInvitedBy")
   receivedProjectInvitations   ProjectInvitation[]      @relation("ProjectInvitedUser")
@@ -222,6 +223,10 @@ model Organization {
   defaultPodCpuMilli     Int?    @map("default_pod_cpu_milli")
   defaultPodMemoryBytes  BigInt? @map("default_pod_memory_bytes")
 
+  // Default per-member resource allowance handed to new members (null = unlimited default).
+  defaultMemberCpuMilli    Int?    @map("default_member_cpu_milli")
+  defaultMemberMemoryBytes BigInt? @map("default_member_memory_bytes")
+
   creator     User?                    @relation("OrganizationCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   members     OrganizationMember[]
   invitations OrganizationInvitation[]
@@ -248,6 +253,12 @@ model OrganizationMember {
   role           OrganizationRole @default(member)
   addedAt        DateTime         @default(now()) @map("added_at") @db.Timestamp(6)
   addedBy        String?          @map("added_by") @db.Uuid
+
+  // Per-member resource allowance. Null + unlimited=false ⇒ inherit org default.
+  cpuAllowanceMilli         Int?     @map("cpu_allowance_milli")
+  memoryAllowanceBytes      BigInt?  @map("memory_allowance_bytes")
+  cpuAllowanceUnlimited     Boolean  @default(false) @map("cpu_allowance_unlimited")
+  memoryAllowanceUnlimited  Boolean  @default(false) @map("memory_allowance_unlimited")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -306,11 +317,15 @@ model Project {
   maxPods          Int?    @map("max_pods")
   maxServices      Int?    @map("max_services")
   createdBy      String?  @map("created_by") @db.Uuid
+  // Project owner — deployments under this project are accredited to this user's allowance.
+  // Backfilled from createdBy on migration; transferable later.
+  ownerId        String?  @map("owner_id") @db.Uuid
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
   organization  Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   creator       User?              @relation("ProjectCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  owner         User?              @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   members       ProjectMember[]
   invitations   ProjectInvitation[]
   deployments       Deployment[]

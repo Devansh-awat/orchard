@@ -244,6 +244,423 @@ export class QuotasService {
     return project;
   }
 
+  // --- Per-member allowance ---
+
+  // Resolved allowance for a member. Null = unlimited on that axis.
+  async resolveMemberAllowance(
+    organizationId: string,
+    userId: string,
+  ): Promise<{
+    cpuMilli: number | null;
+    memoryBytes: number | null;
+    source: { cpu: 'explicit' | 'default' | 'unlimited'; memory: 'explicit' | 'default' | 'unlimited' };
+  }> {
+    const member = await this.prisma.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId, userId } },
+      select: {
+        cpuAllowanceMilli: true,
+        memoryAllowanceBytes: true,
+        cpuAllowanceUnlimited: true,
+        memoryAllowanceUnlimited: true,
+        organization: {
+          select: {
+            defaultMemberCpuMilli: true,
+            defaultMemberMemoryBytes: true,
+          },
+        },
+      },
+    });
+    if (!member) {
+      // Non-members get no allowance — but in practice this isn't called for non-members.
+      return { cpuMilli: 0, memoryBytes: 0, source: { cpu: 'explicit', memory: 'explicit' } };
+    }
+    let cpu: number | null;
+    let cpuSource: 'explicit' | 'default' | 'unlimited';
+    if (member.cpuAllowanceUnlimited) {
+      cpu = null;
+      cpuSource = 'unlimited';
+    } else if (member.cpuAllowanceMilli !== null) {
+      cpu = member.cpuAllowanceMilli;
+      cpuSource = 'explicit';
+    } else if (member.organization.defaultMemberCpuMilli !== null) {
+      cpu = member.organization.defaultMemberCpuMilli;
+      cpuSource = 'default';
+    } else {
+      cpu = null;
+      cpuSource = 'unlimited';
+    }
+    let mem: number | null;
+    let memSource: 'explicit' | 'default' | 'unlimited';
+    if (member.memoryAllowanceUnlimited) {
+      mem = null;
+      memSource = 'unlimited';
+    } else if (member.memoryAllowanceBytes !== null) {
+      mem = Number(member.memoryAllowanceBytes);
+      memSource = 'explicit';
+    } else if (member.organization.defaultMemberMemoryBytes !== null) {
+      mem = Number(member.organization.defaultMemberMemoryBytes);
+      memSource = 'default';
+    } else {
+      mem = null;
+      memSource = 'unlimited';
+    }
+    return { cpuMilli: cpu, memoryBytes: mem, source: { cpu: cpuSource, memory: memSource } };
+  }
+
+  // Sum requested resources for everything owned by this user inside this org.
+  async getMemberUsage(
+    organizationId: string,
+    userId: string,
+  ): Promise<{
+    cpuMilli: number;
+    memoryBytes: number;
+    breakdown: Array<{
+      kind: 'deployment' | 'database' | 'templateInstance';
+      id: string;
+      name: string;
+      projectId: string;
+      projectName: string;
+      cpuMilli: number;
+      memoryBytes: number;
+      replicas: number;
+    }>;
+  }> {
+    const projects = await this.prisma.project.findMany({
+      where: { organizationId, ownerId: userId },
+      select: {
+        id: true,
+        name: true,
+        deployments: {
+          select: {
+            id: true,
+            name: true,
+            cpuRequestMilli: true,
+            memoryRequestBytes: true,
+            replicas: true,
+          },
+        },
+        databases: {
+          select: {
+            id: true,
+            name: true,
+            cpuRequestMilli: true,
+            memoryRequestBytes: true,
+          },
+        },
+        templateInstances: {
+          select: {
+            id: true,
+            name: true,
+          },
+        },
+      },
+    });
+    let cpu = 0;
+    let mem = 0;
+    const breakdown: Array<{
+      kind: 'deployment' | 'database' | 'templateInstance';
+      id: string;
+      name: string;
+      projectId: string;
+      projectName: string;
+      cpuMilli: number;
+      memoryBytes: number;
+      replicas: number;
+    }> = [];
+    for (const p of projects) {
+      for (const d of p.deployments) {
+        const c = (d.cpuRequestMilli ?? 0) * (d.replicas ?? 1);
+        const m = (d.memoryRequestBytes ? Number(d.memoryRequestBytes) : 0) * (d.replicas ?? 1);
+        cpu += c;
+        mem += m;
+        breakdown.push({
+          kind: 'deployment',
+          id: d.id,
+          name: d.name,
+          projectId: p.id,
+          projectName: p.name,
+          cpuMilli: c,
+          memoryBytes: m,
+          replicas: d.replicas ?? 1,
+        });
+      }
+      for (const db of p.databases) {
+        const c = db.cpuRequestMilli ?? 0;
+        const m = db.memoryRequestBytes ? Number(db.memoryRequestBytes) : 0;
+        cpu += c;
+        mem += m;
+        breakdown.push({
+          kind: 'database',
+          id: db.id,
+          name: db.name,
+          projectId: p.id,
+          projectName: p.name,
+          cpuMilli: c,
+          memoryBytes: m,
+          replicas: 1,
+        });
+      }
+    }
+    return { cpuMilli: cpu, memoryBytes: mem, breakdown };
+  }
+
+  // Throws if `ownerId`'s allowance would be exceeded by adding `requested`.
+  async enforceMemberAllowanceForNewPod(
+    organizationId: string,
+    ownerId: string | null | undefined,
+    requested: { cpuMilli: number; memoryBytes: number },
+  ) {
+    if (!ownerId) return;
+    const allowance = await this.resolveMemberAllowance(organizationId, ownerId);
+    if (allowance.cpuMilli === null && allowance.memoryBytes === null) return;
+    const usage = await this.getMemberUsage(organizationId, ownerId);
+    if (allowance.cpuMilli !== null && usage.cpuMilli + requested.cpuMilli > allowance.cpuMilli) {
+      throw new ForbiddenException(
+        `User CPU allowance exceeded: need ${usage.cpuMilli + requested.cpuMilli}m, allowance ${allowance.cpuMilli}m`,
+      );
+    }
+    if (
+      allowance.memoryBytes !== null &&
+      usage.memoryBytes + requested.memoryBytes > allowance.memoryBytes
+    ) {
+      throw new ForbiddenException(
+        `User memory allowance exceeded: need ${usage.memoryBytes + requested.memoryBytes}B, allowance ${allowance.memoryBytes}B`,
+      );
+    }
+  }
+
+  // Sum of all members' effective allowance — used to validate that admins don't oversell the org.
+  // `Unlimited` members contribute 0 to the sum (they don't reserve a share).
+  // Pass overrides to compute as if a specific member or default were changed.
+  private async computeOrgAllowanceCommitment(
+    organizationId: string,
+    overrides?: {
+      memberOverride?: {
+        userId: string;
+        cpuMilli: number | null;
+        memoryBytes: number | null;
+        cpuUnlimited: boolean;
+        memoryUnlimited: boolean;
+      };
+      defaultOverride?: {
+        cpuMilli: number | null;
+        memoryBytes: number | null;
+      };
+    },
+  ): Promise<{ cpuMilli: number; memoryBytes: number }> {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: {
+        defaultMemberCpuMilli: true,
+        defaultMemberMemoryBytes: true,
+        members: {
+          select: {
+            userId: true,
+            cpuAllowanceMilli: true,
+            memoryAllowanceBytes: true,
+            cpuAllowanceUnlimited: true,
+            memoryAllowanceUnlimited: true,
+          },
+        },
+      },
+    });
+    if (!org) throw new NotFoundException('Org not found');
+    const defaultCpu =
+      overrides?.defaultOverride?.cpuMilli !== undefined
+        ? overrides.defaultOverride.cpuMilli
+        : org.defaultMemberCpuMilli;
+    const defaultMem =
+      overrides?.defaultOverride?.memoryBytes !== undefined
+        ? overrides.defaultOverride.memoryBytes
+        : org.defaultMemberMemoryBytes
+          ? Number(org.defaultMemberMemoryBytes)
+          : null;
+    let cpu = 0;
+    let mem = 0;
+    for (const m of org.members) {
+      const override =
+        overrides?.memberOverride?.userId === m.userId ? overrides.memberOverride : null;
+      const cpuUnlimited = override ? override.cpuUnlimited : m.cpuAllowanceUnlimited;
+      const memUnlimited = override ? override.memoryUnlimited : m.memoryAllowanceUnlimited;
+      const cpuExplicit = override ? override.cpuMilli : m.cpuAllowanceMilli;
+      const memExplicit = override
+        ? override.memoryBytes
+        : m.memoryAllowanceBytes
+          ? Number(m.memoryAllowanceBytes)
+          : null;
+      if (!cpuUnlimited) {
+        if (cpuExplicit !== null) cpu += cpuExplicit;
+        else if (defaultCpu !== null) cpu += defaultCpu;
+      }
+      if (!memUnlimited) {
+        if (memExplicit !== null) mem += memExplicit;
+        else if (defaultMem !== null) mem += defaultMem;
+      }
+    }
+    return { cpuMilli: cpu, memoryBytes: mem };
+  }
+
+  async setMemberAllowance(
+    organizationId: string,
+    userId: string,
+    data: {
+      cpuMilli?: number | null; // null = inherit default
+      memoryBytes?: number | null;
+      cpuUnlimited?: boolean;
+      memoryUnlimited?: boolean;
+    },
+  ) {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { cpuLimitMilli: true, memoryLimitBytes: true },
+    });
+    if (!org) throw new NotFoundException('Org not found');
+    const member = await this.prisma.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId, userId } },
+    });
+    if (!member) throw new NotFoundException('Member not found');
+
+    const next = {
+      cpuMilli: data.cpuMilli !== undefined ? data.cpuMilli : member.cpuAllowanceMilli,
+      memoryBytes:
+        data.memoryBytes !== undefined
+          ? data.memoryBytes
+          : member.memoryAllowanceBytes
+            ? Number(member.memoryAllowanceBytes)
+            : null,
+      cpuUnlimited:
+        data.cpuUnlimited !== undefined ? data.cpuUnlimited : member.cpuAllowanceUnlimited,
+      memoryUnlimited:
+        data.memoryUnlimited !== undefined
+          ? data.memoryUnlimited
+          : member.memoryAllowanceUnlimited,
+    };
+
+    const commitment = await this.computeOrgAllowanceCommitment(organizationId, {
+      memberOverride: { userId, ...next },
+    });
+    if (org.cpuLimitMilli !== null && commitment.cpuMilli > org.cpuLimitMilli) {
+      throw new ForbiddenException(
+        `Total committed CPU allowance (${commitment.cpuMilli}m) would exceed org cap (${org.cpuLimitMilli}m)`,
+      );
+    }
+    if (org.memoryLimitBytes !== null && commitment.memoryBytes > Number(org.memoryLimitBytes)) {
+      throw new ForbiddenException(
+        `Total committed memory allowance (${commitment.memoryBytes}B) would exceed org cap (${Number(org.memoryLimitBytes)}B)`,
+      );
+    }
+
+    return this.prisma.organizationMember.update({
+      where: { organizationId_userId: { organizationId, userId } },
+      data: {
+        cpuAllowanceMilli: next.cpuUnlimited ? null : next.cpuMilli,
+        memoryAllowanceBytes:
+          next.memoryUnlimited || next.memoryBytes === null
+            ? null
+            : BigInt(next.memoryBytes),
+        cpuAllowanceUnlimited: next.cpuUnlimited,
+        memoryAllowanceUnlimited: next.memoryUnlimited,
+      },
+    });
+  }
+
+  async setOrgDefaultMemberAllowance(
+    organizationId: string,
+    data: { cpuMilli?: number | null; memoryBytes?: number | null },
+  ) {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { cpuLimitMilli: true, memoryLimitBytes: true },
+    });
+    if (!org) throw new NotFoundException('Org not found');
+
+    const commitment = await this.computeOrgAllowanceCommitment(organizationId, {
+      defaultOverride: {
+        cpuMilli: data.cpuMilli ?? null,
+        memoryBytes: data.memoryBytes ?? null,
+      },
+    });
+    if (org.cpuLimitMilli !== null && commitment.cpuMilli > org.cpuLimitMilli) {
+      throw new ForbiddenException(
+        `Default would push committed CPU (${commitment.cpuMilli}m) past org cap (${org.cpuLimitMilli}m)`,
+      );
+    }
+    if (org.memoryLimitBytes !== null && commitment.memoryBytes > Number(org.memoryLimitBytes)) {
+      throw new ForbiddenException(
+        `Default would push committed memory (${commitment.memoryBytes}B) past org cap (${Number(org.memoryLimitBytes)}B)`,
+      );
+    }
+
+    return this.prisma.organization.update({
+      where: { id: organizationId },
+      data: {
+        ...(data.cpuMilli !== undefined && { defaultMemberCpuMilli: data.cpuMilli }),
+        ...(data.memoryBytes !== undefined && {
+          defaultMemberMemoryBytes: data.memoryBytes === null ? null : BigInt(data.memoryBytes),
+        }),
+      },
+    });
+  }
+
+  // Table for the org admin view at /[org]/usage.
+  async getOrgMembersUsage(organizationId: string) {
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: {
+        cpuLimitMilli: true,
+        memoryLimitBytes: true,
+        defaultMemberCpuMilli: true,
+        defaultMemberMemoryBytes: true,
+        members: {
+          select: {
+            userId: true,
+            role: true,
+            user: {
+              select: {
+                id: true,
+                username: true,
+                email: true,
+                firstName: true,
+                lastName: true,
+                imageUrl: true,
+              },
+            },
+          },
+        },
+      },
+    });
+    if (!org) throw new NotFoundException('Org not found');
+    const rows = await Promise.all(
+      org.members.map(async (m) => {
+        const allowance = await this.resolveMemberAllowance(organizationId, m.userId);
+        const usage = await this.getMemberUsage(organizationId, m.userId);
+        return {
+          user: m.user,
+          role: m.role,
+          allowance: {
+            cpuMilli: allowance.cpuMilli,
+            memoryBytes: allowance.memoryBytes,
+            source: allowance.source,
+          },
+          usage: { cpuMilli: usage.cpuMilli, memoryBytes: usage.memoryBytes },
+        };
+      }),
+    );
+    const commitment = await this.computeOrgAllowanceCommitment(organizationId);
+    return {
+      org: {
+        cpuLimitMilli: org.cpuLimitMilli,
+        memoryLimitBytes: org.memoryLimitBytes ? Number(org.memoryLimitBytes) : null,
+        defaultMemberCpuMilli: org.defaultMemberCpuMilli,
+        defaultMemberMemoryBytes: org.defaultMemberMemoryBytes
+          ? Number(org.defaultMemberMemoryBytes)
+          : null,
+      },
+      commitment,
+      members: rows,
+    };
+  }
+
   async listProjectCapsForOrg(organizationId: string) {
     const projects = await this.prisma.project.findMany({
       where: { organizationId },

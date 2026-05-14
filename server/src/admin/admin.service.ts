@@ -337,7 +337,13 @@ export class AdminService {
       });
     }
 
-    return updated;
+    // Backup credentials are write-only over the API.
+    const { backupR2AccessKey, backupR2SecretKey, ...safe } = updated as any;
+    return {
+      ...safe,
+      backupR2AccessKeyConfigured: Boolean(backupR2AccessKey),
+      backupR2SecretKeyConfigured: Boolean(backupR2SecretKey),
+    };
   }
 
   async deleteOrganization(orgId: string) {

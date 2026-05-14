@@ -1,3 +1,8 @@
+# syntax=docker/dockerfile:1
+# Build from the project root: docker build -f frontend/Dockerfile -t orchard-frontend .
+# Requires BuildKit (default on Docker 23+ / Docker Desktop). Otherwise:
+#   DOCKER_BUILDKIT=1 docker build -f frontend/Dockerfile -t orchard-frontend .
+
 FROM node:22-alpine AS base
 
 RUN corepack enable && corepack prepare pnpm@10 --activate
@@ -7,7 +12,9 @@ WORKDIR /app
 
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY frontend/package.json ./frontend/
-RUN pnpm install --frozen-lockfile
+# Cache the pnpm store across builds (massive speedup on dep changes).
+RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
+    pnpm install --frozen-lockfile
 
 FROM base AS builder
 WORKDIR /app
@@ -17,7 +24,11 @@ COPY --from=deps /app/frontend/node_modules ./frontend/node_modules
 COPY . .
 
 WORKDIR /app/frontend
-RUN pnpm build
+# Cache Vite's transform output between builds. Persists across CI runs via
+# the registry-backed cache (Vite/Rollup re-uses .vite/deps and friends).
+RUN --mount=type=cache,id=vite,target=/app/frontend/node_modules/.vite \
+    --mount=type=cache,id=svelte-kit,target=/app/frontend/.svelte-kit \
+    pnpm build
 
 FROM base AS runner
 WORKDIR /app

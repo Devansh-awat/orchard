@@ -109,4 +109,62 @@ export class OrgQuotasController {
     }
     return this.quotas.updateProjectCaps(projectId, body);
   }
+
+  // --- Per-member allowance ---
+
+  @Get('members')
+  async listMembersUsage(@Param('orgId') orgId: string, @Req() req: any) {
+    await this.orgs.checkPermission(orgId, req.auth.userId, 'admin');
+    return this.quotas.getOrgMembersUsage(orgId);
+  }
+
+  @Patch('members/:userId')
+  async updateMemberAllowance(
+    @Param('orgId') orgId: string,
+    @Param('userId') userId: string,
+    @Body()
+    body: {
+      cpuMilli?: number | null;
+      memoryBytes?: number | null;
+      cpuUnlimited?: boolean;
+      memoryUnlimited?: boolean;
+    },
+    @Req() req: any,
+  ) {
+    await this.orgs.checkPermission(orgId, req.auth.userId, 'admin');
+    return this.quotas.setMemberAllowance(orgId, userId, body);
+  }
+
+  @Patch('default-member-allowance')
+  async updateDefaultAllowance(
+    @Param('orgId') orgId: string,
+    @Body() body: { cpuMilli?: number | null; memoryBytes?: number | null },
+    @Req() req: any,
+  ) {
+    await this.orgs.checkPermission(orgId, req.auth.userId, 'admin');
+    return this.quotas.setOrgDefaultMemberAllowance(orgId, body);
+  }
+
+  @Get('me')
+  async getMyUsage(@Param('orgId') orgId: string, @Req() req: any) {
+    const userId = req.auth.userId;
+    const membership = await this.prisma.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId: orgId, userId } },
+    });
+    if (!membership) throw new NotFoundException('Not a member of this org');
+    const allowance = await this.quotas.resolveMemberAllowance(orgId, userId);
+    const usage = await this.quotas.getMemberUsage(orgId, userId);
+    const org = await this.prisma.organization.findUnique({
+      where: { id: orgId },
+      select: { cpuLimitMilli: true, memoryLimitBytes: true },
+    });
+    return {
+      allowance,
+      usage,
+      orgCap: {
+        cpuLimitMilli: org?.cpuLimitMilli ?? null,
+        memoryLimitBytes: org?.memoryLimitBytes ? Number(org.memoryLimitBytes) : null,
+      },
+    };
+  }
 }

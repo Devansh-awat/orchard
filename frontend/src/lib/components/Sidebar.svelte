@@ -24,6 +24,7 @@
 	const shortcutKey = $derived(isMac ? '⌘' : 'Ctrl');
 
 	const orgSlug = $derived($selectedOrganization?.slug ?? '');
+	const isEnterprise = $derived($selectedOrganization?.plan === 'enterprise');
 	const isSettingsRoute = $derived($page.url.pathname.startsWith('/' + orgSlug + '/settings'));
 	const settingsTab = $derived($page.url.searchParams.get('tab') || 'general');
 	const isAuditLogsRoute = $derived($page.url.pathname.startsWith('/' + orgSlug + '/settings/audit-logs'));
@@ -267,22 +268,10 @@
 							<span class="tree-node-label">Members</span>
 						</a>
 						<a
-							href="/{orgSlug}/settings?tab=quotas"
-							class="tree-node-content"
-							class:is-active={settingsTab === 'quotas'}
-							{@attach navStagger(2)}
-							{@attach springHover({ lift: -1 })}
-						>
-							<div class="tree-icon-badge" style="background-color: #f59e0b">
-								<Gauge size={10} class="tree-icon-svg" />
-							</div>
-							<span class="tree-node-label">Resource Quotas</span>
-						</a>
-						<a
 							href="/{orgSlug}/settings?tab=database"
 							class="tree-node-content"
 							class:is-active={settingsTab === 'database'}
-							{@attach navStagger(3)}
+							{@attach navStagger(2)}
 							{@attach springHover({ lift: -1 })}
 						>
 							<div class="tree-icon-badge" style="background-color: #10b981">
@@ -294,7 +283,7 @@
 							href="/{orgSlug}/settings?tab=backups"
 							class="tree-node-content"
 							class:is-active={settingsTab === 'backups'}
-							{@attach navStagger(4)}
+							{@attach navStagger(3)}
 							{@attach springHover({ lift: -1 })}
 						>
 							<div class="tree-icon-badge" style="background-color: #8b5cf6">
@@ -302,23 +291,25 @@
 							</div>
 							<span class="tree-node-label">Backups</span>
 						</a>
-						<a
-							href="/{orgSlug}/settings?tab=sso"
-							class="tree-node-content"
-							class:is-active={settingsTab === 'sso'}
-							{@attach navStagger(5)}
-							{@attach springHover({ lift: -1 })}
-						>
-							<div class="tree-icon-badge" style="background-color: #ef4444">
-								<Key size={10} class="tree-icon-svg" />
-							</div>
-							<span class="tree-node-label">SSO</span>
-						</a>
+						{#if isEnterprise}
+							<a
+								href="/{orgSlug}/settings?tab=sso"
+								class="tree-node-content"
+								class:is-active={settingsTab === 'sso'}
+								{@attach navStagger(4)}
+								{@attach springHover({ lift: -1 })}
+							>
+								<div class="tree-icon-badge" style="background-color: #ef4444">
+									<Key size={10} class="tree-icon-svg" />
+								</div>
+								<span class="tree-node-label">SSO</span>
+							</a>
+						{/if}
 						<a
 							href="/{orgSlug}/settings/audit-logs"
 							class="tree-node-content"
 							class:is-active={isAuditLogsRoute}
-							{@attach navStagger(6)}
+							{@attach navStagger(5)}
 							{@attach springHover({ lift: -1 })}
 						>
 							<div class="tree-icon-badge" style="background-color: #475569">
@@ -364,18 +355,6 @@
 						<span class="sidebar-collapsed-tooltip">Members</span>
 					</a>
 					<a
-						href="/{orgSlug}/settings?tab=quotas"
-						class="sidebar-collapsed-icon"
-						class:is-active={settingsTab === 'quotas'}
-						aria-label="Resource Quotas"
-						{@attach springHover()}
-					>
-						<div class="tree-icon-badge" style="background-color: #f59e0b">
-							<Gauge size={11} class="tree-icon-svg" />
-						</div>
-						<span class="sidebar-collapsed-tooltip">Quotas</span>
-					</a>
-					<a
 						href="/{orgSlug}/settings?tab=database"
 						class="sidebar-collapsed-icon"
 						class:is-active={settingsTab === 'database'}
@@ -399,18 +378,20 @@
 						</div>
 						<span class="sidebar-collapsed-tooltip">Backups</span>
 					</a>
-					<a
-						href="/{orgSlug}/settings?tab=sso"
-						class="sidebar-collapsed-icon"
-						class:is-active={settingsTab === 'sso'}
-						aria-label="SSO"
-						{@attach springHover()}
-					>
-						<div class="tree-icon-badge" style="background-color: #ef4444">
-							<Key size={11} class="tree-icon-svg" />
-						</div>
-						<span class="sidebar-collapsed-tooltip">SSO</span>
-					</a>
+					{#if isEnterprise}
+						<a
+							href="/{orgSlug}/settings?tab=sso"
+							class="sidebar-collapsed-icon"
+							class:is-active={settingsTab === 'sso'}
+							aria-label="SSO"
+							{@attach springHover()}
+						>
+							<div class="tree-icon-badge" style="background-color: #ef4444">
+								<Key size={11} class="tree-icon-svg" />
+							</div>
+							<span class="sidebar-collapsed-tooltip">SSO</span>
+						</a>
+					{/if}
 				</div>
 			{/if}
 		{:else}

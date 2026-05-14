@@ -414,6 +414,7 @@ export class ProjectsService {
         backgroundImage: data.backgroundImage?.trim() || null,
         namespace,
         createdBy: user.id,
+        ownerId: user.id,
         members: adminRole ? {
           create: {
             userId: user.id,
@@ -555,6 +556,15 @@ export class ProjectsService {
         cpuMilli: resolved.cpuMilli * (deployment.replicas || 1),
         memoryBytes: resolved.memoryBytes * (deployment.replicas || 1),
       });
+      // Per-user allowance check (charged to project owner).
+      await this.quotasService.enforceMemberAllowanceForNewPod(
+        deployment.project.organizationId,
+        deployment.project.ownerId,
+        {
+          cpuMilli: resolved.cpuMilli * (deployment.replicas || 1),
+          memoryBytes: resolved.memoryBytes * (deployment.replicas || 1),
+        },
+      );
 
       await this.kubernetesService.updateDeploymentResources(
         deployment.namespace,
@@ -593,6 +603,11 @@ export class ProjectsService {
       cpuMilli: resolved.cpuMilli,
       memoryBytes: resolved.memoryBytes,
     });
+    await this.quotasService.enforceMemberAllowanceForNewPod(
+      database.project.organizationId,
+      database.project.ownerId,
+      { cpuMilli: resolved.cpuMilli, memoryBytes: resolved.memoryBytes },
+    );
 
     await this.kubernetesService.updateCnpgClusterResources(
       database.namespace,
@@ -741,6 +756,14 @@ export class ProjectsService {
       cpuMilli: podResources.cpuMilli * replicas,
       memoryBytes: podResources.memoryBytes * replicas,
     });
+    await this.quotasService.enforceMemberAllowanceForNewPod(
+      project.organizationId,
+      project.ownerId,
+      {
+        cpuMilli: podResources.cpuMilli * replicas,
+        memoryBytes: podResources.memoryBytes * replicas,
+      },
+    );
     // Make sure the namespace ResourceQuota/LimitRange reflect current caps.
     await this.quotasService.applyProjectQuota(project.id).catch((err) => {
       console.error('[Projects] applyProjectQuota failed:', err);
@@ -1436,7 +1459,7 @@ export class ProjectsService {
           cpuRequestMilli: true,
           memoryRequestBytes: true,
           deployStrategy: true,
-          project: { select: { organizationId: true } },
+          project: { select: { organizationId: true, ownerId: true } },
         },
       });
       const buildStrategy: 'rollingUpdate' | 'recreate' =
@@ -1457,6 +1480,14 @@ export class ProjectsService {
           cpuMilli: rebuildResources.cpuMilli * (deploymentRow.replicas || 1),
           memoryBytes: rebuildResources.memoryBytes * (deploymentRow.replicas || 1),
         });
+        await this.quotasService.enforceMemberAllowanceForNewPod(
+          deploymentRow.project.organizationId,
+          deploymentRow.project.ownerId,
+          {
+            cpuMilli: rebuildResources.cpuMilli * (deploymentRow.replicas || 1),
+            memoryBytes: rebuildResources.memoryBytes * (deploymentRow.replicas || 1),
+          },
+        );
         await this.quotasService.applyProjectQuota(deploymentRow.projectId).catch((err) => {
           console.error('[Projects] applyProjectQuota failed:', err);
         });
@@ -7626,6 +7657,11 @@ export class ProjectsService {
       cpuMilli: dbResources.cpuMilli,
       memoryBytes: dbResources.memoryBytes,
     });
+    await this.quotasService.enforceMemberAllowanceForNewPod(
+      project.organizationId,
+      project.ownerId,
+      { cpuMilli: dbResources.cpuMilli, memoryBytes: dbResources.memoryBytes },
+    );
     await this.quotasService.applyProjectQuota(projectId).catch((err) => {
       console.error('[Projects] applyProjectQuota (db) failed:', err);
     });

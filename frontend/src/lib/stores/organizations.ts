@@ -7,6 +7,7 @@ export interface Organization {
 	slug: string;
 	description?: string;
 	avatarUrl?: string;
+	plan?: string | null;
 	workspaces?: unknown[];
 	members?: unknown[];
 }

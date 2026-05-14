@@ -46,7 +46,7 @@ export class OrganizationsService {
 
     const isSuperAdmin = await this.authz.isSuperAdmin(user.id);
 
-    return this.prisma.organization.findMany({
+    const orgs = await this.prisma.organization.findMany({
       where: isSuperAdmin
         ? undefined
         : { members: { some: { userId: user.id } } },
@@ -62,12 +62,28 @@ export class OrganizationsService {
         createdAt: 'asc'
       }
     });
+    return orgs.map((o) => this.scrubOrgSecrets(o as any));
   }
 
-  private scrubOrgSecrets<T extends { backupR2SecretKey?: string | null }>(org: T | null): T | null {
+  // Backup credentials are write-only over the API. We never return the access key
+  // or the secret access key in plaintext — only a "configured" flag and the last
+  // 4 chars of the access key so an operator can recognize which credential is set.
+  private scrubOrgSecrets<T extends { backupR2SecretKey?: string | null; backupR2AccessKey?: string | null }>(
+    org: T | null,
+  ): T | null {
     if (!org) return org;
+    const accessKey = org.backupR2AccessKey ?? null;
     const hasSecret = Boolean(org.backupR2SecretKey);
-    const clone: any = { ...org, backupR2SecretKey: null, backupR2SecretKeyConfigured: hasSecret };
+    const hasAccessKey = Boolean(accessKey);
+    const clone: any = {
+      ...org,
+      backupR2SecretKey: null,
+      backupR2SecretKeyConfigured: hasSecret,
+      backupR2AccessKey: null,
+      backupR2AccessKeyConfigured: hasAccessKey,
+      backupR2AccessKeyLast4:
+        accessKey && accessKey.length >= 4 ? accessKey.slice(-4) : null,
+    };
     return clone;
   }
 
@@ -87,11 +103,14 @@ export class OrganizationsService {
       },
     });
     if (!org) throw new NotFoundException('Organization not found');
+    const accessKey = org.backupR2AccessKey;
     return {
       endpoint: org.backupR2Endpoint,
       bucket: org.backupR2Bucket,
       region: org.backupR2Region,
-      accessKey: org.backupR2AccessKey,
+      // Write-only: never return the access key value. Surface a fingerprint instead.
+      accessKeyConfigured: Boolean(accessKey),
+      accessKeyLast4: accessKey && accessKey.length >= 4 ? accessKey.slice(-4) : null,
       secretKeyConfigured: Boolean(org.backupR2SecretKey),
       databasePublicIp: org.databasePublicIp,
     };
@@ -410,7 +429,7 @@ export class OrganizationsService {
 
     const changedFields = Object.keys(updateData);
     // Track which secret-bearing fields changed without leaking values.
-    const secretFields = ['backupR2SecretKey'];
+    const secretFields = ['backupR2SecretKey', 'backupR2AccessKey'];
     const meta: Record<string, any> = {};
     if (before) {
       for (const f of changedFields) {
@@ -470,7 +489,7 @@ export class OrganizationsService {
       }
     }
 
-    return this.prisma.organization.update({
+    const updated = await this.prisma.organization.update({
       where: { id: organizationId },
       data: { avatarUrl },
       include: {
@@ -500,6 +519,7 @@ export class OrganizationsService {
         }
       }
     });
+    return this.scrubOrgSecrets(updated as any);
   }
 
   async deleteAvatar(
@@ -532,7 +552,7 @@ export class OrganizationsService {
       }
     }
 
-    return this.prisma.organization.update({
+    const updated = await this.prisma.organization.update({
       where: { id: organizationId },
       data: { avatarUrl: null },
       include: {
@@ -562,6 +582,7 @@ export class OrganizationsService {
         }
       }
     });
+    return this.scrubOrgSecrets(updated as any);
   }
 
   async inviteMemberToOrganization(

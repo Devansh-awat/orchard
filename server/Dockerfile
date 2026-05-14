@@ -1,13 +1,22 @@
+# syntax=docker/dockerfile:1
 # Build this Dockerfile from the project root directory, not from server/
 # Example: docker build -f server/Dockerfile -t server .
 # The build context must be the root to access pnpm-workspace.yaml and other root files
-# syntax=docker/dockerfile:1
+#
+# Requires BuildKit (default on Docker 23+ / Docker Desktop). If your `docker build`
+# fails to parse `--mount=type=cache`, run with `DOCKER_BUILDKIT=1 docker build ...`
+# or install buildx.
 
 FROM node:22-bookworm-slim AS base
 
+# Disable apt's auto-cleanup so BuildKit cache mounts keep .deb files between builds.
+RUN rm -f /etc/apt/apt.conf.d/docker-clean \
+    && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+
 # Install OpenSSL for Prisma (fixes libssl detection warnings)
-RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates
 
 RUN corepack enable && corepack prepare pnpm@10 --activate
 
@@ -44,16 +53,17 @@ ENV NO_PROXY=178.156.144.127,harbor.1mp.dev,harbor-core.harbor.svc.cluster.local
 ENV no_proxy=178.156.144.127,harbor.1mp.dev,harbor-core.harbor.svc.cluster.local,localhost,127.0.0.1
 
 # Install Docker CLI for building images via mounted Docker socket
-RUN apt-get update && apt-get install -y --no-install-recommends \
-    git \
-    curl \
-    ca-certificates \
-    gnupg \
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends \
+        git \
+        curl \
+        ca-certificates \
+        gnupg \
     && curl -fsSL https://download.docker.com/linux/debian/gpg | gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gpg \
     && echo "deb [arch=amd64 signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian bookworm stable" > /etc/apt/sources.list.d/docker.list \
     && apt-get update \
-    && apt-get install -y --no-install-recommends docker-ce-cli \
-    && rm -rf /var/lib/apt/lists/*
+    && apt-get install -y --no-install-recommends docker-ce-cli
 
 
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./

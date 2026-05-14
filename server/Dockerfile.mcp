@@ -1,10 +1,16 @@
-# Build from the project root: docker build -f server/Dockerfile.mcp -t orchard-mcp .
 # syntax=docker/dockerfile:1
+# Build from the project root: docker build -f server/Dockerfile.mcp -t orchard-mcp .
+# Requires BuildKit. On Docker 23+ this is on by default; otherwise set DOCKER_BUILDKIT=1.
 
 FROM node:22-bookworm-slim AS base
 
-RUN apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates \
-    && rm -rf /var/lib/apt/lists/*
+# Keep apt downloads cached so BuildKit cache mounts work across builds.
+RUN rm -f /etc/apt/apt.conf.d/docker-clean \
+    && echo 'Binary::apt::APT::Keep-Downloaded-Packages "true";' > /etc/apt/apt.conf.d/keep-cache
+
+RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
+    --mount=type=cache,target=/var/lib/apt,sharing=locked \
+    apt-get update && apt-get install -y --no-install-recommends openssl ca-certificates
 
 RUN corepack enable && corepack prepare pnpm@10 --activate
 

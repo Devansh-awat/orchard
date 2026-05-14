@@ -4,9 +4,11 @@ import type { PageLoad } from './$types';
 
 export const ssr = false;
 
-export const load: PageLoad = ({ params, depends }) => {
+export const load: PageLoad = ({ params, depends, url }) => {
 	const orgSlug = params.orgSlug;
+	const range = url.searchParams.get('range') ?? '24h';
 	depends(`org:${orgSlug}:usage`);
+	depends(`org:${orgSlug}:usage:metrics:${range}`);
 
 	const usage = (async () => {
 		const orgRes = await apiFetch(`/apiv1/organizations/slug/${orgSlug}`);
@@ -17,16 +19,52 @@ export const load: PageLoad = ({ params, depends }) => {
 		const orgData = await orgRes.json();
 		const orgId: string = orgData.id;
 
-		const [qRes, pRes] = await Promise.all([
-			apiFetch(`/apiv1/organizations/${orgId}/quota`),
-			apiFetch(`/apiv1/organizations/${orgId}/quota/projects`),
-		]);
-		if (!qRes.ok) throw error(qRes.status, 'Failed to load usage');
-		if (!pRes.ok) throw error(pRes.status, 'Failed to load project usage');
-		const orgQuota = await qRes.json();
-		const pdata = await pRes.json();
-		return { orgId, orgQuota, projects: pdata.projects as any[] };
+		const meRes = await apiFetch(`/apiv1/organizations/${orgId}/members/me`);
+		if (!meRes.ok) throw error(meRes.status, 'Failed to load membership');
+		const me = await meRes.json();
+		const role: 'owner' | 'admin' | 'member' | 'guest' = me.role;
+		const isAdmin = role === 'owner' || role === 'admin';
+
+		const myUsageReq = apiFetch(`/apiv1/organizations/${orgId}/quota/me`).then((r) => {
+			if (!r.ok) throw new Error('Failed to load personal usage');
+			return r.json();
+		});
+		const orgQuotaReq = apiFetch(`/apiv1/organizations/${orgId}/quota`).then(async (r) => {
+			if (!r.ok) return null;
+			return r.json();
+		});
+
+		const adminTasks = isAdmin
+			? Promise.all([
+					apiFetch(`/apiv1/organizations/${orgId}/quota/projects`).then((r) =>
+						r.ok ? r.json() : null,
+					),
+					apiFetch(`/apiv1/organizations/${orgId}/quota/members`).then((r) =>
+						r.ok ? r.json() : null,
+					),
+					apiFetch(
+						`/apiv1/organizations/${orgId}/metrics/provisioning?range=${encodeURIComponent(range)}`,
+					).then((r) => (r.ok ? r.json() : null)),
+				]).then(([p, m, prov]) => ({
+					projectsData: p,
+					membersData: m,
+					provisioning: prov,
+				}))
+			: Promise.resolve({ projectsData: null, membersData: null, provisioning: null });
+
+		const [myUsage, orgQuota, admin] = await Promise.all([myUsageReq, orgQuotaReq, adminTasks]);
+
+		return {
+			orgId,
+			role,
+			isAdmin,
+			myUsage,
+			orgQuota,
+			projectsData: admin.projectsData,
+			membersData: admin.membersData,
+			provisioning: admin.provisioning,
+		};
 	})();
 
-	return { orgSlug, usagePromise: usage };
+	return { orgSlug, range, usagePromise: usage };
 };

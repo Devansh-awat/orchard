@@ -4,7 +4,7 @@
 	import { onMount } from 'svelte';
 	import { apiFetch, user, toasts } from '$lib/stores';
 	import { env } from '$env/dynamic/public';
-	import { Loader2, Pencil, Camera, X, UserPlus, Trash2, ChevronDown, Check, Mail, Users, Shield, Globe, Key, Lock } from 'lucide-svelte';
+	import { Loader2, Pencil, Camera, X, UserPlus, Trash2, ChevronDown, Check, Mail, Users, Shield, Globe, Key, Lock, Activity, ScrollText, ArrowRight } from 'lucide-svelte';
 	import { fade, scale, fly } from 'svelte/transition';
 	import { Avatar as AvatarBuilder } from 'melt/builders';
 
@@ -347,7 +347,9 @@
 		}
 	}
 
-	// Backup (R2) settings state
+	// Backup (R2) settings state. The access key + secret are write-only: the API
+	// never sends them back, only a "configured" flag and the last 4 chars of the
+	// access key (for fingerprinting). Editing requires the owner to re-enter both.
 	let backupLoading = $state(false);
 	let backupSaving = $state(false);
 	let backupEndpoint = $state('');
@@ -355,7 +357,14 @@
 	let backupRegion = $state('auto');
 	let backupAccessKey = $state('');
 	let backupSecretKey = $state('');
+	let backupAccessKeyConfigured = $state(false);
+	let backupAccessKeyLast4 = $state<string | null>(null);
 	let backupSecretConfigured = $state(false);
+	let backupEditMode = $state(false);
+
+	const backupConfigured = $derived(
+		Boolean(backupEndpoint && backupBucket && backupSecretConfigured),
+	);
 
 	// Shared public IP for database exposure
 	let publicIp = $state('');
@@ -371,7 +380,10 @@
 			backupEndpoint = data.endpoint || '';
 			backupBucket = data.bucket || '';
 			backupRegion = data.region || 'auto';
-			backupAccessKey = data.accessKey || '';
+			// The API never returns the access key value. Track it as a fingerprint.
+			backupAccessKey = '';
+			backupAccessKeyConfigured = Boolean(data.accessKeyConfigured);
+			backupAccessKeyLast4 = data.accessKeyLast4 ?? null;
 			backupSecretConfigured = Boolean(data.secretKeyConfigured);
 			backupSecretKey = '';
 			publicIp = data.databasePublicIp || '';
@@ -413,8 +425,12 @@
 				backupR2Endpoint: backupEndpoint.trim() || null,
 				backupR2Bucket: backupBucket.trim() || null,
 				backupR2Region: backupRegion.trim() || null,
-				backupR2AccessKey: backupAccessKey.trim() || null,
 			};
+			// Access key + secret are write-only. Only include them if the owner typed a
+			// new value — sending nothing means "keep the existing credential".
+			if (backupAccessKey.trim()) {
+				body.backupR2AccessKey = backupAccessKey.trim();
+			}
 			if (backupSecretKey.trim()) {
 				body.backupR2SecretKey = backupSecretKey.trim();
 			}
@@ -429,6 +445,7 @@
 			}
 			toasts.add({ title: 'Backup settings saved', color: 'success' });
 			backupSecretKey = '';
+			backupEditMode = false;
 			await fetchBackupSettings();
 		} catch (e) {
 			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to save', color: 'error' });
@@ -460,7 +477,10 @@
 			backupRegion = 'auto';
 			backupAccessKey = '';
 			backupSecretKey = '';
+			backupAccessKeyConfigured = false;
+			backupAccessKeyLast4 = null;
 			backupSecretConfigured = false;
+			backupEditMode = false;
 		} catch (e) {
 			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to clear', color: 'error' });
 		} finally {
@@ -657,85 +677,121 @@
 		{#if activeTab === 'general'}
 			<h1 class="os-tab-title">General</h1>
 
-			<!-- Avatar & Org Info -->
+			<!-- Org hero card: avatar + identity + metadata chips -->
 			<div class="os-card">
-				<div class="os-card-header">
-					<h2 class="os-card-title">Organization</h2>
-					{#if canEditOrg && !isEditing}
-						<button onclick={startEditing} class="btn btn-ghost btn-sm">
-							<Pencil class="h-3.5 w-3.5" />
-							Edit
-						</button>
-					{/if}
-				</div>
-				<div class="os-card-body">
-					<div class="os-general-top">
-						<div class="os-avatar-wrap">
-							<div class="os-avatar">
-								<img {...orgAvatar.image} alt={organization.name} class="os-avatar-img" />
-								<span {...orgAvatar.fallback} class="os-avatar-fallback">
-									{organization.name[0]}
-								</span>
-							</div>
-							{#if canEditOrg}
-								<input bind:this={avatarInput} type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" onchange={uploadAvatar} />
-								<button onclick={() => avatarInput?.click()} disabled={uploadingAvatar} class="os-avatar-edit">
-									{#if uploadingAvatar}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Camera class="h-3 w-3" />{/if}
+				<div class="org-hero">
+					<div class="org-hero-avatar">
+						<div class="os-avatar org-hero-avatar-img">
+							<img {...orgAvatar.image} alt={organization.name} class="os-avatar-img" />
+							<span {...orgAvatar.fallback} class="os-avatar-fallback">
+								{organization.name[0]}
+							</span>
+						</div>
+						{#if canEditOrg}
+							<input bind:this={avatarInput} type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" onchange={uploadAvatar} />
+							<button onclick={() => avatarInput?.click()} disabled={uploadingAvatar} class="os-avatar-edit">
+								{#if uploadingAvatar}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Camera class="h-3 w-3" />{/if}
+							</button>
+							{#if organization.avatarUrl}
+								<button onclick={deleteAvatar} disabled={deletingAvatar} class="os-avatar-remove">
+									{#if deletingAvatar}<Loader2 class="h-3 w-3 animate-spin" />{:else}<X class="h-3 w-3" />{/if}
 								</button>
-								{#if organization.avatarUrl}
-									<button onclick={deleteAvatar} disabled={deletingAvatar} class="os-avatar-remove">
-										{#if deletingAvatar}<Loader2 class="h-3 w-3 animate-spin" />{:else}<X class="h-3 w-3" />{/if}
+							{/if}
+						{/if}
+					</div>
+
+					<div class="org-hero-body">
+						{#if !isEditing}
+							<div class="org-hero-titlerow">
+								<div>
+									<h2 class="org-hero-name">{organization.name}</h2>
+									<p class="org-hero-slug">{organization.slug}</p>
+								</div>
+								{#if canEditOrg}
+									<button onclick={startEditing} class="btn btn-ghost btn-sm">
+										<Pencil class="h-3.5 w-3.5" />
+										Edit
 									</button>
 								{/if}
+							</div>
+							{#if organization.description}
+								<p class="org-hero-desc">{organization.description}</p>
 							{/if}
-						</div>
-						{#if !isEditing}
-							<div>
-								<p class="os-detail-value" style="font-size: 1.125rem; font-weight: 700;">{organization.name}</p>
-								<p class="os-detail-label" style="font-family: var(--font-mono);">{organization.slug}</p>
-								{#if organization.description}
-									<p class="os-detail-value" style="margin-top: 0.5rem; font-weight: 400; font-size: 0.8125rem; color: var(--surface-muted);">{organization.description}</p>
+							<div class="org-hero-chips">
+								<span class="org-chip">
+									<span class="org-chip-label">Your role</span>
+									<span class="org-chip-value">{formatRole(currentUserRole || 'member')}</span>
+								</span>
+								{#if organization?.plan}
+									<span class="org-chip">
+										<span class="org-chip-label">Plan</span>
+										<span class="org-chip-value">{organization.plan.charAt(0).toUpperCase() + organization.plan.slice(1)}</span>
+									</span>
 								{/if}
+								{#if organization.members}
+									<span class="org-chip">
+										<span class="org-chip-label">Members</span>
+										<span class="org-chip-value">{organization.members.length}</span>
+									</span>
+								{/if}
+							</div>
+						{:else}
+							<div class="os-edit-grid" transition:fade={{ duration: 150 }}>
+								<div class="os-field">
+									<label for="org-name" class="os-field-label">Name</label>
+									<input id="org-name" type="text" bind:value={editingName} class="input" />
+								</div>
+								<div class="os-field">
+									<label for="org-desc" class="os-field-label">Description</label>
+									<textarea id="org-desc" bind:value={editingDescription} rows="2" class="input"></textarea>
+								</div>
+								<div class="os-edit-actions">
+									<button onclick={cancelEditing} class="btn btn-secondary">Cancel</button>
+									<button onclick={saveOrganization} disabled={updating} class="btn btn-primary">
+										{#if updating}<Loader2 class="h-4 w-4 animate-spin" />{/if}
+										Save
+									</button>
+								</div>
 							</div>
 						{/if}
 					</div>
-					{#if isEditing}
-						<div class="os-edit-grid" style="margin-top: 1rem;" transition:fade={{ duration: 150 }}>
-							<div class="os-field">
-								<label for="org-name" class="os-field-label">Name</label>
-								<input id="org-name" type="text" bind:value={editingName} class="input" />
-							</div>
-							<div class="os-field">
-								<label for="org-desc" class="os-field-label">Description</label>
-								<textarea id="org-desc" bind:value={editingDescription} rows="2" class="input"></textarea>
-							</div>
-							<div class="os-edit-actions">
-								<button onclick={cancelEditing} class="btn btn-secondary">Cancel</button>
-								<button onclick={saveOrganization} disabled={updating} class="btn btn-primary">
-									{#if updating}<Loader2 class="h-4 w-4 animate-spin" />{/if}
-									Save
-								</button>
-							</div>
-						</div>
-					{/if}
 				</div>
 			</div>
 
-			<div class="os-card">
-				<div class="os-card-body">
-					<div class="os-detail-grid">
-						<div class="os-detail">
-							<p class="os-detail-label">Your role</p>
-							<p class="os-detail-value">{formatRole(currentUserRole || 'member')}</p>
-						</div>
-						{#if isOwner && organization?.plan}
-							<div class="os-detail">
-								<p class="os-detail-label">Plan</p>
-								<p class="os-detail-value">{organization.plan.charAt(0).toUpperCase() + organization.plan.slice(1)}</p>
-							</div>
-						{/if}
+			<!-- Quick actions -->
+			<div class="quick-actions">
+				<a class="quick-action" href={`/${organizationSlug}/usage`}>
+					<div class="quick-action-icon" style="background-color: #fef3c7; color: #b45309;">
+						<Activity class="h-4 w-4" />
 					</div>
-				</div>
+					<div class="quick-action-body">
+						<p class="quick-action-title">Usage & Allowances</p>
+						<p class="quick-action-desc">Org capacity, per-user limits, provisioning</p>
+					</div>
+					<ArrowRight class="h-4 w-4 quick-action-arrow" />
+				</a>
+				<a class="quick-action" href={`/${organizationSlug}/settings?tab=members`}>
+					<div class="quick-action-icon" style="background-color: #dbeafe; color: #1d4ed8;">
+						<Users class="h-4 w-4" />
+					</div>
+					<div class="quick-action-body">
+						<p class="quick-action-title">Members</p>
+						<p class="quick-action-desc">Invite, remove, and change roles</p>
+					</div>
+					<ArrowRight class="h-4 w-4 quick-action-arrow" />
+				</a>
+				{#if canEditOrg}
+					<a class="quick-action" href={`/${organizationSlug}/settings/audit-logs`}>
+						<div class="quick-action-icon" style="background-color: #e2e8f0; color: #475569;">
+							<ScrollText class="h-4 w-4" />
+						</div>
+						<div class="quick-action-body">
+							<p class="quick-action-title">Audit log</p>
+							<p class="quick-action-desc">Recent admin actions in this org</p>
+						</div>
+						<ArrowRight class="h-4 w-4 quick-action-arrow" />
+					</a>
+				{/if}
 			</div>
 		{/if}
 
@@ -896,31 +952,6 @@
 			{/if}
 		{/if}
 
-		<!-- Tab: Resource Quotas -->
-		{#if activeTab === 'quotas'}
-			<h1 class="os-tab-title">Resource Quotas</h1>
-
-			{#if isOwner || currentUserRole === 'admin'}
-				<a
-					class="os-card block hover:shadow-md transition"
-					href={`/${organizationSlug}/settings/quotas`}
-				>
-					<div class="os-card-header">
-						<h2 class="os-card-title">Resource quotas</h2>
-					</div>
-					<p class="text-sm" style="color: var(--surface-muted); padding: 0 1.375rem 1.125rem;">
-						View usage and set per-project CPU, memory, and pod caps.
-					</p>
-				</a>
-			{:else}
-				<div class="os-card">
-					<div class="os-card-body">
-						<p class="text-sm" style="color: var(--surface-muted);">Only admins and owners can manage resource quotas.</p>
-					</div>
-				</div>
-			{/if}
-		{/if}
-
 		<!-- Tab: Database -->
 		{#if activeTab === 'database'}
 			<h1 class="os-tab-title">Database</h1>
@@ -973,6 +1004,12 @@
 				<div class="os-card">
 					<div class="os-card-header">
 						<h2 class="os-card-title">Database Backups (R2)</h2>
+						{#if !backupLoading && backupConfigured && !backupEditMode && isOwner}
+							<button onclick={() => (backupEditMode = true)} class="btn btn-ghost btn-sm">
+								<Pencil class="h-3.5 w-3.5" />
+								Edit
+							</button>
+						{/if}
 					</div>
 
 					<div class="os-card-body">
@@ -983,6 +1020,63 @@
 
 					{#if backupLoading}
 						<div class="os-sso-loading"><Loader2 class="h-5 w-5 animate-spin" /></div>
+					{:else if !backupConfigured && !isOwner}
+						<div class="os-sso-section">
+							<p class="backup-readonly-note">
+								<Lock class="h-3.5 w-3.5" />
+								Backups are not configured. Only the organization owner can set them up.
+							</p>
+						</div>
+					{:else if backupConfigured && !backupEditMode}
+						<!-- Read-only view: credentials masked so an admin can't snatch the key. -->
+						<div class="os-sso-section">
+							<dl class="backup-readonly">
+								<div class="backup-readonly-row">
+									<dt>R2 Endpoint</dt>
+									<dd class="backup-mono">{backupEndpoint || '—'}</dd>
+								</div>
+								<div class="backup-readonly-row">
+									<dt>Bucket</dt>
+									<dd class="backup-mono">{backupBucket || '—'}</dd>
+								</div>
+								<div class="backup-readonly-row">
+									<dt>Region</dt>
+									<dd>{backupRegion || 'auto'}</dd>
+								</div>
+								<div class="backup-readonly-row">
+									<dt>Access Key ID</dt>
+									<dd class="backup-mono">
+										{#if backupAccessKeyConfigured}
+											{#if backupAccessKeyLast4}
+												••••••••{backupAccessKeyLast4}
+											{:else}
+												<span class="backup-status backup-status-ok">
+													<Check class="h-3 w-3" />
+													Configured
+												</span>
+											{/if}
+										{:else}
+											—
+										{/if}
+									</dd>
+								</div>
+								<div class="backup-readonly-row">
+									<dt>Secret Access Key</dt>
+									<dd>
+										<span class="backup-status backup-status-ok">
+											<Check class="h-3 w-3" />
+											Configured
+										</span>
+									</dd>
+								</div>
+							</dl>
+							{#if !isOwner}
+								<p class="backup-readonly-note">
+									<Lock class="h-3.5 w-3.5" />
+									Only the organization owner can reveal or change these credentials.
+								</p>
+							{/if}
+						</div>
 					{:else}
 						<div class="os-sso-section">
 							<h3 class="os-sso-section-title">R2 Endpoint</h3>
@@ -1015,11 +1109,18 @@
 						</div>
 
 						<div class="os-sso-section">
-							<h3 class="os-sso-section-title">Access Key ID</h3>
+							<h3 class="os-sso-section-title">
+								Access Key ID
+								{#if backupAccessKeyConfigured}
+									<span class="os-sso-hint" style="font-weight: 400; margin-left: 0.5rem;">
+										(configured{#if backupAccessKeyLast4} · ends in {backupAccessKeyLast4}{/if} · leave empty to keep)
+									</span>
+								{/if}
+							</h3>
 							<input
 								type="text"
 								class="input"
-								placeholder="R2 access key"
+								placeholder={backupAccessKeyConfigured ? '••••••••••••' : 'R2 access key'}
 								bind:value={backupAccessKey}
 							/>
 						</div>
@@ -1044,7 +1145,12 @@
 								{#if backupSaving}<Loader2 class="h-4 w-4 animate-spin" />{/if}
 								Save backup settings
 							</button>
-							{#if backupSecretConfigured}
+							{#if backupEditMode && backupConfigured}
+								<button onclick={() => { backupEditMode = false; backupSecretKey = ''; fetchBackupSettings(); }} disabled={backupSaving} class="btn btn-secondary">
+									Cancel
+								</button>
+							{/if}
+							{#if backupSecretConfigured && isOwner}
 								<button onclick={clearBackupSettings} disabled={backupSaving} class="btn btn-secondary">
 									Clear
 								</button>
@@ -1061,11 +1167,11 @@
 			{/if}
 		{/if}
 
-		<!-- Tab: SSO -->
-		{#if activeTab === 'sso'}
+		<!-- Tab: SSO (enterprise only) -->
+		{#if activeTab === 'sso' && isEnterprise}
 			<h1 class="os-tab-title">Single Sign-On</h1>
 
-			{#if isEnterprise && isOwner}
+			{#if isOwner}
 				<div class="os-card">
 					<div class="os-card-header">
 						<h2 class="os-card-title">SSO Configuration</h2>
@@ -1294,11 +1400,7 @@
 				<div class="os-card">
 					<div class="os-card-body">
 						<p class="text-sm" style="color: var(--surface-muted);">
-							{#if !isEnterprise}
-								SSO is available on the Enterprise plan.
-							{:else}
-								Only the organization owner can manage SSO settings.
-							{/if}
+							Only the organization owner can manage SSO settings.
 						</p>
 					</div>
 				</div>
@@ -1473,6 +1575,188 @@
 
 	.os-card-body {
 		padding: 1.375rem;
+	}
+
+	/* Org hero (General tab) */
+	.org-hero {
+		display: flex;
+		gap: 1.5rem;
+		padding: 1.5rem;
+		align-items: flex-start;
+	}
+	@media (max-width: 600px) {
+		.org-hero { flex-direction: column; gap: 1rem; padding: 1.25rem; }
+	}
+	.org-hero-avatar {
+		position: relative;
+		flex-shrink: 0;
+	}
+	.org-hero-avatar-img {
+		width: 5rem;
+		height: 5rem;
+		border-radius: 1.125rem;
+	}
+	.org-hero-body { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 0.75rem; }
+	.org-hero-titlerow {
+		display: flex;
+		justify-content: space-between;
+		align-items: flex-start;
+		gap: 1rem;
+	}
+	.org-hero-name {
+		font-size: 1.375rem;
+		font-weight: 700;
+		color: var(--center-channel-color);
+		letter-spacing: -0.02em;
+		margin: 0;
+		line-height: 1.2;
+	}
+	.org-hero-slug {
+		margin: 0.125rem 0 0;
+		font-family: var(--font-mono), ui-monospace, monospace;
+		font-size: 0.75rem;
+		color: var(--surface-muted);
+	}
+	.org-hero-desc {
+		font-size: 0.875rem;
+		color: var(--surface-muted);
+		margin: 0;
+		line-height: 1.5;
+	}
+	.org-hero-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		margin-top: 0.25rem;
+	}
+	.org-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.3125rem 0.6875rem;
+		border-radius: 9999px;
+		background-color: color-mix(in srgb, var(--surface-border) 35%, var(--surface-bg));
+		border: 1px solid color-mix(in srgb, var(--surface-border) 60%, transparent);
+		font-size: 0.75rem;
+	}
+	.org-chip-label {
+		color: var(--surface-muted);
+		font-weight: 500;
+	}
+	.org-chip-value {
+		color: var(--center-channel-color);
+		font-weight: 600;
+	}
+
+	/* Backups read-only display */
+	.backup-readonly {
+		display: flex;
+		flex-direction: column;
+		gap: 0.625rem;
+		margin: 0;
+		padding: 0.75rem 1rem;
+		border: 1px solid var(--surface-border);
+		border-radius: 0.625rem;
+		background-color: color-mix(in srgb, var(--surface-border) 18%, var(--surface-bg));
+	}
+	.backup-readonly-row {
+		display: grid;
+		grid-template-columns: 10rem 1fr;
+		align-items: baseline;
+		gap: 1rem;
+	}
+	.backup-readonly-row dt {
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: var(--surface-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		margin: 0;
+	}
+	.backup-readonly-row dd {
+		margin: 0;
+		font-size: 0.8125rem;
+		color: var(--center-channel-color);
+		word-break: break-all;
+	}
+	.backup-mono {
+		font-family: var(--font-mono), ui-monospace, monospace;
+	}
+	.backup-status {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		font-size: 0.75rem;
+		font-weight: 600;
+		padding: 0.1875rem 0.5rem;
+		border-radius: 9999px;
+	}
+	.backup-status-ok {
+		background-color: var(--success-bg);
+		color: var(--success-text);
+	}
+	.backup-readonly-note {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		font-size: 0.75rem;
+		color: var(--surface-muted);
+		margin: 0.75rem 0 0;
+	}
+
+	/* Quick actions */
+	.quick-actions {
+		display: grid;
+		grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+		gap: 0.75rem;
+	}
+	.quick-action {
+		display: flex;
+		align-items: center;
+		gap: 0.875rem;
+		padding: 1rem 1.125rem;
+		border: 1px solid var(--surface-border);
+		border-radius: 1rem;
+		background-color: var(--surface-bg);
+		text-decoration: none;
+		color: inherit;
+		transition: border-color 150ms ease, transform 150ms ease, box-shadow 150ms ease;
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.02);
+	}
+	.quick-action:hover {
+		border-color: color-mix(in srgb, var(--button-bg) 40%, var(--surface-border));
+		transform: translateY(-1px);
+		box-shadow: 0 2px 6px rgb(0 0 0 / 0.06), 0 1px 2px rgb(0 0 0 / 0.03);
+	}
+	.quick-action-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		border-radius: 0.625rem;
+		flex-shrink: 0;
+	}
+	.quick-action-body { flex: 1; min-width: 0; }
+	.quick-action-title {
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--center-channel-color);
+		margin: 0;
+	}
+	.quick-action-desc {
+		font-size: 0.75rem;
+		color: var(--surface-muted);
+		margin: 0.125rem 0 0;
+	}
+	.quick-action-arrow {
+		color: var(--surface-muted);
+		transition: transform 150ms ease, color 150ms ease;
+		flex-shrink: 0;
+	}
+	.quick-action:hover .quick-action-arrow {
+		transform: translateX(2px);
+		color: var(--center-channel-color);
 	}
 
 	/* Edit form */
