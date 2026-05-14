@@ -163,17 +163,25 @@ export class McpOAuthService {
       return { error: 'Invalid session token' };
     }
 
-    // Create MCP access token JWT using the same user info from the session
+    // H6: Require a sessionId on the originating session token so MCP tokens
+    // inherit session revocation. Pre-fix, MCP tokens lived 7 days regardless
+    // of whether the user signed out everywhere.
+    if (!payload.sessionId) {
+      return { error: 'Session token missing session binding' };
+    }
+    // Carry the same sessionId so SuperAdminGuard's session check applies on
+    // every MCP request, and shorten lifetime to 1d.
     const orchardToken = await new SignJWT({
       email: payload.email,
       name: payload.name,
       hackClubId: payload.hackClubId,
       authMethod: payload.authMethod || 'otp',
+      sessionId: payload.sessionId,
     })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject(payload.sub)
       .setIssuedAt()
-      .setExpirationTime('7d')
+      .setExpirationTime('1d')
       .sign(this.getJwtSecret());
 
     const mcpAuthCode = randomBytes(32).toString('hex');

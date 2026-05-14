@@ -13,7 +13,7 @@ import { QuotasService } from './quotas.service';
 import { QuotaBackfillService } from './backfill.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PrismaService } from '../prisma/prisma.service';
-import { Auth } from '../auth/decorators';
+import { Auth, SuperAdmin } from '../auth/decorators';
 import { NotFoundException } from '@nestjs/common';
 
 type CapBody = {
@@ -26,6 +26,7 @@ type CapBody = {
 };
 
 // Super-admin: edit caps on any org.
+@SuperAdmin()
 @Controller('admin/organizations')
 export class AdminQuotasController {
   constructor(private readonly quotas: QuotasService) {}
@@ -42,6 +43,7 @@ export class AdminQuotasController {
 }
 
 // Super-admin: backfill resources on pre-existing deployments + databases.
+@SuperAdmin()
 @Controller('admin/backfill')
 export class AdminBackfillController {
   constructor(private readonly backfill: QuotaBackfillService) {}

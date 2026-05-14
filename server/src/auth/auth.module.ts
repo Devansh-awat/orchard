@@ -1,6 +1,5 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
-import { AuthGuard } from './auth.guard';
 import { SuperAdminGuard } from './superadmin.guard';
 import { OAuthService } from './oauth.service';
 import { OAuthController } from './oauth.controller';
@@ -22,7 +21,6 @@ import { PrismaModule } from '../prisma/prisma.module';
   imports: [UsersModule, EmailModule, PrismaModule],
   controllers: [OAuthController, PasswordlessController, ApiTokensController],
   providers: [
-    AuthGuard,
     SuperAdminGuard,
     OAuthService,
     OtpService,
@@ -38,7 +36,7 @@ import { PrismaModule } from '../prisma/prisma.module';
       useClass: SuperAdminGuard,
     },
   ],
-  exports: [AuthGuard, SuperAdminGuard, OAuthService, OtpService, PasskeyService, RateLimitService, ApiTokensService, SessionsService, MembershipCacheService, AuthorizationService],
+  exports: [SuperAdminGuard, OAuthService, OtpService, PasskeyService, RateLimitService, ApiTokensService, SessionsService, MembershipCacheService, AuthorizationService],
 })
 export class AuthModule {}
 

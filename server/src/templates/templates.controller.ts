@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Put, Delete, Param, Body, Request } from '@nestjs/common';
 import { TemplatesService } from './templates.service';
-import { Auth } from '../auth/decorators';
+import { Auth, SuperAdmin } from '../auth/decorators';
 
 @Auth()
 @Controller()
@@ -17,6 +17,7 @@ export class TemplatesController {
     return this.templatesService.getTemplate(id);
   }
 
+  @SuperAdmin()
   @Post('templates')
   async createTemplate(
     @Body() body: { yaml: string },
@@ -28,6 +29,7 @@ export class TemplatesController {
     });
   }
 
+  @SuperAdmin()
   @Put('templates/:id')
   async updateTemplate(
     @Param('id') id: string,
@@ -40,6 +42,7 @@ export class TemplatesController {
     });
   }
 
+  @SuperAdmin()
   @Delete('templates/:id')
   async deleteTemplate(@Param('id') id: string, @Request() req) {
     return this.templatesService.deleteTemplate(id, req.user.sub, {

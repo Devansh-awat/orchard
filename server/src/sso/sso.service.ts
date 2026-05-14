@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { OAuthService } from '../auth/oauth.service';
+import { SessionsService } from '../auth/sessions.service';
 import { UsersService } from '../users/users.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
@@ -28,6 +29,7 @@ export class SsoService {
     private readonly oauthService: OAuthService,
     private readonly usersService: UsersService,
     private readonly kubernetesService: KubernetesService,
+    private readonly sessionsService: SessionsService,
   ) {
     const secret = process.env.SSO_ENCRYPTION_KEY;
     if (secret) {
@@ -103,13 +105,6 @@ export class SsoService {
   // ========== Subdomain management ==========
 
   async setSubdomain(organizationId: string, subdomain: string | null) {
-    // Get the old subdomain so we can clean up the old ingress
-    const org = await this.prisma.organization.findUnique({
-      where: { id: organizationId },
-      select: { subdomain: true },
-    });
-    const oldSubdomain = org?.subdomain ?? null;
-
     if (subdomain !== null) {
       const normalized = subdomain.toLowerCase().trim();
 
@@ -123,37 +118,103 @@ export class SsoService {
         throw new BadRequestException('This subdomain is reserved');
       }
 
-      const existing = await this.prisma.organization.findUnique({
-        where: { subdomain: normalized },
-      });
+      // Transactionally re-check uniqueness and write the new subdomain.
+      const { result, oldSubdomain } = await this.prisma.$transaction(
+        async (tx) => {
+          const current = await tx.organization.findUnique({
+            where: { id: organizationId },
+            select: { subdomain: true },
+          });
+          const oldSubdomain = current?.subdomain ?? null;
 
-      if (existing && existing.id !== organizationId) {
-        throw new BadRequestException('This subdomain is already taken');
+          const conflict = await tx.organization.findFirst({
+            where: { subdomain: normalized, NOT: { id: organizationId } },
+            select: { id: true },
+          });
+          if (conflict) {
+            throw new ConflictException('This subdomain is already taken');
+          }
+
+          const result = await tx.organization.update({
+            where: { id: organizationId },
+            data: { subdomain: normalized },
+          });
+
+          return { result, oldSubdomain };
+        },
+      );
+
+      // Ingress work happens AFTER the DB commit. On failure, compensate by
+      // reverting the subdomain back to its previous value.
+      try {
+        if (oldSubdomain && oldSubdomain !== normalized) {
+          await this.deleteSsoIngress(oldSubdomain);
+        }
+        await this.ensureSsoIngress(normalized);
+      } catch (err) {
+        this.logger.error(
+          `Ingress provisioning failed for subdomain ${normalized}; reverting DB to ${oldSubdomain ?? 'null'}`,
+          err instanceof Error ? err.stack : String(err),
+        );
+        try {
+          await this.prisma.organization.update({
+            where: { id: organizationId },
+            data: { subdomain: oldSubdomain },
+          });
+        } catch (revertErr) {
+          this.logger.error(
+            `Failed to revert subdomain after ingress failure for org ${organizationId}`,
+            revertErr instanceof Error ? revertErr.stack : String(revertErr),
+          );
+        }
+        throw err;
       }
-
-      const result = await this.prisma.organization.update({
-        where: { id: organizationId },
-        data: { subdomain: normalized },
-      });
-
-      // Create/update the SSO ingress for TLS
-      if (oldSubdomain && oldSubdomain !== normalized) {
-        await this.deleteSsoIngress(oldSubdomain);
-      }
-      await this.ensureSsoIngress(normalized);
 
       return result;
     }
 
     // Subdomain is being cleared
+    const { result, oldSubdomain } = await this.prisma.$transaction(
+      async (tx) => {
+        const current = await tx.organization.findUnique({
+          where: { id: organizationId },
+          select: { subdomain: true },
+        });
+        const oldSubdomain = current?.subdomain ?? null;
+
+        const result = await tx.organization.update({
+          where: { id: organizationId },
+          data: { subdomain: null },
+        });
+
+        return { result, oldSubdomain };
+      },
+    );
+
     if (oldSubdomain) {
-      await this.deleteSsoIngress(oldSubdomain);
+      try {
+        await this.deleteSsoIngress(oldSubdomain);
+      } catch (err) {
+        this.logger.error(
+          `Failed to delete SSO ingress for ${oldSubdomain}; reverting DB`,
+          err instanceof Error ? err.stack : String(err),
+        );
+        try {
+          await this.prisma.organization.update({
+            where: { id: organizationId },
+            data: { subdomain: oldSubdomain },
+          });
+        } catch (revertErr) {
+          this.logger.error(
+            `Failed to revert subdomain clear for org ${organizationId}`,
+            revertErr instanceof Error ? revertErr.stack : String(revertErr),
+          );
+        }
+        throw err;
+      }
     }
 
-    return this.prisma.organization.update({
-      where: { id: organizationId },
-      data: { subdomain: null },
-    });
+    return result;
   }
 
   private ssoIngressName(subdomain: string): string {
@@ -529,11 +590,17 @@ export class SsoService {
       ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}`
       : user.username;
 
+    // Create a tracked session so the resulting JWT is revocable (H6).
+    const sessionId = await this.sessionsService.createSession({
+      userId: user.id,
+      authMethod: 'sso',
+    });
     const token = await this.oauthService.generateSessionTokenForUser(
       user.id,
       user.email,
       displayName,
       'otp', // reuse 'otp' auth method type for SSO sessions
+      sessionId,
     );
 
     return {

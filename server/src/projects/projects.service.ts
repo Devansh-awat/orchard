@@ -37,6 +37,64 @@ export class ProjectsService {
     private readonly authz: AuthorizationService,
   ) {}
 
+  /**
+   * Strip secrets out of a deployment payload for project viewers (read-only role).
+   * - Env var values are nulled (keys remain).
+   * - Build logs/errors are nulled (often leak secrets via stack traces / cmdline).
+   */
+  private scrubDeploymentForViewer<
+    T extends {
+      envVars?: Array<{ key: string; value: string | null }> | null;
+      buildLogs?: string | null;
+      buildError?: string | null;
+    },
+  >(d: T): T {
+    return {
+      ...d,
+      envVars: d.envVars
+        ? d.envVars.map((ev) => ({ ...ev, value: null }))
+        : d.envVars,
+      buildLogs: null,
+      buildError: null,
+    } as T;
+  }
+
+  /**
+   * Redact DB credentials from a database payload for viewers.
+   * Nulls dbPassword, scrubs password out of connection strings.
+   */
+  private redactDatabaseForViewer<
+    T extends {
+      dbPassword?: string | null;
+      connectionString?: string | null;
+      publicConnectionString?: string | null;
+    },
+  >(d: T): T {
+    return {
+      ...d,
+      dbPassword: null,
+      connectionString: null,
+      publicConnectionString: null,
+    } as T;
+  }
+
+  /**
+   * Nullify member emails (project + adder) when the requester is a viewer.
+   */
+  private scrubMembersForViewer<
+    M extends {
+      user?: { email?: string | null } | null;
+      adder?: { email?: string | null } | null;
+    },
+  >(members: M[] | null | undefined): M[] {
+    if (!members) return [] as M[];
+    return members.map((m) => ({
+      ...m,
+      user: m.user ? { ...m.user, email: null } : m.user,
+      adder: m.adder ? { ...m.adder, email: null } : m.adder,
+    }));
+  }
+
   private async resolvePlacementForProject(projectId: string): Promise<{
     allowedNodes: string[] | null;
     deniedNodes: string[];
@@ -465,6 +523,7 @@ export class ProjectsService {
   async updateDeploymentStrategy(
     deploymentId: string,
     strategy: 'rollingUpdate' | 'recreate',
+    userId?: string,
   ) {
     if (strategy !== 'rollingUpdate' && strategy !== 'recreate') {
       throw new BadRequestException('Invalid deploy strategy');
@@ -475,6 +534,11 @@ export class ProjectsService {
       include: { volumes: true },
     });
     if (!deployment) throw new NotFoundException('Deployment not found');
+
+    // Defense-in-depth: re-assert project-edit even though the controller already did.
+    if (userId) {
+      await this.authz.requireProjectEdit(deployment.projectId, userId, 'change deploy strategy');
+    }
 
     // PVC volumes pin the strategy to Recreate — ReadWriteOnce can't satisfy
     // a rolling cutover.
@@ -497,7 +561,7 @@ export class ProjectsService {
     });
   }
 
-  async updateDeploymentImage(deploymentId: string, image: string) {
+  async updateDeploymentImage(deploymentId: string, image: string, userId?: string) {
     const trimmed = (image ?? '').toString().trim();
     if (!trimmed) {
       throw new BadRequestException('Image cannot be empty');
@@ -507,6 +571,11 @@ export class ProjectsService {
       where: { id: deploymentId },
     });
     if (!deployment) throw new NotFoundException('Deployment not found');
+
+    // Defense-in-depth: re-assert project-edit even though the controller already did.
+    if (userId) {
+      await this.authz.requireProjectEdit(deployment.projectId, userId, 'change deployment image');
+    }
 
     // Image-source deployments only — anything tied to a repo is rebuilt from
     // source by the GitHub flow, so a manual image change would just be
@@ -530,12 +599,18 @@ export class ProjectsService {
   async updateDeploymentResources(
     deploymentId: string,
     data: { cpuRequestMilli: number | null; memoryRequestBytes: number | null },
+    userId?: string,
   ) {
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
       include: { project: true },
     });
     if (!deployment) throw new NotFoundException('Deployment not found');
+
+    // Defense-in-depth: re-assert project-edit even though the controller already did.
+    if (userId) {
+      await this.authz.requireProjectEdit(deployment.projectId, userId, 'update deployment resources');
+    }
 
     // Unlimited mode: cpuRequestMilli === 0 means remove all resource constraints.
     const isUnlimited = data.cpuRequestMilli === 0 && data.memoryRequestBytes === 0;
@@ -585,12 +660,19 @@ export class ProjectsService {
   async updateDatabaseResources(
     databaseId: string,
     data: { cpuRequestMilli: number | null; memoryRequestBytes: number | null },
+    userId?: string,
   ) {
     const database = await this.prisma.database.findUnique({
       where: { id: databaseId },
       include: { project: true },
     });
     if (!database) throw new NotFoundException('Database not found');
+
+    // Defense-in-depth: re-assert project-edit even though the controller already did.
+    if (userId) {
+      await this.authz.requireProjectEdit(database.projectId, userId, 'update database resources');
+    }
+
     if (database.mode !== 'cnpg' || !database.clusterName || !database.namespace) {
       throw new BadRequestException('Database does not support resource updates');
     }
@@ -3307,8 +3389,8 @@ export class ProjectsService {
       throw new NotFoundException('User not found');
     }
 
-    const ingress = await this.prisma.ingress.findUnique({
-      where: { id: ingressId },
+    const ingress = await this.prisma.ingress.findFirst({
+      where: { id: ingressId, projectId },
       include: {
         project: {
           include: {
@@ -3324,15 +3406,18 @@ export class ProjectsService {
       },
     });
 
-    if (!ingress) {
-      throw new NotFoundException(`Ingress ${ingressId} not found`);
+    if (!ingress || !ingress.project) {
+      throw new NotFoundException('Ingress not found');
     }
 
-    if (ingress.projectId !== projectId) {
-      throw new BadRequestException('Ingress does not belong to this project');
+    try {
+      await this.assertProjectAccess(ingress.project.id, user.id, ingress.project.organizationId);
+    } catch (e) {
+      if (e instanceof NotFoundException) {
+        throw new NotFoundException('Ingress not found');
+      }
+      throw e;
     }
-
-    await this.assertProjectAccess(ingress.project.id, user.id, ingress.project.organizationId);
 
     // Read the actual K8s ingress to get all routes
     let k8sRoutes: Array<{ path: string; serviceName: string; servicePort: number }> = [];
@@ -3397,8 +3482,8 @@ export class ProjectsService {
       throw new NotFoundException('User not found');
     }
 
-    const ingress = await this.prisma.ingress.findUnique({
-      where: { id: ingressId },
+    const ingress = await this.prisma.ingress.findFirst({
+      where: { id: ingressId, projectId },
       include: {
         project: {
           include: {
@@ -3414,12 +3499,8 @@ export class ProjectsService {
       },
     });
 
-    if (!ingress) {
-      throw new NotFoundException(`Ingress ${ingressId} not found`);
-    }
-
-    if (ingress.projectId !== projectId) {
-      throw new BadRequestException('Ingress does not belong to this project');
+    if (!ingress || !ingress.project) {
+      throw new NotFoundException('Ingress not found');
     }
 
     const project = ingress.project;
@@ -3591,8 +3672,8 @@ export class ProjectsService {
       throw new NotFoundException('User not found');
     }
 
-    const ingress = await this.prisma.ingress.findUnique({
-      where: { id: ingressId },
+    const ingress = await this.prisma.ingress.findFirst({
+      where: { id: ingressId, deploymentId },
       include: {
         deployment: {
           include: {
@@ -3606,12 +3687,8 @@ export class ProjectsService {
       },
     });
 
-    if (!ingress) {
-      throw new NotFoundException(`Ingress ${ingressId} not found`);
-    }
-
-    if (ingress.deploymentId !== deploymentId) {
-      throw new BadRequestException('Ingress does not belong to deployment');
+    if (!ingress || !ingress.deployment) {
+      throw new NotFoundException('Ingress not found');
     }
 
     await this.authz.requireProjectEdit(ingress.deployment.project.id, user.id, 'manage ingress resources');
@@ -3684,8 +3761,8 @@ export class ProjectsService {
       throw new NotFoundException('User not found');
     }
 
-    const ingress = await this.prisma.ingress.findUnique({
-      where: { id: ingressId },
+    const ingress = await this.prisma.ingress.findFirst({
+      where: { id: ingressId, projectId },
       include: {
         project: {
           include: {
@@ -3695,12 +3772,8 @@ export class ProjectsService {
       },
     });
 
-    if (!ingress) {
-      throw new NotFoundException(`Ingress ${ingressId} not found`);
-    }
-
-    if (ingress.projectId !== projectId) {
-      throw new BadRequestException('Ingress does not belong to project');
+    if (!ingress || !ingress.project) {
+      throw new NotFoundException('Ingress not found');
     }
 
     await this.authz.requireProjectEdit(ingress.project.id, user.id, 'manage ingress resources');
@@ -3810,8 +3883,8 @@ export class ProjectsService {
       throw new NotFoundException('User not found');
     }
 
-    const ingress = await this.prisma.ingress.findUnique({
-      where: { id: ingressId },
+    const ingress = await this.prisma.ingress.findFirst({
+      where: { id: ingressId, deploymentId },
       include: {
         deployment: {
           include: {
@@ -3831,12 +3904,8 @@ export class ProjectsService {
       },
     });
 
-    if (!ingress) {
-      throw new NotFoundException(`Ingress ${ingressId} not found`);
-    }
-
-    if (ingress.deploymentId !== deploymentId) {
-      throw new BadRequestException('Ingress does not belong to deployment');
+    if (!ingress || !ingress.deployment) {
+      throw new NotFoundException('Ingress not found');
     }
 
     const deployment = ingress.deployment;
@@ -4314,20 +4383,24 @@ export class ProjectsService {
       project.deployments.map(async (deployment) => {
         const computedStatus = await this.computeDeploymentStatus(deployment);
 
-        return {
+        const merged = {
           ...deployment,
           status: computedStatus,
         };
+        return access.canEdit ? merged : this.scrubDeploymentForViewer(merged);
       })
     );
 
     const icon = project.icon ?? (await this.resolveProjectIconFallback(project.deployments));
     const membersWithOrgRole = await this.attachOrgRoleToMembers(project.organizationId, project.members);
+    const safeMembers = access.canEdit
+      ? membersWithOrgRole
+      : this.scrubMembersForViewer(membersWithOrgRole as any);
 
     return {
       ...project,
       icon,
-      members: membersWithOrgRole,
+      members: safeMembers,
       deployments: deploymentsWithComputedStatus,
       currentUserRole: {
         orgRole: access.orgRole,
@@ -4887,7 +4960,7 @@ export class ProjectsService {
       select: { id: true, slug: true, name: true },
     });
     if (!organization) {
-      throw new NotFoundException(`Organization ${orgSlug} not found`);
+      throw new NotFoundException('Project not found');
     }
 
     const project = await this.prisma.project.findUnique({
@@ -4980,12 +5053,20 @@ export class ProjectsService {
     });
 
     if (!project) {
-      throw new NotFoundException(`Project ${projectSlug} not found`);
+      throw new NotFoundException('Project not found');
     }
 
-    const { access } = await this.assertProjectAccess(
-      project.id, user.id, project.organizationId,
-    );
+    let access;
+    try {
+      ({ access } = await this.assertProjectAccess(
+        project.id, user.id, project.organizationId,
+      ));
+    } catch (e) {
+      if (e instanceof NotFoundException) {
+        throw new NotFoundException('Project not found');
+      }
+      throw e;
+    }
 
     // Batch-fetch pods for every deployment by namespace: one listNamespacedPod
     // call per unique namespace, grouped by `app` label. Replaces N+1 K8s reads.
@@ -5015,7 +5096,8 @@ export class ProjectsService {
             ? undefined
             : (nsMap.get(deployment.name) ?? { pods: [], warnings: [] });
         const computedStatus = await this.computeDeploymentStatus(deployment, prefetched);
-        return { ...deployment, status: computedStatus };
+        const merged = { ...deployment, status: computedStatus };
+        return access.canEdit ? merged : this.scrubDeploymentForViewer(merged as any);
       }),
     );
 
@@ -5047,13 +5129,19 @@ export class ProjectsService {
 
     const icon = project.icon ?? (await this.resolveProjectIconFallback(project.deployments));
     const membersWithOrgRole = await this.attachOrgRoleToMembers(project.organizationId, project.members);
+    const safeMembers = access.canEdit
+      ? membersWithOrgRole
+      : this.scrubMembersForViewer(membersWithOrgRole as any);
+    const safeDatabases = access.canEdit
+      ? reconciledDatabases
+      : (reconciledDatabases as any[]).map((d) => this.redactDatabaseForViewer(d));
 
     return {
       ...project,
       icon,
-      members: membersWithOrgRole,
+      members: safeMembers,
       deployments: deploymentsWithComputedStatus,
-      databases: reconciledDatabases,
+      databases: safeDatabases,
       currentUserRole: {
         orgRole: access.orgRole,
         projectRole: access.projectRoleName,
@@ -5098,10 +5186,17 @@ export class ProjectsService {
     });
 
     return Promise.all(
-      projects.map(async (p) => ({
-        ...p,
-        icon: p.icon ?? (await this.resolveProjectIconFallback(p.deployments)),
-      }))
+      projects.map(async (p) => {
+        const access = await this.authz.resolveProjectAccess(p.id, p.organization.id, userId);
+        const members = access?.canEdit
+          ? p.members
+          : this.scrubMembersForViewer(p.members as any);
+        return {
+          ...p,
+          members,
+          icon: p.icon ?? (await this.resolveProjectIconFallback(p.deployments)),
+        };
+      })
     );
   }
 
@@ -5286,7 +5381,7 @@ export class ProjectsService {
   async getProjectDeployments(projectId: string, clerkId: string, userData?: any) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
     if (!user) throw new NotFoundException('User not found');
-    await this.authz.requireProjectView(projectId, user.id);
+    const access = await this.authz.requireProjectView(projectId, user.id);
 
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
@@ -5337,19 +5432,20 @@ export class ProjectsService {
 
         const computedStatus = await this.computeDeploymentStatus(deployment);
 
-        return {
+        const merged = {
           ...deployment,
           pods,
           status: computedStatus,
           warnings,
         };
+        return access.canEdit ? merged : this.scrubDeploymentForViewer(merged as any);
       })
     );
 
     return deploymentsWithComputedStatus;
   }
 
-  async getDeployment(deploymentId: string) {
+  async getDeployment(deploymentId: string, canEdit: boolean = true, userId?: string) {
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
       include: {
@@ -5398,6 +5494,11 @@ export class ProjectsService {
 
     if (!deployment) {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    // Defense-in-depth: re-assert project-view even though the controller already did.
+    if (userId) {
+      await this.authz.requireProjectView(deployment.projectId, userId);
     }
 
     let pods: any = [];
@@ -5509,7 +5610,7 @@ export class ProjectsService {
 
     const computedStatus = await this.computeDeploymentStatus(deployment);
 
-    return {
+    const result: any = {
       ...deploymentWithInternalUrls,
       pods,
       availableReplicas,
@@ -5519,15 +5620,21 @@ export class ProjectsService {
       status: computedStatus,
       buildStatus: deployment.buildStatus,
     };
+    return canEdit ? result : this.scrubDeploymentForViewer(result);
   }
 
-  async getDeploymentPods(deploymentId: string) {
+  async getDeploymentPods(deploymentId: string, userId?: string) {
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
     });
 
     if (!deployment) {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    // Defense-in-depth: re-assert project-view even though the controller already did.
+    if (userId) {
+      await this.authz.requireProjectView(deployment.projectId, userId);
     }
 
     if (deployment.name && deployment.namespace) {
@@ -5595,11 +5702,11 @@ export class ProjectsService {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
 
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'cancel deployments');
+
     if (deployment.buildStatus !== 'building') {
       throw new BadRequestException('Deployment is not in a buildable state');
     }
-
-    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'cancel deployments');
 
     try {
       console.log(`[Projects] Cancelling build jobs for deployment ${deploymentId}`);
@@ -7826,7 +7933,7 @@ export class ProjectsService {
     return database;
   }
 
-  async getDatabase(databaseId: string) {
+  async getDatabase(databaseId: string, canEdit: boolean = true, userId?: string) {
     const database = await this.prisma.database.findUnique({
       where: { id: databaseId },
       include: {
@@ -7838,6 +7945,11 @@ export class ProjectsService {
     });
 
     if (!database) throw new NotFoundException('Database not found');
+
+    // Defense-in-depth: re-assert project-view even though the controller already did.
+    if (userId) {
+      await this.authz.requireProjectView(database.projectId, userId);
+    }
 
     let liveStatus: any;
     let pods: any[] = [];
@@ -7897,7 +8009,7 @@ export class ProjectsService {
       } catch { /* ignore */ }
     }
 
-    return {
+    const result: any = {
       ...database,
       connectionString: `postgresql://${database.dbUser}:${database.dbPassword}@${database.host}:${database.port}/${database.dbName}`,
       internalHost: `${database.host}:${database.port}`,
@@ -7907,13 +8019,22 @@ export class ProjectsService {
       backupsEnabled,
       pods,
     };
+    if (!canEdit) {
+      return this.redactDatabaseForViewer(result);
+    }
+    return result;
   }
 
-  async getDatabaseProvisioning(databaseId: string) {
+  async getDatabaseProvisioning(databaseId: string, userId?: string) {
     const database = await this.prisma.database.findUnique({
       where: { id: databaseId },
     });
     if (!database) throw new NotFoundException('Database not found');
+
+    // Defense-in-depth: re-assert project-view even though the controller already did.
+    if (userId) {
+      await this.authz.requireProjectView(database.projectId, userId);
+    }
 
     // Container-mode and external databases don't go through the CNPG step list.
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
@@ -8073,8 +8194,12 @@ export class ProjectsService {
     };
   }
 
-  async getProjectDatabases(projectId: string) {
-    return this.prisma.database.findMany({
+  async getProjectDatabases(projectId: string, canEdit: boolean = true, userId?: string) {
+    // Defense-in-depth: re-assert project-view even though the controller already did.
+    if (userId) {
+      await this.authz.requireProjectView(projectId, userId);
+    }
+    const databases = await this.prisma.database.findMany({
       where: { projectId },
       include: {
         creator: {
@@ -8083,6 +8208,10 @@ export class ProjectsService {
       },
       orderBy: { createdAt: 'desc' },
     });
+    if (!canEdit) {
+      return databases.map((d) => this.redactDatabaseForViewer(d as any));
+    }
+    return databases;
   }
 
   async deleteDatabase(
@@ -8150,6 +8279,41 @@ export class ProjectsService {
     return { user, database };
   }
 
+  /**
+   * View-level access guard that still returns the FULL database row (with project + org).
+   * Use for read-only DB endpoints (settings, backup schedule, list backups, extensions list).
+   * Returns `access` so callers can branch on `canEdit` for secret redaction.
+   */
+  private async assertDatabaseEditorOrViewer(
+    databaseId: string,
+    clerkId: string,
+    userData?: any,
+    opts: { allowViewer?: boolean } = {},
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+
+    const database = await this.prisma.database.findUnique({
+      where: { id: databaseId },
+      include: { project: { include: { organization: true } } },
+    });
+    if (!database) throw new NotFoundException('Database not found');
+
+    const access = await this.authz.resolveProjectAccess(
+      database.project.id,
+      database.project.organizationId,
+      user.id,
+    );
+    if (!access || !access.canView) {
+      throw new NotFoundException(`Database ${databaseId} not found`);
+    }
+    if (!opts.allowViewer && !access.canEdit) {
+      // Surface the same forbidden semantics requireProjectEdit would.
+      await this.authz.requireProjectEdit(database.project.id, user.id, 'manage database');
+    }
+    return { user, database, access };
+  }
+
   private async getOrgR2Config(organizationId: string) {
     const org = await this.prisma.organization.findUnique({ where: { id: organizationId } });
     if (!org?.backupR2Endpoint || !org?.backupR2Bucket || !org?.backupR2AccessKey || !org?.backupR2SecretKey) {
@@ -8159,7 +8323,7 @@ export class ProjectsService {
   }
 
   async listDatabaseBackups(databaseId: string, clerkId: string, userData?: any) {
-    const { database } = await this.assertDatabaseEditor(databaseId, clerkId, userData);
+    const { database } = await this.assertDatabaseEditorOrViewer(databaseId, clerkId, userData, { allowViewer: true });
     const records = await this.prisma.databaseBackup.findMany({
       where: { databaseId: database.id },
       orderBy: { createdAt: 'desc' },
@@ -8334,7 +8498,7 @@ export class ProjectsService {
   }
 
   async getBackupSchedule(databaseId: string, clerkId: string, userData?: any) {
-    const { database } = await this.assertDatabaseEditor(databaseId, clerkId, userData);
+    const { database } = await this.assertDatabaseEditorOrViewer(databaseId, clerkId, userData, { allowViewer: true });
     return { cron: database.backupScheduleCron || null };
   }
 
@@ -8473,7 +8637,7 @@ export class ProjectsService {
   // ── Extensions ──
 
   async listDatabaseExtensions(databaseId: string, clerkId: string, userData?: any) {
-    const { database } = await this.assertDatabaseEditor(databaseId, clerkId, userData);
+    const { database } = await this.assertDatabaseEditorOrViewer(databaseId, clerkId, userData, { allowViewer: true });
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
       return { extensions: [], sharedPreloadLibraries: [] };
     }
@@ -8560,10 +8724,11 @@ export class ProjectsService {
   // ── Settings ──
 
   async getDatabaseSettings(databaseId: string, clerkId: string, userData?: any) {
-    const { database } = await this.assertDatabaseEditor(databaseId, clerkId, userData);
+    const { database } = await this.assertDatabaseEditorOrViewer(databaseId, clerkId, userData, { allowViewer: true });
     if (database.mode !== 'cnpg') {
       return { parameters: {}, sharedPreloadLibraries: [] };
     }
+    // Settings (pg_parameters / shared_preload_libs) are not credentials, no extra redaction needed.
     return {
       parameters: (database.pgParameters as Record<string, string> | null) || {},
       sharedPreloadLibraries: (database.sharedPreloadLibs as string[] | null) || [],
@@ -8744,8 +8909,12 @@ export class ProjectsService {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
     if (!user) throw new NotFoundException('User not found');
 
-    const port = await this.prisma.servicePort.findUnique({
-      where: { id: portId },
+    const port = await this.prisma.servicePort.findFirst({
+      where: {
+        id: portId,
+        serviceId,
+        service: { deploymentId },
+      },
       include: {
         service: {
           include: {
@@ -8756,9 +8925,9 @@ export class ProjectsService {
         },
       },
     });
-    if (!port) throw new NotFoundException('Port not found');
-    if (port.serviceId !== serviceId) throw new BadRequestException('Port does not belong to service');
-    if (port.service.deploymentId !== deploymentId) throw new BadRequestException('Service does not belong to deployment');
+    if (!port || !port.service || !port.service.deployment) {
+      throw new NotFoundException('Port not found');
+    }
 
     const deployment = port.service.deployment;
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update services');

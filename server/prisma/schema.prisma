@@ -44,6 +44,7 @@ model User {
   apiTokens                    ApiToken[]
   createdTemplateInstances     TemplateInstance[]        @relation("TemplateInstanceCreator")
   triggeredBuilds              ImageHistory[]
+  createdWebhookTokens         DeploymentWebhookToken[] @relation("WebhookTokenCreator")
   tailscaleConnection          TailscaleConnection?
 
   @@map("users")
@@ -498,14 +499,16 @@ model ImageHistory {
 }
 
 model DeploymentWebhookToken {
-  id           String    @id @default(uuid()) @db.Uuid
-  deploymentId String    @map("deployment_id") @db.Uuid
-  token        String    @unique @db.VarChar(128)
-  label        String?   @db.VarChar(100)
-  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
-  lastUsedAt   DateTime? @map("last_used_at") @db.Timestamp(6)
+  id                String    @id @default(uuid()) @db.Uuid
+  deploymentId      String    @map("deployment_id") @db.Uuid
+  token             String    @unique @db.VarChar(128)
+  label             String?   @db.VarChar(100)
+  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  lastUsedAt        DateTime? @map("last_used_at") @db.Timestamp(6)
+  createdByUserId   String?   @map("created_by_user_id") @db.Uuid
 
-  deployment Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  deployment   Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  createdByUser User?     @relation("WebhookTokenCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
 
   @@index([deploymentId], map: "idx_webhook_tokens_deployment")
   @@map("deployment_webhook_tokens")

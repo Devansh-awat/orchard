@@ -3,6 +3,8 @@ import {
   NotFoundException,
   ConflictException,
   BadRequestException,
+  HttpException,
+  HttpStatus,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
@@ -11,8 +13,16 @@ import { AuditService } from '../audit/audit.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import * as crypto from 'crypto';
 
+const WEBHOOK_RATE_WINDOW_MS = 60_000;
+const WEBHOOK_RATE_MAX = 30;
+
 @Injectable()
 export class WebhooksService {
+  private readonly triggerBuckets = new Map<
+    string,
+    { count: number; windowStart: number }
+  >();
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly kubernetesService: KubernetesService,
@@ -20,6 +30,32 @@ export class WebhooksService {
     private readonly audit: AuditService,
     private readonly authz: AuthorizationService,
   ) {}
+
+  private enforceTriggerRateLimit(tokenId: string): void {
+    const now = Date.now();
+    const bucket = this.triggerBuckets.get(tokenId);
+
+    if (!bucket || now - bucket.windowStart > WEBHOOK_RATE_WINDOW_MS) {
+      this.triggerBuckets.set(tokenId, { count: 1, windowStart: now });
+      return;
+    }
+
+    if (bucket.count >= WEBHOOK_RATE_MAX) {
+      const retryAfter = Math.ceil(
+        (bucket.windowStart + WEBHOOK_RATE_WINDOW_MS - now) / 1000,
+      );
+      throw new HttpException(
+        {
+          statusCode: HttpStatus.TOO_MANY_REQUESTS,
+          message: `Webhook rate limit exceeded (${WEBHOOK_RATE_MAX}/min). Try again in ${retryAfter}s.`,
+          retryAfter,
+        },
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
+    bucket.count += 1;
+  }
 
   async createWebhookToken(
     deploymentId: string,
@@ -46,6 +82,7 @@ export class WebhooksService {
         deploymentId,
         token,
         label: label || null,
+        createdByUserId: user.id,
       },
     });
 
@@ -147,12 +184,14 @@ export class WebhooksService {
   ) {
     const tokenRecord = await this.prisma.deploymentWebhookToken.findUnique({
       where: { token: rawToken },
-      include: { deployment: true },
+      include: { deployment: { include: { project: true } } },
     });
 
     if (!tokenRecord) {
       throw new NotFoundException('Invalid webhook token');
     }
+
+    this.enforceTriggerRateLimit(tokenRecord.id);
 
     // Update lastUsedAt (fire and forget)
     this.prisma.deploymentWebhookToken
@@ -163,8 +202,35 @@ export class WebhooksService {
       .catch(() => {});
 
     const deployment = tokenRecord.deployment;
+    const organizationId = deployment.project.organizationId;
+    const projectId = deployment.projectId;
+
+    const writeAudit = (
+      outcome: 'success' | 'failure',
+      action: string,
+      extra?: Record<string, string | number | boolean | null>,
+    ) => {
+      void this.audit.log({
+        action: 'deployment.webhook_triggered',
+        actorUserId: tokenRecord.createdByUserId ?? null,
+        organizationId,
+        projectId,
+        deploymentId: deployment.id,
+        targetType: 'webhook_token',
+        targetId: tokenRecord.id,
+        targetLabel: tokenRecord.label ?? tokenRecord.id,
+        metadata: {
+          outcome,
+          action,
+          image: image ?? null,
+          tag: tag ?? null,
+          ...(extra ?? {}),
+        },
+      });
+    };
 
     if (['building', 'deploying'].includes(deployment.status)) {
+      writeAudit('failure', 'rejected', { reason: 'building' });
       throw new ConflictException(
         'Deployment is currently building, try again later',
       );
@@ -172,6 +238,7 @@ export class WebhooksService {
 
     // Only allow image/tag updates for docker image deployments (not GitHub-based)
     if ((image || tag) && deployment.githubRepo) {
+      writeAudit('failure', 'rejected', { reason: 'github_repo_image_update' });
       throw new BadRequestException(
         'Image updates via webhook are only supported for Docker image deployments. Use the rebuild endpoint for GitHub-based deployments.',
       );
@@ -183,11 +250,18 @@ export class WebhooksService {
       const resolvedTag = tag ?? 'latest';
       const fullImage = `${baseImage}:${resolvedTag}`;
 
-      await this.kubernetesService.updateDeploymentImage(
-        deployment.name,
-        deployment.namespace,
-        fullImage,
-      );
+      try {
+        await this.kubernetesService.updateDeploymentImage(
+          deployment.name,
+          deployment.namespace,
+          fullImage,
+        );
+      } catch (err) {
+        writeAudit('failure', 'image-update', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        throw err;
+      }
 
       // Update DB
       await this.prisma.deployment.update({
@@ -226,17 +300,26 @@ export class WebhooksService {
         }
       });
 
+      writeAudit('success', 'image-update', { fullImage });
       return {
         ok: true,
         deploymentId: deployment.id,
         action: 'image-update',
       };
     } else {
-      await this.kubernetesService.restartDeployment(
-        deployment.name,
-        deployment.namespace,
-      );
+      try {
+        await this.kubernetesService.restartDeployment(
+          deployment.name,
+          deployment.namespace,
+        );
+      } catch (err) {
+        writeAudit('failure', 'restart', {
+          error: err instanceof Error ? err.message : String(err),
+        });
+        throw err;
+      }
 
+      writeAudit('success', 'restart');
       return {
         ok: true,
         deploymentId: deployment.id,

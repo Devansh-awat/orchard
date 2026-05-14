@@ -482,11 +482,13 @@ export class PasswordlessController {
       ? `${user.firstName}${user.lastName ? ` ${user.lastName}` : ''}`
       : user.username;
 
+    // Carry the originating session id so the MCP fetch path stays revocable.
     const token = await this.oauthService.generateSessionTokenForUser(
       user.id,
       user.email,
       displayName,
       req.user.authMethod || 'otp',
+      req.user.sessionId,
     );
 
     res.status(200).json({ token });

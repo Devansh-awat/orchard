@@ -58,7 +58,7 @@ async function bootstrap() {
 
   // Attach WebSocket terminal handler to the underlying HTTP server
   const httpServer = app.getHttpServer();
-  attachTerminalWebSocket(httpServer);
+  attachTerminalWebSocket(httpServer, app);
 
   console.log(`Server running on http://localhost:${port}`);
   console.log(`Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);

@@ -214,7 +214,10 @@ export class PrismaEventsBridge implements OnModuleInit {
     // Invalidate membership cache for affected user(s)
     const userId = result?.userId ?? params?.args?.where?.userId ?? params?.args?.data?.userId;
     const orgId = result?.organizationId ?? params?.args?.where?.organizationId ?? params?.args?.data?.organizationId;
-    if (userId) this.membershipCache.invalidateUser(userId);
+    // `userId` here is the internal UUID (OrganizationMember.userId FK), but cache
+    // keys can be the JWT sub (= HackClub ID for OAuth users). Use the internal-id
+    // walker so HackClub-ID-keyed entries get dropped too.
+    if (userId) this.membershipCache.invalidateInternalUserId(userId);
     else if (orgId) this.membershipCache.invalidateOrg(orgId);
     else this.membershipCache.invalidateAll();
     if (orgId) this.orgEvents.emit({ organizationId: orgId, type: 'membership.changed', id: userId });

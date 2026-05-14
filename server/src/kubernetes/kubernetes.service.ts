@@ -4540,9 +4540,17 @@ export class KubernetesService {
   }
 
   async createPostgresDatabase(dbName: string, dbUser: string, dbPassword: string): Promise<void> {
+    // Defense-in-depth: identifiers are produced via formatSlug, but reject anything
+    // that isn't a safe lowercase pg identifier before it ever lands in interpolated SQL.
+    const SAFE_PG_IDENT = /^[a-z][a-z0-9_]{0,62}$/;
+    if (!SAFE_PG_IDENT.test(dbUser)) throw new Error(`Refusing unsafe pg identifier: ${dbUser}`);
+    if (!SAFE_PG_IDENT.test(dbName)) throw new Error(`Refusing unsafe pg identifier: ${dbName}`);
+
     console.log(`[K8s/PG] Creating database "${dbName}" with user "${dbUser}"`);
 
     // Create the role
+    // NOTE: passwords are generated via crypto random hex upstream, so they cannot contain
+    // a single quote; the .replace below is still applied as belt-and-braces.
     await this.execPsql(
       `DO $$ BEGIN IF NOT EXISTS (SELECT FROM pg_roles WHERE rolname = '${dbUser}') THEN CREATE ROLE "${dbUser}" LOGIN PASSWORD '${dbPassword.replace(/'/g, "''")}'; END IF; END $$;`
     );
@@ -4566,6 +4574,11 @@ export class KubernetesService {
   }
 
   async deletePostgresDatabase(dbName: string, dbUser: string): Promise<void> {
+    // Defense-in-depth: same identifier whitelist as createPostgresDatabase.
+    const SAFE_PG_IDENT = /^[a-z][a-z0-9_]{0,62}$/;
+    if (!SAFE_PG_IDENT.test(dbUser)) throw new Error(`Refusing unsafe pg identifier: ${dbUser}`);
+    if (!SAFE_PG_IDENT.test(dbName)) throw new Error(`Refusing unsafe pg identifier: ${dbName}`);
+
     console.log(`[K8s/PG] Deleting database "${dbName}" and user "${dbUser}"`);
 
     // Terminate existing connections
@@ -4592,6 +4605,8 @@ export class KubernetesService {
   }
 
   async getPostgresDatabaseStatus(dbName: string): Promise<{ exists: boolean; size?: string; connections?: number }> {
+    const SAFE_PG_IDENT = /^[a-z][a-z0-9_]{0,62}$/;
+    if (!SAFE_PG_IDENT.test(dbName)) throw new Error(`Refusing unsafe pg identifier: ${dbName}`);
     try {
       const sizeResult = await this.execPsql(
         `SELECT pg_size_pretty(pg_database_size('${dbName}'));`

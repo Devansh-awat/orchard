@@ -71,6 +71,15 @@ export class AuthorizationService {
 
   async getOrgAccess(organizationId: string, userId: string): Promise<OrgAccess | null> {
     if (await this.isSuperAdmin(userId)) {
+      // Confirm the org actually exists. Without this, superadmins probing a
+      // random UUID got a synthetic owner membership and downstream endpoints
+      // returned inconsistent shapes (empty list vs 404), which is both a
+      // fuzzing oracle and a foot-gun for write endpoints keyed on the bogus id.
+      const exists = await this.prisma.organization.findUnique({
+        where: { id: organizationId },
+        select: { id: true },
+      });
+      if (!exists) return null;
       return { organizationId, role: 'owner', isAdmin: true };
     }
     const member = await this.prisma.organizationMember.findUnique({
@@ -89,7 +98,7 @@ export class AuthorizationService {
   async requireOrgMember(organizationId: string, userId: string): Promise<OrgAccess> {
     const access = await this.getOrgAccess(organizationId, userId);
     if (!access) {
-      throw new NotFoundException(`Organization ${organizationId} not found`);
+      throw new NotFoundException('Organization not found');
     }
     return access;
   }
@@ -282,7 +291,7 @@ export class AuthorizationService {
       select: { role: true },
     });
     if (!member) {
-      throw new NotFoundException(`Organization ${organizationId} not found`);
+      throw new NotFoundException('Organization not found');
     }
     if (member.role === 'owner' || member.role === 'admin') return null;
 

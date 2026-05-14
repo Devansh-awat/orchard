@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrganizationRole } from '@prisma/client';
 import { UsersService } from '../users/users.service';
@@ -7,10 +7,13 @@ import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
+import { TailscaleService } from '../tailscale/tailscale.service';
 import { randomBytes } from 'crypto';
 
 @Injectable()
 export class OrganizationsService {
+  private readonly logger = new Logger(OrganizationsService.name);
+
   constructor(
     private readonly prisma: PrismaService,
     private readonly usersService: UsersService,
@@ -18,6 +21,7 @@ export class OrganizationsService {
     private readonly audit: AuditService,
     private readonly authz: AuthorizationService,
     private readonly membershipCache: MembershipCacheService,
+    private readonly tailscale: TailscaleService,
   ) {}
 
   async checkPermission(organizationId: string, userId: string, requiredRole: 'owner' | 'admin') {
@@ -249,9 +253,16 @@ export class OrganizationsService {
       select: { id: true },
     });
     if (!orgRow) {
-      throw new NotFoundException(`Organization with slug ${slug} not found`);
+      throw new NotFoundException('Organization not found');
     }
-    const access = await this.authz.requireOrgMember(orgRow.id, userId);
+    try {
+      await this.authz.requireOrgMember(orgRow.id, userId);
+    } catch (e) {
+      if (e instanceof NotFoundException) {
+        throw new NotFoundException('Organization not found');
+      }
+      throw e;
+    }
     const visibleProjectIds = await this.authz.listVisibleProjectIds(orgRow.id, userId);
     const organization = await this.prisma.organization.findUnique({
       where: { slug },
@@ -1033,7 +1044,11 @@ export class OrganizationsService {
       throw new NotFoundException('Invitation not found');
     }
 
-    await this.checkPermission(invitation.organizationId, user.id, 'admin');
+    try {
+      await this.checkPermission(invitation.organizationId, user.id, 'admin');
+    } catch {
+      throw new NotFoundException('Invitation not found');
+    }
 
     await this.prisma.organizationInvitation.delete({ where: { id: invitationId } });
 
@@ -1077,11 +1092,15 @@ export class OrganizationsService {
       throw new NotFoundException('Invitation not found');
     }
 
+    try {
+      await this.checkPermission(invitation.organizationId, user.id, 'admin');
+    } catch {
+      throw new NotFoundException('Invitation not found');
+    }
+
     if (invitation.expiresAt < new Date()) {
       throw new BadRequestException('Invitation has expired');
     }
-
-    await this.checkPermission(invitation.organizationId, user.id, 'admin');
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const inviterName = invitation.inviter.firstName && invitation.inviter.lastName
@@ -1133,6 +1152,29 @@ export class OrganizationsService {
     // to prevent stale ProjectMember rows from reactivating if the user is later
     // re-invited (e.g. as a guest — they'd inherit their old project admin roles).
     await this.prisma.$transaction(async (tx) => {
+      const adminProjects = await tx.projectMember.findMany({
+        where: {
+          userId: member.userId,
+          project: { organizationId },
+          role: { name: 'admin' },
+        },
+        select: { projectId: true, project: { select: { name: true } } },
+      });
+      for (const ap of adminProjects) {
+        const otherAdmins = await tx.projectMember.count({
+          where: {
+            projectId: ap.projectId,
+            role: { name: 'admin' },
+            NOT: { userId: member.userId },
+          },
+        });
+        if (otherAdmins === 0) {
+          throw new ConflictException(
+            `Cannot remove this member: they are the sole admin of project "${ap.project.name}". Promote another admin first.`,
+          );
+        }
+      }
+
       await tx.projectMember.deleteMany({
         where: {
           userId: member.userId,
@@ -1145,6 +1187,52 @@ export class OrganizationsService {
     });
 
     this.membershipCache.invalidateInternalUserId(member.userId);
+
+    // H4: revoke Tailscale exposure for deployments this user exposed in THIS org.
+    // We do NOT delete their global TailscaleConnection (they may still belong to other orgs).
+    // Best-effort: failures to remove the k8s sidecar must not block membership removal.
+    try {
+      const exposed = await this.prisma.deployment.findMany({
+        where: {
+          tailscaleExposedBy: member.userId,
+          tailscaleExposed: true,
+          project: { organizationId },
+        },
+        select: { id: true, name: true, namespace: true },
+      });
+
+      for (const dep of exposed) {
+        try {
+          await this.tailscale.cleanupDeployment({
+            id: dep.id,
+            name: dep.name,
+            namespace: dep.namespace,
+            tailscaleExposed: true,
+          });
+        } catch (err: any) {
+          this.logger.warn(
+            `H4: failed to remove tailscale sidecar for deployment ${dep.name} in ${dep.namespace}: ${err?.message ?? err}`,
+          );
+        }
+      }
+
+      if (exposed.length > 0) {
+        await this.prisma.deployment.updateMany({
+          where: {
+            id: { in: exposed.map((d) => d.id) },
+          },
+          data: {
+            tailscaleExposed: false,
+            tailscaleHostname: null,
+            tailscaleExposedBy: null,
+          },
+        });
+      }
+    } catch (err: any) {
+      this.logger.warn(
+        `H4: tailscale cleanup on member removal failed (user=${member.userId} org=${organizationId}): ${err?.message ?? err}`,
+      );
+    }
 
     void this.audit.log({
       action: 'org.member.removed',
@@ -1212,8 +1300,6 @@ export class OrganizationsService {
       }
     }
 
-    this.membershipCache.invalidateInternalUserId(member.userId);
-
     const updated = await this.prisma.organizationMember.update({
       where: { id: memberId },
       data: { role: newRole },
@@ -1230,6 +1316,11 @@ export class OrganizationsService {
         }
       }
     });
+
+    // Invalidate AFTER the write commits. Pre-write invalidation races: a concurrent
+    // request can read the OLD role from DB and repopulate the cache during the
+    // update window, leaving the user with their previous role for up to the TTL.
+    this.membershipCache.invalidateInternalUserId(member.userId);
 
     void this.audit.log({
       action: 'org.member.role_changed',

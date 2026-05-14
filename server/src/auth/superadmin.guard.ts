@@ -4,7 +4,7 @@ import { jwtVerify } from 'jose';
 import { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionsService } from './sessions.service';
-import { IS_PUBLIC_KEY, REQUIRES_AUTH_KEY } from './decorators';
+import { IS_PUBLIC_KEY, REQUIRES_AUTH_KEY, REQUIRES_SUPERADMIN_KEY } from './decorators';
 
 @Injectable()
 export class SuperAdminGuard implements CanActivate {
@@ -79,16 +79,20 @@ export class SuperAdminGuard implements CanActivate {
         }
       }
 
-      // Validate session if sessionId is present in the token
+      // Require a sessionId so that revocation actually kills the token.
+      // Pre-fix, JWTs without sessionId survived "Sign out everywhere" for the
+      // full 7-day expiry. Every issuance path now mints with a session id;
+      // any token lacking one is either pre-fix legacy or a forgery — reject.
       const sessionId = payload.sessionId as string | undefined;
-      if (sessionId) {
-        const sessionValid = await this.sessionsService.validateSession(sessionId);
-        if (!sessionValid) {
-          throw new UnauthorizedException('Session has been revoked');
-        }
-        // Touch session in background
-        this.sessionsService.touchSession(sessionId).catch(() => {});
+      if (!sessionId) {
+        throw new UnauthorizedException('Session has been revoked');
       }
+      const sessionValid = await this.sessionsService.validateSession(sessionId);
+      if (!sessionValid) {
+        throw new UnauthorizedException('Session has been revoked');
+      }
+      // Touch session in background
+      this.sessionsService.touchSession(sessionId).catch(() => {});
 
       request['auth'] = { userId: dbUserId };
       request['user'] = {
@@ -135,12 +139,20 @@ export class SuperAdminGuard implements CanActivate {
       }).catch(() => {});
     }
 
-    // Check @Auth() — JWT verified, no superadmin check needed
-    if (requiresAuth) {
+    // Explicit @SuperAdmin() forces the superadmin check even if @Auth() is also present.
+    // This makes superadmin-gated controllers self-documenting and resistant to a future
+    // maintainer adding @Auth() and accidentally opening the surface.
+    const requiresSuperadmin = this.reflector.getAllAndOverride<boolean>(REQUIRES_SUPERADMIN_KEY, [
+      context.getHandler(),
+      context.getClass(),
+    ]);
+
+    // Check @Auth() — JWT verified, no superadmin check needed (unless @SuperAdmin() overrides)
+    if (requiresAuth && !requiresSuperadmin) {
       return true;
     }
 
-    // Default: require superadmin
+    // Default (no decorator) OR explicit @SuperAdmin(): require superadmin
     const userId = request['user'].sub as string;
     const user = await this.prisma.user.findFirst({
       where: {

@@ -10,7 +10,9 @@ import {
   Req,
 } from '@nestjs/common';
 import { AdminService } from './admin.service';
+import { SuperAdmin } from '../auth/decorators';
 
+@SuperAdmin()
 @Controller('admin')
 export class AdminController {
   constructor(private readonly adminService: AdminService) {}
