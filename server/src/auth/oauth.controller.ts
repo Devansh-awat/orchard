@@ -23,14 +23,18 @@ export class OAuthController {
    * Check if a user has access to the platform (member of any org or has pending invitations).
    * SuperAdmins always have access.
    */
-  private async hasPrivateBetaAccess(userId: string, email: string): Promise<boolean> {
-    const dbUser = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (dbUser?.isSuperAdmin) return true;
+  private async hasPrivateBetaAccess(
+    email: string,
+    existingUser: { id: string; isSuperAdmin: boolean } | null,
+  ): Promise<boolean> {
+    if (existingUser?.isSuperAdmin) return true;
 
-    const membership = await this.prisma.organizationMember.findFirst({
-      where: { userId },
-    });
-    if (membership) return true;
+    if (existingUser) {
+      const membership = await this.prisma.organizationMember.findFirst({
+        where: { userId: existingUser.id },
+      });
+      if (membership) return true;
+    }
 
     const invitation = await this.prisma.organizationInvitation.findFirst({
       where: {
@@ -38,9 +42,7 @@ export class OAuthController {
         expiresAt: { gt: new Date() },
       },
     });
-    if (invitation) return true;
-
-    return false;
+    return !!invitation;
   }
 
   @Get('login')
@@ -76,15 +78,27 @@ export class OAuthController {
       const accessToken = await this.oauthService.exchangeCodeForToken(code);
       const hackClubUser = await this.oauthService.getUserInfo(accessToken);
 
-      const user = await this.usersService.findOrCreateByHackClubId(hackClubUser);
+      // Private beta: check access BEFORE creating the user so rejected
+      // signups don't leave an orphan user row with zero organizations.
+      const existingUser =
+        (await this.prisma.user.findUnique({
+          where: { hackClubId: hackClubUser.id },
+        })) ??
+        (await this.prisma.user.findUnique({
+          where: { email: hackClubUser.email },
+        }));
 
-      // Private beta: reject users not invited to any organization
-      const hasAccess = await this.hasPrivateBetaAccess(user.id, user.email);
+      const hasAccess = await this.hasPrivateBetaAccess(
+        hackClubUser.email,
+        existingUser,
+      );
       if (!hasAccess) {
         return res.redirect(
           `${process.env.FRONTEND_URL || 'http://localhost:3000'}/oauth/callback?error=${encodeURIComponent('private_beta')}`
         );
       }
+
+      const user = await this.usersService.findOrCreateByHackClubId(hackClubUser);
 
       const sessionId = await this.sessionsService.createSession({
         userId: user.id,

@@ -94,14 +94,18 @@ export class PasswordlessController {
    * Check if a user has access to the platform (member of any org or has pending invitations).
    * SuperAdmins always have access.
    */
-  private async hasPrivateBetaAccess(userId: string, email: string): Promise<boolean> {
-    const dbUser = await this.prisma.user.findUnique({ where: { id: userId } });
-    if (dbUser?.isSuperAdmin) return true;
+  private async hasPrivateBetaAccess(
+    email: string,
+    existingUser: { id: string; isSuperAdmin: boolean } | null,
+  ): Promise<boolean> {
+    if (existingUser?.isSuperAdmin) return true;
 
-    const membership = await this.prisma.organizationMember.findFirst({
-      where: { userId },
-    });
-    if (membership) return true;
+    if (existingUser) {
+      const membership = await this.prisma.organizationMember.findFirst({
+        where: { userId: existingUser.id },
+      });
+      if (membership) return true;
+    }
 
     const invitation = await this.prisma.organizationInvitation.findFirst({
       where: {
@@ -109,9 +113,7 @@ export class PasswordlessController {
         expiresAt: { gt: new Date() },
       },
     });
-    if (invitation) return true;
-
-    return false;
+    return !!invitation;
   }
 
   /**
@@ -196,14 +198,22 @@ export class PasswordlessController {
       throw new HttpException('Invalid OTP code', HttpStatus.UNAUTHORIZED);
     }
 
-    // Find or create user
-    const user = await this.findOrCreateUserByEmail(result.email);
+    // Private beta: check access BEFORE creating the user so rejected
+    // signups don't leave an orphan user row with zero organizations.
+    const normalizedEmail = result.email.toLowerCase().trim();
+    const existingUser = await this.prisma.user.findUnique({
+      where: { email: normalizedEmail },
+    });
 
-    // Private beta: reject users not invited to any organization
-    const hasAccess = await this.hasPrivateBetaAccess(user.id, user.email);
+    const hasAccess = await this.hasPrivateBetaAccess(
+      normalizedEmail,
+      existingUser,
+    );
     if (!hasAccess) {
       throw new HttpException('private_beta', HttpStatus.FORBIDDEN);
     }
+
+    const user = existingUser ?? (await this.findOrCreateUserByEmail(result.email));
 
     // Create session
     const sessionId = await this.sessionsService.createSession({
