@@ -63,6 +63,8 @@
 	import { formatCpu as fmtCpuPreset, formatMemory as fmtMemoryPreset } from '$lib/presets';
 
 	import DeploymentProgress from '$lib/components/DeploymentProgress.svelte';
+	import CircleAlertIcon from '$lib/components/icons/CircleAlertIcon.svelte';
+	import TriangleAlertIcon from '$lib/components/icons/TriangleAlertIcon.svelte';
 	import AnimatedNumber from '$lib/components/AnimatedNumber.svelte';
 	import BuildSteps from '$lib/components/BuildSteps.svelte';
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
@@ -890,6 +892,83 @@
 		return `pw:${w.podName}:${w.message}:${w.timestamp ?? ''}`;
 	}
 
+	// Track which warnings have had their raw message expanded by the user.
+	let expandedWarningRaw = $state<Set<string>>(new Set());
+	function toggleWarningRaw(id: string) {
+		if (expandedWarningRaw.has(id)) expandedWarningRaw.delete(id);
+		else expandedWarningRaw.add(id);
+		expandedWarningRaw = new Set(expandedWarningRaw);
+	}
+
+	// Translate raw kubelet/controller messages into a plain-English title +
+	// hint. Returns null if we don't recognise the shape — caller falls back
+	// to showing the raw text.
+	function humanizeWarning(msg: string): { title: string; hint: string } | null {
+		const m = msg ?? '';
+		const restarts = m.match(/has restarted (\d+) time\(s\)/i);
+		if (restarts) {
+			return {
+				title: `Container restarted ${restarts[1]} time${restarts[1] === '1' ? '' : 's'}`,
+				hint: 'Kubernetes is restarting it after it exited. Frequent restarts usually mean the app is crashing on startup or being killed.'
+			};
+		}
+		if (/back-?off.*restarting failed container/i.test(m) || /crashloopbackoff/i.test(m)) {
+			return {
+				title: 'Container keeps crashing on startup',
+				hint: 'Kubernetes is waiting longer between retries (back-off). Check the pod logs for the crash reason.'
+			};
+		}
+		if (/imagepullbackoff|errimagepull|failed to pull image/i.test(m)) {
+			return {
+				title: "Couldn't pull the container image",
+				hint: 'The image name may be wrong, the tag missing, or the registry needs credentials.'
+			};
+		}
+		if (/oomkilled|out of memory/i.test(m)) {
+			return {
+				title: 'Container ran out of memory',
+				hint: 'The pod was killed for exceeding its memory limit. Raise the memory request or fix the leak.'
+			};
+		}
+		if (/liveness probe failed/i.test(m)) {
+			return {
+				title: 'Liveness check is failing',
+				hint: "Kubernetes is restarting the container because it stopped responding to its health check."
+			};
+		}
+		if (/readiness probe failed/i.test(m)) {
+			return {
+				title: 'Readiness check is failing',
+				hint: "The container is up but not ready to serve traffic yet — usually a slow boot or a failing dependency."
+			};
+		}
+		if (/failedscheduling/i.test(m) || /0\/\d+ nodes are available/i.test(m)) {
+			return {
+				title: "Couldn't place the pod on any node",
+				hint: 'No node has enough free CPU/memory, or the node selectors/taints exclude every node.'
+			};
+		}
+		if (/failedmount|failed to attach volume/i.test(m)) {
+			return {
+				title: "Couldn't mount a storage volume",
+				hint: 'The PVC may be missing, not yet bound, or attached to another node.'
+			};
+		}
+		if (/configmap.*not found|secret.*not found/i.test(m)) {
+			return {
+				title: 'A referenced config or secret is missing',
+				hint: 'The pod references a ConfigMap or Secret that does not exist in this namespace.'
+			};
+		}
+		if (/dnsconfig|dns/i.test(m) && /fail/i.test(m)) {
+			return {
+				title: 'DNS lookups inside the pod are failing',
+				hint: 'Cluster DNS is unreachable or misconfigured.'
+			};
+		}
+		return null;
+	}
+
 	const notificationCount = $derived.by(() => {
 		let n = 0;
 		if (deployment?.buildStatus === 'failed' && (deployment?.buildError || deployment?.buildLogs)) {
@@ -911,8 +990,17 @@
 	const activePodWarnings = $derived.by(() =>
 		(deployment?.warnings ?? []).filter((w) => !dismissedNotifications.has(podWarningNotifId(w)))
 	);
+	// Pod warnings escalate to "error" tone when no replicas are actually ready —
+	// at that point the deployment is hard down, not just degraded.
+	const noPodsReady = $derived(
+		(deployment?.replicas ?? 0) > 0 && (deployment?.availableReplicas ?? 0) === 0
+	);
 	const notificationSeverity = $derived<'error' | 'warning' | null>(
-		buildFailedActive ? 'error' : (activePodWarnings.length > 0 ? 'warning' : null)
+		buildFailedActive
+			? 'error'
+			: activePodWarnings.length > 0
+				? (noPodsReady ? 'error' : 'warning')
+				: null
 	);
 	const notificationLabel = $derived(
 		buildFailedActive
@@ -3453,9 +3541,9 @@
 									title="Open notifications"
 								>
 									{#if notificationSeverity === 'error'}
-										<CircleX class="h-3.5 w-3.5" />
+										<CircleAlertIcon size={14} animate={true} />
 									{:else}
-										<TriangleAlert class="h-3.5 w-3.5" />
+										<TriangleAlertIcon size={14} animate={true} />
 									{/if}
 									<span class="dep-alert-pill-label">{notificationLabel}</span>
 									{#if notificationCount > 1}
@@ -3520,19 +3608,41 @@
 											{#if deployment.warnings?.length}
 												{#each deployment.warnings as warning}
 													{@const _pwId = podWarningNotifId(warning)}
+													{@const _h = humanizeWarning(warning.message)}
+													{@const _rawOpen = expandedWarningRaw.has(_pwId)}
 													{#if !dismissedNotifications.has(_pwId)}
 														<div class="notification-item">
 															<div class="flex items-start gap-3">
-																<div class="notification-icon notification-icon-warning">
-																	<TriangleAlert size={16} class="h-4 w-4" />
+																<div class="notification-icon notification-icon-{noPodsReady ? 'error' : 'warning'}">
+																	{#if noPodsReady}
+																		<CircleAlertIcon size={16} animate={true} />
+																	{:else}
+																		<TriangleAlertIcon size={16} animate={true} />
+																	{/if}
 																</div>
 																<div class="flex-1 min-w-0">
-																	<p class="text-xs font-semibold" style="color: var(--warning-text);">Pod warning</p>
+																	<p class="text-xs font-semibold" style="color: var({noPodsReady ? '--error-text-color' : '--warning-text'});">
+																		{noPodsReady ? 'Pod error' : 'Pod warning'}
+																	</p>
 																	<p class="mt-0.5 font-mono text-xs font-medium" style="color: var(--surface-muted);">{warning.podName}</p>
-																	<p class="mt-0.5 text-xs" style="color: var(--center-channel-color); opacity: 0.75;">{warning.message}</p>
-																	{#if warning.timestamp}
-																		<p class="mt-1 text-[10px]" style="color: var(--surface-muted);">{new Date(warning.timestamp).toLocaleTimeString()}</p>
+																	{#if _h && !_rawOpen}
+																		<p class="mt-1 text-xs font-medium" style="color: var(--center-channel-color);">{_h.title}</p>
+																		<p class="mt-0.5 text-[11px]" style="color: var(--center-channel-color); opacity: 0.7;">{_h.hint}</p>
+																	{:else}
+																		<p class="mt-0.5 text-xs" style="color: var(--center-channel-color); opacity: 0.75; word-break: break-word;">{warning.message}</p>
 																	{/if}
+																	<div class="mt-1.5 flex items-center gap-2">
+																		{#if warning.timestamp}
+																			<span class="text-[10px]" style="color: var(--surface-muted);">{new Date(warning.timestamp).toLocaleTimeString()}</span>
+																		{/if}
+																		{#if _h}
+																			<button
+																				class="warning-raw-toggle"
+																				type="button"
+																				onclick={() => toggleWarningRaw(_pwId)}
+																			>{_rawOpen ? 'Hide original' : 'View original'}</button>
+																		{/if}
+																	</div>
 																</div>
 																<button
 																	class="notification-dismiss"
@@ -6173,7 +6283,19 @@
 		border: 1px solid transparent;
 		cursor: pointer;
 		transition: transform 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
-		animation: dep-alert-pulse 2.4s ease-in-out infinite;
+	}
+	/* @jis3r icons render as a sized wrapper <div>; ensure inner svg fills it
+	   so the icon doesn't visually collapse / overflow inside the pill. */
+	.dep-alert-pill :global([role="img"][aria-label]) {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+	}
+	.dep-alert-pill :global([role="img"][aria-label] > svg) {
+		width: 100%;
+		height: 100%;
+		display: block;
 	}
 	.dep-alert-pill:hover {
 		transform: translateY(-1px);
@@ -6213,13 +6335,16 @@
 	:global(:root.dark) .dep-alert-pill--warning {
 		color: #1a1208;
 	}
-	@keyframes dep-alert-pulse {
+	@keyframes dep-alert-pulse-error {
 		0%, 100% { box-shadow: 0 4px 14px -4px rgba(220, 38, 38, 0.4); }
-		50% { box-shadow: 0 4px 18px -2px rgba(220, 38, 38, 0.7); }
+		50% { box-shadow: 0 4px 20px -2px rgba(220, 38, 38, 0.8); }
 	}
-	.dep-alert-pill--warning {
-		animation: none;
+	@keyframes dep-alert-pulse-warning {
+		0%, 100% { box-shadow: 0 4px 14px -4px rgba(245, 158, 11, 0.35); }
+		50% { box-shadow: 0 4px 20px -2px rgba(245, 158, 11, 0.7); }
 	}
+	.dep-alert-pill--error { animation: dep-alert-pulse-error 2.4s ease-in-out infinite; }
+	.dep-alert-pill--warning { animation: dep-alert-pulse-warning 2.4s ease-in-out infinite; }
 
 	.dep-header-actions {
 		display: flex;
@@ -6566,6 +6691,22 @@
 	.notification-icon-warning {
 		background-color: color-mix(in srgb, var(--warning-text) 12%, transparent);
 		color: var(--warning-text);
+	}
+
+	.warning-raw-toggle {
+		font-size: 10px;
+		font-weight: 500;
+		padding: 1px 6px;
+		border-radius: 4px;
+		border: 1px solid color-mix(in srgb, var(--surface-border) 80%, transparent);
+		background: transparent;
+		color: var(--surface-muted);
+		cursor: pointer;
+		transition: background-color 0.12s, color 0.12s;
+	}
+	.warning-raw-toggle:hover {
+		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);
+		color: var(--center-channel-color);
 	}
 
 	.notification-dismiss {
