@@ -300,12 +300,129 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
     },
   );
 
+  server.registerTool(
+    'exec_in_pod',
+    {
+      description: `Run a one-shot command inside a running pod's container and return stdout/stderr. Equivalent to \`kubectl exec\`.
+Use this to:
+- Inspect files on disk (e.g. \`ls /data\`, \`cat /app/config.json\`)
+- Run health checks or quick diagnostics (e.g. \`curl -sv localhost:3000/health\`)
+- Check installed binaries or env (\`env\`, \`which node\`, \`node -v\`)
+- Tail a single file (\`tail -n 50 /var/log/app.log\`)
+
+The \`command\` arg can be a string (executed via /bin/sh -c) or a string array (exec'd directly with no shell — preferred when arguments contain special chars).
+Use \`list_pods\` first to get pod names and the namespace. If \`container\` is omitted, the first container in the pod spec is used.
+Not for long-running interactive sessions — the call times out (default 60s, max 5min).`,
+      annotations: { readOnlyHint: false, destructiveHint: true, idempotentHint: false },
+      inputSchema: {
+        podName: z.string().describe('Pod name (from list_pods)'),
+        namespace: z.string().describe('Kubernetes namespace (from list_pods or get_deployment.namespace)'),
+        command: z.union([z.string(), z.array(z.string())]).describe('Command to run. String → run via /bin/sh -c. Array → exec directly (e.g. ["ls", "-la", "/data"]).'),
+        container: z.string().optional().describe('Container name within the pod (defaults to the first container)'),
+        timeoutMs: z.number().optional().describe('Hard timeout in milliseconds (default 60000, max 300000)'),
+      },
+    },
+    async ({ podName, namespace, command, container, timeoutMs }) => {
+      const result = await client.post(`/pods/${podName}/exec`, {
+        namespace,
+        command,
+        ...(container && { container }),
+        ...(timeoutMs && { timeoutMs }),
+      });
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    'get_deployment_metrics',
+    {
+      description: `Fetch a time-series of CPU and memory usage for a deployment from the metrics backend.
+Useful for diagnosing performance issues, sizing resource requests, and answering "is this near its limits?".
+
+The result includes datapoints sampled at \`step\` ms intervals between \`start\` and \`end\` (both unix-ms). Defaults to the last hour at 30s resolution.
+
+Each series datapoint includes pod-level CPU (millicores) and memory (bytes). To get aggregate "is it near its limit" pressure, compare \`get_deployment.totalCpuUsage / (cpuRequestMilli × replicas)\` and the memory equivalent.`,
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        start: z.number().optional().describe('Window start (unix-ms). Default: end - 1h'),
+        end: z.number().optional().describe('Window end (unix-ms). Default: now'),
+        step: z.number().optional().describe('Sample step (ms). Default 30000, min 1000'),
+      },
+    },
+    async ({ deploymentId, start, end, step }) => {
+      const params = new URLSearchParams();
+      if (start) params.set('start', String(start));
+      if (end) params.set('end', String(end));
+      if (step) params.set('step', String(step));
+      const qs = params.toString();
+      const metrics = await client.get(`/deployments/${deploymentId}/metrics${qs ? `?${qs}` : ''}`);
+      return { content: [{ type: 'text', text: JSON.stringify(metrics, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    'analyze_deployment_resources',
+    {
+      description: `Snapshot the deployment's current resource pressure. Combines live aggregate CPU/memory usage with the configured per-pod requests and replica count to compute a usage ratio for each axis.
+Returns a per-deployment summary: cpu/memory current usage, request × replicas capacity, ratio, and a "near limit" flag (≥85%).
+Use this before suggesting scale-ups, or to confirm an unhealthy / OOM-looking deployment is actually starved.`,
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+      },
+    },
+    async ({ deploymentId }) => {
+      const dep = await client.get(`/deployments/${deploymentId}`);
+      const replicas = Number(dep.replicas ?? 1);
+      const cpuReq = dep.cpuRequestMilli != null ? Number(dep.cpuRequestMilli) : null;
+      const memReq = dep.memoryRequestBytes != null ? Number(dep.memoryRequestBytes) : null;
+      const cpuUsage = dep.totalCpuUsage != null ? Number(dep.totalCpuUsage) : null;
+      const memUsage = dep.totalMemoryUsage != null ? Number(dep.totalMemoryUsage) : null;
+
+      const cpuCapacity = cpuReq != null && cpuReq > 0 ? cpuReq * replicas : null;
+      const memCapacity = memReq != null && memReq > 0 ? memReq * replicas : null;
+      const cpuRatio = cpuCapacity != null && cpuUsage != null ? cpuUsage / cpuCapacity : null;
+      const memRatio = memCapacity != null && memUsage != null ? memUsage / memCapacity : null;
+      const NEAR = 0.85;
+
+      const summary = {
+        deploymentId,
+        name: dep.name,
+        replicas,
+        cpu: {
+          usageMilli: cpuUsage,
+          requestPerPodMilli: cpuReq,
+          capacityMilli: cpuCapacity,
+          ratio: cpuRatio,
+          nearLimit: cpuRatio != null && cpuRatio >= NEAR,
+          unlimited: cpuReq === 0,
+        },
+        memory: {
+          usageBytes: memUsage,
+          requestPerPodBytes: memReq,
+          capacityBytes: memCapacity,
+          ratio: memRatio,
+          nearLimit: memRatio != null && memRatio >= NEAR,
+          unlimited: memReq === 0,
+        },
+        recommendation:
+          (cpuRatio != null && cpuRatio >= NEAR) || (memRatio != null && memRatio >= NEAR)
+            ? 'Usage is near limits — consider increasing CPU/memory requests, the pod may behave unexpectedly under load.'
+            : 'Within healthy bounds.',
+      };
+      return { content: [{ type: 'text', text: JSON.stringify(summary, null, 2) }] };
+    },
+  );
+
   // ── Volumes ───────────────────────────────────────────────────────
 
   server.registerTool(
     'get_deployment_volumes',
     {
-      description: 'Get all volumes attached to a deployment',
+      description: `Get all volumes attached to a deployment, plus the deploy strategy that volumes drive.
+Volumes are returned with their full record (id, name, type, mountPath, pvcName, storageSize, hostPath, readOnly).
+The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can sanity-check that PVCs they expected are actually attached — a 0 PVC count on what should be a stateful deployment usually means the last volumes update silently dropped a row (e.g. type=pvc without pvcName).`,
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         deploymentId: z.string().describe('The deployment UUID'),
@@ -313,8 +430,22 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
     },
     async ({ deploymentId }) => {
       const deployment = await client.get(`/deployments/${deploymentId}`);
-      const volumes = deployment.volumes || [];
-      return { content: [{ type: 'text', text: JSON.stringify(volumes, null, 2) }] };
+      const volumes: any[] = Array.isArray(deployment?.volumes) ? deployment.volumes : [];
+      const pvcCount = volumes.filter((v: any) => v?.type === 'pvc').length;
+      const payload = {
+        deploymentId,
+        deploymentName: deployment?.name,
+        namespace: deployment?.namespace,
+        deployStrategy: deployment?.deployStrategy ?? null,
+        rollingDeploysDisabled: pvcCount > 0,
+        pvcCount,
+        volumeCount: volumes.length,
+        volumes,
+        note: pvcCount > 0
+          ? `This deployment has ${pvcCount} PVC volume(s); k8s update strategy is forced to Recreate so rolling deploys are disabled.`
+          : undefined,
+      };
+      return { content: [{ type: 'text', text: JSON.stringify(payload, null, 2) }] };
     },
   );
 

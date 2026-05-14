@@ -376,6 +376,7 @@ model Deployment {
   buildStatus    String     @default("none") @map("build_status") @db.VarChar(50)
   buildStep      String?    @map("build_step") @db.VarChar(50)
   buildType      BuildType  @default(dockerfile) @map("build_type")
+  deployStrategy DeploymentStrategy @default(rollingUpdate) @map("deploy_strategy")
   githubRepo     String?    @map("github_repo") @db.VarChar(500)
   githubBranch   String?    @map("github_branch") @db.VarChar(255)
   dockerfilePath String?    @map("dockerfile_path") @db.VarChar(500)
@@ -625,6 +626,13 @@ enum BuildType {
   railpack
 
   @@map("build_type")
+}
+
+enum DeploymentStrategy {
+  rollingUpdate
+  recreate
+
+  @@map("deployment_strategy")
 }
 
 model DeploymentVolume {

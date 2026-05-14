@@ -22,6 +22,36 @@ export function registerResourceTools(server: McpServer, client: OrchardClient) 
     },
   );
 
+  server.registerTool(
+    'update_project',
+    {
+      description: `Update mutable fields on an existing project. Use this to rename a project, change its description, or update its repository URL / icon / background image.
+Only the fields you pass are changed — leave the rest undefined to keep them as-is. The project's slug (URL path) is not affected by a rename.`,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        projectId: z.string().describe('The project UUID'),
+        name: z.string().optional().describe('New project name'),
+        description: z.string().nullable().optional().describe('New project description (pass null to clear)'),
+        repositoryUrl: z.string().nullable().optional().describe('New repository URL (pass null to clear)'),
+        icon: z.string().nullable().optional().describe('New icon (emoji or image URL — pass null to clear)'),
+        backgroundImage: z.string().nullable().optional().describe('New background image URL (pass null to clear)'),
+      },
+    },
+    async ({ projectId, name, description, repositoryUrl, icon, backgroundImage }) => {
+      const body: Record<string, any> = {};
+      if (name !== undefined) body.name = name;
+      if (description !== undefined) body.description = description;
+      if (repositoryUrl !== undefined) body.repositoryUrl = repositoryUrl;
+      if (icon !== undefined) body.icon = icon;
+      if (backgroundImage !== undefined) body.backgroundImage = backgroundImage;
+      if (Object.keys(body).length === 0) {
+        throw new Error('At least one field (name, description, repositoryUrl, icon, backgroundImage) must be provided');
+      }
+      const project = await client.patch(`/projects/${projectId}`, body);
+      return { content: [{ type: 'text', text: JSON.stringify(project, null, 2) }] };
+    },
+  );
+
   // ── Databases ─────────────────────────────────────────────────────
 
   server.registerTool(

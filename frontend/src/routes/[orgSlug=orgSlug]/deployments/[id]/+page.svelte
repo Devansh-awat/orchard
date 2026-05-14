@@ -582,6 +582,7 @@
 		memoryRequestBytes?: number | null;
 		totalCpuUsage?: number | null;
 		totalMemoryUsage?: number | null;
+		deployStrategy?: 'rollingUpdate' | 'recreate';
 		warnings?: Array<{ podName: string; message: string; timestamp: string }>;
 		project?: {
 			id: string;
@@ -966,6 +967,109 @@
 	let startupFailureThreshold = $state(30);
 	let savingHealthCheck = $state(false);
 	let isEditingHealthCheck = $state(false);
+
+	// Resource-utilisation warning. Compare live aggregate usage against the
+	// total guaranteed capacity (request × replicas, since requests == limits
+	// here). Skip when unlimited (request === 0) or when no live metrics have
+	// arrived yet. The user sees this in the resources tab.
+	const NEAR_LIMIT_RATIO = 0.85;
+	const resourcePressure = $derived.by(() => {
+		const replicas = deployment?.replicas ?? 1;
+		const cpuReq = deployment?.cpuRequestMilli ?? null;
+		const memReq = deployment?.memoryRequestBytes != null
+			? Number(deployment.memoryRequestBytes)
+			: null;
+		const cpuUsage = deployment?.totalCpuUsage ?? null;
+		const memUsage = deployment?.totalMemoryUsage ?? null;
+
+		const cpuRatio = cpuReq != null && cpuReq > 0 && cpuUsage != null && replicas > 0
+			? cpuUsage / (cpuReq * replicas)
+			: null;
+		const memRatio = memReq != null && memReq > 0 && memUsage != null && replicas > 0
+			? memUsage / (memReq * replicas)
+			: null;
+
+		const cpuNear = cpuRatio != null && cpuRatio >= NEAR_LIMIT_RATIO;
+		const memNear = memRatio != null && memRatio >= NEAR_LIMIT_RATIO;
+		return {
+			cpuRatio,
+			memRatio,
+			cpuNear,
+			memNear,
+			any: cpuNear || memNear,
+		};
+	});
+
+	// Deploy update strategy (RollingUpdate vs Recreate). PVC volumes force
+	// Recreate; the picker disables RollingUpdate in that case.
+	let strategyValue = $state<'rollingUpdate' | 'recreate'>('rollingUpdate');
+	let savingStrategy = $state(false);
+	const hasPvcVolume = $derived(volumes.some((v) => v.type === 'pvc'));
+
+	async function saveStrategy(next: 'rollingUpdate' | 'recreate') {
+		if (!deployment || savingStrategy || next === strategyValue) return;
+		if (hasPvcVolume && next === 'rollingUpdate') {
+			toasts.add({
+				title: 'Rolling updates unavailable',
+				description: 'Remove the PVC volume to switch back to rolling updates.',
+				color: 'warning',
+			});
+			return;
+		}
+		savingStrategy = true;
+		const previous = strategyValue;
+		strategyValue = next;
+		try {
+			const res = await apiFetch(`/apiv1/deployments/${deployment.id}/strategy`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ strategy: next }),
+			});
+			if (!res.ok) {
+				const data = await res.json().catch(() => null);
+				throw new Error(data?.message || 'Failed to update strategy');
+			}
+			toasts.add({ title: 'Strategy updated', color: 'success' });
+			await fetchDeployment();
+		} catch (e) {
+			strategyValue = previous;
+			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed', color: 'error' });
+		} finally {
+			savingStrategy = false;
+		}
+	}
+
+	// Container image edit (image-source deployments only — GitHub-built
+	// deployments rebuild from source, so a manual image change would be
+	// overwritten by the next build).
+	let imageInput = $state('');
+	let savingImage = $state(false);
+	const isImageSourceDeployment = $derived(!deployment?.githubRepo);
+	const imageDirty = $derived(
+		!!deployment && imageInput.trim() !== '' && imageInput.trim() !== (deployment.image ?? '')
+	);
+
+	async function saveImage() {
+		if (!deployment || !imageDirty) return;
+		savingImage = true;
+		try {
+			const res = await apiFetch(`/apiv1/deployments/${deployment.id}/image`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ image: imageInput.trim() }),
+			});
+			if (!res.ok) {
+				const data = await res.json().catch(() => null);
+				throw new Error(data?.message || 'Failed to update image');
+			}
+			toasts.add({ title: 'Image updated', description: 'Pods will roll to pull the new image.', color: 'success' });
+			await fetchDeployment();
+		} catch (e) {
+			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed', color: 'error' });
+		} finally {
+			savingImage = false;
+		}
+	}
 
 	// Resources (CPU/memory request). Null = inherit org default.
 	let resourceCpuMilli = $state<number | null>(null);
@@ -1734,6 +1838,17 @@
 				if (!resourcesDirty) {
 					resourceCpuMilli = data.cpuRequestMilli ?? null;
 					resourceMemoryBytes = data.memoryRequestBytes != null ? Number(data.memoryRequestBytes) : null;
+				}
+
+				// Seed image input from the deployment's current image, unless the
+				// user already has unsaved edits in flight.
+				if (!savingImage && imageInput.trim() === '') {
+					imageInput = data.image ?? '';
+				}
+
+				// Seed deploy strategy from the persisted value.
+				if (!savingStrategy) {
+					strategyValue = (data.deployStrategy as 'rollingUpdate' | 'recreate') ?? 'rollingUpdate';
 				}
 
 				// Org quota defaults are fetched lazily when the resources tab is opened.
@@ -3873,6 +3988,65 @@
 							</div>
 						</div>
 					{:else if tab.id === 'resources'}
+						{#if resourcePressure.any}
+							<div class="strategy-note resource-warning mb-4">
+								<TriangleAlert class="h-4 w-4 shrink-0" />
+								<div>
+									Usage is near this deployment's resource limits — consider assigning more
+									{#if resourcePressure.cpuNear && resourcePressure.memNear}CPU and memory{:else if resourcePressure.cpuNear}CPU{:else}memory{/if},
+									or pods might behave unexpectedly.
+									<div class="resource-warning-ratios">
+										{#if resourcePressure.cpuRatio != null}
+											CPU {Math.round(resourcePressure.cpuRatio * 100)}%
+										{/if}
+										{#if resourcePressure.cpuRatio != null && resourcePressure.memRatio != null}
+											·
+										{/if}
+										{#if resourcePressure.memRatio != null}
+											Memory {Math.round(resourcePressure.memRatio * 100)}%
+										{/if}
+									</div>
+								</div>
+							</div>
+						{/if}
+						{#if isImageSourceDeployment}
+							<div class="card rounded-2xl p-5 mb-4">
+								<div class="mb-3">
+									<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Container image</p>
+									<p class="text-xs mt-0.5" style="color: var(--surface-muted);">
+										Switch the Docker image this deployment runs. Pods will roll to pull the new image.
+									</p>
+								</div>
+								<input
+									type="text"
+									class="image-input w-full rounded-md border px-3 py-2 text-sm font-mono"
+									style="border-color: var(--surface-border); background-color: var(--control-bg); color: var(--center-channel-color);"
+									placeholder="ghcr.io/org/image:tag"
+									bind:value={imageInput}
+									disabled={savingImage}
+								/>
+								<div class="mt-3 flex items-center justify-between gap-2">
+									<p class="text-xs" style="color: var(--surface-muted);">
+										Current: <span class="font-mono" style="color: var(--center-channel-color);">{deployment?.image || '—'}</span>
+									</p>
+									<div class="flex gap-2">
+										<button
+											class="btn btn-secondary"
+											disabled={!imageDirty || savingImage}
+											onclick={() => { imageInput = deployment?.image ?? ''; }}
+										>Reset</button>
+										<button
+											class="btn btn-primary"
+											disabled={!imageDirty || savingImage}
+											onclick={saveImage}
+										>
+											{#if savingImage}<Loader2 class="h-4 w-4 animate-spin" />{/if}
+											<span>{savingImage ? 'Updating…' : 'Update image'}</span>
+										</button>
+									</div>
+								</div>
+							</div>
+						{/if}
 						<div class="card rounded-2xl p-5">
 							<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
 								<div>
@@ -3936,6 +4110,12 @@
 									<span>Add Storage</span>
 								</button>
 							</div>
+							{#if hasPvcVolume}
+								<div class="strategy-note mb-4">
+									<TriangleAlert class="h-3.5 w-3.5 shrink-0" />
+									<span>Rolling deployments are disabled because this deployment uses a PVC volume. Updates run with the <strong>Recreate</strong> strategy — pods are torn down before new ones start.</span>
+								</div>
+							{/if}
 							<div class="space-y-3">
 								{#each volumes as volume, index}
 									<div class="vol-card" transition:slide={{ duration: 200 }}>
@@ -4788,6 +4968,54 @@
 						</div>
 					{:else if tab.id === 'advanced'}
 						<div class="space-y-5">
+							<!-- Update strategy -->
+							<div class="card rounded-2xl p-5">
+								<div class="mb-3">
+									<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Update strategy</p>
+									<p class="text-xs mt-0.5" style="color: var(--surface-muted);">
+										How Kubernetes rolls out new pods when this deployment changes.
+									</p>
+								</div>
+								<div class="strategy-grid">
+									<button
+										type="button"
+										class="strategy-card"
+										class:strategy-card--active={strategyValue === 'rollingUpdate'}
+										disabled={savingStrategy || hasPvcVolume}
+										onclick={() => saveStrategy('rollingUpdate')}
+									>
+										<div class="flex items-center justify-between gap-2">
+											<span class="strategy-card-title">Rolling Update</span>
+											{#if strategyValue === 'rollingUpdate'}
+												<Check class="h-3.5 w-3.5 text-primary-500" />
+											{/if}
+										</div>
+										<p class="strategy-card-desc">Bring up new pods, then drain the old ones — zero downtime.</p>
+									</button>
+									<button
+										type="button"
+										class="strategy-card"
+										class:strategy-card--active={strategyValue === 'recreate'}
+										disabled={savingStrategy}
+										onclick={() => saveStrategy('recreate')}
+									>
+										<div class="flex items-center justify-between gap-2">
+											<span class="strategy-card-title">Recreate</span>
+											{#if strategyValue === 'recreate'}
+												<Check class="h-3.5 w-3.5 text-primary-500" />
+											{/if}
+										</div>
+										<p class="strategy-card-desc">Tear down all pods first, then start the new ones — brief downtime.</p>
+									</button>
+								</div>
+								{#if hasPvcVolume}
+									<div class="strategy-note mt-3">
+										<TriangleAlert class="h-3.5 w-3.5 shrink-0" />
+										<span>This deployment has a PVC volume, so rolling updates are unavailable. Pods can't share a ReadWriteOnce volume during a rolling cutover.</span>
+									</div>
+								{/if}
+							</div>
+
 							<!-- Build Options -->
 							<div class="card rounded-2xl p-5">
 								<div class="flex items-center justify-between mb-3">
@@ -6953,6 +7181,72 @@
 	}
 
 	/* ===== Advanced tab ===== */
+
+	/* Strategy picker — two big tappable cards */
+	.strategy-grid {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 0.625rem;
+	}
+	@media (max-width: 540px) {
+		.strategy-grid { grid-template-columns: 1fr; }
+	}
+	.strategy-card {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+		padding: 0.75rem 0.875rem;
+		border-radius: 0.75rem;
+		border: 1px solid var(--surface-border);
+		background-color: var(--control-bg);
+		text-align: left;
+		cursor: pointer;
+		transition: border-color 140ms ease, background-color 140ms ease, opacity 140ms ease;
+	}
+	.strategy-card:hover:not(:disabled) {
+		border-color: color-mix(in srgb, var(--button-bg) 50%, var(--surface-border));
+	}
+	.strategy-card:disabled {
+		cursor: not-allowed;
+		opacity: 0.55;
+	}
+	.strategy-card--active {
+		border-color: var(--button-bg);
+		background-color: color-mix(in srgb, var(--button-bg) 10%, var(--control-bg));
+	}
+	.strategy-card-title {
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--center-channel-color);
+	}
+	.strategy-card-desc {
+		font-size: 0.75rem;
+		color: var(--surface-muted);
+		margin: 0;
+	}
+	.strategy-note {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.5rem;
+		padding: 0.625rem 0.75rem;
+		border-radius: 0.5rem;
+		background-color: color-mix(in srgb, var(--warning-bg, #f59e0b) 18%, transparent);
+		border: 1px solid color-mix(in srgb, var(--warning-border, #f59e0b) 40%, transparent);
+		color: var(--warning-text, #b45309);
+		font-size: 0.75rem;
+		line-height: 1.45;
+	}
+
+	.resource-warning {
+		padding: 0.75rem 0.875rem;
+		font-size: 0.8125rem;
+	}
+	.resource-warning-ratios {
+		margin-top: 0.25rem;
+		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+		font-size: 0.72rem;
+		opacity: 0.85;
+	}
 
 	/* Toggle row — clickable row with label + switch */
 	.adv-toggle-row {

@@ -1,4 +1,4 @@
-import { Controller, Delete, Get, Param, Query, Req, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Body, Controller, Delete, Get, Param, Post, Query, Req, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { KubernetesService } from './kubernetes.service';
 import { Auth } from '../auth/decorators';
 import { AuthorizationService } from '../auth/authorization.service';
@@ -81,6 +81,38 @@ export class KubernetesController {
     await this.resolveNamespace(namespace, req, 'view');
     const parsedTailLines = tailLines ? parseInt(tailLines) : 100;
     return this.kubernetesService.getPodLogs(podName, namespace, container, parsedTailLines);
+  }
+
+  // Synchronous one-shot exec. Used by the MCP exec tool and any non-WS
+  // caller — the websocket terminal gateway handles interactive sessions.
+  @Post('pods/:podName/exec')
+  async execInPod(
+    @Param('podName') podName: string,
+    @Body() body: { namespace?: string; command: string | string[]; container?: string; timeoutMs?: number },
+    @Req() req: any,
+    @Query('namespace') namespaceQuery?: string,
+  ) {
+    const namespace = (body?.namespace || namespaceQuery || '').trim();
+    if (!namespace) throw new BadRequestException('namespace is required');
+    await this.resolveNamespace(namespace, req, 'edit', 'exec in pod');
+
+    const cmd: string[] = Array.isArray(body?.command)
+      ? body.command
+      : typeof body?.command === 'string' && body.command.trim()
+        ? ['/bin/sh', '-c', body.command]
+        : [];
+    if (cmd.length === 0) {
+      throw new BadRequestException('command is required (string or string[])');
+    }
+
+    const timeoutMs = Math.min(Math.max(Number(body?.timeoutMs) || 60_000, 1_000), 300_000);
+    const result = await Promise.race([
+      this.kubernetesService.runExec(namespace, podName, cmd, body?.container),
+      new Promise<never>((_, reject) =>
+        setTimeout(() => reject(new BadRequestException(`exec timed out after ${timeoutMs}ms`)), timeoutMs),
+      ),
+    ]);
+    return result;
   }
 
   @Get('endpoints')

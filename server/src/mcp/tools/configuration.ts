@@ -89,6 +89,45 @@ To remove all volumes, pass an empty array.`,
     },
   );
 
+  // ── Image & deploy strategy ───────────────────────────────────────
+
+  server.registerTool(
+    'update_deployment_image',
+    {
+      description: `Change the Docker image of an image-source deployment (one created from an image reference, not built from a GitHub repo). Pods will roll to pull the new image.
+Only valid for non-GitHub deployments — for GitHub deployments use \`rebuild_deployment\` so the image is rebuilt from source. The backend rejects this on a GitHub-built deployment with a clear error.`,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        image: z.string().describe('New Docker image reference (e.g. nginx:1.27, ghcr.io/org/app:v2.1.0)'),
+      },
+    },
+    async ({ deploymentId, image }) => {
+      const result = await client.patch(`/deployments/${deploymentId}/image`, { image });
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    'update_deployment_strategy',
+    {
+      description: `Set the Kubernetes update strategy for a deployment.
+- \`rollingUpdate\`: bring up new pods before draining old ones — zero downtime.
+- \`recreate\`: tear down all pods first, then start new ones — brief downtime, required for ReadWriteOnce PVCs.
+
+When the deployment has a PVC attached, the backend forces \`recreate\` and rejects attempts to set \`rollingUpdate\` (the response will say so). If you must switch back, remove the PVC first via \`update_deployment_volumes\`.`,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        strategy: z.enum(['rollingUpdate', 'recreate']).describe('The new update strategy'),
+      },
+    },
+    async ({ deploymentId, strategy }) => {
+      const result = await client.patch(`/deployments/${deploymentId}/strategy`, { strategy });
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
   // ── Networking ────────────────────────────────────────────────────
 
   server.registerTool(

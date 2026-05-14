@@ -83,6 +83,10 @@ type CreateDeploymentOptions = {
     retries: number;
     startupFailureThreshold: number;
   };
+  // 'rollingUpdate' | 'recreate' — when omitted, the cluster default
+  // (RollingUpdate) is used. Caller is responsible for forcing 'recreate' when
+  // a PVC volume is attached.
+  deployStrategy?: 'rollingUpdate' | 'recreate';
 };
 
 type UpdateDeploymentEnvOptions = {
@@ -1405,6 +1409,16 @@ export class KubernetesService {
 
       const affinity = buildNodeAffinity(options.allowedNodes, options.deniedNodes);
 
+      // PVC volumes can't be held by two pods at once on most CSI drivers
+      // (ReadWriteOnce), so a rolling cutover would deadlock waiting for the
+      // old pod to release the volume. Force Recreate whenever a PVC is in
+      // the volume list, regardless of caller's preference.
+      const hasPvcVolume = (options.volumes ?? []).some((v) => v.type === 'pvc');
+      const effectiveStrategy = hasPvcVolume ? 'recreate' : (options.deployStrategy ?? 'rollingUpdate');
+      const strategy: k8s.V1DeploymentStrategy = effectiveStrategy === 'recreate'
+        ? { type: 'Recreate' }
+        : { type: 'RollingUpdate', rollingUpdate: { maxSurge: '25%', maxUnavailable: '25%' } };
+
       const deploymentBody: k8s.V1Deployment = {
         metadata: {
           name: cleanName,
@@ -1412,6 +1426,7 @@ export class KubernetesService {
         },
         spec: {
           replicas,
+          strategy,
           selector: {
             matchLabels: selectorLabels
           },
@@ -2597,6 +2612,7 @@ export class KubernetesService {
       hostPath?: string | null;
       readOnly?: boolean;
     }[];
+    deployStrategy?: 'rollingUpdate' | 'recreate';
   }) {
     this.ensureKubeConfig();
 
@@ -2663,8 +2679,17 @@ export class KubernetesService {
 
       const containerName = containers[0].name;
 
+      // Force Recreate when a PVC is in the new volume set; otherwise honour
+      // whatever the caller passed (or fall back to RollingUpdate).
+      const hasPvcVolume = volumesList.some((v) => v.type === 'pvc');
+      const effectiveStrategy = hasPvcVolume ? 'recreate' : (options.deployStrategy ?? 'rollingUpdate');
+      const strategy: k8s.V1DeploymentStrategy = effectiveStrategy === 'recreate'
+        ? { type: 'Recreate', rollingUpdate: null as any }
+        : { type: 'RollingUpdate', rollingUpdate: { maxSurge: '25%', maxUnavailable: '25%' } };
+
       const patch = {
         spec: {
+          strategy,
           template: {
             metadata: {
               annotations: {
@@ -2702,7 +2727,8 @@ export class KubernetesService {
         success: true,
         deployment: cleanName,
         namespace: cleanNamespace,
-        volumes: volumesList
+        volumes: volumesList,
+        deployStrategy: effectiveStrategy,
       };
     } catch (error) {
       if (error instanceof BadRequestException || error instanceof NotFoundException) {
@@ -3861,6 +3887,53 @@ export class KubernetesService {
     }
   }
 
+  // Patch only the `spec.strategy` of an existing Deployment. Used when the
+  // user toggles RollingUpdate ↔ Recreate without changing image/volumes.
+  async updateDeploymentStrategy(
+    deploymentName: string,
+    namespace: string,
+    strategy: 'rollingUpdate' | 'recreate',
+  ) {
+    this.ensureKubeConfig();
+    const api = this.kc.makeApiClient(k8s.AppsV1Api);
+    const cleanName = String(deploymentName).trim();
+    const cleanNamespace = String(namespace).trim();
+
+    // Setting `rollingUpdate: null` clears any prior rolling config when
+    // switching to Recreate. K8s rejects strategy.rollingUpdate alongside
+    // type=Recreate, so we have to actively wipe it.
+    const body: k8s.V1DeploymentStrategy = strategy === 'recreate'
+      ? { type: 'Recreate', rollingUpdate: null as any }
+      : { type: 'RollingUpdate', rollingUpdate: { maxSurge: '25%', maxUnavailable: '25%' } };
+
+    try {
+      await api.patchNamespacedDeployment(
+        cleanName,
+        cleanNamespace,
+        { spec: { strategy: body } },
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } },
+      );
+    } catch (error) {
+      if (error.response?.statusCode === 404) {
+        throw new NotFoundException({
+          error: 'Deployment not found',
+          message: `Deployment ${cleanName} not found in namespace ${cleanNamespace}`,
+        });
+      }
+      throw new BadRequestException({
+        error: 'Failed to update deployment strategy',
+        message: error.message,
+      });
+    }
+
+    return { success: true, deployment: cleanName, namespace: cleanNamespace, strategy };
+  }
+
   async updateDeploymentImage(deploymentName: string, namespace: string, image: string) {
     this.ensureKubeConfig();
     
@@ -4856,6 +4929,40 @@ export class KubernetesService {
     await ignore404(coreApi.deleteNamespacedPersistentVolumeClaim(`${n}-data`, ns));
     // Legacy repo PVC from earlier versions; safe to ignore if it doesn't exist.
     await ignore404(coreApi.deleteNamespacedPersistentVolumeClaim(`${n}-pgbackrest`, ns));
+  }
+
+  // Public wrapper so other modules (e.g. the MCP exec tool, the deployments
+  // controller) can run a one-shot command in a pod without going through the
+  // websocket terminal gateway. Returns stdout/stderr/success — no streaming.
+  async runExec(
+    namespace: string,
+    pod: string,
+    cmd: string[],
+    container?: string,
+  ): Promise<{ stdout: string; stderr: string; success: boolean; container: string }> {
+    this.ensureKubeConfig();
+
+    let targetContainer = container?.trim() || '';
+    if (!targetContainer) {
+      // Default to the first container in the pod spec; the pod terminal
+      // gateway uses the same convention.
+      try {
+        const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+        const podSpec = await coreApi.readNamespacedPod(pod, namespace);
+        targetContainer = podSpec.body.spec?.containers?.[0]?.name || '';
+      } catch (error) {
+        throw new NotFoundException({
+          error: 'Pod not found',
+          message: `Could not resolve pod ${pod} in ${namespace}: ${error.message}`,
+        });
+      }
+    }
+    if (!targetContainer) {
+      throw new BadRequestException('Pod has no containers to exec into');
+    }
+
+    const result = await this.execInPod(namespace, pod, targetContainer, cmd);
+    return { ...result, container: targetContainer };
   }
 
   private async execInPod(namespace: string, pod: string, container: string, cmd: string[]): Promise<{ stdout: string; stderr: string; success: boolean }> {

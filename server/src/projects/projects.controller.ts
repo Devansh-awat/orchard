@@ -549,6 +549,38 @@ export class DeploymentsController {
     return { start, end, step, data };
   }
 
+  @Patch(':id/strategy')
+  async updateDeploymentStrategy(
+    @Param('id') id: string,
+    @Body() body: { strategy: 'rollingUpdate' | 'recreate' },
+    @Request() req,
+  ) {
+    const { access } = await this.projectsService.assertDeploymentView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+    if (!access.canEdit) {
+      throw new ForbiddenException('Your role does not allow you to change the deploy strategy');
+    }
+    return this.projectsService.updateDeploymentStrategy(id, body.strategy);
+  }
+
+  @Patch(':id/image')
+  async updateDeploymentImage(
+    @Param('id') id: string,
+    @Body() body: { image: string },
+    @Request() req,
+  ) {
+    const { access } = await this.projectsService.assertDeploymentView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+    if (!access.canEdit) {
+      throw new ForbiddenException('Your role does not allow you to change the deployment image');
+    }
+    return this.projectsService.updateDeploymentImage(id, body.image);
+  }
+
   @Patch(':id/resources')
   async updateResources(
     @Param('id') id: string,

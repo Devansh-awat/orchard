@@ -461,6 +461,71 @@ export class ProjectsService {
     return project;
   }
 
+  async updateDeploymentStrategy(
+    deploymentId: string,
+    strategy: 'rollingUpdate' | 'recreate',
+  ) {
+    if (strategy !== 'rollingUpdate' && strategy !== 'recreate') {
+      throw new BadRequestException('Invalid deploy strategy');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: { volumes: true },
+    });
+    if (!deployment) throw new NotFoundException('Deployment not found');
+
+    // PVC volumes pin the strategy to Recreate — ReadWriteOnce can't satisfy
+    // a rolling cutover.
+    const hasPvc = deployment.volumes.some((v) => v.type === 'pvc');
+    if (hasPvc && strategy === 'rollingUpdate') {
+      throw new BadRequestException(
+        'This deployment has a PVC volume — rolling updates are not supported. Remove the PVC to switch back to rolling updates.',
+      );
+    }
+
+    await this.kubernetesService.updateDeploymentStrategy(
+      deployment.name,
+      deployment.namespace,
+      strategy,
+    );
+
+    return this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: { deployStrategy: strategy },
+    });
+  }
+
+  async updateDeploymentImage(deploymentId: string, image: string) {
+    const trimmed = (image ?? '').toString().trim();
+    if (!trimmed) {
+      throw new BadRequestException('Image cannot be empty');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+    });
+    if (!deployment) throw new NotFoundException('Deployment not found');
+
+    // Image-source deployments only — anything tied to a repo is rebuilt from
+    // source by the GitHub flow, so a manual image change would just be
+    // overwritten by the next build.
+    if (deployment.githubRepo) {
+      throw new BadRequestException(
+        'This deployment is built from a GitHub repository. Use Redeploy to rebuild from source.',
+      );
+    }
+
+    // updateDeploymentImage patches k8s AND writes deployment.image in Prisma.
+    await this.kubernetesService.updateDeploymentImage(
+      deployment.name,
+      deployment.namespace,
+      trimmed,
+    );
+
+    return this.prisma.deployment.findUnique({ where: { id: deploymentId } });
+  }
+
   async updateDeploymentResources(
     deploymentId: string,
     data: { cpuRequestMilli: number | null; memoryRequestBytes: number | null },
@@ -682,6 +747,10 @@ export class ProjectsService {
     });
 
     const placement = await this.resolvePlacementForProject(project.id);
+    // PVC volumes force the Recreate update strategy on k8s; mirror that in
+    // the DB so the UI shows the truth from the moment the deployment exists.
+    const hasPvcOnCreate = (volumes ?? []).some((v) => v.type === 'pvc');
+    const initialStrategy: 'rollingUpdate' | 'recreate' = hasPvcOnCreate ? 'recreate' : 'rollingUpdate';
     const deploymentResult = await this.kubernetesService.createDeployment({
       namespace: project.namespace,
       name,
@@ -694,6 +763,7 @@ export class ProjectsService {
       allowedNodes: placement.allowedNodes,
       deniedNodes: placement.deniedNodes,
       resources: podResources,
+      deployStrategy: initialStrategy,
     });
 
     let createdDeployment;
@@ -709,6 +779,7 @@ export class ProjectsService {
           status: 'running',
           createdBy: user.id,
           templateInstanceId: data.templateInstanceId ?? null,
+          deployStrategy: initialStrategy,
           cpuRequestMilli: data.cpuRequestMilli ?? null,
           memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
         },
@@ -1364,9 +1435,12 @@ export class ProjectsService {
           replicas: true,
           cpuRequestMilli: true,
           memoryRequestBytes: true,
+          deployStrategy: true,
           project: { select: { organizationId: true } },
         },
       });
+      const buildStrategy: 'rollingUpdate' | 'recreate' =
+        (deploymentRow?.deployStrategy as 'rollingUpdate' | 'recreate') ?? 'rollingUpdate';
       const deployPlacement = deploymentRow
         ? await this.resolvePlacementForProject(deploymentRow.projectId)
         : { allowedNodes: null as string[] | null, deniedNodes: [] as string[] };
@@ -1426,6 +1500,7 @@ export class ProjectsService {
             allowedNodes: deployPlacement.allowedNodes,
             deniedNodes: deployPlacement.deniedNodes,
             resources: rebuildResources,
+            deployStrategy: buildStrategy,
           });
         } else {
           // Update existing Kubernetes deployment with new image
@@ -1452,6 +1527,7 @@ export class ProjectsService {
           env: data.env,
           serviceType: data.exposePublic ? 'NodePort' : 'ClusterIP',
           volumes: data.volumes || [],
+          deployStrategy: buildStrategy,
         });
       }
 
@@ -6114,13 +6190,32 @@ export class ProjectsService {
           })
       : [];
 
+    // Compute the effective strategy: PVC forces Recreate, otherwise keep
+    // whatever the deployment was previously set to. The persisted
+    // `deployStrategy` is also auto-reverted to rollingUpdate when the last
+    // PVC is removed only if the user had it set explicitly; we conservatively
+    // keep the existing value (the k8s patch will apply it).
+    const hasPvcVolume = volumesList.some((v) => v.type === 'pvc');
+    const effectiveStrategy: 'rollingUpdate' | 'recreate' = hasPvcVolume
+      ? 'recreate'
+      : (deployment.deployStrategy as 'rollingUpdate' | 'recreate');
+
     await this.kubernetesService.updateDeploymentVolumes({
       namespace: deployment.namespace,
       deploymentName: deployment.name,
       volumes: volumesList,
+      deployStrategy: effectiveStrategy,
     });
 
     const updatedDeployment = await this.prisma.$transaction(async (tx) => {
+      // Persist auto-Recreate when PVC was added, so the UI reflects reality.
+      if (hasPvcVolume && deployment.deployStrategy !== 'recreate') {
+        await tx.deployment.update({
+          where: { id: deployment.id },
+          data: { deployStrategy: 'recreate' },
+        });
+      }
+
       await tx.deploymentVolume.deleteMany({
         where: {
           deploymentId: deployment.id,

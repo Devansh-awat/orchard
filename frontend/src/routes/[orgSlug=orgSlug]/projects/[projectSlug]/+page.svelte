@@ -419,6 +419,7 @@
 	let uploadingBg = $state(false);
 	let iconPreview = $state<string | null>(null); // current or newly uploaded icon URL (for image mode)
 	let bgPreview = $state<string | null>(null);
+	let nameValue = $state('');
 
 	function isImageUrl(v?: string | null) {
 		return !!v && /^https?:\/\//.test(v);
@@ -436,6 +437,7 @@
 			iconPreview = null;
 		}
 		bgPreview = project?.backgroundImage ?? null;
+		nameValue = project?.name ?? '';
 		showCustomize = true;
 	}
 
@@ -508,6 +510,10 @@
 				// User switched from image back to emoji → clear the image URL if they also left emoji empty.
 				if (!emojiValue.trim()) payload.icon = null;
 			}
+			const trimmedName = nameValue.trim();
+			if (trimmedName && trimmedName !== project.name) {
+				payload.name = trimmedName;
+			}
 
 			if (Object.keys(payload).length > 0) {
 				const res = await apiFetch(`/apiv1/projects/${project.id}`, {
@@ -520,7 +526,7 @@
 					throw new Error(d.message || 'Failed to save');
 				}
 				const updated = await res.json();
-				project = { ...project, icon: updated.icon, backgroundImage: updated.backgroundImage };
+				project = { ...project, name: updated.name, icon: updated.icon, backgroundImage: updated.backgroundImage };
 			}
 			toasts.add({ title: 'Project updated', color: 'success' });
 			showCustomize = false;
@@ -1682,12 +1688,25 @@
 					</div>
 					<div class="cm-hero-meta">
 						<span class="cm-hero-eyebrow">Preview</span>
-						<span class="cm-hero-name">{project?.name ?? 'Project'}</span>
+						<span class="cm-hero-name">{nameValue.trim() || project?.name || 'Project'}</span>
 					</div>
 				</div>
 			</div>
 
 			<div class="cm-body">
+				<section class="cm-section">
+					<div class="cm-section-head">
+						<h3 class="cm-section-title">Name</h3>
+					</div>
+					<input
+						type="text"
+						class="cm-input"
+						placeholder="Project name"
+						maxlength="255"
+						bind:value={nameValue}
+					/>
+				</section>
+
 				<section class="cm-section">
 					<div class="cm-section-head">
 						<h3 class="cm-section-title">Icon</h3>
