@@ -220,7 +220,7 @@ r2Proxy:
   replicas: 2
   image:
     name: r2-proxy
-    tag: "" # falls back to .Chart.AppVersion
+    tag: "latest"
   resources:
     requests: { cpu: "50m", memory: "64Mi" }
     limits: { cpu: "1", memory: "256Mi" }

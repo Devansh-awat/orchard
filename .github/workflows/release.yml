@@ -26,6 +26,9 @@ jobs:
             dockerfile: server/Dockerfile
           - name: mcp
             dockerfile: server/Dockerfile.mcp
+          - name: r2-proxy
+            dockerfile: r2-proxy/Dockerfile
+            context: r2-proxy
     steps:
       - uses: actions/checkout@v4
 
@@ -64,7 +67,7 @@ jobs:
 
       - uses: docker/build-push-action@v6
         with:
-          context: .
+          context: ${{ matrix.context || '.' }}
           file: ${{ matrix.dockerfile }}
           push: true
           tags: ${{ steps.meta.outputs.tags }}
