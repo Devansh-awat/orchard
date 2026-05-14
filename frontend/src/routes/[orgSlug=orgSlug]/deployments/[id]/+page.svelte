@@ -900,6 +900,49 @@
 		}
 		return n;
 	});
+
+	// Notification triage: surface the highest-severity active alert and let the
+	// header show a real, colored pill for it instead of a tiny bell badge.
+	const buildFailedActive = $derived.by(() =>
+		deployment?.buildStatus === 'failed'
+			&& !!(deployment?.buildError || deployment?.buildLogs)
+			&& !dismissedNotifications.has(buildFailedNotifId(deployment))
+	);
+	const activePodWarnings = $derived.by(() =>
+		(deployment?.warnings ?? []).filter((w) => !dismissedNotifications.has(podWarningNotifId(w)))
+	);
+	const notificationSeverity = $derived<'error' | 'warning' | null>(
+		buildFailedActive ? 'error' : (activePodWarnings.length > 0 ? 'warning' : null)
+	);
+	const notificationLabel = $derived(
+		buildFailedActive
+			? 'Build failed'
+			: (activePodWarnings.length === 1
+				? 'Pod warning'
+				: activePodWarnings.length > 1
+					? `${activePodWarnings.length} pod warnings`
+					: '')
+	);
+
+	// Deployment status chip: derives a single user-facing label + tone from
+	// buildStatus + status. buildStatus dominates when a build is in flight.
+	type StatusTone = 'success' | 'warning' | 'error' | 'neutral' | 'info';
+	const deploymentStatusChip = $derived.by(() => {
+		const bs = deployment?.buildStatus;
+		const s = (deployment?.status ?? '').toLowerCase();
+		if (bs === 'building' || bs === 'pending') return { label: 'Building', tone: 'info' as StatusTone };
+		if (bs === 'failed') return { label: 'Build failed', tone: 'error' as StatusTone };
+		if (!s) return { label: 'Unknown', tone: 'neutral' as StatusTone };
+		if (s === 'running') return { label: 'Running', tone: 'success' as StatusTone };
+		if (s === 'pending') return { label: 'Pending', tone: 'warning' as StatusTone };
+		if (s === 'scaling') return { label: 'Scaling', tone: 'warning' as StatusTone };
+		if (s === 'restarting') return { label: 'Restarting', tone: 'warning' as StatusTone };
+		if (s === 'unhealthy') return { label: 'Unhealthy', tone: 'error' as StatusTone };
+		if (s === 'failed' || s === 'error') return { label: 'Failed', tone: 'error' as StatusTone };
+		if (s === 'stopped') return { label: 'Stopped', tone: 'neutral' as StatusTone };
+		if (s === 'deleting') return { label: 'Deleting', tone: 'error' as StatusTone };
+		return { label: s.charAt(0).toUpperCase() + s.slice(1), tone: 'neutral' as StatusTone };
+	});
 	const activePods = $derived(deployment?.pods?.filter((pod) => pod.status?.toLowerCase() !== 'succeeded') ?? []);
 
 	let deletingPod = $state<string | null>(null);
@@ -3395,17 +3438,29 @@
 				<div class="dep-header-top">
 					<div class="dep-header-identity">
 						<h1 class="dep-header-name">{deployment.name}</h1>
+						<span class="dep-status-chip dep-status-chip--{deploymentStatusChip.tone}">
+							<span class="dep-status-dot"></span>
+							{deploymentStatusChip.label}
+						</span>
 					</div>
 					<div class="dep-header-actions">
-						{#if notificationCount > 0}
+						{#if notificationSeverity}
 							<div class="relative">
 								<button
 									bind:this={notifBtnEl}
-									class="dep-notif-btn"
+									class="dep-alert-pill dep-alert-pill--{notificationSeverity}"
 									onclick={() => notificationsOpen = !notificationsOpen}
+									title="Open notifications"
 								>
-									<Bell size={14} class="h-3.5 w-3.5" />
-									<span class="notification-badge">{notificationCount}</span>
+									{#if notificationSeverity === 'error'}
+										<CircleX class="h-3.5 w-3.5" />
+									{:else}
+										<TriangleAlert class="h-3.5 w-3.5" />
+									{/if}
+									<span class="dep-alert-pill-label">{notificationLabel}</span>
+									{#if notificationCount > 1}
+										<span class="dep-alert-pill-count">{notificationCount}</span>
+									{/if}
 								</button>
 
 								{#if notificationsRender}
@@ -6048,6 +6103,122 @@
 		gap: 0.625rem;
 		min-width: 0;
 		flex: 1;
+	}
+
+	/* Status chip next to the deployment name — single source of truth for
+	   what state the deployment is actually in. */
+	.dep-status-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.125rem 0.5rem 0.125rem 0.4rem;
+		border-radius: 999px;
+		font-size: 0.7rem;
+		font-weight: 600;
+		line-height: 1.4;
+		letter-spacing: 0.01em;
+		white-space: nowrap;
+		border: 1px solid transparent;
+	}
+	.dep-status-dot {
+		width: 0.4rem;
+		height: 0.4rem;
+		border-radius: 999px;
+		background-color: currentColor;
+		box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 25%, transparent);
+	}
+	.dep-status-chip--success {
+		color: #16a34a;
+		background-color: color-mix(in srgb, #22c55e 14%, transparent);
+		border-color: color-mix(in srgb, #22c55e 35%, transparent);
+	}
+	.dep-status-chip--warning {
+		color: #b45309;
+		background-color: color-mix(in srgb, #f59e0b 16%, transparent);
+		border-color: color-mix(in srgb, #f59e0b 38%, transparent);
+	}
+	.dep-status-chip--error {
+		color: #b91c1c;
+		background-color: color-mix(in srgb, #ef4444 15%, transparent);
+		border-color: color-mix(in srgb, #ef4444 40%, transparent);
+	}
+	.dep-status-chip--info {
+		color: #2563eb;
+		background-color: color-mix(in srgb, #3b82f6 14%, transparent);
+		border-color: color-mix(in srgb, #3b82f6 38%, transparent);
+	}
+	.dep-status-chip--neutral {
+		color: var(--surface-muted);
+		background-color: color-mix(in srgb, var(--surface-muted) 15%, transparent);
+		border-color: color-mix(in srgb, var(--surface-muted) 32%, transparent);
+	}
+	:global(:root.dark) .dep-status-chip--success { color: #4ade80; }
+	:global(:root.dark) .dep-status-chip--warning { color: #fbbf24; }
+	:global(:root.dark) .dep-status-chip--error { color: #f87171; }
+	:global(:root.dark) .dep-status-chip--info { color: #60a5fa; }
+	.dep-header-card--hasbg .dep-status-chip {
+		backdrop-filter: blur(8px);
+	}
+
+	/* Alert pill — replaces the discreet bell with a real attention-grabbing
+	   chip when there's something to look at. */
+	.dep-alert-pill {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.4rem;
+		padding: 0.3rem 0.7rem 0.3rem 0.55rem;
+		border-radius: 999px;
+		font-size: 0.75rem;
+		font-weight: 600;
+		border: 1px solid transparent;
+		cursor: pointer;
+		transition: transform 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
+		animation: dep-alert-pulse 2.4s ease-in-out infinite;
+	}
+	.dep-alert-pill:hover {
+		transform: translateY(-1px);
+	}
+	.dep-alert-pill-label {
+		line-height: 1.2;
+	}
+	.dep-alert-pill-count {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 1.1rem;
+		padding: 0 0.3rem;
+		height: 1.1rem;
+		border-radius: 999px;
+		font-size: 0.65rem;
+		font-weight: 700;
+		background-color: rgba(255, 255, 255, 0.22);
+		color: inherit;
+	}
+	.dep-alert-pill--error {
+		color: #fff;
+		background-color: #dc2626;
+		box-shadow: 0 4px 14px -4px rgba(220, 38, 38, 0.55);
+	}
+	.dep-alert-pill--error:hover {
+		background-color: #b91c1c;
+	}
+	.dep-alert-pill--warning {
+		color: #78350f;
+		background-color: #fbbf24;
+		box-shadow: 0 4px 14px -4px rgba(245, 158, 11, 0.5);
+	}
+	.dep-alert-pill--warning:hover {
+		background-color: #f59e0b;
+	}
+	:global(:root.dark) .dep-alert-pill--warning {
+		color: #1a1208;
+	}
+	@keyframes dep-alert-pulse {
+		0%, 100% { box-shadow: 0 4px 14px -4px rgba(220, 38, 38, 0.4); }
+		50% { box-shadow: 0 4px 18px -2px rgba(220, 38, 38, 0.7); }
+	}
+	.dep-alert-pill--warning {
+		animation: none;
 	}
 
 	.dep-header-actions {
