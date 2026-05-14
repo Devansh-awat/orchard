@@ -3263,9 +3263,6 @@
 			<section
 				class="dep-header dep-header-card"
 				class:dep-header-card--hasbg={!!projectBgImage}
-				class:dep-header-card--live={!projectBgImage && deployment.githubRepo && _activeBuild}
-				class:dep-header-card--building={!projectBgImage && deployment.githubRepo && _isBuilding}
-				class:dep-header-card--failed={!projectBgImage && deployment.githubRepo && _buildFailed && !_activeBuild}
 				class:dep-header-card--collapsed={headerCollapsed}
 				{@attach motionStagger({ index: 0, from: { y: 14, scale: 0.985 } })}
 				{@attach cardTilt({ max: 2 })}
@@ -5893,12 +5890,17 @@
 		border-radius: 0.5rem;
 		border: none;
 		background: transparent;
-		color: #fff;
+		color: var(--center-channel-color);
 		cursor: pointer;
 		transition: background 0.12s, color 0.12s;
 	}
 	.dep-notif-btn:hover {
 		background: var(--control-hover-bg);
+		color: var(--center-channel-color);
+	}
+	/* On gradient backgrounds the icon needs to read against the image. */
+	.dep-header-card--hasbg .dep-notif-btn,
+	.dep-header-card--hasbg .dep-notif-btn:hover {
 		color: #fff;
 	}
 
@@ -7875,19 +7877,6 @@
 	.env-footer-hint {
 		font-size: 0.75rem;
 		color: var(--surface-muted);
-	}
-
-	/* ── Active deployment (merged into dep-header card) ── */
-	.dep-header-card--live {
-		border-left: 4px solid #22c55e;
-	}
-
-	.dep-header-card--building {
-		border-left: 4px solid #f59e0b;
-	}
-
-	.dep-header-card--failed {
-		border-left: 4px solid #ef4444;
 	}
 
 	/* ── Deployments list (Vercel-style) ── */

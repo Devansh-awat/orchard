@@ -5002,6 +5002,7 @@ export class ProjectsService {
       select: {
         id: true,
         name: true,
+        namespace: true,
         status: true,
         buildStatus: true,
         image: true,
@@ -5037,17 +5038,24 @@ export class ProjectsService {
       orderBy: { updatedAt: 'desc' },
     });
 
+    // Reconcile DB status with live pod state so the home page doesn't show
+    // "running" while every pod is still Scheduled / not Ready. Run K8s checks
+    // in parallel; on failure computeDeploymentStatus falls back to db status.
+    const computedStatuses = await Promise.all(
+      deployments.map((d) => this.computeDeploymentStatus(d)),
+    );
+
     // Merge direct ingresses and service-linked ingresses, deduplicating by id
-    return deployments.map(({ services, ingresses, ...rest }) => {
+    return deployments.map(({ services, ingresses, namespace, ...rest }, i) => {
       const serviceIngresses = services.flatMap((s) => s.ingresses);
       const allIngresses = [...ingresses, ...serviceIngresses];
       const seen = new Set<string>();
-      const uniqueIngresses = allIngresses.filter((i) => {
-        if (seen.has(i.id)) return false;
-        seen.add(i.id);
+      const uniqueIngresses = allIngresses.filter((ing) => {
+        if (seen.has(ing.id)) return false;
+        seen.add(ing.id);
         return true;
       });
-      return { ...rest, ingresses: uniqueIngresses };
+      return { ...rest, status: computedStatuses[i], ingresses: uniqueIngresses };
     });
   }
 
