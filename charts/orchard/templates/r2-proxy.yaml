@@ -1,0 +1,172 @@
+{{- if .Values.r2Proxy.enabled }}
+# r2-proxy — S3 V4 re-signing gateway sitting between CNPG/barman pods and
+# the real R2 endpoint. Tenant clusters hold per-cluster "fake" credentials
+# that only work via this proxy and only against their own prefix.
+# The real R2 key lives in `r2-proxy-upstream` here and never leaves this ns.
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ .Values.r2Proxy.namespace }}
+  labels:
+    app.kubernetes.io/managed-by: orchard
+    orchard.io/component: r2-proxy
+---
+# ConfigMap holds the JSON policy: which fake access-keys map to which bucket+prefix.
+# The orchard server updates this on every Database create/delete.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: r2-proxy-policy
+  namespace: {{ .Values.r2Proxy.namespace }}
+data:
+  policy.json: |
+    {"bindings": []}
+---
+# Upstream R2 credentials — the only place the real R2 key exists in-cluster.
+# Set via values, or replace with an externally-managed Secret (External Secrets,
+# SOPS, Vault, etc.) and point the Deployment at it instead.
+apiVersion: v1
+kind: Secret
+metadata:
+  name: r2-proxy-upstream
+  namespace: {{ .Values.r2Proxy.namespace }}
+type: Opaque
+stringData:
+  R2_ENDPOINT: {{ .Values.r2Proxy.upstream.endpoint | quote }}
+  R2_REGION: {{ .Values.r2Proxy.upstream.region | quote }}
+  R2_ACCESS_KEY: {{ .Values.r2Proxy.upstream.accessKey | quote }}
+  R2_SECRET_KEY: {{ .Values.r2Proxy.upstream.secretKey | quote }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: r2-proxy
+  namespace: {{ .Values.r2Proxy.namespace }}
+  labels:
+    app.kubernetes.io/name: r2-proxy
+    app.kubernetes.io/instance: {{ .Release.Name }}
+    app.kubernetes.io/managed-by: orchard
+spec:
+  replicas: {{ .Values.r2Proxy.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: r2-proxy
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: r2-proxy
+        app.kubernetes.io/instance: {{ .Release.Name }}
+    spec:
+      {{- include "orchard.pullSecrets" . | nindent 6 }}
+      containers:
+        - name: r2-proxy
+          image: {{ include "orchard.image" (list . .Values.r2Proxy.image.name .Values.r2Proxy.image.tag) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 9000
+          env:
+            - { name: PROXY_LISTEN, value: ":9000" }
+            - { name: POLICY_PATH, value: "/etc/r2-proxy/policy.json" }
+          envFrom:
+            - secretRef:
+                name: r2-proxy-upstream
+          volumeMounts:
+            - name: policy
+              mountPath: /etc/r2-proxy
+              readOnly: true
+          readinessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 2
+            periodSeconds: 5
+          livenessProbe:
+            httpGet: { path: /healthz, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 15
+          resources:
+            {{- toYaml .Values.r2Proxy.resources | nindent 12 }}
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities: { drop: [ALL] }
+      volumes:
+        - name: policy
+          configMap:
+            name: r2-proxy-policy
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: r2-proxy
+  namespace: {{ .Values.r2Proxy.namespace }}
+  labels:
+    app.kubernetes.io/name: r2-proxy
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  type: ClusterIP
+  selector:
+    app.kubernetes.io/name: r2-proxy
+    app.kubernetes.io/instance: {{ .Release.Name }}
+  ports:
+    - name: http
+      port: 9000
+      targetPort: http
+---
+# RBAC: the orchard server needs to write the policy ConfigMap (one ConfigMap,
+# one namespace, no get-all-secrets style permissions).
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orchard-r2-proxy-writer
+  namespace: {{ .Values.namespace }}
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: r2-proxy-policy-writer
+  namespace: {{ .Values.r2Proxy.namespace }}
+rules:
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    resourceNames: ["r2-proxy-policy"]
+    verbs: ["get", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: orchard-can-write-r2-proxy-policy
+  namespace: {{ .Values.r2Proxy.namespace }}
+subjects:
+  - kind: ServiceAccount
+    name: orchard-r2-proxy-writer
+    namespace: {{ .Values.namespace }}
+roleRef:
+  kind: Role
+  name: r2-proxy-policy-writer
+  apiGroup: rbac.authorization.k8s.io
+{{- if .Values.r2Proxy.networkPolicy.enabled }}
+---
+# Default-deny + tightly-scoped allow rules for the proxy namespace.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: r2-proxy-ingress
+  namespace: {{ .Values.r2Proxy.namespace }}
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: r2-proxy
+  policyTypes: [Ingress]
+  ingress:
+    # Allow ingress from anywhere on the proxy port. CNPG clusters live in
+    # tenant namespaces; restricting source namespaces here would require
+    # labelling every tenant namespace, which the server doesn't do today.
+    # Defense-in-depth: per-key prefix policy at the app layer is the real
+    # security boundary; this rule is just shape.
+    - ports:
+        - port: 9000
+          protocol: TCP
+{{- end }}
+{{- end }}

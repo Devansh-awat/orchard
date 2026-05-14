@@ -208,6 +208,37 @@ certificates:
       domain: db.orchard.my
       secretName: wildcard-db-orchard-my-tls
 
+# R2 backup proxy. Sits between tenant CNPG clusters and Cloudflare R2 so the
+# real R2 credentials never live inside a tenant pod. Each cluster gets a
+# per-cluster fake access key restricted to its own prefix; the proxy verifies
+# V4 signatures and re-signs upstream with the real key. See r2-proxy/ for the
+# Go service. Enabled by default — disable to fall back to handing the org's
+# R2 credentials directly to barman (the legacy, less-isolated behavior).
+r2Proxy:
+  enabled: true
+  namespace: orchard-r2-proxy
+  replicas: 2
+  image:
+    name: r2-proxy
+    tag: "" # falls back to .Chart.AppVersion
+  resources:
+    requests: { cpu: "50m", memory: "64Mi" }
+    limits: { cpu: "1", memory: "256Mi" }
+  # Upstream R2 credentials. The proxy needs ListBucket / ReadObject /
+  # WriteObject / DeleteObject on the bucket(s) that orgs are configured to
+  # back up to. If you'd rather provide these via External Secrets / SOPS,
+  # leave them blank here and edit r2-proxy.yaml to reference your Secret.
+  upstream:
+    endpoint: ""   # e.g. https://<account>.r2.cloudflarestorage.com
+    region: "auto"
+    accessKey: ""
+    secretKey: ""
+  networkPolicy:
+    enabled: true
+  # Service URL the server uses for barman's endpointURL. Defaults to the
+  # in-cluster Service DNS based on namespace above.
+  serviceUrl: ""   # empty → http://r2-proxy.<r2Proxy.namespace>.svc.cluster.local:9000
+
 # Public-TLS reflection — tells the server which Secret to copy from when
 # exposing a CNPG cluster publicly with TLS.
 publicTls:

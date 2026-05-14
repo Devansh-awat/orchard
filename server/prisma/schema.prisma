@@ -697,6 +697,10 @@ model Database {
   publicPort         Int?     @map("public_port")
   cpuRequestMilli    Int?     @map("cpu_request_milli")
   memoryRequestBytes BigInt?  @map("memory_request_bytes")
+  // Per-cluster fake AK/SK presented to barman when BACKUP_PROXY_ENABLED=true.
+  // Real R2 credentials never live in the cluster's namespace.
+  r2ProxyAccessKey String? @map("r2_proxy_access_key") @db.VarChar(64)
+  r2ProxySecret    String? @map("r2_proxy_secret") @db.VarChar(128)
   createdBy     String?  @map("created_by") @db.Uuid
   createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamp(6)

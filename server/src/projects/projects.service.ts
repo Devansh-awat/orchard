@@ -3,6 +3,7 @@ import { Cron } from '@nestjs/schedule';
 import { Prisma, ServiceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
+import { R2ProxyService } from '../kubernetes/r2-proxy.service';
 import { UsersService } from '../users/users.service';
 import { DockerService } from '../docker/docker.service';
 import { GitHubService } from '../github/github.service';
@@ -35,7 +36,79 @@ export class ProjectsService {
     private readonly membershipCache: MembershipCacheService,
     private readonly audit: AuditService,
     private readonly authz: AuthorizationService,
+    private readonly r2Proxy: R2ProxyService,
   ) {}
+
+  /**
+   * Build the R2/backup config object that gets handed to the in-cluster
+   * barman sidecar. When the r2-proxy is enabled we mint a per-cluster fake
+   * AK/SK, register a binding with the proxy ConfigMap, and tell the cluster
+   * to talk to the proxy instead of real R2 — so real R2 credentials never
+   * land in the tenant's namespace.
+   */
+  private async buildBackupR2Config(
+    org: {
+      backupR2Endpoint: string | null;
+      backupR2Bucket: string | null;
+      backupR2Region: string | null;
+      backupR2AccessKey: string | null;
+      backupR2SecretKey: string | null;
+    } | null | undefined,
+    namespace: string,
+    clusterName: string,
+  ): Promise<{
+    r2: {
+      endpoint: string;
+      bucket: string;
+      region: string;
+      accessKey: string;
+      secretKey: string;
+    } | undefined;
+    r2ProxyAccessKey: string | undefined;
+    r2ProxySecret: string | undefined;
+  }> {
+    if (
+      !org?.backupR2Endpoint ||
+      !org?.backupR2Bucket ||
+      !org?.backupR2AccessKey ||
+      !org?.backupR2SecretKey
+    ) {
+      return { r2: undefined, r2ProxyAccessKey: undefined, r2ProxySecret: undefined };
+    }
+
+    if (this.r2Proxy.isEnabled()) {
+      const minted = this.r2Proxy.mintCredentials();
+      await this.r2Proxy.addBinding({
+        accessKey: minted.accessKey,
+        secret: minted.secret,
+        bucket: org.backupR2Bucket,
+        prefix: `${namespace}/${clusterName}/`,
+      });
+      return {
+        r2: {
+          endpoint: this.r2Proxy.getEndpoint(),
+          bucket: org.backupR2Bucket,
+          region: org.backupR2Region || 'auto',
+          accessKey: minted.accessKey,
+          secretKey: minted.secret,
+        },
+        r2ProxyAccessKey: minted.accessKey,
+        r2ProxySecret: minted.secret,
+      };
+    }
+
+    return {
+      r2: {
+        endpoint: org.backupR2Endpoint,
+        bucket: org.backupR2Bucket,
+        region: org.backupR2Region || 'auto',
+        accessKey: org.backupR2AccessKey,
+        secretKey: org.backupR2SecretKey,
+      },
+      r2ProxyAccessKey: undefined,
+      r2ProxySecret: undefined,
+    };
+  }
 
   /**
    * Strip secrets out of a deployment payload for project viewers (read-only role).
@@ -7806,15 +7879,11 @@ export class ProjectsService {
     const namespace = project.namespace;
 
     const org = await this.prisma.organization.findUnique({ where: { id: project.organizationId } });
-    const r2 = org?.backupR2Endpoint && org?.backupR2Bucket && org?.backupR2AccessKey && org?.backupR2SecretKey
-      ? {
-          endpoint: org.backupR2Endpoint,
-          bucket: org.backupR2Bucket,
-          region: org.backupR2Region || 'auto',
-          accessKey: org.backupR2AccessKey,
-          secretKey: org.backupR2SecretKey,
-        }
-      : undefined;
+    const { r2, r2ProxyAccessKey, r2ProxySecret } = await this.buildBackupR2Config(
+      org,
+      namespace,
+      clusterName,
+    );
 
     const sizeRaw = typeof data.storageSize === 'string' ? data.storageSize.trim() : '';
     const storageSize = /^\d+(Mi|Gi|Ti)$/.test(sizeRaw) ? sizeRaw : '1Gi';
@@ -7872,17 +7941,28 @@ export class ProjectsService {
       await this.validateImportSource(importFrom);
     }
 
-    const { host, port } = await this.kubernetesService.createCnpgCluster({
-      namespace,
-      clusterName,
-      dbName,
-      dbUser,
-      dbPassword,
-      storageSize,
-      r2,
-      resources: dbResources,
-      importFrom,
-    });
+    let host: string;
+    let port: number;
+    try {
+      ({ host, port } = await this.kubernetesService.createCnpgCluster({
+        namespace,
+        clusterName,
+        dbName,
+        dbUser,
+        dbPassword,
+        storageSize,
+        r2,
+        resources: dbResources,
+        importFrom,
+      }));
+    } catch (e) {
+      if (r2ProxyAccessKey) {
+        try { await this.r2Proxy.removeBinding(r2ProxyAccessKey); } catch (cleanupErr: any) {
+          console.warn(`[R2Proxy] Failed to remove binding ${r2ProxyAccessKey} after createCnpgCluster failure: ${cleanupErr?.message}`);
+        }
+      }
+      throw e;
+    }
 
     let database;
     try {
@@ -7904,6 +7984,8 @@ export class ProjectsService {
           port,
           createdBy: user.id,
           templateInstanceId: data.templateInstanceId ?? null,
+          r2ProxyAccessKey: r2ProxyAccessKey ?? null,
+          r2ProxySecret: r2ProxySecret ?? null,
         },
         include: {
           creator: {
@@ -7915,6 +7997,11 @@ export class ProjectsService {
       try { await this.kubernetesService.deleteScheduledBackup(namespace, clusterName); } catch { /* ignore */ }
       try { await this.kubernetesService.unexposeCnpgCluster(namespace, clusterName); } catch { /* ignore */ }
       try { await this.kubernetesService.deleteCnpgCluster(namespace, clusterName); } catch { /* ignore */ }
+      if (r2ProxyAccessKey) {
+        try { await this.r2Proxy.removeBinding(r2ProxyAccessKey); } catch (cleanupErr: any) {
+          console.warn(`[R2Proxy] Failed to remove binding ${r2ProxyAccessKey} after createDatabase rollback: ${cleanupErr?.message}`);
+        }
+      }
       throw e;
     }
 
@@ -8246,6 +8333,14 @@ export class ProjectsService {
       await this.kubernetesService.deletePostgresDatabase(database.dbName, database.dbUser);
     }
 
+    if (database.r2ProxyAccessKey) {
+      try {
+        await this.r2Proxy.removeBinding(database.r2ProxyAccessKey);
+      } catch (e: any) {
+        console.warn(`[R2Proxy] Failed to remove binding ${database.r2ProxyAccessKey} during deleteDatabase: ${e?.message}`);
+      }
+    }
+
     await this.prisma.database.delete({ where: { id: databaseId } });
 
     void this.audit.log({
@@ -8567,6 +8662,7 @@ export class ProjectsService {
     if (backup.status !== 'completed') throw new BadRequestException('Backup is not completed yet');
 
     const oldClusterName = database.clusterName;
+    const oldR2ProxyAccessKey = database.r2ProxyAccessKey;
 
     await this.prisma.database.update({ where: { id: database.id }, data: { status: 'restoring' } });
 
@@ -8582,6 +8678,17 @@ export class ProjectsService {
       metadata: { backupId, backupName: backup.backupName },
     });
 
+    // Predetermine the restore cluster name so we can mint a r2-proxy binding
+    // for it (when the proxy is enabled) BEFORE the cluster spins up. The
+    // suffix matches the format used inside restoreCnpgCluster.
+    const restoreSuffix = Date.now().toString(36);
+    const predictedNewClusterName = `${oldClusterName}-r${restoreSuffix}`.substring(0, 53);
+    const restoreR2 = await this.buildBackupR2Config(
+      org,
+      database.namespace!,
+      predictedNewClusterName,
+    );
+
     (async () => {
       try {
         const { newClusterName, host, port } = await this.kubernetesService.restoreCnpgCluster(
@@ -8593,13 +8700,8 @@ export class ProjectsService {
             storageSize: database.storageSize || '1Gi',
             parameters: (database.pgParameters as Record<string, string> | null) || undefined,
             sharedPreloadLibraries: (database.sharedPreloadLibs as string[] | null) || undefined,
-            r2: {
-              endpoint: org.backupR2Endpoint!,
-              bucket: org.backupR2Bucket!,
-              region: org.backupR2Region || 'auto',
-              accessKey: org.backupR2AccessKey!,
-              secretKey: org.backupR2SecretKey!,
-            },
+            r2: restoreR2.r2,
+            newClusterName: predictedNewClusterName,
           },
         );
 
@@ -8617,7 +8719,14 @@ export class ProjectsService {
 
         await this.prisma.database.update({
           where: { id: database.id },
-          data: { clusterName: newClusterName, host, port, status: 'ready' },
+          data: {
+            clusterName: newClusterName,
+            host,
+            port,
+            status: 'ready',
+            r2ProxyAccessKey: restoreR2.r2ProxyAccessKey ?? null,
+            r2ProxySecret: restoreR2.r2ProxySecret ?? null,
+          },
         });
 
         try {
@@ -8625,8 +8734,20 @@ export class ProjectsService {
         } catch (e: any) {
           console.error(`[DB] Failed to delete old cluster ${oldClusterName}: ${e?.message}`);
         }
+
+        // Old cluster is gone — its proxy binding is no longer needed.
+        if (oldR2ProxyAccessKey && oldR2ProxyAccessKey !== restoreR2.r2ProxyAccessKey) {
+          try { await this.r2Proxy.removeBinding(oldR2ProxyAccessKey); } catch (cleanupErr: any) {
+            console.warn(`[R2Proxy] Failed to remove old binding ${oldR2ProxyAccessKey} after restore: ${cleanupErr?.message}`);
+          }
+        }
       } catch (e: any) {
         console.error(`[DB] Restore failed: ${e?.message}`);
+        if (restoreR2.r2ProxyAccessKey) {
+          try { await this.r2Proxy.removeBinding(restoreR2.r2ProxyAccessKey); } catch (cleanupErr: any) {
+            console.warn(`[R2Proxy] Failed to remove new binding ${restoreR2.r2ProxyAccessKey} after restore failure: ${cleanupErr?.message}`);
+          }
+        }
         await this.prisma.database.update({ where: { id: database.id }, data: { status: 'error' } });
       }
     })();

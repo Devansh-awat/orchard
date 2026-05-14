@@ -238,6 +238,13 @@ export class KubernetesService {
     }
   }
 
+  // Exposed for sibling services (e.g. R2ProxyService) that need raw kube
+  // client access without duplicating the kubeconfig-loading logic above.
+  public getCoreV1Api(): k8s.CoreV1Api {
+    this.ensureKubeConfig();
+    return this.kc!.makeApiClient(k8s.CoreV1Api);
+  }
+
   private async getDefaultNodeIp(coreApi: k8s.CoreV1Api): Promise<string | null> {
     try {
       const nodes = await coreApi.listNode();
@@ -5680,6 +5687,7 @@ export class KubernetesService {
       parameters?: Record<string, string>;
       sharedPreloadLibraries?: string[];
       r2?: { endpoint: string; bucket: string; region?: string; accessKey: string; secretKey: string };
+      newClusterName?: string;
     },
   ): Promise<{ host: string; port: number; newClusterName: string }> {
     this.ensureKubeConfig();
@@ -5687,7 +5695,7 @@ export class KubernetesService {
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
 
     const suffix = Date.now().toString(36);
-    const newName = `${sourceClusterName}-r${suffix}`.substring(0, 53);
+    const newName = options.newClusterName || `${sourceClusterName}-r${suffix}`.substring(0, 53);
 
     const appSecret = this.buildAppSecretName(newName);
     await this.upsertSecret(coreApi, namespace, appSecret, 'kubernetes.io/basic-auth', {
