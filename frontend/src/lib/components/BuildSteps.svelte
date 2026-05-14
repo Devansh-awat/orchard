@@ -14,9 +14,12 @@
 		logs: string | null | undefined;
 		// Show the messages panel (non-step lines like "Waiting for build job …").
 		showMessages?: boolean;
+		// When true, the step list grows to fit its content instead of scrolling
+		// inside a capped box — let the parent container handle scrolling.
+		fill?: boolean;
 	}
 
-	let { logs, showMessages = true }: Props = $props();
+	let { logs, showMessages = true, fill = false }: Props = $props();
 
 	const parsed = $derived<ParsedBuildLogs>(parseBuildkitLogs(logs));
 	const summary = $derived(buildSummary(parsed));
@@ -46,7 +49,7 @@
 	}
 </script>
 
-<div class="build-steps">
+<div class="build-steps" class:build-steps-fill={fill}>
 	<div class="bs-header">
 		<div class="bs-title">
 			<span class="bs-title-text">Logs</span>
@@ -87,7 +90,7 @@
 			/>
 		</div>
 
-		<div class="bs-list">
+		<div class="bs-list" class:bs-list-fill={fill}>
 			{#each filteredSteps as step (step.id)}
 				{@const isOpen = expanded[step.id]}
 				{@const hasOutput = step.output.length > 0 || !!step.error}
@@ -187,7 +190,7 @@
 			</details>
 		{/if}
 	{:else}
-		<pre class="bs-raw">{logs ?? ''}</pre>
+		<pre class="bs-raw" class:bs-raw-fill={fill}>{logs ?? ''}</pre>
 	{/if}
 </div>
 
@@ -200,6 +203,26 @@
 		background-color: var(--control-bg);
 		overflow: hidden;
 		font-size: 0.8125rem;
+	}
+
+	/* When rendered inside another container (e.g. the log modal), drop the
+	   card chrome so it doesn't look like a panel-in-a-panel. */
+	.build-steps-fill {
+		border: none;
+		border-radius: 0;
+		background-color: transparent;
+		overflow: visible;
+	}
+
+	.build-steps-fill .bs-header {
+		background-color: transparent;
+		padding-left: 0;
+		padding-right: 0;
+	}
+
+	.build-steps-fill .bs-filter {
+		padding-left: 0;
+		padding-right: 0;
 	}
 
 	.bs-header {
@@ -293,6 +316,11 @@
 		overflow-y: auto;
 		display: flex;
 		flex-direction: column;
+	}
+
+	.bs-list-fill {
+		max-height: none;
+		overflow-y: visible;
 	}
 
 	.bs-row {
@@ -564,6 +592,11 @@
 
 	.bs-message-warning .bs-message-text {
 		color: rgb(245, 158, 11);
+	}
+
+	.bs-raw-fill {
+		max-height: none;
+		overflow-y: visible;
 	}
 
 	.bs-raw {

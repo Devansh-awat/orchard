@@ -5345,7 +5345,7 @@
 						<Loader2 class="h-5 w-5 animate-spin" style="color: rgba(255,255,255,0.3);" />
 					</div>
 				{:else if logModalContent}
-					<BuildSteps logs={logModalContent} />
+					<BuildSteps logs={logModalContent} fill />
 				{/if}
 			</div>
 		</div>
@@ -8326,11 +8326,10 @@
 		max-height: 80vh;
 		border-radius: 0.75rem;
 		overflow: hidden;
-		background-color: #111827;
-		border: 1px solid rgba(255, 255, 255, 0.08);
-		box-shadow:
-			0 0 0 1px rgba(0, 0, 0, 0.3),
-			0 25px 50px -12px rgba(0, 0, 0, 0.6);
+		background-color: var(--center-channel-bg, var(--control-bg));
+		color: var(--center-channel-color);
+		border: 1px solid var(--surface-border);
+		box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.45);
 	}
 
 	.log-modal-header {
@@ -8338,8 +8337,8 @@
 		align-items: center;
 		justify-content: space-between;
 		padding: 0.75rem 1rem;
-		background-color: rgba(255, 255, 255, 0.03);
-		border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+		background-color: color-mix(in srgb, var(--surface-border) 25%, transparent);
+		border-bottom: 1px solid var(--surface-border);
 	}
 
 	.log-modal-header-left {
@@ -8351,7 +8350,7 @@
 	.log-modal-title {
 		font-size: 0.8125rem;
 		font-weight: 600;
-		color: rgba(255, 255, 255, 0.8);
+		color: var(--center-channel-color);
 	}
 
 	.log-modal-close {
@@ -8363,14 +8362,14 @@
 		border-radius: 0.375rem;
 		background: transparent;
 		border: none;
-		color: rgba(255, 255, 255, 0.4);
+		color: var(--surface-muted);
 		cursor: pointer;
 		transition: color 0.15s, background-color 0.15s;
 	}
 
 	.log-modal-close:hover {
-		color: rgba(255, 255, 255, 0.9);
-		background-color: rgba(255, 255, 255, 0.08);
+		color: var(--center-channel-color);
+		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
 	}
 
 	.log-modal-body {
