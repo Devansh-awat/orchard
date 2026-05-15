@@ -1081,33 +1081,49 @@ fi
       },
     };
 
-    // Pusher container — only used when sidecarPushEnabled. Reads the OCI
-    // tarball BuildKit wrote and pushes it to Harbor with the registry
-    // creds. Uses `skopeo copy` because:
-    //   - quay.io throttles Hetzner IPs much less than gcr.io (where the
-    //     original crane image lived — pulls there hit 429 in practice).
-    //   - skopeo's oci-archive: transport reads exactly the format
-    //     BuildKit writes with `--output type=oci,dest=...`.
-    //   - it accepts --authfile so we can keep the Harbor creds isolated
-    //     to this container; BuildKit (the init container that runs
-    //     untrusted Dockerfile RUN steps) never sees them.
-    // Init-container ordering guarantees BuildKit succeeded before this
-    // runs, so /output/image.tar exists.
+    // Pusher container — only used when sidecarPushEnabled. Polls for a
+    // done-marker written by BuildKit, then `skopeo copy`s the OCI
+    // tarball to Harbor.
+    //
+    // Why run BuildKit + pusher as PARALLEL main containers (not init→main):
+    //   Under runtimeClassName=kata, transitioning from the last init
+    //   container to the first main container triggers a 429 from the
+    //   kata-shim's task-create RPC — the kata-agent inside the VM
+    //   doesn't accept new tasks during sandbox-state-transition. Running
+    //   both as `containers:` avoids that transition entirely; both tasks
+    //   start once at pod startup, share /output via emptyDir, and
+    //   coordinate via a filesystem marker.
+    //
+    // Threat model still holds: BuildKit and pusher have separate mount
+    // namespaces inside the Kata VM, so a malicious Dockerfile RUN in
+    // BuildKit cannot read the pusher container's
+    // /root/.docker/config.json.
     const pusherContainer: k8s.V1Container | null = (buildkitContainer && this.sidecarPushEnabled) ? {
       name: 'pusher',
       image: this.pusherImage,
-      command: ['skopeo'],
+      command: ['/bin/sh', '-c'],
       args: [
-        'copy',
-        '--authfile', '/root/.docker/config.json',
-        // Harbor is reachable over plaintext HTTP on the in-cluster
-        // service (matches the buildkit-config.toml `http = true` entries).
-        '--dest-tls-verify=false',
-        'oci-archive:/output/image.tar',
-        `docker://${fullImageName}`,
+        `set -e
+echo "[pusher] waiting for build to finish..."
+TIMEOUT=1700
+ELAPSED=0
+while [ ! -f /output/.done ] && [ ! -f /output/.failed ]; do
+  if [ "$ELAPSED" -ge "$TIMEOUT" ]; then
+    echo "[pusher] timed out waiting for build to produce a marker"
+    exit 1
+  fi
+  sleep 5
+  ELAPSED=$((ELAPSED + 5))
+done
+if [ -f /output/.failed ]; then
+  echo "[pusher] build wrote .failed marker — not pushing"
+  exit 1
+fi
+echo "[pusher] build done, pushing..."
+exec skopeo copy --authfile /root/.docker/config.json --dest-tls-verify=false oci-archive:/output/image.tar 'docker://${fullImageName.replace(/'/g, `'\\''`)}'`,
       ],
       volumeMounts: [
-        { name: 'output', mountPath: '/output', readOnly: true },
+        { name: 'output', mountPath: '/output' },
         { name: 'docker-config', mountPath: '/root/.docker', readOnly: true },
       ],
       resources: {
@@ -1119,17 +1135,28 @@ fi
     // Final container layout:
     //   - Depot: depot container as main, no buildkit/pusher.
     //   - sidecarPush off (default): buildkit as main, classic behaviour.
-    //   - sidecarPush on: buildkit moves to last init, pusher is main.
-    //     Keeping the name `buildkit` preserves log fetching code paths
-    //     in readBuildJob() that look up logs by container name.
-    let mainContainer: k8s.V1Container;
+    //   - sidecarPush on: both run as main in parallel. BuildKit wraps
+    //     its build script to write /output/.done or /output/.failed on
+    //     exit so the pusher knows when to act.
+    let containers: k8s.V1Container[];
     if (buildWithDepot) {
-      mainContainer = this.createDepotContainer({ dockerfilePath, fullImageName, target, buildFromRoot, buildType, envVars });
-    } else if (this.sidecarPushEnabled && pusherContainer) {
-      initContainers.push(buildkitContainer!);
-      mainContainer = pusherContainer;
+      containers = [this.createDepotContainer({ dockerfilePath, fullImageName, target, buildFromRoot, buildType, envVars })];
+    } else if (this.sidecarPushEnabled && pusherContainer && buildkitContainer) {
+      // Wrap the BuildKit script so its exit always writes a marker.
+      const innerScript = (buildkitContainer.args && buildkitContainer.args[0]) || '';
+      buildkitContainer.args = [
+        `mkdir -p /output
+( ${innerScript} ); rc=$?
+if [ "$rc" -eq 0 ]; then
+  touch /output/.done
+else
+  touch /output/.failed
+fi
+exit $rc`,
+      ];
+      containers = [buildkitContainer, pusherContainer];
     } else {
-      mainContainer = buildkitContainer!;
+      containers = [buildkitContainer!];
     }
 
     // Create the build job with init containers and daemonless buildkit
@@ -1179,7 +1206,7 @@ fi
               }],
             } : {}),
             initContainers,
-            containers: [mainContainer],
+            containers,
             volumes: [
               {
                 name: 'workspace',
