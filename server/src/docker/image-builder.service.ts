@@ -16,6 +16,12 @@ interface BuildJobOptions {
   buildType?: 'dockerfile' | 'railpack';
   envVars?: Record<string, string>;
   buildWithDepot?: boolean;
+  // Per-tenant key used as the subPath on the shared buildkit-cache PVC.
+  // Without this, every build pod sees the entire PVC and a malicious build
+  // (root inside the Kata VM) can read/poison cache entries from other
+  // tenants. With subPath, the Kata mount surface only exposes this tenant's
+  // slice. Set to the project namespace by the caller.
+  cacheTenantKey?: string;
 }
 
 interface BuildJobStatus {
@@ -791,7 +797,16 @@ exit $EXIT_CODE
       buildType = 'dockerfile',
       envVars = {},
       buildWithDepot = false,
+      cacheTenantKey,
     } = options;
+
+    // Sanitize the tenant key for use as a PVC subPath. Anything outside
+    // [a-z0-9-] gets squashed; missing key collapses to "_shared" which is
+    // the legacy behaviour (every build in one directory) — only used when
+    // a caller hasn't been updated yet. New callers must pass this.
+    const cacheSubPath = cacheTenantKey
+      ? cacheTenantKey.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 63) || '_shared'
+      : '_shared';
 
     await this.ensureBuilderNamespace();
     await this.ensureBuilderSecrets();
@@ -1088,6 +1103,13 @@ fi
         ...(this.localCacheEnabled ? [{
           name: 'buildkit-cache',
           mountPath: this.localCachePath,
+          // subPath scopes this pod's view of the shared PVC to a single
+          // tenant directory. The Kata guest only ever sees this slice on
+          // its mount surface, so a malicious build can't read/poison
+          // another tenant's cache by walking up the tree — there is no
+          // "up" inside the VM. emptyDir backends ignore subPath but it's
+          // harmless.
+          subPath: cacheSubPath,
         }] : []),
       ],
       resources: {

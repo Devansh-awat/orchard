@@ -38,14 +38,21 @@ metadata:
     app.kubernetes.io/managed-by: leaf
 type: kubernetes.io/dockerconfigjson
 stringData:
+  # The push sidecar uses skopeo, which reads docker auth files via
+  # containers/image. That parser expects the `auth` field (base64 of
+  # `user:pass`) — username/password alone produces "authentication
+  # required" on push because skopeo can't synthesize the header from
+  # the split fields. Emit `auth` alongside user/pass so both skopeo
+  # and any Docker-CLI-style consumer work.
   .dockerconfigjson: |
     {
       "auths": {
 {{- $hosts := .Values.builders.harbor.hosts }}
 {{- $user := .Values.builders.harbor.username }}
 {{- $pass := .Values.builders.harbor.password }}
+{{- $auth := printf "%s:%s" $user $pass | b64enc }}
 {{- range $i, $h := $hosts }}
-        {{ if $i }},{{ end }}"{{ $h }}": { "username": "{{ $user }}", "password": "{{ $pass }}" }
+        {{ if $i }},{{ end }}"{{ $h }}": { "username": "{{ $user }}", "password": "{{ $pass }}", "auth": "{{ $auth }}" }
 {{- end }}
       }
     }

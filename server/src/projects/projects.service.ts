@@ -1674,6 +1674,10 @@ export class ProjectsService {
         tag: data.tag,
         deploymentId,
         accessToken: githubAccessToken,
+        // Scope this build's slice of the shared buildkit-cache PVC to the
+        // project namespace. Kata's mount surface ⇒ the build VM only sees
+        // this directory and can't reach other tenants' cache entries.
+        cacheTenantKey: data.namespace,
       });
 
       const buildCompletedAt = new Date();

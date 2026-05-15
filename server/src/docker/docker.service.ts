@@ -50,6 +50,10 @@ interface BuildOptions {
   buildType?: BuildType;
   buildMode?: BuildMode;
   buildWithDepot?: boolean;
+  // Forwarded to ImageBuilderService as the per-tenant subPath on the
+  // shared buildkit-cache PVC. Callers should set this to the project's
+  // namespace.
+  cacheTenantKey?: string;
 }
 
 @Injectable()
@@ -1152,6 +1156,7 @@ export class DockerService {
         buildType,
         envVars,
         buildWithDepot: options.buildWithDepot,
+        cacheTenantKey: options.cacheTenantKey,
       });
 
       console.log('[Docker Service] Build completed successfully:', result);
