@@ -262,6 +262,35 @@ tenantSandbox:
   enabled: false
   runtimeClassName: gvisor
 
+# Builder pod sandboxing. Image-build jobs need `privileged: true` for
+# BuildKit, which gVisor refuses. Kata Containers wraps the pod in a
+# lightweight VM, so privileged-in-VM is fine and a malicious Dockerfile
+# can't reach the host kernel.
+#
+# REQUIREMENT before flipping enabled=true: `siderolabs/kata-containers`
+# Talos system extension installed on every node, plus KVM available on
+# the host (bare-metal Hetzner nodes have KVM natively).
+#
+# Two independent toggles, both default off so behaviour is unchanged on
+# upgrade:
+#   runtimeClassName: if non-empty, build Jobs run with this runtimeClass.
+#                     Set to "kata" once the extension is rolled out.
+#   sidecarPush:      if true, BuildKit moves to an init container with
+#                     NO Harbor push creds mounted, and a small `crane`
+#                     pusher container becomes the main container with
+#                     the creds. A malicious Dockerfile that exfiltrates
+#                     `/root/.docker/config.json` from BuildKit gets
+#                     nothing because the file isn't there during the
+#                     build step.
+builderSandbox:
+  enabled: false
+  runtimeClassName: kata
+  handler: kata
+  sidecarPush: false
+  # Image used by the pusher container in sidecarPush mode. Must contain
+  # `crane` (gcr.io/go-containerregistry/crane). Override to pin a digest.
+  pusherImage: gcr.io/go-containerregistry/crane:latest
+
 # Public-TLS reflection — tells the server which Secret to copy from when
 # exposing a CNPG cluster publicly with TLS.
 publicTls:

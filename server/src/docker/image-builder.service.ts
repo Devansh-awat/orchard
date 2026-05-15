@@ -61,6 +61,21 @@ export class ImageBuilderService {
   // (and tolerate a matching `orchard-builder` NoSchedule taint if present).
   private readonly dedicatedNodeEnabled = process.env.BUILDER_DEDICATED_NODE === 'true';
 
+  // Sandboxing toggles — both default off so prior versions behave identically.
+  //   BUILDER_RUNTIME_CLASS: if set (e.g. "kata"), the build Job pod selects
+  //     that RuntimeClass. With Kata each pod gets its own lightweight VM, so
+  //     the privileged BuildKit container is privileged-in-VM, not on host.
+  //   BUILDER_SIDECAR_PUSH: if "true", the BuildKit container runs as an
+  //     init container with NO Harbor push creds mounted; a tiny `crane`
+  //     pusher container runs after it (as the Job's main container) with
+  //     the creds and pushes the OCI tarball BuildKit wrote to /output.
+  //     Defence-in-depth against a malicious Dockerfile / BuildKit RCE
+  //     exfiltrating `/root/.docker/config.json`.
+  private readonly builderRuntimeClass = (process.env.BUILDER_RUNTIME_CLASS || '').trim() || undefined;
+  private readonly sidecarPushEnabled = process.env.BUILDER_SIDECAR_PUSH === 'true';
+  private readonly pusherImage =
+    process.env.BUILDER_PUSHER_IMAGE || 'gcr.io/go-containerregistry/crane:latest';
+
   constructor(private readonly prisma: PrismaService) {
     this.initKubeConfig();
   }
@@ -984,79 +999,138 @@ fi
       });
     }
 
-    // Build the main container spec based on build method (Depot vs BuildKit)
-    const mainContainer: k8s.V1Container = buildWithDepot
-      ? this.createDepotContainer({ dockerfilePath, fullImageName, target, buildFromRoot, buildType, envVars })
-      : {
-          name: 'buildkit',
-          image: 'moby/buildkit:latest',
-          securityContext: {
-            privileged: true,
+    // Build the BuildKit container spec (used as either main or init).
+    // sidecarPushEnabled changes two things compared to legacy:
+    //   - no docker-config (Harbor creds) mount — the build cannot
+    //     exfiltrate push creds even via a BuildKit-level compromise.
+    //   - mount `output` emptyDir at /output for the OCI tarball.
+    const buildkitContainer: k8s.V1Container | null = buildWithDepot ? null : {
+      name: 'buildkit',
+      image: 'moby/buildkit:latest',
+      securityContext: {
+        privileged: true,
+      },
+      command: ['/bin/sh', '-c'],
+      args: [this.generateBuildScriptWithCacheFallback(buildctlArgs)],
+      workingDir: '/workspace',
+      env: [
+        ...(this.sidecarPushEnabled
+          ? []
+          : [{ name: 'DOCKER_CONFIG', value: '/root/.docker' }]),
+        { name: 'BUILDKITD_FLAGS', value: '--config /etc/buildkit/buildkitd.toml' },
+        ...(this.s3CacheEnabled && !this.localCacheEnabled ? [
+          {
+            name: 'AWS_ACCESS_KEY_ID',
+            valueFrom: {
+              secretKeyRef: {
+                name: 'buildkit-s3-cache-creds',
+                key: 'AWS_ACCESS_KEY_ID',
+                optional: true,
+              }
+            }
           },
-          command: ['/bin/sh', '-c'],
-          args: [this.generateBuildScriptWithCacheFallback(buildctlArgs)],
-          workingDir: '/workspace',
-          env: [
-            { name: 'DOCKER_CONFIG', value: '/root/.docker' },
-            { name: 'BUILDKITD_FLAGS', value: '--config /etc/buildkit/buildkitd.toml' },
-            ...(this.s3CacheEnabled && !this.localCacheEnabled ? [
-              {
-                name: 'AWS_ACCESS_KEY_ID',
-                valueFrom: {
-                  secretKeyRef: {
-                    name: 'buildkit-s3-cache-creds',
-                    key: 'AWS_ACCESS_KEY_ID',
-                    optional: true,
-                  }
-                }
-              },
-              {
-                name: 'AWS_SECRET_ACCESS_KEY',
-                valueFrom: {
-                  secretKeyRef: {
-                    name: 'buildkit-s3-cache-creds',
-                    key: 'AWS_SECRET_ACCESS_KEY',
-                    optional: true,
-                  }
-                }
-              },
-            ] : []),
-            ...Object.entries(envVars).map(([key, value]) => ({
-              name: key,
-              value: value,
-            })),
-          ],
-          volumeMounts: [
-            {
-              name: 'workspace',
-              mountPath: '/workspace',
-            },
-            {
-              name: 'docker-config',
-              mountPath: '/root/.docker',
-              readOnly: true,
-            },
-            {
-              name: 'buildkit-config',
-              mountPath: '/etc/buildkit',
-              readOnly: true,
-            },
-            ...(this.localCacheEnabled ? [{
-              name: 'buildkit-cache',
-              mountPath: this.localCachePath,
-            }] : []),
-          ],
-          resources: {
-            requests: {
-              cpu: '500m',
-              memory: '1Gi',
-            },
-            limits: {
-              cpu: '4',
-              memory: '8Gi',
-            },
+          {
+            name: 'AWS_SECRET_ACCESS_KEY',
+            valueFrom: {
+              secretKeyRef: {
+                name: 'buildkit-s3-cache-creds',
+                key: 'AWS_SECRET_ACCESS_KEY',
+                optional: true,
+              }
+            }
           },
-        };
+        ] : []),
+        ...Object.entries(envVars).map(([key, value]) => ({
+          name: key,
+          value: value,
+        })),
+      ],
+      volumeMounts: [
+        {
+          name: 'workspace',
+          mountPath: '/workspace',
+        },
+        ...(this.sidecarPushEnabled ? [] : [{
+          name: 'docker-config',
+          mountPath: '/root/.docker',
+          readOnly: true,
+        }]),
+        {
+          name: 'buildkit-config',
+          mountPath: '/etc/buildkit',
+          readOnly: true,
+        },
+        ...(this.sidecarPushEnabled ? [{
+          name: 'output',
+          mountPath: '/output',
+        }] : []),
+        ...(this.localCacheEnabled ? [{
+          name: 'buildkit-cache',
+          mountPath: this.localCachePath,
+        }] : []),
+      ],
+      resources: {
+        requests: {
+          cpu: '500m',
+          memory: '1Gi',
+        },
+        limits: {
+          cpu: '4',
+          memory: '8Gi',
+        },
+      },
+    };
+
+    // Pusher container — only used when sidecarPushEnabled. Reads the OCI
+    // tarball BuildKit wrote and pushes it to Harbor with the registry
+    // creds. The container runs `crane push` only — no untrusted code.
+    const pusherContainer: k8s.V1Container | null = (buildkitContainer && this.sidecarPushEnabled) ? {
+      name: 'pusher',
+      image: this.pusherImage,
+      // crane needs DOCKER_CONFIG pointing at a directory containing
+      // config.json. Use an explicit entrypoint to avoid relying on the
+      // image's default CMD.
+      command: ['/bin/sh', '-c'],
+      args: [
+        `set -e
+echo "=== Pushing OCI tarball to registry ==="
+if [ ! -f /output/image.tar ]; then
+  echo "ERROR: /output/image.tar not found — BuildKit must have failed"
+  ls -la /output 2>&1 || true
+  exit 1
+fi
+echo "Tarball size: $(stat -c%s /output/image.tar 2>/dev/null || wc -c < /output/image.tar) bytes"
+crane push /output/image.tar '${fullImageName.replace(/'/g, `'\\''`)}'
+echo "=== Pushed image ==="`,
+      ],
+      env: [
+        { name: 'DOCKER_CONFIG', value: '/root/.docker' },
+      ],
+      volumeMounts: [
+        { name: 'output', mountPath: '/output', readOnly: true },
+        { name: 'docker-config', mountPath: '/root/.docker', readOnly: true },
+      ],
+      resources: {
+        requests: { cpu: '100m', memory: '256Mi' },
+        limits: { cpu: '1', memory: '1Gi' },
+      },
+    } : null;
+
+    // Final container layout:
+    //   - Depot: depot container as main, no buildkit/pusher.
+    //   - sidecarPush off (default): buildkit as main, classic behaviour.
+    //   - sidecarPush on: buildkit moves to last init, pusher is main.
+    //     Keeping the name `buildkit` preserves log fetching code paths
+    //     in readBuildJob() that look up logs by container name.
+    let mainContainer: k8s.V1Container;
+    if (buildWithDepot) {
+      mainContainer = this.createDepotContainer({ dockerfilePath, fullImageName, target, buildFromRoot, buildType, envVars });
+    } else if (this.sidecarPushEnabled && pusherContainer) {
+      initContainers.push(buildkitContainer!);
+      mainContainer = pusherContainer;
+    } else {
+      mainContainer = buildkitContainer!;
+    }
 
     // Create the build job with init containers and daemonless buildkit
     const job: k8s.V1Job = {
@@ -1092,6 +1166,10 @@ fi
           spec: {
             restartPolicy: 'Never',
             serviceAccountName: 'image-builder',
+            // Builder pod runtime: Kata (lightweight VM) when configured.
+            // Empty/undefined ⇒ default containerd handler (runc) — matches
+            // legacy behaviour on first upgrade.
+            ...(this.builderRuntimeClass ? { runtimeClassName: this.builderRuntimeClass } : {}),
             ...(this.dedicatedNodeEnabled ? {
               nodeSelector: { 'orchard-builder': 'true' },
               tolerations: [{
@@ -1125,6 +1203,10 @@ fi
                   name: 'buildkit-config',
                 },
               },
+              ...(this.sidecarPushEnabled ? [{
+                name: 'output',
+                emptyDir: {},
+              }] : []),
               ...(this.localCacheEnabled ? [{
                 name: 'buildkit-cache',
                 ...(this.localCachePvc
@@ -1253,8 +1335,15 @@ fi
       args.push(cacheArg);
     }
 
-    // Output to registry
-    args.push('--output', `type=image,"name=${fullImageName}",push=true`);
+    // Output: with sidecarPushEnabled, BuildKit writes an OCI tarball to a
+    // shared volume and a separate pusher container (with the Harbor
+    // creds) handles `crane push`. Without it, BuildKit pushes directly
+    // (legacy behaviour, identical to prior versions).
+    if (this.sidecarPushEnabled) {
+      args.push('--output', `type=oci,"name=${fullImageName}",dest=/output/image.tar`);
+    } else {
+      args.push('--output', `type=image,"name=${fullImageName}",push=true`);
+    }
 
     return args;
   }
@@ -1298,7 +1387,11 @@ fi
       args.push(cacheArg);
     }
 
-    args.push('--output', `type=image,"name=${fullImageName}",push=true`);
+    if (this.sidecarPushEnabled) {
+      args.push('--output', `type=oci,"name=${fullImageName}",dest=/output/image.tar`);
+    } else {
+      args.push('--output', `type=image,"name=${fullImageName}",push=true`);
+    }
 
     return args;
   }

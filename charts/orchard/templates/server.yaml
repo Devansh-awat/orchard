@@ -46,6 +46,15 @@ spec:
             {{- if .Values.tenantSandbox.enabled }}
             - { name: TENANT_RUNTIME_CLASS, value: {{ .Values.tenantSandbox.runtimeClassName | quote }} }
             {{- end }}
+            {{- if .Values.builderSandbox.enabled }}
+            {{- if .Values.builderSandbox.runtimeClassName }}
+            - { name: BUILDER_RUNTIME_CLASS, value: {{ .Values.builderSandbox.runtimeClassName | quote }} }
+            {{- end }}
+            {{- if .Values.builderSandbox.sidecarPush }}
+            - { name: BUILDER_SIDECAR_PUSH, value: "true" }
+            - { name: BUILDER_PUSHER_IMAGE, value: {{ .Values.builderSandbox.pusherImage | quote }} }
+            {{- end }}
+            {{- end }}
             {{- if .Values.r2Proxy.enabled }}
             - { name: BACKUP_PROXY_ENABLED, value: "true" }
             - name: BACKUP_PROXY_ENDPOINT
