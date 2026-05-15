@@ -221,6 +221,12 @@ spec:
             matchLabels:
               kubernetes.io/metadata.name: harbor
 ---
+# Cluster-wide permissions limited to truly cluster-scoped resources and the
+# narrow read/watch verbs Orchard needs across tenant namespaces. Read/write
+# on secrets and configmaps is intentionally NOT granted cluster-wide — those
+# permissions are bound per-namespace (orchard-builders + cert-manager source
+# ns below, and per-tenant ns bootstrapped by the server at namespace create
+# time via the role/rolebinding create grant retained here).
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
@@ -239,11 +245,10 @@ rules:
     resources: ["pods", "pods/log"]
     verbs: ["get", "list", "watch"]
   - apiGroups: [""]
-    resources: ["secrets", "configmaps"]
-    verbs: ["get", "list", "create", "update", "patch"]
-  - apiGroups: [""]
     resources: ["serviceaccounts"]
     verbs: ["get", "create"]
+  # Retained so the server can bootstrap a namespaced secrets/configmaps Role
+  # in each tenant namespace at create-time (see KubernetesService).
   - apiGroups: ["rbac.authorization.k8s.io"]
     resources: ["roles", "rolebindings"]
     verbs: ["get", "create"]
@@ -271,5 +276,74 @@ subjects:
 roleRef:
   kind: ClusterRole
   name: {{ .Release.Name }}-image-builder-manager
+  apiGroup: rbac.authorization.k8s.io
+---
+# Builder-namespace Role: full secrets/configmaps management for the builders
+# namespace only. Replaces the cluster-wide secrets grant for this use case.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-image-builder-secrets
+  namespace: {{ $bns }}
+  labels:
+    app.kubernetes.io/name: image-builder
+    app.kubernetes.io/managed-by: leaf
+rules:
+  - apiGroups: [""]
+    resources: ["secrets", "configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-image-builder-secrets
+  namespace: {{ $bns }}
+  labels:
+    app.kubernetes.io/name: image-builder
+    app.kubernetes.io/managed-by: leaf
+subjects:
+  - kind: ServiceAccount
+    name: orchard-server
+    namespace: {{ $appNs }}
+roleRef:
+  kind: Role
+  name: {{ .Release.Name }}-image-builder-secrets
+  apiGroup: rbac.authorization.k8s.io
+---
+# Cert-manager source-namespace Role: read-only access to the single wildcard
+# TLS secret the server mirrors into tenant namespaces. Scoped via
+# resourceNames so even within this namespace the server cannot read other
+# secrets.
+{{- $tlsNs := (.Values.publicTls.db.sourceNamespace | default .Values.certificates.namespace) | default "network" }}
+{{- $tlsSecret := (.Values.publicTls.db.sourceSecret | default .Values.certificates.wildcards.db.secretName) | default "wildcard-db-orchard-my-tls" }}
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-wildcard-tls-reader
+  namespace: {{ $tlsNs }}
+  labels:
+    app.kubernetes.io/name: server
+    app.kubernetes.io/managed-by: leaf
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    resourceNames: [{{ $tlsSecret | quote }}]
+    verbs: ["get", "watch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-wildcard-tls-reader
+  namespace: {{ $tlsNs }}
+  labels:
+    app.kubernetes.io/name: server
+    app.kubernetes.io/managed-by: leaf
+subjects:
+  - kind: ServiceAccount
+    name: orchard-server
+    namespace: {{ $appNs }}
+roleRef:
+  kind: Role
+  name: {{ .Release.Name }}-wildcard-tls-reader
   apiGroup: rbac.authorization.k8s.io
 {{- end }}

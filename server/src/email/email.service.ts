@@ -67,6 +67,15 @@ export class EmailService {
     return this.transporter !== null;
   }
 
+  private escapeHtml(value: string): string {
+    return String(value ?? '')
+      .replaceAll('&', '&amp;')
+      .replaceAll('<', '&lt;')
+      .replaceAll('>', '&gt;')
+      .replaceAll('"', '&quot;')
+      .replaceAll("'", '&#39;');
+  }
+
   private renderTemplate(
     templateName: string,
     variables: Record<string, string>,
@@ -75,7 +84,7 @@ export class EmailService {
     let mjmlContent = fs.readFileSync(templatePath, 'utf-8');
 
     for (const [key, value] of Object.entries(variables)) {
-      mjmlContent = mjmlContent.replaceAll(`{{${key}}}`, value);
+      mjmlContent = mjmlContent.replaceAll(`{{${key}}}`, this.escapeHtml(value));
     }
 
     const { html, errors } = mjml2html(mjmlContent);

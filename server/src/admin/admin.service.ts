@@ -1,7 +1,7 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 import { AuditService } from '../audit/audit.service';
 import { AuthorizationService } from '../auth/authorization.service';
 
@@ -289,6 +289,7 @@ export class AdminService {
     if (data.primaryOwnerEmail?.trim() && inviterId) {
       const email = data.primaryOwnerEmail.trim().toLowerCase();
       const token = randomBytes(32).toString('hex');
+      const tokenHash = createHash('sha256').update(token).digest('hex');
       const expiresAt = new Date();
       expiresAt.setDate(expiresAt.getDate() + 7);
       await this.prisma.organizationInvitation.create({
@@ -296,7 +297,8 @@ export class AdminService {
           organizationId: org.id,
           email,
           role: 'owner',
-          token,
+          token: null,
+          tokenHash,
           invitedBy: inviterId,
           expiresAt,
         },

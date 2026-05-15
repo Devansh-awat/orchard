@@ -763,6 +763,17 @@ export class KubernetesService {
         console.error(`[K8s] Failed to create network policy for namespace ${cleanNamespace}:`, networkPolicyError);
       }
 
+      // Bootstrap the per-tenant Role+RoleBinding that lets the orchard-server
+      // ServiceAccount manage secrets and configmaps inside this namespace.
+      // The cluster-wide grant on these resources was removed — see
+      // charts/orchard/templates/builders.yaml. This namespaced Role is the
+      // replacement for tenant namespaces.
+      try {
+        await this.bootstrapTenantSecretsRbac(cleanNamespace);
+      } catch (rbacErr) {
+        console.error(`[K8s] Failed to bootstrap tenant secrets RBAC for ${cleanNamespace}:`, rbacErr);
+      }
+
       return {
         success: true,
         namespace: cleanNamespace,
@@ -789,6 +800,46 @@ export class KubernetesService {
         error: 'Failed to create namespace',
         message: error.message,
       });
+    }
+  }
+
+  /**
+   * Create a namespaced Role + RoleBinding that grants the orchard-server
+   * ServiceAccount full secrets/configmaps management inside `namespace`.
+   * Idempotent — swallows 409 if the bindings already exist. This replaces
+   * the previous cluster-wide secrets/configmaps grant on the orchard-server
+   * ServiceAccount.
+   */
+  async bootstrapTenantSecretsRbac(namespace: string): Promise<void> {
+    const rbacApi = this.kc.makeApiClient(k8s.RbacAuthorizationV1Api);
+    const serverNamespace = process.env.ORCHARD_SERVER_NAMESPACE || 'orchard';
+    const labels = {
+      'app.kubernetes.io/name': 'server',
+      'app.kubernetes.io/managed-by': 'leaf',
+    };
+    const roleName = 'orchard-server-tenant-secrets';
+    try {
+      await rbacApi.createNamespacedRole(namespace, {
+        metadata: { name: roleName, namespace, labels },
+        rules: [
+          {
+            apiGroups: [''],
+            resources: ['secrets', 'configmaps'],
+            verbs: ['get', 'list', 'watch', 'create', 'update', 'patch', 'delete'],
+          },
+        ],
+      });
+    } catch (e: any) {
+      if (e?.response?.statusCode !== 409) throw e;
+    }
+    try {
+      await rbacApi.createNamespacedRoleBinding(namespace, {
+        metadata: { name: roleName, namespace, labels },
+        roleRef: { apiGroup: 'rbac.authorization.k8s.io', kind: 'Role', name: roleName },
+        subjects: [{ kind: 'ServiceAccount', name: 'orchard-server', namespace: serverNamespace }],
+      });
+    } catch (e: any) {
+      if (e?.response?.statusCode !== 409) throw e;
     }
   }
 
