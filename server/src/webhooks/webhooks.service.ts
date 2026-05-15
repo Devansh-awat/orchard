@@ -203,30 +203,51 @@ export class WebhooksService {
     // deployment through the token until it expires. The token is auto-
     // revoked on the first failed check so a stale CI hook can't keep
     // hammering the audit log.
-    if (tokenRecord.createdByUserId) {
-      try {
-        await this.authz.requireProjectEdit(
-          projectId,
-          tokenRecord.createdByUserId,
-          'trigger deployment via webhook',
-        );
-      } catch {
-        await this.prisma.deploymentWebhookToken
-          .delete({ where: { id: tokenRecord.id } })
-          .catch(() => {});
-        void this.audit.log({
-          action: 'deployment.webhook_triggered',
-          actorUserId: tokenRecord.createdByUserId,
-          organizationId,
-          projectId,
-          deploymentId: deployment.id,
-          targetType: 'webhook_token',
-          targetId: tokenRecord.id,
-          targetLabel: tokenRecord.label ?? tokenRecord.id,
-          metadata: { outcome: 'failure', action: 'rejected', reason: 'creator_lost_access' },
-        });
-        throw new NotFoundException('Invalid webhook token');
-      }
+    //
+    // Legacy tokens with no `createdByUserId` cannot be RBAC-checked — there
+    // is no principal to evaluate against. Previously these tokens bypassed
+    // the re-check entirely, meaning any pre-RBAC token kept full mutation
+    // power forever. Reject and purge them on first use.
+    if (!tokenRecord.createdByUserId) {
+      await this.prisma.deploymentWebhookToken
+        .delete({ where: { id: tokenRecord.id } })
+        .catch(() => {});
+      void this.audit.log({
+        action: 'deployment.webhook_triggered',
+        actorUserId: null,
+        organizationId,
+        projectId,
+        deploymentId: deployment.id,
+        targetType: 'webhook_token',
+        targetId: tokenRecord.id,
+        targetLabel: tokenRecord.label ?? tokenRecord.id,
+        metadata: { outcome: 'failure', action: 'rejected', reason: 'legacy_token_no_creator' },
+      });
+      throw new NotFoundException('Invalid webhook token');
+    }
+
+    try {
+      await this.authz.requireProjectEdit(
+        projectId,
+        tokenRecord.createdByUserId,
+        'trigger deployment via webhook',
+      );
+    } catch {
+      await this.prisma.deploymentWebhookToken
+        .delete({ where: { id: tokenRecord.id } })
+        .catch(() => {});
+      void this.audit.log({
+        action: 'deployment.webhook_triggered',
+        actorUserId: tokenRecord.createdByUserId,
+        organizationId,
+        projectId,
+        deploymentId: deployment.id,
+        targetType: 'webhook_token',
+        targetId: tokenRecord.id,
+        targetLabel: tokenRecord.label ?? tokenRecord.id,
+        metadata: { outcome: 'failure', action: 'rejected', reason: 'creator_lost_access' },
+      });
+      throw new NotFoundException('Invalid webhook token');
     }
 
     // Update lastUsedAt (fire and forget)

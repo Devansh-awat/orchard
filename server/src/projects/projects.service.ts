@@ -141,6 +141,8 @@ export class ProjectsService {
       dbPassword?: string | null;
       connectionString?: string | null;
       publicConnectionString?: string | null;
+      r2ProxyAccessKey?: string | null;
+      r2ProxySecret?: string | null;
     },
   >(d: T): T {
     return {
@@ -148,6 +150,27 @@ export class ProjectsService {
       dbPassword: null,
       connectionString: null,
       publicConnectionString: null,
+      r2ProxyAccessKey: null,
+      r2ProxySecret: null,
+    } as T;
+  }
+
+  /**
+   * Strip R2 proxy backup credentials from a database payload.
+   * These are infrastructure secrets — they should never leave the server
+   * via user-facing APIs. The in-cluster CNPG provisioning path reads them
+   * directly from prisma, so user-facing callers always go through here.
+   */
+  private stripR2ProxyCreds<
+    T extends {
+      r2ProxyAccessKey?: string | null;
+      r2ProxySecret?: string | null;
+    },
+  >(d: T): T {
+    return {
+      ...d,
+      r2ProxyAccessKey: null,
+      r2ProxySecret: null,
     } as T;
   }
 
@@ -2430,6 +2453,14 @@ export class ProjectsService {
     const appDomain = process.env.APP_DOMAIN || 'a.lfdl.ink';
     const domainToCheck = domain.trim().toLowerCase();
 
+    // Generic failure message — do NOT echo resolved DNS records back to the
+    // caller. Returning resolved CNAME / A records turns this endpoint into a
+    // DNS oracle for arbitrary internet domains.
+    const genericFailure = {
+      valid: false,
+      message: 'DNS records do not point to the configured target.',
+    };
+
     if (!domainToCheck) {
       return { valid: false, message: 'Domain is required' };
     }
@@ -2450,23 +2481,12 @@ export class ProjectsService {
 
       if (hasValidCname) {
         return { valid: true, message: 'CNAME record is correctly configured' };
-      } else {
-        return {
-          valid: false,
-          message: `CNAME record does not point to ${expectedCname}. Found: ${records.join(', ') || 'none'}. Please create a CNAME record pointing ${domainToCheck} to ${expectedCname}`
-        };
       }
+      return genericFailure;
     } catch (error: any) {
-      if (error.code === 'ENOTFOUND' || error.code === 'ENODATA') {
-        return {
-          valid: false,
-          message: `CNAME record not found. Please create a CNAME record pointing ${domainToCheck} to ${expectedCname}`
-        };
-      }
-      return {
-        valid: false,
-        message: `DNS lookup failed: ${error.message || 'Unknown error'}`
-      };
+      // Swallow lookup errors (ENOTFOUND/ENODATA/etc) into the same generic
+      // failure to avoid leaking DNS state of arbitrary domains.
+      return genericFailure;
     }
   }
 
@@ -4725,6 +4745,18 @@ export class ProjectsService {
     return { user, access };
   }
 
+  async assertProjectEditAccess(
+    projectId: string,
+    clerkId: string,
+    userData?: any,
+    action: string = 'perform this action',
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+    const access = await this.authz.requireProjectEdit(projectId, user.id, action);
+    return { user, access };
+  }
+
   async assertDatabaseView(databaseId: string, clerkId: string, userData?: any) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
     if (!user) throw new NotFoundException('User not found');
@@ -5277,7 +5309,7 @@ export class ProjectsService {
       ? membersWithOrgRole
       : this.scrubMembersForViewer(membersWithOrgRole as any);
     const safeDatabases = access.canEdit
-      ? reconciledDatabases
+      ? (reconciledDatabases as any[]).map((d) => this.stripR2ProxyCreds(d))
       : (reconciledDatabases as any[]).map((d) => this.redactDatabaseForViewer(d));
 
     return {
@@ -8203,7 +8235,7 @@ export class ProjectsService {
       metadata: { mode: 'cnpg', storageSize },
     });
 
-    return database;
+    return this.stripR2ProxyCreds(database as any);
   }
 
   async getDatabase(databaseId: string, canEdit: boolean = true, userId?: string) {
@@ -8295,7 +8327,11 @@ export class ProjectsService {
     if (!canEdit) {
       return this.redactDatabaseForViewer(result);
     }
-    return result;
+    // R2 proxy backup credentials are infrastructure secrets — strip from
+    // user-facing returns for editors/members too. Only admins of the org
+    // (and the in-cluster provisioning path that reads prisma directly)
+    // should ever see them.
+    return this.stripR2ProxyCreds(result);
   }
 
   async getDatabaseProvisioning(databaseId: string, userId?: string) {
@@ -8484,7 +8520,9 @@ export class ProjectsService {
     if (!canEdit) {
       return databases.map((d) => this.redactDatabaseForViewer(d as any));
     }
-    return databases;
+    // Strip R2 proxy backup credentials from editor returns as well — they
+    // are infrastructure secrets, not user-facing data.
+    return databases.map((d) => this.stripR2ProxyCreds(d as any));
   }
 
   async deleteDatabase(

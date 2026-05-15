@@ -27,6 +27,17 @@ async function bootstrap() {
 
   app.setGlobalPrefix('apiv1');
 
+  // Configure trust proxy so req.ip honors X-Forwarded-For ONLY when we are
+  // behind a known proxy. The env var TRUST_PROXY accepts a hop count
+  // ("1", "2"), "loopback"/"linklocal"/"uniquelocal", or a CIDR list.
+  // Default: disabled (req.ip = socket peer), preventing XFF spoofing
+  // when the app is reachable directly.
+  const trustProxy = process.env.TRUST_PROXY;
+  if (trustProxy) {
+    const n = Number(trustProxy);
+    app.set('trust proxy', Number.isFinite(n) && n > 0 ? n : trustProxy);
+  }
+
   app.use(cookieParser());
 
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';

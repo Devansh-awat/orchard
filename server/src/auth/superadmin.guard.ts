@@ -4,7 +4,13 @@ import { jwtVerify } from 'jose';
 import { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionsService } from './sessions.service';
-import { IS_PUBLIC_KEY, REQUIRES_AUTH_KEY, REQUIRES_SUPERADMIN_KEY } from './decorators';
+import {
+  IS_PUBLIC_KEY,
+  REQUIRES_AUTH_KEY,
+  REQUIRES_SUPERADMIN_KEY,
+  REQUIRED_SCOPE_KEY,
+  ApiTokenScopeName,
+} from './decorators';
 import { hashApiToken } from './api-tokens.service';
 
 @Injectable()
@@ -190,5 +196,68 @@ export class SuperAdminGuard implements CanActivate {
     return authHeader?.startsWith('Bearer ')
       ? authHeader.substring(7)
       : cookieToken;
+  }
+}
+
+// Enforces API-token scope on every mutating request.
+//
+// SuperAdminGuard authenticates the principal and (for API tokens) stashes
+// the granted scopes on the request. ScopeGuard runs immediately after and
+// answers a simpler question: "is this token allowed to do *this kind* of
+// thing?"
+//
+// Defaults are deliberately strict so a new mutating controller can't ship
+// without a scope check by accident:
+//   - GET / HEAD / OPTIONS → require `read` (or any higher scope)
+//   - everything else      → require `deploy` (or `exec`)
+// A route may opt into a different requirement with @RequireScope('exec').
+// Session-authenticated requests bypass this guard entirely — scopes only
+// constrain programmatic token use.
+@Injectable()
+export class ScopeGuard implements CanActivate {
+  constructor(private readonly reflector: Reflector) {}
+
+  canActivate(context: ExecutionContext): boolean {
+    const request = context.switchToHttp().getRequest<Request>();
+    const auth = request['auth'] as { apiTokenId?: string; tokenScopes?: string[] } | undefined;
+
+    // Session auth (no apiTokenId on the auth context) → scopes don't apply.
+    if (!auth || !auth.apiTokenId) {
+      return true;
+    }
+
+    // Public routes (e.g. webhook trigger) never get an apiTokenId set, so
+    // they short-circuit above. We don't need an IS_PUBLIC check here.
+
+    const explicit = this.reflector.getAllAndOverride<ApiTokenScopeName | undefined>(
+      REQUIRED_SCOPE_KEY,
+      [context.getHandler(), context.getClass()],
+    );
+
+    const method = (request.method || 'GET').toUpperCase();
+    const isReadOnly = method === 'GET' || method === 'HEAD' || method === 'OPTIONS';
+    const required: ApiTokenScopeName = explicit ?? (isReadOnly ? 'read' : 'deploy');
+
+    const granted = Array.isArray(auth.tokenScopes) ? auth.tokenScopes : [];
+
+    if (this.scopeSatisfies(granted, required)) {
+      return true;
+    }
+
+    throw new ForbiddenException(`Token lacks required scope: ${required}`);
+  }
+
+  // `exec` ⊇ `deploy` ⊇ `read`. A token granted a higher capability implicitly
+  // satisfies the lower ones, which matches how operators reason about these
+  // scopes in practice (an exec-capable CI key can also read and deploy).
+  private scopeSatisfies(granted: string[], required: ApiTokenScopeName): boolean {
+    if (granted.includes(required)) return true;
+    if (required === 'read') {
+      return granted.includes('deploy') || granted.includes('exec');
+    }
+    if (required === 'deploy') {
+      return granted.includes('exec');
+    }
+    return false;
   }
 }

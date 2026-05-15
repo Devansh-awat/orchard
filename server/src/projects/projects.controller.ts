@@ -59,9 +59,31 @@ export class ProjectsController {
   async validateIngressDns(
     @Body()
     body: {
+      projectId: string;
       domain: string;
-    }
+    },
+    @Request() req,
   ) {
+    if (!body || typeof body.projectId !== 'string' || !body.projectId.trim()) {
+      throw new BadRequestException('projectId is required');
+    }
+    if (typeof body.domain !== 'string' || !body.domain.trim()) {
+      throw new BadRequestException('domain is required');
+    }
+    // Require project-edit on the named project before performing any DNS
+    // lookup. This prevents the endpoint from being abused as an arbitrary
+    // DNS oracle by any authenticated user.
+    await this.projectsService.assertProjectEditAccess(
+      body.projectId,
+      req.user.sub,
+      {
+        email: req.user.email,
+        username: req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        imageUrl: req.user.imageUrl,
+      },
+    );
     return this.projectsService.validateIngressDns(body.domain);
   }
 

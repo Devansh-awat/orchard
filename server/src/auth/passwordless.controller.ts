@@ -59,13 +59,6 @@ export class PasswordlessController {
    * Get the client IP address from the request.
    */
   private getClientIp(req: Request): string {
-    const forwarded = req.headers['x-forwarded-for'];
-    if (typeof forwarded === 'string') {
-      return forwarded.split(',')[0].trim();
-    }
-    if (Array.isArray(forwarded)) {
-      return forwarded[0];
-    }
     return req.ip || req.socket.remoteAddress || 'unknown';
   }
 
@@ -600,6 +593,10 @@ export class PasswordlessController {
         data: {
           email: normalizedEmail,
           username,
+          // H-6: this code path runs only after a successful OTP verify in
+          // verifyOtp() above, so the email has just been proven owned.
+          emailVerified: true,
+          emailVerifiedAt: new Date(),
         },
       });
     }

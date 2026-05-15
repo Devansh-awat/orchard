@@ -1,6 +1,7 @@
 import { Controller, Get, Patch, Post, Delete, Query, Body, Res, Req, HttpException, HttpStatus, UseInterceptors, UploadedFile } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Request, Response } from 'express';
+import * as crypto from 'crypto';
 import { OAuthService } from './oauth.service';
 import { SessionsService } from './sessions.service';
 import { StorageService } from '../organizations/storage.service';
@@ -47,15 +48,23 @@ export class OAuthController {
 
   @Get('login')
   login(@Res() res: Response) {
-    const state = Math.random().toString(36).substring(7);
+    const state = crypto.randomBytes(32).toString('hex');
+    res.cookie('oauth_state', state, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 10 * 60 * 1000,
+      path: '/apiv1/auth',
+    });
     const authUrl = this.oauthService.getAuthorizationUrl(state);
     return res.redirect(authUrl);
   }
 
+  private clearOauthStateCookie(res: Response) {
+    res.clearCookie('oauth_state', { path: '/apiv1/auth' });
+  }
+
   private getClientIp(req: Request): string {
-    const forwarded = req.headers['x-forwarded-for'];
-    if (typeof forwarded === 'string') return forwarded.split(',')[0].trim();
-    if (Array.isArray(forwarded)) return forwarded[0];
     return req.ip || req.socket.remoteAddress || 'unknown';
   }
 
@@ -63,10 +72,14 @@ export class OAuthController {
   async callback(
     @Query('code') code: string,
     @Query('error') error: string,
+    @Query('state') state: string,
     @Req() req: Request,
     @Res() res: Response,
   ) {
+    const frontendBase = process.env.FRONTEND_URL || 'http://localhost:3000';
+
     if (error) {
+      this.clearOauthStateCookie(res);
       return res.redirect(`${process.env.FRONTEND_URL}?error=${encodeURIComponent(error)}`);
     }
 
@@ -74,19 +87,48 @@ export class OAuthController {
       throw new HttpException('No authorization code provided', HttpStatus.BAD_REQUEST);
     }
 
+    // CSRF: validate state against httpOnly cookie set in /login.
+    const cookieState = (req as any).cookies?.oauth_state;
+    const stateMismatch = (() => {
+      if (!state || !cookieState) return true;
+      const a = Buffer.from(state, 'utf8');
+      const b = Buffer.from(cookieState, 'utf8');
+      if (a.length !== b.length) return true;
+      try {
+        return !crypto.timingSafeEqual(a, b);
+      } catch {
+        return true;
+      }
+    })();
+    if (stateMismatch) {
+      this.clearOauthStateCookie(res);
+      return res.redirect(
+        `${frontendBase}/oauth/callback?error=${encodeURIComponent('invalid_state')}`,
+      );
+    }
+    this.clearOauthStateCookie(res);
+
     try {
       const accessToken = await this.oauthService.exchangeCodeForToken(code);
       const hackClubUser = await this.oauthService.getUserInfo(accessToken);
 
-      // Private beta: check access BEFORE creating the user so rejected
-      // signups don't leave an orphan user row with zero organizations.
-      const existingUser =
-        (await this.prisma.user.findUnique({
-          where: { hackClubId: hackClubUser.id },
-        })) ??
-        (await this.prisma.user.findUnique({
+      // Look up ONLY by hackClubId. If an unrelated user already owns this
+      // email, reject — never silently link by email.
+      const existingUser = await this.prisma.user.findUnique({
+        where: { hackClubId: hackClubUser.id },
+      });
+
+      if (!existingUser) {
+        const emailOwner = await this.prisma.user.findUnique({
           where: { email: hackClubUser.email },
-        }));
+          select: { id: true },
+        });
+        if (emailOwner) {
+          return res.redirect(
+            `${frontendBase}/oauth/callback?error=${encodeURIComponent('email_already_registered')}`,
+          );
+        }
+      }
 
       const hasAccess = await this.hasPrivateBetaAccess(
         hackClubUser.email,
@@ -94,7 +136,7 @@ export class OAuthController {
       );
       if (!hasAccess) {
         return res.redirect(
-          `${process.env.FRONTEND_URL || 'http://localhost:3000'}/oauth/callback?error=${encodeURIComponent('private_beta')}`
+          `${frontendBase}/oauth/callback?error=${encodeURIComponent('private_beta')}`
         );
       }
 
@@ -112,7 +154,7 @@ export class OAuthController {
       res.cookie('session_token', sessionToken, {
         httpOnly: true,
         secure: process.env.NODE_ENV === 'production',
-        sameSite: 'lax',
+        sameSite: 'strict',
         maxAge: 7 * 24 * 60 * 60 * 1000,
         path: '/',
         domain: process.env.COOKIE_DOMAIN || undefined,

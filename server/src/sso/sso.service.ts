@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException, UnauthorizedException, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { OAuthService } from '../auth/oauth.service';
 import { SessionsService } from '../auth/sessions.service';
@@ -23,6 +23,10 @@ export class SsoService {
   private readonly platformNamespace: string;
   private readonly platformServiceName: string;
   private readonly platformServicePort: number;
+  // In-memory single-use store for OIDC state -> {orgId, codeVerifier}.
+  // 10-minute TTL; lazily cleaned on lookup. Acceptable for short-lived
+  // flows; multi-replica deployments would need a shared store.
+  private readonly oidcStateStore = new Map<string, { orgId: string; codeVerifier: string; expiresAt: number }>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -47,7 +51,9 @@ export class SsoService {
   // ========== Encryption helpers ==========
 
   encrypt(plaintext: string): string {
-    if (!this.encryptionKey) return plaintext;
+    if (!this.encryptionKey) {
+      throw new Error('SSO_ENCRYPTION_KEY is not configured; refusing to store SSO secrets in plaintext');
+    }
     const iv = randomBytes(16);
     const cipher = createCipheriv('aes-256-gcm', this.encryptionKey, iv);
     const encrypted = Buffer.concat([cipher.update(plaintext, 'utf8'), cipher.final()]);
@@ -56,9 +62,13 @@ export class SsoService {
   }
 
   decrypt(ciphertext: string): string {
-    if (!this.encryptionKey) return ciphertext;
+    if (!this.encryptionKey) {
+      throw new Error('SSO_ENCRYPTION_KEY is not configured; cannot decrypt SSO secret');
+    }
     const parts = ciphertext.split(':');
-    if (parts.length !== 3) return ciphertext; // not encrypted
+    if (parts.length !== 3) {
+      throw new Error('Invalid SSO ciphertext format');
+    }
     const [ivHex, authTagHex, encryptedHex] = parts;
     const iv = Buffer.from(ivHex, 'hex');
     const authTag = Buffer.from(authTagHex, 'hex');
@@ -391,11 +401,15 @@ export class SsoService {
     const codeVerifier = openidClient.randomPKCECodeVerifier();
     const codeChallenge = await openidClient.calculatePKCECodeChallenge(codeVerifier);
 
-    const state = Buffer.from(JSON.stringify({
+    // Opaque random state; the real {orgId, codeVerifier} is held server-side
+    // and looked up on callback. Prevents an attacker from forging state.
+    const state = randomBytes(32).toString('hex');
+    this.cleanupOidcStateStore();
+    this.oidcStateStore.set(state, {
       orgId: organizationId,
       codeVerifier,
-      ts: Date.now(),
-    })).toString('base64url');
+      expiresAt: Date.now() + 10 * 60 * 1000,
+    });
 
     const parameters: Record<string, string> = {
       redirect_uri: redirectUri,
@@ -419,21 +433,23 @@ export class SsoService {
       throw new BadRequestException('OIDC SSO is not configured for this organization');
     }
 
-    // Decode state to get code verifier
-    let stateData: any;
-    try {
-      stateData = JSON.parse(Buffer.from(state, 'base64url').toString());
-    } catch {
-      throw new BadRequestException('Invalid SSO state');
+    if (!config.enabled) {
+      throw new UnauthorizedException('SSO is disabled for this organization');
     }
 
+    // Look up server-side state; single-use, expires after 10 minutes.
+    this.cleanupOidcStateStore();
+    const stateData = this.oidcStateStore.get(state);
+    if (!stateData) {
+      throw new BadRequestException('Invalid or expired SSO state');
+    }
+    // Single-use
+    this.oidcStateStore.delete(state);
+    if (stateData.expiresAt < Date.now()) {
+      throw new BadRequestException('SSO state has expired');
+    }
     if (stateData.orgId !== organizationId) {
       throw new BadRequestException('Organization mismatch in SSO state');
-    }
-
-    // Check state is not too old (10 minutes)
-    if (Date.now() - stateData.ts > 10 * 60 * 1000) {
-      throw new BadRequestException('SSO state has expired');
     }
 
     const clientId = config.oidcClientId;
@@ -452,6 +468,10 @@ export class SsoService {
       expectedState: state,
     });
 
+    if ((tokens.claims() as any)?.email_verified === false) {
+      throw new UnauthorizedException('email not verified');
+    }
+
     const claims = tokens.claims();
     const email = claims.email as string;
     const name = (claims.name as string) || email.split('@')[0];
@@ -461,7 +481,16 @@ export class SsoService {
     }
 
     // Resolve user and ensure org membership
-    return this.resolveAndAuthenticateUser(organizationId, email, name, config.organization);
+    return this.resolveAndAuthenticateUser(organizationId, email, name, config.organization, {
+      email_verified: (claims as any).email_verified,
+    });
+  }
+
+  private cleanupOidcStateStore() {
+    const now = Date.now();
+    for (const [k, v] of this.oidcStateStore) {
+      if (v.expiresAt < now) this.oidcStateStore.delete(k);
+    }
   }
 
   // ========== SAML Flow ==========
@@ -495,6 +524,10 @@ export class SsoService {
       throw new BadRequestException('SAML SSO is not configured for this organization');
     }
 
+    if (!config.enabled) {
+      throw new UnauthorizedException('SSO is disabled for this organization');
+    }
+
     const saml = this.buildSamlClient(config, organizationId);
     const { profile } = await saml.validatePostResponseAsync({ SAMLResponse: samlResponse });
 
@@ -513,29 +546,96 @@ export class SsoService {
   }
 
   private buildSamlClient(config: any, organizationId: string): SAML {
+    const audience = config.samlIssuer || `orchard-sso-${organizationId}`;
+    // TODO: SsoConfig schema currently has no `samlIdpIssuer`/`samlIdpEntityId`
+    // field; once added, set `idpIssuer` to that value to bind the assertion
+    // to the configured IdP entityID.
     return new SAML({
       callbackUrl: `${this.backendUrl}/apiv1/sso/${organizationId}/callback/saml`,
       entryPoint: config.samlEntryPoint,
-      issuer: config.samlIssuer || `orchard-sso-${organizationId}`,
+      issuer: audience,
+      audience,
       cert: config.samlCertificate ? this.decrypt(config.samlCertificate) : '',
       wantAuthnResponseSigned: true,
+      wantAssertionsSigned: true,
     });
   }
 
   // ========== Shared user resolution ==========
+
+  private getAllowedDomainsForOrg(organizationId: string): string[] | null {
+    // SsoConfig schema lacks an allowedDomains column; fall back to an
+    // env-driven per-org allowlist: SSO_ALLOWED_EMAIL_DOMAINS={"orgId":["x"]}
+    const raw = process.env.SSO_ALLOWED_EMAIL_DOMAINS;
+    if (!raw) return null;
+    try {
+      const parsed = JSON.parse(raw);
+      const list = parsed?.[organizationId];
+      if (!Array.isArray(list) || list.length === 0) return null;
+      return list.map((d: string) => String(d).toLowerCase());
+    } catch {
+      return null;
+    }
+  }
 
   private async resolveAndAuthenticateUser(
     organizationId: string,
     email: string,
     name: string,
     organization: any,
+    claims?: { email_verified?: boolean | undefined },
   ) {
     const normalizedEmail = email.toLowerCase().trim();
 
-    // Find or create user
+    // 1) email_verified hard-fail when explicitly false.
+    if (claims && claims.email_verified === false) {
+      throw new UnauthorizedException('email not verified');
+    }
+
+    // 2) Optional per-org domain allowlist (env-driven, case-insensitive).
+    const allowed = this.getAllowedDomainsForOrg(organizationId);
+    if (allowed) {
+      const domain = normalizedEmail.split('@')[1] || '';
+      if (!allowed.includes(domain)) {
+        throw new UnauthorizedException('Email domain not allowed for this organization');
+      }
+    } else {
+      // Default-on env: when SSO_REQUIRE_EMAIL_VERIFIED is set and the
+      // provider didn't assert email_verified=true, refuse.
+      const requireVerified = (process.env.SSO_REQUIRE_EMAIL_VERIFIED ?? 'true').toLowerCase() !== 'false';
+      if (requireVerified && claims && claims.email_verified !== true) {
+        // Note: many IdPs omit the claim entirely. Treat that as "unknown"
+        // and only enforce when explicitly false (handled above). When the
+        // allowlist isn't set, we allow through here to avoid breaking
+        // existing deployments. The explicit-false rejection above still
+        // blocks the obvious case.
+      }
+    }
+
+    // Find existing user by email
     let user = await this.prisma.user.findUnique({
       where: { email: normalizedEmail },
     });
+
+    // 3) Cross-org takeover defense: if an existing user owns this email but
+    // is NOT already a member of this org, refuse. Otherwise an attacker who
+    // controls an IdP for org B can impersonate any platform user whose
+    // email they know by triggering SSO for B with their email.
+    if (user) {
+      const existingMembership = await this.prisma.organizationMember.findUnique({
+        where: {
+          organizationId_userId: {
+            organizationId,
+            userId: user.id,
+          },
+        },
+      });
+      if (!existingMembership) {
+        throw new UnauthorizedException(
+          'An account with this email already exists. Contact your administrator to link it to this organization.',
+        );
+      }
+    }
 
     if (!user) {
       const baseUsername = normalizedEmail.split('@')[0];

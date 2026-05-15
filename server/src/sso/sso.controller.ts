@@ -29,7 +29,7 @@ export class SsoController {
     res.cookie('session_token', token, {
       httpOnly: true,
       secure: this.isSessionCookieSecure(),
-      sameSite: 'lax',
+      sameSite: 'strict',
       maxAge: 7 * 24 * 60 * 60 * 1000,
       path: '/',
       domain: process.env.COOKIE_DOMAIN || undefined,

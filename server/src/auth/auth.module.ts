@@ -1,6 +1,6 @@
 import { Module } from '@nestjs/common';
 import { APP_GUARD } from '@nestjs/core';
-import { SuperAdminGuard } from './superadmin.guard';
+import { SuperAdminGuard, ScopeGuard } from './superadmin.guard';
 import { OAuthService } from './oauth.service';
 import { OAuthController } from './oauth.controller';
 import { PasswordlessController } from './passwordless.controller';
@@ -34,6 +34,13 @@ import { PrismaModule } from '../prisma/prisma.module';
     {
       provide: APP_GUARD,
       useClass: SuperAdminGuard,
+    },
+    // ScopeGuard MUST follow SuperAdminGuard: it reads `request['auth']`
+    // which SuperAdminGuard populates. Nest runs APP_GUARDs in registration
+    // order, so this ordering is load-bearing.
+    {
+      provide: APP_GUARD,
+      useClass: ScopeGuard,
     },
   ],
   exports: [SuperAdminGuard, OAuthService, OtpService, PasskeyService, RateLimitService, ApiTokensService, SessionsService, MembershipCacheService, AuthorizationService],

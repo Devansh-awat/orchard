@@ -171,6 +171,16 @@ export class OtpService {
       data: { used: true },
     });
 
+    // H-6: a successful OTP verification proves ownership of the email
+    // address. Flip the User.emailVerified flag if a row already exists for
+    // this address. updateMany is a no-op when the user has not yet been
+    // created (first-time signups are created post-verify by the controller
+    // with emailVerified=true), so this is safe for both flows.
+    await this.prisma.user.updateMany({
+      where: { email: normalizedEmail, emailVerified: false },
+      data: { emailVerified: true, emailVerifiedAt: new Date() },
+    });
+
     // Reset rate limits on success
     await this.rateLimitService.resetRateLimit(normalizedEmail, 'email', 'otp_verify');
     await this.rateLimitService.resetRateLimit(ipAddress, 'ip', 'otp_verify');

@@ -8,7 +8,7 @@ import { AuditService } from '../audit/audit.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
 import { TailscaleService } from '../tailscale/tailscale.service';
-import { randomBytes } from 'crypto';
+import { randomBytes, createHash } from 'crypto';
 
 @Injectable()
 export class OrganizationsService {
@@ -23,6 +23,13 @@ export class OrganizationsService {
     private readonly membershipCache: MembershipCacheService,
     private readonly tailscale: TailscaleService,
   ) {}
+
+  // M-3: SHA-256 of the plaintext invitation token. Stored alongside the
+  // legacy `token` column during the transition window; lookups go through
+  // this hash so a DB read cannot yield working invite links.
+  private hashToken(token: string): string {
+    return createHash('sha256').update(token).digest('hex');
+  }
 
   async checkPermission(organizationId: string, userId: string, requiredRole: 'owner' | 'admin') {
     if (requiredRole === 'owner') {
@@ -656,6 +663,7 @@ export class OrganizationsService {
     // Direct-add bypasses the recipient's consent, which is the moral equivalent
     // of accepting on behalf of another user.
     const token = randomBytes(32).toString('hex');
+    const tokenHash = this.hashToken(token);
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
@@ -669,6 +677,7 @@ export class OrganizationsService {
           email: normalizedEmail,
           role,
           token,
+          tokenHash,
           invitedBy: inviter.id,
           expiresAt,
         },
@@ -720,27 +729,52 @@ export class OrganizationsService {
   async acceptInvitationByToken(token: string, clerkId: string, userData?: any) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
 
+    // M-9: every "no" branch in this method collapses to the SAME 404. The
+    // old shape (NotFound for missing, Forbidden for wrong-email, BadRequest
+    // for expired) let a holder of a stolen token probe whether it ever
+    // existed, who it was addressed to, and whether it had been redeemed.
+    const notFound = () =>
+      new NotFoundException('Invitation not found or expired.');
+
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw notFound();
     }
 
-    const invitation = await this.prisma.organizationInvitation.findUnique({
-      where: { token },
-      include: { organization: true }
-    });
+    // M-3: look up by hash, falling back to plaintext token so invitations
+    // issued before the hash backfill still work. Once the backfill column is
+    // populated the plaintext branch becomes unreachable in practice.
+    const tokenHash = this.hashToken(token);
+    const invitation =
+      (await this.prisma.organizationInvitation.findUnique({
+        where: { tokenHash },
+        include: { organization: true },
+      })) ??
+      (await this.prisma.organizationInvitation.findUnique({
+        where: { token },
+        include: { organization: true },
+      }));
 
     if (!invitation) {
-      throw new NotFoundException('Invitation not found or has expired');
+      throw notFound();
     }
 
     if (invitation.expiresAt < new Date()) {
       await this.prisma.organizationInvitation.delete({ where: { id: invitation.id } });
-      throw new BadRequestException('Invitation has expired');
+      throw notFound();
     }
 
-    // Verify the user's email matches the invitation
+    // H-6: only a user who has proven ownership of the invited address may
+    // accept. Without this, an attacker can register an unverified account
+    // under the victim's email and inherit any pending invitations. We use
+    // the same 404 shape as the other branches to avoid leaking whether the
+    // token exists or who it was sent to.
     if (user.email.toLowerCase() !== invitation.email.toLowerCase()) {
-      throw new ForbiddenException('This invitation was sent to a different email address');
+      throw notFound();
+    }
+    if (!user.emailVerified) {
+      throw new ForbiddenException(
+        'Verify your email before accepting invitations.',
+      );
     }
 
     // Check if already a member
@@ -803,82 +837,91 @@ export class OrganizationsService {
     return member;
   }
 
+  // M-4: the previous behavior accepted every pending invitation for the
+  // signed-in user's email in one shot. That is a bulk-accept primitive — a
+  // single CSRF/cross-tab/foothold action could land the victim in arbitrary
+  // organizations they never consented to join, with whatever role the
+  // inviter chose. We replace it with a LIST-only operation: the client is
+  // expected to call `acceptInvitationByToken` once per invitation, which
+  // enforces the per-token email + emailVerified checks individually.
   async acceptPendingInvitationsForUser(clerkId: string, userData?: any) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
 
     if (!user) {
-      return [];
+      return { invitations: [] };
     }
 
-    // Find all pending invitations for this user's email
-    const pendingInvitations = await this.prisma.organizationInvitation.findMany({
+    // H-6: do not even reveal pending invitations to an unverified account.
+    // An attacker who registered under the victim's email should not learn
+    // which orgs they were invited to.
+    if (!user.emailVerified) {
+      return { invitations: [] };
+    }
+
+    const pending = await this.prisma.organizationInvitation.findMany({
       where: {
         email: user.email.toLowerCase(),
-        expiresAt: { gt: new Date() }
+        expiresAt: { gt: new Date() },
       },
-      include: { organization: true }
-    });
-
-    const acceptedOrgs = [];
-
-    for (const invitation of pendingInvitations) {
-      // Check if already a member
-      const existingMember = await this.prisma.organizationMember.findUnique({
-        where: {
-          organizationId_userId: {
-            organizationId: invitation.organizationId,
-            userId: user.id
-          }
-        }
-      });
-
-      if (!existingMember) {
-        await this.prisma.$transaction(async (tx) => {
-          await tx.organizationMember.create({
-            data: {
-              organizationId: invitation.organizationId,
-              userId: user.id,
-              role: invitation.role,
-              addedBy: invitation.invitedBy
-            }
-          });
-
-          await tx.organizationInvitation.delete({ where: { id: invitation.id } });
-        });
-
-        this.membershipCache.invalidateInternalUserId(user.id);
-        acceptedOrgs.push(invitation.organization);
-      } else {
-        // Clean up the invitation if already a member
-        await this.prisma.organizationInvitation.delete({ where: { id: invitation.id } });
-      }
-    }
-
-    return acceptedOrgs;
-  }
-
-  async getInvitationByToken(token: string) {
-    const invitation = await this.prisma.organizationInvitation.findUnique({
-      where: { token },
       include: {
-        organization: {
-          select: {
-            id: true,
-            name: true,
-            slug: true,
-            avatarUrl: true
-          }
-        },
+        organization: { select: { name: true, slug: true, avatarUrl: true } },
         inviter: {
           select: {
             firstName: true,
             lastName: true,
             username: true,
-            email: true
-          }
-        }
-      }
+            email: true,
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
     });
+
+    return {
+      invitations: pending.map((inv) => ({
+        token: inv.token,
+        orgName: inv.organization.name,
+        orgSlug: inv.organization.slug,
+        orgAvatarUrl: inv.organization.avatarUrl,
+        role: inv.role,
+        inviter: inv.inviter,
+        expiresAt: inv.expiresAt,
+      })),
+    };
+  }
+
+  async getInvitationByToken(token: string) {
+    // M-3: prefer hash lookup; fall back to plaintext column for unbackfilled
+    // legacy rows. Both branches return identical shape so callers do not see
+    // a difference.
+    const tokenHash = this.hashToken(token);
+    const includeShape = {
+      organization: {
+        select: {
+          id: true,
+          name: true,
+          slug: true,
+          avatarUrl: true,
+        },
+      },
+      inviter: {
+        select: {
+          firstName: true,
+          lastName: true,
+          username: true,
+          email: true,
+        },
+      },
+    } as const;
+    const invitation =
+      (await this.prisma.organizationInvitation.findUnique({
+        where: { tokenHash },
+        include: includeShape,
+      })) ??
+      (await this.prisma.organizationInvitation.findUnique({
+        where: { token },
+        include: includeShape,
+      }));
 
     // Collapse the "not found" and "expired" cases into a single 404. Splitting
     // them gave a holder of an expired token a way to confirm the invitation
@@ -927,21 +970,27 @@ export class OrganizationsService {
   async declineInvitationByToken(token: string, clerkId: string, userData?: any) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
 
+    // M-9: collapse every reject branch to one 404 shape — see
+    // acceptInvitationByToken for the rationale.
+    const notFound = () =>
+      new NotFoundException('Invitation not found or expired.');
+
     if (!user) {
-      throw new NotFoundException('User not found');
+      throw notFound();
     }
 
-    const invitation = await this.prisma.organizationInvitation.findUnique({
-      where: { token }
-    });
+    const tokenHash = this.hashToken(token);
+    const invitation =
+      (await this.prisma.organizationInvitation.findUnique({ where: { tokenHash } })) ??
+      (await this.prisma.organizationInvitation.findUnique({ where: { token } }));
 
     if (!invitation) {
-      throw new NotFoundException('Invitation not found');
+      throw notFound();
     }
 
     // Verify the user's email matches the invitation
     if (user.email.toLowerCase() !== invitation.email.toLowerCase()) {
-      throw new ForbiddenException('This invitation was sent to a different email address');
+      throw notFound();
     }
 
     await this.prisma.organizationInvitation.delete({ where: { id: invitation.id } });

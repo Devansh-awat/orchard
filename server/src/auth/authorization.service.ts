@@ -41,7 +41,7 @@ export interface ProjectAccess {
 // Process-local cache, same multi-pod caveat as MembershipCacheService.
 // invalidateSuperAdmin is called when the flag is toggled in this process, but
 // other pods only learn about it when this TTL expires.
-const SUPERADMIN_TTL_MS = 5_000;
+const SUPERADMIN_TTL_MS = 1_000;
 
 @Injectable()
 export class AuthorizationService {

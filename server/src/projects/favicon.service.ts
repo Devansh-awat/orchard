@@ -1,6 +1,125 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Client, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import * as dns from 'dns';
+import * as net from 'net';
+
+// Suffixes that resolve only on internal networks. We never make HTTP
+// requests to these — even if the domain regex passes.
+const FORBIDDEN_DOMAIN_SUFFIXES = [
+  '.cluster.local',
+  '.svc',
+  '.svc.cluster.local',
+  '.internal',
+  '.local',
+  '.consul',
+  '.localhost',
+];
+
+const FORBIDDEN_DOMAIN_EXACT = new Set([
+  'localhost',
+  'metadata',
+  'metadata.google.internal',
+]);
+
+/**
+ * Return true for IPv4/IPv6 addresses that point to private, loopback,
+ * link-local, ULA, multicast, reserved, or otherwise-unroutable space.
+ * Rejecting these defends against SSRF (cloud metadata, in-cluster services,
+ * RFC1918 hosts, etc.) when the caller resolves a user-supplied hostname.
+ */
+function isPrivateAddress(addr: string): boolean {
+  const family = net.isIP(addr);
+  if (family === 4) {
+    const parts = addr.split('.').map((p) => parseInt(p, 10));
+    if (parts.length !== 4 || parts.some((p) => !Number.isFinite(p) || p < 0 || p > 255)) {
+      return true; // malformed → reject
+    }
+    const [a, b] = parts;
+    // 0.0.0.0/8
+    if (a === 0) return true;
+    // 10.0.0.0/8
+    if (a === 10) return true;
+    // 127.0.0.0/8 loopback
+    if (a === 127) return true;
+    // 169.254.0.0/16 link-local (incl. AWS/GCP metadata 169.254.169.254)
+    if (a === 169 && b === 254) return true;
+    // 172.16.0.0/12
+    if (a === 172 && b >= 16 && b <= 31) return true;
+    // 192.0.0.0/24 IETF protocol assignments
+    if (a === 192 && b === 0 && parts[2] === 0) return true;
+    // 192.168.0.0/16
+    if (a === 192 && b === 168) return true;
+    // 198.18.0.0/15 benchmarking
+    if (a === 198 && (b === 18 || b === 19)) return true;
+    // 224.0.0.0/4 multicast
+    if (a >= 224 && a <= 239) return true;
+    // 240.0.0.0/4 reserved + 255.255.255.255 broadcast
+    if (a >= 240) return true;
+    // 100.64.0.0/10 CGNAT (often used internally too)
+    if (a === 100 && b >= 64 && b <= 127) return true;
+    return false;
+  }
+  if (family === 6) {
+    const lower = addr.toLowerCase();
+    // Loopback ::1
+    if (lower === '::1' || lower === '::') return true;
+    // IPv4-mapped (::ffff:a.b.c.d) — re-check the embedded v4
+    const mapped = lower.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/);
+    if (mapped) return isPrivateAddress(mapped[1]);
+    // Parse first hextet
+    const firstHex = lower.split(':')[0] || '0';
+    const first = parseInt(firstHex, 16);
+    // fe80::/10 link-local
+    if ((first & 0xffc0) === 0xfe80) return true;
+    // fc00::/7 unique local
+    if ((first & 0xfe00) === 0xfc00) return true;
+    // ff00::/8 multicast
+    if ((first & 0xff00) === 0xff00) return true;
+    // ::/128 unspecified handled above; ::ffff handled above
+    return false;
+  }
+  // Not an IP at all → caller should not pass this to isPrivateAddress;
+  // treat conservatively.
+  return true;
+}
+
+function isForbiddenHost(domain: string): boolean {
+  const d = domain.toLowerCase();
+  if (FORBIDDEN_DOMAIN_EXACT.has(d)) return true;
+  for (const suffix of FORBIDDEN_DOMAIN_SUFFIXES) {
+    if (d === suffix.replace(/^\./, '') || d.endsWith(suffix)) return true;
+  }
+  return false;
+}
+
+async function assertPublicDomain(domain: string, logger: Logger): Promise<void> {
+  if (isForbiddenHost(domain)) {
+    throw new Error(`Refusing to fetch internal/reserved host: ${domain}`);
+  }
+  // Reject literal IP addresses passed as the "domain" — callers must use
+  // hostnames, and we want to control resolution ourselves.
+  if (net.isIP(domain)) {
+    if (isPrivateAddress(domain)) {
+      throw new Error(`Refusing to fetch private IP: ${domain}`);
+    }
+    return;
+  }
+  let addrs: { address: string; family: number }[] = [];
+  try {
+    addrs = await dns.promises.lookup(domain, { all: true });
+  } catch (e: any) {
+    throw new Error(`DNS lookup failed for ${domain}: ${e?.message || e}`);
+  }
+  if (!addrs.length) {
+    throw new Error(`DNS lookup returned no addresses for ${domain}`);
+  }
+  for (const a of addrs) {
+    if (isPrivateAddress(a.address)) {
+      throw new Error(`Refusing to fetch ${domain} — resolves to private/internal address ${a.address}`);
+    }
+  }
+}
 
 @Injectable()
 export class FaviconService {
@@ -88,16 +207,31 @@ export class FaviconService {
 
   private async fetchAndStore(domain: string, r2Key: string): Promise<string | null> {
     try {
-      // Fetch the page HTML from the domain
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 8000);
+      // SSRF guard: refuse internal/private targets before issuing any fetch.
+      await assertPublicDomain(domain, this.logger);
 
-      const response = await fetch(`https://${domain}`, {
-        signal: controller.signal,
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OrchardBot/1.0)' },
-        redirect: 'follow',
-      });
-      clearTimeout(timeout);
+      // Fetch the page HTML from the domain. 5-second hard timeout.
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 5000);
+
+      let response: Response;
+      try {
+        response = await fetch(`https://${domain}`, {
+          signal: controller.signal,
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OrchardBot/1.0)' },
+          // Do NOT follow redirects: a 3xx Location could rebind to an
+          // internal host that would bypass our pre-resolution check.
+          redirect: 'manual',
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
+
+      if (response.status >= 300 && response.status < 400) {
+        this.logger.warn(`Refusing to follow redirect from ${domain} (status ${response.status})`);
+        this.memoryCache.set(domain, { url: null, ts: Date.now() });
+        return null;
+      }
 
       const html = await response.text();
 
@@ -184,16 +318,40 @@ export class FaviconService {
 
   private async downloadImage(url: string): Promise<{ buffer: Buffer; contentType: string } | null> {
     try {
+      // Validate scheme and host BEFORE issuing the fetch — icon URLs from
+      // parsed HTML can target arbitrary hosts and must be re-checked.
+      let parsed: URL;
+      try {
+        parsed = new URL(url);
+      } catch {
+        return null;
+      }
+      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+        return null;
+      }
+      try {
+        await assertPublicDomain(parsed.hostname, this.logger);
+      } catch (e: any) {
+        this.logger.warn(`Refusing to fetch image from ${url}: ${e?.message || e}`);
+        return null;
+      }
+
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 5000);
 
-      const res = await fetch(url, {
-        signal: controller.signal,
-        headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OrchardBot/1.0)' },
-        redirect: 'follow',
-      });
-      clearTimeout(timeout);
+      let res: Response;
+      try {
+        res = await fetch(url, {
+          signal: controller.signal,
+          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OrchardBot/1.0)' },
+          // Don't follow redirects — a 3xx could rebind to internal space.
+          redirect: 'manual',
+        });
+      } finally {
+        clearTimeout(timeout);
+      }
 
+      if (res.status >= 300 && res.status < 400) return null;
       if (!res.ok) return null;
 
       const contentType = res.headers.get('content-type') || 'image/png';
