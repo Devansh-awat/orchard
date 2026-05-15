@@ -736,6 +736,21 @@ export class KubernetesService {
           labels: {
             'orchard.dev/managed': 'true',
             name: cleanNamespace,
+            // PodSecurity `baseline` blocks the classic container-escape
+            // primitives at admission: hostPath, privileged, hostNetwork,
+            // hostPID, hostIPC, dangerous capabilities, host process
+            // namespace sharing, etc. We already reject these at the
+            // service layer, but admission-time enforcement closes the
+            // hole if anything bypasses the API (operators creating
+            // pods directly, future code paths, etc).
+            //
+            // We do not use `restricted` — it forces runAsNonRoot and
+            // would break tenant images that bind to :80 or chown at
+            // start. gVisor (runtimeClassName) provides the equivalent
+            // protection by sandboxing root-in-container.
+            'pod-security.kubernetes.io/enforce': 'baseline',
+            'pod-security.kubernetes.io/audit': 'restricted',
+            'pod-security.kubernetes.io/warn': 'restricted',
           },
         },
       };
@@ -1458,6 +1473,18 @@ export class KubernetesService {
         })),
         env: envList,
         volumeMounts: volumeMounts.length > 0 ? volumeMounts : undefined,
+        // Defence-in-depth even when the pod runs under gVisor (runsc):
+        // drop every Linux capability, refuse setuid privilege escalation
+        // mid-process, and apply the runtime's default seccomp profile.
+        // We deliberately do NOT force runAsNonRoot — many tenant images
+        // still chown/listen on :80 as root and would crashloop. gVisor
+        // already neuters root-in-container by virtualising the kernel,
+        // so this is acceptable.
+        securityContext: {
+          allowPrivilegeEscalation: false,
+          capabilities: { drop: ['ALL'] },
+          seccompProfile: { type: 'RuntimeDefault' },
+        },
       };
 
       // requests == limits → Guaranteed QoS. Quota usage matches real-world usage.
@@ -1526,6 +1553,12 @@ export class KubernetesService {
               // pod do `selfsubjectreviews` and (more importantly) carries
               // any unintended RBAC grants out of the namespace.
               automountServiceAccountToken: false,
+              // Run under gVisor (runsc) when configured — a user-space
+              // kernel that intercepts syscalls. A kernel CVE in the
+              // tenant's image no longer reaches the host kernel; a
+              // container escape requires escaping runsc itself.
+              // Falsy env var ⇒ undefined ⇒ default containerd handler.
+              runtimeClassName: process.env.TENANT_RUNTIME_CLASS || undefined,
               containers: [container],
               volumes: k8sVolumes.length > 0 ? k8sVolumes : undefined,
               affinity: affinity || undefined,

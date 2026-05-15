@@ -43,6 +43,9 @@ spec:
             - { name: BUILDKIT_LOCAL_CACHE_PATH, value: {{ .Values.builders.localCache.path | quote }} }
             - { name: BUILDKIT_LOCAL_CACHE_PVC,  value: {{ .Values.builders.localCache.pvcName | quote }} }
             {{- end }}
+            {{- if .Values.tenantSandbox.enabled }}
+            - { name: TENANT_RUNTIME_CLASS, value: {{ .Values.tenantSandbox.runtimeClassName | quote }} }
+            {{- end }}
             {{- if .Values.r2Proxy.enabled }}
             - { name: BACKUP_PROXY_ENABLED, value: "true" }
             - name: BACKUP_PROXY_ENDPOINT

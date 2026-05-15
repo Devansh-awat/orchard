@@ -244,6 +244,24 @@ r2Proxy:
   # Override to point at a read-only role (recommended in prod).
   databaseUrl: ""
 
+# Tenant pod sandboxing. When enabled, tenant Deployments created via the
+# API set `runtimeClassName: gvisor` so their pods run under runsc (a
+# user-space kernel) instead of the host kernel.
+#
+# REQUIREMENT before flipping enabled=true: the `siderolabs/gvisor` Talos
+# system extension must be installed on every node (talos/talconfig.yaml).
+# Without it, new tenant pods will fail to schedule with "no runtime for
+# 'runsc' is configured".
+#
+# Rollout order:
+#   1. Update talos/talconfig.yaml, regen schematic image, roll nodes.
+#   2. Confirm `kubectl get runtimeclass gvisor` exists and a smoke test
+#      pod with `runtimeClassName: gvisor` runs.
+#   3. Flip enabled to true and `helm upgrade`.
+tenantSandbox:
+  enabled: false
+  runtimeClassName: gvisor
+
 # Public-TLS reflection — tells the server which Secret to copy from when
 # exposing a CNPG cluster publicly with TLS.
 publicTls:
