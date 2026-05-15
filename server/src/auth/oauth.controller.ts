@@ -115,25 +115,28 @@ export class OAuthController {
       const accessToken = await this.oauthService.exchangeCodeForToken(code);
       const hackClubUser = await this.oauthService.getUserInfo(accessToken);
 
-      // Look up ONLY by hackClubId. If an unrelated user already owns this
-      // email, reject — never silently link by email.
-      const existingUser = await this.prisma.user.findUnique({
+      let existingUser = await this.prisma.user.findUnique({
         where: { hackClubId: hackClubUser.id },
       });
 
       if (!existingUser) {
         const emailOwner = await this.prisma.user.findUnique({
           where: { email: hackClubUser.email },
-          select: { id: true },
         });
         if (emailOwner) {
-          // L-2: don't distinguish "email already on the platform" from any
-          // other OAuth failure — the distinct redirect was an enumeration
-          // oracle for any attacker who could control a Hack Club account
-          // and edit its profile email.
-          return res.redirect(
-            `${frontendBase}/oauth/callback?error=${encodeURIComponent('oauth_failed')}`,
-          );
+          if (emailOwner.hackClubId && emailOwner.hackClubId !== hackClubUser.id) {
+            // Existing account is already linked to a different Hack Club
+            // identity — refuse with a generic error to avoid an enumeration
+            // oracle.
+            return res.redirect(
+              `${frontendBase}/oauth/callback?error=${encodeURIComponent('oauth_failed')}`,
+            );
+          }
+          // Email row exists but isn't linked to a Hack Club identity yet
+          // (typically an OTP-registered user). Treat it as the existing
+          // user for downstream SSO / private-beta checks; the actual link
+          // happens in findOrCreateByHackClubId below.
+          existingUser = emailOwner;
         }
       }
 

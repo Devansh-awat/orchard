@@ -61,13 +61,19 @@ export class UsersService {
       });
 
       if (user) {
-        // An account with this email already exists but isn't linked to a
-        // Hack Club identity. Silently linking here would let any Hack Club
-        // account whose primary_email matches an existing OTP-registered user
-        // take over that account. Force an out-of-band linking flow.
-        throw new ConflictException(
-          'An account with this email already exists. Sign in with your email first, then link your Hack Club account from settings.',
-        );
+        if (user.hackClubId && user.hackClubId !== hackClubUser.id) {
+          // Email row is already linked to a different Hack Club identity.
+          throw new ConflictException(
+            'An account with this email already exists. Sign in with your email first, then link your Hack Club account from settings.',
+          );
+        }
+        const previous = user;
+        user = await this.prisma.user.update({
+          where: { id: user.id },
+          data: { hackClubId: hackClubUser.id },
+        });
+        this.invalidateUserCache(previous);
+        this.invalidateUserCache(user);
       } else {
         const nameParts = hackClubUser.name.split(' ');
         const firstName = nameParts[0];
