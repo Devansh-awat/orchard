@@ -78,7 +78,7 @@ export class KubernetesController {
     @Query('container') container?: string,
     @Query('tailLines') tailLines?: string,
   ) {
-    await this.resolveNamespace(namespace, req, 'view');
+    await this.resolveNamespace(namespace, req, 'edit', 'stream pod logs');
     const parsedTailLines = tailLines ? parseInt(tailLines) : 100;
     return this.kubernetesService.getPodLogs(podName, namespace, container, parsedTailLines);
   }

@@ -2,8 +2,16 @@ import { Controller, Get, Post, Inject, Req, Res, HttpCode, HttpStatus } from '@
 import { Request, Response } from 'express';
 import { McpOAuthService } from './mcp-oauth.service';
 
+// Dynamic Client Registration is anonymous by design (RFC 7591) but we cap
+// the total number of clients per process so an unauthenticated attacker
+// cannot spray-register clients to phish auth codes or exhaust memory.
+const MAX_REGISTRATIONS_PER_WINDOW = 30;
+const REGISTRATION_WINDOW_MS = 60_000;
+
 @Controller()
 export class McpOAuthController {
+  private registrationHits: number[] = [];
+
   constructor(@Inject(McpOAuthService) private readonly oauthService: McpOAuthService) {}
 
   @Get('.well-known/oauth-protected-resource')
@@ -18,8 +26,25 @@ export class McpOAuthController {
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  registerClient(@Req() req: Request) {
-    return this.oauthService.registerClient(req.body);
+  registerClient(@Req() req: Request, @Res() res: Response) {
+    const now = Date.now();
+    this.registrationHits = this.registrationHits.filter((t) => now - t < REGISTRATION_WINDOW_MS);
+    if (this.registrationHits.length >= MAX_REGISTRATIONS_PER_WINDOW) {
+      return res.status(HttpStatus.TOO_MANY_REQUESTS).json({
+        error: 'rate_limited',
+        error_description: 'too many client registrations',
+      });
+    }
+    this.registrationHits.push(now);
+
+    const result = this.oauthService.registerClient(req.body);
+    if (result.error) {
+      return res.status(HttpStatus.BAD_REQUEST).json({
+        error: result.error,
+        ...(result.error_description && { error_description: result.error_description }),
+      });
+    }
+    return res.status(HttpStatus.CREATED).json(result.registration);
   }
 
   @Get('authorize')

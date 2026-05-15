@@ -111,7 +111,10 @@ export class SessionsService {
   }
 
   /**
-   * Revoke all sessions for a user except the current one.
+   * Revoke all sessions for a user except the current one. API tokens are
+   * also revoked here — "sign out everywhere" without this leaves long-lived
+   * tokens valid and silently undermines the user's expectation that they
+   * have logged out of every entry point.
    */
   async revokeAllSessions(
     userId: string,
@@ -126,12 +129,15 @@ export class SessionsService {
       where.id = { not: exceptSessionId };
     }
 
-    const result = await this.prisma.session.updateMany({
-      where,
-      data: { revokedAt: new Date() },
-    });
+    const [sessionRes] = await this.prisma.$transaction([
+      this.prisma.session.updateMany({
+        where,
+        data: { revokedAt: new Date() },
+      }),
+      this.prisma.apiToken.deleteMany({ where: { userId } }),
+    ]);
 
-    return result.count;
+    return sessionRes.count;
   }
 
   /**

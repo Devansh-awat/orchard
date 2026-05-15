@@ -8,6 +8,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { SessionsService } from '../auth/sessions.service';
 import { AuditService } from '../audit/audit.service';
+import { hashApiToken } from '../auth/api-tokens.service';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -110,13 +111,21 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
     } catch {
       // JWT failed — try API token. API tokens are also bound to a user; treat them
       // as session-revocation-equivalent only if they have not expired.
+      if (!token.startsWith('orch_')) return reject(401, 'Unauthorized');
       const apiToken = await prisma.apiToken.findUnique({
-        where: { token },
+        where: { tokenHash: hashApiToken(token) },
         include: { user: { select: { id: true, email: true } } },
       });
       if (!apiToken) return reject(401, 'Unauthorized');
       if (apiToken.expiresAt && apiToken.expiresAt < new Date()) {
         return reject(401, 'Unauthorized');
+      }
+      const scopes = Array.isArray(apiToken.scopes) ? (apiToken.scopes as string[]) : [];
+      if (!scopes.includes('exec')) {
+        // API tokens default to read-only. Pod exec is one of the most
+        // dangerous capabilities; require it to be explicitly granted at
+        // token creation rather than inherited from the owning user's role.
+        return reject(403, 'Forbidden');
       }
       userId = apiToken.user.id;
       actorEmail = apiToken.user.email;

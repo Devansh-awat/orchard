@@ -67,14 +67,57 @@ export class McpOAuthService {
     };
   }
 
+  /**
+   * Reject redirect URIs an attacker can use to exfiltrate auth codes. The
+   * allow-list is intentionally narrow: localhost loopback for native MCP
+   * clients, and the configured frontend host for hosted callers.
+   */
+  private isAllowedRedirectUri(uri: string): boolean {
+    let parsed: URL;
+    try {
+      parsed = new URL(uri);
+    } catch {
+      return false;
+    }
+    if (parsed.username || parsed.password) return false;
+    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+      // Loopback http is allowed for native clients per RFC 8252.
+      if (parsed.protocol === 'http:') {
+        const h = parsed.hostname;
+        return h === 'localhost' || h === '127.0.0.1' || h === '[::1]';
+      }
+      // For https, require the host to match the configured frontend.
+      try {
+        const allowed = new URL(this.frontendUrl);
+        return parsed.host === allowed.host;
+      } catch {
+        return false;
+      }
+    }
+    return false;
+  }
+
   registerClient(body: {
     client_name?: string;
     redirect_uris?: string[];
     grant_types?: string[];
     response_types?: string[];
     token_endpoint_auth_method?: string;
-  }) {
+  }): { error?: string; error_description?: string; registration?: any } {
     console.error(`[MCP OAuth] Register client: name=${body.client_name}, redirect_uris=${JSON.stringify(body.redirect_uris)}`);
+    const redirectUris = Array.isArray(body.redirect_uris) ? body.redirect_uris : [];
+    if (redirectUris.length === 0) {
+      return { error: 'invalid_redirect_uri', error_description: 'at least one redirect_uri is required' };
+    }
+    for (const uri of redirectUris) {
+      if (typeof uri !== 'string' || !this.isAllowedRedirectUri(uri)) {
+        return {
+          error: 'invalid_redirect_uri',
+          error_description: 'redirect_uri must be loopback http or the configured frontend host over https',
+        };
+      }
+    }
+
     const clientId = `mcp_${randomBytes(16).toString('hex')}`;
     const clientSecret =
       body.token_endpoint_auth_method === 'client_secret_post'
@@ -84,18 +127,20 @@ export class McpOAuthService {
     this.oauthClients.set(clientId, {
       clientId,
       clientSecret,
-      redirectUris: body.redirect_uris || [],
+      redirectUris,
       name: body.client_name || 'MCP Client',
     });
 
     return {
-      client_id: clientId,
-      client_secret: clientSecret,
-      client_name: body.client_name || 'MCP Client',
-      redirect_uris: body.redirect_uris || [],
-      grant_types: body.grant_types || ['authorization_code'],
-      response_types: body.response_types || ['code'],
-      token_endpoint_auth_method: body.token_endpoint_auth_method || 'none',
+      registration: {
+        client_id: clientId,
+        client_secret: clientSecret,
+        client_name: body.client_name || 'MCP Client',
+        redirect_uris: redirectUris,
+        grant_types: body.grant_types || ['authorization_code'],
+        response_types: body.response_types || ['code'],
+        token_endpoint_auth_method: body.token_endpoint_auth_method || 'none',
+      },
     };
   }
 
@@ -120,6 +165,19 @@ export class McpOAuthService {
     if (!query.code_challenge || query.code_challenge_method !== 'S256') {
       console.error(`[MCP OAuth] Authorize failed: PKCE S256 required`);
       return { error: 'invalid_request' };
+    }
+
+    // Reject unknown client_id and any redirect_uri not pre-registered. Without
+    // this, an attacker registers (or guesses) a client and points the
+    // redirect_uri at attacker.example, harvesting the victim's auth code.
+    const client = this.oauthClients.get(query.client_id);
+    if (!client) {
+      console.error(`[MCP OAuth] Authorize failed: unknown client_id=${query.client_id}`);
+      return { error: 'invalid_client' };
+    }
+    if (!client.redirectUris.includes(query.redirect_uri)) {
+      console.error(`[MCP OAuth] Authorize failed: redirect_uri not registered for client`);
+      return { error: 'invalid_redirect_uri' };
     }
 
     const mcpState = randomBytes(16).toString('hex');
@@ -245,9 +303,19 @@ export class McpOAuthService {
       return { error: 'invalid_client' };
     }
 
+    // Re-check both that the exchange request's redirect_uri matches the one
+    // bound to the auth code AND that it is still in the client's registered
+    // list (defense against the registered list being mutated after authorize).
+    const client = this.oauthClients.get(body.client_id);
+    if (!client) {
+      return { error: 'invalid_client' };
+    }
     if (authCode.redirectUri && authCode.redirectUri !== body.redirect_uri) {
       console.error(`[MCP OAuth] Token exchange failed: redirect_uri mismatch (expected=${authCode.redirectUri}, got=${body.redirect_uri})`);
       return { error: 'invalid_grant', error_description: 'redirect_uri mismatch' };
+    }
+    if (!client.redirectUris.includes(body.redirect_uri ?? '')) {
+      return { error: 'invalid_redirect_uri' };
     }
 
     if (authCode.codeChallenge) {

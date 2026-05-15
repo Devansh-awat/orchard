@@ -383,20 +383,29 @@ export class GitHubController {
       const commitMessage = body.head_commit?.message || 'No commit message';
       const commitAuthorName = body.head_commit?.author?.name as string | undefined;
       const commitAuthorUsername = body.head_commit?.author?.username as string | undefined;
+      const senderInstallationId = body.installation?.id;
 
       if (!repoFullName || !pushedBranch) {
         return { received: true, action: 'ignored', reason: 'missing repo or branch info' };
       }
 
+      if (!senderInstallationId) {
+        // No installation context — refuse rather than match by repo name
+        // alone (would let any installation impersonate a repo by full_name).
+        return { received: true, action: 'ignored', reason: 'missing installation context' };
+      }
+
       console.log(`[GitHub App] Push to ${repoFullName}:${pushedBranch} - ${commitSha?.substring(0, 7)}`);
 
-      // Find all deployments that match this repo and have auto-deploy enabled
       const repoUrl = `https://github.com/${repoFullName}`;
+      const installationIdBig = BigInt(senderInstallationId);
+      // Match by canonical https URL AND owning installation. Legacy rows
+      // with githubInstallationId === null are intentionally excluded — they
+      // must be re-linked via enableAutoDeploy before they will fire.
       const deployments = await this.prisma.deployment.findMany({
         where: {
-          githubRepo: {
-            contains: repoFullName,
-          },
+          githubRepo: repoUrl,
+          githubInstallationId: installationIdBig,
           autoDeployEnabled: true,
           autoDeployBranch: pushedBranch,
         },
@@ -413,9 +422,8 @@ export class GitHubController {
         // Also check for deployments where autoDeployBranch is null but githubBranch matches
         const fallbackDeployments = await this.prisma.deployment.findMany({
           where: {
-            githubRepo: {
-              contains: repoFullName,
-            },
+            githubRepo: repoUrl,
+            githubInstallationId: installationIdBig,
             autoDeployEnabled: true,
             autoDeployBranch: null,
             githubBranch: pushedBranch,

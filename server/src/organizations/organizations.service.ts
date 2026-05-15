@@ -650,93 +650,41 @@ export class OrganizationsService {
       if (existingMember) {
         throw new BadRequestException('User is already a member of this organization');
       }
-
-      // User exists — add them directly instead of sending an invitation.
-      const member = await this.prisma.$transaction(async (tx) => {
-        const m = await tx.organizationMember.create({
-          data: {
-            organizationId,
-            userId: existingUser.id,
-            role,
-            addedBy: inviter.id,
-          },
-          include: {
-            user: {
-              select: {
-                id: true,
-                email: true,
-                username: true,
-                firstName: true,
-                lastName: true,
-                imageUrl: true,
-              }
-            },
-            organization: true,
-          },
-        });
-
-        await tx.organizationInvitation.deleteMany({
-          where: { organizationId, email: normalizedEmail },
-        });
-
-        return m;
-      });
-
-      this.membershipCache.invalidateInternalUserId(existingUser.id);
-
-      void this.audit.log({
-        action: 'org.member.added',
-        actorUserId: inviter.id,
-        actorEmail: inviter.email,
-        organizationId,
-        targetType: 'user',
-        targetId: existingUser.id,
-        targetLabel: normalizedEmail,
-        metadata: { email: normalizedEmail, role, via: 'direct_add' },
-      });
-
-      return member;
     }
 
-    // User doesn't exist yet — send an invitation.
-    const existingInvitation = await this.prisma.organizationInvitation.findUnique({
-      where: {
-        organizationId_email: {
-          organizationId,
-          email: normalizedEmail
-        }
-      }
-    });
-
-    if (existingInvitation) {
-      throw new BadRequestException('An invitation has already been sent to this email');
-    }
-
+    // Always go through the invitation flow, even when the user already exists.
+    // Direct-add bypasses the recipient's consent, which is the moral equivalent
+    // of accepting on behalf of another user.
     const token = randomBytes(32).toString('hex');
     const expiresAt = new Date();
     expiresAt.setDate(expiresAt.getDate() + 7);
 
-    const invitation = await this.prisma.organizationInvitation.create({
-      data: {
-        organizationId,
-        email: normalizedEmail,
-        role,
-        token,
-        invitedBy: inviter.id,
-        expiresAt
-      },
-      include: {
-        organization: true,
-        inviter: {
-          select: {
-            id: true,
-            email: true,
-            username: true,
-            firstName: true,
-            lastName: true
-          }
-        }
-      }
+    const invitation = await this.prisma.$transaction(async (tx) => {
+      await tx.organizationInvitation.deleteMany({
+        where: { organizationId, email: normalizedEmail },
+      });
+      return tx.organizationInvitation.create({
+        data: {
+          organizationId,
+          email: normalizedEmail,
+          role,
+          token,
+          invitedBy: inviter.id,
+          expiresAt,
+        },
+        include: {
+          organization: true,
+          inviter: {
+            select: {
+              id: true,
+              email: true,
+              username: true,
+              firstName: true,
+              lastName: true,
+            },
+          },
+        },
+      });
     });
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';

@@ -200,6 +200,11 @@ export class AuthorizationService {
       };
     }
 
+    // Invariant: project access requires org membership. A ProjectMember row
+    // without an OrganizationMember row is an orphan (e.g. partial cleanup) and
+    // must not grant access.
+    if (!orgMember) return null;
+
     if (!projectMember) {
       // Plain org members without a project membership cannot see the project at all.
       return null;

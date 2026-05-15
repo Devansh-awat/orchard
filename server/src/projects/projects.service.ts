@@ -835,6 +835,10 @@ export class ProjectsService {
 
     await this.authz.requireProjectEdit(project.id, user.id, 'create deployments');
 
+    if (Array.isArray(data.volumes) && data.volumes.some((v) => v && v.type === 'hostPath')) {
+      throw new ForbiddenException('hostPath volumes are not permitted');
+    }
+
     const nameInput = String(data.name || '').trim();
     const image = String(data.image || '').trim();
     const replicas = data.replicas && Number.isInteger(data.replicas) && data.replicas > 0 ? data.replicas : 1;
@@ -1143,6 +1147,10 @@ export class ProjectsService {
 
     await this.authz.requireProjectEdit(project.id, user.id, 'create deployments');
 
+    if (Array.isArray(data.volumes) && data.volumes.some((v) => v && v.type === 'hostPath')) {
+      throw new ForbiddenException('hostPath volumes are not permitted');
+    }
+
     const nameInput = String(data.name || '').trim();
     const replicas = data.replicas && Number.isInteger(data.replicas) && data.replicas > 0 ? data.replicas : 1;
     let repoUrl = String(data.repoUrl || data['githubRepo'] || '').trim();
@@ -1176,6 +1184,17 @@ export class ProjectsService {
     if (!canAccess) {
       throw new ForbiddenException(
         'You do not have access to this repository on GitHub. Connect your GitHub account or request access to the repo.'
+      );
+    }
+
+    // Bind the deployment to the specific GitHub App installation that owns
+    // the repo. Auto-deploy webhooks will refuse to fire unless the incoming
+    // installation id matches this one, preventing impersonation by another
+    // installation with a colliding repo full_name.
+    const repoInstallation = await this.githubService.findInstallationForRepo(parsed.owner, parsed.repo);
+    if (!repoInstallation) {
+      throw new BadRequestException(
+        'The GitHub App is not installed on this repository. Please install the app first.'
       );
     }
 
@@ -1285,6 +1304,7 @@ export class ProjectsService {
         buildType,
         githubRepo: repoUrl,
         githubBranch: branch,
+        githubInstallationId: repoInstallation.installationId,
         dockerfilePath: buildType === 'dockerfile' ? dockerfilePath : null,
         buildFromRoot: data.buildFromRoot ?? false,
         buildWithDepot: data.buildWithDepot ?? false,
@@ -4333,24 +4353,33 @@ export class ProjectsService {
 
     await this.kubernetesService.deleteNamespace(project.namespace);
 
-    await this.prisma.project.delete({
-      where: { id: projectId },
+    // Atomically delete the project and orphan-clean any affected guests.
+    // Without the surrounding transaction, a concurrent add to another project
+    // can leave a guest tied to zero projects in the org, or remove a guest
+    // that was just legitimately attached elsewhere.
+    const droppedGuests: string[] = [];
+    await this.prisma.$transaction(async (tx) => {
+      await tx.project.delete({ where: { id: projectId } });
+
+      for (const g of guestsOnProject) {
+        const remaining = await tx.projectMember.count({
+          where: { userId: g.userId, project: { organizationId: project.organizationId } },
+        });
+        if (remaining === 0) {
+          const res = await tx.organizationMember.deleteMany({
+            where: {
+              organizationId: project.organizationId,
+              userId: g.userId,
+              role: 'guest',
+            },
+          });
+          if (res.count > 0) droppedGuests.push(g.userId);
+        }
+      }
     });
 
-    for (const g of guestsOnProject) {
-      const remaining = await this.prisma.projectMember.count({
-        where: { userId: g.userId, project: { organizationId: project.organizationId } },
-      });
-      if (remaining === 0) {
-        await this.prisma.organizationMember.deleteMany({
-          where: {
-            organizationId: project.organizationId,
-            userId: g.userId,
-            role: 'guest',
-          },
-        });
-        this.membershipCache.invalidateInternalUserId(g.userId);
-      }
+    for (const userId of droppedGuests) {
+      this.membershipCache.invalidateInternalUserId(userId);
     }
 
     void this.audit.log({
@@ -4864,27 +4893,36 @@ export class ProjectsService {
       where: { id: memberId },
       include: { user: { select: { id: true, email: true } }, role: { select: { name: true } } },
     });
-    await this.prisma.projectMember.delete({ where: { id: memberId } });
 
     const project = await this.prisma.project.findUnique({ where: { id: projectId }, select: { organizationId: true } });
 
-    // If the removed user was a guest in this org and we just removed their
-    // last project here, drop the org membership entirely — guests have no
-    // standalone relationship with the org, so an orphaned guest membership
-    // is just dead weight.
-    if (project) {
-      const orgMember = await this.prisma.organizationMember.findUnique({
+    // Atomically delete the project membership and, if the user is a guest
+    // with no remaining project memberships in this org, drop the org
+    // membership too. Concurrent add/remove on the same guest can otherwise
+    // leave an orphaned zero-project guest in the org or remove a guest who
+    // has just been added to another project.
+    let guestDropped = false;
+    await this.prisma.$transaction(async (tx) => {
+      await tx.projectMember.delete({ where: { id: memberId } });
+
+      if (!project) return;
+
+      const orgMember = await tx.organizationMember.findUnique({
         where: { organizationId_userId: { organizationId: project.organizationId, userId: member.userId } },
       });
-      if (orgMember?.role === 'guest') {
-        const remaining = await this.prisma.projectMember.count({
-          where: { userId: member.userId, project: { organizationId: project.organizationId } },
-        });
-        if (remaining === 0) {
-          await this.prisma.organizationMember.delete({ where: { id: orgMember.id } });
-          this.membershipCache.invalidateInternalUserId(member.userId);
-        }
+      if (orgMember?.role !== 'guest') return;
+
+      const remaining = await tx.projectMember.count({
+        where: { userId: member.userId, project: { organizationId: project.organizationId } },
+      });
+      if (remaining === 0) {
+        await tx.organizationMember.delete({ where: { id: orgMember.id } });
+        guestDropped = true;
       }
+    });
+
+    if (guestDropped) {
+      this.membershipCache.invalidateInternalUserId(member.userId);
     }
 
     void this.audit.log({
@@ -6522,6 +6560,22 @@ export class ProjectsService {
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployments');
 
+    if (Array.isArray(volumes) && volumes.some((v) => v && v.type === 'hostPath')) {
+      void this.audit.log({
+        action: 'deployment.volume.rejected',
+        actorUserId: user.id,
+        actorEmail: user.email,
+        organizationId: deployment.project.organizationId,
+        projectId: deployment.projectId,
+        deploymentId,
+        targetType: 'deployment',
+        targetId: deploymentId,
+        targetLabel: deployment.name,
+        metadata: { reason: 'hostPath_volume' },
+      });
+      throw new ForbiddenException('hostPath volumes are not permitted');
+    }
+
     const volumesList: Array<{
       name: string;
       type: 'pvc' | 'hostPath' | 'emptyDir';
@@ -7471,12 +7525,19 @@ export class ProjectsService {
       );
     }
 
-    // Update the deployment with auto-deploy settings
+    const previousBranch = deployment.autoDeployBranch;
+    const previouslyEnabled = deployment.autoDeployEnabled;
+
+    // Update the deployment with auto-deploy settings. Also pin the
+    // installation id so subsequent webhook deliveries are bound to this
+    // specific GitHub App installation (legacy rows whose
+    // githubInstallationId is null are picked up here).
     const updated = await this.prisma.deployment.update({
       where: { id: deploymentId },
       data: {
         autoDeployEnabled: true,
         autoDeployBranch: branch,
+        githubInstallationId: installation.installationId,
       },
       include: {
         project: {
@@ -7496,6 +7557,23 @@ export class ProjectsService {
             service: true,
           },
         },
+      },
+    });
+
+    void this.audit.log({
+      action: 'deployment.autodeploy.enabled',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+      metadata: {
+        repo: deployment.githubRepo,
+        branch: [previousBranch ?? null, branch],
+        wasEnabled: previouslyEnabled,
       },
     });
 
@@ -7536,6 +7614,9 @@ export class ProjectsService {
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'configure auto-deploy');
 
+    const previousBranch = deployment.autoDeployBranch;
+    const previouslyEnabled = deployment.autoDeployEnabled;
+
     // Update the deployment
     const updated = await this.prisma.deployment.update({
       where: { id: deploymentId },
@@ -7560,6 +7641,23 @@ export class ProjectsService {
             service: true,
           },
         },
+      },
+    });
+
+    void this.audit.log({
+      action: 'deployment.autodeploy.disabled',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+      metadata: {
+        repo: deployment.githubRepo,
+        branch: [previousBranch ?? null, null],
+        wasEnabled: previouslyEnabled,
       },
     });
 

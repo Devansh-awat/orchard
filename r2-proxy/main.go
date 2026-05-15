@@ -276,7 +276,7 @@ func (p *Proxy) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			// Treat ?location, ?versioning, ?lifecycle, ?policy, ?acl etc. as
 			// metadata sub-resources and allow them through (bucket-level only,
 			// no tenant data exposure).
-			isMetadataSubresource := q.Get("location") != "" || q.Has("versioning") ||
+			isMetadataSubresource := q.Has("location") || q.Has("versioning") ||
 				q.Has("lifecycle") || q.Has("policy") || q.Has("acl") ||
 				q.Has("cors") || q.Has("logging") || q.Has("encryption")
 			if !isMetadataSubresource {
@@ -393,6 +393,10 @@ func parseAuthHeader(h string) (sigv4Authz, error) {
 // (inside-the-cluster attacker who already has the secret) body-tamper isn't
 // in scope; the value of the signature check is rejecting use of a leaked
 // access key without the secret.
+// Reject signatures whose x-amz-date drifts more than this much from now.
+// Matches the standard SigV4 server skew window and stops indefinite replay.
+const sigv4MaxSkew = 5 * time.Minute
+
 func verifyV4(r *http.Request, authz sigv4Authz, secret string) error {
 	contentSha := r.Header.Get("x-amz-content-sha256")
 	if contentSha == "" {
@@ -405,6 +409,18 @@ func verifyV4(r *http.Request, authz sigv4Authz, secret string) error {
 	}
 	if dateHdr == "" {
 		return errors.New("missing x-amz-date")
+	}
+
+	signedAt, err := parseSigV4Date(dateHdr)
+	if err != nil {
+		return fmt.Errorf("invalid x-amz-date: %w", err)
+	}
+	skew := time.Since(signedAt)
+	if skew < 0 {
+		skew = -skew
+	}
+	if skew > sigv4MaxSkew {
+		return errors.New("request expired (clock skew)")
 	}
 
 	cr := canonicalRequest(r, authz.SignedHeaders, contentSha)
@@ -423,6 +439,21 @@ func verifyV4(r *http.Request, authz sigv4Authz, secret string) error {
 		return errors.New("signature mismatch")
 	}
 	return nil
+}
+
+// parseSigV4Date accepts either the basic ISO 8601 form 20060102T150405Z
+// (canonical x-amz-date) or RFC1123 from the legacy Date header.
+func parseSigV4Date(s string) (time.Time, error) {
+	if t, err := time.Parse("20060102T150405Z", s); err == nil {
+		return t, nil
+	}
+	if t, err := time.Parse(time.RFC1123, s); err == nil {
+		return t.UTC(), nil
+	}
+	if t, err := time.Parse(time.RFC1123Z, s); err == nil {
+		return t.UTC(), nil
+	}
+	return time.Time{}, errors.New("unrecognised date format")
 }
 
 func canonicalRequest(r *http.Request, signedHeaders []string, contentSha string) string {

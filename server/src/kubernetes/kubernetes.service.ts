@@ -1352,14 +1352,16 @@ export class KubernetesService {
           name: vol.name,
         };
 
+        if (vol.type === 'hostPath') {
+          // hostPath mounts trivially escape tenant isolation by exposing the
+          // node filesystem (docker.sock, kubelet creds, /etc/kubernetes). Hard
+          // refuse at the lowest layer, regardless of caller role.
+          throw new Error('hostPath volumes are not permitted');
+        }
+
         if (vol.type === 'pvc' && vol.pvcName) {
           volume.persistentVolumeClaim = {
             claimName: vol.pvcName,
-          };
-        } else if (vol.type === 'hostPath' && vol.hostPath) {
-          volume.hostPath = {
-            path: vol.hostPath,
-            type: 'DirectoryOrCreate',
           };
         } else if (vol.type === 'emptyDir') {
           volume.emptyDir = {};
@@ -2654,14 +2656,13 @@ export class KubernetesService {
         name: vol.name,
       };
 
+      if (vol.type === 'hostPath') {
+        throw new Error('hostPath volumes are not permitted');
+      }
+
       if (vol.type === 'pvc' && vol.pvcName) {
         volume.persistentVolumeClaim = {
           claimName: vol.pvcName,
-        };
-      } else if (vol.type === 'hostPath' && vol.hostPath) {
-        volume.hostPath = {
-          path: vol.hostPath,
-          type: 'DirectoryOrCreate',
         };
       } else if (vol.type === 'emptyDir') {
         volume.emptyDir = {};

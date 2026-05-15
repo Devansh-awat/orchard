@@ -1,4 +1,4 @@
-import { Injectable } from '@nestjs/common';
+import { ConflictException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
 export interface HackClubUserData {
@@ -61,18 +61,13 @@ export class UsersService {
       });
 
       if (user) {
-        const nameParts = hackClubUser.name.split(' ');
-        const firstName = nameParts[0];
-        const lastName = nameParts.slice(1).join(' ') || null;
-
-        user = await this.prisma.user.update({
-          where: { id: user.id },
-          data: {
-            hackClubId: hackClubUser.id,
-            firstName,
-            lastName,
-          }
-        });
+        // An account with this email already exists but isn't linked to a
+        // Hack Club identity. Silently linking here would let any Hack Club
+        // account whose primary_email matches an existing OTP-registered user
+        // take over that account. Force an out-of-band linking flow.
+        throw new ConflictException(
+          'An account with this email already exists. Sign in with your email first, then link your Hack Club account from settings.',
+        );
       } else {
         const nameParts = hackClubUser.name.split(' ');
         const firstName = nameParts[0];

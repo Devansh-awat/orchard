@@ -366,7 +366,10 @@ export class PasswordlessController {
     }
 
     // Private beta: reject users not invited to any organization
-    const hasAccess = await this.hasPrivateBetaAccess(user.id, user.email);
+    const hasAccess = await this.hasPrivateBetaAccess(user.email, {
+      id: user.id,
+      isSuperAdmin: user.isSuperAdmin,
+    });
     if (!hasAccess) {
       throw new HttpException('private_beta', HttpStatus.FORBIDDEN);
     }

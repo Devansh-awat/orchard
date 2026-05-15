@@ -5,6 +5,7 @@ import { Request } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionsService } from './sessions.service';
 import { IS_PUBLIC_KEY, REQUIRES_AUTH_KEY, REQUIRES_SUPERADMIN_KEY } from './decorators';
+import { hashApiToken } from './api-tokens.service';
 
 @Injectable()
 export class SuperAdminGuard implements CanActivate {
@@ -108,8 +109,14 @@ export class SuperAdminGuard implements CanActivate {
     }
 
     if (!authenticated) {
+      // Cheap prefix check: bogus bearers (random strings, malformed JWTs) no
+      // longer cost a DB round-trip, blunting an unauth'd amplification path.
+      if (!token.startsWith('orch_')) {
+        throw new UnauthorizedException('Invalid token');
+      }
+
       const apiToken = await this.prisma.apiToken.findUnique({
-        where: { token },
+        where: { tokenHash: hashApiToken(token) },
         include: { user: { select: { id: true, email: true, username: true, firstName: true, lastName: true, hackClubId: true } } },
       });
 
@@ -124,7 +131,9 @@ export class SuperAdminGuard implements CanActivate {
       const user = apiToken.user;
       const name = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.username;
 
-      request['auth'] = { userId: user.id };
+      const scopes = Array.isArray(apiToken.scopes) ? (apiToken.scopes as string[]) : [];
+      request['auth'] = { userId: user.id, apiTokenId: apiToken.id, tokenScopes: scopes };
+      request['tokenScopes'] = scopes;
       request['user'] = {
         sub: user.id,
         email: user.email,
