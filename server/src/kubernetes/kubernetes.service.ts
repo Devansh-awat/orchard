@@ -942,6 +942,22 @@ export class KubernetesService {
                 },
               ],
             },
+            // CNPG barman sidecars in tenant namespaces stream WAL/backups to
+            // r2-proxy, which lives at a ClusterIP in 10.x — blanket RFC1918
+            // egress would block backups entirely. Scope the exception to
+            // the r2-proxy namespace on port 9000.
+            {
+              to: [
+                {
+                  namespaceSelector: {
+                    matchLabels: {
+                      'kubernetes.io/metadata.name': 'orchard-r2-proxy',
+                    },
+                  },
+                },
+              ],
+              ports: [{ protocol: 'TCP', port: 9000 }],
+            },
           ],
         },
       };

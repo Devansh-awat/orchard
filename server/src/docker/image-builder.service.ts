@@ -498,6 +498,16 @@ ${registryConfigs}
   }): k8s.V1Container {
     const { dockerfilePath, fullImageName, target, buildFromRoot, buildType, envVars } = opts;
 
+    // Keys are interpolated into the depot build shell string below. Reject
+    // anything that isn't a POSIX identifier — same rule applied elsewhere
+    // in this service and in projects.service.
+    const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+    for (const key of Object.keys(envVars)) {
+      if (!ENV_KEY_RE.test(key)) {
+        throw new BadRequestException(`Invalid environment variable key: ${key}`);
+      }
+    }
+
     // Determine context directory and dockerfile flag
     let contextDir = '.';
     let dockerfileFlag = dockerfilePath;
@@ -881,6 +891,17 @@ ls -la /workspace
       },
     ];
 
+    // Env keys flow into Dockerfile directives and unquoted shell positions
+    // below; a key containing a newline or shell metachar would inject
+    // arbitrary instructions. Reject early — projects.service already
+    // validates on write, this is defense-in-depth at the build boundary.
+    const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+    for (const key of Object.keys(envVars)) {
+      if (!ENV_KEY_RE.test(key)) {
+        throw new BadRequestException(`Invalid environment variable key: ${key}`);
+      }
+    }
+
     // For Dockerfile builds with env vars, prepend ARG/ENV declarations
     // This makes build-args available as environment variables in RUN commands
     if (buildType === 'dockerfile' && Object.keys(envVars).length > 0) {
@@ -1193,6 +1214,14 @@ exit $rc`,
           spec: {
             restartPolicy: 'Never',
             serviceAccountName: 'image-builder',
+            // The build pod has no business talking to the kube-apiserver.
+            // The image-builder SA's Role grants pods/secrets read in this
+            // namespace; without this line the SA token is auto-mounted at
+            // /var/run/secrets/kubernetes.io/serviceaccount/ inside BuildKit
+            // and a Dockerfile that reaches BuildKit's container fs (via
+            // any future BuildKit parser bug or `--mount` edge case) could
+            // exfil the Harbor push creds via the apiserver.
+            automountServiceAccountToken: false,
             // Builder pod runtime: Kata (lightweight VM) when configured.
             // Empty/undefined ⇒ default containerd handler (runc) — matches
             // legacy behaviour on first upgrade.

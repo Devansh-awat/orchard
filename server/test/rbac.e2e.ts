@@ -64,7 +64,18 @@ interface Fixture {
 let fx: Fixture;
 
 async function mintToken(userId: string): Promise<string> {
-  return new SignJWT({ sub: userId })
+  // SuperAdminGuard rejects any JWT without a sessionId (post-fix, all
+  // issuance paths mint sessions). Tests must do the same or every request
+  // 401s with "Session has been revoked" before reaching the RBAC layer.
+  const session = await prisma.session.create({
+    data: {
+      userId,
+      expiresAt: new Date(Date.now() + 3600_000),
+      ipAddress: '127.0.0.1',
+      userAgent: RUN_TAG,
+    },
+  });
+  return new SignJWT({ sub: userId, sessionId: session.id })
     .setProtectedHeader({ alg: 'HS256' })
     .setIssuedAt()
     .setExpirationTime('1h')

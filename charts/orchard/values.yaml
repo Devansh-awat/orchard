@@ -125,6 +125,12 @@ builders:
     path: /cache/buildkit
     pvcName: buildkit-cache
     accessMode: ReadWriteOnce
+    # BuildKit GC ceilings — keep cache well below `size` so the PVC
+    # never fills. gcEphemeralKeepBytes caps high-churn types (local
+    # source, RUN cache mounts, git checkouts); gcKeepBytes is the
+    # total cap across everything. Both must be < `size`.
+    gcKeepBytes: 18GB
+    gcEphemeralKeepBytes: 1GB
   quota:
     requestsCpu: "16"
     requestsMemory: "32Gi"

@@ -298,6 +298,19 @@ export class ProjectsService {
       .substring(0, 60);
   }
 
+  // Tenant namespaces are `{org-slug}-{project-slug}`. With no blocklist an
+  // org named e.g. `kube` with project `system` would mint `kube-system` —
+  // the existing-namespace 409 check below blocks collisions with namespaces
+  // that already exist, but that's fragile (race on first install, control-
+  // plane components in different clusters, etc). This list mirrors the
+  // platform-owned namespaces; analogous to RESERVED_HOSTS for ingress.
+  private static readonly RESERVED_NAMESPACES = new Set<string>([
+    'kube-system', 'kube-public', 'kube-node-lease', 'default',
+    'orchard', 'orchard-builders', 'orchard-r2-proxy',
+    'harbor', 'postgresql', 'network', 'longhorn-system',
+    'flux-system', 'monitoring', 'cert-manager',
+  ]);
+
   private buildNamespace(parts: string[]) {
     const sanitized = parts
       .map((part) => this.formatSlug(part))
@@ -307,6 +320,10 @@ export class ProjectsService {
 
     if (!namespace) {
       throw new BadRequestException('Failed to build namespace');
+    }
+
+    if (ProjectsService.RESERVED_NAMESPACES.has(namespace)) {
+      throw new ConflictException('This project name is not available');
     }
 
     return namespace;
@@ -6437,6 +6454,17 @@ export class ProjectsService {
           }))
           .filter((entry) => entry.key.length > 0)
       : [];
+
+    // Env keys get interpolated into Dockerfile ARG/ENV directives and shell
+    // commands in the builder; a key with a newline or shell metachar would
+    // inject arbitrary instructions. Reject anything that isn't a POSIX-style
+    // identifier before it reaches the build pipeline.
+    const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+    for (const entry of envEntries) {
+      if (!ENV_KEY_RE.test(entry.key)) {
+        throw new BadRequestException(`Invalid environment variable key: ${entry.key}`);
+      }
+    }
 
     const uniqueEnv = new Map<string, string>();
     for (const entry of envEntries) {

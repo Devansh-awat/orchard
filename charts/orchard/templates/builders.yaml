@@ -21,32 +21,12 @@ metadata:
     app.kubernetes.io/name: image-builder
     app.kubernetes.io/managed-by: leaf
 ---
-apiVersion: rbac.authorization.k8s.io/v1
-kind: Role
-metadata:
-  name: image-builder-role
-  namespace: {{ $bns }}
-rules:
-  - apiGroups: [""]
-    resources: ["pods", "pods/log"]
-    verbs: ["get", "list", "watch"]
-  - apiGroups: [""]
-    resources: ["secrets"]
-    verbs: ["get"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: RoleBinding
-metadata:
-  name: image-builder-rolebinding
-  namespace: {{ $bns }}
-subjects:
-  - kind: ServiceAccount
-    name: image-builder
-    namespace: {{ $bns }}
-roleRef:
-  kind: Role
-  name: image-builder-role
-  apiGroup: rbac.authorization.k8s.io
+# NB: the image-builder ServiceAccount intentionally has NO RoleBinding.
+# Build pods don't need to talk to the K8s API at all — they clone from
+# GitHub, build via BuildKit, push to Harbor via the sidecar pusher. The
+# pod spec also sets `automountServiceAccountToken: false`, but we drop
+# the Role too so that even a misconfigured pod that re-enables
+# auto-mount has nothing to do with the resulting token.
 ---
 apiVersion: v1
 kind: Secret
@@ -97,6 +77,26 @@ data:
 
     [worker.oci]
       max-parallelism = 4
+      # Garbage-collect the shared local cache so it never fills the PVC.
+      # The cache PVC is sized at .Values.builders.localCache.size (25Gi by
+      # default); we keep the cache under {{ .Values.builders.localCache.gcKeepBytes | default "18GB" }}
+      # so there's always headroom for the in-flight build's intermediate
+      # state and metadata.
+      #
+      # Two policies, evaluated top-to-bottom:
+      #   1. Ephemeral entries (local source uploads, RUN --mount=cache
+      #      contents, transient git checkouts) — keep small. These churn
+      #      heavily and benefit from aggressive eviction.
+      #   2. Everything else — capped by the total ceiling.
+      gc = true
+
+      [[worker.oci.gcpolicy]]
+        keepBytes = "{{ .Values.builders.localCache.gcEphemeralKeepBytes | default "1GB" }}"
+        filters = ["type==source.local", "type==exec.cachemount", "type==source.git.checkout"]
+
+      [[worker.oci.gcpolicy]]
+        all = true
+        keepBytes = "{{ .Values.builders.localCache.gcKeepBytes | default "18GB" }}"
 
     [worker.containerd]
       enabled = false
@@ -168,8 +168,51 @@ spec:
     - Ingress
     - Egress
   ingress: []
+  # Allow-list egress for build pods. Blanket `- {}` let a malicious Dockerfile
+  # exfil source/env/secrets anywhere, probe internal cluster services, or hit
+  # the cloud metadata IMDS. Kata isolates the process but doesn't restrict
+  # network — this NetworkPolicy does.
   egress:
-    - {}
+    # DNS (kube-dns)
+    - ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    # HTTPS to the public internet (git, package registries) — exclude
+    # RFC1918, link-local, and the carrier-grade NAT range so builds can't
+    # reach the apiserver, IMDS, or other internal services by IP.
+    - ports:
+        - port: 443
+          protocol: TCP
+      to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+              - 100.64.0.0/10
+    # HTTP for the handful of package mirrors that still need it.
+    - ports:
+        - port: 80
+          protocol: TCP
+      to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+              - 100.64.0.0/10
+    # Internal Harbor for the push sidecar. Pod-level policy ⇒ this rule
+    # covers both buildkit and the push sidecar in the same pod.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: harbor
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole

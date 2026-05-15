@@ -661,7 +661,7 @@ model Ingress {
   // unique index added by an out-of-band migration:
   //   CREATE UNIQUE INDEX ux_ingresses_host_path
   //     ON ingresses(host, path) WHERE path = '/';
-  @@index([host], map: "idx_ingresses_host")
+  @@unique([host], map: "idx_ingresses_host_unique")
   @@map("ingresses")
 }
 
