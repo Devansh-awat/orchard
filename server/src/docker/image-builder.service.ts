@@ -1084,25 +1084,18 @@ fi
     // Pusher container — only used when sidecarPushEnabled. Reads the OCI
     // tarball BuildKit wrote and pushes it to Harbor with the registry
     // creds. The container runs `crane push` only — no untrusted code.
+    //
+    // The default `gcr.io/go-containerregistry/crane:latest` image is
+    // distroless: no shell, no coreutils, only the crane binary at
+    // /ko-app/crane (the image's ENTRYPOINT). So we deliberately do NOT
+    // set `command` — we pass args that the image's entrypoint consumes:
+    //   crane push /output/image.tar <fullImageName>
+    // Init-container semantics guarantee buildkit completed successfully
+    // before pusher starts, so the tarball is present.
     const pusherContainer: k8s.V1Container | null = (buildkitContainer && this.sidecarPushEnabled) ? {
       name: 'pusher',
       image: this.pusherImage,
-      // crane needs DOCKER_CONFIG pointing at a directory containing
-      // config.json. Use an explicit entrypoint to avoid relying on the
-      // image's default CMD.
-      command: ['/bin/sh', '-c'],
-      args: [
-        `set -e
-echo "=== Pushing OCI tarball to registry ==="
-if [ ! -f /output/image.tar ]; then
-  echo "ERROR: /output/image.tar not found — BuildKit must have failed"
-  ls -la /output 2>&1 || true
-  exit 1
-fi
-echo "Tarball size: $(stat -c%s /output/image.tar 2>/dev/null || wc -c < /output/image.tar) bytes"
-crane push /output/image.tar '${fullImageName.replace(/'/g, `'\\''`)}'
-echo "=== Pushed image ==="`,
-      ],
+      args: ['push', '/output/image.tar', fullImageName],
       env: [
         { name: 'DOCKER_CONFIG', value: '/root/.docker' },
       ],
