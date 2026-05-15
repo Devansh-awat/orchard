@@ -65,6 +65,17 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && apt-get update \
     && apt-get install -y --no-install-recommends docker-ce-cli
 
+# Install kompose for converting docker-compose files into Kubernetes manifests
+ARG KOMPOSE_VERSION=v1.34.0
+RUN ARCH="$(dpkg --print-architecture)" \
+    && case "$ARCH" in \
+         amd64) KARCH=amd64 ;; \
+         arm64) KARCH=arm64 ;; \
+         *) echo "unsupported arch $ARCH" && exit 1 ;; \
+       esac \
+    && curl -fsSL "https://github.com/kubernetes/kompose/releases/download/${KOMPOSE_VERSION}/kompose-linux-${KARCH}" -o /usr/local/bin/kompose \
+    && chmod +x /usr/local/bin/kompose \
+    && kompose version
 
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY --from=builder /app/server/package.json ./server/package.json

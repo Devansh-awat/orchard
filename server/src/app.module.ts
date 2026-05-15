@@ -13,6 +13,7 @@ import { EmailModule } from './email/email.module';
 import { AdminModule } from './admin/admin.module';
 import { WebhooksModule } from './webhooks/webhooks.module';
 import { TemplatesModule } from './templates/templates.module';
+import { ComposeStacksModule } from './compose-stacks/compose-stacks.module';
 import { SsoModule } from './sso/sso.module';
 import { NodesModule } from './nodes/nodes.module';
 import { QuotasModule } from './quotas/quotas.module';
@@ -37,6 +38,7 @@ import { AuditModule } from './audit/audit.module';
     AdminModule,
     WebhooksModule,
     TemplatesModule,
+    ComposeStacksModule,
     SsoModule,
     NodesModule,
     QuotasModule,

@@ -9,7 +9,8 @@
 		Globe,
 		Search,
 		LayoutTemplate,
-		Server
+		Server,
+		FileText
 	} from 'lucide-svelte';
 	import { apiFetch } from '$lib/stores';
 
@@ -53,6 +54,13 @@
 			description: 'Deploy a container image',
 			icon: Container,
 			color: '#2496ed',
+		},
+		{
+			id: 'compose-stack',
+			label: 'Docker Compose',
+			description: 'Deploy a stack from a docker-compose.yml',
+			icon: FileText,
+			color: '#0db7ed',
 		},
 		{
 			id: 'database',
@@ -118,6 +126,9 @@
 				break;
 			case 'database':
 				goto(`${basePath}/databases/new`);
+				break;
+			case 'compose-stack':
+				goto(`${basePath}/compose-stacks/new`);
 				break;
 		}
 	}

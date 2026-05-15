@@ -286,6 +286,14 @@ export class ProjectsService {
     return null;
   }
 
+  private assertNotComposeManaged(deployment: { composeStackId?: string | null } | null | undefined, action: string) {
+    if (deployment?.composeStackId) {
+      throw new BadRequestException(
+        `This deployment is managed by a Compose file. ${action} via its parent compose stack.`,
+      );
+    }
+  }
+
   private formatSlug(value: string) {
     if (!value) {
       return '';
@@ -717,6 +725,7 @@ export class ProjectsService {
       include: { volumes: true },
     });
     if (!deployment) throw new NotFoundException('Deployment not found');
+    this.assertNotComposeManaged(deployment, 'Change deploy strategy');
 
     // Defense-in-depth: re-assert project-edit even though the controller already did.
     if (userId) {
@@ -754,6 +763,7 @@ export class ProjectsService {
       where: { id: deploymentId },
     });
     if (!deployment) throw new NotFoundException('Deployment not found');
+    this.assertNotComposeManaged(deployment, 'Change the image');
 
     // Defense-in-depth: re-assert project-edit even though the controller already did.
     if (userId) {
@@ -789,6 +799,7 @@ export class ProjectsService {
       include: { project: true },
     });
     if (!deployment) throw new NotFoundException('Deployment not found');
+    this.assertNotComposeManaged(deployment, 'Update resources');
 
     // Defense-in-depth: re-assert project-edit even though the controller already did.
     if (userId) {
@@ -914,6 +925,8 @@ export class ProjectsService {
         readOnly?: boolean;
       }[];
       templateInstanceId?: string;
+      composeStackId?: string;
+      composeServiceName?: string;
       cpuRequestMilli?: number | null;
       memoryRequestBytes?: number | null;
     },
@@ -1071,6 +1084,8 @@ export class ProjectsService {
           status: 'running',
           createdBy: user.id,
           templateInstanceId: data.templateInstanceId ?? null,
+          composeStackId: data.composeStackId ?? null,
+          composeServiceName: data.composeServiceName ?? null,
           deployStrategy: initialStrategy,
           cpuRequestMilli: data.cpuRequestMilli ?? null,
           memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
@@ -6159,7 +6174,8 @@ export class ProjectsService {
       firstName?: string;
       lastName?: string;
       imageUrl?: string;
-    }
+    },
+    options?: { fromComposeStack?: boolean }
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
 
@@ -6180,6 +6196,12 @@ export class ProjectsService {
 
     if (!deployment) {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    if (deployment.composeStackId && !options?.fromComposeStack) {
+      throw new BadRequestException(
+        'This deployment is managed by a Compose file. Delete it via its parent compose stack.',
+      );
     }
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'delete deployments');
@@ -6306,6 +6328,7 @@ export class ProjectsService {
     if (!deployment) {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
+    this.assertNotComposeManaged(deployment, 'Scale');
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'scale deployments');
 
@@ -6446,6 +6469,7 @@ export class ProjectsService {
     if (!deployment) {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
+    this.assertNotComposeManaged(deployment, 'Update environment variables');
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployments');
 
@@ -6669,6 +6693,7 @@ export class ProjectsService {
     if (!deployment) {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
+    this.assertNotComposeManaged(deployment, 'Update health checks');
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployments');
 
@@ -6773,6 +6798,7 @@ export class ProjectsService {
     if (!deployment) {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
+    this.assertNotComposeManaged(deployment, 'Update volumes');
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployments');
 
