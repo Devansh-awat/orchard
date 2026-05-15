@@ -288,8 +288,16 @@ builderSandbox:
   handler: kata
   sidecarPush: false
   # Image used by the pusher container in sidecarPush mode. Must contain
-  # `crane` (gcr.io/go-containerregistry/crane). Override to pin a digest.
-  pusherImage: gcr.io/go-containerregistry/crane:latest
+  # the `skopeo` binary on PATH.
+  #
+  # quay.io/skopeo/stable is the upstream Red Hat image — quay throttles
+  # Hetzner IPs much less than gcr.io did with the previous crane image.
+  # If you want to be airtight, mirror this into Harbor and point at the
+  # mirrored copy:
+  #   skopeo copy docker://quay.io/skopeo/stable:latest \
+  #               docker://harbor.1mp.dev/orchard/skopeo:latest
+  # Then set pusherImage: harbor.1mp.dev/orchard/skopeo:latest
+  pusherImage: quay.io/skopeo/stable:latest
 
 # Public-TLS reflection — tells the server which Secret to copy from when
 # exposing a CNPG cluster publicly with TLS.

@@ -1083,21 +1083,28 @@ fi
 
     // Pusher container — only used when sidecarPushEnabled. Reads the OCI
     // tarball BuildKit wrote and pushes it to Harbor with the registry
-    // creds. The container runs `crane push` only — no untrusted code.
-    //
-    // The default `gcr.io/go-containerregistry/crane:latest` image is
-    // distroless: no shell, no coreutils, only the crane binary at
-    // /ko-app/crane (the image's ENTRYPOINT). So we deliberately do NOT
-    // set `command` — we pass args that the image's entrypoint consumes:
-    //   crane push /output/image.tar <fullImageName>
-    // Init-container semantics guarantee buildkit completed successfully
-    // before pusher starts, so the tarball is present.
+    // creds. Uses `skopeo copy` because:
+    //   - quay.io throttles Hetzner IPs much less than gcr.io (where the
+    //     original crane image lived — pulls there hit 429 in practice).
+    //   - skopeo's oci-archive: transport reads exactly the format
+    //     BuildKit writes with `--output type=oci,dest=...`.
+    //   - it accepts --authfile so we can keep the Harbor creds isolated
+    //     to this container; BuildKit (the init container that runs
+    //     untrusted Dockerfile RUN steps) never sees them.
+    // Init-container ordering guarantees BuildKit succeeded before this
+    // runs, so /output/image.tar exists.
     const pusherContainer: k8s.V1Container | null = (buildkitContainer && this.sidecarPushEnabled) ? {
       name: 'pusher',
       image: this.pusherImage,
-      args: ['push', '/output/image.tar', fullImageName],
-      env: [
-        { name: 'DOCKER_CONFIG', value: '/root/.docker' },
+      command: ['skopeo'],
+      args: [
+        'copy',
+        '--authfile', '/root/.docker/config.json',
+        // Harbor is reachable over plaintext HTTP on the in-cluster
+        // service (matches the buildkit-config.toml `http = true` entries).
+        '--dest-tls-verify=false',
+        'oci-archive:/output/image.tar',
+        `docker://${fullImageName}`,
       ],
       volumeMounts: [
         { name: 'output', mountPath: '/output', readOnly: true },
