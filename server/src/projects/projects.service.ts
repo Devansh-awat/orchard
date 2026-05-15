@@ -14,6 +14,7 @@ import { TailscaleService } from '../tailscale/tailscale.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
 import { SessionsService } from '../auth/sessions.service';
 import { AuthorizationService } from '../auth/authorization.service';
+import { requestAuthStorage } from '../auth/request-context';
 import { AuditService } from '../audit/audit.service';
 import { randomUUID } from 'crypto';
 import * as dns from 'dns';
@@ -66,6 +67,44 @@ export class ProjectsService {
    * host first is a low-grade enumeration oracle.
    */
   private async assertHostnameAvailable(rawHost: string, projectId: string): Promise<void> {
+    const host = String(rawHost || '').trim().toLowerCase();
+    if (!host) {
+      throw new BadRequestException('Hostname is required');
+    }
+
+    // Platform-owned hostnames are never registerable by a tenant. Without
+    // this check a tenant could claim e.g. `app.orchard.dev` (the platform
+    // login host) — their IngressRoute would then live alongside the
+    // platform's chart-managed Ingress, and depending on Traefik
+    // priority/ordering the tenant route could shadow the platform's and
+    // capture session cookies from logged-in admins. RESERVED_HOSTS holds
+    // exact platform hosts; RESERVED_SUFFIXES holds parent zones whose
+    // subdomains are managed by the platform (Let's Encrypt DNS-01,
+    // wildcards, etc).
+    const reservedExact = new Set<string>(
+      (process.env.RESERVED_HOSTS || '')
+        .split(',')
+        .map((s) => s.trim().toLowerCase())
+        .filter(Boolean),
+    );
+    const reservedSuffixes = (process.env.RESERVED_HOST_SUFFIXES || '')
+      .split(',')
+      .map((s) => s.trim().toLowerCase().replace(/^\./, ''))
+      .filter(Boolean);
+
+    if (reservedExact.has(host)) {
+      throw new ConflictException(
+        `Hostname ${rawHost} is unavailable. Choose a different domain.`,
+      );
+    }
+    for (const suffix of reservedSuffixes) {
+      if (host === suffix || host.endsWith(`.${suffix}`)) {
+        throw new ConflictException(
+          `Hostname ${rawHost} is unavailable. Choose a different domain.`,
+        );
+      }
+    }
+
     const conflict = await this.prisma.ingress.findFirst({
       where: { host: rawHost, NOT: { projectId } },
       select: { id: true },
@@ -1216,6 +1255,29 @@ export class ProjectsService {
     const dockerfilePath = String(data.dockerfilePath || '').trim();
     const tag = data.tag ? String(data.tag).trim() : 'latest';
     const buildType = data.buildType === 'railpack' ? 'railpack' : 'dockerfile';
+
+    // Validate refs and paths at the boundary. The same checks are
+    // enforced again inside DockerService.cloneRepository as defence in
+    // depth — see isSafeGitRef / isSafeRelativePath there.
+    const GIT_REF_RE = /^[A-Za-z0-9._/-]+$/;
+    if (branch.length > 200 || branch.startsWith('-') || branch.includes('..') || !GIT_REF_RE.test(branch)) {
+      throw new BadRequestException('Invalid branch name');
+    }
+    if (tag.length > 200 || tag.startsWith('-') || tag.includes('..') || !GIT_REF_RE.test(tag)) {
+      throw new BadRequestException('Invalid tag');
+    }
+    if (dockerfilePath) {
+      if (
+        dockerfilePath.length > 500 ||
+        dockerfilePath.startsWith('/') ||
+        dockerfilePath.startsWith('\\') ||
+        dockerfilePath.includes('..') ||
+        dockerfilePath.includes('\0') ||
+        !/^[A-Za-z0-9._/\- ]+$/.test(dockerfilePath)
+      ) {
+        throw new BadRequestException('Invalid Dockerfile path');
+      }
+    }
 
     if (!nameInput) {
       throw new BadRequestException('Deployment name is required');
@@ -4769,7 +4831,19 @@ export class ProjectsService {
       });
     }
     if (conditions.length === 0) return null;
-    return conditions.length === 1 ? conditions[0] : { OR: conditions };
+    const base = conditions.length === 1 ? conditions[0] : { OR: conditions };
+
+    // If this request is authenticated via an API token with a non-empty
+    // restrictedProjectIds list, every project read must also be inside
+    // that allow-list. The membership-based filter alone would leak
+    // project metadata for projects the underlying user can see but the
+    // token explicitly excludes (see assertProjectView at
+    // authorization.service.ts:284 for the single-project equivalent).
+    const tokenCtx = requestAuthStorage.getStore();
+    if (tokenCtx?.tokenProjectIds && tokenCtx.tokenProjectIds.length > 0) {
+      return { AND: [base, { id: { in: tokenCtx.tokenProjectIds } }] };
+    }
+    return base;
   }
 
   /**
@@ -9084,6 +9158,30 @@ export class ProjectsService {
       throw new BadRequestException('Extensions require a CNPG-backed database');
     }
     if (!data.name) throw new BadRequestException('name is required');
+
+    // Untrusted Postgres procedural languages and FDWs give whoever can run
+    // `CREATE EXTENSION` arbitrary code execution as the postgres OS user
+    // inside the cluster pod (plperlu, plpython3u, plr) or filesystem reads
+    // (file_fdw, adminpack) or arbitrary outbound TCP (dblink,
+    // postgres_fdw). The tenant already runs in their own namespace and
+    // their CNPG pod has the tenant netpol applied, but we still don't
+    // want to hand them a code-exec primitive on a platform-managed
+    // database — fix the blast radius with an explicit allow-list.
+    const ALLOWED_EXTENSIONS = new Set<string>([
+      'pgvector', 'vector',
+      'citext', 'hstore', 'ltree', 'pg_trgm', 'unaccent', 'btree_gin', 'btree_gist',
+      'uuid-ossp', 'pgcrypto',
+      'tablefunc', 'fuzzystrmatch', 'pg_stat_statements',
+      'postgis', 'postgis_topology', 'postgis_raster',
+      'plpgsql',
+      'intarray', 'isn', 'cube', 'earthdistance',
+      'timescaledb',
+    ]);
+    if (!ALLOWED_EXTENSIONS.has(data.name)) {
+      throw new BadRequestException(
+        `Extension "${data.name}" is not allowed. Allowed: ${[...ALLOWED_EXTENSIONS].sort().join(', ')}`,
+      );
+    }
 
     let preloadAdded = false;
     if (data.addToPreload) {

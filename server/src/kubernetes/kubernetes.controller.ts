@@ -1,6 +1,6 @@
 import { Body, Controller, Delete, Get, Param, Post, Query, Req, BadRequestException, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { KubernetesService } from './kubernetes.service';
-import { Auth } from '../auth/decorators';
+import { Auth, RequireScope } from '../auth/decorators';
 import { AuthorizationService } from '../auth/authorization.service';
 import { PrismaService } from '../prisma/prisma.service';
 
@@ -85,7 +85,11 @@ export class KubernetesController {
 
   // Synchronous one-shot exec. Used by the MCP exec tool and any non-WS
   // caller — the websocket terminal gateway handles interactive sessions.
+  // Requires the `exec` API-token scope (the default for POST is `deploy`,
+  // which is insufficient — exec is shell access and demands an explicit
+  // higher-privilege scope, matching the WS terminal gateway).
   @Post('pods/:podName/exec')
+  @RequireScope('exec')
   async execInPod(
     @Param('podName') podName: string,
     @Body() body: { namespace?: string; command: string | string[]; container?: string; timeoutMs?: number },

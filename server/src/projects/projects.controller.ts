@@ -152,9 +152,13 @@ export class ProjectsController {
     @Request() req,
   ) {
     if (!file) throw new BadRequestException('No file provided');
-    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp', 'image/svg+xml'];
+    // SVG intentionally excluded: SVG is an executable document (can carry
+    // <script> and event handlers) and we render project icons same-origin
+    // in the dashboard. Allowing SVG turns "upload icon" into stored XSS
+    // against any user who views the project.
+    const allowed = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
     if (!allowed.includes(file.mimetype)) {
-      throw new BadRequestException('Invalid file type. Only JPEG, PNG, GIF, WebP, and SVG are allowed');
+      throw new BadRequestException('Invalid file type. Only JPEG, PNG, GIF, and WebP are allowed');
     }
     if (file.size > 2 * 1024 * 1024) {
       throw new BadRequestException('File size exceeds 2MB limit');

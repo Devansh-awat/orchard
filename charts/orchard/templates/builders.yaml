@@ -198,6 +198,15 @@ rules:
     resources: ["roles", "rolebindings"]
     verbs: ["get", "create"]
 ---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: orchard-server
+  namespace: {{ $appNs }}
+  labels:
+    app.kubernetes.io/name: server
+    app.kubernetes.io/managed-by: leaf
+---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
@@ -207,7 +216,7 @@ metadata:
     app.kubernetes.io/managed-by: leaf
 subjects:
   - kind: ServiceAccount
-    name: default
+    name: orchard-server
     namespace: {{ $appNs }}
 roleRef:
   kind: ClusterRole

@@ -41,23 +41,32 @@ async function bootstrap() {
   app.use(cookieParser());
 
   const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-  const baseDomain = process.env.BASE_DOMAIN; // e.g. "orchard.my"
+  // Hosts that are part of the platform itself (login, status page, docs,
+  // etc.) and may issue credentialed requests to the API. Comma-separated
+  // origins, e.g. `https://app.orchard.dev,https://docs.orchard.dev`.
+  const platformOrigins = new Set<string>(
+    [
+      frontendUrl,
+      ...(process.env.PLATFORM_ORIGINS || '')
+        .split(',')
+        .map((s) => s.trim())
+        .filter(Boolean),
+    ],
+  );
 
   app.enableCors({
     origin: (origin, callback) => {
-      // Allow requests with no origin (e.g. server-to-server, curl)
+      // No-origin requests (curl, server-to-server) cannot ride a session
+      // cookie cross-origin, so accepting them is harmless.
       if (!origin) return callback(null, true);
 
-      // Allow the main frontend URL
-      if (origin === frontendUrl) return callback(null, true);
+      if (platformOrigins.has(origin)) return callback(null, true);
 
-      // Allow any subdomain of the base domain
-      if (baseDomain) {
-        const escapedDomain = baseDomain.replace(/\./g, '\\.');
-        const subdomainPattern = new RegExp(`^https?://[a-z0-9-]+\\.${escapedDomain}$`);
-        if (subdomainPattern.test(origin)) return callback(null, true);
-      }
-
+      // Deliberately no `*.BASE_DOMAIN` wildcard: tenant-hosted apps live
+      // under the same apex as platform infra in some configurations, and
+      // a credentialed CORS match would let a tenant's JS read API
+      // responses on behalf of a logged-in user. If you need to allow
+      // additional first-party origins, add them to PLATFORM_ORIGINS.
       callback(new Error('Not allowed by CORS'));
     },
     credentials: true,

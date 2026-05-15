@@ -4,6 +4,20 @@ import { ServiceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { parseCpu, parseMemory, cpuMilliToK8s, memoryBytesToK8s } from './quantity';
 
+// Annotations users may set on their ingresses. Everything else — in
+// particular anything under `traefik.ingress.kubernetes.io/router.*` — is
+// silently stripped, because those keys let a tenant cross namespaces
+// (router.middlewares: `<ns>-<name>@kubernetescrd`) or rewrite routing in
+// ways the platform doesn't intend to expose.
+const ALLOWED_INGRESS_ANNOTATION_KEYS = new Set<string>([
+  'cert-manager.io/cluster-issuer',
+  'cert-manager.io/issuer',
+  'nginx.ingress.kubernetes.io/proxy-body-size',
+  'nginx.ingress.kubernetes.io/proxy-read-timeout',
+  'nginx.ingress.kubernetes.io/proxy-send-timeout',
+  'nginx.ingress.kubernetes.io/ssl-redirect',
+]);
+
 function buildNodeAffinity(
   allowedNodes: string[] | null | undefined,
   deniedNodes: string[] | undefined,
@@ -848,8 +862,71 @@ export class KubernetesService {
               ],
             },
           ],
+          // Egress is allow-listed. Pods may:
+          //   1. Talk to other pods in the same tenant namespace.
+          //   2. Resolve DNS via kube-dns in kube-system (UDP/TCP 53).
+          //   3. Talk to the `network` namespace (Traefik, ingress controllers).
+          //   4. Reach the public internet — but NOT in-cluster Services
+          //      (10.0.0.0/8 RFC1918, the service/pod CIDR is in there),
+          //      link-local / cloud metadata (169.254.0.0/16), or other
+          //      RFC1918 ranges that the platform's own infra may live on.
+          // This blocks tenant pods from reaching the kube-apiserver,
+          // platform Postgres/Harbor/server, other tenants, and the cloud
+          // metadata IMDS — while still letting them call out to the
+          // public internet for normal app traffic.
           egress: [
-            {},
+            {
+              to: [
+                {
+                  namespaceSelector: {
+                    matchLabels: {
+                      'kubernetes.io/metadata.name': cleanNamespace,
+                    },
+                  },
+                },
+                {
+                  namespaceSelector: {
+                    matchLabels: {
+                      'kubernetes.io/metadata.name': 'network',
+                    },
+                  },
+                },
+              ],
+            },
+            {
+              to: [
+                {
+                  namespaceSelector: {
+                    matchLabels: {
+                      'kubernetes.io/metadata.name': 'kube-system',
+                    },
+                  },
+                  podSelector: {
+                    matchLabels: { 'k8s-app': 'kube-dns' },
+                  },
+                },
+              ],
+              ports: [
+                { protocol: 'UDP', port: 53 },
+                { protocol: 'TCP', port: 53 },
+              ],
+            },
+            {
+              to: [
+                {
+                  ipBlock: {
+                    cidr: '0.0.0.0/0',
+                    except: [
+                      '10.0.0.0/8',
+                      '172.16.0.0/12',
+                      '192.168.0.0/16',
+                      '169.254.0.0/16',
+                      '100.64.0.0/10',
+                    ],
+                  },
+                },
+              ],
+            },
           ],
         },
       };
@@ -1444,6 +1521,11 @@ export class KubernetesService {
               labels
             },
             spec: {
+              // Tenant pods do not need to talk to the kube-apiserver. The
+              // default ServiceAccount token, if mounted, lets a compromised
+              // pod do `selfsubjectreviews` and (more importantly) carries
+              // any unintended RBAC grants out of the namespace.
+              automountServiceAccountToken: false,
               containers: [container],
               volumes: k8sVolumes.length > 0 ? k8sVolumes : undefined,
               affinity: affinity || undefined,
@@ -1852,6 +1934,15 @@ export class KubernetesService {
       }
     }
 
+    // Ingress annotations are not free-form. User input that reaches Traefik
+    // routing (router.middlewares, router.rule, router.priority,
+    // router.tls.options, etc.) can reference middlewares from any namespace
+    // via the `<ns>-<name>@kubernetescrd` provider syntax — including
+    // kube-system or another tenant's namespace — or override router rules
+    // / priorities to shadow other ingresses. Only pass through an
+    // allow-list of well-known safe keys. Routing-control annotations
+    // (entrypoints, redirect, basicAuth middlewares) are written by this
+    // service further down.
     const annotations: Record<string, string> = {};
 
     if (options.annotations) {
@@ -1859,7 +1950,9 @@ export class KubernetesService {
         if (value === undefined || value === null) {
           continue;
         }
-        annotations[String(key)] = String(value);
+        const k = String(key);
+        if (!ALLOWED_INGRESS_ANNOTATION_KEYS.has(k)) continue;
+        annotations[k] = String(value);
       }
     }
 
@@ -2039,6 +2132,15 @@ export class KubernetesService {
       }
     }
 
+    // Ingress annotations are not free-form. User input that reaches Traefik
+    // routing (router.middlewares, router.rule, router.priority,
+    // router.tls.options, etc.) can reference middlewares from any namespace
+    // via the `<ns>-<name>@kubernetescrd` provider syntax — including
+    // kube-system or another tenant's namespace — or override router rules
+    // / priorities to shadow other ingresses. Only pass through an
+    // allow-list of well-known safe keys. Routing-control annotations
+    // (entrypoints, redirect, basicAuth middlewares) are written by this
+    // service further down.
     const annotations: Record<string, string> = {};
 
     if (options.annotations) {
@@ -2046,7 +2148,9 @@ export class KubernetesService {
         if (value === undefined || value === null) {
           continue;
         }
-        annotations[String(key)] = String(value);
+        const k = String(key);
+        if (!ALLOWED_INGRESS_ANNOTATION_KEYS.has(k)) continue;
+        annotations[k] = String(value);
       }
     }
 
@@ -5227,14 +5331,22 @@ export class KubernetesService {
       if (ready && dbName && dbUser) {
         try {
           const pod = await this.findPostgresPod(namespace, name);
+          // Pass dbName via a psql variable (`-v name=value`) and reference
+          // it as `:'dbname'`, which psql client-side-quotes as a
+          // SQL string literal. This avoids string-interpolating the
+          // database name into SQL even though dbName originates from a
+          // DB row (defence in depth — if a future code path lets users
+          // pick the name, the SQL stays safe).
           const exec = async (sql: string): Promise<string> => {
             const r = await this.execInPod(namespace, pod, 'postgres', [
-              'psql', '-U', dbUser, '-d', dbName, '-t', '-A', '-c', sql,
+              'psql', '-U', dbUser, '-d', dbName,
+              '-v', `dbname=${dbName}`,
+              '-t', '-A', '-c', sql,
             ]);
             return r.stdout.trim();
           };
-          size = await exec(`SELECT pg_size_pretty(pg_database_size('${dbName.replace(/'/g, "''")}'));`);
-          const connRaw = await exec(`SELECT count(*) FROM pg_stat_activity WHERE datname = '${dbName.replace(/'/g, "''")}';`);
+          size = await exec(`SELECT pg_size_pretty(pg_database_size(:'dbname'));`);
+          const connRaw = await exec(`SELECT count(*) FROM pg_stat_activity WHERE datname = :'dbname';`);
           connections = parseInt(connRaw, 10) || 0;
         } catch {}
       }

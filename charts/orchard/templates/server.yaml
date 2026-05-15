@@ -17,6 +17,7 @@ spec:
       labels:
         {{- include "orchard.labels" (dict "root" . "name" "server") | nindent 8 }}
     spec:
+      serviceAccountName: orchard-server
       {{- include "orchard.pullSecrets" . | nindent 6 }}
       containers:
         - name: server

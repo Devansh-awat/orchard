@@ -11,6 +11,29 @@ import { ImageBuilderService } from './image-builder.service';
 
 const execAsync = promisify(exec);
 
+// Allow letters, digits, `_`, `.`, `/`, `-`. Reject leading `-` (git option
+// smuggling), `..` segments (path traversal in refs), and any whitespace.
+// This is intentionally narrower than git's full ref grammar — it's the
+// shape of every realistic branch/tag name in practice.
+function isSafeGitRef(ref: string): boolean {
+  if (!ref || typeof ref !== 'string') return false;
+  if (ref.length > 200) return false;
+  if (ref.startsWith('-')) return false;
+  if (ref.includes('..')) return false;
+  return /^[A-Za-z0-9._/-]+$/.test(ref);
+}
+
+// Dockerfile paths are joined onto a freshly-cloned working tree. They
+// must be relative and stay inside it.
+function isSafeRelativePath(p: string): boolean {
+  if (typeof p !== 'string') return false;
+  if (p === '') return true; // empty = default Dockerfile at root
+  if (p.startsWith('/') || p.startsWith('\\')) return false;
+  if (p.includes('..')) return false;
+  if (p.includes('\0')) return false;
+  return /^[A-Za-z0-9._/\- ]+$/.test(p);
+}
+
 type BuildType = 'dockerfile' | 'railpack';
 type BuildMode = 'local' | 'kubernetes';
 
@@ -122,6 +145,14 @@ export class DockerService {
   }
 
   async cloneRepository(repoUrl: string, branch: string, accessToken?: string, deploymentId?: string): Promise<string> {
+    // git treats argv entries that start with `-` as options even when
+    // they're positionally an argument (notably `--branch <ref>` accepts
+    // `--upload-pack=<cmd>`-shaped values in some versions, and refspec
+    // parsing has had RCEs historically). Refuse anything that isn't a
+    // valid ref name before it reaches argv.
+    if (!isSafeGitRef(branch)) {
+      throw new Error(`Invalid branch name: ${branch}`);
+    }
     const tempDir = await fs.mkdtemp(path.join(os.tmpdir(), 'orchard-build-'));
 
     let cloneUrl = repoUrl;
