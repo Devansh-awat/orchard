@@ -12,42 +12,42 @@ import {
 import { Request, Response } from 'express';
 import { SsoService } from './sso.service';
 import { Public } from '../auth/decorators';
+import { setSessionCookie } from '../auth/cookies';
 
 @Public()
 @Controller('sso')
 export class SsoController {
   constructor(private readonly ssoService: SsoService) {}
 
-  private isSessionCookieSecure(): boolean {
-    const override = process.env.SESSION_COOKIE_SECURE?.toLowerCase();
-    if (override === 'true') return true;
-    if (override === 'false') return false;
-    return process.env.NODE_ENV === 'production';
-  }
-
-  private setSessionCookie(res: Response, token: string): void {
-    res.cookie('session_token', token, {
-      httpOnly: true,
-      secure: this.isSessionCookieSecure(),
-      sameSite: 'strict',
-      maxAge: 7 * 24 * 60 * 60 * 1000,
-      path: '/',
-      domain: process.env.COOKIE_DOMAIN || undefined,
-    });
-  }
+  // H-2: cookie attributes come from ../auth/cookies — shared across OAuth,
+  // SSO, and passwordless flows.
 
   /**
-   * Get public branding info for a subdomain.
-   * Used by the frontend to render the branded SSO login page.
+   * Get public branding info for a subdomain. Only returns data when SSO is
+   * actually enabled — otherwise responds 404 (same shape as an unknown
+   * subdomain) so unauthenticated callers can't enumerate which orgs reserved
+   * a subdomain.
    */
   @Get('subdomain/:subdomain')
   async getSubdomainBranding(@Param('subdomain') subdomain: string) {
-    return this.ssoService.getPublicBranding(subdomain);
+    try {
+      const branding = await this.ssoService.getPublicBranding(subdomain);
+      if (!branding.ssoEnabled) {
+        throw new HttpException('Not Found', HttpStatus.NOT_FOUND);
+      }
+      return branding;
+    } catch (err) {
+      if (err instanceof HttpException && err.getStatus() === HttpStatus.NOT_FOUND) {
+        throw err;
+      }
+      throw new HttpException('Not Found', HttpStatus.NOT_FOUND);
+    }
   }
 
   /**
-   * Initiate SSO login for an organization.
-   * Redirects to the IdP (OIDC authorize URL or SAML entry point).
+   * Initiate SSO login for an organization. Any error path collapses to a 404
+   * so unauthenticated callers can't tell "org doesn't exist" from "SSO not
+   * configured" by inspecting the response.
    */
   @Get(':orgId/login')
   async initiateLogin(
@@ -58,7 +58,10 @@ export class SsoController {
       const org = await this.ssoService.resolveBySubdomain(orgId).catch(() => null);
       const organizationId = org ? org.id : orgId;
 
-      const config = await this.getSsoConfigForOrg(organizationId);
+      const config = await this.ssoService.getSsoConfig(organizationId);
+      if (!config) {
+        throw new HttpException('Not Found', HttpStatus.NOT_FOUND);
+      }
 
       let redirectUrl: string;
       if (config.provider === 'oidc') {
@@ -66,14 +69,13 @@ export class SsoController {
       } else if (config.provider === 'saml') {
         redirectUrl = await this.ssoService.initiateSamlLogin(organizationId);
       } else {
-        throw new HttpException('Unknown SSO provider', HttpStatus.BAD_REQUEST);
+        throw new HttpException('Not Found', HttpStatus.NOT_FOUND);
       }
 
       return res.redirect(redirectUrl);
     } catch (err) {
-      if (err instanceof HttpException) throw err;
       console.error('SSO login initiation error:', err);
-      throw new HttpException('Failed to initiate SSO login', HttpStatus.INTERNAL_SERVER_ERROR);
+      throw new HttpException('Not Found', HttpStatus.NOT_FOUND);
     }
   }
 
@@ -96,15 +98,14 @@ export class SsoController {
 
       const result = await this.ssoService.handleOidcCallback(orgId, callbackUrl, state);
 
-      this.setSessionCookie(res, result.token);
+      setSessionCookie(res, result.token);
 
       const frontendUrl = this.getFrontendRedirectUrl(result.organizationSlug);
       return res.redirect(`${frontendUrl}/oauth/callback`);
     } catch (err) {
       console.error('OIDC callback error:', err);
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-      const errorMsg = err instanceof HttpException ? err.message : 'SSO authentication failed';
-      return res.redirect(`${frontendUrl}?error=${encodeURIComponent(errorMsg)}`);
+      return res.redirect(`${frontendUrl}?error=sso_failed`);
     }
   }
 
@@ -124,24 +125,15 @@ export class SsoController {
 
       const result = await this.ssoService.handleSamlCallback(orgId, samlResponse);
 
-      this.setSessionCookie(res, result.token);
+      setSessionCookie(res, result.token);
 
       const frontendUrl = this.getFrontendRedirectUrl(result.organizationSlug);
       return res.redirect(`${frontendUrl}/oauth/callback`);
     } catch (err) {
       console.error('SAML callback error:', err);
       const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:5173';
-      const errorMsg = err instanceof HttpException ? err.message : 'SSO authentication failed';
-      return res.redirect(`${frontendUrl}?error=${encodeURIComponent(errorMsg)}`);
+      return res.redirect(`${frontendUrl}?error=sso_failed`);
     }
-  }
-
-  private async getSsoConfigForOrg(organizationId: string) {
-    const config = await this.ssoService.getSsoConfig(organizationId);
-    if (!config) {
-      throw new HttpException('SSO is not configured for this organization', HttpStatus.BAD_REQUEST);
-    }
-    return config;
   }
 
   private getFrontendRedirectUrl(orgSlug: string): string {

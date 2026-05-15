@@ -13,6 +13,15 @@ import { AuditService } from '../audit/audit.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import * as crypto from 'crypto';
 
+// H-3: Webhook bearer tokens are persisted as a SHA-256 hex digest. The
+// plaintext is only ever held in memory long enough to return it from
+// `createWebhookToken`; subsequent lookups hash the incoming bearer and
+// query by `tokenHash`. Keeps a DB-read foothold from minting working
+// triggers.
+function hashWebhookToken(plaintext: string): string {
+  return crypto.createHash('sha256').update(plaintext).digest('hex');
+}
+
 const WEBHOOK_RATE_WINDOW_MS = 60_000;
 const WEBHOOK_RATE_MAX = 30;
 
@@ -61,6 +70,7 @@ export class WebhooksService {
     deploymentId: string,
     clerkId: string,
     label?: string,
+    originatingApiTokenId?: string | null,
   ) {
     const user = await this.resolveUser(clerkId);
 
@@ -76,13 +86,21 @@ export class WebhooksService {
     await this.authz.requireProjectEdit(deployment.projectId, user.id, 'manage webhook tokens');
 
     const token = crypto.randomBytes(32).toString('hex');
+    const tokenHash = hashWebhookToken(token);
 
     const record = await this.prisma.deploymentWebhookToken.create({
       data: {
         deploymentId,
-        token,
+        // Persist only the hash; the plaintext column is retained nullable
+        // for rollback safety but no new row populates it.
+        token: null,
+        tokenHash,
         label: label || null,
         createdByUserId: user.id,
+        // H-3: tie the webhook's lifetime to the API token that minted it
+        // (if any). Session-auth callers leave this NULL, in which case the
+        // webhook lifetime is bound to the user + project-edit re-check.
+        originatingApiTokenId: originatingApiTokenId ?? null,
       },
     });
 
@@ -100,7 +118,9 @@ export class WebhooksService {
 
     return {
       id: record.id,
-      token: record.token,
+      // Return the plaintext from the in-memory variable — `record.token` is
+      // NULL by design now that the column is no longer persisted.
+      token,
       label: record.label,
       createdAt: record.createdAt,
     };
@@ -182,8 +202,11 @@ export class WebhooksService {
     image?: string,
     tag?: string,
   ) {
+    // H-3: look up by hash only. Plaintext-column lookup is gone — all
+    // post-migration rows have token=NULL, and querying the legacy column
+    // would defeat the at-rest hashing.
     const tokenRecord = await this.prisma.deploymentWebhookToken.findUnique({
-      where: { token: rawToken },
+      where: { tokenHash: hashWebhookToken(rawToken) },
       include: { deployment: { include: { project: true } } },
     });
 
@@ -224,6 +247,39 @@ export class WebhooksService {
         metadata: { outcome: 'failure', action: 'rejected', reason: 'legacy_token_no_creator' },
       });
       throw new NotFoundException('Invalid webhook token');
+    }
+
+    // H-3: if this webhook was minted by an API token, that token must still
+    // exist AND its restrictedProjectIds (if any) must still cover this
+    // deployment's project. Otherwise revoking the API token would leave a
+    // working trigger that bypasses the token's scope.
+    if (tokenRecord.originatingApiTokenId) {
+      const parent = await this.prisma.apiToken.findUnique({
+        where: { id: tokenRecord.originatingApiTokenId },
+        select: { id: true, restrictedProjectIds: true, expiresAt: true },
+      });
+      const parentValid =
+        !!parent &&
+        (!parent.expiresAt || parent.expiresAt > new Date()) &&
+        (parent.restrictedProjectIds.length === 0 ||
+          parent.restrictedProjectIds.includes(projectId));
+      if (!parentValid) {
+        await this.prisma.deploymentWebhookToken
+          .delete({ where: { id: tokenRecord.id } })
+          .catch(() => {});
+        void this.audit.log({
+          action: 'deployment.webhook_triggered',
+          actorUserId: tokenRecord.createdByUserId,
+          organizationId,
+          projectId,
+          deploymentId: deployment.id,
+          targetType: 'webhook_token',
+          targetId: tokenRecord.id,
+          targetLabel: tokenRecord.label ?? tokenRecord.id,
+          metadata: { outcome: 'failure', action: 'rejected', reason: 'originating_api_token_invalid' },
+        });
+        throw new NotFoundException('Invalid webhook token');
+      }
     }
 
     try {

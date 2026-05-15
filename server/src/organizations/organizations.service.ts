@@ -7,6 +7,7 @@ import { EmailService } from '../email/email.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
+import { SessionsService } from '../auth/sessions.service';
 import { TailscaleService } from '../tailscale/tailscale.service';
 import { randomBytes, createHash } from 'crypto';
 
@@ -21,6 +22,7 @@ export class OrganizationsService {
     private readonly audit: AuditService,
     private readonly authz: AuthorizationService,
     private readonly membershipCache: MembershipCacheService,
+    private readonly sessions: SessionsService,
     private readonly tailscale: TailscaleService,
   ) {}
 
@@ -339,36 +341,46 @@ export class OrganizationsService {
 
   async getMembershipByUserId(organizationId: string, clerkId: string, userData?: any) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
-    
+
     if (!user) {
       throw new NotFoundException('User not found');
     }
 
-    const membership = await this.prisma.organizationMember.findUnique({
-      where: {
-        organizationId_userId: {
-          organizationId,
-          userId: user.id
-        }
-      }
-    });
-
-    if (membership) {
-      return membership;
+    // M-5: route through AuthorizationService.getOrgAccess so the synthetic
+    // superadmin "owner" only materialises for orgs that actually exist (the
+    // helper does a row-exists check). Previously a superadmin probing
+    // /orgs/<random-uuid>/membership/me got a 200 with a fabricated row,
+    // which both leaked superadmin-ness to clients and ran with a bogus org
+    // id through downstream calls.
+    const access = await this.authz.getOrgAccess(organizationId, user.id);
+    if (!access) {
+      throw new NotFoundException('Organization not found');
     }
 
-    if (await this.authz.isSuperAdmin(user.id)) {
-      return {
-        id: `superadmin:${user.id}`,
-        organizationId,
-        userId: user.id,
-        role: 'owner' as const,
-        addedAt: new Date(),
-        addedBy: null,
-      };
+    if (access.source === 'membership') {
+      const membership = await this.prisma.organizationMember.findUnique({
+        where: {
+          organizationId_userId: { organizationId, userId: user.id },
+        },
+      });
+      if (membership) return membership;
+      // Theoretically unreachable — access.source === 'membership' implies
+      // the row exists — but treat the race as "not found" rather than
+      // synthesising data.
+      throw new NotFoundException('Organization not found');
     }
 
-    throw new NotFoundException('Organization not found');
+    // source === 'superadmin' — synthesise an in-memory "owner" record so
+    // the UI can present admin affordances. The id prefix makes the synthetic
+    // origin obvious to any consumer that joins back on OrganizationMember.
+    return {
+      id: `superadmin:${user.id}`,
+      organizationId,
+      userId: user.id,
+      role: 'owner' as const,
+      addedAt: new Date(),
+      addedBy: null,
+    };
   }
 
   async updateOrganization(
@@ -676,7 +688,10 @@ export class OrganizationsService {
           organizationId,
           email: normalizedEmail,
           role,
-          token,
+          // H-2: never persist the plaintext token. The plaintext ships in
+          // the invite email (`loginUrl`) and is only ever held in this
+          // request's memory; the at-rest source of truth is `tokenHash`.
+          token: null,
           tokenHash,
           invitedBy: inviter.id,
           expiresAt,
@@ -727,12 +742,50 @@ export class OrganizationsService {
   }
 
   async acceptInvitationByToken(token: string, clerkId: string, userData?: any) {
+    // M-3: hash lookup only. The plaintext-column fallback was removed once
+    // the backfill completed — a fallback that still queries by raw `token`
+    // turns a DB-read foothold (backup leak, replica access) into working
+    // invitation links.
+    const tokenHash = this.hashToken(token);
+    return this.acceptInvitationByLookup(
+      { tokenHash },
+      clerkId,
+      userData,
+      'invitation',
+    );
+  }
+
+  /**
+   * In-app accept variant. The user is already authenticated; the listing
+   * endpoint returns invitation IDs instead of plaintext tokens (the token
+   * column is hashed at rest and nulled on existing rows), so this is the
+   * only way for the in-app "Accept" button to consume an invite without
+   * the email link. All security checks are identical to the token path —
+   * email-match + emailVerified + already-member + expiry — and collapse to
+   * the same 404 shape on any reject branch.
+   */
+  async acceptInvitationById(invitationId: string, clerkId: string, userData?: any) {
+    return this.acceptInvitationByLookup(
+      { id: invitationId },
+      clerkId,
+      userData,
+      'invitation_in_app',
+    );
+  }
+
+  private async acceptInvitationByLookup(
+    where: { tokenHash: string } | { id: string },
+    clerkId: string,
+    userData: any,
+    via: 'invitation' | 'invitation_in_app',
+  ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
 
-    // M-9: every "no" branch in this method collapses to the SAME 404. The
-    // old shape (NotFound for missing, Forbidden for wrong-email, BadRequest
-    // for expired) let a holder of a stolen token probe whether it ever
-    // existed, who it was addressed to, and whether it had been redeemed.
+    // M-9: every "no" branch collapses to the SAME 404. The old shape
+    // (NotFound for missing, Forbidden for wrong-email, BadRequest for
+    // expired or already-member) let a holder of a stolen token probe
+    // whether it ever existed, who it was addressed to, and whether it had
+    // been redeemed.
     const notFound = () =>
       new NotFoundException('Invitation not found or expired.');
 
@@ -740,19 +793,10 @@ export class OrganizationsService {
       throw notFound();
     }
 
-    // M-3: look up by hash, falling back to plaintext token so invitations
-    // issued before the hash backfill still work. Once the backfill column is
-    // populated the plaintext branch becomes unreachable in practice.
-    const tokenHash = this.hashToken(token);
-    const invitation =
-      (await this.prisma.organizationInvitation.findUnique({
-        where: { tokenHash },
-        include: { organization: true },
-      })) ??
-      (await this.prisma.organizationInvitation.findUnique({
-        where: { token },
-        include: { organization: true },
-      }));
+    const invitation = await this.prisma.organizationInvitation.findUnique({
+      where: where as any,
+      include: { organization: true },
+    });
 
     if (!invitation) {
       throw notFound();
@@ -765,16 +809,15 @@ export class OrganizationsService {
 
     // H-6: only a user who has proven ownership of the invited address may
     // accept. Without this, an attacker can register an unverified account
-    // under the victim's email and inherit any pending invitations. We use
-    // the same 404 shape as the other branches to avoid leaking whether the
-    // token exists or who it was sent to.
+    // under the victim's email and inherit any pending invitations.
     if (user.email.toLowerCase() !== invitation.email.toLowerCase()) {
       throw notFound();
     }
+    // L-1: collapse to the same 404 shape — distinguishing "wrong user"
+    // from "not verified" lets a freshly-registered unverified account
+    // under the victim's email probe whether an invitation exists.
     if (!user.emailVerified) {
-      throw new ForbiddenException(
-        'Verify your email before accepting invitations.',
-      );
+      throw notFound();
     }
 
     // Check if already a member
@@ -782,24 +825,24 @@ export class OrganizationsService {
       where: {
         organizationId_userId: {
           organizationId: invitation.organizationId,
-          userId: user.id
-        }
-      }
+          userId: user.id,
+        },
+      },
     });
 
     if (existingMember) {
+      // M-9: preserve the same 404 shape as every other reject branch.
       await this.prisma.organizationInvitation.delete({ where: { id: invitation.id } });
-      throw new BadRequestException('You are already a member of this organization');
+      throw notFound();
     }
 
-    // Create membership and delete invitation in a transaction
     const member = await this.prisma.$transaction(async (tx) => {
       const newMember = await tx.organizationMember.create({
         data: {
           organizationId: invitation.organizationId,
           userId: user.id,
           role: invitation.role,
-          addedBy: invitation.invitedBy
+          addedBy: invitation.invitedBy,
         },
         include: {
           user: {
@@ -809,11 +852,11 @@ export class OrganizationsService {
               username: true,
               firstName: true,
               lastName: true,
-              imageUrl: true
-            }
+              imageUrl: true,
+            },
           },
-          organization: true
-        }
+          organization: true,
+        },
       });
 
       await tx.organizationInvitation.delete({ where: { id: invitation.id } });
@@ -831,7 +874,7 @@ export class OrganizationsService {
       targetType: 'user',
       targetId: user.id,
       targetLabel: user.email,
-      metadata: { role: invitation.role, via: 'invitation' },
+      metadata: { role: invitation.role, via },
     });
 
     return member;
@@ -877,9 +920,13 @@ export class OrganizationsService {
       orderBy: { createdAt: 'desc' },
     });
 
+    // H-2: never return the plaintext token in API responses. The hash is
+    // the source of truth and the plaintext is nulled at rest; in-app
+    // acceptance happens via `acceptInvitationById` using the row id, which
+    // re-runs every per-token check under the caller's session.
     return {
       invitations: pending.map((inv) => ({
-        token: inv.token,
+        id: inv.id,
         orgName: inv.organization.name,
         orgSlug: inv.organization.slug,
         orgAvatarUrl: inv.organization.avatarUrl,
@@ -891,46 +938,35 @@ export class OrganizationsService {
   }
 
   async getInvitationByToken(token: string) {
-    // M-3: prefer hash lookup; fall back to plaintext column for unbackfilled
-    // legacy rows. Both branches return identical shape so callers do not see
-    // a difference.
+    // M-3: hash lookup only — see acceptInvitationByToken for why the
+    // plaintext-column fallback was removed.
     const tokenHash = this.hashToken(token);
-    const includeShape = {
-      organization: {
-        select: {
-          id: true,
-          name: true,
-          slug: true,
-          avatarUrl: true,
+    const invitation = await this.prisma.organizationInvitation.findUnique({
+      where: { tokenHash },
+      include: {
+        organization: {
+          select: {
+            name: true,
+            slug: true,
+            avatarUrl: true,
+          },
         },
       },
-      inviter: {
-        select: {
-          firstName: true,
-          lastName: true,
-          username: true,
-          email: true,
-        },
-      },
-    } as const;
-    const invitation =
-      (await this.prisma.organizationInvitation.findUnique({
-        where: { tokenHash },
-        include: includeShape,
-      })) ??
-      (await this.prisma.organizationInvitation.findUnique({
-        where: { token },
-        include: includeShape,
-      }));
+    });
 
-    // Collapse the "not found" and "expired" cases into a single 404. Splitting
-    // them gave a holder of an expired token a way to confirm the invitation
-    // once existed (and therefore that the org exists) without authentication.
     if (!invitation || invitation.expiresAt < new Date()) {
       throw new NotFoundException('Invitation not found');
     }
 
-    return invitation;
+    // Minimal payload for the unauthenticated landing page. Inviter identity
+    // and invited email are revealed only on the authenticated accept path,
+    // where an email-match check already runs. Anyone who happens to share a
+    // link could otherwise dox both the inviter and the invited user.
+    return {
+      role: invitation.role,
+      expiresAt: invitation.expiresAt,
+      organization: invitation.organization,
+    };
   }
 
   async getPendingInvitationsForUser(clerkId: string, userData?: any) {
@@ -940,12 +976,21 @@ export class OrganizationsService {
       return [];
     }
 
-    return this.prisma.organizationInvitation.findMany({
+    // H-2: explicit field selection — never return `token` / `tokenHash` to
+    // the client. The in-app accept flow uses the row `id` via
+    // acceptInvitationById, which re-runs every per-token security check
+    // under the caller's session.
+    const rows = await this.prisma.organizationInvitation.findMany({
       where: {
         email: user.email.toLowerCase(),
         expiresAt: { gt: new Date() }
       },
-      include: {
+      select: {
+        id: true,
+        email: true,
+        role: true,
+        expiresAt: true,
+        createdAt: true,
         organization: {
           select: {
             id: true,
@@ -965,6 +1010,7 @@ export class OrganizationsService {
       },
       orderBy: { createdAt: 'desc' }
     });
+    return rows;
   }
 
   async declineInvitationByToken(token: string, clerkId: string, userData?: any) {
@@ -980,16 +1026,25 @@ export class OrganizationsService {
     }
 
     const tokenHash = this.hashToken(token);
-    const invitation =
-      (await this.prisma.organizationInvitation.findUnique({ where: { tokenHash } })) ??
-      (await this.prisma.organizationInvitation.findUnique({ where: { token } }));
+    const invitation = await this.prisma.organizationInvitation.findUnique({
+      where: { tokenHash },
+    });
 
     if (!invitation) {
       throw notFound();
     }
 
-    // Verify the user's email matches the invitation
+    // L-1: parity with acceptInvitationByToken — require a verified email and
+    // collapse mismatch / unverified branches to the same 404 shape so a freshly
+    // registered unverified account can't probe pending invitation addresses.
     if (user.email.toLowerCase() !== invitation.email.toLowerCase()) {
+      throw notFound();
+    }
+    if (!user.emailVerified) {
+      throw notFound();
+    }
+    if (invitation.expiresAt < new Date()) {
+      await this.prisma.organizationInvitation.delete({ where: { id: invitation.id } });
       throw notFound();
     }
 
@@ -1095,8 +1150,12 @@ export class OrganizationsService {
       throw new NotFoundException('Invitation not found');
     }
 
+    // M-4: collapse expired-state to 404 for parity with other invitation
+    // branches and so the response shape is uniform. Drop the stale row to
+    // close the resend-after-expiry path.
     if (invitation.expiresAt < new Date()) {
-      throw new BadRequestException('Invitation has expired');
+      await this.prisma.organizationInvitation.delete({ where: { id: invitation.id } });
+      throw new NotFoundException('Invitation not found');
     }
 
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
@@ -1190,7 +1249,27 @@ export class OrganizationsService {
       });
     });
 
+    // Project-scoped API tokens that point at this org's projects must not
+    // outlive the membership. Fetch the org's project IDs and drop any token
+    // whose restriction list intersects them.
+    const orgProjectIds = await this.prisma.project.findMany({
+      where: { organizationId },
+      select: { id: true },
+    });
+    if (orgProjectIds.length > 0) {
+      await this.prisma.apiToken.deleteMany({
+        where: {
+          userId: member.userId,
+          restrictedProjectIds: { hasSome: orgProjectIds.map((p) => p.id) },
+        },
+      });
+    }
+
     this.membershipCache.invalidateInternalUserId(member.userId);
+    // The session JWT carries no role claim today, but downstream callers can
+    // still hit user-scoped endpoints with a token that pre-dates the removal.
+    // Force re-auth so the next request goes through a fresh authz lookup.
+    await this.sessions.revokeUserSessions(member.userId).catch(() => {});
 
     // H4: revoke Tailscale exposure for deployments this user exposed in THIS org.
     // We do NOT delete their global TailscaleConnection (they may still belong to other orgs).
@@ -1291,6 +1370,16 @@ export class OrganizationsService {
       throw new BadRequestException('Cannot change owner role. Transfer ownership instead.');
     }
 
+    // H-1: explicit guard so the failure mode is obvious to operators.
+    // The owner-demotion check above already covers this (an owner calling
+    // updateMemberRole on themselves with newRole != owner hits it), but a
+    // future refactor that loosens the role check above must keep this one.
+    if (member.userId === updater.id && newRole !== member.role) {
+      throw new BadRequestException(
+        'You cannot change your own organization role. Have another owner make the change, or transfer ownership first.',
+      );
+    }
+
     // Guests must have at least one project membership — prevent creating
     // orphaned guests that violate the lifecycle rule.
     if (newRole === 'guest') {
@@ -1321,6 +1410,14 @@ export class OrganizationsService {
       }
     });
 
+    // Revoke sessions FIRST (M-1), then invalidate the cache. If we invalidate
+    // first, a concurrent request from the (still-authenticated) user can
+    // re-populate the cache with stale-relative-to-revoke state before the
+    // session dies. Revoking first kills the active session; the subsequent
+    // invalidate then forces any new session to read fresh from DB.
+    if (member.role !== newRole) {
+      await this.sessions.revokeUserSessions(member.userId).catch(() => {});
+    }
     // Invalidate AFTER the write commits. Pre-write invalidation races: a concurrent
     // request can read the OLD role from DB and repopulate the cache during the
     // update window, leaving the user with their previous role for up to the TTL.

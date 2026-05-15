@@ -32,9 +32,11 @@ COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY --from=deps /app/node_modules ./node_modules
 COPY --from=deps /app/server/node_modules ./server/node_modules
 COPY server/package.json server/tsconfig.json server/.swcrc ./server/
-COPY server/src/mcp ./server/src/mcp
+COPY server/src ./server/src
+COPY server/prisma ./server/prisma
 
 WORKDIR /app/server
+RUN pnpm prisma:generate
 
 EXPOSE 3100
 

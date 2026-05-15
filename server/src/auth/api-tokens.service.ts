@@ -1,6 +1,7 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { AuthorizationService } from './authorization.service';
 import { randomBytes, createHash } from 'crypto';
 
 // Hard cap on token lifetime. Leaked tokens have no scope (they inherit the
@@ -21,7 +22,45 @@ export class ApiTokensService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly authz: AuthorizationService,
   ) {}
+
+  // Restrict-list validation: every listed project must be one the creating user
+  // can already view, otherwise we'd happily mint tokens for unreachable projects.
+  // Returns the deduplicated, normalised list.
+  private async normalizeRestrictedProjects(
+    userId: string,
+    input: unknown,
+  ): Promise<string[]> {
+    if (input == null) return [];
+    if (!Array.isArray(input)) {
+      throw new BadRequestException('restrictedProjectIds must be an array');
+    }
+    // Reject an explicit empty array. Downstream consumers treat [] as "no
+    // restriction" (unrestricted token), so silently accepting [] from a
+    // caller who meant "scoped to nothing" would mint a fully-privileged
+    // token. Force the caller to omit the field if they want unrestricted.
+    if (input.length === 0) {
+      throw new BadRequestException(
+        'restrictedProjectIds cannot be an empty array; omit the field for an unrestricted token',
+      );
+    }
+    const seen = new Set<string>();
+    for (const v of input) {
+      if (typeof v !== 'string' || !v) {
+        throw new BadRequestException('restrictedProjectIds entries must be strings');
+      }
+      seen.add(v);
+    }
+    for (const projectId of seen) {
+      try {
+        await this.authz.requireProjectView(projectId, userId);
+      } catch {
+        throw new NotFoundException(`Project ${projectId} not found`);
+      }
+    }
+    return Array.from(seen);
+  }
 
   private normalizeScopes(input: unknown): ApiTokenScope[] {
     if (!Array.isArray(input) || input.length === 0) return ['read'];
@@ -38,7 +77,13 @@ export class ApiTokensService {
     return cleaned;
   }
 
-  async create(userId: string, name: string, expiresAt?: Date, scopes?: unknown) {
+  async create(
+    userId: string,
+    name: string,
+    expiresAt?: Date,
+    scopes?: unknown,
+    restrictedProjectIds?: unknown,
+  ) {
     const now = Date.now();
     const cap = new Date(now + MAX_TOKEN_LIFETIME_MS);
     let resolvedExpiresAt: Date;
@@ -55,6 +100,7 @@ export class ApiTokensService {
     }
 
     const resolvedScopes = this.normalizeScopes(scopes);
+    const resolvedRestrictedProjects = await this.normalizeRestrictedProjects(userId, restrictedProjectIds);
     const token = `orch_${randomBytes(32).toString('hex')}`;
     const tokenHash = hashApiToken(token);
 
@@ -63,6 +109,7 @@ export class ApiTokensService {
         name,
         tokenHash,
         scopes: resolvedScopes,
+        restrictedProjectIds: resolvedRestrictedProjects,
         userId,
         expiresAt: resolvedExpiresAt,
       },
@@ -74,15 +121,19 @@ export class ApiTokensService {
       targetType: 'api_token',
       targetId: apiToken.id,
       targetLabel: name,
-      metadata: { expiresAt: resolvedExpiresAt.toISOString(), scopes: resolvedScopes },
+      metadata: {
+        expiresAt: resolvedExpiresAt.toISOString(),
+        scopes: resolvedScopes,
+        restrictedProjectIds: resolvedRestrictedProjects,
+      },
     });
 
-    // Plaintext is returned once on creation and never persisted.
     return {
       id: apiToken.id,
       name: apiToken.name,
       token,
       scopes: resolvedScopes,
+      restrictedProjectIds: resolvedRestrictedProjects,
       createdAt: apiToken.createdAt,
       expiresAt: apiToken.expiresAt,
     };
@@ -95,6 +146,7 @@ export class ApiTokensService {
         id: true,
         name: true,
         scopes: true,
+        restrictedProjectIds: true,
         lastUsedAt: true,
         expiresAt: true,
         createdAt: true,

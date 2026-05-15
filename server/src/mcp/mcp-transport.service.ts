@@ -3,21 +3,44 @@ import { randomUUID } from 'crypto';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { createOrchardMcpServer } from './server';
 
+interface TransportEntry {
+  transport: StreamableHTTPServerTransport;
+  // Owner of this MCP session, taken from the JWT `sub` claim at creation.
+  // Subsequent requests reusing the same session id MUST present a bearer
+  // whose sub matches — otherwise a leaked `mcp-session-id` lets any other
+  // authenticated MCP user dispatch tool calls against this transport's
+  // `OrchardClient`, running as the original creator against the
+  // first-party API.
+  ownerSub: string;
+}
+
 @Injectable()
 export class McpTransportService implements OnModuleDestroy {
-  private readonly transports = new Map<string, StreamableHTTPServerTransport>();
+  private readonly transports = new Map<string, TransportEntry>();
 
   async onModuleDestroy() {
-    for (const [sid, transport] of this.transports) {
+    for (const [sid, entry] of this.transports) {
       try {
-        await transport.close();
+        await entry.transport.close();
       } catch {}
       this.transports.delete(sid);
     }
   }
 
-  getTransport(sessionId: string): StreamableHTTPServerTransport | undefined {
-    return this.transports.get(sessionId);
+  /**
+   * Resolve a session for a caller. Returns `undefined` if the session
+   * does not exist OR if the caller's `sub` does not match the session's
+   * owner. Treating "doesn't exist" and "exists but not yours" identically
+   * keeps a leaked session id from being usable as an existence oracle.
+   */
+  getTransportForCaller(
+    sessionId: string,
+    callerSub: string,
+  ): StreamableHTTPServerTransport | undefined {
+    const entry = this.transports.get(sessionId);
+    if (!entry) return undefined;
+    if (entry.ownerSub !== callerSub) return undefined;
+    return entry.transport;
   }
 
   hasTransport(sessionId: string): boolean {
@@ -28,11 +51,18 @@ export class McpTransportService implements OnModuleDestroy {
     this.transports.delete(sessionId);
   }
 
-  registerTransport(sessionId: string, transport: StreamableHTTPServerTransport) {
-    this.transports.set(sessionId, transport);
+  registerTransport(
+    sessionId: string,
+    transport: StreamableHTTPServerTransport,
+    ownerSub: string,
+  ) {
+    this.transports.set(sessionId, { transport, ownerSub });
   }
 
-  async createSession(orchardToken: string): Promise<StreamableHTTPServerTransport> {
+  async createSession(
+    orchardToken: string,
+    ownerSub: string,
+  ): Promise<{ transport: StreamableHTTPServerTransport; ownerSub: string }> {
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
     });
@@ -46,6 +76,6 @@ export class McpTransportService implements OnModuleDestroy {
 
     await server.connect(transport);
 
-    return transport;
+    return { transport, ownerSub };
   }
 }

@@ -12,6 +12,7 @@ import {
   ApiTokenScopeName,
 } from './decorators';
 import { hashApiToken } from './api-tokens.service';
+import { requestAuthStorage } from './request-context';
 
 @Injectable()
 export class SuperAdminGuard implements CanActivate {
@@ -64,6 +65,15 @@ export class SuperAdminGuard implements CanActivate {
     try {
       const { payload } = await jwtVerify(token, this.jwtSecret);
 
+      // M-2: reject tokens minted by the MCP OAuth provider. They share the
+      // same HS256 signing secret but are issued under a different consent
+      // surface — a user authorising an MCP client never agreed to hand that
+      // bearer to the first-party API. Sessions issued by oauth.service /
+      // passwordless / SSO have no `type` claim and pass through.
+      if ((payload as any).type === 'mcp') {
+        throw new UnauthorizedException('Invalid token');
+      }
+
       // Resolve the real DB user ID for OAuth users (where sub is a Hack Club ID, not a UUID).
       // Fall back to email if hackClubId lookup fails — without this, a user whose
       // hackClubId column got nulled or overwritten ends up with dbUserId = a Hack Club ID,
@@ -81,9 +91,15 @@ export class SuperAdminGuard implements CanActivate {
             select: { id: true },
           });
         }
-        if (dbUser) {
-          dbUserId = dbUser.id;
+        if (!dbUser) {
+          // Neither hackClubId nor email mapped to a User. Falling through
+          // would leave dbUserId set to the raw Hack Club ID — a non-UUID —
+          // and every downstream Prisma query keyed on it would silently
+          // return empty, surfacing as confusing permanent 403/404s. Refuse
+          // the request instead.
+          throw new UnauthorizedException('User not found for this session');
         }
+        dbUserId = dbUser.id;
       }
 
       // Require a sessionId so that revocation actually kills the token.
@@ -109,6 +125,8 @@ export class SuperAdminGuard implements CanActivate {
         hackClubId: payload.hackClubId,
         sessionId,
       };
+      // Session-auth: no token-scope restrictions to publish to the request context.
+      requestAuthStorage.enterWith({});
       authenticated = true;
     } catch {
       // JWT failed — try API token lookup
@@ -138,8 +156,21 @@ export class SuperAdminGuard implements CanActivate {
       const name = [user.firstName, user.lastName].filter(Boolean).join(' ') || user.username;
 
       const scopes = Array.isArray(apiToken.scopes) ? (apiToken.scopes as string[]) : [];
-      request['auth'] = { userId: user.id, apiTokenId: apiToken.id, tokenScopes: scopes };
+      const restrictedProjectIds = Array.isArray(apiToken.restrictedProjectIds)
+        ? (apiToken.restrictedProjectIds as string[])
+        : [];
+      request['auth'] = {
+        userId: user.id,
+        apiTokenId: apiToken.id,
+        tokenScopes: scopes,
+        tokenProjectIds: restrictedProjectIds,
+      };
       request['tokenScopes'] = scopes;
+      requestAuthStorage.enterWith({
+        apiTokenId: apiToken.id,
+        tokenScopes: scopes,
+        tokenProjectIds: restrictedProjectIds,
+      });
       request['user'] = {
         sub: user.id,
         email: user.email,

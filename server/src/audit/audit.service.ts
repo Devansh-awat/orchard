@@ -33,6 +33,13 @@ const RETENTION_DAYS = 180;
 const METADATA_VALUE_MAX_LEN = 256;
 const METADATA_MAX_KEYS = 24;
 
+// Key-name substrings that flag a value as sensitive. Match is
+// case-insensitive on the key. Redaction is applied to both single values and
+// diff tuples ([old, new]) so a "password changed from X to Y" entry doesn't
+// land X and Y in plaintext in the audit log.
+const REDACT_KEY_PATTERN = /pass(word)?|secret|token|api[_-]?key|credential|connection[_-]?string|database[_-]?url|private[_-]?key|access[_-]?key/i;
+const REDACTED_PLACEHOLDER = '[redacted]';
+
 @Injectable()
 export class AuditService {
   private readonly logger = new Logger(AuditService.name);
@@ -129,6 +136,12 @@ export class AuditService {
 
   /**
    * Daily prune of records past retention. @Cron — runs at 03:00 server time.
+   *
+   * M-2: every prune writes a meta-audit row so the trail of "rows were
+   * deleted" is itself part of the log. From the audited user's perspective
+   * the log is append-only; this meta-event lets an investigator distinguish
+   * "the operator never logged X" from "the operator logged X and a later
+   * scheduled prune dropped it."
    */
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
   async pruneExpired() {
@@ -139,6 +152,16 @@ export class AuditService {
       });
       if (count > 0) {
         this.logger.log(`Pruned ${count} audit log entries older than ${RETENTION_DAYS} days`);
+        // Emit a meta-event AFTER the delete so it survives this cycle's cutoff.
+        await this.log({
+          action: 'audit.pruned',
+          actorUserId: null,
+          actorEmail: null,
+          targetType: 'audit_log',
+          targetId: null,
+          targetLabel: `retention=${RETENTION_DAYS}d`,
+          metadata: { count, cutoff: cutoff.toISOString() },
+        }).catch((e) => this.logger.warn(`failed to write audit.pruned meta-event: ${e}`));
       }
     } catch (err) {
       this.logger.warn(`Audit prune failed: ${err instanceof Error ? err.message : err}`);
@@ -159,10 +182,13 @@ export class AuditService {
     const out: Record<string, unknown> = {};
     for (const k of keys) {
       const v = meta[k];
+      const sensitive = REDACT_KEY_PATTERN.test(k);
       if (Array.isArray(v) && v.length === 2) {
-        out[k] = [this.truncate(v[0]), this.truncate(v[1])];
+        out[k] = sensitive
+          ? [REDACTED_PLACEHOLDER, REDACTED_PLACEHOLDER]
+          : [this.truncate(v[0]), this.truncate(v[1])];
       } else {
-        out[k] = this.truncate(v);
+        out[k] = sensitive ? REDACTED_PLACEHOLDER : this.truncate(v);
       }
     }
     if (Object.keys(out).length === 0) return undefined;

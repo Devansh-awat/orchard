@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Inject, forwardRef, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException, Inject, forwardRef, Logger } from '@nestjs/common';
 import { Cron } from '@nestjs/schedule';
 import { Prisma, ServiceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -12,6 +12,7 @@ import { NodesService } from '../nodes/nodes.service';
 import { QuotasService } from '../quotas/quotas.service';
 import { TailscaleService } from '../tailscale/tailscale.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
+import { SessionsService } from '../auth/sessions.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { AuditService } from '../audit/audit.service';
 import { randomUUID } from 'crypto';
@@ -34,6 +35,7 @@ export class ProjectsService {
     private readonly quotasService: QuotasService,
     private readonly tailscaleService: TailscaleService,
     private readonly membershipCache: MembershipCacheService,
+    private readonly sessions: SessionsService,
     private readonly audit: AuditService,
     private readonly authz: AuthorizationService,
     private readonly r2Proxy: R2ProxyService,
@@ -46,6 +48,35 @@ export class ProjectsService {
    * to talk to the proxy instead of real R2 — so real R2 credentials never
    * land in the tenant's namespace.
    */
+  /**
+   * C-2: enforce global hostname uniqueness across projects.
+   *
+   * The schema's only unique constraint on Ingress is (namespace, name), which
+   * is the K8s resource name — NOT the routed host. Without this check, org A
+   * can register `app.example.com` in namespace `proj-a` and org B can register
+   * the same host in `proj-b`; whichever IngressRoute the controller resolves
+   * last wins, and traffic (including session cookies) can land in the wrong
+   * tenant.
+   *
+   * Path-merging *within* the same project is allowed and handled separately
+   * by the merge branch in createProjectIngress, so we scope this check to
+   * "any other project."
+   *
+   * The 409 message is generic on purpose: revealing which org claimed the
+   * host first is a low-grade enumeration oracle.
+   */
+  private async assertHostnameAvailable(rawHost: string, projectId: string): Promise<void> {
+    const conflict = await this.prisma.ingress.findFirst({
+      where: { host: rawHost, NOT: { projectId } },
+      select: { id: true },
+    });
+    if (conflict) {
+      throw new ConflictException(
+        `Hostname ${rawHost} is unavailable. Choose a different domain.`,
+      );
+    }
+  }
+
   private async buildBackupR2Config(
     org: {
       backupR2Endpoint: string | null;
@@ -2805,6 +2836,8 @@ export class ProjectsService {
 
     const tlsHosts = tlsSecretName ? [rawHost] : [];
 
+    await this.assertHostnameAvailable(rawHost, deployment.projectId);
+
     const ingressResult = await this.kubernetesService.createIngress({
       namespace: deployment.namespace,
       name: ingressName,
@@ -3034,6 +3067,8 @@ export class ProjectsService {
         throw new BadRequestException('Failed to generate unique ingress name');
       }
     }
+
+    await this.assertHostnameAvailable(rawHost, deployment.projectId);
 
     const ingressResult = await this.kubernetesService.createIngress({
       namespace: deployment.namespace,
@@ -3345,6 +3380,8 @@ export class ProjectsService {
         throw new BadRequestException('Failed to generate unique ingress name');
       }
     }
+
+    await this.assertHostnameAvailable(rawHost, project.id);
 
     const ingressResult = await this.kubernetesService.createIngress({
       namespace: project.namespace,
@@ -4400,6 +4437,20 @@ export class ProjectsService {
 
     for (const userId of droppedGuests) {
       this.membershipCache.invalidateInternalUserId(userId);
+      // Only the guests dropped out of the org entirely lose sessions. Org
+      // members and admins who happened to be on this project keep their
+      // sessions — they still have other projects/access in this org and we
+      // don't want to interrupt unrelated work.
+      await this.sessions.revokeUserSessions(userId).catch(() => {});
+    }
+
+    if (droppedGuests.length > 0) {
+      await this.prisma.apiToken.deleteMany({
+        where: {
+          userId: { in: droppedGuests },
+          restrictedProjectIds: { has: projectId },
+        },
+      });
     }
 
     void this.audit.log({
@@ -4436,6 +4487,13 @@ export class ProjectsService {
     if (!user) {
       throw new NotFoundException('User not found');
     }
+
+    // M-1: authorize FIRST with a cheap indexed lookup. Loading the project
+    // with every relation before the access check turned non-member latency
+    // into an existence oracle — a real project ID ran a multi-join query;
+    // a random UUID returned after a single index miss. `requireProjectView`
+    // throws the same 404 either way, and now the timing matches the body.
+    await this.authz.requireProjectView(projectId, user.id);
 
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
@@ -4954,8 +5012,24 @@ export class ProjectsService {
     });
 
     if (guestDropped) {
+      // M-1: revoke sessions BEFORE invalidating the membership cache.
+      // The reverse ordering leaves a small window where an in-flight request
+      // with a still-valid session can read the post-invalidation cache and
+      // re-populate it with the (empty) membership view, while the session
+      // itself is technically still authoritative. Killing the session first
+      // guarantees the next observable request goes through a fresh DB lookup.
+      await this.sessions.revokeUserSessions(member.userId).catch(() => {});
       this.membershipCache.invalidateInternalUserId(member.userId);
     }
+
+    // Token-scope cleanup: any API tokens this user holds that were restricted
+    // to this specific project should not survive their removal from it.
+    await this.prisma.apiToken.deleteMany({
+      where: {
+        userId: member.userId,
+        restrictedProjectIds: { has: projectId },
+      },
+    });
 
     void this.audit.log({
       action: 'project.member.removed',
@@ -5013,6 +5087,10 @@ export class ProjectsService {
         },
       },
     });
+
+    if (oldRole?.name !== role.name) {
+      await this.sessions.revokeUserSessions(member.userId).catch(() => {});
+    }
 
     const project = await this.prisma.project.findUnique({ where: { id: projectId }, select: { organizationId: true } });
     void this.audit.log({

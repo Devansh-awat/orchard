@@ -17,6 +17,8 @@ import { OAuthService } from './oauth.service';
 import { SessionsService } from './sessions.service';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuthorizationService } from './authorization.service';
+import { setSessionCookie } from './cookies';
 import { Prisma } from '@prisma/client';
 import { Public, Auth } from './decorators';
 
@@ -53,6 +55,7 @@ export class PasswordlessController {
     private readonly sessionsService: SessionsService,
     private readonly usersService: UsersService,
     private readonly prisma: PrismaService,
+    private readonly authz: AuthorizationService,
   ) {}
 
   /**
@@ -62,26 +65,8 @@ export class PasswordlessController {
     return req.ip || req.socket.remoteAddress || 'unknown';
   }
 
-  private isSessionCookieSecure(): boolean {
-    const override = process.env.SESSION_COOKIE_SECURE?.toLowerCase();
-    if (override === 'true') return true;
-    if (override === 'false') return false;
-    return process.env.NODE_ENV === 'production';
-  }
-
-  /**
-   * Set the session cookie with the token.
-   */
-  private setSessionCookie(res: Response, token: string): void {
-    res.cookie('session_token', token, {
-      httpOnly: true,
-      secure: this.isSessionCookieSecure(),
-      sameSite: 'lax',
-      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
-      path: '/',
-      domain: process.env.COOKIE_DOMAIN || undefined,
-    });
-  }
+  // H-2: cookie attributes live in ./cookies — one source of truth across
+  // OAuth, SSO, and passwordless flows so SameSite/Secure stay in sync.
 
   /**
    * Check if a user has access to the platform (member of any org or has pending invitations).
@@ -206,6 +191,15 @@ export class PasswordlessController {
       throw new HttpException('private_beta', HttpStatus.FORBIDDEN);
     }
 
+    // H-1: refuse OTP login when the user's org enforces SSO.
+    // H-4: even for brand-new identities, refuse OTP if the email has a
+    // pending invite from an SSO-enforced org — otherwise an attacker who
+    // controls the inbox can slip in before SSO is enforced.
+    await this.authz.assertSsoNotEnforced(existingUser, 'otp');
+    if (!existingUser) {
+      await this.authz.assertSsoNotEnforcedForEmail(normalizedEmail, 'otp');
+    }
+
     const user = existingUser ?? (await this.findOrCreateUserByEmail(result.email));
 
     // Create session
@@ -230,7 +224,7 @@ export class PasswordlessController {
     );
 
     // Set cookie and respond
-    this.setSessionCookie(res, token);
+    setSessionCookie(res, token);
 
     res.status(200).json({
       success: true,
@@ -367,6 +361,9 @@ export class PasswordlessController {
       throw new HttpException('private_beta', HttpStatus.FORBIDDEN);
     }
 
+    // H-1: refuse passkey login when the user's org enforces SSO.
+    await this.authz.assertSsoNotEnforced(user, 'passkey');
+
     // Create session
     const sessionId = await this.sessionsService.createSession({
       userId: user.id,
@@ -389,7 +386,7 @@ export class PasswordlessController {
     );
 
     // Set cookie and respond
-    this.setSessionCookie(res, token);
+    setSessionCookie(res, token);
 
     res.status(200).json({
       success: true,

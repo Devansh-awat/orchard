@@ -7,6 +7,8 @@ import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
 import * as openidClient from 'openid-client';
 import { SAML } from '@node-saml/node-saml';
+import { OidcStateStore } from './oidc-state.store';
+import { AuditService } from '../audit/audit.service';
 
 const RESERVED_SUBDOMAINS = new Set([
   'www', 'api', 'admin', 'mail', 'smtp', 'imap', 'pop', 'ftp',
@@ -23,10 +25,10 @@ export class SsoService {
   private readonly platformNamespace: string;
   private readonly platformServiceName: string;
   private readonly platformServicePort: number;
-  // In-memory single-use store for OIDC state -> {orgId, codeVerifier}.
-  // 10-minute TTL; lazily cleaned on lookup. Acceptable for short-lived
-  // flows; multi-replica deployments would need a shared store.
-  private readonly oidcStateStore = new Map<string, { orgId: string; codeVerifier: string; expiresAt: number }>();
+  // M-3: OIDC state lives behind OidcStateStore — currently in-memory, but
+  // single-use (atomic get+delete) and TTL-bounded. The interface lets a
+  // future commit swap in a shared store (Redis, Prisma table) without
+  // touching this service when multi-replica SSO is needed.
 
   constructor(
     private readonly prisma: PrismaService,
@@ -34,6 +36,8 @@ export class SsoService {
     private readonly usersService: UsersService,
     private readonly kubernetesService: KubernetesService,
     private readonly sessionsService: SessionsService,
+    private readonly oidcStateStore: OidcStateStore,
+    private readonly audit: AuditService,
   ) {
     const secret = process.env.SSO_ENCRYPTION_KEY;
     if (secret) {
@@ -402,13 +406,12 @@ export class SsoService {
     const codeChallenge = await openidClient.calculatePKCECodeChallenge(codeVerifier);
 
     // Opaque random state; the real {orgId, codeVerifier} is held server-side
-    // and looked up on callback. Prevents an attacker from forging state.
+    // (Redis-backed) and looked up on callback. Prevents an attacker from
+    // forging state.
     const state = randomBytes(32).toString('hex');
-    this.cleanupOidcStateStore();
-    this.oidcStateStore.set(state, {
+    await this.oidcStateStore.set(state, {
       orgId: organizationId,
       codeVerifier,
-      expiresAt: Date.now() + 10 * 60 * 1000,
     });
 
     const parameters: Record<string, string> = {
@@ -437,16 +440,10 @@ export class SsoService {
       throw new UnauthorizedException('SSO is disabled for this organization');
     }
 
-    // Look up server-side state; single-use, expires after 10 minutes.
-    this.cleanupOidcStateStore();
-    const stateData = this.oidcStateStore.get(state);
+    // Look up server-side state; consume is single-use and TTL-bounded.
+    const stateData = await this.oidcStateStore.consume(state);
     if (!stateData) {
       throw new BadRequestException('Invalid or expired SSO state');
-    }
-    // Single-use
-    this.oidcStateStore.delete(state);
-    if (stateData.expiresAt < Date.now()) {
-      throw new BadRequestException('SSO state has expired');
     }
     if (stateData.orgId !== organizationId) {
       throw new BadRequestException('Organization mismatch in SSO state');
@@ -486,12 +483,8 @@ export class SsoService {
     });
   }
 
-  private cleanupOidcStateStore() {
-    const now = Date.now();
-    for (const [k, v] of this.oidcStateStore) {
-      if (v.expiresAt < now) this.oidcStateStore.delete(k);
-    }
-  }
+  // M-3: state cleanup is now Redis TTL-driven; in-memory fallback in
+  // OidcStateStore handles its own lazy GC.
 
   // ========== SAML Flow ==========
 
@@ -542,7 +535,15 @@ export class SsoService {
       throw new BadRequestException('SAML provider did not return an email address');
     }
 
-    return this.resolveAndAuthenticateUser(organizationId, email, name.trim(), config.organization);
+    // SAML has no standard email_verified claim. The IdP itself is the trust
+    // anchor here — an org admin explicitly configured it — so treat a
+    // successfully validated SAML assertion as proof the IdP vouches for the
+    // email. This makes the SAML and OIDC paths symmetric: both arrive at
+    // resolveAndAuthenticateUser with email_verified set, so the explicit-false
+    // hard-fail and the SSO_REQUIRE_EMAIL_VERIFIED gate both apply uniformly.
+    return this.resolveAndAuthenticateUser(organizationId, email, name.trim(), config.organization, {
+      email_verified: true,
+    });
   }
 
   private buildSamlClient(config: any, organizationId: string): SAML {
@@ -562,6 +563,18 @@ export class SsoService {
   }
 
   // ========== Shared user resolution ==========
+
+  private getSsoDefaultRoleForOrg(organizationId: string): 'member' | 'guest' {
+    const raw = process.env.SSO_DEFAULT_ROLE;
+    if (!raw) return 'member';
+    try {
+      const parsed = JSON.parse(raw);
+      const role = String(parsed?.[organizationId] ?? '').toLowerCase();
+      return role === 'guest' ? 'guest' : 'member';
+    } catch {
+      return 'member';
+    }
+  }
 
   private getAllowedDomainsForOrg(organizationId: string): string[] | null {
     // SsoConfig schema lacks an allowedDomains column; fall back to an
@@ -600,15 +613,15 @@ export class SsoService {
         throw new UnauthorizedException('Email domain not allowed for this organization');
       }
     } else {
-      // Default-on env: when SSO_REQUIRE_EMAIL_VERIFIED is set and the
-      // provider didn't assert email_verified=true, refuse.
+      // Default-on: SSO_REQUIRE_EMAIL_VERIFIED gates the path. An IdP that
+      // omits the email_verified claim is treated as unverified, because an
+      // attacker who can attach a hostile IdP and choose any subject for it
+      // shouldn't get a free pass by simply not asserting verification.
+      // Operators with a pre-existing IdP that doesn't emit the claim must
+      // explicitly opt out by setting SSO_REQUIRE_EMAIL_VERIFIED=false.
       const requireVerified = (process.env.SSO_REQUIRE_EMAIL_VERIFIED ?? 'true').toLowerCase() !== 'false';
-      if (requireVerified && claims && claims.email_verified !== true) {
-        // Note: many IdPs omit the claim entirely. Treat that as "unknown"
-        // and only enforce when explicitly false (handled above). When the
-        // allowlist isn't set, we allow through here to avoid breaking
-        // existing deployments. The explicit-false rejection above still
-        // blocks the obvious case.
+      if (requireVerified && (!claims || claims.email_verified !== true)) {
+        throw new UnauthorizedException('email not verified');
       }
     }
 
@@ -631,9 +644,9 @@ export class SsoService {
         },
       });
       if (!existingMembership) {
-        throw new UnauthorizedException(
-          'An account with this email already exists. Contact your administrator to link it to this organization.',
-        );
+        // Generic message: distinguishing "email exists elsewhere" from "email
+        // unknown" lets a malicious IdP enumerate platform users.
+        throw new UnauthorizedException('SSO authentication failed');
       }
     }
 
@@ -668,12 +681,34 @@ export class SsoService {
     });
 
     if (!membership) {
+      // M-5: SSO auto-provisioning is the trusted "every identity in the
+      // bound IdP is a member of this org" model. Role defaults to 'member';
+      // operators can override via SSO_DEFAULT_ROLE={"orgId":"guest"} when
+      // they want every new IdP identity to land as a project-less guest
+      // until an admin explicitly assigns project membership. Anything
+      // unrecognised falls back to 'member' so a typo doesn't silently
+      // escalate access.
+      const role = this.getSsoDefaultRoleForOrg(organizationId);
       await this.prisma.organizationMember.create({
         data: {
           organizationId,
           userId: user.id,
-          role: 'member',
+          role,
         },
+      });
+      // Audit the implicit grant. Without this, an org admin reviewing the
+      // member list has no way to distinguish "Alice was invited and joined"
+      // from "Alice authenticated against the bound IdP and got auto-added"
+      // — a meaningful distinction when investigating an IdP compromise.
+      void this.audit.log({
+        action: 'org.member.joined',
+        actorUserId: user.id,
+        actorEmail: user.email,
+        organizationId,
+        targetType: 'user',
+        targetId: user.id,
+        targetLabel: user.email,
+        metadata: { role, via: 'sso_auto_provision' },
       });
     }
 

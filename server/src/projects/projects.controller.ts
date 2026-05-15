@@ -1251,7 +1251,11 @@ export class DeploymentsController {
     @Body() body: { label?: string },
     @Request() req,
   ) {
-    return this.webhooksService.createWebhookToken(id, req.user.sub, body?.label);
+    // H-3: forward the originating API token id (if any) so the webhook is
+    // cascade-deleted when the API token is revoked. Session-auth requests
+    // leave req.auth.apiTokenId undefined, which we pass through as null.
+    const apiTokenId = (req as any).auth?.apiTokenId ?? null;
+    return this.webhooksService.createWebhookToken(id, req.user.sub, body?.label, apiTokenId);
   }
 
   @Delete(':id/webhook-tokens/:tokenId')

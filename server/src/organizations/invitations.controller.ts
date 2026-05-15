@@ -29,6 +29,21 @@ export class InvitationsController {
     });
   }
 
+  // H-2: in-app accept by row id. The listing endpoints no longer return
+  // plaintext tokens (they're nulled at rest), so the in-app Accept button
+  // calls this route. Every per-token security check still runs under the
+  // caller's session inside acceptInvitationById.
+  @Post('by-id/:id/accept')
+  async acceptInvitationById(@Param('id') id: string, @Request() req) {
+    return this.organizationsService.acceptInvitationById(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl,
+    });
+  }
+
   @Public()
   @Get(':token')
   async getInvitationByToken(@Param('token') token: string) {

@@ -11,11 +11,17 @@ export class ApiTokensController {
   @Post()
   async create(
     @Req() req: Request,
-    @Body() body: { name: string; expiresAt?: string; scopes?: string[] },
+    @Body() body: { name: string; expiresAt?: string; scopes?: string[]; restrictedProjectIds?: string[] },
   ) {
     const userId = req['auth'].userId;
     const expiresAt = body.expiresAt ? new Date(body.expiresAt) : undefined;
-    return this.apiTokensService.create(userId, body.name, expiresAt, body.scopes);
+    return this.apiTokensService.create(
+      userId,
+      body.name,
+      expiresAt,
+      body.scopes,
+      body.restrictedProjectIds,
+    );
   }
 
   @Auth()

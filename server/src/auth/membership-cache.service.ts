@@ -7,12 +7,20 @@ interface CachedEntry {
   expiresAt: number;
 }
 
-// Process-local cache. Cross-pod invalidation isn't broadcast, so a role
-// downgrade in pod A can be honored by pod B only after this TTL expires.
-// 5s is the longest window we're willing to keep an unauthorised user
-// reading projects they shouldn't see; the in-process invalidation path
-// (PrismaEventsBridge → invalidateInternalUserId) makes the same-pod window
-// effectively zero.
+// H-5: Process-local cache. Cross-pod invalidation isn't broadcast — a role
+// downgrade in pod A is honoured by pod B only after this TTL expires.
+//
+// Bound: 1 second is the maximum revocation latency on any pod that didn't
+// observe the write. In-process invalidation (PrismaEventsBridge →
+// invalidateInternalUserId) makes the same-pod window effectively zero.
+//
+// If you change TTL_MS, also update SUPERADMIN_TTL_MS in
+// AuthorizationService — both caches must agree on the revocation budget,
+// or the longer one becomes the platform's effective bound.
+//
+// True zero-latency revocation requires Redis/NATS pub/sub. That's a
+// dependency we don't carry today; the 1s bound is the SLA, documented
+// here so operators can quote it.
 const TTL_MS = 1_000;
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 

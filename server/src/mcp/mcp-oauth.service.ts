@@ -241,7 +241,13 @@ export class McpOAuthService {
     }
     // Carry the same sessionId so SuperAdminGuard's session check applies on
     // every MCP request, and shorten lifetime to 1d.
+    //
+    // M-2: stamp `type: 'mcp'` so SuperAdminGuard can reject MCP-issued tokens
+    // when they're replayed at the main Orchard API. Both JWTs use the same
+    // HS256 secret, so without a type discriminator a leaked MCP access token
+    // is indistinguishable from a first-party browser session JWT.
     const orchardToken = await new SignJWT({
+      type: 'mcp',
       email: payload.email,
       name: payload.name,
       hackClubId: payload.hackClubId,
@@ -346,6 +352,21 @@ export class McpOAuthService {
   }
 
   async validateBearerToken(authHeader?: string): Promise<string | null> {
+    const result = await this.validateBearerTokenWithSub(authHeader);
+    return result?.token ?? null;
+  }
+
+  /**
+   * Same checks as `validateBearerToken` but also returns the JWT `sub`
+   * claim so callers can bind a long-lived stateful resource (MCP transport
+   * sessions) to the user who created it. Without this binding, a leaked
+   * `mcp-session-id` lets any other authenticated MCP user dispatch tool
+   * calls against the original creator's `OrchardClient` (i.e. their
+   * orchard token), running as that user against the first-party API.
+   */
+  async validateBearerTokenWithSub(
+    authHeader?: string,
+  ): Promise<{ token: string; sub: string } | null> {
     if (!authHeader?.startsWith('Bearer ')) {
       console.error('[MCP OAuth] No Bearer token in header');
       return null;
@@ -354,6 +375,16 @@ export class McpOAuthService {
     console.error(`[MCP OAuth] Token length: ${token.length}, prefix: ${token.substring(0, 20)}...`);
     try {
       const result = await jwtVerify(token, this.getJwtSecret());
+
+      // M-2: MCP must only accept tokens this service minted. A first-party
+      // browser-session JWT (issued by oauth.service / passwordless / SSO) is
+      // signed with the same secret and therefore passes jwtVerify — but it
+      // is not the credential the user consented to share with the MCP client.
+      // Reject anything that isn't type='mcp'.
+      if (result.payload.type !== 'mcp') {
+        console.error('[MCP OAuth] Token rejected: wrong token type');
+        return null;
+      }
 
       // MCP runs in its own Nest app and does NOT pass through SuperAdminGuard,
       // so the session check has to happen here. Without this, "sign out
@@ -373,8 +404,14 @@ export class McpOAuthService {
       }
       this.sessions.touchSession(sessionId).catch(() => {});
 
-      console.error(`[MCP OAuth] Token valid, sub: ${result.payload.sub}, exp: ${result.payload.exp}`);
-      return token;
+      const sub = result.payload.sub as string | undefined;
+      if (!sub) {
+        console.error('[MCP OAuth] Token rejected: missing sub claim');
+        return null;
+      }
+
+      console.error(`[MCP OAuth] Token valid, sub: ${sub}, exp: ${result.payload.exp}`);
+      return { token, sub };
     } catch (err) {
       console.error(`[MCP OAuth] Token verification failed: ${err instanceof Error ? err.message : err}`);
       return null;

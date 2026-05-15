@@ -1,6 +1,7 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrganizationRole } from '@prisma/client';
+import { requestAuthStorage } from './request-context';
 
 export type ProjectRoleName = 'admin' | 'member' | 'viewer';
 
@@ -8,6 +9,12 @@ export interface OrgAccess {
   organizationId: string;
   role: OrganizationRole;
   isAdmin: boolean;
+  // 'membership' = real OrganizationMember row backs this access.
+  // 'superadmin' = synthesised for User.isSuperAdmin; no underlying row.
+  //   Consumers that depend on physical membership (member listings, audit log
+  //   actor lookups, seat counts) MUST branch on this and not assume the user
+  //   exists in OrganizationMember.
+  source: 'membership' | 'superadmin';
 }
 
 export interface ProjectAccess {
@@ -38,9 +45,13 @@ export interface ProjectAccess {
  * Callers pass the internal user UUID (already resolved via UsersService).
  * Superadmins (User.isSuperAdmin) bypass every check.
  */
-// Process-local cache, same multi-pod caveat as MembershipCacheService.
-// invalidateSuperAdmin is called when the flag is toggled in this process, but
-// other pods only learn about it when this TTL expires.
+// H-5: Process-local cache, same multi-pod caveat as MembershipCacheService.
+// invalidateSuperAdmin is called when the flag is toggled in this process,
+// but other pods only learn about it when this TTL expires.
+//
+// MUST stay equal to MembershipCacheService.TTL_MS — the slower of the two
+// caches sets the platform-wide revocation bound, and a mismatch means the
+// stated SLA is a lie.
 const SUPERADMIN_TTL_MS = 1_000;
 
 @Injectable()
@@ -70,9 +81,86 @@ export class AuthorizationService {
     this.superAdminCache.delete(userId);
   }
 
+  // ──────────────────────────── SSO enforcement ────────────────────────────
+
+  /**
+   * H-1: If the user is a member of any organization with SSO enforced, refuse
+   * non-SSO authentication paths (OTP, passkey, password, Hack Club OAuth).
+   * Without this gate, `SsoConfig.enforced=true` is purely cosmetic — an admin
+   * who offboards a user from the IdP cannot prevent them from logging back
+   * in via OTP to the same email, defeating the whole point of enforcement.
+   *
+   * Superadmins bypass enforcement (break-glass access) — the assumption is
+   * that they manage SSO config and need a way back in if it breaks.
+   *
+   * The `authMethod` param is the method the caller is about to use; only
+   * 'sso' satisfies enforcement. Anything else throws.
+   */
+  async assertSsoNotEnforced(
+    user: { id: string; isSuperAdmin?: boolean | null } | null,
+    authMethod: 'sso' | 'oauth' | 'otp' | 'passkey' | 'password',
+  ): Promise<void> {
+    if (authMethod === 'sso') return;
+    if (user?.isSuperAdmin) return;
+    if (user) {
+      const enforced = await this.prisma.organizationMember.findFirst({
+        where: {
+          userId: user.id,
+          organization: { ssoConfig: { is: { enforced: true, enabled: true } } },
+        },
+        select: { organizationId: true },
+      });
+      if (enforced) {
+        throw new ForbiddenException(
+          'Your organization requires single sign-on. Use the SSO login link for your workspace.',
+        );
+      }
+    }
+  }
+
+  /**
+   * H-4: closes the onboarding-side gap that `assertSsoNotEnforced` doesn't
+   * cover. When a brand-new identity tries to sign in via OAuth/OTP/passkey,
+   * the user row doesn't exist yet so the per-user enforcement check above
+   * has nothing to fire against. But if there's a pending invitation under
+   * that email from an SSO-enforced org, accepting it via a non-SSO path
+   * would have let an attacker who controls the email (or who registers
+   * the email under a non-SSO identity provider) bypass the IdP entirely.
+   *
+   * Call this BEFORE user creation/JIT in the OAuth, OTP, and passkey
+   * registration flows. SSO callback itself is exempt (authMethod='sso').
+   */
+  async assertSsoNotEnforcedForEmail(
+    email: string,
+    authMethod: 'sso' | 'oauth' | 'otp' | 'passkey' | 'password',
+  ): Promise<void> {
+    if (authMethod === 'sso') return;
+    const normalized = email.toLowerCase().trim();
+    if (!normalized) return;
+    const invitation = await this.prisma.organizationInvitation.findFirst({
+      where: {
+        email: normalized,
+        expiresAt: { gt: new Date() },
+        organization: { ssoConfig: { is: { enforced: true, enabled: true } } },
+      },
+      select: { organizationId: true },
+    });
+    if (invitation) {
+      throw new ForbiddenException(
+        'Your organization requires single sign-on. Use the SSO login link for your workspace.',
+      );
+    }
+  }
+
   // ──────────────────────────── organisation ────────────────────────────
 
   async getOrgAccess(organizationId: string, userId: string): Promise<OrgAccess | null> {
+    // A project-scoped API token must not grant org-admin powers (settings,
+    // member management, billing). Strip isAdmin so admin checks fall through
+    // to ForbiddenException even when the underlying user is an org owner.
+    const tokenCtx = requestAuthStorage.getStore();
+    const tokenIsProjectScoped =
+      !!tokenCtx?.tokenProjectIds && tokenCtx.tokenProjectIds.length > 0;
     if (await this.isSuperAdmin(userId)) {
       // Confirm the org actually exists. Without this, superadmins probing a
       // random UUID got a synthetic owner membership and downstream endpoints
@@ -83,7 +171,7 @@ export class AuthorizationService {
         select: { id: true },
       });
       if (!exists) return null;
-      return { organizationId, role: 'owner', isAdmin: true };
+      return { organizationId, role: 'owner', isAdmin: !tokenIsProjectScoped, source: 'superadmin' };
     }
     const member = await this.prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId, userId } },
@@ -93,7 +181,8 @@ export class AuthorizationService {
     return {
       organizationId,
       role: member.role,
-      isAdmin: member.role === 'owner' || member.role === 'admin',
+      isAdmin: !tokenIsProjectScoped && (member.role === 'owner' || member.role === 'admin'),
+      source: 'membership',
     };
   }
 
@@ -125,6 +214,30 @@ export class AuthorizationService {
     if (access.role === 'guest') {
       throw new ForbiddenException('Guests cannot create projects in this organization');
     }
+    const tokenCtx = requestAuthStorage.getStore();
+    if (tokenCtx?.tokenProjectIds && tokenCtx.tokenProjectIds.length > 0) {
+      throw new ForbiddenException('Project-scoped tokens cannot create new projects');
+    }
+    return access;
+  }
+
+  /**
+   * M-4: for callers whose correctness depends on a real OrganizationMember
+   * row existing (audit log actor lookups, seat counting, member list joins).
+   * Superadmins get a synthetic access object from getOrgAccess; this helper
+   * makes the failure mode explicit rather than letting a join silently
+   * return zero rows.
+   */
+  async requirePhysicalOrgMembership(
+    organizationId: string,
+    userId: string,
+  ): Promise<OrgAccess> {
+    const access = await this.requireOrgMember(organizationId, userId);
+    if (access.source !== 'membership') {
+      throw new ForbiddenException(
+        'This action requires a real organization membership; superadmin access is not sufficient.',
+      );
+    }
     return access;
   }
 
@@ -132,6 +245,10 @@ export class AuthorizationService {
     const access = await this.requireOrgMember(organizationId, userId);
     if (access.role !== 'owner') {
       throw new ForbiddenException('Only the organization owner can perform this action');
+    }
+    const tokenCtx = requestAuthStorage.getStore();
+    if (tokenCtx?.tokenProjectIds && tokenCtx.tokenProjectIds.length > 0) {
+      throw new ForbiddenException('Project-scoped tokens cannot perform owner-level actions');
     }
     return access;
   }
@@ -160,6 +277,16 @@ export class AuthorizationService {
     organizationId: string,
     userId: string,
   ): Promise<ProjectAccess | null> {
+    // Token project-scoping: when the request is authenticated by an API token
+    // with a non-empty restrictedProjectIds, treat any project outside that
+    // list as if it didn't exist for this caller — even if the underlying user
+    // is org owner. Same 404 shape as a non-member to avoid leaking existence.
+    const tokenCtx = requestAuthStorage.getStore();
+    if (tokenCtx?.tokenProjectIds && tokenCtx.tokenProjectIds.length > 0) {
+      if (!tokenCtx.tokenProjectIds.includes(projectId)) {
+        return null;
+      }
+    }
     if (await this.isSuperAdmin(userId)) {
       return {
         projectId,
@@ -292,7 +419,19 @@ export class AuthorizationService {
    * If the user is not an org member at all, throws 404.
    */
   async listVisibleProjectIds(organizationId: string, userId: string): Promise<string[] | null> {
-    if (await this.isSuperAdmin(userId)) return null;
+    const tokenCtx = requestAuthStorage.getStore();
+    const tokenAllowList =
+      tokenCtx?.tokenProjectIds && tokenCtx.tokenProjectIds.length > 0
+        ? tokenCtx.tokenProjectIds
+        : null;
+    if (await this.isSuperAdmin(userId)) {
+      if (!tokenAllowList) return null;
+      const projects = await this.prisma.project.findMany({
+        where: { organizationId, id: { in: tokenAllowList } },
+        select: { id: true },
+      });
+      return projects.map((p) => p.id);
+    }
 
     const member = await this.prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId, userId } },
@@ -301,12 +440,21 @@ export class AuthorizationService {
     if (!member) {
       throw new NotFoundException('Organization not found');
     }
-    if (member.role === 'owner' || member.role === 'admin') return null;
+    if (member.role === 'owner' || member.role === 'admin') {
+      if (!tokenAllowList) return null;
+      const projects = await this.prisma.project.findMany({
+        where: { organizationId, id: { in: tokenAllowList } },
+        select: { id: true },
+      });
+      return projects.map((p) => p.id);
+    }
 
     const memberships = await this.prisma.projectMember.findMany({
       where: { userId, project: { organizationId } },
       select: { projectId: true },
     });
-    return memberships.map((m) => m.projectId);
+    const ids = memberships.map((m) => m.projectId);
+    if (!tokenAllowList) return ids;
+    return ids.filter((id) => tokenAllowList.includes(id));
   }
 }

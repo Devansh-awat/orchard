@@ -9,6 +9,7 @@ import { AuthorizationService } from '../auth/authorization.service';
 import { SessionsService } from '../auth/sessions.service';
 import { AuditService } from '../audit/audit.service';
 import { hashApiToken } from '../auth/api-tokens.service';
+import { requestAuthStorage } from '../auth/request-context';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -73,6 +74,12 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
 
     let userId: string | undefined;
     let actorEmail: string | undefined;
+    // C-1: when an API token authenticates this WS, its project allow-list
+    // must constrain the authz checks below. The HTTP API plumbs this via
+    // SuperAdminGuard → requestAuthStorage; this gateway bypasses that guard
+    // and must enter the context itself, otherwise resolveProjectAccess sees
+    // an empty store and skips the allow-list entirely.
+    let tokenAuthCtx: { apiTokenId: string; tokenScopes: string[]; tokenProjectIds: string[] } | null = null;
     try {
       const { payload } = await jwtVerify(token, jwtSecret);
 
@@ -95,6 +102,9 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
         }
       }
       if (!UUID_RE.test(dbUserId)) {
+        // sub is a Hack Club ID, not a UUID. Try one more lookup; if it
+        // still misses, refuse rather than let downstream membership checks
+        // run with a non-UUID and silently fail closed in confusing ways.
         const dbUser = await prisma.user.findFirst({
           where: { hackClubId: dbUserId },
           select: { id: true, email: true },
@@ -127,6 +137,14 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
         // token creation rather than inherited from the owning user's role.
         return reject(403, 'Forbidden');
       }
+      const restrictedProjectIds = Array.isArray(apiToken.restrictedProjectIds)
+        ? (apiToken.restrictedProjectIds as string[])
+        : [];
+      tokenAuthCtx = {
+        apiTokenId: apiToken.id,
+        tokenScopes: scopes,
+        tokenProjectIds: restrictedProjectIds,
+      };
       userId = apiToken.user.id;
       actorEmail = apiToken.user.email;
       prisma.apiToken.update({ where: { id: apiToken.id }, data: { lastUsedAt: new Date() } }).catch(() => {});
@@ -146,8 +164,18 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
     });
     if (!project) return reject(404, 'Not Found');
 
+    // Run authz inside the token context so requestAuthStorage-based scope
+    // filtering in AuthorizationService applies. Session auth gets an empty
+    // context, matching what SuperAdminGuard publishes for JWT-auth requests.
+    const runWithAuthCtx = <T>(fn: () => Promise<T>): Promise<T> =>
+      new Promise<T>((resolve, reject) => {
+        requestAuthStorage.run(tokenAuthCtx ?? {}, () => {
+          fn().then(resolve, reject);
+        });
+      });
+
     try {
-      await authz.requireProjectEdit(project.id, userId, 'exec into pod');
+      await runWithAuthCtx(() => authz.requireProjectEdit(project.id, userId!, 'exec into pod'));
     } catch {
       // 404 to non-members so we don't leak project existence.
       return reject(404, 'Not Found');
@@ -166,12 +194,45 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
       metadata: { namespace, container: container || null },
     }).catch(() => {});
 
+    const sessionIdForRecheck = (() => {
+      try {
+        // Re-decode to grab sessionId without re-verifying — we already
+        // verified the signature above. Best-effort: if this fails (e.g. API
+        // token path), we'll fall back to project-edit-only rechecks.
+        const parts = token.split('.');
+        if (parts.length !== 3) return undefined;
+        const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString('utf-8'));
+        return typeof payload.sessionId === 'string' ? (payload.sessionId as string) : undefined;
+      } catch {
+        return undefined;
+      }
+    })();
+
+    const recheckAuth = (): Promise<boolean> =>
+      runWithAuthCtx(async () => {
+        try {
+          if (sessionIdForRecheck) {
+            const valid = await sessions.validateSession(sessionIdForRecheck);
+            if (!valid) return false;
+          }
+          await authz.requireProjectEdit(project.id, userId!, 'exec into pod');
+          return true;
+        } catch {
+          return false;
+        }
+      });
+
     wss.handleUpgrade(req, socket, head, (ws) => {
       wss.emit('connection', ws, req);
-      handleExecSession(ws, kc, namespace, podName, container);
+      handleExecSession(ws, kc, namespace, podName, container, recheckAuth);
     });
   });
 }
+
+// Re-validation cadence for an open exec session. Short enough that revoking
+// a session or demoting a user closes the shell quickly; long enough that the
+// DB load is negligible per active terminal.
+const RECHECK_INTERVAL_MS = 15_000;
 
 function handleExecSession(
   ws: WebSocket,
@@ -179,12 +240,33 @@ function handleExecSession(
   namespace: string,
   podName: string,
   container: string,
+  recheckAuth: () => Promise<boolean>,
 ) {
   const exec = new k8s.Exec(kc);
 
   const stdin = new PassThrough();
   const stdout = new PassThrough();
   const stderr = new PassThrough();
+
+  // Periodic authorization re-check. Authorization is verified once at upgrade
+  // time; without this loop, a user whose session is revoked or whose project
+  // role is downgraded would keep an open shell until they disconnect. The
+  // policy explicitly forbids trusting that initial decision for the lifetime
+  // of the stream.
+  const recheckTimer = setInterval(() => {
+    void recheckAuth().then((ok) => {
+      if (ok) return;
+      if (ws.readyState === WebSocket.OPEN) {
+        try {
+          ws.send('\r\nSession terminated: access revoked.\r\n');
+        } catch {}
+        ws.close(4401, 'access revoked');
+      }
+      stdin.end();
+    });
+  }, RECHECK_INTERVAL_MS);
+
+  const stopRecheck = () => clearInterval(recheckTimer);
 
   // Forward stdout → ws
   stdout.on('data', (chunk: Buffer) => {
@@ -223,11 +305,13 @@ function handleExecSession(
 
   ws.on('close', () => {
     execClosed = true;
+    stopRecheck();
     stdin.end();
   });
 
   ws.on('error', () => {
     execClosed = true;
+    stopRecheck();
     stdin.end();
   });
 

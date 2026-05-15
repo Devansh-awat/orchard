@@ -1,9 +1,21 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import UAParser from 'ua-parser-js';
 
+// M-1: Geo enrichment uses ipwho.is over HTTPS with a short timeout. The
+// previous implementation hit http://ip-api.com over plaintext for every
+// login, which (a) leaked every login IP to a third party in cleartext and
+// (b) let a network attacker forge the "location" stored against the
+// session, enabling social-engineering vectors via the "Active sessions"
+// UI. HTTPS closes the MITM angle; the leak-to-third-party tradeoff is
+// accepted as the price of avoiding a local DB.
+
+const GEO_LOOKUP_TIMEOUT_MS = 1500;
+
 @Injectable()
 export class SessionsService {
+  private readonly logger = new Logger(SessionsService.name);
+
   constructor(private readonly prisma: PrismaService) {}
 
   /**
@@ -115,6 +127,12 @@ export class SessionsService {
    * also revoked here — "sign out everywhere" without this leaves long-lived
    * tokens valid and silently undermines the user's expectation that they
    * have logged out of every entry point.
+   *
+   * L-3: this is intentionally unconditional. Do NOT call this helper from
+   * scoped flows (org/project removal) where only some tokens should die —
+   * use revokeUserSessions plus a targeted apiToken cleanup at the call site.
+   * The only legitimate callers are user-initiated "Sign out everywhere"
+   * and account-deletion paths, where nuking every token is the goal.
    */
   async revokeAllSessions(
     userId: string,
@@ -138,6 +156,18 @@ export class SessionsService {
     ]);
 
     return sessionRes.count;
+  }
+
+  // Revokes only browser sessions, leaving API tokens intact. Used when a user
+  // is removed from one org/project but may still hold tokens scoped to other
+  // resources they still belong to — full revocation would nuke unrelated work.
+  // Project-scoped tokens for the affected resource are pruned at the call site.
+  async revokeUserSessions(userId: string): Promise<number> {
+    const res = await this.prisma.session.updateMany({
+      where: { userId, revokedAt: null },
+      data: { revokedAt: new Date() },
+    });
+    return res.count;
   }
 
   /**
@@ -168,43 +198,57 @@ export class SessionsService {
   }
 
   /**
-   * Look up approximate location from IP address.
-   * Uses a simple heuristic - for private/local IPs returns null.
-   * For production, you can integrate with a geolocation service.
+   * Look up approximate location from IP via ipwho.is over HTTPS. Returns
+   * null for private/local IPs, on timeout, or on any error — geolocation
+   * is best-effort and must never block auth.
    */
   private async lookupLocation(ip: string): Promise<string | null> {
-    if (!ip || ip === 'unknown') return null;
+    if (!ip || ip === 'unknown' || this.isPrivateIp(ip)) return null;
 
-    // Skip private/local IPs
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), GEO_LOOKUP_TIMEOUT_MS);
+    try {
+      const response = await fetch(
+        `https://ipwho.is/${encodeURIComponent(ip)}?fields=success,city,region,country`,
+        { signal: controller.signal },
+      );
+      if (!response.ok) return null;
+      const data = (await response.json()) as {
+        success?: boolean;
+        city?: string;
+        region?: string;
+        country?: string;
+      };
+      if (data.success === false) return null;
+      const parts = [data.city, data.region, data.country].filter(
+        (s): s is string => typeof s === 'string' && s.length > 0,
+      );
+      return parts.length > 0 ? parts.join(', ') : null;
+    } catch {
+      return null;
+    } finally {
+      clearTimeout(timer);
+    }
+  }
+
+  private isPrivateIp(ip: string): boolean {
     if (
       ip === '127.0.0.1' ||
       ip === '::1' ||
+      ip === 'localhost' ||
       ip.startsWith('10.') ||
-      ip.startsWith('172.') ||
       ip.startsWith('192.168.') ||
-      ip === 'localhost'
+      ip.startsWith('fc') ||
+      ip.startsWith('fd') ||
+      ip.startsWith('fe80:')
     ) {
-      return null;
+      return true;
     }
-
-    // Try to get location from a free API (ip-api.com, no key required)
-    try {
-      const response = await fetch(
-        `http://ip-api.com/json/${ip}?fields=city,regionName,country`,
-      );
-      if (response.ok) {
-        const data = await response.json();
-        if (data.city && data.country) {
-          const parts = [data.city];
-          if (data.regionName) parts.push(data.regionName);
-          parts.push(data.country);
-          return parts.join(', ');
-        }
-      }
-    } catch {
-      // Geolocation is best-effort
+    // 172.16.0.0 – 172.31.255.255
+    if (ip.startsWith('172.')) {
+      const second = parseInt(ip.split('.')[1] ?? '', 10);
+      if (second >= 16 && second <= 31) return true;
     }
-
-    return null;
+    return false;
   }
 }

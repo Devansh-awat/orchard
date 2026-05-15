@@ -7,6 +7,8 @@ import { SessionsService } from './sessions.service';
 import { StorageService } from '../organizations/storage.service';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuthorizationService } from './authorization.service';
+import { setSessionCookie, clearSessionCookie } from './cookies';
 import { Public, Auth } from './decorators';
 
 @Public()
@@ -18,6 +20,7 @@ export class OAuthController {
     private readonly storageService: StorageService,
     private readonly usersService: UsersService,
     private readonly prisma: PrismaService,
+    private readonly authz: AuthorizationService,
   ) {}
 
   /**
@@ -124,10 +127,32 @@ export class OAuthController {
           select: { id: true },
         });
         if (emailOwner) {
+          // L-2: don't distinguish "email already on the platform" from any
+          // other OAuth failure — the distinct redirect was an enumeration
+          // oracle for any attacker who could control a Hack Club account
+          // and edit its profile email.
           return res.redirect(
-            `${frontendBase}/oauth/callback?error=${encodeURIComponent('email_already_registered')}`,
+            `${frontendBase}/oauth/callback?error=${encodeURIComponent('oauth_failed')}`,
           );
         }
+      }
+
+      // H-1: if the user is in any org with SSO enforced, OAuth/OTP/passkey
+      // are not valid login paths — they must come through the SSO callback.
+      // H-4: even for brand-new identities, refuse OAuth if the email has a
+      // pending invite from an SSO-enforced org. Otherwise an attacker who
+      // controls a Hack Club account with the invited email can slip in
+      // before SSO is enforced.
+      try {
+        if (existingUser) {
+          await this.authz.assertSsoNotEnforced(existingUser, 'oauth');
+        } else {
+          await this.authz.assertSsoNotEnforcedForEmail(hackClubUser.email, 'oauth');
+        }
+      } catch {
+        return res.redirect(
+          `${frontendBase}/oauth/callback?error=${encodeURIComponent('sso_required')}`,
+        );
       }
 
       const hasAccess = await this.hasPrivateBetaAccess(
@@ -151,14 +176,7 @@ export class OAuthController {
 
       const sessionToken = await this.oauthService.generateSessionToken(hackClubUser, sessionId);
 
-      res.cookie('session_token', sessionToken, {
-        httpOnly: true,
-        secure: process.env.NODE_ENV === 'production',
-        sameSite: 'strict',
-        maxAge: 7 * 24 * 60 * 60 * 1000,
-        path: '/',
-        domain: process.env.COOKIE_DOMAIN || undefined,
-      });
+      setSessionCookie(res, sessionToken);
 
       return res.redirect(`${process.env.FRONTEND_URL || 'http://localhost:3000'}/oauth/callback`);
     } catch (err) {
@@ -194,10 +212,12 @@ export class OAuthController {
       // Best-effort session revocation
     }
 
-    res.clearCookie('session_token', {
-      path: '/',
-      domain: process.env.COOKIE_DOMAIN || undefined,
-    });
+    // M-3: route every clear through the cookies helper so secure/httpOnly/
+    // sameSite/domain attributes stay in lockstep with setSessionCookie.
+    // Prior to this, the clear path passed only { path, domain } which left
+    // browsers free to refuse the clear when the original cookie had
+    // SameSite=Strict from a cross-site context (rare, but observed).
+    clearSessionCookie(res);
     return res.redirect(process.env.FRONTEND_URL || 'http://localhost:3000');
   }
 
@@ -223,7 +243,10 @@ export class OAuthController {
       }
     }
 
-    return {
+    // Only emit isSuperAdmin when truthy. Returning the field for every user
+    // turns /auth/me into an oracle that confirms "you are not a superadmin",
+    // and ships a privilege flag the UI doesn't need for non-admins.
+    const base = {
       id: user.id,
       email: user.email,
       username: user.username,
@@ -231,9 +254,9 @@ export class OAuthController {
       lastName: user.lastName,
       imageUrl: user.imageUrl,
       hackClubId: req.user.hackClubId || user.hackClubId,
-      isSuperAdmin: user.isSuperAdmin,
       setupCompleted: user.setupCompleted,
     };
+    return user.isSuperAdmin ? { ...base, isSuperAdmin: true } : base;
   }
 
   @Auth()
