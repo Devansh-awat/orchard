@@ -9,11 +9,20 @@
 		Trash2,
 		Server,
 		ExternalLink,
-		Save,
-		Pencil,
-		X
+		Github,
+		RefreshCw,
 	} from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+
+	interface ChildDeployment {
+		id: string;
+		name: string;
+		status: string;
+		image?: string;
+		buildStatus?: string;
+		buildStep?: string;
+		composeServiceName?: string;
+	}
 
 	interface ComposeStack {
 		id: string;
@@ -21,18 +30,23 @@
 		composeYaml: string;
 		status: string;
 		lastError?: string | null;
+		githubRepo?: string | null;
+		githubBranch?: string | null;
+		composePath?: string | null;
+		autoDeployEnabled: boolean;
+		autoDeployBranch?: string | null;
+		lastCommitSha?: string | null;
 		createdAt: string;
-		deployments: { id: string; name: string; status: string; image?: string; composeServiceName?: string }[];
+		deployments: ChildDeployment[];
 	}
 
 	let stack = $state<ComposeStack | null>(null);
 	let loading = $state(true);
 	let deleting = $state(false);
-	let saving = $state(false);
+	let redeploying = $state(false);
+	let togglingAutoDeploy = $state(false);
 	let error = $state<string | null>(null);
 	let showDeleteModal = $state(false);
-	let editing = $state(false);
-	let draftYaml = $state('');
 
 	const orgSlug = $derived($page.params.orgSlug);
 	const stackId = $derived($page.params.stackId);
@@ -42,6 +56,7 @@
 			case 'active':
 			case 'running':
 			case 'ready':
+			case 'succeeded':
 				return '#22c55e';
 			case 'deploying':
 			case 'updating':
@@ -57,13 +72,22 @@
 		}
 	}
 
+	function githubRepoLabel(url: string | null | undefined): string {
+		if (!url) return '—';
+		try {
+			const u = new URL(url);
+			return u.pathname.replace(/^\/+|\.git$/g, '');
+		} catch {
+			return url;
+		}
+	}
+
 	async function fetchStack() {
 		loading = true;
 		try {
 			const response = await apiFetch(`/apiv1/compose-stacks/${stackId}`);
 			if (!response.ok) throw new Error('Failed to fetch compose stack');
 			stack = await response.json();
-			draftYaml = stack?.composeYaml ?? '';
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to load stack';
 		} finally {
@@ -71,29 +95,46 @@
 		}
 	}
 
-	async function saveYaml() {
+	async function redeploy() {
 		if (!stack) return;
-		saving = true;
+		redeploying = true;
 		error = null;
 		try {
-			const response = await apiFetch(`/apiv1/compose-stacks/${stackId}`, {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ composeYaml: draftYaml }),
+			const response = await apiFetch(`/apiv1/compose-stacks/${stackId}/redeploy`, {
+				method: 'POST',
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to update compose stack');
+				throw new Error(data.message || 'Failed to redeploy');
 			}
 			stack = await response.json();
-			draftYaml = stack?.composeYaml ?? '';
-			editing = false;
 			refreshTree();
-			toasts.add({ title: 'Stack updated', description: 'Redeployed services', color: 'success' });
+			toasts.add({ title: 'Redeployed', description: 'Pulled fresh compose from GitHub', color: 'success' });
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to update';
+			error = e instanceof Error ? e.message : 'Failed to redeploy';
 		} finally {
-			saving = false;
+			redeploying = false;
+		}
+	}
+
+	async function toggleAutoDeploy() {
+		if (!stack) return;
+		togglingAutoDeploy = true;
+		try {
+			const response = await apiFetch(`/apiv1/compose-stacks/${stackId}/auto-deploy`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ enabled: !stack.autoDeployEnabled }),
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to update auto-deploy');
+			}
+			stack = await response.json();
+		} catch (e) {
+			error = e instanceof Error ? e.message : 'Failed to update auto-deploy';
+		} finally {
+			togglingAutoDeploy = false;
 		}
 	}
 
@@ -132,8 +173,7 @@
 		</div>
 	{:else if stack}
 		<button onclick={() => history.back()} class="cs-back">
-			<ArrowLeft class="h-4 w-4" />
-			Back
+			<ArrowLeft class="h-4 w-4" /> Back
 		</button>
 
 		<div class="cs-header">
@@ -149,13 +189,22 @@
 					</p>
 				</div>
 			</div>
-			<button onclick={() => (showDeleteModal = true)} disabled={deleting} class="cs-btn cs-btn-danger">
-				{#if deleting}
-					<Loader2 class="h-4 w-4 animate-spin" /> Deleting…
-				{:else}
-					<Trash2 class="h-4 w-4" /> Delete stack
-				{/if}
-			</button>
+			<div class="cs-header-actions">
+				<button onclick={redeploy} disabled={redeploying} class="cs-btn cs-btn-secondary">
+					{#if redeploying}
+						<Loader2 class="h-4 w-4 animate-spin" /> Redeploying…
+					{:else}
+						<RefreshCw class="h-4 w-4" /> Redeploy
+					{/if}
+				</button>
+				<button onclick={() => (showDeleteModal = true)} disabled={deleting} class="cs-btn cs-btn-danger">
+					{#if deleting}
+						<Loader2 class="h-4 w-4 animate-spin" /> Deleting…
+					{:else}
+						<Trash2 class="h-4 w-4" /> Delete
+					{/if}
+				</button>
+			</div>
 		</div>
 
 		{#if error}
@@ -163,33 +212,85 @@
 		{/if}
 
 		{#if stack.lastError && stack.status === 'failed'}
-			<div class="cs-error">
-				<strong>Last error:</strong> {stack.lastError}
-			</div>
+			<div class="cs-error"><strong>Last error:</strong> {stack.lastError}</div>
 		{/if}
 
 		<div class="cs-section">
-			<div class="cs-section-head">
-				<h2 class="cs-section-title">
-					<Server class="h-4 w-4" style="color: #3b82f6" />
-					Services ({stack.deployments.length})
-				</h2>
+			<h2 class="cs-section-title">
+				<Github class="h-4 w-4" style="color: var(--surface-muted)" /> Source
+			</h2>
+			<div class="cs-source-card">
+				<dl class="cs-source-grid">
+					<div>
+						<dt>Repository</dt>
+						<dd>
+							{#if stack.githubRepo}
+								<a href={stack.githubRepo} target="_blank" rel="noopener noreferrer" class="cs-link">
+									{githubRepoLabel(stack.githubRepo)}
+									<ExternalLink class="h-3 w-3" />
+								</a>
+							{:else}
+								<span class="cs-muted">—</span>
+							{/if}
+						</dd>
+					</div>
+					<div>
+						<dt>Branch</dt>
+						<dd><span class="cs-mono">{stack.githubBranch ?? '—'}</span></dd>
+					</div>
+					<div>
+						<dt>Compose file</dt>
+						<dd><span class="cs-mono">{stack.composePath ?? 'docker-compose.yml'}</span></dd>
+					</div>
+					<div>
+						<dt>Last commit</dt>
+						<dd>
+							<span class="cs-mono">{stack.lastCommitSha?.substring(0, 7) ?? '—'}</span>
+						</dd>
+					</div>
+				</dl>
+				<label class="cs-toggle">
+					<input
+						type="checkbox"
+						checked={stack.autoDeployEnabled}
+						disabled={togglingAutoDeploy}
+						onchange={toggleAutoDeploy}
+					/>
+					<span class="cs-toggle-label">
+						<span class="cs-toggle-title">
+							Auto-deploy on push to <span class="cs-mono">{stack.autoDeployBranch ?? stack.githubBranch ?? '—'}</span>
+						</span>
+						<span class="cs-toggle-desc">
+							Each <code>build:</code> service rebuilds independently when a commit lands.
+						</span>
+					</span>
+				</label>
 			</div>
+		</div>
+
+		<div class="cs-section">
+			<h2 class="cs-section-title">
+				<Server class="h-4 w-4" style="color: #3b82f6" /> Services ({stack.deployments.length})
+			</h2>
 			<div class="cs-resource-list">
 				{#each stack.deployments as dep}
 					<a href="/{orgSlug}/deployments/{dep.id}" class="cs-resource-card">
 						<div class="cs-resource-info">
-							<span class="cs-resource-name">
-								{dep.composeServiceName ?? dep.name}
-							</span>
+							<span class="cs-resource-name">{dep.composeServiceName ?? dep.name}</span>
 							{#if dep.image}
 								<span class="cs-resource-detail">{dep.image}</span>
 							{/if}
 						</div>
 						<div class="cs-resource-right">
-							<span class="cs-resource-status" style="color: {getStatusColor(dep.status)}">
-								{dep.status}
-							</span>
+							{#if dep.buildStatus === 'building'}
+								<span class="cs-resource-status" style="color: #f59e0b">
+									<Loader2 class="h-3 w-3 animate-spin" /> building
+								</span>
+							{:else}
+								<span class="cs-resource-status" style="color: {getStatusColor(dep.status)}">
+									{dep.status}
+								</span>
+							{/if}
 							<ExternalLink class="h-3.5 w-3.5" style="color: var(--surface-muted)" />
 						</div>
 					</a>
@@ -200,45 +301,14 @@
 		</div>
 
 		<div class="cs-section">
-			<div class="cs-section-head">
-				<h2 class="cs-section-title">
-					<FileText class="h-4 w-4" style="color: #0db7ed" />
-					docker-compose.yml
-				</h2>
-				{#if editing}
-					<div class="cs-section-actions">
-						<button
-							class="cs-btn cs-btn-secondary cs-btn-sm"
-							disabled={saving}
-							onclick={() => {
-								draftYaml = stack?.composeYaml ?? '';
-								editing = false;
-							}}
-						>
-							<X class="h-3.5 w-3.5" /> Cancel
-						</button>
-						<button class="cs-btn cs-btn-primary cs-btn-sm" disabled={saving} onclick={saveYaml}>
-							{#if saving}
-								<Loader2 class="h-3.5 w-3.5 animate-spin" /> Saving…
-							{:else}
-								<Save class="h-3.5 w-3.5" /> Save & redeploy
-							{/if}
-						</button>
-					</div>
-				{:else}
-					<button class="cs-btn cs-btn-secondary cs-btn-sm" onclick={() => (editing = true)}>
-						<Pencil class="h-3.5 w-3.5" /> Edit
-					</button>
-				{/if}
-			</div>
-			{#if editing}
-				<textarea bind:value={draftYaml} class="cs-textarea cs-mono" spellcheck="false" rows="20"></textarea>
-				<p class="cs-hint">
-					Saving will <strong>tear down the existing services and redeploy them</strong> from the new compose file. Persistent volumes will be recreated.
-				</p>
-			{:else}
-				<pre class="cs-yaml-view cs-mono">{stack.composeYaml}</pre>
-			{/if}
+			<h2 class="cs-section-title">
+				<FileText class="h-4 w-4" style="color: #0db7ed" /> docker-compose.yml
+			</h2>
+			<pre class="cs-yaml-view cs-mono">{stack.composeYaml}</pre>
+			<p class="cs-hint">
+				This is the compose file Orchard last fetched from GitHub. To change it, edit the file in
+				your repo and click <strong>Redeploy</strong>, or push to the auto-deploy branch.
+			</p>
 		</div>
 	{/if}
 </div>
@@ -276,7 +346,6 @@
 		cursor: pointer;
 		padding: 0;
 		margin-bottom: 1.5rem;
-		transition: color 0.15s;
 	}
 
 	.cs-back:hover {
@@ -295,6 +364,12 @@
 		display: flex;
 		gap: 0.75rem;
 		align-items: flex-start;
+	}
+
+	.cs-header-actions {
+		display: flex;
+		gap: 0.5rem;
+		flex-shrink: 0;
 	}
 
 	.cs-header-icon {
@@ -351,11 +426,6 @@
 		white-space: nowrap;
 	}
 
-	.cs-btn-sm {
-		padding: 0.25rem 0.625rem;
-		font-size: 0.75rem;
-	}
-
 	.cs-btn:disabled {
 		opacity: 0.5;
 		cursor: not-allowed;
@@ -368,15 +438,6 @@
 
 	.cs-btn-danger:hover:not(:disabled) {
 		background-color: color-mix(in srgb, var(--error-text-color) 20%, transparent);
-	}
-
-	.cs-btn-primary {
-		background-color: var(--sidebar-text-active-border);
-		color: white;
-	}
-
-	.cs-btn-primary:hover:not(:disabled) {
-		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 85%, black);
 	}
 
 	.cs-btn-secondary {
@@ -393,19 +454,6 @@
 		margin-bottom: 1.75rem;
 	}
 
-	.cs-section-head {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.5rem;
-		margin-bottom: 0.75rem;
-	}
-
-	.cs-section-actions {
-		display: flex;
-		gap: 0.375rem;
-	}
-
 	.cs-section-title {
 		display: flex;
 		align-items: center;
@@ -415,7 +463,95 @@
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: var(--surface-muted);
+		margin: 0 0 0.75rem;
+	}
+
+	.cs-source-card {
+		border: 1px solid var(--surface-border);
+		border-radius: 0.875rem;
+		background-color: var(--surface-bg);
+		padding: 1rem 1.125rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.875rem;
+	}
+
+	.cs-source-grid {
+		display: grid;
+		grid-template-columns: repeat(2, 1fr);
+		gap: 0.625rem 1rem;
 		margin: 0;
+	}
+
+	.cs-source-grid dt {
+		font-size: 0.6875rem;
+		color: var(--surface-muted);
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		margin: 0;
+	}
+
+	.cs-source-grid dd {
+		font-size: 0.8125rem;
+		color: var(--center-channel-color);
+		margin: 0.125rem 0 0;
+	}
+
+	.cs-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		color: var(--sidebar-text-active-border);
+		text-decoration: none;
+	}
+
+	.cs-link:hover {
+		text-decoration: underline;
+	}
+
+	.cs-muted {
+		color: var(--surface-muted);
+	}
+
+	.cs-toggle {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.625rem;
+		padding: 0.625rem 0.75rem;
+		border-radius: 0.5rem;
+		background-color: color-mix(in srgb, var(--surface-border) 20%, transparent);
+		cursor: pointer;
+	}
+
+	.cs-toggle input {
+		margin-top: 0.1875rem;
+	}
+
+	.cs-toggle-label {
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+	}
+
+	.cs-toggle-title {
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--center-channel-color);
+	}
+
+	.cs-toggle-desc {
+		font-size: 0.75rem;
+		color: var(--surface-muted);
+		line-height: 1.45;
+	}
+
+	.cs-toggle-desc code,
+	.cs-toggle-title code {
+		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+		font-size: 0.6875rem;
+		padding: 0.0625rem 0.25rem;
+		border-radius: 0.25rem;
+		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
 	}
 
 	.cs-resource-list {
@@ -435,7 +571,7 @@
 		background-color: var(--surface-bg);
 		text-decoration: none;
 		color: var(--center-channel-color);
-		transition: border-color 0.15s, box-shadow 0.15s;
+		transition: border-color 0.15s;
 		box-shadow: 0 1px 3px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.02);
 	}
 
@@ -472,6 +608,9 @@
 	}
 
 	.cs-resource-status {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
 		font-size: 0.75rem;
 		font-weight: 500;
 		text-transform: capitalize;
@@ -485,25 +624,6 @@
 		border: 1px dashed var(--surface-border);
 		border-radius: 0.75rem;
 		margin: 0;
-	}
-
-	.cs-textarea {
-		width: 100%;
-		padding: 0.75rem 0.875rem;
-		border-radius: 0.5rem;
-		border: 1px solid var(--surface-border);
-		background-color: var(--center-channel-bg);
-		color: var(--center-channel-color);
-		font-size: 0.8125rem;
-		line-height: 1.5;
-		min-height: 18rem;
-		resize: vertical;
-	}
-
-	.cs-textarea:focus {
-		outline: none;
-		border-color: var(--sidebar-text-active-border);
-		box-shadow: 0 0 0 2px color-mix(in srgb, var(--sidebar-text-active-border) 15%, transparent);
 	}
 
 	.cs-yaml-view {
@@ -521,7 +641,7 @@
 	}
 
 	.cs-mono {
-		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 	}
 
 	.cs-hint {

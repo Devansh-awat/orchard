@@ -21,13 +21,19 @@ function clerkId(req: any) {
 export class ComposeStacksController {
   constructor(private readonly composeStacks: ComposeStacksService) {}
 
-  @Post('projects/:projectId/compose-stacks')
-  async create(
+  @Post('projects/:projectId/compose-stacks/from-github')
+  async createFromGithub(
     @Param('projectId') projectId: string,
-    @Body() body: { name: string; composeYaml: string },
+    @Body() body: {
+      name: string;
+      repoUrl: string;
+      branch: string;
+      composePath?: string;
+      autoDeployEnabled?: boolean;
+    },
     @Request() req: any,
   ) {
-    return this.composeStacks.createComposeStack(projectId, body, clerkId(req), userBag(req));
+    return this.composeStacks.createFromGithub(projectId, body, clerkId(req), userBag(req));
   }
 
   @Get('projects/:projectId/compose-stacks')
@@ -40,13 +46,18 @@ export class ComposeStacksController {
     return this.composeStacks.getComposeStack(id, clerkId(req), userBag(req));
   }
 
-  @Put('compose-stacks/:id')
-  async update(
+  @Post('compose-stacks/:id/redeploy')
+  async redeploy(@Param('id') id: string, @Request() req: any) {
+    return this.composeStacks.redeployFromGithub(id, clerkId(req), userBag(req));
+  }
+
+  @Put('compose-stacks/:id/auto-deploy')
+  async setAutoDeploy(
     @Param('id') id: string,
-    @Body() body: { composeYaml: string },
+    @Body() body: { enabled: boolean },
     @Request() req: any,
   ) {
-    return this.composeStacks.updateComposeStack(id, body, clerkId(req), userBag(req));
+    return this.composeStacks.setAutoDeploy(id, Boolean(body?.enabled), clerkId(req), userBag(req));
   }
 
   @Delete('compose-stacks/:id')

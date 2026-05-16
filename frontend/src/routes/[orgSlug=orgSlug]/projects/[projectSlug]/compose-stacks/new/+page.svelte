@@ -2,20 +2,28 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { apiFetch, toasts, refreshTree, fetchProjectContext, buildBasePath, type ProjectContext } from '$lib/stores';
-	import { Loader2, FileText, Upload } from 'lucide-svelte';
+	import {
+		apiFetch,
+		toasts,
+		refreshTree,
+		fetchProjectContext,
+		buildBasePath,
+		type ProjectContext,
+	} from '$lib/stores';
+	import { Loader2, FileText, Github } from 'lucide-svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
 
-	const EXAMPLE_COMPOSE = `services:
-  web:
-    image: nginx:1.27
-    ports:
-      - "8080:80"
-  cache:
-    image: redis:7
-    ports:
-      - "6379"
-`;
+	interface Repository {
+		id: number;
+		full_name: string;
+		clone_url: string;
+		default_branch: string;
+		private: boolean;
+	}
+	interface Branch {
+		name: string;
+		protected: boolean;
+	}
 
 	let project = $state<ProjectContext | null>(null);
 	let loading = $state(true);
@@ -23,9 +31,24 @@
 	let error = $state<string | null>(null);
 	let formError = $state<string | null>(null);
 
+	let githubLinked = $state(false);
+	let hasGitHubApp = $state(false);
+	let githubAppInstallUrl = $state<string | null>(null);
+	let repositories = $state<Repository[]>([]);
+	let branches = $state<Branch[]>([]);
+	let loadingRepos = $state(false);
+	let loadingBranches = $state(false);
+
+	let selectedRepo = $state<Repository | null>(null);
+	let selectedBranch = $state<Branch | null>(null);
+	let repoSearch = $state('');
+	let branchSearch = $state('');
+	let showRepoDropdown = $state(false);
+	let showBranchDropdown = $state(false);
+
 	let name = $state('');
-	let composeYaml = $state(EXAMPLE_COMPOSE);
-	let fileInput = $state<HTMLInputElement | null>(null);
+	let composePath = $state('docker-compose.yml');
+	let autoDeployEnabled = $state(true);
 
 	const projectSlug = $derived($page.params.projectSlug ?? '');
 	const orgSlug = $derived($page.params.orgSlug ?? '');
@@ -44,20 +67,105 @@
 		}
 	}
 
+	async function checkGitHubStatus() {
+		try {
+			const response = await apiFetch('/apiv1/github/status');
+			if (response.ok) {
+				const status = await response.json();
+				githubLinked = status.linked;
+				hasGitHubApp = (status.installations?.length ?? 0) > 0;
+				if (status.linked) fetchRepositories();
+			}
+			const installRes = await apiFetch('/apiv1/github/app/install');
+			if (installRes.ok) {
+				const data = await installRes.json();
+				githubAppInstallUrl = data.url;
+			}
+		} catch (e) {
+			console.error('Failed to check GitHub status:', e);
+		}
+	}
+
+	async function fetchRepositories() {
+		loadingRepos = true;
+		try {
+			const response = await apiFetch('/apiv1/github/repositories');
+			if (response.ok) {
+				const data = await response.json();
+				repositories = Array.isArray(data) ? data : (data.repositories ?? []);
+			}
+		} catch (e) {
+			console.error('Failed to fetch repositories:', e);
+		} finally {
+			loadingRepos = false;
+		}
+	}
+
+	async function fetchBranches(repo: Repository) {
+		loadingBranches = true;
+		branches = [];
+		selectedBranch = null;
+		branchSearch = '';
+		try {
+			const [owner, repoName] = repo.full_name.split('/');
+			const response = await apiFetch(`/apiv1/github/repositories/${owner}/${repoName}/branches`);
+			if (response.ok) {
+				branches = await response.json();
+				const defaultBranch = branches.find((b) => b.name === repo.default_branch);
+				if (defaultBranch) {
+					selectedBranch = defaultBranch;
+					branchSearch = defaultBranch.name;
+				}
+			}
+		} catch (e) {
+			console.error('Failed to fetch branches:', e);
+		} finally {
+			loadingBranches = false;
+		}
+	}
+
+	function selectRepo(repo: Repository) {
+		selectedRepo = repo;
+		repoSearch = repo.full_name;
+		showRepoDropdown = false;
+		if (!name) name = repo.full_name.split('/')[1] ?? '';
+		fetchBranches(repo);
+	}
+
+	function clearRepoSelection() {
+		selectedRepo = null;
+		repoSearch = '';
+		branches = [];
+		selectedBranch = null;
+	}
+
+	function selectBranch(b: Branch) {
+		selectedBranch = b;
+		branchSearch = b.name;
+		showBranchDropdown = false;
+	}
+
+	function clearBranchSelection() {
+		selectedBranch = null;
+		branchSearch = '';
+	}
+
+	function handleClickOutside(event: MouseEvent, type: 'repo' | 'branch') {
+		const target = event.target as HTMLElement;
+		if (type === 'repo' && !target.closest('[data-repo-dropdown]')) showRepoDropdown = false;
+		if (type === 'branch' && !target.closest('[data-branch-dropdown]')) showBranchDropdown = false;
+	}
+
 	onMount(() => {
 		fetchProjectData();
-	});
-
-	function handleFile(e: Event) {
-		const input = e.target as HTMLInputElement;
-		const file = input.files?.[0];
-		if (!file) return;
-		const reader = new FileReader();
-		reader.onload = () => {
-			composeYaml = String(reader.result || '');
+		checkGitHubStatus();
+		const onClick = (e: MouseEvent) => {
+			handleClickOutside(e, 'repo');
+			handleClickOutside(e, 'branch');
 		};
-		reader.readAsText(file);
-	}
+		document.addEventListener('click', onClick);
+		return () => document.removeEventListener('click', onClick);
+	});
 
 	async function handleSubmit() {
 		formError = null;
@@ -69,17 +177,28 @@
 			formError = 'Stack name is required';
 			return;
 		}
-		if (!composeYaml.trim()) {
-			formError = 'Compose file is required';
+		if (!selectedRepo) {
+			formError = 'Pick a repository';
+			return;
+		}
+		const branch = selectedBranch?.name || branchSearch.trim();
+		if (!branch) {
+			formError = 'Pick a branch';
 			return;
 		}
 
 		submitting = true;
 		try {
-			const response = await apiFetch(`/apiv1/projects/${project.id}/compose-stacks`, {
+			const response = await apiFetch(`/apiv1/projects/${project.id}/compose-stacks/from-github`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ name: name.trim(), composeYaml }),
+				body: JSON.stringify({
+					name: name.trim(),
+					repoUrl: selectedRepo.clone_url,
+					branch,
+					composePath: composePath.trim() || 'docker-compose.yml',
+					autoDeployEnabled,
+				}),
 			});
 
 			if (!response.ok) {
@@ -90,7 +209,7 @@
 			const stack = await response.json();
 			toasts.add({
 				title: 'Compose stack created',
-				description: 'Services are being deployed',
+				description: 'Services are deploying — builds run in the background',
 				color: 'success',
 			});
 			refreshTree();
@@ -113,13 +232,17 @@
 		</div>
 	{:else if project}
 		<div class="cs-hero">
-			<h1 class="cs-page-title">New Compose Stack</h1>
-			<p class="cs-page-subtitle">Deploy multiple services from a single docker-compose.yml file.</p>
+			<h1 class="cs-page-title">Deploy Compose from GitHub</h1>
+			<p class="cs-page-subtitle">
+				Point Orchard at a <code>docker-compose.yml</code> in a repo. Services with
+				<code>build:</code> are built into images automatically; services with <code>image:</code>
+				are pulled as-is.
+			</p>
 		</div>
 
 		<div class="cs-main-card">
 			<div class="cs-source-row">
-				<span class="cs-source-label"><FileText class="h-3.5 w-3.5" /> Compose stack</span>
+				<span class="cs-source-label"><Github class="h-3.5 w-3.5" /> GitHub source</span>
 			</div>
 
 			<div class="cs-owner-row">
@@ -132,33 +255,125 @@
 			</div>
 
 			<div class="cs-card-body">
-				<div class="cs-field">
-					<div class="cs-label-row">
-						<label class="cs-label" for="compose-yaml">docker-compose.yml</label>
-						<button type="button" class="cs-btn cs-btn-secondary cs-btn-sm" onclick={() => fileInput?.click()}>
-							<Upload class="h-3.5 w-3.5" /> Upload file
-						</button>
-						<input
-							type="file"
-							accept=".yml,.yaml"
-							bind:this={fileInput}
-							style="display: none;"
-							onchange={handleFile}
-						/>
+				{#if !githubLinked}
+					<div class="cs-warning">
+						<p class="cs-warning-title">Sign in with GitHub to continue</p>
+						<p class="cs-warning-desc">Required to read your repos and clone the compose file.</p>
+						<div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
+							<a href="/user/settings" class="cs-btn cs-btn-primary">Sign in with GitHub</a>
+							{#if githubAppInstallUrl}
+								<a href={githubAppInstallUrl} target="_blank" class="cs-btn cs-btn-secondary">
+									Install GitHub App
+								</a>
+							{/if}
+						</div>
 					</div>
-					<textarea
-						id="compose-yaml"
-						bind:value={composeYaml}
-						class="cs-textarea cs-mono"
-						spellcheck="false"
-						rows="20"
-					></textarea>
-					<p class="cs-hint">
-						Supported: <code>image</code>, <code>ports</code>, <code>environment</code>, <code>volumes</code> (named),
-						<code>command</code>, <code>depends_on</code>. <code>build:</code> is not supported — use a pre-built image
-						or the GitHub deploy flow.
-					</p>
-				</div>
+				{:else}
+					<div class="cs-field" data-repo-dropdown>
+						<label class="cs-label" for="cs-repo-input">Repository</label>
+						<div class="cs-relative">
+							<input
+								id="cs-repo-input"
+								type="text"
+								bind:value={repoSearch}
+								oninput={() => {
+									showRepoDropdown = repoSearch.length > 0 && repositories.length > 0;
+									if (selectedRepo) selectedRepo = null;
+								}}
+								onfocus={() => {
+									if (!selectedRepo) showRepoDropdown = repositories.length > 0;
+								}}
+								placeholder="owner/repo"
+								class="cs-input"
+								readonly={selectedRepo !== null}
+								style={selectedRepo ? 'opacity: 0.7;' : ''}
+							/>
+							{#if loadingRepos || loadingBranches}
+								<div class="cs-input-suffix"><Loader2 class="h-4 w-4 animate-spin" /></div>
+							{:else if selectedRepo}
+								<button onclick={clearRepoSelection} class="cs-input-suffix cs-input-clear" type="button">
+									✕
+								</button>
+							{/if}
+						</div>
+						{#if showRepoDropdown && repoSearch && !loadingRepos && !selectedRepo}
+							<div class="cs-dropdown">
+								{#each repositories.filter((r) => r.full_name.toLowerCase().includes(repoSearch.toLowerCase())) as repo}
+									<button
+										type="button"
+										onclick={() => selectRepo(repo)}
+										class="cs-dropdown-item"
+									>
+										<Github class="h-4 w-4" />
+										<span class="cs-truncate">{repo.full_name}</span>
+										{#if repo.private}<span class="cs-badge">Private</span>{/if}
+									</button>
+								{/each}
+							</div>
+						{/if}
+					</div>
+
+					{#if selectedRepo}
+						<div class="cs-field" data-branch-dropdown>
+							<label class="cs-label" for="cs-branch-input">Branch</label>
+							<div class="cs-relative">
+								<input
+									id="cs-branch-input"
+									type="text"
+									bind:value={branchSearch}
+									oninput={() => {
+										showBranchDropdown = branchSearch.length > 0 && branches.length > 0;
+										if (selectedBranch) selectedBranch = null;
+									}}
+									onfocus={() => {
+										if (!selectedBranch) showBranchDropdown = branches.length > 0;
+									}}
+									placeholder="main"
+									class="cs-input"
+									disabled={loadingBranches}
+									readonly={selectedBranch !== null}
+									style={selectedBranch ? 'opacity: 0.7;' : ''}
+								/>
+								{#if selectedBranch}
+									<button onclick={clearBranchSelection} class="cs-input-suffix cs-input-clear" type="button">
+										✕
+									</button>
+								{/if}
+							</div>
+							{#if showBranchDropdown && branchSearch && !loadingBranches && !selectedBranch}
+								<div class="cs-dropdown">
+									{#each branches.filter((b) => b.name.toLowerCase().includes(branchSearch.toLowerCase())) as b}
+										<button type="button" onclick={() => selectBranch(b)} class="cs-dropdown-item">
+											<span class="cs-truncate">{b.name}</span>
+										</button>
+									{/each}
+								</div>
+							{/if}
+						</div>
+					{/if}
+
+					<div class="cs-field">
+						<label class="cs-label" for="cs-compose-path">Path to docker-compose.yml</label>
+						<input
+							id="cs-compose-path"
+							type="text"
+							bind:value={composePath}
+							placeholder="docker-compose.yml"
+							class="cs-input cs-mono"
+						/>
+						<p class="cs-hint">Relative to the repo root. Default: <code>docker-compose.yml</code>.</p>
+					</div>
+
+					<label class="cs-toggle">
+						<input type="checkbox" bind:checked={autoDeployEnabled} />
+						<span class="cs-toggle-label">
+							<span class="cs-toggle-title">Auto-deploy on push</span>
+							<span class="cs-toggle-desc">
+								Rebuild every <code>build:</code> service when a commit lands on this branch.
+							</span>
+						</span>
+					</label>
+				{/if}
 
 				{#if formError}
 					<div class="cs-warning">
@@ -174,12 +389,12 @@
 						type="button"
 						class="cs-btn cs-btn-primary"
 						onclick={handleSubmit}
-						disabled={submitting}
+						disabled={submitting || !githubLinked || !selectedRepo}
 					>
 						{#if submitting}
 							<Loader2 class="h-3.5 w-3.5 animate-spin" /> Deploying…
 						{:else}
-							Deploy stack
+							<FileText class="h-3.5 w-3.5" /> Deploy stack
 						{/if}
 					</button>
 				</div>
@@ -214,7 +429,18 @@
 	.cs-page-subtitle {
 		font-size: 0.8125rem;
 		color: var(--surface-muted);
-		margin: 0.25rem 0 0;
+		margin: 0.5rem 0 0;
+		line-height: 1.5;
+	}
+
+	.cs-page-subtitle code,
+	.cs-hint code,
+	.cs-toggle-desc code {
+		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+		font-size: 0.6875rem;
+		padding: 0.0625rem 0.25rem;
+		border-radius: 0.25rem;
+		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
 	}
 
 	.cs-main-card {
@@ -270,10 +496,10 @@
 		font-size: 0.9375rem;
 		font-weight: 600;
 		letter-spacing: -0.01em;
-		transition: border-color 0.15s;
 	}
 
-	.cs-name-input:focus {
+	.cs-name-input:focus,
+	.cs-input:focus {
 		outline: none;
 		border-color: var(--sidebar-text-active-border);
 		box-shadow: 0 0 0 2px color-mix(in srgb, var(--sidebar-text-active-border) 15%, transparent);
@@ -290,12 +516,7 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.375rem;
-	}
-
-	.cs-label-row {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
+		position: relative;
 	}
 
 	.cs-label {
@@ -304,43 +525,127 @@
 		color: var(--center-channel-color);
 	}
 
-	.cs-textarea {
+	.cs-input {
 		width: 100%;
-		padding: 0.625rem 0.875rem;
+		padding: 0.4375rem 0.75rem;
 		border-radius: 0.5rem;
 		border: 1px solid var(--surface-border);
 		background-color: var(--center-channel-bg);
 		color: var(--center-channel-color);
 		font-size: 0.8125rem;
-		line-height: 1.5;
-		min-height: 18rem;
-		resize: vertical;
 	}
 
 	.cs-mono {
-		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
+		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
 	}
 
-	.cs-textarea:focus {
-		outline: none;
-		border-color: var(--sidebar-text-active-border);
-		box-shadow: 0 0 0 2px color-mix(in srgb, var(--sidebar-text-active-border) 15%, transparent);
+	.cs-relative {
+		position: relative;
+	}
+
+	.cs-input-suffix {
+		position: absolute;
+		right: 0.5rem;
+		top: 50%;
+		transform: translateY(-50%);
+		display: flex;
+		align-items: center;
+		color: var(--surface-muted);
+	}
+
+	.cs-input-clear {
+		background: none;
+		border: none;
+		cursor: pointer;
+		font-size: 0.875rem;
+	}
+
+	.cs-dropdown {
+		position: absolute;
+		top: 100%;
+		left: 0;
+		right: 0;
+		margin-top: 0.25rem;
+		max-height: 16rem;
+		overflow-y: auto;
+		background-color: var(--center-channel-bg);
+		border: 1px solid var(--surface-border);
+		border-radius: 0.5rem;
+		box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+		z-index: 10;
+		display: flex;
+		flex-direction: column;
+	}
+
+	.cs-dropdown-item {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem 0.75rem;
+		background: none;
+		border: none;
+		color: var(--center-channel-color);
+		text-align: left;
+		cursor: pointer;
+		font-size: 0.8125rem;
+	}
+
+	.cs-dropdown-item:hover {
+		background-color: color-mix(in srgb, var(--surface-border) 35%, transparent);
+	}
+
+	.cs-truncate {
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		flex: 1;
+	}
+
+	.cs-badge {
+		font-size: 0.625rem;
+		padding: 0.0625rem 0.375rem;
+		border-radius: 9999px;
+		background-color: color-mix(in srgb, var(--surface-border) 60%, transparent);
+		color: var(--surface-muted);
 	}
 
 	.cs-hint {
 		font-size: 0.75rem;
 		color: var(--surface-muted);
 		margin: 0;
-		line-height: 1.5;
 	}
 
-	.cs-hint code {
-		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace;
-		padding: 0.0625rem 0.25rem;
-		border-radius: 0.25rem;
-		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
+	.cs-toggle {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.625rem;
+		padding: 0.75rem 0.875rem;
+		border-radius: 0.625rem;
+		border: 1px solid var(--surface-border);
+		background-color: color-mix(in srgb, var(--surface-border) 12%, transparent);
+		cursor: pointer;
+	}
+
+	.cs-toggle input {
+		margin-top: 0.1875rem;
+	}
+
+	.cs-toggle-label {
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+	}
+
+	.cs-toggle-title {
+		font-size: 0.8125rem;
+		font-weight: 500;
 		color: var(--center-channel-color);
-		font-size: 0.6875rem;
+	}
+
+	.cs-toggle-desc {
+		font-size: 0.75rem;
+		color: var(--surface-muted);
+		line-height: 1.45;
 	}
 
 	.cs-actions {
@@ -359,12 +664,8 @@
 		font-weight: 500;
 		border: 1px solid transparent;
 		cursor: pointer;
+		text-decoration: none;
 		transition: background-color 0.15s, border-color 0.15s, opacity 0.15s;
-	}
-
-	.cs-btn-sm {
-		padding: 0.25rem 0.5rem;
-		font-size: 0.6875rem;
 	}
 
 	.cs-btn:disabled {

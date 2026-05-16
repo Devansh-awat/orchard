@@ -57,8 +57,8 @@
 		},
 		{
 			id: 'compose-stack',
-			label: 'Docker Compose',
-			description: 'Deploy a stack from a docker-compose.yml',
+			label: 'Compose from GitHub',
+			description: 'Deploy a docker-compose.yml from a repo (auto-builds services)',
 			icon: FileText,
 			color: '#0db7ed',
 		},

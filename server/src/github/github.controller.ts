@@ -91,17 +91,21 @@ export class GitHubController {
 
   @Post('link')
   async linkAccount(@Req() req: any, @Body('code') code: string) {
-    const hackClubId = req.user.sub;
+    const hackClubId = req.user.hackClubId || req.user.sub;
 
     if (!code) {
       throw new HttpException('Code is required', HttpStatus.BAD_REQUEST);
     }
 
-    const user = await this.usersService.findOrCreateByHackClubId({
-      id: hackClubId,
+    const user = await this.usersService.findOrCreateByClerkId(hackClubId, {
       email: req.user.email,
-      name: req.user.name,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
     });
+
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.UNAUTHORIZED);
+    }
 
     await this.githubService.linkGitHubAccount(user.id, code);
 
@@ -110,13 +114,17 @@ export class GitHubController {
 
   @Delete('unlink')
   async unlinkAccount(@Req() req: any) {
-    const hackClubId = req.user.sub;
+    const hackClubId = req.user.hackClubId || req.user.sub;
 
-    const user = await this.usersService.findOrCreateByHackClubId({
-      id: hackClubId,
+    const user = await this.usersService.findOrCreateByClerkId(hackClubId, {
       email: req.user.email,
-      name: req.user.name,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
     });
+
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.UNAUTHORIZED);
+    }
 
     await this.githubService.unlinkGitHubAccount(user.id);
 
@@ -125,12 +133,16 @@ export class GitHubController {
 
   @Get('status')
   async getStatus(@Req() req: any) {
-    const hackClubId = req.user.sub;
-    const user = await this.usersService.findOrCreateByHackClubId({
-      id: hackClubId,
+    const hackClubId = req.user.hackClubId || req.user.sub;
+    const user = await this.usersService.findOrCreateByClerkId(hackClubId, {
       email: req.user.email,
-      name: req.user.name,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
     });
+
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.UNAUTHORIZED);
+    }
 
     const installations = await this.githubService.getUserInstallations(user.id);
 
@@ -149,12 +161,16 @@ export class GitHubController {
 
   @Get('repositories')
   async getRepositories(@Req() req: any, @Query('all') all?: string) {
-    const hackClubId = req.user.sub;
-    const user = await this.usersService.findOrCreateByHackClubId({
-      id: hackClubId,
+    const hackClubId = req.user.hackClubId || req.user.sub;
+    const user = await this.usersService.findOrCreateByClerkId(hackClubId, {
       email: req.user.email,
-      name: req.user.name,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
     });
+
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.UNAUTHORIZED);
+    }
 
     // We require a linked GitHub account so we can verify per-repo access.
     if (!user.githubAccessToken) {
@@ -189,12 +205,16 @@ export class GitHubController {
     @Param('owner') owner: string,
     @Param('repo') repo: string
   ): Promise<GitHubBranch[]> {
-    const hackClubId = req.user.sub;
-    const user = await this.usersService.findOrCreateByHackClubId({
-      id: hackClubId,
+    const hackClubId = req.user.hackClubId || req.user.sub;
+    const user = await this.usersService.findOrCreateByClerkId(hackClubId, {
       email: req.user.email,
-      name: req.user.name,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
     });
+
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.UNAUTHORIZED);
+    }
 
     if (!user.githubAccessToken) {
       throw new HttpException('Connect your GitHub account to deploy from repositories. We use it to verify your access.', HttpStatus.BAD_REQUEST);
@@ -218,12 +238,16 @@ export class GitHubController {
     @Param('repo') repo: string,
     @Query('branch') branch?: string
   ): Promise<string[]> {
-    const hackClubId = req.user.sub;
-    const user = await this.usersService.findOrCreateByHackClubId({
-      id: hackClubId,
+    const hackClubId = req.user.hackClubId || req.user.sub;
+    const user = await this.usersService.findOrCreateByClerkId(hackClubId, {
       email: req.user.email,
-      name: req.user.name,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
     });
+
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.UNAUTHORIZED);
+    }
 
     if (!user.githubAccessToken) {
       throw new HttpException('Connect your GitHub account to deploy from repositories. We use it to verify your access.', HttpStatus.BAD_REQUEST);
@@ -248,12 +272,16 @@ export class GitHubController {
     @Query('path') path?: string,
     @Query('branch') branch?: string
   ): Promise<GitHubContent[]> {
-    const hackClubId = req.user.sub;
-    const user = await this.usersService.findOrCreateByHackClubId({
-      id: hackClubId,
+    const hackClubId = req.user.hackClubId || req.user.sub;
+    const user = await this.usersService.findOrCreateByClerkId(hackClubId, {
       email: req.user.email,
-      name: req.user.name,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
     });
+
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.UNAUTHORIZED);
+    }
 
     if (!user.githubAccessToken) {
       throw new HttpException('Connect your GitHub account to deploy from repositories. We use it to verify your access.', HttpStatus.BAD_REQUEST);
@@ -278,12 +306,16 @@ export class GitHubController {
     @Query('dockerfilePath') dockerfilePath: string,
     @Query('branch') branch?: string
   ): Promise<string[]> {
-    const hackClubId = req.user.sub;
-    const user = await this.usersService.findOrCreateByHackClubId({
-      id: hackClubId,
+    const hackClubId = req.user.hackClubId || req.user.sub;
+    const user = await this.usersService.findOrCreateByClerkId(hackClubId, {
       email: req.user.email,
-      name: req.user.name,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
     });
+
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.UNAUTHORIZED);
+    }
 
     if (!dockerfilePath) {
       throw new HttpException('Dockerfile path is required', HttpStatus.BAD_REQUEST);
@@ -312,12 +344,16 @@ export class GitHubController {
     @Query('dockerfilePath') dockerfilePath: string,
     @Query('branch') branch?: string
   ): Promise<{ exposedPorts: number[]; envVars: { key: string; value: string }[]; stages: string[] }> {
-    const hackClubId = req.user.sub;
-    const user = await this.usersService.findOrCreateByHackClubId({
-      id: hackClubId,
+    const hackClubId = req.user.hackClubId || req.user.sub;
+    const user = await this.usersService.findOrCreateByClerkId(hackClubId, {
       email: req.user.email,
-      name: req.user.name,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
     });
+
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.UNAUTHORIZED);
+    }
 
     if (!dockerfilePath) {
       throw new HttpException('Dockerfile path is required', HttpStatus.BAD_REQUEST);
@@ -496,12 +532,16 @@ export class GitHubController {
 
   @Get('app/installations')
   async getUserInstallations(@Req() req: any) {
-    const hackClubId = req.user.sub;
-    const user = await this.usersService.findOrCreateByHackClubId({
-      id: hackClubId,
+    const hackClubId = req.user.hackClubId || req.user.sub;
+    const user = await this.usersService.findOrCreateByClerkId(hackClubId, {
       email: req.user.email,
-      name: req.user.name,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
     });
+
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.UNAUTHORIZED);
+    }
 
     const installations = await this.githubService.getUserInstallations(user.id);
 
@@ -515,12 +555,16 @@ export class GitHubController {
 
   @Get('app/repositories')
   async getAppRepositories(@Req() req: any) {
-    const hackClubId = req.user.sub;
-    const user = await this.usersService.findOrCreateByHackClubId({
-      id: hackClubId,
+    const hackClubId = req.user.hackClubId || req.user.sub;
+    const user = await this.usersService.findOrCreateByClerkId(hackClubId, {
       email: req.user.email,
-      name: req.user.name,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
     });
+
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.UNAUTHORIZED);
+    }
 
     const installations = await this.githubService.getUserInstallations(user.id);
 

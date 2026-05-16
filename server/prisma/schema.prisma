@@ -847,6 +847,21 @@ model ComposeStack {
   composeYaml  String   @map("compose_yaml") @db.Text
   status       String   @default("deploying") @db.VarChar(50)
   lastError    String?  @map("last_error") @db.Text
+
+  // GitHub source — when set, the compose file is fetched from GitHub on
+  // every (re)deploy and `build:` services are built into Harbor images.
+  githubRepo            String?  @map("github_repo") @db.VarChar(500)
+  githubBranch          String?  @map("github_branch") @db.VarChar(255)
+  composePath           String?  @map("compose_path") @db.VarChar(500)
+  githubInstallationId  BigInt?  @map("github_installation_id")
+  autoDeployEnabled     Boolean  @default(false) @map("auto_deploy_enabled")
+  autoDeployBranch      String?  @map("auto_deploy_branch") @db.VarChar(255)
+  lastCommitSha         String?  @map("last_commit_sha") @db.VarChar(64)
+
+  // Build pipeline state (mirrors Deployment build columns at the stack level).
+  buildStatus           String   @default("none") @map("build_status") @db.VarChar(50)
+  buildLogs             String?  @map("build_logs") @db.Text
+
   createdBy    String?  @map("created_by") @db.Uuid
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
@@ -857,6 +872,7 @@ model ComposeStack {
 
   @@unique([projectId, name])
   @@index([projectId], map: "idx_compose_stacks_project")
+  @@index([githubInstallationId, githubRepo], map: "idx_compose_stacks_github")
   @@map("compose_stacks")
 }
 

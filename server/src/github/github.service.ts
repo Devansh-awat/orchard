@@ -1283,12 +1283,88 @@ export class GitHubService {
     return { repos: allRepos, installations: installationData, hasInstallations: installations.length > 0, userLinked: true };
   }
 
-  // Get user's GitHub App installations
+  /**
+   * Installations the current user can see on GitHub.
+   *
+   * The DB-only lookup (rows where `userId` matches) misses installations the
+   * user has access to through *org membership* — the install was performed by
+   * another teammate, so the DB row's `userId` points at them, but GitHub
+   * still grants the current user installation access via org permissions.
+   * GitHub's `/user/installations` endpoint is the source of truth for "what
+   * can this user see"; we cross-reference it with our DB rows so callers
+   * still get our internal UUID where available.
+   */
   async getUserInstallations(userId: string) {
-    return this.prisma.gitHubAppInstallation.findMany({
-      where: { userId, suspendedAt: null },
+    const dbRows = await this.prisma.gitHubAppInstallation.findMany({
+      where: { suspendedAt: null },
       orderBy: { accountLogin: 'asc' },
     });
+
+    const userToken = await this.getValidUserToken(userId);
+    if (!userToken) {
+      // No OAuth token — fall back to rows directly owned by this user.
+      return dbRows.filter((r) => r.userId === userId);
+    }
+
+    let githubInstallations: Array<{
+      id: number;
+      account: { login: string; type: string } | null;
+      repository_selection: 'all' | 'selected';
+    }> = [];
+    try {
+      const response = await fetch(
+        'https://api.github.com/user/installations?per_page=100',
+        {
+          headers: {
+            Authorization: `Bearer ${userToken}`,
+            Accept: 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+          },
+        },
+      );
+      if (response.ok) {
+        const data = await response.json();
+        githubInstallations = data.installations ?? [];
+      } else if (response.status === 401) {
+        // Token went stale between the validity check and the call — fall back.
+        return dbRows.filter((r) => r.userId === userId);
+      }
+    } catch (e) {
+      console.warn('[GitHub] /user/installations lookup failed, falling back to DB:', e);
+      return dbRows.filter((r) => r.userId === userId);
+    }
+
+    // Merge: prefer the DB row when present (for the internal UUID + accurate
+    // timestamps), fall back to GitHub-reported metadata for installations we
+    // haven't synced yet (e.g. installed by a teammate before this user signed
+    // up). Result shape matches the Prisma `GitHubAppInstallation` model
+    // closely enough that downstream consumers (controller, frontend) don't
+    // care which source it came from.
+    const dbByInstallationId = new Map<string, (typeof dbRows)[number]>();
+    for (const row of dbRows) {
+      dbByInstallationId.set(row.installationId.toString(), row);
+    }
+
+    return githubInstallations
+      .filter((inst) => inst.account?.login)
+      .map((inst) => {
+        const dbRow = dbByInstallationId.get(String(inst.id));
+        if (dbRow) return dbRow;
+        return {
+          id: `gh-${inst.id}`,
+          installationId: BigInt(inst.id),
+          userId,
+          accountLogin: inst.account!.login,
+          accountType: inst.account!.type,
+          repositorySelection: inst.repository_selection,
+          accessToken: null,
+          tokenExpiresAt: null,
+          suspendedAt: null,
+          createdAt: new Date(),
+          updatedAt: new Date(),
+        } as unknown as (typeof dbRows)[number];
+      })
+      .sort((a, b) => a.accountLogin.localeCompare(b.accountLogin));
   }
 
   // Get GitHub App installation URL

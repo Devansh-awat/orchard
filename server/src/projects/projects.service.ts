@@ -1243,6 +1243,10 @@ export class ProjectsService {
       }[];
       cpuRequestMilli?: number | null;
       memoryRequestBytes?: number | null;
+      composeStackId?: string;
+      composeServiceName?: string;
+      autoDeployEnabled?: boolean;
+      autoDeployBranch?: string;
     },
     clerkId: string,
     userData?: {
@@ -1461,6 +1465,10 @@ export class ProjectsService {
         buildStepTimestamps: { __start: Date.now() },
         cpuRequestMilli: data.cpuRequestMilli ?? null,
         memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
+        composeStackId: data.composeStackId ?? null,
+        composeServiceName: data.composeServiceName ?? null,
+        autoDeployEnabled: data.autoDeployEnabled ?? false,
+        autoDeployBranch: data.autoDeployBranch ?? null,
       },
     });
 
