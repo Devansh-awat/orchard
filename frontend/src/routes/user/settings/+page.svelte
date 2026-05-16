@@ -2,7 +2,7 @@
 	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
 	import { user, apiFetch, toasts, pendingInvitations, organizations, type PendingInvitation } from '$lib/stores';
-	import { ArrowLeft, Github, Loader2, Unlink, Trash2, Eye, EyeOff, Check, X, Plus, Fingerprint, ChevronRight, Pencil, Mail, Building2, Monitor, Smartphone, Globe, LogOut, Camera, Lock, ExternalLink } from 'lucide-svelte';
+	import { ArrowLeft, Github, Loader2, Unlink, Trash2, Eye, EyeOff, Check, X, Plus, Fingerprint, ChevronRight, Pencil, Mail, Building2, Monitor, Smartphone, Globe, LogOut, Camera, ExternalLink } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 
 	let githubLinked = $state(false);
@@ -687,15 +687,15 @@
 
 			<div class="us-card-divider"></div>
 
-			<!-- GitHub Account -->
+			<!-- GitHub -->
 			<div class="us-card-section">
 				<div class="us-section-head">
 					<div class="us-section-icon us-section-icon--github">
 						<Github class="h-4 w-4" />
 					</div>
 					<div class="us-section-title-group">
-						<h2 class="us-section-title">GitHub Account</h2>
-						<p class="us-section-desc">Required to deploy from GitHub. We sign you in with GitHub to verify which repositories you can access — you can only deploy repos visible to your account.</p>
+						<h2 class="us-section-title">GitHub</h2>
+						<p class="us-section-desc">Connect to deploy from your repositories</p>
 					</div>
 					{#if !loading}
 						<div class="us-pill" class:us-pill--active={githubLinked}>
@@ -707,7 +707,18 @@
 
 				{#if loading}
 					<div class="us-loading"><Loader2 class="h-4 w-4 animate-spin" /></div>
-				{:else if githubLinked}
+				{:else if !githubLinked}
+					<button onclick={linkGitHub} class="us-connect-btn">
+						<div class="us-connect-icon">
+							<Github class="h-5 w-5" />
+						</div>
+						<div class="us-connect-text">
+							<span class="us-connect-label">Sign in with GitHub</span>
+							<span class="us-connect-hint">We verify your identity to confirm which repositories you can deploy. No extra scopes requested.</span>
+						</div>
+						<ChevronRight class="h-4 w-4 us-connect-arrow" />
+					</button>
+				{:else}
 					<div class="us-integration-row">
 						<div class="us-gh-badge">
 							<Github class="h-4 w-4" />
@@ -718,111 +729,69 @@
 							Disconnect
 						</button>
 					</div>
-				{:else}
-					<button onclick={linkGitHub} class="us-connect-btn">
-						<div class="us-connect-icon">
-							<Github class="h-5 w-5" />
-						</div>
-						<div class="us-connect-text">
-							<span class="us-connect-label">Sign in with GitHub</span>
-							<span class="us-connect-hint">Required to deploy. Used to check which repos you can access — no extra scopes requested.</span>
-						</div>
-						<ChevronRight class="h-4 w-4 us-connect-arrow" />
-					</button>
-				{/if}
-			</div>
 
-			<div class="us-card-divider"></div>
+					<div class="us-subsection">
+						<div class="us-subsection-head">
+							<span class="us-subsection-title">Repository access</span>
+							{#if githubInstallations.length > 0}
+								<span class="us-subsection-meta">
+									{githubInstallations.length} {githubInstallations.length === 1 ? 'account' : 'accounts'} connected
+								</span>
+							{:else}
+								<span class="us-subsection-meta">None yet</span>
+							{/if}
+						</div>
 
-			<!-- GitHub App (Repo Access) -->
-			<div class="us-card-section" class:us-card-section--locked={!loading && !githubLinked}>
-				<div class="us-section-head">
-					<div class="us-section-icon us-section-icon--github">
-						<Github class="h-4 w-4" />
-					</div>
-					<div class="us-section-title-group">
-						<h2 class="us-section-title">GitHub App</h2>
-						<p class="us-section-desc">Grant access to specific repos and orgs for deployments</p>
-					</div>
-					{#if !loading}
-						{#if !githubLinked}
-							<div class="us-pill us-pill--locked">
-								<Lock class="h-3 w-3" />
-								Locked
-							</div>
-						{:else}
-							<div class="us-pill" class:us-pill--active={githubInstallations.length > 0}>
-								<span class="us-pill-dot"></span>
-								{githubInstallations.length > 0 ? `${githubInstallations.length} installed` : 'Not installed'}
+						{#if githubInstallations.length > 0}
+							<div class="us-install-list">
+								{#each githubInstallations as inst}
+									{@const isOrg = inst.accountType === 'Organization'}
+									{@const manageUrl = isOrg
+										? `https://github.com/organizations/${inst.accountLogin}/settings/installations/${inst.installationId}`
+										: `https://github.com/settings/installations/${inst.installationId}`}
+									<a
+										href={manageUrl}
+										target="_blank"
+										rel="noopener noreferrer"
+										class="us-install-card"
+									>
+										<div class="us-install-avatar">
+											{#if isOrg}
+												<Building2 class="h-4 w-4" />
+											{:else}
+												<Github class="h-4 w-4" />
+											{/if}
+										</div>
+										<div class="us-install-info">
+											<span class="us-install-name">
+												{inst.accountLogin}
+												<span class="us-install-type">{isOrg ? 'Organization' : 'User'}</span>
+											</span>
+											<span class="us-install-meta">
+												{inst.repositorySelection === 'all' ? 'All repositories' : 'Selected repositories'}
+											</span>
+										</div>
+										<span class="us-install-action">
+											Manage on GitHub
+											<ExternalLink class="h-3 w-3" />
+										</span>
+									</a>
+								{/each}
 							</div>
 						{/if}
-					{/if}
-				</div>
 
-				{#if loading}
-					<div class="us-loading"><Loader2 class="h-4 w-4 animate-spin" /></div>
-				{:else if !githubLinked}
-					<div class="us-locked-card">
-						<div class="us-locked-icon"><Lock class="h-4 w-4" /></div>
-						<div class="us-locked-text">
-							<p class="us-locked-title">Link your GitHub account first</p>
-							<p class="us-locked-desc">
-								Orchard uses your GitHub identity to verify which repositories you can access
-								before showing or deploying them. Connect your account above to unlock the GitHub
-								App installation flow.
-							</p>
-						</div>
+						{#if githubAppInstallUrl}
+							<a
+								href={githubAppInstallUrl}
+								target="_blank"
+								class="us-add-link"
+								class:us-add-link--primary={githubInstallations.length === 0}
+							>
+								<Plus class="h-4 w-4" />
+								{githubInstallations.length > 0 ? 'Add another organization or account' : 'Connect a repository or organization'}
+							</a>
+						{/if}
 					</div>
-				{:else}
-					{#if githubInstallations.length > 0}
-						<div class="us-install-list">
-							{#each githubInstallations as inst}
-								{@const isOrg = inst.accountType === 'Organization'}
-								{@const manageUrl = isOrg
-									? `https://github.com/organizations/${inst.accountLogin}/settings/installations/${inst.installationId}`
-									: `https://github.com/settings/installations/${inst.installationId}`}
-								<a
-									href={manageUrl}
-									target="_blank"
-									rel="noopener noreferrer"
-									class="us-install-card"
-								>
-									<div class="us-install-avatar">
-										{#if isOrg}
-											<Building2 class="h-4 w-4" />
-										{:else}
-											<Github class="h-4 w-4" />
-										{/if}
-									</div>
-									<div class="us-install-info">
-										<span class="us-install-name">
-											{inst.accountLogin}
-											<span class="us-install-type">{isOrg ? 'Organization' : 'User'}</span>
-										</span>
-										<span class="us-install-meta">
-											{inst.repositorySelection === 'all' ? 'All repositories' : 'Selected repositories'}
-										</span>
-									</div>
-									<span class="us-install-action">
-										Manage
-										<ExternalLink class="h-3 w-3" />
-									</span>
-								</a>
-							{/each}
-						</div>
-					{/if}
-					{#if githubAppInstallUrl}
-						<a href={githubAppInstallUrl} target="_blank" class="us-connect-btn" style="margin-top: {githubInstallations.length > 0 ? '0.5rem' : '0'}; text-decoration: none;">
-							<div class="us-connect-icon">
-								<Plus class="h-5 w-5" />
-							</div>
-							<div class="us-connect-text">
-								<span class="us-connect-label">{githubInstallations.length > 0 ? 'Add another org/account' : 'Install GitHub App'}</span>
-								<span class="us-connect-hint">Choose exactly which repositories and organizations to grant access to</span>
-							</div>
-							<ChevronRight class="h-4 w-4 us-connect-arrow" />
-						</a>
-					{/if}
 				{/if}
 			</div>
 
@@ -1562,52 +1531,6 @@
 		background-color: color-mix(in srgb, var(--online-indicator) 10%, transparent);
 		color: var(--online-indicator);
 	}
-	.us-pill--locked {
-		background-color: color-mix(in srgb, var(--surface-muted) 14%, transparent);
-		color: var(--surface-muted);
-	}
-
-	/* ── Locked section ── */
-	.us-card-section--locked {
-		opacity: 0.92;
-	}
-
-	.us-locked-card {
-		display: flex;
-		gap: 0.75rem;
-		padding: 0.875rem 1rem;
-		border-radius: 0.625rem;
-		border: 1px dashed var(--surface-border);
-		background-color: color-mix(in srgb, var(--surface-border) 14%, transparent);
-		align-items: flex-start;
-	}
-
-	.us-locked-icon {
-		flex-shrink: 0;
-		width: 2rem;
-		height: 2rem;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		border-radius: 0.5rem;
-		background-color: color-mix(in srgb, var(--surface-muted) 18%, transparent);
-		color: var(--surface-muted);
-	}
-
-	.us-locked-title {
-		font-size: 0.8125rem;
-		font-weight: 600;
-		margin: 0 0 0.25rem;
-		color: var(--center-channel-color);
-	}
-
-	.us-locked-desc {
-		font-size: 0.75rem;
-		color: var(--surface-muted);
-		margin: 0;
-		line-height: 1.5;
-	}
-
 	/* ── Installation cards ── */
 	.us-install-list {
 		display: flex;
@@ -1690,6 +1613,63 @@
 
 	.us-install-card:hover .us-install-action {
 		color: var(--sidebar-text-active-border);
+	}
+
+	/* ── Sub-section (Repository access under GitHub) ── */
+	.us-subsection {
+		margin-top: 1rem;
+		padding-top: 1rem;
+		border-top: 1px dashed color-mix(in srgb, var(--surface-border) 70%, transparent);
+		display: flex;
+		flex-direction: column;
+		gap: 0.625rem;
+	}
+
+	.us-subsection-head {
+		display: flex;
+		align-items: baseline;
+		justify-content: space-between;
+		gap: 0.75rem;
+	}
+
+	.us-subsection-title {
+		font-size: 0.8125rem;
+		font-weight: 600;
+		color: var(--center-channel-color);
+	}
+
+	.us-subsection-meta {
+		font-size: 0.6875rem;
+		color: var(--surface-muted);
+	}
+
+	.us-add-link {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		align-self: flex-start;
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: var(--surface-muted);
+		padding: 0.375rem 0.625rem;
+		border-radius: 0.5rem;
+		text-decoration: none;
+		transition: background-color 0.15s, color 0.15s;
+	}
+
+	.us-add-link:hover {
+		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);
+		color: var(--center-channel-color);
+	}
+
+	.us-add-link--primary {
+		color: var(--center-channel-color);
+		background-color: color-mix(in srgb, var(--center-channel-color) 4%, transparent);
+		border: 1px dashed color-mix(in srgb, var(--surface-border) 80%, transparent);
+		padding: 0.625rem 0.75rem;
+		font-size: 0.8125rem;
+		width: 100%;
+		justify-content: center;
 	}
 
 	.us-pill-dot {
