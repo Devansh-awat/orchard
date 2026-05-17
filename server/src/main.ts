@@ -43,13 +43,13 @@ async function bootstrap() {
   const analytics = app.get(AnalyticsService);
   app.useGlobalFilters(new AnalyticsExceptionFilter(analytics, httpAdapter));
 
-  // Configure trust proxy so req.ip honors X-Forwarded-For ONLY when we are
-  // behind a known proxy. The env var TRUST_PROXY accepts a hop count
-  // ("1", "2"), "loopback"/"linklocal"/"uniquelocal", or a CIDR list.
-  // Default: disabled (req.ip = socket peer), preventing XFF spoofing
-  // when the app is reachable directly.
-  const trustProxy = process.env.TRUST_PROXY;
-  if (trustProxy) {
+  // Configure trust proxy so req.ip honors X-Forwarded-For. Defaults to 1
+  // (single trusted hop: Traefik in cluster, harmless in dev where no proxy
+  // sets XFF). TRUST_PROXY accepts a hop count ("1", "2"),
+  // "loopback"/"linklocal"/"uniquelocal", or a CIDR list. Set to "0" or
+  // "false" to disable when running directly exposed.
+  const trustProxy = process.env.TRUST_PROXY ?? '1';
+  if (trustProxy && trustProxy !== '0' && trustProxy.toLowerCase() !== 'false') {
     const n = Number(trustProxy);
     app.set('trust proxy', Number.isFinite(n) && n > 0 ? n : trustProxy);
   }

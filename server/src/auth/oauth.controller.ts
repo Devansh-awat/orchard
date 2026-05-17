@@ -10,6 +10,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuthorizationService } from './authorization.service';
 import { setSessionCookie, clearSessionCookie } from './cookies';
 import { Public, Auth } from './decorators';
+import { getClientIp } from './client-ip';
 
 @Public()
 @Controller('auth')
@@ -68,7 +69,7 @@ export class OAuthController {
   }
 
   private getClientIp(req: Request): string {
-    return req.ip || req.socket.remoteAddress || 'unknown';
+    return getClientIp(req);
   }
 
   @Get('callback')

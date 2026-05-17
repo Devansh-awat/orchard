@@ -9,6 +9,7 @@ import {
 import { BaseExceptionFilter, HttpServer } from '@nestjs/core';
 import { Request, Response } from 'express';
 import { AnalyticsService } from './analytics.service';
+import { getClientIp } from '../auth/client-ip';
 
 /**
  * Global filter that forwards every unhandled error to PostHog Error
@@ -38,7 +39,7 @@ export class AnalyticsExceptionFilter extends BaseExceptionFilter implements Exc
         const status =
           exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
         if (status >= 500) {
-          const distinctId = req.auth?.userId || req.user?.sub || `ip:${req.ip ?? 'unknown'}`;
+          const distinctId = req.auth?.userId || req.user?.sub || `ip:${getClientIp(req)}`;
           this.analytics.captureException(exception, distinctId, {
             http_method: req.method,
             http_path: req.route?.path ?? req.url,

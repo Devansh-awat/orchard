@@ -22,6 +22,7 @@ import { AuditService } from '../audit/audit.service';
 import { setSessionCookie } from './cookies';
 import { Prisma } from '@prisma/client';
 import { Public, Auth } from './decorators';
+import { getClientIp } from './client-ip';
 
 // DTOs
 interface RequestOtpDto {
@@ -60,11 +61,8 @@ export class PasswordlessController {
     private readonly audit: AuditService,
   ) {}
 
-  /**
-   * Get the client IP address from the request.
-   */
   private getClientIp(req: Request): string {
-    return req.ip || req.socket.remoteAddress || 'unknown';
+    return getClientIp(req);
   }
 
   // H-2: cookie attributes live in ./cookies — one source of truth across
