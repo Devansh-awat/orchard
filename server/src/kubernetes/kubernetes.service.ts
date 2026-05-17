@@ -3,7 +3,7 @@ import * as k8s from '@kubernetes/client-node';
 import { ServiceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { parseCpu, parseMemory, cpuMilliToK8s, memoryBytesToK8s } from './quantity';
-import { isTrustedImage } from './trusted-images';
+import { isTrustedImage, trustedSecurityContext, hardenedSecurityContext } from './trusted-images';
 
 // Annotations users may set on their ingresses. Everything else — in
 // particular anything under `traefik.ingress.kubernetes.io/router.*` — is
@@ -1548,11 +1548,12 @@ export class KubernetesService {
         // still chown/listen on :80 as root and would crashloop. gVisor
         // already neuters root-in-container by virtualising the kernel,
         // so this is acceptable.
-        securityContext: {
-          allowPrivilegeEscalation: false,
-          capabilities: { drop: ['ALL'] },
-          seccompProfile: { type: 'RuntimeDefault' },
-        },
+        //
+        // Trusted images keep the default container caps so their
+        // entrypoints can perform a root→service-user drop (Redis, etc).
+        securityContext: isTrustedImage(cleanImage)
+          ? trustedSecurityContext()
+          : hardenedSecurityContext(),
       };
 
       // requests == limits → Guaranteed QoS. Quota usage matches real-world usage.

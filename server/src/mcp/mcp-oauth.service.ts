@@ -369,7 +369,13 @@ export class McpOAuthService {
    */
   async validateBearerTokenWithSub(
     authHeader?: string,
-  ): Promise<{ token: string; sub: string } | null> {
+  ): Promise<{
+    token: string;
+    sub: string;
+    email?: string;
+    hackClubId?: string;
+    sessionId: string;
+  } | null> {
     if (!authHeader?.startsWith('Bearer ')) {
       console.error('[MCP OAuth] No Bearer token in header');
       return null;
@@ -414,7 +420,13 @@ export class McpOAuthService {
       }
 
       console.error(`[MCP OAuth] Token valid, sub: ${sub}, exp: ${result.payload.exp}`);
-      return { token, sub };
+      return {
+        token,
+        sub,
+        email: result.payload.email as string | undefined,
+        hackClubId: result.payload.hackClubId as string | undefined,
+        sessionId,
+      };
     } catch (err) {
       console.error(`[MCP OAuth] Token verification failed: ${err instanceof Error ? err.message : err}`);
       return null;

@@ -65,3 +65,20 @@ export const isTrustedImage = (image: string): boolean => {
   const patterns = [...TRUSTED_IMAGES, ...extra];
   return patterns.some((p) => matchPattern(p, image));
 };
+
+// Security context for trusted images. We still forbid acquiring NEW privileges
+// mid-process and apply the runtime's default seccomp profile, but we keep the
+// default container capability set instead of dropping ALL. Images like Redis
+// need CAP_SETUID/SETGID/CHOWN to do their root→service-user drop in the
+// entrypoint; dropping ALL caps causes `setresuid: Operation not permitted`.
+export const trustedSecurityContext = () => ({
+  allowPrivilegeEscalation: false,
+  seccompProfile: { type: 'RuntimeDefault' as const },
+});
+
+// Default hardened context for untrusted tenant code.
+export const hardenedSecurityContext = () => ({
+  allowPrivilegeEscalation: false,
+  capabilities: { drop: ['ALL'] },
+  seccompProfile: { type: 'RuntimeDefault' as const },
+});

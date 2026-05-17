@@ -2,6 +2,7 @@ import { Injectable, CanActivate, ExecutionContext, ForbiddenException, Unauthor
 import { Reflector } from '@nestjs/core';
 import { jwtVerify } from 'jose';
 import { Request } from 'express';
+import { timingSafeEqual } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { SessionsService } from './sessions.service';
 import {
@@ -57,6 +58,76 @@ export class SuperAdminGuard implements CanActivate {
 
     if (!token) {
       throw new UnauthorizedException('No token provided');
+    }
+
+    // MCP gateway path: the MCP server authenticates as the service and passes
+    // the consenting user's identity in X-Acting-User-* headers. The user's
+    // session is still validated for revocation. This is the only legitimate
+    // way for an MCP-originated request to reach the first-party API; M-2
+    // still rejects type='mcp' JWTs presented directly below.
+    const serviceToken = process.env.MCP_SERVICE_TOKEN;
+    if (serviceToken && this.constantTimeEquals(token, serviceToken)) {
+      const actingSub = request.headers['x-acting-user-sub'] as string | undefined;
+      const actingSessionId = request.headers['x-acting-user-session-id'] as string | undefined;
+      const actingEmail = request.headers['x-acting-user-email'] as string | undefined;
+      const actingHackClubId = request.headers['x-acting-user-hackclub-id'] as string | undefined;
+
+      if (!actingSub || !actingSessionId) {
+        throw new UnauthorizedException('MCP gateway request missing acting-user headers');
+      }
+
+      const sessionValid = await this.sessionsService.validateSession(actingSessionId);
+      if (!sessionValid) {
+        throw new UnauthorizedException('Session has been revoked');
+      }
+      this.sessionsService.touchSession(actingSessionId).catch(() => {});
+
+      // Resolve to DB user id the same way the JWT path does, so superadmin
+      // checks and downstream queries work identically whether the request
+      // came in directly or via the MCP gateway.
+      let dbUserId = actingSub;
+      if (actingHackClubId) {
+        let dbUser = await this.prisma.user.findUnique({
+          where: { hackClubId: actingHackClubId },
+          select: { id: true },
+        });
+        if (!dbUser && actingEmail) {
+          dbUser = await this.prisma.user.findUnique({
+            where: { email: actingEmail },
+            select: { id: true },
+          });
+        }
+        if (!dbUser) {
+          throw new UnauthorizedException('User not found for this session');
+        }
+        dbUserId = dbUser.id;
+      }
+
+      request['auth'] = { userId: dbUserId, viaMcpGateway: true };
+      request['user'] = {
+        sub: dbUserId,
+        email: actingEmail,
+        hackClubId: actingHackClubId,
+        sessionId: actingSessionId,
+        viaMcpGateway: true,
+      };
+      requestAuthStorage.enterWith({});
+
+      const requiresSuperadminGw = this.reflector.getAllAndOverride<boolean>(REQUIRES_SUPERADMIN_KEY, [
+        context.getHandler(),
+        context.getClass(),
+      ]);
+      if (requiresAuth && !requiresSuperadminGw) {
+        return true;
+      }
+      const sa = await this.prisma.user.findFirst({
+        where: { id: dbUserId },
+        select: { isSuperAdmin: true },
+      });
+      if (!sa || !sa.isSuperAdmin) {
+        throw new ForbiddenException('Superadmin access required');
+      }
+      return true;
     }
 
     // Try JWT first, then fall back to API token
@@ -218,6 +289,14 @@ export class SuperAdminGuard implements CanActivate {
     request['auth'] = { userId: user.id };
 
     return true;
+  }
+
+  private constantTimeEquals(a: string, b: string): boolean {
+    // Length differs → can't be equal; comparing buffers of different lengths
+    // would throw. Returning false here leaks length, which is acceptable
+    // because the service token length is fixed by deployment.
+    if (a.length !== b.length) return false;
+    return timingSafeEqual(Buffer.from(a), Buffer.from(b));
   }
 
   private extractToken(request: Request): string | undefined {

@@ -1,19 +1,19 @@
 import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
-import { OrchardClient } from './client';
+import { OrchardClient, type ActingUser } from './client';
 import { registerQueryTools } from './tools/query';
 import { registerDeploymentTools } from './tools/deployments';
 import { registerConfigurationTools } from './tools/configuration';
 import { registerResourceTools } from './tools/resources';
 import { registerDangerousTools } from './tools/dangerous';
 
-export function createOrchardMcpServer(token?: string) {
+export function createOrchardMcpServer(token?: string, actingUser?: ActingUser) {
   const server = new McpServer({
     name: 'orchard',
     version: '1.0.0',
   });
 
-  const client = token
-    ? new OrchardClient(process.env.ORCHARD_API_URL, token)
+  const client = token || actingUser
+    ? new OrchardClient(process.env.ORCHARD_API_URL, token, actingUser)
     : new OrchardClient();
 
   // Read-only queries (list, get, inspect)

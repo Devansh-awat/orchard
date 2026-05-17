@@ -58,6 +58,12 @@ export class McpTransportController {
       const { transport } = await this.transportService.createSession(
         auth.token,
         auth.sub,
+        {
+          sub: auth.sub,
+          email: auth.email,
+          hackClubId: auth.hackClubId,
+          sessionId: auth.sessionId,
+        },
       );
       await transport.handleRequest(req, res, req.body);
       // sessionId is only available after handleRequest processes the initialize message

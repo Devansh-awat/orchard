@@ -2,6 +2,7 @@ import { Injectable, OnModuleDestroy } from '@nestjs/common';
 import { randomUUID } from 'crypto';
 import { StreamableHTTPServerTransport } from '@modelcontextprotocol/sdk/server/streamableHttp.js';
 import { createOrchardMcpServer } from './server';
+import type { ActingUser } from './client';
 
 interface TransportEntry {
   transport: StreamableHTTPServerTransport;
@@ -62,12 +63,13 @@ export class McpTransportService implements OnModuleDestroy {
   async createSession(
     orchardToken: string,
     ownerSub: string,
+    actingUser: ActingUser,
   ): Promise<{ transport: StreamableHTTPServerTransport; ownerSub: string }> {
     const transport = new StreamableHTTPServerTransport({
       sessionIdGenerator: () => randomUUID(),
     });
 
-    const server = createOrchardMcpServer(orchardToken);
+    const server = createOrchardMcpServer(orchardToken, actingUser);
 
     transport.onclose = () => {
       const sid = (transport as any).sessionId;
