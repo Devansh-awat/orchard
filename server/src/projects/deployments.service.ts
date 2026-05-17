@@ -1,0 +1,4833 @@
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ConflictException,
+  ForbiddenException,
+  Inject,
+  forwardRef,
+  Logger,
+} from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { KubernetesService } from '../kubernetes/kubernetes.service';
+import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
+import { K8sNetworkService } from '../kubernetes/k8s-network.service';
+import { UsersService } from '../users/users.service';
+import { DockerService } from '../docker/docker.service';
+import { GitHubService } from '../github/github.service';
+import { QuotasService } from '../quotas/quotas.service';
+import { TailscaleService } from '../tailscale/tailscale.service';
+import { MembershipCacheService } from '../auth/membership-cache.service';
+import { AuthorizationService } from '../auth/authorization.service';
+import { AuditService } from '../audit/audit.service';
+import { ProjectAccessService } from './project-access.service';
+import { NodesService } from '../nodes/nodes.service';
+import { formatSlug } from './projects.utils';
+import { Prisma, ServiceType } from '@prisma/client';
+
+@Injectable()
+export class DeploymentsService {
+  private readonly logger = new Logger(DeploymentsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly kubernetesService: KubernetesService,
+    private readonly k8sWorkload: K8sWorkloadService,
+    private readonly k8sNetwork: K8sNetworkService,
+    private readonly usersService: UsersService,
+    private readonly dockerService: DockerService,
+    @Inject(forwardRef(() => GitHubService))
+    private readonly githubService: GitHubService,
+    @Inject(forwardRef(() => QuotasService))
+    private readonly quotasService: QuotasService,
+    private readonly tailscaleService: TailscaleService,
+    private readonly membershipCache: MembershipCacheService,
+    private readonly authz: AuthorizationService,
+    private readonly audit: AuditService,
+    private readonly access: ProjectAccessService,
+    @Inject(forwardRef(() => NodesService))
+    private readonly nodesService: NodesService,
+  ) {}
+
+  async listDeploymentsSummary(userId: string, orgId?: string) {
+    const projectFilter = await this.access.buildProjectAccessFilter(userId, orgId);
+    if (!projectFilter) return [];
+
+    const deployments = await this.prisma.deployment.findMany({
+      where: { project: projectFilter },
+      select: {
+        id: true,
+        name: true,
+        namespace: true,
+        status: true,
+        buildStatus: true,
+        image: true,
+        githubRepo: true,
+        githubBranch: true,
+        updatedAt: true,
+        replicas: true,
+        ingresses: {
+          select: {
+            id: true,
+            host: true,
+          },
+        },
+        services: {
+          select: {
+            ingresses: {
+              select: {
+                id: true,
+                host: true,
+              },
+            },
+          },
+        },
+        project: {
+          select: {
+            id: true,
+            name: true,
+            slug: true,
+            organizationId: true,
+          },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    // Reconcile DB status with live pod state so the home page doesn't show
+    // "running" while every pod is still Scheduled / not Ready. Previously this
+    // fired 2 K8s API calls per deployment (readNamespacedDeployment +
+    // listNamespacedPod via getDeploymentPods → 2*N round-trips). Now we list
+    // pods ONCE per namespace and bucket by the app.kubernetes.io/name label,
+    // collapsing it to M (unique namespaces) calls.
+    const uniqueNamespaces = Array.from(
+      new Set(deployments.map((d) => d.namespace).filter((n): n is string => !!n)),
+    );
+    const namespacePodMaps = new Map<
+      string,
+      Map<string, { pods: Array<{ status: string; restartCount: number }>; warnings: Array<{ message: string }> }>
+    >();
+    await Promise.all(
+      uniqueNamespaces.map(async (ns) => {
+        const m = await this.k8sWorkload.listPodStatusesByDeploymentInNamespace(ns);
+        namespacePodMaps.set(ns, m);
+      }),
+    );
+
+    const computedStatuses = await Promise.all(
+      deployments.map((d) => {
+        const bucket = d.namespace
+          ? namespacePodMaps.get(d.namespace)?.get(d.name) ?? { pods: [], warnings: [] }
+          : { pods: [], warnings: [] };
+        return this.computeDeploymentStatus(d, bucket);
+      }),
+    );
+
+    // Merge direct ingresses and service-linked ingresses, deduplicating by id
+    return deployments.map(({ services, ingresses, namespace, ...rest }, i) => {
+      const serviceIngresses = services.flatMap((s) => s.ingresses);
+      const allIngresses = [...ingresses, ...serviceIngresses];
+      const seen = new Set<string>();
+      const uniqueIngresses = allIngresses.filter((ing) => {
+        if (seen.has(ing.id)) return false;
+        seen.add(ing.id);
+        return true;
+      });
+      return { ...rest, status: computedStatuses[i], ingresses: uniqueIngresses };
+    });
+  }
+
+  async listRecentBuilds(userId: string, orgId?: string, limit = 5) {
+    const projectFilter = await this.access.buildProjectAccessFilter(userId, orgId);
+    if (!projectFilter) return { active: [], recent: [] };
+
+    // Currently building deployments
+    const activeBuilds = await this.prisma.deployment.findMany({
+      where: {
+        project: projectFilter,
+        buildStatus: { in: ['building', 'pending'] },
+      },
+      select: {
+        id: true,
+        name: true,
+        image: true,
+        status: true,
+        buildStatus: true,
+        buildStep: true,
+        updatedAt: true,
+        githubRepo: true,
+        githubBranch: true,
+        ingresses: { select: { host: true }, take: 1 },
+        project: { select: { name: true } },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: limit,
+    });
+
+    // Recent completed builds from image history
+    const recentBuilds = await this.prisma.imageHistory.findMany({
+      where: { deployment: { project: projectFilter } },
+      select: {
+        id: true,
+        commitSha: true,
+        branch: true,
+        triggerType: true,
+        isActive: true,
+        createdAt: true,
+        deployment: {
+          select: {
+            id: true,
+            name: true,
+            image: true,
+            buildStatus: true,
+            ingresses: { select: { host: true }, take: 1 },
+            project: { select: { name: true } },
+          },
+        },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+    });
+
+    return { active: activeBuilds, recent: recentBuilds };
+  }
+
+  async getProjectDeployments(projectId: string, clerkId: string, userData?: any) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+    const access = await this.authz.requireProjectView(projectId, user.id);
+
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+    });
+
+    if (!project) {
+      throw new NotFoundException(`Project ${projectId} not found`);
+    }
+
+    const deployments = await this.prisma.deployment.findMany({
+      where: { projectId },
+      include: {
+        services: {
+          include: {
+            ports: true,
+          },
+        },
+        envVars: true,
+        pods: true,
+        ingresses: {
+          include: {
+            service: true,
+          },
+        },
+      },
+    });
+
+    const deploymentsWithComputedStatus = await Promise.all(
+      deployments.map(async (deployment) => {
+        let pods: any = deployment.pods;
+        let warnings: any[] = [];
+
+        if (deployment.name && deployment.namespace) {
+          try {
+            const livePods = await this.k8sWorkload.getDeploymentPods(
+              deployment.name,
+              deployment.namespace
+            );
+            pods = this.formatLivePods(livePods?.pods);
+            warnings = livePods?.warnings || [];
+          } catch (error) {
+            console.error(
+              `[ProjectsService] Failed to fetch live pods for deployment ${deployment.id}:`,
+              error instanceof Error ? error.message : error
+            );
+          }
+        }
+
+        // Hand the already-fetched pods to computeDeploymentStatus so it doesn't
+        // re-issue the same readNamespacedDeployment + listNamespacedPod calls
+        // we just made above — that doubled the K8s round-trips per deployment.
+        const computedStatus = await this.computeDeploymentStatus(deployment, {
+          pods,
+          warnings,
+        });
+
+        const merged = {
+          ...deployment,
+          pods,
+          status: computedStatus,
+          warnings,
+        };
+        return access.canEdit ? merged : this.scrubDeploymentForViewer(merged as any);
+      })
+    );
+
+    return deploymentsWithComputedStatus;
+  }
+
+  async getDeployment(deploymentId: string, canEdit: boolean = true, userId?: string) {
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+        services: {
+          include: {
+            ports: true,
+          },
+        },
+        envVars: true,
+        volumes: true,
+        ingresses: {
+          include: {
+            service: true,
+          },
+        },
+        imageHistory: {
+          orderBy: { createdAt: 'desc' },
+          take: 20,
+          select: {
+            id: true,
+            image: true,
+            tag: true,
+            commitSha: true,
+            commitMessage: true,
+            branch: true,
+            isActive: true,
+            createdAt: true,
+            triggerType: true,
+            triggeredBy: {
+              select: {
+                id: true,
+                username: true,
+                firstName: true,
+                lastName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    // Defense-in-depth: re-assert project-view even though the controller already did.
+    if (userId) {
+      await this.authz.requireProjectView(deployment.projectId, userId);
+    }
+
+    let pods: any = [];
+    let availableReplicas = 0;
+    let warnings: any[] = [];
+    let totalCpuUsage: number | null = null;
+    let totalMemoryUsage: number | null = null;
+
+    if (deployment.name && deployment.namespace) {
+      try {
+        const livePods = await this.k8sWorkload.getDeploymentPods(
+          deployment.name,
+          deployment.namespace
+        );
+        pods = this.formatLivePods(livePods?.pods);
+        warnings = livePods?.warnings || [];
+        totalCpuUsage = livePods?.totalCpuUsage ?? null;
+        totalMemoryUsage = livePods?.totalMemoryUsage ?? null;
+
+        try {
+          const k8sDeployment = await this.k8sWorkload.getKubernetesDeployment(
+            deployment.name,
+            deployment.namespace
+          );
+          availableReplicas = k8sDeployment?.status?.availableReplicas ?? 0;
+        } catch (k8sError) {
+          console.error(
+            `[ProjectsService] Failed to fetch deployment status for ${deploymentId}:`,
+            k8sError instanceof Error ? k8sError.message : k8sError
+          );
+          availableReplicas = pods?.filter((pod: any) => pod.status?.toLowerCase() === 'ready').length ?? 0;
+        }
+      } catch (error) {
+        console.error(
+          `[ProjectsService] Failed to fetch live pods for deployment ${deploymentId}:`,
+          error instanceof Error ? error.message : error
+        );
+        availableReplicas = pods?.filter((pod: any) => pod.status?.toLowerCase() === 'running').length ?? 0;
+      }
+    } else {
+      availableReplicas = pods?.filter((pod: any) => pod.status?.toLowerCase() === 'running').length ?? 0;
+    }
+
+    const deploymentWithInternalUrls = this.addInternalUrlsToDeployment(deployment);
+
+    // Discover project-level ingresses that route to this deployment's services,
+    // and enrich every ingress with K8s routes — all in a single parallel pass.
+    // Each unique ingress name is read from K8s exactly once.
+    if (deployment.namespace) {
+      const namespace = deployment.namespace;
+      const directIngresses: any[] = deploymentWithInternalUrls.ingresses ?? [];
+      const existingIds = new Set(directIngresses.map((i: any) => i.id));
+
+      const projectIngresses = deployment.projectId
+        ? await this.prisma.ingress.findMany({
+            where: { projectId: deployment.projectId, id: { notIn: Array.from(existingIds) } },
+            include: { service: true },
+          })
+        : [];
+
+      const candidateIngresses = [...directIngresses, ...projectIngresses];
+      const k8sByName = new Map<string, any>();
+      await Promise.all(
+        candidateIngresses.map(async (ing: any) => {
+          if (k8sByName.has(ing.name)) return;
+          try {
+            const k8sIngress = await this.k8sNetwork.readIngress(namespace, ing.name);
+            k8sByName.set(ing.name, k8sIngress);
+          } catch {
+            k8sByName.set(ing.name, null);
+          }
+        }),
+      );
+
+      const serviceNames = new Set((deployment.services ?? []).map((s: any) => s.name));
+      const enrich = (ing: any) => {
+        const k8sIngress = k8sByName.get(ing.name);
+        const rules = k8sIngress?.spec?.rules ?? [];
+        const k8sPaths = rules.length > 0 && rules[0].http?.paths ? rules[0].http.paths : [];
+        const routes = k8sPaths.length
+          ? k8sPaths.map((p: any) => ({
+              path: p.path || '/',
+              serviceName: p.backend?.service?.name || '',
+              servicePort: p.backend?.service?.port?.number || 0,
+            }))
+          : [
+              {
+                path: ing.path,
+                serviceName: ing.service?.name || '',
+                servicePort: ing.service?.port || 0,
+              },
+            ];
+        return { ingress: { ...ing, routes }, k8sPaths };
+      };
+
+      const directEnriched = directIngresses.map((ing) => enrich(ing).ingress);
+      const projectExtras = projectIngresses
+        .map((pi: any) => {
+          const { ingress, k8sPaths } = enrich(pi);
+          const hasRouteForDeployment = k8sPaths.some((p: any) =>
+            serviceNames.has(p.backend?.service?.name || ''),
+          );
+          return hasRouteForDeployment ? ingress : null;
+        })
+        .filter((i): i is any => !!i);
+
+      deploymentWithInternalUrls.ingresses = [...directEnriched, ...projectExtras];
+    }
+
+    const computedStatus = await this.computeDeploymentStatus(deployment);
+
+    const result: any = {
+      ...deploymentWithInternalUrls,
+      pods,
+      availableReplicas,
+      warnings,
+      totalCpuUsage,
+      totalMemoryUsage,
+      status: computedStatus,
+      buildStatus: deployment.buildStatus,
+    };
+    return canEdit ? result : this.scrubDeploymentForViewer(result);
+  }
+
+  async getDeploymentPods(deploymentId: string, userId?: string) {
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    // Defense-in-depth: re-assert project-view even though the controller already did.
+    if (userId) {
+      await this.authz.requireProjectView(deployment.projectId, userId);
+    }
+
+    if (deployment.name && deployment.namespace) {
+      try {
+        const livePods = await this.k8sWorkload.getDeploymentPods(
+          deployment.name,
+          deployment.namespace
+        );
+        return this.formatLivePods(livePods?.pods);
+      } catch (error) {
+        console.error(
+          `[ProjectsService] Failed to fetch live pods for deployment ${deploymentId}:`,
+          error instanceof Error ? error.message : error
+        );
+      }
+    }
+
+    const storedPods = await this.prisma.pod.findMany({
+      where: { deploymentId },
+    });
+
+    return storedPods.map((pod) => ({
+      id: pod.id,
+      name: pod.name,
+      status: pod.status,
+      ip: pod.podIp,
+      podIp: pod.podIp,
+      nodeName: pod.nodeName,
+      restartCount: pod.restartCount,
+      startTime: pod.createdAt,
+      createdAt: pod.createdAt,
+      containers: [],
+    }));
+  }
+
+  async cancelDeploymentBuild(
+    deploymentId: string,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+      },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'cancel deployments');
+
+    if (deployment.buildStatus !== 'building') {
+      throw new BadRequestException('Deployment is not in a buildable state');
+    }
+
+    try {
+      console.log(`[Projects] Cancelling build jobs for deployment ${deploymentId}`);
+      await this.dockerService.cancelBuildJobsByDeploymentId(deploymentId);
+      console.log(`[Projects] Successfully cancelled build jobs for deployment ${deploymentId}`);
+    } catch (error) {
+      console.error(`[Projects] Error cancelling build jobs for deployment ${deploymentId}:`, error);
+    }
+
+    const currentLogs = deployment.buildLogs || '';
+    await this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: {
+        buildStatus: 'failed',
+        buildStep: null,
+        buildError: 'Build cancelled by user',
+        buildLogs: currentLogs + `[${Date.now()}] [INFO] Build cancelled by user\n`,
+      },
+    });
+
+    void this.audit.log({
+      action: 'deployment.build_cancelled',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+    });
+
+    return {
+      success: true,
+      deploymentId,
+      message: 'Build cancelled successfully',
+    };
+  }
+
+  async deleteDeployment(
+    deploymentId: string,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    },
+    options?: { fromComposeStack?: boolean }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+      },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    if (deployment.composeStackId && !options?.fromComposeStack) {
+      throw new BadRequestException(
+        'This deployment is managed by a Compose file. Delete it via its parent compose stack.',
+      );
+    }
+
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'delete deployments');
+
+    // Fetch all related resources before deleting
+    const [ingresses, services, volumes, imageHistoryEntries] = await Promise.all([
+      this.prisma.ingress.findMany({ where: { deploymentId } }),
+      this.prisma.service.findMany({ where: { deploymentId } }),
+      this.prisma.deploymentVolume.findMany({ where: { deploymentId } }),
+      this.prisma.imageHistory.findMany({ where: { deploymentId }, select: { image: true } }),
+    ]);
+
+    // Delete all ingresses from Kubernetes
+    for (const ingress of ingresses) {
+      try {
+        await this.k8sNetwork.deleteIngress(ingress.namespace, ingress.name);
+      } catch (error) {
+        console.error(`Failed to delete ingress ${ingress.name} from Kubernetes:`, error);
+      }
+    }
+
+    // Delete all services from Kubernetes
+    for (const service of services) {
+      try {
+        await this.k8sNetwork.deleteService(deployment.namespace, service.name);
+      } catch (error) {
+        console.error(`Failed to delete service ${service.name} from Kubernetes:`, error);
+      }
+    }
+
+    // Delete all PVCs from Kubernetes
+    for (const volume of volumes) {
+      if (volume.type === 'pvc' && volume.pvcName) {
+        try {
+          await this.kubernetesService.deletePVC(deployment.namespace, volume.pvcName);
+        } catch (error) {
+          console.error(`Failed to delete PVC ${volume.pvcName} from Kubernetes:`, error);
+        }
+      }
+    }
+
+    try {
+      await this.k8sNetwork.unexposeAllDeploymentPortsPublic(deployment.namespace, deployment.name);
+    } catch (error) {
+      console.error(`Failed to unexpose public ports for ${deployment.name}:`, error);
+    }
+    try {
+      await this.k8sNetwork.deletePublicDeploymentNetworkPolicy(deployment.namespace, deployment.name);
+    } catch (error) {
+      console.error(`Failed to delete public NetworkPolicy for ${deployment.name}:`, error);
+    }
+
+    // Clean up Tailscale sidecar if exposed
+    try {
+      await this.tailscaleService.cleanupDeployment(deployment);
+    } catch (error) {
+      console.error(`[Projects] Failed to clean up Tailscale for deployment ${deployment.name}:`, error);
+    }
+
+    // Delete the K8s deployment itself
+    await this.k8sWorkload.deleteDeployment(deployment.name, deployment.namespace);
+
+    // Delete the DB record (cascades to pods, services, envVars, ingresses, volumes, imageHistory)
+    await this.prisma.deployment.delete({
+      where: { id: deploymentId },
+    });
+
+    // Delete all associated repositories from Harbor in the background
+    if (imageHistoryEntries.length > 0) {
+      const imageRefs = imageHistoryEntries.map((entry) => entry.image);
+      this.dockerService.deleteRepositoriesFromRegistry(imageRefs).catch((err) => {
+        console.error(`[Projects] Failed to delete repositories from registry for deployment ${deploymentId}:`, err);
+      });
+    }
+
+    void this.audit.log({
+      action: 'deployment.deleted',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+    });
+
+    return {
+      success: true,
+      deploymentId,
+      projectId: deployment.projectId,
+    };
+  }
+
+  async scaleDeployment(
+    deploymentId: string,
+    replicas: number,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+      },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+    this.assertNotComposeManaged(deployment, 'Scale');
+
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'scale deployments');
+
+    // Enforce resource quotas when scaling up — N replicas of this deployment
+    // each consume the same per-pod CPU/memory, so a scale to R+Δ adds Δ pods'
+    // worth of usage to the org cap and the project owner's member allowance.
+    // Scaling down or staying flat is always permitted.
+    const currentReplicas = deployment.replicas || 0;
+    const delta = replicas - currentReplicas;
+    if (delta > 0) {
+      const perPod = await this.quotasService.resolvePodResources(deployment.projectId, {
+        cpuRequestMilli: deployment.cpuRequestMilli ?? null,
+        memoryRequestBytes:
+          deployment.memoryRequestBytes != null ? Number(deployment.memoryRequestBytes) : null,
+      });
+      const requested = {
+        cpuMilli: perPod.cpuMilli * delta,
+        memoryBytes: perPod.memoryBytes * delta,
+      };
+      await this.quotasService.enforceOrgCapForNewPod(
+        deployment.project.organizationId,
+        requested,
+      );
+      await this.quotasService.enforceMemberAllowanceForNewPod(
+        deployment.project.organizationId,
+        deployment.project.ownerId,
+        requested,
+      );
+    }
+
+    const result = await this.k8sWorkload.scaleDeployment(
+      deployment.name,
+      deployment.namespace,
+      replicas
+    );
+
+    await this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: { replicas },
+    });
+
+    void this.audit.log({
+      action: 'deployment.scaled',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+      metadata: { replicas: [deployment.replicas, replicas] },
+    });
+
+    return result;
+  }
+
+  async restartDeployment(
+    deploymentId: string,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+      },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'restart deployments');
+
+    const result = await this.k8sWorkload.restartDeployment(deployment.name, deployment.namespace);
+
+    void this.audit.log({
+      action: 'deployment.restarted',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+    });
+
+    return result;
+  }
+
+  async updateDeploymentEnvVars(
+    deploymentId: string,
+    env: { key: string; value: string }[],
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+      },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+    this.assertNotComposeManaged(deployment, 'Update environment variables');
+
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployments');
+
+    const envEntries = Array.isArray(env)
+      ? env
+          .filter((entry) => entry && typeof entry.key === 'string')
+          .map((entry) => ({
+            key: entry.key.trim(),
+            value: entry.value !== undefined && entry.value !== null ? String(entry.value) : '',
+          }))
+          .filter((entry) => entry.key.length > 0)
+      : [];
+
+    // Env keys get interpolated into Dockerfile ARG/ENV directives and shell
+    // commands in the builder; a key with a newline or shell metachar would
+    // inject arbitrary instructions. Reject anything that isn't a POSIX-style
+    // identifier before it reaches the build pipeline.
+    const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+    for (const entry of envEntries) {
+      if (!ENV_KEY_RE.test(entry.key)) {
+        throw new BadRequestException(`Invalid environment variable key: ${entry.key}`);
+      }
+    }
+
+    const uniqueEnv = new Map<string, string>();
+    for (const entry of envEntries) {
+      uniqueEnv.set(entry.key, entry.value);
+    }
+
+    const envList = Array.from(uniqueEnv.entries()).map(([key, value]) => ({
+      key,
+      value,
+    }));
+
+    await this.k8sWorkload.updateDeploymentEnv({
+      namespace: deployment.namespace,
+      deploymentName: deployment.name,
+      env: envList,
+    });
+
+    const previousEnvVars = await this.prisma.deploymentEnvVar.findMany({
+      where: { deploymentId: deployment.id },
+      select: { key: true, value: true },
+    });
+    const prevMap = new Map(previousEnvVars.map((e) => [e.key, e.value]));
+    const newMap = new Map(envList.map((e) => [e.key, e.value]));
+    const added: string[] = [];
+    const removed: string[] = [];
+    const changed: string[] = [];
+    for (const [k, v] of newMap) {
+      if (!prevMap.has(k)) added.push(k);
+      else if (prevMap.get(k) !== v) changed.push(k);
+    }
+    for (const k of prevMap.keys()) if (!newMap.has(k)) removed.push(k);
+
+    const updatedDeployment = await this.prisma.$transaction(async (tx) => {
+      await tx.deploymentEnvVar.deleteMany({
+        where: {
+          deploymentId: deployment.id,
+        },
+      });
+
+      if (envList.length > 0) {
+        await tx.deploymentEnvVar.createMany({
+          data: envList.map((entry) => ({
+            deploymentId: deployment.id,
+            key: entry.key,
+            value: entry.value,
+          })),
+        });
+      }
+
+      return tx.deployment.findUnique({
+        where: { id: deployment.id },
+        include: {
+          project: {
+            include: {
+              organization: true,
+            },
+          },
+          pods: true,
+          services: {
+            include: {
+              ports: true,
+            },
+          },
+          envVars: true,
+          ingresses: {
+            include: {
+              service: true,
+            },
+          },
+        },
+      });
+    });
+
+    if (added.length || removed.length || changed.length) {
+      void this.audit.log({
+        action: 'deployment.env.updated',
+        actorUserId: user.id,
+        actorEmail: user.email,
+        organizationId: deployment.project.organizationId,
+        projectId: deployment.projectId,
+        deploymentId: deployment.id,
+        targetType: 'deployment',
+        targetId: deployment.id,
+        targetLabel: deployment.name,
+        // Keys only — never values.
+        metadata: { added: added.join(',') || null, removed: removed.join(',') || null, changed: changed.join(',') || null },
+      });
+    }
+
+    return updatedDeployment;
+  }
+
+  async updateDeploymentBuildFromRoot(
+    deploymentId: string,
+    buildFromRoot: boolean,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    },
+    buildWithDepot?: boolean,
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+      },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployments');
+
+    await this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: {
+        buildFromRoot,
+        ...(buildWithDepot !== undefined && { buildWithDepot }),
+      },
+    });
+
+    void this.audit.log({
+      action: 'deployment.build_options.updated',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+      metadata: {
+        buildFromRoot: [deployment.buildFromRoot, buildFromRoot],
+        ...(buildWithDepot !== undefined ? { buildWithDepot: [deployment.buildWithDepot, buildWithDepot] } : {}),
+      },
+    });
+
+    return this.getDeployment(deploymentId);
+  }
+
+  async updateDeploymentHealthCheck(
+    deploymentId: string,
+    healthCheck: {
+      healthCheckEnabled: boolean;
+      healthCheckType: string;
+      healthCheckPath?: string;
+      healthCheckPort?: number;
+      healthCheckCommand?: string;
+      livenessEnabled: boolean;
+      readinessEnabled: boolean;
+      startupEnabled: boolean;
+      healthCheckInterval: number;
+      healthCheckTimeout: number;
+      healthCheckRetries: number;
+      startupFailureThreshold: number;
+    },
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+      },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+    this.assertNotComposeManaged(deployment, 'Update health checks');
+
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployments');
+
+    await this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: {
+        healthCheckEnabled: healthCheck.healthCheckEnabled,
+        healthCheckType: healthCheck.healthCheckType,
+        healthCheckPath: healthCheck.healthCheckPath || null,
+        healthCheckPort: healthCheck.healthCheckPort || null,
+        healthCheckCommand: healthCheck.healthCheckCommand || null,
+        livenessEnabled: healthCheck.livenessEnabled,
+        readinessEnabled: healthCheck.readinessEnabled,
+        startupEnabled: healthCheck.startupEnabled,
+        healthCheckInterval: healthCheck.healthCheckInterval,
+        healthCheckTimeout: healthCheck.healthCheckTimeout,
+        healthCheckRetries: healthCheck.healthCheckRetries,
+        startupFailureThreshold: healthCheck.startupFailureThreshold,
+      },
+    });
+
+    // Apply to the live Kubernetes deployment
+    try {
+      await this.k8sWorkload.updateDeploymentHealthCheck({
+        namespace: deployment.namespace,
+        deploymentName: deployment.name,
+        enabled: healthCheck.healthCheckEnabled,
+        type: healthCheck.healthCheckType,
+        path: healthCheck.healthCheckPath,
+        port: healthCheck.healthCheckPort,
+        command: healthCheck.healthCheckCommand,
+        livenessEnabled: healthCheck.livenessEnabled,
+        readinessEnabled: healthCheck.readinessEnabled,
+        startupEnabled: healthCheck.startupEnabled,
+        interval: healthCheck.healthCheckInterval,
+        timeout: healthCheck.healthCheckTimeout,
+        retries: healthCheck.healthCheckRetries,
+        startupFailureThreshold: healthCheck.startupFailureThreshold,
+      });
+    } catch (error) {
+      // Log but don't fail - the DB is updated, K8s will sync on next restart/rebuild
+      console.error('Failed to apply health check to Kubernetes deployment:', error.message);
+    }
+
+    void this.audit.log({
+      action: 'deployment.health_check.updated',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+      metadata: {
+        enabled: [deployment.healthCheckEnabled, healthCheck.healthCheckEnabled],
+        type: [deployment.healthCheckType, healthCheck.healthCheckType],
+        path: [deployment.healthCheckPath, healthCheck.healthCheckPath ?? null],
+      },
+    });
+
+    return this.getDeployment(deploymentId);
+  }
+
+  async updateDeploymentVolumes(
+    deploymentId: string,
+    volumes: {
+      name: string;
+      type: 'pvc' | 'hostPath' | 'emptyDir';
+      mountPath: string;
+      pvcName?: string;
+      storageSize?: string;
+      hostPath?: string;
+      readOnly?: boolean;
+    }[],
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+      },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+    this.assertNotComposeManaged(deployment, 'Update volumes');
+
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployments');
+
+    if (Array.isArray(volumes) && volumes.some((v) => v && v.type === 'hostPath')) {
+      void this.audit.log({
+        action: 'deployment.volume.rejected',
+        actorUserId: user.id,
+        actorEmail: user.email,
+        organizationId: deployment.project.organizationId,
+        projectId: deployment.projectId,
+        deploymentId,
+        targetType: 'deployment',
+        targetId: deploymentId,
+        targetLabel: deployment.name,
+        metadata: { reason: 'hostPath_volume' },
+      });
+      throw new ForbiddenException('hostPath volumes are not permitted');
+    }
+
+    const volumesList: Array<{
+      name: string;
+      type: 'pvc' | 'hostPath' | 'emptyDir';
+      mountPath: string;
+      pvcName?: string | null;
+      storageSize?: string | null;
+      hostPath?: string | null;
+      readOnly?: boolean;
+    }> = Array.isArray(volumes)
+      ? volumes
+          .filter((vol) => vol && vol.name && vol.mountPath)
+          .map((vol) => {
+            const volType: 'pvc' | 'hostPath' | 'emptyDir' = vol.type === 'pvc' ? 'pvc' : vol.type === 'hostPath' ? 'hostPath' : 'emptyDir';
+            return {
+              name: vol.name.trim(),
+              type: volType,
+              mountPath: vol.mountPath.trim(),
+              pvcName: vol.type === 'pvc' && vol.pvcName ? vol.pvcName.trim() : null,
+              storageSize: vol.type === 'pvc' && vol.storageSize ? vol.storageSize.trim() : null,
+              hostPath: vol.type === 'hostPath' && vol.hostPath ? vol.hostPath.trim() : null,
+              readOnly: Boolean(vol.readOnly),
+            };
+          })
+          .filter((vol) => {
+            if (vol.type === 'pvc' && !vol.pvcName) return false;
+            if (vol.type === 'hostPath' && !vol.hostPath) return false;
+            return true;
+          })
+      : [];
+
+    // Compute the effective strategy: PVC forces Recreate, otherwise keep
+    // whatever the deployment was previously set to. The persisted
+    // `deployStrategy` is also auto-reverted to rollingUpdate when the last
+    // PVC is removed only if the user had it set explicitly; we conservatively
+    // keep the existing value (the k8s patch will apply it).
+    const hasPvcVolume = volumesList.some((v) => v.type === 'pvc');
+    const effectiveStrategy: 'rollingUpdate' | 'recreate' = hasPvcVolume
+      ? 'recreate'
+      : (deployment.deployStrategy as 'rollingUpdate' | 'recreate');
+
+    await this.k8sWorkload.updateDeploymentVolumes({
+      namespace: deployment.namespace,
+      deploymentName: deployment.name,
+      volumes: volumesList,
+      deployStrategy: effectiveStrategy,
+    });
+
+    const updatedDeployment = await this.prisma.$transaction(async (tx) => {
+      // Persist auto-Recreate when PVC was added, so the UI reflects reality.
+      if (hasPvcVolume && deployment.deployStrategy !== 'recreate') {
+        await tx.deployment.update({
+          where: { id: deployment.id },
+          data: { deployStrategy: 'recreate' },
+        });
+      }
+
+      await tx.deploymentVolume.deleteMany({
+        where: {
+          deploymentId: deployment.id,
+        },
+      });
+
+      if (volumesList.length > 0) {
+        await tx.deploymentVolume.createMany({
+          data: volumesList.map((vol) => ({
+            deploymentId: deployment.id,
+            name: vol.name,
+            type: vol.type as 'pvc' | 'hostPath' | 'emptyDir',
+            mountPath: vol.mountPath,
+            pvcName: vol.pvcName,
+            storageSize: vol.storageSize,
+            hostPath: vol.hostPath,
+            readOnly: vol.readOnly,
+          })),
+        });
+      }
+
+      return tx.deployment.findUnique({
+        where: { id: deployment.id },
+        include: {
+          project: {
+            include: {
+              organization: true,
+            },
+          },
+          pods: true,
+          services: {
+            include: {
+              ports: true,
+            },
+          },
+          envVars: true,
+          volumes: true,
+          ingresses: {
+            include: {
+              service: true,
+            },
+          },
+        },
+      });
+    });
+
+    void this.audit.log({
+      action: 'deployment.volumes.updated',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+      metadata: { count: volumesList.length, names: volumesList.map((v) => v.name).join(',') || null },
+    });
+
+    return updatedDeployment;
+  }
+
+  async createDeploymentService(
+    deploymentId: string,
+    data: {
+      name: string;
+      ports: {
+        name?: string;
+        containerPort?: number;
+        servicePort?: number;
+        protocol?: string;
+        nodePort?: number;
+      }[];
+      exposePublic?: boolean;
+      domain?: string | null;
+    },
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+        services: {
+          include: {
+            ports: true,
+          },
+        },
+      },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'manage services');
+
+    const rawName = String(data.name || '').trim();
+    if (!rawName) {
+      throw new BadRequestException('Service name is required');
+    }
+
+    const normalizedName = formatSlug(rawName);
+    if (!normalizedName) {
+      throw new BadRequestException('Service name is invalid');
+    }
+
+    const existingServiceWithName = await this.prisma.service.findFirst({
+      where: {
+        name: normalizedName,
+        deployment: {
+          projectId: deployment.projectId,
+        },
+      },
+    });
+
+    if (existingServiceWithName) {
+      throw new BadRequestException('A service with this name already exists in the project namespace');
+    }
+
+    const portsPayload = this.normalizeServicePortInputs(data.ports, {
+      requireAtLeastOne: true,
+    });
+
+    const domainProvided = Object.prototype.hasOwnProperty.call(data ?? {}, 'domain');
+    let normalizedDomain: string | null = null;
+
+    if (domainProvided) {
+      const rawDomain =
+        data.domain === null || data.domain === undefined
+          ? ''
+          : String(data.domain).trim().toLowerCase();
+
+      if (!rawDomain) {
+        normalizedDomain = null;
+      } else if (!/^[a-z0-9.-]+$/.test(rawDomain)) {
+        throw new BadRequestException('Domain can only contain letters, numbers, dots, or hyphens');
+      } else if (rawDomain.length > 253) {
+        throw new BadRequestException('Domain is too long');
+      } else {
+        normalizedDomain = rawDomain;
+      }
+    }
+
+    const exposePublic = data.exposePublic === true;
+    const requestedType = exposePublic ? 'NodePort' : 'ClusterIP';
+    const serviceType = exposePublic ? ServiceType.external : ServiceType.internal;
+
+    const creationResult = await this.k8sNetwork.createDeploymentService({
+      namespace: deployment.namespace,
+      deploymentName: deployment.name,
+      serviceName: normalizedName,
+      type: requestedType,
+      ports: portsPayload,
+    });
+
+    const resolvedPorts =
+      creationResult.ports && creationResult.ports.length > 0
+        ? creationResult.ports
+        : portsPayload;
+
+    const primaryPort = resolvedPorts[0];
+
+    await this.prisma.$transaction(async (tx) => {
+      const serviceRecord = await tx.service.create({
+        data: {
+          deploymentId: deployment.id,
+          name: normalizedName,
+          type: serviceType,
+          port: primaryPort.servicePort,
+          targetPort: primaryPort.containerPort,
+          protocol: primaryPort.protocol,
+          nodePort: primaryPort.nodePort ?? null,
+          externalIp: creationResult.externalIp ?? null,
+          domain: normalizedDomain,
+        },
+      });
+
+      if (resolvedPorts.length > 0) {
+        await tx.servicePort.createMany({
+          data: resolvedPorts.map((port) => ({
+            serviceId: serviceRecord.id,
+            name: port.name,
+            port: port.servicePort,
+            targetPort: port.containerPort,
+            protocol: port.protocol,
+            nodePort: port.nodePort ?? null,
+          })),
+        });
+      }
+    });
+
+    const result = await this.prisma.deployment.findUnique({
+      where: { id: deployment.id },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+        pods: true,
+        services: {
+          include: {
+            ports: true,
+          },
+        },
+        envVars: true,
+        ingresses: {
+          include: {
+            service: true,
+          },
+        },
+      },
+    });
+
+    return this.addInternalUrlsToDeployment(result);
+  }
+
+  async updateServiceConfiguration(
+    deploymentId: string,
+    serviceId: string,
+    changes: {
+      ports?: {
+        name?: string;
+        containerPort?: number;
+        servicePort?: number;
+        protocol?: string;
+        nodePort?: number;
+      }[];
+      domain?: string | null;
+    },
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const service = await this.prisma.service.findUnique({
+      where: { id: serviceId },
+      include: {
+        deployment: {
+          include: {
+            project: {
+              include: {
+                organization: true,
+              },
+            },
+          },
+        },
+        ports: true,
+      },
+    });
+
+    if (!service) {
+      throw new NotFoundException(`Service ${serviceId} not found`);
+    }
+
+    if (service.deploymentId !== deploymentId) {
+      throw new BadRequestException('Service does not belong to deployment');
+    }
+
+    await this.authz.requireProjectEdit(service.deployment.project.id, user.id, 'update services');
+
+    const domainProvided = Object.prototype.hasOwnProperty.call(changes ?? {}, 'domain');
+    let normalizedDomain: string | null = null;
+
+    if (domainProvided) {
+      const rawDomain =
+        changes.domain === null || changes.domain === undefined
+          ? ''
+          : String(changes.domain).trim().toLowerCase();
+
+      if (!rawDomain) {
+        normalizedDomain = null;
+      } else if (!/^[a-z0-9.-]+$/.test(rawDomain)) {
+        throw new BadRequestException('Domain can only contain letters, numbers, dots, or hyphens');
+      } else if (rawDomain.length > 253) {
+        throw new BadRequestException('Domain is too long');
+      } else {
+        normalizedDomain = rawDomain;
+      }
+    }
+
+    let portsPayload: {
+      name?: string;
+      containerPort?: number;
+      servicePort?: number;
+      protocol?: string;
+      nodePort?: number;
+    }[] | null = null;
+
+    if (Array.isArray(changes?.ports)) {
+      portsPayload = this.normalizeServicePortInputs(changes.ports, {
+        requireAtLeastOne: true,
+      });
+    }
+
+    if (!domainProvided && portsPayload === null) {
+      throw new BadRequestException('No changes provided for service update');
+    }
+
+    let updateResult:
+      | {
+          type: string;
+          ports: {
+            name: string;
+            containerPort: number;
+            servicePort: number;
+            protocol: string;
+            nodePort?: number;
+          }[];
+          externalIp: string | null;
+        }
+      | null = null;
+
+    if (portsPayload) {
+      updateResult = await this.k8sNetwork.updateServicePorts({
+        namespace: service.deployment.namespace,
+        deploymentName: service.deployment.name,
+        serviceName: service.name,
+        ports: portsPayload,
+      });
+    }
+
+    const resolvedPorts = updateResult
+      ? updateResult.ports.map((port) => ({
+          name: port.name,
+          servicePort: port.servicePort,
+          containerPort: port.containerPort,
+          protocol: port.protocol,
+          nodePort: port.nodePort ?? null,
+        }))
+      : service.ports.length > 0
+      ? service.ports.map((port) => ({
+          name: port.name || `${service.name}`,
+          servicePort: port.port,
+          containerPort: port.targetPort,
+          protocol: port.protocol,
+          nodePort: port.nodePort ?? null,
+        }))
+      : [
+          {
+            name: service.name,
+            servicePort: service.port,
+            containerPort: service.targetPort,
+            protocol: service.protocol,
+            nodePort: service.nodePort ?? null,
+          },
+        ];
+
+    const primaryPort =
+      resolvedPorts[0] || {
+        name: service.name,
+        servicePort: service.port,
+        containerPort: service.targetPort,
+        protocol: service.protocol,
+        nodePort: service.nodePort ?? null,
+      };
+
+    const resolvedType =
+      updateResult && updateResult.type === 'ClusterIP'
+        ? ServiceType.internal
+        : updateResult && updateResult.type !== 'ClusterIP'
+        ? ServiceType.external
+        : service.type;
+
+    const resolvedExternalIp =
+      updateResult && Object.prototype.hasOwnProperty.call(updateResult, 'externalIp')
+        ? updateResult.externalIp
+        : service.externalIp;
+
+    const priorPublic = new Map<
+      string,
+      { publicEnabled: boolean; publicPort: number | null; targetPort: number; protocol: string }
+    >();
+    if (portsPayload) {
+      for (const p of service.ports) {
+        if (p.publicEnabled && p.publicPort) {
+          priorPublic.set(`${p.port}:${p.protocol.toUpperCase()}`, {
+            publicEnabled: true,
+            publicPort: p.publicPort,
+            targetPort: p.targetPort,
+            protocol: p.protocol,
+          });
+        }
+      }
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      const data: Prisma.ServiceUpdateInput = {};
+
+      if (portsPayload) {
+        data.type = resolvedType;
+        data.externalIp = resolvedExternalIp ?? null;
+        data.port = primaryPort.servicePort;
+        data.targetPort = primaryPort.containerPort;
+        data.protocol = primaryPort.protocol;
+        data.nodePort = primaryPort.nodePort ?? null;
+      }
+
+      if (domainProvided) {
+        data.domain = normalizedDomain;
+      }
+
+      if (Object.keys(data).length > 0) {
+        await tx.service.update({
+          where: { id: service.id },
+          data,
+        });
+      }
+
+      if (portsPayload) {
+        await tx.servicePort.deleteMany({
+          where: { serviceId: service.id },
+        });
+
+        if (resolvedPorts.length > 0) {
+          await tx.servicePort.createMany({
+            data: resolvedPorts.map((port) => {
+              const key = `${port.servicePort}:${port.protocol.toUpperCase()}`;
+              const prior = priorPublic.get(key);
+              return {
+                serviceId: service.id,
+                name: port.name,
+                port: port.servicePort,
+                targetPort: port.containerPort,
+                protocol: port.protocol,
+                nodePort: port.nodePort,
+                publicEnabled: prior ? prior.publicEnabled : false,
+                publicPort: prior ? prior.publicPort : null,
+              };
+            }),
+          });
+        }
+      }
+    });
+
+    if (portsPayload && priorPublic.size > 0) {
+      const keptKeys = new Set(
+        resolvedPorts.map((p) => `${p.servicePort}:${p.protocol.toUpperCase()}`),
+      );
+      for (const [key, prior] of priorPublic) {
+        if (keptKeys.has(key)) {
+          if (prior.publicPort) {
+            const kept = resolvedPorts.find(
+              (p) => `${p.servicePort}:${p.protocol.toUpperCase()}` === key,
+            );
+            if (kept && kept.containerPort !== prior.targetPort) {
+              try {
+                const org = await this.prisma.organization.findUnique({
+                  where: { id: service.deployment.project.organizationId },
+                });
+                const ip = (org?.databasePublicIp || '').trim();
+                if (ip) {
+                  await this.k8sNetwork.exposeDeploymentPortPublic({
+                    namespace: service.deployment.namespace,
+                    deploymentName: service.deployment.name,
+                    loadBalancerIp: ip,
+                    publicPort: prior.publicPort,
+                    targetPort: kept.containerPort,
+                    protocol: prior.protocol,
+                  });
+                }
+              } catch (e: any) {
+                console.error(`[Deployment/public] Failed to re-expose port on update: ${e?.message}`);
+              }
+            }
+          }
+        } else if (prior.publicPort) {
+          try {
+            await this.k8sNetwork.unexposeDeploymentPortPublic({
+              namespace: service.deployment.namespace,
+              deploymentName: service.deployment.name,
+              publicPort: prior.publicPort,
+              protocol: prior.protocol,
+            });
+          } catch (e: any) {
+            console.error(`[Deployment/public] Failed to unexpose removed port: ${e?.message}`);
+          }
+        }
+      }
+      await this.syncPublicDeploymentNetworkPolicy(
+        service.deployment.namespace,
+        service.deployment.name,
+        service.deployment.id,
+      );
+    }
+
+    const result = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+        pods: true,
+        services: {
+          include: {
+            ports: true,
+          },
+        },
+        envVars: true,
+        ingresses: {
+          include: {
+            service: true,
+          },
+        },
+      },
+    });
+    return this.addInternalUrlsToDeployment(result);
+  }
+
+  async deleteDeploymentService(
+    deploymentId: string,
+    serviceId: string,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const service = await this.prisma.service.findUnique({
+      where: { id: serviceId },
+      include: {
+        deployment: {
+          include: {
+            project: {
+              include: {
+                organization: true,
+              },
+            },
+            services: {
+              include: {
+                ports: true,
+              },
+            },
+          },
+        },
+        ports: true,
+        ingresses: true,
+      },
+    });
+
+    if (!service) {
+      throw new NotFoundException(`Service ${serviceId} not found`);
+    }
+
+    if (service.deploymentId !== deploymentId) {
+      throw new BadRequestException('Service does not belong to deployment');
+    }
+
+    if (service.ingresses.length > 0) {
+      throw new BadRequestException('Delete associated ingresses before removing the service');
+    }
+
+    await this.authz.requireProjectEdit(service.deployment.project.id, user.id, 'update services');
+
+    const otherServices = service.deployment.services.filter(
+      (entry) => entry.id !== service.id
+    );
+
+    const remainingPortsInput: {
+      name?: string;
+      containerPort: number;
+      servicePort: number;
+      protocol: string;
+      nodePort?: number;
+    }[] = [];
+
+    for (const entry of otherServices) {
+      const servicePorts =
+        entry.ports.length > 0
+          ? entry.ports.map((port) => ({
+              name: port.name || entry.name,
+              containerPort: port.targetPort,
+              servicePort: port.port,
+              protocol: port.protocol,
+              nodePort: port.nodePort ?? undefined,
+            }))
+          : [
+              {
+                name: entry.name,
+                containerPort: entry.targetPort,
+                servicePort: entry.port,
+                protocol: entry.protocol,
+                nodePort: entry.nodePort ?? undefined,
+              },
+            ];
+
+      remainingPortsInput.push(...servicePorts);
+    }
+
+    for (const p of service.ports) {
+      if (p.publicEnabled && p.publicPort) {
+        try {
+          await this.k8sNetwork.unexposeDeploymentPortPublic({
+            namespace: service.deployment.namespace,
+            deploymentName: service.deployment.name,
+            publicPort: p.publicPort,
+            protocol: p.protocol,
+          });
+        } catch (e: any) {
+          console.error(`[Deployment/public] Failed to unexpose port on service delete: ${e?.message}`);
+        }
+      }
+    }
+
+    await this.k8sNetwork.deleteDeploymentService({
+      namespace: service.deployment.namespace,
+      deploymentName: service.deployment.name,
+      serviceName: service.name,
+      remainingPorts: remainingPortsInput,
+    });
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.servicePort.deleteMany({
+        where: { serviceId: service.id },
+      });
+
+      await tx.service.delete({
+        where: { id: service.id },
+      });
+    });
+
+    await this.syncPublicDeploymentNetworkPolicy(
+      service.deployment.namespace,
+      service.deployment.name,
+      service.deployment.id,
+    );
+
+    const result = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+        pods: true,
+        services: {
+          include: {
+            ports: true,
+          },
+        },
+        envVars: true,
+        ingresses: {
+          include: {
+            service: true,
+          },
+        },
+      },
+    });
+    return this.addInternalUrlsToDeployment(result);
+  }
+
+  async updateServiceExposure(
+    deploymentId: string,
+    serviceId: string,
+    exposePublic: boolean,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const service = await this.prisma.service.findUnique({
+      where: { id: serviceId },
+      include: {
+        deployment: {
+          include: {
+            project: {
+              include: {
+                organization: true,
+              },
+            },
+          },
+        },
+        ports: true,
+      },
+    });
+
+    if (!service) {
+      throw new NotFoundException(`Service ${serviceId} not found`);
+    }
+
+    if (service.deploymentId !== deploymentId) {
+      throw new BadRequestException('Service does not belong to deployment');
+    }
+
+    await this.authz.requireProjectEdit(service.deployment.project.id, user.id, 'update services');
+
+    const desiredType = exposePublic ? 'NodePort' : 'ClusterIP';
+
+    const exposureResult = await this.k8sNetwork.updateServiceExposure({
+      namespace: service.deployment.namespace,
+      serviceName: service.name,
+      type: desiredType,
+    });
+
+    const normalizedPorts = Array.isArray(exposureResult.ports) && exposureResult.ports.length > 0
+      ? exposureResult.ports.map((port) => ({
+          name: port.name,
+          servicePort: port.servicePort,
+          containerPort: port.containerPort,
+          protocol: port.protocol,
+          nodePort:
+            port.nodePort !== undefined && port.nodePort !== null ? port.nodePort : null,
+        }))
+      : service.ports.map((port) => ({
+          name: port.name || `port-${port.port}`,
+          servicePort: port.port,
+          containerPort: port.targetPort,
+          protocol: port.protocol,
+          nodePort: port.nodePort ?? null,
+        }));
+
+    const primaryPort = normalizedPorts[0] || {
+      name: service.name,
+      servicePort: service.port,
+      containerPort: service.targetPort,
+      protocol: service.protocol,
+      nodePort: service.nodePort ?? null,
+    };
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.service.update({
+        where: { id: service.id },
+        data: {
+          type: exposePublic ? ServiceType.external : ServiceType.internal,
+          externalIp: exposureResult.externalIp || null,
+          port: primaryPort.servicePort,
+          targetPort: primaryPort.containerPort,
+          protocol: primaryPort.protocol,
+          nodePort: primaryPort.nodePort,
+        },
+      });
+
+      await tx.servicePort.deleteMany({
+        where: { serviceId: service.id },
+      });
+
+      if (normalizedPorts.length > 0) {
+        await tx.servicePort.createMany({
+          data: normalizedPorts.map((port) => ({
+            serviceId: service.id,
+            name: port.name,
+            port: port.servicePort,
+            targetPort: port.containerPort,
+            protocol: port.protocol,
+            nodePort: port.nodePort,
+          })),
+        });
+      }
+    });
+
+    const result = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+        pods: true,
+        services: {
+          include: {
+            ports: true,
+          },
+        },
+        envVars: true,
+        ingresses: {
+          include: {
+            service: true,
+          },
+        },
+      },
+    });
+
+    void this.audit.log({
+      action: exposePublic ? 'service.exposure.enabled' : 'service.exposure.disabled',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: service.deployment.project.organizationId,
+      projectId: service.deployment.projectId,
+      deploymentId,
+      targetType: 'service',
+      targetId: serviceId,
+      targetLabel: service.name,
+      metadata: { type: [service.type, exposePublic ? 'external' : 'internal'] },
+    });
+
+    return this.addInternalUrlsToDeployment(result);
+  }
+
+  // Auto-deploy methods
+
+  async enableAutoDeploy(
+    deploymentId: string,
+    branch: string,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+      },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    if (!deployment.githubRepo) {
+      throw new BadRequestException('This deployment was not created from GitHub');
+    }
+
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'configure auto-deploy');
+
+    // Parse the repo URL to get owner and repo
+    const repoInfo = this.githubService.parseRepoUrl(deployment.githubRepo);
+    if (!repoInfo) {
+      throw new BadRequestException('Invalid GitHub repository URL');
+    }
+
+    // Check if the GitHub App has access to this repository
+    const installation = await this.githubService.findInstallationForRepo(repoInfo.owner, repoInfo.repo);
+    if (!installation) {
+      throw new BadRequestException(
+        'The GitHub App is not installed on this repository. Please install the app first.'
+      );
+    }
+
+    const previousBranch = deployment.autoDeployBranch;
+    const previouslyEnabled = deployment.autoDeployEnabled;
+
+    // Update the deployment with auto-deploy settings. Also pin the
+    // installation id so subsequent webhook deliveries are bound to this
+    // specific GitHub App installation (legacy rows whose
+    // githubInstallationId is null are picked up here).
+    const updated = await this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: {
+        autoDeployEnabled: true,
+        autoDeployBranch: branch,
+        githubInstallationId: installation.installationId,
+      },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+        pods: true,
+        services: {
+          include: {
+            ports: true,
+          },
+        },
+        envVars: true,
+        ingresses: {
+          include: {
+            service: true,
+          },
+        },
+      },
+    });
+
+    void this.audit.log({
+      action: 'deployment.autodeploy.enabled',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+      metadata: {
+        repo: deployment.githubRepo,
+        branch: [previousBranch ?? null, branch],
+        wasEnabled: previouslyEnabled,
+      },
+    });
+
+    return this.addInternalUrlsToDeployment(updated);
+  }
+
+  async disableAutoDeploy(
+    deploymentId: string,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+      },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'configure auto-deploy');
+
+    const previousBranch = deployment.autoDeployBranch;
+    const previouslyEnabled = deployment.autoDeployEnabled;
+
+    // Update the deployment
+    const updated = await this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: {
+        autoDeployEnabled: false,
+      },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+        pods: true,
+        services: {
+          include: {
+            ports: true,
+          },
+        },
+        envVars: true,
+        ingresses: {
+          include: {
+            service: true,
+          },
+        },
+      },
+    });
+
+    void this.audit.log({
+      action: 'deployment.autodeploy.disabled',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+      metadata: {
+        repo: deployment.githubRepo,
+        branch: [previousBranch ?? null, null],
+        wasEnabled: previouslyEnabled,
+      },
+    });
+
+    return this.addInternalUrlsToDeployment(updated);
+  }
+
+  // Called by the webhook handler to trigger a deploy
+  async triggerAutoDeploy(
+    deploymentId: string,
+    commitSha: string,
+    commitMessage: string,
+    commitAuthorName?: string,
+    commitAuthorUsername?: string,
+  ) {
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+        envVars: true,
+        volumes: true,
+        services: {
+          include: {
+            ports: true,
+          },
+        },
+      },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    if (!deployment.githubRepo || !deployment.githubBranch) {
+      throw new BadRequestException('This deployment was not created from GitHub');
+    }
+
+    if (deployment.buildStatus === 'building') {
+      console.log(`[Projects] Skipping auto-deploy for deployment ${deploymentId}: build already in progress (buildStatus: ${deployment.buildStatus})`);
+      throw new BadRequestException('A build is already in progress for this deployment');
+    }
+
+    // Parse repo info for GitHub API calls
+    const repoInfo = this.githubService.parseRepoUrl(deployment.githubRepo);
+
+    // Find GitHub App installation for this repo (uses app token, not user token)
+    let installationId: bigint | null = null;
+    let checkRunId: number | null = null;
+    let installationAccessToken: string | null = null;
+
+    if (repoInfo) {
+      try {
+        const installation = await this.githubService.findInstallationForRepo(repoInfo.owner, repoInfo.repo);
+        if (installation) {
+          installationId = installation.installationId;
+
+          // Get installation access token for cloning the repo
+          installationAccessToken = await this.githubService.getOrRefreshInstallationToken(installationId);
+
+          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+          const orgSlug = deployment.project?.organization?.slug;
+          const logUrl = orgSlug
+            ? `${frontendUrl}/${orgSlug}/deployments/${deploymentId}/progress`
+            : `${frontendUrl}/deployments/${deploymentId}/progress`;
+
+          // Create a GitHub Check Run (appears under "Checks" on the commit, authored by the app)
+          const checkRun = await this.githubService.createCheckRun(
+            installationId,
+            repoInfo.owner,
+            repoInfo.repo,
+            {
+              name: 'Orchard Deployment',
+              headSha: commitSha,
+              status: 'in_progress',
+              detailsUrl: logUrl,
+              externalId: deploymentId,
+              output: {
+                title: 'Building...',
+                summary: `Deploying \`${deployment.name}\` from commit \`${commitSha.substring(0, 7)}\``,
+                text: `**Commit:** ${commitMessage.split('\n')[0]}\n\n**Branch:** ${deployment.autoDeployBranch || deployment.githubBranch}\n\n---\n\nBuilding...`,
+              },
+            }
+          );
+
+          checkRunId = checkRun.id;
+          console.log(`[Projects] Created GitHub check run ${checkRunId} for deployment ${deploymentId}`);
+
+          // Also create a GitHub Deployment (appears under "Deployments" section)
+          try {
+            const ghDeployment = await this.githubService.createGitHubDeploymentWithApp(
+              installationId,
+              repoInfo.owner,
+              repoInfo.repo,
+              commitSha,
+              deployment.name,
+              `Deploying ${deployment.name} from commit ${commitSha.substring(0, 7)}`
+            );
+
+            // Update deployment status to in_progress
+            await this.githubService.updateDeploymentStatusWithApp(
+              installationId,
+              repoInfo.owner,
+              repoInfo.repo,
+              ghDeployment.id,
+              'in_progress',
+              { logUrl, description: 'Building...' }
+            );
+
+            // Store the GitHub deployment record
+            await this.prisma.gitHubDeployment.create({
+              data: {
+                deploymentId,
+                githubDeploymentId: BigInt(ghDeployment.id),
+                owner: repoInfo.owner,
+                repo: repoInfo.repo,
+                ref: deployment.autoDeployBranch || deployment.githubBranch,
+                commitSha,
+                environment: deployment.name,
+                status: 'in_progress',
+                logUrl,
+              },
+            });
+
+            console.log(`[Projects] Created GitHub deployment ${ghDeployment.id} for ${deploymentId}`);
+          } catch (ghErr) {
+            console.error(`[Projects] Failed to create GitHub deployment: ${ghErr.message}`);
+          }
+        }
+      } catch (err) {
+        console.error(`[Projects] Failed to create GitHub check run: ${err.message}`);
+      }
+    }
+
+    // Reset build status to building
+    await this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: {
+        buildStatus: 'building',
+        buildStepTimestamps: { __start: Date.now() },
+        buildLogs: `Auto-deploy triggered by push to ${deployment.autoDeployBranch || deployment.githubBranch}\nCommit: ${commitSha?.substring(0, 7)} - ${commitMessage.split('\n')[0]}\n\n`,
+        buildError: null,
+      },
+    });
+
+    // Extract image name from current image
+    const imageParts = deployment.image?.split('/') || [];
+    const imageNameWithTag = imageParts[imageParts.length - 1] || `${deployment.project.namespace}-${deployment.name}`;
+    const [imageName] = imageNameWithTag.split(':');
+
+    // Generate unique tag based on timestamp
+    const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').slice(0, 14);
+    const uniqueTag = `v${timestamp}`;
+
+    // Get service configuration
+    const service = deployment.services[0];
+    const rawPorts = service?.ports.map(port => ({
+      name: port.name,
+      containerPort: port.targetPort,
+      servicePort: port.port,
+      protocol: port.protocol,
+      nodePort: port.nodePort || undefined,
+    })) || [];
+
+    const env = deployment.envVars.map(ev => ({
+      key: ev.key,
+      value: ev.value,
+    }));
+
+    const volumes = (deployment.volumes || []).map(vol => ({
+      name: vol.name,
+      type: vol.type as 'pvc' | 'hostPath' | 'emptyDir',
+      mountPath: vol.mountPath,
+      pvcName: vol.pvcName || undefined,
+      storageSize: vol.storageSize || undefined,
+      hostPath: vol.hostPath || undefined,
+      readOnly: vol.readOnly,
+    }));
+
+    // Start build process with GitHub check run info
+    this.buildAndDeployAsync(
+      deploymentId,
+      {
+        repoUrl: deployment.githubRepo,
+        branch: deployment.autoDeployBranch || deployment.githubBranch,
+        dockerfilePath: deployment.dockerfilePath,
+        buildFromRoot: deployment.buildFromRoot ?? false,
+        buildWithDepot: deployment.buildWithDepot ?? false,
+        buildType: deployment.buildType as 'dockerfile' | 'railpack',
+        imageName,
+        tag: uniqueTag,
+        namespace: deployment.namespace,
+        name: deployment.name,
+        replicas: deployment.replicas,
+        rawPorts,
+        env,
+        exposePublic: service?.type === 'external',
+        volumes,
+        isRebuild: true,
+        commitSha,
+        commitMessage: commitMessage.split('\n')[0],
+        commitAuthorName,
+        commitAuthorUsername,
+        // GitHub Check Run info (uses App, not user)
+        checkRunId,
+        installationId: installationId ? installationId.toString() : null,
+        repoInfo,
+        triggerType: 'auto',
+      },
+      installationAccessToken, // Use GitHub App installation token for cloning
+    ).catch((error) => {
+      console.error(`[Projects] Auto-deploy failed for deployment ${deploymentId}:`, error);
+    });
+  }
+
+  async getAutoDeployStatus(deploymentId: string) {
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: {
+        autoDeployEnabled: true,
+        autoDeployBranch: true,
+        githubRepo: true,
+        githubBranch: true,
+      },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    // Check if GitHub App has access to this repo
+    let appInstalled = false;
+    if (deployment.githubRepo) {
+      const repoInfo = this.githubService.parseRepoUrl(deployment.githubRepo);
+      if (repoInfo) {
+        try {
+          const installation = await this.githubService.findInstallationForRepo(repoInfo.owner, repoInfo.repo);
+          appInstalled = !!installation;
+        } catch {
+          appInstalled = false;
+        }
+      }
+    }
+
+    return {
+      enabled: deployment.autoDeployEnabled,
+      branch: deployment.autoDeployBranch || deployment.githubBranch,
+      appInstalled,
+    };
+  }
+
+  async getGitHubDeployments(deploymentId: string) {
+    return this.prisma.gitHubDeployment.findMany({
+      where: { deploymentId },
+      orderBy: { createdAt: 'desc' },
+      take: 20,
+    });
+  }
+  // ── Public deployment-port exposure ──
+
+  private async pickFreePublicDeploymentPort(ip: string): Promise<number> {
+    const dbPortsRaw = await this.prisma.database.findMany({
+      where: { publicIp: ip, publicPort: { not: null } },
+      select: { publicPort: true },
+    });
+    const svcPortsRaw = await this.prisma.servicePort.findMany({
+      where: { publicEnabled: true, publicPort: { not: null } },
+      select: { publicPort: true },
+    });
+    const taken = new Set<number>();
+    for (const r of dbPortsRaw) if (typeof r.publicPort === 'number') taken.add(r.publicPort);
+    for (const r of svcPortsRaw) if (typeof r.publicPort === 'number') taken.add(r.publicPort);
+
+    try {
+      const live = await this.k8sNetwork.listInUsePortsOnIp(ip);
+      for (const p of live) taken.add(p);
+    } catch (e: any) {
+      console.error(`[Deployment/public] Failed to list in-use ports on ${ip}: ${e?.message}`);
+    }
+
+    const MIN = 30000;
+    const MAX = 32767;
+    for (let i = 0; i < 200; i++) {
+      const port = Math.floor(Math.random() * (MAX - MIN + 1)) + MIN;
+      if (!taken.has(port)) return port;
+    }
+    throw new BadRequestException('Could not find a free public port after 200 attempts');
+  }
+
+  private async syncPublicDeploymentNetworkPolicy(namespace: string, deploymentName: string, deploymentId: string) {
+    const publicPorts = await this.prisma.servicePort.findMany({
+      where: {
+        publicEnabled: true,
+        service: { deploymentId },
+      },
+      select: { targetPort: true, protocol: true },
+    });
+    const deduped = new Map<string, { port: number; protocol: string }>();
+    for (const p of publicPorts) {
+      const proto = p.protocol?.toUpperCase() === 'UDP' ? 'UDP' : 'TCP';
+      deduped.set(`${proto}:${p.targetPort}`, { port: p.targetPort, protocol: proto });
+    }
+    try {
+      await this.k8sNetwork.upsertPublicDeploymentNetworkPolicy(
+        namespace,
+        deploymentName,
+        Array.from(deduped.values()),
+      );
+    } catch (e: any) {
+      console.error(`[Deployment/public] Failed to sync NetworkPolicy: ${e?.message}`);
+    }
+  }
+
+  async enableServicePortPublic(
+    deploymentId: string,
+    serviceId: string,
+    portId: string,
+    clerkId: string,
+    userData?: any,
+  ) {
+    const { user, port, deployment } = await this.access.assertServicePortEditor(deploymentId, serviceId, portId, clerkId, userData);
+
+    const org = await this.prisma.organization.findUnique({ where: { id: deployment.project.organizationId } });
+    const ip = (org?.databasePublicIp || '').trim();
+    if (!ip) {
+      throw new BadRequestException('This organization does not have a public IP configured. Set one in organization settings.');
+    }
+
+    if (port.publicEnabled && port.publicPort) {
+      const host = this.k8sNetwork.publicDeploymentBaseDomain();
+      return { enabled: true, host, ip, port: port.publicPort, protocol: port.protocol };
+    }
+
+    const publicPort = await this.pickFreePublicDeploymentPort(ip);
+
+    await this.k8sNetwork.exposeDeploymentPortPublic({
+      namespace: deployment.namespace,
+      deploymentName: deployment.name,
+      loadBalancerIp: ip,
+      publicPort,
+      targetPort: port.targetPort,
+      protocol: port.protocol,
+    });
+
+    await this.prisma.servicePort.update({
+      where: { id: port.id },
+      data: { publicEnabled: true, publicPort },
+    });
+
+    await this.syncPublicDeploymentNetworkPolicy(deployment.namespace, deployment.name, deployment.id);
+
+    void this.audit.log({
+      action: 'service.port.public_enabled',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId: deployment.id,
+      targetType: 'service_port',
+      targetId: port.id,
+      targetLabel: `${deployment.name}:${port.targetPort}`,
+      metadata: { publicPort, protocol: port.protocol, ip },
+    });
+
+    const host = this.k8sNetwork.publicDeploymentBaseDomain();
+    return { enabled: true, host, ip, port: publicPort, protocol: port.protocol };
+  }
+
+  async disableServicePortPublic(
+    deploymentId: string,
+    serviceId: string,
+    portId: string,
+    clerkId: string,
+    userData?: any,
+  ) {
+    const { user, port, deployment } = await this.access.assertServicePortEditor(deploymentId, serviceId, portId, clerkId, userData);
+    const previousPublicPort = port.publicPort;
+
+    if (port.publicEnabled && port.publicPort) {
+      try {
+        await this.k8sNetwork.unexposeDeploymentPortPublic({
+          namespace: deployment.namespace,
+          deploymentName: deployment.name,
+          publicPort: port.publicPort,
+          protocol: port.protocol,
+        });
+      } catch (e: any) {
+        console.error(`[Deployment/public] Failed to delete public Service: ${e?.message}`);
+      }
+    }
+
+    await this.prisma.servicePort.update({
+      where: { id: port.id },
+      data: { publicEnabled: false, publicPort: null },
+    });
+
+    await this.syncPublicDeploymentNetworkPolicy(deployment.namespace, deployment.name, deployment.id);
+
+    void this.audit.log({
+      action: 'service.port.public_disabled',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId: deployment.id,
+      targetType: 'service_port',
+      targetId: port.id,
+      targetLabel: `${deployment.name}:${port.targetPort}`,
+      metadata: { previousPublicPort, protocol: port.protocol },
+    });
+
+    return { enabled: false };
+  }
+  scrubDeploymentForViewer<
+    T extends {
+      envVars?: Array<{ key: string; value: string | null }> | null;
+      buildLogs?: string | null;
+      buildError?: string | null;
+    },
+  >(d: T): T {
+    return {
+      ...d,
+      envVars: d.envVars
+        ? d.envVars.map((ev) => ({ ...ev, value: null }))
+        : d.envVars,
+      buildLogs: null,
+      buildError: null,
+    } as T;
+  }
+
+  /**
+   * Nullify member emails (project + adder) when the requester is a viewer.
+   */
+  private scrubMembersForViewer<
+    M extends {
+      user?: { email?: string | null } | null;
+      adder?: { email?: string | null } | null;
+    },
+  >(members: M[] | null | undefined): M[] {
+    if (!members) return [] as M[];
+    return members.map((m) => ({
+      ...m,
+      user: m.user ? { ...m.user, email: null } : m.user,
+      adder: m.adder ? { ...m.adder, email: null } : m.adder,
+    }));
+  }
+
+  async resolvePlacementForProject(projectId: string): Promise<{
+    allowedNodes: string[] | null;
+    deniedNodes: string[];
+  }> {
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { organizationId: true },
+    });
+    if (!project) return { allowedNodes: null, deniedNodes: [] };
+    const placement = await this.nodesService.getPlacementForOrg(project.organizationId);
+    return { allowedNodes: placement.allowedNodes, deniedNodes: placement.deniedNodes };
+  }
+
+  assertNotComposeManaged(deployment: { composeStackId?: string | null } | null | undefined, action: string) {
+    if (deployment?.composeStackId) {
+      throw new BadRequestException(
+        `This deployment is managed by a Compose file. ${action} via its parent compose stack.`,
+      );
+    }
+  }
+
+  formatLivePods(pods: Array<any> = []) {
+    return pods.map((pod) => ({
+      id: pod.name,
+      name: pod.name,
+      status: pod.status,
+      ip: pod.podIp,
+      podIp: pod.podIp,
+      nodeName: pod.nodeName,
+      restartCount: typeof pod.restartCount === 'number' ? pod.restartCount : 0,
+      startTime: pod.createdAt,
+      createdAt: pod.createdAt,
+      cpuUsage: pod.cpuUsage ?? null,
+      memoryUsage: pod.memoryUsage ?? null,
+      containers:
+        pod.containers?.map((container) => ({
+          name: container.name,
+          image: container.image,
+          ready: container.ready ?? false,
+          restartCount: typeof container.restartCount === 'number' ? container.restartCount : 0,
+        })) ?? [],
+    }));
+  }
+
+  /**
+   * Compute the runtime deployment status from Kubernetes state.
+   * Possible values: 'running' | 'restarting' | 'scaling' | 'failed' | 'stopped' | 'unhealthy' | 'pending'
+   */
+  async computeDeploymentStatus(
+    deployment: any,
+    prefetched?: { pods: any[]; warnings: any[] },
+  ): Promise<string> {
+    if (deployment.replicas === 0) {
+      return 'stopped';
+    }
+
+    if (!deployment.name || !deployment.namespace) {
+      return deployment.status;
+    }
+
+    try {
+      let pods: any[];
+      let warnings: any[];
+      if (prefetched) {
+        pods = prefetched.pods ?? [];
+        warnings = prefetched.warnings ?? [];
+      } else {
+        const livePods = await this.k8sWorkload.getDeploymentPods(
+          deployment.name,
+          deployment.namespace,
+        );
+        pods = this.formatLivePods(livePods?.pods) ?? [];
+        warnings = livePods?.warnings || [];
+      }
+
+      const readyPods = pods?.filter((pod: any) => pod.status?.toLowerCase() === 'ready') ?? [];
+      const allPods = (pods ?? []).filter((pod: any) => pod.status?.toLowerCase() !== 'succeeded');
+      const desiredReplicas = deployment.replicas || 1;
+
+      if (allPods.length === 0) {
+        return 'pending';
+      }
+
+      const hasBackOffWarning = warnings.some(warning =>
+        warning.message?.toLowerCase().includes('back-off') ||
+        warning.message?.toLowerCase().includes('backoff') ||
+        warning.message?.toLowerCase().includes('crashloop')
+      );
+
+      const hasCrashingPods = allPods.some((pod: any) => {
+        const restartCount = typeof pod.restartCount === 'number' ? pod.restartCount : 0;
+        return restartCount > 5 && pod.status?.toLowerCase() !== 'ready';
+      });
+
+      const hasAnyRestarts = allPods.some((pod: any) => {
+        const restartCount = typeof pod.restartCount === 'number' ? pod.restartCount : 0;
+        return restartCount > 0;
+      });
+
+      // No ready pods at all
+      if (readyPods.length === 0) {
+        if (hasBackOffWarning || hasCrashingPods) {
+          return 'failed';
+        }
+        // Pods exist but none ready and no crash loops — starting up or restarting
+        return hasAnyRestarts ? 'restarting' : 'pending';
+      }
+
+      // Some pods ready, some not
+      if (readyPods.length < desiredReplicas) {
+        if (hasBackOffWarning || hasCrashingPods) {
+          return 'unhealthy';
+        }
+        // Pods cycling with restarts = rolling restart, otherwise scaling up
+        return hasAnyRestarts ? 'restarting' : 'scaling';
+      }
+
+      // More total pods than desired = scaling down or rolling restart in progress
+      if (allPods.length > desiredReplicas) {
+        return hasAnyRestarts ? 'restarting' : 'scaling';
+      }
+
+      // All desired replicas are ready
+      if (hasBackOffWarning) {
+        return 'unhealthy';
+      }
+
+      return 'running';
+    } catch (error) {
+      console.error(
+        `[ProjectsService] Failed to compute status for deployment ${deployment.id}:`,
+        error instanceof Error ? error.message : error
+      );
+      return deployment.status;
+    }
+  }
+
+  addInternalUrlsToServices(services: any[], namespace: string) {
+    if (!Array.isArray(services) || !namespace) {
+      return services;
+    }
+
+    return services.map((service) => {
+      const serviceName = service.name;
+      const ports = service.ports || [];
+      
+      const internalUrls = ports.map((port: any) => {
+        const portNumber = port.port || service.port || 80;
+        return `${serviceName}.${namespace}.svc.cluster.local:${portNumber}`;
+      });
+
+      return {
+        ...service,
+        internalUrl: internalUrls.length > 0 ? internalUrls[0] : `${serviceName}.${namespace}.svc.cluster.local:${service.port || 80}`,
+        internalUrls: internalUrls.length > 0 ? internalUrls : [`${serviceName}.${namespace}.svc.cluster.local:${service.port || 80}`],
+      };
+    });
+  }
+
+  addInternalUrlsToDeployment(deployment: any) {
+    if (!deployment || !deployment.namespace) {
+      return deployment;
+    }
+
+    if (deployment.services && Array.isArray(deployment.services)) {
+      const servicesWithInternalUrls = this.addInternalUrlsToServices(
+        deployment.services,
+        deployment.namespace
+      );
+      return {
+        ...deployment,
+        services: servicesWithInternalUrls,
+      };
+    }
+
+    return deployment;
+  }
+
+  normalizeServicePortInputs(
+    ports?: {
+      name?: string;
+      containerPort?: number;
+      servicePort?: number;
+      protocol?: string;
+      nodePort?: number;
+    }[],
+    options: { requireAtLeastOne?: boolean } = {}
+  ) {
+    const mapped: {
+      name?: string;
+      containerPort: number;
+      servicePort: number;
+      protocol: string;
+      nodePort?: number;
+    }[] = [];
+
+    if (!Array.isArray(ports)) {
+      if (options.requireAtLeastOne) {
+        throw new BadRequestException('At least one valid port is required');
+      }
+      return mapped;
+    }
+
+    for (const entry of ports) {
+      if (!entry) {
+        continue;
+      }
+
+      const containerPort = Number(entry.containerPort ?? entry.servicePort ?? 0);
+      const servicePort = Number(entry.servicePort ?? entry.containerPort ?? 0);
+
+      if (!Number.isInteger(containerPort) || containerPort <= 0) {
+        continue;
+      }
+
+      if (!Number.isInteger(servicePort) || servicePort <= 0) {
+        continue;
+      }
+
+      const protocol =
+        typeof entry.protocol === 'string' && entry.protocol.trim().length > 0
+          ? entry.protocol.trim().toUpperCase()
+          : 'TCP';
+
+      const nodePortValue =
+        entry.nodePort === undefined || entry.nodePort === null
+          ? undefined
+          : Number(entry.nodePort);
+
+      const nodePort =
+        nodePortValue !== undefined && Number.isInteger(nodePortValue) && nodePortValue > 0
+          ? nodePortValue
+          : undefined;
+
+      const name =
+        typeof entry.name === 'string' && entry.name.trim().length > 0
+          ? entry.name.trim()
+          : undefined;
+
+      mapped.push({
+        name,
+        containerPort,
+        servicePort,
+        protocol,
+        nodePort,
+      });
+    }
+
+    if (mapped.length === 0 && options.requireAtLeastOne) {
+      throw new BadRequestException('At least one valid port is required');
+    }
+
+    return mapped;
+  }
+
+  async updateDeploymentStrategy(
+    deploymentId: string,
+    strategy: 'rollingUpdate' | 'recreate',
+    userId?: string,
+  ) {
+    if (strategy !== 'rollingUpdate' && strategy !== 'recreate') {
+      throw new BadRequestException('Invalid deploy strategy');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: { volumes: true },
+    });
+    if (!deployment) throw new NotFoundException('Deployment not found');
+    this.assertNotComposeManaged(deployment, 'Change deploy strategy');
+
+    // Defense-in-depth: re-assert project-edit even though the controller already did.
+    if (userId) {
+      await this.authz.requireProjectEdit(deployment.projectId, userId, 'change deploy strategy');
+    }
+
+    // PVC volumes pin the strategy to Recreate — ReadWriteOnce can't satisfy
+    // a rolling cutover.
+    const hasPvc = deployment.volumes.some((v) => v.type === 'pvc');
+    if (hasPvc && strategy === 'rollingUpdate') {
+      throw new BadRequestException(
+        'This deployment has a PVC volume — rolling updates are not supported. Remove the PVC to switch back to rolling updates.',
+      );
+    }
+
+    await this.k8sWorkload.updateDeploymentStrategy(
+      deployment.name,
+      deployment.namespace,
+      strategy,
+    );
+
+    return this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: { deployStrategy: strategy },
+    });
+  }
+
+  async updateDeploymentImage(deploymentId: string, image: string, userId?: string) {
+    const trimmed = (image ?? '').toString().trim();
+    if (!trimmed) {
+      throw new BadRequestException('Image cannot be empty');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+    });
+    if (!deployment) throw new NotFoundException('Deployment not found');
+    this.assertNotComposeManaged(deployment, 'Change the image');
+
+    // Defense-in-depth: re-assert project-edit even though the controller already did.
+    if (userId) {
+      await this.authz.requireProjectEdit(deployment.projectId, userId, 'change deployment image');
+    }
+
+    // Image-source deployments only — anything tied to a repo is rebuilt from
+    // source by the GitHub flow, so a manual image change would just be
+    // overwritten by the next build.
+    if (deployment.githubRepo) {
+      throw new BadRequestException(
+        'This deployment is built from a GitHub repository. Use Redeploy to rebuild from source.',
+      );
+    }
+
+    // updateDeploymentImage patches k8s AND writes deployment.image in Prisma.
+    await this.k8sWorkload.updateDeploymentImage(
+      deployment.name,
+      deployment.namespace,
+      trimmed,
+    );
+
+    return this.prisma.deployment.findUnique({ where: { id: deploymentId } });
+  }
+
+  async updateDeploymentResources(
+    deploymentId: string,
+    data: { cpuRequestMilli: number | null; memoryRequestBytes: number | null },
+    userId?: string,
+  ) {
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: { project: true },
+    });
+    if (!deployment) throw new NotFoundException('Deployment not found');
+    this.assertNotComposeManaged(deployment, 'Update resources');
+
+    // Defense-in-depth: re-assert project-edit even though the controller already did.
+    if (userId) {
+      await this.authz.requireProjectEdit(deployment.projectId, userId, 'update deployment resources');
+    }
+
+    // Unlimited mode: cpuRequestMilli === 0 means remove all resource constraints.
+    const isUnlimited = data.cpuRequestMilli === 0 && data.memoryRequestBytes === 0;
+
+    if (isUnlimited) {
+      await this.k8sWorkload.removeDeploymentResources(
+        deployment.namespace,
+        deployment.name,
+      );
+    } else {
+      const resolved = await this.quotasService.resolvePodResources(deployment.projectId, {
+        cpuRequestMilli: data.cpuRequestMilli,
+        memoryRequestBytes: data.memoryRequestBytes,
+      });
+
+      // Org-wide delta check.
+      await this.quotasService.enforceOrgCapForNewPod(deployment.project.organizationId, {
+        cpuMilli: resolved.cpuMilli * (deployment.replicas || 1),
+        memoryBytes: resolved.memoryBytes * (deployment.replicas || 1),
+      });
+      // Per-user allowance check (charged to project owner).
+      await this.quotasService.enforceMemberAllowanceForNewPod(
+        deployment.project.organizationId,
+        deployment.project.ownerId,
+        {
+          cpuMilli: resolved.cpuMilli * (deployment.replicas || 1),
+          memoryBytes: resolved.memoryBytes * (deployment.replicas || 1),
+        },
+      );
+
+      await this.k8sWorkload.updateDeploymentResources(
+        deployment.namespace,
+        deployment.name,
+        resolved,
+      );
+    }
+
+    return this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: {
+        cpuRequestMilli: data.cpuRequestMilli,
+        memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
+      },
+    });
+  }
+
+  async createDeployment(
+    projectId: string,
+    data: {
+      name: string;
+      image: string;
+      port?: number;
+      ports?: {
+        name?: string;
+        containerPort?: number;
+        servicePort?: number;
+        protocol?: string;
+      }[];
+      replicas?: number;
+      env?: { key: string; value: string }[];
+      exposePublic?: boolean;
+      volumes?: {
+        name: string;
+        type: 'pvc' | 'hostPath' | 'emptyDir';
+        mountPath: string;
+        pvcName?: string;
+        storageSize?: string;
+        hostPath?: string;
+        readOnly?: boolean;
+      }[];
+      templateInstanceId?: string;
+      composeStackId?: string;
+      composeServiceName?: string;
+      cpuRequestMilli?: number | null;
+      memoryRequestBytes?: number | null;
+    },
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        organization: true,
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(`Project ${projectId} not found`);
+    }
+
+    await this.authz.requireProjectEdit(project.id, user.id, 'create deployments');
+
+    if (Array.isArray(data.volumes) && data.volumes.some((v) => v && v.type === 'hostPath')) {
+      throw new ForbiddenException('hostPath volumes are not permitted');
+    }
+
+    const nameInput = String(data.name || '').trim();
+    const image = String(data.image || '').trim();
+    const replicas = data.replicas && Number.isInteger(data.replicas) && data.replicas > 0 ? data.replicas : 1;
+
+    if (!nameInput) {
+      throw new BadRequestException('Deployment name is required');
+    }
+
+    if (!image) {
+      throw new BadRequestException('Image is required');
+    }
+
+    const name = formatSlug(nameInput);
+
+    if (!name) {
+      throw new BadRequestException('Deployment name cannot be empty');
+    }
+
+    const existingDeployment = await this.prisma.deployment.findUnique({
+      where: {
+        projectId_name: {
+          projectId: project.id,
+          name,
+        },
+      },
+    });
+
+    if (existingDeployment) {
+      throw new BadRequestException('A deployment with this name already exists in the project');
+    }
+
+    const envEntries = Array.isArray(data.env)
+      ? data.env
+          .filter((entry) => entry && typeof entry.key === 'string')
+          .map((entry) => ({
+            key: entry.key.trim(),
+            value: entry.value !== undefined && entry.value !== null ? String(entry.value) : '',
+          }))
+          .filter((entry) => entry.key.length > 0)
+      : [];
+
+    const uniqueEnv = new Map<string, string>();
+    for (const entry of envEntries) {
+      uniqueEnv.set(entry.key, entry.value);
+    }
+
+    const env = Array.from(uniqueEnv.entries()).map(([key, value]) => ({
+      key,
+      value,
+    }));
+
+    const exposePublic = Boolean(data.exposePublic);
+
+    const rawPorts = Array.isArray(data.ports) && data.ports.length > 0
+      ? data.ports
+      : [
+          {
+            name: 'http',
+            containerPort: data.port && Number.isInteger(data.port) && data.port > 0 ? data.port : 80,
+            servicePort: data.port && Number.isInteger(data.port) && data.port > 0 ? data.port : 80,
+            protocol: 'TCP',
+          },
+        ];
+
+    const volumes = Array.isArray(data.volumes) ? data.volumes : [];
+
+    // Resolve per-pod resources (explicit override → org default → fallback).
+    const podResources = await this.quotasService.resolvePodResources(project.id, {
+      cpuRequestMilli: data.cpuRequestMilli ?? null,
+      memoryRequestBytes: data.memoryRequestBytes ?? null,
+    });
+
+    await this.quotasService.enforceOrgCapForNewPod(project.organizationId, {
+      cpuMilli: podResources.cpuMilli * replicas,
+      memoryBytes: podResources.memoryBytes * replicas,
+    });
+    await this.quotasService.enforceMemberAllowanceForNewPod(
+      project.organizationId,
+      project.ownerId,
+      {
+        cpuMilli: podResources.cpuMilli * replicas,
+        memoryBytes: podResources.memoryBytes * replicas,
+      },
+    );
+    // Make sure the namespace ResourceQuota/LimitRange reflect current caps.
+    await this.quotasService.applyProjectQuota(project.id).catch((err) => {
+      console.error('[Projects] applyProjectQuota failed:', err);
+    });
+
+    const placement = await this.resolvePlacementForProject(project.id);
+    // PVC volumes force the Recreate update strategy on k8s; mirror that in
+    // the DB so the UI shows the truth from the moment the deployment exists.
+    const hasPvcOnCreate = (volumes ?? []).some((v) => v.type === 'pvc');
+    const initialStrategy: 'rollingUpdate' | 'recreate' = hasPvcOnCreate ? 'recreate' : 'rollingUpdate';
+    const deploymentResult = await this.k8sWorkload.createDeployment({
+      namespace: project.namespace,
+      name,
+      image,
+      replicas,
+      ports: rawPorts,
+      env,
+      serviceType: exposePublic ? 'NodePort' : 'ClusterIP',
+      volumes,
+      allowedNodes: placement.allowedNodes,
+      deniedNodes: placement.deniedNodes,
+      resources: podResources,
+      deployStrategy: initialStrategy,
+    });
+
+    let createdDeployment;
+    try {
+      createdDeployment = await this.prisma.$transaction(async (tx) => {
+      const deployment = await tx.deployment.create({
+        data: {
+          projectId: project.id,
+          name,
+          namespace: project.namespace,
+          image,
+          replicas,
+          status: 'running',
+          createdBy: user.id,
+          templateInstanceId: data.templateInstanceId ?? null,
+          composeStackId: data.composeStackId ?? null,
+          composeServiceName: data.composeServiceName ?? null,
+          deployStrategy: initialStrategy,
+          cpuRequestMilli: data.cpuRequestMilli ?? null,
+          memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
+        },
+      });
+
+      if (env.length > 0) {
+        await tx.deploymentEnvVar.createMany({
+          data: env.map((entry) => ({
+            deploymentId: deployment.id,
+            key: entry.key,
+            value: entry.value,
+          })),
+        });
+      }
+
+      if (volumes.length > 0) {
+        await tx.deploymentVolume.createMany({
+          data: volumes.map((vol) => ({
+            deploymentId: deployment.id,
+            name: vol.name.trim(),
+            type: vol.type === 'pvc' ? 'pvc' : vol.type === 'hostPath' ? 'hostPath' : 'emptyDir',
+            mountPath: vol.mountPath.trim(),
+            pvcName: vol.type === 'pvc' && vol.pvcName ? vol.pvcName.trim() : null,
+            storageSize: vol.type === 'pvc' && vol.storageSize ? vol.storageSize.trim() : null,
+            hostPath: vol.type === 'hostPath' && vol.hostPath ? vol.hostPath.trim() : null,
+            readOnly: Boolean(vol.readOnly),
+          })),
+        });
+      }
+
+      const normalizedPorts = deploymentResult.ports || [];
+      const primaryPort = normalizedPorts[0] || {
+        name: 'http',
+        containerPort: 80,
+        servicePort: 80,
+        protocol: 'TCP',
+        nodePort: null,
+      };
+      const primaryNodePort =
+        primaryPort.nodePort !== undefined && primaryPort.nodePort !== null
+          ? primaryPort.nodePort
+          : null;
+
+      const serviceType = exposePublic ? ServiceType.external : ServiceType.internal;
+      const externalIp = deploymentResult.externalIp || null;
+
+      const service = await tx.service.create({
+        data: {
+          deploymentId: deployment.id,
+          name,
+          type: serviceType,
+          port: primaryPort.servicePort,
+          targetPort: primaryPort.containerPort,
+          protocol: primaryPort.protocol,
+          externalIp,
+          nodePort: primaryNodePort,
+        },
+      });
+
+      if (normalizedPorts.length > 0) {
+        await tx.servicePort.createMany({
+          data: normalizedPorts.map((portEntry) => ({
+            serviceId: service.id,
+            name: portEntry.name,
+            port: portEntry.servicePort,
+            targetPort: portEntry.containerPort,
+            protocol: portEntry.protocol,
+            nodePort:
+              portEntry.nodePort !== undefined && portEntry.nodePort !== null
+                ? portEntry.nodePort
+                : null,
+          })),
+        });
+      }
+
+      return tx.deployment.findUnique({
+        where: { id: deployment.id },
+        include: {
+          pods: true,
+          services: {
+            include: {
+              ports: true,
+            },
+          },
+          envVars: true,
+          volumes: true,
+          ingresses: {
+            include: {
+              service: true,
+            },
+          },
+          project: {
+            include: {
+              organization: true,
+            },
+          },
+        },
+      });
+      });
+    } catch (e) {
+      try { await this.k8sWorkload.deleteDeployment(name, project.namespace); } catch { /* ignore */ }
+      try { await this.k8sNetwork.deleteService(project.namespace, name); } catch { /* ignore */ }
+      throw e;
+    }
+
+    if (createdDeployment) {
+      void this.audit.log({
+        action: 'deployment.created',
+        actorUserId: user.id,
+        actorEmail: user.email,
+        organizationId: project.organizationId,
+        projectId: project.id,
+        deploymentId: createdDeployment.id,
+        targetType: 'deployment',
+        targetId: createdDeployment.id,
+        targetLabel: createdDeployment.name,
+        metadata: { image, replicas, source: 'image' },
+      });
+    }
+
+    return createdDeployment;
+  }
+
+  async createDeploymentFromGitHub(
+    projectId: string,
+    data: {
+      name: string;
+      repoUrl: string;
+      branch: string;
+      dockerfilePath?: string;
+      target?: string;
+      tag?: string;
+      buildFromRoot?: boolean;
+      buildWithDepot?: boolean;
+      buildType?: 'dockerfile' | 'railpack';
+      port?: number;
+      ports?: {
+        name?: string;
+        containerPort?: number;
+        servicePort?: number;
+        protocol?: string;
+      }[];
+      replicas?: number;
+      env?: { key: string; value: string }[];
+      exposePublic?: boolean;
+      volumes?: {
+        name: string;
+        type: 'pvc' | 'hostPath' | 'emptyDir';
+        mountPath: string;
+        pvcName?: string;
+        storageSize?: string;
+        hostPath?: string;
+        readOnly?: boolean;
+      }[];
+      cpuRequestMilli?: number | null;
+      memoryRequestBytes?: number | null;
+      composeStackId?: string;
+      composeServiceName?: string;
+      autoDeployEnabled?: boolean;
+      autoDeployBranch?: string;
+    },
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: {
+        organization: true,
+      },
+    });
+
+    if (!project) {
+      throw new NotFoundException(`Project ${projectId} not found`);
+    }
+
+    await this.authz.requireProjectEdit(project.id, user.id, 'create deployments');
+
+    if (Array.isArray(data.volumes) && data.volumes.some((v) => v && v.type === 'hostPath')) {
+      throw new ForbiddenException('hostPath volumes are not permitted');
+    }
+
+    const nameInput = String(data.name || '').trim();
+    const replicas = data.replicas && Number.isInteger(data.replicas) && data.replicas > 0 ? data.replicas : 1;
+    let repoUrl = String(data.repoUrl || data['githubRepo'] || '').trim();
+    // Accept owner/repo shorthand and convert to full URL
+    if (repoUrl && !repoUrl.startsWith('http')) {
+      repoUrl = `https://github.com/${repoUrl}`;
+    }
+    const branch = String(data.branch || 'main').trim();
+    const dockerfilePath = String(data.dockerfilePath || '').trim();
+    const tag = data.tag ? String(data.tag).trim() : 'latest';
+    const buildType = data.buildType === 'railpack' ? 'railpack' : 'dockerfile';
+
+    // Validate refs and paths at the boundary. The same checks are
+    // enforced again inside DockerService.cloneRepository as defence in
+    // depth — see isSafeGitRef / isSafeRelativePath there.
+    const GIT_REF_RE = /^[A-Za-z0-9._/-]+$/;
+    if (branch.length > 200 || branch.startsWith('-') || branch.includes('..') || !GIT_REF_RE.test(branch)) {
+      throw new BadRequestException('Invalid branch name');
+    }
+    if (tag.length > 200 || tag.startsWith('-') || tag.includes('..') || !GIT_REF_RE.test(tag)) {
+      throw new BadRequestException('Invalid tag');
+    }
+    if (dockerfilePath) {
+      if (
+        dockerfilePath.length > 500 ||
+        dockerfilePath.startsWith('/') ||
+        dockerfilePath.startsWith('\\') ||
+        dockerfilePath.includes('..') ||
+        dockerfilePath.includes('\0') ||
+        !/^[A-Za-z0-9._/\- ]+$/.test(dockerfilePath)
+      ) {
+        throw new BadRequestException('Invalid Dockerfile path');
+      }
+    }
+
+    if (!nameInput) {
+      throw new BadRequestException('Deployment name is required');
+    }
+
+    if (!repoUrl) {
+      throw new BadRequestException('Repository URL is required');
+    }
+
+    if (!branch) {
+      throw new BadRequestException('Branch is required');
+    }
+
+    // Verify the requesting user can actually access this repo on GitHub.
+    const parsed = this.githubService.parseRepoUrl(repoUrl);
+    if (!parsed) {
+      throw new BadRequestException('Could not parse repository URL');
+    }
+    const canAccess = await this.githubService.verifyUserCanAccessRepo(user.id, parsed.owner, parsed.repo);
+    if (!canAccess) {
+      throw new ForbiddenException(
+        'You do not have access to this repository on GitHub. Connect your GitHub account or request access to the repo.'
+      );
+    }
+
+    // Bind the deployment to the specific GitHub App installation that owns
+    // the repo. Auto-deploy webhooks will refuse to fire unless the incoming
+    // installation id matches this one, preventing impersonation by another
+    // installation with a colliding repo full_name.
+    const repoInstallation = await this.githubService.findInstallationForRepo(parsed.owner, parsed.repo);
+    if (!repoInstallation) {
+      throw new BadRequestException(
+        'The GitHub App is not installed on this repository. Please install the app first.'
+      );
+    }
+
+    // Dockerfile path is only required for dockerfile builds
+    if (buildType === 'dockerfile' && !dockerfilePath) {
+      throw new BadRequestException('Dockerfile path is required for Dockerfile builds');
+    }
+
+    const name = formatSlug(nameInput);
+
+    if (!name) {
+      throw new BadRequestException('Deployment name cannot be empty');
+    }
+
+    const existingDeployment = await this.prisma.deployment.findUnique({
+      where: {
+        projectId_name: {
+          projectId: project.id,
+          name,
+        },
+      },
+    });
+
+    if (existingDeployment) {
+      throw new BadRequestException('A deployment with this name already exists in the project');
+    }
+
+    const imageName = `${project.namespace}-${name}`;
+    
+    // Generate unique tag based on timestamp
+    const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').slice(0, 14);
+    const uniqueTag = `v${timestamp}`;
+    
+    const envEntries = Array.isArray(data.env)
+      ? data.env
+          .filter((entry) => entry && typeof entry.key === 'string')
+          .map((entry) => ({
+            key: entry.key.trim(),
+            value: entry.value !== undefined && entry.value !== null ? String(entry.value) : '',
+          }))
+          .filter((entry) => entry.key.length > 0)
+      : [];
+
+    const uniqueEnv = new Map<string, string>();
+    for (const entry of envEntries) {
+      uniqueEnv.set(entry.key, entry.value);
+    }
+
+    const env = Array.from(uniqueEnv.entries()).map(([key, value]) => ({
+      key,
+      value,
+    }));
+
+    const exposePublic = Boolean(data.exposePublic);
+
+    // Auto-detect port from Dockerfile EXPOSE directive if no port specified
+    let detectedPort: number | null = null;
+    const hasExplicitPort = (data.port && Number.isInteger(data.port) && data.port > 0) ||
+      (Array.isArray(data.ports) && data.ports.length > 0);
+
+    if (!hasExplicitPort && repoUrl && dockerfilePath) {
+      try {
+        const repoInfo = this.githubService.parseRepoUrl(repoUrl);
+        const userToken = repoInfo ? await this.githubService.getValidUserToken(user.id) : null;
+        if (repoInfo && userToken) {
+          const dockerfileContent = await this.githubService.getFileContent(
+            userToken,
+            repoInfo.owner,
+            repoInfo.repo,
+            dockerfilePath,
+            branch,
+          );
+          detectedPort = this.githubService.parseExposedPort(dockerfileContent);
+          if (detectedPort) {
+            console.log(`[Projects] Auto-detected EXPOSE port ${detectedPort} from ${dockerfilePath}`);
+          }
+        }
+      } catch (error) {
+        console.warn(`[Projects] Failed to auto-detect port from Dockerfile:`, error.message);
+      }
+    }
+
+    const defaultPort = detectedPort || 80;
+
+    const rawPorts = Array.isArray(data.ports) && data.ports.length > 0
+      ? data.ports
+      : [
+          {
+            name: 'http',
+            containerPort: data.port && Number.isInteger(data.port) && data.port > 0 ? data.port : defaultPort,
+            servicePort: data.port && Number.isInteger(data.port) && data.port > 0 ? data.port : defaultPort,
+            protocol: 'TCP',
+          },
+        ];
+
+    // Create deployment record with buildStatus='building' and status='pending'
+    const buildMethodLabel = buildType === 'railpack' ? 'Railpack' : 'Dockerfile';
+    const deployment = await this.prisma.deployment.create({
+      data: {
+        projectId: project.id,
+        name,
+        namespace: project.namespace,
+        image: `${this.dockerService.getImagePath(imageName, uniqueTag)}`, // Placeholder, will be updated
+        replicas,
+        status: 'pending',
+        buildStatus: 'building',
+        buildType,
+        githubRepo: repoUrl,
+        githubBranch: branch,
+        githubInstallationId: repoInstallation.installationId,
+        dockerfilePath: buildType === 'dockerfile' ? dockerfilePath : null,
+        buildFromRoot: data.buildFromRoot ?? false,
+        buildWithDepot: data.buildWithDepot ?? false,
+        createdBy: user.id,
+        buildLogs: `[INFO] Starting ${buildMethodLabel} build for ${repoUrl}@${branch}\n`,
+        buildStepTimestamps: { __start: Date.now() },
+        cpuRequestMilli: data.cpuRequestMilli ?? null,
+        memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
+        composeStackId: data.composeStackId ?? null,
+        composeServiceName: data.composeServiceName ?? null,
+        autoDeployEnabled: data.autoDeployEnabled ?? false,
+        autoDeployBranch: data.autoDeployBranch ?? null,
+      },
+    });
+
+    // Add environment variables
+    if (env.length > 0) {
+      await this.prisma.deploymentEnvVar.createMany({
+        data: env.map((entry) => ({
+          deploymentId: deployment.id,
+          key: entry.key,
+          value: entry.value,
+        })),
+      });
+    }
+
+    // Add volumes
+    const volumes = Array.isArray(data.volumes) ? data.volumes : [];
+    if (volumes.length > 0) {
+      await this.prisma.deploymentVolume.createMany({
+        data: volumes.map((vol) => ({
+          deploymentId: deployment.id,
+          name: vol.name.trim(),
+          type: vol.type === 'pvc' ? 'pvc' : vol.type === 'hostPath' ? 'hostPath' : 'emptyDir',
+          mountPath: vol.mountPath.trim(),
+          pvcName: vol.type === 'pvc' && vol.pvcName ? vol.pvcName.trim() : null,
+          storageSize: vol.type === 'pvc' && vol.storageSize ? vol.storageSize.trim() : null,
+          hostPath: vol.type === 'hostPath' && vol.hostPath ? vol.hostPath.trim() : null,
+          readOnly: Boolean(vol.readOnly),
+        })),
+      });
+    }
+
+    console.log(`[Projects] Created deployment record ${deployment.id}, starting async build`);
+
+    void this.audit.log({
+      action: 'deployment.created',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: project.organizationId,
+      projectId: project.id,
+      deploymentId: deployment.id,
+      targetType: 'deployment',
+      targetId: deployment.id,
+      targetLabel: deployment.name,
+      metadata: { source: 'github', repoUrl, branch, buildType },
+    });
+
+    // Start build process asynchronously - don't await!
+    this.buildAndDeployAsync(
+      deployment.id,
+      {
+        repoUrl,
+        branch,
+        dockerfilePath,
+        target: data.target,
+        buildFromRoot: data.buildFromRoot,
+        buildWithDepot: data.buildWithDepot,
+        buildType,
+        imageName,
+        tag: uniqueTag,
+        namespace: project.namespace,
+        name,
+        replicas,
+        rawPorts,
+        env,
+        exposePublic,
+        volumes,
+        isRebuild: false,
+        triggerType: 'manual',
+        triggeredById: user.id,
+      },
+      await this.githubService.getValidUserToken(user.id),
+    ).catch((error) => {
+      console.error(`[Projects] Async build failed for deployment ${deployment.id}:`, error);
+    });
+
+    // Return deployment immediately so frontend can poll for logs
+    const result = await this.prisma.deployment.findUnique({
+      where: { id: deployment.id },
+      include: {
+        pods: true,
+        services: {
+          include: {
+            ports: true,
+          },
+        },
+        envVars: true,
+        ingresses: {
+          include: {
+            service: true,
+          },
+        },
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+      },
+    });
+    return this.addInternalUrlsToDeployment(result);
+  }
+
+  private async getDeploymentProgressUrl(deploymentId: string): Promise<string> {
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { project: { select: { organization: { select: { slug: true } } } } },
+    });
+    const orgSlug = deployment?.project?.organization?.slug;
+    return orgSlug
+      ? `${frontendUrl}/${orgSlug}/deployments/${deploymentId}/progress`
+      : `${frontendUrl}/deployments/${deploymentId}/progress`;
+  }
+
+  async buildAndDeployAsync(
+    deploymentId: string,
+    data: {
+      repoUrl: string;
+      branch: string;
+      dockerfilePath?: string;
+      target?: string;
+      buildFromRoot?: boolean;
+      buildWithDepot?: boolean;
+      buildType?: 'dockerfile' | 'railpack';
+      imageName: string;
+      tag: string;
+      namespace: string;
+      name: string;
+      replicas: number;
+      rawPorts: any[];
+      env: any[];
+      exposePublic: boolean;
+      volumes?: any[];
+      isRebuild?: boolean;
+      // GitHub Deployments API support (legacy)
+      commitSha?: string;
+      commitMessage?: string;
+      commitAuthorName?: string;
+      commitAuthorUsername?: string;
+      githubDeploymentId?: number | null;
+      githubAccessToken?: string | null;
+      repoInfo?: { owner: string; repo: string } | null;
+      // GitHub Checks API support (new - via App)
+      checkRunId?: number | null;
+      installationId?: string | null;
+      // Build trigger info
+      triggerType?: string;
+      triggeredById?: string;
+    },
+    githubAccessToken?: string,
+  ) {
+    console.log(`[Projects] Starting buildAndDeployAsync for deployment ${deploymentId}`);
+    
+    try {
+      await this.dockerService.cancelBuildJobsByDeploymentId(deploymentId);
+    } catch (error) {
+      console.warn(`[Projects] Failed to cancel existing build jobs:`, error);
+    }
+
+    // Set up periodic log updates to GitHub Check Run
+    let logUpdateInterval: NodeJS.Timeout | null = null;
+    let lastLogLength = 0;
+
+    if (data.checkRunId && data.installationId && data.repoInfo) {
+      logUpdateInterval = setInterval(async () => {
+        try {
+          const currentDeployment = await this.prisma.deployment.findUnique({
+            where: { id: deploymentId },
+            select: { buildLogs: true, buildStep: true },
+          });
+
+          const currentLogs = currentDeployment?.buildLogs || '';
+
+          // Only update if logs have changed
+          if (currentLogs.length > lastLogLength) {
+            lastLogLength = currentLogs.length;
+
+            const stepLabel = currentDeployment?.buildStep === 'cloning' ? 'Cloning repository...' :
+                             currentDeployment?.buildStep === 'building' ? 'Building image...' :
+                             currentDeployment?.buildStep === 'pushing' ? 'Pushing to registry...' :
+                             currentDeployment?.buildStep === 'deploying' ? 'Deploying to cluster...' :
+                             'Building...';
+
+            await this.githubService.updateCheckRun(
+              BigInt(data.installationId),
+              data.repoInfo.owner,
+              data.repoInfo.repo,
+              data.checkRunId,
+              {
+                status: 'in_progress',
+                output: {
+                  title: stepLabel,
+                  summary: `Deploying \`${data.name}\` from commit \`${data.commitSha?.substring(0, 7) || 'unknown'}\``,
+                  text: this.githubService.formatLogsForCheck(currentLogs),
+                },
+              }
+            );
+          }
+        } catch (err) {
+          // Don't fail the build if log updates fail
+          console.error(`[Projects] Failed to update check run logs: ${err.message}`);
+        }
+      }, 10000); // Update every 10 seconds
+    }
+
+    try {
+      const buildTypeLabel = data.buildType === 'railpack' ? 'Railpack' : 'Dockerfile';
+      console.log(`[Projects] Building image from GitHub using ${buildTypeLabel}: ${data.repoUrl}@${data.branch} -> ${data.imageName}:${data.tag}${data.target ? ` (target: ${data.target})` : ''}`, {
+        deploymentId,
+        dockerfilePath: data.dockerfilePath,
+        buildFromRoot: data.buildFromRoot,
+        hasAccessToken: !!githubAccessToken,
+        isRebuild: data.isRebuild,
+      });
+
+      const buildStartTime = Date.now();
+      
+      const image = await this.dockerService.buildAndPushFromGitHub({
+        repoUrl: data.repoUrl,
+        branch: data.branch,
+        dockerfilePath: data.dockerfilePath || 'Dockerfile',
+        target: data.target,
+        buildFromRoot: data.buildFromRoot,
+        buildWithDepot: data.buildWithDepot,
+        buildType: data.buildType,
+        imageName: data.imageName,
+        tag: data.tag,
+        deploymentId,
+        accessToken: githubAccessToken,
+        // Scope this build's slice of the shared buildkit-cache PVC to the
+        // project namespace. Kata's mount surface ⇒ the build VM only sees
+        // this directory and can't reach other tenants' cache entries.
+        cacheTenantKey: data.namespace,
+      });
+
+      const buildCompletedAt = new Date();
+      const buildDuration = Math.floor((buildCompletedAt.getTime() - buildStartTime) / 1000);
+      console.log(`[Projects] Built and pushed image: ${image}, ${data.isRebuild ? 'updating' : 'creating'} Kubernetes resources (build took ${buildDuration}s)`);
+
+      // Update deployment with final image
+      await this.prisma.deployment.update({
+        where: { id: deploymentId },
+        data: { image },
+      });
+
+      // Save image history and enforce max 10 images per deployment
+      await this.prisma.$transaction(async (tx) => {
+        // Mark all previous images as inactive
+        await tx.imageHistory.updateMany({
+          where: { deploymentId, isActive: true },
+          data: { isActive: false },
+        });
+
+        // Create new image history entry
+        const deployment = await tx.deployment.findUnique({
+          where: { id: deploymentId },
+          select: { buildLogs: true },
+        });
+
+        await tx.imageHistory.create({
+          data: {
+            deploymentId,
+            image,
+            tag: data.tag,
+            commitSha: data.commitSha || null,
+            commitMessage: data.commitMessage || null,
+            commitAuthorName: data.commitAuthorName || null,
+            commitAuthorUsername: data.commitAuthorUsername || null,
+            branch: data.branch,
+            buildLogs: deployment?.buildLogs || null,
+            buildStartedAt: new Date(buildStartTime),
+            buildCompletedAt,
+            triggerType: data.triggerType || null,
+            triggeredById: data.triggeredById || null,
+            isActive: true,
+          },
+        });
+
+        // Remove oldest images if we exceed max 10
+        const allImages = await tx.imageHistory.findMany({
+          where: { deploymentId },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true, image: true },
+        });
+
+        if (allImages.length > 10) {
+          const imagesToRemove = allImages.slice(10);
+          const idsToRemove = imagesToRemove.map((img) => img.id);
+
+          await tx.imageHistory.deleteMany({
+            where: { id: { in: idsToRemove } },
+          });
+
+          // Delete old artifact tags from the registry in the background
+          const imageRefs = imagesToRemove.map((img) => img.image);
+          this.dockerService.deleteArtifactsFromRegistry(imageRefs).catch((err) => {
+            console.error(`[Projects] Failed to delete old artifacts from registry:`, err);
+          });
+        }
+      });
+
+      let deploymentResult: any;
+
+      // Set buildStep to deploying
+      const currentDeploymentData = await this.prisma.deployment.findUnique({ where: { id: deploymentId }, select: { buildLogs: true, buildStepTimestamps: true } });
+      const currentLogs = currentDeploymentData?.buildLogs || '';
+      const currentTimestamps = (currentDeploymentData?.buildStepTimestamps as Record<string, number> | null) || {};
+      currentTimestamps['deploying'] = Date.now();
+      await this.prisma.deployment.update({
+        where: { id: deploymentId },
+        data: {
+          buildStep: 'deploying',
+          buildLogs: currentLogs + '[INFO] Creating Kubernetes deployment...\n',
+          buildStepTimestamps: currentTimestamps,
+        },
+      });
+
+      // Resolve node placement rules for this deployment's org once.
+      const deploymentRow = await this.prisma.deployment.findUnique({
+        where: { id: deploymentId },
+        select: {
+          projectId: true,
+          replicas: true,
+          cpuRequestMilli: true,
+          memoryRequestBytes: true,
+          deployStrategy: true,
+          project: { select: { organizationId: true, ownerId: true } },
+        },
+      });
+      const buildStrategy: 'rollingUpdate' | 'recreate' =
+        (deploymentRow?.deployStrategy as 'rollingUpdate' | 'recreate') ?? 'rollingUpdate';
+      const deployPlacement = deploymentRow
+        ? await this.resolvePlacementForProject(deploymentRow.projectId)
+        : { allowedNodes: null as string[] | null, deniedNodes: [] as string[] };
+
+      let rebuildResources: { cpuMilli: number; memoryBytes: number } | undefined;
+      const isUnlimitedDeploy = deploymentRow?.cpuRequestMilli === 0 &&
+        (deploymentRow?.memoryRequestBytes === BigInt(0) || deploymentRow?.memoryRequestBytes === null);
+      if (deploymentRow && !isUnlimitedDeploy) {
+        rebuildResources = await this.quotasService.resolvePodResources(deploymentRow.projectId, {
+          cpuRequestMilli: deploymentRow.cpuRequestMilli,
+          memoryRequestBytes: deploymentRow.memoryRequestBytes ? Number(deploymentRow.memoryRequestBytes) : null,
+        });
+        await this.quotasService.enforceOrgCapForNewPod(deploymentRow.project.organizationId, {
+          cpuMilli: rebuildResources.cpuMilli * (deploymentRow.replicas || 1),
+          memoryBytes: rebuildResources.memoryBytes * (deploymentRow.replicas || 1),
+        });
+        await this.quotasService.enforceMemberAllowanceForNewPod(
+          deploymentRow.project.organizationId,
+          deploymentRow.project.ownerId,
+          {
+            cpuMilli: rebuildResources.cpuMilli * (deploymentRow.replicas || 1),
+            memoryBytes: rebuildResources.memoryBytes * (deploymentRow.replicas || 1),
+          },
+        );
+        await this.quotasService.applyProjectQuota(deploymentRow.projectId).catch((err) => {
+          console.error('[Projects] applyProjectQuota failed:', err);
+        });
+      }
+
+      let shouldCreateNew = false;
+      if (data.isRebuild) {
+        // Check if Kubernetes deployment actually exists
+        const existingDeploymentDb = await this.prisma.deployment.findUnique({
+          where: { id: deploymentId },
+          include: { services: { include: { ports: true } } },
+        });
+
+        // Check if Kubernetes deployment actually exists in the cluster
+        let k8sDeploymentExists = false;
+        try {
+          const k8sDeployment = await this.k8sWorkload.getKubernetesDeployment(data.name, data.namespace);
+          k8sDeploymentExists = k8sDeployment !== null;
+        } catch (error) {
+          // If we can't check, assume it doesn't exist
+          k8sDeploymentExists = false;
+        }
+
+        // If no services exist in database OR Kubernetes deployment doesn't exist, create it
+        const hasServices = existingDeploymentDb?.services && existingDeploymentDb.services.length > 0;
+        if (!hasServices || !k8sDeploymentExists) {
+          shouldCreateNew = true;
+        }
+
+        if (shouldCreateNew) {
+          // Kubernetes deployment doesn't exist, create it as new
+          deploymentResult = await this.k8sWorkload.createDeployment({
+            namespace: data.namespace,
+            name: data.name,
+            image,
+            replicas: data.replicas,
+            ports: data.rawPorts,
+            env: data.env,
+            serviceType: data.exposePublic ? 'NodePort' : 'ClusterIP',
+            volumes: data.volumes || [],
+            allowedNodes: deployPlacement.allowedNodes,
+            deniedNodes: deployPlacement.deniedNodes,
+            resources: rebuildResources,
+            deployStrategy: buildStrategy,
+          });
+        } else {
+          // Update existing Kubernetes deployment with new image
+          await this.k8sWorkload.updateDeploymentImage(
+            data.name,
+            data.namespace,
+            image,
+          );
+
+          // Fetch existing service info for the response
+          deploymentResult = {
+            ports: existingDeploymentDb?.services[0]?.ports || [],
+            externalIp: existingDeploymentDb?.services[0]?.externalIp || null,
+          };
+        }
+      } else {
+        // Create new Kubernetes deployment
+        deploymentResult = await this.k8sWorkload.createDeployment({
+          namespace: data.namespace,
+          name: data.name,
+          image,
+          replicas: data.replicas,
+          ports: data.rawPorts,
+          env: data.env,
+          serviceType: data.exposePublic ? 'NodePort' : 'ClusterIP',
+          volumes: data.volumes || [],
+          deployStrategy: buildStrategy,
+        });
+      }
+
+      if (!data.isRebuild || shouldCreateNew) {
+        // Only create service and ports for new deployments or rebuilds where deployment didn't exist
+        await this.prisma.$transaction(async (tx) => {
+          // Check if services already exist (might exist from previous failed attempt)
+          const existingDeployment = await tx.deployment.findUnique({
+            where: { id: deploymentId },
+            include: { services: { include: { ports: true } } },
+          });
+
+          const hasServices = existingDeployment?.services && existingDeployment.services.length > 0;
+
+          if (!hasServices) {
+            // Create services and ports if they don't exist
+            const normalizedPorts = deploymentResult.ports || [];
+            const primaryPort = normalizedPorts[0] || {
+              name: 'http',
+              containerPort: 80,
+              servicePort: 80,
+              protocol: 'TCP',
+              nodePort: null,
+            };
+            const primaryNodePort =
+              primaryPort.nodePort !== undefined && primaryPort.nodePort !== null
+                ? primaryPort.nodePort
+                : null;
+
+            const serviceType = data.exposePublic ? ServiceType.external : ServiceType.internal;
+            const externalIp = deploymentResult.externalIp || null;
+
+            const service = await tx.service.create({
+              data: {
+                deploymentId,
+                name: data.name,
+                type: serviceType,
+                port: primaryPort.servicePort,
+                targetPort: primaryPort.containerPort,
+                protocol: primaryPort.protocol,
+                externalIp,
+                nodePort: primaryNodePort,
+              },
+            });
+
+            if (normalizedPorts.length > 0) {
+              await tx.servicePort.createMany({
+                data: normalizedPorts.map((portEntry) => ({
+                  serviceId: service.id,
+                  name: portEntry.name,
+                  port: portEntry.servicePort,
+                  targetPort: portEntry.containerPort,
+                  protocol: portEntry.protocol,
+                  nodePort:
+                    portEntry.nodePort !== undefined && portEntry.nodePort !== null
+                      ? portEntry.nodePort
+                      : null,
+                })),
+              });
+            }
+          }
+
+          // Update deployment status to success
+          const txDeployData = await tx.deployment.findUnique({ where: { id: deploymentId }, select: { buildLogs: true, buildStepTimestamps: true } });
+          const txTimestamps = (txDeployData?.buildStepTimestamps as Record<string, number> | null) || {};
+          txTimestamps['complete'] = Date.now();
+          await tx.deployment.update({
+            where: { id: deploymentId },
+            data: {
+              status: 'running',
+              buildStatus: 'succeeded',
+              buildStep: 'complete',
+              buildLogs: (txDeployData?.buildLogs || '') + '\nDeployment is live.',
+              buildStepTimestamps: txTimestamps,
+            },
+          });
+        });
+      } else {
+        // For rebuilds where deployment already existed, just update the status
+        const rebuildData = await this.prisma.deployment.findUnique({ where: { id: deploymentId }, select: { buildLogs: true, buildStepTimestamps: true } });
+        const rebuildTimestamps = (rebuildData?.buildStepTimestamps as Record<string, number> | null) || {};
+        rebuildTimestamps['complete'] = Date.now();
+        await this.prisma.deployment.update({
+          where: { id: deploymentId },
+          data: {
+            status: 'running',
+            buildStatus: 'succeeded',
+            buildStep: 'complete',
+            buildLogs: (rebuildData?.buildLogs || '') + '\nRebuild complete. Deployment is live.',
+            buildStepTimestamps: rebuildTimestamps,
+          },
+        });
+      }
+
+      console.log(`[Projects] Deployment ${deploymentId} completed successfully`);
+
+      // Update GitHub deployment status to success
+      if (data.githubDeploymentId && data.repoInfo && data.githubAccessToken) {
+        try {
+          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+
+          // Get the environment URL from ingresses if available
+          const deploymentWithIngress = await this.prisma.deployment.findUnique({
+            where: { id: deploymentId },
+            include: { ingresses: true },
+          });
+          const environmentUrl = deploymentWithIngress?.ingresses?.[0]?.host
+            ? `https://${deploymentWithIngress.ingresses[0].host}`
+            : undefined;
+
+          await this.githubService.updateDeploymentStatus(
+            data.githubAccessToken,
+            data.repoInfo.owner,
+            data.repoInfo.repo,
+            data.githubDeploymentId,
+            'success',
+            {
+              logUrl: await this.getDeploymentProgressUrl(deploymentId),
+              environmentUrl,
+              description: 'Deployment successful!',
+            }
+          );
+
+          // Update our record
+          await this.prisma.gitHubDeployment.updateMany({
+            where: {
+              deploymentId,
+              githubDeploymentId: BigInt(data.githubDeploymentId),
+            },
+            data: {
+              status: 'success',
+              environmentUrl,
+            },
+          });
+        } catch (err) {
+          console.error(`[Projects] Failed to update GitHub deployment status: ${err.message}`);
+        }
+      }
+
+      // Clear the log update interval
+      if (logUpdateInterval) {
+        clearInterval(logUpdateInterval);
+        logUpdateInterval = null;
+      }
+
+      // Update GitHub Check Run to success (via App)
+      if (data.checkRunId && data.installationId && data.repoInfo) {
+        try {
+          const finalDeployment = await this.prisma.deployment.findUnique({
+            where: { id: deploymentId },
+            select: { buildLogs: true, ingresses: { select: { host: true } } },
+          });
+
+          const buildLogs = finalDeployment?.buildLogs || '';
+          const environmentUrl = finalDeployment?.ingresses?.[0]?.host
+            ? `https://${finalDeployment.ingresses[0].host}`
+            : undefined;
+
+          await this.githubService.updateCheckRun(
+            BigInt(data.installationId),
+            data.repoInfo.owner,
+            data.repoInfo.repo,
+            data.checkRunId,
+            {
+              status: 'completed',
+              conclusion: 'success',
+              output: {
+                title: 'Deployment Successful',
+                summary: environmentUrl
+                  ? `\`${data.name}\` is live at [${environmentUrl}](${environmentUrl}).`
+                  : `\`${data.name}\` deployed successfully.`,
+                text: this.githubService.formatLogsForCheck(buildLogs),
+              },
+            }
+          );
+
+          console.log(`[Projects] Updated GitHub check run ${data.checkRunId} to success`);
+        } catch (err) {
+          console.error(`[Projects] Failed to update GitHub check run: ${err.message}`);
+        }
+      }
+
+      // Update GitHub Deployment to success (via App)
+      if (data.installationId && data.repoInfo) {
+        try {
+          // Find the GitHub deployment we created
+          const ghDeployment = await this.prisma.gitHubDeployment.findFirst({
+            where: { deploymentId, status: 'in_progress' },
+            orderBy: { createdAt: 'desc' },
+          });
+
+          if (ghDeployment) {
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+            const finalDeploymentData = await this.prisma.deployment.findUnique({
+              where: { id: deploymentId },
+              include: { ingresses: true },
+            });
+            const environmentUrl = finalDeploymentData?.ingresses?.[0]?.host
+              ? `https://${finalDeploymentData.ingresses[0].host}`
+              : undefined;
+
+            await this.githubService.updateDeploymentStatusWithApp(
+              BigInt(data.installationId),
+              data.repoInfo.owner,
+              data.repoInfo.repo,
+              Number(ghDeployment.githubDeploymentId),
+              'success',
+              {
+                logUrl: await this.getDeploymentProgressUrl(deploymentId),
+                environmentUrl,
+                description: 'Deployment successful!',
+              }
+            );
+
+            await this.prisma.gitHubDeployment.update({
+              where: { id: ghDeployment.id },
+              data: { status: 'success', environmentUrl },
+            });
+
+            console.log(`[Projects] Updated GitHub deployment ${ghDeployment.githubDeploymentId} to success`);
+          }
+        } catch (err) {
+          console.error(`[Projects] Failed to update GitHub deployment: ${err.message}`);
+        }
+      }
+    } catch (error) {
+      if (logUpdateInterval) {
+        clearInterval(logUpdateInterval);
+        logUpdateInterval = null;
+      }
+
+      const errorDetails = {
+        deploymentId,
+        imageName: data.imageName,
+        tag: data.tag,
+        repoUrl: data.repoUrl,
+        branch: data.branch,
+        buildType: data.buildType,
+        errorMessage: error.message,
+        errorType: error.constructor.name,
+        errorStack: error.stack,
+        statusCode: error.statusCode || error.status,
+        response: error.response,
+        isRebuild: data.isRebuild,
+      };
+
+      console.error(`[Projects] Build failed for deployment ${deploymentId}:`, errorDetails);
+
+      try {
+        const currentDeployment = await this.prisma.deployment.findUnique({
+          where: { id: deploymentId },
+          select: { buildLogs: true, buildStep: true, status: true, buildStatus: true },
+        });
+
+        // Don't overwrite a successful build status from a newer build
+        if (currentDeployment?.buildStatus === 'succeeded') {
+          console.log(`[Projects] Deployment ${deploymentId} already has a succeeded build (likely from a newer build), skipping error status update`);
+          return;
+        }
+
+        const errorLogEntry = `\n❌ Build failed at step '${currentDeployment?.buildStep || 'unknown'}'\nError: ${error.message}\nError Type: ${error.constructor.name}\n`;
+
+        await this.prisma.deployment.update({
+          where: { id: deploymentId },
+          data: {
+            buildStatus: 'failed',
+            buildError: error.message,
+            buildLogs: (currentDeployment?.buildLogs || '') + errorLogEntry,
+          },
+        });
+      } catch (dbErr) {
+        console.error(`[Projects] Failed to update error status in database:`, {
+          deploymentId,
+          dbError: dbErr.message,
+          originalError: error.message,
+        });
+      }
+
+      // Update GitHub deployment status to failure (legacy - user token)
+      if (data.githubDeploymentId && data.repoInfo && data.githubAccessToken) {
+        try {
+          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+          await this.githubService.updateDeploymentStatus(
+            data.githubAccessToken,
+            data.repoInfo.owner,
+            data.repoInfo.repo,
+            data.githubDeploymentId,
+            'failure',
+            {
+              logUrl: await this.getDeploymentProgressUrl(deploymentId),
+              description: `Build failed: ${error.message?.substring(0, 100)}`,
+            }
+          );
+
+          // Update our record
+          await this.prisma.gitHubDeployment.updateMany({
+            where: {
+              deploymentId,
+              githubDeploymentId: BigInt(data.githubDeploymentId),
+            },
+            data: {
+              status: 'failure',
+            },
+          });
+        } catch (ghErr) {
+          console.error(`[Projects] Failed to update GitHub deployment status: ${ghErr.message}`);
+        }
+      }
+
+      // Update GitHub Deployment to failure (via App)
+      if (data.installationId && data.repoInfo) {
+        try {
+          const ghDeployment = await this.prisma.gitHubDeployment.findFirst({
+            where: { deploymentId, status: 'in_progress' },
+            orderBy: { createdAt: 'desc' },
+          });
+
+          if (ghDeployment) {
+            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+            await this.githubService.updateDeploymentStatusWithApp(
+              BigInt(data.installationId),
+              data.repoInfo.owner,
+              data.repoInfo.repo,
+              Number(ghDeployment.githubDeploymentId),
+              'failure',
+              {
+                logUrl: await this.getDeploymentProgressUrl(deploymentId),
+                description: `Build failed: ${error.message?.substring(0, 100)}`,
+              }
+            );
+
+            await this.prisma.gitHubDeployment.update({
+              where: { id: ghDeployment.id },
+              data: { status: 'failure' },
+            });
+
+            console.log(`[Projects] Updated GitHub deployment ${ghDeployment.githubDeploymentId} to failure`);
+          }
+        } catch (ghErr) {
+          console.error(`[Projects] Failed to update GitHub deployment: ${ghErr.message}`);
+        }
+      }
+
+      // Update GitHub Check Run to failure (via App)
+      if (data.checkRunId && data.installationId && data.repoInfo) {
+        try {
+          const failedDeployment = await this.prisma.deployment.findUnique({
+            where: { id: deploymentId },
+            select: { buildLogs: true },
+          });
+
+          const buildLogs = failedDeployment?.buildLogs || '';
+
+          await this.githubService.updateCheckRun(
+            BigInt(data.installationId),
+            data.repoInfo.owner,
+            data.repoInfo.repo,
+            data.checkRunId,
+            {
+              status: 'completed',
+              conclusion: 'failure',
+              output: {
+                title: 'Deployment Failed',
+                summary: `❌ Failed to deploy \`${data.name}\`: ${error.message?.substring(0, 200) || 'Unknown error'}`,
+                text: this.githubService.formatLogsForCheck(buildLogs),
+              },
+            }
+          );
+
+          console.log(`[Projects] Updated GitHub check run ${data.checkRunId} to failure`);
+        } catch (ghErr) {
+          console.error(`[Projects] Failed to update GitHub check run: ${ghErr.message}`);
+        }
+      }
+    }
+  }
+
+  async rebuildDeployment(
+    deploymentId: string,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+        envVars: true,
+        volumes: true,
+        services: {
+          include: {
+            ports: true,
+          },
+        },
+      },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    if (!deployment.githubRepo || !deployment.githubBranch) {
+      throw new BadRequestException('This deployment was not created from GitHub');
+    }
+
+    // For dockerfile builds, dockerfilePath is required
+    if (deployment.buildType === 'dockerfile' && !deployment.dockerfilePath) {
+      throw new BadRequestException('Dockerfile path is missing for this deployment');
+    }
+
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'rebuild deployments');
+
+    if (deployment.buildStatus === 'building') {
+      throw new BadRequestException('A build is already in progress for this deployment. Please cancel it before starting a new build.');
+    }
+
+    console.log(`[Projects] Cancelling any existing build jobs for deployment ${deploymentId}`);
+    try {
+      await this.dockerService.cancelBuildJobsByDeploymentId(deploymentId);
+    } catch (error) {
+      console.error(`[Projects] Error cancelling existing build jobs:`, error);
+    }
+
+    // Reset build status to building
+    await this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: {
+        buildStatus: 'building',
+        buildStep: null,
+        buildStepTimestamps: { __start: Date.now() },
+        buildLogs: `🔄 Rebuilding deployment from ${deployment.githubRepo}@${deployment.githubBranch}\n`,
+        buildError: null,
+      },
+    });
+
+    // Extract image name from current image
+    const imageParts = deployment.image?.split('/') || [];
+    const imageNameWithTag = imageParts[imageParts.length - 1] || `${deployment.project.namespace}-${deployment.name}`;
+    const [imageName] = imageNameWithTag.split(':');
+
+    // Generate unique tag based on timestamp
+    const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').slice(0, 14);
+    const uniqueTag = `v${timestamp}`;
+
+    // Get service configuration
+    const service = deployment.services[0];
+    const rawPorts = service?.ports.map(port => ({
+      name: port.name,
+      containerPort: port.targetPort,
+      servicePort: port.port,
+      protocol: port.protocol,
+      nodePort: port.nodePort || undefined,
+    })) || [];
+
+    const env = deployment.envVars.map(ev => ({
+      key: ev.key,
+      value: ev.value,
+    }));
+
+    const volumes = (deployment.volumes || []).map(vol => ({
+      name: vol.name,
+      type: vol.type as 'pvc' | 'hostPath' | 'emptyDir',
+      mountPath: vol.mountPath,
+      pvcName: vol.pvcName || undefined,
+      storageSize: vol.storageSize || undefined,
+      hostPath: vol.hostPath || undefined,
+      readOnly: vol.readOnly,
+    }));
+
+    // Start rebuild process asynchronously
+    this.buildAndDeployAsync(
+      deploymentId,
+      {
+        repoUrl: deployment.githubRepo,
+        branch: deployment.githubBranch,
+        dockerfilePath: deployment.dockerfilePath,
+        buildFromRoot: deployment.buildFromRoot ?? false,
+        buildWithDepot: deployment.buildWithDepot ?? false,
+        buildType: deployment.buildType as 'dockerfile' | 'railpack',
+        imageName,
+        tag: uniqueTag,
+        namespace: deployment.namespace,
+        name: deployment.name,
+        replicas: deployment.replicas,
+        rawPorts,
+        env,
+        exposePublic: service?.type === 'external',
+        volumes,
+        isRebuild: true,
+        triggerType: 'manual',
+        triggeredById: user.id,
+      },
+      await this.githubService.getValidUserToken(user.id),
+    ).catch((error) => {
+      console.error(`[Projects] Rebuild failed for deployment ${deploymentId}:`, error);
+    });
+
+    void this.audit.log({
+      action: 'deployment.redeployed',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+      metadata: { repo: deployment.githubRepo, branch: deployment.githubBranch, tag: uniqueTag },
+    });
+
+    const result = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        pods: true,
+        services: {
+          include: {
+            ports: true,
+          },
+        },
+        envVars: true,
+        ingresses: {
+          include: {
+            service: true,
+          },
+        },
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+      },
+    });
+    return this.addInternalUrlsToDeployment(result);
+  }
+
+  async getImageHistory(deploymentId: string) {
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    return this.prisma.imageHistory.findMany({
+      where: { deploymentId },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getImageHistoryLogs(deploymentId: string, imageHistoryId: string) {
+    const entry = await this.prisma.imageHistory.findUnique({
+      where: { id: imageHistoryId },
+      select: { deploymentId: true, buildLogs: true },
+    });
+
+    if (!entry || entry.deploymentId !== deploymentId) {
+      throw new NotFoundException(`Image history entry not found`);
+    }
+
+    return { logs: entry.buildLogs || '' };
+  }
+
+  async rollbackToImage(
+    deploymentId: string,
+    imageHistoryId: string,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+      },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'rollback deployments');
+
+    const imageHistory = await this.prisma.imageHistory.findUnique({
+      where: { id: imageHistoryId },
+    });
+
+    if (!imageHistory || imageHistory.deploymentId !== deploymentId) {
+      throw new NotFoundException('Image history not found');
+    }
+
+    // Update Kubernetes deployment with the old image
+    await this.k8sWorkload.updateDeploymentImage(
+      deployment.name,
+      deployment.namespace,
+      imageHistory.image,
+    );
+
+    // Update database
+    await this.prisma.$transaction(async (tx) => {
+      // Mark all images as inactive
+      await tx.imageHistory.updateMany({
+        where: { deploymentId },
+        data: { isActive: false },
+      });
+
+      // Mark this image as active
+      await tx.imageHistory.update({
+        where: { id: imageHistoryId },
+        data: { isActive: true },
+      });
+
+      // Update deployment
+      await tx.deployment.update({
+        where: { id: deploymentId },
+        data: {
+          image: imageHistory.image,
+          status: 'running',
+        },
+      });
+    });
+
+    const result = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        pods: true,
+        services: {
+          include: {
+            ports: true,
+          },
+        },
+        envVars: true,
+        ingresses: {
+          include: {
+            service: true,
+          },
+        },
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+      },
+    });
+
+    void this.audit.log({
+      action: 'deployment.rolled_back',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+      metadata: { image: [deployment.image, imageHistory.image] },
+    });
+
+    return this.addInternalUrlsToDeployment(result);
+  }
+
+}

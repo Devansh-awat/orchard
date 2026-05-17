@@ -8,6 +8,9 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
+import { DatabasesService } from '../projects/databases.service';
+import { DeploymentsService } from '../projects/deployments.service';
+import { IngressService } from '../projects/ingress.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { UsersService } from '../users/users.service';
 import {
@@ -25,6 +28,9 @@ export class TemplatesService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly projectsService: ProjectsService,
+    private readonly databases: DatabasesService,
+    private readonly deployments: DeploymentsService,
+    private readonly ingress: IngressService,
     private readonly templateEngine: TemplateEngineService,
     private readonly authz: AuthorizationService,
     private readonly usersService: UsersService,
@@ -284,7 +290,7 @@ export class TemplatesService implements OnModuleInit {
 
         switch (resource.type) {
           case 'database': {
-            const db = await this.projectsService.createDatabase(
+            const db = await this.databases.createDatabase(
               projectId,
               {
                 name: config.name,
@@ -322,7 +328,7 @@ export class TemplatesService implements OnModuleInit {
               memoryRequestBytes: resourceOverride?.memoryRequestBytes ?? null,
             };
 
-            const deployment = await this.projectsService.createDeployment(
+            const deployment = await this.deployments.createDeployment(
               projectId,
               deployData,
               clerkId,
@@ -349,7 +355,7 @@ export class TemplatesService implements OnModuleInit {
               },
             ];
 
-            await this.projectsService.createProjectIngress(
+            await this.ingress.createProjectIngress(
               projectId,
               {
                 host: config.host,
@@ -511,7 +517,7 @@ export class TemplatesService implements OnModuleInit {
     // Delete ingresses first
     for (const ingress of instance.ingresses) {
       try {
-        await this.projectsService.deleteProjectIngress(
+        await this.ingress.deleteProjectIngress(
           ingress.projectId,
           ingress.id,
           clerkId,
@@ -525,7 +531,7 @@ export class TemplatesService implements OnModuleInit {
     // Delete deployments
     for (const deployment of instance.deployments) {
       try {
-        await this.projectsService.deleteDeployment(
+        await this.deployments.deleteDeployment(
           deployment.id,
           clerkId,
           userData,
@@ -538,7 +544,7 @@ export class TemplatesService implements OnModuleInit {
     // Delete databases
     for (const database of instance.databases) {
       try {
-        await this.projectsService.deleteDatabase(
+        await this.databases.deleteDatabase(
           database.id,
           clerkId,
           userData,

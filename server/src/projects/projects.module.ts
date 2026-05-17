@@ -12,15 +12,19 @@ import { AuthModule } from '../auth/auth.module';
 import { EventsModule } from '../events/events.module';
 import { MetricsModule } from '../metrics/metrics.module';
 import { ProjectsService } from './projects.service';
+import { ProjectAccessService } from './project-access.service';
+import { DatabasesService } from './databases.service';
+import { DeploymentsService } from './deployments.service';
+import { IngressService } from './ingress.service';
 import { FaviconService } from './favicon.service';
 import { ProjectsController, DeploymentsController, IngressesController, DatabasesController } from './projects.controller';
 import { OverviewController } from './overview.controller';
 
 @Module({
   imports: [KubernetesModule, UsersModule, forwardRef(() => GitHubModule), DockerModule, WebhooksModule, OrganizationsModule, forwardRef(() => NodesModule), forwardRef(() => QuotasModule), TailscaleModule, AuthModule, EventsModule, MetricsModule],
-  providers: [ProjectsService, FaviconService],
+  providers: [ProjectsService, ProjectAccessService, DatabasesService, DeploymentsService, IngressService, FaviconService],
   controllers: [ProjectsController, DeploymentsController, IngressesController, DatabasesController, OverviewController],
-  exports: [ProjectsService],
+  exports: [ProjectsService, ProjectAccessService, DatabasesService, DeploymentsService, IngressService],
 })
 export class ProjectsModule {}
 

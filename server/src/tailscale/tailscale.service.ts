@@ -1,12 +1,14 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
+import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 
 @Injectable()
 export class TailscaleService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly kubernetesService: KubernetesService,
+    private readonly k8sWorkload: K8sWorkloadService,
   ) {}
 
   /**
@@ -48,7 +50,7 @@ export class TailscaleService {
 
     for (const deployment of exposedDeployments) {
       try {
-        await this.kubernetesService.removeTailscaleSidecar(deployment.namespace, deployment.name);
+        await this.k8sWorkload.removeTailscaleSidecar(deployment.namespace, deployment.name);
       } catch (error) {
         console.error(`[Tailscale] Failed to remove sidecar from ${deployment.name}:`, error);
       }
@@ -92,7 +94,7 @@ export class TailscaleService {
       return { exposed: false, ip: null, dns: null, hostname: null };
     }
 
-    const status = await this.kubernetesService.getTailscaleStatus(deployment.namespace, deployment.name);
+    const status = await this.k8sWorkload.getTailscaleStatus(deployment.namespace, deployment.name);
 
     return {
       exposed: true,
@@ -138,7 +140,7 @@ export class TailscaleService {
     }));
 
     // Pass the user's auth key directly to the sidecar — it registers itself on their tailnet
-    await this.kubernetesService.addTailscaleSidecar(
+    await this.k8sWorkload.addTailscaleSidecar(
       deployment.namespace,
       deployment.name,
       connection.accessToken,
@@ -171,7 +173,7 @@ export class TailscaleService {
       throw new BadRequestException('Deployment is not exposed to Tailscale');
     }
 
-    await this.kubernetesService.removeTailscaleSidecar(deployment.namespace, deployment.name);
+    await this.k8sWorkload.removeTailscaleSidecar(deployment.namespace, deployment.name);
 
     await this.prisma.deployment.update({
       where: { id: deploymentId },
@@ -190,7 +192,7 @@ export class TailscaleService {
 
     for (const deployment of deployments) {
       try {
-        await this.kubernetesService.removeTailscaleSidecar(namespace, deployment.name);
+        await this.k8sWorkload.removeTailscaleSidecar(namespace, deployment.name);
       } catch (error) {
         console.error(`[Tailscale] Failed to remove sidecar for ${deployment.name}:`, error);
       }
@@ -210,7 +212,7 @@ export class TailscaleService {
     if (!deployment.tailscaleExposed) return;
 
     try {
-      await this.kubernetesService.removeTailscaleSidecar(deployment.namespace, deployment.name);
+      await this.k8sWorkload.removeTailscaleSidecar(deployment.namespace, deployment.name);
     } catch (error) {
       console.error(`[Tailscale] Failed to remove sidecar for ${deployment.name}:`, error);
     }

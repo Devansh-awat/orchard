@@ -1,0 +1,9 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "baseUrl": null,
+    "moduleResolution": "node16",
+    "module": "node16",
+    "incremental": false
+  }
+}

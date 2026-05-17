@@ -4,6 +4,7 @@ import { GitHubService, GitHubRepo, GitHubBranch, GitHubContent, GitHubWebhookPa
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
+import { DeploymentsService } from '../projects/deployments.service';
 import { Public, Auth } from '../auth/decorators';
 
 @Auth()
@@ -14,6 +15,7 @@ export class GitHubController {
     private readonly usersService: UsersService,
     private readonly prisma: PrismaService,
     private readonly projectsService: ProjectsService,
+    private readonly deployments: DeploymentsService,
   ) {}
 
   @Public()
@@ -489,7 +491,7 @@ export class GitHubController {
       const results = await Promise.allSettled(
         deployments.map(async (deployment) => {
           console.log(`[GitHub App] Auto-deploying ${deployment.name} from commit ${commitSha?.substring(0, 7)}`);
-          await this.projectsService.triggerAutoDeploy(
+          await this.deployments.triggerAutoDeploy(
             deployment.id,
             commitSha,
             commitMessage,

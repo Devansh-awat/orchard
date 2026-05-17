@@ -7,6 +7,7 @@ import {
 import * as yaml from 'js-yaml';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
+import { DeploymentsService } from '../projects/deployments.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { UsersService } from '../users/users.service';
 import { GitHubService } from '../github/github.service';
@@ -44,6 +45,7 @@ export class ComposeStacksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly projectsService: ProjectsService,
+    private readonly deployments: DeploymentsService,
     private readonly authz: AuthorizationService,
     private readonly usersService: UsersService,
     private readonly github: GitHubService,
@@ -275,7 +277,7 @@ export class ComposeStacksService {
         const dockerfilePath = svc.build.dockerfile || 'Dockerfile';
         const buildFromRoot =
           !svc.build.context || svc.build.context === '.' || svc.build.context === './';
-        await this.projectsService.createDeploymentFromGitHub(
+        await this.deployments.createDeploymentFromGitHub(
           stack.projectId,
           {
             name: deployName,
@@ -303,7 +305,7 @@ export class ComposeStacksService {
           userData,
         );
       } else if (svc.image) {
-        await this.projectsService.createDeployment(
+        await this.deployments.createDeployment(
           stack.projectId,
           {
             name: deployName,
@@ -502,7 +504,7 @@ export class ComposeStacksService {
     const errors: string[] = [];
     for (const d of deployments) {
       try {
-        await this.projectsService.deleteDeployment(d.id, clerkId, userData, { fromComposeStack: true });
+        await this.deployments.deleteDeployment(d.id, clerkId, userData, { fromComposeStack: true });
       } catch (e: any) {
         errors.push(`deployment ${d.id}: ${e.message}`);
       }

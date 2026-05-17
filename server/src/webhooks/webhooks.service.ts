@@ -8,6 +8,7 @@ import {
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
+import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { UsersService } from '../users/users.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthorizationService } from '../auth/authorization.service';
@@ -35,6 +36,7 @@ export class WebhooksService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly kubernetesService: KubernetesService,
+    private readonly k8sWorkload: K8sWorkloadService,
     private readonly usersService: UsersService,
     private readonly audit: AuditService,
     private readonly authz: AuthorizationService,
@@ -360,7 +362,7 @@ export class WebhooksService {
       const fullImage = `${baseImage}:${resolvedTag}`;
 
       try {
-        await this.kubernetesService.updateDeploymentImage(
+        await this.k8sWorkload.updateDeploymentImage(
           deployment.name,
           deployment.namespace,
           fullImage,
@@ -417,7 +419,7 @@ export class WebhooksService {
       };
     } else {
       try {
-        await this.kubernetesService.restartDeployment(
+        await this.k8sWorkload.restartDeployment(
           deployment.name,
           deployment.namespace,
         );

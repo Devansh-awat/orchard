@@ -4,6 +4,7 @@ import { OAuthService } from '../auth/oauth.service';
 import { SessionsService } from '../auth/sessions.service';
 import { UsersService } from '../users/users.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
+import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
 import * as openidClient from 'openid-client';
 import { SAML } from '@node-saml/node-saml';
@@ -35,6 +36,7 @@ export class SsoService {
     private readonly oauthService: OAuthService,
     private readonly usersService: UsersService,
     private readonly kubernetesService: KubernetesService,
+    private readonly k8sNetwork: K8sNetworkService,
     private readonly sessionsService: SessionsService,
     private readonly oidcStateStore: OidcStateStore,
     private readonly audit: AuditService,
@@ -258,12 +260,12 @@ export class SsoService {
     };
 
     try {
-      await this.kubernetesService.createIngress(ingressOpts);
+      await this.k8sNetwork.createIngress(ingressOpts);
       this.logger.log(`Created SSO ingress "${ingressName}" for ${host}`);
     } catch (error) {
       if (error?.response?.error === 'Ingress already exists') {
         try {
-          await this.kubernetesService.updateIngress(ingressOpts);
+          await this.k8sNetwork.updateIngress(ingressOpts);
           this.logger.log(`Updated SSO ingress "${ingressName}" for ${host}`);
         } catch (updateErr) {
           this.logger.error(`Failed to update SSO ingress for ${host}:`, updateErr);
@@ -277,7 +279,7 @@ export class SsoService {
   private async deleteSsoIngress(subdomain: string) {
     const ingressName = this.ssoIngressName(subdomain);
     try {
-      await this.kubernetesService.deleteIngress(
+      await this.k8sNetwork.deleteIngress(
         this.platformNamespace,
         ingressName,
       );

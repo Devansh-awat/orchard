@@ -2,6 +2,10 @@ import { Controller, Get, Param, Post, Body, Request, Delete, Put, Patch, Query,
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { ProjectsService } from './projects.service';
+import { ProjectAccessService } from './project-access.service';
+import { DatabasesService } from './databases.service';
+import { DeploymentsService } from './deployments.service';
+import { IngressService } from './ingress.service';
 import { FaviconService } from './favicon.service';
 import { WebhooksService } from '../webhooks/webhooks.service';
 import { StorageService } from '../organizations/storage.service';
@@ -13,6 +17,10 @@ import { MetricsService } from '../metrics/metrics.service';
 export class ProjectsController {
   constructor(
     private readonly projectsService: ProjectsService,
+    private readonly projectAccess: ProjectAccessService,
+    private readonly databases: DatabasesService,
+    private readonly deployments: DeploymentsService,
+    private readonly ingress: IngressService,
     private readonly storageService: StorageService,
   ) {}
 
@@ -73,7 +81,7 @@ export class ProjectsController {
     // Require project-edit on the named project before performing any DNS
     // lookup. This prevents the endpoint from being abused as an arbitrary
     // DNS oracle by any authenticated user.
-    await this.projectsService.assertProjectEditAccess(
+    await this.projectAccess.assertProjectEditAccess(
       body.projectId,
       req.user.sub,
       {
@@ -84,7 +92,7 @@ export class ProjectsController {
         imageUrl: req.user.imageUrl,
       },
     );
-    return this.projectsService.validateIngressDns(body.domain);
+    return this.ingress.validateIngressDns(body.domain);
   }
 
   @Post()
@@ -239,7 +247,7 @@ export class ProjectsController {
   @Get(':id/deployments')
 
   async getProjectDeployments(@Param('id') id: string, @Request() req) {
-    return this.projectsService.getProjectDeployments(id, req.user.sub, {
+    return this.deployments.getProjectDeployments(id, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
@@ -324,7 +332,7 @@ export class ProjectsController {
     },
     @Request() req
   ) {
-    return this.projectsService.createDatabase(id, body, req.user.sub, {
+    return this.databases.createDatabase(id, body, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
@@ -336,14 +344,14 @@ export class ProjectsController {
   @Get(':id/databases')
 
   async getProjectDatabases(@Param('id') id: string, @Request() req) {
-    const { user, access } = await this.projectsService.assertProjectView(id, req.user.sub, {
+    const { user, access } = await this.projectAccess.assertProjectView(id, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
       lastName: req.user.lastName,
       imageUrl: req.user.imageUrl,
     });
-    return this.projectsService.getProjectDatabases(id, access.canEdit, user.id);
+    return this.databases.getProjectDatabases(id, access.canEdit, user.id);
   }
 
   @Post(':id/ingresses')
@@ -363,7 +371,7 @@ export class ProjectsController {
     },
     @Request() req
   ) {
-    return this.projectsService.createProjectIngress(id, body, req.user.sub, {
+    return this.ingress.createProjectIngress(id, body, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
@@ -390,7 +398,7 @@ export class ProjectsController {
     },
     @Request() req
   ) {
-    return this.projectsService.updateProjectIngress(id, ingressId, body, req.user.sub, {
+    return this.ingress.updateProjectIngress(id, ingressId, body, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
@@ -406,7 +414,7 @@ export class ProjectsController {
     @Param('ingressId') ingressId: string,
     @Request() req
   ) {
-    return this.projectsService.getProjectIngress(id, ingressId, req.user.sub, {
+    return this.ingress.getProjectIngress(id, ingressId, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
@@ -422,7 +430,7 @@ export class ProjectsController {
     @Param('ingressId') ingressId: string,
     @Request() req
   ) {
-    return this.projectsService.deleteProjectIngress(id, ingressId, req.user.sub, {
+    return this.ingress.deleteProjectIngress(id, ingressId, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
@@ -464,7 +472,7 @@ export class ProjectsController {
     @Request() req
   ) {
     const { name, image, port, ports, replicas, env, exposePublic, volumes, cpuRequestMilli, memoryRequestBytes } = body;
-    return this.projectsService.createDeployment(
+    return this.deployments.createDeployment(
       id,
       { name, image, port, ports, replicas, env, exposePublic, volumes, cpuRequestMilli, memoryRequestBytes },
       req.user.sub,
@@ -518,7 +526,7 @@ export class ProjectsController {
     },
     @Request() req
   ) {
-    return this.projectsService.createDeploymentFromGitHub(
+    return this.deployments.createDeploymentFromGitHub(
       id,
       body,
       req.user.hackClubId || req.user.sub,
@@ -538,6 +546,9 @@ export class ProjectsController {
 export class DeploymentsController {
   constructor(
     private readonly projectsService: ProjectsService,
+    private readonly projectAccess: ProjectAccessService,
+    private readonly deployments: DeploymentsService,
+    private readonly ingress: IngressService,
     private readonly webhooksService: WebhooksService,
     private readonly faviconService: FaviconService,
     private readonly metricsService: MetricsService,
@@ -551,7 +562,7 @@ export class DeploymentsController {
     @Query('end') endStr?: string,
     @Query('step') stepStr?: string,
   ) {
-    const { user } = await this.projectsService.assertDeploymentView(id, req.user.sub, {
+    const { user } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
@@ -560,7 +571,7 @@ export class DeploymentsController {
     const step = Math.max(1000, Number(stepStr) || 30_000);
     if (end <= start) throw new BadRequestException('end must be > start');
 
-    const dep = await this.projectsService.getDeployment(id, true, user.id);
+    const dep = await this.deployments.getDeployment(id, true, user.id);
     if (!dep?.namespace || !dep?.name) {
       throw new BadRequestException('Deployment has no namespace/name');
     }
@@ -581,14 +592,14 @@ export class DeploymentsController {
     @Body() body: { strategy: 'rollingUpdate' | 'recreate' },
     @Request() req,
   ) {
-    const { user, access } = await this.projectsService.assertDeploymentView(id, req.user.sub, {
+    const { user, access } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
     if (!access.canEdit) {
       throw new ForbiddenException('Your role does not allow you to change the deploy strategy');
     }
-    return this.projectsService.updateDeploymentStrategy(id, body.strategy, user.id);
+    return this.deployments.updateDeploymentStrategy(id, body.strategy, user.id);
   }
 
   @Patch(':id/image')
@@ -597,14 +608,14 @@ export class DeploymentsController {
     @Body() body: { image: string },
     @Request() req,
   ) {
-    const { user, access } = await this.projectsService.assertDeploymentView(id, req.user.sub, {
+    const { user, access } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
     if (!access.canEdit) {
       throw new ForbiddenException('Your role does not allow you to change the deployment image');
     }
-    return this.projectsService.updateDeploymentImage(id, body.image, user.id);
+    return this.deployments.updateDeploymentImage(id, body.image, user.id);
   }
 
   @Patch(':id/resources')
@@ -613,14 +624,14 @@ export class DeploymentsController {
     @Body() body: { cpuRequestMilli?: number | null; memoryRequestBytes?: number | null },
     @Request() req,
   ) {
-    const { user, access } = await this.projectsService.assertDeploymentView(id, req.user.sub, {
+    const { user, access } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
     if (!access.canEdit) {
       throw new ForbiddenException('Your role does not allow you to update deployment resources');
     }
-    return this.projectsService.updateDeploymentResources(id, {
+    return this.deployments.updateDeploymentResources(id, {
       cpuRequestMilli: body.cpuRequestMilli ?? null,
       memoryRequestBytes: body.memoryRequestBytes ?? null,
     }, user.id);
@@ -629,13 +640,13 @@ export class DeploymentsController {
   @Get()
 
   async listDeployments(@Request() req, @Query('orgId') orgId?: string) {
-    return this.projectsService.listDeploymentsSummary(req.user.sub, orgId);
+    return this.deployments.listDeploymentsSummary(req.user.sub, orgId);
   }
 
   @Get('recent-builds')
 
   async listRecentBuilds(@Request() req, @Query('orgId') orgId?: string) {
-    return this.projectsService.listRecentBuilds(req.user.sub, orgId);
+    return this.deployments.listRecentBuilds(req.user.sub, orgId);
   }
 
   @Get('favicon')
@@ -656,21 +667,21 @@ export class DeploymentsController {
   @Get(':id')
 
   async getDeployment(@Param('id') id: string, @Request() req) {
-    const { user, access } = await this.projectsService.assertDeploymentView(id, req.user.sub, {
+    const { user, access } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
-    return this.projectsService.getDeployment(id, access.canEdit, user.id);
+    return this.deployments.getDeployment(id, access.canEdit, user.id);
   }
 
   @Get(':id/logs')
 
   async getDeploymentLogs(@Param('id') id: string, @Request() req) {
-    const { user, access } = await this.projectsService.assertDeploymentView(id, req.user.sub, {
+    const { user, access } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
-    const deployment = await this.projectsService.getDeployment(id, access.canEdit, user.id);
+    const deployment = await this.deployments.getDeployment(id, access.canEdit, user.id);
     return {
       logs: access.canEdit ? (deployment.buildLogs || '') : '',
       status: deployment.status,
@@ -681,7 +692,7 @@ export class DeploymentsController {
   @Post(':id/cancel')
 
   async cancelDeploymentBuild(@Param('id') id: string, @Request() req) {
-    return this.projectsService.cancelDeploymentBuild(
+    return this.deployments.cancelDeploymentBuild(
       id,
       req.user.sub,
       {
@@ -697,7 +708,7 @@ export class DeploymentsController {
   @Delete(':id')
 
   async deleteDeployment(@Param('id') id: string, @Request() req) {
-    return this.projectsService.deleteDeployment(
+    return this.deployments.deleteDeployment(
       id,
       req.user.sub,
       {
@@ -713,17 +724,17 @@ export class DeploymentsController {
   @Get(':id/pods')
 
   async getDeploymentPods(@Param('id') id: string, @Request() req) {
-    const { user } = await this.projectsService.assertDeploymentView(id, req.user.sub, {
+    const { user } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
-    return this.projectsService.getDeploymentPods(id, user.id);
+    return this.deployments.getDeploymentPods(id, user.id);
   }
 
   @Post(':id/rebuild')
 
   async rebuildDeployment(@Param('id') id: string, @Request() req) {
-    return this.projectsService.rebuildDeployment(
+    return this.deployments.rebuildDeployment(
       id,
       req.user.sub,
       {
@@ -743,7 +754,7 @@ export class DeploymentsController {
     @Body() body: { replicas: number },
     @Request() req
   ) {
-    return this.projectsService.scaleDeployment(
+    return this.deployments.scaleDeployment(
       id,
       body.replicas,
       req.user.sub,
@@ -763,7 +774,7 @@ export class DeploymentsController {
     @Param('id') id: string,
     @Request() req
   ) {
-    return this.projectsService.restartDeployment(
+    return this.deployments.restartDeployment(
       id,
       req.user.sub,
       {
@@ -779,11 +790,11 @@ export class DeploymentsController {
   @Get(':id/image-history')
 
   async getImageHistory(@Param('id') id: string, @Request() req) {
-    await this.projectsService.assertDeploymentView(id, req.user.sub, {
+    await this.projectAccess.assertDeploymentView(id, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
-    return this.projectsService.getImageHistory(id);
+    return this.deployments.getImageHistory(id);
   }
 
   @Get(':id/image-history/:imageHistoryId/logs')
@@ -793,14 +804,14 @@ export class DeploymentsController {
     @Param('imageHistoryId') imageHistoryId: string,
     @Request() req,
   ) {
-    const { access } = await this.projectsService.assertDeploymentView(id, req.user.sub, {
+    const { access } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
     if (!access.canEdit) {
       return { logs: '' };
     }
-    return this.projectsService.getImageHistoryLogs(id, imageHistoryId);
+    return this.deployments.getImageHistoryLogs(id, imageHistoryId);
   }
 
   @Post(':id/rollback/:imageHistoryId')
@@ -810,7 +821,7 @@ export class DeploymentsController {
     @Param('imageHistoryId') imageHistoryId: string,
     @Request() req
   ) {
-    return this.projectsService.rollbackToImage(
+    return this.deployments.rollbackToImage(
       id,
       imageHistoryId,
       req.user.sub,
@@ -834,7 +845,7 @@ export class DeploymentsController {
     },
     @Request() req
   ) {
-    return this.projectsService.updateDeploymentEnvVars(
+    return this.deployments.updateDeploymentEnvVars(
       id,
       body.env || [],
       req.user.sub,
@@ -859,7 +870,7 @@ export class DeploymentsController {
     },
     @Request() req
   ) {
-    return this.projectsService.updateDeploymentBuildFromRoot(
+    return this.deployments.updateDeploymentBuildFromRoot(
       id,
       body.buildFromRoot,
       req.user.sub,
@@ -895,7 +906,7 @@ export class DeploymentsController {
     },
     @Request() req
   ) {
-    return this.projectsService.updateDeploymentHealthCheck(
+    return this.deployments.updateDeploymentHealthCheck(
       id,
       body,
       req.user.sub,
@@ -927,7 +938,7 @@ export class DeploymentsController {
     },
     @Request() req
   ) {
-    return this.projectsService.updateDeploymentVolumes(
+    return this.deployments.updateDeploymentVolumes(
       id,
       body.volumes || [],
       req.user.sub,
@@ -962,7 +973,7 @@ export class DeploymentsController {
     },
     @Request() req
   ) {
-    return this.projectsService.createDeploymentIngress(
+    return this.ingress.createDeploymentIngress(
       id,
       body,
       req.user.sub,
@@ -997,7 +1008,7 @@ export class DeploymentsController {
     },
     @Request() req
   ) {
-    return this.projectsService.updateDeploymentIngress(
+    return this.ingress.updateDeploymentIngress(
       deploymentId,
       ingressId,
       body,
@@ -1019,7 +1030,7 @@ export class DeploymentsController {
     @Param('ingressId') ingressId: string,
     @Request() req
   ) {
-    return this.projectsService.deleteDeploymentIngress(
+    return this.ingress.deleteDeploymentIngress(
       deploymentId,
       ingressId,
       req.user.sub,
@@ -1052,7 +1063,7 @@ export class DeploymentsController {
     },
     @Request() req
   ) {
-    return this.projectsService.createDeploymentService(
+    return this.deployments.createDeploymentService(
       deploymentId,
       body,
       req.user.sub,
@@ -1084,7 +1095,7 @@ export class DeploymentsController {
     },
     @Request() req
   ) {
-    return this.projectsService.updateServiceConfiguration(
+    return this.deployments.updateServiceConfiguration(
       deploymentId,
       serviceId,
       {
@@ -1109,7 +1120,7 @@ export class DeploymentsController {
     @Param('serviceId') serviceId: string,
     @Request() req
   ) {
-    return this.projectsService.deleteDeploymentService(
+    return this.deployments.deleteDeploymentService(
       deploymentId,
       serviceId,
       req.user.sub,
@@ -1134,7 +1145,7 @@ export class DeploymentsController {
     },
     @Request() req
   ) {
-    return this.projectsService.updateServiceExposure(
+    return this.deployments.updateServiceExposure(
       deploymentId,
       serviceId,
       Boolean(body.exposePublic),
@@ -1156,7 +1167,7 @@ export class DeploymentsController {
     @Param('portId') portId: string,
     @Request() req,
   ) {
-    return this.projectsService.enableServicePortPublic(
+    return this.deployments.enableServicePortPublic(
       deploymentId, serviceId, portId, req.user.sub,
       {
         email: req.user.email, username: req.user.username,
@@ -1172,7 +1183,7 @@ export class DeploymentsController {
     @Param('portId') portId: string,
     @Request() req,
   ) {
-    return this.projectsService.disableServicePortPublic(
+    return this.deployments.disableServicePortPublic(
       deploymentId, serviceId, portId, req.user.sub,
       {
         email: req.user.email, username: req.user.username,
@@ -1186,11 +1197,11 @@ export class DeploymentsController {
   @Get(':id/auto-deploy')
 
   async getAutoDeployStatus(@Param('id') id: string, @Request() req) {
-    await this.projectsService.assertDeploymentView(id, req.user.sub, {
+    await this.projectAccess.assertDeploymentView(id, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
-    return this.projectsService.getAutoDeployStatus(id);
+    return this.deployments.getAutoDeployStatus(id);
   }
 
   @Post(':id/auto-deploy/enable')
@@ -1200,7 +1211,7 @@ export class DeploymentsController {
     @Body() body: { branch: string },
     @Request() req
   ) {
-    return this.projectsService.enableAutoDeploy(
+    return this.deployments.enableAutoDeploy(
       id,
       body.branch,
       req.user.sub,
@@ -1217,7 +1228,7 @@ export class DeploymentsController {
   @Post(':id/auto-deploy/disable')
 
   async disableAutoDeploy(@Param('id') id: string, @Request() req) {
-    return this.projectsService.disableAutoDeploy(
+    return this.deployments.disableAutoDeploy(
       id,
       req.user.sub,
       {
@@ -1233,11 +1244,11 @@ export class DeploymentsController {
   @Get(':id/github-deployments')
 
   async getGitHubDeployments(@Param('id') id: string, @Request() req) {
-    await this.projectsService.assertDeploymentView(id, req.user.sub, {
+    await this.projectAccess.assertDeploymentView(id, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
-    return this.projectsService.getGitHubDeployments(id);
+    return this.deployments.getGitHubDeployments(id);
   }
 
   // Webhook token management endpoints
@@ -1276,12 +1287,16 @@ export class DeploymentsController {
 @Auth()
 @Controller('ingresses')
 export class IngressesController {
-  constructor(private readonly projectsService: ProjectsService) {}
+  constructor(
+    private readonly projectsService: ProjectsService,
+    private readonly projectAccess: ProjectAccessService,
+    private readonly ingress: IngressService,
+  ) {}
 
   @Get(':id')
 
   async getIngress(@Param('id') id: string, @Request() req) {
-    return this.projectsService.getIngressById(id, req.user.sub, {
+    return this.ingress.getIngressById(id, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
@@ -1294,7 +1309,11 @@ export class IngressesController {
 @Auth()
 @Controller('databases')
 export class DatabasesController {
-  constructor(private readonly projectsService: ProjectsService) {}
+  constructor(
+    private readonly projectsService: ProjectsService,
+    private readonly projectAccess: ProjectAccessService,
+    private readonly databases: DatabasesService,
+  ) {}
 
   @Get()
   async listDatabases(@Request() req, @Query('orgId') orgId?: string) {
@@ -1304,11 +1323,11 @@ export class DatabasesController {
   @Get(':id')
 
   async getDatabase(@Param('id') id: string, @Request() req) {
-    const { user, access } = await this.projectsService.assertDatabaseView(id, req.user.sub, {
+    const { user, access } = await this.projectAccess.assertDatabaseView(id, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
-    return this.projectsService.getDatabase(id, access.canEdit, user.id);
+    return this.databases.getDatabase(id, access.canEdit, user.id);
   }
 
   @Patch(':id/resources')
@@ -1317,7 +1336,7 @@ export class DatabasesController {
     @Body() body: { cpuRequestMilli?: number | null; memoryRequestBytes?: number | null },
     @Request() req,
   ) {
-    const { user, access } = await this.projectsService.assertDatabaseView(id, req.user.sub, {
+    const { user, access } = await this.projectAccess.assertDatabaseView(id, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
@@ -1333,7 +1352,7 @@ export class DatabasesController {
   @Delete(':id')
 
   async deleteDatabase(@Param('id') id: string, @Request() req) {
-    return this.projectsService.deleteDatabase(id, req.user.sub, {
+    return this.databases.deleteDatabase(id, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
@@ -1344,16 +1363,16 @@ export class DatabasesController {
 
   @Get(':id/provisioning')
   async getProvisioning(@Param('id') id: string, @Request() req) {
-    const { user } = await this.projectsService.assertDatabaseView(id, req.user.sub, {
+    const { user } = await this.projectAccess.assertDatabaseView(id, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
-    return this.projectsService.getDatabaseProvisioning(id, user.id);
+    return this.databases.getDatabaseProvisioning(id, user.id);
   }
 
   @Get(':id/backups')
   async listBackups(@Param('id') id: string, @Request() req) {
-    return this.projectsService.listDatabaseBackups(id, req.user.sub, {
+    return this.databases.listDatabaseBackups(id, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
@@ -1368,7 +1387,7 @@ export class DatabasesController {
     @Body() body: { label?: string; type?: 'full' | 'diff' | 'incr' },
     @Request() req
   ) {
-    return this.projectsService.createDatabaseBackup(id, body || {}, req.user.sub, {
+    return this.databases.createDatabaseBackup(id, body || {}, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
@@ -1383,7 +1402,7 @@ export class DatabasesController {
     @Body() body: { backupId?: string },
     @Request() req
   ) {
-    return this.projectsService.restoreDatabaseBackup(id, body?.backupId, req.user.sub, {
+    return this.databases.restoreDatabaseBackup(id, body?.backupId, req.user.sub, {
       email: req.user.email,
       username: req.user.username,
       firstName: req.user.firstName,
@@ -1394,7 +1413,7 @@ export class DatabasesController {
 
   @Get(':id/extensions')
   async listExtensions(@Param('id') id: string, @Request() req) {
-    return this.projectsService.listDatabaseExtensions(id, req.user.sub, {
+    return this.databases.listDatabaseExtensions(id, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
@@ -1406,7 +1425,7 @@ export class DatabasesController {
     @Body() body: { name: string; addToPreload?: boolean },
     @Request() req,
   ) {
-    return this.projectsService.installDatabaseExtension(id, body, req.user.sub, {
+    return this.databases.installDatabaseExtension(id, body, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
@@ -1419,7 +1438,7 @@ export class DatabasesController {
     @Query('removeFromPreload') removeFromPreload: string,
     @Request() req,
   ) {
-    return this.projectsService.uninstallDatabaseExtension(
+    return this.databases.uninstallDatabaseExtension(
       id, { name, removeFromPreload: removeFromPreload === 'true' }, req.user.sub,
       {
         email: req.user.email, username: req.user.username,
@@ -1430,7 +1449,7 @@ export class DatabasesController {
 
   @Get(':id/settings')
   async getSettings(@Param('id') id: string, @Request() req) {
-    return this.projectsService.getDatabaseSettings(id, req.user.sub, {
+    return this.databases.getDatabaseSettings(id, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
@@ -1438,7 +1457,7 @@ export class DatabasesController {
 
   @Post(':id/public')
   async enablePublic(@Param('id') id: string, @Request() req) {
-    return this.projectsService.enableDatabasePublic(id, req.user.sub, {
+    return this.databases.enableDatabasePublic(id, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
@@ -1446,7 +1465,7 @@ export class DatabasesController {
 
   @Delete(':id/public')
   async disablePublic(@Param('id') id: string, @Request() req) {
-    return this.projectsService.disableDatabasePublic(id, req.user.sub, {
+    return this.databases.disableDatabasePublic(id, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
@@ -1454,7 +1473,7 @@ export class DatabasesController {
 
   @Get(':id/backup-schedule')
   async getBackupSchedule(@Param('id') id: string, @Request() req) {
-    return this.projectsService.getBackupSchedule(id, req.user.sub, {
+    return this.databases.getBackupSchedule(id, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
@@ -1466,7 +1485,7 @@ export class DatabasesController {
     @Body() body: { cron: string },
     @Request() req,
   ) {
-    return this.projectsService.setBackupSchedule(id, body, req.user.sub, {
+    return this.databases.setBackupSchedule(id, body, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
@@ -1474,7 +1493,7 @@ export class DatabasesController {
 
   @Delete(':id/backup-schedule')
   async clearBackupSchedule(@Param('id') id: string, @Request() req) {
-    return this.projectsService.deleteBackupSchedule(id, req.user.sub, {
+    return this.databases.deleteBackupSchedule(id, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
@@ -1486,7 +1505,7 @@ export class DatabasesController {
     @Body() body: { parameters: Record<string, string> },
     @Request() req,
   ) {
-    return this.projectsService.updateDatabaseSettings(id, body, req.user.sub, {
+    return this.databases.updateDatabaseSettings(id, body, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });

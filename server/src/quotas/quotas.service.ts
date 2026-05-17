@@ -1,6 +1,7 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
+import { K8sNamespaceService } from '../kubernetes/k8s-namespace.service';
 import { parseCpu, parseMemory } from '../kubernetes/quantity';
 import { DEFAULT_CPU_MILLI, DEFAULT_MEMORY_BYTES } from '../kubernetes/presets';
 
@@ -20,6 +21,7 @@ export class QuotasService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly k8s: KubernetesService,
+    private readonly k8sNamespace: K8sNamespaceService,
   ) {}
 
   // Resolve the caps applied to a project namespace.
@@ -105,7 +107,7 @@ export class QuotasService {
     });
     if (!project) return;
     const { caps, defaultPodCpuMilli, defaultPodMemoryBytes } = await this.resolveProjectCaps(projectId);
-    await this.k8s.applyNamespaceQuota({
+    await this.k8sNamespace.applyNamespaceQuota({
       namespace: project.namespace,
       cpuLimitMilli: caps.cpuLimitMilli,
       memoryLimitBytes: caps.memoryLimitBytes,
@@ -152,7 +154,7 @@ export class QuotasService {
     const capPods = org.maxPods;
     if (!capCpu && !capMem && !capPods) return;
     const namespaces = org.projects.map((p) => p.namespace);
-    const usage = await this.k8s.getOrgUsage(namespaces);
+    const usage = await this.k8sNamespace.getOrgUsage(namespaces);
 
     if (capCpu && usage.cpuMilli + requested.cpuMilli > capCpu) {
       throw new ForbiddenException(
@@ -188,7 +190,7 @@ export class QuotasService {
       },
     });
     if (!org) throw new NotFoundException('Org not found');
-    const usage = await this.k8s.getOrgUsage(org.projects.map((p) => p.namespace));
+    const usage = await this.k8sNamespace.getOrgUsage(org.projects.map((p) => p.namespace));
     return {
       org: {
         id: org.id,
@@ -677,7 +679,7 @@ export class QuotasService {
       orderBy: { name: 'asc' },
     });
     const namespaces = projects.map((p) => p.namespace);
-    const usage = await this.k8s.getOrgUsage(namespaces); // aggregate; we also want per-ns
+    const usage = await this.k8sNamespace.getOrgUsage(namespaces); // aggregate; we also want per-ns
     // Fetch per-ns breakdown cheaply: reuse getClusterPodUsage
     const pods = await this.k8s.getClusterPodUsage();
     const perNs = new Map<string, { cpuMilli: number; memoryBytes: number; pods: number }>();

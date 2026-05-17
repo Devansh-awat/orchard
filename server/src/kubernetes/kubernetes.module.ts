@@ -1,6 +1,10 @@
 import { Module } from '@nestjs/common';
 import { KubernetesController } from './kubernetes.controller';
 import { KubernetesService } from './kubernetes.service';
+import { K8sCnpgService } from './k8s-cnpg.service';
+import { K8sWorkloadService } from './k8s-workload.service';
+import { K8sNetworkService } from './k8s-network.service';
+import { K8sNamespaceService } from './k8s-namespace.service';
 import { R2ProxyService } from './r2-proxy.service';
 import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../prisma/prisma.module';
@@ -8,7 +12,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 @Module({
   imports: [AuthModule, PrismaModule],
   controllers: [KubernetesController],
-  providers: [KubernetesService, R2ProxyService],
-  exports: [KubernetesService, R2ProxyService],
+  providers: [KubernetesService, K8sCnpgService, K8sWorkloadService, K8sNetworkService, K8sNamespaceService, R2ProxyService],
+  exports: [KubernetesService, K8sCnpgService, K8sWorkloadService, K8sNetworkService, K8sNamespaceService, R2ProxyService],
 })
 export class KubernetesModule {}
