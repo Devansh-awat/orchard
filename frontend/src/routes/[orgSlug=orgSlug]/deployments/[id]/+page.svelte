@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
 	import { Tabs } from 'melt/builders';
-	import { apiFetch, toasts, refreshTree, isSuperAdmin, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
+	import { apiFetch, toasts, refreshTree, isSuperAdmin, selectedOrganization, subscribeOrgEvents, sseStatusFor } from '$lib/stores';
 	import { env } from '$env/dynamic/public';
 	import { invalidate } from '$app/navigation';
 	import type { PageData } from './$types';
@@ -3217,6 +3217,49 @@
 		}
 	});
 
+	// Track SSE connection health for the current org so we can surface a
+	// "data may be outdated" banner and engage adaptive polling as a fallback.
+	let sseStatusValue = $state<'connecting' | 'connected' | 'disconnected'>('connecting');
+	$effect(() => {
+		const id = $selectedOrganization?.id;
+		if (!id) {
+			sseStatusValue = 'connecting';
+			return;
+		}
+		const store = sseStatusFor(id);
+		return store.subscribe((v) => { sseStatusValue = v; });
+	});
+	const sseDisconnected = $derived(sseStatusValue === 'disconnected');
+
+	// K8s rollout transitions (pod scheduled/ready/terminated) don't write to
+	// Prisma, so the SSE bridge never fires for them. Poll while the deployment
+	// is in a transient state, or while SSE is down, so the UI catches up
+	// without a manual refresh. Falls silent once stable and SSE is healthy.
+	//
+	// Both inputs are isolated $derived booleans so the $effect only re-runs
+	// when the polling regime *changes*, not on every fetchDeployment() write
+	// to `deployment` — otherwise the interval would be torn down and rebuilt
+	// on every tick (self-loop on $state).
+	const TRANSIENT_DEPLOYMENT_STATUSES = new Set([
+		'scaling', 'restarting', 'pending', 'building', 'unhealthy',
+	]);
+	const isTransientStatus = $derived(
+		TRANSIENT_DEPLOYMENT_STATUSES.has((deployment?.status ?? '').toLowerCase())
+		|| (deployment?.buildStatus ?? '').toLowerCase() === 'building'
+	);
+	$effect(() => {
+		if (!deploymentId) return;
+		const transient = isTransientStatus;
+		const sseDown = sseStatusValue === 'disconnected';
+		if (!transient && !sseDown) return;
+		const intervalMs = transient ? 3000 : 10000;
+		const id = setInterval(() => {
+			if (typeof document !== 'undefined' && document.hidden) return;
+			fetchDeployment();
+		}, intervalMs);
+		return () => clearInterval(id);
+	});
+
 	onMount(() => {
 		// Reserve scrollbar space so switching between tall/short tabs doesn't shift the
 		// centered max-w container left/right when the scrollbar appears/disappears.
@@ -3530,6 +3573,15 @@
 							<span class="dep-status-dot"></span>
 							{deploymentStatusChip.label}
 						</span>
+						{#if sseDisconnected}
+							<span
+								class="dep-status-chip dep-status-chip--warning"
+								title="Live updates disconnected — values shown may be out of date. Reconnecting…"
+							>
+								<span class="dep-status-dot"></span>
+								Live updates offline — data may be outdated
+							</span>
+						{/if}
 					</div>
 					<div class="dep-header-actions">
 						{#if notificationSeverity}
