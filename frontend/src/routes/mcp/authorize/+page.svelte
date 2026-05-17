@@ -7,6 +7,16 @@
 
 	let mcpState = $derived($page.url.searchParams.get('mcp_state') || '');
 	let mcpServer = $derived($page.url.searchParams.get('mcp_server') || '');
+	let clientName = $derived($page.url.searchParams.get('client_name') || 'An application');
+	let redirectUri = $derived($page.url.searchParams.get('redirect_uri') || '');
+	let redirectHost = $derived.by(() => {
+		if (!redirectUri) return '';
+		try {
+			return new URL(redirectUri).host;
+		} catch {
+			return '';
+		}
+	});
 
 	let error = $state<string | null>(null);
 	let authorizing = $state(false);
@@ -245,7 +255,15 @@
 		<div class="login-hero">
 			<div class="login-hero-content">
 				<img src="/logo/logofulldm.svg" alt="Orchard" class="login-hero-logo" />
-				<p class="login-hero-subtitle">An application is requesting access to your Orchard account via MCP.</p>
+				<p class="login-hero-subtitle"><strong>{clientName}</strong> is requesting access to your Orchard account via MCP.</p>
+				{#if redirectUri}
+					<div class="mcp-consent-details">
+						<p class="mcp-consent-label">After you approve, your authorization code will be sent to:</p>
+						<p class="mcp-consent-host">{redirectHost || redirectUri}</p>
+						<p class="mcp-consent-uri">{redirectUri}</p>
+						<p class="mcp-consent-warning">Only approve if you recognize this destination. Anyone with access to that URL can use your Orchard account.</p>
+					</div>
+				{/if}
 			</div>
 		</div>
 
@@ -371,3 +389,40 @@
 		</div>
 	</div>
 </div>
+
+<style>
+	.mcp-consent-details {
+		margin-top: 1.5rem;
+		padding: 1rem;
+		border-radius: 0.5rem;
+		background: rgba(255, 255, 255, 0.05);
+		border: 1px solid rgba(255, 255, 255, 0.1);
+		text-align: left;
+	}
+	.mcp-consent-label {
+		font-size: 0.875rem;
+		opacity: 0.75;
+		margin: 0 0 0.5rem 0;
+	}
+	.mcp-consent-host {
+		font-size: 1.125rem;
+		font-weight: 600;
+		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+		margin: 0 0 0.25rem 0;
+		word-break: break-all;
+	}
+	.mcp-consent-uri {
+		font-size: 0.75rem;
+		opacity: 0.6;
+		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+		margin: 0 0 0.75rem 0;
+		word-break: break-all;
+	}
+	.mcp-consent-warning {
+		font-size: 0.8125rem;
+		opacity: 0.8;
+		margin: 0;
+		padding-top: 0.75rem;
+		border-top: 1px solid rgba(255, 255, 255, 0.08);
+	}
+</style>

@@ -68,9 +68,10 @@ export class McpOAuthService {
   }
 
   /**
-   * Reject redirect URIs an attacker can use to exfiltrate auth codes. The
-   * allow-list is intentionally narrow: localhost loopback for native MCP
-   * clients, and the configured frontend host for hosted callers.
+   * Accept any https redirect URI, plus loopback http per RFC 8252. Safety
+   * relies on PKCE S256, per-client redirect_uri binding at registration,
+   * single-use auth codes, and the consent screen showing the full URI —
+   * not on a host allowlist.
    */
   private isAllowedRedirectUri(uri: string): boolean {
     let parsed: URL;
@@ -80,21 +81,12 @@ export class McpOAuthService {
       return false;
     }
     if (parsed.username || parsed.password) return false;
-    if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
-      // Loopback http is allowed for native clients per RFC 8252.
-      if (parsed.protocol === 'http:') {
-        const h = parsed.hostname;
-        return h === 'localhost' || h === '127.0.0.1' || h === '[::1]';
-      }
-      // For https, require the host to match the configured frontend.
-      try {
-        const allowed = new URL(this.frontendUrl);
-        return parsed.host === allowed.host;
-      } catch {
-        return false;
-      }
+    if (parsed.hash) return false;
+    if (parsed.protocol === 'http:') {
+      const h = parsed.hostname;
+      return h === 'localhost' || h === '127.0.0.1' || h === '[::1]';
     }
-    return false;
+    return parsed.protocol === 'https:';
   }
 
   registerClient(body: {
@@ -113,7 +105,7 @@ export class McpOAuthService {
       if (typeof uri !== 'string' || !this.isAllowedRedirectUri(uri)) {
         return {
           error: 'invalid_redirect_uri',
-          error_description: 'redirect_uri must be loopback http or the configured frontend host over https',
+          error_description: 'redirect_uri must be https or loopback http (no userinfo, no fragment)',
         };
       }
     }
@@ -196,10 +188,16 @@ export class McpOAuthService {
       expiresAt: Date.now() + 10 * 60 * 1000,
     });
 
-    // Redirect to Orchard frontend login page with MCP state
+    // Redirect to Orchard frontend login page with MCP state. client_name and
+    // redirect_uri are passed for the consent screen to display — the actual
+    // values used for the redirect come from the server-stored pending entry,
+    // so tampering with these params changes only what the user sees, not where
+    // the auth code is sent.
     const params = new URLSearchParams({
       mcp_state: mcpState,
       mcp_server: this.baseUrl,
+      client_name: client.name,
+      redirect_uri: query.redirect_uri,
     });
 
     return {
@@ -324,18 +322,23 @@ export class McpOAuthService {
       return { error: 'invalid_redirect_uri' };
     }
 
-    if (authCode.codeChallenge) {
-      if (!body.code_verifier) {
-        console.error(`[MCP OAuth] Token exchange failed: code_verifier required`);
-        return { error: 'invalid_grant', error_description: 'code_verifier required' };
-      }
-      const expectedChallenge = createHash('sha256')
-        .update(body.code_verifier)
-        .digest('base64url');
-      if (expectedChallenge !== authCode.codeChallenge) {
-        console.error(`[MCP OAuth] Token exchange failed: code_verifier mismatch`);
-        return { error: 'invalid_grant', error_description: 'code_verifier mismatch' };
-      }
+    // PKCE is mandatory — /authorize already rejects challenge-less requests,
+    // but enforce again here so the token endpoint cannot be bypassed even if
+    // an auth code somehow lands without a stored challenge.
+    if (!authCode.codeChallenge || authCode.codeChallengeMethod !== 'S256') {
+      console.error(`[MCP OAuth] Token exchange failed: PKCE S256 required on stored code`);
+      return { error: 'invalid_grant', error_description: 'PKCE required' };
+    }
+    if (!body.code_verifier) {
+      console.error(`[MCP OAuth] Token exchange failed: code_verifier required`);
+      return { error: 'invalid_grant', error_description: 'code_verifier required' };
+    }
+    const expectedChallenge = createHash('sha256')
+      .update(body.code_verifier)
+      .digest('base64url');
+    if (expectedChallenge !== authCode.codeChallenge) {
+      console.error(`[MCP OAuth] Token exchange failed: code_verifier mismatch`);
+      return { error: 'invalid_grant', error_description: 'code_verifier mismatch' };
     }
 
     const orchardToken = authCode.orchardToken;
