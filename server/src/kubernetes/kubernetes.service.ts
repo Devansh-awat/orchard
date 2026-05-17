@@ -1016,6 +1016,39 @@ export class KubernetesService {
 
       await networkingApi.createNamespacedNetworkPolicy(cleanNamespace, networkPolicyBody);
 
+      // CNPG instance pods call the kube-apiserver on startup to fetch their
+      // Cluster CR; default-deny-all blocks that and postgres never starts.
+      // Layer on an additive allow scoped to pods carrying `cnpg.io/cluster`
+      // so tenant app pods still can't reach the apiserver. Has to be a
+      // CiliumNetworkPolicy with `toEntities: [kube-apiserver]` — a plain
+      // NetworkPolicy with `ipBlock: 10.96.0.1/32` doesn't work here because
+      // kube-proxy DNATs the apiserver ClusterIP to the apiserver host/pod
+      // IP before Cilium evaluates the egress rule, so the ipBlock never
+      // matches the post-DNAT destination.
+      const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+      const cnpgApiServerPolicy = {
+        apiVersion: 'cilium.io/v2',
+        kind: 'CiliumNetworkPolicy',
+        metadata: {
+          name: 'allow-cnpg-apiserver',
+          namespace: cleanNamespace,
+          labels: { 'orchard.dev/managed': 'true' },
+        },
+        spec: {
+          endpointSelector: {
+            matchExpressions: [{ key: 'cnpg.io/cluster', operator: 'Exists' }],
+          },
+          egress: [{ toEntities: ['kube-apiserver'] }],
+        },
+      };
+      try {
+        await customApi.createNamespacedCustomObject(
+          'cilium.io', 'v2', cleanNamespace, 'ciliumnetworkpolicies', cnpgApiServerPolicy,
+        );
+      } catch (e: any) {
+        if (e.response?.statusCode !== 409) throw e;
+      }
+
       return {
         success: true,
         namespace: cleanNamespace,
