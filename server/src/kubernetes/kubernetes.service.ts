@@ -3,6 +3,7 @@ import * as k8s from '@kubernetes/client-node';
 import { ServiceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { parseCpu, parseMemory, cpuMilliToK8s, memoryBytesToK8s } from './quantity';
+import { isTrustedImage } from './trusted-images';
 
 // Annotations users may set on their ingresses. Everything else — in
 // particular anything under `traefik.ingress.kubernetes.io/router.*` — is
@@ -1625,7 +1626,12 @@ export class KubernetesService {
               // tenant's image no longer reaches the host kernel; a
               // container escape requires escaping runsc itself.
               // Falsy env var ⇒ undefined ⇒ default containerd handler.
-              runtimeClassName: process.env.TENANT_RUNTIME_CLASS || undefined,
+              // Trusted first-party images (see trusted-images.ts) skip
+              // the sandbox — runsc rejects some uid/cap transitions that
+              // their entrypoints rely on (e.g. Redis's root→redis drop).
+              runtimeClassName: isTrustedImage(cleanImage)
+                ? undefined
+                : (process.env.TENANT_RUNTIME_CLASS || undefined),
               containers: [container],
               volumes: k8sVolumes.length > 0 ? k8sVolumes : undefined,
               affinity: affinity || undefined,
