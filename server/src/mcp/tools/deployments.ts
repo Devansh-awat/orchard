@@ -53,12 +53,40 @@ If no port is specified, it defaults to 80. Make sure the port matches the port 
   );
 
   server.registerTool(
+    'list_github_deploy_targets',
+    {
+      description: `List the GitHub accounts/orgs available for deploy_from_github. ALWAYS call this before deploy_from_github so the user can pick a target.
+Returns:
+- linked: whether the caller's GitHub account is linked to Orchard (required for deploy_from_github)
+- username: the linked GitHub username (null if not linked)
+- installations: GitHub accounts/orgs where the Orchard GitHub App is installed AND the caller has access (personal account + orgs)
+If linked is false, tell the user to link their GitHub account at /user/settings in the Orchard UI.
+If installations is empty, tell the user to install the Orchard GitHub App on their personal account or org. The install URL can be fetched server-side; ask the user to visit /user/settings.`,
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      inputSchema: {},
+    },
+    async () => {
+      const status = await client.get('/github/status');
+      return { content: [{ type: 'text', text: JSON.stringify({
+        linked: status.linked,
+        username: status.username,
+        installations: status.installations,
+        hint: status.linked
+          ? (status.installations?.length
+              ? 'Use deploy_from_github with githubRepo="owner/repo" where owner matches one of the installation accountLogins. Use list_github_app_repos to see deployable repos.'
+              : 'Account linked but no GitHub App installations visible. Ask the user to install the Orchard GitHub App on their account/org via the Orchard UI settings.')
+          : 'GitHub account not linked. Ask the user to link it at /user/settings in the Orchard UI before deploying.',
+      }, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
     'deploy_from_github',
     {
-      description: `Deploy an application from a GitHub repository. This will build the Docker image from the repo and deploy it.
+      description: `Deploy an application from a GitHub repository using owner/repo shorthand. This will build the Docker image from the repo and deploy it.
 Before using this tool:
-- Check if the user's GitHub account is linked using get_github_status
-- If not linked, tell the user to link their GitHub account first via the Orchard UI
+- Call list_github_deploy_targets to confirm the caller's GitHub account is linked AND that the owner you are about to deploy is one of the installed accounts/orgs
+- If not linked or the owner has no Orchard GitHub App installation, tell the user to fix that via the Orchard UI (/user/settings) before retrying
 - Ask the user about environment variables their app needs
 - Ask if the app needs a database (use create_database tool)
 - Ask if the app needs a public domain (use create_ingress tool after deployment)
@@ -97,6 +125,66 @@ Before using this tool:
         name,
         githubRepo,
         branch: branch ?? 'main',
+        dockerfilePath,
+        buildFromRoot: buildFromRoot ?? false,
+        ...(port && { port }),
+        ...(env && { env }),
+        ...(cpuRequestMilli != null && { cpuRequestMilli }),
+        ...(memoryRequestBytes != null && { memoryRequestBytes }),
+      });
+      return { content: [{ type: 'text', text: JSON.stringify(deployment, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    'deploy_from_github_url',
+    {
+      description: `Deploy an application by pasting a full GitHub repository URL. Use this when the user gives you a link (e.g. https://github.com/owner/repo or https://github.com/owner/repo/tree/branch) rather than an owner/repo pair.
+Accepted URL shapes:
+- https://github.com/<owner>/<repo>
+- https://github.com/<owner>/<repo>.git
+- https://github.com/<owner>/<repo>/tree/<branch>
+- https://github.com/<owner>/<repo>/blob/<branch>/<path>
+- git@github.com:<owner>/<repo>.git
+The branch is auto-derived from /tree/<branch> or /blob/<branch> segments when present; otherwise it falls back to the branch parameter (default: main).
+Before calling, you should still confirm with list_github_deploy_targets that the caller's account is linked and the repo owner has the Orchard GitHub App installed. The other guidance from deploy_from_github (env vars, databases, ingress, port detection, buildFromRoot) applies here too.`,
+      annotations: { readOnlyHint: false, destructiveHint: false },
+      inputSchema: {
+        projectId: z.string().describe('The project UUID'),
+        name: z.string().describe('Deployment name'),
+        repoUrl: z.string().describe('Full GitHub URL to the repo (https:// or git@). May include /tree/<branch> or /blob/<branch> segments — the branch will be parsed out.'),
+        branch: z.string().optional().describe('Branch to deploy. Overrides any branch inferred from the URL. Defaults to main if neither is provided.'),
+        dockerfilePath: z.string().optional().describe('Path to Dockerfile relative to repo root (default: Dockerfile)'),
+        buildFromRoot: z.boolean().optional().describe('Whether to use repo root as build context (default: false)'),
+        port: z.number().optional().describe('Port the application listens on. If not specified, auto-detected from Dockerfile EXPOSE directive, falling back to 80'),
+        env: z.array(z.object({
+          key: z.string().describe('Environment variable name'),
+          value: z.string().describe('Environment variable value'),
+        })).optional().describe('Environment variables to set on the deployment'),
+        cpuRequestMilli: z.number().int().positive().optional().describe('CPU request in millicores per pod. Subject to project/org/member quotas.'),
+        memoryRequestBytes: z.number().int().positive().optional().describe('Memory request in bytes per pod. Subject to project/org/member quotas.'),
+      },
+    },
+    async ({ projectId, name, repoUrl, branch, dockerfilePath, buildFromRoot, port, env, cpuRequestMilli, memoryRequestBytes }) => {
+      const trimmed = repoUrl.trim();
+      const httpsMatch = trimmed.match(/^https?:\/\/github\.com\/([^\/\s]+)\/([^\/\s\.]+?)(?:\.git)?(?:\/(?:tree|blob)\/([^\/\s]+))?(?:\/.*)?$/i);
+      const sshMatch = trimmed.match(/^git@github\.com:([^\/\s]+)\/([^\/\s\.]+?)(?:\.git)?$/i);
+      const m = httpsMatch ?? sshMatch;
+      if (!m) {
+        return {
+          isError: true,
+          content: [{ type: 'text', text: `Could not parse GitHub URL: ${repoUrl}. Expected something like https://github.com/owner/repo or https://github.com/owner/repo/tree/branch.` }],
+        };
+      }
+      const owner = m[1];
+      const repo = m[2];
+      const branchFromUrl = httpsMatch ? httpsMatch[3] : undefined;
+      const resolvedBranch = branch ?? branchFromUrl ?? 'main';
+
+      const deployment = await client.post(`/projects/${projectId}/deployments/from-github`, {
+        name,
+        repoUrl: `https://github.com/${owner}/${repo}`,
+        branch: resolvedBranch,
         dockerfilePath,
         buildFromRoot: buildFromRoot ?? false,
         ...(port && { port }),

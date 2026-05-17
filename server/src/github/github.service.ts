@@ -1320,6 +1320,10 @@ export class GitHubService {
             Accept: 'application/vnd.github+json',
             'X-GitHub-Api-Version': '2022-11-28',
           },
+          // Without this an unresponsive GitHub (or a token in a weird state)
+          // will hang the whole request — and any MCP tool that calls
+          // /github/status — indefinitely.
+          signal: AbortSignal.timeout(5000),
         },
       );
       if (response.ok) {
