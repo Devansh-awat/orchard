@@ -97,10 +97,10 @@ export class MetricsService {
           (async () => {
             const [cpu, mem] = await Promise.all([
               this.queryInstant(
-                `quantile_over_time(0.95, (sum(rate(container_cpu_usage_seconds_total{namespace="${escapeLabel(p.namespace)}",pod=~"${escapeRegex(d.name)}-.*",container!="",container!="POD"}[60s])) * 1000)[${rangeSeconds}s:60s])`,
+                `quantile_over_time(0.95, (sum(rate(container_cpu_usage_seconds_total{namespace="${escapeLabel(p.namespace)}",pod=~"${escapeRegex(d.name)}-.*",container="",image=""}[60s])) * 1000)[${rangeSeconds}s:60s])`,
               ),
               this.queryInstant(
-                `quantile_over_time(0.95, sum(container_memory_working_set_bytes{namespace="${escapeLabel(p.namespace)}",pod=~"${escapeRegex(d.name)}-.*",container!="",container!="POD"})[${rangeSeconds}s:60s])`,
+                `quantile_over_time(0.95, sum(container_memory_working_set_bytes{namespace="${escapeLabel(p.namespace)}",pod=~"${escapeRegex(d.name)}-.*",container="",image=""})[${rangeSeconds}s:60s])`,
               ),
             ]);
             const cpuUtil = requestedCpu > 0 && cpu !== null ? cpu / requestedCpu : null;
@@ -131,10 +131,10 @@ export class MetricsService {
           (async () => {
             const [cpu, mem] = await Promise.all([
               this.queryInstant(
-                `quantile_over_time(0.95, (sum(rate(container_cpu_usage_seconds_total{namespace="${escapeLabel(db.namespace!)}",pod=~"${escapeRegex(db.clusterName!)}-.*",container!="",container!="POD"}[60s])) * 1000)[${rangeSeconds}s:60s])`,
+                `quantile_over_time(0.95, (sum(rate(container_cpu_usage_seconds_total{namespace="${escapeLabel(db.namespace!)}",pod=~"${escapeRegex(db.clusterName!)}-.*",container="",image=""}[60s])) * 1000)[${rangeSeconds}s:60s])`,
               ),
               this.queryInstant(
-                `quantile_over_time(0.95, sum(container_memory_working_set_bytes{namespace="${escapeLabel(db.namespace!)}",pod=~"${escapeRegex(db.clusterName!)}-.*",container!="",container!="POD"})[${rangeSeconds}s:60s])`,
+                `quantile_over_time(0.95, sum(container_memory_working_set_bytes{namespace="${escapeLabel(db.namespace!)}",pod=~"${escapeRegex(db.clusterName!)}-.*",container="",image=""})[${rangeSeconds}s:60s])`,
               ),
             ]);
             const cpuUtil = requestedCpu > 0 && cpu !== null ? cpu / requestedCpu : null;
@@ -201,10 +201,13 @@ export class MetricsService {
     const rateWin = Math.max(60, stepSec * 2);
 
     const queries: Record<SeriesId, string> = {
-      // millicores: cores × 1000
-      cpu: `sum(rate(container_cpu_usage_seconds_total{namespace="${ns}",pod=~"${podRe}",container!="",container!="POD"}[${rateWin}s])) * 1000`,
+      // millicores: cores × 1000. Read the pod-level cgroup series
+      // (container="",image="") instead of summing per-container series —
+      // gVisor pods only populate the pod cgroup, not the inner containers.
+      // image="" excludes the pause container (which also has container="").
+      cpu: `sum(rate(container_cpu_usage_seconds_total{namespace="${ns}",pod=~"${podRe}",container="",image=""}[${rateWin}s])) * 1000`,
       // bytes
-      mem: `sum(container_memory_working_set_bytes{namespace="${ns}",pod=~"${podRe}",container!="",container!="POD"})`,
+      mem: `sum(container_memory_working_set_bytes{namespace="${ns}",pod=~"${podRe}",container="",image=""})`,
       // bytes/sec
       rx: `sum(rate(container_network_receive_bytes_total{namespace="${ns}",pod=~"${podRe}"}[${rateWin}s]))`,
       tx: `sum(rate(container_network_transmit_bytes_total{namespace="${ns}",pod=~"${podRe}"}[${rateWin}s]))`,
