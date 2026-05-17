@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 import UAParser from 'ua-parser-js';
 
 // M-1: Geo enrichment uses ipwho.is over HTTPS with a short timeout. The
@@ -16,7 +17,10 @@ const GEO_LOOKUP_TIMEOUT_MS = 1500;
 export class SessionsService {
   private readonly logger = new Logger(SessionsService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   /**
    * Create a new session record when a user logs in.
@@ -46,6 +50,18 @@ export class SessionsService {
         location,
         authMethod: params.authMethod || null,
         expiresAt,
+      },
+    });
+
+    void this.audit.log({
+      action: 'user.signed_in',
+      actorUserId: params.userId,
+      targetType: 'session',
+      targetId: session.id,
+      metadata: {
+        auth_method: params.authMethod ?? null,
+        device_name: deviceName ?? null,
+        location: location ?? null,
       },
     });
 

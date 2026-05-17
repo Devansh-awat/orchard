@@ -1,16 +1,26 @@
 import 'reflect-metadata';
-import { NestFactory } from '@nestjs/core';
-import { AppModule } from './app.module';
 import * as dotenv from 'dotenv';
 import { resolve } from 'path';
-import cookieParser from 'cookie-parser';
-import { attachTerminalWebSocket } from './kubernetes/terminal.gateway';
 
+// dotenv MUST run before telemetry so POSTHOG_API_KEY is available, and
+// telemetry MUST run before Nest is imported so OTel instrumentation hooks
+// are installed before any application code emits a log.
 dotenv.config();
 const envPath1 = resolve(process.cwd(), '..', '.env');
 dotenv.config({ path: envPath1, override: false });
 const envPath2 = resolve(__dirname, '../../.env');
 dotenv.config({ path: envPath2, override: false });
+
+import { startTelemetry } from './analytics/telemetry';
+startTelemetry();
+
+import { NestFactory, HttpAdapterHost } from '@nestjs/core';
+import { AppModule } from './app.module';
+import cookieParser from 'cookie-parser';
+import { attachTerminalWebSocket } from './kubernetes/terminal.gateway';
+import { OtelConsoleLogger } from './analytics/otel-logger';
+import { AnalyticsService } from './analytics/analytics.service';
+import { AnalyticsExceptionFilter } from './analytics/exception.filter';
 
 declare global {
   interface BigInt {
@@ -23,9 +33,15 @@ BigInt.prototype.toJSON = function() {
 };
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule);
+  const app = await NestFactory.create(AppModule, { logger: new OtelConsoleLogger() });
 
   app.setGlobalPrefix('apiv1');
+
+  // Forward unhandled exceptions to PostHog Error Tracking. Registered after
+  // app creation so HttpAdapterHost is resolvable for the BaseExceptionFilter.
+  const { httpAdapter } = app.get(HttpAdapterHost);
+  const analytics = app.get(AnalyticsService);
+  app.useGlobalFilters(new AnalyticsExceptionFilter(analytics, httpAdapter));
 
   // Configure trust proxy so req.ip honors X-Forwarded-For ONLY when we are
   // behind a known proxy. The env var TRUST_PROXY accepts a hop count

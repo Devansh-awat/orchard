@@ -57,6 +57,7 @@ function createAuthStore() {
 
 	function signOut() {
 		if (browser) {
+			import('$lib/posthog').then(({ resetPostHog }) => resetPostHog()).catch(() => {});
 			window.location.href = `${get(apiBase)}/apiv1/auth/logout`;
 		}
 	}

@@ -668,6 +668,15 @@ export class SsoService {
           lastName: nameParts.slice(1).join(' ') || null,
         },
       });
+      void this.audit.log({
+        action: 'user.signed_up',
+        actorUserId: user.id,
+        actorEmail: user.email,
+        organizationId,
+        targetType: 'user',
+        targetId: user.id,
+        metadata: { signup_method: 'sso' },
+      });
     }
 
     // Ensure user is a member of the organization (auto-provision)

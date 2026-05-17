@@ -1,5 +1,6 @@
 import { ConflictException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
 
 export interface HackClubUserData {
   id: string;
@@ -22,7 +23,10 @@ type CachedUser = { value: any; expiresAt: number };
 export class UsersService {
   private readonly userCache = new Map<string, CachedUser>();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+  ) {}
 
   private cacheGet(key: string): any | null {
     const hit = this.userCache.get(key);
@@ -96,6 +100,14 @@ export class UsersService {
             firstName,
             lastName,
           }
+        });
+        void this.audit.log({
+          action: 'user.signed_up',
+          actorUserId: user.id,
+          actorEmail: user.email,
+          targetType: 'user',
+          targetId: user.id,
+          metadata: { signup_method: 'hackclub_oauth' },
         });
       }
     } else {
@@ -215,6 +227,14 @@ export class UsersService {
             lastName: userData.lastName || null,
             imageUrl: userData.imageUrl || null,
           },
+        });
+        void this.audit.log({
+          action: 'user.signed_up',
+          actorUserId: user.id,
+          actorEmail: user.email,
+          targetType: 'user',
+          targetId: user.id,
+          metadata: { signup_method: 'clerk_id' },
         });
       }
     }

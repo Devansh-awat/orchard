@@ -1,0 +1,128 @@
+import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
+import { PostHog } from 'posthog-node';
+
+type Primitive = string | number | boolean | null;
+export type AnalyticsProps = Record<string, Primitive | Primitive[] | Record<string, unknown>>;
+
+export interface CaptureInput {
+  distinctId: string;
+  event: string;
+  properties?: AnalyticsProps;
+  groups?: Record<string, string>;
+}
+
+@Injectable()
+export class AnalyticsService implements OnModuleDestroy {
+  private readonly logger = new Logger(AnalyticsService.name);
+  private readonly client: PostHog | null;
+
+  constructor() {
+    const key = process.env.POSTHOG_API_KEY;
+    if (!key) {
+      this.client = null;
+      this.logger.log('POSTHOG_API_KEY not set — analytics disabled');
+      return;
+    }
+    this.client = new PostHog(key, {
+      host: process.env.POSTHOG_HOST || 'https://at.leafd.dev',
+      flushAt: 20,
+      flushInterval: 10_000,
+    });
+  }
+
+  capture({ distinctId, event, properties, groups }: CaptureInput): void {
+    if (!this.client) return;
+    try {
+      this.client.capture({ distinctId, event, properties, groups });
+    } catch (err) {
+      this.logger.warn(`capture(${event}) failed: ${(err as Error).message}`);
+    }
+  }
+
+  identify(distinctId: string, properties: AnalyticsProps): void {
+    if (!this.client) return;
+    try {
+      this.client.identify({ distinctId, properties });
+    } catch (err) {
+      this.logger.warn(`identify failed: ${(err as Error).message}`);
+    }
+  }
+
+  groupIdentify(groupType: string, groupKey: string, properties: AnalyticsProps): void {
+    if (!this.client) return;
+    try {
+      this.client.groupIdentify({ groupType, groupKey, properties });
+    } catch (err) {
+      this.logger.warn(`groupIdentify failed: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * Forward an unhandled error to PostHog Error Tracking. distinctId may be
+   * a user id, an org/project synthetic id, or "anonymous" — anything is
+   * better than no attribution when sifting through the dashboard.
+   */
+  captureException(
+    error: unknown,
+    distinctId: string,
+    properties?: AnalyticsProps,
+    groups?: Record<string, string>,
+  ): void {
+    if (!this.client) return;
+    const err = error instanceof Error ? error : new Error(String(error));
+    try {
+      this.client.captureException(err, distinctId, {
+        ...(properties ?? {}),
+        ...(groups ? { $groups: groups } : {}),
+      });
+    } catch (e) {
+      this.logger.warn(`captureException failed: ${(e as Error).message}`);
+    }
+  }
+
+  /**
+   * Server-side feature flag check. Returns false when PostHog is disabled or
+   * on error — failing closed avoids surprise rollouts when the SDK is down.
+   */
+  async isFeatureEnabled(
+    key: string,
+    distinctId: string,
+    options?: { groups?: Record<string, string>; personProperties?: Record<string, unknown> },
+  ): Promise<boolean> {
+    if (!this.client) return false;
+    try {
+      const result = await this.client.isFeatureEnabled(key, distinctId, options);
+      return Boolean(result);
+    } catch (err) {
+      this.logger.warn(`isFeatureEnabled(${key}) failed: ${(err as Error).message}`);
+      return false;
+    }
+  }
+
+  /**
+   * Server-side variant lookup for multivariate flags / experiments. Returns
+   * undefined when PostHog is disabled, the flag is missing, or on error.
+   */
+  async getFeatureFlag(
+    key: string,
+    distinctId: string,
+    options?: { groups?: Record<string, string>; personProperties?: Record<string, unknown> },
+  ): Promise<string | boolean | undefined> {
+    if (!this.client) return undefined;
+    try {
+      return await this.client.getFeatureFlag(key, distinctId, options);
+    } catch (err) {
+      this.logger.warn(`getFeatureFlag(${key}) failed: ${(err as Error).message}`);
+      return undefined;
+    }
+  }
+
+  async onModuleDestroy(): Promise<void> {
+    if (!this.client) return;
+    try {
+      await this.client.shutdown();
+    } catch (err) {
+      this.logger.warn(`shutdown failed: ${(err as Error).message}`);
+    }
+  }
+}

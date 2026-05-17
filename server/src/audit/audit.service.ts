@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 
 export type AuditMetadataValue = string | number | boolean | null | [unknown, unknown];
 
@@ -44,7 +45,10 @@ const REDACTED_PLACEHOLDER = '[redacted]';
 export class AuditService {
   private readonly logger = new Logger(AuditService.name);
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly analytics: AnalyticsService,
+  ) {}
 
   /**
    * Record an audit entry. Best-effort: errors are logged, never thrown.
@@ -66,9 +70,45 @@ export class AuditService {
           ...(sanitized !== undefined ? { metadata: sanitized } : {}),
         },
       });
+      this.forwardToAnalytics(input, sanitized);
     } catch (err) {
       this.logger.warn(`Failed to record audit log "${input.action}": ${err instanceof Error ? err.message : err}`);
     }
+  }
+
+  private forwardToAnalytics(
+    input: AuditLogInput,
+    sanitized: Prisma.InputJsonValue | undefined,
+  ): void {
+    // distinct_id: prefer user, fall back to org/project so server-driven
+    // events (cron, webhooks) still attribute somewhere.
+    const distinctId =
+      input.actorUserId ||
+      (input.organizationId ? `org:${input.organizationId}` : null) ||
+      (input.projectId ? `project:${input.projectId}` : null);
+    if (!distinctId) return;
+
+    const groups: Record<string, string> = {};
+    if (input.organizationId) groups.organization = input.organizationId;
+    if (input.projectId) groups.project = input.projectId;
+
+    this.analytics.capture({
+      distinctId,
+      event: input.action,
+      groups,
+      properties: {
+        actor_email: input.actorEmail ?? null,
+        organization_id: input.organizationId ?? null,
+        project_id: input.projectId ?? null,
+        deployment_id: input.deploymentId ?? null,
+        target_type: input.targetType ?? null,
+        target_id: input.targetId ?? null,
+        target_label: input.targetLabel ?? null,
+        ...(sanitized !== undefined
+          ? { metadata: sanitized as unknown as Record<string, unknown> }
+          : {}),
+      },
+    });
   }
 
   /**

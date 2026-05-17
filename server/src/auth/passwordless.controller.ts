@@ -18,6 +18,7 @@ import { SessionsService } from './sessions.service';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthorizationService } from './authorization.service';
+import { AuditService } from '../audit/audit.service';
 import { setSessionCookie } from './cookies';
 import { Prisma } from '@prisma/client';
 import { Public, Auth } from './decorators';
@@ -56,6 +57,7 @@ export class PasswordlessController {
     private readonly usersService: UsersService,
     private readonly prisma: PrismaService,
     private readonly authz: AuthorizationService,
+    private readonly audit: AuditService,
   ) {}
 
   /**
@@ -595,6 +597,14 @@ export class PasswordlessController {
           emailVerified: true,
           emailVerifiedAt: new Date(),
         },
+      });
+      void this.audit.log({
+        action: 'user.signed_up',
+        actorUserId: user.id,
+        actorEmail: user.email,
+        targetType: 'user',
+        targetId: user.id,
+        metadata: { signup_method: 'otp' },
       });
     }
 

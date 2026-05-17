@@ -1,4 +1,4 @@
-import type { Handle } from '@sveltejs/kit';
+import type { Handle, HandleServerError } from '@sveltejs/kit';
 import { env } from '$env/dynamic/public';
 
 const BASE_DOMAIN = env.PUBLIC_BASE_DOMAIN || '';
@@ -40,4 +40,38 @@ export const handle: Handle = async ({ event, resolve }) => {
 	}
 
 	return resolve(event);
+};
+
+// Forward SSR errors to PostHog Error Tracking. SvelteKit's server context
+// can't use the browser SDK, so we POST directly to the capture endpoint.
+// Best-effort: never let analytics noise mask the real error.
+export const handleError: HandleServerError = ({ error, event, status, message }) => {
+	const key = env.PUBLIC_POSTHOG_KEY;
+	if (!key) return;
+	const host = env.PUBLIC_POSTHOG_HOST || 'https://at.leafd.dev';
+	const err = error instanceof Error ? error : new Error(String(error));
+	const payload = {
+		api_key: key,
+		event: '$exception',
+		distinct_id: event.locals.subdomain || event.url.hostname,
+		properties: {
+			$exception_source: 'sveltekit.server',
+			$exception_list: [
+				{
+					type: err.name,
+					value: err.message,
+					stacktrace: { type: 'raw', frames: [{ raw: err.stack ?? '' }] },
+				},
+			],
+			route_id: event.route.id,
+			url: event.url.pathname,
+			status,
+			sveltekit_message: message,
+		},
+	};
+	fetch(`${host}/i/v0/e/`, {
+		method: 'POST',
+		headers: { 'content-type': 'application/json' },
+		body: JSON.stringify(payload),
+	}).catch(() => {});
 };

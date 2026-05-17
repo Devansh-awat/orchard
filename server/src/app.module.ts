@@ -21,6 +21,7 @@ import { TailscaleModule } from './tailscale/tailscale.module';
 import { EventsModule } from './events/events.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { AuditModule } from './audit/audit.module';
+import { AnalyticsModule } from './analytics/analytics.module';
 
 @Module({
   imports: [
@@ -46,6 +47,7 @@ import { AuditModule } from './audit/audit.module';
     EventsModule,
     MetricsModule,
     AuditModule,
+    AnalyticsModule,
   ],
 })
 export class AppModule {}

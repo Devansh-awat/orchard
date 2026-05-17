@@ -38,6 +38,7 @@
 		"lucide-svelte": "^0.510.0",
 		"melt": "^0.42.0",
 		"motion": "^12.38.0",
+		"posthog-js": "^1.373.5",
 		"svelte5-chartjs": "^1.0.0"
 	}
 }

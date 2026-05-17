@@ -18,6 +18,7 @@
 	import { QueryClientProvider } from '@tanstack/svelte-query';
 	import { queryClient } from '$lib/query';
 	import { env } from '$env/dynamic/public';
+	import { initPostHog, identifyUser } from '$lib/posthog';
 
 	let { children } = $props();
 
@@ -36,6 +37,9 @@
 		// Initialize theme as early as possible to prevent flash
 		themeStore.init();
 
+		// Initialize PostHog analytics (no-op if PUBLIC_POSTHOG_KEY is unset)
+		initPostHog();
+
 		// Initialize API base from environment or default
 		const apiBase = env.PUBLIC_API_BASE || '';
 		initApiBase(apiBase);
@@ -44,6 +48,14 @@
 		await user.fetchUser();
 
 		// If user is signed in, fetch organizations and check for pending invitations
+		if ($isSignedIn && $user) {
+			identifyUser({
+				id: $user.id,
+				email: $user.email ?? $user.primaryEmailAddress?.emailAddress,
+				name: $user.fullName ?? $user.name,
+				username: $user.username
+			});
+		}
 		if ($isSignedIn) {
 			// Redirect to setup if not completed (unless already on setup/invite/callback)
 			if ($user?.setupCompleted === false && !shouldSkipChecks($page.url.pathname)) {

@@ -2,8 +2,14 @@
 	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
 	import { user, apiFetch, toasts, pendingInvitations, organizations, type PendingInvitation } from '$lib/stores';
-	import { ArrowLeft, Github, Loader2, Unlink, Trash2, Eye, EyeOff, Check, X, Plus, Fingerprint, ChevronRight, Pencil, Mail, Building2, Monitor, Smartphone, Globe, LogOut, Camera, ExternalLink } from 'lucide-svelte';
+	import { ArrowLeft, Github, Loader2, Unlink, Trash2, Eye, EyeOff, Check, X, Plus, Fingerprint, ChevronRight, Pencil, Mail, Building2, Monitor, Smartphone, Globe, LogOut, Camera, ExternalLink, FlaskConical } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import {
+		loadEarlyAccessFeatures,
+		setEarlyAccessFeatureEnrollment,
+		isFeatureEnabledNow,
+		type EarlyAccessFeature
+	} from '$lib/posthog';
 
 	let githubLinked = $state(false);
 	let githubUsername = $state<string | null>(null);
@@ -75,6 +81,12 @@
 	let showRevokeAllModal = $state(false);
 	let sessionToRevoke = $state<SessionRecord | null>(null);
 	let showRevokeSessionModal = $state(false);
+
+	// Early access features (PostHog)
+	let earlyAccessFeatures = $state<EarlyAccessFeature[]>([]);
+	let earlyAccessLoading = $state(true);
+	let earlyAccessEnrollment = $state<Record<string, boolean>>({});
+	let togglingFeature = $state<string | null>(null);
 
 	async function handleAcceptInvitation(invitation: PendingInvitation) {
 		if (acceptingInvitation || decliningInvitation) return;
@@ -412,6 +424,7 @@
 		checkTailscaleStatus();
 		fetchPasskeys();
 		fetchSessions();
+		fetchEarlyAccessFeatures();
 
 		// Scroll to #invitations if hash is present
 		if (browser && window.location.hash === '#invitations') {
@@ -420,6 +433,45 @@
 			});
 		}
 	});
+
+	async function fetchEarlyAccessFeatures() {
+		earlyAccessLoading = true;
+		try {
+			const features = await loadEarlyAccessFeatures();
+			earlyAccessFeatures = features;
+			// posthog's getEarlyAccessFeatures() returns the catalog but not the
+			// per-user enrollment state — derive that from the flag value.
+			const next: Record<string, boolean> = {};
+			for (const f of features) next[f.flagKey] = isFeatureEnabledNow(f.flagKey);
+			earlyAccessEnrollment = next;
+		} finally {
+			earlyAccessLoading = false;
+		}
+	}
+
+	async function toggleEarlyAccessFeature(feature: EarlyAccessFeature) {
+		if (togglingFeature) return;
+		togglingFeature = feature.flagKey;
+		const next = !earlyAccessEnrollment[feature.flagKey];
+		earlyAccessEnrollment = { ...earlyAccessEnrollment, [feature.flagKey]: next };
+		try {
+			setEarlyAccessFeatureEnrollment(feature.flagKey, next);
+			toasts.add({
+				title: next ? 'Enrolled' : 'Unenrolled',
+				description: `${next ? 'Enrolled in' : 'Left'} "${feature.name}"`,
+				color: 'success'
+			});
+		} catch (err) {
+			earlyAccessEnrollment = { ...earlyAccessEnrollment, [feature.flagKey]: !next };
+			toasts.add({
+				title: 'Error',
+				description: err instanceof Error ? err.message : 'Failed to update enrollment',
+				color: 'error'
+			});
+		} finally {
+			togglingFeature = null;
+		}
+	}
 
 	async function fetchPasskeys() {
 		passkeysLoading = true;
@@ -1042,6 +1094,68 @@
 					{/if}
 				{/if}
 			</div>
+
+			<!-- Early Access Features -->
+			{#if earlyAccessLoading || earlyAccessFeatures.length > 0}
+				<div class="us-card-section">
+					<div class="us-section-head">
+						<div class="us-section-icon us-section-icon--eaf">
+							<FlaskConical class="h-4 w-4" />
+						</div>
+						<div class="us-section-title-group">
+							<h2 class="us-section-title">Early Access Features</h2>
+							<p class="us-section-desc">Try features still in development. Expect rough edges.</p>
+						</div>
+						{#if !earlyAccessLoading && earlyAccessFeatures.length > 0}
+							<span class="us-count">{earlyAccessFeatures.length}</span>
+						{/if}
+					</div>
+
+					{#if earlyAccessLoading}
+						<div class="us-loading"><Loader2 class="h-4 w-4 animate-spin" /></div>
+					{:else}
+						<div class="us-eaf-list">
+							{#each earlyAccessFeatures as feature (feature.flagKey)}
+								{@const enrolled = earlyAccessEnrollment[feature.flagKey] ?? false}
+								<div class="us-eaf-row">
+									<div class="us-eaf-body">
+										<div class="us-eaf-top">
+											<span class="us-eaf-name">{feature.name}</span>
+											<span class="us-eaf-stage">{feature.stage}</span>
+										</div>
+										<p class="us-eaf-desc">{feature.description}</p>
+										{#if feature.documentationUrl}
+											<a
+												class="us-eaf-doc"
+												href={feature.documentationUrl}
+												target="_blank"
+												rel="noopener noreferrer"
+											>
+												Documentation <ExternalLink class="h-3 w-3" />
+											</a>
+										{/if}
+									</div>
+									<button
+										type="button"
+										class="us-btn"
+										class:us-btn-danger={enrolled}
+										onclick={() => toggleEarlyAccessFeature(feature)}
+										disabled={togglingFeature === feature.flagKey}
+									>
+										{#if togglingFeature === feature.flagKey}
+											<Loader2 class="h-3.5 w-3.5 animate-spin" />
+										{:else if enrolled}
+											Leave beta
+										{:else}
+											Join beta
+										{/if}
+									</button>
+								</div>
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{/if}
 		</div>
 	</div>
 </div>
@@ -1432,6 +1546,68 @@
 	.us-section-icon--tailscale {
 		background-color: color-mix(in srgb, var(--center-channel-color) 8%, transparent);
 		color: var(--center-channel-color);
+	}
+	.us-section-icon--eaf {
+		background-color: color-mix(in srgb, var(--away-indicator) 12%, transparent);
+		color: var(--away-indicator);
+	}
+
+	/* ── Early Access Features ── */
+	.us-eaf-list {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+	.us-eaf-row {
+		display: flex;
+		align-items: flex-start;
+		gap: 1rem;
+		padding: 0.75rem 0;
+		border-top: 1px solid color-mix(in srgb, var(--center-channel-color) 8%, transparent);
+	}
+	.us-eaf-row:first-child {
+		border-top: none;
+		padding-top: 0;
+	}
+	.us-eaf-body {
+		flex: 1;
+		min-width: 0;
+	}
+	.us-eaf-top {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-bottom: 0.25rem;
+	}
+	.us-eaf-name {
+		font-weight: 600;
+		color: var(--center-channel-color);
+	}
+	.us-eaf-stage {
+		font-size: 0.7rem;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		padding: 0.125rem 0.5rem;
+		border-radius: 999px;
+		background-color: color-mix(in srgb, var(--away-indicator) 14%, transparent);
+		color: var(--away-indicator);
+	}
+	.us-eaf-desc {
+		font-size: 0.85rem;
+		color: color-mix(in srgb, var(--center-channel-color) 70%, transparent);
+		margin: 0;
+	}
+	.us-eaf-doc {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		margin-top: 0.375rem;
+		font-size: 0.8rem;
+		color: var(--link-color);
+		text-decoration: none;
+	}
+	.us-eaf-doc:hover {
+		text-decoration: underline;
 	}
 
 	/* ── Invitations ── */
