@@ -38,7 +38,6 @@
 	<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
 		<div>
 			<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Persistent Storage</p>
-			<p class="text-xs mt-0.5" style="color: var(--surface-muted);">Attach storage that persists across restarts and redeployments.</p>
 		</div>
 		<button onclick={addVolume} class="btn btn-secondary btn-sm">
 			<Plus class="h-4 w-4" />

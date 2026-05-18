@@ -88,9 +88,6 @@
 	<div class="card rounded-2xl p-5">
 		<div class="mb-3">
 			<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Update strategy</p>
-			<p class="text-xs mt-0.5" style="color: var(--surface-muted);">
-				How Kubernetes rolls out new pods when this deployment changes.
-			</p>
 		</div>
 		<div class="strategy-grid">
 			<button
@@ -295,8 +292,6 @@
 					<span>Save</span>
 				</button>
 			</div>
-			<p class="text-xs mb-4" style="color: var(--surface-muted);">Automatically restart your app if it becomes unresponsive.</p>
-
 			<!-- Master toggle -->
 			<!-- svelte-ignore a11y_click_events_have_key_events -->
 			<!-- svelte-ignore a11y_no_static_element_interactions -->

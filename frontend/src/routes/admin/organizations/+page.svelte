@@ -105,8 +105,8 @@
 		quotaOrg = null;
 	}
 
-	function parseIntOrNull(v: string): number | null {
-		const t = v.trim();
+	function parseIntOrNull(v: string | number | null | undefined): number | null {
+		const t = String(v ?? '').trim();
 		if (!t) return null;
 		const n = parseInt(t, 10);
 		return Number.isFinite(n) && n > 0 ? n : null;

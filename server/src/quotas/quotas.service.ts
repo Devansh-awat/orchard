@@ -173,6 +173,13 @@ export class QuotasService {
     }
   }
 
+  /** Org total resource usage — lightweight, no caps/metadata. */
+  async getOrgTotalUsage(organizationId: string, namespaces: string[]): Promise<{ cpuMilli: number; memoryBytes: number }> {
+    if (namespaces.length === 0) return { cpuMilli: 0, memoryBytes: 0 };
+    const usage = await this.k8sNamespace.getOrgUsage(namespaces);
+    return { cpuMilli: usage.cpuMilli, memoryBytes: usage.memoryBytes };
+  }
+
   // Public read API (used by UI).
   async getOrgUsageWithCaps(organizationId: string) {
     const org = await this.prisma.organization.findUnique({

@@ -380,7 +380,7 @@
 		box-shadow:
 			0 1px 3px rgb(0 0 0 / 0.03),
 			0 1px 2px rgb(0 0 0 / 0.02);
-		transition: padding 320ms cubic-bezier(0.22, 1, 0.36, 1);
+		/* padding transition removed — Motion springs drive the collapse */
 	}
 	/* Compact mode: tighter top/bottom padding, less generous spacing under the title.
 	   Body height is animated by motion; the card pads in sympathy. */

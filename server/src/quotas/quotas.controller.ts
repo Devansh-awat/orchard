@@ -154,18 +154,67 @@ export class OrgQuotasController {
       where: { organizationId_userId: { organizationId: orgId, userId } },
     });
     if (!membership) throw new NotFoundException('Not a member of this org');
-    const allowance = await this.quotas.resolveMemberAllowance(orgId, userId);
-    const usage = await this.quotas.getMemberUsage(orgId, userId);
-    const org = await this.prisma.organization.findUnique({
-      where: { id: orgId },
-      select: { cpuLimitMilli: true, memoryLimitBytes: true },
-    });
+
+    const [allowance, usage, org] = await Promise.all([
+      this.quotas.resolveMemberAllowance(orgId, userId),
+      this.quotas.getMemberUsage(orgId, userId),
+      this.prisma.organization.findUnique({
+        where: { id: orgId },
+        select: {
+          cpuLimitMilli: true,
+          memoryLimitBytes: true,
+          projects: { select: { namespace: true } },
+        },
+      }),
+    ]);
+
+    const orgCpuCap = org?.cpuLimitMilli ?? null;
+    const orgMemCap = org?.memoryLimitBytes ? Number(org.memoryLimitBytes) : null;
+
+    // Compute org-level remaining by fetching total org usage
+    const orgUsage = await this.quotas.getOrgTotalUsage(orgId, org?.projects?.map(p => p.namespace) ?? []);
+    const orgCpuRemaining = orgCpuCap != null ? Math.max(0, orgCpuCap - orgUsage.cpuMilli) : null;
+    const orgMemRemaining = orgMemCap != null ? Math.max(0, orgMemCap - orgUsage.memoryBytes) : null;
+
+    // Effective limit = min(user allowance, org remaining)
+    // If user allowance is null (unlimited), effective = org remaining
+    // If org remaining is null (no org cap), effective = user allowance
+    // If both null, effective = null (unlimited)
+    const userCpu = usage.cpuMilli ?? 0;
+    const userMem = usage.memoryBytes ?? 0;
+
+    let effectiveCpuLimit: number | null = null;
+    if (allowance.cpuMilli != null && orgCpuRemaining != null) {
+      // User has allowance AND org has cap: effective = min(allowance - userUsage, orgRemaining)
+      const userLeft = Math.max(0, allowance.cpuMilli - userCpu);
+      effectiveCpuLimit = Math.min(userLeft, orgCpuRemaining);
+    } else if (allowance.cpuMilli != null) {
+      effectiveCpuLimit = Math.max(0, allowance.cpuMilli - userCpu);
+    } else if (orgCpuRemaining != null) {
+      effectiveCpuLimit = orgCpuRemaining;
+    }
+
+    let effectiveMemLimit: number | null = null;
+    if (allowance.memoryBytes != null && orgMemRemaining != null) {
+      const userLeft = Math.max(0, allowance.memoryBytes - userMem);
+      effectiveMemLimit = Math.min(userLeft, orgMemRemaining);
+    } else if (allowance.memoryBytes != null) {
+      effectiveMemLimit = Math.max(0, allowance.memoryBytes - userMem);
+    } else if (orgMemRemaining != null) {
+      effectiveMemLimit = orgMemRemaining;
+    }
+
     return {
       allowance,
       usage,
       orgCap: {
-        cpuLimitMilli: org?.cpuLimitMilli ?? null,
-        memoryLimitBytes: org?.memoryLimitBytes ? Number(org.memoryLimitBytes) : null,
+        cpuLimitMilli: orgCpuCap,
+        memoryLimitBytes: orgMemCap,
+      },
+      /** The max this user can assign to a single new deployment right now */
+      effectiveLimit: {
+        cpuMilli: effectiveCpuLimit,
+        memoryBytes: effectiveMemLimit,
       },
     };
   }

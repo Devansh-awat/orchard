@@ -96,6 +96,7 @@
 			}>;
 		};
 		orgCap: { cpuLimitMilli: number | null; memoryLimitBytes: number | null };
+		effectiveLimit: { cpuMilli: number | null; memoryBytes: number | null };
 	}
 	interface ProvisioningRow {
 		kind: 'deployment' | 'database';
@@ -603,8 +604,12 @@
 
 				<!-- ───────── MY USAGE ───────── -->
 				{:else if activeTab === 'me' && myUsage}
-					{@const cpuCap = myUsage.allowance.cpuMilli}
-					{@const memCap = myUsage.allowance.memoryBytes}
+					{@const userCpuCap = myUsage.allowance.cpuMilli}
+					{@const userMemCap = myUsage.allowance.memoryBytes}
+					{@const effectiveCpu = myUsage.effectiveLimit?.cpuMilli ?? null}
+					{@const effectiveMem = myUsage.effectiveLimit?.memoryBytes ?? null}
+					{@const cpuCap = userCpuCap ?? myUsage.orgCap.cpuLimitMilli}
+					{@const memCap = userMemCap ?? myUsage.orgCap.memoryLimitBytes}
 					{@const myProjects = projectBreakdown(myUsage)}
 
 					<div class="card">
@@ -619,9 +624,11 @@
 									max={cpuCap}
 									formatValue={formatCpuMilli}
 									size="lg"
-									caption={cpuCap === null && myUsage.orgCap.cpuLimitMilli !== null
-										? `Org cap: ${formatCpuMilli(myUsage.orgCap.cpuLimitMilli)}`
-										: null}
+									caption={userCpuCap === null && myUsage.orgCap.cpuLimitMilli !== null
+										? `Unlimited — org cap: ${formatCpuMilli(myUsage.orgCap.cpuLimitMilli)}`
+										: effectiveCpu !== null
+											? `${formatCpuMilli(effectiveCpu)} available to assign`
+											: null}
 								/>
 								<Speedometer
 									label="Memory allowance"
@@ -629,9 +636,11 @@
 									max={memCap}
 									formatValue={formatMemoryBytes}
 									size="lg"
-									caption={memCap === null && myUsage.orgCap.memoryLimitBytes !== null
-										? `Org cap: ${formatMemoryBytes(myUsage.orgCap.memoryLimitBytes)}`
-										: null}
+									caption={userMemCap === null && myUsage.orgCap.memoryLimitBytes !== null
+										? `Unlimited — org cap: ${formatMemoryBytes(myUsage.orgCap.memoryLimitBytes)}`
+										: effectiveMem !== null
+											? `${formatMemoryBytes(effectiveMem)} available to assign`
+											: null}
 								/>
 							</div>
 						</div>

@@ -76,7 +76,6 @@
 				</div>
 				<div>
 					<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Deploy with webhooks</p>
-					<p class="text-xs mt-0.5" style="color: var(--surface-muted);">Trigger deployments from CI/CD pipelines, GitHub Actions, or any HTTP client. Create a token, then POST to the webhook URL to deploy.</p>
 				</div>
 			</div>
 

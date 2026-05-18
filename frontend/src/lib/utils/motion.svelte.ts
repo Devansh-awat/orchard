@@ -343,6 +343,53 @@ export function springCollapse(collapsed: () => boolean) {
 	};
 }
 
+// ---- Spring Rotate ------------------------------------------------------------
+// Animates rotation between two angles driven by a reactive boolean.
+// Great for chevron toggles, expand/collapse indicators.
+export function springRotate(
+	active: () => boolean,
+	opts: { rest?: number; on?: number; stiffness?: number; damping?: number } = {}
+) {
+	const rest = opts.rest ?? 0;
+	const on = opts.on ?? 180;
+	const stiffness = opts.stiffness ?? 380;
+	const damping = opts.damping ?? 22;
+	return (el: Element) => {
+		const target = el as HTMLElement;
+		target.style.rotate = `${active() ? on : rest}deg`;
+		let prev = active();
+		$effect(() => {
+			const next = active();
+			if (next === prev) return;
+			prev = next;
+			animate(target, { rotate: next ? on : rest }, { type: 'spring', stiffness, damping, mass: 0.7 });
+		});
+	};
+}
+
+// ---- Spring Width -------------------------------------------------------------
+// Interpolates width between two pixel values driven by a reactive boolean.
+export function springWidth(
+	active: () => boolean,
+	opts: { rest: number; on: number; stiffness?: number; damping?: number; mass?: number }
+) {
+	return (el: Element) => {
+		const target = el as HTMLElement;
+		target.style.width = `${active() ? opts.on : opts.rest}px`;
+		let prev = active();
+		$effect(() => {
+			const next = active();
+			if (next === prev) return;
+			prev = next;
+			animate(
+				target,
+				{ width: `${next ? opts.on : opts.rest}px` },
+				{ type: 'spring', stiffness: opts.stiffness ?? 380, damping: opts.damping ?? 22, mass: opts.mass ?? 0.7 }
+			);
+		});
+	};
+}
+
 // ---- Spring Pop ---------------------------------------------------------------
 // One-shot pop spring — fires when `active` flips false → true.
 export function springPop(active: () => boolean) {

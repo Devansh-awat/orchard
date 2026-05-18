@@ -31,13 +31,6 @@
 	<div class="dep-list-header">
 		<div>
 			<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Deployments</p>
-			<p class="text-xs mt-0.5" style="color: var(--surface-muted);">
-				{#if deployment.githubRepo}
-					History of every build for <span class="font-mono">{deployment.githubRepo.replace('https://github.com/', '').replace(/\.git$/, '')}</span>
-				{:else}
-					History of every build
-				{/if}
-			</p>
 		</div>
 		{#if deployment.githubRepo}
 			<button onclick={onRebuild} disabled={rebuilding} class="btn btn-secondary btn-sm">

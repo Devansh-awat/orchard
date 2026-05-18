@@ -5,9 +5,7 @@
 	import { apiFetch, toasts } from '$lib/stores';
 	import { env } from '$env/dynamic/public';
 	import { Loader2 } from 'lucide-svelte';
-	import { fade, fly } from 'svelte/transition';
 	import { OrgGeneralTab, OrgMembersTab, OrgDatabaseTab, OrgBackupsTab, OrgSsoTab } from '$lib/components/org-settings';
-	import '$lib/components/org-settings/org-settings.css';
 
 	interface Member {
 		id: string;
@@ -339,19 +337,18 @@
 </script>
 
 {#if error}
-	<div class="os-page"><div class="alert alert-error">{error}</div></div>
+	<div class="osp-page"><div class="alert alert-error">{error}</div></div>
 {/if}
 
 {#if loading}
-	<div class="os-page">
-		<div class="flex justify-center py-16">
+	<div class="osp-page">
+		<div class="osp-loading">
 			<Loader2 class="h-6 w-6 animate-spin text-primary-600" />
 		</div>
 	</div>
 {:else if organization}
-	<div class="os-page">
-		{#key activeTab}
-		<div class="os-tab-content" in:fly={{ y: 8, duration: 200, delay: 60 }} out:fade={{ duration: 100 }}>
+	<div class="osp-page">
+		<div class="osp-stack">
 		{#if activeTab === 'general'}
 			<OrgGeneralTab {organization} {organizationSlug} {currentUserRole} {canEditOrg} bind:isEditing bind:editingName bind:editingDescription {updating} {uploadingAvatar} {deletingAvatar} onStartEditing={startEditing} onCancelEditing={cancelEditing} onSave={saveOrganization} onUploadAvatar={uploadAvatar} onDeleteAvatar={deleteAvatar} bind:avatarInputRef={avatarInput} />
 		{/if}
@@ -368,31 +365,28 @@
 			<OrgSsoTab {organization} {isOwner} {baseDomain} {ssoLoading} {ssoSaving} bind:ssoTab {ssoConfig} bind:ssoSubdomain {ssoSubdomainSaving} bind:ssoProvider bind:ssoOidcIssuerUrl bind:ssoOidcClientId bind:ssoOidcClientSecret bind:ssoOidcScopes bind:ssoSamlEntryPoint bind:ssoSamlIssuer bind:ssoSamlCertificate bind:ssoSamlMetadataUrl bind:ssoEnabled bind:ssoEnforced bind:ssoLoginLogoUrl bind:ssoLoginPrimaryColor bind:ssoLoginBgColor bind:ssoLoginWelcomeText {ssoTestResult} {ssoTesting} onSaveSubdomain={saveSubdomain} onSaveSsoConfig={saveSsoConfig} onTestSsoConnection={testSsoConnection} onDeleteSsoConfig={deleteSsoConfig} />
 		{/if}
 		</div>
-		{/key}
 	</div>
 {/if}
 
 <style>
-	.os-page {
+	.osp-page {
 		padding: 2.5rem 2.5rem 3rem;
 		max-width: 52rem;
 		margin: 0 auto;
+	}
+	.osp-stack {
 		display: flex;
 		flex-direction: column;
-		gap: 1.5rem;
+		gap: 1rem;
 	}
-	.os-tab-content {
+	.osp-loading {
 		display: flex;
-		flex-direction: column;
-		gap: 1.5rem;
+		justify-content: center;
+		padding: 4rem 0;
 	}
-	.os-tab-content > :global(*) { animation: tab-card-in 250ms ease both; }
-	.os-tab-content > :global(*:nth-child(1)) { animation-delay: 0ms; }
-	.os-tab-content > :global(*:nth-child(2)) { animation-delay: 50ms; }
-	.os-tab-content > :global(*:nth-child(3)) { animation-delay: 100ms; }
-	.os-tab-content > :global(*:nth-child(4)) { animation-delay: 150ms; }
-	@keyframes tab-card-in {
-		from { opacity: 0; transform: translateY(6px); }
-		to { opacity: 1; transform: translateY(0); }
+	@media (max-width: 640px) {
+		.osp-page {
+			padding: 1.5rem 1rem 3rem;
+		}
 	}
 </style>

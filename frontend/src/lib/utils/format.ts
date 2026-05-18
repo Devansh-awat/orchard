@@ -163,69 +163,236 @@ export function getBuildStatusColor(buildStatus: string) {
 }
 
 /** Translate raw kubelet/controller messages into plain-English */
-export function humanizeWarning(msg: string): { title: string; hint: string } | null {
+export type WarningSeverity = 'critical' | 'error' | 'warning' | 'info';
+
+export interface HumanizedWarning {
+	title: string;
+	hint: string;
+	severity: WarningSeverity;
+	action?: string;
+}
+
+export function humanizeWarning(msg: string): HumanizedWarning | null {
 	const m = msg ?? '';
-	const restarts = m.match(/has restarted (\d+) time\(s\)/i);
-	if (restarts) {
+
+	// --- Critical: deployment is down or will be down imminently ---
+
+	if (/oomkilled|out of memory/i.test(m)) {
 		return {
-			title: `Container restarted ${restarts[1]} time${restarts[1] === '1' ? '' : 's'}`,
-			hint: 'Kubernetes is restarting it after it exited. Frequent restarts usually mean the app is crashing on startup or being killed.'
+			title: 'Out of memory — container killed',
+			hint: 'Your app exceeded its memory limit and was terminated. Increase memory in Resources or fix the memory leak.',
+			severity: 'critical',
+			action: 'Increase memory'
 		};
 	}
 	if (/back-?off.*restarting failed container/i.test(m) || /crashloopbackoff/i.test(m)) {
 		return {
-			title: 'Container keeps crashing on startup',
-			hint: 'Kubernetes is waiting longer between retries (back-off). Check the pod logs for the crash reason.'
+			title: 'Crash loop — app keeps crashing',
+			hint: 'Your app crashes on startup, Kubernetes restarts it, and it crashes again. Check logs for the error.',
+			severity: 'critical',
+			action: 'View logs'
+		};
+	}
+	if (/evicted/i.test(m)) {
+		return {
+			title: 'Pod evicted',
+			hint: 'The node ran out of resources and kicked this pod. It should reschedule automatically. If it keeps happening, reduce resource usage.',
+			severity: 'critical'
+		};
+	}
+	if (/deadline exceeded/i.test(m) || /progressdeadlineexceeded/i.test(m)) {
+		return {
+			title: 'Deployment timed out',
+			hint: 'Kubernetes gave up waiting for the new version to become healthy. The app may be crashing or taking too long to start.',
+			severity: 'critical',
+			action: 'View logs'
+		};
+	}
+
+	// --- Error: something is broken but may self-heal ---
+
+	const restarts = m.match(/has restarted (\d+) time\(s\)/i);
+	if (restarts) {
+		const count = parseInt(restarts[1]);
+		return {
+			title: `Restarted ${count} time${count === 1 ? '' : 's'}`,
+			hint: count >= 5
+				? 'Frequent restarts usually mean the app is crashing on startup. Check logs for errors.'
+				: 'The container exited and was restarted. One or two restarts can be normal during deploys.',
+			severity: count >= 5 ? 'error' : 'warning',
+			action: count >= 5 ? 'View logs' : undefined
 		};
 	}
 	if (/imagepullbackoff|errimagepull|failed to pull image/i.test(m)) {
 		return {
-			title: "Couldn't pull the container image",
-			hint: 'The image name may be wrong, the tag missing, or the registry needs credentials.'
+			title: "Can't pull container image",
+			hint: 'The image name or tag may be wrong, or the registry requires authentication.',
+			severity: 'error',
+			action: 'Check image'
 		};
 	}
-	if (/oomkilled|out of memory/i.test(m)) {
+	if (/exec format error/i.test(m) || /exec.*format/i.test(m)) {
 		return {
-			title: 'Container ran out of memory',
-			hint: 'The pod was killed for exceeding its memory limit. Raise the memory request or fix the leak.'
+			title: 'Wrong CPU architecture',
+			hint: 'The container image was built for a different architecture (e.g. ARM vs x86). Rebuild for the correct platform.',
+			severity: 'error',
+			action: 'Rebuild'
+		};
+	}
+	if (/permission denied|operation not permitted/i.test(m) && !/pull/i.test(m)) {
+		return {
+			title: 'Permission denied inside container',
+			hint: 'The process tried to access something it doesn\'t have permission for. This can happen with file system operations or privileged syscalls.',
+			severity: 'error'
 		};
 	}
 	if (/liveness probe failed/i.test(m)) {
 		return {
-			title: 'Liveness check is failing',
-			hint: "Kubernetes is restarting the container because it stopped responding to its health check."
+			title: 'Health check failing — restarting',
+			hint: 'Your app stopped responding to its health check and is being restarted. This usually means the app froze or is overloaded.',
+			severity: 'error',
+			action: 'Check health settings'
 		};
 	}
-	if (/readiness probe failed/i.test(m)) {
+	if (/startup probe failed/i.test(m)) {
 		return {
-			title: 'Readiness check is failing',
-			hint: "The container is up but not ready to serve traffic yet — usually a slow boot or a failing dependency."
+			title: 'App taking too long to start',
+			hint: 'The startup health check timed out. Your app may need more time to initialize. Increase the startup failure threshold.',
+			severity: 'error',
+			action: 'Check health settings'
 		};
 	}
 	if (/failedscheduling/i.test(m) || /0\/\d+ nodes are available/i.test(m)) {
 		return {
-			title: "Couldn't place the pod on any node",
-			hint: 'No node has enough free CPU/memory, or the node selectors/taints exclude every node.'
+			title: 'No available nodes',
+			hint: 'No node has enough free CPU or memory to run this pod. Try reducing resource requests or wait for capacity.',
+			severity: 'error',
+			action: 'Check resources'
 		};
 	}
-	if (/failedmount|failed to attach volume/i.test(m)) {
+	if (/failedmount|failed to attach volume|unable to attach or mount/i.test(m)) {
 		return {
-			title: "Couldn't mount a storage volume",
-			hint: 'The PVC may be missing, not yet bound, or attached to another node.'
+			title: "Can't attach storage",
+			hint: 'The persistent volume couldn\'t be mounted. It may be in use by another pod or the storage class is unavailable.',
+			severity: 'error'
+		};
+	}
+	if (/containercreating/i.test(m) && /timeout/i.test(m)) {
+		return {
+			title: 'Container stuck creating',
+			hint: 'The container is taking an unusually long time to start. Could be a slow image pull or volume mount.',
+			severity: 'error'
+		};
+	}
+	if (/init.*container.*(?:error|fail|crash)/i.test(m) || /init:error/i.test(m) || /init:crashloopbackoff/i.test(m)) {
+		return {
+			title: 'Init container failed',
+			hint: 'A setup step that runs before your app crashed. Your app won\'t start until this is fixed.',
+			severity: 'error',
+			action: 'View logs'
+		};
+	}
+
+	// --- Warning: degraded but not broken ---
+
+	if (/readiness probe failed/i.test(m)) {
+		return {
+			title: 'Not ready for traffic',
+			hint: 'The app is running but failing its readiness check. It won\'t receive traffic until it passes. Usually a slow boot or failing dependency.',
+			severity: 'warning'
 		};
 	}
 	if (/configmap.*not found|secret.*not found/i.test(m)) {
 		return {
-			title: 'A referenced config or secret is missing',
-			hint: 'The pod references a ConfigMap or Secret that does not exist in this namespace.'
+			title: 'Missing config or secret',
+			hint: 'The pod references a ConfigMap or Secret that doesn\'t exist. Check your environment variable configuration.',
+			severity: 'warning',
+			action: 'Check environment'
 		};
 	}
 	if (/dnsconfig|dns/i.test(m) && /fail/i.test(m)) {
 		return {
-			title: 'DNS lookups inside the pod are failing',
-			hint: 'Cluster DNS is unreachable or misconfigured.'
+			title: 'DNS resolution failing',
+			hint: 'The pod can\'t resolve domain names. External API calls and database connections may fail.',
+			severity: 'warning'
 		};
 	}
+	if (/node.*pressure|diskpressure|memorypressure|pidpressure/i.test(m)) {
+		return {
+			title: 'Node under pressure',
+			hint: 'The node running your pod is low on resources. Pods may be evicted if pressure continues.',
+			severity: 'warning'
+		};
+	}
+	if (/preempt/i.test(m)) {
+		return {
+			title: 'Pod preempted',
+			hint: 'A higher-priority workload needed this pod\'s resources. It will be rescheduled automatically.',
+			severity: 'warning'
+		};
+	}
+	if (/insufficient cpu/i.test(m)) {
+		return {
+			title: 'Not enough CPU available',
+			hint: 'The cluster doesn\'t have enough CPU to schedule this pod. Try lowering the CPU request.',
+			severity: 'warning',
+			action: 'Check resources'
+		};
+	}
+	if (/insufficient memory/i.test(m)) {
+		return {
+			title: 'Not enough memory available',
+			hint: 'The cluster doesn\'t have enough memory to schedule this pod. Try lowering the memory request.',
+			severity: 'warning',
+			action: 'Check resources'
+		};
+	}
+	if (/pull.*rate.*limit|too many requests/i.test(m)) {
+		return {
+			title: 'Registry rate limited',
+			hint: 'The container registry is throttling image pulls. This usually resolves on its own. Consider using a private registry.',
+			severity: 'warning'
+		};
+	}
+	if (/network.*not ready|cni/i.test(m)) {
+		return {
+			title: 'Network not ready',
+			hint: 'The pod\'s network interface isn\'t configured yet. Usually transient during node startup.',
+			severity: 'warning'
+		};
+	}
+
+	// --- Info: transient or expected ---
+
+	if (/pulling image/i.test(m)) {
+		return {
+			title: 'Pulling container image',
+			hint: 'Downloading the container image. First pulls take longer.',
+			severity: 'info'
+		};
+	}
+	if (/successfully pulled/i.test(m)) {
+		return {
+			title: 'Image pulled successfully',
+			hint: 'The container image was downloaded and is ready to start.',
+			severity: 'info'
+		};
+	}
+	if (/created container|started container/i.test(m)) {
+		return {
+			title: 'Container starting',
+			hint: 'The container has been created and is booting up.',
+			severity: 'info'
+		};
+	}
+	if (/killing.*container.*with.*signal/i.test(m) || /stopping container/i.test(m)) {
+		return {
+			title: 'Container shutting down',
+			hint: 'The container is being gracefully stopped. This is normal during deploys and restarts.',
+			severity: 'info'
+		};
+	}
+
 	return null;
 }
 

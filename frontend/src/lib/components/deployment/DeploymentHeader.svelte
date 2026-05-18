@@ -83,7 +83,7 @@
 		onViewBuildLogs: () => void;
 		buildFailedNotifId: (d: any) => string;
 		podWarningNotifId: (w: any) => string;
-		humanizeWarning: (msg: string) => { title: string; hint: string } | null;
+		humanizeWarning: (msg: string) => { title: string; hint: string; severity?: string; action?: string } | null;
 		sanitizeLogs: (logs: string) => string;
 		_commitLead: string | null;
 		_commitLeadMono: boolean;

@@ -76,7 +76,8 @@
 		motionBackdrop, cardTilt, pressSpringDelegate
 	} from '$lib/utils/motion.svelte';
 	import {
-		portal, ansiToHtml, formatCpu, formatMemory, formatRelativeTime, formatBuildDurationBetween
+		portal, ansiToHtml, formatCpu, formatMemory, formatRelativeTime, formatBuildDurationBetween,
+		humanizeWarning
 	} from '$lib/utils/format';
 	import type {
 		Pod, Service, ServicePortConfig, Ingress, IngressRoute, ImageHistory, Volume,
@@ -85,7 +86,8 @@
 	} from '$lib/types/deployment';
 	import {
 		EnvironmentTab, VolumesTab, WebhooksTab, HistoryTab, ResourcesTab,
-		OverviewTab, NetworkTab, AdvancedTab, DeploymentHeader, BuildProgressModal
+		OverviewTab, NetworkTab, AdvancedTab, DeploymentHeader, BuildProgressModal,
+		DeploymentAlerts, ConfigureTab, DeploysTab, SettingsTab
 	} from '$lib/components/deployment';
 
 	const APP_DOMAIN = env.PUBLIC_APP_DOMAIN || 'a.lfdl.ink';
@@ -172,15 +174,9 @@
 			icon: Cpu
 		},
 		{
-			id: 'metrics',
-			label: 'Metrics',
-			description: 'Live charts & history',
-			icon: Activity
-		},
-		{
 			id: 'volumes',
 			label: 'Storage',
-			description: 'Persistent storage',
+			description: 'Persistent volumes',
 			icon: HardDriveDownload
 		},
 		{
@@ -190,38 +186,29 @@
 			icon: Wifi
 		},
 		{
-			id: 'history',
-			label: 'Deployments',
-			description: 'Builds & rollbacks',
+			id: 'metrics',
+			label: 'Metrics',
+			description: 'Live charts & history',
+			icon: Activity
+		},
+		{
+			id: 'deploys',
+			label: 'Deploys',
+			description: 'History, rollbacks & triggers',
 			icon: History
 		},
 		{
-			id: 'webhooks',
-			label: 'Webhooks',
-			description: 'Deploy triggers & tokens',
-			icon: Webhook
-		},
-		{
-			id: 'audit',
-			label: 'Audit Log',
-			description: 'Recent activity on this deployment',
-			icon: ClipboardList
-		},
-		{
-			id: 'advanced',
+			id: 'settings',
 			label: 'Advanced',
-			description: 'Build options & settings',
+			description: 'Strategy, health checks & audit log',
 			icon: SlidersHorizontal
 		}
 	] as const;
 
 	type TabId = (typeof tabSections)[number]['id'];
 
-	// Docker image deployments (no githubRepo) get the webhooks tab
 	const isDockerImageDeployment = $derived(!deployment?.githubRepo);
-	const visibleTabs = $derived(
-		tabSections.filter((tab) => tab.id !== 'webhooks' || isDockerImageDeployment)
-	);
+	const visibleTabs = $derived(tabSections);
 
 	const tabs = new Tabs<TabId>({
 		value: 'overview',
@@ -255,6 +242,7 @@
 		return (el: Element) => {
 			const target = el as HTMLElement;
 			target.style.overflow = 'hidden';
+			target.style.contain = 'content';
 			const naturalMargin = parseFloat(getComputedStyle(target).marginTop) || 0;
 			const naturalHeight = () => {
 				const prev = target.style.height;
@@ -263,9 +251,6 @@
 				target.style.height = prev;
 				return h;
 			};
-			// Arm the spring after a short grace period so any post-hydration noise on
-			// tabs.value (briefly undefined / re-asserted to 'overview') doesn't trigger
-			// a spurious collapse→expand animation on first paint.
 			let armed = false;
 			let last: boolean | null = null;
 			setTimeout(() => {
@@ -281,27 +266,46 @@
 				const isCollapsed = collapsed();
 				if (!armed || isCollapsed === last) return;
 				last = isCollapsed;
-				// Snap margin-top immediately so the inner content sits at its final
-				// vertical offset from frame 1 — animating it alongside height makes the
-				// text appear "too high" until both settle.
 				target.style.marginTop = isCollapsed ? '0px' : `${naturalMargin}px`;
-				const to = isCollapsed ? 0 : naturalHeight();
-				const opts = isCollapsed
-					? { type: 'spring' as const, stiffness: 200, damping: 18, mass: 1.2 }
-					: { type: 'spring' as const, stiffness: 180, damping: 16, mass: 1.3 };
-				const ctrl = animate(
-					target,
-					{ height: to, opacity: isCollapsed ? 0 : 1 },
-					opts
-				);
-				if (!isCollapsed) {
-					ctrl.finished.then(() => {
+				const fullHeight = naturalHeight();
+				const card = target.parentElement;
+				if (isCollapsed) {
+					// Height can't go below 0, so a spring to 0 can't bounce.
+					// Instead: collapse height quickly with an eased tween,
+					// then spring-bounce the parent card's Y to sell the motion.
+					animate(target, { height: 0 }, {
+						duration: 0.28, easing: [0.32, 0, 0.67, 0]
+					});
+					if (card) {
+						card.style.transformOrigin = 'top center';
+						card.style.overflow = 'visible';
+						animate(card, { scaleY: 0.97 }, {
+							type: 'spring', stiffness: 500, damping: 10, mass: 0.5
+						}).finished.then(() => {
+							const ctrl = animate(card, { scaleY: 1 }, {
+								type: 'spring', stiffness: 260, damping: 12, mass: 0.8
+							});
+							ctrl.finished.then(() => {
+								card.style.overflow = '';
+							});
+						});
+					}
+				} else {
+					const expandCtrl = animate(
+						target,
+						{ height: fullHeight },
+						{ type: 'spring', stiffness: 120, damping: 15, mass: 1.2 }
+					);
+					expandCtrl.finished.then(() => {
 						if (!collapsed()) {
 							target.style.height = 'auto';
 							target.style.marginTop = '';
 						}
 					});
 				}
+				animate(target, { opacity: isCollapsed ? 0 : 1 }, {
+					type: 'spring', stiffness: 300, damping: 28
+				});
 			});
 		};
 	}
@@ -415,75 +419,6 @@
 		if (expandedWarningRaw.has(id)) expandedWarningRaw.delete(id);
 		else expandedWarningRaw.add(id);
 		expandedWarningRaw = new Set(expandedWarningRaw);
-	}
-
-	// Translate raw kubelet/controller messages into a plain-English title +
-	// hint. Returns null if we don't recognise the shape — caller falls back
-	// to showing the raw text.
-	function humanizeWarning(msg: string): { title: string; hint: string } | null {
-		const m = msg ?? '';
-		const restarts = m.match(/has restarted (\d+) time\(s\)/i);
-		if (restarts) {
-			return {
-				title: `Container restarted ${restarts[1]} time${restarts[1] === '1' ? '' : 's'}`,
-				hint: 'Kubernetes is restarting it after it exited. Frequent restarts usually mean the app is crashing on startup or being killed.'
-			};
-		}
-		if (/back-?off.*restarting failed container/i.test(m) || /crashloopbackoff/i.test(m)) {
-			return {
-				title: 'Container keeps crashing on startup',
-				hint: 'Kubernetes is waiting longer between retries (back-off). Check the pod logs for the crash reason.'
-			};
-		}
-		if (/imagepullbackoff|errimagepull|failed to pull image/i.test(m)) {
-			return {
-				title: "Couldn't pull the container image",
-				hint: 'The image name may be wrong, the tag missing, or the registry needs credentials.'
-			};
-		}
-		if (/oomkilled|out of memory/i.test(m)) {
-			return {
-				title: 'Container ran out of memory',
-				hint: 'The pod was killed for exceeding its memory limit. Raise the memory request or fix the leak.'
-			};
-		}
-		if (/liveness probe failed/i.test(m)) {
-			return {
-				title: 'Liveness check is failing',
-				hint: "Kubernetes is restarting the container because it stopped responding to its health check."
-			};
-		}
-		if (/readiness probe failed/i.test(m)) {
-			return {
-				title: 'Readiness check is failing',
-				hint: "The container is up but not ready to serve traffic yet — usually a slow boot or a failing dependency."
-			};
-		}
-		if (/failedscheduling/i.test(m) || /0\/\d+ nodes are available/i.test(m)) {
-			return {
-				title: "Couldn't place the pod on any node",
-				hint: 'No node has enough free CPU/memory, or the node selectors/taints exclude every node.'
-			};
-		}
-		if (/failedmount|failed to attach volume/i.test(m)) {
-			return {
-				title: "Couldn't mount a storage volume",
-				hint: 'The PVC may be missing, not yet bound, or attached to another node.'
-			};
-		}
-		if (/configmap.*not found|secret.*not found/i.test(m)) {
-			return {
-				title: 'A referenced config or secret is missing',
-				hint: 'The pod references a ConfigMap or Secret that does not exist in this namespace.'
-			};
-		}
-		if (/dnsconfig|dns/i.test(m) && /fail/i.test(m)) {
-			return {
-				title: 'DNS lookups inside the pod are failing',
-				hint: 'Cluster DNS is unreachable or misconfigured.'
-			};
-		}
-		return null;
 	}
 
 	const notificationCount = $derived.by(() => {
@@ -725,6 +660,8 @@
 	let resourceMemoryBytes = $state<number | null>(null);
 	let orgDefaultCpuMilli = $state<number | null>(null);
 	let orgDefaultMemoryBytes = $state<number | null>(null);
+	let effectiveCpuLimit = $state<number | null>(null);
+	let effectiveMemLimit = $state<number | null>(null);
 	let savingResources = $state(false);
 	let resourcesDirty = $state(false);
 
@@ -2869,6 +2806,25 @@
 		}
 	});
 
+	// Fetch user's effective resource limits eagerly
+	let quotaMeFetched = false;
+	$effect(() => {
+		const orgId = $selectedOrganization?.id;
+		if (orgId && !quotaMeFetched) {
+			quotaMeFetched = true;
+			apiFetch(`/apiv1/organizations/${orgId}/quota/me`)
+				.then((r) => (r.ok ? r.json() : null))
+				.then((q) => {
+					if (!q) return;
+					if (q.effectiveLimit) {
+						effectiveCpuLimit = q.effectiveLimit.cpuMilli ?? null;
+						effectiveMemLimit = q.effectiveLimit.memoryBytes ?? null;
+					}
+				})
+				.catch(() => {});
+		}
+	});
+
 	// Lazy-load org quota defaults when resources tab is opened
 	let orgQuotaFetched = false;
 	$effect(() => {
@@ -3136,6 +3092,20 @@
 				</div>
 			</nav>
 
+			<!-- Unified alerts -->
+			<DeploymentAlerts
+				buildFailed={buildFailedActive}
+				buildError={deployment?.buildError ?? ''}
+				{noPodsReady}
+				podWarnings={activePodWarnings}
+				{resourcePressure}
+				dismissedIds={dismissedNotifications}
+				{sseDisconnected}
+				onDismiss={dismissNotification}
+				onViewLogs={handleViewBuildLogs}
+				onGoToResources={() => { tabs.value = 'resources'; }}
+			/>
+
 			<!-- Tab panels -->
 			{#each visibleTabs as tab}
 				<section {...tabs.getContent(tab.id)} hidden={undefined} class="tab-panel">
@@ -3199,6 +3169,8 @@
 							bind:resourceMemoryBytes
 							{orgDefaultCpuMilli}
 							{orgDefaultMemoryBytes}
+							{effectiveCpuLimit}
+							{effectiveMemLimit}
 							bind:resourcesDirty
 							{savingResources}
 							{resourcePressure}
@@ -3209,10 +3181,6 @@
 							onSaveResources={saveResources}
 							onSaveImage={saveImage}
 						/>
-					{:else if tab.id === 'metrics'}
-						<div class="card rounded-2xl p-5">
-							<DeploymentMetrics deploymentId={deployment?.id ?? null} />
-						</div>
 					{:else if tab.id === 'volumes'}
 						<VolumesTab
 							bind:volumes
@@ -3271,17 +3239,19 @@
 							onGenerateRandomDomain={generateRandomDomainForNew}
 							{toasts}
 						/>
-					{:else if tab.id === 'history'}
-						<HistoryTab
+					{:else if tab.id === 'metrics'}
+						<div class="card rounded-2xl p-5">
+							<DeploymentMetrics deploymentId={deployment?.id ?? null} />
+						</div>
+					{:else if tab.id === 'deploys'}
+						<DeploysTab
 							{deployment}
 							{rebuilding}
 							onRebuild={rebuild}
 							onOpenLogModal={openLogModal}
 							onRollback={rollbackToImage}
 							onViewBuildLogs={handleViewBuildLogs}
-						/>
-					{:else if tab.id === 'webhooks'}
-						<WebhooksTab
+							{isDockerImageDeployment}
 							deploymentId={deployment.id}
 							{webhookTokens}
 							{webhookTokensLoading}
@@ -3290,12 +3260,8 @@
 							onCreateToken={(label) => { newWebhookLabel = label; createWebhookToken(); }}
 							onDeleteToken={deleteWebhookToken}
 						/>
-					{:else if tab.id === 'audit'}
-						<div class="space-y-5">
-							<AuditLogList scope={{ deploymentId: deployment.id }} title="Recent activity" />
-						</div>
-					{:else if tab.id === 'advanced'}
-						<AdvancedTab
+					{:else if tab.id === 'settings'}
+						<SettingsTab
 							{deployment}
 							bind:strategyValue
 							{savingStrategy}

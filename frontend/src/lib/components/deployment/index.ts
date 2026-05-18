@@ -8,3 +8,7 @@ export { default as NetworkTab } from './NetworkTab.svelte';
 export { default as AdvancedTab } from './AdvancedTab.svelte';
 export { default as DeploymentHeader } from './DeploymentHeader.svelte';
 export { default as BuildProgressModal } from './BuildProgressModal.svelte';
+export { default as DeploymentAlerts } from './DeploymentAlerts.svelte';
+export { default as ConfigureTab } from './ConfigureTab.svelte';
+export { default as DeploysTab } from './DeploysTab.svelte';
+export { default as SettingsTab } from './SettingsTab.svelte';

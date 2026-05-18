@@ -6,7 +6,6 @@
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import { loadEarlyAccessFeatures, setEarlyAccessFeatureEnrollment, isFeatureEnabledNow, featureFlag, type EarlyAccessFeature } from '$lib/posthog';
 	import { UserProfile, UserInvitations, UserGitHub, UserTailscale, UserPasskeys, UserSessions, UserEarlyAccess } from '$lib/components/user-settings';
-	import '$lib/components/user-settings/user-settings.css';
 
 	let githubLinked = $state(false);
 	let githubUsername = $state<string | null>(null);
@@ -113,20 +112,23 @@
 	<div class="us-grid-fade"></div>
 	<div class="us-content">
 		<button onclick={() => window.history.back()} class="us-back"><ArrowLeft class="h-3.5 w-3.5" /> Back</button>
-		<div class="us-card">
-			<UserProfile user={$user} {displayEmail} bind:emailRevealed bind:editingField bind:editValue {savingField} {uploadingAvatar} {deletingAvatar} onStartEditField={startEditField} onCancelEditField={cancelEditField} onSaveField={saveField} onFieldKeydown={handleFieldKeydown} onUploadAvatar={uploadAvatar} onDeleteAvatar={deleteAvatar} bind:avatarInputRef={avatarInput} />
-			<UserInvitations {invitations} {acceptingInvitation} {decliningInvitation} onAccept={handleAcceptInvitation} onDecline={handleDeclineInvitation} />
-			<div class="us-card-divider"></div>
-			<UserGitHub {loading} {githubLinked} {githubUsername} {githubInstallations} {githubAppInstallUrl} {unlinking} onLink={linkGitHub} onUnlink={unlinkGitHub} />
+
+		<div class="us-stack">
+			<UserProfile index={0} user={$user} {displayEmail} bind:emailRevealed bind:editingField bind:editValue {savingField} {uploadingAvatar} {deletingAvatar} onStartEditField={startEditField} onCancelEditField={cancelEditField} onSaveField={saveField} onFieldKeydown={handleFieldKeydown} onUploadAvatar={uploadAvatar} onDeleteAvatar={deleteAvatar} bind:avatarInputRef={avatarInput} />
+
+			<UserInvitations index={1} {invitations} {acceptingInvitation} {decliningInvitation} onAccept={handleAcceptInvitation} onDecline={handleDeclineInvitation} />
+
+			<UserGitHub index={2} {loading} {githubLinked} {githubUsername} {githubInstallations} {githubAppInstallUrl} {unlinking} onLink={linkGitHub} onUnlink={unlinkGitHub} />
+
 			{#if $tailscaleEnabled}
-				<div class="us-card-divider"></div>
-				<UserTailscale {tailscaleLoading} {tailscaleLinked} {tailscaleTailnet} {unlinkingTailscale} bind:showTailscaleForm bind:tailscaleApiKey {linkingTailscale} onLink={linkTailscale} onUnlink={unlinkTailscale} />
+				<UserTailscale index={3} {tailscaleLoading} {tailscaleLinked} {tailscaleTailnet} {unlinkingTailscale} bind:showTailscaleForm bind:tailscaleApiKey {linkingTailscale} onLink={linkTailscale} onUnlink={unlinkTailscale} />
 			{/if}
-			<div class="us-card-divider"></div>
-			<UserPasskeys {passkeys} {passkeysLoading} {passkeyListError} {passkeyEnvWarning} {registerLoading} bind:showAddPasskey bind:newPasskeyName bind:editingPasskeyId bind:renameValue {renaming} {deletingPasskeyId} onRegister={registerPasskey} onStartRenaming={startRenaming} onCancelRenaming={cancelRenaming} onSavePasskeyName={savePasskeyName} onConfirmDelete={confirmDeletePasskey} {formatTimestamp} />
-			<div class="us-card-divider"></div>
-			<UserSessions {sessions} {sessionsLoading} {sessionsError} {revokingSessionId} onConfirmRevokeSession={confirmRevokeSession} onShowRevokeAll={() => (showRevokeAllModal = true)} />
-			<UserEarlyAccess {earlyAccessFeatures} {earlyAccessLoading} {earlyAccessEnrollment} {togglingFeature} onToggleFeature={toggleEarlyAccessFeature} />
+
+			<UserPasskeys index={4} {passkeys} {passkeysLoading} {passkeyListError} {passkeyEnvWarning} {registerLoading} bind:showAddPasskey bind:newPasskeyName bind:editingPasskeyId bind:renameValue {renaming} {deletingPasskeyId} onRegister={registerPasskey} onStartRenaming={startRenaming} onCancelRenaming={cancelRenaming} onSavePasskeyName={savePasskeyName} onConfirmDelete={confirmDeletePasskey} {formatTimestamp} />
+
+			<UserSessions index={5} {sessions} {sessionsLoading} {sessionsError} {revokingSessionId} onConfirmRevokeSession={confirmRevokeSession} onShowRevokeAll={() => (showRevokeAllModal = true)} />
+
+			<UserEarlyAccess index={6} {earlyAccessFeatures} {earlyAccessLoading} {earlyAccessEnrollment} {togglingFeature} onToggleFeature={toggleEarlyAccessFeature} />
 		</div>
 	</div>
 </div>
@@ -140,11 +142,56 @@
 {/if}
 
 <style>
-	.us-page { position: relative; min-height: 100%; overflow-y: auto; }
-	.us-grid-fade { position: fixed; inset: 0; pointer-events: none; z-index: 0; background-image: linear-gradient(color-mix(in srgb, var(--surface-border) 50%, transparent) 1px, transparent 1px), linear-gradient(90deg, color-mix(in srgb, var(--surface-border) 50%, transparent) 1px, transparent 1px); background-size: 80px 80px; opacity: 0.35; mask-image: radial-gradient(ellipse 70% 40% at 50% 0%, black 0%, transparent 100%); -webkit-mask-image: radial-gradient(ellipse 70% 40% at 50% 0%, black 0%, transparent 100%); }
-	.us-content { position: relative; z-index: 1; max-width: 42rem; margin: 0 auto; padding: 2.5rem 2rem 4rem; }
-	.us-back { display: inline-flex; align-items: center; gap: 0.375rem; font-size: 0.8125rem; font-weight: 450; color: var(--surface-muted); background: none; border: none; cursor: pointer; padding: 0; margin-bottom: 2rem; transition: color 120ms; }
-	.us-back:hover { color: var(--center-channel-color); }
-	.us-card { border: 1px solid var(--surface-border); border-radius: 1rem; background-color: var(--surface-bg); overflow: hidden; box-shadow: 0 1px 3px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.02); }
-	@media (max-width: 640px) { .us-content { padding: 1.5rem 1rem 3rem; } }
+	.us-page {
+		position: relative;
+		min-height: 100%;
+		overflow-y: auto;
+	}
+	.us-grid-fade {
+		position: fixed;
+		inset: 0;
+		pointer-events: none;
+		z-index: 0;
+		background-image:
+			linear-gradient(color-mix(in srgb, var(--surface-border) 50%, transparent) 1px, transparent 1px),
+			linear-gradient(90deg, color-mix(in srgb, var(--surface-border) 50%, transparent) 1px, transparent 1px);
+		background-size: 80px 80px;
+		opacity: 0.35;
+		mask-image: radial-gradient(ellipse 70% 40% at 50% 0%, black 0%, transparent 100%);
+		-webkit-mask-image: radial-gradient(ellipse 70% 40% at 50% 0%, black 0%, transparent 100%);
+	}
+	.us-content {
+		position: relative;
+		z-index: 1;
+		max-width: 42rem;
+		margin: 0 auto;
+		padding: 2.5rem 2rem 4rem;
+	}
+	.us-back {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		font-size: 0.8125rem;
+		font-weight: 450;
+		color: var(--surface-muted);
+		background: none;
+		border: none;
+		cursor: pointer;
+		padding: 0;
+		margin-bottom: 2rem;
+		transition: color 120ms;
+	}
+	.us-back:hover {
+		color: var(--center-channel-color);
+	}
+	.us-stack {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+	@media (max-width: 640px) {
+		.us-content {
+			padding: 1.5rem 1rem 3rem;
+		}
+	}
 </style>

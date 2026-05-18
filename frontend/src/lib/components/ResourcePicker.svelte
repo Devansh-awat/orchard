@@ -1,6 +1,5 @@
 <script lang="ts">
-	import { RESOURCE_PRESETS, matchPreset, formatCpu, formatMemory, type ResourcePreset } from '$lib/presets';
-	import { Check, Infinity as InfinityIcon } from 'lucide-svelte';
+	import { formatCpu, formatMemory } from '$lib/presets';
 
 	interface Props {
 		cpuMilli: number | null;
@@ -9,6 +8,10 @@
 		defaultMemoryBytes?: number | null;
 		disabled?: boolean;
 		showUnlimited?: boolean;
+		currentCpuUsage?: number | null;
+		currentMemUsage?: number | null;
+		maxCpuMilli?: number | null;
+		maxMemoryBytes?: number | null;
 		onchange?: (v: { cpuMilli: number | null; memoryBytes: number | null }) => void;
 	}
 
@@ -19,307 +22,296 @@
 		defaultMemoryBytes = null,
 		disabled = false,
 		showUnlimited = false,
+		currentCpuUsage = null,
+		currentMemUsage = null,
+		maxCpuMilli = null,
+		maxMemoryBytes = null,
 		onchange,
 	}: Props = $props();
 
-	// User explicitly picked "Custom" — sticks even when their values happen to match a preset.
-	let customLocked = $state(false);
+	// Display values — convert to user-friendly units
+	let cpuInput = $state('');
+	let memInput = $state('');
+	let cpuUnit = $state<'m' | 'cores'>('m');
+	let memUnit = $state<'MiB' | 'GiB'>('MiB');
+	// Sync from props on mount / external change
+	$effect(() => {
+		if (cpuMilli === null && memoryBytes === null) {
+			// Show org defaults as placeholder values
+			if (defaultCpuMilli != null) {
+				if (cpuUnit === 'cores') cpuInput = String(defaultCpuMilli / 1000);
+				else cpuInput = String(defaultCpuMilli);
+			}
+			if (defaultMemoryBytes != null) {
+				if (memUnit === 'GiB') memInput = String(+(defaultMemoryBytes / (1024 ** 3)).toFixed(2));
+				else memInput = String(Math.round(defaultMemoryBytes / (1024 * 1024)));
+			}
+		} else {
+			if (cpuMilli != null) {
+				if (cpuUnit === 'cores') cpuInput = String(cpuMilli / 1000);
+				else cpuInput = String(cpuMilli);
+			}
+			if (memoryBytes != null) {
+				if (memUnit === 'GiB') memInput = String(+(memoryBytes / (1024 ** 3)).toFixed(2));
+				else memInput = String(Math.round(memoryBytes / (1024 * 1024)));
+			}
+		}
+	});
 
-	const isUnlimited = $derived(cpuMilli === 0 && memoryBytes === 0);
-
-	const selectedId = $derived(
-		isUnlimited
-			? 'unlimited'
-			: customLocked
-				? 'custom'
-				: cpuMilli === null && memoryBytes === null
-					? 'default'
-					: cpuMilli != null && memoryBytes != null
-						? (matchPreset(cpuMilli, memoryBytes) ?? 'custom')
-						: 'custom',
-	);
-
-	let customCpu = $state('');
-	let customMem = $state('');
-
-	function pick(preset: ResourcePreset) {
-		if (disabled) return;
-		customLocked = false;
-		cpuMilli = preset.cpuMilli;
-		memoryBytes = preset.memoryBytes;
+	function applyCpu() {
+		const v = parseFloat(cpuInput);
+		if (!Number.isFinite(v) || v <= 0) return;
+		cpuMilli = cpuUnit === 'cores' ? Math.round(v * 1000) : Math.round(v);
 		onchange?.({ cpuMilli, memoryBytes });
 	}
 
-	function pickDefault() {
-		if (disabled) return;
-		customLocked = false;
-		cpuMilli = null;
-		memoryBytes = null;
-		onchange?.({ cpuMilli: null, memoryBytes: null });
-	}
-
-	function pickUnlimited() {
-		if (disabled) return;
-		customLocked = false;
-		cpuMilli = 0;
-		memoryBytes = 0;
-		onchange?.({ cpuMilli: 0, memoryBytes: 0 });
-	}
-
-	function pickCustom() {
-		if (disabled) return;
-		customLocked = true;
-		const initCpu = cpuMilli ?? defaultCpuMilli ?? 100;
-		const initMem = memoryBytes ?? defaultMemoryBytes ?? 128 * 1024 * 1024;
-		cpuMilli = initCpu;
-		memoryBytes = initMem;
-		customCpu = String(initCpu);
-		customMem = String(Math.round(initMem / (1024 * 1024)));
+	function applyMem() {
+		const v = parseFloat(memInput);
+		if (!Number.isFinite(v) || v <= 0) return;
+		memoryBytes = memUnit === 'GiB' ? Math.round(v * 1024 ** 3) : Math.round(v * 1024 * 1024);
 		onchange?.({ cpuMilli, memoryBytes });
 	}
 
-	function applyCustom() {
-		if (disabled) return;
-		const c = parseInt(customCpu, 10);
-		const m = parseInt(customMem, 10);
-		if (Number.isFinite(c) && c > 0) cpuMilli = c;
-		if (Number.isFinite(m) && m > 0) memoryBytes = m * 1024 * 1024;
-		onchange?.({ cpuMilli, memoryBytes });
+	// Usage percentages
+	function pct(usage: number | null, limit: number | null): number | null {
+		if (usage == null || limit == null || limit <= 0) return null;
+		return Math.min(100, Math.round((usage / limit) * 100));
 	}
+
+	const cpuPct = $derived(pct(currentCpuUsage, cpuMilli ?? defaultCpuMilli));
+	const memPct = $derived(pct(currentMemUsage, memoryBytes ?? defaultMemoryBytes));
+
+	// Limit warnings
+	const cpuOverLimit = $derived(maxCpuMilli != null && cpuMilli != null && cpuMilli > maxCpuMilli);
+	const memOverLimit = $derived(maxMemoryBytes != null && memoryBytes != null && memoryBytes > maxMemoryBytes);
+
+	function barColor(p: number): string {
+		if (p >= 90) return 'var(--error-text-color)';
+		if (p >= 70) return 'var(--away-indicator)';
+		return 'var(--online-indicator)';
+	}
+
+
 </script>
 
 <div class="rp-root">
-	<div class="rp-grid">
-		<button
-			type="button"
-			class="rp-card"
-			class:is-selected={selectedId === 'default'}
-			onclick={pickDefault}
-			{disabled}
-			aria-pressed={selectedId === 'default'}
-		>
-			{#if selectedId === 'default'}<span class="rp-check"><Check class="h-2.5 w-2.5" strokeWidth={3} /></span>{/if}
-			<div class="rp-title">Default</div>
-			<div class="rp-value">
-				{#if defaultCpuMilli != null && defaultMemoryBytes != null}
-					{formatCpu(defaultCpuMilli)} · {formatMemory(defaultMemoryBytes)}
-				{:else}
-					From org
+	<div class="rp-fields">
+			<!-- CPU -->
+			<div class="rp-field">
+				<div class="rp-field-header">
+					<span class="rp-field-label">CPU</span>
+					<div class="rp-unit-toggle">
+						<button type="button" class="rp-unit-btn" class:rp-unit-btn--active={cpuUnit === 'm'} onclick={() => { cpuUnit = 'm'; if (cpuMilli != null) cpuInput = String(cpuMilli); }} {disabled}>millicores</button>
+						<button type="button" class="rp-unit-btn" class:rp-unit-btn--active={cpuUnit === 'cores'} onclick={() => { cpuUnit = 'cores'; if (cpuMilli != null) cpuInput = String(cpuMilli / 1000); }} {disabled}>cores</button>
+					</div>
+				</div>
+				<div class="rp-input-row">
+					<div class="rp-input-wrap">
+						<input
+							type="number"
+							min="1"
+							step={cpuUnit === 'cores' ? '0.1' : '1'}
+							bind:value={cpuInput}
+							oninput={applyCpu}
+							placeholder={cpuUnit === 'cores' ? '0.25' : '250'}
+							{disabled}
+						/>
+						<span class="rp-input-unit">{cpuUnit === 'cores' ? 'cores' : 'm'}</span>
+					</div>
+				</div>
+				{#if cpuPct != null}
+					<div class="rp-bar-row">
+						<div class="rp-bar-track">
+							<div class="rp-bar-fill" style="width: {cpuPct}%; background-color: {barColor(cpuPct)};"></div>
+						</div>
+						<span class="rp-bar-label" style="color: {barColor(cpuPct)};">{cpuPct}% used</span>
+					</div>
+				{/if}
+				{#if cpuOverLimit}
+					<p class="rp-limit-warn">Exceeds your org limit of {formatCpu(maxCpuMilli!)}</p>
+				{:else if maxCpuMilli != null}
+					<p class="rp-limit-hint">Max allowed: {formatCpu(maxCpuMilli)}</p>
 				{/if}
 			</div>
-		</button>
 
-		{#if showUnlimited}
-			<button
-				type="button"
-				class="rp-card rp-card-unlimited"
-				class:is-selected={selectedId === 'unlimited'}
-				onclick={pickUnlimited}
-				{disabled}
-				aria-pressed={selectedId === 'unlimited'}
-			>
-				{#if selectedId === 'unlimited'}<span class="rp-check"><Check class="h-2.5 w-2.5" strokeWidth={3} /></span>{/if}
-				<div class="rp-title">Unlimited</div>
-				<div class="rp-value">No limits</div>
-			</button>
-		{/if}
-
-		{#each RESOURCE_PRESETS as preset}
-			<button
-				type="button"
-				class="rp-card"
-				class:is-selected={selectedId === preset.id}
-				onclick={() => pick(preset)}
-				{disabled}
-				aria-pressed={selectedId === preset.id}
-			>
-				{#if selectedId === preset.id}<span class="rp-check"><Check class="h-2.5 w-2.5" strokeWidth={3} /></span>{/if}
-				<div class="rp-title">{preset.label}</div>
-				<div class="rp-value">{formatCpu(preset.cpuMilli)} · {formatMemory(preset.memoryBytes)}</div>
-			</button>
-		{/each}
-
-		<button
-			type="button"
-			class="rp-card"
-			class:is-selected={selectedId === 'custom'}
-			onclick={pickCustom}
-			{disabled}
-			aria-pressed={selectedId === 'custom'}
-		>
-			{#if selectedId === 'custom'}<span class="rp-check"><Check class="h-2.5 w-2.5" strokeWidth={3} /></span>{/if}
-			<div class="rp-title">Custom</div>
-			<div class="rp-value">
-				{#if selectedId === 'custom' && cpuMilli != null && memoryBytes != null}
-					{formatCpu(cpuMilli)} · {formatMemory(memoryBytes)}
-				{:else}
-					Set your own
+			<!-- Memory -->
+			<div class="rp-field">
+				<div class="rp-field-header">
+					<span class="rp-field-label">Memory</span>
+					<div class="rp-unit-toggle">
+						<button type="button" class="rp-unit-btn" class:rp-unit-btn--active={memUnit === 'MiB'} onclick={() => { memUnit = 'MiB'; if (memoryBytes != null) memInput = String(Math.round(memoryBytes / (1024 * 1024))); }} {disabled}>MiB</button>
+						<button type="button" class="rp-unit-btn" class:rp-unit-btn--active={memUnit === 'GiB'} onclick={() => { memUnit = 'GiB'; if (memoryBytes != null) memInput = String(+(memoryBytes / (1024 ** 3)).toFixed(2)); }} {disabled}>GiB</button>
+					</div>
+				</div>
+				<div class="rp-input-row">
+					<div class="rp-input-wrap">
+						<input
+							type="number"
+							min="1"
+							step={memUnit === 'GiB' ? '0.25' : '1'}
+							bind:value={memInput}
+							oninput={applyMem}
+							placeholder={memUnit === 'GiB' ? '0.5' : '512'}
+							{disabled}
+						/>
+						<span class="rp-input-unit">{memUnit}</span>
+					</div>
+				</div>
+				{#if memPct != null}
+					<div class="rp-bar-row">
+						<div class="rp-bar-track">
+							<div class="rp-bar-fill" style="width: {memPct}%; background-color: {barColor(memPct)};"></div>
+						</div>
+						<span class="rp-bar-label" style="color: {barColor(memPct)};">{memPct}% used</span>
+					</div>
+				{/if}
+				{#if memOverLimit}
+					<p class="rp-limit-warn">Exceeds your org limit of {formatMemory(maxMemoryBytes!)}</p>
+				{:else if maxMemoryBytes != null}
+					<p class="rp-limit-hint">Max allowed: {formatMemory(maxMemoryBytes)}</p>
 				{/if}
 			</div>
-		</button>
 	</div>
-
-	{#if selectedId === 'custom'}
-		<div class="rp-custom">
-			<label class="rp-field">
-				<span class="rp-field-label">CPU</span>
-				<div class="rp-input-wrap">
-					<input type="number" min="1" bind:value={customCpu} oninput={applyCustom} placeholder="500" {disabled} />
-					<span class="rp-unit">m</span>
-				</div>
-			</label>
-			<label class="rp-field">
-				<span class="rp-field-label">Memory</span>
-				<div class="rp-input-wrap">
-					<input type="number" min="1" bind:value={customMem} oninput={applyCustom} placeholder="1024" {disabled} />
-					<span class="rp-unit">MiB</span>
-				</div>
-			</label>
-		</div>
-	{/if}
 </div>
 
 <style>
-	.rp-root { display: flex; flex-direction: column; gap: 0.75rem; }
-
-	.rp-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-		gap: 0.375rem;
+	.rp-root {
+		display: flex;
+		flex-direction: column;
+		gap: 0.875rem;
 	}
 
-	.rp-card {
-		position: relative;
-		text-align: left;
-		padding: 0.5rem 0.625rem;
-		border: 1px solid var(--surface-border);
-		background-color: var(--center-channel-bg);
-		color: var(--center-channel-color);
-		border-radius: 0.5rem;
-		cursor: pointer;
-		transition: border-color 120ms ease, box-shadow 120ms ease, background-color 120ms ease;
-	}
-
-	.rp-card:hover:not(:disabled):not(.is-selected) {
-		border-color: color-mix(in srgb, var(--button-bg) 40%, var(--surface-border));
-	}
-
-	.rp-card:focus-visible {
-		outline: none;
-		box-shadow: 0 0 0 3px color-mix(in srgb, var(--button-bg) 30%, transparent);
-	}
-
-	.rp-card:disabled { opacity: 0.5; cursor: not-allowed; }
-
-	.rp-card.is-selected {
-		border-color: var(--button-bg);
-		background-color: color-mix(in srgb, var(--button-bg) 8%, var(--center-channel-bg));
-		box-shadow: 0 0 0 1px var(--button-bg);
-	}
-
-	.rp-check {
-		position: absolute;
-		top: 0.375rem;
-		right: 0.375rem;
-		width: 0.875rem;
-		height: 0.875rem;
-		border-radius: 999px;
-		background-color: var(--button-bg);
-		color: #fff;
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-	}
-
-	.rp-title {
-		font-size: 0.75rem;
-		font-weight: 600;
-		line-height: 1.1;
-		color: var(--center-channel-color);
-		padding-right: 1rem;
-	}
-
-	.rp-card.is-selected .rp-title {
-		color: var(--button-bg);
-	}
-
-	.rp-value {
-		margin-top: 0.25rem;
-		font-size: 0.8125rem;
-		font-weight: 500;
-		line-height: 1.2;
-		font-variant-numeric: tabular-nums;
-		color: var(--surface-muted);
-	}
-
-	.rp-card.is-selected .rp-value {
-		color: var(--center-channel-color);
-	}
-
-	.rp-custom {
+	/* Fields */
+	.rp-fields {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 0.75rem;
-		padding: 0.75rem;
-		background-color: var(--control-bg);
-		border: 1px solid var(--surface-border);
-		border-radius: 0.5rem;
+		gap: 1.25rem;
 	}
-
-	.rp-field { display: flex; flex-direction: column; gap: 0.25rem; }
-
+	.rp-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+	.rp-field-header {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+	}
 	.rp-field-label {
-		font-size: 0.6875rem;
-		font-weight: 600;
-		letter-spacing: 0.03em;
+		font-size: 0.75rem;
+		font-weight: 650;
 		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--center-channel-color);
+	}
+	.rp-unit-toggle {
+		display: flex;
+		border: 1px solid var(--surface-border);
+		border-radius: 0.375rem;
+		overflow: hidden;
+	}
+	.rp-unit-btn {
+		padding: 0.1875rem 0.5rem;
+		font-size: 0.625rem;
+		font-weight: 550;
+		border: none;
+		background: none;
 		color: var(--surface-muted);
+		cursor: pointer;
+		transition: all 100ms;
+	}
+	.rp-unit-btn:not(:last-child) {
+		border-right: 1px solid var(--surface-border);
+	}
+	.rp-unit-btn--active {
+		background-color: var(--button-bg);
+		color: var(--button-color);
 	}
 
-	.rp-input-wrap { position: relative; display: flex; align-items: center; }
-
+	/* Input */
+	.rp-input-row {
+		display: flex;
+		gap: 0.5rem;
+	}
+	.rp-input-wrap {
+		position: relative;
+		display: flex;
+		align-items: center;
+		flex: 1;
+	}
 	.rp-input-wrap input {
 		flex: 1;
 		width: 100%;
-		padding: 0.375rem 2.25rem 0.375rem 0.625rem;
+		padding: 0.5rem 3rem 0.5rem 0.75rem;
 		border: 1px solid var(--surface-border);
-		background-color: var(--center-channel-bg);
+		background-color: var(--surface-bg);
 		color: var(--center-channel-color);
-		border-radius: 0.375rem;
-		font-size: 0.875rem;
+		border-radius: 0.5rem;
+		font-size: 0.9375rem;
 		font-variant-numeric: tabular-nums;
+		font-family: var(--font-mono);
 	}
-
 	.rp-input-wrap input:focus {
 		outline: none;
 		border-color: var(--button-bg);
-		box-shadow: 0 0 0 3px color-mix(in srgb, var(--button-bg) 20%, transparent);
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--button-bg) 15%, transparent);
 	}
-
-	.rp-unit {
+	.rp-input-wrap input:disabled {
+		opacity: 0.5;
+	}
+	.rp-input-unit {
 		position: absolute;
-		right: 0.625rem;
+		right: 0.75rem;
 		font-size: 0.6875rem;
+		font-weight: 500;
 		color: var(--surface-muted);
 		pointer-events: none;
 	}
 
-	.rp-card-unlimited.is-selected {
-		border-color: #f59e0b;
-		background-color: color-mix(in srgb, #f59e0b 8%, var(--center-channel-bg));
-		box-shadow: 0 0 0 1px #f59e0b;
+	/* Usage bar */
+	.rp-bar-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+	.rp-bar-track {
+		flex: 1;
+		height: 0.375rem;
+		border-radius: 1rem;
+		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
+		overflow: hidden;
+	}
+	.rp-bar-fill {
+		height: 100%;
+		border-radius: 1rem;
+		transition: width 400ms cubic-bezier(0.22, 1, 0.36, 1), background-color 300ms;
+		min-width: 2px;
+	}
+	.rp-bar-label {
+		font-size: 0.625rem;
+		font-weight: 600;
+		font-family: var(--font-mono);
+		white-space: nowrap;
+		flex-shrink: 0;
 	}
 
-	.rp-card-unlimited.is-selected .rp-title {
-		color: #f59e0b;
+	/* Limit warnings */
+	.rp-limit-warn {
+		font-size: 0.6875rem;
+		color: var(--error-text-color);
+		margin: 0;
+		font-weight: 550;
 	}
-
-	.rp-card-unlimited.is-selected .rp-check {
-		background-color: #f59e0b;
+	.rp-limit-hint {
+		font-size: 0.6875rem;
+		color: var(--surface-muted);
+		margin: 0;
 	}
 
 	@media (max-width: 540px) {
-		.rp-grid { grid-template-columns: repeat(2, 1fr); }
-		.rp-custom { grid-template-columns: 1fr; }
+		.rp-fields {
+			grid-template-columns: 1fr;
+		}
 	}
 </style>
