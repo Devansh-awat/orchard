@@ -1,0 +1,76 @@
+export interface DeploymentSummary {
+	id: string;
+	name: string;
+	status: string;
+	buildStatus: string;
+	image?: string;
+	githubRepo?: string;
+	githubBranch?: string;
+	updatedAt: string;
+	replicas: number;
+	ingresses: Array<{ id: string; host: string }>;
+	project: {
+		id: string;
+		name: string;
+		slug: string;
+		organizationId: string;
+	};
+}
+
+export interface DatabaseSummary {
+	id: string;
+	name: string;
+	dbName: string;
+	status: string;
+	mode?: string;
+	updatedAt: string;
+	project: { id: string; name: string; slug: string; organizationId: string };
+}
+
+export interface ActiveBuild {
+	id: string;
+	name: string;
+	image?: string;
+	status: string;
+	buildStatus: string;
+	buildStep: string | null;
+	updatedAt: string;
+	githubRepo?: string;
+	githubBranch?: string;
+	ingresses: Array<{ host: string }>;
+	project?: { name: string };
+}
+
+export interface RecentBuild {
+	id: string;
+	commitSha: string | null;
+	branch: string | null;
+	triggerType: string | null;
+	isActive: boolean;
+	createdAt: string;
+	deployment: {
+		id: string;
+		name: string;
+		image?: string;
+		buildStatus: string;
+		ingresses: Array<{ host: string }>;
+		project?: { name: string };
+	};
+}
+
+export interface ProjectMeta {
+	id: string;
+	name: string;
+	slug: string;
+	description?: string;
+	icon?: string | null;
+	backgroundImage?: string | null;
+}
+
+export interface ProjectGroup {
+	id: string;
+	name: string;
+	slug: string;
+	deps: DeploymentSummary[];
+	dbs: DatabaseSummary[];
+}

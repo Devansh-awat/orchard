@@ -1,0 +1,206 @@
+export interface Pod {
+	name: string;
+	status: string;
+	ip?: string;
+	startTime?: string;
+	cpuUsage?: number | null;
+	memoryUsage?: number | null;
+	containers?: Array<{ name: string; image: string; ready: boolean }>;
+}
+
+export interface ServicePortConfig {
+	id?: string;
+	name?: string;
+	port: number;
+	targetPort: number;
+	protocol: string;
+	nodePort?: number | null;
+	publicEnabled?: boolean;
+	publicPort?: number | null;
+}
+
+export interface Service {
+	id: string;
+	name: string;
+	port: number;
+	targetPort: number;
+	protocol: string;
+	nodePort?: number;
+	type?: string;
+	externalIp?: string | null;
+	domain?: string | null;
+	ports?: ServicePortConfig[];
+	internalUrl?: string;
+	internalUrls?: string[];
+}
+
+export interface IngressRoute {
+	path: string;
+	serviceName: string;
+	servicePort: number;
+}
+
+export interface Ingress {
+	id: string;
+	name: string;
+	host: string;
+	path: string;
+	tlsEnabled: boolean;
+	address?: string;
+	annotations?: Record<string, any>;
+	routes?: IngressRoute[];
+	service?: {
+		id: string;
+		name: string;
+		port: number;
+	};
+}
+
+export interface ImageHistory {
+	id: string;
+	image: string;
+	branch?: string;
+	commitSha?: string;
+	commitMessage?: string;
+	commitAuthorName?: string;
+	commitAuthorUsername?: string;
+	buildStartedAt?: string;
+	buildCompletedAt?: string;
+	createdAt: string;
+	isActive: boolean;
+	triggerType?: string;
+	triggeredBy?: {
+		id: string;
+		username: string;
+		firstName?: string;
+		lastName?: string;
+	};
+}
+
+export interface Volume {
+	id: string;
+	name: string;
+	type: 'pvc' | 'hostPath' | 'emptyDir';
+	mountPath: string;
+	pvcName?: string | null;
+	storageSize?: string | null;
+	hostPath?: string | null;
+	readOnly: boolean;
+}
+
+export interface Deployment {
+	id: string;
+	name: string;
+	status: string;
+	buildStatus?: string;
+	buildStep?: string | null;
+	replicas: number;
+	availableReplicas: number;
+	image?: string;
+	namespace?: string;
+	env?: Array<{ key: string; value: string }>;
+	volumes?: Volume[];
+	pods?: Pod[];
+	services?: Service[];
+	ingresses?: Ingress[];
+	imageHistory?: ImageHistory[];
+	githubRepo?: string;
+	githubBranch?: string;
+	buildType?: 'dockerfile' | 'railpack';
+	dockerfilePath?: string;
+	buildFromRoot?: boolean;
+	buildWithDepot?: boolean;
+	buildLogs?: string;
+	buildError?: string;
+	buildStepTimestamps?: Record<string, number> | null;
+	autoDeployEnabled?: boolean;
+	autoDeployBranch?: string;
+	healthCheckEnabled?: boolean;
+	healthCheckPath?: string;
+	healthCheckPort?: number;
+	healthCheckType?: string;
+	healthCheckCommand?: string;
+	livenessEnabled?: boolean;
+	readinessEnabled?: boolean;
+	startupEnabled?: boolean;
+	healthCheckInterval?: number;
+	healthCheckTimeout?: number;
+	healthCheckRetries?: number;
+	startupFailureThreshold?: number;
+	cpuRequestMilli?: number | null;
+	memoryRequestBytes?: number | null;
+	totalCpuUsage?: number | null;
+	totalMemoryUsage?: number | null;
+	deployStrategy?: 'rollingUpdate' | 'recreate';
+	warnings?: Array<{ podName: string; message: string; timestamp: string }>;
+	project?: {
+		id: string;
+		name: string;
+		slug: string;
+		backgroundImage?: string | null;
+	};
+	projectId?: string;
+	tailscaleExposed?: boolean;
+	tailscaleHostname?: string | null;
+	envVars?: Array<{ key: string; value: string }>;
+}
+
+export interface AutoDeployStatus {
+	enabled: boolean;
+	branch: string;
+	appInstalled: boolean;
+}
+
+export interface GitHubAppInstallation {
+	id: string;
+	installationId: string;
+	accountLogin: string;
+	accountType: string;
+}
+
+export interface GitHubDeploymentRecord {
+	id: string;
+	githubDeploymentId: string;
+	owner: string;
+	repo: string;
+	ref: string;
+	commitSha: string;
+	environment: string;
+	status: string;
+	logUrl?: string;
+	environmentUrl?: string;
+	createdAt: string;
+}
+
+export type ServicePortForm = {
+	name: string;
+	containerPort: number;
+	servicePort: number;
+	protocol: string;
+	nodePort?: number | null;
+};
+
+export type ServiceFormState = {
+	name: string;
+	exposePublic: boolean;
+	ports: ServicePortForm[];
+};
+
+export interface WebhookToken {
+	id: string;
+	label: string | null;
+	createdAt: string;
+	lastUsedAt: string | null;
+	token?: string;
+}
+
+export interface TerminalTabInfo {
+	id: string;
+	podName: string;
+	container: string;
+	label: string;
+}
+
+export type StatusTone = 'success' | 'warning' | 'error' | 'neutral' | 'info';
+
+export type TabId = 'overview' | 'environment' | 'resources' | 'metrics' | 'volumes' | 'network' | 'history' | 'webhooks' | 'audit' | 'advanced';
