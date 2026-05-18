@@ -555,57 +555,5 @@ export class GitHubController {
     }));
   }
 
-  @Get('app/repositories')
-  async getAppRepositories(@Req() req: any) {
-    const hackClubId = req.user.hackClubId || req.user.sub;
-    const user = await this.usersService.findOrCreateByClerkId(hackClubId, {
-      email: req.user.email,
-      firstName: req.user.firstName,
-      lastName: req.user.lastName,
-    });
-
-    if (!user) {
-      throw new HttpException('User not found', HttpStatus.UNAUTHORIZED);
-    }
-
-    const installations = await this.githubService.getUserInstallations(user.id);
-
-    if (installations.length === 0) {
-      return { installations: [], repositories: [] };
-    }
-
-    // Get repositories from all installations
-    const allRepos: any[] = [];
-    const installationData: any[] = [];
-
-    for (const installation of installations) {
-      try {
-        const repos = await this.githubService.getInstallationRepositories(installation.installationId);
-
-        installationData.push({
-          id: installation.id,
-          installationId: installation.installationId.toString(),
-          accountLogin: installation.accountLogin,
-          accountType: installation.accountType,
-          repositoryCount: repos.length,
-        });
-
-        for (const repo of repos) {
-          allRepos.push({
-            ...repo,
-            installationId: installation.installationId.toString(),
-            accountLogin: installation.accountLogin,
-          });
-        }
-      } catch (e) {
-        console.error(`[GitHub App] Failed to get repos for installation ${installation.installationId}:`, e);
-      }
-    }
-
-    return {
-      installations: installationData,
-      repositories: allRepos
-    };
-  }
 }
 

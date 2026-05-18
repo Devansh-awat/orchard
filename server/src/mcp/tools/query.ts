@@ -467,25 +467,12 @@ The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can 
   server.registerTool(
     'list_github_repos',
     {
-      description: "List the user's GitHub repositories available for deployment",
+      description: `Autocomplete source for deploy_from_github. Lists repos that are BOTH (a) covered by an Orchard GitHub App installation the user has access to AND (b) accessible to the user's own GitHub account — i.e. the intersection. These are safe to suggest because the deploy will succeed for them. The user should never be shown repos they cannot access on GitHub.`,
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {},
     },
     async () => {
       const repos = await client.get('/github/repositories');
-      return { content: [{ type: 'text', text: JSON.stringify(repos, null, 2) }] };
-    },
-  );
-
-  server.registerTool(
-    'list_github_app_repos',
-    {
-      description: 'List repositories from GitHub App installations (these have webhook support for auto-deploy)',
-      annotations: { readOnlyHint: true, destructiveHint: false },
-      inputSchema: {},
-    },
-    async () => {
-      const repos = await client.get('/github/app/repositories');
       return { content: [{ type: 'text', text: JSON.stringify(repos, null, 2) }] };
     },
   );
