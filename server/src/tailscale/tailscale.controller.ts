@@ -1,8 +1,9 @@
-import { Controller, Get, Post, Delete, Param, Req, Body, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Delete, Param, Req, Body, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { TailscaleService } from './tailscale.service';
 import { UsersService } from '../users/users.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { PrismaService } from '../prisma/prisma.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 import { Auth } from '../auth/decorators';
 
 @Auth()
@@ -13,7 +14,15 @@ export class TailscaleController {
     private readonly usersService: UsersService,
     private readonly authz: AuthorizationService,
     private readonly prisma: PrismaService,
+    private readonly analytics: AnalyticsService,
   ) {}
+
+  private async requireTailscaleFeature(userId: string): Promise<void> {
+    const enabled = await this.analytics.isFeatureEnabled('tailscale-integration', userId);
+    if (!enabled) {
+      throw new ForbiddenException('Tailscale integration is not enabled for your account. Enable it in Early Access Features.');
+    }
+  }
 
   private async resolveDeploymentForEdit(deploymentId: string, userId: string) {
     const dep = await this.prisma.deployment.findUnique({
@@ -38,6 +47,7 @@ export class TailscaleController {
     const user = await this.usersService.findOrCreateByClerkId(req.user.sub, {
       email: req.user.email,
     });
+    await this.requireTailscaleFeature(user.id);
     return this.tailscaleService.getStatus(user.id);
   }
 
@@ -49,6 +59,7 @@ export class TailscaleController {
     const user = await this.usersService.findOrCreateByClerkId(req.user.sub, {
       email: req.user.email,
     });
+    await this.requireTailscaleFeature(user.id);
     return this.tailscaleService.linkAccount(user.id, body.apiKey.trim());
   }
 
@@ -57,6 +68,7 @@ export class TailscaleController {
     const user = await this.usersService.findOrCreateByClerkId(req.user.sub, {
       email: req.user.email,
     });
+    await this.requireTailscaleFeature(user.id);
     await this.tailscaleService.unlinkAccount(user.id);
     return { success: true };
   }
@@ -66,6 +78,7 @@ export class TailscaleController {
     const user = await this.usersService.findOrCreateByClerkId(req.user.sub, {
       email: req.user.email,
     });
+    await this.requireTailscaleFeature(user.id);
     await this.resolveDeploymentForView(deploymentId, user.id);
     return this.tailscaleService.getDeploymentTailscaleStatus(deploymentId);
   }
@@ -75,6 +88,7 @@ export class TailscaleController {
     const user = await this.usersService.findOrCreateByClerkId(req.user.sub, {
       email: req.user.email,
     });
+    await this.requireTailscaleFeature(user.id);
     await this.resolveDeploymentForEdit(deploymentId, user.id);
     return this.tailscaleService.exposeDeployment(deploymentId, user.id);
   }
@@ -84,6 +98,7 @@ export class TailscaleController {
     const user = await this.usersService.findOrCreateByClerkId(req.user.sub, {
       email: req.user.email,
     });
+    await this.requireTailscaleFeature(user.id);
     await this.resolveDeploymentForEdit(deploymentId, user.id);
     await this.tailscaleService.unexposeDeployment(deploymentId, user.id);
     return { success: true };

@@ -9,6 +9,7 @@
 	import { apiFetch, toasts, refreshTree, isSuperAdmin, selectedOrganization, subscribeOrgEvents, sseStatusFor } from '$lib/stores';
 	import { env } from '$env/dynamic/public';
 	import { invalidate } from '$app/navigation';
+	import { featureFlag } from '$lib/posthog';
 	import type { PageData } from './$types';
 	import {
 		Loader2,
@@ -581,7 +582,8 @@
 	let buildFromRoot = $state(false);
 	let buildWithDepot = $state(false);
 
-	// Tailscale state
+	// Tailscale state (gated behind early access flag)
+	const tailscaleEnabled = featureFlag('tailscale-integration');
 	let tailscaleExposing = $state(false);
 	let tailscaleUnexposing = $state(false);
 	let tailscaleLinked = $state(false);
@@ -2737,7 +2739,7 @@
 		autoDeployFetched = false;
 		projectIngressesFetched = false;
 
-		checkTailscaleStatus();
+		if ($tailscaleEnabled) checkTailscaleStatus();
 	});
 
 	// SSE subscription — invalidates the TanStack query instead of fetching directly.
@@ -3221,6 +3223,7 @@
 					{:else if tab.id === 'network'}
 						<NetworkTab
 							{deployment}
+							tailscaleFeatureEnabled={$tailscaleEnabled}
 							{tailscaleLinked}
 							{tailscaleExposing}
 							{tailscaleUnexposing}

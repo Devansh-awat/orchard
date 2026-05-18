@@ -4,7 +4,7 @@
 	import { user, apiFetch, toasts, pendingInvitations, organizations, type PendingInvitation } from '$lib/stores';
 	import { ArrowLeft } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
-	import { loadEarlyAccessFeatures, setEarlyAccessFeatureEnrollment, isFeatureEnabledNow, type EarlyAccessFeature } from '$lib/posthog';
+	import { loadEarlyAccessFeatures, setEarlyAccessFeatureEnrollment, isFeatureEnabledNow, featureFlag, type EarlyAccessFeature } from '$lib/posthog';
 	import { UserProfile, UserInvitations, UserGitHub, UserTailscale, UserPasskeys, UserSessions, UserEarlyAccess } from '$lib/components/user-settings';
 	import '$lib/components/user-settings/user-settings.css';
 
@@ -65,6 +65,8 @@
 	let earlyAccessEnrollment = $state<Record<string, boolean>>({});
 	let togglingFeature = $state<string | null>(null);
 
+	const tailscaleEnabled = featureFlag('tailscale-integration');
+
 	function censorEmail(email: string): string { const [local, domain] = email.split('@'); if (!domain) return '••••••'; return `${local.slice(0, 2)}${'•'.repeat(Math.max(local.length - 2, 3))}@${domain}`; }
 	let displayEmail = $derived.by(() => { const email = $user?.email || ''; if (!email) return ''; return emailRevealed ? email : censorEmail(email); });
 
@@ -104,7 +106,7 @@
 	async function fetchEarlyAccessFeatures() { earlyAccessLoading = true; try { const features = await loadEarlyAccessFeatures(); earlyAccessFeatures = features; const next: Record<string, boolean> = {}; for (const f of features) next[f.flagKey] = isFeatureEnabledNow(f.flagKey); earlyAccessEnrollment = next; } finally { earlyAccessLoading = false; } }
 	async function toggleEarlyAccessFeature(feature: EarlyAccessFeature) { if (togglingFeature) return; togglingFeature = feature.flagKey; const next = !earlyAccessEnrollment[feature.flagKey]; earlyAccessEnrollment = { ...earlyAccessEnrollment, [feature.flagKey]: next }; try { setEarlyAccessFeatureEnrollment(feature.flagKey, next); toasts.add({ title: next ? 'Enrolled' : 'Unenrolled', description: `${next ? 'Enrolled in' : 'Left'} "${feature.name}"`, color: 'success' }); } catch (err) { earlyAccessEnrollment = { ...earlyAccessEnrollment, [feature.flagKey]: !next }; toasts.add({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to update enrollment', color: 'error' }); } finally { togglingFeature = null; } }
 
-	onMount(() => { if (browser && typeof window !== 'undefined' && !window.isSecureContext) { passkeyEnvWarning = `Passkeys require a secure origin. You're on ${window.location.origin}.`; } checkGitHubStatus(); checkTailscaleStatus(); fetchPasskeys(); fetchSessions(); fetchEarlyAccessFeatures(); if (browser && window.location.hash === '#invitations') { requestAnimationFrame(() => { document.getElementById('invitations')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }); } });
+	onMount(() => { if (browser && typeof window !== 'undefined' && !window.isSecureContext) { passkeyEnvWarning = `Passkeys require a secure origin. You're on ${window.location.origin}.`; } checkGitHubStatus(); if (isFeatureEnabledNow('tailscale-integration')) checkTailscaleStatus(); fetchPasskeys(); fetchSessions(); fetchEarlyAccessFeatures(); if (browser && window.location.hash === '#invitations') { requestAnimationFrame(() => { document.getElementById('invitations')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }); } });
 </script>
 
 <div class="us-page">
@@ -116,8 +118,10 @@
 			<UserInvitations {invitations} {acceptingInvitation} {decliningInvitation} onAccept={handleAcceptInvitation} onDecline={handleDeclineInvitation} />
 			<div class="us-card-divider"></div>
 			<UserGitHub {loading} {githubLinked} {githubUsername} {githubInstallations} {githubAppInstallUrl} {unlinking} onLink={linkGitHub} onUnlink={unlinkGitHub} />
-			<div class="us-card-divider"></div>
-			<UserTailscale {tailscaleLoading} {tailscaleLinked} {tailscaleTailnet} {unlinkingTailscale} bind:showTailscaleForm bind:tailscaleApiKey {linkingTailscale} onLink={linkTailscale} onUnlink={unlinkTailscale} />
+			{#if $tailscaleEnabled}
+				<div class="us-card-divider"></div>
+				<UserTailscale {tailscaleLoading} {tailscaleLinked} {tailscaleTailnet} {unlinkingTailscale} bind:showTailscaleForm bind:tailscaleApiKey {linkingTailscale} onLink={linkTailscale} onUnlink={unlinkTailscale} />
+			{/if}
 			<div class="us-card-divider"></div>
 			<UserPasskeys {passkeys} {passkeysLoading} {passkeyListError} {passkeyEnvWarning} {registerLoading} bind:showAddPasskey bind:newPasskeyName bind:editingPasskeyId bind:renameValue {renaming} {deletingPasskeyId} onRegister={registerPasskey} onStartRenaming={startRenaming} onCancelRenaming={cancelRenaming} onSavePasskeyName={savePasskeyName} onConfirmDelete={confirmDeletePasskey} {formatTimestamp} />
 			<div class="us-card-divider"></div>

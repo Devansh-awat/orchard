@@ -14,7 +14,8 @@
 
 	let {
 		deployment,
-		// Tailscale
+		// Tailscale (gated behind early access flag)
+		tailscaleFeatureEnabled = false,
 		tailscaleLinked,
 		tailscaleExposing,
 		tailscaleUnexposing,
@@ -65,6 +66,7 @@
 		toasts,
 	}: {
 		deployment: any;
+		tailscaleFeatureEnabled?: boolean;
 		tailscaleLinked: boolean;
 		tailscaleExposing: boolean;
 		tailscaleUnexposing: boolean;
@@ -115,70 +117,72 @@
 </script>
 
 <div class="space-y-5">
-	<!-- Tailscale -->
-	<div class="card rounded-2xl p-5">
-		<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-			<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Tailscale</p>
-		</div>
-		{#if deployment?.tailscaleExposed}
-			<div class="rounded-xl" style="background-color: var(--control-bg); border: 1px solid var(--surface-border); overflow: hidden;">
-				<div class="flex items-center justify-between gap-3 px-4 py-3">
-					<div class="flex items-center gap-3">
-						<Wifi size={16} class="h-4 w-4 flex-shrink-0" style="color: var(--button-bg);" />
-						<div>
-							{#if tailscaleDns}
-								<p class="text-sm font-medium" style="color: var(--center-channel-color);">{tailscaleDns}</p>
-							{:else}
-								<p class="text-sm font-medium" style="color: var(--center-channel-color);">{deployment.tailscaleHostname}</p>
-							{/if}
-							{#if tailscaleIp}
-								<p class="text-xs" style="color: var(--surface-muted);">{tailscaleIp}</p>
-							{:else}
-								<p class="text-xs flex items-center gap-1" style="color: var(--surface-muted);">
-									<Loader2 class="h-3 w-3 animate-spin" />
-									Connecting to Tailscale...
-								</p>
-							{/if}
-						</div>
-					</div>
-					<button onclick={onUnexposeTailscale} disabled={tailscaleUnexposing} class="btn btn-secondary btn-sm">
-						{#if tailscaleUnexposing}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<X class="h-3.5 w-3.5" />{/if}
-						<span>Remove</span>
-					</button>
-				</div>
-				{#if (tailscaleDns || tailscaleIp) && deployment.services?.length}
-					<div style="border-top: 1px solid var(--surface-border);">
-						{#each deployment.services as service}
-							{@const tsHost = tailscaleDns || tailscaleIp}
-							{@const displayedPorts = service.ports?.length ? service.ports : [{ port: service.port, targetPort: service.targetPort, protocol: service.protocol }]}
-							{#each displayedPorts as port}
-								{@const addr = `${tsHost}:${port.targetPort}`}
-								<div class="flex items-center justify-between gap-2 px-4 py-2" style="border-bottom: 1px solid var(--surface-border);">
-									<div class="flex items-center gap-2 min-w-0">
-										<span class="text-xs font-mono truncate" style="color: var(--center-channel-color);">{addr}</span>
-										<span class="text-xs px-1.5 py-0.5 rounded" style="background-color: var(--surface-border); color: var(--surface-muted);">{port.protocol || 'TCP'}</span>
-									</div>
-									<button
-										class="btn btn-ghost btn-sm"
-										onclick={() => { navigator.clipboard.writeText(addr); toasts.add({ title: 'Copied', description: addr, color: 'success' }); }}
-									>
-										<Copy size={14} class="h-3.5 w-3.5" />
-									</button>
-								</div>
-							{/each}
-						{/each}
-					</div>
-				{/if}
+	<!-- Tailscale (gated behind early access flag) -->
+	{#if tailscaleFeatureEnabled}
+		<div class="card rounded-2xl p-5">
+			<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
+				<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Tailscale</p>
 			</div>
-		{:else if tailscaleLinked}
-			<button onclick={onExposeTailscale} disabled={tailscaleExposing} class="btn btn-secondary btn-sm">
-				{#if tailscaleExposing}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Wifi size={14} class="h-3.5 w-3.5" />{/if}
-				<span>Expose to Tailscale</span>
-			</button>
-		{:else}
-			<p class="text-xs" style="color: var(--surface-muted);">Connect your Tailscale account in <a href="/user/settings" class="underline">user settings</a> to expose deployments to your private network.</p>
-		{/if}
-	</div>
+			{#if deployment?.tailscaleExposed}
+				<div class="rounded-xl" style="background-color: var(--control-bg); border: 1px solid var(--surface-border); overflow: hidden;">
+					<div class="flex items-center justify-between gap-3 px-4 py-3">
+						<div class="flex items-center gap-3">
+							<Wifi size={16} class="h-4 w-4 flex-shrink-0" style="color: var(--button-bg);" />
+							<div>
+								{#if tailscaleDns}
+									<p class="text-sm font-medium" style="color: var(--center-channel-color);">{tailscaleDns}</p>
+								{:else}
+									<p class="text-sm font-medium" style="color: var(--center-channel-color);">{deployment.tailscaleHostname}</p>
+								{/if}
+								{#if tailscaleIp}
+									<p class="text-xs" style="color: var(--surface-muted);">{tailscaleIp}</p>
+								{:else}
+									<p class="text-xs flex items-center gap-1" style="color: var(--surface-muted);">
+										<Loader2 class="h-3 w-3 animate-spin" />
+										Connecting to Tailscale...
+									</p>
+								{/if}
+							</div>
+						</div>
+						<button onclick={onUnexposeTailscale} disabled={tailscaleUnexposing} class="btn btn-secondary btn-sm">
+							{#if tailscaleUnexposing}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<X class="h-3.5 w-3.5" />{/if}
+							<span>Remove</span>
+						</button>
+					</div>
+					{#if (tailscaleDns || tailscaleIp) && deployment.services?.length}
+						<div style="border-top: 1px solid var(--surface-border);">
+							{#each deployment.services as service}
+								{@const tsHost = tailscaleDns || tailscaleIp}
+								{@const displayedPorts = service.ports?.length ? service.ports : [{ port: service.port, targetPort: service.targetPort, protocol: service.protocol }]}
+								{#each displayedPorts as port}
+									{@const addr = `${tsHost}:${port.targetPort}`}
+									<div class="flex items-center justify-between gap-2 px-4 py-2" style="border-bottom: 1px solid var(--surface-border);">
+										<div class="flex items-center gap-2 min-w-0">
+											<span class="text-xs font-mono truncate" style="color: var(--center-channel-color);">{addr}</span>
+											<span class="text-xs px-1.5 py-0.5 rounded" style="background-color: var(--surface-border); color: var(--surface-muted);">{port.protocol || 'TCP'}</span>
+										</div>
+										<button
+											class="btn btn-ghost btn-sm"
+											onclick={() => { navigator.clipboard.writeText(addr); toasts.add({ title: 'Copied', description: addr, color: 'success' }); }}
+										>
+											<Copy size={14} class="h-3.5 w-3.5" />
+										</button>
+									</div>
+								{/each}
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{:else if tailscaleLinked}
+				<button onclick={onExposeTailscale} disabled={tailscaleExposing} class="btn btn-secondary btn-sm">
+					{#if tailscaleExposing}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Wifi size={14} class="h-3.5 w-3.5" />{/if}
+					<span>Expose to Tailscale</span>
+				</button>
+			{:else}
+				<p class="text-xs" style="color: var(--surface-muted);">Connect your Tailscale account in <a href="/user/settings" class="underline">user settings</a> to expose deployments to your private network.</p>
+			{/if}
+		</div>
+	{/if}
 
 	<!-- Ports -->
 	<div class="card rounded-2xl p-5">
