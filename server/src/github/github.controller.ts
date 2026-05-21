@@ -83,6 +83,7 @@ export class GitHubController {
       });
 
       await this.githubService.linkGitHubAccount(user.id, code);
+      this.usersService.invalidateUserCache(user);
 
       return res.redirect(`${frontendUrl}/user/settings?github=linked`);
     } catch (err) {
@@ -110,6 +111,7 @@ export class GitHubController {
     }
 
     await this.githubService.linkGitHubAccount(user.id, code);
+    this.usersService.invalidateUserCache(user);
 
     return { success: true, message: 'GitHub account linked successfully' };
   }
@@ -129,6 +131,7 @@ export class GitHubController {
     }
 
     await this.githubService.unlinkGitHubAccount(user.id);
+    this.usersService.invalidateUserCache(user);
 
     return { success: true, message: 'GitHub account unlinked successfully' };
   }
