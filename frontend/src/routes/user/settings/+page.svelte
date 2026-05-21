@@ -80,7 +80,7 @@
 	async function handleAcceptInvitation(invitation: PendingInvitation) { if (acceptingInvitation || decliningInvitation) return; acceptingInvitation = invitation.token; try { await pendingInvitations.accept(invitation.token); const orgsResponse = await apiFetch('/apiv1/organizations/user'); if (orgsResponse.ok) { const orgs = await orgsResponse.json(); organizations.set(orgs); organizations.initializeSelected(); } toasts.add({ title: 'Welcome!', description: `You've joined ${invitation.organization.name}`, color: 'success' }); } catch (e) { toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to accept invitation', color: 'error' }); } finally { acceptingInvitation = null; } }
 	async function handleDeclineInvitation(invitation: PendingInvitation) { if (acceptingInvitation || decliningInvitation) return; decliningInvitation = invitation.token; try { await pendingInvitations.decline(invitation.token); toasts.add({ title: 'Invitation declined', color: 'success' }); } catch (e) { toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to decline invitation', color: 'error' }); } finally { decliningInvitation = null; } }
 
-	async function checkGitHubStatus() { loading = true; try { const response = await apiFetch('/apiv1/github/status'); if (response.ok) { const data = await response.json(); githubLinked = data.linked; githubUsername = data.username || null; githubInstallations = data.installations ?? []; } const installRes = await apiFetch('/apiv1/github/app/install'); if (installRes.ok) { const data = await installRes.json(); githubAppInstallUrl = data.url; } } catch (e) { console.error('Failed to check GitHub status:', e); } finally { loading = false; } }
+	async function checkGitHubStatus() { loading = true; try { const response = await apiFetch('/apiv1/github/status'); if (response.ok) { const data = await response.json(); githubLinked = data.linked; githubUsername = data.username || null; githubInstallations = data.installations ?? []; } else { console.error('[GitHub status]', response.status, await response.text().catch(() => '')); } const installRes = await apiFetch('/apiv1/github/app/install'); if (installRes.ok) { const data = await installRes.json(); githubAppInstallUrl = data.url; } } catch (e) { console.error('Failed to check GitHub status:', e); } finally { loading = false; } }
 	function linkGitHub() { window.location.href = '/apiv1/github/link'; }
 	async function unlinkGitHub() { unlinking = true; try { const response = await apiFetch('/apiv1/github/unlink', { method: 'DELETE' }); if (!response.ok) throw new Error('Failed to unlink GitHub account'); githubLinked = false; githubUsername = null; toasts.add({ title: 'GitHub Unlinked', description: 'Your GitHub account has been disconnected', color: 'success' }); } catch (e) { toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to unlink GitHub', color: 'error' }); } finally { unlinking = false; } }
 
@@ -105,7 +105,29 @@
 	async function fetchEarlyAccessFeatures() { earlyAccessLoading = true; try { const features = await loadEarlyAccessFeatures(); earlyAccessFeatures = features; const next: Record<string, boolean> = {}; for (const f of features) next[f.flagKey] = isFeatureEnabledNow(f.flagKey); earlyAccessEnrollment = next; } finally { earlyAccessLoading = false; } }
 	async function toggleEarlyAccessFeature(feature: EarlyAccessFeature) { if (togglingFeature) return; togglingFeature = feature.flagKey; const next = !earlyAccessEnrollment[feature.flagKey]; earlyAccessEnrollment = { ...earlyAccessEnrollment, [feature.flagKey]: next }; try { setEarlyAccessFeatureEnrollment(feature.flagKey, next); toasts.add({ title: next ? 'Enrolled' : 'Unenrolled', description: `${next ? 'Enrolled in' : 'Left'} "${feature.name}"`, color: 'success' }); } catch (err) { earlyAccessEnrollment = { ...earlyAccessEnrollment, [feature.flagKey]: !next }; toasts.add({ title: 'Error', description: err instanceof Error ? err.message : 'Failed to update enrollment', color: 'error' }); } finally { togglingFeature = null; } }
 
-	onMount(() => { if (browser && typeof window !== 'undefined' && !window.isSecureContext) { passkeyEnvWarning = `Passkeys require a secure origin. You're on ${window.location.origin}.`; } checkGitHubStatus(); if (isFeatureEnabledNow('tailscale-integration')) checkTailscaleStatus(); fetchPasskeys(); fetchSessions(); fetchEarlyAccessFeatures(); if (browser && window.location.hash === '#invitations') { requestAnimationFrame(() => { document.getElementById('invitations')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }); } });
+	onMount(() => {
+		if (browser && typeof window !== 'undefined' && !window.isSecureContext) { passkeyEnvWarning = `Passkeys require a secure origin. You're on ${window.location.origin}.`; }
+
+		if (browser) {
+			const params = new URLSearchParams(window.location.search);
+			const ghError = params.get('error');
+			const ghLinked = params.get('github');
+			if (ghError) {
+				toasts.add({ title: 'GitHub linking failed', description: ghError, color: 'error' });
+				console.error('[GitHub OAuth]', ghError);
+			} else if (ghLinked === 'linked') {
+				toasts.add({ title: 'GitHub linked', description: 'Your GitHub account has been connected', color: 'success' });
+			}
+			if (ghError || ghLinked) {
+				const url = new URL(window.location.href);
+				url.searchParams.delete('error');
+				url.searchParams.delete('github');
+				window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+			}
+		}
+
+		checkGitHubStatus(); if (isFeatureEnabledNow('tailscale-integration')) checkTailscaleStatus(); fetchPasskeys(); fetchSessions(); fetchEarlyAccessFeatures(); if (browser && window.location.hash === '#invitations') { requestAnimationFrame(() => { document.getElementById('invitations')?.scrollIntoView({ behavior: 'smooth', block: 'center' }); }); }
+	});
 </script>
 
 <div class="us-page">

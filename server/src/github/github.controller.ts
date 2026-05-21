@@ -87,8 +87,9 @@ export class GitHubController {
 
       return res.redirect(`${frontendUrl}/user/settings?github=linked`);
     } catch (err) {
-      console.error('GitHub OAuth callback error:', err);
-      return res.redirect(`${frontendUrl}/user/settings?error=${encodeURIComponent('Failed to link GitHub account')}`);
+      const msg = err instanceof Error ? err.message : 'Unknown error';
+      console.error('GitHub OAuth callback error:', msg, err);
+      return res.redirect(`${frontendUrl}/user/settings?error=${encodeURIComponent(msg)}`);
     }
   }
 
