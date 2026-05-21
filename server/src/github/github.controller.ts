@@ -37,8 +37,9 @@ export class GitHubController {
     const clientId = process.env.GITHUB_CLIENT_ID;
     const redirectUri = process.env.GITHUB_REDIRECT_URI;
 
-    // GitHub Apps ignore the `scope` param — user-to-server tokens inherit App permissions.
-    const authUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}`;
+    // Pass the session token as OAuth state so the callback can identify the
+    // user even when the browser drops the cookie (e.g. SameSite restrictions).
+    const authUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(token)}`;
 
     return res.redirect(authUrl);
   }
@@ -63,8 +64,10 @@ export class GitHubController {
     }
 
     try {
-      const token = req.cookies?.session_token;
-      
+      // Prefer the cookie, fall back to the state param (which carries the
+      // session JWT) when the browser strips the cookie on cross-site redirect.
+      const token = req.cookies?.session_token || state;
+
       if (!token) {
         return res.redirect(`${frontendUrl}/user/settings?error=${encodeURIComponent('Not authenticated')}`);
       }
