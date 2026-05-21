@@ -4,11 +4,7 @@
 	import { apiFetch, toasts, refreshTree, subscribeOrgEvents } from '$lib/stores';
 	import { Plus, Loader2, Folder, Trash2, Rocket, Globe, Database } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
-	import { AiChat } from '$lib/components/ai-chat';
-	import { featureFlag } from '$lib/posthog';
 	import type { PageData } from './$types';
-
-	const aiAgentEnabled = featureFlag('ai-agent');
 
 	let { data } = $props<{ data: PageData }>();
 	const orgSlug = $derived(data.orgSlug);
@@ -216,10 +212,6 @@
 		onconfirm={hasDeployments ? (() => { deleteTarget = null; }) : deleteProject}
 		oncancel={() => { deleteTarget = null; }}
 	/>
-{/if}
-
-{#if $aiAgentEnabled}
-	<AiChat />
 {/if}
 
 <style>

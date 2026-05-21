@@ -17,8 +17,6 @@
 		ProjectCard,
 		BuildsSidebar
 	} from '$lib/components/org-dashboard';
-	import { AiChat } from '$lib/components/ai-chat';
-	import { featureFlag } from '$lib/posthog';
 	import type {
 		DeploymentSummary,
 		DatabaseSummary,
@@ -27,8 +25,6 @@
 		ProjectMeta,
 		ProjectGroup
 	} from '$lib/components/org-dashboard';
-
-	const aiAgentEnabled = featureFlag('ai-agent');
 
 	let { data } = $props<{ data: PageData }>();
 	const orgSlug = $derived(data.orgSlug);
@@ -595,7 +591,3 @@
 		/>
 	</div>
 </div>
-
-{#if $aiAgentEnabled}
-	<AiChat />
-{/if}

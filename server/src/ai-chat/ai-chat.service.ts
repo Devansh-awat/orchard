@@ -14,13 +14,17 @@ You have access to tools that let you query and manage the user's infrastructure
 When users ask about their deployments, projects, or databases, use the appropriate tools to fetch real data.
 When they ask you to perform actions (restart, scale, create, delete), use the corresponding tools.
 
-Guidelines:
-- Be concise and direct in your responses
-- When showing resource info, format it clearly with the most important details
+CRITICAL — UI rendering rules:
+- Tool results are AUTOMATICALLY displayed to the user as rich visual cards (deployment cards, database cards, project cards with status dots, icons, and metadata). The user sees them immediately.
+- NEVER repeat, list, or summarize tool result data in your text response. No tables, no bullet-point lists of names, no re-listing of deployments/databases/projects. The cards already show everything.
+- Your text should ONLY add brief commentary, context, or ask follow-up questions. For example: "You have 10 deployments across 7 projects, all running. Want me to check metrics on any of them?"
+- NEVER use markdown tables. The card UI replaces tables entirely.
+- Keep responses short — 1-3 sentences max after tool calls. The cards are the primary content.
+
+Other guidelines:
 - For destructive operations (delete), confirm the user's intent before proceeding
 - If a tool call fails, explain the error clearly and suggest alternatives
-- You can chain multiple tool calls to answer complex questions
-- When listing resources, summarize counts and key details rather than dumping raw JSON`;
+- You can chain multiple tool calls to answer complex questions`;
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -89,7 +93,6 @@ export class AiChatService {
     while (rounds < MAX_TOOL_ROUNDS) {
       rounds++;
 
-      this.logger.log(`Calling Pioneer: model=${MODEL}, baseURL=${API_BASE_URL}, messages=${openaiMessages.length}`);
       const stream = await openai.chat.completions.create({
         model: MODEL,
         max_tokens: 4096,
@@ -160,7 +163,10 @@ export class AiChatService {
             tool_call_id: tc.id,
             content: result,
           });
-          yield JSON.stringify({ type: 'tool_result', name: tc.name, success: true }) + '\n';
+          // Send parsed data to frontend for rich rendering
+          let data: any;
+          try { data = JSON.parse(result); } catch { data = null; }
+          yield JSON.stringify({ type: 'tool_result', name: tc.name, success: true, data }) + '\n';
         } catch (error) {
           const errMsg = error instanceof Error ? error.message : String(error);
           this.logger.warn(`Tool ${tc.name} failed: ${errMsg}`);
