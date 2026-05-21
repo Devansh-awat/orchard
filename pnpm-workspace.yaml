@@ -3,3 +3,13 @@ packages:
   - 'server'
   - 'frontend'
   - 'gateway'
+allowBuilds:
+  '@nestjs/core': true
+  '@prisma/client': true
+  '@prisma/engines': true
+  '@swc/core': true
+  bcrypt: true
+  core-js: true
+  esbuild: true
+  prisma: true
+  protobufjs: true

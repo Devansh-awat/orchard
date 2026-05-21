@@ -22,6 +22,7 @@ import { EventsModule } from './events/events.module';
 import { MetricsModule } from './metrics/metrics.module';
 import { AuditModule } from './audit/audit.module';
 import { AnalyticsModule } from './analytics/analytics.module';
+import { AiChatModule } from './ai-chat/ai-chat.module';
 
 @Module({
   imports: [
@@ -48,6 +49,7 @@ import { AnalyticsModule } from './analytics/analytics.module';
     MetricsModule,
     AuditModule,
     AnalyticsModule,
+    AiChatModule,
   ],
 })
 export class AppModule {}
