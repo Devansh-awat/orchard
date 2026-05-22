@@ -402,12 +402,11 @@ export class ImageBuilderService {
   http = true`)
       .join('\n\n');
 
-    const snapshotterLine = this.workspaceTmpfs ? '\n  snapshotter = "native"' : '';
     const buildkitConfig = `# BuildKit daemon configuration
 debug = true
 
 [worker.oci]
-  max-parallelism = 4${snapshotterLine}
+  max-parallelism = 4
 
   [[worker.oci.rlimits]]
     type = "RLIMIT_NOFILE"
@@ -608,6 +607,18 @@ echo "=== Super Build completed ==="
     };
   }
 
+  private get ramdiskPreamble(): string {
+    if (!this.workspaceTmpfs) return '';
+    return `
+echo "=== Setting up ext4 ramdisk for BuildKit state ==="
+truncate -s 12G /workspace/.buildkit-ramdisk.img
+mkfs.ext4 -qF /workspace/.buildkit-ramdisk.img
+mkdir -p /buildkit-state
+mount -o loop /workspace/.buildkit-ramdisk.img /buildkit-state
+echo "=== Ramdisk ready ==="
+`;
+  }
+
   private generateBuildScriptWithCacheFallback(buildctlArgs: string[]): string {
     const cacheArgs = this.buildCacheArgs();
     const hasCacheEnabled = cacheArgs.length > 0;
@@ -634,7 +645,7 @@ echo "=== Super Build completed ==="
     return `
 set +e
 ulimit -n 1048576 2>/dev/null || true
-
+${this.ramdiskPreamble}
 echo "=== Attempting build with S3 cache enabled ==="
 BUILD_OUTPUT=$(mktemp)
 FIFO=$(mktemp -u)
@@ -743,7 +754,7 @@ fi
     return `
 set +e
 ulimit -n 1048576 2>/dev/null || true
-
+${this.ramdiskPreamble}
 MAX_RETRIES=3
 RETRY_DELAY=2
 BUILD_OUTPUT=$(mktemp)
@@ -1062,7 +1073,7 @@ fi
         ...(this.sidecarPushEnabled
           ? []
           : [{ name: 'DOCKER_CONFIG', value: '/root/.docker' }]),
-        { name: 'BUILDKITD_FLAGS', value: '--config /etc/buildkit/buildkitd.toml' },
+        { name: 'BUILDKITD_FLAGS', value: `--config /etc/buildkit/buildkitd.toml${this.workspaceTmpfs ? ' --root /buildkit-state' : ''}` },
         ...(this.s3CacheEnabled && !this.localCacheEnabled ? [
           {
             name: 'AWS_ACCESS_KEY_ID',
