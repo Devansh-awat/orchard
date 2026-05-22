@@ -408,6 +408,11 @@ debug = true
 [worker.oci]
   max-parallelism = 4
 
+  [[worker.oci.rlimits]]
+    type = "RLIMIT_NOFILE"
+    soft = 1048576
+    hard = 1048576
+
 [worker.containerd]
   enabled = false
 
