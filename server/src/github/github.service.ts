@@ -951,14 +951,16 @@ export class GitHubService {
     // Get a new token
     const { token, expiresAt } = await this.getInstallationAccessToken(installationId);
 
-    // Update the cached token
-    await this.prisma.gitHubAppInstallation.update({
-      where: { installationId },
-      data: {
-        accessToken: token,
-        tokenExpiresAt: expiresAt,
-      },
-    });
+    // Cache the token if we have a DB record for this installation
+    if (installation) {
+      await this.prisma.gitHubAppInstallation.update({
+        where: { installationId },
+        data: {
+          accessToken: token,
+          tokenExpiresAt: expiresAt,
+        },
+      });
+    }
 
     return token;
   }
@@ -1109,10 +1111,11 @@ export class GitHubService {
   // Find installation for a repository
   async findInstallationForRepo(owner: string, repo: string): Promise<{ installationId: bigint } | null> {
     // Find installations that might have access to this repo
+    // Use case-insensitive matching for accountLogin since GitHub usernames are case-insensitive
     const installations = await this.prisma.gitHubAppInstallation.findMany({
       where: {
         OR: [
-          { accountLogin: owner },
+          { accountLogin: { equals: owner, mode: 'insensitive' } },
           { repositorySelection: 'all' },
         ],
         suspendedAt: null,
@@ -1134,6 +1137,31 @@ export class GitHubService {
         // Token might be invalid, continue checking others
         console.warn(`[GitHub App] Failed to check repo access for installation ${installation.installationId}:`, e);
       }
+    }
+
+    // Fallback: query GitHub directly for the repo's installation.
+    // This handles the case where the webhook was missed (e.g. user installed
+    // the app before linking their GitHub account) so no DB record exists.
+    try {
+      const jwt = this.generateAppJwt();
+      const response = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}/installation`,
+        {
+          headers: {
+            'Authorization': `Bearer ${jwt}`,
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+          },
+        },
+      );
+      if (response.ok) {
+        const data = await response.json();
+        const installationId = BigInt(data.id);
+        console.log(`[GitHub App] Found installation ${installationId} for ${owner}/${repo} via GitHub API (not in DB).`);
+        return { installationId };
+      }
+    } catch (e) {
+      console.warn(`[GitHub App] GitHub API fallback failed for ${owner}/${repo}:`, e);
     }
 
     return null;
