@@ -610,13 +610,12 @@ echo "=== Super Build completed ==="
   private get ramdiskPreamble(): string {
     if (!this.workspaceTmpfs) return '';
     return `
-echo "=== Setting up ext4-on-ram for BuildKit state ==="
+apk add --no-cache e2fsprogs util-linux > /dev/null 2>&1
 mkdir -p /ramdisk-backing /buildkit-state
 mount -t tmpfs -o size=12G tmpfs /ramdisk-backing
 truncate -s 12G /ramdisk-backing/buildkit.img
 mkfs.ext4 -qF /ramdisk-backing/buildkit.img
 mount -o loop /ramdisk-backing/buildkit.img /buildkit-state
-echo "=== ext4 ramdisk ready ==="
 `;
   }
 
