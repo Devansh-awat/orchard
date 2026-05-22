@@ -610,12 +610,10 @@ echo "=== Super Build completed ==="
   private get ramdiskPreamble(): string {
     if (!this.workspaceTmpfs) return '';
     return `
-echo "=== Setting up ext4 ramdisk for BuildKit state ==="
-truncate -s 12G /workspace/.buildkit-ramdisk.img
-mkfs.ext4 -qF /workspace/.buildkit-ramdisk.img
+echo "=== Mounting in-VM tmpfs for BuildKit state (bypasses virtiofs) ==="
 mkdir -p /buildkit-state
-mount -o loop /workspace/.buildkit-ramdisk.img /buildkit-state
-echo "=== Ramdisk ready ==="
+mount -t tmpfs -o size=12G tmpfs /buildkit-state
+echo "=== BuildKit state tmpfs ready ==="
 `;
   }
 
