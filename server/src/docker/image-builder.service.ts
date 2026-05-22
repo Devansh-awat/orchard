@@ -632,6 +632,7 @@ echo "=== Super Build completed ==="
 
     return `
 set +e
+ulimit -n 1048576 2>/dev/null || true
 
 echo "=== Attempting build with S3 cache enabled ==="
 BUILD_OUTPUT=$(mktemp)
@@ -740,6 +741,7 @@ fi
   private generateRetryScript(command: string): string {
     return `
 set +e
+ulimit -n 1048576 2>/dev/null || true
 
 MAX_RETRIES=3
 RETRY_DELAY=2
