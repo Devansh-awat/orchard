@@ -81,6 +81,7 @@ export class ImageBuilderService {
   private readonly sidecarPushEnabled = process.env.BUILDER_SIDECAR_PUSH === 'true';
   private readonly pusherImage =
     process.env.BUILDER_PUSHER_IMAGE || 'gcr.io/go-containerregistry/crane:latest';
+  private readonly workspaceTmpfs = process.env.BUILDER_WORKSPACE_TMPFS === 'true';
 
   constructor(private readonly prisma: PrismaService) {
     this.initKubeConfig();
@@ -1261,7 +1262,7 @@ exit $rc`,
             volumes: [
               {
                 name: 'workspace',
-                emptyDir: {},
+                emptyDir: this.workspaceTmpfs ? { medium: 'Memory' } : {},
               },
               {
                 name: 'docker-config',
@@ -1283,7 +1284,7 @@ exit $rc`,
               },
               ...(this.sidecarPushEnabled ? [{
                 name: 'output',
-                emptyDir: {},
+                emptyDir: this.workspaceTmpfs ? { medium: 'Memory' } : {},
               }] : []),
               ...(this.localCacheEnabled ? [{
                 name: 'buildkit-cache',

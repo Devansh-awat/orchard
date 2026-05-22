@@ -304,6 +304,10 @@ builderSandbox:
   #               docker://harbor.1mp.dev/orchard/skopeo:latest
   # Then set pusherImage: harbor.1mp.dev/orchard/skopeo:latest
   pusherImage: quay.io/skopeo/stable:latest
+  # Back workspace and output emptyDirs with tmpfs (memory) instead of disk.
+  # Bypasses virtio-fs overhead in kata VMs — filesystem ops happen at memory
+  # speed inside the guest. Counts against the container's memory limit.
+  tmpfsWorkspace: false
 
 # Public-TLS reflection — tells the server which Secret to copy from when
 # exposing a CNPG cluster publicly with TLS.

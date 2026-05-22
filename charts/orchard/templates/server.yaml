@@ -54,6 +54,9 @@ spec:
             - { name: BUILDER_SIDECAR_PUSH, value: "true" }
             - { name: BUILDER_PUSHER_IMAGE, value: {{ .Values.builderSandbox.pusherImage | quote }} }
             {{- end }}
+            {{- if .Values.builderSandbox.tmpfsWorkspace }}
+            - { name: BUILDER_WORKSPACE_TMPFS, value: "true" }
+            {{- end }}
             {{- end }}
             {{- if .Values.r2Proxy.enabled }}
             - { name: BACKUP_PROXY_ENABLED, value: "true" }
