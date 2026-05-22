@@ -1116,11 +1116,11 @@ fi
       resources: {
         requests: {
           cpu: '500m',
-          memory: '1Gi',
+          memory: '2Gi',
         },
         limits: {
           cpu: '4',
-          memory: '8Gi',
+          memory: '16Gi',
         },
       },
     };
