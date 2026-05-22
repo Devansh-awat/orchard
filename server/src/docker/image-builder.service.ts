@@ -402,11 +402,12 @@ export class ImageBuilderService {
   http = true`)
       .join('\n\n');
 
+    const snapshotterLine = this.workspaceTmpfs ? '\n  snapshotter = "native"' : '';
     const buildkitConfig = `# BuildKit daemon configuration
 debug = true
 
 [worker.oci]
-  max-parallelism = 4
+  max-parallelism = 4${snapshotterLine}
 
   [[worker.oci.rlimits]]
     type = "RLIMIT_NOFILE"
