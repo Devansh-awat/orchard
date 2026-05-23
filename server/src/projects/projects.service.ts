@@ -1337,9 +1337,11 @@ export class ProjectsService {
     });
     if (!org) throw new NotFoundException('Organization not found');
 
-    const memberships = await this.membershipCache.getMembershipsForOrg(userId, org.id);
-    if (memberships.length === 0) {
-      throw new NotFoundException('Organization not found');
+    if (!(await this.authz.isSuperAdmin(userId))) {
+      const memberships = await this.membershipCache.getMembershipsForOrg(userId, org.id);
+      if (memberships.length === 0) {
+        throw new NotFoundException('Organization not found');
+      }
     }
 
     const [projects, deployments, databases, builds] = await Promise.all([

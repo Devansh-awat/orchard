@@ -616,6 +616,50 @@ export class OrganizationsService {
     return this.scrubOrgSecrets(updated as any);
   }
 
+  async superadminJoinOrganization(
+    organizationId: string,
+    role: OrganizationRole,
+    clerkId: string,
+    userData?: any,
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+
+    if (!(await this.authz.isSuperAdmin(user.id))) {
+      throw new ForbiddenException('Only superadmins can join organizations directly');
+    }
+
+    const org = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+    });
+    if (!org) throw new NotFoundException('Organization not found');
+
+    const existing = await this.prisma.organizationMember.findUnique({
+      where: { organizationId_userId: { organizationId, userId: user.id } },
+    });
+    if (existing) {
+      throw new BadRequestException('You are already a member of this organization');
+    }
+
+    const member = await this.prisma.organizationMember.create({
+      data: {
+        organizationId,
+        userId: user.id,
+        role,
+        addedBy: user.id,
+      },
+      include: {
+        user: {
+          select: { id: true, email: true, firstName: true, lastName: true, imageUrl: true },
+        },
+      },
+    });
+
+    this.membershipCache.invalidateInternalUserId(user.id);
+
+    return member;
+  }
+
   async inviteMemberToOrganization(
     organizationId: string,
     email: string,

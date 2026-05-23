@@ -166,6 +166,26 @@ export class OrganizationsController {
     });
   }
 
+  @Post(':id/members/join')
+  async superadminJoinOrganization(
+    @Param('id') organizationId: string,
+    @Body('role') role: OrganizationRole,
+    @Request() req
+  ) {
+    return this.organizationsService.superadminJoinOrganization(
+      organizationId,
+      role || 'owner',
+      req.user.sub,
+      {
+        email: req.user.email,
+        username: req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        imageUrl: req.user.imageUrl,
+      }
+    );
+  }
+
   @Post(':id/members')
   async inviteMemberToOrganization(
     @Param('id') organizationId: string,

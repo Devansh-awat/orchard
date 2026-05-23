@@ -20,9 +20,12 @@ export class EventsController {
     @Request() req,
   ): Promise<Observable<MessageEvent>> {
     const userId = req.user.sub;
-    const orgMemberships = await this.memberships.getMembershipsForOrg(userId, orgId);
-    if (orgMemberships.length === 0) {
-      throw new NotFoundException('Organization not found');
+    const isSuperAdmin = await this.authz.isSuperAdmin(userId);
+    if (!isSuperAdmin) {
+      const orgMemberships = await this.memberships.getMembershipsForOrg(userId, orgId);
+      if (orgMemberships.length === 0) {
+        throw new NotFoundException('Organization not found');
+      }
     }
 
     // H3: scope the SSE stream to projects the user can actually see.

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import '$lib/components/org-dashboard/org-dashboard.css';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { apiFetch, pinnedItems, toasts, subscribeOrgEvents } from '$lib/stores';
+	import { apiFetch, pinnedItems, toasts, subscribeOrgEvents, isSuperAdmin } from '$lib/stores';
 	import { queryClient } from '$lib/query';
 	import { Plus, Star } from 'lucide-svelte';
 	import { onDestroy, untrack } from 'svelte';
@@ -49,6 +49,8 @@
 
 	// Manual state — set from $effect watching query, avoids $derived chains
 	let currentOrgRole = $state<'owner' | 'admin' | 'member' | 'guest' | null>(null);
+	let isSyntheticMembership = $state(false);
+	let joiningOrg = $state(false);
 	const canCreateProjects = $derived(currentOrgRole !== null && currentOrgRole !== 'guest');
 	let loading = $state(true);
 	let buildsLoading = $state(true);
@@ -181,6 +183,8 @@
 						if (!r.ok) return;
 						const body = await r.json().catch(() => null);
 						if (body?.role) currentOrgRole = body.role;
+						if (body?.id?.startsWith('superadmin:')) isSyntheticMembership = true;
+						else isSyntheticMembership = false;
 					})
 					.catch(() => {});
 			}
@@ -218,6 +222,7 @@
 				loadError = null;
 				orgId = null;
 				currentOrgRole = null;
+				isSyntheticMembership = false;
 				lastDataRef = null;
 				depOrder = [];
 				dbOrder = [];
@@ -437,6 +442,30 @@
 	function closeAll() {
 		openMenuId = null;
 	}
+
+	async function joinOrganization() {
+		if (!orgId || joiningOrg) return;
+		joiningOrg = true;
+		try {
+			const r = await apiFetch(`/apiv1/organizations/${orgId}/members/join`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ role: 'owner' }),
+			});
+			if (r.ok) {
+				isSyntheticMembership = false;
+				toasts.add({ title: 'Joined organization', color: 'success' });
+				queryClient.invalidateQueries({ queryKey: ['overview', orgSlug] });
+			} else {
+				const body = await r.json().catch(() => null);
+				toasts.add({ title: body?.message || 'Failed to join', color: 'error' });
+			}
+		} catch {
+			toasts.add({ title: 'Failed to join organization', color: 'error' });
+		} finally {
+			joiningOrg = false;
+		}
+	}
 	async function restart(dep: DeploymentSummary, e: Event) {
 		e.preventDefault();
 		e.stopPropagation();
@@ -475,14 +504,24 @@
 	<!-- Header -->
 	<header class="header" {@attach motionStagger({ index: 0, from: { y: -6 } })}>
 		<h1 class="title">Overview</h1>
-		{#if canCreateProjects}
-		<a
-			href="/{orgSlug}/new?autoCreate=1"
-			class="btn-primary"
-			{@attach springHover({ lift: -1, stiffness: 480, damping: 26 })}
-			><Plus size={15} /> Add New...</a
-		>
-		{/if}
+		<div style="display: flex; gap: 8px; align-items: center;">
+			{#if $isSuperAdmin && isSyntheticMembership}
+			<button
+				class="btn-secondary"
+				onclick={joinOrganization}
+				disabled={joiningOrg}
+				{@attach springHover({ lift: -1, stiffness: 480, damping: 26 })}
+			>{joiningOrg ? 'Joining...' : 'Join Organization'}</button>
+			{/if}
+			{#if canCreateProjects}
+			<a
+				href="/{orgSlug}/new?autoCreate=1"
+				class="btn-primary"
+				{@attach springHover({ lift: -1, stiffness: 480, damping: 26 })}
+				><Plus size={15} /> Add New...</a
+			>
+			{/if}
+		</div>
 	</header>
 
 	<div class="layout">

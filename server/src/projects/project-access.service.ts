@@ -101,6 +101,16 @@ export class ProjectAccessService {
    * (project creation, org settings) — for reads, both see the same slice.
    */
   async buildProjectAccessFilter(userId: string, orgId?: string) {
+    // Superadmins bypass membership checks — they can see all projects.
+    if (await this.authz.isSuperAdmin(userId)) {
+      const base = orgId ? { organizationId: orgId } : {};
+      const tokenCtx = requestAuthStorage.getStore();
+      if (tokenCtx?.tokenProjectIds && tokenCtx.tokenProjectIds.length > 0) {
+        return { AND: [base, { id: { in: tokenCtx.tokenProjectIds } }] };
+      }
+      return Object.keys(base).length > 0 ? base : {};
+    }
+
     const all = await this.membershipCache.getMemberships(userId);
     const orgMemberships = orgId ? all.filter((m) => m.organizationId === orgId) : all;
     if (orgMemberships.length === 0) return null;
