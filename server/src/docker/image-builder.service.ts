@@ -406,7 +406,7 @@ export class ImageBuilderService {
 debug = true
 
 [worker.oci]
-  max-parallelism = 4
+  max-parallelism = 4${this.workspaceTmpfs ? '\n  snapshotter = "native"' : ''}
 
   [[worker.oci.rlimits]]
     type = "RLIMIT_NOFILE"
@@ -608,15 +608,7 @@ echo "=== Super Build completed ==="
   }
 
   private get ramdiskPreamble(): string {
-    if (!this.workspaceTmpfs) return '';
-    return `
-apk add --no-cache e2fsprogs util-linux > /dev/null 2>&1
-mkdir -p /ramdisk-backing /buildkit-state
-mount -t tmpfs -o size=12G tmpfs /ramdisk-backing
-truncate -s 12G /ramdisk-backing/buildkit.img
-mkfs.ext4 -qF /ramdisk-backing/buildkit.img
-mount -o loop /ramdisk-backing/buildkit.img /buildkit-state
-`;
+    return '';
   }
 
   private generateBuildScriptWithCacheFallback(buildctlArgs: string[]): string {
@@ -1073,7 +1065,7 @@ fi
         ...(this.sidecarPushEnabled
           ? []
           : [{ name: 'DOCKER_CONFIG', value: '/root/.docker' }]),
-        { name: 'BUILDKITD_FLAGS', value: `--config /etc/buildkit/buildkitd.toml${this.workspaceTmpfs ? ' --root /buildkit-state' : ''}` },
+        { name: 'BUILDKITD_FLAGS', value: '--config /etc/buildkit/buildkitd.toml' },
         ...(this.s3CacheEnabled && !this.localCacheEnabled ? [
           {
             name: 'AWS_ACCESS_KEY_ID',
