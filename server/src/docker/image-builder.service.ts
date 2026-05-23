@@ -406,7 +406,7 @@ export class ImageBuilderService {
 debug = true
 
 [worker.oci]
-  max-parallelism = 4${this.workspaceTmpfs ? '\n  snapshotter = "native"' : ''}
+  max-parallelism = 4
 
   [[worker.oci.rlimits]]
     type = "RLIMIT_NOFILE"
