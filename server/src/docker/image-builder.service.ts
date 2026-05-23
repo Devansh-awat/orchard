@@ -1065,7 +1065,7 @@ fi
         ...(this.sidecarPushEnabled
           ? []
           : [{ name: 'DOCKER_CONFIG', value: '/root/.docker' }]),
-        { name: 'BUILDKITD_FLAGS', value: '--config /etc/buildkit/buildkitd.toml' },
+        { name: 'BUILDKITD_FLAGS', value: `--config /etc/buildkit/buildkitd.toml${this.workspaceTmpfs ? ' --root /buildkit-state' : ''}` },
         ...(this.s3CacheEnabled && !this.localCacheEnabled ? [
           {
             name: 'AWS_ACCESS_KEY_ID',
@@ -1111,6 +1111,10 @@ fi
         ...(this.sidecarPushEnabled ? [{
           name: 'output',
           mountPath: '/output',
+        }] : []),
+        ...(this.workspaceTmpfs ? [{
+          name: 'buildkit-state',
+          mountPath: '/buildkit-state',
         }] : []),
         ...(this.localCacheEnabled ? [{
           name: 'buildkit-cache',
@@ -1296,6 +1300,10 @@ exit $rc`,
               ...(this.sidecarPushEnabled ? [{
                 name: 'output',
                 emptyDir: this.workspaceTmpfs ? { medium: 'Memory' } : {},
+              }] : []),
+              ...(this.workspaceTmpfs ? [{
+                name: 'buildkit-state',
+                emptyDir: { medium: 'Memory' },
               }] : []),
               ...(this.localCacheEnabled ? [{
                 name: 'buildkit-cache',
