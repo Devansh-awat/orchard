@@ -423,6 +423,7 @@ model Deployment {
   dockerfilePath String?    @map("dockerfile_path") @db.VarChar(500)
   buildFromRoot  Boolean    @default(false) @map("build_from_root")
   buildWithDepot Boolean    @default(false) @map("build_with_depot")
+  persistentBuildCache Boolean @default(false) @map("persistent_build_cache")
   buildLogs      String?    @map("build_logs") @db.Text
   buildError     String?    @map("build_error") @db.Text
   buildStepTimestamps Json?  @map("build_step_timestamps") @db.JsonB

@@ -118,6 +118,7 @@
 		dockerfilePath?: string;
 		buildFromRoot?: boolean;
 		buildWithDepot?: boolean;
+		persistentBuildCache?: boolean;
 		buildLogs?: string;
 		buildError?: string;
 		buildStepTimestamps?: Record<string, number> | null;
@@ -516,6 +517,7 @@
 	let savingService = $state(false);
 	let buildFromRoot = $state(false);
 	let buildWithDepot = $state(false);
+	let persistentBuildCache = $state(false);
 
 	// Tailscale state (gated behind early access flag)
 	const tailscaleEnabled = featureFlag('tailscale-integration');
@@ -1438,6 +1440,7 @@
 					buildFromRoot = data.buildFromRoot;
 				}
 				buildWithDepot = data.buildWithDepot ?? false;
+				persistentBuildCache = data.persistentBuildCache ?? false;
 
 				// Initialize health check state from deployment data
 				if (data.healthCheckEnabled !== undefined && !isEditingHealthCheck) {
@@ -2265,7 +2268,7 @@
 			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/build-from-root`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ buildFromRoot, buildWithDepot })
+				body: JSON.stringify({ buildFromRoot, buildWithDepot, persistentBuildCache })
 			});
 
 			if (!response.ok) {
@@ -3269,6 +3272,7 @@
 							onSaveStrategy={saveStrategy}
 							bind:buildFromRoot
 							bind:buildWithDepot
+							bind:persistentBuildCache
 							{savingAdvanced}
 							onSaveAdvanced={saveAdvanced}
 							{autoDeployStatus}

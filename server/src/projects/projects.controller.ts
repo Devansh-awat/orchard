@@ -867,6 +867,7 @@ export class DeploymentsController {
     body: {
       buildFromRoot: boolean;
       buildWithDepot?: boolean;
+      persistentBuildCache?: boolean;
     },
     @Request() req
   ) {
@@ -882,6 +883,7 @@ export class DeploymentsController {
         imageUrl: req.user.imageUrl,
       },
       body.buildWithDepot,
+      body.persistentBuildCache,
     );
   }
 

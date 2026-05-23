@@ -1002,6 +1002,7 @@ export class DeploymentsService {
       imageUrl?: string;
     },
     buildWithDepot?: boolean,
+    persistentBuildCache?: boolean,
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
 
@@ -1031,6 +1032,7 @@ export class DeploymentsService {
       data: {
         buildFromRoot,
         ...(buildWithDepot !== undefined && { buildWithDepot }),
+        ...(persistentBuildCache !== undefined && { persistentBuildCache }),
       },
     });
 
@@ -1047,6 +1049,7 @@ export class DeploymentsService {
       metadata: {
         buildFromRoot: [deployment.buildFromRoot, buildFromRoot],
         ...(buildWithDepot !== undefined ? { buildWithDepot: [deployment.buildWithDepot, buildWithDepot] } : {}),
+        ...(persistentBuildCache !== undefined ? { persistentBuildCache: [deployment.persistentBuildCache, persistentBuildCache] } : {}),
       },
     });
 
@@ -2495,6 +2498,7 @@ export class DeploymentsService {
         dockerfilePath: deployment.dockerfilePath,
         buildFromRoot: deployment.buildFromRoot ?? false,
         buildWithDepot: deployment.buildWithDepot ?? false,
+        persistentBuildCache: deployment.persistentBuildCache ?? false,
         buildType: deployment.buildType as 'dockerfile' | 'railpack',
         imageName,
         tag: uniqueTag,
@@ -3470,6 +3474,7 @@ export class DeploymentsService {
       tag?: string;
       buildFromRoot?: boolean;
       buildWithDepot?: boolean;
+      persistentBuildCache?: boolean;
       buildType?: 'dockerfile' | 'railpack';
       port?: number;
       ports?: {
@@ -3709,6 +3714,7 @@ export class DeploymentsService {
         dockerfilePath: buildType === 'dockerfile' ? dockerfilePath : null,
         buildFromRoot: data.buildFromRoot ?? false,
         buildWithDepot: data.buildWithDepot ?? false,
+        persistentBuildCache: data.persistentBuildCache ?? false,
         createdBy: user.id,
         buildLogs: `[INFO] Starting ${buildMethodLabel} build for ${repoUrl}@${branch}\n`,
         buildStepTimestamps: { __start: Date.now() },
@@ -3774,6 +3780,7 @@ export class DeploymentsService {
         target: data.target,
         buildFromRoot: data.buildFromRoot,
         buildWithDepot: data.buildWithDepot,
+        persistentBuildCache: data.persistentBuildCache,
         buildType,
         imageName,
         tag: uniqueTag,
@@ -3840,6 +3847,7 @@ export class DeploymentsService {
       target?: string;
       buildFromRoot?: boolean;
       buildWithDepot?: boolean;
+      persistentBuildCache?: boolean;
       buildType?: 'dockerfile' | 'railpack';
       imageName: string;
       tag: string;
@@ -3941,6 +3949,7 @@ export class DeploymentsService {
         target: data.target,
         buildFromRoot: data.buildFromRoot,
         buildWithDepot: data.buildWithDepot,
+        persistentBuildCache: data.persistentBuildCache,
         buildType: data.buildType,
         imageName: data.imageName,
         tag: data.tag,
@@ -4636,6 +4645,7 @@ export class DeploymentsService {
         dockerfilePath: deployment.dockerfilePath,
         buildFromRoot: deployment.buildFromRoot ?? false,
         buildWithDepot: deployment.buildWithDepot ?? false,
+        persistentBuildCache: deployment.persistentBuildCache ?? false,
         buildType: deployment.buildType as 'dockerfile' | 'railpack',
         imageName,
         tag: uniqueTag,

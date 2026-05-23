@@ -14,6 +14,7 @@
 		// Build options
 		buildFromRoot = $bindable(),
 		buildWithDepot = $bindable(),
+		persistentBuildCache = $bindable(),
 		savingAdvanced,
 		onSaveAdvanced,
 		// Auto-deploy
@@ -52,6 +53,7 @@
 		onSaveStrategy: (next: 'rollingUpdate' | 'recreate') => void;
 		buildFromRoot: boolean;
 		buildWithDepot: boolean;
+		persistentBuildCache: boolean;
 		savingAdvanced: boolean;
 		onSaveAdvanced: () => void;
 		autoDeployStatus: AutoDeployStatus | null;
@@ -153,6 +155,21 @@
 				</div>
 				<label class="adv-switch" onclick={(e) => e.stopPropagation()}>
 					<input type="checkbox" bind:checked={buildFromRoot} />
+					<span class="adv-switch-track"></span>
+				</label>
+			</div>
+			<!-- svelte-ignore a11y_click_events_have_key_events -->
+			<!-- svelte-ignore a11y_no_static_element_interactions -->
+			<div
+				class="adv-toggle-row"
+				onclick={() => { persistentBuildCache = !persistentBuildCache; }}
+			>
+				<div class="adv-toggle-info">
+					<span class="adv-toggle-label">Persistent build cache</span>
+					<span class="adv-toggle-desc">Keep a warm build daemon between deploys — unchanged layers rebuild instantly</span>
+				</div>
+				<label class="adv-switch" onclick={(e) => e.stopPropagation()}>
+					<input type="checkbox" bind:checked={persistentBuildCache} />
 					<span class="adv-switch-track"></span>
 				</label>
 			</div>

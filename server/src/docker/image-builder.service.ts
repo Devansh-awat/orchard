@@ -1,7 +1,8 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, Inject, Optional } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { BuildKitPoolService } from './buildkit-pool.service';
 
 interface BuildJobOptions {
   repoUrl: string;
@@ -22,6 +23,11 @@ interface BuildJobOptions {
   // tenants. With subPath, the Kata mount surface only exposes this tenant's
   // slice. Set to the project namespace by the caller.
   cacheTenantKey?: string;
+  // When true, builds connect to a persistent BuildKit daemon pod (managed
+  // by BuildKitPoolService) instead of running buildctl-daemonless.sh in
+  // each Job. The daemon keeps its layer cache warm between builds, so
+  // unchanged layers are instant cache hits (like Depot).
+  persistentBuildCache?: boolean;
 }
 
 interface BuildJobStatus {
@@ -83,7 +89,10 @@ export class ImageBuilderService {
     process.env.BUILDER_PUSHER_IMAGE || 'gcr.io/go-containerregistry/crane:latest';
   private readonly workspaceTmpfs = process.env.BUILDER_WORKSPACE_TMPFS === 'true';
 
-  constructor(private readonly prisma: PrismaService) {
+  constructor(
+    private readonly prisma: PrismaService,
+    @Optional() private readonly buildKitPool?: BuildKitPoolService,
+  ) {
     this.initKubeConfig();
   }
 
@@ -810,6 +819,7 @@ exit $EXIT_CODE
       envVars = {},
       buildWithDepot = false,
       cacheTenantKey,
+      persistentBuildCache = false,
     } = options;
 
     // Sanitize the tenant key for use as a PVC subPath. Anything outside
@@ -849,7 +859,8 @@ exit $EXIT_CODE
     // Use deployment ID as cache key for multi-tenant isolation
     const cacheKey = deploymentId ? `orchard-${deploymentId.slice(0, 8)}` : undefined;
 
-    // Build the buildctl args for daemonless mode
+    // Build the buildctl args. When using a persistent daemon, skip external
+    // cache args — the daemon's own content store is the cache.
     const buildctlArgs = this.generateBuildctlArgs({
       dockerfilePath,
       fullImageName,
@@ -859,6 +870,7 @@ exit $EXIT_CODE
       envVars,
       secretsHash,
       cacheKey,
+      skipCache: persistentBuildCache && !!this.buildKitPool,
     });
 
     const batchApi = this.kc!.makeApiClient(k8s.BatchV1Api);
@@ -1047,98 +1059,134 @@ fi
       });
     }
 
-    // Build the BuildKit container spec (used as either main or init).
-    // sidecarPushEnabled changes two things compared to legacy:
-    //   - no docker-config (Harbor creds) mount — the build cannot
-    //     exfiltrate push creds even via a BuildKit-level compromise.
+    // Persistent daemon mode: get/create a warm BuildKit daemon and build
+    // a lightweight client container that connects to it via gRPC. The
+    // daemon keeps its layer cache warm between builds (like Depot).
+    let daemonIp: string | null = null;
+    if (persistentBuildCache && !buildWithDepot && this.buildKitPool) {
+      try {
+        const daemon = await this.buildKitPool.getOrCreateDaemon(cacheTenantKey || imageName);
+        daemonIp = daemon.podIp;
+        await this.appendLog(deploymentId, `Using persistent BuildKit daemon at ${daemon.podName}`);
+      } catch (err) {
+        console.warn(`[ImageBuilder] Failed to get daemon, falling back to daemonless:`, err.message);
+        await this.appendLog(deploymentId, `Persistent daemon unavailable, using standard builder`, 'WARNING');
+      }
+    }
+
+    // Build the BuildKit container spec.
+    // Two modes:
+    //   1. Daemon mode (daemonIp set): lightweight client runs `buildctl
+    //      --addr tcp://<daemon>:1234 build ...`. Not privileged, no
+    //      buildkitd flags, no cache volumes (daemon has those).
+    //   2. Daemonless mode (default): runs `buildctl-daemonless.sh` which
+    //      starts+stops its own buildkitd. Privileged, needs config/state.
+    //
+    // sidecarPushEnabled changes credential handling in both modes:
+    //   - no docker-config mount — the build cannot exfiltrate push creds.
     //   - mount `output` emptyDir at /output for the OCI tarball.
-    const buildkitContainer: k8s.V1Container | null = buildWithDepot ? null : {
-      name: 'buildkit',
-      image: 'moby/buildkit:latest',
-      securityContext: {
-        privileged: true,
-      },
-      command: ['/bin/sh', '-c'],
-      args: [this.generateBuildScriptWithCacheFallback(buildctlArgs)],
-      workingDir: '/workspace',
-      env: [
-        ...(this.sidecarPushEnabled
-          ? []
-          : [{ name: 'DOCKER_CONFIG', value: '/root/.docker' }]),
-        { name: 'BUILDKITD_FLAGS', value: `--config /etc/buildkit/buildkitd.toml${this.workspaceTmpfs ? ' --root /buildkit-state' : ''}` },
-        ...(this.s3CacheEnabled && !this.localCacheEnabled ? [
-          {
-            name: 'AWS_ACCESS_KEY_ID',
-            valueFrom: {
-              secretKeyRef: {
-                name: 'buildkit-s3-cache-creds',
-                key: 'AWS_ACCESS_KEY_ID',
-                optional: true,
-              }
-            }
+    const buildkitContainer: k8s.V1Container | null = buildWithDepot ? null : (() => {
+      if (daemonIp) {
+        // --- Daemon client mode ---
+        // buildctl sends the local context directory to the remote daemon
+        // over gRPC, so the client needs /workspace but NOT privilege.
+        const shellQuote = (arg: string) =>
+          /^[A-Za-z0-9_\-./:=@,+%]+$/.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`;
+        const clientCmd = `buildctl --addr tcp://${daemonIp}:1234 ${buildctlArgs.map(shellQuote).join(' ')}`;
+        const clientScript = this.generateRetryScript(clientCmd);
+
+        return {
+          name: 'buildkit',
+          image: 'moby/buildkit:latest',
+          // Not privileged — just a gRPC client. The daemon pod has registry
+          // creds and pushes directly, so the client doesn't need docker-config.
+          command: ['/bin/sh', '-c'],
+          args: [clientScript],
+          workingDir: '/workspace',
+          env: [
+            ...Object.entries(envVars).map(([key, value]) => ({
+              name: key,
+              value: value,
+            })),
+          ],
+          volumeMounts: [
+            { name: 'workspace', mountPath: '/workspace' },
+          ],
+          resources: {
+            requests: { cpu: '200m', memory: '512Mi' },
+            limits: { cpu: '2', memory: '4Gi' },
           },
-          {
-            name: 'AWS_SECRET_ACCESS_KEY',
-            valueFrom: {
-              secretKeyRef: {
-                name: 'buildkit-s3-cache-creds',
-                key: 'AWS_SECRET_ACCESS_KEY',
-                optional: true,
+        } as k8s.V1Container;
+      }
+
+      // --- Daemonless mode (original) ---
+      return {
+        name: 'buildkit',
+        image: 'moby/buildkit:latest',
+        securityContext: { privileged: true },
+        command: ['/bin/sh', '-c'],
+        args: [this.generateBuildScriptWithCacheFallback(buildctlArgs)],
+        workingDir: '/workspace',
+        env: [
+          ...(this.sidecarPushEnabled
+            ? []
+            : [{ name: 'DOCKER_CONFIG', value: '/root/.docker' }]),
+          { name: 'BUILDKITD_FLAGS', value: `--config /etc/buildkit/buildkitd.toml${this.workspaceTmpfs ? ' --root /buildkit-state' : ''}` },
+          ...(this.s3CacheEnabled && !this.localCacheEnabled ? [
+            {
+              name: 'AWS_ACCESS_KEY_ID',
+              valueFrom: {
+                secretKeyRef: {
+                  name: 'buildkit-s3-cache-creds',
+                  key: 'AWS_ACCESS_KEY_ID',
+                  optional: true,
+                }
               }
-            }
-          },
-        ] : []),
-        ...Object.entries(envVars).map(([key, value]) => ({
-          name: key,
-          value: value,
-        })),
-      ],
-      volumeMounts: [
-        {
-          name: 'workspace',
-          mountPath: '/workspace',
+            },
+            {
+              name: 'AWS_SECRET_ACCESS_KEY',
+              valueFrom: {
+                secretKeyRef: {
+                  name: 'buildkit-s3-cache-creds',
+                  key: 'AWS_SECRET_ACCESS_KEY',
+                  optional: true,
+                }
+              }
+            },
+          ] : []),
+          ...Object.entries(envVars).map(([key, value]) => ({
+            name: key,
+            value: value,
+          })),
+        ],
+        volumeMounts: [
+          { name: 'workspace', mountPath: '/workspace' },
+          ...(this.sidecarPushEnabled ? [] : [{
+            name: 'docker-config',
+            mountPath: '/root/.docker',
+            readOnly: true,
+          }]),
+          { name: 'buildkit-config', mountPath: '/etc/buildkit', readOnly: true },
+          ...(this.sidecarPushEnabled ? [{
+            name: 'output',
+            mountPath: '/output',
+          }] : []),
+          ...(this.workspaceTmpfs ? [{
+            name: 'buildkit-state',
+            mountPath: '/buildkit-state',
+          }] : []),
+          ...(this.localCacheEnabled ? [{
+            name: 'buildkit-cache',
+            mountPath: this.localCachePath,
+            subPath: cacheSubPath,
+          }] : []),
+        ],
+        resources: {
+          requests: { cpu: '500m', memory: '2Gi' },
+          limits: { cpu: '4', memory: '16Gi' },
         },
-        ...(this.sidecarPushEnabled ? [] : [{
-          name: 'docker-config',
-          mountPath: '/root/.docker',
-          readOnly: true,
-        }]),
-        {
-          name: 'buildkit-config',
-          mountPath: '/etc/buildkit',
-          readOnly: true,
-        },
-        ...(this.sidecarPushEnabled ? [{
-          name: 'output',
-          mountPath: '/output',
-        }] : []),
-        ...(this.workspaceTmpfs ? [{
-          name: 'buildkit-state',
-          mountPath: '/buildkit-state',
-        }] : []),
-        ...(this.localCacheEnabled ? [{
-          name: 'buildkit-cache',
-          mountPath: this.localCachePath,
-          // subPath scopes this pod's view of the shared PVC to a single
-          // tenant directory. The Kata guest only ever sees this slice on
-          // its mount surface, so a malicious build can't read/poison
-          // another tenant's cache by walking up the tree — there is no
-          // "up" inside the VM. emptyDir backends ignore subPath but it's
-          // harmless.
-          subPath: cacheSubPath,
-        }] : []),
-      ],
-      resources: {
-        requests: {
-          cpu: '500m',
-          memory: '2Gi',
-        },
-        limits: {
-          cpu: '4',
-          memory: '16Gi',
-        },
-      },
-    };
+      } as k8s.V1Container;
+    })();
 
     // Pusher container — only used when sidecarPushEnabled. Polls for a
     // done-marker written by BuildKit, then `skopeo copy`s the OCI
@@ -1157,7 +1205,8 @@ fi
     // namespaces inside the Kata VM, so a malicious Dockerfile RUN in
     // BuildKit cannot read the pusher container's
     // /root/.docker/config.json.
-    const pusherContainer: k8s.V1Container | null = (buildkitContainer && this.sidecarPushEnabled) ? {
+    // No pusher in daemon mode — the daemon pushes directly (it has creds).
+    const pusherContainer: k8s.V1Container | null = (buildkitContainer && this.sidecarPushEnabled && !daemonIp) ? {
       name: 'pusher',
       image: this.pusherImage,
       command: ['/bin/sh', '-c'],
@@ -1263,7 +1312,9 @@ exit $rc`,
             // Builder pod runtime: Kata (lightweight VM) when configured.
             // Empty/undefined ⇒ default containerd handler (runc) — matches
             // legacy behaviour on first upgrade.
-            ...(this.builderRuntimeClass ? { runtimeClassName: this.builderRuntimeClass } : {}),
+            // Daemon-client mode doesn't need Kata — it's just a gRPC client,
+            // the daemon pod itself runs with the runtime class.
+            ...(!daemonIp && this.builderRuntimeClass ? { runtimeClassName: this.builderRuntimeClass } : {}),
             ...(this.dedicatedNodeEnabled ? {
               nodeSelector: { 'orchard-builder': 'true' },
               tolerations: [{
@@ -1291,21 +1342,23 @@ exit $rc`,
                   ],
                 },
               },
-              {
+              // Daemon-client mode doesn't need buildkit-config, buildkit-state,
+              // or buildkit-cache — the daemon pod has its own.
+              ...(!daemonIp ? [{
                 name: 'buildkit-config',
                 configMap: {
                   name: 'buildkit-config',
                 },
-              },
+              }] : []),
               ...(this.sidecarPushEnabled ? [{
                 name: 'output',
                 emptyDir: this.workspaceTmpfs ? { medium: 'Memory' } : {},
               }] : []),
-              ...(this.workspaceTmpfs ? [{
+              ...(!daemonIp && this.workspaceTmpfs ? [{
                 name: 'buildkit-state',
                 emptyDir: { medium: 'Memory' },
               }] : []),
-              ...(this.localCacheEnabled ? [{
+              ...(!daemonIp && this.localCacheEnabled ? [{
                 name: 'buildkit-cache',
                 ...(this.localCachePvc
                   ? { persistentVolumeClaim: { claimName: this.localCachePvc } }
@@ -1377,6 +1430,7 @@ exit $rc`,
     target?: string;
     buildFromRoot: boolean;
     envVars: Record<string, string>;
+    skipCache?: boolean;
   }): string[] {
     const {
       dockerfilePath,
@@ -1428,16 +1482,25 @@ exit $rc`,
     }
 
     // Add cache arguments (namespaced per image to prevent cross-deployment contamination)
-    const cacheArgs = this.buildCacheArgs(fullImageName);
-    for (const cacheArg of cacheArgs) {
-      args.push(cacheArg);
+    // Skip when using persistent daemon — its content store IS the cache.
+    // Strip the tag from the cache key — tags change per build (timestamp), so
+    // including them means every build writes to a unique cache path and never
+    // gets a hit. Also strip the registry/project prefix since it's constant.
+    if (!options.skipCache) {
+      const cacheImageKey = fullImageName.replace(/:[^/]*$/, '').replace(/^[^/]*\/[^/]*\//, '');
+      const cacheArgs = this.buildCacheArgs(cacheImageKey);
+      for (const cacheArg of cacheArgs) {
+        args.push(cacheArg);
+      }
     }
 
-    // Output: with sidecarPushEnabled, BuildKit writes an OCI tarball to a
-    // shared volume and a separate pusher container (with the Harbor
-    // creds) handles `crane push`. Without it, BuildKit pushes directly
-    // (legacy behaviour, identical to prior versions).
-    if (this.sidecarPushEnabled) {
+    // Output mode:
+    //   - Persistent daemon: always push directly — the daemon has registry
+    //     creds and sidecar push doesn't work across pods.
+    //   - sidecarPushEnabled: write OCI tarball to /output for the pusher
+    //     sidecar container.
+    //   - Default: push directly from BuildKit.
+    if (this.sidecarPushEnabled && !options.skipCache) {
       args.push('--output', `type=oci,"name=${fullImageName}",dest=/output/image.tar`);
     } else {
       args.push('--output', `type=image,"name=${fullImageName}",push=true`);
@@ -1451,6 +1514,7 @@ exit $rc`,
     envVars: Record<string, string>;
     secretsHash: string;
     cacheKey?: string;
+    skipCache?: boolean;
   }): string[] {
     const {
       fullImageName,
@@ -1480,12 +1544,16 @@ exit $rc`,
       args.push('--secret', `id=${key},env=${key}`);
     }
 
-    const cacheArgs = this.buildCacheArgs(fullImageName);
-    for (const cacheArg of cacheArgs) {
-      args.push(cacheArg);
+    // Skip cache when using persistent daemon — its content store IS the cache.
+    if (!options.skipCache) {
+      const cacheImageKey = fullImageName.replace(/:[^/]*$/, '').replace(/^[^/]*\/[^/]*\//, '');
+      const cacheArgs = this.buildCacheArgs(cacheImageKey);
+      for (const cacheArg of cacheArgs) {
+        args.push(cacheArg);
+      }
     }
 
-    if (this.sidecarPushEnabled) {
+    if (this.sidecarPushEnabled && !options.skipCache) {
       args.push('--output', `type=oci,"name=${fullImageName}",dest=/output/image.tar`);
     } else {
       args.push('--output', `type=image,"name=${fullImageName}",push=true`);
@@ -1503,8 +1571,9 @@ exit $rc`,
     envVars: Record<string, string>;
     secretsHash?: string;
     cacheKey?: string;
+    skipCache?: boolean;
   }): string[] {
-    const { buildType, fullImageName, envVars, secretsHash, cacheKey, ...dockerfileOptions } = options;
+    const { buildType, fullImageName, envVars, secretsHash, cacheKey, skipCache, ...dockerfileOptions } = options;
 
     if (buildType === 'railpack') {
       return this.generateBuildctlArgsForRailpack({
@@ -1512,6 +1581,7 @@ exit $rc`,
         envVars,
         secretsHash: secretsHash || '',
         cacheKey,
+        skipCache,
       });
     }
 
@@ -1519,6 +1589,7 @@ exit $rc`,
       ...dockerfileOptions,
       fullImageName,
       envVars,
+      skipCache,
     });
   }
 

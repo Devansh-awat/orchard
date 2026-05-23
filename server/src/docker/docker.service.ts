@@ -54,6 +54,7 @@ interface BuildOptions {
   // shared buildkit-cache PVC. Callers should set this to the project's
   // namespace.
   cacheTenantKey?: string;
+  persistentBuildCache?: boolean;
 }
 
 @Injectable()
@@ -1157,6 +1158,7 @@ export class DockerService {
         envVars,
         buildWithDepot: options.buildWithDepot,
         cacheTenantKey: options.cacheTenantKey,
+        persistentBuildCache: options.persistentBuildCache,
       });
 
       console.log('[Docker Service] Build completed successfully:', result);
