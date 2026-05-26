@@ -1148,7 +1148,8 @@ export class GitHubService {
         const data = await response.json();
         const installationId = BigInt(data.id);
 
-        await this.prisma.gitHubAppInstallation.upsert({
+        // Backfill DB — non-blocking so the return isn't gated on it
+        this.prisma.gitHubAppInstallation.upsert({
           where: { installationId },
           create: {
             userId: null,
@@ -1164,9 +1165,12 @@ export class GitHubService {
             repositorySelection: data.repository_selection ?? 'all',
             suspendedAt: null,
           },
+        }).then(() => {
+          console.log(`[GitHub App] Backfilled installation ${installationId} for ${owner}/${repo} from GitHub API.`);
+        }).catch((e) => {
+          console.warn(`[GitHub App] Failed to backfill installation ${installationId}:`, e);
         });
 
-        console.log(`[GitHub App] Backfilled installation ${installationId} for ${owner}/${repo} from GitHub API.`);
         return { installationId };
       }
     } catch (e) {
