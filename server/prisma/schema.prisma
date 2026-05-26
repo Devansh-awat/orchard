@@ -126,22 +126,23 @@ model Session {
 // GitHub App installations - tracks when users install the GitHub App on their repos
 model GitHubAppInstallation {
   id               String   @id @default(uuid()) @db.Uuid
-  userId           String   @map("user_id") @db.Uuid
-  installationId   BigInt   @unique @map("installation_id") // GitHub's installation ID
-  accountLogin     String   @map("account_login") @db.VarChar(255) // GitHub username or org name
-  accountId        BigInt   @map("account_id") // GitHub account ID
-  accountType      String   @map("account_type") @db.VarChar(50) // "User" or "Organization"
-  accessToken      String?  @map("access_token") @db.Text // Installation access token (short-lived, refreshed as needed)
+  userId           String?  @map("user_id") @db.Uuid
+  installationId   BigInt   @unique @map("installation_id")
+  accountLogin     String   @map("account_login") @db.VarChar(255)
+  accountId        BigInt   @map("account_id")
+  accountType      String   @map("account_type") @db.VarChar(50)
+  accessToken      String?  @map("access_token") @db.Text
   tokenExpiresAt   DateTime? @map("token_expires_at") @db.Timestamp(6)
-  repositorySelection String @default("all") @map("repository_selection") @db.VarChar(50) // "all" or "selected"
+  repositorySelection String @default("all") @map("repository_selection") @db.VarChar(50)
   suspendedAt      DateTime? @map("suspended_at") @db.Timestamp(6)
   createdAt        DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
 
   @@index([userId], map: "idx_github_app_installations_user")
   @@index([accountLogin], map: "idx_github_app_installations_account")
+  @@index([accountId], map: "idx_github_app_installations_account_id")
   @@map("github_app_installations")
 }
 

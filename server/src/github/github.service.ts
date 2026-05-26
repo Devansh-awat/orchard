@@ -982,21 +982,18 @@ export class GitHubService {
     console.log(`[GitHub App] Installation ${action} by ${sender.login} for ${installation.account.login}`);
 
     if (action === 'created') {
-      // Find the user by their GitHub ID
       const user = await this.prisma.user.findFirst({
         where: { githubId: String(sender.id) },
       });
 
       if (!user) {
-        console.warn(`[GitHub App] No user found with GitHub ID ${sender.id} (${sender.login})`);
-        return;
+        console.warn(`[GitHub App] No Orchard user for GitHub ID ${sender.id} (${sender.login}) — creating installation without user link`);
       }
 
-      // Create or update the installation record
       await this.prisma.gitHubAppInstallation.upsert({
         where: { installationId: BigInt(installation.id) },
         create: {
-          userId: user.id,
+          userId: user?.id ?? null,
           installationId: BigInt(installation.id),
           accountLogin: installation.account.login,
           accountId: BigInt(installation.account.id),
@@ -1004,7 +1001,7 @@ export class GitHubService {
           repositorySelection: installation.repository_selection,
         },
         update: {
-          userId: user.id,
+          ...(user ? { userId: user.id } : {}),
           accountLogin: installation.account.login,
           accountId: BigInt(installation.account.id),
           accountType: installation.account.type,
@@ -1013,7 +1010,7 @@ export class GitHubService {
         },
       });
 
-      console.log(`[GitHub App] Installation created for user ${user.username}`);
+      console.log(`[GitHub App] Installation created for ${installation.account.login}${user ? ` (linked to ${user.username})` : ' (no user link)'}`);
     } else if (action === 'deleted') {
       // Delete the installation record
       await this.prisma.gitHubAppInstallation.deleteMany({
@@ -1111,18 +1108,13 @@ export class GitHubService {
   // Find installation for a repository
   async findInstallationForRepo(owner: string, repo: string): Promise<{ installationId: bigint } | null> {
     // Find installations that might have access to this repo
-    // Use case-insensitive matching for accountLogin since GitHub usernames are case-insensitive
     const installations = await this.prisma.gitHubAppInstallation.findMany({
       where: {
-        OR: [
-          { accountLogin: { equals: owner, mode: 'insensitive' } },
-          { repositorySelection: 'all' },
-        ],
+        accountLogin: { equals: owner, mode: 'insensitive' },
         suspendedAt: null,
       },
     });
 
-    // Check each installation for repo access
     for (const installation of installations) {
       try {
         const hasAccess = await this.isRepoAccessibleByInstallation(
@@ -1134,14 +1126,12 @@ export class GitHubService {
           return { installationId: installation.installationId };
         }
       } catch (e) {
-        // Token might be invalid, continue checking others
         console.warn(`[GitHub App] Failed to check repo access for installation ${installation.installationId}:`, e);
       }
     }
 
-    // Fallback: query GitHub directly for the repo's installation.
-    // This handles the case where the webhook was missed (e.g. user installed
-    // the app before linking their GitHub account) so no DB record exists.
+    // Fallback: query GitHub directly, then backfill the DB so future
+    // lookups are fast and token caching works.
     try {
       const jwt = this.generateAppJwt();
       const response = await fetch(
@@ -1157,7 +1147,26 @@ export class GitHubService {
       if (response.ok) {
         const data = await response.json();
         const installationId = BigInt(data.id);
-        console.log(`[GitHub App] Found installation ${installationId} for ${owner}/${repo} via GitHub API (not in DB).`);
+
+        await this.prisma.gitHubAppInstallation.upsert({
+          where: { installationId },
+          create: {
+            userId: null,
+            installationId,
+            accountLogin: data.account?.login ?? owner,
+            accountId: BigInt(data.account?.id ?? 0),
+            accountType: data.account?.type ?? 'Organization',
+            repositorySelection: data.repository_selection ?? 'all',
+          },
+          update: {
+            accountLogin: data.account?.login ?? owner,
+            accountType: data.account?.type ?? 'Organization',
+            repositorySelection: data.repository_selection ?? 'all',
+            suspendedAt: null,
+          },
+        });
+
+        console.log(`[GitHub App] Backfilled installation ${installationId} for ${owner}/${repo} from GitHub API.`);
         return { installationId };
       }
     } catch (e) {
@@ -1314,13 +1323,11 @@ export class GitHubService {
   /**
    * Installations the current user can see on GitHub.
    *
-   * The DB-only lookup (rows where `userId` matches) misses installations the
-   * user has access to through *org membership* — the install was performed by
-   * another teammate, so the DB row's `userId` points at them, but GitHub
-   * still grants the current user installation access via org permissions.
-   * GitHub's `/user/installations` endpoint is the source of truth for "what
-   * can this user see"; we cross-reference it with our DB rows so callers
-   * still get our internal UUID where available.
+   * GitHub's `/user/installations` endpoint is the source of truth — it
+   * returns installations accessible through org membership, not just ones
+   * the user personally installed. We cross-reference with DB rows for our
+   * internal UUID + cached tokens, and backfill any GitHub-reported
+   * installations that are missing from the DB.
    */
   async getUserInstallations(userId: string) {
     const dbRows = await this.prisma.gitHubAppInstallation.findMany({
@@ -1330,13 +1337,12 @@ export class GitHubService {
 
     const userToken = await this.getValidUserToken(userId);
     if (!userToken) {
-      // No OAuth token — fall back to rows directly owned by this user.
-      return dbRows.filter((r) => r.userId === userId);
+      return dbRows;
     }
 
     let githubInstallations: Array<{
       id: number;
-      account: { login: string; type: string } | null;
+      account: { login: string; id: number; type: string } | null;
       repository_selection: 'all' | 'selected';
     }> = [];
     try {
@@ -1348,9 +1354,6 @@ export class GitHubService {
             Accept: 'application/vnd.github+json',
             'X-GitHub-Api-Version': '2022-11-28',
           },
-          // Without this an unresponsive GitHub (or a token in a weird state)
-          // will hang the whole request — and any MCP tool that calls
-          // /github/status — indefinitely.
           signal: AbortSignal.timeout(5000),
         },
       );
@@ -1358,23 +1361,44 @@ export class GitHubService {
         const data = await response.json();
         githubInstallations = data.installations ?? [];
       } else if (response.status === 401) {
-        // Token went stale between the validity check and the call — fall back.
-        return dbRows.filter((r) => r.userId === userId);
+        return dbRows;
       }
     } catch (e) {
       console.warn('[GitHub] /user/installations lookup failed, falling back to DB:', e);
-      return dbRows.filter((r) => r.userId === userId);
+      return dbRows;
     }
 
-    // Merge: prefer the DB row when present (for the internal UUID + accurate
-    // timestamps), fall back to GitHub-reported metadata for installations we
-    // haven't synced yet (e.g. installed by a teammate before this user signed
-    // up). Result shape matches the Prisma `GitHubAppInstallation` model
-    // closely enough that downstream consumers (controller, frontend) don't
-    // care which source it came from.
     const dbByInstallationId = new Map<string, (typeof dbRows)[number]>();
     for (const row of dbRows) {
       dbByInstallationId.set(row.installationId.toString(), row);
+    }
+
+    // Backfill installations GitHub knows about that we don't have in the DB
+    const toBackfill = githubInstallations.filter(
+      (inst) => inst.account?.login && !dbByInstallationId.has(String(inst.id)),
+    );
+    for (const inst of toBackfill) {
+      try {
+        const row = await this.prisma.gitHubAppInstallation.upsert({
+          where: { installationId: BigInt(inst.id) },
+          create: {
+            userId: null,
+            installationId: BigInt(inst.id),
+            accountLogin: inst.account!.login,
+            accountId: BigInt(inst.account!.id),
+            accountType: inst.account!.type,
+            repositorySelection: inst.repository_selection,
+          },
+          update: {
+            accountLogin: inst.account!.login,
+            accountType: inst.account!.type,
+            repositorySelection: inst.repository_selection,
+          },
+        });
+        dbByInstallationId.set(row.installationId.toString(), row);
+      } catch (e) {
+        console.warn(`[GitHub] Failed to backfill installation ${inst.id}:`, e);
+      }
     }
 
     return githubInstallations
@@ -1385,8 +1409,9 @@ export class GitHubService {
         return {
           id: `gh-${inst.id}`,
           installationId: BigInt(inst.id),
-          userId,
+          userId: null,
           accountLogin: inst.account!.login,
+          accountId: BigInt(inst.account!.id),
           accountType: inst.account!.type,
           repositorySelection: inst.repository_selection,
           accessToken: null,
