@@ -2802,7 +2802,7 @@
 	// Lazy-load auto-deploy status when advanced tab is opened
 	let autoDeployFetched = false;
 	$effect(() => {
-		if (tabs.value === 'advanced' && deployment?.githubRepo && !autoDeployFetched) {
+		if (tabs.value === 'settings' && deployment?.githubRepo && !autoDeployFetched) {
 			autoDeployFetched = true;
 			loadAutoDeployStatus();
 			loadGitHubDeployments();

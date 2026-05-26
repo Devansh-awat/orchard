@@ -1114,8 +1114,6 @@ export class GitHubService {
         suspendedAt: null,
       },
     });
-    console.log(`[GitHub App] findInstallationForRepo ${owner}/${repo}: ${installations.length} DB rows`, installations.map(i => ({ id: i.installationId.toString(), login: i.accountLogin, repoSel: i.repositorySelection })));
-
     for (const installation of installations) {
       try {
         const hasAccess = await this.isRepoAccessibleByInstallation(
@@ -1145,7 +1143,6 @@ export class GitHubService {
           },
         },
       );
-      console.log(`[GitHub App] Fallback GET /repos/${owner}/${repo}/installation → ${response.status}`);
       if (response.ok) {
         const data = await response.json();
         const installationId = BigInt(data.id);
@@ -1179,7 +1176,6 @@ export class GitHubService {
       console.warn(`[GitHub App] GitHub API fallback failed for ${owner}/${repo}:`, e);
     }
 
-    console.warn(`[GitHub App] findInstallationForRepo ${owner}/${repo}: no installation found anywhere`);
     return null;
   }
 
