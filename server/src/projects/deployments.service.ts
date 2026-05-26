@@ -2545,14 +2545,19 @@ export class DeploymentsService {
     let appInstalled = false;
     if (deployment.githubRepo) {
       const repoInfo = this.githubService.parseRepoUrl(deployment.githubRepo);
+      console.log(`[Auto-deploy] deploymentId=${deploymentId} githubRepo=${deployment.githubRepo} parsed=${JSON.stringify(repoInfo)}`);
       if (repoInfo) {
         try {
           const installation = await this.githubService.findInstallationForRepo(repoInfo.owner, repoInfo.repo);
+          console.log(`[Auto-deploy] findInstallationForRepo result for ${repoInfo.owner}/${repoInfo.repo}:`, installation);
           appInstalled = !!installation;
-        } catch {
+        } catch (e) {
+          console.warn(`[Auto-deploy] findInstallationForRepo failed for ${repoInfo.owner}/${repoInfo.repo}:`, e);
           appInstalled = false;
         }
       }
+    } else {
+      console.log(`[Auto-deploy] deploymentId=${deploymentId} has no githubRepo`);
     }
 
     return {
