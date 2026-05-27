@@ -22,6 +22,9 @@ export interface DatabaseDetail {
 		podIp?: string;
 		containers?: Array<{ name: string; image?: string; ready?: boolean }>;
 	}>;
+	cpuRequestMilli?: number | null;
+	memoryRequestBytes?: number | null;
+	clusterName?: string | null;
 	connectionString: string;
 	internalHost: string;
 	createdAt: string;

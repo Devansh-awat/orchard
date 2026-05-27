@@ -231,6 +231,43 @@ export class MetricsService {
     };
   }
 
+  async fetchDatabaseMetrics(args: {
+    namespace: string;
+    podPrefix: string;
+    startMs: number;
+    endMs: number;
+    stepMs: number;
+  }): Promise<SeriesBundle> {
+    const ns = escapeLabel(args.namespace);
+    const podRe = `${escapeRegex(args.podPrefix)}-.*`;
+    const stepSec = Math.max(1, Math.round(args.stepMs / 1000));
+    const rateWin = Math.max(60, stepSec * 2);
+
+    const queries: Record<SeriesId, string> = {
+      cpu: `sum(rate(container_cpu_usage_seconds_total{namespace="${ns}",pod=~"${podRe}",container="",image=""}[${rateWin}s])) * 1000`,
+      mem: `sum(container_memory_working_set_bytes{namespace="${ns}",pod=~"${podRe}",container="",image=""})`,
+      rx: `sum(rate(container_network_receive_bytes_total{namespace="${ns}",pod=~"${podRe}"}[${rateWin}s]))`,
+      tx: `sum(rate(container_network_transmit_bytes_total{namespace="${ns}",pod=~"${podRe}"}[${rateWin}s]))`,
+    };
+
+    const startSec = Math.floor(args.startMs / 1000);
+    const endSec = Math.floor(args.endMs / 1000);
+
+    const [cpu, mem, rx, tx] = await Promise.all([
+      this.queryRange(queries.cpu, startSec, endSec, stepSec),
+      this.queryRange(queries.mem, startSec, endSec, stepSec),
+      this.queryRange(queries.rx,  startSec, endSec, stepSec),
+      this.queryRange(queries.tx,  startSec, endSec, stepSec),
+    ]);
+
+    return {
+      cpu,
+      mem: mem.map((p) => ({ x: p.x, y: p.y / (1024 * 1024) })),
+      rx:  rx.map((p)  => ({ x: p.x, y: p.y / 1024 })),
+      tx:  tx.map((p)  => ({ x: p.x, y: p.y / 1024 })),
+    };
+  }
+
   private async queryRange(
     promql: string,
     startSec: number,

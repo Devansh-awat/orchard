@@ -5,7 +5,7 @@
 	import { onMount } from 'svelte';
 	import { apiFetch, toasts, refreshTree, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
 	import type { PageData } from './$types';
-	import { Loader2, Key, Archive, Terminal as TerminalIcon, Puzzle, Settings as SettingsIcon } from 'lucide-svelte';
+	import { Loader2, Key, Archive, Terminal as TerminalIcon, Puzzle, Settings as SettingsIcon, Activity, Cpu } from 'lucide-svelte';
 	import { Tabs } from 'melt/builders';
 	import DatabaseProvisioning from '$lib/components/DatabaseProvisioning.svelte';
 	import {
@@ -14,6 +14,8 @@
 		TerminalTab,
 		ExtensionsTab,
 		SettingsTab,
+		MetricsTab,
+		ResourcesTab,
 		DatabaseHeader,
 		DeleteModal,
 	} from '$lib/components/database';
@@ -118,12 +120,20 @@
 	let deleteTimerInterval = $state<ReturnType<typeof setInterval> | null>(null);
 	let deleteProgress = $derived(((10 - deleteCountdown) / 10) * 100);
 
+	// Resources
+	let resourceCpuMilli = $state<number | null>(null);
+	let resourceMemoryBytes = $state<number | null>(null);
+	let resourcesDirty = $state(false);
+	let savingResources = $state(false);
+
 	// Tabs
 	const tabSections = [
 		{ id: 'connection', label: 'Connection', icon: Key },
 		{ id: 'backups', label: 'Backups', icon: Archive },
 		{ id: 'terminal', label: 'Terminal', icon: TerminalIcon },
 		{ id: 'extensions', label: 'Extensions', icon: Puzzle },
+		{ id: 'metrics', label: 'Metrics', icon: Activity },
+		{ id: 'resources', label: 'Resources', icon: Cpu },
 		{ id: 'settings', label: 'Settings', icon: SettingsIcon }
 	] as const;
 	type TabId = (typeof tabSections)[number]['id'];
@@ -182,10 +192,41 @@
 			if (!response.ok) throw new Error('Failed to fetch database');
 			database = await response.json();
 			if (database?.backupsEnabled) fetchBackups();
+			// Sync resource state
+			if (!resourcesDirty) {
+				resourceCpuMilli = database?.cpuRequestMilli ?? null;
+				resourceMemoryBytes = database?.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null;
+			}
 		} catch (e) {
 			if (!silent) error = e instanceof Error ? e.message : 'Failed to load database';
 		} finally {
 			if (!silent) loading = false;
+		}
+	}
+
+	async function saveResources() {
+		if (!database) return;
+		savingResources = true;
+		try {
+			const res = await apiFetch(`/apiv1/databases/${database.id}/resources`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					cpuRequestMilli: resourceCpuMilli,
+					memoryRequestBytes: resourceMemoryBytes,
+				}),
+			});
+			if (!res.ok) {
+				const data = await res.json().catch(() => null);
+				throw new Error(data?.message || 'Failed to update resources');
+			}
+			toasts.add({ title: 'Resources updated', description: 'Database pod will restart with new values.', color: 'success' });
+			resourcesDirty = false;
+			await fetchDatabase(true);
+		} catch (e) {
+			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed', color: 'error' });
+		} finally {
+			savingResources = false;
 		}
 	}
 
@@ -486,13 +527,41 @@
 	}
 
 	// --- Lifecycle ---
+	async function fetchQuota() {
+		const orgId = $selectedOrganization?.id;
+		if (!orgId) return;
+		try {
+			const res = await apiFetch(`/apiv1/organizations/${orgId}/quota/me`);
+			if (res.ok) {
+				const q = await res.json();
+				orgDefaultCpuMilli = q.org?.defaultPodCpuMilli ?? null;
+				orgDefaultMemoryBytes = q.org?.defaultPodMemoryBytes ?? null;
+				effectiveCpuLimit = q.effectiveLimit?.cpuMilli ?? null;
+				effectiveMemLimit = q.effectiveLimit?.memoryBytes ?? null;
+			}
+		} catch { /* ignore */ }
+	}
+
+	// Org resource defaults/limits
+	let orgDefaultCpuMilli = $state<number | null>(null);
+	let orgDefaultMemoryBytes = $state<number | null>(null);
+	let effectiveCpuLimit = $state<number | null>(null);
+	let effectiveMemLimit = $state<number | null>(null);
+
 	onMount(() => {
 		data.databasePromise
 			.then((seed: any) => {
-				if (!database) { database = seed; loading = false; if (database?.backupsEnabled) fetchBackups(); }
+				if (!database) {
+					database = seed;
+					loading = false;
+					if (database?.backupsEnabled) fetchBackups();
+					resourceCpuMilli = database?.cpuRequestMilli ?? null;
+					resourceMemoryBytes = database?.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null;
+				}
 			})
 			.catch(() => {});
 		fetchDatabase();
+		fetchQuota();
 		const orgIdForSse = $selectedOrganization?.id;
 		if (orgIdForSse) {
 			dbSseUnsub = subscribeOrgEvents(
@@ -658,6 +727,41 @@
 			/>
 		</section>
 
+		<!-- Metrics tab -->
+		<section {...tabs.getContent('metrics')} hidden={undefined} class="tab-panel">
+			{#if database?.mode !== 'shared'}
+				<div class="card rounded-2xl p-5">
+					<MetricsTab databaseId={database?.id ?? null} />
+				</div>
+			{:else}
+				<div class="db-empty-state">
+					<p>Metrics are not available for shared databases. Create a dedicated (CNPG) database for full metrics.</p>
+				</div>
+			{/if}
+		</section>
+
+		<!-- Resources tab -->
+		<section {...tabs.getContent('resources')} hidden={undefined} class="tab-panel">
+			{#if database?.mode !== 'shared'}
+				<ResourcesTab
+					{database}
+					bind:resourceCpuMilli
+					bind:resourceMemoryBytes
+					{orgDefaultCpuMilli}
+					{orgDefaultMemoryBytes}
+					{effectiveCpuLimit}
+					{effectiveMemLimit}
+					bind:resourcesDirty
+					{savingResources}
+					onSaveResources={saveResources}
+				/>
+			{:else}
+				<div class="db-empty-state">
+					<p>Resource configuration is not available for shared databases.</p>
+				</div>
+			{/if}
+		</section>
+
 		<!-- Settings tab -->
 		<section {...tabs.getContent('settings')} hidden={undefined} class="tab-panel">
 			<SettingsTab
@@ -738,6 +842,15 @@
 		font-size: 0.9375rem;
 		font-weight: 600;
 		color: var(--center-channel-color);
+	}
+
+	.db-empty-state {
+		padding: 2rem 1.5rem;
+		text-align: center;
+		color: var(--surface-muted);
+		font-size: 0.875rem;
+		border: 1px dashed var(--surface-border);
+		border-radius: 0.75rem;
 	}
 
 	.db-stat-pod {

@@ -1315,6 +1315,7 @@ export class DatabasesController {
     private readonly projectsService: ProjectsService,
     private readonly projectAccess: ProjectAccessService,
     private readonly databases: DatabasesService,
+    private readonly metricsService: MetricsService,
   ) {}
 
   @Get()
@@ -1330,6 +1331,40 @@ export class DatabasesController {
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
     return this.databases.getDatabase(id, access.canEdit, user.id);
+  }
+
+  @Get(':id/metrics')
+  async getDatabaseMetrics(
+    @Param('id') id: string,
+    @Request() req,
+    @Query('start') startStr?: string,
+    @Query('end') endStr?: string,
+    @Query('step') stepStr?: string,
+  ) {
+    const { user } = await this.projectAccess.assertDatabaseView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+    const end = Number(endStr) || Date.now();
+    const start = Number(startStr) || end - 60 * 60 * 1000;
+    const step = Math.max(1000, Number(stepStr) || 30_000);
+    if (end <= start) throw new BadRequestException('end must be > start');
+
+    const db = await this.databases.getDatabase(id, true, user.id);
+    // Resolve the pod prefix: CNPG uses clusterName, container mode uses containerName
+    const podPrefix = db?.clusterName || db?.containerName;
+    if (!db?.namespace || !podPrefix) {
+      throw new BadRequestException('Database has no namespace/pod info');
+    }
+
+    const data = await this.metricsService.fetchDatabaseMetrics({
+      namespace: db.namespace,
+      podPrefix,
+      startMs: start,
+      endMs: end,
+      stepMs: step,
+    });
+    return { start, end, step, data };
   }
 
   @Patch(':id/resources')
