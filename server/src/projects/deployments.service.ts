@@ -3588,21 +3588,22 @@ export class DeploymentsService {
     }
     const canAccess = await this.githubService.verifyUserCanAccessRepo(user.id, parsed.owner, parsed.repo);
     if (!canAccess) {
-      throw new ForbiddenException(
-        'You do not have access to this repository on GitHub. Connect your GitHub account or request access to the repo.'
-      );
+      // If the user can't access via their token, check if the repo is public
+      const isPublic = await this.githubService.isRepoPublic(parsed.owner, parsed.repo);
+      if (!isPublic) {
+        throw new ForbiddenException(
+          'You do not have access to this repository on GitHub. Connect your GitHub account or request access to the repo.'
+        );
+      }
     }
 
     // Bind the deployment to the specific GitHub App installation that owns
     // the repo. Auto-deploy webhooks will refuse to fire unless the incoming
     // installation id matches this one, preventing impersonation by another
     // installation with a colliding repo full_name.
+    // For public repos without the app installed, installationId will be null
+    // (auto-deploy won't work, but manual builds can clone without auth).
     const repoInstallation = await this.githubService.findInstallationForRepo(parsed.owner, parsed.repo);
-    if (!repoInstallation) {
-      throw new BadRequestException(
-        'The GitHub App is not installed on this repository. Please install the app first.'
-      );
-    }
 
     // Dockerfile path is only required for dockerfile builds
     if (buildType === 'dockerfile' && !dockerfilePath) {
@@ -3710,7 +3711,7 @@ export class DeploymentsService {
         buildType,
         githubRepo: repoUrl,
         githubBranch: branch,
-        githubInstallationId: repoInstallation.installationId,
+        githubInstallationId: repoInstallation?.installationId ?? null,
         dockerfilePath: buildType === 'dockerfile' ? dockerfilePath : null,
         buildFromRoot: data.buildFromRoot ?? false,
         buildWithDepot: data.buildWithDepot ?? false,

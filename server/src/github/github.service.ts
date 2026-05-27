@@ -372,17 +372,24 @@ export class GitHubService {
     return allRepos;
   }
 
+  private githubApiHeaders(accessToken?: string): Record<string, string> {
+    const headers: Record<string, string> = {
+      'Accept': 'application/vnd.github+json',
+      'X-GitHub-Api-Version': '2022-11-28',
+    };
+    if (accessToken) {
+      headers['Authorization'] = `Bearer ${accessToken}`;
+    }
+    return headers;
+  }
+
   async getRepoBranches(accessToken: string, owner: string, repo: string): Promise<GitHubBranch[]> {
     const MAX_PAGES = 10;
     const fetchPage = async (page: number): Promise<GitHubBranch[]> => {
       const response = await fetch(
         `https://api.github.com/repos/${owner}/${repo}/branches?per_page=100&page=${page}`,
         {
-          headers: {
-            'Authorization': `Bearer ${accessToken}`,
-            'Accept': 'application/vnd.github+json',
-            'X-GitHub-Api-Version': '2022-11-28',
-          },
+          headers: this.githubApiHeaders(accessToken),
         },
       );
       if (!response.ok) throw new BadRequestException('Failed to fetch repository branches');
@@ -417,11 +424,7 @@ export class GitHubService {
     }
 
     const response = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Accept': 'application/vnd.github+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
+      headers: this.githubApiHeaders(accessToken),
     });
 
     if (!response.ok) {
@@ -443,11 +446,7 @@ export class GitHubService {
 
     try {
       const response = await fetch(url, {
-        headers: {
-          'Authorization': `Bearer ${accessToken}`,
-          'Accept': 'application/vnd.github+json',
-          'X-GitHub-Api-Version': '2022-11-28',
-        },
+        headers: this.githubApiHeaders(accessToken),
       });
 
       if (!response.ok) {
@@ -509,13 +508,9 @@ export class GitHubService {
       url += `?ref=${encodeURIComponent(branch)}`;
     }
 
-    const response = await fetch(url, {
-      headers: {
-        'Authorization': `Bearer ${accessToken}`,
-        'Accept': 'application/vnd.github.raw+json',
-        'X-GitHub-Api-Version': '2022-11-28',
-      },
-    });
+    const headers = this.githubApiHeaders(accessToken);
+    headers['Accept'] = 'application/vnd.github.raw+json';
+    const response = await fetch(url, { headers });
 
     if (!response.ok) {
       throw new BadRequestException('Failed to fetch file content');
@@ -1207,6 +1202,26 @@ export class GitHubService {
   ): Promise<void> {
     const token = await this.getOrRefreshInstallationToken(installationId);
     return this.updateDeploymentStatus(token, owner, repo, deploymentId, state, options);
+  }
+
+  // Check if a repo is public using an unauthenticated GitHub API call.
+  async isRepoPublic(owner: string, repo: string): Promise<boolean> {
+    try {
+      const response = await fetch(
+        `https://api.github.com/repos/${owner}/${repo}`,
+        {
+          headers: {
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+          },
+        }
+      );
+      if (!response.ok) return false;
+      const data = await response.json();
+      return data.visibility === 'public' || data.private === false;
+    } catch {
+      return false;
+    }
   }
 
   // Verify that a specific user (by stored OAuth token) can access a given repo on GitHub.

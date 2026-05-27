@@ -732,15 +732,9 @@
 					</div>
 				{:else}
 					{#if !githubLinked}
-						<div class="nd-warning">
-							<p class="nd-warning-title">Sign in with GitHub to continue</p>
-							<p class="nd-warning-desc">We use your GitHub account to verify which repositories you can access. You'll only see and deploy repos visible to your GitHub user — no extra scopes are requested.</p>
-							<div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
-								<a href="/user/settings" class="nd-btn nd-btn-primary">Sign in with GitHub</a>
-								{#if githubAppInstallUrl}
-									<a href={githubAppInstallUrl} target="_blank" class="nd-btn nd-btn-secondary">Install GitHub App</a>
-								{/if}
-							</div>
+						<div class="nd-warning" style="margin-bottom: 0.75rem;">
+							<p class="nd-warning-title">GitHub not connected</p>
+							<p class="nd-warning-desc">You can deploy any public repository by entering its slug (e.g. <code>owner/repo</code>) or URL below. <a href="/user/settings">Connect GitHub</a> to also access your private repos.</p>
 						</div>
 					{:else if !hasGitHubApp && repositories.length === 0 && !loadingRepos}
 						<div class="nd-warning" style="margin-bottom: 0.75rem;">
@@ -751,7 +745,6 @@
 							{/if}
 						</div>
 					{/if}
-					{#if githubLinked}
 						<div class="nd-field nd-relative" data-repo-dropdown>
 							<label class="nd-label">Repository</label>
 							<div class="nd-relative">
@@ -855,7 +848,6 @@
 							{/if}
 						{/if}
 					{/if}
-				{/if}
 			</div>
 		</div>
 
