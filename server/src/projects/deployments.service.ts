@@ -764,11 +764,18 @@ export class DeploymentsService {
       );
     }
 
-    const result = await this.k8sWorkload.scaleDeployment(
-      deployment.name,
-      deployment.namespace,
-      replicas
-    );
+    // Only push to K8s if the deployment exists in the cluster.
+    const k8sExistsScale = await this.k8sWorkload.getKubernetesDeployment(
+      deployment.name, deployment.namespace,
+    ).then((d) => d !== null).catch(() => false);
+
+    if (k8sExistsScale) {
+      await this.k8sWorkload.scaleDeployment(
+        deployment.name,
+        deployment.namespace,
+        replicas
+      );
+    }
 
     await this.prisma.deployment.update({
       where: { id: deploymentId },
@@ -909,11 +916,20 @@ export class DeploymentsService {
       value,
     }));
 
-    await this.k8sWorkload.updateDeploymentEnv({
-      namespace: deployment.namespace,
-      deploymentName: deployment.name,
-      env: envList,
-    });
+    // Only push to K8s if the deployment actually exists in the cluster.
+    // If the build hasn't succeeded yet, just persist to DB — the env vars
+    // will be applied when the build completes and creates the K8s deployment.
+    const k8sExists = await this.k8sWorkload.getKubernetesDeployment(
+      deployment.name, deployment.namespace,
+    ).then((d) => d !== null).catch(() => false);
+
+    if (k8sExists) {
+      await this.k8sWorkload.updateDeploymentEnv({
+        namespace: deployment.namespace,
+        deploymentName: deployment.name,
+        env: envList,
+      });
+    }
 
     const previousEnvVars = await this.prisma.deploymentEnvVar.findMany({
       where: { deploymentId: deployment.id },
@@ -1266,12 +1282,19 @@ export class DeploymentsService {
       ? 'recreate'
       : (deployment.deployStrategy as 'rollingUpdate' | 'recreate');
 
-    await this.k8sWorkload.updateDeploymentVolumes({
-      namespace: deployment.namespace,
-      deploymentName: deployment.name,
-      volumes: volumesList,
-      deployStrategy: effectiveStrategy,
-    });
+    // Only push to K8s if the deployment exists in the cluster.
+    const k8sExistsVol = await this.k8sWorkload.getKubernetesDeployment(
+      deployment.name, deployment.namespace,
+    ).then((d) => d !== null).catch(() => false);
+
+    if (k8sExistsVol) {
+      await this.k8sWorkload.updateDeploymentVolumes({
+        namespace: deployment.namespace,
+        deploymentName: deployment.name,
+        volumes: volumesList,
+        deployStrategy: effectiveStrategy,
+      });
+    }
 
     const updatedDeployment = await this.prisma.$transaction(async (tx) => {
       // Persist auto-Recreate when PVC was added, so the UI reflects reality.
@@ -3111,11 +3134,18 @@ export class DeploymentsService {
     // Unlimited mode: cpuRequestMilli === 0 means remove all resource constraints.
     const isUnlimited = data.cpuRequestMilli === 0 && data.memoryRequestBytes === 0;
 
+    // Only push to K8s if the deployment exists in the cluster.
+    const k8sExistsRes = await this.k8sWorkload.getKubernetesDeployment(
+      deployment.name, deployment.namespace,
+    ).then((d) => d !== null).catch(() => false);
+
     if (isUnlimited) {
-      await this.k8sWorkload.removeDeploymentResources(
-        deployment.namespace,
-        deployment.name,
-      );
+      if (k8sExistsRes) {
+        await this.k8sWorkload.removeDeploymentResources(
+          deployment.namespace,
+          deployment.name,
+        );
+      }
     } else {
       const resolved = await this.quotasService.resolvePodResources(deployment.projectId, {
         cpuRequestMilli: data.cpuRequestMilli,
@@ -3137,11 +3167,13 @@ export class DeploymentsService {
         },
       );
 
-      await this.k8sWorkload.updateDeploymentResources(
-        deployment.namespace,
-        deployment.name,
-        resolved,
-      );
+      if (k8sExistsRes) {
+        await this.k8sWorkload.updateDeploymentResources(
+          deployment.namespace,
+          deployment.name,
+          resolved,
+        );
+      }
     }
 
     return this.prisma.deployment.update({
@@ -3756,6 +3788,37 @@ export class DeploymentsService {
       });
     }
 
+    // Persist ports/service config upfront so they survive build failures.
+    // The actual K8s Service is created after a successful build, but the DB
+    // records are needed so rebuilds and the UI can read the port config back.
+    if (rawPorts.length > 0) {
+      const serviceType = exposePublic ? ServiceType.external : ServiceType.internal;
+      const primaryPort = rawPorts[0];
+      const service = await this.prisma.service.create({
+        data: {
+          deploymentId: deployment.id,
+          name,
+          type: serviceType,
+          port: primaryPort.servicePort,
+          targetPort: primaryPort.containerPort,
+          protocol: primaryPort.protocol || 'TCP',
+          externalIp: null,
+          nodePort: null,
+        },
+      });
+
+      await this.prisma.servicePort.createMany({
+        data: rawPorts.map((portEntry) => ({
+          serviceId: service.id,
+          name: portEntry.name,
+          port: portEntry.servicePort,
+          targetPort: portEntry.containerPort,
+          protocol: portEntry.protocol || 'TCP',
+          nodePort: null,
+        })),
+      });
+    }
+
     console.log(`[Projects] Created deployment record ${deployment.id}, starting async build`);
 
     void this.audit.log({
@@ -4157,9 +4220,9 @@ export class DeploymentsService {
       }
 
       if (!data.isRebuild || shouldCreateNew) {
-        // Only create service and ports for new deployments or rebuilds where deployment didn't exist
+        // Update service records with K8s-assigned values (nodePort, externalIp)
+        // or create them if they don't exist yet.
         await this.prisma.$transaction(async (tx) => {
-          // Check if services already exist (might exist from previous failed attempt)
           const existingDeployment = await tx.deployment.findUnique({
             where: { id: deploymentId },
             include: { services: { include: { ports: true } } },
@@ -4167,8 +4230,36 @@ export class DeploymentsService {
 
           const hasServices = existingDeployment?.services && existingDeployment.services.length > 0;
 
-          if (!hasServices) {
-            // Create services and ports if they don't exist
+          if (hasServices) {
+            // Services were created upfront — update with K8s-assigned values
+            const normalizedPorts = deploymentResult.ports || [];
+            const existingService = existingDeployment!.services[0];
+            const primaryPort = normalizedPorts[0];
+            const primaryNodePort = primaryPort?.nodePort ?? null;
+            const externalIp = deploymentResult.externalIp || null;
+
+            await tx.service.update({
+              where: { id: existingService.id },
+              data: {
+                nodePort: primaryNodePort,
+                externalIp,
+              },
+            });
+
+            // Update each port with its K8s-assigned nodePort
+            for (const existingPort of existingService.ports) {
+              const matchingPort = normalizedPorts.find(
+                (p) => p.containerPort === existingPort.targetPort && p.protocol === existingPort.protocol
+              );
+              if (matchingPort?.nodePort) {
+                await tx.servicePort.update({
+                  where: { id: existingPort.id },
+                  data: { nodePort: matchingPort.nodePort },
+                });
+              }
+            }
+          } else {
+            // No services exist — create them (legacy path for old deployments)
             const normalizedPorts = deploymentResult.ports || [];
             const primaryPort = normalizedPorts[0] || {
               name: 'http',
