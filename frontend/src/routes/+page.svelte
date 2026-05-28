@@ -87,7 +87,7 @@ let passkeySupportReason = $state<string | null>(null);
 
 		try {
 			const [wsRes, depRes, dbRes, ingRes] = await Promise.all([
-				apiFetch('/apiv1/workspaces'),
+				apiFetch('/apiv1/projects'),
 				apiFetch('/apiv1/deployments').catch(() => null),
 				apiFetch('/apiv1/databases').catch(() => null),
 				apiFetch('/apiv1/ingresses').catch(() => null)

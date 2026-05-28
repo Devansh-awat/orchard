@@ -166,7 +166,7 @@
 		try {
 			const invitations = [...$pendingInvitations];
 			for (const invitation of invitations) {
-				await pendingInvitations.accept(invitation.token);
+				await pendingInvitations.accept(invitation.id, true);
 			}
 
 			const orgsResponse = await apiFetch('/apiv1/organizations/user');

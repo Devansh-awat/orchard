@@ -1097,6 +1097,40 @@ export class OrganizationsService {
     return { success: true, message: 'Invitation declined' };
   }
 
+  async declineInvitationById(invitationId: string, clerkId: string, userData?: any) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    const notFound = () =>
+      new NotFoundException('Invitation not found or expired.');
+
+    if (!user) {
+      throw notFound();
+    }
+
+    const invitation = await this.prisma.organizationInvitation.findUnique({
+      where: { id: invitationId },
+    });
+
+    if (!invitation) {
+      throw notFound();
+    }
+
+    if (user.email.toLowerCase() !== invitation.email.toLowerCase()) {
+      throw notFound();
+    }
+    if (!user.emailVerified) {
+      throw notFound();
+    }
+    if (invitation.expiresAt < new Date()) {
+      await this.prisma.organizationInvitation.delete({ where: { id: invitation.id } });
+      throw notFound();
+    }
+
+    await this.prisma.organizationInvitation.delete({ where: { id: invitation.id } });
+
+    return { success: true, message: 'Invitation declined' };
+  }
+
   async getOrganizationInvitations(organizationId: string, clerkId: string, userData?: any) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
 

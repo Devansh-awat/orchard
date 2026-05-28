@@ -35,10 +35,10 @@
 	async function handleAccept(invitation: PendingInvitation) {
 		if (accepting || declining) return;
 
-		accepting = invitation.token;
+		accepting = invitation.id;
 
 		try {
-			await pendingInvitations.accept(invitation.token);
+			await pendingInvitations.accept(invitation.id, true);
 
 			// Refresh organizations
 			const orgsResponse = await apiFetch('/apiv1/organizations/user');
@@ -71,10 +71,10 @@
 	async function handleDecline(invitation: PendingInvitation) {
 		if (accepting || declining) return;
 
-		declining = invitation.token;
+		declining = invitation.id;
 
 		try {
-			await pendingInvitations.decline(invitation.token);
+			await pendingInvitations.decline(invitation.id, true);
 
 			// Check if user has any organizations
 			const orgsResponse = await apiFetch('/apiv1/organizations/user');

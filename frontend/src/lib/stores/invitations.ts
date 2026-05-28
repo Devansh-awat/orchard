@@ -4,7 +4,7 @@ import { apiFetch } from './api';
 
 export interface PendingInvitation {
 	id: string;
-	token: string;
+	token?: string;
 	email: string;
 	role: 'owner' | 'admin' | 'member' | 'guest';
 	expiresAt: string;
@@ -56,9 +56,12 @@ async function fetchPending(): Promise<PendingInvitation[]> {
 	}
 }
 
-async function accept(token: string): Promise<{ success: boolean; organization?: PendingInvitation['organization'] }> {
+async function accept(tokenOrId: string, useId = false): Promise<{ success: boolean; organization?: PendingInvitation['organization'] }> {
 	try {
-		const response = await apiFetch(`/apiv1/invitations/${token}/accept`, {
+		const url = useId
+			? `/apiv1/invitations/by-id/${tokenOrId}/accept`
+			: `/apiv1/invitations/${tokenOrId}/accept`;
+		const response = await apiFetch(url, {
 			method: 'POST'
 		});
 
@@ -71,7 +74,7 @@ async function accept(token: string): Promise<{ success: boolean; organization?:
 
 		// Remove the accepted invitation from the list
 		pendingInvitationsList.update((list) =>
-			list.filter((inv) => inv.token !== token)
+			list.filter((inv) => useId ? inv.id !== tokenOrId : inv.token !== tokenOrId)
 		);
 
 		// Set the accepted organization for onboarding
@@ -86,9 +89,12 @@ async function accept(token: string): Promise<{ success: boolean; organization?:
 	}
 }
 
-async function decline(token: string): Promise<boolean> {
+async function decline(tokenOrId: string, useId = false): Promise<boolean> {
 	try {
-		const response = await apiFetch(`/apiv1/invitations/${token}/decline`, {
+		const url = useId
+			? `/apiv1/invitations/by-id/${tokenOrId}/decline`
+			: `/apiv1/invitations/${tokenOrId}/decline`;
+		const response = await apiFetch(url, {
 			method: 'POST'
 		});
 
@@ -99,7 +105,7 @@ async function decline(token: string): Promise<boolean> {
 
 		// Remove the declined invitation from the list
 		pendingInvitationsList.update((list) =>
-			list.filter((inv) => inv.token !== token)
+			list.filter((inv) => useId ? inv.id !== tokenOrId : inv.token !== tokenOrId)
 		);
 
 		return true;

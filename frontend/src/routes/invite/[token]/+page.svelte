@@ -105,7 +105,7 @@
 		accepting = true;
 
 		try {
-			await pendingInvitations.accept(invitation.token);
+			await pendingInvitations.accept(token);
 
 			// Refresh organizations
 			const orgsResponse = await apiFetch('/apiv1/organizations/user');
@@ -143,7 +143,7 @@
 		declining = true;
 
 		try {
-			await pendingInvitations.decline(invitation.token);
+			await pendingInvitations.decline(token);
 
 			// Check if user has any organizations
 			const orgsResponse = await apiFetch('/apiv1/organizations/user');

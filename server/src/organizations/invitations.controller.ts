@@ -44,6 +44,17 @@ export class InvitationsController {
     });
   }
 
+  @Post('by-id/:id/decline')
+  async declineInvitationById(@Param('id') id: string, @Request() req) {
+    return this.organizationsService.declineInvitationById(id, req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl,
+    });
+  }
+
   @Public()
   @Get(':token')
   async getInvitationByToken(@Param('token') token: string) {
