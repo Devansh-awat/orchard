@@ -1818,6 +1818,24 @@ export class DeploymentsService {
       );
     }
 
+    if (portsPayload) {
+      const affectedIngresses = await this.prisma.ingress.findMany({
+        where: { serviceId: service.id },
+      });
+      for (const ing of affectedIngresses) {
+        try {
+          await this.k8sNetwork.patchIngressPathPort(
+            ing.namespace,
+            ing.name,
+            ing.path,
+            primaryPort.servicePort,
+          );
+        } catch (e: any) {
+          console.error(`[Deployment] Failed to sync ingress ${ing.name} path ${ing.path} port: ${e?.message}`);
+        }
+      }
+    }
+
     const result = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
       include: {

@@ -490,7 +490,7 @@ export class K8sNetworkService {
           }
         }
       };
-    });
+    }).sort((a, b) => b.path.length - a.path.length);
 
     const ingressBody: k8s.V1Ingress = {
       metadata: {
@@ -702,7 +702,7 @@ export class K8sNetworkService {
           }
         }
       };
-    });
+    }).sort((a, b) => b.path.length - a.path.length);
 
     const ingressBody: k8s.V1Ingress = {
       metadata: {
@@ -765,6 +765,35 @@ export class K8sNetworkService {
         message: error.message
       });
     }
+  }
+
+  async patchIngressPathPort(
+    namespace: string,
+    ingressName: string,
+    path: string,
+    newPort: number,
+  ) {
+    this.ensureKubeConfig();
+    const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
+
+    const ingress = await networkingApi.readNamespacedIngress(ingressName, namespace);
+    const paths = ingress.body.spec?.rules?.[0]?.http?.paths;
+    if (!paths) return;
+
+    const pathIndex = paths.findIndex((p) => p.path === path);
+    if (pathIndex === -1) return;
+
+    await networkingApi.patchNamespacedIngress(
+      ingressName,
+      namespace,
+      [{ op: 'replace', path: `/spec/rules/0/http/paths/${pathIndex}/backend/service/port/number`, value: newPort }],
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { headers: { 'Content-Type': 'application/json-patch+json' } },
+    );
   }
 
   async readIngress(namespace: string, name: string) {

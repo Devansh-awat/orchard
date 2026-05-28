@@ -856,7 +856,7 @@ export class IngressService {
         pathType: pb.pathType,
         serviceName: pb.serviceName,
         servicePort: pb.servicePort,
-      }))];
+      }))].sort((a, b) => b.path.length - a.path.length);
 
       const existingAnnotations = (mergeTarget.annotations as Record<string, string> | null) ?? {};
       const existingEntrypoints = Array.isArray(mergeTarget.entrypoints) ? mergeTarget.entrypoints : [];
