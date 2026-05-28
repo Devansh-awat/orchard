@@ -329,7 +329,8 @@ function handleExecSession(
     true, // tty
     (status) => {
       if (!execClosed && ws.readyState === WebSocket.OPEN) {
-        ws.close(1000, status.status === 'Success' ? 'exited' : `exec failed: ${status.message}`);
+        const reason = status.status === 'Success' ? 'exited' : `exec failed: ${status.message}`;
+        ws.close(1000, reason.length > 123 ? reason.slice(0, 120) + '...' : reason);
       }
     },
   ).catch((err) => {
