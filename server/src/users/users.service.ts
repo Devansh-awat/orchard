@@ -74,7 +74,14 @@ export class UsersService {
         const previous = user;
         user = await this.prisma.user.update({
           where: { id: user.id },
-          data: { hackClubId: hackClubUser.id },
+          data: {
+            hackClubId: hackClubUser.id,
+            // Hack Club is the identity provider asserting this address, so
+            // treat it as verified. Don't clobber an existing verification.
+            ...(user.emailVerified
+              ? {}
+              : { emailVerified: true, emailVerifiedAt: new Date() }),
+          },
         });
         this.invalidateUserCache(previous);
         this.invalidateUserCache(user);
@@ -99,6 +106,10 @@ export class UsersService {
             username,
             firstName,
             lastName,
+            // Hack Club OAuth asserts the email; mark it verified so the user
+            // can accept org invitations without a separate email flow.
+            emailVerified: true,
+            emailVerifiedAt: new Date(),
           }
         });
         void this.audit.log({
@@ -117,6 +128,11 @@ export class UsersService {
         where: { hackClubId: hackClubUser.id },
         data: {
           email: hackClubUser.email,
+          // Backfill verification for existing Hack Club OAuth users created
+          // before email was auto-verified.
+          ...(user.emailVerified
+            ? {}
+            : { emailVerified: true, emailVerifiedAt: new Date() }),
         }
       });
     }
