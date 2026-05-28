@@ -446,6 +446,7 @@ export class ProjectsService {
       where: { id: projectId },
       include: {
         organization: true,
+        owner: { select: { username: true } },
         members: {
           include: {
             role: true,
@@ -1040,6 +1041,7 @@ export class ProjectsService {
       },
       include: {
         organization: true,
+        owner: { select: { username: true } },
         members: {
           include: {
             role: true,
@@ -1230,6 +1232,7 @@ export class ProjectsService {
       where,
       include: {
         organization: { select: { id: true, name: true, slug: true } },
+        owner: { select: { username: true } },
         members: {
           include: {
             role: true,

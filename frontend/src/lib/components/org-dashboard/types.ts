@@ -65,6 +65,7 @@ export interface ProjectMeta {
 	description?: string;
 	icon?: string | null;
 	backgroundImage?: string | null;
+	owner?: { username: string | null } | null;
 }
 
 export interface ProjectGroup {

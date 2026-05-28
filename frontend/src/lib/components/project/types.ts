@@ -48,6 +48,7 @@ export interface Project {
 	repositoryUrl?: string;
 	icon?: string | null;
 	backgroundImage?: string | null;
+	owner?: { username: string | null } | null;
 	deployments?: Deployment[];
 	members?: ProjectMember[];
 	organization?: {

@@ -84,7 +84,7 @@
 						{/if}
 					</span>
 				{/if}
-				{project.name}
+				{#if project.owner?.username}<span class="pj-title-owner">{project.owner.username}@</span>{/if}{project.name}
 			</h1>
 			{#if project.description}
 				<p

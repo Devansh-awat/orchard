@@ -113,7 +113,11 @@
 			{/if}
 		</div>
 		<div class="proj-text">
-			<span class="proj-name">{group.name}</span>
+			<span class="proj-name"
+				>{#if meta?.owner?.username}<span class="proj-owner"
+						>{meta.owner.username}@</span
+					>{/if}{group.name}</span
+			>
 			{#if meta?.description}
 				<span class="proj-sub">{meta.description}</span>
 			{/if}

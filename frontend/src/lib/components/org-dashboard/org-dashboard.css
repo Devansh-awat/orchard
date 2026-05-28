@@ -352,6 +352,10 @@
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
+.proj-owner {
+	color: var(--surface-muted);
+	font-weight: 500;
+}
 .proj-sub {
 	font-size: 0.75rem;
 	color: var(--surface-muted);

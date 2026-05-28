@@ -258,6 +258,13 @@
 	margin: 0;
 	letter-spacing: -0.02em;
 }
+.pj-title-owner {
+	font-weight: 500;
+	color: var(--pj-text-secondary);
+}
+.pj-title--onhero .pj-title-owner {
+	color: rgba(255, 255, 255, 0.75);
+}
 .pj-description {
 	font-size: 0.875rem;
 	color: var(--pj-text-secondary);
