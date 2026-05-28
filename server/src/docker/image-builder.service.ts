@@ -472,7 +472,7 @@ ${registryConfigs}
       const cacheDir = `${this.localCachePath}/${sub}`;
       console.log(`[ImageBuilder] Local cache enabled - path: ${cacheDir}`);
       const importCache = `type=local,src=${cacheDir}`;
-      const exportCache = `type=local,dest=${cacheDir},mode=max`;
+      const exportCache = `type=local,dest=${cacheDir},mode=max,compression=zstd,ignore-error=true`;
       return [
         '--import-cache', importCache,
         '--export-cache', exportCache,
@@ -620,6 +620,36 @@ echo "=== Super Build completed ==="
     return '';
   }
 
+  /**
+   * Generate a shell snippet that prunes the local cache directory when disk
+   * usage exceeds 80%. Removes the oldest subdirectories (by mtime) until
+   * usage drops below 70% or only one directory remains.
+   */
+  private get cachePrunePreamble(): string {
+    if (!this.localCacheEnabled) return '';
+    return `
+# --- Prune local build cache if disk is getting full ---
+CACHE_ROOT="${this.localCachePath}"
+if [ -d "$CACHE_ROOT" ]; then
+  USAGE=$(df "$CACHE_ROOT" | awk 'NR==2 {sub(/%/,"",$5); print $5}')
+  if [ "$USAGE" -gt 80 ] 2>/dev/null; then
+    echo "=== Cache disk usage at \${USAGE}% — pruning oldest entries ==="
+    # List subdirectories sorted by modification time (oldest first)
+    ls -1dt "$CACHE_ROOT"/*/ 2>/dev/null | tail -n +2 | tac | while read -r dir; do
+      USAGE=$(df "$CACHE_ROOT" | awk 'NR==2 {sub(/%/,"",$5); print $5}')
+      if [ "$USAGE" -le 70 ]; then
+        echo "=== Cache pruned down to \${USAGE}% ==="
+        break
+      fi
+      echo "Removing old cache: $dir"
+      rm -rf "$dir"
+    done
+  fi
+fi
+# --- End cache prune ---
+`;
+  }
+
   private generateBuildScriptWithCacheFallback(buildctlArgs: string[]): string {
     const cacheArgs = this.buildCacheArgs();
     const hasCacheEnabled = cacheArgs.length > 0;
@@ -646,8 +676,8 @@ echo "=== Super Build completed ==="
     return `
 set +e
 ulimit -n 1048576 2>/dev/null || true
-${this.ramdiskPreamble}
-echo "=== Attempting build with S3 cache enabled ==="
+${this.ramdiskPreamble}${this.cachePrunePreamble}
+echo "=== Attempting build with cache enabled ==="
 BUILD_OUTPUT=$(mktemp)
 FIFO=$(mktemp -u)
 mkfifo "$FIFO"
@@ -691,9 +721,9 @@ for attempt in $(seq 1 $MAX_RETRIES); do
   break
 done
 
-if grep -qi "failed to check file presence in cache\\|BadRequest\\|Bad Request\\|operation error S3\\|api error BadRequest" "$BUILD_OUTPUT"; then
+if grep -qi "failed to check file presence in cache\\|BadRequest\\|Bad Request\\|operation error S3\\|api error BadRequest\\|no space left on device" "$BUILD_OUTPUT"; then
   echo "=================================================="
-  echo "WARNING: S3 cache operation failed"
+  echo "WARNING: Cache operation failed (S3 error or disk full)"
   echo "Failed to save/load cache - skipping cache"
   echo "Retrying without cache..."
   echo "=================================================="
@@ -755,7 +785,7 @@ fi
     return `
 set +e
 ulimit -n 1048576 2>/dev/null || true
-${this.ramdiskPreamble}
+${this.ramdiskPreamble}${this.cachePrunePreamble}
 MAX_RETRIES=3
 RETRY_DELAY=2
 BUILD_OUTPUT=$(mktemp)
