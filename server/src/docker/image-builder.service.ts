@@ -634,8 +634,10 @@ if [ -d "$CACHE_ROOT" ]; then
   USAGE=$(df "$CACHE_ROOT" | awk 'NR==2 {sub(/%/,"",$5); print $5}')
   if [ "$USAGE" -gt 80 ] 2>/dev/null; then
     echo "=== Cache disk usage at \${USAGE}% — pruning oldest entries ==="
-    # List subdirectories sorted by modification time (oldest first)
-    ls -1dt "$CACHE_ROOT"/*/ 2>/dev/null | tail -n +2 | tac | while read -r dir; do
+    # Prune oldest-first, but skip dirs modified in the last 10 min (active builds)
+    ls -1dt "$CACHE_ROOT"/*/ 2>/dev/null | tac | while read -r dir; do
+      [ -d "$dir" ] || continue
+      if find "$dir" -maxdepth 0 -mmin -10 2>/dev/null | grep -q .; then continue; fi
       USAGE=$(df "$CACHE_ROOT" | awk 'NR==2 {sub(/%/,"",$5); print $5}')
       if [ "$USAGE" -le 70 ]; then
         echo "=== Cache pruned down to \${USAGE}% ==="
@@ -663,6 +665,11 @@ fi
       return this.generateRetryScript(`buildctl-daemonless.sh ${argsWithCache}`);
     }
 
+    // Extract local cache dest dir from --export-cache arg so we can mkdir -p it
+    const exportArg = buildctlArgs.find((_, i) => i > 0 && buildctlArgs[i - 1] === '--export-cache') || '';
+    const destMatch = exportArg.match(/dest=([^,]+)/);
+    const mkdirLine = destMatch ? `mkdir -p "${destMatch[1]}"` : '';
+
     const argsWithoutCache = buildctlArgs.filter((arg, idx, arr) => {
       if (arg === '--import-cache' || arg === '--export-cache') {
         return false;
@@ -677,6 +684,7 @@ fi
 set +e
 ulimit -n 1048576 2>/dev/null || true
 ${this.ramdiskPreamble}${this.cachePrunePreamble}
+${mkdirLine}
 echo "=== Attempting build with cache enabled ==="
 BUILD_OUTPUT=$(mktemp)
 FIFO=$(mktemp -u)
@@ -721,7 +729,7 @@ for attempt in $(seq 1 $MAX_RETRIES); do
   break
 done
 
-if grep -qi "failed to check file presence in cache\\|BadRequest\\|Bad Request\\|operation error S3\\|api error BadRequest\\|no space left on device" "$BUILD_OUTPUT"; then
+if grep -qi "failed to check file presence in cache\\|BadRequest\\|Bad Request\\|operation error S3\\|api error BadRequest\\|no space left on device\\|no such file or directory" "$BUILD_OUTPUT"; then
   echo "=================================================="
   echo "WARNING: Cache operation failed (S3 error or disk full)"
   echo "Failed to save/load cache - skipping cache"
