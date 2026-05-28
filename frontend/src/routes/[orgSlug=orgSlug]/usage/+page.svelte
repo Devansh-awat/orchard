@@ -234,14 +234,14 @@
 		try {
 			const cpuMilli = defaultCpuUnlim
 				? null
-				: defaultCpuInput.trim() === ''
+				: String(defaultCpuInput).trim() === ''
 					? null
-					: Math.max(0, parseInt(defaultCpuInput, 10));
+					: Math.max(0, parseInt(String(defaultCpuInput), 10));
 			const memoryBytes = defaultMemUnlim
 				? null
-				: defaultMemInput.trim() === ''
+				: String(defaultMemInput).trim() === ''
 					? null
-					: Math.max(0, parseInt(defaultMemInput, 10)) * 1024 * 1024;
+					: Math.max(0, parseInt(String(defaultMemInput), 10)) * 1024 * 1024;
 			const res = await apiFetch(`/apiv1/organizations/${orgId}/quota/default-member-allowance`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
@@ -302,16 +302,16 @@
 				? null
 				: memCpuUseDefault
 					? null
-					: memCpuInput.trim() === ''
+					: String(memCpuInput).trim() === ''
 						? null
-						: Math.max(0, parseInt(memCpuInput, 10));
+						: Math.max(0, parseInt(String(memCpuInput), 10));
 			const memoryBytes = memMemUnlim
 				? null
 				: memMemUseDefault
 					? null
-					: memMemInput.trim() === ''
+					: String(memMemInput).trim() === ''
 						? null
-						: Math.max(0, parseInt(memMemInput, 10)) * 1024 * 1024;
+						: Math.max(0, parseInt(String(memMemInput), 10)) * 1024 * 1024;
 			const res = await apiFetch(
 				`/apiv1/organizations/${orgId}/quota/members/${editingMemberId}`,
 				{

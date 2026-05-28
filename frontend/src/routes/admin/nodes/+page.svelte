@@ -135,7 +135,7 @@
 			const body: Record<string, unknown> = { mode: addMode };
 			if (addCpuLimit.trim()) body.cpuLimit = addCpuLimit.trim();
 			if (addMemoryLimit.trim()) body.memoryLimit = addMemoryLimit.trim();
-			if (addMaxServices.trim()) body.maxServices = parseInt(addMaxServices, 10);
+			if (String(addMaxServices).trim()) body.maxServices = parseInt(String(addMaxServices), 10);
 			const res = await apiFetch(`/apiv1/admin/nodes/${selectedNode.id}/assignments/${addOrgId}`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
