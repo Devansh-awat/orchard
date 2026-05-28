@@ -4215,6 +4215,9 @@ export class DeploymentsService {
           env: data.env,
           serviceType: data.exposePublic ? 'NodePort' : 'ClusterIP',
           volumes: data.volumes || [],
+          allowedNodes: deployPlacement.allowedNodes,
+          deniedNodes: deployPlacement.deniedNodes,
+          resources: rebuildResources,
           deployStrategy: buildStrategy,
         });
       }
