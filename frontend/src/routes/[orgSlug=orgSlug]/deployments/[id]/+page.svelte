@@ -2485,7 +2485,12 @@
 			const filteredVolumes = volumes
 				.filter((v) => v.pvcName?.trim() && v.mountPath.trim())
 				.map((v) => ({
-					name: v.pvcName!.trim(),
+					// Preserve the existing k8s volume name. Substituting pvcName here
+					// renamed the volume on every save, which orphaned the volumeMount
+					// and broke the strategic-merge patch (400) for any volume whose
+					// name differs from its pvcName. New volumes start with name='',
+					// so fall back to pvcName only then.
+					name: v.name?.trim() || v.pvcName!.trim(),
 					type: 'pvc' as const,
 					mountPath: v.mountPath.trim(),
 					readOnly: v.readOnly,
