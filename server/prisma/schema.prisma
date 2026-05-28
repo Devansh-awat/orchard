@@ -657,19 +657,16 @@ model Ingress {
   service          Service?          @relation(fields: [serviceId], references: [id], onDelete: SetNull)
   templateInstance TemplateInstance? @relation(fields: [templateInstanceId], references: [id], onDelete: SetNull)
 
-  @@unique([namespace, name])
+  @@unique([namespace, name, path])
   @@index([projectId], map: "idx_ingresses_project")
   @@index([deploymentId], map: "idx_ingresses_deployment")
   @@index([serviceId], map: "idx_ingresses_service")
   @@index([templateInstanceId], map: "idx_ingresses_template_instance")
-  // C-2: speeds up the cross-project hostname-availability check on every
-  // ingress create. The application enforces global uniqueness across
-  // projects (path-merging within a project is allowed). A pure DB-level
-  // UNIQUE(host) would break that, so we defend in depth with a partial
-  // unique index added by an out-of-band migration:
-  //   CREATE UNIQUE INDEX ux_ingresses_host_path
-  //     ON ingresses(host, path) WHERE path = '/';
-  @@unique([host], map: "idx_ingresses_host_unique")
+  // C-2: non-unique index speeds up cross-project hostname-availability
+  // checks. Uniqueness is enforced at the application layer by
+  // assertHostnameAvailable (same host may appear in multiple rows for
+  // path-merged ingresses within a project).
+  @@index([host], map: "idx_ingresses_host")
   @@map("ingresses")
 }
 

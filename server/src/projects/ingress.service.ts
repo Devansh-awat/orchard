@@ -833,15 +833,25 @@ export class IngressService {
           servicePort: p.backend?.service?.port?.number || 0,
         }));
 
+      // Check for path collisions. A path that exists in k8s but has no
+      // matching DB row is an orphan (e.g. from a previous failed create) and
+      // can be safely overwritten.
+      const dbPaths = new Set(existingForHost.map((e) => e.path || '/'));
       for (const pb of pathBackends) {
-        if (existingPaths.some((ep) => ep.path === pb.path)) {
+        const inK8s = existingPaths.some((ep) => ep.path === pb.path);
+        const inDb = dbPaths.has(pb.path);
+        if (inK8s && inDb) {
           throw new BadRequestException(
             `Domain ${rawHost} already routes ${pb.path} to another service. Use a different path.`
           );
         }
       }
 
-      const mergedPaths = [...existingPaths, ...pathBackends.map((pb) => ({
+      // Replace orphaned k8s paths, keep the rest
+      const replacedPaths = new Set(pathBackends.map((pb) => pb.path));
+      const mergedPaths = [
+        ...existingPaths.filter((ep) => !replacedPaths.has(ep.path)),
+        ...pathBackends.map((pb) => ({
         path: pb.path,
         pathType: pb.pathType,
         serviceName: pb.serviceName,

@@ -352,6 +352,11 @@
 		return { otherDeployment: !!otherDeployment, pathCollision: !!pathCollision };
 	});
 
+	// Auto-expand Advanced path input when domain already has routes
+	$effect(() => {
+		if (newDomainConflict) showDomainAdvanced = true;
+	});
+
 	// Computed properties for template compatibility with API field names
 	const repoUrl = $derived(deployment?.githubRepo);
 	const branch = $derived(deployment?.githubBranch);

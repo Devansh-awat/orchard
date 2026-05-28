@@ -451,7 +451,7 @@
 					>
 						{#if newDomainConflict.pathCollision}
 							<strong>Path in use.</strong>
-							<code>{newDomainNormalizedHost}{newDomainNormalizedPath}</code> is already routed. Choose a different path under Advanced.
+							<code>{newDomainNormalizedHost}{newDomainNormalizedPath}</code> is already routed. Choose a different path below.
 						{:else if newDomainConflict.otherDeployment}
 							<strong>Sharing domain.</strong>
 							{newDomainNormalizedHost} already routes to another deployment. Traffic to <code>{newDomainNormalizedPath}</code> will be added to the existing ingress.
