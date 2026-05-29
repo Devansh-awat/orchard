@@ -7,6 +7,28 @@ import { ProjectsService } from '../projects/projects.service';
 import { DeploymentsService } from '../projects/deployments.service';
 import { Public, Auth } from '../auth/decorators';
 
+/** Only allow same-origin, non-protocol-relative return paths. */
+function isSafeRedirect(redirect?: string): redirect is string {
+  return !!redirect && redirect.startsWith('/') && !redirect.startsWith('//');
+}
+
+/** Recover the session token and optional return path from the OAuth state param. */
+function parseLinkState(state?: string): { stateToken?: string; returnPath?: string } {
+  if (!state) return {};
+  try {
+    const parsed = JSON.parse(Buffer.from(state, 'base64url').toString('utf8'));
+    if (parsed && typeof parsed === 'object' && typeof parsed.t === 'string') {
+      return {
+        stateToken: parsed.t,
+        returnPath: isSafeRedirect(parsed.r) ? parsed.r : undefined,
+      };
+    }
+  } catch {
+    // Not encoded JSON — treat the whole state as a raw session token.
+  }
+  return { stateToken: state };
+}
+
 @Auth()
 @Controller('github')
 export class GitHubController {
@@ -55,7 +77,7 @@ export class GitHubController {
 
   @Public()
   @Get('link')
-  async initiateLink(@Req() req: any, @Res() res: Response) {
+  async initiateLink(@Req() req: any, @Res() res: Response, @Query('redirect') redirect?: string) {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const token = req.cookies?.session_token;
 
@@ -74,7 +96,13 @@ export class GitHubController {
 
     // Pass the session token as OAuth state so the callback can identify the
     // user even when the browser drops the cookie (e.g. SameSite restrictions).
-    const authUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(token)}`;
+    // When a same-origin return path is supplied, carry it alongside the token
+    // so the callback knows where to send the user back (e.g. onboarding flow).
+    const safeRedirect = isSafeRedirect(redirect) ? redirect : undefined;
+    const state = safeRedirect
+      ? Buffer.from(JSON.stringify({ t: token, r: safeRedirect })).toString('base64url')
+      : token;
+    const authUrl = `https://github.com/login/oauth/authorize?client_id=${clientId}&redirect_uri=${encodeURIComponent(redirectUri)}&state=${encodeURIComponent(state)}`;
 
     return res.redirect(authUrl);
   }
@@ -99,9 +127,13 @@ export class GitHubController {
     }
 
     try {
-      // Prefer the cookie, fall back to the state param (which carries the
-      // session JWT) when the browser strips the cookie on cross-site redirect.
-      const token = req.cookies?.session_token || state;
+      // State carries the session JWT, and optionally a same-origin return path
+      // encoded as base64url JSON. Older flows pass the raw JWT as state.
+      const { stateToken, returnPath } = parseLinkState(state);
+
+      // Prefer the cookie, fall back to the token from state when the browser
+      // strips the cookie on cross-site redirect.
+      const token = req.cookies?.session_token || stateToken;
 
       if (!token) {
         return res.redirect(`${frontendUrl}/user/settings?error=${encodeURIComponent('Not authenticated')}`);
@@ -109,7 +141,7 @@ export class GitHubController {
 
       const payload = await this.githubService.verifySessionToken(token);
       const hackClubId = payload.hackClubId || payload.sub;
-      
+
       if (!hackClubId) {
         return res.redirect(`${frontendUrl}/user/settings?error=${encodeURIComponent('Invalid session token')}`);
       }
@@ -123,7 +155,9 @@ export class GitHubController {
       await this.githubService.linkGitHubAccount(user.id, code);
       this.usersService.invalidateUserCache(user);
 
-      return res.redirect(`${frontendUrl}/user/settings?github=linked`);
+      const dest = returnPath || '/user/settings';
+      const sep = dest.includes('?') ? '&' : '?';
+      return res.redirect(`${frontendUrl}${dest}${sep}github=linked`);
     } catch (err) {
       const msg = err instanceof Error ? err.message : 'Unknown error';
       console.error('GitHub OAuth callback error:', msg, err);

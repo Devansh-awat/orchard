@@ -69,7 +69,15 @@
 			}
 		}
 
-		currentStep = 'profile';
+		// Returning from the GitHub OAuth round-trip lands back on /setup with
+		// ?github=linked — resume on the GitHub step instead of restarting.
+		const params = new URLSearchParams(window.location.search);
+		if (params.get('github') === 'linked' || params.get('step') === 'github') {
+			currentStep = 'github';
+			checkGitHubStatus();
+		} else {
+			currentStep = 'profile';
+		}
 	});
 
 	async function checkGitHubStatus() {
@@ -139,7 +147,7 @@
 	}
 
 	function handleLinkGithub() {
-		window.location.href = '/apiv1/github/link';
+		window.location.href = '/apiv1/github/link?redirect=' + encodeURIComponent('/setup');
 	}
 
 	function handleBack() {
