@@ -94,6 +94,20 @@ const TOOLS: ToolDef[] = [
     },
   },
   {
+    name: 'get_database_metrics',
+    description: 'Fetch CPU/memory time-series metrics for a database pod. Use to confirm OOM patterns and size memory requests.',
+    parameters: {
+      type: 'object' as const,
+      properties: {
+        databaseId: { type: 'string', description: 'The database UUID' },
+        start: { type: 'number', description: 'Start timestamp in ms (default: 1h ago)' },
+        end: { type: 'number', description: 'End timestamp in ms (default: now)' },
+        step: { type: 'number', description: 'Sample step in ms (default: 30000, min 1000)' },
+      },
+      required: ['databaseId'],
+    },
+  },
+  {
     name: 'list_databases',
     description: 'List PostgreSQL databases in a project',
     parameters: {
@@ -345,6 +359,14 @@ export async function executeTool(
       if (input.end) qs.set('end', String(input.end));
       const q = qs.toString();
       return json(await apiFetch('GET', `/deployments/${input.deploymentId}/metrics${q ? `?${q}` : ''}`));
+    }
+    case 'get_database_metrics': {
+      const qs = new URLSearchParams();
+      if (input.start) qs.set('start', String(input.start));
+      if (input.end) qs.set('end', String(input.end));
+      if (input.step) qs.set('step', String(input.step));
+      const q = qs.toString();
+      return json(await apiFetch('GET', `/databases/${input.databaseId}/metrics${q ? `?${q}` : ''}`));
     }
     case 'list_databases':
       return json(await apiFetch('GET', `/projects/${input.projectId}/databases`));

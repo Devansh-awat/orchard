@@ -375,6 +375,34 @@ Each series datapoint includes pod-level CPU (millicores) and memory (bytes). To
   );
 
   server.registerTool(
+    'get_database_metrics',
+    {
+      description: `Fetch a time-series of CPU and memory usage for a database pod from the metrics backend.
+Useful for confirming OOM/restart suspicions (memory climbing to the limit before a kill), sizing memory/CPU requests, and answering "is this near its limit?".
+
+The result includes datapoints sampled at \`step\` ms intervals between \`start\` and \`end\` (both unix-ms). Defaults to the last hour at 30s resolution.
+
+To diagnose an OOMKill, look for memory rising to the request/limit ceiling right before \`liveStatus.lastTerminationAt\` (from get_database). If memory plateaus near the limit, raise it with update_database_resources.`,
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      inputSchema: {
+        databaseId: z.string().describe('The database UUID'),
+        start: z.number().optional().describe('Window start (unix-ms). Default: end - 1h'),
+        end: z.number().optional().describe('Window end (unix-ms). Default: now'),
+        step: z.number().optional().describe('Sample step (ms). Default 30000, min 1000'),
+      },
+    },
+    async ({ databaseId, start, end, step }) => {
+      const params = new URLSearchParams();
+      if (start) params.set('start', String(start));
+      if (end) params.set('end', String(end));
+      if (step) params.set('step', String(step));
+      const qs = params.toString();
+      const metrics = await client.get(`/databases/${databaseId}/metrics${qs ? `?${qs}` : ''}`);
+      return { content: [{ type: 'text', text: JSON.stringify(metrics, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
     'analyze_deployment_resources',
     {
       description: `Snapshot the deployment's current resource pressure. Combines live aggregate CPU/memory usage with the configured per-pod requests and replica count to compute a usage ratio for each axis.

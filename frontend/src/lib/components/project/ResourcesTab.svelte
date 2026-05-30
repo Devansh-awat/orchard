@@ -179,6 +179,14 @@
 	</div>
 	<div class="pj-deployment-grid">
 		{#each databases as db, i (db.id)}
+			{@const ls = db.liveStatus}
+			{@const unhealthy = !!(
+				(ls?.message && /oomkilled|out of memory|crashloopbackoff|back-?off|error/i.test(ls.message)) ||
+				(ls?.lastTerminationReason && ls.lastTerminationReason !== 'Completed') ||
+				((ls?.restartCount ?? 0) >= 5)
+			)}
+			{@const effectiveStatus = unhealthy ? 'unhealthy' : db.status}
+			{@const badgeColor = effectiveStatus === 'ready' ? 'var(--pj-color-green)' : effectiveStatus === 'error' || effectiveStatus === 'unhealthy' ? 'var(--pj-color-red)' : 'var(--pj-color-amber)'}
 			<a
 				href="/{orgSlug}/databases/{db.id}"
 				class="pj-deployment-card"
@@ -187,11 +195,11 @@
 				{@attach cardTilt({ max: 5 })}
 			>
 				<div class="pj-deployment-card-top">
-					<div class="pj-deployment-indicator" style="background-color: color-mix(in srgb, var(--pj-color-green) 12%, transparent)">
-						<DatabaseIcon class="h-5 w-5" style="color: var(--pj-color-green)" />
+					<div class="pj-deployment-indicator" style="background-color: color-mix(in srgb, {unhealthy ? 'var(--pj-color-red)' : 'var(--pj-color-green)'} 12%, transparent)">
+						<DatabaseIcon class="h-5 w-5" style="color: {unhealthy ? 'var(--pj-color-red)' : 'var(--pj-color-green)'}" />
 					</div>
-					<span class="pj-deployment-status-badge" style="background-color: color-mix(in srgb, {db.status === 'ready' ? 'var(--pj-color-green)' : db.status === 'error' ? 'var(--pj-color-red)' : 'var(--pj-color-amber)'} 15%, transparent); color: {db.status === 'ready' ? 'var(--pj-color-green)' : db.status === 'error' ? 'var(--pj-color-red)' : 'var(--pj-color-amber)'}">
-						{db.status}
+					<span class="pj-deployment-status-badge" class:pj-status-unhealthy={unhealthy} style="background-color: color-mix(in srgb, {badgeColor} 15%, transparent); color: {badgeColor}">
+						{effectiveStatus}
 					</span>
 				</div>
 				<div class="pj-deployment-card-body">

@@ -1034,6 +1034,8 @@ export class K8sCnpgService {
       let lastTerminationExitCode: number | undefined;
       let lastTerminationAt: string | undefined;
       let currentWaitingReason: string | undefined;
+      let currentRunningSinceMs: number | undefined;
+      let currentReady = false;
       try {
         const { body: podList } = await coreApi.listNamespacedPod(
           namespace, undefined, undefined, undefined, undefined,
@@ -1056,16 +1058,37 @@ export class K8sCnpgService {
           if (container.state?.waiting?.reason) {
             currentWaitingReason = container.state.waiting.reason;
           }
+          const runningSince = (container as any).state?.running?.startedAt;
+          if (runningSince) {
+            const t = Date.parse(runningSince);
+            if (!Number.isNaN(t) && (currentRunningSinceMs === undefined || t > currentRunningSinceMs)) {
+              currentRunningSinceMs = t;
+            }
+          }
+          if (container.ready) currentReady = true;
         }
       } catch { /* ignore — pod listing is best-effort */ }
 
       // Synthesize a `message` so the existing frontend liveStatus.message path
       // surfaces OOMKilled / CrashLoopBackOff even when the container is currently running.
+      // Historical terminations are only surfaced if they're still "fresh" — once the
+      // container has been running cleanly for a while (e.g. after a memory bump),
+      // we stop nagging about the old OOM.
+      const STALE_TERMINATION_MS = 10 * 60 * 1000; // 10 minutes of clean runtime = recovered
+      const runningCleanlyForMs = currentReady && currentRunningSinceMs
+        ? Date.now() - currentRunningSinceMs
+        : 0;
+      const terminationIsStale = runningCleanlyForMs > STALE_TERMINATION_MS;
+
       let message: string | undefined;
       if (currentWaitingReason) {
         message = currentWaitingReason; // e.g. "CrashLoopBackOff"
-      } else if (lastTerminationReason && lastTerminationReason !== 'Completed') {
-        // e.g. "OOMKilled" — flag historical OOMs even if pod is currently running
+      } else if (
+        lastTerminationReason &&
+        lastTerminationReason !== 'Completed' &&
+        !terminationIsStale
+      ) {
+        // e.g. "OOMKilled" — only flag if we haven't yet proven the issue is gone
         message = lastTerminationReason;
       }
 

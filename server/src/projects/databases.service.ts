@@ -677,12 +677,28 @@ export class DatabasesService {
       },
       orderBy: { createdAt: 'desc' },
     });
+
+    // Lightweight liveStatus enrichment so the list view can surface OOM/crash
+    // states (the persisted `status` says "ready" even while pods OOM-cycle).
+    // Best-effort + parallel; failures fall through silently.
+    const enriched = await Promise.all(
+      databases.map(async (d: any) => {
+        if (d.mode === 'cnpg' && d.namespace && d.clusterName) {
+          try {
+            const ls = await this.k8sCnpg.getCnpgClusterStatus(d.namespace, d.clusterName);
+            return { ...d, liveStatus: ls };
+          } catch { return d; }
+        }
+        return d;
+      }),
+    );
+
     if (!canEdit) {
-      return databases.map((d) => redactDatabaseForViewer(d as any));
+      return enriched.map((d) => redactDatabaseForViewer(d as any));
     }
     // Strip R2 proxy backup credentials from editor returns as well — they
     // are infrastructure secrets, not user-facing data.
-    return databases.map((d) => stripR2ProxyCreds(d as any));
+    return enriched.map((d) => stripR2ProxyCreds(d as any));
   }
 
   async deleteDatabase(

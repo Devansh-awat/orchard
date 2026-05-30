@@ -449,6 +449,21 @@
 	background-color: color-mix(in srgb, var(--surface-border) 60%, transparent);
 	color: var(--pj-text-secondary);
 }
+.pj-deployment-status-badge.pj-status-unhealthy::before {
+	content: '';
+	display: inline-block;
+	width: 0.4375rem;
+	height: 0.4375rem;
+	border-radius: 9999px;
+	background-color: currentColor;
+	margin-right: 0.375rem;
+	vertical-align: 0.0625rem;
+	animation: pj-status-unhealthy-pulse 1.4s ease-in-out infinite;
+}
+@keyframes pj-status-unhealthy-pulse {
+	0%, 100% { opacity: 1; }
+	50% { opacity: 0.4; }
+}
 .pj-deployment-build-badge {
 	font-size: 0.7rem;
 	font-weight: 500;

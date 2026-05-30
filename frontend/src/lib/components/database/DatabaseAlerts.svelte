@@ -53,7 +53,7 @@
 						</div>
 						<span class="dba-desc">
 							Your database was killed by the kernel for exceeding its memory limit ({#if database.memoryRequestBytes}{formatMemory(database.memoryRequestBytes)}{:else}128Mi{/if}).
-							Increase memory in Resources or fix the memory leak.
+							Increase memory in Resources.
 						</span>
 					</div>
 					{#if onGoToResources}
