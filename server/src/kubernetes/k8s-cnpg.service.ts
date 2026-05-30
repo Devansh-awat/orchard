@@ -1013,6 +1013,7 @@ export class K8sCnpgService {
   async getCnpgClusterStatus(namespace: string, clusterName: string): Promise<any> {
     this.ensureKubeConfig();
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
     try {
       const { body } = await customApi.getNamespacedCustomObject(
         this.CNPG_GROUP, this.CNPG_VERSION, namespace, this.CNPG_PLURAL, clusterName,
@@ -1024,6 +1025,50 @@ export class K8sCnpgService {
       // Prefer quantitative readiness over phase strings, which can include noisy transient messages
       // like "Instance Status Extraction Error: HTTP communication issue" during pod startup.
       const ready = readyInstances >= instances && readyInstances > 0;
+
+      // Surface restart count and last-termination reason from the postgres container
+      // across all instance pods. The cluster phase / readyInstances alone hide
+      // OOMKill cycles when the pod is currently in `running` state between crashes.
+      let restartCount = 0;
+      let lastTerminationReason: string | undefined;
+      let lastTerminationExitCode: number | undefined;
+      let lastTerminationAt: string | undefined;
+      let currentWaitingReason: string | undefined;
+      try {
+        const { body: podList } = await coreApi.listNamespacedPod(
+          namespace, undefined, undefined, undefined, undefined,
+          `cnpg.io/cluster=${clusterName}`,
+        );
+        for (const pod of podList.items || []) {
+          const container = pod.status?.containerStatuses?.find((c) => c.name === 'postgres');
+          if (!container) continue;
+          restartCount += container.restartCount || 0;
+          const lastTerm = (container as any).lastState?.terminated;
+          if (lastTerm?.reason) {
+            // Keep the most recent termination across pods
+            const at: string | undefined = lastTerm.finishedAt;
+            if (!lastTerminationAt || (at && at > lastTerminationAt)) {
+              lastTerminationReason = lastTerm.reason;
+              lastTerminationExitCode = lastTerm.exitCode;
+              lastTerminationAt = at;
+            }
+          }
+          if (container.state?.waiting?.reason) {
+            currentWaitingReason = container.state.waiting.reason;
+          }
+        }
+      } catch { /* ignore — pod listing is best-effort */ }
+
+      // Synthesize a `message` so the existing frontend liveStatus.message path
+      // surfaces OOMKilled / CrashLoopBackOff even when the container is currently running.
+      let message: string | undefined;
+      if (currentWaitingReason) {
+        message = currentWaitingReason; // e.g. "CrashLoopBackOff"
+      } else if (lastTerminationReason && lastTerminationReason !== 'Completed') {
+        // e.g. "OOMKilled" — flag historical OOMs even if pod is currently running
+        message = lastTerminationReason;
+      }
+
       return {
         exists: true,
         phase,
@@ -1032,6 +1077,11 @@ export class K8sCnpgService {
         replicas: instances,
         currentPrimary: cluster.status?.currentPrimary,
         conditions: cluster.status?.conditions || [],
+        restartCount,
+        message,
+        lastTerminationReason,
+        lastTerminationExitCode,
+        lastTerminationAt,
       };
     } catch (e: any) {
       if (e.response?.statusCode === 404) return { exists: false };

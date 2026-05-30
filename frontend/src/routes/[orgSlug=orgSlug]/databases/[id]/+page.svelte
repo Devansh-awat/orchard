@@ -18,6 +18,7 @@
 		ResourcesTab,
 		DatabaseHeader,
 		DeleteModal,
+		DatabaseAlerts,
 	} from '$lib/components/database';
 	import type { DatabaseDetail, Backup, ExtInfo, TerminalTab as TerminalTabType } from '$lib/components/database';
 
@@ -597,6 +598,12 @@
 		<div class="db-error">{error}</div>
 	{:else if database}
 		<DatabaseHeader {database} {orgSlug} {deleting} onOpenDeleteModal={openDeleteModal} />
+
+		<DatabaseAlerts
+			{database}
+			onGoToResources={() => { tabs.value = 'resources'; }}
+			onViewLogs={() => { tabs.value = 'terminal'; activeConsoleTab = 'logs'; }}
+		/>
 
 		{#if database.mode === 'cnpg' && (database.status === 'provisioning' || database.status === 'restoring' || (database.status === 'error' && !database.liveStatus?.ready))}
 			<DatabaseProvisioning dbId={dbId} dbName={database.name} onDone={() => fetchDatabase(true)} />

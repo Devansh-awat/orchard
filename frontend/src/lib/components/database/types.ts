@@ -39,6 +39,9 @@ export interface DatabaseDetail {
 		readyReplicas?: number;
 		restartCount?: number;
 		message?: string;
+		lastTerminationReason?: string;
+		lastTerminationExitCode?: number;
+		lastTerminationAt?: string;
 	};
 	project?: {
 		id: string;
