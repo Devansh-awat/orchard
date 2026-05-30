@@ -43,6 +43,7 @@ export class K8sCnpgService {
     this.ensureKubeConfig();
     if (!this.kc) return;
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
     const cpuStr = cpuMilliToK8s(resources.cpuMilli);
     const memStr = memoryBytesToK8s(resources.memoryBytes);
     const patch = [
@@ -88,6 +89,24 @@ export class K8sCnpgService {
         throw err;
       }
     }
+
+    // CNPG performs a rolling update on resource changes only when the cluster has
+    // a healthy primary — a single-instance cluster stuck in CrashLoopBackOff (the
+    // exact case where users tend to bump resources) won't get rolled. Force-delete
+    // the cluster's pods so the operator recreates them with the new spec.
+    try {
+      const { body: podList } = await coreApi.listNamespacedPod(
+        namespace, undefined, undefined, undefined, undefined,
+        `cnpg.io/cluster=${clusterName}`,
+      );
+      for (const pod of podList.items || []) {
+        const name = pod.metadata?.name;
+        if (!name) continue;
+        try {
+          await coreApi.deleteNamespacedPod(name, namespace);
+        } catch { /* ignore — operator may already be recreating it */ }
+      }
+    } catch { /* ignore — pod listing/deletion is best-effort */ }
   }
 
 

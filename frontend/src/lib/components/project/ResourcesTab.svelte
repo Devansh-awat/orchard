@@ -180,7 +180,7 @@
 	<div class="pj-deployment-grid">
 		{#each databases as db, i (db.id)}
 			{@const ls = db.liveStatus}
-			{@const unhealthy = !!(
+			{@const unhealthy = db.status !== 'restarting' && !!(
 				(ls?.message && /oomkilled|out of memory|crashloopbackoff|back-?off|error/i.test(ls.message)) ||
 				(ls?.lastTerminationReason && ls.lastTerminationReason !== 'Completed') ||
 				((ls?.restartCount ?? 0) >= 5)

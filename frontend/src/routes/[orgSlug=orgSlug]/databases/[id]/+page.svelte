@@ -608,7 +608,7 @@
 			{orgSlug}
 			{deleting}
 			onOpenDeleteModal={openDeleteModal}
-			statusOverride={isUnhealthy ? 'unhealthy' : undefined}
+			statusOverride={database.status === 'restarting' ? undefined : (isUnhealthy ? 'unhealthy' : undefined)}
 		/>
 
 		<DatabaseAlerts

@@ -70,9 +70,27 @@
 	color: #22c55e;
 }
 
-.db-status-pending {
+.db-status-pending,
+.db-status-restarting {
 	background-color: color-mix(in srgb, #f59e0b 15%, transparent);
 	color: #f59e0b;
+}
+
+.db-status-restarting::before {
+	content: '';
+	display: inline-block;
+	width: 0.5rem;
+	height: 0.5rem;
+	border-radius: 9999px;
+	border: 1.5px solid currentColor;
+	border-right-color: transparent;
+	margin-right: 0.375rem;
+	vertical-align: -0.0625rem;
+	animation: db-status-restarting-spin 0.9s linear infinite;
+}
+
+@keyframes db-status-restarting-spin {
+	to { transform: rotate(360deg); }
 }
 
 .db-status-error,

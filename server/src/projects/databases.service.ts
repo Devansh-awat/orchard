@@ -428,6 +428,8 @@ export class DatabasesService {
       } catch { /* ignore */ }
 
       // Reconcile stored status with live cluster state.
+      // 'restarting' flips to 'ready' once the new pod becomes ready — same path
+      // as initial provisioning, just from a different starting state.
       if (liveStatus.ready && database.status !== 'ready' && database.status !== 'restoring') {
         try {
           await this.prisma.database.update({ where: { id: database.id }, data: { status: 'ready' } });

@@ -298,6 +298,10 @@ export class ProjectsService {
       data: {
         cpuRequestMilli: data.cpuRequestMilli,
         memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
+        // Pod is being force-recreated by updateCnpgClusterResources — surface this
+        // in the UI until the new pod is ready (the getDatabase reconciler flips
+        // it back to 'ready' once liveStatus.ready is true).
+        status: 'restarting',
       },
     });
   }

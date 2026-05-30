@@ -29,7 +29,9 @@
 
 	const restartCount = $derived(database.liveStatus?.restartCount ?? 0);
 	const highRestarts = $derived(restartCount >= 5);
-	const hasAlert = $derived(isOOM || isCrashLoop || highRestarts);
+	// Suppress alerts during an in-flight restart — the user just acted to fix this.
+	const isRestarting = $derived(database.status === 'restarting');
+	const hasAlert = $derived(!isRestarting && (isOOM || isCrashLoop || highRestarts));
 
 </script>
 
