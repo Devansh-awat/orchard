@@ -104,7 +104,7 @@ const TOOLS: ToolDef[] = [
   },
   {
     name: 'get_database',
-    description: 'Get database connection info (host, port, user, password, dbname)',
+    description: 'Get database connection info (host, port, user, password, dbname) plus liveStatus with health: ready, phase, restartCount, message (e.g. "OOMKilled"), lastTerminationReason, lastTerminationExitCode, lastTerminationAt. Check liveStatus.message and liveStatus.lastTerminationReason to diagnose why a db is unhealthy — top-level status: "ready" only reflects provisioning state, not runtime health.',
     parameters: {
       type: 'object' as const,
       properties: { databaseId: { type: 'string', description: 'The database UUID' } },

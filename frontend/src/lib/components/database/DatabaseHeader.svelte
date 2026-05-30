@@ -8,12 +8,16 @@
 		orgSlug,
 		deleting,
 		onOpenDeleteModal,
+		statusOverride,
 	}: {
 		database: DatabaseDetail;
 		orgSlug: string;
 		deleting: boolean;
 		onOpenDeleteModal: () => void;
+		statusOverride?: string;
 	} = $props();
+
+	const effectiveStatus = $derived(statusOverride || database.status);
 </script>
 
 {#if database.project && database.project.workspace}
@@ -33,7 +37,7 @@
 				<Database size={16} />
 			</div>
 			<h1 class="db-title">{database.name}</h1>
-			<span class="db-status db-status-{database.status}">{database.status}</span>
+			<span class="db-status db-status-{effectiveStatus}">{effectiveStatus}</span>
 		</div>
 	</div>
 	<button

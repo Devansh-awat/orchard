@@ -213,7 +213,20 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
   server.registerTool(
     'get_database',
     {
-      description: 'Get database details including connection information (host, port, user, password, database name)',
+      description: `Get database details including connection information AND live cluster health.
+
+Returns connection info (host, port, user, password, database name) plus a \`liveStatus\` object with real-time health from Kubernetes:
+- \`ready\`: whether enough instances report ready
+- \`phase\`: CNPG cluster phase
+- \`replicas\` / \`readyReplicas\`: instance counts
+- \`restartCount\`: total postgres container restarts across pods (HIGH NUMBERS = INSTABILITY)
+- \`message\`: current problem reason if any (e.g. "OOMKilled", "CrashLoopBackOff")
+- \`lastTerminationReason\`: last termination reason of the postgres container (e.g. "OOMKilled", "Error"). Present even when the container is currently running — this is how you detect intermittent crashes.
+- \`lastTerminationExitCode\`: exit code from the last termination (137 = OOMKill, 139 = segfault, etc.)
+- \`lastTerminationAt\`: timestamp of last termination
+- \`size\`, \`connections\`: only present when reachable
+
+To diagnose an unhealthy database, check \`liveStatus.message\`, \`liveStatus.lastTerminationReason\`, and \`liveStatus.restartCount\` together. \`status: "ready"\` at the top level reflects only the provisioning state — it can say "ready" while the pod is actively OOM-cycling.`,
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         databaseId: z.string().describe('The database UUID'),

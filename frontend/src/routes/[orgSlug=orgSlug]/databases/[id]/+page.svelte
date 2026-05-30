@@ -597,7 +597,19 @@
 	{:else if error}
 		<div class="db-error">{error}</div>
 	{:else if database}
-		<DatabaseHeader {database} {orgSlug} {deleting} onOpenDeleteModal={openDeleteModal} />
+		{@const ls = database.liveStatus}
+		{@const isUnhealthy = !!(
+			(ls?.message && /oomkilled|out of memory|crashloopbackoff|back-?off|error/i.test(ls.message)) ||
+			(ls?.lastTerminationReason && ls.lastTerminationReason !== 'Completed') ||
+			((ls?.restartCount ?? 0) >= 5)
+		)}
+		<DatabaseHeader
+			{database}
+			{orgSlug}
+			{deleting}
+			onOpenDeleteModal={openDeleteModal}
+			statusOverride={isUnhealthy ? 'unhealthy' : undefined}
+		/>
 
 		<DatabaseAlerts
 			{database}

@@ -75,9 +75,31 @@
 	color: #f59e0b;
 }
 
-.db-status-error {
+.db-status-error,
+.db-status-unhealthy {
 	background-color: color-mix(in srgb, var(--error-text-color) 15%, transparent);
 	color: var(--error-text-color);
+}
+
+.db-status-unhealthy {
+	position: relative;
+}
+
+.db-status-unhealthy::before {
+	content: '';
+	display: inline-block;
+	width: 0.4375rem;
+	height: 0.4375rem;
+	border-radius: 9999px;
+	background-color: var(--error-text-color);
+	margin-right: 0.375rem;
+	vertical-align: 0.0625rem;
+	animation: db-status-unhealthy-pulse 1.4s ease-in-out infinite;
+}
+
+@keyframes db-status-unhealthy-pulse {
+	0%, 100% { opacity: 1; box-shadow: 0 0 0 0 color-mix(in srgb, var(--error-text-color) 50%, transparent); }
+	50% { opacity: 0.5; box-shadow: 0 0 0 4px color-mix(in srgb, var(--error-text-color) 0%, transparent); }
 }
 
 .db-btn {
