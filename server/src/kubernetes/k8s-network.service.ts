@@ -1169,6 +1169,28 @@ export class K8sNetworkService {
         : [];
       const mergedPorts: k8s.V1ContainerPort[] = [];
       const usedSignatures = new Set<string>();
+      const usedNames = new Set<string>();
+
+      const allocateName = (desired: string, fallbackIndex: number): string => {
+        let base = (desired || `port-${fallbackIndex}`).trim().toLowerCase();
+        base = base.replace(/[^a-z0-9-]/g, '-').replace(/^-+|-+$/g, '');
+        if (!base) base = `port-${fallbackIndex}`;
+        if (base.length > 63) base = base.substring(0, 63);
+        if (!usedNames.has(base)) {
+          usedNames.add(base);
+          return base;
+        }
+        let suffix = 1;
+        while (true) {
+          const tag = `-${suffix++}`;
+          const trimmed = base.substring(0, Math.max(1, 63 - tag.length));
+          const candidate = `${trimmed}${tag}`;
+          if (!usedNames.has(candidate)) {
+            usedNames.add(candidate);
+            return candidate;
+          }
+        }
+      };
 
       existingPorts.forEach((port, index) => {
         if (
@@ -1180,18 +1202,18 @@ export class K8sNetworkService {
           const signature = `${port.containerPort}-${protocol}`;
           usedSignatures.add(signature);
           mergedPorts.push({
-            name: port.name || `port-${index + 1}`,
+            name: allocateName(port.name || '', index + 1),
             containerPort: port.containerPort,
             protocol,
           });
         }
       });
 
-      sanitizedPorts.forEach((port) => {
+      sanitizedPorts.forEach((port, index) => {
         const signature = `${port.containerPort}-${port.protocol}`;
         if (!usedSignatures.has(signature)) {
           mergedPorts.push({
-            name: port.name,
+            name: allocateName(port.name || '', existingPorts.length + index + 1),
             containerPort: port.containerPort,
             protocol: port.protocol,
           });
