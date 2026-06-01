@@ -629,23 +629,47 @@ echo "=== Super Build completed ==="
     if (!this.localCacheEnabled) return '';
     return `
 # --- Prune local build cache if disk is getting full ---
+# Two modes:
+#  - >80%: gentle prune to 70%, skipping dirs touched in the last 10 min
+#    (so we don't trample concurrent builds).
+#  - >=90%: critical prune to 50%, ignoring the "recent" guard. The current
+#    build's cache export can write ~hundreds of MB, so leaving headroom
+#    matters more than preserving warm caches for parallel jobs.
 CACHE_ROOT="${this.localCachePath}"
 if [ -d "$CACHE_ROOT" ]; then
   USAGE=$(df "$CACHE_ROOT" | awk 'NR==2 {sub(/%/,"",$5); print $5}')
-  if [ "$USAGE" -gt 80 ] 2>/dev/null; then
+  CRITICAL=0
+  TARGET=70
+  if [ "$USAGE" -ge 90 ] 2>/dev/null; then
+    CRITICAL=1
+    TARGET=50
+    echo "=== Cache disk CRITICAL at \${USAGE}% — aggressive prune to \${TARGET}% ==="
+  elif [ "$USAGE" -gt 80 ] 2>/dev/null; then
     echo "=== Cache disk usage at \${USAGE}% — pruning oldest entries ==="
-    # Prune oldest-first, but skip dirs modified in the last 10 min (active builds)
+  fi
+  if [ "$USAGE" -gt 80 ] 2>/dev/null; then
     ls -1dt "$CACHE_ROOT"/*/ 2>/dev/null | tac | while read -r dir; do
       [ -d "$dir" ] || continue
-      if find "$dir" -maxdepth 0 -mmin -10 2>/dev/null | grep -q .; then continue; fi
+      if [ "$CRITICAL" -eq 0 ]; then
+        if find "$dir" -maxdepth 0 -mmin -10 2>/dev/null | grep -q .; then continue; fi
+      fi
       USAGE=$(df "$CACHE_ROOT" | awk 'NR==2 {sub(/%/,"",$5); print $5}')
-      if [ "$USAGE" -le 70 ]; then
+      if [ "$USAGE" -le "$TARGET" ]; then
         echo "=== Cache pruned down to \${USAGE}% ==="
         break
       fi
       echo "Removing old cache: $dir"
       rm -rf "$dir"
     done
+    # Final guard: if still critical (only one cache dir, can't prune
+    # without nuking our own warm cache), wipe the lot to free space.
+    USAGE=$(df "$CACHE_ROOT" | awk 'NR==2 {sub(/%/,"",$5); print $5}')
+    if [ "$USAGE" -ge 90 ] 2>/dev/null; then
+      echo "=== Cache still at \${USAGE}% after prune — wiping all cache dirs ==="
+      rm -rf "$CACHE_ROOT"/*
+      USAGE=$(df "$CACHE_ROOT" | awk 'NR==2 {sub(/%/,"",$5); print $5}')
+      echo "=== Cache wiped, now at \${USAGE}% ==="
+    fi
   fi
 fi
 # --- End cache prune ---
@@ -1769,6 +1793,33 @@ exit $rc`,
                 5000
               );
               logs += logResponse.body;
+
+              // The pusher sidecar can fail (skopeo push error, auth, registry
+              // unavailable) even when buildkit completed successfully. Its
+              // logs hold the real error message — include them when the job
+              // failed so the user sees why the push didn't go through.
+              const hasPusherContainer = containerStatuses?.some((cs) => cs.name === 'pusher');
+              if (status === 'failed' && hasPusherContainer) {
+                try {
+                  const pusherLog = await coreApi.readNamespacedPodLog(
+                    podName,
+                    this.builderNamespace,
+                    'pusher',
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    undefined,
+                    2000
+                  );
+                  if (pusherLog.body && pusherLog.body.trim().length > 0) {
+                    logs += `\n=== Pusher container logs ===\n${pusherLog.body}`;
+                  }
+                } catch (pusherLogError) {
+                  console.warn(`[ImageBuilder] Could not fetch pusher logs for pod ${podName}:`, pusherLogError.message);
+                }
+              }
             } catch (buildkitLogError) {
               console.warn(`[ImageBuilder] Could not fetch buildkit logs for pod ${podName}:`, buildkitLogError.message);
               
