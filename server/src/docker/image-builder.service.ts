@@ -1050,8 +1050,14 @@ head -n 20 "\${DOCKERFILE}"
         args: [
           `set -ex
 echo "=== Installing curl ==="
-if command -v apt-get >/dev/null 2>&1; then
-  apt-get update && apt-get install -y curl
+if command -v curl >/dev/null 2>&1; then
+  echo "curl already installed, skipping"
+elif command -v apt-get >/dev/null 2>&1; then
+  # Tolerate non-fatal apt cleanup errors (e.g. I/O error closing
+  # /var/lib/apt/extended_states) — verify curl exists after install.
+  apt-get update || true
+  apt-get install -y curl || true
+  command -v curl >/dev/null 2>&1 || { echo "curl install failed"; exit 1; }
 elif command -v apk >/dev/null 2>&1; then
   apk add --no-cache curl
 elif command -v yum >/dev/null 2>&1; then
