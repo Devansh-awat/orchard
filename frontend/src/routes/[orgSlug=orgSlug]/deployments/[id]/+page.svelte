@@ -1380,11 +1380,16 @@
 	function applyDeploymentData(data: any) {
 		const wasUnloaded = !deployment;
 
-			// If deployment transitions to building during the session, open the build modal.
-			// Skip on the first fetch so opening the page on an already-running build doesn't pop the modal.
-			if (!wasUnloaded && data.buildStatus === 'building' && data.githubRepo && !showBuildModal && !showBuildCard) {
-				showBuildModal = true;
-				showBuildCard = false;
+			// If a build is in progress — either transitioning during the session or
+			// already running when the page loaded — surface it immediately. Show the
+			// floating card on first load so we don't blast the modal over the page
+			// the user just navigated to; show the modal when a build kicks off mid-session.
+			if (data.buildStatus === 'building' && data.githubRepo && !showBuildModal && !showBuildCard) {
+				if (wasUnloaded) {
+					showBuildCard = true;
+				} else {
+					showBuildModal = true;
+				}
 				stopBuildPolling();
 				startBuildPolling();
 			}
@@ -1593,7 +1598,7 @@
 	}
 
 	async function fetchBuildLogs() {
-		if (!deployment || deployment.status !== 'building') return;
+		if (!deployment || deployment.buildStatus !== 'building') return;
 
 		buildLogsLoading = true;
 		try {
