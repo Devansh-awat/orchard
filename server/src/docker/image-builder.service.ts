@@ -954,7 +954,7 @@ MASKED_URL="\${MASKED_URL//:\\/\\/github_pat_*@/:\/\/***@}"
 echo "Repository: \$MASKED_URL"
 echo "Branch: ${branch}"
 
-CLONE_OUTPUT=$(GIT_TERMINAL_PROMPT=0 git clone --depth 1 --branch "${branch}" "\$CLONE_URL" /workspace 2>&1) || {
+CLONE_OUTPUT=$(GIT_TERMINAL_PROMPT=0 git clone --depth 1 --recurse-submodules --shallow-submodules --branch "${branch}" "\$CLONE_URL" /workspace 2>&1) || {
   SANITIZED_OUTPUT=$(echo "\$CLONE_OUTPUT" | sed -E 's/(x-access-token:|ghs_|ghp_|github_pat_)[^ @]*/***REDACTED***/g')
   echo "\$SANITIZED_OUTPUT"
   if echo "\$CLONE_OUTPUT" | grep -q "terminal prompts disabled\\|could not read Username\\|Authentication failed\\|403"; then

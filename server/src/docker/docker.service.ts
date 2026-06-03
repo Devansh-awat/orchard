@@ -176,7 +176,7 @@ export class DockerService {
     await this.appendLog(deploymentId, `Cloning repository ${repoUrl} (branch: ${branch})...`);
 
     return new Promise((resolve, reject) => {
-        const cloneProcess = spawn('git', ['clone', '--progress', '--depth', '1', '--branch', branch, cloneUrl, tempDir], {
+        const cloneProcess = spawn('git', ['clone', '--progress', '--depth', '1', '--recurse-submodules', '--shallow-submodules', '--branch', branch, cloneUrl, tempDir], {
           env: {
             ...process.env,
             PATH: process.env.PATH || '/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin',
