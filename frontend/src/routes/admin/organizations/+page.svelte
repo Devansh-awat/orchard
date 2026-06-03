@@ -77,11 +77,21 @@
 	let qDefaultCpu = $state<string>('');
 	let qDefaultMemMi = $state<string>('');
 
+	// Quota connections (shared-pool linking)
+	let qConnections = $state<Array<{ id: string; name: string; slug: string }>>([]);
+	let qConnectSearch = $state('');
+	let qConnectResults = $state<OrgItem[]>([]);
+	let qConnectBusy = $state(false);
+	let qConnectSearchTimeout: ReturnType<typeof setTimeout>;
+
 	async function openQuota(org: OrgItem) {
 		quotaOrg = org;
 		quotaLoading = true;
 		quotaUsage = null;
 		qCpu = qMemMi = qPods = qServices = qDefaultCpu = qDefaultMemMi = '';
+		qConnections = [];
+		qConnectSearch = '';
+		qConnectResults = [];
 		try {
 			const res = await apiFetch(`/apiv1/admin/organizations/${org.id}/quota`);
 			if (!res.ok) throw new Error('Failed to load quota');
@@ -93,6 +103,7 @@
 			qServices = data.org.maxServices ? String(data.org.maxServices) : '';
 			qDefaultCpu = data.org.defaultPodCpuMilli ? String(data.org.defaultPodCpuMilli) : '';
 			qDefaultMemMi = data.org.defaultPodMemoryBytes ? String(Math.round(data.org.defaultPodMemoryBytes / (1024 * 1024))) : '';
+			qConnections = data.connections ?? [];
 		} catch (e) {
 			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed', color: 'error' });
 			quotaOrg = null;
@@ -110,6 +121,92 @@
 		if (!t) return null;
 		const n = parseInt(t, 10);
 		return Number.isFinite(n) && n > 0 ? n : null;
+	}
+
+	function handleConnectSearch() {
+		clearTimeout(qConnectSearchTimeout);
+		qConnectSearchTimeout = setTimeout(async () => {
+			const q = qConnectSearch.trim();
+			if (!q) {
+				qConnectResults = [];
+				return;
+			}
+			try {
+				const params = new URLSearchParams({ page: '1', limit: '8', search: q });
+				const res = await apiFetch(`/apiv1/admin/organizations?${params}`);
+				if (!res.ok) return;
+				const data = await res.json();
+				const connectedIds = new Set(qConnections.map((c) => c.id));
+				qConnectResults = (data.organizations as OrgItem[]).filter(
+					(o) => o.id !== quotaOrg?.id && !connectedIds.has(o.id),
+				);
+			} catch {
+				qConnectResults = [];
+			}
+		}, 250);
+	}
+
+	async function refreshQuota() {
+		if (!quotaOrg) return;
+		const res = await apiFetch(`/apiv1/admin/organizations/${quotaOrg.id}/quota`);
+		if (!res.ok) return;
+		const data = await res.json();
+		quotaUsage = data.usage;
+		qCpu = data.org.cpuLimitMilli ? String(data.org.cpuLimitMilli) : '';
+		qMemMi = data.org.memoryLimitBytes ? String(Math.round(data.org.memoryLimitBytes / (1024 * 1024))) : '';
+		qPods = data.org.maxPods ? String(data.org.maxPods) : '';
+		qServices = data.org.maxServices ? String(data.org.maxServices) : '';
+		qDefaultCpu = data.org.defaultPodCpuMilli ? String(data.org.defaultPodCpuMilli) : '';
+		qDefaultMemMi = data.org.defaultPodMemoryBytes ? String(Math.round(data.org.defaultPodMemoryBytes / (1024 * 1024))) : '';
+		qConnections = data.connections ?? [];
+	}
+
+	async function connectOrg(other: OrgItem) {
+		if (!quotaOrg) return;
+		qConnectBusy = true;
+		try {
+			const res = await apiFetch(`/apiv1/admin/organizations/${quotaOrg.id}/quota/connect`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ otherOrgId: other.id }),
+			});
+			if (!res.ok) {
+				const data = await res.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to connect');
+			}
+			toasts.add({
+				title: 'Connected',
+				description: `${quotaOrg.name} and ${other.name} now share the same quota pool.`,
+				color: 'success',
+			});
+			qConnectSearch = '';
+			qConnectResults = [];
+			await refreshQuota();
+		} catch (e) {
+			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed', color: 'error' });
+		} finally {
+			qConnectBusy = false;
+		}
+	}
+
+	async function disconnectQuota() {
+		if (!quotaOrg) return;
+		qConnectBusy = true;
+		try {
+			const res = await apiFetch(`/apiv1/admin/organizations/${quotaOrg.id}/quota/disconnect`, {
+				method: 'POST',
+			});
+			if (!res.ok) {
+				const data = await res.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to disconnect');
+			}
+			toasts.add({ title: 'Disconnected', description: 'Quota pool is no longer shared.', color: 'success' });
+			await refreshQuota();
+		} catch (e) {
+			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed', color: 'error' });
+		} finally {
+			qConnectBusy = false;
+		}
 	}
 
 	async function saveQuota() {
@@ -704,6 +801,71 @@
 						Default memory / pod (MiB)
 						<input type="number" bind:value={qDefaultMemMi} placeholder="128" class="input w-full mt-1" />
 					</label>
+				</div>
+
+				<h4 class="text-sm font-semibold mt-4 mb-2">Connected organizations</h4>
+				<p class="text-xs mb-2" style="color: var(--surface-muted);">
+					Connected orgs mirror the same caps and draw from the <strong>same usage pool</strong>.
+					Connecting org A (10 CPU) to org B means both show 10 CPU, but the sum of their usage
+					still cannot exceed 10.
+				</p>
+
+				{#if qConnections.length > 0}
+					<div class="space-y-1 mb-3">
+						{#each qConnections as conn}
+							<div
+								class="flex items-center justify-between rounded-lg border px-3 py-2 text-sm"
+								style="border-color: var(--surface-border);"
+							>
+								<div>
+									<div class="font-medium">{conn.name}</div>
+									<div class="font-mono text-xs" style="color: var(--surface-muted);">{conn.slug}</div>
+								</div>
+								<button
+									type="button"
+									onclick={disconnectQuota}
+									disabled={qConnectBusy}
+									class="btn btn-ghost btn-sm text-red-500"
+									title="Disconnect from shared pool"
+								>
+									<X class="h-4 w-4" />
+								</button>
+							</div>
+						{/each}
+					</div>
+				{:else}
+					<p class="text-xs mb-2 italic" style="color: var(--surface-muted);">Not connected to any other org.</p>
+				{/if}
+
+				<div class="relative">
+					<input
+						type="text"
+						bind:value={qConnectSearch}
+						oninput={handleConnectSearch}
+						placeholder="Search for an organization to connect..."
+						class="input w-full"
+					/>
+					{#if qConnectResults.length > 0}
+						<div
+							class="mt-1 rounded-lg border overflow-hidden"
+							style="border-color: var(--surface-border); background-color: var(--center-channel-bg);"
+						>
+							{#each qConnectResults as r}
+								<button
+									type="button"
+									onclick={() => connectOrg(r)}
+									disabled={qConnectBusy}
+									class="w-full text-left px-3 py-2 text-sm hover:bg-[color-mix(in_srgb,var(--surface-border)_20%,transparent)] flex items-center justify-between"
+								>
+									<span>
+										<span class="font-medium">{r.name}</span>
+										<span class="font-mono text-xs ml-2" style="color: var(--surface-muted);">{r.slug}</span>
+									</span>
+									<Plus class="h-4 w-4" />
+								</button>
+							{/each}
+						</div>
+					{/if}
 				</div>
 
 				<div class="mt-6 flex justify-end gap-2">

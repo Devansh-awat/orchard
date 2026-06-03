@@ -1,4 +1,5 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { K8sNamespaceService } from '../kubernetes/k8s-namespace.service';
@@ -133,6 +134,24 @@ export class QuotasService {
     );
   }
 
+  // Returns namespaces for `organizationId` plus any orgs sharing its quotaGroupId.
+  // Linked orgs share both the cap and the usage pool — total usage is summed across them.
+  private async getQuotaGroupNamespaces(organizationId: string): Promise<string[]> {
+    const self = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { quotaGroupId: true, projects: { select: { namespace: true } } },
+    });
+    if (!self) return [];
+    const namespaces = self.projects.map((p) => p.namespace);
+    if (!self.quotaGroupId) return namespaces;
+    const others = await this.prisma.organization.findMany({
+      where: { quotaGroupId: self.quotaGroupId, id: { not: organizationId } },
+      select: { projects: { select: { namespace: true } } },
+    });
+    for (const o of others) for (const p of o.projects) namespaces.push(p.namespace);
+    return namespaces;
+  }
+
   // Org-wide admission check used at deploy time. Throws if the requested delta would push
   // the org past its org-wide cap. Additive resources only — cpu/memory.
   async enforceOrgCapForNewPod(
@@ -145,7 +164,6 @@ export class QuotasService {
         cpuLimitMilli: true,
         memoryLimitBytes: true,
         maxPods: true,
-        projects: { select: { namespace: true } },
       },
     });
     if (!org) return;
@@ -153,7 +171,7 @@ export class QuotasService {
     const capMem = org.memoryLimitBytes ? Number(org.memoryLimitBytes) : null;
     const capPods = org.maxPods;
     if (!capCpu && !capMem && !capPods) return;
-    const namespaces = org.projects.map((p) => p.namespace);
+    const namespaces = await this.getQuotaGroupNamespaces(organizationId);
     const usage = await this.k8sNamespace.getOrgUsage(namespaces);
 
     if (capCpu && usage.cpuMilli + requested.cpuMilli > capCpu) {
@@ -193,11 +211,13 @@ export class QuotasService {
         maxServices: true,
         defaultPodCpuMilli: true,
         defaultPodMemoryBytes: true,
-        projects: { select: { namespace: true } },
+        quotaGroupId: true,
       },
     });
     if (!org) throw new NotFoundException('Org not found');
-    const usage = await this.k8sNamespace.getOrgUsage(org.projects.map((p) => p.namespace));
+    const namespaces = await this.getQuotaGroupNamespaces(organizationId);
+    const usage = await this.k8sNamespace.getOrgUsage(namespaces);
+    const connections = await this.getOrgConnections(organizationId);
     return {
       org: {
         id: org.id,
@@ -208,33 +228,161 @@ export class QuotasService {
         maxServices: org.maxServices,
         defaultPodCpuMilli: org.defaultPodCpuMilli,
         defaultPodMemoryBytes: org.defaultPodMemoryBytes ? Number(org.defaultPodMemoryBytes) : null,
+        quotaGroupId: org.quotaGroupId,
       },
       usage,
+      connections,
     };
+  }
+
+  // List other orgs sharing this org's quotaGroupId (empty if not linked).
+  async getOrgConnections(organizationId: string): Promise<Array<{ id: string; name: string; slug: string }>> {
+    const self = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { quotaGroupId: true },
+    });
+    if (!self?.quotaGroupId) return [];
+    const others = await this.prisma.organization.findMany({
+      where: { quotaGroupId: self.quotaGroupId, id: { not: organizationId } },
+      select: { id: true, name: true, slug: true },
+      orderBy: { name: 'asc' },
+    });
+    return others;
+  }
+
+  // Connect two orgs into a shared-quota group. Caps from `primaryOrgId` are mirrored
+  // onto the other org. If either is already in a group, the groups merge.
+  async linkOrganizations(primaryOrgId: string, otherOrgId: string) {
+    if (primaryOrgId === otherOrgId) {
+      throw new ForbiddenException('Cannot connect an organization to itself');
+    }
+    const [primary, other] = await Promise.all([
+      this.prisma.organization.findUnique({
+        where: { id: primaryOrgId },
+        select: {
+          id: true,
+          quotaGroupId: true,
+          cpuLimitMilli: true,
+          memoryLimitBytes: true,
+          maxPods: true,
+          maxServices: true,
+          defaultPodCpuMilli: true,
+          defaultPodMemoryBytes: true,
+        },
+      }),
+      this.prisma.organization.findUnique({
+        where: { id: otherOrgId },
+        select: { id: true, quotaGroupId: true },
+      }),
+    ]);
+    if (!primary) throw new NotFoundException('Primary org not found');
+    if (!other) throw new NotFoundException('Other org not found');
+
+    // Pick the group id: reuse an existing one if present, otherwise mint a new one.
+    const groupId = primary.quotaGroupId ?? other.quotaGroupId ?? randomUUID();
+
+    // Mirror caps from primary onto every org joining the group (including reassigned ones).
+    const targetIds = new Set<string>([primary.id, other.id]);
+    if (primary.quotaGroupId) {
+      const existing = await this.prisma.organization.findMany({
+        where: { quotaGroupId: primary.quotaGroupId },
+        select: { id: true },
+      });
+      for (const o of existing) targetIds.add(o.id);
+    }
+    if (other.quotaGroupId && other.quotaGroupId !== primary.quotaGroupId) {
+      const existing = await this.prisma.organization.findMany({
+        where: { quotaGroupId: other.quotaGroupId },
+        select: { id: true },
+      });
+      for (const o of existing) targetIds.add(o.id);
+    }
+
+    await this.prisma.organization.updateMany({
+      where: { id: { in: Array.from(targetIds) } },
+      data: {
+        quotaGroupId: groupId,
+        cpuLimitMilli: primary.cpuLimitMilli,
+        memoryLimitBytes: primary.memoryLimitBytes,
+        maxPods: primary.maxPods,
+        maxServices: primary.maxServices,
+        defaultPodCpuMilli: primary.defaultPodCpuMilli,
+        defaultPodMemoryBytes: primary.defaultPodMemoryBytes,
+      },
+    });
+    // Reapply quotas to every project of every org in the group so K8s ResourceQuotas match.
+    await Promise.allSettled(Array.from(targetIds).map((id) => this.applyAllProjectsForOrg(id)));
+    return { quotaGroupId: groupId, orgIds: Array.from(targetIds) };
+  }
+
+  // Remove an org from its quota group. If only one org remains, clear that one too.
+  async unlinkOrganization(organizationId: string) {
+    const self = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { quotaGroupId: true },
+    });
+    if (!self?.quotaGroupId) return { quotaGroupId: null };
+    const groupId = self.quotaGroupId;
+    await this.prisma.organization.update({
+      where: { id: organizationId },
+      data: { quotaGroupId: null },
+    });
+    const remaining = await this.prisma.organization.findMany({
+      where: { quotaGroupId: groupId },
+      select: { id: true },
+    });
+    if (remaining.length <= 1) {
+      await this.prisma.organization.updateMany({
+        where: { quotaGroupId: groupId },
+        data: { quotaGroupId: null },
+      });
+    }
+    // Reapply quotas since the shared-pool perspective changed for everyone touched.
+    const touched = [organizationId, ...remaining.map((r) => r.id)];
+    await Promise.allSettled(touched.map((id) => this.applyAllProjectsForOrg(id)));
+    return { quotaGroupId: null };
   }
 
   async updateOrgCaps(organizationId: string, data: Partial<Caps> & {
     defaultPodCpuMilli?: number | null;
     defaultPodMemoryBytes?: number | null;
   }) {
-    const org = await this.prisma.organization.update({
+    const self = await this.prisma.organization.findUnique({
       where: { id: organizationId },
-      data: {
-        ...(data.cpuLimitMilli !== undefined && { cpuLimitMilli: data.cpuLimitMilli }),
-        ...(data.memoryLimitBytes !== undefined && {
-          memoryLimitBytes: data.memoryLimitBytes === null ? null : BigInt(data.memoryLimitBytes),
-        }),
-        ...(data.maxPods !== undefined && { maxPods: data.maxPods }),
-        ...(data.maxServices !== undefined && { maxServices: data.maxServices }),
-        ...(data.defaultPodCpuMilli !== undefined && { defaultPodCpuMilli: data.defaultPodCpuMilli }),
-        ...(data.defaultPodMemoryBytes !== undefined && {
-          defaultPodMemoryBytes:
-            data.defaultPodMemoryBytes === null ? null : BigInt(data.defaultPodMemoryBytes),
-        }),
-      },
+      select: { quotaGroupId: true },
     });
-    await this.applyAllProjectsForOrg(organizationId);
-    return org;
+    if (!self) throw new NotFoundException('Org not found');
+
+    const update = {
+      ...(data.cpuLimitMilli !== undefined && { cpuLimitMilli: data.cpuLimitMilli }),
+      ...(data.memoryLimitBytes !== undefined && {
+        memoryLimitBytes: data.memoryLimitBytes === null ? null : BigInt(data.memoryLimitBytes),
+      }),
+      ...(data.maxPods !== undefined && { maxPods: data.maxPods }),
+      ...(data.maxServices !== undefined && { maxServices: data.maxServices }),
+      ...(data.defaultPodCpuMilli !== undefined && { defaultPodCpuMilli: data.defaultPodCpuMilli }),
+      ...(data.defaultPodMemoryBytes !== undefined && {
+        defaultPodMemoryBytes:
+          data.defaultPodMemoryBytes === null ? null : BigInt(data.defaultPodMemoryBytes),
+      }),
+    };
+
+    // Connected orgs share one set of caps — mirror the change across the group.
+    const targetIds = self.quotaGroupId
+      ? (
+          await this.prisma.organization.findMany({
+            where: { quotaGroupId: self.quotaGroupId },
+            select: { id: true },
+          })
+        ).map((o) => o.id)
+      : [organizationId];
+
+    await this.prisma.organization.updateMany({
+      where: { id: { in: targetIds } },
+      data: update,
+    });
+    await Promise.allSettled(targetIds.map((id) => this.applyAllProjectsForOrg(id)));
+    return this.prisma.organization.findUnique({ where: { id: organizationId } });
   }
 
   async updateProjectCaps(projectId: string, data: Partial<Caps>) {

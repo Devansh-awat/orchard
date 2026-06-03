@@ -248,6 +248,10 @@ model Organization {
   defaultMemberCpuMilli    Int?    @map("default_member_cpu_milli")
   defaultMemberMemoryBytes BigInt? @map("default_member_memory_bytes")
 
+  // Connected orgs share the same caps and the same usage pool. All orgs with the
+  // same quotaGroupId mirror caps and aggregate usage when admission-checking.
+  quotaGroupId String? @map("quota_group_id") @db.Uuid
+
   creator     User?                    @relation("OrganizationCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   members     OrganizationMember[]
   invitations OrganizationInvitation[]
@@ -255,6 +259,7 @@ model Organization {
   ssoConfig   SsoConfig?
   nodeAssignments OrgNodeAssignment[]
 
+  @@index([quotaGroupId], map: "idx_organizations_quota_group")
   @@map("organizations")
 }
 

@@ -40,6 +40,18 @@ export class AdminQuotasController {
   async updateOrgQuota(@Param('id') id: string, @Body() body: CapBody) {
     return this.quotas.updateOrgCaps(id, body);
   }
+
+  // Connect this org's quota pool with another org. Both orgs share caps + usage.
+  @Post(':id/quota/connect')
+  async connectQuota(@Param('id') id: string, @Body() body: { otherOrgId: string }) {
+    return this.quotas.linkOrganizations(id, body.otherOrgId);
+  }
+
+  // Disconnect this org from its quota group.
+  @Post(':id/quota/disconnect')
+  async disconnectQuota(@Param('id') id: string) {
+    return this.quotas.unlinkOrganization(id);
+  }
 }
 
 // Super-admin: backfill resources on pre-existing deployments + databases.
