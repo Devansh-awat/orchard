@@ -77,8 +77,21 @@ export const trustedSecurityContext = () => ({
 });
 
 // Default hardened context for untrusted tenant code.
+//
+// We drop ALL capabilities, then add back the minimal set official images
+// (postgres, nginx, mysql, redis, …) need for their entrypoint's
+// root→service-user drop via gosu/su-exec/setpriv: SETUID/SETGID for the
+// uid/gid transition itself, CHOWN/FOWNER/DAC_OVERRIDE to chown+chmod the
+// data dir before dropping. These caps are enforced by gVisor's Sentry
+// (userspace kernel), not the host kernel — granting them inside the
+// sandbox confers no host privilege, and allowPrivilegeEscalation=false
+// (no_new_privs) still blocks re-gaining privileges via setuid binaries
+// or file capabilities after the drop.
 export const hardenedSecurityContext = () => ({
   allowPrivilegeEscalation: false,
-  capabilities: { drop: ['ALL'] },
+  capabilities: {
+    drop: ['ALL'],
+    add: ['SETUID', 'SETGID', 'CHOWN', 'FOWNER', 'DAC_OVERRIDE'],
+  },
   seccompProfile: { type: 'RuntimeDefault' as const },
 });

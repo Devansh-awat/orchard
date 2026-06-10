@@ -562,8 +562,10 @@ export class K8sWorkloadService {
         env: envList,
         volumeMounts: volumeMounts.length > 0 ? volumeMounts : undefined,
         // Defence-in-depth even when the pod runs under gVisor (runsc):
-        // drop every Linux capability, refuse setuid privilege escalation
-        // mid-process, and apply the runtime's default seccomp profile.
+        // drop every Linux capability except the minimal entrypoint
+        // uid-drop set (see trusted-images.ts), refuse setuid privilege
+        // escalation mid-process, and apply the runtime's default seccomp
+        // profile.
         // We deliberately do NOT force runAsNonRoot — many tenant images
         // still chown/listen on :80 as root and would crashloop. gVisor
         // already neuters root-in-container by virtualising the kernel,
