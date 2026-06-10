@@ -18,6 +18,7 @@ import { AuthorizationService } from '../auth/authorization.service';
 import { AuditService } from '../audit/audit.service';
 import { ProjectAccessService } from './project-access.service';
 import { DeploymentsService } from './deployments.service';
+import { FaviconService } from './favicon.service';
 import { ProjectsService } from './projects.service';
 import { formatSlug } from './projects.utils';
 import { randomUUID } from 'crypto';
@@ -39,7 +40,24 @@ export class IngressService {
     private readonly deployments: DeploymentsService,
     @Inject(forwardRef(() => ProjectsService))
     private readonly projects: ProjectsService,
+    private readonly faviconService: FaviconService,
   ) {}
+
+  /**
+   * Fire-and-forget favicon (re)fetch for a freshly created or updated
+   * ingress host, so dashboard icons appear without waiting for the daily
+   * refresh job. Deliberately not awaited — ingress mutations must never
+   * fail or slow down because a favicon fetch is slow.
+   */
+  private warmFavicon(host?: string | null) {
+    const domain = host?.split('/')[0]?.trim().toLowerCase();
+    if (!domain) return;
+    // Slight delay so the site behind a brand-new ingress has a chance to
+    // start answering before we probe it.
+    setTimeout(() => {
+      this.faviconService.refreshFavicon(domain).catch(() => {});
+    }, 10_000);
+  }
 
   async validateIngressDns(domain: string): Promise<{ valid: boolean; message: string }> {
     const expectedCname = process.env.INGRESS_CNAME || 'ingress.lfdl.ink';
@@ -483,6 +501,8 @@ export class IngressService {
       },
     });
 
+    this.warmFavicon(rawHost);
+
     void this.audit.log({
       action: 'ingress.created',
       actorUserId: user.id,
@@ -690,6 +710,8 @@ export class IngressService {
         ingresses: { include: { service: true } },
       },
     });
+
+    this.warmFavicon(rawHost);
 
     void this.audit.log({
       action: 'ingress.created',
@@ -907,6 +929,8 @@ export class IngressService {
         }
       }
 
+      this.warmFavicon(rawHost);
+
       void this.audit.log({
         action: 'ingress.updated',
         actorUserId: user.id,
@@ -1011,6 +1035,8 @@ export class IngressService {
       });
       throw e;
     }
+
+    this.warmFavicon(rawHost);
 
     void this.audit.log({
       action: 'ingress.created',
@@ -1356,6 +1382,8 @@ export class IngressService {
         });
       }
     }
+
+    this.warmFavicon(rawHost);
 
     void this.audit.log({
       action: 'ingress.updated',
@@ -1911,6 +1939,8 @@ export class IngressService {
         },
       },
     });
+
+    this.warmFavicon(rawHost);
 
     void this.audit.log({
       action: 'ingress.updated',

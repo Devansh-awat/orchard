@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Client, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
 import * as dns from 'dns';
@@ -130,7 +131,9 @@ export class FaviconService {
 
   // In-memory cache to avoid repeated R2 checks within the same process lifetime
   private memoryCache = new Map<string, { url: string | null; ts: number }>();
-  private static MEMORY_TTL = 60 * 60 * 1000; // 1h in-memory
+  // Same idea for og:image banners (key: domain)
+  private bannerCache = new Map<string, { url: string | null; ts: number }>();
+  private static MEMORY_TTL = 24 * 60 * 60 * 1000; // 24h in-memory
   private pendingFetches = new Map<string, Promise<string | null>>();
 
   constructor(private readonly prisma: PrismaService) {}
@@ -205,38 +208,155 @@ export class FaviconService {
     }
   }
 
+  /**
+   * Non-blocking favicon lookup for bulk callers (e.g. the org overview).
+   * Returns the URL when it is already known (memory cache or R2); on a cold
+   * domain it kicks off the slow fetch-and-store in the background and
+   * returns null so the caller never waits on an external site.
+   */
+  async peekFavicon(domain: string): Promise<string | null> {
+    const cached = this.memoryCache.get(domain);
+    if (cached && Date.now() - cached.ts < FaviconService.MEMORY_TTL) {
+      return cached.url;
+    }
+
+    this.initS3();
+    if (!this.s3Client || !this.bucketName) return null;
+
+    const r2Key = `favicons/${domain}.png`;
+    try {
+      await this.s3Client.send(new HeadObjectCommand({
+        Bucket: this.bucketName,
+        Key: r2Key,
+      }));
+      const url = `${this.publicUrl}/${r2Key}`;
+      this.memoryCache.set(domain, { url, ts: Date.now() });
+      return url;
+    } catch {
+      // Not in R2 — warm it in the background, don't block the caller.
+      if (!this.pendingFetches.has(domain)) {
+        const p = this.fetchAndStore(domain, r2Key);
+        this.pendingFetches.set(domain, p);
+        p.catch(() => null).finally(() => this.pendingFetches.delete(domain));
+      }
+      return null;
+    }
+  }
+
+  /**
+   * Force a re-fetch of a domain's favicon, overwriting any R2 copy.
+   * Used when an ingress is created/updated and by the daily refresh job.
+   * On failure the stale memory entry is dropped (not nulled) so readers
+   * fall back to the existing R2 object instead of losing a working icon.
+   */
+  async refreshFavicon(domain: string): Promise<string | null> {
+    if (!/^[a-z0-9.-]+\.[a-z]{2,}$/i.test(domain)) return null;
+    const existing = this.pendingFetches.get(domain);
+    if (existing) return existing;
+
+    this.initS3();
+    const r2Key = `favicons/${domain}.png`;
+    const p = this.fetchAndStore(domain, r2Key);
+    this.pendingFetches.set(domain, p);
+    try {
+      const url = await p;
+      if (!url) this.memoryCache.delete(domain);
+      return url;
+    } finally {
+      this.pendingFetches.delete(domain);
+    }
+  }
+
+  /**
+   * Daily sweep: re-fetch favicons for every ingress host so changed icons
+   * propagate and newly-reachable sites get picked up.
+   */
+  @Cron(CronExpression.EVERY_DAY_AT_4AM)
+  async refreshAllFavicons() {
+    let rows: { host: string | null }[];
+    try {
+      rows = await this.prisma.ingress.findMany({ select: { host: true } });
+    } catch (err) {
+      this.logger.warn(`Favicon refresh: failed to list ingresses: ${err instanceof Error ? err.message : err}`);
+      return;
+    }
+    const domains = [
+      ...new Set(
+        rows
+          .map((r) => r.host?.split('/')[0]?.toLowerCase())
+          .filter((d): d is string => !!d && /^[a-z0-9.-]+\.[a-z]{2,}$/i.test(d)),
+      ),
+    ];
+    this.logger.log(`Daily favicon refresh: ${domains.length} domains`);
+    const BATCH = 5;
+    for (let i = 0; i < domains.length; i += BATCH) {
+      await Promise.all(
+        domains.slice(i, i + BATCH).map((d) => this.refreshFavicon(d).catch(() => null)),
+      );
+    }
+    this.logger.log('Daily favicon refresh complete');
+  }
+
+  /** Resolve many domains at once without blocking on cold fetches. */
+  async peekFavicons(domains: string[]): Promise<Record<string, string | null>> {
+    const unique = [...new Set(domains)];
+    const entries = await Promise.all(
+      unique.map(async (d) => [d, await this.peekFavicon(d)] as const),
+    );
+    return Object.fromEntries(entries);
+  }
+
   private async fetchAndStore(domain: string, r2Key: string): Promise<string | null> {
     try {
       // SSRF guard: refuse internal/private targets before issuing any fetch.
       await assertPublicDomain(domain, this.logger);
 
-      // Fetch the page HTML from the domain. 5-second hard timeout.
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
+      // Fetch the page HTML from the domain. 5-second hard timeout per hop.
+      const fetchPage = async (url: string): Promise<Response> => {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        try {
+          return await fetch(url, {
+            signal: controller.signal,
+            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OrchardBot/1.0)' },
+            // Redirects handled manually below: we only follow same-origin
+            // hops — a cross-host 3xx Location could rebind to an internal
+            // host that would bypass our pre-resolution check.
+            redirect: 'manual',
+          });
+        } finally {
+          clearTimeout(timeout);
+        }
+      };
 
-      let response: Response;
-      try {
-        response = await fetch(`https://${domain}`, {
-          signal: controller.signal,
-          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OrchardBot/1.0)' },
-          // Do NOT follow redirects: a 3xx Location could rebind to an
-          // internal host that would bypass our pre-resolution check.
-          redirect: 'manual',
-        });
-      } finally {
-        clearTimeout(timeout);
+      let response = await fetchPage(`https://${domain}`);
+      // Follow same-origin redirects (e.g. / → /dashboard) up to 3 hops.
+      // Cross-origin redirects are not followed; we fall through to the
+      // /favicon.ico fallback instead of giving up.
+      for (let hop = 0; hop < 3 && response.status >= 300 && response.status < 400; hop++) {
+        const loc = response.headers.get('location');
+        if (!loc) break;
+        let next: URL;
+        try {
+          next = new URL(loc, `https://${domain}/`);
+        } catch {
+          break;
+        }
+        if (next.protocol !== 'https:' || next.hostname.toLowerCase() !== domain.toLowerCase()) {
+          this.logger.warn(`Not following cross-origin redirect from ${domain} → ${next.hostname}`);
+          break;
+        }
+        response = await fetchPage(next.href);
       }
 
-      if (response.status >= 300 && response.status < 400) {
-        this.logger.warn(`Refusing to follow redirect from ${domain} (status ${response.status})`);
-        this.memoryCache.set(domain, { url: null, ts: Date.now() });
-        return null;
-      }
+      const html = response.ok ? await response.text() : '';
 
-      const html = await response.text();
+      // Banner (og:image / twitter:image) rides along on the same HTML fetch.
+      // Fire-and-forget: banner failures must never affect the favicon result.
+      void this.storeBanner(domain, html).catch(() => {});
 
       // Parse icon URLs from HTML
-      const iconUrl = this.parseIconFromHtml(html, domain);
+      const iconUrl = html ? this.parseIconFromHtml(html, domain) : null;
       if (!iconUrl) {
         // Try /favicon.ico as last resort
         const fallbackUrl = `https://${domain}/favicon.ico`;
@@ -261,6 +381,125 @@ export class FaviconService {
       this.memoryCache.set(domain, { url: null, ts: Date.now() });
       return null;
     }
+  }
+
+  private resolveHtmlUrl(href: string, domain: string): string {
+    if (href.startsWith('//')) return 'https:' + href;
+    if (href.startsWith('/')) return `https://${domain}${href}`;
+    if (!/^https?:/i.test(href)) return `https://${domain}/${href}`;
+    return href;
+  }
+
+  /** Extract the page's social-preview image (og:image > twitter:image). */
+  private parseBannerFromHtml(html: string, domain: string): string | null {
+    const candidates: { url: string; priority: number }[] = [];
+    const metaRegex = /<meta\s[^>]*>/gi;
+    let m: RegExpExecArray | null;
+    while ((m = metaRegex.exec(html)) !== null) {
+      const tag = m[0];
+      const prop = tag
+        .match(/(?:property|name)=["']([^"']+)["']/i)?.[1]
+        ?.toLowerCase();
+      if (!prop) continue;
+      let priority = -1;
+      if (prop === 'og:image' || prop === 'og:image:url' || prop === 'og:image:secure_url') priority = 2;
+      else if (prop === 'twitter:image' || prop === 'twitter:image:src') priority = 1;
+      if (priority < 0) continue;
+      const content = tag.match(/content=["']([^"']+)["']/i)?.[1];
+      if (!content) continue;
+      candidates.push({ url: this.resolveHtmlUrl(content, domain), priority });
+    }
+    if (candidates.length === 0) return null;
+    candidates.sort((a, b) => b.priority - a.priority);
+    return candidates[0].url;
+  }
+
+  private async resizeBanner(
+    buffer: Buffer,
+    contentType: string,
+  ): Promise<{ buffer: Buffer; contentType: string }> {
+    try {
+      const sharp = (await import('sharp')).default;
+      const resized = await sharp(buffer)
+        .resize(1280, 720, { fit: 'inside', withoutEnlargement: true })
+        .jpeg({ quality: 82 })
+        .toBuffer();
+      if (resized.length < buffer.length) {
+        return { buffer: resized, contentType: 'image/jpeg' };
+      }
+    } catch {
+      // sharp missing or unsupported input — store as-is
+    }
+    return { buffer, contentType };
+  }
+
+  /** Download + store the page's og:image banner. Keyed banners/<domain>.png */
+  private async storeBanner(domain: string, html: string): Promise<void> {
+    const setNull = () => this.bannerCache.set(domain, { url: null, ts: Date.now() });
+    try {
+      const bannerUrl = html ? this.parseBannerFromHtml(html, domain) : null;
+      if (!bannerUrl) return setNull();
+      const img = await this.downloadImage(bannerUrl);
+      if (!img) return setNull();
+      if (!this.s3Client || !this.bucketName) return setNull();
+      const { buffer, contentType } = await this.resizeBanner(img.buffer, img.contentType);
+      const key = `banners/${domain}.png`;
+      await this.s3Client.send(new PutObjectCommand({
+        Bucket: this.bucketName,
+        Key: key,
+        Body: buffer,
+        ContentType: contentType,
+        CacheControl: 'public, max-age=604800', // 7 days
+      }));
+      const url = `${this.publicUrl}/${key}`;
+      this.logger.log(`Cached banner for ${domain} → ${url}`);
+      this.bannerCache.set(domain, { url, ts: Date.now() });
+    } catch (err) {
+      this.logger.warn(`Failed to store banner for ${domain}: ${err instanceof Error ? err.message : err}`);
+      setNull();
+    }
+  }
+
+  /**
+   * Non-blocking banner lookup, mirroring peekFavicon: memory cache → R2
+   * HEAD → background fetch (shared with the favicon pipeline) + null.
+   */
+  async peekBanner(domain: string): Promise<string | null> {
+    const cached = this.bannerCache.get(domain);
+    if (cached && Date.now() - cached.ts < FaviconService.MEMORY_TTL) {
+      return cached.url;
+    }
+
+    this.initS3();
+    if (!this.s3Client || !this.bucketName) return null;
+
+    const key = `banners/${domain}.png`;
+    try {
+      await this.s3Client.send(new HeadObjectCommand({
+        Bucket: this.bucketName,
+        Key: key,
+      }));
+      const url = `${this.publicUrl}/${key}`;
+      this.bannerCache.set(domain, { url, ts: Date.now() });
+      return url;
+    } catch {
+      // fetchAndStore extracts the banner alongside the favicon
+      if (!this.pendingFetches.has(domain)) {
+        const p = this.fetchAndStore(domain, `favicons/${domain}.png`);
+        this.pendingFetches.set(domain, p);
+        p.catch(() => null).finally(() => this.pendingFetches.delete(domain));
+      }
+      return null;
+    }
+  }
+
+  /** Resolve many banner domains at once without blocking on cold fetches. */
+  async peekBanners(domains: string[]): Promise<Record<string, string | null>> {
+    const unique = [...new Set(domains)];
+    const entries = await Promise.all(
+      unique.map(async (d) => [d, await this.peekBanner(d)] as const),
+    );
+    return Object.fromEntries(entries);
   }
 
   private parseIconFromHtml(html: string, domain: string): string | null {
@@ -318,41 +557,52 @@ export class FaviconService {
 
   private async downloadImage(url: string): Promise<{ buffer: Buffer; contentType: string } | null> {
     try {
-      // Validate scheme and host BEFORE issuing the fetch — icon URLs from
-      // parsed HTML can target arbitrary hosts and must be re-checked.
-      let parsed: URL;
-      try {
-        parsed = new URL(url);
-      } catch {
-        return null;
-      }
-      if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
-        return null;
-      }
-      try {
-        await assertPublicDomain(parsed.hostname, this.logger);
-      } catch (e: any) {
-        this.logger.warn(`Refusing to fetch image from ${url}: ${e?.message || e}`);
-        return null;
+      // Follow redirects manually (CDNs commonly 3xx image URLs), validating
+      // scheme + hostname against private/internal space on EVERY hop — image
+      // URLs from parsed HTML can target arbitrary hosts and a redirect could
+      // otherwise rebind to internal space.
+      let current = url;
+      let res: Response | null = null;
+      for (let hop = 0; hop <= 3; hop++) {
+        let parsed: URL;
+        try {
+          parsed = new URL(current);
+        } catch {
+          return null;
+        }
+        if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
+          return null;
+        }
+        try {
+          await assertPublicDomain(parsed.hostname, this.logger);
+        } catch (e: any) {
+          this.logger.warn(`Refusing to fetch image from ${current}: ${e?.message || e}`);
+          return null;
+        }
+
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 5000);
+        try {
+          res = await fetch(current, {
+            signal: controller.signal,
+            headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OrchardBot/1.0)' },
+            redirect: 'manual',
+          });
+        } finally {
+          clearTimeout(timeout);
+        }
+
+        if (res.status >= 300 && res.status < 400) {
+          const loc = res.headers.get('location');
+          if (!loc) return null;
+          current = new URL(loc, current).href;
+          res = null;
+          continue;
+        }
+        break;
       }
 
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 5000);
-
-      let res: Response;
-      try {
-        res = await fetch(url, {
-          signal: controller.signal,
-          headers: { 'User-Agent': 'Mozilla/5.0 (compatible; OrchardBot/1.0)' },
-          // Don't follow redirects — a 3xx could rebind to internal space.
-          redirect: 'manual',
-        });
-      } finally {
-        clearTimeout(timeout);
-      }
-
-      if (res.status >= 300 && res.status < 400) return null;
-      if (!res.ok) return null;
+      if (!res || !res.ok) return null;
 
       const contentType = res.headers.get('content-type') || 'image/png';
 
@@ -373,6 +623,30 @@ export class FaviconService {
     }
   }
 
+  // Downscale icons before storing — apple-touch-icons can be 512px/250KB+
+  // while the dashboard renders them at ~20px. Falls back to the original
+  // bytes if sharp is unavailable or the format is unsupported (e.g. some
+  // .ico variants).
+  private async resizeIcon(
+    buffer: Buffer,
+    contentType: string,
+  ): Promise<{ buffer: Buffer; contentType: string }> {
+    try {
+      const sharp = (await import('sharp')).default;
+      const resized = await sharp(buffer)
+        .resize(64, 64, { fit: 'inside', withoutEnlargement: true })
+        .png()
+        .toBuffer();
+      // Only keep the resized version when it actually shrinks the payload.
+      if (resized.length < buffer.length) {
+        return { buffer: resized, contentType: 'image/png' };
+      }
+    } catch {
+      // sharp missing or unsupported input — store as-is
+    }
+    return { buffer, contentType };
+  }
+
   private async storeToR2(domain: string, key: string, buffer: Buffer, contentType: string): Promise<string | null> {
     if (!this.s3Client || !this.bucketName) {
       // R2 not configured — return the original URL from memory
@@ -380,6 +654,8 @@ export class FaviconService {
       this.memoryCache.set(domain, { url: null, ts: Date.now() });
       return null;
     }
+
+    ({ buffer, contentType } = await this.resizeIcon(buffer, contentType));
 
     try {
       await this.s3Client.send(new PutObjectCommand({

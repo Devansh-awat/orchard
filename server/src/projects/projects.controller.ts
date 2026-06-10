@@ -658,9 +658,14 @@ export class DeploymentsController {
 
     const url = await this.faviconService.getFavicon(domain);
     if (url) {
-      // Redirect to the R2-cached image with long browser cache
-      return res.redirect(301, url);
+      // 302 (not 301) so a bad target isn't cached permanently by browsers;
+      // the explicit Cache-Control still avoids re-hitting this endpoint.
+      res.setHeader('Cache-Control', 'public, max-age=86400');
+      return res.redirect(302, url);
     }
+    // Cache the miss too — otherwise every dashboard load re-runs the full
+    // fetch pipeline for domains that have no favicon.
+    res.setHeader('Cache-Control', 'public, max-age=3600');
     return res.status(HttpStatus.NOT_FOUND).json({ error: 'No favicon found' });
   }
 

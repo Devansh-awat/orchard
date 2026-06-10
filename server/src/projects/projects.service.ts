@@ -82,6 +82,27 @@ export class ProjectsService {
     return null;
   }
 
+  /**
+   * Auto banner: when a project has no manually-set backgroundImage, fall
+   * back to the og:image of one of its deployments' sites (cached in R2 by
+   * FaviconService). Response-only — never persisted, so a manual banner
+   * always wins and clearing it reverts to the auto one.
+   */
+  private async resolveProjectBannerFallback(
+    deployments: Array<{ ingresses?: Array<{ host?: string | null }> | null }> | null | undefined,
+  ): Promise<string | null> {
+    try {
+      const hosts = (deployments ?? [])
+        .map((d) => d.ingresses?.[0]?.host?.split('/')[0])
+        .filter(Boolean) as string[];
+      if (hosts.length === 0) return null;
+      const banners = await this.faviconService.peekBanners(hosts);
+      return hosts.map((h) => banners[h]).find(Boolean) ?? null;
+    } catch {
+      return null;
+    }
+  }
+
   // Tenant namespaces are `{org-slug}-{project-slug}`. With no blocklist an
   // org named e.g. `kube` with project `system` would mint `kube-system` —
   // the existing-namespace 409 check below blocks collisions with namespaces
@@ -557,6 +578,8 @@ export class ProjectsService {
     );
 
     const icon = project.icon ?? (await this.resolveProjectIconFallback(project.deployments));
+    const backgroundImage =
+      project.backgroundImage ?? (await this.resolveProjectBannerFallback(project.deployments));
     const membersWithOrgRole = await this.attachOrgRoleToMembers(project.organizationId, project.members);
     const safeMembers = access.canEdit
       ? membersWithOrgRole
@@ -565,6 +588,7 @@ export class ProjectsService {
     return {
       ...project,
       icon,
+      backgroundImage,
       members: safeMembers,
       deployments: deploymentsWithComputedStatus,
       currentUserRole: {
@@ -1003,10 +1027,13 @@ export class ProjectsService {
     );
 
     const icon = project.icon ?? (await this.resolveProjectIconFallback(project.deployments));
+    const backgroundImage =
+      project.backgroundImage ?? (await this.resolveProjectBannerFallback(project.deployments));
 
     return {
       ...project,
       icon,
+      backgroundImage,
       deployments: deploymentsWithComputedStatus,
     };
   }
@@ -1202,6 +1229,8 @@ export class ProjectsService {
     );
 
     const icon = project.icon ?? (await this.resolveProjectIconFallback(project.deployments));
+    const backgroundImage =
+      project.backgroundImage ?? (await this.resolveProjectBannerFallback(project.deployments));
     const membersWithOrgRole = await this.attachOrgRoleToMembers(project.organizationId, project.members);
     const safeMembers = access.canEdit
       ? membersWithOrgRole
@@ -1213,6 +1242,7 @@ export class ProjectsService {
     return {
       ...project,
       icon,
+      backgroundImage,
       members: safeMembers,
       deployments: deploymentsWithComputedStatus,
       databases: safeDatabases,
@@ -1344,12 +1374,22 @@ export class ProjectsService {
     });
     if (!org) throw new NotFoundException('Organization not found');
 
-    if (!(await this.authz.isSuperAdmin(userId))) {
-      const memberships = await this.membershipCache.getMembershipsForOrg(userId, org.id);
-      if (memberships.length === 0) {
-        throw new NotFoundException('Organization not found');
-      }
+    const [isSuper, memberships] = await Promise.all([
+      this.authz.isSuperAdmin(userId),
+      this.membershipCache.getMembershipsForOrg(userId, org.id),
+    ]);
+    if (!isSuper && memberships.length === 0) {
+      throw new NotFoundException('Organization not found');
     }
+    // Inline what GET /organizations/:id/members/me would return so the
+    // dashboard doesn't need a second round trip. `synthetic` marks a
+    // superadmin viewing an org they aren't actually a member of.
+    const m = memberships[0];
+    const currentMember = m
+      ? { role: m.role, synthetic: false }
+      : isSuper
+        ? { role: 'owner' as const, synthetic: true }
+        : null;
 
     const [projects, deployments, databases, builds] = await Promise.all([
       this.listProjects(userId, org.id),
@@ -1358,7 +1398,57 @@ export class ProjectsService {
       this.deployments.listRecentBuilds(userId, org.id),
     ]);
 
-    return { organization: org, projects, deployments, databases, builds };
+    // Resolve favicon URLs in bulk so cards can point straight at R2 instead
+    // of issuing one authenticated /deployments/favicon request per card.
+    // peekFavicons never blocks on cold domains (background warm + null).
+    try {
+      const hostOf = (d: any): string | null =>
+        d?.ingresses?.[0]?.host?.split('/')[0] || null;
+      const buildTargets: any[] = [
+        ...((builds as any)?.active ?? []),
+        ...(((builds as any)?.recent ?? []).map((b: any) => b.deployment).filter(Boolean)),
+      ];
+      const hosts = [...deployments, ...buildTargets]
+        .map(hostOf)
+        .filter(Boolean) as string[];
+      const favicons = await this.faviconService.peekFavicons(hosts);
+      for (const d of [...(deployments as any[]), ...buildTargets]) {
+        const h = hostOf(d);
+        d.faviconUrl = h ? (favicons[h] ?? null) : null;
+      }
+    } catch {
+      // favicons are decorative — never fail the overview for them
+    }
+
+    // Auto-fill project banners from a child deployment's og:image. A banner
+    // set manually in the UI lives in project.backgroundImage and wins; we
+    // only decorate projects that have none (and never write to the DB, so
+    // clearing the manual banner falls back to the auto one).
+    try {
+      const candidateHosts = new Map<string, string[]>();
+      for (const p of projects as any[]) {
+        if (p.backgroundImage) continue;
+        const hosts = (p.deployments ?? [])
+          .map((d: any) => d.ingresses?.[0]?.host?.split('/')[0])
+          .filter(Boolean) as string[];
+        if (hosts.length) candidateHosts.set(p.id, hosts);
+      }
+      if (candidateHosts.size > 0) {
+        const banners = await this.faviconService.peekBanners(
+          [...candidateHosts.values()].flat(),
+        );
+        for (const p of projects as any[]) {
+          const hosts = candidateHosts.get(p.id);
+          if (!hosts) continue;
+          const found = hosts.map((h) => banners[h]).find(Boolean);
+          if (found) p.backgroundImage = found;
+        }
+      }
+    } catch {
+      // banners are decorative too
+    }
+
+    return { organization: org, projects, deployments, databases, builds, currentMember };
   }
 
 }
