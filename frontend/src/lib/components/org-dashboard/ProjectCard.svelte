@@ -104,7 +104,7 @@
 		>
 			{#if meta?.icon}
 				{#if /^https?:\/\//.test(meta.icon)}
-					<img src={meta.icon} alt="" class="proj-av-img" />
+					<img src={meta.icon} alt="" class="proj-av-img" loading="lazy" decoding="async" />
 				{:else}
 					<span class="proj-av-emoji">{meta.icon}</span>
 				{/if}

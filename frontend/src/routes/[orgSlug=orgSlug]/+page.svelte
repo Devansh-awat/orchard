@@ -175,18 +175,14 @@
 			syncList(recentBuilds, qData.builds?.recent ?? []);
 
 			const newOrgId = qData.organization?.id ?? null;
-			if (newOrgId && newOrgId !== orgId) {
-				orgId = newOrgId;
-				// Fetch role once per org
-				apiFetch(`/apiv1/organizations/${newOrgId}/members/me`)
-					.then(async (r) => {
-						if (!r.ok) return;
-						const body = await r.json().catch(() => null);
-						if (body?.role) currentOrgRole = body.role;
-						if (body?.id?.startsWith('superadmin:')) isSyntheticMembership = true;
-						else isSyntheticMembership = false;
-					})
-					.catch(() => {});
+			if (newOrgId && newOrgId !== orgId) orgId = newOrgId;
+			// Membership is inlined in the overview payload — no extra fetch
+			if (qData.currentMember) {
+				currentOrgRole = qData.currentMember.role;
+				isSyntheticMembership = !!qData.currentMember.synthetic;
+			} else {
+				currentOrgRole = null;
+				isSyntheticMembership = false;
 			}
 
 			depOrder = mergeOrder(depOrder, deployments, (d) => new Date(d.updatedAt).getTime());
@@ -242,6 +238,9 @@
 	// which triggers an automatic refetch — no manual loadOverview() needed.
 	let unsub: (() => void) | null = null;
 	let sseOrgId: string | null = null;
+	// Builds emit a burst of SSE events; collapse them into one refetch per
+	// 2s window instead of refetching the full overview on every event.
+	let invalidateTimer: ReturnType<typeof setTimeout> | null = null;
 
 	$effect(() => {
 		const id = orgId;
@@ -255,7 +254,11 @@
 				id,
 				(ev) => {
 					if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
-					queryClient.invalidateQueries({ queryKey: ['overview', slug] });
+					if (invalidateTimer) return;
+					invalidateTimer = setTimeout(() => {
+						invalidateTimer = null;
+						queryClient.invalidateQueries({ queryKey: ['overview', slug] });
+					}, 2000);
 				},
 				{ invalidateDependencies: [] }
 			);
@@ -264,6 +267,7 @@
 
 	onDestroy(() => {
 		unsub?.();
+		if (invalidateTimer) clearTimeout(invalidateTimer);
 	});
 
 	// ── Expand state (persisted) ──

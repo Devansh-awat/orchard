@@ -69,7 +69,8 @@ function applyEventToCache(sub: Subscription, ev: OrgEvent) {
 		case 'database.changed':
 		case 'project.changed':
 		case 'pod.changed':
-			qc.invalidateQueries({ queryKey: ['org', sub.orgId, 'overview'] });
+			// (the overview page invalidates its own ['overview', slug] query,
+			// debounced — no query uses an ['org', id, 'overview'] key)
 			qc.invalidateQueries({ queryKey: ['projects', sub.orgId] });
 			if (ev.id) qc.invalidateQueries({ queryKey: ['deployment', ev.id] });
 			if (ev.projectId) qc.invalidateQueries({ queryKey: ['project', ev.projectId] });

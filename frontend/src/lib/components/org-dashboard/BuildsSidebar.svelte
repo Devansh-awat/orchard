@@ -38,7 +38,7 @@
 		<p class="aside-empty">No recent builds</p>
 	{:else}
 		{#each activeBuilds as b, i (b.id)}
-			{@const ic = buildIcon(b.image, b.ingresses, b.id, failedFav)}
+			{@const ic = buildIcon(b.image, b.ingresses, b.id, failedFav, b.faviconUrl)}
 			<a
 				href="/{orgSlug}/deployments/{b.id}"
 				class="bld bld--live"
@@ -51,6 +51,8 @@
 								src={ic}
 								alt=""
 								class="bld-ic"
+								loading="lazy"
+								decoding="async"
 								onerror={() => onFavErr('b-' + b.id)}
 							/>{/if}<span class="bld-name">{b.name}</span></span
 					>
@@ -66,7 +68,7 @@
 		{/each}
 		{#each recentBuilds as b, i (b.id)}
 			{@const ok = b.deployment.buildStatus !== 'failed'}
-			{@const ic = buildIcon(b.deployment.image, b.deployment.ingresses, b.deployment.id, failedFav)}
+			{@const ic = buildIcon(b.deployment.image, b.deployment.ingresses, b.deployment.id, failedFav, b.deployment.faviconUrl)}
 			<a
 				href="/{orgSlug}/deployments/{b.deployment.id}"
 				class="bld"
@@ -85,6 +87,8 @@
 								src={ic}
 								alt=""
 								class="bld-ic"
+								loading="lazy"
+								decoding="async"
 								onerror={() => onFavErr('b-' + b.deployment.id)}
 							/>{/if}<span class="bld-name">{b.deployment.name}</span></span
 					>

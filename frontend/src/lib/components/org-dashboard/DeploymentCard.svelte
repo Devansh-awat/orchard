@@ -54,12 +54,14 @@
 >
 	<div class="card-top">
 		{#if icon}
-			<img src={icon} alt="" class="card-ic" />
-		{:else if dep.ingresses.length > 0 && !failedFav.has(dep.id)}
+			<img src={icon} alt="" class="card-ic" loading="lazy" decoding="async" />
+		{:else if (dep.faviconUrl || dep.ingresses.length > 0) && !failedFav.has(dep.id)}
 			<img
-				src={favUrl(dep.ingresses[0].host.split('/')[0])}
+				src={dep.faviconUrl ?? favUrl(dep.ingresses[0].host.split('/')[0])}
 				alt=""
 				class="card-ic"
+				loading="lazy"
+				decoding="async"
 				onerror={() => onFavErr(dep.id)}
 			/>
 		{:else}

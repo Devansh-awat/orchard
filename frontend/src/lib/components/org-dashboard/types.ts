@@ -8,6 +8,7 @@ export interface DeploymentSummary {
 	githubBranch?: string;
 	updatedAt: string;
 	replicas: number;
+	faviconUrl?: string | null;
 	ingresses: Array<{ id: string; host: string }>;
 	project: {
 		id: string;
@@ -37,6 +38,7 @@ export interface ActiveBuild {
 	updatedAt: string;
 	githubRepo?: string;
 	githubBranch?: string;
+	faviconUrl?: string | null;
 	ingresses: Array<{ host: string }>;
 	project?: { name: string };
 }
@@ -53,6 +55,7 @@ export interface RecentBuild {
 		name: string;
 		image?: string;
 		buildStatus: string;
+		faviconUrl?: string | null;
 		ingresses: Array<{ host: string }>;
 		project?: { name: string };
 	};

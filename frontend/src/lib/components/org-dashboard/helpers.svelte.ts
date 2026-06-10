@@ -3,21 +3,21 @@ import type { ProjectGroup } from './types';
 
 export const IMG_ICONS: Record<string, string> = {
 	postgres:
-		'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/postgresql/postgresql-original.svg',
+		'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/postgresql/postgresql-original.svg',
 	postgresql:
-		'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/postgresql/postgresql-original.svg',
-	mysql: 'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/mysql/mysql-original.svg',
-	redis: 'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/redis/redis-original.svg',
-	mongo: 'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/mongodb/mongodb-original.svg',
+		'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/postgresql/postgresql-original.svg',
+	mysql: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/mysql/mysql-original.svg',
+	redis: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/redis/redis-original.svg',
+	mongo: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/mongodb/mongodb-original.svg',
 	mongodb:
-		'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/mongodb/mongodb-original.svg',
-	nginx: 'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/nginx/nginx-original.svg',
-	node: 'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/nodejs/nodejs-original.svg',
-	python: 'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/python/python-original.svg',
-	go: 'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/go/go-original.svg',
-	rust: 'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/rust/rust-original.svg',
+		'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/mongodb/mongodb-original.svg',
+	nginx: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/nginx/nginx-original.svg',
+	node: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/nodejs/nodejs-original.svg',
+	python: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/python/python-original.svg',
+	go: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/go/go-original.svg',
+	rust: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/rust/rust-original.svg',
 	grafana:
-		'https://cdn.jsdelivr.net/gh/devicons/devicon@latest/icons/grafana/grafana-original.svg'
+		'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/grafana/grafana-original.svg'
 };
 
 export function knownIcon(img?: string): string | null {
@@ -92,12 +92,15 @@ export function buildIcon(
 	img: string | undefined,
 	ings: Array<{ host: string }> | undefined,
 	id: string | undefined,
-	failedFav: Set<string>
+	failedFav: Set<string>,
+	faviconUrl?: string | null
 ) {
 	const k = knownIcon(img);
 	if (k) return k;
-	if (ings?.length && !failedFav.has('b-' + (id ?? '')))
-		return favUrl(ings[0].host.split('/')[0]);
+	if (failedFav.has('b-' + (id ?? ''))) return null;
+	// Prefer the R2 URL the overview already resolved — no backend round trip
+	if (faviconUrl) return faviconUrl;
+	if (ings?.length) return favUrl(ings[0].host.split('/')[0]);
 	return null;
 }
 
