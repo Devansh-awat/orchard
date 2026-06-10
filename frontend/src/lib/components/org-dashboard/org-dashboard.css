@@ -191,6 +191,7 @@
 .proj-card--hasbg .proj-sub,
 .proj-card--hasbg .proj-stat,
 .proj-card--hasbg .proj-chev,
+.proj-card--hasbg .proj-owner,
 .proj-card--hasbg .proj-open {
 	color: rgba(255, 255, 255, 0.78);
 }
