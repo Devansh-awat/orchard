@@ -1097,6 +1097,9 @@
 			const sseDown = sseStatusValue === 'disconnected';
 			if (transient) return 3000;
 			if (sseDown) return 10000;
+			// Keep a slow poll while warnings are on screen so banners clear
+			// as soon as Kubernetes reports the pods healthy again.
+			if (activePodWarnings.length > 0) return 15000;
 			return false;
 		})(),
 		refetchIntervalInBackground: false,

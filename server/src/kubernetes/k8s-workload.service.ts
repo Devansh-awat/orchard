@@ -2091,6 +2091,7 @@ export class K8sWorkloadService {
             ready: status?.ready ?? false,
             restartCount: status?.restartCount ?? 0,
             warning: containerWarning,
+            lastTerminatedAt: status?.lastState?.terminated?.finishedAt,
           };
         }) ?? [];
 
@@ -2137,26 +2138,42 @@ export class K8sWorkloadService {
         };
       }));
 
+      // Warnings mirror the pod's CURRENT state, not k8s event history.
+      // Kubernetes retains warning events for ~1h after the condition
+      // resolves, so a pod that briefly failed scheduling or volume attach
+      // would otherwise keep showing the alert long after it went ready.
       const warnings = pods.flatMap(pod => {
-        const podWarnings: string[] = [];
+        // A ready pod is healthy by definition — whatever its events say is
+        // already resolved, so it contributes no warnings at all.
+        if (pod.status === 'ready') return [];
+
+        const podWarnings: Array<{ message: string; timestamp?: any }> = [];
 
         pod.containers?.forEach(container => {
           if (container.warning) {
-            podWarnings.push(`${container.name}: ${container.warning}`);
+            podWarnings.push({ message: `${container.name}: ${container.warning}` });
           }
           if (container.restartCount > 0) {
-            podWarnings.push(`${container.name} has restarted ${container.restartCount} time(s)`);
+            podWarnings.push({
+              message: `${container.name} has restarted ${container.restartCount} time(s)`,
+              timestamp: container.lastTerminatedAt,
+            });
           }
         });
 
         pod.events?.forEach(event => {
-          podWarnings.push(`${event.reason}: ${event.message}`);
+          // Scheduling failures are resolved the moment the pod lands on a node.
+          if (/failedscheduling/i.test(event.reason ?? '') && pod.nodeName) return;
+          podWarnings.push({
+            message: `${event.reason}: ${event.message}`,
+            timestamp: event.lastTimestamp,
+          });
         });
 
         return podWarnings.map(warning => ({
           podName: pod.name,
-          message: warning,
-          timestamp: pod.events?.[0]?.lastTimestamp || pod.createdAt,
+          message: warning.message,
+          timestamp: warning.timestamp || pod.createdAt,
         }));
       });
       
