@@ -40,13 +40,19 @@ export function startTelemetry(): void {
   sdk.start();
 
   // Graceful flush on shutdown so we don't lose the last batch of logs.
-  const shutdown = () => {
-    sdk
-      ?.shutdown()
-      .catch((err) => console.warn(`OTel shutdown failed: ${(err as Error).message}`));
+  // IMPORTANT: registering a SIGTERM/SIGINT listener disables Node's default
+  // terminate-on-signal behavior, so we MUST exit ourselves once the flush
+  // finishes — otherwise the process ignores SIGTERM entirely and `nest
+  // start --watch` restarts hang forever on stale code.
+  const shutdown = (signal: NodeJS.Signals) => {
+    const forceExit = setTimeout(() => process.exit(0), 3000);
+    forceExit.unref();
+    Promise.resolve(sdk?.shutdown())
+      .catch((err) => console.warn(`OTel shutdown failed: ${(err as Error).message}`))
+      .finally(() => process.exit(signal === 'SIGINT' ? 130 : 0));
   };
-  process.on('SIGTERM', shutdown);
-  process.on('SIGINT', shutdown);
+  process.on('SIGTERM', () => shutdown('SIGTERM'));
+  process.on('SIGINT', () => shutdown('SIGINT'));
 }
 
 /**
