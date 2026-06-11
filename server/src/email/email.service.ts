@@ -14,6 +14,16 @@ export interface OrganizationInviteEmailData {
   loginUrl: string;
 }
 
+export interface ProjectInviteEmailData {
+  recipientEmail: string;
+  recipientName: string;
+  organizationName: string;
+  projectName: string;
+  inviterName: string;
+  role: string;
+  loginUrl: string;
+}
+
 export interface WorkspaceInviteEmailData {
   recipientEmail: string;
   recipientName: string;
@@ -128,6 +138,45 @@ export class EmailService {
       return true;
     } catch (error) {
       console.error('[EmailService] Failed to send organization invite email:', error);
+      return false;
+    }
+  }
+
+  async sendProjectInviteEmail(
+    data: ProjectInviteEmailData,
+  ): Promise<boolean> {
+    if (!this.isConfigured()) {
+      console.warn(
+        'Email service not configured. Skipping project invite email.',
+      );
+      return false;
+    }
+
+    const html = this.renderTemplate('project-invite', {
+      recipientEmail: data.recipientEmail,
+      recipientName: data.recipientName,
+      organizationName: data.organizationName,
+      projectName: data.projectName,
+      inviterName: data.inviterName,
+      role: data.role.charAt(0).toUpperCase() + data.role.slice(1),
+      loginUrl: data.loginUrl,
+      frontendUrl: this.frontendUrl,
+    });
+
+    const mailOptions = {
+      from: `"${this.fromName}" <${this.fromEmail}>`,
+      to: data.recipientEmail,
+      subject: `You've been invited to ${data.projectName} on Orchard`,
+      html,
+    };
+    console.log(`[EmailService] Sending project invite email to=${data.recipientEmail} from=${mailOptions.from} subject="${mailOptions.subject}"`);
+
+    try {
+      const info = await this.transporter!.sendMail(mailOptions);
+      console.log(`[EmailService] Project invite email sent successfully messageId=${info.messageId} response="${info.response}"`);
+      return true;
+    } catch (error) {
+      console.error('[EmailService] Failed to send project invite email:', error);
       return false;
     }
   }

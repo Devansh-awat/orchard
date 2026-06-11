@@ -8,6 +8,7 @@ import { K8sNamespaceService } from '../kubernetes/k8s-namespace.service';
 import { K8sCnpgService } from '../kubernetes/k8s-cnpg.service';
 import { R2ProxyService } from '../kubernetes/r2-proxy.service';
 import { UsersService } from '../users/users.service';
+import { OrganizationsService } from '../organizations/organizations.service';
 import { DockerService } from '../docker/docker.service';
 import { GitHubService } from '../github/github.service';
 import { FaviconService } from './favicon.service';
@@ -32,6 +33,7 @@ export class ProjectsService {
     private readonly k8sNamespace: K8sNamespaceService,
     private readonly k8sCnpg: K8sCnpgService,
     private readonly usersService: UsersService,
+    private readonly organizationsService: OrganizationsService,
     private readonly dockerService: DockerService,
     @Inject(forwardRef(() => GitHubService))
     private readonly githubService: GitHubService,
@@ -731,8 +733,29 @@ export class ProjectsService {
     const role = await this.prisma.role.findUnique({ where: { name: roleName } });
     if (!role) throw new BadRequestException(`Invalid role: ${roleName}`);
 
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      select: { organizationId: true, name: true },
+    });
+    if (!project) throw new NotFoundException('Project not found');
+
     const user = await this.prisma.user.findUnique({ where: { email: normalizedEmail } });
-    if (!user) throw new NotFoundException('No user with that email exists');
+
+    // No account under that email yet — send a project-targeted guest
+    // invitation instead of failing. Accepting it creates the account's org
+    // guest membership and this project membership in one step.
+    if (!user) {
+      const invitation = await this.organizationsService.createProjectGuestInvitation({
+        organizationId: project.organizationId,
+        projectId,
+        projectName: project.name,
+        projectRoleId: role.id,
+        projectRoleName: role.name,
+        email: normalizedEmail,
+        inviter: adder,
+      });
+      return { invited: true, invitation };
+    }
 
     const existing = await this.prisma.projectMember.findFirst({
       where: { projectId, userId: user.id },
@@ -744,11 +767,6 @@ export class ProjectsService {
     // narrowest membership that still lets them log in and see this project.
     // Existing members/admins/owners keep their current role — we never
     // downgrade.
-    const project = await this.prisma.project.findUnique({
-      where: { id: projectId },
-      select: { organizationId: true },
-    });
-    if (!project) throw new NotFoundException('Project not found');
     const existingOrgMember = await this.prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId: project.organizationId, userId: user.id } },
     });
@@ -792,6 +810,41 @@ export class ProjectsService {
     });
 
     return created;
+  }
+
+  async revokeProjectInvitation(
+    projectId: string,
+    invitationId: string,
+    revokedByClerkId: string,
+    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }
+  ) {
+    const revoker = await this.usersService.findOrCreateByClerkId(revokedByClerkId, userData);
+    if (!revoker) throw new NotFoundException('User not found');
+
+    await this.access.assertProjectAdmin(projectId, revoker.id);
+
+    const invitation = await this.prisma.organizationInvitation.findUnique({
+      where: { id: invitationId },
+      select: { id: true, email: true, projectId: true, organizationId: true },
+    });
+    if (!invitation || invitation.projectId !== projectId) {
+      throw new NotFoundException('Invitation not found for this project');
+    }
+
+    await this.prisma.organizationInvitation.delete({ where: { id: invitationId } });
+
+    void this.audit.log({
+      action: 'project.invitation.revoked',
+      actorUserId: revoker.id,
+      actorEmail: revoker.email,
+      organizationId: invitation.organizationId,
+      projectId,
+      targetType: 'invitation',
+      targetId: invitation.id,
+      targetLabel: invitation.email,
+    });
+
+    return { success: true };
   }
 
   async removeProjectMember(
@@ -1239,11 +1292,28 @@ export class ProjectsService {
       ? (reconciledDatabases as any[]).map((d) => stripR2ProxyCreds(d))
       : (reconciledDatabases as any[]).map((d) => redactDatabaseForViewer(d));
 
+    // Pending email invitations targeted at this project — only revealed to
+    // users who can manage members (emails of people not yet in the org).
+    const pendingInvitations = access.canManageMembers
+      ? await this.prisma.organizationInvitation.findMany({
+          where: { projectId: project.id, expiresAt: { gt: new Date() } },
+          select: {
+            id: true,
+            email: true,
+            createdAt: true,
+            expiresAt: true,
+            projectRole: { select: { name: true } },
+          },
+          orderBy: { createdAt: 'desc' },
+        })
+      : [];
+
     return {
       ...project,
       icon,
       backgroundImage,
       members: safeMembers,
+      pendingInvitations,
       deployments: deploymentsWithComputedStatus,
       databases: safeDatabases,
       currentUserRole: {

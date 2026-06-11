@@ -51,6 +51,7 @@ export interface Project {
 	owner?: { username: string | null } | null;
 	deployments?: Deployment[];
 	members?: ProjectMember[];
+	pendingInvitations?: PendingInvitation[];
 	organization?: {
 		id: string;
 		name: string;
@@ -100,6 +101,14 @@ export interface ComposeStackSummary {
 	status: string;
 	createdAt: string;
 	deployments: { id: string; name: string; status: string; composeServiceName?: string }[];
+}
+
+export interface PendingInvitation {
+	id: string;
+	email: string;
+	createdAt: string;
+	expiresAt: string;
+	projectRole?: { name: string } | null;
 }
 
 export interface OrgMember {

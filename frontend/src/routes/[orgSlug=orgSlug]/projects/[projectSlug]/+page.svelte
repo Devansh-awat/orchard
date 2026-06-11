@@ -28,6 +28,7 @@
 		DatabaseSummary,
 		ComposeStackSummary,
 		OrgMember,
+		PendingInvitation,
 	} from '$lib/components/project';
 
 	import '$lib/components/project/project.css';
@@ -61,6 +62,8 @@
 	let deploymentSearch = $state('');
 	let showNewResourceModal = $state(false);
 	let projectMembers = $state<ProjectMember[]>([]);
+	let pendingInvitations = $state<PendingInvitation[]>([]);
+	let revokingInviteId = $state<string | null>(null);
 	let newMemberRole = $state<'member' | 'admin' | 'viewer'>('member');
 	let addingMember = $state(false);
 	let favFailed = $state<Set<string>>(new Set());
@@ -176,6 +179,7 @@
 	function applyProjectData(p: any) {
 		project = p;
 		projectMembers = p.members ?? [];
+		pendingInvitations = p.pendingInvitations ?? [];
 		templateInstances = p.templateInstances ?? [];
 		databases = p.databases ?? [];
 	}
@@ -236,7 +240,12 @@
 				const data = await response.json().catch(() => ({}));
 				throw new Error(data.message || 'Failed to add member');
 			}
-			toasts.add({ title: 'Member added', color: 'success' });
+			const result = await response.json().catch(() => ({}));
+			if (result.invited) {
+				toasts.add({ title: 'Invitation sent', description: `${email} will join this project as a guest once they accept`, color: 'success' });
+			} else {
+				toasts.add({ title: 'Member added', color: 'success' });
+			}
 			memberSearch = '';
 			newMemberRole = 'member';
 			await fetchProject();
@@ -285,6 +294,24 @@
 			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to remove member', color: 'error' });
 		} finally {
 			removingMemberId = null;
+		}
+	}
+
+	async function revokeInvitation(invitationId: string) {
+		if (!project) return;
+		revokingInviteId = invitationId;
+		try {
+			const response = await apiFetch(`/apiv1/projects/${project.id}/invitations/${invitationId}`, { method: 'DELETE' });
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to revoke invitation');
+			}
+			toasts.add({ title: 'Invitation revoked', color: 'success' });
+			await fetchProject();
+		} catch (e) {
+			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to revoke invitation', color: 'error' });
+		} finally {
+			revokingInviteId = null;
 		}
 	}
 
@@ -364,6 +391,7 @@
 			loading = true;
 			project = null;
 			projectMembers = [];
+			pendingInvitations = [];
 			templateInstances = [];
 			databases = [];
 			lastSyncedNamespace = null;
@@ -535,6 +563,7 @@
 		<div class="pj-tab-panel" bind:this={tabPanelEl}>
 			<MembersTab
 				{projectMembers}
+				{pendingInvitations}
 				{canManageMembers}
 				{canEdit}
 				bind:memberSearch
@@ -542,10 +571,12 @@
 				{addingMember}
 				{removingMemberId}
 				{updatingMemberId}
+				{revokingInviteId}
 				bind:openRoleMenuId
 				onAddMember={addMember}
 				onUpdateMemberRole={updateMemberRole}
 				onRemoveMember={removeMember}
+				onRevokeInvitation={revokeInvitation}
 				onEnsureOrgMembersLoaded={ensureOrgMembersLoaded}
 			/>
 		</div>

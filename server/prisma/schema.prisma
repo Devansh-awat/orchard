@@ -309,14 +309,23 @@ model OrganizationInvitation {
   invitedBy      String           @map("invited_by") @db.Uuid
   expiresAt      DateTime         @map("expires_at") @db.Timestamp(6)
   createdAt      DateTime         @default(now()) @map("created_at") @db.Timestamp(6)
+  // Optional project target. Set when the invite was issued from a project's
+  // members page for an email with no existing account: on accept the user
+  // joins the org with `role` (guest) AND becomes a member of this project
+  // with `projectRoleId`.
+  projectId      String?          @map("project_id") @db.Uuid
+  projectRoleId  String?          @map("project_role_id") @db.Uuid
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   inviter      User         @relation("OrgInvitationInviter", fields: [invitedBy], references: [id], onDelete: Cascade)
+  project      Project?     @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  projectRole  Role?        @relation(fields: [projectRoleId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, email])
   @@index([organizationId], map: "idx_organization_invitations_org")
   @@index([email], map: "idx_organization_invitations_email")
   @@index([token], map: "idx_organization_invitations_token")
+  @@index([projectId], map: "idx_organization_invitations_project")
   @@map("organization_invitations")
 }
 
@@ -328,6 +337,7 @@ model Role {
 
   projectMembers     ProjectMember[]
   projectInvitations ProjectInvitation[]
+  orgInvitations     OrganizationInvitation[]
 
   @@map("roles")
 }
@@ -359,6 +369,7 @@ model Project {
   owner         User?              @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
   members       ProjectMember[]
   invitations   ProjectInvitation[]
+  orgInvitations OrganizationInvitation[]
   deployments       Deployment[]
   ingresses         Ingress[]
   databases         Database[]

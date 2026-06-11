@@ -277,6 +277,26 @@ export class ProjectsController {
     );
   }
 
+  @Delete(':id/invitations/:invitationId')
+  async revokeProjectInvitation(
+    @Param('id') id: string,
+    @Param('invitationId') invitationId: string,
+    @Request() req
+  ) {
+    return this.projectsService.revokeProjectInvitation(
+      id,
+      invitationId,
+      req.user.sub,
+      {
+        email: req.user.email,
+        username: req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        imageUrl: req.user.imageUrl,
+      }
+    );
+  }
+
   @Delete(':id/members/:memberId')
   async removeProjectMember(
     @Param('id') id: string,

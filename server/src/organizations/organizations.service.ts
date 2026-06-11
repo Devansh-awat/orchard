@@ -785,6 +785,104 @@ export class OrganizationsService {
     return invitation;
   }
 
+  /**
+   * Invitation issued from a project's members page for an email with no
+   * existing account. On accept the user joins the org as a guest AND becomes
+   * a member of the target project. Authorization (project admin) is the
+   * caller's responsibility — this is invoked by ProjectsService, which has
+   * already run assertProjectAdmin.
+   */
+  async createProjectGuestInvitation(params: {
+    organizationId: string;
+    projectId: string;
+    projectName: string;
+    projectRoleId: string;
+    projectRoleName: string;
+    email: string;
+    inviter: { id: string; email: string; username?: string | null; firstName?: string | null; lastName?: string | null };
+  }) {
+    const { organizationId, projectId, projectName, projectRoleId, projectRoleName, email, inviter } = params;
+    const normalizedEmail = email.toLowerCase().trim();
+
+    const organization = await this.prisma.organization.findUnique({
+      where: { id: organizationId },
+      select: { name: true },
+    });
+    if (!organization) throw new NotFoundException('Organization not found');
+
+    // One pending invitation per org+email (DB unique). Re-inviting to the
+    // same project refreshes the token/expiry; a pending invite for a
+    // different target must be resolved first so we don't silently clobber it.
+    const existing = await this.prisma.organizationInvitation.findUnique({
+      where: { organizationId_email: { organizationId, email: normalizedEmail } },
+    });
+    if (existing && existing.projectId !== projectId) {
+      throw new BadRequestException(
+        'An invitation for this email is already pending in this organization',
+      );
+    }
+
+    const token = randomBytes(32).toString('hex');
+    const tokenHash = this.hashToken(token);
+    const expiresAt = new Date();
+    expiresAt.setDate(expiresAt.getDate() + 7);
+
+    const invitation = await this.prisma.$transaction(async (tx) => {
+      await tx.organizationInvitation.deleteMany({
+        where: { organizationId, email: normalizedEmail },
+      });
+      return tx.organizationInvitation.create({
+        data: {
+          organizationId,
+          email: normalizedEmail,
+          role: 'guest',
+          token: null,
+          tokenHash,
+          invitedBy: inviter.id,
+          expiresAt,
+          projectId,
+          projectRoleId,
+        },
+      });
+    });
+
+    const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
+    const inviterName = inviter.firstName && inviter.lastName
+      ? `${inviter.firstName} ${inviter.lastName}`
+      : inviter.username || inviter.email || 'Someone';
+
+    this.emailService.sendProjectInviteEmail({
+      recipientEmail: normalizedEmail,
+      recipientName: normalizedEmail.split('@')[0],
+      organizationName: organization.name,
+      projectName,
+      inviterName,
+      role: projectRoleName,
+      loginUrl: frontendUrl,
+    }).catch(err => {
+      console.error('Failed to send project invite email:', err);
+    });
+
+    void this.audit.log({
+      action: 'project.member.invited',
+      actorUserId: inviter.id,
+      actorEmail: inviter.email,
+      organizationId,
+      projectId,
+      targetType: 'invitation',
+      targetId: invitation.id,
+      targetLabel: normalizedEmail,
+      metadata: { email: normalizedEmail, role: projectRoleName },
+    });
+
+    return {
+      id: invitation.id,
+      email: invitation.email,
+      expiresAt: invitation.expiresAt,
+      createdAt: invitation.createdAt,
+    };
+  }
+
   async acceptInvitationByToken(token: string, clerkId: string, userData?: any) {
     // M-3: hash lookup only. The plaintext-column fallback was removed once
     // the backfill completed — a fallback that still queries by raw `token`
@@ -875,6 +973,42 @@ export class OrganizationsService {
     });
 
     if (existingMember) {
+      // Project-targeted invite where the user joined the org through some
+      // other path in the meantime: still honor the project membership grant
+      // (never touching their existing — possibly higher — org role).
+      if (invitation.projectId && invitation.projectRoleId) {
+        const granted = await this.prisma.$transaction(async (tx) => {
+          const alreadyInProject = await tx.projectMember.findUnique({
+            where: { projectId_userId: { projectId: invitation.projectId!, userId: user.id } },
+          });
+          if (!alreadyInProject) {
+            await tx.projectMember.create({
+              data: {
+                projectId: invitation.projectId!,
+                userId: user.id,
+                roleId: invitation.projectRoleId!,
+                addedBy: invitation.invitedBy,
+              },
+            });
+          }
+          await tx.organizationInvitation.delete({ where: { id: invitation.id } });
+          return !alreadyInProject;
+        });
+        if (granted) {
+          void this.audit.log({
+            action: 'project.member.added',
+            actorUserId: user.id,
+            actorEmail: user.email,
+            organizationId: invitation.organizationId,
+            projectId: invitation.projectId,
+            targetType: 'user',
+            targetId: user.id,
+            targetLabel: user.email,
+            metadata: { via },
+          });
+        }
+        return existingMember;
+      }
       // M-9: preserve the same 404 shape as every other reject branch.
       await this.prisma.organizationInvitation.delete({ where: { id: invitation.id } });
       throw notFound();
@@ -902,6 +1036,19 @@ export class OrganizationsService {
           organization: true,
         },
       });
+
+      // Project-targeted guest invite: also grant the project membership the
+      // invite was issued for.
+      if (invitation.projectId && invitation.projectRoleId) {
+        await tx.projectMember.create({
+          data: {
+            projectId: invitation.projectId,
+            userId: user.id,
+            roleId: invitation.projectRoleId,
+            addedBy: invitation.invitedBy,
+          },
+        });
+      }
 
       await tx.organizationInvitation.delete({ where: { id: invitation.id } });
 
@@ -952,6 +1099,7 @@ export class OrganizationsService {
       },
       include: {
         organization: { select: { name: true, slug: true, avatarUrl: true } },
+        project: { select: { name: true, slug: true } },
         inviter: {
           select: {
             firstName: true,
@@ -975,6 +1123,7 @@ export class OrganizationsService {
         orgSlug: inv.organization.slug,
         orgAvatarUrl: inv.organization.avatarUrl,
         role: inv.role,
+        project: inv.project,
         inviter: inv.inviter,
         expiresAt: inv.expiresAt,
       })),
@@ -1041,6 +1190,13 @@ export class OrganizationsService {
             name: true,
             slug: true,
             avatarUrl: true
+          }
+        },
+        project: {
+          select: {
+            id: true,
+            name: true,
+            slug: true
           }
         },
         inviter: {

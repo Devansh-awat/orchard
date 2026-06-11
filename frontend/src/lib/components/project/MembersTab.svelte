@@ -1,11 +1,12 @@
 <script lang="ts">
-	import { Users, Loader2, Trash2, ChevronDown, Check } from 'lucide-svelte';
+	import { Users, Loader2, Trash2, ChevronDown, Check, Mail, UserPlus } from 'lucide-svelte';
 	import { motionStagger, motionPopover } from '$lib/utils/motion.svelte';
-	import type { ProjectMember, OrgMember } from './types';
+	import type { ProjectMember, OrgMember, PendingInvitation } from './types';
 	import { ROLE_OPTIONS } from './types';
 
 	let {
 		projectMembers,
+		pendingInvitations = [],
 		canManageMembers = false,
 		canEdit = false,
 		memberSearch = $bindable(''),
@@ -13,13 +14,16 @@
 		addingMember = false,
 		removingMemberId = null as string | null,
 		updatingMemberId = null as string | null,
+		revokingInviteId = null as string | null,
 		openRoleMenuId = $bindable<string | null>(null),
 		onAddMember,
 		onUpdateMemberRole,
 		onRemoveMember,
+		onRevokeInvitation,
 		onEnsureOrgMembersLoaded,
 	}: {
 		projectMembers: ProjectMember[];
+		pendingInvitations?: PendingInvitation[];
 		canManageMembers?: boolean;
 		canEdit?: boolean;
 		memberSearch?: string;
@@ -27,12 +31,28 @@
 		addingMember?: boolean;
 		removingMemberId?: string | null;
 		updatingMemberId?: string | null;
+		revokingInviteId?: string | null;
 		openRoleMenuId?: string | null;
 		onAddMember: (email: string) => void;
 		onUpdateMemberRole: (memberId: string, role: string, prevRole: string) => void;
 		onRemoveMember: (memberId: string) => void;
+		onRevokeInvitation?: (invitationId: string) => void;
 		onEnsureOrgMembersLoaded: () => void;
 	} = $props();
+
+	// A search string that looks like an email but matches no org member can
+	// be invited as a guest — the backend emails them an invitation.
+	const searchEmail = $derived(memberSearch.trim().toLowerCase());
+	const searchIsEmail = $derived(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(searchEmail));
+	const searchIsKnown = $derived(
+		projectMembers.some((m) => m.user.email?.toLowerCase() === searchEmail) ||
+		pendingInvitations.some((inv) => inv.email.toLowerCase() === searchEmail)
+	);
+	const showInviteOption = $derived(
+		searchIsEmail &&
+		!searchIsKnown &&
+		!filteredOrgMembers.some((m) => m.user.email.toLowerCase() === searchEmail)
+	);
 
 	let pickerOpen = $state(false);
 	let pickerRender = $state(false);
@@ -140,7 +160,31 @@
 							onClosed: () => { pickerRender = false; }
 						})}
 					>
-						<div class="pj-picker-empty">No matching org members</div>
+						{#if showInviteOption}
+							<button
+								type="button"
+								class="pj-picker-item pj-picker-invite"
+								onmousedown={(e) => e.preventDefault()}
+								onclick={() => onAddMember(searchEmail)}
+								disabled={addingMember}
+							>
+								<div class="pj-member-avatar pj-member-avatar--letter">
+									{#if addingMember}
+										<Loader2 class="h-3.5 w-3.5 animate-spin" />
+									{:else}
+										<UserPlus size={14} />
+									{/if}
+								</div>
+								<div class="pj-member-info">
+									<span class="pj-member-name">Invite {searchEmail}</span>
+									<span class="pj-member-email">Not on Orchard yet — they'll get an email and join as a guest</span>
+								</div>
+							</button>
+						{:else if searchIsKnown}
+							<div class="pj-picker-empty">Already a member or invited</div>
+						{:else}
+							<div class="pj-picker-empty">No matching org members — type a full email to invite a guest</div>
+						{/if}
 					</div>
 				{/if}
 			</div>
@@ -258,7 +302,48 @@
 				{/each}
 			</ul>
 		{:else}
-			<div class="pj-members-empty">No members yet. Add someone from your organization above.</div>
+			<div class="pj-members-empty">No members yet. Add someone from your organization above, or type an email to invite a guest.</div>
+		{/if}
+
+		{#if canManageMembers && pendingInvitations.length > 0}
+			<div class="pj-invites-head">
+				<Mail size={13} />
+				<span>Pending invitations</span>
+				<span class="pj-members-count">{pendingInvitations.length}</span>
+			</div>
+			<ul class="pj-members-list">
+				{#each pendingInvitations as inv, i (inv.id)}
+					<li
+						class="pj-member pj-member--pending"
+						{@attach motionStagger({ index: i, axis: 'x', from: { y: -10, scale: 1 }, stride: 0.04 })}
+					>
+						<div class="pj-member-avatar pj-member-avatar--letter">
+							{inv.email.charAt(0).toUpperCase()}
+						</div>
+						<div class="pj-member-info">
+							<span class="pj-member-name">
+								{inv.email}
+								<span class="guest-pill" title="They'll join as a guest once they accept the email invitation">Invited</span>
+							</span>
+							<span class="pj-member-email">Expires {new Date(inv.expiresAt).toLocaleDateString()}</span>
+						</div>
+						<span class="pj-role-chip pj-role-chip--{inv.projectRole?.name ?? 'member'}">{inv.projectRole?.name ?? 'member'}</span>
+						<button
+							class="pj-member-remove"
+							title="Revoke invitation"
+							aria-label="Revoke invitation for {inv.email}"
+							onclick={() => onRevokeInvitation?.(inv.id)}
+							disabled={revokingInviteId === inv.id}
+						>
+							{#if revokingInviteId === inv.id}
+								<Loader2 class="h-3.5 w-3.5 animate-spin" />
+							{:else}
+								<Trash2 class="h-3.5 w-3.5" />
+							{/if}
+						</button>
+					</li>
+				{/each}
+			</ul>
 		{/if}
 	</div>
 </div>

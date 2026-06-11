@@ -955,6 +955,16 @@
 	text-align: center;
 }
 
+.pj-invites-head {
+	display: flex; align-items: center; gap: 0.5rem;
+	padding: 0.75rem 1rem 0.375rem 1rem;
+	border-top: 1px solid color-mix(in srgb, var(--surface-border) 45%, transparent);
+	font-size: 0.75rem; font-weight: 600;
+	color: var(--pj-text-secondary);
+}
+.pj-member--pending .pj-member-avatar--letter { opacity: 0.65; }
+.pj-member--pending .pj-member-name { color: var(--pj-text-secondary); }
+
 .pj-picker { position: relative; flex: 1; max-width: 18rem; margin-left: auto; }
 .pj-invite-input {
 	width: 100%;

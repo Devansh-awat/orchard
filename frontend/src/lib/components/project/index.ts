@@ -13,6 +13,7 @@ export type {
 	TemplateInstanceSummary,
 	DatabaseSummary,
 	ComposeStackSummary,
-	OrgMember
+	OrgMember,
+	PendingInvitation
 } from './types';
 export { ROLE_OPTIONS } from './types';
