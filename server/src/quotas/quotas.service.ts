@@ -108,11 +108,22 @@ export class QuotasService {
     });
     if (!project) return;
     const { caps, defaultPodCpuMilli, defaultPodMemoryBytes } = await this.resolveProjectCaps(projectId);
+    // RollingUpdate briefly runs old and new pods side by side (maxSurge 25%),
+    // so the namespace ResourceQuota gets matching headroom on top of the cap —
+    // otherwise a namespace running at its cap can never replace a pod: the
+    // surge pod is rejected at admission and the rollout wedges. Steady-state
+    // usage is still held to the real cap by the API-layer checks
+    // (enforceOrgCapForNewPod / member allowances).
+    const SURGE_HEADROOM = 1.25;
+    const withHeadroom = (v: number | null) => (v ? Math.ceil(v * SURGE_HEADROOM) : v);
+    const podsWithHeadroom = caps.maxPods
+      ? caps.maxPods + Math.max(1, Math.ceil(caps.maxPods * 0.25))
+      : caps.maxPods;
     await this.k8sNamespace.applyNamespaceQuota({
       namespace: project.namespace,
-      cpuLimitMilli: caps.cpuLimitMilli,
-      memoryLimitBytes: caps.memoryLimitBytes,
-      maxPods: caps.maxPods,
+      cpuLimitMilli: withHeadroom(caps.cpuLimitMilli),
+      memoryLimitBytes: withHeadroom(caps.memoryLimitBytes),
+      maxPods: podsWithHeadroom,
       maxServices: caps.maxServices,
       defaultPodCpuMilli,
       defaultPodMemoryBytes,

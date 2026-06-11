@@ -3175,20 +3175,39 @@ export class DeploymentsService {
         memoryRequestBytes: data.memoryRequestBytes,
       });
 
-      // Org-wide delta check.
-      await this.quotasService.enforceOrgCapForNewPod(deployment.project.organizationId, {
-        cpuMilli: resolved.cpuMilli * (deployment.replicas || 1),
-        memoryBytes: resolved.memoryBytes * (deployment.replicas || 1),
-      });
-      // Per-user allowance check (charged to project owner).
-      await this.quotasService.enforceMemberAllowanceForNewPod(
-        deployment.project.organizationId,
-        deployment.project.ownerId,
-        {
-          cpuMilli: resolved.cpuMilli * (deployment.replicas || 1),
-          memoryBytes: resolved.memoryBytes * (deployment.replicas || 1),
-        },
-      );
+      // The deployment's current footprint is already counted in org/member
+      // usage, so only the increase is additive — charging the full new
+      // footprint would double-count the running pods. Previously-unlimited
+      // deployments contribute nothing to counted usage, so their whole new
+      // footprint is the increase.
+      const wasUnlimited = deployment.cpuRequestMilli === 0 &&
+        (deployment.memoryRequestBytes === null || deployment.memoryRequestBytes === BigInt(0));
+      const current = wasUnlimited
+        ? { cpuMilli: 0, memoryBytes: 0 }
+        : await this.quotasService.resolvePodResources(deployment.projectId, {
+            cpuRequestMilli: deployment.cpuRequestMilli,
+            memoryRequestBytes:
+              deployment.memoryRequestBytes != null ? Number(deployment.memoryRequestBytes) : null,
+          });
+      const replicasRes = deployment.replicas || 1;
+      const increase = {
+        cpuMilli: Math.max(0, (resolved.cpuMilli - current.cpuMilli) * replicasRes),
+        memoryBytes: Math.max(0, (resolved.memoryBytes - current.memoryBytes) * replicasRes),
+      };
+
+      if (increase.cpuMilli > 0 || increase.memoryBytes > 0) {
+        // Org-wide delta check.
+        await this.quotasService.enforceOrgCapForNewPod(
+          deployment.project.organizationId,
+          increase,
+        );
+        // Per-user allowance check (charged to project owner).
+        await this.quotasService.enforceMemberAllowanceForNewPod(
+          deployment.project.organizationId,
+          deployment.project.ownerId,
+          increase,
+        );
+      }
 
       if (k8sExistsRes) {
         await this.k8sWorkload.updateDeploymentResources(
@@ -4148,6 +4167,12 @@ export class DeploymentsService {
         ? await this.resolvePlacementForProject(deploymentRow.projectId)
         : { allowedNodes: null as string[] | null, deniedNodes: [] as string[] };
 
+      // Whether this deployment is already running in the cluster — decided
+      // up front because it gates both quota enforcement and create-vs-update.
+      const k8sDeploymentExists = await this.k8sWorkload.getKubernetesDeployment(
+        data.name, data.namespace,
+      ).then((d) => d !== null).catch(() => false);
+
       let rebuildResources: { cpuMilli: number; memoryBytes: number } | undefined;
       const isUnlimitedDeploy = deploymentRow?.cpuRequestMilli === 0 &&
         (deploymentRow?.memoryRequestBytes === BigInt(0) || deploymentRow?.memoryRequestBytes === null);
@@ -4156,18 +4181,26 @@ export class DeploymentsService {
           cpuRequestMilli: deploymentRow.cpuRequestMilli,
           memoryRequestBytes: deploymentRow.memoryRequestBytes ? Number(deploymentRow.memoryRequestBytes) : null,
         });
-        await this.quotasService.enforceOrgCapForNewPod(deploymentRow.project.organizationId, {
-          cpuMilli: rebuildResources.cpuMilli * (deploymentRow.replicas || 1),
-          memoryBytes: rebuildResources.memoryBytes * (deploymentRow.replicas || 1),
-        });
-        await this.quotasService.enforceMemberAllowanceForNewPod(
-          deploymentRow.project.organizationId,
-          deploymentRow.project.ownerId,
-          {
+        // Rebuilding an existing deployment swaps pods, it doesn't add any —
+        // its footprint is already counted in org/member usage, so charging
+        // the full footprint again double-counts it and fails builds for
+        // owners near their allowance. Resource/replica increases are
+        // enforced on their own paths (updateDeploymentResources, scale),
+        // so only a deployment that isn't in the cluster yet is additive.
+        if (!k8sDeploymentExists) {
+          await this.quotasService.enforceOrgCapForNewPod(deploymentRow.project.organizationId, {
             cpuMilli: rebuildResources.cpuMilli * (deploymentRow.replicas || 1),
             memoryBytes: rebuildResources.memoryBytes * (deploymentRow.replicas || 1),
-          },
-        );
+          });
+          await this.quotasService.enforceMemberAllowanceForNewPod(
+            deploymentRow.project.organizationId,
+            deploymentRow.project.ownerId,
+            {
+              cpuMilli: rebuildResources.cpuMilli * (deploymentRow.replicas || 1),
+              memoryBytes: rebuildResources.memoryBytes * (deploymentRow.replicas || 1),
+            },
+          );
+        }
         await this.quotasService.applyProjectQuota(deploymentRow.projectId).catch((err) => {
           console.error('[Projects] applyProjectQuota failed:', err);
         });
@@ -4180,16 +4213,6 @@ export class DeploymentsService {
           where: { id: deploymentId },
           include: { services: { include: { ports: true } } },
         });
-
-        // Check if Kubernetes deployment actually exists in the cluster
-        let k8sDeploymentExists = false;
-        try {
-          const k8sDeployment = await this.k8sWorkload.getKubernetesDeployment(data.name, data.namespace);
-          k8sDeploymentExists = k8sDeployment !== null;
-        } catch (error) {
-          // If we can't check, assume it doesn't exist
-          k8sDeploymentExists = false;
-        }
 
         // If no services exist in database OR Kubernetes deployment doesn't exist, create it
         const hasServices = existingDeploymentDb?.services && existingDeploymentDb.services.length > 0;
