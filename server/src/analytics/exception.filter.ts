@@ -9,6 +9,7 @@ import {
 import { BaseExceptionFilter, HttpServer } from '@nestjs/core';
 import { Request, Response } from 'express';
 import { AnalyticsService } from './analytics.service';
+import { markSpanError } from './datadog';
 import { getClientIp } from '../auth/client-ip';
 
 /**
@@ -39,6 +40,9 @@ export class AnalyticsExceptionFilter extends BaseExceptionFilter implements Exc
         const status =
           exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
         if (status >= 500) {
+          // Nest swallows the exception before express sees it, so without
+          // this Datadog Error Tracking only gets a bare 500 status.
+          markSpanError(exception);
           const distinctId = req.auth?.userId || req.user?.sub || `ip:${getClientIp(req)}`;
           this.analytics.captureException(exception, distinctId, {
             http_method: req.method,
@@ -49,6 +53,7 @@ export class AnalyticsExceptionFilter extends BaseExceptionFilter implements Exc
         }
         void res;
       } else {
+        markSpanError(exception);
         this.analytics.captureException(exception, 'background', {
           context_type: host.getType(),
         });

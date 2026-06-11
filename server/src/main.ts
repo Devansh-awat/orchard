@@ -11,6 +11,11 @@ dotenv.config({ path: envPath1, override: false });
 const envPath2 = resolve(__dirname, '../../.env');
 dotenv.config({ path: envPath2, override: false });
 
+// dd-trace must init before Nest/express/prisma are required so its module
+// patching can instrument them (APM traces + continuous profiler).
+import { initDatadog } from './analytics/datadog';
+initDatadog();
+
 import { startTelemetry } from './analytics/telemetry';
 startTelemetry();
 
