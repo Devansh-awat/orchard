@@ -684,9 +684,10 @@ export class DeploymentsController {
       return res.redirect(302, url);
     }
     // Cache the miss too — otherwise every dashboard load re-runs the full
-    // fetch pipeline for domains that have no favicon.
+    // fetch pipeline for domains that have no favicon. 204 (not 404) so the
+    // <img> onerror fallback fires without a console error on every load.
     res.setHeader('Cache-Control', 'public, max-age=3600');
-    return res.status(HttpStatus.NOT_FOUND).json({ error: 'No favicon found' });
+    return res.status(HttpStatus.NO_CONTENT).end();
   }
 
   @Get(':id')

@@ -1,12 +1,14 @@
 <script lang="ts">
-	import { goto, invalidate } from '$app/navigation';
-	import { onDestroy, onMount, tick } from 'svelte';
+	import { goto } from '$app/navigation';
+	import { onDestroy, onMount, tick, untrack } from 'svelte';
+	import { createQuery } from '@tanstack/svelte-query';
 	import { animate } from 'motion';
 	import { springPop } from '$lib/utils/motion.svelte';
-	import { apiFetch, toasts, refreshTree, subscribeOrgEvents } from '$lib/stores';
+	import { apiFetch, toasts, refreshTree, subscribeOrgEvents, sseStatusFor } from '$lib/stores';
+	import { queryClient } from '$lib/query';
 	import type { PageData } from './$types';
 	import { SpatialMenu } from 'melt/builders';
-	import { Server } from 'lucide-svelte';
+	import { Server, TriangleAlert } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import NewResourceModal from '$lib/components/NewResourceModal.svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
@@ -47,6 +49,11 @@
 		crossAxis: true
 	});
 
+	// --- Props / page data ---
+	let { data } = $props<{ data: PageData }>();
+	const orgSlug = $derived(data.orgSlug);
+	const projectSlug = $derived(data.projectSlug);
+
 	// --- State ---
 	let project = $state<Project | null>(null);
 	const canEdit = $derived(project?.currentUserRole?.canEdit ?? false);
@@ -74,29 +81,23 @@
 	let activeTab = $state<'resources' | 'compose' | 'members'>('resources');
 	let memberSearch = $state('');
 
-	// Compose stacks
-	let composeStacks = $state<ComposeStackSummary[]>([]);
-	let composeStacksLoading = $state(false);
-
-	async function fetchComposeStacks(projectId: string) {
-		composeStacksLoading = true;
-		try {
-			const response = await apiFetch(`/apiv1/projects/${projectId}/compose-stacks`);
-			if (response.ok) {
-				composeStacks = await response.json();
-			}
-		} catch {
-			/* silent */
-		} finally {
-			composeStacksLoading = false;
-		}
-	}
-
-	$effect(() => {
-		if (project?.id) {
-			fetchComposeStacks(project.id);
-		}
+	// Compose stacks — keyed by project id so SSE-driven project refetches
+	// don't re-trigger this request (staleTime gates background refetches).
+	const composeQuery = createQuery(() => {
+		const projectId = project?.id;
+		return {
+			queryKey: ['compose-stacks', projectId ?? ''],
+			enabled: !!projectId,
+			queryFn: async () => {
+				const response = await apiFetch(`/apiv1/projects/${projectId}/compose-stacks`);
+				if (!response.ok) throw new Error('Failed to fetch compose stacks');
+				return response.json() as Promise<ComposeStackSummary[]>;
+			},
+			staleTime: 30_000,
+		};
 	});
+	const composeStacks = $derived<ComposeStackSummary[]>(composeQuery.data ?? []);
+	const composeStacksLoading = $derived(!!project?.id && composeQuery.isPending);
 
 	// --- Hero/tab animation ---
 	let tabsRowEl = $state<HTMLElement | null>(null);
@@ -167,13 +168,8 @@
 		});
 	});
 
-	// --- Props / page data ---
-	let { data } = $props<{ data: PageData }>();
-	const orgSlug = $derived(data.orgSlug);
-	const projectSlug = $derived(data.projectSlug);
-
 	async function fetchProject() {
-		await invalidate(`project:${orgSlug}/${projectSlug}`);
+		await queryClient.invalidateQueries({ queryKey: ['project-detail', orgSlug, projectSlug] });
 	}
 
 	function applyProjectData(p: any) {
@@ -191,9 +187,12 @@
 		if (project.namespace === lastSyncedNamespace) return;
 		lastSyncedNamespace = project.namespace;
 		try {
-			await apiFetch(`/apiv1/sync/${project.namespace}`, { method: 'POST' });
-			const response = await apiFetch(`/apiv1/projects/${project.id}`);
-			if (response.ok) project = await response.json();
+			// The server exposes sync as GET (kubernetes.controller.ts) — a POST
+			// here 404s and the namespace never syncs.
+			await apiFetch(`/apiv1/sync/${project.namespace}`);
+			// Refresh through the query (coalesced) instead of a second full
+			// project GET that could race and overwrite fresher data.
+			scheduleProjectRefetch();
 		} catch (e) {
 			console.error('Failed to sync namespace:', e);
 		}
@@ -377,59 +376,125 @@
 		openDeployment(id);
 	}
 
-	// --- Data loading via SSE ---
-	let unsub: (() => void) | null = null;
-	let loadedSlug: string | null = null;
+	// --- Live updates: SSE connection health ---
+	let sseStatusValue = $state<'connecting' | 'connected' | 'disconnected'>('connecting');
+	const sseDisconnected = $derived(sseStatusValue === 'disconnected');
+	const orgId = $derived(project?.organization?.id ?? null);
 
+	// Coalesce SSE bursts (a single deploy emits many pod/deployment events in
+	// quick succession) into one refetch instead of N concurrent full reloads.
+	let refetchTimer: ReturnType<typeof setTimeout> | null = null;
+	function scheduleProjectRefetch() {
+		if (refetchTimer) return;
+		refetchTimer = setTimeout(() => {
+			refetchTimer = null;
+			queryClient.invalidateQueries({ queryKey: ['project-detail', orgSlug, projectSlug] });
+		}, 350);
+	}
+
+	// ── TanStack Query: project data ──
+	const TRANSIENT_DEPLOYMENT_STATUSES = new Set([
+		'scaling', 'restarting', 'pending', 'unhealthy',
+	]);
+	const projectQuery = createQuery(() => ({
+		queryKey: ['project-detail', orgSlug, projectSlug],
+		queryFn: async () => {
+			const res = await apiFetch(`/apiv1/projects/by-slugs/${orgSlug}/${projectSlug}`);
+			if (!res.ok) {
+				if (res.status === 404) throw new Error('Project not found');
+				if (res.status === 403) throw new Error('Access denied');
+				throw new Error(`Project load failed: ${res.status}`);
+			}
+			return res.json();
+		},
+		// Adaptive polling: fast while any resource is transitioning, fallback
+		// poll while SSE is down, silent otherwise (SSE drives refetches).
+		refetchInterval: (() => {
+			const transient = (project?.deployments ?? []).some(
+				(d: Deployment) =>
+					TRANSIENT_DEPLOYMENT_STATUSES.has((d.status ?? '').toLowerCase()) ||
+					(d.buildStatus ?? '').toLowerCase() === 'building',
+			);
+			if (transient) return 4000;
+			if (sseStatusValue === 'disconnected') return 10_000;
+			return false;
+		})(),
+		refetchIntervalInBackground: false,
+	}));
+
+	// Reset page state when navigating between projects so the skeleton shows
+	// instead of the previous project's data.
+	let loadedSlug: string | null = null;
+	let lastQueryData: unknown = null;
 	$effect(() => {
-		const slug = data.projectSlug;
-		const promise = data.projectPromise;
-		if (!promise) return;
-		const isProjectSwitch = loadedSlug !== null && loadedSlug !== slug;
-		if (isProjectSwitch) {
-			error = null;
-			loading = true;
-			project = null;
-			projectMembers = [];
-			pendingInvitations = [];
-			templateInstances = [];
-			databases = [];
-			lastSyncedNamespace = null;
-		}
-		promise
-			.then((p) => {
-				if (!p) return;
-				applyProjectData(p);
-				loadedSlug = slug;
-				loading = false;
+		const slug = projectSlug;
+		untrack(() => {
+			if (loadedSlug !== null && loadedSlug !== slug) {
+				lastQueryData = null;
 				error = null;
-				if (p?.namespace) syncNamespace();
-				const orgIdValue = p?.organization?.id;
-				if (orgIdValue) {
-					unsub?.();
-					unsub = subscribeOrgEvents(
-						orgIdValue,
-						(ev) => {
-							if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
-							if (
-								ev.projectId === p.id ||
-								ev.type === 'project.changed' ||
-								ev.type === 'membership.changed'
-							) {
-								invalidate(`project:${orgSlug}/${projectSlug}`);
-							}
-						},
-						{ invalidateDependencies: [] },
-					);
-				}
-			})
-			.catch((e) => {
-				error = e instanceof Error ? e.message : 'Failed to fetch project';
-				loading = false;
-			});
+				loading = true;
+				project = null;
+				projectMembers = [];
+				pendingInvitations = [];
+				templateInstances = [];
+				databases = [];
+				lastSyncedNamespace = null;
+			}
+			loadedSlug = slug;
+		});
 	});
 
-	onDestroy(() => unsub?.());
+	// Apply query data to local state (latest-wins: TanStack never resolves a
+	// stale response after a newer one, which is what made cards flicker to
+	// "Pending" under bursts of invalidations before).
+	$effect(() => {
+		const qData = projectQuery.data;
+		const qError = projectQuery.error;
+		const qPending = projectQuery.isPending;
+		untrack(() => {
+			if (qPending && !lastQueryData) return; // initial load — keep skeleton
+			if (qError && !qData) {
+				error = qError instanceof Error ? qError.message : 'Failed to fetch project';
+				loading = false;
+				return;
+			}
+			if (!qData || qData === lastQueryData) return;
+			lastQueryData = qData;
+			applyProjectData(qData);
+			loading = false;
+			error = null;
+			if (qData?.namespace) syncNamespace();
+		});
+	});
+
+	// Subscribe to org SSE once the org is known; re-runs only if orgId changes.
+	$effect(() => {
+		const id = orgId;
+		if (!id) return;
+		const unsubStatus = sseStatusFor(id).subscribe((v) => (sseStatusValue = v));
+		const unsubEvents = subscribeOrgEvents(
+			id,
+			(ev) => {
+				if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
+				if (
+					ev.projectId === project?.id ||
+					ev.type === 'project.changed' ||
+					ev.type === 'membership.changed'
+				) {
+					scheduleProjectRefetch();
+				}
+			},
+			{ invalidateDependencies: [] },
+		);
+		return () => {
+			unsubStatus();
+			unsubEvents();
+		};
+	});
+
+	onDestroy(() => {
+		if (refetchTimer) clearTimeout(refetchTimer);
+	});
 </script>
 
 <div class="pj-page" class:pj-page--hasbg={!!project?.backgroundImage}>
@@ -443,6 +508,17 @@
 	{/if}
 
 	<div class="pj-page-inner">
+	{#if sseDisconnected && !loading}
+		<div class="pj-sse-alert" role="alert">
+			<TriangleAlert class="h-4 w-4" style="flex-shrink: 0; margin-top: 0.0625rem;" />
+			<div class="pj-sse-alert-body">
+				<span class="pj-sse-alert-title">Live updates offline</span>
+				<span class="pj-sse-alert-hint">Real-time connection lost — reconnecting automatically. Data shown may be outdated.</span>
+			</div>
+			<button class="pj-sse-alert-action" onclick={() => location.reload()}>Reload</button>
+		</div>
+	{/if}
+
 	{#if error}
 		<div class="pj-error">{error}</div>
 	{/if}
@@ -611,6 +687,56 @@
 {/if}
 
 <style>
+	.pj-sse-alert {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.75rem;
+		padding: 0.75rem 1rem;
+		margin-bottom: 1rem;
+		border-radius: 0.75rem;
+		border: 1px solid color-mix(in srgb, var(--warning-text) 18%, transparent);
+		background-color: color-mix(in srgb, var(--warning-text) 6%, transparent);
+		color: var(--warning-text);
+	}
+	.pj-sse-alert-body {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+	}
+	.pj-sse-alert-title {
+		font-size: 0.8125rem;
+		font-weight: 600;
+		line-height: 1.3;
+	}
+	.pj-sse-alert-hint {
+		font-size: 0.75rem;
+		opacity: 0.85;
+		line-height: 1.4;
+	}
+	.pj-sse-alert-action {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.3125rem 0.625rem;
+		border-radius: 0.375rem;
+		font-size: 0.75rem;
+		font-weight: 600;
+		border: 1px solid currentColor;
+		background: none;
+		color: inherit;
+		cursor: pointer;
+		white-space: nowrap;
+		flex-shrink: 0;
+		align-self: center;
+		opacity: 0.9;
+		transition: opacity 120ms, background-color 120ms;
+	}
+	.pj-sse-alert-action:hover {
+		opacity: 1;
+		background-color: color-mix(in srgb, currentColor 8%, transparent);
+	}
+
 	/* Stats skeleton only used in this page */
 	.pj-stats {
 		display: flex;

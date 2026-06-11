@@ -1243,12 +1243,14 @@ export class ProjectsService {
       project.deployments.map(async (deployment) => {
         const ns = deployment.namespace;
         const nsMap = ns ? podsByNsByApp.get(ns) : undefined;
-        // null = batch fetch failed → fall back to per-deployment fetch (original behavior).
-        // empty entry = batch succeeded, no pods for this deployment → 'pending'.
-        const prefetched =
-          nsMap === null || nsMap === undefined
-            ? undefined
-            : (nsMap.get(deployment.name) ?? { pods: [], warnings: [] });
+        // The batch map is keyed by the pods' `app` label, which only matches
+        // deployments whose selector is `app=<name>` (leaf-created ones).
+        // Synced/imported deployments can use arbitrary selectors, so a miss
+        // means "unknown", NOT "no pods" — fall back to the per-deployment
+        // fetch (which reads the real selector) instead of reporting
+        // 'pending' for a healthy deployment. null = batch fetch failed →
+        // same fallback.
+        const prefetched = nsMap?.get(deployment.name) ?? undefined;
         const computedStatus = await this.deployments.computeDeploymentStatus(deployment, prefetched);
         const merged = { ...deployment, status: computedStatus };
         return access.canEdit ? merged : this.deployments.scrubDeploymentForViewer(merged as any);

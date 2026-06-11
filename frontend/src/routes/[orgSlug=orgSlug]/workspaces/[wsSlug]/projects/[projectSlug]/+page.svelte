@@ -176,7 +176,9 @@
 
 		syncing = true;
 		try {
-			await apiFetch(`/apiv1/sync/${project.namespace}`, { method: 'POST' });
+			// The server exposes sync as GET (kubernetes.controller.ts) — a POST
+		// here 404s and the namespace never syncs.
+		await apiFetch(`/apiv1/sync/${project.namespace}`);
 			const response = await apiFetch(`/apiv1/projects/${project.id}`);
 			if (response.ok) {
 				project = await response.json();

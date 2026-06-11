@@ -27,13 +27,15 @@ export interface OrgEvent {
 export type SseStatus = 'connecting' | 'connected' | 'disconnected';
 
 interface Subscription {
-	source: EventSource;
+	source: EventSource | null;
 	listeners: Set<(ev: OrgEvent) => void>;
 	orgId: string;
 	dependencies: Set<string>;
 	status: SseStatus;
 	lastEventAt: number;
 	heartbeatTimer: ReturnType<typeof setInterval> | null;
+	reconnectTimer: ReturnType<typeof setTimeout> | null;
+	reconnectAttempts: number;
 }
 
 const subscriptions = new Map<string, Subscription>();
@@ -59,6 +61,12 @@ function setStatus(orgId: string, next: SseStatus) {
 // stream as dead even if the EventSource hasn't fired onerror — proxies
 // sometimes wedge silently. The server sends heartbeats every 25s.
 const STALE_THRESHOLD_MS = 60_000;
+
+// Manual reconnect backoff. EventSource only auto-retries while CONNECTING;
+// once it reaches CLOSED (e.g. a proxy returned an HTTP error) it is dead for
+// good, so we have to recreate it ourselves.
+const RECONNECT_BASE_MS = 1_000;
+const RECONNECT_MAX_MS = 30_000;
 
 function applyEventToCache(sub: Subscription, ev: OrgEvent) {
 	if (ev.type === 'heartbeat' || ev.type === 'deployment.metrics') return;
@@ -87,6 +95,66 @@ function applyEventToLoaders(sub: Subscription, ev: OrgEvent) {
 	for (const dep of sub.dependencies) invalidate(dep);
 }
 
+function scheduleReconnect(sub: Subscription) {
+	// Subscription was torn down (last listener left) — don't resurrect it.
+	if (subscriptions.get(sub.orgId) !== sub) return;
+	if (sub.reconnectTimer) return;
+	const delay = Math.min(
+		RECONNECT_MAX_MS,
+		RECONNECT_BASE_MS * 2 ** Math.min(sub.reconnectAttempts, 5),
+	);
+	sub.reconnectAttempts += 1;
+	sub.reconnectTimer = setTimeout(() => {
+		sub.reconnectTimer = null;
+		if (subscriptions.get(sub.orgId) !== sub) return;
+		setStatus(sub.orgId, 'connecting');
+		connect(sub);
+	}, delay);
+}
+
+function connect(sub: Subscription) {
+	const base = get(apiBase) ?? '';
+	// Encode orgId so a value containing path-special chars can't escape
+	// the route segment (defense-in-depth — orgIds are server-issued UUIDs
+	// today, but the boundary is the safer place to enforce it).
+	const source = new EventSource(
+		`${base}/apiv1/events/orgs/${encodeURIComponent(sub.orgId)}`,
+		{ withCredentials: true },
+	);
+	sub.source = source;
+	source.onopen = () => {
+		sub.lastEventAt = Date.now();
+		sub.reconnectAttempts = 0;
+		setStatus(sub.orgId, 'connected');
+	};
+	source.onmessage = (e) => {
+		sub.lastEventAt = Date.now();
+		sub.reconnectAttempts = 0;
+		if (sub.status !== 'connected') setStatus(sub.orgId, 'connected');
+		let ev: OrgEvent;
+		try {
+			ev = JSON.parse(e.data);
+		} catch {
+			return;
+		}
+		applyEventToCache(sub, ev);
+		applyEventToLoaders(sub, ev);
+		for (const l of sub.listeners) l(ev);
+	};
+	source.onerror = () => {
+		if (source.readyState === EventSource.CLOSED) {
+			// EventSource never recovers from CLOSED on its own — recreate it
+			// with backoff. Until then the UI shows the stale-data warning.
+			setStatus(sub.orgId, 'disconnected');
+			sub.source = null;
+			scheduleReconnect(sub);
+		} else {
+			// CONNECTING — the browser is auto-retrying; just surface the gap.
+			setStatus(sub.orgId, 'connecting');
+		}
+	};
+}
+
 /**
  * Subscribe to server-sent events for an organization. Multiple callers for the
  * same orgId share one EventSource.
@@ -103,52 +171,28 @@ export function subscribeOrgEvents(
 
 	let sub = subscriptions.get(orgId);
 	if (!sub) {
-		const base = get(apiBase) ?? '';
 		setStatus(orgId, 'connecting');
-		// Encode orgId so a value containing path-special chars can't escape
-		// the route segment (defense-in-depth — orgIds are server-issued UUIDs
-		// today, but the boundary is the safer place to enforce it).
-		const source = new EventSource(
-			`${base}/apiv1/events/orgs/${encodeURIComponent(orgId)}`,
-			{ withCredentials: true },
-		);
 		sub = {
-			source,
+			source: null,
 			listeners: new Set(),
 			orgId,
 			dependencies: new Set(opts?.invalidateDependencies ?? []),
 			status: 'connecting',
 			lastEventAt: Date.now(),
 			heartbeatTimer: null,
+			reconnectTimer: null,
+			reconnectAttempts: 0,
 		};
-		source.onopen = () => {
-			sub!.lastEventAt = Date.now();
-			setStatus(orgId, 'connected');
-		};
-		source.onmessage = (e) => {
-			sub!.lastEventAt = Date.now();
-			if (sub!.status !== 'connected') setStatus(orgId, 'connected');
-			let ev: OrgEvent;
-			try {
-				ev = JSON.parse(e.data);
-			} catch {
-				return;
-			}
-			applyEventToCache(sub!, ev);
-			applyEventToLoaders(sub!, ev);
-			for (const l of sub!.listeners) l(ev);
-		};
-		source.onerror = () => {
-			// EventSource auto-reconnects; surface the gap so the UI can warn that
-			// data may be stale until the next message arrives.
-			setStatus(orgId, source.readyState === EventSource.CLOSED ? 'disconnected' : 'connecting');
-		};
-		// Stale-detection: if heartbeats stop landing, mark disconnected so
-		// adaptive polling on the page can take over.
+		connect(sub);
+		// Stale-detection: if heartbeats stop landing (proxies can wedge a
+		// stream without erroring), tear the connection down and reconnect.
 		sub.heartbeatTimer = setInterval(() => {
 			if (!sub) return;
 			if (Date.now() - sub.lastEventAt > STALE_THRESHOLD_MS && sub.status === 'connected') {
 				setStatus(orgId, 'disconnected');
+				sub.source?.close();
+				sub.source = null;
+				scheduleReconnect(sub);
 			}
 		}, 10_000);
 		subscriptions.set(orgId, sub);
@@ -164,8 +208,10 @@ export function subscribeOrgEvents(
 		if (!s) return;
 		s.listeners.delete(listener);
 		if (s.listeners.size === 0) {
-			s.source.close();
+			s.source?.close();
+			s.source = null;
 			if (s.heartbeatTimer) clearInterval(s.heartbeatTimer);
+			if (s.reconnectTimer) clearTimeout(s.reconnectTimer);
 			subscriptions.delete(orgId);
 			statusStore.update((st) => {
 				if (!(orgId in st)) return st;
