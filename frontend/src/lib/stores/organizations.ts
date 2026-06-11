@@ -45,9 +45,20 @@ function selectById(id: string) {
 	}
 }
 
-function initializeSelected() {
+function initializeSelected(preferredSlug?: string | null) {
 	const storedId = loadSelectedFromStorage();
 	const orgs = get(organizationsList);
+
+	// The org in the URL wins over the last-selected org in localStorage —
+	// otherwise the sidebar mounts with the stored org and visibly flips to
+	// the URL's org a frame later when [orgSlug]/+layout corrects it.
+	if (preferredSlug) {
+		const org = orgs.find((o) => o.slug === preferredSlug);
+		if (org) {
+			setSelected(org);
+			return;
+		}
+	}
 
 	if (storedId) {
 		const org = orgs.find((o) => o.id === storedId);

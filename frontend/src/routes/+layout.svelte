@@ -73,7 +73,7 @@
 				if (response.ok) {
 					const orgs = await response.json();
 					organizations.set(orgs);
-					organizations.initializeSelected();
+					organizations.initializeSelected($page.params.orgSlug);
 				}
 			});
 			const invitationsPromise = wantInvitations
