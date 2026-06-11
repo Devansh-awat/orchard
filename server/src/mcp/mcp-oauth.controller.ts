@@ -86,9 +86,9 @@ export class McpOAuthController {
   }
 
   @Post('token')
-  exchangeToken(@Req() req: Request, @Res() res: Response) {
+  async exchangeToken(@Req() req: Request, @Res() res: Response) {
     console.error(`[MCP OAuth] Token exchange: grant_type=${req.body.grant_type}, client_id=${req.body.client_id}, code_length=${req.body.code?.length || 0}`);
-    const result = this.oauthService.exchangeToken(req.body);
+    const result = await this.oauthService.exchangeToken(req.body);
 
     if (result.error) {
       console.error(`[MCP OAuth] Token exchange failed: ${result.error} ${result.error_description || ''}`);

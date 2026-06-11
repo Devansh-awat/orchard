@@ -96,6 +96,26 @@ export class SessionsService {
   }
 
   /**
+   * Sliding expiration for sessions kept alive by an active credential
+   * (currently the MCP refresh-token grant). Only live sessions are
+   * extended — revoked or already-expired sessions stay dead, so
+   * "sign out everywhere" still wins.
+   */
+  async extendSession(sessionId: string): Promise<void> {
+    await this.prisma.session.updateMany({
+      where: {
+        id: sessionId,
+        revokedAt: null,
+        expiresAt: { gt: new Date() },
+      },
+      data: {
+        expiresAt: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000),
+        lastActiveAt: new Date(),
+      },
+    });
+  }
+
+  /**
    * Get all active sessions for a user.
    */
   async getUserSessions(userId: string) {

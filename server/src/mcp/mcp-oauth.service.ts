@@ -19,6 +19,21 @@ interface AuthCodeEntry {
   expiresAt: number;
 }
 
+interface McpTokenClaims {
+  sub: string;
+  email?: string;
+  name?: string;
+  hackClubId?: string;
+  authMethod?: string;
+  sessionId: string;
+}
+
+const ACCESS_TOKEN_TTL = '1d';
+const ACCESS_TOKEN_TTL_SECONDS = 24 * 60 * 60;
+// Refresh tokens rotate on every use, so an actively-used client stays
+// authorized indefinitely while an idle one dies after 30 days.
+const REFRESH_TOKEN_TTL = '30d';
+
 @Injectable()
 export class McpOAuthService {
   private readonly oauthClients = new Map<string, OAuthClient>();
@@ -239,24 +254,14 @@ export class McpOAuthService {
     }
     // Carry the same sessionId so SuperAdminGuard's session check applies on
     // every MCP request, and shorten lifetime to 1d.
-    //
-    // M-2: stamp `type: 'mcp'` so SuperAdminGuard can reject MCP-issued tokens
-    // when they're replayed at the main Orchard API. Both JWTs use the same
-    // HS256 secret, so without a type discriminator a leaked MCP access token
-    // is indistinguishable from a first-party browser session JWT.
-    const orchardToken = await new SignJWT({
-      type: 'mcp',
+    const orchardToken = await this.mintAccessToken({
+      sub: payload.sub,
       email: payload.email,
       name: payload.name,
       hackClubId: payload.hackClubId,
-      authMethod: payload.authMethod || 'otp',
+      authMethod: payload.authMethod,
       sessionId: payload.sessionId,
-    })
-      .setProtectedHeader({ alg: 'HS256' })
-      .setSubject(payload.sub)
-      .setIssuedAt()
-      .setExpirationTime('1d')
-      .sign(this.getJwtSecret());
+    });
 
     const mcpAuthCode = randomBytes(32).toString('hex');
     console.error(`[MCP OAuth] MCP auth code created, redirecting to ${pending.redirectUri}`);
@@ -281,24 +286,137 @@ export class McpOAuthService {
     return { redirectUrl: redirectUrl.toString() };
   }
 
-  exchangeToken(body: {
+  // M-2: stamp `type: 'mcp'` so SuperAdminGuard can reject MCP-issued tokens
+  // when they're replayed at the main Orchard API. Both JWTs use the same
+  // HS256 secret, so without a type discriminator a leaked MCP access token
+  // is indistinguishable from a first-party browser session JWT.
+  private mintAccessToken(claims: McpTokenClaims): Promise<string> {
+    return new SignJWT({
+      type: 'mcp',
+      email: claims.email,
+      name: claims.name,
+      hackClubId: claims.hackClubId,
+      authMethod: claims.authMethod || 'otp',
+      sessionId: claims.sessionId,
+    })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setSubject(claims.sub)
+      .setIssuedAt()
+      .setExpirationTime(ACCESS_TOKEN_TTL)
+      .sign(this.getJwtSecret());
+  }
+
+  // Refresh tokens are stateless JWTs rather than DB/in-memory entries so
+  // they survive server restarts (the client registry and auth-code maps do
+  // not). type='mcp_refresh' means validateBearerTokenWithSub rejects them
+  // as bearer credentials, and the embedded clientId binds the token to the
+  // client it was issued to. Session revocation is still honored because the
+  // refresh grant re-validates sessionId against the DB before minting.
+  private mintRefreshToken(claims: McpTokenClaims, clientId: string): Promise<string> {
+    return new SignJWT({
+      type: 'mcp_refresh',
+      email: claims.email,
+      name: claims.name,
+      hackClubId: claims.hackClubId,
+      authMethod: claims.authMethod || 'otp',
+      sessionId: claims.sessionId,
+      clientId,
+    })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setSubject(claims.sub)
+      .setIssuedAt()
+      .setExpirationTime(REFRESH_TOKEN_TTL)
+      .sign(this.getJwtSecret());
+  }
+
+  private async buildTokenResponse(claims: McpTokenClaims, clientId: string, accessToken?: string) {
+    return {
+      access_token: accessToken ?? (await this.mintAccessToken(claims)),
+      token_type: 'Bearer',
+      expires_in: ACCESS_TOKEN_TTL_SECONDS,
+      refresh_token: await this.mintRefreshToken(claims, clientId),
+      scope: 'mcp:access',
+    };
+  }
+
+  private claimsFromPayload(payload: any): McpTokenClaims {
+    return {
+      sub: payload.sub,
+      email: payload.email,
+      name: payload.name,
+      hackClubId: payload.hackClubId,
+      authMethod: payload.authMethod,
+      sessionId: payload.sessionId,
+    };
+  }
+
+  private async refreshAccessToken(body: {
+    refresh_token?: string;
+    client_id: string;
+  }): Promise<{ error?: string; error_description?: string; token_response?: any }> {
+    if (!body.refresh_token) {
+      return { error: 'invalid_request', error_description: 'refresh_token required' };
+    }
+
+    let payload: any;
+    try {
+      payload = (await jwtVerify(body.refresh_token, this.getJwtSecret())).payload;
+    } catch (err) {
+      console.error(`[MCP OAuth] Refresh failed: ${err instanceof Error ? err.message : err}`);
+      return { error: 'invalid_grant', error_description: 'refresh token expired or invalid' };
+    }
+
+    if (payload.type !== 'mcp_refresh') {
+      console.error('[MCP OAuth] Refresh failed: wrong token type');
+      return { error: 'invalid_grant', error_description: 'not a refresh token' };
+    }
+    // Bind to the issuing client via the embedded claim, not the in-memory
+    // registry — registrations are lost on restart but refresh must survive.
+    if (!body.client_id || payload.clientId !== body.client_id) {
+      console.error('[MCP OAuth] Refresh failed: client_id mismatch');
+      return { error: 'invalid_client' };
+    }
+    if (!payload.sessionId || !payload.sub) {
+      return { error: 'invalid_grant', error_description: 'malformed refresh token' };
+    }
+
+    const sessionValid = await this.sessions.validateSession(payload.sessionId);
+    if (!sessionValid) {
+      console.error('[MCP OAuth] Refresh failed: session revoked or expired');
+      return { error: 'invalid_grant', error_description: 'session revoked or expired' };
+    }
+    // Sliding window: an actively-refreshing MCP client keeps its underlying
+    // session alive instead of dying at the fixed 7-day mark.
+    await this.sessions.extendSession(payload.sessionId);
+
+    console.error(`[MCP OAuth] Refresh succeeded for sub=${payload.sub}`);
+    return {
+      token_response: await this.buildTokenResponse(this.claimsFromPayload(payload), body.client_id),
+    };
+  }
+
+  async exchangeToken(body: {
     grant_type: string;
-    code: string;
+    code?: string;
     redirect_uri?: string;
     client_id: string;
     code_verifier?: string;
-  }): { error?: string; error_description?: string; token_response?: any } {
+    refresh_token?: string;
+  }): Promise<{ error?: string; error_description?: string; token_response?: any }> {
     console.error(`[MCP OAuth] Token exchange: grant_type=${body.grant_type}, client_id=${body.client_id}, code_length=${body.code?.length}, redirect_uri=${body.redirect_uri}`);
+    if (body.grant_type === 'refresh_token') {
+      return this.refreshAccessToken(body);
+    }
     if (body.grant_type !== 'authorization_code') {
       console.error(`[MCP OAuth] Token exchange failed: unsupported_grant_type`);
       return { error: 'unsupported_grant_type' };
     }
 
-    const authCode = this.authCodes.get(body.code);
+    const authCode = body.code ? this.authCodes.get(body.code) : undefined;
     console.error(`[MCP OAuth] Token exchange: authCode found=${!!authCode}, authCodes size=${this.authCodes.size}`);
-    if (!authCode || authCode.expiresAt < Date.now()) {
+    if (!body.code || !authCode || authCode.expiresAt < Date.now()) {
       console.error(`[MCP OAuth] Token exchange failed: invalid_grant (not found or expired)`);
-      this.authCodes.delete(body.code);
+      if (body.code) this.authCodes.delete(body.code);
       return { error: 'invalid_grant' };
     }
 
@@ -344,13 +462,23 @@ export class McpOAuthService {
     const orchardToken = authCode.orchardToken;
     this.authCodes.delete(body.code);
 
+    // Recover the identity claims from the access token minted at
+    // authorization time so the refresh token carries the same identity.
+    let payload: any;
+    try {
+      payload = (await jwtVerify(orchardToken, this.getJwtSecret())).payload;
+    } catch {
+      // The access token minted minutes ago should always verify; if it
+      // doesn't (e.g. JWT_SECRET rotated mid-flow), the code is unusable.
+      return { error: 'invalid_grant', error_description: 'authorization expired' };
+    }
+
     return {
-      token_response: {
-        access_token: orchardToken,
-        token_type: 'Bearer',
-        expires_in: 7 * 24 * 60 * 60,
-        scope: 'mcp:access',
-      },
+      token_response: await this.buildTokenResponse(
+        this.claimsFromPayload(payload),
+        body.client_id,
+        orchardToken,
+      ),
     };
   }
 
