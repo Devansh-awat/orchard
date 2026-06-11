@@ -357,6 +357,25 @@ export class K8sWorkloadService {
         };
       } catch (logError) {
         const statusCode = logError.response?.statusCode;
+        const k8sMessage: string = logError.response?.body?.message || '';
+
+        // k8s answers 400 "container ... is waiting to start: ContainerCreating"
+        // (or PodInitializing / image pull states) for pods that haven't started
+        // yet — routine right after a scale-up or restart while the frontend is
+        // already polling logs. Not an error: report empty logs until the
+        // container is up.
+        if (statusCode === 400 && k8sMessage.includes('is waiting to start')) {
+          return {
+            podName: cleanPodName,
+            container: targetContainer,
+            namespace: cleanNamespace,
+            logs: '',
+            tailLines: tailLines,
+            pending: true,
+            message: k8sMessage
+          };
+        }
+
         if (statusCode !== 404) {
           console.error('[API] Log fetch error details:', {
             message: logError.message,
@@ -365,7 +384,7 @@ export class K8sWorkloadService {
             body: logError.response?.body
           });
         }
-        
+
         throw new BadRequestException({
           error: 'Failed to fetch logs',
           message: logError.response?.body?.message || logError.message || 'Error occurred in log request',

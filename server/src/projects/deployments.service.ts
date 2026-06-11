@@ -795,7 +795,12 @@ export class DeploymentsService {
       metadata: { replicas: [deployment.replicas, replicas] },
     });
 
-    return result;
+    return {
+      success: true,
+      deploymentId,
+      projectId: deployment.projectId,
+      replicas,
+    };
   }
 
   async restartDeployment(
