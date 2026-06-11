@@ -44,6 +44,22 @@ const STEP_SUBLINE_RE = /^#(\d+)\s+(.*)$/;
 // `transferring …: 14.30MB done` or `… 1.7kB`
 const TRANSFER_RE = /(?:transferring\b[^:]*:\s*|\s)([\d.]+\s?[KMG]?B)(?:\s+done)?\s*$/i;
 
+// Export/push phases emit no `[stage]` header — their first line is the only
+// description (e.g. `#36 exporting to oci image format`). Map the known ones
+// to friendly labels; anything unrecognized falls back to the raw line.
+const HEADERLESS_LABELS: Array<[RegExp, string]> = [
+	[/^exporting to .*image format/i, 'Pushing image layers'],
+	[/^exporting to image/i, 'Pushing image layers'],
+	[/^exporting cache/i, 'Pushing build cache'],
+];
+
+function headerlessLabel(body: string): string {
+	for (const [re, label] of HEADERLESS_LABELS) {
+		if (re.test(body)) return label;
+	}
+	return body;
+}
+
 function stripPrefix(line: string): { ts: number | null; level: BuildMessage['level']; rest: string } {
 	const m = line.match(PREFIX_RE);
 	if (!m) return { ts: null, level: 'INFO', rest: line };
@@ -133,6 +149,12 @@ export function parseBuildkitLogs(raw: string | null | undefined): ParsedBuildLo
 		}
 		if (sublineMatch) {
 			const body = sublineMatch[2];
+			// Headerless steps take their first line as the label instead of
+			// rendering as an anonymous "Step #36".
+			if (!step.command && !step.stage) {
+				step.command = headerlessLabel(body);
+				continue;
+			}
 			// Capture transferred sizes shown next to the stage badge in Depot.
 			const tm = body.match(TRANSFER_RE);
 			if (tm && !step.transferred) step.transferred = tm[1].replace(/\s+/, ' ');
