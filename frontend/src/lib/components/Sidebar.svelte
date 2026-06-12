@@ -412,6 +412,9 @@
 							<kbd class="sidebar-search-kbd">{isMac ? '⌘' : 'Ctrl'}K</kbd>
 						</button>
 					</div>
+					<!-- Without a selected org the slug is empty and these hrefs would
+					     render as "//projects" — a protocol-relative external URL. -->
+					{#if orgSlug}
 					<div class="sidebar-home-link">
 						<a
 							href="/{orgSlug}"
@@ -450,6 +453,7 @@
 							<span class="tree-node-label">Usage</span>
 						</a>
 					</div>
+					{/if}
 				</div>
 			{:else}
 				<div class="sidebar-collapsed-nav" {@attach navIn}>
@@ -465,6 +469,7 @@
 						</div>
 						<span class="sidebar-collapsed-tooltip">Search <kbd class="sidebar-collapsed-tooltip-kbd">{shortcutKey}K</kbd></span>
 					</button>
+					{#if orgSlug}
 					<a
 						href="/{orgSlug}"
 						class="sidebar-collapsed-icon"
@@ -501,6 +506,7 @@
 						</div>
 						<span class="sidebar-collapsed-tooltip">Usage</span>
 					</a>
+					{/if}
 				</div>
 			{/if}
 		{/if}

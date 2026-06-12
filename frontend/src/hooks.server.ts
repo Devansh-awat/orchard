@@ -7,6 +7,19 @@ const BASE_DOMAIN = env.PUBLIC_BASE_DOMAIN || '';
 const SSO_ALLOWED_PATHS = ['/sso', '/oauth/callback', '/apiv1/'];
 
 export const handle: Handle = async ({ event, resolve }) => {
+	// Merge consecutive slashes (`//ysws//projects` → `/ysws/projects`).
+	// Doubled slashes still render a page but break every exact-match on
+	// pathname (sidebar active state, breadcrumbs), and relative links keep
+	// compounding the bad prefix. Normalize once at the entry point.
+	const { pathname } = event.url;
+	if (pathname.includes('//')) {
+		const normalized = pathname.replace(/\/{2,}/g, '/');
+		return new Response(null, {
+			status: 308,
+			headers: { Location: normalized + event.url.search },
+		});
+	}
+
 	if (BASE_DOMAIN) {
 		const host = event.request.headers.get('host') || '';
 
