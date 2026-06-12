@@ -31,6 +31,156 @@ export function initDatadog(): void {
 }
 
 /**
+ * Heuristic: did the build fail because of the user's code/config, or
+ * because of our infrastructure? Tagged on the build span so dashboards can
+ * separate "their Dockerfile is broken" from "our builders are broken".
+ */
+const USER_ERROR_RE =
+  /dockerfile|failed to parse|syntax error|npm err|yarn|pnpm|tsc |compil|did not complete successfully|exit code: [1-9]|executor failed|unable to find|no such file|fatal: |authentication failed|repository not found|railpack/i;
+const SYSTEM_ERROR_RE =
+  /timed? ?out|scheduling|insufficient|quota|registry|failed to push|econnrefused|enotfound|etimedout|socket hang up|daemon|buildkit|pvc|disk full|no space|s3|tls|internal server|pool/i;
+
+export function classifyBuildError(message: string, step?: string): 'user' | 'system' | 'unknown' {
+  const text = `${step ?? ''} ${message}`;
+  if (USER_ERROR_RE.test(text)) return 'user';
+  if (SYSTEM_ERROR_RE.test(text)) return 'system';
+  return 'unknown';
+}
+
+/**
+ * One APM trace per image build, on its own `orchard-builds` service so the
+ * Service Catalog shows build throughput/duration/error-rate separately from
+ * API traffic. Works even when tracing is disabled (dd-trace returns no-op
+ * spans before init), so callers never need to guard.
+ */
+export function startBuildTrace(meta: {
+  deploymentId: string;
+  deploymentName: string;
+  namespace: string;
+  repoUrl?: string;
+  branch?: string;
+  commitSha?: string;
+  buildType?: string;
+  triggerType?: string;
+  triggeredById?: string;
+  isRebuild?: boolean;
+}) {
+  const repo = meta.repoUrl?.replace(/^https?:\/\/github\.com\//i, '').replace(/\.git$/, '');
+  const span = tracer.startSpan('build.pipeline', {
+    tags: {
+      'service.name': 'orchard-builds',
+      'resource.name': repo ? `${repo}@${meta.branch ?? 'main'}` : meta.deploymentName,
+      'span.kind': 'internal',
+      'build.deployment_id': meta.deploymentId,
+      'build.deployment_name': meta.deploymentName,
+      'build.namespace': meta.namespace,
+      'build.repo': repo,
+      'build.branch': meta.branch,
+      'build.commit_sha': meta.commitSha,
+      'build.type': meta.buildType ?? 'dockerfile',
+      'build.trigger': meta.triggerType ?? 'manual',
+      'build.triggered_by': meta.triggeredById,
+      'build.is_rebuild': !!meta.isRebuild,
+    },
+  });
+
+  let finished = false;
+  return {
+    /**
+     * Run `fn` with this build span as the active trace context, so spans
+     * created downstream (build.schedule, instrumented k8s/registry HTTP
+     * calls) attach to the build trace instead of floating free.
+     */
+    activate<T>(fn: () => Promise<T>): Promise<T> {
+      try {
+        return tracer.scope().activate(span, fn);
+      } catch {
+        return fn();
+      }
+    },
+    /** Mark the pipeline successful. Extra tags: e.g. image build seconds. */
+    finishSuccess(tags?: Record<string, string | number | boolean | undefined>) {
+      if (finished) return;
+      finished = true;
+      try {
+        if (tags) span.addTags(tags as Record<string, string>);
+        span.setTag('build.outcome', 'succeeded');
+        span.finish();
+      } catch { /* telemetry must never break builds */ }
+    },
+    /** Mark the pipeline failed; classifies user-vs-system from the error. */
+    finishFailure(error: unknown, step?: string) {
+      if (finished) return;
+      finished = true;
+      try {
+        const err = error instanceof Error ? error : new Error(String(error));
+        span.setTag('error', err);
+        span.setTag('build.outcome', 'failed');
+        span.setTag('build.failed_step', step ?? 'unknown');
+        span.setTag('build.error_domain', classifyBuildError(err.message, step));
+        span.finish();
+      } catch { /* telemetry must never break builds */ }
+    },
+  };
+}
+
+/**
+ * Child span for a phase inside the build pipeline (e.g. `build.schedule`:
+ * k8s Job submitted → pod running). Parents to the active trace context when
+ * one exists, otherwise stands alone. Finish is idempotent.
+ */
+export function startPhaseSpan(
+  name: string,
+  tags?: Record<string, string | number | boolean | undefined>,
+) {
+  const span = tracer.startSpan(name, {
+    childOf: tracer.scope().active() ?? undefined,
+    tags: {
+      'service.name': 'orchard-builds',
+      'resource.name': name,
+      ...tags,
+    },
+  });
+  let finished = false;
+  return {
+    finish(extra?: Record<string, string | number | boolean | undefined>) {
+      if (finished) return;
+      finished = true;
+      try {
+        if (extra) span.addTags(extra as Record<string, string>);
+        span.finish();
+      } catch { /* telemetry must never break builds */ }
+    },
+  };
+}
+
+/**
+ * Record an already-completed phase as a span with explicit start/end times
+ * (e.g. build pod container timings reported by Kubernetes after the fact).
+ * No-op for invalid/zero-length windows.
+ */
+export function recordPhaseSpan(
+  name: string,
+  startMs: number,
+  endMs: number,
+  tags?: Record<string, string | number | boolean | undefined>,
+): void {
+  if (!Number.isFinite(startMs) || !Number.isFinite(endMs) || endMs <= startMs) return;
+  try {
+    const span = tracer.startSpan(name, {
+      childOf: tracer.scope().active() ?? undefined,
+      startTime: startMs,
+      tags: {
+        'service.name': 'orchard-builds',
+        'resource.name': name,
+        ...tags,
+      },
+    });
+    span.finish(endMs);
+  } catch { /* telemetry must never break builds */ }
+}
+
+/**
  * Attach an exception to the active APM span so Datadog Error Tracking gets
  * the real error type/message/stack instead of a bare HTTP 500. Safe to call
  * when tracing is disabled (no active span → no-op).

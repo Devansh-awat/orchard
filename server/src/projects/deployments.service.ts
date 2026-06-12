@@ -23,6 +23,7 @@ import { AuditService } from '../audit/audit.service';
 import { ProjectAccessService } from './project-access.service';
 import { NodesService } from '../nodes/nodes.service';
 import { formatSlug } from './projects.utils';
+import { startBuildTrace } from '../analytics/datadog';
 import { Prisma, ServiceType } from '@prisma/client';
 
 @Injectable()
@@ -3983,7 +3984,22 @@ export class DeploymentsService {
     githubAccessToken?: string,
   ) {
     console.log(`[Projects] Starting buildAndDeployAsync for deployment ${deploymentId}`);
-    
+
+    // One Datadog APM trace per build (service: orchard-builds) — duration,
+    // start time, outcome, and user-vs-system failure classification.
+    const buildTrace = startBuildTrace({
+      deploymentId,
+      deploymentName: data.name,
+      namespace: data.namespace,
+      repoUrl: data.repoUrl,
+      branch: data.branch,
+      commitSha: data.commitSha,
+      buildType: data.buildType,
+      triggerType: data.triggerType,
+      triggeredById: data.triggeredById,
+      isRebuild: data.isRebuild,
+    });
+
     try {
       await this.dockerService.cancelBuildJobsByDeploymentId(deploymentId);
     } catch (error) {
@@ -4048,7 +4064,7 @@ export class DeploymentsService {
 
       const buildStartTime = Date.now();
       
-      const image = await this.dockerService.buildAndPushFromGitHub({
+      const image = await buildTrace.activate(() => this.dockerService.buildAndPushFromGitHub({
         repoUrl: data.repoUrl,
         branch: data.branch,
         dockerfilePath: data.dockerfilePath || 'Dockerfile',
@@ -4065,7 +4081,7 @@ export class DeploymentsService {
         // project namespace. Kata's mount surface ⇒ the build VM only sees
         // this directory and can't reach other tenants' cache entries.
         cacheTenantKey: data.namespace,
-      });
+      }));
 
       const buildCompletedAt = new Date();
       const buildDuration = Math.floor((buildCompletedAt.getTime() - buildStartTime) / 1000);
@@ -4518,6 +4534,8 @@ export class DeploymentsService {
           console.error(`[Projects] Failed to update GitHub deployment: ${err.message}`);
         }
       }
+
+      buildTrace.finishSuccess({ 'build.image_seconds': buildDuration });
     } catch (error) {
       if (logUpdateInterval) {
         clearInterval(logUpdateInterval);
@@ -4547,6 +4565,8 @@ export class DeploymentsService {
           select: { buildLogs: true, buildStep: true, status: true, buildStatus: true },
         });
 
+        buildTrace.finishFailure(error, currentDeployment?.buildStep ?? undefined);
+
         // Don't overwrite a successful build status from a newer build
         if (currentDeployment?.buildStatus === 'succeeded') {
           console.log(`[Projects] Deployment ${deploymentId} already has a succeeded build (likely from a newer build), skipping error status update`);
@@ -4564,6 +4584,7 @@ export class DeploymentsService {
           },
         });
       } catch (dbErr) {
+        buildTrace.finishFailure(error); // no-op if already finished above
         console.error(`[Projects] Failed to update error status in database:`, {
           deploymentId,
           dbError: dbErr.message,

@@ -3,6 +3,7 @@ import * as k8s from '@kubernetes/client-node';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { BuildKitPoolService } from './buildkit-pool.service';
+import { startPhaseSpan, recordPhaseSpan } from '../analytics/datadog';
 
 interface BuildJobOptions {
   repoUrl: string;
@@ -1675,6 +1676,50 @@ exit $rc`,
     return crypto.createHash('sha256').update(secrets).digest('hex');
   }
 
+  /**
+   * Emit per-phase spans (clone / image build / registry push) for a finished
+   * build job, using the exact container timestamps Kubernetes reports:
+   * git-clone init container, buildkit main container, pusher sidecar.
+   * Best-effort — failures here never affect the build result.
+   */
+  private async emitBuildPhaseSpans(jobName: string, deploymentId?: string): Promise<void> {
+    try {
+      this.ensureKubeConfig();
+      const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
+      const pods = await coreApi.listNamespacedPod(
+        this.builderNamespace,
+        undefined, undefined, undefined, undefined,
+        `job-name=${jobName}`,
+      );
+      const pod = pods.body.items[0];
+      if (!pod) return;
+
+      const tags = { 'build.job_name': jobName, 'build.deployment_id': deploymentId };
+      const windowOf = (s?: k8s.V1ContainerStatus) => {
+        const t = s?.state?.terminated;
+        if (!t?.startedAt || !t?.finishedAt) return null;
+        return { start: new Date(t.startedAt).getTime(), end: new Date(t.finishedAt).getTime() };
+      };
+
+      const clone = windowOf(pod.status?.initContainerStatuses?.find((c) => c.name === 'git-clone'));
+      if (clone) recordPhaseSpan('build.clone', clone.start, clone.end, tags);
+
+      const image = windowOf(pod.status?.containerStatuses?.find((c) => c.name === 'buildkit'));
+      if (image) recordPhaseSpan('build.image', image.start, image.end, tags);
+
+      // The pusher sidecar starts with the pod and idles until buildkit hands
+      // it the image, so clamp its window to begin where the build ended —
+      // otherwise "push" would include the whole build as wait time.
+      const push = windowOf(pod.status?.containerStatuses?.find((c) => c.name === 'pusher'));
+      if (push) {
+        const start = image ? Math.max(push.start, image.end) : push.start;
+        recordPhaseSpan('build.push', start, push.end, tags);
+      }
+    } catch (error) {
+      console.warn(`[ImageBuilder] Failed to emit build phase spans for ${jobName}:`, (error as Error).message);
+    }
+  }
+
   async getBuildJobStatus(jobName: string): Promise<BuildJobStatus> {
     this.ensureKubeConfig();
     const batchApi = this.kc!.makeApiClient(k8s.BatchV1Api);
@@ -1898,13 +1943,24 @@ exit $rc`,
     console.log(`[ImageBuilder] Starting to wait for build job ${jobName} (timeout: ${timeoutMs / 1000}s, deploymentId: ${deploymentId})`);
     await this.appendLog(deploymentId, `Waiting for build job ${jobName} to complete...`);
 
+    // Scheduling wait: job submitted → pod actually running. Finishes on the
+    // first non-pending status observed (5s poll granularity).
+    const scheduleSpan = startPhaseSpan('build.schedule', {
+      'build.job_name': jobName,
+      'build.deployment_id': deploymentId,
+    });
+
     while (Date.now() - startTime < timeoutMs) {
       pollCount++;
       const elapsedSeconds = Math.floor((Date.now() - startTime) / 1000);
       
       try {
         const status = await this.getBuildJobStatus(jobName);
-        
+
+        if (status.status !== 'pending' && status.status !== 'unknown') {
+          scheduleSpan.finish({ 'build.schedule_outcome': status.status });
+        }
+
         if (status.status !== lastLoggedStatus) {
           console.log(`[ImageBuilder] Job ${jobName} status changed: ${lastLoggedStatus} -> ${status.status} (poll #${pollCount}, elapsed: ${elapsedSeconds}s)`);
           lastLoggedStatus = status.status;
@@ -1915,6 +1971,8 @@ exit $rc`,
           await this.streamBuildkitOutput(deploymentId, jobName, status.logs);
           await this.appendLog(deploymentId, `Build job ${jobName} completed successfully`);
           this.clearBuildkitOffset(jobName);
+          // Before deleteBuildJob reaps the pod — container timestamps die with it.
+          await this.emitBuildPhaseSpans(jobName, deploymentId);
           return status;
         }
 
@@ -1929,6 +1987,9 @@ exit $rc`,
           }
 
           this.clearBuildkitOffset(jobName);
+          // Whatever phases completed before the failure (e.g. clone) are
+          // still worth recording on the trace.
+          await this.emitBuildPhaseSpans(jobName, deploymentId);
 
           const detailedError = status.logs
             ? `Build job failed: ${status.logs}`
@@ -1977,6 +2038,7 @@ exit $rc`,
     }
 
     this.clearBuildkitOffset(jobName);
+    scheduleSpan.finish({ 'build.schedule_outcome': 'timeout' });
     throw new BadRequestException(`Build job timed out after ${finalElapsed} seconds (last status: ${lastLoggedStatus})`);
   }
 
