@@ -1,0 +1,957 @@
+{
+  "title": "Orchard — Operations Overview",
+  "description": "Everything needed to run Orchard: at-a-glance health, API endpoints, image builds, platform components, Postgres, cluster nodes, logs & security, Node.js runtime. Import via Dashboards → New Dashboard → ⚙ → Import dashboard JSON.",
+  "layout_type": "ordered",
+  "reflow_type": "auto",
+  "template_variables": [
+    { "name": "env", "prefix": "env", "available_values": [], "default": "production" }
+  ],
+  "widgets": [
+    {
+      "definition": {
+        "title": "At a glance",
+        "type": "group",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "definition": {
+              "title": "API requests",
+              "type": "query_value",
+              "precision": 1,
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "q1", "query": "sum:trace.express.request.hits{service:orchard-server,$env}.as_rate()", "aggregator": "avg" }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "Requests per second" }],
+                  "response_format": "scalar"
+                }
+              ],
+              "custom_unit": "req/s"
+            }
+          },
+          {
+            "definition": {
+              "title": "API error rate",
+              "type": "query_value",
+              "precision": 2,
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "errs", "query": "sum:trace.express.request.errors{service:orchard-server,$env}.as_count()", "aggregator": "sum" },
+                    { "data_source": "metrics", "name": "hits", "query": "sum:trace.express.request.hits{service:orchard-server,$env}.as_count()", "aggregator": "sum" }
+                  ],
+                  "formulas": [{ "formula": "100 * errs / hits", "alias": "Errors as % of requests" }],
+                  "response_format": "scalar",
+                  "conditional_formats": [
+                    { "comparator": ">", "value": 5, "palette": "white_on_red" },
+                    { "comparator": ">", "value": 1, "palette": "white_on_yellow" },
+                    { "comparator": "<=", "value": 1, "palette": "white_on_green" }
+                  ]
+                }
+              ],
+              "custom_unit": "%"
+            }
+          },
+          {
+            "definition": {
+              "title": "API latency (p95)",
+              "type": "query_value",
+              "precision": 3,
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "q1", "query": "p95:trace.express.request{service:orchard-server,$env}", "aggregator": "avg" }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "95th percentile response time" }],
+                  "response_format": "scalar",
+                  "conditional_formats": [
+                    { "comparator": ">", "value": 2, "palette": "white_on_red" },
+                    { "comparator": ">", "value": 0.5, "palette": "white_on_yellow" },
+                    { "comparator": "<=", "value": 0.5, "palette": "white_on_green" }
+                  ]
+                }
+              ],
+              "custom_unit": "s"
+            }
+          },
+          {
+            "definition": {
+              "title": "Failed builds (infra fault)",
+              "type": "query_value",
+              "precision": 0,
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "data_source": "spans",
+                      "name": "q1",
+                      "indexes": ["*"],
+                      "compute": { "aggregation": "count" },
+                      "group_by": [],
+                      "search": { "query": "service:orchard-builds operation_name:build.pipeline status:error @build.error_domain:system $env" }
+                    }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "Builds failed due to platform problems" }],
+                  "response_format": "scalar",
+                  "conditional_formats": [
+                    { "comparator": ">", "value": 0, "palette": "white_on_red" },
+                    { "comparator": "<=", "value": 0, "palette": "white_on_green" }
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Server pod restarts",
+              "type": "query_value",
+              "precision": 0,
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "q1", "query": "sum:kubernetes.containers.restarts{kube_namespace:orchard,kube_deployment:server}", "aggregator": "last" }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "Total restarts of the API server container" }],
+                  "response_format": "scalar",
+                  "conditional_formats": [
+                    { "comparator": ">", "value": 0, "palette": "white_on_yellow" },
+                    { "comparator": "<=", "value": 0, "palette": "white_on_green" }
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "API — orchard-server",
+        "type": "group",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "definition": {
+              "title": "Traffic",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "hits", "query": "sum:trace.express.request.hits{service:orchard-server,$env}.as_rate()" }
+                  ],
+                  "formulas": [{ "formula": "hits", "alias": "Requests per second" }],
+                  "response_format": "timeseries",
+                  "display_type": "area"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Errors",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "errs", "query": "sum:trace.express.request.errors{service:orchard-server,$env}.as_count()" },
+                    { "data_source": "metrics", "name": "hits", "query": "sum:trace.express.request.hits{service:orchard-server,$env}.as_count()" }
+                  ],
+                  "formulas": [
+                    { "formula": "errs", "alias": "Failed requests (5xx)" },
+                    { "formula": "100 * errs / hits", "alias": "Error rate %" }
+                  ],
+                  "response_format": "timeseries",
+                  "display_type": "bars",
+                  "style": { "palette": "warm" }
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Response time",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "p50", "query": "p50:trace.express.request{service:orchard-server,$env}" },
+                    { "data_source": "metrics", "name": "p95", "query": "p95:trace.express.request{service:orchard-server,$env}" },
+                    { "data_source": "metrics", "name": "p99", "query": "p99:trace.express.request{service:orchard-server,$env}" }
+                  ],
+                  "formulas": [
+                    { "formula": "p50", "alias": "Typical request (p50)" },
+                    { "formula": "p95", "alias": "Slow requests (p95)" },
+                    { "formula": "p99", "alias": "Worst requests (p99)" }
+                  ],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Slowest endpoints",
+              "type": "toplist",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "q1", "query": "p95:trace.express.request{service:orchard-server,$env} by {resource_name}" }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "p95 response time (s)", "limit": { "count": 15, "order": "desc" } }],
+                  "response_format": "scalar"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Busiest endpoints",
+              "type": "toplist",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "q1", "query": "sum:trace.express.request.hits{service:orchard-server,$env} by {resource_name}.as_rate()" }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "Requests per second", "limit": { "count": 15, "order": "desc" } }],
+                  "response_format": "scalar"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Endpoints throwing errors",
+              "type": "toplist",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "q1", "query": "sum:trace.express.request.errors{service:orchard-server,$env} by {resource_name}.as_rate()" }
+                  ],
+                  "formulas": [{ "formula": "60 * q1", "alias": "Errors per minute", "limit": { "count": 15, "order": "desc" } }],
+                  "response_format": "scalar"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Time spent in Postgres vs k8s API (per request, p95)",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "pg", "query": "p95:trace.pg.query{service:orchard-server-postgres,$env}" },
+                    { "data_source": "metrics", "name": "http", "query": "p95:trace.http.request{service:orchard-server-http-client,$env}" }
+                  ],
+                  "formulas": [
+                    { "formula": "pg", "alias": "Database queries (p95)" },
+                    { "formula": "http", "alias": "Outbound HTTP / k8s API calls (p95)" }
+                  ],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Image Builds — orchard-builds",
+        "type": "group",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "definition": {
+              "title": "Build volume by outcome",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "data_source": "spans",
+                      "name": "builds",
+                      "indexes": ["*"],
+                      "compute": { "aggregation": "count" },
+                      "group_by": [{ "facet": "@build.outcome", "limit": 5, "sort": { "order": "desc", "aggregation": "count" } }],
+                      "search": { "query": "service:orchard-builds operation_name:build.pipeline $env" }
+                    }
+                  ],
+                  "formulas": [{ "formula": "builds", "alias": "Builds" }],
+                  "response_format": "timeseries",
+                  "display_type": "bars"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Why builds fail: user code vs our infra",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "data_source": "spans",
+                      "name": "fails",
+                      "indexes": ["*"],
+                      "compute": { "aggregation": "count" },
+                      "group_by": [{ "facet": "@build.error_domain", "limit": 5, "sort": { "order": "desc", "aggregation": "count" } }],
+                      "search": { "query": "service:orchard-builds operation_name:build.pipeline status:error $env" }
+                    }
+                  ],
+                  "formulas": [{ "formula": "fails", "alias": "Failed builds" }],
+                  "response_format": "timeseries",
+                  "display_type": "bars",
+                  "style": { "palette": "warm" }
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "How long builds take",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "data_source": "spans",
+                      "name": "p50",
+                      "indexes": ["*"],
+                      "compute": { "aggregation": "pc50", "metric": "@duration" },
+                      "group_by": [],
+                      "search": { "query": "service:orchard-builds operation_name:build.pipeline $env" }
+                    },
+                    {
+                      "data_source": "spans",
+                      "name": "p95",
+                      "indexes": ["*"],
+                      "compute": { "aggregation": "pc95", "metric": "@duration" },
+                      "group_by": [],
+                      "search": { "query": "service:orchard-builds operation_name:build.pipeline $env" }
+                    }
+                  ],
+                  "formulas": [
+                    { "formula": "p50", "alias": "Typical build (p50)" },
+                    { "formula": "p95", "alias": "Slow build (p95)" }
+                  ],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Where build time goes (p95 per phase)",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "data_source": "spans",
+                      "name": "phases",
+                      "indexes": ["*"],
+                      "compute": { "aggregation": "pc95", "metric": "@duration" },
+                      "group_by": [{ "facet": "operation_name", "limit": 10, "sort": { "order": "desc", "aggregation": "pc95", "metric": "@duration" } }],
+                      "search": { "query": "service:orchard-builds operation_name:(build.schedule OR build.clone OR build.image OR build.push) $env" }
+                    }
+                  ],
+                  "formulas": [{ "formula": "phases", "alias": "Phase duration" }],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Queue: job submitted → pod running",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "data_source": "spans",
+                      "name": "wait",
+                      "indexes": ["*"],
+                      "compute": { "aggregation": "pc95", "metric": "@duration" },
+                      "group_by": [],
+                      "search": { "query": "service:orchard-builds operation_name:build.schedule $env" }
+                    }
+                  ],
+                  "formulas": [{ "formula": "wait", "alias": "Scheduling wait (p95)" }],
+                  "response_format": "timeseries",
+                  "display_type": "area",
+                  "style": { "palette": "orange" }
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Slowest repos to build",
+              "type": "toplist",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "data_source": "spans",
+                      "name": "q1",
+                      "indexes": ["*"],
+                      "compute": { "aggregation": "pc95", "metric": "@duration" },
+                      "group_by": [{ "facet": "@build.repo", "limit": 15, "sort": { "order": "desc", "aggregation": "pc95", "metric": "@duration" } }],
+                      "search": { "query": "service:orchard-builds operation_name:build.pipeline $env" }
+                    }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "p95 build time" }],
+                  "response_format": "scalar"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Platform components — frontend / server / mcp / r2-proxy",
+        "type": "group",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "definition": {
+              "title": "CPU per component",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "q1", "query": "avg:container.cpu.usage{kube_namespace:orchard} by {kube_deployment}" }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "CPU used (cores ×10⁹ ns/s)" }],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Memory per component",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "q1", "query": "avg:container.memory.working_set{kube_namespace:orchard} by {kube_deployment}" }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "Memory in active use" }],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Container restarts (cumulative)",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "q1", "query": "sum:kubernetes.containers.restarts{kube_namespace:orchard} by {kube_deployment}" }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "Restart count" }],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Out-of-memory kills",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "q1", "query": "sum:container.memory.oom_events{kube_namespace:orchard} by {kube_deployment}" }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "OOM-killed containers" }],
+                  "response_format": "timeseries",
+                  "display_type": "bars",
+                  "style": { "palette": "warm" }
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Containers stuck waiting (orchard ns)",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "q1", "query": "sum:kubernetes.containers.state.waiting{kube_namespace:orchard} by {reason}" }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "Waiting containers" }],
+                  "response_format": "timeseries",
+                  "display_type": "bars"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Postgres — orchard-db (CNPG)",
+        "type": "group",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "definition": {
+              "title": "Database CPU",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "q1", "query": "avg:container.cpu.usage{kube_namespace:orchard,pod_name:orchard-db*} by {pod_name}" }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "CPU per DB instance" }],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Database memory",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "q1", "query": "avg:container.memory.working_set{kube_namespace:orchard,pod_name:orchard-db*} by {pod_name}" }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "Memory per DB instance" }],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Query latency seen by the app (p95 / p50)",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "p95", "query": "p95:trace.pg.query{$env}" },
+                    { "data_source": "metrics", "name": "p50", "query": "p50:trace.pg.query{$env}" }
+                  ],
+                  "formulas": [
+                    { "formula": "p95", "alias": "Slow queries (p95)" },
+                    { "formula": "p50", "alias": "Typical query (p50)" }
+                  ],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Slowest SQL (by p95)",
+              "type": "toplist",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "q1", "query": "p95:trace.pg.query{$env} by {resource_name}" }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "p95 query time (s)", "limit": { "count": 15, "order": "desc" } }],
+                  "response_format": "scalar"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Connections",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "conns", "query": "avg:postgresql.connections{service:orchard-db}" },
+                    { "data_source": "metrics", "name": "pct", "query": "avg:postgresql.percent_usage_connections{service:orchard-db}" }
+                  ],
+                  "formulas": [
+                    { "formula": "conns", "alias": "Open connections" },
+                    { "formula": "100 * pct", "alias": "% of max_connections used" }
+                  ],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ],
+              "markers": [{ "value": "y > 80", "display_type": "warning dashed" }]
+            }
+          },
+          {
+            "definition": {
+              "title": "Transaction throughput",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "commits", "query": "sum:postgresql.commits{service:orchard-db}.as_rate()" },
+                    { "data_source": "metrics", "name": "rollbacks", "query": "sum:postgresql.rollbacks{service:orchard-db}.as_rate()" }
+                  ],
+                  "formulas": [
+                    { "formula": "commits", "alias": "Commits per second" },
+                    { "formula": "rollbacks", "alias": "Rollbacks per second" }
+                  ],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Cache effectiveness (reads from RAM vs disk)",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "hit", "query": "sum:postgresql.buffer_hit{service:orchard-db}.as_rate()" },
+                    { "data_source": "metrics", "name": "read", "query": "sum:postgresql.disk_read{service:orchard-db}.as_rate()" }
+                  ],
+                  "formulas": [{ "formula": "100 * hit / (hit + read)", "alias": "Buffer cache hit %" }],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ],
+              "markers": [{ "value": "y < 95", "display_type": "warning dashed" }]
+            }
+          },
+          {
+            "definition": {
+              "title": "Replica lag",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "q1", "query": "max:postgresql.replication_delay{service:orchard-db} by {host}" }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "Seconds behind primary" }],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ],
+              "markers": [{ "value": "y > 30", "display_type": "error dashed" }]
+            }
+          },
+          {
+            "definition": {
+              "title": "Locks & deadlocks",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "locks", "query": "max:postgresql.locks{service:orchard-db} by {lock_mode}" },
+                    { "data_source": "metrics", "name": "dead", "query": "sum:postgresql.deadlocks.count{service:orchard-db}.as_count()" }
+                  ],
+                  "formulas": [
+                    { "formula": "locks", "alias": "Held locks" },
+                    { "formula": "dead", "alias": "Deadlocks" }
+                  ],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Database size",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "q1", "query": "max:postgresql.database_size{service:orchard-db} by {db}" }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "Size on disk" }],
+                  "response_format": "timeseries",
+                  "display_type": "area"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Tables needing vacuum (dead rows)",
+              "type": "toplist",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "q1", "query": "max:postgresql.dead_rows{service:orchard-db} by {table}" }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "Dead rows awaiting vacuum", "limit": { "count": 10, "order": "desc" } }],
+                  "response_format": "scalar"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Sequential scans (missing indexes?)",
+              "type": "toplist",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "q1", "query": "sum:postgresql.seq_scans{service:orchard-db} by {table}.as_count()" }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "Full-table scans", "limit": { "count": 10, "order": "desc" } }],
+                  "response_format": "scalar"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Cluster nodes",
+        "type": "group",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "definition": {
+              "title": "Node CPU usage",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "idle", "query": "avg:system.cpu.idle{*} by {host}" }
+                  ],
+                  "formulas": [{ "formula": "100 - idle", "alias": "CPU busy %" }],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ],
+              "markers": [{ "value": "y > 90", "display_type": "error dashed" }]
+            }
+          },
+          {
+            "definition": {
+              "title": "Node memory usage",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "usable", "query": "avg:system.mem.pct_usable{*} by {host}" }
+                  ],
+                  "formulas": [{ "formula": "100 * (1 - usable)", "alias": "Memory used %" }],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ],
+              "markers": [{ "value": "y > 90", "display_type": "error dashed" }]
+            }
+          },
+          {
+            "definition": {
+              "title": "Node disk usage",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "q1", "query": "max:system.disk.in_use{device:/dev/*} by {host}" }
+                  ],
+                  "formulas": [{ "formula": "100 * q1", "alias": "Disk used %" }],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ],
+              "markers": [{ "value": "y > 85", "display_type": "warning dashed" }]
+            }
+          },
+          {
+            "definition": {
+              "title": "Pods not running, cluster-wide",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "q1", "query": "sum:kubernetes.containers.state.waiting{*} by {reason}" }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "Waiting containers" }],
+                  "response_format": "timeseries",
+                  "display_type": "bars",
+                  "style": { "palette": "warm" }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Logs & Security",
+        "type": "group",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "definition": {
+              "title": "Error logs by service (orchard ns)",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "data_source": "logs",
+                      "name": "q1",
+                      "indexes": ["*"],
+                      "compute": { "aggregation": "count" },
+                      "group_by": [{ "facet": "service", "limit": 10, "sort": { "order": "desc", "aggregation": "count" } }],
+                      "search": { "query": "kube_namespace:orchard status:error" }
+                    }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "Error log lines" }],
+                  "response_format": "timeseries",
+                  "display_type": "bars",
+                  "style": { "palette": "warm" }
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Latest errors",
+              "type": "log_stream",
+              "indexes": [],
+              "query": "kube_namespace:orchard status:error",
+              "columns": ["service", "pod_name"],
+              "show_date_column": true,
+              "show_message_column": true,
+              "message_display": "inline",
+              "sort": { "column": "time", "order": "desc" }
+            }
+          },
+          {
+            "definition": {
+              "title": "Attack attempts detected (App & API Protection)",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    {
+                      "data_source": "spans",
+                      "name": "q1",
+                      "indexes": ["*"],
+                      "compute": { "aggregation": "count" },
+                      "group_by": [{ "facet": "@appsec.type", "limit": 10, "sort": { "order": "desc", "aggregation": "count" } }],
+                      "search": { "query": "service:orchard-server @appsec.security_activity:* $env" }
+                    }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "Suspicious requests" }],
+                  "response_format": "timeseries",
+                  "display_type": "bars",
+                  "style": { "palette": "warm" }
+                }
+              ]
+            }
+          }
+        ]
+      }
+    },
+    {
+      "definition": {
+        "title": "Node.js runtime — orchard-server",
+        "type": "group",
+        "layout_type": "ordered",
+        "widgets": [
+          {
+            "definition": {
+              "title": "Event loop lag (requests stall when this spikes)",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "q1", "query": "max:runtime.node.event_loop.delay.max{service:orchard-server,$env}" }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "Worst event-loop delay" }],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "JS heap (climbing forever = memory leak)",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "used", "query": "avg:runtime.node.mem.heap_used{service:orchard-server,$env}" },
+                    { "data_source": "metrics", "name": "total", "query": "avg:runtime.node.mem.heap_total{service:orchard-server,$env}" }
+                  ],
+                  "formulas": [
+                    { "formula": "used", "alias": "Heap in use" },
+                    { "formula": "total", "alias": "Heap allocated" }
+                  ],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Garbage collection pauses",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "q1", "query": "max:runtime.node.gc.pause.max{service:orchard-server,$env}" }
+                  ],
+                  "formulas": [{ "formula": "q1", "alias": "Longest GC pause" }],
+                  "response_format": "timeseries",
+                  "display_type": "line"
+                }
+              ]
+            }
+          },
+          {
+            "definition": {
+              "title": "Process CPU",
+              "type": "timeseries",
+              "requests": [
+                {
+                  "queries": [
+                    { "data_source": "metrics", "name": "user", "query": "avg:runtime.node.cpu.user{service:orchard-server,$env}" },
+                    { "data_source": "metrics", "name": "sys", "query": "avg:runtime.node.cpu.system{service:orchard-server,$env}" }
+                  ],
+                  "formulas": [
+                    { "formula": "user", "alias": "App code (user CPU)" },
+                    { "formula": "sys", "alias": "System calls (kernel CPU)" }
+                  ],
+                  "response_format": "timeseries",
+                  "display_type": "area"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    }
+  ]
+}

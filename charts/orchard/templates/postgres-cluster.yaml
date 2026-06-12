@@ -15,6 +15,29 @@ spec:
     initdb:
       database: {{ .Values.postgres.database }}
       owner: {{ .Values.postgres.owner }}
+  {{- if .Values.datadog.enabled }}
+  # Datadog Database Monitoring prerequisites. CNPG manages pg_stat_statements
+  # as a "managed extension": setting its parameters below makes the operator
+  # add it to shared_preload_libraries (rolling restart) and CREATE EXTENSION
+  # in the app database.
+  postgresql:
+    parameters:
+      pg_stat_statements.track: all
+      pg_stat_statements.max: "10000"
+      track_activity_query_size: "4096"
+      track_io_timing: "on"
+  managed:
+    roles:
+      # Read-only monitoring user the Datadog agent connects as. Password
+      # lives in the orchard-db-datadog secret (kubeops, SOPS-encrypted).
+      - name: datadog
+        ensure: present
+        login: true
+        inherit: true
+        inRoles: [pg_monitor]
+        passwordSecret:
+          name: orchard-db-datadog
+  {{- end }}
   storage:
     size: {{ .Values.postgres.storage.size }}
     storageClass: {{ .Values.postgres.storage.storageClass }}
