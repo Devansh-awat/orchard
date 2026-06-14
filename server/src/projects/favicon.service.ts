@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service';
-import { S3Client, PutObjectCommand, HeadObjectCommand } from '@aws-sdk/client-s3';
+import { S3Client, PutObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import * as dns from 'dns';
 import * as net from 'net';
 
@@ -162,6 +162,25 @@ export class FaviconService {
   }
 
   /**
+   * Does an object exist in R2? Uses ListObjectsV2 rather than HeadObject on
+   * purpose: HeadObject throws NotFound (a 404) for a missing key, and since
+   * the common case here is a cold/uncached domain, that turned every miss
+   * into an errored AWS span that dd-trace surfaced in Error Tracking as
+   * noise. ListObjectsV2 returns 200 with empty Contents on a miss — no
+   * exception, no error span. Genuine R2 failures still throw and are still
+   * reported, which is correct.
+   */
+  private async objectExists(key: string): Promise<boolean> {
+    if (!this.s3Client || !this.bucketName) return false;
+    const res = await this.s3Client.send(new ListObjectsV2Command({
+      Bucket: this.bucketName,
+      Prefix: key,
+      MaxKeys: 1,
+    }));
+    return res.Contents?.some((o) => o.Key === key) ?? false;
+  }
+
+  /**
    * Get a favicon URL for the given domain.
    * Returns the R2 public URL if cached, or fetches + stores it.
    * Returns null if no favicon could be found.
@@ -180,16 +199,14 @@ export class FaviconService {
     // Check if already in R2
     if (this.s3Client && this.bucketName) {
       try {
-        await this.s3Client.send(new HeadObjectCommand({
-          Bucket: this.bucketName,
-          Key: r2Key,
-        }));
-        // Exists in R2
-        const url = `${this.publicUrl}/${r2Key}`;
-        this.memoryCache.set(domain, { url, ts: Date.now() });
-        return url;
-      } catch {
-        // Not in R2 yet — fetch it
+        if (await this.objectExists(r2Key)) {
+          const url = `${this.publicUrl}/${r2Key}`;
+          this.memoryCache.set(domain, { url, ts: Date.now() });
+          return url;
+        }
+      } catch (err) {
+        // R2 lookup failed — fall through and try to (re)fetch it.
+        this.logger.warn(`R2 lookup failed for ${domain}: ${err instanceof Error ? err.message : err}`);
       }
     }
 
@@ -225,22 +242,21 @@ export class FaviconService {
 
     const r2Key = `favicons/${domain}.png`;
     try {
-      await this.s3Client.send(new HeadObjectCommand({
-        Bucket: this.bucketName,
-        Key: r2Key,
-      }));
-      const url = `${this.publicUrl}/${r2Key}`;
-      this.memoryCache.set(domain, { url, ts: Date.now() });
-      return url;
-    } catch {
-      // Not in R2 — warm it in the background, don't block the caller.
-      if (!this.pendingFetches.has(domain)) {
-        const p = this.fetchAndStore(domain, r2Key);
-        this.pendingFetches.set(domain, p);
-        p.catch(() => null).finally(() => this.pendingFetches.delete(domain));
+      if (await this.objectExists(r2Key)) {
+        const url = `${this.publicUrl}/${r2Key}`;
+        this.memoryCache.set(domain, { url, ts: Date.now() });
+        return url;
       }
-      return null;
+    } catch (err) {
+      this.logger.warn(`peekFavicon R2 lookup failed for ${domain}: ${err instanceof Error ? err.message : err}`);
     }
+    // Not in R2 (or lookup failed) — warm it in the background, don't block.
+    if (!this.pendingFetches.has(domain)) {
+      const p = this.fetchAndStore(domain, r2Key);
+      this.pendingFetches.set(domain, p);
+      p.catch(() => null).finally(() => this.pendingFetches.delete(domain));
+    }
+    return null;
   }
 
   /**
@@ -475,22 +491,22 @@ export class FaviconService {
 
     const key = `banners/${domain}.png`;
     try {
-      await this.s3Client.send(new HeadObjectCommand({
-        Bucket: this.bucketName,
-        Key: key,
-      }));
-      const url = `${this.publicUrl}/${key}`;
-      this.bannerCache.set(domain, { url, ts: Date.now() });
-      return url;
-    } catch {
-      // fetchAndStore extracts the banner alongside the favicon
-      if (!this.pendingFetches.has(domain)) {
-        const p = this.fetchAndStore(domain, `favicons/${domain}.png`);
-        this.pendingFetches.set(domain, p);
-        p.catch(() => null).finally(() => this.pendingFetches.delete(domain));
+      if (await this.objectExists(key)) {
+        const url = `${this.publicUrl}/${key}`;
+        this.bannerCache.set(domain, { url, ts: Date.now() });
+        return url;
       }
-      return null;
+    } catch (err) {
+      this.logger.warn(`peekBanner R2 lookup failed for ${domain}: ${err instanceof Error ? err.message : err}`);
     }
+    // Not in R2 (or lookup failed) — fetchAndStore extracts the banner
+    // alongside the favicon.
+    if (!this.pendingFetches.has(domain)) {
+      const p = this.fetchAndStore(domain, `favicons/${domain}.png`);
+      this.pendingFetches.set(domain, p);
+      p.catch(() => null).finally(() => this.pendingFetches.delete(domain));
+    }
+    return null;
   }
 
   /** Resolve many banner domains at once without blocking on cold fetches. */
