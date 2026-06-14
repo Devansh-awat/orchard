@@ -20,6 +20,7 @@ import { startTelemetry } from './analytics/telemetry';
 startTelemetry();
 
 import { NestFactory, HttpAdapterHost } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
 import { AppModule } from './app.module';
 import cookieParser from 'cookie-parser';
 import { attachTerminalWebSocket } from './kubernetes/terminal.gateway';
@@ -38,7 +39,18 @@ BigInt.prototype.toJSON = function() {
 };
 
 async function bootstrap() {
-  const app = await NestFactory.create(AppModule, { rawBody: true, logger: new OtelConsoleLogger() });
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true, logger: new OtelConsoleLogger() });
+
+  // Raise the body-parser limit above Express's 100kb default. GitHub App
+  // webhooks (POST /apiv1/github/app/webhook) deliver push/installation
+  // payloads that routinely exceed 100kb, and GitHub caps deliveries at 25MB.
+  // Below 25MB the JSON parser threw PayloadTooLargeError (HTTP 413) before
+  // the handler ran, so signature verification never happened and GitHub
+  // marked the delivery failed. These re-register the json/urlencoded parsers
+  // with a larger limit; NestJS dedups against its defaults and re-applies
+  // rawBody capture (verify hook) so webhook HMAC verification still works.
+  app.useBodyParser('json', { limit: '25mb' });
+  app.useBodyParser('urlencoded', { limit: '25mb', extended: true });
 
   app.setGlobalPrefix('apiv1');
 
