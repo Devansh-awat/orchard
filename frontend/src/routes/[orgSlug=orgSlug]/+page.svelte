@@ -3,6 +3,7 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { apiFetch, pinnedItems, toasts, subscribeOrgEvents, isSuperAdmin } from '$lib/stores';
 	import { queryClient } from '$lib/query';
+	import { overviewQueryOptions } from '$lib/queries/overview';
 	import { Plus, Star } from 'lucide-svelte';
 	import { onDestroy, untrack } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
@@ -30,21 +31,12 @@
 	const orgSlug = $derived(data.orgSlug);
 
 	// ── TanStack Query: overview data ──
+	// Shared definition (see $lib/queries/overview) so the layout can warm this
+	// exact cache key in parallel with auth — by the time this page mounts the
+	// data is usually already in flight or cached.
 	const overviewQuery = createQuery(() => ({
-		queryKey: ['overview', orgSlug],
-		enabled: !!orgSlug,
-		queryFn: async () => {
-			const res = await apiFetch(`/apiv1/overview/orgs/${orgSlug}`);
-			if (!res.ok) {
-				const body = await res.text().catch(() => '');
-				let message = body;
-				try { message = JSON.parse(body)?.message ?? body; } catch {}
-				throw Object.assign(new Error(message || `overview ${res.status}`), {
-					status: res.status
-				});
-			}
-			return res.json();
-		},
+		...overviewQueryOptions(orgSlug),
+		enabled: !!orgSlug
 	}));
 
 	// Manual state — set from $effect watching query, avoids $derived chains
