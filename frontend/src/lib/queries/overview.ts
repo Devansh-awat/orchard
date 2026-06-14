@@ -1,12 +1,5 @@
 import { apiFetch } from '$lib/stores';
 
-/**
- * Shared query definition for an org's overview payload (deployments,
- * databases, builds, project metadata). Used both by the page's `createQuery`
- * and by the layout's `prefetchQuery`, so the key + fetcher can never drift
- * out of sync — a mismatch would silently double-fetch instead of warming
- * the cache.
- */
 export function overviewQueryOptions(orgSlug: string) {
 	return {
 		queryKey: ['overview', orgSlug],

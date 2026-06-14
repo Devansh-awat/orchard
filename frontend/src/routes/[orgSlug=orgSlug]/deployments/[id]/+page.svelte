@@ -6,6 +6,19 @@
 	import { Tabs } from 'melt/builders';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { queryClient } from '$lib/query';
+	import { deploymentQueryOptions } from '$lib/queries/deployment';
+	import { TailscaleController } from '$lib/components/deployment/tailscale.svelte';
+	import { ServicesController } from '$lib/components/deployment/services.svelte';
+	import {
+		podLabel,
+		getNewestPod,
+		formatBuildElapsed,
+		sanitizeLogs,
+		envVarsToRaw,
+		rawToEnvVars,
+		getStatusColor,
+		getDeploymentStatusLabel
+	} from '$lib/components/deployment/deployment-helpers';
 	import { apiFetch, toasts, refreshTree, isSuperAdmin, selectedOrganization, subscribeOrgEvents, sseStatusFor } from '$lib/stores';
 	import { env } from '$env/dynamic/public';
 	import { invalidate } from '$app/navigation';
@@ -524,14 +537,12 @@
 	let buildWithDepot = $state(false);
 	let persistentBuildCache = $state(false);
 
-	// Tailscale state (gated behind early access flag)
 	const tailscaleEnabled = featureFlag('tailscale-integration');
-	let tailscaleExposing = $state(false);
-	let tailscaleUnexposing = $state(false);
-	let tailscaleLinked = $state(false);
-	let tailscaleHostname = $state<string | null>(null);
-	let tailscaleIp = $state<string | null>(null);
-	let tailscaleDns = $state<string | null>(null);
+	const tailscale = new TailscaleController({
+		deploymentId: () => deploymentId,
+		isExposed: () => !!deployment?.tailscaleExposed,
+		refetch: fetchDeployment
+	});
 
 	// Auto-deploy state
 	let autoDeployStatus = $state<AutoDeployStatus | null>(null);
@@ -727,12 +738,6 @@
 	let terminalTabs = $state<TerminalTabInfo[]>([]);
 	let terminalCounter = 0;
 
-	function podLabel(podName: string): string {
-		// "backend-cb974cb4c-vjvfb" → "vjvfb"
-		const parts = podName.split('-');
-		return parts.length >= 2 ? parts[parts.length - 1] : podName;
-	}
-
 	function handleNewShell() {
 		const allCombos: { podName: string; container: string }[] = [];
 		for (const pod of deployment?.pods ?? []) {
@@ -771,16 +776,6 @@
 		manualPodSelection = true;
 		showLogsPodMenu = false;
 		fetchLogs();
-	}
-
-	function getNewestPod(pods: Pod[]): Pod | null {
-		const active = pods.filter(p => p.status?.toLowerCase() !== 'succeeded');
-		if (!active.length) return null;
-		return active.reduce((newest, pod) => {
-			if (!newest.startTime) return pod;
-			if (!pod.startTime) return newest;
-			return new Date(pod.startTime) > new Date(newest.startTime) ? pod : newest;
-		});
 	}
 
 	function scrollLogsToBottom() {
@@ -857,29 +852,13 @@
 		}
 	}
 	let volumes = $state<Array<{ name: string; type: 'pvc' | 'hostPath' | 'emptyDir'; mountPath: string; pvcName?: string; storageSize?: string; hostPath?: string; readOnly: boolean }>>([]);
-	let showServiceForm = $state(false);
-	let newServiceForm = $state<ServiceFormState>({
-		name: '',
-		exposePublic: false,
-		ports: [
-			{
-				name: '',
-				containerPort: 80,
-				servicePort: 80,
-				protocol: 'TCP',
-				nodePort: null
-			}
-		]
-	});
-	let serviceFormError = $state<string | null>(null);
-	let serviceEditForms = $state<Record<string, ServiceFormState>>({});
-	let serviceEditErrors = $state<Record<string, string | null>>({});
-	let creatingService = $state(false);
-	let serviceSavingId = $state<string | null>(null);
-	let serviceDeletingId = $state<string | null>(null);
-	let copiedUrlId = $state<string | null>(null);
 	let isEditingEnv = $state(false);
-	let isEditingServices = $state(false);
+	const services = new ServicesController({
+		deploymentId: () => deploymentId,
+		getServices: () => deployment?.services ?? [],
+		setDeployment: (d) => { deployment = d as Deployment; },
+		refetch: fetchDeployment
+	});
 
 	// Build modal state
 	let showBuildModal = $state(false);
@@ -943,14 +922,6 @@
 	let newlyCreatedToken = $state<string | null>(null);
 	let copiedWebhookToken = $state(false);
 	let copiedWebhookUrl = $state(false);
-
-	function formatBuildElapsed(seconds: number): string {
-		const total = Math.round(seconds);
-		const m = Math.floor(total / 60);
-		const s = total % 60;
-		if (m > 0) return `${m}m ${s}s`;
-		return `${s}s`;
-	}
 
 	function startBuildPolling() {
 		buildStartTime = Date.now();
@@ -1082,13 +1053,8 @@
 		'scaling', 'restarting', 'pending', 'building', 'unhealthy',
 	]);
 	const deploymentQuery = createQuery(() => ({
-		queryKey: ['deployment', deploymentId],
+		...deploymentQueryOptions(deploymentId),
 		enabled: !!deploymentId,
-		queryFn: async () => {
-			const res = await apiFetch(`/apiv1/deployments/${deploymentId}`);
-			if (!res.ok) throw new Error('Failed to fetch deployment');
-			return res.json();
-		},
 		// Adaptive polling: fast during transient states or SSE down, silent otherwise.
 		refetchInterval: (() => {
 			const status = (deployment?.status ?? '').toLowerCase();
@@ -1104,255 +1070,6 @@
 		})(),
 		refetchIntervalInBackground: false,
 	}));
-
-	function createPortRow(overrides?: Partial<ServicePortForm>): ServicePortForm {
-		return {
-			name: '',
-			containerPort: 80,
-			servicePort: 80,
-			protocol: 'TCP',
-			nodePort: null,
-			...overrides
-		};
-	}
-
-	function resetNewServiceForm() {
-		newServiceForm = {
-			name: '',
-			exposePublic: false,
-			ports: [createPortRow()]
-		};
-		serviceFormError = null;
-	}
-
-	function updateNewServicePort(index: number, changes: Partial<ServicePortForm>) {
-		newServiceForm = {
-			...newServiceForm,
-			ports: newServiceForm.ports.map((port, idx) =>
-				idx === index ? { ...port, ...changes } : port
-			)
-		};
-	}
-
-	function addNewServicePortRow() {
-		newServiceForm = {
-			...newServiceForm,
-			ports: [...newServiceForm.ports, createPortRow()]
-		};
-	}
-
-	function removeNewServicePortRow(index: number) {
-		if (newServiceForm.ports.length === 1) {
-			updateNewServicePort(0, createPortRow());
-			return;
-		}
-		newServiceForm = {
-			...newServiceForm,
-			ports: newServiceForm.ports.filter((_, idx) => idx !== index)
-		};
-	}
-
-	function mapServiceToForm(service: Service): ServiceFormState {
-		const sourcePorts =
-			service.ports && service.ports.length > 0
-				? service.ports
-				: [
-						{
-							name: service.name,
-							port: service.port,
-							targetPort: service.targetPort,
-							protocol: service.protocol,
-							nodePort: service.nodePort ?? null
-						}
-				  ];
-
-		return {
-			name: service.name,
-			exposePublic: service.type === 'external',
-			ports: sourcePorts.map((entry) =>
-				createPortRow({
-					name: entry.name ?? '',
-					containerPort: entry.targetPort,
-					servicePort: entry.port,
-					protocol: entry.protocol ?? 'TCP',
-					nodePort: entry.nodePort ?? null
-				})
-			)
-		};
-	}
-
-	function toggleServiceEdit(service: Service) {
-		if (serviceEditForms[service.id]) {
-			const { [service.id]: _removedForm, ...restForms } = serviceEditForms;
-			serviceEditForms = restForms;
-			const { [service.id]: _removedError, ...restErrors } = serviceEditErrors;
-			serviceEditErrors = restErrors;
-			if (Object.keys(serviceEditForms).length === 0 && !showServiceForm) {
-				isEditingServices = false;
-			}
-			return;
-		}
-
-		isEditingServices = true;
-		serviceEditForms = {
-			...serviceEditForms,
-			[service.id]: mapServiceToForm(service)
-		};
-		serviceEditErrors = {
-			...serviceEditErrors,
-			[service.id]: null
-		};
-	}
-
-	async function copyInternalUrl(url: string | undefined, serviceId: string) {
-		if (!url) {
-			toasts.add({
-				title: 'Error',
-				description: 'No internal URL available',
-				color: 'error'
-			});
-			return;
-		}
-
-		try {
-			if (navigator.clipboard && navigator.clipboard.writeText) {
-				await navigator.clipboard.writeText(url);
-			} else {
-				const textArea = document.createElement('textarea');
-				textArea.value = url;
-				textArea.style.position = 'fixed';
-				textArea.style.left = '-999999px';
-				textArea.style.top = '-999999px';
-				document.body.appendChild(textArea);
-				textArea.focus();
-				textArea.select();
-				const successful = document.execCommand('copy');
-				document.body.removeChild(textArea);
-				if (!successful) {
-					throw new Error('execCommand failed');
-				}
-			}
-			copiedUrlId = serviceId;
-			setTimeout(() => {
-				copiedUrlId = null;
-			}, 2000);
-			toasts.add({
-				title: 'Copied',
-				description: 'Internal URL copied to clipboard',
-				color: 'success'
-			});
-		} catch (error) {
-			console.error('Copy failed:', error);
-			toasts.add({
-				title: 'Error',
-				description: 'Failed to copy URL. Please select and copy manually.',
-				color: 'error'
-			});
-		}
-	}
-
-	function updateServiceEditPort(
-		serviceId: string,
-		index: number,
-		changes: Partial<ServicePortForm>
-	) {
-		const form = serviceEditForms[serviceId];
-		if (!form) return;
-
-		serviceEditForms = {
-			...serviceEditForms,
-			[serviceId]: {
-				...form,
-				ports: form.ports.map((port, idx) =>
-					idx === index ? { ...port, ...changes } : port
-				)
-			}
-		};
-	}
-
-	function addServiceEditPortRow(serviceId: string) {
-		const form = serviceEditForms[serviceId];
-		if (!form) return;
-
-		serviceEditForms = {
-			...serviceEditForms,
-			[serviceId]: {
-				...form,
-				ports: [...form.ports, createPortRow()]
-			}
-		};
-	}
-
-	function removeServiceEditPortRow(serviceId: string, index: number) {
-		const form = serviceEditForms[serviceId];
-		if (!form) return;
-
-		if (form.ports.length === 1) {
-			updateServiceEditPort(serviceId, 0, createPortRow());
-			return;
-		}
-
-		serviceEditForms = {
-			...serviceEditForms,
-			[serviceId]: {
-				...form,
-				ports: form.ports.filter((_, idx) => idx !== index)
-			}
-		};
-	}
-
-	function buildPortPayloadFromForm(form: ServiceFormState) {
-		const payload: Array<{
-			name?: string;
-			containerPort: number;
-			servicePort: number;
-			protocol: string;
-			nodePort?: number;
-		}> = [];
-
-		for (let index = 0; index < form.ports.length; index += 1) {
-			const port = form.ports[index];
-			const containerPort = Number(port.containerPort);
-			const servicePort = Number(port.servicePort);
-
-			if (!Number.isInteger(containerPort) || containerPort <= 0) {
-				return { error: `Port ${index + 1}: Container port must be a positive integer` };
-			}
-
-			if (!Number.isInteger(servicePort) || servicePort <= 0) {
-				return { error: `Port ${index + 1}: Service port must be a positive integer` };
-			}
-
-			const protocol =
-				typeof port.protocol === 'string' && port.protocol.trim().length > 0
-					? port.protocol.trim().toUpperCase()
-					: 'TCP';
-
-			const nodePortValue =
-				port.nodePort === undefined || port.nodePort === null
-					? undefined
-					: Number(port.nodePort);
-
-			const nodePort =
-				nodePortValue !== undefined && Number.isInteger(nodePortValue) && nodePortValue > 0
-					? nodePortValue
-					: undefined;
-
-			payload.push({
-				name: port.name?.trim() || undefined,
-				containerPort,
-				servicePort,
-				protocol,
-				nodePort
-			});
-		}
-
-		if (payload.length === 0) {
-			return { error: 'Add at least one valid port' };
-		}
-
-		return { payload };
-	}
 
 	/** Trigger a refetch of deployment data via TanStack Query. All call sites
 	 *  that previously called this function directly now just invalidate the cache
@@ -1401,11 +1118,7 @@
 			if (wasUnloaded) loadDismissedNotifications();
 			if (showBuildModal || showBuildCard) syncBuildModalFromDeployment();
 
-			// Sync Tailscale state
-			tailscaleHostname = data.tailscaleHostname || null;
-			if (data.tailscaleExposed && !tailscaleDns) {
-				fetchTailscaleDeploymentStatus();
-			}
+			tailscale.syncFromDeployment(data);
 
 			// Skip overwriting form state while a build is in progress so the user can
 			// keep editing settings. Form state will refresh when the build finishes.
@@ -1417,8 +1130,8 @@
 				} else {
 					scaleReplicas = 1;
 				}
-				if (!showServiceForm) {
-					resetNewServiceForm();
+				if (!services.showForm) {
+					services.resetNewForm();
 				}
 
 				if (!isEditingEnv) {
@@ -1582,24 +1295,6 @@
 		logsAtMax = false;
 	}
 
-	function sanitizeLogs(logs: string): string {
-		if (!logs) return logs;
-		
-		let sanitized = logs;
-		
-		sanitized = sanitized.replace(/(x-access-token:|ghs_|ghp_|github_pat_)[a-zA-Z0-9_]+/gi, '***REDACTED***');
-		
-		sanitized = sanitized.replace(/https?:\/\/[^:@\s]+:[^@\s]+@github\.com/gi, 'https://***@github.com');
-		
-		sanitized = sanitized.replace(/https?:\/\/[^@\s]+@github\.com/gi, 'https://***@github.com');
-		
-		sanitized = sanitized.replace(/(Bearer|Token|Authorization:)\s+[a-zA-Z0-9_\-\.]+/gi, '$1 ***REDACTED***');
-		
-		sanitized = sanitized.replace(/(password|passwd|pwd|secret|key|token)[\s]*[=:]['"]?([^\s'"]+)/gi, '$1=***REDACTED***');
-		
-		return sanitized;
-	}
-
 	async function fetchBuildLogs() {
 		if (!deployment || deployment.buildStatus !== 'building') return;
 
@@ -1645,93 +1340,6 @@
 		}
 	}
 
-	async function checkTailscaleStatus() {
-		try {
-			const response = await apiFetch('/apiv1/tailscale/status');
-			if (response.ok) {
-				const data = await response.json();
-				tailscaleLinked = data.linked;
-			}
-		} catch (e) {
-			console.error('Failed to check Tailscale status:', e);
-		}
-	}
-
-	async function fetchTailscaleDeploymentStatus() {
-		if (!deployment?.tailscaleExposed) return;
-		try {
-			const response = await apiFetch(`/apiv1/tailscale/deployment/${deploymentId}`);
-			if (response.ok) {
-				const data = await response.json();
-				tailscaleIp = data.ip;
-				tailscaleDns = data.dns;
-			}
-		} catch (e) {
-			console.error('Failed to fetch Tailscale deployment status:', e);
-		}
-	}
-
-	async function exposeTailscale() {
-		tailscaleExposing = true;
-		try {
-			const response = await apiFetch(`/apiv1/tailscale/expose/${deploymentId}`, {
-				method: 'POST'
-			});
-			if (!response.ok) {
-				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to expose to Tailscale');
-			}
-			const data = await response.json();
-			tailscaleHostname = data.hostname;
-			toasts.add({
-				title: 'Exposed to Tailscale',
-				description: 'Sidecar is starting — address will appear shortly',
-				color: 'success'
-			});
-			fetchDeployment();
-			// Poll for the IP/DNS once the sidecar is ready
-			setTimeout(fetchTailscaleDeploymentStatus, 5000);
-			setTimeout(fetchTailscaleDeploymentStatus, 15000);
-		} catch (e) {
-			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to expose to Tailscale',
-				color: 'error'
-			});
-		} finally {
-			tailscaleExposing = false;
-		}
-	}
-
-	async function unexposeTailscale() {
-		tailscaleUnexposing = true;
-		try {
-			const response = await apiFetch(`/apiv1/tailscale/unexpose/${deploymentId}`, {
-				method: 'POST'
-			});
-			if (!response.ok) {
-				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to remove Tailscale exposure');
-			}
-			tailscaleHostname = null;
-			tailscaleIp = null;
-			tailscaleDns = null;
-			toasts.add({
-				title: 'Tailscale removed',
-				description: 'Deployment is no longer exposed to Tailscale',
-				color: 'success'
-			});
-			fetchDeployment();
-		} catch (e) {
-			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to remove Tailscale exposure',
-				color: 'error'
-			});
-		} finally {
-			tailscaleUnexposing = false;
-		}
-	}
 
 	async function scaleDeployment() {
 		scaling = true;
@@ -1863,188 +1471,6 @@
 			});
 		} finally {
 			savingEnv = false;
-		}
-	}
-
-	async function createService() {
-		const { payload, error } = buildPortPayloadFromForm(newServiceForm);
-		if (error) {
-			serviceFormError = error;
-			return;
-		}
-
-		// Auto-generate service name from first port
-		const firstPort = newServiceForm.ports[0]?.containerPort ?? 80;
-		const existingNames = new Set((deployment?.services ?? []).map((s: Service) => s.name));
-		let serviceName = `port-${firstPort}`;
-		let suffix = 2;
-		while (existingNames.has(serviceName)) {
-			serviceName = `port-${firstPort}-${suffix}`;
-			suffix++;
-		}
-
-		serviceFormError = null;
-		creatingService = true;
-
-		try {
-			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/services`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({
-					name: serviceName,
-					ports: payload,
-					exposePublic: newServiceForm.exposePublic
-				})
-			});
-
-			if (!response.ok) {
-				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to create service');
-			}
-
-			const updated = await response.json();
-			deployment = updated;
-
-			toasts.add({
-				title: 'Port added',
-				description: `Port ${newServiceForm.ports[0]?.containerPort ?? ''} is now routing traffic`,
-				color: 'success'
-			});
-
-			showServiceForm = false;
-			resetNewServiceForm();
-			if (Object.keys(serviceEditForms).length === 0) {
-				isEditingServices = false;
-			}
-		} catch (e) {
-			serviceFormError = e instanceof Error ? e.message : 'Failed to create service';
-		} finally {
-			creatingService = false;
-		}
-	}
-
-	let portPublicBusyId: string | null = $state(null);
-
-	async function togglePortPublic(serviceId: string, portId: string, currentlyEnabled: boolean) {
-		portPublicBusyId = portId;
-		try {
-			const method = currentlyEnabled ? 'DELETE' : 'POST';
-			const response = await apiFetch(
-				`/apiv1/deployments/${deploymentId}/services/${serviceId}/ports/${portId}/public`,
-				{ method }
-			);
-			if (!response.ok) {
-				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to toggle public exposure');
-			}
-			const res = await response.json();
-			await fetchDeployment();
-			toasts.add({
-				title: currentlyEnabled ? 'Port unexposed' : 'Port exposed publicly',
-				description:
-					!currentlyEnabled && res?.host && res?.port
-						? `Reachable at ${res.host}:${res.port}`
-						: undefined,
-				color: 'success'
-			});
-		} catch (e) {
-			toasts.add({
-				title: 'Public exposure failed',
-				description: e instanceof Error ? e.message : 'Unknown error',
-				color: 'danger'
-			});
-		} finally {
-			portPublicBusyId = null;
-		}
-	}
-
-	async function saveServicePorts(serviceId: string) {
-		const form = serviceEditForms[serviceId];
-		if (!form) {
-			return;
-		}
-
-		const { payload, error } = buildPortPayloadFromForm(form);
-		if (error) {
-			serviceEditErrors = { ...serviceEditErrors, [serviceId]: error };
-			return;
-		}
-
-		serviceEditErrors = { ...serviceEditErrors, [serviceId]: null };
-		serviceSavingId = serviceId;
-
-		try {
-			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/services/${serviceId}`, {
-				method: 'PUT',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ ports: payload })
-			});
-
-			if (!response.ok) {
-				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to update service');
-			}
-
-			const updated = await response.json();
-			deployment = updated;
-
-			const { [serviceId]: _removedForm, ...restForms } = serviceEditForms;
-			serviceEditForms = restForms;
-			const { [serviceId]: _removedError, ...restErrors } = serviceEditErrors;
-			serviceEditErrors = restErrors;
-
-			if (Object.keys(serviceEditForms).length === 0 && !showServiceForm) {
-				isEditingServices = false;
-			}
-
-			toasts.add({
-				title: 'Port updated',
-				description: 'Port configuration saved',
-				color: 'success'
-			});
-		} catch (e) {
-			serviceEditErrors = {
-				...serviceEditErrors,
-				[serviceId]: e instanceof Error ? e.message : 'Failed to update service'
-			};
-		} finally {
-			serviceSavingId = null;
-		}
-	}
-
-	async function deleteService(serviceId: string) {
-		serviceDeletingId = serviceId;
-
-		try {
-			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/services/${serviceId}`, {
-				method: 'DELETE'
-			});
-
-			if (!response.ok) {
-				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to delete service');
-			}
-
-			const updated = await response.json();
-			deployment = updated;
-
-			toasts.add({
-				title: 'Port removed',
-				color: 'success'
-			});
-
-			const { [serviceId]: _removedForm, ...restForms } = serviceEditForms;
-			serviceEditForms = restForms;
-			const { [serviceId]: _removedError, ...restErrors } = serviceEditErrors;
-			serviceEditErrors = restErrors;
-		} catch (e) {
-			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to remove port',
-				color: 'error'
-			});
-		} finally {
-			serviceDeletingId = null;
 		}
 	}
 
@@ -2232,25 +1658,6 @@
 	function removeEnvRow(index: number) {
 		isEditingEnv = true;
 		envVars = envVars.filter((_, i) => i !== index);
-	}
-
-	function envVarsToRaw(vars: Array<{ key: string; value: string }>): string {
-		return vars.filter((e) => e.key.trim()).map((e) => `${e.key}=${e.value}`).join('\n');
-	}
-
-	function rawToEnvVars(raw: string): Array<{ key: string; value: string }> {
-		const lines = raw.split('\n');
-		const parsed: Array<{ key: string; value: string }> = [];
-		for (const line of lines) {
-			const trimmed = line.trim();
-			if (!trimmed || trimmed.startsWith('#')) continue;
-			const equalIndex = trimmed.indexOf('=');
-			if (equalIndex === -1) continue;
-			const key = trimmed.substring(0, equalIndex).trim();
-			const value = trimmed.substring(equalIndex + 1).trim();
-			if (key) parsed.push({ key, value });
-		}
-		return parsed;
 	}
 
 	function switchEnvView(mode: 'ui' | 'raw') {
@@ -2534,39 +1941,6 @@
 		}
 	}
 
-	function getStatusColor(status: string) {
-		switch (status?.toLowerCase()) {
-			case 'ready':
-			case 'running':
-				return 'badge-success';
-			case 'scheduled':
-			case 'scaling':
-			case 'restarting':
-			case 'pending':
-				return 'badge-warning';
-			case 'unhealthy':
-				return 'badge-warning';
-			case 'stopped':
-			case 'failed':
-			case 'error':
-				return 'badge-error';
-			default:
-				return 'badge-neutral';
-		}
-	}
-
-	function getDeploymentStatusLabel(status: string) {
-		switch (status?.toLowerCase()) {
-			case 'running': return 'Running';
-			case 'restarting': return 'Restarting';
-			case 'scaling': return 'Scaling';
-			case 'failed': return 'Failed';
-			case 'stopped': return 'Stopped';
-			case 'unhealthy': return 'Unhealthy';
-			case 'pending': return 'Pending';
-			default: return status || 'Unknown';
-		}
-	}
 
 	function getBuildStatusColor(buildStatus: string) {
 		switch (buildStatus?.toLowerCase()) {
@@ -2697,7 +2071,7 @@
 		autoDeployFetched = false;
 		projectIngressesFetched = false;
 
-		if ($tailscaleEnabled) checkTailscaleStatus();
+		if ($tailscaleEnabled) tailscale.checkStatus();
 	});
 
 	// SSE subscription — invalidates the TanStack query instead of fetching directly.
@@ -3213,34 +2587,34 @@
 						<NetworkTab
 							{deployment}
 							tailscaleFeatureEnabled={$tailscaleEnabled}
-							{tailscaleLinked}
-							{tailscaleExposing}
-							{tailscaleUnexposing}
-							{tailscaleDns}
-							{tailscaleIp}
-							{tailscaleHostname}
-							onExposeTailscale={exposeTailscale}
-							onUnexposeTailscale={unexposeTailscale}
-							bind:showServiceForm
-							bind:newServiceForm
-							{serviceFormError}
-							bind:serviceEditForms
-							{serviceEditErrors}
-							{creatingService}
-							{serviceSavingId}
-							{serviceDeletingId}
-							{portPublicBusyId}
-							bind:isEditingServices
-							onCreateService={createService}
-							onSaveServicePorts={saveServicePorts}
-							onDeleteService={deleteService}
-							onToggleServiceEdit={toggleServiceEdit}
-							onTogglePortPublic={togglePortPublic}
-							onResetNewServiceForm={resetNewServiceForm}
-							onUpdateNewServicePort={updateNewServicePort}
-							onUpdateServiceEditPort={updateServiceEditPort}
-							onCopyInternalUrl={copyInternalUrl}
-							{copiedUrlId}
+							tailscaleLinked={tailscale.linked}
+							tailscaleExposing={tailscale.exposing}
+							tailscaleUnexposing={tailscale.unexposing}
+							tailscaleDns={tailscale.dns}
+							tailscaleIp={tailscale.ip}
+							tailscaleHostname={tailscale.hostname}
+							onExposeTailscale={() => tailscale.expose()}
+							onUnexposeTailscale={() => tailscale.unexpose()}
+							bind:showServiceForm={services.showForm}
+							bind:newServiceForm={services.newForm}
+							serviceFormError={services.formError}
+							bind:serviceEditForms={services.editForms}
+							serviceEditErrors={services.editErrors}
+							creatingService={services.creating}
+							serviceSavingId={services.savingId}
+							serviceDeletingId={services.deletingId}
+							portPublicBusyId={services.portPublicBusyId}
+							bind:isEditingServices={services.isEditing}
+							onCreateService={() => services.create()}
+							onSaveServicePorts={(id) => services.savePorts(id)}
+							onDeleteService={(id) => services.delete(id)}
+							onToggleServiceEdit={(svc) => services.toggleEdit(svc)}
+							onTogglePortPublic={(s, p, e) => services.togglePortPublic(s, p, e)}
+							onResetNewServiceForm={() => services.resetNewForm()}
+							onUpdateNewServicePort={(i, c) => services.updateNewPort(i, c)}
+							onUpdateServiceEditPort={(id, i, c) => services.updateEditPort(id, i, c)}
+							onCopyInternalUrl={(url, id) => services.copyInternalUrl(url, id)}
+							copiedUrlId={services.copiedUrlId}
 							bind:showDomainForm
 							bind:newDomainHost
 							bind:newDomainPath

@@ -30,10 +30,6 @@
 	let { data } = $props<{ data: PageData }>();
 	const orgSlug = $derived(data.orgSlug);
 
-	// ── TanStack Query: overview data ──
-	// Shared definition (see $lib/queries/overview) so the layout can warm this
-	// exact cache key in parallel with auth — by the time this page mounts the
-	// data is usually already in flight or cached.
 	const overviewQuery = createQuery(() => ({
 		...overviewQueryOptions(orgSlug),
 		enabled: !!orgSlug

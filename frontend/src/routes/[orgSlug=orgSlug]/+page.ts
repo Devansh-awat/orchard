@@ -1,8 +1,10 @@
 import type { PageLoad } from './$types';
+import { queryClient } from '$lib/query';
+import { overviewQueryOptions } from '$lib/queries/overview';
 
-// Keep client-only — auth is cookie-based and apiBase is set in the browser.
 export const ssr = false;
 
 export const load: PageLoad = ({ params }) => {
+	void queryClient.prefetchQuery(overviewQueryOptions(params.orgSlug));
 	return { orgSlug: params.orgSlug };
 };

@@ -105,8 +105,6 @@
 .section {
 	margin-bottom: 1.75rem;
 }
-/* Segmented control: a single shared track with pills inside, so the pages
-   read as one cohesive switch rather than free-floating mismatched buttons. */
 .proj-tabs {
 	display: inline-flex;
 	align-items: center;
