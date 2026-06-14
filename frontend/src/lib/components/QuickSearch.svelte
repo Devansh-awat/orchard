@@ -1,6 +1,9 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { tree, type TreeItem } from '$lib/stores';
+	import { page } from '$app/stores';
+	import { type TreeItem } from '$lib/stores';
+	import { createQuery } from '@tanstack/svelte-query';
+	import { overviewQueryOptions } from '$lib/queries/overview';
 	import { Package, Rocket, Search, X, Database, LayoutTemplate } from 'lucide-svelte';
 	import { onMount } from 'svelte';
 	import { animate } from 'motion';
@@ -8,6 +11,60 @@
 	let open = $state(false);
 	let query = $state('');
 	let selectedIndex = $state(0);
+
+	const orgSlug = $derived($page.params.orgSlug);
+
+	const overview = createQuery(() => ({
+		...overviewQueryOptions(orgSlug),
+		enabled: open && !!orgSlug
+	}));
+
+	type ProjectRef = { id: string; name: string; slug: string };
+	type OverviewLite = {
+		deployments?: Array<{ id: string; name: string; project?: ProjectRef }>;
+		databases?: Array<{ id: string; name: string; project?: ProjectRef }>;
+		projects?: ProjectRef[];
+	};
+
+	const searchTree = $derived.by<TreeItem[]>(() => {
+		const data = overview.data as OverviewLite | undefined;
+		if (!data || !orgSlug) return [];
+		const projects = new Map<string, TreeItem>();
+		const ensureProject = (p: ProjectRef) => {
+			let node = projects.get(p.id);
+			if (!node) {
+				node = {
+					id: p.id,
+					name: p.name,
+					type: 'project',
+					href: `/${orgSlug}/projects/${p.slug}`,
+					children: []
+				};
+				projects.set(p.id, node);
+			}
+			return node;
+		};
+		for (const d of data.deployments ?? []) {
+			if (!d.project) continue;
+			ensureProject(d.project).children!.push({
+				id: d.id,
+				name: d.name,
+				type: 'deployment',
+				href: `/${orgSlug}/deployments/${d.id}`
+			});
+		}
+		for (const db of data.databases ?? []) {
+			if (!db.project) continue;
+			ensureProject(db.project).children!.push({
+				id: db.id,
+				name: db.name,
+				type: 'database',
+				href: `/${orgSlug}/databases/${db.id}`
+			});
+		}
+		for (const p of data.projects ?? []) ensureProject(p);
+		return [...projects.values()];
+	});
 
 	export function openSearch() {
 		open = true;
@@ -121,7 +178,7 @@
 	const result = $derived.by<{ groups: Group[]; flat: Hit[] }>(() => {
 		const Q = query.trim();
 		if (!Q) return { groups: [], flat: [] };
-		const flat = flatten($tree);
+		const flat = flatten(searchTree);
 
 		const projectMatch = new Map<string, Match>();
 		for (const { item } of flat) {
