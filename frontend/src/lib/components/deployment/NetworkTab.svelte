@@ -145,7 +145,7 @@
 							</div>
 						</div>
 						<button onclick={onUnexposeTailscale} disabled={tailscaleUnexposing} class="btn btn-secondary btn-sm">
-							{#if tailscaleUnexposing}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<X class="h-3.5 w-3.5" />{/if}
+							{#if tailscaleUnexposing}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<X size={14} />{/if}
 							<span>Remove</span>
 						</button>
 					</div>
@@ -203,10 +203,10 @@
 				}}
 			>
 				{#if showServiceForm}
-					<X class="h-4 w-4" />
+					<X size={16} />
 					<span>Close</span>
 				{:else}
-					<Plus class="h-4 w-4" />
+					<Plus size={16} />
 					<span>Add</span>
 				{/if}
 			</button>
@@ -360,10 +360,10 @@
 					}}
 				>
 					{#if showDomainForm}
-						<X class="h-4 w-4" />
+						<X size={16} />
 						<span>Close</span>
 					{:else}
-						<Plus class="h-4 w-4" />
+						<Plus size={16} />
 						<span>Add</span>
 					{/if}
 				</button>

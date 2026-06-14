@@ -153,7 +153,7 @@
 							<div class="flex items-center justify-between px-4 py-3" style="border-bottom: 1px solid var(--surface-border);">
 								<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Notifications</p>
 								<button class="btn-icon rounded-md p-1" onclick={() => notificationsOpen = false}>
-									<X class="h-3.5 w-3.5" />
+									<X size={14} />
 								</button>
 							</div>
 							<div class="notification-scroll">
@@ -187,7 +187,7 @@
 													aria-label="Dismiss notification"
 													onclick={() => onDismissNotification(_bfId)}
 												>
-													<X class="h-3 w-3" />
+													<X size={12} />
 												</button>
 											</div>
 										</div>
@@ -238,7 +238,7 @@
 														aria-label="Dismiss notification"
 														onclick={() => onDismissNotification(_pwId)}
 													>
-														<X class="h-3 w-3" />
+														<X size={12} />
 													</button>
 												</div>
 											</div>

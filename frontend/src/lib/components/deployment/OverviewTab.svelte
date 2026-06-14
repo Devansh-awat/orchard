@@ -145,7 +145,7 @@
 								onclick={(e) => { e.stopPropagation(); onCloseTerminalTab(ttab.id); }}
 								onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onCloseTerminalTab(ttab.id); } }}
 							>
-								<X class="h-2.5 w-2.5" />
+								<X size={10} />
 							</span>
 						</button>
 					{/each}

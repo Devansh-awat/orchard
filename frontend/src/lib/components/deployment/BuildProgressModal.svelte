@@ -115,7 +115,7 @@
 							<Loader2 class="h-3.5 w-3.5 animate-spin" />
 							Cancelling...
 						{:else}
-							<X class="h-3.5 w-3.5" />
+							<X size={14} />
 							Cancel build
 						{/if}
 					</button>
@@ -138,7 +138,7 @@
 				{#if buildModalStatus === 'building' || buildModalStatus === 'pending'}
 					<Loader2 class="h-4 w-4 animate-spin shrink-0 text-primary-500" />
 				{:else if buildModalStatus === 'failed'}
-					<X class="h-4 w-4 shrink-0 text-red-500" />
+					<X size={16} class="shrink-0 text-red-500" />
 				{:else if buildModalStatus === 'running'}
 					<Check size={16} class="h-4 w-4 shrink-0 text-green-500" />
 				{/if}

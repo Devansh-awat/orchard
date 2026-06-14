@@ -102,7 +102,7 @@
 				<div class="flex items-center justify-between gap-2">
 					<span class="strategy-card-title">Rolling Update</span>
 					{#if strategyValue === 'rollingUpdate'}
-						<Check class="h-3.5 w-3.5 text-primary-500" />
+						<Check size={14} class="text-primary-500" />
 					{/if}
 				</div>
 				<p class="strategy-card-desc">Bring up new pods, then drain the old ones — zero downtime.</p>
@@ -117,7 +117,7 @@
 				<div class="flex items-center justify-between gap-2">
 					<span class="strategy-card-title">Recreate</span>
 					{#if strategyValue === 'recreate'}
-						<Check class="h-3.5 w-3.5 text-primary-500" />
+						<Check size={14} class="text-primary-500" />
 					{/if}
 				</div>
 				<p class="strategy-card-desc">Tear down all pods first, then start the new ones — brief downtime.</p>

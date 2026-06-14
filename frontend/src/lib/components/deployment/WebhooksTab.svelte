@@ -120,7 +120,7 @@
 					</div>
 				</div>
 				<button class="btn btn-ghost btn-sm wh-dismiss-btn" onclick={() => (newlyCreatedToken = null)}>
-					<X class="h-3.5 w-3.5" />
+					<X size={14} />
 					<span>Dismiss</span>
 				</button>
 			</div>
