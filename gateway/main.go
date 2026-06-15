@@ -17,6 +17,9 @@ import (
 	"strings"
 )
 
+// Version is set via -ldflags "-X main.Version=..." at build time.
+var Version = "dev"
+
 func main() {
 	listen := flagOrEnv("listen", "GATEWAY_LISTEN", ":4000")
 	frontend := flagOrEnv("frontend", "GATEWAY_FRONTEND", "http://localhost:3000")

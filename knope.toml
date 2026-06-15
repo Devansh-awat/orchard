@@ -1,0 +1,61 @@
+# Versioning + changelog automation for the Orchard monorepo (knope).
+# Full model — channels, scopes, bootstrap — in tools/release/README.md.
+#
+# Each service is an independent package: its version, git tag (<name>/vX.Y.Z)
+# and CHANGELOG are driven by conventional commits carrying its scope. The
+# `orchard` package is the umbrella product version: it has no scope, so it
+# absorbs every commit and bumps by the highest rule seen repo-wide.
+
+[packages.server]
+versioned_files = ["server/package.json"]
+changelog = "server/CHANGELOG.md"
+scopes = ["server"]
+
+[packages.frontend]
+versioned_files = ["frontend/package.json"]
+changelog = "frontend/CHANGELOG.md"
+scopes = ["frontend"]
+
+[packages.gateway]
+versioned_files = ["gateway/go.mod"]
+changelog = "gateway/CHANGELOG.md"
+scopes = ["gateway"]
+
+[packages.cli]
+versioned_files = ["cli/go.mod"]
+changelog = "cli/CHANGELOG.md"
+scopes = ["cli"]
+
+[packages.r2-proxy]
+versioned_files = ["r2-proxy/go.mod"]
+changelog = "r2-proxy/CHANGELOG.md"
+scopes = ["r2-proxy", "r2proxy"]
+
+# Umbrella product version. No `scopes` → every conventional commit counts, so
+# it bumps by the largest rule across the whole repo. Tracked purely via the
+# orchard/vX.Y.Z tag + root CHANGELOG; CI mirrors it into the Helm chart.
+[packages.orchard]
+changelog = "CHANGELOG.md"
+
+[github]
+owner = "LeafdTK"
+repo = "leaf"
+
+# Order matters for GitHub releases: prepare + commit + push the bump first,
+# then Release creates the remote tags/releases against the pushed commit.
+[[workflows]]
+name = "release"
+
+[[workflows.steps]]
+type = "PrepareRelease"
+
+[[workflows.steps]]
+type = "Command"
+command = "git commit -m \"chore(release): publish versions [skip ci]\""
+
+[[workflows.steps]]
+type = "Command"
+command = "git push"
+
+[[workflows.steps]]
+type = "Release"

@@ -2,19 +2,57 @@ name: release
 
 on:
   push:
-    branches: [main]
+    branches: [main, beta]
   workflow_dispatch:
 
 env:
   REGISTRY: ghcr.io
   IMAGE_BASE: ${{ github.repository }}
 
+# contents:write so knope can push the version-bump commit and create the
+# per-package tags + GitHub releases. Pushes made with GITHUB_TOKEN do not
+# re-trigger this workflow, so there is no release loop.
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
+  # Compute versions from conventional commits, bump files + changelogs, tag and
+  # release. Emits a JSON manifest the downstream jobs tag images/chart with.
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      versions: ${{ steps.rel.outputs.versions }}
+      umbrella: ${{ steps.rel.outputs.umbrella }}
+      channel: ${{ steps.rel.outputs.channel }}
+      released: ${{ steps.rel.outputs.released }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          fetch-tags: true
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure git identity
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
+      - name: Install knope
+        run: |
+          curl -sL -o knope.tgz \
+            https://github.com/knope-dev/knope/releases/download/knope/v0.23.0/knope-x86_64-unknown-linux-musl.tgz
+          tar xzf knope.tgz
+          sudo install "$(find . -maxdepth 2 -name knope -type f | head -1)" /usr/local/bin/knope
+          knope --version
+
+      - id: rel
+        run: bash tools/release/run-release.sh
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
   images:
+    needs: version
     runs-on: ubuntu-latest
     strategy:
       fail-fast: false
@@ -22,15 +60,23 @@ jobs:
         include:
           - name: frontend
             dockerfile: frontend/Dockerfile
+            vkey: frontend
           - name: server
             dockerfile: server/Dockerfile
+            vkey: server
           - name: mcp
             dockerfile: server/Dockerfile.mcp
+            vkey: mcp
           - name: r2-proxy
             dockerfile: r2-proxy/Dockerfile
             context: r2-proxy
+            vkey: r2-proxy
     steps:
+      # Check out the branch tip so we build the commit knope just pushed
+      # (bumped package.json / go.mod / changelogs), not the triggering sha.
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
 
       - uses: docker/setup-buildx-action@v3
         with:
@@ -56,13 +102,21 @@ jobs:
           IMAGE_BASE: ${{ env.IMAGE_BASE }}
           MATRIX_NAME: ${{ matrix.name }}
 
+      # Pull this image's computed semver out of the version manifest.
+      - id: ver
+        run: echo "v=$(echo '${{ needs.version.outputs.versions }}' | jq -r --arg k '${{ matrix.vkey }}' '.[$k]')" >> "$GITHUB_OUTPUT"
+
       - id: meta
         uses: docker/metadata-action@v5
         with:
           images: ${{ steps.refs.outputs.image }}
+          # Immutable semver tag is applied only on an actual release; latest
+          # (stable) / beta (prerelease) + sha always refresh.
           tags: |
             type=sha,format=long
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=${{ steps.ver.outputs.v }},enable=${{ needs.version.outputs.released == 'true' }}
+            type=raw,value=latest,enable=${{ needs.version.outputs.channel == 'stable' }}
+            type=raw,value=beta,enable=${{ needs.version.outputs.channel == 'beta' }}
             type=ref,event=branch
 
       - uses: docker/build-push-action@v6
@@ -74,8 +128,10 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           provenance: false
           # BuildKit inline cache so pulled images themselves seed local cache.
+          # VERSION is consumed by Dockerfiles that embed it via ldflags.
           build-args: |
             BUILDKIT_INLINE_CACHE=1
+            VERSION=${{ steps.ver.outputs.v }}
           # Aggressive multi-source cache: GHA (fast, per-branch, 10GB cap) +
           # a dedicated registry cache tag (cross-branch, persists indefinitely) +
           # the latest published image as a final fallback.
@@ -90,13 +146,28 @@ jobs:
             type=gha,mode=max,scope=${{ matrix.name }}${{ github.ref == 'refs/heads/main' && '-main' || '' }}
             type=registry,ref=${{ steps.refs.outputs.cache }},mode=max,image-manifest=true,oci-mediatypes=true,compression=zstd
 
+  # Package + publish the Helm chart only when a release happened: chart
+  # version/appVersion = umbrella, each image tag pinned to its service version.
   chart:
-    needs: images
+    needs: [version, images]
+    if: needs.version.outputs.released == 'true'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.ref_name }}
 
       - uses: azure/setup-helm@v4
+
+      - name: Pin chart + image versions
+        run: |
+          U='${{ needs.version.outputs.umbrella }}'
+          V='${{ needs.version.outputs.versions }}'
+          yq -i ".version = \"$U\" | .appVersion = \"$U\"" charts/orchard/Chart.yaml
+          yq -i ".frontend.image.tag = \"$(echo "$V" | jq -r .frontend)\"" charts/orchard/values.yaml
+          yq -i ".server.image.tag   = \"$(echo "$V" | jq -r .server)\""   charts/orchard/values.yaml
+          yq -i ".mcp.image.tag      = \"$(echo "$V" | jq -r .mcp)\""      charts/orchard/values.yaml
+          yq -i ".r2Proxy.image.tag  = \"$(echo "$V" | jq -r '."r2-proxy"')\"" charts/orchard/values.yaml
 
       - name: Login to GHCR
         run: echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ${{ env.REGISTRY }} -u ${{ github.actor }} --password-stdin

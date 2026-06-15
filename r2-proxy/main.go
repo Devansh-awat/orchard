@@ -48,6 +48,9 @@ import (
 	_ "github.com/lib/pq"
 )
 
+// Version is set via -ldflags "-X main.Version=..." at build time.
+var Version = "dev"
+
 // ─────────────────────────── binding resolver ───────────────────────────
 
 type Binding struct {
@@ -168,6 +171,7 @@ type Proxy struct {
 }
 
 func main() {
+	log.Printf("r2-proxy version %s", Version)
 	listen := envDefault("PROXY_LISTEN", ":9000")
 	endpoint := mustEnv("R2_ENDPOINT")
 	region := envDefault("R2_REGION", "auto")
