@@ -507,10 +507,10 @@
 			{/if}
 			{#if canCreateProjects}
 			<a
-				href="/{orgSlug}/new?autoCreate=1"
+				href="/{orgSlug}/projects/new"
 				class="btn-primary"
 				{@attach springHover({ lift: -1, stiffness: 480, damping: 26 })}
-				><Plus size={15} /> Add New...</a
+				><Plus size={15} /> New Project</a
 			>
 			{/if}
 		</div>
