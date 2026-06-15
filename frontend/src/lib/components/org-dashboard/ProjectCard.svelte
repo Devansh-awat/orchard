@@ -5,9 +5,12 @@
 		Folder,
 		Rocket,
 		Database,
-		ArrowRight
+		ArrowRight,
+		Github,
+		Container,
+		Ellipsis
 	} from 'lucide-svelte';
-	import { motionStagger } from '$lib/utils/motion.svelte';
+	import { motionStagger, motionPopover } from '$lib/utils/motion.svelte';
 	import {
 		projectStatusSummary,
 		preBlurBg,
@@ -61,6 +64,45 @@
 	} = $props();
 
 	const summary = $derived(projectStatusSummary(group));
+
+	let newOpen = $state(false);
+	let newRender = $state(false);
+	let menuTop = $state(0);
+	let menuRight = $state(0);
+
+	function portal(node: HTMLElement) {
+		document.body.appendChild(node);
+		return () => {
+			if (node.parentNode) node.parentNode.removeChild(node);
+		};
+	}
+
+	function toggleNew(e: Event) {
+		e.stopPropagation();
+		e.preventDefault();
+		if (newOpen) {
+			newOpen = false;
+			return;
+		}
+		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
+		menuTop = r.bottom + 6;
+		menuRight = window.innerWidth - r.right;
+		newRender = true;
+		newOpen = true;
+	}
+
+	$effect(() => {
+		if (!newOpen) return;
+		const close = () => (newOpen = false);
+		window.addEventListener('click', close);
+		window.addEventListener('scroll', close, true);
+		window.addEventListener('resize', close);
+		return () => {
+			window.removeEventListener('click', close);
+			window.removeEventListener('scroll', close, true);
+			window.removeEventListener('resize', close);
+		};
+	});
 </script>
 
 <div
@@ -141,14 +183,46 @@
 				</span>
 			{/if}
 		</div>
-		<a
-			href="/{orgSlug}/new?projectSlug={group.slug}"
+		<span
 			class="proj-new"
-			onclick={(e) => e.stopPropagation()}
+			role="button"
+			tabindex="0"
+			onclick={toggleNew}
+			onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleNew(e); }}
+			aria-haspopup="menu"
+			aria-expanded={newOpen}
 			aria-label="Add new to this project"
 		>
 			<Plus size={12} /> New
-		</a>
+		</span>
+		{#if newRender}
+			<div
+				class="menu proj-new-menu"
+				role="menu"
+				style="position: fixed; top: {menuTop}px; right: {menuRight}px;"
+				onclick={(e) => e.stopPropagation()}
+				onkeydown={(e) => e.stopPropagation()}
+				tabindex="-1"
+				{@attach portal}
+				{@attach motionPopover({
+					from: { y: -6, scale: 0.94 },
+					stiffness: 540,
+					damping: 28,
+					closing: () => !newOpen,
+					onClosed: () => (newRender = false)
+				})}
+			>
+				<a class="menu-item" role="menuitem" href="/{orgSlug}/projects/{group.slug}/deployments/new?source=image">
+					<Container size={14} /> Dockerfile
+				</a>
+				<a class="menu-item" role="menuitem" href="/{orgSlug}/projects/{group.slug}/deployments/new?source=github">
+					<Github size={14} /> Github Repo
+				</a>
+				<a class="menu-item" role="menuitem" href="/{orgSlug}/new?projectSlug={group.slug}">
+					<Ellipsis size={14} /> Others
+				</a>
+			</div>
+		{/if}
 		<a
 			href="/{orgSlug}/projects/{group.slug}"
 			class="proj-open"

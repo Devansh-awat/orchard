@@ -413,6 +413,7 @@
 	background: none;
 	transition: all 0.12s;
 	white-space: nowrap;
+	cursor: pointer;
 }
 .proj-new:hover {
 	color: var(--sidebar-text-active-border);
