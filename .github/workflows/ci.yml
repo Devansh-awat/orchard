@@ -1,0 +1,223 @@
+name: ci
+
+on:
+  pull_request:
+
+permissions:
+  contents: read
+  pull-requests: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # Decide which components changed so the rest can skip natively (no runner).
+  changes:
+    runs-on: ubuntu-latest
+    outputs:
+      frontend: ${{ steps.filter.outputs.frontend }}
+      server: ${{ steps.filter.outputs.server }}
+      gateway: ${{ steps.filter.outputs.gateway }}
+      cli: ${{ steps.filter.outputs.cli }}
+      r2_proxy: ${{ steps.filter.outputs.r2_proxy }}
+      chart: ${{ steps.filter.outputs.chart }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dorny/paths-filter@v3
+        id: filter
+        with:
+          filters: |
+            frontend:
+              - 'frontend/**'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'package.json'
+              - '.github/workflows/**'
+            server:
+              - 'server/**'
+              - 'pnpm-lock.yaml'
+              - 'pnpm-workspace.yaml'
+              - 'package.json'
+              - '.github/workflows/**'
+            gateway:
+              - 'gateway/**'
+              - '.github/workflows/**'
+            cli:
+              - 'cli/**'
+              - '.github/workflows/**'
+            r2_proxy:
+              - 'r2-proxy/**'
+              - '.github/workflows/**'
+            chart:
+              - 'charts/**'
+              - '.github/workflows/**'
+
+  commitlint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: wagoid/commitlint-github-action@v6
+
+  secret-scan:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - uses: trufflesecurity/trufflehog@main
+        with:
+          extra_args: --only-verified
+
+  frontend:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Prettier check
+        run: pnpm --filter frontend lint
+      - name: Build
+        run: pnpm --filter frontend build
+
+  server-build-test:
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Generate Prisma client
+        run: pnpm --filter server prisma:generate
+      - name: Build server
+        run: pnpm --filter server build
+      - name: Auth-coverage snapshot test
+        run: pnpm --filter server test:auth-coverage
+
+  e2e:
+    needs: changes
+    if: needs.changes.outputs.server == 'true'
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: orchard
+          POSTGRES_PASSWORD: orchard
+          POSTGRES_DB: orchard
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U orchard"
+          --health-interval 5s --health-timeout 5s --health-retries 10
+    env:
+      DATABASE_URL: postgresql://orchard:orchard@localhost:5432/orchard
+      JWT_SECRET: ci-e2e-secret
+      PORT: '3001'
+      SERVER_URL: http://localhost:3001
+      NODE_ENV: test
+      DD_TRACE_ENABLED: 'false'
+      OTEL_SDK_DISABLED: 'true'
+      HACKCLUB_CLIENT_ID: ci-dummy
+      HACKCLUB_CLIENT_SECRET: ci-dummy
+      HACKCLUB_REDIRECT_URI: http://localhost:3001/apiv1/auth/callback
+      SSO_ENCRYPTION_KEY: '0000000000000000000000000000000000000000000000000000000000000000'
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - name: Migrate + generate
+        run: |
+          pnpm --filter server prisma:generate
+          cd server && pnpm exec prisma migrate deploy
+      - name: Build server
+        run: pnpm --filter server build
+      - name: Boot server + run RBAC e2e
+        run: |
+          (cd server && node dist/main &)
+          for i in $(seq 1 90); do
+            (echo > /dev/tcp/localhost/3001) >/dev/null 2>&1 && break
+            sleep 1
+            [ "$i" = 90 ] && { echo "server never listened on :3001" >&2; exit 1; }
+          done
+          pnpm --filter server test:rbac
+
+  go-cli:
+    needs: changes
+    if: needs.changes.outputs.cli == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: cli/go.mod
+          cache-dependency-path: cli/go.sum
+      - run: cd cli && go vet ./... && go test ./... -count=1
+
+  go-gateway:
+    needs: changes
+    if: needs.changes.outputs.gateway == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: gateway/go.mod
+      - run: cd gateway && go vet ./... && go build ./...
+
+  go-r2-proxy:
+    needs: changes
+    if: needs.changes.outputs.r2_proxy == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: r2-proxy/go.mod
+      - run: cd r2-proxy && go vet ./... && go build ./...
+
+  helm-lint:
+    needs: changes
+    if: needs.changes.outputs.chart == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - run: helm lint charts/orchard
+
+  validate-images:
+    needs: changes
+    if: needs.changes.outputs.frontend == 'true' || needs.changes.outputs.server == 'true' || needs.changes.outputs.r2_proxy == 'true'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: docker/setup-buildx-action@v3
+      - name: Build changed images (no push)
+        run: |
+          build() { docker buildx build "$3" -f "$2" --build-arg VERSION=0.0.0-ci -t "ci/$1" --load=false; }
+          if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then build frontend frontend/Dockerfile .; fi
+          if [ "${{ needs.changes.outputs.server }}" = "true" ]; then build server server/Dockerfile .; build mcp server/Dockerfile.mcp .; fi
+          if [ "${{ needs.changes.outputs.r2_proxy }}" = "true" ]; then build r2-proxy r2-proxy/Dockerfile r2-proxy; fi

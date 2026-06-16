@@ -1,0 +1,151 @@
+name: release
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+  pull-requests: write
+  packages: write
+
+jobs:
+  # release-please maintains the release PR and, when it merges, cuts the
+  # GitHub releases/tags. Its per-package outputs decide what gets built.
+  release-please:
+    runs-on: ubuntu-latest
+    outputs:
+      any: ${{ steps.rp.outputs.releases_created }}
+      frontend: ${{ steps.rp.outputs['frontend--release_created'] }}
+      frontend_v: ${{ steps.rp.outputs['frontend--version'] }}
+      server: ${{ steps.rp.outputs['server--release_created'] }}
+      server_v: ${{ steps.rp.outputs['server--version'] }}
+      r2_proxy: ${{ steps.rp.outputs['r2-proxy--release_created'] }}
+      r2_proxy_v: ${{ steps.rp.outputs['r2-proxy--version'] }}
+      gateway: ${{ steps.rp.outputs['gateway--release_created'] }}
+      gateway_v: ${{ steps.rp.outputs['gateway--version'] }}
+      cli: ${{ steps.rp.outputs['cli--release_created'] }}
+      cli_v: ${{ steps.rp.outputs['cli--version'] }}
+    steps:
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: 1090304
+          private-key: ${{ secrets.LEAFDBOT_PRIVATE_KEY }}
+      - uses: googleapis/release-please-action@v4
+        id: rp
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+
+  image-frontend:
+    needs: release-please
+    if: needs.release-please.outputs.frontend == 'true'
+    uses: ./.github/workflows/_image.yml
+    secrets: inherit
+    with:
+      service: frontend
+      dockerfile: frontend/Dockerfile
+      version: ${{ needs.release-please.outputs.frontend_v }}
+
+  image-server:
+    needs: release-please
+    if: needs.release-please.outputs.server == 'true'
+    uses: ./.github/workflows/_image.yml
+    secrets: inherit
+    with:
+      service: server
+      dockerfile: server/Dockerfile
+      version: ${{ needs.release-please.outputs.server_v }}
+
+  image-mcp:
+    needs: release-please
+    if: needs.release-please.outputs.server == 'true'
+    uses: ./.github/workflows/_image.yml
+    secrets: inherit
+    with:
+      service: mcp
+      dockerfile: server/Dockerfile.mcp
+      version: ${{ needs.release-please.outputs.server_v }}
+
+  image-r2-proxy:
+    needs: release-please
+    if: needs.release-please.outputs.r2_proxy == 'true'
+    uses: ./.github/workflows/_image.yml
+    secrets: inherit
+    with:
+      service: r2-proxy
+      dockerfile: r2-proxy/Dockerfile
+      context: r2-proxy
+      version: ${{ needs.release-please.outputs.r2_proxy_v }}
+
+  # Runs after the (possibly-skipped) image jobs as long as none FAILED.
+  publish-chart:
+    needs: [release-please, image-frontend, image-server, image-mcp, image-r2-proxy]
+    if: >-
+      ${{ !cancelled() && needs.release-please.outputs.any == 'true'
+        && needs.image-frontend.result != 'failure'
+        && needs.image-server.result != 'failure'
+        && needs.image-mcp.result != 'failure'
+        && needs.image-r2-proxy.result != 'failure' }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: azure/setup-helm@v4
+      - name: Pin + publish chart
+        run: |
+          set -euo pipefail
+          sudo curl -fsSL -o /usr/local/bin/yq \
+            https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+          sudo chmod +x /usr/local/bin/yq
+
+          M=.release-please-manifest.json
+          FRONTEND=$(jq -r '.frontend' "$M"); SERVER=$(jq -r '.server' "$M")
+          R2=$(jq -r '."r2-proxy"' "$M")
+          UMBRELLA=$(printf '%s\n' \
+            "$(jq -r '.frontend' "$M")" "$(jq -r '.server' "$M")" \
+            "$(jq -r '.gateway' "$M")" "$(jq -r '.cli' "$M")" \
+            "$(jq -r '."r2-proxy"' "$M")" | sort -V | tail -1)
+
+          yq -i ".version = \"$UMBRELLA\" | .appVersion = \"$UMBRELLA\"" charts/orchard/Chart.yaml
+          yq -i ".frontend.image.tag = \"$FRONTEND\"" charts/orchard/values.yaml
+          yq -i ".server.image.tag   = \"$SERVER\""   charts/orchard/values.yaml
+          yq -i ".mcp.image.tag      = \"$SERVER\""   charts/orchard/values.yaml
+          yq -i ".r2Proxy.image.tag  = \"$R2\""       charts/orchard/values.yaml
+
+          echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
+          helm package charts/orchard -d dist
+          helm push "$(ls dist/*.tgz)" oci://ghcr.io/leafdtk/leaf/charts
+
+  deploy-marker:
+    needs: [release-please, publish-chart]
+    if: ${{ !cancelled() && needs.release-please.outputs.any == 'true' && needs.publish-chart.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Datadog deploy markers
+        env:
+          DD_API_KEY: ${{ secrets.DD_API_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${DD_API_KEY:-}" ]; then
+            echo "DD_API_KEY not set — skipping deploy markers."
+            exit 0
+          fi
+          SITE="${DD_SITE:-datadoghq.com}"
+          mark() {
+            local svc="$1" v="$2"
+            [ -n "$v" ] || return 0
+            curl -fsS -X POST "https://api.${SITE}/api/v1/events" \
+              -H "DD-API-KEY: ${DD_API_KEY}" -H "Content-Type: application/json" \
+              -d "{\"title\":\"Deploy ${svc} v${v}\",\"text\":\"orchard ${svc} ${v} via github actions %%% sha: ${{ github.sha }} %%%\",\"alert_type\":\"info\",\"tags\":[\"service:${svc}\",\"version:${v}\",\"env:production\",\"source:github\",\"event_type:deploy\"]}"
+            echo "marked ${svc} v${v}"
+          }
+          [ "${{ needs.release-please.outputs.frontend }}" = "true" ] && mark frontend "${{ needs.release-please.outputs.frontend_v }}"
+          [ "${{ needs.release-please.outputs.server }}" = "true" ]   && mark server   "${{ needs.release-please.outputs.server_v }}"
+          [ "${{ needs.release-please.outputs.server }}" = "true" ]   && mark mcp      "${{ needs.release-please.outputs.server_v }}"
+          [ "${{ needs.release-please.outputs.r2_proxy }}" = "true" ] && mark r2-proxy "${{ needs.release-please.outputs.r2_proxy_v }}"
+          [ "${{ needs.release-please.outputs.gateway }}" = "true" ]  && mark gateway  "${{ needs.release-please.outputs.gateway_v }}"
+          [ "${{ needs.release-please.outputs.cli }}" = "true" ]      && mark cli      "${{ needs.release-please.outputs.cli_v }}"
+          true
