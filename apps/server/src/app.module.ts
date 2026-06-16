@@ -24,6 +24,7 @@ import { MetricsModule } from './metrics/metrics.module';
 import { AuditModule } from './audit/audit.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AiChatModule } from './ai-chat/ai-chat.module';
+import { ObservabilityModule } from './observability/observability.module';
 import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
 
@@ -57,6 +58,7 @@ import { APP_GUARD } from '@nestjs/core';
     AuditModule,
     AnalyticsModule,
     AiChatModule,
+    ObservabilityModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })

@@ -138,7 +138,8 @@
 		DeploymentAlerts,
 		ConfigureTab,
 		DeploysTab,
-		SettingsTab
+		SettingsTab,
+		ObserveTab
 	} from '$lib/components/deployment';
 
 	const APP_DOMAIN = env.PUBLIC_APP_DOMAIN || 'a.lfdl.ink';
@@ -235,6 +236,12 @@
 			icon: Wifi
 		},
 		{
+			id: 'observe',
+			label: 'Observe',
+			description: 'Logs, HTTP & traces',
+			icon: Eye
+		},
+		{
 			id: 'metrics',
 			label: 'Metrics',
 			description: 'Live charts & history',
@@ -257,7 +264,9 @@
 	type TabId = (typeof tabSections)[number]['id'];
 
 	const isDockerImageDeployment = $derived(!deployment?.githubRepo);
-	const visibleTabs = $derived(tabSections);
+	const visibleTabs = $derived(
+		$advancedObservability ? tabSections : tabSections.filter((t) => t.id !== 'observe')
+	);
 
 	const tabs = new Tabs<TabId>({
 		value: 'overview',
@@ -625,6 +634,7 @@
 	let persistentBuildCache = $state(false);
 
 	const tailscaleEnabled = featureFlag('tailscale-integration');
+	const advancedObservability = featureFlag('advanced-observability');
 	const tailscale = new TailscaleController({
 		deploymentId: () => deploymentId,
 		isExposed: () => !!deployment?.tailscaleExposed,
@@ -2817,6 +2827,10 @@
 							onGenerateRandomDomain={generateRandomDomainForNew}
 							{toasts}
 						/>
+					{:else if tab.id === 'observe'}
+						<div class="card rounded-2xl p-5">
+							<ObserveTab {deployment} />
+						</div>
 					{:else if tab.id === 'metrics'}
 						<div class="card rounded-2xl p-5">
 							<DeploymentMetrics deploymentId={deployment?.id ?? null} />
