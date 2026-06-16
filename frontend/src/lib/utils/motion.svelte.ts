@@ -48,7 +48,9 @@ export function getLastPointerSpeed(): number {
 
 // ---- Motion attachments -----------------------------------------------------------
 
-export function springHover(opts: { rest?: number; lift?: number; stiffness?: number; damping?: number } = {}) {
+export function springHover(
+	opts: { rest?: number; lift?: number; stiffness?: number; damping?: number } = {}
+) {
 	const rest = opts.rest ?? 0;
 	const lift = opts.lift ?? -3;
 	const stiffness = opts.stiffness ?? 380;
@@ -56,7 +58,12 @@ export function springHover(opts: { rest?: number; lift?: number; stiffness?: nu
 	return (el: Element) => {
 		const target = el as HTMLElement;
 		const enter = () => animate(target, { y: lift }, { type: 'spring', stiffness, damping });
-		const leave = () => animate(target, { y: rest, scale: 1 }, { type: 'spring', stiffness: stiffness * 0.8, damping: damping + 4 });
+		const leave = () =>
+			animate(
+				target,
+				{ y: rest, scale: 1 },
+				{ type: 'spring', stiffness: stiffness * 0.8, damping: damping + 4 }
+			);
 		const press = (e: Event) => {
 			const h = pointerHardness(e as PointerEvent);
 			// 0.97 (soft tap) → 0.92 (hard slam). Higher stiffness on harder press.
@@ -67,7 +74,11 @@ export function springHover(opts: { rest?: number; lift?: number; stiffness?: nu
 		const release = () => {
 			const h = lastPointerSpeed / 2;
 			const overshoot = 1 + Math.max(0, Math.min(1, h)) * 0.025;
-			animate(target, { scale: [null, overshoot, 1] as any }, { type: 'spring', stiffness: 420, damping: 14, mass: 0.7 });
+			animate(
+				target,
+				{ scale: [null, overshoot, 1] as any },
+				{ type: 'spring', stiffness: 420, damping: 14, mass: 0.7 }
+			);
 		};
 		target.addEventListener('mouseenter', enter);
 		target.addEventListener('mouseleave', leave);
@@ -84,14 +95,16 @@ export function springHover(opts: { rest?: number; lift?: number; stiffness?: nu
 	};
 }
 
-export function motionStagger(opts: {
-	index?: number;
-	stride?: number;
-	from?: { y?: number; opacity?: number; scale?: number };
-	stiffness?: number;
-	damping?: number;
-	mass?: number;
-} = {}) {
+export function motionStagger(
+	opts: {
+		index?: number;
+		stride?: number;
+		from?: { y?: number; opacity?: number; scale?: number };
+		stiffness?: number;
+		damping?: number;
+		mass?: number;
+	} = {}
+) {
 	const i = opts.index ?? 0;
 	const stride = opts.stride ?? 0.04;
 	const from = {
@@ -140,7 +153,10 @@ export function motionPopover(opts: {
 		let firstRun = true;
 		$effect(() => {
 			const closing = opts.closing();
-			if (firstRun) { firstRun = false; return; }
+			if (firstRun) {
+				firstRun = false;
+				return;
+			}
 			if (closing) {
 				animate(
 					target,
@@ -150,7 +166,11 @@ export function motionPopover(opts: {
 					if (opts.closing()) opts.onClosed();
 				});
 			} else {
-				animate(target, { opacity: 1, scale: 1, y: 0 }, { type: 'spring', stiffness, damping, mass });
+				animate(
+					target,
+					{ opacity: 1, scale: 1, y: 0 },
+					{ type: 'spring', stiffness, damping, mass }
+				);
 			}
 		});
 	};
@@ -164,10 +184,18 @@ export function motionBackdrop(closing: () => boolean, onClosed: () => void) {
 		let firstRun = true;
 		$effect(() => {
 			const c = closing();
-			if (firstRun) { firstRun = false; return; }
+			if (firstRun) {
+				firstRun = false;
+				return;
+			}
 			if (c) {
-				animate(target, { opacity: 0 }, { type: 'spring', stiffness: 360, damping: 32 })
-					.finished.then(() => { if (closing()) onClosed(); });
+				animate(
+					target,
+					{ opacity: 0 },
+					{ type: 'spring', stiffness: 360, damping: 32 }
+				).finished.then(() => {
+					if (closing()) onClosed();
+				});
 			}
 		});
 	};
@@ -181,12 +209,18 @@ export function cardTilt(opts: { max?: number } = {}) {
 		target.style.transformStyle = 'preserve-3d';
 		target.style.perspective = '1000px';
 		let rect: DOMRect | null = null;
-		const onEnter = () => { rect = target.getBoundingClientRect(); };
+		const onEnter = () => {
+			rect = target.getBoundingClientRect();
+		};
 		const onMove = (e: PointerEvent) => {
 			if (!rect) rect = target.getBoundingClientRect();
 			const x = (e.clientX - rect.left) / rect.width - 0.5;
 			const y = (e.clientY - rect.top) / rect.height - 0.5;
-			animate(target, { rotateX: -y * max, rotateY: x * max }, { type: 'spring', stiffness: 380, damping: 28, mass: 0.5 });
+			animate(
+				target,
+				{ rotateX: -y * max, rotateY: x * max },
+				{ type: 'spring', stiffness: 380, damping: 28, mass: 0.5 }
+			);
 		};
 		const onLeave = () => {
 			animate(target, { rotateX: 0, rotateY: 0 }, { type: 'spring', stiffness: 250, damping: 32 });
@@ -205,7 +239,9 @@ export function cardTilt(opts: { max?: number } = {}) {
 
 // Scroll-velocity-aware "rubber" — content micro-shifts based on wheel intensity,
 // then springs back. Captures the "react to how hard you scroll" feel.
-export function scrollRubber(opts: { axis?: 'y' | 'x'; max?: number; stiffness?: number; damping?: number } = {}) {
+export function scrollRubber(
+	opts: { axis?: 'y' | 'x'; max?: number; stiffness?: number; damping?: number } = {}
+) {
 	const axis = opts.axis ?? 'y';
 	const max = opts.max ?? 6;
 	const stiffness = opts.stiffness ?? 420;
@@ -223,7 +259,8 @@ export function scrollRubber(opts: { axis?: 'y' | 'x'; max?: number; stiffness?:
 			const delta = axis === 'y' ? e.deltaY : e.deltaX;
 			// Only apply rubber when at scroll bounds.
 			const atTop = target.scrollTop <= 0 && delta < 0;
-			const atBottom = target.scrollTop + target.clientHeight >= target.scrollHeight - 1 && delta > 0;
+			const atBottom =
+				target.scrollTop + target.clientHeight >= target.scrollHeight - 1 && delta > 0;
 			if (axis === 'y' && !atTop && !atBottom) return;
 			const intensity = Math.max(-1, Math.min(1, delta / 200));
 			pending = Math.max(-max, Math.min(max, pending - intensity * max * 0.6));
@@ -277,7 +314,11 @@ export function pressSpringDelegate(root: HTMLElement, selector: string) {
 		const overshoot = 1.08 + h * 0.06;
 		const settle = t === hovered ? 1.02 : 1;
 		const settleY = t === hovered ? -2 : 0;
-		animate(t, { scale: [null, overshoot, settle] as any, y: settleY }, { type: 'spring', stiffness: 380, damping: 12, mass: 0.7 });
+		animate(
+			t,
+			{ scale: [null, overshoot, settle] as any, y: settleY },
+			{ type: 'spring', stiffness: 380, damping: 12, mass: 0.7 }
+		);
 	};
 	root.addEventListener('pointermove', onMove, { passive: true });
 	root.addEventListener('pointerleave', onLeaveRoot);
@@ -326,11 +367,7 @@ export function springCollapse(collapsed: () => boolean) {
 			const opts = isCollapsed
 				? { type: 'spring' as const, stiffness: 200, damping: 18, mass: 1.2 }
 				: { type: 'spring' as const, stiffness: 180, damping: 16, mass: 1.3 };
-			const ctrl = animate(
-				target,
-				{ height: to, opacity: isCollapsed ? 0 : 1 },
-				opts
-			);
+			const ctrl = animate(target, { height: to, opacity: isCollapsed ? 0 : 1 }, opts);
 			if (!isCollapsed) {
 				ctrl.finished.then(() => {
 					if (!collapsed()) {
@@ -362,7 +399,11 @@ export function springRotate(
 			const next = active();
 			if (next === prev) return;
 			prev = next;
-			animate(target, { rotate: next ? on : rest }, { type: 'spring', stiffness, damping, mass: 0.7 });
+			animate(
+				target,
+				{ rotate: next ? on : rest },
+				{ type: 'spring', stiffness, damping, mass: 0.7 }
+			);
 		});
 	};
 }
@@ -384,7 +425,12 @@ export function springWidth(
 			animate(
 				target,
 				{ width: `${next ? opts.on : opts.rest}px` },
-				{ type: 'spring', stiffness: opts.stiffness ?? 380, damping: opts.damping ?? 22, mass: opts.mass ?? 0.7 }
+				{
+					type: 'spring',
+					stiffness: opts.stiffness ?? 380,
+					damping: opts.damping ?? 22,
+					mass: opts.mass ?? 0.7
+				}
 			);
 		});
 	};

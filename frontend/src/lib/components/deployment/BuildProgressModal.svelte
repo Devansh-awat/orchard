@@ -27,7 +27,7 @@
 		// Build card
 		showBuildCard = $bindable(),
 		showBuildCardRender = $bindable(),
-		onExpandBuildCard,
+		onExpandBuildCard
 	}: {
 		deployment: any;
 		showBuildModal: boolean;
@@ -59,15 +59,34 @@
 		role="dialog"
 		aria-modal="true"
 		aria-label="Build progress"
-		onclick={(e) => { if (e.target === e.currentTarget) onMinimizeBuildModal(); }}
-		onkeydown={(e) => { if (e.key === 'Escape') onMinimizeBuildModal(); }}
-		{@attach motionBackdrop(() => !showBuildModal, () => { showBuildModalRender = false; })}
+		onclick={(e) => {
+			if (e.target === e.currentTarget) onMinimizeBuildModal();
+		}}
+		onkeydown={(e) => {
+			if (e.key === 'Escape') onMinimizeBuildModal();
+		}}
+		{@attach motionBackdrop(
+			() => !showBuildModal,
+			() => {
+				showBuildModalRender = false;
+			}
+		)}
 	>
 		<div
 			class="build-modal card w-full max-w-2xl rounded-2xl shadow-2xl"
-			{@attach motionPopover({ closing: () => !showBuildModal, onClosed: () => {}, from: { y: 14, scale: 0.94, opacity: 0 }, stiffness: 460, damping: 30, mass: 0.95 })}
+			{@attach motionPopover({
+				closing: () => !showBuildModal,
+				onClosed: () => {},
+				from: { y: 14, scale: 0.94, opacity: 0 },
+				stiffness: 460,
+				damping: 30,
+				mass: 0.95
+			})}
 		>
-			<div class="flex items-center justify-between border-b px-6 py-4" style="border-color: var(--surface-border);">
+			<div
+				class="flex items-center justify-between border-b px-6 py-4"
+				style="border-color: var(--surface-border);"
+			>
 				<div class="flex items-center gap-3">
 					<h2 class="text-lg font-semibold">Rebuilding {deployment?.name ?? 'deployment'}</h2>
 					<div class="flex items-center gap-1.5 text-sm" style="color: var(--surface-muted);">
@@ -97,20 +116,14 @@
 				/>
 			</div>
 
-			<div class="flex justify-end gap-3 border-t px-6 py-4" style="border-color: var(--surface-border);">
+			<div
+				class="flex justify-end gap-3 border-t px-6 py-4"
+				style="border-color: var(--surface-border);"
+			>
 				{#if buildModalStatus === 'failed'}
-					<button
-						onclick={onCloseBuildModal}
-						class="btn btn-secondary text-sm"
-					>
-						Close
-					</button>
+					<button onclick={onCloseBuildModal} class="btn btn-secondary text-sm"> Close </button>
 				{:else if canCancelBuild}
-					<button
-						onclick={onCancelBuild}
-						disabled={cancelingBuild}
-						class="btn btn-danger text-sm"
-					>
+					<button onclick={onCancelBuild} disabled={cancelingBuild} class="btn btn-danger text-sm">
 						{#if cancelingBuild}
 							<Loader2 class="h-3.5 w-3.5 animate-spin" />
 							Cancelling...
@@ -131,7 +144,16 @@
 		class="build-card fixed bottom-6 right-6 z-40 w-72 cursor-pointer rounded-xl shadow-lg hover:shadow-xl"
 		style="transform-origin: bottom right;"
 		onclick={onExpandBuildCard}
-		{@attach motionPopover({ closing: () => !(showBuildCard && !showBuildModal), onClosed: () => { showBuildCardRender = false; }, from: { y: 18, scale: 0.86, opacity: 0 }, stiffness: 500, damping: 28, mass: 0.9 })}
+		{@attach motionPopover({
+			closing: () => !(showBuildCard && !showBuildModal),
+			onClosed: () => {
+				showBuildCardRender = false;
+			},
+			from: { y: 18, scale: 0.86, opacity: 0 },
+			stiffness: 500,
+			damping: 28,
+			mass: 0.9
+		})}
 	>
 		<div class="flex items-center justify-between px-4 py-3">
 			<div class="flex items-center gap-2 min-w-0">
@@ -155,17 +177,26 @@
 		<div class="px-4 pb-3">
 			<div class="build-card-track h-1.5 w-full overflow-hidden rounded-full">
 				<div
-					class="h-full transition-all duration-500 ease-out rounded-full {buildModalStatus === 'failed' ? 'bg-red-500' : buildModalStatus === 'running' ? 'bg-green-500' : 'bg-primary-500'}"
+					class="h-full transition-all duration-500 ease-out rounded-full {buildModalStatus ===
+					'failed'
+						? 'bg-red-500'
+						: buildModalStatus === 'running'
+							? 'bg-green-500'
+							: 'bg-primary-500'}"
 					style="width: {buildProgressValue()}%"
 				></div>
 			</div>
 			<p class="mt-1.5 text-xs" style="color: var(--surface-muted);">
 				{#if buildModalStatus === 'building'}
-					{buildModalStep === 'cloning' ? 'Cloning repository...' :
-					 buildModalStep === 'building' ? 'Building image...' :
-					 buildModalStep === 'pushing' ? 'Pushing image...' :
-					 buildModalStep === 'deploying' ? 'Creating deployment...' :
-					 'Building...'}
+					{buildModalStep === 'cloning'
+						? 'Cloning repository...'
+						: buildModalStep === 'building'
+							? 'Building image...'
+							: buildModalStep === 'pushing'
+								? 'Pushing image...'
+								: buildModalStep === 'deploying'
+									? 'Creating deployment...'
+									: 'Building...'}
 				{:else if buildModalStatus === 'pending'}
 					Starting build...
 				{:else if buildModalStatus === 'failed'}

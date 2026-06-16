@@ -14,7 +14,7 @@
 		favFailed = $bindable(new Set<string>()),
 		onDeploymentClick,
 		onNewResource,
-		onOpenDeployment,
+		onOpenDeployment
 	}: {
 		filteredDeployments: Deployment[];
 		databases: DatabaseSummary[];
@@ -31,7 +31,8 @@
 	function formatBuildDuration(deployment: Deployment): string | null {
 		const history = deployment.imageHistory?.[0];
 		if (!history?.buildStartedAt || !history?.buildCompletedAt) return null;
-		const ms = new Date(history.buildCompletedAt).getTime() - new Date(history.buildStartedAt).getTime();
+		const ms =
+			new Date(history.buildCompletedAt).getTime() - new Date(history.buildStartedAt).getTime();
 		if (ms < 1000) return '<1s';
 		const seconds = Math.floor(ms / 1000);
 		if (seconds < 60) return `${seconds}s`;
@@ -45,49 +46,65 @@
 		if (history?.commitAuthorName) return history.commitAuthorName;
 		if (history?.triggeredBy) {
 			const t = history.triggeredBy;
-			return t.firstName ? `${t.firstName} ${t.lastName ?? ''}`.trim() : t.username ?? null;
+			return t.firstName ? `${t.firstName} ${t.lastName ?? ''}`.trim() : (t.username ?? null);
 		}
 		if (deployment.creator) {
 			const c = deployment.creator;
-			return c.firstName ? `${c.firstName} ${c.lastName ?? ''}`.trim() : c.username ?? null;
+			return c.firstName ? `${c.firstName} ${c.lastName ?? ''}`.trim() : (c.username ?? null);
 		}
 		return null;
 	}
 
 	function getStatusColor(status: string) {
 		switch (status?.toLowerCase()) {
-			case 'running': return 'pj-status-running';
-			case 'pending': case 'restarting': case 'scaling': return 'pj-status-pending';
-			case 'failed': case 'error': case 'stopped': case 'unhealthy': return 'pj-status-error';
-			default: return 'pj-status-neutral';
+			case 'running':
+				return 'pj-status-running';
+			case 'pending':
+			case 'restarting':
+			case 'scaling':
+				return 'pj-status-pending';
+			case 'failed':
+			case 'error':
+			case 'stopped':
+			case 'unhealthy':
+				return 'pj-status-error';
+			default:
+				return 'pj-status-neutral';
 		}
 	}
 
 	function getStatusLabel(status: string) {
 		switch (status?.toLowerCase()) {
-			case 'running': return 'Running';
-			case 'restarting': return 'Restarting';
-			case 'scaling': return 'Scaling';
-			case 'failed': return 'Failed';
-			case 'stopped': return 'Stopped';
-			case 'unhealthy': return 'Unhealthy';
-			case 'pending': return 'Pending';
-			default: return status || 'Unknown';
+			case 'running':
+				return 'Running';
+			case 'restarting':
+				return 'Restarting';
+			case 'scaling':
+				return 'Scaling';
+			case 'failed':
+				return 'Failed';
+			case 'stopped':
+				return 'Stopped';
+			case 'unhealthy':
+				return 'Unhealthy';
+			case 'pending':
+				return 'Pending';
+			default:
+				return status || 'Unknown';
 		}
 	}
 
 	// Derive whether there are any deployments at all (before filtering)
-	const hasAnyDeployments = $derived(filteredDeployments.length > 0 || deploymentSearch.trim().length > 0);
+	const hasAnyDeployments = $derived(
+		filteredDeployments.length > 0 || deploymentSearch.trim().length > 0
+	);
 </script>
 
 {#if !hasAnyDeployments && databases.length === 0 && templateInstances.length === 0}
 	<div class="pj-empty-card">
 		<span style:color="var(--surface-muted)"><Server class="h-10 w-10" /></span>
 		<p>No deployments yet</p>
-		<button
-			class="pj-btn pj-btn-primary pj-btn-mt"
-			onclick={onNewResource}
-		>
+		<button class="pj-btn pj-btn-primary pj-btn-mt" onclick={onNewResource}>
 			<Plus class="h-4 w-4" />
 			Create Resource
 		</button>
@@ -120,7 +137,9 @@
 								onerror={() => (favFailed = new Set(favFailed).add(deployment.id))}
 							/>
 						{:else}
-							<span class="pj-deployment-favicon-letter">{deployment.name.charAt(0).toUpperCase()}</span>
+							<span class="pj-deployment-favicon-letter"
+								>{deployment.name.charAt(0).toUpperCase()}</span
+							>
 						{/if}
 						<span class="pj-deployment-favicon-dot {getStatusColor(deployment.status)}"></span>
 					</div>
@@ -130,7 +149,11 @@
 						</span>
 						{#if deployment.buildStatus && deployment.buildStatus !== 'none' && deployment.buildStatus !== 'succeeded'}
 							<span class="pj-deployment-build-badge pj-build-{deployment.buildStatus}">
-								Build: {deployment.buildStatus === 'building' ? 'Building' : deployment.buildStatus === 'failed' ? 'Failed' : deployment.buildStatus}
+								Build: {deployment.buildStatus === 'building'
+									? 'Building'
+									: deployment.buildStatus === 'failed'
+										? 'Failed'
+										: deployment.buildStatus}
 							</span>
 						{/if}
 					</div>
@@ -180,13 +203,21 @@
 	<div class="pj-deployment-grid">
 		{#each databases as db, i (db.id)}
 			{@const ls = db.liveStatus}
-			{@const unhealthy = db.status !== 'restarting' && !!(
-				(ls?.message && /oomkilled|out of memory|crashloopbackoff|back-?off|error/i.test(ls.message)) ||
-				(ls?.lastTerminationReason && ls.lastTerminationReason !== 'Completed') ||
-				((ls?.restartCount ?? 0) >= 5)
-			)}
+			{@const unhealthy =
+				db.status !== 'restarting' &&
+				!!(
+					(ls?.message &&
+						/oomkilled|out of memory|crashloopbackoff|back-?off|error/i.test(ls.message)) ||
+					(ls?.lastTerminationReason && ls.lastTerminationReason !== 'Completed') ||
+					(ls?.restartCount ?? 0) >= 5
+				)}
 			{@const effectiveStatus = unhealthy ? 'unhealthy' : db.status}
-			{@const badgeColor = effectiveStatus === 'ready' ? 'var(--pj-color-green)' : effectiveStatus === 'error' || effectiveStatus === 'unhealthy' ? 'var(--pj-color-red)' : 'var(--pj-color-amber)'}
+			{@const badgeColor =
+				effectiveStatus === 'ready'
+					? 'var(--pj-color-green)'
+					: effectiveStatus === 'error' || effectiveStatus === 'unhealthy'
+						? 'var(--pj-color-red)'
+						: 'var(--pj-color-amber)'}
 			<a
 				href="/{orgSlug}/databases/{db.id}"
 				class="pj-deployment-card"
@@ -195,10 +226,22 @@
 				{@attach cardTilt({ max: 5 })}
 			>
 				<div class="pj-deployment-card-top">
-					<div class="pj-deployment-indicator" style="background-color: color-mix(in srgb, {unhealthy ? 'var(--pj-color-red)' : 'var(--pj-color-green)'} 12%, transparent)">
-						<DatabaseIcon class="h-5 w-5" style="color: {unhealthy ? 'var(--pj-color-red)' : 'var(--pj-color-green)'}" />
+					<div
+						class="pj-deployment-indicator"
+						style="background-color: color-mix(in srgb, {unhealthy
+							? 'var(--pj-color-red)'
+							: 'var(--pj-color-green)'} 12%, transparent)"
+					>
+						<DatabaseIcon
+							class="h-5 w-5"
+							style="color: {unhealthy ? 'var(--pj-color-red)' : 'var(--pj-color-green)'}"
+						/>
 					</div>
-					<span class="pj-deployment-status-badge" class:pj-status-unhealthy={unhealthy} style="background-color: color-mix(in srgb, {badgeColor} 15%, transparent); color: {badgeColor}">
+					<span
+						class="pj-deployment-status-badge"
+						class:pj-status-unhealthy={unhealthy}
+						style="background-color: color-mix(in srgb, {badgeColor} 15%, transparent); color: {badgeColor}"
+					>
 						{effectiveStatus}
 					</span>
 				</div>
@@ -220,7 +263,10 @@
 {#if templateInstances.length}
 	<div class="pj-deployments-header" style="margin-top: 1rem;">
 		<h2 class="pj-section-title">
-			<LayoutTemplate class="h-4 w-4" style="color: var(--sidebar-text-active-border); display: inline;" />
+			<LayoutTemplate
+				class="h-4 w-4"
+				style="color: var(--sidebar-text-active-border); display: inline;"
+			/>
 			Template Instances
 		</h2>
 	</div>
@@ -234,10 +280,24 @@
 				{@attach cardTilt({ max: 5 })}
 			>
 				<div class="pj-deployment-card-top">
-					<div class="pj-deployment-indicator" style="background-color: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent)">
+					<div
+						class="pj-deployment-indicator"
+						style="background-color: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent)"
+					>
 						<LayoutTemplate class="h-5 w-5" style="color: var(--sidebar-text-active-border)" />
 					</div>
-					<span class="pj-deployment-status-badge" style="background-color: color-mix(in srgb, {ti.status === 'active' ? 'var(--pj-color-green)' : ti.status === 'failed' ? 'var(--pj-color-red)' : 'var(--pj-color-amber)'} 15%, transparent); color: {ti.status === 'active' ? 'var(--pj-color-green)' : ti.status === 'failed' ? 'var(--pj-color-red)' : 'var(--pj-color-amber)'}">
+					<span
+						class="pj-deployment-status-badge"
+						style="background-color: color-mix(in srgb, {ti.status === 'active'
+							? 'var(--pj-color-green)'
+							: ti.status === 'failed'
+								? 'var(--pj-color-red)'
+								: 'var(--pj-color-amber)'} 15%, transparent); color: {ti.status === 'active'
+							? 'var(--pj-color-green)'
+							: ti.status === 'failed'
+								? 'var(--pj-color-red)'
+								: 'var(--pj-color-amber)'}"
+					>
 						{ti.status}
 					</span>
 				</div>
@@ -247,7 +307,11 @@
 				</div>
 				<div class="pj-deployment-card-footer">
 					<span class="pj-deployment-replicas">
-						{(ti._count ? ti._count.deployments + ti._count.databases + ti._count.ingresses : (ti.deployments?.length ?? 0) + (ti.databases?.length ?? 0) + (ti.ingresses?.length ?? 0))} resources
+						{ti._count
+							? ti._count.deployments + ti._count.databases + ti._count.ingresses
+							: (ti.deployments?.length ?? 0) +
+								(ti.databases?.length ?? 0) +
+								(ti.ingresses?.length ?? 0)} resources
 					</span>
 				</div>
 			</a>

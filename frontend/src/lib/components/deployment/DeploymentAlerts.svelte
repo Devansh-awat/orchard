@@ -24,12 +24,18 @@
 		buildError = '',
 		noPodsReady = false,
 		podWarnings = [],
-		resourcePressure = { cpuRatio: null, memRatio: null, cpuNear: false, memNear: false, any: false },
+		resourcePressure = {
+			cpuRatio: null,
+			memRatio: null,
+			cpuNear: false,
+			memNear: false,
+			any: false
+		},
 		dismissedIds,
 		sseDisconnected = false,
 		onDismiss,
 		onViewLogs,
-		onGoToResources,
+		onGoToResources
 	}: {
 		buildFailed?: boolean;
 		buildError?: string;
@@ -62,7 +68,7 @@
 				id: 'sse-disconnected',
 				severity: 'warning',
 				title: 'Live updates offline',
-				hint: 'Real-time connection lost. Data may be outdated — it will auto-reconnect.',
+				hint: 'Real-time connection lost. Data may be outdated — it will auto-reconnect.'
 			});
 		}
 
@@ -72,10 +78,12 @@
 				id: 'build-failed',
 				severity: 'critical',
 				title: 'Build failed',
-				hint: buildError ? buildError.split('\n')[0].slice(0, 200) : 'The last build did not complete successfully.',
+				hint: buildError
+					? buildError.split('\n')[0].slice(0, 200)
+					: 'The last build did not complete successfully.',
 				action: 'View build logs',
 				onAction: onViewLogs,
-				flash: true,
+				flash: true
 			});
 		}
 
@@ -86,22 +94,24 @@
 				severity: 'critical',
 				title: 'Deployment is down',
 				hint: 'No pods are running. Your app is not serving traffic.',
-				flash: true,
+				flash: true
 			});
 		}
 
 		// Resource pressure
 		if (resourcePressure.any && !dismissedIds.has('resource-pressure')) {
 			const parts: string[] = [];
-			if (resourcePressure.cpuNear && resourcePressure.cpuRatio != null) parts.push(`CPU at ${Math.round(resourcePressure.cpuRatio * 100)}%`);
-			if (resourcePressure.memNear && resourcePressure.memRatio != null) parts.push(`Memory at ${Math.round(resourcePressure.memRatio * 100)}%`);
+			if (resourcePressure.cpuNear && resourcePressure.cpuRatio != null)
+				parts.push(`CPU at ${Math.round(resourcePressure.cpuRatio * 100)}%`);
+			if (resourcePressure.memNear && resourcePressure.memRatio != null)
+				parts.push(`Memory at ${Math.round(resourcePressure.memRatio * 100)}%`);
 			items.push({
 				id: 'resource-pressure',
 				severity: resourcePressure.memNear ? 'error' : 'warning',
 				title: 'Near resource limits',
 				hint: `${parts.join(' · ')} of allocated limits. ${resourcePressure.memNear ? 'Pods may be killed (OOMKilled) if memory exceeds the limit.' : 'Performance may degrade.'}`,
 				action: 'Adjust resources',
-				onAction: onGoToResources,
+				onAction: onGoToResources
 			});
 		}
 
@@ -122,8 +132,13 @@
 					title: humanized.title,
 					hint: humanized.hint,
 					action: humanized.action,
-					onAction: humanized.action === 'View logs' ? onViewLogs : humanized.action === 'Increase memory' || humanized.action === 'Check resources' ? onGoToResources : undefined,
-					flash: humanized.severity === 'critical',
+					onAction:
+						humanized.action === 'View logs'
+							? onViewLogs
+							: humanized.action === 'Increase memory' || humanized.action === 'Check resources'
+								? onGoToResources
+								: undefined,
+					flash: humanized.severity === 'critical'
 				});
 			} else {
 				// Unknown warning — show raw
@@ -131,7 +146,7 @@
 					id: wId,
 					severity: 'warning',
 					title: `Pod ${w.podName}`,
-					hint: w.message.slice(0, 200),
+					hint: w.message.slice(0, 200)
 				});
 			}
 		}
@@ -171,7 +186,11 @@
 			<div
 				class="da-alert da-alert--{alert.severity}"
 				class:da-alert--flash={alert.flash}
-				{@attach motionStagger({ index: i, stride: 0.04, from: { y: -8, opacity: 0, scale: 0.98 } })}
+				{@attach motionStagger({
+					index: i,
+					stride: 0.04,
+					from: { y: -8, opacity: 0, scale: 0.98 }
+				})}
 			>
 				<div class="da-alert-icon">
 					<Icon size={16} animate={alert.flash} />
@@ -241,8 +260,13 @@
 		animation: da-pulse 2s ease-in-out infinite;
 	}
 	@keyframes da-pulse {
-		0%, 100% { opacity: 1; }
-		50% { opacity: 0.7; }
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.7;
+		}
 	}
 	.da-alert-icon {
 		display: flex;

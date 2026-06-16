@@ -90,7 +90,9 @@
 }
 
 @keyframes db-status-restarting-spin {
-	to { transform: rotate(360deg); }
+	to {
+		transform: rotate(360deg);
+	}
 }
 
 .db-status-error,
@@ -116,8 +118,15 @@
 }
 
 @keyframes db-status-unhealthy-pulse {
-	0%, 100% { opacity: 1; box-shadow: 0 0 0 0 color-mix(in srgb, var(--error-text-color) 50%, transparent); }
-	50% { opacity: 0.5; box-shadow: 0 0 0 4px color-mix(in srgb, var(--error-text-color) 0%, transparent); }
+	0%,
+	100% {
+		opacity: 1;
+		box-shadow: 0 0 0 0 color-mix(in srgb, var(--error-text-color) 50%, transparent);
+	}
+	50% {
+		opacity: 0.5;
+		box-shadow: 0 0 0 4px color-mix(in srgb, var(--error-text-color) 0%, transparent);
+	}
 }
 
 .db-btn {
@@ -399,8 +408,14 @@
 	border-radius: 0;
 }
 
-.console-panel.console-expanded .console-body { flex: 1; min-height: 0; }
-.console-panel.console-expanded .console-output { max-height: none; height: 100%; }
+.console-panel.console-expanded .console-body {
+	flex: 1;
+	min-height: 0;
+}
+.console-panel.console-expanded .console-output {
+	max-height: none;
+	height: 100%;
+}
 
 .console-toolbar {
 	display: flex;
@@ -438,7 +453,9 @@
 	font-family: var(--font-mono);
 	cursor: pointer;
 	border-radius: 0.375rem;
-	transition: background 0.1s, color 0.1s;
+	transition:
+		background 0.1s,
+		color 0.1s;
 	white-space: nowrap;
 	flex-shrink: 0;
 }
@@ -461,7 +478,9 @@
 	border-radius: 3px;
 	opacity: 0.4;
 	cursor: pointer;
-	transition: opacity 0.1s, background 0.1s;
+	transition:
+		opacity 0.1s,
+		background 0.1s;
 }
 
 .console-tab-close:hover {
@@ -481,7 +500,9 @@
 	font-family: var(--font-mono);
 	cursor: pointer;
 	border-radius: 0.375rem;
-	transition: background 0.1s, color 0.1s;
+	transition:
+		background 0.1s,
+		color 0.1s;
 	white-space: nowrap;
 }
 
@@ -502,7 +523,10 @@
 	font-family: var(--font-mono);
 	cursor: pointer;
 	border-radius: 0.375rem;
-	transition: background 0.1s, color 0.1s, border-color 0.1s;
+	transition:
+		background 0.1s,
+		color 0.1s,
+		border-color 0.1s;
 	white-space: nowrap;
 }
 
@@ -523,7 +547,9 @@
 	color: inherit;
 	cursor: pointer;
 	opacity: 0.6;
-	transition: opacity 0.1s, background 0.1s;
+	transition:
+		opacity 0.1s,
+		background 0.1s;
 }
 
 .console-icon-btn:hover {
@@ -585,7 +611,9 @@
 	padding: 1.75rem;
 	width: 100%;
 	max-width: 26rem;
-	box-shadow: 0 4px 12px rgb(0 0 0 / 0.08), 0 20px 60px rgb(0 0 0 / 0.2);
+	box-shadow:
+		0 4px 12px rgb(0 0 0 / 0.08),
+		0 20px 60px rgb(0 0 0 / 0.2);
 }
 
 .modal-header {
@@ -617,7 +645,9 @@
 	background: none;
 	color: var(--surface-muted);
 	cursor: pointer;
-	transition: color 0.15s, background-color 0.15s;
+	transition:
+		color 0.15s,
+		background-color 0.15s;
 }
 
 .modal-close:hover {
@@ -689,7 +719,13 @@
 }
 
 @media (max-width: 640px) {
-	.db-setting-row { grid-template-columns: 1fr; }
-	.db-kv-grid { grid-template-columns: 1fr; }
-	.db-kv-label { margin-top: 0.5rem; }
+	.db-setting-row {
+		grid-template-columns: 1fr;
+	}
+	.db-kv-grid {
+		grid-template-columns: 1fr;
+	}
+	.db-kv-label {
+		margin-top: 0.5rem;
+	}
 }

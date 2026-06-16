@@ -8,7 +8,7 @@
 		refreshTree,
 		fetchProjectContext,
 		buildBasePath,
-		type ProjectContext,
+		type ProjectContext
 	} from '$lib/stores';
 	import { Loader2, FileText, Github } from 'lucide-svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
@@ -197,8 +197,8 @@
 					repoUrl: selectedRepo.clone_url,
 					branch,
 					composePath: composePath.trim() || 'docker-compose.yml',
-					autoDeployEnabled,
-				}),
+					autoDeployEnabled
+				})
 			});
 
 			if (!response.ok) {
@@ -210,7 +210,7 @@
 			toasts.add({
 				title: 'Compose stack created',
 				description: 'Services are deploying — builds run in the background',
-				color: 'success',
+				color: 'success'
 			});
 			refreshTree();
 			goto(`/${orgSlug}/compose-stacks/${stack.id}`);
@@ -291,19 +291,21 @@
 							{#if loadingRepos || loadingBranches}
 								<div class="cs-input-suffix"><Loader2 class="h-4 w-4 animate-spin" /></div>
 							{:else if selectedRepo}
-								<button onclick={clearRepoSelection} class="cs-input-suffix cs-input-clear" type="button">
+								<button
+									onclick={clearRepoSelection}
+									class="cs-input-suffix cs-input-clear"
+									type="button"
+								>
 									✕
 								</button>
 							{/if}
 						</div>
 						{#if showRepoDropdown && repoSearch && !loadingRepos && !selectedRepo}
 							<div class="cs-dropdown">
-								{#each repositories.filter((r) => r.full_name.toLowerCase().includes(repoSearch.toLowerCase())) as repo}
-									<button
-										type="button"
-										onclick={() => selectRepo(repo)}
-										class="cs-dropdown-item"
-									>
+								{#each repositories.filter((r) => r.full_name
+										.toLowerCase()
+										.includes(repoSearch.toLowerCase())) as repo}
+									<button type="button" onclick={() => selectRepo(repo)} class="cs-dropdown-item">
 										<Github class="h-4 w-4" />
 										<span class="cs-truncate">{repo.full_name}</span>
 										{#if repo.private}<span class="cs-badge">Private</span>{/if}
@@ -335,14 +337,20 @@
 									style={selectedBranch ? 'opacity: 0.7;' : ''}
 								/>
 								{#if selectedBranch}
-									<button onclick={clearBranchSelection} class="cs-input-suffix cs-input-clear" type="button">
+									<button
+										onclick={clearBranchSelection}
+										class="cs-input-suffix cs-input-clear"
+										type="button"
+									>
 										✕
 									</button>
 								{/if}
 							</div>
 							{#if showBranchDropdown && branchSearch && !loadingBranches && !selectedBranch}
 								<div class="cs-dropdown">
-									{#each branches.filter((b) => b.name.toLowerCase().includes(branchSearch.toLowerCase())) as b}
+									{#each branches.filter((b) => b.name
+											.toLowerCase()
+											.includes(branchSearch.toLowerCase())) as b}
 										<button type="button" onclick={() => selectBranch(b)} class="cs-dropdown-item">
 											<span class="cs-truncate">{b.name}</span>
 										</button>
@@ -361,7 +369,9 @@
 							placeholder="docker-compose.yml"
 							class="cs-input cs-mono"
 						/>
-						<p class="cs-hint">Relative to the repo root. Default: <code>docker-compose.yml</code>.</p>
+						<p class="cs-hint">
+							Relative to the repo root. Default: <code>docker-compose.yml</code>.
+						</p>
 					</div>
 
 					<label class="cs-toggle">
@@ -382,7 +392,12 @@
 				{/if}
 
 				<div class="cs-actions">
-					<button type="button" class="cs-btn cs-btn-secondary" onclick={() => history.back()} disabled={submitting}>
+					<button
+						type="button"
+						class="cs-btn cs-btn-secondary"
+						onclick={() => history.back()}
+						disabled={submitting}
+					>
 						Cancel
 					</button>
 					<button
@@ -420,7 +435,11 @@
 		color: var(--center-channel-color);
 		margin: 0;
 		letter-spacing: -0.025em;
-		background: linear-gradient(135deg, var(--sidebar-text-active-border), color-mix(in srgb, var(--sidebar-text-active-border) 60%, #0db7ed));
+		background: linear-gradient(
+			135deg,
+			var(--sidebar-text-active-border),
+			color-mix(in srgb, var(--sidebar-text-active-border) 60%, #0db7ed)
+		);
 		-webkit-background-clip: text;
 		-webkit-text-fill-color: transparent;
 		background-clip: text;
@@ -449,7 +468,9 @@
 		background-color: var(--surface-bg);
 		display: flex;
 		flex-direction: column;
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.04), 0 1px 2px rgb(0 0 0 / 0.02);
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.04),
+			0 1px 2px rgb(0 0 0 / 0.02);
 	}
 
 	.cs-source-row {
@@ -665,7 +686,10 @@
 		border: 1px solid transparent;
 		cursor: pointer;
 		text-decoration: none;
-		transition: background-color 0.15s, border-color 0.15s, opacity 0.15s;
+		transition:
+			background-color 0.15s,
+			border-color 0.15s,
+			opacity 0.15s;
 	}
 
 	.cs-btn:disabled {

@@ -86,7 +86,7 @@
 		canceling = true;
 		try {
 			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/cancel`, {
-				method: 'POST',
+				method: 'POST'
 			});
 
 			if (!response.ok) {
@@ -97,7 +97,7 @@
 			toasts.add({
 				title: 'Build cancelled',
 				description: 'The build has been cancelled successfully',
-				color: 'success',
+				color: 'success'
 			});
 
 			await fetchDeployment();
@@ -105,7 +105,7 @@
 			toasts.add({
 				title: 'Error',
 				description: e instanceof Error ? e.message : 'Failed to cancel build',
-				color: 'error',
+				color: 'error'
 			});
 		} finally {
 			canceling = false;
@@ -142,7 +142,12 @@
 						<div class="mt-2 flex items-center justify-center gap-2 text-sm muted-text">
 							<span class="font-mono">{deployment.githubBranch}</span>
 							{#if deployment.buildType}
-								<span class="rounded-full px-2 py-0.5 text-xs font-medium {deployment.buildType === 'railpack' ? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400' : 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}">
+								<span
+									class="rounded-full px-2 py-0.5 text-xs font-medium {deployment.buildType ===
+									'railpack'
+										? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
+										: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}"
+								>
 									{deployment.buildType === 'railpack' ? 'Railpack' : 'Dockerfile'}
 								</span>
 							{/if}
@@ -227,7 +232,9 @@
 		background-color: var(--surface-bg);
 		border: 1px solid var(--surface-border);
 		color: var(--center-channel-color);
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.02);
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
 	}
 
 	.error-box {

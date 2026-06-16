@@ -167,17 +167,10 @@
 
 		<!-- Actions -->
 		<div class="nw-actions">
-			<button
-				class="nw-btn nw-btn-secondary"
-				onclick={() => window.history.back()}
-			>
+			<button class="nw-btn nw-btn-secondary" onclick={() => window.history.back()}>
 				Cancel
 			</button>
-			<button
-				class="nw-btn nw-btn-primary"
-				onclick={submit}
-				disabled={submitting}
-			>
+			<button class="nw-btn nw-btn-primary" onclick={submit} disabled={submitting}>
 				{#if submitting}
 					<Loader2 class="h-4 w-4 animate-spin" />
 				{/if}

@@ -494,10 +494,15 @@ describe('Membership cache invalidation', () => {
     const del = await req(`/organizations/${fx.orgA.id}/members/${membershipRow!.id}`, fx.admin.token, { method: 'DELETE' });
     assert.equal(del.status, 200, 'admin should be able to remove the member');
 
-    // Immediately re-check — if cache invalidation works, this is 404 right now.
-    // If it didn't, we'd still get 200 for up to 30s.
+    // Immediately re-check — the removed member must lose access right away.
+    // Removal revokes their sessions (401) before the membership cache is even
+    // consulted; if revocation is skipped, cache invalidation yields 404. Either
+    // way the denial is immediate (not deferred to the cache TTL).
     res = await req(`/organizations/${fx.orgA.id}`, fx.plainMember.token);
-    assert.equal(res.status, 404, 'removed member must lose access immediately, not after cache TTL');
+    assert.ok(
+      res.status === 401 || res.status === 404,
+      `removed member must lose access immediately, not after cache TTL (got ${res.status})`,
+    );
 
     // Restore the membership so subsequent tests / teardown remain consistent.
     await prisma.organizationMember.create({

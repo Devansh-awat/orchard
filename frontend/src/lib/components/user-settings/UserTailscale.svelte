@@ -15,7 +15,7 @@
 		linkingTailscale,
 		onLink,
 		onUnlink,
-		index = 0,
+		index = 0
 	}: {
 		tailscaleLoading: boolean;
 		tailscaleLinked: boolean;
@@ -30,18 +30,29 @@
 	} = $props();
 </script>
 
-<SettingsSection {index} title="Tailscale" description="Access your deployments on your private network">
+<SettingsSection
+	{index}
+	title="Tailscale"
+	description="Access your deployments on your private network"
+>
 	{#snippet icon(_hovered)}<Globe class="h-[18px] w-[18px]" />{/snippet}
 	{#snippet badge()}
 		{#if !tailscaleLoading}
-			<StatusPill active={tailscaleLinked} label={tailscaleLinked ? 'Connected' : 'Not connected'} />
+			<StatusPill
+				active={tailscaleLinked}
+				label={tailscaleLinked ? 'Connected' : 'Not connected'}
+			/>
 		{/if}
 	{/snippet}
 
 	{#if tailscaleLoading}
 		<div class="ut-loading"><Loader2 class="h-4 w-4 animate-spin" /></div>
 	{:else if tailscaleLinked}
-		<IntegrationCard name={tailscaleTailnet ?? ''} disconnecting={unlinkingTailscale} onDisconnect={onUnlink}>
+		<IntegrationCard
+			name={tailscaleTailnet ?? ''}
+			disconnecting={unlinkingTailscale}
+			onDisconnect={onUnlink}
+		>
 			{#snippet icon()}<Globe class="h-4 w-4" />{/snippet}
 		</IntegrationCard>
 	{:else if showTailscaleForm}
@@ -49,7 +60,14 @@
 			<div class="ut-instructions">
 				<p class="ut-instructions-intro">Paste a Tailscale auth key below. To create one:</p>
 				<ol class="ut-instructions-list">
-					<li>Go to <a href="https://login.tailscale.com/admin/settings/keys" target="_blank" rel="noopener" class="ut-link">Tailscale Admin → Settings → Keys</a></li>
+					<li>
+						Go to <a
+							href="https://login.tailscale.com/admin/settings/keys"
+							target="_blank"
+							rel="noopener"
+							class="ut-link">Tailscale Admin → Settings → Keys</a
+						>
+					</li>
 					<li>Click <strong>Generate auth key</strong></li>
 					<li>Enable <strong>Reusable</strong> so it can be used for multiple deployments</li>
 					<li>Set expiration to <strong>90 days</strong> (max)</li>
@@ -64,10 +82,22 @@
 					class="ut-input"
 					placeholder="tskey-auth-..."
 					bind:value={tailscaleApiKey}
-					onkeydown={(e) => { if (e.key === 'Enter') onLink(); }}
+					onkeydown={(e) => {
+						if (e.key === 'Enter') onLink();
+					}}
 				/>
-				<button onclick={() => { showTailscaleForm = false; tailscaleApiKey = ''; }} class="ut-btn ut-btn--ghost">Cancel</button>
-				<button onclick={onLink} disabled={linkingTailscale || !tailscaleApiKey.trim()} class="ut-btn ut-btn--solid">
+				<button
+					onclick={() => {
+						showTailscaleForm = false;
+						tailscaleApiKey = '';
+					}}
+					class="ut-btn ut-btn--ghost">Cancel</button
+				>
+				<button
+					onclick={onLink}
+					disabled={linkingTailscale || !tailscaleApiKey.trim()}
+					class="ut-btn ut-btn--solid"
+				>
 					{#if linkingTailscale}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
 					Connect
 				</button>
@@ -154,12 +184,17 @@
 		transition: all 120ms;
 		white-space: nowrap;
 	}
-	.ut-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+	.ut-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
 	.ut-btn--solid {
 		background-color: var(--button-bg);
 		color: var(--button-color);
 	}
-	.ut-btn--solid:hover:not(:disabled) { opacity: 0.9; }
+	.ut-btn--solid:hover:not(:disabled) {
+		opacity: 0.9;
+	}
 	.ut-btn--ghost {
 		background: none;
 		color: var(--surface-muted);

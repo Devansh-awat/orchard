@@ -22,7 +22,7 @@
 		imageDirty,
 		savingImage,
 		onSaveResources,
-		onSaveImage,
+		onSaveImage
 	}: {
 		deployment: any;
 		resourceCpuMilli: number | null;
@@ -33,7 +33,13 @@
 		effectiveMemLimit?: number | null;
 		resourcesDirty: boolean;
 		savingResources: boolean;
-		resourcePressure: { cpuRatio: number | null; memRatio: number | null; cpuNear: boolean; memNear: boolean; any: boolean };
+		resourcePressure: {
+			cpuRatio: number | null;
+			memRatio: number | null;
+			cpuNear: boolean;
+			memNear: boolean;
+			any: boolean;
+		};
 		isImageSourceDeployment: boolean;
 		imageInput: string;
 		imageDirty: boolean;
@@ -48,8 +54,6 @@
 			return `${fmtCpuPreset(resourceCpuMilli)} · ${fmtMemoryPreset(resourceMemoryBytes)}`;
 		return 'Organization default';
 	});
-
-
 </script>
 
 <div class="rt-stack">
@@ -77,8 +81,10 @@
 						<button
 							class="rt-btn rt-btn--ghost"
 							disabled={!imageDirty || savingImage}
-							onclick={() => { imageInput = deployment?.image ?? ''; }}
-						>Reset</button>
+							onclick={() => {
+								imageInput = deployment?.image ?? '';
+							}}>Reset</button
+						>
 						<button
 							class="rt-btn rt-btn--primary"
 							disabled={!imageDirty || savingImage}
@@ -114,7 +120,9 @@
 				currentMemUsage={deployment?.totalMemoryUsage}
 				maxCpuMilli={effectiveCpuLimit}
 				maxMemoryBytes={effectiveMemLimit}
-				onchange={() => { resourcesDirty = true; }}
+				onchange={() => {
+					resourcesDirty = true;
+				}}
 			/>
 			<div class="rt-actions">
 				<button
@@ -122,10 +130,11 @@
 					disabled={!resourcesDirty || savingResources}
 					onclick={() => {
 						resourceCpuMilli = deployment?.cpuRequestMilli ?? null;
-						resourceMemoryBytes = deployment?.memoryRequestBytes != null ? Number(deployment.memoryRequestBytes) : null;
+						resourceMemoryBytes =
+							deployment?.memoryRequestBytes != null ? Number(deployment.memoryRequestBytes) : null;
 						resourcesDirty = false;
-					}}
-				>Reset</button>
+					}}>Reset</button
+				>
 				<button
 					class="rt-btn rt-btn--primary"
 					disabled={!resourcesDirty || savingResources}
@@ -150,7 +159,9 @@
 		border: 1px solid var(--surface-border);
 		border-radius: 0.875rem;
 		background-color: var(--surface-bg);
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.02);
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
 		overflow: hidden;
 	}
 	.rt-card-header {
@@ -257,12 +268,17 @@
 		transition: all 120ms;
 		white-space: nowrap;
 	}
-	.rt-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+	.rt-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
 	.rt-btn--primary {
 		background-color: var(--button-bg);
 		color: var(--button-color);
 	}
-	.rt-btn--primary:hover:not(:disabled) { opacity: 0.9; }
+	.rt-btn--primary:hover:not(:disabled) {
+		opacity: 0.9;
+	}
 	.rt-btn--ghost {
 		background: none;
 		color: var(--surface-muted);

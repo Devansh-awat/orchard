@@ -12,7 +12,7 @@
 		deleting = false,
 		heroImgReady = $bindable(false),
 		onCustomize,
-		onDelete,
+		onDelete
 	}: {
 		project: Project;
 		activeTab: string;
@@ -36,15 +36,29 @@
 		const descOp = compact ? 0 : 1;
 
 		if (heroEl) {
-			animate(heroEl, { height: `${heroPx}px` }, { type: 'spring', stiffness: 180, damping: 19, mass: 1.3 });
+			animate(
+				heroEl,
+				{ height: `${heroPx}px` },
+				{ type: 'spring', stiffness: 180, damping: 19, mass: 1.3 }
+			);
 		}
 		if (heroTitleEl) {
-			animate(heroTitleEl, { fontSize: `${titlePx}px` }, { type: 'spring', stiffness: 220, damping: 22, mass: 1 });
+			animate(
+				heroTitleEl,
+				{ fontSize: `${titlePx}px` },
+				{ type: 'spring', stiffness: 220, damping: 22, mass: 1 }
+			);
 		}
 		if (heroDescEl) {
-			animate(heroDescEl, { opacity: descOp }, { type: 'spring', stiffness: 260, damping: 26, mass: 0.7 });
+			animate(
+				heroDescEl,
+				{ opacity: descOp },
+				{ type: 'spring', stiffness: 260, damping: 26, mass: 0.7 }
+			);
 		}
-		if (firstRun) { firstRun = false; }
+		if (firstRun) {
+			firstRun = false;
+		}
 	});
 </script>
 
@@ -55,11 +69,7 @@
 		aria-hidden="true"
 	></div>
 {/if}
-<div
-	class="pj-hero"
-	class:pj-hero--compact={activeTab === 'members'}
-	bind:this={heroEl}
->
+<div class="pj-hero" class:pj-hero--compact={activeTab === 'members'} bind:this={heroEl}>
 	<img
 		class="pj-hero-img"
 		src={project.backgroundImage}
@@ -71,10 +81,7 @@
 	<div class="pj-hero-fade"></div>
 	<div class="pj-hero-content">
 		<div class="pj-header-info">
-			<h1
-				class="pj-title pj-title--onhero"
-				bind:this={heroTitleEl}
-			>
+			<h1 class="pj-title pj-title--onhero" bind:this={heroTitleEl}>
 				{#if project.icon}
 					<span class="pj-title-icon">
 						{#if /^https?:\/\//.test(project.icon)}
@@ -84,36 +91,38 @@
 						{/if}
 					</span>
 				{/if}
-				{#if project.owner?.username}<span class="pj-title-owner">{project.owner.username}@</span>{/if}{project.name}
+				{#if project.owner?.username}<span class="pj-title-owner">{project.owner.username}@</span
+					>{/if}{project.name}
 			</h1>
 			{#if project.description}
-				<p
-					class="pj-description pj-description--onhero"
-					bind:this={heroDescEl}
-				>{project.description}</p>
+				<p class="pj-description pj-description--onhero" bind:this={heroDescEl}>
+					{project.description}
+				</p>
 			{/if}
 		</div>
 		<div class="pj-header-actions">
 			{#if canEdit}
-			<button
-				onclick={onCustomize}
-				class="pj-icon-btn pj-icon-btn--onhero"
-				aria-label="Customize project"
-				title="Customize"
-			>
-				<Palette class="h-4 w-4" />
-			</button>
+				<button
+					onclick={onCustomize}
+					class="pj-icon-btn pj-icon-btn--onhero"
+					aria-label="Customize project"
+					title="Customize"
+				>
+					<Palette class="h-4 w-4" />
+				</button>
 			{/if}
 			{#if canDelete}
-			<button
-				onclick={onDelete}
-				disabled={deleting}
-				class="pj-icon-btn pj-icon-btn--danger pj-icon-btn--onhero"
-				aria-label="Delete project"
-				title="Delete"
-			>
-				{#if deleting}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Trash2 class="h-4 w-4" />{/if}
-			</button>
+				<button
+					onclick={onDelete}
+					disabled={deleting}
+					class="pj-icon-btn pj-icon-btn--danger pj-icon-btn--onhero"
+					aria-label="Delete project"
+					title="Delete"
+				>
+					{#if deleting}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Trash2
+							class="h-4 w-4"
+						/>{/if}
+				</button>
 			{/if}
 		</div>
 	</div>

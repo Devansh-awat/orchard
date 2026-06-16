@@ -47,7 +47,7 @@
 		onUpdateMemberRole,
 		onResendInvitation,
 		onCancelInvitation,
-		index = 0,
+		index = 0
 	}: {
 		members: Member[];
 		invitations: Invitation[];
@@ -107,7 +107,10 @@
 						{#each roleOptions as option}
 							<button
 								type="button"
-								onclick={() => { newMemberRole = option.value; inviteRoleOpen = false; }}
+								onclick={() => {
+									newMemberRole = option.value;
+									inviteRoleOpen = false;
+								}}
 								class="om-role-option"
 							>
 								<span>{option.label}</span>
@@ -123,7 +126,9 @@
 				class="om-invite-btn"
 				{@attach springHover()}
 			>
-				{#if addingMember}<Loader2 class="h-4 w-4 animate-spin" />{:else}<UserPlus class="h-4 w-4" />{/if}
+				{#if addingMember}<Loader2 class="h-4 w-4 animate-spin" />{:else}<UserPlus
+						class="h-4 w-4"
+					/>{/if}
 				Invite
 			</button>
 		</div>
@@ -134,7 +139,11 @@
 			<div class="om-member" {@attach motionStagger({ index: i, stride: 0.03 })}>
 				<div class="om-member-left">
 					{#if member.user.imageUrl}
-						<img src={member.user.imageUrl} alt={member.user.firstName || member.user.email} class="om-avatar" />
+						<img
+							src={member.user.imageUrl}
+							alt={member.user.firstName || member.user.email}
+							class="om-avatar"
+						/>
 					{:else}
 						<div class="om-avatar-fallback">
 							{member.user.firstName?.[0] || member.user.email[0].toUpperCase()}
@@ -142,9 +151,14 @@
 					{/if}
 					<div class="om-member-info">
 						<p class="om-member-name">
-							{member.user.firstName || ''} {member.user.lastName || ''}
+							{member.user.firstName || ''}
+							{member.user.lastName || ''}
 							{#if member.role === 'guest'}
-								<span class="om-guest-pill" title="Guests are only members of specific projects, not the whole organization">Guest</span>
+								<span
+									class="om-guest-pill"
+									title="Guests are only members of specific projects, not the whole organization"
+									>Guest</span
+								>
 							{/if}
 						</p>
 						<p class="om-member-email">{member.user.email}</p>
@@ -167,11 +181,16 @@
 									{#each roleOptions as option}
 										<button
 											type="button"
-											onclick={() => { onUpdateMemberRole(member.id, option.value); memberRoleOpen = null; }}
+											onclick={() => {
+												onUpdateMemberRole(member.id, option.value);
+												memberRoleOpen = null;
+											}}
 											class="om-role-option"
 										>
 											<span>{option.label}</span>
-											{#if member.role === option.value}<Check class="h-3.5 w-3.5 om-check-icon" />{/if}
+											{#if member.role === option.value}<Check
+													class="h-3.5 w-3.5 om-check-icon"
+												/>{/if}
 										</button>
 									{/each}
 								</div>
@@ -197,7 +216,12 @@
 </SettingsSection>
 
 {#if canInvite && invitations.length > 0}
-	<SettingsSection title="Pending Invitations" description="Invitations awaiting acceptance" iconColor="amber" index={index + 1}>
+	<SettingsSection
+		title="Pending Invitations"
+		description="Invitations awaiting acceptance"
+		iconColor="amber"
+		index={index + 1}
+	>
 		{#snippet icon(hovered)}<MailCheck size={18} animate={hovered} />{/snippet}
 		{#snippet badge()}<span class="om-count">{invitations.length}</span>{/snippet}
 
@@ -211,7 +235,9 @@
 						<div class="om-member-info">
 							<p class="om-member-name">{invitation.email}</p>
 							<p class="om-member-email">
-								Invited {new Date(invitation.createdAt).toLocaleDateString()} · Expires {new Date(invitation.expiresAt).toLocaleDateString()}
+								Invited {new Date(invitation.createdAt).toLocaleDateString()} · Expires {new Date(
+									invitation.expiresAt
+								).toLocaleDateString()}
 							</p>
 						</div>
 					</div>
@@ -224,7 +250,9 @@
 							title="Resend"
 							{@attach springHover()}
 						>
-							{#if resendingInvitationId === invitation.id}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Mail class="h-3.5 w-3.5" />{/if}
+							{#if resendingInvitationId === invitation.id}<Loader2
+									class="h-3.5 w-3.5 animate-spin"
+								/>{:else}<Mail class="h-3.5 w-3.5" />{/if}
 						</button>
 						<button
 							onclick={() => onCancelInvitation(invitation.id)}
@@ -233,7 +261,9 @@
 							title="Cancel"
 							{@attach springHover()}
 						>
-							{#if cancellingInvitationId === invitation.id}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<X class="h-3.5 w-3.5" />{/if}
+							{#if cancellingInvitationId === invitation.id}<Loader2
+									class="h-3.5 w-3.5 animate-spin"
+								/>{:else}<X class="h-3.5 w-3.5" />{/if}
 						</button>
 					</div>
 				</div>
@@ -321,7 +351,9 @@
 		border-radius: 0.5rem;
 		border: 1px solid var(--surface-border);
 		background-color: var(--center-channel-bg);
-		box-shadow: 0 4px 12px rgb(0 0 0 / 0.08), 0 1px 3px rgb(0 0 0 / 0.04);
+		box-shadow:
+			0 4px 12px rgb(0 0 0 / 0.08),
+			0 1px 3px rgb(0 0 0 / 0.04);
 	}
 
 	.om-role-option {
@@ -491,7 +523,9 @@
 		background: none;
 		color: var(--surface-muted);
 		cursor: pointer;
-		transition: color 120ms, background-color 120ms;
+		transition:
+			color 120ms,
+			background-color 120ms;
 	}
 
 	.om-remove-btn:hover {
@@ -515,7 +549,9 @@
 		background: none;
 		color: var(--surface-muted);
 		cursor: pointer;
-		transition: color 120ms, background-color 120ms;
+		transition:
+			color 120ms,
+			background-color 120ms;
 	}
 
 	.om-action-btn:hover {

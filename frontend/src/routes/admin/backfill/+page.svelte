@@ -50,7 +50,11 @@
 			choices = defaults;
 			status = {};
 		} catch (e) {
-			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed', color: 'error' });
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed',
+				color: 'error'
+			});
 		} finally {
 			loading = false;
 		}
@@ -82,7 +86,12 @@
 			const res = await apiFetch('/apiv1/admin/backfill/apply', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ kind: r.kind, id: r.id, cpuMilli: values.cpuMilli, memoryBytes: values.memoryBytes }),
+				body: JSON.stringify({
+					kind: r.kind,
+					id: r.id,
+					cpuMilli: values.cpuMilli,
+					memoryBytes: values.memoryBytes
+				})
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => null);
@@ -95,7 +104,11 @@
 			}, 600);
 		} catch (e) {
 			status[key] = 'error';
-			toasts.add({ title: `${r.name} failed`, description: e instanceof Error ? e.message : 'Failed', color: 'error' });
+			toasts.add({
+				title: `${r.name} failed`,
+				description: e instanceof Error ? e.message : 'Failed',
+				color: 'error'
+			});
 		} finally {
 			applyingId = null;
 		}
@@ -115,7 +128,7 @@
 	const summary = $derived({
 		total: rows.length,
 		withRec: rows.filter((r) => r.recommendation).length,
-		noMetrics: rows.filter((r) => !r.observed).length,
+		noMetrics: rows.filter((r) => !r.observed).length
 	});
 
 	onMount(load);
@@ -125,7 +138,8 @@
 	<div>
 		<h2 class="text-lg font-semibold">Unsized resources</h2>
 		<p class="text-sm" style="color: var(--surface-muted);">
-			Deployments and databases created before resource limits were added. Pick a size and apply — the pod will roll with requests = limits.
+			Deployments and databases created before resource limits were added. Pick a size and apply —
+			the pod will roll with requests = limits.
 		</p>
 	</div>
 	<div class="flex gap-2">
@@ -150,7 +164,9 @@
 	<div class="rounded-2xl border p-8 text-center" style="border-color: var(--surface-border);">
 		<CheckCircle2 class="h-10 w-10 mx-auto mb-2" style="color: #16a34a;" />
 		<p class="font-medium">Nothing to backfill</p>
-		<p class="text-sm mt-1" style="color: var(--surface-muted);">Every deployment and database already has resource requests set.</p>
+		<p class="text-sm mt-1" style="color: var(--surface-muted);">
+			Every deployment and database already has resource requests set.
+		</p>
 	</div>
 {:else}
 	<div class="grid grid-cols-3 gap-3 mb-4">
@@ -186,7 +202,10 @@
 						<td class="px-3 py-3">
 							<div class="font-medium">{r.name}</div>
 							<div class="text-xs" style="color: var(--surface-muted);">
-								<span class="inline-block rounded px-1.5 py-0.5 mr-1" style="background-color: var(--control-bg);">{r.kind}</span>
+								<span
+									class="inline-block rounded px-1.5 py-0.5 mr-1"
+									style="background-color: var(--control-bg);">{r.kind}</span
+								>
 								<span class="font-mono">{r.namespace}</span>
 							</div>
 						</td>
@@ -201,7 +220,9 @@
 						<td class="px-3 py-3 text-xs">
 							{#if r.observed}
 								<div>{formatCpu(r.observed.cpuMilli)} · {formatMemory(r.observed.memoryBytes)}</div>
-								<div style="color: var(--surface-muted);">{r.pods} pod{r.pods === 1 ? '' : 's'}</div>
+								<div style="color: var(--surface-muted);">
+									{r.pods} pod{r.pods === 1 ? '' : 's'}
+								</div>
 							{:else}
 								<span style="color: var(--surface-muted);">No metrics</span>
 							{/if}
@@ -215,7 +236,8 @@
 								{#each RESOURCE_PRESETS as p}
 									<option value={p.id}>
 										{p.label} — {formatCpu(p.cpuMilli)} · {formatMemory(p.memoryBytes)}
-										{#if r.recommendation?.presetId === p.id} ★ recommended{/if}
+										{#if r.recommendation?.presetId === p.id}
+											★ recommended{/if}
 									</option>
 								{/each}
 								<option value="custom">Custom…</option>
@@ -223,8 +245,20 @@
 							</select>
 							{#if choices[key] === 'custom'}
 								<div class="mt-2 flex gap-2">
-									<input type="number" placeholder="CPU m" bind:value={customCpu[key]} class="w-24 rounded-lg border px-2 py-1 text-sm" style="border-color: var(--surface-border); background-color: var(--center-channel-bg);" />
-									<input type="number" placeholder="Mem MiB" bind:value={customMem[key]} class="w-28 rounded-lg border px-2 py-1 text-sm" style="border-color: var(--surface-border); background-color: var(--center-channel-bg);" />
+									<input
+										type="number"
+										placeholder="CPU m"
+										bind:value={customCpu[key]}
+										class="w-24 rounded-lg border px-2 py-1 text-sm"
+										style="border-color: var(--surface-border); background-color: var(--center-channel-bg);"
+									/>
+									<input
+										type="number"
+										placeholder="Mem MiB"
+										bind:value={customMem[key]}
+										class="w-28 rounded-lg border px-2 py-1 text-sm"
+										style="border-color: var(--surface-border); background-color: var(--center-channel-bg);"
+									/>
 								</div>
 							{/if}
 						</td>
@@ -236,7 +270,10 @@
 							{:else}
 								<button
 									class="btn btn-primary"
-									disabled={!!applyingId || bulkRunning || choices[key] === 'skip' || !resolveChoice(r)}
+									disabled={!!applyingId ||
+										bulkRunning ||
+										choices[key] === 'skip' ||
+										!resolveChoice(r)}
 									onclick={() => applyOne(r)}
 								>
 									{#if applyingId === key}<Loader2 class="h-4 w-4 animate-spin" />{/if}

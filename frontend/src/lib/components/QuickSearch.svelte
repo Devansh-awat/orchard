@@ -112,7 +112,8 @@
 		if (t === Q) return { score: 1000, spans: [[0, t.length]] };
 		const idx = t.indexOf(Q);
 		if (idx === 0) return { score: 850 - (t.length - Q.length), spans: [[0, Q.length]] };
-		if (idx > 0) return { score: 700 - idx * 3 - (t.length - Q.length), spans: [[idx, idx + Q.length]] };
+		if (idx > 0)
+			return { score: 700 - idx * 3 - (t.length - Q.length), spans: [[idx, idx + Q.length]] };
 		// Word-boundary subsequence: prefer matches that start at word boundaries.
 		let ti = 0;
 		let qi = 0;
@@ -317,7 +318,10 @@
 	});
 
 	// ── Highlight matched character ranges ──
-	function segments(name: string, spans: Span[] | undefined): Array<{ text: string; hit: boolean }> {
+	function segments(
+		name: string,
+		spans: Span[] | undefined
+	): Array<{ text: string; hit: boolean }> {
 		if (!spans || spans.length === 0) return [{ text: name, hit: false }];
 		const out: Array<{ text: string; hit: boolean }> = [];
 		let cursor = 0;
@@ -334,16 +338,26 @@
 	function motionPopover(closing: () => boolean, onClosed: () => void) {
 		return (el: Element) => {
 			const target = el as HTMLElement;
-			animate(target, { opacity: [0, 1], scale: [0.96, 1], y: [-8, 0] },
-				{ type: 'spring', stiffness: 540, damping: 30, mass: 0.85 });
+			animate(
+				target,
+				{ opacity: [0, 1], scale: [0.96, 1], y: [-8, 0] },
+				{ type: 'spring', stiffness: 540, damping: 30, mass: 0.85 }
+			);
 			let firstRun = true;
 			$effect(() => {
 				const isClosing = closing();
-				if (firstRun) { firstRun = false; return; }
+				if (firstRun) {
+					firstRun = false;
+					return;
+				}
 				if (isClosing) {
-					animate(target, { opacity: 0, scale: 0.96, y: -8 },
-						{ type: 'spring', stiffness: 600, damping: 36, mass: 0.85 })
-						.finished.then(() => { if (closing()) onClosed(); });
+					animate(
+						target,
+						{ opacity: 0, scale: 0.96, y: -8 },
+						{ type: 'spring', stiffness: 600, damping: 36, mass: 0.85 }
+					).finished.then(() => {
+						if (closing()) onClosed();
+					});
 				}
 			});
 		};
@@ -355,7 +369,10 @@
 			let firstRun = true;
 			$effect(() => {
 				const isClosing = closing();
-				if (firstRun) { firstRun = false; return; }
+				if (firstRun) {
+					firstRun = false;
+					return;
+				}
 				if (isClosing) {
 					animate(target, { opacity: 0 }, { duration: 0.18, ease: [0.4, 0, 1, 1] });
 				}
@@ -365,26 +382,44 @@
 	function rowStagger(index: number) {
 		return (el: Element) => {
 			const target = el as HTMLElement;
-			animate(target, { opacity: [0, 1], y: [4, 0] },
-				{ type: 'spring', stiffness: 320, damping: 26, mass: 0.7, delay: Math.min(index, 12) * 0.018 });
+			animate(
+				target,
+				{ opacity: [0, 1], y: [4, 0] },
+				{
+					type: 'spring',
+					stiffness: 320,
+					damping: 26,
+					mass: 0.7,
+					delay: Math.min(index, 12) * 0.018
+				}
+			);
 		};
 	}
 
 	// Drive open/close of the modal with a render-flag pattern so the OUT
 	// spring can play before unmount.
 	let render = $state(false);
-	$effect(() => { if (open) render = true; });
+	$effect(() => {
+		if (open) render = true;
+	});
 </script>
 
 {#if render}
 	<div
 		class="quick-search-overlay"
-		onclick={(e) => { if (e.target === e.currentTarget) closeSearch(); }}
+		onclick={(e) => {
+			if (e.target === e.currentTarget) closeSearch();
+		}}
 		{@attach motionBackdrop(() => !open)}
 	>
 		<div
 			class="quick-search-modal"
-			{@attach motionPopover(() => !open, () => { render = false; })}
+			{@attach motionPopover(
+				() => !open,
+				() => {
+					render = false;
+				}
+			)}
 		>
 			<div class="quick-search-header">
 				<div class="quick-search-input-wrapper">
@@ -399,7 +434,9 @@
 						<button
 							type="button"
 							class="quick-search-clear"
-							onclick={() => { query = ''; }}
+							onclick={() => {
+								query = '';
+							}}
 							aria-label="Clear"
 						>
 							<X class="h-4 w-4" />
@@ -411,8 +448,12 @@
 			<div class="quick-search-results">
 				{#if !query.trim()}
 					<div class="quick-search-empty">
-						<p class="quick-search-empty-text">Type to search across every project and its contents.</p>
-						<p class="quick-search-empty-hint">Tip: typing a project name reveals everything inside it.</p>
+						<p class="quick-search-empty-text">
+							Type to search across every project and its contents.
+						</p>
+						<p class="quick-search-empty-hint">
+							Tip: typing a project name reveals everything inside it.
+						</p>
 					</div>
 				{:else if totalCount === 0}
 					<div class="quick-search-empty">
@@ -554,7 +595,9 @@
 		border-radius: 0.5rem;
 		color: var(--center-channel-color);
 		outline: none;
-		transition: border-color 120ms ease, box-shadow 120ms ease;
+		transition:
+			border-color 120ms ease,
+			box-shadow 120ms ease;
 	}
 
 	.quick-search-input:focus {
@@ -580,7 +623,9 @@
 		border-radius: 0.25rem;
 		color: var(--surface-muted);
 		cursor: pointer;
-		transition: background-color 120ms ease, color 120ms ease;
+		transition:
+			background-color 120ms ease,
+			color 120ms ease;
 	}
 
 	.quick-search-clear:hover {

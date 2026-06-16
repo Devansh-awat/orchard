@@ -1,7 +1,14 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { apiFetch, toasts, refreshTree, fetchProjectContext, buildBasePath, type ProjectContext } from '$lib/stores';
+	import {
+		apiFetch,
+		toasts,
+		refreshTree,
+		fetchProjectContext,
+		buildBasePath,
+		type ProjectContext
+	} from '$lib/stores';
 	import { Loader2, Database } from 'lucide-svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
@@ -25,7 +32,11 @@
 	const generatedDbName = $derived(() => {
 		const o = orgSlug.replace(/-/g, '_');
 		const p = projectSlug.replace(/-/g, '_');
-		const n = name.trim().toLowerCase().replace(/[^a-z0-9]+/g, '_') || 'name';
+		const n =
+			name
+				.trim()
+				.toLowerCase()
+				.replace(/[^a-z0-9]+/g, '_') || 'name';
 		const parts = wsSlug ? [o, wsSlug.replace(/-/g, '_'), p, n] : [o, p, n];
 		const full = parts.join('_');
 		return full.length > 61 ? full.substring(0, 61) : full;
@@ -58,7 +69,7 @@
 					storageSize: `${size}Gi`,
 					cpuRequestMilli: resourceCpuMilli,
 					memoryRequestBytes: resourceMemoryBytes,
-					restoreFromUrl: restoreFromUrl.trim() || undefined,
+					restoreFromUrl: restoreFromUrl.trim() || undefined
 				})
 			});
 
@@ -85,7 +96,9 @@
 	}
 
 	$effect(() => {
-		orgSlug; projectSlug; wsSlug;
+		orgSlug;
+		projectSlug;
+		wsSlug;
 		if (orgSlug && projectSlug) {
 			fetchProject();
 		}
@@ -101,11 +114,13 @@
 			<div class="skeleton" style="height: 2.25rem; border-radius: 0.5rem;"></div>
 		</div>
 	{:else if project}
-		<Breadcrumb crumbs={[
-			{ label: 'Home', href: `/${orgSlug}` },
-			{ label: project?.name || projectSlug || '', href: basePath },
-			{ label: 'New Database' }
-		]} />
+		<Breadcrumb
+			crumbs={[
+				{ label: 'Home', href: `/${orgSlug}` },
+				{ label: project?.name || projectSlug || '', href: basePath },
+				{ label: 'New Database' }
+			]}
+		/>
 
 		<div class="nd-header">
 			<div class="nd-header-top">
@@ -115,14 +130,22 @@
 					pathSuffix="/databases/new"
 				/>
 			</div>
-			<p class="nd-subtitle">Create a PostgreSQL database on the shared cluster. A unique user and password will be generated automatically.</p>
+			<p class="nd-subtitle">
+				Create a PostgreSQL database on the shared cluster. A unique user and password will be
+				generated automatically.
+			</p>
 		</div>
 
 		{#if error}
 			<div class="nd-error">{error}</div>
 		{/if}
 
-		<form onsubmit={(e) => { e.preventDefault(); handleSubmit(); }}>
+		<form
+			onsubmit={(e) => {
+				e.preventDefault();
+				handleSubmit();
+			}}
+		>
 			<div class="nd-card">
 				<h2 class="nd-card-title">Database Details</h2>
 
@@ -137,7 +160,11 @@
 						required
 						disabled={submitting}
 					/>
-					<p class="nd-hint">A slug-friendly name. The database will be created as <code class="nd-mono">{generatedDbName()}</code></p>
+					<p class="nd-hint">
+						A slug-friendly name. The database will be created as <code class="nd-mono"
+							>{generatedDbName()}</code
+						>
+					</p>
 				</div>
 
 				<div class="nd-field">
@@ -156,7 +183,9 @@
 				</div>
 
 				<div class="nd-field">
-					<label for="db-restore-url" class="nd-label">Restore from existing database (optional)</label>
+					<label for="db-restore-url" class="nd-label"
+						>Restore from existing database (optional)</label
+					>
 					<input
 						id="db-restore-url"
 						type="text"
@@ -167,7 +196,10 @@
 						autocomplete="off"
 						spellcheck="false"
 					/>
-					<p class="nd-hint">If provided, the new database will be bootstrapped by importing data from this PostgreSQL connection URL. The source database must be reachable from the cluster.</p>
+					<p class="nd-hint">
+						If provided, the new database will be bootstrapped by importing data from this
+						PostgreSQL connection URL. The source database must be reachable from the cluster.
+					</p>
 				</div>
 
 				<div class="nd-field" style="grid-column: 1 / -1;">
@@ -332,7 +364,9 @@
 	.nd-btn-primary {
 		background-color: var(--sidebar-text-active-border);
 		color: #fff;
-		box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 1px 1px rgb(0 0 0 / 0.04);
+		box-shadow:
+			0 1px 2px rgb(0 0 0 / 0.08),
+			0 1px 1px rgb(0 0 0 / 0.04);
 	}
 
 	.nd-btn-primary:hover:not(:disabled) {

@@ -29,7 +29,7 @@
 		onUploadAvatar,
 		onDeleteAvatar,
 		avatarInputRef = $bindable<HTMLInputElement | undefined>(undefined),
-		index = 0,
+		index = 0
 	}: {
 		user: UserData | null;
 		displayEmail: string;
@@ -54,7 +54,7 @@
 	const fields = $derived([
 		{ key: 'firstName', label: 'First name', value: user?.firstName || '—', mono: false },
 		{ key: 'lastName', label: 'Last name', value: user?.lastName || '—', mono: false },
-		{ key: 'username', label: 'Username', value: user?.username || '—', mono: true },
+		{ key: 'username', label: 'Username', value: user?.username || '—', mono: true }
 	]);
 </script>
 
@@ -66,7 +66,12 @@
 	onchange={onUploadAvatar}
 />
 
-<SettingsSection title="Profile" description="Your personal information" iconColor="primary" {index}>
+<SettingsSection
+	title="Profile"
+	description="Your personal information"
+	iconColor="primary"
+	{index}
+>
 	{#snippet icon(hovered)}<UserPen size={18} animate={hovered} />{/snippet}
 
 	<div class="up-identity">
@@ -87,7 +92,9 @@
 					disabled={uploadingAvatar}
 					title="Upload photo"
 				>
-					{#if uploadingAvatar}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Camera class="h-3 w-3" />{/if}
+					{#if uploadingAvatar}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Camera
+							class="h-3 w-3"
+						/>{/if}
 				</button>
 				{#if user?.imageUrl}
 					<button
@@ -96,7 +103,9 @@
 						disabled={deletingAvatar}
 						title="Remove photo"
 					>
-						{#if deletingAvatar}<Loader2 class="h-3 w-3 animate-spin" />{:else}<X class="h-3 w-3" />{/if}
+						{#if deletingAvatar}<Loader2 class="h-3 w-3 animate-spin" />{:else}<X
+								class="h-3 w-3"
+							/>{/if}
 					</button>
 				{/if}
 			</div>
@@ -118,7 +127,10 @@
 					onmouseenter={() => (revealHovered = true)}
 					onmouseleave={() => (revealHovered = false)}
 				>
-					{#if emailRevealed}<EyeOff size={13} animate={revealHovered} />{:else}<Eye size={13} animate={revealHovered} />{/if}
+					{#if emailRevealed}<EyeOff size={13} animate={revealHovered} />{:else}<Eye
+							size={13}
+							animate={revealHovered}
+						/>{/if}
 				</button>
 			</p>
 		</div>

@@ -3,7 +3,24 @@
 	import { apiFetch } from '$lib/stores';
 	import { featureFlag } from '$lib/posthog';
 	import { springHover, motionStagger } from '$lib/utils/motion.svelte';
-	import { Bot, Send, Loader2, Check, X, Sparkles, Trash2, Rocket, Database, Folder, Globe, Server, FileText, Activity, Settings, Wrench } from 'lucide-svelte';
+	import {
+		Bot,
+		Send,
+		Loader2,
+		Check,
+		X,
+		Sparkles,
+		Trash2,
+		Rocket,
+		Database,
+		Folder,
+		Globe,
+		Server,
+		FileText,
+		Activity,
+		Settings,
+		Wrench
+	} from 'lucide-svelte';
 	import { tick } from 'svelte';
 	import { marked } from 'marked';
 
@@ -57,7 +74,7 @@
 		deploy_from_github: { label: 'Deploying from GitHub', icon: Rocket },
 		create_database: { label: 'Provisioning database', icon: Database },
 		delete_deployment: { label: 'Deleting deployment', icon: Rocket },
-		delete_database: { label: 'Deleting database', icon: Database },
+		delete_database: { label: 'Deleting database', icon: Database }
 	};
 
 	function getToolMeta(name: string) {
@@ -95,10 +112,22 @@
 
 	let now = $state(Date.now());
 	let tickInterval: ReturnType<typeof setInterval> | null = null;
-	function startTicker() { if (!tickInterval) tickInterval = setInterval(() => { now = Date.now(); }, 100); }
-	function stopTicker() { if (tickInterval) { clearInterval(tickInterval); tickInterval = null; } }
+	function startTicker() {
+		if (!tickInterval)
+			tickInterval = setInterval(() => {
+				now = Date.now();
+			}, 100);
+	}
+	function stopTicker() {
+		if (tickInterval) {
+			clearInterval(tickInterval);
+			tickInterval = null;
+		}
+	}
 
-	function scrollToBottom() { if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight; }
+	function scrollToBottom() {
+		if (messagesEl) messagesEl.scrollTop = messagesEl.scrollHeight;
+	}
 	function handleScroll() {
 		if (!messagesEl) return;
 		showScrollBtn = messagesEl.scrollHeight - messagesEl.scrollTop - messagesEl.clientHeight > 80;
@@ -108,7 +137,9 @@
 		return ms < 1000 ? `${ms}ms` : `${(ms / 1000).toFixed(1)}s`;
 	}
 
-	function clearChat() { messages = []; }
+	function clearChat() {
+		messages = [];
+	}
 
 	function resizeInput() {
 		if (!inputEl) return;
@@ -120,12 +151,15 @@
 		'What deployments are running?',
 		'Show me my projects',
 		'Check resource usage',
-		'List my databases',
+		'List my databases'
 	];
 
 	function useSuggestion(text: string) {
 		input = text;
-		tick().then(() => { inputEl?.focus(); resizeInput(); });
+		tick().then(() => {
+			inputEl?.focus();
+			resizeInput();
+		});
 	}
 
 	async function sendMessage() {
@@ -133,7 +167,13 @@
 		if (!text || streaming) return;
 
 		messages.push({ id: crypto.randomUUID(), role: 'user', content: text });
-		messages.push({ id: crypto.randomUUID(), role: 'assistant', content: '', loading: true, toolCalls: [] });
+		messages.push({
+			id: crypto.randomUUID(),
+			role: 'assistant',
+			content: '',
+			loading: true,
+			toolCalls: []
+		});
 		const assistantMsg = messages[messages.length - 1];
 		input = '';
 		streaming = true;
@@ -151,7 +191,7 @@
 			const res = await apiFetch('/apiv1/ai/chat', {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ messages: chatHistory }),
+				body: JSON.stringify({ messages: chatHistory })
 			});
 
 			if (!res.ok) {
@@ -220,7 +260,9 @@
 						} else if (event.type === 'done') {
 							assistantMsg.loading = false;
 						}
-					} catch { /* skip malformed */ }
+					} catch {
+						/* skip malformed */
+					}
 				}
 			}
 
@@ -237,7 +279,10 @@
 	}
 
 	function handleKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
+		if (e.key === 'Enter' && !e.shiftKey) {
+			e.preventDefault();
+			sendMessage();
+		}
 	}
 </script>
 
@@ -254,15 +299,18 @@
 					<div class="ai-empty" {@attach motionStagger({ index: 0, from: { y: 12 } })}>
 						<div class="ai-empty-icon"><Sparkles size={28} /></div>
 						<h2 class="ai-empty-title">Orchard AI</h2>
-						<p class="ai-empty-sub">Ask me anything about your infrastructure — deployments, databases, logs, metrics, and more.</p>
+						<p class="ai-empty-sub">
+							Ask me anything about your infrastructure — deployments, databases, logs, metrics, and
+							more.
+						</p>
 						<div class="suggestions">
 							{#each suggestions as s, i}
 								<button
 									class="suggestion"
 									onclick={() => useSuggestion(s)}
 									{@attach motionStagger({ index: i + 1, stride: 0.06, from: { y: 8 } })}
-									{@attach springHover({ lift: -1, stiffness: 480, damping: 26 })}
-								>{s}</button>
+									{@attach springHover({ lift: -1, stiffness: 480, damping: 26 })}>{s}</button
+								>
 							{/each}
 						</div>
 					</div>
@@ -285,7 +333,10 @@
 											>
 												<!-- Tool header with spinner/check -->
 												<div class="tool-header">
-													<div class="tool-icon-wrap" class:tool-icon-wrap--running={tc.success === undefined}>
+													<div
+														class="tool-icon-wrap"
+														class:tool-icon-wrap--running={tc.success === undefined}
+													>
 														{#if tc.success === undefined}
 															<div class="tool-spinner"></div>
 														{:else if tc.success}
@@ -312,7 +363,11 @@
 																{#each tc.data.slice(0, 9) as item, ci}
 																	<div
 																		class="card"
-																		{@attach motionStagger({ index: ci, stride: 0.04, from: { y: 10 } })}
+																		{@attach motionStagger({
+																			index: ci,
+																			stride: 0.04,
+																			from: { y: 10 }
+																		})}
 																		{@attach springHover({ lift: -3, stiffness: 360, damping: 22 })}
 																	>
 																		<div class="card-top">
@@ -328,11 +383,20 @@
 																				{/if}
 																			</div>
 																			<div class="card-text">
-																				<span class="card-name">{item.name || item.slug || item.podName || 'Unknown'}</span>
+																				<span class="card-name"
+																					>{item.name ||
+																						item.slug ||
+																						item.podName ||
+																						'Unknown'}</span
+																				>
 																				{#if item.ingresses?.length}
 																					<span class="card-sub">{item.ingresses[0].host}</span>
 																				{:else if item.githubRepo}
-																					<span class="card-sub">{item.githubRepo}{item.githubBranch ? `/${item.githubBranch}` : ''}</span>
+																					<span class="card-sub"
+																						>{item.githubRepo}{item.githubBranch
+																							? `/${item.githubBranch}`
+																							: ''}</span
+																					>
 																				{:else if item.image}
 																					<span class="card-sub">{item.image}</span>
 																				{:else if item.dbName}
@@ -352,8 +416,10 @@
 																				</span>
 																			{:else if item._count}
 																				<span class="card-status">
-																					<Rocket size={10} /> {item._count.deployments ?? 0}
-																					<Database size={10} style="margin-left:0.375rem" /> {item._count.databases ?? 0}
+																					<Rocket size={10} />
+																					{item._count.deployments ?? 0}
+																					<Database size={10} style="margin-left:0.375rem" />
+																					{item._count.databases ?? 0}
 																				</span>
 																			{/if}
 																		</div>
@@ -402,7 +468,11 @@
 																			</span>
 																		{/if}
 																		{#if tc.data.replicas !== undefined}
-																			<span class="card-meta">{tc.data.replicas} replica{tc.data.replicas !== 1 ? 's' : ''}</span>
+																			<span class="card-meta"
+																				>{tc.data.replicas} replica{tc.data.replicas !== 1
+																					? 's'
+																					: ''}</span
+																			>
 																		{/if}
 																	</div>
 																</div>
@@ -412,8 +482,16 @@
 																	{#each (tc.data.deployments ?? []).slice(0, 6) as dep, ci}
 																		<div
 																			class="card"
-																			{@attach motionStagger({ index: ci, stride: 0.04, from: { y: 10 } })}
-																			{@attach springHover({ lift: -3, stiffness: 360, damping: 22 })}
+																			{@attach motionStagger({
+																				index: ci,
+																				stride: 0.04,
+																				from: { y: 10 }
+																			})}
+																			{@attach springHover({
+																				lift: -3,
+																				stiffness: 360,
+																				damping: 22
+																			})}
 																		>
 																			<div class="card-top">
 																				<div class="card-av"><Rocket size={13} /></div>
@@ -437,14 +515,23 @@
 																	{#each (tc.data.databases ?? []).slice(0, 4) as db, ci}
 																		<div
 																			class="card"
-																			{@attach motionStagger({ index: ci + (tc.data.deployments?.length ?? 0), stride: 0.04, from: { y: 10 } })}
-																			{@attach springHover({ lift: -3, stiffness: 360, damping: 22 })}
+																			{@attach motionStagger({
+																				index: ci + (tc.data.deployments?.length ?? 0),
+																				stride: 0.04,
+																				from: { y: 10 }
+																			})}
+																			{@attach springHover({
+																				lift: -3,
+																				stiffness: 360,
+																				damping: 22
+																			})}
 																		>
 																			<div class="card-top">
 																				<div class="card-av"><Database size={13} /></div>
 																				<div class="card-text">
 																					<span class="card-name">{db.name}</span>
-																					{#if db.dbName}<span class="card-sub">{db.dbName}</span>{/if}
+																					{#if db.dbName}<span class="card-sub">{db.dbName}</span
+																						>{/if}
 																				</div>
 																			</div>
 																			<div class="card-bot">
@@ -481,7 +568,9 @@
 
 								{#if msg.loading && !msg.content && (!msg.toolCalls || msg.toolCalls.length === 0)}
 									<div class="msg-thinking">
-										<span class="thinking-dot"></span><span class="thinking-dot"></span><span class="thinking-dot"></span>
+										<span class="thinking-dot"></span><span class="thinking-dot"></span><span
+											class="thinking-dot"
+										></span>
 									</div>
 								{/if}
 							</div>
@@ -497,11 +586,21 @@
 
 		<div class="input-area">
 			{#if messages.length > 0}
-				<button class="clear-btn" onclick={clearChat} aria-label="Clear chat"
+				<button
+					class="clear-btn"
+					onclick={clearChat}
+					aria-label="Clear chat"
 					{@attach springHover({ lift: -1, stiffness: 480, damping: 26 })}
-				><Trash2 size={14} /></button>
+					><Trash2 size={14} /></button
+				>
 			{/if}
-			<form class="input-bar" onsubmit={(e) => { e.preventDefault(); sendMessage(); }}>
+			<form
+				class="input-bar"
+				onsubmit={(e) => {
+					e.preventDefault();
+					sendMessage();
+				}}
+			>
 				<textarea
 					bind:this={inputEl}
 					bind:value={input}
@@ -511,7 +610,11 @@
 					oninput={resizeInput}
 					disabled={streaming}
 				></textarea>
-				<button type="submit" class="send-btn" disabled={!input.trim() || streaming} aria-label="Send"
+				<button
+					type="submit"
+					class="send-btn"
+					disabled={!input.trim() || streaming}
+					aria-label="Send"
 					{@attach springHover({ lift: -1, stiffness: 520, damping: 28 })}
 				>
 					{#if streaming}<Loader2 size={18} class="spin" />{:else}<Send size={18} />{/if}
@@ -523,109 +626,255 @@
 
 <style>
 	.gate {
-		display: flex; flex-direction: column; align-items: center; justify-content: center;
-		height: 100%; gap: 0.75rem; color: var(--surface-muted); font-size: 0.875rem;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		height: 100%;
+		gap: 0.75rem;
+		color: var(--surface-muted);
+		font-size: 0.875rem;
 	}
 
 	.chat-page {
-		display: flex; flex-direction: column; height: 100%;
-		max-width: 56rem; margin: 0 auto; padding: 0 1.5rem;
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+		max-width: 56rem;
+		margin: 0 auto;
+		padding: 0 1.5rem;
 	}
 
-	.messages-wrap { flex: 1; position: relative; overflow: hidden; min-height: 0; }
+	.messages-wrap {
+		flex: 1;
+		position: relative;
+		overflow: hidden;
+		min-height: 0;
+	}
 	.messages {
-		height: 100%; overflow-y: auto; padding: 2rem 0;
-		display: flex; flex-direction: column; gap: 1.25rem;
+		height: 100%;
+		overflow-y: auto;
+		padding: 2rem 0;
+		display: flex;
+		flex-direction: column;
+		gap: 1.25rem;
 	}
 
 	/* ── Empty state ────────────────────────────────── */
 	.ai-empty {
-		flex: 1; display: flex; flex-direction: column; align-items: center;
-		justify-content: center; text-align: center; gap: 0.5rem; padding: 2rem;
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		text-align: center;
+		gap: 0.5rem;
+		padding: 2rem;
 	}
 	.ai-empty-icon {
-		width: 3.5rem; height: 3.5rem; border-radius: 1rem;
-		display: flex; align-items: center; justify-content: center;
+		width: 3.5rem;
+		height: 3.5rem;
+		border-radius: 1rem;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		background: color-mix(in srgb, var(--button-bg) 12%, transparent);
-		color: var(--button-bg); margin-bottom: 0.5rem;
+		color: var(--button-bg);
+		margin-bottom: 0.5rem;
 	}
-	.ai-empty-title { font-size: 1.25rem; font-weight: 700; color: var(--center-channel-color); margin: 0; letter-spacing: -0.02em; }
-	.ai-empty-sub { font-size: 0.8125rem; color: var(--surface-muted); max-width: 24rem; line-height: 1.5; margin: 0; }
-	.suggestions { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; margin-top: 1rem; }
+	.ai-empty-title {
+		font-size: 1.25rem;
+		font-weight: 700;
+		color: var(--center-channel-color);
+		margin: 0;
+		letter-spacing: -0.02em;
+	}
+	.ai-empty-sub {
+		font-size: 0.8125rem;
+		color: var(--surface-muted);
+		max-width: 24rem;
+		line-height: 1.5;
+		margin: 0;
+	}
+	.suggestions {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		justify-content: center;
+		margin-top: 1rem;
+	}
 	.suggestion {
-		padding: 0.4375rem 0.875rem; border-radius: 2rem;
-		border: 1px solid var(--surface-border); background: var(--center-channel-bg);
-		color: var(--center-channel-color); font-size: 0.75rem; cursor: pointer;
+		padding: 0.4375rem 0.875rem;
+		border-radius: 2rem;
+		border: 1px solid var(--surface-border);
+		background: var(--center-channel-bg);
+		color: var(--center-channel-color);
+		font-size: 0.75rem;
+		cursor: pointer;
 	}
-	.suggestion:hover { border-color: var(--button-bg); color: var(--button-bg); }
+	.suggestion:hover {
+		border-color: var(--button-bg);
+		color: var(--button-bg);
+	}
 
 	/* ── Messages ───────────────────────────────────── */
-	.msg { display: flex; gap: 0.625rem; max-width: 100%; }
-	.msg--user { justify-content: flex-end; }
-	.msg--assistant { justify-content: flex-start; }
+	.msg {
+		display: flex;
+		gap: 0.625rem;
+		max-width: 100%;
+	}
+	.msg--user {
+		justify-content: flex-end;
+	}
+	.msg--assistant {
+		justify-content: flex-start;
+	}
 
 	.msg-avatar {
-		width: 1.75rem; height: 1.75rem; border-radius: 0.5rem;
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: 0.5rem;
 		background: color-mix(in srgb, var(--button-bg) 12%, transparent);
-		color: var(--button-bg); display: flex; align-items: center; justify-content: center;
-		flex-shrink: 0; margin-top: 0.125rem;
+		color: var(--button-bg);
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
+		margin-top: 0.125rem;
 	}
 
-	.msg-body { display: flex; flex-direction: column; gap: 0.625rem; max-width: 90%; min-width: 0; }
-	.msg--user .msg-body { max-width: 70%; }
+	.msg-body {
+		display: flex;
+		flex-direction: column;
+		gap: 0.625rem;
+		max-width: 90%;
+		min-width: 0;
+	}
+	.msg--user .msg-body {
+		max-width: 70%;
+	}
 
 	.msg-text {
-		padding: 0.625rem 0.875rem; border-radius: 0.75rem;
-		font-size: 0.8125rem; line-height: 1.6;
-		white-space: pre-wrap; word-break: break-word;
+		padding: 0.625rem 0.875rem;
+		border-radius: 0.75rem;
+		font-size: 0.8125rem;
+		line-height: 1.6;
+		white-space: pre-wrap;
+		word-break: break-word;
 	}
 	.msg--user .msg-text {
-		background: var(--button-bg); color: var(--button-color);
+		background: var(--button-bg);
+		color: var(--button-color);
 		border-bottom-right-radius: 0.25rem;
 	}
 	.msg--assistant .msg-text {
 		background: color-mix(in srgb, var(--surface-border) 35%, transparent);
-		color: var(--center-channel-color); border-bottom-left-radius: 0.25rem;
+		color: var(--center-channel-color);
+		border-bottom-left-radius: 0.25rem;
 	}
 
 	/* ── Markdown ───────────────────────────────────── */
-	.msg-text--md { white-space: normal; }
-	.msg-text--md :global(p) { margin: 0 0 0.5em; }
-	.msg-text--md :global(p:last-child) { margin-bottom: 0; }
-	.msg-text--md :global(strong) { font-weight: 600; }
+	.msg-text--md {
+		white-space: normal;
+	}
+	.msg-text--md :global(p) {
+		margin: 0 0 0.5em;
+	}
+	.msg-text--md :global(p:last-child) {
+		margin-bottom: 0;
+	}
+	.msg-text--md :global(strong) {
+		font-weight: 600;
+	}
 	.msg-text--md :global(code) {
 		background: color-mix(in srgb, var(--surface-border) 60%, transparent);
-		padding: 0.125em 0.3em; border-radius: 0.25rem; font-size: 0.8em;
+		padding: 0.125em 0.3em;
+		border-radius: 0.25rem;
+		font-size: 0.8em;
 		font-family: 'SF Mono', 'Fira Code', monospace;
 	}
 	.msg-text--md :global(pre) {
 		background: color-mix(in srgb, var(--surface-border) 50%, transparent);
-		padding: 0.625rem 0.75rem; border-radius: 0.375rem;
-		overflow-x: auto; margin: 0.5em 0; font-size: 0.75rem;
+		padding: 0.625rem 0.75rem;
+		border-radius: 0.375rem;
+		overflow-x: auto;
+		margin: 0.5em 0;
+		font-size: 0.75rem;
 	}
-	.msg-text--md :global(pre code) { background: none; padding: 0; }
-	.msg-text--md :global(ul), .msg-text--md :global(ol) { margin: 0.25em 0 0.5em; padding-left: 1.25em; }
-	.msg-text--md :global(li) { margin: 0.125em 0; }
-	.msg-text--md :global(table) { width: 100%; border-collapse: collapse; margin: 0.5em 0; font-size: 0.75rem; }
-	.msg-text--md :global(th) { text-align: left; padding: 0.375rem 0.5rem; font-weight: 600; border-bottom: 2px solid var(--surface-border); }
-	.msg-text--md :global(td) { padding: 0.3125rem 0.5rem; border-bottom: 1px solid color-mix(in srgb, var(--surface-border) 50%, transparent); }
-	.msg-text--md :global(tr:last-child td) { border-bottom: none; }
-	.msg-text--md :global(blockquote) { border-left: 3px solid var(--button-bg); margin: 0.5em 0; padding: 0.25em 0.75em; color: var(--surface-muted); }
-	.msg-text--md :global(a) { color: var(--button-bg); text-decoration: underline; }
-	.msg-text--md :global(h1), .msg-text--md :global(h2), .msg-text--md :global(h3) { margin: 0.5em 0 0.25em; font-weight: 700; }
-	.msg-text--md :global(h1) { font-size: 1.1em; }
-	.msg-text--md :global(h2) { font-size: 1em; }
-	.msg-text--md :global(h3) { font-size: 0.9em; }
+	.msg-text--md :global(pre code) {
+		background: none;
+		padding: 0;
+	}
+	.msg-text--md :global(ul),
+	.msg-text--md :global(ol) {
+		margin: 0.25em 0 0.5em;
+		padding-left: 1.25em;
+	}
+	.msg-text--md :global(li) {
+		margin: 0.125em 0;
+	}
+	.msg-text--md :global(table) {
+		width: 100%;
+		border-collapse: collapse;
+		margin: 0.5em 0;
+		font-size: 0.75rem;
+	}
+	.msg-text--md :global(th) {
+		text-align: left;
+		padding: 0.375rem 0.5rem;
+		font-weight: 600;
+		border-bottom: 2px solid var(--surface-border);
+	}
+	.msg-text--md :global(td) {
+		padding: 0.3125rem 0.5rem;
+		border-bottom: 1px solid color-mix(in srgb, var(--surface-border) 50%, transparent);
+	}
+	.msg-text--md :global(tr:last-child td) {
+		border-bottom: none;
+	}
+	.msg-text--md :global(blockquote) {
+		border-left: 3px solid var(--button-bg);
+		margin: 0.5em 0;
+		padding: 0.25em 0.75em;
+		color: var(--surface-muted);
+	}
+	.msg-text--md :global(a) {
+		color: var(--button-bg);
+		text-decoration: underline;
+	}
+	.msg-text--md :global(h1),
+	.msg-text--md :global(h2),
+	.msg-text--md :global(h3) {
+		margin: 0.5em 0 0.25em;
+		font-weight: 700;
+	}
+	.msg-text--md :global(h1) {
+		font-size: 1.1em;
+	}
+	.msg-text--md :global(h2) {
+		font-size: 1em;
+	}
+	.msg-text--md :global(h3) {
+		font-size: 0.9em;
+	}
 
 	/* ── Tool call cards ────────────────────────────── */
-	.tool-calls { display: flex; flex-direction: column; gap: 0.5rem; }
+	.tool-calls {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
 
 	.tool-card {
-		border-radius: 0.75rem; font-size: 0.75rem;
+		border-radius: 0.75rem;
+		font-size: 0.75rem;
 		background: var(--center-channel-bg);
 		border: 1px solid var(--surface-border);
-		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04), 0 3px 8px rgba(0, 0, 0, 0.03);
-		position: relative; overflow: hidden;
+		box-shadow:
+			0 1px 2px rgba(0, 0, 0, 0.04),
+			0 3px 8px rgba(0, 0, 0, 0.03);
+		position: relative;
+		overflow: hidden;
 		animation: tool-enter 0.3s cubic-bezier(0.34, 1.56, 0.64, 1);
 	}
 	.tool-card--running {
@@ -639,33 +888,59 @@
 	}
 
 	.tool-header {
-		display: flex; align-items: center; gap: 0.5rem;
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
 		padding: 0.625rem 0.875rem;
 	}
 
 	.tool-icon-wrap {
-		width: 1.375rem; height: 1.375rem; border-radius: 50%;
-		display: flex; align-items: center; justify-content: center; flex-shrink: 0;
+		width: 1.375rem;
+		height: 1.375rem;
+		border-radius: 50%;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		flex-shrink: 0;
 	}
-	.tool-icon-wrap--running { animation: pulse-glow 2s ease-in-out infinite; }
+	.tool-icon-wrap--running {
+		animation: pulse-glow 2s ease-in-out infinite;
+	}
 
 	.tool-spinner {
-		width: 0.875rem; height: 0.875rem;
+		width: 0.875rem;
+		height: 0.875rem;
 		border: 2px solid color-mix(in srgb, var(--button-bg) 25%, transparent);
 		border-top-color: var(--button-bg);
-		border-radius: 50%; animation: spin 0.7s linear infinite;
+		border-radius: 50%;
+		animation: spin 0.7s linear infinite;
 	}
 	.tool-done {
-		color: #22c55e; display: flex; align-items: center; justify-content: center;
+		color: #22c55e;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		animation: pop-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 	}
 	.tool-fail {
-		color: var(--error-text-color); display: flex; align-items: center; justify-content: center;
+		color: var(--error-text-color);
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		animation: pop-in 0.35s cubic-bezier(0.34, 1.56, 0.64, 1);
 	}
 
-	.tool-label-text { flex: 1; font-weight: 500; color: var(--center-channel-color); }
-	.tool-elapsed { color: var(--surface-muted); font-size: 0.6875rem; font-variant-numeric: tabular-nums; flex-shrink: 0; }
+	.tool-label-text {
+		flex: 1;
+		font-weight: 500;
+		color: var(--center-channel-color);
+	}
+	.tool-elapsed {
+		color: var(--surface-muted);
+		font-size: 0.6875rem;
+		font-variant-numeric: tabular-nums;
+		flex-shrink: 0;
+	}
 
 	/* Card grid inside tool results — uses org-dashboard .od-grid, .card, etc. */
 	.tool-cards {
@@ -688,98 +963,215 @@
 	}
 
 	.tool-progress {
-		position: absolute; bottom: 0; left: 0; right: 0; height: 2px;
-		background: color-mix(in srgb, var(--button-bg) 12%, transparent); overflow: hidden;
+		position: absolute;
+		bottom: 0;
+		left: 0;
+		right: 0;
+		height: 2px;
+		background: color-mix(in srgb, var(--button-bg) 12%, transparent);
+		overflow: hidden;
 	}
 	.tool-progress-bar {
-		height: 100%; width: 40%; background: var(--button-bg);
-		border-radius: 1px; animation: progress-slide 1.2s ease-in-out infinite;
+		height: 100%;
+		width: 40%;
+		background: var(--button-bg);
+		border-radius: 1px;
+		animation: progress-slide 1.2s ease-in-out infinite;
 	}
 
 	/* ── Thinking dots ──────────────────────────────── */
 	.msg-thinking {
-		display: flex; gap: 0.3rem; padding: 0.75rem 0.875rem;
-		border-radius: 0.75rem; background: color-mix(in srgb, var(--surface-border) 35%, transparent);
-		border-bottom-left-radius: 0.25rem; width: fit-content;
+		display: flex;
+		gap: 0.3rem;
+		padding: 0.75rem 0.875rem;
+		border-radius: 0.75rem;
+		background: color-mix(in srgb, var(--surface-border) 35%, transparent);
+		border-bottom-left-radius: 0.25rem;
+		width: fit-content;
 	}
 	.thinking-dot {
-		width: 0.375rem; height: 0.375rem; border-radius: 50%;
-		background: var(--surface-muted); animation: bounce 1.4s infinite;
+		width: 0.375rem;
+		height: 0.375rem;
+		border-radius: 50%;
+		background: var(--surface-muted);
+		animation: bounce 1.4s infinite;
 	}
-	.thinking-dot:nth-child(2) { animation-delay: 0.16s; }
-	.thinking-dot:nth-child(3) { animation-delay: 0.32s; }
+	.thinking-dot:nth-child(2) {
+		animation-delay: 0.16s;
+	}
+	.thinking-dot:nth-child(3) {
+		animation-delay: 0.32s;
+	}
 
 	.scroll-btn {
-		position: absolute; bottom: 0.75rem; left: 50%; transform: translateX(-50%);
-		padding: 0.3125rem 0.75rem; border-radius: 2rem;
-		border: 1px solid var(--surface-border); background: var(--center-channel-bg);
-		color: var(--surface-muted); font-size: 0.6875rem; cursor: pointer;
+		position: absolute;
+		bottom: 0.75rem;
+		left: 50%;
+		transform: translateX(-50%);
+		padding: 0.3125rem 0.75rem;
+		border-radius: 2rem;
+		border: 1px solid var(--surface-border);
+		background: var(--center-channel-bg);
+		color: var(--surface-muted);
+		font-size: 0.6875rem;
+		cursor: pointer;
 		box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 	}
-	.scroll-btn:hover { color: var(--center-channel-color); }
+	.scroll-btn:hover {
+		color: var(--center-channel-color);
+	}
 
 	/* ── Input ──────────────────────────────────────── */
 	.input-area {
-		display: flex; align-items: flex-end; gap: 0.5rem;
-		padding: 1rem 0 1.5rem; flex-shrink: 0;
+		display: flex;
+		align-items: flex-end;
+		gap: 0.5rem;
+		padding: 1rem 0 1.5rem;
+		flex-shrink: 0;
 	}
 	.clear-btn {
-		display: flex; align-items: center; justify-content: center;
-		width: 2.5rem; height: 2.5rem; border-radius: 0.625rem;
-		border: 1px solid var(--surface-border); background: var(--center-channel-bg);
-		color: var(--surface-muted); cursor: pointer; flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.5rem;
+		height: 2.5rem;
+		border-radius: 0.625rem;
+		border: 1px solid var(--surface-border);
+		background: var(--center-channel-bg);
+		color: var(--surface-muted);
+		cursor: pointer;
+		flex-shrink: 0;
 	}
-	.clear-btn:hover { color: var(--error-text-color); border-color: color-mix(in srgb, var(--error-text-color) 40%, transparent); }
+	.clear-btn:hover {
+		color: var(--error-text-color);
+		border-color: color-mix(in srgb, var(--error-text-color) 40%, transparent);
+	}
 
 	.input-bar {
-		flex: 1; display: flex; align-items: flex-end; gap: 0.5rem;
-		padding: 0.5rem 0.5rem 0.5rem 0.875rem; border-radius: 0.75rem;
-		border: 1px solid var(--surface-border); background: var(--center-channel-bg);
-		box-shadow: 0 1px 4px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.03);
+		flex: 1;
+		display: flex;
+		align-items: flex-end;
+		gap: 0.5rem;
+		padding: 0.5rem 0.5rem 0.5rem 0.875rem;
+		border-radius: 0.75rem;
+		border: 1px solid var(--surface-border);
+		background: var(--center-channel-bg);
+		box-shadow:
+			0 1px 4px rgba(0, 0, 0, 0.04),
+			0 4px 12px rgba(0, 0, 0, 0.03);
 	}
 	.input-bar:focus-within {
 		border-color: var(--sidebar-text-active-border);
 		box-shadow: 0 0 0 3px color-mix(in srgb, var(--sidebar-text-active-border) 15%, transparent);
 	}
 	.input-bar textarea {
-		flex: 1; padding: 0.375rem 0; border: none; background: none;
-		color: var(--center-channel-color); font-size: 0.875rem; font-family: inherit;
-		line-height: 1.5; resize: none; overflow-y: auto; max-height: 10rem;
+		flex: 1;
+		padding: 0.375rem 0;
+		border: none;
+		background: none;
+		color: var(--center-channel-color);
+		font-size: 0.875rem;
+		font-family: inherit;
+		line-height: 1.5;
+		resize: none;
+		overflow-y: auto;
+		max-height: 10rem;
 	}
-	.input-bar textarea:focus { outline: none; }
-	.input-bar textarea::placeholder { color: var(--surface-muted); }
-	.input-bar textarea:disabled { opacity: 0.5; }
+	.input-bar textarea:focus {
+		outline: none;
+	}
+	.input-bar textarea::placeholder {
+		color: var(--surface-muted);
+	}
+	.input-bar textarea:disabled {
+		opacity: 0.5;
+	}
 
 	.send-btn {
-		display: flex; align-items: center; justify-content: center;
-		width: 2.25rem; height: 2.25rem; border-radius: 0.5rem;
-		border: none; background: var(--button-bg); color: var(--button-color);
-		cursor: pointer; flex-shrink: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.25rem;
+		height: 2.25rem;
+		border-radius: 0.5rem;
+		border: none;
+		background: var(--button-bg);
+		color: var(--button-color);
+		cursor: pointer;
+		flex-shrink: 0;
 	}
-	.send-btn:disabled { opacity: 0.3; cursor: not-allowed; }
+	.send-btn:disabled {
+		opacity: 0.3;
+		cursor: not-allowed;
+	}
 
 	/* ── Animations ─────────────────────────────────── */
-	@keyframes spin { from { transform: rotate(0deg); } to { transform: rotate(360deg); } }
-	@keyframes bounce {
-		0%, 80%, 100% { transform: scale(0.6); opacity: 0.4; }
-		40% { transform: scale(1); opacity: 1; }
+	@keyframes spin {
+		from {
+			transform: rotate(0deg);
+		}
+		to {
+			transform: rotate(360deg);
+		}
 	}
-	@keyframes pop-in { 0% { transform: scale(0); } 100% { transform: scale(1); } }
+	@keyframes bounce {
+		0%,
+		80%,
+		100% {
+			transform: scale(0.6);
+			opacity: 0.4;
+		}
+		40% {
+			transform: scale(1);
+			opacity: 1;
+		}
+	}
+	@keyframes pop-in {
+		0% {
+			transform: scale(0);
+		}
+		100% {
+			transform: scale(1);
+		}
+	}
 	@keyframes progress-slide {
-		0% { transform: translateX(-100%); }
-		50% { transform: translateX(200%); }
-		100% { transform: translateX(200%); }
+		0% {
+			transform: translateX(-100%);
+		}
+		50% {
+			transform: translateX(200%);
+		}
+		100% {
+			transform: translateX(200%);
+		}
 	}
 	@keyframes tool-enter {
-		0% { opacity: 0; transform: translateY(8px) scale(0.97); }
-		100% { opacity: 1; transform: translateY(0) scale(1); }
+		0% {
+			opacity: 0;
+			transform: translateY(8px) scale(0.97);
+		}
+		100% {
+			opacity: 1;
+			transform: translateY(0) scale(1);
+		}
 	}
 	@keyframes data-reveal {
-		0% { opacity: 0; transform: translateY(4px); }
-		100% { opacity: 1; transform: translateY(0); }
+		0% {
+			opacity: 0;
+			transform: translateY(4px);
+		}
+		100% {
+			opacity: 1;
+			transform: translateY(0);
+		}
 	}
 	@keyframes pulse-glow {
-		0%, 100% { opacity: 1; }
-		50% { opacity: 0.6; }
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.6;
+		}
 	}
 </style>

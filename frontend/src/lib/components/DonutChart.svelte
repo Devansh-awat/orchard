@@ -23,7 +23,7 @@
 		thickness = 22,
 		centerLabel,
 		centerCaption,
-		formatValue = (n) => String(n),
+		formatValue = (n) => String(n)
 	}: Props = $props();
 
 	// Stable palette pulled from the platform's accent + chart-friendly hues.
@@ -37,7 +37,7 @@
 		'#ec4899',
 		'#84cc16',
 		'#f97316',
-		'#14b8a6',
+		'#14b8a6'
 	];
 
 	const cx = $derived(size / 2);
@@ -76,7 +76,7 @@
 				slice: s,
 				pct: p,
 				path,
-				color: s.color ?? DEFAULT_PALETTE[i % DEFAULT_PALETTE.length],
+				color: s.color ?? DEFAULT_PALETTE[i % DEFAULT_PALETTE.length]
 			});
 			cursorAngle = endAngle;
 		});
@@ -89,21 +89,17 @@
 		<svg viewBox="0 0 {size} {size}" width={size} height={size} aria-hidden="true">
 			<!-- Background ring -->
 			<circle
-				cx={cx}
-				cy={cy}
-				r={r}
+				{cx}
+				{cy}
+				{r}
 				fill="none"
 				stroke="color-mix(in srgb, var(--surface-border) 60%, transparent)"
 				stroke-width={thickness}
 			/>
 			{#if total <= 0}
-				<text
-					x={cx}
-					y={cy + 4}
-					text-anchor="middle"
-					font-size="11"
-					fill="var(--surface-muted)"
-				>No data</text>
+				<text x={cx} y={cy + 4} text-anchor="middle" font-size="11" fill="var(--surface-muted)"
+					>No data</text
+				>
 			{:else}
 				<g transform="rotate(-90 {cx} {cy})">
 					{#each computed as c, i (i)}
@@ -159,14 +155,22 @@
 		position: relative;
 		flex-shrink: 0;
 	}
-	.donut-svg-wrap svg { display: block; }
+	.donut-svg-wrap svg {
+		display: block;
+	}
 	.donut-slice {
 		animation: donut-fade 350ms cubic-bezier(0.22, 1, 0.36, 1) var(--anim-delay, 0ms) both;
 		transform-origin: center;
 	}
 	@keyframes donut-fade {
-		from { opacity: 0; transform: scale(0.92); }
-		to   { opacity: 1; transform: scale(1); }
+		from {
+			opacity: 0;
+			transform: scale(0.92);
+		}
+		to {
+			opacity: 1;
+			transform: scale(1);
+		}
 	}
 	.donut-center {
 		position: absolute;

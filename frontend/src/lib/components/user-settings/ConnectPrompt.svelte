@@ -7,7 +7,7 @@
 		label,
 		hint = '',
 		icon,
-		onclick,
+		onclick
 	}: {
 		label: string;
 		hint?: string;

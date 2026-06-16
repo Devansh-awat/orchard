@@ -19,8 +19,6 @@
 	const invitations = $derived($pendingInvitations);
 	const isOpen = $derived($showPendingInvitationsModal);
 
-
-
 	function getRoleBadgeColor(role: string): string {
 		switch (role) {
 			case 'owner':
@@ -83,7 +81,7 @@
 				organizations.set(orgs);
 
 				// Get remaining invitations
-				const remainingInvitations = invitations.filter(inv => inv.token !== invitation.token);
+				const remainingInvitations = invitations.filter((inv) => inv.token !== invitation.token);
 
 				if (orgs.length === 0 && remainingInvitations.length === 0) {
 					// User has no orgs and no more pending invitations
@@ -99,7 +97,7 @@
 			});
 
 			// If no more invitations, close modal
-			const remaining = invitations.filter(inv => inv.token !== invitation.token);
+			const remaining = invitations.filter((inv) => inv.token !== invitation.token);
 			if (remaining.length === 0) {
 				showPendingInvitationsModal.hide();
 			}
@@ -152,14 +150,17 @@
 			{#if showLogoutWarning}
 				<!-- Logout warning state -->
 				<div class="p-6 text-center">
-					<div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-yellow-100 dark:bg-yellow-900/30">
+					<div
+						class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-yellow-100 dark:bg-yellow-900/30"
+					>
 						<LogOut class="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
 					</div>
 					<h2 class="text-xl font-semibold" style="color: var(--center-channel-color);">
 						No Organization Access
 					</h2>
 					<p class="mt-2" style="color: var(--surface-muted);">
-						You need to be part of an organization to use Orchard. Since you declined all invitations and don't belong to any organization, you'll be logged out.
+						You need to be part of an organization to use Orchard. Since you declined all
+						invitations and don't belong to any organization, you'll be logged out.
 					</p>
 					<button onclick={handleLogout} class="btn btn-primary mt-6 w-full">
 						<LogOut class="h-4 w-4" />
@@ -168,9 +169,14 @@
 				</div>
 			{:else}
 				<!-- Header -->
-				<div class="flex items-center justify-between border-b p-4" style="border-color: var(--surface-border);">
+				<div
+					class="flex items-center justify-between border-b p-4"
+					style="border-color: var(--surface-border);"
+				>
 					<div class="flex items-center gap-3">
-						<div class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-100 dark:bg-primary-900/30">
+						<div
+							class="flex h-10 w-10 items-center justify-center rounded-xl bg-primary-100 dark:bg-primary-900/30"
+						>
 							<UserPlus class="h-5 w-5 text-primary-600" />
 						</div>
 						<div>
@@ -202,7 +208,9 @@
 								style="border-color: var(--surface-border); background-color: var(--control-bg);"
 							>
 								<div class="flex items-start gap-3">
-									<div class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-100 dark:bg-primary-900/30">
+									<div
+										class="flex h-12 w-12 shrink-0 items-center justify-center rounded-xl bg-primary-100 dark:bg-primary-900/30"
+									>
 										{#if invitation.organization.avatarUrl}
 											<img
 												src={invitation.organization.avatarUrl}
@@ -218,7 +226,9 @@
 											<h3 class="font-semibold" style="color: var(--center-channel-color);">
 												{invitation.organization.name}
 											</h3>
-											<span class={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium capitalize ${getRoleBadgeColor(invitation.role)}`}>
+											<span
+												class={`shrink-0 rounded-full px-2 py-0.5 text-xs font-medium capitalize ${getRoleBadgeColor(invitation.role)}`}
+											>
 												{invitation.role}
 											</span>
 										</div>

@@ -7,7 +7,7 @@
 	let {
 		envVars = $bindable<Array<{ key: string; value: string }>>(),
 		savingEnv,
-		onSave,
+		onSave
 	}: {
 		envVars: Array<{ key: string; value: string }>;
 		savingEnv: boolean;
@@ -62,22 +62,31 @@
 
 <div class="card rounded-2xl p-5">
 	<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-		<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Environment variables</p>
+		<p class="text-sm font-semibold" style="color: var(--center-channel-color);">
+			Environment variables
+		</p>
 		<div class="relative flex rounded-lg p-0.5" style="background-color: var(--control-bg);">
 			<div
 				class="absolute top-0.5 bottom-0.5 rounded-md shadow-sm transition-all duration-200 ease-in-out"
-				style="background-color: var(--surface-bg); width: calc(50% - 2px); left: {envViewMode === 'ui' ? '2px' : 'calc(50% + 0px)'};"
+				style="background-color: var(--surface-bg); width: calc(50% - 2px); left: {envViewMode ===
+				'ui'
+					? '2px'
+					: 'calc(50% + 0px)'};"
 			></div>
 			<button
 				onclick={() => switchEnvView('ui')}
 				class="relative z-10 px-3 py-1 text-xs font-medium rounded-md transition-colors duration-200"
-				style="color: {envViewMode === 'ui' ? 'var(--center-channel-color)' : 'var(--surface-muted)'};"
-			>UI</button>
+				style="color: {envViewMode === 'ui'
+					? 'var(--center-channel-color)'
+					: 'var(--surface-muted)'};">UI</button
+			>
 			<button
 				onclick={() => switchEnvView('raw')}
 				class="relative z-10 px-3 py-1 text-xs font-medium rounded-md transition-colors duration-200"
-				style="color: {envViewMode === 'raw' ? 'var(--center-channel-color)' : 'var(--surface-muted)'};"
-			>Raw</button>
+				style="color: {envViewMode === 'raw'
+					? 'var(--center-channel-color)'
+					: 'var(--surface-muted)'};">Raw</button
+			>
 		</div>
 	</div>
 	<div class="env-container">
@@ -93,7 +102,7 @@
 								bind:value={env.key}
 								placeholder="KEY"
 								class="env-key-input"
-								onfocus={() => isEditing = true}
+								onfocus={() => (isEditing = true)}
 							/>
 						</div>
 						<div class="env-val-col">
@@ -102,14 +111,26 @@
 								bind:value={env.value}
 								placeholder={hasKey ? 'value' : ''}
 								class="env-val-input"
-								onfocus={() => isEditing = true}
+								onfocus={() => (isEditing = true)}
 							/>
 						</div>
 						<div class="env-actions">
-							<button type="button" onclick={() => toggleReveal(index)} class="env-action-btn" aria-label={isRevealed ? 'Hide' : 'Show'}>
-								{#if isRevealed}<EyeOff size={14} class="h-3.5 w-3.5" />{:else}<Eye size={14} class="h-3.5 w-3.5" />{/if}
+							<button
+								type="button"
+								onclick={() => toggleReveal(index)}
+								class="env-action-btn"
+								aria-label={isRevealed ? 'Hide' : 'Show'}
+							>
+								{#if isRevealed}<EyeOff size={14} class="h-3.5 w-3.5" />{:else}<Eye
+										size={14}
+										class="h-3.5 w-3.5"
+									/>{/if}
 							</button>
-							<button onclick={() => removeEnvRow(index)} class="env-action-btn env-action-delete" aria-label="Remove">
+							<button
+								onclick={() => removeEnvRow(index)}
+								class="env-action-btn env-action-delete"
+								aria-label="Remove"
+							>
 								<Trash2 size={14} class="h-3.5 w-3.5" />
 							</button>
 						</div>
@@ -125,7 +146,7 @@
 				bind:value={envRawText}
 				placeholder="KEY1=value1&#10;KEY2=value2&#10;# Comments are ignored"
 				class="env-raw-textarea"
-				onfocus={() => isEditing = true}
+				onfocus={() => (isEditing = true)}
 			></textarea>
 		{/if}
 	</div>

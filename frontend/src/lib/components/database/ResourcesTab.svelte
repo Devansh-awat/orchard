@@ -15,7 +15,7 @@
 		effectiveMemLimit = null,
 		resourcesDirty = $bindable<boolean>(),
 		savingResources,
-		onSaveResources,
+		onSaveResources
 	}: {
 		database: any;
 		resourceCpuMilli: number | null;
@@ -55,7 +55,9 @@
 				showUnlimited={$isSuperAdmin}
 				maxCpuMilli={effectiveCpuLimit}
 				maxMemoryBytes={effectiveMemLimit}
-				onchange={() => { resourcesDirty = true; }}
+				onchange={() => {
+					resourcesDirty = true;
+				}}
 			/>
 			<div class="rt-actions">
 				<button
@@ -63,10 +65,11 @@
 					disabled={!resourcesDirty || savingResources}
 					onclick={() => {
 						resourceCpuMilli = database?.cpuRequestMilli ?? null;
-						resourceMemoryBytes = database?.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null;
+						resourceMemoryBytes =
+							database?.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null;
 						resourcesDirty = false;
-					}}
-				>Reset</button>
+					}}>Reset</button
+				>
 				<button
 					class="rt-btn rt-btn--primary"
 					disabled={!resourcesDirty || savingResources}
@@ -91,7 +94,9 @@
 		border: 1px solid var(--surface-border);
 		border-radius: 0.875rem;
 		background-color: var(--surface-bg);
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.02);
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
 		overflow: hidden;
 	}
 	.rt-card-header {
@@ -144,12 +149,17 @@
 		transition: all 120ms;
 		white-space: nowrap;
 	}
-	.rt-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+	.rt-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
 	.rt-btn--primary {
 		background-color: var(--button-bg);
 		color: var(--button-color);
 	}
-	.rt-btn--primary:hover:not(:disabled) { opacity: 0.9; }
+	.rt-btn--primary:hover:not(:disabled) {
+		opacity: 0.9;
+	}
 	.rt-btn--ghost {
 		background: none;
 		color: var(--surface-muted);

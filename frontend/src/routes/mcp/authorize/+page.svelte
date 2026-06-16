@@ -255,13 +255,20 @@
 		<div class="login-hero">
 			<div class="login-hero-content">
 				<img src="/logo/logofulldm.svg" alt="Orchard" class="login-hero-logo" />
-				<p class="login-hero-subtitle"><strong>{clientName}</strong> is requesting access to your Orchard account via MCP.</p>
+				<p class="login-hero-subtitle">
+					<strong>{clientName}</strong> is requesting access to your Orchard account via MCP.
+				</p>
 				{#if redirectUri}
 					<div class="mcp-consent-details">
-						<p class="mcp-consent-label">After you approve, your authorization code will be sent to:</p>
+						<p class="mcp-consent-label">
+							After you approve, your authorization code will be sent to:
+						</p>
 						<p class="mcp-consent-host">{redirectHost || redirectUri}</p>
 						<p class="mcp-consent-uri">{redirectUri}</p>
-						<p class="mcp-consent-warning">Only approve if you recognize this destination. Anyone with access to that URL can use your Orchard account.</p>
+						<p class="mcp-consent-warning">
+							Only approve if you recognize this destination. Anyone with access to that URL can use
+							your Orchard account.
+						</p>
 					</div>
 				{/if}
 			</div>
@@ -303,7 +310,20 @@
 					</div>
 
 					<button class="login-primary" onclick={signInWithHackClub}>
-						<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="18"
+							height="18"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline
+								points="10 17 15 12 10 7"
+							/><line x1="15" y1="12" x2="3" y2="12" /></svg
+						>
 						Continue with Hack Club
 					</button>
 
@@ -343,7 +363,15 @@
 									bind:value={otpCode}
 									autocomplete="one-time-code"
 								/>
-								<button type="button" class="login-back" onclick={() => { otpStep = 'email'; otpCode = ''; otpMessage = null; }}>
+								<button
+									type="button"
+									class="login-back"
+									onclick={() => {
+										otpStep = 'email';
+										otpCode = '';
+										otpMessage = null;
+									}}
+								>
 									Back
 								</button>
 							</div>
@@ -354,7 +382,11 @@
 						{#if otpMessage}
 							<p class="login-success">{otpMessage}</p>
 						{/if}
-						<button class="btn btn-primary login-submit" type="submit" disabled={otpRequesting || otpVerifying}>
+						<button
+							class="btn btn-primary login-submit"
+							type="submit"
+							disabled={otpRequesting || otpVerifying}
+						>
 							{#if otpRequesting || otpVerifying}
 								<Loader2 class="h-4 w-4 animate-spin" />
 							{/if}
@@ -372,7 +404,12 @@
 								id="passkey-email"
 								bind:value={passkeyEmail}
 							/>
-							<button class="btn btn-secondary login-passkey-btn" type="button" onclick={signInWithPasskey} disabled={passkeyLoading}>
+							<button
+								class="btn btn-secondary login-passkey-btn"
+								type="button"
+								onclick={signInWithPasskey}
+								disabled={passkeyLoading}
+							>
 								{#if passkeyLoading}
 									<Loader2 class="h-4 w-4 animate-spin" />
 								{/if}

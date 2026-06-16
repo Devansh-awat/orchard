@@ -3,7 +3,18 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { apiFetch, toasts } from '$lib/stores';
-	import { ArrowLeft, Loader2, Search, LayoutTemplate, Database, Globe, Server, Plus, Package, Trash2 } from 'lucide-svelte';
+	import {
+		ArrowLeft,
+		Loader2,
+		Search,
+		LayoutTemplate,
+		Database,
+		Globe,
+		Server,
+		Plus,
+		Package,
+		Trash2
+	} from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 
 	interface Template {
@@ -173,8 +184,14 @@
 			{#each Array(6) as _}
 				<div class="tpl-card" style="pointer-events: none;">
 					<div class="tpl-card-top">
-						<div class="skeleton" style="width: 2.75rem; height: 2.75rem; border-radius: 0.75rem;"></div>
-						<div class="skeleton" style="height: 1.25rem; width: 3.5rem; border-radius: 9999px;"></div>
+						<div
+							class="skeleton"
+							style="width: 2.75rem; height: 2.75rem; border-radius: 0.75rem;"
+						></div>
+						<div
+							class="skeleton"
+							style="height: 1.25rem; width: 3.5rem; border-radius: 9999px;"
+						></div>
 					</div>
 					<div class="tpl-card-body">
 						<div class="skeleton" style="height: 0.9375rem; width: 60%;"></div>
@@ -183,7 +200,10 @@
 					</div>
 					<div class="tpl-card-tags">
 						{#each Array(3) as _}
-							<div class="skeleton" style="height: 1.125rem; width: 3rem; border-radius: 0.25rem;"></div>
+							<div
+								class="skeleton"
+								style="height: 1.125rem; width: 3rem; border-radius: 0.25rem;"
+							></div>
 						{/each}
 					</div>
 				</div>
@@ -191,10 +211,7 @@
 		</div>
 	{:else}
 		<!-- Back link -->
-		<button
-			onclick={() => goto(`/${orgSlug}/projects/${projectSlug}`)}
-			class="tpl-back"
-		>
+		<button onclick={() => goto(`/${orgSlug}/projects/${projectSlug}`)} class="tpl-back">
 			<ArrowLeft class="h-4 w-4" />
 			Back to Project
 		</button>
@@ -203,15 +220,10 @@
 		<div class="tpl-header">
 			<div class="tpl-header-info">
 				<h1 class="tpl-title">Templates</h1>
-				<p class="tpl-subtitle">
-					Deploy pre-configured application stacks with a single click.
-				</p>
+				<p class="tpl-subtitle">Deploy pre-configured application stacks with a single click.</p>
 			</div>
 			<div class="tpl-header-actions">
-				<a
-					href="/{orgSlug}/projects/{projectSlug}/templates/new"
-					class="tpl-btn tpl-btn-primary"
-				>
+				<a href="/{orgSlug}/projects/{projectSlug}/templates/new" class="tpl-btn tpl-btn-primary">
 					<Plus class="h-4 w-4" />
 					Create Template
 				</a>
@@ -225,10 +237,10 @@
 				<span class="tpl-stat-value">{templates.length}</span>
 				<span class="tpl-stat-label">Available</span>
 			</div>
-			{#if templates.filter(t => t.isBuiltIn).length}
+			{#if templates.filter((t) => t.isBuiltIn).length}
 				<div class="tpl-stat">
 					<LayoutTemplate class="h-4 w-4" />
-					<span class="tpl-stat-value">{templates.filter(t => t.isBuiltIn).length}</span>
+					<span class="tpl-stat-value">{templates.filter((t) => t.isBuiltIn).length}</span>
 					<span class="tpl-stat-label">Built-in</span>
 				</div>
 			{/if}
@@ -268,7 +280,9 @@
 				<button
 					class="tpl-cat-btn"
 					class:tpl-cat-active={selectedCategory === cat}
-					style={selectedCategory === cat ? `background-color: ${getCategoryColor(cat)}; border-color: ${getCategoryColor(cat)};` : ''}
+					style={selectedCategory === cat
+						? `background-color: ${getCategoryColor(cat)}; border-color: ${getCategoryColor(cat)};`
+						: ''}
 					onclick={() => (selectedCategory = selectedCategory === cat ? null : cat)}
 				>
 					{cat}
@@ -291,14 +305,21 @@
 						class="tpl-card"
 					>
 						<div class="tpl-card-top">
-							<div class="tpl-card-icon" style="background-color: color-mix(in srgb, {getCategoryColor(template.category)} 12%, transparent)">
+							<div
+								class="tpl-card-icon"
+								style="background-color: color-mix(in srgb, {getCategoryColor(
+									template.category
+								)} 12%, transparent)"
+							>
 								<Icon class="h-5 w-5" style="color: {getCategoryColor(template.category)}" />
 							</div>
 							<div class="tpl-card-top-right">
 								{#if template.category}
 									<span
 										class="tpl-card-badge"
-										style="background-color: color-mix(in srgb, {getCategoryColor(template.category)} 15%, transparent); color: {getCategoryColor(template.category)}"
+										style="background-color: color-mix(in srgb, {getCategoryColor(
+											template.category
+										)} 15%, transparent); color: {getCategoryColor(template.category)}"
 									>
 										{template.category}
 									</span>
@@ -337,8 +358,8 @@
 {#if templateToDelete}
 	<ConfirmModal
 		bind:open={showDeleteModal}
-		title='Delete "{templateToDelete.displayName}"?'
-		description='This will permanently <strong>delete this template</strong>. Any existing instances will not be affected, but no new deployments can be made from it.'
+		title={`Delete "${templateToDelete.displayName}"?`}
+		description="This will permanently <strong>delete this template</strong>. Any existing instances will not be affected, but no new deployments can be made from it."
 		confirmLabel="Delete Template"
 		onconfirm={deleteTemplate}
 		oncancel={() => (templateToDelete = null)}
@@ -556,9 +577,13 @@
 		background-color: var(--surface-bg);
 		text-decoration: none;
 		color: var(--center-channel-color);
-		transition: border-color 0.15s, box-shadow 0.15s;
+		transition:
+			border-color 0.15s,
+			box-shadow 0.15s;
 		cursor: pointer;
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.02);
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
 	}
 
 	.tpl-card:hover {
@@ -612,7 +637,10 @@
 		color: var(--surface-muted);
 		cursor: pointer;
 		opacity: 0;
-		transition: opacity 0.15s, color 0.15s, background-color 0.15s;
+		transition:
+			opacity 0.15s,
+			color 0.15s,
+			background-color 0.15s;
 	}
 
 	.tpl-card:hover .tpl-card-delete {
@@ -670,20 +698,27 @@
 		border: none;
 		cursor: pointer;
 		text-decoration: none;
-		transition: opacity 0.15s, transform 0.15s, box-shadow 0.15s;
+		transition:
+			opacity 0.15s,
+			transform 0.15s,
+			box-shadow 0.15s;
 		white-space: nowrap;
 	}
 
 	.tpl-btn-primary {
 		background-color: var(--sidebar-text-active-border);
 		color: #fff;
-		box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 1px 1px rgb(0 0 0 / 0.04);
+		box-shadow:
+			0 1px 2px rgb(0 0 0 / 0.08),
+			0 1px 1px rgb(0 0 0 / 0.04);
 	}
 
 	.tpl-btn-primary:hover {
 		opacity: 0.95;
 		transform: translateY(-0.5px);
-		box-shadow: 0 2px 4px rgb(0 0 0 / 0.08), 0 4px 12px rgb(0 0 0 / 0.06);
+		box-shadow:
+			0 2px 4px rgb(0 0 0 / 0.08),
+			0 4px 12px rgb(0 0 0 / 0.06);
 	}
 
 	/* Empty */

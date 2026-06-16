@@ -21,7 +21,7 @@
 		rows,
 		max = null,
 		formatValue = (n) => String(n),
-		emptyLabel = 'No data',
+		emptyLabel = 'No data'
 	}: Props = $props();
 
 	const computedMax = $derived(max ?? Math.max(1, ...rows.map((r) => r.value)));
@@ -47,12 +47,14 @@
 				<div class="hbar-track">
 					<div
 						class="hbar-fill"
-						style="width: {pctOf(r.value, computedMax)}%; background-color: {r.color ?? 'var(--button-bg)'};"
+						style="width: {pctOf(r.value, computedMax)}%; background-color: {r.color ??
+							'var(--button-bg)'};"
 					>
 						{#if r.fillValue !== undefined}
 							<div
 								class="hbar-inner"
-								style="width: {pctOf(r.fillValue, r.value)}%; background-color: {r.fillColor ?? 'color-mix(in srgb, var(--center-channel-color) 35%, transparent)'};"
+								style="width: {pctOf(r.fillValue, r.value)}%; background-color: {r.fillColor ??
+									'color-mix(in srgb, var(--center-channel-color) 35%, transparent)'};"
 							></div>
 						{/if}
 					</div>
@@ -121,7 +123,9 @@
 		border-radius: 999px 0 0 999px;
 	}
 	@keyframes hbar-grow {
-		from { width: 0 !important; }
+		from {
+			width: 0 !important;
+		}
 	}
 	.hbar-value {
 		font-size: 0.75rem;

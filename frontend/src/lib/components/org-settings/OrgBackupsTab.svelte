@@ -21,7 +21,7 @@
 		onSaveBackupSettings,
 		onClearBackupSettings,
 		onCancelEdit,
-		index = 0,
+		index = 0
 	}: {
 		canEditOrg: boolean;
 		isOwner: boolean;
@@ -157,7 +157,8 @@
 					Access Key ID
 					{#if backupAccessKeyConfigured}
 						<span class="ob-field-hint">
-							(configured{#if backupAccessKeyLast4} · ends in {backupAccessKeyLast4}{/if} · leave empty to keep)
+							(configured{#if backupAccessKeyLast4}
+								· ends in {backupAccessKeyLast4}{/if} · leave empty to keep)
 						</span>
 					{/if}
 				</label>
@@ -197,7 +198,11 @@
 					</button>
 				{/if}
 				{#if backupSecretConfigured && isOwner}
-					<button onclick={onClearBackupSettings} disabled={backupSaving} class="ob-btn ob-btn--ghost">
+					<button
+						onclick={onClearBackupSettings}
+						disabled={backupSaving}
+						class="ob-btn ob-btn--ghost"
+					>
 						Clear
 					</button>
 				{/if}

@@ -50,7 +50,7 @@
 		_commitLeadMono,
 		_activeBuild,
 		_buildFailed,
-		branch,
+		branch
 	}: {
 		deployment: any;
 		projectBgImage: string | null;
@@ -83,7 +83,9 @@
 		onViewBuildLogs: () => void;
 		buildFailedNotifId: (d: any) => string;
 		podWarningNotifId: (w: any) => string;
-		humanizeWarning: (msg: string) => { title: string; hint: string; severity?: string; action?: string } | null;
+		humanizeWarning: (
+			msg: string
+		) => { title: string; hint: string; severity?: string; action?: string } | null;
 		sanitizeLogs: (logs: string) => string;
 		_commitLead: string | null;
 		_commitLeadMono: boolean;
@@ -102,9 +104,18 @@
 >
 	{#if projectBgImage}
 		<div class="dep-header-backdrop" aria-hidden="true">
-			<div class="dep-header-bg dep-header-bg--1" style="background-image: url({JSON.stringify(projectBgImage)});"></div>
-			<div class="dep-header-bg dep-header-bg--2" style="background-image: url({JSON.stringify(projectBgImage)});"></div>
-			<div class="dep-header-bg dep-header-bg--3" style="background-image: url({JSON.stringify(projectBgImage)});"></div>
+			<div
+				class="dep-header-bg dep-header-bg--1"
+				style="background-image: url({JSON.stringify(projectBgImage)});"
+			></div>
+			<div
+				class="dep-header-bg dep-header-bg--2"
+				style="background-image: url({JSON.stringify(projectBgImage)});"
+			></div>
+			<div
+				class="dep-header-bg dep-header-bg--3"
+				style="background-image: url({JSON.stringify(projectBgImage)});"
+			></div>
 			<div class="dep-header-veil"></div>
 		</div>
 	{/if}
@@ -131,7 +142,7 @@
 					<button
 						bind:this={notifBtnEl}
 						class="dep-alert-pill dep-alert-pill--{notificationSeverity}"
-						onclick={() => notificationsOpen = !notificationsOpen}
+						onclick={() => (notificationsOpen = !notificationsOpen)}
 						title="Open notifications"
 					>
 						{#if notificationSeverity === 'error'}
@@ -148,11 +159,35 @@
 					{#if notificationsRender}
 						<!-- svelte-ignore a11y_click_events_have_key_events -->
 						<!-- svelte-ignore a11y_no_static_element_interactions -->
-						<div class="notification-backdrop" use:portal onclick={() => notificationsOpen = false} {@attach motionBackdrop(() => !notificationsOpen, () => {})}></div>
-						<div class="notification-panel" use:portal style="top: {notifPanelPos.top}px; left: {notifPanelPos.left}px; transform-origin: top right;" {@attach motionPopover({ closing: () => !notificationsOpen, onClosed: () => { notificationsRender = false; }, from: { y: -8, scale: 0.96, opacity: 0 } })}>
-							<div class="flex items-center justify-between px-4 py-3" style="border-bottom: 1px solid var(--surface-border);">
-								<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Notifications</p>
-								<button class="btn-icon rounded-md p-1" onclick={() => notificationsOpen = false}>
+						<div
+							class="notification-backdrop"
+							use:portal
+							onclick={() => (notificationsOpen = false)}
+							{@attach motionBackdrop(
+								() => !notificationsOpen,
+								() => {}
+							)}
+						></div>
+						<div
+							class="notification-panel"
+							use:portal
+							style="top: {notifPanelPos.top}px; left: {notifPanelPos.left}px; transform-origin: top right;"
+							{@attach motionPopover({
+								closing: () => !notificationsOpen,
+								onClosed: () => {
+									notificationsRender = false;
+								},
+								from: { y: -8, scale: 0.96, opacity: 0 }
+							})}
+						>
+							<div
+								class="flex items-center justify-between px-4 py-3"
+								style="border-bottom: 1px solid var(--surface-border);"
+							>
+								<p class="text-sm font-semibold" style="color: var(--center-channel-color);">
+									Notifications
+								</p>
+								<button class="btn-icon rounded-md p-1" onclick={() => (notificationsOpen = false)}>
 									<X size={14} />
 								</button>
 							</div>
@@ -166,9 +201,16 @@
 													<CircleX size={16} class="h-4 w-4" />
 												</div>
 												<div class="flex-1 min-w-0">
-													<p class="text-xs font-semibold" style="color: var(--error-text-color);">Build failed</p>
+													<p class="text-xs font-semibold" style="color: var(--error-text-color);">
+														Build failed
+													</p>
 													{#if deployment.buildError}
-														<p class="mt-1 text-xs font-mono truncate" style="color: var(--surface-muted);">{sanitizeLogs(deployment.buildError).split('\n')[0]}</p>
+														<p
+															class="mt-1 text-xs font-mono truncate"
+															style="color: var(--surface-muted);"
+														>
+															{sanitizeLogs(deployment.buildError).split('\n')[0]}
+														</p>
 													{/if}
 													{#if deployment.buildLogs}
 														<button
@@ -177,8 +219,8 @@
 															onclick={() => {
 																notificationsOpen = false;
 																onViewBuildLogs();
-															}}
-														>View build logs</button>
+															}}>View build logs</button
+														>
 													{/if}
 												</div>
 												<button
@@ -201,7 +243,11 @@
 										{#if !dismissedNotifications.has(_pwId)}
 											<div class="notification-item">
 												<div class="flex items-start gap-3">
-													<div class="notification-icon notification-icon-{noPodsReady ? 'error' : 'warning'}">
+													<div
+														class="notification-icon notification-icon-{noPodsReady
+															? 'error'
+															: 'warning'}"
+													>
 														{#if noPodsReady}
 															<CircleAlertIcon size={16} animate={true} />
 														{:else}
@@ -209,26 +255,54 @@
 														{/if}
 													</div>
 													<div class="flex-1 min-w-0">
-														<p class="text-xs font-semibold" style="color: var({noPodsReady ? '--error-text-color' : '--warning-text'});">
+														<p
+															class="text-xs font-semibold"
+															style="color: var({noPodsReady
+																? '--error-text-color'
+																: '--warning-text'});"
+														>
 															{noPodsReady ? 'Pod error' : 'Pod warning'}
 														</p>
-														<p class="mt-0.5 font-mono text-xs font-medium" style="color: var(--surface-muted);">{warning.podName}</p>
+														<p
+															class="mt-0.5 font-mono text-xs font-medium"
+															style="color: var(--surface-muted);"
+														>
+															{warning.podName}
+														</p>
 														{#if _h && !_rawOpen}
-															<p class="mt-1 text-xs font-medium" style="color: var(--center-channel-color);">{_h.title}</p>
-															<p class="mt-0.5 text-[11px]" style="color: var(--center-channel-color); opacity: 0.7;">{_h.hint}</p>
+															<p
+																class="mt-1 text-xs font-medium"
+																style="color: var(--center-channel-color);"
+															>
+																{_h.title}
+															</p>
+															<p
+																class="mt-0.5 text-[11px]"
+																style="color: var(--center-channel-color); opacity: 0.7;"
+															>
+																{_h.hint}
+															</p>
 														{:else}
-															<p class="mt-0.5 text-xs" style="color: var(--center-channel-color); opacity: 0.75; word-break: break-word;">{warning.message}</p>
+															<p
+																class="mt-0.5 text-xs"
+																style="color: var(--center-channel-color); opacity: 0.75; word-break: break-word;"
+															>
+																{warning.message}
+															</p>
 														{/if}
 														<div class="mt-1.5 flex items-center gap-2">
 															{#if warning.timestamp}
-																<span class="text-[10px]" style="color: var(--surface-muted);">{new Date(warning.timestamp).toLocaleTimeString()}</span>
+																<span class="text-[10px]" style="color: var(--surface-muted);"
+																	>{new Date(warning.timestamp).toLocaleTimeString()}</span
+																>
 															{/if}
 															{#if _h}
 																<button
 																	class="warning-raw-toggle"
 																	type="button"
 																	onclick={() => onToggleWarningRaw(_pwId)}
-																>{_rawOpen ? 'Hide original' : 'View original'}</button>
+																	>{_rawOpen ? 'Hide original' : 'View original'}</button
+																>
 															{/if}
 														</div>
 													</div>
@@ -254,17 +328,41 @@
 				</div>
 			{/if}
 			{#if repoUrl}
-				<button onclick={onRebuild} disabled={rebuilding || _isBuilding} class="btn btn-secondary btn-sm" onmouseenter={() => onTriggerActionAnim('redeploy')}>
-					{#if rebuilding}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw size={14} animate={actionAnim.redeploy ?? false} />{/if}
+				<button
+					onclick={onRebuild}
+					disabled={rebuilding || _isBuilding}
+					class="btn btn-secondary btn-sm"
+					onmouseenter={() => onTriggerActionAnim('redeploy')}
+				>
+					{#if rebuilding}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw
+							size={14}
+							animate={actionAnim.redeploy ?? false}
+						/>{/if}
 					<span>Redeploy</span>
 				</button>
 			{/if}
-			<button onclick={onRestart} disabled={restarting} class="btn btn-secondary btn-sm" onmouseenter={() => onTriggerActionAnim('restart')}>
-				{#if restarting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Play size={14} animate={actionAnim.restart ?? false} />{/if}
+			<button
+				onclick={onRestart}
+				disabled={restarting}
+				class="btn btn-secondary btn-sm"
+				onmouseenter={() => onTriggerActionAnim('restart')}
+			>
+				{#if restarting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Play
+						size={14}
+						animate={actionAnim.restart ?? false}
+					/>{/if}
 				<span>Restart</span>
 			</button>
-			<button onclick={onShowDeleteModal} disabled={deleting} class="btn btn-sm dep-delete-btn" onmouseenter={() => onTriggerActionAnim('delete')}>
-				{#if deleting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2 size={14} animate={actionAnim.delete ?? false} />{/if}
+			<button
+				onclick={onShowDeleteModal}
+				disabled={deleting}
+				class="btn btn-sm dep-delete-btn"
+				onmouseenter={() => onTriggerActionAnim('delete')}
+			>
+				{#if deleting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2
+						size={14}
+						animate={actionAnim.delete ?? false}
+					/>{/if}
 			</button>
 		</div>
 	</div>
@@ -279,15 +377,20 @@
 						target="_blank"
 						rel="noopener noreferrer"
 						class="dep-meta-lead dep-meta-lead-link"
-						class:dep-meta-mono={_commitLeadMono}
-					>{_commitLead}</a>
+						class:dep-meta-mono={_commitLeadMono}>{_commitLead}</a
+					>
 				{:else}
 					<span class="dep-meta-lead" class:dep-meta-mono={_commitLeadMono}>{_commitLead}</span>
 				{/if}
 			{/if}
 			{#if deployment.githubRepo}
 				{#if _commitLead}<span class="dep-meta-dot">·</span>{/if}
-				<a href={deployment.githubRepo.replace(/\.git$/, '')} target="_blank" rel="noopener noreferrer" class="dep-meta-link">
+				<a
+					href={deployment.githubRepo.replace(/\.git$/, '')}
+					target="_blank"
+					rel="noopener noreferrer"
+					class="dep-meta-link"
+				>
 					{deployment.githubRepo.replace('https://github.com/', '').replace(/\.git$/, '')}
 				</a>
 			{/if}
@@ -297,17 +400,22 @@
 			{/if}
 			{#if _activeBuild}
 				<span class="dep-meta-dot">·</span>
-				<span>{(() => {
-					const diff = Date.now() - new Date(_activeBuild.createdAt).getTime();
-					const mins = Math.floor(diff / 60000);
-					if (mins < 1) return 'just now';
-					if (mins < 60) return `${mins}m ago`;
-					const hrs = Math.floor(mins / 60);
-					if (hrs < 24) return `${hrs}h ago`;
-					const days = Math.floor(hrs / 24);
-					if (days < 30) return `${days}d ago`;
-					return new Date(_activeBuild.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-				})()}</span>
+				<span
+					>{(() => {
+						const diff = Date.now() - new Date(_activeBuild.createdAt).getTime();
+						const mins = Math.floor(diff / 60000);
+						if (mins < 1) return 'just now';
+						if (mins < 60) return `${mins}m ago`;
+						const hrs = Math.floor(mins / 60);
+						if (hrs < 24) return `${hrs}h ago`;
+						const days = Math.floor(hrs / 24);
+						if (days < 30) return `${days}d ago`;
+						return new Date(_activeBuild.createdAt).toLocaleDateString('en-US', {
+							month: 'short',
+							day: 'numeric'
+						});
+					})()}</span
+				>
 				{#if _activeBuild.triggerType === 'manual' && _activeBuild.triggeredBy}
 					<span>by</span>
 					<span class="dep-meta-strong">@{_activeBuild.triggeredBy.username}</span>
@@ -317,10 +425,9 @@
 			{/if}
 			{#if _buildFailed && (deployment.buildLogs || deployment.buildError)}
 				<span class="dep-meta-dot">·</span>
-				<button
-					class="dep-meta-link dep-meta-button"
-					onclick={onViewBuildLogs}
-				>View build logs</button>
+				<button class="dep-meta-link dep-meta-button" onclick={onViewBuildLogs}
+					>View build logs</button
+				>
 			{/if}
 		</p>
 

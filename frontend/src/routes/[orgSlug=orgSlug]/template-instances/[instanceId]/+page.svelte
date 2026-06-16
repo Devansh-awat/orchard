@@ -112,12 +112,18 @@
 			<div style="display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 1.5rem;">
 				<div class="skeleton" style="width: 2.5rem; height: 2.5rem; border-radius: 0.75rem;"></div>
 				<div>
-					<div class="skeleton" style="width: 10rem; height: 1.25rem; margin-bottom: 0.375rem;"></div>
+					<div
+						class="skeleton"
+						style="width: 10rem; height: 1.25rem; margin-bottom: 0.375rem;"
+					></div>
 					<div class="skeleton" style="width: 8rem; height: 0.75rem;"></div>
 				</div>
 			</div>
 			<div class="skeleton" style="width: 6rem; height: 0.75rem; margin-bottom: 0.75rem;"></div>
-			<div class="skeleton" style="width: 100%; height: 3.5rem; border-radius: 0.75rem; margin-bottom: 0.5rem;"></div>
+			<div
+				class="skeleton"
+				style="width: 100%; height: 3.5rem; border-radius: 0.75rem; margin-bottom: 0.5rem;"
+			></div>
 			<div class="skeleton" style="width: 100%; height: 3.5rem; border-radius: 0.75rem;"></div>
 		</div>
 	{:else if instance}
@@ -136,10 +142,7 @@
 					<h1 class="ti-title">{instance.name}</h1>
 					<p class="ti-meta">
 						{instance.template.displayName} &middot;
-						<span
-							class="ti-status"
-							style="color: {getStatusColor(instance.status)}"
-						>
+						<span class="ti-status" style="color: {getStatusColor(instance.status)}">
 							{instance.status}
 						</span>
 					</p>
@@ -183,10 +186,7 @@
 									{/if}
 								</div>
 								<div class="ti-resource-right">
-									<span
-										class="ti-resource-status"
-										style="color: {getStatusColor(dep.status)}"
-									>
+									<span class="ti-resource-status" style="color: {getStatusColor(dep.status)}">
 										{dep.status}
 									</span>
 									<ExternalLink class="h-3.5 w-3.5" style="color: var(--surface-muted)" />
@@ -212,10 +212,7 @@
 									<span class="ti-resource-detail">{db.dbName}</span>
 								</div>
 								<div class="ti-resource-right">
-									<span
-										class="ti-resource-status"
-										style="color: {getStatusColor(db.status)}"
-									>
+									<span class="ti-resource-status" style="color: {getStatusColor(db.status)}">
 										{db.status}
 									</span>
 									<ExternalLink class="h-3.5 w-3.5" style="color: var(--surface-muted)" />
@@ -272,8 +269,8 @@
 {#if instance}
 	<ConfirmModal
 		bind:open={showDeleteModal}
-		title='Delete "{instance.name}"?'
-		description='This will permanently <strong>delete all resources</strong> created by this template (deployments, databases, and ingresses). This cannot be undone.'
+		title={`Delete "${instance.name}"?`}
+		description="This will permanently <strong>delete all resources</strong> created by this template (deployments, databases, and ingresses). This cannot be undone."
 		confirmLabel="Delete All"
 		onconfirm={deleteInstance}
 		oncancel={() => {}}
@@ -435,7 +432,9 @@
 		background-color: var(--surface-bg);
 		text-decoration: none;
 		color: var(--center-channel-color);
-		transition: border-color 0.15s, box-shadow 0.15s;
+		transition:
+			border-color 0.15s,
+			box-shadow 0.15s;
 		box-shadow:
 			0 1px 3px rgb(0 0 0 / 0.03),
 			0 1px 2px rgb(0 0 0 / 0.02);

@@ -8,4 +8,11 @@ export { default as ResourcesTab } from './ResourcesTab.svelte';
 export { default as DatabaseHeader } from './DatabaseHeader.svelte';
 export { default as DeleteModal } from './DeleteModal.svelte';
 export { default as DatabaseAlerts } from './DatabaseAlerts.svelte';
-export type { DatabaseDetail, Backup, SchedulePreset, ExtInfo, ParamMeta, TerminalTab as TerminalTabType } from './types';
+export type {
+	DatabaseDetail,
+	Backup,
+	SchedulePreset,
+	ExtInfo,
+	ParamMeta,
+	TerminalTab as TerminalTabType
+} from './types';

@@ -34,7 +34,7 @@
 		onSaveSsoConfig,
 		onTestSsoConnection,
 		onDeleteSsoConfig,
-		index = 0,
+		index = 0
 	}: {
 		organization: { id: string; name: string } | null;
 		isOwner: boolean;
@@ -71,7 +71,12 @@
 </script>
 
 {#if isOwner}
-	<SettingsSection title="Single Sign-On" description="Configure identity provider for your organization" iconColor="primary" {index}>
+	<SettingsSection
+		title="Single Sign-On"
+		description="Configure identity provider for your organization"
+		iconColor="primary"
+		{index}
+	>
 		{#snippet icon(hovered)}<ShieldCheck size={18} animate={hovered} />{/snippet}
 
 		{#if ssoLoading}
@@ -93,17 +98,15 @@
 						class="input sso-subdomain-input"
 					/>
 					<span class="sso-subdomain-suffix">.{baseDomain}</span>
-					<button
-						onclick={onSaveSubdomain}
-						disabled={ssoSubdomainSaving}
-						class="btn btn-secondary"
-					>
+					<button onclick={onSaveSubdomain} disabled={ssoSubdomainSaving} class="btn btn-secondary">
 						{#if ssoSubdomainSaving}<Loader2 class="h-4 w-4 animate-spin" />{/if}
 						Save
 					</button>
 				</div>
 				{#if ssoSubdomain}
-					<p class="sso-hint">Your login page will be at <strong>https://{ssoSubdomain}.{baseDomain}</strong></p>
+					<p class="sso-hint">
+						Your login page will be at <strong>https://{ssoSubdomain}.{baseDomain}</strong>
+					</p>
 				{/if}
 			</div>
 
@@ -112,14 +115,18 @@
 				<button
 					class="sso-tab"
 					class:sso-tab-active={ssoTab === 'config'}
-					onclick={() => { ssoTab = 'config'; }}
+					onclick={() => {
+						ssoTab = 'config';
+					}}
 				>
 					Provider Configuration
 				</button>
 				<button
 					class="sso-tab"
 					class:sso-tab-active={ssoTab === 'branding'}
-					onclick={() => { ssoTab = 'branding'; }}
+					onclick={() => {
+						ssoTab = 'branding';
+					}}
 				>
 					Login Page Customization
 				</button>
@@ -133,14 +140,18 @@
 						<button
 							class="sso-provider-btn"
 							class:sso-provider-active={ssoProvider === 'oidc'}
-							onclick={() => { ssoProvider = 'oidc'; }}
+							onclick={() => {
+								ssoProvider = 'oidc';
+							}}
 						>
 							OpenID Connect (OIDC)
 						</button>
 						<button
 							class="sso-provider-btn"
 							class:sso-provider-active={ssoProvider === 'saml'}
-							onclick={() => { ssoProvider = 'saml'; }}
+							onclick={() => {
+								ssoProvider = 'saml';
+							}}
 						>
 							SAML 2.0
 						</button>
@@ -152,19 +163,45 @@
 					<div class="sso-section">
 						<div class="sso-field">
 							<label class="sso-field-label" for="oidc-issuer">Issuer URL</label>
-							<input id="oidc-issuer" type="url" bind:value={ssoOidcIssuerUrl} placeholder="https://accounts.google.com" class="input" />
+							<input
+								id="oidc-issuer"
+								type="url"
+								bind:value={ssoOidcIssuerUrl}
+								placeholder="https://accounts.google.com"
+								class="input"
+							/>
 						</div>
 						<div class="sso-field">
 							<label class="sso-field-label" for="oidc-client-id">Client ID</label>
-							<input id="oidc-client-id" type="text" bind:value={ssoOidcClientId} placeholder="your-client-id" class="input" />
+							<input
+								id="oidc-client-id"
+								type="text"
+								bind:value={ssoOidcClientId}
+								placeholder="your-client-id"
+								class="input"
+							/>
 						</div>
 						<div class="sso-field">
 							<label class="sso-field-label" for="oidc-client-secret">Client Secret</label>
-							<input id="oidc-client-secret" type="password" bind:value={ssoOidcClientSecret} placeholder={ssoConfig?.oidcClientSecret === '••••••••' ? '(already set, leave blank to keep)' : 'your-client-secret'} class="input" />
+							<input
+								id="oidc-client-secret"
+								type="password"
+								bind:value={ssoOidcClientSecret}
+								placeholder={ssoConfig?.oidcClientSecret === '••••••••'
+									? '(already set, leave blank to keep)'
+									: 'your-client-secret'}
+								class="input"
+							/>
 						</div>
 						<div class="sso-field">
 							<label class="sso-field-label" for="oidc-scopes">Scopes</label>
-							<input id="oidc-scopes" type="text" bind:value={ssoOidcScopes} placeholder="openid email profile" class="input" />
+							<input
+								id="oidc-scopes"
+								type="text"
+								bind:value={ssoOidcScopes}
+								placeholder="openid email profile"
+								class="input"
+							/>
 						</div>
 					</div>
 				{/if}
@@ -174,19 +211,45 @@
 					<div class="sso-section">
 						<div class="sso-field">
 							<label class="sso-field-label" for="saml-metadata">Metadata URL (optional)</label>
-							<input id="saml-metadata" type="url" bind:value={ssoSamlMetadataUrl} placeholder="https://idp.example.com/metadata" class="input" />
+							<input
+								id="saml-metadata"
+								type="url"
+								bind:value={ssoSamlMetadataUrl}
+								placeholder="https://idp.example.com/metadata"
+								class="input"
+							/>
 						</div>
 						<div class="sso-field">
 							<label class="sso-field-label" for="saml-entry">SSO Entry Point URL</label>
-							<input id="saml-entry" type="url" bind:value={ssoSamlEntryPoint} placeholder="https://idp.example.com/sso" class="input" />
+							<input
+								id="saml-entry"
+								type="url"
+								bind:value={ssoSamlEntryPoint}
+								placeholder="https://idp.example.com/sso"
+								class="input"
+							/>
 						</div>
 						<div class="sso-field">
 							<label class="sso-field-label" for="saml-issuer">Issuer</label>
-							<input id="saml-issuer" type="text" bind:value={ssoSamlIssuer} placeholder="urn:idp:example" class="input" />
+							<input
+								id="saml-issuer"
+								type="text"
+								bind:value={ssoSamlIssuer}
+								placeholder="urn:idp:example"
+								class="input"
+							/>
 						</div>
 						<div class="sso-field">
 							<label class="sso-field-label" for="saml-cert">IdP Certificate (PEM)</label>
-							<textarea id="saml-cert" bind:value={ssoSamlCertificate} rows="4" placeholder={ssoConfig?.samlCertificate === '(configured)' ? '(already set, leave blank to keep)' : 'Paste the X.509 certificate here...'} class="input"></textarea>
+							<textarea
+								id="saml-cert"
+								bind:value={ssoSamlCertificate}
+								rows="4"
+								placeholder={ssoConfig?.samlCertificate === '(configured)'
+									? '(already set, leave blank to keep)'
+									: 'Paste the X.509 certificate here...'}
+								class="input"
+							></textarea>
 						</div>
 					</div>
 				{/if}
@@ -206,7 +269,9 @@
 					<div class="sso-toggle-row">
 						<div>
 							<p class="sso-toggle-label">Enforce SSO</p>
-							<p class="sso-toggle-desc">Require SSO for all members (disables email/passkey login on subdomain)</p>
+							<p class="sso-toggle-desc">
+								Require SSO for all members (disables email/passkey login on subdomain)
+							</p>
 						</div>
 						<label class="sso-switch">
 							<input type="checkbox" bind:checked={ssoEnforced} />
@@ -226,16 +291,30 @@
 						Test Connection
 					</button>
 					{#if ssoConfig}
-						<button onclick={onDeleteSsoConfig} class="btn btn-secondary" style="color: var(--error-color, #ef4444);">
+						<button
+							onclick={onDeleteSsoConfig}
+							class="btn btn-secondary"
+							style="color: var(--error-color, #ef4444);"
+						>
 							Delete SSO Config
 						</button>
 					{/if}
 				</div>
 
 				{#if ssoTestResult}
-					<div class="sso-test-result" class:sso-test-success={ssoTestResult.success} class:sso-test-error={!ssoTestResult.success}>
+					<div
+						class="sso-test-result"
+						class:sso-test-success={ssoTestResult.success}
+						class:sso-test-error={!ssoTestResult.success}
+					>
 						{#if ssoTestResult.success}
-							<p>Connection successful. <a href={ssoTestResult.testLoginUrl} target="_blank" rel="noopener">Test login</a></p>
+							<p>
+								Connection successful. <a
+									href={ssoTestResult.testLoginUrl}
+									target="_blank"
+									rel="noopener">Test login</a
+								>
+							</p>
 						{:else}
 							<p>Connection failed: {ssoTestResult.error}</p>
 						{/if}
@@ -247,25 +326,49 @@
 				<div class="sso-section">
 					<div class="sso-field">
 						<label class="sso-field-label" for="sso-logo">Logo URL</label>
-						<input id="sso-logo" type="url" bind:value={ssoLoginLogoUrl} placeholder="https://example.com/logo.png" class="input" />
+						<input
+							id="sso-logo"
+							type="url"
+							bind:value={ssoLoginLogoUrl}
+							placeholder="https://example.com/logo.png"
+							class="input"
+						/>
 					</div>
 					<div class="sso-field">
 						<label class="sso-field-label" for="sso-welcome">Welcome Text</label>
-						<input id="sso-welcome" type="text" bind:value={ssoLoginWelcomeText} placeholder="Sign in to Your Company" class="input" />
+						<input
+							id="sso-welcome"
+							type="text"
+							bind:value={ssoLoginWelcomeText}
+							placeholder="Sign in to Your Company"
+							class="input"
+						/>
 					</div>
 					<div class="sso-color-row">
 						<div class="sso-field" style="flex: 1;">
 							<label class="sso-field-label" for="sso-primary-color">Primary Color</label>
 							<div class="sso-color-input">
 								<input id="sso-primary-color" type="color" bind:value={ssoLoginPrimaryColor} />
-								<input type="text" bind:value={ssoLoginPrimaryColor} placeholder="#6366f1" class="input" style="flex: 1;" />
+								<input
+									type="text"
+									bind:value={ssoLoginPrimaryColor}
+									placeholder="#6366f1"
+									class="input"
+									style="flex: 1;"
+								/>
 							</div>
 						</div>
 						<div class="sso-field" style="flex: 1;">
 							<label class="sso-field-label" for="sso-bg-color">Background Color</label>
 							<div class="sso-color-input">
 								<input id="sso-bg-color" type="color" bind:value={ssoLoginBgColor} />
-								<input type="text" bind:value={ssoLoginBgColor} placeholder="#0a0a0f" class="input" style="flex: 1;" />
+								<input
+									type="text"
+									bind:value={ssoLoginBgColor}
+									placeholder="#0a0a0f"
+									class="input"
+									style="flex: 1;"
+								/>
 							</div>
 						</div>
 					</div>
@@ -276,12 +379,19 @@
 							{#if ssoLoginLogoUrl}
 								<img src={ssoLoginLogoUrl} alt="Logo" class="sso-preview-logo" />
 							{:else}
-								<div class="sso-preview-icon" style="background: {ssoLoginPrimaryColor}20; color: {ssoLoginPrimaryColor};">
+								<div
+									class="sso-preview-icon"
+									style="background: {ssoLoginPrimaryColor}20; color: {ssoLoginPrimaryColor};"
+								>
 									<Lock class="h-5 w-5" />
 								</div>
 							{/if}
-							<p class="sso-preview-text">{ssoLoginWelcomeText || `Sign in to ${organization?.name || 'Organization'}`}</p>
-							<div class="sso-preview-btn" style="background: {ssoLoginPrimaryColor};">Sign in with SSO</div>
+							<p class="sso-preview-text">
+								{ssoLoginWelcomeText || `Sign in to ${organization?.name || 'Organization'}`}
+							</p>
+							<div class="sso-preview-btn" style="background: {ssoLoginPrimaryColor};">
+								Sign in with SSO
+							</div>
 						</div>
 					</div>
 
@@ -294,12 +404,15 @@
 		{/if}
 	</SettingsSection>
 {:else}
-	<SettingsSection title="Single Sign-On" description="Configure identity provider for your organization" iconColor="primary" {index}>
+	<SettingsSection
+		title="Single Sign-On"
+		description="Configure identity provider for your organization"
+		iconColor="primary"
+		{index}
+	>
 		{#snippet icon(hovered)}<ShieldCheck size={18} animate={hovered} />{/snippet}
 
-		<p class="sso-no-access">
-			Only the organization owner can manage SSO settings.
-		</p>
+		<p class="sso-no-access">Only the organization owner can manage SSO settings.</p>
 	</SettingsSection>
 {/if}
 
@@ -368,7 +481,9 @@
 		color: var(--surface-muted);
 		cursor: pointer;
 		border-bottom: 2px solid transparent;
-		transition: color 120ms ease, border-color 120ms ease;
+		transition:
+			color 120ms ease,
+			border-color 120ms ease;
 		background: transparent;
 		border-top: none;
 		border-left: none;

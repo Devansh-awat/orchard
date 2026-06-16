@@ -118,7 +118,7 @@
 			const res = await apiFetch(`/apiv1/admin/nodes/${node.id}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ schedulable: !node.schedulable }),
+				body: JSON.stringify({ schedulable: !node.schedulable })
 			});
 			if (!res.ok) throw new Error('Failed');
 			await loadNodes();
@@ -139,7 +139,7 @@
 			const res = await apiFetch(`/apiv1/admin/nodes/${selectedNode.id}/assignments/${addOrgId}`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(body),
+				body: JSON.stringify(body)
 			});
 			if (!res.ok) throw new Error('Failed to save assignment');
 			await openNode(selectedNode.id);
@@ -162,7 +162,7 @@
 		try {
 			const res = await apiFetch(
 				`/apiv1/admin/nodes/${selectedNode.id}/assignments/${a.organizationId}`,
-				{ method: 'DELETE' },
+				{ method: 'DELETE' }
 			);
 			if (!res.ok) throw new Error('Failed');
 			await openNode(selectedNode.id);
@@ -175,7 +175,7 @@
 	const assignableOrgs = $derived(
 		selectedNode
 			? orgs.filter((o) => !selectedNode!.assignments.some((a) => a.organizationId === o.id))
-			: orgs,
+			: orgs
 	);
 
 	onMount(() => {
@@ -289,7 +289,9 @@
 					<div>
 						<h2 class="text-lg font-bold">{selectedNode.name}</h2>
 						<p class="text-xs" style="color: var(--surface-muted);">
-							{selectedNode.usage.pods} pods · {formatCpuMilli(selectedNode.usage.cpuMilli)} · {formatMemoryBytes(selectedNode.usage.memoryBytes)}
+							{selectedNode.usage.pods} pods · {formatCpuMilli(selectedNode.usage.cpuMilli)} · {formatMemoryBytes(
+								selectedNode.usage.memoryBytes
+							)}
 						</p>
 					</div>
 					<button onclick={closeDetail} class="p-1 rounded hover:bg-[var(--control-bg)]">
@@ -315,10 +317,7 @@
 				{:else}
 					<div class="space-y-2 mb-4">
 						{#each selectedNode.assignments as a}
-							<div
-								class="rounded-xl border p-3"
-								style="border-color: var(--surface-border);"
-							>
+							<div class="rounded-xl border p-3" style="border-color: var(--surface-border);">
 								<div class="flex items-start justify-between">
 									<div>
 										<div class="flex items-center gap-2">
@@ -333,7 +332,8 @@
 											</span>
 										</div>
 										<div class="text-xs mt-1" style="color: var(--surface-muted);">
-											CPU: {a.cpuLimit || '∞'} · Memory: {a.memoryLimit || '∞'} · Services: {a.maxServices ?? '∞'}
+											CPU: {a.cpuLimit || '∞'} · Memory: {a.memoryLimit || '∞'} · Services: {a.maxServices ??
+												'∞'}
 										</div>
 									</div>
 									<button

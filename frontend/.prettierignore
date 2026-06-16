@@ -7,3 +7,10 @@ bun.lockb
 
 # Miscellaneous
 /static/
+
+# Generated output
+/build/
+/.svelte-kit/
+
+# Docs
+CLAUDE.md

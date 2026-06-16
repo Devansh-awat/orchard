@@ -216,7 +216,9 @@
 					{#if !showOtpFallback}
 						<button
 							class="sso-btn sso-btn-link"
-							onclick={() => { showOtpFallback = true; }}
+							onclick={() => {
+								showOtpFallback = true;
+							}}
 						>
 							Sign in with email instead
 						</button>
@@ -262,7 +264,15 @@
 								bind:value={otpCode}
 								autocomplete="one-time-code"
 							/>
-							<button type="button" class="sso-btn sso-btn-ghost" onclick={() => { otpStep = 'email'; otpCode = ''; otpMessage = null; }}>
+							<button
+								type="button"
+								class="sso-btn sso-btn-ghost"
+								onclick={() => {
+									otpStep = 'email';
+									otpCode = '';
+									otpMessage = null;
+								}}
+							>
 								Back
 							</button>
 						</div>
@@ -275,7 +285,11 @@
 						<p class="sso-success-text">{otpMessage}</p>
 					{/if}
 
-					<button class="sso-btn sso-btn-secondary" type="submit" disabled={otpRequesting || otpVerifying}>
+					<button
+						class="sso-btn sso-btn-secondary"
+						type="submit"
+						disabled={otpRequesting || otpVerifying}
+					>
 						{#if otpRequesting || otpVerifying}
 							<Loader2 class="h-4 w-4 animate-spin" />
 						{/if}

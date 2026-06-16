@@ -16,18 +16,14 @@ export const handle: Handle = async ({ event, resolve }) => {
 		const normalized = pathname.replace(/\/{2,}/g, '/');
 		return new Response(null, {
 			status: 308,
-			headers: { Location: normalized + event.url.search },
+			headers: { Location: normalized + event.url.search }
 		});
 	}
 
 	if (BASE_DOMAIN) {
 		const host = event.request.headers.get('host') || '';
 
-		if (
-			host.endsWith(`.${BASE_DOMAIN}`) &&
-			host !== BASE_DOMAIN &&
-			!host.startsWith('www.')
-		) {
+		if (host.endsWith(`.${BASE_DOMAIN}`) && host !== BASE_DOMAIN && !host.startsWith('www.')) {
 			const subdomain = host.replace(`.${BASE_DOMAIN}`, '');
 			event.locals.subdomain = subdomain;
 
@@ -46,7 +42,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 				const mainUrl = `https://${BASE_DOMAIN}${pathname}${event.url.search}`;
 				return new Response(null, {
 					status: 302,
-					headers: { Location: mainUrl },
+					headers: { Location: mainUrl }
 				});
 			}
 		}
@@ -73,18 +69,18 @@ export const handleError: HandleServerError = ({ error, event, status, message }
 				{
 					type: err.name,
 					value: err.message,
-					stacktrace: { type: 'raw', frames: [{ raw: err.stack ?? '' }] },
-				},
+					stacktrace: { type: 'raw', frames: [{ raw: err.stack ?? '' }] }
+				}
 			],
 			route_id: event.route.id,
 			url: event.url.pathname,
 			status,
-			sveltekit_message: message,
-		},
+			sveltekit_message: message
+		}
 	};
 	fetch(`${host}/i/v0/e/`, {
 		method: 'POST',
 		headers: { 'content-type': 'application/json' },
-		body: JSON.stringify(payload),
+		body: JSON.stringify(payload)
 	}).catch(() => {});
 };

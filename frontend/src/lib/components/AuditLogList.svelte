@@ -71,7 +71,7 @@
 			toasts.add({
 				title: 'Error',
 				description: e instanceof Error ? e.message : 'Failed to load audit logs',
-				color: 'error',
+				color: 'error'
 			});
 		} finally {
 			loading = false;
@@ -127,8 +127,14 @@
 	});
 </script>
 
-<div class="rounded-2xl border" style="border-color: var(--surface-border); background-color: var(--center-channel-bg);">
-	<div class="flex items-center justify-between gap-3 border-b px-5 py-4" style="border-color: var(--surface-border);">
+<div
+	class="rounded-2xl border"
+	style="border-color: var(--surface-border); background-color: var(--center-channel-bg);"
+>
+	<div
+		class="flex items-center justify-between gap-3 border-b px-5 py-4"
+		style="border-color: var(--surface-border);"
+	>
 		<div class="flex items-center gap-2">
 			<ScrollText class="h-4 w-4" style="color: var(--surface-muted);" />
 			<h3 class="text-sm font-semibold" style="color: var(--center-channel-color);">{title}</h3>
@@ -159,10 +165,14 @@
 					<div class="flex items-start justify-between gap-4">
 						<div class="min-w-0 flex-1">
 							<div class="flex items-center gap-2 text-sm">
-								<span class="font-mono font-semibold" style="color: var(--center-channel-color);">{formatAction(entry.action)}</span>
+								<span class="font-mono font-semibold" style="color: var(--center-channel-color);"
+									>{formatAction(entry.action)}</span
+								>
 								{#if entry.targetLabel}
 									<span style="color: var(--surface-muted);">·</span>
-									<span class="truncate" style="color: var(--center-channel-color);">{entry.targetLabel}</span>
+									<span class="truncate" style="color: var(--center-channel-color);"
+										>{entry.targetLabel}</span
+									>
 								{/if}
 							</div>
 							{#if entry.metadata && Object.keys(entry.metadata).length}
@@ -170,7 +180,10 @@
 									{formatMetadata(entry.metadata)}
 								</div>
 							{/if}
-							<div class="mt-1 flex items-center gap-2 text-xs" style="color: var(--surface-muted);">
+							<div
+								class="mt-1 flex items-center gap-2 text-xs"
+								style="color: var(--surface-muted);"
+							>
 								<User class="h-3 w-3" />
 								<span>{actorName(entry)}</span>
 								<span>·</span>

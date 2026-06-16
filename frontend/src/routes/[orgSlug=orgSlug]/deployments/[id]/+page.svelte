@@ -19,7 +19,15 @@
 		getStatusColor,
 		getDeploymentStatusLabel
 	} from '$lib/components/deployment/deployment-helpers';
-	import { apiFetch, toasts, refreshTree, isSuperAdmin, selectedOrganization, subscribeOrgEvents, sseStatusFor } from '$lib/stores';
+	import {
+		apiFetch,
+		toasts,
+		refreshTree,
+		isSuperAdmin,
+		selectedOrganization,
+		subscribeOrgEvents,
+		sseStatusFor
+	} from '$lib/stores';
 	import { env } from '$env/dynamic/public';
 	import { invalidate } from '$app/navigation';
 	import { featureFlag } from '$lib/posthog';
@@ -85,29 +93,57 @@
 
 	// Extracted modules
 	import {
-		motionStagger, motionPopover,
-		motionBackdrop, cardTilt, pressSpringDelegate
+		motionStagger,
+		motionPopover,
+		motionBackdrop,
+		cardTilt,
+		pressSpringDelegate
 	} from '$lib/utils/motion.svelte';
 	import {
-		portal, ansiToHtml, formatCpu, formatMemory, formatRelativeTime, formatBuildDurationBetween,
+		portal,
+		ansiToHtml,
+		formatCpu,
+		formatMemory,
+		formatRelativeTime,
+		formatBuildDurationBetween,
 		humanizeWarning
 	} from '$lib/utils/format';
 	import type {
-		Pod, Service, ServicePortConfig, Ingress, IngressRoute, ImageHistory, Volume,
-		AutoDeployStatus, GitHubAppInstallation, GitHubDeploymentRecord,
-		ServicePortForm, ServiceFormState, WebhookToken, TerminalTabInfo
+		Pod,
+		Service,
+		ServicePortConfig,
+		Ingress,
+		IngressRoute,
+		ImageHistory,
+		Volume,
+		AutoDeployStatus,
+		GitHubAppInstallation,
+		GitHubDeploymentRecord,
+		ServicePortForm,
+		ServiceFormState,
+		WebhookToken,
+		TerminalTabInfo
 	} from '$lib/types/deployment';
 	import {
-		EnvironmentTab, VolumesTab, WebhooksTab, HistoryTab, ResourcesTab,
-		OverviewTab, NetworkTab, AdvancedTab, DeploymentHeader, BuildProgressModal,
-		DeploymentAlerts, ConfigureTab, DeploysTab, SettingsTab
+		EnvironmentTab,
+		VolumesTab,
+		WebhooksTab,
+		HistoryTab,
+		ResourcesTab,
+		OverviewTab,
+		NetworkTab,
+		AdvancedTab,
+		DeploymentHeader,
+		BuildProgressModal,
+		DeploymentAlerts,
+		ConfigureTab,
+		DeploysTab,
+		SettingsTab
 	} from '$lib/components/deployment';
 
 	const APP_DOMAIN = env.PUBLIC_APP_DOMAIN || 'a.lfdl.ink';
 	const INGRESS_CNAME = env.PUBLIC_INGRESS_CNAME || 'ingress.lfdl.ink';
 	const PUBLIC_DEPLOYMENT_DOMAIN = env.PUBLIC_DEPLOYMENT_DOMAIN || 'public.orchard.my';
-
-
 
 	interface Deployment {
 		id: string;
@@ -166,7 +202,6 @@
 		tailscaleHostname?: string | null;
 		envVars?: Array<{ key: string; value: string }>;
 	}
-
 
 	const tabSections = [
 		{
@@ -236,13 +271,17 @@
 	function triggerTabIconAnim(id: string) {
 		if (tabIconAnim[id]) return;
 		tabIconAnim[id] = true;
-		setTimeout(() => { tabIconAnim[id] = false; }, 650);
+		setTimeout(() => {
+			tabIconAnim[id] = false;
+		}, 650);
 	}
 	let actionAnim = $state<Record<string, boolean>>({});
 	function triggerActionAnim(id: string) {
 		if (actionAnim[id]) return;
 		actionAnim[id] = true;
-		setTimeout(() => { actionAnim[id] = false; }, 650);
+		setTimeout(() => {
+			actionAnim[id] = false;
+		}, 650);
 	}
 
 	// Header card collapses (spring) when the user leaves the Overview tab — the
@@ -287,18 +326,37 @@
 					// Height can't go below 0, so a spring to 0 can't bounce.
 					// Instead: collapse height quickly with an eased tween,
 					// then spring-bounce the parent card's Y to sell the motion.
-					animate(target, { height: 0 }, {
-						duration: 0.28, easing: [0.32, 0, 0.67, 0]
-					});
+					animate(
+						target,
+						{ height: 0 },
+						{
+							duration: 0.28,
+							easing: [0.32, 0, 0.67, 0]
+						}
+					);
 					if (card) {
 						card.style.transformOrigin = 'top center';
 						card.style.overflow = 'visible';
-						animate(card, { scaleY: 0.97 }, {
-							type: 'spring', stiffness: 500, damping: 10, mass: 0.5
-						}).finished.then(() => {
-							const ctrl = animate(card, { scaleY: 1 }, {
-								type: 'spring', stiffness: 260, damping: 12, mass: 0.8
-							});
+						animate(
+							card,
+							{ scaleY: 0.97 },
+							{
+								type: 'spring',
+								stiffness: 500,
+								damping: 10,
+								mass: 0.5
+							}
+						).finished.then(() => {
+							const ctrl = animate(
+								card,
+								{ scaleY: 1 },
+								{
+									type: 'spring',
+									stiffness: 260,
+									damping: 12,
+									mass: 0.8
+								}
+							);
 							ctrl.finished.then(() => {
 								card.style.overflow = '';
 							});
@@ -317,9 +375,15 @@
 						}
 					});
 				}
-				animate(target, { opacity: isCollapsed ? 0 : 1 }, {
-					type: 'spring', stiffness: 300, damping: 28
-				});
+				animate(
+					target,
+					{ opacity: isCollapsed ? 0 : 1 },
+					{
+						type: 'spring',
+						stiffness: 300,
+						damping: 28
+					}
+				);
 			});
 		};
 	}
@@ -331,7 +395,9 @@
 	let projectBgImage = $derived(deployment?.project?.backgroundImage ?? null);
 
 	let deletingIngressId = $state<string | null>(null);
-	let projectIngresses = $state<Array<{ id: string; host: string; path?: string; deploymentId?: string | null }>>([]);
+	let projectIngresses = $state<
+		Array<{ id: string; host: string; path?: string; deploymentId?: string | null }>
+	>([]);
 
 	let showDomainForm = $state(false);
 	let newDomainHost = $state('');
@@ -345,7 +411,12 @@
 	const domainServiceOptions = $derived.by(() => {
 		const opts: Array<{ key: string; label: string; serviceName: string; port: number }> = [];
 		for (const s of deployment?.services ?? []) {
-			opts.push({ key: `${s.id}::${s.port}`, label: `Port ${s.port}`, serviceName: s.name, port: s.port });
+			opts.push({
+				key: `${s.id}::${s.port}`,
+				label: `Port ${s.port}`,
+				serviceName: s.name,
+				port: s.port
+			});
 		}
 		return opts;
 	});
@@ -376,7 +447,9 @@
 
 	let notificationsOpen = $state(false);
 	let notificationsRender = $state(false);
-	$effect(() => { if (notificationsOpen) notificationsRender = true; });
+	$effect(() => {
+		if (notificationsOpen) notificationsRender = true;
+	});
 	let notifBtnEl: HTMLButtonElement | undefined = $state();
 	let notifPanelPos = $state({ top: 0, left: 0 });
 	$effect(() => {
@@ -422,7 +495,9 @@
 		persistDismissedNotifications();
 	}
 
-	function buildFailedNotifId(d: { buildError?: string | null; buildLogs?: string | null } | null | undefined): string {
+	function buildFailedNotifId(
+		d: { buildError?: string | null; buildLogs?: string | null } | null | undefined
+	): string {
 		const err = (d?.buildError ?? '').trim().slice(0, 120);
 		const logsLen = d?.buildLogs?.length ?? 0;
 		return `bf:${err}:${logsLen}`;
@@ -453,10 +528,11 @@
 
 	// Notification triage: surface the highest-severity active alert and let the
 	// header show a real, colored pill for it instead of a tiny bell badge.
-	const buildFailedActive = $derived.by(() =>
-		deployment?.buildStatus === 'failed'
-			&& !!(deployment?.buildError || deployment?.buildLogs)
-			&& !dismissedNotifications.has(buildFailedNotifId(deployment))
+	const buildFailedActive = $derived.by(
+		() =>
+			deployment?.buildStatus === 'failed' &&
+			!!(deployment?.buildError || deployment?.buildLogs) &&
+			!dismissedNotifications.has(buildFailedNotifId(deployment))
 	);
 	const activePodWarnings = $derived.by(() =>
 		(deployment?.warnings ?? []).filter((w) => !dismissedNotifications.has(podWarningNotifId(w)))
@@ -470,17 +546,19 @@
 		buildFailedActive
 			? 'error'
 			: activePodWarnings.length > 0
-				? (noPodsReady ? 'error' : 'warning')
+				? noPodsReady
+					? 'error'
+					: 'warning'
 				: null
 	);
 	const notificationLabel = $derived(
 		buildFailedActive
 			? 'Build failed'
-			: (activePodWarnings.length === 1
+			: activePodWarnings.length === 1
 				? 'Pod warning'
 				: activePodWarnings.length > 1
 					? `${activePodWarnings.length} pod warnings`
-					: '')
+					: ''
 	);
 
 	// Deployment status chip: derives a single user-facing label + tone from
@@ -489,7 +567,8 @@
 	const deploymentStatusChip = $derived.by(() => {
 		const bs = deployment?.buildStatus;
 		const s = (deployment?.status ?? '').toLowerCase();
-		if (bs === 'building' || bs === 'pending') return { label: 'Building', tone: 'info' as StatusTone };
+		if (bs === 'building' || bs === 'pending')
+			return { label: 'Building', tone: 'info' as StatusTone };
 		if (bs === 'failed') return { label: 'Build failed', tone: 'error' as StatusTone };
 		if (!s) return { label: 'Unknown', tone: 'neutral' as StatusTone };
 		if (s === 'running') return { label: 'Running', tone: 'success' as StatusTone };
@@ -502,7 +581,9 @@
 		if (s === 'deleting') return { label: 'Deleting', tone: 'error' as StatusTone };
 		return { label: s.charAt(0).toUpperCase() + s.slice(1), tone: 'neutral' as StatusTone };
 	});
-	const activePods = $derived(deployment?.pods?.filter((pod) => pod.status?.toLowerCase() !== 'succeeded') ?? []);
+	const activePods = $derived(
+		deployment?.pods?.filter((pod) => pod.status?.toLowerCase() !== 'succeeded') ?? []
+	);
 
 	let deletingPod = $state<string | null>(null);
 
@@ -510,7 +591,9 @@
 		if (!deployment?.namespace || deletingPod) return;
 		deletingPod = podName;
 		try {
-			const res = await apiFetch(`/apiv1/pods/${podName}?namespace=${deployment.namespace}`, { method: 'DELETE' });
+			const res = await apiFetch(`/apiv1/pods/${podName}?namespace=${deployment.namespace}`, {
+				method: 'DELETE'
+			});
 			if (!res.ok) {
 				const d = await res.json().catch(() => ({}));
 				throw new Error(d.message || 'Failed to delete pod');
@@ -518,7 +601,11 @@
 			toasts.add({ title: 'Pod deleted', description: podName, color: 'success' });
 			await fetchDeployment();
 		} catch (e) {
-			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to delete pod', color: 'error' });
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to delete pod',
+				color: 'error'
+			});
 		} finally {
 			deletingPod = null;
 		}
@@ -578,18 +665,19 @@
 	const resourcePressure = $derived.by(() => {
 		const replicas = deployment?.replicas ?? 1;
 		const cpuReq = deployment?.cpuRequestMilli ?? null;
-		const memReq = deployment?.memoryRequestBytes != null
-			? Number(deployment.memoryRequestBytes)
-			: null;
+		const memReq =
+			deployment?.memoryRequestBytes != null ? Number(deployment.memoryRequestBytes) : null;
 		const cpuUsage = deployment?.totalCpuUsage ?? null;
 		const memUsage = deployment?.totalMemoryUsage ?? null;
 
-		const cpuRatio = cpuReq != null && cpuReq > 0 && cpuUsage != null && replicas > 0
-			? cpuUsage / (cpuReq * replicas)
-			: null;
-		const memRatio = memReq != null && memReq > 0 && memUsage != null && replicas > 0
-			? memUsage / (memReq * replicas)
-			: null;
+		const cpuRatio =
+			cpuReq != null && cpuReq > 0 && cpuUsage != null && replicas > 0
+				? cpuUsage / (cpuReq * replicas)
+				: null;
+		const memRatio =
+			memReq != null && memReq > 0 && memUsage != null && replicas > 0
+				? memUsage / (memReq * replicas)
+				: null;
 
 		const cpuNear = cpuRatio != null && cpuRatio >= NEAR_LIMIT_RATIO;
 		const memNear = memRatio != null && memRatio >= NEAR_LIMIT_RATIO;
@@ -598,7 +686,7 @@
 			memRatio,
 			cpuNear,
 			memNear,
-			any: cpuNear || memNear,
+			any: cpuNear || memNear
 		};
 	});
 
@@ -614,7 +702,7 @@
 			toasts.add({
 				title: 'Rolling updates unavailable',
 				description: 'Remove the PVC volume to switch back to rolling updates.',
-				color: 'warning',
+				color: 'warning'
 			});
 			return;
 		}
@@ -625,7 +713,7 @@
 			const res = await apiFetch(`/apiv1/deployments/${deployment.id}/strategy`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ strategy: next }),
+				body: JSON.stringify({ strategy: next })
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => null);
@@ -635,7 +723,11 @@
 			await fetchDeployment();
 		} catch (e) {
 			strategyValue = previous;
-			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed', color: 'error' });
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed',
+				color: 'error'
+			});
 		} finally {
 			savingStrategy = false;
 		}
@@ -658,16 +750,24 @@
 			const res = await apiFetch(`/apiv1/deployments/${deployment.id}/image`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ image: imageInput.trim() }),
+				body: JSON.stringify({ image: imageInput.trim() })
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => null);
 				throw new Error(data?.message || 'Failed to update image');
 			}
-			toasts.add({ title: 'Image updated', description: 'Pods will roll to pull the new image.', color: 'success' });
+			toasts.add({
+				title: 'Image updated',
+				description: 'Pods will roll to pull the new image.',
+				color: 'success'
+			});
 			await fetchDeployment();
 		} catch (e) {
-			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed', color: 'error' });
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed',
+				color: 'error'
+			});
 		} finally {
 			savingImage = false;
 		}
@@ -692,18 +792,26 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					cpuRequestMilli: resourceCpuMilli,
-					memoryRequestBytes: resourceMemoryBytes,
-				}),
+					memoryRequestBytes: resourceMemoryBytes
+				})
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => null);
 				throw new Error(data?.message || 'Failed to update resources');
 			}
-			toasts.add({ title: 'Resources updated', description: 'Pods will roll to pick up the new values.', color: 'success' });
+			toasts.add({
+				title: 'Resources updated',
+				description: 'Pods will roll to pick up the new values.',
+				color: 'success'
+			});
 			resourcesDirty = false;
 			await fetchDeployment();
 		} catch (e) {
-			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed', color: 'error' });
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed',
+				color: 'error'
+			});
 		} finally {
 			savingResources = false;
 		}
@@ -730,10 +838,14 @@
 	let activeConsoleTab = $state<string>('logs');
 	let showNewShellMenu = $state(false);
 	let showNewShellMenuRender = $state(false);
-	$effect(() => { if (showNewShellMenu) showNewShellMenuRender = true; });
+	$effect(() => {
+		if (showNewShellMenu) showNewShellMenuRender = true;
+	});
 	let showLogsPodMenu = $state(false);
 	let showLogsPodMenuRender = $state(false);
-	$effect(() => { if (showLogsPodMenu) showLogsPodMenuRender = true; });
+	$effect(() => {
+		if (showLogsPodMenu) showLogsPodMenuRender = true;
+	});
 
 	let terminalTabs = $state<TerminalTabInfo[]>([]);
 	let terminalCounter = 0;
@@ -765,7 +877,8 @@
 	function closeTerminalTab(id: string) {
 		terminalTabs = terminalTabs.filter((t) => t.id !== id);
 		if (activeConsoleTab === id) {
-			activeConsoleTab = terminalTabs.length > 0 ? terminalTabs[terminalTabs.length - 1].id : 'logs';
+			activeConsoleTab =
+				terminalTabs.length > 0 ? terminalTabs[terminalTabs.length - 1].id : 'logs';
 		}
 	}
 
@@ -790,20 +903,20 @@
 	let isDragging = $state(false);
 	let dragStartX = $state(0);
 	let dragStartValue = $state(0);
-	
+
 	$effect(() => {
 		if (deployment?.replicas !== undefined && deployment.replicas !== null && !isDragging) {
 			scaleReplicas = deployment.replicas;
 		}
 	});
-	
+
 	function getValueFromPosition(clientX: number): number {
 		if (!sliderRef) return scaleReplicas;
 		const rect = sliderRef.getBoundingClientRect();
 		const percentage = Math.max(0, Math.min(1, (clientX - rect.left) / rect.width));
 		return Math.round(percentage * 20);
 	}
-	
+
 	function handlePointerDown(event: PointerEvent) {
 		if (!sliderRef) return;
 		isDragging = true;
@@ -812,30 +925,30 @@
 		sliderRef.setPointerCapture(event.pointerId);
 		scaleReplicas = getValueFromPosition(event.clientX);
 	}
-	
+
 	function handlePointerMove(event: PointerEvent) {
 		if (!isDragging || !sliderRef) return;
 		scaleReplicas = getValueFromPosition(event.clientX);
 	}
-	
+
 	function handlePointerUp(event: PointerEvent) {
 		if (!sliderRef) return;
 		isDragging = false;
 		sliderRef.releasePointerCapture(event.pointerId);
 	}
-	
+
 	function handlePointerCancel(event: PointerEvent) {
 		if (!sliderRef) return;
 		isDragging = false;
 		sliderRef.releasePointerCapture(event.pointerId);
 		scaleReplicas = dragStartValue;
 	}
-	
+
 	function handleTrackClick(event: MouseEvent) {
 		if (!sliderRef || isDragging) return;
 		scaleReplicas = getValueFromPosition(event.clientX);
 	}
-	
+
 	const sliderPercentage = $derived((scaleReplicas / 20) * 100);
 
 	let envVars = $state<Array<{ key: string; value: string }>>([{ key: '', value: '' }]);
@@ -851,26 +964,45 @@
 			revealedIndices.add(index);
 		}
 	}
-	let volumes = $state<Array<{ name: string; type: 'pvc' | 'hostPath' | 'emptyDir'; mountPath: string; pvcName?: string; storageSize?: string; hostPath?: string; readOnly: boolean }>>([]);
+	let volumes = $state<
+		Array<{
+			name: string;
+			type: 'pvc' | 'hostPath' | 'emptyDir';
+			mountPath: string;
+			pvcName?: string;
+			storageSize?: string;
+			hostPath?: string;
+			readOnly: boolean;
+		}>
+	>([]);
 	let isEditingEnv = $state(false);
 	const services = new ServicesController({
 		deploymentId: () => deploymentId,
 		getServices: () => deployment?.services ?? [],
-		setDeployment: (d) => { deployment = d as Deployment; },
+		setDeployment: (d) => {
+			deployment = d as Deployment;
+		},
 		refetch: fetchDeployment
 	});
 
 	// Build modal state
 	let showBuildModal = $state(false);
 	let showBuildModalRender = $state(false);
-	$effect(() => { if (showBuildModal) showBuildModalRender = true; });
+	$effect(() => {
+		if (showBuildModal) showBuildModalRender = true;
+	});
 	let expandedBuildLogId = $state<string | null>(null);
 	let buildLogCache = $state<Record<string, string>>({});
 	let buildLogLoading = $state<string | null>(null);
 	let consoleExpanded = $state(false);
 	let consoleAnimating = $state(false);
 	let consoleRef = $state<HTMLDivElement | null>(null);
-	let consoleInlineRect = $state<{ top: number; left: number; width: number; height: number } | null>(null);
+	let consoleInlineRect = $state<{
+		top: number;
+		left: number;
+		width: number;
+		height: number;
+	} | null>(null);
 
 	function toggleConsoleExpand() {
 		if (consoleAnimating) return;
@@ -886,7 +1018,9 @@
 			requestAnimationFrame(() => {
 				consoleExpanded = true;
 				// Clear animating after transition ends
-				setTimeout(() => { consoleAnimating = false; }, 300);
+				setTimeout(() => {
+					consoleAnimating = false;
+				}, 300);
 			});
 		} else {
 			// Collapsing: animate back to inline rect, then remove fixed
@@ -900,7 +1034,9 @@
 	}
 	let showBuildCard = $state(false);
 	let showBuildCardRender = $state(false);
-	$effect(() => { if (showBuildCard && !showBuildModal) showBuildCardRender = true; });
+	$effect(() => {
+		if (showBuildCard && !showBuildModal) showBuildCardRender = true;
+	});
 	let buildStartTime = $state<number>(0);
 	let buildElapsed = $state(0);
 	let accumulatedBuildLogs = $state<string | null>(null);
@@ -908,7 +1044,9 @@
 	let buildModalStatus = $state<string>('pending');
 	let buildModalStep = $state<string | null>(null);
 	let buildModalError = $state<string | null>(null);
-	let buildModalWarnings = $state<Array<{ podName: string; message: string; timestamp: string }>>([]);
+	let buildModalWarnings = $state<Array<{ podName: string; message: string; timestamp: string }>>(
+		[]
+	);
 	let buildModalTimestamps = $state<Record<string, number> | null>(null);
 	let cancelingBuild = $state(false);
 
@@ -1010,8 +1148,8 @@
 			stopBuildPolling();
 			showBuildModal = false;
 			showBuildCard = false;
-			
-			await new Promise(resolve => setTimeout(resolve, 1000));
+
+			await new Promise((resolve) => setTimeout(resolve, 1000));
 			await fetchDeployment();
 		} catch (e) {
 			toasts.add({
@@ -1034,7 +1172,9 @@
 		return ((idx + 0.5) / steps.length) * 100;
 	});
 
-	const canCancelBuild = $derived(buildModalStatus === 'building' || buildModalStatus === 'pending');
+	const canCancelBuild = $derived(
+		buildModalStatus === 'building' || buildModalStatus === 'pending'
+	);
 
 	let { data } = $props<{ data: PageData }>();
 	const deploymentId = $derived(data.deploymentId);
@@ -1050,7 +1190,11 @@
 
 	// ── TanStack Query: deployment data ──
 	const TRANSIENT_DEPLOYMENT_STATUSES = new Set([
-		'scaling', 'restarting', 'pending', 'building', 'unhealthy',
+		'scaling',
+		'restarting',
+		'pending',
+		'building',
+		'unhealthy'
 	]);
 	const deploymentQuery = createQuery(() => ({
 		...deploymentQueryOptions(deploymentId),
@@ -1068,7 +1212,7 @@
 			if (activePodWarnings.length > 0) return 15000;
 			return false;
 		})(),
-		refetchIntervalInBackground: false,
+		refetchIntervalInBackground: false
 	}));
 
 	/** Trigger a refetch of deployment data via TanStack Query. All call sites
@@ -1100,134 +1244,135 @@
 	function applyDeploymentData(data: any) {
 		const wasUnloaded = !deployment;
 
-			// If a build is in progress — either transitioning during the session or
-			// already running when the page loaded — surface it immediately. Show the
-			// floating card on first load so we don't blast the modal over the page
-			// the user just navigated to; show the modal when a build kicks off mid-session.
-			if (data.buildStatus === 'building' && data.githubRepo && !showBuildModal && !showBuildCard) {
-				if (wasUnloaded) {
-					showBuildCard = true;
-				} else {
-					showBuildModal = true;
-				}
-				stopBuildPolling();
-				startBuildPolling();
+		// If a build is in progress — either transitioning during the session or
+		// already running when the page loaded — surface it immediately. Show the
+		// floating card on first load so we don't blast the modal over the page
+		// the user just navigated to; show the modal when a build kicks off mid-session.
+		if (data.buildStatus === 'building' && data.githubRepo && !showBuildModal && !showBuildCard) {
+			if (wasUnloaded) {
+				showBuildCard = true;
+			} else {
+				showBuildModal = true;
+			}
+			stopBuildPolling();
+			startBuildPolling();
+		}
+
+		deployment = data;
+		if (wasUnloaded) loadDismissedNotifications();
+		if (showBuildModal || showBuildCard) syncBuildModalFromDeployment();
+
+		tailscale.syncFromDeployment(data);
+
+		// Skip overwriting form state while a build is in progress so the user can
+		// keep editing settings. Form state will refresh when the build finishes.
+		const buildActive = showBuildModal || showBuildCard;
+
+		if (!buildActive) {
+			if (data.replicas !== undefined && data.replicas !== null) {
+				scaleReplicas = data.replicas;
+			} else {
+				scaleReplicas = 1;
+			}
+			if (!services.showForm) {
+				services.resetNewForm();
 			}
 
-			deployment = data;
-			if (wasUnloaded) loadDismissedNotifications();
-			if (showBuildModal || showBuildCard) syncBuildModalFromDeployment();
-
-			tailscale.syncFromDeployment(data);
-
-			// Skip overwriting form state while a build is in progress so the user can
-			// keep editing settings. Form state will refresh when the build finishes.
-			const buildActive = showBuildModal || showBuildCard;
-
-			if (!buildActive) {
-				if (data.replicas !== undefined && data.replicas !== null) {
-					scaleReplicas = data.replicas;
+			if (!isEditingEnv) {
+				if (data.envVars && Array.isArray(data.envVars) && data.envVars.length > 0) {
+					envVars = [
+						...data.envVars.map((ev: { key: string; value: string }) => ({
+							key: ev.key || '',
+							value: ev.value || ''
+						})),
+						{ key: '', value: '' }
+					];
 				} else {
-					scaleReplicas = 1;
+					envVars = [{ key: '', value: '' }];
 				}
-				if (!services.showForm) {
-					services.resetNewForm();
-				}
-
-				if (!isEditingEnv) {
-					if (data.envVars && Array.isArray(data.envVars) && data.envVars.length > 0) {
-						envVars = [
-							...data.envVars.map((ev: { key: string; value: string }) => ({
-								key: ev.key || '',
-								value: ev.value || ''
-							})),
-							{ key: '', value: '' }
-						];
-					} else {
-						envVars = [{ key: '', value: '' }];
-					}
-				}
-
-				if (data.volumes && Array.isArray(data.volumes) && data.volumes.length > 0) {
-					volumes = data.volumes.map((vol: Volume) => ({
-						name: vol.name || '',
-						type: vol.type || 'pvc',
-						mountPath: vol.mountPath || '',
-						pvcName: vol.pvcName || '',
-						storageSize: vol.storageSize || '1Gi',
-						hostPath: vol.hostPath || '',
-						readOnly: vol.readOnly || false
-					}));
-				} else {
-					volumes = [];
-				}
-
-				if (data.buildFromRoot !== undefined) {
-					buildFromRoot = data.buildFromRoot;
-				}
-				buildWithDepot = data.buildWithDepot ?? false;
-				persistentBuildCache = data.persistentBuildCache ?? false;
-
-				// Initialize health check state from deployment data
-				if (data.healthCheckEnabled !== undefined && !isEditingHealthCheck) {
-					healthCheckEnabled = data.healthCheckEnabled;
-					healthCheckType = data.healthCheckType || 'http';
-					healthCheckPath = data.healthCheckPath || '/';
-					healthCheckPort = data.healthCheckPort || 80;
-					healthCheckCommand = data.healthCheckCommand || '';
-					livenessEnabled = data.livenessEnabled ?? true;
-					readinessEnabled = data.readinessEnabled ?? true;
-					startupEnabled = data.startupEnabled ?? false;
-					healthCheckInterval = data.healthCheckInterval ?? 30;
-					healthCheckTimeout = data.healthCheckTimeout ?? 5;
-					healthCheckRetries = data.healthCheckRetries ?? 3;
-					startupFailureThreshold = data.startupFailureThreshold ?? 30;
-				}
-
-				// Sync resource state (unless user has unsaved edits).
-				if (!resourcesDirty) {
-					resourceCpuMilli = data.cpuRequestMilli ?? null;
-					resourceMemoryBytes = data.memoryRequestBytes != null ? Number(data.memoryRequestBytes) : null;
-				}
-
-				// Seed image input from the deployment's current image, unless the
-				// user already has unsaved edits in flight.
-				if (!savingImage && imageInput.trim() === '') {
-					imageInput = data.image ?? '';
-				}
-
-				// Seed deploy strategy from the persisted value.
-				if (!savingStrategy) {
-					strategyValue = (data.deployStrategy as 'rollingUpdate' | 'recreate') ?? 'rollingUpdate';
-				}
-
-				// Org quota defaults are fetched lazily when the resources tab is opened.
 			}
 
-			if (data.pods?.length) {
-				if (!manualPodSelection) {
-					const newest = getNewestPod(data.pods);
-					if (newest && newest.name !== selectedPod) {
-						selectedPod = newest.name;
-						selectedContainer = newest.containers?.[0]?.name || '';
-					}
-				} else if (!selectedPod) {
-					// First load, no manual selection yet
-					const newest = getNewestPod(data.pods);
-					if (newest) {
-						selectedPod = newest.name;
-						selectedContainer = newest.containers?.[0]?.name || '';
-					}
-				} else if (!data.pods.find((p: Pod) => p.name === selectedPod)) {
-					// Selected pod was deleted, fall back to newest
-					manualPodSelection = false;
-					const newest = getNewestPod(data.pods);
-					if (newest) {
-						selectedPod = newest.name;
-						selectedContainer = newest.containers?.[0]?.name || '';
-					}
+			if (data.volumes && Array.isArray(data.volumes) && data.volumes.length > 0) {
+				volumes = data.volumes.map((vol: Volume) => ({
+					name: vol.name || '',
+					type: vol.type || 'pvc',
+					mountPath: vol.mountPath || '',
+					pvcName: vol.pvcName || '',
+					storageSize: vol.storageSize || '1Gi',
+					hostPath: vol.hostPath || '',
+					readOnly: vol.readOnly || false
+				}));
+			} else {
+				volumes = [];
+			}
+
+			if (data.buildFromRoot !== undefined) {
+				buildFromRoot = data.buildFromRoot;
+			}
+			buildWithDepot = data.buildWithDepot ?? false;
+			persistentBuildCache = data.persistentBuildCache ?? false;
+
+			// Initialize health check state from deployment data
+			if (data.healthCheckEnabled !== undefined && !isEditingHealthCheck) {
+				healthCheckEnabled = data.healthCheckEnabled;
+				healthCheckType = data.healthCheckType || 'http';
+				healthCheckPath = data.healthCheckPath || '/';
+				healthCheckPort = data.healthCheckPort || 80;
+				healthCheckCommand = data.healthCheckCommand || '';
+				livenessEnabled = data.livenessEnabled ?? true;
+				readinessEnabled = data.readinessEnabled ?? true;
+				startupEnabled = data.startupEnabled ?? false;
+				healthCheckInterval = data.healthCheckInterval ?? 30;
+				healthCheckTimeout = data.healthCheckTimeout ?? 5;
+				healthCheckRetries = data.healthCheckRetries ?? 3;
+				startupFailureThreshold = data.startupFailureThreshold ?? 30;
+			}
+
+			// Sync resource state (unless user has unsaved edits).
+			if (!resourcesDirty) {
+				resourceCpuMilli = data.cpuRequestMilli ?? null;
+				resourceMemoryBytes =
+					data.memoryRequestBytes != null ? Number(data.memoryRequestBytes) : null;
+			}
+
+			// Seed image input from the deployment's current image, unless the
+			// user already has unsaved edits in flight.
+			if (!savingImage && imageInput.trim() === '') {
+				imageInput = data.image ?? '';
+			}
+
+			// Seed deploy strategy from the persisted value.
+			if (!savingStrategy) {
+				strategyValue = (data.deployStrategy as 'rollingUpdate' | 'recreate') ?? 'rollingUpdate';
+			}
+
+			// Org quota defaults are fetched lazily when the resources tab is opened.
+		}
+
+		if (data.pods?.length) {
+			if (!manualPodSelection) {
+				const newest = getNewestPod(data.pods);
+				if (newest && newest.name !== selectedPod) {
+					selectedPod = newest.name;
+					selectedContainer = newest.containers?.[0]?.name || '';
+				}
+			} else if (!selectedPod) {
+				// First load, no manual selection yet
+				const newest = getNewestPod(data.pods);
+				if (newest) {
+					selectedPod = newest.name;
+					selectedContainer = newest.containers?.[0]?.name || '';
+				}
+			} else if (!data.pods.find((p: Pod) => p.name === selectedPod)) {
+				// Selected pod was deleted, fall back to newest
+				manualPodSelection = false;
+				const newest = getNewestPod(data.pods);
+				if (newest) {
+					selectedPod = newest.name;
+					selectedContainer = newest.containers?.[0]?.name || '';
 				}
 			}
+		}
 		loading = false;
 	}
 
@@ -1323,9 +1468,10 @@
 			}
 			toasts.add({
 				title: 'Deployment restarting',
-				description: deployment?.deployStrategy === 'recreate'
-					? 'Recreate restart initiated'
-					: 'Rolling restart initiated',
+				description:
+					deployment?.deployStrategy === 'recreate'
+						? 'Recreate restart initiated'
+						: 'Rolling restart initiated',
 				color: 'success'
 			});
 			fetchDeployment();
@@ -1339,7 +1485,6 @@
 			restarting = false;
 		}
 	}
-
 
 	async function scaleDeployment() {
 		scaling = true;
@@ -1384,7 +1529,7 @@
 				description: 'Building new image from repository',
 				color: 'success'
 			});
-			
+
 			accumulatedBuildLogs = '';
 			buildModalStatus = 'building';
 			buildModalStep = null;
@@ -1392,7 +1537,7 @@
 			buildModalWarnings = [];
 			buildModalTimestamps = null;
 			buildStartTime = Date.now();
-			
+
 			showBuildModal = true;
 			showBuildCard = false;
 			startBuildPolling();
@@ -1568,7 +1713,11 @@
 					host: newDomainNormalizedHost,
 					tlsEnabled: newDomainTlsEnabled,
 					routes: [
-						{ path: newDomainNormalizedPath, serviceName: option.serviceName, servicePort: option.port }
+						{
+							path: newDomainNormalizedPath,
+							serviceName: option.serviceName,
+							servicePort: option.port
+						}
 					]
 				})
 			});
@@ -1597,7 +1746,9 @@
 
 	let logModalId = $state<string | null>(null);
 	let logModalRender = $state(false);
-	$effect(() => { if (logModalId) logModalRender = true; });
+	$effect(() => {
+		if (logModalId) logModalRender = true;
+	});
 	let logModalContent = $state<string | null>(null);
 	let logModalLoading = $state(false);
 
@@ -1607,7 +1758,9 @@
 		if (logModalContent) return;
 		logModalLoading = true;
 		try {
-			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/image-history/${historyId}/logs`);
+			const response = await apiFetch(
+				`/apiv1/deployments/${deploymentId}/image-history/${historyId}/logs`
+			);
 			if (!response.ok) throw new Error('Failed to fetch build logs');
 			const data = await response.json();
 			const logs = data.logs || 'No logs available.';
@@ -1673,7 +1826,10 @@
 	}
 
 	function addVolume() {
-		volumes = [...volumes, { name: '', type: 'pvc', mountPath: '', pvcName: '', storageSize: '1Gi', readOnly: false }];
+		volumes = [
+			...volumes,
+			{ name: '', type: 'pvc', mountPath: '', pvcName: '', storageSize: '1Gi', readOnly: false }
+		];
 	}
 
 	function removeVolume(index: number) {
@@ -1941,7 +2097,6 @@
 		}
 	}
 
-
 	function getBuildStatusColor(buildStatus: string) {
 		switch (buildStatus?.toLowerCase()) {
 			case 'succeeded':
@@ -1969,7 +2124,7 @@
 		if (!ts) return null;
 		const keys = Object.keys(ts);
 		if (keys.length === 0) return null;
-		const startTime = Math.min(...keys.map(k => ts[k]));
+		const startTime = Math.min(...keys.map((k) => ts[k]));
 		const endTime = ts['complete'];
 		if (!endTime) return null;
 		return formatBuildDuration(Math.max(0, Math.floor((endTime - startTime) / 1000)));
@@ -2048,7 +2203,9 @@
 			return;
 		}
 		const store = sseStatusFor(id);
-		return store.subscribe((v) => { sseStatusValue = v; });
+		return store.subscribe((v) => {
+			sseStatusValue = v;
+		});
 	});
 
 	// Reset page state when navigating to a different deployment.
@@ -2091,7 +2248,7 @@
 						queryClient.invalidateQueries({ queryKey: ['deployment', depId] });
 					}
 				},
-				{ invalidateDependencies: [] },
+				{ invalidateDependencies: [] }
 			);
 		});
 	});
@@ -2143,9 +2300,12 @@
 		// is hovered. Re-fire each icon's mouseenter when the user enters the parent
 		// button/link, so the animation plays on parent hover everywhere.
 		let lastHoverButton: HTMLElement | null = null;
-		const iconHoverSelector = 'button, a, .dep-action-btn, .console-tab-btn, .console-source-btn, .console-action-btn, .console-icon-btn, .console-compact-item, .notification-item, .dep-list-row';
+		const iconHoverSelector =
+			'button, a, .dep-action-btn, .console-tab-btn, .console-source-btn, .console-action-btn, .console-icon-btn, .console-compact-item, .notification-item, .dep-list-row';
 		const onIconHover = (e: PointerEvent) => {
-			const btn = (e.target as HTMLElement | null)?.closest?.(iconHoverSelector) as HTMLElement | null;
+			const btn = (e.target as HTMLElement | null)?.closest?.(
+				iconHoverSelector
+			) as HTMLElement | null;
 			if (btn === lastHoverButton) return;
 			lastHoverButton = btn;
 			if (!btn) return;
@@ -2282,9 +2442,12 @@
 	async function deleteWebhookToken(tokenId: string) {
 		deletingWebhookTokenId = tokenId;
 		try {
-			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/webhook-tokens/${tokenId}`, {
-				method: 'DELETE'
-			});
+			const response = await apiFetch(
+				`/apiv1/deployments/${deploymentId}/webhook-tokens/${tokenId}`,
+				{
+					method: 'DELETE'
+				}
+			);
 			if (response.ok) {
 				await fetchWebhookTokens();
 				toasts.add({ title: 'Webhook token deleted', color: 'success' });
@@ -2358,22 +2521,28 @@
 	}
 </script>
 
-
 <div class="deployment-page p-6 max-w-[100rem] mx-auto">
 	{#if deployment?.project?.slug}
 		<div class="mb-4">
-			<Breadcrumb crumbs={[
-				{ label: 'Home', href: `/${orgSlug}` },
-				{ label: deployment.project.name || deployment.project.slug, href: `/${orgSlug}/projects/${deployment.project.slug}` },
-				{ label: deployment.name }
-			]} />
+			<Breadcrumb
+				crumbs={[
+					{ label: 'Home', href: `/${orgSlug}` },
+					{
+						label: deployment.project.name || deployment.project.slug,
+						href: `/${orgSlug}/projects/${deployment.project.slug}`
+					},
+					{ label: deployment.name }
+				]}
+			/>
 		</div>
 	{:else}
 		<div class="mb-4">
-			<Breadcrumb crumbs={[
-				{ label: 'Home', href: `/${orgSlug}` },
-				{ label: deployment?.name || 'Deployment' }
-			]} />
+			<Breadcrumb
+				crumbs={[
+					{ label: 'Home', href: `/${orgSlug}` },
+					{ label: deployment?.name || 'Deployment' }
+				]}
+			/>
 		</div>
 	{/if}
 
@@ -2389,12 +2558,21 @@
 					<div class="flex-1">
 						<div class="flex items-center gap-3">
 							<div class="h-8 w-48 rounded" style="background-color: var(--surface-border);"></div>
-							<div class="h-6 w-16 rounded-full" style="background-color: var(--surface-border);"></div>
+							<div
+								class="h-6 w-16 rounded-full"
+								style="background-color: var(--surface-border);"
+							></div>
 						</div>
 						<div class="mt-3 flex flex-wrap items-center gap-3">
-							<div class="h-5 w-24 rounded-full" style="background-color: var(--surface-border);"></div>
+							<div
+								class="h-5 w-24 rounded-full"
+								style="background-color: var(--surface-border);"
+							></div>
 							<div class="h-4 w-40 rounded" style="background-color: var(--surface-border);"></div>
-							<div class="h-5 w-16 rounded-full" style="background-color: var(--surface-border);"></div>
+							<div
+								class="h-5 w-16 rounded-full"
+								style="background-color: var(--surface-border);"
+							></div>
 						</div>
 					</div>
 					<div class="flex gap-2">
@@ -2406,25 +2584,35 @@
 			<section class="card rounded-3xl p-2 shadow-sm">
 				<div class="flex gap-1 overflow-x-auto p-1">
 					{#each Array(6) as _}
-						<div class="h-10 w-28 shrink-0 rounded-xl" style="background-color: var(--surface-border);"></div>
+						<div
+							class="h-10 w-28 shrink-0 rounded-xl"
+							style="background-color: var(--surface-border);"
+						></div>
 					{/each}
 				</div>
 			</section>
 		</div>
 	{:else if deployment}
 		{@const _activeBuild = deployment.imageHistory?.find((h) => h.isActive)}
-		{@const _isBuilding = deployment.buildStatus === 'building' || deployment.buildStatus === 'queued' || deployment.buildStatus === 'pending'}
+		{@const _isBuilding =
+			deployment.buildStatus === 'building' ||
+			deployment.buildStatus === 'queued' ||
+			deployment.buildStatus === 'pending'}
 		{@const _buildFailed = deployment.buildStatus === 'failed'}
 		{@const _activeFallbackMsg = _activeBuild?.commitSha
-			? deployment.imageHistory?.find((h) => h.commitMessage && h.commitSha === _activeBuild.commitSha)?.commitMessage
+			? deployment.imageHistory?.find(
+					(h) => h.commitMessage && h.commitSha === _activeBuild.commitSha
+				)?.commitMessage
 			: undefined}
 		{@const _commitLead = deployment.githubRepo
-			? (_activeBuild
-				? (_activeBuild.commitMessage || _activeFallbackMsg || null)
-				: (_isBuilding
+			? _activeBuild
+				? _activeBuild.commitMessage || _activeFallbackMsg || null
+				: _isBuilding
 					? `Building from ${deployment.githubBranch || 'main'}…`
-					: (_buildFailed ? 'Last build failed' : null)))
-			: (deployment.image || null)}
+					: _buildFailed
+						? 'Last build failed'
+						: null
+			: deployment.image || null}
 		{@const _commitLeadMono = !deployment.githubRepo && !!deployment.image}
 		<div class="space-y-5">
 			<!-- Header -->
@@ -2498,7 +2686,9 @@
 				{sseDisconnected}
 				onDismiss={dismissNotification}
 				onViewLogs={handleViewBuildLogs}
-				onGoToResources={() => { tabs.value = 'resources'; }}
+				onGoToResources={() => {
+					tabs.value = 'resources';
+				}}
 			/>
 
 			<!-- Tab panels -->
@@ -2540,23 +2730,21 @@
 							onOpenShell={openShell}
 							onCloseTerminalTab={closeTerminalTab}
 							onSelectLogsPod={selectLogsPod}
-							onLogsScroll={onLogsScroll}
+							{onLogsScroll}
 							onPointerDown={handlePointerDown}
 							onPointerMove={handlePointerMove}
 							onPointerUp={handlePointerUp}
 							onPointerCancel={handlePointerCancel}
 							onTrackClick={handleTrackClick}
-							onSetTabMetrics={() => { tabs.value = 'metrics'; }}
+							onSetTabMetrics={() => {
+								tabs.value = 'metrics';
+							}}
 							onKeydownSlider={handleSliderKeydown}
 							{getStatusColor}
 							{podLabel}
 						/>
 					{:else if tab.id === 'environment'}
-						<EnvironmentTab
-							bind:envVars
-							{savingEnv}
-							onSave={saveEnv}
-						/>
+						<EnvironmentTab bind:envVars {savingEnv} onSave={saveEnv} />
 					{:else if tab.id === 'resources'}
 						<ResourcesTab
 							{deployment}
@@ -2577,12 +2765,7 @@
 							onSaveImage={saveImage}
 						/>
 					{:else if tab.id === 'volumes'}
-						<VolumesTab
-							bind:volumes
-							{savingVolumes}
-							{hasPvcVolume}
-							onSave={saveVolumes}
-						/>
+						<VolumesTab bind:volumes {savingVolumes} {hasPvcVolume} onSave={saveVolumes} />
 					{:else if tab.id === 'network'}
 						<NetworkTab
 							{deployment}
@@ -2652,7 +2835,10 @@
 							{webhookTokensLoading}
 							{creatingWebhookToken}
 							{deletingWebhookTokenId}
-							onCreateToken={(label) => { newWebhookLabel = label; createWebhookToken(); }}
+							onCreateToken={(label) => {
+								newWebhookLabel = label;
+								createWebhookToken();
+							}}
 							onDeleteToken={deleteWebhookToken}
 						/>
 					{:else if tab.id === 'settings'}
@@ -2728,8 +2914,8 @@
 {#if deployment}
 	<ConfirmModal
 		bind:open={showDeleteModal}
-		title='Delete "{deployment.name}"?'
-		description='This will permanently <strong>delete this deployment</strong> and all its associated services and ingresses. This cannot be undone.'
+		title={`Delete "${deployment.name}"?`}
+		description="This will permanently <strong>delete this deployment</strong> and all its associated services and ingresses. This cannot be undone."
 		confirmLabel="Delete Deployment"
 		onconfirm={deleteDeployment}
 		oncancel={() => {}}
@@ -2737,11 +2923,35 @@
 {/if}
 
 {#if logModalRender}
-	<div class="log-modal-backdrop" onclick={closeLogModal} {@attach motionBackdrop(() => !logModalId, () => {})}>
-		<div class="log-modal" onclick={(e) => e.stopPropagation()} {@attach motionPopover({ closing: () => !logModalId, onClosed: () => { logModalRender = false; }, from: { y: 12, scale: 0.96, opacity: 0 }, stiffness: 480, damping: 30, mass: 0.9 })}>
+	<div
+		class="log-modal-backdrop"
+		onclick={closeLogModal}
+		{@attach motionBackdrop(
+			() => !logModalId,
+			() => {}
+		)}
+	>
+		<div
+			class="log-modal"
+			onclick={(e) => e.stopPropagation()}
+			{@attach motionPopover({
+				closing: () => !logModalId,
+				onClosed: () => {
+					logModalRender = false;
+				},
+				from: { y: 12, scale: 0.96, opacity: 0 },
+				stiffness: 480,
+				damping: 30,
+				mass: 0.9
+			})}
+		>
 			<div class="log-modal-header">
 				<div class="log-modal-header-left">
-					<Terminal size={16} class="h-4 w-4" style="color: var(--sidebar-text, #e0e0e0); opacity: 0.5;" />
+					<Terminal
+						size={16}
+						class="h-4 w-4"
+						style="color: var(--sidebar-text, #e0e0e0); opacity: 0.5;"
+					/>
 					<p class="log-modal-title">Build Logs</p>
 				</div>
 				<button class="log-modal-close" onclick={closeLogModal}>
@@ -2760,4 +2970,3 @@
 		</div>
 	</div>
 {/if}
-

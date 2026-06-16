@@ -93,7 +93,7 @@
 		maxS: 81.01,
 		s: () => Math.min(scaleConvert(value, [0, 60], [0, dark.maxS]), dark.maxS),
 		minL: 65.1,
-		l: () => clamp(dark.minL, scaleConvert(value, [0, 80], [100, dark.minL]), 100),
+		l: () => clamp(dark.minL, scaleConvert(value, [0, 80], [100, dark.minL]), 100)
 	};
 
 	const darkClr = $derived(`hsl(${dark.h}, ${dark.s()}%, ${dark.l()}%)`);
@@ -103,13 +103,13 @@
 		maxS: 81.01,
 		s: () => Math.min(scaleConvert(value, [0, 60], [0, light.maxS]), light.maxS),
 		maxL: 65.1,
-		l: () => clamp(40, scaleConvert(value, [0, 80], [0, light.maxL]), light.maxL),
+		l: () => clamp(40, scaleConvert(value, [0, 80], [0, light.maxL]), light.maxL)
 	};
 
 	const lightClr = $derived(`hsl(${light.h}, ${light.s()}%, ${light.l()}%)`);
 
-	const clrClasses = "text-[var(--light)] dark:text-[var(--dark)]";
-	const bgClasses = "bg-[var(--light)] dark:bg-[var(--dark)]";
+	const clrClasses = 'text-[var(--light)] dark:text-[var(--dark)]';
+	const bgClasses = 'bg-[var(--light)] dark:bg-[var(--dark)]';
 	const clrStyle = $derived(`--light: ${lightClr}; --dark: ${darkClr};`);
 
 	let name = $state('');
@@ -172,7 +172,7 @@
 		showingProgress = true;
 		formError = null;
 
-		const fakeDelay = new Promise(resolve => setTimeout(resolve, 3000));
+		const fakeDelay = new Promise((resolve) => setTimeout(resolve, 3000));
 
 		try {
 			const response = await apiFetch('/apiv1/projects', {
@@ -227,8 +227,8 @@
 			onclick={() => window.history.back()}
 			class="mb-6 inline-flex items-center gap-2 text-sm cursor-pointer"
 			style="color: var(--surface-muted);"
-			onmouseenter={(e) => e.currentTarget.style.color = 'var(--center-channel-color)'}
-			onmouseleave={(e) => e.currentTarget.style.color = 'var(--surface-muted)'}
+			onmouseenter={(e) => (e.currentTarget.style.color = 'var(--center-channel-color)')}
+			onmouseleave={(e) => (e.currentTarget.style.color = 'var(--surface-muted)')}
 		>
 			<ArrowLeft class="h-4 w-4" />
 			Back to workspace
@@ -240,7 +240,10 @@
 
 		{#if loading}
 			<div class="mx-auto max-w-2xl space-y-6">
-				<div class="rounded-3xl border p-6 shadow-sm" style="background-color: var(--surface-bg); border-color: var(--surface-border);">
+				<div
+					class="rounded-3xl border p-6 shadow-sm"
+					style="background-color: var(--surface-bg); border-color: var(--surface-border);"
+				>
 					<div class="skeleton" style="width: 3rem; height: 0.75rem; margin-bottom: 0.5rem;"></div>
 					<div class="skeleton" style="width: 10rem; height: 1.5rem; margin-bottom: 0.5rem;"></div>
 					<div class="skeleton" style="width: 14rem; height: 0.875rem;"></div>
@@ -250,8 +253,14 @@
 						<div style="display: flex; flex-direction: column; gap: 1.5rem;">
 							{#each [1, 2, 3] as _}
 								<div>
-									<div class="skeleton" style="width: 6rem; height: 0.875rem; margin-bottom: 0.5rem;"></div>
-									<div class="skeleton" style="width: 100%; height: 2.5rem; border-radius: 0.75rem;"></div>
+									<div
+										class="skeleton"
+										style="width: 6rem; height: 0.875rem; margin-bottom: 0.5rem;"
+									></div>
+									<div
+										class="skeleton"
+										style="width: 100%; height: 2.5rem; border-radius: 0.75rem;"
+									></div>
 								</div>
 							{/each}
 						</div>
@@ -266,7 +275,9 @@
 					style="background-color: var(--surface-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
 				>
 					<p class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">Create</p>
-					<h1 class="mt-1 text-2xl font-bold" style="color: var(--center-channel-color);">New Project</h1>
+					<h1 class="mt-1 text-2xl font-bold" style="color: var(--center-channel-color);">
+						New Project
+					</h1>
 					<p class="mt-2 text-sm" style="color: var(--surface-muted);">
 						Create a new project in {workspace.name}
 					</p>
@@ -276,106 +287,120 @@
 					<div class="alert alert-error">{formError}</div>
 				{/if}
 
-					<div class="card">
-						<div class="card-body">
-							<div class="relative">
-								<div class={['space-y-6', showingProgress ? 'opacity-0' : '']}>
-						<!-- Project Name -->
-						<div>
-							<label for="name" class="mb-2 block text-sm font-medium" style="color: var(--center-channel-color);">
-								Project name
-							</label>
-							<input
-								id="name"
-								type="text"
-								bind:value={name}
-								placeholder="My Project"
-								class="input rounded-xl"
-								style="background-color: var(--control-bg); color: var(--center-channel-color); border-color: var(--surface-border);"
-							/>
-						</div>
+				<div class="card">
+					<div class="card-body">
+						<div class="relative">
+							<div class={['space-y-6', showingProgress ? 'opacity-0' : '']}>
+								<!-- Project Name -->
+								<div>
+									<label
+										for="name"
+										class="mb-2 block text-sm font-medium"
+										style="color: var(--center-channel-color);"
+									>
+										Project name
+									</label>
+									<input
+										id="name"
+										type="text"
+										bind:value={name}
+										placeholder="My Project"
+										class="input rounded-xl"
+										style="background-color: var(--control-bg); color: var(--center-channel-color); border-color: var(--surface-border);"
+									/>
+								</div>
 
-						<!-- Project Slug -->
-						<div>
-							<label for="slug" class="mb-2 block text-sm font-medium" style="color: var(--center-channel-color);">
-								Project slug
-							</label>
-							<input
-								id="slug"
-								type="text"
-								bind:value={slug}
-								oninput={handleSlugInput}
-								placeholder="my-project"
-								class="input rounded-xl font-mono"
-								style="background-color: var(--control-bg); color: var(--center-channel-color); border-color: var(--surface-border);"
-							/>
-							<p class="mt-1 text-xs" style="color: var(--surface-muted);">
-								Used in URLs and Kubernetes namespace generation
-							</p>
-						</div>
+								<!-- Project Slug -->
+								<div>
+									<label
+										for="slug"
+										class="mb-2 block text-sm font-medium"
+										style="color: var(--center-channel-color);"
+									>
+										Project slug
+									</label>
+									<input
+										id="slug"
+										type="text"
+										bind:value={slug}
+										oninput={handleSlugInput}
+										placeholder="my-project"
+										class="input rounded-xl font-mono"
+										style="background-color: var(--control-bg); color: var(--center-channel-color); border-color: var(--surface-border);"
+									/>
+									<p class="mt-1 text-xs" style="color: var(--surface-muted);">
+										Used in URLs and Kubernetes namespace generation
+									</p>
+								</div>
 
-						<!-- Repository URL -->
-						<div>
-							<label for="repositoryUrl" class="mb-2 block text-sm font-medium" style="color: var(--center-channel-color);">
-								Repository URL (optional)
-							</label>
-							<input
-								id="repositoryUrl"
-								type="text"
-								bind:value={repositoryUrl}
-								placeholder="https://github.com/org/repo"
-								class="input rounded-xl font-mono"
-								style="background-color: var(--control-bg); color: var(--center-channel-color); border-color: var(--surface-border);"
-							/>
-						</div>
+								<!-- Repository URL -->
+								<div>
+									<label
+										for="repositoryUrl"
+										class="mb-2 block text-sm font-medium"
+										style="color: var(--center-channel-color);"
+									>
+										Repository URL (optional)
+									</label>
+									<input
+										id="repositoryUrl"
+										type="text"
+										bind:value={repositoryUrl}
+										placeholder="https://github.com/org/repo"
+										class="input rounded-xl font-mono"
+										style="background-color: var(--control-bg); color: var(--center-channel-color); border-color: var(--surface-border);"
+									/>
+								</div>
 
-						<!-- Description -->
-						<div>
-							<label for="description" class="mb-2 block text-sm font-medium" style="color: var(--center-channel-color);">
-								Description (optional)
-							</label>
-							<textarea
-								id="description"
-								bind:value={description}
-								placeholder="A brief description of this project"
-								rows="3"
-								class="input rounded-xl"
-								style="background-color: var(--control-bg); color: var(--center-channel-color); border-color: var(--surface-border);"
-							></textarea>
-						</div>
+								<!-- Description -->
+								<div>
+									<label
+										for="description"
+										class="mb-2 block text-sm font-medium"
+										style="color: var(--center-channel-color);"
+									>
+										Description (optional)
+									</label>
+									<textarea
+										id="description"
+										bind:value={description}
+										placeholder="A brief description of this project"
+										rows="3"
+										class="input rounded-xl"
+										style="background-color: var(--control-bg); color: var(--center-channel-color); border-color: var(--surface-border);"
+									></textarea>
+								</div>
 
-						<!-- Namespace Preview -->
-						{#if slug && workspace.organization}
-							<div
-								class="rounded-2xl border p-4"
-								style="background-color: var(--control-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
-							>
-								<p class="text-sm font-medium" style="color: var(--center-channel-color);">Namespace preview</p>
-								<code class="mt-1 block text-sm font-mono" style="color: var(--link-color);">
-									{workspace.organization.slug}-{workspace.slug}-{slug}
-								</code>
-							</div>
-						{/if}
-
-						<!-- Actions -->
-						<div
-							class="flex items-center justify-end gap-3 pt-4 border-t"
-							style="border-color: var(--surface-border);"
-						>
-							<a href="/{orgSlug}/workspaces/{workspaceSlug}" class="btn btn-secondary">
-								Cancel
-							</a>
-							<button
-								onclick={submit}
-								disabled={submitting}
-								class="btn btn-primary"
-							>
-								{#if submitting}
-									<Loader2 class="h-4 w-4 animate-spin" />
+								<!-- Namespace Preview -->
+								{#if slug && workspace.organization}
+									<div
+										class="rounded-2xl border p-4"
+										style="background-color: var(--control-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
+									>
+										<p class="text-sm font-medium" style="color: var(--center-channel-color);">
+											Namespace preview
+										</p>
+										<code class="mt-1 block text-sm font-mono" style="color: var(--link-color);">
+											{workspace.organization.slug}-{workspace.slug}-{slug}
+										</code>
+									</div>
 								{/if}
-								Create project
-							</button>
-						</div>
+
+								<!-- Actions -->
+								<div
+									class="flex items-center justify-end gap-3 pt-4 border-t"
+									style="border-color: var(--surface-border);"
+								>
+									<a href="/{orgSlug}/workspaces/{workspaceSlug}" class="btn btn-secondary">
+										Cancel
+									</a>
+									<button onclick={submit} disabled={submitting} class="btn btn-primary">
+										{#if submitting}
+											<Loader2 class="h-4 w-4 animate-spin" />
+										{/if}
+										Create project
+									</button>
+								</div>
 							</div>
 
 							{#if showingProgress}
@@ -390,19 +415,19 @@
 										>
 											<NumberFlow {value} suffix="%" />
 										</span>
-				<div
-					{...progress.root}
-					class="relative w-[300px] overflow-hidden rounded-full"
-					style="background-color: var(--surface-border);"
-					style:height={`${scaleConvert(value, [0, 100], [8, 24])}px`}
-				>
-					<div
-						{...progress.progress}
-						class="h-full rounded-full"
-						style={`width: ${progressValue}%; transition: width 120ms linear; background-color: var(--link-color);`}
-					></div>
-				</div>
-			</div>
+										<div
+											{...progress.root}
+											class="relative w-[300px] overflow-hidden rounded-full"
+											style="background-color: var(--surface-border);"
+											style:height={`${scaleConvert(value, [0, 100], [8, 24])}px`}
+										>
+											<div
+												{...progress.progress}
+												class="h-full rounded-full"
+												style={`width: ${progressValue}%; transition: width 120ms linear; background-color: var(--link-color);`}
+											></div>
+										</div>
+									</div>
 								</div>
 							{/if}
 						</div>

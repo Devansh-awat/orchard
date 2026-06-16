@@ -61,14 +61,18 @@
 						{/if}{b.buildStep ?? 'Building'}</span
 					>
 				</div>
-				<span class="bld-time bld-time--live"
-					><BuildTimer updatedAt={b.updatedAt} /></span
-				>
+				<span class="bld-time bld-time--live"><BuildTimer updatedAt={b.updatedAt} /></span>
 			</a>
 		{/each}
 		{#each recentBuilds as b, i (b.id)}
 			{@const ok = b.deployment.buildStatus !== 'failed'}
-			{@const ic = buildIcon(b.deployment.image, b.deployment.ingresses, b.deployment.id, failedFav, b.deployment.faviconUrl)}
+			{@const ic = buildIcon(
+				b.deployment.image,
+				b.deployment.ingresses,
+				b.deployment.id,
+				failedFav,
+				b.deployment.faviconUrl
+			)}
 			<a
 				href="/{orgSlug}/deployments/{b.deployment.id}"
 				class="bld"

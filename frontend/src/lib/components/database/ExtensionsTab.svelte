@@ -11,10 +11,12 @@
 		busyExtension,
 		onFetchExtensions,
 		onInstallExtension,
-		onUninstallExtension,
+		onUninstallExtension
 	}: {
 		database: DatabaseDetail;
-		filteredExtensions: Array<ExtInfo & { description?: string; requiresPreload?: boolean; featured?: boolean }>;
+		filteredExtensions: Array<
+			ExtInfo & { description?: string; requiresPreload?: boolean; featured?: boolean }
+		>;
 		preloadedExts: string[];
 		extensionsLoading: boolean;
 		extensionSearch: string;
@@ -37,8 +39,15 @@
 					style="max-width: 20rem;"
 					bind:value={extensionSearch}
 				/>
-				<button class="btn btn-secondary btn-sm" onclick={onFetchExtensions} disabled={extensionsLoading} aria-label="Refresh">
-					{#if extensionsLoading}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw class="h-3.5 w-3.5" />{/if}
+				<button
+					class="btn btn-secondary btn-sm"
+					onclick={onFetchExtensions}
+					disabled={extensionsLoading}
+					aria-label="Refresh"
+				>
+					{#if extensionsLoading}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw
+							class="h-3.5 w-3.5"
+						/>{/if}
 				</button>
 			</div>
 		{/if}
@@ -46,7 +55,10 @@
 
 	{#if database.mode !== 'cnpg'}
 		<div class="db-empty-box">
-			<p class="text-sm" style="color: var(--surface-muted);">Extension management is only available for CNPG-backed databases. Recreate this database to enable it.</p>
+			<p class="text-sm" style="color: var(--surface-muted);">
+				Extension management is only available for CNPG-backed databases. Recreate this database to
+				enable it.
+			</p>
 		</div>
 	{:else if extensionsLoading && filteredExtensions.length === 0}
 		<div class="db-empty-box flex items-center gap-2">
@@ -65,9 +77,13 @@
 						<div class="flex items-center gap-2 flex-wrap">
 							<span class="db-list-name">{ext.name}</span>
 							{#if ext.installed}
-								<span class="db-status-pill db-status-pill-completed">installed{ext.version ? ` · ${ext.version}` : ''}</span>
+								<span class="db-status-pill db-status-pill-completed"
+									>installed{ext.version ? ` · ${ext.version}` : ''}</span
+								>
 							{:else}
-								<span class="db-status-pill db-status-pill-muted">available{ext.defaultVersion ? ` · ${ext.defaultVersion}` : ''}</span>
+								<span class="db-status-pill db-status-pill-muted"
+									>available{ext.defaultVersion ? ` · ${ext.defaultVersion}` : ''}</span
+								>
 							{/if}
 							{#if preloadedExts.includes(ext.name)}
 								<span class="db-status-pill db-status-pill-warn">preloaded</span>
@@ -92,7 +108,9 @@
 							onclick={() => onInstallExtension(ext.name, Boolean(ext.requiresPreload))}
 							disabled={busyExtension === ext.name}
 						>
-							{#if busyExtension === ext.name}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Plus class="h-3.5 w-3.5" />{/if}
+							{#if busyExtension === ext.name}<Loader2
+									class="h-3.5 w-3.5 animate-spin"
+								/>{:else}<Plus class="h-3.5 w-3.5" />{/if}
 							<span>Install</span>
 						</button>
 					{/if}

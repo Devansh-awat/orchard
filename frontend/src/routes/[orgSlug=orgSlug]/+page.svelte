@@ -304,9 +304,7 @@
 
 	const favouriteIds = new SvelteSet<string>();
 	$effect(() => {
-		const next = new Set(
-			$pinnedItems.filter((i) => i.type === 'deployment').map((i) => i.id)
-		);
+		const next = new Set($pinnedItems.filter((i) => i.type === 'deployment').map((i) => i.id));
 		for (const id of favouriteIds) if (!next.has(id)) favouriteIds.delete(id);
 		for (const id of next) if (!favouriteIds.has(id)) favouriteIds.add(id);
 	});
@@ -442,7 +440,7 @@
 			const r = await apiFetch(`/apiv1/organizations/${orgId}/members/join`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ role: 'owner' }),
+				body: JSON.stringify({ role: 'owner' })
 			});
 			if (r.ok) {
 				isSyntheticMembership = false;
@@ -498,20 +496,21 @@
 		<h1 class="title">Overview</h1>
 		<div style="display: flex; gap: 8px; align-items: center;">
 			{#if $isSuperAdmin && isSyntheticMembership}
-			<button
-				class="btn-secondary"
-				onclick={joinOrganization}
-				disabled={joiningOrg}
-				{@attach springHover({ lift: -1, stiffness: 480, damping: 26 })}
-			>{joiningOrg ? 'Joining...' : 'Join Organization'}</button>
+				<button
+					class="btn-secondary"
+					onclick={joinOrganization}
+					disabled={joiningOrg}
+					{@attach springHover({ lift: -1, stiffness: 480, damping: 26 })}
+					>{joiningOrg ? 'Joining...' : 'Join Organization'}</button
+				>
 			{/if}
 			{#if canCreateProjects}
-			<a
-				href="/{orgSlug}/projects/new"
-				class="btn-primary"
-				{@attach springHover({ lift: -1, stiffness: 480, damping: 26 })}
-				><Plus size={15} /> New Project</a
-			>
+				<a
+					href="/{orgSlug}/projects/new"
+					class="btn-primary"
+					{@attach springHover({ lift: -1, stiffness: 480, damping: 26 })}
+					><Plus size={15} /> New Project</a
+				>
 			{/if}
 		</div>
 	</header>
@@ -586,7 +585,7 @@
 								{orgSlug}
 								expanded={expandedProjects.has(group.id)}
 								rendered={renderedProjectBodies.has(group.id)}
-								favouriteIds={favouriteIds}
+								{favouriteIds}
 								{failedFav}
 								{openMenuId}
 								{renderMenuId}

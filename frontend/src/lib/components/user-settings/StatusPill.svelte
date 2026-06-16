@@ -1,7 +1,7 @@
 <script lang="ts">
 	let {
 		active = false,
-		label,
+		label
 	}: {
 		active?: boolean;
 		label: string;

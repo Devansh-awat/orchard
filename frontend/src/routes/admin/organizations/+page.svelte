@@ -10,7 +10,7 @@
 		X,
 		ChevronLeft,
 		ChevronRight,
-		Gauge,
+		Gauge
 	} from 'lucide-svelte';
 	import { formatCpuMilli, formatMemoryBytes } from '$lib/quantity';
 
@@ -69,7 +69,12 @@
 	let quotaOrg = $state<OrgItem | null>(null);
 	let quotaLoading = $state(false);
 	let quotaSaving = $state(false);
-	let quotaUsage = $state<{ cpuMilli: number; memoryBytes: number; pods: number; services: number } | null>(null);
+	let quotaUsage = $state<{
+		cpuMilli: number;
+		memoryBytes: number;
+		pods: number;
+		services: number;
+	} | null>(null);
 	let qCpu = $state<string>('');
 	let qMemMi = $state<string>('');
 	let qPods = $state<string>('');
@@ -98,14 +103,22 @@
 			const data = await res.json();
 			quotaUsage = data.usage;
 			qCpu = data.org.cpuLimitMilli ? String(data.org.cpuLimitMilli) : '';
-			qMemMi = data.org.memoryLimitBytes ? String(Math.round(data.org.memoryLimitBytes / (1024 * 1024))) : '';
+			qMemMi = data.org.memoryLimitBytes
+				? String(Math.round(data.org.memoryLimitBytes / (1024 * 1024)))
+				: '';
 			qPods = data.org.maxPods ? String(data.org.maxPods) : '';
 			qServices = data.org.maxServices ? String(data.org.maxServices) : '';
 			qDefaultCpu = data.org.defaultPodCpuMilli ? String(data.org.defaultPodCpuMilli) : '';
-			qDefaultMemMi = data.org.defaultPodMemoryBytes ? String(Math.round(data.org.defaultPodMemoryBytes / (1024 * 1024))) : '';
+			qDefaultMemMi = data.org.defaultPodMemoryBytes
+				? String(Math.round(data.org.defaultPodMemoryBytes / (1024 * 1024)))
+				: '';
 			qConnections = data.connections ?? [];
 		} catch (e) {
-			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed', color: 'error' });
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed',
+				color: 'error'
+			});
 			quotaOrg = null;
 		} finally {
 			quotaLoading = false;
@@ -138,7 +151,7 @@
 				const data = await res.json();
 				const connectedIds = new Set(qConnections.map((c) => c.id));
 				qConnectResults = (data.organizations as OrgItem[]).filter(
-					(o) => o.id !== quotaOrg?.id && !connectedIds.has(o.id),
+					(o) => o.id !== quotaOrg?.id && !connectedIds.has(o.id)
 				);
 			} catch {
 				qConnectResults = [];
@@ -153,11 +166,15 @@
 		const data = await res.json();
 		quotaUsage = data.usage;
 		qCpu = data.org.cpuLimitMilli ? String(data.org.cpuLimitMilli) : '';
-		qMemMi = data.org.memoryLimitBytes ? String(Math.round(data.org.memoryLimitBytes / (1024 * 1024))) : '';
+		qMemMi = data.org.memoryLimitBytes
+			? String(Math.round(data.org.memoryLimitBytes / (1024 * 1024)))
+			: '';
 		qPods = data.org.maxPods ? String(data.org.maxPods) : '';
 		qServices = data.org.maxServices ? String(data.org.maxServices) : '';
 		qDefaultCpu = data.org.defaultPodCpuMilli ? String(data.org.defaultPodCpuMilli) : '';
-		qDefaultMemMi = data.org.defaultPodMemoryBytes ? String(Math.round(data.org.defaultPodMemoryBytes / (1024 * 1024))) : '';
+		qDefaultMemMi = data.org.defaultPodMemoryBytes
+			? String(Math.round(data.org.defaultPodMemoryBytes / (1024 * 1024)))
+			: '';
 		qConnections = data.connections ?? [];
 	}
 
@@ -168,7 +185,7 @@
 			const res = await apiFetch(`/apiv1/admin/organizations/${quotaOrg.id}/quota/connect`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ otherOrgId: other.id }),
+				body: JSON.stringify({ otherOrgId: other.id })
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => ({}));
@@ -177,13 +194,17 @@
 			toasts.add({
 				title: 'Connected',
 				description: `${quotaOrg.name} and ${other.name} now share the same quota pool.`,
-				color: 'success',
+				color: 'success'
 			});
 			qConnectSearch = '';
 			qConnectResults = [];
 			await refreshQuota();
 		} catch (e) {
-			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed', color: 'error' });
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed',
+				color: 'error'
+			});
 		} finally {
 			qConnectBusy = false;
 		}
@@ -194,16 +215,24 @@
 		qConnectBusy = true;
 		try {
 			const res = await apiFetch(`/apiv1/admin/organizations/${quotaOrg.id}/quota/disconnect`, {
-				method: 'POST',
+				method: 'POST'
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => ({}));
 				throw new Error(data.message || 'Failed to disconnect');
 			}
-			toasts.add({ title: 'Disconnected', description: 'Quota pool is no longer shared.', color: 'success' });
+			toasts.add({
+				title: 'Disconnected',
+				description: 'Quota pool is no longer shared.',
+				color: 'success'
+			});
 			await refreshQuota();
 		} catch (e) {
-			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed', color: 'error' });
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed',
+				color: 'error'
+			});
 		} finally {
 			qConnectBusy = false;
 		}
@@ -221,18 +250,22 @@
 				maxPods: parseIntOrNull(qPods),
 				maxServices: parseIntOrNull(qServices),
 				defaultPodCpuMilli: parseIntOrNull(qDefaultCpu),
-				defaultPodMemoryBytes: defMemMi === null ? null : defMemMi * 1024 * 1024,
+				defaultPodMemoryBytes: defMemMi === null ? null : defMemMi * 1024 * 1024
 			};
 			const res = await apiFetch(`/apiv1/admin/organizations/${quotaOrg.id}/quota`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(body),
+				body: JSON.stringify(body)
 			});
 			if (!res.ok) throw new Error('Save failed');
 			toasts.add({ title: 'Saved', description: 'Quotas applied to cluster', color: 'success' });
 			closeQuota();
 		} catch (e) {
-			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed', color: 'error' });
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed',
+				color: 'error'
+			});
 		} finally {
 			quotaSaving = false;
 		}
@@ -254,7 +287,7 @@
 			toasts.add({
 				title: 'Error',
 				description: e instanceof Error ? e.message : 'Failed to fetch organizations',
-				color: 'error',
+				color: 'error'
 			});
 		} finally {
 			loading = false;
@@ -298,8 +331,8 @@
 					description: createDescription || undefined,
 					avatarUrl: createImageUrl || undefined,
 					plan: createPlan || undefined,
-					primaryOwnerEmail: createPrimaryOwnerEmail.trim() || undefined,
-				}),
+					primaryOwnerEmail: createPrimaryOwnerEmail.trim() || undefined
+				})
 			});
 			if (!response.ok) {
 				const data = await response.json();
@@ -312,7 +345,7 @@
 				description: inviteLink
 					? 'Share the invite link with the primary owner so they can join.'
 					: undefined,
-				color: 'success',
+				color: 'success'
 			});
 			if (inviteLink) {
 				await navigator.clipboard.writeText(inviteLink);
@@ -330,7 +363,7 @@
 			toasts.add({
 				title: 'Error',
 				description: e instanceof Error ? e.message : 'Failed to create organization',
-				color: 'error',
+				color: 'error'
 			});
 		} finally {
 			creating = false;
@@ -354,7 +387,7 @@
 			const response = await apiFetch(`/apiv1/admin/organizations/${editingOrg.id}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ name: editName, description: editDescription }),
+				body: JSON.stringify({ name: editName, description: editDescription })
 			});
 			if (!response.ok) {
 				const data = await response.json();
@@ -367,7 +400,7 @@
 			toasts.add({
 				title: 'Error',
 				description: e instanceof Error ? e.message : 'Failed to update organization',
-				color: 'error',
+				color: 'error'
 			});
 		} finally {
 			saving = false;
@@ -379,7 +412,7 @@
 		deleting = true;
 		try {
 			const response = await apiFetch(`/apiv1/admin/organizations/${deletingOrg.id}`, {
-				method: 'DELETE',
+				method: 'DELETE'
 			});
 			if (!response.ok) {
 				const data = await response.json();
@@ -392,7 +425,7 @@
 			toasts.add({
 				title: 'Error',
 				description: e instanceof Error ? e.message : 'Failed to delete organization',
-				color: 'error',
+				color: 'error'
 			});
 		} finally {
 			deleting = false;
@@ -438,9 +471,7 @@
 			<Loader2 class="h-6 w-6 animate-spin text-primary-600" />
 		</div>
 	{:else if organizations.length === 0}
-		<div class="p-8 text-center" style="color: var(--surface-muted);">
-			No organizations found
-		</div>
+		<div class="p-8 text-center" style="color: var(--surface-muted);">No organizations found</div>
 	{:else}
 		<div class="overflow-x-auto">
 			<table class="w-full text-sm">
@@ -621,7 +652,9 @@
 					</select>
 				</div>
 				<div>
-					<label for="create-primary-owner-email" class="block text-sm font-medium mb-1">Primary owner email (optional)</label>
+					<label for="create-primary-owner-email" class="block text-sm font-medium mb-1"
+						>Primary owner email (optional)</label
+					>
 					<input
 						id="create-primary-owner-email"
 						type="email"
@@ -630,7 +663,8 @@
 						class="input w-full"
 					/>
 					<p class="text-xs mt-1" style="color: var(--surface-muted);">
-						If they have an account, they become owner now. Otherwise they’re invited and become owner when they accept.
+						If they have an account, they become owner now. Otherwise they’re invited and become
+						owner when they accept.
 					</p>
 				</div>
 			</div>
@@ -743,7 +777,9 @@
 			{:else}
 				{#if quotaUsage}
 					<div class="rounded-xl border p-3 mb-4" style="border-color: var(--surface-border);">
-						<p class="text-xs font-medium mb-1" style="color: var(--surface-muted);">Current usage</p>
+						<p class="text-xs font-medium mb-1" style="color: var(--surface-muted);">
+							Current usage
+						</p>
 						<div class="grid grid-cols-2 gap-2 text-sm">
 							<div>CPU: <strong>{formatCpuMilli(quotaUsage.cpuMilli)}</strong></div>
 							<div>Memory: <strong>{formatMemoryBytes(quotaUsage.memoryBytes)}</strong></div>
@@ -754,7 +790,8 @@
 				{/if}
 
 				<p class="text-xs mb-3" style="color: var(--surface-muted);">
-					Click <strong>Unlimited</strong> or leave blank to remove a cap. Limits apply across all projects in this org. Kubernetes enforces them at pod-admission time.
+					Click <strong>Unlimited</strong> or leave blank to remove a cap. Limits apply across all projects
+					in this org. Kubernetes enforces them at pod-admission time.
 				</p>
 
 				<div class="grid grid-cols-2 gap-3">
@@ -762,28 +799,63 @@
 						CPU (millicores)
 						<div class="flex items-center gap-2 mt-1">
 							<input type="number" bind:value={qCpu} placeholder="unlimited" class="input flex-1" />
-							<button type="button" class="text-xs px-2 py-1 rounded border" style="border-color: var(--surface-border);" onclick={() => (qCpu = '')}>Unlimited</button>
+							<button
+								type="button"
+								class="text-xs px-2 py-1 rounded border"
+								style="border-color: var(--surface-border);"
+								onclick={() => (qCpu = '')}>Unlimited</button
+							>
 						</div>
 					</label>
 					<label class="text-xs">
 						Memory (MiB)
 						<div class="flex items-center gap-2 mt-1">
-							<input type="number" bind:value={qMemMi} placeholder="unlimited" class="input flex-1" />
-							<button type="button" class="text-xs px-2 py-1 rounded border" style="border-color: var(--surface-border);" onclick={() => (qMemMi = '')}>Unlimited</button>
+							<input
+								type="number"
+								bind:value={qMemMi}
+								placeholder="unlimited"
+								class="input flex-1"
+							/>
+							<button
+								type="button"
+								class="text-xs px-2 py-1 rounded border"
+								style="border-color: var(--surface-border);"
+								onclick={() => (qMemMi = '')}>Unlimited</button
+							>
 						</div>
 					</label>
 					<label class="text-xs">
 						Max pods
 						<div class="flex items-center gap-2 mt-1">
-							<input type="number" bind:value={qPods} placeholder="unlimited" class="input flex-1" />
-							<button type="button" class="text-xs px-2 py-1 rounded border" style="border-color: var(--surface-border);" onclick={() => (qPods = '')}>Unlimited</button>
+							<input
+								type="number"
+								bind:value={qPods}
+								placeholder="unlimited"
+								class="input flex-1"
+							/>
+							<button
+								type="button"
+								class="text-xs px-2 py-1 rounded border"
+								style="border-color: var(--surface-border);"
+								onclick={() => (qPods = '')}>Unlimited</button
+							>
 						</div>
 					</label>
 					<label class="text-xs">
 						Max services
 						<div class="flex items-center gap-2 mt-1">
-							<input type="number" bind:value={qServices} placeholder="unlimited" class="input flex-1" />
-							<button type="button" class="text-xs px-2 py-1 rounded border" style="border-color: var(--surface-border);" onclick={() => (qServices = '')}>Unlimited</button>
+							<input
+								type="number"
+								bind:value={qServices}
+								placeholder="unlimited"
+								class="input flex-1"
+							/>
+							<button
+								type="button"
+								class="text-xs px-2 py-1 rounded border"
+								style="border-color: var(--surface-border);"
+								onclick={() => (qServices = '')}>Unlimited</button
+							>
 						</div>
 					</label>
 				</div>
@@ -795,11 +867,21 @@
 				<div class="grid grid-cols-2 gap-3">
 					<label class="text-xs">
 						Default CPU / pod (millicores)
-						<input type="number" bind:value={qDefaultCpu} placeholder="100" class="input w-full mt-1" />
+						<input
+							type="number"
+							bind:value={qDefaultCpu}
+							placeholder="100"
+							class="input w-full mt-1"
+						/>
 					</label>
 					<label class="text-xs">
 						Default memory / pod (MiB)
-						<input type="number" bind:value={qDefaultMemMi} placeholder="128" class="input w-full mt-1" />
+						<input
+							type="number"
+							bind:value={qDefaultMemMi}
+							placeholder="128"
+							class="input w-full mt-1"
+						/>
 					</label>
 				</div>
 
@@ -819,7 +901,9 @@
 							>
 								<div>
 									<div class="font-medium">{conn.name}</div>
-									<div class="font-mono text-xs" style="color: var(--surface-muted);">{conn.slug}</div>
+									<div class="font-mono text-xs" style="color: var(--surface-muted);">
+										{conn.slug}
+									</div>
 								</div>
 								<button
 									type="button"
@@ -834,7 +918,9 @@
 						{/each}
 					</div>
 				{:else}
-					<p class="text-xs mb-2 italic" style="color: var(--surface-muted);">Not connected to any other org.</p>
+					<p class="text-xs mb-2 italic" style="color: var(--surface-muted);">
+						Not connected to any other org.
+					</p>
 				{/if}
 
 				<div class="relative">
@@ -859,7 +945,9 @@
 								>
 									<span>
 										<span class="font-medium">{r.name}</span>
-										<span class="font-mono text-xs ml-2" style="color: var(--surface-muted);">{r.slug}</span>
+										<span class="font-mono text-xs ml-2" style="color: var(--surface-muted);"
+											>{r.slug}</span
+										>
 									</span>
 									<Plus class="h-4 w-4" />
 								</button>
@@ -879,4 +967,3 @@
 		</div>
 	</div>
 {/if}
-

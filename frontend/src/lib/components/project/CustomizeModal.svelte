@@ -7,11 +7,15 @@
 		open = $bindable(false),
 		onSave,
 		onIconUpload,
-		onBgUpload,
+		onBgUpload
 	}: {
 		project: Project;
 		open?: boolean;
-		onSave: (payload: { icon?: string | null; backgroundImage?: string | null; name?: string }) => Promise<void>;
+		onSave: (payload: {
+			icon?: string | null;
+			backgroundImage?: string | null;
+			name?: string;
+		}) => Promise<void>;
 		onIconUpload: (file: File) => Promise<string | null>;
 		onBgUpload: (file: File) => Promise<string | null>;
 	} = $props();
@@ -101,15 +105,13 @@
 		}
 	}
 
-	function clearBg() { bgPreview = null; }
+	function clearBg() {
+		bgPreview = null;
+	}
 </script>
 
 {#if open}
-	<div
-		class="cm-overlay"
-		onclick={() => (open = false)}
-		role="presentation"
-	>
+	<div class="cm-overlay" onclick={() => (open = false)} role="presentation">
 		<div
 			class="cm-modal"
 			onclick={(e) => e.stopPropagation()}
@@ -121,14 +123,20 @@
 				<XIcon class="h-4 w-4" />
 			</button>
 
-			<div class="cm-hero" style={bgPreview ? `background-image: url(${JSON.stringify(bgPreview)});` : ''}>
+			<div
+				class="cm-hero"
+				style={bgPreview ? `background-image: url(${JSON.stringify(bgPreview)});` : ''}
+			>
 				{#if bgPreview}
 					<div class="cm-hero-scrim"></div>
 				{:else}
 					<div class="cm-hero-placeholder" aria-hidden="true"></div>
 				{/if}
 				<div class="cm-hero-content">
-					<div class="cm-hero-icon" class:cm-hero-icon--empty={!(iconMode === 'emoji' ? emojiValue.trim() : iconPreview)}>
+					<div
+						class="cm-hero-icon"
+						class:cm-hero-icon--empty={!(iconMode === 'emoji' ? emojiValue.trim() : iconPreview)}
+					>
 						{#if iconMode === 'emoji' && emojiValue.trim()}
 							<span class="cm-hero-emoji">{emojiValue.trim()}</span>
 						{:else if iconMode === 'image' && iconPreview}
@@ -168,16 +176,16 @@
 								aria-selected={iconMode === 'emoji'}
 								class="cm-seg"
 								class:cm-seg--active={iconMode === 'emoji'}
-								onclick={() => (iconMode = 'emoji')}
-							>Emoji</button>
+								onclick={() => (iconMode = 'emoji')}>Emoji</button
+							>
 							<button
 								type="button"
 								role="tab"
 								aria-selected={iconMode === 'image'}
 								class="cm-seg"
 								class:cm-seg--active={iconMode === 'image'}
-								onclick={() => (iconMode = 'image')}
-							>Image</button>
+								onclick={() => (iconMode = 'image')}>Image</button
+							>
 						</div>
 					</div>
 
@@ -190,8 +198,8 @@
 									aria-checked={emojiValue.trim() === emoji}
 									class="cm-emoji-chip"
 									class:cm-emoji-chip--active={emojiValue.trim() === emoji}
-									onclick={() => (emojiValue = emoji)}
-								>{emoji}</button>
+									onclick={() => (emojiValue = emoji)}>{emoji}</button
+								>
 							{/each}
 						</div>
 						<div class="cm-emoji-custom">
@@ -212,7 +220,11 @@
 								</div>
 							{:else if iconPreview}
 								<div class="cm-drop-filled">
-									<img src={iconPreview} alt="Project icon preview" class="cm-drop-thumb cm-drop-thumb--square" />
+									<img
+										src={iconPreview}
+										alt="Project icon preview"
+										class="cm-drop-thumb cm-drop-thumb--square"
+									/>
 									<div class="cm-drop-meta">
 										<span class="cm-drop-meta-title">Icon uploaded</span>
 										<span class="cm-drop-meta-hint">Click to replace</span>
@@ -227,7 +239,12 @@
 									</div>
 								</div>
 							{/if}
-							<input type="file" accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml" onchange={handleIconFile} disabled={uploadingIcon} />
+							<input
+								type="file"
+								accept="image/png,image/jpeg,image/gif,image/webp,image/svg+xml"
+								onchange={handleIconFile}
+								disabled={uploadingIcon}
+							/>
 						</label>
 					{/if}
 				</section>
@@ -250,7 +267,11 @@
 							</div>
 						{:else if bgPreview}
 							<div class="cm-drop-filled">
-								<img src={bgPreview} alt="Background preview" class="cm-drop-thumb cm-drop-thumb--wide" />
+								<img
+									src={bgPreview}
+									alt="Background preview"
+									class="cm-drop-thumb cm-drop-thumb--wide"
+								/>
 								<div class="cm-drop-meta">
 									<span class="cm-drop-meta-title">Background set</span>
 									<span class="cm-drop-meta-hint">Click to replace</span>
@@ -265,16 +286,29 @@
 								</div>
 							</div>
 						{/if}
-						<input type="file" accept="image/png,image/jpeg,image/webp" onchange={handleBgFile} disabled={uploadingBg} />
+						<input
+							type="file"
+							accept="image/png,image/jpeg,image/webp"
+							onchange={handleBgFile}
+							disabled={uploadingBg}
+						/>
 					</label>
 				</section>
 			</div>
 
 			<div class="cm-footer">
-				<button class="pj-btn pj-btn-secondary" onclick={() => (open = false)} disabled={savingCustom}>
+				<button
+					class="pj-btn pj-btn-secondary"
+					onclick={() => (open = false)}
+					disabled={savingCustom}
+				>
 					Cancel
 				</button>
-				<button class="pj-btn pj-btn-primary" onclick={save} disabled={savingCustom || uploadingIcon || uploadingBg}>
+				<button
+					class="pj-btn pj-btn-primary"
+					onclick={save}
+					disabled={savingCustom || uploadingIcon || uploadingBg}
+				>
 					{#if savingCustom}<Loader2 class="h-4 w-4 animate-spin" />{/if}
 					Save changes
 				</button>

@@ -193,7 +193,10 @@
 	});
 </script>
 
-<div class="flex min-h-screen items-center justify-center p-6" style="background-color: var(--center-channel-bg);">
+<div
+	class="flex min-h-screen items-center justify-center p-6"
+	style="background-color: var(--center-channel-bg);"
+>
 	<div class="w-full max-w-md">
 		<div class="mb-8 text-center">
 			<img src="/logo/logocompact.svg" alt="Orchard" class="mx-auto h-8 logo-light" />
@@ -206,7 +209,9 @@
 			</div>
 		{:else if error}
 			<div class="card p-8 text-center">
-				<div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
+				<div
+					class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30"
+				>
 					<AlertCircle class="h-6 w-6 text-red-600 dark:text-red-400" />
 				</div>
 				<h1 class="mb-2 text-xl font-semibold" style="color: var(--center-channel-color);">
@@ -217,14 +222,17 @@
 			</div>
 		{:else if showLogoutWarning}
 			<div class="card p-8 text-center">
-				<div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-yellow-100 dark:bg-yellow-900/30">
+				<div
+					class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-yellow-100 dark:bg-yellow-900/30"
+				>
 					<LogOut class="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
 				</div>
 				<h1 class="mb-2 text-xl font-semibold" style="color: var(--center-channel-color);">
 					No Organization Access
 				</h1>
 				<p class="mb-6" style="color: var(--surface-muted);">
-					You need to be part of an organization to use Orchard. Since you declined this invitation and don't belong to any other organization, you'll be logged out.
+					You need to be part of an organization to use Orchard. Since you declined this invitation
+					and don't belong to any other organization, you'll be logged out.
 				</p>
 				<button onclick={handleLogout} class="btn btn-primary w-full">
 					<LogOut class="h-4 w-4" />
@@ -235,7 +243,9 @@
 			<div class="card overflow-hidden">
 				<!-- Header -->
 				<div class="border-b p-6 text-center" style="border-color: var(--surface-border);">
-					<div class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-100 dark:bg-primary-900/30">
+					<div
+						class="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-primary-100 dark:bg-primary-900/30"
+					>
 						{#if invitation.organization.avatarUrl}
 							<img
 								src={invitation.organization.avatarUrl}
@@ -256,16 +266,25 @@
 
 				<!-- Details -->
 				<div class="space-y-4 p-6">
-					<div class="flex items-center justify-between rounded-xl p-4" style="background-color: var(--control-bg);">
+					<div
+						class="flex items-center justify-between rounded-xl p-4"
+						style="background-color: var(--control-bg);"
+					>
 						<div>
-							<p class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">Invited by</p>
+							<p class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">
+								Invited by
+							</p>
 							<p class="font-medium" style="color: var(--center-channel-color);">
 								{getInviterName(invitation.inviter)}
 							</p>
 						</div>
 						<div class="text-right">
-							<p class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">Role</p>
-							<span class={`inline-block rounded-full px-2 py-0.5 text-xs font-medium capitalize ${getRoleBadgeColor(invitation.role)}`}>
+							<p class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">
+								Role
+							</p>
+							<span
+								class={`inline-block rounded-full px-2 py-0.5 text-xs font-medium capitalize ${getRoleBadgeColor(invitation.role)}`}
+							>
 								{invitation.role}
 							</span>
 						</div>
@@ -273,7 +292,10 @@
 
 					{#if !$isSignedIn}
 						<!-- Not logged in -->
-						<div class="rounded-xl border-2 border-dashed p-4 text-center" style="border-color: var(--surface-border);">
+						<div
+							class="rounded-xl border-2 border-dashed p-4 text-center"
+							style="border-color: var(--surface-border);"
+						>
 							<UserPlus class="mx-auto h-8 w-8 text-primary-600" />
 							<p class="mt-2 text-sm" style="color: var(--surface-muted);">
 								Sign in with <strong>{invitation.email}</strong> to accept this invitation.
@@ -284,9 +306,12 @@
 						</button>
 					{:else if emailMismatch}
 						<!-- Email mismatch -->
-						<div class="rounded-xl border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-900/40 dark:bg-yellow-900/20">
+						<div
+							class="rounded-xl border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-900/40 dark:bg-yellow-900/20"
+						>
 							<p class="text-sm text-yellow-800 dark:text-yellow-200">
-								This invitation was sent to <strong>{invitation.email}</strong>, but you're signed in as <strong>{$user?.email}</strong>.
+								This invitation was sent to <strong>{invitation.email}</strong>, but you're signed
+								in as <strong>{$user?.email}</strong>.
 							</p>
 							<p class="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
 								Please sign in with the correct email to accept this invitation.

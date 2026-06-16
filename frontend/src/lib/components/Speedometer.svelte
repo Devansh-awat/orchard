@@ -18,14 +18,16 @@
 			? { w: 160, h: 110, r: 60, sw: 12, fs: 18, fsSub: 11 }
 			: size === 'lg'
 				? { w: 280, h: 180, r: 110, sw: 20, fs: 32, fsSub: 14 }
-				: { w: 220, h: 140, r: 84, sw: 16, fs: 24, fsSub: 12 },
+				: { w: 220, h: 140, r: 84, sw: 16, fs: 24, fsSub: 12 }
 	);
 
 	const cx = $derived(dims.w / 2);
 	const cy = $derived(dims.h - 12);
 
 	const isUnlimited = $derived(max === null);
-	const pct = $derived(isUnlimited ? 0 : max && max > 0 ? Math.min(1, Math.max(0, value / max)) : 0);
+	const pct = $derived(
+		isUnlimited ? 0 : max && max > 0 ? Math.min(1, Math.max(0, value / max)) : 0
+	);
 	const pctClamped = $derived(isUnlimited ? 0 : pct);
 
 	const endX = $derived(cx - dims.r * Math.cos(Math.PI * pctClamped));
@@ -38,14 +40,12 @@
 				? 'var(--error-text-color)'
 				: pct >= 0.7
 					? 'var(--warning-text)'
-					: 'var(--success-text)',
+					: 'var(--success-text)'
 	);
 
 	const bgArc = $derived(`M ${cx - dims.r} ${cy} A ${dims.r} ${dims.r} 0 0 1 ${cx + dims.r} ${cy}`);
 	const fillArc = $derived(
-		pctClamped < 0.001
-			? ''
-			: `M ${cx - dims.r} ${cy} A ${dims.r} ${dims.r} 0 0 1 ${endX} ${endY}`,
+		pctClamped < 0.001 ? '' : `M ${cx - dims.r} ${cy} A ${dims.r} ${dims.r} 0 0 1 ${endX} ${endY}`
 	);
 
 	// Tick angles in % space.
@@ -57,7 +57,7 @@
 			x1: cx - inner * Math.cos(a),
 			y1: cy - inner * Math.sin(a),
 			x2: cx - outer * Math.cos(a),
-			y2: cy - outer * Math.sin(a),
+			y2: cy - outer * Math.sin(a)
 		};
 	}
 
@@ -111,8 +111,8 @@
 				stroke-linecap="round"
 				class="speedo-needle"
 			/>
-			<circle cx={cx} cy={cy} r="4" fill="var(--center-channel-color)" />
-			<circle cx={cx} cy={cy} r="2" fill="var(--surface-bg)" />
+			<circle {cx} {cy} r="4" fill="var(--center-channel-color)" />
+			<circle {cx} {cy} r="2" fill="var(--surface-bg)" />
 		{/if}
 	</svg>
 
@@ -140,7 +140,8 @@
 		{:else if remaining !== null}
 			<p class="speedo-caption">
 				{#if overLimit}
-					<span style="color: var(--error-text-color);">{formatValue(value - max!)} over limit</span>
+					<span style="color: var(--error-text-color);">{formatValue(value - max!)} over limit</span
+					>
 				{:else}
 					{formatValue(remaining)} remaining
 				{/if}
@@ -172,11 +173,17 @@
 	.speedo-needle {
 		transform-origin: center;
 		animation: speedo-fill-in 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
-		transition: x2 250ms cubic-bezier(0.22, 1, 0.36, 1), y2 250ms cubic-bezier(0.22, 1, 0.36, 1);
+		transition:
+			x2 250ms cubic-bezier(0.22, 1, 0.36, 1),
+			y2 250ms cubic-bezier(0.22, 1, 0.36, 1);
 	}
 	@keyframes speedo-fill-in {
-		from { stroke-dasharray: 0 1000; }
-		to   { stroke-dasharray: 1000 0; }
+		from {
+			stroke-dasharray: 0 1000;
+		}
+		to {
+			stroke-dasharray: 1000 0;
+		}
 	}
 
 	.speedo-readout {
@@ -194,7 +201,9 @@
 		font-variant-numeric: tabular-nums;
 		color: var(--fill-color);
 	}
-	.speedo-pct.over { color: var(--error-text-color); }
+	.speedo-pct.over {
+		color: var(--error-text-color);
+	}
 	.speedo :global(.speedo-infinity) {
 		width: 1.5em;
 		height: 1.5em;
@@ -222,7 +231,10 @@
 	.speedo-strong {
 		font-variant-numeric: tabular-nums;
 	}
-	.speedo-muted { color: var(--surface-muted); font-weight: 500; }
+	.speedo-muted {
+		color: var(--surface-muted);
+		font-weight: 500;
+	}
 	.speedo-caption {
 		font-size: 0.6875rem;
 		color: var(--surface-muted);

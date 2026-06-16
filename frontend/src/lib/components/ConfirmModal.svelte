@@ -134,7 +134,9 @@
 		background: none;
 		color: var(--surface-muted);
 		cursor: pointer;
-		transition: color 0.15s, background-color 0.15s;
+		transition:
+			color 0.15s,
+			background-color 0.15s;
 	}
 
 	.cm-close:hover {

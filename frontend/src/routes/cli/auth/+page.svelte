@@ -108,7 +108,9 @@
 		<div class="login-form-side">
 			{#if error}
 				<div class="login-panel" style="text-align:center;">
-					<div class="login-panel-header"><h2 class="login-panel-title">Authorization Failed</h2></div>
+					<div class="login-panel-header">
+						<h2 class="login-panel-title">Authorization Failed</h2>
+					</div>
 					<p class="login-error">{error}</p>
 				</div>
 			{:else if done}
@@ -130,9 +132,24 @@
 				</div>
 			{:else}
 				<div class="login-panel">
-					<div class="login-panel-header"><h2 class="login-panel-title">Sign in to authorize</h2></div>
+					<div class="login-panel-header">
+						<h2 class="login-panel-title">Sign in to authorize</h2>
+					</div>
 					<button class="login-primary" onclick={signIn}>
-						<svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+						<svg
+							xmlns="http://www.w3.org/2000/svg"
+							width="18"
+							height="18"
+							viewBox="0 0 24 24"
+							fill="none"
+							stroke="currentColor"
+							stroke-width="2"
+							stroke-linecap="round"
+							stroke-linejoin="round"
+							><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline
+								points="10 17 15 12 10 7"
+							/><line x1="15" y1="12" x2="3" y2="12" /></svg
+						>
 						Continue with Hack Club
 					</button>
 				</div>
@@ -150,20 +167,36 @@
 		border: 1px solid rgba(255, 255, 255, 0.1);
 		text-align: left;
 	}
-	.cli-label { font-size: 0.875rem; opacity: 0.75; margin: 0 0 0.5rem 0; }
+	.cli-label {
+		font-size: 0.875rem;
+		opacity: 0.75;
+		margin: 0 0 0.5rem 0;
+	}
 	.cli-host {
-		display: flex; align-items: center; gap: 0.4rem;
-		font-size: 1.125rem; font-weight: 600;
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+		font-size: 1.125rem;
+		font-weight: 600;
 		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 		margin: 0 0 0.25rem 0;
 	}
-	.cli-name { font-size: 0.8125rem; opacity: 0.6; margin: 0 0 0.75rem 0; }
+	.cli-name {
+		font-size: 0.8125rem;
+		opacity: 0.6;
+		margin: 0 0 0.75rem 0;
+	}
 	.cli-warning {
-		font-size: 0.8125rem; opacity: 0.8; margin: 0;
-		padding-top: 0.75rem; border-top: 1px solid rgba(255, 255, 255, 0.08);
+		font-size: 0.8125rem;
+		opacity: 0.8;
+		margin: 0;
+		padding-top: 0.75rem;
+		border-top: 1px solid rgba(255, 255, 255, 0.08);
 	}
 	.cli-warning code {
 		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-		background: rgba(255,255,255,0.08); padding: 0.1rem 0.3rem; border-radius: 0.25rem;
+		background: rgba(255, 255, 255, 0.08);
+		padding: 0.1rem 0.3rem;
+		border-radius: 0.25rem;
 	}
 </style>

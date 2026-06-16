@@ -11,12 +11,7 @@
 		Ellipsis
 	} from 'lucide-svelte';
 	import { motionStagger, motionPopover } from '$lib/utils/motion.svelte';
-	import {
-		projectStatusSummary,
-		preBlurBg,
-		springRotate,
-		bodyAttach
-	} from './helpers.svelte';
+	import { projectStatusSummary, preBlurBg, springRotate, bodyAttach } from './helpers.svelte';
 	import DeploymentCard from './DeploymentCard.svelte';
 	import DatabaseCard from './DatabaseCard.svelte';
 	import type { ProjectGroup, ProjectMeta, DeploymentSummary } from './types';
@@ -112,18 +107,9 @@
 >
 	{#if meta?.backgroundImage}
 		<div class="proj-card-backdrop" aria-hidden="true">
-			<div
-				class="proj-body-bg proj-body-bg--1"
-				{@attach preBlurBg(meta.backgroundImage)}
-			></div>
-			<div
-				class="proj-body-bg proj-body-bg--2"
-				{@attach preBlurBg(meta.backgroundImage)}
-			></div>
-			<div
-				class="proj-body-bg proj-body-bg--3"
-				{@attach preBlurBg(meta.backgroundImage)}
-			></div>
+			<div class="proj-body-bg proj-body-bg--1" {@attach preBlurBg(meta.backgroundImage)}></div>
+			<div class="proj-body-bg proj-body-bg--2" {@attach preBlurBg(meta.backgroundImage)}></div>
+			<div class="proj-body-bg proj-body-bg--3" {@attach preBlurBg(meta.backgroundImage)}></div>
 			<div class="proj-body-veil"></div>
 		</div>
 	{/if}
@@ -140,10 +126,7 @@
 		>
 			<ChevronRight size={16} />
 		</div>
-		<div
-			class="proj-av"
-			class:proj-av--fallback={!meta?.icon || !/^https?:\/\//.test(meta.icon)}
-		>
+		<div class="proj-av" class:proj-av--fallback={!meta?.icon || !/^https?:\/\//.test(meta.icon)}>
 			{#if meta?.icon}
 				{#if /^https?:\/\//.test(meta.icon)}
 					<img src={meta.icon} alt="" class="proj-av-img" loading="lazy" decoding="async" />
@@ -156,8 +139,7 @@
 		</div>
 		<div class="proj-text">
 			<span class="proj-name"
-				>{#if meta?.owner?.username}<span class="proj-owner"
-						>{meta.owner.username}@</span
+				>{#if meta?.owner?.username}<span class="proj-owner">{meta.owner.username}@</span
 					>{/if}{group.name}</span
 			>
 			{#if meta?.description}
@@ -165,20 +147,14 @@
 			{/if}
 		</div>
 		<div class="proj-stats">
-			<span class="proj-stat" title="Deployments"
-				><Rocket size={12} /> {group.deps.length}</span
-			>
+			<span class="proj-stat" title="Deployments"><Rocket size={12} /> {group.deps.length}</span>
 			{#if group.dbs.length > 0}
-				<span class="proj-stat" title="Databases"
-					><Database size={12} /> {group.dbs.length}</span
-				>
+				<span class="proj-stat" title="Databases"><Database size={12} /> {group.dbs.length}</span>
 			{/if}
 			{#if summary}
 				<span class="proj-summary">
-					{#if summary.green > 0}<span class="dot dot--green"
-						></span>{summary.green}{/if}
-					{#if summary.amber > 0}<span class="dot dot--amber"
-						></span>{summary.amber}{/if}
+					{#if summary.green > 0}<span class="dot dot--green"></span>{summary.green}{/if}
+					{#if summary.amber > 0}<span class="dot dot--amber"></span>{summary.amber}{/if}
 					{#if summary.red > 0}<span class="dot dot--red"></span>{summary.red}{/if}
 				</span>
 			{/if}
@@ -188,7 +164,9 @@
 			role="button"
 			tabindex="0"
 			onclick={toggleNew}
-			onkeydown={(e) => { if (e.key === 'Enter' || e.key === ' ') toggleNew(e); }}
+			onkeydown={(e) => {
+				if (e.key === 'Enter' || e.key === ' ') toggleNew(e);
+			}}
 			aria-haspopup="menu"
 			aria-expanded={newOpen}
 			aria-label="Add new to this project"
@@ -212,10 +190,18 @@
 					onClosed: () => (newRender = false)
 				})}
 			>
-				<a class="menu-item" role="menuitem" href="/{orgSlug}/projects/{group.slug}/deployments/new?source=image">
+				<a
+					class="menu-item"
+					role="menuitem"
+					href="/{orgSlug}/projects/{group.slug}/deployments/new?source=image"
+				>
 					<Container size={14} /> Dockerfile
 				</a>
-				<a class="menu-item" role="menuitem" href="/{orgSlug}/projects/{group.slug}/deployments/new?source=github">
+				<a
+					class="menu-item"
+					role="menuitem"
+					href="/{orgSlug}/projects/{group.slug}/deployments/new?source=github"
+				>
 					<Github size={14} /> Github Repo
 				</a>
 				<a class="menu-item" role="menuitem" href="/{orgSlug}/new?projectSlug={group.slug}">
@@ -257,7 +243,7 @@
 							{onToggleFav}
 							{onToggleMenu}
 							{onRestart}
-							onCopyUrl={onCopyUrl}
+							{onCopyUrl}
 							{onVisit}
 							{onFavErr}
 						/>

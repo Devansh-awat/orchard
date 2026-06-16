@@ -8,7 +8,7 @@
 		name,
 		icon,
 		disconnecting = false,
-		onDisconnect,
+		onDisconnect
 	}: {
 		name: string;
 		icon?: Snippet;
@@ -36,7 +36,9 @@
 		onmouseleave={() => (btnHovered = false)}
 		{@attach springHover({ lift: -1, stiffness: 400, damping: 26 })}
 	>
-		{#if disconnecting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<span class="ic-icon-wrap"><Unplug size={14} animate={btnHovered} /></span>{/if}
+		{#if disconnecting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<span class="ic-icon-wrap"
+				><Unplug size={14} animate={btnHovered} /></span
+			>{/if}
 		Disconnect
 	</button>
 </div>
@@ -86,9 +88,18 @@
 	.ic-disconnect:hover:not(:disabled) {
 		background-color: color-mix(in srgb, var(--error-text-color) 16%, transparent);
 	}
-	.ic-disconnect:disabled { opacity: 0.5; cursor: not-allowed; }
-	.ic-icon-wrap { display: inline-flex; pointer-events: none; }
+	.ic-disconnect:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
+	.ic-icon-wrap {
+		display: inline-flex;
+		pointer-events: none;
+	}
 	@media (max-width: 640px) {
-		.ic-root { flex-direction: column; align-items: flex-start; }
+		.ic-root {
+			flex-direction: column;
+			align-items: flex-start;
+		}
 	}
 </style>

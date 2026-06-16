@@ -11,14 +11,14 @@
 	const defaultMessages: Record<number, string> = {
 		400: 'The request was invalid.',
 		401: 'You need to sign in to view this page.',
-		403: 'You don\'t have access to this page.',
-		404: 'The page you\'re looking for doesn\'t exist.',
+		403: "You don't have access to this page.",
+		404: "The page you're looking for doesn't exist.",
 		408: 'The request took too long.',
 		429: 'Too many requests. Please slow down.',
 		500: 'Something went wrong on our end.',
 		502: 'The server is temporarily unavailable.',
 		503: 'The service is temporarily unavailable.',
-		504: 'The server took too long to respond.',
+		504: 'The server took too long to respond.'
 	};
 
 	const displayMessage = $derived(message || defaultMessages[status] || 'Something went wrong.');
@@ -37,7 +37,9 @@
 			src="https://http.cat/{status}"
 			alt={String(status)}
 			class="nf-cat"
-			onerror={(e: Event) => { (e.currentTarget as HTMLImageElement).style.display = 'none'; }}
+			onerror={(e: Event) => {
+				(e.currentTarget as HTMLImageElement).style.display = 'none';
+			}}
 		/>
 		<h1 class="nf-title">{displayMessage}</h1>
 		<a href="/" class="nf-btn">
@@ -113,18 +115,37 @@
 	}
 
 	@keyframes nf-float-1 {
-		0%, 100% { transform: translate(0, 0) scale(1); }
-		33% { transform: translate(-40px, 30px) scale(1.08); }
-		66% { transform: translate(20px, -50px) scale(0.95); }
+		0%,
+		100% {
+			transform: translate(0, 0) scale(1);
+		}
+		33% {
+			transform: translate(-40px, 30px) scale(1.08);
+		}
+		66% {
+			transform: translate(20px, -50px) scale(0.95);
+		}
 	}
 	@keyframes nf-float-2 {
-		0%, 100% { transform: translate(0, 0) scale(1); }
-		33% { transform: translate(50px, -40px) scale(1.05); }
-		66% { transform: translate(-30px, 20px) scale(0.92); }
+		0%,
+		100% {
+			transform: translate(0, 0) scale(1);
+		}
+		33% {
+			transform: translate(50px, -40px) scale(1.05);
+		}
+		66% {
+			transform: translate(-30px, 20px) scale(0.92);
+		}
 	}
 	@keyframes nf-float-3 {
-		0%, 100% { transform: translate(0, 0) scale(1); }
-		50% { transform: translate(-60px, 40px) scale(1.12); }
+		0%,
+		100% {
+			transform: translate(0, 0) scale(1);
+		}
+		50% {
+			transform: translate(-60px, 40px) scale(1.12);
+		}
 	}
 
 	.nf-card {
@@ -175,11 +196,15 @@
 		border-radius: 0.75rem;
 		text-decoration: none;
 		transition: all 0.2s ease;
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.1), 0 4px 12px rgb(0 0 0 / 0.06);
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.1),
+			0 4px 12px rgb(0 0 0 / 0.06);
 	}
 
 	.nf-btn:hover {
-		box-shadow: 0 2px 6px rgb(0 0 0 / 0.15), 0 8px 24px rgb(0 0 0 / 0.1);
+		box-shadow:
+			0 2px 6px rgb(0 0 0 / 0.15),
+			0 8px 24px rgb(0 0 0 / 0.1);
 		transform: translateY(-1px);
 	}
 

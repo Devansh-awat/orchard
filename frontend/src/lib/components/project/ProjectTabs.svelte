@@ -15,7 +15,7 @@
 		deploymentSearch = $bindable(''),
 		onNewResource,
 		tabsRowEl = $bindable<HTMLElement | null>(null),
-		deploymentMenu,
+		deploymentMenu
 	}: {
 		activeTab?: 'resources' | 'compose' | 'members';
 		resourceCount?: number;
@@ -97,10 +97,7 @@
 					/>
 				</div>
 			{/if}
-			<button
-				class="pj-btn pj-btn-primary pj-btn--sm"
-				onclick={onNewResource}
-			>
+			<button class="pj-btn pj-btn-primary pj-btn--sm" onclick={onNewResource}>
 				<Plus class="h-4 w-4" />
 				New
 			</button>

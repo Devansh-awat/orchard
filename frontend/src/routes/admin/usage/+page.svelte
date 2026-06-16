@@ -34,7 +34,7 @@
 	const totals = $derived({
 		cpuMilli: rows.reduce((a, r) => a + r.cpuMilli, 0),
 		memoryBytes: rows.reduce((a, r) => a + r.memoryBytes, 0),
-		pods: rows.reduce((a, r) => a + r.pods, 0),
+		pods: rows.reduce((a, r) => a + r.pods, 0)
 	});
 
 	onMount(load);

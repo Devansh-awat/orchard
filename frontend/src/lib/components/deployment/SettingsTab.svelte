@@ -49,7 +49,7 @@
 		startupFailureThreshold = $bindable(30),
 		savingHealthCheck,
 		isEditingHealthCheck = $bindable(false),
-		onSaveHealthCheck,
+		onSaveHealthCheck
 	}: {
 		deployment: any;
 		strategyValue: 'rollingUpdate' | 'recreate';
@@ -140,7 +140,14 @@
 			<div class="st-section-title-group">
 				<h3 class="st-section-title">Audit Log</h3>
 			</div>
-			<svg class="st-chevron" class:st-chevron--closed={!auditOpen} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+			<svg
+				class="st-chevron"
+				class:st-chevron--closed={!auditOpen}
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+			>
 				<path d="m6 9 6 6 6-6" />
 			</svg>
 		</button>

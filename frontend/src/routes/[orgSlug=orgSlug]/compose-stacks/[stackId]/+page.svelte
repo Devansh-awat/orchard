@@ -10,7 +10,7 @@
 		Server,
 		ExternalLink,
 		Github,
-		RefreshCw,
+		RefreshCw
 	} from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 
@@ -101,7 +101,7 @@
 		error = null;
 		try {
 			const response = await apiFetch(`/apiv1/compose-stacks/${stackId}/redeploy`, {
-				method: 'POST',
+				method: 'POST'
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
@@ -109,7 +109,11 @@
 			}
 			stack = await response.json();
 			refreshTree();
-			toasts.add({ title: 'Redeployed', description: 'Pulled fresh compose from GitHub', color: 'success' });
+			toasts.add({
+				title: 'Redeployed',
+				description: 'Pulled fresh compose from GitHub',
+				color: 'success'
+			});
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to redeploy';
 		} finally {
@@ -124,7 +128,7 @@
 			const response = await apiFetch(`/apiv1/compose-stacks/${stackId}/auto-deploy`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ enabled: !stack.autoDeployEnabled }),
+				body: JSON.stringify({ enabled: !stack.autoDeployEnabled })
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
@@ -150,7 +154,7 @@
 			toasts.add({
 				title: 'Stack deleted',
 				description: `${stack.name} and its services have been removed`,
-				color: 'success',
+				color: 'success'
 			});
 			refreshTree();
 			history.back();
@@ -168,7 +172,10 @@
 	{#if loading}
 		<div class="cs-skeleton">
 			<div class="skeleton" style="width: 3.5rem; height: 0.875rem; margin-bottom: 1.5rem;"></div>
-			<div class="skeleton" style="width: 100%; height: 4rem; border-radius: 0.75rem; margin-bottom: 1rem;"></div>
+			<div
+				class="skeleton"
+				style="width: 100%; height: 4rem; border-radius: 0.75rem; margin-bottom: 1rem;"
+			></div>
 			<div class="skeleton" style="width: 100%; height: 12rem; border-radius: 0.75rem;"></div>
 		</div>
 	{:else if stack}
@@ -185,7 +192,9 @@
 					<h1 class="cs-title">{stack.name}</h1>
 					<p class="cs-meta">
 						Compose stack &middot;
-						<span class="cs-status" style="color: {getStatusColor(stack.status)}">{stack.status}</span>
+						<span class="cs-status" style="color: {getStatusColor(stack.status)}"
+							>{stack.status}</span
+						>
 					</p>
 				</div>
 			</div>
@@ -197,7 +206,11 @@
 						<RefreshCw class="h-4 w-4" /> Redeploy
 					{/if}
 				</button>
-				<button onclick={() => (showDeleteModal = true)} disabled={deleting} class="cs-btn cs-btn-danger">
+				<button
+					onclick={() => (showDeleteModal = true)}
+					disabled={deleting}
+					class="cs-btn cs-btn-danger"
+				>
 					{#if deleting}
 						<Loader2 class="h-4 w-4 animate-spin" /> Deleting…
 					{:else}
@@ -225,7 +238,12 @@
 						<dt>Repository</dt>
 						<dd>
 							{#if stack.githubRepo}
-								<a href={stack.githubRepo} target="_blank" rel="noopener noreferrer" class="cs-link">
+								<a
+									href={stack.githubRepo}
+									target="_blank"
+									rel="noopener noreferrer"
+									class="cs-link"
+								>
 									{githubRepoLabel(stack.githubRepo)}
 									<ExternalLink class="h-3 w-3" />
 								</a>
@@ -258,7 +276,9 @@
 					/>
 					<span class="cs-toggle-label">
 						<span class="cs-toggle-title">
-							Auto-deploy on push to <span class="cs-mono">{stack.autoDeployBranch ?? stack.githubBranch ?? '—'}</span>
+							Auto-deploy on push to <span class="cs-mono"
+								>{stack.autoDeployBranch ?? stack.githubBranch ?? '—'}</span
+							>
 						</span>
 						<span class="cs-toggle-desc">
 							Each <code>build:</code> service rebuilds independently when a commit lands.
@@ -316,8 +336,8 @@
 {#if stack}
 	<ConfirmModal
 		bind:open={showDeleteModal}
-		title='Delete "{stack.name}"?'
-		description='This will permanently <strong>delete all services</strong> in this compose stack. This cannot be undone.'
+		title={`Delete "${stack.name}"?`}
+		description="This will permanently <strong>delete all services</strong> in this compose stack. This cannot be undone."
 		confirmLabel="Delete stack"
 		onconfirm={deleteStack}
 		oncancel={() => {}}
@@ -422,7 +442,10 @@
 		font-weight: 500;
 		border: 1px solid transparent;
 		cursor: pointer;
-		transition: opacity 0.15s, background-color 0.15s, border-color 0.15s;
+		transition:
+			opacity 0.15s,
+			background-color 0.15s,
+			border-color 0.15s;
 		white-space: nowrap;
 	}
 
@@ -572,7 +595,9 @@
 		text-decoration: none;
 		color: var(--center-channel-color);
 		transition: border-color 0.15s;
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.02);
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
 	}
 
 	.cs-resource-card:hover {

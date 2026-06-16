@@ -50,7 +50,7 @@
 			if (!res.ok) throw new Error(`projects ${res.status}`);
 			const list = await res.json();
 			return list.map((p: any) => ({ id: p.id, name: p.name, slug: p.slug }));
-		},
+		}
 	}));
 
 	// svelte-query v6 returns a Svelte 5 reactive object — read fields directly,
@@ -66,7 +66,11 @@
 	let nameInputEl = $state<HTMLInputElement | null>(null);
 
 	let triggerEl = $state<HTMLElement | null>(null);
-	let menuPos = $state<{ top: number; left: number; minWidth: number }>({ top: 0, left: 0, minWidth: 0 });
+	let menuPos = $state<{ top: number; left: number; minWidth: number }>({
+		top: 0,
+		left: 0,
+		minWidth: 0
+	});
 
 	function updateMenuPos() {
 		if (!triggerEl) return;
@@ -164,12 +168,14 @@
 
 <div class="ps-root">
 	<div bind:this={triggerEl} class="ps-trigger" class:ps-trigger-pending={pendingProjectName}>
-		<button type="button" class="ps-trigger-main" onclick={() => open = !open}>
+		<button type="button" class="ps-trigger-main" onclick={() => (open = !open)}>
 			<span class="ps-label">Project</span>
 			{#if pendingProjectName}
 				<Sparkles size={12} class="ps-pending-icon" />
 			{/if}
-			<span class="ps-value" class:ps-value-pending={pendingProjectName}>{pendingProjectName || currentProjectName}</span>
+			<span class="ps-value" class:ps-value-pending={pendingProjectName}
+				>{pendingProjectName || currentProjectName}</span
+			>
 			<ChevronDown size={14} class="ps-chevron" />
 		</button>
 		{#if pendingProjectName}
@@ -263,7 +269,9 @@
 		border-radius: 0.5rem;
 		border: 1px solid var(--surface-border);
 		background: var(--center-channel-bg);
-		transition: border-color 0.15s, background-color 0.15s;
+		transition:
+			border-color 0.15s,
+			background-color 0.15s;
 		font-size: 0.75rem;
 		overflow: hidden;
 	}
@@ -296,10 +304,13 @@
 		padding: 0 0.5rem;
 		background: transparent;
 		border: none;
-		border-left: 1px solid color-mix(in srgb, var(--sidebar-text-active-border) 30%, var(--surface-border));
+		border-left: 1px solid
+			color-mix(in srgb, var(--sidebar-text-active-border) 30%, var(--surface-border));
 		color: var(--surface-muted);
 		cursor: pointer;
-		transition: color 0.1s, background-color 0.1s;
+		transition:
+			color 0.1s,
+			background-color 0.1s;
 	}
 
 	.ps-pending-clear:hover {
@@ -464,7 +475,11 @@
 		background: var(--center-channel-bg);
 		color: var(--surface-muted);
 		cursor: pointer;
-		transition: background-color 0.1s, border-color 0.1s, color 0.1s, opacity 0.1s;
+		transition:
+			background-color 0.1s,
+			border-color 0.1s,
+			color 0.1s,
+			opacity 0.1s;
 	}
 
 	.ps-create-icon:disabled {
@@ -492,5 +507,4 @@
 		font-size: 0.75rem;
 		color: var(--error-text, #e03e3e);
 	}
-
 </style>

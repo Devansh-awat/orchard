@@ -204,10 +204,7 @@ resources:
 	}
 
 	function addOption(paramIndex: number) {
-		parameters[paramIndex].options = [
-			...parameters[paramIndex].options,
-			{ label: '', value: '' }
-		];
+		parameters[paramIndex].options = [...parameters[paramIndex].options, { label: '', value: '' }];
 	}
 
 	function removeOption(paramIndex: number, optIndex: number) {
@@ -420,11 +417,13 @@ resources:
 </script>
 
 <div class="nt-page">
-	<Breadcrumb crumbs={[
-		{ label: 'Home', href: `/${orgSlug}` },
-		{ label: 'Templates', href: `${basePath}/templates` },
-		{ label: 'New Template' }
-	]} />
+	<Breadcrumb
+		crumbs={[
+			{ label: 'Home', href: `/${orgSlug}` },
+			{ label: 'Templates', href: `${basePath}/templates` },
+			{ label: 'New Template' }
+		]}
+	/>
 
 	<div class="nt-header">
 		<LayoutTemplate class="h-6 w-6" style="color: var(--sidebar-text-active-border)" />
@@ -436,19 +435,11 @@ resources:
 
 	<!-- Mode toggle -->
 	<div class="nt-mode-toggle">
-		<button
-			class="nt-mode-btn"
-			class:nt-mode-active={mode === 'visual'}
-			onclick={switchToVisual}
-		>
+		<button class="nt-mode-btn" class:nt-mode-active={mode === 'visual'} onclick={switchToVisual}>
 			<SlidersHorizontal class="h-4 w-4" />
 			Visual Editor
 		</button>
-		<button
-			class="nt-mode-btn"
-			class:nt-mode-active={mode === 'yaml'}
-			onclick={switchToYaml}
-		>
+		<button class="nt-mode-btn" class:nt-mode-active={mode === 'yaml'} onclick={switchToYaml}>
 			<Code class="h-4 w-4" />
 			YAML Editor
 		</button>
@@ -463,16 +454,17 @@ resources:
 		<div class="nt-yaml-section">
 			<p class="nt-yaml-hint">
 				Write your template YAML directly. See the
-				<button class="nt-link" onclick={() => { yamlContent = exampleYaml(); }}>
+				<button
+					class="nt-link"
+					onclick={() => {
+						yamlContent = exampleYaml();
+					}}
+				>
 					example template
 				</button>
 				for reference.
 			</p>
-			<textarea
-				class="nt-yaml-editor"
-				bind:value={yamlContent}
-				spellcheck="false"
-				rows="30"
+			<textarea class="nt-yaml-editor" bind:value={yamlContent} spellcheck="false" rows="30"
 			></textarea>
 		</div>
 	{:else}
@@ -484,20 +476,37 @@ resources:
 				<div class="nt-grid-2">
 					<div class="nt-field">
 						<label for="meta-name" class="nt-label">Name <span class="nt-req">*</span></label>
-						<input id="meta-name" type="text" class="nt-input" bind:value={metaName}
-							placeholder="my-template" />
+						<input
+							id="meta-name"
+							type="text"
+							class="nt-input"
+							bind:value={metaName}
+							placeholder="my-template"
+						/>
 						<p class="nt-hint">Unique identifier (lowercase, hyphens)</p>
 					</div>
 					<div class="nt-field">
-						<label for="meta-display" class="nt-label">Display Name <span class="nt-req">*</span></label>
-						<input id="meta-display" type="text" class="nt-input" bind:value={metaDisplayName}
-							placeholder="My Template" />
+						<label for="meta-display" class="nt-label"
+							>Display Name <span class="nt-req">*</span></label
+						>
+						<input
+							id="meta-display"
+							type="text"
+							class="nt-input"
+							bind:value={metaDisplayName}
+							placeholder="My Template"
+						/>
 					</div>
 				</div>
 				<div class="nt-field">
 					<label for="meta-desc" class="nt-label">Description</label>
-					<input id="meta-desc" type="text" class="nt-input" bind:value={metaDescription}
-						placeholder="What this template does" />
+					<input
+						id="meta-desc"
+						type="text"
+						class="nt-input"
+						bind:value={metaDescription}
+						placeholder="What this template does"
+					/>
 				</div>
 				<div class="nt-grid-3">
 					<div class="nt-field">
@@ -524,14 +533,24 @@ resources:
 					</div>
 					<div class="nt-field">
 						<label for="meta-version" class="nt-label">Version</label>
-						<input id="meta-version" type="text" class="nt-input" bind:value={metaVersion}
-							placeholder="1.0.0" />
+						<input
+							id="meta-version"
+							type="text"
+							class="nt-input"
+							bind:value={metaVersion}
+							placeholder="1.0.0"
+						/>
 					</div>
 				</div>
 				<div class="nt-field">
 					<label for="meta-tags" class="nt-label">Tags</label>
-					<input id="meta-tags" type="text" class="nt-input" bind:value={metaTags}
-						placeholder="nodejs, api, postgres (comma-separated)" />
+					<input
+						id="meta-tags"
+						type="text"
+						class="nt-input"
+						bind:value={metaTags}
+						placeholder="nodejs, api, postgres (comma-separated)"
+					/>
 				</div>
 			</section>
 
@@ -545,15 +564,21 @@ resources:
 					</button>
 				</div>
 				<p class="nt-section-desc">
-					Parameters let users customize the template at deploy time. Use <code>{'{{ params.name }}'}</code> to reference them in resources.
+					Parameters let users customize the template at deploy time. Use <code
+						>{'{{ params.name }}'}</code
+					> to reference them in resources.
 				</p>
 
 				{#each parameters as param, i}
 					<div class="nt-param-card">
 						<div class="nt-param-header">
 							<span class="nt-param-num">#{i + 1}</span>
-							<input type="text" class="nt-input nt-input-sm" bind:value={param.name}
-								placeholder="param-name" />
+							<input
+								type="text"
+								class="nt-input nt-input-sm"
+								bind:value={param.name}
+								placeholder="param-name"
+							/>
 							<button class="nt-remove-btn" onclick={() => removeParameter(i)}>
 								<Trash2 class="h-3.5 w-3.5" />
 							</button>
@@ -561,8 +586,12 @@ resources:
 						<div class="nt-grid-2">
 							<div class="nt-field">
 								<label class="nt-label-sm">Display Name</label>
-								<input type="text" class="nt-input nt-input-sm" bind:value={param.displayName}
-									placeholder="Display Name" />
+								<input
+									type="text"
+									class="nt-input nt-input-sm"
+									bind:value={param.displayName}
+									placeholder="Display Name"
+								/>
 							</div>
 							<div class="nt-field">
 								<label class="nt-label-sm">Type</label>
@@ -576,19 +605,31 @@ resources:
 						</div>
 						<div class="nt-field">
 							<label class="nt-label-sm">Description</label>
-							<input type="text" class="nt-input nt-input-sm" bind:value={param.description}
-								placeholder="Help text for this parameter" />
+							<input
+								type="text"
+								class="nt-input nt-input-sm"
+								bind:value={param.description}
+								placeholder="Help text for this parameter"
+							/>
 						</div>
 						<div class="nt-grid-3">
 							<div class="nt-field">
 								<label class="nt-label-sm">Default</label>
-								<input type="text" class="nt-input nt-input-sm" bind:value={param.default}
-									placeholder="Default value" />
+								<input
+									type="text"
+									class="nt-input nt-input-sm"
+									bind:value={param.default}
+									placeholder="Default value"
+								/>
 							</div>
 							<div class="nt-field">
 								<label class="nt-label-sm">Placeholder</label>
-								<input type="text" class="nt-input nt-input-sm" bind:value={param.placeholder}
-									placeholder="Hint text" />
+								<input
+									type="text"
+									class="nt-input nt-input-sm"
+									bind:value={param.placeholder}
+									placeholder="Hint text"
+								/>
 							</div>
 							<div class="nt-field nt-field-check">
 								<label class="nt-check-label">
@@ -602,26 +643,42 @@ resources:
 							<div class="nt-grid-2">
 								<div class="nt-field">
 									<label class="nt-label-sm">Validation Pattern</label>
-									<input type="text" class="nt-input nt-input-sm nt-input-mono"
-										bind:value={param.validationPattern} placeholder="^[a-z][a-z0-9-]+$" />
+									<input
+										type="text"
+										class="nt-input nt-input-sm nt-input-mono"
+										bind:value={param.validationPattern}
+										placeholder="^[a-z][a-z0-9-]+$"
+									/>
 								</div>
 								<div class="nt-field">
 									<label class="nt-label-sm">Validation Message</label>
-									<input type="text" class="nt-input nt-input-sm"
-										bind:value={param.validationMessage} placeholder="Error message" />
+									<input
+										type="text"
+										class="nt-input nt-input-sm"
+										bind:value={param.validationMessage}
+										placeholder="Error message"
+									/>
 								</div>
 							</div>
 						{:else if param.type === 'number'}
 							<div class="nt-grid-2">
 								<div class="nt-field">
 									<label class="nt-label-sm">Min</label>
-									<input type="text" class="nt-input nt-input-sm"
-										bind:value={param.validationMin} placeholder="0" />
+									<input
+										type="text"
+										class="nt-input nt-input-sm"
+										bind:value={param.validationMin}
+										placeholder="0"
+									/>
 								</div>
 								<div class="nt-field">
 									<label class="nt-label-sm">Max</label>
-									<input type="text" class="nt-input nt-input-sm"
-										bind:value={param.validationMax} placeholder="100" />
+									<input
+										type="text"
+										class="nt-input nt-input-sm"
+										bind:value={param.validationMax}
+										placeholder="100"
+									/>
 								</div>
 							</div>
 						{:else if param.type === 'select'}
@@ -629,10 +686,18 @@ resources:
 								<label class="nt-label-sm">Options</label>
 								{#each param.options as opt, oi}
 									<div class="nt-option-row">
-										<input type="text" class="nt-input nt-input-sm" bind:value={opt.label}
-											placeholder="Label" />
-										<input type="text" class="nt-input nt-input-sm" bind:value={opt.value}
-											placeholder="Value" />
+										<input
+											type="text"
+											class="nt-input nt-input-sm"
+											bind:value={opt.label}
+											placeholder="Label"
+										/>
+										<input
+											type="text"
+											class="nt-input nt-input-sm"
+											bind:value={opt.value}
+											placeholder="Value"
+										/>
 										<button class="nt-remove-btn-sm" onclick={() => removeOption(i, oi)}>
 											<Trash2 class="h-3 w-3" />
 										</button>
@@ -661,22 +726,36 @@ resources:
 					</button>
 				</div>
 				<p class="nt-section-desc">
-					Resources are created when deploying. Use <code>{'{{ resources.name.field }}'}</code> to reference other resources. Order matters &mdash; resources can only reference resources listed above them.
+					Resources are created when deploying. Use <code>{'{{ resources.name.field }}'}</code> to reference
+					other resources. Order matters &mdash; resources can only reference resources listed above them.
 				</p>
 
 				{#each resources as res, ri}
 					<div class="nt-res-card">
 						<div class="nt-res-header">
-							<button class="nt-collapse-btn" onclick={() => { resources[ri].expanded = !resources[ri].expanded; }}>
+							<button
+								class="nt-collapse-btn"
+								onclick={() => {
+									resources[ri].expanded = !resources[ri].expanded;
+								}}
+							>
 								{#if res.expanded}
 									<ChevronUp class="h-4 w-4" />
 								{:else}
 									<ChevronDown class="h-4 w-4" />
 								{/if}
 							</button>
-							<input type="text" class="nt-input nt-input-sm" bind:value={res.name}
-								placeholder="resource-name" />
-							<select class="nt-input nt-input-sm nt-select" style="max-width: 10rem" bind:value={res.type}>
+							<input
+								type="text"
+								class="nt-input nt-input-sm"
+								bind:value={res.name}
+								placeholder="resource-name"
+							/>
+							<select
+								class="nt-input nt-input-sm nt-select"
+								style="max-width: 10rem"
+								bind:value={res.type}
+							>
 								<option value="deployment">Deployment</option>
 								<option value="database">Database</option>
 								<option value="ingress">Ingress</option>
@@ -691,26 +770,38 @@ resources:
 								{#if res.type === 'database'}
 									<div class="nt-field">
 										<label class="nt-label-sm">Database Name</label>
-										<input type="text" class="nt-input nt-input-sm" bind:value={res.dbName}
-											placeholder={"{{ params.app-name }}-db"} />
+										<input
+											type="text"
+											class="nt-input nt-input-sm"
+											bind:value={res.dbName}
+											placeholder={'{{ params.app-name }}-db'}
+										/>
 										<p class="nt-hint">Supports interpolation</p>
 									</div>
 									<div class="nt-res-context">
 										<span class="nt-label-sm">Available in context:</span>
-										<code>id</code> <code>host</code> <code>port</code> <code>dbName</code> <code>dbUser</code> <code>dbPassword</code> <code>connectionString</code>
+										<code>id</code> <code>host</code> <code>port</code> <code>dbName</code>
+										<code>dbUser</code> <code>dbPassword</code> <code>connectionString</code>
 									</div>
-
 								{:else if res.type === 'deployment'}
 									<div class="nt-grid-2">
 										<div class="nt-field">
 											<label class="nt-label-sm">Image</label>
-											<input type="text" class="nt-input nt-input-sm" bind:value={res.image}
-												placeholder={"{{ params.image }}"} />
+											<input
+												type="text"
+												class="nt-input nt-input-sm"
+												bind:value={res.image}
+												placeholder={'{{ params.image }}'}
+											/>
 										</div>
 										<div class="nt-field">
 											<label class="nt-label-sm">Replicas</label>
-											<input type="text" class="nt-input nt-input-sm" bind:value={res.replicas}
-												placeholder="1" />
+											<input
+												type="text"
+												class="nt-input nt-input-sm"
+												bind:value={res.replicas}
+												placeholder="1"
+											/>
 										</div>
 									</div>
 
@@ -724,9 +815,24 @@ resources:
 										</div>
 										{#each res.ports as port, pi}
 											<div class="nt-port-row">
-												<input type="text" class="nt-input nt-input-xs" bind:value={port.name} placeholder="name" />
-												<input type="number" class="nt-input nt-input-xs" bind:value={port.containerPort} placeholder="container" />
-												<input type="number" class="nt-input nt-input-xs" bind:value={port.servicePort} placeholder="service" />
+												<input
+													type="text"
+													class="nt-input nt-input-xs"
+													bind:value={port.name}
+													placeholder="name"
+												/>
+												<input
+													type="number"
+													class="nt-input nt-input-xs"
+													bind:value={port.containerPort}
+													placeholder="container"
+												/>
+												<input
+													type="number"
+													class="nt-input nt-input-xs"
+													bind:value={port.servicePort}
+													placeholder="service"
+												/>
 												<select class="nt-input nt-input-xs nt-select" bind:value={port.protocol}>
 													<option value="TCP">TCP</option>
 													<option value="UDP">UDP</option>
@@ -748,10 +854,18 @@ resources:
 										</div>
 										{#each res.env as env, ei}
 											<div class="nt-env-row">
-												<input type="text" class="nt-input nt-input-sm nt-input-mono" bind:value={env.key}
-													placeholder="KEY" />
-												<input type="text" class="nt-input nt-input-sm" bind:value={env.value}
-													placeholder={"value or {{ params.x }}"} />
+												<input
+													type="text"
+													class="nt-input nt-input-sm nt-input-mono"
+													bind:value={env.key}
+													placeholder="KEY"
+												/>
+												<input
+													type="text"
+													class="nt-input nt-input-sm"
+													bind:value={env.value}
+													placeholder={'value or {{ params.x }}'}
+												/>
 												<button class="nt-remove-btn-sm" onclick={() => removeEnvVar(ri, ei)}>
 													<Trash2 class="h-3 w-3" />
 												</button>
@@ -763,13 +877,16 @@ resources:
 										<span class="nt-label-sm">Available in context:</span>
 										<code>id</code> <code>serviceName</code>
 									</div>
-
 								{:else if res.type === 'ingress'}
 									<div class="nt-grid-2">
 										<div class="nt-field">
 											<label class="nt-label-sm">Host</label>
-											<input type="text" class="nt-input nt-input-sm" bind:value={res.host}
-												placeholder={"{{ params.domain }}"} />
+											<input
+												type="text"
+												class="nt-input nt-input-sm"
+												bind:value={res.host}
+												placeholder={'{{ params.domain }}'}
+											/>
 										</div>
 										<div class="nt-field nt-field-check" style="padding-top: 1.25rem">
 											<label class="nt-check-label">
@@ -789,12 +906,26 @@ resources:
 										</div>
 										{#each res.routes as route, roi}
 											<div class="nt-route-row">
-												<input type="text" class="nt-input nt-input-sm" bind:value={route.path}
-													placeholder="/" style="max-width: 5rem" />
-												<input type="text" class="nt-input nt-input-sm" bind:value={route.serviceName}
-													placeholder={"{{ resources.app.serviceName }}"} />
-												<input type="number" class="nt-input nt-input-sm" bind:value={route.servicePort}
-													placeholder="80" style="max-width: 5rem" />
+												<input
+													type="text"
+													class="nt-input nt-input-sm"
+													bind:value={route.path}
+													placeholder="/"
+													style="max-width: 5rem"
+												/>
+												<input
+													type="text"
+													class="nt-input nt-input-sm"
+													bind:value={route.serviceName}
+													placeholder={'{{ resources.app.serviceName }}'}
+												/>
+												<input
+													type="number"
+													class="nt-input nt-input-sm"
+													bind:value={route.servicePort}
+													placeholder="80"
+													style="max-width: 5rem"
+												/>
 												<button class="nt-remove-btn-sm" onclick={() => removeRoute(ri, roi)}>
 													<Trash2 class="h-3 w-3" />
 												</button>
@@ -853,7 +984,9 @@ resources:
 		margin-bottom: 1.5rem;
 		transition: color 0.15s;
 	}
-	.nt-back:hover { color: var(--center-channel-color); }
+	.nt-back:hover {
+		color: var(--center-channel-color);
+	}
 
 	.nt-header {
 		display: flex;
@@ -916,7 +1049,11 @@ resources:
 	}
 
 	/* YAML editor */
-	.nt-yaml-section { display: flex; flex-direction: column; gap: 0.75rem; }
+	.nt-yaml-section {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
 	.nt-yaml-hint {
 		font-size: 0.8125rem;
 		color: var(--surface-muted);
@@ -951,7 +1088,11 @@ resources:
 	}
 
 	/* Visual editor */
-	.nt-visual { display: flex; flex-direction: column; gap: 1.5rem; }
+	.nt-visual {
+		display: flex;
+		flex-direction: column;
+		gap: 1.5rem;
+	}
 
 	.nt-section {
 		border: 1px solid var(--surface-border);
@@ -991,8 +1132,14 @@ resources:
 	}
 
 	/* Fields */
-	.nt-field { display: flex; flex-direction: column; gap: 0.25rem; }
-	.nt-field-check { justify-content: center; }
+	.nt-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
+	.nt-field-check {
+		justify-content: center;
+	}
 	.nt-label {
 		font-size: 0.8125rem;
 		font-weight: 500;
@@ -1003,7 +1150,9 @@ resources:
 		font-weight: 500;
 		color: var(--surface-muted);
 	}
-	.nt-req { color: var(--error-text-color); }
+	.nt-req {
+		color: var(--error-text-color);
+	}
 	.nt-hint {
 		font-size: 0.6875rem;
 		color: var(--surface-muted);
@@ -1022,12 +1171,20 @@ resources:
 		outline: none;
 		border-color: var(--sidebar-text-active-border);
 	}
-	.nt-input-sm { padding: 0.375rem 0.625rem; font-size: 0.8125rem; }
-	.nt-input-xs { padding: 0.25rem 0.5rem; font-size: 0.75rem; }
+	.nt-input-sm {
+		padding: 0.375rem 0.625rem;
+		font-size: 0.8125rem;
+	}
+	.nt-input-xs {
+		padding: 0.25rem 0.5rem;
+		font-size: 0.75rem;
+	}
 	.nt-input-mono {
 		font-family: var(--font-mono);
 	}
-	.nt-select { cursor: pointer; }
+	.nt-select {
+		cursor: pointer;
+	}
 
 	.nt-check-label {
 		display: flex;
@@ -1039,8 +1196,16 @@ resources:
 	}
 
 	/* Grids */
-	.nt-grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 0.75rem; }
-	.nt-grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 0.75rem; }
+	.nt-grid-2 {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 0.75rem;
+	}
+	.nt-grid-3 {
+		display: grid;
+		grid-template-columns: 1fr 1fr 1fr;
+		gap: 0.75rem;
+	}
 
 	/* Param cards */
 	.nt-param-card {
@@ -1115,12 +1280,17 @@ resources:
 	}
 
 	/* Rows */
-	.nt-env-row, .nt-port-row, .nt-route-row, .nt-option-row {
+	.nt-env-row,
+	.nt-port-row,
+	.nt-route-row,
+	.nt-option-row {
 		display: flex;
 		align-items: center;
 		gap: 0.375rem;
 	}
-	.nt-env-row > input:first-child { max-width: 12rem; }
+	.nt-env-row > input:first-child {
+		max-width: 12rem;
+	}
 
 	/* Buttons */
 	.nt-add-btn {
@@ -1192,7 +1362,9 @@ resources:
 		cursor: pointer;
 		flex-shrink: 0;
 	}
-	.nt-remove-btn-sm:hover { color: var(--error-text-color); }
+	.nt-remove-btn-sm:hover {
+		color: var(--error-text-color);
+	}
 
 	.nt-collapse-btn {
 		display: flex;
@@ -1241,7 +1413,10 @@ resources:
 		cursor: pointer;
 		transition: opacity 0.15s;
 	}
-	.nt-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+	.nt-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
 	.nt-btn-primary {
 		background-color: var(--sidebar-text-active-border);
 		color: #fff;

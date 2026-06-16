@@ -12,7 +12,7 @@ export function formatMemoryBytes(bytes: number): string {
 		['Ti', 1024 ** 4],
 		['Gi', 1024 ** 3],
 		['Mi', 1024 ** 2],
-		['Ki', 1024],
+		['Ki', 1024]
 	];
 	for (const [u, m] of units) {
 		if (bytes >= m) return `${(bytes / m).toFixed(2).replace(/\.?0+$/, '')} ${u}`;

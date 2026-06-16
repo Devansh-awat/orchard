@@ -10,7 +10,7 @@
 		badge,
 		actions,
 		children,
-		index = 0,
+		index = 0
 	}: {
 		title: string;
 		description?: string;
@@ -25,7 +25,10 @@
 	let headerHovered = $state(false);
 </script>
 
-<section class="ss-root" {@attach motionStagger({ index, stride: 0.06, from: { y: 12, opacity: 0, scale: 0.985 } })}>
+<section
+	class="ss-root"
+	{@attach motionStagger({ index, stride: 0.06, from: { y: 12, opacity: 0, scale: 0.985 } })}
+>
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<header
 		class="ss-header"
@@ -64,7 +67,9 @@
 		border: 1px solid var(--surface-border);
 		border-radius: 0.875rem;
 		background-color: var(--surface-bg);
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.02);
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
 		overflow: hidden;
 	}
 	.ss-header {

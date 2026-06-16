@@ -5,7 +5,13 @@
 	import { apiFetch, selectedOrganization, toasts, refreshTree, user } from '$lib/stores';
 	import {
 		Loader2,
-		Github, Container, Database, Globe, LayoutTemplate, Server, Search
+		Github,
+		Container,
+		Database,
+		Globe,
+		LayoutTemplate,
+		Server,
+		Search
 	} from 'lucide-svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 
@@ -42,37 +48,67 @@
 		icon: typeof Github;
 		color: string;
 	}> = [
-		{ id: 'deployment-github', label: 'GitHub Repository', desc: 'Build and deploy from a GitHub repo', icon: Github, color: '#6e5494' },
-		{ id: 'deployment-image', label: 'Docker Image', desc: 'Deploy a container image', icon: Container, color: '#2496ed' },
-		{ id: 'database', label: 'Database', desc: 'Create a managed PostgreSQL database', icon: Database, color: '#f59e0b' },
+		{
+			id: 'deployment-github',
+			label: 'GitHub Repository',
+			desc: 'Build and deploy from a GitHub repo',
+			icon: Github,
+			color: '#6e5494'
+		},
+		{
+			id: 'deployment-image',
+			label: 'Docker Image',
+			desc: 'Deploy a container image',
+			icon: Container,
+			color: '#2496ed'
+		},
+		{
+			id: 'database',
+			label: 'Database',
+			desc: 'Create a managed PostgreSQL database',
+			icon: Database,
+			color: '#f59e0b'
+		}
 	];
 
 	function getCategoryColor(category?: string) {
 		switch (category) {
-			case 'cms': return '#8b5cf6';
-			case 'backend': return '#3b82f6';
-			case 'frontend': return '#22c55e';
-			case 'database': return '#f59e0b';
-			default: return 'var(--surface-muted)';
+			case 'cms':
+				return '#8b5cf6';
+			case 'backend':
+				return '#3b82f6';
+			case 'frontend':
+				return '#22c55e';
+			case 'database':
+				return '#f59e0b';
+			default:
+				return 'var(--surface-muted)';
 		}
 	}
 
 	function getIconForTemplate(icon?: string) {
 		switch (icon) {
-			case 'database': return Database;
-			case 'globe': return Globe;
-			case 'wordpress': case 'ghost': case 'nodejs': return Server;
-			default: return LayoutTemplate;
+			case 'database':
+				return Database;
+			case 'globe':
+				return Globe;
+			case 'wordpress':
+			case 'ghost':
+			case 'nodejs':
+				return Server;
+			default:
+				return LayoutTemplate;
 		}
 	}
 
 	const filteredTemplates = $derived.by(() => {
 		const q = templateSearch.trim().toLowerCase();
 		if (!q) return templates;
-		return templates.filter(t =>
-			t.displayName.toLowerCase().includes(q) ||
-			t.description?.toLowerCase().includes(q) ||
-			t.tags.some(tag => tag.toLowerCase().includes(q))
+		return templates.filter(
+			(t) =>
+				t.displayName.toLowerCase().includes(q) ||
+				t.description?.toLowerCase().includes(q) ||
+				t.tags.some((tag) => tag.toLowerCase().includes(q))
 		);
 	});
 
@@ -85,23 +121,31 @@
 			]);
 
 			if (projRes.ok) {
-				projects = (await projRes.json()).map((p: any) => ({ id: p.id, name: p.name, slug: p.slug }));
+				projects = (await projRes.json()).map((p: any) => ({
+					id: p.id,
+					name: p.name,
+					slug: p.slug
+				}));
 			}
 			if (tplRes.ok) {
 				templates = await tplRes.json();
 			}
 
-			if (preselectedType && resourceOptions.find(r => r.id === preselectedType)) {
+			if (preselectedType && resourceOptions.find((r) => r.id === preselectedType)) {
 				selectedResource = preselectedType;
 			}
-		} catch { /* */ }
-		finally { loading = false; }
+		} catch {
+			/* */
+		} finally {
+			loading = false;
+		}
 	}
 
 	async function createProject(name: string): Promise<string> {
 		// Server auto-suffixes on slug collisions, so we just send the name.
 		const projRes = await apiFetch('/apiv1/projects', {
-			method: 'POST', headers: { 'Content-Type': 'application/json' },
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
 			body: JSON.stringify({ name, organizationId: selectedOrgId })
 		});
 		if (!projRes.ok) {
@@ -120,7 +164,7 @@
 	}
 
 	async function resolveProjectSlug(): Promise<string> {
-		if (preselectedProjectSlug && projects.some(p => p.slug === preselectedProjectSlug)) {
+		if (preselectedProjectSlug && projects.some((p) => p.slug === preselectedProjectSlug)) {
 			return preselectedProjectSlug;
 		}
 		if (projects.length === 0) {
@@ -137,12 +181,22 @@
 			const projSlug = await resolveProjectSlug();
 			const base = `/${orgSlug}/projects/${projSlug}`;
 			switch (type) {
-				case 'deployment-github': goto(`${base}/deployments/new?source=github`); break;
-				case 'deployment-image': goto(`${base}/deployments/new?source=image`); break;
-				case 'database': goto(`${base}/databases/new`); break;
+				case 'deployment-github':
+					goto(`${base}/deployments/new?source=github`);
+					break;
+				case 'deployment-image':
+					goto(`${base}/deployments/new?source=image`);
+					break;
+				case 'database':
+					goto(`${base}/databases/new`);
+					break;
 			}
 		} catch (e) {
-			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Something went wrong', color: 'error' });
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Something went wrong',
+				color: 'error'
+			});
 			navigating = false;
 		}
 	}
@@ -153,7 +207,11 @@
 			const projSlug = await resolveProjectSlug();
 			goto(`/${orgSlug}/projects/${projSlug}/templates/deploy/${templateId}`);
 		} catch (e) {
-			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Something went wrong', color: 'error' });
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Something went wrong',
+				color: 'error'
+			});
 			navigating = false;
 		}
 	}
@@ -162,10 +220,7 @@
 </script>
 
 <div class="nr-page">
-	<Breadcrumb crumbs={[
-		{ label: 'Home', href: `/${orgSlug}` },
-		{ label: 'New Resource' }
-	]} />
+	<Breadcrumb crumbs={[{ label: 'Home', href: `/${orgSlug}` }, { label: 'New Resource' }]} />
 
 	<div class="nr-header">
 		<h1 class="nr-title">Create a new resource</h1>
@@ -176,7 +231,10 @@
 		<div class="nr-type-grid">
 			{#each Array(4) as _}
 				<div class="nr-type-card nr-type-skeleton">
-					<div class="skeleton" style="width: 2.25rem; height: 2.25rem; border-radius: 0.5rem; flex-shrink: 0;"></div>
+					<div
+						class="skeleton"
+						style="width: 2.25rem; height: 2.25rem; border-radius: 0.5rem; flex-shrink: 0;"
+					></div>
 					<div style="flex: 1; display: flex; flex-direction: column; gap: 0.25rem;">
 						<div class="skeleton" style="height: 0.8125rem; width: 60%;"></div>
 						<div class="skeleton" style="height: 0.625rem; width: 85%;"></div>
@@ -194,7 +252,10 @@
 					disabled={navigating}
 					onclick={() => selectResourceAndGo(opt.id)}
 				>
-					<div class="nr-type-icon" style="background: color-mix(in srgb, {opt.color} 12%, transparent);">
+					<div
+						class="nr-type-icon"
+						style="background: color-mix(in srgb, {opt.color} 12%, transparent);"
+					>
 						<Icon size={18} style="color: {opt.color}" />
 					</div>
 					<div class="nr-type-text">
@@ -202,61 +263,71 @@
 						<span class="nr-type-desc">{opt.desc}</span>
 					</div>
 					{#if selectedResource === opt.id && navigating}
-						<Loader2 size={16} class="animate-spin" style="color: var(--sidebar-text-active-border); flex-shrink: 0;" />
+						<Loader2
+							size={16}
+							class="animate-spin"
+							style="color: var(--sidebar-text-active-border); flex-shrink: 0;"
+						/>
 					{/if}
 				</button>
 			{/each}
 		</div>
-	<!-- Templates -->
-	{#if templates.length > 0}
-		<div class="nr-tpl-section">
-			<div class="nr-tpl-header">
-				<h2 class="nr-section-label">Templates</h2>
-				{#if templates.length > 6}
-					<div class="nr-tpl-search-wrap">
-						<Search size={14} class="nr-tpl-search-icon" />
-						<input
-							type="search"
-							placeholder="Search templates..."
-							class="nr-tpl-search"
-							bind:value={templateSearch}
-						/>
+		<!-- Templates -->
+		{#if templates.length > 0}
+			<div class="nr-tpl-section">
+				<div class="nr-tpl-header">
+					<h2 class="nr-section-label">Templates</h2>
+					{#if templates.length > 6}
+						<div class="nr-tpl-search-wrap">
+							<Search size={14} class="nr-tpl-search-icon" />
+							<input
+								type="search"
+								placeholder="Search templates..."
+								class="nr-tpl-search"
+								bind:value={templateSearch}
+							/>
+						</div>
+					{/if}
+				</div>
+
+				{#if filteredTemplates.length === 0}
+					<p class="nr-tpl-empty">No templates match your search</p>
+				{:else}
+					<div class="nr-tpl-grid">
+						{#each filteredTemplates as template}
+							{@const Icon = getIconForTemplate(template.icon)}
+							{@const color = getCategoryColor(template.category)}
+							<button
+								class="nr-tpl-card"
+								disabled={navigating}
+								onclick={() => deployTemplate(template.id)}
+							>
+								<div
+									class="nr-tpl-icon"
+									style="background: color-mix(in srgb, {color} 12%, transparent);"
+								>
+									<Icon size={16} style="color: {color}" />
+								</div>
+								<div class="nr-tpl-text">
+									<span class="nr-tpl-name">{template.displayName}</span>
+									{#if template.description}
+										<span class="nr-tpl-desc">{template.description}</span>
+									{/if}
+								</div>
+								{#if template.category}
+									<span
+										class="nr-tpl-badge"
+										style="background: color-mix(in srgb, {color} 12%, transparent); color: {color};"
+									>
+										{template.category}
+									</span>
+								{/if}
+							</button>
+						{/each}
 					</div>
 				{/if}
 			</div>
-
-			{#if filteredTemplates.length === 0}
-				<p class="nr-tpl-empty">No templates match your search</p>
-			{:else}
-				<div class="nr-tpl-grid">
-					{#each filteredTemplates as template}
-						{@const Icon = getIconForTemplate(template.icon)}
-						{@const color = getCategoryColor(template.category)}
-						<button
-							class="nr-tpl-card"
-							disabled={navigating}
-							onclick={() => deployTemplate(template.id)}
-						>
-							<div class="nr-tpl-icon" style="background: color-mix(in srgb, {color} 12%, transparent);">
-								<Icon size={16} style="color: {color}" />
-							</div>
-							<div class="nr-tpl-text">
-								<span class="nr-tpl-name">{template.displayName}</span>
-								{#if template.description}
-									<span class="nr-tpl-desc">{template.description}</span>
-								{/if}
-							</div>
-							{#if template.category}
-								<span class="nr-tpl-badge" style="background: color-mix(in srgb, {color} 12%, transparent); color: {color};">
-									{template.category}
-								</span>
-							{/if}
-						</button>
-					{/each}
-				</div>
-			{/if}
-		</div>
-	{/if}
+		{/if}
 	{/if}
 </div>
 
@@ -302,7 +373,9 @@
 		border: 1px solid var(--surface-border);
 		background: var(--center-channel-bg);
 		cursor: pointer;
-		transition: border-color 0.15s, box-shadow 0.15s;
+		transition:
+			border-color 0.15s,
+			box-shadow 0.15s;
 	}
 
 	.nr-type-card:hover:not(:disabled) {
@@ -423,7 +496,9 @@
 		border-radius: 0.5rem;
 		background: none;
 		cursor: pointer;
-		transition: background-color 0.12s, border-color 0.12s;
+		transition:
+			background-color 0.12s,
+			border-color 0.12s;
 		text-align: left;
 		width: 100%;
 	}

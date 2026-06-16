@@ -12,7 +12,7 @@
 		onRebuild,
 		onOpenLogModal,
 		onRollback,
-		onViewBuildLogs,
+		onViewBuildLogs
 	}: {
 		deployment: Deployment;
 		rebuilding: boolean;
@@ -23,7 +23,9 @@
 	} = $props();
 
 	const isBuilding = $derived(
-		deployment.buildStatus === 'building' || deployment.buildStatus === 'queued' || deployment.buildStatus === 'pending'
+		deployment.buildStatus === 'building' ||
+			deployment.buildStatus === 'queued' ||
+			deployment.buildStatus === 'pending'
 	);
 </script>
 
@@ -34,7 +36,10 @@
 		</div>
 		{#if deployment.githubRepo}
 			<button onclick={onRebuild} disabled={rebuilding} class="btn btn-secondary btn-sm">
-				{#if rebuilding}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw size={14} class="h-3.5 w-3.5" />{/if}
+				{#if rebuilding}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw
+						size={14}
+						class="h-3.5 w-3.5"
+					/>{/if}
 				<span>Redeploy</span>
 			</button>
 		{/if}
@@ -63,7 +68,9 @@
 						<div class="dep-commit-stack">
 							<span class="dep-commit-msg dep-commit-msg--muted">Build in progress…</span>
 							<div class="dep-commit-meta">
-								<span class="dep-mini-chip"><GitBranch class="h-2.5 w-2.5" />{deployment.githubBranch || 'main'}</span>
+								<span class="dep-mini-chip"
+									><GitBranch class="h-2.5 w-2.5" />{deployment.githubBranch || 'main'}</span
+								>
 							</div>
 						</div>
 					</div>
@@ -95,7 +102,11 @@
 							<span class="dep-commit-msg" style="color: #ef4444;">Build failed</span>
 							{#if deployment.buildError}
 								<div class="dep-commit-meta">
-									<span class="dep-meta-text font-mono" style="color: color-mix(in srgb, #ef4444 60%, var(--surface-muted)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;">{deployment.buildError.split('\n')[0]}</span>
+									<span
+										class="dep-meta-text font-mono"
+										style="color: color-mix(in srgb, #ef4444 60%, var(--surface-muted)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;"
+										>{deployment.buildError.split('\n')[0]}</span
+									>
 								</div>
 							{/if}
 						</div>
@@ -129,19 +140,34 @@
 					if (hrs < 24) return `${hrs}h ago`;
 					const days = Math.floor(hrs / 24);
 					if (days < 30) return `${days}d ago`;
-					return new Date(history.createdAt).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+					return new Date(history.createdAt).toLocaleDateString('en-US', {
+						month: 'short',
+						day: 'numeric'
+					});
 				})()}
 				{@const rowFallbackMsg = history.commitSha
-					? deployment.imageHistory?.find((h) => h.commitMessage && h.commitSha === history.commitSha)?.commitMessage
+					? deployment.imageHistory?.find(
+							(h) => h.commitMessage && h.commitSha === history.commitSha
+						)?.commitMessage
 					: undefined}
 				{@const rowDisplayMsgFull = history.commitMessage || rowFallbackMsg}
 				{@const rowDisplayMsg = rowDisplayMsgFull?.split('\n')[0].trim()}
-				{@const rowBuildDuration = formatBuildDurationBetween(history.buildStartedAt, history.buildCompletedAt)}
+				{@const rowBuildDuration = formatBuildDurationBetween(
+					history.buildStartedAt,
+					history.buildCompletedAt
+				)}
 				{@const rowAuthor = history.commitAuthorUsername || history.commitAuthorName || null}
-				<div class="dep-list-row" class:dep-list-row--active={history.isActive} {@attach motionStagger({ index: _hi, stride: 0.035, from: { y: 10 } })}>
+				<div
+					class="dep-list-row"
+					class:dep-list-row--active={history.isActive}
+					{@attach motionStagger({ index: _hi, stride: 0.035, from: { y: 10 } })}
+				>
 					<div class="dep-col-status">
 						<span class="dep-status">
-							<span class="dep-status-dot dep-status-dot--ready" class:dep-status-dot--live={history.isActive}></span>
+							<span
+								class="dep-status-dot dep-status-dot--ready"
+								class:dep-status-dot--live={history.isActive}
+							></span>
 							<span class="dep-status-label">Ready</span>
 						</span>
 						{#if history.isActive}
@@ -153,13 +179,17 @@
 							{#if rowDisplayMsg}
 								<span class="dep-commit-msg" title={rowDisplayMsgFull}>{rowDisplayMsg}</span>
 							{:else if history.branch}
-								<span class="dep-commit-msg dep-commit-msg--muted">Deployed from {history.branch}</span>
+								<span class="dep-commit-msg dep-commit-msg--muted"
+									>Deployed from {history.branch}</span
+								>
 							{:else}
 								<span class="dep-commit-msg dep-commit-msg--muted">Image build</span>
 							{/if}
 							<div class="dep-commit-meta">
 								{#if history.branch}
-									<span class="dep-mini-chip"><GitBranch class="h-2.5 w-2.5" />{history.branch}</span>
+									<span class="dep-mini-chip"
+										><GitBranch class="h-2.5 w-2.5" />{history.branch}</span
+									>
 								{/if}
 								{#if history.commitSha && deployment.githubRepo}
 									<a
@@ -210,11 +240,19 @@
 						</span>
 					</div>
 					<div class="dep-col-actions">
-						<button onclick={() => onOpenLogModal(history.id)} class="dep-action-btn" title="View logs">
+						<button
+							onclick={() => onOpenLogModal(history.id)}
+							class="dep-action-btn"
+							title="View logs"
+						>
 							<Terminal size={14} class="h-3.5 w-3.5" />
 						</button>
 						{#if !history.isActive}
-							<button onclick={() => onRollback(history.id)} class="dep-action-btn dep-action-btn--primary" title="Promote to production">
+							<button
+								onclick={() => onRollback(history.id)}
+								class="dep-action-btn dep-action-btn--primary"
+								title="Promote to production"
+							>
 								<RefreshCw size={14} class="h-3.5 w-3.5" />
 							</button>
 						{/if}
@@ -224,8 +262,12 @@
 		</div>
 	{:else}
 		<div class="dep-list-empty">
-			<span style="color: var(--surface-muted);"><History size={32} class="h-8 w-8 mx-auto mb-2" /></span>
-			<p class="text-sm font-medium" style="color: var(--center-channel-color);">No deployments yet</p>
+			<span style="color: var(--surface-muted);"
+				><History size={32} class="h-8 w-8 mx-auto mb-2" /></span
+			>
+			<p class="text-sm font-medium" style="color: var(--center-channel-color);">
+				No deployments yet
+			</p>
 			<p class="text-xs mt-1" style="color: var(--surface-muted);">
 				{#if deployment.githubRepo}
 					Push a commit to {deployment.githubBranch || 'main'} to trigger your first deployment.

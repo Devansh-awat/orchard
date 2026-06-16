@@ -16,22 +16,43 @@
 		buildStepTimestamps?: Record<string, number> | null;
 	}
 
-	let { status, buildStatus = 'none', buildStep, buildLogs, buildError, isGitHubDeploy, warnings, buildStepTimestamps }: Props = $props();
+	let {
+		status,
+		buildStatus = 'none',
+		buildStep,
+		buildLogs,
+		buildError,
+		isGitHubDeploy,
+		warnings,
+		buildStepTimestamps
+	}: Props = $props();
 
 	function sanitizeLogs(logs: string | null | undefined): string {
 		if (!logs) return '';
 
 		let sanitized = logs;
 
-		sanitized = sanitized.replace(/(x-access-token:|ghs_|ghp_|github_pat_)[a-zA-Z0-9_]+/gi, '***REDACTED***');
+		sanitized = sanitized.replace(
+			/(x-access-token:|ghs_|ghp_|github_pat_)[a-zA-Z0-9_]+/gi,
+			'***REDACTED***'
+		);
 
-		sanitized = sanitized.replace(/https?:\/\/[^:@\s]+:[^@\s]+@github\.com/gi, 'https://***@github.com');
+		sanitized = sanitized.replace(
+			/https?:\/\/[^:@\s]+:[^@\s]+@github\.com/gi,
+			'https://***@github.com'
+		);
 
 		sanitized = sanitized.replace(/https?:\/\/[^@\s]+@github\.com/gi, 'https://***@github.com');
 
-		sanitized = sanitized.replace(/(Bearer|Token|Authorization:)\s+[a-zA-Z0-9_\-\.]+/gi, '$1 ***REDACTED***');
+		sanitized = sanitized.replace(
+			/(Bearer|Token|Authorization:)\s+[a-zA-Z0-9_\-\.]+/gi,
+			'$1 ***REDACTED***'
+		);
 
-		sanitized = sanitized.replace(/(password|passwd|pwd|secret|key|token)[\s]*[=:]['"]?([^\s'"]+)/gi, '$1=***REDACTED***');
+		sanitized = sanitized.replace(
+			/(password|passwd|pwd|secret|key|token)[\s]*[=:]['"]?([^\s'"]+)/gi,
+			'$1=***REDACTED***'
+		);
 
 		return sanitized;
 	}
@@ -74,13 +95,21 @@
 		{ id: 'cloning', label: 'Cloning repository', description: 'Fetching source code from GitHub' },
 		{ id: 'building', label: 'Building image', description: 'Creating Docker image' },
 		{ id: 'pushing', label: 'Pushing image', description: 'Uploading to container registry' },
-		{ id: 'deploying', label: 'Creating deployment', description: 'Setting up Kubernetes resources' },
+		{
+			id: 'deploying',
+			label: 'Creating deployment',
+			description: 'Setting up Kubernetes resources'
+		},
 		{ id: 'complete', label: 'Done', description: 'Deployment is ready' }
 	];
 
 	// Define steps for image-based deployments
 	const imageSteps = [
-		{ id: 'deploying', label: 'Creating deployment', description: 'Setting up Kubernetes resources' },
+		{
+			id: 'deploying',
+			label: 'Creating deployment',
+			description: 'Setting up Kubernetes resources'
+		},
 		{ id: 'service', label: 'Creating service', description: 'Configuring network access' },
 		{ id: 'complete', label: 'Spinning up pods', description: 'Starting containers' }
 	];
@@ -122,7 +151,7 @@
 		// post-cloning.
 		const stepKeys = Object.keys(buildStepTimestamps);
 		if (stepKeys.length === 0) return null;
-		const startTime = Math.min(...stepKeys.map(k => buildStepTimestamps![k]));
+		const startTime = Math.min(...stepKeys.map((k) => buildStepTimestamps![k]));
 		const endTime = buildStepTimestamps['complete'];
 		if (!endTime) return null;
 		return Math.max(0, Math.floor((endTime - startTime) / 1000));
@@ -144,7 +173,10 @@
 					Build failed
 				{:else if buildStatus === 'succeeded'}
 					{#if totalDurationSeconds !== null}
-						Build completed in <AnimatedNumber value={totalDurationSeconds} format={formatDuration} />
+						Build completed in <AnimatedNumber
+							value={totalDurationSeconds}
+							format={formatDuration}
+						/>
 					{:else}
 						Build succeeded
 					{/if}
@@ -193,7 +225,10 @@
 					{@const startTime = getStepTimestamp(step.id)}
 					{#if startTime}
 						{@const nextStepIndex = index + 1}
-						{@const nextStepStartTime = nextStepIndex < steps.length ? getStepTimestamp(steps[nextStepIndex].id) : getStepTimestamp('complete')}
+						{@const nextStepStartTime =
+							nextStepIndex < steps.length
+								? getStepTimestamp(steps[nextStepIndex].id)
+								: getStepTimestamp('complete')}
 						{#if nextStepStartTime}
 							{@const duration = Math.max(0, Math.floor((nextStepStartTime - startTime) / 1000))}
 							<AnimatedNumber
@@ -231,7 +266,12 @@
 		<div class="warning-box mt-4 rounded-lg p-4">
 			<div class="flex items-start gap-2 mb-2">
 				<svg class="h-5 w-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />
+					<path
+						stroke-linecap="round"
+						stroke-linejoin="round"
+						stroke-width="2"
+						d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
+					/>
 				</svg>
 				<div class="flex-1 min-w-0">
 					<p class="text-sm font-medium">Pod Warnings</p>
@@ -325,7 +365,8 @@
 	.step-row-active :global(svg) {
 		width: 1.15rem;
 		height: 1.15rem;
-		transition: width 360ms cubic-bezier(0.34, 1.56, 0.64, 1),
+		transition:
+			width 360ms cubic-bezier(0.34, 1.56, 0.64, 1),
 			height 360ms cubic-bezier(0.34, 1.56, 0.64, 1);
 	}
 

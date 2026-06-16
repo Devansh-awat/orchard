@@ -10,7 +10,7 @@
 		X,
 		Check,
 		ChevronLeft,
-		ChevronRight,
+		ChevronRight
 	} from 'lucide-svelte';
 
 	interface UserItem {
@@ -63,7 +63,7 @@
 			toasts.add({
 				title: 'Error',
 				description: e instanceof Error ? e.message : 'Failed to fetch users',
-				color: 'error',
+				color: 'error'
 			});
 		} finally {
 			loading = false;
@@ -98,8 +98,8 @@
 				body: JSON.stringify({
 					firstName: editFirstName,
 					lastName: editLastName,
-					isSuperAdmin: editIsSuperAdmin,
-				}),
+					isSuperAdmin: editIsSuperAdmin
+				})
 			});
 			if (!response.ok) {
 				const data = await response.json();
@@ -112,7 +112,7 @@
 			toasts.add({
 				title: 'Error',
 				description: e instanceof Error ? e.message : 'Failed to update user',
-				color: 'error',
+				color: 'error'
 			});
 		} finally {
 			saving = false;
@@ -124,7 +124,7 @@
 		deleting = true;
 		try {
 			const response = await apiFetch(`/apiv1/admin/users/${deletingUser.id}`, {
-				method: 'DELETE',
+				method: 'DELETE'
 			});
 			if (!response.ok) {
 				const data = await response.json();
@@ -137,7 +137,7 @@
 			toasts.add({
 				title: 'Error',
 				description: e instanceof Error ? e.message : 'Failed to delete user',
-				color: 'error',
+				color: 'error'
 			});
 		} finally {
 			deleting = false;
@@ -179,9 +179,7 @@
 			<Loader2 class="h-6 w-6 animate-spin text-primary-600" />
 		</div>
 	{:else if users.length === 0}
-		<div class="p-8 text-center" style="color: var(--surface-muted);">
-			No users found
-		</div>
+		<div class="p-8 text-center" style="color: var(--surface-muted);">No users found</div>
 	{:else}
 		<div class="overflow-x-auto">
 			<table class="w-full text-sm">
@@ -220,7 +218,8 @@
 									{/if}
 									<div>
 										<p class="font-medium">
-											{user.firstName || ''} {user.lastName || ''}
+											{user.firstName || ''}
+											{user.lastName || ''}
 											{#if !user.firstName && !user.lastName}
 												<span style="color: var(--surface-muted);">No name</span>
 											{/if}
@@ -366,7 +365,8 @@
 				Are you sure you want to delete this user?
 			</p>
 			<p class="text-sm font-medium mb-4">
-				{deletingUser.firstName || ''} {deletingUser.lastName || ''} ({deletingUser.email})
+				{deletingUser.firstName || ''}
+				{deletingUser.lastName || ''} ({deletingUser.email})
 			</p>
 			<p class="text-xs text-red-500 mb-4">
 				This action cannot be undone. All their data will be permanently deleted.

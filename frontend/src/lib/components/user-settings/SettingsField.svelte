@@ -12,7 +12,7 @@
 		onSave,
 		onCancel,
 		onStartEdit,
-		onKeydown,
+		onKeydown
 	}: {
 		label: string;
 		value: string;
@@ -57,7 +57,10 @@
 					onmouseenter={() => (saveBtnHovered = true)}
 					onmouseleave={() => (saveBtnHovered = false)}
 				>
-					{#if saving}<Loader2 class="h-3 w-3 animate-spin" />{:else}<CheckAnim size={14} animate={saveBtnHovered} />{/if}
+					{#if saving}<Loader2 class="h-3 w-3 animate-spin" />{:else}<CheckAnim
+							size={14}
+							animate={saveBtnHovered}
+						/>{/if}
 				</button>
 				<button
 					class="sf-action"
@@ -154,11 +157,17 @@
 		background-color: var(--surface-bg);
 		color: var(--center-channel-color);
 		box-shadow: 0 0 0 2px color-mix(in srgb, var(--sidebar-text-active-border) 10%, transparent);
-		transition: border-color 150ms, box-shadow 150ms;
+		transition:
+			border-color 150ms,
+			box-shadow 150ms;
 		line-height: 1.5;
 	}
-	.sf-input:focus { outline: none; }
-	.sf-input::placeholder { color: color-mix(in srgb, var(--surface-muted) 55%, transparent); }
+	.sf-input:focus {
+		outline: none;
+	}
+	.sf-input::placeholder {
+		color: color-mix(in srgb, var(--surface-muted) 55%, transparent);
+	}
 	.sf-input--mono {
 		font-family: var(--font-mono);
 		font-size: 0.8125rem;
@@ -186,10 +195,15 @@
 		color: var(--center-channel-color);
 		background-color: color-mix(in srgb, var(--center-channel-color) 6%, transparent);
 	}
-	.sf-action--save { color: var(--button-bg); }
+	.sf-action--save {
+		color: var(--button-bg);
+	}
 	.sf-action--save:hover {
 		color: var(--button-bg);
 		background-color: color-mix(in srgb, var(--button-bg) 10%, transparent);
 	}
-	.sf-action:disabled { opacity: 0.4; cursor: not-allowed; }
+	.sf-action:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
 </style>

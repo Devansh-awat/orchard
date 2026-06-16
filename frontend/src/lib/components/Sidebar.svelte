@@ -27,7 +27,9 @@
 	const isEnterprise = $derived($selectedOrganization?.plan === 'enterprise');
 	const isSettingsRoute = $derived($page.url.pathname.startsWith('/' + orgSlug + '/settings'));
 	const settingsTab = $derived($page.url.searchParams.get('tab') || 'general');
-	const isAuditLogsRoute = $derived($page.url.pathname.startsWith('/' + orgSlug + '/settings/audit-logs'));
+	const isAuditLogsRoute = $derived(
+		$page.url.pathname.startsWith('/' + orgSlug + '/settings/audit-logs')
+	);
 	// Org overview has an `auto-fill` grid whose column count flips mid-spring
 	// when the sidebar width swings ~192px, snapping every card to a new cell.
 	// On just that page, fall back to the original short CSS width transition.
@@ -145,9 +147,12 @@
 					icon.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
 				});
 			};
-			const leave = () => animate(t, { y: 0 }, { type: 'spring', stiffness: stiffness * 0.8, damping: damping + 4 });
-			const press = () => animate(t, { scale: 0.94 }, { type: 'spring', stiffness: 600, damping: 28 });
-			const release = () => animate(t, { scale: 1 }, { type: 'spring', stiffness: 420, damping: 18 });
+			const leave = () =>
+				animate(t, { y: 0 }, { type: 'spring', stiffness: stiffness * 0.8, damping: damping + 4 });
+			const press = () =>
+				animate(t, { scale: 0.94 }, { type: 'spring', stiffness: 600, damping: 28 });
+			const release = () =>
+				animate(t, { scale: 1 }, { type: 'spring', stiffness: 420, damping: 18 });
 			t.addEventListener('mouseenter', enter);
 			t.addEventListener('mouseleave', leave);
 			t.addEventListener('pointerdown', press);
@@ -200,40 +205,38 @@
 						<WorkspacesMenu collapsed />
 					{/if}
 				</div>
+			{:else if isSettingsRoute}
+				<div class="flex items-center gap-2">
+					<a href="/{orgSlug}" class="settings-back-btn" {@attach springHover({ lift: -1 })}>
+						<ArrowLeft size={16} />
+						<span>Back</span>
+					</a>
+					<div class="flex-1"></div>
+					<button
+						onclick={() => sidebarCollapsed.toggle()}
+						class="sidebar-action"
+						aria-label="Collapse sidebar"
+						{@attach springHover()}
+						{@attach togglePop}
+					>
+						<PanelLeftClose size={20} />
+					</button>
+				</div>
 			{:else}
-				{#if isSettingsRoute}
-					<div class="flex items-center gap-2">
-						<a href="/{orgSlug}" class="settings-back-btn" {@attach springHover({ lift: -1 })}>
-							<ArrowLeft size={16} />
-							<span>Back</span>
-						</a>
-						<div class="flex-1"></div>
-						<button
-							onclick={() => sidebarCollapsed.toggle()}
-							class="sidebar-action"
-							aria-label="Collapse sidebar"
-							{@attach springHover()}
-							{@attach togglePop}
-						>
-							<PanelLeftClose size={20} />
-						</button>
+				<div class="flex items-center gap-2">
+					<div class="flex-1">
+						<WorkspacesMenu />
 					</div>
-				{:else}
-					<div class="flex items-center gap-2">
-						<div class="flex-1">
-							<WorkspacesMenu />
-						</div>
-						<button
-							onclick={() => sidebarCollapsed.toggle()}
-							class="sidebar-action"
-							aria-label="Collapse sidebar"
-							{@attach springHover()}
-							{@attach togglePop}
-						>
-							<PanelLeftClose size={20} />
-						</button>
-					</div>
-				{/if}
+					<button
+						onclick={() => sidebarCollapsed.toggle()}
+						class="sidebar-action"
+						aria-label="Collapse sidebar"
+						{@attach springHover()}
+						{@attach togglePop}
+					>
+						<PanelLeftClose size={20} />
+					</button>
+				</div>
 			{/if}
 		</div>
 
@@ -415,44 +418,44 @@
 					<!-- Without a selected org the slug is empty and these hrefs would
 					     render as "//projects" — a protocol-relative external URL. -->
 					{#if orgSlug}
-					<div class="sidebar-home-link">
-						<a
-							href="/{orgSlug}"
-							class="tree-node-content"
-							class:is-active={$page.url.pathname === '/' + orgSlug}
-							{@attach navStagger(0)}
-							{@attach springHover({ lift: -1 })}
-						>
-							<div class="tree-icon-badge" style="background-color: #22c55e">
-								<Leaf size={10} class="tree-icon-svg" />
-							</div>
-							<span class="tree-node-label">Overview</span>
-						</a>
-						<a
-							href="/{orgSlug}/projects"
-							class="tree-node-content"
-							class:is-active={$page.url.pathname.startsWith('/' + orgSlug + '/projects')}
-							{@attach navStagger(1)}
-							{@attach springHover({ lift: -1 })}
-						>
-							<div class="tree-icon-badge" style="background-color: #4a8aff">
-								<Folder size={10} class="tree-icon-svg" />
-							</div>
-							<span class="tree-node-label">Projects</span>
-						</a>
-						<a
-							href="/{orgSlug}/usage"
-							class="tree-node-content"
-							class:is-active={$page.url.pathname.startsWith('/' + orgSlug + '/usage')}
-							{@attach navStagger(2)}
-							{@attach springHover({ lift: -1 })}
-						>
-							<div class="tree-icon-badge" style="background-color: #f59e0b">
-								<Activity size={10} class="tree-icon-svg" />
-							</div>
-							<span class="tree-node-label">Usage</span>
-						</a>
-					</div>
+						<div class="sidebar-home-link">
+							<a
+								href="/{orgSlug}"
+								class="tree-node-content"
+								class:is-active={$page.url.pathname === '/' + orgSlug}
+								{@attach navStagger(0)}
+								{@attach springHover({ lift: -1 })}
+							>
+								<div class="tree-icon-badge" style="background-color: #22c55e">
+									<Leaf size={10} class="tree-icon-svg" />
+								</div>
+								<span class="tree-node-label">Overview</span>
+							</a>
+							<a
+								href="/{orgSlug}/projects"
+								class="tree-node-content"
+								class:is-active={$page.url.pathname.startsWith('/' + orgSlug + '/projects')}
+								{@attach navStagger(1)}
+								{@attach springHover({ lift: -1 })}
+							>
+								<div class="tree-icon-badge" style="background-color: #4a8aff">
+									<Folder size={10} class="tree-icon-svg" />
+								</div>
+								<span class="tree-node-label">Projects</span>
+							</a>
+							<a
+								href="/{orgSlug}/usage"
+								class="tree-node-content"
+								class:is-active={$page.url.pathname.startsWith('/' + orgSlug + '/usage')}
+								{@attach navStagger(2)}
+								{@attach springHover({ lift: -1 })}
+							>
+								<div class="tree-icon-badge" style="background-color: #f59e0b">
+									<Activity size={10} class="tree-icon-svg" />
+								</div>
+								<span class="tree-node-label">Usage</span>
+							</a>
+						</div>
 					{/if}
 				</div>
 			{:else}
@@ -467,45 +470,47 @@
 						<div class="sidebar-search-icon-wrapper">
 							<Search size={16} />
 						</div>
-						<span class="sidebar-collapsed-tooltip">Search <kbd class="sidebar-collapsed-tooltip-kbd">{shortcutKey}K</kbd></span>
+						<span class="sidebar-collapsed-tooltip"
+							>Search <kbd class="sidebar-collapsed-tooltip-kbd">{shortcutKey}K</kbd></span
+						>
 					</button>
 					{#if orgSlug}
-					<a
-						href="/{orgSlug}"
-						class="sidebar-collapsed-icon"
-						class:is-active={$page.url.pathname === '/' + orgSlug}
-						aria-label="Overview"
-						{@attach springHover()}
-					>
-						<div class="tree-icon-badge" style="background-color: #22c55e">
-							<Leaf size={11} class="tree-icon-svg" />
-						</div>
-						<span class="sidebar-collapsed-tooltip">Overview</span>
-					</a>
-					<a
-						href="/{orgSlug}/projects"
-						class="sidebar-collapsed-icon"
-						class:is-active={$page.url.pathname.startsWith('/' + orgSlug + '/projects')}
-						aria-label="Projects"
-						{@attach springHover()}
-					>
-						<div class="tree-icon-badge" style="background-color: #4a8aff">
-							<Folder size={11} class="tree-icon-svg" />
-						</div>
-						<span class="sidebar-collapsed-tooltip">Projects</span>
-					</a>
-					<a
-						href="/{orgSlug}/usage"
-						class="sidebar-collapsed-icon"
-						class:is-active={$page.url.pathname.startsWith('/' + orgSlug + '/usage')}
-						aria-label="Usage"
-						{@attach springHover()}
-					>
-						<div class="tree-icon-badge" style="background-color: #f59e0b">
-							<Activity size={11} class="tree-icon-svg" />
-						</div>
-						<span class="sidebar-collapsed-tooltip">Usage</span>
-					</a>
+						<a
+							href="/{orgSlug}"
+							class="sidebar-collapsed-icon"
+							class:is-active={$page.url.pathname === '/' + orgSlug}
+							aria-label="Overview"
+							{@attach springHover()}
+						>
+							<div class="tree-icon-badge" style="background-color: #22c55e">
+								<Leaf size={11} class="tree-icon-svg" />
+							</div>
+							<span class="sidebar-collapsed-tooltip">Overview</span>
+						</a>
+						<a
+							href="/{orgSlug}/projects"
+							class="sidebar-collapsed-icon"
+							class:is-active={$page.url.pathname.startsWith('/' + orgSlug + '/projects')}
+							aria-label="Projects"
+							{@attach springHover()}
+						>
+							<div class="tree-icon-badge" style="background-color: #4a8aff">
+								<Folder size={11} class="tree-icon-svg" />
+							</div>
+							<span class="sidebar-collapsed-tooltip">Projects</span>
+						</a>
+						<a
+							href="/{orgSlug}/usage"
+							class="sidebar-collapsed-icon"
+							class:is-active={$page.url.pathname.startsWith('/' + orgSlug + '/usage')}
+							aria-label="Usage"
+							{@attach springHover()}
+						>
+							<div class="tree-icon-badge" style="background-color: #f59e0b">
+								<Activity size={11} class="tree-icon-svg" />
+							</div>
+							<span class="sidebar-collapsed-tooltip">Usage</span>
+						</a>
 					{/if}
 				</div>
 			{/if}
@@ -530,7 +535,9 @@
 		opacity: 0.7;
 		padding: 0.375rem 0.5rem;
 		border-radius: 0.375rem;
-		transition: opacity 120ms ease, background-color 120ms ease;
+		transition:
+			opacity 120ms ease,
+			background-color 120ms ease;
 		text-decoration: none;
 	}
 	.settings-back-btn:hover {

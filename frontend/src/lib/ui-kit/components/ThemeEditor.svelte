@@ -9,14 +9,7 @@
 		type SimpleThemeColors
 	} from '../stores/theme';
 	import { toasts } from '../stores/toast';
-	import {
-		ChevronDown,
-		ChevronUp,
-		Copy,
-		RotateCcw,
-		Check,
-		X
-	} from 'lucide-svelte';
+	import { ChevronDown, ChevronUp, Copy, RotateCcw, Check, X } from 'lucide-svelte';
 	import { slide } from 'svelte/transition';
 
 	interface Props {
@@ -148,7 +141,11 @@
 	<!-- Theme name and mode -->
 	<div class="grid gap-4 sm:grid-cols-2">
 		<div>
-			<label for="theme-name" class="block text-sm font-medium mb-2" style="color: var(--center-channel-color);">
+			<label
+				for="theme-name"
+				class="block text-sm font-medium mb-2"
+				style="color: var(--center-channel-color);"
+			>
 				Theme Name
 			</label>
 			<input
@@ -175,7 +172,9 @@
 					class="flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
 					class:bg-primary-600={!isDark}
 					class:text-white={!isDark}
-					style={isDark ? `background-color: var(--control-bg); color: var(--control-text); border: 1px solid var(--surface-border);` : ''}
+					style={isDark
+						? `background-color: var(--control-bg); color: var(--control-text); border: 1px solid var(--surface-border);`
+						: ''}
 					onclick={() => (isDark = false)}
 				>
 					Light
@@ -185,7 +184,9 @@
 					class="flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
 					class:bg-primary-600={isDark}
 					class:text-white={isDark}
-					style={!isDark ? `background-color: var(--control-bg); color: var(--control-text); border: 1px solid var(--surface-border);` : ''}
+					style={!isDark
+						? `background-color: var(--control-bg); color: var(--control-text); border: 1px solid var(--surface-border);`
+						: ''}
 					onclick={() => (isDark = true)}
 				>
 					Dark
@@ -228,7 +229,10 @@
 							{#each category.colors as colorDef}
 								{@const colorKey = colorDef.key as keyof SimpleThemeColors}
 								{@const colorValue = safeEditingColors[colorKey]}
-								<div class="flex items-center gap-3 p-3 rounded-lg" style="background-color: var(--control-bg);">
+								<div
+									class="flex items-center gap-3 p-3 rounded-lg"
+									style="background-color: var(--control-bg);"
+								>
 									<div class="relative">
 										<input
 											type="color"
@@ -265,13 +269,12 @@
 	</div>
 
 	<!-- Actions -->
-	<div class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t" style="border-color: var(--divider-color);">
+	<div
+		class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t"
+		style="border-color: var(--divider-color);"
+	>
 		<div class="flex gap-2">
-			<button
-				type="button"
-				class="btn btn-secondary"
-				onclick={resetToDefault}
-			>
+			<button type="button" class="btn btn-secondary" onclick={resetToDefault}>
 				<RotateCcw class="h-4 w-4" />
 				Reset to Default
 			</button>

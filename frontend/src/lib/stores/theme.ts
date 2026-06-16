@@ -186,7 +186,10 @@ function mixColors(color1: string, color2: string, weight: number): string {
 }
 
 // Generate a full primary color palette from a single accent color
-function generatePrimaryPalette(accent: string, isDark: boolean): {
+function generatePrimaryPalette(
+	accent: string,
+	isDark: boolean
+): {
 	primary50: string;
 	primary100: string;
 	primary200: string;
@@ -213,7 +216,7 @@ function generatePrimaryPalette(accent: string, isDark: boolean): {
 			primary700: hslToHex(hsl.h, hsl.s, Math.max(hsl.l - 20, 25)),
 			primary800: hslToHex(hsl.h, hsl.s, Math.max(hsl.l - 30, 20)),
 			primary900: hslToHex(hsl.h, hsl.s, Math.max(hsl.l - 40, 15)),
-			primary950: hslToHex(hsl.h, hsl.s, Math.max(hsl.l - 45, 10)),
+			primary950: hslToHex(hsl.h, hsl.s, Math.max(hsl.l - 45, 10))
 		};
 	}
 
@@ -228,7 +231,7 @@ function generatePrimaryPalette(accent: string, isDark: boolean): {
 		primary700: hslToHex(hsl.h, hsl.s + 5, Math.max(hsl.l - 18, 28)),
 		primary800: hslToHex(hsl.h, hsl.s + 5, Math.max(hsl.l - 25, 22)),
 		primary900: hslToHex(hsl.h, hsl.s + 5, Math.max(hsl.l - 32, 16)),
-		primary950: hslToHex(hsl.h, hsl.s + 5, Math.max(hsl.l - 38, 10)),
+		primary950: hslToHex(hsl.h, hsl.s + 5, Math.max(hsl.l - 38, 10))
 	};
 }
 
@@ -243,9 +246,7 @@ export function generateThemeColors(simple: SimpleThemeColors, isDark: boolean):
 	const activeBg = isDark
 		? adjustLightness(simple.sidebarBackground, 10)
 		: mixColors(simple.accent, simple.background, 0.15);
-	const controlBg = isDark
-		? simple.background
-		: adjustLightness(simple.background, -2);
+	const controlBg = isDark ? simple.background : adjustLightness(simple.background, -2);
 	const controlHoverBg = isDark
 		? adjustLightness(simple.sidebarBackground, 10)
 		: adjustLightness(simple.background, -5);
@@ -298,7 +299,7 @@ export function generateThemeColors(simple: SimpleThemeColors, isDark: boolean):
 
 		dividerColor: simple.border,
 		orgTriggerBg: controlBg,
-		orgTriggerHoverBg: controlHoverBg,
+		orgTriggerHoverBg: controlHoverBg
 	};
 }
 
@@ -315,7 +316,7 @@ const defaultLightSimple: SimpleThemeColors = {
 	sidebarForeground: '#5d3a3f',
 	error: '#d63c56',
 	success: '#33d6a6',
-	warning: '#ff8c37',
+	warning: '#ff8c37'
 };
 
 // Default simple colors for dark theme
@@ -331,7 +332,7 @@ const defaultDarkSimple: SimpleThemeColors = {
 	sidebarForeground: '#f9e8ea',
 	error: '#ff6b7d',
 	success: '#33d6a6',
-	warning: '#f1c40f',
+	warning: '#f1c40f'
 };
 
 // Default light theme
@@ -341,7 +342,7 @@ export const defaultLightTheme: Theme = {
 	isDark: false,
 	isBuiltIn: true,
 	simpleColors: defaultLightSimple,
-	colors: generateThemeColors(defaultLightSimple, false),
+	colors: generateThemeColors(defaultLightSimple, false)
 };
 
 // Default dark theme
@@ -351,7 +352,7 @@ export const defaultDarkTheme: Theme = {
 	isDark: true,
 	isBuiltIn: true,
 	simpleColors: defaultDarkSimple,
-	colors: generateThemeColors(defaultDarkSimple, true),
+	colors: generateThemeColors(defaultDarkSimple, true)
 };
 
 // Theme color categories for the editor UI - simplified!
@@ -360,8 +361,16 @@ export const themeColorCategories = [
 		name: 'Brand',
 		description: 'Your primary brand color',
 		colors: [
-			{ key: 'accent', label: 'Accent Color', description: 'Main brand color used for buttons, links, and highlights' },
-			{ key: 'accentForeground', label: 'Accent Text', description: 'Text color on accent-colored backgrounds' },
+			{
+				key: 'accent',
+				label: 'Accent Color',
+				description: 'Main brand color used for buttons, links, and highlights'
+			},
+			{
+				key: 'accentForeground',
+				label: 'Accent Text',
+				description: 'Text color on accent-colored backgrounds'
+			}
 		]
 	},
 	{
@@ -372,7 +381,7 @@ export const themeColorCategories = [
 			{ key: 'card', label: 'Card', description: 'Cards and elevated surfaces' },
 			{ key: 'foreground', label: 'Text', description: 'Main text color' },
 			{ key: 'muted', label: 'Muted Text', description: 'Secondary/subtle text' },
-			{ key: 'border', label: 'Border', description: 'Borders and dividers' },
+			{ key: 'border', label: 'Border', description: 'Borders and dividers' }
 		]
 	},
 	{
@@ -380,18 +389,22 @@ export const themeColorCategories = [
 		description: 'Navigation sidebar colors',
 		colors: [
 			{ key: 'sidebarBackground', label: 'Background', description: 'Sidebar background color' },
-			{ key: 'sidebarForeground', label: 'Text', description: 'Sidebar text color' },
+			{ key: 'sidebarForeground', label: 'Text', description: 'Sidebar text color' }
 		]
 	},
 	{
 		name: 'Status',
 		description: 'Status indicator colors',
 		colors: [
-			{ key: 'success', label: 'Success/Online', description: 'Success states and online indicator' },
+			{
+				key: 'success',
+				label: 'Success/Online',
+				description: 'Success states and online indicator'
+			},
 			{ key: 'warning', label: 'Warning/Away', description: 'Warning states and away indicator' },
-			{ key: 'error', label: 'Error/DND', description: 'Error states and do not disturb indicator' },
+			{ key: 'error', label: 'Error/DND', description: 'Error states and do not disturb indicator' }
 		]
-	},
+	}
 ] as const;
 
 // Store for custom themes
@@ -445,7 +458,7 @@ function createThemeStore() {
 	function saveCustomThemes(themes: Theme[]) {
 		if (browser) {
 			// Only save simple colors and metadata, not generated colors
-			const toSave = themes.map(t => ({
+			const toSave = themes.map((t) => ({
 				id: t.id,
 				name: t.name,
 				isDark: t.isDark,
@@ -567,7 +580,10 @@ function createThemeStore() {
 			return newTheme;
 		},
 
-		updateTheme(id: string, updates: { name?: string; isDark?: boolean; simpleColors?: SimpleThemeColors }) {
+		updateTheme(
+			id: string,
+			updates: { name?: string; isDark?: boolean; simpleColors?: SimpleThemeColors }
+		) {
 			customThemes.update((themes) => {
 				const updated = themes.map((t) => {
 					if (t.id !== id) return t;
@@ -616,11 +632,15 @@ function createThemeStore() {
 			const themes = get(allThemes);
 			const theme = themes.find((t) => t.id === id);
 			if (!theme) return null;
-			return JSON.stringify({
-				name: theme.name,
-				isDark: theme.isDark,
-				simpleColors: theme.simpleColors
-			}, null, 2);
+			return JSON.stringify(
+				{
+					name: theme.name,
+					isDark: theme.isDark,
+					simpleColors: theme.simpleColors
+				},
+				null,
+				2
+			);
 		},
 
 		importTheme(json: string): Theme | null {
@@ -631,9 +651,18 @@ function createThemeStore() {
 				}
 				// Validate simple color keys
 				const requiredKeys: (keyof SimpleThemeColors)[] = [
-					'accent', 'accentForeground', 'background', 'foreground',
-					'muted', 'border', 'card', 'sidebarBackground', 'sidebarForeground',
-					'error', 'success', 'warning'
+					'accent',
+					'accentForeground',
+					'background',
+					'foreground',
+					'muted',
+					'border',
+					'card',
+					'sidebarBackground',
+					'sidebarForeground',
+					'error',
+					'success',
+					'warning'
 				];
 				for (const key of requiredKeys) {
 					if (!data.simpleColors[key]) {

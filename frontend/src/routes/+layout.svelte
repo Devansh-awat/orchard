@@ -69,8 +69,7 @@
 				return;
 			}
 
-			const wantInvitations =
-				!shouldSkipChecks($page.url.pathname) && $user?.setupCompleted;
+			const wantInvitations = !shouldSkipChecks($page.url.pathname) && $user?.setupCompleted;
 			if (wantInvitations) {
 				void pendingInvitations
 					.fetchPending()
@@ -99,9 +98,15 @@
 
 <QueryClientProvider client={queryClient}>
 	{#if loading}
-		<div class="flex h-screen items-center justify-center" style="background-color: var(--center-channel-bg);">
+		<div
+			class="flex h-screen items-center justify-center"
+			style="background-color: var(--center-channel-bg);"
+		>
 			<div class="lds-ellipsis" style="color: var(--button-bg);">
-				<div></div><div></div><div></div><div></div>
+				<div></div>
+				<div></div>
+				<div></div>
+				<div></div>
 			</div>
 		</div>
 	{:else if $isSignedIn && $page.url.pathname.startsWith('/setup')}

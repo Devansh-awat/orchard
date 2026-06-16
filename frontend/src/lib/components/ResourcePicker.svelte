@@ -26,7 +26,7 @@
 		currentMemUsage = null,
 		maxCpuMilli = null,
 		maxMemoryBytes = null,
-		onchange,
+		onchange
 	}: Props = $props();
 
 	// Display values — convert to user-friendly units
@@ -43,7 +43,7 @@
 				else cpuInput = String(defaultCpuMilli);
 			}
 			if (defaultMemoryBytes != null) {
-				if (memUnit === 'GiB') memInput = String(+(defaultMemoryBytes / (1024 ** 3)).toFixed(2));
+				if (memUnit === 'GiB') memInput = String(+(defaultMemoryBytes / 1024 ** 3).toFixed(2));
 				else memInput = String(Math.round(defaultMemoryBytes / (1024 * 1024)));
 			}
 		} else {
@@ -52,7 +52,7 @@
 				else cpuInput = String(cpuMilli);
 			}
 			if (memoryBytes != null) {
-				if (memUnit === 'GiB') memInput = String(+(memoryBytes / (1024 ** 3)).toFixed(2));
+				if (memUnit === 'GiB') memInput = String(+(memoryBytes / 1024 ** 3).toFixed(2));
 				else memInput = String(Math.round(memoryBytes / (1024 * 1024)));
 			}
 		}
@@ -83,94 +83,136 @@
 
 	// Limit warnings
 	const cpuOverLimit = $derived(maxCpuMilli != null && cpuMilli != null && cpuMilli > maxCpuMilli);
-	const memOverLimit = $derived(maxMemoryBytes != null && memoryBytes != null && memoryBytes > maxMemoryBytes);
+	const memOverLimit = $derived(
+		maxMemoryBytes != null && memoryBytes != null && memoryBytes > maxMemoryBytes
+	);
 
 	function barColor(p: number): string {
 		if (p >= 90) return 'var(--error-text-color)';
 		if (p >= 70) return 'var(--away-indicator)';
 		return 'var(--online-indicator)';
 	}
-
-
 </script>
 
 <div class="rp-root">
 	<div class="rp-fields">
-			<!-- CPU -->
-			<div class="rp-field">
-				<div class="rp-field-header">
-					<span class="rp-field-label">CPU</span>
-					<div class="rp-unit-toggle">
-						<button type="button" class="rp-unit-btn" class:rp-unit-btn--active={cpuUnit === 'm'} onclick={() => { cpuUnit = 'm'; if (cpuMilli != null) cpuInput = String(cpuMilli); }} {disabled}>millicores</button>
-						<button type="button" class="rp-unit-btn" class:rp-unit-btn--active={cpuUnit === 'cores'} onclick={() => { cpuUnit = 'cores'; if (cpuMilli != null) cpuInput = String(cpuMilli / 1000); }} {disabled}>cores</button>
-					</div>
+		<!-- CPU -->
+		<div class="rp-field">
+			<div class="rp-field-header">
+				<span class="rp-field-label">CPU</span>
+				<div class="rp-unit-toggle">
+					<button
+						type="button"
+						class="rp-unit-btn"
+						class:rp-unit-btn--active={cpuUnit === 'm'}
+						onclick={() => {
+							cpuUnit = 'm';
+							if (cpuMilli != null) cpuInput = String(cpuMilli);
+						}}
+						{disabled}>millicores</button
+					>
+					<button
+						type="button"
+						class="rp-unit-btn"
+						class:rp-unit-btn--active={cpuUnit === 'cores'}
+						onclick={() => {
+							cpuUnit = 'cores';
+							if (cpuMilli != null) cpuInput = String(cpuMilli / 1000);
+						}}
+						{disabled}>cores</button
+					>
 				</div>
-				<div class="rp-input-row">
-					<div class="rp-input-wrap">
-						<input
-							type="number"
-							min="1"
-							step={cpuUnit === 'cores' ? '0.1' : '1'}
-							bind:value={cpuInput}
-							oninput={applyCpu}
-							placeholder={cpuUnit === 'cores' ? '0.25' : '250'}
-							{disabled}
-						/>
-						<span class="rp-input-unit">{cpuUnit === 'cores' ? 'cores' : 'm'}</span>
-					</div>
-				</div>
-				{#if cpuPct != null}
-					<div class="rp-bar-row">
-						<div class="rp-bar-track">
-							<div class="rp-bar-fill" style="width: {cpuPct}%; background-color: {barColor(cpuPct)};"></div>
-						</div>
-						<span class="rp-bar-label" style="color: {barColor(cpuPct)};">{cpuPct}% used</span>
-					</div>
-				{/if}
-				{#if cpuOverLimit}
-					<p class="rp-limit-warn">Exceeds your org limit of {formatCpu(maxCpuMilli!)}</p>
-				{:else if maxCpuMilli != null}
-					<p class="rp-limit-hint">Max allowed: {formatCpu(maxCpuMilli)}</p>
-				{/if}
 			</div>
+			<div class="rp-input-row">
+				<div class="rp-input-wrap">
+					<input
+						type="number"
+						min="1"
+						step={cpuUnit === 'cores' ? '0.1' : '1'}
+						bind:value={cpuInput}
+						oninput={applyCpu}
+						placeholder={cpuUnit === 'cores' ? '0.25' : '250'}
+						{disabled}
+					/>
+					<span class="rp-input-unit">{cpuUnit === 'cores' ? 'cores' : 'm'}</span>
+				</div>
+			</div>
+			{#if cpuPct != null}
+				<div class="rp-bar-row">
+					<div class="rp-bar-track">
+						<div
+							class="rp-bar-fill"
+							style="width: {cpuPct}%; background-color: {barColor(cpuPct)};"
+						></div>
+					</div>
+					<span class="rp-bar-label" style="color: {barColor(cpuPct)};">{cpuPct}% used</span>
+				</div>
+			{/if}
+			{#if cpuOverLimit}
+				<p class="rp-limit-warn">Exceeds your org limit of {formatCpu(maxCpuMilli!)}</p>
+			{:else if maxCpuMilli != null}
+				<p class="rp-limit-hint">Max allowed: {formatCpu(maxCpuMilli)}</p>
+			{/if}
+		</div>
 
-			<!-- Memory -->
-			<div class="rp-field">
-				<div class="rp-field-header">
-					<span class="rp-field-label">Memory</span>
-					<div class="rp-unit-toggle">
-						<button type="button" class="rp-unit-btn" class:rp-unit-btn--active={memUnit === 'MiB'} onclick={() => { memUnit = 'MiB'; if (memoryBytes != null) memInput = String(Math.round(memoryBytes / (1024 * 1024))); }} {disabled}>MiB</button>
-						<button type="button" class="rp-unit-btn" class:rp-unit-btn--active={memUnit === 'GiB'} onclick={() => { memUnit = 'GiB'; if (memoryBytes != null) memInput = String(+(memoryBytes / (1024 ** 3)).toFixed(2)); }} {disabled}>GiB</button>
-					</div>
+		<!-- Memory -->
+		<div class="rp-field">
+			<div class="rp-field-header">
+				<span class="rp-field-label">Memory</span>
+				<div class="rp-unit-toggle">
+					<button
+						type="button"
+						class="rp-unit-btn"
+						class:rp-unit-btn--active={memUnit === 'MiB'}
+						onclick={() => {
+							memUnit = 'MiB';
+							if (memoryBytes != null) memInput = String(Math.round(memoryBytes / (1024 * 1024)));
+						}}
+						{disabled}>MiB</button
+					>
+					<button
+						type="button"
+						class="rp-unit-btn"
+						class:rp-unit-btn--active={memUnit === 'GiB'}
+						onclick={() => {
+							memUnit = 'GiB';
+							if (memoryBytes != null) memInput = String(+(memoryBytes / 1024 ** 3).toFixed(2));
+						}}
+						{disabled}>GiB</button
+					>
 				</div>
-				<div class="rp-input-row">
-					<div class="rp-input-wrap">
-						<input
-							type="number"
-							min="1"
-							step={memUnit === 'GiB' ? '0.25' : '1'}
-							bind:value={memInput}
-							oninput={applyMem}
-							placeholder={memUnit === 'GiB' ? '0.5' : '512'}
-							{disabled}
-						/>
-						<span class="rp-input-unit">{memUnit}</span>
-					</div>
-				</div>
-				{#if memPct != null}
-					<div class="rp-bar-row">
-						<div class="rp-bar-track">
-							<div class="rp-bar-fill" style="width: {memPct}%; background-color: {barColor(memPct)};"></div>
-						</div>
-						<span class="rp-bar-label" style="color: {barColor(memPct)};">{memPct}% used</span>
-					</div>
-				{/if}
-				{#if memOverLimit}
-					<p class="rp-limit-warn">Exceeds your org limit of {formatMemory(maxMemoryBytes!)}</p>
-				{:else if maxMemoryBytes != null}
-					<p class="rp-limit-hint">Max allowed: {formatMemory(maxMemoryBytes)}</p>
-				{/if}
 			</div>
+			<div class="rp-input-row">
+				<div class="rp-input-wrap">
+					<input
+						type="number"
+						min="1"
+						step={memUnit === 'GiB' ? '0.25' : '1'}
+						bind:value={memInput}
+						oninput={applyMem}
+						placeholder={memUnit === 'GiB' ? '0.5' : '512'}
+						{disabled}
+					/>
+					<span class="rp-input-unit">{memUnit}</span>
+				</div>
+			</div>
+			{#if memPct != null}
+				<div class="rp-bar-row">
+					<div class="rp-bar-track">
+						<div
+							class="rp-bar-fill"
+							style="width: {memPct}%; background-color: {barColor(memPct)};"
+						></div>
+					</div>
+					<span class="rp-bar-label" style="color: {barColor(memPct)};">{memPct}% used</span>
+				</div>
+			{/if}
+			{#if memOverLimit}
+				<p class="rp-limit-warn">Exceeds your org limit of {formatMemory(maxMemoryBytes!)}</p>
+			{:else if maxMemoryBytes != null}
+				<p class="rp-limit-hint">Max allowed: {formatMemory(maxMemoryBytes)}</p>
+			{/if}
+		</div>
 	</div>
 </div>
 
@@ -285,7 +327,9 @@
 	.rp-bar-fill {
 		height: 100%;
 		border-radius: 1rem;
-		transition: width 400ms cubic-bezier(0.22, 1, 0.36, 1), background-color 300ms;
+		transition:
+			width 400ms cubic-bezier(0.22, 1, 0.36, 1),
+			background-color 300ms;
 		min-width: 2px;
 	}
 	.rp-bar-label {

@@ -22,14 +22,10 @@
 		</h3>
 		<p class="empty-p">
 			{loadError.status === 403
-				? 'The server says you don\'t have access right now. This usually clears on reload.'
+				? "The server says you don't have access right now. This usually clears on reload."
 				: loadError.message}
 		</p>
-		<button
-			class="btn-primary"
-			style="margin-top:0.5rem"
-			onclick={() => location.reload()}
-		>
+		<button class="btn-primary" style="margin-top:0.5rem" onclick={() => location.reload()}>
 			<RefreshCw size={15} /> Reload
 		</button>
 	</div>
@@ -45,9 +41,9 @@
 				: 'A project admin needs to invite you to a specific project before anything shows up here.'}
 		</p>
 		{#if canCreateProjects}
-		<a href="/{orgSlug}/new" class="btn-primary" style="margin-top:0.5rem"
-			><Plus size={15} /> New Deployment</a
-		>
+			<a href="/{orgSlug}/new" class="btn-primary" style="margin-top:0.5rem"
+				><Plus size={15} /> New Deployment</a
+			>
 		{/if}
 	</div>
 {/if}

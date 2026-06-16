@@ -7,10 +7,7 @@ export function initApiBase(base: string) {
 	apiBase.set(base);
 }
 
-export async function apiFetch(
-	path: string,
-	options: RequestInit = {}
-): Promise<Response> {
+export async function apiFetch(path: string, options: RequestInit = {}): Promise<Response> {
 	const base = get(apiBase);
 	const url = `${base}${path}`;
 

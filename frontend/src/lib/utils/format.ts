@@ -46,7 +46,10 @@ export function formatBuildElapsed(seconds: number): string {
 	return `${s}s`;
 }
 
-export function formatBuildDurationBetween(startedAt?: string, completedAt?: string): string | null {
+export function formatBuildDurationBetween(
+	startedAt?: string,
+	completedAt?: string
+): string | null {
 	if (!startedAt || !completedAt) return null;
 	const ms = new Date(completedAt).getTime() - new Date(startedAt).getTime();
 	if (!isFinite(ms) || ms < 0) return null;
@@ -58,45 +61,55 @@ export function ansiToHtml(text: string): string {
 	if (!text) return '';
 
 	// Strip lines that contain only a timestamp (and optional whitespace/ANSI codes)
-	let cleaned = text.replace(/\r/g, '').split('\n').filter(line => {
-		const stripped = line
-			.replace(/\x1b\[[0-9;]*m/g, '')
-			.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, '')
-			.trim();
-		return stripped.length > 0;
-	}).join('\n');
+	let cleaned = text
+		.replace(/\r/g, '')
+		.split('\n')
+		.filter((line) => {
+			const stripped = line
+				.replace(/\x1b\[[0-9;]*m/g, '')
+				.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, '')
+				.trim();
+			return stripped.length > 0;
+		})
+		.join('\n');
 
 	// Convert ANSI to HTML (ansi_up handles escaping and all ANSI codes)
 	let result = ansi.ansi_to_html(cleaned);
 
 	// Replace ISO timestamps with compact local-time pills with rich tooltip
-	result = result.replace(
-		/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g,
-		(ts) => {
-			try {
-				const d = new Date(ts);
-				const h = d.getHours().toString().padStart(2, '0');
-				const m = d.getMinutes().toString().padStart(2, '0');
-				const s = d.getSeconds().toString().padStart(2, '0');
-				const ms = d.getMilliseconds().toString().padStart(3, '0');
+	result = result.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, (ts) => {
+		try {
+			const d = new Date(ts);
+			const h = d.getHours().toString().padStart(2, '0');
+			const m = d.getMinutes().toString().padStart(2, '0');
+			const s = d.getSeconds().toString().padStart(2, '0');
+			const ms = d.getMilliseconds().toString().padStart(3, '0');
 
-				const fullLocal = d.toLocaleString(undefined, {
-					weekday: 'short', year: 'numeric', month: 'short', day: 'numeric',
-					hour: '2-digit', minute: '2-digit', second: '2-digit', fractionalSecondDigits: 3
-				});
-				const utcStr = d.toLocaleString(undefined, {
-					hour: '2-digit', minute: '2-digit', second: '2-digit',
-					timeZone: 'UTC', timeZoneName: 'short'
-				});
-				const ago = formatRelativeTime(d);
-				const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+			const fullLocal = d.toLocaleString(undefined, {
+				weekday: 'short',
+				year: 'numeric',
+				month: 'short',
+				day: 'numeric',
+				hour: '2-digit',
+				minute: '2-digit',
+				second: '2-digit',
+				fractionalSecondDigits: 3
+			});
+			const utcStr = d.toLocaleString(undefined, {
+				hour: '2-digit',
+				minute: '2-digit',
+				second: '2-digit',
+				timeZone: 'UTC',
+				timeZoneName: 'short'
+			});
+			const ago = formatRelativeTime(d);
+			const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
 
-				return `<span class="log-ts" data-tooltip-local="${fullLocal}" data-tooltip-utc="${utcStr}" data-tooltip-ago="${ago}" data-tooltip-tz="${tz}" data-tooltip-raw="${ts}">${h}:${m}:${s}<span class="log-ts-ms">.${ms}</span></span>`;
-			} catch {
-				return ts;
-			}
+			return `<span class="log-ts" data-tooltip-local="${fullLocal}" data-tooltip-utc="${utcStr}" data-tooltip-ago="${ago}" data-tooltip-tz="${tz}" data-tooltip-raw="${ts}">${h}:${m}:${s}<span class="log-ts-ms">.${ms}</span></span>`;
+		} catch {
+			return ts;
 		}
-	);
+	});
 
 	return result;
 }
@@ -106,11 +119,23 @@ export function sanitizeLogs(logs: string): string {
 	if (!logs) return logs;
 
 	let sanitized = logs;
-	sanitized = sanitized.replace(/(x-access-token:|ghs_|ghp_|github_pat_)[a-zA-Z0-9_]+/gi, '***REDACTED***');
-	sanitized = sanitized.replace(/https?:\/\/[^:@\s]+:[^@\s]+@github\.com/gi, 'https://***@github.com');
+	sanitized = sanitized.replace(
+		/(x-access-token:|ghs_|ghp_|github_pat_)[a-zA-Z0-9_]+/gi,
+		'***REDACTED***'
+	);
+	sanitized = sanitized.replace(
+		/https?:\/\/[^:@\s]+:[^@\s]+@github\.com/gi,
+		'https://***@github.com'
+	);
 	sanitized = sanitized.replace(/https?:\/\/[^@\s]+@github\.com/gi, 'https://***@github.com');
-	sanitized = sanitized.replace(/(Bearer|Token|Authorization:)\s+[a-zA-Z0-9_\-\.]+/gi, '$1 ***REDACTED***');
-	sanitized = sanitized.replace(/(password|passwd|pwd|secret|key|token)[\s]*[=:]['"]?([^\s'"]+)/gi, '$1=***REDACTED***');
+	sanitized = sanitized.replace(
+		/(Bearer|Token|Authorization:)\s+[a-zA-Z0-9_\-\.]+/gi,
+		'$1 ***REDACTED***'
+	);
+	sanitized = sanitized.replace(
+		/(password|passwd|pwd|secret|key|token)[\s]*[=:]['"]?([^\s'"]+)/gi,
+		'$1=***REDACTED***'
+	);
 
 	return sanitized;
 }
@@ -138,14 +163,22 @@ export function getStatusColor(status: string) {
 
 export function getDeploymentStatusLabel(status: string) {
 	switch (status?.toLowerCase()) {
-		case 'running': return 'Running';
-		case 'restarting': return 'Restarting';
-		case 'scaling': return 'Scaling';
-		case 'failed': return 'Failed';
-		case 'stopped': return 'Stopped';
-		case 'unhealthy': return 'Unhealthy';
-		case 'pending': return 'Pending';
-		default: return status || 'Unknown';
+		case 'running':
+			return 'Running';
+		case 'restarting':
+			return 'Restarting';
+		case 'scaling':
+			return 'Scaling';
+		case 'failed':
+			return 'Failed';
+		case 'stopped':
+			return 'Stopped';
+		case 'unhealthy':
+			return 'Unhealthy';
+		case 'pending':
+			return 'Pending';
+		default:
+			return status || 'Unknown';
 	}
 }
 
@@ -216,9 +249,10 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 		const count = parseInt(restarts[1]);
 		return {
 			title: `Restarted ${count} time${count === 1 ? '' : 's'}`,
-			hint: count >= 5
-				? 'Frequent restarts usually mean the app is crashing on startup. Check logs for errors.'
-				: 'The container exited and was restarted. One or two restarts can be normal during deploys.',
+			hint:
+				count >= 5
+					? 'Frequent restarts usually mean the app is crashing on startup. Check logs for errors.'
+					: 'The container exited and was restarted. One or two restarts can be normal during deploys.',
 			severity: count >= 5 ? 'error' : 'warning',
 			action: count >= 5 ? 'View logs' : undefined
 		};
@@ -242,7 +276,7 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 	if (/permission denied|operation not permitted/i.test(m) && !/pull/i.test(m)) {
 		return {
 			title: 'Permission denied inside container',
-			hint: 'The process tried to access something it doesn\'t have permission for. This can happen with file system operations or privileged syscalls.',
+			hint: "The process tried to access something it doesn't have permission for. This can happen with file system operations or privileged syscalls.",
 			severity: 'error'
 		};
 	}
@@ -273,7 +307,7 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 	if (/failedmount|failed to attach volume|unable to attach or mount/i.test(m)) {
 		return {
 			title: "Can't attach storage",
-			hint: 'The persistent volume couldn\'t be mounted. It may be in use by another pod or the storage class is unavailable.',
+			hint: "The persistent volume couldn't be mounted. It may be in use by another pod or the storage class is unavailable.",
 			severity: 'error'
 		};
 	}
@@ -284,10 +318,14 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 			severity: 'error'
 		};
 	}
-	if (/init.*container.*(?:error|fail|crash)/i.test(m) || /init:error/i.test(m) || /init:crashloopbackoff/i.test(m)) {
+	if (
+		/init.*container.*(?:error|fail|crash)/i.test(m) ||
+		/init:error/i.test(m) ||
+		/init:crashloopbackoff/i.test(m)
+	) {
 		return {
 			title: 'Init container failed',
-			hint: 'A setup step that runs before your app crashed. Your app won\'t start until this is fixed.',
+			hint: "A setup step that runs before your app crashed. Your app won't start until this is fixed.",
 			severity: 'error',
 			action: 'View logs'
 		};
@@ -298,14 +336,14 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 	if (/readiness probe failed/i.test(m)) {
 		return {
 			title: 'Not ready for traffic',
-			hint: 'The app is running but failing its readiness check. It won\'t receive traffic until it passes. Usually a slow boot or failing dependency.',
+			hint: "The app is running but failing its readiness check. It won't receive traffic until it passes. Usually a slow boot or failing dependency.",
 			severity: 'warning'
 		};
 	}
 	if (/configmap.*not found|secret.*not found/i.test(m)) {
 		return {
 			title: 'Missing config or secret',
-			hint: 'The pod references a ConfigMap or Secret that doesn\'t exist. Check your environment variable configuration.',
+			hint: "The pod references a ConfigMap or Secret that doesn't exist. Check your environment variable configuration.",
 			severity: 'warning',
 			action: 'Check environment'
 		};
@@ -313,7 +351,7 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 	if (/dnsconfig|dns/i.test(m) && /fail/i.test(m)) {
 		return {
 			title: 'DNS resolution failing',
-			hint: 'The pod can\'t resolve domain names. External API calls and database connections may fail.',
+			hint: "The pod can't resolve domain names. External API calls and database connections may fail.",
 			severity: 'warning'
 		};
 	}
@@ -327,14 +365,14 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 	if (/preempt/i.test(m)) {
 		return {
 			title: 'Pod preempted',
-			hint: 'A higher-priority workload needed this pod\'s resources. It will be rescheduled automatically.',
+			hint: "A higher-priority workload needed this pod's resources. It will be rescheduled automatically.",
 			severity: 'warning'
 		};
 	}
 	if (/insufficient cpu/i.test(m)) {
 		return {
 			title: 'Not enough CPU available',
-			hint: 'The cluster doesn\'t have enough CPU to schedule this pod. Try lowering the CPU request.',
+			hint: "The cluster doesn't have enough CPU to schedule this pod. Try lowering the CPU request.",
 			severity: 'warning',
 			action: 'Check resources'
 		};
@@ -342,7 +380,7 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 	if (/insufficient memory/i.test(m)) {
 		return {
 			title: 'Not enough memory available',
-			hint: 'The cluster doesn\'t have enough memory to schedule this pod. Try lowering the memory request.',
+			hint: "The cluster doesn't have enough memory to schedule this pod. Try lowering the memory request.",
 			severity: 'warning',
 			action: 'Check resources'
 		};
@@ -357,7 +395,7 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 	if (/network.*not ready|cni/i.test(m)) {
 		return {
 			title: 'Network not ready',
-			hint: 'The pod\'s network interface isn\'t configured yet. Usually transient during node startup.',
+			hint: "The pod's network interface isn't configured yet. Usually transient during node startup.",
 			severity: 'warning'
 		};
 	}
@@ -430,5 +468,8 @@ export function rawToEnvVars(raw: string): Array<{ key: string; value: string }>
 
 /** Convert env vars array to raw .env text */
 export function envVarsToRaw(vars: Array<{ key: string; value: string }>): string {
-	return vars.filter((e) => e.key.trim()).map((e) => `${e.key}=${e.value}`).join('\n');
+	return vars
+		.filter((e) => e.key.trim())
+		.map((e) => `${e.key}=${e.value}`)
+		.join('\n');
 }

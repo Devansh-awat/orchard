@@ -3,14 +3,26 @@
 	import { browser } from '$app/environment';
 	import { apiFetch } from '$lib/stores';
 	import {
-		Activity, Cpu, MemoryStick, ArrowDown, ArrowUp,
-		Maximize2, X, Pause, Play, CalendarRange
+		Activity,
+		Cpu,
+		MemoryStick,
+		ArrowDown,
+		ArrowUp,
+		Maximize2,
+		X,
+		Pause,
+		Play,
+		CalendarRange
 	} from 'lucide-svelte';
 
 	type Props = { deploymentId: string | null };
 	const { deploymentId }: Props = $props();
 
-	type QuickRange = { id: '5m' | '15m' | '30m' | '1h' | '6h' | '24h' | '7d'; label: string; ms: number };
+	type QuickRange = {
+		id: '5m' | '15m' | '30m' | '1h' | '6h' | '24h' | '7d';
+		label: string;
+		ms: number;
+	};
 	const QUICK_RANGES: QuickRange[] = [
 		{ id: '5m', label: '5m', ms: 5 * 60 * 1000 },
 		{ id: '15m', label: '15m', ms: 15 * 60 * 1000 },
@@ -25,11 +37,11 @@
 		// Upstream scrapes every 15s, so 15s is the finest meaningful step
 		// for short windows. Coarsen for longer windows to keep point
 		// counts manageable.
-		if (ms <= 30 * 60 * 1000) return 15_000;       // ≤30m: 15s
-		if (ms <= 60 * 60 * 1000) return 30_000;       // ≤1h: 30s
-		if (ms <= 6 * 60 * 60 * 1000) return 60_000;   // ≤6h: 1m
+		if (ms <= 30 * 60 * 1000) return 15_000; // ≤30m: 15s
+		if (ms <= 60 * 60 * 1000) return 30_000; // ≤1h: 30s
+		if (ms <= 6 * 60 * 60 * 1000) return 60_000; // ≤6h: 1m
 		if (ms <= 24 * 60 * 60 * 1000) return 5 * 60_000; // ≤24h: 5m
-		return 30 * 60_000;                            // 7d+: 30m
+		return 30 * 60_000; // 7d+: 30m
 	}
 
 	let windowMs = $state<number>(60 * 60 * 1000);
@@ -47,7 +59,7 @@
 	let customError = $state<string | null>(null);
 
 	const windowEnd = $derived(customEnd ?? now);
-	const windowStart = $derived(customStart ?? (windowEnd - windowMs));
+	const windowStart = $derived(customStart ?? windowEnd - windowMs);
 	const effectiveWindowMs = $derived(windowEnd - windowStart);
 	const step = $derived(chooseStep(effectiveWindowMs));
 	const isCustom = $derived(customStart != null && customEnd != null);
@@ -63,18 +75,38 @@
 	};
 
 	const CARDS: MetricCard[] = [
-		{ id: 'cpu', label: 'CPU usage', color: '#7c5cff', icon: Cpu,
-			formatter: (v) => v >= 1000 ? `${(v / 1000).toFixed(2)} cores` : `${v.toFixed(0)}m` },
-		{ id: 'mem', label: 'Memory', color: '#22c0a8', icon: MemoryStick,
-			formatter: (v) => v >= 1024 ? `${(v / 1024).toFixed(2)} GB` : `${v.toFixed(0)} MB` },
-		{ id: 'rx', label: 'Network in', color: '#3aa8ff', icon: ArrowDown,
-			formatter: (v) => v >= 1024 ? `${(v / 1024).toFixed(2)} MB/s` : `${v.toFixed(0)} KB/s` },
-		{ id: 'tx', label: 'Network out', color: '#ff7e6b', icon: ArrowUp,
-			formatter: (v) => v >= 1024 ? `${(v / 1024).toFixed(2)} MB/s` : `${v.toFixed(0)} KB/s` }
+		{
+			id: 'cpu',
+			label: 'CPU usage',
+			color: '#7c5cff',
+			icon: Cpu,
+			formatter: (v) => (v >= 1000 ? `${(v / 1000).toFixed(2)} cores` : `${v.toFixed(0)}m`)
+		},
+		{
+			id: 'mem',
+			label: 'Memory',
+			color: '#22c0a8',
+			icon: MemoryStick,
+			formatter: (v) => (v >= 1024 ? `${(v / 1024).toFixed(2)} GB` : `${v.toFixed(0)} MB`)
+		},
+		{
+			id: 'rx',
+			label: 'Network in',
+			color: '#3aa8ff',
+			icon: ArrowDown,
+			formatter: (v) => (v >= 1024 ? `${(v / 1024).toFixed(2)} MB/s` : `${v.toFixed(0)} KB/s`)
+		},
+		{
+			id: 'tx',
+			label: 'Network out',
+			color: '#ff7e6b',
+			icon: ArrowUp,
+			formatter: (v) => (v >= 1024 ? `${(v / 1024).toFixed(2)} MB/s` : `${v.toFixed(0)} KB/s`)
+		}
 	];
 
 	const expandedCard = $derived(
-		expandedCardId ? CARDS.find((c) => c.id === expandedCardId) ?? null : null
+		expandedCardId ? (CARDS.find((c) => c.id === expandedCardId) ?? null) : null
 	);
 
 	let series = $state<Record<MetricCard['id'], Series>>({ cpu: [], mem: [], rx: [], tx: [] });
@@ -84,7 +116,9 @@
 	let inFlight = false;
 
 	function hasData(): boolean {
-		return series.cpu.length > 0 || series.mem.length > 0 || series.rx.length > 0 || series.tx.length > 0;
+		return (
+			series.cpu.length > 0 || series.mem.length > 0 || series.rx.length > 0 || series.tx.length > 0
+		);
 	}
 
 	async function loadSeries(start: number, end: number, stepMs: number, id: string) {
@@ -157,15 +191,19 @@
 	function getHatchPattern(ctx: CanvasRenderingContext2D, stroke: string): CanvasPattern | null {
 		if (hatchPattern && hatchStroke === stroke) return hatchPattern;
 		const tile = document.createElement('canvas');
-		tile.width = 8; tile.height = 8;
+		tile.width = 8;
+		tile.height = 8;
 		const tctx = tile.getContext('2d');
 		if (!tctx) return null;
 		tctx.strokeStyle = stroke;
 		tctx.lineWidth = 1;
 		tctx.beginPath();
-		tctx.moveTo(-1, 9);  tctx.lineTo(9, -1);
-		tctx.moveTo(-1, 17); tctx.lineTo(17, -1);
-		tctx.moveTo(-9, 1);  tctx.lineTo(1, -9);
+		tctx.moveTo(-1, 9);
+		tctx.lineTo(9, -1);
+		tctx.moveTo(-1, 17);
+		tctx.lineTo(17, -1);
+		tctx.moveTo(-9, 1);
+		tctx.lineTo(1, -9);
 		tctx.stroke();
 		hatchPattern = ctx.createPattern(tile, 'repeat');
 		hatchStroke = stroke;
@@ -197,12 +235,12 @@
 				chart.ctx.fillRect(area.left, top, area.right - area.left, bottom - top);
 			} else {
 				if (dataMin > xMin) {
-					const left  = xs.getPixelForValue(xMin);
+					const left = xs.getPixelForValue(xMin);
 					const right = xs.getPixelForValue(dataMin);
 					if (right > left) chart.ctx.fillRect(left, top, right - left, bottom - top);
 				}
 				if (dataMax < xMax) {
-					const left  = xs.getPixelForValue(dataMax);
+					const left = xs.getPixelForValue(dataMax);
 					const right = xs.getPixelForValue(xMax);
 					if (right > left) chart.ctx.fillRect(left, top, right - left, bottom - top);
 				}
@@ -239,13 +277,21 @@
 
 	const trackPlugin = {
 		id: 'track-instance',
-		afterInit(chart: any) { chartInstances.add(chart); },
-		beforeDestroy(chart: any) { chartInstances.delete(chart); }
+		afterInit(chart: any) {
+			chartInstances.add(chart);
+		},
+		beforeDestroy(chart: any) {
+			chartInstances.delete(chart);
+		}
 	};
 
 	function redrawAll() {
 		for (const c of chartInstances) {
-			try { c.render(); } catch { /* no-op */ }
+			try {
+				c.render();
+			} catch {
+				/* no-op */
+			}
 		}
 	}
 
@@ -257,26 +303,47 @@
 	}
 
 	if (browser) {
-		Promise.all([
-			import('chart.js'),
-			import('svelte5-chartjs')
-		]).then(([{ Chart, LinearScale, PointElement, LineElement, Filler, Decimation }, mod]) => {
-			Chart.register(LinearScale, PointElement, LineElement, Filler, Decimation, crosshairPlugin, trackPlugin, pendingPlugin);
-			Line = mod.Line;
-			chartReady = true;
-		}).catch(() => {});
+		Promise.all([import('chart.js'), import('svelte5-chartjs')])
+			.then(([{ Chart, LinearScale, PointElement, LineElement, Filler, Decimation }, mod]) => {
+				Chart.register(
+					LinearScale,
+					PointElement,
+					LineElement,
+					Filler,
+					Decimation,
+					crosshairPlugin,
+					trackPlugin,
+					pendingPlugin
+				);
+				Line = mod.Line;
+				chartReady = true;
+			})
+			.catch(() => {});
 	}
 
 	let tickHandle: ReturnType<typeof setInterval> | null = null;
 	$effect(() => {
 		if (!isLive) return;
 		// 15s matches the upstream scrape interval — no point refetching faster.
-		tickHandle = setInterval(() => { now = Date.now(); }, 15_000);
-		return () => { if (tickHandle) { clearInterval(tickHandle); tickHandle = null; } };
+		tickHandle = setInterval(() => {
+			now = Date.now();
+		}, 15_000);
+		return () => {
+			if (tickHandle) {
+				clearInterval(tickHandle);
+				tickHandle = null;
+			}
+		};
 	});
-	onDestroy(() => { if (tickHandle) clearInterval(tickHandle); });
+	onDestroy(() => {
+		if (tickHandle) clearInterval(tickHandle);
+	});
 
-	function pendingExtent(s: Series): { dataMin: number | null; dataMax: number | null; stroke: string } {
+	function pendingExtent(s: Series): {
+		dataMin: number | null;
+		dataMax: number | null;
+		stroke: string;
+	} {
 		const stroke = 'rgba(120,120,128,0.35)';
 		if (!s.length) return { dataMin: null, dataMax: null, stroke };
 		return { dataMin: s[0].x, dataMax: s[s.length - 1].x, stroke };
@@ -284,17 +351,19 @@
 
 	function chartData(card: MetricCard) {
 		return {
-			datasets: [{
-				data: series[card.id] as any,
-				borderColor: card.color,
-				backgroundColor: card.color + '22',
-				borderWidth: 1.5,
-				pointRadius: 0,
-				pointHoverRadius: 0,
-				fill: true,
-				tension: 0.25,
-				spanGaps: true
-			}]
+			datasets: [
+				{
+					data: series[card.id] as any,
+					borderColor: card.color,
+					backgroundColor: card.color + '22',
+					borderWidth: 1.5,
+					pointRadius: 0,
+					pointHoverRadius: 0,
+					fill: true,
+					tension: 0.25,
+					spanGaps: true
+				}
+			]
 		};
 	}
 
@@ -343,14 +412,17 @@
 		const d = new Date(t);
 		const h = String(d.getHours()).padStart(2, '0');
 		const m = String(d.getMinutes()).padStart(2, '0');
-		if (effectiveWindowMs > 24 * 60 * 60 * 1000) return `${d.getMonth() + 1}/${d.getDate()} ${h}:00`;
-		if (effectiveWindowMs > 6 * 60 * 60 * 1000) return `${d.getMonth() + 1}/${d.getDate()} ${h}:${m}`;
+		if (effectiveWindowMs > 24 * 60 * 60 * 1000)
+			return `${d.getMonth() + 1}/${d.getDate()} ${h}:00`;
+		if (effectiveWindowMs > 6 * 60 * 60 * 1000)
+			return `${d.getMonth() + 1}/${d.getDate()} ${h}:${m}`;
 		return `${h}:${m}`;
 	}
 
 	function valueAtCrosshair(s: Series): number | null {
 		if (crosshairX == null || !s.length) return null;
-		let lo = 0, hi = s.length - 1;
+		let lo = 0,
+			hi = s.length - 1;
 		while (lo < hi) {
 			const mid = (lo + hi) >>> 1;
 			if (s[mid].x < crosshairX) lo = mid + 1;
@@ -392,8 +464,14 @@
 	function applyCustomRange() {
 		const s = customStartInput ? new Date(customStartInput).getTime() : NaN;
 		const e = customEndInput ? new Date(customEndInput).getTime() : NaN;
-		if (!isFinite(s) || !isFinite(e)) { customError = 'Both start and end required'; return; }
-		if (s >= e) { customError = 'Start must be before end'; return; }
+		if (!isFinite(s) || !isFinite(e)) {
+			customError = 'Both start and end required';
+			return;
+		}
+		if (s >= e) {
+			customError = 'Start must be before end';
+			return;
+		}
 		customStart = s;
 		customEnd = e;
 		customError = null;
@@ -450,8 +528,8 @@
 				class="metrics-rangebtn"
 				class:active={activeQuickId === r.id}
 				onclick={() => setQuickRange(r.ms)}
-				type="button"
-			>{r.label}</button>
+				type="button">{r.label}</button
+			>
 		{/each}
 		<button
 			class="metrics-rangebtn metrics-rangebtn--icon"
@@ -459,14 +537,14 @@
 			onclick={toggleCustomPanel}
 			type="button"
 			title="Custom range"
-			aria-label="Custom range"
-		><CalendarRange class="h-3.5 w-3.5" /></button>
+			aria-label="Custom range"><CalendarRange class="h-3.5 w-3.5" /></button
+		>
 	</div>
 	<button
 		class="metrics-iconbtn"
 		onclick={togglePause}
 		type="button"
-		title={isLive ? 'Pause' : (isCustom ? 'Resume live' : 'Resume')}
+		title={isLive ? 'Pause' : isCustom ? 'Resume live' : 'Resume'}
 		aria-label={isLive ? 'Pause' : 'Resume'}
 	>
 		{#if isLive}<Pause class="h-3.5 w-3.5" />{:else}<Play class="h-3.5 w-3.5" />{/if}
@@ -486,9 +564,18 @@
 			</label>
 			<div class="metrics-custompanel-actions">
 				<button class="btn-mini" type="button" onclick={() => (showCustom = false)}>Cancel</button>
-				<button class="btn-mini btn-mini--primary" type="button" onclick={applyCustomRange}>Apply</button>
+				<button class="btn-mini btn-mini--primary" type="button" onclick={applyCustomRange}
+					>Apply</button
+				>
 				{#if isCustom}
-					<button class="btn-mini btn-mini--ghost" type="button" onclick={() => { clearCustomRange(); showCustom = false; }}>Clear</button>
+					<button
+						class="btn-mini btn-mini--ghost"
+						type="button"
+						onclick={() => {
+							clearCustomRange();
+							showCustom = false;
+						}}>Clear</button
+					>
 				{/if}
 			</div>
 			{#if customError}<div class="metrics-custompanel-error">{customError}</div>{/if}
@@ -498,7 +585,8 @@
 
 {#snippet stateBadge()}
 	{#if isLive}
-		<span class="metrics-badge metrics-badge--live"><span class="metrics-live-dot"></span>live</span>
+		<span class="metrics-badge metrics-badge--live"><span class="metrics-live-dot"></span>live</span
+		>
 	{:else if isCustom}
 		<span class="metrics-badge metrics-badge--custom">custom</span>
 	{:else}
@@ -526,8 +614,8 @@
 						onclick={() => (expandedCardId = c.id)}
 						type="button"
 						title="Expand"
-						aria-label="Expand {c.label}"
-					><Maximize2 class="h-3 w-3" /></button>
+						aria-label="Expand {c.label}"><Maximize2 class="h-3 w-3" /></button
+					>
 				{/if}
 			</div>
 		</div>
@@ -544,9 +632,18 @@
 			{/if}
 		</div>
 		<dl class="metrics-card-stats">
-			<div><dt>avg</dt><dd>{c.formatter(sum.avg)}</dd></div>
-			<div><dt>p95</dt><dd>{c.formatter(sum.p95)}</dd></div>
-			<div><dt>max</dt><dd>{c.formatter(sum.max)}</dd></div>
+			<div>
+				<dt>avg</dt>
+				<dd>{c.formatter(sum.avg)}</dd>
+			</div>
+			<div>
+				<dt>p95</dt>
+				<dd>{c.formatter(sum.p95)}</dd>
+			</div>
+			<div>
+				<dt>max</dt>
+				<dd>{c.formatter(sum.max)}</dd>
+			</div>
 		</dl>
 	</article>
 {/snippet}
@@ -587,18 +684,16 @@
 </div>
 
 {#if expandedCard}
-	<div
-		class="metrics-modal-backdrop"
-		role="presentation"
-		onclick={() => (expandedCardId = null)}
-	>
+	<div class="metrics-modal-backdrop" role="presentation" onclick={() => (expandedCardId = null)}>
 		<div
 			class="metrics-modal"
 			role="dialog"
 			aria-modal="true"
 			aria-label="{expandedCard.label} expanded"
 			onclick={(e) => e.stopPropagation()}
-			onkeydown={(e) => { if (e.key === 'Escape') expandedCardId = null; }}
+			onkeydown={(e) => {
+				if (e.key === 'Escape') expandedCardId = null;
+			}}
 		>
 			<header class="metrics-modal-head">
 				<div class="metrics-title">
@@ -612,8 +707,8 @@
 						class="metrics-iconbtn"
 						onclick={() => (expandedCardId = null)}
 						type="button"
-						aria-label="Close"
-					><X class="h-4 w-4" /></button>
+						aria-label="Close"><X class="h-4 w-4" /></button
+					>
 				</div>
 			</header>
 
@@ -631,93 +726,178 @@
 {/if}
 
 <style>
-	.metrics-root { display: flex; flex-direction: column; gap: 12px; }
+	.metrics-root {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
 
 	.metrics-header {
-		display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		flex-wrap: wrap;
 	}
-	.metrics-controls { display: inline-flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+	.metrics-controls {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		flex-wrap: wrap;
+	}
 
 	.metrics-title {
-		display: inline-flex; align-items: center; gap: 8px;
-		font-weight: 600; font-size: 0.95rem; color: var(--text-primary, inherit);
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+		font-weight: 600;
+		font-size: 0.95rem;
+		color: var(--text-primary, inherit);
 	}
 
 	.metrics-badge {
-		display: inline-flex; align-items: center; gap: 5px;
-		padding: 2px 8px; border-radius: 999px; font-size: 0.7rem;
-		font-weight: 600; letter-spacing: 0.04em; text-transform: uppercase;
+		display: inline-flex;
+		align-items: center;
+		gap: 5px;
+		padding: 2px 8px;
+		border-radius: 999px;
+		font-size: 0.7rem;
+		font-weight: 600;
+		letter-spacing: 0.04em;
+		text-transform: uppercase;
 	}
-	.metrics-badge--live { background: rgba(34, 192, 168, 0.12); color: #1a8e7a; }
-	.metrics-badge--paused { background: rgba(255, 165, 0, 0.14); color: #b87100; }
-	.metrics-badge--custom { background: rgba(124, 92, 255, 0.14); color: #5a3ed1; }
-	:global(:root.dark) .metrics-badge--live { color: #6dd9c4; }
-	:global(:root.dark) .metrics-badge--paused { color: #ffb84d; }
-	:global(:root.dark) .metrics-badge--custom { color: #b09dff; }
+	.metrics-badge--live {
+		background: rgba(34, 192, 168, 0.12);
+		color: #1a8e7a;
+	}
+	.metrics-badge--paused {
+		background: rgba(255, 165, 0, 0.14);
+		color: #b87100;
+	}
+	.metrics-badge--custom {
+		background: rgba(124, 92, 255, 0.14);
+		color: #5a3ed1;
+	}
+	:global(:root.dark) .metrics-badge--live {
+		color: #6dd9c4;
+	}
+	:global(:root.dark) .metrics-badge--paused {
+		color: #ffb84d;
+	}
+	:global(:root.dark) .metrics-badge--custom {
+		color: #b09dff;
+	}
 	.metrics-live-dot {
-		width: 6px; height: 6px; border-radius: 50%;
+		width: 6px;
+		height: 6px;
+		border-radius: 50%;
 		background: #22c0a8;
 		animation: metrics-pulse 1.6s ease-out infinite;
 	}
 	@keyframes metrics-pulse {
-		0%   { box-shadow: 0 0 0 0 rgba(34, 192, 168, 0.55); }
-		70%  { box-shadow: 0 0 0 8px rgba(34, 192, 168, 0); }
-		100% { box-shadow: 0 0 0 0 rgba(34, 192, 168, 0); }
+		0% {
+			box-shadow: 0 0 0 0 rgba(34, 192, 168, 0.55);
+		}
+		70% {
+			box-shadow: 0 0 0 8px rgba(34, 192, 168, 0);
+		}
+		100% {
+			box-shadow: 0 0 0 0 rgba(34, 192, 168, 0);
+		}
 	}
 
 	.metrics-rangepick {
-		display: inline-flex; padding: 2px; gap: 2px;
-		border-radius: 8px; background: rgba(120, 120, 128, 0.08);
+		display: inline-flex;
+		padding: 2px;
+		gap: 2px;
+		border-radius: 8px;
+		background: rgba(120, 120, 128, 0.08);
 	}
 	.metrics-rangebtn {
-		padding: 4px 10px; font-size: 0.78rem; font-weight: 500;
-		border: 0; background: transparent;
+		padding: 4px 10px;
+		font-size: 0.78rem;
+		font-weight: 500;
+		border: 0;
+		background: transparent;
 		color: var(--text-muted, rgba(140, 140, 150, 0.95));
-		border-radius: 6px; cursor: pointer;
-		transition: background 80ms ease, color 80ms ease;
-		display: inline-flex; align-items: center; gap: 4px;
+		border-radius: 6px;
+		cursor: pointer;
+		transition:
+			background 80ms ease,
+			color 80ms ease;
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
 	}
-	.metrics-rangebtn--icon { padding: 4px 8px; }
-	.metrics-rangebtn:hover { color: var(--text-primary, inherit); }
+	.metrics-rangebtn--icon {
+		padding: 4px 8px;
+	}
+	.metrics-rangebtn:hover {
+		color: var(--text-primary, inherit);
+	}
 	.metrics-rangebtn.active {
 		background: var(--surface, white);
 		color: var(--text-primary, inherit);
 		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
 	}
-	:global(:root.dark) .metrics-rangebtn.active { background: rgba(255, 255, 255, 0.08); }
+	:global(:root.dark) .metrics-rangebtn.active {
+		background: rgba(255, 255, 255, 0.08);
+	}
 
 	.metrics-iconbtn {
-		display: inline-flex; align-items: center; justify-content: center;
-		width: 28px; height: 28px; padding: 0;
-		border-radius: 6px; border: 0; cursor: pointer;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 28px;
+		height: 28px;
+		padding: 0;
+		border-radius: 6px;
+		border: 0;
+		cursor: pointer;
 		background: rgba(120, 120, 128, 0.08);
 		color: var(--text-muted, rgba(140, 140, 150, 0.95));
-		transition: background 80ms ease, color 80ms ease;
+		transition:
+			background 80ms ease,
+			color 80ms ease;
 	}
 	.metrics-iconbtn:hover {
 		background: rgba(120, 120, 128, 0.16);
 		color: var(--text-primary, inherit);
 	}
-	.metrics-iconbtn--small { width: 22px; height: 22px; }
+	.metrics-iconbtn--small {
+		width: 22px;
+		height: 22px;
+	}
 
 	.metrics-rangelabel {
 		font-size: 0.72rem;
 		font-variant-numeric: tabular-nums;
 		color: var(--text-muted, rgba(140, 140, 150, 0.85));
-		display: inline-flex; align-items: center; gap: 8px;
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
 	}
-	.metrics-rangelabel--modal { margin-top: -2px; }
+	.metrics-rangelabel--modal {
+		margin-top: -2px;
+	}
 
 	.metrics-grid {
-		display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px;
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 12px;
 	}
 	@media (max-width: 720px) {
-		.metrics-grid { grid-template-columns: 1fr; }
+		.metrics-grid {
+			grid-template-columns: 1fr;
+		}
 	}
 
 	.metrics-card {
-		display: flex; flex-direction: column; gap: 8px;
-		padding: 12px 14px 10px; border-radius: 10px;
+		display: flex;
+		flex-direction: column;
+		gap: 8px;
+		padding: 12px 14px 10px;
+		border-radius: 10px;
 		background: var(--surface, white);
 		border: 1px solid rgba(120, 120, 128, 0.12);
 		min-width: 0;
@@ -728,71 +908,124 @@
 	}
 
 	.metrics-card-head {
-		display: flex; align-items: center; justify-content: space-between; gap: 10px;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 10px;
 	}
-	.metrics-card-head-right { display: inline-flex; align-items: center; gap: 8px; }
+	.metrics-card-head-right {
+		display: inline-flex;
+		align-items: center;
+		gap: 8px;
+	}
 	.metrics-card-label {
-		display: inline-flex; align-items: center; gap: 6px;
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
 		font-size: 0.78rem;
 		color: var(--text-muted, rgba(140, 140, 150, 0.95));
 	}
-	.metrics-card-label :global(svg) { color: var(--accent); }
+	.metrics-card-label :global(svg) {
+		color: var(--accent);
+	}
 	.metrics-card-now {
 		font-variant-numeric: tabular-nums;
-		font-weight: 600; font-size: 1.15rem;
-		color: var(--accent); letter-spacing: -0.01em;
+		font-weight: 600;
+		font-size: 1.15rem;
+		color: var(--accent);
+		letter-spacing: -0.01em;
 	}
 
-	.metrics-card-chart { position: relative; min-width: 0; touch-action: none; }
+	.metrics-card-chart {
+		position: relative;
+		min-width: 0;
+		touch-action: none;
+	}
 	.metrics-card-skeleton {
-		width: 100%; height: 100%; border-radius: 6px;
-		background: linear-gradient(90deg,
-			rgba(120,120,128,0.06) 0%,
-			rgba(120,120,128,0.10) 50%,
-			rgba(120,120,128,0.06) 100%);
+		width: 100%;
+		height: 100%;
+		border-radius: 6px;
+		background: linear-gradient(
+			90deg,
+			rgba(120, 120, 128, 0.06) 0%,
+			rgba(120, 120, 128, 0.1) 50%,
+			rgba(120, 120, 128, 0.06) 100%
+		);
 		background-size: 200% 100%;
 		animation: metrics-shimmer 1.4s linear infinite;
 	}
 	@keyframes metrics-shimmer {
-		0%   { background-position: 200% 0; }
-		100% { background-position: -200% 0; }
+		0% {
+			background-position: 200% 0;
+		}
+		100% {
+			background-position: -200% 0;
+		}
 	}
 
 	.metrics-card-stats {
-		display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
-		gap: 8px; margin: 0; padding-top: 6px;
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: 8px;
+		margin: 0;
+		padding-top: 6px;
 		border-top: 1px dashed rgba(120, 120, 128, 0.18);
 	}
-	.metrics-card-stats > div { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+	.metrics-card-stats > div {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		min-width: 0;
+	}
 	.metrics-card-stats dt {
-		font-size: 0.65rem; text-transform: uppercase; letter-spacing: 0.06em;
+		font-size: 0.65rem;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
 		color: var(--text-muted, rgba(140, 140, 150, 0.95));
 	}
 	.metrics-card-stats dd {
-		margin: 0; font-variant-numeric: tabular-nums;
-		font-size: 0.85rem; font-weight: 500;
+		margin: 0;
+		font-variant-numeric: tabular-nums;
+		font-size: 0.85rem;
+		font-weight: 500;
 		color: var(--text-primary, inherit);
 	}
 
 	.metrics-foot {
-		margin: 4px 0 0; font-size: 0.72rem;
+		margin: 4px 0 0;
+		font-size: 0.72rem;
 		color: var(--text-muted, rgba(140, 140, 150, 0.85));
 	}
 	.metrics-foot code {
-		padding: 1px 5px; border-radius: 3px;
-		background: rgba(120, 120, 128, 0.1); font-size: 0.7rem;
+		padding: 1px 5px;
+		border-radius: 3px;
+		background: rgba(120, 120, 128, 0.1);
+		font-size: 0.7rem;
 	}
-	.metrics-foot-err { color: #d04a4a; }
+	.metrics-foot-err {
+		color: #d04a4a;
+	}
 
 	.metrics-modal-backdrop {
-		position: fixed; inset: 0; z-index: 80;
+		position: fixed;
+		inset: 0;
+		z-index: 80;
 		background: rgba(15, 15, 20, 0.55);
 		backdrop-filter: blur(4px);
-		display: flex; align-items: center; justify-content: center;
+		display: flex;
+		align-items: center;
+		justify-content: center;
 		padding: 24px;
 		animation: metrics-fade 140ms ease-out;
 	}
-	@keyframes metrics-fade { from { opacity: 0; } to { opacity: 1; } }
+	@keyframes metrics-fade {
+		from {
+			opacity: 0;
+		}
+		to {
+			opacity: 1;
+		}
+	}
 	.metrics-modal {
 		width: min(1000px, 100%);
 		max-height: calc(100vh - 48px);
@@ -800,9 +1033,11 @@
 		background: var(--surface, white);
 		border-radius: 14px;
 		border: 1px solid rgba(120, 120, 128, 0.18);
-		box-shadow: 0 20px 60px rgba(0,0,0,0.25);
+		box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
 		padding: 18px 20px 20px;
-		display: flex; flex-direction: column; gap: 14px;
+		display: flex;
+		flex-direction: column;
+		gap: 14px;
 		animation: metrics-pop 180ms cubic-bezier(0.22, 1, 0.36, 1);
 	}
 	:global(:root.dark) .metrics-modal {
@@ -810,49 +1045,92 @@
 		border-color: rgba(255, 255, 255, 0.08);
 	}
 	@keyframes metrics-pop {
-		from { opacity: 0; transform: scale(0.97); }
-		to   { opacity: 1; transform: scale(1); }
+		from {
+			opacity: 0;
+			transform: scale(0.97);
+		}
+		to {
+			opacity: 1;
+			transform: scale(1);
+		}
 	}
 	.metrics-modal-head {
-		display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap;
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 12px;
+		flex-wrap: wrap;
 	}
-	.metrics-modal-body { display: flex; flex-direction: column; gap: 12px; }
+	.metrics-modal-body {
+		display: flex;
+		flex-direction: column;
+		gap: 12px;
+	}
 
 	.metrics-custompanel {
-		display: flex; align-items: flex-end; gap: 10px; flex-wrap: wrap;
-		padding: 10px 12px; border-radius: 8px;
+		display: flex;
+		align-items: flex-end;
+		gap: 10px;
+		flex-wrap: wrap;
+		padding: 10px 12px;
+		border-radius: 8px;
 		background: rgba(120, 120, 128, 0.06);
 		border: 1px solid rgba(120, 120, 128, 0.12);
 	}
 	.metrics-custompanel label {
-		display: flex; flex-direction: column; gap: 4px;
-		font-size: 0.72rem; color: var(--text-muted, rgba(140,140,150,0.95));
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		font-size: 0.72rem;
+		color: var(--text-muted, rgba(140, 140, 150, 0.95));
 	}
-	.metrics-custompanel input[type="datetime-local"] {
-		font: inherit; padding: 5px 8px; border-radius: 6px;
+	.metrics-custompanel input[type='datetime-local'] {
+		font: inherit;
+		padding: 5px 8px;
+		border-radius: 6px;
 		border: 1px solid rgba(120, 120, 128, 0.25);
 		background: var(--surface, white);
 		color: var(--text-primary, inherit);
 	}
-	:global(:root.dark) .metrics-custompanel input[type="datetime-local"] {
-		background: rgba(255,255,255,0.04); border-color: rgba(255,255,255,0.1);
+	:global(:root.dark) .metrics-custompanel input[type='datetime-local'] {
+		background: rgba(255, 255, 255, 0.04);
+		border-color: rgba(255, 255, 255, 0.1);
 	}
-	.metrics-custompanel-actions { display: inline-flex; gap: 6px; }
+	.metrics-custompanel-actions {
+		display: inline-flex;
+		gap: 6px;
+	}
 	.metrics-custompanel-error {
 		flex-basis: 100%;
-		font-size: 0.72rem; color: #d04a4a;
+		font-size: 0.72rem;
+		color: #d04a4a;
 	}
 
 	.btn-mini {
-		font: inherit; font-size: 0.72rem; font-weight: 500;
-		padding: 5px 10px; border-radius: 6px; cursor: pointer;
+		font: inherit;
+		font-size: 0.72rem;
+		font-weight: 500;
+		padding: 5px 10px;
+		border-radius: 6px;
+		cursor: pointer;
 		border: 1px solid rgba(120, 120, 128, 0.2);
-		background: transparent; color: var(--text-primary, inherit);
+		background: transparent;
+		color: var(--text-primary, inherit);
 	}
-	.btn-mini:hover { background: rgba(120, 120, 128, 0.08); }
+	.btn-mini:hover {
+		background: rgba(120, 120, 128, 0.08);
+	}
 	.btn-mini--primary {
-		background: #5a3ed1; color: white; border-color: transparent;
+		background: #5a3ed1;
+		color: white;
+		border-color: transparent;
 	}
-	.btn-mini--primary:hover { filter: brightness(1.08); }
-	.btn-mini--ghost { border: 0; padding: 3px 8px; color: var(--text-muted, rgba(140,140,150,0.95)); }
+	.btn-mini--primary:hover {
+		filter: brightness(1.08);
+	}
+	.btn-mini--ghost {
+		border: 0;
+		padding: 3px 8px;
+		color: var(--text-muted, rgba(140, 140, 150, 0.95));
+	}
 </style>

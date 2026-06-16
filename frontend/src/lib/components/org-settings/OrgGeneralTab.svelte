@@ -34,7 +34,7 @@
 		onUploadAvatar,
 		onDeleteAvatar,
 		avatarInputRef = $bindable<HTMLInputElement | undefined>(undefined),
-		index = 0,
+		index = 0
 	}: {
 		organization: Organization;
 		organizationSlug: string;
@@ -65,7 +65,12 @@
 	});
 </script>
 
-<SettingsSection title="Organization" description="Manage your organization profile" iconColor="primary" {index}>
+<SettingsSection
+	title="Organization"
+	description="Manage your organization profile"
+	iconColor="primary"
+	{index}
+>
 	{#snippet icon(hovered)}
 		<UserCog size={18} animate={hovered} />
 	{/snippet}
@@ -79,13 +84,27 @@
 				</span>
 			</div>
 			{#if canEditOrg}
-				<input bind:this={avatarInputRef} type="file" accept="image/jpeg,image/png,image/gif,image/webp" class="hidden" onchange={onUploadAvatar} />
-				<button onclick={() => avatarInputRef?.click()} disabled={uploadingAvatar} class="og-avatar-edit">
-					{#if uploadingAvatar}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Camera class="h-3 w-3" />{/if}
+				<input
+					bind:this={avatarInputRef}
+					type="file"
+					accept="image/jpeg,image/png,image/gif,image/webp"
+					class="hidden"
+					onchange={onUploadAvatar}
+				/>
+				<button
+					onclick={() => avatarInputRef?.click()}
+					disabled={uploadingAvatar}
+					class="og-avatar-edit"
+				>
+					{#if uploadingAvatar}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Camera
+							class="h-3 w-3"
+						/>{/if}
 				</button>
 				{#if organization.avatarUrl}
 					<button onclick={onDeleteAvatar} disabled={deletingAvatar} class="og-avatar-remove">
-						{#if deletingAvatar}<Loader2 class="h-3 w-3 animate-spin" />{:else}<X class="h-3 w-3" />{/if}
+						{#if deletingAvatar}<Loader2 class="h-3 w-3 animate-spin" />{:else}<X
+								class="h-3 w-3"
+							/>{/if}
 					</button>
 				{/if}
 			{/if}
@@ -116,7 +135,9 @@
 					{#if organization?.plan}
 						<span class="og-chip">
 							<span class="og-chip-label">Plan</span>
-							<span class="og-chip-value">{organization.plan.charAt(0).toUpperCase() + organization.plan.slice(1)}</span>
+							<span class="og-chip-value"
+								>{organization.plan.charAt(0).toUpperCase() + organization.plan.slice(1)}</span
+							>
 						</span>
 					{/if}
 					{#if organization.members}
@@ -134,7 +155,8 @@
 					</div>
 					<div class="og-field">
 						<label for="org-desc" class="og-field-label">Description</label>
-						<textarea id="org-desc" bind:value={editingDescription} rows="2" class="input"></textarea>
+						<textarea id="org-desc" bind:value={editingDescription} rows="2" class="input"
+						></textarea>
 					</div>
 					<div class="og-edit-actions">
 						<button onclick={onCancelEditing} class="btn btn-secondary">Cancel</button>
@@ -155,7 +177,11 @@
 	{/snippet}
 
 	<div class="og-quick-actions">
-		<a class="og-quick-action" href={`/${organizationSlug}/usage`} {@attach springHover({ lift: -2, stiffness: 340, damping: 24 })}>
+		<a
+			class="og-quick-action"
+			href={`/${organizationSlug}/usage`}
+			{@attach springHover({ lift: -2, stiffness: 340, damping: 24 })}
+		>
 			<div class="og-quick-action-icon og-quick-action-icon--amber">
 				<Activity class="h-4 w-4" />
 			</div>
@@ -165,7 +191,11 @@
 			</div>
 			<ArrowRight class="h-4 w-4 og-quick-action-arrow" />
 		</a>
-		<a class="og-quick-action" href={`/${organizationSlug}/settings?tab=members`} {@attach springHover({ lift: -2, stiffness: 340, damping: 24 })}>
+		<a
+			class="og-quick-action"
+			href={`/${organizationSlug}/settings?tab=members`}
+			{@attach springHover({ lift: -2, stiffness: 340, damping: 24 })}
+		>
 			<div class="og-quick-action-icon og-quick-action-icon--blue">
 				<Users class="h-4 w-4" />
 			</div>
@@ -176,7 +206,11 @@
 			<ArrowRight class="h-4 w-4 og-quick-action-arrow" />
 		</a>
 		{#if canEditOrg}
-			<a class="og-quick-action" href={`/${organizationSlug}/settings/audit-logs`} {@attach springHover({ lift: -2, stiffness: 340, damping: 24 })}>
+			<a
+				class="og-quick-action"
+				href={`/${organizationSlug}/settings/audit-logs`}
+				{@attach springHover({ lift: -2, stiffness: 340, damping: 24 })}
+			>
 				<div class="og-quick-action-icon og-quick-action-icon--default">
 					<ScrollText class="h-4 w-4" />
 				</div>

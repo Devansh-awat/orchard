@@ -63,12 +63,16 @@
 		background-color: var(--surface-bg);
 		border: 1px solid var(--surface-border);
 		border-radius: 0.75rem;
-		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.12), 0 2px 6px rgba(0, 0, 0, 0.06);
+		box-shadow:
+			0 10px 30px rgba(0, 0, 0, 0.12),
+			0 2px 6px rgba(0, 0, 0, 0.06);
 		color: var(--center-channel-color);
 	}
 
 	:global(.dark) .toast {
-		box-shadow: 0 10px 30px rgba(0, 0, 0, 0.4), 0 2px 6px rgba(0, 0, 0, 0.25);
+		box-shadow:
+			0 10px 30px rgba(0, 0, 0, 0.4),
+			0 2px 6px rgba(0, 0, 0, 0.25);
 	}
 
 	.toast-icon {
@@ -144,7 +148,9 @@
 		color: var(--surface-muted);
 		cursor: pointer;
 		flex-shrink: 0;
-		transition: color 0.15s, background-color 0.15s;
+		transition:
+			color 0.15s,
+			background-color 0.15s;
 	}
 
 	.toast-close:hover {

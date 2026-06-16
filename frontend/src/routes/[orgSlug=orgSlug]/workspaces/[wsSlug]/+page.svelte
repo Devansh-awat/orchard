@@ -1,25 +1,38 @@
 <script lang="ts">
-import { goto } from '$app/navigation';
-import { page } from '$app/stores';
-import { onMount } from 'svelte';
-import { apiFetch, user, toasts, selectedOrganization, refreshTree } from '$lib/stores';
-import { mergeAttrs } from 'melt';
-import { SpatialMenu } from 'melt/builders';
-import { Loader2, Plus, FolderKanban, Calendar, User, Trash2, UserPlus, LogOut, Check, X, Users, Boxes } from 'lucide-svelte';
-import ConfirmModal from '$lib/components/ConfirmModal.svelte';
-import Breadcrumb from '$lib/components/Breadcrumb.svelte';
+	import { goto } from '$app/navigation';
+	import { page } from '$app/stores';
+	import { onMount } from 'svelte';
+	import { apiFetch, user, toasts, selectedOrganization, refreshTree } from '$lib/stores';
+	import { mergeAttrs } from 'melt';
+	import { SpatialMenu } from 'melt/builders';
+	import {
+		Loader2,
+		Plus,
+		FolderKanban,
+		Calendar,
+		User,
+		Trash2,
+		UserPlus,
+		LogOut,
+		Check,
+		X,
+		Users,
+		Boxes
+	} from 'lucide-svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 
-interface Project {
-	id: string;
-	name: string;
-	slug: string;
-	description?: string;
-	repositoryUrl?: string;
-	_count?: {
-		deployments: number;
-	};
-	members?: Member[];
-}
+	interface Project {
+		id: string;
+		name: string;
+		slug: string;
+		description?: string;
+		repositoryUrl?: string;
+		_count?: {
+			deployments: number;
+		};
+		members?: Member[];
+	}
 
 	interface Member {
 		id: string;
@@ -73,34 +86,34 @@ interface Project {
 		crossAxis: true
 	});
 
-let workspace = $state<Workspace | null>(null);
-let loading = $state(true);
-let error = $state<string | null>(null);
-let projectSearch = $state('');
-let deleteError = $state<string | null>(null);
-let deletingWorkspace = $state(false);
-let orgMembers = $state<OrgMember[]>([]);
-let loadingOrgMembers = $state(false);
-let showInviteDialog = $state(false);
-let selectedUserId = $state<string>('');
-let selectedRoleId = $state<string>('');
-let inviting = $state(false);
-let joining = $state(false);
-let leaving = $state(false);
-let showLeaveModal = $state(false);
-let showDeleteWorkspaceModal = $state(false);
-let roles = $state<Array<{ id: string; name: string }>>([]);
-let currentOrgMembership = $state<OrgMember | null>(null);
+	let workspace = $state<Workspace | null>(null);
+	let loading = $state(true);
+	let error = $state<string | null>(null);
+	let projectSearch = $state('');
+	let deleteError = $state<string | null>(null);
+	let deletingWorkspace = $state(false);
+	let orgMembers = $state<OrgMember[]>([]);
+	let loadingOrgMembers = $state(false);
+	let showInviteDialog = $state(false);
+	let selectedUserId = $state<string>('');
+	let selectedRoleId = $state<string>('');
+	let inviting = $state(false);
+	let joining = $state(false);
+	let leaving = $state(false);
+	let showLeaveModal = $state(false);
+	let showDeleteWorkspaceModal = $state(false);
+	let roles = $state<Array<{ id: string; name: string }>>([]);
+	let currentOrgMembership = $state<OrgMember | null>(null);
 
 	const currentUserId = $derived($user?.id);
 	const currentUserMember = $derived.by(() => {
 		if (!workspace || !currentUserId) return null;
-		return workspace.members?.find(m => m.user.id === currentUserId);
+		return workspace.members?.find((m) => m.user.id === currentUserId);
 	});
 	const isWorkspaceAdmin = $derived(currentUserMember?.role?.name === 'admin');
 	const isOrgAdminOrOwner = $derived(
 		currentOrgMembership &&
-		(currentOrgMembership.role === 'owner' || currentOrgMembership.role === 'admin')
+			(currentOrgMembership.role === 'owner' || currentOrgMembership.role === 'admin')
 	);
 	const canManageMembers = $derived(isWorkspaceAdmin || isOrgAdminOrOwner);
 	const isMember = $derived(!!currentUserMember);
@@ -109,15 +122,11 @@ let currentOrgMembership = $state<OrgMember | null>(null);
 		const list = workspace?.projects ?? [];
 		const query = projectSearch.trim().toLowerCase();
 		if (!query) return list;
-		return list.filter(project => {
+		return list.filter((project) => {
 			const name = project.name.toLowerCase();
 			const slugMatch = project.slug.toLowerCase();
 			const description = project.description?.toLowerCase() ?? '';
-			return (
-				name.includes(query) ||
-				slugMatch.includes(query) ||
-				description.includes(query)
-			);
+			return name.includes(query) || slugMatch.includes(query) || description.includes(query);
 		});
 	});
 
@@ -137,15 +146,19 @@ let currentOrgMembership = $state<OrgMember | null>(null);
 
 			// If workspace has a project with the same slug, redirect to the project page
 			// This merges the workspace/project abstraction for the user
-			const matchingProject = workspace?.projects?.find(p => p.slug === wsSlug);
+			const matchingProject = workspace?.projects?.find((p) => p.slug === wsSlug);
 			if (matchingProject) {
-				goto(`/${orgSlug}/workspaces/${wsSlug}/projects/${matchingProject.slug}`, { replaceState: true });
+				goto(`/${orgSlug}/workspaces/${wsSlug}/projects/${matchingProject.slug}`, {
+					replaceState: true
+				});
 				return;
 			}
 
 			// If workspace has exactly one project, redirect to it
 			if (workspace?.projects?.length === 1) {
-				goto(`/${orgSlug}/workspaces/${wsSlug}/projects/${workspace.projects[0].slug}`, { replaceState: true });
+				goto(`/${orgSlug}/workspaces/${wsSlug}/projects/${workspace.projects[0].slug}`, {
+					replaceState: true
+				});
 				return;
 			}
 		} catch (e) {
@@ -188,7 +201,9 @@ let currentOrgMembership = $state<OrgMember | null>(null);
 		if (!workspace?.organization?.id) return;
 
 		try {
-			const response = await apiFetch(`/apiv1/organizations/${workspace.organization.id}/members/me`);
+			const response = await apiFetch(
+				`/apiv1/organizations/${workspace.organization.id}/members/me`
+			);
 			if (response.ok) {
 				currentOrgMembership = await response.json();
 			}
@@ -317,25 +332,18 @@ let currentOrgMembership = $state<OrgMember | null>(null);
 		await fetchCurrentOrgMembership();
 	});
 
-
 	function openProject(projectSlug: string) {
 		return goto(`/${orgSlug}/workspaces/${wsSlug}/projects/${projectSlug}`);
 	}
 
-function handleProjectClick(event: MouseEvent, projectSlug: string) {
-		if (
-			event.metaKey ||
-			event.ctrlKey ||
-			event.shiftKey ||
-			event.altKey ||
-			event.button !== 0
-		) {
+	function handleProjectClick(event: MouseEvent, projectSlug: string) {
+		if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
 			return;
 		}
 
 		event.preventDefault();
-	openProject(projectSlug);
-}
+		openProject(projectSlug);
+	}
 
 	async function deleteWorkspace() {
 		if (!workspace || deletingWorkspace) return;
@@ -415,10 +423,7 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 			</div>
 		</div>
 	{:else if workspace}
-		<Breadcrumb crumbs={[
-			{ label: 'Home', href: `/${orgSlug}` },
-			{ label: workspace.name }
-		]} />
+		<Breadcrumb crumbs={[{ label: 'Home', href: `/${orgSlug}` }, { label: workspace.name }]} />
 
 		<!-- Header -->
 		<div class="ws-header">
@@ -432,7 +437,9 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 				{#if canManageMembers}
 					<button
 						class="ws-btn ws-btn-danger"
-						onclick={() => { showDeleteWorkspaceModal = true; }}
+						onclick={() => {
+							showDeleteWorkspaceModal = true;
+						}}
 						disabled={deletingWorkspace}
 					>
 						{#if deletingWorkspace}
@@ -468,7 +475,9 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 			{#if workspace.createdBy}
 				<div class="ws-stat">
 					<User class="h-4 w-4" />
-					<span class="ws-stat-label">by {workspace.createdBy.firstName || workspace.createdBy.email}</span>
+					<span class="ws-stat-label"
+						>by {workspace.createdBy.firstName || workspace.createdBy.email}</span
+					>
 				</div>
 			{/if}
 		</div>
@@ -499,7 +508,10 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 			<div class="ws-empty-card">
 				<span style:color="var(--surface-muted)"><FolderKanban class="h-10 w-10" /></span>
 				<p>No projects yet</p>
-				<a href="/{orgSlug}/workspaces/{wsSlug}/projects/new" class="ws-btn ws-btn-primary ws-btn-mt">
+				<a
+					href="/{orgSlug}/workspaces/{wsSlug}/projects/new"
+					class="ws-btn ws-btn-primary ws-btn-mt"
+				>
 					<Plus class="h-4 w-4" />
 					Create Project
 				</a>
@@ -570,7 +582,9 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 						{:else if !isWorkspaceAdmin}
 							<button
 								class="ws-btn ws-btn-ghost ws-btn-sm"
-								onclick={() => { showLeaveModal = true; }}
+								onclick={() => {
+									showLeaveModal = true;
+								}}
 								disabled={leaving}
 							>
 								{#if leaving}
@@ -600,7 +614,11 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 			{#if workspace.members?.length}
 				<div class="ws-team-avatars">
 					{#each workspace.members as member}
-						<div class="ws-team-member" title="{member.user.firstName || ''} {member.user.lastName || ''} ({member.role.name})">
+						<div
+							class="ws-team-member"
+							title="{member.user.firstName || ''} {member.user.lastName || ''} ({member.role
+								.name})"
+						>
 							{#if member.user.imageUrl}
 								<img
 									src={member.user.imageUrl}
@@ -612,7 +630,9 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 									{member.user.firstName?.[0] || member.user.email[0].toUpperCase()}
 								</div>
 							{/if}
-							<span class="ws-team-name">{member.user.firstName || member.user.email.split('@')[0]}</span>
+							<span class="ws-team-name"
+								>{member.user.firstName || member.user.email.split('@')[0]}</span
+							>
 							<span class="ws-team-role">{member.role.name}</span>
 						</div>
 					{/each}
@@ -656,19 +676,18 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 					{:else if orgMembers.length === 0}
 						<p class="ws-field-hint">No organization members found.</p>
 					{:else}
-						{@const availableMembers = orgMembers.filter(om => !workspace?.members?.some(m => m.user.id === om.user.id))}
+						{@const availableMembers = orgMembers.filter(
+							(om) => !workspace?.members?.some((m) => m.user.id === om.user.id)
+						)}
 						{#if availableMembers.length === 0}
 							<p class="ws-field-hint">All organization members are already in this workspace.</p>
 						{:else}
-							<select
-								class="ws-select"
-								bind:value={selectedUserId}
-								disabled={inviting}
-							>
+							<select class="ws-select" bind:value={selectedUserId} disabled={inviting}>
 								<option value="">Select a member...</option>
 								{#each availableMembers as orgMember}
 									<option value={orgMember.user.id}>
-										{orgMember.user.firstName} {orgMember.user.lastName || ''} ({orgMember.user.email})
+										{orgMember.user.firstName}
+										{orgMember.user.lastName || ''} ({orgMember.user.email})
 									</option>
 								{/each}
 							</select>
@@ -678,11 +697,7 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 
 				<div class="ws-field">
 					<label class="ws-label">Role</label>
-					<select
-						class="ws-select"
-						bind:value={selectedRoleId}
-						disabled={inviting}
-					>
+					<select class="ws-select" bind:value={selectedRoleId} disabled={inviting}>
 						<option value="">Select a role...</option>
 						{#each roles as role}
 							<option value={role.id}>{role.name}</option>
@@ -732,8 +747,8 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 	/>
 	<ConfirmModal
 		bind:open={showDeleteWorkspaceModal}
-		title='Delete "{workspace.name}"?'
-		description='This will permanently <strong>delete this workspace</strong> and all its projects, deployments, databases, and ingresses. This cannot be undone.'
+		title={`Delete "${workspace.name}"?`}
+		description="This will permanently <strong>delete this workspace</strong> and all its projects, deployments, databases, and ingresses. This cannot be undone."
 		confirmLabel="Delete Workspace"
 		onconfirm={deleteWorkspace}
 		oncancel={() => {}}
@@ -887,8 +902,12 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 		background-color: var(--surface-bg);
 		text-decoration: none;
 		color: var(--center-channel-color);
-		transition: border-color 0.15s, box-shadow 0.15s;
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.02);
+		transition:
+			border-color 0.15s,
+			box-shadow 0.15s;
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
 		cursor: pointer;
 	}
 
@@ -1086,13 +1105,17 @@ function handleProjectClick(event: MouseEvent, projectSlug: string) {
 	.ws-btn-primary {
 		background-color: var(--sidebar-text-active-border);
 		color: #fff;
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.1), 0 1px 2px rgb(0 0 0 / 0.06);
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.1),
+			0 1px 2px rgb(0 0 0 / 0.06);
 	}
 
 	.ws-btn-primary:hover:not(:disabled) {
 		opacity: 0.9;
 		transform: translateY(-0.5px);
-		box-shadow: 0 4px 6px rgb(0 0 0 / 0.1), 0 2px 4px rgb(0 0 0 / 0.06);
+		box-shadow:
+			0 4px 6px rgb(0 0 0 / 0.1),
+			0 2px 4px rgb(0 0 0 / 0.06);
 	}
 
 	.ws-btn-mt {

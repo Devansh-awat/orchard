@@ -1,7 +1,16 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { apiFetch, toasts } from '$lib/stores';
-	import { ArrowLeft, KeyRound, Plus, Loader2, Trash2, Copy, Check, ChevronRight } from 'lucide-svelte';
+	import {
+		ArrowLeft,
+		KeyRound,
+		Plus,
+		Loader2,
+		Trash2,
+		Copy,
+		Check,
+		ChevronRight
+	} from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 
 	interface ApiToken {
@@ -77,7 +86,9 @@
 			await navigator.clipboard.writeText(createdToken);
 			copied = true;
 			toasts.add({ title: 'Copied to clipboard', color: 'success' });
-			setTimeout(() => { copied = false; }, 2000);
+			setTimeout(() => {
+				copied = false;
+			}, 2000);
 		} catch {
 			toasts.add({ title: 'Failed to copy', color: 'error' });
 		}
@@ -131,10 +142,7 @@
 	<div class="settings-container">
 		<!-- Header -->
 		<div class="settings-header">
-			<button
-				onclick={() => window.history.back()}
-				class="settings-back-btn"
-			>
+			<button onclick={() => window.history.back()} class="settings-back-btn">
 				<ArrowLeft class="h-4 w-4" />
 				Back
 			</button>
@@ -145,7 +153,9 @@
 				</div>
 				<div>
 					<h1 class="settings-title">API Tokens</h1>
-					<p class="settings-subtitle">Manage personal access tokens for the Orchard API and MCP server</p>
+					<p class="settings-subtitle">
+						Manage personal access tokens for the Orchard API and MCP server
+					</p>
 				</div>
 			</div>
 		</div>
@@ -175,21 +185,31 @@
 
 		<!-- Create section -->
 		<section class="settings-section">
-			<button class="settings-section-trigger" onclick={() => { showCreate = !showCreate; }}>
+			<button
+				class="settings-section-trigger"
+				onclick={() => {
+					showCreate = !showCreate;
+				}}
+			>
 				<div class="settings-section-trigger-left">
 					<Plus class="h-4 w-4" />
 					<div>
 						<p class="settings-section-label">Create new token</p>
-						<p class="settings-section-desc">Generate a token for CLI tools, MCP server, or API access</p>
+						<p class="settings-section-desc">
+							Generate a token for CLI tools, MCP server, or API access
+						</p>
 					</div>
 				</div>
-				<span class="settings-section-chevron" class:is-open={showCreate}><ChevronRight class="h-4 w-4" /></span>
+				<span class="settings-section-chevron" class:is-open={showCreate}
+					><ChevronRight class="h-4 w-4" /></span
+				>
 			</button>
 
 			{#if showCreate}
 				<div class="settings-section-content">
 					<p class="settings-hint">
-						Tokens have the same permissions as your account. Use them with the Orchard MCP server or API.
+						Tokens have the same permissions as your account. Use them with the Orchard MCP server
+						or API.
 					</p>
 					<div class="token-create-form">
 						<input
@@ -197,7 +217,9 @@
 							type="text"
 							placeholder="Token name (e.g. Claude Code, CI/CD)"
 							bind:value={newTokenName}
-							onkeydown={(e) => { if (e.key === 'Enter') createToken(); }}
+							onkeydown={(e) => {
+								if (e.key === 'Enter') createToken();
+							}}
 						/>
 						<button
 							class="btn btn-primary"
@@ -221,7 +243,8 @@
 						<p class="settings-section-label">Active tokens</p>
 						<p class="settings-section-desc">
 							{#if loading}
-								<span class="skeleton" style="display: inline-block; width: 4rem; height: 0.75rem;"></span>
+								<span class="skeleton" style="display: inline-block; width: 4rem; height: 0.75rem;"
+								></span>
 							{:else}
 								{tokens.length} token{tokens.length !== 1 ? 's' : ''}
 							{/if}
@@ -236,17 +259,24 @@
 				{:else if loading}
 					<div style="display: flex; flex-direction: column; gap: 0.375rem; padding: 0.25rem 0;">
 						{#each [1, 2] as _}
-							<div style="display: flex; align-items: center; justify-content: space-between; padding: 0.875rem 1rem; border: 1px solid var(--surface-border); border-radius: 0.625rem;">
+							<div
+								style="display: flex; align-items: center; justify-content: space-between; padding: 0.875rem 1rem; border: 1px solid var(--surface-border); border-radius: 0.625rem;"
+							>
 								<div style="display: flex; flex-direction: column; gap: 0.375rem; flex: 1;">
 									<div class="skeleton" style="width: 8rem; height: 0.875rem;"></div>
 									<div class="skeleton" style="width: 14rem; height: 0.6875rem;"></div>
 								</div>
-								<div class="skeleton" style="width: 1.75rem; height: 1.75rem; border-radius: 0.375rem;"></div>
+								<div
+									class="skeleton"
+									style="width: 1.75rem; height: 1.75rem; border-radius: 0.375rem;"
+								></div>
 							</div>
 						{/each}
 					</div>
 				{:else if tokens.length === 0}
-					<p class="settings-hint" style="text-align: center; padding: 1rem 0;">No API tokens yet. Create one to get started.</p>
+					<p class="settings-hint" style="text-align: center; padding: 1rem 0;">
+						No API tokens yet. Create one to get started.
+					</p>
 				{:else}
 					<div class="token-list">
 						{#each tokens as token}
@@ -254,9 +284,11 @@
 								<div class="flex-1 min-w-0">
 									<p class="settings-field-value">{token.name}</p>
 									<p class="settings-field-label">
-										Created {formatTimestamp(token.createdAt)} · Last used {formatTimestamp(token.lastUsedAt)}
+										Created {formatTimestamp(token.createdAt)} · Last used {formatTimestamp(
+											token.lastUsedAt
+										)}
 										{#if token.expiresAt}
-											 · Expires {formatTimestamp(token.expiresAt)}
+											· Expires {formatTimestamp(token.expiresAt)}
 										{/if}
 									</p>
 								</div>
@@ -320,11 +352,13 @@
 {#if tokenToRevoke}
 	<ConfirmModal
 		bind:open={showRevokeModal}
-		title='Revoke "{tokenToRevoke.name}"?'
-		description='Any tools or integrations using this token will <strong>stop working</strong> immediately.'
+		title={`Revoke "${tokenToRevoke.name}"?`}
+		description="Any tools or integrations using this token will <strong>stop working</strong> immediately."
 		confirmLabel="Revoke Token"
 		onconfirm={() => revokeToken(tokenToRevoke!)}
-		oncancel={() => { tokenToRevoke = null; }}
+		oncancel={() => {
+			tokenToRevoke = null;
+		}}
 	/>
 {/if}
 

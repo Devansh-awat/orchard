@@ -20,7 +20,7 @@
 		onRestoreBackup,
 		onSaveSchedule,
 		formatBytes,
-		formatDate,
+		formatDate
 	}: {
 		database: DatabaseDetail;
 		orgSlug: string;
@@ -47,7 +47,9 @@
 	{#if database.mode === 'cnpg' && database.backupsEnabled}
 		<div class="card rounded-2xl p-5">
 			<div class="flex items-center justify-between mb-3">
-				<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Backup schedule</p>
+				<p class="text-sm font-semibold" style="color: var(--center-channel-color);">
+					Backup schedule
+				</p>
 				<button class="btn btn-primary btn-sm" onclick={onSaveSchedule} disabled={scheduleSaving}>
 					{#if scheduleSaving}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
 					<span>{schedulePreset === 'none' ? 'Clear' : 'Save'}</span>
@@ -57,11 +59,7 @@
 			<div class="grid gap-3 md:grid-cols-2">
 				<div>
 					<p class="text-xs mb-1" style="color: var(--surface-muted);">Run backups</p>
-					<select
-						class="input text-sm"
-						bind:value={schedulePreset}
-						disabled={scheduleSaving}
-					>
+					<select class="input text-sm" bind:value={schedulePreset} disabled={scheduleSaving}>
 						<option value="none">Never (manual only)</option>
 						{#each schedulePresets as p}
 							<option value={p.id}>{p.label}</option>
@@ -84,7 +82,8 @@
 
 			{#if schedulePreset === 'custom'}
 				<p class="text-xs mt-2" style="color: var(--surface-muted);">
-					5 fields: <code class="db-inline-code">min hour day month weekday</code>. Interpreted in UTC.
+					5 fields: <code class="db-inline-code">min hour day month weekday</code>. Interpreted in
+					UTC.
 				</p>
 			{:else if schedulePreset !== 'none'}
 				{@const active = schedulePresets.find((p) => p.id === schedulePreset)}
@@ -107,7 +106,9 @@
 			<div class="flex items-center gap-2">
 				<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Backups</p>
 				{#if backups.length > 0}
-					<span class="db-badge-count">{backups.filter((b) => b.status === 'completed').length} / {maxBackups}</span>
+					<span class="db-badge-count"
+						>{backups.filter((b) => b.status === 'completed').length} / {maxBackups}</span
+					>
 				{/if}
 			</div>
 			{#if (database.mode === 'cnpg' || database.mode === 'container') && database.backupsEnabled}
@@ -126,7 +127,9 @@
 
 		{#if database.mode !== 'cnpg' && database.mode !== 'container'}
 			<div class="db-empty-box">
-				<p class="text-sm" style="color: var(--surface-muted);">Backups require a managed database (CNPG). Recreate this database to enable backups.</p>
+				<p class="text-sm" style="color: var(--surface-muted);">
+					Backups require a managed database (CNPG). Recreate this database to enable backups.
+				</p>
 			</div>
 		{:else if !database.backupsEnabled}
 			<div class="db-empty-box">
@@ -143,7 +146,9 @@
 			</div>
 		{:else if backups.length === 0}
 			<div class="db-empty-box">
-				<p class="text-sm" style="color: var(--surface-muted);">No backups yet. Create your first backup to enable point-in-time restores.</p>
+				<p class="text-sm" style="color: var(--surface-muted);">
+					No backups yet. Create your first backup to enable point-in-time restores.
+				</p>
 			</div>
 		{:else}
 			<div class="space-y-2">
@@ -173,7 +178,9 @@
 								onclick={() => onRestoreBackup(backup)}
 								disabled={restoringBackupId === backup.id}
 							>
-								{#if restoringBackupId === backup.id}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+								{#if restoringBackupId === backup.id}<Loader2
+										class="h-3.5 w-3.5 animate-spin"
+									/>{/if}
 								<span>Restore</span>
 							</button>
 						{/if}

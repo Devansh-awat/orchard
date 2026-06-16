@@ -26,7 +26,7 @@
 		creatingWebhookToken = false,
 		deletingWebhookTokenId = null,
 		onCreateToken,
-		onDeleteToken,
+		onDeleteToken
 	}: {
 		deployment: any;
 		rebuilding: boolean;
@@ -67,8 +67,15 @@
 				</div>
 				<div class="dt-section-title-group">
 					<h3 class="dt-section-title">Webhook Triggers</h3>
-					</div>
-				<svg class="dt-chevron" class:dt-chevron--closed={!webhooksOpen} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+				</div>
+				<svg
+					class="dt-chevron"
+					class:dt-chevron--closed={!webhooksOpen}
+					viewBox="0 0 24 24"
+					fill="none"
+					stroke="currentColor"
+					stroke-width="2"
+				>
 					<path d="m6 9 6 6 6-6" />
 				</svg>
 			</button>

@@ -1,3 +1,12 @@
+<script lang="ts" module>
+	function formatMemory(bytes: number | null | undefined): string {
+		if (!bytes) return '—';
+		const mb = bytes / (1024 * 1024);
+		if (mb < 1024) return `${Math.round(mb)}Mi`;
+		return `${(mb / 1024).toFixed(1)}Gi`;
+	}
+</script>
+
 <script lang="ts">
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import { Zap, MemoryStick, RotateCcw } from 'lucide-svelte';
@@ -6,7 +15,7 @@
 	let {
 		database,
 		onGoToResources,
-		onViewLogs,
+		onViewLogs
 	}: {
 		database: DatabaseDetail;
 		onGoToResources?: () => void;
@@ -19,9 +28,7 @@
 	const oomSignal = $derived(
 		(database.liveStatus?.message || '') + ' ' + (database.liveStatus?.lastTerminationReason || '')
 	);
-	const isOOM = $derived(
-		/oomkilled|out of memory/i.test(oomSignal)
-	);
+	const isOOM = $derived(/oomkilled|out of memory/i.test(oomSignal));
 
 	const isCrashLoop = $derived(
 		/crashloopbackoff|back-?off/i.test(database.liveStatus?.message || '')
@@ -32,13 +39,19 @@
 	// Suppress alerts during an in-flight restart — the user just acted to fix this.
 	const isRestarting = $derived(database.status === 'restarting');
 	const hasAlert = $derived(!isRestarting && (isOOM || isCrashLoop || highRestarts));
-
 </script>
 
 {#if hasAlert}
 	<div class="dba-container">
 		{#if isOOM}
-			<div class="dba-alert dba-alert--oom" {@attach motionStagger({ index: 0, stride: 0.06, from: { y: -8, opacity: 0, scale: 0.98 } })}>
+			<div
+				class="dba-alert dba-alert--oom"
+				{@attach motionStagger({
+					index: 0,
+					stride: 0.06,
+					from: { y: -8, opacity: 0, scale: 0.98 }
+				})}
+			>
 				<div class="dba-alert-inner">
 					<div class="dba-icon-wrap dba-icon--oom">
 						<Zap size={16} strokeWidth={2.25} />
@@ -54,8 +67,9 @@
 							{/if}
 						</div>
 						<span class="dba-desc">
-							Your database was killed by the kernel for exceeding its memory limit ({#if database.memoryRequestBytes}{formatMemory(database.memoryRequestBytes)}{:else}128Mi{/if}).
-							Increase memory in Resources.
+							Your database was killed by the kernel for exceeding its memory limit ({#if database.memoryRequestBytes}{formatMemory(
+									database.memoryRequestBytes
+								)}{:else}128Mi{/if}). Increase memory in Resources.
 						</span>
 					</div>
 					{#if onGoToResources}
@@ -73,7 +87,14 @@
 		{/if}
 
 		{#if isCrashLoop && !isOOM}
-			<div class="dba-alert dba-alert--crash" {@attach motionStagger({ index: 0, stride: 0.06, from: { y: -8, opacity: 0, scale: 0.98 } })}>
+			<div
+				class="dba-alert dba-alert--crash"
+				{@attach motionStagger({
+					index: 0,
+					stride: 0.06,
+					from: { y: -8, opacity: 0, scale: 0.98 }
+				})}
+			>
 				<div class="dba-alert-inner">
 					<div class="dba-icon-wrap dba-icon--crash">
 						<RotateCcw size={16} strokeWidth={2.25} />
@@ -86,16 +107,21 @@
 						</span>
 					</div>
 					{#if onViewLogs}
-						<button class="dba-action" onclick={onViewLogs}>
-							View logs
-						</button>
+						<button class="dba-action" onclick={onViewLogs}> View logs </button>
 					{/if}
 				</div>
 			</div>
 		{/if}
 
 		{#if highRestarts && !isOOM && !isCrashLoop}
-			<div class="dba-alert dba-alert--restarts" {@attach motionStagger({ index: 0, stride: 0.06, from: { y: -8, opacity: 0, scale: 0.98 } })}>
+			<div
+				class="dba-alert dba-alert--restarts"
+				{@attach motionStagger({
+					index: 0,
+					stride: 0.06,
+					from: { y: -8, opacity: 0, scale: 0.98 }
+				})}
+			>
 				<div class="dba-alert-inner">
 					<div class="dba-icon-wrap dba-icon--restarts">
 						<RotateCcw size={16} strokeWidth={2.25} />
@@ -109,24 +135,13 @@
 						</span>
 					</div>
 					{#if onViewLogs}
-						<button class="dba-action" onclick={onViewLogs}>
-							View logs
-						</button>
+						<button class="dba-action" onclick={onViewLogs}> View logs </button>
 					{/if}
 				</div>
 			</div>
 		{/if}
 	</div>
 {/if}
-
-<script lang="ts" module>
-	function formatMemory(bytes: number | null | undefined): string {
-		if (!bytes) return '—';
-		const mb = bytes / (1024 * 1024);
-		if (mb < 1024) return `${Math.round(mb)}Mi`;
-		return `${(mb / 1024).toFixed(1)}Gi`;
-	}
-</script>
 
 <style>
 	.dba-container {
@@ -195,7 +210,9 @@
 		flex-shrink: 0;
 		opacity: 0.9;
 		align-self: center;
-		transition: opacity 120ms, background-color 120ms;
+		transition:
+			opacity 120ms,
+			background-color 120ms;
 	}
 	.dba-action:hover {
 		opacity: 1;
@@ -236,7 +253,8 @@
 	.dba-oom-bar-fill {
 		position: absolute;
 		inset: 0;
-		background: linear-gradient(90deg,
+		background: linear-gradient(
+			90deg,
 			transparent 0%,
 			color-mix(in srgb, var(--error-text-color) 25%, transparent) 50%,
 			transparent 100%
@@ -269,8 +287,12 @@
 	}
 
 	@keyframes dba-bar-sweep {
-		0% { transform: translateX(-100%); }
-		100% { transform: translateX(100%); }
+		0% {
+			transform: translateX(-100%);
+		}
+		100% {
+			transform: translateX(100%);
+		}
 	}
 
 	@media (max-width: 640px) {

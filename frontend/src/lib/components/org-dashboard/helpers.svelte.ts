@@ -9,15 +9,13 @@ export const IMG_ICONS: Record<string, string> = {
 	mysql: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/mysql/mysql-original.svg',
 	redis: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/redis/redis-original.svg',
 	mongo: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/mongodb/mongodb-original.svg',
-	mongodb:
-		'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/mongodb/mongodb-original.svg',
+	mongodb: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/mongodb/mongodb-original.svg',
 	nginx: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/nginx/nginx-original.svg',
 	node: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/nodejs/nodejs-original.svg',
 	python: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/python/python-original.svg',
 	go: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/go/go-original.svg',
 	rust: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/rust/rust-original.svg',
-	grafana:
-		'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/grafana/grafana-original.svg'
+	grafana: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/grafana/grafana-original.svg'
 };
 
 export function knownIcon(img?: string): string | null {
@@ -80,9 +78,7 @@ export function projectStatusSummary(g: ProjectGroup) {
 	};
 	for (const d of g.deps) bump(dotClass(d.status, d.buildStatus));
 	for (const db of g.dbs) {
-		bump(
-			db.status === 'ready' ? 'dot--green' : db.status === 'error' ? 'dot--red' : 'dot--amber'
-		);
+		bump(db.status === 'ready' ? 'dot--green' : db.status === 'error' ? 'dot--red' : 'dot--amber');
 	}
 	if (!green && !amber && !red) return null;
 	return { green, amber, red };
@@ -280,11 +276,7 @@ export function bodyAttach(
 				).finished.then(() => {
 					if (myGen !== gen) return;
 					if (card) {
-						animate(
-							card,
-							{ y: [-5, 0] },
-							{ type: 'spring', stiffness: 120, damping: 10, mass: 1 }
-						);
+						animate(card, { y: [-5, 0] }, { type: 'spring', stiffness: 120, damping: 10, mass: 1 });
 					}
 					if (!isExpanded()) {
 						setRenderedProjectBodies(

@@ -8,16 +8,7 @@
 	import Speedometer from '$lib/components/Speedometer.svelte';
 	import DonutChart from '$lib/components/DonutChart.svelte';
 	import HorizontalBars from '$lib/components/HorizontalBars.svelte';
-	import {
-		Loader2,
-		Activity,
-		Gauge,
-		Users,
-		BarChart3,
-		Pencil,
-		Check,
-		X,
-	} from 'lucide-svelte';
+	import { Loader2, Activity, Gauge, Users, BarChart3, Pencil, Check, X } from 'lucide-svelte';
 
 	const formatPods = (n: number) => `${n}`;
 	import type { PageData } from './$types';
@@ -134,7 +125,7 @@
 	const availableTabs = $derived.by<Array<{ id: Tab; label: string; icon: any }>>(() => {
 		const tabs: Array<{ id: Tab; label: string; icon: any }> = [
 			{ id: 'overview', label: 'Overview', icon: Activity },
-			{ id: 'me', label: 'My usage', icon: Gauge },
+			{ id: 'me', label: 'My usage', icon: Gauge }
 		];
 		if (isAdmin) {
 			tabs.push({ id: 'members', label: 'Members', icon: Users });
@@ -191,7 +182,7 @@
 						if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
 						invalidate(`org:${orgSlug}:usage`);
 					},
-					{ invalidateDependencies: [] },
+					{ invalidateDependencies: [] }
 				);
 			})
 			.catch((e: any) => {
@@ -199,7 +190,7 @@
 				toasts.add({
 					title: 'Error',
 					description: e instanceof Error ? e.message : 'Failed to load usage',
-					color: 'error',
+					color: 'error'
 				});
 			});
 	});
@@ -245,7 +236,7 @@
 			const res = await apiFetch(`/apiv1/organizations/${orgId}/quota/default-member-allowance`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ cpuMilli, memoryBytes }),
+				body: JSON.stringify({ cpuMilli, memoryBytes })
 			});
 			if (!res.ok) {
 				const body = await res.json().catch(() => ({}));
@@ -258,7 +249,7 @@
 			toasts.add({
 				title: 'Error',
 				description: e instanceof Error ? e.message : 'Failed to save',
-				color: 'error',
+				color: 'error'
 			});
 		} finally {
 			savingDefault = false;
@@ -312,19 +303,16 @@
 					: String(memMemInput).trim() === ''
 						? null
 						: Math.max(0, parseInt(String(memMemInput), 10)) * 1024 * 1024;
-			const res = await apiFetch(
-				`/apiv1/organizations/${orgId}/quota/members/${editingMemberId}`,
-				{
-					method: 'PATCH',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						cpuMilli,
-						memoryBytes,
-						cpuUnlimited: memCpuUnlim,
-						memoryUnlimited: memMemUnlim,
-					}),
-				},
-			);
+			const res = await apiFetch(`/apiv1/organizations/${orgId}/quota/members/${editingMemberId}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					cpuMilli,
+					memoryBytes,
+					cpuUnlimited: memCpuUnlim,
+					memoryUnlimited: memMemUnlim
+				})
+			});
 			if (!res.ok) {
 				const body = await res.json().catch(() => ({}));
 				throw new Error(body.message || `Failed to save (${res.status})`);
@@ -336,7 +324,7 @@
 			toasts.add({
 				title: 'Error',
 				description: e instanceof Error ? e.message : 'Failed to save',
-				color: 'error',
+				color: 'error'
 			});
 		} finally {
 			savingMember = false;
@@ -350,7 +338,7 @@
 	function allowanceLabel(
 		src: AllowanceSource,
 		value: number | null,
-		fmt: (n: number) => string,
+		fmt: (n: number) => string
 	): string {
 		if (src === 'unlimited' || value === null) return 'Unlimited';
 		return `${fmt(value)}${src === 'default' ? ' · default' : ''}`;
@@ -359,26 +347,38 @@
 	// ---- Provisioning helpers ----
 	function verdictColor(v: Verdict): string {
 		switch (v) {
-			case 'over': return 'var(--warning-text)';
-			case 'under': return 'var(--error-text-color)';
-			case 'ok': return 'var(--success-text)';
-			default: return 'var(--surface-muted)';
+			case 'over':
+				return 'var(--warning-text)';
+			case 'under':
+				return 'var(--error-text-color)';
+			case 'ok':
+				return 'var(--success-text)';
+			default:
+				return 'var(--surface-muted)';
 		}
 	}
 	function verdictBg(v: Verdict): string {
 		switch (v) {
-			case 'over': return 'var(--warning-bg)';
-			case 'under': return 'color-mix(in srgb, var(--error-text-color) 12%, transparent)';
-			case 'ok': return 'var(--success-bg)';
-			default: return 'color-mix(in srgb, var(--surface-border) 35%, transparent)';
+			case 'over':
+				return 'var(--warning-bg)';
+			case 'under':
+				return 'color-mix(in srgb, var(--error-text-color) 12%, transparent)';
+			case 'ok':
+				return 'var(--success-bg)';
+			default:
+				return 'color-mix(in srgb, var(--surface-border) 35%, transparent)';
 		}
 	}
 	function verdictLabel(v: Verdict): string {
 		switch (v) {
-			case 'over': return 'Over-provisioned';
-			case 'under': return 'Under-provisioned';
-			case 'ok': return 'OK';
-			default: return 'No data';
+			case 'over':
+				return 'Over-provisioned';
+			case 'under':
+				return 'Under-provisioned';
+			case 'ok':
+				return 'OK';
+			default:
+				return 'No data';
 		}
 	}
 
@@ -388,13 +388,16 @@
 	}
 
 	function projectBreakdown(u: MyUsage) {
-		const map = new Map<string, { projectId: string; projectName: string; cpuMilli: number; memoryBytes: number }>();
+		const map = new Map<
+			string,
+			{ projectId: string; projectName: string; cpuMilli: number; memoryBytes: number }
+		>();
 		for (const item of u.usage.breakdown) {
 			const cur = map.get(item.projectId) || {
 				projectId: item.projectId,
 				projectName: item.projectName,
 				cpuMilli: 0,
-				memoryBytes: 0,
+				memoryBytes: 0
 			};
 			cur.cpuMilli += item.cpuMilli;
 			cur.memoryBytes += item.memoryBytes;
@@ -408,7 +411,7 @@
 			.filter((r) => r.actualCpuMilliP95 !== null && r.requestedCpuMilli > 0)
 			.map((r) => ({
 				row: r,
-				wasted: Math.max(0, r.requestedCpuMilli - (r.actualCpuMilliP95 ?? 0)),
+				wasted: Math.max(0, r.requestedCpuMilli - (r.actualCpuMilliP95 ?? 0))
 			}))
 			.filter((x) => x.wasted > 0)
 			.sort((a, b) => b.wasted - a.wasted)
@@ -417,7 +420,7 @@
 			.filter((r) => r.actualMemoryBytesP95 !== null && r.requestedMemoryBytes > 0)
 			.map((r) => ({
 				row: r,
-				wasted: Math.max(0, r.requestedMemoryBytes - (r.actualMemoryBytesP95 ?? 0)),
+				wasted: Math.max(0, r.requestedMemoryBytes - (r.actualMemoryBytesP95 ?? 0))
 			}))
 			.filter((x) => x.wasted > 0)
 			.sort((a, b) => b.wasted - a.wasted)
@@ -444,7 +447,7 @@
 	const RANGES = [
 		{ value: '1h', label: '1h' },
 		{ value: '24h', label: '24h' },
-		{ value: '7d', label: '7d' },
+		{ value: '7d', label: '7d' }
 	];
 </script>
 
@@ -455,7 +458,9 @@
 		</div>
 		<div class="usage-header-text">
 			<h1 class="usage-title">Usage</h1>
-			<p class="usage-subtitle">Resource allowance, consumption, and right-sizing across this organization.</p>
+			<p class="usage-subtitle">
+				Resource allowance, consumption, and right-sizing across this organization.
+			</p>
 		</div>
 	</header>
 
@@ -489,16 +494,19 @@
 							type="button"
 							class="usage-range-btn"
 							class:is-active={range === r.value}
-							onclick={() => setRange(r.value)}
-						>{r.label}</button>
+							onclick={() => setRange(r.value)}>{r.label}</button
+						>
 					{/each}
 				</div>
 			{/if}
 		</div>
 
 		{#key activeTab}
-			<div class="usage-tab-content" in:fly={{ y: 8, duration: 200, delay: 60 }} out:fade={{ duration: 100 }}>
-
+			<div
+				class="usage-tab-content"
+				in:fly={{ y: 8, duration: 200, delay: 60 }}
+				out:fade={{ duration: 100 }}
+			>
 				<!-- ───────── OVERVIEW ───────── -->
 				{#if activeTab === 'overview' && orgQuota}
 					<div class="card">
@@ -584,11 +592,15 @@
 												</td>
 												<td>
 													{formatCpuMilli(p.usage.cpuMilli)}
-													{#if p.cpuLimitMilli}<span class="cell-sub"> / {formatCpuMilli(p.cpuLimitMilli)}</span>{/if}
+													{#if p.cpuLimitMilli}<span class="cell-sub">
+															/ {formatCpuMilli(p.cpuLimitMilli)}</span
+														>{/if}
 												</td>
 												<td>
 													{formatMemoryBytes(p.usage.memoryBytes)}
-													{#if p.memoryLimitBytes}<span class="cell-sub"> / {formatMemoryBytes(p.memoryLimitBytes)}</span>{/if}
+													{#if p.memoryLimitBytes}<span class="cell-sub">
+															/ {formatMemoryBytes(p.memoryLimitBytes)}</span
+														>{/if}
 												</td>
 												<td>
 													{p.usage.pods}
@@ -602,7 +614,7 @@
 						</div>
 					{/if}
 
-				<!-- ───────── MY USAGE ───────── -->
+					<!-- ───────── MY USAGE ───────── -->
 				{:else if activeTab === 'me' && myUsage}
 					{@const userCpuCap = myUsage.allowance.cpuMilli}
 					{@const userMemCap = myUsage.allowance.memoryBytes}
@@ -647,9 +659,7 @@
 					</div>
 
 					{#if myUsage.usage.breakdown.length === 0}
-						<div class="empty-card">
-							You don't own any projects with deployments yet.
-						</div>
+						<div class="empty-card">You don't own any projects with deployments yet.</div>
 					{:else}
 						<div class="card">
 							<div class="card-head">
@@ -702,7 +712,7 @@
 						</div>
 					{/if}
 
-				<!-- ───────── MEMBERS ───────── -->
+					<!-- ───────── MEMBERS ───────── -->
 				{:else if activeTab === 'members' && isAdmin && membersData}
 					<div class="card">
 						<div class="card-head">
@@ -727,7 +737,10 @@
 									size="md"
 								/>
 							</div>
-							<p class="hint-text">Unlimited members don't contribute to these totals, but their actual usage still counts against the org cap.</p>
+							<p class="hint-text">
+								Unlimited members don't contribute to these totals, but their actual usage still
+								counts against the org cap.
+							</p>
 						</div>
 					</div>
 
@@ -754,11 +767,19 @@
 												min="0"
 												class="input field-input"
 												bind:value={defaultCpuInput}
-												oninput={() => { if (defaultCpuInput) defaultCpuUnlim = false; }}
+												oninput={() => {
+													if (defaultCpuInput) defaultCpuUnlim = false;
+												}}
 												placeholder={defaultCpuUnlim ? 'Unlimited' : 'e.g. 500'}
 											/>
 											<label class="toggle">
-												<input type="checkbox" bind:checked={defaultCpuUnlim} onchange={() => { if (defaultCpuUnlim) defaultCpuInput = ''; }} /> Unlimited
+												<input
+													type="checkbox"
+													bind:checked={defaultCpuUnlim}
+													onchange={() => {
+														if (defaultCpuUnlim) defaultCpuInput = '';
+													}}
+												/> Unlimited
 											</label>
 										</div>
 									</label>
@@ -770,17 +791,29 @@
 												min="0"
 												class="input field-input"
 												bind:value={defaultMemInput}
-												oninput={() => { if (defaultMemInput) defaultMemUnlim = false; }}
+												oninput={() => {
+													if (defaultMemInput) defaultMemUnlim = false;
+												}}
 												placeholder={defaultMemUnlim ? 'Unlimited' : 'e.g. 1024'}
 											/>
 											<label class="toggle">
-												<input type="checkbox" bind:checked={defaultMemUnlim} onchange={() => { if (defaultMemUnlim) defaultMemInput = ''; }} /> Unlimited
+												<input
+													type="checkbox"
+													bind:checked={defaultMemUnlim}
+													onchange={() => {
+														if (defaultMemUnlim) defaultMemInput = '';
+													}}
+												/> Unlimited
 											</label>
 										</div>
 									</label>
 								</div>
 								<div class="form-actions">
-									<button class="btn btn-secondary" onclick={() => (editingDefault = false)} disabled={savingDefault}>Cancel</button>
+									<button
+										class="btn btn-secondary"
+										onclick={() => (editingDefault = false)}
+										disabled={savingDefault}>Cancel</button
+									>
 									<button class="btn btn-primary" onclick={saveDefault} disabled={savingDefault}>
 										{#if savingDefault}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
 										Save
@@ -837,32 +870,59 @@
 											<td>
 												<div class="strong">
 													{formatCpuMilli(m.usage.cpuMilli)}
-													<span class="cell-sub">/ {allowanceLabel(m.allowance.source.cpu, m.allowance.cpuMilli, formatCpuMilli)}</span>
+													<span class="cell-sub"
+														>/ {allowanceLabel(
+															m.allowance.source.cpu,
+															m.allowance.cpuMilli,
+															formatCpuMilli
+														)}</span
+													>
 												</div>
 												{#if m.allowance.cpuMilli !== null}
 													<div class="bar-track bar-track-sm bar-row-w">
-														<div class="bar-fill" style="width: {pct(m.usage.cpuMilli, m.allowance.cpuMilli)}%;"></div>
+														<div
+															class="bar-fill"
+															style="width: {pct(m.usage.cpuMilli, m.allowance.cpuMilli)}%;"
+														></div>
 													</div>
 												{/if}
 											</td>
 											<td>
 												<div class="strong">
 													{formatMemoryBytes(m.usage.memoryBytes)}
-													<span class="cell-sub">/ {allowanceLabel(m.allowance.source.memory, m.allowance.memoryBytes, formatMemoryBytes)}</span>
+													<span class="cell-sub"
+														>/ {allowanceLabel(
+															m.allowance.source.memory,
+															m.allowance.memoryBytes,
+															formatMemoryBytes
+														)}</span
+													>
 												</div>
 												{#if m.allowance.memoryBytes !== null}
 													<div class="bar-track bar-track-sm bar-row-w">
-														<div class="bar-fill" style="width: {pct(m.usage.memoryBytes, m.allowance.memoryBytes)}%;"></div>
+														<div
+															class="bar-fill"
+															style="width: {pct(m.usage.memoryBytes, m.allowance.memoryBytes)}%;"
+														></div>
 													</div>
 												{/if}
 											</td>
 											<td class="ta-right">
 												{#if editingMemberId === m.user.id}
-													<button class="btn-icon-sm" onclick={() => (editingMemberId = null)} disabled={savingMember} aria-label="Cancel">
+													<button
+														class="btn-icon-sm"
+														onclick={() => (editingMemberId = null)}
+														disabled={savingMember}
+														aria-label="Cancel"
+													>
 														<X class="h-4 w-4" />
 													</button>
 												{:else}
-													<button class="btn-icon-sm" onclick={() => startEditMember(m)} aria-label="Edit allowance">
+													<button
+														class="btn-icon-sm"
+														onclick={() => startEditMember(m)}
+														aria-label="Edit allowance"
+													>
 														<Pencil class="h-4 w-4" />
 													</button>
 												{/if}
@@ -880,14 +940,41 @@
 																	min="0"
 																	class="input field-input"
 																	bind:value={memCpuInput}
-																	oninput={() => { if (memCpuInput) { memCpuUnlim = false; memCpuUseDefault = false; } }}
-																	placeholder={memCpuUnlim ? 'Unlimited' : memCpuUseDefault ? 'Inherits default' : 'e.g. 500'}
+																	oninput={() => {
+																		if (memCpuInput) {
+																			memCpuUnlim = false;
+																			memCpuUseDefault = false;
+																		}
+																	}}
+																	placeholder={memCpuUnlim
+																		? 'Unlimited'
+																		: memCpuUseDefault
+																			? 'Inherits default'
+																			: 'e.g. 500'}
 																/>
 																<label class="toggle">
-																	<input type="checkbox" bind:checked={memCpuUnlim} onchange={() => { if (memCpuUnlim) { memCpuUseDefault = false; memCpuInput = ''; } }} /> Unlimited
+																	<input
+																		type="checkbox"
+																		bind:checked={memCpuUnlim}
+																		onchange={() => {
+																			if (memCpuUnlim) {
+																				memCpuUseDefault = false;
+																				memCpuInput = '';
+																			}
+																		}}
+																	/> Unlimited
 																</label>
 																<label class="toggle">
-																	<input type="checkbox" bind:checked={memCpuUseDefault} onchange={() => { if (memCpuUseDefault) { memCpuUnlim = false; memCpuInput = ''; } }} /> Use default
+																	<input
+																		type="checkbox"
+																		bind:checked={memCpuUseDefault}
+																		onchange={() => {
+																			if (memCpuUseDefault) {
+																				memCpuUnlim = false;
+																				memCpuInput = '';
+																			}
+																		}}
+																	/> Use default
 																</label>
 															</div>
 														</label>
@@ -899,22 +986,59 @@
 																	min="0"
 																	class="input field-input"
 																	bind:value={memMemInput}
-																	oninput={() => { if (memMemInput) { memMemUnlim = false; memMemUseDefault = false; } }}
-																	placeholder={memMemUnlim ? 'Unlimited' : memMemUseDefault ? 'Inherits default' : 'e.g. 1024'}
+																	oninput={() => {
+																		if (memMemInput) {
+																			memMemUnlim = false;
+																			memMemUseDefault = false;
+																		}
+																	}}
+																	placeholder={memMemUnlim
+																		? 'Unlimited'
+																		: memMemUseDefault
+																			? 'Inherits default'
+																			: 'e.g. 1024'}
 																/>
 																<label class="toggle">
-																	<input type="checkbox" bind:checked={memMemUnlim} onchange={() => { if (memMemUnlim) { memMemUseDefault = false; memMemInput = ''; } }} /> Unlimited
+																	<input
+																		type="checkbox"
+																		bind:checked={memMemUnlim}
+																		onchange={() => {
+																			if (memMemUnlim) {
+																				memMemUseDefault = false;
+																				memMemInput = '';
+																			}
+																		}}
+																	/> Unlimited
 																</label>
 																<label class="toggle">
-																	<input type="checkbox" bind:checked={memMemUseDefault} onchange={() => { if (memMemUseDefault) { memMemUnlim = false; memMemInput = ''; } }} /> Use default
+																	<input
+																		type="checkbox"
+																		bind:checked={memMemUseDefault}
+																		onchange={() => {
+																			if (memMemUseDefault) {
+																				memMemUnlim = false;
+																				memMemInput = '';
+																			}
+																		}}
+																	/> Use default
 																</label>
 															</div>
 														</label>
 													</div>
 													<div class="form-actions">
-														<button class="btn btn-secondary" onclick={() => (editingMemberId = null)} disabled={savingMember}>Cancel</button>
-														<button class="btn btn-primary" onclick={saveMember} disabled={savingMember}>
-															{#if savingMember}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Check class="h-3.5 w-3.5" />{/if}
+														<button
+															class="btn btn-secondary"
+															onclick={() => (editingMemberId = null)}
+															disabled={savingMember}>Cancel</button
+														>
+														<button
+															class="btn btn-primary"
+															onclick={saveMember}
+															disabled={savingMember}
+														>
+															{#if savingMember}<Loader2
+																	class="h-3.5 w-3.5 animate-spin"
+																/>{:else}<Check class="h-3.5 w-3.5" />{/if}
 															Save
 														</button>
 													</div>
@@ -927,7 +1051,7 @@
 						</div>
 					</div>
 
-				<!-- ───────── PROVISIONING ───────── -->
+					<!-- ───────── PROVISIONING ───────── -->
 				{:else if activeTab === 'provisioning' && isAdmin}
 					<div class="prov-overview">
 						<div class="card prov-donut-card">
@@ -937,10 +1061,26 @@
 							<div class="card-body">
 								<DonutChart
 									slices={[
-										{ label: 'OK', value: provisioningSummary.counts.ok, color: 'var(--success-text)' },
-										{ label: 'Over-provisioned', value: provisioningSummary.counts.over, color: 'var(--warning-text)' },
-										{ label: 'Under-provisioned', value: provisioningSummary.counts.under, color: 'var(--error-text-color)' },
-										{ label: 'No data', value: provisioningSummary.counts.unknown, color: 'var(--surface-muted)' },
+										{
+											label: 'OK',
+											value: provisioningSummary.counts.ok,
+											color: 'var(--success-text)'
+										},
+										{
+											label: 'Over-provisioned',
+											value: provisioningSummary.counts.over,
+											color: 'var(--warning-text)'
+										},
+										{
+											label: 'Under-provisioned',
+											value: provisioningSummary.counts.under,
+											color: 'var(--error-text-color)'
+										},
+										{
+											label: 'No data',
+											value: provisioningSummary.counts.unknown,
+											color: 'var(--surface-muted)'
+										}
 									]}
 									size={170}
 									thickness={22}
@@ -964,7 +1104,10 @@
 										<p class="headroom-value">{formatMemoryBytes(provisioningSummary.wastedMem)}</p>
 									</div>
 								</div>
-								<p class="hint-text">Sum of requested minus p95 actual for every workload, across the selected range. Lower these requests to reclaim capacity.</p>
+								<p class="hint-text">
+									Sum of requested minus p95 actual for every workload, across the selected range.
+									Lower these requests to reclaim capacity.
+								</p>
 							</div>
 						</div>
 					</div>
@@ -987,7 +1130,7 @@
 												value: w.wasted,
 												fillValue: w.row.actualCpuMilliP95 ?? 0,
 												color: 'var(--warning-bg)',
-												fillColor: verdictColor(w.row.verdict),
+												fillColor: verdictColor(w.row.verdict)
 											}))}
 											formatValue={formatCpuMilli}
 											emptyLabel="No waste detected"
@@ -1007,7 +1150,7 @@
 												value: w.wasted,
 												fillValue: w.row.actualMemoryBytesP95 ?? 0,
 												color: 'var(--warning-bg)',
-												fillColor: verdictColor(w.row.verdict),
+												fillColor: verdictColor(w.row.verdict)
 											}))}
 											formatValue={formatMemoryBytes}
 											emptyLabel="No waste detected"
@@ -1044,15 +1187,24 @@
 														<div class="util-bar-track">
 															<div
 																class="util-bar-fill"
-																style="width: {r.cpuUtilization === null ? 0 : Math.min(100, r.cpuUtilization * 100)}%; background-color: {verdictColor(r.verdict)};"
+																style="width: {r.cpuUtilization === null
+																	? 0
+																	: Math.min(
+																			100,
+																			r.cpuUtilization * 100
+																		)}%; background-color: {verdictColor(r.verdict)};"
 															></div>
 														</div>
 														<div class="util-text">
 															<span class="util-actual">
-																{r.actualCpuMilliP95 === null ? '—' : formatCpuMilli(r.actualCpuMilliP95)}
+																{r.actualCpuMilliP95 === null
+																	? '—'
+																	: formatCpuMilli(r.actualCpuMilliP95)}
 															</span>
 															<span class="util-sep">/</span>
-															<span class="util-requested">{formatCpuMilli(r.requestedCpuMilli)}</span>
+															<span class="util-requested"
+																>{formatCpuMilli(r.requestedCpuMilli)}</span
+															>
 															<span class="util-pct">{utilPctStr(r.cpuUtilization)}</span>
 														</div>
 													</div>
@@ -1062,21 +1214,35 @@
 														<div class="util-bar-track">
 															<div
 																class="util-bar-fill"
-																style="width: {r.memoryUtilization === null ? 0 : Math.min(100, r.memoryUtilization * 100)}%; background-color: {verdictColor(r.verdict)};"
+																style="width: {r.memoryUtilization === null
+																	? 0
+																	: Math.min(
+																			100,
+																			r.memoryUtilization * 100
+																		)}%; background-color: {verdictColor(r.verdict)};"
 															></div>
 														</div>
 														<div class="util-text">
 															<span class="util-actual">
-																{r.actualMemoryBytesP95 === null ? '—' : formatMemoryBytes(r.actualMemoryBytesP95)}
+																{r.actualMemoryBytesP95 === null
+																	? '—'
+																	: formatMemoryBytes(r.actualMemoryBytesP95)}
 															</span>
 															<span class="util-sep">/</span>
-															<span class="util-requested">{formatMemoryBytes(r.requestedMemoryBytes)}</span>
+															<span class="util-requested"
+																>{formatMemoryBytes(r.requestedMemoryBytes)}</span
+															>
 															<span class="util-pct">{utilPctStr(r.memoryUtilization)}</span>
 														</div>
 													</div>
 												</td>
 												<td>
-													<span class="pill" style="color: {verdictColor(r.verdict)}; background-color: {verdictBg(r.verdict)};">
+													<span
+														class="pill"
+														style="color: {verdictColor(r.verdict)}; background-color: {verdictBg(
+															r.verdict
+														)};"
+													>
 														{verdictLabel(r.verdict)}
 													</span>
 												</td>
@@ -1088,7 +1254,6 @@
 						</div>
 					{/if}
 				{/if}
-
 			</div>
 		{/key}
 	{/if}
@@ -1150,7 +1315,9 @@
 		border: 1px solid color-mix(in srgb, var(--surface-border) 70%, transparent);
 		backdrop-filter: blur(10px) saturate(1.2);
 		-webkit-backdrop-filter: blur(10px) saturate(1.2);
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.02);
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
 		flex-wrap: wrap;
 	}
 	.usage-tabs {
@@ -1170,9 +1337,15 @@
 		font-weight: 600;
 		cursor: pointer;
 		font-family: inherit;
-		transition: color 0.18s ease, background-color 0.25s cubic-bezier(0.22, 1, 0.36, 1), box-shadow 0.25s cubic-bezier(0.22, 1, 0.36, 1), transform 0.15s ease;
+		transition:
+			color 0.18s ease,
+			background-color 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+			box-shadow 0.25s cubic-bezier(0.22, 1, 0.36, 1),
+			transform 0.15s ease;
 	}
-	.usage-tab:active { transform: scale(0.97); }
+	.usage-tab:active {
+		transform: scale(0.97);
+	}
 	.usage-tab:hover {
 		color: var(--center-channel-color);
 		background: color-mix(in srgb, var(--surface-border) 30%, transparent);
@@ -1180,7 +1353,9 @@
 	.usage-tab.is-active {
 		color: var(--center-channel-color);
 		background: color-mix(in srgb, var(--center-channel-bg) 80%, transparent);
-		box-shadow: 0 1px 2px rgba(0,0,0,0.05), 0 0 0 1px color-mix(in srgb, var(--surface-border) 60%, transparent);
+		box-shadow:
+			0 1px 2px rgba(0, 0, 0, 0.05),
+			0 0 0 1px color-mix(in srgb, var(--surface-border) 60%, transparent);
 	}
 
 	.usage-range {
@@ -1201,13 +1376,17 @@
 		font-weight: 600;
 		cursor: pointer;
 		font-family: inherit;
-		transition: background-color 0.18s ease, color 0.18s ease;
+		transition:
+			background-color 0.18s ease,
+			color 0.18s ease;
 	}
-	.usage-range-btn:hover { color: var(--center-channel-color); }
+	.usage-range-btn:hover {
+		color: var(--center-channel-color);
+	}
 	.usage-range-btn.is-active {
 		background-color: var(--surface-bg);
 		color: var(--center-channel-color);
-		box-shadow: 0 1px 2px rgba(0,0,0,0.05);
+		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.05);
 	}
 
 	.usage-tab-content {
@@ -1215,13 +1394,27 @@
 		flex-direction: column;
 		gap: 1.25rem;
 	}
-	.usage-tab-content > :global(*) { animation: tab-card-in 250ms ease both; }
-	.usage-tab-content > :global(*:nth-child(2)) { animation-delay: 50ms; }
-	.usage-tab-content > :global(*:nth-child(3)) { animation-delay: 100ms; }
-	.usage-tab-content > :global(*:nth-child(4)) { animation-delay: 150ms; }
+	.usage-tab-content > :global(*) {
+		animation: tab-card-in 250ms ease both;
+	}
+	.usage-tab-content > :global(*:nth-child(2)) {
+		animation-delay: 50ms;
+	}
+	.usage-tab-content > :global(*:nth-child(3)) {
+		animation-delay: 100ms;
+	}
+	.usage-tab-content > :global(*:nth-child(4)) {
+		animation-delay: 150ms;
+	}
 	@keyframes tab-card-in {
-		from { opacity: 0; transform: translateY(6px); }
-		to   { opacity: 1; transform: translateY(0); }
+		from {
+			opacity: 0;
+			transform: translateY(6px);
+		}
+		to {
+			opacity: 1;
+			transform: translateY(0);
+		}
 	}
 
 	.stat-label {
@@ -1241,14 +1434,19 @@
 		margin-top: 0.5rem;
 		overflow: hidden;
 	}
-	.bar-track-sm { height: 0.25rem; }
+	.bar-track-sm {
+		height: 0.25rem;
+	}
 	.bar-fill {
 		height: 100%;
 		border-radius: 999px;
 		background-color: var(--button-bg);
 		transition: width 250ms ease;
 	}
-	.bar-row-w { width: 10rem; margin-top: 0.375rem; }
+	.bar-row-w {
+		width: 10rem;
+		margin-top: 0.375rem;
+	}
 
 	/* Cards */
 	.card {
@@ -1256,7 +1454,9 @@
 		border-radius: 1rem;
 		background-color: var(--surface-bg);
 		overflow: hidden;
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.02);
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
 	}
 	.card-head {
 		display: flex;
@@ -1281,7 +1481,9 @@
 		background-color: color-mix(in srgb, var(--surface-border) 50%, var(--center-channel-bg));
 		color: var(--surface-muted);
 	}
-	.card-body { padding: 1.25rem; }
+	.card-body {
+		padding: 1.25rem;
+	}
 
 	.commit-grid {
 		display: grid;
@@ -1301,7 +1503,9 @@
 	}
 
 	/* Tables */
-	.table-wrap { overflow-x: auto; }
+	.table-wrap {
+		overflow-x: auto;
+	}
 	.data-table {
 		width: 100%;
 		font-size: 0.8125rem;
@@ -1329,20 +1533,31 @@
 		background-color: color-mix(in srgb, var(--surface-border) 18%, var(--surface-bg));
 		padding: 1rem 1.25rem;
 	}
-	.data-table tr.align-top td { vertical-align: top; }
+	.data-table tr.align-top td {
+		vertical-align: top;
+	}
 	.cell-sub {
 		font-size: 0.75rem;
 		color: var(--surface-muted);
 	}
-	.strong { font-weight: 600; }
-	.mono { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; }
-	.ta-right { text-align: right; }
+	.strong {
+		font-weight: 600;
+	}
+	.mono {
+		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+	}
+	.ta-right {
+		text-align: right;
+	}
 	.link-cell {
 		font-weight: 600;
 		color: var(--center-channel-color);
 		text-decoration: none;
 	}
-	.link-cell:hover { color: var(--link-color); text-decoration: underline; }
+	.link-cell:hover {
+		color: var(--link-color);
+		text-decoration: underline;
+	}
 
 	/* Pills */
 	.pill {
@@ -1359,7 +1574,10 @@
 		color: var(--surface-muted);
 		background-color: color-mix(in srgb, var(--surface-border) 45%, var(--surface-bg));
 	}
-	.capitalize { text-transform: capitalize; letter-spacing: 0; }
+	.capitalize {
+		text-transform: capitalize;
+		letter-spacing: 0;
+	}
 
 	/* Buttons */
 	.btn {
@@ -1374,10 +1592,19 @@
 		font-weight: 600;
 		cursor: pointer;
 		font-family: inherit;
-		transition: background-color 120ms ease, color 120ms ease, border-color 120ms ease, transform 100ms ease;
+		transition:
+			background-color 120ms ease,
+			color 120ms ease,
+			border-color 120ms ease,
+			transform 100ms ease;
 	}
-	.btn:active { transform: scale(0.98); }
-	.btn:disabled { opacity: 0.5; cursor: not-allowed; }
+	.btn:active {
+		transform: scale(0.98);
+	}
+	.btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
 	.btn-primary {
 		background-color: var(--button-bg);
 		color: var(--button-color);
@@ -1408,7 +1635,9 @@
 		font-family: inherit;
 		transition: background-color 120ms ease;
 	}
-	.btn-icon:hover { background-color: var(--control-hover-bg); }
+	.btn-icon:hover {
+		background-color: var(--control-hover-bg);
+	}
 	.btn-icon-sm {
 		display: inline-flex;
 		padding: 0.375rem;
@@ -1418,9 +1647,14 @@
 		color: var(--surface-muted);
 		cursor: pointer;
 		font-family: inherit;
-		transition: background-color 120ms ease, color 120ms ease;
+		transition:
+			background-color 120ms ease,
+			color 120ms ease;
 	}
-	.btn-icon-sm:hover { background-color: var(--control-hover-bg); color: var(--center-channel-color); }
+	.btn-icon-sm:hover {
+		background-color: var(--control-hover-bg);
+		color: var(--center-channel-color);
+	}
 
 	/* Forms */
 	.form-grid {
@@ -1429,9 +1663,15 @@
 		gap: 1rem;
 	}
 	@media (max-width: 640px) {
-		.form-grid { grid-template-columns: 1fr; }
+		.form-grid {
+			grid-template-columns: 1fr;
+		}
 	}
-	.field { display: flex; flex-direction: column; gap: 0.375rem; }
+	.field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+	}
 	.field-label {
 		font-size: 0.6875rem;
 		font-weight: 600;
@@ -1458,14 +1698,19 @@
 		border-radius: 0.5rem;
 		font-size: 0.8125rem;
 		font-family: inherit;
-		transition: border-color 120ms ease, box-shadow 120ms ease;
+		transition:
+			border-color 120ms ease,
+			box-shadow 120ms ease;
 	}
 	.input:focus {
 		outline: none;
 		border-color: var(--button-bg);
 		box-shadow: 0 0 0 3px color-mix(in srgb, var(--button-bg) 20%, transparent);
 	}
-	.input:disabled { opacity: 0.55; cursor: not-allowed; }
+	.input:disabled {
+		opacity: 0.55;
+		cursor: not-allowed;
+	}
 	.toggle {
 		display: inline-flex;
 		align-items: center;
@@ -1488,7 +1733,9 @@
 		gap: 1.25rem;
 	}
 	@media (max-width: 880px) {
-		.top-wasters-grid { grid-template-columns: 1fr; }
+		.top-wasters-grid {
+			grid-template-columns: 1fr;
+		}
 	}
 
 	.util-cell {
@@ -1511,7 +1758,9 @@
 		animation: util-bar-grow 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
 	}
 	@keyframes util-bar-grow {
-		from { width: 0 !important; }
+		from {
+			width: 0 !important;
+		}
 	}
 	.util-text {
 		display: inline-flex;
@@ -1524,8 +1773,12 @@
 		font-weight: 700;
 		color: var(--center-channel-color);
 	}
-	.util-sep { color: var(--surface-muted); }
-	.util-requested { color: var(--surface-muted); }
+	.util-sep {
+		color: var(--surface-muted);
+	}
+	.util-requested {
+		color: var(--surface-muted);
+	}
 	.util-pct {
 		margin-left: auto;
 		color: var(--surface-muted);
@@ -1550,7 +1803,9 @@
 		gap: 1.25rem;
 	}
 	@media (max-width: 720px) {
-		.prov-overview { grid-template-columns: 1fr; }
+		.prov-overview {
+			grid-template-columns: 1fr;
+		}
 	}
 	.headroom-row {
 		display: grid;
@@ -1558,7 +1813,11 @@
 		gap: 1.5rem;
 		margin-bottom: 0.75rem;
 	}
-	.headroom-cell { display: flex; flex-direction: column; gap: 0.25rem; }
+	.headroom-cell {
+		display: flex;
+		flex-direction: column;
+		gap: 0.25rem;
+	}
 	.headroom-value {
 		font-size: 1.5rem;
 		font-weight: 700;

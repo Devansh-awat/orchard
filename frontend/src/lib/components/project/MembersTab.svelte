@@ -20,7 +20,7 @@
 		onUpdateMemberRole,
 		onRemoveMember,
 		onRevokeInvitation,
-		onEnsureOrgMembersLoaded,
+		onEnsureOrgMembersLoaded
 	}: {
 		projectMembers: ProjectMember[];
 		pendingInvitations?: PendingInvitation[];
@@ -46,12 +46,12 @@
 	const searchIsEmail = $derived(/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(searchEmail));
 	const searchIsKnown = $derived(
 		projectMembers.some((m) => m.user.email?.toLowerCase() === searchEmail) ||
-		pendingInvitations.some((inv) => inv.email.toLowerCase() === searchEmail)
+			pendingInvitations.some((inv) => inv.email.toLowerCase() === searchEmail)
 	);
 	const showInviteOption = $derived(
 		searchIsEmail &&
-		!searchIsKnown &&
-		!filteredOrgMembers.some((m) => m.user.email.toLowerCase() === searchEmail)
+			!searchIsKnown &&
+			!filteredOrgMembers.some((m) => m.user.email.toLowerCase() === searchEmail)
 	);
 
 	let pickerOpen = $state(false);
@@ -87,13 +87,22 @@
 			return () => {
 				window.removeEventListener('resize', onResize);
 				window.removeEventListener('scroll', onResize, true);
-				try { node.remove(); } catch { /* already removed */ }
+				try {
+					node.remove();
+				} catch {
+					/* already removed */
+				}
 			};
 		};
 	}
 </script>
 
-<svelte:window onclick={() => (openRoleMenuId = null)} onkeydown={(e) => { if (e.key === 'Escape') openRoleMenuId = null; }} />
+<svelte:window
+	onclick={() => (openRoleMenuId = null)}
+	onkeydown={(e) => {
+		if (e.key === 'Escape') openRoleMenuId = null;
+	}}
+/>
 
 <div class="pj-members-section">
 	<div class="pj-members-card">
@@ -104,90 +113,105 @@
 				<span class="pj-members-count">{projectMembers.length}</span>
 			</div>
 			{#if canManageMembers}
-			<div class="pj-picker">
-				<input
-					type="text"
-					bind:value={memberSearch}
-					placeholder="Add a member…"
-					class="pj-invite-input"
-					onfocus={() => { pickerOpen = true; onEnsureOrgMembersLoaded(); }}
-					onblur={() => setTimeout(() => (pickerOpen = false), 150)}
-				/>
-				{#if pickerRender && filteredOrgMembers.length > 0}
-					<div
-						class="pj-picker-dropdown"
-						{@attach motionPopover({
-							from: { y: -8, scale: 0.96 },
-							closing: () => !pickerOpen,
-							onClosed: () => { pickerRender = false; }
-						})}
-					>
-						{#each filteredOrgMembers as om (om.id)}
-							<button
-								type="button"
-								class="pj-picker-item"
-								onmousedown={(e) => e.preventDefault()}
-								onclick={() => onAddMember(om.user.email)}
-								disabled={addingMember}
-							>
-								{#if om.user.imageUrl}
-									<img src={om.user.imageUrl} alt="" class="pj-member-avatar" />
-								{:else}
-									<div class="pj-member-avatar pj-member-avatar--letter">
-										{(om.user.firstName ?? om.user.email).charAt(0).toUpperCase()}
-									</div>
-								{/if}
-								<div class="pj-member-info">
-									<span class="pj-member-name">
-										{#if om.user.firstName}{om.user.firstName}{#if om.user.lastName}&nbsp;{om.user.lastName}{/if}{:else}{om.user.email}{/if}
-										{#if om.role === 'guest'}
-											<span class="guest-pill" title="Guests only see projects they're explicit members of">Guest</span>
-										{/if}
-									</span>
-									{#if om.user.firstName}
-										<span class="pj-member-email">{om.user.email}</span>
-									{/if}
-								</div>
-							</button>
-						{/each}
-					</div>
-				{:else if pickerRender && memberSearch.trim() && filteredOrgMembers.length === 0}
-					<div
-						class="pj-picker-dropdown"
-						{@attach motionPopover({
-							from: { y: -8, scale: 0.96 },
-							closing: () => !pickerOpen,
-							onClosed: () => { pickerRender = false; }
-						})}
-					>
-						{#if showInviteOption}
-							<button
-								type="button"
-								class="pj-picker-item pj-picker-invite"
-								onmousedown={(e) => e.preventDefault()}
-								onclick={() => onAddMember(searchEmail)}
-								disabled={addingMember}
-							>
-								<div class="pj-member-avatar pj-member-avatar--letter">
-									{#if addingMember}
-										<Loader2 class="h-3.5 w-3.5 animate-spin" />
+				<div class="pj-picker">
+					<input
+						type="text"
+						bind:value={memberSearch}
+						placeholder="Add a member…"
+						class="pj-invite-input"
+						onfocus={() => {
+							pickerOpen = true;
+							onEnsureOrgMembersLoaded();
+						}}
+						onblur={() => setTimeout(() => (pickerOpen = false), 150)}
+					/>
+					{#if pickerRender && filteredOrgMembers.length > 0}
+						<div
+							class="pj-picker-dropdown"
+							{@attach motionPopover({
+								from: { y: -8, scale: 0.96 },
+								closing: () => !pickerOpen,
+								onClosed: () => {
+									pickerRender = false;
+								}
+							})}
+						>
+							{#each filteredOrgMembers as om (om.id)}
+								<button
+									type="button"
+									class="pj-picker-item"
+									onmousedown={(e) => e.preventDefault()}
+									onclick={() => onAddMember(om.user.email)}
+									disabled={addingMember}
+								>
+									{#if om.user.imageUrl}
+										<img src={om.user.imageUrl} alt="" class="pj-member-avatar" />
 									{:else}
-										<UserPlus size={14} />
+										<div class="pj-member-avatar pj-member-avatar--letter">
+											{(om.user.firstName ?? om.user.email).charAt(0).toUpperCase()}
+										</div>
 									{/if}
+									<div class="pj-member-info">
+										<span class="pj-member-name">
+											{#if om.user.firstName}{om.user.firstName}{#if om.user.lastName}&nbsp;{om.user
+														.lastName}{/if}{:else}{om.user.email}{/if}
+											{#if om.role === 'guest'}
+												<span
+													class="guest-pill"
+													title="Guests only see projects they're explicit members of">Guest</span
+												>
+											{/if}
+										</span>
+										{#if om.user.firstName}
+											<span class="pj-member-email">{om.user.email}</span>
+										{/if}
+									</div>
+								</button>
+							{/each}
+						</div>
+					{:else if pickerRender && memberSearch.trim() && filteredOrgMembers.length === 0}
+						<div
+							class="pj-picker-dropdown"
+							{@attach motionPopover({
+								from: { y: -8, scale: 0.96 },
+								closing: () => !pickerOpen,
+								onClosed: () => {
+									pickerRender = false;
+								}
+							})}
+						>
+							{#if showInviteOption}
+								<button
+									type="button"
+									class="pj-picker-item pj-picker-invite"
+									onmousedown={(e) => e.preventDefault()}
+									onclick={() => onAddMember(searchEmail)}
+									disabled={addingMember}
+								>
+									<div class="pj-member-avatar pj-member-avatar--letter">
+										{#if addingMember}
+											<Loader2 class="h-3.5 w-3.5 animate-spin" />
+										{:else}
+											<UserPlus size={14} />
+										{/if}
+									</div>
+									<div class="pj-member-info">
+										<span class="pj-member-name">Invite {searchEmail}</span>
+										<span class="pj-member-email"
+											>Not on Orchard yet — they'll get an email and join as a guest</span
+										>
+									</div>
+								</button>
+							{:else if searchIsKnown}
+								<div class="pj-picker-empty">Already a member or invited</div>
+							{:else}
+								<div class="pj-picker-empty">
+									No matching org members — type a full email to invite a guest
 								</div>
-								<div class="pj-member-info">
-									<span class="pj-member-name">Invite {searchEmail}</span>
-									<span class="pj-member-email">Not on Orchard yet — they'll get an email and join as a guest</span>
-								</div>
-							</button>
-						{:else if searchIsKnown}
-							<div class="pj-picker-empty">Already a member or invited</div>
-						{:else}
-							<div class="pj-picker-empty">No matching org members — type a full email to invite a guest</div>
-						{/if}
-					</div>
-				{/if}
-			</div>
+							{/if}
+						</div>
+					{/if}
+				</div>
 			{/if}
 		</div>
 
@@ -196,7 +220,12 @@
 				{#each projectMembers as m, i (m.id)}
 					<li
 						class="pj-member"
-						{@attach motionStagger({ index: i, axis: 'x', from: { y: -10, scale: 1 }, stride: 0.04 })}
+						{@attach motionStagger({
+							index: i,
+							axis: 'x',
+							from: { y: -10, scale: 1 },
+							stride: 0.04
+						})}
 					>
 						{#if m.user.imageUrl}
 							<img src={m.user.imageUrl} alt="" class="pj-member-avatar" />
@@ -207,9 +236,14 @@
 						{/if}
 						<div class="pj-member-info">
 							<span class="pj-member-name">
-								{#if m.user.firstName}{m.user.firstName}{#if m.user.lastName}&nbsp;{m.user.lastName}{/if}{:else}{m.user.email}{/if}
+								{#if m.user.firstName}{m.user.firstName}{#if m.user.lastName}&nbsp;{m.user
+											.lastName}{/if}{:else}{m.user.email}{/if}
 								{#if m.orgRole === 'guest'}
-									<span class="guest-pill" title="Guests are only members of specific projects, not the whole organization">Guest</span>
+									<span
+										class="guest-pill"
+										title="Guests are only members of specific projects, not the whole organization"
+										>Guest</span
+									>
 								{/if}
 							</span>
 							<span class="pj-member-email">{m.user.email}</span>
@@ -247,7 +281,9 @@
 											stiffness: 540,
 											damping: 30,
 											closing: () => openRoleMenuId !== m.id,
-											onClosed: () => { if (renderRoleMenuId === m.id) renderRoleMenuId = null; }
+											onClosed: () => {
+												if (renderRoleMenuId === m.id) renderRoleMenuId = null;
+											}
 										})}
 										{@attach portalUnder(() => document.getElementById(triggerId))}
 									>
@@ -284,25 +320,28 @@
 							<span class="pj-role-chip pj-role-chip--{m.role.name}">{m.role.name}</span>
 						{/if}
 						{#if canEdit}
-						<button
-							class="pj-member-remove"
-							title="Remove member"
-							aria-label="Remove {m.user.firstName ?? m.user.email}"
-							onclick={() => onRemoveMember(m.id)}
-							disabled={removingMemberId === m.id}
-						>
-							{#if removingMemberId === m.id}
-								<Loader2 class="h-3.5 w-3.5 animate-spin" />
-							{:else}
-								<Trash2 class="h-3.5 w-3.5" />
-							{/if}
-						</button>
+							<button
+								class="pj-member-remove"
+								title="Remove member"
+								aria-label="Remove {m.user.firstName ?? m.user.email}"
+								onclick={() => onRemoveMember(m.id)}
+								disabled={removingMemberId === m.id}
+							>
+								{#if removingMemberId === m.id}
+									<Loader2 class="h-3.5 w-3.5 animate-spin" />
+								{:else}
+									<Trash2 class="h-3.5 w-3.5" />
+								{/if}
+							</button>
 						{/if}
 					</li>
 				{/each}
 			</ul>
 		{:else}
-			<div class="pj-members-empty">No members yet. Add someone from your organization above, or type an email to invite a guest.</div>
+			<div class="pj-members-empty">
+				No members yet. Add someone from your organization above, or type an email to invite a
+				guest.
+			</div>
 		{/if}
 
 		{#if canManageMembers && pendingInvitations.length > 0}
@@ -315,7 +354,12 @@
 				{#each pendingInvitations as inv, i (inv.id)}
 					<li
 						class="pj-member pj-member--pending"
-						{@attach motionStagger({ index: i, axis: 'x', from: { y: -10, scale: 1 }, stride: 0.04 })}
+						{@attach motionStagger({
+							index: i,
+							axis: 'x',
+							from: { y: -10, scale: 1 },
+							stride: 0.04
+						})}
 					>
 						<div class="pj-member-avatar pj-member-avatar--letter">
 							{inv.email.charAt(0).toUpperCase()}
@@ -323,11 +367,19 @@
 						<div class="pj-member-info">
 							<span class="pj-member-name">
 								{inv.email}
-								<span class="guest-pill" title="They'll join as a guest once they accept the email invitation">Invited</span>
+								<span
+									class="guest-pill"
+									title="They'll join as a guest once they accept the email invitation"
+									>Invited</span
+								>
 							</span>
-							<span class="pj-member-email">Expires {new Date(inv.expiresAt).toLocaleDateString()}</span>
+							<span class="pj-member-email"
+								>Expires {new Date(inv.expiresAt).toLocaleDateString()}</span
+							>
 						</div>
-						<span class="pj-role-chip pj-role-chip--{inv.projectRole?.name ?? 'member'}">{inv.projectRole?.name ?? 'member'}</span>
+						<span class="pj-role-chip pj-role-chip--{inv.projectRole?.name ?? 'member'}"
+							>{inv.projectRole?.name ?? 'member'}</span
+						>
 						<button
 							class="pj-member-remove"
 							title="Revoke invitation"

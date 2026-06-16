@@ -33,22 +33,29 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
   const base64Value = process.env.KUBECONFIG_BASE64;
   const configPath = process.env.KUBECONFIG_PATH || process.env.KUBECONFIG;
 
-  if (base64Value) {
-    kc.loadFromString(Buffer.from(base64Value, 'base64').toString('utf-8'));
-  } else if (configPath) {
-    // Try base64 first, then file
-    try {
-      const decoded = Buffer.from(configPath, 'base64').toString('utf-8');
-      if (decoded.includes('apiVersion') || decoded.includes('clusters')) {
-        kc.loadFromString(decoded);
-      } else {
+  try {
+    if (base64Value) {
+      kc.loadFromString(Buffer.from(base64Value, 'base64').toString('utf-8'));
+    } else if (configPath) {
+      // Try base64 first, then file
+      try {
+        const decoded = Buffer.from(configPath, 'base64').toString('utf-8');
+        if (decoded.includes('apiVersion') || decoded.includes('clusters')) {
+          kc.loadFromString(decoded);
+        } else {
+          kc.loadFromFile(configPath);
+        }
+      } catch {
         kc.loadFromFile(configPath);
       }
-    } catch {
-      kc.loadFromFile(configPath);
+    } else {
+      kc.loadFromDefault();
     }
-  } else {
-    kc.loadFromDefault();
+  } catch (err) {
+    console.warn(
+      '[Terminal] kubeconfig unavailable — pod exec terminal disabled:',
+      (err as Error).message,
+    );
   }
 
   const jwtSecret = new TextEncoder().encode(process.env.JWT_SECRET || '');

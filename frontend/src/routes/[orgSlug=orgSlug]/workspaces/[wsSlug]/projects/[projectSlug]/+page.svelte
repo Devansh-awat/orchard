@@ -111,15 +111,11 @@
 		const deployments = project?.deployments ?? [];
 		const query = deploymentSearch.trim().toLowerCase();
 		if (!query) return deployments;
-		return deployments.filter(deployment => {
+		return deployments.filter((deployment) => {
 			const name = deployment.name?.toLowerCase() ?? '';
 			const status = deployment.status?.toLowerCase() ?? '';
 			const image = deployment.image?.toLowerCase() ?? '';
-			return (
-				name.includes(query) ||
-				status.includes(query) ||
-				image.includes(query)
-			);
+			return name.includes(query) || status.includes(query) || image.includes(query);
 		});
 	});
 
@@ -162,7 +158,9 @@
 					if (tiRes.ok) {
 						templateInstances = await tiRes.json();
 					}
-				} catch { /* ignore */ }
+				} catch {
+					/* ignore */
+				}
 			}
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to fetch project';
@@ -177,8 +175,8 @@
 		syncing = true;
 		try {
 			// The server exposes sync as GET (kubernetes.controller.ts) — a POST
-		// here 404s and the namespace never syncs.
-		await apiFetch(`/apiv1/sync/${project.namespace}`);
+			// here 404s and the namespace never syncs.
+			await apiFetch(`/apiv1/sync/${project.namespace}`);
 			const response = await apiFetch(`/apiv1/projects/${project.id}`);
 			if (response.ok) {
 				project = await response.json();
@@ -256,14 +254,22 @@
 
 	function getStatusLabel(status: string) {
 		switch (status?.toLowerCase()) {
-			case 'running': return 'Running';
-			case 'restarting': return 'Restarting';
-			case 'scaling': return 'Scaling';
-			case 'failed': return 'Failed';
-			case 'stopped': return 'Stopped';
-			case 'unhealthy': return 'Unhealthy';
-			case 'pending': return 'Pending';
-			default: return status || 'Unknown';
+			case 'running':
+				return 'Running';
+			case 'restarting':
+				return 'Restarting';
+			case 'scaling':
+				return 'Scaling';
+			case 'failed':
+				return 'Failed';
+			case 'stopped':
+				return 'Stopped';
+			case 'unhealthy':
+				return 'Unhealthy';
+			case 'pending':
+				return 'Pending';
+			default:
+				return status || 'Unknown';
 		}
 	}
 
@@ -276,13 +282,7 @@
 	}
 
 	function handleDeploymentClick(event: MouseEvent, id: string) {
-		if (
-			event.metaKey ||
-			event.ctrlKey ||
-			event.shiftKey ||
-			event.altKey ||
-			event.button !== 0
-		) {
+		if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) {
 			return;
 		}
 		event.preventDefault();
@@ -341,11 +341,20 @@
 		</div>
 	{:else if project}
 		<!-- Breadcrumb -->
-		<Breadcrumb crumbs={[
-			{ label: 'Home', href: `/${orgSlug}` },
-			...(project.workspace?.slug ? [{ label: project.workspace.name || project.workspace.slug, href: `/${orgSlug}/workspaces/${project.workspace.slug}` }] : []),
-			{ label: project.name }
-		]} />
+		<Breadcrumb
+			crumbs={[
+				{ label: 'Home', href: `/${orgSlug}` },
+				...(project.workspace?.slug
+					? [
+							{
+								label: project.workspace.name || project.workspace.slug,
+								href: `/${orgSlug}/workspaces/${project.workspace.slug}`
+							}
+						]
+					: []),
+				{ label: project.name }
+			]}
+		/>
 
 		<!-- Header -->
 		<div class="pj-header">
@@ -357,11 +366,7 @@
 					{/if}
 				</div>
 				<div class="pj-header-actions">
-					<button
-						onclick={syncNamespace}
-						disabled={syncing}
-						class="pj-btn pj-btn-secondary"
-					>
+					<button onclick={syncNamespace} disabled={syncing} class="pj-btn pj-btn-secondary">
 						<RefreshCw class="h-4 w-4 {syncing ? 'animate-spin' : ''}" />
 						Sync
 					</button>
@@ -422,10 +427,7 @@
 						/>
 					</div>
 				{/if}
-				<button
-					class="pj-btn pj-btn-primary"
-					onclick={() => (showNewResourceModal = true)}
-				>
+				<button class="pj-btn pj-btn-primary" onclick={() => (showNewResourceModal = true)}>
 					<Plus class="h-4 w-4" />
 					New
 				</button>
@@ -468,7 +470,11 @@
 							</span>
 							{#if deployment.buildStatus && deployment.buildStatus !== 'none' && deployment.buildStatus !== 'succeeded'}
 								<span class="pj-deployment-build-badge pj-build-{deployment.buildStatus}">
-									Build: {deployment.buildStatus === 'building' ? 'Building' : deployment.buildStatus === 'failed' ? 'Failed' : deployment.buildStatus}
+									Build: {deployment.buildStatus === 'building'
+										? 'Building'
+										: deployment.buildStatus === 'failed'
+											? 'Failed'
+											: deployment.buildStatus}
 								</span>
 							{/if}
 						</div>
@@ -504,21 +510,35 @@
 		{#if templateInstances.length}
 			<div class="pj-deployments-header" style="margin-top: 1rem;">
 				<h2 class="pj-section-title">
-					<LayoutTemplate class="h-4 w-4" style="color: var(--sidebar-text-active-border); display: inline;" />
+					<LayoutTemplate
+						class="h-4 w-4"
+						style="color: var(--sidebar-text-active-border); display: inline;"
+					/>
 					Template Instances
 				</h2>
 			</div>
 			<div class="pj-deployment-grid">
 				{#each templateInstances as ti}
-					<a
-						href="/{orgSlug}/template-instances/{ti.id}"
-						class="pj-deployment-card"
-					>
+					<a href="/{orgSlug}/template-instances/{ti.id}" class="pj-deployment-card">
 						<div class="pj-deployment-card-top">
-							<div class="pj-deployment-indicator" style="background-color: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent)">
+							<div
+								class="pj-deployment-indicator"
+								style="background-color: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent)"
+							>
 								<LayoutTemplate class="h-5 w-5" style="color: var(--sidebar-text-active-border)" />
 							</div>
-							<span class="pj-deployment-status-badge" style="background-color: color-mix(in srgb, {ti.status === 'active' ? 'var(--pj-color-green)' : ti.status === 'failed' ? 'var(--pj-color-red)' : 'var(--pj-color-amber)'} 15%, transparent); color: {ti.status === 'active' ? 'var(--pj-color-green)' : ti.status === 'failed' ? 'var(--pj-color-red)' : 'var(--pj-color-amber)'}">
+							<span
+								class="pj-deployment-status-badge"
+								style="background-color: color-mix(in srgb, {ti.status === 'active'
+									? 'var(--pj-color-green)'
+									: ti.status === 'failed'
+										? 'var(--pj-color-red)'
+										: 'var(--pj-color-amber)'} 15%, transparent); color: {ti.status === 'active'
+									? 'var(--pj-color-green)'
+									: ti.status === 'failed'
+										? 'var(--pj-color-red)'
+										: 'var(--pj-color-amber)'}"
+							>
 								{ti.status}
 							</span>
 						</div>
@@ -554,7 +574,8 @@
 							{/if}
 							<div class="pj-member-info">
 								<span class="pj-member-name">
-									{#if m.user.firstName}{m.user.firstName}{#if m.user.lastName} {m.user.lastName}{/if}{:else}{m.user.email}{/if}
+									{#if m.user.firstName}{m.user.firstName}{#if m.user.lastName}
+											{m.user.lastName}{/if}{:else}{m.user.email}{/if}
 								</span>
 								{#if m.user.firstName}
 									<span class="pj-member-email">{m.user.email}</span>
@@ -578,8 +599,8 @@
 {#if project}
 	<ConfirmModal
 		bind:open={showDeleteModal}
-		title='Delete "{project.name}"?'
-		description='This will permanently <strong>delete this project</strong> and all its resources (deployments, databases, ingresses). This cannot be undone.'
+		title={`Delete "${project.name}"?`}
+		description="This will permanently <strong>delete this project</strong> and all its resources (deployments, databases, ingresses). This cannot be undone."
 		confirmLabel="Delete Project"
 		onconfirm={deleteProject}
 		oncancel={() => {}}
@@ -763,7 +784,9 @@
 		background-color: var(--surface-bg);
 		text-decoration: none;
 		color: var(--center-channel-color);
-		transition: border-color 0.15s, box-shadow 0.15s;
+		transition:
+			border-color 0.15s,
+			box-shadow 0.15s;
 		cursor: pointer;
 		box-shadow:
 			0 1px 3px rgb(0 0 0 / 0.03),
@@ -935,7 +958,6 @@
 		border-radius: 1rem;
 		margin-bottom: 1.5rem;
 	}
-
 
 	/* Buttons */
 	.pj-btn {

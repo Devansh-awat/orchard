@@ -37,18 +37,18 @@ export const load: PageLoad = ({ params, depends, url }) => {
 		const adminTasks = isAdmin
 			? Promise.all([
 					apiFetch(`/apiv1/organizations/${orgId}/quota/projects`).then((r) =>
-						r.ok ? r.json() : null,
+						r.ok ? r.json() : null
 					),
 					apiFetch(`/apiv1/organizations/${orgId}/quota/members`).then((r) =>
-						r.ok ? r.json() : null,
+						r.ok ? r.json() : null
 					),
 					apiFetch(
-						`/apiv1/organizations/${orgId}/metrics/provisioning?range=${encodeURIComponent(range)}`,
-					).then((r) => (r.ok ? r.json() : null)),
+						`/apiv1/organizations/${orgId}/metrics/provisioning?range=${encodeURIComponent(range)}`
+					).then((r) => (r.ok ? r.json() : null))
 				]).then(([p, m, prov]) => ({
 					projectsData: p,
 					membersData: m,
-					provisioning: prov,
+					provisioning: prov
 				}))
 			: Promise.resolve({ projectsData: null, membersData: null, provisioning: null });
 
@@ -62,7 +62,7 @@ export const load: PageLoad = ({ params, depends, url }) => {
 			orgQuota,
 			projectsData: admin.projectsData,
 			membersData: admin.membersData,
-			provisioning: admin.provisioning,
+			provisioning: admin.provisioning
 		};
 	})();
 

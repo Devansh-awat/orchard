@@ -1,9 +1,6 @@
 <script lang="ts">
 	import { Loader2, Lock } from 'lucide-svelte';
-	import {
-		ChevronDown, Copy, Plus, RefreshCw, Settings,
-		Trash2, Wifi, X
-	} from '@jis3r/icons';
+	import { ChevronDown, Copy, Plus, RefreshCw, Settings, Trash2, Wifi, X } from '@jis3r/icons';
 	import { slide } from 'svelte/transition';
 	import { env } from '$env/dynamic/public';
 	import type { Service, ServiceFormState, ServicePortForm } from '$lib/types/deployment';
@@ -63,7 +60,7 @@
 		onDeleteIngress,
 		onResetDomainForm,
 		onGenerateRandomDomain,
-		toasts,
+		toasts
 	}: {
 		deployment: any;
 		tailscaleFeatureEnabled?: boolean;
@@ -92,7 +89,11 @@
 		onTogglePortPublic: (serviceId: string, portId: string, currentlyEnabled: boolean) => void;
 		onResetNewServiceForm: () => void;
 		onUpdateNewServicePort: (index: number, changes: Partial<ServicePortForm>) => void;
-		onUpdateServiceEditPort: (serviceId: string, index: number, changes: Partial<ServicePortForm>) => void;
+		onUpdateServiceEditPort: (
+			serviceId: string,
+			index: number,
+			changes: Partial<ServicePortForm>
+		) => void;
 		onCopyInternalUrl: (url: string | undefined, serviceId: string) => void;
 		copiedUrlId: string | null;
 		showDomainForm: boolean;
@@ -124,15 +125,22 @@
 				<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Tailscale</p>
 			</div>
 			{#if deployment?.tailscaleExposed}
-				<div class="rounded-xl" style="background-color: var(--control-bg); border: 1px solid var(--surface-border); overflow: hidden;">
+				<div
+					class="rounded-xl"
+					style="background-color: var(--control-bg); border: 1px solid var(--surface-border); overflow: hidden;"
+				>
 					<div class="flex items-center justify-between gap-3 px-4 py-3">
 						<div class="flex items-center gap-3">
 							<Wifi size={16} class="h-4 w-4 flex-shrink-0" style="color: var(--button-bg);" />
 							<div>
 								{#if tailscaleDns}
-									<p class="text-sm font-medium" style="color: var(--center-channel-color);">{tailscaleDns}</p>
+									<p class="text-sm font-medium" style="color: var(--center-channel-color);">
+										{tailscaleDns}
+									</p>
 								{:else}
-									<p class="text-sm font-medium" style="color: var(--center-channel-color);">{deployment.tailscaleHostname}</p>
+									<p class="text-sm font-medium" style="color: var(--center-channel-color);">
+										{deployment.tailscaleHostname}
+									</p>
 								{/if}
 								{#if tailscaleIp}
 									<p class="text-xs" style="color: var(--surface-muted);">{tailscaleIp}</p>
@@ -144,8 +152,14 @@
 								{/if}
 							</div>
 						</div>
-						<button onclick={onUnexposeTailscale} disabled={tailscaleUnexposing} class="btn btn-secondary btn-sm">
-							{#if tailscaleUnexposing}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<X size={14} />{/if}
+						<button
+							onclick={onUnexposeTailscale}
+							disabled={tailscaleUnexposing}
+							class="btn btn-secondary btn-sm"
+						>
+							{#if tailscaleUnexposing}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<X
+									size={14}
+								/>{/if}
 							<span>Remove</span>
 						</button>
 					</div>
@@ -153,17 +167,38 @@
 						<div style="border-top: 1px solid var(--surface-border);">
 							{#each deployment.services as service}
 								{@const tsHost = tailscaleDns || tailscaleIp}
-								{@const displayedPorts = service.ports?.length ? service.ports : [{ port: service.port, targetPort: service.targetPort, protocol: service.protocol }]}
+								{@const displayedPorts = service.ports?.length
+									? service.ports
+									: [
+											{
+												port: service.port,
+												targetPort: service.targetPort,
+												protocol: service.protocol
+											}
+										]}
 								{#each displayedPorts as port}
 									{@const addr = `${tsHost}:${port.targetPort}`}
-									<div class="flex items-center justify-between gap-2 px-4 py-2" style="border-bottom: 1px solid var(--surface-border);">
+									<div
+										class="flex items-center justify-between gap-2 px-4 py-2"
+										style="border-bottom: 1px solid var(--surface-border);"
+									>
 										<div class="flex items-center gap-2 min-w-0">
-											<span class="text-xs font-mono truncate" style="color: var(--center-channel-color);">{addr}</span>
-											<span class="text-xs px-1.5 py-0.5 rounded" style="background-color: var(--surface-border); color: var(--surface-muted);">{port.protocol || 'TCP'}</span>
+											<span
+												class="text-xs font-mono truncate"
+												style="color: var(--center-channel-color);">{addr}</span
+											>
+											<span
+												class="text-xs px-1.5 py-0.5 rounded"
+												style="background-color: var(--surface-border); color: var(--surface-muted);"
+												>{port.protocol || 'TCP'}</span
+											>
 										</div>
 										<button
 											class="btn btn-ghost btn-sm"
-											onclick={() => { navigator.clipboard.writeText(addr); toasts.add({ title: 'Copied', description: addr, color: 'success' }); }}
+											onclick={() => {
+												navigator.clipboard.writeText(addr);
+												toasts.add({ title: 'Copied', description: addr, color: 'success' });
+											}}
 										>
 											<Copy size={14} class="h-3.5 w-3.5" />
 										</button>
@@ -174,12 +209,23 @@
 					{/if}
 				</div>
 			{:else if tailscaleLinked}
-				<button onclick={onExposeTailscale} disabled={tailscaleExposing} class="btn btn-secondary btn-sm">
-					{#if tailscaleExposing}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Wifi size={14} class="h-3.5 w-3.5" />{/if}
+				<button
+					onclick={onExposeTailscale}
+					disabled={tailscaleExposing}
+					class="btn btn-secondary btn-sm"
+				>
+					{#if tailscaleExposing}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Wifi
+							size={14}
+							class="h-3.5 w-3.5"
+						/>{/if}
 					<span>Expose to Tailscale</span>
 				</button>
 			{:else}
-				<p class="text-xs" style="color: var(--surface-muted);">Connect your Tailscale account in <a href="/user/settings" class="underline">user settings</a> to expose deployments to your private network.</p>
+				<p class="text-xs" style="color: var(--surface-muted);">
+					Connect your Tailscale account in <a href="/user/settings" class="underline"
+						>user settings</a
+					> to expose deployments to your private network.
+				</p>
 			{/if}
 		</div>
 	{/if}
@@ -213,24 +259,53 @@
 		</div>
 
 		{#if showServiceForm}
-			<div class="surface-form rounded-xl border border-dashed p-4 mb-4" transition:slide={{ duration: 200 }}>
+			<div
+				class="surface-form rounded-xl border border-dashed p-4 mb-4"
+				transition:slide={{ duration: 200 }}
+			>
 				<div class="flex items-center gap-2">
 					<div style="flex: 1; min-width: 80px; max-width: 120px;">
-						<input type="number" min="1" class="input text-sm" placeholder="80" value={newServiceForm.ports[0].containerPort}
+						<input
+							type="number"
+							min="1"
+							class="input text-sm"
+							placeholder="80"
+							value={newServiceForm.ports[0].containerPort}
 							oninput={(event) => {
 								const val = Number((event.currentTarget as HTMLInputElement).value);
 								onUpdateNewServicePort(0, { containerPort: val, servicePort: val });
-							}} />
+							}}
+						/>
 					</div>
 					<div class="svc-protocol-toggle">
-						<button type="button" class="svc-proto-btn" class:svc-proto-active={newServiceForm.ports[0].protocol === 'TCP'}
-							onclick={() => onUpdateNewServicePort(0, { protocol: 'TCP' })}>TCP</button>
-						<button type="button" class="svc-proto-btn" class:svc-proto-active={newServiceForm.ports[0].protocol === 'UDP'}
-							onclick={() => onUpdateNewServicePort(0, { protocol: 'UDP' })}>UDP</button>
+						<button
+							type="button"
+							class="svc-proto-btn"
+							class:svc-proto-active={newServiceForm.ports[0].protocol === 'TCP'}
+							onclick={() => onUpdateNewServicePort(0, { protocol: 'TCP' })}>TCP</button
+						>
+						<button
+							type="button"
+							class="svc-proto-btn"
+							class:svc-proto-active={newServiceForm.ports[0].protocol === 'UDP'}
+							onclick={() => onUpdateNewServicePort(0, { protocol: 'UDP' })}>UDP</button
+						>
 					</div>
 					<div class="flex-1"></div>
-					<button type="button" class="btn btn-secondary btn-sm" onclick={() => { showServiceForm = false; onResetNewServiceForm(); }}>Cancel</button>
-					<button type="button" class="btn btn-primary btn-sm" onclick={onCreateService} disabled={creatingService}>
+					<button
+						type="button"
+						class="btn btn-secondary btn-sm"
+						onclick={() => {
+							showServiceForm = false;
+							onResetNewServiceForm();
+						}}>Cancel</button
+					>
+					<button
+						type="button"
+						class="btn btn-primary btn-sm"
+						onclick={onCreateService}
+						disabled={creatingService}
+					>
 						{#if creatingService}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
 						Add
 					</button>
@@ -248,33 +323,80 @@
 					{@const displayedPorts =
 						service.ports && service.ports.length
 							? service.ports
-							: [{ name: service.name, port: service.port, targetPort: service.targetPort, protocol: service.protocol, nodePort: service.nodePort ?? null }]}
+							: [
+									{
+										name: service.name,
+										port: service.port,
+										targetPort: service.targetPort,
+										protocol: service.protocol,
+										nodePort: service.nodePort ?? null
+									}
+								]}
 					{#each displayedPorts as port, portIndex}
-						<div class="svc-port-row flex items-center gap-2 rounded-xl px-4 py-3" class:svc-port-editing={serviceEditForms[service.id]} style="background-color: var(--control-bg); border: 1px solid var(--surface-border);">
+						<div
+							class="svc-port-row flex items-center gap-2 rounded-xl px-4 py-3"
+							class:svc-port-editing={serviceEditForms[service.id]}
+							style="background-color: var(--control-bg); border: 1px solid var(--surface-border);"
+						>
 							{#if serviceEditForms[service.id]}
 								<div style="flex: 1; min-width: 80px; max-width: 120px;">
-									<input type="number" min="1" class="input text-sm" placeholder="80"
-										value={serviceEditForms[service.id].ports[portIndex]?.containerPort ?? port.targetPort}
+									<input
+										type="number"
+										min="1"
+										class="input text-sm"
+										placeholder="80"
+										value={serviceEditForms[service.id].ports[portIndex]?.containerPort ??
+											port.targetPort}
 										oninput={(event) => {
 											const val = Number((event.currentTarget as HTMLInputElement).value);
-											onUpdateServiceEditPort(service.id, portIndex, { containerPort: val, servicePort: val });
-										}} />
+											onUpdateServiceEditPort(service.id, portIndex, {
+												containerPort: val,
+												servicePort: val
+											});
+										}}
+									/>
 								</div>
 								<div class="svc-protocol-toggle">
-									<button type="button" class="svc-proto-btn" class:svc-proto-active={(serviceEditForms[service.id].ports[portIndex]?.protocol ?? port.protocol) === 'TCP'}
-										onclick={() => onUpdateServiceEditPort(service.id, portIndex, { protocol: 'TCP' })}>TCP</button>
-									<button type="button" class="svc-proto-btn" class:svc-proto-active={(serviceEditForms[service.id].ports[portIndex]?.protocol ?? port.protocol) === 'UDP'}
-										onclick={() => onUpdateServiceEditPort(service.id, portIndex, { protocol: 'UDP' })}>UDP</button>
+									<button
+										type="button"
+										class="svc-proto-btn"
+										class:svc-proto-active={(serviceEditForms[service.id].ports[portIndex]
+											?.protocol ?? port.protocol) === 'TCP'}
+										onclick={() =>
+											onUpdateServiceEditPort(service.id, portIndex, { protocol: 'TCP' })}
+										>TCP</button
+									>
+									<button
+										type="button"
+										class="svc-proto-btn"
+										class:svc-proto-active={(serviceEditForms[service.id].ports[portIndex]
+											?.protocol ?? port.protocol) === 'UDP'}
+										onclick={() =>
+											onUpdateServiceEditPort(service.id, portIndex, { protocol: 'UDP' })}
+										>UDP</button
+									>
 								</div>
 							{:else}
-								<span class="text-sm font-mono font-medium" style="color: var(--center-channel-color);">{port.targetPort}</span>
-								<span class="surface-pill rounded-full px-1.5 py-0.5 text-[10px]">{port.protocol}</span>
+								<span
+									class="text-sm font-mono font-medium"
+									style="color: var(--center-channel-color);">{port.targetPort}</span
+								>
+								<span class="surface-pill rounded-full px-1.5 py-0.5 text-[10px]"
+									>{port.protocol}</span
+								>
 								{#if port.publicEnabled && port.publicPort}
 									{@const pubEndpoint = `${PUBLIC_DEPLOYMENT_DOMAIN}:${port.publicPort}`}
 									<button
 										type="button"
 										class="svc-public-pill flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] font-mono"
-										onclick={() => { navigator.clipboard.writeText(pubEndpoint); toasts.add({ title: 'Copied public endpoint', description: pubEndpoint, color: 'success' }); }}
+										onclick={() => {
+											navigator.clipboard.writeText(pubEndpoint);
+											toasts.add({
+												title: 'Copied public endpoint',
+												description: pubEndpoint,
+												color: 'success'
+											});
+										}}
 										title="Click to copy public endpoint"
 									>
 										<Wifi size={12} class="h-3 w-3" />
@@ -318,20 +440,43 @@
 								{/if}
 							{/if}
 							{#if !serviceEditForms[service.id]}
-								<button type="button" class="btn btn-ghost btn-sm" title="Edit port" onclick={() => onToggleServiceEdit(service)}>
+								<button
+									type="button"
+									class="btn btn-ghost btn-sm"
+									title="Edit port"
+									onclick={() => onToggleServiceEdit(service)}
+								>
 									<Settings size={14} class="h-3.5 w-3.5" />
 								</button>
 							{/if}
-							<button type="button" class="btn btn-ghost btn-sm text-red-500" onclick={() => onDeleteService(service.id)} disabled={serviceDeletingId === service.id}>
-								{#if serviceDeletingId === service.id}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2 size={14} class="h-3.5 w-3.5" />{/if}
+							<button
+								type="button"
+								class="btn btn-ghost btn-sm text-red-500"
+								onclick={() => onDeleteService(service.id)}
+								disabled={serviceDeletingId === service.id}
+							>
+								{#if serviceDeletingId === service.id}<Loader2
+										class="h-3.5 w-3.5 animate-spin"
+									/>{:else}<Trash2 size={14} class="h-3.5 w-3.5" />{/if}
 							</button>
 						</div>
 					{/each}
 					{#if serviceEditForms[service.id]}
 						<div class="flex justify-end gap-2 pb-1" transition:slide={{ duration: 150 }}>
-							<button type="button" class="btn btn-secondary btn-sm" onclick={() => onToggleServiceEdit(service)}>Cancel</button>
-							<button type="button" class="btn btn-primary btn-sm" onclick={() => onSaveServicePorts(service.id)} disabled={serviceSavingId === service.id}>
-								{#if serviceSavingId === service.id}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+							<button
+								type="button"
+								class="btn btn-secondary btn-sm"
+								onclick={() => onToggleServiceEdit(service)}>Cancel</button
+							>
+							<button
+								type="button"
+								class="btn btn-primary btn-sm"
+								onclick={() => onSaveServicePorts(service.id)}
+								disabled={serviceSavingId === service.id}
+							>
+								{#if serviceSavingId === service.id}<Loader2
+										class="h-3.5 w-3.5 animate-spin"
+									/>{/if}
 								Save
 							</button>
 						</div>
@@ -341,7 +486,9 @@
 					{/if}
 				{/each}
 			{:else}
-				<p class="text-sm text-center py-4" style="color: var(--surface-muted);">No ports configured</p>
+				<p class="text-sm text-center py-4" style="color: var(--surface-muted);">
+					No ports configured
+				</p>
 			{/if}
 		</div>
 	</div>
@@ -371,7 +518,10 @@
 		</div>
 
 		{#if showDomainForm}
-			<div class="surface-form rounded-xl border border-dashed p-4 mb-4" transition:slide={{ duration: 200 }}>
+			<div
+				class="surface-form rounded-xl border border-dashed p-4 mb-4"
+				transition:slide={{ duration: 200 }}
+			>
 				<div class="flex flex-wrap gap-2 items-end">
 					<div class="flex-[2] min-w-[160px]">
 						<p class="text-xs mb-1" style="color: var(--surface-muted);">Domain</p>
@@ -399,10 +549,7 @@
 				{#if domainServiceOptions.length > 1}
 					<div class="mt-3">
 						<p class="text-xs mb-1" style="color: var(--surface-muted);">Forward to</p>
-						<select
-							class="input text-sm"
-							bind:value={newDomainServiceKey}
-						>
+						<select class="input text-sm" bind:value={newDomainServiceKey}>
 							{#each domainServiceOptions as option}
 								<option value={option.key}>{option.label}</option>
 							{/each}
@@ -425,7 +572,11 @@
 					style="color: var(--surface-muted); background: none; border: none; cursor: pointer; padding: 0;"
 					onclick={() => (showDomainAdvanced = !showDomainAdvanced)}
 				>
-					<ChevronDown size={12} class="h-3 w-3" style={showDomainAdvanced ? '' : 'transform: rotate(-90deg);'} />
+					<ChevronDown
+						size={12}
+						class="h-3 w-3"
+						style={showDomainAdvanced ? '' : 'transform: rotate(-90deg);'}
+					/>
 					Advanced
 				</button>
 
@@ -439,7 +590,8 @@
 							bind:value={newDomainPath}
 						/>
 						<p class="text-xs mt-1" style="color: var(--surface-muted);">
-							Route a specific path here (e.g. <code>/api</code>). Leave as <code>/</code> to catch all traffic.
+							Route a specific path here (e.g. <code>/api</code>). Leave as <code>/</code> to catch all
+							traffic.
 						</p>
 					</div>
 				{/if}
@@ -447,16 +599,23 @@
 				{#if newDomainConflict}
 					<div
 						class="mt-3 p-2 rounded-lg text-xs border"
-						style="background-color: color-mix(in srgb, {newDomainConflict.pathCollision ? 'var(--error-text-color)' : 'var(--sidebar-text-active-border)'} 10%, transparent); border-color: color-mix(in srgb, {newDomainConflict.pathCollision ? 'var(--error-text-color)' : 'var(--sidebar-text-active-border)'} 25%, transparent); color: var(--center-channel-color);"
+						style="background-color: color-mix(in srgb, {newDomainConflict.pathCollision
+							? 'var(--error-text-color)'
+							: 'var(--sidebar-text-active-border)'} 10%, transparent); border-color: color-mix(in srgb, {newDomainConflict.pathCollision
+							? 'var(--error-text-color)'
+							: 'var(--sidebar-text-active-border)'} 25%, transparent); color: var(--center-channel-color);"
 					>
 						{#if newDomainConflict.pathCollision}
 							<strong>Path in use.</strong>
-							<code>{newDomainNormalizedHost}{newDomainNormalizedPath}</code> is already routed. Choose a different path below.
+							<code>{newDomainNormalizedHost}{newDomainNormalizedPath}</code> is already routed. Choose
+							a different path below.
 						{:else if newDomainConflict.otherDeployment}
 							<strong>Sharing domain.</strong>
-							{newDomainNormalizedHost} already routes to another deployment. Traffic to <code>{newDomainNormalizedPath}</code> will be added to the existing ingress.
+							{newDomainNormalizedHost} already routes to another deployment. Traffic to
+							<code>{newDomainNormalizedPath}</code> will be added to the existing ingress.
 						{:else}
-							Adding <code>{newDomainNormalizedPath}</code> to the existing {newDomainNormalizedHost} ingress.
+							Adding <code>{newDomainNormalizedPath}</code> to the existing {newDomainNormalizedHost}
+							ingress.
 						{/if}
 					</div>
 				{/if}
@@ -469,7 +628,10 @@
 					<button
 						type="button"
 						class="btn btn-secondary btn-sm"
-						onclick={() => { showDomainForm = false; onResetDomainForm(); }}
+						onclick={() => {
+							showDomainForm = false;
+							onResetDomainForm();
+						}}
 					>
 						Cancel
 					</button>
@@ -477,7 +639,10 @@
 						type="button"
 						class="btn btn-primary btn-sm"
 						onclick={onCreateDomain}
-						disabled={creatingDomain || !newDomainNormalizedHost || !newDomainServiceKey || newDomainConflict?.pathCollision}
+						disabled={creatingDomain ||
+							!newDomainNormalizedHost ||
+							!newDomainServiceKey ||
+							newDomainConflict?.pathCollision}
 					>
 						{#if creatingDomain}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
 						Create
@@ -513,7 +678,10 @@
 						</a>
 						<button
 							type="button"
-							onclick={(e) => { e.stopPropagation(); onDeleteIngress(ingress.id); }}
+							onclick={(e) => {
+								e.stopPropagation();
+								onDeleteIngress(ingress.id);
+							}}
 							disabled={deletingIngressId === ingress.id}
 							class="btn btn-sm"
 							style="background-color: transparent; border: 1px solid var(--surface-border); color: var(--surface-muted);"
@@ -528,7 +696,9 @@
 					</div>
 				{/each}
 			{:else}
-				<p class="text-sm text-center py-4" style="color: var(--surface-muted);">No domains configured</p>
+				<p class="text-sm text-center py-4" style="color: var(--surface-muted);">
+					No domains configured
+				</p>
 			{/if}
 		</div>
 	</div>

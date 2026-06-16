@@ -11,7 +11,7 @@
 		decliningInvitation,
 		onAccept,
 		onDecline,
-		index = 0,
+		index = 0
 	}: {
 		invitations: PendingInvitation[];
 		acceptingInvitation: string | null;
@@ -23,7 +23,12 @@
 </script>
 
 {#if invitations.length > 0}
-	<SettingsSection {index} title="Pending Invitations" description="{invitations.length} organization{invitations.length === 1 ? '' : 's'} invited you" iconColor="blue">
+	<SettingsSection
+		{index}
+		title="Pending Invitations"
+		description="{invitations.length} organization{invitations.length === 1 ? '' : 's'} invited you"
+		iconColor="blue"
+	>
 		{#snippet icon(hovered)}<MailCheck size={18} animate={hovered} />{/snippet}
 		{#snippet badge()}
 			<span class="ui-count">{invitations.length}</span>
@@ -34,7 +39,11 @@
 				<div class="ui-item">
 					<div class="ui-item-icon">
 						{#if invitation.organization.avatarUrl}
-							<img src={invitation.organization.avatarUrl} alt={invitation.organization.name} class="ui-item-avatar" />
+							<img
+								src={invitation.organization.avatarUrl}
+								alt={invitation.organization.name}
+								class="ui-item-avatar"
+							/>
 						{:else}
 							<Building2 class="h-5 w-5" />
 						{/if}
@@ -51,7 +60,9 @@
 							onclick={() => onDecline(invitation)}
 							disabled={acceptingInvitation !== null || decliningInvitation !== null}
 						>
-							{#if decliningInvitation === invitation.token}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+							{#if decliningInvitation === invitation.token}<Loader2
+									class="h-3.5 w-3.5 animate-spin"
+								/>{/if}
 							Decline
 						</button>
 						<button
@@ -59,7 +70,9 @@
 							onclick={() => onAccept(invitation)}
 							disabled={acceptingInvitation !== null || decliningInvitation !== null}
 						>
-							{#if acceptingInvitation === invitation.token}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+							{#if acceptingInvitation === invitation.token}<Loader2
+									class="h-3.5 w-3.5 animate-spin"
+								/>{/if}
 							Accept
 						</button>
 					</div>
@@ -147,12 +160,17 @@
 		transition: all 120ms;
 		white-space: nowrap;
 	}
-	.ui-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+	.ui-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
 	.ui-btn--solid {
 		background-color: var(--button-bg);
 		color: var(--button-color);
 	}
-	.ui-btn--solid:hover:not(:disabled) { opacity: 0.9; }
+	.ui-btn--solid:hover:not(:disabled) {
+		opacity: 0.9;
+	}
 	.ui-btn--ghost {
 		background: none;
 		color: var(--surface-muted);
@@ -162,7 +180,12 @@
 		background-color: color-mix(in srgb, var(--center-channel-color) 5%, transparent);
 	}
 	@media (max-width: 640px) {
-		.ui-item { flex-wrap: wrap; }
-		.ui-item-actions { width: 100%; margin-top: 0.25rem; }
+		.ui-item {
+			flex-wrap: wrap;
+		}
+		.ui-item-actions {
+			width: 100%;
+			margin-top: 0.25rem;
+		}
 	}
 </style>

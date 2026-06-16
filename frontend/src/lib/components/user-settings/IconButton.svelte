@@ -7,7 +7,7 @@
 		disabled = false,
 		title = '',
 		onclick,
-		children,
+		children
 	}: {
 		variant?: 'default' | 'danger' | 'save';
 		disabled?: boolean;

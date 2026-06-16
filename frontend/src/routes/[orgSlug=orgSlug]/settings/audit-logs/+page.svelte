@@ -42,7 +42,12 @@
 			<Loader2 class="h-5 w-5 animate-spin" style="color: var(--surface-muted);" />
 		</div>
 	{:else if error}
-		<div class="rounded-lg border p-4 text-sm" style="border-color: var(--surface-border); color: var(--surface-muted);">{error}</div>
+		<div
+			class="rounded-lg border p-4 text-sm"
+			style="border-color: var(--surface-border); color: var(--surface-muted);"
+		>
+			{error}
+		</div>
 	{:else if organizationId}
 		<AuditLogList scope={{ organizationId }} title="Organization activity" />
 	{/if}

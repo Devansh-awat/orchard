@@ -18,7 +18,7 @@ export const load: PageLoad = ({ params, depends }) => {
 		const payload = await res.json();
 		return {
 			organizationId: payload.organization.id as string,
-			projects: payload.projects as any[],
+			projects: payload.projects as any[]
 		};
 	})();
 

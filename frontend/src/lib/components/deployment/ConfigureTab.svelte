@@ -35,7 +35,7 @@
 		volumes = $bindable<Volume[]>([]),
 		savingVolumes,
 		hasPvcVolume,
-		onSaveVolumes,
+		onSaveVolumes
 	}: {
 		envVars: Array<{ key: string; value: string }>;
 		savingEnv: boolean;
@@ -47,7 +47,12 @@
 		orgDefaultMemoryBytes: number | null;
 		resourcesDirty: boolean;
 		savingResources: boolean;
-		resourcePressure: { cpuPercent: number | null; memoryPercent: number | null; cpuWarning: boolean; memoryWarning: boolean };
+		resourcePressure: {
+			cpuPercent: number | null;
+			memoryPercent: number | null;
+			cpuWarning: boolean;
+			memoryWarning: boolean;
+		};
 		isImageSourceDeployment: boolean;
 		imageInput: string;
 		imageDirty: boolean;
@@ -77,13 +82,20 @@
 				<h3 class="ct-section-title">Environment Variables</h3>
 				<p class="ct-section-desc">Config & secrets for your app</p>
 			</div>
-			<svg class="ct-chevron" class:ct-chevron--closed={!envOpen} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+			<svg
+				class="ct-chevron"
+				class:ct-chevron--closed={!envOpen}
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+			>
 				<path d="m6 9 6 6 6-6" />
 			</svg>
 		</button>
 		<div {@attach springCollapse(() => !envOpen)}>
 			<div class="ct-section-body">
-				<EnvironmentTab bind:envVars savingEnv={savingEnv} onSave={onSaveEnv} />
+				<EnvironmentTab bind:envVars {savingEnv} onSave={onSaveEnv} />
 			</div>
 		</div>
 	</div>
@@ -98,7 +110,14 @@
 				<h3 class="ct-section-title">Resources</h3>
 				<p class="ct-section-desc">CPU & memory allocation</p>
 			</div>
-			<svg class="ct-chevron" class:ct-chevron--closed={!resourcesOpen} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+			<svg
+				class="ct-chevron"
+				class:ct-chevron--closed={!resourcesOpen}
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+			>
 				<path d="m6 9 6 6 6-6" />
 			</svg>
 		</button>
@@ -117,8 +136,8 @@
 					bind:imageInput
 					{imageDirty}
 					{savingImage}
-					onSaveResources={onSaveResources}
-					onSaveImage={onSaveImage}
+					{onSaveResources}
+					{onSaveImage}
 				/>
 			</div>
 		</div>
@@ -134,13 +153,20 @@
 				<h3 class="ct-section-title">Storage</h3>
 				<p class="ct-section-desc">Persistent volumes & mounts</p>
 			</div>
-			<svg class="ct-chevron" class:ct-chevron--closed={!storageOpen} viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+			<svg
+				class="ct-chevron"
+				class:ct-chevron--closed={!storageOpen}
+				viewBox="0 0 24 24"
+				fill="none"
+				stroke="currentColor"
+				stroke-width="2"
+			>
 				<path d="m6 9 6 6 6-6" />
 			</svg>
 		</button>
 		<div {@attach springCollapse(() => !storageOpen)}>
 			<div class="ct-section-body">
-				<VolumesTab bind:volumes savingVolumes={savingVolumes} {hasPvcVolume} onSave={onSaveVolumes} />
+				<VolumesTab bind:volumes {savingVolumes} {hasPvcVolume} onSave={onSaveVolumes} />
 			</div>
 		</div>
 	</div>
@@ -156,7 +182,9 @@
 		border: 1px solid var(--surface-border);
 		border-radius: 0.875rem;
 		background-color: var(--surface-bg);
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.02);
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
 		overflow: hidden;
 	}
 	.ct-section-header {

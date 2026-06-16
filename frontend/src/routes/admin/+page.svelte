@@ -19,9 +19,14 @@
 		stats
 			? [
 					{ label: 'Users', value: stats.userCount, icon: Users, href: '/admin/users' },
-					{ label: 'Organizations', value: stats.orgCount, icon: Building2, href: '/admin/organizations' },
+					{
+						label: 'Organizations',
+						value: stats.orgCount,
+						icon: Building2,
+						href: '/admin/organizations'
+					},
 					{ label: 'Projects', value: stats.projectCount, icon: Package, href: null },
-					{ label: 'Deployments', value: stats.deploymentCount, icon: Rocket, href: null },
+					{ label: 'Deployments', value: stats.deploymentCount, icon: Rocket, href: null }
 				].filter((c) => typeof c.value === 'number')
 			: []
 	);

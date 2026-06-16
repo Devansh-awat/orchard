@@ -145,7 +145,9 @@ body {
 	background-color: var(--center-channel-bg);
 	color: var(--center-channel-color);
 	@apply antialiased;
-	transition: background-color 150ms ease, color 150ms ease;
+	transition:
+		background-color 150ms ease,
+		color 150ms ease;
 }
 
 main {
@@ -194,7 +196,9 @@ a:hover {
 	@apply focus:ring-gray-500;
 	background-color: var(--control-bg);
 	color: var(--control-text);
-	transition: background-color 120ms ease, color 120ms ease;
+	transition:
+		background-color 120ms ease,
+		color 120ms ease;
 }
 
 .btn-secondary:hover {
@@ -204,7 +208,9 @@ a:hover {
 .btn-ghost {
 	@apply bg-transparent focus:ring-gray-500;
 	color: var(--center-channel-color);
-	transition: background-color 120ms ease, color 120ms ease;
+	transition:
+		background-color 120ms ease,
+		color 120ms ease;
 }
 
 .btn-ghost:hover {
@@ -336,8 +342,12 @@ select.input:focus {
    Skeleton loading
    ============================================================ */
 @keyframes skeleton-shimmer {
-	0% { background-position: -200% 0; }
-	100% { background-position: 200% 0; }
+	0% {
+		background-position: -200% 0;
+	}
+	100% {
+		background-position: 200% 0;
+	}
 }
 
 .skeleton {
@@ -388,9 +398,15 @@ select.input:focus {
 }
 
 @keyframes indeterminate {
-	0% { transform: translateX(-100%); }
-	50% { transform: translateX(0%); }
-	100% { transform: translateX(100%); }
+	0% {
+		transform: translateX(-100%);
+	}
+	50% {
+		transform: translateX(0%);
+	}
+	100% {
+		transform: translateX(100%);
+	}
 }
 
 .progress-bar-indeterminate {
@@ -436,10 +452,16 @@ select.input:focus {
 	border: none;
 	border-radius: 0.75rem;
 	cursor: pointer;
-	transition: opacity 0.15s, transform 0.1s;
+	transition:
+		opacity 0.15s,
+		transform 0.1s;
 }
-.login-primary:hover { opacity: 0.95; }
-.login-primary:active { transform: scale(0.99); }
+.login-primary:hover {
+	opacity: 0.95;
+}
+.login-primary:active {
+	transform: scale(0.99);
+}
 .login-divider {
 	display: flex;
 	align-items: center;

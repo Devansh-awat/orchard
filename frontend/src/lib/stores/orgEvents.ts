@@ -101,7 +101,7 @@ function scheduleReconnect(sub: Subscription) {
 	if (sub.reconnectTimer) return;
 	const delay = Math.min(
 		RECONNECT_MAX_MS,
-		RECONNECT_BASE_MS * 2 ** Math.min(sub.reconnectAttempts, 5),
+		RECONNECT_BASE_MS * 2 ** Math.min(sub.reconnectAttempts, 5)
 	);
 	sub.reconnectAttempts += 1;
 	sub.reconnectTimer = setTimeout(() => {
@@ -117,10 +117,9 @@ function connect(sub: Subscription) {
 	// Encode orgId so a value containing path-special chars can't escape
 	// the route segment (defense-in-depth — orgIds are server-issued UUIDs
 	// today, but the boundary is the safer place to enforce it).
-	const source = new EventSource(
-		`${base}/apiv1/events/orgs/${encodeURIComponent(sub.orgId)}`,
-		{ withCredentials: true },
-	);
+	const source = new EventSource(`${base}/apiv1/events/orgs/${encodeURIComponent(sub.orgId)}`, {
+		withCredentials: true
+	});
 	sub.source = source;
 	source.onopen = () => {
 		sub.lastEventAt = Date.now();
@@ -162,7 +161,7 @@ function connect(sub: Subscription) {
 export function subscribeOrgEvents(
 	orgId: string,
 	listener: (ev: OrgEvent) => void,
-	opts?: { queryClient?: QueryClient; invalidateDependencies?: string[] },
+	opts?: { queryClient?: QueryClient; invalidateDependencies?: string[] }
 ): () => void {
 	if (!browser) return () => {};
 	if (typeof location !== 'undefined' && location.search.includes('nosse')) {
@@ -181,7 +180,7 @@ export function subscribeOrgEvents(
 			lastEventAt: Date.now(),
 			heartbeatTimer: null,
 			reconnectTimer: null,
-			reconnectAttempts: 0,
+			reconnectAttempts: 0
 		};
 		connect(sub);
 		// Stale-detection: if heartbeats stop landing (proxies can wedge a

@@ -13,7 +13,7 @@
 		value,
 		duration = 400,
 		format = (n: number) => String(Math.round(n)),
-		class: klass = '',
+		class: klass = ''
 	}: Props = $props();
 
 	// Start at 0 so first paint animates up to `value` (matches the

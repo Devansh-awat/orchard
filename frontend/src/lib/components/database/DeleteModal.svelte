@@ -8,7 +8,7 @@
 		deleteCountdown,
 		deleteProgress,
 		onStartDeleteCountdown,
-		onCancelDelete,
+		onCancelDelete
 	}: {
 		databaseName: string;
 		deleteCountdownActive: boolean;
@@ -37,17 +37,14 @@
 
 		<h2 class="modal-title">Delete "{databaseName}"?</h2>
 		<p class="modal-desc">
-			This will permanently <strong>drop the PostgreSQL database</strong> and its user.
-			All data will be lost. This cannot be undone.
+			This will permanently <strong>drop the PostgreSQL database</strong> and its user. All data will
+			be lost. This cannot be undone.
 		</p>
 
 		{#if deleteCountdownActive}
 			<div class="modal-progress-wrapper">
 				<div class="modal-progress-track">
-					<div
-						class="modal-progress-fill"
-						style="width: {deleteProgress}%"
-					></div>
+					<div class="modal-progress-fill" style="width: {deleteProgress}%"></div>
 				</div>
 				<span class="modal-countdown">
 					{#if deleteCountdown > 0}
@@ -59,15 +56,11 @@
 			</div>
 
 			<div class="modal-actions">
-				<button class="db-btn modal-btn-cancel" onclick={onCancelDelete}>
-					Abort
-				</button>
+				<button class="db-btn modal-btn-cancel" onclick={onCancelDelete}> Abort </button>
 			</div>
 		{:else}
 			<div class="modal-actions">
-				<button class="db-btn modal-btn-cancel" onclick={onCancelDelete}>
-					Cancel
-				</button>
+				<button class="db-btn modal-btn-cancel" onclick={onCancelDelete}> Cancel </button>
 				<button class="db-btn db-btn-danger modal-btn-delete" onclick={onStartDeleteCountdown}>
 					<Trash2 class="h-4 w-4" />
 					Delete

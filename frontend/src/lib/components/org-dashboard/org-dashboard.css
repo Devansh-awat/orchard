@@ -128,7 +128,9 @@
 	font-variant-numeric: tabular-nums;
 	line-height: 1;
 	cursor: pointer;
-	transition: color 0.15s ease, background 0.15s ease;
+	transition:
+		color 0.15s ease,
+		background 0.15s ease;
 }
 .proj-tab:hover:not(.proj-tab--active) {
 	color: var(--center-channel-color);
@@ -255,16 +257,28 @@
 }
 
 @keyframes proj-spin-a {
-	from { transform: scale(1.6) rotate(0deg); }
-	to { transform: scale(1.6) rotate(360deg); }
+	from {
+		transform: scale(1.6) rotate(0deg);
+	}
+	to {
+		transform: scale(1.6) rotate(360deg);
+	}
 }
 @keyframes proj-spin-b {
-	from { transform: scale(2.1) translate(8%, -6%) rotate(70deg); }
-	to { transform: scale(2.1) translate(8%, -6%) rotate(430deg); }
+	from {
+		transform: scale(2.1) translate(8%, -6%) rotate(70deg);
+	}
+	to {
+		transform: scale(2.1) translate(8%, -6%) rotate(430deg);
+	}
 }
 @keyframes proj-spin-c {
-	from { transform: scale(2.6) translate(-10%, 9%) rotate(140deg); }
-	to { transform: scale(2.6) translate(-10%, 9%) rotate(-220deg); }
+	from {
+		transform: scale(2.6) translate(-10%, 9%) rotate(140deg);
+	}
+	to {
+		transform: scale(2.6) translate(-10%, 9%) rotate(-220deg);
+	}
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -845,12 +859,20 @@
 	border-radius: 0.25rem;
 }
 @keyframes shimmer {
-	0% { background-position: 200% 0; }
-	100% { background-position: -200% 0; }
+	0% {
+		background-position: 200% 0;
+	}
+	100% {
+		background-position: -200% 0;
+	}
 }
 @keyframes spin {
-	from { transform: rotate(0deg); }
-	to { transform: rotate(360deg); }
+	from {
+		transform: rotate(0deg);
+	}
+	to {
+		transform: rotate(360deg);
+	}
 }
 
 /* Responsive */

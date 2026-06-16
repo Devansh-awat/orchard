@@ -33,7 +33,11 @@
 		importLogs?: string;
 		steps: Step[];
 		events: KEvent[];
-		pod?: { name?: string; phase?: string; waiting?: { reason?: string; message?: string } | null } | null;
+		pod?: {
+			name?: string;
+			phase?: string;
+			waiting?: { reason?: string; message?: string } | null;
+		} | null;
 		importPod?: { name?: string; phase?: string; status?: string } | null;
 	}
 
@@ -111,79 +115,83 @@
 		if (r === 'failedscheduling' || /0\/\d+ nodes are available/i.test(m)) {
 			if (/unbound immediate persistentvolumeclaim/i.test(m)) {
 				return {
-					title: "Waiting for storage to be ready",
-					hint: 'The Postgres pod is waiting on its PersistentVolumeClaim to bind. This usually resolves on its own once Longhorn provisions the volume — give it a few seconds.',
+					title: 'Waiting for storage to be ready',
+					hint: 'The Postgres pod is waiting on its PersistentVolumeClaim to bind. This usually resolves on its own once Longhorn provisions the volume — give it a few seconds.'
 				};
 			}
 			if (/insufficient (cpu|memory)/i.test(m)) {
 				return {
-					title: "No node has enough free CPU or memory",
-					hint: 'Lower the database resources, or free capacity on the cluster before the pod can schedule.',
+					title: 'No node has enough free CPU or memory',
+					hint: 'Lower the database resources, or free capacity on the cluster before the pod can schedule.'
 				};
 			}
 			if (/taint|toleration|nodeselector|node\(s\) didn't match/i.test(m)) {
 				return {
-					title: "No node matches the scheduling rules",
-					hint: 'Node selectors or taints are excluding every available worker. Check the cluster\'s node labels and taints.',
+					title: 'No node matches the scheduling rules',
+					hint: "Node selectors or taints are excluding every available worker. Check the cluster's node labels and taints."
 				};
 			}
 			return {
 				title: "Couldn't place the pod on any node",
-				hint: 'Kubernetes will retry — if it persists, capacity is exhausted or scheduling constraints are too strict.',
+				hint: 'Kubernetes will retry — if it persists, capacity is exhausted or scheduling constraints are too strict.'
 			};
 		}
-		if (r === 'failedattachvolume' || r === 'failedmount' || /failed to attach volume|failed to mount/i.test(m)) {
+		if (
+			r === 'failedattachvolume' ||
+			r === 'failedmount' ||
+			/failed to attach volume|failed to mount/i.test(m)
+		) {
 			return {
 				title: "Couldn't attach the storage volume",
-				hint: 'The PVC may still be detaching from another node, or the storage class is having trouble. Usually self-heals within a minute.',
+				hint: 'The PVC may still be detaching from another node, or the storage class is having trouble. Usually self-heals within a minute.'
 			};
 		}
 		if (r === 'provisioningfailed' || /failed to provision volume/i.test(m)) {
 			return {
 				title: 'Storage provisioning failed',
-				hint: 'The storage class (Longhorn) couldn\'t create the underlying volume. Check storage capacity and the Longhorn controller.',
+				hint: "The storage class (Longhorn) couldn't create the underlying volume. Check storage capacity and the Longhorn controller."
 			};
 		}
 		if (/imagepullbackoff|errimagepull|failed to pull image/i.test(m)) {
 			return {
 				title: "Couldn't pull the Postgres image",
-				hint: 'The image registry is unreachable or the tag is missing. Retries will keep happening with back-off.',
+				hint: 'The image registry is unreachable or the tag is missing. Retries will keep happening with back-off.'
 			};
 		}
 		if (/back-?off.*restarting failed container/i.test(m) || /crashloopbackoff/i.test(m)) {
 			return {
 				title: 'Postgres container keeps crashing on startup',
-				hint: 'See the migration / pod logs below for the actual error. Common causes: corrupt data dir, bad initdb parameters, or a failing import.',
+				hint: 'See the migration / pod logs below for the actual error. Common causes: corrupt data dir, bad initdb parameters, or a failing import.'
 			};
 		}
 		if (/oomkilled|out of memory/i.test(m)) {
 			return {
 				title: 'Postgres ran out of memory',
-				hint: 'Raise the database\'s memory request, or reduce shared_buffers and work_mem.',
+				hint: "Raise the database's memory request, or reduce shared_buffers and work_mem."
 			};
 		}
 		if (/secret.*not found|configmap.*not found/i.test(m)) {
 			return {
 				title: 'A referenced secret or config is missing',
-				hint: 'The cluster references an object that does not exist in this namespace yet — typically transient during create.',
+				hint: 'The cluster references an object that does not exist in this namespace yet — typically transient during create.'
 			};
 		}
 		if (/dnsconfig|dns/i.test(m) && /fail/i.test(m)) {
 			return {
 				title: 'DNS lookups inside the pod are failing',
-				hint: 'Cluster DNS is unreachable. The import job may not be able to reach the source database.',
+				hint: 'Cluster DNS is unreachable. The import job may not be able to reach the source database.'
 			};
 		}
 		if (/connection refused|could not connect to server/i.test(m)) {
 			return {
 				title: "Can't reach the source database",
-				hint: 'The migration URL host is unreachable from this cluster, or the source server is rejecting the connection.',
+				hint: 'The migration URL host is unreachable from this cluster, or the source server is rejecting the connection.'
 			};
 		}
 		if (/password authentication failed|role .* does not exist/i.test(m)) {
 			return {
 				title: 'Source database rejected our credentials',
-				hint: 'Double-check the user and password in the migration URL.',
+				hint: 'Double-check the user and password in the migration URL.'
 			};
 		}
 		return null;
@@ -233,8 +241,10 @@
 		if (!ts) return '';
 		const s = Math.floor((Date.now() - new Date(ts).getTime()) / 1000);
 		if (s < 60) return `${s}s ago`;
-		const m = Math.floor(s / 60); if (m < 60) return `${m}m ago`;
-		const h = Math.floor(m / 60); if (h < 24) return `${h}h ago`;
+		const m = Math.floor(s / 60);
+		if (m < 60) return `${m}m ago`;
+		const h = Math.floor(m / 60);
+		if (h < 24) return `${h}h ago`;
 		return `${Math.floor(h / 24)}d ago`;
 	}
 </script>
@@ -269,13 +279,17 @@
 		</div>
 
 		<div class="prov-progress">
-			<div class="prov-bar"><div class="prov-bar-fill" data-failed={data?.failed} style="width: {percent}%"></div></div>
+			<div class="prov-bar">
+				<div class="prov-bar-fill" data-failed={data?.failed} style="width: {percent}%"></div>
+			</div>
 			<span class="prov-count">{completedCount} / {totalCount}</span>
 		</div>
 	</div>
 
 	{#if loading && !data}
-		<div class="prov-loading"><Loader2 class="h-5 w-5 animate-spin" /> Loading provisioning status…</div>
+		<div class="prov-loading">
+			<Loader2 class="h-5 w-5 animate-spin" /> Loading provisioning status…
+		</div>
 	{:else if error}
 		<div class="prov-error">{error}</div>
 	{:else if data}
@@ -309,10 +323,19 @@
 		{#if data.hasImport && (data.importLogs || data.importPod)}
 			<div class="prov-panel">
 				<button class="prov-panel-header" onclick={() => (logsOpen = !logsOpen)} type="button">
-					<ChevronDown class="h-3.5 w-3.5 prov-chev" style={logsOpen ? '' : 'transform: rotate(-90deg)'} />
+					<ChevronDown
+						class="h-3.5 w-3.5 prov-chev"
+						style={logsOpen ? '' : 'transform: rotate(-90deg)'}
+					/>
 					<span class="prov-panel-title">Migration logs</span>
 					{#if data.importPod?.phase}
-						<span class="prov-pill prov-pill-{data.importStatus === 'failed' ? 'error' : data.importStatus === 'completed' ? 'done' : 'running'}">
+						<span
+							class="prov-pill prov-pill-{data.importStatus === 'failed'
+								? 'error'
+								: data.importStatus === 'completed'
+									? 'done'
+									: 'running'}"
+						>
 							{data.importPod.phase}
 						</span>
 					{/if}
@@ -321,19 +344,28 @@
 					{/if}
 				</button>
 				{#if logsOpen}
-					<pre class="prov-logs" bind:this={logsRef}>{data.importLogs || 'Waiting for migration job to start…'}</pre>
+					<pre class="prov-logs" bind:this={logsRef}>{data.importLogs ||
+							'Waiting for migration job to start…'}</pre>
 				{/if}
 			</div>
 		{/if}
 
 		{#if warnings.length > 0}
 			<div class="prov-panel prov-panel-warning">
-				<button class="prov-panel-header" onclick={() => (warningsOpen = !warningsOpen)} type="button">
-					<ChevronDown class="h-3.5 w-3.5 prov-chev" style={warningsOpen ? '' : 'transform: rotate(-90deg)'} />
+				<button
+					class="prov-panel-header"
+					onclick={() => (warningsOpen = !warningsOpen)}
+					type="button"
+				>
+					<ChevronDown
+						class="h-3.5 w-3.5 prov-chev"
+						style={warningsOpen ? '' : 'transform: rotate(-90deg)'}
+					/>
 					<TriangleAlertIcon size={14} animate={true} class="prov-warn-head-icon" />
 					<span class="prov-panel-title">Heads up</span>
 					<span class="prov-panel-sub">
-						{warnings.length} {warnings.length === 1 ? 'issue' : 'issues'} from Kubernetes
+						{warnings.length}
+						{warnings.length === 1 ? 'issue' : 'issues'} from Kubernetes
 					</span>
 				</button>
 				{#if warningsOpen}
@@ -756,7 +788,9 @@
 		background: transparent;
 		color: var(--surface-muted);
 		cursor: pointer;
-		transition: background-color 120ms, color 120ms;
+		transition:
+			background-color 120ms,
+			color 120ms;
 	}
 	.prov-warn-toggle:hover {
 		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);

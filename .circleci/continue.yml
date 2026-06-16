@@ -1,0 +1,490 @@
+version: 2.1
+
+parameters:
+  registry:
+    type: string
+    default: ghcr.io
+  image_repo:
+    type: string
+    default: leafdtk/leaf
+  frontend_changed: { type: boolean, default: false }
+  server_changed: { type: boolean, default: false }
+  gateway_changed: { type: boolean, default: false }
+  cli_changed: { type: boolean, default: false }
+  r2_proxy_changed: { type: boolean, default: false }
+  chart_changed: { type: boolean, default: false }
+
+executors:
+  node:
+    docker:
+      - image: cimg/node:22.13.0
+    working_directory: ~/repo
+    resource_class: medium
+
+  node-pg:
+    docker:
+      - image: cimg/node:22.13.0
+      - image: cimg/postgres:16.2
+        environment:
+          POSTGRES_USER: orchard
+          POSTGRES_DB: orchard
+          POSTGRES_PASSWORD: orchard
+    working_directory: ~/repo
+    resource_class: medium+
+
+  go:
+    docker:
+      - image: cimg/go:1.23
+    working_directory: ~/repo
+    resource_class: medium
+
+  base:
+    docker:
+      - image: cimg/base:current
+    working_directory: ~/repo
+    resource_class: small
+
+  builder:
+    machine:
+      image: ubuntu-2404:current
+      docker_layer_caching: true
+    working_directory: ~/repo
+    resource_class: medium
+
+commands:
+  skip_unless:
+    parameters:
+      flag: { type: boolean }
+    steps:
+      - run:
+          name: Skip if component unchanged
+          command: |
+            if [ "<< parameters.flag >>" != "true" ]; then
+              echo "Component unchanged — skipping."
+              circleci-agent step halt
+            fi
+
+  pnpm_install:
+    steps:
+      - run:
+          name: Install pnpm
+          command: sudo npm install -g pnpm@10
+      - restore_cache:
+          keys:
+            - pnpm-v1-{{ checksum "pnpm-lock.yaml" }}
+            - pnpm-v1-
+      - run:
+          name: Install dependencies
+          command: pnpm install --frozen-lockfile
+      - save_cache:
+          key: pnpm-v1-{{ checksum "pnpm-lock.yaml" }}
+          paths:
+            - ~/.local/share/pnpm/store
+
+  buildx_login:
+    steps:
+      - run:
+          name: Set up buildx + GHCR login
+          command: |
+            echo "$GHCR_PAT" | docker login << pipeline.parameters.registry >> \
+              -u "$GHCR_USER" --password-stdin
+            docker buildx create --use --name orchard --driver docker-container \
+              --driver-opt image=moby/buildkit:latest || docker buildx use orchard
+
+jobs:
+  commitlint:
+    executor: node
+    steps:
+      - checkout
+      - run:
+          name: Lint commit range against main
+          command: |
+            git fetch origin main --quiet || true
+            BASE=$(git merge-base origin/main HEAD || echo HEAD~1)
+            npx --yes \
+              --package @commitlint/cli \
+              --package @commitlint/config-conventional \
+              commitlint --from "$BASE" --to HEAD --verbose
+
+  secret-scan:
+    executor: base
+    steps:
+      - checkout
+      - run:
+          name: TruffleHog secret scan
+          command: |
+            curl -sSfL https://raw.githubusercontent.com/trufflesecurity/trufflehog/main/scripts/install.sh \
+              | sudo sh -s -- -b /usr/local/bin
+            printf '^\.git/\n^node_modules/\n' > /tmp/th-exclude
+            trufflehog filesystem . --exclude-paths /tmp/th-exclude \
+              --only-verified --fail --no-update
+
+  format-frontend:
+    executor: node
+    steps:
+      - skip_unless: { flag: << pipeline.parameters.frontend_changed >> }
+      - checkout
+      - pnpm_install
+      - run:
+          name: Prettier (auto-fix + self-commit)
+          command: bash .circleci/prettier-fix.sh
+
+  server-build-test:
+    executor: node
+    steps:
+      - skip_unless: { flag: << pipeline.parameters.server_changed >> }
+      - checkout
+      - pnpm_install
+      - run:
+          name: Generate Prisma client
+          command: pnpm --filter server prisma:generate
+      - run:
+          name: Build server
+          command: pnpm --filter server build
+      - run:
+          name: Auth-coverage snapshot test
+          command: pnpm --filter server test:auth-coverage
+
+  frontend-build:
+    executor: node
+    steps:
+      - skip_unless: { flag: << pipeline.parameters.frontend_changed >> }
+      - checkout
+      - pnpm_install
+      - run:
+          name: Build frontend
+          command: pnpm --filter frontend build
+
+  go-cli:
+    executor: go
+    steps:
+      - skip_unless: { flag: << pipeline.parameters.cli_changed >> }
+      - checkout
+      - restore_cache:
+          keys:
+            - go-v1-{{ checksum "cli/go.sum" }}
+            - go-v1-
+      - run:
+          name: cli — vet + test
+          command: cd cli && go vet ./... && go test ./... -count=1
+      - save_cache:
+          key: go-v1-{{ checksum "cli/go.sum" }}
+          paths:
+            - ~/go/pkg/mod
+            - ~/.cache/go-build
+
+  go-gateway:
+    executor: go
+    steps:
+      - skip_unless: { flag: << pipeline.parameters.gateway_changed >> }
+      - checkout
+      - run:
+          name: gateway — vet + build
+          command: cd gateway && go vet ./... && go build ./...
+
+  go-r2-proxy:
+    executor: go
+    steps:
+      - skip_unless: { flag: << pipeline.parameters.r2_proxy_changed >> }
+      - checkout
+      - run:
+          name: r2-proxy — vet + build
+          command: cd r2-proxy && go vet ./... && go build ./...
+
+  e2e:
+    executor: node-pg
+    environment:
+      DATABASE_URL: postgresql://orchard:orchard@localhost:5432/orchard
+      JWT_SECRET: ci-e2e-secret
+      PORT: '3001'
+      SERVER_URL: http://localhost:3001
+      NODE_ENV: test
+      DD_TRACE_ENABLED: 'false'
+      OTEL_SDK_DISABLED: 'true'
+      HACKCLUB_CLIENT_ID: ci-dummy
+      HACKCLUB_CLIENT_SECRET: ci-dummy
+      HACKCLUB_REDIRECT_URI: http://localhost:3001/apiv1/auth/callback
+      SSO_ENCRYPTION_KEY: 0000000000000000000000000000000000000000000000000000000000000000
+    steps:
+      - skip_unless: { flag: << pipeline.parameters.server_changed >> }
+      - checkout
+      - pnpm_install
+      - run:
+          name: Wait for Postgres
+          command: |
+            for i in $(seq 1 60); do
+              (echo > /dev/tcp/localhost/5432) >/dev/null 2>&1 && exit 0
+              sleep 1
+            done
+            echo "Postgres never came up" >&2; exit 1
+      - run:
+          name: Generate Prisma client + apply migrations
+          command: |
+            pnpm --filter server prisma:generate
+            cd server && pnpm exec prisma migrate deploy
+      - run:
+          name: Build server
+          command: pnpm --filter server build
+      - run:
+          name: Boot server (background)
+          command: cd server && node dist/main
+          background: true
+      - run:
+          name: Wait for server to listen
+          command: |
+            for i in $(seq 1 90); do
+              (echo > /dev/tcp/localhost/3001) >/dev/null 2>&1 && exit 0
+              sleep 1
+            done
+            echo "Server never started listening on :3001" >&2; exit 1
+      - run:
+          name: RBAC end-to-end
+          command: pnpm --filter server test:rbac
+
+  helm-lint:
+    executor: node
+    steps:
+      - skip_unless: { flag: << pipeline.parameters.chart_changed >> }
+      - checkout
+      - run:
+          name: helm lint
+          command: |
+            curl -fsSL https://get.helm.sh/helm-v3.16.2-linux-amd64.tar.gz | tar xz
+            ./linux-amd64/helm lint charts/orchard
+
+  validate-images:
+    executor: builder
+    steps:
+      - run:
+          name: Skip if no image component changed
+          command: |
+            if [ "<< pipeline.parameters.frontend_changed >>" != "true" ] && \
+               [ "<< pipeline.parameters.server_changed >>" != "true" ] && \
+               [ "<< pipeline.parameters.r2_proxy_changed >>" != "true" ]; then
+              echo "No image component changed — skipping."
+              circleci-agent step halt
+            fi
+      - checkout
+      - buildx_login
+      - run:
+          name: Build changed images (no push)
+          command: |
+            REG="<< pipeline.parameters.registry >>/<< pipeline.parameters.image_repo >>"
+            build() {
+              local name="$1" file="$2" ctx="$3"
+              echo "── building $name"
+              docker buildx build "$ctx" -f "$file" \
+                --cache-from "type=registry,ref=$REG/$name:buildcache" \
+                --cache-from "type=registry,ref=$REG/$name:latest" \
+                --build-arg BUILDKIT_INLINE_CACHE=1 \
+                --build-arg VERSION=0.0.0-ci \
+                --output type=cacheonly
+            }
+            if [ "<< pipeline.parameters.frontend_changed >>" = "true" ]; then build frontend frontend/Dockerfile .; fi
+            if [ "<< pipeline.parameters.server_changed >>" = "true" ]; then build server server/Dockerfile .; build mcp server/Dockerfile.mcp .; fi
+            if [ "<< pipeline.parameters.r2_proxy_changed >>" = "true" ]; then build r2-proxy r2-proxy/Dockerfile r2-proxy; fi
+
+  version:
+    executor: node
+    steps:
+      - checkout
+      - run:
+          name: Release-please (release PR + GitHub releases) as leafdbot[bot]
+          command: |
+            git config user.name "leafdbot[bot]"
+            git config user.email "192038741+leafdbot[bot]@users.noreply.github.com"
+            TOKEN="$(bash .circleci/gh-app-token.sh)"
+            GITHUB_TOKEN="$TOKEN" bash tools/release/run-release.sh
+      - persist_to_workspace:
+          root: .
+          paths:
+            - versions.json
+
+  publish-image:
+    executor: builder
+    parameters:
+      service: { type: string }
+      dockerfile: { type: string }
+      build_context: { type: string, default: "." }
+      vkey: { type: string }
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: Released this run?
+          command: |
+            REL=$(jq -r --arg k "released_<< parameters.vkey >>" '.[$k] // false' versions.json)
+            if [ "$REL" != "true" ]; then
+              echo "<< parameters.service >> was not released this run — skipping image build."
+              circleci-agent step halt
+            fi
+      - buildx_login
+      - run:
+          name: Build + push << parameters.service >>
+          command: |
+            REG="<< pipeline.parameters.registry >>/<< pipeline.parameters.image_repo >>"
+            IMAGE="$REG/<< parameters.service >>"
+            V=$(jq -r '."<< parameters.vkey >>"' versions.json)
+            CHANNEL=$(jq -r '.channel' versions.json)
+
+            TAGS=( "-t" "$IMAGE:$V" "-t" "$IMAGE:sha-$CIRCLE_SHA1" "-t" "$IMAGE:$CIRCLE_BRANCH" )
+            [ "$CHANNEL" = "stable" ] && TAGS+=( "-t" "$IMAGE:latest" )
+            [ "$CHANNEL" = "beta" ] && TAGS+=( "-t" "$IMAGE:beta" )
+
+            docker buildx build "<< parameters.build_context >>" \
+              -f "<< parameters.dockerfile >>" \
+              "${TAGS[@]}" \
+              --build-arg BUILDKIT_INLINE_CACHE=1 \
+              --build-arg "VERSION=$V" \
+              --cache-from "type=registry,ref=$IMAGE:buildcache" \
+              --cache-from "type=registry,ref=$IMAGE:latest" \
+              --cache-to "type=registry,ref=$IMAGE:buildcache,mode=max,image-manifest=true,oci-mediatypes=true,compression=zstd" \
+              --provenance=false \
+              --push
+
+  publish-chart:
+    executor: builder
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: Publish chart (released runs only)
+          command: |
+            set -euo pipefail
+            if [ "$(jq -r '.released' versions.json)" != "true" ]; then
+              echo "No release this run — skipping chart publish."
+              exit 0
+            fi
+            curl -fsSL https://get.helm.sh/helm-v3.16.2-linux-amd64.tar.gz | tar xz
+            sudo install linux-amd64/helm /usr/local/bin/helm
+            sudo curl -fsSL -o /usr/local/bin/yq \
+              https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+            sudo chmod +x /usr/local/bin/yq
+
+            U=$(jq -r '.umbrella' versions.json)
+            yq -i ".version = \"$U\" | .appVersion = \"$U\"" charts/orchard/Chart.yaml
+            yq -i ".frontend.image.tag = \"$(jq -r .frontend versions.json)\"" charts/orchard/values.yaml
+            yq -i ".server.image.tag   = \"$(jq -r .server versions.json)\""   charts/orchard/values.yaml
+            yq -i ".mcp.image.tag      = \"$(jq -r .mcp versions.json)\""      charts/orchard/values.yaml
+            yq -i ".r2Proxy.image.tag  = \"$(jq -r '."r2-proxy"' versions.json)\"" charts/orchard/values.yaml
+
+            echo "$GHCR_PAT" | helm registry login << pipeline.parameters.registry >> \
+              -u "$GHCR_USER" --password-stdin
+            helm package charts/orchard -d dist
+            helm push "$(ls dist/*.tgz)" \
+              "oci://<< pipeline.parameters.registry >>/<< pipeline.parameters.image_repo >>/charts"
+
+  deploy-marker:
+    executor: node
+    steps:
+      - checkout
+      - attach_workspace:
+          at: .
+      - run:
+          name: Datadog deploy marker
+          command: |
+            set -euo pipefail
+            if [ "$(jq -r '.released' versions.json)" != "true" ]; then
+              echo "No release this run — no deploy marker."
+              exit 0
+            fi
+            if [ -z "${DD_API_KEY:-}" ]; then
+              echo "DD_API_KEY not set — skipping deploy marker." >&2
+              exit 0
+            fi
+            SITE="${DD_SITE:-datadoghq.com}"
+            U=$(jq -r '.umbrella' versions.json)
+            CHANNEL=$(jq -r '.channel' versions.json)
+            ENV=production
+            [ "$CHANNEL" = "beta" ] && ENV=beta
+            for svc in frontend server mcp gateway cli r2-proxy; do
+              REL=$(jq -r --arg k "released_$svc" '.[$k] // false' versions.json)
+              [ "$REL" = "true" ] || continue
+              V=$(jq -r --arg k "$svc" '.[$k]' versions.json)
+              curl -fsS -X POST "https://api.${SITE}/api/v1/events" \
+                -H "DD-API-KEY: ${DD_API_KEY}" \
+                -H "Content-Type: application/json" \
+                -d "{\"title\":\"Deploy ${svc} v${V}\",\"text\":\"orchard ${svc} ${V} (umbrella ${U}) published from ${CIRCLE_BRANCH} %%% sha: ${CIRCLE_SHA1} %%%\",\"alert_type\":\"info\",\"tags\":[\"service:${svc}\",\"version:${V}\",\"env:${ENV}\",\"source:circleci\",\"event_type:deploy\"]}"
+              echo "marked ${svc} v${V}"
+            done
+
+release_filter: &release_filter
+  filters:
+    branches:
+      only:
+        - main
+        - beta
+        - alpha
+        - rc
+        - /^[0-9]+\.x$/
+        - /^[0-9]+\.[0-9]+\.x$/
+
+workflows:
+  ci:
+    jobs:
+      - commitlint
+      - secret-scan
+      - format-frontend
+      - frontend-build
+      - server-build-test
+      - e2e
+      - go-cli
+      - go-gateway
+      - go-r2-proxy
+      - helm-lint
+      - validate-images:
+          filters:
+            branches:
+              ignore: [main, beta, alpha, rc]
+
+      - version:
+          <<: *release_filter
+          requires:
+            - server-build-test
+            - frontend-build
+            - e2e
+            - go-cli
+            - go-gateway
+            - go-r2-proxy
+      - publish-image:
+          name: image-frontend
+          <<: *release_filter
+          requires: [version]
+          service: frontend
+          dockerfile: frontend/Dockerfile
+          vkey: frontend
+      - publish-image:
+          name: image-server
+          <<: *release_filter
+          requires: [version]
+          service: server
+          dockerfile: server/Dockerfile
+          vkey: server
+      - publish-image:
+          name: image-mcp
+          <<: *release_filter
+          requires: [version]
+          service: mcp
+          dockerfile: server/Dockerfile.mcp
+          vkey: mcp
+      - publish-image:
+          name: image-r2-proxy
+          <<: *release_filter
+          requires: [version]
+          service: r2-proxy
+          build_context: r2-proxy
+          dockerfile: r2-proxy/Dockerfile
+          vkey: r2-proxy
+      - publish-chart:
+          <<: *release_filter
+          requires:
+            - image-frontend
+            - image-server
+            - image-mcp
+            - image-r2-proxy
+      - deploy-marker:
+          <<: *release_filter
+          requires:
+            - publish-chart

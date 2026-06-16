@@ -6,7 +6,7 @@
 		formatTimestamp,
 		buildSummary,
 		type BuildStep,
-		type ParsedBuildLogs,
+		type ParsedBuildLogs
 	} from '$lib/utils/buildkitParser';
 	import AnimatedNumber from './AnimatedNumber.svelte';
 
@@ -82,12 +82,7 @@
 
 	{#if !showRaw}
 		<div class="bs-filter">
-			<input
-				type="text"
-				placeholder="Filter steps…"
-				bind:value={filter}
-				class="bs-filter-input"
-			/>
+			<input type="text" placeholder="Filter steps…" bind:value={filter} class="bs-filter-input" />
 		</div>
 
 		<div class="bs-list" class:bs-list-fill={fill}>
@@ -134,7 +129,8 @@
 							{/if}
 						</span>
 
-						<span class="bs-command" title={step.command}>{step.command || `Step #${step.id}`}</span>
+						<span class="bs-command" title={step.command}>{step.command || `Step #${step.id}`}</span
+						>
 
 						<span class="bs-right">
 							{#if step.status === 'cached'}
@@ -147,15 +143,14 @@
 								/>
 							{/if}
 							{#if hasOutput}
-								<ChevronRight
-									class="h-3.5 w-3.5 bs-chevron {isOpen ? 'bs-chevron-open' : ''}"
-								/>
+								<ChevronRight class="h-3.5 w-3.5 bs-chevron {isOpen ? 'bs-chevron-open' : ''}" />
 							{/if}
 						</span>
 					</button>
 
 					{#if isOpen && hasOutput}
-						<pre class="bs-output">{#if step.error}<span class="bs-output-error">ERROR: {step.error}
+						<pre class="bs-output">{#if step.error}<span class="bs-output-error"
+									>ERROR: {step.error}
 </span>{/if}{step.output.join('\n')}</pre>
 					{/if}
 				</div>
@@ -279,7 +274,9 @@
 		border-radius: 0.375rem;
 		padding: 0.2rem 0.5rem;
 		cursor: pointer;
-		transition: color 150ms, border-color 150ms;
+		transition:
+			color 150ms,
+			border-color 150ms;
 	}
 
 	.bs-raw-toggle:hover {

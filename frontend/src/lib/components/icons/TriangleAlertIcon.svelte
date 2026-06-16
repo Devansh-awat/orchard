@@ -57,10 +57,21 @@
 	}
 
 	@keyframes primaryAnimation {
-		0% { transform: scale(1) rotate(0deg); }
-		8% { transform: scale(1.1) rotate(-3deg); }
-		16% { transform: scale(1.1) rotate(3deg); }
-		24% { transform: scale(1.1) rotate(-2deg); }
-		32%, 100% { transform: scale(1) rotate(0deg); }
+		0% {
+			transform: scale(1) rotate(0deg);
+		}
+		8% {
+			transform: scale(1.1) rotate(-3deg);
+		}
+		16% {
+			transform: scale(1.1) rotate(3deg);
+		}
+		24% {
+			transform: scale(1.1) rotate(-2deg);
+		}
+		32%,
+		100% {
+			transform: scale(1) rotate(0deg);
+		}
 	}
 </style>

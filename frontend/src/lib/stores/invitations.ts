@@ -56,7 +56,10 @@ async function fetchPending(): Promise<PendingInvitation[]> {
 	}
 }
 
-async function accept(tokenOrId: string, useId = false): Promise<{ success: boolean; organization?: PendingInvitation['organization'] }> {
+async function accept(
+	tokenOrId: string,
+	useId = false
+): Promise<{ success: boolean; organization?: PendingInvitation['organization'] }> {
 	try {
 		const url = useId
 			? `/apiv1/invitations/by-id/${tokenOrId}/accept`
@@ -74,7 +77,7 @@ async function accept(tokenOrId: string, useId = false): Promise<{ success: bool
 
 		// Remove the accepted invitation from the list
 		pendingInvitationsList.update((list) =>
-			list.filter((inv) => useId ? inv.id !== tokenOrId : inv.token !== tokenOrId)
+			list.filter((inv) => (useId ? inv.id !== tokenOrId : inv.token !== tokenOrId))
 		);
 
 		// Set the accepted organization for onboarding
@@ -105,7 +108,7 @@ async function decline(tokenOrId: string, useId = false): Promise<boolean> {
 
 		// Remove the declined invitation from the list
 		pendingInvitationsList.update((list) =>
-			list.filter((inv) => useId ? inv.id !== tokenOrId : inv.token !== tokenOrId)
+			list.filter((inv) => (useId ? inv.id !== tokenOrId : inv.token !== tokenOrId))
 		);
 
 		return true;
@@ -172,4 +175,3 @@ export const showOnboarding = {
 export const lastAcceptedOrganization = {
 	subscribe: acceptedOrganization.subscribe
 };
-

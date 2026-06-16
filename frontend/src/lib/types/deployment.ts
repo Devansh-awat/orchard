@@ -203,4 +203,14 @@ export interface TerminalTabInfo {
 
 export type StatusTone = 'success' | 'warning' | 'error' | 'neutral' | 'info';
 
-export type TabId = 'overview' | 'environment' | 'resources' | 'metrics' | 'volumes' | 'network' | 'history' | 'webhooks' | 'audit' | 'advanced';
+export type TabId =
+	| 'overview'
+	| 'environment'
+	| 'resources'
+	| 'metrics'
+	| 'volumes'
+	| 'network'
+	| 'history'
+	| 'webhooks'
+	| 'audit'
+	| 'advanced';

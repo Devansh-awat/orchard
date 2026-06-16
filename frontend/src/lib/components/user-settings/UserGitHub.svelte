@@ -23,7 +23,7 @@
 		unlinking,
 		onLink,
 		onUnlink,
-		index = 0,
+		index = 0
 	}: {
 		loading: boolean;
 		githubLinked: boolean;
@@ -66,7 +66,8 @@
 					<span class="ug-repos-title">Repository access</span>
 					{#if githubInstallations.length > 0}
 						<span class="ug-repos-meta">
-							{githubInstallations.length} {githubInstallations.length === 1 ? 'account' : 'accounts'} connected
+							{githubInstallations.length}
+							{githubInstallations.length === 1 ? 'account' : 'accounts'} connected
 						</span>
 					{:else}
 						<span class="ug-repos-meta">None yet</span>
@@ -90,7 +91,9 @@
 										<span class="ug-install-type">{isOrg ? 'Organization' : 'User'}</span>
 									</span>
 									<span class="ug-install-meta">
-										{inst.repositorySelection === 'all' ? 'All repositories' : 'Selected repositories'}
+										{inst.repositorySelection === 'all'
+											? 'All repositories'
+											: 'Selected repositories'}
 									</span>
 								</div>
 								<span class="ug-install-action">
@@ -109,7 +112,9 @@
 						class:ug-add-link--primary={githubInstallations.length === 0}
 					>
 						<Plus size={16} />
-						{githubInstallations.length > 0 ? 'Add another organization or account' : 'Connect a repository or organization'}
+						{githubInstallations.length > 0
+							? 'Add another organization or account'
+							: 'Connect a repository or organization'}
 					</a>
 				{/if}
 			</div>
@@ -163,7 +168,9 @@
 		background-color: var(--surface-bg);
 		text-decoration: none;
 		color: var(--center-channel-color);
-		transition: border-color 0.15s, background-color 0.15s;
+		transition:
+			border-color 0.15s,
+			background-color 0.15s;
 	}
 	.ug-install:hover {
 		border-color: color-mix(in srgb, var(--sidebar-text-active-border) 60%, var(--surface-border));
@@ -231,7 +238,9 @@
 		padding: 0.375rem 0.625rem;
 		border-radius: 0.5rem;
 		text-decoration: none;
-		transition: background-color 0.15s, color 0.15s;
+		transition:
+			background-color 0.15s,
+			color 0.15s;
 	}
 	.ug-add-link:hover {
 		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);

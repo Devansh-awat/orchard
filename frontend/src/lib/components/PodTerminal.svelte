@@ -39,7 +39,8 @@
 
 		terminal = new ghosttyModule.Terminal({
 			fontSize: 11,
-			fontFamily: '"SF Mono", "Cascadia Code", "Fira Code", Menlo, Monaco, "Courier New", monospace',
+			fontFamily:
+				'"SF Mono", "Cascadia Code", "Fira Code", Menlo, Monaco, "Courier New", monospace',
 			cursorBlink: true,
 			cursorStyle: 'bar',
 			theme: {
@@ -63,8 +64,8 @@
 				brightBlue: '#c8e1ff',
 				brightMagenta: '#d2b3ff',
 				brightCyan: '#a5f3fc',
-				brightWhite: '#fafbfc',
-			},
+				brightWhite: '#fafbfc'
+			}
 		});
 
 		fitAddon = new ghosttyModule.FitAddon();
@@ -106,9 +107,8 @@
 
 		ws.onmessage = (event) => {
 			if (!terminal) return;
-			const data = event.data instanceof ArrayBuffer
-				? new TextDecoder().decode(event.data)
-				: event.data;
+			const data =
+				event.data instanceof ArrayBuffer ? new TextDecoder().decode(event.data) : event.data;
 			terminal.write(data);
 		};
 
@@ -141,7 +141,10 @@
 		}
 	});
 
-	onMount(() => { mounted = true; init(); });
+	onMount(() => {
+		mounted = true;
+		init();
+	});
 
 	onDestroy(() => {
 		resizeObserver?.disconnect();
@@ -174,7 +177,9 @@
 		background: #0d1117;
 	}
 
-	.pod-terminal--hidden { display: none; }
+	.pod-terminal--hidden {
+		display: none;
+	}
 
 	.pod-terminal-canvas {
 		flex: 1;

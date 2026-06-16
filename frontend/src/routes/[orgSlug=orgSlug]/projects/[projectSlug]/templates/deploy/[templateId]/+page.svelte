@@ -59,19 +59,27 @@
 
 	function getResourceIcon(type: string) {
 		switch (type) {
-			case 'database': return Database;
-			case 'deployment': return Server;
-			case 'ingress': return Globe;
-			default: return LayoutTemplate;
+			case 'database':
+				return Database;
+			case 'deployment':
+				return Server;
+			case 'ingress':
+				return Globe;
+			default:
+				return LayoutTemplate;
 		}
 	}
 
 	function getResourceColor(type: string) {
 		switch (type) {
-			case 'database': return '#22c55e';
-			case 'deployment': return '#3b82f6';
-			case 'ingress': return '#f59e0b';
-			default: return 'var(--surface-muted)';
+			case 'database':
+				return '#22c55e';
+			case 'deployment':
+				return '#3b82f6';
+			case 'ingress':
+				return '#f59e0b';
+			default:
+				return 'var(--surface-muted)';
 		}
 	}
 
@@ -116,19 +124,16 @@
 		error = null;
 
 		try {
-			const response = await apiFetch(
-				`/apiv1/projects/${project.id}/template-instances`,
-				{
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({
-						templateId: template.id,
-						parameters: paramValues,
-						cpuRequestMilli: resourceCpuMilli,
-						memoryRequestBytes: resourceMemoryBytes,
-					})
-				}
-			);
+			const response = await apiFetch(`/apiv1/projects/${project.id}/template-instances`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({
+					templateId: template.id,
+					parameters: paramValues,
+					cpuRequestMilli: resourceCpuMilli,
+					memoryRequestBytes: resourceMemoryBytes
+				})
+			});
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
@@ -156,7 +161,9 @@
 
 	let didInit = $state(false);
 	$effect(() => {
-		orgSlug; projectSlug; wsSlug;
+		orgSlug;
+		projectSlug;
+		wsSlug;
 		if (!didInit) {
 			didInit = true;
 			return;
@@ -198,7 +205,10 @@
 					{/if}
 				</div>
 				{#if template.category}
-					<span class="td-info-badge" style="background: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent); color: var(--sidebar-text-active-border);">
+					<span
+						class="td-info-badge"
+						style="background: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent); color: var(--sidebar-text-active-border);"
+					>
 						{template.category}
 					</span>
 				{/if}
@@ -235,92 +245,113 @@
 			<h2 class="td-card-title">Configuration</h2>
 
 			<form
-				onsubmit={(e) => { e.preventDefault(); deploy(); }}
+				onsubmit={(e) => {
+					e.preventDefault();
+					deploy();
+				}}
 				class="td-form"
 			>
 				{#each template.parameters as param}
-						<div class="td-field">
-							{#if param.type === 'boolean'}
-								<label class="td-toggle-row">
-									<div class="td-toggle-info">
-										<span class="td-label">
-											{param.displayName}
-											{#if param.required}<span class="td-required">*</span>{/if}
-										</span>
-										{#if param.description}
-											<span class="td-hint">{param.description}</span>
-										{/if}
-									</div>
-									<div class="td-toggle-switch">
-										<input type="checkbox" bind:checked={paramValues[param.name]} disabled={deploying} />
-										<span class="td-toggle-slider"></span>
-									</div>
-								</label>
-							{:else}
-								<label for="p-{param.name}" class="td-label">
-									{param.displayName}
-									{#if param.required}<span class="td-required">*</span>{/if}
-								</label>
-
-								{#if param.type === 'select'}
-									<select id="p-{param.name}" class="td-input" bind:value={paramValues[param.name]} disabled={deploying}>
-										{#each param.options || [] as option}
-											<option value={option.value}>{option.label}</option>
-										{/each}
-									</select>
-								{:else if param.type === 'number'}
-									<input
-										id="p-{param.name}" type="number" class="td-input"
-										min={param.validation?.min} max={param.validation?.max}
-										bind:value={paramValues[param.name]}
-										required={param.required} disabled={deploying}
-									/>
-								{:else}
-									<input
-										id="p-{param.name}" type="text" class="td-input"
-										placeholder={param.placeholder || ''}
-										bind:value={paramValues[param.name]}
-										required={param.required} disabled={deploying}
-									/>
-								{/if}
-
-								{#if param.description}
-									<p class="td-hint">{param.description}</p>
-								{/if}
-							{/if}
-						</div>
-					{/each}
-
 					<div class="td-field">
-						<span class="td-label">Resources</span>
-						<p class="td-hint" style="margin-top: 0;">Applies to every deployment and database created by this template.</p>
-						<ResourcePicker
-							bind:cpuMilli={resourceCpuMilli}
-							bind:memoryBytes={resourceMemoryBytes}
-							disabled={deploying}
-						/>
-					</div>
+						{#if param.type === 'boolean'}
+							<label class="td-toggle-row">
+								<div class="td-toggle-info">
+									<span class="td-label">
+										{param.displayName}
+										{#if param.required}<span class="td-required">*</span>{/if}
+									</span>
+									{#if param.description}
+										<span class="td-hint">{param.description}</span>
+									{/if}
+								</div>
+								<div class="td-toggle-switch">
+									<input
+										type="checkbox"
+										bind:checked={paramValues[param.name]}
+										disabled={deploying}
+									/>
+									<span class="td-toggle-slider"></span>
+								</div>
+							</label>
+						{:else}
+							<label for="p-{param.name}" class="td-label">
+								{param.displayName}
+								{#if param.required}<span class="td-required">*</span>{/if}
+							</label>
 
-					{#if error}
-						<div class="td-error">{error}</div>
-					{/if}
-
-					<div class="td-actions">
-						<a href={basePath} class="td-btn td-btn-secondary">Cancel</a>
-						<button type="submit" class="td-btn td-btn-primary" disabled={deploying}>
-							{#if deploying}
-								<Loader2 class="h-4 w-4 animate-spin" />
-								Deploying...
+							{#if param.type === 'select'}
+								<select
+									id="p-{param.name}"
+									class="td-input"
+									bind:value={paramValues[param.name]}
+									disabled={deploying}
+								>
+									{#each param.options || [] as option}
+										<option value={option.value}>{option.label}</option>
+									{/each}
+								</select>
+							{:else if param.type === 'number'}
+								<input
+									id="p-{param.name}"
+									type="number"
+									class="td-input"
+									min={param.validation?.min}
+									max={param.validation?.max}
+									bind:value={paramValues[param.name]}
+									required={param.required}
+									disabled={deploying}
+								/>
 							{:else}
-								<Rocket class="h-4 w-4" />
-								Deploy
+								<input
+									id="p-{param.name}"
+									type="text"
+									class="td-input"
+									placeholder={param.placeholder || ''}
+									bind:value={paramValues[param.name]}
+									required={param.required}
+									disabled={deploying}
+								/>
 							{/if}
-						</button>
+
+							{#if param.description}
+								<p class="td-hint">{param.description}</p>
+							{/if}
+						{/if}
 					</div>
-				</form>
-			</div>
-		{/if}
-	</div>
+				{/each}
+
+				<div class="td-field">
+					<span class="td-label">Resources</span>
+					<p class="td-hint" style="margin-top: 0;">
+						Applies to every deployment and database created by this template.
+					</p>
+					<ResourcePicker
+						bind:cpuMilli={resourceCpuMilli}
+						bind:memoryBytes={resourceMemoryBytes}
+						disabled={deploying}
+					/>
+				</div>
+
+				{#if error}
+					<div class="td-error">{error}</div>
+				{/if}
+
+				<div class="td-actions">
+					<a href={basePath} class="td-btn td-btn-secondary">Cancel</a>
+					<button type="submit" class="td-btn td-btn-primary" disabled={deploying}>
+						{#if deploying}
+							<Loader2 class="h-4 w-4 animate-spin" />
+							Deploying...
+						{:else}
+							<Rocket class="h-4 w-4" />
+							Deploy
+						{/if}
+					</button>
+				</div>
+			</form>
+		</div>
+	{/if}
+</div>
 
 <style>
 	.td-page {
@@ -638,7 +669,9 @@
 	.td-btn-primary {
 		background-color: var(--sidebar-text-active-border);
 		color: #fff;
-		box-shadow: 0 1px 2px rgb(0 0 0 / 0.08), 0 1px 1px rgb(0 0 0 / 0.04);
+		box-shadow:
+			0 1px 2px rgb(0 0 0 / 0.08),
+			0 1px 1px rgb(0 0 0 / 0.04);
 	}
 
 	.td-btn-primary:hover:not(:disabled) {

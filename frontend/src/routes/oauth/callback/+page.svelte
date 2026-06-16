@@ -43,36 +43,41 @@
 	});
 </script>
 
-<div class="flex min-h-screen items-center justify-center" style="background-color: var(--center-channel-bg);">
+<div
+	class="flex min-h-screen items-center justify-center"
+	style="background-color: var(--center-channel-bg);"
+>
 	<div class="text-center">
 		<img src="/logo/logoiconcolor.svg" alt="Orchard" class="mx-auto mb-6 h-12 w-12" />
 		{#if isPrivateBeta}
-			<div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full" style="background-color: var(--control-bg);">
+			<div
+				class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full"
+				style="background-color: var(--control-bg);"
+			>
 				<Lock class="h-6 w-6" style="color: var(--surface-muted);" />
 			</div>
 			<h1 class="mb-2 text-xl font-semibold" style="color: var(--center-channel-color);">
 				Private Beta
 			</h1>
-			<p class="mb-4" style="color: var(--surface-muted);">Orchard is currently in private beta. You need an invitation from an existing organization to access the platform.</p>
-			<a href="/" class="btn btn-primary">
-				Return Home
-			</a>
+			<p class="mb-4" style="color: var(--surface-muted);">
+				Orchard is currently in private beta. You need an invitation from an existing organization
+				to access the platform.
+			</p>
+			<a href="/" class="btn btn-primary"> Return Home </a>
 		{:else if error}
-			<div class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30">
+			<div
+				class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30"
+			>
 				<AlertCircle class="h-6 w-6 text-red-600 dark:text-red-400" />
 			</div>
 			<h1 class="mb-2 text-xl font-semibold" style="color: var(--center-channel-color);">
 				Authentication Error
 			</h1>
 			<p class="mb-4" style="color: var(--surface-muted);">{error}</p>
-			<a href="/" class="btn btn-primary">
-				Return Home
-			</a>
+			<a href="/" class="btn btn-primary"> Return Home </a>
 		{:else}
 			<Loader2 class="mx-auto h-8 w-8 animate-spin text-primary-600" />
-			<p class="mt-4" style="color: var(--surface-muted);">
-				Completing sign in...
-			</p>
+			<p class="mt-4" style="color: var(--surface-muted);">Completing sign in...</p>
 		{/if}
 	</div>
 </div>

@@ -4,7 +4,13 @@
 	import { onMount } from 'svelte';
 	import { apiFetch, selectedOrganization, toasts, refreshTree } from '$lib/stores';
 	import {
-		Github, Container, Database, Loader2, ArrowRight, Image as ImageIcon, ImagePlus
+		Github,
+		Container,
+		Database,
+		Loader2,
+		ArrowRight,
+		Image as ImageIcon,
+		ImagePlus
 	} from 'lucide-svelte';
 	import { springHover, motionStagger, springPop } from '$lib/utils/motion.svelte';
 
@@ -29,10 +35,34 @@
 
 	type ResourceType = 'github' | 'image' | 'database';
 	let selected = $state<ResourceType | null>(null);
-	const resources: Array<{ id: ResourceType; label: string; desc: string; icon: typeof Github; color: string }> = [
-		{ id: 'github', label: 'GitHub Repository', desc: 'Build from a repo', icon: Github, color: '#6e5494' },
-		{ id: 'image', label: 'Docker Image', desc: 'Deploy a container', icon: Container, color: '#2496ed' },
-		{ id: 'database', label: 'Database', desc: 'Managed Postgres', icon: Database, color: '#f59e0b' }
+	const resources: Array<{
+		id: ResourceType;
+		label: string;
+		desc: string;
+		icon: typeof Github;
+		color: string;
+	}> = [
+		{
+			id: 'github',
+			label: 'GitHub Repository',
+			desc: 'Build from a repo',
+			icon: Github,
+			color: '#6e5494'
+		},
+		{
+			id: 'image',
+			label: 'Docker Image',
+			desc: 'Deploy a container',
+			icon: Container,
+			color: '#2496ed'
+		},
+		{
+			id: 'database',
+			label: 'Database',
+			desc: 'Managed Postgres',
+			icon: Database,
+			color: '#f59e0b'
+		}
 	];
 
 	onMount(() => nameInput?.focus());
@@ -42,7 +72,11 @@
 		const file = input.files?.[0];
 		if (!file) return;
 		if (!types.includes(file.type)) {
-			toasts.add({ title: 'Invalid file type', description: 'Use JPEG, PNG, GIF or WebP', color: 'error' });
+			toasts.add({
+				title: 'Invalid file type',
+				description: 'Use JPEG, PNG, GIF or WebP',
+				color: 'error'
+			});
 			input.value = '';
 			return;
 		}
@@ -89,7 +123,10 @@
 			else if (selected === 'database') goto(`${base}/databases/new`);
 			else goto(base);
 		} catch (e) {
-			toasts.add({ title: e instanceof Error ? e.message : 'Failed to create project', color: 'error' });
+			toasts.add({
+				title: e instanceof Error ? e.message : 'Failed to create project',
+				color: 'error'
+			});
 			submitting = false;
 		}
 	}
@@ -99,9 +136,18 @@
 	{#if glowSrc}
 		{#key glowSrc}
 			<div class="np-glow" aria-hidden="true">
-				<div class="np-glow-layer np-glow-layer--1" style="background-image: url({JSON.stringify(glowSrc)});"></div>
-				<div class="np-glow-layer np-glow-layer--2" style="background-image: url({JSON.stringify(glowSrc)});"></div>
-				<div class="np-glow-layer np-glow-layer--3" style="background-image: url({JSON.stringify(glowSrc)});"></div>
+				<div
+					class="np-glow-layer np-glow-layer--1"
+					style="background-image: url({JSON.stringify(glowSrc)});"
+				></div>
+				<div
+					class="np-glow-layer np-glow-layer--2"
+					style="background-image: url({JSON.stringify(glowSrc)});"
+				></div>
+				<div
+					class="np-glow-layer np-glow-layer--3"
+					style="background-image: url({JSON.stringify(glowSrc)});"
+				></div>
 				<div class="np-glow-fade"></div>
 			</div>
 		{/key}
@@ -157,18 +203,28 @@
 			type="file"
 			accept="image/jpeg,image/png,image/webp"
 			hidden
-			onchange={(e) => pickFile(e, BANNER_TYPES, 8, (f, url) => { bannerFile = f; bannerPreview = url; })}
+			onchange={(e) =>
+				pickFile(e, BANNER_TYPES, 8, (f, url) => {
+					bannerFile = f;
+					bannerPreview = url;
+				})}
 		/>
 		<input
 			bind:this={iconInput}
 			type="file"
 			accept="image/jpeg,image/png,image/gif,image/webp"
 			hidden
-			onchange={(e) => pickFile(e, ICON_TYPES, 2, (f, url) => { iconFile = f; iconPreview = url; })}
+			onchange={(e) =>
+				pickFile(e, ICON_TYPES, 2, (f, url) => {
+					iconFile = f;
+					iconPreview = url;
+				})}
 		/>
 
 		<div class="np-starter">
-			<span class="np-starter-label" {@attach motionStagger({ index: 1, from: { y: 10 } })}>Start with</span>
+			<span class="np-starter-label" {@attach motionStagger({ index: 1, from: { y: 10 } })}
+				>Start with</span
+			>
 			<div class="np-grid">
 				{#each resources as r, i}
 					{@const Icon = r.icon}
@@ -232,8 +288,14 @@
 		contain: layout style paint;
 	}
 	@keyframes np-glow-in {
-		0% { opacity: 0; transform: scale(0.72); }
-		100% { opacity: 1; transform: scale(1); }
+		0% {
+			opacity: 0;
+			transform: scale(0.72);
+		}
+		100% {
+			opacity: 1;
+			transform: scale(1);
+		}
 	}
 
 	.np-glow-layer {
@@ -265,14 +327,45 @@
 		position: absolute;
 		inset: 0;
 		background:
-			radial-gradient(72% 68% at 50% 50%, rgba(0,0,0,0) 0%, var(--center-channel-bg) 84%),
-			linear-gradient(180deg, var(--center-channel-bg) 0%, rgba(0,0,0,0) 18%, rgba(0,0,0,0) 82%, var(--center-channel-bg) 100%);
+			radial-gradient(72% 68% at 50% 50%, rgba(0, 0, 0, 0) 0%, var(--center-channel-bg) 84%),
+			linear-gradient(
+				180deg,
+				var(--center-channel-bg) 0%,
+				rgba(0, 0, 0, 0) 18%,
+				rgba(0, 0, 0, 0) 82%,
+				var(--center-channel-bg) 100%
+			);
 	}
-	@keyframes np-spin-a { from { transform: scale(2) rotate(0deg); } to { transform: scale(2) rotate(360deg); } }
-	@keyframes np-spin-b { from { transform: scale(2.5) translate(8%, -6%) rotate(70deg); } to { transform: scale(2.5) translate(8%, -6%) rotate(430deg); } }
-	@keyframes np-spin-c { from { transform: scale(3) translate(-10%, 9%) rotate(140deg); } to { transform: scale(3) translate(-10%, 9%) rotate(-220deg); } }
+	@keyframes np-spin-a {
+		from {
+			transform: scale(2) rotate(0deg);
+		}
+		to {
+			transform: scale(2) rotate(360deg);
+		}
+	}
+	@keyframes np-spin-b {
+		from {
+			transform: scale(2.5) translate(8%, -6%) rotate(70deg);
+		}
+		to {
+			transform: scale(2.5) translate(8%, -6%) rotate(430deg);
+		}
+	}
+	@keyframes np-spin-c {
+		from {
+			transform: scale(3) translate(-10%, 9%) rotate(140deg);
+		}
+		to {
+			transform: scale(3) translate(-10%, 9%) rotate(-220deg);
+		}
+	}
 	@media (prefers-reduced-motion: reduce) {
-		.np-glow-layer--1, .np-glow-layer--2, .np-glow-layer--3 { animation: none; }
+		.np-glow-layer--1,
+		.np-glow-layer--2,
+		.np-glow-layer--3 {
+			animation: none;
+		}
 	}
 
 	.np-form {
@@ -286,7 +379,11 @@
 		padding: 1.5rem;
 		border-radius: 1.25rem;
 		border: 1px solid transparent;
-		transition: background 0.4s ease, backdrop-filter 0.4s ease, border-color 0.4s ease, box-shadow 0.4s ease;
+		transition:
+			background 0.4s ease,
+			backdrop-filter 0.4s ease,
+			border-color 0.4s ease,
+			box-shadow 0.4s ease;
 	}
 
 	.np-form--glass {
@@ -306,7 +403,12 @@
 		left: 12%;
 		right: 12%;
 		height: 1px;
-		background: linear-gradient(90deg, transparent, color-mix(in srgb, #fff 70%, transparent), transparent);
+		background: linear-gradient(
+			90deg,
+			transparent,
+			color-mix(in srgb, #fff 70%, transparent),
+			transparent
+		);
 		pointer-events: none;
 	}
 
@@ -319,7 +421,12 @@
 	}
 
 	:global(.dark) .np-form--glass::before {
-		background: linear-gradient(90deg, transparent, color-mix(in srgb, #fff 18%, transparent), transparent);
+		background: linear-gradient(
+			90deg,
+			transparent,
+			color-mix(in srgb, #fff 18%, transparent),
+			transparent
+		);
 	}
 
 	.np-head {
@@ -343,7 +450,9 @@
 		font-size: 0.8125rem;
 		font-weight: 500;
 		cursor: pointer;
-		transition: border-color 0.15s, color 0.15s;
+		transition:
+			border-color 0.15s,
+			color 0.15s;
 	}
 
 	.np-banner:hover {
@@ -445,7 +554,9 @@
 		border: 1px solid var(--surface-border);
 		background: var(--center-channel-bg);
 		cursor: pointer;
-		transition: border-color 0.15s, box-shadow 0.15s;
+		transition:
+			border-color 0.15s,
+			box-shadow 0.15s;
 	}
 
 	.np-card:hover {

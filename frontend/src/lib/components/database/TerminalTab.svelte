@@ -24,7 +24,7 @@
 		onFetchLogs,
 		onOpenShellTab,
 		onCloseTerminalTab,
-		podShortName,
+		podShortName
 	}: {
 		database: DatabaseDetail;
 		logs: string;
@@ -62,8 +62,8 @@
 				<button
 					class="console-tab-btn"
 					class:console-tab-btn--active={activeConsoleTab === 'logs'}
-					onclick={() => (activeConsoleTab = 'logs')}
-				>Logs</button>
+					onclick={() => (activeConsoleTab = 'logs')}>Logs</button
+				>
 				{#each terminalTabs as ttab (ttab.id)}
 					<button
 						class="console-tab-btn"
@@ -75,8 +75,16 @@
 							class="console-tab-close"
 							role="button"
 							tabindex="-1"
-							onclick={(e) => { e.stopPropagation(); onCloseTerminalTab(ttab.id); }}
-							onkeydown={(e) => { if (e.key === 'Enter') { e.stopPropagation(); onCloseTerminalTab(ttab.id); } }}
+							onclick={(e) => {
+								e.stopPropagation();
+								onCloseTerminalTab(ttab.id);
+							}}
+							onkeydown={(e) => {
+								if (e.key === 'Enter') {
+									e.stopPropagation();
+									onCloseTerminalTab(ttab.id);
+								}
+							}}
 						>
 							<X class="h-2.5 w-2.5" />
 						</span>
@@ -87,18 +95,34 @@
 				{#if activeConsoleTab === 'logs'}
 					<button
 						class="console-source-btn"
-						onclick={(e) => { e.preventDefault(); tailLines = tailLines === 100 ? 200 : tailLines === 200 ? 500 : tailLines === 500 ? 1000 : 100; onFetchLogs(); }}
+						onclick={(e) => {
+							e.preventDefault();
+							tailLines =
+								tailLines === 100 ? 200 : tailLines === 200 ? 500 : tailLines === 500 ? 1000 : 100;
+							onFetchLogs();
+						}}
 						title="Cycle tail size"
 					>
 						<Container class="h-3 w-3 opacity-40" />
 						<span>{podShortName(pod.name)} / postgres</span>
 						<ChevronDown class="h-2.5 w-2.5 opacity-40" />
 					</button>
-					<button onclick={onFetchLogs} disabled={logsLoading} class="console-icon-btn" title={`Refresh (tail ${tailLines})`}>
-						{#if logsLoading}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw class="h-3.5 w-3.5" />{/if}
+					<button
+						onclick={onFetchLogs}
+						disabled={logsLoading}
+						class="console-icon-btn"
+						title={`Refresh (tail ${tailLines})`}
+					>
+						{#if logsLoading}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw
+								class="h-3.5 w-3.5"
+							/>{/if}
 					</button>
 				{/if}
-				<button class="console-action-btn" onclick={() => onOpenShellTab(pod.name, 'postgres')} title="Open shell in pod">
+				<button
+					class="console-action-btn"
+					onclick={() => onOpenShellTab(pod.name, 'postgres')}
+					title="Open shell in pod"
+				>
 					<TerminalIcon class="h-3 w-3" />
 					Shell
 				</button>
@@ -107,7 +131,9 @@
 					class="console-icon-btn"
 					title={consoleExpanded ? 'Collapse' : 'Expand'}
 				>
-					{#if consoleExpanded}<Minimize2 class="h-3.5 w-3.5" />{:else}<Maximize2 class="h-3.5 w-3.5" />{/if}
+					{#if consoleExpanded}<Minimize2 class="h-3.5 w-3.5" />{:else}<Maximize2
+							class="h-3.5 w-3.5"
+						/>{/if}
 				</button>
 			</div>
 		</div>

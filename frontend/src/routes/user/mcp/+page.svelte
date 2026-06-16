@@ -11,7 +11,9 @@
 		navigator.clipboard.writeText(text).then(() => {
 			copiedId = id;
 			toasts.add({ title: 'Copied to clipboard', color: 'success' });
-			setTimeout(() => { copiedId = null; }, 2000);
+			setTimeout(() => {
+				copiedId = null;
+			}, 2000);
 		});
 	}
 </script>
@@ -19,21 +21,37 @@
 <div class="settings-page">
 	<div class="settings-container">
 		<div class="settings-header">
-			<button
-				onclick={() => window.history.back()}
-				class="settings-back-btn"
-			>
+			<button onclick={() => window.history.back()} class="settings-back-btn">
 				<ArrowLeft class="h-4 w-4" />
 				Back
 			</button>
 
 			<div class="settings-title-row">
 				<div class="settings-avatar">
-					<svg class="h-5 w-5" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M18 84.8528L85.8822 16.9706C95.2548 7.59798 110.451 7.59798 119.823 16.9706C129.196 26.3431 129.196 41.5391 119.823 50.9117L68.5581 102.177" stroke="currentColor" stroke-width="12" stroke-linecap="round"/><path d="M69.2652 101.47L119.823 50.9117C129.196 41.5391 144.392 41.5391 153.765 50.9117L154.118 51.2652C163.491 60.6378 163.491 75.8338 154.118 85.2063L92.7248 146.6C89.6006 149.724 89.6006 154.789 92.7248 157.913L105.331 170.52" stroke="currentColor" stroke-width="12" stroke-linecap="round"/><path d="M102.853 33.9411L52.6482 84.1457C43.2756 93.5183 43.2756 108.714 52.6482 118.087C62.0208 127.459 77.2167 127.459 86.5893 118.087L136.794 67.8822" stroke="currentColor" stroke-width="12" stroke-linecap="round"/></svg>
+					<svg class="h-5 w-5" viewBox="0 0 180 180" fill="none" xmlns="http://www.w3.org/2000/svg"
+						><path
+							d="M18 84.8528L85.8822 16.9706C95.2548 7.59798 110.451 7.59798 119.823 16.9706C129.196 26.3431 129.196 41.5391 119.823 50.9117L68.5581 102.177"
+							stroke="currentColor"
+							stroke-width="12"
+							stroke-linecap="round"
+						/><path
+							d="M69.2652 101.47L119.823 50.9117C129.196 41.5391 144.392 41.5391 153.765 50.9117L154.118 51.2652C163.491 60.6378 163.491 75.8338 154.118 85.2063L92.7248 146.6C89.6006 149.724 89.6006 154.789 92.7248 157.913L105.331 170.52"
+							stroke="currentColor"
+							stroke-width="12"
+							stroke-linecap="round"
+						/><path
+							d="M102.853 33.9411L52.6482 84.1457C43.2756 93.5183 43.2756 108.714 52.6482 118.087C62.0208 127.459 77.2167 127.459 86.5893 118.087L136.794 67.8822"
+							stroke="currentColor"
+							stroke-width="12"
+							stroke-linecap="round"
+						/></svg
+					>
 				</div>
 				<div>
 					<h1 class="settings-title">MCP Server</h1>
-					<p class="settings-subtitle">Connect AI assistants to Orchard via Model Context Protocol</p>
+					<p class="settings-subtitle">
+						Connect AI assistants to Orchard via Model Context Protocol
+					</p>
 				</div>
 			</div>
 		</div>
@@ -44,7 +62,9 @@
 				<div class="settings-section-trigger-left">
 					<div>
 						<p class="settings-section-label">What is MCP?</p>
-						<p class="settings-section-desc">Model Context Protocol lets AI tools manage your infrastructure</p>
+						<p class="settings-section-desc">
+							Model Context Protocol lets AI tools manage your infrastructure
+						</p>
 					</div>
 				</div>
 			</div>
@@ -70,8 +90,9 @@
 
 			<div class="settings-section-content">
 				<p class="settings-hint">
-					Go to <strong>Settings &rarr; Connectors</strong>, scroll to the bottom and click <strong>Add custom connector</strong>, then enter the URL below.
-					You'll be prompted to sign in with your Orchard account to authorize access.
+					Go to <strong>Settings &rarr; Connectors</strong>, scroll to the bottom and click
+					<strong>Add custom connector</strong>, then enter the URL below. You'll be prompted to
+					sign in with your Orchard account to authorize access.
 				</p>
 
 				<div class="mcp-field">
@@ -96,28 +117,39 @@
 				<div class="settings-section-trigger-left">
 					<div>
 						<p class="settings-section-label">Claude Code</p>
-						<p class="settings-section-desc">Add to your project's .mcp.json or Claude Code settings</p>
+						<p class="settings-section-desc">
+							Add to your project's .mcp.json or Claude Code settings
+						</p>
 					</div>
 				</div>
 			</div>
 
 			<div class="settings-section-content">
 				<p class="settings-hint">
-					Claude Code supports remote MCP servers with OAuth. Add the following to <code>.mcp.json</code> in your project root,
-					or to your global Claude Code settings. You'll be prompted to authorize on first use.
+					Claude Code supports remote MCP servers with OAuth. Add the following to <code
+						>.mcp.json</code
+					> in your project root, or to your global Claude Code settings. You'll be prompted to authorize
+					on first use.
 				</p>
 
 				<div class="mcp-field">
 					<div class="mcp-copy-row" style="justify-content: space-between;">
 						<p class="settings-field-label">.mcp.json</p>
-						<button class="btn btn-ghost btn-sm" onclick={() => copy(`{
+						<button
+							class="btn btn-ghost btn-sm"
+							onclick={() =>
+								copy(
+									`{
   "mcpServers": {
     "orchard": {
       "type": "url",
       "url": "${MCP_URL}"
     }
   }
-}`, 'claude-code')}>
+}`,
+									'claude-code'
+								)}
+						>
 							{#if copiedId === 'claude-code'}
 								<Check class="h-3.5 w-3.5" />
 							{:else}
@@ -150,21 +182,29 @@
 
 			<div class="settings-section-content">
 				<p class="settings-hint">
-					Open the Command Palette (<kbd>Shift+Cmd+P</kbd>) and run <strong>MCP: Add Server</strong>,
-					or create <code>.vscode/mcp.json</code> in your project. VS Code will handle OAuth automatically.
+					Open the Command Palette (<kbd>Shift+Cmd+P</kbd>) and run
+					<strong>MCP: Add Server</strong>, or create <code>.vscode/mcp.json</code> in your project. VS
+					Code will handle OAuth automatically.
 				</p>
 
 				<div class="mcp-field">
 					<div class="mcp-copy-row" style="justify-content: space-between;">
 						<p class="settings-field-label">.vscode/mcp.json</p>
-						<button class="btn btn-ghost btn-sm" onclick={() => copy(`{
+						<button
+							class="btn btn-ghost btn-sm"
+							onclick={() =>
+								copy(
+									`{
   "servers": {
     "orchard": {
       "type": "http",
       "url": "${MCP_URL}"
     }
   }
-}`, 'vscode')}>
+}`,
+									'vscode'
+								)}
+						>
 							{#if copiedId === 'vscode'}
 								<Check class="h-3.5 w-3.5" />
 							{:else}
@@ -183,7 +223,9 @@
 				</div>
 
 				<p class="settings-hint">
-					You can also add it to your user profile by running <strong>MCP: Open User Configuration</strong> from the Command Palette.
+					You can also add it to your user profile by running <strong
+						>MCP: Open User Configuration</strong
+					> from the Command Palette.
 				</p>
 			</div>
 		</section>
@@ -194,27 +236,36 @@
 				<div class="settings-section-trigger-left">
 					<div>
 						<p class="settings-section-label">Cursor</p>
-						<p class="settings-section-desc">Add to your project or global Cursor MCP configuration</p>
+						<p class="settings-section-desc">
+							Add to your project or global Cursor MCP configuration
+						</p>
 					</div>
 				</div>
 			</div>
 
 			<div class="settings-section-content">
 				<p class="settings-hint">
-					Create <code>.cursor/mcp.json</code> in your project root for project-specific access,
-					or <code>~/.cursor/mcp.json</code> for global access across all projects.
+					Create <code>.cursor/mcp.json</code> in your project root for project-specific access, or
+					<code>~/.cursor/mcp.json</code> for global access across all projects.
 				</p>
 
 				<div class="mcp-field">
 					<div class="mcp-copy-row" style="justify-content: space-between;">
 						<p class="settings-field-label">.cursor/mcp.json</p>
-						<button class="btn btn-ghost btn-sm" onclick={() => copy(`{
+						<button
+							class="btn btn-ghost btn-sm"
+							onclick={() =>
+								copy(
+									`{
   "mcpServers": {
     "orchard": {
       "url": "${MCP_URL}"
     }
   }
-}`, 'cursor')}>
+}`,
+									'cursor'
+								)}
+						>
 							{#if copiedId === 'cursor'}
 								<Check class="h-3.5 w-3.5" />
 							{:else}
@@ -251,13 +302,18 @@
 			<div class="settings-section-content">
 				<p class="settings-hint">
 					If your MCP client doesn't support OAuth, you can authenticate with an API token instead.
-					Create one in <a href="/user/api-tokens">API Tokens</a>, then pass it as a Bearer token in the Authorization header.
+					Create one in <a href="/user/api-tokens">API Tokens</a>, then pass it as a Bearer token in
+					the Authorization header.
 				</p>
 
 				<div class="mcp-field">
 					<div class="mcp-copy-row" style="justify-content: space-between;">
 						<p class="settings-field-label">Configuration with token</p>
-						<button class="btn btn-ghost btn-sm" onclick={() => copy(`{
+						<button
+							class="btn btn-ghost btn-sm"
+							onclick={() =>
+								copy(
+									`{
   "mcpServers": {
     "orchard": {
       "type": "url",
@@ -267,7 +323,10 @@
       }
     }
   }
-}`, 'token-config')}>
+}`,
+									'token-config'
+								)}
+						>
 							{#if copiedId === 'token-config'}
 								<Check class="h-3.5 w-3.5" />
 							{:else}

@@ -142,7 +142,7 @@
 					}
 				},
 				// SSE handler refetches directly; don't also re-run the loader.
-				{ invalidateDependencies: [] },
+				{ invalidateDependencies: [] }
 			);
 		}
 	});
@@ -229,7 +229,9 @@
 									<Container class="h-5 w-5 text-gray-500" />
 									<div>
 										<p class="font-medium">{container.name}</p>
-										<p class="text-sm text-gray-500 font-mono truncate max-w-md">{container.image}</p>
+										<p class="text-sm text-gray-500 font-mono truncate max-w-md">
+											{container.image}
+										</p>
 									</div>
 								</div>
 								{#if status}
@@ -250,17 +252,16 @@
 				<div class="flex items-center justify-between">
 					<h2 class="font-semibold">Logs</h2>
 					<div class="flex items-center gap-2">
-						<select bind:value={selectedContainer} onchange={() => fetchLogs()} class="input w-auto">
+						<select
+							bind:value={selectedContainer}
+							onchange={() => fetchLogs()}
+							class="input w-auto"
+						>
 							{#each pod.spec?.containers ?? [] as container}
 								<option value={container.name}>{container.name}</option>
 							{/each}
 						</select>
-						<input
-							type="number"
-							bind:value={tailLines}
-							placeholder="Lines"
-							class="input w-20"
-						/>
+						<input type="number" bind:value={tailLines} placeholder="Lines" class="input w-20" />
 						<button onclick={fetchLogs} disabled={logsLoading} class="btn btn-secondary btn-sm">
 							{#if logsLoading}
 								<Loader2 class="h-4 w-4 animate-spin" />

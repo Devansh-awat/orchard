@@ -12,7 +12,7 @@
 		onFetchSettings,
 		onSaveSettings,
 		paramValue,
-		setParam,
+		setParam
 	}: {
 		database: DatabaseDetail;
 		paramSchema: ParamMeta[];
@@ -29,13 +29,19 @@
 
 <div class="card rounded-2xl p-5">
 	<div class="flex items-center justify-between mb-4">
-		<p class="text-sm font-semibold" style="color: var(--center-channel-color);">PostgreSQL parameters</p>
+		<p class="text-sm font-semibold" style="color: var(--center-channel-color);">
+			PostgreSQL parameters
+		</p>
 		{#if database.mode === 'cnpg'}
 			<div class="flex gap-2">
 				<button class="btn btn-ghost btn-sm" onclick={onFetchSettings} disabled={settingsSaving}>
 					<span>Discard</span>
 				</button>
-				<button class="btn btn-primary btn-sm" onclick={onSaveSettings} disabled={settingsSaving || !settingsDirty}>
+				<button
+					class="btn btn-primary btn-sm"
+					onclick={onSaveSettings}
+					disabled={settingsSaving || !settingsDirty}
+				>
 					{#if settingsSaving}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
 					<span>Save</span>
 				</button>
@@ -45,7 +51,9 @@
 
 	{#if database.mode !== 'cnpg'}
 		<div class="db-empty-box">
-			<p class="text-sm" style="color: var(--surface-muted);">Database settings are only configurable for CNPG-backed databases.</p>
+			<p class="text-sm" style="color: var(--surface-muted);">
+				Database settings are only configurable for CNPG-backed databases.
+			</p>
 		</div>
 	{:else if settingsLoading && !settingsLoaded}
 		<div class="db-empty-box flex items-center gap-2">
@@ -64,7 +72,9 @@
 								<span class="db-status-pill db-status-pill-warn">restart required</span>
 							{/if}
 						</div>
-						<p class="db-setting-help">{p.help} Default: <code class="db-inline-code">{p.defaultValue}</code>.</p>
+						<p class="db-setting-help">
+							{p.help} Default: <code class="db-inline-code">{p.defaultValue}</code>.
+						</p>
 					</div>
 					<div class="db-setting-control">
 						{#if p.kind === 'int'}

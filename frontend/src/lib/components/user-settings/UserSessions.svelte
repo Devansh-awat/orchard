@@ -22,7 +22,7 @@
 		revokingSessionId,
 		onConfirmRevokeSession,
 		onShowRevokeAll,
-		index = 0,
+		index = 0
 	}: {
 		sessions: SessionRecord[];
 		sessionsLoading: boolean;
@@ -38,7 +38,12 @@
 	function isMobile(deviceName?: string | null): boolean {
 		if (!deviceName) return false;
 		const lower = deviceName.toLowerCase();
-		return lower.includes('iphone') || lower.includes('android') || lower.includes('mobile') || lower.includes('ipad');
+		return (
+			lower.includes('iphone') ||
+			lower.includes('android') ||
+			lower.includes('mobile') ||
+			lower.includes('ipad')
+		);
 	}
 
 	function formatRelativeTime(dateStr: string): string {
@@ -56,7 +61,12 @@
 	}
 </script>
 
-<SettingsSection {index} title="Active Sessions" description="Devices where you're currently signed in" iconColor="green">
+<SettingsSection
+	{index}
+	title="Active Sessions"
+	description="Devices where you're currently signed in"
+	iconColor="green"
+>
 	{#snippet icon(hovered)}<ShieldCheck size={18} animate={hovered} />{/snippet}
 	{#snippet badge()}
 		{#if !sessionsLoading && sessions.length > 0}
@@ -70,73 +80,71 @@
 
 	{#if sessionsLoading}
 		<div class="se-loading"><Loader2 class="h-4 w-4 animate-spin" /></div>
-	{:else}
-		{#if sessions.length > 0}
-			<div class="se-list">
-				{#each sessions as session (session.id)}
-					<div class="se-item" class:se-item--current={session.isCurrent}>
-						<div class="se-item-icon">
-							{#if isMobile(session.deviceName)}
-								<SmartphoneNfc size={16} />
-							{:else}
-								<MonitorCheck size={16} />
-							{/if}
-						</div>
-						<div class="se-item-body">
-							<div class="se-item-top">
-								<span class="se-item-device">
-									{session.deviceName || 'Unknown Device'}
-									{#if session.isCurrent}
-										<span class="se-current-badge">This device</span>
-									{/if}
-								</span>
-							</div>
-							<div class="se-item-meta">
-								{#if session.location}
-									<span>{session.location}</span>
-									<span class="se-sep">·</span>
-								{/if}
-								{#if session.ipAddress}
-									<span>{session.ipAddress}</span>
-									<span class="se-sep">·</span>
-								{/if}
-								<span>Active {formatRelativeTime(session.lastActiveAt)}</span>
-							</div>
-						</div>
-						{#if !session.isCurrent}
-							<IconButton
-								variant="danger"
-								onclick={() => onConfirmRevokeSession(session)}
-								disabled={revokingSessionId === session.id}
-								title="Sign out this device"
-							>
-								{#snippet children(hovered)}
-									{#if revokingSessionId === session.id}
-										<Loader2 class="h-3 w-3 animate-spin" />
-									{:else}
-										<LogOut size={13} animate={hovered} />
-									{/if}
-								{/snippet}
-							</IconButton>
+	{:else if sessions.length > 0}
+		<div class="se-list">
+			{#each sessions as session (session.id)}
+				<div class="se-item" class:se-item--current={session.isCurrent}>
+					<div class="se-item-icon">
+						{#if isMobile(session.deviceName)}
+							<SmartphoneNfc size={16} />
+						{:else}
+							<MonitorCheck size={16} />
 						{/if}
 					</div>
-				{/each}
-			</div>
+					<div class="se-item-body">
+						<div class="se-item-top">
+							<span class="se-item-device">
+								{session.deviceName || 'Unknown Device'}
+								{#if session.isCurrent}
+									<span class="se-current-badge">This device</span>
+								{/if}
+							</span>
+						</div>
+						<div class="se-item-meta">
+							{#if session.location}
+								<span>{session.location}</span>
+								<span class="se-sep">·</span>
+							{/if}
+							{#if session.ipAddress}
+								<span>{session.ipAddress}</span>
+								<span class="se-sep">·</span>
+							{/if}
+							<span>Active {formatRelativeTime(session.lastActiveAt)}</span>
+						</div>
+					</div>
+					{#if !session.isCurrent}
+						<IconButton
+							variant="danger"
+							onclick={() => onConfirmRevokeSession(session)}
+							disabled={revokingSessionId === session.id}
+							title="Sign out this device"
+						>
+							{#snippet children(hovered)}
+								{#if revokingSessionId === session.id}
+									<Loader2 class="h-3 w-3 animate-spin" />
+								{:else}
+									<LogOut size={13} animate={hovered} />
+								{/if}
+							{/snippet}
+						</IconButton>
+					{/if}
+				</div>
+			{/each}
+		</div>
 
-			{#if sessions.length > 1}
-				<button
-					class="se-revoke-all"
-					onclick={onShowRevokeAll}
-					onmouseenter={() => (revokeAllHovered = true)}
-					onmouseleave={() => (revokeAllHovered = false)}
-				>
-					<LogOut size={14} animate={revokeAllHovered} />
-					Sign out all other devices
-				</button>
-			{/if}
-		{:else}
-			<p class="se-empty">No active sessions found.</p>
+		{#if sessions.length > 1}
+			<button
+				class="se-revoke-all"
+				onclick={onShowRevokeAll}
+				onmouseenter={() => (revokeAllHovered = true)}
+				onmouseleave={() => (revokeAllHovered = false)}
+			>
+				<LogOut size={14} animate={revokeAllHovered} />
+				Sign out all other devices
+			</button>
 		{/if}
+	{:else}
+		<p class="se-empty">No active sessions found.</p>
 	{/if}
 </SettingsSection>
 
@@ -237,7 +245,9 @@
 		flex-wrap: wrap;
 		gap: 0.125rem;
 	}
-	.se-sep { margin: 0 0.125rem; }
+	.se-sep {
+		margin: 0 0.125rem;
+	}
 	.se-revoke-all {
 		display: flex;
 		align-items: center;

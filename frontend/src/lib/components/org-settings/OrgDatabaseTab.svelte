@@ -7,7 +7,7 @@
 		publicIp = $bindable(''),
 		publicIpSaving,
 		onSavePublicIp,
-		index = 0,
+		index = 0
 	}: {
 		canEditOrg: boolean;
 		publicIp: string;
@@ -27,8 +27,8 @@
 
 	{#if canEditOrg}
 		<p class="od-hint">
-			Shared external IP used to expose databases publicly. Databases opted into public
-			exposure will share this IP with unique ports per database.
+			Shared external IP used to expose databases publicly. Databases opted into public exposure
+			will share this IP with unique ports per database.
 		</p>
 
 		<div class="od-field">

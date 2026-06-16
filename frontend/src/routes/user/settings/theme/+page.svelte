@@ -1,12 +1,7 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
-	import {
-		themeStore,
-		defaultLightTheme,
-		defaultDarkTheme,
-		type Theme
-	} from '$lib/stores/theme';
+	import { themeStore, defaultLightTheme, defaultDarkTheme, type Theme } from '$lib/stores/theme';
 	import { toasts } from '$lib/stores';
 	import ThemeEditor from '$lib/components/ThemeEditor.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
@@ -238,19 +233,14 @@
 
 	{#if editingTheme}
 		<!-- Theme Editor View -->
-		<div
-			class="card"
-			transition:slide={{ duration: 200 }}
-		>
+		<div class="card" transition:slide={{ duration: 200 }}>
 			<div class="card-header flex items-center justify-between">
 				<h2 class="font-semibold">
-					{editingTheme.isBuiltIn ? `Customize ${editingTheme.name} Theme` : `Edit "${editingTheme.name}"`}
+					{editingTheme.isBuiltIn
+						? `Customize ${editingTheme.name} Theme`
+						: `Edit "${editingTheme.name}"`}
 				</h2>
-				<button
-					type="button"
-					class="btn btn-ghost"
-					onclick={stopEditing}
-				>
+				<button type="button" class="btn btn-ghost" onclick={stopEditing}>
 					<X class="h-4 w-4" />
 					Close
 				</button>
@@ -349,10 +339,7 @@
 								</div>
 
 								<!-- Theme Info -->
-								<div
-									class="p-4"
-									style="background-color: var(--surface-bg);"
-								>
+								<div class="p-4" style="background-color: var(--surface-bg);">
 									<div class="flex items-center justify-between">
 										<div class="flex items-center gap-2">
 											{#if theme.isDark}
@@ -411,14 +398,14 @@
 			</div>
 
 			<!-- Custom Themes -->
-			{#if allThemes.filter(t => !t.isBuiltIn).length > 0}
+			{#if allThemes.filter((t) => !t.isBuiltIn).length > 0}
 				<div class="card">
 					<div class="card-header">
 						<h2 class="font-semibold">Custom Themes</h2>
 					</div>
 					<div class="card-body">
 						<div class="grid gap-4 sm:grid-cols-2">
-							{#each allThemes.filter(t => !t.isBuiltIn) as theme}
+							{#each allThemes.filter((t) => !t.isBuiltIn) as theme}
 								{@const preview = getThemePreviewColors(theme)}
 								{@const isActive = activeThemeId === theme.id}
 								<div
@@ -441,10 +428,7 @@
 									</div>
 
 									<!-- Theme Info -->
-									<div
-										class="p-4"
-										style="background-color: var(--surface-bg);"
-									>
+									<div class="p-4" style="background-color: var(--surface-bg);">
 										<div class="flex items-center justify-between">
 											<div class="flex items-center gap-2">
 												{#if theme.isDark}
@@ -537,7 +521,11 @@
 
 			<div class="space-y-4">
 				<div>
-					<label for="import-json" class="block text-sm font-medium mb-2" style="color: var(--center-channel-color);">
+					<label
+						for="import-json"
+						class="block text-sm font-medium mb-2"
+						style="color: var(--center-channel-color);"
+					>
 						Theme JSON
 					</label>
 					<textarea
@@ -556,17 +544,16 @@
 
 				<div class="text-center">
 					<p class="text-sm mb-2" style="color: var(--surface-muted);">Or import from file</p>
-					<button
-						type="button"
-						class="btn btn-secondary"
-						onclick={() => fileInput?.click()}
-					>
+					<button type="button" class="btn btn-secondary" onclick={() => fileInput?.click()}>
 						<Upload class="h-4 w-4" />
 						Choose File
 					</button>
 				</div>
 
-				<div class="flex justify-end gap-2 pt-4 border-t" style="border-color: var(--divider-color);">
+				<div
+					class="flex justify-end gap-2 pt-4 border-t"
+					style="border-color: var(--divider-color);"
+				>
 					<button type="button" class="btn btn-secondary" onclick={closeImportModal}>
 						Cancel
 					</button>
@@ -587,11 +574,16 @@
 {#if themeToDelete}
 	<ConfirmModal
 		bind:open={showDeleteThemeModal}
-		title='Delete "{themeToDelete.name}"?'
-		description='This theme will be permanently deleted. This cannot be undone.'
+		title={`Delete "${themeToDelete.name}"?`}
+		description="This theme will be permanently deleted. This cannot be undone."
 		confirmLabel="Delete Theme"
 		danger
-		onconfirm={() => { deleteTheme(themeToDelete!); themeToDelete = null; }}
-		oncancel={() => { themeToDelete = null; }}
+		onconfirm={() => {
+			deleteTheme(themeToDelete!);
+			themeToDelete = null;
+		}}
+		oncancel={() => {
+			themeToDelete = null;
+		}}
 	/>
 {/if}

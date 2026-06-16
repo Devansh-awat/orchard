@@ -7,7 +7,7 @@
 		composeStacks,
 		composeStacksLoading = false,
 		orgSlug,
-		projectSlug,
+		projectSlug
 	}: {
 		composeStacks: ComposeStackSummary[];
 		composeStacksLoading?: boolean;
@@ -22,7 +22,10 @@
 		Compose Stacks
 	</h2>
 	<div style="margin-left: auto;">
-		<a href="/{orgSlug}/projects/{projectSlug}/compose-stacks/new" class="pj-btn pj-btn-primary pj-btn--sm">
+		<a
+			href="/{orgSlug}/projects/{projectSlug}/compose-stacks/new"
+			class="pj-btn pj-btn-primary pj-btn--sm"
+		>
 			<Plus class="h-4 w-4" />
 			New stack
 		</a>
@@ -57,12 +60,23 @@
 				{@attach cardTilt({ max: 5 })}
 			>
 				<div class="pj-deployment-card-top">
-					<div class="pj-deployment-indicator" style="background-color: color-mix(in srgb, #0db7ed 12%, transparent)">
+					<div
+						class="pj-deployment-indicator"
+						style="background-color: color-mix(in srgb, #0db7ed 12%, transparent)"
+					>
 						<FileText class="h-5 w-5" style="color: #0db7ed" />
 					</div>
 					<span
 						class="pj-deployment-status-badge"
-						style="background-color: color-mix(in srgb, {cs.status === 'active' ? 'var(--pj-color-green)' : cs.status === 'failed' ? 'var(--pj-color-red)' : 'var(--pj-color-amber)'} 15%, transparent); color: {cs.status === 'active' ? 'var(--pj-color-green)' : cs.status === 'failed' ? 'var(--pj-color-red)' : 'var(--pj-color-amber)'}"
+						style="background-color: color-mix(in srgb, {cs.status === 'active'
+							? 'var(--pj-color-green)'
+							: cs.status === 'failed'
+								? 'var(--pj-color-red)'
+								: 'var(--pj-color-amber)'} 15%, transparent); color: {cs.status === 'active'
+							? 'var(--pj-color-green)'
+							: cs.status === 'failed'
+								? 'var(--pj-color-red)'
+								: 'var(--pj-color-amber)'}"
 					>
 						{cs.status}
 					</span>

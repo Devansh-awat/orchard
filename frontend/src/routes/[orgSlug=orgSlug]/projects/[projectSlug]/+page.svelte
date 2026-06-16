@@ -20,7 +20,7 @@
 		ResourcesTab,
 		ComposeTab,
 		MembersTab,
-		CustomizeModal,
+		CustomizeModal
 	} from '$lib/components/project';
 	import type {
 		Project,
@@ -30,7 +30,7 @@
 		DatabaseSummary,
 		ComposeStackSummary,
 		OrgMember,
-		PendingInvitation,
+		PendingInvitation
 	} from '$lib/components/project';
 
 	import '$lib/components/project/project.css';
@@ -41,7 +41,9 @@
 		if (!main) return;
 		const prev = main.style.overscrollBehavior;
 		main.style.overscrollBehavior = 'none';
-		return () => { main.style.overscrollBehavior = prev; };
+		return () => {
+			main.style.overscrollBehavior = prev;
+		};
 	});
 
 	const deploymentMenu = new SpatialMenu<Deployment>({
@@ -93,7 +95,7 @@
 				if (!response.ok) throw new Error('Failed to fetch compose stacks');
 				return response.json() as Promise<ComposeStackSummary[]>;
 			},
-			staleTime: 30_000,
+			staleTime: 30_000
 		};
 	});
 	const composeStacks = $derived<ComposeStackSummary[]>(composeQuery.data ?? []);
@@ -106,7 +108,10 @@
 
 	$effect(() => {
 		const _tab = activeTab; // subscribe
-		if (firstTabRun) { firstTabRun = false; return; }
+		if (firstTabRun) {
+			firstTabRun = false;
+			return;
+		}
 		const dir = activeTab === 'members' ? -1 : 1;
 		tick().then(() => {
 			if (tabsRowEl) {
@@ -160,7 +165,7 @@
 		const deployments = project?.deployments ?? [];
 		const query = deploymentSearch.trim().toLowerCase();
 		if (!query) return deployments;
-		return deployments.filter(deployment => {
+		return deployments.filter((deployment) => {
 			const name = deployment.name?.toLowerCase() ?? '';
 			const status = deployment.status?.toLowerCase() ?? '';
 			const image = deployment.image?.toLowerCase() ?? '';
@@ -211,16 +216,25 @@
 					if (errorData.message) errorMessage = errorData.message;
 					else if (errorData.error) errorMessage = errorData.error;
 				} catch {
-					if (response.status === 403) errorMessage = 'You do not have permission to delete this project.';
+					if (response.status === 403)
+						errorMessage = 'You do not have permission to delete this project.';
 					else if (response.status === 404) errorMessage = 'Project not found';
 				}
 				throw new Error(errorMessage);
 			}
-			toasts.add({ title: 'Project deleted', description: `${project.name} has been deleted`, color: 'success' });
+			toasts.add({
+				title: 'Project deleted',
+				description: `${project.name} has been deleted`,
+				color: 'success'
+			});
 			refreshTree();
 			goto(`/${orgSlug}`);
 		} catch (e) {
-			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to delete project', color: 'error' });
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to delete project',
+				color: 'error'
+			});
 		} finally {
 			deleting = false;
 		}
@@ -241,7 +255,11 @@
 			}
 			const result = await response.json().catch(() => ({}));
 			if (result.invited) {
-				toasts.add({ title: 'Invitation sent', description: `${email} will join this project as a guest once they accept`, color: 'success' });
+				toasts.add({
+					title: 'Invitation sent',
+					description: `${email} will join this project as a guest once they accept`,
+					color: 'success'
+				});
 			} else {
 				toasts.add({ title: 'Member added', color: 'success' });
 			}
@@ -249,7 +267,11 @@
 			newMemberRole = 'member';
 			await fetchProject();
 		} catch (e) {
-			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to add member', color: 'error' });
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to add member',
+				color: 'error'
+			});
 		} finally {
 			addingMember = false;
 		}
@@ -271,7 +293,11 @@
 			toasts.add({ title: 'Role updated', color: 'success' });
 			await fetchProject();
 		} catch (e) {
-			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to update role', color: 'error' });
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to update role',
+				color: 'error'
+			});
 			await fetchProject();
 		} finally {
 			updatingMemberId = null;
@@ -282,7 +308,9 @@
 		if (!project) return;
 		removingMemberId = memberId;
 		try {
-			const response = await apiFetch(`/apiv1/projects/${project.id}/members/${memberId}`, { method: 'DELETE' });
+			const response = await apiFetch(`/apiv1/projects/${project.id}/members/${memberId}`, {
+				method: 'DELETE'
+			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
 				throw new Error(data.message || 'Failed to remove member');
@@ -290,7 +318,11 @@
 			toasts.add({ title: 'Member removed', color: 'success' });
 			await fetchProject();
 		} catch (e) {
-			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to remove member', color: 'error' });
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to remove member',
+				color: 'error'
+			});
 		} finally {
 			removingMemberId = null;
 		}
@@ -300,7 +332,9 @@
 		if (!project) return;
 		revokingInviteId = invitationId;
 		try {
-			const response = await apiFetch(`/apiv1/projects/${project.id}/invitations/${invitationId}`, { method: 'DELETE' });
+			const response = await apiFetch(`/apiv1/projects/${project.id}/invitations/${invitationId}`, {
+				method: 'DELETE'
+			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
 				throw new Error(data.message || 'Failed to revoke invitation');
@@ -308,7 +342,11 @@
 			toasts.add({ title: 'Invitation revoked', color: 'success' });
 			await fetchProject();
 		} catch (e) {
-			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to revoke invitation', color: 'error' });
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to revoke invitation',
+				color: 'error'
+			});
 		} finally {
 			revokingInviteId = null;
 		}
@@ -321,14 +359,19 @@
 			const res = await apiFetch(`/apiv1/projects/${project.id}`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(payload),
+				body: JSON.stringify(payload)
 			});
 			if (!res.ok) {
 				const d = await res.json().catch(() => ({}));
 				throw new Error(d.message || 'Failed to save');
 			}
 			const updated = await res.json();
-			project = { ...project, name: updated.name, icon: updated.icon, backgroundImage: updated.backgroundImage };
+			project = {
+				...project,
+				name: updated.name,
+				icon: updated.icon,
+				backgroundImage: updated.backgroundImage
+			};
 		}
 		toasts.add({ title: 'Project updated', color: 'success' });
 	}
@@ -340,7 +383,11 @@
 		const res = await apiFetch(`/apiv1/projects/${project.id}/icon`, { method: 'POST', body: fd });
 		if (!res.ok) {
 			const d = await res.json().catch(() => ({}));
-			toasts.add({ title: 'Upload failed', description: d.message || 'Upload failed', color: 'error' });
+			toasts.add({
+				title: 'Upload failed',
+				description: d.message || 'Upload failed',
+				color: 'error'
+			});
 			return null;
 		}
 		const updated = await res.json();
@@ -353,10 +400,17 @@
 		if (!project) return null;
 		const fd = new FormData();
 		fd.append('file', file);
-		const res = await apiFetch(`/apiv1/projects/${project.id}/background-image`, { method: 'POST', body: fd });
+		const res = await apiFetch(`/apiv1/projects/${project.id}/background-image`, {
+			method: 'POST',
+			body: fd
+		});
 		if (!res.ok) {
 			const d = await res.json().catch(() => ({}));
-			toasts.add({ title: 'Upload failed', description: d.message || 'Upload failed', color: 'error' });
+			toasts.add({
+				title: 'Upload failed',
+				description: d.message || 'Upload failed',
+				color: 'error'
+			});
 			return null;
 		}
 		const updated = await res.json();
@@ -371,7 +425,8 @@
 	}
 
 	function handleDeploymentClick(event: MouseEvent, id: string) {
-		if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0) return;
+		if (event.metaKey || event.ctrlKey || event.shiftKey || event.altKey || event.button !== 0)
+			return;
 		event.preventDefault();
 		openDeployment(id);
 	}
@@ -393,9 +448,7 @@
 	}
 
 	// ── TanStack Query: project data ──
-	const TRANSIENT_DEPLOYMENT_STATUSES = new Set([
-		'scaling', 'restarting', 'pending', 'unhealthy',
-	]);
+	const TRANSIENT_DEPLOYMENT_STATUSES = new Set(['scaling', 'restarting', 'pending', 'unhealthy']);
 	const projectQuery = createQuery(() => ({
 		queryKey: ['project-detail', orgSlug, projectSlug],
 		queryFn: async () => {
@@ -413,13 +466,13 @@
 			const transient = (project?.deployments ?? []).some(
 				(d: Deployment) =>
 					TRANSIENT_DEPLOYMENT_STATUSES.has((d.status ?? '').toLowerCase()) ||
-					(d.buildStatus ?? '').toLowerCase() === 'building',
+					(d.buildStatus ?? '').toLowerCase() === 'building'
 			);
 			if (transient) return 4000;
 			if (sseStatusValue === 'disconnected') return 10_000;
 			return false;
 		})(),
-		refetchIntervalInBackground: false,
+		refetchIntervalInBackground: false
 	}));
 
 	// Reset page state when navigating between projects so the skeleton shows
@@ -484,7 +537,7 @@
 					scheduleProjectRefetch();
 				}
 			},
-			{ invalidateDependencies: [] },
+			{ invalidateDependencies: [] }
 		);
 		return () => {
 			unsubStatus();
@@ -500,164 +553,182 @@
 <div class="pj-page" class:pj-page--hasbg={!!project?.backgroundImage}>
 	{#if project?.backgroundImage && heroImgReady}
 		<div class="pj-accent-glow" aria-hidden="true">
-			<div class="pj-accent-glow-layer pj-accent-glow-layer--1" style="background-image: url({JSON.stringify(project.backgroundImage)});"></div>
-			<div class="pj-accent-glow-layer pj-accent-glow-layer--2" style="background-image: url({JSON.stringify(project.backgroundImage)});"></div>
-			<div class="pj-accent-glow-layer pj-accent-glow-layer--3" style="background-image: url({JSON.stringify(project.backgroundImage)});"></div>
+			<div
+				class="pj-accent-glow-layer pj-accent-glow-layer--1"
+				style="background-image: url({JSON.stringify(project.backgroundImage)});"
+			></div>
+			<div
+				class="pj-accent-glow-layer pj-accent-glow-layer--2"
+				style="background-image: url({JSON.stringify(project.backgroundImage)});"
+			></div>
+			<div
+				class="pj-accent-glow-layer pj-accent-glow-layer--3"
+				style="background-image: url({JSON.stringify(project.backgroundImage)});"
+			></div>
 			<div class="pj-accent-glow-fade"></div>
 		</div>
 	{/if}
 
 	<div class="pj-page-inner">
-	{#if sseDisconnected && !loading}
-		<div class="pj-sse-alert" role="alert">
-			<TriangleAlert class="h-4 w-4" style="flex-shrink: 0; margin-top: 0.0625rem;" />
-			<div class="pj-sse-alert-body">
-				<span class="pj-sse-alert-title">Live updates offline</span>
-				<span class="pj-sse-alert-hint">Real-time connection lost — reconnecting automatically. Data shown may be outdated.</span>
+		{#if sseDisconnected && !loading}
+			<div class="pj-sse-alert" role="alert">
+				<TriangleAlert class="h-4 w-4" style="flex-shrink: 0; margin-top: 0.0625rem;" />
+				<div class="pj-sse-alert-body">
+					<span class="pj-sse-alert-title">Live updates offline</span>
+					<span class="pj-sse-alert-hint"
+						>Real-time connection lost — reconnecting automatically. Data shown may be outdated.</span
+					>
+				</div>
+				<button class="pj-sse-alert-action" onclick={() => location.reload()}>Reload</button>
 			</div>
-			<button class="pj-sse-alert-action" onclick={() => location.reload()}>Reload</button>
-		</div>
-	{/if}
-
-	{#if error}
-		<div class="pj-error">{error}</div>
-	{/if}
-
-	{#if loading}
-		<!-- Skeleton -->
-		<div class="skeleton" style="height: 0.8125rem; width: 6rem; margin-bottom: 1rem;"></div>
-		<div class="pj-header">
-			<div class="pj-header-top">
-				<div class="pj-header-info">
-					<div class="skeleton" style="height: 1.5rem; width: 40%; margin-bottom: 0.375rem;"></div>
-					<div class="skeleton" style="height: 0.875rem; width: 55%;"></div>
-				</div>
-				<div class="pj-header-actions">
-					<div class="skeleton" style="height: 2rem; width: 4.5rem; border-radius: 0.5rem;"></div>
-					<div class="skeleton" style="height: 2rem; width: 5rem; border-radius: 0.5rem;"></div>
-				</div>
-			</div>
-		</div>
-		<div class="pj-stats">
-			{#each Array(3) as _}
-				<div class="skeleton" style="height: 1.75rem; width: 6rem; border-radius: 0.5rem;"></div>
-			{/each}
-		</div>
-		<div class="pj-deployments-header">
-			<div class="skeleton" style="height: 1.125rem; width: 7rem;"></div>
-		</div>
-		<div class="pj-deployment-grid">
-			{#each Array(3) as _}
-				<div class="pj-deployment-card" style="pointer-events: none;">
-					<div class="pj-deployment-card-top">
-						<div class="skeleton skeleton-icon"></div>
-						<div class="skeleton skeleton-badge"></div>
-					</div>
-					<div class="pj-deployment-card-body">
-						<div class="skeleton skeleton-title"></div>
-						<div class="skeleton skeleton-desc"></div>
-					</div>
-					<div class="pj-deployment-card-footer">
-						<div class="skeleton" style="height: 0.625rem; width: 3rem;"></div>
-					</div>
-				</div>
-			{/each}
-		</div>
-	{:else if project}
-		<Breadcrumb crumbs={[
-			{ label: 'Home', href: `/${orgSlug}` },
-			{ label: 'Projects', href: `/${orgSlug}` },
-			{ label: project.name }
-		]} />
-
-		<!-- Hero / Header -->
-		{#if project.backgroundImage}
-			<ProjectHero
-				{project}
-				{activeTab}
-				{canEdit}
-				{canDelete}
-				{deleting}
-				bind:heroImgReady
-				onCustomize={() => (showCustomize = true)}
-				onDelete={() => (showDeleteModal = true)}
-			/>
-		{:else}
-			<ProjectHeader
-				{project}
-				{canEdit}
-				{canDelete}
-				{deleting}
-				onCustomize={() => (showCustomize = true)}
-				onDelete={() => (showDeleteModal = true)}
-			/>
 		{/if}
 
-		<!-- Tab bar -->
-		<ProjectTabs
-			bind:activeTab
-			resourceCount={(project.deployments?.length ?? 0) + databases.length + templateInstances.length}
-			composeCount={composeStacks.length}
-			membersCount={projectMembers.length}
-			repositoryUrl={project.repositoryUrl}
-			hasDeployments={!!project.deployments?.length}
-			bind:deploymentSearch
-			onNewResource={() => (showNewResourceModal = true)}
-			bind:tabsRowEl
-			{deploymentMenu}
-		/>
+		{#if error}
+			<div class="pj-error">{error}</div>
+		{/if}
 
-		{#if activeTab === 'resources'}
-		<div class="pj-tab-panel" bind:this={tabPanelEl}>
-			<ResourcesTab
-				{filteredDeployments}
-				{databases}
-				{templateInstances}
-				orgSlug={orgSlug ?? ''}
-				{deploymentSearch}
-				{deploymentMenu}
-				bind:favFailed
-				onDeploymentClick={handleDeploymentClick}
+		{#if loading}
+			<!-- Skeleton -->
+			<div class="skeleton" style="height: 0.8125rem; width: 6rem; margin-bottom: 1rem;"></div>
+			<div class="pj-header">
+				<div class="pj-header-top">
+					<div class="pj-header-info">
+						<div
+							class="skeleton"
+							style="height: 1.5rem; width: 40%; margin-bottom: 0.375rem;"
+						></div>
+						<div class="skeleton" style="height: 0.875rem; width: 55%;"></div>
+					</div>
+					<div class="pj-header-actions">
+						<div class="skeleton" style="height: 2rem; width: 4.5rem; border-radius: 0.5rem;"></div>
+						<div class="skeleton" style="height: 2rem; width: 5rem; border-radius: 0.5rem;"></div>
+					</div>
+				</div>
+			</div>
+			<div class="pj-stats">
+				{#each Array(3) as _}
+					<div class="skeleton" style="height: 1.75rem; width: 6rem; border-radius: 0.5rem;"></div>
+				{/each}
+			</div>
+			<div class="pj-deployments-header">
+				<div class="skeleton" style="height: 1.125rem; width: 7rem;"></div>
+			</div>
+			<div class="pj-deployment-grid">
+				{#each Array(3) as _}
+					<div class="pj-deployment-card" style="pointer-events: none;">
+						<div class="pj-deployment-card-top">
+							<div class="skeleton skeleton-icon"></div>
+							<div class="skeleton skeleton-badge"></div>
+						</div>
+						<div class="pj-deployment-card-body">
+							<div class="skeleton skeleton-title"></div>
+							<div class="skeleton skeleton-desc"></div>
+						</div>
+						<div class="pj-deployment-card-footer">
+							<div class="skeleton" style="height: 0.625rem; width: 3rem;"></div>
+						</div>
+					</div>
+				{/each}
+			</div>
+		{:else if project}
+			<Breadcrumb
+				crumbs={[
+					{ label: 'Home', href: `/${orgSlug}` },
+					{ label: 'Projects', href: `/${orgSlug}` },
+					{ label: project.name }
+				]}
+			/>
+
+			<!-- Hero / Header -->
+			{#if project.backgroundImage}
+				<ProjectHero
+					{project}
+					{activeTab}
+					{canEdit}
+					{canDelete}
+					{deleting}
+					bind:heroImgReady
+					onCustomize={() => (showCustomize = true)}
+					onDelete={() => (showDeleteModal = true)}
+				/>
+			{:else}
+				<ProjectHeader
+					{project}
+					{canEdit}
+					{canDelete}
+					{deleting}
+					onCustomize={() => (showCustomize = true)}
+					onDelete={() => (showDeleteModal = true)}
+				/>
+			{/if}
+
+			<!-- Tab bar -->
+			<ProjectTabs
+				bind:activeTab
+				resourceCount={(project.deployments?.length ?? 0) +
+					databases.length +
+					templateInstances.length}
+				composeCount={composeStacks.length}
+				membersCount={projectMembers.length}
+				repositoryUrl={project.repositoryUrl}
+				hasDeployments={!!project.deployments?.length}
+				bind:deploymentSearch
 				onNewResource={() => (showNewResourceModal = true)}
-				onOpenDeployment={openDeployment}
+				bind:tabsRowEl
+				{deploymentMenu}
 			/>
-		</div>
-		{/if}
 
-		{#if activeTab === 'compose'}
-		<div class="pj-tab-panel" bind:this={tabPanelEl}>
-			<ComposeTab
-				{composeStacks}
-				{composeStacksLoading}
-				orgSlug={orgSlug ?? ''}
-				projectSlug={projectSlug ?? ''}
-			/>
-		</div>
-		{/if}
+			{#if activeTab === 'resources'}
+				<div class="pj-tab-panel" bind:this={tabPanelEl}>
+					<ResourcesTab
+						{filteredDeployments}
+						{databases}
+						{templateInstances}
+						orgSlug={orgSlug ?? ''}
+						{deploymentSearch}
+						{deploymentMenu}
+						bind:favFailed
+						onDeploymentClick={handleDeploymentClick}
+						onNewResource={() => (showNewResourceModal = true)}
+						onOpenDeployment={openDeployment}
+					/>
+				</div>
+			{/if}
 
-		{#if activeTab === 'members'}
-		<div class="pj-tab-panel" bind:this={tabPanelEl}>
-			<MembersTab
-				{projectMembers}
-				{pendingInvitations}
-				{canManageMembers}
-				{canEdit}
-				bind:memberSearch
-				{filteredOrgMembers}
-				{addingMember}
-				{removingMemberId}
-				{updatingMemberId}
-				{revokingInviteId}
-				bind:openRoleMenuId
-				onAddMember={addMember}
-				onUpdateMemberRole={updateMemberRole}
-				onRemoveMember={removeMember}
-				onRevokeInvitation={revokeInvitation}
-				onEnsureOrgMembersLoaded={ensureOrgMembersLoaded}
-			/>
-		</div>
+			{#if activeTab === 'compose'}
+				<div class="pj-tab-panel" bind:this={tabPanelEl}>
+					<ComposeTab
+						{composeStacks}
+						{composeStacksLoading}
+						orgSlug={orgSlug ?? ''}
+						projectSlug={projectSlug ?? ''}
+					/>
+				</div>
+			{/if}
+
+			{#if activeTab === 'members'}
+				<div class="pj-tab-panel" bind:this={tabPanelEl}>
+					<MembersTab
+						{projectMembers}
+						{pendingInvitations}
+						{canManageMembers}
+						{canEdit}
+						bind:memberSearch
+						{filteredOrgMembers}
+						{addingMember}
+						{removingMemberId}
+						{updatingMemberId}
+						{revokingInviteId}
+						bind:openRoleMenuId
+						onAddMember={addMember}
+						onUpdateMemberRole={updateMemberRole}
+						onRemoveMember={removeMember}
+						onRevokeInvitation={revokeInvitation}
+						onEnsureOrgMembersLoaded={ensureOrgMembersLoaded}
+					/>
+				</div>
+			{/if}
 		{/if}
-	{/if}
 	</div>
 </div>
 
@@ -670,8 +741,8 @@
 {#if project}
 	<ConfirmModal
 		bind:open={showDeleteModal}
-		title='Delete "{project.name}"?'
-		description='This will permanently <strong>delete this project</strong> and all its resources (deployments, databases, ingresses). This cannot be undone.'
+		title={`Delete "${project.name}"?`}
+		description="This will permanently <strong>delete this project</strong> and all its resources (deployments, databases, ingresses). This cannot be undone."
 		confirmLabel="Delete Project"
 		onconfirm={deleteProject}
 		oncancel={() => {}}
@@ -730,7 +801,9 @@
 		flex-shrink: 0;
 		align-self: center;
 		opacity: 0.9;
-		transition: opacity 120ms, background-color 120ms;
+		transition:
+			opacity 120ms,
+			background-color 120ms;
 	}
 	.pj-sse-alert-action:hover {
 		opacity: 1;

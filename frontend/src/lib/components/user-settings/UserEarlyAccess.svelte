@@ -10,7 +10,7 @@
 		earlyAccessEnrollment,
 		togglingFeature,
 		onToggleFeature,
-		index = 0,
+		index = 0
 	}: {
 		earlyAccessFeatures: EarlyAccessFeature[];
 		earlyAccessLoading: boolean;
@@ -22,7 +22,12 @@
 </script>
 
 {#if earlyAccessLoading || earlyAccessFeatures.length > 0}
-	<SettingsSection {index} title="Early Access" description="Try features still in development. Expect rough edges." iconColor="amber">
+	<SettingsSection
+		{index}
+		title="Early Access"
+		description="Try features still in development. Expect rough edges."
+		iconColor="amber"
+	>
 		{#snippet icon(hovered)}<Sparkles size={18} animate={hovered} />{/snippet}
 		{#snippet badge()}
 			{#if !earlyAccessLoading && earlyAccessFeatures.length > 0}
@@ -148,7 +153,9 @@
 		color: var(--link-color);
 		text-decoration: none;
 	}
-	.ea-doc-link:hover { text-decoration: underline; }
+	.ea-doc-link:hover {
+		text-decoration: underline;
+	}
 	.ea-toggle {
 		display: inline-flex;
 		align-items: center;
@@ -165,8 +172,13 @@
 		background-color: var(--button-bg);
 		color: var(--button-color);
 	}
-	.ea-toggle:hover:not(:disabled) { opacity: 0.9; }
-	.ea-toggle:disabled { opacity: 0.5; cursor: not-allowed; }
+	.ea-toggle:hover:not(:disabled) {
+		opacity: 0.9;
+	}
+	.ea-toggle:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
 	.ea-toggle--leave {
 		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
 		color: var(--error-text-color);

@@ -3,9 +3,24 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { apiFetch, toasts, refreshTree, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
+	import {
+		apiFetch,
+		toasts,
+		refreshTree,
+		selectedOrganization,
+		subscribeOrgEvents
+	} from '$lib/stores';
 	import type { PageData } from './$types';
-	import { Loader2, Key, Archive, Terminal as TerminalIcon, Puzzle, Settings as SettingsIcon, Activity, Cpu } from 'lucide-svelte';
+	import {
+		Loader2,
+		Key,
+		Archive,
+		Terminal as TerminalIcon,
+		Puzzle,
+		Settings as SettingsIcon,
+		Activity,
+		Cpu
+	} from 'lucide-svelte';
 	import { Tabs } from 'melt/builders';
 	import DatabaseProvisioning from '$lib/components/DatabaseProvisioning.svelte';
 	import {
@@ -18,44 +33,129 @@
 		ResourcesTab,
 		DatabaseHeader,
 		DeleteModal,
-		DatabaseAlerts,
+		DatabaseAlerts
 	} from '$lib/components/database';
-	import type { DatabaseDetail, Backup, ExtInfo, TerminalTab as TerminalTabType } from '$lib/components/database';
+	import type {
+		DatabaseDetail,
+		Backup,
+		ExtInfo,
+		TerminalTab as TerminalTabType
+	} from '$lib/components/database';
 
 	// --- Constants ---
 	const SCHEDULE_PRESETS = [
 		{ id: 'hourly', label: 'Every hour', cron: '0 * * * *', description: 'Top of every hour' },
-		{ id: 'every6h', label: 'Every 6 hours', cron: '0 */6 * * *', description: 'Midnight, 6am, noon, 6pm (UTC)' },
+		{
+			id: 'every6h',
+			label: 'Every 6 hours',
+			cron: '0 */6 * * *',
+			description: 'Midnight, 6am, noon, 6pm (UTC)'
+		},
 		{ id: 'daily', label: 'Daily at 2am UTC', cron: '0 2 * * *', description: 'Once per day' },
-		{ id: 'weekly', label: 'Weekly (Sun 2am UTC)', cron: '0 2 * * 0', description: 'Once per week' },
+		{
+			id: 'weekly',
+			label: 'Weekly (Sun 2am UTC)',
+			cron: '0 2 * * 0',
+			description: 'Once per week'
+		},
 		{ id: 'custom', label: 'Custom cron…', cron: '', description: '' }
 	] as const;
 
-	const EXTENSION_CATALOG: Array<{ name: string; description: string; requiresPreload?: boolean }> = [
-		{ name: 'pg_stat_statements', description: 'Track execution statistics for SQL statements', requiresPreload: true },
-		{ name: 'pgcrypto', description: 'Cryptographic functions' },
-		{ name: 'uuid-ossp', description: 'Generate UUIDs' },
-		{ name: 'hstore', description: 'Key/value pair storage' },
-		{ name: 'citext', description: 'Case-insensitive text type' },
-		{ name: 'pg_trgm', description: 'Trigram matching / fuzzy search' },
-		{ name: 'btree_gin', description: 'B-tree support for GIN indexes' },
-		{ name: 'btree_gist', description: 'B-tree support for GiST indexes' },
-		{ name: 'unaccent', description: 'Remove accents from text' },
-		{ name: 'tablefunc', description: 'crosstab & other table functions' },
-		{ name: 'ltree', description: 'Hierarchical tree-like data type' },
-		{ name: 'pg_buffercache', description: 'Inspect the buffer cache' },
-	];
+	const EXTENSION_CATALOG: Array<{ name: string; description: string; requiresPreload?: boolean }> =
+		[
+			{
+				name: 'pg_stat_statements',
+				description: 'Track execution statistics for SQL statements',
+				requiresPreload: true
+			},
+			{ name: 'pgcrypto', description: 'Cryptographic functions' },
+			{ name: 'uuid-ossp', description: 'Generate UUIDs' },
+			{ name: 'hstore', description: 'Key/value pair storage' },
+			{ name: 'citext', description: 'Case-insensitive text type' },
+			{ name: 'pg_trgm', description: 'Trigram matching / fuzzy search' },
+			{ name: 'btree_gin', description: 'B-tree support for GIN indexes' },
+			{ name: 'btree_gist', description: 'B-tree support for GiST indexes' },
+			{ name: 'unaccent', description: 'Remove accents from text' },
+			{ name: 'tablefunc', description: 'crosstab & other table functions' },
+			{ name: 'ltree', description: 'Hierarchical tree-like data type' },
+			{ name: 'pg_buffercache', description: 'Inspect the buffer cache' }
+		];
 
 	const PARAM_SCHEMA = [
-		{ key: 'max_connections', label: 'Max Connections', kind: 'int' as const, min: 10, max: 500, defaultValue: '100', requiresRestart: true, help: 'Maximum concurrent client connections. Restart required.' },
-		{ key: 'shared_buffers', label: 'Shared Buffers', kind: 'memory' as const, defaultValue: '128MB', requiresRestart: true, help: 'Memory for caching shared data. Typically 25% of system RAM. Restart required.' },
-		{ key: 'work_mem', label: 'Work Memory', kind: 'memory' as const, defaultValue: '4MB', help: 'Memory per sort/hash operation.' },
-		{ key: 'maintenance_work_mem', label: 'Maintenance Work Memory', kind: 'memory' as const, defaultValue: '64MB', help: 'Memory for VACUUM, CREATE INDEX, etc.' },
-		{ key: 'effective_cache_size', label: 'Effective Cache Size', kind: 'memory' as const, defaultValue: '4GB', help: 'Planner hint for OS page cache size.' },
-		{ key: 'log_min_duration_statement', label: 'Slow Query Log (ms)', kind: 'int' as const, min: -1, max: 600000, defaultValue: '-1', help: 'Log statements slower than this (ms). -1 disables.' },
-		{ key: 'statement_timeout', label: 'Statement Timeout (ms)', kind: 'int' as const, min: 0, max: 3600000, defaultValue: '0', help: 'Abort any statement taking longer than this (ms). 0 disables.' },
-		{ key: 'idle_in_transaction_session_timeout', label: 'Idle-in-Transaction Timeout (ms)', kind: 'int' as const, min: 0, max: 3600000, defaultValue: '0', help: 'Terminate sessions idle inside a transaction. 0 disables.' },
-		{ key: 'synchronous_commit', label: 'Synchronous Commit', kind: 'string' as const, enum: ['on', 'off', 'local', 'remote_write', 'remote_apply'], defaultValue: 'on', help: 'Wait for WAL flush before acknowledging. Off is faster, less durable.' },
+		{
+			key: 'max_connections',
+			label: 'Max Connections',
+			kind: 'int' as const,
+			min: 10,
+			max: 500,
+			defaultValue: '100',
+			requiresRestart: true,
+			help: 'Maximum concurrent client connections. Restart required.'
+		},
+		{
+			key: 'shared_buffers',
+			label: 'Shared Buffers',
+			kind: 'memory' as const,
+			defaultValue: '128MB',
+			requiresRestart: true,
+			help: 'Memory for caching shared data. Typically 25% of system RAM. Restart required.'
+		},
+		{
+			key: 'work_mem',
+			label: 'Work Memory',
+			kind: 'memory' as const,
+			defaultValue: '4MB',
+			help: 'Memory per sort/hash operation.'
+		},
+		{
+			key: 'maintenance_work_mem',
+			label: 'Maintenance Work Memory',
+			kind: 'memory' as const,
+			defaultValue: '64MB',
+			help: 'Memory for VACUUM, CREATE INDEX, etc.'
+		},
+		{
+			key: 'effective_cache_size',
+			label: 'Effective Cache Size',
+			kind: 'memory' as const,
+			defaultValue: '4GB',
+			help: 'Planner hint for OS page cache size.'
+		},
+		{
+			key: 'log_min_duration_statement',
+			label: 'Slow Query Log (ms)',
+			kind: 'int' as const,
+			min: -1,
+			max: 600000,
+			defaultValue: '-1',
+			help: 'Log statements slower than this (ms). -1 disables.'
+		},
+		{
+			key: 'statement_timeout',
+			label: 'Statement Timeout (ms)',
+			kind: 'int' as const,
+			min: 0,
+			max: 3600000,
+			defaultValue: '0',
+			help: 'Abort any statement taking longer than this (ms). 0 disables.'
+		},
+		{
+			key: 'idle_in_transaction_session_timeout',
+			label: 'Idle-in-Transaction Timeout (ms)',
+			kind: 'int' as const,
+			min: 0,
+			max: 3600000,
+			defaultValue: '0',
+			help: 'Terminate sessions idle inside a transaction. 0 disables.'
+		},
+		{
+			key: 'synchronous_commit',
+			label: 'Synchronous Commit',
+			kind: 'string' as const,
+			enum: ['on', 'off', 'local', 'remote_write', 'remote_apply'],
+			defaultValue: 'on',
+			help: 'Wait for WAL flush before acknowledging. Off is faster, less durable.'
+		}
 	];
 
 	const MAX_BACKUPS = 10;
@@ -148,29 +248,45 @@
 		const q = extensionSearch.trim().toLowerCase();
 		const byName = new Map<string, ExtInfo>();
 		for (const e of extensions) byName.set(e.name, e);
-		const merged: Array<ExtInfo & { description?: string; requiresPreload?: boolean; featured?: boolean }> = [];
+		const merged: Array<
+			ExtInfo & { description?: string; requiresPreload?: boolean; featured?: boolean }
+		> = [];
 		for (const c of EXTENSION_CATALOG) {
 			const live = byName.get(c.name);
 			if (!live) continue;
-			merged.push({ ...live, description: c.description, requiresPreload: c.requiresPreload, featured: true });
+			merged.push({
+				...live,
+				description: c.description,
+				requiresPreload: c.requiresPreload,
+				featured: true
+			});
 			byName.delete(c.name);
 		}
 		for (const e of byName.values()) {
 			merged.push({ ...e, description: e.comment });
 		}
 		if (!q) return merged;
-		return merged.filter((e) =>
-			e.name.toLowerCase().includes(q) ||
-			(e.description || '').toLowerCase().includes(q),
+		return merged.filter(
+			(e) => e.name.toLowerCase().includes(q) || (e.description || '').toLowerCase().includes(q)
 		);
 	});
 
 	// --- Effects ---
 	$effect(() => {
-		if (tabs.value === 'extensions' && database?.mode === 'cnpg' && !extensionsLoaded && !extensionsLoading) {
+		if (
+			tabs.value === 'extensions' &&
+			database?.mode === 'cnpg' &&
+			!extensionsLoaded &&
+			!extensionsLoading
+		) {
 			fetchExtensions();
 		}
-		if (tabs.value === 'settings' && database?.mode === 'cnpg' && !settingsLoaded && !settingsLoading) {
+		if (
+			tabs.value === 'settings' &&
+			database?.mode === 'cnpg' &&
+			!settingsLoaded &&
+			!settingsLoading
+		) {
 			fetchSettings();
 		}
 		if (tabs.value === 'backups' && database?.mode === 'cnpg' && !scheduleLoaded) {
@@ -196,7 +312,8 @@
 			// Sync resource state
 			if (!resourcesDirty) {
 				resourceCpuMilli = database?.cpuRequestMilli ?? null;
-				resourceMemoryBytes = database?.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null;
+				resourceMemoryBytes =
+					database?.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null;
 			}
 		} catch (e) {
 			if (!silent) error = e instanceof Error ? e.message : 'Failed to load database';
@@ -214,18 +331,26 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					cpuRequestMilli: resourceCpuMilli,
-					memoryRequestBytes: resourceMemoryBytes,
-				}),
+					memoryRequestBytes: resourceMemoryBytes
+				})
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => null);
 				throw new Error(data?.message || 'Failed to update resources');
 			}
-			toasts.add({ title: 'Resources updated', description: 'Database pod will restart with new values.', color: 'success' });
+			toasts.add({
+				title: 'Resources updated',
+				description: 'Database pod will restart with new values.',
+				color: 'success'
+			});
 			resourcesDirty = false;
 			await fetchDatabase(true);
 		} catch (e) {
-			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed', color: 'error' });
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed',
+				color: 'error'
+			});
 		} finally {
 			savingResources = false;
 		}
@@ -254,17 +379,26 @@
 				const data = await response.json().catch(() => ({}));
 				throw new Error(data.message || 'Failed to create backup');
 			}
-			toasts.add({ title: 'Backup started', description: 'Your backup is running in the background', color: 'success' });
+			toasts.add({
+				title: 'Backup started',
+				description: 'Your backup is running in the background',
+				color: 'success'
+			});
 			await fetchBackups();
 		} catch (e) {
-			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to create backup', color: 'error' });
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to create backup',
+				color: 'error'
+			});
 		} finally {
 			creatingBackup = false;
 		}
 	}
 
 	async function restoreBackup(backup: Backup) {
-		if (!confirm(`Restore "${backup.label}"? This replaces all current data in this database.`)) return;
+		if (!confirm(`Restore "${backup.label}"? This replaces all current data in this database.`))
+			return;
 		restoringBackupId = backup.id;
 		try {
 			const response = await apiFetch(`/apiv1/databases/${dbId}/restore`, {
@@ -276,10 +410,18 @@
 				const data = await response.json().catch(() => ({}));
 				throw new Error(data.message || 'Failed to restore');
 			}
-			toasts.add({ title: 'Restore started', description: 'The database will be restored shortly', color: 'success' });
+			toasts.add({
+				title: 'Restore started',
+				description: 'The database will be restored shortly',
+				color: 'success'
+			});
 			await fetchDatabase();
 		} catch (e) {
-			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to restore', color: 'error' });
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to restore',
+				color: 'error'
+			});
 		} finally {
 			restoringBackupId = null;
 		}
@@ -310,24 +452,53 @@
 			scheduleSaving = true;
 			try {
 				const r = await apiFetch(`/apiv1/databases/${dbId}/backup-schedule`, { method: 'DELETE' });
-				if (r.ok) { scheduleCron = ''; toasts.add({ title: 'Schedule cleared', color: 'success' }); }
-				else { toasts.add({ title: 'Failed to clear schedule', color: 'error' }); }
-			} finally { scheduleSaving = false; }
+				if (r.ok) {
+					scheduleCron = '';
+					toasts.add({ title: 'Schedule cleared', color: 'success' });
+				} else {
+					toasts.add({ title: 'Failed to clear schedule', color: 'error' });
+				}
+			} finally {
+				scheduleSaving = false;
+			}
 			return;
 		}
-		if (schedulePreset === 'custom') { cron = scheduleCustomCron.trim(); }
-		else { const preset = SCHEDULE_PRESETS.find((p) => p.id === schedulePreset); cron = preset?.cron || ''; }
-		if (!cron) { toasts.add({ title: 'Enter a cron expression', color: 'error' }); return; }
+		if (schedulePreset === 'custom') {
+			cron = scheduleCustomCron.trim();
+		} else {
+			const preset = SCHEDULE_PRESETS.find((p) => p.id === schedulePreset);
+			cron = preset?.cron || '';
+		}
+		if (!cron) {
+			toasts.add({ title: 'Enter a cron expression', color: 'error' });
+			return;
+		}
 
 		scheduleSaving = true;
 		try {
 			const r = await apiFetch(`/apiv1/databases/${dbId}/backup-schedule`, {
-				method: 'PUT', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ cron }),
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ cron })
 			});
 			const data = await r.json().catch(() => ({}));
-			if (!r.ok) { toasts.add({ title: 'Failed to save schedule', description: data.message || 'Unknown error', color: 'error' }); }
-			else { scheduleCron = data.cron || cron; toasts.add({ title: 'Schedule saved', description: `Backups will run: ${scheduleCron}`, color: 'success' }); }
-		} finally { scheduleSaving = false; }
+			if (!r.ok) {
+				toasts.add({
+					title: 'Failed to save schedule',
+					description: data.message || 'Unknown error',
+					color: 'error'
+				});
+			} else {
+				scheduleCron = data.cron || cron;
+				toasts.add({
+					title: 'Schedule saved',
+					description: `Backups will run: ${scheduleCron}`,
+					color: 'success'
+				});
+			}
+		} finally {
+			scheduleSaving = false;
+		}
 	}
 
 	async function enablePublic() {
@@ -336,22 +507,50 @@
 		try {
 			const r = await apiFetch(`/apiv1/databases/${dbId}/public`, { method: 'POST' });
 			const data = await r.json().catch(() => ({}));
-			if (!r.ok) { toasts.add({ title: 'Could not expose database', description: data.message || 'Unknown error', color: 'error' }); return; }
-			toasts.add({ title: 'Database exposed', description: `${data.host}:${data.port}`, color: 'success' });
+			if (!r.ok) {
+				toasts.add({
+					title: 'Could not expose database',
+					description: data.message || 'Unknown error',
+					color: 'error'
+				});
+				return;
+			}
+			toasts.add({
+				title: 'Database exposed',
+				description: `${data.host}:${data.port}`,
+				color: 'success'
+			});
 			await fetchDatabase(true);
-		} finally { togglingPublic = false; }
+		} finally {
+			togglingPublic = false;
+		}
 	}
 
 	async function disablePublic() {
 		if (!database) return;
-		if (!confirm('Stop exposing this database publicly? Connected clients using the public endpoint will be disconnected.')) return;
+		if (
+			!confirm(
+				'Stop exposing this database publicly? Connected clients using the public endpoint will be disconnected.'
+			)
+		)
+			return;
 		togglingPublic = true;
 		try {
 			const r = await apiFetch(`/apiv1/databases/${dbId}/public`, { method: 'DELETE' });
-			if (!r.ok) { const data = await r.json().catch(() => ({})); toasts.add({ title: 'Failed to disable', description: data.message || 'Unknown error', color: 'error' }); return; }
+			if (!r.ok) {
+				const data = await r.json().catch(() => ({}));
+				toasts.add({
+					title: 'Failed to disable',
+					description: data.message || 'Unknown error',
+					color: 'error'
+				});
+				return;
+			}
 			toasts.add({ title: 'Public access disabled', color: 'success' });
 			await fetchDatabase(true);
-		} finally { togglingPublic = false; }
+		} finally {
+			togglingPublic = false;
+		}
 	}
 
 	// Extensions
@@ -359,33 +558,71 @@
 		extensionsLoading = true;
 		try {
 			const r = await apiFetch(`/apiv1/databases/${dbId}/extensions`);
-			if (r.ok) { const data = await r.json(); extensions = data.extensions || []; preloadedExts = data.sharedPreloadLibraries || []; }
+			if (r.ok) {
+				const data = await r.json();
+				extensions = data.extensions || [];
+				preloadedExts = data.sharedPreloadLibraries || [];
+			}
 			extensionsLoaded = true;
-		} finally { extensionsLoading = false; }
+		} finally {
+			extensionsLoading = false;
+		}
 	}
 
 	async function installExtension(name: string, addToPreload: boolean) {
 		busyExtension = name;
 		try {
 			const r = await apiFetch(`/apiv1/databases/${dbId}/extensions`, {
-				method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ name, addToPreload }),
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ name, addToPreload })
 			});
 			const data = await r.json().catch(() => ({}));
-			if (!r.ok || !data.success) { toasts.add({ title: 'Install failed', description: data.output || data.message || 'Unknown error', color: 'error' }); }
-			else { toasts.add({ title: `${name} installed`, description: data.preloadAdded ? 'Added to shared_preload_libraries — restart required' : 'Extension is ready to use', color: 'success' }); await fetchExtensions(); }
-		} finally { busyExtension = null; }
+			if (!r.ok || !data.success) {
+				toasts.add({
+					title: 'Install failed',
+					description: data.output || data.message || 'Unknown error',
+					color: 'error'
+				});
+			} else {
+				toasts.add({
+					title: `${name} installed`,
+					description: data.preloadAdded
+						? 'Added to shared_preload_libraries — restart required'
+						: 'Extension is ready to use',
+					color: 'success'
+				});
+				await fetchExtensions();
+			}
+		} finally {
+			busyExtension = null;
+		}
 	}
 
 	async function uninstallExtension(name: string, removeFromPreload: boolean) {
-		if (!confirm(`Drop extension "${name}"? Objects that depend on it will also be dropped.`)) return;
+		if (!confirm(`Drop extension "${name}"? Objects that depend on it will also be dropped.`))
+			return;
 		busyExtension = name;
 		try {
 			const qs = removeFromPreload ? '?removeFromPreload=true' : '';
-			const r = await apiFetch(`/apiv1/databases/${dbId}/extensions/${encodeURIComponent(name)}${qs}`, { method: 'DELETE' });
+			const r = await apiFetch(
+				`/apiv1/databases/${dbId}/extensions/${encodeURIComponent(name)}${qs}`,
+				{ method: 'DELETE' }
+			);
 			const data = await r.json().catch(() => ({}));
-			if (!r.ok || !data.success) { toasts.add({ title: 'Uninstall failed', description: data.output || data.message || 'Unknown error', color: 'error' }); }
-			else { toasts.add({ title: `${name} removed`, color: 'success' }); await fetchExtensions(); }
-		} finally { busyExtension = null; }
+			if (!r.ok || !data.success) {
+				toasts.add({
+					title: 'Uninstall failed',
+					description: data.output || data.message || 'Unknown error',
+					color: 'error'
+				});
+			} else {
+				toasts.add({ title: `${name} removed`, color: 'success' });
+				await fetchExtensions();
+			}
+		} finally {
+			busyExtension = null;
+		}
 	}
 
 	// Settings
@@ -393,14 +630,20 @@
 		settingsLoading = true;
 		try {
 			const r = await apiFetch(`/apiv1/databases/${dbId}/settings`);
-			if (r.ok) { const data = await r.json(); settings = { ...(data.parameters || {}) }; settingsDirty = false; }
+			if (r.ok) {
+				const data = await r.json();
+				settings = { ...(data.parameters || {}) };
+				settingsDirty = false;
+			}
 			settingsLoaded = true;
-		} finally { settingsLoading = false; }
+		} finally {
+			settingsLoading = false;
+		}
 	}
 
 	function paramValue(key: string): string {
 		const meta = PARAM_SCHEMA.find((p) => p.key === key);
-		return settings[key] ?? (meta?.defaultValue ?? '');
+		return settings[key] ?? meta?.defaultValue ?? '';
 	}
 
 	function setParam(key: string, v: string) {
@@ -409,17 +652,38 @@
 	}
 
 	async function saveSettings() {
-		const hasRestart = PARAM_SCHEMA.filter((p) => p.requiresRestart).some((p) => settings[p.key] !== undefined && settings[p.key] !== p.defaultValue);
-		if (hasRestart && !confirm('Some of these settings require a brief database restart (~10–30s of downtime). Apply now?')) return;
+		const hasRestart = PARAM_SCHEMA.filter((p) => p.requiresRestart).some(
+			(p) => settings[p.key] !== undefined && settings[p.key] !== p.defaultValue
+		);
+		if (
+			hasRestart &&
+			!confirm(
+				'Some of these settings require a brief database restart (~10–30s of downtime). Apply now?'
+			)
+		)
+			return;
 		settingsSaving = true;
 		try {
 			const r = await apiFetch(`/apiv1/databases/${dbId}/settings`, {
-				method: 'PATCH', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify({ parameters: settings }),
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ parameters: settings })
 			});
 			const data = await r.json().catch(() => ({}));
-			if (!r.ok) { toasts.add({ title: 'Save failed', description: data.message || 'Unknown error', color: 'error' }); }
-			else { toasts.add({ title: 'Settings saved', color: 'success' }); settings = { ...(data.parameters || {}) }; settingsDirty = false; }
-		} finally { settingsSaving = false; }
+			if (!r.ok) {
+				toasts.add({
+					title: 'Save failed',
+					description: data.message || 'Unknown error',
+					color: 'error'
+				});
+			} else {
+				toasts.add({ title: 'Settings saved', color: 'success' });
+				settings = { ...(data.parameters || {}) };
+				settingsDirty = false;
+			}
+		} finally {
+			settingsSaving = false;
+		}
 	}
 
 	// Terminal / logs
@@ -429,13 +693,21 @@
 		if (!pod?.name) return;
 		logsLoading = true;
 		try {
-			const r = await apiFetch(`/apiv1/pods/${pod.name}/logs?namespace=${database.namespace}&container=postgres&tailLines=${tailLines}`);
+			const r = await apiFetch(
+				`/apiv1/pods/${pod.name}/logs?namespace=${database.namespace}&container=postgres&tailLines=${tailLines}`
+			);
 			if (r.ok) {
 				const data = await r.json();
 				logs = data.logs || '';
-				requestAnimationFrame(() => { if (logsRef) logsRef.scrollTop = logsRef.scrollHeight; });
+				requestAnimationFrame(() => {
+					if (logsRef) logsRef.scrollTop = logsRef.scrollHeight;
+				});
 			}
-		} catch { /* ignore */ } finally { logsLoading = false; }
+		} catch {
+			/* ignore */
+		} finally {
+			logsLoading = false;
+		}
 	}
 
 	function podShortName(name: string): string {
@@ -453,64 +725,104 @@
 	function closeTerminalTab(id: string) {
 		terminalTabs = terminalTabs.filter((t) => t.id !== id);
 		if (activeConsoleTab === id) {
-			activeConsoleTab = terminalTabs.length > 0 ? terminalTabs[terminalTabs.length - 1].id : 'logs';
+			activeConsoleTab =
+				terminalTabs.length > 0 ? terminalTabs[terminalTabs.length - 1].id : 'logs';
 		}
 	}
 
 	// Delete
-	function openDeleteModal() { if (!database) return; showDeleteModal = true; deleteCountdownActive = false; deleteCountdown = 10; }
+	function openDeleteModal() {
+		if (!database) return;
+		showDeleteModal = true;
+		deleteCountdownActive = false;
+		deleteCountdown = 10;
+	}
 
 	function startDeleteCountdown() {
 		deleteCountdownActive = true;
 		deleteCountdown = 10;
 		deleteTimerInterval = setInterval(() => {
 			deleteCountdown -= 1;
-			if (deleteCountdown <= 0) { clearInterval(deleteTimerInterval!); deleteTimerInterval = null; executeDelete(); }
+			if (deleteCountdown <= 0) {
+				clearInterval(deleteTimerInterval!);
+				deleteTimerInterval = null;
+				executeDelete();
+			}
 		}, 1000);
 	}
 
 	function cancelDelete() {
 		showDeleteModal = false;
 		deleteCountdownActive = false;
-		if (deleteTimerInterval) { clearInterval(deleteTimerInterval); deleteTimerInterval = null; }
+		if (deleteTimerInterval) {
+			clearInterval(deleteTimerInterval);
+			deleteTimerInterval = null;
+		}
 		deleteCountdown = 10;
 	}
 
 	async function executeDelete() {
 		if (!database) return;
-		if (deleteTimerInterval) { clearInterval(deleteTimerInterval); deleteTimerInterval = null; }
+		if (deleteTimerInterval) {
+			clearInterval(deleteTimerInterval);
+			deleteTimerInterval = null;
+		}
 		showDeleteModal = false;
 		deleteCountdownActive = false;
 		deleting = true;
 		try {
 			const response = await apiFetch(`/apiv1/databases/${dbId}`, { method: 'DELETE' });
-			if (!response.ok) { const data = await response.json().catch(() => ({})); throw new Error(data.message || 'Failed to delete database'); }
-			toasts.add({ title: 'Database deleted', description: `${database.name} has been deleted`, color: 'success' });
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to delete database');
+			}
+			toasts.add({
+				title: 'Database deleted',
+				description: `${database.name} has been deleted`,
+				color: 'success'
+			});
 			refreshTree();
 			const ws = database.project?.workspace;
-			if (ws) { goto(`/${orgSlug}/workspaces/${ws.slug}/projects/${database.project!.slug}`); }
-			else { goto(`/${orgSlug}`); }
+			if (ws) {
+				goto(`/${orgSlug}/workspaces/${ws.slug}/projects/${database.project!.slug}`);
+			} else {
+				goto(`/${orgSlug}`);
+			}
 		} catch (e) {
-			toasts.add({ title: 'Error', description: e instanceof Error ? e.message : 'Failed to delete', color: 'error' });
-		} finally { deleting = false; }
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to delete',
+				color: 'error'
+			});
+		} finally {
+			deleting = false;
+		}
 	}
 
 	// Helpers
 	function copyToClipboard(text: string, field: string) {
 		navigator.clipboard.writeText(text);
 		copiedField = field;
-		setTimeout(() => { copiedField = null; }, 2000);
+		setTimeout(() => {
+			copiedField = null;
+		}, 2000);
 	}
 
 	function formatBytes(bytes: number | null): string {
 		if (!bytes) return '—';
 		const units = ['B', 'KB', 'MB', 'GB', 'TB'];
-		let n = bytes; let i = 0;
-		while (n >= 1024 && i < units.length - 1) { n /= 1024; i++; }
+		let n = bytes;
+		let i = 0;
+		while (n >= 1024 && i < units.length - 1) {
+			n /= 1024;
+			i++;
+		}
 		return `${n.toFixed(1)} ${units[i]}`;
 	}
 
-	function formatDate(s: string): string { return new Date(s).toLocaleString(); }
+	function formatDate(s: string): string {
+		return new Date(s).toLocaleString();
+	}
 
 	function podStateLabel(): { label: string; kind: 'ready' | 'pending' | 'error' } {
 		const ls = database?.liveStatus;
@@ -520,7 +832,8 @@
 		if (ls.ready) return { label: 'Running', kind: 'ready' };
 		if (ls.message) {
 			const m = ls.message.toLowerCase();
-			if (m.includes('crash') || m.includes('error') || m.includes('backoff')) return { label: ls.message, kind: 'error' };
+			if (m.includes('crash') || m.includes('error') || m.includes('backoff'))
+				return { label: ls.message, kind: 'error' };
 			return { label: ls.message, kind: 'pending' };
 		}
 		if (ls.phase === 'Running') return { label: 'Starting', kind: 'pending' };
@@ -540,7 +853,9 @@
 				effectiveCpuLimit = q.effectiveLimit?.cpuMilli ?? null;
 				effectiveMemLimit = q.effectiveLimit?.memoryBytes ?? null;
 			}
-		} catch { /* ignore */ }
+		} catch {
+			/* ignore */
+		}
 	}
 
 	// Org resource defaults/limits
@@ -557,7 +872,8 @@
 					loading = false;
 					if (database?.backupsEnabled) fetchBackups();
 					resourceCpuMilli = database?.cpuRequestMilli ?? null;
-					resourceMemoryBytes = database?.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null;
+					resourceMemoryBytes =
+						database?.memoryRequestBytes != null ? Number(database.memoryRequestBytes) : null;
 				}
 			})
 			.catch(() => {});
@@ -567,11 +883,18 @@
 		if (orgIdForSse) {
 			dbSseUnsub = subscribeOrgEvents(
 				orgIdForSse,
-				(ev) => { if (ev.id === dbId) { fetchDatabase(true); if (database?.backupsEnabled) fetchBackups(); } },
-				{ invalidateDependencies: [] },
+				(ev) => {
+					if (ev.id === dbId) {
+						fetchDatabase(true);
+						if (database?.backupsEnabled) fetchBackups();
+					}
+				},
+				{ invalidateDependencies: [] }
 			);
 		}
-		return () => { dbSseUnsub?.(); };
+		return () => {
+			dbSseUnsub?.();
+		};
 	});
 </script>
 
@@ -579,7 +902,9 @@
 	{#if loading}
 		<div class="db-skeleton">
 			<div class="skeleton" style="width: 4rem; height: 0.875rem; margin-bottom: 1.5rem;"></div>
-			<div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;">
+			<div
+				style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;"
+			>
 				<div style="display: flex; align-items: center; gap: 0.75rem;">
 					<div class="skeleton" style="width: 2rem; height: 2rem; border-radius: 0.5rem;"></div>
 					<div class="skeleton" style="width: 10rem; height: 1.25rem;"></div>
@@ -599,203 +924,223 @@
 	{:else if database}
 		{@const ls = database.liveStatus}
 		{@const isUnhealthy = !!(
-			(ls?.message && /oomkilled|out of memory|crashloopbackoff|back-?off|error/i.test(ls.message)) ||
+			(ls?.message &&
+				/oomkilled|out of memory|crashloopbackoff|back-?off|error/i.test(ls.message)) ||
 			(ls?.lastTerminationReason && ls.lastTerminationReason !== 'Completed') ||
-			((ls?.restartCount ?? 0) >= 5)
+			(ls?.restartCount ?? 0) >= 5
 		)}
 		<DatabaseHeader
 			{database}
 			{orgSlug}
 			{deleting}
 			onOpenDeleteModal={openDeleteModal}
-			statusOverride={database.status === 'restarting' ? undefined : (isUnhealthy ? 'unhealthy' : undefined)}
+			statusOverride={database.status === 'restarting'
+				? undefined
+				: isUnhealthy
+					? 'unhealthy'
+					: undefined}
 		/>
 
 		<DatabaseAlerts
 			{database}
-			onGoToResources={() => { tabs.value = 'resources'; }}
-			onViewLogs={() => { tabs.value = 'terminal'; activeConsoleTab = 'logs'; }}
+			onGoToResources={() => {
+				tabs.value = 'resources';
+			}}
+			onViewLogs={() => {
+				tabs.value = 'terminal';
+				activeConsoleTab = 'logs';
+			}}
 		/>
 
 		{#if database.mode === 'cnpg' && (database.status === 'provisioning' || database.status === 'restoring' || (database.status === 'error' && !database.liveStatus?.ready))}
-			<DatabaseProvisioning dbId={dbId} dbName={database.name} onDone={() => fetchDatabase(true)} />
+			<DatabaseProvisioning {dbId} dbName={database.name} onDone={() => fetchDatabase(true)} />
 		{:else}
-
-		{#if database.liveStatus}
-			{@const state = podStateLabel()}
-			<div class="db-stats">
-				{#if database.mode === 'container'}
-					<div class="db-stat db-stat-pod">
-						<span class="db-stat-label">Pod State</span>
-						<div class="db-pod-state-row">
-							<span class="db-pod-dot db-pod-dot-{state.kind}" aria-hidden="true"></span>
-							<span class="db-stat-value" title={database.liveStatus.message ?? ''}>{state.label}</span>
-							{#if state.kind === 'pending'}
-								<Loader2 class="h-3.5 w-3.5 animate-spin db-pod-spinner" />
+			{#if database.liveStatus}
+				{@const state = podStateLabel()}
+				<div class="db-stats">
+					{#if database.mode === 'container'}
+						<div class="db-stat db-stat-pod">
+							<span class="db-stat-label">Pod State</span>
+							<div class="db-pod-state-row">
+								<span class="db-pod-dot db-pod-dot-{state.kind}" aria-hidden="true"></span>
+								<span class="db-stat-value" title={database.liveStatus.message ?? ''}
+									>{state.label}</span
+								>
+								{#if state.kind === 'pending'}
+									<Loader2 class="h-3.5 w-3.5 animate-spin db-pod-spinner" />
+								{/if}
+							</div>
+							{#if typeof database.liveStatus.readyReplicas === 'number' && typeof database.liveStatus.replicas === 'number'}
+								<span class="db-pod-sub"
+									>{database.liveStatus.readyReplicas} / {database.liveStatus.replicas} ready{#if database.liveStatus.restartCount}·
+										{database.liveStatus.restartCount} restarts{/if}</span
+								>
 							{/if}
 						</div>
-						{#if typeof database.liveStatus.readyReplicas === 'number' && typeof database.liveStatus.replicas === 'number'}
-							<span class="db-pod-sub">{database.liveStatus.readyReplicas} / {database.liveStatus.replicas} ready{#if database.liveStatus.restartCount}· {database.liveStatus.restartCount} restarts{/if}</span>
-						{/if}
-					</div>
-				{/if}
-				<div class="db-stat">
-					<span class="db-stat-label">Size</span>
-					<span class="db-stat-value">{database.liveStatus.size ?? 'N/A'}</span>
-				</div>
-				<div class="db-stat">
-					<span class="db-stat-label">Connections</span>
-					<span class="db-stat-value">{database.liveStatus.connections ?? 0}</span>
-				</div>
-				<div class="db-stat">
-					<span class="db-stat-label">Port</span>
-					<span class="db-stat-value">{database.port}</span>
-				</div>
-				{#if database.mode === 'container' && database.storageSize}
+					{/if}
 					<div class="db-stat">
-						<span class="db-stat-label">Storage</span>
-						<span class="db-stat-value">{database.storageSize}</span>
+						<span class="db-stat-label">Size</span>
+						<span class="db-stat-value">{database.liveStatus.size ?? 'N/A'}</span>
+					</div>
+					<div class="db-stat">
+						<span class="db-stat-label">Connections</span>
+						<span class="db-stat-value">{database.liveStatus.connections ?? 0}</span>
+					</div>
+					<div class="db-stat">
+						<span class="db-stat-label">Port</span>
+						<span class="db-stat-value">{database.port}</span>
+					</div>
+					{#if database.mode === 'container' && database.storageSize}
+						<div class="db-stat">
+							<span class="db-stat-label">Storage</span>
+							<span class="db-stat-value">{database.storageSize}</span>
+						</div>
+					{/if}
+				</div>
+			{/if}
+
+			<!-- Tab nav -->
+			<nav class="dep-tabs" {...tabs.triggerList}>
+				<div class="dep-tabs-inner">
+					{#each tabSections as tab}
+						{@const Icon = tab.icon}
+						<button class="tabs-trigger dep-tab" {...tabs.getTrigger(tab.id)}>
+							<Icon class="h-3.5 w-3.5" />
+							<span>{tab.label}</span>
+						</button>
+					{/each}
+				</div>
+			</nav>
+
+			<!-- Connection tab -->
+			<section {...tabs.getContent('connection')} hidden={undefined} class="tab-panel">
+				<ConnectionTab
+					{database}
+					{orgSlug}
+					bind:copiedField
+					bind:showPassword
+					bind:showConnectionString
+					bind:showPublicConnectionString
+					{togglingPublic}
+					onEnablePublic={enablePublic}
+					onDisablePublic={disablePublic}
+					onCopy={copyToClipboard}
+				/>
+			</section>
+
+			<!-- Backups tab -->
+			<section {...tabs.getContent('backups')} hidden={undefined} class="tab-panel">
+				<BackupsTab
+					{database}
+					{orgSlug}
+					{backups}
+					{backupsLoading}
+					{creatingBackup}
+					{restoringBackupId}
+					bind:schedulePreset
+					bind:scheduleCustomCron
+					{scheduleCron}
+					{scheduleLoaded}
+					{scheduleSaving}
+					maxBackups={MAX_BACKUPS}
+					schedulePresets={[...SCHEDULE_PRESETS]}
+					onCreateBackup={createBackup}
+					onRestoreBackup={restoreBackup}
+					onSaveSchedule={saveSchedule}
+					{formatBytes}
+					{formatDate}
+				/>
+			</section>
+
+			<!-- Terminal tab -->
+			<section {...tabs.getContent('terminal')} hidden={undefined} class="tab-panel">
+				<TerminalTab
+					{database}
+					{logs}
+					{logsLoading}
+					bind:logsRef
+					bind:activeConsoleTab
+					bind:terminalTabs
+					bind:consoleExpanded
+					bind:tailLines
+					onFetchLogs={fetchLogs}
+					onOpenShellTab={openShellTab}
+					onCloseTerminalTab={closeTerminalTab}
+					{podShortName}
+				/>
+			</section>
+
+			<!-- Extensions tab -->
+			<section {...tabs.getContent('extensions')} hidden={undefined} class="tab-panel">
+				<ExtensionsTab
+					{database}
+					{filteredExtensions}
+					{preloadedExts}
+					{extensionsLoading}
+					bind:extensionSearch
+					{busyExtension}
+					onFetchExtensions={fetchExtensions}
+					onInstallExtension={installExtension}
+					onUninstallExtension={uninstallExtension}
+				/>
+			</section>
+
+			<!-- Metrics tab -->
+			<section {...tabs.getContent('metrics')} hidden={undefined} class="tab-panel">
+				{#if database?.mode !== 'shared'}
+					<div class="card rounded-2xl p-5">
+						<MetricsTab databaseId={database?.id ?? null} />
+					</div>
+				{:else}
+					<div class="db-empty-state">
+						<p>
+							Metrics are not available for shared databases. Create a dedicated (CNPG) database for
+							full metrics.
+						</p>
 					</div>
 				{/if}
-			</div>
-		{/if}
+			</section>
 
-		<!-- Tab nav -->
-		<nav class="dep-tabs" {...tabs.triggerList}>
-			<div class="dep-tabs-inner">
-				{#each tabSections as tab}
-					{@const Icon = tab.icon}
-					<button class="tabs-trigger dep-tab" {...tabs.getTrigger(tab.id)}>
-						<Icon class="h-3.5 w-3.5" />
-						<span>{tab.label}</span>
-					</button>
-				{/each}
-			</div>
-		</nav>
+			<!-- Resources tab -->
+			<section {...tabs.getContent('resources')} hidden={undefined} class="tab-panel">
+				{#if database?.mode !== 'shared'}
+					<ResourcesTab
+						{database}
+						bind:resourceCpuMilli
+						bind:resourceMemoryBytes
+						{orgDefaultCpuMilli}
+						{orgDefaultMemoryBytes}
+						{effectiveCpuLimit}
+						{effectiveMemLimit}
+						bind:resourcesDirty
+						{savingResources}
+						onSaveResources={saveResources}
+					/>
+				{:else}
+					<div class="db-empty-state">
+						<p>Resource configuration is not available for shared databases.</p>
+					</div>
+				{/if}
+			</section>
 
-		<!-- Connection tab -->
-		<section {...tabs.getContent('connection')} hidden={undefined} class="tab-panel">
-			<ConnectionTab
-				{database}
-				{orgSlug}
-				bind:copiedField
-				bind:showPassword
-				bind:showConnectionString
-				bind:showPublicConnectionString
-				{togglingPublic}
-				onEnablePublic={enablePublic}
-				onDisablePublic={disablePublic}
-				onCopy={copyToClipboard}
-			/>
-		</section>
-
-		<!-- Backups tab -->
-		<section {...tabs.getContent('backups')} hidden={undefined} class="tab-panel">
-			<BackupsTab
-				{database}
-				{orgSlug}
-				{backups}
-				{backupsLoading}
-				{creatingBackup}
-				{restoringBackupId}
-				bind:schedulePreset
-				bind:scheduleCustomCron
-				{scheduleCron}
-				{scheduleLoaded}
-				{scheduleSaving}
-				maxBackups={MAX_BACKUPS}
-				schedulePresets={[...SCHEDULE_PRESETS]}
-				onCreateBackup={createBackup}
-				onRestoreBackup={restoreBackup}
-				onSaveSchedule={saveSchedule}
-				{formatBytes}
-				{formatDate}
-			/>
-		</section>
-
-		<!-- Terminal tab -->
-		<section {...tabs.getContent('terminal')} hidden={undefined} class="tab-panel">
-			<TerminalTab
-				{database}
-				{logs}
-				{logsLoading}
-				bind:logsRef
-				bind:activeConsoleTab
-				bind:terminalTabs
-				bind:consoleExpanded
-				bind:tailLines
-				onFetchLogs={fetchLogs}
-				onOpenShellTab={openShellTab}
-				onCloseTerminalTab={closeTerminalTab}
-				{podShortName}
-			/>
-		</section>
-
-		<!-- Extensions tab -->
-		<section {...tabs.getContent('extensions')} hidden={undefined} class="tab-panel">
-			<ExtensionsTab
-				{database}
-				{filteredExtensions}
-				{preloadedExts}
-				{extensionsLoading}
-				bind:extensionSearch
-				{busyExtension}
-				onFetchExtensions={fetchExtensions}
-				onInstallExtension={installExtension}
-				onUninstallExtension={uninstallExtension}
-			/>
-		</section>
-
-		<!-- Metrics tab -->
-		<section {...tabs.getContent('metrics')} hidden={undefined} class="tab-panel">
-			{#if database?.mode !== 'shared'}
-				<div class="card rounded-2xl p-5">
-					<MetricsTab databaseId={database?.id ?? null} />
-				</div>
-			{:else}
-				<div class="db-empty-state">
-					<p>Metrics are not available for shared databases. Create a dedicated (CNPG) database for full metrics.</p>
-				</div>
-			{/if}
-		</section>
-
-		<!-- Resources tab -->
-		<section {...tabs.getContent('resources')} hidden={undefined} class="tab-panel">
-			{#if database?.mode !== 'shared'}
-				<ResourcesTab
+			<!-- Settings tab -->
+			<section {...tabs.getContent('settings')} hidden={undefined} class="tab-panel">
+				<SettingsTab
 					{database}
-					bind:resourceCpuMilli
-					bind:resourceMemoryBytes
-					{orgDefaultCpuMilli}
-					{orgDefaultMemoryBytes}
-					{effectiveCpuLimit}
-					{effectiveMemLimit}
-					bind:resourcesDirty
-					{savingResources}
-					onSaveResources={saveResources}
+					paramSchema={PARAM_SCHEMA}
+					{settingsLoading}
+					{settingsLoaded}
+					{settingsSaving}
+					{settingsDirty}
+					onFetchSettings={() => {
+						settingsLoaded = false;
+						fetchSettings();
+					}}
+					onSaveSettings={saveSettings}
+					{paramValue}
+					{setParam}
 				/>
-			{:else}
-				<div class="db-empty-state">
-					<p>Resource configuration is not available for shared databases.</p>
-				</div>
-			{/if}
-		</section>
-
-		<!-- Settings tab -->
-		<section {...tabs.getContent('settings')} hidden={undefined} class="tab-panel">
-			<SettingsTab
-				{database}
-				paramSchema={PARAM_SCHEMA}
-				{settingsLoading}
-				{settingsLoaded}
-				{settingsSaving}
-				{settingsDirty}
-				onFetchSettings={() => { settingsLoaded = false; fetchSettings(); }}
-				onSaveSettings={saveSettings}
-				{paramValue}
-				{setParam}
-			/>
-		</section>
+			</section>
 		{/if}
 	{/if}
 </div>
@@ -847,7 +1192,9 @@
 		background-color: var(--surface-bg);
 		border: 1px solid var(--surface-border);
 		min-width: 6rem;
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.03), 0 1px 2px rgb(0 0 0 / 0.02);
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.03),
+			0 1px 2px rgb(0 0 0 / 0.02);
 	}
 
 	.db-stat-label {
@@ -975,7 +1322,13 @@
 	}
 
 	@keyframes tab-panel-in {
-		from { opacity: 0; transform: translateY(0.75rem) scale(0.99); }
-		to { opacity: 1; transform: none; }
+		from {
+			opacity: 0;
+			transform: translateY(0.75rem) scale(0.99);
+		}
+		to {
+			opacity: 1;
+			transform: none;
+		}
 	}
 </style>

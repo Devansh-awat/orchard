@@ -8,7 +8,7 @@
 		canDelete = false,
 		deleting = false,
 		onCustomize,
-		onDelete,
+		onDelete
 	}: {
 		project: Project;
 		canEdit?: boolean;
@@ -32,7 +32,8 @@
 						{/if}
 					</span>
 				{/if}
-				{#if project.owner?.username}<span class="pj-title-owner">{project.owner.username}@</span>{/if}{project.name}
+				{#if project.owner?.username}<span class="pj-title-owner">{project.owner.username}@</span
+					>{/if}{project.name}
 			</h1>
 			{#if project.description}
 				<p class="pj-description">{project.description}</p>
@@ -40,25 +41,27 @@
 		</div>
 		<div class="pj-header-actions">
 			{#if canEdit}
-			<button
-				onclick={onCustomize}
-				class="pj-icon-btn"
-				aria-label="Customize project"
-				title="Customize"
-			>
-				<Palette class="h-4 w-4" />
-			</button>
+				<button
+					onclick={onCustomize}
+					class="pj-icon-btn"
+					aria-label="Customize project"
+					title="Customize"
+				>
+					<Palette class="h-4 w-4" />
+				</button>
 			{/if}
 			{#if canDelete}
-			<button
-				onclick={onDelete}
-				disabled={deleting}
-				class="pj-icon-btn pj-icon-btn--danger"
-				aria-label="Delete project"
-				title="Delete"
-			>
-				{#if deleting}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Trash2 class="h-4 w-4" />{/if}
-			</button>
+				<button
+					onclick={onDelete}
+					disabled={deleting}
+					class="pj-icon-btn pj-icon-btn--danger"
+					aria-label="Delete project"
+					title="Delete"
+				>
+					{#if deleting}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Trash2
+							class="h-4 w-4"
+						/>{/if}
+				</button>
 			{/if}
 		</div>
 	</div>

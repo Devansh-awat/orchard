@@ -1,13 +1,5 @@
 <script lang="ts">
-	import {
-		Star,
-		MoreVertical,
-		ExternalLink,
-		RefreshCw,
-		Pin,
-		PinOff,
-		Copy
-	} from 'lucide-svelte';
+	import { Star, MoreVertical, ExternalLink, RefreshCw, Pin, PinOff, Copy } from 'lucide-svelte';
 	import { springHover, cardTilt, motionPopover } from '$lib/utils/motion.svelte';
 	import { knownIcon, favUrl, dotClass, statusText, timeAgo, springPop } from './helpers.svelte';
 	import type { DeploymentSummary } from './types';
@@ -117,9 +109,7 @@
 							><RefreshCw size={14} /> Restart</button
 						>
 						<button class="menu-item" onclick={(e) => onToggleFav(dep, e)}
-							>{#if isFavourite}<PinOff size={14} /> Unfavourite{:else}<Pin
-									size={14}
-								/> Favourite{/if}</button
+							>{#if isFavourite}<PinOff size={14} /> Unfavourite{:else}<Pin size={14} /> Favourite{/if}</button
 						>
 					</div>
 				{/if}

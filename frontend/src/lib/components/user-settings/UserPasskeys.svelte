@@ -32,7 +32,7 @@
 		onSavePasskeyName,
 		onConfirmDelete,
 		formatTimestamp,
-		index = 0,
+		index = 0
 	}: {
 		passkeys: PasskeyRecord[];
 		passkeysLoading: boolean;
@@ -57,7 +57,12 @@
 	let addBtnHovered = $state(false);
 </script>
 
-<SettingsSection {index} title="Passkeys" description="Sign in with Touch ID, Face ID, or Windows Hello" iconColor="primary">
+<SettingsSection
+	{index}
+	title="Passkeys"
+	description="Sign in with Touch ID, Face ID, or Windows Hello"
+	iconColor="primary"
+>
 	{#snippet icon(hovered)}<KeyRound size={18} animate={hovered} />{/snippet}
 	{#snippet badge()}
 		{#if !passkeysLoading && passkeys.length > 0}
@@ -84,9 +89,16 @@
 						<div class="pk-body">
 							{#if editingPasskeyId === passkey.id}
 								<div class="pk-edit-row">
-									<input class="pk-input" type="text" placeholder="Friendly name" bind:value={renameValue} />
+									<input
+										class="pk-input"
+										type="text"
+										placeholder="Friendly name"
+										bind:value={renameValue}
+									/>
 									<IconButton variant="save" onclick={onSavePasskeyName} disabled={renaming}>
-										{#snippet children(hovered)}{#if renaming}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Check size={13} animate={hovered} />{/if}{/snippet}
+										{#snippet children(hovered)}{#if renaming}<Loader2
+													class="h-3 w-3 animate-spin"
+												/>{:else}<Check size={13} animate={hovered} />{/if}{/snippet}
 									</IconButton>
 									<IconButton onclick={onCancelRenaming}>
 										{#snippet children(hovered)}<X size={13} animate={hovered} />{/snippet}
@@ -95,7 +107,9 @@
 							{:else}
 								<span class="pk-name">{passkey.friendlyName || 'Passkey'}</span>
 								<span class="pk-meta">
-									Last used {formatTimestamp(passkey.lastUsedAt)} · Added {formatTimestamp(passkey.createdAt)}
+									Last used {formatTimestamp(passkey.lastUsedAt)} · Added {formatTimestamp(
+										passkey.createdAt
+									)}
 								</span>
 							{/if}
 						</div>
@@ -104,8 +118,15 @@
 								<IconButton onclick={() => onStartRenaming(passkey)} title="Rename">
 									{#snippet children(hovered)}<Pencil size={13} animate={hovered} />{/snippet}
 								</IconButton>
-								<IconButton variant="danger" onclick={() => onConfirmDelete(passkey)} disabled={deletingPasskeyId === passkey.id} title="Remove">
-									{#snippet children(hovered)}{#if deletingPasskeyId === passkey.id}<Loader2 class="h-3 w-3 animate-spin" />{:else}<Trash2 size={13} animate={hovered} />{/if}{/snippet}
+								<IconButton
+									variant="danger"
+									onclick={() => onConfirmDelete(passkey)}
+									disabled={deletingPasskeyId === passkey.id}
+									title="Remove"
+								>
+									{#snippet children(hovered)}{#if deletingPasskeyId === passkey.id}<Loader2
+												class="h-3 w-3 animate-spin"
+											/>{:else}<Trash2 size={13} animate={hovered} />{/if}{/snippet}
 								</IconButton>
 							</div>
 						{/if}
@@ -118,12 +139,29 @@
 
 		{#if showAddPasskey}
 			<div class="pk-add-row">
-				<input class="pk-input pk-input--full" type="text" placeholder="Device name (optional)" bind:value={newPasskeyName} />
-				<button class="pk-btn pk-btn--solid" type="button" onclick={onRegister} disabled={registerLoading}>
+				<input
+					class="pk-input pk-input--full"
+					type="text"
+					placeholder="Device name (optional)"
+					bind:value={newPasskeyName}
+				/>
+				<button
+					class="pk-btn pk-btn--solid"
+					type="button"
+					onclick={onRegister}
+					disabled={registerLoading}
+				>
 					{#if registerLoading}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
 					Register
 				</button>
-				<button class="pk-btn pk-btn--ghost" type="button" onclick={() => { showAddPasskey = false; newPasskeyName = ''; }}>Cancel</button>
+				<button
+					class="pk-btn pk-btn--ghost"
+					type="button"
+					onclick={() => {
+						showAddPasskey = false;
+						newPasskeyName = '';
+					}}>Cancel</button
+				>
 			</div>
 		{:else}
 			<button
@@ -235,8 +273,14 @@
 		box-shadow: 0 0 0 2px color-mix(in srgb, var(--sidebar-text-active-border) 10%, transparent);
 		line-height: 1.5;
 	}
-	.pk-input:focus { outline: none; }
-	.pk-input--full { width: 100%; min-width: 0; flex: 1; }
+	.pk-input:focus {
+		outline: none;
+	}
+	.pk-input--full {
+		width: 100%;
+		min-width: 0;
+		flex: 1;
+	}
 	.pk-add-row {
 		display: flex;
 		gap: 0.5rem;
@@ -255,7 +299,9 @@
 		padding: 0.25rem 0;
 		transition: opacity 120ms;
 	}
-	.pk-add-btn:hover { opacity: 0.75; }
+	.pk-add-btn:hover {
+		opacity: 0.75;
+	}
 	.pk-empty {
 		font-size: 0.8125rem;
 		color: var(--surface-muted);
@@ -276,12 +322,17 @@
 		white-space: nowrap;
 		flex-shrink: 0;
 	}
-	.pk-btn:disabled { opacity: 0.5; cursor: not-allowed; }
+	.pk-btn:disabled {
+		opacity: 0.5;
+		cursor: not-allowed;
+	}
 	.pk-btn--solid {
 		background-color: var(--button-bg);
 		color: var(--button-color);
 	}
-	.pk-btn--solid:hover:not(:disabled) { opacity: 0.9; }
+	.pk-btn--solid:hover:not(:disabled) {
+		opacity: 0.9;
+	}
 	.pk-btn--ghost {
 		background: none;
 		color: var(--surface-muted);

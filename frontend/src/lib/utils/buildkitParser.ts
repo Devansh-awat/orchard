@@ -5,16 +5,16 @@
 export type StepStatus = 'pending' | 'running' | 'done' | 'cached' | 'error' | 'canceled';
 
 export interface BuildStep {
-	id: string;            // BuildKit step number, e.g. "5"
-	order: number;         // first-seen order, used for stable sort
-	stage: string | null;  // e.g. "base", "builder", "runner", "internal"
+	id: string; // BuildKit step number, e.g. "5"
+	order: number; // first-seen order, used for stable sort
+	stage: string | null; // e.g. "base", "builder", "runner", "internal"
 	stagePos: string | null; // e.g. "1/3"
-	command: string;       // first descriptive line, e.g. "FROM …" or "RUN …"
+	command: string; // first descriptive line, e.g. "FROM …" or "RUN …"
 	status: StepStatus;
 	durationSec: number | null;
 	transferred: string | null; // e.g. "14.3 MB" / "1.7kB"
 	firstSeenAt: number | null; // ms epoch (timestamp from `[ts]` prefix if present)
-	output: string[];      // raw sub-lines (excluding header)
+	output: string[]; // raw sub-lines (excluding header)
 	error: string | null;
 }
 
@@ -50,7 +50,7 @@ const TRANSFER_RE = /(?:transferring\b[^:]*:\s*|\s)([\d.]+\s?[KMG]?B)(?:\s+done)
 const HEADERLESS_LABELS: Array<[RegExp, string]> = [
 	[/^exporting to .*image format/i, 'Pushing image layers'],
 	[/^exporting to image/i, 'Pushing image layers'],
-	[/^exporting cache/i, 'Pushing build cache'],
+	[/^exporting cache/i, 'Pushing build cache']
 ];
 
 function headerlessLabel(body: string): string {
@@ -60,7 +60,11 @@ function headerlessLabel(body: string): string {
 	return body;
 }
 
-function stripPrefix(line: string): { ts: number | null; level: BuildMessage['level']; rest: string } {
+function stripPrefix(line: string): {
+	ts: number | null;
+	level: BuildMessage['level'];
+	rest: string;
+} {
 	const m = line.match(PREFIX_RE);
 	if (!m) return { ts: null, level: 'INFO', rest: line };
 	return { ts: Number(m[1]), level: m[2] as BuildMessage['level'], rest: line.slice(m[0].length) };
@@ -93,8 +97,13 @@ export function parseBuildkitLogs(raw: string | null | undefined): ParsedBuildLo
 		const canceledMatch = rest.match(STEP_CANCELED_RE);
 		const sublineMatch = rest.match(STEP_SUBLINE_RE);
 
-		const stepId = headerMatch?.[1] ?? doneMatch?.[1] ?? cachedMatch?.[1]
-			?? errorMatch?.[1] ?? canceledMatch?.[1] ?? sublineMatch?.[1];
+		const stepId =
+			headerMatch?.[1] ??
+			doneMatch?.[1] ??
+			cachedMatch?.[1] ??
+			errorMatch?.[1] ??
+			canceledMatch?.[1] ??
+			sublineMatch?.[1];
 
 		if (!stepId) {
 			// Non-step line: a status message from appendLog.
@@ -115,7 +124,7 @@ export function parseBuildkitLogs(raw: string | null | undefined): ParsedBuildLo
 				transferred: null,
 				firstSeenAt: ts,
 				output: [],
-				error: null,
+				error: null
 			};
 			stepMap.set(stepId, step);
 		}

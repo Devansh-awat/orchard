@@ -46,28 +46,28 @@
 			label: 'GitHub Repository',
 			description: 'Build and deploy from a GitHub repo',
 			icon: Github,
-			color: '#6e5494',
+			color: '#6e5494'
 		},
 		{
 			id: 'deployment-image',
 			label: 'Docker Image',
 			description: 'Deploy a container image',
 			icon: Container,
-			color: '#2496ed',
+			color: '#2496ed'
 		},
 		{
 			id: 'compose-stack',
 			label: 'Compose from GitHub',
 			description: 'Deploy a docker-compose.yml from a repo (auto-builds services)',
 			icon: FileText,
-			color: '#0db7ed',
+			color: '#0db7ed'
 		},
 		{
 			id: 'database',
 			label: 'Database',
 			description: 'Create a managed database',
 			icon: Database,
-			color: '#f59e0b',
+			color: '#f59e0b'
 		}
 	];
 
@@ -92,11 +92,16 @@
 
 	function getCategoryColor(category?: string) {
 		switch (category) {
-			case 'cms': return '#8b5cf6';
-			case 'backend': return '#3b82f6';
-			case 'frontend': return '#22c55e';
-			case 'database': return '#f59e0b';
-			default: return 'var(--surface-muted)';
+			case 'cms':
+				return '#8b5cf6';
+			case 'backend':
+				return '#3b82f6';
+			case 'frontend':
+				return '#22c55e';
+			case 'database':
+				return '#f59e0b';
+			default:
+				return 'var(--surface-muted)';
 		}
 	}
 
@@ -204,10 +209,7 @@
 						<div class="nr-quick-grid">
 							{#each filteredActions as action}
 								{@const Icon = action.icon}
-								<button
-									class="nr-quick-card"
-									onclick={() => navigateToNew(action.id)}
-								>
+								<button class="nr-quick-card" onclick={() => navigateToNew(action.id)}>
 									<div
 										class="nr-quick-icon"
 										style="background-color: color-mix(in srgb, {action.color} 12%, transparent)"
@@ -230,7 +232,10 @@
 						<h3 class="nr-section-title">Templates</h3>
 						<button
 							class="nr-browse-link"
-							onclick={() => { open = false; goto(`${basePath}/templates`); }}
+							onclick={() => {
+								open = false;
+								goto(`${basePath}/templates`);
+							}}
 						>
 							Browse all
 						</button>
@@ -240,7 +245,10 @@
 						<div class="nr-tpl-grid">
 							{#each Array(4) as _}
 								<div class="nr-tpl-card nr-tpl-skeleton">
-									<div class="skeleton" style="width: 2.25rem; height: 2.25rem; border-radius: 0.625rem; flex-shrink: 0;"></div>
+									<div
+										class="skeleton"
+										style="width: 2.25rem; height: 2.25rem; border-radius: 0.625rem; flex-shrink: 0;"
+									></div>
 									<div style="flex: 1; display: flex; flex-direction: column; gap: 0.25rem;">
 										<div class="skeleton" style="height: 0.8125rem; width: 60%;"></div>
 										<div class="skeleton" style="height: 0.6875rem; width: 80%;"></div>
@@ -251,19 +259,20 @@
 					{:else if filteredTemplates.length === 0}
 						<div class="nr-tpl-empty">
 							<LayoutTemplate class="h-6 w-6" style="color: var(--surface-muted)" />
-							<span>{search.trim() ? 'No templates match your search' : 'No templates available'}</span>
+							<span
+								>{search.trim() ? 'No templates match your search' : 'No templates available'}</span
+							>
 						</div>
 					{:else}
 						<div class="nr-tpl-grid">
 							{#each filteredTemplates as template}
 								{@const Icon = getIconForTemplate(template.icon)}
-								<button
-									class="nr-tpl-card"
-									onclick={() => navigateToTemplate(template.id)}
-								>
+								<button class="nr-tpl-card" onclick={() => navigateToTemplate(template.id)}>
 									<div
 										class="nr-tpl-icon"
-										style="background-color: color-mix(in srgb, {getCategoryColor(template.category)} 12%, transparent)"
+										style="background-color: color-mix(in srgb, {getCategoryColor(
+											template.category
+										)} 12%, transparent)"
 									>
 										<Icon class="h-4 w-4" style="color: {getCategoryColor(template.category)}" />
 									</div>
@@ -276,7 +285,9 @@
 									{#if template.category}
 										<span
 											class="nr-tpl-badge"
-											style="background-color: color-mix(in srgb, {getCategoryColor(template.category)} 15%, transparent); color: {getCategoryColor(template.category)}"
+											style="background-color: color-mix(in srgb, {getCategoryColor(
+												template.category
+											)} 15%, transparent); color: {getCategoryColor(template.category)}"
 										>
 											{template.category}
 										</span>
@@ -340,7 +351,9 @@
 		background: none;
 		color: var(--surface-muted);
 		cursor: pointer;
-		transition: color 0.15s, background-color 0.15s;
+		transition:
+			color 0.15s,
+			background-color 0.15s;
 	}
 
 	.nr-close:hover {
@@ -437,7 +450,9 @@
 		border-radius: 0.75rem;
 		background-color: var(--surface-bg);
 		cursor: pointer;
-		transition: border-color 0.15s, box-shadow 0.15s;
+		transition:
+			border-color 0.15s,
+			box-shadow 0.15s;
 		text-align: left;
 	}
 
@@ -489,7 +504,9 @@
 		border-radius: 0.5rem;
 		background: none;
 		cursor: pointer;
-		transition: background-color 0.15s, border-color 0.15s;
+		transition:
+			background-color 0.15s,
+			border-color 0.15s;
 		text-align: left;
 		width: 100%;
 	}
