@@ -149,3 +149,22 @@ jobs:
           [ "${{ needs.release-please.outputs.gateway }}" = "true" ]  && mark gateway  "${{ needs.release-please.outputs.gateway_v }}"
           [ "${{ needs.release-please.outputs.cli }}" = "true" ]      && mark cli      "${{ needs.release-please.outputs.cli_v }}"
           true
+
+  # Ping the Flux webhook so the cluster pulls the new chart immediately
+  # instead of waiting for the OCIRepository poll interval.
+  flux-notify:
+    needs: [release-please, publish-chart]
+    if: ${{ !cancelled() && needs.release-please.outputs.any == 'true' && needs.publish-chart.result == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - name: Trigger Flux reconcile
+        env:
+          FLUX_WEBHOOK_URL: ${{ secrets.FLUX_WEBHOOK_URL }}
+        run: |
+          set -euo pipefail
+          if [ -z "${FLUX_WEBHOOK_URL:-}" ]; then
+            echo "FLUX_WEBHOOK_URL not set — skipping (Flux pulls on its poll interval)."
+            exit 0
+          fi
+          curl -fsS -X POST "$FLUX_WEBHOOK_URL" -H "Content-Type: application/json" -d '{}'
+          echo "pinged Flux — orchard chart reconciles now."
