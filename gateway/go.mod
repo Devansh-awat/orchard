@@ -1,3 +1,3 @@
-module gateway
+module gateway // v0.1.1
 
 go 1.22

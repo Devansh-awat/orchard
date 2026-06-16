@@ -1,4 +1,4 @@
-module r2-proxy
+module r2-proxy // v0.1.1
 
 go 1.22
 
