@@ -10,7 +10,8 @@
 		OrgMembersTab,
 		OrgDatabaseTab,
 		OrgBackupsTab,
-		OrgSsoTab
+		OrgSsoTab,
+		OrgScimTab
 	} from '$lib/components/org-settings';
 
 	interface Member {
@@ -115,6 +116,22 @@
 	);
 	let ssoTesting = $state(false);
 
+	let scimLoading = $state(false);
+	let scimBaseUrl = $state('');
+	let scimTokens = $state<
+		{
+			id: string;
+			name: string;
+			lastUsedAt: string | null;
+			expiresAt: string | null;
+			createdAt: string;
+		}[]
+	>([]);
+	let scimNewName = $state('');
+	let scimCreating = $state(false);
+	let scimRevokingId = $state<string | null>(null);
+	let scimCreatedToken = $state<{ name: string; token: string } | null>(null);
+
 	const organizationSlug = $derived($page.params.orgSlug);
 	const activeTab = $derived($page.url.searchParams.get('tab') || 'general');
 	const canEditOrg = $derived(currentUserRole === 'owner' || currentUserRole === 'admin');
@@ -145,6 +162,7 @@
 					if (data.plan === 'enterprise') {
 						ssoSubdomain = data.subdomain || '';
 						await fetchSsoConfig();
+						await fetchScimTokens();
 					}
 				} else {
 					await goto(`/${organizationSlug}`, { replaceState: true });
@@ -654,6 +672,86 @@
 		}
 	}
 
+	async function fetchScimTokens() {
+		if (!organization) return;
+		scimLoading = true;
+		try {
+			const r = await apiFetch(`/apiv1/organizations/${organization.id}/scim/tokens`);
+			if (r.ok) {
+				const d = await r.json();
+				scimBaseUrl = d.baseUrl || '';
+				scimTokens = d.tokens || [];
+			}
+		} catch (e) {
+			console.error('Failed to fetch SCIM tokens:', e);
+		} finally {
+			scimLoading = false;
+		}
+	}
+
+	async function createScimToken() {
+		if (!organization || !scimNewName.trim()) return;
+		scimCreating = true;
+		try {
+			const r = await apiFetch(`/apiv1/organizations/${organization.id}/scim/tokens`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ name: scimNewName.trim() })
+			});
+			if (!r.ok) {
+				const d = await r.json().catch(() => ({}));
+				throw new Error(d.message || d.detail || 'Failed to create token');
+			}
+			const d = await r.json();
+			scimCreatedToken = { name: d.name, token: d.token };
+			if (d.baseUrl) scimBaseUrl = d.baseUrl;
+			scimTokens = [
+				{
+					id: d.id,
+					name: d.name,
+					lastUsedAt: null,
+					expiresAt: d.expiresAt ?? null,
+					createdAt: d.createdAt
+				},
+				...scimTokens
+			];
+			scimNewName = '';
+			toasts.add({ title: 'SCIM token created', color: 'success' });
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to create token',
+				color: 'error'
+			});
+		} finally {
+			scimCreating = false;
+		}
+	}
+
+	async function revokeScimToken(tokenId: string) {
+		if (!organization) return;
+		scimRevokingId = tokenId;
+		try {
+			const r = await apiFetch(`/apiv1/organizations/${organization.id}/scim/tokens/${tokenId}`, {
+				method: 'DELETE'
+			});
+			if (!r.ok) {
+				const d = await r.json().catch(() => ({}));
+				throw new Error(d.message || d.detail || 'Failed to revoke token');
+			}
+			toasts.add({ title: 'SCIM token revoked', color: 'success' });
+			scimTokens = scimTokens.filter((t) => t.id !== tokenId);
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to revoke token',
+				color: 'error'
+			});
+		} finally {
+			scimRevokingId = null;
+		}
+	}
+
 	onMount(() => {
 		fetchOrganization();
 	});
@@ -770,6 +868,23 @@
 					onSaveSsoConfig={saveSsoConfig}
 					onTestSsoConnection={testSsoConnection}
 					onDeleteSsoConfig={deleteSsoConfig}
+				/>
+			{/if}
+			{#if activeTab === 'scim' && isEnterprise}
+				<OrgScimTab
+					{isOwner}
+					{scimLoading}
+					{scimBaseUrl}
+					{scimTokens}
+					bind:scimNewName
+					{scimCreating}
+					{scimRevokingId}
+					{scimCreatedToken}
+					onCreateToken={createScimToken}
+					onRevokeToken={revokeScimToken}
+					onDismissCreatedToken={() => {
+						scimCreatedToken = null;
+					}}
 				/>
 			{/if}
 		</div>

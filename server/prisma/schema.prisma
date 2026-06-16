@@ -258,6 +258,7 @@ model Organization {
   projects    Project[]
   ssoConfig   SsoConfig?
   nodeAssignments OrgNodeAssignment[]
+  scimTokens  ScimToken[]
 
   @@index([quotaGroupId], map: "idx_organizations_quota_group")
   @@map("organizations")
@@ -286,12 +287,20 @@ model OrganizationMember {
   cpuAllowanceUnlimited     Boolean  @default(false) @map("cpu_allowance_unlimited")
   memoryAllowanceUnlimited  Boolean  @default(false) @map("memory_allowance_unlimited")
 
+  // SCIM provisioning state. A membership is the unit an IdP provisions: SCIM
+  // resource id = this row's id. scimExternalId is the IdP's stable handle for
+  // the user (carried in `externalId`); scimManaged flags rows created via SCIM
+  // so deprovisioning (active:false / DELETE) only removes IdP-owned memberships.
+  scimExternalId String?  @map("scim_external_id") @db.VarChar(255)
+  scimManaged    Boolean  @default(false) @map("scim_managed")
+
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@unique([organizationId, userId])
   @@index([organizationId], map: "idx_organization_members_org")
   @@index([userId], map: "idx_organization_members_user")
+  @@index([organizationId, scimExternalId], map: "idx_organization_members_scim_external")
   @@map("organization_members")
 }
 
@@ -927,6 +936,25 @@ model SsoConfig {
 
   @@index([organizationId], map: "idx_sso_config_org")
   @@map("sso_configs")
+}
+
+// Long-lived bearer credential an IdP presents to the SCIM endpoints. Scoped to
+// one org; only the sha256 digest is stored (mirrors ApiToken). The plaintext is
+// shown once at mint time. lastUsedAt powers "is this connector still live".
+model ScimToken {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  name           String    @db.VarChar(255)
+  tokenHash      String    @unique @map("token_hash") @db.VarChar(128)
+  createdBy      String?   @map("created_by") @db.Uuid
+  lastUsedAt     DateTime? @map("last_used_at") @db.Timestamp(6)
+  expiresAt      DateTime? @map("expires_at") @db.Timestamp(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+
+  @@index([organizationId], map: "idx_scim_tokens_org")
+  @@map("scim_tokens")
 }
 
 // Append-only audit ledger. Pruned at 180 days by AuditService.

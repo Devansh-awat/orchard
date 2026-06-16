@@ -11,6 +11,7 @@
 		Settings,
 		Users,
 		Key,
+		UserCog,
 		Gauge
 	} from '@jis3r/icons';
 	import WorkspacesMenu from './WorkspacesMenu.svelte';
@@ -307,12 +308,24 @@
 								</div>
 								<span class="tree-node-label">SSO</span>
 							</a>
+							<a
+								href="/{orgSlug}/settings?tab=scim"
+								class="tree-node-content"
+								class:is-active={settingsTab === 'scim'}
+								{@attach navStagger(5)}
+								{@attach springHover({ lift: -1 })}
+							>
+								<div class="tree-icon-badge" style="background-color: #f59e0b">
+									<UserCog size={10} class="tree-icon-svg" />
+								</div>
+								<span class="tree-node-label">SCIM</span>
+							</a>
 						{/if}
 						<a
 							href="/{orgSlug}/settings/audit-logs"
 							class="tree-node-content"
 							class:is-active={isAuditLogsRoute}
-							{@attach navStagger(5)}
+							{@attach navStagger(6)}
 							{@attach springHover({ lift: -1 })}
 						>
 							<div class="tree-icon-badge" style="background-color: #475569">
@@ -393,6 +406,18 @@
 								<Key size={11} class="tree-icon-svg" />
 							</div>
 							<span class="sidebar-collapsed-tooltip">SSO</span>
+						</a>
+						<a
+							href="/{orgSlug}/settings?tab=scim"
+							class="sidebar-collapsed-icon"
+							class:is-active={settingsTab === 'scim'}
+							aria-label="SCIM"
+							{@attach springHover()}
+						>
+							<div class="tree-icon-badge" style="background-color: #f59e0b">
+								<UserCog size={11} class="tree-icon-svg" />
+							</div>
+							<span class="sidebar-collapsed-tooltip">SCIM</span>
 						</a>
 					{/if}
 				</div>
