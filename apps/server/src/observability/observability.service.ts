@@ -144,12 +144,18 @@ export class ObservabilityService {
 
     for (const pod of pods) {
       try {
-        const result = await this.k8sWorkload.getPodLogs(
-          pod.name,
-          deployment.namespace,
-          undefined,
-          tailLines,
-        );
+        let result;
+        try {
+          result = await this.k8sWorkload.getPodLogs(pod.name, deployment.namespace, undefined, tailLines);
+        } catch (firstErr: any) {
+          const resp = typeof firstErr?.getResponse === 'function' ? firstErr.getResponse() : firstErr?.response;
+          const containers: string[] | undefined = resp?.availableContainers;
+          if (containers?.length) {
+            result = await this.k8sWorkload.getPodLogs(pod.name, deployment.namespace, containers[0], tailLines);
+          } else {
+            throw firstErr;
+          }
+        }
         const lines = (result.logs || '').split('\n').filter(Boolean);
         for (const line of lines) {
           allEntries.push(parseLine(line));
@@ -417,7 +423,7 @@ export class ObservabilityService {
     for (const ingress of ingresses) {
       if (!ingress.service) continue;
       selectors.push(
-        `${escapeRegex(ingress.service.name)}-${escapeRegex(ingress.namespace)}-${ingress.service.port}@kubernetes`,
+        `${escapeRegex(ingress.namespace)}-${escapeRegex(ingress.service.name)}-${ingress.service.port}@kubernetes`,
       );
     }
 

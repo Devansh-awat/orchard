@@ -603,10 +603,11 @@
 		const memReq = deployment?.memoryRequestBytes ?? 0;
 		const cpuPct = overview?.cpuPercent ?? 0;
 		const memPct = overview?.memoryPercent ?? 0;
-		const uptime = overview?.uptime ?? null;
-		const reqRate = overview?.requestRate ?? null;
-		const errorRate = overview?.errorRate ?? null;
-		const p95 = overview?.p95Latency ?? null;
+		const uptimeRaw = overview?.uptime ?? null;
+		const uptime = uptimeRaw ? (Date.now() - new Date(uptimeRaw).getTime()) / 1000 : null;
+		const reqRate = overview?.httpRequestRate ?? null;
+		const errorRate = overview?.httpErrorRate ?? null;
+		const p95 = overview?.httpP95Latency ?? null;
 
 		return { running, total, cpuReq, memReq, cpuPct, memPct, uptime, reqRate, errorRate, p95 };
 	});
