@@ -28,7 +28,7 @@ datadog:
 
 frontend:
   enabled: true
-  replicas: 1
+  replicas: 2
   image:
     name: frontend
     tag: "" # falls back to .Chart.AppVersion
@@ -41,7 +41,7 @@ frontend:
 
 server:
   enabled: true
-  replicas: 1
+  replicas: 2
   image:
     name: server
     tag: ""

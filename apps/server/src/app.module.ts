@@ -24,10 +24,15 @@ import { MetricsModule } from './metrics/metrics.module';
 import { AuditModule } from './audit/audit.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AiChatModule } from './ai-chat/ai-chat.module';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 
 @Module({
   imports: [
     ScheduleModule.forRoot(),
+    // Per-IP rate limiting across the whole API (200 req/60s). Tune per-route
+    // with @Throttle({...}) or exempt with @SkipThrottle().
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: 200 }]),
     PrismaModule,
     AuthModule,
     UsersModule,
@@ -53,6 +58,7 @@ import { AiChatModule } from './ai-chat/ai-chat.module';
     AnalyticsModule,
     AiChatModule,
   ],
+  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
 })
 export class AppModule {}
 
