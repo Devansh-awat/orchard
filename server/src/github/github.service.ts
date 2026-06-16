@@ -855,12 +855,12 @@ export class GitHubService {
     // https://github.com/owner/repo
     // https://github.com/owner/repo.git
     // git@github.com:owner/repo.git
-    const httpsMatch = repoUrl.match(/github\.com\/([^\/]+)\/([^\/\.]+)/);
+    const httpsMatch = repoUrl.match(/github\.com\/([^\/\s]+)\/([^\/\s]+?)(?:\.git)?(?:[\/\s]|$)/);
     if (httpsMatch) {
       return { owner: httpsMatch[1], repo: httpsMatch[2] };
     }
 
-    const sshMatch = repoUrl.match(/github\.com:([^\/]+)\/([^\/\.]+)/);
+    const sshMatch = repoUrl.match(/github\.com:([^\/\s]+)\/([^\/\s]+?)(?:\.git)?$/);
     if (sshMatch) {
       return { owner: sshMatch[1], repo: sshMatch[2] };
     }

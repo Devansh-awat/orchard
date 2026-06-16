@@ -167,8 +167,8 @@ Before calling, you should still confirm with list_github_deploy_targets that th
     },
     async ({ projectId, name, repoUrl, branch, dockerfilePath, buildFromRoot, port, env, cpuRequestMilli, memoryRequestBytes }) => {
       const trimmed = repoUrl.trim();
-      const httpsMatch = trimmed.match(/^https?:\/\/github\.com\/([^\/\s]+)\/([^\/\s\.]+?)(?:\.git)?(?:\/(?:tree|blob)\/([^\/\s]+))?(?:\/.*)?$/i);
-      const sshMatch = trimmed.match(/^git@github\.com:([^\/\s]+)\/([^\/\s\.]+?)(?:\.git)?$/i);
+      const httpsMatch = trimmed.match(/^https?:\/\/github\.com\/([^\/\s]+)\/([^\/\s]+?)(?:\.git)?(?:\/(?:tree|blob)\/([^\/\s]+))?(?:\/.*)?$/i);
+      const sshMatch = trimmed.match(/^git@github\.com:([^\/\s]+)\/([^\/\s]+?)(?:\.git)?$/i);
       const m = httpsMatch ?? sshMatch;
       if (!m) {
         return {
