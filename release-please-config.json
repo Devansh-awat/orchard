@@ -5,10 +5,25 @@
   "include-v-in-tag": true,
   "tag-separator": "/",
   "packages": {
-    "server": { "release-type": "node", "component": "server" },
-    "frontend": { "release-type": "node", "component": "frontend" },
-    "gateway": { "release-type": "go", "component": "gateway" },
-    "cli": { "release-type": "go", "component": "cli" },
-    "r2-proxy": { "release-type": "go", "component": "r2-proxy" }
+    "apps/server": {
+      "release-type": "node",
+      "component": "server"
+    },
+    "apps/frontend": {
+      "release-type": "node",
+      "component": "frontend"
+    },
+    "apps/gateway": {
+      "release-type": "go",
+      "component": "gateway"
+    },
+    "apps/cli": {
+      "release-type": "go",
+      "component": "cli"
+    },
+    "apps/r2-proxy": {
+      "release-type": "go",
+      "component": "r2-proxy"
+    }
   }
 }

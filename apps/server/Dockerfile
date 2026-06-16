@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
-# Build this Dockerfile from the project root directory, not from server/
-# Example: docker build -f server/Dockerfile -t server .
+# Build this Dockerfile from the project root directory, not from apps/server/
+# Example: docker build -f apps/server/Dockerfile -t server .
 # The build context must be the root to access pnpm-workspace.yaml and other root files
 #
 # Requires BuildKit (default on Docker 23+ / Docker Desktop). If your `docker build`
@@ -25,7 +25,7 @@ WORKDIR /app
 
 # Copy only package files first for better layer caching
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
-COPY server/package.json ./server/
+COPY apps/server/package.json ./apps/server/
 
 # Use BuildKit cache mount for pnpm store to speed up rebuilds
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
@@ -35,13 +35,13 @@ FROM base AS builder
 WORKDIR /app
 
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/server/node_modules ./server/node_modules
+COPY --from=deps /app/apps/server/node_modules ./apps/server/node_modules
 
 # Copy source files
-COPY server ./server
+COPY apps/server ./apps/server
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 
-WORKDIR /app/server
+WORKDIR /app/apps/server
 RUN pnpm prisma:generate
 RUN pnpm build
 
@@ -66,18 +66,18 @@ RUN --mount=type=cache,target=/var/cache/apt,sharing=locked \
     && apt-get install -y --no-install-recommends docker-ce-cli
 
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
-COPY --from=builder /app/server/package.json ./server/package.json
-COPY --from=builder /app/server/dist ./server/dist
-COPY --from=builder /app/server/prisma ./server/prisma
+COPY --from=builder /app/apps/server/package.json ./apps/server/package.json
+COPY --from=builder /app/apps/server/dist ./apps/server/dist
+COPY --from=builder /app/apps/server/prisma ./apps/server/prisma
 
 # Use cache mount for faster production dependency installs
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile --prod --filter server
 
-WORKDIR /app/server
+WORKDIR /app/apps/server
 RUN pnpm dlx prisma@6.18.0 generate
 
-COPY server/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
+COPY apps/server/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
 RUN chmod +x /usr/local/bin/docker-entrypoint.sh
 
 EXPOSE 3001

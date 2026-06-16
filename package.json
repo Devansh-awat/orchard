@@ -4,11 +4,9 @@
   "private": true,
   "scripts": {
     "dev": "pnpm --parallel --stream --filter frontend --filter server --filter gateway dev",
-    "dev:lif": "pnpm --filter lif dev",
     "dev:server": "pnpm --filter server dev",
     "dev:gateway": "pnpm --filter gateway dev",
     "build": "pnpm --parallel run build",
-    "build:lif": "pnpm --filter lif build",
     "build:server": "pnpm --filter server build",
     "prisma:generate": "pnpm --filter server prisma:generate"
   },

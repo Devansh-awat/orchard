@@ -12,6 +12,7 @@ bun.lockb
 # Generated output
 /build/
 /.svelte-kit/
+CHANGELOG.md
 
 # Docs
 CLAUDE.md

@@ -1,0 +1,7 @@
+# Default owner for everything; refine per-path as the team grows.
+*           @LeafdTK
+
+/apps/frontend/   @LeafdTK
+/apps/server/     @LeafdTK
+/infra/           @LeafdTK
+/.github/         @LeafdTK

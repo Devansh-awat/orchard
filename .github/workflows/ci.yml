@@ -29,28 +29,28 @@ jobs:
         with:
           filters: |
             frontend:
-              - 'frontend/**'
+              - 'apps/frontend/**'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
               - 'package.json'
               - '.github/workflows/**'
             server:
-              - 'server/**'
+              - 'apps/server/**'
               - 'pnpm-lock.yaml'
               - 'pnpm-workspace.yaml'
               - 'package.json'
               - '.github/workflows/**'
             gateway:
-              - 'gateway/**'
+              - 'apps/gateway/**'
               - '.github/workflows/**'
             cli:
-              - 'cli/**'
+              - 'apps/cli/**'
               - '.github/workflows/**'
             r2_proxy:
-              - 'r2-proxy/**'
+              - 'apps/r2-proxy/**'
               - '.github/workflows/**'
             chart:
-              - 'charts/**'
+              - 'infra/charts/**'
               - '.github/workflows/**'
 
   commitlint:
@@ -75,8 +75,18 @@ jobs:
     needs: changes
     if: needs.changes.outputs.frontend == 'true'
     runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
+      - uses: actions/create-github-app-token@v1
+        id: app-token
+        with:
+          app-id: 1090304
+          private-key: ${{ secrets.LEAFDBOT_PRIVATE_KEY }}
       - uses: actions/checkout@v4
+        with:
+          token: ${{ steps.app-token.outputs.token }}
+          ref: ${{ github.head_ref }}
       - uses: pnpm/action-setup@v4
         with:
           version: 10
@@ -85,8 +95,18 @@ jobs:
           node-version: 22
           cache: pnpm
       - run: pnpm install --frozen-lockfile
-      - name: Prettier check
-        run: pnpm --filter frontend lint
+      - name: Prettier (auto-fix + self-commit)
+        run: |
+          pnpm --filter frontend exec prettier --write .
+          if git diff --quiet; then echo "already formatted"; exit 0; fi
+          if ! pnpm --filter frontend exec prettier --check . >/dev/null 2>&1; then
+            echo "prettier output failed re-validation — refusing to commit" >&2
+            git checkout -- .; exit 1
+          fi
+          git config user.name "leafdbot[bot]"
+          git config user.email "192038741+leafdbot[bot]@users.noreply.github.com"
+          git commit -am "chore(ci): apply linter fixes"
+          git push
       - name: Build
         run: pnpm --filter frontend build
 
@@ -152,12 +172,12 @@ jobs:
       - name: Migrate + generate
         run: |
           pnpm --filter server prisma:generate
-          cd server && pnpm exec prisma migrate deploy
+          cd apps/server && pnpm exec prisma migrate deploy
       - name: Build server
         run: pnpm --filter server build
       - name: Boot server + run RBAC e2e
         run: |
-          (cd server && node dist/main &)
+          (cd apps/server && node dist/main &)
           for i in $(seq 1 90); do
             (echo > /dev/tcp/localhost/3001) >/dev/null 2>&1 && break
             sleep 1
@@ -173,9 +193,9 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: cli/go.mod
-          cache-dependency-path: cli/go.sum
-      - run: cd cli && go vet ./... && go test ./... -count=1
+          go-version-file: apps/cli/go.mod
+          cache-dependency-path: apps/cli/go.sum
+      - run: cd apps/cli && go vet ./... && go test ./... -count=1
 
   go-gateway:
     needs: changes
@@ -185,8 +205,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: gateway/go.mod
-      - run: cd gateway && go vet ./... && go build ./...
+          go-version-file: apps/gateway/go.mod
+      - run: cd apps/gateway && go vet ./... && go build ./...
 
   go-r2-proxy:
     needs: changes
@@ -196,8 +216,8 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version-file: r2-proxy/go.mod
-      - run: cd r2-proxy && go vet ./... && go build ./...
+          go-version-file: apps/r2-proxy/go.mod
+      - run: cd apps/r2-proxy && go vet ./... && go build ./...
 
   helm-lint:
     needs: changes
@@ -206,7 +226,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
       - uses: azure/setup-helm@v4
-      - run: helm lint charts/orchard
+      - run: helm lint infra/charts/orchard
 
   validate-images:
     needs: changes
@@ -218,6 +238,6 @@ jobs:
       - name: Build changed images (no push)
         run: |
           build() { docker buildx build "$3" -f "$2" --build-arg VERSION=0.0.0-ci -t "ci/$1" --load=false; }
-          if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then build frontend frontend/Dockerfile .; fi
-          if [ "${{ needs.changes.outputs.server }}" = "true" ]; then build server server/Dockerfile .; build mcp server/Dockerfile.mcp .; fi
-          if [ "${{ needs.changes.outputs.r2_proxy }}" = "true" ]; then build r2-proxy r2-proxy/Dockerfile r2-proxy; fi
+          if [ "${{ needs.changes.outputs.frontend }}" = "true" ]; then build frontend apps/frontend/Dockerfile .; fi
+          if [ "${{ needs.changes.outputs.server }}" = "true" ]; then build server apps/server/Dockerfile .; build mcp apps/server/Dockerfile.mcp .; fi
+          if [ "${{ needs.changes.outputs.r2_proxy }}" = "true" ]; then build r2-proxy apps/r2-proxy/Dockerfile apps/r2-proxy; fi

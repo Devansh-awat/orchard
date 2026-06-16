@@ -1,0 +1,255 @@
+# Kubernetes manifests for the BuildKit-based image builder system
+# This sets up the namespace, service account, RBAC, and secrets needed for
+# building Docker images using BuildKit pods with Cloudflare R2 cache support.
+#
+# SETUP INSTRUCTIONS:
+# 1. Replace all ${...} placeholders with actual values
+# 2. Apply with: kubectl apply -f image-builder-setup.yaml
+# 3. Set environment variables in your backend deployment (see README below)
+
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: orchard-builders
+  labels:
+    app.kubernetes.io/managed-by: leaf-image-builder
+    purpose: image-builds
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/warn: privileged
+
+---
+# Service Account for image builder pods
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: image-builder
+  namespace: orchard-builders
+  labels:
+    app.kubernetes.io/name: image-builder
+    app.kubernetes.io/managed-by: leaf
+
+---
+# Role for image builder - minimal permissions needed
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: image-builder-role
+  namespace: orchard-builders
+rules:
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get"]
+
+---
+# RoleBinding for image builder service account
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: image-builder-rolebinding
+  namespace: orchard-builders
+subjects:
+  - kind: ServiceAccount
+    name: image-builder
+    namespace: orchard-builders
+roleRef:
+  kind: Role
+  name: image-builder-role
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# Secret for Harbor registry credentials
+# Replace ${HARBOR_PASSWORD} with your actual Harbor password
+apiVersion: v1
+kind: Secret
+metadata:
+  name: harbor-registry-creds
+  namespace: orchard-builders
+  labels:
+    app.kubernetes.io/name: image-builder
+    app.kubernetes.io/managed-by: leaf
+# NOTE: Do NOT commit plaintext registry credentials. Apply this Secret
+# out-of-band (e.g. `kubectl create secret docker-registry ...`) or via
+# sops-encrypted manifests / ExternalSecrets.
+type: kubernetes.io/dockerconfigjson
+stringData:
+  .dockerconfigjson: |
+    {
+      "auths": {
+        "harbor-core.harbor.svc.cluster.local": {
+          "username": "REPLACE_ME_HARBOR_USER",
+          "password": "REPLACE_ME_HARBOR_PASSWORD"
+        },
+        "harbor.1mp.dev": {
+          "username": "REPLACE_ME_HARBOR_USER",
+          "password": "REPLACE_ME_HARBOR_PASSWORD"
+        }
+      }
+    }
+
+---
+# Secret for Cloudflare R2 cache credentials
+# Get these from Cloudflare Dashboard > R2 > Manage R2 API Tokens
+# Replace ${R2_ACCESS_KEY_ID} and ${R2_SECRET_ACCESS_KEY} with your R2 API token credentials
+apiVersion: v1
+kind: Secret
+metadata:
+  name: buildkit-s3-cache-creds
+  namespace: orchard-builders
+  labels:
+    app.kubernetes.io/name: image-builder
+    app.kubernetes.io/managed-by: leaf
+# NOTE: Do NOT commit plaintext R2 credentials. Apply this Secret out-of-band
+# or via sops-encrypted manifests / ExternalSecrets.
+type: Opaque
+stringData:
+  # These should match the R2_ACCESS_KEY_ID and R2_SECRET_ACCESS_KEY in the backend deployment
+  AWS_ACCESS_KEY_ID: "REPLACE_ME_R2_ACCESS_KEY_ID"
+  AWS_SECRET_ACCESS_KEY: "REPLACE_ME_R2_SECRET_ACCESS_KEY"
+
+---
+# ConfigMap for BuildKit configuration
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: buildkit-config
+  namespace: orchard-builders
+  labels:
+    app.kubernetes.io/name: image-builder
+    app.kubernetes.io/managed-by: leaf
+data:
+  buildkitd.toml: |
+    # BuildKit daemon configuration
+    debug = true
+
+    [worker.oci]
+      max-parallelism = 4
+
+    [worker.containerd]
+      enabled = false
+
+    # Registry configuration for insecure registries
+    # The key must match exactly how the registry is referenced in the image name
+    # For plain HTTP registries, use ONLY http=true
+    # insecure=true means "HTTPS with self-signed cert", NOT "allow HTTP"
+    [registry."harbor-core.harbor.svc.cluster.local"]
+      http = true
+
+    [registry."178.156.144.127"]
+      http = true
+
+---
+# ResourceQuota to limit builder resources
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: builder-quota
+  namespace: orchard-builders
+spec:
+  hard:
+    requests.cpu: "16"
+    requests.memory: "32Gi"
+    limits.cpu: "32"
+    limits.memory: "64Gi"
+    pods: "10"
+
+---
+# LimitRange for default pod limits
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: builder-limits
+  namespace: orchard-builders
+spec:
+  limits:
+    - default:
+        cpu: "4"
+        memory: "8Gi"
+      defaultRequest:
+        cpu: "500m"
+        memory: "1Gi"
+      type: Container
+
+---
+# NetworkPolicy to allow builder pods to access required services
+# NOTE: For now, allowing all egress. Can be tightened later if needed.
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: builder-network-policy
+  namespace: orchard-builders
+spec:
+  podSelector:
+    matchLabels:
+      app.kubernetes.io/name: image-builder
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress: []  # No ingress needed
+  egress:
+    # Allow all egress - builder pods need to access:
+    # - DNS (port 53)
+    # - Git repos (HTTPS port 443)
+    # - Harbor registry (HTTP port 80, internal cluster IPs)
+    # - S3/R2 cache (HTTPS port 443)
+    - {}
+
+---
+# ClusterRole to allow creating/managing build jobs in orchard-builders namespace
+# This needs to be bound to the backend's service account
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: leaf-image-builder-manager
+  labels:
+    app.kubernetes.io/name: image-builder
+    app.kubernetes.io/managed-by: leaf
+rules:
+  # Namespace management
+  - apiGroups: [""]
+    resources: ["namespaces"]
+    verbs: ["get", "create"]
+  # Jobs management for builds
+  - apiGroups: ["batch"]
+    resources: ["jobs"]
+    verbs: ["get", "list", "watch", "create", "delete"]
+  # Pods for log streaming
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+  # Secrets and ConfigMaps management
+  - apiGroups: [""]
+    resources: ["secrets", "configmaps"]
+    verbs: ["get", "list", "create", "update", "patch"]
+  # ServiceAccounts and RBAC setup
+  - apiGroups: [""]
+    resources: ["serviceaccounts"]
+    verbs: ["get", "create"]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: ["roles", "rolebindings"]
+    verbs: ["get", "create"]
+
+---
+# ClusterRoleBinding - binds the ClusterRole to the backend's service account
+# Update the namespace and service account name to match your backend deployment
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: leaf-image-builder-manager-binding
+  labels:
+    app.kubernetes.io/name: image-builder
+    app.kubernetes.io/managed-by: leaf
+subjects:
+  # Update this to match your backend's service account
+  # If using default service account in a namespace:
+  - kind: ServiceAccount
+    name: default
+    namespace: leafycorp-thething-the-thing
+roleRef:
+  kind: ClusterRole
+  name: leaf-image-builder-manager
+  apiGroup: rbac.authorization.k8s.io

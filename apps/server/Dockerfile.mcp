@@ -1,5 +1,5 @@
 # syntax=docker/dockerfile:1
-# Build from the project root: docker build -f server/Dockerfile.mcp -t orchard-mcp .
+# Build from the project root: docker build -f apps/server/Dockerfile.mcp -t orchard-mcp .
 # Requires BuildKit. On Docker 23+ this is on by default; otherwise set DOCKER_BUILDKIT=1.
 
 FROM node:22-bookworm-slim AS base
@@ -18,7 +18,7 @@ FROM base AS deps
 WORKDIR /app
 
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
-COPY server/package.json ./server/
+COPY apps/server/package.json ./apps/server/
 
 RUN --mount=type=cache,id=pnpm,target=/root/.local/share/pnpm/store \
     pnpm install --frozen-lockfile
@@ -30,12 +30,12 @@ ENV NODE_ENV=production
 
 COPY pnpm-workspace.yaml package.json pnpm-lock.yaml ./
 COPY --from=deps /app/node_modules ./node_modules
-COPY --from=deps /app/server/node_modules ./server/node_modules
-COPY server/package.json server/tsconfig.json server/.swcrc ./server/
-COPY server/src ./server/src
-COPY server/prisma ./server/prisma
+COPY --from=deps /app/apps/server/node_modules ./apps/server/node_modules
+COPY apps/server/package.json apps/server/tsconfig.json apps/server/.swcrc ./apps/server/
+COPY apps/server/src ./apps/server/src
+COPY apps/server/prisma ./apps/server/prisma
 
-WORKDIR /app/server
+WORKDIR /app/apps/server
 RUN pnpm prisma:generate
 
 EXPOSE 3100

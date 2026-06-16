@@ -1,8 +1,6 @@
 packages:
-  - 'lif'
-  - 'server'
-  - 'frontend'
-  - 'gateway'
+  - 'apps/*'
+  - 'packages/*'
 allowBuilds:
   '@datadog/native-appsec': true
   '@datadog/native-iast-taint-tracking': true

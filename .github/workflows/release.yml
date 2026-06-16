@@ -16,16 +16,16 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       any: ${{ steps.rp.outputs.releases_created }}
-      frontend: ${{ steps.rp.outputs['frontend--release_created'] }}
-      frontend_v: ${{ steps.rp.outputs['frontend--version'] }}
-      server: ${{ steps.rp.outputs['server--release_created'] }}
-      server_v: ${{ steps.rp.outputs['server--version'] }}
-      r2_proxy: ${{ steps.rp.outputs['r2-proxy--release_created'] }}
-      r2_proxy_v: ${{ steps.rp.outputs['r2-proxy--version'] }}
-      gateway: ${{ steps.rp.outputs['gateway--release_created'] }}
-      gateway_v: ${{ steps.rp.outputs['gateway--version'] }}
-      cli: ${{ steps.rp.outputs['cli--release_created'] }}
-      cli_v: ${{ steps.rp.outputs['cli--version'] }}
+      frontend: ${{ steps.rp.outputs['apps/frontend--release_created'] }}
+      frontend_v: ${{ steps.rp.outputs['apps/frontend--version'] }}
+      server: ${{ steps.rp.outputs['apps/server--release_created'] }}
+      server_v: ${{ steps.rp.outputs['apps/server--version'] }}
+      r2_proxy: ${{ steps.rp.outputs['apps/r2-proxy--release_created'] }}
+      r2_proxy_v: ${{ steps.rp.outputs['apps/r2-proxy--version'] }}
+      gateway: ${{ steps.rp.outputs['apps/gateway--release_created'] }}
+      gateway_v: ${{ steps.rp.outputs['apps/gateway--version'] }}
+      cli: ${{ steps.rp.outputs['apps/cli--release_created'] }}
+      cli_v: ${{ steps.rp.outputs['apps/cli--version'] }}
     steps:
       - uses: actions/create-github-app-token@v1
         id: app-token
@@ -44,7 +44,7 @@ jobs:
     secrets: inherit
     with:
       service: frontend
-      dockerfile: frontend/Dockerfile
+      dockerfile: apps/frontend/Dockerfile
       version: ${{ needs.release-please.outputs.frontend_v }}
 
   image-server:
@@ -54,7 +54,7 @@ jobs:
     secrets: inherit
     with:
       service: server
-      dockerfile: server/Dockerfile
+      dockerfile: apps/server/Dockerfile
       version: ${{ needs.release-please.outputs.server_v }}
 
   image-mcp:
@@ -64,7 +64,7 @@ jobs:
     secrets: inherit
     with:
       service: mcp
-      dockerfile: server/Dockerfile.mcp
+      dockerfile: apps/server/Dockerfile.mcp
       version: ${{ needs.release-please.outputs.server_v }}
 
   image-r2-proxy:
@@ -74,8 +74,8 @@ jobs:
     secrets: inherit
     with:
       service: r2-proxy
-      dockerfile: r2-proxy/Dockerfile
-      context: r2-proxy
+      dockerfile: apps/r2-proxy/Dockerfile
+      context: apps/r2-proxy
       version: ${{ needs.release-please.outputs.r2_proxy_v }}
 
   # Runs after the (possibly-skipped) image jobs as long as none FAILED.
@@ -102,21 +102,21 @@ jobs:
           sudo chmod +x /usr/local/bin/yq
 
           M=.release-please-manifest.json
-          FRONTEND=$(jq -r '.frontend' "$M"); SERVER=$(jq -r '.server' "$M")
-          R2=$(jq -r '."r2-proxy"' "$M")
+          FRONTEND=$(jq -r '."apps/frontend"' "$M"); SERVER=$(jq -r '."apps/server"' "$M")
+          R2=$(jq -r '."apps/r2-proxy"' "$M")
           UMBRELLA=$(printf '%s\n' \
-            "$(jq -r '.frontend' "$M")" "$(jq -r '.server' "$M")" \
-            "$(jq -r '.gateway' "$M")" "$(jq -r '.cli' "$M")" \
-            "$(jq -r '."r2-proxy"' "$M")" | sort -V | tail -1)
+            "$(jq -r '."apps/frontend"' "$M")" "$(jq -r '."apps/server"' "$M")" \
+            "$(jq -r '."apps/gateway"' "$M")" "$(jq -r '."apps/cli"' "$M")" \
+            "$(jq -r '."apps/r2-proxy"' "$M")" | sort -V | tail -1)
 
-          yq -i ".version = \"$UMBRELLA\" | .appVersion = \"$UMBRELLA\"" charts/orchard/Chart.yaml
-          yq -i ".frontend.image.tag = \"$FRONTEND\"" charts/orchard/values.yaml
-          yq -i ".server.image.tag   = \"$SERVER\""   charts/orchard/values.yaml
-          yq -i ".mcp.image.tag      = \"$SERVER\""   charts/orchard/values.yaml
-          yq -i ".r2Proxy.image.tag  = \"$R2\""       charts/orchard/values.yaml
+          yq -i ".version = \"$UMBRELLA\" | .appVersion = \"$UMBRELLA\"" infra/charts/orchard/Chart.yaml
+          yq -i ".frontend.image.tag = \"$FRONTEND\"" infra/charts/orchard/values.yaml
+          yq -i ".server.image.tag   = \"$SERVER\""   infra/charts/orchard/values.yaml
+          yq -i ".mcp.image.tag      = \"$SERVER\""   infra/charts/orchard/values.yaml
+          yq -i ".r2Proxy.image.tag  = \"$R2\""       infra/charts/orchard/values.yaml
 
           echo "${{ secrets.GITHUB_TOKEN }}" | helm registry login ghcr.io -u ${{ github.actor }} --password-stdin
-          helm package charts/orchard -d dist
+          helm package infra/charts/orchard -d dist
           helm push "$(ls dist/*.tgz)" oci://ghcr.io/leafdtk/leaf/charts
 
   deploy-marker:

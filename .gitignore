@@ -1,6 +1,17 @@
 node_modules
 dist
 graphify-out/
+
+# Local agent state
+.claude/
+
+# Large binaries / design exports — keep out of git
+*.pdf
+
+# Compiled Go binaries (build outputs)
+/apps/cli/orchard
+/apps/gateway/gateway
+/apps/r2-proxy/r2-proxy
 .env
 .env.*
 !.env.example
