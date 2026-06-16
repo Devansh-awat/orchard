@@ -1,0 +1,198 @@
+version: 2.1
+
+# Continued from config.yml's decide job ON MAIN ONLY. release-please has
+# already run in decide; this config just builds/publishes what it bumped.
+# versions.json is passed in (base64) and each per-component workflow is gated
+# on a released_* parameter, so unbumped components are never scheduled.
+
+parameters:
+  registry:
+    type: string
+    default: ghcr.io
+  image_repo:
+    type: string
+    default: leafdtk/leaf
+  versions_b64: { type: string, default: "" }
+  released_frontend: { type: boolean, default: false }
+  released_server: { type: boolean, default: false }
+  released_mcp: { type: boolean, default: false }
+  released_r2_proxy: { type: boolean, default: false }
+  released_any: { type: boolean, default: false }
+
+executors:
+  builder:
+    machine:
+      image: ubuntu-2404:current
+      docker_layer_caching: true
+    working_directory: ~/repo
+    resource_class: medium
+  node:
+    docker:
+      - image: cimg/node:22.13.0
+    working_directory: ~/repo
+    resource_class: medium
+
+commands:
+  decode_versions:
+    steps:
+      - run:
+          name: Restore versions.json
+          command: printf '%s' "<< pipeline.parameters.versions_b64 >>" | base64 -d > versions.json
+  buildx_login:
+    steps:
+      - run:
+          name: Set up buildx + GHCR login
+          command: |
+            echo "$GHCR_PAT" | docker login << pipeline.parameters.registry >> \
+              -u "$GHCR_USER" --password-stdin
+            docker buildx create --use --name orchard --driver docker-container \
+              --driver-opt image=moby/buildkit:latest || docker buildx use orchard
+
+jobs:
+  publish-image:
+    executor: builder
+    parameters:
+      service: { type: string }
+      dockerfile: { type: string }
+      build_context: { type: string, default: "." }
+      vkey: { type: string }
+    steps:
+      - checkout
+      - decode_versions
+      - buildx_login
+      - run:
+          name: Build + push << parameters.service >>
+          command: |
+            REG="<< pipeline.parameters.registry >>/<< pipeline.parameters.image_repo >>"
+            IMAGE="$REG/<< parameters.service >>"
+            V=$(jq -r '."<< parameters.vkey >>"' versions.json)
+            CHANNEL=$(jq -r '.channel' versions.json)
+
+            TAGS=( "-t" "$IMAGE:$V" "-t" "$IMAGE:sha-$CIRCLE_SHA1" "-t" "$IMAGE:$CIRCLE_BRANCH" )
+            [ "$CHANNEL" = "stable" ] && TAGS+=( "-t" "$IMAGE:latest" )
+            [ "$CHANNEL" = "beta" ] && TAGS+=( "-t" "$IMAGE:beta" )
+
+            docker buildx build "<< parameters.build_context >>" \
+              -f "<< parameters.dockerfile >>" \
+              "${TAGS[@]}" \
+              --build-arg BUILDKIT_INLINE_CACHE=1 \
+              --build-arg "VERSION=$V" \
+              --cache-from "type=registry,ref=$IMAGE:buildcache" \
+              --cache-from "type=registry,ref=$IMAGE:latest" \
+              --cache-to "type=registry,ref=$IMAGE:buildcache,mode=max,image-manifest=true,oci-mediatypes=true,compression=zstd" \
+              --provenance=false \
+              --push
+
+  publish-chart:
+    executor: builder
+    steps:
+      - checkout
+      - decode_versions
+      - run:
+          name: Publish chart
+          command: |
+            set -euo pipefail
+            curl -fsSL https://get.helm.sh/helm-v3.16.2-linux-amd64.tar.gz | tar xz
+            sudo install linux-amd64/helm /usr/local/bin/helm
+            sudo curl -fsSL -o /usr/local/bin/yq \
+              https://github.com/mikefarah/yq/releases/download/v4.44.3/yq_linux_amd64
+            sudo chmod +x /usr/local/bin/yq
+
+            U=$(jq -r '.umbrella' versions.json)
+            yq -i ".version = \"$U\" | .appVersion = \"$U\"" charts/orchard/Chart.yaml
+            yq -i ".frontend.image.tag = \"$(jq -r .frontend versions.json)\"" charts/orchard/values.yaml
+            yq -i ".server.image.tag   = \"$(jq -r .server versions.json)\""   charts/orchard/values.yaml
+            yq -i ".mcp.image.tag      = \"$(jq -r .mcp versions.json)\""      charts/orchard/values.yaml
+            yq -i ".r2Proxy.image.tag  = \"$(jq -r '."r2-proxy"' versions.json)\"" charts/orchard/values.yaml
+
+            echo "$GHCR_PAT" | helm registry login << pipeline.parameters.registry >> \
+              -u "$GHCR_USER" --password-stdin
+            helm package charts/orchard -d dist
+            helm push "$(ls dist/*.tgz)" \
+              "oci://<< pipeline.parameters.registry >>/<< pipeline.parameters.image_repo >>/charts"
+
+  noop:
+    docker:
+      - image: cimg/base:current
+    resource_class: small
+    steps:
+      - run:
+          name: Nothing released
+          command: echo "No component was bumped this run — nothing to publish."
+
+  deploy-marker:
+    executor: node
+    steps:
+      - checkout
+      - decode_versions
+      - run:
+          name: Datadog deploy marker
+          command: |
+            set -euo pipefail
+            if [ -z "${DD_API_KEY:-}" ]; then
+              echo "DD_API_KEY not set — skipping deploy marker." >&2
+              exit 0
+            fi
+            SITE="${DD_SITE:-datadoghq.com}"
+            U=$(jq -r '.umbrella' versions.json)
+            CHANNEL=$(jq -r '.channel' versions.json)
+            ENV=production
+            [ "$CHANNEL" = "beta" ] && ENV=beta
+            for svc in frontend server mcp gateway cli r2-proxy; do
+              REL=$(jq -r --arg k "released_$svc" '.[$k] // false' versions.json)
+              [ "$REL" = "true" ] || continue
+              V=$(jq -r --arg k "$svc" '.[$k]' versions.json)
+              curl -fsS -X POST "https://api.${SITE}/api/v1/events" \
+                -H "DD-API-KEY: ${DD_API_KEY}" \
+                -H "Content-Type: application/json" \
+                -d "{\"title\":\"Deploy ${svc} v${V}\",\"text\":\"orchard ${svc} ${V} (umbrella ${U}) published from ${CIRCLE_BRANCH} %%% sha: ${CIRCLE_SHA1} %%%\",\"alert_type\":\"info\",\"tags\":[\"service:${svc}\",\"version:${V}\",\"env:${ENV}\",\"source:circleci\",\"event_type:deploy\"]}"
+              echo "marked ${svc} v${V}"
+            done
+
+workflows:
+  release-frontend:
+    when: << pipeline.parameters.released_frontend >>
+    jobs:
+      - publish-image:
+          name: image-frontend
+          service: frontend
+          dockerfile: frontend/Dockerfile
+          vkey: frontend
+
+  release-server:
+    when: << pipeline.parameters.released_server >>
+    jobs:
+      - publish-image:
+          name: image-server
+          service: server
+          dockerfile: server/Dockerfile
+          vkey: server
+      - publish-image:
+          name: image-mcp
+          service: mcp
+          dockerfile: server/Dockerfile.mcp
+          vkey: mcp
+
+  release-r2-proxy:
+    when: << pipeline.parameters.released_r2_proxy >>
+    jobs:
+      - publish-image:
+          name: image-r2-proxy
+          service: r2-proxy
+          build_context: r2-proxy
+          dockerfile: r2-proxy/Dockerfile
+          vkey: r2-proxy
+
+  release-chart:
+    when: << pipeline.parameters.released_any >>
+    jobs:
+      - publish-chart
+      - deploy-marker:
+          requires:
+            - publish-chart
+
+  no-release:
+    when:
+      not: << pipeline.parameters.released_any >>
+    jobs:
+      - noop

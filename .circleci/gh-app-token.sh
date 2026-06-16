@@ -2,10 +2,11 @@
 set -euo pipefail
 
 # Mints a short-lived GitHub App installation token for leafdbot and prints it.
-# Needs: LEAFDBOT_APP_ID, and LEAFDBOT_PRIVATE_KEY_B64 (base64 of the app PEM)
-# or LEAFDBOT_PRIVATE_KEY (raw PEM). Optional first arg = owner/repo.
+# Needs: LEAFDBOT_PRIVATE_KEY_B64 (base64 of the app PEM) or LEAFDBOT_PRIVATE_KEY
+# (raw PEM). Optional first arg = owner/repo. The leafdbot App ID is a constant
+# (192038741 is the bot USER id used in the commit email, NOT the App ID).
 
-app_id="${LEAFDBOT_APP_ID:?set LEAFDBOT_APP_ID}"
+app_id="${LEAFDBOT_APP_ID:-1090304}"
 repo="${1:-LeafdTK/leaf}"
 api="https://api.github.com"
 

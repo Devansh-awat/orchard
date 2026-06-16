@@ -19,8 +19,8 @@ if ! pnpm --filter frontend exec prettier --check . >/dev/null 2>&1; then
   exit 1
 fi
 
-if [ -z "${LEAFDBOT_APP_ID:-}" ] || [ -z "${CIRCLE_BRANCH:-}" ]; then
-  echo "leafdbot app credentials / branch unavailable — cannot self-commit." >&2
+if [ -z "${LEAFDBOT_PRIVATE_KEY_B64:-}${LEAFDBOT_PRIVATE_KEY:-}" ] || [ -z "${CIRCLE_BRANCH:-}" ]; then
+  echo "leafdbot private key / branch unavailable — cannot self-commit." >&2
   echo "Run 'pnpm --filter frontend lint' locally and commit the formatting." >&2
   exit 1
 fi
