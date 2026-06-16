@@ -410,44 +410,50 @@ jobs:
               echo "marked ${svc} v${V}"
             done
 
+# Checks run on every branch EXCEPT main — they gate the PR, not the release.
+pr_only: &pr_only
+  filters:
+    branches:
+      ignore: main
+
+# Release runs ONLY on main, with no test dependencies: the PR already proved
+# green, and release-please (the version job) is the sole authority on what gets
+# released — each image self-skips unless its package was bumped this run.
 release_filter: &release_filter
   filters:
     branches:
-      only:
-        - main
-        - beta
-        - alpha
-        - rc
-        - /^[0-9]+\.x$/
-        - /^[0-9]+\.[0-9]+\.x$/
+      only: main
 
 workflows:
   ci:
     jobs:
-      - commitlint
-      - secret-scan
-      - format-frontend
-      - frontend-build
-      - server-build-test
-      - e2e
-      - go-cli
-      - go-gateway
-      - go-r2-proxy
-      - helm-lint
+      # ── checks (PRs / feature branches; never main) ──
+      - commitlint:
+          <<: *pr_only
+      - secret-scan:
+          <<: *pr_only
+      - format-frontend:
+          <<: *pr_only
+      - frontend-build:
+          <<: *pr_only
+      - server-build-test:
+          <<: *pr_only
+      - e2e:
+          <<: *pr_only
+      - go-cli:
+          <<: *pr_only
+      - go-gateway:
+          <<: *pr_only
+      - go-r2-proxy:
+          <<: *pr_only
+      - helm-lint:
+          <<: *pr_only
       - validate-images:
-          filters:
-            branches:
-              ignore: [main, beta, alpha, rc]
+          <<: *pr_only
 
+      # ── release (main only; release-please decides what builds) ──
       - version:
           <<: *release_filter
-          requires:
-            - server-build-test
-            - frontend-build
-            - e2e
-            - go-cli
-            - go-gateway
-            - go-r2-proxy
       - publish-image:
           name: image-frontend
           <<: *release_filter
