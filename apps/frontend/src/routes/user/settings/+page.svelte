@@ -110,6 +110,9 @@
 	let earlyAccessEnrollment = $state<Record<string, boolean>>({});
 	let togglingFeature = $state<string | null>(null);
 
+	let backendVersion = $state<string | null>(null);
+	const frontendVersion = __APP_VERSION__;
+
 	const tailscaleEnabled = featureFlag('tailscale-integration');
 
 	function censorEmail(email: string): string {
@@ -681,6 +684,10 @@
 		fetchPasskeys();
 		fetchSessions();
 		fetchEarlyAccessFeatures();
+		apiFetch('/apiv1/health')
+			.then((r) => r.json())
+			.then((d) => (backendVersion = d.version))
+			.catch(() => {});
 		if (browser && window.location.hash === '#invitations') {
 			requestAnimationFrame(() => {
 				document
@@ -794,6 +801,10 @@
 				onToggleFeature={toggleEarlyAccessFeature}
 			/>
 		</div>
+
+		<p class="us-version">
+			{frontendVersion}{backendVersion ? `+${backendVersion}` : ''}
+		</p>
 	</div>
 </div>
 
@@ -890,6 +901,15 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
+	}
+	.us-version {
+		text-align: center;
+		font-size: 0.6875rem;
+		color: var(--surface-muted);
+		opacity: 0.6;
+		margin-top: 1.5rem;
+		font-variant-numeric: tabular-nums;
+		letter-spacing: 0.01em;
 	}
 	@media (max-width: 640px) {
 		.us-content {
