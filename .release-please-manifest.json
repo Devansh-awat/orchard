@@ -1,5 +1,5 @@
 {
-  "apps/server": "1.6.1",
+  "apps/server": "1.6.2",
   "apps/frontend": "0.4.0",
   "apps/gateway": "0.2.0",
   "apps/cli": "0.1.0",
