@@ -527,7 +527,7 @@ end
           { name: serviceName, namespace: cleanNamespace, ports: [servicePort] },
         ],
         backendServices: [
-          { name: 'server', namespace: authServerNamespace, number: authServerPort },
+          { name: 'server', namespace: authServerNamespace, number: [String(authServerPort)] },
         ],
         resources: [
           {
