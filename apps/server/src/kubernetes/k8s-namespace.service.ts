@@ -396,7 +396,7 @@ export class K8sNamespaceService {
           // Egress is allow-listed. Pods may:
           //   1. Talk to other pods in the same tenant namespace.
           //   2. Resolve DNS via kube-dns in kube-system (UDP/TCP 53).
-          //   3. Talk to the `network` namespace (Traefik, ingress controllers).
+          //   3. Talk to the `network` namespace (ingress controllers).
           //   4. Reach the public internet — but NOT in-cluster Services
           //      (10.0.0.0/8 RFC1918, the service/pod CIDR is in there),
           //      link-local / cloud metadata (169.254.0.0/16), or other
@@ -480,16 +480,29 @@ export class K8sNamespaceService {
 
       await networkingApi.createNamespacedNetworkPolicy(cleanNamespace, networkPolicyBody);
 
-      // CNPG instance pods call the kube-apiserver on startup to fetch their
-      // Cluster CR; default-deny-all blocks that and postgres never starts.
-      // Layer on an additive allow scoped to pods carrying `cnpg.io/cluster`
-      // so tenant app pods still can't reach the apiserver. Has to be a
-      // CiliumNetworkPolicy with `toEntities: [kube-apiserver]` — a plain
-      // NetworkPolicy with `ipBlock: 10.96.0.1/32` doesn't work here because
-      // kube-proxy DNATs the apiserver ClusterIP to the apiserver host/pod
-      // IP before Cilium evaluates the egress rule, so the ipBlock never
-      // matches the post-DNAT destination.
       const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+
+      const allowCiliumIngress = {
+        apiVersion: 'cilium.io/v2',
+        kind: 'CiliumNetworkPolicy',
+        metadata: {
+          name: 'allow-cilium-ingress',
+          namespace: cleanNamespace,
+          labels: { 'orchard.dev/managed': 'true' },
+        },
+        spec: {
+          endpointSelector: {},
+          ingress: [{ fromEntities: ['ingress'] }],
+        },
+      };
+      try {
+        await customApi.createNamespacedCustomObject(
+          'cilium.io', 'v2', cleanNamespace, 'ciliumnetworkpolicies', allowCiliumIngress,
+        );
+      } catch (e: any) {
+        if (e.response?.statusCode !== 409) throw e;
+      }
+
       const cnpgApiServerPolicy = {
         apiVersion: 'cilium.io/v2',
         kind: 'CiliumNetworkPolicy',
