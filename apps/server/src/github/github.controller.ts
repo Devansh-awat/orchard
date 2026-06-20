@@ -463,12 +463,14 @@ export class GitHubController {
 
       const repoUrl = `https://github.com/${repoFullName}`;
       const installationIdBig = BigInt(senderInstallationId);
+      // Match both with and without .git suffix so legacy rows still trigger
+      const repoUrls = [repoUrl, `${repoUrl}.git`];
       // Match by canonical https URL AND owning installation. Legacy rows
       // with githubInstallationId === null are intentionally excluded — they
       // must be re-linked via enableAutoDeploy before they will fire.
       const deployments = await this.prisma.deployment.findMany({
         where: {
-          githubRepo: repoUrl,
+          githubRepo: { in: repoUrls },
           githubInstallationId: installationIdBig,
           autoDeployEnabled: true,
           autoDeployBranch: pushedBranch,
@@ -486,7 +488,7 @@ export class GitHubController {
         // Also check for deployments where autoDeployBranch is null but githubBranch matches
         const fallbackDeployments = await this.prisma.deployment.findMany({
           where: {
-            githubRepo: repoUrl,
+            githubRepo: { in: repoUrls },
             githubInstallationId: installationIdBig,
             autoDeployEnabled: true,
             autoDeployBranch: null,

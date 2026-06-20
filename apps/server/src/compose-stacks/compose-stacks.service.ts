@@ -198,7 +198,7 @@ export class ComposeStacksService {
     const name = this.formatStackName(String(body.name || '').trim());
     if (!name) throw new BadRequestException('Stack name is required');
 
-    const repoUrl = String(body.repoUrl || '').trim();
+    const repoUrl = String(body.repoUrl || '').trim().replace(/\.git$/, '');
     const branch = String(body.branch || 'main').trim();
     const composePath = String(body.composePath || 'docker-compose.yml').trim();
     const autoDeployEnabled = Boolean(body.autoDeployEnabled);

@@ -3616,6 +3616,7 @@ export class DeploymentsService {
     if (repoUrl && !repoUrl.startsWith('http')) {
       repoUrl = `https://github.com/${repoUrl}`;
     }
+    repoUrl = repoUrl.replace(/\.git$/, '');
     const branch = String(data.branch || 'main').trim();
     const dockerfilePath = String(data.dockerfilePath || '').trim();
     const tag = data.tag ? String(data.tag).trim() : 'latest';
