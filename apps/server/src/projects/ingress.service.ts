@@ -217,7 +217,7 @@ export class IngressService {
       throw new BadRequestException('An ingress for this host and path already exists');
     }
 
-    const ingressClassName = 'traefik';
+    const ingressClassName = 'cilium';
 
     const tlsEnabled = data.tlsEnabled !== false;
     let tlsSecretName: string | null = null;
@@ -253,8 +253,9 @@ export class IngressService {
       sanitizedAnnotations[trimmedKey] = stringValue;
     }
 
-    sanitizedAnnotations['traefik.ingress.kubernetes.io/router.entrypoints'] =
-      entrypoints.join(',');
+    if (tlsEnabled) {
+      sanitizedAnnotations['ingress.cilium.io/force-https'] = 'enabled';
+    }
 
     if (clusterIssuer) {
       sanitizedAnnotations['cert-manager.io/cluster-issuer'] = clusterIssuer;
@@ -625,7 +626,9 @@ export class IngressService {
         }
       }
     }
-    sanitizedAnnotations['traefik.ingress.kubernetes.io/router.entrypoints'] = entrypoints.join(',');
+    if (tlsEnabled) {
+      sanitizedAnnotations['ingress.cilium.io/force-https'] = 'enabled';
+    }
     if (clusterIssuer) {
       sanitizedAnnotations['cert-manager.io/cluster-issuer'] = clusterIssuer;
     }
@@ -659,7 +662,7 @@ export class IngressService {
       paths: pathBackends,
       tlsSecretName: tlsSecretName || undefined,
       tlsHosts,
-      ingressClassName: 'traefik',
+      ingressClassName: 'cilium',
       entrypoints,
       annotations: sanitizedAnnotations,
       basicAuth: data.basicAuth?.enabled ? data.basicAuth : undefined,
@@ -685,7 +688,7 @@ export class IngressService {
         pathType: 'Prefix',
         tlsSecretName,
         tlsHosts,
-        ingressClass: 'traefik',
+        ingressClass: 'cilium',
         entrypoints,
         clusterIssuer,
         annotations: Object.keys(sanitizedAnnotations).length > 0 ? (sanitizedAnnotations as Prisma.JsonObject) : undefined,
@@ -891,7 +894,7 @@ export class IngressService {
         paths: mergedPaths,
         tlsSecretName: mergeTarget.tlsSecretName || undefined,
         tlsHosts: mergeTarget.tlsHosts ?? (mergedTlsEnabled ? [rawHost] : []),
-        ingressClassName: mergeTarget.ingressClass || 'traefik',
+        ingressClassName: mergeTarget.ingressClass || 'cilium',
         entrypoints: existingEntrypoints,
         annotations: existingAnnotations,
       });
@@ -909,7 +912,7 @@ export class IngressService {
             pathType: pb.pathType,
             tlsSecretName: mergeTarget.tlsSecretName,
             tlsHosts: mergeTarget.tlsHosts ?? [],
-            ingressClass: mergeTarget.ingressClass || 'traefik',
+            ingressClass: mergeTarget.ingressClass || 'cilium',
             entrypoints: existingEntrypoints,
             clusterIssuer: mergeTarget.clusterIssuer,
             annotations: Object.keys(existingAnnotations).length > 0
@@ -952,7 +955,9 @@ export class IngressService {
     const entrypoints = tlsEnabled ? ['websecure'] : ['web'];
 
     const sanitizedAnnotations: Record<string, string> = {};
-    sanitizedAnnotations['traefik.ingress.kubernetes.io/router.entrypoints'] = entrypoints.join(',');
+    if (tlsEnabled) {
+      sanitizedAnnotations['ingress.cilium.io/force-https'] = 'enabled';
+    }
     if (clusterIssuer) {
       sanitizedAnnotations['cert-manager.io/cluster-issuer'] = clusterIssuer;
     }
@@ -986,7 +991,7 @@ export class IngressService {
       paths: pathBackends.map((pb) => ({ path: pb.path, pathType: pb.pathType, serviceName: pb.serviceName, servicePort: pb.servicePort })),
       tlsSecretName: tlsSecretName || undefined,
       tlsHosts,
-      ingressClassName: 'traefik',
+      ingressClassName: 'cilium',
       entrypoints,
       annotations: sanitizedAnnotations,
       basicAuth: data.basicAuth?.enabled ? data.basicAuth : undefined,
@@ -1011,7 +1016,7 @@ export class IngressService {
             pathType: pb.pathType,
             tlsSecretName,
             tlsHosts,
-            ingressClass: 'traefik',
+            ingressClass: 'cilium',
             entrypoints,
             clusterIssuer,
             annotations: Object.keys(sanitizedAnnotations).length > 0 ? (sanitizedAnnotations as Prisma.JsonObject) : undefined,
@@ -1189,7 +1194,7 @@ export class IngressService {
     }
 
     const hasBasicAuth = typeof ingress.annotations === 'object' && ingress.annotations !== null
-      && (ingress.annotations as any)['traefik.ingress.kubernetes.io/router.middlewares']?.includes('auth@kubernetescrd');
+      && (ingress.annotations as any)['orchard.my/basic-auth'] === 'true';
 
     return {
       id: ingress.id,
@@ -1331,7 +1336,9 @@ export class IngressService {
     const entrypoints = tlsEnabled ? ['websecure'] : ['web'];
 
     const sanitizedAnnotations: Record<string, string> = {};
-    sanitizedAnnotations['traefik.ingress.kubernetes.io/router.entrypoints'] = entrypoints.join(',');
+    if (tlsEnabled) {
+      sanitizedAnnotations['ingress.cilium.io/force-https'] = 'enabled';
+    }
     if (clusterIssuer) {
       sanitizedAnnotations['cert-manager.io/cluster-issuer'] = clusterIssuer;
     }
@@ -1344,7 +1351,7 @@ export class IngressService {
         paths: pathBackends.map((pb) => ({ path: pb.path, pathType: pb.pathType, serviceName: pb.serviceName, servicePort: pb.servicePort })),
         tlsSecretName: tlsSecretName || undefined,
         tlsHosts,
-        ingressClassName: 'traefik',
+        ingressClassName: 'cilium',
         entrypoints,
         annotations: sanitizedAnnotations,
         basicAuth: data.basicAuth?.enabled ? data.basicAuth : data.basicAuth?.enabled === false ? { enabled: false, username: '', password: '' } : undefined,
@@ -1563,7 +1570,7 @@ export class IngressService {
             paths: remainingPaths,
             tlsSecretName: ingress.tlsSecretName || undefined,
             tlsHosts: ingress.tlsHosts ?? [],
-            ingressClassName: ingress.ingressClass || 'traefik',
+            ingressClassName: ingress.ingressClass || 'cilium',
             entrypoints: existingEntrypoints,
             annotations: existingAnnotations,
           });
@@ -1701,7 +1708,7 @@ export class IngressService {
       throw new BadRequestException('An ingress for this host and path already exists');
     }
 
-    const ingressClassName = 'traefik';
+    const ingressClassName = 'cilium';
 
     const tlsEnabled = data.tlsEnabled !== false;
     let tlsSecretName: string | null = ingress.tlsSecretName;
@@ -1739,8 +1746,9 @@ export class IngressService {
       sanitizedAnnotations[trimmedKey] = stringValue;
     }
 
-    sanitizedAnnotations['traefik.ingress.kubernetes.io/router.entrypoints'] =
-      entrypoints.join(',');
+    if (tlsEnabled) {
+      sanitizedAnnotations['ingress.cilium.io/force-https'] = 'enabled';
+    }
 
     if (clusterIssuer) {
       sanitizedAnnotations['cert-manager.io/cluster-issuer'] = clusterIssuer;

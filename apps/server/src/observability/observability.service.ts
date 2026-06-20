@@ -97,8 +97,8 @@ export class ObservabilityService {
     endMs: number,
     stepMs: number,
   ): Promise<HttpMetricsSeries> {
-    const serviceSelector = await this.buildTraefikServiceSelector(deploymentId);
-    if (!serviceSelector) {
+    const hubbleSelector = await this.buildHubbleSelector(deploymentId);
+    if (!hubbleSelector) {
       return { requestRate: [], errorRate: [], latencyP50: [], latencyP95: [] };
     }
 
@@ -108,10 +108,10 @@ export class ObservabilityService {
     const rateWin = Math.max(60, stepSec * 2);
 
     const queries = {
-      requestRate: `sum(rate(traefik_service_requests_total{service=~"${serviceSelector}"}[${rateWin}s]))`,
-      errorRate: `sum(rate(traefik_service_requests_total{service=~"${serviceSelector}",code=~"5.."}[${rateWin}s]))`,
-      latencyP50: `histogram_quantile(0.50, sum(rate(traefik_service_request_duration_seconds_bucket{service=~"${serviceSelector}"}[${rateWin}s])) by (le)) * 1000`,
-      latencyP95: `histogram_quantile(0.95, sum(rate(traefik_service_request_duration_seconds_bucket{service=~"${serviceSelector}"}[${rateWin}s])) by (le)) * 1000`,
+      requestRate: `sum(rate(hubble_http_requests_total{${hubbleSelector}}[${rateWin}s]))`,
+      errorRate: `sum(rate(hubble_http_requests_total{${hubbleSelector},status_code=~"5.."}[${rateWin}s]))`,
+      latencyP50: `histogram_quantile(0.50, sum(rate(hubble_http_request_duration_seconds_bucket{${hubbleSelector}}[${rateWin}s])) by (le)) * 1000`,
+      latencyP95: `histogram_quantile(0.95, sum(rate(hubble_http_request_duration_seconds_bucket{${hubbleSelector}}[${rateWin}s])) by (le)) * 1000`,
     };
 
     const [requestRate, errorRate, latencyP50, latencyP95] = await Promise.all([
@@ -227,19 +227,19 @@ export class ObservabilityService {
     let httpErrorRate: number | null = null;
     let httpP95Latency: number | null = null;
 
-    const serviceSelector = await this.buildTraefikServiceSelector(deploymentId);
-    if (serviceSelector) {
+    const hubbleSelector = await this.buildHubbleSelector(deploymentId);
+    if (hubbleSelector) {
       const rateWin = 60;
 
       [httpRequestRate, httpErrorRate, httpP95Latency] = await Promise.all([
         this.queryInstant(
-          `sum(rate(traefik_service_requests_total{service=~"${serviceSelector}"}[${rateWin}s]))`,
+          `sum(rate(hubble_http_requests_total{${hubbleSelector}}[${rateWin}s]))`,
         ),
         this.queryInstant(
-          `sum(rate(traefik_service_requests_total{service=~"${serviceSelector}",code=~"5.."}[${rateWin}s]))`,
+          `sum(rate(hubble_http_requests_total{${hubbleSelector},status_code=~"5.."}[${rateWin}s]))`,
         ),
         this.queryInstant(
-          `histogram_quantile(0.95, sum(rate(traefik_service_request_duration_seconds_bucket{service=~"${serviceSelector}"}[${rateWin}s])) by (le)) * 1000`,
+          `histogram_quantile(0.95, sum(rate(hubble_http_request_duration_seconds_bucket{${hubbleSelector}}[${rateWin}s])) by (le)) * 1000`,
         ),
       ]);
     }
@@ -410,24 +410,15 @@ export class ObservabilityService {
     return { errors };
   }
 
-  private async buildTraefikServiceSelector(deploymentId: string): Promise<string | null> {
-    const ingresses = await this.prisma.ingress.findMany({
-      where: { deploymentId },
-      select: {
-        namespace: true,
-        service: { select: { name: true, port: true } },
-      },
+  private async buildHubbleSelector(deploymentId: string): Promise<string | null> {
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { name: true, namespace: true },
     });
 
-    const selectors: string[] = [];
-    for (const ingress of ingresses) {
-      if (!ingress.service) continue;
-      selectors.push(
-        `${escapeRegex(ingress.namespace)}-${escapeRegex(ingress.service.name)}-${ingress.service.port}@kubernetes`,
-      );
-    }
+    if (!deployment) return null;
 
-    return selectors.length > 0 ? selectors.join('|') : null;
+    return `destination_workload="${deployment.name}",destination_namespace="${deployment.namespace}"`;
   }
 
   private async queryInstant(promql: string): Promise<number | null> {

@@ -6,18 +6,11 @@ import { parseCpu, parseMemory } from './quantity';
 import { isTrustedImage, trustedSecurityContext, hardenedSecurityContext } from './trusted-images';
 import { sanitizePortEntries } from './port-utils';
 
-// Annotations users may set on their ingresses. Everything else — in
-// particular anything under `traefik.ingress.kubernetes.io/router.*` — is
-// silently stripped, because those keys let a tenant cross namespaces
-// (router.middlewares: `<ns>-<name>@kubernetescrd`) or rewrite routing in
-// ways the platform doesn't intend to expose.
 export const ALLOWED_INGRESS_ANNOTATION_KEYS = new Set<string>([
   'cert-manager.io/cluster-issuer',
   'cert-manager.io/issuer',
-  'nginx.ingress.kubernetes.io/proxy-body-size',
-  'nginx.ingress.kubernetes.io/proxy-read-timeout',
-  'nginx.ingress.kubernetes.io/proxy-send-timeout',
-  'nginx.ingress.kubernetes.io/ssl-redirect',
+  'ingress.cilium.io/force-https',
+  'orchard.my/basic-auth',
 ]);
 
 export function buildNodeAffinity(

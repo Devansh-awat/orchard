@@ -1,5 +1,6 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
+import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   KubernetesService,
@@ -13,14 +14,10 @@ import {
 import { mapServicePorts, ensureUniqueServicePorts, sanitizePortEntries } from './port-utils';
 
 /**
- * All Kubernetes network/edge resources: Services, Ingress (Traefik routes),
- * basic-auth + https-redirect middleware (CRDs), public exposure
- * (MetalLB LoadBalancer + NetworkPolicies) for both CNPG clusters and
- * raw deployment ports, and endpoint listing.
- *
- * Shares kubeconfig with the core KubernetesService via injection;
- * moved bodies still use `this.kc` / `this.ensureKubeConfig()` /
- * `this.getDefaultNodeIp()` through the private delegates below.
+ * All Kubernetes network/edge resources: Services, Ingress (Cilium),
+ * basic-auth (CiliumEnvoyConfig), public exposure (Cilium LB IPAM
+ * LoadBalancer + NetworkPolicies) for both CNPG clusters and raw
+ * deployment ports, and endpoint listing.
  */
 @Injectable()
 export class K8sNetworkService {
@@ -136,9 +133,8 @@ export class K8sNetworkService {
       throw new BadRequestException('Username and password are required');
     }
 
-    const bcrypt = require('bcrypt');
-    const hashedPassword = bcrypt.hashSync(password, 10);
-    const authString = `${username}:${hashedPassword}`;
+    const sha1Hash = crypto.createHash('sha1').update(password).digest('base64');
+    const authString = `${username}:{SHA}${sha1Hash}`;
 
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
 
@@ -191,7 +187,14 @@ export class K8sNetworkService {
     }
   }
 
-  async createBasicAuthMiddleware(namespace: string, name: string, secretName: string): Promise<void> {
+  async createBasicAuthMiddleware(
+    namespace: string,
+    name: string,
+    username: string,
+    password: string,
+    serviceName: string,
+    servicePort: number,
+  ): Promise<void> {
     this.ensureKubeConfig();
 
     const cleanNamespace = String(namespace || '').trim();
@@ -199,50 +202,87 @@ export class K8sNetworkService {
 
     if (!cleanNamespace || !cleanName) return;
 
+    const sha1Hash = crypto.createHash('sha1').update(password).digest('base64');
+    const htpasswd = `${username}:{SHA}${sha1Hash}`;
+
     const customObjectsApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
 
-    const middlewareBody = {
-      apiVersion: 'traefik.io/v1alpha1',
-      kind: 'Middleware',
+    const envoyConfigBody = {
+      apiVersion: 'cilium.io/v2',
+      kind: 'CiliumEnvoyConfig',
       metadata: {
         name: `${cleanName}-auth`,
         namespace: cleanNamespace,
         labels: {
-          'leaf.dev/managed': 'true',
-          'leaf.dev/type': 'basic-auth-middleware'
-        }
+          'orchard.my/managed': 'true',
+          'orchard.my/type': 'basic-auth',
+        },
       },
       spec: {
-        basicAuth: {
-          secret: secretName
-        }
-      }
+        services: [
+          { name: serviceName, namespace: cleanNamespace, ports: [servicePort] },
+        ],
+        resources: [
+          {
+            '@type': 'type.googleapis.com/envoy.config.listener.v3.Listener',
+            name: `${cleanName}-auth-listener`,
+            filter_chains: [
+              {
+                filters: [
+                  {
+                    name: 'envoy.filters.network.http_connection_manager',
+                    typed_config: {
+                      '@type': 'type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager',
+                      stat_prefix: `${cleanName}-auth`,
+                      http_filters: [
+                        {
+                          name: 'envoy.filters.http.basic_auth',
+                          typed_config: {
+                            '@type': 'type.googleapis.com/envoy.extensions.filters.http.basic_auth.v3.BasicAuth',
+                            users: { inline_string: htpasswd },
+                          },
+                        },
+                        {
+                          name: 'envoy.filters.http.router',
+                          typed_config: {
+                            '@type': 'type.googleapis.com/envoy.extensions.filters.http.router.v3.Router',
+                          },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
     };
 
     try {
       await customObjectsApi.createNamespacedCustomObject(
-        'traefik.io',
-        'v1alpha1',
+        'cilium.io',
+        'v2',
         cleanNamespace,
-        'middlewares',
-        middlewareBody
+        'ciliumenvoyconfigs',
+        envoyConfigBody
       );
     } catch (error) {
       if (error.response?.statusCode === 409) {
         try {
           await customObjectsApi.replaceNamespacedCustomObject(
-            'traefik.io',
-            'v1alpha1',
+            'cilium.io',
+            'v2',
             cleanNamespace,
-            'middlewares',
+            'ciliumenvoyconfigs',
             `${cleanName}-auth`,
-            middlewareBody
+            envoyConfigBody
           );
         } catch (replaceError) {
-          console.error(`Failed to update basic auth middleware: ${replaceError.message}`);
+          console.error(`Failed to update basic auth CiliumEnvoyConfig: ${replaceError.message}`);
         }
       } else {
-        console.error(`Failed to create basic auth middleware: ${error.message}`);
+        console.error(`Failed to create basic auth CiliumEnvoyConfig: ${error.message}`);
       }
     }
   }
@@ -259,100 +299,19 @@ export class K8sNetworkService {
 
     try {
       await customObjectsApi.deleteNamespacedCustomObject(
-        'traefik.io',
-        'v1alpha1',
+        'cilium.io',
+        'v2',
         cleanNamespace,
-        'middlewares',
+        'ciliumenvoyconfigs',
         `${cleanName}-auth`
       );
     } catch (error) {
       if (error.response?.statusCode !== 404) {
-        console.error(`Failed to delete basic auth middleware ${cleanName}-auth in ${cleanNamespace}:`, error);
+        console.error(`Failed to delete basic auth CiliumEnvoyConfig ${cleanName}-auth in ${cleanNamespace}:`, error);
       }
     }
   }
 
-  async createHttpsRedirectMiddleware(namespace: string, name: string): Promise<void> {
-    this.ensureKubeConfig();
-
-    const cleanNamespace = String(namespace || '').trim();
-    const cleanName = String(name || '').trim();
-
-    if (!cleanNamespace || !cleanName) return;
-
-    const customObjectsApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
-
-    const middlewareBody = {
-      apiVersion: 'traefik.io/v1alpha1',
-      kind: 'Middleware',
-      metadata: {
-        name: `${cleanName}-redirect-https`,
-        namespace: cleanNamespace,
-        labels: {
-          'leaf.dev/managed': 'true',
-          'leaf.dev/type': 'redirect-https-middleware'
-        }
-      },
-      spec: {
-        redirectScheme: {
-          scheme: 'https',
-          permanent: true
-        }
-      }
-    };
-
-    try {
-      await customObjectsApi.createNamespacedCustomObject(
-        'traefik.io',
-        'v1alpha1',
-        cleanNamespace,
-        'middlewares',
-        middlewareBody
-      );
-    } catch (error) {
-      if (error.response?.statusCode === 409) {
-        try {
-          await customObjectsApi.replaceNamespacedCustomObject(
-            'traefik.io',
-            'v1alpha1',
-            cleanNamespace,
-            'middlewares',
-            `${cleanName}-redirect-https`,
-            middlewareBody
-          );
-        } catch (replaceError) {
-          console.error(`Failed to update HTTPS redirect middleware: ${replaceError.message}`);
-        }
-      } else {
-        console.error(`Failed to create HTTPS redirect middleware: ${error.message}`);
-      }
-    }
-  }
-
-  async deleteHttpsRedirectMiddleware(namespace: string, name: string): Promise<void> {
-    this.ensureKubeConfig();
-
-    const cleanNamespace = String(namespace || '').trim();
-    const cleanName = String(name || '').trim();
-
-    if (!cleanNamespace || !cleanName) return;
-
-    const customObjectsApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
-
-    try {
-      await customObjectsApi.deleteNamespacedCustomObject(
-        'traefik.io',
-        'v1alpha1',
-        cleanNamespace,
-        'middlewares',
-        `${cleanName}-redirect-https`
-      );
-    } catch (error) {
-      if (error.response?.statusCode !== 404) {
-        console.error(`Failed to delete HTTPS redirect middleware ${cleanName}-redirect-https in ${cleanNamespace}:`, error);
-      }
-    }
-  }
 
   async createIngress(options: CreateIngressOptions) {
     this.ensureKubeConfig();
@@ -396,15 +355,6 @@ export class K8sNetworkService {
       }
     }
 
-    // Ingress annotations are not free-form. User input that reaches Traefik
-    // routing (router.middlewares, router.rule, router.priority,
-    // router.tls.options, etc.) can reference middlewares from any namespace
-    // via the `<ns>-<name>@kubernetescrd` provider syntax — including
-    // kube-system or another tenant's namespace — or override router rules
-    // / priorities to shadow other ingresses. Only pass through an
-    // allow-list of well-known safe keys. Routing-control annotations
-    // (entrypoints, redirect, basicAuth middlewares) are written by this
-    // service further down.
     const annotations: Record<string, string> = {};
 
     if (options.annotations) {
@@ -418,20 +368,15 @@ export class K8sNetworkService {
       }
     }
 
-    if (options.entrypoints && options.entrypoints.length > 0) {
-      if (!annotations['traefik.ingress.kubernetes.io/router.entrypoints']) {
-        const normalizedEntrypoints = options.entrypoints
-          .map((entry) => String(entry || '').trim())
-          .filter((entry) => entry.length > 0);
-        if (normalizedEntrypoints.length > 0) {
-          annotations['traefik.ingress.kubernetes.io/router.entrypoints'] =
-            normalizedEntrypoints.join(',');
-        }
-      }
+    const hasTls = options.tlsSecretName && options.tlsSecretName.trim().length > 0;
+
+    if (hasTls) {
+      annotations['ingress.cilium.io/force-https'] = 'enabled';
     }
 
     if (options.basicAuth?.enabled && options.basicAuth.username && options.basicAuth.password) {
       const basicAuthSecretName = options.basicAuth.secretName || `${name}-basic-auth`;
+      const targetService = pathBackends[0];
       try {
         await this.createBasicAuthSecret(
           namespace,
@@ -440,33 +385,18 @@ export class K8sNetworkService {
           options.basicAuth.password
         );
 
-        await this.createBasicAuthMiddleware(namespace, name, basicAuthSecretName);
+        await this.createBasicAuthMiddleware(
+          namespace,
+          name,
+          options.basicAuth.username,
+          options.basicAuth.password,
+          String(targetService.serviceName).trim(),
+          Number(targetService.servicePort),
+        );
+        annotations['orchard.my/basic-auth'] = 'true';
       } catch (error) {
         console.error('[K8s] Failed to create basic auth:', error);
       }
-    }
-
-    const hasTls = options.tlsSecretName && options.tlsSecretName.trim().length > 0;
-
-    if (hasTls) {
-      try {
-        await this.createHttpsRedirectMiddleware(namespace, name);
-      } catch (error) {
-        console.error('[K8s] Failed to create HTTPS redirect middleware:', error);
-      }
-
-      annotations['traefik.ingress.kubernetes.io/router.entrypoints'] = 'web,websecure';
-    }
-
-    const middlewares: string[] = [];
-    if (hasTls) {
-      middlewares.push(`${namespace}-${name}-redirect-https@kubernetescrd`);
-    }
-    if (options.basicAuth?.enabled && options.basicAuth.username && options.basicAuth.password) {
-      middlewares.push(`${namespace}-${name}-auth@kubernetescrd`);
-    }
-    if (middlewares.length > 0) {
-      annotations['traefik.ingress.kubernetes.io/router.middlewares'] = middlewares.join(',');
     }
 
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
@@ -594,15 +524,6 @@ export class K8sNetworkService {
       }
     }
 
-    // Ingress annotations are not free-form. User input that reaches Traefik
-    // routing (router.middlewares, router.rule, router.priority,
-    // router.tls.options, etc.) can reference middlewares from any namespace
-    // via the `<ns>-<name>@kubernetescrd` provider syntax — including
-    // kube-system or another tenant's namespace — or override router rules
-    // / priorities to shadow other ingresses. Only pass through an
-    // allow-list of well-known safe keys. Routing-control annotations
-    // (entrypoints, redirect, basicAuth middlewares) are written by this
-    // service further down.
     const annotations: Record<string, string> = {};
 
     if (options.annotations) {
@@ -616,20 +537,15 @@ export class K8sNetworkService {
       }
     }
 
-    if (options.entrypoints && options.entrypoints.length > 0) {
-      if (!annotations['traefik.ingress.kubernetes.io/router.entrypoints']) {
-        const normalizedEntrypoints = options.entrypoints
-          .map((entry) => String(entry || '').trim())
-          .filter((entry) => entry.length > 0);
-        if (normalizedEntrypoints.length > 0) {
-          annotations['traefik.ingress.kubernetes.io/router.entrypoints'] =
-            normalizedEntrypoints.join(',');
-        }
-      }
+    const hasTls = options.tlsSecretName && options.tlsSecretName.trim().length > 0;
+
+    if (hasTls) {
+      annotations['ingress.cilium.io/force-https'] = 'enabled';
     }
 
     if (options.basicAuth?.enabled && options.basicAuth.username && options.basicAuth.password) {
       const basicAuthSecretName = options.basicAuth.secretName || `${name}-basic-auth`;
+      const targetService = pathBackends[0];
       try {
         await this.createBasicAuthSecret(
           namespace,
@@ -638,7 +554,15 @@ export class K8sNetworkService {
           options.basicAuth.password
         );
 
-        await this.createBasicAuthMiddleware(namespace, name, basicAuthSecretName);
+        await this.createBasicAuthMiddleware(
+          namespace,
+          name,
+          options.basicAuth.username,
+          options.basicAuth.password,
+          String(targetService.serviceName).trim(),
+          Number(targetService.servicePort),
+        );
+        annotations['orchard.my/basic-auth'] = 'true';
       } catch (error) {
         console.error('[K8s] Failed to create basic auth:', error);
       }
@@ -650,35 +574,6 @@ export class K8sNetworkService {
       } catch (error) {
         console.error('[K8s] Failed to remove basic auth:', error);
       }
-    }
-
-    const hasTls = options.tlsSecretName && options.tlsSecretName.trim().length > 0;
-
-    if (hasTls) {
-      try {
-        await this.createHttpsRedirectMiddleware(namespace, name);
-      } catch (error) {
-        console.error('[K8s] Failed to create HTTPS redirect middleware:', error);
-      }
-
-      annotations['traefik.ingress.kubernetes.io/router.entrypoints'] = 'web,websecure';
-    } else {
-      try {
-        await this.deleteHttpsRedirectMiddleware(namespace, name);
-      } catch (error) {
-        console.error('[K8s] Failed to delete HTTPS redirect middleware:', error);
-      }
-    }
-
-    const middlewares: string[] = [];
-    if (hasTls) {
-      middlewares.push(`${namespace}-${name}-redirect-https@kubernetescrd`);
-    }
-    if (options.basicAuth?.enabled && options.basicAuth.username && options.basicAuth.password) {
-      middlewares.push(`${namespace}-${name}-auth@kubernetescrd`);
-    }
-    if (middlewares.length > 0) {
-      annotations['traefik.ingress.kubernetes.io/router.middlewares'] = middlewares.join(',');
     }
 
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
@@ -831,7 +726,6 @@ export class K8sNetworkService {
 
       await this.deleteBasicAuthSecret(cleanNamespace, `${cleanName}-basic-auth`);
       await this.deleteBasicAuthMiddleware(cleanNamespace, cleanName);
-      await this.deleteHttpsRedirectMiddleware(cleanNamespace, cleanName);
 
       return {
         success: true,
