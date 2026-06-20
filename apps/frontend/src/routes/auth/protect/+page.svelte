@@ -136,6 +136,8 @@
 	<div class="protect-bg">
 		<div class="protect-orb protect-orb-1"></div>
 		<div class="protect-orb protect-orb-2"></div>
+		<div class="protect-orb protect-orb-3"></div>
+		<div class="protect-grid"></div>
 	</div>
 
 	{#if loading}
@@ -146,19 +148,19 @@
 		</div>
 	{:else if error && !info}
 		<div class="protect-card">
-			<div class="protect-card-icon protect-card-icon-error">
+			<div class="protect-icon protect-icon--error">
 				<Shield size={24} />
 			</div>
 			<h2 class="protect-title">{error}</h2>
 		</div>
 	{:else if info}
 		<div class="protect-card">
-			<div class="protect-card-icon">
+			<div class="protect-icon">
 				<Shield size={24} />
 			</div>
 			<h2 class="protect-title">Protected deployment</h2>
 			<p class="protect-subtitle">
-				<strong>{info.host}</strong> requires authentication.
+				<span class="protect-host">{info.host}</span> requires authentication.
 			</p>
 
 			{#if mode === 'password'}
@@ -171,7 +173,7 @@
 				>
 					<input
 						type="password"
-						class="protect-input"
+						class="input protect-input"
 						placeholder="Enter password"
 						bind:value={password}
 						disabled={exchanging}
@@ -181,7 +183,7 @@
 						<p class="protect-error">{passwordError}</p>
 					{/if}
 					<button
-						class="protect-btn protect-btn-primary"
+						class="btn btn-primary protect-submit"
 						type="submit"
 						disabled={exchanging || !password.trim()}
 					>
@@ -194,26 +196,26 @@
 					</button>
 				</form>
 			{:else if exchanging}
-				<div class="protect-loading-inline">
+				<div class="protect-verifying">
 					<Loader2 class="h-5 w-5 animate-spin" />
 					<span>Verifying access…</span>
 				</div>
 			{:else if error}
 				<p class="protect-error">{error}</p>
 				{#if !$isSignedIn}
-					<button class="protect-btn protect-btn-primary" onclick={signIn}>
+					<button class="btn btn-primary protect-submit" onclick={signIn}>
 						<LogIn size={16} />
 						Sign in with Orchard
 					</button>
 				{/if}
 			{:else if !$isSignedIn}
 				<p class="protect-hint">Sign in to your Orchard account to continue.</p>
-				<button class="protect-btn protect-btn-primary" onclick={signIn}>
+				<button class="btn btn-primary protect-submit" onclick={signIn}>
 					<LogIn size={16} />
 					Sign in with Orchard
 				</button>
 			{:else}
-				<button class="protect-btn protect-btn-primary" onclick={attemptExchange}>
+				<button class="btn btn-primary protect-submit" onclick={attemptExchange}>
 					<LogIn size={16} />
 					Continue as {$user?.email}
 				</button>
@@ -229,7 +231,7 @@
 		align-items: center;
 		justify-content: center;
 		padding: 1rem;
-		background: #0a0a0f;
+		background: var(--center-channel-bg);
 		position: relative;
 		overflow: hidden;
 	}
@@ -238,143 +240,157 @@
 		position: absolute;
 		inset: 0;
 		pointer-events: none;
+		overflow: hidden;
+	}
+
+	.protect-grid {
+		position: absolute;
+		inset: 0;
+		background-image:
+			linear-gradient(var(--surface-border) 1px, transparent 1px),
+			linear-gradient(90deg, var(--surface-border) 1px, transparent 1px);
+		background-size: 60px 60px;
+		opacity: 0.4;
+		mask-image: radial-gradient(ellipse 80% 60% at 50% 50%, black 20%, transparent 100%);
+		-webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 50%, black 20%, transparent 100%);
 	}
 
 	.protect-orb {
 		position: absolute;
 		border-radius: 50%;
-		filter: blur(120px);
-		opacity: 0.15;
+		filter: blur(80px);
+		opacity: 0.5;
+		will-change: transform;
 	}
 
 	.protect-orb-1 {
-		width: 600px;
-		height: 600px;
-		background: #6366f1;
-		top: -200px;
-		right: -100px;
+		width: 500px;
+		height: 500px;
+		background: var(--button-bg);
+		top: -15%;
+		right: -10%;
+		animation: protect-float-1 18s ease-in-out infinite;
 	}
 
 	.protect-orb-2 {
 		width: 400px;
 		height: 400px;
-		background: #8b5cf6;
-		bottom: -150px;
-		left: -100px;
+		background: color-mix(in srgb, var(--button-bg) 60%, #ff8c37);
+		bottom: -15%;
+		left: -10%;
+		animation: protect-float-2 22s ease-in-out infinite;
+	}
+
+	.protect-orb-3 {
+		width: 250px;
+		height: 250px;
+		background: color-mix(in srgb, var(--button-bg) 40%, #33d6a6);
+		top: 40%;
+		left: 30%;
+		animation: protect-float-3 15s ease-in-out infinite;
+	}
+
+	@keyframes protect-float-1 {
+		0%, 100% { transform: translate(0, 0) scale(1); }
+		33% { transform: translate(60px, 40px) scale(1.1); }
+		66% { transform: translate(-30px, 70px) scale(0.95); }
+	}
+
+	@keyframes protect-float-2 {
+		0%, 100% { transform: translate(0, 0) scale(1); }
+		33% { transform: translate(-50px, -60px) scale(1.05); }
+		66% { transform: translate(40px, -30px) scale(0.9); }
+	}
+
+	@keyframes protect-float-3 {
+		0%, 100% { transform: translate(0, 0) scale(1); }
+		50% { transform: translate(80px, -50px) scale(1.15); }
 	}
 
 	.protect-card {
 		position: relative;
-		background: rgba(255, 255, 255, 0.03);
-		border: 1px solid rgba(255, 255, 255, 0.08);
-		border-radius: 1rem;
+		background: color-mix(in srgb, var(--surface-bg) 90%, transparent);
+		border: 1px solid var(--surface-border);
+		border-radius: 1.5rem;
 		padding: 2.5rem;
-		max-width: 400px;
+		max-width: 24rem;
 		width: 100%;
 		text-align: center;
 		backdrop-filter: blur(24px);
+		-webkit-backdrop-filter: blur(24px);
+		box-shadow:
+			0 1px 3px rgb(0 0 0 / 0.04),
+			0 25px 50px -12px rgb(0 0 0 / 0.12),
+			0 0 0 1px rgb(255 255 255 / 0.05) inset;
 	}
 
-	.protect-card-icon {
+	.protect-icon {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 48px;
-		height: 48px;
-		border-radius: 12px;
-		background: rgba(99, 102, 241, 0.15);
-		color: #818cf8;
+		width: 3rem;
+		height: 3rem;
+		border-radius: 0.75rem;
+		background: color-mix(in srgb, var(--button-bg) 15%, transparent);
+		color: var(--button-bg);
 		margin-bottom: 1.25rem;
 	}
 
-	.protect-card-icon-error {
-		background: rgba(239, 68, 68, 0.15);
-		color: #f87171;
+	.protect-icon--error {
+		background: color-mix(in srgb, var(--error-text-color) 15%, transparent);
+		color: var(--error-text-color);
 	}
 
 	.protect-title {
-		font-size: 1.25rem;
-		font-weight: 600;
-		color: #f1f5f9;
+		font-size: 1.375rem;
+		font-weight: 700;
+		letter-spacing: -0.025em;
+		color: var(--center-channel-color);
 		margin: 0 0 0.5rem;
+		line-height: 1.2;
 	}
 
 	.protect-subtitle {
 		font-size: 0.875rem;
-		color: #94a3b8;
+		color: var(--surface-muted);
 		margin: 0 0 1.5rem;
 		line-height: 1.5;
 	}
 
-	.protect-subtitle strong {
-		color: #cbd5e1;
-		font-family: monospace;
+	.protect-host {
+		color: var(--center-channel-color);
+		font-family: var(--font-mono);
 		font-size: 0.8125rem;
+		font-weight: 600;
 	}
 
 	.protect-hint {
 		font-size: 0.8125rem;
-		color: #94a3b8;
+		color: var(--surface-muted);
 		margin: 0 0 1rem;
 	}
 
 	.protect-form {
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
+		gap: 0.875rem;
 	}
 
 	.protect-input {
+		text-align: center;
+	}
+
+	.protect-submit {
 		width: 100%;
-		padding: 0.625rem 0.875rem;
-		border-radius: 0.5rem;
-		border: 1px solid rgba(255, 255, 255, 0.1);
-		background: rgba(255, 255, 255, 0.05);
-		color: #f1f5f9;
-		font-size: 0.875rem;
-		outline: none;
-		transition: border-color 0.15s;
-	}
-
-	.protect-input:focus {
-		border-color: #6366f1;
-	}
-
-	.protect-input::placeholder {
-		color: #64748b;
-	}
-
-	.protect-btn {
-		display: inline-flex;
+		display: flex;
 		align-items: center;
 		justify-content: center;
 		gap: 0.5rem;
-		padding: 0.625rem 1.25rem;
-		border-radius: 0.5rem;
-		font-size: 0.875rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: opacity 0.15s;
-		border: none;
-	}
-
-	.protect-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.protect-btn-primary {
-		background: #6366f1;
-		color: white;
-	}
-
-	.protect-btn-primary:hover:not(:disabled) {
-		opacity: 0.9;
 	}
 
 	.protect-error {
 		font-size: 0.8125rem;
-		color: #f87171;
+		color: var(--error-text-color);
 		margin: 0;
 	}
 
@@ -383,16 +399,16 @@
 		align-items: center;
 		justify-content: center;
 		padding: 2rem 0;
-		color: #94a3b8;
+		color: var(--surface-muted);
 	}
 
-	.protect-loading-inline {
+	.protect-verifying {
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		gap: 0.5rem;
 		padding: 0.5rem 0;
-		color: #94a3b8;
+		color: var(--surface-muted);
 		font-size: 0.875rem;
 	}
 </style>

@@ -390,6 +390,13 @@ export class K8sNamespaceService {
                     },
                   },
                 },
+                {
+                  namespaceSelector: {
+                    matchLabels: {
+                      'kubernetes.io/metadata.name': 'orchard',
+                    },
+                  },
+                },
               ],
             },
           ],
@@ -492,7 +499,10 @@ export class K8sNamespaceService {
         },
         spec: {
           endpointSelector: {},
-          ingress: [{ fromEntities: ['ingress'] }],
+          ingress: [
+            { fromEntities: ['ingress'] },
+            { fromEndpoints: [{ matchLabels: { 'kubernetes.io/metadata.name': 'orchard' } }] },
+          ],
         },
       };
       try {

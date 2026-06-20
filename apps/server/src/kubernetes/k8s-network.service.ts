@@ -559,6 +559,8 @@ end
       }
     }
 
+    await this.ensureOrchardIngressAllowed(cleanNamespace);
+
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
     try {
       const ingress = await networkingApi.readNamespacedIngress(cleanName, cleanNamespace);
@@ -646,6 +648,39 @@ end
       if (error.response?.statusCode !== 404) {
         console.error(`Failed to delete protection proxy endpoint slice: ${error.message}`);
       }
+    }
+  }
+
+  private async ensureOrchardIngressAllowed(namespace: string): Promise<void> {
+    const orchardSelector = { namespaceSelector: { matchLabels: { 'kubernetes.io/metadata.name': 'orchard' } } };
+
+    const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
+    try {
+      const np = await networkingApi.readNamespacedNetworkPolicy('default-deny-all', namespace);
+      const from = np.body.spec?.ingress?.[0]?.from || [];
+      const hasOrchard = from.some((f: any) => f.namespaceSelector?.matchLabels?.['kubernetes.io/metadata.name'] === 'orchard');
+      if (!hasOrchard) {
+        from.push(orchardSelector);
+        await networkingApi.replaceNamespacedNetworkPolicy('default-deny-all', namespace, np.body);
+      }
+    } catch (e: any) {
+      if (e.response?.statusCode !== 404) this.logger.warn(`Failed to patch NetworkPolicy: ${e.message}`);
+    }
+
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    try {
+      const cnp: any = await customApi.getNamespacedCustomObject('cilium.io', 'v2', namespace, 'ciliumnetworkpolicies', 'allow-cilium-ingress');
+      const ingress = cnp.body?.spec?.ingress || [];
+      const hasOrchard = ingress.some((rule: any) =>
+        rule.fromEndpoints?.some((ep: any) => ep.matchLabels?.['kubernetes.io/metadata.name'] === 'orchard'),
+      );
+      if (!hasOrchard) {
+        ingress.push({ fromEndpoints: [{ matchLabels: { 'kubernetes.io/metadata.name': 'orchard' } }] });
+        cnp.body.spec.ingress = ingress;
+        await customApi.replaceNamespacedCustomObject('cilium.io', 'v2', namespace, 'ciliumnetworkpolicies', 'allow-cilium-ingress', cnp.body);
+      }
+    } catch (e: any) {
+      if (e.response?.statusCode !== 404) this.logger.warn(`Failed to patch CiliumNetworkPolicy: ${e.message}`);
     }
   }
 

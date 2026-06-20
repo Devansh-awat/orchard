@@ -55,7 +55,6 @@ async function bootstrap() {
 
   const protectionService = app.get(ProtectionService);
   app.use(async (req, res, next) => {
-    if (req.url.startsWith('/apiv1')) return next();
     try {
       const handled = await protectionService.handleProxyRequest(req, res);
       if (!handled) return next();

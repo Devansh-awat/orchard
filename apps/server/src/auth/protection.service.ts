@@ -31,6 +31,7 @@ export class ProtectionService {
   private readonly jwtSecret: Uint8Array;
   private readonly frontendUrl: string;
   private readonly ingressCache = new Map<string, CachedIngress>();
+  private readonly negativeCache = new Map<string, number>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -48,6 +49,9 @@ export class ProtectionService {
     const cached = this.ingressCache.get(host);
     if (cached && cached.expiresAt > Date.now()) return cached;
 
+    const negativeExpiry = this.negativeCache.get(host);
+    if (negativeExpiry && negativeExpiry > Date.now()) return null;
+
     const ingress = await this.prisma.ingress.findFirst({
       where: { host, protectionMode: { not: 'none' } },
       select: {
@@ -64,7 +68,7 @@ export class ProtectionService {
     });
 
     if (!ingress) {
-      this.ingressCache.delete(host);
+      this.negativeCache.set(host, Date.now() + 30_000);
       return null;
     }
 
@@ -275,6 +279,7 @@ export class ProtectionService {
       delete headers['host'];
       headers['host'] = `${upstreamHost}:${upstreamPort}`;
       delete headers['connection'];
+      delete headers['x-orchard-protection-bypass'];
 
       const proxyReq = http.request(
         {
@@ -283,6 +288,7 @@ export class ProtectionService {
           path: req.originalUrl || req.url,
           method: req.method,
           headers,
+          timeout: 30_000,
         },
         (proxyRes) => {
           res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
@@ -290,6 +296,12 @@ export class ProtectionService {
           proxyRes.on('end', resolve);
         },
       );
+
+      proxyReq.on('timeout', () => {
+        proxyReq.destroy();
+        if (!res.headersSent) res.status(504).send('Upstream timeout');
+        resolve();
+      });
 
       proxyReq.on('error', () => {
         if (!res.headersSent) res.status(502).send('Upstream error');
