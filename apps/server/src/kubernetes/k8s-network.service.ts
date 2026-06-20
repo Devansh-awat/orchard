@@ -1557,8 +1557,11 @@ export class K8sNetworkService {
     return `${clusterName}-public`.substring(0, 63);
   }
 
-  private sharedIpAnnotation(ip: string): string {
-    return `shared-${ip.replace(/[^0-9a-zA-Z]/g, '-')}`;
+  private sharedIpAnnotations(ip: string): Record<string, string> {
+    return {
+      'lbipam.cilium.io/sharing-key': `shared-${ip.replace(/[^0-9a-zA-Z]/g, '-')}`,
+      'lbipam.cilium.io/sharing-cross-namespace': '*',
+    };
   }
 
   async listInUsePortsOnIp(loadBalancerIp: string): Promise<number[]> {
@@ -1596,9 +1599,7 @@ export class K8sNetworkService {
           'app.kubernetes.io/managed-by': 'orchard',
           'cnpg.io/cluster': options.clusterName,
         },
-        annotations: {
-          'lbipam.cilium.io/sharing-key': this.sharedIpAnnotation(options.loadBalancerIp),
-        },
+        annotations: this.sharedIpAnnotations(options.loadBalancerIp),
       },
       spec: {
         type: 'LoadBalancer',
@@ -1735,9 +1736,7 @@ export class K8sNetworkService {
           'app.kubernetes.io/name': options.deploymentName,
           'orchard.dev/public-deployment': options.deploymentName,
         },
-        annotations: {
-          'lbipam.cilium.io/sharing-key': this.sharedIpAnnotation(options.loadBalancerIp),
-        },
+        annotations: this.sharedIpAnnotations(options.loadBalancerIp),
       },
       spec: {
         type: 'LoadBalancer',
