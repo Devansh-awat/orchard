@@ -10,6 +10,7 @@ export const ALLOWED_INGRESS_ANNOTATION_KEYS = new Set<string>([
   'cert-manager.io/cluster-issuer',
   'cert-manager.io/issuer',
   'acme.cert-manager.io/http01-edit-in-place',
+  'ingress.cilium.io/force-https',
   'orchard.my/basic-auth',
 ]);
 

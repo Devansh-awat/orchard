@@ -256,6 +256,7 @@ export class IngressService {
 
     if (tlsEnabled) {
       sanitizedAnnotations['acme.cert-manager.io/http01-edit-in-place'] = 'true';
+      sanitizedAnnotations['ingress.cilium.io/force-https'] = 'disabled';
     }
 
     if (clusterIssuer) {
@@ -630,6 +631,7 @@ export class IngressService {
     }
     if (tlsEnabled) {
       sanitizedAnnotations['acme.cert-manager.io/http01-edit-in-place'] = 'true';
+      sanitizedAnnotations['ingress.cilium.io/force-https'] = 'disabled';
     }
     if (clusterIssuer) {
       sanitizedAnnotations['cert-manager.io/cluster-issuer'] = clusterIssuer;
@@ -960,6 +962,7 @@ export class IngressService {
     const sanitizedAnnotations: Record<string, string> = {};
     if (tlsEnabled) {
       sanitizedAnnotations['acme.cert-manager.io/http01-edit-in-place'] = 'true';
+      sanitizedAnnotations['ingress.cilium.io/force-https'] = 'disabled';
     }
     if (clusterIssuer) {
       sanitizedAnnotations['cert-manager.io/cluster-issuer'] = clusterIssuer;
@@ -1346,6 +1349,7 @@ export class IngressService {
     const sanitizedAnnotations: Record<string, string> = {};
     if (tlsEnabled) {
       sanitizedAnnotations['acme.cert-manager.io/http01-edit-in-place'] = 'true';
+      sanitizedAnnotations['ingress.cilium.io/force-https'] = 'disabled';
     }
     if (clusterIssuer) {
       sanitizedAnnotations['cert-manager.io/cluster-issuer'] = clusterIssuer;
@@ -1761,6 +1765,7 @@ export class IngressService {
 
     if (tlsEnabled) {
       sanitizedAnnotations['acme.cert-manager.io/http01-edit-in-place'] = 'true';
+      sanitizedAnnotations['ingress.cilium.io/force-https'] = 'disabled';
     }
 
     if (clusterIssuer) {

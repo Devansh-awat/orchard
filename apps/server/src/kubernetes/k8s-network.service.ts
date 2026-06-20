@@ -234,6 +234,17 @@ export class K8sNetworkService {
                     typed_config: {
                       '@type': 'type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager',
                       stat_prefix: `${cleanName}-auth`,
+                      route_config: {
+                        name: `${cleanName}-auth-route`,
+                        virtual_hosts: [{
+                          name: 'default',
+                          domains: ['*'],
+                          routes: [{
+                            match: { prefix: '/' },
+                            route: { cluster: `${cleanNamespace}:${serviceName}:${servicePort}` },
+                          }],
+                        }],
+                      },
                       http_filters: [
                         {
                           name: 'envoy.filters.http.basic_auth',
@@ -390,6 +401,17 @@ end
                     typed_config: {
                       '@type': 'type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager',
                       stat_prefix: `${cleanName}-https-redirect`,
+                      route_config: {
+                        name: `${cleanName}-https-redirect-route`,
+                        virtual_hosts: [{
+                          name: 'default',
+                          domains: ['*'],
+                          routes: [{
+                            match: { prefix: '/' },
+                            route: { cluster: `${cleanNamespace}:${serviceName}:${servicePort}` },
+                          }],
+                        }],
+                      },
                       http_filters: [
                         {
                           name: 'envoy.filters.http.lua',
@@ -527,6 +549,10 @@ end
     }
 
     const hasTls = options.tlsSecretName && options.tlsSecretName.trim().length > 0;
+
+    if (hasTls) {
+      annotations['ingress.cilium.io/force-https'] = 'disabled';
+    }
 
     if (options.basicAuth?.enabled && options.basicAuth.username && options.basicAuth.password) {
       const basicAuthSecretName = options.basicAuth.secretName || `${name}-basic-auth`;
@@ -706,6 +732,10 @@ end
     }
 
     const hasTls = options.tlsSecretName && options.tlsSecretName.trim().length > 0;
+
+    if (hasTls) {
+      annotations['ingress.cilium.io/force-https'] = 'disabled';
+    }
 
     if (options.basicAuth?.enabled && options.basicAuth.username && options.basicAuth.password) {
       const basicAuthSecretName = options.basicAuth.secretName || `${name}-basic-auth`;
