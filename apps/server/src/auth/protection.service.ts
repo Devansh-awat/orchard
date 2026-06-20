@@ -2,6 +2,8 @@ import { Injectable, BadRequestException, NotFoundException } from '@nestjs/comm
 import { SignJWT, jwtVerify } from 'jose';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
+import * as http from 'http';
+import { Request, Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthorizationService } from './authorization.service';
 
@@ -19,6 +21,8 @@ interface CachedIngress {
   protectionBypassSecret: string | null;
   project: { organizationId: string; name: string };
   host: string;
+  upstreamHost: string | null;
+  upstreamPort: number | null;
   expiresAt: number;
 }
 
@@ -49,11 +53,13 @@ export class ProtectionService {
       select: {
         id: true,
         projectId: true,
+        namespace: true,
         protectionMode: true,
         protectionPasswordHash: true,
         protectionBypassSecret: true,
         host: true,
         project: { select: { organizationId: true, name: true } },
+        service: { select: { name: true, port: true } },
       },
     });
 
@@ -64,6 +70,8 @@ export class ProtectionService {
 
     const entry: CachedIngress = {
       ...ingress,
+      upstreamHost: ingress.service ? `${ingress.service.name}.${ingress.namespace}.svc.cluster.local` : null,
+      upstreamPort: ingress.service?.port ?? null,
       expiresAt: Date.now() + 5_000,
     };
     this.ingressCache.set(host, entry);
@@ -231,6 +239,65 @@ export class ProtectionService {
     if (url.hostname !== ingress.host) {
       throw new BadRequestException('returnTo does not match ingress host');
     }
+  }
+
+  async handleProxyRequest(req: Request, res: Response): Promise<boolean> {
+    const host = (req.hostname || req.headers.host || '').toLowerCase().replace(/:\d+$/, '');
+    const ingress = await this.resolveIngressFromHost(host);
+    if (!ingress) return false;
+
+    const cookieHeader = req.headers['cookie']?.toString();
+    const bypassHeader = req.headers['x-orchard-protection-bypass']?.toString();
+    const decision = await this.checkProtection(host, req.originalUrl || req.url, cookieHeader, bypassHeader);
+
+    if (!decision.allow) {
+      if (decision.headers) {
+        for (const [key, value] of Object.entries(decision.headers)) {
+          res.setHeader(key, value);
+        }
+      }
+      res.status(decision.status || 403).send('');
+      return true;
+    }
+
+    if (!ingress.upstreamHost || !ingress.upstreamPort) {
+      res.status(502).send('No upstream configured');
+      return true;
+    }
+
+    await this.proxyToUpstream(req, res, ingress.upstreamHost, ingress.upstreamPort);
+    return true;
+  }
+
+  private proxyToUpstream(req: Request, res: Response, upstreamHost: string, upstreamPort: number): Promise<void> {
+    return new Promise((resolve) => {
+      const headers = { ...req.headers };
+      delete headers['host'];
+      headers['host'] = `${upstreamHost}:${upstreamPort}`;
+      delete headers['connection'];
+
+      const proxyReq = http.request(
+        {
+          hostname: upstreamHost,
+          port: upstreamPort,
+          path: req.originalUrl || req.url,
+          method: req.method,
+          headers,
+        },
+        (proxyRes) => {
+          res.writeHead(proxyRes.statusCode || 502, proxyRes.headers);
+          proxyRes.pipe(res);
+          proxyRes.on('end', resolve);
+        },
+      );
+
+      proxyReq.on('error', () => {
+        if (!res.headersSent) res.status(502).send('Upstream error');
+        resolve();
+      });
+
+      req.pipe(proxyReq);
+    });
   }
 
   private extractCookie(cookieHeader: string | undefined, name: string): string | null {

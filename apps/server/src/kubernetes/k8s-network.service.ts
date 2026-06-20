@@ -493,164 +493,158 @@ end
   }
 
 
-  async createProtectionMiddleware(
-    namespace: string,
-    name: string,
-    serviceName: string,
-    servicePort: number,
-  ): Promise<void> {
+  async enableProtectionProxy(namespace: string, ingressName: string): Promise<void> {
     this.ensureKubeConfig();
 
     const cleanNamespace = String(namespace || '').trim();
-    const cleanName = String(name || '').trim();
-
+    const cleanName = String(ingressName || '').trim();
     if (!cleanNamespace || !cleanName) return;
 
-    const customObjectsApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
-
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
     const authServerNamespace = process.env.ORCHARD_NAMESPACE || 'orchard';
     const authServerPort = parseInt(process.env.ORCHARD_SERVER_PORT || '3001', 10);
+    const proxyServiceName = 'orchard-protection-proxy';
 
-    const envoyConfigBody = {
-      apiVersion: 'cilium.io/v2',
-      kind: 'CiliumEnvoyConfig',
+    const serverEndpoints = await coreApi.readNamespacedEndpoints('server', authServerNamespace);
+    const addresses = serverEndpoints.body.subsets?.[0]?.addresses?.map(a => a.ip) || [];
+    if (!addresses.length) {
+      console.error('No server endpoints found for protection proxy');
+      return;
+    }
+
+    const svcBody: k8s.V1Service = {
       metadata: {
-        name: `${cleanName}-protection`,
+        name: proxyServiceName,
         namespace: cleanNamespace,
-        labels: {
-          'orchard.my/managed': 'true',
-          'orchard.my/type': 'protection',
-        },
+        labels: { 'orchard.my/managed': 'true', 'orchard.my/type': 'protection-proxy' },
       },
       spec: {
-        services: [
-          { name: serviceName, namespace: cleanNamespace, ports: [servicePort] },
-        ],
-        backendServices: [
-          { name: 'server', namespace: authServerNamespace, number: [String(authServerPort)] },
-        ],
-        resources: [
-          {
-            '@type': 'type.googleapis.com/envoy.config.listener.v3.Listener',
-            name: `${cleanName}-protection-listener`,
-            filter_chains: [
-              {
-                filters: [
-                  {
-                    name: 'envoy.filters.network.http_connection_manager',
-                    typed_config: {
-                      '@type': 'type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager',
-                      stat_prefix: `${cleanName}-protection`,
-                      route_config: {
-                        name: `${cleanName}-protection-route`,
-                        virtual_hosts: [{
-                          name: 'default',
-                          domains: ['*'],
-                          routes: [{
-                            match: { prefix: '/' },
-                            route: { cluster: `${cleanNamespace}:${serviceName}:${servicePort}` },
-                          }],
-                        }],
-                      },
-                      http_filters: [
-                        {
-                          name: 'envoy.filters.http.ext_authz',
-                          typed_config: {
-                            '@type': 'type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz',
-                            http_service: {
-                              server_uri: {
-                                uri: `server.${authServerNamespace}.svc.cluster.local:${authServerPort}`,
-                                cluster: `${authServerNamespace}/server:${authServerPort}`,
-                                timeout: '5s',
-                              },
-                              path_prefix: '/apiv1/auth/protect/check',
-                              authorization_request: {
-                                allowed_headers: {
-                                  patterns: [
-                                    { exact: 'cookie' },
-                                    { exact: 'x-orchard-protection-bypass' },
-                                  ],
-                                },
-                              },
-                              authorization_response: {
-                                allowed_upstream_headers: {
-                                  patterns: [
-                                    { exact: 'set-cookie' },
-                                    { exact: 'location' },
-                                  ],
-                                },
-                              },
-                            },
-                            failure_mode_allow: false,
-                            status_on_error: { code: 'ServiceUnavailable' },
-                          },
-                        },
-                        {
-                          name: 'envoy.filters.http.router',
-                          typed_config: {
-                            '@type': 'type.googleapis.com/envoy.extensions.filters.http.router.v3.Router',
-                          },
-                        },
-                      ],
-                    },
-                  },
-                ],
-              },
-            ],
-          },
-        ],
+        clusterIP: 'None',
+        ports: [{ port: authServerPort, targetPort: authServerPort, protocol: 'TCP' } as k8s.V1ServicePort],
       },
     };
 
     try {
-      await customObjectsApi.createNamespacedCustomObject(
-        'cilium.io',
-        'v2',
-        cleanNamespace,
-        'ciliumenvoyconfigs',
-        envoyConfigBody,
-      );
+      await coreApi.createNamespacedService(cleanNamespace, svcBody);
     } catch (error) {
       if (error.response?.statusCode === 409) {
-        try {
-          await customObjectsApi.replaceNamespacedCustomObject(
-            'cilium.io',
-            'v2',
-            cleanNamespace,
-            'ciliumenvoyconfigs',
-            `${cleanName}-protection`,
-            envoyConfigBody,
-          );
-        } catch (replaceError) {
-          console.error(`Failed to update protection CiliumEnvoyConfig: ${replaceError.message}`);
-        }
+        await coreApi.replaceNamespacedService(proxyServiceName, cleanNamespace, svcBody);
       } else {
-        console.error(`Failed to create protection CiliumEnvoyConfig: ${error.message}`);
+        console.error(`Failed to create protection proxy service: ${error.message}`);
+        return;
+      }
+    }
+
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    const endpointSlice = {
+      apiVersion: 'discovery.k8s.io/v1',
+      kind: 'EndpointSlice',
+      metadata: {
+        name: `${proxyServiceName}-1`,
+        namespace: cleanNamespace,
+        labels: { 'kubernetes.io/service-name': proxyServiceName, 'orchard.my/managed': 'true' },
+      },
+      addressType: 'IPv4',
+      ports: [{ port: authServerPort, protocol: 'TCP' }],
+      endpoints: [{ addresses }],
+    };
+
+    try {
+      await customApi.createNamespacedCustomObject('discovery.k8s.io', 'v1', cleanNamespace, 'endpointslices', endpointSlice);
+    } catch (error) {
+      if (error.response?.statusCode === 409) {
+        await customApi.replaceNamespacedCustomObject('discovery.k8s.io', 'v1', cleanNamespace, 'endpointslices', `${proxyServiceName}-1`, endpointSlice);
+      } else {
+        console.error(`Failed to create protection proxy endpoint slice: ${error.message}`);
+      }
+    }
+
+    const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
+    try {
+      const ingress = await networkingApi.readNamespacedIngress(cleanName, cleanNamespace);
+      const rules = ingress.body.spec?.rules || [];
+      for (const rule of rules) {
+        for (const path of rule.http?.paths || []) {
+          path.backend = {
+            service: { name: proxyServiceName, port: { number: authServerPort } },
+          };
+        }
+      }
+      await networkingApi.replaceNamespacedIngress(cleanName, cleanNamespace, ingress.body);
+    } catch (error) {
+      console.error(`Failed to update ingress backend for protection: ${error.message}`);
+    }
+  }
+
+  async disableProtectionProxy(
+    namespace: string,
+    ingressName: string,
+    originalServiceName: string,
+    originalServicePort: number,
+  ): Promise<void> {
+    this.ensureKubeConfig();
+
+    const cleanNamespace = String(namespace || '').trim();
+    const cleanName = String(ingressName || '').trim();
+    if (!cleanNamespace || !cleanName) return;
+
+    const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
+    try {
+      const ingress = await networkingApi.readNamespacedIngress(cleanName, cleanNamespace);
+      const rules = ingress.body.spec?.rules || [];
+      for (const rule of rules) {
+        for (const path of rule.http?.paths || []) {
+          path.backend = {
+            service: { name: originalServiceName, port: { number: originalServicePort } },
+          };
+        }
+      }
+      await networkingApi.replaceNamespacedIngress(cleanName, cleanNamespace, ingress.body);
+    } catch (error) {
+      console.error(`Failed to restore ingress backend: ${error.message}`);
+    }
+
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    const proxyServiceName = 'orchard-protection-proxy';
+    try {
+      await coreApi.deleteNamespacedService(proxyServiceName, cleanNamespace);
+    } catch (error) {
+      if (error.response?.statusCode !== 404) {
+        console.error(`Failed to delete protection proxy service: ${error.message}`);
+      }
+    }
+
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    try {
+      await customApi.deleteNamespacedCustomObject('discovery.k8s.io', 'v1', cleanNamespace, 'endpointslices', `${proxyServiceName}-1`);
+    } catch (error) {
+      if (error.response?.statusCode !== 404) {
+        console.error(`Failed to delete protection proxy endpoint slice: ${error.message}`);
       }
     }
   }
 
-  async deleteProtectionMiddleware(namespace: string, name: string): Promise<void> {
+  async cleanupProtectionProxy(namespace: string): Promise<void> {
     this.ensureKubeConfig();
-
     const cleanNamespace = String(namespace || '').trim();
-    const cleanName = String(name || '').trim();
+    if (!cleanNamespace) return;
 
-    if (!cleanNamespace || !cleanName) return;
-
-    const customObjectsApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
-
+    const proxyServiceName = 'orchard-protection-proxy';
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
     try {
-      await customObjectsApi.deleteNamespacedCustomObject(
-        'cilium.io',
-        'v2',
-        cleanNamespace,
-        'ciliumenvoyconfigs',
-        `${cleanName}-protection`,
-      );
+      await coreApi.deleteNamespacedService(proxyServiceName, cleanNamespace);
     } catch (error) {
       if (error.response?.statusCode !== 404) {
-        console.error(`Failed to delete protection CiliumEnvoyConfig ${cleanName}-protection in ${cleanNamespace}:`, error);
+        console.error(`Failed to delete protection proxy service: ${error.message}`);
+      }
+    }
+
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    try {
+      await customApi.deleteNamespacedCustomObject('discovery.k8s.io', 'v1', cleanNamespace, 'endpointslices', `${proxyServiceName}-1`);
+    } catch (error) {
+      if (error.response?.statusCode !== 404) {
+        console.error(`Failed to delete protection proxy endpoint slice: ${error.message}`);
       }
     }
   }
@@ -1102,7 +1096,7 @@ end
 
       await this.deleteBasicAuthSecret(cleanNamespace, `${cleanName}-basic-auth`);
       await this.deleteBasicAuthMiddleware(cleanNamespace, cleanName);
-      await this.deleteProtectionMiddleware(cleanNamespace, cleanName);
+      await this.cleanupProtectionProxy(cleanNamespace);
 
       return {
         success: true,

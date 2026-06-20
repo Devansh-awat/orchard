@@ -2026,20 +2026,20 @@ export class IngressService {
     }
 
     if (wasProtected && !willProtect) {
-      await this.k8sNetwork.deleteProtectionMiddleware(ingress.namespace, ingress.name);
-    }
-
-    if (willProtect) {
       const serviceName = ingress.service?.name;
       const servicePort = ingress.service?.ports?.[0]?.port || ingress.service?.port;
       if (serviceName && servicePort) {
-        await this.k8sNetwork.createProtectionMiddleware(
+        await this.k8sNetwork.disableProtectionProxy(
           ingress.namespace,
           ingress.name,
           serviceName,
           Number(servicePort),
         );
       }
+    }
+
+    if (willProtect) {
+      await this.k8sNetwork.enableProtectionProxy(ingress.namespace, ingress.name);
     }
 
     const annotations = (ingress.annotations as Record<string, string>) || {};

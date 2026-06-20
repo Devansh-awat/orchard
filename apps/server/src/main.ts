@@ -27,6 +27,7 @@ import { attachTerminalWebSocket } from './kubernetes/terminal.gateway';
 import { OtelConsoleLogger } from './analytics/otel-logger';
 import { AnalyticsService } from './analytics/analytics.service';
 import { AnalyticsExceptionFilter } from './analytics/exception.filter';
+import { ProtectionService } from './auth/protection.service';
 
 declare global {
   interface BigInt {
@@ -51,6 +52,17 @@ async function bootstrap() {
   // rawBody capture (verify hook) so webhook HMAC verification still works.
   app.useBodyParser('json', { limit: '25mb' });
   app.useBodyParser('urlencoded', { limit: '25mb', extended: true });
+
+  const protectionService = app.get(ProtectionService);
+  app.use(async (req, res, next) => {
+    if (req.url.startsWith('/apiv1')) return next();
+    try {
+      const handled = await protectionService.handleProxyRequest(req, res);
+      if (!handled) return next();
+    } catch {
+      if (!res.headersSent) next();
+    }
+  });
 
   app.setGlobalPrefix('apiv1');
 
