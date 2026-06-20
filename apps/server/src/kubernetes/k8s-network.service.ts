@@ -1558,9 +1558,7 @@ export class K8sNetworkService {
   }
 
   private sharedIpAnnotation(ip: string): string {
-    // Use a key derived from the IP itself so multiple orgs pointing at the same IP
-    // converge on the same MetalLB sharing group (safe by design).
-    return `db-shared-${ip.replace(/[^0-9a-zA-Z]/g, '-')}`;
+    return `shared-${ip.replace(/[^0-9a-zA-Z]/g, '-')}`;
   }
 
   async listInUsePortsOnIp(loadBalancerIp: string): Promise<number[]> {
@@ -1599,15 +1597,12 @@ export class K8sNetworkService {
           'cnpg.io/cluster': options.clusterName,
         },
         annotations: {
-          'metallb.universe.tf/allow-shared-ip': this.sharedIpAnnotation(options.loadBalancerIp),
+          'lbipam.cilium.io/sharing-key': this.sharedIpAnnotation(options.loadBalancerIp),
         },
       },
       spec: {
         type: 'LoadBalancer',
         loadBalancerIP: options.loadBalancerIp,
-        // MetalLB shared-IP across services that select different pods requires Cluster policy
-        // (Local requires all co-located pods and per-service healthCheckNodePorts). We trade
-        // client-IP preservation for reliable multi-DB sharing; TLS + password handle auth anyway.
         externalTrafficPolicy: 'Cluster',
         selector: {
           'cnpg.io/cluster': options.clusterName,
@@ -1741,7 +1736,7 @@ export class K8sNetworkService {
           'orchard.dev/public-deployment': options.deploymentName,
         },
         annotations: {
-          'metallb.universe.tf/allow-shared-ip': this.sharedIpAnnotation(options.loadBalancerIp),
+          'lbipam.cilium.io/sharing-key': this.sharedIpAnnotation(options.loadBalancerIp),
         },
       },
       spec: {
