@@ -220,15 +220,16 @@ export class IngressService {
     const ingressClassName = 'cilium';
 
     const tlsEnabled = data.tlsEnabled !== false;
+    const isWildcardDomain = rawHost.endsWith('.k.hackclub.dev');
     let tlsSecretName: string | null = null;
     if (tlsEnabled) {
-      tlsSecretName = `leaf-cert-${randomUUID()}`;
+      tlsSecretName = isWildcardDomain ? 'wildcard-k-hackclub-dev-tls' : `leaf-cert-${randomUUID()}`;
       if (tlsSecretName.length > 255) {
         throw new BadRequestException('TLS secret name is too long');
       }
     }
 
-    const clusterIssuer = tlsEnabled ? 'letsencrypt-prod' : null;
+    const clusterIssuer = tlsEnabled && !isWildcardDomain ? 'letsencrypt-prod' : null;
 
     const entrypoints = tlsEnabled ? ['websecure'] : ['web'];
 
@@ -254,7 +255,7 @@ export class IngressService {
     }
 
     if (tlsEnabled) {
-      sanitizedAnnotations['ingress.cilium.io/force-https'] = 'enabled';
+      sanitizedAnnotations['acme.cert-manager.io/http01-edit-in-place'] = 'true';
     }
 
     if (clusterIssuer) {
@@ -613,9 +614,10 @@ export class IngressService {
     }
 
     const tlsEnabled = data.tlsEnabled !== false;
-    const tlsSecretName = tlsEnabled ? `leaf-cert-${randomUUID()}` : null;
+    const isWildcardDomain = rawHost.endsWith('.k.hackclub.dev');
+    const tlsSecretName = tlsEnabled ? (isWildcardDomain ? 'wildcard-k-hackclub-dev-tls' : `leaf-cert-${randomUUID()}`) : null;
     const tlsHosts = tlsSecretName ? [rawHost] : [];
-    const clusterIssuer = tlsEnabled ? 'letsencrypt-prod' : null;
+    const clusterIssuer = tlsEnabled && !isWildcardDomain ? 'letsencrypt-prod' : null;
     const entrypoints = tlsEnabled ? ['websecure'] : ['web'];
 
     const sanitizedAnnotations: Record<string, string> = {};
@@ -627,7 +629,7 @@ export class IngressService {
       }
     }
     if (tlsEnabled) {
-      sanitizedAnnotations['ingress.cilium.io/force-https'] = 'enabled';
+      sanitizedAnnotations['acme.cert-manager.io/http01-edit-in-place'] = 'true';
     }
     if (clusterIssuer) {
       sanitizedAnnotations['cert-manager.io/cluster-issuer'] = clusterIssuer;
@@ -949,14 +951,15 @@ export class IngressService {
     }
 
     const tlsEnabled = data.tlsEnabled !== false;
-    const tlsSecretName = tlsEnabled ? `leaf-cert-${randomUUID()}` : null;
+    const isWildcardDomain = rawHost.endsWith('.k.hackclub.dev');
+    const tlsSecretName = tlsEnabled ? (isWildcardDomain ? 'wildcard-k-hackclub-dev-tls' : `leaf-cert-${randomUUID()}`) : null;
     const tlsHosts = tlsSecretName ? [rawHost] : [];
-    const clusterIssuer = tlsEnabled ? 'letsencrypt-prod' : null;
+    const clusterIssuer = tlsEnabled && !isWildcardDomain ? 'letsencrypt-prod' : null;
     const entrypoints = tlsEnabled ? ['websecure'] : ['web'];
 
     const sanitizedAnnotations: Record<string, string> = {};
     if (tlsEnabled) {
-      sanitizedAnnotations['ingress.cilium.io/force-https'] = 'enabled';
+      sanitizedAnnotations['acme.cert-manager.io/http01-edit-in-place'] = 'true';
     }
     if (clusterIssuer) {
       sanitizedAnnotations['cert-manager.io/cluster-issuer'] = clusterIssuer;
@@ -1325,19 +1328,24 @@ export class IngressService {
     }
 
     const tlsEnabled = data.tlsEnabled !== false;
+    const isWildcardDomain = rawHost.endsWith('.k.hackclub.dev');
     let tlsSecretName: string | null = ingress.tlsSecretName;
-    if (tlsEnabled && !tlsSecretName) {
-      tlsSecretName = `leaf-cert-${randomUUID()}`;
-    } else if (!tlsEnabled) {
+    if (tlsEnabled) {
+      if (isWildcardDomain) {
+        tlsSecretName = 'wildcard-k-hackclub-dev-tls';
+      } else if (!tlsSecretName || tlsSecretName === 'wildcard-k-hackclub-dev-tls') {
+        tlsSecretName = `leaf-cert-${randomUUID()}`;
+      }
+    } else {
       tlsSecretName = null;
     }
     const tlsHosts = tlsSecretName ? [rawHost] : [];
-    const clusterIssuer = tlsEnabled ? 'letsencrypt-prod' : null;
+    const clusterIssuer = tlsEnabled && !isWildcardDomain ? 'letsencrypt-prod' : null;
     const entrypoints = tlsEnabled ? ['websecure'] : ['web'];
 
     const sanitizedAnnotations: Record<string, string> = {};
     if (tlsEnabled) {
-      sanitizedAnnotations['ingress.cilium.io/force-https'] = 'enabled';
+      sanitizedAnnotations['acme.cert-manager.io/http01-edit-in-place'] = 'true';
     }
     if (clusterIssuer) {
       sanitizedAnnotations['cert-manager.io/cluster-issuer'] = clusterIssuer;
@@ -1711,17 +1719,22 @@ export class IngressService {
     const ingressClassName = 'cilium';
 
     const tlsEnabled = data.tlsEnabled !== false;
+    const isWildcardDomain = rawHost.endsWith('.k.hackclub.dev');
     let tlsSecretName: string | null = ingress.tlsSecretName;
-    if (tlsEnabled && !tlsSecretName) {
-      tlsSecretName = `leaf-cert-${randomUUID()}`;
-      if (tlsSecretName.length > 255) {
-        throw new BadRequestException('TLS secret name is too long');
+    if (tlsEnabled) {
+      if (isWildcardDomain) {
+        tlsSecretName = 'wildcard-k-hackclub-dev-tls';
+      } else if (!tlsSecretName || tlsSecretName === 'wildcard-k-hackclub-dev-tls') {
+        tlsSecretName = `leaf-cert-${randomUUID()}`;
+        if (tlsSecretName.length > 255) {
+          throw new BadRequestException('TLS secret name is too long');
+        }
       }
-    } else if (!tlsEnabled) {
+    } else {
       tlsSecretName = null;
     }
 
-    const clusterIssuer = tlsEnabled ? 'letsencrypt-prod' : null;
+    const clusterIssuer = tlsEnabled && !isWildcardDomain ? 'letsencrypt-prod' : null;
 
     const entrypoints = tlsEnabled ? ['websecure'] : ['web'];
 
@@ -1747,7 +1760,7 @@ export class IngressService {
     }
 
     if (tlsEnabled) {
-      sanitizedAnnotations['ingress.cilium.io/force-https'] = 'enabled';
+      sanitizedAnnotations['acme.cert-manager.io/http01-edit-in-place'] = 'true';
     }
 
     if (clusterIssuer) {

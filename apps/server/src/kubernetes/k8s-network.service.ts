@@ -312,6 +312,164 @@ export class K8sNetworkService {
     }
   }
 
+  private static readonly HTTPS_REDIRECT_LUA = `
+function envoy_on_request(request_handle)
+  local host = request_handle:headers():get(":authority")
+  local path = request_handle:headers():get(":path")
+
+  local client_proto = "http"
+  local cf = request_handle:headers():get("cf-visitor")
+  if cf and string.find(cf, '"https"', 1, true) then
+    client_proto = "https"
+  else
+    local xfp = request_handle:headers():get("x-forwarded-proto")
+    if xfp == "https" then
+      client_proto = "https"
+    end
+  end
+
+  if client_proto == "http" then
+    request_handle:respond(
+      {[":status"] = "301", ["location"] = "https://" .. host .. path},
+      ""
+    )
+    return
+  end
+
+  request_handle:headers():replace("x-forwarded-proto", client_proto)
+  request_handle:headers():replace("x-forwarded-host", host)
+
+  local xff = request_handle:headers():get("x-forwarded-for")
+  if xff then
+    request_handle:headers():add("x-orchard-forwarded-for", xff)
+  end
+  request_handle:headers():add("x-orchard-forwarded-proto", client_proto)
+  request_handle:headers():add("x-orchard-forwarded-host", host)
+end
+`.trim();
+
+  async createHttpsRedirectMiddleware(
+    namespace: string,
+    name: string,
+    serviceName: string,
+    servicePort: number,
+  ): Promise<void> {
+    this.ensureKubeConfig();
+
+    const cleanNamespace = String(namespace || '').trim();
+    const cleanName = String(name || '').trim();
+
+    if (!cleanNamespace || !cleanName) return;
+
+    const customObjectsApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+
+    const envoyConfigBody = {
+      apiVersion: 'cilium.io/v2',
+      kind: 'CiliumEnvoyConfig',
+      metadata: {
+        name: `${cleanName}-https-redirect`,
+        namespace: cleanNamespace,
+        labels: {
+          'orchard.my/managed': 'true',
+          'orchard.my/type': 'https-redirect',
+        },
+      },
+      spec: {
+        services: [
+          { name: serviceName, namespace: cleanNamespace, ports: [servicePort] },
+        ],
+        resources: [
+          {
+            '@type': 'type.googleapis.com/envoy.config.listener.v3.Listener',
+            name: `${cleanName}-https-redirect-listener`,
+            filter_chains: [
+              {
+                filters: [
+                  {
+                    name: 'envoy.filters.network.http_connection_manager',
+                    typed_config: {
+                      '@type': 'type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager',
+                      stat_prefix: `${cleanName}-https-redirect`,
+                      http_filters: [
+                        {
+                          name: 'envoy.filters.http.lua',
+                          typed_config: {
+                            '@type': 'type.googleapis.com/envoy.extensions.filters.http.lua.v3.Lua',
+                            default_source_code: {
+                              inline_string: K8sNetworkService.HTTPS_REDIRECT_LUA,
+                            },
+                          },
+                        },
+                        {
+                          name: 'envoy.filters.http.router',
+                          typed_config: {
+                            '@type': 'type.googleapis.com/envoy.extensions.filters.http.router.v3.Router',
+                          },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    try {
+      await customObjectsApi.createNamespacedCustomObject(
+        'cilium.io',
+        'v2',
+        cleanNamespace,
+        'ciliumenvoyconfigs',
+        envoyConfigBody,
+      );
+    } catch (error) {
+      if (error.response?.statusCode === 409) {
+        try {
+          await customObjectsApi.replaceNamespacedCustomObject(
+            'cilium.io',
+            'v2',
+            cleanNamespace,
+            'ciliumenvoyconfigs',
+            `${cleanName}-https-redirect`,
+            envoyConfigBody,
+          );
+        } catch (replaceError) {
+          console.error(`Failed to update HTTPS redirect CiliumEnvoyConfig: ${replaceError.message}`);
+        }
+      } else {
+        console.error(`Failed to create HTTPS redirect CiliumEnvoyConfig: ${error.message}`);
+      }
+    }
+  }
+
+  async deleteHttpsRedirectMiddleware(namespace: string, name: string): Promise<void> {
+    this.ensureKubeConfig();
+
+    const cleanNamespace = String(namespace || '').trim();
+    const cleanName = String(name || '').trim();
+
+    if (!cleanNamespace || !cleanName) return;
+
+    const customObjectsApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+
+    try {
+      await customObjectsApi.deleteNamespacedCustomObject(
+        'cilium.io',
+        'v2',
+        cleanNamespace,
+        'ciliumenvoyconfigs',
+        `${cleanName}-https-redirect`,
+      );
+    } catch (error) {
+      if (error.response?.statusCode !== 404) {
+        console.error(`Failed to delete HTTPS redirect CiliumEnvoyConfig ${cleanName}-https-redirect in ${cleanNamespace}:`, error);
+      }
+    }
+  }
+
 
   async createIngress(options: CreateIngressOptions) {
     this.ensureKubeConfig();
@@ -370,10 +528,6 @@ export class K8sNetworkService {
 
     const hasTls = options.tlsSecretName && options.tlsSecretName.trim().length > 0;
 
-    if (hasTls) {
-      annotations['ingress.cilium.io/force-https'] = 'enabled';
-    }
-
     if (options.basicAuth?.enabled && options.basicAuth.username && options.basicAuth.password) {
       const basicAuthSecretName = options.basicAuth.secretName || `${name}-basic-auth`;
       const targetService = pathBackends[0];
@@ -396,6 +550,20 @@ export class K8sNetworkService {
         annotations['orchard.my/basic-auth'] = 'true';
       } catch (error) {
         console.error('[K8s] Failed to create basic auth:', error);
+      }
+    }
+
+    if (hasTls) {
+      const targetService = pathBackends[0];
+      try {
+        await this.createHttpsRedirectMiddleware(
+          namespace,
+          name,
+          String(targetService.serviceName).trim(),
+          Number(targetService.servicePort),
+        );
+      } catch (error) {
+        console.error('[K8s] Failed to create HTTPS redirect middleware:', error);
       }
     }
 
@@ -539,10 +707,6 @@ export class K8sNetworkService {
 
     const hasTls = options.tlsSecretName && options.tlsSecretName.trim().length > 0;
 
-    if (hasTls) {
-      annotations['ingress.cilium.io/force-https'] = 'enabled';
-    }
-
     if (options.basicAuth?.enabled && options.basicAuth.username && options.basicAuth.password) {
       const basicAuthSecretName = options.basicAuth.secretName || `${name}-basic-auth`;
       const targetService = pathBackends[0];
@@ -573,6 +737,26 @@ export class K8sNetworkService {
         await this.deleteBasicAuthMiddleware(namespace, name);
       } catch (error) {
         console.error('[K8s] Failed to remove basic auth:', error);
+      }
+    }
+
+    if (hasTls) {
+      const targetService = pathBackends[0];
+      try {
+        await this.createHttpsRedirectMiddleware(
+          namespace,
+          name,
+          String(targetService.serviceName).trim(),
+          Number(targetService.servicePort),
+        );
+      } catch (error) {
+        console.error('[K8s] Failed to create HTTPS redirect middleware:', error);
+      }
+    } else {
+      try {
+        await this.deleteHttpsRedirectMiddleware(namespace, name);
+      } catch (error) {
+        console.error('[K8s] Failed to remove HTTPS redirect middleware:', error);
       }
     }
 

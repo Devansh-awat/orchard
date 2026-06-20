@@ -9,7 +9,7 @@ import { sanitizePortEntries } from './port-utils';
 export const ALLOWED_INGRESS_ANNOTATION_KEYS = new Set<string>([
   'cert-manager.io/cluster-issuer',
   'cert-manager.io/issuer',
-  'ingress.cilium.io/force-https',
+  'acme.cert-manager.io/http01-edit-in-place',
   'orchard.my/basic-auth',
 ]);
 
