@@ -9,6 +9,8 @@ import { PasskeyService } from './passkey.service';
 import { RateLimitService } from './rate-limit.service';
 import { ApiTokensService } from './api-tokens.service';
 import { ApiTokensController } from './api-tokens.controller';
+import { ProtectionService } from './protection.service';
+import { ProtectionController } from './protection.controller';
 import { SessionsService } from './sessions.service';
 import { MembershipCacheService } from './membership-cache.service';
 import { AuthorizationService } from './authorization.service';
@@ -19,7 +21,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 
 @Module({
   imports: [UsersModule, EmailModule, PrismaModule],
-  controllers: [OAuthController, PasswordlessController, ApiTokensController],
+  controllers: [OAuthController, PasswordlessController, ApiTokensController, ProtectionController],
   providers: [
     SuperAdminGuard,
     OAuthService,
@@ -27,6 +29,7 @@ import { PrismaModule } from '../prisma/prisma.module';
     PasskeyService,
     RateLimitService,
     ApiTokensService,
+    ProtectionService,
     SessionsService,
     MembershipCacheService,
     AuthorizationService,
@@ -43,7 +46,7 @@ import { PrismaModule } from '../prisma/prisma.module';
       useClass: ScopeGuard,
     },
   ],
-  exports: [SuperAdminGuard, OAuthService, OtpService, PasskeyService, RateLimitService, ApiTokensService, SessionsService, MembershipCacheService, AuthorizationService],
+  exports: [SuperAdminGuard, OAuthService, OtpService, PasskeyService, RateLimitService, ApiTokensService, ProtectionService, SessionsService, MembershipCacheService, AuthorizationService],
 })
 export class AuthModule {}
 

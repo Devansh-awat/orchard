@@ -493,6 +493,168 @@ end
   }
 
 
+  async createProtectionMiddleware(
+    namespace: string,
+    name: string,
+    serviceName: string,
+    servicePort: number,
+  ): Promise<void> {
+    this.ensureKubeConfig();
+
+    const cleanNamespace = String(namespace || '').trim();
+    const cleanName = String(name || '').trim();
+
+    if (!cleanNamespace || !cleanName) return;
+
+    const customObjectsApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+
+    const authServerNamespace = process.env.ORCHARD_NAMESPACE || 'orchard';
+    const authServerPort = parseInt(process.env.ORCHARD_SERVER_PORT || '3001', 10);
+
+    const envoyConfigBody = {
+      apiVersion: 'cilium.io/v2',
+      kind: 'CiliumEnvoyConfig',
+      metadata: {
+        name: `${cleanName}-protection`,
+        namespace: cleanNamespace,
+        labels: {
+          'orchard.my/managed': 'true',
+          'orchard.my/type': 'protection',
+        },
+      },
+      spec: {
+        services: [
+          { name: serviceName, namespace: cleanNamespace, ports: [servicePort] },
+        ],
+        backendServices: [
+          { name: 'server', namespace: authServerNamespace, number: authServerPort },
+        ],
+        resources: [
+          {
+            '@type': 'type.googleapis.com/envoy.config.listener.v3.Listener',
+            name: `${cleanName}-protection-listener`,
+            filter_chains: [
+              {
+                filters: [
+                  {
+                    name: 'envoy.filters.network.http_connection_manager',
+                    typed_config: {
+                      '@type': 'type.googleapis.com/envoy.extensions.filters.network.http_connection_manager.v3.HttpConnectionManager',
+                      stat_prefix: `${cleanName}-protection`,
+                      route_config: {
+                        name: `${cleanName}-protection-route`,
+                        virtual_hosts: [{
+                          name: 'default',
+                          domains: ['*'],
+                          routes: [{
+                            match: { prefix: '/' },
+                            route: { cluster: `${cleanNamespace}:${serviceName}:${servicePort}` },
+                          }],
+                        }],
+                      },
+                      http_filters: [
+                        {
+                          name: 'envoy.filters.http.ext_authz',
+                          typed_config: {
+                            '@type': 'type.googleapis.com/envoy.extensions.filters.http.ext_authz.v3.ExtAuthz',
+                            http_service: {
+                              server_uri: {
+                                uri: `server.${authServerNamespace}.svc.cluster.local:${authServerPort}`,
+                                cluster: `${authServerNamespace}/server:${authServerPort}`,
+                                timeout: '5s',
+                              },
+                              path_prefix: '/apiv1/auth/protect/check',
+                              authorization_request: {
+                                allowed_headers: {
+                                  patterns: [
+                                    { exact: 'cookie' },
+                                    { exact: 'x-orchard-protection-bypass' },
+                                  ],
+                                },
+                              },
+                              authorization_response: {
+                                allowed_upstream_headers: {
+                                  patterns: [
+                                    { exact: 'set-cookie' },
+                                    { exact: 'location' },
+                                  ],
+                                },
+                              },
+                            },
+                            failure_mode_allow: false,
+                            status_on_error: { code: 'ServiceUnavailable' },
+                          },
+                        },
+                        {
+                          name: 'envoy.filters.http.router',
+                          typed_config: {
+                            '@type': 'type.googleapis.com/envoy.extensions.filters.http.router.v3.Router',
+                          },
+                        },
+                      ],
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        ],
+      },
+    };
+
+    try {
+      await customObjectsApi.createNamespacedCustomObject(
+        'cilium.io',
+        'v2',
+        cleanNamespace,
+        'ciliumenvoyconfigs',
+        envoyConfigBody,
+      );
+    } catch (error) {
+      if (error.response?.statusCode === 409) {
+        try {
+          await customObjectsApi.replaceNamespacedCustomObject(
+            'cilium.io',
+            'v2',
+            cleanNamespace,
+            'ciliumenvoyconfigs',
+            `${cleanName}-protection`,
+            envoyConfigBody,
+          );
+        } catch (replaceError) {
+          console.error(`Failed to update protection CiliumEnvoyConfig: ${replaceError.message}`);
+        }
+      } else {
+        console.error(`Failed to create protection CiliumEnvoyConfig: ${error.message}`);
+      }
+    }
+  }
+
+  async deleteProtectionMiddleware(namespace: string, name: string): Promise<void> {
+    this.ensureKubeConfig();
+
+    const cleanNamespace = String(namespace || '').trim();
+    const cleanName = String(name || '').trim();
+
+    if (!cleanNamespace || !cleanName) return;
+
+    const customObjectsApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+
+    try {
+      await customObjectsApi.deleteNamespacedCustomObject(
+        'cilium.io',
+        'v2',
+        cleanNamespace,
+        'ciliumenvoyconfigs',
+        `${cleanName}-protection`,
+      );
+    } catch (error) {
+      if (error.response?.statusCode !== 404) {
+        console.error(`Failed to delete protection CiliumEnvoyConfig ${cleanName}-protection in ${cleanNamespace}:`, error);
+      }
+    }
+  }
+
   async createIngress(options: CreateIngressOptions) {
     this.ensureKubeConfig();
 
@@ -940,6 +1102,7 @@ end
 
       await this.deleteBasicAuthSecret(cleanNamespace, `${cleanName}-basic-auth`);
       await this.deleteBasicAuthMiddleware(cleanNamespace, cleanName);
+      await this.deleteProtectionMiddleware(cleanNamespace, cleanName);
 
       return {
         success: true,

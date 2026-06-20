@@ -2776,6 +2776,7 @@ export class DeploymentsService {
       envVars?: Array<{ key: string; value: string | null }> | null;
       buildLogs?: string | null;
       buildError?: string | null;
+      ingresses?: Array<any> | null;
     },
   >(d: T): T {
     return {
@@ -2783,6 +2784,9 @@ export class DeploymentsService {
       envVars: d.envVars
         ? d.envVars.map((ev) => ({ ...ev, value: null }))
         : d.envVars,
+      ingresses: d.ingresses
+        ? d.ingresses.map(({ protectionBypassSecret, ...ing }) => ing)
+        : d.ingresses,
       buildLogs: null,
       buildError: null,
     } as T;
@@ -2969,18 +2973,17 @@ export class DeploymentsService {
       return deployment;
     }
 
-    if (deployment.services && Array.isArray(deployment.services)) {
-      const servicesWithInternalUrls = this.addInternalUrlsToServices(
-        deployment.services,
-        deployment.namespace
-      );
-      return {
-        ...deployment,
-        services: servicesWithInternalUrls,
-      };
+    const result = { ...deployment };
+
+    if (result.services && Array.isArray(result.services)) {
+      result.services = this.addInternalUrlsToServices(result.services, result.namespace);
     }
 
-    return deployment;
+    if (result.ingresses && Array.isArray(result.ingresses)) {
+      result.ingresses = result.ingresses.map(({ protectionPasswordHash, ...ing }: any) => ing);
+    }
+
+    return result;
   }
 
   normalizeServicePortInputs(

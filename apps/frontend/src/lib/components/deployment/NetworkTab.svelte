@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Loader2, Lock } from 'lucide-svelte';
+	import { Loader2, Lock, Shield, Check } from 'lucide-svelte';
 	import { ChevronDown, Copy, Plus, RefreshCw, Settings, Trash2, Wifi, X } from '@jis3r/icons';
 	import { slide } from 'svelte/transition';
 	import { env } from '$env/dynamic/public';
@@ -60,6 +60,8 @@
 		onDeleteIngress,
 		onResetDomainForm,
 		onGenerateRandomDomain,
+		onUpdateProtection,
+		protectionUpdatingId,
 		toasts
 	}: {
 		deployment: any;
@@ -113,8 +115,39 @@
 		onDeleteIngress: (ingressId: string) => void;
 		onResetDomainForm: () => void;
 		onGenerateRandomDomain: () => void;
+		onUpdateProtection?: (ingressId: string, mode: string, password?: string) => void;
+		protectionUpdatingId?: string | null;
 		toasts: any;
 	} = $props();
+
+	let protectionExpandedId = $state<string | null>(null);
+	let protectionMode = $state<string>('none');
+	let protectionPassword = $state('');
+	let copiedBypass = $state(false);
+
+	function toggleProtection(ingress: any) {
+		if (protectionExpandedId === ingress.id) {
+			protectionExpandedId = null;
+		} else {
+			protectionExpandedId = ingress.id;
+			protectionMode = ingress.protectionMode || 'none';
+			protectionPassword = '';
+		}
+	}
+
+	function saveProtection(ingressId: string) {
+		onUpdateProtection?.(
+			ingressId,
+			protectionMode,
+			protectionMode === 'password' ? protectionPassword : undefined
+		);
+	}
+
+	async function copyBypassSecret(secret: string) {
+		await navigator.clipboard.writeText(secret);
+		copiedBypass = true;
+		setTimeout(() => (copiedBypass = false), 2000);
+	}
 </script>
 
 <div class="space-y-5">
@@ -654,45 +687,178 @@
 			{#if deployment.ingresses?.length}
 				{#each deployment.ingresses as ingress}
 					<div
-						class="svc-port-row flex w-full items-center justify-between gap-3 rounded-xl p-3 text-left"
+						class="rounded-xl overflow-hidden"
 						style="background-color: var(--control-bg); border: 1px solid var(--surface-border);"
 					>
-						<a
-							href="{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}{ingress.path}"
-							target="_blank"
-							rel="noopener noreferrer"
-							class="flex-1 min-w-0 text-left no-underline transition hover:opacity-80"
-						>
-							{#if ingress.annotations?.['traefik.ingress.kubernetes.io/router.middlewares']?.includes('auth@kubernetescrd')}
-								<p class="text-xs text-amber-500 mb-1">
-									<Lock class="inline h-3 w-3 mr-1" />
-									Auth
+						<div class="svc-port-row flex w-full items-center justify-between gap-3 p-3 text-left">
+							<a
+								href="{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}{ingress.path}"
+								target="_blank"
+								rel="noopener noreferrer"
+								class="flex-1 min-w-0 text-left no-underline transition hover:opacity-80"
+							>
+								{#if ingress.protectionMode && ingress.protectionMode !== 'none'}
+									<p class="text-xs text-indigo-400 mb-1">
+										<Shield class="inline h-3 w-3 mr-1" />
+										{ingress.protectionMode === 'password'
+											? 'Password protected'
+											: 'Orchard sign-in'}
+									</p>
+								{:else if ingress.annotations?.['traefik.ingress.kubernetes.io/router.middlewares']?.includes('auth@kubernetescrd')}
+									<p class="text-xs text-amber-500 mb-1">
+										<Lock class="inline h-3 w-3 mr-1" />
+										Auth
+									</p>
+								{/if}
+								<p class="text-sm font-medium" style="color: var(--center-channel-color);">
+									{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}{ingress.path}
 								</p>
-							{/if}
-							<p class="text-sm font-medium" style="color: var(--center-channel-color);">
-								{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}{ingress.path}
-							</p>
-							{#if ingress.address}
-								<p class="text-xs mt-0.5" style="color: var(--surface-muted);">{ingress.address}</p>
-							{/if}
-						</a>
-						<button
-							type="button"
-							onclick={(e) => {
-								e.stopPropagation();
-								onDeleteIngress(ingress.id);
-							}}
-							disabled={deletingIngressId === ingress.id}
-							class="btn btn-sm"
-							style="background-color: transparent; border: 1px solid var(--surface-border); color: var(--surface-muted);"
-							aria-label="Remove domain"
-						>
-							{#if deletingIngressId === ingress.id}
-								<Loader2 class="h-4 w-4 animate-spin" />
-							{:else}
-								<Trash2 size={16} class="h-4 w-4" />
-							{/if}
-						</button>
+								{#if ingress.address}
+									<p class="text-xs mt-0.5" style="color: var(--surface-muted);">
+										{ingress.address}
+									</p>
+								{/if}
+							</a>
+							<div class="flex items-center gap-1.5">
+								{#if onUpdateProtection}
+									<button
+										type="button"
+										onclick={(e) => {
+											e.stopPropagation();
+											toggleProtection(ingress);
+										}}
+										class="btn btn-sm"
+										style="background-color: transparent; border: 1px solid var(--surface-border); color: {protectionExpandedId ===
+										ingress.id
+											? 'var(--sidebar-text-active-border)'
+											: 'var(--surface-muted)'};"
+										aria-label="Protection settings"
+									>
+										<Shield size={16} class="h-4 w-4" />
+									</button>
+								{/if}
+								<button
+									type="button"
+									onclick={(e) => {
+										e.stopPropagation();
+										onDeleteIngress(ingress.id);
+									}}
+									disabled={deletingIngressId === ingress.id}
+									class="btn btn-sm"
+									style="background-color: transparent; border: 1px solid var(--surface-border); color: var(--surface-muted);"
+									aria-label="Remove domain"
+								>
+									{#if deletingIngressId === ingress.id}
+										<Loader2 class="h-4 w-4 animate-spin" />
+									{:else}
+										<Trash2 size={16} class="h-4 w-4" />
+									{/if}
+								</button>
+							</div>
+						</div>
+
+						{#if protectionExpandedId === ingress.id}
+							<div
+								class="border-t px-3 pb-3 pt-2"
+								style="border-color: var(--surface-border);"
+								transition:slide={{ duration: 150 }}
+							>
+								<p class="text-xs font-medium mb-2" style="color: var(--center-channel-color);">
+									Deployment Protection
+								</p>
+								<div class="flex flex-col gap-2">
+									<label
+										class="flex items-center gap-2 text-xs cursor-pointer"
+										style="color: var(--center-channel-color);"
+									>
+										<input
+											type="radio"
+											name="protection-{ingress.id}"
+											value="none"
+											bind:group={protectionMode}
+										/>
+										None
+									</label>
+									<label
+										class="flex items-center gap-2 text-xs cursor-pointer"
+										style="color: var(--center-channel-color);"
+									>
+										<input
+											type="radio"
+											name="protection-{ingress.id}"
+											value="password"
+											bind:group={protectionMode}
+										/>
+										Password
+									</label>
+									<label
+										class="flex items-center gap-2 text-xs cursor-pointer"
+										style="color: var(--center-channel-color);"
+									>
+										<input
+											type="radio"
+											name="protection-{ingress.id}"
+											value="orchard"
+											bind:group={protectionMode}
+										/>
+										Sign in with Orchard
+									</label>
+								</div>
+
+								{#if protectionMode === 'password'}
+									<div class="mt-2">
+										<input
+											type="password"
+											class="input text-sm w-full"
+											placeholder="Enter password"
+											bind:value={protectionPassword}
+										/>
+									</div>
+								{/if}
+
+								{#if ingress.protectionBypassSecret && protectionMode !== 'none'}
+									<div class="mt-2">
+										<p class="text-xs mb-1" style="color: var(--surface-muted);">Bypass secret</p>
+										<div class="flex items-center gap-1.5">
+											<code
+												class="text-xs flex-1 truncate px-2 py-1 rounded"
+												style="background: var(--surface-bg); color: var(--surface-muted);"
+											>
+												{ingress.protectionBypassSecret}
+											</code>
+											<button
+												type="button"
+												class="btn btn-sm"
+												style="background-color: transparent; border: 1px solid var(--surface-border); color: var(--surface-muted);"
+												onclick={() => copyBypassSecret(ingress.protectionBypassSecret)}
+											>
+												{#if copiedBypass}
+													<Check size={14} class="h-3.5 w-3.5 text-green-400" />
+												{:else}
+													<Copy size={14} class="h-3.5 w-3.5" />
+												{/if}
+											</button>
+										</div>
+										<p class="text-xs mt-1" style="color: var(--surface-muted);">
+											Send as <code>x-orchard-protection-bypass</code> header to skip auth.
+										</p>
+									</div>
+								{/if}
+
+								<button
+									type="button"
+									class="btn btn-sm btn-primary mt-2"
+									disabled={protectionUpdatingId === ingress.id ||
+										(protectionMode === 'password' && !protectionPassword.trim())}
+									onclick={() => saveProtection(ingress.id)}
+								>
+									{#if protectionUpdatingId === ingress.id}
+										<Loader2 class="h-3.5 w-3.5 animate-spin" />
+									{/if}
+									Save
+								</button>
+							</div>
+						{/if}
 					</div>
 				{/each}
 			{:else}

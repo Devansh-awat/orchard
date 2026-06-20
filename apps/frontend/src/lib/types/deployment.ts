@@ -54,6 +54,8 @@ export interface Ingress {
 		name: string;
 		port: number;
 	};
+	protectionMode?: 'none' | 'password' | 'orchard';
+	protectionBypassSecret?: string;
 }
 
 export interface ImageHistory {

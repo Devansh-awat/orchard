@@ -51,6 +51,8 @@
   "GET /auth/login": "public",
   "GET /auth/logout": "public",
   "GET /auth/me": "authenticated",
+  "GET /auth/protect/check": "public",
+  "GET /auth/protect/info": "public",
   "GET /auth/passkey/check": "public",
   "GET /auth/passkeys": "authenticated",
   "GET /auth/sessions": "authenticated",
@@ -123,6 +125,7 @@
   "GET /projects/:id/databases": "authenticated",
   "GET /projects/:id/deployments": "authenticated",
   "GET /projects/:id/ingresses/:ingressId": "authenticated",
+  "GET /projects/:id/ingresses/:ingressId/protection": "authenticated",
   "GET /projects/:projectId/compose-stacks": "authenticated",
   "GET /projects/:projectId/template-instances": "authenticated",
   "GET /projects/by-slugs/:orgSlug/:projectSlug": "authenticated",
@@ -174,6 +177,8 @@
   "POST /admin/organizations/:id/quota/disconnect": "superadmin",
   "POST /ai/chat": "authenticated",
   "POST /auth/mcp-token": "authenticated",
+  "POST /auth/protect/exchange/orchard": "authenticated",
+  "POST /auth/protect/exchange/password": "public",
   "POST /auth/me/avatar": "authenticated",
   "POST /auth/otp/request": "public",
   "POST /auth/otp/verify": "public",
@@ -247,6 +252,7 @@
   "PUT /deployments/:id/volumes": "authenticated",
   "PUT /organizations/:id/sso": "authenticated",
   "PUT /projects/:id/ingresses/:ingressId": "authenticated",
+  "PUT /projects/:id/ingresses/:ingressId/protection": "authenticated",
   "PUT /scim/v2/Users/:id": "public",
   "PUT /templates/:id": "authenticated"
 }

@@ -404,6 +404,7 @@
 	let projectBgImage = $derived(deployment?.project?.backgroundImage ?? null);
 
 	let deletingIngressId = $state<string | null>(null);
+	let protectionUpdatingId = $state<string | null>(null);
 	let projectIngresses = $state<
 		Array<{ id: string; host: string; path?: string; deploymentId?: string | null }>
 	>([]);
@@ -1678,6 +1679,38 @@
 		}
 	}
 
+	async function updateProtection(ingressId: string, mode: string, password?: string) {
+		if (!deployment?.project?.id) return;
+		protectionUpdatingId = ingressId;
+		try {
+			const response = await apiFetch(
+				`/apiv1/projects/${deployment.project.id}/ingresses/${ingressId}/protection`,
+				{
+					method: 'PUT',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ mode, password })
+				}
+			);
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to update protection');
+			}
+			toasts.add({
+				title: mode === 'none' ? 'Protection disabled' : 'Protection enabled',
+				color: 'success'
+			});
+			await fetchDeployment();
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to update protection',
+				color: 'error'
+			});
+		} finally {
+			protectionUpdatingId = null;
+		}
+	}
+
 	function resetDomainForm() {
 		newDomainHost = '';
 		newDomainPath = '/';
@@ -2825,6 +2858,8 @@
 							onDeleteIngress={deleteIngress}
 							onResetDomainForm={resetDomainForm}
 							onGenerateRandomDomain={generateRandomDomainForNew}
+							onUpdateProtection={updateProtection}
+							{protectionUpdatingId}
 							{toasts}
 						/>
 					{:else if tab.id === 'observe'}

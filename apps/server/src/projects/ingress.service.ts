@@ -21,8 +21,9 @@ import { DeploymentsService } from './deployments.service';
 import { FaviconService } from './favicon.service';
 import { ProjectsService } from './projects.service';
 import { formatSlug } from './projects.utils';
-import { randomUUID } from 'crypto';
-import { Prisma } from '@prisma/client';
+import { randomUUID, randomBytes } from 'crypto';
+import * as bcrypt from 'bcrypt';
+import { Prisma, IngressProtectionMode } from '@prisma/client';
 
 @Injectable()
 export class IngressService {
@@ -1210,6 +1211,7 @@ export class IngressService {
       tlsEnabled: !!ingress.tlsSecretName,
       routes: k8sRoutes,
       basicAuthEnabled: hasBasicAuth,
+      protectionMode: ingress.protectionMode,
       project: ingress.project,
     };
   }
@@ -1982,5 +1984,114 @@ export class IngressService {
     });
 
     return this.deployments.addInternalUrlsToDeployment(result);
+  }
+
+  async updateIngressProtection(
+    projectId: string,
+    ingressId: string,
+    userId: string,
+    mode: IngressProtectionMode,
+    password?: string,
+  ) {
+    await this.authz.requireProjectEdit(projectId, userId, 'manage ingress protection');
+
+    const ingress = await this.prisma.ingress.findFirst({
+      where: { id: ingressId, projectId },
+      include: {
+        service: { include: { ports: true } },
+        project: { include: { organization: true } },
+      },
+    });
+
+    if (!ingress) throw new NotFoundException('Ingress not found');
+
+    const wasProtected = ingress.protectionMode !== 'none';
+    const willProtect = mode !== 'none';
+
+    let protectionPasswordHash: string | null = null;
+    let protectionBypassSecret = ingress.protectionBypassSecret;
+
+    if (mode === 'password') {
+      if (!password) throw new BadRequestException('Password is required for password protection');
+      protectionPasswordHash = await bcrypt.hash(password, 10);
+    }
+
+    if (willProtect && !protectionBypassSecret) {
+      protectionBypassSecret = randomBytes(32).toString('hex');
+    }
+
+    if (!willProtect) {
+      protectionBypassSecret = null;
+      protectionPasswordHash = null;
+    }
+
+    if (wasProtected && !willProtect) {
+      await this.k8sNetwork.deleteProtectionMiddleware(ingress.namespace, ingress.name);
+    }
+
+    if (willProtect) {
+      const serviceName = ingress.service?.name;
+      const servicePort = ingress.service?.ports?.[0]?.port || ingress.service?.port;
+      if (serviceName && servicePort) {
+        await this.k8sNetwork.createProtectionMiddleware(
+          ingress.namespace,
+          ingress.name,
+          serviceName,
+          Number(servicePort),
+        );
+      }
+    }
+
+    const annotations = (ingress.annotations as Record<string, string>) || {};
+    if (willProtect) {
+      annotations['orchard.my/protection'] = mode;
+    } else {
+      delete annotations['orchard.my/protection'];
+    }
+
+    await this.prisma.ingress.update({
+      where: { id: ingressId },
+      data: {
+        protectionMode: mode,
+        protectionPasswordHash,
+        protectionBypassSecret,
+        annotations: annotations as Prisma.JsonObject,
+      },
+    });
+
+    void this.audit.log({
+      action: willProtect ? 'ingress.protection.enabled' : 'ingress.protection.disabled',
+      actorUserId: userId,
+      organizationId: ingress.project.organizationId,
+      projectId,
+      targetType: 'ingress',
+      targetId: ingressId,
+      targetLabel: ingress.host,
+      metadata: { mode },
+    });
+
+    return {
+      protectionMode: mode,
+      protectionBypassSecret: willProtect ? protectionBypassSecret : null,
+    };
+  }
+
+  async getIngressProtection(projectId: string, ingressId: string, userId: string) {
+    await this.authz.requireProjectEdit(projectId, userId, 'view ingress protection');
+
+    const ingress = await this.prisma.ingress.findFirst({
+      where: { id: ingressId, projectId },
+      select: {
+        protectionMode: true,
+        protectionBypassSecret: true,
+      },
+    });
+
+    if (!ingress) throw new NotFoundException('Ingress not found');
+
+    return {
+      protectionMode: ingress.protectionMode,
+      protectionBypassSecret: ingress.protectionMode !== 'none' ? ingress.protectionBypassSecret : null,
+    };
   }
 }

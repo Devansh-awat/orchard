@@ -459,6 +459,25 @@ export class ProjectsController {
     });
   }
 
+  @Get(':id/ingresses/:ingressId/protection')
+  async getIngressProtection(
+    @Param('id') id: string,
+    @Param('ingressId') ingressId: string,
+    @Request() req,
+  ) {
+    return this.ingress.getIngressProtection(id, ingressId, req.user.sub);
+  }
+
+  @Put(':id/ingresses/:ingressId/protection')
+  async updateIngressProtection(
+    @Param('id') id: string,
+    @Param('ingressId') ingressId: string,
+    @Body() body: { mode: 'none' | 'password' | 'orchard'; password?: string },
+    @Request() req,
+  ) {
+    return this.ingress.updateIngressProtection(id, ingressId, req.user.sub, body.mode, body.password);
+  }
+
   @Post(':id/deployments')
 
   async createDeployment(
