@@ -1620,6 +1620,33 @@ export class K8sWorkloadService {
     }
   }
 
+  async waitForReady(
+    deploymentName: string,
+    namespace: string,
+    timeoutMs: number = 120_000,
+    pollMs: number = 2_000,
+  ): Promise<boolean> {
+    this.ensureKubeConfig();
+    const api = this.kc.makeApiClient(k8s.AppsV1Api);
+    const deadline = Date.now() + timeoutMs;
+    while (Date.now() < deadline) {
+      try {
+        const res = await api.readNamespacedDeployment(deploymentName, namespace);
+        const status = res.body.status;
+        const spec = res.body.spec;
+        if (
+          status?.updatedReplicas === spec?.replicas &&
+          status?.readyReplicas === spec?.replicas &&
+          (status?.unavailableReplicas ?? 0) === 0
+        ) {
+          return true;
+        }
+      } catch {}
+      await new Promise((r) => setTimeout(r, pollMs));
+    }
+    return false;
+  }
+
   async patchDeploymentReplicas(deploymentName: string, namespace: string, replicas: number) {
     this.ensureKubeConfig();
     const api = this.kc.makeApiClient(k8s.AppsV1Api);

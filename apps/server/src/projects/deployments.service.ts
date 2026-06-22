@@ -4301,6 +4301,8 @@ export class DeploymentsService {
         });
       }
 
+      await this.k8sWorkload.waitForReady(data.name, data.namespace);
+
       if (!data.isRebuild || shouldCreateNew) {
         // Update service records with K8s-assigned values (nodePort, externalIp)
         // or create them if they don't exist yet.
