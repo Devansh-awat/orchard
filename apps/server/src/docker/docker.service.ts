@@ -1368,4 +1368,28 @@ export class DockerService {
       console.warn('[Docker] ImageBuilderService not available, cannot cancel Kubernetes build jobs');
     }
   }
+
+  async getBuildJobStatus(jobName: string) {
+    if (!this.imageBuilderService) return null;
+    try {
+      return await this.imageBuilderService.getBuildJobStatus(jobName);
+    } catch {
+      return null;
+    }
+  }
+
+  async waitForBuildJob(jobName: string, deploymentId?: string, timeoutMs?: number) {
+    if (!this.imageBuilderService) return null;
+    return this.imageBuilderService.waitForBuildJob(jobName, deploymentId, timeoutMs);
+  }
+
+  async deleteBuildJob(jobName: string): Promise<void> {
+    if (!this.imageBuilderService) return;
+    await this.imageBuilderService.deleteBuildJob(jobName);
+  }
+
+  async findBuildJobsForDeployment(deploymentId: string): Promise<Array<{ name: string; image: string | null; status: string }>> {
+    if (!this.imageBuilderService) return [];
+    return this.imageBuilderService.findBuildJobsForDeployment(deploymentId);
+  }
 }

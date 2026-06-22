@@ -178,21 +178,16 @@ export class ImageBuilderService {
     if (!deploymentId) return;
 
     try {
-      const deployment = await this.prisma.deployment.findUnique({
-        where: { id: deploymentId },
-        select: { buildLogs: true },
-      });
-
-      const currentLogs = deployment?.buildLogs || '';
       const timestamp = Date.now();
       const sanitizedMessage = this.sanitizeLogMessage(message);
-      const formattedMessage = `[${timestamp}] [${level}] ${sanitizedMessage}`;
-      const newLogs = currentLogs + formattedMessage + '\n';
+      const line = `[${timestamp}] [${level}] ${sanitizedMessage}\n`;
 
-      await this.prisma.deployment.update({
-        where: { id: deploymentId },
-        data: { buildLogs: newLogs },
-      });
+      await this.prisma.$executeRaw`
+        UPDATE "deployments"
+        SET "build_logs" = COALESCE("build_logs", '') || ${line},
+            "updated_at" = NOW()
+        WHERE "id" = ${deploymentId}::uuid
+      `;
     } catch (error) {
       console.error('[ImageBuilder] Failed to append log:', error);
     }
@@ -210,17 +205,17 @@ export class ImageBuilderService {
     this.buildkitLogOffsets.set(jobName, fullLogs.length);
 
     try {
-      const deployment = await this.prisma.deployment.findUnique({
-        where: { id: deploymentId },
-        select: { buildLogs: true },
-      });
-      const current = deployment?.buildLogs || '';
       const sanitized = this.sanitizeLogMessage(chunk);
-      const sep = current && !current.endsWith('\n') ? '\n' : '';
-      await this.prisma.deployment.update({
-        where: { id: deploymentId },
-        data: { buildLogs: current + sep + sanitized },
-      });
+      await this.prisma.$executeRaw`
+        UPDATE "deployments"
+        SET "build_logs" = CASE
+          WHEN "build_logs" IS NULL OR "build_logs" = '' THEN ${sanitized}
+          WHEN RIGHT("build_logs", 1) = E'\n' THEN "build_logs" || ${sanitized}
+          ELSE "build_logs" || E'\n' || ${sanitized}
+        END,
+        "updated_at" = NOW()
+        WHERE "id" = ${deploymentId}::uuid
+      `;
     } catch (error) {
       console.error('[ImageBuilder] Failed to stream buildkit output:', error);
     }
@@ -1461,8 +1456,9 @@ exit $rc`,
           where: { id: deploymentId },
           select: { buildStepTimestamps: true },
         });
-        const ts = (dep?.buildStepTimestamps as Record<string, number> | null) || {};
+        const ts = (dep?.buildStepTimestamps as Record<string, any> | null) || {};
         ts['building'] = Date.now();
+        ts['__jobName'] = jobName;
         await this.prisma.deployment.update({
           where: { id: deploymentId },
           data: {
@@ -1968,11 +1964,10 @@ exit $rc`,
 
         if (status.status === 'succeeded') {
           console.log(`[ImageBuilder] Build job ${jobName} completed successfully after ${elapsedSeconds}s`);
-          await this.streamBuildkitOutput(deploymentId, jobName, status.logs);
-          await this.appendLog(deploymentId, `Build job ${jobName} completed successfully`);
+          this.streamBuildkitOutput(deploymentId, jobName, status.logs).catch(() => {});
+          this.appendLog(deploymentId, `Build job ${jobName} completed successfully`).catch(() => {});
           this.clearBuildkitOffset(jobName);
-          // Before deleteBuildJob reaps the pod — container timestamps die with it.
-          await this.emitBuildPhaseSpans(jobName, deploymentId);
+          this.emitBuildPhaseSpans(jobName, deploymentId).catch(() => {});
           return status;
         }
 
@@ -2000,6 +1995,10 @@ exit $rc`,
 
         if (status.status === 'running') {
           await this.streamBuildkitOutput(deploymentId, jobName, status.logs);
+        } else if (deploymentId) {
+          this.prisma.$executeRaw`
+            UPDATE "deployments" SET "updated_at" = NOW() WHERE "id" = ${deploymentId}::uuid
+          `.catch(() => {});
         }
 
         if (status.status === 'pending' && elapsedSeconds > 60) {
@@ -2182,12 +2181,10 @@ exit $rc`,
       const fullImagePath = `${this.harborRegistryPull}/${this.harborProject}/${imageName}:${tag}`;
 
       console.log(`[ImageBuilder] Build completed successfully: ${fullImagePath}`);
-      await this.appendLog(deploymentId, `Build and push completed successfully.`);
       const imageRef = fullImagePath.split('/').slice(-1)[0] || fullImagePath;
-      await this.appendLog(deploymentId, `Image: ${imageRef}`);
-      await this.setBuildStep(deploymentId, 'completed');
-
-      await this.deleteBuildJob(jobName);
+      this.appendLog(deploymentId, `Build and push completed successfully.`).catch(() => {});
+      this.appendLog(deploymentId, `Image: ${imageRef}`).catch(() => {});
+      this.deleteBuildJob(jobName).catch(err => console.error('[ImageBuilder] Failed to delete build job:', err));
 
       return fullImagePath;
     } catch (error) {
@@ -2326,6 +2323,25 @@ exit $rc`,
           },
         });
       }
+    }
+  }
+
+  async findBuildJobsForDeployment(deploymentId: string): Promise<Array<{ name: string; image: string | null; status: string }>> {
+    this.ensureKubeConfig();
+    try {
+      const batchApi = this.kc!.makeApiClient(k8s.BatchV1Api);
+      const jobs = await batchApi.listNamespacedJob(
+        this.builderNamespace,
+        undefined, undefined, undefined, undefined,
+        `orchard.dev/deployment-id=${deploymentId}`,
+      );
+      return jobs.body.items.map(j => ({
+        name: j.metadata?.name || '',
+        image: j.metadata?.annotations?.['orchard.dev/full-image'] || null,
+        status: j.status?.succeeded ? 'succeeded' : j.status?.failed ? 'failed' : j.status?.active ? 'running' : 'pending',
+      }));
+    } catch {
+      return [];
     }
   }
 

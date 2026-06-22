@@ -7,6 +7,8 @@ import {
   Inject,
   forwardRef,
   Logger,
+  OnModuleInit,
+  OnModuleDestroy,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
@@ -27,8 +29,9 @@ import { startBuildTrace } from '../analytics/datadog';
 import { Prisma, ServiceType } from '@prisma/client';
 
 @Injectable()
-export class DeploymentsService {
+export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DeploymentsService.name);
+  private buildReconcileInterval: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -49,6 +52,212 @@ export class DeploymentsService {
     @Inject(forwardRef(() => NodesService))
     private readonly nodesService: NodesService,
   ) {}
+
+  onModuleInit() {
+    setTimeout(() => this.recoverStuckBuilds(), 5_000);
+    this.buildReconcileInterval = setInterval(() => this.recoverStuckBuilds(), 60_000);
+  }
+
+  onModuleDestroy() {
+    if (this.buildReconcileInterval) {
+      clearInterval(this.buildReconcileInterval);
+      this.buildReconcileInterval = null;
+    }
+  }
+
+  private async recoverStuckBuilds() {
+    try {
+      const stuckBuilds = await this.prisma.deployment.findMany({
+        where: {
+          buildStatus: 'building',
+          updatedAt: { lt: new Date(Date.now() - 2 * 60 * 1000) },
+        },
+        select: {
+          id: true,
+          name: true,
+          namespace: true,
+          image: true,
+          replicas: true,
+          buildStep: true,
+          buildStepTimestamps: true,
+          projectId: true,
+        },
+      });
+
+      if (stuckBuilds.length === 0) return;
+      this.logger.log(`[BuildRecovery] Found ${stuckBuilds.length} stuck build(s), attempting recovery`);
+
+      for (const deployment of stuckBuilds) {
+        try {
+          await this.recoverStuckBuild(deployment);
+        } catch (error) {
+          this.logger.error(`[BuildRecovery] Failed to recover deployment ${deployment.id}: ${error.message}`);
+        }
+      }
+    } catch (error) {
+      this.logger.error(`[BuildRecovery] Recovery scan failed: ${error.message}`);
+    }
+  }
+
+  private async recoverStuckBuild(deployment: {
+    id: string; name: string; namespace: string; image: string | null;
+    replicas: number; buildStep: string | null; buildStepTimestamps: any; projectId: string;
+  }) {
+    const metadata = (deployment.buildStepTimestamps as Record<string, any>) || {};
+
+    if (metadata.__lockedUntil && metadata.__lockedUntil > Date.now()) return;
+
+    this.logger.log(`[BuildRecovery] Recovering deployment ${deployment.id} (step: ${deployment.buildStep})`);
+
+    if (deployment.buildStep === 'deploying' && deployment.image) {
+      try {
+        const k8sExists = await this.k8sWorkload.getKubernetesDeployment(deployment.name, deployment.namespace)
+          .then(d => d !== null).catch(() => false);
+        if (k8sExists) {
+          await this.k8sWorkload.updateDeploymentImage(deployment.name, deployment.namespace, deployment.image);
+        }
+        await this.markBuildSucceeded(deployment.id, 'Recovered after server restart.');
+        this.logger.log(`[BuildRecovery] Completed deploying-state build for ${deployment.id}`);
+      } catch (error) {
+        await this.markBuildFailed(deployment.id, `Server restarted during deployment: ${error.message}`);
+      }
+      return;
+    }
+
+    const jobName = metadata.__jobName as string | undefined;
+    let foundJob: { name: string; image: string | null; status: string } | null = null;
+
+    if (jobName) {
+      const status = await this.dockerService.getBuildJobStatus(jobName);
+      if (status) {
+        foundJob = { name: jobName, image: null, status: status.status };
+      }
+    }
+
+    if (!foundJob) {
+      const jobs = await this.dockerService.findBuildJobsForDeployment(deployment.id);
+      if (jobs.length > 0) {
+        foundJob = jobs[0];
+      }
+    }
+
+    if (!foundJob) {
+      await this.markBuildFailed(deployment.id, 'Build job not found after server restart');
+      return;
+    }
+
+    if (foundJob.status === 'succeeded') {
+      const expectedImage = foundJob.image || deployment.image;
+      if (!expectedImage) {
+        await this.markBuildFailed(deployment.id, 'Build succeeded but image path unknown');
+        this.dockerService.deleteBuildJob(foundJob.name).catch(() => {});
+        return;
+      }
+
+      try {
+        await this.prisma.deployment.update({
+          where: { id: deployment.id },
+          data: { image: expectedImage, buildStep: 'deploying' },
+        });
+
+        const k8sExists = await this.k8sWorkload.getKubernetesDeployment(deployment.name, deployment.namespace)
+          .then(d => d !== null).catch(() => false);
+        if (k8sExists) {
+          await this.k8sWorkload.updateDeploymentImage(deployment.name, deployment.namespace, expectedImage);
+        }
+
+        await this.markBuildSucceeded(deployment.id, 'Build recovered after server restart.');
+        this.logger.log(`[BuildRecovery] Completed succeeded build for ${deployment.id}`);
+      } catch (error) {
+        await this.markBuildFailed(deployment.id, `Recovery failed: ${error.message}`);
+      }
+      this.dockerService.deleteBuildJob(foundJob.name).catch(() => {});
+    } else if (foundJob.status === 'failed') {
+      await this.markBuildFailed(deployment.id, 'Build job failed');
+      this.dockerService.deleteBuildJob(foundJob.name).catch(() => {});
+    } else if (foundJob.status === 'running' || foundJob.status === 'pending') {
+      this.resumeBuildWatch(deployment, foundJob.name, foundJob.image || deployment.image);
+    }
+  }
+
+  private resumeBuildWatch(
+    deployment: { id: string; name: string; namespace: string; image: string | null; replicas: number },
+    jobName: string,
+    expectedImage: string | null,
+  ) {
+    this.logger.log(`[BuildRecovery] Resuming watch for ${deployment.id} (job: ${jobName})`);
+    (async () => {
+      try {
+        const status = await this.dockerService.waitForBuildJob(jobName, deployment.id);
+        if (!status || status.status !== 'succeeded') {
+          await this.markBuildFailed(deployment.id, status?.logs || 'Build failed');
+          return;
+        }
+        if (!expectedImage) {
+          const jobs = await this.dockerService.findBuildJobsForDeployment(deployment.id);
+          expectedImage = jobs.find(j => j.name === jobName)?.image || null;
+        }
+        if (!expectedImage) {
+          await this.markBuildFailed(deployment.id, 'Build succeeded but image path unknown');
+          return;
+        }
+
+        await this.prisma.deployment.update({
+          where: { id: deployment.id },
+          data: { image: expectedImage, buildStep: 'deploying' },
+        });
+
+        const k8sExists = await this.k8sWorkload.getKubernetesDeployment(deployment.name, deployment.namespace)
+          .then(d => d !== null).catch(() => false);
+        if (k8sExists) {
+          await this.k8sWorkload.updateDeploymentImage(deployment.name, deployment.namespace, expectedImage);
+        }
+
+        await this.markBuildSucceeded(deployment.id, 'Build recovered after server restart.');
+        this.logger.log(`[BuildRecovery] Successfully resumed and completed build for ${deployment.id}`);
+      } catch (error) {
+        await this.markBuildFailed(deployment.id, `Build failed after resume: ${error.message}`).catch(() => {});
+        this.logger.error(`[BuildRecovery] Resumed build failed for ${deployment.id}: ${error.message}`);
+      } finally {
+        this.dockerService.deleteBuildJob(jobName).catch(() => {});
+      }
+    })();
+  }
+
+  private async markBuildFailed(deploymentId: string, reason: string) {
+    await this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: { buildStatus: 'failed', buildStep: 'failed', buildError: reason },
+    });
+    await this.prisma.$executeRaw`
+      UPDATE "deployments"
+      SET "build_logs" = COALESCE("build_logs", '') || ${`\n[ERROR] ${reason}\n`}
+      WHERE "id" = ${deploymentId}::uuid
+    `.catch(() => {});
+  }
+
+  private async markBuildSucceeded(deploymentId: string, logMessage: string) {
+    const data = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { buildStepTimestamps: true },
+    });
+    const timestamps = (data?.buildStepTimestamps as Record<string, any> | null) || {};
+    timestamps['complete'] = Date.now();
+    await this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: {
+        status: 'running',
+        buildStatus: 'succeeded',
+        buildStep: 'complete',
+        buildStepTimestamps: timestamps,
+      },
+    });
+    await this.prisma.$executeRaw`
+      UPDATE "deployments"
+      SET "build_logs" = COALESCE("build_logs", '') || ${`\n${logMessage}\n`}
+      WHERE "id" = ${deploymentId}::uuid
+    `.catch(() => {});
+  }
 
   async listDeploymentsSummary(userId: string, orgId?: string) {
     const projectFilter = await this.access.buildProjectAccessFilter(userId, orgId);
@@ -4097,21 +4306,39 @@ export class DeploymentsService {
       const buildDuration = Math.floor((buildCompletedAt.getTime() - buildStartTime) / 1000);
       console.log(`[Projects] Built and pushed image: ${image}, ${data.isRebuild ? 'updating' : 'creating'} Kubernetes resources (build took ${buildDuration}s)`);
 
-      // Update deployment with final image
-      await this.prisma.deployment.update({
+      const deployingTimestampData = await this.prisma.deployment.findUnique({
         where: { id: deploymentId },
-        data: { image },
+        select: { buildStepTimestamps: true },
       });
+      const deployingTimestamps = (deployingTimestampData?.buildStepTimestamps as Record<string, number> | null) || {};
+      deployingTimestamps['deploying'] = Date.now();
 
-      // Save image history and enforce max 10 images per deployment
-      await this.prisma.$transaction(async (tx) => {
-        // Mark all previous images as inactive
+      const [, k8sDeploymentExists] = await Promise.all([
+        this.prisma.deployment.update({
+          where: { id: deploymentId },
+          data: {
+            image,
+            buildStep: 'deploying',
+            buildStepTimestamps: deployingTimestamps,
+          },
+        }),
+        this.k8sWorkload.getKubernetesDeployment(
+          data.name, data.namespace,
+        ).then((d) => d !== null).catch(() => false),
+      ]);
+
+      this.prisma.$executeRaw`
+        UPDATE "deployments"
+        SET "build_logs" = COALESCE("build_logs", '') || '[INFO] Creating Kubernetes deployment...\n'
+        WHERE "id" = ${deploymentId}::uuid
+      `.catch(() => {});
+
+      const imageHistoryPromise = this.prisma.$transaction(async (tx) => {
         await tx.imageHistory.updateMany({
           where: { deploymentId, isActive: true },
           data: { isActive: false },
         });
 
-        // Create new image history entry
         const deployment = await tx.deployment.findUnique({
           where: { id: deploymentId },
           select: { buildLogs: true },
@@ -4136,7 +4363,6 @@ export class DeploymentsService {
           },
         });
 
-        // Remove oldest images if we exceed max 10
         const allImages = await tx.imageHistory.findMany({
           where: { deploymentId },
           orderBy: { createdAt: 'desc' },
@@ -4151,103 +4377,111 @@ export class DeploymentsService {
             where: { id: { in: idsToRemove } },
           });
 
-          // Delete old artifact tags from the registry in the background
           const imageRefs = imagesToRemove.map((img) => img.image);
           this.dockerService.deleteArtifactsFromRegistry(imageRefs).catch((err) => {
             console.error(`[Projects] Failed to delete old artifacts from registry:`, err);
           });
         }
+      }).catch((err) => {
+        console.error('[Projects] Image history save failed:', err);
       });
 
       let deploymentResult: any;
-
-      // Set buildStep to deploying
-      const currentDeploymentData = await this.prisma.deployment.findUnique({ where: { id: deploymentId }, select: { buildLogs: true, buildStepTimestamps: true } });
-      const currentLogs = currentDeploymentData?.buildLogs || '';
-      const currentTimestamps = (currentDeploymentData?.buildStepTimestamps as Record<string, number> | null) || {};
-      currentTimestamps['deploying'] = Date.now();
-      await this.prisma.deployment.update({
-        where: { id: deploymentId },
-        data: {
-          buildStep: 'deploying',
-          buildLogs: currentLogs + '[INFO] Creating Kubernetes deployment...\n',
-          buildStepTimestamps: currentTimestamps,
-        },
-      });
-
-      // Resolve node placement rules for this deployment's org once.
-      const deploymentRow = await this.prisma.deployment.findUnique({
-        where: { id: deploymentId },
-        select: {
-          projectId: true,
-          replicas: true,
-          cpuRequestMilli: true,
-          memoryRequestBytes: true,
-          deployStrategy: true,
-          project: { select: { organizationId: true, ownerId: true } },
-        },
-      });
-      const buildStrategy: 'rollingUpdate' | 'recreate' =
-        (deploymentRow?.deployStrategy as 'rollingUpdate' | 'recreate') ?? 'rollingUpdate';
-      const deployPlacement = deploymentRow
-        ? await this.resolvePlacementForProject(deploymentRow.projectId)
-        : { allowedNodes: null as string[] | null, deniedNodes: [] as string[] };
-
-      // Whether this deployment is already running in the cluster — decided
-      // up front because it gates both quota enforcement and create-vs-update.
-      const k8sDeploymentExists = await this.k8sWorkload.getKubernetesDeployment(
-        data.name, data.namespace,
-      ).then((d) => d !== null).catch(() => false);
-
-      let rebuildResources: { cpuMilli: number; memoryBytes: number } | undefined;
-      const isUnlimitedDeploy = deploymentRow?.cpuRequestMilli === 0 &&
-        (deploymentRow?.memoryRequestBytes === BigInt(0) || deploymentRow?.memoryRequestBytes === null);
-      if (deploymentRow && !isUnlimitedDeploy) {
-        rebuildResources = await this.quotasService.resolvePodResources(deploymentRow.projectId, {
-          cpuRequestMilli: deploymentRow.cpuRequestMilli,
-          memoryRequestBytes: deploymentRow.memoryRequestBytes ? Number(deploymentRow.memoryRequestBytes) : null,
-        });
-        // Rebuilding an existing deployment swaps pods, it doesn't add any —
-        // its footprint is already counted in org/member usage, so charging
-        // the full footprint again double-counts it and fails builds for
-        // owners near their allowance. Resource/replica increases are
-        // enforced on their own paths (updateDeploymentResources, scale),
-        // so only a deployment that isn't in the cluster yet is additive.
-        if (!k8sDeploymentExists) {
-          await this.quotasService.enforceOrgCapForNewPod(deploymentRow.project.organizationId, {
-            cpuMilli: rebuildResources.cpuMilli * (deploymentRow.replicas || 1),
-            memoryBytes: rebuildResources.memoryBytes * (deploymentRow.replicas || 1),
-          });
-          await this.quotasService.enforceMemberAllowanceForNewPod(
-            deploymentRow.project.organizationId,
-            deploymentRow.project.ownerId,
-            {
-              cpuMilli: rebuildResources.cpuMilli * (deploymentRow.replicas || 1),
-              memoryBytes: rebuildResources.memoryBytes * (deploymentRow.replicas || 1),
-            },
-          );
-        }
-        await this.quotasService.applyProjectQuota(deploymentRow.projectId).catch((err) => {
-          console.error('[Projects] applyProjectQuota failed:', err);
-        });
-      }
-
       let shouldCreateNew = false;
-      if (data.isRebuild) {
-        // Check if Kubernetes deployment actually exists
+
+      if (data.isRebuild && k8sDeploymentExists) {
+        await this.k8sWorkload.updateDeploymentImage(
+          data.name,
+          data.namespace,
+          image,
+        );
+
+        const desiredReplicas = data.replicas || 1;
+        const k8sDeploy = await this.k8sWorkload.getKubernetesDeployment(data.name, data.namespace);
+        if (k8sDeploy && k8sDeploy.status.replicas !== desiredReplicas) {
+          await this.k8sWorkload.patchDeploymentReplicas(data.name, data.namespace, desiredReplicas);
+        }
+
         const existingDeploymentDb = await this.prisma.deployment.findUnique({
           where: { id: deploymentId },
           include: { services: { include: { ports: true } } },
         });
+        deploymentResult = {
+          ports: existingDeploymentDb?.services[0]?.ports || [],
+          externalIp: existingDeploymentDb?.services[0]?.externalIp || null,
+        };
 
-        // If no services exist in database OR Kubernetes deployment doesn't exist, create it
-        const hasServices = existingDeploymentDb?.services && existingDeploymentDb.services.length > 0;
-        if (!hasServices || !k8sDeploymentExists) {
-          shouldCreateNew = true;
+        const deploymentRow = await this.prisma.deployment.findUnique({
+          where: { id: deploymentId },
+          select: { projectId: true, cpuRequestMilli: true, memoryRequestBytes: true },
+        });
+        if (deploymentRow) {
+          const isUnlimitedDeploy = deploymentRow.cpuRequestMilli === 0 &&
+            (deploymentRow.memoryRequestBytes === BigInt(0) || deploymentRow.memoryRequestBytes === null);
+          if (!isUnlimitedDeploy) {
+            this.quotasService.applyProjectQuota(deploymentRow.projectId).catch((err) => {
+              console.error('[Projects] applyProjectQuota failed:', err);
+            });
+          }
+        }
+      } else {
+        const deploymentRow = await this.prisma.deployment.findUnique({
+          where: { id: deploymentId },
+          select: {
+            projectId: true,
+            replicas: true,
+            cpuRequestMilli: true,
+            memoryRequestBytes: true,
+            deployStrategy: true,
+            project: { select: { organizationId: true, ownerId: true } },
+          },
+        });
+        const buildStrategy: 'rollingUpdate' | 'recreate' =
+          (deploymentRow?.deployStrategy as 'rollingUpdate' | 'recreate') ?? 'rollingUpdate';
+        const deployPlacement = deploymentRow
+          ? await this.resolvePlacementForProject(deploymentRow.projectId)
+          : { allowedNodes: null as string[] | null, deniedNodes: [] as string[] };
+
+        let rebuildResources: { cpuMilli: number; memoryBytes: number } | undefined;
+        const isUnlimitedDeploy = deploymentRow?.cpuRequestMilli === 0 &&
+          (deploymentRow?.memoryRequestBytes === BigInt(0) || deploymentRow?.memoryRequestBytes === null);
+        if (deploymentRow && !isUnlimitedDeploy) {
+          rebuildResources = await this.quotasService.resolvePodResources(deploymentRow.projectId, {
+            cpuRequestMilli: deploymentRow.cpuRequestMilli,
+            memoryRequestBytes: deploymentRow.memoryRequestBytes ? Number(deploymentRow.memoryRequestBytes) : null,
+          });
+          if (!k8sDeploymentExists) {
+            await this.quotasService.enforceOrgCapForNewPod(deploymentRow.project.organizationId, {
+              cpuMilli: rebuildResources.cpuMilli * (deploymentRow.replicas || 1),
+              memoryBytes: rebuildResources.memoryBytes * (deploymentRow.replicas || 1),
+            });
+            await this.quotasService.enforceMemberAllowanceForNewPod(
+              deploymentRow.project.organizationId,
+              deploymentRow.project.ownerId,
+              {
+                cpuMilli: rebuildResources.cpuMilli * (deploymentRow.replicas || 1),
+                memoryBytes: rebuildResources.memoryBytes * (deploymentRow.replicas || 1),
+              },
+            );
+          }
+          await this.quotasService.applyProjectQuota(deploymentRow.projectId).catch((err) => {
+            console.error('[Projects] applyProjectQuota failed:', err);
+          });
+        }
+
+        shouldCreateNew = !data.isRebuild || !k8sDeploymentExists;
+        if (data.isRebuild && !k8sDeploymentExists) {
+          const existingDeploymentDb = await this.prisma.deployment.findUnique({
+            where: { id: deploymentId },
+            include: { services: { include: { ports: true } } },
+          });
+          const hasServices = existingDeploymentDb?.services && existingDeploymentDb.services.length > 0;
+          if (!hasServices) {
+            shouldCreateNew = true;
+          }
         }
 
         if (shouldCreateNew) {
-          // Kubernetes deployment doesn't exist, create it as new
           deploymentResult = await this.k8sWorkload.createDeployment({
             namespace: data.namespace,
             name: data.name,
@@ -4263,45 +4497,25 @@ export class DeploymentsService {
             deployStrategy: buildStrategy,
           });
         } else {
-          // Update existing Kubernetes deployment with new image
           await this.k8sWorkload.updateDeploymentImage(
             data.name,
             data.namespace,
             image,
           );
-
-          // Reconcile replica count — k8s may have drifted from the DB
-          const desiredReplicas = data.replicas || 1;
-          const k8sDeploy = await this.k8sWorkload.getKubernetesDeployment(data.name, data.namespace);
-          if (k8sDeploy && k8sDeploy.status.replicas !== desiredReplicas) {
-            await this.k8sWorkload.patchDeploymentReplicas(data.name, data.namespace, desiredReplicas);
-          }
-
-          // Fetch existing service info for the response
+          const existingDeploymentDb = await this.prisma.deployment.findUnique({
+            where: { id: deploymentId },
+            include: { services: { include: { ports: true } } },
+          });
           deploymentResult = {
             ports: existingDeploymentDb?.services[0]?.ports || [],
             externalIp: existingDeploymentDb?.services[0]?.externalIp || null,
           };
         }
-      } else {
-        // Create new Kubernetes deployment
-        deploymentResult = await this.k8sWorkload.createDeployment({
-          namespace: data.namespace,
-          name: data.name,
-          image,
-          replicas: data.replicas,
-          ports: data.rawPorts,
-          env: data.env,
-          serviceType: data.exposePublic ? 'NodePort' : 'ClusterIP',
-          volumes: data.volumes || [],
-          allowedNodes: deployPlacement.allowedNodes,
-          deniedNodes: deployPlacement.deniedNodes,
-          resources: rebuildResources,
-          deployStrategy: buildStrategy,
-        });
       }
 
       await this.k8sWorkload.waitForReady(data.name, data.namespace);
+
+      await imageHistoryPromise;
 
       if (!data.isRebuild || shouldCreateNew) {
         // Update service records with K8s-assigned values (nodePort, externalIp)
