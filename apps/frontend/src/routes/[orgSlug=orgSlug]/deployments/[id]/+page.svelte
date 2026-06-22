@@ -1210,17 +1210,14 @@
 	const deploymentQuery = createQuery(() => ({
 		...deploymentQueryOptions(deploymentId),
 		enabled: !!deploymentId,
-		// Adaptive polling: fast during transient states or SSE down, silent otherwise.
 		refetchInterval: (() => {
 			const status = (deployment?.status ?? '').toLowerCase();
 			const buildSt = (deployment?.buildStatus ?? '').toLowerCase();
 			const transient = TRANSIENT_DEPLOYMENT_STATUSES.has(status) || buildSt === 'building';
-			const sseDown = sseStatusValue === 'disconnected';
-			if (transient) return 3000;
-			if (sseDown) return 10000;
-			// Keep a slow poll while warnings are on screen so banners clear
-			// as soon as Kubernetes reports the pods healthy again.
-			if (activePodWarnings.length > 0) return 15000;
+			const sseUp = sseStatusValue === 'connected';
+			if (transient) return sseUp ? 15_000 : 3_000;
+			if (!sseUp) return 10_000;
+			if (activePodWarnings.length > 0) return 15_000;
 			return false;
 		})(),
 		refetchIntervalInBackground: false
@@ -2295,9 +2292,6 @@
 			);
 		});
 	});
-
-	// Adaptive polling is handled by TanStack Query's refetchInterval option
-	// on deploymentQuery above — no manual setInterval needed.
 
 	onMount(() => {
 		// Reserve scrollbar space so switching between tall/short tabs doesn't shift the

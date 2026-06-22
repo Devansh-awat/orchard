@@ -3,6 +3,7 @@ import * as k8s from '@kubernetes/client-node';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { BuildKitPoolService } from './buildkit-pool.service';
+import { OrgEventsService } from '../events/org-events.service';
 import { startPhaseSpan, recordPhaseSpan } from '../analytics/datadog';
 
 interface BuildJobOptions {
@@ -91,11 +92,34 @@ export class ImageBuilderService {
   private readonly workspaceTmpfs = process.env.BUILDER_WORKSPACE_TMPFS === 'true';
   private builderInfraReady = false;
 
+  private deploymentOrgCache = new Map<string, { orgId: string; projectId: string }>();
+
   constructor(
     private readonly prisma: PrismaService,
+    private readonly orgEvents: OrgEventsService,
     @Optional() private readonly buildKitPool?: BuildKitPoolService,
   ) {
     this.initKubeConfig();
+  }
+
+  private async emitBuildChanged(deploymentId: string | undefined) {
+    if (!deploymentId) return;
+    let ctx = this.deploymentOrgCache.get(deploymentId);
+    if (!ctx) {
+      const dep = await this.prisma.deployment.findUnique({
+        where: { id: deploymentId },
+        select: { projectId: true, project: { select: { organizationId: true } } },
+      });
+      if (!dep) return;
+      ctx = { orgId: dep.project.organizationId, projectId: dep.projectId };
+      this.deploymentOrgCache.set(deploymentId, ctx);
+    }
+    this.orgEvents.emit({
+      organizationId: ctx.orgId,
+      type: 'build.changed',
+      id: deploymentId,
+      projectId: ctx.projectId,
+    });
   }
 
   private initKubeConfig() {
@@ -1186,12 +1210,19 @@ fi
       }
 
       // --- Daemonless mode (original) ---
+      const scriptArgs = this.sidecarPushEnabled
+        ? buildctlArgs.filter((arg, idx, arr) => {
+            if (arg === '--export-cache') return false;
+            if (idx > 0 && arr[idx - 1] === '--export-cache') return false;
+            return true;
+          })
+        : buildctlArgs;
       return {
         name: 'buildkit',
         image: 'moby/buildkit:latest',
         securityContext: { privileged: true },
         command: ['/bin/sh', '-c'],
-        args: [this.generateBuildScriptWithCacheFallback(buildctlArgs)],
+        args: [this.generateBuildScriptWithCacheFallback(scriptArgs)],
         workingDir: '/workspace',
         env: [
           ...(this.sidecarPushEnabled
@@ -1471,6 +1502,7 @@ exit $rc`,
               "updated_at" = NOW()
           WHERE "id" = ${deploymentId}::uuid
         `;
+        this.emitBuildChanged(deploymentId).catch(() => {});
       }
 
       return jobName;
@@ -2190,6 +2222,7 @@ exit $rc`,
               "updated_at" = NOW()
           WHERE "id" = ${deploymentId}::uuid
         `;
+        this.emitBuildChanged(deploymentId).catch(() => {});
       }
 
       const jobName = await this.createBuildJob(options);
@@ -2207,6 +2240,7 @@ exit $rc`,
           )
           WHERE "id" = ${deploymentId}::uuid
         `.catch(() => {});
+        this.emitBuildChanged(deploymentId).catch(() => {});
       }
 
       const fullImagePath = `${this.harborRegistryPull}/${this.harborProject}/${imageName}:${tag}`;

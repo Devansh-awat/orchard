@@ -460,16 +460,15 @@
 			}
 			return res.json();
 		},
-		// Adaptive polling: fast while any resource is transitioning, fallback
-		// poll while SSE is down, silent otherwise (SSE drives refetches).
 		refetchInterval: (() => {
 			const transient = (project?.deployments ?? []).some(
 				(d: Deployment) =>
 					TRANSIENT_DEPLOYMENT_STATUSES.has((d.status ?? '').toLowerCase()) ||
 					(d.buildStatus ?? '').toLowerCase() === 'building'
 			);
-			if (transient) return 4000;
-			if (sseStatusValue === 'disconnected') return 10_000;
+			const sseUp = sseStatusValue === 'connected';
+			if (transient) return sseUp ? 15_000 : 4_000;
+			if (!sseUp) return 10_000;
 			return false;
 		})(),
 		refetchIntervalInBackground: false
