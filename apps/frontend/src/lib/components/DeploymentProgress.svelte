@@ -146,12 +146,10 @@
 
 	function getTotalBuildSeconds(): number | null {
 		if (!buildStepTimestamps) return null;
-		// Earliest known timestamp wins — `__start` is seeded by the backend at
-		// build-trigger time so the duration covers the full build, not just
-		// post-cloning.
-		const stepKeys = Object.keys(buildStepTimestamps);
-		if (stepKeys.length === 0) return null;
-		const startTime = Math.min(...stepKeys.map((k) => buildStepTimestamps![k]));
+		const timestamps = Object.entries(buildStepTimestamps)
+			.filter(([k, v]) => !k.startsWith('__') && typeof v === 'number');
+		if (timestamps.length === 0) return null;
+		const startTime = Math.min(...timestamps.map(([, v]) => v));
 		const endTime = buildStepTimestamps['complete'];
 		if (!endTime) return null;
 		return Math.max(0, Math.floor((endTime - startTime) / 1000));

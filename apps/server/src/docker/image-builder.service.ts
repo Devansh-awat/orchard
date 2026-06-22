@@ -898,7 +898,6 @@ exit $EXIT_CODE
     const buildMethodLabel = buildType === 'railpack' ? 'Railpack' : 'Dockerfile';
     const builderLabel = buildWithDepot ? 'Super Builds' : 'BuildKit';
     await this.appendLog(deploymentId, `Creating image-builder pod: ${jobName} (${buildMethodLabel} via ${builderLabel})`);
-    await this.setBuildStep(deploymentId, 'creating-builder');
 
     // Build the git clone URL with optional access token
     let cloneUrl = repoUrl;
@@ -2171,12 +2170,24 @@ exit $rc`,
 
     try {
       await this.appendLog(deploymentId, `Starting BuildKit build for ${repoUrl}@${branch} (type: ${buildType})`);
-      await this.setBuildStep(deploymentId, 'starting');
+      await this.setBuildStep(deploymentId, 'cloning');
 
       const jobName = await this.createBuildJob(options);
       console.log(`[ImageBuilder] Created build job: ${jobName}`);
 
       const status = await this.waitForBuildJob(jobName, deploymentId);
+
+      if (deploymentId) {
+        this.prisma.$executeRaw`
+          UPDATE "deployments"
+          SET "build_step_timestamps" = jsonb_set(
+            COALESCE("build_step_timestamps", '{}'::jsonb),
+            '{pushing}',
+            ${Date.now()}::text::jsonb
+          )
+          WHERE "id" = ${deploymentId}::uuid
+        `.catch(() => {});
+      }
 
       const fullImagePath = `${this.harborRegistryPull}/${this.harborProject}/${imageName}:${tag}`;
 
