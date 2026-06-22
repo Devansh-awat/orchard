@@ -32,6 +32,7 @@ import { Prisma, ServiceType } from '@prisma/client';
 export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DeploymentsService.name);
   private buildReconcileInterval: NodeJS.Timeout | null = null;
+  private activeRecoveries = new Set<string>();
 
   constructor(
     private readonly prisma: PrismaService,
@@ -103,9 +104,33 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     id: string; name: string; namespace: string; image: string | null;
     replicas: number; buildStep: string | null; buildStepTimestamps: any; projectId: string;
   }) {
-    const metadata = (deployment.buildStepTimestamps as Record<string, any>) || {};
+    if (this.activeRecoveries.has(deployment.id)) return;
 
-    if (metadata.__lockedUntil && metadata.__lockedUntil > Date.now()) return;
+    const staleCutoff = new Date(Date.now() - 2 * 60 * 1000);
+    const claimed: number = await this.prisma.$executeRaw`
+      UPDATE "deployments"
+      SET "updated_at" = NOW()
+      WHERE "id" = ${deployment.id}::uuid
+        AND "build_status" = 'building'
+        AND "updated_at" < ${staleCutoff}
+    `;
+    if (claimed === 0) return;
+
+    this.activeRecoveries.add(deployment.id);
+
+    try {
+      await this.doRecoverStuckBuild(deployment);
+    } catch (error) {
+      this.logger.error(`[BuildRecovery] Unexpected error recovering ${deployment.id}: ${error.message}`);
+      this.activeRecoveries.delete(deployment.id);
+    }
+  }
+
+  private async doRecoverStuckBuild(deployment: {
+    id: string; name: string; namespace: string; image: string | null;
+    replicas: number; buildStep: string | null; buildStepTimestamps: any; projectId: string;
+  }) {
+    const metadata = (deployment.buildStepTimestamps as Record<string, any>) || {};
 
     this.logger.log(`[BuildRecovery] Recovering deployment ${deployment.id} (step: ${deployment.buildStep})`);
 
@@ -121,36 +146,42 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       } catch (error) {
         await this.markBuildFailed(deployment.id, `Server restarted during deployment: ${error.message}`);
       }
+      this.activeRecoveries.delete(deployment.id);
       return;
     }
 
+    const jobs = await this.dockerService.findBuildJobsForDeployment(deployment.id);
     const jobName = metadata.__jobName as string | undefined;
     let foundJob: { name: string; image: string | null; status: string } | null = null;
 
     if (jobName) {
-      const status = await this.dockerService.getBuildJobStatus(jobName);
-      if (status) {
-        foundJob = { name: jobName, image: null, status: status.status };
+      const fromLabel = jobs.find(j => j.name === jobName);
+      if (fromLabel) {
+        foundJob = fromLabel;
+      } else {
+        const status = await this.dockerService.getBuildJobStatus(jobName);
+        if (status) {
+          foundJob = { name: jobName, image: null, status: status.status };
+        }
       }
     }
 
-    if (!foundJob) {
-      const jobs = await this.dockerService.findBuildJobsForDeployment(deployment.id);
-      if (jobs.length > 0) {
-        foundJob = jobs[0];
-      }
+    if (!foundJob && jobs.length > 0) {
+      foundJob = jobs[0];
     }
 
     if (!foundJob) {
       await this.markBuildFailed(deployment.id, 'Build job not found after server restart');
+      this.activeRecoveries.delete(deployment.id);
       return;
     }
 
     if (foundJob.status === 'succeeded') {
-      const expectedImage = foundJob.image || deployment.image;
+      const expectedImage = foundJob.image;
       if (!expectedImage) {
         await this.markBuildFailed(deployment.id, 'Build succeeded but image path unknown');
         this.dockerService.deleteBuildJob(foundJob.name).catch(() => {});
+        this.activeRecoveries.delete(deployment.id);
         return;
       }
 
@@ -172,11 +203,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         await this.markBuildFailed(deployment.id, `Recovery failed: ${error.message}`);
       }
       this.dockerService.deleteBuildJob(foundJob.name).catch(() => {});
+      this.activeRecoveries.delete(deployment.id);
     } else if (foundJob.status === 'failed') {
       await this.markBuildFailed(deployment.id, 'Build job failed');
       this.dockerService.deleteBuildJob(foundJob.name).catch(() => {});
+      this.activeRecoveries.delete(deployment.id);
     } else if (foundJob.status === 'running' || foundJob.status === 'pending') {
-      this.resumeBuildWatch(deployment, foundJob.name, foundJob.image || deployment.image);
+      this.resumeBuildWatch(deployment, foundJob.name, foundJob.image);
     }
   }
 
@@ -220,6 +253,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         this.logger.error(`[BuildRecovery] Resumed build failed for ${deployment.id}: ${error.message}`);
       } finally {
         this.dockerService.deleteBuildJob(jobName).catch(() => {});
+        this.activeRecoveries.delete(deployment.id);
       }
     })();
   }
