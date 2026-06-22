@@ -4342,22 +4342,19 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       const buildDuration = Math.floor((buildCompletedAt.getTime() - buildStartTime) / 1000);
       console.log(`[Projects] Built and pushed image: ${image}, ${data.isRebuild ? 'updating' : 'creating'} Kubernetes resources (build took ${buildDuration}s)`);
 
-      const deployingTimestampData = await this.prisma.deployment.findUnique({
-        where: { id: deploymentId },
-        select: { buildStepTimestamps: true },
-      });
-      const deployingTimestamps = (deployingTimestampData?.buildStepTimestamps as Record<string, number> | null) || {};
-      deployingTimestamps['deploying'] = Date.now();
-
       const [, k8sDeploymentExists] = await Promise.all([
-        this.prisma.deployment.update({
-          where: { id: deploymentId },
-          data: {
-            image,
-            buildStep: 'deploying',
-            buildStepTimestamps: deployingTimestamps,
-          },
-        }),
+        (async () => {
+          const tsData = await this.prisma.deployment.findUnique({
+            where: { id: deploymentId },
+            select: { buildStepTimestamps: true },
+          });
+          const ts = (tsData?.buildStepTimestamps as Record<string, any> | null) || {};
+          ts['deploying'] = Date.now();
+          await this.prisma.deployment.update({
+            where: { id: deploymentId },
+            data: { image, buildStep: 'deploying', buildStepTimestamps: ts },
+          });
+        })(),
         this.k8sWorkload.getKubernetesDeployment(
           data.name, data.namespace,
         ).then((d) => d !== null).catch(() => false),

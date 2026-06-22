@@ -1140,10 +1140,6 @@ export class DockerService {
     }
 
     try {
-      console.log('[Docker Service] Ensuring service account is set up...');
-      await this.imageBuilderService.ensureServiceAccount();
-      console.log('[Docker Service] Service account ready, delegating to ImageBuilderService');
-
       const result = await this.imageBuilderService.buildAndPush({
         repoUrl,
         branch,

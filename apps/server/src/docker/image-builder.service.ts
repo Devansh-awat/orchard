@@ -89,6 +89,7 @@ export class ImageBuilderService {
   private readonly pusherImage =
     process.env.BUILDER_PUSHER_IMAGE || 'gcr.io/go-containerregistry/crane:latest';
   private readonly workspaceTmpfs = process.env.BUILDER_WORKSPACE_TMPFS === 'true';
+  private builderInfraReady = false;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -888,16 +889,18 @@ exit $EXIT_CODE
       ? cacheTenantKey.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 63) || '_shared'
       : '_shared';
 
-    await this.ensureBuilderNamespace();
-    await this.ensureBuilderSecrets();
-    await this.ensureServiceAccount();
+    if (!this.builderInfraReady) {
+      await this.ensureBuilderNamespace();
+      await Promise.all([this.ensureBuilderSecrets(), this.ensureServiceAccount()]);
+      this.builderInfraReady = true;
+    }
 
     const jobName = this.generateJobName(imageName);
     const fullImageName = `${this.harborRegistryPush}/${this.harborProject}/${imageName}:${tag}`;
 
     const buildMethodLabel = buildType === 'railpack' ? 'Railpack' : 'Dockerfile';
     const builderLabel = buildWithDepot ? 'Super Builds' : 'BuildKit';
-    await this.appendLog(deploymentId, `Creating image-builder pod: ${jobName} (${buildMethodLabel} via ${builderLabel})`);
+    this.appendLog(deploymentId, `Creating image-builder pod: ${jobName} (${buildMethodLabel} via ${builderLabel})`).catch(() => {});
 
     // Build the git clone URL with optional access token
     let cloneUrl = repoUrl;
@@ -1448,23 +1451,26 @@ exit $rc`,
     try {
       const jobCreationResult = await batchApi.createNamespacedJob(this.builderNamespace, job);
       console.log(`[ImageBuilder] Job ${jobName} created successfully. UID: ${jobCreationResult.body.metadata?.uid}`);
-      await this.appendLog(deploymentId, `Build job ${jobName} created successfully`);
 
       if (deploymentId) {
-        const dep = await this.prisma.deployment.findUnique({
-          where: { id: deploymentId },
-          select: { buildStepTimestamps: true },
-        });
-        const ts = (dep?.buildStepTimestamps as Record<string, any> | null) || {};
-        ts['building'] = Date.now();
-        ts['__jobName'] = jobName;
-        await this.prisma.deployment.update({
-          where: { id: deploymentId },
-          data: {
-            buildStep: 'building',
-            buildStepTimestamps: ts,
-          },
-        });
+        const now = Date.now();
+        const logLine = `[${now}] [INFO] Build job ${jobName} created successfully\n`;
+        await this.prisma.$executeRaw`
+          UPDATE "deployments"
+          SET "build_step" = 'building',
+              "build_logs" = COALESCE("build_logs", '') || ${logLine},
+              "build_step_timestamps" = jsonb_set(
+                jsonb_set(
+                  COALESCE("build_step_timestamps", '{}'::jsonb),
+                  '{building}',
+                  ${now}::text::jsonb
+                ),
+                '{__jobName}',
+                ${JSON.stringify(jobName)}::jsonb
+              ),
+              "updated_at" = NOW()
+          WHERE "id" = ${deploymentId}::uuid
+        `;
       }
 
       return jobName;
@@ -2169,8 +2175,22 @@ exit $rc`,
     });
 
     try {
-      await this.appendLog(deploymentId, `Starting BuildKit build for ${repoUrl}@${branch} (type: ${buildType})`);
-      await this.setBuildStep(deploymentId, 'cloning');
+      if (deploymentId) {
+        const now = Date.now();
+        const logLine = `[${now}] [INFO] Starting BuildKit build for ${this.sanitizeLogMessage(repoUrl)}@${branch} (type: ${buildType})\n`;
+        await this.prisma.$executeRaw`
+          UPDATE "deployments"
+          SET "build_step" = 'cloning',
+              "build_logs" = COALESCE("build_logs", '') || ${logLine},
+              "build_step_timestamps" = jsonb_set(
+                COALESCE("build_step_timestamps", '{}'::jsonb),
+                '{cloning}',
+                ${now}::text::jsonb
+              ),
+              "updated_at" = NOW()
+          WHERE "id" = ${deploymentId}::uuid
+        `;
+      }
 
       const jobName = await this.createBuildJob(options);
       console.log(`[ImageBuilder] Created build job: ${jobName}`);
