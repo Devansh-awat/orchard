@@ -1347,16 +1347,45 @@ exec skopeo copy --authfile /root/.docker/config.json --dest-tls-verify=false oc
     if (buildWithDepot) {
       containers = [this.createDepotContainer({ dockerfilePath, fullImageName, target, buildFromRoot, buildType, envVars })];
     } else if (this.sidecarPushEnabled && pusherContainer && buildkitContainer) {
-      // Wrap the BuildKit script so its exit always writes a marker.
       const innerScript = (buildkitContainer.args && buildkitContainer.args[0]) || '';
+
+      const shellQuote2 = (arg: string) =>
+        /^[A-Za-z0-9_\-./:=@,+%]+$/.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`;
+      const cacheExportArgs = buildctlArgs.map(a =>
+        a.includes('dest=/output/image.tar')
+          ? a.replace('dest=/output/image.tar', 'dest=/tmp/cache-export.tar')
+          : a,
+      ).map(shellQuote2).join(' ');
+      const hasCacheExport = buildctlArgs.some(a => a === '--export-cache');
+
       buildkitContainer.args = [
         `mkdir -p /output
+
+# Start buildkitd ourselves and replace buildctl-daemonless.sh with a
+# passthrough so the inner build script (with all its retry logic) reuses
+# our daemon instead of spawning its own.
+printf '#!/bin/sh\\nexec buildctl "$@"\\n' > /usr/bin/buildctl-daemonless.sh
+
+buildkitd $BUILDKITD_FLAGS &
+DAEMON_PID=$!
+for i in $(seq 1 100); do
+  buildctl debug workers >/dev/null 2>&1 && break
+  sleep 0.1
+done
+
 ( ${innerScript} ); rc=$?
+
 if [ "$rc" -eq 0 ]; then
   touch /output/.done
+${hasCacheExport ? `  echo "=== Exporting build cache ==="
+  buildctl ${cacheExportArgs} >/dev/null 2>&1 || echo "=== Cache export failed (non-critical) ==="
+  rm -f /tmp/cache-export.tar` : ''}
 else
   touch /output/.failed
 fi
+
+kill $DAEMON_PID 2>/dev/null
+wait $DAEMON_PID 2>/dev/null || true
 exit $rc`,
       ];
       containers = [buildkitContainer, pusherContainer];
