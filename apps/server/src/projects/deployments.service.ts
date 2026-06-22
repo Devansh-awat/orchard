@@ -140,9 +140,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           .then(d => d !== null).catch(() => false);
         if (k8sExists) {
           await this.k8sWorkload.updateDeploymentImage(deployment.name, deployment.namespace, deployment.image);
+          await this.markBuildSucceeded(deployment.id, 'Recovered after server restart.');
+          this.logger.log(`[BuildRecovery] Completed deploying-state build for ${deployment.id}`);
+        } else {
+          await this.markBuildFailed(deployment.id, 'Server restarted during deployment and k8s deployment not found. Please redeploy.');
         }
-        await this.markBuildSucceeded(deployment.id, 'Recovered after server restart.');
-        this.logger.log(`[BuildRecovery] Completed deploying-state build for ${deployment.id}`);
       } catch (error) {
         await this.markBuildFailed(deployment.id, `Server restarted during deployment: ${error.message}`);
       }
@@ -186,19 +188,19 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
 
       try {
-        await this.prisma.deployment.update({
-          where: { id: deployment.id },
-          data: { image: expectedImage, buildStep: 'deploying' },
-        });
-
         const k8sExists = await this.k8sWorkload.getKubernetesDeployment(deployment.name, deployment.namespace)
           .then(d => d !== null).catch(() => false);
         if (k8sExists) {
+          await this.prisma.deployment.update({
+            where: { id: deployment.id },
+            data: { image: expectedImage, buildStep: 'deploying' },
+          });
           await this.k8sWorkload.updateDeploymentImage(deployment.name, deployment.namespace, expectedImage);
+          await this.markBuildSucceeded(deployment.id, 'Build recovered after server restart.');
+          this.logger.log(`[BuildRecovery] Completed succeeded build for ${deployment.id}`);
+        } else {
+          await this.markBuildFailed(deployment.id, 'Build succeeded but k8s deployment not found. Please redeploy.');
         }
-
-        await this.markBuildSucceeded(deployment.id, 'Build recovered after server restart.');
-        this.logger.log(`[BuildRecovery] Completed succeeded build for ${deployment.id}`);
       } catch (error) {
         await this.markBuildFailed(deployment.id, `Recovery failed: ${error.message}`);
       }
@@ -235,19 +237,19 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           return;
         }
 
-        await this.prisma.deployment.update({
-          where: { id: deployment.id },
-          data: { image: expectedImage, buildStep: 'deploying' },
-        });
-
         const k8sExists = await this.k8sWorkload.getKubernetesDeployment(deployment.name, deployment.namespace)
           .then(d => d !== null).catch(() => false);
         if (k8sExists) {
+          await this.prisma.deployment.update({
+            where: { id: deployment.id },
+            data: { image: expectedImage, buildStep: 'deploying' },
+          });
           await this.k8sWorkload.updateDeploymentImage(deployment.name, deployment.namespace, expectedImage);
+          await this.markBuildSucceeded(deployment.id, 'Build recovered after server restart.');
+          this.logger.log(`[BuildRecovery] Successfully resumed and completed build for ${deployment.id}`);
+        } else {
+          await this.markBuildFailed(deployment.id, 'Build succeeded but k8s deployment not found. Please redeploy.');
         }
-
-        await this.markBuildSucceeded(deployment.id, 'Build recovered after server restart.');
-        this.logger.log(`[BuildRecovery] Successfully resumed and completed build for ${deployment.id}`);
       } catch (error) {
         await this.markBuildFailed(deployment.id, `Build failed after resume: ${error.message}`).catch(() => {});
         this.logger.error(`[BuildRecovery] Resumed build failed for ${deployment.id}: ${error.message}`);

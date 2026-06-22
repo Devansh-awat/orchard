@@ -2335,11 +2335,17 @@ exit $rc`,
         undefined, undefined, undefined, undefined,
         `orchard.dev/deployment-id=${deploymentId}`,
       );
-      return jobs.body.items.map(j => ({
-        name: j.metadata?.name || '',
-        image: j.metadata?.annotations?.['orchard.dev/full-image'] || null,
-        status: j.status?.succeeded ? 'succeeded' : j.status?.failed ? 'failed' : j.status?.active ? 'running' : 'pending',
-      }));
+      return jobs.body.items
+        .sort((a, b) => {
+          const ta = a.metadata?.creationTimestamp?.getTime() ?? 0;
+          const tb = b.metadata?.creationTimestamp?.getTime() ?? 0;
+          return tb - ta;
+        })
+        .map(j => ({
+          name: j.metadata?.name || '',
+          image: j.metadata?.annotations?.['orchard.dev/full-image'] || null,
+          status: j.status?.succeeded ? 'succeeded' : j.status?.failed ? 'failed' : j.status?.active ? 'running' : 'pending',
+        }));
     } catch {
       return [];
     }
