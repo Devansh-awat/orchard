@@ -838,6 +838,12 @@ export class DeploymentsService {
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'restart deployments');
 
+    const desiredReplicas = deployment.replicas || 1;
+    const k8sDeploy = await this.k8sWorkload.getKubernetesDeployment(deployment.name, deployment.namespace);
+    if (k8sDeploy && k8sDeploy.status.replicas !== desiredReplicas) {
+      await this.k8sWorkload.patchDeploymentReplicas(deployment.name, deployment.namespace, desiredReplicas);
+    }
+
     const result = await this.k8sWorkload.restartDeployment(deployment.name, deployment.namespace);
 
     void this.audit.log({
@@ -4263,6 +4269,13 @@ export class DeploymentsService {
             data.namespace,
             image,
           );
+
+          // Reconcile replica count — k8s may have drifted from the DB
+          const desiredReplicas = data.replicas || 1;
+          const k8sDeploy = await this.k8sWorkload.getKubernetesDeployment(data.name, data.namespace);
+          if (k8sDeploy && k8sDeploy.status.replicas !== desiredReplicas) {
+            await this.k8sWorkload.patchDeploymentReplicas(data.name, data.namespace, desiredReplicas);
+          }
 
           // Fetch existing service info for the response
           deploymentResult = {

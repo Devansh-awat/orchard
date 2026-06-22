@@ -678,11 +678,6 @@ export class QuotasService {
       memoryUnlimited?: boolean;
     },
   ) {
-    const org = await this.prisma.organization.findUnique({
-      where: { id: organizationId },
-      select: { cpuLimitMilli: true, memoryLimitBytes: true },
-    });
-    if (!org) throw new NotFoundException('Org not found');
     const member = await this.prisma.organizationMember.findUnique({
       where: { organizationId_userId: { organizationId, userId } },
     });
@@ -704,20 +699,6 @@ export class QuotasService {
           : member.memoryAllowanceUnlimited,
     };
 
-    const commitment = await this.computeOrgAllowanceCommitment(organizationId, {
-      memberOverride: { userId, ...next },
-    });
-    if (org.cpuLimitMilli !== null && commitment.cpuMilli > org.cpuLimitMilli) {
-      throw new ForbiddenException(
-        `Total committed CPU allowance (${commitment.cpuMilli}m) would exceed org cap (${org.cpuLimitMilli}m)`,
-      );
-    }
-    if (org.memoryLimitBytes !== null && commitment.memoryBytes > Number(org.memoryLimitBytes)) {
-      throw new ForbiddenException(
-        `Total committed memory allowance (${commitment.memoryBytes}B) would exceed org cap (${Number(org.memoryLimitBytes)}B)`,
-      );
-    }
-
     return this.prisma.organizationMember.update({
       where: { organizationId_userId: { organizationId, userId } },
       data: {
@@ -736,29 +717,6 @@ export class QuotasService {
     organizationId: string,
     data: { cpuMilli?: number | null; memoryBytes?: number | null },
   ) {
-    const org = await this.prisma.organization.findUnique({
-      where: { id: organizationId },
-      select: { cpuLimitMilli: true, memoryLimitBytes: true },
-    });
-    if (!org) throw new NotFoundException('Org not found');
-
-    const commitment = await this.computeOrgAllowanceCommitment(organizationId, {
-      defaultOverride: {
-        cpuMilli: data.cpuMilli ?? null,
-        memoryBytes: data.memoryBytes ?? null,
-      },
-    });
-    if (org.cpuLimitMilli !== null && commitment.cpuMilli > org.cpuLimitMilli) {
-      throw new ForbiddenException(
-        `Default would push committed CPU (${commitment.cpuMilli}m) past org cap (${org.cpuLimitMilli}m)`,
-      );
-    }
-    if (org.memoryLimitBytes !== null && commitment.memoryBytes > Number(org.memoryLimitBytes)) {
-      throw new ForbiddenException(
-        `Default would push committed memory (${commitment.memoryBytes}B) past org cap (${Number(org.memoryLimitBytes)}B)`,
-      );
-    }
-
     return this.prisma.organization.update({
       where: { id: organizationId },
       data: {

@@ -1620,6 +1620,17 @@ export class K8sWorkloadService {
     }
   }
 
+  async patchDeploymentReplicas(deploymentName: string, namespace: string, replicas: number) {
+    this.ensureKubeConfig();
+    const api = this.kc.makeApiClient(k8s.AppsV1Api);
+    await api.patchNamespacedDeployment(
+      deploymentName, namespace,
+      { spec: { replicas } },
+      undefined, undefined, undefined, undefined, undefined,
+      { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } },
+    );
+  }
+
   async scaleDeployment(deploymentName: string, namespace: string = 'midnight-staging', replicas: number) {
     this.ensureKubeConfig();
     
