@@ -25,6 +25,7 @@
 		webhookTokensLoading = false,
 		creatingWebhookToken = false,
 		deletingWebhookTokenId = null,
+		newlyCreatedToken = $bindable(null),
 		onCreateToken,
 		onDeleteToken
 	}: {
@@ -40,6 +41,7 @@
 		webhookTokensLoading?: boolean;
 		creatingWebhookToken?: boolean;
 		deletingWebhookTokenId?: string | null;
+		newlyCreatedToken?: string | null;
 		onCreateToken?: (label: string) => void;
 		onDeleteToken?: (id: string) => void;
 	} = $props();
@@ -87,6 +89,7 @@
 						{webhookTokensLoading}
 						{creatingWebhookToken}
 						{deletingWebhookTokenId}
+						bind:newlyCreatedToken
 						{onCreateToken}
 						{onDeleteToken}
 					/>
