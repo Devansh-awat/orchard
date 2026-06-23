@@ -976,6 +976,15 @@ MASKED_URL="\${MASKED_URL//:\\/\\/github_pat_*@/:\/\/***@}"
 echo "Repository: \$MASKED_URL"
 echo "Branch: ${branch}"
 
+# Enable git-lfs (best-effort) so LFS-tracked files are materialized instead of
+# left as pointer stubs. alpine/git doesn't bundle it; install registers the
+# global smudge filter so the clone below pulls LFS content during checkout.
+if apk add --no-cache git-lfs >/dev/null 2>&1 && git lfs install --skip-repo >/dev/null 2>&1; then
+  echo "git-lfs: enabled"
+else
+  echo "git-lfs: unavailable, continuing without it"
+fi
+
 CLONE_OUTPUT=$(GIT_TERMINAL_PROMPT=0 git clone --depth 1 --recurse-submodules --shallow-submodules --branch "${branch}" "\$CLONE_URL" /workspace 2>&1) || {
   SANITIZED_OUTPUT=$(echo "\$CLONE_OUTPUT" | sed -E 's/(x-access-token:|ghs_|ghp_|github_pat_)[^ @]*/***REDACTED***/g')
   echo "\$SANITIZED_OUTPUT"
