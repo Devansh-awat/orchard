@@ -11,7 +11,7 @@ import {
   OnModuleDestroy,
 } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { KubernetesService } from '../kubernetes/kubernetes.service';
+import { KubernetesService, CreateDeploymentOptions } from '../kubernetes/kubernetes.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { UsersService } from '../users/users.service';
@@ -1437,6 +1437,46 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     });
 
     return this.getDeployment(deploymentId);
+  }
+
+  // Render path is the source of truth: any full (re)create of the workload
+  // must re-apply the stored health-check config, otherwise the probes the
+  // save button patched in get wiped on the next rebuild.
+  private async loadHealthCheckOptions(
+    deploymentId: string,
+  ): Promise<CreateDeploymentOptions['healthCheck'] | undefined> {
+    const hc = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: {
+        healthCheckEnabled: true,
+        healthCheckType: true,
+        healthCheckPath: true,
+        healthCheckPort: true,
+        healthCheckCommand: true,
+        livenessEnabled: true,
+        readinessEnabled: true,
+        startupEnabled: true,
+        healthCheckInterval: true,
+        healthCheckTimeout: true,
+        healthCheckRetries: true,
+        startupFailureThreshold: true,
+      },
+    });
+    if (!hc || !hc.healthCheckEnabled) return undefined;
+    return {
+      enabled: hc.healthCheckEnabled,
+      type: hc.healthCheckType,
+      path: hc.healthCheckPath,
+      port: hc.healthCheckPort,
+      command: hc.healthCheckCommand,
+      livenessEnabled: hc.livenessEnabled,
+      readinessEnabled: hc.readinessEnabled,
+      startupEnabled: hc.startupEnabled,
+      interval: hc.healthCheckInterval,
+      timeout: hc.healthCheckTimeout,
+      retries: hc.healthCheckRetries,
+      startupFailureThreshold: hc.startupFailureThreshold,
+    };
   }
 
   async updateDeploymentVolumes(
@@ -4435,6 +4475,30 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           await this.k8sWorkload.patchDeploymentReplicas(data.name, data.namespace, desiredReplicas);
         }
 
+        // Image-only rebuild keeps the existing spec, so re-apply the stored
+        // health-check config to heal deployments whose probes were dropped.
+        const hc = await this.loadHealthCheckOptions(deploymentId);
+        if (hc) {
+          await this.k8sWorkload.updateDeploymentHealthCheck({
+            namespace: data.namespace,
+            deploymentName: data.name,
+            enabled: hc.enabled,
+            type: hc.type,
+            path: hc.path,
+            port: hc.port,
+            command: hc.command,
+            livenessEnabled: hc.livenessEnabled,
+            readinessEnabled: hc.readinessEnabled,
+            startupEnabled: hc.startupEnabled,
+            interval: hc.interval,
+            timeout: hc.timeout,
+            retries: hc.retries,
+            startupFailureThreshold: hc.startupFailureThreshold,
+          }).catch((err) => {
+            console.error('[Projects] re-applying health check on rebuild failed:', err.message);
+          });
+        }
+
         const existingDeploymentDb = await this.prisma.deployment.findUnique({
           where: { id: deploymentId },
           include: { services: { include: { ports: true } } },
@@ -4515,6 +4579,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         }
 
         if (shouldCreateNew) {
+          const healthCheck = await this.loadHealthCheckOptions(deploymentId);
           deploymentResult = await this.k8sWorkload.createDeployment({
             namespace: data.namespace,
             name: data.name,
@@ -4528,6 +4593,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             deniedNodes: deployPlacement.deniedNodes,
             resources: rebuildResources,
             deployStrategy: buildStrategy,
+            healthCheck,
           });
         } else {
           await this.k8sWorkload.updateDeploymentImage(
