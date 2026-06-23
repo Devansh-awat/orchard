@@ -25,6 +25,8 @@ import { randomUUID, randomBytes } from 'crypto';
 import * as bcrypt from 'bcrypt';
 import { Prisma, IngressProtectionMode } from '@prisma/client';
 
+const TENANT_INGRESS_CLASS = 'haproxy';
+
 @Injectable()
 export class IngressService {
   private readonly logger = new Logger(IngressService.name);
@@ -218,7 +220,7 @@ export class IngressService {
       throw new BadRequestException('An ingress for this host and path already exists');
     }
 
-    const ingressClassName = 'cilium';
+    const ingressClassName = TENANT_INGRESS_CLASS;
 
     const tlsEnabled = data.tlsEnabled !== false;
     const isWildcardDomain = rawHost.endsWith('.k.hackclub.dev');
@@ -257,7 +259,6 @@ export class IngressService {
 
     if (tlsEnabled) {
       sanitizedAnnotations['acme.cert-manager.io/http01-edit-in-place'] = 'true';
-      sanitizedAnnotations['ingress.cilium.io/force-https'] = 'disabled';
     }
 
     if (clusterIssuer) {
@@ -632,7 +633,6 @@ export class IngressService {
     }
     if (tlsEnabled) {
       sanitizedAnnotations['acme.cert-manager.io/http01-edit-in-place'] = 'true';
-      sanitizedAnnotations['ingress.cilium.io/force-https'] = 'disabled';
     }
     if (clusterIssuer) {
       sanitizedAnnotations['cert-manager.io/cluster-issuer'] = clusterIssuer;
@@ -667,7 +667,7 @@ export class IngressService {
       paths: pathBackends,
       tlsSecretName: tlsSecretName || undefined,
       tlsHosts,
-      ingressClassName: 'cilium',
+      ingressClassName: TENANT_INGRESS_CLASS,
       entrypoints,
       annotations: sanitizedAnnotations,
       basicAuth: data.basicAuth?.enabled ? data.basicAuth : undefined,
@@ -693,7 +693,7 @@ export class IngressService {
         pathType: 'Prefix',
         tlsSecretName,
         tlsHosts,
-        ingressClass: 'cilium',
+        ingressClass: TENANT_INGRESS_CLASS,
         entrypoints,
         clusterIssuer,
         annotations: Object.keys(sanitizedAnnotations).length > 0 ? (sanitizedAnnotations as Prisma.JsonObject) : undefined,
@@ -899,7 +899,7 @@ export class IngressService {
         paths: mergedPaths,
         tlsSecretName: mergeTarget.tlsSecretName || undefined,
         tlsHosts: mergeTarget.tlsHosts ?? (mergedTlsEnabled ? [rawHost] : []),
-        ingressClassName: mergeTarget.ingressClass || 'cilium',
+        ingressClassName: TENANT_INGRESS_CLASS,
         entrypoints: existingEntrypoints,
         annotations: existingAnnotations,
       });
@@ -917,7 +917,7 @@ export class IngressService {
             pathType: pb.pathType,
             tlsSecretName: mergeTarget.tlsSecretName,
             tlsHosts: mergeTarget.tlsHosts ?? [],
-            ingressClass: mergeTarget.ingressClass || 'cilium',
+            ingressClass: TENANT_INGRESS_CLASS,
             entrypoints: existingEntrypoints,
             clusterIssuer: mergeTarget.clusterIssuer,
             annotations: Object.keys(existingAnnotations).length > 0
@@ -963,7 +963,6 @@ export class IngressService {
     const sanitizedAnnotations: Record<string, string> = {};
     if (tlsEnabled) {
       sanitizedAnnotations['acme.cert-manager.io/http01-edit-in-place'] = 'true';
-      sanitizedAnnotations['ingress.cilium.io/force-https'] = 'disabled';
     }
     if (clusterIssuer) {
       sanitizedAnnotations['cert-manager.io/cluster-issuer'] = clusterIssuer;
@@ -998,7 +997,7 @@ export class IngressService {
       paths: pathBackends.map((pb) => ({ path: pb.path, pathType: pb.pathType, serviceName: pb.serviceName, servicePort: pb.servicePort })),
       tlsSecretName: tlsSecretName || undefined,
       tlsHosts,
-      ingressClassName: 'cilium',
+      ingressClassName: TENANT_INGRESS_CLASS,
       entrypoints,
       annotations: sanitizedAnnotations,
       basicAuth: data.basicAuth?.enabled ? data.basicAuth : undefined,
@@ -1023,7 +1022,7 @@ export class IngressService {
             pathType: pb.pathType,
             tlsSecretName,
             tlsHosts,
-            ingressClass: 'cilium',
+            ingressClass: TENANT_INGRESS_CLASS,
             entrypoints,
             clusterIssuer,
             annotations: Object.keys(sanitizedAnnotations).length > 0 ? (sanitizedAnnotations as Prisma.JsonObject) : undefined,
@@ -1351,7 +1350,6 @@ export class IngressService {
     const sanitizedAnnotations: Record<string, string> = {};
     if (tlsEnabled) {
       sanitizedAnnotations['acme.cert-manager.io/http01-edit-in-place'] = 'true';
-      sanitizedAnnotations['ingress.cilium.io/force-https'] = 'disabled';
     }
     if (clusterIssuer) {
       sanitizedAnnotations['cert-manager.io/cluster-issuer'] = clusterIssuer;
@@ -1365,7 +1363,7 @@ export class IngressService {
         paths: pathBackends.map((pb) => ({ path: pb.path, pathType: pb.pathType, serviceName: pb.serviceName, servicePort: pb.servicePort })),
         tlsSecretName: tlsSecretName || undefined,
         tlsHosts,
-        ingressClassName: 'cilium',
+        ingressClassName: TENANT_INGRESS_CLASS,
         entrypoints,
         annotations: sanitizedAnnotations,
         basicAuth: data.basicAuth?.enabled ? data.basicAuth : data.basicAuth?.enabled === false ? { enabled: false, username: '', password: '' } : undefined,
@@ -1584,7 +1582,7 @@ export class IngressService {
             paths: remainingPaths,
             tlsSecretName: ingress.tlsSecretName || undefined,
             tlsHosts: ingress.tlsHosts ?? [],
-            ingressClassName: ingress.ingressClass || 'cilium',
+            ingressClassName: TENANT_INGRESS_CLASS,
             entrypoints: existingEntrypoints,
             annotations: existingAnnotations,
           });
@@ -1722,7 +1720,7 @@ export class IngressService {
       throw new BadRequestException('An ingress for this host and path already exists');
     }
 
-    const ingressClassName = 'cilium';
+    const ingressClassName = TENANT_INGRESS_CLASS;
 
     const tlsEnabled = data.tlsEnabled !== false;
     const isWildcardDomain = rawHost.endsWith('.k.hackclub.dev');
@@ -1767,7 +1765,6 @@ export class IngressService {
 
     if (tlsEnabled) {
       sanitizedAnnotations['acme.cert-manager.io/http01-edit-in-place'] = 'true';
-      sanitizedAnnotations['ingress.cilium.io/force-https'] = 'disabled';
     }
 
     if (clusterIssuer) {

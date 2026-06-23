@@ -502,6 +502,16 @@ export class K8sNamespaceService {
           ingress: [
             { fromEntities: ['host', 'remote-node', 'ingress'] },
             { fromEndpoints: [{ matchLabels: { 'kubernetes.io/metadata.name': 'orchard' } }] },
+            {
+              fromEndpoints: [
+                {
+                  matchLabels: {
+                    'kubernetes.io/metadata.name': 'network',
+                    'app.kubernetes.io/name': 'kubernetes-ingress',
+                  },
+                },
+              ],
+            },
           ],
         },
       };
