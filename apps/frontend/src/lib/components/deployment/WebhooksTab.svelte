@@ -10,6 +10,7 @@
 		webhookTokensLoading,
 		creatingWebhookToken,
 		deletingWebhookTokenId,
+		newlyCreatedToken = $bindable(null),
 		onCreateToken,
 		onDeleteToken
 	}: {
@@ -18,12 +19,12 @@
 		webhookTokensLoading: boolean;
 		creatingWebhookToken: boolean;
 		deletingWebhookTokenId: string | null;
+		newlyCreatedToken?: string | null;
 		onCreateToken: (label: string) => void;
 		onDeleteToken: (tokenId: string) => void;
 	} = $props();
 
 	let newWebhookLabel = $state('');
-	let newlyCreatedToken = $state<string | null>(null);
 	let copiedWebhookToken = $state(false);
 	let copiedWebhookUrl = $state(false);
 

@@ -2878,6 +2878,7 @@
 							{webhookTokensLoading}
 							{creatingWebhookToken}
 							{deletingWebhookTokenId}
+							bind:newlyCreatedToken
 							onCreateToken={(label) => {
 								newWebhookLabel = label;
 								createWebhookToken();
