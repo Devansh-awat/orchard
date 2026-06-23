@@ -500,7 +500,7 @@ export class K8sNamespaceService {
         spec: {
           endpointSelector: {},
           ingress: [
-            { fromEntities: ['ingress'] },
+            { fromEntities: ['host', 'remote-node', 'ingress'] },
             { fromEndpoints: [{ matchLabels: { 'kubernetes.io/metadata.name': 'orchard' } }] },
           ],
         },
