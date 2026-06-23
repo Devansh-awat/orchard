@@ -220,6 +220,18 @@ spec:
         - namespaceSelector:
             matchLabels:
               kubernetes.io/metadata.name: harbor
+    # HAProxy ingress controller (network ns). The registry's public hostname
+    # (registry.tier2.infra.hackclub.com) resolves to the HAProxy LB IP, which
+    # Cilium translates to these backend pods — so egress is enforced against
+    # the network-ns identity, not the public ipBlock. Without this the push
+    # sidecar's connection to the LB times out.
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: network
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: kubernetes-ingress
 ---
 # Cluster-wide permissions limited to truly cluster-scoped resources and the
 # narrow read/watch verbs Orchard needs across tenant namespaces. Read/write
