@@ -291,20 +291,39 @@
 	}
 
 	@keyframes protect-float-1 {
-		0%, 100% { transform: translate(0, 0) scale(1); }
-		33% { transform: translate(60px, 40px) scale(1.1); }
-		66% { transform: translate(-30px, 70px) scale(0.95); }
+		0%,
+		100% {
+			transform: translate(0, 0) scale(1);
+		}
+		33% {
+			transform: translate(60px, 40px) scale(1.1);
+		}
+		66% {
+			transform: translate(-30px, 70px) scale(0.95);
+		}
 	}
 
 	@keyframes protect-float-2 {
-		0%, 100% { transform: translate(0, 0) scale(1); }
-		33% { transform: translate(-50px, -60px) scale(1.05); }
-		66% { transform: translate(40px, -30px) scale(0.9); }
+		0%,
+		100% {
+			transform: translate(0, 0) scale(1);
+		}
+		33% {
+			transform: translate(-50px, -60px) scale(1.05);
+		}
+		66% {
+			transform: translate(40px, -30px) scale(0.9);
+		}
 	}
 
 	@keyframes protect-float-3 {
-		0%, 100% { transform: translate(0, 0) scale(1); }
-		50% { transform: translate(80px, -50px) scale(1.15); }
+		0%,
+		100% {
+			transform: translate(0, 0) scale(1);
+		}
+		50% {
+			transform: translate(80px, -50px) scale(1.15);
+		}
 	}
 
 	.protect-card {

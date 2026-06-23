@@ -146,8 +146,9 @@
 
 	function getTotalBuildSeconds(): number | null {
 		if (!buildStepTimestamps) return null;
-		const timestamps = Object.entries(buildStepTimestamps)
-			.filter(([k, v]) => !k.startsWith('__') && typeof v === 'number');
+		const timestamps = Object.entries(buildStepTimestamps).filter(
+			([k, v]) => !k.startsWith('__') && typeof v === 'number'
+		);
 		if (timestamps.length === 0) return null;
 		const startTime = Math.min(...timestamps.map(([, v]) => v));
 		const endTime = buildStepTimestamps['complete'];
