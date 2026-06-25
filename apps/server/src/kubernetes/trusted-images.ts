@@ -91,7 +91,7 @@ export const hardenedSecurityContext = () => ({
   allowPrivilegeEscalation: false,
   capabilities: {
     drop: ['ALL'],
-    add: ['SETUID', 'SETGID', 'CHOWN', 'FOWNER', 'DAC_OVERRIDE'],
+    add: ['SETUID', 'SETGID', 'CHOWN', 'FOWNER', 'DAC_OVERRIDE', 'SYS_CHROOT'],
   },
   seccompProfile: { type: 'RuntimeDefault' as const },
 });
