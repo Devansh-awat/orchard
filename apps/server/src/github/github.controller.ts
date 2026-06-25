@@ -222,11 +222,26 @@ export class GitHubController {
       throw new HttpException('User not found', HttpStatus.UNAUTHORIZED);
     }
 
+    if (!user.githubId) {
+      return { linked: false, username: null, tokenExpired: false, installations: [] };
+    }
+
+    const token = await this.githubService.getValidUserToken(user.id);
+    if (!token) {
+      return {
+        linked: true,
+        username: user.githubUsername,
+        tokenExpired: true,
+        installations: [],
+      };
+    }
+
     const installations = await this.githubService.getUserInstallations(user.id);
 
     return {
-      linked: !!user.githubId,
+      linked: true,
       username: user.githubUsername,
+      tokenExpired: false,
       installations: installations.map(inst => ({
         id: inst.id,
         installationId: inst.installationId.toString(),

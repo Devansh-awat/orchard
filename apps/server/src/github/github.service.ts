@@ -1349,7 +1349,7 @@ export class GitHubService {
    */
   async getUserInstallations(userId: string) {
     const dbRows = await this.prisma.gitHubAppInstallation.findMany({
-      where: { suspendedAt: null },
+      where: { suspendedAt: null, userId },
       orderBy: { accountLogin: 'asc' },
     });
 

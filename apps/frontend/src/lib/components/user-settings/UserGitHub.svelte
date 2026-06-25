@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Loader2, Github, Building2, ExternalLink } from 'lucide-svelte';
+	import { Loader2, Github, Building2, ExternalLink, TriangleAlert } from 'lucide-svelte';
 	import { Plus } from '@jis3r/icons';
 	import SettingsSection from './SettingsSection.svelte';
 	import StatusPill from './StatusPill.svelte';
@@ -20,6 +20,7 @@
 		githubUsername,
 		githubInstallations,
 		githubAppInstallUrl,
+		githubTokenExpired = false,
 		unlinking,
 		onLink,
 		onUnlink,
@@ -30,6 +31,7 @@
 		githubUsername: string | null;
 		githubInstallations: GitHubInstallation[];
 		githubAppInstallUrl: string | null;
+		githubTokenExpired?: boolean;
 		unlinking: boolean;
 		onLink: () => void;
 		onUnlink: () => void;
@@ -60,7 +62,20 @@
 			{#snippet icon()}<Github class="h-4 w-4" />{/snippet}
 		</IntegrationCard>
 
-		{#if githubInstallations.length > 0 || githubAppInstallUrl}
+		{#if githubTokenExpired}
+			<div class="ug-expired" role="alert">
+				<TriangleAlert class="h-4 w-4" />
+				<div class="ug-expired-text">
+					<span class="ug-expired-title">GitHub session expired</span>
+					<span class="ug-expired-hint">
+						Reconnect to view repository access and deploy from your repositories.
+					</span>
+				</div>
+				<button type="button" class="ug-expired-btn" onclick={onLink}>Reconnect</button>
+			</div>
+		{/if}
+
+		{#if !githubTokenExpired && (githubInstallations.length > 0 || githubAppInstallUrl)}
 			<div class="ug-repos">
 				<div class="ug-repos-head">
 					<span class="ug-repos-title">Repository access</span>
@@ -129,6 +144,48 @@
 		justify-content: center;
 		padding: 1.5rem 0;
 		color: var(--surface-muted);
+	}
+	.ug-expired {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		margin-top: 0.75rem;
+		padding: 0.75rem 0.875rem;
+		border-radius: 0.625rem;
+		border: 1px solid color-mix(in srgb, var(--warning, #ff8c37) 45%, transparent);
+		background-color: color-mix(in srgb, var(--warning, #ff8c37) 12%, transparent);
+		color: color-mix(in srgb, var(--warning, #ff8c37) 80%, var(--center-channel-color));
+	}
+	.ug-expired-text {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+	}
+	.ug-expired-title {
+		font-size: 0.8125rem;
+		font-weight: 600;
+		color: var(--center-channel-color);
+	}
+	.ug-expired-hint {
+		font-size: 0.6875rem;
+		color: var(--surface-muted);
+	}
+	.ug-expired-btn {
+		flex-shrink: 0;
+		padding: 0.375rem 0.75rem;
+		border-radius: 0.5rem;
+		border: none;
+		font-size: 0.75rem;
+		font-weight: 600;
+		cursor: pointer;
+		background-color: var(--sidebar-text-active-border);
+		color: #fff;
+		transition: opacity 0.15s;
+	}
+	.ug-expired-btn:hover {
+		opacity: 0.9;
 	}
 	.ug-repos {
 		margin-top: 1rem;

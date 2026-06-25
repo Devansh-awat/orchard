@@ -12,6 +12,8 @@
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import NewResourceModal from '$lib/components/NewResourceModal.svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
+	import MeshGradient from '$lib/components/MeshGradient.svelte';
+	import { projectGradientEnabled } from '$lib/stores';
 
 	import {
 		ProjectHero,
@@ -103,7 +105,6 @@
 
 	// --- Hero/tab animation ---
 	let tabsRowEl = $state<HTMLElement | null>(null);
-	let tabPanelEl = $state<HTMLElement | null>(null);
 	let firstTabRun = true;
 
 	$effect(() => {
@@ -121,15 +122,19 @@
 					{ type: 'spring', stiffness: 220, damping: 15, mass: 0.9 }
 				);
 			}
-			if (tabPanelEl) {
-				animate(
-					tabPanelEl,
-					{ y: [dir * 9, 0], opacity: [0.5, 1] },
-					{ type: 'spring', stiffness: 180, damping: 15, mass: 1.2, delay: 0.05 }
-				);
-			}
 		});
 	});
+
+	let firstPanelMount = true;
+	function tabPanelEnter(node: HTMLElement) {
+		if (firstPanelMount) {
+			firstPanelMount = false;
+			return;
+		}
+		const dir = activeTab === 'members' ? -1 : 1;
+		node.style.transform = `translateY(${dir * 9}px)`;
+		animate(node, { y: [dir * 9, 0] }, { type: 'spring', stiffness: 180, damping: 15, mass: 1.2 });
+	}
 
 	// --- Org members for picker ---
 	let orgMembers = $state<OrgMember[]>([]);
@@ -549,22 +554,11 @@
 	});
 </script>
 
-<div class="pj-page" class:pj-page--hasbg={!!project?.backgroundImage}>
-	{#if project?.backgroundImage && heroImgReady}
-		<div class="pj-accent-glow" aria-hidden="true">
-			<div
-				class="pj-accent-glow-layer pj-accent-glow-layer--1"
-				style="background-image: url({JSON.stringify(project.backgroundImage)});"
-			></div>
-			<div
-				class="pj-accent-glow-layer pj-accent-glow-layer--2"
-				style="background-image: url({JSON.stringify(project.backgroundImage)});"
-			></div>
-			<div
-				class="pj-accent-glow-layer pj-accent-glow-layer--3"
-				style="background-image: url({JSON.stringify(project.backgroundImage)});"
-			></div>
-			<div class="pj-accent-glow-fade"></div>
+<div class="pj-page" class:pj-page--hasbg={!!project?.backgroundImage && $projectGradientEnabled}>
+	{#if project?.backgroundImage && $projectGradientEnabled}
+		<div class="pj-mesh-bg" aria-hidden="true">
+			<MeshGradient src={project.backgroundImage} class="pj-mesh-canvas" />
+			<div class="pj-mesh-scrim"></div>
 		</div>
 	{/if}
 
@@ -678,7 +672,7 @@
 			/>
 
 			{#if activeTab === 'resources'}
-				<div class="pj-tab-panel" bind:this={tabPanelEl}>
+				<div class="pj-tab-panel" {@attach tabPanelEnter}>
 					<ResourcesTab
 						{filteredDeployments}
 						{databases}
@@ -695,7 +689,7 @@
 			{/if}
 
 			{#if activeTab === 'compose'}
-				<div class="pj-tab-panel" bind:this={tabPanelEl}>
+				<div class="pj-tab-panel" {@attach tabPanelEnter}>
 					<ComposeTab
 						{composeStacks}
 						{composeStacksLoading}
@@ -706,7 +700,7 @@
 			{/if}
 
 			{#if activeTab === 'members'}
-				<div class="pj-tab-panel" bind:this={tabPanelEl}>
+				<div class="pj-tab-panel" {@attach tabPanelEnter}>
 					<MembersTab
 						{projectMembers}
 						{pendingInvitations}

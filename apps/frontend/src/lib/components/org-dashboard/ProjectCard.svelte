@@ -11,7 +11,8 @@
 		Ellipsis
 	} from 'lucide-svelte';
 	import { motionStagger, motionPopover } from '$lib/utils/motion.svelte';
-	import { projectStatusSummary, preBlurBg, springRotate, bodyAttach } from './helpers.svelte';
+	import { projectGradientEnabled } from '$lib/stores';
+	import { projectStatusSummary, meshBakedBg, springRotate, bodyAttach } from './helpers.svelte';
 	import DeploymentCard from './DeploymentCard.svelte';
 	import DatabaseCard from './DatabaseCard.svelte';
 	import type { ProjectGroup, ProjectMeta, DeploymentSummary } from './types';
@@ -103,13 +104,13 @@
 <div
 	class="proj-card"
 	class:proj-card--expanded={expanded}
-	class:proj-card--hasbg={!!meta?.backgroundImage}
+	class:proj-card--hasbg={!!meta?.backgroundImage && $projectGradientEnabled}
 >
-	{#if meta?.backgroundImage}
-		<div class="proj-card-backdrop" aria-hidden="true">
-			<div class="proj-body-bg proj-body-bg--1" {@attach preBlurBg(meta.backgroundImage)}></div>
-			<div class="proj-body-bg proj-body-bg--2" {@attach preBlurBg(meta.backgroundImage)}></div>
-			<div class="proj-body-bg proj-body-bg--3" {@attach preBlurBg(meta.backgroundImage)}></div>
+	{#if meta?.backgroundImage && $projectGradientEnabled}
+		<div class="proj-card-backdrop" aria-hidden="true" {@attach meshBakedBg(meta.backgroundImage)}>
+			<div class="proj-mesh proj-mesh--1"></div>
+			<div class="proj-mesh proj-mesh--2"></div>
+			<div class="proj-mesh proj-mesh--3"></div>
 			<div class="proj-body-veil"></div>
 		</div>
 	{/if}

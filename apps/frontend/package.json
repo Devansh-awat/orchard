@@ -39,6 +39,8 @@
 		"marked": "^18.0.4",
 		"melt": "^0.42.0",
 		"motion": "^12.38.0",
+		"pixi-filters": "^6.1.5",
+		"pixi.js": "^8.19.0",
 		"posthog-js": "^1.373.5",
 		"svelte5-chartjs": "^1.0.0"
 	}

@@ -214,15 +214,6 @@ html[data-sidebar-animating='true'] main {
 html[data-sidebar-animating='true'] main * {
 	transition: none !important;
 }
-/* Freeze CSS keyframe animations on the backdrop layers during sidebar
-   resize. The proj-spin-* rotations keep tweening transforms while the
-   parent card reflows, which forces Chrome to re-rasterize the 48px
-   blur filter against changing layer bounds every frame — the flicker
-   the user reports. Pausing for the 200ms resize is imperceptible
-   visually but stops the rasterization churn cold. */
-html[data-sidebar-animating='true'] main .proj-body-bg {
-	animation-play-state: paused !important;
-}
 
 a {
 	color: var(--link-color);
@@ -232,22 +223,33 @@ a:hover {
 	color: color-mix(in srgb, var(--link-color) 85%, white);
 }
 
-/* Custom scrollbar */
 ::-webkit-scrollbar {
-	width: 8px;
-	height: 8px;
+	width: 12px;
+	height: 12px;
 }
 
 ::-webkit-scrollbar-track {
-	@apply bg-transparent;
+	background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-	@apply bg-gray-300 dark:bg-gray-700 rounded-full;
+	background-color: color-mix(in srgb, var(--center-channel-color) 22%, transparent);
+	border-radius: 999px;
+	border: 3px solid transparent;
+	background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-	@apply bg-gray-400 dark:bg-gray-600;
+	background-color: color-mix(in srgb, var(--center-channel-color) 38%, transparent);
+}
+
+::-webkit-scrollbar-corner {
+	background: transparent;
+}
+
+html {
+	scrollbar-width: thin;
+	scrollbar-color: color-mix(in srgb, var(--center-channel-color) 22%, transparent) transparent;
 }
 
 /* Button base styles — primary/secondary/tertiary hierarchy */

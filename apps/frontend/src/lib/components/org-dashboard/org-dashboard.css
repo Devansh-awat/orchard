@@ -221,72 +221,78 @@
 	border-color: #fff;
 }
 
-.proj-body-bg {
+.proj-mesh {
 	position: absolute;
-	inset: -40%;
+	top: 50%;
+	left: 50%;
+	width: 200%;
+	aspect-ratio: 1;
+	background-image: var(--mesh-bg, none);
 	background-size: cover;
 	background-position: center;
-	filter: blur(48px) saturate(1.6);
 	will-change: transform;
-	transform-origin: 50% 50%;
+	opacity: 0;
+	transition: opacity 0.5s ease-out;
 }
-@-moz-document url-prefix() {
-	.proj-body-bg {
-		filter: blur(20px) saturate(1.4);
-	}
-}
-.proj-body-bg--1 {
-	transform: scale(1.6) rotate(0deg);
+.proj-mesh--1 {
+	transform: translate(-50%, -50%) scale(1.1) rotate(0deg);
 	animation: proj-spin-a 28s linear infinite;
+}
+.proj-card-backdrop--ready .proj-mesh--1 {
 	opacity: 0.9;
 }
-.proj-body-bg--2 {
-	transform: scale(2.1) translate(8%, -6%) rotate(70deg);
+.proj-mesh--2 {
+	transform: translate(-50%, -50%) scale(1.45) rotate(70deg);
 	animation: proj-spin-b 44s linear infinite;
+}
+.proj-card-backdrop--ready .proj-mesh--2 {
 	opacity: 0.55;
 }
-.proj-body-bg--3 {
-	transform: scale(2.6) translate(-10%, 9%) rotate(140deg);
+.proj-mesh--3 {
+	transform: translate(-50%, -50%) scale(1.8) rotate(140deg);
 	animation: proj-spin-c 60s linear infinite;
+}
+.proj-card-backdrop--ready .proj-mesh--3 {
 	opacity: 0.4;
+}
+.proj-card-backdrop--offscreen .proj-mesh {
+	animation-play-state: paused;
+}
+@keyframes proj-spin-a {
+	from {
+		transform: translate(-50%, -50%) scale(1.1) rotate(0deg);
+	}
+	to {
+		transform: translate(-50%, -50%) scale(1.1) rotate(360deg);
+	}
+}
+@keyframes proj-spin-b {
+	from {
+		transform: translate(-50%, -50%) scale(1.45) rotate(70deg);
+	}
+	to {
+		transform: translate(-50%, -50%) scale(1.45) rotate(430deg);
+	}
+}
+@keyframes proj-spin-c {
+	from {
+		transform: translate(-50%, -50%) scale(1.8) rotate(140deg);
+	}
+	to {
+		transform: translate(-50%, -50%) scale(1.8) rotate(-220deg);
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.proj-mesh--1,
+	.proj-mesh--2,
+	.proj-mesh--3 {
+		animation: none;
+	}
 }
 .proj-body-veil {
 	position: absolute;
 	inset: 0;
 	background: linear-gradient(180deg, rgba(0, 0, 0, 0.15) 0%, rgba(0, 0, 0, 0.35) 100%);
-}
-
-@keyframes proj-spin-a {
-	from {
-		transform: scale(1.6) rotate(0deg);
-	}
-	to {
-		transform: scale(1.6) rotate(360deg);
-	}
-}
-@keyframes proj-spin-b {
-	from {
-		transform: scale(2.1) translate(8%, -6%) rotate(70deg);
-	}
-	to {
-		transform: scale(2.1) translate(8%, -6%) rotate(430deg);
-	}
-}
-@keyframes proj-spin-c {
-	from {
-		transform: scale(2.6) translate(-10%, 9%) rotate(140deg);
-	}
-	to {
-		transform: scale(2.6) translate(-10%, 9%) rotate(-220deg);
-	}
-}
-
-@media (prefers-reduced-motion: reduce) {
-	.proj-body-bg--1,
-	.proj-body-bg--2,
-	.proj-body-bg--3 {
-		animation: none;
-	}
 }
 
 .proj-card--hasbg .proj-body {

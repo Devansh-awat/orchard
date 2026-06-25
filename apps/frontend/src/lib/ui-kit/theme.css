@@ -163,22 +163,33 @@ a:hover {
 	color: color-mix(in srgb, var(--link-color) 85%, white);
 }
 
-/* Custom scrollbar */
 ::-webkit-scrollbar {
-	width: 8px;
-	height: 8px;
+	width: 12px;
+	height: 12px;
 }
 
 ::-webkit-scrollbar-track {
-	@apply bg-transparent;
+	background: transparent;
 }
 
 ::-webkit-scrollbar-thumb {
-	@apply bg-gray-300 dark:bg-gray-700 rounded-full;
+	background-color: color-mix(in srgb, var(--center-channel-color) 22%, transparent);
+	border-radius: 999px;
+	border: 3px solid transparent;
+	background-clip: padding-box;
 }
 
 ::-webkit-scrollbar-thumb:hover {
-	@apply bg-gray-400 dark:bg-gray-600;
+	background-color: color-mix(in srgb, var(--center-channel-color) 38%, transparent);
+}
+
+::-webkit-scrollbar-corner {
+	background: transparent;
+}
+
+html {
+	scrollbar-width: thin;
+	scrollbar-color: color-mix(in srgb, var(--center-channel-color) 22%, transparent) transparent;
 }
 
 /* ============================================================

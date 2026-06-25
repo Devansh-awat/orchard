@@ -42,6 +42,7 @@
 		}>
 	>([]);
 	let githubAppInstallUrl = $state<string | null>(null);
+	let githubTokenExpired = $state(false);
 
 	let tailscaleLinked = $state(false);
 	let tailscaleTailnet = $state<string | null>(null);
@@ -292,6 +293,7 @@
 				githubLinked = data.linked;
 				githubUsername = data.username || null;
 				githubInstallations = data.installations ?? [];
+				githubTokenExpired = data.tokenExpired ?? false;
 			} else {
 				console.error('[GitHub status]', response.status, await response.text().catch(() => ''));
 			}
@@ -741,6 +743,7 @@
 				{githubUsername}
 				{githubInstallations}
 				{githubAppInstallUrl}
+				{githubTokenExpired}
 				{unlinking}
 				onLink={linkGitHub}
 				onUnlink={unlinkGitHub}

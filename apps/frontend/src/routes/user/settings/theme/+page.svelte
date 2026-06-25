@@ -2,7 +2,7 @@
 	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
 	import { themeStore, defaultLightTheme, defaultDarkTheme, type Theme } from '$lib/stores/theme';
-	import { toasts } from '$lib/stores';
+	import { toasts, projectGradientEnabled } from '$lib/stores';
 	import ThemeEditor from '$lib/components/ThemeEditor.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import {
@@ -18,6 +18,7 @@
 		Moon,
 		Monitor,
 		Pencil,
+		Sparkles,
 		X
 	} from 'lucide-svelte';
 	import { slide } from 'svelte/transition';
@@ -309,6 +310,39 @@
 				</div>
 			</div>
 
+			<!-- Effects -->
+			<div class="card">
+				<div class="card-header">
+					<h2 class="font-semibold">Effects</h2>
+				</div>
+				<div class="card-body">
+					<label class="grad-toggle-row">
+						<div
+							class="flex h-12 w-12 items-center justify-center rounded-lg"
+							style="background-color: var(--surface-bg); border: 1px solid var(--surface-border);"
+						>
+							<Sparkles class="h-6 w-6" style="color: var(--center-channel-color);" />
+						</div>
+						<div class="grad-toggle-text">
+							<p class="font-medium" style="color: var(--center-channel-color);">
+								Project background gradient
+							</p>
+							<p class="text-sm" style="color: var(--surface-muted);">
+								Animated flowing gradient on project pages and cards. Turn off to reduce motion or
+								save GPU.
+							</p>
+						</div>
+						<input
+							type="checkbox"
+							class="grad-toggle-input"
+							checked={$projectGradientEnabled}
+							onchange={(e) => projectGradientEnabled.set(e.currentTarget.checked)}
+						/>
+						<span class="grad-toggle-track"><span class="grad-toggle-thumb"></span></span>
+					</label>
+				</div>
+			</div>
+
 			<!-- Built-in Themes -->
 			<div class="card">
 				<div class="card-header">
@@ -587,3 +621,64 @@
 		}}
 	/>
 {/if}
+
+<style>
+	.grad-toggle-row {
+		display: flex;
+		align-items: center;
+		gap: 1rem;
+		padding: 1rem;
+		border-radius: 0.75rem;
+		cursor: pointer;
+		background-color: var(--control-bg);
+		transition: background-color 0.15s;
+	}
+
+	.grad-toggle-text {
+		flex: 1;
+		min-width: 0;
+	}
+
+	.grad-toggle-input {
+		position: absolute;
+		opacity: 0;
+		width: 0;
+		height: 0;
+		pointer-events: none;
+	}
+
+	.grad-toggle-track {
+		position: relative;
+		flex-shrink: 0;
+		width: 2.25rem;
+		height: 1.25rem;
+		border-radius: 0.625rem;
+		background-color: color-mix(in srgb, var(--surface-border) 80%, var(--center-channel-color));
+		transition: background-color 0.2s;
+	}
+
+	.grad-toggle-input:checked + .grad-toggle-track {
+		background-color: var(--sidebar-text-active-border);
+	}
+
+	.grad-toggle-thumb {
+		position: absolute;
+		top: 0.125rem;
+		left: 0.125rem;
+		width: 1rem;
+		height: 1rem;
+		border-radius: 50%;
+		background-color: #fff;
+		box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
+		transition: transform 0.2s;
+	}
+
+	.grad-toggle-input:checked + .grad-toggle-track .grad-toggle-thumb {
+		transform: translateX(1rem);
+	}
+
+	.grad-toggle-input:focus-visible + .grad-toggle-track {
+		outline: 2px solid var(--sidebar-text-active-border);
+		outline-offset: 2px;
+	}
+</style>

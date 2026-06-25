@@ -100,24 +100,33 @@ export function buildIcon(
 	return null;
 }
 
-// Pre-blur project backdrop images on a canvas once per URL
-const preBlurCache = new Map<string, Promise<string | null>>();
-function preBlurImage(url: string): Promise<string | null> {
-	let p = preBlurCache.get(url);
+function proxied(raw: string): string {
+	try {
+		const u = new URL(raw, location.href);
+		if (u.origin === location.origin) return u.href;
+		return `/asset-proxy?u=${encodeURIComponent(u.href)}`;
+	} catch {
+		return raw;
+	}
+}
+
+const blurCache = new Map<string, Promise<string | null>>();
+function blurBake(url: string): Promise<string | null> {
+	let p = blurCache.get(url);
 	if (p) return p;
 	p = new Promise((resolve) => {
 		const img = new Image();
 		img.crossOrigin = 'anonymous';
 		img.onload = () => {
 			try {
-				const W = 512;
+				const W = 640;
 				const H = Math.max(1, Math.round((img.naturalHeight / img.naturalWidth) * W));
 				const canvas = document.createElement('canvas');
 				canvas.width = W;
 				canvas.height = H;
 				const ctx = canvas.getContext('2d');
 				if (!ctx) return resolve(null);
-				ctx.filter = 'blur(48px) saturate(1.6)';
+				ctx.filter = 'blur(80px) saturate(1.6)';
 				ctx.drawImage(img, 0, 0, W, H);
 				resolve(canvas.toDataURL('image/jpeg', 0.85));
 			} catch {
@@ -125,24 +134,32 @@ function preBlurImage(url: string): Promise<string | null> {
 			}
 		};
 		img.onerror = () => resolve(null);
-		img.src = url;
+		img.src = proxied(url);
 	});
-	preBlurCache.set(url, p);
+	blurCache.set(url, p);
 	return p;
 }
 
-export function preBlurBg(url: string) {
+export function meshBakedBg(url: string) {
 	return (el: Element) => {
 		const target = el as HTMLElement;
 		let cancelled = false;
-		target.style.backgroundImage = `url("${url}")`;
-		preBlurImage(url).then((dataUrl) => {
+
+		blurBake(url).then((dataUrl) => {
 			if (cancelled || !dataUrl) return;
-			target.style.backgroundImage = `url("${dataUrl}")`;
-			target.style.filter = 'none';
+			target.style.setProperty('--mesh-bg', `url("${dataUrl}")`);
+			target.classList.add('proj-card-backdrop--ready');
 		});
+
+		const io = new IntersectionObserver((entries) => {
+			const on = entries.some((e) => e.isIntersecting);
+			target.classList.toggle('proj-card-backdrop--offscreen', !on);
+		});
+		io.observe(target);
+
 		return () => {
 			cancelled = true;
+			io.disconnect();
 		};
 	};
 }
