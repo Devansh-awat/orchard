@@ -16,3 +16,6 @@ graphify-out/
 .env.*
 !.env.example
 .env.bak.*
+
+# OS
+.DS_Store
