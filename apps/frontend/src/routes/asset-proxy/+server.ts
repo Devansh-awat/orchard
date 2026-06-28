@@ -1,7 +1,6 @@
 import type { RequestHandler } from './$types';
 
-const hostAllowed = (host: string) =>
-	host.endsWith('.r2.dev') || host === 'assets.orchard.my';
+const hostAllowed = (host: string) => host.endsWith('.r2.dev') || host === 'assets.orchard.my';
 
 export const GET: RequestHandler = async ({ url, fetch, setHeaders }) => {
 	const target = url.searchParams.get('u');
