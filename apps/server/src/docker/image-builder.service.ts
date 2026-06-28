@@ -36,33 +36,21 @@ interface BuildJobStatus {
   jobName: string;
   status: 'pending' | 'running' | 'succeeded' | 'failed' | 'unknown';
   logs?: string;
-  // Pusher (skopeo) sidecar logs, fetched separately from the buildkit
-  // container so they can be streamed into the build log after the build
-  // output instead of dumped into the failure path only.
   pusherLogs?: string;
   imageRef?: string;
 }
 
-// BuildKit prints these once it leaves the build graph and starts writing the
-// image — mirrors the export markers the frontend log parser (buildkitParser.ts)
-// relabels as "Pushing image layers". Covers both modes:
-//   - sidecar push: BuildKit exports an OCI archive (`exporting to oci image
-//     format` / `exporting layers` / `sending tarball`); the pusher sidecar
-//     then uploads it while the job stays active and build_step stays 'pushing'.
-//   - direct push (daemon mode): BuildKit pushes to the registry itself
-//     (`exporting to image` / `pushing manifest`).
-// Detection fires once per job, and the image export always precedes any cache
-// export, so cache-export lines can't re-trigger it.
 const BUILDKIT_PUSH_PHASE_RE =
   /exporting to [^\n]*image|exporting layers|sending tarball|pushing manifest/i;
+
+const BUILDKIT_STEP_RE = /(?:^|\n)#\d+\s/;
 
 @Injectable()
 export class ImageBuilderService {
   private kc: k8s.KubeConfig | null = null;
   private buildkitLogOffsets = new Map<string, number>();
-  // Jobs whose streamed output has already crossed into BuildKit's export/push
-  // phase, so we flip build_step → 'pushing' exactly once per job.
   private buildkitPushDetected = new Set<string>();
+  private buildkitBuildingDetected = new Set<string>();
   private readonly builderNamespace = process.env.BUILDER_NAMESPACE || 'orchard-builders';
   // Internal Harbor registry for pushing (HTTP on port 80)
   private readonly harborRegistryPush = process.env.DOCKER_REGISTRY_PUSH || 'harbor-core.harbor.svc.cluster.local';
@@ -249,9 +237,12 @@ export class ImageBuilderService {
 
     await this.appendStreamedChunk(deploymentId, chunk);
 
-    // The build job builds and pushes in one shot, so build_step stays 'building'
-    // until the job exits. Flip it to 'pushing' the moment BuildKit starts
-    // exporting/pushing layers, matching what the frontend log parser shows.
+    if (!this.buildkitBuildingDetected.has(jobName) && BUILDKIT_STEP_RE.test(chunk)) {
+      this.buildkitBuildingDetected.add(jobName);
+      await this.setBuildStep(deploymentId, 'building');
+      this.emitBuildChanged(deploymentId).catch(() => {});
+    }
+
     if (!this.buildkitPushDetected.has(jobName) && BUILDKIT_PUSH_PHASE_RE.test(chunk)) {
       this.buildkitPushDetected.add(jobName);
       await this.setBuildStep(deploymentId, 'pushing');
@@ -259,10 +250,6 @@ export class ImageBuilderService {
     }
   }
 
-  // Stream the pusher (skopeo) sidecar logs into build_logs. The pusher only
-  // logs meaningfully once BuildKit has written its `.done` marker, so callers
-  // gate this on the push phase having been detected — that keeps the pusher
-  // output ordered after the build output in the single build_logs column.
   private async streamPusherOutput(deploymentId: string | undefined, jobName: string, pusherLogs: string | undefined) {
     if (!deploymentId || !pusherLogs) return;
     const chunk = this.takeLogChunk(`${jobName}:pusher`, pusherLogs);
@@ -270,9 +257,6 @@ export class ImageBuilderService {
     await this.appendStreamedChunk(deploymentId, chunk);
   }
 
-  // Return only the not-yet-streamed suffix of a pod log, advancing the offset.
-  // Returns null when there's nothing new. Keyed so buildkit and pusher streams
-  // for the same job track independently.
   private takeLogChunk(offsetKey: string, fullLogs: string): string | null {
     const offset = this.buildkitLogOffsets.get(offsetKey) ?? 0;
     if (fullLogs.length <= offset) return null;
@@ -1579,14 +1563,9 @@ exit $rc`,
         const logLine = `[${now}] [INFO] Build job ${jobName} created successfully\n`;
         await this.prisma.$executeRaw`
           UPDATE "deployments"
-          SET "build_step" = 'building',
-              "build_logs" = COALESCE("build_logs", '') || ${logLine},
+          SET "build_logs" = COALESCE("build_logs", '') || ${logLine},
               "build_step_timestamps" = jsonb_set(
-                jsonb_set(
-                  COALESCE("build_step_timestamps", '{}'::jsonb),
-                  '{building}',
-                  ${now}::text::jsonb
-                ),
+                COALESCE("build_step_timestamps", '{}'::jsonb),
                 '{__jobName}',
                 ${JSON.stringify(jobName)}::jsonb
               ),
@@ -1964,11 +1943,6 @@ exit $rc`,
               );
               logs += logResponse.body;
 
-              // Fetch the pusher (skopeo) sidecar logs separately whenever the
-              // pod has one. On success these stream into the build log after
-              // the build output, giving live visibility into the registry
-              // upload (the previously silent ~30s window). On failure they
-              // hold the real push error (auth, registry unavailable, etc).
               const hasPusherContainer = containerStatuses?.some((cs) => cs.name === 'pusher');
               if (hasPusherContainer && status !== 'pending') {
                 try {
@@ -2116,12 +2090,9 @@ exit $rc`,
 
           this.clearBuildkitOffset(jobName);
           this.buildkitPushDetected.delete(jobName);
-          // Whatever phases completed before the failure (e.g. clone) are
-          // still worth recording on the trace.
+          this.buildkitBuildingDetected.delete(jobName);
           await this.emitBuildPhaseSpans(jobName, deploymentId);
 
-          // A push failure surfaces only in the pusher logs (buildkit succeeded),
-          // so fold both streams into the error the caller throws.
           const combinedLogs = [status.logs, status.pusherLogs && `=== Pusher container logs ===\n${status.pusherLogs}`]
             .filter(Boolean)
             .join('\n');
@@ -2134,8 +2105,6 @@ exit $rc`,
 
         if (status.status === 'running') {
           await this.streamBuildkitOutput(deploymentId, jobName, status.logs);
-          // Only once BuildKit has reached its export phase do the pusher logs
-          // belong after the build output — gate on the same detection.
           if (this.buildkitPushDetected.has(jobName)) {
             await this.streamPusherOutput(deploymentId, jobName, status.pusherLogs);
           }
@@ -2183,6 +2152,7 @@ exit $rc`,
 
     this.clearBuildkitOffset(jobName);
     this.buildkitPushDetected.delete(jobName);
+    this.buildkitBuildingDetected.delete(jobName);
     scheduleSpan.finish({ 'build.schedule_outcome': 'timeout' });
     throw new BadRequestException(`Build job timed out after ${finalElapsed} seconds (last status: ${lastLoggedStatus})`);
   }
@@ -2339,10 +2309,6 @@ exit $rc`,
 
       const status = await this.waitForBuildJob(jobName, deploymentId);
 
-      // streamBuildkitOutput normally flips build_step → 'pushing' the moment
-      // the export phase appears in the logs. If we never saw that marker (e.g.
-      // truncated logs), stamp it now as a fallback so the stepper and the
-      // 'building' duration still resolve. Don't overwrite a real detection.
       if (deploymentId && !this.buildkitPushDetected.has(jobName)) {
         this.prisma.$executeRaw`
           UPDATE "deployments"
@@ -2357,6 +2323,7 @@ exit $rc`,
         this.emitBuildChanged(deploymentId).catch(() => {});
       }
       this.buildkitPushDetected.delete(jobName);
+      this.buildkitBuildingDetected.delete(jobName);
 
       const fullImagePath = `${this.harborRegistryPull}/${this.harborProject}/${imageName}:${tag}`;
 

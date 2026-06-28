@@ -189,7 +189,7 @@
 			<p class="mt-1.5 text-xs" style="color: var(--surface-muted);">
 				{#if buildModalStatus === 'building'}
 					{buildModalStep === 'cloning'
-						? 'Cloning repository...'
+						? 'Scheduling builder...'
 						: buildModalStep === 'building'
 							? 'Building image...'
 							: buildModalStep === 'pushing'

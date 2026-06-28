@@ -60,17 +60,10 @@ function headerlessLabel(body: string): string {
 	return body;
 }
 
-// The pusher (skopeo) sidecar uploads the exported image to the registry. Its
-// lines aren't BuildKit `#N` steps, so without this they'd fall into the
-// collapsed "System messages" drawer. Fold them into one synthetic step that
-// renders inline after the build, giving the registry push its own row.
 const PUSHER_STEP_ID = '__pusher';
 const PUSHER_LINE_RE = /^\[pusher\]/i;
 const SKOPEO_LINE_RE =
 	/^(Getting image source signatures|Copying blob\b|Copying config\b|Writing manifest|Storing signatures|Skipping fetch of repeat blob)/i;
-// The push only really begins at "build done, pushing" / the first skopeo line.
-// Other `[pusher]` lines ("waiting…", "…not pushing" when the build failed) are
-// not push activity, so they shouldn't conjure a push step on their own.
 const PUSHER_START_RE = /^\[pusher\] build done/i;
 const PUSHER_DONE_RE = /Writing manifest to image destination/i;
 const PUSHER_ERROR_RE = /^(FATA|Error)\b|level=fatal/i;
@@ -129,13 +122,8 @@ export function parseBuildkitLogs(raw: string | null | undefined): ParsedBuildLo
 			sublineMatch?.[1];
 
 		if (!stepId) {
-			// Registry push (skopeo) lines fold into one synthetic step so the
-			// upload shows as its own row instead of a pile of system messages.
 			if (isPusherLine(rest)) {
 				let push = stepMap.get(PUSHER_STEP_ID);
-				// Don't create a push step from non-activity lines (e.g. the
-				// pusher's "waiting…"/"not pushing" when the build itself failed);
-				// let those fall through to system messages.
 				if (!push && !isPushActivity(rest)) {
 					result.messages.push({ timestamp: ts, level, text: rest });
 					continue;

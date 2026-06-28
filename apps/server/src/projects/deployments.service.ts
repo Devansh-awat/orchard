@@ -4319,7 +4319,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           if (currentLogs.length > lastLogLength) {
             lastLogLength = currentLogs.length;
 
-            const stepLabel = currentDeployment?.buildStep === 'cloning' ? 'Cloning repository...' :
+            const stepLabel = currentDeployment?.buildStep === 'cloning' ? 'Scheduling builder...' :
                              currentDeployment?.buildStep === 'building' ? 'Building image...' :
                              currentDeployment?.buildStep === 'pushing' ? 'Pushing to registry...' :
                              currentDeployment?.buildStep === 'deploying' ? 'Deploying to cluster...' :
@@ -4611,8 +4611,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           };
         }
       }
-
-      await this.k8sWorkload.waitForReady(data.name, data.namespace);
 
       await imageHistoryPromise;
 
