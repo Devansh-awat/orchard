@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.7.1](https://github.com/LeafdTK/leaf/compare/frontend/v0.7.0...frontend/v0.7.1) (2026-06-29)
+
+
+### Bug Fixes
+
+* restore observe logs + http metrics after haproxy ingress switch ([47eda41](https://github.com/LeafdTK/leaf/commit/47eda417516a0d448de07eaa5d28fec3c99e260f))
+
 ## [0.7.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.6.0...frontend/v0.7.0) (2026-06-29)
 
 
