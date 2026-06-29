@@ -41,7 +41,9 @@
 		Lock,
 		Webhook,
 		GitBranch,
-		GitCommit
+		GitCommit,
+		WifiOff,
+		RotateCw
 	} from 'lucide-svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import {
@@ -1198,6 +1200,7 @@
 	// SSE connection health — declared early so the query's refetchInterval can read it.
 	let sseStatusValue = $state<'connecting' | 'connected' | 'disconnected'>('connecting');
 	const sseDisconnected = $derived(sseStatusValue === 'disconnected');
+	let sseReloadPrompt = $state(false);
 
 	// ── TanStack Query: deployment data ──
 	const TRANSIENT_DEPLOYMENT_STATUSES = new Set([
@@ -1220,7 +1223,7 @@
 			if (activePodWarnings.length > 0) return 15_000;
 			return false;
 		})(),
-		refetchIntervalInBackground: false
+		refetchIntervalInBackground: true
 	}));
 
 	/** Trigger a refetch of deployment data via TanStack Query. All call sites
@@ -2248,6 +2251,17 @@
 		});
 	});
 
+	$effect(() => {
+		if (sseStatusValue !== 'disconnected') {
+			sseReloadPrompt = false;
+			return;
+		}
+		const t = setTimeout(() => {
+			sseReloadPrompt = true;
+		}, 6000);
+		return () => clearTimeout(t);
+	});
+
 	// Reset page state when navigating to a different deployment.
 	$effect(() => {
 		if (!deploymentId) return;
@@ -2275,7 +2289,6 @@
 	let sseOrgId: string | null = null;
 	$effect(() => {
 		const orgIdForSse = $selectedOrganization?.id ?? null;
-		const depId = deploymentId;
 		untrack(() => {
 			if (orgIdForSse === sseOrgId) return;
 			sseOrgId = orgIdForSse;
@@ -2284,8 +2297,9 @@
 			sseUnsub = subscribeOrgEvents(
 				orgIdForSse,
 				(ev) => {
-					if (ev.id === depId || ev.projectId === deployment?.projectId) {
-						queryClient.invalidateQueries({ queryKey: ['deployment', depId] });
+					const currentId = deploymentId;
+					if (ev.id === currentId || ev.projectId === deployment?.projectId) {
+						queryClient.invalidateQueries({ queryKey: ['deployment', currentId] });
 					}
 				},
 				{ invalidateDependencies: [] }
@@ -2652,7 +2666,23 @@
 			: deployment.image || null}
 		{@const _commitLeadMono = !deployment.githubRepo && !!deployment.image}
 		<div class="space-y-5">
-			<!-- Header -->
+			{#if sseReloadPrompt}
+				<div class="sse-reload-banner" role="alert" transition:slide={{ duration: 150 }}>
+					<div class="sse-reload-icon"><WifiOff size={22} /></div>
+					<div class="sse-reload-body">
+						<span class="sse-reload-title">Live updates disconnected</span>
+						<span class="sse-reload-text"
+							>We lost the real-time connection and couldn't reconnect. What you're seeing
+							may be out of date — reload to get the latest.</span
+						>
+					</div>
+					<button class="sse-reload-btn" onclick={() => location.reload()}>
+						<RotateCw size={16} />
+						<span>Reload page</span>
+					</button>
+				</div>
+			{/if}
+
 			<DeploymentHeader
 				{deployment}
 				{projectBgImage}
@@ -2720,7 +2750,7 @@
 				podWarnings={activePodWarnings}
 				{resourcePressure}
 				dismissedIds={dismissedNotifications}
-				{sseDisconnected}
+				sseDisconnected={sseDisconnected && !sseReloadPrompt}
 				onDismiss={dismissNotification}
 				onViewLogs={handleViewBuildLogs}
 				onGoToResources={() => {

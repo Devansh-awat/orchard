@@ -240,14 +240,14 @@ export class ImageBuilderService {
     if (!this.buildkitBuildingDetected.has(jobName) && BUILDKIT_STEP_RE.test(chunk)) {
       this.buildkitBuildingDetected.add(jobName);
       await this.setBuildStep(deploymentId, 'building');
-      this.emitBuildChanged(deploymentId).catch(() => {});
     }
 
     if (!this.buildkitPushDetected.has(jobName) && BUILDKIT_PUSH_PHASE_RE.test(chunk)) {
       this.buildkitPushDetected.add(jobName);
       await this.setBuildStep(deploymentId, 'pushing');
-      this.emitBuildChanged(deploymentId).catch(() => {});
     }
+
+    this.emitBuildChanged(deploymentId).catch(() => {});
   }
 
   private async streamPusherOutput(deploymentId: string | undefined, jobName: string, pusherLogs: string | undefined) {
@@ -255,6 +255,7 @@ export class ImageBuilderService {
     const chunk = this.takeLogChunk(`${jobName}:pusher`, pusherLogs);
     if (chunk === null) return;
     await this.appendStreamedChunk(deploymentId, chunk);
+    this.emitBuildChanged(deploymentId).catch(() => {});
   }
 
   private takeLogChunk(offsetKey: string, fullLogs: string): string | null {
@@ -2037,7 +2038,7 @@ exit $rc`,
 
   async waitForBuildJob(jobName: string, deploymentId?: string, timeoutMs: number = 1800000): Promise<BuildJobStatus> {
     const startTime = Date.now();
-    const pollInterval = 5000;
+    const pollInterval = 3000;
     let lastLoggedStatus = '';
     let pollCount = 0;
 

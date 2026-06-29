@@ -3476,3 +3476,72 @@ a.dep-meta-lead-link:hover {
 	color: #d1d5db;
 	tab-size: 4;
 }
+
+.sse-reload-banner {
+	display: flex;
+	align-items: center;
+	gap: 1rem;
+	padding: 1rem 1.25rem;
+	border-radius: 0.875rem;
+	border: 1.5px solid color-mix(in srgb, var(--error-text-color, #ef4444) 45%, transparent);
+	background-color: color-mix(in srgb, var(--error-text-color, #ef4444) 12%, transparent);
+	color: var(--error-text-color, #ef4444);
+}
+
+.sse-reload-icon {
+	display: flex;
+	align-items: center;
+	justify-content: center;
+	flex-shrink: 0;
+}
+
+.sse-reload-body {
+	flex: 1;
+	min-width: 0;
+	display: flex;
+	flex-direction: column;
+	gap: 0.1875rem;
+}
+
+.sse-reload-title {
+	font-size: 0.9375rem;
+	font-weight: 700;
+	line-height: 1.3;
+}
+
+.sse-reload-text {
+	font-size: 0.8125rem;
+	opacity: 0.9;
+	line-height: 1.45;
+}
+
+.sse-reload-btn {
+	display: inline-flex;
+	align-items: center;
+	gap: 0.4375rem;
+	padding: 0.5rem 0.875rem;
+	border-radius: 0.5rem;
+	font-size: 0.8125rem;
+	font-weight: 700;
+	border: 1.5px solid currentColor;
+	background: none;
+	color: inherit;
+	cursor: pointer;
+	white-space: nowrap;
+	flex-shrink: 0;
+	transition: background-color 120ms;
+}
+
+.sse-reload-btn:hover {
+	background-color: color-mix(in srgb, currentColor 14%, transparent);
+}
+
+@media (max-width: 640px) {
+	.sse-reload-banner {
+		flex-wrap: wrap;
+	}
+	.sse-reload-btn {
+		width: 100%;
+		justify-content: center;
+	}
+}
