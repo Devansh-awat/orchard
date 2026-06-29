@@ -10,7 +10,7 @@
 		<Search size={14} />
 		<input
 			type="search"
-			placeholder="Search deployments..."
+			placeholder="Search apps..."
 			class="search"
 			bind:value={searchQuery}
 		/>

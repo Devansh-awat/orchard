@@ -1053,7 +1053,7 @@
 					</div>
 					<p class="observe-empty-title">All clear!</p>
 					<p class="observe-empty-desc">
-						No errors in the selected time window &mdash; your deployment is running clean
+						No errors in the selected time window &mdash; your app is running clean
 					</p>
 				</div>
 			{:else}

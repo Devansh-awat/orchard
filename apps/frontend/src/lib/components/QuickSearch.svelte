@@ -93,6 +93,8 @@
 		switch (type) {
 			case 'templateInstance':
 				return 'template';
+			case 'deployment':
+				return 'app';
 			default:
 				return type;
 		}
@@ -427,7 +429,7 @@
 					<input
 						type="text"
 						class="quick-search-input"
-						placeholder="Search projects, deployments, databases…"
+						placeholder="Search projects, apps, databases…"
 						bind:value={query}
 					/>
 					{#if query}

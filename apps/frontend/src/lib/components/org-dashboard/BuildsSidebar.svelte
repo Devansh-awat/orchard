@@ -23,7 +23,7 @@
 </script>
 
 <aside class="aside">
-	<h2 class="label aside-label">Recent Builds</h2>
+	<h2 class="label aside-label">Recent Deployments</h2>
 	{#if buildsLoading}
 		{#each Array(3) as _}
 			<div class="bld bld--skel">
@@ -35,7 +35,7 @@
 			</div>
 		{/each}
 	{:else if activeBuilds.length === 0 && recentBuilds.length === 0}
-		<p class="aside-empty">No recent builds</p>
+		<p class="aside-empty">No recent deployments</p>
 	{:else}
 		{#each activeBuilds as b, i (b.id)}
 			{@const ic = buildIcon(b.image, b.ingresses, b.id, failedFav, b.faviconUrl)}

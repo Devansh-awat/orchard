@@ -58,7 +58,7 @@
 		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
 		role="dialog"
 		aria-modal="true"
-		aria-label="Build progress"
+		aria-label="Deployment progress"
 		onclick={(e) => {
 			if (e.target === e.currentTarget) onMinimizeBuildModal();
 		}}
@@ -88,7 +88,7 @@
 				style="border-color: var(--surface-border);"
 			>
 				<div class="flex items-center gap-3">
-					<h2 class="text-lg font-semibold">Rebuilding {deployment?.name ?? 'deployment'}</h2>
+					<h2 class="text-lg font-semibold">Redeploying {deployment?.name ?? 'app'}</h2>
 					<div class="flex items-center gap-1.5 text-sm" style="color: var(--surface-muted);">
 						<Clock size={14} class="h-3.5 w-3.5" />
 						<AnimatedNumber value={buildElapsed} format={formatBuildElapsed} class="font-mono" />
@@ -129,7 +129,7 @@
 							Cancelling...
 						{:else}
 							<X size={14} />
-							Cancel build
+							Cancel deployment
 						{/if}
 					</button>
 				{/if}
@@ -164,7 +164,7 @@
 				{:else if buildModalStatus === 'running'}
 					<Check size={16} class="h-4 w-4 shrink-0 text-green-500" />
 				{/if}
-				<span class="truncate text-sm font-medium">{deployment?.name ?? 'Build'}</span>
+				<span class="truncate text-sm font-medium">{deployment?.name ?? 'App'}</span>
 			</div>
 			<div class="flex items-center gap-2 shrink-0">
 				<div class="flex items-center gap-1 text-xs font-mono" style="color: var(--surface-muted);">
@@ -195,14 +195,14 @@
 							: buildModalStep === 'pushing'
 								? 'Pushing image...'
 								: buildModalStep === 'deploying'
-									? 'Creating deployment...'
+									? 'Creating app...'
 									: 'Building...'}
 				{:else if buildModalStatus === 'pending'}
-					Starting build...
+					Starting deployment...
 				{:else if buildModalStatus === 'failed'}
-					Build failed
+					Deployment failed
 				{:else if buildModalStatus === 'running'}
-					Build complete
+					Deployment complete
 				{/if}
 			</p>
 		</div>

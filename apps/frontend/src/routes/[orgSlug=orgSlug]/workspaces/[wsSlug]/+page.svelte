@@ -539,7 +539,7 @@
 								<span class="ws-project-deploy-count">
 									{project._count?.deployments ?? 0}
 								</span>
-								<span>deployments</span>
+								<span>apps</span>
 							</div>
 						</div>
 						<div class="ws-project-card-body">

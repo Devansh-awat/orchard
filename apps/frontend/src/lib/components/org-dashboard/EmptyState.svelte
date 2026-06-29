@@ -42,7 +42,7 @@
 		</p>
 		{#if canCreateProjects}
 			<a href="/{orgSlug}/new" class="btn-primary" style="margin-top:0.5rem"
-				><Plus size={15} /> New Deployment</a
+				><Plus size={15} /> New App</a
 			>
 		{/if}
 	</div>

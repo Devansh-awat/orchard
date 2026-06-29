@@ -546,7 +546,7 @@
 		}
 
 		if (!name.trim()) {
-			formError = 'Deployment name is required';
+			formError = 'App name is required';
 			return;
 		}
 
@@ -669,13 +669,13 @@
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to create deployment');
+				throw new Error(data.message || 'Failed to create app');
 			}
 
 			const deployment = await response.json();
 
 			toasts.add({
-				title: 'Deployment created',
+				title: 'App created',
 				description:
 					deploymentSource === 'github' ? 'Building image from GitHub...' : 'Provisioning started',
 				color: 'success'
@@ -689,7 +689,7 @@
 				goto(`/${orgSlug}/deployments/${deployment.id}`);
 			}
 		} catch (e) {
-			formError = e instanceof Error ? e.message : 'Failed to create deployment';
+			formError = e instanceof Error ? e.message : 'Failed to create app';
 		} finally {
 			submitting = false;
 		}
@@ -746,7 +746,7 @@
 		</div>
 	{:else if project}
 		<div class="nd-hero" {@attach motionStagger({ index: 0, from: { y: 12 } })}>
-			<h1 class="nd-page-title">New Deployment</h1>
+			<h1 class="nd-page-title">New App</h1>
 			<p class="nd-page-subtitle">Configure and launch a new service.</p>
 		</div>
 
@@ -780,7 +780,7 @@
 					onPendingProjectChange={(n) => (pendingProjectName = n)}
 				/>
 				<span class="nd-slash">/</span>
-				<input type="text" bind:value={name} placeholder="deployment-name" class="nd-name-input" />
+				<input type="text" bind:value={name} placeholder="app-name" class="nd-name-input" />
 			</div>
 
 			<div class="nd-card-body">

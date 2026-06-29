@@ -735,7 +735,7 @@
 	<ConfirmModal
 		bind:open={showDeleteModal}
 		title={`Delete "${project.name}"?`}
-		description="This will permanently <strong>delete this project</strong> and all its resources (deployments, databases, ingresses). This cannot be undone."
+		description="This will permanently <strong>delete this project</strong> and all its resources (apps, databases, ingresses). This cannot be undone."
 		confirmLabel="Delete Project"
 		onconfirm={deleteProject}
 		oncancel={() => {}}

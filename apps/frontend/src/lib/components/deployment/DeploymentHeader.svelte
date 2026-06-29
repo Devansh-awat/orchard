@@ -202,7 +202,7 @@
 												</div>
 												<div class="flex-1 min-w-0">
 													<p class="text-xs font-semibold" style="color: var(--error-text-color);">
-														Build failed
+														Deployment failed
 													</p>
 													{#if deployment.buildError}
 														<p
@@ -219,7 +219,7 @@
 															onclick={() => {
 																notificationsOpen = false;
 																onViewBuildLogs();
-															}}>View build logs</button
+															}}>View deployment logs</button
 														>
 													{/if}
 												</div>
@@ -426,7 +426,7 @@
 			{#if _buildFailed && (deployment.buildLogs || deployment.buildError)}
 				<span class="dep-meta-dot">·</span>
 				<button class="dep-meta-link dep-meta-button" onclick={onViewBuildLogs}
-					>View build logs</button
+					>View deployment logs</button
 				>
 			{/if}
 		</p>

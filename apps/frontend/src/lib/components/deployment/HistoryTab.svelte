@@ -66,7 +66,7 @@
 					</div>
 					<div class="dep-col-commit">
 						<div class="dep-commit-stack">
-							<span class="dep-commit-msg dep-commit-msg--muted">Build in progress…</span>
+							<span class="dep-commit-msg dep-commit-msg--muted">Deployment in progress…</span>
 							<div class="dep-commit-meta">
 								<span class="dep-mini-chip"
 									><GitBranch class="h-2.5 w-2.5" />{deployment.githubBranch || 'main'}</span
@@ -99,7 +99,7 @@
 					</div>
 					<div class="dep-col-commit">
 						<div class="dep-commit-stack">
-							<span class="dep-commit-msg" style="color: #ef4444;">Build failed</span>
+							<span class="dep-commit-msg" style="color: #ef4444;">Deployment failed</span>
 							{#if deployment.buildError}
 								<div class="dep-commit-meta">
 									<span
@@ -122,7 +122,7 @@
 					</div>
 					<div class="dep-col-actions">
 						{#if deployment.buildLogs || deployment.buildError}
-							<button onclick={onViewBuildLogs} class="dep-action-btn" title="View build logs">
+							<button onclick={onViewBuildLogs} class="dep-action-btn" title="View deployment logs">
 								<Terminal size={14} class="h-3.5 w-3.5" />
 							</button>
 						{/if}
@@ -183,7 +183,7 @@
 									>Deployed from {history.branch}</span
 								>
 							{:else}
-								<span class="dep-commit-msg dep-commit-msg--muted">Image build</span>
+								<span class="dep-commit-msg dep-commit-msg--muted">Image deployment</span>
 							{/if}
 							<div class="dep-commit-meta">
 								{#if history.branch}
@@ -272,7 +272,7 @@
 				{#if deployment.githubRepo}
 					Push a commit to {deployment.githubBranch || 'main'} to trigger your first deployment.
 				{:else}
-					Builds will appear here after your first deploy.
+					Deployments will appear here after your first deploy.
 				{/if}
 			</p>
 		</div>

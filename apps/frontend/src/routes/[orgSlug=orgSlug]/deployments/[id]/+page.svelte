@@ -565,7 +565,7 @@
 	);
 	const notificationLabel = $derived(
 		buildFailedActive
-			? 'Build failed'
+			? 'Deployment failed'
 			: activePodWarnings.length === 1
 				? 'Pod warning'
 				: activePodWarnings.length > 1
@@ -581,7 +581,7 @@
 		const s = (deployment?.status ?? '').toLowerCase();
 		if (bs === 'building' || bs === 'pending')
 			return { label: 'Building', tone: 'info' as StatusTone };
-		if (bs === 'failed') return { label: 'Build failed', tone: 'error' as StatusTone };
+		if (bs === 'failed') return { label: 'Deployment failed', tone: 'error' as StatusTone };
 		if (!s) return { label: 'Unknown', tone: 'neutral' as StatusTone };
 		if (s === 'running') return { label: 'Running', tone: 'success' as StatusTone };
 		if (s === 'pending') return { label: 'Pending', tone: 'warning' as StatusTone };
@@ -1151,11 +1151,11 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to cancel build');
+				throw new Error(data.message || 'Failed to cancel deployment');
 			}
 			toasts.add({
-				title: 'Build cancelled',
-				description: 'The build has been cancelled successfully',
+				title: 'Deployment cancelled',
+				description: 'The deployment has been cancelled successfully',
 				color: 'success'
 			});
 			stopBuildPolling();
@@ -1167,7 +1167,7 @@
 		} catch (e) {
 			toasts.add({
 				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to cancel build',
+				description: e instanceof Error ? e.message : 'Failed to cancel deployment',
 				color: 'error'
 			});
 		} finally {
@@ -1242,7 +1242,7 @@
 		untrack(() => {
 			if (qPending && !lastQueryData) return; // still loading initial
 			if (qError && !deployment) {
-				error = qError instanceof Error ? qError.message : 'Failed to fetch deployment';
+				error = qError instanceof Error ? qError.message : 'Failed to fetch app';
 				loading = false;
 				return;
 			}
@@ -1475,10 +1475,10 @@
 				method: 'POST'
 			});
 			if (!response.ok) {
-				throw new Error('Failed to restart deployment');
+				throw new Error('Failed to restart app');
 			}
 			toasts.add({
-				title: 'Deployment restarting',
+				title: 'App restarting',
 				description:
 					deployment?.deployStrategy === 'recreate'
 						? 'Recreate restart initiated'
@@ -1506,10 +1506,10 @@
 				body: JSON.stringify({ replicas: scaleReplicas })
 			});
 			if (!response.ok) {
-				throw new Error('Failed to scale deployment');
+				throw new Error('Failed to scale app');
 			}
 			toasts.add({
-				title: 'Deployment scaled',
+				title: 'App scaled',
 				description: `Scaled to ${scaleReplicas} replica(s)`,
 				color: 'success'
 			});
@@ -1533,10 +1533,10 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to rebuild deployment');
+				throw new Error(data.message || 'Failed to redeploy');
 			}
 			toasts.add({
-				title: 'Rebuild started',
+				title: 'Deployment started',
 				description: 'Building new image from repository',
 				color: 'success'
 			});
@@ -1555,7 +1555,7 @@
 		} catch (e) {
 			toasts.add({
 				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to rebuild',
+				description: e instanceof Error ? e.message : 'Failed to redeploy',
 				color: 'error'
 			});
 		} finally {
@@ -1572,10 +1572,10 @@
 			});
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to delete deployment');
+				throw new Error(data.message || 'Failed to delete app');
 			}
 			toasts.add({
-				title: 'Deployment deleted',
+				title: 'App deleted',
 				color: 'success'
 			});
 			refreshTree();
@@ -1804,13 +1804,13 @@
 			const response = await apiFetch(
 				`/apiv1/deployments/${deploymentId}/image-history/${historyId}/logs`
 			);
-			if (!response.ok) throw new Error('Failed to fetch build logs');
+			if (!response.ok) throw new Error('Failed to fetch deployment logs');
 			const data = await response.json();
 			const logs = data.logs || 'No logs available.';
 			buildLogCache[historyId] = logs;
 			logModalContent = logs;
 		} catch {
-			const fallback = 'Failed to load build logs.';
+			const fallback = 'Failed to load deployment logs.';
 			buildLogCache[historyId] = fallback;
 			logModalContent = fallback;
 		} finally {
@@ -2591,7 +2591,7 @@
 			<Breadcrumb
 				crumbs={[
 					{ label: 'Home', href: `/${orgSlug}` },
-					{ label: deployment?.name || 'Deployment' }
+					{ label: deployment?.name || 'App' }
 				]}
 			/>
 		</div>
@@ -2659,9 +2659,9 @@
 			? _activeBuild
 				? _activeBuild.commitMessage || _activeFallbackMsg || null
 				: _isBuilding
-					? `Building from ${deployment.githubBranch || 'main'}…`
+					? `Deploying from ${deployment.githubBranch || 'main'}…`
 					: _buildFailed
-						? 'Last build failed'
+						? 'Last deployment failed'
 						: null
 			: deployment.image || null}
 		{@const _commitLeadMono = !deployment.githubRepo && !!deployment.image}
@@ -2989,8 +2989,8 @@
 	<ConfirmModal
 		bind:open={showDeleteModal}
 		title={`Delete "${deployment.name}"?`}
-		description="This will permanently <strong>delete this deployment</strong> and all its associated services and ingresses. This cannot be undone."
-		confirmLabel="Delete Deployment"
+		description="This will permanently <strong>delete this app</strong> and all its associated services and ingresses. This cannot be undone."
+		confirmLabel="Delete App"
 		onconfirm={deleteDeployment}
 		oncancel={() => {}}
 	/>
@@ -3026,7 +3026,7 @@
 						class="h-4 w-4"
 						style="color: var(--sidebar-text, #e0e0e0); opacity: 0.5;"
 					/>
-					<p class="log-modal-title">Build Logs</p>
+					<p class="log-modal-title">Deployment Logs</p>
 				</div>
 				<button class="log-modal-close" onclick={closeLogModal}>
 					<X class="h-4 w-4" />

@@ -756,7 +756,7 @@ resources:
 								style="max-width: 10rem"
 								bind:value={res.type}
 							>
-								<option value="deployment">Deployment</option>
+								<option value="deployment">App</option>
 								<option value="database">Database</option>
 								<option value="ingress">Ingress</option>
 							</select>

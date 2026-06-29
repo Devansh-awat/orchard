@@ -33,7 +33,7 @@
 <SettingsSection
 	{index}
 	title="Tailscale"
-	description="Access your deployments on your private network"
+	description="Access your apps on your private network"
 >
 	{#snippet icon(_hovered)}<Globe class="h-[18px] w-[18px]" />{/snippet}
 	{#snippet badge()}
@@ -69,7 +69,7 @@
 						>
 					</li>
 					<li>Click <strong>Generate auth key</strong></li>
-					<li>Enable <strong>Reusable</strong> so it can be used for multiple deployments</li>
+					<li>Enable <strong>Reusable</strong> so it can be used for multiple apps</li>
 					<li>Set expiration to <strong>90 days</strong> (max)</li>
 					<li>Enable <strong>Ephemeral</strong> so nodes auto-remove when deployments stop</li>
 					<li>Leave <strong>Tags</strong> empty</li>

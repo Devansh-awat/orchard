@@ -391,7 +391,7 @@
 			<div class="pj-stat">
 				<Boxes class="h-4 w-4" />
 				<span class="pj-stat-value">{project.deployments?.length ?? 0}</span>
-				<span class="pj-stat-label">Deployments</span>
+				<span class="pj-stat-label">Apps</span>
 			</div>
 			{#if project.namespace}
 				<div class="pj-stat">
@@ -412,15 +412,15 @@
 			{/if}
 		</div>
 
-		<!-- Deployments -->
+		<!-- Apps -->
 		<div class="pj-deployments-header">
-			<h2 class="pj-section-title">Deployments</h2>
+			<h2 class="pj-section-title">Apps</h2>
 			<div class="pj-deployments-toolbar">
 				{#if project.deployments?.length}
 					<div class="pj-deployment-search-bar" {...deploymentMenu.root}>
 						<input
 							type="search"
-							placeholder="Search deployments..."
+							placeholder="Search apps..."
 							class="pj-search-input"
 							bind:value={deploymentSearch}
 							{...deploymentMenu.input}
@@ -437,7 +437,7 @@
 		{#if !project.deployments?.length}
 			<div class="pj-empty-card">
 				<span style:color="var(--surface-muted)"><Server class="h-10 w-10" /></span>
-				<p>No deployments yet</p>
+				<p>No apps yet</p>
 				<button
 					class="pj-btn pj-btn-primary pj-btn-mt"
 					onclick={() => (showNewResourceModal = true)}
@@ -470,7 +470,7 @@
 							</span>
 							{#if deployment.buildStatus && deployment.buildStatus !== 'none' && deployment.buildStatus !== 'succeeded'}
 								<span class="pj-deployment-build-badge pj-build-{deployment.buildStatus}">
-									Build: {deployment.buildStatus === 'building'
+									Deploy: {deployment.buildStatus === 'building'
 										? 'Building'
 										: deployment.buildStatus === 'failed'
 											? 'Failed'
@@ -502,7 +502,7 @@
 			</div>
 		{:else}
 			<div class="pj-empty-card">
-				<p>No deployments match "{deploymentSearch}"</p>
+				<p>No apps match "{deploymentSearch}"</p>
 			</div>
 		{/if}
 
@@ -600,7 +600,7 @@
 	<ConfirmModal
 		bind:open={showDeleteModal}
 		title={`Delete "${project.name}"?`}
-		description="This will permanently <strong>delete this project</strong> and all its resources (deployments, databases, ingresses). This cannot be undone."
+		description="This will permanently <strong>delete this project</strong> and all its resources (apps, databases, ingresses). This cannot be undone."
 		confirmLabel="Delete Project"
 		onconfirm={deleteProject}
 		oncancel={() => {}}

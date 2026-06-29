@@ -38,13 +38,13 @@
 		try {
 			const res = await apiFetch(`/apiv1/auth/protect/info?ingressId=${ingressId}`);
 			if (!res.ok) {
-				error = 'This deployment is not protected or does not exist.';
+				error = 'This app is not protected or does not exist.';
 				loading = false;
 				return;
 			}
 			info = await res.json();
 		} catch {
-			error = 'Failed to load deployment info.';
+			error = 'Failed to load app info.';
 		}
 
 		await user.fetchUser();
@@ -68,7 +68,7 @@
 			});
 
 			if (res.status === 403) {
-				error = "You don't have access to this deployment.";
+				error = "You don't have access to this app.";
 				exchanging = false;
 				return;
 			}

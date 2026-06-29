@@ -42,7 +42,7 @@
 		try {
 			const response = await apiFetch(`/apiv1/deployments/${deploymentId}`);
 			if (!response.ok) {
-				throw new Error('Failed to fetch deployment');
+				throw new Error('Failed to fetch app');
 			}
 			const data = await response.json();
 
@@ -59,7 +59,7 @@
 			}
 		} catch (e) {
 			if (!deployment) {
-				error = e instanceof Error ? e.message : 'Failed to fetch deployment';
+				error = e instanceof Error ? e.message : 'Failed to fetch app';
 			}
 		} finally {
 			loading = false;
@@ -91,12 +91,12 @@
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				throw new Error(data.message || 'Failed to cancel build');
+				throw new Error(data.message || 'Failed to cancel deployment');
 			}
 
 			toasts.add({
-				title: 'Build cancelled',
-				description: 'The build has been cancelled successfully',
+				title: 'Deployment cancelled',
+				description: 'The deployment has been cancelled successfully',
 				color: 'success'
 			});
 
@@ -104,7 +104,7 @@
 		} catch (e) {
 			toasts.add({
 				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to cancel build',
+				description: e instanceof Error ? e.message : 'Failed to cancel deployment',
 				color: 'error'
 			});
 		} finally {
@@ -132,7 +132,7 @@
 		{:else if loading}
 			<div class="flex flex-col items-center justify-center py-16">
 				<Loader2 class="h-12 w-12 animate-spin text-primary-600" />
-				<p class="mt-4 muted-text">Loading deployment...</p>
+				<p class="mt-4 muted-text">Loading app...</p>
 			</div>
 		{:else if deployment}
 			<div class="card rounded-2xl p-8 shadow-lg">
@@ -186,7 +186,7 @@
 								Cancelling...
 							{:else}
 								<X class="h-4 w-4" />
-								Cancel build
+								Cancel deployment
 							{/if}
 						</button>
 					{/if}
@@ -195,7 +195,7 @@
 							Back to project
 						</button>
 						<a href="/{orgSlug}/deployments/{deployment.id}" class="btn btn-primary">
-							View deployment
+							View app
 						</a>
 					{/if}
 				</div>
@@ -203,7 +203,7 @@
 
 			<div class="mt-6 text-center text-sm muted-text">
 				{#if deployment.status === 'building' || deployment.status === 'pending'}
-					<p>You'll be redirected automatically when the deployment is ready.</p>
+					<p>You'll be redirected automatically when the app is ready.</p>
 				{/if}
 			</div>
 		{/if}

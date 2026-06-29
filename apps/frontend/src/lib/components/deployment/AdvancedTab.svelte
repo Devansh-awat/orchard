@@ -141,7 +141,7 @@
 			<div class="strategy-note mt-3">
 				<TriangleAlert class="h-3.5 w-3.5 shrink-0" />
 				<span
-					>This deployment has a PVC volume, so rolling updates are unavailable. Pods can't share a
+					>This app has a PVC volume, so rolling updates are unavailable. Pods can't share a
 					ReadWriteOnce volume during a rolling cutover.</span
 				>
 			</div>
@@ -221,7 +221,7 @@
 			{/if}
 		{:else}
 			<p class="text-xs" style="color: var(--surface-muted);">
-				Build settings are only available for GitHub deployments.
+				Build settings are only available for apps deployed from GitHub.
 			</p>
 		{/if}
 	</div>
@@ -388,7 +388,7 @@
 			{/if}
 		{:else}
 			<p class="text-xs" style="color: var(--surface-muted);">
-				Only available for GitHub deployments.
+				Only available for apps deployed from GitHub.
 			</p>
 		{/if}
 	</div>

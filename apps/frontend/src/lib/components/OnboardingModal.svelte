@@ -391,7 +391,7 @@
 											class="mt-1 flex h-4 w-4 shrink-0 items-center justify-center rounded-full bg-primary-600 text-xs text-white"
 											>2</span
 										>
-										Add a project and configure your deployment
+										Add a project and configure your app
 									</li>
 									<li class="flex items-start gap-2">
 										<span

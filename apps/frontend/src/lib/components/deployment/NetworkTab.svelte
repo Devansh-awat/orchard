@@ -257,7 +257,7 @@
 				<p class="text-xs" style="color: var(--surface-muted);">
 					Connect your Tailscale account in <a href="/user/settings" class="underline"
 						>user settings</a
-					> to expose deployments to your private network.
+					> to expose apps to your private network.
 				</p>
 			{/if}
 		</div>
@@ -644,7 +644,7 @@
 							a different path below.
 						{:else if newDomainConflict.otherDeployment}
 							<strong>Sharing domain.</strong>
-							{newDomainNormalizedHost} already routes to another deployment. Traffic to
+							{newDomainNormalizedHost} already routes to another app. Traffic to
 							<code>{newDomainNormalizedPath}</code> will be added to the existing ingress.
 						{:else}
 							Adding <code>{newDomainNormalizedPath}</code> to the existing {newDomainNormalizedHost}
@@ -764,7 +764,7 @@
 								transition:slide={{ duration: 150 }}
 							>
 								<p class="text-xs font-medium mb-2" style="color: var(--center-channel-color);">
-									Deployment Protection
+									App Protection
 								</p>
 								<div class="flex flex-col gap-2">
 									<label

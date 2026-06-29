@@ -97,17 +97,17 @@
 		{ id: 'pushing', label: 'Pushing image', description: 'Uploading to container registry' },
 		{
 			id: 'deploying',
-			label: 'Creating deployment',
+			label: 'Creating app',
 			description: 'Setting up Kubernetes resources'
 		},
-		{ id: 'complete', label: 'Done', description: 'Deployment is ready' }
+		{ id: 'complete', label: 'Done', description: 'App is ready' }
 	];
 
 	// Define steps for image-based deployments
 	const imageSteps = [
 		{
 			id: 'deploying',
-			label: 'Creating deployment',
+			label: 'Creating app',
 			description: 'Setting up Kubernetes resources'
 		},
 		{ id: 'service', label: 'Creating service', description: 'Configuring network access' },
@@ -169,18 +169,18 @@
 			{/if}
 			<span class="text-sm font-medium">
 				{#if buildStatus === 'failed'}
-					Build failed
+					Deployment failed
 				{:else if buildStatus === 'succeeded'}
 					{#if totalDurationSeconds !== null}
-						Build completed in <AnimatedNumber
+						Deployment completed in <AnimatedNumber
 							value={totalDurationSeconds}
 							format={formatDuration}
 						/>
 					{:else}
-						Build succeeded
+						Deployment succeeded
 					{/if}
 				{:else}
-					Deployment ready
+					App ready
 				{/if}
 			</span>
 		</div>
@@ -295,10 +295,10 @@
 			>
 				{#if showLogs}
 					<ChevronUp class="h-4 w-4" />
-					{buildStatus === 'failed' ? 'Hide last build logs' : 'Hide logs'}
+					{buildStatus === 'failed' ? 'Hide last deployment logs' : 'Hide logs'}
 				{:else}
 					<ChevronDown class="h-4 w-4" />
-					{buildStatus === 'failed' ? 'Show last build logs' : 'Show logs'}
+					{buildStatus === 'failed' ? 'Show last deployment logs' : 'Show logs'}
 				{/if}
 			</button>
 

@@ -99,7 +99,7 @@ export class TailscaleController {
 			this.dns = null;
 			toasts.add({
 				title: 'Tailscale removed',
-				description: 'Deployment is no longer exposed to Tailscale',
+				description: 'App is no longer exposed to Tailscale',
 				color: 'success'
 			});
 			this.#deps.refetch();

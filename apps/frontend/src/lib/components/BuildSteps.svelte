@@ -157,7 +157,7 @@
 			{:else}
 				<div class="bs-empty">
 					{#if parsed.steps.length === 0}
-						Waiting for build output…
+						Waiting for deployment output…
 					{:else}
 						No steps match "{filter}".
 					{/if}

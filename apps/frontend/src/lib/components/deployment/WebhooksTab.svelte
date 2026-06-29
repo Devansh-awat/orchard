@@ -232,7 +232,7 @@
 						<span style="color: var(--surface-muted);"
 							><RefreshCw size={14} class="h-3.5 w-3.5" /></span
 						>
-						<span class="wh-example-title">Restart deployment</span>
+						<span class="wh-example-title">Restart app</span>
 					</div>
 					<span class="wh-example-method">POST</span>
 				</summary>

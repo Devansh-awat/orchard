@@ -103,7 +103,7 @@
 {#if !hasAnyDeployments && databases.length === 0 && templateInstances.length === 0}
 	<div class="pj-empty-card">
 		<span style:color="var(--surface-muted)"><Server class="h-10 w-10" /></span>
-		<p>No deployments yet</p>
+		<p>No apps yet</p>
 		<button class="pj-btn pj-btn-primary pj-btn-mt" onclick={onNewResource}>
 			<Plus class="h-4 w-4" />
 			Create Resource
@@ -149,7 +149,7 @@
 						</span>
 						{#if deployment.buildStatus && deployment.buildStatus !== 'none' && deployment.buildStatus !== 'succeeded'}
 							<span class="pj-deployment-build-badge pj-build-{deployment.buildStatus}">
-								Build: {deployment.buildStatus === 'building'
+								Deploy: {deployment.buildStatus === 'building'
 									? 'Building'
 									: deployment.buildStatus === 'failed'
 										? 'Failed'
@@ -177,7 +177,7 @@
 						{deployment.replicas} replica{deployment.replicas !== 1 ? 's' : ''}
 					</span>
 					{#if formatBuildDuration(deployment)}
-						<span class="pj-deployment-meta">Built in {formatBuildDuration(deployment)}</span>
+						<span class="pj-deployment-meta">Deployed in {formatBuildDuration(deployment)}</span>
 					{/if}
 					{#if getDeploymentAuthor(deployment)}
 						<span class="pj-deployment-meta">{getDeploymentAuthor(deployment)}</span>
@@ -188,7 +188,7 @@
 	</div>
 {:else if deploymentSearch.trim()}
 	<div class="pj-empty-card">
-		<p>No deployments match "{deploymentSearch}"</p>
+		<p>No apps match "{deploymentSearch}"</p>
 	</div>
 {/if}
 

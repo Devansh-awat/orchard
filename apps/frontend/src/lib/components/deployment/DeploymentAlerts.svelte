@@ -77,11 +77,11 @@
 			items.push({
 				id: 'build-failed',
 				severity: 'critical',
-				title: 'Build failed',
+				title: 'Deployment failed',
 				hint: buildError
 					? buildError.split('\n')[0].slice(0, 200)
-					: 'The last build did not complete successfully.',
-				action: 'View build logs',
+					: 'The last deployment did not complete successfully.',
+				action: 'View deployment logs',
 				onAction: onViewLogs,
 				flash: true
 			});
@@ -92,7 +92,7 @@
 			items.push({
 				id: 'no-pods-ready',
 				severity: 'critical',
-				title: 'Deployment is down',
+				title: 'App is down',
 				hint: 'No pods are running. Your app is not serving traffic.',
 				flash: true
 			});

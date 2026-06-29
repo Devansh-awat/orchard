@@ -701,7 +701,7 @@
 					</div>
 					<div class="hp-stat-info">
 						<span class="hp-stat-value">{deploymentCount}</span>
-						<span class="hp-stat-label">Deployments</span>
+						<span class="hp-stat-label">Apps</span>
 					</div>
 				</div>
 				<div class="hp-stat">
