@@ -8,8 +8,8 @@ export type SeriesPoint = { x: number; y: number };
 export type HttpMetricsSeries = {
   requestRate: SeriesPoint[];
   errorRate: SeriesPoint[];
-  latencyP50: SeriesPoint[];
-  latencyP95: SeriesPoint[];
+  latencyAvg: SeriesPoint[];
+  latencyMax: SeriesPoint[];
 };
 
 export type LogEntry = {
@@ -60,7 +60,7 @@ export type DeploymentOverview = {
   memoryPercent: number | null;
   httpRequestRate: number | null;
   httpErrorRate: number | null;
-  httpP95Latency: number | null;
+  httpAvgLatency: number | null;
 };
 
 @Injectable()
@@ -97,9 +97,9 @@ export class ObservabilityService {
     endMs: number,
     stepMs: number,
   ): Promise<HttpMetricsSeries> {
-    const hubbleSelector = await this.buildHubbleSelector(deploymentId);
-    if (!hubbleSelector) {
-      return { requestRate: [], errorRate: [], latencyP50: [], latencyP95: [] };
+    const selector = await this.buildHaproxySelector(deploymentId);
+    if (!selector) {
+      return { requestRate: [], errorRate: [], latencyAvg: [], latencyMax: [] };
     }
 
     const startSec = Math.floor(startMs / 1000);
@@ -107,21 +107,23 @@ export class ObservabilityService {
     const stepSec = Math.max(1, Math.round(stepMs / 1000));
     const rateWin = Math.max(60, stepSec * 2);
 
+    // HAProxy ingress exposes per-backend response counters and response-time
+    // gauges (no native histogram), so latency is avg + max, not p50/p95.
     const queries = {
-      requestRate: `sum(rate(hubble_http_requests_total{${hubbleSelector}}[${rateWin}s]))`,
-      errorRate: `sum(rate(hubble_http_requests_total{${hubbleSelector},status_code=~"5.."}[${rateWin}s]))`,
-      latencyP50: `histogram_quantile(0.50, sum(rate(hubble_http_request_duration_seconds_bucket{${hubbleSelector}}[${rateWin}s])) by (le)) * 1000`,
-      latencyP95: `histogram_quantile(0.95, sum(rate(hubble_http_request_duration_seconds_bucket{${hubbleSelector}}[${rateWin}s])) by (le)) * 1000`,
+      requestRate: `sum(rate(haproxy_backend_http_responses_total{${selector}}[${rateWin}s]))`,
+      errorRate: `100 * sum(rate(haproxy_backend_http_responses_total{${selector},code="5xx"}[${rateWin}s])) / clamp_min(sum(rate(haproxy_backend_http_responses_total{${selector}}[${rateWin}s])), 1)`,
+      latencyAvg: `max(haproxy_backend_response_time_average_seconds{${selector}}) * 1000`,
+      latencyMax: `max(haproxy_backend_max_response_time_seconds{${selector}}) * 1000`,
     };
 
-    const [requestRate, errorRate, latencyP50, latencyP95] = await Promise.all([
+    const [requestRate, errorRate, latencyAvg, latencyMax] = await Promise.all([
       this.queryRange(queries.requestRate, startSec, endSec, stepSec),
       this.queryRange(queries.errorRate, startSec, endSec, stepSec),
-      this.queryRange(queries.latencyP50, startSec, endSec, stepSec),
-      this.queryRange(queries.latencyP95, startSec, endSec, stepSec),
+      this.queryRange(queries.latencyAvg, startSec, endSec, stepSec),
+      this.queryRange(queries.latencyMax, startSec, endSec, stepSec),
     ]);
 
-    return { requestRate, errorRate, latencyP50, latencyP95 };
+    return { requestRate, errorRate, latencyAvg, latencyMax };
   }
 
   async getStructuredLogs(
@@ -198,7 +200,10 @@ export class ObservabilityService {
       select: { restartCount: true, status: true },
     });
 
-    const activePods = pods.filter((p) => p.status !== 'Succeeded' && p.status !== 'Failed');
+    const activePods = pods.filter((p) => {
+      const s = p.status?.toLowerCase();
+      return s !== 'succeeded' && s !== 'failed';
+    });
     const restarts = pods.reduce((sum, p) => sum + p.restartCount, 0);
 
     const ns = escapeLabel(deployment.namespace);
@@ -225,21 +230,21 @@ export class ObservabilityService {
 
     let httpRequestRate: number | null = null;
     let httpErrorRate: number | null = null;
-    let httpP95Latency: number | null = null;
+    let httpAvgLatency: number | null = null;
 
-    const hubbleSelector = await this.buildHubbleSelector(deploymentId);
-    if (hubbleSelector) {
+    const selector = await this.buildHaproxySelector(deploymentId);
+    if (selector) {
       const rateWin = 60;
 
-      [httpRequestRate, httpErrorRate, httpP95Latency] = await Promise.all([
+      [httpRequestRate, httpErrorRate, httpAvgLatency] = await Promise.all([
         this.queryInstant(
-          `sum(rate(hubble_http_requests_total{${hubbleSelector}}[${rateWin}s]))`,
+          `sum(rate(haproxy_backend_http_responses_total{${selector}}[${rateWin}s]))`,
         ),
         this.queryInstant(
-          `sum(rate(hubble_http_requests_total{${hubbleSelector},status_code=~"5.."}[${rateWin}s]))`,
+          `100 * sum(rate(haproxy_backend_http_responses_total{${selector},code="5xx"}[${rateWin}s])) / clamp_min(sum(rate(haproxy_backend_http_responses_total{${selector}}[${rateWin}s])), 1)`,
         ),
         this.queryInstant(
-          `histogram_quantile(0.95, sum(rate(hubble_http_request_duration_seconds_bucket{${hubbleSelector}}[${rateWin}s])) by (le)) * 1000`,
+          `max(haproxy_backend_response_time_average_seconds{${selector}}) * 1000`,
         ),
       ]);
     }
@@ -252,7 +257,7 @@ export class ObservabilityService {
       memoryPercent,
       httpRequestRate,
       httpErrorRate,
-      httpP95Latency,
+      httpAvgLatency,
     };
   }
 
@@ -410,15 +415,35 @@ export class ObservabilityService {
     return { errors };
   }
 
-  private async buildHubbleSelector(deploymentId: string): Promise<string | null> {
-    const deployment = await this.prisma.deployment.findUnique({
-      where: { id: deploymentId },
-      select: { name: true, namespace: true },
-    });
+  // HAProxy ingress names each backend `<namespace>_svc_<service>_<portname>`.
+  // Build a `proxy=~` selector covering every service the deployment exposes
+  // through an ingress (namespace and service names are DNS-safe, so `_` is an
+  // unambiguous delimiter and `.+` captures any port suffix).
+  private async buildHaproxySelector(deploymentId: string): Promise<string | null> {
+    const [deployment, services, ingresses] = await Promise.all([
+      this.prisma.deployment.findUnique({
+        where: { id: deploymentId },
+        select: { namespace: true },
+      }),
+      this.prisma.service.findMany({
+        where: { deploymentId },
+        select: { name: true },
+      }),
+      this.prisma.ingress.findMany({
+        where: { deploymentId },
+        select: { service: { select: { name: true } } },
+      }),
+    ]);
 
-    if (!deployment) return null;
+    if (!deployment?.namespace) return null;
 
-    return `destination_workload="${deployment.name}",destination_namespace="${deployment.namespace}"`;
+    const names = new Set<string>();
+    for (const s of services) names.add(s.name);
+    for (const i of ingresses) if (i.service?.name) names.add(i.service.name);
+    if (names.size === 0) return null;
+
+    const alt = [...names].map(escapeRegex).join('|');
+    return `proxy=~"${escapeRegex(deployment.namespace)}_svc_(${alt})_.+"`;
   }
 
   private async queryInstant(promql: string): Promise<number | null> {

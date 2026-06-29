@@ -42,9 +42,9 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
       coreApi.listPodForAllNamespaces(undefined, undefined, undefined, ORCHARD_SELECTOR);
 
     this.informer = k8s.makeInformer(kc, '/api/v1/pods', listFn, ORCHARD_SELECTOR);
-    this.informer.on('add', (pod) => this.onPodEvent(pod));
-    this.informer.on('update', (pod) => this.onPodEvent(pod));
-    this.informer.on('delete', (pod) => this.onPodEvent(pod));
+    this.informer.on('add', (pod) => this.onPodEvent('add', pod));
+    this.informer.on('update', (pod) => this.onPodEvent('update', pod));
+    this.informer.on('delete', (pod) => this.onPodEvent('delete', pod));
     this.informer.on('connect', () => {
       this.backoffMs = 1000;
     });
@@ -86,12 +86,18 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
     }, delay);
   }
 
-  private async onPodEvent(pod: k8s.V1Pod) {
+  private async onPodEvent(type: 'add' | 'update' | 'delete', pod: k8s.V1Pod) {
     const ns = pod.metadata?.namespace;
     const depName = pod.metadata?.labels?.['app.kubernetes.io/name'];
     if (!ns || !depName) return;
     const ctx = await this.resolveCtx(ns, depName);
     if (!ctx) return;
+
+    // Keep the `pods` table in sync from the single cluster-wide watch so log
+    // and overview reads (observability) have fresh pod names without each
+    // request hitting the k8s API. The DB write is never coalesced; only the
+    // SSE fan-out below is.
+    await this.syncPod(type, ctx.deploymentId, pod);
 
     const now = Date.now();
     const last = this.lastEmit.get(ctx.deploymentId) ?? 0;
@@ -104,6 +110,44 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
       id: ctx.deploymentId,
       projectId: ctx.projectId,
     });
+  }
+
+  private async syncPod(
+    type: 'add' | 'update' | 'delete',
+    deploymentId: string,
+    pod: k8s.V1Pod,
+  ) {
+    const name = pod.metadata?.name;
+    if (!name) return;
+
+    try {
+      if (type === 'delete') {
+        await this.prisma.pod.deleteMany({ where: { deploymentId, name } });
+        return;
+      }
+
+      const containerStatuses = pod.status?.containerStatuses ?? [];
+      const restartCount = containerStatuses.reduce(
+        (sum, c) => sum + (c.restartCount ?? 0),
+        0,
+      );
+      const data = {
+        podIp: pod.status?.podIP ?? null,
+        nodeName: pod.spec?.nodeName ?? null,
+        status: computePodStatus(pod),
+        restartCount,
+      };
+
+      await this.prisma.pod.upsert({
+        where: { deploymentId_name: { deploymentId, name } },
+        create: { deploymentId, name, ...data },
+        update: data,
+      });
+    } catch (err) {
+      this.logger.warn(
+        `syncPod(${deploymentId}/${name}) failed: ${(err as Error)?.message ?? err}`,
+      );
+    }
   }
 
   private async resolveCtx(ns: string, depName: string): Promise<Ctx | null> {
@@ -132,4 +176,40 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
     this.ctxCache.set(key, { ctx, exp: Date.now() + (ctx ? POSITIVE_TTL_MS : NEGATIVE_TTL_MS) });
     return ctx;
   }
+}
+
+const BACKOFF_REASONS = new Set([
+  'crashloopbackoff',
+  'imagepullbackoff',
+  'errimagepull',
+  'createcontainererror',
+]);
+
+// Mirrors k8s-workload.service getDeploymentPods status derivation so the
+// stored `pods` table matches what the live pod path reports.
+function computePodStatus(pod: k8s.V1Pod): string {
+  const containerStatuses = pod.status?.containerStatuses ?? [];
+  const phase = pod.status?.phase?.toLowerCase() || 'pending';
+  const conditions = pod.status?.conditions ?? [];
+  const isScheduled = conditions.some((c) => c.type === 'PodScheduled' && c.status === 'True');
+  const isReady = conditions.some((c) => c.type === 'Ready' && c.status === 'True');
+  const allContainersReady =
+    containerStatuses.length > 0 && containerStatuses.every((c) => c.ready === true);
+
+  let status = phase;
+  if (phase === 'running') {
+    status = isReady && allContainersReady ? 'ready' : isScheduled ? 'scheduled' : 'pending';
+  } else if (phase === 'pending' && isScheduled) {
+    status = 'scheduled';
+  }
+
+  for (const c of containerStatuses) {
+    const reason = c?.state?.waiting?.reason;
+    if (reason && BACKOFF_REASONS.has(String(reason).toLowerCase())) {
+      status = 'crashing';
+      break;
+    }
+  }
+
+  return status;
 }

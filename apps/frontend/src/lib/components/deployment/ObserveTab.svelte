@@ -607,9 +607,9 @@
 		const uptime = uptimeRaw ? (Date.now() - new Date(uptimeRaw).getTime()) / 1000 : null;
 		const reqRate = overview?.httpRequestRate ?? null;
 		const errorRate = overview?.httpErrorRate ?? null;
-		const p95 = overview?.httpP95Latency ?? null;
+		const avgLatency = overview?.httpAvgLatency ?? null;
 
-		return { running, total, cpuReq, memReq, cpuPct, memPct, uptime, reqRate, errorRate, p95 };
+		return { running, total, cpuReq, memReq, cpuPct, memPct, uptime, reqRate, errorRate, avgLatency };
 	});
 
 	function highlightStack(stack: string): string {
@@ -665,7 +665,7 @@
 				</div>
 			</div>
 		{/if}
-		{#each [{ icon: Clock, label: 'Uptime', value: formatUptime(overviewStats.uptime), show: true }, { icon: Boxes, label: 'Pods', value: `${overviewStats.running}/${overviewStats.total}`, show: true }, { icon: Cpu, label: 'CPU', value: overviewStats.cpuPct != null ? `${overviewStats.cpuPct.toFixed(1)}%` : '--', show: true }, { icon: MemoryStick, label: 'Memory', value: overviewStats.memPct != null ? `${overviewStats.memPct.toFixed(1)}%` : '--', show: true }, { icon: Activity, label: 'Req/s', value: overviewStats.reqRate != null ? fmtReqRate(overviewStats.reqRate) : '--', show: hasIngress }, { icon: AlertTriangle, label: 'Error rate', value: overviewStats.errorRate != null ? fmtPercent(overviewStats.errorRate) : '--', show: hasIngress }, { icon: Clock, label: 'p95', value: overviewStats.p95 != null ? fmtLatency(overviewStats.p95) : '--', show: hasIngress }].filter((s) => s.show) as stat, i}
+		{#each [{ icon: Clock, label: 'Uptime', value: formatUptime(overviewStats.uptime), show: true }, { icon: Boxes, label: 'Pods', value: `${overviewStats.running}/${overviewStats.total}`, show: true }, { icon: Cpu, label: 'CPU', value: overviewStats.cpuPct != null ? `${overviewStats.cpuPct.toFixed(1)}%` : '--', show: true }, { icon: MemoryStick, label: 'Memory', value: overviewStats.memPct != null ? `${overviewStats.memPct.toFixed(1)}%` : '--', show: true }, { icon: Activity, label: 'Req/s', value: overviewStats.reqRate != null ? fmtReqRate(overviewStats.reqRate) : '--', show: hasIngress }, { icon: AlertTriangle, label: 'Error rate', value: overviewStats.errorRate != null ? fmtPercent(overviewStats.errorRate) : '--', show: hasIngress }, { icon: Clock, label: 'Avg latency', value: overviewStats.avgLatency != null ? fmtLatency(overviewStats.avgLatency) : '--', show: hasIngress }].filter((s) => s.show) as stat, i}
 			{@const Icon = stat.icon}
 			<div
 				class="observe-stat"
@@ -860,7 +860,7 @@
 					</div>
 				{:else}
 					<div class="observe-chart-grid">
-						{#each [{ label: 'Request Rate', series: httpMetrics?.requestRate ?? [], color: '#7c5cff', formatter: fmtReqRate }, { label: 'Error Rate', series: httpMetrics?.errorRate ?? [], color: '#d04a4a', formatter: fmtPercent }, { label: 'p50 Latency', series: httpMetrics?.p50Latency ?? [], color: '#22c0a8', formatter: fmtLatency }, { label: 'p95 Latency', series: httpMetrics?.p95Latency ?? [], color: '#ff7e6b', formatter: fmtLatency }] as chart, i}
+						{#each [{ label: 'Request Rate', series: httpMetrics?.requestRate ?? [], color: '#7c5cff', formatter: fmtReqRate }, { label: 'Error Rate', series: httpMetrics?.errorRate ?? [], color: '#d04a4a', formatter: fmtPercent }, { label: 'Avg Latency', series: httpMetrics?.latencyAvg ?? [], color: '#22c0a8', formatter: fmtLatency }, { label: 'Max Latency', series: httpMetrics?.latencyMax ?? [], color: '#ff7e6b', formatter: fmtLatency }] as chart, i}
 							{@const latest = latestValue(chart.series)}
 							<div
 								class="observe-chart-card"
