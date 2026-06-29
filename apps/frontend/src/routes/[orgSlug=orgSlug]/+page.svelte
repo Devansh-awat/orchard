@@ -1,7 +1,14 @@
 <script lang="ts">
 	import '$lib/components/org-dashboard/org-dashboard.css';
 	import { createQuery } from '@tanstack/svelte-query';
-	import { apiFetch, pinnedItems, toasts, subscribeOrgEvents, isSuperAdmin } from '$lib/stores';
+	import {
+		apiFetch,
+		pinnedItems,
+		toasts,
+		subscribeOrgEvents,
+		sseStatusFor,
+		isSuperAdmin
+	} from '$lib/stores';
 	import { queryClient } from '$lib/query';
 	import { overviewQueryOptions } from '$lib/queries/overview';
 	import { Plus, Star } from 'lucide-svelte';
@@ -30,11 +37,6 @@
 	let { data } = $props<{ data: PageData }>();
 	const orgSlug = $derived(data.orgSlug);
 
-	const overviewQuery = createQuery(() => ({
-		...overviewQueryOptions(orgSlug),
-		enabled: !!orgSlug
-	}));
-
 	// Manual state — set from $effect watching query, avoids $derived chains
 	let currentOrgRole = $state<'owner' | 'admin' | 'member' | 'guest' | null>(null);
 	let isSyntheticMembership = $state(false);
@@ -49,6 +51,19 @@
 	const projectMetas = new SvelteMap<string, ProjectMeta>();
 	let activeBuilds = $state<ActiveBuild[]>([]);
 	let recentBuilds = $state<RecentBuild[]>([]);
+	let sseStatusValue = $state<'connecting' | 'connected' | 'disconnected'>('connecting');
+
+	const overviewQuery = createQuery(() => ({
+		...overviewQueryOptions(orgSlug),
+		enabled: !!orgSlug,
+		refetchInterval: (() => {
+			const sseUp = sseStatusValue === 'connected';
+			if (activeBuilds.length > 0) return sseUp ? 8_000 : 3_000;
+			if (!sseUp) return 10_000;
+			return 30_000;
+		})(),
+		refetchIntervalInBackground: true
+	}));
 
 	// ── Stable ordering ──
 	let depOrder = $state<string[]>([]);
@@ -250,6 +265,18 @@
 				},
 				{ invalidateDependencies: [] }
 			);
+		});
+	});
+
+	$effect(() => {
+		const id = orgId;
+		if (!id) {
+			sseStatusValue = 'connecting';
+			return;
+		}
+		const store = sseStatusFor(id);
+		return store.subscribe((v) => {
+			sseStatusValue = v;
 		});
 	});
 

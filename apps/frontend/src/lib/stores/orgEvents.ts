@@ -33,6 +33,7 @@ interface Subscription {
 	dependencies: Set<string>;
 	status: SseStatus;
 	lastEventAt: number;
+	lastEventId: string | null;
 	heartbeatTimer: ReturnType<typeof setInterval> | null;
 	reconnectTimer: ReturnType<typeof setTimeout> | null;
 	reconnectAttempts: number;
@@ -117,9 +118,13 @@ function connect(sub: Subscription) {
 	// Encode orgId so a value containing path-special chars can't escape
 	// the route segment (defense-in-depth — orgIds are server-issued UUIDs
 	// today, but the boundary is the safer place to enforce it).
-	const source = new EventSource(`${base}/apiv1/events/orgs/${encodeURIComponent(sub.orgId)}`, {
-		withCredentials: true
-	});
+	const resume = sub.lastEventId
+		? `?lastEventId=${encodeURIComponent(sub.lastEventId)}`
+		: '';
+	const source = new EventSource(
+		`${base}/apiv1/events/orgs/${encodeURIComponent(sub.orgId)}${resume}`,
+		{ withCredentials: true }
+	);
 	sub.source = source;
 	source.onopen = () => {
 		sub.lastEventAt = Date.now();
@@ -129,6 +134,7 @@ function connect(sub: Subscription) {
 	source.onmessage = (e) => {
 		sub.lastEventAt = Date.now();
 		sub.reconnectAttempts = 0;
+		if (e.lastEventId) sub.lastEventId = e.lastEventId;
 		if (sub.status !== 'connected') setStatus(sub.orgId, 'connected');
 		let ev: OrgEvent;
 		try {
@@ -178,6 +184,7 @@ export function subscribeOrgEvents(
 			dependencies: new Set(opts?.invalidateDependencies ?? []),
 			status: 'connecting',
 			lastEventAt: Date.now(),
+			lastEventId: null,
 			heartbeatTimer: null,
 			reconnectTimer: null,
 			reconnectAttempts: 0

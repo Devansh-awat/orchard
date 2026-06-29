@@ -155,6 +155,7 @@ export function getStatusColor(status: string) {
 		case 'stopped':
 		case 'failed':
 		case 'error':
+		case 'crashing':
 			return 'badge-error';
 		default:
 			return 'badge-neutral';

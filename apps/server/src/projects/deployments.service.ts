@@ -3191,7 +3191,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
       const hasCrashingPods = allPods.some((pod: any) => {
         const restartCount = typeof pod.restartCount === 'number' ? pod.restartCount : 0;
-        return restartCount > 5 && pod.status?.toLowerCase() !== 'ready';
+        return (
+          pod.status?.toLowerCase() === 'crashing' ||
+          (restartCount > 5 && pod.status?.toLowerCase() !== 'ready')
+        );
       });
 
       const hasAnyRestarts = allPods.some((pod: any) => {

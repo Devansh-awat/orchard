@@ -1,5 +1,5 @@
-import { Controller, Param, Request, NotFoundException, Sse, MessageEvent } from '@nestjs/common';
-import { Observable, merge, interval, map, finalize, defer } from 'rxjs';
+import { Controller, Param, Query, Request, NotFoundException, Sse, MessageEvent } from '@nestjs/common';
+import { Observable, merge, interval, map, finalize, defer, concat, from, mergeMap } from 'rxjs';
 import { Auth } from '../auth/decorators';
 import { MembershipCacheService } from '../auth/membership-cache.service';
 import { AuthorizationService } from '../auth/authorization.service';
@@ -17,9 +17,14 @@ export class EventsController {
   @Sse('orgs/:orgId')
   async streamOrg(
     @Param('orgId') orgId: string,
+    @Query('lastEventId') lastEventIdQuery: string | undefined,
     @Request() req,
   ): Promise<Observable<MessageEvent>> {
     const userId = req.user.sub;
+    const lastEventId =
+      (typeof req.headers?.['last-event-id'] === 'string'
+        ? req.headers['last-event-id']
+        : undefined) || lastEventIdQuery;
     const isSuperAdmin = await this.authz.isSuperAdmin(userId);
     if (!isSuperAdmin) {
       const orgMemberships = await this.memberships.getMembershipsForOrg(userId, orgId);
@@ -43,10 +48,16 @@ export class EventsController {
     // can skip orgs nobody is currently watching.
     return defer(() => {
       this.orgEvents.addSubscriber(orgId);
-      return merge(
-        this.orgEvents.forOrgAsSseScoped(orgId, userId, visibleProjectIds),
-        heartbeat$,
-      );
+      const live$ = this.orgEvents.forOrgAsSseScoped(orgId, userId, visibleProjectIds);
+      const events$ = lastEventId
+        ? concat(
+            from(
+              this.orgEvents.replayScoped(lastEventId, orgId, userId, visibleProjectIds),
+            ).pipe(mergeMap((msgs) => from(msgs))),
+            live$,
+          )
+        : live$;
+      return merge(events$, heartbeat$);
     }).pipe(finalize(() => this.orgEvents.removeSubscriber(orgId))) as Observable<MessageEvent>;
   }
 }

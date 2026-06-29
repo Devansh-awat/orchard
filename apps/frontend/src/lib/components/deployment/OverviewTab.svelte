@@ -458,9 +458,13 @@
 											class="h-1.5 w-1.5 rounded-full shrink-0 {pod.status?.toLowerCase() ===
 											'ready'
 												? 'bg-green-500'
-												: pod.status?.toLowerCase() === 'scheduled'
-													? 'bg-yellow-500'
-													: 'bg-gray-400'}"
+												: ['crashing', 'failed', 'error'].includes(
+															pod.status?.toLowerCase() ?? ''
+													  )
+													? 'bg-red-500'
+													: pod.status?.toLowerCase() === 'scheduled'
+														? 'bg-yellow-500'
+														: 'bg-gray-400'}"
 										></span>
 										<span class="font-mono text-xs truncate">{podLabel(pod.name)}</span>
 									</div>

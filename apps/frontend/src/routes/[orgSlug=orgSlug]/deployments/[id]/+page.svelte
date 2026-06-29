@@ -1221,7 +1221,7 @@
 			if (transient) return sseUp ? 15_000 : 3_000;
 			if (!sseUp) return 10_000;
 			if (activePodWarnings.length > 0) return 15_000;
-			return false;
+			return 30_000;
 		})(),
 		refetchIntervalInBackground: true
 	}));

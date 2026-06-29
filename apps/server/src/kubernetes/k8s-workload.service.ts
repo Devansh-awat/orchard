@@ -25,6 +25,27 @@ import { isTrustedImage, trustedSecurityContext, hardenedSecurityContext } from 
  * bodies still use `this.kc`, `this.ensureKubeConfig()`, etc. — delegated
  * below so the bodies stay byte-identical.
  */
+const POD_BACKOFF_REASONS = new Set([
+  'crashloopbackoff',
+  'imagepullbackoff',
+  'errimagepull',
+  'errimagepullbackoff',
+  'createcontainererror',
+  'createcontainerconfigerror',
+  'runcontainererror',
+  'invalidimagename',
+]);
+
+function podBackoffReason(containerStatuses: any[] | undefined): string | null {
+  for (const c of containerStatuses ?? []) {
+    const reason = c?.state?.waiting?.reason;
+    if (reason && POD_BACKOFF_REASONS.has(String(reason).toLowerCase())) {
+      return reason;
+    }
+  }
+  return null;
+}
+
 @Injectable()
 export class K8sWorkloadService {
   private readonly logger = new Logger(K8sWorkloadService.name);
@@ -2064,6 +2085,9 @@ export class K8sWorkloadService {
         } else if (podPhase === 'pending' && isScheduled) {
           computedStatus = 'scheduled';
         }
+        if (podBackoffReason(containerStatuses)) {
+          computedStatus = 'crashing';
+        }
 
         const warnings: any[] = [];
         for (const cs of containerStatuses) {
@@ -2181,6 +2205,9 @@ export class K8sWorkloadService {
             computedStatus = 'scheduled';
           }
         }
+        if (podBackoffReason(containerStatuses)) {
+          computedStatus = 'crashing';
+        }
 
         return {
           name: podName,
@@ -2199,18 +2226,20 @@ export class K8sWorkloadService {
       // Kubernetes retains warning events for ~1h after the condition
       // resolves, so a pod that briefly failed scheduling or volume attach
       // would otherwise keep showing the alert long after it went ready.
+      const RECENT_TERMINATION_MS = 15 * 60 * 1000;
       const warnings = pods.flatMap(pod => {
-        // A ready pod is healthy by definition — whatever its events say is
-        // already resolved, so it contributes no warnings at all.
-        if (pod.status === 'ready') return [];
-
         const podWarnings: Array<{ message: string; timestamp?: any }> = [];
 
         pod.containers?.forEach(container => {
           if (container.warning) {
             podWarnings.push({ message: `${container.name}: ${container.warning}` });
           }
-          if (container.restartCount > 0) {
+          const terminatedAt = container.lastTerminatedAt
+            ? new Date(container.lastTerminatedAt).getTime()
+            : null;
+          const recentlyTerminated =
+            terminatedAt !== null && Date.now() - terminatedAt < RECENT_TERMINATION_MS;
+          if (container.restartCount > 0 && (pod.status !== 'ready' || recentlyTerminated)) {
             podWarnings.push({
               message: `${container.name} has restarted ${container.restartCount} time(s)`,
               timestamp: container.lastTerminatedAt,
@@ -2218,14 +2247,15 @@ export class K8sWorkloadService {
           }
         });
 
-        pod.events?.forEach(event => {
-          // Scheduling failures are resolved the moment the pod lands on a node.
-          if (/failedscheduling/i.test(event.reason ?? '') && pod.nodeName) return;
-          podWarnings.push({
-            message: `${event.reason}: ${event.message}`,
-            timestamp: event.lastTimestamp,
+        if (pod.status !== 'ready') {
+          pod.events?.forEach(event => {
+            if (/failedscheduling/i.test(event.reason ?? '') && pod.nodeName) return;
+            podWarnings.push({
+              message: `${event.reason}: ${event.message}`,
+              timestamp: event.lastTimestamp,
+            });
           });
-        });
+        }
 
         return podWarnings.map(warning => ({
           podName: pod.name,
@@ -2324,6 +2354,9 @@ export class K8sWorkloadService {
         let computedStatus = phase;
         if (phase === 'running') {
           computedStatus = isReady && allContainersReady ? 'ready' : 'pending';
+        }
+        if (podBackoffReason(containerStatuses)) {
+          computedStatus = 'crashing';
         }
 
         const totalRestarts = containerStatuses.reduce(

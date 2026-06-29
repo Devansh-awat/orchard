@@ -1,6 +1,7 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, OnModuleInit } from '@nestjs/common';
 import { Subject, Observable, filter, map, takeWhile } from 'rxjs';
 import { AuthorizationService } from '../auth/authorization.service';
+import { EventBusService } from './event-bus.service';
 
 export type OrgEventType =
   | 'deployment.changed'
@@ -13,78 +14,99 @@ export type OrgEventType =
 export interface OrgEvent {
   organizationId: string;
   type: OrgEventType;
-  /** Optional id of the changed resource (deployment id, db id, etc) */
   id?: string;
-  /** Optional secondary id (e.g. projectId for a deployment) */
   projectId?: string;
-  /** Best-effort timestamp */
   ts: number;
 }
 
+interface Delivery {
+  event: OrgEvent;
+  streamId?: string;
+}
+
+export interface ScopedMessage {
+  data: OrgEvent;
+  id?: string;
+}
+
 @Injectable()
-export class OrgEventsService {
+export class OrgEventsService implements OnModuleInit {
   private readonly logger = new Logger(OrgEventsService.name);
-  private readonly subject = new Subject<OrgEvent>();
-  /** subscriber counts per orgId; lets background pushers (e.g. metrics) skip orgs nobody is watching. */
+  private readonly subject = new Subject<Delivery>();
   private readonly subscriberCounts = new Map<string, number>();
 
-  constructor(private readonly authz: AuthorizationService) {}
+  constructor(
+    private readonly authz: AuthorizationService,
+    private readonly bus: EventBusService,
+  ) {}
+
+  onModuleInit() {
+    this.bus.setConsumer((entry) => {
+      this.subject.next({ event: entry.event, streamId: entry.id });
+    });
+  }
 
   emit(ev: Omit<OrgEvent, 'ts'>) {
-    this.subject.next({ ...ev, ts: Date.now() });
+    const event: OrgEvent = { ...ev, ts: Date.now() };
+    if (this.bus.enabled) {
+      this.bus.publish(event).catch(() => {});
+    } else {
+      this.subject.next({ event });
+    }
   }
 
-  /** Returns an observable filtered to events for a given org. */
-  forOrg(organizationId: string): Observable<OrgEvent> {
-    return this.subject.asObservable().pipe(filter((e) => e.organizationId === organizationId));
+  emitLocal(ev: Omit<OrgEvent, 'ts'>) {
+    this.subject.next({ event: { ...ev, ts: Date.now() } });
   }
 
-  /** SSE-friendly: maps to MessageEvent shape. */
-  forOrgAsSse(organizationId: string): Observable<{ data: OrgEvent }> {
-    return this.forOrg(organizationId).pipe(map((data) => ({ data })));
+  private visibleTo(
+    event: OrgEvent,
+    userId: string,
+    allowed: Set<string> | null,
+  ): boolean {
+    if (allowed === null) return true;
+    if (event.type === 'membership.changed') return event.id === userId;
+    if (!event.projectId) return false;
+    return allowed.has(event.projectId);
   }
 
-  /**
-   * Per-user SSE stream: filters events by the user's visible project set so
-   * plain org members don't see events for projects they aren't a member of.
-   * Spec rule (H3): plain Members MUST NOT see events for non-member projects.
-   *
-   * `visibleProjectIds` is captured at subscribe-time:
-   *   - null  => org-admin/owner/superadmin: see everything
-   *   - array => plain member: only events whose projectId is in the set
-   */
   forOrgAsSseScoped(
     organizationId: string,
     userId: string,
     visibleProjectIds: string[] | null,
-  ): Observable<{ data: OrgEvent }> {
+  ): Observable<ScopedMessage> {
     const allowed = visibleProjectIds === null ? null : new Set(visibleProjectIds);
     let alive = true;
-    return this.forOrg(organizationId).pipe(
-      // Close the stream as soon as this user's membership changes. The
-      // visible-project set was captured at subscribe time, so anything that
-      // could shift it (role change, project add/remove, removal from the org)
-      // means the snapshot is no longer trustworthy. Forcing reconnect lets
-      // the controller re-evaluate listVisibleProjectIds against current
-      // state. The terminal membership.changed event itself is still
-      // delivered so the client knows why the stream ended.
+    return this.subject.asObservable().pipe(
+      filter((d) => d.event.organizationId === organizationId),
       takeWhile(() => alive, true),
-      filter((e) => {
-        if (e.type === 'membership.changed' && e.id === userId) {
+      filter((d) => {
+        if (d.event.type === 'membership.changed' && d.event.id === userId) {
           alive = false;
           return true;
         }
-        if (allowed === null) return true;
-        if (e.type === 'membership.changed') {
-          return e.id === userId;
-        }
-        if (!e.projectId) {
-          return false;
-        }
-        return allowed.has(e.projectId);
+        return this.visibleTo(d.event, userId, allowed);
       }),
-      map((data) => ({ data })),
+      map((d) => ({ data: d.event, id: d.streamId })),
     );
+  }
+
+  async replayScoped(
+    fromId: string,
+    organizationId: string,
+    userId: string,
+    visibleProjectIds: string[] | null,
+  ): Promise<ScopedMessage[]> {
+    const entries = await this.bus.replay(fromId);
+    if (entries.length === 0) return [];
+    const allowed = visibleProjectIds === null ? null : new Set(visibleProjectIds);
+    const out: ScopedMessage[] = [];
+    for (const entry of entries) {
+      if (entry.event.organizationId !== organizationId) continue;
+      if (!this.visibleTo(entry.event, userId, allowed)) continue;
+      out.push({ data: entry.event, id: entry.id });
+    }
+    return out;
   }
 
   addSubscriber(organizationId: string) {
@@ -100,7 +122,6 @@ export class OrgEventsService {
     else this.subscriberCounts.set(organizationId, next);
   }
 
-  /** Snapshot of orgIds that currently have at least one SSE subscriber. */
   watchedOrgIds(): string[] {
     return Array.from(this.subscriberCounts.keys());
   }

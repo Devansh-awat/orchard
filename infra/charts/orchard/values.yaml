@@ -54,6 +54,24 @@ server:
   env: []
   envFrom: []
 
+# Control-plane Redis. Backs the cross-replica SSE event bus (Redis Streams)
+# so live updates reach SSE clients on every server replica, and is available
+# as a general cache. REDIS_URL is injected into the server automatically when
+# enabled. The app degrades to local-only delivery + polling if it's absent.
+redis:
+  enabled: true
+  image: redis:7-alpine
+  storage: 1Gi
+  storageClass: ""
+  # Override to point at an external/managed Redis; otherwise the in-cluster
+  # service is used.
+  url: ""
+  networkPolicy:
+    enabled: true
+  resources:
+    requests: { cpu: "50m", memory: "64Mi" }
+    limits: { cpu: "500m", memory: "512Mi" }
+
 # Remote MCP server (server/Dockerfile.mcp). Exposes the Orchard MCP over HTTP
 # on its own domain so external MCP clients can connect.
 mcp:
