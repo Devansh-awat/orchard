@@ -39,13 +39,7 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
     }
     const coreApi = kc.makeApiClient(k8s.CoreV1Api);
     const listFn = () =>
-      coreApi.listPodForAllNamespaces(
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        ORCHARD_SELECTOR,
-      );
+      coreApi.listPodForAllNamespaces(undefined, undefined, undefined, ORCHARD_SELECTOR);
 
     this.informer = k8s.makeInformer(kc, '/api/v1/pods', listFn, ORCHARD_SELECTOR);
     this.informer.on('add', (pod) => this.onPodEvent(pod));
