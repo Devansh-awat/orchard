@@ -42,7 +42,7 @@ export class ObservabilityController {
     @Query('search') search?: string,
   ) {
     await this.assertAccess(id, req);
-    const tailLines = Math.min(Math.max(1, Number(tailLinesStr) || 200), 5000);
+    const tailLines = Math.min(Math.max(1, Number(tailLinesStr) || 200), 20000);
     return this.observability.getStructuredLogs(id, tailLines, level, search);
   }
 

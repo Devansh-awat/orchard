@@ -2,7 +2,7 @@
 	import { onDestroy, untrack, tick } from 'svelte';
 	import { browser } from '$app/environment';
 	import { apiFetch, toasts } from '$lib/stores';
-	import { formatRelativeTime } from '$lib/utils/format';
+	import { formatRelativeTime, ansiToHtml } from '$lib/utils/format';
 	import { motionStagger, springHover } from '$lib/utils/motion.svelte';
 	import {
 		Clock,
@@ -139,6 +139,12 @@
 		{ id: '1h', label: '1h', ms: 60 * 60 * 1000 }
 	];
 
+	// Incremental log loading: start with a small tail, grow it as the user
+	// scrolls up. LOG_MAX_LINES matches the backend cap and bounds search too.
+	const LOG_INITIAL_LINES = 1000;
+	const LOG_PAGE_SIZE = 2000;
+	const LOG_MAX_LINES = 20000;
+
 	function chooseStep(ms: number): number {
 		if (ms <= 30 * 60 * 1000) return 15_000;
 		return 30_000;
@@ -149,6 +155,11 @@
 	let logSearch = $state('');
 	let logLevel = $state<LogLevel>('all');
 	let liveTail = $state(false);
+	let logTail = $state(1000);
+	let logsAtMax = $state(false);
+	let loadingMoreLogs = $state(false);
+	let lastLoadMoreAt = 0;
+	let expandedLogs = $state(new Set<string>());
 	let logEntries = $state<any[]>([]);
 	let logsLoading = $state(false);
 	let logsError = $state<string | null>(null);
@@ -185,10 +196,29 @@
 		}
 		if (logSearch.trim()) {
 			const q = logSearch.toLowerCase();
-			entries = entries.filter((e: any) => (e.message ?? '').toLowerCase().includes(q));
+			entries = entries.filter((e: any) =>
+				((e.raw ?? e.message ?? '') as string).toLowerCase().includes(q)
+			);
 		}
 		return entries;
 	});
+
+	function logKey(entry: any, i: number): string {
+		return `${entry.timestamp ?? ''}|${i}|${(entry.message ?? '').slice(0, 64)}`;
+	}
+
+	function toggleLog(key: string) {
+		const next = new Set(expandedLogs);
+		if (next.has(key)) next.delete(key);
+		else next.add(key);
+		expandedLogs = next;
+	}
+
+	function fullTimestamp(ts: string | number | undefined): string {
+		if (!ts) return '';
+		const d = new Date(ts);
+		return isNaN(d.getTime()) ? String(ts) : d.toISOString();
+	}
 
 	const visibleTabs = $derived(
 		(['logs', 'http', 'traces', 'errors'] as SubTab[]).filter((t) => t !== 'http' || hasIngress)
@@ -213,6 +243,20 @@
 		if (!logViewerEl) return;
 		const { scrollTop, scrollHeight, clientHeight } = logViewerEl;
 		userScrolledUp = scrollHeight - scrollTop - clientHeight > 60;
+
+		// Scroll-to-top loads earlier logs (disabled while filtering — search/level
+		// already scan the whole window server-side).
+		if (logSearch.trim() || logLevel !== 'all') return;
+		if (loadingMoreLogs || logsAtMax || logTail >= LOG_MAX_LINES) return;
+		if (scrollTop > 80) return;
+		const now = Date.now();
+		if (now - lastLoadMoreAt < 400) return;
+		lastLoadMoreAt = now;
+		loadingMoreLogs = true;
+		logTail = Math.min(logTail + LOG_PAGE_SIZE, LOG_MAX_LINES);
+		fetchLogs({ preserveScroll: true }).finally(() => {
+			loadingMoreLogs = false;
+		});
 	}
 
 	function scrollToBottom() {
@@ -272,19 +316,47 @@
 		}
 	}
 
-	async function fetchLogs() {
+	async function fetchLogs(opts?: { preserveScroll?: boolean }) {
 		if (!deployment?.id) return;
 		const seq = ++logsFetchSeq;
 		if (!logEntries.length) logsLoading = true;
 		logsError = null;
+		const q = logSearch.trim();
+		const filtering = q.length > 0 || logLevel !== 'all';
+		const params = new URLSearchParams();
+		// When filtering, scan the whole retained window server-side so matches
+		// aren't limited to the lines currently loaded in the browser. Otherwise
+		// load just the current tail (grown incrementally on scroll-up).
+		params.set('tailLines', String(filtering ? LOG_MAX_LINES : logTail));
+		if (logLevel !== 'all') params.set('level', logLevel);
+		if (q) params.set('search', q);
+
+		// Capture scroll geometry so we can re-anchor after prepending earlier logs.
+		const el = logViewerEl;
+		const preserve = opts?.preserveScroll === true && !!el;
+		const prevHeight = preserve && el ? el.scrollHeight : 0;
+		const prevTop = preserve && el ? el.scrollTop : 0;
+		const prevCount = logEntries.length;
+
 		try {
 			const res = await apiFetch(
-				`/apiv1/observe/deployments/${encodeURIComponent(deployment.id)}/logs/structured?tailLines=200`
+				`/apiv1/observe/deployments/${encodeURIComponent(deployment.id)}/logs/structured?${params}`
 			);
 			if (seq !== logsFetchSeq) return;
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
 			const body = await res.json();
-			logEntries = body?.entries ?? body?.logs ?? body ?? [];
+			const next = body?.entries ?? body?.logs ?? body ?? [];
+			logEntries = next;
+			// k8s caps tailLines at the retained buffer; if asking for more didn't
+			// yield more entries, we've reached the start of available logs.
+			if (opts?.preserveScroll && next.length <= prevCount) logsAtMax = true;
+			if (preserve) {
+				requestAnimationFrame(() => {
+					if (!logViewerEl) return;
+					const delta = logViewerEl.scrollHeight - prevHeight;
+					logViewerEl.scrollTop = prevTop + delta;
+				});
+			}
 		} catch (err) {
 			if (seq !== logsFetchSeq) return;
 			logsError = (err as Error).message;
@@ -391,18 +463,6 @@
 		expandedErrors = next;
 	}
 
-	function trendIcon(trend: 'rising' | 'stable' | 'falling'): string {
-		if (trend === 'rising') return '↑';
-		if (trend === 'falling') return '↓';
-		return '→';
-	}
-
-	function trendColor(trend: 'rising' | 'stable' | 'falling'): string {
-		if (trend === 'rising') return '#d04a4a';
-		if (trend === 'falling') return '#22c0a8';
-		return 'var(--surface-muted)';
-	}
-
 	$effect(() => {
 		const id = deployment?.id;
 		if (!id) return;
@@ -429,6 +489,23 @@
 		untrack(() => {
 			fetchErrors();
 		});
+	});
+
+	// Debounced server-backed search/level: refetch so filtering spans the whole
+	// retained window, not just the lines already in the browser.
+	$effect(() => {
+		const q = logSearch;
+		const lvl = logLevel;
+		const id = deployment?.id;
+		if (!id) return;
+		const handle = setTimeout(() => {
+			untrack(() => {
+				logsAtMax = false;
+				if (!q.trim() && lvl === 'all') logTail = LOG_INITIAL_LINES;
+				fetchLogs();
+			});
+		}, 300);
+		return () => clearTimeout(handle);
 	});
 
 	$effect(() => {
@@ -480,17 +557,6 @@
 			default:
 				return 'rgba(140,140,150,0.1)';
 		}
-	}
-
-	function formatTimestamp(ts: string | number | undefined): string {
-		if (!ts) return '';
-		const d = new Date(ts);
-		if (isNaN(d.getTime())) return '';
-		const h = String(d.getHours()).padStart(2, '0');
-		const m = String(d.getMinutes()).padStart(2, '0');
-		const s = String(d.getSeconds()).padStart(2, '0');
-		const ms = String(d.getMilliseconds()).padStart(3, '0');
-		return `${h}:${m}:${s}.${ms}`;
 	}
 
 	function formatTick(t: number): string {
@@ -736,17 +802,6 @@
 					</select>
 				</div>
 
-				<div class="observe-rangepick">
-					{#each TIME_RANGES as r}
-						<button
-							class="observe-rangebtn"
-							class:active={timeRange === r.id}
-							onclick={() => (timeRange = r.id)}
-							type="button">{r.label}</button
-						>
-					{/each}
-				</div>
-
 				<button
 					class="observe-tail-btn"
 					class:observe-tail-btn--active={liveTail}
@@ -785,19 +840,60 @@
 						<span>No log entries{logSearch || logLevel !== 'all' ? ' matching filters' : ''}</span>
 					</div>
 				{:else}
+					{#if !logSearch.trim() && logLevel === 'all'}
+						{#if loadingMoreLogs}
+							<div class="observe-log-loadmore">
+								<Loader2 class="h-3.5 w-3.5 animate-spin" /> Loading earlier logs…
+							</div>
+						{:else if logsAtMax || logTail >= LOG_MAX_LINES}
+							<div class="observe-log-loadmore observe-log-loadmore--end">
+								— start of available logs —
+							</div>
+						{:else}
+							<div class="observe-log-loadmore observe-log-loadmore--hint">
+								Scroll up to load earlier logs
+							</div>
+						{/if}
+					{/if}
 					{#each filteredLogs as entry, i}
-						<div class="observe-log-entry" class:observe-log-entry--alt={i % 2 === 1}>
+						{@const detail = (entry.lines?.length ?? 0) > 1 ? entry.lines.slice(1) : []}
+						{@const key = logKey(entry, i)}
+						{@const open = expandedLogs.has(key)}
+						<div
+							class="observe-log-entry"
+							class:observe-log-entry--alt={i % 2 === 1}
+							class:observe-log-entry--group={detail.length > 0}
+						>
 							<span class="observe-log-num">{i + 1}</span>
-							{#if entry.timestamp}
-								<span class="observe-log-ts">{formatTimestamp(entry.timestamp)}</span>
-							{/if}
 							<span
 								class="observe-log-level-badge"
 								style="color: {levelColor(entry.level)}; background: {levelBg(entry.level)};"
 							>
 								{(entry.level ?? 'log').toUpperCase()}
 							</span>
-							<span class="observe-log-msg">{entry.message ?? ''}</span>
+							<div class="observe-log-body">
+								<button
+									type="button"
+									class="observe-log-headline"
+									class:observe-log-headline--btn={detail.length > 0}
+									onclick={() => detail.length > 0 && toggleLog(key)}
+								>
+									{#if detail.length > 0}
+										<ChevronRight
+											class="observe-log-caret"
+											style="transform: rotate({open ? 90 : 0}deg);"
+										/>
+									{/if}
+									<span class="observe-log-msg">{@html ansiToHtml(entry.lines?.[0] ?? entry.message ?? '')}</span
+									>
+									{#if detail.length > 0 && !open}
+										<span class="observe-log-more">+{detail.length}</span>
+									{/if}
+								</button>
+								{#if detail.length > 0 && open}
+									<pre class="observe-log-detail">{@html ansiToHtml(detail.join('\n'))}</pre>
+								{/if}
+							</div>
 						</div>
 					{/each}
 				{/if}
@@ -1073,11 +1169,10 @@
 						{@const isExpanded = expandedErrors.has(group.fingerprint)}
 						<div
 							class="observe-error-card"
-							{@attach springHover()}
 							{@attach motionStagger({
 								index: i,
-								stride: 0.04,
-								from: { y: 8, opacity: 0, scale: 0.98 }
+								stride: 0.03,
+								from: { y: 6, opacity: 0 }
 							})}
 						>
 							<button
@@ -1085,25 +1180,30 @@
 								onclick={() => toggleError(group.fingerprint)}
 								type="button"
 							>
-								<div class="observe-error-top">
-									<ChevronRight
-										class="h-3.5 w-3.5 observe-error-chevron"
-										style="transform: rotate({isExpanded
-											? 90
-											: 0}deg); transition: transform 150ms ease; flex-shrink: 0;"
-									/>
-									<span class="observe-error-type">{group.type}</span>
-									<span class="observe-error-trend" style="color: {trendColor(group.trend)};">
-										<span class="observe-trend-arrow">{trendIcon(group.trend)}</span>
-										<span class="observe-trend-label">{group.trend}</span>
-									</span>
-									<span class="observe-error-count">{group.count.toLocaleString()}</span>
+								<ChevronRight
+									class="h-3.5 w-3.5 observe-error-chevron"
+									style="transform: rotate({isExpanded
+										? 90
+										: 0}deg); transition: transform 150ms ease; flex-shrink: 0;"
+								/>
+								<div class="observe-error-main">
+									<div class="observe-error-titlerow">
+										<span class="observe-error-type">{group.type}</span>
+										<span class="observe-error-fp">{group.fingerprint.slice(0, 8)}</span>
+									</div>
+									<div class="observe-error-message-line">{group.message}</div>
+									<div class="observe-error-meta">
+										<Clock class="h-3 w-3" />
+										{formatRelativeTime(new Date(group.lastSeen))}
+										<span class="observe-error-meta-sep">&middot;</span>
+										first seen {formatRelativeTime(new Date(group.firstSeen))}
+									</div>
 								</div>
-								<div class="observe-error-message-line">{group.message}</div>
-								<div class="observe-error-meta">
-									First {formatRelativeTime(new Date(group.firstSeen))} &middot; Last {formatRelativeTime(
-										new Date(group.lastSeen)
-									)}
+								<div class="observe-error-stats">
+									<span class="observe-error-count-num">{group.count.toLocaleString()}</span>
+									<span class="observe-error-count-label"
+										>{group.count === 1 ? 'event' : 'events'}</span
+									>
 								</div>
 							</button>
 
@@ -1112,32 +1212,41 @@
 									<p class="observe-error-full-msg">{group.message}</p>
 
 									{#if group.samples.length > 0}
+										<div class="observe-error-samples-label">
+											Recent occurrences ({group.samples.length})
+										</div>
 										{#each group.samples as sample, si}
-											{#if sample.stackTrace}
-												<div class="observe-stack-wrapper">
-													<pre class="observe-error-stack">{@html highlightStack(
-															sample.stackTrace
-														)}</pre>
-													<button
-														class="observe-stack-copy"
-														onclick={() =>
-															copyToClipboard(
-																sample.stackTrace ?? '',
-																`stack-${group.fingerprint}-${si}`
-															)}
-														type="button"
+											<div class="observe-error-sample">
+												{#if sample.timestamp}
+													<div
+														class="observe-error-sample-ts"
+														title={fullTimestamp(sample.timestamp)}
 													>
-														{#if copiedId === `stack-${group.fingerprint}-${si}`}<Check
-																class="h-3 w-3"
-															/>{:else}<Copy class="h-3 w-3" />{/if}
-													</button>
-												</div>
-											{/if}
-											{#if sample.timestamp}
-												<span class="observe-error-sample-ts"
-													>{formatRelativeTime(new Date(sample.timestamp))}</span
-												>
-											{/if}
+														<Clock class="h-3 w-3" />
+														{formatRelativeTime(new Date(sample.timestamp))}
+													</div>
+												{/if}
+												{#if sample.stackTrace}
+													<div class="observe-stack-wrapper">
+														<pre class="observe-error-stack">{@html highlightStack(
+																sample.stackTrace
+															)}</pre>
+														<button
+															class="observe-stack-copy"
+															onclick={() =>
+																copyToClipboard(
+																	sample.stackTrace ?? '',
+																	`stack-${group.fingerprint}-${si}`
+																)}
+															type="button"
+														>
+															{#if copiedId === `stack-${group.fingerprint}-${si}`}<Check
+																	class="h-3 w-3"
+																/>{:else}<Copy class="h-3 w-3" />{/if}
+														</button>
+													</div>
+												{/if}
+											</div>
 										{/each}
 									{/if}
 								</div>
@@ -1341,18 +1450,34 @@
 	}
 
 	.observe-select {
-		padding: 6px 28px 6px 10px;
+		padding: 6px 30px 6px 12px;
 		border-radius: 8px;
 		border: 1px solid var(--surface-border);
-		background: var(--surface-bg);
+		background-color: var(--surface-bg);
 		color: var(--center-channel-color);
-		font-size: 0.8rem;
+		font-size: 0.78rem;
+		font-weight: 500;
 		font-family: inherit;
 		cursor: pointer;
 		appearance: none;
-		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
+		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
 		background-repeat: no-repeat;
-		background-position: right 8px center;
+		background-position: right 9px center;
+		transition:
+			border-color 120ms ease,
+			box-shadow 120ms ease,
+			background-color 120ms ease;
+	}
+
+	.observe-select:hover {
+		border-color: var(--surface-muted);
+		background-color: rgba(120, 120, 128, 0.06);
+	}
+
+	.observe-select:focus-visible {
+		outline: none;
+		border-color: var(--button-bg, #7c5cff);
+		box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.18);
 	}
 
 	.observe-rangepick {
@@ -1441,12 +1566,13 @@
 
 	.observe-log-viewer {
 		position: relative;
-		border: 1px solid var(--surface-border);
+		border: 1px solid rgba(255, 255, 255, 0.08);
 		border-radius: 0.875rem;
-		background: var(--surface-bg);
+		background: #0d1117;
+		color: #c9d1d9;
 		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.03),
-			0 1px 2px rgb(0 0 0 / 0.02);
+			0 1px 3px rgb(0 0 0 / 0.18),
+			inset 0 0 0 1px rgba(255, 255, 255, 0.02);
 		min-height: 300px;
 		max-height: 520px;
 		overflow-y: auto;
@@ -1464,30 +1590,26 @@
 		min-width: 0;
 	}
 
+	.observe-log-entry {
+		border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+	}
+
 	.observe-log-entry--alt {
-		background: rgba(120, 120, 128, 0.02);
+		background: rgba(255, 255, 255, 0.018);
 	}
 
 	.observe-log-entry:hover {
-		background: rgba(120, 120, 128, 0.05);
+		background: rgba(255, 255, 255, 0.045);
 	}
 
 	.observe-log-num {
-		color: rgba(120, 120, 128, 0.35);
+		color: rgba(255, 255, 255, 0.22);
 		font-size: 0.65rem;
 		font-variant-numeric: tabular-nums;
 		min-width: 28px;
 		text-align: right;
 		flex-shrink: 0;
 		user-select: none;
-	}
-
-	.observe-log-ts {
-		color: var(--surface-muted);
-		font-size: 0.7rem;
-		white-space: nowrap;
-		flex-shrink: 0;
-		font-variant-numeric: tabular-nums;
 	}
 
 	.observe-log-level-badge {
@@ -1504,10 +1626,88 @@
 	}
 
 	.observe-log-msg {
-		color: var(--center-channel-color);
+		color: inherit;
 		white-space: pre-wrap;
 		word-break: break-all;
 		min-width: 0;
+	}
+
+	.observe-log-body {
+		min-width: 0;
+		flex: 1;
+	}
+
+	.observe-log-headline {
+		display: flex;
+		align-items: baseline;
+		gap: 6px;
+		width: 100%;
+		min-width: 0;
+		padding: 0;
+		background: none;
+		border: none;
+		text-align: left;
+		font: inherit;
+		color: inherit;
+		cursor: default;
+	}
+
+	.observe-log-headline--btn {
+		cursor: pointer;
+	}
+
+	:global(.observe-log-caret) {
+		width: 12px;
+		height: 12px;
+		flex-shrink: 0;
+		color: var(--surface-muted);
+		align-self: center;
+		transition: transform 120ms ease;
+	}
+
+	.observe-log-more {
+		flex-shrink: 0;
+		font-size: 0.62rem;
+		font-weight: 600;
+		color: #8b949e;
+		background: rgba(255, 255, 255, 0.08);
+		border-radius: 4px;
+		padding: 0 5px;
+		align-self: center;
+	}
+
+	.observe-log-detail {
+		margin: 4px 0 6px 18px;
+		padding: 8px 10px;
+		background: rgba(255, 255, 255, 0.03);
+		border-left: 2px solid rgba(255, 255, 255, 0.15);
+		border-radius: 4px;
+		color: #c9d1d9;
+		font-size: 0.72rem;
+		line-height: 1.5;
+		white-space: pre-wrap;
+		word-break: break-word;
+		overflow-x: auto;
+	}
+
+	.observe-log-loadmore {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 6px;
+		padding: 8px 0;
+		font-size: 0.7rem;
+		color: rgba(255, 255, 255, 0.45);
+		border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+	}
+
+	.observe-log-loadmore--end {
+		font-style: italic;
+		color: rgba(255, 255, 255, 0.3);
+	}
+
+	.observe-log-loadmore--hint {
+		color: rgba(255, 255, 255, 0.3);
 	}
 
 	.observe-log-skeleton {
@@ -1988,9 +2188,10 @@
 	}
 
 	.observe-error-header {
+		position: relative;
 		display: flex;
-		flex-direction: column;
-		gap: 4px;
+		align-items: flex-start;
+		gap: 10px;
 		padding: 12px 14px;
 		width: 100%;
 		border: 0;
@@ -2006,7 +2207,21 @@
 		background: rgba(120, 120, 128, 0.04);
 	}
 
-	.observe-error-top {
+	:global(.observe-error-chevron) {
+		margin-top: 3px;
+		color: var(--surface-muted);
+		flex-shrink: 0;
+	}
+
+	.observe-error-main {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		flex-direction: column;
+		gap: 3px;
+	}
+
+	.observe-error-titlerow {
 		display: flex;
 		align-items: center;
 		gap: 8px;
@@ -2014,76 +2229,94 @@
 	}
 
 	.observe-error-type {
-		font-size: 0.82rem;
-		font-weight: 600;
-		color: #d04a4a;
-		min-width: 0;
+		font-size: 0.85rem;
+		font-weight: 650;
+		color: var(--center-channel-color);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
+		flex-shrink: 1;
 	}
 
-	.observe-error-trend {
-		display: inline-flex;
-		align-items: center;
-		gap: 3px;
-		font-weight: 600;
+	.observe-error-fp {
+		font-family: 'SF Mono', 'Cascadia Code', monospace;
+		font-size: 0.64rem;
+		color: var(--surface-muted);
+		background: rgba(120, 120, 128, 0.1);
+		padding: 1px 6px;
+		border-radius: 4px;
 		flex-shrink: 0;
 	}
 
-	.observe-trend-arrow {
-		font-size: 1rem;
-		line-height: 1;
+	.observe-error-stats {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-end;
+		flex-shrink: 0;
+		line-height: 1.05;
 	}
 
-	.observe-trend-label {
-		font-size: 0.68rem;
-		text-transform: uppercase;
-		letter-spacing: 0.03em;
-	}
-
-	.observe-error-count {
-		margin-left: auto;
-		padding: 1px 8px;
-		border-radius: 6px;
-		background: rgba(208, 74, 74, 0.1);
-		color: #d04a4a;
-		font-size: 0.72rem;
-		font-weight: 600;
+	.observe-error-count-num {
+		font-size: 1.15rem;
+		font-weight: 700;
+		color: var(--center-channel-color);
 		font-variant-numeric: tabular-nums;
-		flex-shrink: 0;
+	}
+
+	.observe-error-count-label {
+		font-size: 0.58rem;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--surface-muted);
 	}
 
 	.observe-error-message-line {
-		font-size: 0.78rem;
-		color: var(--center-channel-color);
+		font-size: 0.76rem;
+		font-family: 'SF Mono', 'Cascadia Code', monospace;
+		color: var(--surface-muted);
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		padding-left: 22px;
 	}
 
 	.observe-error-meta {
-		font-size: 0.7rem;
+		display: flex;
+		align-items: center;
+		gap: 5px;
+		font-size: 0.68rem;
 		color: var(--surface-muted);
-		padding-left: 22px;
+	}
+
+	.observe-error-meta-sep {
+		opacity: 0.5;
 	}
 
 	.observe-error-detail {
-		padding: 0 14px 14px 36px;
+		padding: 12px 16px 16px;
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
-		border-top: 1px solid rgba(120, 120, 128, 0.08);
+		gap: 12px;
+		border-top: 1px solid var(--surface-border);
+		background: rgba(120, 120, 128, 0.025);
 	}
 
 	.observe-error-full-msg {
-		font-size: 0.78rem;
+		font-size: 0.8rem;
 		color: var(--center-channel-color);
-		margin: 10px 0 0;
-		line-height: 1.5;
+		margin: 0;
+		line-height: 1.55;
 		white-space: pre-wrap;
 		word-break: break-word;
+		padding: 10px 12px;
+		background: var(--surface-bg);
+		border: 1px solid var(--surface-border);
+		border-radius: 8px;
+	}
+
+	.observe-error-sample {
+		display: flex;
+		flex-direction: column;
+		gap: 5px;
 	}
 
 	.observe-stack-wrapper {
@@ -2133,12 +2366,23 @@
 	}
 
 	.observe-error-sample-ts {
-		font-size: 0.68rem;
+		display: inline-flex;
+		align-items: center;
+		gap: 4px;
+		align-self: flex-start;
+		font-size: 0.66rem;
+		font-variant-numeric: tabular-nums;
 		color: var(--surface-muted);
+		cursor: help;
 	}
 
-	.observe-error-chevron {
-		flex-shrink: 0;
+	.observe-error-samples-label {
+		font-size: 0.64rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--surface-muted);
+		margin: 4px 0 2px;
 	}
 
 	@media (max-width: 720px) {

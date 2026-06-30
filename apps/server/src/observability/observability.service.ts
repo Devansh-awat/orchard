@@ -16,6 +16,11 @@ export type LogEntry = {
   timestamp?: string;
   level?: string;
   message: string;
+  // Every content line of the logical entry (header + folded continuation
+  // lines: stack frames, object dumps). Length 1 for an ordinary single-line
+  // log. The frontend renders lines[0] as the header and the rest as
+  // expandable detail.
+  lines: string[];
   raw: string;
   metadata?: Record<string, any>;
 };
@@ -159,9 +164,9 @@ export class ObservabilityService {
           }
         }
         const lines = (result.logs || '').split('\n').filter(Boolean);
-        for (const line of lines) {
-          allEntries.push(parseLine(line));
-        }
+        // Group within a pod's stream so multi-line entries (stack traces,
+        // object dumps) stay together and keep their original order.
+        allEntries.push(...groupLines(lines));
       } catch (err) {
         this.logger.warn(`failed to fetch logs for pod ${pod.name}: ${(err as Error).message}`);
       }
@@ -298,7 +303,7 @@ export class ObservabilityService {
     deploymentId: string,
     timeWindowMinutes: number = 60,
   ): Promise<{ errors: ErrorGroup[] }> {
-    const tailLines = Math.min(5000, timeWindowMinutes * 50);
+    const tailLines = Math.min(20000, timeWindowMinutes * 50);
     const { entries } = await this.getStructuredLogs(deploymentId, tailLines);
 
     const cutoff = new Date(Date.now() - timeWindowMinutes * 60 * 1000);
@@ -318,8 +323,7 @@ export class ObservabilityService {
       stackTrace?: string;
     }> = [];
 
-    for (let i = 0; i < windowEntries.length; i++) {
-      const entry = windowEntries[i];
+    for (const entry of windowEntries) {
       const isError =
         entry.level === 'ERROR' ||
         entry.level === 'FATAL' ||
@@ -327,18 +331,13 @@ export class ObservabilityService {
 
       if (!isError) continue;
 
-      const { type, message: errMsg } = extractErrorInfo(entry.message || entry.raw);
+      const { type, message: errMsg } = extractErrorInfo(entry.message);
 
-      let stackTrace: string | undefined;
-      const stackLines: string[] = [];
-      let j = i + 1;
-      while (j < windowEntries.length && isStackFrame(windowEntries[j].raw)) {
-        stackLines.push(windowEntries[j].raw);
-        j++;
-      }
-      if (stackLines.length > 0) {
-        stackTrace = stackLines.join('\n');
-      }
+      // Grouped entries already carry their stack/object-dump as the
+      // continuation lines after the header (entry.raw is the cleaned text).
+      const cleanLines = entry.raw.split('\n');
+      const stackLines = cleanLines.slice(1).filter((l) => isStackFrame(l) || /^\s/.test(l));
+      const stackTrace = stackLines.length > 0 ? stackLines.join('\n') : undefined;
 
       errorEntries.push({
         timestamp: entry.timestamp,
@@ -503,43 +502,116 @@ export class ObservabilityService {
   }
 }
 
-const TIMESTAMP_LEVEL_RE =
-  /^(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)\s+(DEBUG|INFO|WARN(?:ING)?|ERROR|FATAL|TRACE)\b\s*(.*)/i;
+// Kubernetes prefixes every line with an RFC3339Nano timestamp + space when
+// logs are requested with timestamps=true.
+const K8S_TS_RE = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)\s(.*)$/s;
+// ANSI SGR/color escape sequences (\x1b[..m) and other CSI codes.
+const ANSI_RE = /\[[0-9;]*[A-Za-z]/g;
+const INLINE_LEVEL_RE = /^\[?(DEBUG|INFO|WARN(?:ING)?|ERROR|FATAL|TRACE)\]?\b/i;
 
-function parseLine(raw: string): LogEntry {
-  const trimmed = raw.trim();
+function stripAnsi(s: string): string {
+  return s.replace(ANSI_RE, '');
+}
 
-  try {
-    const obj = JSON.parse(trimmed);
-    if (typeof obj === 'object' && obj !== null) {
-      const level =
-        obj.level ?? obj.severity ?? obj.lvl ?? obj.log_level ?? undefined;
-      const message =
-        obj.msg ?? obj.message ?? obj.text ?? trimmed;
-      const timestamp =
-        obj.timestamp ?? obj.time ?? obj.ts ?? obj['@timestamp'] ?? undefined;
-      const { level: _l, severity: _s, lvl: _v, log_level: _ll, msg: _m, message: _ms, text: _t, timestamp: _ts, time: _ti, ts: _tss, '@timestamp': _at, ...metadata } = obj;
-      return {
-        timestamp: timestamp != null ? String(timestamp) : undefined,
-        level: level != null ? String(level).toUpperCase() : undefined,
-        message: String(message),
-        raw,
-        metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
-      };
+// `raw` keeps the original line (k8s timestamp + ANSI) so the frontend can
+// render it in colour through ansiToHtml; `clean` is timestamp/ANSI-stripped
+// and drives grouping, level detection, and search.
+type RawLine = { ts?: string; tsMs: number; raw: string; clean: string };
+
+function splitLine(raw: string): RawLine {
+  const m = K8S_TS_RE.exec(raw);
+  if (m) {
+    const ms = Date.parse(m[1]);
+    return { ts: m[1], tsMs: Number.isNaN(ms) ? NaN : ms, raw, clean: stripAnsi(m[2]) };
+  }
+  return { ts: undefined, tsMs: NaN, raw, clean: stripAnsi(raw) };
+}
+
+// A line continues the open entry when it's an indented/stack/brace fragment,
+// or — within the same flush window — a top-level `key: value` annotation
+// (e.g. `params:`, `cause:`, `H3Error:`). This folds a console.error's stack
+// and object dump into one logical entry instead of one row per physical line.
+function isContinuation(line: RawLine, groupStartMs: number): boolean {
+  const c = line.clean;
+  if (c === '') return false;
+  if (/^\s/.test(c)) return true;
+  if (/^(at\s|\.{3}\s*\d+\s+more\b|Caused by:|goroutine\s|File ")/.test(c)) return true;
+  if (/^[}\])]/.test(c)) return true;
+  const closeBy = Number.isNaN(line.tsMs) || Number.isNaN(groupStartMs)
+    ? false
+    : Math.abs(line.tsMs - groupStartMs) <= 5;
+  if (closeBy && /^[\w.$#-]+:\s/.test(c)) return true;
+  return false;
+}
+
+function groupLines(rawLines: string[]): LogEntry[] {
+  const entries: LogEntry[] = [];
+  let group: { header: RawLine; lines: RawLine[] } | null = null;
+
+  const flush = () => {
+    if (!group) return;
+    entries.push(buildEntry(group.header, group.lines));
+    group = null;
+  };
+
+  for (const raw of rawLines) {
+    const line = splitLine(raw);
+    if (group && group.lines.length < 500 && isContinuation(line, group.header.tsMs)) {
+      group.lines.push(line);
+    } else {
+      flush();
+      group = { header: line, lines: [line] };
     }
-  } catch {}
+  }
+  flush();
+  return entries;
+}
 
-  const match = TIMESTAMP_LEVEL_RE.exec(trimmed);
-  if (match) {
-    return {
-      timestamp: match[1],
-      level: normalizeLevel(match[2]),
-      message: match[3],
-      raw,
-    };
+function buildEntry(header: RawLine, lines: RawLine[]): LogEntry {
+  // Single-line JSON log: surface its own level/message/timestamp.
+  if (lines.length === 1) {
+    const trimmed = header.clean.trim();
+    if (trimmed.startsWith('{') && trimmed.endsWith('}')) {
+      try {
+        const obj = JSON.parse(trimmed);
+        if (obj && typeof obj === 'object') {
+          const level = obj.level ?? obj.severity ?? obj.lvl ?? obj.log_level;
+          const message = obj.msg ?? obj.message ?? obj.text ?? trimmed;
+          const timestamp = obj.timestamp ?? obj.time ?? obj.ts ?? obj['@timestamp'] ?? header.ts;
+          const { level: _l, severity: _s, lvl: _v, log_level: _ll, msg: _m, message: _ms, text: _t, timestamp: _ts, time: _ti, ts: _tss, '@timestamp': _at, ...metadata } = obj;
+          return {
+            timestamp: timestamp != null ? String(timestamp) : undefined,
+            level: level != null ? normalizeLevel(String(level)) : undefined,
+            message: String(message),
+            lines: [String(message)],
+            raw: String(message),
+            metadata: Object.keys(metadata).length > 0 ? metadata : undefined,
+          };
+        }
+      } catch {}
+    }
   }
 
-  return { message: trimmed, raw };
+  const cleanLines = lines.map((l) => l.clean);
+  return {
+    timestamp: header.ts,
+    level: detectLevel(header.clean, cleanLines),
+    message: header.clean,
+    // Original ts+ANSI lines for colourised rendering on the client.
+    lines: lines.map((l) => l.raw),
+    // Cleaned text for client-side search.
+    raw: cleanLines.join('\n'),
+  };
+}
+
+function detectLevel(header: string, lines: string[]): string | undefined {
+  const m = INLINE_LEVEL_RE.exec(header.trim());
+  if (m) return normalizeLevel(m[1]);
+  if (lines.some((l) => hasStackTraceStart(l)) || /\b(error|exception|unhandled|fatal|panic|failed)\b/i.test(header)) {
+    return 'ERROR';
+  }
+  if (/\bwarn(ing)?\b/i.test(header)) return 'WARN';
+  return undefined;
 }
 
 function normalizeLevel(s: string): string {

@@ -1049,7 +1049,7 @@ a.dep-meta-lead-link:hover {
 }
 
 /* ===== Log timestamp pills ===== */
-.console-output .log-ts {
+:is(.console-output, .observe-log-viewer) .log-ts {
 	display: inline-block;
 	padding: 0 0.375rem;
 	border-radius: 0.25rem;
@@ -1068,18 +1068,18 @@ a.dep-meta-lead-link:hover {
 		background 0.1s,
 		color 0.1s;
 }
-.console-output .log-ts:hover {
+:is(.console-output, .observe-log-viewer) .log-ts:hover {
 	background: rgba(255, 255, 255, 0.12);
 	color: rgba(255, 255, 255, 0.7);
 }
-.console-output .log-ts-ms {
+:is(.console-output, .observe-log-viewer) .log-ts-ms {
 	opacity: 0.5;
 	font-size: 0.5625rem;
 }
 
 /* Tooltip — built from data attributes via ::after.
 	   Uses position:fixed computed by JS to escape overflow:auto parents. */
-.console-output .log-ts::after {
+:is(.console-output, .observe-log-viewer) .log-ts::after {
 	content: attr(data-tooltip-local) '\A' 'UTC: ' attr(data-tooltip-utc) '\A' attr(data-tooltip-ago)
 		' · ' attr(data-tooltip-tz) '\A\A' attr(data-tooltip-raw);
 	white-space: pre-wrap;
@@ -1107,7 +1107,7 @@ a.dep-meta-lead-link:hover {
 	top: var(--tt-y, -9999px);
 	transform: translateY(-100%) scale(0.96);
 }
-.console-output .log-ts:hover::after {
+:is(.console-output, .observe-log-viewer) .log-ts:hover::after {
 	opacity: 1;
 	transform: translateY(-100%) scale(1);
 }
