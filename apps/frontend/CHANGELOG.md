@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.7.1...frontend/v0.8.0) (2026-06-30)
+
+
+### Features
+
+* terminal-style colored logs with grouping, scroll pagination, server-side search, sentry-style errors ([9564844](https://github.com/LeafdTK/leaf/commit/95648442a08a5b209d0809e81d29bf0e33c0c81e))
+
+
+### Bug Fixes
+
+* **frontend:** rename deployment/build UI labels to apps/deployments ([c3c1be9](https://github.com/LeafdTK/leaf/commit/c3c1be94a6ccd56c80d1225f8b6b6d90fb4b4258))
+
 ## [0.7.1](https://github.com/LeafdTK/leaf/compare/frontend/v0.7.0...frontend/v0.7.1) (2026-06-29)
 
 
