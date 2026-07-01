@@ -1138,7 +1138,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (!deployment) {
       throw new NotFoundException(`Deployment ${deploymentId} not found`);
     }
-    this.assertNotComposeManaged(deployment, 'Update environment variables');
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployments');
 

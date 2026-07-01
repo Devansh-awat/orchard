@@ -260,17 +260,29 @@ export class ComposeStacksService {
     }
   }
 
+  private mergeComposeEnv(
+    composeEnv: { key: string; value: string }[],
+    preserved?: { key: string; value: string }[],
+  ): { key: string; value: string }[] {
+    const merged = new Map<string, string>();
+    for (const e of preserved ?? []) merged.set(e.key, e.value);
+    for (const e of composeEnv ?? []) merged.set(e.key, e.value);
+    return Array.from(merged.entries()).map(([key, value]) => ({ key, value }));
+  }
+
   private async deployChildren(
     stackId: string,
     services: ParsedComposeService[],
     clerkId: string,
     userData?: UserData,
+    preservedEnv?: Map<string, { key: string; value: string }[]>,
   ) {
     const stack = await this.prisma.composeStack.findUnique({ where: { id: stackId } });
     if (!stack) throw new NotFoundException('Compose stack disappeared');
 
     for (const svc of services) {
       const deployName = `${stack.name}-${svc.name}`.slice(0, 63);
+      const env = this.mergeComposeEnv(svc.env, preservedEnv?.get(svc.name));
       if (svc.build) {
         // Reuse the existing GitHub-build pipeline. Each child deployment owns
         // its own buildStatus/buildLogs and webhooks fan out per child.
@@ -288,7 +300,7 @@ export class ComposeStacksService {
             buildFromRoot,
             replicas: svc.replicas,
             ports: svc.ports.length > 0 ? svc.ports : undefined,
-            env: svc.env,
+            env,
             volumes: svc.volumes.map((v) => ({
               name: v.name,
               type: v.type,
@@ -312,7 +324,7 @@ export class ComposeStacksService {
             image: svc.image,
             replicas: svc.replicas,
             ports: svc.ports.length > 0 ? svc.ports : undefined,
-            env: svc.env,
+            env,
             volumes: svc.volumes.map((v) => ({
               name: v.name,
               type: v.type,
@@ -368,6 +380,18 @@ export class ComposeStacksService {
       throw e;
     }
 
+    const existingChildren = await this.prisma.deployment.findMany({
+      where: { composeStackId: stackId },
+      select: {
+        composeServiceName: true,
+        envVars: { select: { key: true, value: true } },
+      },
+    });
+    const preservedEnv = new Map<string, { key: string; value: string }[]>();
+    for (const child of existingChildren) {
+      if (child.composeServiceName) preservedEnv.set(child.composeServiceName, child.envVars);
+    }
+
     try {
       await this.deleteChildDeployments(stackId, clerkId, userData);
     } catch (e: any) {
@@ -384,7 +408,7 @@ export class ComposeStacksService {
     });
 
     try {
-      await this.deployChildren(stackId, services, clerkId, userData);
+      await this.deployChildren(stackId, services, clerkId, userData, preservedEnv);
       await this.prisma.composeStack.update({
         where: { id: stackId },
         data: { status: 'active', lastError: null },
