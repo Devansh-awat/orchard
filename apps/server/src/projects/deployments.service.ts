@@ -4561,6 +4561,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
                 cpuMilli: rebuildResources.cpuMilli * (deploymentRow.replicas || 1),
                 memoryBytes: rebuildResources.memoryBytes * (deploymentRow.replicas || 1),
               },
+              deploymentRow.id,
             );
           }
           await this.quotasService.applyProjectQuota(deploymentRow.projectId).catch((err) => {

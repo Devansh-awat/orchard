@@ -479,6 +479,7 @@ export class QuotasService {
   async getMemberUsage(
     organizationId: string,
     userId: string,
+    excludeDeploymentId?: string,
   ): Promise<{
     cpuMilli: number;
     memoryBytes: number;
@@ -537,6 +538,7 @@ export class QuotasService {
     }> = [];
     for (const p of projects) {
       for (const d of p.deployments) {
+        if (excludeDeploymentId && d.id === excludeDeploymentId) continue;
         const c = (d.cpuRequestMilli ?? 0) * (d.replicas ?? 1);
         const m = (d.memoryRequestBytes ? Number(d.memoryRequestBytes) : 0) * (d.replicas ?? 1);
         cpu += c;
@@ -577,11 +579,12 @@ export class QuotasService {
     organizationId: string,
     ownerId: string | null | undefined,
     requested: { cpuMilli: number; memoryBytes: number },
+    excludeDeploymentId?: string,
   ) {
     if (!ownerId) return;
     const allowance = await this.resolveMemberAllowance(organizationId, ownerId);
     if (allowance.cpuMilli === null && allowance.memoryBytes === null) return;
-    const usage = await this.getMemberUsage(organizationId, ownerId);
+    const usage = await this.getMemberUsage(organizationId, ownerId, excludeDeploymentId);
     if (allowance.cpuMilli !== null && usage.cpuMilli + requested.cpuMilli > allowance.cpuMilli) {
       throw new ForbiddenException(
         `User CPU allowance exceeded: need ${usage.cpuMilli + requested.cpuMilli}m, allowance ${allowance.cpuMilli}m`,
