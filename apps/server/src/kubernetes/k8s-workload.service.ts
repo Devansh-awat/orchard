@@ -661,7 +661,7 @@ export class K8sWorkloadService {
       const effectiveStrategy = hasPvcVolume ? 'recreate' : (options.deployStrategy ?? 'rollingUpdate');
       const strategy: k8s.V1DeploymentStrategy = effectiveStrategy === 'recreate'
         ? { type: 'Recreate' }
-        : { type: 'RollingUpdate', rollingUpdate: { maxSurge: '25%', maxUnavailable: '25%' } };
+        : { type: 'RollingUpdate', rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } };
 
       const deploymentBody: k8s.V1Deployment = {
         metadata: {
@@ -1167,7 +1167,7 @@ export class K8sWorkloadService {
       const effectiveStrategy = hasPvcVolume ? 'recreate' : (options.deployStrategy ?? 'rollingUpdate');
       const strategy: k8s.V1DeploymentStrategy = effectiveStrategy === 'recreate'
         ? { type: 'Recreate', rollingUpdate: null as any }
-        : { type: 'RollingUpdate', rollingUpdate: { maxSurge: '25%', maxUnavailable: '25%' } };
+        : { type: 'RollingUpdate', rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } };
 
       const patch = {
         spec: {
@@ -1781,7 +1781,7 @@ export class K8sWorkloadService {
     // type=Recreate, so we have to actively wipe it.
     const body: k8s.V1DeploymentStrategy = strategy === 'recreate'
       ? { type: 'Recreate', rollingUpdate: null as any }
-      : { type: 'RollingUpdate', rollingUpdate: { maxSurge: '25%', maxUnavailable: '25%' } };
+      : { type: 'RollingUpdate', rollingUpdate: { maxSurge: 0, maxUnavailable: 1 } };
 
     try {
       await api.patchNamespacedDeployment(
