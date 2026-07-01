@@ -1547,14 +1547,17 @@ export class K8sWorkloadService {
       );
       
       const dbDeployments = await this.prisma.deployment.findMany({
-        where: { 
+        where: {
           projectId: project.id,
-          buildStatus: { notIn: ['building'] }
+          buildStatus: 'succeeded',
         }
       });
-      
+
       for (const dbDeployment of dbDeployments) {
         if (!dbDeploymentNames.has(dbDeployment.name)) {
+          this.logger.warn(
+            `[Sync] ${namespace}: deployment "${dbDeployment.name}" (${dbDeployment.id}) built successfully but is absent from k8s; removing stale DB row`,
+          );
           await this.prisma.deployment.delete({
             where: { id: dbDeployment.id }
           });
