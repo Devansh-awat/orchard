@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
+import { LeaderElectionService } from '../events/leader-election.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 
 export type AuditMetadataValue = string | number | boolean | null | [unknown, unknown];
@@ -48,6 +49,7 @@ export class AuditService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly analytics: AnalyticsService,
+    private readonly leaderElection: LeaderElectionService,
   ) {}
 
   /**
@@ -185,6 +187,7 @@ export class AuditService {
    */
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
   async pruneExpired() {
+    if (!this.leaderElection.isLeader()) return;
     const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000);
     try {
       const { count } = await this.prisma.auditLog.deleteMany({

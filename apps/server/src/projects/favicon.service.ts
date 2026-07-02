@@ -1,5 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
+import { LeaderElectionService } from '../events/leader-election.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { S3Client, PutObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import * as dns from 'dns';
@@ -136,7 +137,10 @@ export class FaviconService {
   private static MEMORY_TTL = 24 * 60 * 60 * 1000; // 24h in-memory
   private pendingFetches = new Map<string, Promise<string | null>>();
 
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly leaderElection: LeaderElectionService,
+  ) {}
 
   private initS3() {
     if (this.s3Client) return;
@@ -289,6 +293,7 @@ export class FaviconService {
    */
   @Cron(CronExpression.EVERY_DAY_AT_4AM)
   async refreshAllFavicons() {
+    if (!this.leaderElection.isLeader()) return;
     let rows: { host: string | null }[];
     try {
       rows = await this.prisma.ingress.findMany({ select: { host: true } });

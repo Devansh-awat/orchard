@@ -22,6 +22,7 @@ import { TailscaleService } from '../tailscale/tailscale.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { AuditService } from '../audit/audit.service';
+import { LeaderElectionService } from '../events/leader-election.service';
 import { ProjectAccessService } from './project-access.service';
 import { NodesService } from '../nodes/nodes.service';
 import { formatSlug } from './projects.utils';
@@ -52,6 +53,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     private readonly access: ProjectAccessService,
     @Inject(forwardRef(() => NodesService))
     private readonly nodesService: NodesService,
+    private readonly leaderElection: LeaderElectionService,
   ) {}
 
   onModuleInit() {
@@ -67,6 +69,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async recoverStuckBuilds() {
+    if (!this.leaderElection.isLeader()) return;
     try {
       const stuckBuilds = await this.prisma.deployment.findMany({
         where: {
