@@ -280,21 +280,56 @@ To diagnose an unhealthy database, check \`liveStatus.message\`, \`liveStatus.la
   server.registerTool(
     'get_pod_logs',
     {
-      description: 'Get runtime logs from a specific pod. Use list_pods first to get pod names.',
+      description: 'Get runtime logs from a specific pod. Use list_pods first to get pod names. Pass previous=true to read the logs of the prior (terminated) container instance after a crash/OOM restart.',
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
         podName: z.string().describe('The pod name (from list_pods)'),
         namespace: z.string().optional().describe('Kubernetes namespace (defaults to deployment namespace). Get this from the deployment details or list_pods.'),
         tailLines: z.number().optional().describe('Number of log lines to return (default: 100)'),
+        previous: z.boolean().optional().describe('Read logs from the previous (terminated) container instance instead of the current one. Use this to see what a crashed/OOMKilled container printed before it died.'),
       },
     },
-    async ({ podName, namespace, tailLines }) => {
+    async ({ podName, namespace, tailLines, previous }) => {
       const params = new URLSearchParams();
       if (namespace) params.set('namespace', namespace);
       if (tailLines) params.set('tailLines', String(tailLines));
+      if (previous) params.set('previous', 'true');
       const qs = params.toString();
       const logs = await client.get(`/pods/${podName}/logs${qs ? `?${qs}` : ''}`);
       return { content: [{ type: 'text', text: typeof logs === 'string' ? logs : JSON.stringify(logs, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    'list_killed_containers',
+    {
+      description: 'List recently killed containers for a deployment (last 24h): pod, container, termination reason (e.g. OOMKilled), exit code, and when it died. Their pre-death logs are captured even if the pod no longer exists — pass an entryId to get_killed_container_logs to read them. Use this first when diagnosing crashes, OOMs, or restart loops.',
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+      },
+    },
+    async ({ deploymentId }) => {
+      const entries = await client.get(`/deployments/${deploymentId}/killed-containers`);
+      return { content: [{ type: 'text', text: JSON.stringify(entries, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    'get_killed_container_logs',
+    {
+      description: 'Get the captured logs a killed container printed before it died (last ~500 lines, retained 24h). Works even after the pod was deleted. Use list_killed_containers first to get the entryId.',
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        entryId: z.string().describe('The killed-container entryId (from list_killed_containers)'),
+      },
+    },
+    async ({ deploymentId, entryId }) => {
+      const entry = await client.get(
+        `/deployments/${deploymentId}/killed-containers/${encodeURIComponent(entryId)}/logs`,
+      );
+      return { content: [{ type: 'text', text: JSON.stringify(entry, null, 2) }] };
     },
   );
 
