@@ -6,6 +6,7 @@ import { EventBusService } from './event-bus.service';
 import { LeaderElectionService } from './leader-election.service';
 import { EventsController } from './events.controller';
 import { PrismaEventsBridge } from './prisma-events.bridge';
+import { MetricsPusherService } from './metrics-pusher.service';
 import { K8sPodInformerService } from '../kubernetes/k8s-pod-informer.service';
 import { K8sCnpgInformerService } from '../kubernetes/k8s-cnpg-informer.service';
 import { PodLogCaptureService } from '../kubernetes/pod-log-capture.service';
@@ -21,6 +22,7 @@ import { PodLogCaptureService } from '../kubernetes/pod-log-capture.service';
     K8sPodInformerService,
     K8sCnpgInformerService,
     PodLogCaptureService,
+    MetricsPusherService,
   ],
   controllers: [EventsController],
   exports: [OrgEventsService, LeaderElectionService, PodLogCaptureService],

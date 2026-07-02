@@ -2,7 +2,7 @@
 	import { onMount, onDestroy } from 'svelte';
 	import { Check, X, Loader2, Database, ChevronDown } from 'lucide-svelte';
 	import TriangleAlertIcon from '$lib/components/icons/TriangleAlertIcon.svelte';
-	import { apiFetch } from '$lib/stores';
+	import { apiFetch, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
 
 	type StepStatus = 'pending' | 'running' | 'done' | 'error';
 	interface Step {
@@ -81,12 +81,22 @@
 
 	function scheduleNext() {
 		if (pollTimer) clearTimeout(pollTimer);
-		// Poll faster while not done; stop once it's done or failed.
 		if (data?.done) return;
 		pollTimer = setTimeout(async () => {
 			await fetchOnce();
 			scheduleNext();
-		}, 2500);
+		}, 10_000);
+	}
+
+	let fetchQueued = false;
+
+	function queueFetch() {
+		if (fetchQueued || data?.done) return;
+		fetchQueued = true;
+		setTimeout(async () => {
+			fetchQueued = false;
+			await fetchOnce();
+		}, 250);
 	}
 
 	onMount(() => {
@@ -94,6 +104,18 @@
 	});
 	onDestroy(() => {
 		if (pollTimer) clearTimeout(pollTimer);
+	});
+
+	$effect(() => {
+		const orgId = $selectedOrganization?.id;
+		if (!orgId) return;
+		return subscribeOrgEvents(
+			orgId,
+			(ev) => {
+				if (ev.type === 'database.changed' && ev.id === dbId) queueFetch();
+			},
+			{ invalidateDependencies: [] }
+		);
 	});
 
 	$effect(() => {

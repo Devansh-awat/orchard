@@ -2,7 +2,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
-	import { apiFetch, toasts } from '$lib/stores';
+	import { apiFetch, toasts, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
 	import { ArrowLeft, Loader2, ExternalLink, X } from 'lucide-svelte';
 	import DeploymentProgress from '$lib/components/DeploymentProgress.svelte';
 
@@ -66,16 +66,41 @@
 		}
 	}
 
+	let fetchQueued = false;
+
+	function queueFetch() {
+		if (fetchQueued) return;
+		fetchQueued = true;
+		setTimeout(() => {
+			fetchQueued = false;
+			fetchDeployment();
+		}, 250);
+	}
+
 	onMount(() => {
 		fetchDeployment();
-		// Poll every 2 seconds for faster updates
-		pollInterval = setInterval(fetchDeployment, 2000);
+		pollInterval = setInterval(fetchDeployment, 10_000);
 	});
 
 	onDestroy(() => {
 		if (pollInterval) {
 			clearInterval(pollInterval);
 		}
+	});
+
+	$effect(() => {
+		const orgId = $selectedOrganization?.id;
+		if (!orgId) return;
+		return subscribeOrgEvents(
+			orgId,
+			(ev) => {
+				if (ev.id !== deploymentId) return;
+				if (ev.type === 'deployment.changed' || ev.type === 'build.changed' || ev.type === 'pod.changed') {
+					queueFetch();
+				}
+			},
+			{ invalidateDependencies: [] }
+		);
 	});
 
 	const isGitHubDeploy = $derived(Boolean(deployment?.githubRepo));

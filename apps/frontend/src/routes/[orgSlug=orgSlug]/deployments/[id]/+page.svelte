@@ -1271,6 +1271,25 @@
 		deployment = { ...deployment, pods };
 	}
 
+	function applyMetricsDelta(payload: any) {
+		if (!deployment || payload?.totalCpuUsage == null) return;
+		const podMetrics = payload.pods ?? {};
+		deployment = {
+			...deployment,
+			totalCpuUsage: payload.totalCpuUsage,
+			totalMemoryUsage: payload.totalMemoryUsage,
+			pods: ((deployment.pods as any[]) ?? []).map((p) =>
+				podMetrics[p.name]
+					? {
+							...p,
+							cpuUsage: podMetrics[p.name].cpuUsage,
+							memoryUsage: podMetrics[p.name].memoryUsage
+						}
+					: p
+			)
+		};
+	}
+
 	let podsLiveInflight = false;
 	async function refreshPodsLive() {
 		if (!deployment || !deploymentId || podsLiveInflight) return;
@@ -2361,7 +2380,9 @@
 					const currentId = deploymentId;
 					const relevant = ev.id === currentId || ev.projectId === deployment?.projectId;
 					if (!relevant) return;
-					if (ev.type === 'pod.changed' && ev.id === currentId) {
+					if (ev.type === 'deployment.metrics') {
+						if (ev.id === currentId) applyMetricsDelta(ev.payload);
+					} else if (ev.type === 'pod.changed' && ev.id === currentId) {
 						applyPodDelta(ev.payload);
 						refreshPodsLive();
 					} else {
