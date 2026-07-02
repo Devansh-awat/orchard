@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.9.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.8.0...frontend/v0.9.0) (2026-07-02)
+
+
+### Features
+
+* informer-driven pod events on redis streams, OOM surfacing, killed-container logs ([#79](https://github.com/LeafdTK/leaf/issues/79)) ([2ba9309](https://github.com/LeafdTK/leaf/commit/2ba930913a6b3d4eaa8fe879081c66c24b114f85))
+
 ## [0.8.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.7.1...frontend/v0.8.0) (2026-06-30)
 
 
