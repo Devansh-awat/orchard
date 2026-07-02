@@ -313,7 +313,7 @@ export class K8sWorkloadService {
     }
   }
 
-  async getPodLogs(podName: string, namespace: string = 'midnight-staging', containerName?: string, tailLines: number = 100) {
+  async getPodLogs(podName: string, namespace: string = 'midnight-staging', containerName?: string, tailLines: number = 100, previous: boolean = false) {
     this.ensureKubeConfig();
 
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
@@ -363,18 +363,19 @@ export class K8sWorkloadService {
           false,
           undefined,
           undefined,
-          false,
+          previous,
           undefined,
           tailLines,
           true
         );
-        
+
         return {
           podName: cleanPodName,
           container: targetContainer,
           namespace: cleanNamespace,
           logs: logs.body,
-          tailLines: tailLines
+          tailLines: tailLines,
+          previous,
         };
       } catch (logError) {
         const statusCode = logError.response?.statusCode;
@@ -393,6 +394,19 @@ export class K8sWorkloadService {
             logs: '',
             tailLines: tailLines,
             pending: true,
+            message: k8sMessage
+          };
+        }
+
+        if (statusCode === 400 && previous && /previous terminated container/i.test(k8sMessage)) {
+          return {
+            podName: cleanPodName,
+            container: targetContainer,
+            namespace: cleanNamespace,
+            logs: '',
+            tailLines: tailLines,
+            previous: true,
+            noPreviousLogs: true,
             message: k8sMessage
           };
         }
@@ -2169,13 +2183,17 @@ export class K8sWorkloadService {
             }
           }
 
+          const term = state?.terminated ?? status?.lastState?.terminated;
+
           return {
             name: container.name,
             image: container.image,
             ready: status?.ready ?? false,
             restartCount: status?.restartCount ?? 0,
             warning: containerWarning,
-            lastTerminatedAt: status?.lastState?.terminated?.finishedAt,
+            lastTerminatedAt: term?.finishedAt,
+            lastTerminationReason: term?.reason,
+            lastExitCode: term?.exitCode,
           };
         }) ?? [];
 
@@ -2242,7 +2260,25 @@ export class K8sWorkloadService {
             : null;
           const recentlyTerminated =
             terminatedAt !== null && Date.now() - terminatedAt < RECENT_TERMINATION_MS;
-          if (container.restartCount > 0 && (pod.status !== 'ready' || recentlyTerminated)) {
+          const restartingOrRecentlyDied =
+            container.restartCount > 0 && (pod.status !== 'ready' || recentlyTerminated);
+
+          const reason = container.lastTerminationReason;
+          if (
+            reason &&
+            reason !== 'Completed' &&
+            reason !== 'Error' &&
+            restartingOrRecentlyDied
+          ) {
+            const codePart =
+              container.lastExitCode != null ? ` (exit code ${container.lastExitCode})` : '';
+            podWarnings.push({
+              message: `${container.name}: last terminated with ${reason}${codePart}`,
+              timestamp: container.lastTerminatedAt,
+            });
+          }
+
+          if (restartingOrRecentlyDied) {
             podWarnings.push({
               message: `${container.name} has restarted ${container.restartCount} time(s)`,
               timestamp: container.lastTerminatedAt,

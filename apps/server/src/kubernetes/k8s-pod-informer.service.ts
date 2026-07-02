@@ -3,16 +3,24 @@ import * as k8s from '@kubernetes/client-node';
 import { KubernetesService } from './kubernetes.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrgEventsService } from '../events/org-events.service';
+import { LeaderElectionService } from '../events/leader-election.service';
+import { PodLogCaptureService } from './pod-log-capture.service';
 
 const ORCHARD_SELECTOR = 'app.kubernetes.io/managed-by=orchard';
 const POSITIVE_TTL_MS = 10 * 60 * 1000;
 const NEGATIVE_TTL_MS = 30 * 1000;
-const EMIT_COALESCE_MS = 750;
+const EMIT_COALESCE_MS = 250;
 
 interface Ctx {
   deploymentId: string;
   orgId: string;
   projectId: string;
+}
+
+interface PendingEmit {
+  ctx: Ctx;
+  payload: unknown;
+  timer: ReturnType<typeof setTimeout>;
 }
 
 @Injectable()
@@ -24,11 +32,14 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
   private restartTimer?: ReturnType<typeof setTimeout>;
   private readonly ctxCache = new Map<string, { ctx: Ctx | null; exp: number }>();
   private readonly lastEmit = new Map<string, number>();
+  private readonly pending = new Map<string, PendingEmit>();
 
   constructor(
     private readonly kubernetes: KubernetesService,
     private readonly prisma: PrismaService,
     private readonly orgEvents: OrgEventsService,
+    private readonly leader: LeaderElectionService,
+    private readonly logCapture: PodLogCaptureService,
   ) {}
 
   async onModuleInit() {
@@ -60,6 +71,8 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
   async onModuleDestroy() {
     this.stopped = true;
     if (this.restartTimer) clearTimeout(this.restartTimer);
+    for (const p of this.pending.values()) clearTimeout(p.timer);
+    this.pending.clear();
     try {
       await this.informer?.stop();
     } catch {}
@@ -87,29 +100,74 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async onPodEvent(type: 'add' | 'update' | 'delete', pod: k8s.V1Pod) {
+    if (!this.leader.isLeader()) return;
+
     const ns = pod.metadata?.namespace;
     const depName = pod.metadata?.labels?.['app.kubernetes.io/name'];
     if (!ns || !depName) return;
     const ctx = await this.resolveCtx(ns, depName);
     if (!ctx) return;
 
-    // Keep the `pods` table in sync from the single cluster-wide watch so log
-    // and overview reads (observability) have fresh pod names without each
-    // request hitting the k8s API. The DB write is never coalesced; only the
-    // SSE fan-out below is.
     await this.syncPod(type, ctx.deploymentId, pod);
 
-    const now = Date.now();
-    const last = this.lastEmit.get(ctx.deploymentId) ?? 0;
-    if (now - last < EMIT_COALESCE_MS) return;
-    this.lastEmit.set(ctx.deploymentId, now);
+    if (type !== 'delete') {
+      void this.logCapture.capture(ctx.deploymentId, ns, pod);
+    }
 
-    this.orgEvents.emitLocal({
+    const payload = this.buildPayload(type, pod);
+    this.scheduleEmit(ctx, payload);
+  }
+
+  private scheduleEmit(ctx: Ctx, payload: unknown) {
+    const key = ctx.deploymentId;
+    const now = Date.now();
+    const last = this.lastEmit.get(key) ?? 0;
+
+    if (now - last >= EMIT_COALESCE_MS) {
+      this.lastEmit.set(key, now);
+      this.emit(ctx, payload);
+      return;
+    }
+
+    const existing = this.pending.get(key);
+    if (existing) {
+      existing.payload = payload;
+      return;
+    }
+    const delay = EMIT_COALESCE_MS - (now - last);
+    const timer = setTimeout(() => {
+      const p = this.pending.get(key);
+      this.pending.delete(key);
+      this.lastEmit.set(key, Date.now());
+      if (p) this.emit(p.ctx, p.payload);
+    }, delay);
+    this.pending.set(key, { ctx, payload, timer });
+  }
+
+  private emit(ctx: Ctx, payload: unknown) {
+    this.orgEvents.emit({
       organizationId: ctx.orgId,
       type: 'pod.changed',
       id: ctx.deploymentId,
       projectId: ctx.projectId,
+      payload,
     });
+  }
+
+  private buildPayload(type: 'add' | 'update' | 'delete', pod: k8s.V1Pod) {
+    const name = pod.metadata?.name;
+    if (type === 'delete') return { deleted: true, name };
+    const containerStatuses = pod.status?.containerStatuses ?? [];
+    const term = latestTermination(containerStatuses);
+    return {
+      name,
+      status: computePodStatus(pod),
+      ready: pod.status?.conditions?.some((c) => c.type === 'Ready' && c.status === 'True') ?? false,
+      restartCount: containerStatuses.reduce((sum, c) => sum + (c.restartCount ?? 0), 0),
+      lastTermination: term?.reason
+        ? { reason: term.reason, exitCode: term.exitCode, finishedAt: term.finishedAt }
+        : null,
+    };
   }
 
   private async syncPod(
@@ -131,11 +189,18 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
         (sum, c) => sum + (c.restartCount ?? 0),
         0,
       );
+      const ready =
+        pod.status?.conditions?.some((c) => c.type === 'Ready' && c.status === 'True') ?? null;
+      const term = latestTermination(containerStatuses);
       const data = {
         podIp: pod.status?.podIP ?? null,
         nodeName: pod.spec?.nodeName ?? null,
         status: computePodStatus(pod),
         restartCount,
+        ready,
+        lastTerminationReason: term?.reason ?? null,
+        lastExitCode: term?.exitCode ?? null,
+        lastTerminatedAt: term?.finishedAt ?? null,
       };
 
       await this.prisma.pod.upsert({
@@ -176,6 +241,25 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
     this.ctxCache.set(key, { ctx, exp: Date.now() + (ctx ? POSITIVE_TTL_MS : NEGATIVE_TTL_MS) });
     return ctx;
   }
+}
+
+function latestTermination(
+  containerStatuses: k8s.V1ContainerStatus[],
+): { reason: string | null; exitCode: number | null; finishedAt: Date | null } | null {
+  let best: { reason: string | null; exitCode: number | null; finishedAt: Date | null } | null =
+    null;
+  for (const cs of containerStatuses) {
+    const t = cs.state?.terminated ?? cs.lastState?.terminated;
+    if (!t) continue;
+    const finishedAt = t.finishedAt ? new Date(t.finishedAt) : null;
+    if (best && best.finishedAt && finishedAt && finishedAt <= best.finishedAt) continue;
+    best = {
+      reason: t.reason ?? null,
+      exitCode: t.exitCode ?? null,
+      finishedAt,
+    };
+  }
+  return best;
 }
 
 const BACKOFF_REASONS = new Set([

@@ -71,8 +71,8 @@
 
 			<div class="settings-section-content">
 				<p class="mcp-desc">
-					The Orchard MCP server allows AI assistants like Claude to manage your apps,
-					databases, environment variables, networking, and more
+					The Orchard MCP server allows AI assistants like Claude to manage your apps, databases,
+					environment variables, networking, and more
 				</p>
 			</div>
 		</section>

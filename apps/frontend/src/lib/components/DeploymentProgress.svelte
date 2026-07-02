@@ -92,7 +92,11 @@
 
 	// Define steps for GitHub deployments
 	const githubSteps = [
-		{ id: 'cloning', label: 'Scheduling builder', description: 'Provisioning the build environment' },
+		{
+			id: 'cloning',
+			label: 'Scheduling builder',
+			description: 'Provisioning the build environment'
+		},
 		{ id: 'building', label: 'Building image', description: 'Creating Docker image' },
 		{ id: 'pushing', label: 'Pushing image', description: 'Uploading to container registry' },
 		{

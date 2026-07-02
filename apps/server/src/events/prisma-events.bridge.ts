@@ -14,7 +14,6 @@ const WATCHED_MODELS = [
   'database',
   'databaseBackup',
   'imageHistory',
-  'pod',
   'project',
   'ingress',
   'organizationMember',
@@ -90,8 +89,6 @@ export class PrismaEventsBridge implements OnModuleInit {
         return this.emitForDatabaseBackup(params, result);
       case 'ImageHistory':
         return this.emitForImageHistory(params, result);
-      case 'Pod':
-        return this.emitForPod(params, result);
       case 'Project':
         return this.emitForProject(params, result);
       case 'Ingress':
@@ -174,19 +171,6 @@ export class PrismaEventsBridge implements OnModuleInit {
       organizationId: ctx.orgId,
       type: 'build.changed',
       id: deploymentId,
-      projectId: ctx.projectId,
-    });
-  }
-
-  private async emitForPod(params: any, result: any) {
-    const deploymentId = result?.deploymentId ?? params?.args?.data?.deploymentId ?? params?.args?.where?.deploymentId;
-    if (!deploymentId) return;
-    const ctx = await this.resolveOrgIdFromDeployment(deploymentId);
-    if (!ctx) return;
-    this.orgEvents.emit({
-      organizationId: ctx.orgId,
-      type: 'pod.changed',
-      id: result?.id,
       projectId: ctx.projectId,
     });
   }

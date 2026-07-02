@@ -30,11 +30,7 @@
 	} = $props();
 </script>
 
-<SettingsSection
-	{index}
-	title="Tailscale"
-	description="Access your apps on your private network"
->
+<SettingsSection {index} title="Tailscale" description="Access your apps on your private network">
 	{#snippet icon(_hovered)}<Globe class="h-[18px] w-[18px]" />{/snippet}
 	{#snippet badge()}
 		{#if !tailscaleLoading}

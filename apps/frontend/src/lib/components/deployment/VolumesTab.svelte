@@ -53,8 +53,9 @@
 		<div class="strategy-note mb-4">
 			<TriangleAlert class="h-3.5 w-3.5 shrink-0" />
 			<span
-				>Rolling deployments are disabled because this app uses a PVC volume. Updates run
-				with the <strong>Recreate</strong> strategy — pods are torn down before new ones start.</span
+				>Rolling deployments are disabled because this app uses a PVC volume. Updates run with the <strong
+					>Recreate</strong
+				> strategy — pods are torn down before new ones start.</span
 			>
 		</div>
 	{/if}

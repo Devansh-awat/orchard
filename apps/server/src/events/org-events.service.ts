@@ -16,6 +16,7 @@ export interface OrgEvent {
   type: OrgEventType;
   id?: string;
   projectId?: string;
+  payload?: unknown;
   ts: number;
 }
 

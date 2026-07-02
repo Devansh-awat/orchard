@@ -26,7 +26,17 @@
 
 	let { deployment }: { deployment: any } = $props();
 
-	type SubTab = 'logs' | 'http' | 'traces' | 'errors';
+	type SubTab = 'logs' | 'http' | 'traces' | 'errors' | 'killed';
+
+	type KilledContainer = {
+		entryId: string;
+		pod: string;
+		container: string;
+		reason: string;
+		exitCode: number | null;
+		finishedAt: string | null;
+		capturedAt: string;
+	};
 	type LogLevel = 'all' | 'debug' | 'info' | 'warn' | 'error';
 	type TimeRange = '5m' | '15m' | '30m' | '1h';
 	type ErrorTimeWindow = '15m' | '1h' | '6h' | '24h';
@@ -221,9 +231,63 @@
 	}
 
 	const visibleTabs = $derived(
-		(['logs', 'http', 'traces', 'errors'] as SubTab[]).filter((t) => t !== 'http' || hasIngress)
+		(['logs', 'http', 'traces', 'errors', 'killed'] as SubTab[]).filter(
+			(t) => t !== 'http' || hasIngress
+		)
 	);
 	const activeTabIndex = $derived(visibleTabs.indexOf(activeTab));
+
+	let killedList = $state<KilledContainer[]>([]);
+	let killedLoading = $state(false);
+	let killedError = $state<string | null>(null);
+	let killedFetched = $state(false);
+	let expandedKilled = $state<string | null>(null);
+	let killedLogs = $state<Record<string, string>>({});
+	let killedLogsLoading = $state<string | null>(null);
+
+	async function fetchKilled() {
+		if (!deployment?.id) return;
+		killedLoading = true;
+		killedError = null;
+		try {
+			const res = await apiFetch(`/apiv1/deployments/${deployment.id}/killed-containers`);
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			killedList = await res.json();
+			killedFetched = true;
+		} catch (e) {
+			killedError = e instanceof Error ? e.message : 'Failed to load';
+		} finally {
+			killedLoading = false;
+		}
+	}
+
+	async function toggleKilled(entryId: string) {
+		if (expandedKilled === entryId) {
+			expandedKilled = null;
+			return;
+		}
+		expandedKilled = entryId;
+		if (killedLogs[entryId] !== undefined || !deployment?.id) return;
+		killedLogsLoading = entryId;
+		try {
+			const res = await apiFetch(
+				`/apiv1/deployments/${deployment.id}/killed-containers/${encodeURIComponent(entryId)}/logs`
+			);
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+			const data = await res.json();
+			killedLogs = { ...killedLogs, [entryId]: data.logs || '' };
+		} catch {
+			killedLogs = { ...killedLogs, [entryId]: '' };
+		} finally {
+			killedLogsLoading = null;
+		}
+	}
+
+	$effect(() => {
+		if (activeTab === 'killed' && !killedFetched) {
+			untrack(() => void fetchKilled());
+		}
+	});
 
 	async function copyToClipboard(text: string, id: string) {
 		await navigator.clipboard.writeText(text);
@@ -675,7 +739,18 @@
 		const errorRate = overview?.httpErrorRate ?? null;
 		const avgLatency = overview?.httpAvgLatency ?? null;
 
-		return { running, total, cpuReq, memReq, cpuPct, memPct, uptime, reqRate, errorRate, avgLatency };
+		return {
+			running,
+			total,
+			cpuReq,
+			memReq,
+			cpuPct,
+			memPct,
+			uptime,
+			reqRate,
+			errorRate,
+			avgLatency
+		};
 	});
 
 	function highlightStack(stack: string): string {
@@ -773,7 +848,9 @@
 							? 'HTTP'
 							: tab === 'traces'
 								? 'Traces'
-								: 'Errors'}
+								: tab === 'errors'
+									? 'Errors'
+									: 'Killed'}
 				</button>
 			{/each}
 		</div>
@@ -884,7 +961,8 @@
 											style="transform: rotate({open ? 90 : 0}deg);"
 										/>
 									{/if}
-									<span class="observe-log-msg">{@html ansiToHtml(entry.lines?.[0] ?? entry.message ?? '')}</span
+									<span class="observe-log-msg"
+										>{@html ansiToHtml(entry.lines?.[0] ?? entry.message ?? '')}</span
 									>
 									{#if detail.length > 0 && !open}
 										<span class="observe-log-more">+{detail.length}</span>
@@ -1248,6 +1326,115 @@
 												{/if}
 											</div>
 										{/each}
+									{/if}
+								</div>
+							{/if}
+						</div>
+					{/each}
+				</div>
+			{/if}
+		{:else if activeTab === 'killed'}
+			<div class="observe-errors-toolbar">
+				<span class="observe-killed-hint">
+					Containers terminated in the last 24h, with the logs they printed before dying
+				</span>
+				<button
+					class="observe-rangebtn"
+					onclick={() => fetchKilled()}
+					disabled={killedLoading}
+					type="button"
+				>
+					{#if killedLoading}<Loader2 class="h-3 w-3 animate-spin" />{:else}Refresh{/if}
+				</button>
+			</div>
+
+			{#if killedError}
+				<div class="observe-empty">
+					<AlertTriangle class="h-5 w-5" style="color: #d04a4a;" />
+					<span>Failed to load killed containers: {killedError}</span>
+				</div>
+			{:else if killedLoading && !killedList.length}
+				<div class="observe-empty">
+					<Loader2 class="h-5 w-5 animate-spin" />
+					<span>Loading...</span>
+				</div>
+			{:else if killedList.length === 0}
+				<div class="observe-empty-state">
+					<div class="observe-empty-icon-ring observe-empty-icon-ring--celebrate">
+						<PartyPopper class="h-10 w-10" style="color: #22c0a8;" />
+					</div>
+					<p class="observe-empty-title">No recently killed containers</p>
+					<p class="observe-empty-desc">
+						Nothing has crashed or been OOMKilled in the last 24 hours
+					</p>
+				</div>
+			{:else}
+				<div class="observe-errors-list">
+					{#each killedList as k, i (k.entryId)}
+						{@const isExpanded = expandedKilled === k.entryId}
+						<div
+							class="observe-error-card"
+							{@attach motionStagger({
+								index: i,
+								stride: 0.03,
+								from: { y: 6, opacity: 0 }
+							})}
+						>
+							<button
+								class="observe-error-header"
+								onclick={() => toggleKilled(k.entryId)}
+								type="button"
+							>
+								<ChevronRight
+									class="h-3.5 w-3.5 observe-error-chevron"
+									style="transform: rotate({isExpanded
+										? 90
+										: 0}deg); transition: transform 150ms ease; flex-shrink: 0;"
+								/>
+								<div class="observe-error-main">
+									<div class="observe-error-titlerow">
+										<span class="observe-error-type">{k.reason}</span>
+										{#if k.exitCode != null}
+											<span class="observe-error-fp">exit {k.exitCode}</span>
+										{/if}
+									</div>
+									<div class="observe-error-message-line">{k.pod} / {k.container}</div>
+									{#if k.finishedAt}
+										<div class="observe-error-meta">
+											<Clock class="h-3 w-3" />
+											{formatRelativeTime(new Date(k.finishedAt))}
+										</div>
+									{/if}
+								</div>
+							</button>
+
+							{#if isExpanded}
+								<div class="observe-error-detail">
+									{#if killedLogsLoading === k.entryId}
+										<div class="observe-empty">
+											<Loader2 class="h-4 w-4 animate-spin" />
+											<span>Loading captured logs...</span>
+										</div>
+									{:else if killedLogs[k.entryId]}
+										<div class="observe-stack-wrapper">
+											<pre class="observe-error-stack observe-killed-logs">{@html ansiToHtml(
+													killedLogs[k.entryId]
+												)}</pre>
+											<button
+												class="observe-stack-copy"
+												onclick={() =>
+													copyToClipboard(killedLogs[k.entryId], `killed-${k.entryId}`)}
+												type="button"
+											>
+												{#if copiedId === `killed-${k.entryId}`}<Check
+														class="h-3 w-3"
+													/>{:else}<Copy class="h-3 w-3" />{/if}
+											</button>
+										</div>
+									{:else}
+										<p class="observe-empty-desc">
+											No logs were captured for this container before it died
+										</p>
 									{/if}
 								</div>
 							{/if}
@@ -2132,6 +2319,18 @@
 		display: flex;
 		align-items: center;
 		gap: 10px;
+	}
+
+	.observe-killed-hint {
+		font-size: 0.75rem;
+		color: var(--surface-muted);
+		flex: 1;
+	}
+
+	.observe-killed-logs {
+		max-height: 400px;
+		overflow-y: auto;
+		white-space: pre-wrap;
 	}
 
 	.observe-errors-summary {

@@ -194,9 +194,7 @@
 						<button onclick={() => window.history.back()} class="btn btn-secondary">
 							Back to project
 						</button>
-						<a href="/{orgSlug}/deployments/{deployment.id}" class="btn btn-primary">
-							View app
-						</a>
+						<a href="/{orgSlug}/deployments/{deployment.id}" class="btn btn-primary"> View app </a>
 					{/if}
 				</div>
 			</div>

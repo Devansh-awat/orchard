@@ -1,4 +1,4 @@
-import { Controller, Get, Param, Post, Body, Request, Delete, Put, Patch, Query, Res, HttpStatus, UseInterceptors, UploadedFile, BadRequestException, ForbiddenException } from '@nestjs/common';
+import { Controller, Get, Param, Post, Body, Request, Delete, Put, Patch, Query, Res, HttpStatus, UseInterceptors, UploadedFile, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { Response } from 'express';
 import { ProjectsService } from './projects.service';
@@ -11,6 +11,7 @@ import { WebhooksService } from '../webhooks/webhooks.service';
 import { StorageService } from '../organizations/storage.service';
 import { Auth } from '../auth/decorators';
 import { MetricsService } from '../metrics/metrics.service';
+import { PodLogCaptureService } from '../kubernetes/pod-log-capture.service';
 
 @Auth()
 @Controller('projects')
@@ -591,6 +592,7 @@ export class DeploymentsController {
     private readonly webhooksService: WebhooksService,
     private readonly faviconService: FaviconService,
     private readonly metricsService: MetricsService,
+    private readonly logCapture: PodLogCaptureService,
   ) {}
 
   @Get(':id/metrics')
@@ -774,6 +776,39 @@ export class DeploymentsController {
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
     return this.deployments.getDeploymentPods(id, user.id);
+  }
+
+  @Get(':id/pods-live')
+  async getDeploymentPodsLive(@Param('id') id: string, @Request() req) {
+    const { user } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+    return this.deployments.getDeploymentPodsLive(id, user.id);
+  }
+
+  @Get(':id/killed-containers')
+  async getKilledContainers(@Param('id') id: string, @Request() req) {
+    await this.projectAccess.assertDeploymentView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+    return this.logCapture.list(id);
+  }
+
+  @Get(':id/killed-containers/:entryId/logs')
+  async getKilledContainerLogs(
+    @Param('id') id: string,
+    @Param('entryId') entryId: string,
+    @Request() req,
+  ) {
+    await this.projectAccess.assertDeploymentView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+    const entry = await this.logCapture.getLogs(id, entryId);
+    if (!entry) throw new NotFoundException('Captured logs expired or not found');
+    return entry;
   }
 
   @Post(':id/rebuild')

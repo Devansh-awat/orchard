@@ -1,11 +1,24 @@
+export interface ContainerTermination {
+	reason: string;
+	exitCode?: number | null;
+	finishedAt?: string | null;
+}
+
 export interface Pod {
 	name: string;
 	status: string;
 	ip?: string;
 	startTime?: string;
+	restartCount?: number;
 	cpuUsage?: number | null;
 	memoryUsage?: number | null;
-	containers?: Array<{ name: string; image: string; ready: boolean }>;
+	containers?: Array<{
+		name: string;
+		image: string;
+		ready: boolean;
+		restartCount?: number;
+		lastTermination?: ContainerTermination | null;
+	}>;
 }
 
 export interface ServicePortConfig {

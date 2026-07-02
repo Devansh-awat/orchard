@@ -45,6 +45,9 @@
 		showLogsPodMenu = $bindable(),
 		showLogsPodMenuRender = $bindable(),
 		onFetchLogs,
+		showPreviousLogs,
+		selectedContainerHasPrevious,
+		onTogglePreviousLogs,
 		onScaleDeployment,
 		onDeletePod,
 		onToggleConsoleExpand,
@@ -90,6 +93,9 @@
 		showLogsPodMenu: boolean;
 		showLogsPodMenuRender: boolean;
 		onFetchLogs: () => void;
+		showPreviousLogs: boolean;
+		selectedContainerHasPrevious: boolean;
+		onTogglePreviousLogs: () => void;
 		onScaleDeployment: () => void;
 		onDeletePod: (podName: string) => void;
 		onToggleConsoleExpand: () => void;
@@ -110,6 +116,15 @@
 	} = $props();
 
 	const LOG_MAX_LINES = 50_000;
+
+	function podTermination(pod: Pod): { reason: string; exitCode?: number | null } | null {
+		for (const c of pod.containers ?? []) {
+			if (c.lastTermination?.reason && c.lastTermination.reason !== 'Completed') {
+				return { reason: c.lastTermination.reason, exitCode: c.lastTermination.exitCode };
+			}
+		}
+		return null;
+	}
 </script>
 
 <div class="grid gap-5 items-stretch overview-grid">
@@ -212,6 +227,19 @@
 								</div>
 							{/if}
 						</div>
+
+						<button
+							onclick={onTogglePreviousLogs}
+							disabled={!selectedContainerHasPrevious && !showPreviousLogs}
+							class="console-source-btn {showPreviousLogs ? 'text-amber-500 font-semibold' : ''}"
+							title={showPreviousLogs
+								? 'Showing logs from the previous (terminated) container — click for current'
+								: selectedContainerHasPrevious
+									? 'Show logs from the previous (terminated) container'
+									: 'No previous container logs available'}
+						>
+							{showPreviousLogs ? 'Previous' : 'Current'}
+						</button>
 
 						<button
 							onclick={onFetchLogs}
@@ -444,6 +472,7 @@
 				{#if activePods.length}
 					<div class="space-y-1 overview-pods-scroll">
 						{#each activePods as pod}
+							{@const term = podTermination(pod)}
 							<div class="console-pod-row-wrap">
 								<button
 									class="console-pod-row console-pod-row--compact"
@@ -458,9 +487,7 @@
 											class="h-1.5 w-1.5 rounded-full shrink-0 {pod.status?.toLowerCase() ===
 											'ready'
 												? 'bg-green-500'
-												: ['crashing', 'failed', 'error'].includes(
-															pod.status?.toLowerCase() ?? ''
-													  )
+												: ['crashing', 'failed', 'error'].includes(pod.status?.toLowerCase() ?? '')
 													? 'bg-red-500'
 													: pod.status?.toLowerCase() === 'scheduled'
 														? 'bg-yellow-500'
@@ -474,6 +501,19 @@
 									>
 										{#if pod.startTime}<span>{formatRelativeTime(new Date(pod.startTime))}</span
 											>{/if}
+										{#if term}
+											<span
+												class="badge text-[9px] px-1 py-0.5 bg-red-500/15 text-red-500"
+												title="Last terminated: {term.reason}{term.exitCode != null
+													? ` (exit ${term.exitCode})`
+													: ''}">{term.reason}</span
+											>
+										{:else if (pod.restartCount ?? 0) > 0}
+											<span
+												class="badge text-[9px] px-1 py-0.5 bg-yellow-500/15 text-yellow-600"
+												title="{pod.restartCount} restart(s)">↻ {pod.restartCount}</span
+											>
+										{/if}
 										<span class="badge {getStatusColor(pod.status)} text-[9px] px-1 py-0.5"
 											>{pod.status}</span
 										>

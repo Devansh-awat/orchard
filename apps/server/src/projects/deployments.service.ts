@@ -740,6 +740,57 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }));
   }
 
+  async getDeploymentPodsLive(deploymentId: string, userId?: string) {
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    if (userId) {
+      await this.authz.requireProjectView(deployment.projectId, userId);
+    }
+
+    let pods: any[] = [];
+    let warnings: any[] = [];
+    let availableReplicas = 0;
+    let totalCpuUsage: number | null = null;
+    let totalMemoryUsage: number | null = null;
+
+    if (deployment.name && deployment.namespace) {
+      try {
+        const livePods = await this.k8sWorkload.getDeploymentPods(
+          deployment.name,
+          deployment.namespace
+        );
+        pods = this.formatLivePods(livePods?.pods);
+        warnings = livePods?.warnings || [];
+        totalCpuUsage = livePods?.totalCpuUsage ?? null;
+        totalMemoryUsage = livePods?.totalMemoryUsage ?? null;
+
+        try {
+          const k8sDeployment = await this.k8sWorkload.getKubernetesDeployment(
+            deployment.name,
+            deployment.namespace
+          );
+          availableReplicas = k8sDeployment?.status?.availableReplicas ?? 0;
+        } catch {
+          availableReplicas =
+            pods?.filter((pod: any) => pod.status?.toLowerCase() === 'ready').length ?? 0;
+        }
+      } catch (error) {
+        console.error(
+          `[ProjectsService] Failed to fetch live pods for deployment ${deploymentId}:`,
+          error instanceof Error ? error.message : error
+        );
+      }
+    }
+
+    return { pods, warnings, availableReplicas, totalCpuUsage, totalMemoryUsage };
+  }
+
   async cancelDeploymentBuild(
     deploymentId: string,
     clerkId: string,
@@ -3139,6 +3190,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           image: container.image,
           ready: container.ready ?? false,
           restartCount: typeof container.restartCount === 'number' ? container.restartCount : 0,
+          lastTermination: container.lastTerminationReason
+            ? {
+                reason: container.lastTerminationReason,
+                exitCode: container.lastExitCode ?? null,
+                finishedAt: container.lastTerminatedAt ?? null,
+              }
+            : null,
         })) ?? [],
     }));
   }

@@ -613,6 +613,10 @@ model Pod {
   nodeName     String?  @map("node_name") @db.VarChar(255)
   status       String   @default("pending") @db.VarChar(50)
   restartCount Int      @default(0) @map("restart_count")
+  ready        Boolean? @map("ready")
+  lastTerminationReason String?   @map("last_termination_reason") @db.VarChar(100)
+  lastExitCode          Int?      @map("last_exit_code")
+  lastTerminatedAt      DateTime? @map("last_terminated_at") @db.Timestamp(6)
   createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 

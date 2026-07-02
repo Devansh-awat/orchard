@@ -77,11 +77,14 @@ function applyEventToCache(sub: Subscription, ev: OrgEvent) {
 		case 'build.changed':
 		case 'database.changed':
 		case 'project.changed':
-		case 'pod.changed':
 			// (the overview page invalidates its own ['overview', slug] query,
 			// debounced — no query uses an ['org', id, 'overview'] key)
 			qc.invalidateQueries({ queryKey: ['projects', sub.orgId] });
 			if (ev.id) qc.invalidateQueries({ queryKey: ['deployment', ev.id] });
+			if (ev.projectId) qc.invalidateQueries({ queryKey: ['project', ev.projectId] });
+			break;
+		case 'pod.changed':
+			qc.invalidateQueries({ queryKey: ['projects', sub.orgId] });
 			if (ev.projectId) qc.invalidateQueries({ queryKey: ['project', ev.projectId] });
 			break;
 		case 'membership.changed':
@@ -118,9 +121,7 @@ function connect(sub: Subscription) {
 	// Encode orgId so a value containing path-special chars can't escape
 	// the route segment (defense-in-depth — orgIds are server-issued UUIDs
 	// today, but the boundary is the safer place to enforce it).
-	const resume = sub.lastEventId
-		? `?lastEventId=${encodeURIComponent(sub.lastEventId)}`
-		: '';
+	const resume = sub.lastEventId ? `?lastEventId=${encodeURIComponent(sub.lastEventId)}` : '';
 	const source = new EventSource(
 		`${base}/apiv1/events/orgs/${encodeURIComponent(sub.orgId)}${resume}`,
 		{ withCredentials: true }

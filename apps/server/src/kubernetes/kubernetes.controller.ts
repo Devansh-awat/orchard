@@ -83,10 +83,12 @@ export class KubernetesController {
     @Query('namespace') namespace?: string,
     @Query('container') container?: string,
     @Query('tailLines') tailLines?: string,
+    @Query('previous') previous?: string,
   ) {
     await this.resolveNamespace(namespace, req, 'edit', 'stream pod logs');
     const parsedTailLines = tailLines ? parseInt(tailLines) : 100;
-    return this.k8sWorkload.getPodLogs(podName, namespace, container, parsedTailLines);
+    const wantPrevious = previous === 'true' || previous === '1';
+    return this.k8sWorkload.getPodLogs(podName, namespace, container, parsedTailLines, wantPrevious);
   }
 
   // Synchronous one-shot exec. Used by the MCP exec tool and any non-WS

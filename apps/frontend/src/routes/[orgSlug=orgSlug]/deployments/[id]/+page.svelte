@@ -841,6 +841,7 @@
 	let loadingMoreLogs = $state(false);
 	let logs = $state<string>('');
 	let logsLoading = $state(false);
+	let showPreviousLogs = $state(false);
 	let logsOutputRef = $state<HTMLPreElement | null>(null);
 	let buildLogs = $state<string>('');
 	let buildLogsLoading = $state(false);
@@ -901,8 +902,22 @@
 		selectedContainer = containerName || pod?.containers?.[0]?.name || '';
 		manualPodSelection = true;
 		showLogsPodMenu = false;
+		showPreviousLogs = false;
 		fetchLogs();
 	}
+
+	function togglePreviousLogs() {
+		showPreviousLogs = !showPreviousLogs;
+		tailLines = LOG_INITIAL_LINES;
+		logsAtMax = false;
+		fetchLogs();
+	}
+
+	const selectedContainerHasPrevious = $derived.by(() => {
+		const pod = (deployment?.pods ?? []).find((p) => p.name === selectedPod);
+		const cont = pod?.containers?.find((c) => c.name === selectedContainer);
+		return !!cont?.lastTermination || (cont?.restartCount ?? 0) > 0;
+	});
 
 	function scrollLogsToBottom() {
 		if (logsOutputRef) {
@@ -1233,6 +1248,52 @@
 		queryClient.invalidateQueries({ queryKey: ['deployment', deploymentId] });
 	}
 
+	function applyPodDelta(payload: any) {
+		if (!deployment || !payload?.name) return;
+		const pods = [...((deployment.pods as any[]) ?? [])];
+		const idx = pods.findIndex((p) => p.name === payload.name);
+		if (payload.deleted) {
+			if (idx >= 0) pods.splice(idx, 1);
+			else return;
+		} else if (idx >= 0) {
+			const pod = { ...pods[idx] };
+			pod.status = payload.status ?? pod.status;
+			pod.restartCount = payload.restartCount ?? pod.restartCount;
+			pod.containers = (pod.containers ?? []).map((c: any) => ({
+				...c,
+				ready: payload.ready ?? c.ready,
+				lastTermination: payload.lastTermination ?? c.lastTermination ?? null
+			}));
+			pods[idx] = pod;
+		} else {
+			return;
+		}
+		deployment = { ...deployment, pods };
+	}
+
+	let podsLiveInflight = false;
+	async function refreshPodsLive() {
+		if (!deployment || !deploymentId || podsLiveInflight) return;
+		podsLiveInflight = true;
+		try {
+			const res = await apiFetch(`/apiv1/deployments/${deploymentId}/pods-live`);
+			if (!res.ok) return;
+			const data = await res.json();
+			if (!deployment) return;
+			deployment = {
+				...deployment,
+				pods: data.pods ?? deployment.pods,
+				warnings: data.warnings ?? deployment.warnings,
+				availableReplicas: data.availableReplicas ?? deployment.availableReplicas,
+				totalCpuUsage: data.totalCpuUsage ?? deployment.totalCpuUsage,
+				totalMemoryUsage: data.totalMemoryUsage ?? deployment.totalMemoryUsage
+			};
+		} catch {
+		} finally {
+			podsLiveInflight = false;
+		}
+	}
+
 	// Apply query data to local state. This replaces the old fetchDeployment() body.
 	let lastQueryData: any = null;
 	$effect(() => {
@@ -1399,7 +1460,7 @@
 		logsLoading = true;
 		try {
 			const response = await apiFetch(
-				`/apiv1/pods/${selectedPod}/logs?namespace=${deployment?.namespace}&container=${selectedContainer}&tailLines=${tailLines}`
+				`/apiv1/pods/${selectedPod}/logs?namespace=${deployment?.namespace}&container=${selectedContainer}&tailLines=${tailLines}${showPreviousLogs ? '&previous=true' : ''}`
 			);
 			if (response.ok) {
 				const data = await response.json();
@@ -2298,7 +2359,12 @@
 				orgIdForSse,
 				(ev) => {
 					const currentId = deploymentId;
-					if (ev.id === currentId || ev.projectId === deployment?.projectId) {
+					const relevant = ev.id === currentId || ev.projectId === deployment?.projectId;
+					if (!relevant) return;
+					if (ev.type === 'pod.changed' && ev.id === currentId) {
+						applyPodDelta(ev.payload);
+						refreshPodsLive();
+					} else {
 						queryClient.invalidateQueries({ queryKey: ['deployment', currentId] });
 					}
 				},
@@ -2589,10 +2655,7 @@
 	{:else}
 		<div class="mb-4">
 			<Breadcrumb
-				crumbs={[
-					{ label: 'Home', href: `/${orgSlug}` },
-					{ label: deployment?.name || 'App' }
-				]}
+				crumbs={[{ label: 'Home', href: `/${orgSlug}` }, { label: deployment?.name || 'App' }]}
 			/>
 		</div>
 	{/if}
@@ -2672,8 +2735,8 @@
 					<div class="sse-reload-body">
 						<span class="sse-reload-title">Live updates disconnected</span>
 						<span class="sse-reload-text"
-							>We lost the real-time connection and couldn't reconnect. What you're seeing
-							may be out of date — reload to get the latest.</span
+							>We lost the real-time connection and couldn't reconnect. What you're seeing may be
+							out of date — reload to get the latest.</span
 						>
 					</div>
 					<button class="sse-reload-btn" onclick={() => location.reload()}>
@@ -2790,6 +2853,9 @@
 							bind:showLogsPodMenu
 							bind:showLogsPodMenuRender
 							onFetchLogs={fetchLogs}
+							{showPreviousLogs}
+							{selectedContainerHasPrevious}
+							onTogglePreviousLogs={togglePreviousLogs}
 							onScaleDeployment={scaleDeployment}
 							onDeletePod={deletePod}
 							onToggleConsoleExpand={toggleConsoleExpand}
