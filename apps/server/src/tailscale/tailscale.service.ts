@@ -23,7 +23,7 @@ export class TailscaleService {
     // We can't easily discover the tailnet from an auth key without registering a device,
     // so we store it and resolve the tailnet when the first sidecar comes online.
     // For display, extract the key ID portion.
-    const keyId = authKey.slice(0, 20) + '...';
+    const keyId = `${authKey.slice(0, 20)  }...`;
 
     await this.prisma.tailscaleConnection.upsert({
       where: { userId },
@@ -160,7 +160,7 @@ export class TailscaleService {
     return { hostname };
   }
 
-  async unexposeDeployment(deploymentId: string, userId: string): Promise<void> {
+  async unexposeDeployment(deploymentId: string, _userId: string): Promise<void> {
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
     });

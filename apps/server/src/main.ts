@@ -2,6 +2,22 @@ import 'reflect-metadata';
 import * as dotenv from 'dotenv';
 import { resolve } from 'path';
 
+// dd-trace must init before Nest/express/prisma are required so its module
+// patching can instrument them (APM traces + continuous profiler).
+import { NestFactory, HttpAdapterHost } from '@nestjs/core';
+import { NestExpressApplication } from '@nestjs/platform-express';
+import cookieParser from 'cookie-parser';
+import { initDatadog } from './analytics/datadog';
+
+import { startTelemetry } from './analytics/telemetry';
+
+import { AppModule } from './app.module';
+import { attachTerminalWebSocket } from './kubernetes/terminal.gateway';
+import { OtelConsoleLogger } from './analytics/otel-logger';
+import { AnalyticsService } from './analytics/analytics.service';
+import { AnalyticsExceptionFilter } from './analytics/exception.filter';
+import { ProtectionService } from './auth/protection.service';
+
 // dotenv MUST run before telemetry so POSTHOG_API_KEY is available, and
 // telemetry MUST run before Nest is imported so OTel instrumentation hooks
 // are installed before any application code emits a log.
@@ -10,24 +26,8 @@ const envPath1 = resolve(process.cwd(), '..', '.env');
 dotenv.config({ path: envPath1, override: false });
 const envPath2 = resolve(__dirname, '../../.env');
 dotenv.config({ path: envPath2, override: false });
-
-// dd-trace must init before Nest/express/prisma are required so its module
-// patching can instrument them (APM traces + continuous profiler).
-import { initDatadog } from './analytics/datadog';
 initDatadog();
-
-import { startTelemetry } from './analytics/telemetry';
 startTelemetry();
-
-import { NestFactory, HttpAdapterHost } from '@nestjs/core';
-import { NestExpressApplication } from '@nestjs/platform-express';
-import { AppModule } from './app.module';
-import cookieParser from 'cookie-parser';
-import { attachTerminalWebSocket } from './kubernetes/terminal.gateway';
-import { OtelConsoleLogger } from './analytics/otel-logger';
-import { AnalyticsService } from './analytics/analytics.service';
-import { AnalyticsExceptionFilter } from './analytics/exception.filter';
-import { ProtectionService } from './auth/protection.service';
 
 declare global {
   interface BigInt {
@@ -35,6 +35,7 @@ declare global {
   }
 }
 
+// eslint-disable-next-line no-extend-native
 BigInt.prototype.toJSON = function() {
   return this.toString();
 };

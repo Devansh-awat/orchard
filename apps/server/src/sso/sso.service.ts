@@ -1,13 +1,13 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException, UnauthorizedException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, UnauthorizedException, Logger } from '@nestjs/common';
+import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
+import * as openidClient from 'openid-client';
+import { SAML } from '@node-saml/node-saml';
 import { PrismaService } from '../prisma/prisma.service';
 import { OAuthService } from '../auth/oauth.service';
 import { SessionsService } from '../auth/sessions.service';
 import { UsersService } from '../users/users.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
-import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
-import * as openidClient from 'openid-client';
-import { SAML } from '@node-saml/node-saml';
 import { OidcStateStore } from './oidc-state.store';
 import { AuditService } from '../audit/audit.service';
 
@@ -20,11 +20,17 @@ const RESERVED_SUBDOMAINS = new Set([
 @Injectable()
 export class SsoService {
   private readonly logger = new Logger(SsoService.name);
+
   private readonly encryptionKey: Buffer | null;
+
   private readonly backendUrl: string;
+
   private readonly baseDomain: string;
+
   private readonly platformNamespace: string;
+
   private readonly platformServiceName: string;
+
   private readonly platformServicePort: number;
   // M-3: OIDC state lives behind OidcStateStore — currently in-memory, but
   // single-use (atomic get+delete) and TTL-bounded. The interface lets a
@@ -141,7 +147,7 @@ export class SsoService {
             where: { id: organizationId },
             select: { subdomain: true },
           });
-          const oldSubdomain = current?.subdomain ?? null;
+          const currentSubdomain = current?.subdomain ?? null;
 
           const conflict = await tx.organization.findFirst({
             where: { subdomain: normalized, NOT: { id: organizationId } },
@@ -151,12 +157,12 @@ export class SsoService {
             throw new ConflictException('This subdomain is already taken');
           }
 
-          const result = await tx.organization.update({
+          const updated = await tx.organization.update({
             where: { id: organizationId },
             data: { subdomain: normalized },
           });
 
-          return { result, oldSubdomain };
+          return { result: updated, oldSubdomain: currentSubdomain };
         },
       );
 
@@ -196,14 +202,14 @@ export class SsoService {
           where: { id: organizationId },
           select: { subdomain: true },
         });
-        const oldSubdomain = current?.subdomain ?? null;
+        const currentSubdomain = current?.subdomain ?? null;
 
-        const result = await tx.organization.update({
+        const updated = await tx.organization.update({
           where: { id: organizationId },
           data: { subdomain: null },
         });
 
-        return { result, oldSubdomain };
+        return { result: updated, oldSubdomain: currentSubdomain };
       },
     );
 
@@ -460,8 +466,6 @@ export class SsoService {
       clientSecret ? { client_secret: clientSecret } : undefined,
     );
 
-    const redirectUri = `${this.backendUrl}/apiv1/sso/${organizationId}/callback/oidc`;
-
     const tokens = await openidClient.authorizationCodeGrant(oidcConfig, callbackUrl, {
       pkceCodeVerifier: stateData.codeVerifier,
       expectedState: state,
@@ -531,7 +535,7 @@ export class SsoService {
     }
 
     const email = profile.nameID || (profile as any).email;
-    const name = ((profile as any).firstName || '') + ' ' + ((profile as any).lastName || '') || email;
+    const name = `${(profile as any).firstName || ''  } ${  (profile as any).lastName || ''}` || email;
 
     if (!email) {
       throw new BadRequestException('SAML provider did not return an email address');

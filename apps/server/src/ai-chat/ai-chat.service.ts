@@ -48,7 +48,7 @@ export class AiChatService {
     actingUser: ChatActingUser,
   ): AsyncGenerator<string> {
     if (!API_KEY) {
-      yield JSON.stringify({ type: 'error', error: 'AI chat is not configured (missing API key)' }) + '\n';
+      yield `${JSON.stringify({ type: 'error', error: 'AI chat is not configured (missing API key)' })  }\n`;
       return;
     }
 
@@ -110,7 +110,7 @@ export class AiChatService {
 
         if (delta.content) {
           assistantContent += delta.content;
-          yield JSON.stringify({ type: 'text', text: delta.content }) + '\n';
+          yield `${JSON.stringify({ type: 'text', text: delta.content })  }\n`;
         }
 
         if (delta.tool_calls) {
@@ -147,7 +147,7 @@ export class AiChatService {
 
       // Execute each tool call
       for (const tc of toolCalls.values()) {
-        yield JSON.stringify({ type: 'tool_call', name: tc.name, input: tc.arguments }) + '\n';
+        yield `${JSON.stringify({ type: 'tool_call', name: tc.name, input: tc.arguments })  }\n`;
 
         let parsed: Record<string, any>;
         try {
@@ -166,7 +166,7 @@ export class AiChatService {
           // Send parsed data to frontend for rich rendering
           let data: any;
           try { data = JSON.parse(result); } catch { data = null; }
-          yield JSON.stringify({ type: 'tool_result', name: tc.name, success: true, data }) + '\n';
+          yield `${JSON.stringify({ type: 'tool_result', name: tc.name, success: true, data })  }\n`;
         } catch (error) {
           const errMsg = error instanceof Error ? error.message : String(error);
           this.logger.warn(`Tool ${tc.name} failed: ${errMsg}`);
@@ -175,11 +175,11 @@ export class AiChatService {
             tool_call_id: tc.id,
             content: JSON.stringify({ error: errMsg }),
           });
-          yield JSON.stringify({ type: 'tool_result', name: tc.name, success: false, error: errMsg }) + '\n';
+          yield `${JSON.stringify({ type: 'tool_result', name: tc.name, success: false, error: errMsg })  }\n`;
         }
       }
     }
 
-    yield JSON.stringify({ type: 'done' }) + '\n';
+    yield `${JSON.stringify({ type: 'done' })  }\n`;
   }
 }

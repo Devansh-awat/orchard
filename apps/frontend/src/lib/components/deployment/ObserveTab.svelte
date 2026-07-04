@@ -285,7 +285,9 @@
 
 	$effect(() => {
 		if (activeTab === 'killed' && !killedFetched) {
-			untrack(() => void fetchKilled());
+			untrack(() => {
+				fetchKilled();
+			});
 		}
 	});
 

@@ -16,12 +16,12 @@ export interface DatabaseDetail {
 	publicPort?: number | null;
 	publicHostname?: string | null;
 	publicConnectionString?: string | null;
-	pods?: Array<{
+	pods?: {
 		name: string;
 		status?: string;
 		podIp?: string;
-		containers?: Array<{ name: string; image?: string; ready?: boolean }>;
-	}>;
+		containers?: { name: string; image?: string; ready?: boolean }[];
+	}[];
 	cpuRequestMilli?: number | null;
 	memoryRequestBytes?: number | null;
 	clusterName?: string | null;

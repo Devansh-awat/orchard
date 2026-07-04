@@ -1,6 +1,4 @@
 import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
-import { RateLimitService } from './rate-limit.service';
 import {
   generateRegistrationOptions,
   verifyRegistrationResponse,
@@ -14,6 +12,8 @@ import {
   PublicKeyCredentialCreationOptionsJSON,
   PublicKeyCredentialRequestOptionsJSON,
 } from '@simplewebauthn/server';
+import { PrismaService } from '../prisma/prisma.service';
+import { RateLimitService } from './rate-limit.service';
 
 const CHALLENGE_EXPIRY_MINUTES = 5;
 

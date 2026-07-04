@@ -2,7 +2,6 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ConflictException,
   ForbiddenException,
   Inject,
   forwardRef,
@@ -10,6 +9,7 @@ import {
   OnModuleInit,
   OnModuleDestroy,
 } from '@nestjs/common';
+import { Prisma, ServiceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService, CreateDeploymentOptions } from '../kubernetes/kubernetes.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
@@ -27,12 +27,13 @@ import { ProjectAccessService } from './project-access.service';
 import { NodesService } from '../nodes/nodes.service';
 import { formatSlug } from './projects.utils';
 import { startBuildTrace } from '../analytics/datadog';
-import { Prisma, ServiceType } from '@prisma/client';
 
 @Injectable()
 export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(DeploymentsService.name);
+
   private buildReconcileInterval: NodeJS.Timeout | null = null;
+
   private activeRecoveries = new Set<string>();
 
   constructor(
@@ -231,11 +232,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           await this.markBuildFailed(deployment.id, status?.logs || 'Build failed');
           return;
         }
-        if (!expectedImage) {
+        let resolvedImage = expectedImage;
+        if (!resolvedImage) {
           const jobs = await this.dockerService.findBuildJobsForDeployment(deployment.id);
-          expectedImage = jobs.find(j => j.name === jobName)?.image || null;
+          resolvedImage = jobs.find(j => j.name === jobName)?.image || null;
         }
-        if (!expectedImage) {
+        if (!resolvedImage) {
           await this.markBuildFailed(deployment.id, 'Build succeeded but image path unknown');
           return;
         }
@@ -245,9 +247,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         if (k8sExists) {
           await this.prisma.deployment.update({
             where: { id: deployment.id },
-            data: { image: expectedImage, buildStep: 'deploying' },
+            data: { image: resolvedImage, buildStep: 'deploying' },
           });
-          await this.k8sWorkload.updateDeploymentImage(deployment.name, deployment.namespace, expectedImage);
+          await this.k8sWorkload.updateDeploymentImage(deployment.name, deployment.namespace, resolvedImage);
           await this.markBuildSucceeded(deployment.id, 'Build recovered after server restart.');
           this.logger.log(`[BuildRecovery] Successfully resumed and completed build for ${deployment.id}`);
         } else {
@@ -354,7 +356,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     );
     const namespacePodMaps = new Map<
       string,
-      Map<string, { pods: Array<{ status: string; restartCount: number }>; warnings: Array<{ message: string }> }>
+      Map<string, { pods: { status: string; restartCount: number }[]; warnings: { message: string }[] }>
     >();
     await Promise.all(
       uniqueNamespaces.map(async (ns) => {
@@ -373,7 +375,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     );
 
     // Merge direct ingresses and service-linked ingresses, deduplicating by id
-    return deployments.map(({ services, ingresses, namespace, ...rest }, i) => {
+    return deployments.map(({ services, ingresses, namespace: _namespace, ...rest }, i) => {
       const serviceIngresses = services.flatMap((s) => s.ingresses);
       const allIngresses = [...ingresses, ...serviceIngresses];
       const seen = new Set<string>();
@@ -514,7 +516,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     return deploymentsWithComputedStatus;
   }
 
-  async getDeployment(deploymentId: string, canEdit: boolean = true, userId?: string) {
+  async getDeployment(deploymentId: string, canEdit = true, userId?: string) {
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
       include: {
@@ -847,7 +849,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         buildStatus: 'failed',
         buildStep: null,
         buildError: 'Build cancelled by user',
-        buildLogs: currentLogs + `[${Date.now()}] [INFO] Build cancelled by user\n`,
+        buildLogs: `${currentLogs  }[${Date.now()}] [INFO] Build cancelled by user\n`,
       },
     });
 
@@ -1592,7 +1594,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       throw new ForbiddenException('hostPath volumes are not permitted');
     }
 
-    const volumesList: Array<{
+    const volumesList: {
       name: string;
       type: 'pvc' | 'hostPath' | 'emptyDir';
       mountPath: string;
@@ -1600,11 +1602,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       storageSize?: string | null;
       hostPath?: string | null;
       readOnly?: boolean;
-    }> = Array.isArray(volumes)
+    }[] = Array.isArray(volumes)
       ? volumes
           .filter((vol) => vol && vol.name && vol.mountPath)
           .map((vol) => {
-            const volType: 'pvc' | 'hostPath' | 'emptyDir' = vol.type === 'pvc' ? 'pvc' : vol.type === 'hostPath' ? 'hostPath' : 'emptyDir';
+            let volType: 'pvc' | 'hostPath' | 'emptyDir' = 'emptyDir';
+            if (vol.type === 'pvc') volType = 'pvc';
+            else if (vol.type === 'hostPath') volType = 'hostPath';
             return {
               name: vol.name.trim(),
               type: volType,
@@ -1795,7 +1799,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       requireAtLeastOne: true,
     });
 
-    const domainProvided = Object.prototype.hasOwnProperty.call(data ?? {}, 'domain');
+    const domainProvided = Object.hasOwn(data ?? {}, 'domain');
     let normalizedDomain: string | null = null;
 
     if (domainProvided) {
@@ -1943,7 +1947,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     await this.authz.requireProjectEdit(service.deployment.project.id, user.id, 'update services');
 
-    const domainProvided = Object.prototype.hasOwnProperty.call(changes ?? {}, 'domain');
+    const domainProvided = Object.hasOwn(changes ?? {}, 'domain');
     let normalizedDomain: string | null = null;
 
     if (domainProvided) {
@@ -2004,31 +2008,34 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       });
     }
 
-    const resolvedPorts = updateResult
-      ? updateResult.ports.map((port) => ({
-          name: port.name,
-          servicePort: port.servicePort,
-          containerPort: port.containerPort,
-          protocol: port.protocol,
-          nodePort: port.nodePort ?? null,
-        }))
-      : service.ports.length > 0
-      ? service.ports.map((port) => ({
-          name: port.name || `${service.name}`,
-          servicePort: port.port,
-          containerPort: port.targetPort,
-          protocol: port.protocol,
-          nodePort: port.nodePort ?? null,
-        }))
-      : [
-          {
-            name: service.name,
-            servicePort: service.port,
-            containerPort: service.targetPort,
-            protocol: service.protocol,
-            nodePort: service.nodePort ?? null,
-          },
-        ];
+    let resolvedPorts;
+    if (updateResult) {
+      resolvedPorts = updateResult.ports.map((port) => ({
+        name: port.name,
+        servicePort: port.servicePort,
+        containerPort: port.containerPort,
+        protocol: port.protocol,
+        nodePort: port.nodePort ?? null,
+      }));
+    } else if (service.ports.length > 0) {
+      resolvedPorts = service.ports.map((port) => ({
+        name: port.name || `${service.name}`,
+        servicePort: port.port,
+        containerPort: port.targetPort,
+        protocol: port.protocol,
+        nodePort: port.nodePort ?? null,
+      }));
+    } else {
+      resolvedPorts = [
+        {
+          name: service.name,
+          servicePort: service.port,
+          containerPort: service.targetPort,
+          protocol: service.protocol,
+          nodePort: service.nodePort ?? null,
+        },
+      ];
+    }
 
     const primaryPort =
       resolvedPorts[0] || {
@@ -2039,15 +2046,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         nodePort: service.nodePort ?? null,
       };
 
-    const resolvedType =
-      updateResult && updateResult.type === 'ClusterIP'
-        ? ServiceType.internal
-        : updateResult && updateResult.type !== 'ClusterIP'
-        ? ServiceType.external
-        : service.type;
+    let resolvedType = service.type;
+    if (updateResult) {
+      resolvedType = updateResult.type === 'ClusterIP' ? ServiceType.internal : ServiceType.external;
+    }
 
     const resolvedExternalIp =
-      updateResult && Object.prototype.hasOwnProperty.call(updateResult, 'externalIp')
+      updateResult && Object.hasOwn(updateResult, 'externalIp')
         ? updateResult.externalIp
         : service.externalIp;
 
@@ -3115,12 +3120,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     return { enabled: false };
   }
+
   scrubDeploymentForViewer<
     T extends {
-      envVars?: Array<{ key: string; value: string | null }> | null;
+      envVars?: { key: string; value: string | null }[] | null;
       buildLogs?: string | null;
       buildError?: string | null;
-      ingresses?: Array<any> | null;
+      ingresses?: any[] | null;
     },
   >(d: T): T {
     return {
@@ -3129,7 +3135,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         ? d.envVars.map((ev) => ({ ...ev, value: null }))
         : d.envVars,
       ingresses: d.ingresses
-        ? d.ingresses.map(({ protectionBypassSecret, ...ing }) => ing)
+        ? d.ingresses.map(({ protectionBypassSecret: _protectionBypassSecret, ...ing }) => ing)
         : d.ingresses,
       buildLogs: null,
       buildError: null,
@@ -3174,7 +3180,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  formatLivePods(pods: Array<any> = []) {
+  formatLivePods(pods: any[] = []) {
     return pods.map((pod) => ({
       id: pod.name,
       name: pod.name,
@@ -3334,7 +3340,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (result.ingresses && Array.isArray(result.ingresses)) {
-      result.ingresses = result.ingresses.map(({ protectionPasswordHash, ...ing }: any) => ing);
+      result.ingresses = result.ingresses.map(({ protectionPasswordHash: _protectionPasswordHash, ...ing }: any) => ing);
     }
 
     return result;
@@ -3789,16 +3795,21 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
       if (volumes.length > 0) {
         await tx.deploymentVolume.createMany({
-          data: volumes.map((vol) => ({
-            deploymentId: deployment.id,
-            name: vol.name.trim(),
-            type: vol.type === 'pvc' ? 'pvc' : vol.type === 'hostPath' ? 'hostPath' : 'emptyDir',
-            mountPath: vol.mountPath.trim(),
-            pvcName: vol.type === 'pvc' && vol.pvcName ? vol.pvcName.trim() : null,
-            storageSize: vol.type === 'pvc' && vol.storageSize ? vol.storageSize.trim() : null,
-            hostPath: vol.type === 'hostPath' && vol.hostPath ? vol.hostPath.trim() : null,
-            readOnly: Boolean(vol.readOnly),
-          })),
+          data: volumes.map((vol) => {
+            let volType: 'pvc' | 'hostPath' | 'emptyDir' = 'emptyDir';
+            if (vol.type === 'pvc') volType = 'pvc';
+            else if (vol.type === 'hostPath') volType = 'hostPath';
+            return {
+              deploymentId: deployment.id,
+              name: vol.name.trim(),
+              type: volType,
+              mountPath: vol.mountPath.trim(),
+              pvcName: vol.type === 'pvc' && vol.pvcName ? vol.pvcName.trim() : null,
+              storageSize: vol.type === 'pvc' && vol.storageSize ? vol.storageSize.trim() : null,
+              hostPath: vol.type === 'hostPath' && vol.hostPath ? vol.hostPath.trim() : null,
+              readOnly: Boolean(vol.readOnly),
+            };
+          }),
         });
       }
 
@@ -4176,16 +4187,21 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const volumes = Array.isArray(data.volumes) ? data.volumes : [];
     if (volumes.length > 0) {
       await this.prisma.deploymentVolume.createMany({
-        data: volumes.map((vol) => ({
-          deploymentId: deployment.id,
-          name: vol.name.trim(),
-          type: vol.type === 'pvc' ? 'pvc' : vol.type === 'hostPath' ? 'hostPath' : 'emptyDir',
-          mountPath: vol.mountPath.trim(),
-          pvcName: vol.type === 'pvc' && vol.pvcName ? vol.pvcName.trim() : null,
-          storageSize: vol.type === 'pvc' && vol.storageSize ? vol.storageSize.trim() : null,
-          hostPath: vol.type === 'hostPath' && vol.hostPath ? vol.hostPath.trim() : null,
-          readOnly: Boolean(vol.readOnly),
-        })),
+        data: volumes.map((vol) => {
+          let volType: 'pvc' | 'hostPath' | 'emptyDir' = 'emptyDir';
+          if (vol.type === 'pvc') volType = 'pvc';
+          else if (vol.type === 'hostPath') volType = 'hostPath';
+          return {
+            deploymentId: deployment.id,
+            name: vol.name.trim(),
+            type: volType,
+            mountPath: vol.mountPath.trim(),
+            pvcName: vol.type === 'pvc' && vol.pvcName ? vol.pvcName.trim() : null,
+            storageSize: vol.type === 'pvc' && vol.storageSize ? vol.storageSize.trim() : null,
+            hostPath: vol.type === 'hostPath' && vol.hostPath ? vol.hostPath.trim() : null,
+            readOnly: Boolean(vol.readOnly),
+          };
+        }),
       });
     }
 
@@ -4382,11 +4398,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           if (currentLogs.length > lastLogLength) {
             lastLogLength = currentLogs.length;
 
-            const stepLabel = currentDeployment?.buildStep === 'cloning' ? 'Scheduling builder...' :
-                             currentDeployment?.buildStep === 'building' ? 'Building image...' :
-                             currentDeployment?.buildStep === 'pushing' ? 'Pushing to registry...' :
-                             currentDeployment?.buildStep === 'deploying' ? 'Deploying to cluster...' :
-                             'Building...';
+            const stepLabels: Record<string, string> = {
+              cloning: 'Scheduling builder...',
+              building: 'Building image...',
+              pushing: 'Pushing to registry...',
+              deploying: 'Deploying to cluster...',
+            };
+            const stepLabel = stepLabels[currentDeployment?.buildStep ?? ''] || 'Building...';
 
             await this.githubService.updateCheckRun(
               BigInt(data.installationId),
@@ -4775,7 +4793,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               status: 'running',
               buildStatus: 'succeeded',
               buildStep: 'complete',
-              buildLogs: (txDeployData?.buildLogs || '') + '\nDeployment is live.',
+              buildLogs: `${txDeployData?.buildLogs || ''  }\nDeployment is live.`,
               buildStepTimestamps: txTimestamps,
             },
           });
@@ -4791,7 +4809,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             status: 'running',
             buildStatus: 'succeeded',
             buildStep: 'complete',
-            buildLogs: (rebuildData?.buildLogs || '') + '\nRebuild complete. Deployment is live.',
+            buildLogs: `${rebuildData?.buildLogs || ''  }\nRebuild complete. Deployment is live.`,
             buildStepTimestamps: rebuildTimestamps,
           },
         });
@@ -4802,7 +4820,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       // Update GitHub deployment status to success
       if (data.githubDeploymentId && data.repoInfo && data.githubAccessToken) {
         try {
-          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
 
           // Get the environment URL from ingresses if available
           const deploymentWithIngress = await this.prisma.deployment.findUnique({
@@ -4895,7 +4912,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           });
 
           if (ghDeployment) {
-            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
             const finalDeploymentData = await this.prisma.deployment.findUnique({
               where: { id: deploymentId },
               include: { ingresses: true },
@@ -4989,7 +5005,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       // Update GitHub deployment status to failure (legacy - user token)
       if (data.githubDeploymentId && data.repoInfo && data.githubAccessToken) {
         try {
-          const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
           await this.githubService.updateDeploymentStatus(
             data.githubAccessToken,
             data.repoInfo.owner,
@@ -5026,7 +5041,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           });
 
           if (ghDeployment) {
-            const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
             await this.githubService.updateDeploymentStatusWithApp(
               BigInt(data.installationId),
               data.repoInfo.owner,

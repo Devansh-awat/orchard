@@ -25,12 +25,19 @@ interface PendingEmit {
 @Injectable()
 export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(K8sCnpgInformerService.name);
+
   private informer?: k8s.Informer<k8s.V1Pod> & k8s.ObjectCache<k8s.V1Pod>;
+
   private backoffMs = 1000;
+
   private stopped = false;
+
   private restartTimer?: ReturnType<typeof setTimeout>;
+
   private readonly ctxCache = new Map<string, { ctx: Ctx | null; exp: number }>();
+
   private readonly lastEmit = new Map<string, number>();
+
   private readonly pending = new Map<string, PendingEmit>();
 
   constructor(

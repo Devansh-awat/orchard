@@ -1,6 +1,7 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException, Logger } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
 import { OrganizationRole } from '@prisma/client';
+import { randomBytes, createHash } from 'crypto';
+import { PrismaService } from '../prisma/prisma.service';
 import { UsersService } from '../users/users.service';
 import { StorageService } from './storage.service';
 import { EmailService } from '../email/email.service';
@@ -9,7 +10,6 @@ import { AuthorizationService } from '../auth/authorization.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
 import { SessionsService } from '../auth/sessions.service';
 import { TailscaleService } from '../tailscale/tailscale.service';
-import { randomBytes, createHash } from 'crypto';
 
 @Injectable()
 export class OrganizationsService {

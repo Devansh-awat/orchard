@@ -1,5 +1,5 @@
-import { apiFetch } from '$lib/stores';
 import { error } from '@sveltejs/kit';
+import { apiFetch } from '$lib/stores';
 import type { PageLoad } from './$types';
 
 export const ssr = false;

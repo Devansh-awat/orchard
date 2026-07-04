@@ -43,9 +43,13 @@ export interface OtpEmailData {
 @Injectable()
 export class EmailService {
   private transporter: Transporter | null = null;
+
   private readonly fromEmail: string;
+
   private readonly fromName: string;
+
   private readonly frontendUrl: string;
+
   private readonly templatesDir: string;
 
   constructor() {

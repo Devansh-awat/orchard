@@ -27,8 +27,6 @@ export const handle: Handle = async ({ event, resolve }) => {
 			const subdomain = host.replace(`.${BASE_DOMAIN}`, '');
 			event.locals.subdomain = subdomain;
 
-			const pathname = event.url.pathname;
-
 			// Rewrite root path to /sso for subdomain requests
 			if (pathname === '/') {
 				event.url.pathname = '/sso';

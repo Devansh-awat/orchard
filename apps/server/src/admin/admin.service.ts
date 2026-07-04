@@ -1,7 +1,7 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
 import { Prisma } from '@prisma/client';
 import { randomBytes, createHash } from 'crypto';
+import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthorizationService } from '../auth/authorization.service';
 
@@ -27,7 +27,7 @@ export class AdminService {
 
   // --- Users ---
 
-  async getAllUsers(page: number = 1, limit: number = 20, search?: string) {
+  async getAllUsers(page = 1, limit = 20, search?: string) {
     const where: Prisma.UserWhereInput = search
       ? {
           OR: [
@@ -176,7 +176,7 @@ export class AdminService {
 
   // --- Organizations ---
 
-  async getAllOrganizations(page: number = 1, limit: number = 20, search?: string) {
+  async getAllOrganizations(page = 1, limit = 20, search?: string) {
     const where: Prisma.OrganizationWhereInput = search
       ? {
           OR: [

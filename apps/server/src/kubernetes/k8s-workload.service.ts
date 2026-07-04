@@ -1,16 +1,15 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
+import { PassThrough } from 'stream';
+import { ServiceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import {
   KubernetesService,
   CreateDeploymentOptions,
   DeploymentPortInput,
-  SanitizedPortEntry,
-  UpdateDeploymentEnvOptions,
+  UpdateDeploymentEnvOptions, buildNodeAffinity
 } from './kubernetes.service';
 import { sanitizePortEntries, mapServicePorts } from './port-utils';
-import { ServiceType } from '@prisma/client';
-import { buildNodeAffinity } from './kubernetes.service';
 import { cpuMilliToK8s, memoryBytesToK8s } from './quantity';
 import { isTrustedImage, trustedSecurityContext, hardenedSecurityContext } from './trusted-images';
 
@@ -67,7 +66,7 @@ export class K8sWorkloadService {
     return this.kubernetes.getDefaultNodeIp(coreApi);
   }
 
-  private createPVC(namespace: string, name: string, storageSize: string = '1Gi') {
+  private createPVC(namespace: string, name: string, storageSize = '1Gi') {
     return this.kubernetes.createPVC(namespace, name, storageSize);
   }
 
@@ -160,7 +159,7 @@ export class K8sWorkloadService {
     );
   }
 
-  async listPods(namespace: string = 'midnight-staging') {
+  async listPods(namespace = 'midnight-staging') {
     this.ensureKubeConfig();
     
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
@@ -217,7 +216,7 @@ export class K8sWorkloadService {
     }
   }
 
-  async getKubernetesDeployment(deploymentName: string, namespace: string = 'midnight-staging') {
+  async getKubernetesDeployment(deploymentName: string, namespace = 'midnight-staging') {
     this.ensureKubeConfig();
     
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
@@ -259,7 +258,7 @@ export class K8sWorkloadService {
     }
   }
 
-  async getPod(podName: string, namespace: string = 'midnight-staging') {
+  async getPod(podName: string, namespace = 'midnight-staging') {
     this.ensureKubeConfig();
 
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
@@ -289,7 +288,7 @@ export class K8sWorkloadService {
     }
   }
 
-  async deletePod(podName: string, namespace: string = 'midnight-staging') {
+  async deletePod(podName: string, namespace = 'midnight-staging') {
     this.ensureKubeConfig();
 
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
@@ -313,7 +312,7 @@ export class K8sWorkloadService {
     }
   }
 
-  async getPodLogs(podName: string, namespace: string = 'midnight-staging', containerName?: string, tailLines: number = 100, previous: boolean = false) {
+  async getPodLogs(podName: string, namespace = 'midnight-staging', containerName?: string, tailLines = 100, previous = false) {
     this.ensureKubeConfig();
 
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
@@ -374,7 +373,7 @@ export class K8sWorkloadService {
           container: targetContainer,
           namespace: cleanNamespace,
           logs: logs.body,
-          tailLines: tailLines,
+          tailLines,
           previous,
         };
       } catch (logError) {
@@ -392,7 +391,7 @@ export class K8sWorkloadService {
             container: targetContainer,
             namespace: cleanNamespace,
             logs: '',
-            tailLines: tailLines,
+            tailLines,
             pending: true,
             message: k8sMessage
           };
@@ -404,7 +403,7 @@ export class K8sWorkloadService {
             container: targetContainer,
             namespace: cleanNamespace,
             logs: '',
-            tailLines: tailLines,
+            tailLines,
             previous: true,
             noPreviousLogs: true,
             message: k8sMessage
@@ -415,7 +414,7 @@ export class K8sWorkloadService {
           console.error('[API] Log fetch error details:', {
             message: logError.message,
             code: logError.code,
-            statusCode: statusCode,
+            statusCode,
             body: logError.response?.body
           });
         }
@@ -424,7 +423,7 @@ export class K8sWorkloadService {
           error: 'Failed to fetch logs',
           message: logError.response?.body?.message || logError.message || 'Error occurred in log request',
           availableContainers: containers,
-          targetContainer: targetContainer,
+          targetContainer,
           podStatus: pod.body.status?.phase,
           containerStatuses: pod.body.status?.containerStatuses?.map(cs => ({
             name: cs.name,
@@ -451,7 +450,7 @@ export class K8sWorkloadService {
     }
   }
 
-  async listDeployments(namespace: string = 'midnight-staging') {
+  async listDeployments(namespace = 'midnight-staging') {
     this.ensureKubeConfig();
     
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
@@ -544,12 +543,9 @@ export class K8sWorkloadService {
       value
     }));
 
-    const requestedServiceType =
-      options.serviceType === 'LoadBalancer'
-        ? 'LoadBalancer'
-        : options.serviceType === 'NodePort'
-        ? 'NodePort'
-        : 'ClusterIP';
+    let requestedServiceType: 'LoadBalancer' | 'NodePort' | 'ClusterIP' = 'ClusterIP';
+    if (options.serviceType === 'LoadBalancer') requestedServiceType = 'LoadBalancer';
+    else if (options.serviceType === 'NodePort') requestedServiceType = 'NodePort';
 
     let externalAddress: string | null = null;
 
@@ -1254,7 +1250,7 @@ export class K8sWorkloadService {
   }
 
 
-  async deleteDeployment(deploymentName: string, namespace: string = 'midnight-staging') {
+  async deleteDeployment(deploymentName: string, namespace = 'midnight-staging') {
     this.ensureKubeConfig();
 
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
@@ -1596,7 +1592,7 @@ export class K8sWorkloadService {
   }
 
 
-  async restartDeployment(deploymentName: string, namespace: string = 'midnight-staging') {
+  async restartDeployment(deploymentName: string, namespace = 'midnight-staging') {
     this.ensureKubeConfig();
     
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
@@ -1661,8 +1657,8 @@ export class K8sWorkloadService {
   async waitForReady(
     deploymentName: string,
     namespace: string,
-    timeoutMs: number = 120_000,
-    pollMs: number = 2_000,
+    timeoutMs = 120_000,
+    pollMs = 2_000,
   ): Promise<boolean> {
     this.ensureKubeConfig();
     const api = this.kc.makeApiClient(k8s.AppsV1Api);
@@ -1680,7 +1676,7 @@ export class K8sWorkloadService {
           return true;
         }
       } catch {}
-      await new Promise((r) => setTimeout(r, pollMs));
+      await new Promise((r) => { setTimeout(r, pollMs); });
     }
     return false;
   }
@@ -1696,7 +1692,7 @@ export class K8sWorkloadService {
     );
   }
 
-  async scaleDeployment(deploymentName: string, namespace: string = 'midnight-staging', replicas: number) {
+  async scaleDeployment(deploymentName: string, namespace: string, replicas: number) {
     this.ensureKubeConfig();
     
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
@@ -1716,7 +1712,7 @@ export class K8sWorkloadService {
       
       const patch = {
         spec: {
-          replicas: replicas
+          replicas
         }
       };
       
@@ -1749,7 +1745,7 @@ export class K8sWorkloadService {
             }
           },
           data: {
-            replicas: replicas
+            replicas
           }
         });
         
@@ -1988,14 +1984,14 @@ export class K8sWorkloadService {
         for (const c of item.containers ?? []) {
           const cpuStr: string = c.usage?.cpu ?? '0';
           const memStr: string = c.usage?.memory ?? '0';
-          if (cpuStr.endsWith('n')) cpu += parseInt(cpuStr) / 1_000_000;
-          else if (cpuStr.endsWith('u')) cpu += parseInt(cpuStr) / 1000;
-          else if (cpuStr.endsWith('m')) cpu += parseInt(cpuStr);
+          if (cpuStr.endsWith('n')) cpu += parseInt(cpuStr, 10) / 1_000_000;
+          else if (cpuStr.endsWith('u')) cpu += parseInt(cpuStr, 10) / 1000;
+          else if (cpuStr.endsWith('m')) cpu += parseInt(cpuStr, 10);
           else cpu += parseFloat(cpuStr) * 1000;
-          if (memStr.endsWith('Ki')) mem += parseInt(memStr) * 1024;
-          else if (memStr.endsWith('Mi')) mem += parseInt(memStr) * 1024 * 1024;
-          else if (memStr.endsWith('Gi')) mem += parseInt(memStr) * 1024 * 1024 * 1024;
-          else mem += parseInt(memStr);
+          if (memStr.endsWith('Ki')) mem += parseInt(memStr, 10) * 1024;
+          else if (memStr.endsWith('Mi')) mem += parseInt(memStr, 10) * 1024 * 1024;
+          else if (memStr.endsWith('Gi')) mem += parseInt(memStr, 10) * 1024 * 1024 * 1024;
+          else mem += parseInt(memStr, 10);
         }
         out.set(`${ns}/${pod}`, { cpuMilli: Math.round(cpu), memoryBytes: mem, namespace: ns, podName: pod });
       }
@@ -2037,22 +2033,22 @@ export class K8sWorkloadService {
 
           // Parse CPU: could be "123n" (nanocores) or "100m" (millicores)
           if (cpuStr.endsWith('n')) {
-            totalCpu += parseInt(cpuStr) / 1_000_000; // nanocores to millicores
+            totalCpu += parseInt(cpuStr, 10) / 1_000_000; // nanocores to millicores
           } else if (cpuStr.endsWith('m')) {
-            totalCpu += parseInt(cpuStr);
+            totalCpu += parseInt(cpuStr, 10);
           } else {
             totalCpu += parseFloat(cpuStr) * 1000; // cores to millicores
           }
 
           // Parse memory: could be "123Ki", "456Mi", "789Gi", or plain bytes
           if (memStr.endsWith('Ki')) {
-            totalMemory += parseInt(memStr) * 1024;
+            totalMemory += parseInt(memStr, 10) * 1024;
           } else if (memStr.endsWith('Mi')) {
-            totalMemory += parseInt(memStr) * 1024 * 1024;
+            totalMemory += parseInt(memStr, 10) * 1024 * 1024;
           } else if (memStr.endsWith('Gi')) {
-            totalMemory += parseInt(memStr) * 1024 * 1024 * 1024;
+            totalMemory += parseInt(memStr, 10) * 1024 * 1024 * 1024;
           } else {
-            totalMemory += parseInt(memStr);
+            totalMemory += parseInt(memStr, 10);
           }
         }
 
@@ -2098,7 +2094,9 @@ export class K8sWorkloadService {
           containerStatuses.length > 0 && containerStatuses.every((c) => c.ready === true);
         let computedStatus = podPhase;
         if (podPhase === 'running') {
-          computedStatus = isReady && allContainersReady ? 'ready' : isScheduled ? 'scheduled' : 'pending';
+          if (isReady && allContainersReady) computedStatus = 'ready';
+          else if (isScheduled) computedStatus = 'scheduled';
+          else computedStatus = 'pending';
         } else if (podPhase === 'pending' && isScheduled) {
           computedStatus = 'scheduled';
         }
@@ -2136,7 +2134,7 @@ export class K8sWorkloadService {
     return result;
   }
 
-  async getDeploymentPods(deploymentName: string, namespace: string = 'midnight-staging') {
+  async getDeploymentPods(deploymentName: string, namespace = 'midnight-staging') {
     this.ensureKubeConfig();
 
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
@@ -2249,7 +2247,7 @@ export class K8sWorkloadService {
       // would otherwise keep showing the alert long after it went ready.
       const RECENT_TERMINATION_MS = 15 * 60 * 1000;
       const warnings = pods.flatMap(pod => {
-        const podWarnings: Array<{ message: string; timestamp?: any }> = [];
+        const podWarnings: { message: string; timestamp?: any }[] = [];
 
         pod.containers?.forEach(container => {
           if (container.warning) {
@@ -2360,7 +2358,7 @@ export class K8sWorkloadService {
    * shared namespace; collapses 2*N round-trips to a single one.
    */
   async listPodStatusesByDeploymentInNamespace(namespace: string): Promise<
-    Map<string, { pods: Array<{ status: string; restartCount: number }>; warnings: Array<{ message: string }> }>
+    Map<string, { pods: { status: string; restartCount: number }[]; warnings: { message: string }[] }>
   > {
     this.ensureKubeConfig();
     const cleanNamespace = String(namespace || '').trim();
@@ -2369,7 +2367,7 @@ export class K8sWorkloadService {
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
     const result = new Map<
       string,
-      { pods: Array<{ status: string; restartCount: number }>; warnings: Array<{ message: string }> }
+      { pods: { status: string; restartCount: number }[]; warnings: { message: string }[] }
     >();
 
     try {
@@ -2513,7 +2511,6 @@ export class K8sWorkloadService {
 
     // 4. Build a Tailscale Serve config to proxy each port to the target service.
     // TS_SERVE_CONFIG works in userspace mode — no NET_ADMIN needed.
-    const targetPort = servicePorts[0]?.targetPort || 80;
     const serveConfig = JSON.stringify({
       TCP: Object.fromEntries(
         servicePorts.map((p) => [
@@ -2765,8 +2762,8 @@ export class K8sWorkloadService {
       const chunks: Buffer[] = [];
       const errChunks: Buffer[] = [];
 
-      const stdout = new (require('stream').PassThrough)();
-      const stderr = new (require('stream').PassThrough)();
+      const stdout = new PassThrough();
+      const stderr = new PassThrough();
 
       stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
       stderr.on('data', (chunk: Buffer) => errChunks.push(chunk));

@@ -1,10 +1,7 @@
-import { Injectable, ServiceUnavailableException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, ServiceUnavailableException } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
-import { ServiceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { parseCpu, parseMemory } from './quantity';
-import { isTrustedImage, trustedSecurityContext, hardenedSecurityContext } from './trusted-images';
-import { sanitizePortEntries } from './port-utils';
 
 export const ALLOWED_INGRESS_ANNOTATION_KEYS = new Set<string>([
   'cert-manager.io/cluster-issuer',
@@ -35,28 +32,28 @@ export function buildNodeAffinity(
   };
 }
 
-export type DeploymentEnvVarInput = {
+export interface DeploymentEnvVarInput {
   key: string;
   value: string;
-};
+}
 
-export type DeploymentPortInput = {
+export interface DeploymentPortInput {
   name?: string;
   containerPort?: number;
   servicePort?: number;
   protocol?: string;
   nodePort?: number;
-};
+}
 
-export type SanitizedPortEntry = {
+export interface SanitizedPortEntry {
   name: string;
   containerPort: number;
   servicePort: number;
   protocol: string;
   nodePort?: number;
-};
+}
 
-export type CreateDeploymentOptions = {
+export interface CreateDeploymentOptions {
   namespace: string;
   name: string;
   image: string;
@@ -97,50 +94,50 @@ export type CreateDeploymentOptions = {
   // (RollingUpdate) is used. Caller is responsible for forcing 'recreate' when
   // a PVC volume is attached.
   deployStrategy?: 'rollingUpdate' | 'recreate';
-};
+}
 
-export type UpdateDeploymentEnvOptions = {
+export interface UpdateDeploymentEnvOptions {
   namespace: string;
   deploymentName: string;
   env: DeploymentEnvVarInput[];
-};
+}
 
-export type UpdateServiceExposureOptions = {
+export interface UpdateServiceExposureOptions {
   namespace: string;
   serviceName: string;
   type: 'ClusterIP' | 'LoadBalancer' | 'NodePort';
-};
+}
 
-export type UpdateServicePortsOptions = {
+export interface UpdateServicePortsOptions {
   namespace: string;
   deploymentName: string;
   serviceName: string;
   ports: DeploymentPortInput[];
-};
+}
 
-export type CreateAdditionalServiceOptions = {
+export interface CreateAdditionalServiceOptions {
   namespace: string;
   deploymentName: string;
   serviceName: string;
   ports: DeploymentPortInput[];
   type?: 'ClusterIP' | 'LoadBalancer' | 'NodePort';
-};
+}
 
-export type DeleteDeploymentServiceOptions = {
+export interface DeleteDeploymentServiceOptions {
   namespace: string;
   deploymentName: string;
   serviceName: string;
   remainingPorts?: DeploymentPortInput[];
-};
+}
 
-type IngressPathBackend = {
+interface IngressPathBackend {
   path: string;
   pathType?: string;
   serviceName: string;
   servicePort: number;
-};
+}
 
-export type CreateIngressOptions = {
+export interface CreateIngressOptions {
   namespace: string;
   name: string;
   host: string;
@@ -161,7 +158,7 @@ export type CreateIngressOptions = {
     password: string;
     secretName?: string;
   };
-};
+}
 
 @Injectable()
 export class KubernetesService {
@@ -295,28 +292,28 @@ export class KubernetesService {
 
   // Returns per-node aggregated requests for all pods in the cluster.
   async getClusterPodUsage(): Promise<
-    Array<{
+    {
       nodeName: string | null;
       namespace: string;
       podName: string;
       cpuRequestMilli: number;
       memoryRequestBytes: number;
       labels: Record<string, string>;
-    }>
+    }[]
   > {
     this.ensureKubeConfig();
     if (!this.kc) return [];
     try {
       const api = this.kc.makeApiClient(k8s.CoreV1Api);
       const res = await api.listPodForAllNamespaces();
-      const out: Array<{
+      const out: {
         nodeName: string | null;
         namespace: string;
         podName: string;
         cpuRequestMilli: number;
         memoryRequestBytes: number;
         labels: Record<string, string>;
-      }> = [];
+      }[] = [];
       for (const pod of res.body.items) {
         const phase = pod.status?.phase;
         if (phase === 'Succeeded' || phase === 'Failed') continue;
@@ -365,7 +362,7 @@ export class KubernetesService {
     }
   }
 
-  async createPVC(namespace: string, name: string, storageSize: string = '1Gi') {
+  async createPVC(namespace: string, name: string, storageSize = '1Gi') {
     this.ensureKubeConfig();
 
     const cleanNamespace = String(namespace || '').trim();

@@ -47,7 +47,7 @@ const TRANSFER_RE = /(?:transferring\b[^:]*:\s*|\s)([\d.]+\s?[KMG]?B)(?:\s+done)
 // Export/push phases emit no `[stage]` header — their first line is the only
 // description (e.g. `#36 exporting to oci image format`). Map the known ones
 // to friendly labels; anything unrecognized falls back to the raw line.
-const HEADERLESS_LABELS: Array<[RegExp, string]> = [
+const HEADERLESS_LABELS: [RegExp, string][] = [
 	[/^exporting to .*image format/i, 'Exporting image layers'],
 	[/^exporting to image/i, 'Exporting image layers'],
 	[/^exporting cache/i, 'Pushing build cache']
@@ -225,7 +225,7 @@ export function parseBuildkitLogs(raw: string | null | undefined): ParsedBuildLo
 }
 
 export function formatDuration(seconds: number): string {
-	if (!isFinite(seconds) || seconds < 0) return '';
+	if (!Number.isFinite(seconds) || seconds < 0) return '';
 	if (seconds < 60) return `${seconds.toFixed(1)}s`;
 	const m = Math.floor(seconds / 60);
 	const s = Math.floor(seconds % 60);
@@ -235,7 +235,7 @@ export function formatDuration(seconds: number): string {
 export function formatTimestamp(ms: number | null): string {
 	if (!ms) return '';
 	const d = new Date(ms);
-	return d.toISOString().replace('T', ' ').slice(0, 23) + 'Z';
+	return `${d.toISOString().replace('T', ' ').slice(0, 23)}Z`;
 }
 
 export function buildSummary(parsed: ParsedBuildLogs): {

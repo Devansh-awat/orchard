@@ -383,7 +383,7 @@ export class ProjectsController {
     body: {
       host: string;
       tlsEnabled?: boolean;
-      routes: Array<{ path: string; serviceName: string; servicePort: number }>;
+      routes: { path: string; serviceName: string; servicePort: number }[];
       basicAuth?: {
         enabled: boolean;
         username: string;
@@ -410,7 +410,7 @@ export class ProjectsController {
     body: {
       host: string;
       tlsEnabled?: boolean;
-      routes: Array<{ path: string; serviceName: string; servicePort: number }>;
+      routes: { path: string; serviceName: string; servicePort: number }[];
       basicAuth?: {
         enabled: boolean;
         username: string;
@@ -1046,7 +1046,7 @@ export class DeploymentsController {
       servicePort?: number;
       tlsEnabled?: boolean;
       annotations?: Record<string, string>;
-      routes?: Array<{ path: string; serviceName: string; servicePort: number }>;
+      routes?: { path: string; serviceName: string; servicePort: number }[];
       basicAuth?: {
         enabled: boolean;
         username: string;

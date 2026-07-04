@@ -67,15 +67,17 @@ If installations is empty, tell the user to install the Orchard GitHub App on th
     },
     async () => {
       const status = await client.get('/github/status');
+      let hint = 'GitHub account not linked. Ask the user to link it at /user/settings in the Orchard UI before deploying.';
+      if (status.linked) {
+        hint = status.installations?.length
+          ? 'Use deploy_from_github with githubRepo="owner/repo" where owner matches one of the installation accountLogins. Use list_github_app_repos to see deployable repos.'
+          : 'Account linked but no GitHub App installations visible. Ask the user to install the Orchard GitHub App on their account/org via the Orchard UI settings.';
+      }
       return { content: [{ type: 'text', text: JSON.stringify({
         linked: status.linked,
         username: status.username,
         installations: status.installations,
-        hint: status.linked
-          ? (status.installations?.length
-              ? 'Use deploy_from_github with githubRepo="owner/repo" where owner matches one of the installation accountLogins. Use list_github_app_repos to see deployable repos.'
-              : 'Account linked but no GitHub App installations visible. Ask the user to install the Orchard GitHub App on their account/org via the Orchard UI settings.')
-          : 'GitHub account not linked. Ask the user to link it at /user/settings in the Orchard UI before deploying.',
+        hint,
       }, null, 2) }] };
     },
   );
@@ -167,8 +169,8 @@ Before calling, you should still confirm with list_github_deploy_targets that th
     },
     async ({ projectId, name, repoUrl, branch, dockerfilePath, buildFromRoot, port, env, cpuRequestMilli, memoryRequestBytes }) => {
       const trimmed = repoUrl.trim();
-      const httpsMatch = trimmed.match(/^https?:\/\/github\.com\/([^\/\s]+)\/([^\/\s]+?)(?:\.git)?(?:\/(?:tree|blob)\/([^\/\s]+))?(?:\/.*)?$/i);
-      const sshMatch = trimmed.match(/^git@github\.com:([^\/\s]+)\/([^\/\s]+?)(?:\.git)?$/i);
+      const httpsMatch = trimmed.match(/^https?:\/\/github\.com\/([^/\s]+)\/([^/\s]+?)(?:\.git)?(?:\/(?:tree|blob)\/([^/\s]+))?(?:\/.*)?$/i);
+      const sshMatch = trimmed.match(/^git@github\.com:([^/\s]+)\/([^/\s]+?)(?:\.git)?$/i);
       const m = httpsMatch ?? sshMatch;
       if (!m) {
         return {

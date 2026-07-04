@@ -11,22 +11,27 @@ export class OtelConsoleLogger extends ConsoleLogger {
     super.log(message, ...optionalParams);
     this.forward('log', message, optionalParams);
   }
+
   error(message: any, ...optionalParams: any[]) {
     super.error(message, ...optionalParams);
     this.forward('error', message, optionalParams);
   }
+
   warn(message: any, ...optionalParams: any[]) {
     super.warn(message, ...optionalParams);
     this.forward('warn', message, optionalParams);
   }
+
   debug(message: any, ...optionalParams: any[]) {
     super.debug(message, ...optionalParams);
     this.forward('debug', message, optionalParams);
   }
+
   verbose(message: any, ...optionalParams: any[]) {
     super.verbose(message, ...optionalParams);
     this.forward('verbose', message, optionalParams);
   }
+
   fatal(message: any, ...optionalParams: any[]) {
     super.fatal?.(message, ...optionalParams);
     this.forward('fatal', message, optionalParams);

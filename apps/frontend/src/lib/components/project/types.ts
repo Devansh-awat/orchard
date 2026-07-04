@@ -15,15 +15,15 @@ export interface Deployment {
 	image?: string;
 	githubRepo?: string;
 	githubBranch?: string;
-	ingresses?: Array<{ id: string; host: string }>;
+	ingresses?: { id: string; host: string }[];
 	creator?: DeploymentUser;
-	imageHistory?: Array<{
+	imageHistory?: {
 		buildStartedAt?: string;
 		buildCompletedAt?: string;
 		commitAuthorName?: string;
 		commitAuthorUsername?: string;
 		triggeredBy?: DeploymentUser;
-	}>;
+	}[];
 }
 
 export interface ProjectMember {

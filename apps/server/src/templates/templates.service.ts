@@ -6,6 +6,8 @@ import {
   Logger,
   OnModuleInit,
 } from '@nestjs/common';
+import * as fs from 'fs';
+import * as path from 'path';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';
 import { DatabasesService } from '../projects/databases.service';
@@ -16,10 +18,7 @@ import { UsersService } from '../users/users.service';
 import {
   TemplateEngineService,
   ResolutionContext,
-  ParsedTemplate,
 } from './template-engine.service';
-import * as fs from 'fs';
-import * as path from 'path';
 
 @Injectable()
 export class TemplatesService implements OnModuleInit {
@@ -379,6 +378,8 @@ export class TemplatesService implements OnModuleInit {
             };
             break;
           }
+          default:
+            break;
         }
       }
 

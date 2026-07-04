@@ -3,15 +3,14 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { K8sNamespaceService } from '../kubernetes/k8s-namespace.service';
-import { parseCpu, parseMemory } from '../kubernetes/quantity';
 import { DEFAULT_CPU_MILLI, DEFAULT_MEMORY_BYTES } from '../kubernetes/presets';
 
-export type Caps = {
+export interface Caps {
   cpuLimitMilli: number | null;
   memoryLimitBytes: number | null;
   maxPods: number | null;
   maxServices: number | null;
-};
+}
 
 type EffectiveProjectCaps = Caps & {
   source: { cpu: 'project' | 'org' | null; memory: 'project' | 'org' | null; pods: 'project' | 'org' | null; services: 'project' | 'org' | null };
@@ -247,7 +246,7 @@ export class QuotasService {
   }
 
   // List other orgs sharing this org's quotaGroupId (empty if not linked).
-  async getOrgConnections(organizationId: string): Promise<Array<{ id: string; name: string; slug: string }>> {
+  async getOrgConnections(organizationId: string): Promise<{ id: string; name: string; slug: string }[]> {
     const self = await this.prisma.organization.findUnique({
       where: { id: organizationId },
       select: { quotaGroupId: true },
@@ -483,7 +482,7 @@ export class QuotasService {
   ): Promise<{
     cpuMilli: number;
     memoryBytes: number;
-    breakdown: Array<{
+    breakdown: {
       kind: 'deployment' | 'database' | 'templateInstance';
       id: string;
       name: string;
@@ -492,7 +491,7 @@ export class QuotasService {
       cpuMilli: number;
       memoryBytes: number;
       replicas: number;
-    }>;
+    }[];
   }> {
     const projects = await this.prisma.project.findMany({
       where: { organizationId, ownerId: userId },
@@ -526,7 +525,7 @@ export class QuotasService {
     });
     let cpu = 0;
     let mem = 0;
-    const breakdown: Array<{
+    const breakdown: {
       kind: 'deployment' | 'database' | 'templateInstance';
       id: string;
       name: string;
@@ -535,7 +534,7 @@ export class QuotasService {
       cpuMilli: number;
       memoryBytes: number;
       replicas: number;
-    }> = [];
+    }[] = [];
     for (const p of projects) {
       for (const d of p.deployments) {
         if (excludeDeploymentId && d.id === excludeDeploymentId) continue;
@@ -640,12 +639,10 @@ export class QuotasService {
       overrides?.defaultOverride?.cpuMilli !== undefined
         ? overrides.defaultOverride.cpuMilli
         : org.defaultMemberCpuMilli;
-    const defaultMem =
-      overrides?.defaultOverride?.memoryBytes !== undefined
-        ? overrides.defaultOverride.memoryBytes
-        : org.defaultMemberMemoryBytes
-          ? Number(org.defaultMemberMemoryBytes)
-          : null;
+    let defaultMem: number | null = org.defaultMemberMemoryBytes ? Number(org.defaultMemberMemoryBytes) : null;
+    if (overrides?.defaultOverride?.memoryBytes !== undefined) {
+      defaultMem = overrides.defaultOverride.memoryBytes;
+    }
     let cpu = 0;
     let mem = 0;
     for (const m of org.members) {
@@ -654,11 +651,9 @@ export class QuotasService {
       const cpuUnlimited = override ? override.cpuUnlimited : m.cpuAllowanceUnlimited;
       const memUnlimited = override ? override.memoryUnlimited : m.memoryAllowanceUnlimited;
       const cpuExplicit = override ? override.cpuMilli : m.cpuAllowanceMilli;
-      const memExplicit = override
-        ? override.memoryBytes
-        : m.memoryAllowanceBytes
-          ? Number(m.memoryAllowanceBytes)
-          : null;
+      let memExplicit: number | null = null;
+      if (override) memExplicit = override.memoryBytes;
+      else if (m.memoryAllowanceBytes) memExplicit = Number(m.memoryAllowanceBytes);
       if (!cpuUnlimited) {
         if (cpuExplicit !== null) cpu += cpuExplicit;
         else if (defaultCpu !== null) cpu += defaultCpu;
@@ -686,14 +681,14 @@ export class QuotasService {
     });
     if (!member) throw new NotFoundException('Member not found');
 
+    let nextMemoryBytes: number | null = member.memoryAllowanceBytes ? Number(member.memoryAllowanceBytes) : null;
+    if (data.memoryBytes !== undefined) {
+      nextMemoryBytes = data.memoryBytes;
+    }
+
     const next = {
       cpuMilli: data.cpuMilli !== undefined ? data.cpuMilli : member.cpuAllowanceMilli,
-      memoryBytes:
-        data.memoryBytes !== undefined
-          ? data.memoryBytes
-          : member.memoryAllowanceBytes
-            ? Number(member.memoryAllowanceBytes)
-            : null,
+      memoryBytes: nextMemoryBytes,
       cpuUnlimited:
         data.cpuUnlimited !== undefined ? data.cpuUnlimited : member.cpuAllowanceUnlimited,
       memoryUnlimited:

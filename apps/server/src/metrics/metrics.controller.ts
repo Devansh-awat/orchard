@@ -29,6 +29,6 @@ function parseRange(s: string | undefined): number | null {
   if (!m) return null;
   const n = parseInt(m[1], 10);
   const unit = m[2];
-  const mult = unit === 's' ? 1 : unit === 'm' ? 60 : unit === 'h' ? 3600 : 86400;
-  return n * mult;
+  const mults: Record<string, number> = { s: 1, m: 60, h: 3600, d: 86400 };
+  return n * mults[unit];
 }

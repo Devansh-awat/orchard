@@ -95,6 +95,8 @@ export class PrismaEventsBridge implements OnModuleInit {
         return this.emitForIngress(params, result);
       case 'OrganizationMember':
         return this.emitForMembership(params, result);
+      default:
+        return undefined;
     }
   }
 

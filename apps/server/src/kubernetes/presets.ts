@@ -1,11 +1,11 @@
 // Shared resource presets. Keep in sync with frontend/src/lib/presets.ts.
-export type ResourcePreset = {
+export interface ResourcePreset {
   id: string;
   label: string;
   description: string;
   cpuMilli: number;
   memoryBytes: number;
-};
+}
 
 const MiB = 1024 * 1024;
 

@@ -178,7 +178,7 @@ export class ProjectAccessService {
     projectId: string,
     clerkId: string,
     userData?: any,
-    action: string = 'perform this action',
+    action = 'perform this action',
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
     if (!user) throw new NotFoundException('User not found');

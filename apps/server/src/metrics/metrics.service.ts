@@ -1,18 +1,19 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
-export type SeriesPoint = { x: number; y: number };
+export interface SeriesPoint { x: number; y: number }
 export type SeriesId = 'cpu' | 'mem' | 'rx' | 'tx';
 export type SeriesBundle = Record<SeriesId, SeriesPoint[]>;
 
-type PromMatrix = {
+interface PromMatrix {
   status: string;
-  data?: { resultType: string; result: Array<{ metric: Record<string, string>; values: Array<[number, string]> }> };
-};
+  data?: { resultType: string; result: { metric: Record<string, string>; values: [number, string][] }[] };
+}
 
 @Injectable()
 export class MetricsService {
   private readonly logger = new Logger(MetricsService.name);
+
   private readonly base = process.env.VICTORIAMETRICS_URL
     ?? 'http://victoriametrics.orchard-metrics.svc.cluster.local:8428';
 
@@ -24,7 +25,7 @@ export class MetricsService {
     organizationId: string,
     rangeSeconds: number = 24 * 3600,
   ): Promise<{
-    rows: Array<{
+    rows: {
       kind: 'deployment' | 'database';
       id: string;
       name: string;
@@ -38,7 +39,7 @@ export class MetricsService {
       cpuUtilization: number | null;
       memoryUtilization: number | null;
       verdict: 'over' | 'under' | 'ok' | 'unknown';
-    }>;
+    }[];
   }> {
     const projects = await this.prisma.project.findMany({
       where: { organizationId },
@@ -68,10 +69,7 @@ export class MetricsService {
       },
     });
 
-    const endSec = Math.floor(Date.now() / 1000);
-    const startSec = endSec - rangeSeconds;
-
-    const rows: Array<{
+    const rows: {
       kind: 'deployment' | 'database';
       id: string;
       name: string;
@@ -85,9 +83,9 @@ export class MetricsService {
       cpuUtilization: number | null;
       memoryUtilization: number | null;
       verdict: 'over' | 'under' | 'ok' | 'unknown';
-    }> = [];
+    }[] = [];
 
-    const tasks: Array<Promise<void>> = [];
+    const tasks: Promise<void>[] = [];
 
     for (const p of projects) {
       for (const d of p.deployments) {
@@ -175,7 +173,7 @@ export class MetricsService {
       }
       const body = (await res.json()) as {
         status: string;
-        data?: { resultType: string; result: Array<{ value: [number, string] }> };
+        data?: { resultType: string; result: { value: [number, string] }[] };
       };
       if (body.status !== 'success' || !body.data?.result?.length) return null;
       const v = Number(body.data.result[0].value[1]);
@@ -296,10 +294,6 @@ export class MetricsService {
       return [];
     }
   }
-}
-
-function empty(): SeriesBundle {
-  return { cpu: [], mem: [], rx: [], tx: [] };
 }
 
 function escapeLabel(s: string): string {

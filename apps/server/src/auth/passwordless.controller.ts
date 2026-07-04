@@ -11,6 +11,7 @@ import {
   HttpStatus,
 } from '@nestjs/common';
 import { Request, Response } from 'express';
+import { Prisma } from '@prisma/client';
 import { OtpService } from './otp.service';
 import { PasskeyService } from './passkey.service';
 import { OAuthService } from './oauth.service';
@@ -20,7 +21,6 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuthorizationService } from './authorization.service';
 import { AuditService } from '../audit/audit.service';
 import { setSessionCookie } from './cookies';
-import { Prisma } from '@prisma/client';
 import { Public, Auth } from './decorators';
 import { getClientIp } from './client-ip';
 
@@ -205,7 +205,7 @@ export class PasswordlessController {
     // Create session
     const sessionId = await this.sessionsService.createSession({
       userId: user.id,
-      ipAddress: ipAddress,
+      ipAddress,
       userAgent: req.headers['user-agent'],
       authMethod: 'otp',
     });
@@ -367,7 +367,7 @@ export class PasswordlessController {
     // Create session
     const sessionId = await this.sessionsService.createSession({
       userId: user.id,
-      ipAddress: ipAddress,
+      ipAddress,
       userAgent: req.headers['user-agent'],
       authMethod: 'passkey',
     });

@@ -248,7 +248,7 @@
 			<div class="cs-owner-row">
 				<ProjectSwitcher
 					currentProjectName={project?.name || projectSlug}
-					pathSuffix={`/compose-stacks/new`}
+					pathSuffix="/compose-stacks/new"
 				/>
 				<span class="cs-slash">/</span>
 				<input type="text" bind:value={name} placeholder="my-stack" class="cs-name-input" />

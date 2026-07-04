@@ -1,7 +1,7 @@
 import { Controller, Get, Post, Patch, Delete, Param, Body, Request, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
 import { FileInterceptor } from '@nestjs/platform-express';
-import { OrganizationsService } from './organizations.service';
 import { OrganizationRole } from '@prisma/client';
+import { OrganizationsService } from './organizations.service';
 import { StorageService } from './storage.service';
 import { Auth } from '../auth/decorators';
 

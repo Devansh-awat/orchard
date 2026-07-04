@@ -1208,7 +1208,7 @@
 					<textarea
 						bind:value={envRawText}
 						oninput={() => (envsManuallyEdited = true)}
-						placeholder={'KEY1=value1\nKEY2=value2\n# Comments are ignored'}
+						placeholder="KEY1=value1&#10;KEY2=value2&#10;# Comments are ignored"
 						class="env-raw-textarea"
 					></textarea>
 				{/if}

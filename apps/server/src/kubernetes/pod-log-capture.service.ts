@@ -24,6 +24,7 @@ interface KilledEntry extends KilledContainerMeta {
 @Injectable()
 export class PodLogCaptureService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(PodLogCaptureService.name);
+
   private redis: Redis | null = null;
 
   constructor(private readonly k8sWorkload: K8sWorkloadService) {}
@@ -47,9 +48,11 @@ export class PodLogCaptureService implements OnModuleInit, OnModuleDestroy {
   private idxKey(deploymentId: string) {
     return `orchard:killed:idx:${deploymentId}`;
   }
+
   private entryKey(deploymentId: string, entryId: string) {
     return `orchard:killed:entry:${deploymentId}:${entryId}`;
   }
+
   private seenKey(deploymentId: string, entryId: string) {
     return `orchard:killed:seen:${deploymentId}:${entryId}`;
   }

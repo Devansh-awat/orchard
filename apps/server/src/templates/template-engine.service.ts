@@ -141,7 +141,7 @@ export class TemplateEngineService {
         switch (def.type) {
           case 'number':
             value = Number(value);
-            if (isNaN(value)) {
+            if (Number.isNaN(value)) {
               throw new BadRequestException(`Parameter "${def.displayName}" must be a number`);
             }
             if (def.validation?.min !== undefined && value < def.validation.min) {
@@ -189,6 +189,8 @@ export class TemplateEngineService {
                 `Parameter "${def.displayName}" must be at most ${def.validation.max} characters`,
               );
             }
+            break;
+          default:
             break;
         }
       }

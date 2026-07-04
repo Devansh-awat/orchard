@@ -36,7 +36,7 @@ export function sanitizeLogs(logs: string): string {
 	);
 	sanitized = sanitized.replace(/https?:\/\/[^@\s]+@github\.com/gi, 'https://***@github.com');
 	sanitized = sanitized.replace(
-		/(Bearer|Token|Authorization:)\s+[a-zA-Z0-9_\-\.]+/gi,
+		/(Bearer|Token|Authorization:)\s+[a-zA-Z0-9_\-.]+/gi,
 		'$1 ***REDACTED***'
 	);
 	sanitized = sanitized.replace(
@@ -46,16 +46,16 @@ export function sanitizeLogs(logs: string): string {
 	return sanitized;
 }
 
-export function envVarsToRaw(vars: Array<{ key: string; value: string }>): string {
+export function envVarsToRaw(vars: { key: string; value: string }[]): string {
 	return vars
 		.filter((e) => e.key.trim())
 		.map((e) => `${e.key}=${e.value}`)
 		.join('\n');
 }
 
-export function rawToEnvVars(raw: string): Array<{ key: string; value: string }> {
+export function rawToEnvVars(raw: string): { key: string; value: string }[] {
 	const lines = raw.split('\n');
-	const parsed: Array<{ key: string; value: string }> = [];
+	const parsed: { key: string; value: string }[] = [];
 	for (const line of lines) {
 		const trimmed = line.trim();
 		if (!trimmed || trimmed.startsWith('#')) continue;

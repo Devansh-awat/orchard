@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
+import UAParser from 'ua-parser-js';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
-import UAParser from 'ua-parser-js';
 
 // M-1: Geo enrichment uses ipwho.is over HTTPS with a short timeout. The
 // previous implementation hit http://ip-api.com over plaintext for every

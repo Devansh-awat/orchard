@@ -4,17 +4,17 @@ export interface ProjectContext {
 	id: string;
 	name: string;
 	slug: string;
-	deployments?: Array<{
+	deployments?: {
 		id: string;
 		name: string;
-		services?: Array<{
+		services?: {
 			id: string;
 			name: string;
 			port: number;
 			targetPort: number;
 			protocol: string;
-		}>;
-	}>;
+		}[];
+	}[];
 	[key: string]: unknown;
 }
 

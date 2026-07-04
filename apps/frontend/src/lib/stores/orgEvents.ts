@@ -1,7 +1,7 @@
-import { browser } from '$app/environment';
-import { invalidate } from '$app/navigation';
 import type { QueryClient } from '@tanstack/svelte-query';
 import { get, writable, derived, type Readable } from 'svelte/store';
+import { browser } from '$app/environment';
+import { invalidate } from '$app/navigation';
 import { apiBase } from './api';
 import { queryClient } from '../query';
 
@@ -91,6 +91,8 @@ function applyEventToCache(sub: Subscription, ev: OrgEvent) {
 			qc.invalidateQueries({ queryKey: ['org', sub.orgId] });
 			qc.invalidateQueries({ queryKey: ['projects', sub.orgId] });
 			break;
+		default:
+			break;
 	}
 }
 
@@ -171,7 +173,7 @@ export function subscribeOrgEvents(
 	opts?: { queryClient?: QueryClient; invalidateDependencies?: string[] }
 ): () => void {
 	if (!browser) return () => {};
-	if (typeof location !== 'undefined' && location.search.includes('nosse')) {
+	if (typeof window.location !== 'undefined' && window.location.search.includes('nosse')) {
 		return () => {};
 	}
 
@@ -203,10 +205,8 @@ export function subscribeOrgEvents(
 			}
 		}, 10_000);
 		subscriptions.set(orgId, sub);
-	} else {
-		if (opts?.invalidateDependencies) {
-			for (const d of opts.invalidateDependencies) sub.dependencies.add(d);
-		}
+	} else if (opts?.invalidateDependencies) {
+		for (const d of opts.invalidateDependencies) sub.dependencies.add(d);
 	}
 
 	sub.listeners.add(listener);

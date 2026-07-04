@@ -3,7 +3,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { RESOURCE_PRESETS, type ResourcePreset } from '../kubernetes/presets';
 
-export type BackfillRow = {
+export interface BackfillRow {
   kind: 'deployment' | 'database';
   id: string;
   name: string;
@@ -13,7 +13,7 @@ export type BackfillRow = {
   pods: number;
   observed: { cpuMilli: number; memoryBytes: number } | null; // sum across pods
   recommendation: { cpuMilli: number; memoryBytes: number; presetId: string } | null;
-};
+}
 
 // Snap an observed usage up to the smallest preset that fits,
 // with a 1.5× headroom applied first. Floor: smallest preset.
@@ -114,7 +114,7 @@ export class QuotaBackfillService {
       let sumCpu = 0;
       let sumMem = 0;
       let matched = 0;
-      for (const [key, m] of metrics) {
+      for (const [, m] of metrics) {
         if (m.namespace !== db.namespace) continue;
         if (!m.podName.startsWith(`${db.clusterName}-`)) continue;
         sumCpu += m.cpuMilli;

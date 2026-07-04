@@ -1,6 +1,5 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException, Inject, forwardRef, Logger } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
-import { Prisma, ServiceType } from '@prisma/client';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, Inject, forwardRef } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
@@ -22,7 +21,6 @@ import { AuditService } from '../audit/audit.service';
 import { ProjectAccessService } from './project-access.service';
 import { DeploymentsService } from './deployments.service';
 import { formatSlug, redactDatabaseForViewer, stripR2ProxyCreds } from './projects.utils';
-import { randomUUID } from 'crypto';
 
 @Injectable()
 export class ProjectsService {
@@ -79,7 +77,7 @@ export class ProjectsService {
    * decides its own fallback (Folder icon) when `project.icon` is null.
    */
   private async resolveProjectIconFallback(
-    _deployments: Array<{ ingresses?: Array<{ host?: string | null }> | null }> | null | undefined,
+    _deployments: { ingresses?: { host?: string | null }[] | null }[] | null | undefined,
   ): Promise<string | null> {
     return null;
   }
@@ -91,7 +89,7 @@ export class ProjectsService {
    * always wins and clearing it reverts to the auto one.
    */
   private async resolveProjectBannerFallback(
-    deployments: Array<{ ingresses?: Array<{ host?: string | null }> | null }> | null | undefined,
+    deployments: { ingresses?: { host?: string | null }[] | null }[] | null | undefined,
   ): Promise<string | null> {
     try {
       const hosts = (deployments ?? [])
@@ -613,8 +611,8 @@ export class ProjectsService {
   private async attachOrgRoleToMembers<M extends { user: { id: string } }>(
     organizationId: string,
     members: M[],
-  ): Promise<Array<M & { orgRole: string | null }>> {
-    if (members.length === 0) return [] as Array<M & { orgRole: string | null }>;
+  ): Promise<(M & { orgRole: string | null })[]> {
+    if (members.length === 0) return [] as (M & { orgRole: string | null })[];
     const userIds = members.map((m) => m.user.id);
     const orgMembers = await this.prisma.organizationMember.findMany({
       where: { organizationId, userId: { in: userIds } },
@@ -651,11 +649,11 @@ export class ProjectsService {
     }
     if (data.icon !== undefined) {
       const v = data.icon?.toString().trim();
-      updates.icon = v ? v : null;
+      updates.icon = v || null;
     }
     if (data.backgroundImage !== undefined) {
       const v = data.backgroundImage?.toString().trim();
-      updates.backgroundImage = v ? v : null;
+      updates.backgroundImage = v || null;
     }
 
     const before = await this.prisma.project.findUnique({
@@ -1457,11 +1455,9 @@ export class ProjectsService {
     // dashboard doesn't need a second round trip. `synthetic` marks a
     // superadmin viewing an org they aren't actually a member of.
     const m = memberships[0];
-    const currentMember = m
-      ? { role: m.role, synthetic: false }
-      : isSuper
-        ? { role: 'owner' as const, synthetic: true }
-        : null;
+    let currentMember: { role: string; synthetic: boolean } | null = null;
+    if (m) currentMember = { role: m.role, synthetic: false };
+    else if (isSuper) currentMember = { role: 'owner' as const, synthetic: true };
 
     const [projects, deployments, databases, builds] = await Promise.all([
       this.listProjects(userId, org.id),

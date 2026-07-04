@@ -11,8 +11,11 @@ export interface ActingUser {
 
 export class OrchardClient {
   private baseUrl: string;
+
   private token: string;
+
   private actingUser?: ActingUser;
+
   private usesServiceToken: boolean;
 
   constructor(baseUrl?: string, token?: string, actingUser?: ActingUser) {

@@ -4,7 +4,7 @@ import { Auth, RequireScope } from '../auth/decorators';
 import { AiChatService } from './ai-chat.service';
 
 interface ChatRequest {
-  messages: Array<{ role: 'user' | 'assistant'; content: string }>;
+  messages: { role: 'user' | 'assistant'; content: string }[];
 }
 
 @Auth()

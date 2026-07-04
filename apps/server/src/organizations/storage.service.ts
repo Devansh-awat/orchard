@@ -5,7 +5,9 @@ import { randomUUID } from 'crypto';
 @Injectable()
 export class StorageService {
   private s3Client: S3Client | null = null;
+
   private bucketName: string | null = null;
+
   private initialized = false;
 
   private initialize() {
@@ -36,7 +38,7 @@ export class StorageService {
     this.initialized = true;
   }
 
-  async uploadFile(file: Express.Multer.File, folder: string = 'organizations'): Promise<string> {
+  async uploadFile(file: Express.Multer.File, folder = 'organizations'): Promise<string> {
     this.initialize();
 
     if (!this.s3Client || !this.bucketName) {

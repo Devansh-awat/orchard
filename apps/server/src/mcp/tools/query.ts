@@ -2,6 +2,206 @@ import { McpServer } from '@modelcontextprotocol/sdk/server/mcp.js';
 import { z } from 'zod';
 import { OrchardClient } from '../client';
 
+const YAML_FORMAT_GUIDE = `
+## Leaf Template YAML Format
+
+Templates use \`apiVersion: leaf/v1\` and \`kind: Template\`.
+
+### Structure
+
+\`\`\`yaml
+apiVersion: leaf/v1
+kind: Template
+
+metadata:
+  name: my-template           # unique, lowercase alphanumeric + hyphens
+  displayName: My Template    # human-readable name
+  description: What it does   # optional
+  icon: nodejs                # optional icon identifier
+  version: "1.0.0"           # optional, defaults to 1.0.0
+  category: backend           # optional: backend, frontend, cms, database, etc.
+  tags: ["tag1", "tag2"]     # optional
+
+parameters:                   # user-configurable inputs
+  - name: paramName           # variable name, referenced as {{ params.paramName }}
+    displayName: Param Label
+    description: Help text
+    type: string              # string | number | boolean | select | secret
+    default: value            # optional default
+    required: true            # defaults to false
+    placeholder: hint         # optional
+    validation:               # optional
+      pattern: "^regex$"      # for strings
+      message: "error msg"
+      min: 1                  # for numbers / min length for secrets
+      max: 100                # for numbers / max length for secrets
+
+resources:                    # infrastructure to create (order matters!)
+  - name: resourceName        # referenced as {{ resources.resourceName.field }}
+    type: deployment          # deployment | database | ingress
+    config: { ... }           # type-specific config
+\`\`\`
+
+### Resource Types
+
+**database** — Creates a PostgreSQL database.
+Available context fields: id, host, port, dbName, dbUser, dbPassword, connectionString
+\`\`\`yaml
+- name: db
+  type: database
+  config:
+    name: "{{ params.appName }}-db"
+\`\`\`
+
+**deployment** — Creates a container deployment.
+Available context fields: id, serviceName
+\`\`\`yaml
+- name: app
+  type: deployment
+  config:
+    name: "{{ params.appName }}"
+    image: "{{ params.image }}"
+    replicas: "{{ params.replicas }}"
+    ports:
+      - name: http
+        containerPort: "{{ params.port }}"
+        servicePort: "{{ params.port }}"
+        protocol: TCP
+    env:
+      - key: DATABASE_URL
+        value: "{{ resources.db.connectionString }}"
+    volumes:                          # optional
+      - name: data
+        type: pvc                     # pvc | hostPath | emptyDir
+        mountPath: /data
+        pvcName: my-pvc
+        storageSize: 1Gi              # default: 1Gi
+    exposePublic: true                # optional, creates external service
+\`\`\`
+
+**ingress** — Creates a public domain route.
+Available context fields: id, host
+\`\`\`yaml
+- name: web
+  type: ingress
+  config:
+    host: "{{ params.domain }}"
+    tlsEnabled: true
+    routes:
+      - path: /
+        serviceName: "{{ resources.app.serviceName }}"
+        servicePort: "{{ params.port }}"
+    basicAuth:                        # optional
+      enabled: true
+      username: admin
+      password: secret
+\`\`\`
+
+### Interpolation
+
+- \`{{ params.paramName }}\` — inserts a parameter value
+- \`{{ resources.resourceName.field }}\` — references a previously created resource
+- Resources are created in order, so a deployment can reference a database created before it
+
+### Example: Full-stack Node.js + PostgreSQL
+
+\`\`\`yaml
+apiVersion: leaf/v1
+kind: Template
+metadata:
+  name: nodejs-postgres
+  displayName: Node.js + PostgreSQL
+  description: A Node.js app with a PostgreSQL database and public ingress.
+  icon: nodejs
+  category: backend
+  tags: ["nodejs", "postgres", "api"]
+
+parameters:
+  - name: appName
+    displayName: App Name
+    type: string
+    default: my-app
+    required: true
+    validation:
+      pattern: "^[a-z][a-z0-9-]{1,58}[a-z0-9]$"
+      message: Lowercase alphanumeric with hyphens, 3-60 chars
+
+  - name: image
+    displayName: Docker Image
+    type: string
+    required: true
+    placeholder: "ghcr.io/user/app:latest"
+
+  - name: port
+    displayName: App Port
+    type: number
+    default: 3000
+    validation:
+      min: 1
+      max: 65535
+
+  - name: replicas
+    displayName: Replicas
+    type: number
+    default: 1
+    validation:
+      min: 1
+      max: 10
+
+  - name: domain
+    displayName: Domain
+    type: string
+    required: true
+    placeholder: "api.example.com"
+
+  - name: dbPassword
+    displayName: Database Password
+    type: secret             # auto-generates a strong password if not provided
+    validation:
+      min: 16                # minimum length (default: 32)
+
+  - name: enableTls
+    displayName: Enable HTTPS
+    type: boolean
+    default: true
+
+resources:
+  - name: db
+    type: database
+    config:
+      name: "{{ params.appName }}-db"
+
+  - name: app
+    type: deployment
+    config:
+      name: "{{ params.appName }}"
+      image: "{{ params.image }}"
+      replicas: "{{ params.replicas }}"
+      ports:
+        - name: http
+          containerPort: "{{ params.port }}"
+          servicePort: "{{ params.port }}"
+          protocol: TCP
+      env:
+        - key: DATABASE_URL
+          value: "{{ resources.db.connectionString }}"
+        - key: PORT
+          value: "{{ params.port }}"
+        - key: NODE_ENV
+          value: production
+
+  - name: ingress
+    type: ingress
+    config:
+      host: "{{ params.domain }}"
+      tlsEnabled: "{{ params.enableTls }}"
+      routes:
+        - path: /
+          serviceName: "{{ resources.app.serviceName }}"
+          servicePort: "{{ params.port }}"
+\`\`\`
+`;
+
 export function registerQueryTools(server: McpServer, client: OrchardClient) {
   // ── User & Organizations ──────────────────────────────────────────
 
@@ -668,208 +868,6 @@ The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can 
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {},
     },
-    async () => {
-      return { content: [{ type: 'text', text: YAML_FORMAT_GUIDE }] };
-    },
+    async () => ({ content: [{ type: 'text', text: YAML_FORMAT_GUIDE }] }),
   );
 }
-
-const YAML_FORMAT_GUIDE = `
-## Leaf Template YAML Format
-
-Templates use \`apiVersion: leaf/v1\` and \`kind: Template\`.
-
-### Structure
-
-\`\`\`yaml
-apiVersion: leaf/v1
-kind: Template
-
-metadata:
-  name: my-template           # unique, lowercase alphanumeric + hyphens
-  displayName: My Template    # human-readable name
-  description: What it does   # optional
-  icon: nodejs                # optional icon identifier
-  version: "1.0.0"           # optional, defaults to 1.0.0
-  category: backend           # optional: backend, frontend, cms, database, etc.
-  tags: ["tag1", "tag2"]     # optional
-
-parameters:                   # user-configurable inputs
-  - name: paramName           # variable name, referenced as {{ params.paramName }}
-    displayName: Param Label
-    description: Help text
-    type: string              # string | number | boolean | select | secret
-    default: value            # optional default
-    required: true            # defaults to false
-    placeholder: hint         # optional
-    validation:               # optional
-      pattern: "^regex$"      # for strings
-      message: "error msg"
-      min: 1                  # for numbers / min length for secrets
-      max: 100                # for numbers / max length for secrets
-
-resources:                    # infrastructure to create (order matters!)
-  - name: resourceName        # referenced as {{ resources.resourceName.field }}
-    type: deployment          # deployment | database | ingress
-    config: { ... }           # type-specific config
-\`\`\`
-
-### Resource Types
-
-**database** — Creates a PostgreSQL database.
-Available context fields: id, host, port, dbName, dbUser, dbPassword, connectionString
-\`\`\`yaml
-- name: db
-  type: database
-  config:
-    name: "{{ params.appName }}-db"
-\`\`\`
-
-**deployment** — Creates a container deployment.
-Available context fields: id, serviceName
-\`\`\`yaml
-- name: app
-  type: deployment
-  config:
-    name: "{{ params.appName }}"
-    image: "{{ params.image }}"
-    replicas: "{{ params.replicas }}"
-    ports:
-      - name: http
-        containerPort: "{{ params.port }}"
-        servicePort: "{{ params.port }}"
-        protocol: TCP
-    env:
-      - key: DATABASE_URL
-        value: "{{ resources.db.connectionString }}"
-    volumes:                          # optional
-      - name: data
-        type: pvc                     # pvc | hostPath | emptyDir
-        mountPath: /data
-        pvcName: my-pvc
-        storageSize: 1Gi              # default: 1Gi
-    exposePublic: true                # optional, creates external service
-\`\`\`
-
-**ingress** — Creates a public domain route.
-Available context fields: id, host
-\`\`\`yaml
-- name: web
-  type: ingress
-  config:
-    host: "{{ params.domain }}"
-    tlsEnabled: true
-    routes:
-      - path: /
-        serviceName: "{{ resources.app.serviceName }}"
-        servicePort: "{{ params.port }}"
-    basicAuth:                        # optional
-      enabled: true
-      username: admin
-      password: secret
-\`\`\`
-
-### Interpolation
-
-- \`{{ params.paramName }}\` — inserts a parameter value
-- \`{{ resources.resourceName.field }}\` — references a previously created resource
-- Resources are created in order, so a deployment can reference a database created before it
-
-### Example: Full-stack Node.js + PostgreSQL
-
-\`\`\`yaml
-apiVersion: leaf/v1
-kind: Template
-metadata:
-  name: nodejs-postgres
-  displayName: Node.js + PostgreSQL
-  description: A Node.js app with a PostgreSQL database and public ingress.
-  icon: nodejs
-  category: backend
-  tags: ["nodejs", "postgres", "api"]
-
-parameters:
-  - name: appName
-    displayName: App Name
-    type: string
-    default: my-app
-    required: true
-    validation:
-      pattern: "^[a-z][a-z0-9-]{1,58}[a-z0-9]$"
-      message: Lowercase alphanumeric with hyphens, 3-60 chars
-
-  - name: image
-    displayName: Docker Image
-    type: string
-    required: true
-    placeholder: "ghcr.io/user/app:latest"
-
-  - name: port
-    displayName: App Port
-    type: number
-    default: 3000
-    validation:
-      min: 1
-      max: 65535
-
-  - name: replicas
-    displayName: Replicas
-    type: number
-    default: 1
-    validation:
-      min: 1
-      max: 10
-
-  - name: domain
-    displayName: Domain
-    type: string
-    required: true
-    placeholder: "api.example.com"
-
-  - name: dbPassword
-    displayName: Database Password
-    type: secret             # auto-generates a strong password if not provided
-    validation:
-      min: 16                # minimum length (default: 32)
-
-  - name: enableTls
-    displayName: Enable HTTPS
-    type: boolean
-    default: true
-
-resources:
-  - name: db
-    type: database
-    config:
-      name: "{{ params.appName }}-db"
-
-  - name: app
-    type: deployment
-    config:
-      name: "{{ params.appName }}"
-      image: "{{ params.image }}"
-      replicas: "{{ params.replicas }}"
-      ports:
-        - name: http
-          containerPort: "{{ params.port }}"
-          servicePort: "{{ params.port }}"
-          protocol: TCP
-      env:
-        - key: DATABASE_URL
-          value: "{{ resources.db.connectionString }}"
-        - key: PORT
-          value: "{{ params.port }}"
-        - key: NODE_ENV
-          value: production
-
-  - name: ingress
-    type: ingress
-    config:
-      host: "{{ params.domain }}"
-      tlsEnabled: "{{ params.enableTls }}"
-      routes:
-        - path: /
-          serviceName: "{{ resources.app.serviceName }}"
-          servicePort: "{{ params.port }}"
-\`\`\`
-`;

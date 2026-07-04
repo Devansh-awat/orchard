@@ -68,9 +68,9 @@ export function favUrl(host: string) {
 }
 
 export function projectStatusSummary(g: ProjectGroup) {
-	let green = 0,
-		amber = 0,
-		red = 0;
+	let green = 0;
+	let amber = 0;
+	let red = 0;
 	const bump = (cls: string) => {
 		if (cls === 'dot--green') green++;
 		else if (cls === 'dot--amber') amber++;
@@ -86,14 +86,14 @@ export function projectStatusSummary(g: ProjectGroup) {
 
 export function buildIcon(
 	img: string | undefined,
-	ings: Array<{ host: string }> | undefined,
+	ings: { host: string }[] | undefined,
 	id: string | undefined,
 	failedFav: Set<string>,
 	faviconUrl?: string | null
 ) {
 	const k = knownIcon(img);
 	if (k) return k;
-	if (failedFav.has('b-' + (id ?? ''))) return null;
+	if (failedFav.has(`b-${id ?? ''}`)) return null;
 	// Prefer the R2 URL the overview already resolved — no backend round trip
 	if (faviconUrl) return faviconUrl;
 	if (ings?.length) return favUrl(ings[0].host.split('/')[0]);
@@ -102,8 +102,8 @@ export function buildIcon(
 
 function proxied(raw: string): string {
 	try {
-		const u = new URL(raw, location.href);
-		if (u.origin === location.origin) return u.href;
+		const u = new URL(raw, window.location.href);
+		if (u.origin === window.location.origin) return u.href;
 		return `/asset-proxy?u=${encodeURIComponent(u.href)}`;
 	} catch {
 		return raw;

@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException, Inject, Optional } from '@nestjs/common';
+import { Injectable, BadRequestException, Optional } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -48,35 +48,52 @@ const BUILDKIT_STEP_RE = /(?:^|\n)#\d+\s/;
 @Injectable()
 export class ImageBuilderService {
   private kc: k8s.KubeConfig | null = null;
+
   private buildkitLogOffsets = new Map<string, number>();
+
   private buildkitPushDetected = new Set<string>();
+
   private buildkitBuildingDetected = new Set<string>();
+
   private readonly builderNamespace = process.env.BUILDER_NAMESPACE || 'orchard-builders';
+
   // Internal Harbor registry for pushing (HTTP on port 80)
   private readonly harborRegistryPush = process.env.DOCKER_REGISTRY_PUSH || 'harbor-core.harbor.svc.cluster.local';
+
   private readonly harborRegistryPull = process.env.DOCKER_REGISTRY_PULL || 'harbor.1mp.dev';
+
   private readonly harborProject = 'orchard';
 
   // Depot configuration
   private readonly depotToken = process.env.DEPOT_TOKEN;
+
   private readonly depotProjectId = process.env.DEPOT_PROJECT_ID;
 
   // S3/R2 cache configuration
   // For Cloudflare R2, the endpoint format is: https://<ACCOUNT_ID>.r2.cloudflarestorage.com
   private readonly s3CacheEnabled = process.env.BUILDKIT_S3_CACHE_ENABLED === 'true';
+
   private readonly r2AccountId = process.env.R2_ACCOUNT_ID;
+
   private readonly s3Endpoint = process.env.BUILDKIT_S3_ENDPOINT ||
     (this.r2AccountId ? `https://${this.r2AccountId}.r2.cloudflarestorage.com` : process.env.R2_ENDPOINT);
+
   private readonly s3Region = process.env.BUILDKIT_S3_REGION || 'auto';
+
   private readonly s3Bucket = process.env.BUILDKIT_S3_BUCKET || process.env.R2_BUCKET_NAME || 'buildkit-cache';
+
   private readonly s3AccessKeyId = process.env.BUILDKIT_S3_ACCESS_KEY_ID || process.env.R2_ACCESS_KEY_ID;
+
   private readonly s3SecretAccessKey = process.env.BUILDKIT_S3_SECRET_ACCESS_KEY || process.env.R2_SECRET_ACCESS_KEY;
+
   private readonly s3CachePrefix = process.env.BUILDKIT_S3_CACHE_PREFIX || 'buildkit-cache/';
 
   // Local cache configuration — when enabled, overrides S3 cache and uses a
   // path inside the build pod (optionally backed by a PVC for persistence).
   private readonly localCacheEnabled = process.env.BUILDKIT_LOCAL_CACHE_ENABLED === 'true';
+
   private readonly localCachePath = process.env.BUILDKIT_LOCAL_CACHE_PATH || '/cache/buildkit';
+
   private readonly localCachePvc = process.env.BUILDKIT_LOCAL_CACHE_PVC;
 
   // When enabled, build jobs are pinned to nodes labelled `orchard-builder=true`
@@ -94,10 +111,14 @@ export class ImageBuilderService {
   //     Defence-in-depth against a malicious Dockerfile / BuildKit RCE
   //     exfiltrating `/root/.docker/config.json`.
   private readonly builderRuntimeClass = (process.env.BUILDER_RUNTIME_CLASS || '').trim() || undefined;
+
   private readonly sidecarPushEnabled = process.env.BUILDER_SIDECAR_PUSH === 'true';
+
   private readonly pusherImage =
     process.env.BUILDER_PUSHER_IMAGE || 'gcr.io/go-containerregistry/crane:latest';
+
   private readonly workspaceTmpfs = process.env.BUILDER_WORKSPACE_TMPFS === 'true';
+
   private builderInfraReady = false;
 
   private deploymentOrgCache = new Map<string, { orgId: string; projectId: string }>();
@@ -188,7 +209,7 @@ export class ImageBuilderService {
 
     sanitized = sanitized.replace(/https?:\/\/[^@\s]+@github\.com/gi, 'https://***@github.com');
 
-    sanitized = sanitized.replace(/(Bearer|Token|Authorization:)\s+[a-zA-Z0-9_\-\.]+/gi, '$1 ***REDACTED***');
+    sanitized = sanitized.replace(/(Bearer|Token|Authorization:)\s+[a-zA-Z0-9_\-.]+/gi, '$1 ***REDACTED***');
 
     sanitized = sanitized.replace(/(password|passwd|pwd|secret|key|token)[\s]*[=:]['"]?([^\s'"]+)/gi, '$1=***REDACTED***');
 
@@ -653,7 +674,7 @@ echo "=== Super Build completed ==="
         // Pass env vars so build-args can reference them via ${KEY}
         ...Object.entries(envVars).map(([key, value]) => ({
           name: key,
-          value: value,
+          value,
         })),
       ],
       volumeMounts: [
@@ -675,9 +696,7 @@ echo "=== Super Build completed ==="
     };
   }
 
-  private get ramdiskPreamble(): string {
-    return '';
-  }
+  private readonly ramdiskPreamble: string = '';
 
   /**
    * Generate a shell snippet that prunes the local cache directory when disk
@@ -1007,11 +1026,11 @@ exit $EXIT_CODE
           `set -e
 echo "=== Cloning repository ==="
 CLONE_URL="${cloneUrl}"
-MASKED_URL="\${CLONE_URL//:\\/\\/x-access-token:*@/:\/\/x-access-token:***@}"
-MASKED_URL="\${MASKED_URL//:\\/\\/ghs_*@/:\/\/***@}"
-MASKED_URL="\${MASKED_URL//:\\/\\/ghp_*@/:\/\/***@}"
-MASKED_URL="\${MASKED_URL//:\\/\\/github_pat_*@/:\/\/***@}"
-echo "Repository: \$MASKED_URL"
+MASKED_URL="\${CLONE_URL//:\\/\\/x-access-token:*@/://x-access-token:***@}"
+MASKED_URL="\${MASKED_URL//:\\/\\/ghs_*@/://***@}"
+MASKED_URL="\${MASKED_URL//:\\/\\/ghp_*@/://***@}"
+MASKED_URL="\${MASKED_URL//:\\/\\/github_pat_*@/://***@}"
+echo "Repository: $MASKED_URL"
 echo "Branch: ${branch}"
 
 # Enable git-lfs (best-effort) so LFS-tracked files are materialized instead of
@@ -1023,10 +1042,10 @@ else
   echo "git-lfs: unavailable, continuing without it"
 fi
 
-CLONE_OUTPUT=$(GIT_TERMINAL_PROMPT=0 git clone --depth 1 --recurse-submodules --shallow-submodules --branch "${branch}" "\$CLONE_URL" /workspace 2>&1) || {
-  SANITIZED_OUTPUT=$(echo "\$CLONE_OUTPUT" | sed -E 's/(x-access-token:|ghs_|ghp_|github_pat_)[^ @]*/***REDACTED***/g')
-  echo "\$SANITIZED_OUTPUT"
-  if echo "\$CLONE_OUTPUT" | grep -q "terminal prompts disabled\\|could not read Username\\|Authentication failed\\|403"; then
+CLONE_OUTPUT=$(GIT_TERMINAL_PROMPT=0 git clone --depth 1 --recurse-submodules --shallow-submodules --branch "${branch}" "$CLONE_URL" /workspace 2>&1) || {
+  SANITIZED_OUTPUT=$(echo "$CLONE_OUTPUT" | sed -E 's/(x-access-token:|ghs_|ghp_|github_pat_)[^ @]*/***REDACTED***/g')
+  echo "$SANITIZED_OUTPUT"
+  if echo "$CLONE_OUTPUT" | grep -q "terminal prompts disabled\\|could not read Username\\|Authentication failed\\|403"; then
     echo ""
     echo "========================================="
     echo "ERROR: GitHub authentication failed."
@@ -1036,7 +1055,7 @@ CLONE_OUTPUT=$(GIT_TERMINAL_PROMPT=0 git clone --depth 1 --recurse-submodules --
   fi
   exit 1
 }
-echo "\$CLONE_OUTPUT" | sed -E 's/(x-access-token:|ghs_|ghp_|github_pat_)[^ @]*/***REDACTED***/g'
+echo "$CLONE_OUTPUT" | sed -E 's/(x-access-token:|ghs_|ghp_|github_pat_)[^ @]*/***REDACTED***/g'
 
 echo "=== Repository cloned successfully ==="
 ls -la /workspace
@@ -1243,7 +1262,7 @@ fi
           env: [
             ...Object.entries(envVars).map(([key, value]) => ({
               name: key,
-              value: value,
+              value,
             })),
           ],
           volumeMounts: [
@@ -1300,7 +1319,7 @@ fi
           ] : []),
           ...Object.entries(envVars).map(([key, value]) => ({
             name: key,
-            value: value,
+            value,
           })),
         ],
         volumeMounts: [
@@ -1543,6 +1562,10 @@ exit $rc`,
       },
     };
 
+    let cacheBackend = 'none';
+    if (this.localCacheEnabled) cacheBackend = 'local';
+    else if (this.s3CacheEnabled) cacheBackend = 's3';
+
     console.log(`[ImageBuilder] Creating job ${jobName} in namespace ${this.builderNamespace}`, {
       imageName: fullImageName,
       repoUrl: this.sanitizeLogMessage(repoUrl),
@@ -1551,7 +1574,7 @@ exit $rc`,
       buildType,
       initContainerCount: initContainers.length,
       hasCacheEnabled: this.localCacheEnabled || this.s3CacheEnabled,
-      cacheBackend: this.localCacheEnabled ? 'local' : (this.s3CacheEnabled ? 's3' : 'none'),
+      cacheBackend,
       envVarsCount: Object.keys(envVars).length,
     });
 
@@ -2036,7 +2059,7 @@ exit $rc`,
     }
   }
 
-  async waitForBuildJob(jobName: string, deploymentId?: string, timeoutMs: number = 1800000): Promise<BuildJobStatus> {
+  async waitForBuildJob(jobName: string, deploymentId?: string, timeoutMs = 1800000): Promise<BuildJobStatus> {
     const startTime = Date.now();
     const pollInterval = 3000;
     let lastLoggedStatus = '';
@@ -2135,7 +2158,7 @@ exit $rc`,
         await this.appendLog(deploymentId, `Warning: Error checking build status: ${error.message}`, 'WARNING');
       }
 
-      await new Promise(resolve => setTimeout(resolve, pollInterval));
+      await new Promise(resolve => { setTimeout(resolve, pollInterval); });
     }
 
     const finalElapsed = Math.floor((Date.now() - startTime) / 1000);
@@ -2308,7 +2331,7 @@ exit $rc`,
       const jobName = await this.createBuildJob(options);
       console.log(`[ImageBuilder] Created build job: ${jobName}`);
 
-      const status = await this.waitForBuildJob(jobName, deploymentId);
+      await this.waitForBuildJob(jobName, deploymentId);
 
       if (deploymentId && !this.buildkitPushDetected.has(jobName)) {
         this.prisma.$executeRaw`
@@ -2474,7 +2497,7 @@ exit $rc`,
     }
   }
 
-  async findBuildJobsForDeployment(deploymentId: string): Promise<Array<{ name: string; image: string | null; status: string }>> {
+  async findBuildJobsForDeployment(deploymentId: string): Promise<{ name: string; image: string | null; status: string }[]> {
     this.ensureKubeConfig();
     try {
       const batchApi = this.kc!.makeApiClient(k8s.BatchV1Api);
@@ -2489,17 +2512,23 @@ exit $rc`,
           const tb = b.metadata?.creationTimestamp?.getTime() ?? 0;
           return tb - ta;
         })
-        .map(j => ({
-          name: j.metadata?.name || '',
-          image: j.metadata?.annotations?.['orchard.dev/full-image'] || null,
-          status: j.status?.succeeded ? 'succeeded' : j.status?.failed ? 'failed' : j.status?.active ? 'running' : 'pending',
-        }));
+        .map(j => {
+          let status = 'pending';
+          if (j.status?.succeeded) status = 'succeeded';
+          else if (j.status?.failed) status = 'failed';
+          else if (j.status?.active) status = 'running';
+          return {
+            name: j.metadata?.name || '',
+            image: j.metadata?.annotations?.['orchard.dev/full-image'] || null,
+            status,
+          };
+        });
     } catch {
       return [];
     }
   }
 
-  getImagePath(imageName: string, tag: string = 'latest'): string {
+  getImagePath(imageName: string, tag = 'latest'): string {
     return `${this.harborRegistryPull}/${this.harborProject}/${imageName}:${tag}`;
   }
 
@@ -2515,7 +2544,7 @@ exit $rc`,
     const registryPrefixes = [this.harborRegistryPush, this.harborRegistryPull];
     let repo = imagePath;
     for (const prefix of registryPrefixes) {
-      if (repo.startsWith(prefix + '/')) {
+      if (repo.startsWith(`${prefix  }/`)) {
         repo = repo.substring(prefix.length + 1);
         break;
       }
@@ -2531,7 +2560,7 @@ exit $rc`,
       console.warn('[ImageBuilder] Harbor credentials not configured, skipping registry image deletion');
       return null;
     }
-    const authHeader = 'Basic ' + Buffer.from(`${harborUsername}:${harborPassword}`).toString('base64');
+    const authHeader = `Basic ${  Buffer.from(`${harborUsername}:${harborPassword}`).toString('base64')}`;
     const registryUrl = this.harborRegistryPull.startsWith('http')
       ? this.harborRegistryPull
       : `https://${this.harborRegistryPull}`;

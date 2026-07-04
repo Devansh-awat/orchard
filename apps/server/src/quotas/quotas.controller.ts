@@ -7,23 +7,22 @@ import {
   Body,
   Req,
   Inject,
-  forwardRef,
+  forwardRef, NotFoundException 
 } from '@nestjs/common';
 import { QuotasService } from './quotas.service';
 import { QuotaBackfillService } from './backfill.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { Auth, SuperAdmin } from '../auth/decorators';
-import { NotFoundException } from '@nestjs/common';
 
-type CapBody = {
+interface CapBody {
   cpuLimitMilli?: number | null;
   memoryLimitBytes?: number | null;
   maxPods?: number | null;
   maxServices?: number | null;
   defaultPodCpuMilli?: number | null;
   defaultPodMemoryBytes?: number | null;
-};
+}
 
 // Super-admin: edit caps on any org.
 @SuperAdmin()

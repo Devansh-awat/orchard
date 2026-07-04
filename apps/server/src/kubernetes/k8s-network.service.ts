@@ -650,11 +650,8 @@ export class K8sNetworkService {
 
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
 
-    const tlsHosts = hasTls
-      ? (options.tlsHosts && options.tlsHosts.length > 0
-          ? options.tlsHosts
-          : [host])
-      : [];
+    const requestedTlsHosts = options.tlsHosts && options.tlsHosts.length > 0 ? options.tlsHosts : [host];
+    const tlsHosts = hasTls ? requestedTlsHosts : [];
 
     const httpPaths = pathBackends.map((pb) => {
       const path = String(pb.path || '/').trim() || '/';
@@ -829,11 +826,8 @@ export class K8sNetworkService {
 
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
 
-    const tlsHosts = hasTls
-      ? (options.tlsHosts && options.tlsHosts.length > 0
-          ? options.tlsHosts
-          : [host])
-      : [];
+    const requestedTlsHosts = options.tlsHosts && options.tlsHosts.length > 0 ? options.tlsHosts : [host];
+    const tlsHosts = hasTls ? requestedTlsHosts : [];
 
     const httpPaths = pathBackends.map((pb) => {
       const path = String(pb.path || '/').trim() || '/';
@@ -1618,12 +1612,9 @@ export class K8sNetworkService {
 
     const namespace = String(options.namespace || '').trim();
     const serviceName = String(options.serviceName || '').trim();
-    const type =
-      options.type === 'LoadBalancer'
-        ? 'LoadBalancer'
-        : options.type === 'NodePort'
-        ? 'NodePort'
-        : 'ClusterIP';
+    let type: 'LoadBalancer' | 'NodePort' | 'ClusterIP' = 'ClusterIP';
+    if (options.type === 'LoadBalancer') type = 'LoadBalancer';
+    else if (options.type === 'NodePort') type = 'NodePort';
 
     if (!namespace) {
       throw new BadRequestException('Namespace parameter is required');

@@ -28,10 +28,15 @@ end`;
 @Injectable()
 export class LeaderElectionService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(LeaderElectionService.name);
+
   private readonly instanceId = `${hostname()}-${process.pid}`;
+
   private redis: Redis | null = null;
+
   private timer?: ReturnType<typeof setInterval>;
+
   private leader = false;
+
   private lastLeaderAt = 0;
 
   onModuleInit() {
@@ -44,7 +49,7 @@ export class LeaderElectionService implements OnModuleInit, OnModuleDestroy {
     this.redis = new Redis(url, { maxRetriesPerRequest: null });
     this.redis.on('error', (e) => this.logger.warn(`leader redis error: ${e.message}`));
     void this.tick();
-    this.timer = setInterval(() => void this.tick(), RENEW_MS);
+    this.timer = setInterval(() => { void this.tick(); }, RENEW_MS);
   }
 
   async onModuleDestroy() {

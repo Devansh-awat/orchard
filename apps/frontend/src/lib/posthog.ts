@@ -1,7 +1,7 @@
-import { browser } from '$app/environment';
-import { env } from '$env/dynamic/public';
 import { readable, type Readable } from 'svelte/store';
 import posthog from 'posthog-js';
+import { browser } from '$app/environment';
+import { env } from '$env/dynamic/public';
 
 let initialized = false;
 
@@ -108,7 +108,10 @@ export interface EarlyAccessFeature {
 
 export function loadEarlyAccessFeatures(): Promise<EarlyAccessFeature[]> {
 	return new Promise((resolve) => {
-		if (!browser || !initialized) return resolve([]);
+		if (!browser || !initialized) {
+			resolve([]);
+			return;
+		}
 		posthog.getEarlyAccessFeatures((features) => {
 			resolve(
 				(features ?? []).map((f) => ({
@@ -134,7 +137,10 @@ export function setEarlyAccessFeatureEnrollment(flagKey: string, enrolled: boole
 
 export function loadActiveSurveys(): Promise<unknown[]> {
 	return new Promise((resolve) => {
-		if (!browser || !initialized) return resolve([]);
+		if (!browser || !initialized) {
+			resolve([]);
+			return;
+		}
 		posthog.getActiveMatchingSurveys((surveys) => resolve(surveys ?? []), true);
 	});
 }

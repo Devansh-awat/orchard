@@ -1,6 +1,6 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import Redis from 'ioredis';
-import { OrgEvent } from './org-events.service';
+import type { OrgEvent } from './org-events.service';
 
 const STREAM_KEY = 'orchard:events';
 const MAXLEN = 10_000;
@@ -24,10 +24,15 @@ function parseEntry(fields: string[]): OrgEvent | null {
 @Injectable()
 export class EventBusService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(EventBusService.name);
+
   private pub: Redis | null = null;
+
   private sub: Redis | null = null;
+
   private consumer: ((entry: BusEntry) => void) | null = null;
+
   private running = false;
+
   private lastId = '$';
 
   get enabled(): boolean {
@@ -92,7 +97,7 @@ export class EventBusService implements OnModuleInit, OnModuleDestroy {
         '+',
         'COUNT',
         REPLAY_LIMIT,
-      )) as Array<[string, string[]]>;
+      )) as [string, string[]][];
       const out: BusEntry[] = [];
       for (const [id, fields] of rows) {
         const event = parseEntry(fields);
@@ -114,7 +119,7 @@ export class EventBusService implements OnModuleInit, OnModuleDestroy {
           'STREAMS',
           STREAM_KEY,
           this.lastId,
-        )) as Array<[string, Array<[string, string[]]>]> | null;
+        )) as [string, [string, string[]][]][] | null;
         if (!res) continue;
         for (const [, entries] of res) {
           for (const [id, fields] of entries) {
@@ -126,7 +131,7 @@ export class EventBusService implements OnModuleInit, OnModuleDestroy {
       } catch (e) {
         if (!this.running) break;
         this.logger.warn(`xread error: ${(e as Error).message}; retrying`);
-        await new Promise((r) => setTimeout(r, 1000));
+        await new Promise((r) => { setTimeout(r, 1000); });
       }
     }
   }

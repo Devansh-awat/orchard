@@ -2,7 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from './kubernetes.service';
-import { parseCpu, parseMemory, cpuMilliToK8s, memoryBytesToK8s } from './quantity';
+import { parseCpu, parseMemory } from './quantity';
 
 /**
  * Per-tenant namespace lifecycle: creation, deletion, ResourceQuota +

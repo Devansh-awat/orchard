@@ -29,8 +29,11 @@ interface CachedIngress {
 @Injectable()
 export class ProtectionService {
   private readonly jwtSecret: Uint8Array;
+
   private readonly frontendUrl: string;
+
   private readonly ingressCache = new Map<string, CachedIngress>();
+
   private readonly negativeCache = new Map<string, number>();
 
   constructor(

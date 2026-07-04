@@ -1,6 +1,6 @@
 import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
 import { OrganizationRole } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
 import { requestAuthStorage } from './request-context';
 
 export type ProjectRoleName = 'admin' | 'member' | 'viewer';

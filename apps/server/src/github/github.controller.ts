@@ -1,6 +1,6 @@
 import { Controller, Get, Post, Query, Param, Req, Body, Delete, HttpException, HttpStatus, Res, Headers, RawBodyRequest } from '@nestjs/common';
 import { Request, Response } from 'express';
-import { GitHubService, GitHubRepo, GitHubBranch, GitHubContent, GitHubWebhookPayload } from './github.service';
+import { GitHubService, GitHubBranch, GitHubContent } from './github.service';
 import { UsersService } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { ProjectsService } from '../projects/projects.service';

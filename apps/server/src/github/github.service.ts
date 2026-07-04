@@ -1,7 +1,7 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
+import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { OAuthService } from '../auth/oauth.service';
-import * as crypto from 'crypto';
 
 export interface GitHubUser {
   id: string;
@@ -86,8 +86,11 @@ interface CachedRepos {
 @Injectable()
 export class GitHubService {
   private readonly clientId: string;
+
   private readonly clientSecret: string;
+
   private readonly repoCache = new Map<string, CachedRepos>();
+
   private readonly CACHE_TTL = 5 * 60 * 1000;
 
   constructor(
@@ -323,7 +326,7 @@ export class GitHubService {
     });
   }
 
-  async getUserRepositories(accessToken: string, maxPages: number = 3): Promise<GitHubRepo[]> {
+  async getUserRepositories(accessToken: string, maxPages = 3): Promise<GitHubRepo[]> {
     const cached = this.getCachedRepos(accessToken, maxPages);
     if (cached) {
       return cached;
@@ -414,7 +417,7 @@ export class GitHubService {
     accessToken: string,
     owner: string,
     repo: string,
-    path: string = '',
+    path = '',
     branch?: string
   ): Promise<GitHubContent[]> {
     let url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
@@ -652,10 +655,10 @@ export class GitHubService {
       return false;
     }
 
-    const expectedSignature = 'sha256=' + crypto
+    const expectedSignature = `sha256=${  crypto
       .createHmac('sha256', secret)
       .update(payload)
-      .digest('hex');
+      .digest('hex')}`;
 
     try {
       return crypto.timingSafeEqual(
@@ -697,7 +700,7 @@ export class GitHubService {
           config: {
             url: webhookUrl,
             content_type: 'json',
-            secret: secret,
+            secret,
             insecure_ssl: '0',
           },
         }),
@@ -743,7 +746,7 @@ export class GitHubService {
     owner: string,
     repo: string,
     ref: string,
-    environment: string = 'production',
+    environment = 'production',
     description?: string
   ): Promise<GitHubDeploymentResponse> {
     const response = await fetch(
@@ -855,12 +858,12 @@ export class GitHubService {
     // https://github.com/owner/repo
     // https://github.com/owner/repo.git
     // git@github.com:owner/repo.git
-    const httpsMatch = repoUrl.match(/github\.com\/([^\/\s]+)\/([^\/\s]+?)(?:\.git)?(?:[\/\s]|$)/);
+    const httpsMatch = repoUrl.match(/github\.com\/([^/\s]+)\/([^/\s]+?)(?:\.git)?(?:[/\s]|$)/);
     if (httpsMatch) {
       return { owner: httpsMatch[1], repo: httpsMatch[2] };
     }
 
-    const sshMatch = repoUrl.match(/github\.com:([^\/\s]+)\/([^\/\s]+?)(?:\.git)?$/);
+    const sshMatch = repoUrl.match(/github\.com:([^/\s]+)\/([^/\s]+?)(?:\.git)?$/);
     if (sshMatch) {
       return { owner: sshMatch[1], repo: sshMatch[2] };
     }
@@ -1180,7 +1183,7 @@ export class GitHubService {
     owner: string,
     repo: string,
     ref: string,
-    environment: string = 'production',
+    environment = 'production',
     description?: string
   ): Promise<GitHubDeploymentResponse> {
     const token = await this.getOrRefreshInstallationToken(installationId);
@@ -1358,11 +1361,11 @@ export class GitHubService {
       return dbRows;
     }
 
-    let githubInstallations: Array<{
+    let githubInstallations: {
       id: number;
       account: { login: string; id: number; type: string } | null;
       repository_selection: 'all' | 'selected';
-    }> = [];
+    }[] = [];
     try {
       const response = await fetch(
         'https://api.github.com/user/installations?per_page=100',
@@ -1587,15 +1590,15 @@ export class GitHubService {
   }
 
   // Format build logs for GitHub check output (GitHub has a 65535 char limit for text)
-  formatLogsForCheck(logs: string, maxLength: number = 60000): string {
+  formatLogsForCheck(logs: string, maxLength = 60000): string {
     if (!logs) return '';
 
     // GitHub uses markdown for check output
-    let formatted = '```\n' + logs + '\n```';
+    let formatted = `\`\`\`\n${  logs  }\n\`\`\``;
 
     if (formatted.length > maxLength) {
       const truncated = logs.substring(logs.length - (maxLength - 100));
-      formatted = '```\n... (truncated, showing last portion)\n\n' + truncated + '\n```';
+      formatted = `\`\`\`\n... (truncated, showing last portion)\n\n${  truncated  }\n\`\`\``;
     }
 
     return formatted;

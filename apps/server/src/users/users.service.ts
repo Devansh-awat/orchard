@@ -17,7 +17,7 @@ export interface HackClubUserData {
 // called from updateProfile + admin updateUser to drop stale entries on edits.
 const USER_CACHE_TTL_MS = 10_000;
 const USER_CACHE_MAX = 5_000;
-type CachedUser = { value: any; expiresAt: number };
+interface CachedUser { value: any; expiresAt: number }
 
 @Injectable()
 export class UsersService {
@@ -180,9 +180,9 @@ export class UsersService {
 
     if (uuidRegex.test(identifier)) {
       return this.findById(identifier);
-    } else {
+    } 
       return this.findByHackClubId(identifier);
-    }
+    
   }
 
   async findOrCreateByClerkId(identifier: string, userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }) {
@@ -258,7 +258,7 @@ export class UsersService {
     return user;
   }
 
-  async syncImageUrlFromClerk(hackClubId: string): Promise<string | null> {
+  async syncImageUrlFromClerk(_hackClubId: string): Promise<string | null> {
     return null;
   }
 

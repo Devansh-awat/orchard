@@ -1,8 +1,8 @@
 import { BadRequestException, Injectable, NotFoundException } from '@nestjs/common';
+import { randomBytes, createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthorizationService } from './authorization.service';
-import { randomBytes, createHash } from 'crypto';
 
 // Hard cap on token lifetime. Leaked tokens have no scope (they inherit the
 // owning user's full permissions), so an infinite-lifetime token is a

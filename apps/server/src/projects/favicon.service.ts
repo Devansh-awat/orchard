@@ -1,10 +1,10 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
-import { LeaderElectionService } from '../events/leader-election.service';
-import { PrismaService } from '../prisma/prisma.service';
 import { S3Client, PutObjectCommand, ListObjectsV2Command } from '@aws-sdk/client-s3';
 import * as dns from 'dns';
 import * as net from 'net';
+import { PrismaService } from '../prisma/prisma.service';
+import { LeaderElectionService } from '../events/leader-election.service';
 
 // Suffixes that resolve only on internal networks. We never make HTTP
 // requests to these — even if the domain regex passes.
@@ -95,7 +95,7 @@ function isForbiddenHost(domain: string): boolean {
   return false;
 }
 
-async function assertPublicDomain(domain: string, logger: Logger): Promise<void> {
+async function assertPublicDomain(domain: string, _logger: Logger): Promise<void> {
   if (isForbiddenHost(domain)) {
     throw new Error(`Refusing to fetch internal/reserved host: ${domain}`);
   }
@@ -126,15 +126,21 @@ async function assertPublicDomain(domain: string, logger: Logger): Promise<void>
 @Injectable()
 export class FaviconService {
   private readonly logger = new Logger(FaviconService.name);
+
   private s3Client: S3Client | null = null;
+
   private bucketName: string | null = null;
+
   private publicUrl: string | null = null;
 
   // In-memory cache to avoid repeated R2 checks within the same process lifetime
   private memoryCache = new Map<string, { url: string | null; ts: number }>();
+
   // Same idea for og:image banners (key: domain)
   private bannerCache = new Map<string, { url: string | null; ts: number }>();
+
   private static MEMORY_TTL = 24 * 60 * 60 * 1000; // 24h in-memory
+
   private pendingFetches = new Map<string, Promise<string | null>>();
 
   constructor(
@@ -405,7 +411,7 @@ export class FaviconService {
   }
 
   private resolveHtmlUrl(href: string, domain: string): string {
-    if (href.startsWith('//')) return 'https:' + href;
+    if (href.startsWith('//')) return `https:${  href}`;
     if (href.startsWith('/')) return `https://${domain}${href}`;
     if (!/^https?:/i.test(href)) return `https://${domain}/${href}`;
     return href;
@@ -415,8 +421,7 @@ export class FaviconService {
   private parseBannerFromHtml(html: string, domain: string): string | null {
     const candidates: { url: string; priority: number }[] = [];
     const metaRegex = /<meta\s[^>]*>/gi;
-    let m: RegExpExecArray | null;
-    while ((m = metaRegex.exec(html)) !== null) {
+    for (let m = metaRegex.exec(html); m !== null; m = metaRegex.exec(html)) {
       const tag = m[0];
       const prop = tag
         .match(/(?:property|name)=["']([^"']+)["']/i)?.[1]
@@ -529,9 +534,8 @@ export class FaviconService {
     // Match <link> tags with icon-related rel attributes
     // Handles both rel-before-href and href-before-rel orderings
     const linkRegex = /<link\s[^>]*>/gi;
-    let linkMatch: RegExpExecArray | null;
 
-    while ((linkMatch = linkRegex.exec(html)) !== null) {
+    for (let linkMatch = linkRegex.exec(html); linkMatch !== null; linkMatch = linkRegex.exec(html)) {
       const tag = linkMatch[0];
 
       // Check if it's an icon link
@@ -550,7 +554,7 @@ export class FaviconService {
 
       // Resolve relative URLs
       if (href.startsWith('//')) {
-        href = 'https:' + href;
+        href = `https:${  href}`;
       } else if (href.startsWith('/')) {
         href = `https://${domain}${href}`;
       } else if (!href.startsWith('http')) {
@@ -676,14 +680,14 @@ export class FaviconService {
       return null;
     }
 
-    ({ buffer, contentType } = await this.resizeIcon(buffer, contentType));
+    const { buffer: finalBuffer, contentType: finalContentType } = await this.resizeIcon(buffer, contentType);
 
     try {
       await this.s3Client.send(new PutObjectCommand({
         Bucket: this.bucketName,
         Key: key,
-        Body: buffer,
-        ContentType: contentType,
+        Body: finalBuffer,
+        ContentType: finalContentType,
         CacheControl: 'public, max-age=604800', // 7 days
       }));
 

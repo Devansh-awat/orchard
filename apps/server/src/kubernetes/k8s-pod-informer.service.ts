@@ -26,12 +26,19 @@ interface PendingEmit {
 @Injectable()
 export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(K8sPodInformerService.name);
+
   private informer?: k8s.Informer<k8s.V1Pod> & k8s.ObjectCache<k8s.V1Pod>;
+
   private backoffMs = 1000;
+
   private stopped = false;
+
   private restartTimer?: ReturnType<typeof setTimeout>;
+
   private readonly ctxCache = new Map<string, { ctx: Ctx | null; exp: number }>();
+
   private readonly lastEmit = new Map<string, number>();
+
   private readonly pending = new Map<string, PendingEmit>();
 
   constructor(
@@ -282,7 +289,9 @@ function computePodStatus(pod: k8s.V1Pod): string {
 
   let status = phase;
   if (phase === 'running') {
-    status = isReady && allContainersReady ? 'ready' : isScheduled ? 'scheduled' : 'pending';
+    if (isReady && allContainersReady) status = 'ready';
+    else if (isScheduled) status = 'scheduled';
+    else status = 'pending';
   } else if (phase === 'pending' && isScheduled) {
     status = 'scheduled';
   }

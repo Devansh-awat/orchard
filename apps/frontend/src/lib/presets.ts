@@ -1,11 +1,11 @@
 // Mirrors server/src/kubernetes/presets.ts.
-export type ResourcePreset = {
+export interface ResourcePreset {
 	id: string;
 	label: string;
 	description: string;
 	cpuMilli: number;
 	memoryBytes: number;
-};
+}
 
 const MiB = 1024 * 1024;
 
@@ -58,7 +58,9 @@ export const DEFAULT_CPU_MILLI = 100;
 export const DEFAULT_MEMORY_BYTES = 128 * MiB;
 
 export function matchPreset(cpuMilli: number, memoryBytes: number): string | null {
-	const p = RESOURCE_PRESETS.find((p) => p.cpuMilli === cpuMilli && p.memoryBytes === memoryBytes);
+	const p = RESOURCE_PRESETS.find(
+		(preset) => preset.cpuMilli === cpuMilli && preset.memoryBytes === memoryBytes
+	);
 	return p?.id ?? null;
 }
 

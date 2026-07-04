@@ -14,6 +14,7 @@ export interface CaptureInput {
 @Injectable()
 export class AnalyticsService implements OnModuleDestroy {
   private readonly logger = new Logger(AnalyticsService.name);
+
   private readonly client: PostHog | null;
 
   constructor() {

@@ -1,7 +1,6 @@
-import { Injectable, BadRequestException, Inject, forwardRef, Optional } from '@nestjs/common';
-import { spawn } from 'child_process';
+import { Injectable, BadRequestException, Optional } from '@nestjs/common';
+import { spawn, exec  } from 'child_process';
 import { promisify } from 'util';
-import { exec } from 'child_process';
 import * as path from 'path';
 import * as fs from 'fs/promises';
 import * as os from 'os';
@@ -21,17 +20,6 @@ function isSafeGitRef(ref: string): boolean {
   if (ref.startsWith('-')) return false;
   if (ref.includes('..')) return false;
   return /^[A-Za-z0-9._/-]+$/.test(ref);
-}
-
-// Dockerfile paths are joined onto a freshly-cloned working tree. They
-// must be relative and stay inside it.
-function isSafeRelativePath(p: string): boolean {
-  if (typeof p !== 'string') return false;
-  if (p === '') return true; // empty = default Dockerfile at root
-  if (p.startsWith('/') || p.startsWith('\\')) return false;
-  if (p.includes('..')) return false;
-  if (p.includes('\0')) return false;
-  return /^[A-Za-z0-9._/\- ]+$/.test(p);
 }
 
 type BuildType = 'dockerfile' | 'railpack';
@@ -60,11 +48,17 @@ interface BuildOptions {
 @Injectable()
 export class DockerService {
   private readonly harborRegistryPush = process.env.DOCKER_REGISTRY_PUSH || '178.156.144.127';
+
   private readonly harborRegistryPull = process.env.DOCKER_REGISTRY_PULL || 'harbor.1mp.dev';
+
   private readonly harborProject = 'orchard';
+
   private activeBuilds = 0;
+
   private buildsSincePrune = 0;
+
   private pendingPrune = false;
+
   private pruneLock: Promise<void> = Promise.resolve();
 
   // Default build mode - can be overridden per-build or via environment variable
@@ -87,7 +81,7 @@ export class DockerService {
       const currentLogs = deployment?.buildLogs || '';
       const timestamp = Date.now();
       const formattedMessage = `[${timestamp}] [${level}] ${message}`;
-      const newLogs = currentLogs + formattedMessage + '\n';
+      const newLogs = `${currentLogs + formattedMessage  }\n`;
 
       await this.prisma.deployment.update({
         where: { id: deploymentId },
@@ -184,7 +178,7 @@ export class DockerService {
           },
         });
 
-        let stdout = '';
+        let _stdout = '';
         let stderr = '';
         let totalObjects = 0;
         let receivedObjects = 0;
@@ -254,7 +248,7 @@ export class DockerService {
 
         cloneProcess.stdout.on('data', async (data) => {
           const message = data.toString();
-          stdout += message;
+          _stdout += message;
         });
 
         cloneProcess.on('close', async (code) => {
@@ -504,7 +498,7 @@ export class DockerService {
     deploymentId?: string,
     target?: string,
     buildFromRoot?: boolean,
-    buildType?: string,
+    _buildType?: string,
   ): Promise<void> {
     const fullImageName = `${this.harborRegistryPush}/${this.harborProject}/${imageName}`;
 
@@ -564,13 +558,11 @@ export class DockerService {
       let stdout = '';
       let stderr = '';
 
-      const rebrandLine = (line: string): string => {
-        return line
+      const rebrandLine = (line: string): string => line
           .replace(/\[depot\]/gi, '[super-build]')
           .replace(/https:\/\/depot\.dev\/\S+/g, '')
           .replace(/depot build/gi, 'super build')
           .trim();
-      };
 
       buildProcess.stdout.on('data', async (data: Buffer) => {
         const message = data.toString();
@@ -977,7 +969,12 @@ export class DockerService {
             stderr += message;
             console.error('[Docker Push Error]', message.trim());
             const lowerMessage = message.toLowerCase();
-            const logLevel = lowerMessage.includes('error') || lowerMessage.includes('failed') ? 'ERROR' : lowerMessage.includes('warn') ? 'WARNING' : 'INFO';
+            let logLevel = 'INFO';
+            if (lowerMessage.includes('error') || lowerMessage.includes('failed')) {
+              logLevel = 'ERROR';
+            } else if (lowerMessage.includes('warn')) {
+              logLevel = 'WARNING';
+            }
             await this.appendLog(deploymentId, message.trim(), logLevel);
           });
 
@@ -1021,9 +1018,9 @@ export class DockerService {
         );
 
         if (isRetryable && attempt < maxRetries) {
-          const waitSeconds = Math.pow(2, attempt);
+          const waitSeconds = 2**attempt;
           await this.appendLog(deploymentId, `Push failed with retryable error, waiting ${waitSeconds}s before retry...`, 'WARNING');
-          await new Promise(resolve => setTimeout(resolve, waitSeconds * 1000));
+          await new Promise(resolve => { setTimeout(resolve, waitSeconds * 1000); });
           continue;
         } else {
           throw error;
@@ -1036,7 +1033,7 @@ export class DockerService {
     }
   }
 
-  getImagePath(imageName: string, tag: string = 'latest'): string {
+  getImagePath(imageName: string, tag = 'latest'): string {
     return `${this.harborRegistryPull}/${this.harborProject}/${imageName}:${tag}`;
   }
 
@@ -1048,9 +1045,6 @@ export class DockerService {
       imageName,
       tag = 'latest',
       deploymentId,
-      accessToken,
-      target,
-      buildFromRoot,
       buildType = 'dockerfile',
       buildMode = this.defaultBuildMode,
     } = options;
@@ -1324,7 +1318,7 @@ export class DockerService {
     return totalSize > 0 ? (totalCurrent / totalSize) * 100 : 0;
   }
 
-  private createProgressBar(percentage: number, width: number = 30): string {
+  private createProgressBar(percentage: number, width = 30): string {
     const filled = Math.round((percentage / 100) * width);
     const empty = width - filled;
     const bar = '█'.repeat(filled) + '░'.repeat(empty);
@@ -1384,7 +1378,7 @@ export class DockerService {
     await this.imageBuilderService.deleteBuildJob(jobName);
   }
 
-  async findBuildJobsForDeployment(deploymentId: string): Promise<Array<{ name: string; image: string | null; status: string }>> {
+  async findBuildJobsForDeployment(deploymentId: string): Promise<{ name: string; image: string | null; status: string }[]> {
     if (!this.imageBuilderService) return [];
     return this.imageBuilderService.findBuildJobsForDeployment(deploymentId);
   }

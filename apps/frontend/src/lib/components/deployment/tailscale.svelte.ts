@@ -8,10 +8,15 @@ interface TailscaleDeps {
 
 export class TailscaleController {
 	exposing = $state(false);
+
 	unexposing = $state(false);
+
 	linked = $state(false);
+
 	hostname = $state<string | null>(null);
+
 	ip = $state<string | null>(null);
+
 	dns = $state<string | null>(null);
 
 	#deps: TailscaleDeps;

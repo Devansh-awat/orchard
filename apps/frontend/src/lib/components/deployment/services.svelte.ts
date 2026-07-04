@@ -20,13 +20,13 @@ function createPortRow(overrides?: Partial<ServicePortForm>): ServicePortForm {
 }
 
 function buildPortPayloadFromForm(form: ServiceFormState) {
-	const payload: Array<{
+	const payload: {
 		name?: string;
 		containerPort: number;
 		servicePort: number;
 		protocol: string;
 		nodePort?: number;
-	}> = [];
+	}[] = [];
 
 	for (let index = 0; index < form.ports.length; index += 1) {
 		const port = form.ports[index];
@@ -72,19 +72,29 @@ function buildPortPayloadFromForm(form: ServiceFormState) {
 
 export class ServicesController {
 	showForm = $state(false);
+
 	newForm = $state<ServiceFormState>({
 		name: '',
 		exposePublic: false,
 		ports: [createPortRow()]
 	});
+
 	formError = $state<string | null>(null);
+
 	editForms = $state<Record<string, ServiceFormState>>({});
+
 	editErrors = $state<Record<string, string | null>>({});
+
 	creating = $state(false);
+
 	savingId = $state<string | null>(null);
+
 	deletingId = $state<string | null>(null);
+
 	portPublicBusyId = $state<string | null>(null);
+
 	isEditing = $state(false);
+
 	copiedUrlId = $state<string | null>(null);
 
 	#deps: ServicesDeps;

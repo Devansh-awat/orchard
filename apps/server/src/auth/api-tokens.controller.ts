@@ -1,7 +1,7 @@
 import { Controller, Post, Get, Delete, Body, Param, Req, NotFoundException } from '@nestjs/common';
+import { Request } from 'express';
 import { Auth } from './decorators';
 import { ApiTokensService } from './api-tokens.service';
-import { Request } from 'express';
 
 @Controller('auth/tokens')
 export class ApiTokensController {

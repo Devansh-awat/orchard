@@ -3,16 +3,16 @@ import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 
-export type SeriesPoint = { x: number; y: number };
+export interface SeriesPoint { x: number; y: number }
 
-export type HttpMetricsSeries = {
+export interface HttpMetricsSeries {
   requestRate: SeriesPoint[];
   errorRate: SeriesPoint[];
   latencyAvg: SeriesPoint[];
   latencyMax: SeriesPoint[];
-};
+}
 
-export type LogEntry = {
+export interface LogEntry {
   timestamp?: string;
   level?: string;
   message: string;
@@ -23,41 +23,41 @@ export type LogEntry = {
   lines: string[];
   raw: string;
   metadata?: Record<string, any>;
-};
+}
 
-export type DetectedRuntime = {
+export interface DetectedRuntime {
   language: string;
   framework: string | null;
   version: string | null;
   confidence: 'high' | 'medium' | 'low';
   detectedFrom: 'build_logs' | 'image' | 'env_vars' | 'dockerfile';
-};
+}
 
-export type ErrorGroup = {
+export interface ErrorGroup {
   fingerprint: string;
   type: string;
   message: string;
   count: number;
   firstSeen: string;
   lastSeen: string;
-  samples: Array<{
+  samples: {
     timestamp?: string;
     message: string;
     stackTrace?: string;
-  }>;
+  }[];
   trend: 'rising' | 'stable' | 'falling';
-};
+}
 
-export type Capabilities = {
+export interface Capabilities {
   logs: boolean;
   containerMetrics: boolean;
   httpMetrics: boolean;
   customMetrics: boolean;
   traces: boolean;
   runtime: DetectedRuntime | null;
-};
+}
 
-export type DeploymentOverview = {
+export interface DeploymentOverview {
   uptime: string;
   podCount: number;
   restarts: number;
@@ -66,11 +66,12 @@ export type DeploymentOverview = {
   httpRequestRate: number | null;
   httpErrorRate: number | null;
   httpAvgLatency: number | null;
-};
+}
 
 @Injectable()
 export class ObservabilityService {
   private readonly logger = new Logger(ObservabilityService.name);
+
   private readonly vmBase =
     process.env.VICTORIAMETRICS_URL ??
     'http://victoriametrics.orchard-metrics.svc.cluster.local:8428';
@@ -133,7 +134,7 @@ export class ObservabilityService {
 
   async getStructuredLogs(
     deploymentId: string,
-    tailLines: number = 200,
+    tailLines = 200,
     level?: string,
     search?: string,
   ): Promise<{ entries: LogEntry[] }> {
@@ -301,7 +302,7 @@ export class ObservabilityService {
 
   async getErrors(
     deploymentId: string,
-    timeWindowMinutes: number = 60,
+    timeWindowMinutes = 60,
   ): Promise<{ errors: ErrorGroup[] }> {
     const tailLines = Math.min(20000, timeWindowMinutes * 50);
     const { entries } = await this.getStructuredLogs(deploymentId, tailLines);
@@ -316,12 +317,12 @@ export class ObservabilityService {
       }
     });
 
-    const errorEntries: Array<{
+    const errorEntries: {
       timestamp?: string;
       type: string;
       message: string;
       stackTrace?: string;
-    }> = [];
+    }[] = [];
 
     for (const entry of windowEntries) {
       const isError =
@@ -352,7 +353,7 @@ export class ObservabilityService {
       {
         type: string;
         message: string;
-        entries: Array<{ timestamp?: string; message: string; stackTrace?: string }>;
+        entries: { timestamp?: string; message: string; stackTrace?: string }[];
       }
     >();
 
@@ -456,7 +457,7 @@ export class ObservabilityService {
       }
       const body = (await res.json()) as {
         status: string;
-        data?: { resultType: string; result: Array<{ value: [number, string] }> };
+        data?: { resultType: string; result: { value: [number, string] }[] };
       };
       if (body.status !== 'success' || !body.data?.result?.length) return null;
       const v = Number(body.data.result[0].value[1]);
@@ -490,7 +491,7 @@ export class ObservabilityService {
         status: string;
         data?: {
           resultType: string;
-          result: Array<{ metric: Record<string, string>; values: Array<[number, string]> }>;
+          result: { metric: Record<string, string>; values: [number, string][] }[];
         };
       };
       if (body.status !== 'success' || !body.data?.result?.length) return [];
@@ -506,6 +507,7 @@ export class ObservabilityService {
 // logs are requested with timestamps=true.
 const K8S_TS_RE = /^(\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z)\s(.*)$/s;
 // ANSI SGR/color escape sequences (\x1b[..m) and other CSI codes.
+// eslint-disable-next-line no-control-regex
 const ANSI_RE = /\[[0-9;]*[A-Za-z]/g;
 const INLINE_LEVEL_RE = /^\[?(DEBUG|INFO|WARN(?:ING)?|ERROR|FATAL|TRACE)\]?\b/i;
 
@@ -516,7 +518,7 @@ function stripAnsi(s: string): string {
 // `raw` keeps the original line (k8s timestamp + ANSI) so the frontend can
 // render it in colour through ansiToHtml; `clean` is timestamp/ANSI-stripped
 // and drives grouping, level detection, and search.
-type RawLine = { ts?: string; tsMs: number; raw: string; clean: string };
+interface RawLine { ts?: string; tsMs: number; raw: string; clean: string }
 
 function splitLine(raw: string): RawLine {
   const m = K8S_TS_RE.exec(raw);
@@ -628,7 +630,7 @@ function escapeRegex(s: string): string {
   return s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 }
 
-const LANGUAGE_PATTERNS: Array<{ re: RegExp; language: string; framework?: string }> = [
+const LANGUAGE_PATTERNS: { re: RegExp; language: string; framework?: string }[] = [
   { re: /\bdetected[:\s]+next\.?js\b/i, language: 'node', framework: 'nextjs' },
   { re: /\bdetected[:\s]+nuxt\b/i, language: 'node', framework: 'nuxt' },
   { re: /\bdetected[:\s]+remix\b/i, language: 'node', framework: 'remix' },
@@ -657,7 +659,7 @@ const LANGUAGE_PATTERNS: Array<{ re: RegExp; language: string; framework?: strin
   { re: /\bdetected[:\s]+elixir\b/i, language: 'elixir' },
 ];
 
-const INSTALL_PATTERNS: Array<{ re: RegExp; language: string }> = [
+const INSTALL_PATTERNS: { re: RegExp; language: string }[] = [
   { re: /installing dependencies with (npm|yarn|pnpm)\b/i, language: 'node' },
   { re: /installing dependencies with pip\b/i, language: 'python' },
   { re: /installing dependencies with bundler\b/i, language: 'ruby' },
@@ -714,7 +716,7 @@ const DOCKER_FROM_RE =
 const BUILDKIT_FROM_RE =
   /^#\d+\s+\[.*\]\s+FROM\s+(?:docker\.io\/library\/)?(?:mcr\.microsoft\.com\/dotnet\/(?:aspnet|sdk|runtime)[:@]|([a-z][a-z0-9-]*(?:\/[a-z][a-z0-9-]*)*)[:@])/i;
 
-const FROM_IMAGE_MAP: Array<{ re: RegExp; language: string }> = [
+const FROM_IMAGE_MAP: { re: RegExp; language: string }[] = [
   { re: /^node(?=[:\-@])/, language: 'node' },
   { re: /^python(?=[:\-@])/, language: 'python' },
   { re: /^golang(?=[:\-@])/, language: 'go' },
@@ -729,7 +731,7 @@ const FROM_IMAGE_MAP: Array<{ re: RegExp; language: string }> = [
   { re: /^httpd(?=[:\-@])/, language: 'node' },
 ];
 
-const DOCKER_FRAMEWORK_PATTERNS: Record<string, Array<{ re: RegExp; framework: string }>> = {
+const DOCKER_FRAMEWORK_PATTERNS: Record<string, { re: RegExp; framework: string }[]> = {
   node: [
     { re: /\bnext\s+build\b|\bnext\s+start\b|\bNEXT_/i, framework: 'nextjs' },
     { re: /\bnuxt\s+build\b|\bnuxt\s+start\b/i, framework: 'nuxt' },
@@ -760,7 +762,7 @@ const DOCKER_FRAMEWORK_PATTERNS: Record<string, Array<{ re: RegExp; framework: s
   ],
 };
 
-const DOCKER_COPY_LANGUAGE: Array<{ re: RegExp; language: string }> = [
+const DOCKER_COPY_LANGUAGE: { re: RegExp; language: string }[] = [
   { re: /\bCOPY\b.*\b(?:package\.json|package-lock\.json|yarn\.lock|pnpm-lock\.yaml)\b/i, language: 'node' },
   { re: /\bCOPY\b.*\b(?:requirements\.txt|Pipfile|pyproject\.toml)\b/i, language: 'python' },
   { re: /\bCOPY\b.*\b(?:go\.mod|go\.sum)\b/i, language: 'go' },
@@ -772,7 +774,7 @@ const DOCKER_COPY_LANGUAGE: Array<{ re: RegExp; language: string }> = [
   { re: /\bCOPY\b.*\b(?:\.csproj|\.sln)\b/i, language: 'dotnet' },
 ];
 
-const DOCKER_RUN_LANGUAGE: Array<{ re: RegExp; language: string }> = [
+const DOCKER_RUN_LANGUAGE: { re: RegExp; language: string }[] = [
   { re: /\bRUN\b.*\b(?:npm\s+install|yarn\s|pnpm\s+install)\b/i, language: 'node' },
   { re: /\bRUN\b.*\b(?:pip3?\s+install|poetry\s+install)\b/i, language: 'python' },
   { re: /\bRUN\b.*\b(?:go\s+build|go\s+mod\s+download)\b/i, language: 'go' },
@@ -901,11 +903,11 @@ function detectFromDockerBuildLogs(buildLogs: string): DetectedRuntime | null {
   };
 }
 
-const ENV_RULES: Array<{
+const ENV_RULES: {
   test: (key: string) => boolean;
   language: string;
   framework?: string;
-}> = [
+}[] = [
   { test: (k) => k.startsWith('NEXT_PUBLIC_'), language: 'node', framework: 'nextjs' },
   { test: (k) => k.startsWith('NUXT_'), language: 'node', framework: 'nuxt' },
   { test: (k) => k === 'DJANGO_SETTINGS_MODULE', language: 'python', framework: 'django' },
@@ -920,7 +922,7 @@ const ENV_RULES: Array<{
 ];
 
 function detectFromEnvVars(
-  envVars: Array<{ key: string; value: string }>,
+  envVars: { key: string; value: string }[],
 ): DetectedRuntime | null {
   for (const env of envVars) {
     for (const rule of ENV_RULES) {
@@ -938,18 +940,18 @@ function detectFromEnvVars(
   return null;
 }
 
-const IMAGE_PATTERNS: Array<{ re: RegExp; language: string }> = [
-  { re: /\bnode[:\-]/, language: 'node' },
-  { re: /\bpython[:\-]/, language: 'python' },
-  { re: /\bgolang[:\-]/, language: 'go' },
-  { re: /\bruby[:\-]/, language: 'ruby' },
-  { re: /\bopenjdk[:\-]/, language: 'java' },
-  { re: /\bjava[:\-]/, language: 'java' },
-  { re: /\bdotnet[:\-]/, language: 'dotnet' },
-  { re: /\baspnet[:\-]/, language: 'dotnet' },
-  { re: /\brust[:\-]/, language: 'rust' },
-  { re: /\bphp[:\-]/, language: 'php' },
-  { re: /\belixir[:\-]/, language: 'elixir' },
+const IMAGE_PATTERNS: { re: RegExp; language: string }[] = [
+  { re: /\bnode[:-]/, language: 'node' },
+  { re: /\bpython[:-]/, language: 'python' },
+  { re: /\bgolang[:-]/, language: 'go' },
+  { re: /\bruby[:-]/, language: 'ruby' },
+  { re: /\bopenjdk[:-]/, language: 'java' },
+  { re: /\bjava[:-]/, language: 'java' },
+  { re: /\bdotnet[:-]/, language: 'dotnet' },
+  { re: /\baspnet[:-]/, language: 'dotnet' },
+  { re: /\brust[:-]/, language: 'rust' },
+  { re: /\bphp[:-]/, language: 'php' },
+  { re: /\belixir[:-]/, language: 'elixir' },
 ];
 
 function detectFromImage(image: string | null): DetectedRuntime | null {
@@ -986,7 +988,7 @@ function detectFromImage(image: string | null): DetectedRuntime | null {
   return null;
 }
 
-const DOCKERFILE_PATH_PATTERNS: Array<{ re: RegExp; language: string }> = [
+const DOCKERFILE_PATH_PATTERNS: { re: RegExp; language: string }[] = [
   { re: /\.node/i, language: 'node' },
   { re: /\.python/i, language: 'python' },
   { re: /\.go/i, language: 'go' },
@@ -1030,7 +1032,7 @@ function isStackFrame(raw: string): boolean {
   return STACK_FRAME_RE.test(raw.trim());
 }
 
-const ERROR_TYPE_RE = /^(?:(\w+(?:\.\w+)*(?:Error|Exception|Fault|Panic))\s*[:\-]\s*)(.*)/;
+const ERROR_TYPE_RE = /^(?:(\w+(?:\.\w+)*(?:Error|Exception|Fault|Panic))\s*[:-]\s*)(.*)/;
 
 function extractErrorInfo(msg: string): { type: string; message: string } {
   const match = ERROR_TYPE_RE.exec(msg.trim());

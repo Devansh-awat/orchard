@@ -1,8 +1,8 @@
 import 'reflect-metadata';
 import { NestFactory } from '@nestjs/core';
-import { McpModule } from './mcp.module';
 import * as dotenv from 'dotenv';
 import { resolve } from 'path';
+import { McpModule } from './mcp.module';
 
 dotenv.config();
 dotenv.config({ path: resolve(process.cwd(), '..', '.env'), override: false });

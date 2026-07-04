@@ -8,7 +8,7 @@ export function formatCpuMilli(milli: number): string {
 
 export function formatMemoryBytes(bytes: number): string {
 	if (!bytes) return '0 B';
-	const units: Array<[string, number]> = [
+	const units: [string, number][] = [
 		['Ti', 1024 ** 4],
 		['Gi', 1024 ** 3],
 		['Mi', 1024 ** 2],

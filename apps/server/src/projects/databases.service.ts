@@ -2,12 +2,12 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ConflictException,
-  ForbiddenException,
   Inject,
   forwardRef,
   Logger,
 } from '@nestjs/common';
+import { randomBytes } from 'crypto';
+import { Client } from 'pg';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
@@ -123,7 +123,6 @@ export class DatabasesService {
     database: string;
     sslMode?: string;
   }): Promise<void> {
-    const { Client } = require('pg');
     const ssl = src.sslMode && src.sslMode !== 'disable'
       ? { rejectUnauthorized: false }
       : false;
@@ -188,7 +187,7 @@ export class DatabasesService {
 
   private generatePassword(length = 24): string {
     const chars = 'abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789';
-    const bytes = require('crypto').randomBytes(length);
+    const bytes = randomBytes(length);
     return Array.from(bytes as Buffer, (b: number) => chars[b % chars.length]).join('');
   }
 
@@ -398,7 +397,7 @@ export class DatabasesService {
     return stripR2ProxyCreds(database as any);
   }
 
-  async getDatabase(databaseId: string, canEdit: boolean = true, userId?: string) {
+  async getDatabase(databaseId: string, canEdit = true, userId?: string) {
     const database = await this.prisma.database.findUnique({
       where: { id: databaseId },
       include: {
@@ -556,76 +555,79 @@ export class DatabasesService {
 
     const steps: Step[] = [];
 
+    let clusterStatus: StepStatus = 'running';
+    if (k.exists) clusterStatus = 'done';
+    else if (database.status === 'error') clusterStatus = 'error';
+
     steps.push({
       id: 'cluster',
       label: 'Cluster resource created',
       description: 'Registering the Postgres cluster with Kubernetes.',
-      status: k.exists ? 'done' : database.status === 'error' ? 'error' : 'running',
+      status: clusterStatus,
     });
+
+    let storageStatus: StepStatus = 'pending';
+    if (k.pvc.bound) storageStatus = 'done';
+    else if (k.pvc.exists || k.exists) storageStatus = 'running';
 
     steps.push({
       id: 'storage',
       label: 'Storage volume attached',
       description: 'Provisioning and binding the PersistentVolumeClaim.',
-      status: k.pvc.bound
-        ? 'done'
-        : k.pvc.exists
-          ? 'running'
-          : k.exists
-            ? 'running'
-            : 'pending',
+      status: storageStatus,
       detail: k.pvc.exists && !k.pvc.bound ? `PVC ${k.pvc.phase || 'Pending'}` : undefined,
     });
+
+    let podScheduledStatus: StepStatus = 'pending';
+    if (k.instancePod?.scheduled) podScheduledStatus = 'done';
+    else if (k.instancePod) podScheduledStatus = 'running';
 
     steps.push({
       id: 'pod-scheduled',
       label: 'Pod scheduled to a node',
       description: 'Kubernetes is placing the Postgres pod onto a worker.',
-      status: k.instancePod?.scheduled
-        ? 'done'
-        : k.instancePod
-          ? 'running'
-          : 'pending',
+      status: podScheduledStatus,
       detail: k.instancePod?.nodeName ? `Scheduled on ${k.instancePod.nodeName}` : undefined,
     });
+
+    let podRunningStatus: StepStatus = 'pending';
+    if (k.instancePod?.running) podRunningStatus = 'done';
+    else if (podStuck) podRunningStatus = 'error';
+    else if (k.instancePod?.scheduled) podRunningStatus = 'running';
 
     steps.push({
       id: 'pod-running',
       label: 'Postgres container running',
       description: 'Pulling the Postgres image and starting the container.',
-      status: k.instancePod?.running
-        ? 'done'
-        : podStuck
-          ? 'error'
-          : k.instancePod?.scheduled
-            ? 'running'
-            : 'pending',
+      status: podRunningStatus,
       detail: podWaiting
-        ? `${podWaiting.reason}${podWaiting.message ? ': ' + podWaiting.message : ''}`
+        ? `${podWaiting.reason}${podWaiting.message ? `: ${  podWaiting.message}` : ''}`
         : undefined,
     });
 
     if (k.hasImport) {
+      let importStatus: StepStatus = 'pending';
+      if (k.importStatus === 'completed') importStatus = 'done';
+      else if (k.importStatus === 'failed') importStatus = 'error';
+      else if (k.importStatus === 'running') importStatus = 'running';
+
       steps.push({
         id: 'import',
         label: 'Migrating data from source database',
         description: 'CloudNativePG is dumping the source DB and restoring into this cluster.',
-        status:
-          k.importStatus === 'completed'
-            ? 'done'
-            : k.importStatus === 'failed'
-              ? 'error'
-              : k.importStatus === 'running'
-                ? 'running'
-                : 'pending',
+        status: importStatus,
       });
     }
+
+    let readyStatus: StepStatus = 'pending';
+    if (k.ready) readyStatus = 'done';
+    else if (k.instancePod?.ready) readyStatus = 'running';
 
     steps.push({
       id: 'ready',
       label: 'Database accepting connections',
       description: 'Bootstrap is complete and the cluster is healthy.',
-      status: k.ready ? 'done' : k.instancePod?.ready ? 'running' : 'pending',
+      status: readyStatus,
     });
 
     // Promote the first non-done step to "running" if everything before it is
@@ -665,7 +667,7 @@ export class DatabasesService {
     };
   }
 
-  async getProjectDatabases(projectId: string, canEdit: boolean = true, userId?: string) {
+  async getProjectDatabases(projectId: string, canEdit = true, userId?: string) {
     // Defense-in-depth: re-assert project-view even though the controller already did.
     if (userId) {
       await this.authz.requireProjectView(projectId, userId);
@@ -814,7 +816,9 @@ export class DatabasesService {
           const name: string | undefined = lb.metadata?.name;
           if (!name || known.has(name)) continue;
           const phase: string | undefined = lb.status?.phase;
-          const status = phase === 'completed' ? 'completed' : phase === 'failed' ? 'failed' : 'running';
+          let status = 'running';
+          if (phase === 'completed') status = 'completed';
+          else if (phase === 'failed') status = 'failed';
           const completedAt = (status === 'completed' || status === 'failed') ? new Date(lb.status?.stoppedAt || Date.now()) : null;
           try {
             const created = await this.prisma.databaseBackup.create({
@@ -1061,7 +1065,7 @@ export class DatabasesService {
         const deadline = Date.now() + 10 * 60 * 1000;
         let healthy = false;
         while (Date.now() < deadline) {
-          await new Promise((r) => setTimeout(r, 5000));
+          await new Promise((r) => { setTimeout(r, 5000); });
           const status = await this.k8sCnpg.getCnpgClusterStatus(database.namespace!, newClusterName);
           if (status.exists && status.ready) { healthy = true; break; }
         }
@@ -1284,6 +1288,7 @@ export class DatabasesService {
   // ── Public (MetalLB) exposure ──
 
   private readonly PUBLIC_PORT_MIN = 30000;
+
   private readonly PUBLIC_PORT_MAX = 32767;
 
   private async pickFreePublicPort(ip: string): Promise<number> {

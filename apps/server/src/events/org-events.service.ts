@@ -34,7 +34,9 @@ export interface ScopedMessage {
 @Injectable()
 export class OrgEventsService implements OnModuleInit {
   private readonly logger = new Logger(OrgEventsService.name);
+
   private readonly subject = new Subject<Delivery>();
+
   private readonly subscriberCounts = new Map<string, number>();
 
   constructor(

@@ -176,7 +176,7 @@ export class SsoConfigController {
       if (fullConfig.provider === 'oidc') {
         const loginUrl = await this.ssoService.initiateOidcLogin(organizationId);
         return { success: true, testLoginUrl: loginUrl };
-      } else if (fullConfig.provider === 'saml') {
+      } if (fullConfig.provider === 'saml') {
         const loginUrl = await this.ssoService.initiateSamlLogin(organizationId);
         return { success: true, testLoginUrl: loginUrl };
       }

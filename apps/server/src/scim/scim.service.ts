@@ -4,7 +4,7 @@ import SCIMMY from 'scimmy';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 
-type Ctx = { organizationId: string };
+interface Ctx { organizationId: string }
 
 const SCIM_BASEPATH = '/apiv1/scim/v2';
 
@@ -19,6 +19,7 @@ function ScimError(status: number, scimType: string | null, detail: string) {
 @Injectable()
 export class ScimService implements OnModuleInit {
   private readonly logger = new Logger(ScimService.name);
+
   private declared = false;
 
   constructor(
@@ -303,18 +304,23 @@ export class ScimService implements OnModuleInit {
   async listUsers(query: ScimQuery, ctx: Ctx) {
     return new SCIMMY.Resources.User(query).read(ctx);
   }
+
   async getUser(id: string, query: ScimQuery, ctx: Ctx) {
     return new SCIMMY.Resources.User(id, query).read(ctx);
   }
+
   async createUser(body: any, ctx: Ctx) {
     return new SCIMMY.Resources.User().write(body, ctx);
   }
+
   async replaceUser(id: string, body: any, ctx: Ctx) {
     return new SCIMMY.Resources.User(id).write(body, ctx);
   }
+
   async patchUser(id: string, body: any, ctx: Ctx) {
     return new SCIMMY.Resources.User(id).patch(body, ctx);
   }
+
   async deleteUser(id: string, ctx: Ctx) {
     return new SCIMMY.Resources.User(id).dispose(ctx);
   }
@@ -322,6 +328,7 @@ export class ScimService implements OnModuleInit {
   async listGroups(query: ScimQuery, ctx: Ctx) {
     return new SCIMMY.Resources.Group(query).read(ctx);
   }
+
   async getGroup(id: string, query: ScimQuery, ctx: Ctx) {
     return new SCIMMY.Resources.Group(id, query).read(ctx);
   }
@@ -329,15 +336,17 @@ export class ScimService implements OnModuleInit {
   async serviceProviderConfig() {
     return new SCIMMY.Resources.ServiceProviderConfig().read();
   }
+
   async resourceTypes(id?: string) {
     return new SCIMMY.Resources.ResourceType(id).read();
   }
+
   async schemas(id?: string) {
     return new SCIMMY.Resources.Schema(id).read();
   }
 }
 
-export type ScimQuery = {
+export interface ScimQuery {
   filter?: string;
   attributes?: string;
   excludedAttributes?: string;
@@ -345,4 +354,4 @@ export type ScimQuery = {
   sortOrder?: string;
   startIndex?: number;
   count?: number;
-};
+}

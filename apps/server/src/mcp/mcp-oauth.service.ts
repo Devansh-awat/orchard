@@ -37,6 +37,7 @@ const REFRESH_TOKEN_TTL = '30d';
 @Injectable()
 export class McpOAuthService {
   private readonly oauthClients = new Map<string, OAuthClient>();
+
   private readonly authCodes = new Map<string, AuthCodeEntry>();
 
   constructor(private readonly sessions: SessionsService) {}

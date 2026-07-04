@@ -1,8 +1,8 @@
 import { Injectable, BadRequestException } from '@nestjs/common';
+import { randomBytes, createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { EmailService } from '../email/email.service';
 import { RateLimitService } from './rate-limit.service';
-import { randomBytes, createHash } from 'crypto';
 
 const OTP_LENGTH = 6;
 const OTP_EXPIRY_MINUTES = 10;

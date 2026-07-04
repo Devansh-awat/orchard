@@ -17,6 +17,7 @@ const TTL_MS = 10 * 60 * 1000;
 @Injectable()
 export class OidcStateStore {
   private readonly logger = new Logger(OidcStateStore.name);
+
   private readonly memory = new Map<string, { value: OidcState; expiresAt: number }>();
 
   async set(state: string, value: OidcState): Promise<void> {

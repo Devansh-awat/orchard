@@ -17,7 +17,7 @@ export interface User {
 }
 
 function createAuthStore() {
-	const { subscribe, set, update } = writable<User | null>(null);
+	const { subscribe, set } = writable<User | null>(null);
 	const loading = writable(true);
 	const error = writable<string | null>(null);
 

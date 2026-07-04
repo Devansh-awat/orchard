@@ -3,12 +3,12 @@ import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { parseCpu, parseMemory } from '../kubernetes/quantity';
 
-type AssignmentInput = {
+interface AssignmentInput {
   mode?: 'allow' | 'deny';
   cpuLimit?: string | null;
   memoryLimit?: string | null;
   maxServices?: number | null;
-};
+}
 
 @Injectable()
 export class NodesService {
@@ -250,7 +250,7 @@ export class NodesService {
   async getPlacementForOrg(organizationId: string): Promise<{
     allowedNodes: string[] | null;
     deniedNodes: string[];
-    quotas: Array<{ nodeName: string; cpuLimitMilli: number | null; memoryLimitBytes: number | null; maxServices: number | null }>;
+    quotas: { nodeName: string; cpuLimitMilli: number | null; memoryLimitBytes: number | null; maxServices: number | null }[];
   }> {
     const assignments = await this.prisma.orgNodeAssignment.findMany({
       where: { organizationId },

@@ -52,7 +52,7 @@ export function formatBuildDurationBetween(
 ): string | null {
 	if (!startedAt || !completedAt) return null;
 	const ms = new Date(completedAt).getTime() - new Date(startedAt).getTime();
-	if (!isFinite(ms) || ms < 0) return null;
+	if (!Number.isFinite(ms) || ms < 0) return null;
 	return formatBuildDuration(Math.round(ms / 1000));
 }
 
@@ -61,11 +61,12 @@ export function ansiToHtml(text: string): string {
 	if (!text) return '';
 
 	// Strip lines that contain only a timestamp (and optional whitespace/ANSI codes)
-	let cleaned = text
+	const cleaned = text
 		.replace(/\r/g, '')
 		.split('\n')
 		.filter((line) => {
 			const stripped = line
+				// eslint-disable-next-line no-control-regex
 				.replace(/\x1b\[[0-9;]*m/g, '')
 				.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, '')
 				.trim();
@@ -129,7 +130,7 @@ export function sanitizeLogs(logs: string): string {
 	);
 	sanitized = sanitized.replace(/https?:\/\/[^@\s]+@github\.com/gi, 'https://***@github.com');
 	sanitized = sanitized.replace(
-		/(Bearer|Token|Authorization:)\s+[a-zA-Z0-9_\-\.]+/gi,
+		/(Bearer|Token|Authorization:)\s+[a-zA-Z0-9_\-.]+/gi,
 		'$1 ***REDACTED***'
 	);
 	sanitized = sanitized.replace(
@@ -247,7 +248,7 @@ export function humanizeWarning(msg: string): HumanizedWarning | null {
 
 	const restarts = m.match(/has restarted (\d+) time\(s\)/i);
 	if (restarts) {
-		const count = parseInt(restarts[1]);
+		const count = parseInt(restarts[1], 10);
 		return {
 			title: `Restarted ${count} time${count === 1 ? '' : 's'}`,
 			hint:
@@ -452,9 +453,9 @@ export function podLabel(podName: string): string {
 }
 
 /** Parse raw .env text into key-value pairs */
-export function rawToEnvVars(raw: string): Array<{ key: string; value: string }> {
+export function rawToEnvVars(raw: string): { key: string; value: string }[] {
 	const lines = raw.split('\n');
-	const parsed: Array<{ key: string; value: string }> = [];
+	const parsed: { key: string; value: string }[] = [];
 	for (const line of lines) {
 		const trimmed = line.trim();
 		if (!trimmed || trimmed.startsWith('#')) continue;
@@ -468,7 +469,7 @@ export function rawToEnvVars(raw: string): Array<{ key: string; value: string }>
 }
 
 /** Convert env vars array to raw .env text */
-export function envVarsToRaw(vars: Array<{ key: string; value: string }>): string {
+export function envVarsToRaw(vars: { key: string; value: string }[]): string {
 	return vars
 		.filter((e) => e.key.trim())
 		.map((e) => `${e.key}=${e.value}`)

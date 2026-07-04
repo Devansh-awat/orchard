@@ -6,13 +6,13 @@ import {
   HttpException,
   HttpStatus,
 } from '@nestjs/common';
+import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { UsersService } from '../users/users.service';
 import { AuditService } from '../audit/audit.service';
 import { AuthorizationService } from '../auth/authorization.service';
-import * as crypto from 'crypto';
 
 // H-3: Webhook bearer tokens are persisted as a SHA-256 hex digest. The
 // plaintext is only ever held in memory long enough to return it from
@@ -417,7 +417,7 @@ export class WebhooksService {
         deploymentId: deployment.id,
         action: 'image-update',
       };
-    } else {
+    } 
       try {
         await this.k8sWorkload.restartDeployment(
           deployment.name,
@@ -436,7 +436,7 @@ export class WebhooksService {
         deploymentId: deployment.id,
         action: 'restart',
       };
-    }
+    
   }
 
   private async resolveUser(clerkId: string) {

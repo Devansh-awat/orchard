@@ -8,7 +8,9 @@ const PUSH_INTERVAL_MS = 15_000;
 @Injectable()
 export class MetricsPusherService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(MetricsPusherService.name);
+
   private timer?: ReturnType<typeof setInterval>;
+
   private ticking = false;
 
   constructor(
@@ -18,7 +20,7 @@ export class MetricsPusherService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
-    this.timer = setInterval(() => void this.tick(), PUSH_INTERVAL_MS);
+    this.timer = setInterval(() => { void this.tick(); }, PUSH_INTERVAL_MS);
   }
 
   onModuleDestroy() {

@@ -2,14 +2,15 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
-  ConflictException,
-  ForbiddenException,
   Inject,
   forwardRef,
   Logger,
 } from '@nestjs/common';
 import * as dns from 'dns';
 import { promisify } from 'util';
+import { randomUUID, randomBytes } from 'crypto';
+import * as bcrypt from 'bcrypt';
+import { Prisma, IngressProtectionMode } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
@@ -21,9 +22,6 @@ import { DeploymentsService } from './deployments.service';
 import { FaviconService } from './favicon.service';
 import { ProjectsService } from './projects.service';
 import { formatSlug } from './projects.utils';
-import { randomUUID, randomBytes } from 'crypto';
-import * as bcrypt from 'bcrypt';
-import { Prisma, IngressProtectionMode } from '@prisma/client';
 
 const TENANT_INGRESS_CLASS = 'haproxy';
 
@@ -79,7 +77,7 @@ export class IngressService {
       return { valid: false, message: 'Domain is required' };
     }
 
-    if (domainToCheck.endsWith('.' + appDomain)) {
+    if (domainToCheck.endsWith(`.${  appDomain}`)) {
       return { valid: true, message: 'Auto-generated domain is ready to use' };
     }
 
@@ -90,7 +88,7 @@ export class IngressService {
       const normalizedExpected = expectedCname.toLowerCase().replace(/\.$/, '');
       const hasValidCname = records.some((record) => {
         const normalizedRecord = record.toLowerCase().replace(/\.$/, '');
-        return normalizedRecord === normalizedExpected || normalizedRecord.endsWith('.' + normalizedExpected);
+        return normalizedRecord === normalizedExpected || normalizedRecord.endsWith(`.${  normalizedExpected}`);
       });
 
       if (hasValidCname) {
@@ -113,7 +111,7 @@ export class IngressService {
       servicePort?: number;
       tlsEnabled?: boolean;
       annotations?: Record<string, string>;
-      routes?: Array<{ path: string; serviceName: string; servicePort: number }>;
+      routes?: { path: string; serviceName: string; servicePort: number }[];
       basicAuth?: {
         enabled: boolean;
         username: string;
@@ -529,7 +527,7 @@ export class IngressService {
       host: string;
       tlsEnabled?: boolean;
       annotations?: Record<string, string>;
-      routes: Array<{ path: string; serviceName: string; servicePort: number }>;
+      routes: { path: string; serviceName: string; servicePort: number }[];
       basicAuth?: {
         enabled: boolean;
         username: string;
@@ -573,7 +571,7 @@ export class IngressService {
     }
 
     const pathPattern = /^\/[A-Za-z0-9\-._/]*$/;
-    const pathBackends: Array<{ path: string; pathType: string; serviceName: string; servicePort: number }> = [];
+    const pathBackends: { path: string; pathType: string; serviceName: string; servicePort: number }[] = [];
 
     for (const route of data.routes) {
       let path = String(route.path || '/').trim() || '/';
@@ -618,7 +616,10 @@ export class IngressService {
 
     const tlsEnabled = data.tlsEnabled !== false;
     const isWildcardDomain = rawHost.endsWith('.k.hackclub.dev');
-    const tlsSecretName = tlsEnabled ? (isWildcardDomain ? 'wildcard-k-hackclub-dev-tls' : `leaf-cert-${randomUUID()}`) : null;
+    let tlsSecretName: string | null = null;
+    if (tlsEnabled) {
+      tlsSecretName = isWildcardDomain ? 'wildcard-k-hackclub-dev-tls' : `leaf-cert-${randomUUID()}`;
+    }
     const tlsHosts = tlsSecretName ? [rawHost] : [];
     const clusterIssuer = tlsEnabled && !isWildcardDomain ? 'letsencrypt-prod' : null;
     const entrypoints = tlsEnabled ? ['websecure'] : ['web'];
@@ -643,7 +644,7 @@ export class IngressService {
       .map((s) => formatSlug(s))
       .filter((s) => s.length > 0)
       .join('-');
-    let baseName = formatSlug(`${deployment.name}-${hostSlug}`.substring(0, 48)) || `ingress-${Math.floor(Date.now() / 1000)}`;
+    const baseName = formatSlug(`${deployment.name}-${hostSlug}`.substring(0, 48)) || `ingress-${Math.floor(Date.now() / 1000)}`;
     let ingressName = baseName;
     let suffixCounter = 1;
 
@@ -741,7 +742,7 @@ export class IngressService {
     data: {
       host: string;
       tlsEnabled?: boolean;
-      routes: Array<{ path: string; serviceName: string; servicePort: number }>;
+      routes: { path: string; serviceName: string; servicePort: number }[];
       basicAuth?: {
         enabled: boolean;
         username: string;
@@ -807,7 +808,7 @@ export class IngressService {
     }
 
     const pathPattern = /^\/[A-Za-z0-9\-._/]*$/;
-    const pathBackends: Array<{ path: string; pathType: string; serviceName: string; servicePort: number; serviceId: string; deploymentId: string }> = [];
+    const pathBackends: { path: string; pathType: string; serviceName: string; servicePort: number; serviceId: string; deploymentId: string }[] = [];
 
     for (const route of routes) {
       let path = String(route.path || '/').trim() || '/';
@@ -855,7 +856,7 @@ export class IngressService {
         mergeTarget.namespace,
         mergeTarget.name
       );
-      const existingPaths: Array<{ path: string; pathType: string; serviceName: string; servicePort: number }> =
+      const existingPaths: { path: string; pathType: string; serviceName: string; servicePort: number }[] =
         (k8sIngress?.spec?.rules?.[0]?.http?.paths ?? []).map((p: any) => ({
           path: p.path || '/',
           pathType: p.pathType || 'Prefix',
@@ -955,7 +956,10 @@ export class IngressService {
 
     const tlsEnabled = data.tlsEnabled !== false;
     const isWildcardDomain = rawHost.endsWith('.k.hackclub.dev');
-    const tlsSecretName = tlsEnabled ? (isWildcardDomain ? 'wildcard-k-hackclub-dev-tls' : `leaf-cert-${randomUUID()}`) : null;
+    let tlsSecretName: string | null = null;
+    if (tlsEnabled) {
+      tlsSecretName = isWildcardDomain ? 'wildcard-k-hackclub-dev-tls' : `leaf-cert-${randomUUID()}`;
+    }
     const tlsHosts = tlsSecretName ? [rawHost] : [];
     const clusterIssuer = tlsEnabled && !isWildcardDomain ? 'letsencrypt-prod' : null;
     const entrypoints = tlsEnabled ? ['websecure'] : ['web'];
@@ -973,7 +977,7 @@ export class IngressService {
       .map((s) => formatSlug(s))
       .filter((s) => s.length > 0)
       .join('-');
-    let baseName = formatSlug(`${project.slug}-${hostSlug}`.substring(0, 48)) || `ingress-${Math.floor(Date.now() / 1000)}`;
+    const baseName = formatSlug(`${project.slug}-${hostSlug}`.substring(0, 48)) || `ingress-${Math.floor(Date.now() / 1000)}`;
     let ingressName = baseName;
     let suffixCounter = 1;
 
@@ -1104,7 +1108,7 @@ export class IngressService {
     await this.access.assertProjectAccess(ingress.project.id, user.id, ingress.project.organizationId);
 
     // Read the actual K8s ingress to get all routes
-    let k8sRoutes: Array<{ path: string; serviceName: string; servicePort: number }> = [];
+    let k8sRoutes: { path: string; serviceName: string; servicePort: number }[] = [];
     try {
       const k8sIngress = await this.k8sNetwork.readIngress(ingress.namespace, ingress.name);
       const rules = k8sIngress?.spec?.rules ?? [];
@@ -1179,7 +1183,7 @@ export class IngressService {
     }
 
     // Read the actual K8s ingress to get all routes
-    let k8sRoutes: Array<{ path: string; serviceName: string; servicePort: number }> = [];
+    let k8sRoutes: { path: string; serviceName: string; servicePort: number }[] = [];
     try {
       const k8sIngress = await this.k8sNetwork.readIngress(ingress.namespace, ingress.name);
       const rules = k8sIngress?.spec?.rules ?? [];
@@ -1221,7 +1225,7 @@ export class IngressService {
     data: {
       host: string;
       tlsEnabled?: boolean;
-      routes: Array<{ path: string; serviceName: string; servicePort: number }>;
+      routes: { path: string; serviceName: string; servicePort: number }[];
       basicAuth?: {
         enabled: boolean;
         username: string;
@@ -1291,7 +1295,7 @@ export class IngressService {
     }
 
     const pathPattern = /^\/[A-Za-z0-9\-._/]*$/;
-    const pathBackends: Array<{ path: string; pathType: string; serviceName: string; servicePort: number; serviceId: string; deploymentId: string }> = [];
+    const pathBackends: { path: string; pathType: string; serviceName: string; servicePort: number; serviceId: string; deploymentId: string }[] = [];
 
     for (const route of routes) {
       let path = String(route.path || '/').trim() || '/';
@@ -1355,6 +1359,13 @@ export class IngressService {
       sanitizedAnnotations['cert-manager.io/cluster-issuer'] = clusterIssuer;
     }
 
+    let basicAuth;
+    if (data.basicAuth?.enabled) {
+      basicAuth = data.basicAuth;
+    } else if (data.basicAuth?.enabled === false) {
+      basicAuth = { enabled: false, username: '', password: '' };
+    }
+
     try {
       await this.k8sNetwork.updateIngress({
         namespace: ingress.namespace,
@@ -1366,7 +1377,7 @@ export class IngressService {
         ingressClassName: TENANT_INGRESS_CLASS,
         entrypoints,
         annotations: sanitizedAnnotations,
-        basicAuth: data.basicAuth?.enabled ? data.basicAuth : data.basicAuth?.enabled === false ? { enabled: false, username: '', password: '' } : undefined,
+        basicAuth,
       });
     } catch (error) {
       if (error instanceof BadRequestException) {
@@ -1885,11 +1896,12 @@ export class IngressService {
     const tlsHosts = tlsSecretName ? [rawHost] : [];
 
     try {
-      const basicAuthConfig = data.basicAuth?.enabled && data.basicAuth.username && data.basicAuth.password
-        ? data.basicAuth
-        : data.basicAuth?.enabled === false
-        ? { enabled: false, username: '', password: '' }
-        : undefined;
+      let basicAuthConfig;
+      if (data.basicAuth?.enabled && data.basicAuth.username && data.basicAuth.password) {
+        basicAuthConfig = data.basicAuth;
+      } else if (data.basicAuth?.enabled === false) {
+        basicAuthConfig = { enabled: false, username: '', password: '' };
+      }
 
       await this.k8sNetwork.updateIngress({
         namespace: ingress.namespace,

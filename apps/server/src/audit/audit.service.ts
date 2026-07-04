@@ -145,6 +145,8 @@ export class AuditService {
       case 'deployment':
         where.deploymentId = opts.scope.deploymentId;
         break;
+      default:
+        break;
     }
     if (opts.action) where.action = opts.action;
 
@@ -213,7 +215,7 @@ export class AuditService {
 
   private truncate(value: unknown): unknown {
     if (typeof value === 'string' && value.length > METADATA_VALUE_MAX_LEN) {
-      return value.slice(0, METADATA_VALUE_MAX_LEN) + '…';
+      return `${value.slice(0, METADATA_VALUE_MAX_LEN)  }…`;
     }
     if (typeof value === 'bigint') return value.toString();
     return value;

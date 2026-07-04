@@ -1,5 +1,7 @@
 import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
+import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { APP_GUARD } from '@nestjs/core';
 import { HealthModule } from './health/health.module';
 import { KubernetesModule } from './kubernetes/kubernetes.module';
 import { AuthModule } from './auth/auth.module';
@@ -25,8 +27,6 @@ import { AuditModule } from './audit/audit.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AiChatModule } from './ai-chat/ai-chat.module';
 import { ObservabilityModule } from './observability/observability.module';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
-import { APP_GUARD } from '@nestjs/core';
 
 @Module({
   imports: [

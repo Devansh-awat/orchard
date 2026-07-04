@@ -95,7 +95,11 @@
 			orgId,
 			(ev) => {
 				if (ev.id !== deploymentId) return;
-				if (ev.type === 'deployment.changed' || ev.type === 'build.changed' || ev.type === 'pod.changed') {
+				if (
+					ev.type === 'deployment.changed' ||
+					ev.type === 'build.changed' ||
+					ev.type === 'pod.changed'
+				) {
 					queueFetch();
 				}
 			},

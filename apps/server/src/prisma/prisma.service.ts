@@ -27,9 +27,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
   }
 
   async onModuleInit() {
-    const timeout = new Promise((_, reject) =>
-      setTimeout(() => reject(new Error('Database connection timed out after 10s')), 10_000),
-    );
+    const timeout = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Database connection timed out after 10s')), 10_000);
+    });
     try {
       await Promise.race([this.$connect(), timeout]);
       this.logger.log('$connect() done, testing actual query...');

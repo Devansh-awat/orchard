@@ -175,9 +175,9 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
     // filtering in AuthorizationService applies. Session auth gets an empty
     // context, matching what SuperAdminGuard publishes for JWT-auth requests.
     const runWithAuthCtx = <T>(fn: () => Promise<T>): Promise<T> =>
-      new Promise<T>((resolve, reject) => {
+      new Promise<T>((resolve, rejectPromise) => {
         requestAuthStorage.run(tokenAuthCtx ?? {}, () => {
-          fn().then(resolve, reject);
+          fn().then(resolve, rejectPromise);
         });
       });
 
@@ -337,7 +337,7 @@ function handleExecSession(
     (status) => {
       if (!execClosed && ws.readyState === WebSocket.OPEN) {
         const reason = status.status === 'Success' ? 'exited' : `exec failed: ${status.message}`;
-        ws.close(1000, reason.length > 123 ? reason.slice(0, 120) + '...' : reason);
+        ws.close(1000, reason.length > 123 ? `${reason.slice(0, 120)  }...` : reason);
       }
     },
   ).catch((err) => {

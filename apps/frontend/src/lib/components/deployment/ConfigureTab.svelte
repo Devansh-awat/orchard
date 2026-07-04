@@ -73,7 +73,6 @@
 <div class="ct-stack">
 	<!-- Environment section -->
 	<div class="ct-section">
-		<!-- svelte-ignore a11y_no_static_element_interactions -->
 		<button class="ct-section-header" onclick={() => (envOpen = !envOpen)}>
 			<div class="ct-section-icon ct-section-icon--blue">
 				<Settings size={16} animate={!envOpen} />

@@ -20,9 +20,13 @@ interface DaemonInfo {
 @Injectable()
 export class BuildKitPoolService {
   private kc: k8s.KubeConfig | null = null;
+
   private readonly namespace: string;
+
   private readonly localCachePvc: string | undefined;
+
   private readonly dedicatedNodeEnabled: boolean;
+
   private readonly builderRuntimeClass: string | undefined;
 
   constructor() {
@@ -250,7 +254,7 @@ export class BuildKitPoolService {
         if (err.message?.includes('state')) throw err;
       }
 
-      await new Promise(r => setTimeout(r, 3000));
+      await new Promise(r => { setTimeout(r, 3000); });
     }
 
     throw new Error(`Daemon pod ${podName} not ready after ${timeoutMs / 1000}s`);

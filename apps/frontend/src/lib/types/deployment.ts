@@ -12,13 +12,13 @@ export interface Pod {
 	restartCount?: number;
 	cpuUsage?: number | null;
 	memoryUsage?: number | null;
-	containers?: Array<{
+	containers?: {
 		name: string;
 		image: string;
 		ready: boolean;
 		restartCount?: number;
 		lastTermination?: ContainerTermination | null;
-	}>;
+	}[];
 }
 
 export interface ServicePortConfig {
@@ -113,7 +113,7 @@ export interface Deployment {
 	availableReplicas: number;
 	image?: string;
 	namespace?: string;
-	env?: Array<{ key: string; value: string }>;
+	env?: { key: string; value: string }[];
 	volumes?: Volume[];
 	pods?: Pod[];
 	services?: Service[];
@@ -147,7 +147,7 @@ export interface Deployment {
 	totalCpuUsage?: number | null;
 	totalMemoryUsage?: number | null;
 	deployStrategy?: 'rollingUpdate' | 'recreate';
-	warnings?: Array<{ podName: string; message: string; timestamp: string }>;
+	warnings?: { podName: string; message: string; timestamp: string }[];
 	project?: {
 		id: string;
 		name: string;
@@ -157,7 +157,7 @@ export interface Deployment {
 	projectId?: string;
 	tailscaleExposed?: boolean;
 	tailscaleHostname?: string | null;
-	envVars?: Array<{ key: string; value: string }>;
+	envVars?: { key: string; value: string }[];
 }
 
 export interface AutoDeployStatus {
@@ -187,19 +187,19 @@ export interface GitHubDeploymentRecord {
 	createdAt: string;
 }
 
-export type ServicePortForm = {
+export interface ServicePortForm {
 	name: string;
 	containerPort: number;
 	servicePort: number;
 	protocol: string;
 	nodePort?: number | null;
-};
+}
 
-export type ServiceFormState = {
+export interface ServiceFormState {
 	name: string;
 	exposePublic: boolean;
 	ports: ServicePortForm[];
-};
+}
 
 export interface WebhookToken {
 	id: string;

@@ -22,8 +22,11 @@ export interface TokenPayload {
 @Injectable()
 export class OAuthService {
   private readonly clientId: string;
+
   private readonly clientSecret: string;
+
   private readonly redirectUri: string;
+
   private readonly jwtSecret: Uint8Array;
 
   constructor() {

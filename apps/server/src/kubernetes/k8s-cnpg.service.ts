@@ -1,5 +1,6 @@
 import { Injectable, Logger, BadRequestException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
+import { PassThrough } from 'stream';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from './kubernetes.service';
 import { cpuMilliToK8s, memoryBytesToK8s } from './quantity';
@@ -31,7 +32,7 @@ export class K8sCnpgService {
     this.kubernetes.ensureKubeConfig();
   }
 
-  private createPVC(namespace: string, name: string, storageSize: string = '1Gi') {
+  private createPVC(namespace: string, name: string, storageSize = '1Gi') {
     return this.kubernetes.createPVC(namespace, name, storageSize);
   }
 
@@ -113,7 +114,9 @@ export class K8sCnpgService {
   // ── PostgreSQL Database Management (via kubectl exec into CNPG pod) ──
 
   private readonly CNPG_NAMESPACE = 'postgresql';
+
   private readonly CNPG_POD = 'postgresql-cluster-1';
+
   private readonly CNPG_CONTAINER = 'postgres';
 
   private async execPsql(sql: string): Promise<string> {
@@ -143,8 +146,8 @@ export class K8sCnpgService {
       const chunks: Buffer[] = [];
       const errChunks: Buffer[] = [];
 
-      const stdout = new (require('stream').PassThrough)();
-      const stderr = new (require('stream').PassThrough)();
+      const stdout = new PassThrough();
+      const stderr = new PassThrough();
 
       stdout.on('data', (chunk: Buffer) => chunks.push(chunk));
       stderr.on('data', (chunk: Buffer) => errChunks.push(chunk));
@@ -252,7 +255,7 @@ export class K8sCnpgService {
       return {
         exists: true,
         size: sizeResult || '0 bytes',
-        connections: parseInt(connResult) || 0,
+        connections: parseInt(connResult, 10) || 0,
       };
     } catch {
       return { exists: false };
@@ -323,7 +326,7 @@ export class K8sCnpgService {
     const selectorLabels = { 'app.kubernetes.io/name': name };
 
     const secretName = `${name}-pg`;
-    const secretData: { [k: string]: string } = {
+    const secretData: Record<string, string> = {
       'POSTGRES_DB': Buffer.from(options.dbName).toString('base64'),
       'POSTGRES_USER': Buffer.from(options.dbUser).toString('base64'),
       'POSTGRES_PASSWORD': Buffer.from(options.dbPassword).toString('base64'),
@@ -622,8 +625,8 @@ export class K8sCnpgService {
     return new Promise((resolve) => {
       const outChunks: Buffer[] = [];
       const errChunks: Buffer[] = [];
-      const stdout = new (require('stream').PassThrough)();
-      const stderr = new (require('stream').PassThrough)();
+      const stdout = new PassThrough();
+      const stderr = new PassThrough();
       stdout.on('data', (c: Buffer) => outChunks.push(c));
       stderr.on('data', (c: Buffer) => errChunks.push(c));
       exec.exec(namespace, pod, container, cmd, stdout, stderr, null, false, (status) => {
@@ -702,7 +705,7 @@ export class K8sCnpgService {
   }
 
   async restorePostgresBackup(namespace: string, name: string, dbName: string, backupLabel?: string): Promise<{ success: boolean; output: string }> {
-    const pod = await this.findPostgresPod(namespace, name);
+    await this.findPostgresPod(namespace, name);
     const stanza = this.pgBackRestStanza(dbName);
     const appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
 
@@ -712,7 +715,7 @@ export class K8sCnpgService {
       { headers: { 'Content-Type': 'application/strategic-merge-patch+json' } }
     );
 
-    await new Promise((r) => setTimeout(r, 5000));
+    await new Promise((r) => { setTimeout(r, 5000); });
 
     await appsApi.patchNamespacedDeploymentScale(
       name, namespace, { spec: { replicas: 1 } },
@@ -722,7 +725,7 @@ export class K8sCnpgService {
 
     let newPod = '';
     for (let i = 0; i < 30; i++) {
-      await new Promise((r) => setTimeout(r, 3000));
+      await new Promise((r) => { setTimeout(r, 3000); });
       try {
         newPod = await this.findPostgresPod(namespace, name);
         break;
@@ -809,9 +812,13 @@ export class K8sCnpgService {
   // ── CNPG (CloudNativePG) Cluster management ──
 
   private readonly CNPG_GROUP = 'postgresql.cnpg.io';
+
   private readonly CNPG_VERSION = 'v1';
+
   private readonly CNPG_PLURAL = 'clusters';
+
   private readonly CNPG_BACKUP_PLURAL = 'backups';
+
   private readonly CNPG_SCHEDULED_BACKUP_PLURAL = 'scheduledbackups';
 
   private buildAppSecretName(clusterName: string): string {
@@ -1528,14 +1535,14 @@ export class K8sCnpgService {
     ]);
   }
 
-  async listCnpgExtensions(namespace: string, clusterName: string, dbName: string): Promise<Array<{ name: string; installed: boolean; version?: string; defaultVersion?: string; comment?: string }>> {
+  async listCnpgExtensions(namespace: string, clusterName: string, dbName: string): Promise<{ name: string; installed: boolean; version?: string; defaultVersion?: string; comment?: string }[]> {
     const pod = await this.findCnpgPrimaryPod(namespace, clusterName);
     const r = await this.execInPod(namespace, pod, 'postgres', [
       'psql', '-U', 'postgres', '-d', dbName, '-t', '-A', '-F', '|', '-c',
       `SELECT a.name, COALESCE(i.extversion, '') AS installed_version, a.default_version, COALESCE(a.comment, '') FROM pg_available_extensions a LEFT JOIN pg_extension i ON a.name = i.extname ORDER BY a.name;`,
     ]);
     if (!r.success) return [];
-    const out: Array<{ name: string; installed: boolean; version?: string; defaultVersion?: string; comment?: string }> = [];
+    const out: { name: string; installed: boolean; version?: string; defaultVersion?: string; comment?: string }[] = [];
     for (const line of r.stdout.split('\n')) {
       if (!line.trim()) continue;
       const [name, installed, defaultVersion, comment] = line.split('|');
@@ -1622,8 +1629,11 @@ export class K8sCnpgService {
   // ── Public TLS (cert-manager wildcard reflection) ──
 
   private readonly PUBLIC_TLS_SOURCE_NAMESPACE = process.env.PUBLIC_DB_TLS_SOURCE_NAMESPACE || 'network';
+
   private readonly PUBLIC_TLS_SOURCE_SECRET = process.env.PUBLIC_DB_TLS_SOURCE_SECRET || 'wildcard-db-orchard-my-tls';
+
   private readonly PUBLIC_TLS_BASE_DOMAIN = process.env.PUBLIC_DB_DOMAIN || 'db.orchard.my';
+
   private readonly PUBLIC_TLS_LOCAL_SECRET = process.env.PUBLIC_DB_TLS_LOCAL_SECRET || 'wildcard-db-tls';
 
   publicTlsBaseDomain(): string {
@@ -1658,7 +1668,7 @@ export class K8sCnpgService {
       const fullChainPem = Buffer.from(src.data['tls.crt'], 'base64').toString('utf-8');
       const certs = fullChainPem.match(/-----BEGIN CERTIFICATE-----[\s\S]*?-----END CERTIFICATE-----/g) || [];
       if (certs.length >= 2) {
-        const intermediates = certs.slice(1).join('\n') + '\n';
+        const intermediates = `${certs.slice(1).join('\n')  }\n`;
         caCrtB64 = Buffer.from(intermediates, 'utf-8').toString('base64');
       }
     }

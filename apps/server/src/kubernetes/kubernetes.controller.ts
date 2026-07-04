@@ -86,7 +86,7 @@ export class KubernetesController {
     @Query('previous') previous?: string,
   ) {
     await this.resolveNamespace(namespace, req, 'edit', 'stream pod logs');
-    const parsedTailLines = tailLines ? parseInt(tailLines) : 100;
+    const parsedTailLines = tailLines ? parseInt(tailLines, 10) : 100;
     const wantPrevious = previous === 'true' || previous === '1';
     return this.k8sWorkload.getPodLogs(podName, namespace, container, parsedTailLines, wantPrevious);
   }
@@ -108,11 +108,12 @@ export class KubernetesController {
     if (!namespace) throw new BadRequestException('namespace is required');
     await this.resolveNamespace(namespace, req, 'edit', 'exec in pod');
 
-    const cmd: string[] = Array.isArray(body?.command)
-      ? body.command
-      : typeof body?.command === 'string' && body.command.trim()
-        ? ['/bin/sh', '-c', body.command]
-        : [];
+    let cmd: string[] = [];
+    if (Array.isArray(body?.command)) {
+      cmd = body.command;
+    } else if (typeof body?.command === 'string' && body.command.trim()) {
+      cmd = ['/bin/sh', '-c', body.command];
+    }
     if (cmd.length === 0) {
       throw new BadRequestException('command is required (string or string[])');
     }
@@ -120,9 +121,9 @@ export class KubernetesController {
     const timeoutMs = Math.min(Math.max(Number(body?.timeoutMs) || 60_000, 1_000), 300_000);
     const result = await Promise.race([
       this.k8sCnpg.runExec(namespace, podName, cmd, body?.container),
-      new Promise<never>((_, reject) =>
-        setTimeout(() => reject(new BadRequestException(`exec timed out after ${timeoutMs}ms`)), timeoutMs),
-      ),
+      new Promise<never>((_, reject) => {
+        setTimeout(() => reject(new BadRequestException(`exec timed out after ${timeoutMs}ms`)), timeoutMs);
+      }),
     ]);
     return result;
   }

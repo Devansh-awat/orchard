@@ -1,9 +1,9 @@
 import { Injectable } from '@nestjs/common';
-import { PrismaService } from '../prisma/prisma.service';
 import { OrganizationRole } from '@prisma/client';
+import { PrismaService } from '../prisma/prisma.service';
 
 interface CachedEntry {
-  memberships: Array<{ organizationId: string; role: OrganizationRole }>;
+  memberships: { organizationId: string; role: OrganizationRole }[];
   expiresAt: number;
 }
 
@@ -27,7 +27,9 @@ const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-
 @Injectable()
 export class MembershipCacheService {
   private readonly cache = new Map<string, CachedEntry>();
+
   private readonly inflight = new Map<string, Promise<CachedEntry['memberships']>>();
+
   // sub (JWT subject) → internal UUID. JWT sub may be a Hack Club ID;
   // organizationMember.userId is a UUID FK so we have to resolve first.
   private readonly subToInternal = new Map<string, string>();
