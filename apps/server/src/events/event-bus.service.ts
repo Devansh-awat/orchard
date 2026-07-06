@@ -42,9 +42,13 @@ export class EventBusService implements OnModuleInit, OnModuleDestroy {
   onModuleInit() {
     const url = process.env.REDIS_URL;
     if (!url) {
-      this.logger.warn(
-        'REDIS_URL not set — event bus is local-only (cross-replica SSE delivery disabled, polling fallback covers it)',
-      );
+      const msg =
+        'REDIS_URL not set: event bus is local-only. With multiple server replicas, SSE clients will miss events published by other replicas (polling fallback covers it, degraded).';
+      if (process.env.NODE_ENV === 'production') {
+        this.logger.error(msg);
+      } else {
+        this.logger.warn(msg);
+      }
       return;
     }
     this.pub = new Redis(url, { maxRetriesPerRequest: null });
