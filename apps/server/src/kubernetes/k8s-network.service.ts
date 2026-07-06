@@ -66,6 +66,92 @@ export class K8sNetworkService implements OnModuleInit {
     if (protectedIngresses.length > 0) {
       this.logger.log(`Reconciled protection proxies for ${protectedIngresses.length} ingress(es)`);
     }
+
+    try {
+      await this.restoreOrphanedProtectionBackends(
+        new Set(protectedIngresses.map((i) => `${i.namespace}/${i.name}`)),
+      );
+    } catch (error) {
+      this.logger.warn(`Failed to restore orphaned protection backends: ${error.message}`);
+    }
+  }
+
+  /**
+   * Heals ingresses whose paths still point at orchard-protection-proxy even
+   * though protection is off in the DB and the proxy Service is gone (e.g. a
+   * disable flow that deleted the Service but failed to restore the backend).
+   * Only acts when the proxy Service is absent, so an in-flight enable (which
+   * creates the Service before rewriting the ingress and committing the DB
+   * row) can never be undone into an unprotected page.
+   */
+  private async restoreOrphanedProtectionBackends(protectedKeys: Set<string>): Promise<void> {
+    const proxyServiceName = 'orchard-protection-proxy';
+    const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+
+    const allIngresses = await networkingApi.listIngressForAllNamespaces(
+      undefined,
+      undefined,
+      undefined,
+      'leaf.dev/managed=true',
+    );
+
+    for (const ingress of allIngresses.body.items) {
+      const namespace = ingress.metadata?.namespace;
+      const name = ingress.metadata?.name;
+      if (!namespace || !name || protectedKeys.has(`${namespace}/${name}`)) continue;
+
+      const rules = ingress.spec?.rules || [];
+      const proxied = rules.some((rule) =>
+        (rule.http?.paths || []).some((p) => p.backend?.service?.name === proxyServiceName),
+      );
+      if (!proxied) continue;
+
+      try {
+        await coreApi.readNamespacedService(proxyServiceName, namespace);
+        continue;
+      } catch (error) {
+        if (error.response?.statusCode !== 404) continue;
+      }
+
+      const rows = await this.prisma.ingress.findMany({
+        where: { namespace, name },
+        include: { service: { include: { ports: true } } },
+      });
+      if (rows.length === 0 || rows.some((r) => r.protectionMode !== 'none')) continue;
+
+      const backendByPath = new Map(
+        rows
+          .filter((r) => r.service)
+          .map((r) => [
+            r.path || '/',
+            {
+              name: r.service!.name,
+              port: Number(r.service!.ports?.[0]?.port ?? r.service!.port),
+            },
+          ]),
+      );
+
+      let restored = false;
+      for (const rule of rules) {
+        for (const p of rule.http?.paths || []) {
+          if (p.backend?.service?.name !== proxyServiceName) continue;
+          const original = backendByPath.get(p.path || '/') ?? backendByPath.values().next().value;
+          if (!original || !Number.isInteger(original.port) || original.port <= 0) continue;
+          p.backend = { service: { name: original.name, port: { number: original.port } } };
+          restored = true;
+        }
+      }
+
+      if (!restored) continue;
+
+      try {
+        await networkingApi.replaceNamespacedIngress(name, namespace, ingress);
+        this.logger.log(`Restored orphaned protection backend on ${namespace}/${name}`);
+      } catch (error) {
+        this.logger.warn(`Failed to restore ${namespace}/${name}: ${error.message}`);
+      }
+    }
   }
 
   private get kc(): k8s.KubeConfig | null {
@@ -446,7 +532,9 @@ export class K8sNetworkService implements OnModuleInit {
       },
       addressType: 'IPv4',
       ports: [{ port: authServerPort, protocol: 'TCP' }],
-      endpoints: [{ addresses }],
+      // ready must be set explicitly: HAProxy's controller skips endpoints
+      // whose ready condition is nil, leaving the backend with zero servers.
+      endpoints: [{ addresses, conditions: { ready: true, serving: true } }],
     };
 
     try {
