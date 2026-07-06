@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.1](https://github.com/LeafdTK/leaf/compare/frontend/v0.11.0...frontend/v0.11.1) (2026-07-06)
+
+
+### Bug Fixes
+
+* mcp docs used invalid type url in claude code config ([08b3730](https://github.com/LeafdTK/leaf/commit/08b37307dc3771309ab275c1a20459767344996e))
+
 ## [0.11.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.10.0...frontend/v0.11.0) (2026-07-06)
 
 
