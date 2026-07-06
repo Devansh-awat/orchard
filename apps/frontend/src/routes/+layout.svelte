@@ -31,7 +31,7 @@
 		return skipRoutes.some((route) => pathname.startsWith(route));
 	}
 
-	const publicRoutes = ['/invite', '/oauth/callback', '/sso', '/mcp', '/cli'];
+	const publicRoutes = ['/invite', '/oauth/callback', '/sso', '/mcp', '/cli', '/auth/protect'];
 
 	$effect(() => {
 		if (loading || $isSignedIn) return;
@@ -118,7 +118,7 @@
 				<div></div>
 			</div>
 		</div>
-	{:else if $isSignedIn && $page.url.pathname.startsWith('/setup')}
+	{:else if $isSignedIn && ($page.url.pathname.startsWith('/setup') || $page.url.pathname.startsWith('/auth/protect'))}
 		{@render children()}
 	{:else if $isSignedIn}
 		<div class="flex h-screen overflow-hidden">
