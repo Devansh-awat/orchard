@@ -662,14 +662,77 @@ export class FaviconService {
         .resize(64, 64, { fit: 'inside', withoutEnlargement: true })
         .png()
         .toBuffer();
+      const dematted = await this.trimWhiteMatte(resized);
       // Only keep the resized version when it actually shrinks the payload.
-      if (resized.length < buffer.length) {
-        return { buffer: resized, contentType: 'image/png' };
+      if (dematted.length < buffer.length || dematted.length !== resized.length) {
+        return { buffer: dematted, contentType: 'image/png' };
       }
     } catch {
       // sharp missing or unsupported input — store as-is
     }
     return { buffer, contentType };
+  }
+
+  // Many favicons ship with an opaque white matte that looks like a white
+  // box on tinted dashboard tiles. Flood-fill from the borders and clear
+  // only the connected near-white region, so white INSIDE the artwork
+  // (highlights, text) survives. Skipped unless the corners are white.
+  private async trimWhiteMatte(buffer: Buffer): Promise<Buffer> {
+    try {
+      const sharp = (await import('sharp')).default;
+      const { data, info } = await sharp(buffer)
+        .ensureAlpha()
+        .raw()
+        .toBuffer({ resolveWithObject: true });
+      const { width, height, channels } = info;
+      if (channels !== 4 || width < 4 || height < 4) return buffer;
+
+      const px = (x: number, y: number) => (y * width + x) * channels;
+      const nearWhite = (i: number) =>
+        data[i] >= 240 && data[i + 1] >= 240 && data[i + 2] >= 240 && data[i + 3] >= 250;
+
+      const corners = [
+        px(0, 0),
+        px(width - 1, 0),
+        px(0, height - 1),
+        px(width - 1, height - 1),
+      ];
+      if (corners.filter(nearWhite).length < 3) return buffer;
+
+      const visited = new Uint8Array(width * height);
+      const queue: number[] = [];
+      const enqueue = (x: number, y: number) => {
+        const p = y * width + x;
+        if (!visited[p] && nearWhite(p * channels)) {
+          visited[p] = 1;
+          queue.push(p);
+        }
+      };
+      for (let x = 0; x < width; x++) {
+        enqueue(x, 0);
+        enqueue(x, height - 1);
+      }
+      for (let y = 0; y < height; y++) {
+        enqueue(0, y);
+        enqueue(width - 1, y);
+      }
+      while (queue.length > 0) {
+        const p = queue.pop()!;
+        const x = p % width;
+        const y = Math.floor(p / width);
+        data[p * channels + 3] = 0;
+        if (x > 0) enqueue(x - 1, y);
+        if (x < width - 1) enqueue(x + 1, y);
+        if (y > 0) enqueue(x, y - 1);
+        if (y < height - 1) enqueue(x, y + 1);
+      }
+
+      return await sharp(data, { raw: { width, height, channels: 4 } })
+        .png()
+        .toBuffer();
+    } catch {
+      return buffer;
+    }
   }
 
   private async storeToR2(domain: string, key: string, buffer: Buffer, contentType: string): Promise<string | null> {
