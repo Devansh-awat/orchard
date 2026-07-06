@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.15.0](https://github.com/LeafdTK/leaf/compare/server/v1.14.4...server/v1.15.0) (2026-07-06)
+
+
+### Features
+
+* grow-only database storage expansion with mcp tool ([f422d4f](https://github.com/LeafdTK/leaf/commit/f422d4ff41c048ed5a9c02f91f7de4131d93ab72))
+* warn on failing wal archiving when expanding database storage ([95c4d39](https://github.com/LeafdTK/leaf/commit/95c4d3999be05a5a8c83bfb56d108cc531a35054))
+
 ## [1.14.4](https://github.com/LeafdTK/leaf/compare/server/v1.14.3...server/v1.14.4) (2026-07-06)
 
 
