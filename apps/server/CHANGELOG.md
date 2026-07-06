@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.15.1](https://github.com/LeafdTK/leaf/compare/server/v1.15.0...server/v1.15.1) (2026-07-06)
+
+
+### Bug Fixes
+
+* persist mcp oauth client registrations across restarts ([91b3ebc](https://github.com/LeafdTK/leaf/commit/91b3ebce0abf0ec90f69b2b397b4958bab2d52e8))
+
 ## [1.15.0](https://github.com/LeafdTK/leaf/compare/server/v1.14.4...server/v1.15.0) (2026-07-06)
 
 
