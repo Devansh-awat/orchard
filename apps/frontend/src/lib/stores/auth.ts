@@ -1,6 +1,6 @@
 import { writable, derived, get } from 'svelte/store';
 import { browser } from '$app/environment';
-import { apiBase, apiFetch } from './api';
+import { apiBase, apiFetch, onUnauthorized } from './api';
 
 export interface User {
 	id: string;
@@ -79,6 +79,15 @@ function createAuthStore() {
 }
 
 export const user = createAuthStore();
+
+let sessionExpiryHandled = false;
+onUnauthorized((path) => {
+	if (!browser || sessionExpiryHandled || path.startsWith('/apiv1/auth/')) return;
+	if (!get(user)) return;
+	sessionExpiryHandled = true;
+	window.location.assign(`/?error=${encodeURIComponent('Your session expired. Sign in again.')}`);
+});
+
 export const isSignedIn = derived(user, ($user) => $user !== null);
 export const isLoaded = derived(user.loading, ($loading) => !$loading);
 export const isSuperAdmin = derived(user, ($user) => $user?.isSuperAdmin === true);
