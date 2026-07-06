@@ -874,7 +874,7 @@ export class DeploymentsController {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
-    return this.deployments.getImageHistory(id);
+    return this.deployments.getImageHistory(id, req.user.sub);
   }
 
   @Get(':id/image-history/:imageHistoryId/logs')
@@ -891,7 +891,7 @@ export class DeploymentsController {
     if (!access.canEdit) {
       return { logs: '' };
     }
-    return this.deployments.getImageHistoryLogs(id, imageHistoryId);
+    return this.deployments.getImageHistoryLogs(id, imageHistoryId, req.user.sub);
   }
 
   @Post(':id/rollback/:imageHistoryId')
@@ -1283,7 +1283,7 @@ export class DeploymentsController {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
-    return this.deployments.getAutoDeployStatus(id);
+    return this.deployments.getAutoDeployStatus(id, req.user.sub);
   }
 
   @Post(':id/auto-deploy/enable')
@@ -1330,7 +1330,7 @@ export class DeploymentsController {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
-    return this.deployments.getGitHubDeployments(id);
+    return this.deployments.getGitHubDeployments(id, req.user.sub);
   }
 
   // Webhook token management endpoints

@@ -1459,11 +1459,10 @@ export class ProjectsService {
     if (m) currentMember = { role: m.role, synthetic: false };
     else if (isSuper) currentMember = { role: 'owner' as const, synthetic: true };
 
-    const [projects, deployments, databases, builds] = await Promise.all([
+    const [projects, deployments, databases] = await Promise.all([
       this.listProjects(userId, org.id),
       this.deployments.listDeploymentsSummary(userId, org.id),
       this.listDatabasesSummary(userId, org.id),
-      this.deployments.listRecentBuilds(userId, org.id),
     ]);
 
     // Resolve favicon URLs in bulk so cards can point straight at R2 instead
@@ -1472,15 +1471,9 @@ export class ProjectsService {
     try {
       const hostOf = (d: any): string | null =>
         d?.ingresses?.[0]?.host?.split('/')[0] || null;
-      const buildTargets: any[] = [
-        ...((builds as any)?.active ?? []),
-        ...(((builds as any)?.recent ?? []).map((b: any) => b.deployment).filter(Boolean)),
-      ];
-      const hosts = [...deployments, ...buildTargets]
-        .map(hostOf)
-        .filter(Boolean) as string[];
+      const hosts = deployments.map(hostOf).filter(Boolean) as string[];
       const favicons = await this.faviconService.peekFavicons(hosts);
-      for (const d of [...(deployments as any[]), ...buildTargets]) {
+      for (const d of deployments as any[]) {
         const h = hostOf(d);
         d.faviconUrl = h ? (favicons[h] ?? null) : null;
       }
@@ -1516,7 +1509,56 @@ export class ProjectsService {
       // banners are decorative too
     }
 
-    return { organization: org, projects, deployments, databases, builds, currentMember };
+    return { organization: org, projects, deployments, databases, currentMember };
+  }
+
+  /**
+   * The live build feed for the org dashboard sidebar. Split from the full
+   * overview so it can be refetched aggressively on build events without
+   * paying for the project grid, and scoped to the caller's own projects by
+   * default. Falls back to org-wide visibility when the user has no explicit
+   * project memberships in the org (solo and small orgs).
+   */
+  async getOrgBuildsBySlug(userId: string, orgSlug: string, scope: 'mine' | 'all' = 'mine') {
+    const org = await this.prisma.organization.findUnique({
+      where: { slug: orgSlug },
+      select: { id: true },
+    });
+    if (!org) throw new NotFoundException('Organization not found');
+
+    const [isSuper, memberships] = await Promise.all([
+      this.authz.isSuperAdmin(userId),
+      this.membershipCache.getMembershipsForOrg(userId, org.id),
+    ]);
+    if (!isSuper && memberships.length === 0) {
+      throw new NotFoundException('Organization not found');
+    }
+
+    const builds = await this.deployments.listRecentBuilds(userId, org.id, {
+      scope,
+      activeLimit: 15,
+      recentLimit: 8,
+    });
+
+    try {
+      const hostOf = (d: any): string | null =>
+        d?.ingresses?.[0]?.host?.split('/')[0] || null;
+      const targets: any[] = [
+        ...builds.active,
+        ...builds.recent.map((b: any) => b.deployment).filter(Boolean),
+      ];
+      const favicons = await this.faviconService.peekFavicons(
+        targets.map(hostOf).filter(Boolean) as string[],
+      );
+      for (const d of targets) {
+        const h = hostOf(d);
+        d.faviconUrl = h ? (favicons[h] ?? null) : null;
+      }
+    } catch {
+      // decorative
+    }
+
+    return builds;
   }
 
 }

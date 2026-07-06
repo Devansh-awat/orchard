@@ -388,9 +388,26 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  async listRecentBuilds(userId: string, orgId?: string, limit = 5) {
-    const projectFilter = await this.access.buildProjectAccessFilter(userId, orgId);
+  async listRecentBuilds(
+    userId: string,
+    orgId?: string,
+    opts: { scope?: 'mine' | 'all'; activeLimit?: number; recentLimit?: number } = {},
+  ) {
+    const { scope = 'all', activeLimit = 5, recentLimit = 5 } = opts;
+    let projectFilter = await this.access.buildProjectAccessFilter(userId, orgId);
     if (!projectFilter) return { active: [], recent: [] };
+
+    if (scope === 'mine') {
+      const mineCount = await this.prisma.project.count({
+        where: {
+          ...(orgId ? { organizationId: orgId } : {}),
+          members: { some: { userId } },
+        },
+      });
+      if (mineCount > 0) {
+        projectFilter = { AND: [projectFilter, { members: { some: { userId } } }] };
+      }
+    }
 
     // Currently building deployments
     const activeBuilds = await this.prisma.deployment.findMany({
@@ -412,7 +429,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         project: { select: { name: true } },
       },
       orderBy: { updatedAt: 'desc' },
-      take: limit,
+      take: activeLimit,
     });
 
     // Recent completed builds from image history
@@ -437,7 +454,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         },
       },
       orderBy: { createdAt: 'desc' },
-      take: limit,
+      take: recentLimit,
     });
 
     return { active: activeBuilds, recent: recentBuilds };
@@ -2922,7 +2939,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  async getAutoDeployStatus(deploymentId: string) {
+  async getAutoDeployStatus(deploymentId: string, clerkId: string) {
+    await this.access.assertDeploymentView(deploymentId, clerkId);
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
       select: {
@@ -2958,7 +2976,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     };
   }
 
-  async getGitHubDeployments(deploymentId: string) {
+  async getGitHubDeployments(deploymentId: string, clerkId: string) {
+    await this.access.assertDeploymentView(deploymentId, clerkId);
     return this.prisma.gitHubDeployment.findMany({
       where: { deploymentId },
       orderBy: { createdAt: 'desc' },
@@ -5273,7 +5292,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     return this.addInternalUrlsToDeployment(result);
   }
 
-  async getImageHistory(deploymentId: string) {
+  async getImageHistory(deploymentId: string, clerkId: string) {
+    await this.access.assertDeploymentView(deploymentId, clerkId);
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
     });
@@ -5288,7 +5308,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  async getImageHistoryLogs(deploymentId: string, imageHistoryId: string) {
+  async getImageHistoryLogs(deploymentId: string, imageHistoryId: string, clerkId: string) {
+    await this.access.assertDeploymentView(deploymentId, clerkId);
     const entry = await this.prisma.imageHistory.findUnique({
       where: { id: imageHistoryId },
       select: { deploymentId: true, buildLogs: true },
