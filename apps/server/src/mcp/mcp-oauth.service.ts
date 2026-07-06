@@ -2,6 +2,7 @@ import { Injectable } from '@nestjs/common';
 import { randomBytes, createHash } from 'crypto';
 import { SignJWT, jwtVerify } from 'jose';
 import { SessionsService } from '../auth/sessions.service';
+import { PrismaService } from '../prisma/prisma.service';
 
 interface OAuthClient {
   clientId: string;
@@ -40,7 +41,26 @@ export class McpOAuthService {
 
   private readonly authCodes = new Map<string, AuthCodeEntry>();
 
-  constructor(private readonly sessions: SessionsService) {}
+  constructor(
+    private readonly sessions: SessionsService,
+    private readonly prisma: PrismaService,
+  ) {}
+
+  private async getClient(clientId: string): Promise<OAuthClient | null> {
+    if (!clientId) return null;
+    const cached = this.oauthClients.get(clientId);
+    if (cached) return cached;
+    const row = await this.prisma.mcpOauthClient.findUnique({ where: { id: clientId } });
+    if (!row) return null;
+    const client: OAuthClient = {
+      clientId: row.id,
+      clientSecret: row.clientSecret ?? undefined,
+      redirectUris: Array.isArray(row.redirectUris) ? (row.redirectUris as string[]) : [],
+      name: row.name,
+    };
+    this.oauthClients.set(clientId, client);
+    return client;
+  }
 
   private get baseUrl(): string {
     return process.env.MCP_BASE_URL || 'http://localhost:3100';
@@ -105,13 +125,13 @@ export class McpOAuthService {
     return parsed.protocol === 'https:';
   }
 
-  registerClient(body: {
+  async registerClient(body: {
     client_name?: string;
     redirect_uris?: string[];
     grant_types?: string[];
     response_types?: string[];
     token_endpoint_auth_method?: string;
-  }): { error?: string; error_description?: string; registration?: any } {
+  }): Promise<{ error?: string; error_description?: string; registration?: any }> {
     console.error(`[MCP OAuth] Register client: name=${body.client_name}, redirect_uris=${JSON.stringify(body.redirect_uris)}`);
     const redirectUris = Array.isArray(body.redirect_uris) ? body.redirect_uris : [];
     if (redirectUris.length === 0) {
@@ -132,11 +152,20 @@ export class McpOAuthService {
         ? randomBytes(32).toString('hex')
         : undefined;
 
+    const name = body.client_name || 'MCP Client';
+    await this.prisma.mcpOauthClient.create({
+      data: {
+        id: clientId,
+        clientSecret: clientSecret ?? null,
+        name,
+        redirectUris,
+      },
+    });
     this.oauthClients.set(clientId, {
       clientId,
       clientSecret,
       redirectUris,
-      name: body.client_name || 'MCP Client',
+      name,
     });
 
     return {
@@ -152,14 +181,14 @@ export class McpOAuthService {
     };
   }
 
-  buildAuthorizeRedirect(query: {
+  async buildAuthorizeRedirect(query: {
     client_id: string;
     redirect_uri: string;
     response_type: string;
     state?: string;
     code_challenge?: string;
     code_challenge_method?: string;
-  }): { error?: string; redirectUrl?: string } {
+  }): Promise<{ error?: string; redirectUrl?: string }> {
     console.error(`[MCP OAuth] Authorize: client_id=${query.client_id}, redirect_uri=${query.redirect_uri}, state=${query.state}`);
     if (query.response_type !== 'code') {
       console.error(`[MCP OAuth] Authorize failed: unsupported_response_type=${query.response_type}`);
@@ -178,7 +207,7 @@ export class McpOAuthService {
     // Reject unknown client_id and any redirect_uri not pre-registered. Without
     // this, an attacker registers (or guesses) a client and points the
     // redirect_uri at attacker.example, harvesting the victim's auth code.
-    const client = this.oauthClients.get(query.client_id);
+    const client = await this.getClient(query.client_id);
     if (!client) {
       console.error(`[MCP OAuth] Authorize failed: unknown client_id=${query.client_id}`);
       return { error: 'invalid_client' };
@@ -429,7 +458,7 @@ export class McpOAuthService {
     // Re-check both that the exchange request's redirect_uri matches the one
     // bound to the auth code AND that it is still in the client's registered
     // list (defense against the registered list being mutated after authorize).
-    const client = this.oauthClients.get(body.client_id);
+    const client = await this.getClient(body.client_id);
     if (!client) {
       return { error: 'invalid_client' };
     }

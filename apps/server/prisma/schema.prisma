@@ -1049,3 +1049,13 @@ model OrgNodeAssignment {
   @@index([organizationId], map: "idx_org_node_assignments_org")
   @@map("org_node_assignments")
 }
+
+model McpOauthClient {
+  id           String   @id @db.VarChar(64)
+  clientSecret String?  @map("client_secret") @db.VarChar(128)
+  name         String   @db.VarChar(255)
+  redirectUris Json     @map("redirect_uris")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  @@map("mcp_oauth_clients")
+}

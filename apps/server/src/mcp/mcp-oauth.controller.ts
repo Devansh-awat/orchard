@@ -26,7 +26,7 @@ export class McpOAuthController {
 
   @Post('register')
   @HttpCode(HttpStatus.CREATED)
-  registerClient(@Req() req: Request, @Res() res: Response) {
+  async registerClient(@Req() req: Request, @Res() res: Response) {
     const now = Date.now();
     this.registrationHits = this.registrationHits.filter((t) => now - t < REGISTRATION_WINDOW_MS);
     if (this.registrationHits.length >= MAX_REGISTRATIONS_PER_WINDOW) {
@@ -37,7 +37,7 @@ export class McpOAuthController {
     }
     this.registrationHits.push(now);
 
-    const result = this.oauthService.registerClient(req.body);
+    const result = await this.oauthService.registerClient(req.body);
     if (result.error) {
       return res.status(HttpStatus.BAD_REQUEST).json({
         error: result.error,
@@ -48,9 +48,9 @@ export class McpOAuthController {
   }
 
   @Get('authorize')
-  authorize(@Req() req: Request, @Res() res: Response) {
+  async authorize(@Req() req: Request, @Res() res: Response) {
     const query = req.query as Record<string, string>;
-    const result = this.oauthService.buildAuthorizeRedirect({
+    const result = await this.oauthService.buildAuthorizeRedirect({
       client_id: query.client_id,
       redirect_uri: query.redirect_uri,
       response_type: query.response_type,
