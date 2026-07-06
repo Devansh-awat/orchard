@@ -142,7 +142,7 @@
 									`{
   "mcpServers": {
     "orchard": {
-      "type": "url",
+      "type": "http",
       "url": "${MCP_URL}"
     }
   }
@@ -160,12 +160,18 @@
 					<pre class="usage-code">{`{
   "mcpServers": {
     "orchard": {
-      "type": "url",
+      "type": "http",
       "url": "${MCP_URL}"
     }
   }
 }`}</pre>
 				</div>
+
+				<p class="settings-hint">
+					Or add it from the terminal with
+					<code>claude mcp add --transport http orchard {MCP_URL}</code>, then run
+					<code>/mcp</code> inside Claude Code to authenticate.
+				</p>
 			</div>
 		</section>
 
@@ -316,7 +322,7 @@
 									`{
   "mcpServers": {
     "orchard": {
-      "type": "url",
+      "type": "http",
       "url": "${MCP_URL}",
       "headers": {
         "Authorization": "Bearer orch_your_token_here"
@@ -337,7 +343,7 @@
 					<pre class="usage-code">{`{
   "mcpServers": {
     "orchard": {
-      "type": "url",
+      "type": "http",
       "url": "${MCP_URL}",
       "headers": {
         "Authorization": "Bearer orch_your_token_here"
