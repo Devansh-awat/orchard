@@ -202,14 +202,10 @@
 				{:else if error}
 					<p class="protect-error">{error}</p>
 					{#if !$isSignedIn}
-						<Button variant="primary" class="w-full" onclick={signIn}>
-							Continue with Orchard
-						</Button>
+						<Button variant="primary" class="w-full" onclick={signIn}>Continue with Orchard</Button>
 					{/if}
 				{:else if !$isSignedIn}
-					<Button variant="primary" class="w-full" onclick={signIn}>
-						Continue with Orchard
-					</Button>
+					<Button variant="primary" class="w-full" onclick={signIn}>Continue with Orchard</Button>
 				{:else}
 					<Button variant="primary" class="w-full" onclick={attemptExchange}>
 						Continue as {$user?.email}

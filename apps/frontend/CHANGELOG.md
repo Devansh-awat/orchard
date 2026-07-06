@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.11.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.10.0...frontend/v0.11.0) (2026-07-06)
+
+
+### Features
+
+* simplify protected deployment auth page ([bd76a86](https://github.com/LeafdTK/leaf/commit/bd76a86968fb59eb7eb6c72f282a215d0ad7ab34))
+
+
+### Bug Fixes
+
+* let anonymous visitors reach the protection auth page ([bbc6b76](https://github.com/LeafdTK/leaf/commit/bbc6b76d080bc466c18f7f1370ae81349ac87276))
+
 ## [0.10.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.9.0...frontend/v0.10.0) (2026-07-06)
 
 
