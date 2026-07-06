@@ -352,7 +352,7 @@ export class ProjectsService {
       throw new BadRequestException('Storage size cannot exceed 200Gi');
     }
 
-    const { previousSize } = await this.k8sCnpg.expandCnpgClusterStorage(
+    const { previousSize, archivingFailure } = await this.k8sCnpg.expandCnpgClusterStorage(
       database.namespace,
       database.clusterName,
       size,
@@ -374,7 +374,13 @@ export class ProjectsService {
       metadata: { storageSize: [previousSize, size] },
     });
 
-    return { previousSize, storageSize: size };
+    return {
+      previousSize,
+      storageSize: size,
+      warning: archivingFailure
+        ? `WAL archiving on this cluster is failing (${archivingFailure}). PostgreSQL cannot recycle WAL segments while archiving fails, so the volume will keep filling and eventually run out of space again regardless of size. Fix or disable the backup/archiving configuration to stop WAL accumulation.`
+        : null,
+    };
   }
 
   async deleteProject(

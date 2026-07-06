@@ -195,7 +195,8 @@ Pass null for either field to clear it and fall back to the default.`,
   server.registerTool(
     'expand_database_storage',
     {
-      description: `Expand the storage volume of a CNPG database. Storage can ONLY grow, never shrink — requests smaller than or equal to the current size are rejected. Expansion happens online (Longhorn resizes the volume in place); if the database was down due to a full disk, CNPG restarts it once headroom is available. Maximum size is 200Gi.`,
+      description: `Expand the storage volume of a CNPG database. Storage can ONLY grow, never shrink — requests smaller than or equal to the current size are rejected. Expansion happens online (Longhorn resizes the volume in place); if the database was down due to a full disk, CNPG restarts it once headroom is available. Maximum size is 200Gi.
+IMPORTANT: if the disk filled because WAL archiving is failing, expansion only buys time — PostgreSQL cannot recycle WAL while archiving fails, so the volume WILL fill again. The response includes a "warning" field when the cluster's ContinuousArchiving condition is failing; if present, surface it to the user and treat fixing the archiving config as the real remediation.`,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
         databaseId: z.string().describe('The database UUID'),

@@ -114,7 +114,7 @@ export class K8sCnpgService {
     namespace: string,
     clusterName: string,
     newSize: string,
-  ): Promise<{ previousSize: string }> {
+  ): Promise<{ previousSize: string; archivingFailure: string | null }> {
     this.ensureKubeConfig();
     if (!this.kc) {
       throw new ServiceUnavailableException('Kubernetes API not available');
@@ -132,6 +132,15 @@ export class K8sCnpgService {
     if (!previousSize) {
       throw new BadRequestException('Cluster has no storage size configured');
     }
+
+    const conditions: any[] = Array.isArray(cluster.body?.status?.conditions)
+      ? cluster.body.status.conditions
+      : [];
+    const archiving = conditions.find((c) => c?.type === 'ContinuousArchiving');
+    const archivingFailure =
+      archiving && archiving.status === 'False'
+        ? String(archiving.message || archiving.reason || 'WAL archiving is failing')
+        : null;
 
     const previousBytes = parseMemory(previousSize);
     const newBytes = parseMemory(newSize);
@@ -157,7 +166,7 @@ export class K8sCnpgService {
       { headers: { 'Content-Type': 'application/json-patch+json' } },
     );
 
-    return { previousSize };
+    return { previousSize, archivingFailure };
   }
 
 
