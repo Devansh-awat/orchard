@@ -2,8 +2,10 @@
 	import { page } from '$app/stores';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
-	import { Loader2, Shield, Lock, LogIn } from 'lucide-svelte';
-	import { apiFetch, initApiBase, user, isSignedIn, isLoaded } from '$lib/stores';
+	import { Loader2, Lock, ShieldX } from 'lucide-svelte';
+	import { Button, Input } from '$lib/components/ui';
+	import { motionStagger } from '$lib/utils/motion.svelte';
+	import { apiFetch, initApiBase, user, isSignedIn } from '$lib/stores';
 	import { env } from '$env/dynamic/public';
 
 	interface IngressInfo {
@@ -38,13 +40,13 @@
 		try {
 			const res = await apiFetch(`/apiv1/auth/protect/info?ingressId=${ingressId}`);
 			if (!res.ok) {
-				error = 'This app is not protected or does not exist.';
+				error = 'This deployment is not protected or does not exist.';
 				loading = false;
 				return;
 			}
 			info = await res.json();
 		} catch {
-			error = 'Failed to load app info.';
+			error = 'Failed to load deployment info.';
 		}
 
 		await user.fetchUser();
@@ -68,7 +70,7 @@
 			});
 
 			if (res.status === 403) {
-				error = "You don't have access to this app.";
+				error = "You don't have access to this deployment.";
 				exchanging = false;
 				return;
 			}
@@ -129,97 +131,91 @@
 </script>
 
 <svelte:head>
-	<title>Protected — Orchard</title>
+	<title>Protected deployment — Orchard</title>
 </svelte:head>
 
 <div class="protect-page">
-	<div class="protect-bg">
-		<div class="protect-orb protect-orb-1"></div>
-		<div class="protect-orb protect-orb-2"></div>
-		<div class="protect-orb protect-orb-3"></div>
-		<div class="protect-grid"></div>
-	</div>
-
 	{#if loading}
-		<div class="protect-card">
-			<div class="protect-loading">
-				<Loader2 class="h-6 w-6 animate-spin" />
-			</div>
+		<div class="protect-loading">
+			<Loader2 class="h-5 w-5 animate-spin" />
 		</div>
 	{:else if error && !info}
-		<div class="protect-card">
-			<div class="protect-icon protect-icon--error">
-				<Shield size={24} />
+		<div class="protect-stack">
+			<div class="protect-icon protect-icon--error" {@attach motionStagger({ index: 0 })}>
+				<ShieldX size={22} />
 			</div>
-			<h2 class="protect-title">{error}</h2>
+			<h1 class="protect-title" {@attach motionStagger({ index: 1 })}>{error}</h1>
 		</div>
 	{:else if info}
-		<div class="protect-card">
-			<div class="protect-icon">
-				<Shield size={24} />
+		<div class="protect-stack">
+			<div class="protect-icon" {@attach motionStagger({ index: 0 })}>
+				<Lock size={22} />
 			</div>
-			<h2 class="protect-title">Protected deployment</h2>
-			<p class="protect-subtitle">
-				<span class="protect-host">{info.host}</span> requires authentication.
+			<h1 class="protect-title" {@attach motionStagger({ index: 1 })}>
+				This deployment is protected
+			</h1>
+			<p class="protect-subtitle" {@attach motionStagger({ index: 2 })}>
+				{#if mode === 'password'}
+					Enter the password to view <span class="protect-host">{info.host}</span>
+				{:else}
+					Sign in with an Orchard account that has access to
+					<span class="protect-host">{info.host}</span>
+				{/if}
 			</p>
 
-			{#if mode === 'password'}
-				<form
-					class="protect-form"
-					onsubmit={(e) => {
-						e.preventDefault();
-						submitPassword();
-					}}
-				>
-					<input
-						type="password"
-						class="input protect-input"
-						placeholder="Enter password"
-						bind:value={password}
-						disabled={exchanging}
-						autocomplete="current-password"
-					/>
-					{#if passwordError}
-						<p class="protect-error">{passwordError}</p>
-					{/if}
-					<button
-						class="btn btn-primary protect-submit"
-						type="submit"
-						disabled={exchanging || !password.trim()}
+			<div class="protect-action" {@attach motionStagger({ index: 3 })}>
+				{#if mode === 'password'}
+					<form
+						class="protect-form"
+						onsubmit={(e) => {
+							e.preventDefault();
+							submitPassword();
+						}}
 					>
-						{#if exchanging}
-							<Loader2 class="h-4 w-4 animate-spin" />
-						{:else}
-							<Lock size={16} />
+						<Input
+							type="password"
+							class="protect-input"
+							placeholder="Password"
+							bind:value={password}
+							error={!!passwordError}
+							disabled={exchanging}
+							autocomplete="current-password"
+						/>
+						{#if passwordError}
+							<p class="protect-error">{passwordError}</p>
 						{/if}
-						Continue
-					</button>
-				</form>
-			{:else if exchanging}
-				<div class="protect-verifying">
-					<Loader2 class="h-5 w-5 animate-spin" />
-					<span>Verifying access…</span>
-				</div>
-			{:else if error}
-				<p class="protect-error">{error}</p>
-				{#if !$isSignedIn}
-					<button class="btn btn-primary protect-submit" onclick={signIn}>
-						<LogIn size={16} />
-						Sign in with Orchard
-					</button>
+						<Button
+							variant="primary"
+							class="w-full"
+							type="submit"
+							loading={exchanging}
+							disabled={!password.trim()}
+						>
+							Continue
+						</Button>
+					</form>
+				{:else if exchanging}
+					<div class="protect-verifying">
+						<Loader2 class="h-4 w-4 animate-spin" />
+						<span>Verifying access…</span>
+					</div>
+				{:else if error}
+					<p class="protect-error">{error}</p>
+					{#if !$isSignedIn}
+						<Button variant="primary" class="w-full" onclick={signIn}>
+							Continue with Orchard
+						</Button>
+					{/if}
+				{:else if !$isSignedIn}
+					<Button variant="primary" class="w-full" onclick={signIn}>
+						Continue with Orchard
+					</Button>
+				{:else}
+					<Button variant="primary" class="w-full" onclick={attemptExchange}>
+						Continue as {$user?.email}
+					</Button>
 				{/if}
-			{:else if !$isSignedIn}
-				<p class="protect-hint">Sign in to your Orchard account to continue.</p>
-				<button class="btn btn-primary protect-submit" onclick={signIn}>
-					<LogIn size={16} />
-					Sign in with Orchard
-				</button>
-			{:else}
-				<button class="btn btn-primary protect-submit" onclick={attemptExchange}>
-					<LogIn size={16} />
-					Continue as {$user?.email}
-				</button>
-			{/if}
+			</div>
 		</div>
 	{/if}
 </div>
@@ -230,117 +226,21 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		padding: 1rem;
+		padding: 1.5rem;
 		background: var(--center-channel-bg);
-		position: relative;
-		overflow: hidden;
 	}
 
-	.protect-bg {
-		position: absolute;
-		inset: 0;
-		pointer-events: none;
-		overflow: hidden;
-	}
-
-	.protect-grid {
-		position: absolute;
-		inset: 0;
-		background-image:
-			linear-gradient(var(--surface-border) 1px, transparent 1px),
-			linear-gradient(90deg, var(--surface-border) 1px, transparent 1px);
-		background-size: 60px 60px;
-		opacity: 0.4;
-		mask-image: radial-gradient(ellipse 80% 60% at 50% 50%, black 20%, transparent 100%);
-		-webkit-mask-image: radial-gradient(ellipse 80% 60% at 50% 50%, black 20%, transparent 100%);
-	}
-
-	.protect-orb {
-		position: absolute;
-		border-radius: 50%;
-		filter: blur(80px);
-		opacity: 0.5;
-		will-change: transform;
-	}
-
-	.protect-orb-1 {
-		width: 500px;
-		height: 500px;
-		background: var(--button-bg);
-		top: -15%;
-		right: -10%;
-		animation: protect-float-1 18s ease-in-out infinite;
-	}
-
-	.protect-orb-2 {
-		width: 400px;
-		height: 400px;
-		background: color-mix(in srgb, var(--button-bg) 60%, #ff8c37);
-		bottom: -15%;
-		left: -10%;
-		animation: protect-float-2 22s ease-in-out infinite;
-	}
-
-	.protect-orb-3 {
-		width: 250px;
-		height: 250px;
-		background: color-mix(in srgb, var(--button-bg) 40%, #33d6a6);
-		top: 40%;
-		left: 30%;
-		animation: protect-float-3 15s ease-in-out infinite;
-	}
-
-	@keyframes protect-float-1 {
-		0%,
-		100% {
-			transform: translate(0, 0) scale(1);
-		}
-		33% {
-			transform: translate(60px, 40px) scale(1.1);
-		}
-		66% {
-			transform: translate(-30px, 70px) scale(0.95);
-		}
-	}
-
-	@keyframes protect-float-2 {
-		0%,
-		100% {
-			transform: translate(0, 0) scale(1);
-		}
-		33% {
-			transform: translate(-50px, -60px) scale(1.05);
-		}
-		66% {
-			transform: translate(40px, -30px) scale(0.9);
-		}
-	}
-
-	@keyframes protect-float-3 {
-		0%,
-		100% {
-			transform: translate(0, 0) scale(1);
-		}
-		50% {
-			transform: translate(80px, -50px) scale(1.15);
-		}
-	}
-
-	.protect-card {
-		position: relative;
-		background: color-mix(in srgb, var(--surface-bg) 90%, transparent);
-		border: 1px solid var(--surface-border);
-		border-radius: 1.5rem;
-		padding: 2.5rem;
-		max-width: 24rem;
+	.protect-stack {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
 		width: 100%;
+		max-width: 20rem;
 		text-align: center;
-		backdrop-filter: blur(24px);
-		-webkit-backdrop-filter: blur(24px);
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.04),
-			0 25px 50px -12px rgb(0 0 0 / 0.12),
-			0 0 0 1px rgb(255 255 255 / 0.05) inset;
+	}
+
+	.protect-loading {
+		color: var(--surface-muted);
 	}
 
 	.protect-icon {
@@ -349,62 +249,58 @@
 		justify-content: center;
 		width: 3rem;
 		height: 3rem;
-		border-radius: 0.75rem;
-		background: color-mix(in srgb, var(--button-bg) 15%, transparent);
-		color: var(--button-bg);
+		border-radius: 0.875rem;
+		background: var(--surface-bg);
+		border: 1px solid var(--surface-border);
+		color: var(--center-channel-color);
 		margin-bottom: 1.25rem;
 	}
 
 	.protect-icon--error {
-		background: color-mix(in srgb, var(--error-text-color) 15%, transparent);
+		background: color-mix(in srgb, var(--error-text-color) 8%, transparent);
+		border-color: color-mix(in srgb, var(--error-text-color) 25%, transparent);
 		color: var(--error-text-color);
 	}
 
 	.protect-title {
-		font-size: 1.375rem;
-		font-weight: 700;
-		letter-spacing: -0.025em;
+		font-size: 1.25rem;
+		font-weight: 600;
+		letter-spacing: -0.02em;
 		color: var(--center-channel-color);
 		margin: 0 0 0.5rem;
-		line-height: 1.2;
+		line-height: 1.3;
 	}
 
 	.protect-subtitle {
 		font-size: 0.875rem;
 		color: var(--surface-muted);
 		margin: 0 0 1.5rem;
-		line-height: 1.5;
+		line-height: 1.6;
 	}
 
 	.protect-host {
 		color: var(--center-channel-color);
 		font-family: var(--font-mono);
 		font-size: 0.8125rem;
-		font-weight: 600;
+		font-weight: 500;
+		white-space: nowrap;
 	}
 
-	.protect-hint {
-		font-size: 0.8125rem;
-		color: var(--surface-muted);
-		margin: 0 0 1rem;
+	.protect-action {
+		width: 100%;
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
 	}
 
 	.protect-form {
 		display: flex;
 		flex-direction: column;
-		gap: 0.875rem;
+		gap: 0.75rem;
 	}
 
-	.protect-input {
+	.protect-form :global(.protect-input) {
 		text-align: center;
-	}
-
-	.protect-submit {
-		width: 100%;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
 	}
 
 	.protect-error {
@@ -413,20 +309,11 @@
 		margin: 0;
 	}
 
-	.protect-loading {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 2rem 0;
-		color: var(--surface-muted);
-	}
-
 	.protect-verifying {
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		gap: 0.5rem;
-		padding: 0.5rem 0;
 		color: var(--surface-muted);
 		font-size: 0.875rem;
 	}
