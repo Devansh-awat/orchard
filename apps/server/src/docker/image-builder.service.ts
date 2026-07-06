@@ -5,6 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { BuildKitPoolService } from './buildkit-pool.service';
 import { OrgEventsService } from '../events/org-events.service';
 import { startPhaseSpan, recordPhaseSpan } from '../analytics/datadog';
+import { truncateK8sName } from '../projects/projects.utils';
 
 interface BuildJobOptions {
   repoUrl: string;
@@ -194,10 +195,58 @@ export class ImageBuilderService {
     }
   }
 
+  /**
+   * Distill a failed build's log dump into the few lines a user needs. The
+   * full logs already stream into buildLogs; buildError must stay short
+   * because the UI surfaces it as the headline failure reason.
+   */
+  private summarizeBuildFailure(logs?: string | null, pusherLogs?: string | null): string {
+    const parts: string[] = [];
+
+    const reasonsMatch = (logs ?? '').match(
+      /Build job failed with the following reasons:\n([\s\S]*?)(?:\n\n|$)/,
+    );
+    if (reasonsMatch) {
+      parts.push(...reasonsMatch[1].split('\n').filter((l) => l.trim()));
+    }
+
+    const lines = (logs ?? '').split('\n');
+    const solveError = lines.filter((l) => l.startsWith('error: failed to solve:')).pop();
+    const stepErrors = lines.filter((l) => /^#\d+ ERROR:/.test(l)).slice(-2);
+    parts.push(...stepErrors);
+    if (solveError && !stepErrors.some((e) => solveError.includes(e.replace(/^#\d+ ERROR: /, '')))) {
+      parts.push(solveError);
+    }
+
+    const pusherError = (pusherLogs ?? '')
+      .split('\n')
+      .filter((l) => /^(FATA|Error)\b|level=fatal/.test(l))
+      .pop();
+    if (pusherError) parts.push(`Pusher: ${pusherError}`);
+
+    if (parts.length === 0) {
+      const tail = lines.filter((l) => l.trim() && !l.startsWith('time=')).slice(-4);
+      parts.push(...tail);
+    }
+
+    const seen = new Set<string>();
+    const unique = parts.filter((p) => {
+      const key = p.trim();
+      if (!key || seen.has(key)) return false;
+      seen.add(key);
+      return true;
+    });
+
+    return unique.join('\n').slice(0, 800);
+  }
+
   private generateJobName(imageName: string): string {
     const hash = crypto.randomBytes(4).toString('hex');
-    const sanitized = imageName.replace(/[^a-z0-9-]/gi, '-').toLowerCase().slice(0, 40);
-    return `image-builder-${sanitized}-${hash}`;
+    const sanitized = truncateK8sName(
+      imageName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+/, ''),
+      40,
+    );
+    return `image-builder-${sanitized || 'image'}-${hash}`;
   }
 
   private sanitizeLogMessage(message: string): string {
@@ -1470,7 +1519,10 @@ exit $rc`,
           'app.kubernetes.io/name': 'image-builder',
           'app.kubernetes.io/managed-by': 'orchard',
           'orchard.dev/deployment-id': deploymentId || 'unknown',
-          'orchard.dev/image-name': imageName.replace(/[^a-z0-9-]/gi, '-').toLowerCase().slice(0, 63),
+          'orchard.dev/image-name': truncateK8sName(
+            imageName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+/, ''),
+            63,
+          ),
           'orchard.dev/build-type': buildType,
         },
         annotations: {
@@ -2117,14 +2169,12 @@ exit $rc`,
           this.buildkitBuildingDetected.delete(jobName);
           await this.emitBuildPhaseSpans(jobName, deploymentId);
 
-          const combinedLogs = [status.logs, status.pusherLogs && `=== Pusher container logs ===\n${status.pusherLogs}`]
-            .filter(Boolean)
-            .join('\n');
-          const detailedError = combinedLogs
-            ? `Build job failed: ${combinedLogs}`
-            : 'Build job failed: No logs available. This typically indicates a pod scheduling failure, image pull error, or init container failure. Check Kubernetes pod events for more details.';
-
-          throw new BadRequestException(detailedError);
+          const summary = this.summarizeBuildFailure(status.logs, status.pusherLogs);
+          throw new BadRequestException(
+            summary
+              ? `Build failed: ${summary}`
+              : 'Build failed: No logs available. This typically indicates a pod scheduling failure, image pull error, or init container failure. Check Kubernetes pod events for more details.',
+          );
         }
 
         if (status.status === 'running') {
