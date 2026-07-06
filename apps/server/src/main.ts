@@ -41,18 +41,11 @@ BigInt.prototype.toJSON = function() {
 };
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true, logger: new OtelConsoleLogger() });
-
-  // Raise the body-parser limit above Express's 100kb default. GitHub App
-  // webhooks (POST /apiv1/github/app/webhook) deliver push/installation
-  // payloads that routinely exceed 100kb, and GitHub caps deliveries at 25MB.
-  // Below 25MB the JSON parser threw PayloadTooLargeError (HTTP 413) before
-  // the handler ran, so signature verification never happened and GitHub
-  // marked the delivery failed. These re-register the json/urlencoded parsers
-  // with a larger limit; NestJS dedups against its defaults and re-applies
-  // rawBody capture (verify hook) so webhook HMAC verification still works.
-  app.useBodyParser('json', { limit: '25mb' });
-  app.useBodyParser('urlencoded', { limit: '25mb', extended: true });
+  // bodyParser: false — parsers are registered manually below AFTER the
+  // protection proxy middleware. The proxy streams request bodies verbatim
+  // to tenant upstreams; a parser in front of it would consume the stream
+  // and every proxied POST would arrive empty.
+  const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true, bodyParser: false, logger: new OtelConsoleLogger() });
 
   const protectionService = app.get(ProtectionService);
   app.use(async (req, res, next) => {
@@ -63,6 +56,17 @@ async function bootstrap() {
       if (!res.headersSent) next();
     }
   });
+
+  // Raise the body-parser limit above Express's 100kb default. GitHub App
+  // webhooks (POST /apiv1/github/app/webhook) deliver push/installation
+  // payloads that routinely exceed 100kb, and GitHub caps deliveries at 25MB.
+  // Below 25MB the JSON parser threw PayloadTooLargeError (HTTP 413) before
+  // the handler ran, so signature verification never happened and GitHub
+  // marked the delivery failed. With bodyParser disabled at create() these
+  // are the only json/urlencoded parsers; Nest still applies rawBody capture
+  // (verify hook) so webhook HMAC verification keeps working.
+  app.useBodyParser('json', { limit: '25mb' });
+  app.useBodyParser('urlencoded', { limit: '25mb', extended: true });
 
   app.setGlobalPrefix('apiv1');
 
@@ -123,6 +127,12 @@ async function bootstrap() {
 
   // Attach WebSocket terminal handler to the underlying HTTP server
   const httpServer = app.getHttpServer();
+  // Protected-host websocket upgrades (e.g. graphql-ws on a tenant app) are
+  // tunneled by the protection service; everything else falls through to the
+  // terminal gateway's own upgrade listener.
+  httpServer.on('upgrade', (req, socket, head) => {
+    protectionService.handleUpgrade(req, socket, head).catch(() => socket.destroy());
+  });
   attachTerminalWebSocket(httpServer, app);
 
   console.log(`Server running on http://localhost:${port}`);

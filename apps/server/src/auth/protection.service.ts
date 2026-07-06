@@ -3,6 +3,8 @@ import { SignJWT, jwtVerify } from 'jose';
 import * as bcrypt from 'bcrypt';
 import * as crypto from 'crypto';
 import * as http from 'http';
+import * as net from 'net';
+import { Duplex } from 'stream';
 import { Request, Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthorizationService } from './authorization.service';
@@ -276,6 +278,74 @@ export class ProtectionService {
     return true;
   }
 
+  /**
+   * Tunnel websocket upgrades for protected hosts to their upstream. The
+   * HTTP proxy path can't carry upgrades (http.request has no upgrade
+   * semantics), so raw TCP piping is required. Returns false when the host
+   * isn't protected so other upgrade listeners (terminal gateway) can act.
+   * Unauthenticated upgrades on protected hosts are rejected, never proxied.
+   */
+  async handleUpgrade(req: http.IncomingMessage, socket: Duplex, head: Buffer): Promise<boolean> {
+    const host = String(req.headers.host || '').toLowerCase().replace(/:\d+$/, '');
+    const ingress = await this.resolveIngressFromHost(host);
+    if (!ingress) return false;
+
+    const reject = (status: string) => {
+      try {
+        socket.write(`HTTP/1.1 ${status}\r\nConnection: close\r\n\r\n`);
+      } catch {}
+      socket.destroy();
+    };
+
+    let allowed = false;
+    const bypassHeader = req.headers['x-orchard-protection-bypass']?.toString();
+    if (bypassHeader && ingress.protectionBypassSecret) {
+      const a = Buffer.from(bypassHeader);
+      const b = Buffer.from(ingress.protectionBypassSecret);
+      allowed = a.length === b.length && crypto.timingSafeEqual(a, b);
+    }
+    if (!allowed) {
+      const cookie = this.extractCookie(req.headers.cookie, '_orchard_protection');
+      if (cookie) {
+        allowed = !!(await this.verifyProtectionJwt(cookie, 'protection', ingress.id));
+      }
+    }
+    if (!allowed) {
+      reject('401 Unauthorized');
+      return true;
+    }
+
+    if (!ingress.upstreamHost || !ingress.upstreamPort) {
+      reject('502 Bad Gateway');
+      return true;
+    }
+
+    const upstream = net.connect(ingress.upstreamPort, ingress.upstreamHost);
+    upstream.on('connect', () => {
+      const lines = [`${req.method} ${req.url} HTTP/1.1`];
+      const raw = req.rawHeaders;
+      for (let i = 0; i < raw.length; i += 2) {
+        const key = raw[i];
+        const lower = key.toLowerCase();
+        if (lower === 'host') {
+          lines.push(`Host: ${ingress.upstreamHost}:${ingress.upstreamPort}`);
+          continue;
+        }
+        if (lower === 'x-orchard-protection-bypass') continue;
+        lines.push(`${key}: ${raw[i + 1]}`);
+      }
+      upstream.write(`${lines.join('\r\n')}\r\n\r\n`);
+      if (head && head.length > 0) upstream.write(head);
+      upstream.pipe(socket);
+      socket.pipe(upstream);
+    });
+    upstream.on('error', () => reject('502 Bad Gateway'));
+    socket.on('error', () => upstream.destroy());
+    socket.on('close', () => upstream.destroy());
+    upstream.on('close', () => socket.destroy());
+    return true;
+  }
+
   private proxyToUpstream(req: Request, res: Response, upstreamHost: string, upstreamPort: number): Promise<void> {
     return new Promise((resolve) => {
       const headers = { ...req.headers };
@@ -283,6 +353,9 @@ export class ProtectionService {
       headers['host'] = `${upstreamHost}:${upstreamPort}`;
       delete headers['connection'];
       delete headers['x-orchard-protection-bypass'];
+      // Node re-chunks bodies without a content-length; forwarding the
+      // original transfer-encoding header would double-encode them.
+      delete headers['transfer-encoding'];
 
       const proxyReq = http.request(
         {
