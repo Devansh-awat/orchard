@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, Optional } from '@nestjs/common';
 import { Cron, CronExpression } from '@nestjs/schedule';
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -46,10 +46,15 @@ const REDACTED_PLACEHOLDER = '[redacted]';
 export class AuditService {
   private readonly logger = new Logger(AuditService.name);
 
+  // Optional: the standalone MCP process registers AuditService without
+  // EventsModule (and without ScheduleModule, so the prune cron never runs
+  // there). It must not provide LeaderElectionService itself — that would
+  // join the shared leader lock and could steal leadership from the server
+  // replicas' informers.
   constructor(
     private readonly prisma: PrismaService,
     private readonly analytics: AnalyticsService,
-    private readonly leaderElection: LeaderElectionService,
+    @Optional() private readonly leaderElection?: LeaderElectionService,
   ) {}
 
   /**
@@ -189,7 +194,7 @@ export class AuditService {
    */
   @Cron(CronExpression.EVERY_DAY_AT_3AM)
   async pruneExpired() {
-    if (!this.leaderElection.isLeader()) return;
+    if (!this.leaderElection?.isLeader()) return;
     const cutoff = new Date(Date.now() - RETENTION_DAYS * 24 * 60 * 60 * 1000);
     try {
       const { count } = await this.prisma.auditLog.deleteMany({
