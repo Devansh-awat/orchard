@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException, OnModuleInit } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -21,13 +21,52 @@ import { truncateK8sName } from '../projects/projects.utils';
  * deployment ports, and endpoint listing.
  */
 @Injectable()
-export class K8sNetworkService {
+export class K8sNetworkService implements OnModuleInit {
   private readonly logger = new Logger(K8sNetworkService.name);
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly kubernetes: KubernetesService,
   ) {}
+
+  onModuleInit() {
+    setTimeout(() => {
+      void this.reconcileProtectionProxies();
+    }, 10_000);
+    setInterval(() => {
+      void this.reconcileProtectionProxies();
+    }, 10 * 60 * 1000).unref();
+  }
+
+  async reconcileProtectionProxies(): Promise<void> {
+    if (!this.kc) return;
+
+    let protectedIngresses: { namespace: string; name: string }[];
+    try {
+      protectedIngresses = await this.prisma.ingress.findMany({
+        where: { protectionMode: { not: 'none' } },
+        select: { namespace: true, name: true },
+        distinct: ['namespace', 'name'],
+      });
+    } catch (error) {
+      this.logger.warn(`Failed to list protected ingresses for reconcile: ${error.message}`);
+      return;
+    }
+
+    for (const ingress of protectedIngresses) {
+      try {
+        await this.enableProtectionProxy(ingress.namespace, ingress.name);
+      } catch (error) {
+        this.logger.warn(
+          `Failed to reconcile protection proxy for ${ingress.namespace}/${ingress.name}: ${error.message}`,
+        );
+      }
+    }
+
+    if (protectedIngresses.length > 0) {
+      this.logger.log(`Reconciled protection proxies for ${protectedIngresses.length} ingress(es)`);
+    }
+  }
 
   private get kc(): k8s.KubeConfig | null {
     return this.kubernetes.kc;
@@ -362,12 +401,16 @@ export class K8sNetworkService {
     const authServerPort = parseInt(process.env.ORCHARD_SERVER_PORT || '3001', 10);
     const proxyServiceName = 'orchard-protection-proxy';
 
-    const serverEndpoints = await coreApi.readNamespacedEndpoints('server', authServerNamespace);
-    const addresses = serverEndpoints.body.subsets?.[0]?.addresses?.map(a => a.ip) || [];
-    if (!addresses.length) {
-      console.error('No server endpoints found for protection proxy');
+    // The EndpointSlice must hold the server Service's ClusterIP, not pod
+    // IPs: the slice is only written here, so pod IPs go stale on every
+    // server rollout and HAProxy is left with no live backend.
+    const serverService = await coreApi.readNamespacedService('server', authServerNamespace);
+    const clusterIP = serverService.body.spec?.clusterIP;
+    if (!clusterIP || clusterIP === 'None') {
+      this.logger.error('No stable ClusterIP on server service for protection proxy');
       return;
     }
+    const addresses = [clusterIP];
 
     const svcBody: k8s.V1Service = {
       metadata: {
