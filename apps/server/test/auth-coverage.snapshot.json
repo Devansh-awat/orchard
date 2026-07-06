@@ -120,6 +120,7 @@
   "GET /organizations/slug/:slug": "authenticated",
   "GET /organizations/user": "authenticated",
   "GET /overview/orgs/:orgSlug": "authenticated",
+  "GET /overview/orgs/:orgSlug/builds": "authenticated",
   "GET /pods": "authenticated",
   "GET /pods/:podName": "authenticated",
   "GET /pods/:podName/logs": "authenticated",
