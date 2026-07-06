@@ -203,11 +203,12 @@ export class ImageBuilderService {
   private summarizeBuildFailure(logs?: string | null, pusherLogs?: string | null): string {
     const parts: string[] = [];
 
-    const reasonsMatch = (logs ?? '').match(
-      /Build job failed with the following reasons:\n([\s\S]*?)(?:\n\n|$)/,
-    );
-    if (reasonsMatch) {
-      parts.push(...reasonsMatch[1].split('\n').filter((l) => l.trim()));
+    const lintMatch = (logs ?? '').match(/lint violation found for rules: ([A-Za-z0-9, ]+)/);
+    if (lintMatch) {
+      const rules = lintMatch[1].trim();
+      parts.push(
+        `Dockerfile lint check failed (${rules}). Your Dockerfile sets "# check=error=true", which turns Dockerfile lint warnings into build failures. Remove that line, or change it to "# check=skip=${rules.replace(/,\s*/g, ',')}" to skip these rules.`,
+      );
     }
 
     const lines = (logs ?? '').split('\n');
@@ -216,6 +217,17 @@ export class ImageBuilderService {
     parts.push(...stepErrors);
     if (solveError && !stepErrors.some((e) => solveError.includes(e.replace(/^#\d+ ERROR: /, '')))) {
       parts.push(solveError);
+    }
+
+    const reasonsMatch = (logs ?? '').match(
+      /Build job failed with the following reasons:\n([\s\S]*?)(?:\n\n|$)/,
+    );
+    if (reasonsMatch) {
+      parts.push(
+        ...reasonsMatch[1]
+          .split('\n')
+          .filter((l) => l.trim() && !/ - No message$/.test(l)),
+      );
     }
 
     const pusherError = (pusherLogs ?? '')
