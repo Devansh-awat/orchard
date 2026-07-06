@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.10.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.9.0...frontend/v0.10.0) (2026-07-06)
+
+
+### Features
+
+* push live deployment metrics over sse, relax frontend polling ([95c53fb](https://github.com/LeafdTK/leaf/commit/95c53fbd88f65e6342c966862ae5418c3528f596))
+* redesign the whole frontend on shared primitives ([d6ca434](https://github.com/LeafdTK/leaf/commit/d6ca434e516350052a36348af8d421c607e476e4))
+* shared ui primitives (button, menu, modal, tabs, field, alert & co) ([4a506fb](https://github.com/LeafdTK/leaf/commit/4a506fb0c893812ca64d915b891f6fca3c8d4d69))
+
+
+### Bug Fixes
+
+* redirect expired sessions to login instead of dead deep links ([0d6ea7c](https://github.com/LeafdTK/leaf/commit/0d6ea7c2eeff2aeca0f85440eee3d39d30f83a28))
+
 ## [0.9.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.8.0...frontend/v0.9.0) (2026-07-02)
 
 
