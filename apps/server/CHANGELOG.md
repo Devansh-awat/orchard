@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.14.4](https://github.com/LeafdTK/leaf/compare/server/v1.14.3...server/v1.14.4) (2026-07-06)
+
+
+### Bug Fixes
+
+* skip SecretsUsedInArgOrEnv lint so check=error dockerfiles build ([d6c0fa0](https://github.com/LeafdTK/leaf/commit/d6c0fa0d1a039c2589915773354a3f68f69147f0))
+* surface the real build error instead of container termination noise ([af67c68](https://github.com/LeafdTK/leaf/commit/af67c68343640b217c378f445644a2be81633031))
+
 ## [1.14.3](https://github.com/LeafdTK/leaf/compare/server/v1.14.2...server/v1.14.3) (2026-07-06)
 
 
