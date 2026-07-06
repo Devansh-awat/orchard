@@ -1466,6 +1466,22 @@ export class DatabasesController {
     }, user.id);
   }
 
+  @Patch(':id/storage')
+  async expandDatabaseStorage(
+    @Param('id') id: string,
+    @Body() body: { storageSize?: string },
+    @Request() req,
+  ) {
+    const { user, access } = await this.projectAccess.assertDatabaseView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+    if (!access.canEdit) {
+      throw new ForbiddenException('Your role does not allow you to expand database storage');
+    }
+    return this.projectsService.expandDatabaseStorage(id, String(body.storageSize || ''), user.id);
+  }
+
   @Delete(':id')
 
   async deleteDatabase(@Param('id') id: string, @Request() req) {

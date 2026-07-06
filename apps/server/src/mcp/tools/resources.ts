@@ -193,6 +193,25 @@ Pass null for either field to clear it and fall back to the default.`,
   );
 
   server.registerTool(
+    'expand_database_storage',
+    {
+      description: `Expand the storage volume of a CNPG database. Storage can ONLY grow, never shrink — requests smaller than or equal to the current size are rejected. Expansion happens online (Longhorn resizes the volume in place); if the database was down due to a full disk, CNPG restarts it once headroom is available. Maximum size is 100Gi.`,
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        databaseId: z.string().describe('The database UUID'),
+        storageSize: z
+          .string()
+          .regex(/^\d+(Mi|Gi|Ti)$/)
+          .describe('New volume size as a Kubernetes quantity, e.g. "10Gi". Must be larger than the current size.'),
+      },
+    },
+    async ({ databaseId, storageSize }) => {
+      const result = await client.patch(`/databases/${databaseId}/storage`, { storageSize });
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
     'list_database_extensions',
     {
       description:

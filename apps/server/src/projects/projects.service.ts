@@ -21,6 +21,7 @@ import { AuditService } from '../audit/audit.service';
 import { ProjectAccessService } from './project-access.service';
 import { DeploymentsService } from './deployments.service';
 import { formatSlug, redactDatabaseForViewer, stripR2ProxyCreds } from './projects.utils';
+import { parseMemory } from '../kubernetes/quantity';
 
 @Injectable()
 export class ProjectsService {
@@ -327,6 +328,54 @@ export class ProjectsService {
     });
   }
 
+
+  async expandDatabaseStorage(databaseId: string, storageSize: string, userId?: string) {
+    const database = await this.prisma.database.findUnique({
+      where: { id: databaseId },
+      include: { project: true },
+    });
+    if (!database) throw new NotFoundException('Database not found');
+
+    if (userId) {
+      await this.authz.requireProjectEdit(database.projectId, userId, 'expand database storage');
+    }
+
+    if (database.mode !== 'cnpg' || !database.clusterName || !database.namespace) {
+      throw new BadRequestException('Database does not support storage expansion');
+    }
+
+    const size = String(storageSize || '').trim();
+    if (!/^\d+(Mi|Gi|Ti)$/.test(size)) {
+      throw new BadRequestException('Storage size must be a Kubernetes quantity like "10Gi"');
+    }
+    if (parseMemory(size) > parseMemory('100Gi')) {
+      throw new BadRequestException('Storage size cannot exceed 100Gi');
+    }
+
+    const { previousSize } = await this.k8sCnpg.expandCnpgClusterStorage(
+      database.namespace,
+      database.clusterName,
+      size,
+    );
+
+    await this.prisma.database.update({
+      where: { id: databaseId },
+      data: { storageSize: size },
+    });
+
+    void this.audit.log({
+      action: 'database.storage.expanded',
+      actorUserId: userId ?? null,
+      organizationId: database.project.organizationId,
+      projectId: database.projectId,
+      targetType: 'database',
+      targetId: databaseId,
+      targetLabel: database.name,
+      metadata: { storageSize: [previousSize, size] },
+    });
+
+    return { previousSize, storageSize: size };
+  }
 
   async deleteProject(
     projectId: string,

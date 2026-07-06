@@ -3,7 +3,7 @@ import * as k8s from '@kubernetes/client-node';
 import { PassThrough } from 'stream';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from './kubernetes.service';
-import { cpuMilliToK8s, memoryBytesToK8s } from './quantity';
+import { cpuMilliToK8s, memoryBytesToK8s, parseMemory } from './quantity';
 
 /**
  * All PostgreSQL flows: legacy single-pod Postgres (exec into shared cluster
@@ -108,6 +108,56 @@ export class K8sCnpgService {
         } catch { /* ignore — operator may already be recreating it */ }
       }
     } catch { /* ignore — pod listing/deletion is best-effort */ }
+  }
+
+  async expandCnpgClusterStorage(
+    namespace: string,
+    clusterName: string,
+    newSize: string,
+  ): Promise<{ previousSize: string }> {
+    this.ensureKubeConfig();
+    if (!this.kc) {
+      throw new ServiceUnavailableException('Kubernetes API not available');
+    }
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+
+    const cluster: any = await customApi.getNamespacedCustomObject(
+      'postgresql.cnpg.io',
+      'v1',
+      namespace,
+      'clusters',
+      clusterName,
+    );
+    const previousSize = String(cluster.body?.spec?.storage?.size || '').trim();
+    if (!previousSize) {
+      throw new BadRequestException('Cluster has no storage size configured');
+    }
+
+    const previousBytes = parseMemory(previousSize);
+    const newBytes = parseMemory(newSize);
+    if (!newBytes) {
+      throw new BadRequestException(`Invalid storage size: ${newSize}`);
+    }
+    if (newBytes <= previousBytes) {
+      throw new BadRequestException(
+        `Storage can only be expanded, never shrunk: requested ${newSize}, current size is ${previousSize}`,
+      );
+    }
+
+    await customApi.patchNamespacedCustomObject(
+      'postgresql.cnpg.io',
+      'v1',
+      namespace,
+      'clusters',
+      clusterName,
+      [{ op: 'replace', path: '/spec/storage/size', value: newSize }],
+      undefined,
+      undefined,
+      undefined,
+      { headers: { 'Content-Type': 'application/json-patch+json' } },
+    );
+
+    return { previousSize };
   }
 
 
