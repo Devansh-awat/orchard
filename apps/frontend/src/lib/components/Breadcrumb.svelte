@@ -10,7 +10,7 @@
 </script>
 
 <nav class="bc" aria-label="Breadcrumb">
-	{#each crumbs as crumb, i}
+	{#each crumbs as crumb, i (i)}
 		{#if i > 0}
 			<ChevronRight size={12} class="bc-sep" />
 		{/if}

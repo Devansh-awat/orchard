@@ -10,6 +10,7 @@
 		Minimize2
 	} from 'lucide-svelte';
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
+	import { Button, TabBar } from '$lib/components/ui';
 	import type { DatabaseDetail, TerminalTab as TerminalTabType } from './types';
 
 	let {
@@ -39,6 +40,11 @@
 		onCloseTerminalTab: (id: string) => void;
 		podShortName: (name: string) => string;
 	} = $props();
+
+	const consoleTabs = $derived([
+		{ id: 'logs', label: 'Logs' },
+		...terminalTabs.map((t) => ({ id: t.id, label: t.label }))
+	]);
 </script>
 
 {#if database.mode !== 'cnpg' && database.mode !== 'container'}
@@ -59,43 +65,37 @@
 	>
 		<div class="console-toolbar">
 			<div class="console-toolbar-left">
-				<button
-					class="console-tab-btn"
-					class:console-tab-btn--active={activeConsoleTab === 'logs'}
-					onclick={() => (activeConsoleTab = 'logs')}>Logs</button
-				>
-				{#each terminalTabs as ttab (ttab.id)}
-					<button
-						class="console-tab-btn"
-						class:console-tab-btn--active={activeConsoleTab === ttab.id}
-						onclick={() => (activeConsoleTab = ttab.id)}
-					>
-						{ttab.label}
-						<span
-							class="console-tab-close"
-							role="button"
-							tabindex="-1"
-							onclick={(e) => {
-								e.stopPropagation();
-								onCloseTerminalTab(ttab.id);
-							}}
-							onkeydown={(e) => {
-								if (e.key === 'Enter') {
+				<TabBar tabs={consoleTabs} bind:value={activeConsoleTab}>
+					{#snippet tab(t)}
+						<span>{t.label}</span>
+						{#if t.id !== 'logs'}
+							<span
+								class="console-tab-close"
+								role="button"
+								tabindex="-1"
+								onclick={(e) => {
 									e.stopPropagation();
-									onCloseTerminalTab(ttab.id);
-								}
-							}}
-						>
-							<X class="h-2.5 w-2.5" />
-						</span>
-					</button>
-				{/each}
+									onCloseTerminalTab(t.id);
+								}}
+								onkeydown={(e) => {
+									if (e.key === 'Enter') {
+										e.stopPropagation();
+										onCloseTerminalTab(t.id);
+									}
+								}}
+							>
+								<X class="h-2.5 w-2.5" />
+							</span>
+						{/if}
+					{/snippet}
+				</TabBar>
 			</div>
 			<div class="console-toolbar-right">
 				{#if activeConsoleTab === 'logs'}
-					<button
-						class="console-source-btn"
-						onclick={(e) => {
+					<Button
+						variant="ghost"
+						size="sm"
+						onclick={(e: MouseEvent) => {
 							e.preventDefault();
 							tailLines =
 								tailLines === 100 ? 200 : tailLines === 200 ? 500 : tailLines === 500 ? 1000 : 100;
@@ -106,35 +106,38 @@
 						<Container class="h-3 w-3 opacity-40" />
 						<span>{podShortName(pod.name)} / postgres</span>
 						<ChevronDown class="h-2.5 w-2.5 opacity-40" />
-					</button>
-					<button
+					</Button>
+					<Button
+						variant="ghost"
+						size="sm"
 						onclick={onFetchLogs}
-						disabled={logsLoading}
-						class="console-icon-btn"
+						loading={logsLoading}
 						title={`Refresh (tail ${tailLines})`}
+						aria-label="Refresh logs"
 					>
-						{#if logsLoading}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw
-								class="h-3.5 w-3.5"
-							/>{/if}
-					</button>
+						{#if !logsLoading}<RefreshCw class="h-3.5 w-3.5" />{/if}
+					</Button>
 				{/if}
-				<button
-					class="console-action-btn"
+				<Button
+					variant="secondary"
+					size="sm"
 					onclick={() => onOpenShellTab(pod.name, 'postgres')}
 					title="Open shell in pod"
 				>
 					<TerminalIcon class="h-3 w-3" />
 					Shell
-				</button>
-				<button
+				</Button>
+				<Button
+					variant="ghost"
+					size="sm"
 					onclick={() => (consoleExpanded = !consoleExpanded)}
-					class="console-icon-btn"
 					title={consoleExpanded ? 'Collapse' : 'Expand'}
+					aria-label={consoleExpanded ? 'Collapse' : 'Expand'}
 				>
 					{#if consoleExpanded}<Minimize2 class="h-3.5 w-3.5" />{:else}<Maximize2
 							class="h-3.5 w-3.5"
 						/>{/if}
-				</button>
+				</Button>
 			</div>
 		</div>
 

@@ -4,7 +4,7 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { animate } from 'motion';
 	import { springPop } from '$lib/utils/motion.svelte';
-	import { apiFetch, toasts, refreshTree, subscribeOrgEvents, sseStatusFor } from '$lib/stores';
+	import { apiFetch, toasts, subscribeOrgEvents, sseStatusFor } from '$lib/stores';
 	import { queryClient } from '$lib/query';
 	import type { PageData } from './$types';
 	import { SpatialMenu } from 'melt/builders';
@@ -232,7 +232,6 @@
 				description: `${project.name} has been deleted`,
 				color: 'success'
 			});
-			refreshTree();
 			goto(`/${orgSlug}`);
 		} catch (e) {
 			toasts.add({
@@ -529,20 +528,16 @@
 		const id = orgId;
 		if (!id) return;
 		const unsubStatus = sseStatusFor(id).subscribe((v) => (sseStatusValue = v));
-		const unsubEvents = subscribeOrgEvents(
-			id,
-			(ev) => {
-				if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
-				if (
-					ev.projectId === project?.id ||
-					ev.type === 'project.changed' ||
-					ev.type === 'membership.changed'
-				) {
-					scheduleProjectRefetch();
-				}
-			},
-			{ invalidateDependencies: [] }
-		);
+		const unsubEvents = subscribeOrgEvents(id, (ev) => {
+			if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
+			if (
+				ev.projectId === project?.id ||
+				ev.type === 'project.changed' ||
+				ev.type === 'membership.changed'
+			) {
+				scheduleProjectRefetch();
+			}
+		});
 		return () => {
 			unsubStatus();
 			unsubEvents();
@@ -599,7 +594,7 @@
 				</div>
 			</div>
 			<div class="pj-stats">
-				{#each Array(3) as _}
+				{#each Array(3) as _, i (i)}
 					<div class="skeleton" style="height: 1.75rem; width: 6rem; border-radius: 0.5rem;"></div>
 				{/each}
 			</div>
@@ -607,7 +602,7 @@
 				<div class="skeleton" style="height: 1.125rem; width: 7rem;"></div>
 			</div>
 			<div class="pj-deployment-grid">
-				{#each Array(3) as _}
+				{#each Array(3) as _, i (i)}
 					<div class="pj-deployment-card" style="pointer-events: none;">
 						<div class="pj-deployment-card-top">
 							<div class="skeleton skeleton-icon"></div>
@@ -736,6 +731,7 @@
 		bind:open={showDeleteModal}
 		title={`Delete "${project.name}"?`}
 		description="This will permanently <strong>delete this project</strong> and all its resources (apps, databases, ingresses). This cannot be undone."
+		html
 		confirmLabel="Delete Project"
 		onconfirm={deleteProject}
 		oncancel={() => {}}

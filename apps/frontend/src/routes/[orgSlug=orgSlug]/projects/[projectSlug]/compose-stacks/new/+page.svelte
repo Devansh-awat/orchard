@@ -5,13 +5,14 @@
 	import {
 		apiFetch,
 		toasts,
-		refreshTree,
 		fetchProjectContext,
 		buildBasePath,
 		type ProjectContext
 	} from '$lib/stores';
-	import { Loader2, FileText, Github } from 'lucide-svelte';
+	import { Loader2, FileText, Github, ChevronDown, X } from 'lucide-svelte';
+	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
+	import { Button, PopoverPanel, Field, Input, Badge } from '$lib/components/ui';
 
 	interface Repository {
 		id: number;
@@ -43,8 +44,6 @@
 	let selectedBranch = $state<Branch | null>(null);
 	let repoSearch = $state('');
 	let branchSearch = $state('');
-	let showRepoDropdown = $state(false);
-	let showBranchDropdown = $state(false);
 
 	let name = $state('');
 	let composePath = $state('docker-compose.yml');
@@ -127,7 +126,6 @@
 	function selectRepo(repo: Repository) {
 		selectedRepo = repo;
 		repoSearch = repo.full_name;
-		showRepoDropdown = false;
 		if (!name) name = repo.full_name.split('/')[1] ?? '';
 		fetchBranches(repo);
 	}
@@ -142,7 +140,6 @@
 	function selectBranch(b: Branch) {
 		selectedBranch = b;
 		branchSearch = b.name;
-		showBranchDropdown = false;
 	}
 
 	function clearBranchSelection() {
@@ -150,21 +147,16 @@
 		branchSearch = '';
 	}
 
-	function handleClickOutside(event: MouseEvent, type: 'repo' | 'branch') {
-		const target = event.target as HTMLElement;
-		if (type === 'repo' && !target.closest('[data-repo-dropdown]')) showRepoDropdown = false;
-		if (type === 'branch' && !target.closest('[data-branch-dropdown]')) showBranchDropdown = false;
-	}
+	const filteredRepos = $derived(
+		repositories.filter((r) => r.full_name.toLowerCase().includes(repoSearch.toLowerCase()))
+	);
+	const filteredBranches = $derived(
+		branches.filter((b) => b.name.toLowerCase().includes(branchSearch.toLowerCase()))
+	);
 
 	onMount(() => {
 		fetchProjectData();
 		checkGitHubStatus();
-		const onClick = (e: MouseEvent) => {
-			handleClickOutside(e, 'repo');
-			handleClickOutside(e, 'branch');
-		};
-		document.addEventListener('click', onClick);
-		return () => document.removeEventListener('click', onClick);
 	});
 
 	async function handleSubmit() {
@@ -209,10 +201,9 @@
 			const stack = await response.json();
 			toasts.add({
 				title: 'Compose stack created',
-				description: 'Services are deploying — builds run in the background',
+				description: 'Services are deploying; builds run in the background',
 				color: 'success'
 			});
-			refreshTree();
 			goto(`/${orgSlug}/compose-stacks/${stack.id}`);
 		} catch (e) {
 			formError = e instanceof Error ? e.message : 'Failed to create compose stack';
@@ -231,6 +222,14 @@
 			<p class="cs-warning-desc">{error}</p>
 		</div>
 	{:else if project}
+		<Breadcrumb
+			crumbs={[
+				{ label: 'Home', href: `/${orgSlug}` },
+				{ label: project?.name || projectSlug || '', href: basePath },
+				{ label: 'New Compose stack' }
+			]}
+		/>
+
 		<div class="cs-hero">
 			<h1 class="cs-page-title">Deploy Compose from GitHub</h1>
 			<p class="cs-page-subtitle">
@@ -260,119 +259,154 @@
 						<p class="cs-warning-title">Sign in with GitHub to continue</p>
 						<p class="cs-warning-desc">Required to read your repos and clone the compose file.</p>
 						<div style="display: flex; gap: 0.5rem; margin-top: 0.5rem; flex-wrap: wrap;">
-							<a href="/user/settings" class="cs-btn cs-btn-primary">Sign in with GitHub</a>
+							<Button variant="primary" size="sm" href="/user/settings">Sign in with GitHub</Button>
 							{#if githubAppInstallUrl}
-								<a href={githubAppInstallUrl} target="_blank" class="cs-btn cs-btn-secondary">
+								<Button variant="secondary" size="sm" href={githubAppInstallUrl} target="_blank">
 									Install GitHub App
-								</a>
+								</Button>
 							{/if}
 						</div>
 					</div>
 				{:else}
-					<div class="cs-field" data-repo-dropdown>
-						<label class="cs-label" for="cs-repo-input">Repository</label>
-						<div class="cs-relative">
-							<input
-								id="cs-repo-input"
-								type="text"
-								bind:value={repoSearch}
-								oninput={() => {
-									showRepoDropdown = repoSearch.length > 0 && repositories.length > 0;
-									if (selectedRepo) selectedRepo = null;
-								}}
-								onfocus={() => {
-									if (!selectedRepo) showRepoDropdown = repositories.length > 0;
-								}}
-								placeholder="owner/repo"
-								class="cs-input"
-								readonly={selectedRepo !== null}
-								style={selectedRepo ? 'opacity: 0.7;' : ''}
-							/>
-							{#if loadingRepos || loadingBranches}
-								<div class="cs-input-suffix"><Loader2 class="h-4 w-4 animate-spin" /></div>
-							{:else if selectedRepo}
-								<button
-									onclick={clearRepoSelection}
-									class="cs-input-suffix cs-input-clear"
-									type="button"
-								>
-									✕
-								</button>
-							{/if}
-						</div>
-						{#if showRepoDropdown && repoSearch && !loadingRepos && !selectedRepo}
-							<div class="cs-dropdown">
-								{#each repositories.filter((r) => r.full_name
-										.toLowerCase()
-										.includes(repoSearch.toLowerCase())) as repo}
-									<button type="button" onclick={() => selectRepo(repo)} class="cs-dropdown-item">
-										<Github class="h-4 w-4" />
-										<span class="cs-truncate">{repo.full_name}</span>
-										{#if repo.private}<span class="cs-badge">Private</span>{/if}
+					<Field label="Repository">
+						<PopoverPanel sameWidth>
+							{#snippet trigger(attrs, open)}
+								<div class="picker-wrap">
+									<button type="button" class="picker-trigger" {...attrs}>
+										{#if selectedRepo}
+											<Github class="h-4 w-4 shrink-0" />
+											<span class="picker-value">{selectedRepo.full_name}</span>
+										{:else if repoSearch}
+											<span class="picker-value">{repoSearch}</span>
+										{:else}
+											<span class="picker-placeholder">owner/repo</span>
+										{/if}
 									</button>
-								{/each}
-							</div>
-						{/if}
-					</div>
+									{#if loadingRepos || loadingBranches}
+										<span class="picker-suffix"><Loader2 class="h-4 w-4 animate-spin" /></span>
+									{:else if selectedRepo}
+										<button
+											type="button"
+											class="picker-suffix picker-clear"
+											aria-label="Clear repository"
+											onclick={clearRepoSelection}
+										>
+											<X size={15} />
+										</button>
+									{:else}
+										<span class="picker-suffix picker-chevron" class:picker-chevron--open={open}
+											><ChevronDown size={15} /></span
+										>
+									{/if}
+								</div>
+							{/snippet}
+							{#snippet children({ close })}
+								<Input
+									bind:value={repoSearch}
+									placeholder="owner/repo"
+									readonly={selectedRepo !== null}
+								/>
+								<div class="picker-list">
+									{#if loadingRepos}
+										<div class="picker-empty">
+											<Loader2 class="h-4 w-4 animate-spin" /> Loading repositories
+										</div>
+									{:else}
+										{#each filteredRepos as repo (repo.full_name)}
+											<button
+												type="button"
+												class="picker-option"
+												onclick={() => {
+													selectRepo(repo);
+													close();
+												}}
+											>
+												<Github class="h-4 w-4 shrink-0" />
+												<span class="picker-option-text">{repo.full_name}</span>
+												{#if repo.private}<Badge tone="neutral">Private</Badge>{/if}
+											</button>
+										{:else}
+											<div class="picker-empty">No matching repositories</div>
+										{/each}
+									{/if}
+								</div>
+							{/snippet}
+						</PopoverPanel>
+					</Field>
 
 					{#if selectedRepo}
-						<div class="cs-field" data-branch-dropdown>
-							<label class="cs-label" for="cs-branch-input">Branch</label>
-							<div class="cs-relative">
-								<input
-									id="cs-branch-input"
-									type="text"
-									bind:value={branchSearch}
-									oninput={() => {
-										showBranchDropdown = branchSearch.length > 0 && branches.length > 0;
-										if (selectedBranch) selectedBranch = null;
-									}}
-									onfocus={() => {
-										if (!selectedBranch) showBranchDropdown = branches.length > 0;
-									}}
-									placeholder="main"
-									class="cs-input"
-									disabled={loadingBranches}
-									readonly={selectedBranch !== null}
-									style={selectedBranch ? 'opacity: 0.7;' : ''}
-								/>
-								{#if selectedBranch}
-									<button
-										onclick={clearBranchSelection}
-										class="cs-input-suffix cs-input-clear"
-										type="button"
-									>
-										✕
-									</button>
-								{/if}
-							</div>
-							{#if showBranchDropdown && branchSearch && !loadingBranches && !selectedBranch}
-								<div class="cs-dropdown">
-									{#each branches.filter((b) => b.name
-											.toLowerCase()
-											.includes(branchSearch.toLowerCase())) as b}
-										<button type="button" onclick={() => selectBranch(b)} class="cs-dropdown-item">
-											<span class="cs-truncate">{b.name}</span>
+						<Field label="Branch">
+							<PopoverPanel sameWidth>
+								{#snippet trigger(attrs, open)}
+									<div class="picker-wrap">
+										<button
+											type="button"
+											class="picker-trigger"
+											disabled={loadingBranches}
+											{...attrs}
+										>
+											{#if branchSearch}
+												<span class="picker-value">{branchSearch}</span>
+											{:else}
+												<span class="picker-placeholder">main</span>
+											{/if}
 										</button>
-									{/each}
-								</div>
-							{/if}
-						</div>
+										{#if loadingBranches}
+											<span class="picker-suffix"><Loader2 class="h-4 w-4 animate-spin" /></span>
+										{:else if selectedBranch}
+											<button
+												type="button"
+												class="picker-suffix picker-clear"
+												aria-label="Clear branch"
+												onclick={clearBranchSelection}
+											>
+												<X size={15} />
+											</button>
+										{:else}
+											<span class="picker-suffix picker-chevron" class:picker-chevron--open={open}
+												><ChevronDown size={15} /></span
+											>
+										{/if}
+									</div>
+								{/snippet}
+								{#snippet children({ close })}
+									<Input
+										bind:value={branchSearch}
+										placeholder="main"
+										readonly={selectedBranch !== null}
+									/>
+									<div class="picker-list">
+										{#each filteredBranches as b (b.name)}
+											<button
+												type="button"
+												class="picker-option"
+												onclick={() => {
+													selectBranch(b);
+													close();
+												}}
+											>
+												<span class="picker-option-text">{b.name}</span>
+											</button>
+										{:else}
+											<div class="picker-empty">No matching branches</div>
+										{/each}
+									</div>
+								{/snippet}
+							</PopoverPanel>
+						</Field>
 					{/if}
 
-					<div class="cs-field">
-						<label class="cs-label" for="cs-compose-path">Path to docker-compose.yml</label>
-						<input
+					<Field label="Path to docker-compose.yml" for="cs-compose-path">
+						<Input
 							id="cs-compose-path"
-							type="text"
 							bind:value={composePath}
 							placeholder="docker-compose.yml"
-							class="cs-input cs-mono"
+							class="font-mono"
 						/>
 						<p class="cs-hint">
 							Relative to the repo root. Default: <code>docker-compose.yml</code>.
 						</p>
-					</div>
+					</Field>
 
 					<label class="cs-toggle">
 						<input type="checkbox" bind:checked={autoDeployEnabled} />
@@ -392,26 +426,18 @@
 				{/if}
 
 				<div class="cs-actions">
-					<button
-						type="button"
-						class="cs-btn cs-btn-secondary"
-						onclick={() => history.back()}
-						disabled={submitting}
-					>
+					<Button variant="secondary" onclick={() => history.back()} disabled={submitting}>
 						Cancel
-					</button>
-					<button
-						type="button"
-						class="cs-btn cs-btn-primary"
+					</Button>
+					<Button
+						variant="primary"
 						onclick={handleSubmit}
+						loading={submitting}
 						disabled={submitting || !githubLinked || !selectedRepo}
 					>
-						{#if submitting}
-							<Loader2 class="h-3.5 w-3.5 animate-spin" /> Deploying…
-						{:else}
-							<FileText class="h-3.5 w-3.5" /> Deploy stack
-						{/if}
-					</button>
+						{#if !submitting}<FileText class="h-3.5 w-3.5" />{/if}
+						Deploy stack
+					</Button>
 				</div>
 			</div>
 		</div>
@@ -438,7 +464,7 @@
 		background: linear-gradient(
 			135deg,
 			var(--sidebar-text-active-border),
-			color-mix(in srgb, var(--sidebar-text-active-border) 60%, #0db7ed)
+			color-mix(in srgb, var(--sidebar-text-active-border) 60%, var(--link-color))
 		);
 		-webkit-background-clip: text;
 		-webkit-text-fill-color: transparent;
@@ -519,8 +545,7 @@
 		letter-spacing: -0.01em;
 	}
 
-	.cs-name-input:focus,
-	.cs-input:focus {
+	.cs-name-input:focus {
 		outline: none;
 		border-color: var(--sidebar-text-active-border);
 		box-shadow: 0 0 0 2px color-mix(in srgb, var(--sidebar-text-active-border) 15%, transparent);
@@ -533,40 +558,55 @@
 		gap: 1rem;
 	}
 
-	.cs-field {
-		display: flex;
-		flex-direction: column;
-		gap: 0.375rem;
+	/* Pickers */
+	.picker-wrap {
 		position: relative;
 	}
 
-	.cs-label {
-		font-size: 0.8125rem;
-		font-weight: 500;
-		color: var(--center-channel-color);
-	}
-
-	.cs-input {
+	.picker-trigger {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
 		width: 100%;
-		padding: 0.4375rem 0.75rem;
+		padding: 0.625rem 2.25rem 0.625rem 0.875rem;
 		border-radius: 0.5rem;
 		border: 1px solid var(--surface-border);
-		background-color: var(--center-channel-bg);
+		background-color: var(--surface-bg);
 		color: var(--center-channel-color);
-		font-size: 0.8125rem;
+		font-size: 0.875rem;
+		line-height: 1.5;
+		text-align: left;
+		cursor: pointer;
+		transition:
+			border-color 150ms ease,
+			box-shadow 150ms ease;
 	}
 
-	.cs-mono {
-		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+	.picker-trigger:focus-visible {
+		outline: none;
+		border-color: var(--sidebar-text-active-border);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
 	}
 
-	.cs-relative {
-		position: relative;
+	.picker-trigger:disabled {
+		opacity: 0.5;
+		cursor: default;
 	}
 
-	.cs-input-suffix {
+	.picker-value {
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		min-width: 0;
+	}
+
+	.picker-placeholder {
+		color: color-mix(in srgb, var(--surface-muted) 65%, transparent);
+	}
+
+	.picker-suffix {
 		position: absolute;
-		right: 0.5rem;
+		right: 0.75rem;
 		top: 50%;
 		transform: translateY(-50%);
 		display: flex;
@@ -574,59 +614,68 @@
 		color: var(--surface-muted);
 	}
 
-	.cs-input-clear {
+	.picker-clear {
 		background: none;
 		border: none;
 		cursor: pointer;
-		font-size: 0.875rem;
+		padding: 0;
 	}
 
-	.cs-dropdown {
-		position: absolute;
-		top: 100%;
-		left: 0;
-		right: 0;
-		margin-top: 0.25rem;
-		max-height: 16rem;
-		overflow-y: auto;
-		background-color: var(--center-channel-bg);
-		border: 1px solid var(--surface-border);
-		border-radius: 0.5rem;
-		box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
-		z-index: 10;
+	.picker-clear:hover {
+		color: var(--center-channel-color);
+	}
+
+	.picker-chevron {
+		pointer-events: none;
+		transition: transform 150ms ease;
+	}
+
+	.picker-chevron--open {
+		transform: translateY(-50%) rotate(180deg);
+	}
+
+	.picker-list {
 		display: flex;
 		flex-direction: column;
+		margin-top: 0.5rem;
+		max-height: 14rem;
+		overflow-y: auto;
 	}
 
-	.cs-dropdown-item {
+	.picker-option {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.5rem 0.75rem;
-		background: none;
-		border: none;
-		color: var(--center-channel-color);
+		width: 100%;
+		border-radius: 0.5rem;
+		padding: 0.4375rem 0.75rem;
 		text-align: left;
-		cursor: pointer;
 		font-size: 0.8125rem;
+		border: none;
+		background: none;
+		color: var(--center-channel-color);
+		cursor: pointer;
+		transition: background-color 0.1s;
 	}
 
-	.cs-dropdown-item:hover {
-		background-color: color-mix(in srgb, var(--surface-border) 35%, transparent);
+	.picker-option:hover {
+		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);
 	}
 
-	.cs-truncate {
+	.picker-option-text {
+		flex: 1;
+		min-width: 0;
+		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
-		white-space: nowrap;
-		flex: 1;
 	}
 
-	.cs-badge {
-		font-size: 0.625rem;
-		padding: 0.0625rem 0.375rem;
-		border-radius: 9999px;
-		background-color: color-mix(in srgb, var(--surface-border) 60%, transparent);
+	.picker-empty {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.625rem 0.75rem;
+		font-size: 0.75rem;
 		color: var(--surface-muted);
 	}
 
@@ -675,52 +724,11 @@
 		gap: 0.5rem;
 	}
 
-	.cs-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.4375rem 0.875rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		font-weight: 500;
-		border: 1px solid transparent;
-		cursor: pointer;
-		text-decoration: none;
-		transition:
-			background-color 0.15s,
-			border-color 0.15s,
-			opacity 0.15s;
-	}
-
-	.cs-btn:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-
-	.cs-btn-primary {
-		background-color: var(--sidebar-text-active-border);
-		color: white;
-	}
-
-	.cs-btn-primary:hover:not(:disabled) {
-		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 85%, black);
-	}
-
-	.cs-btn-secondary {
-		border-color: var(--surface-border);
-		background-color: var(--center-channel-bg);
-		color: var(--center-channel-color);
-	}
-
-	.cs-btn-secondary:hover:not(:disabled) {
-		background-color: color-mix(in srgb, var(--surface-border) 30%, transparent);
-	}
-
 	.cs-warning {
 		padding: 0.75rem 0.875rem;
 		border-radius: 0.5rem;
-		border: 1px solid color-mix(in srgb, #ef4444 30%, var(--surface-border));
-		background-color: color-mix(in srgb, #ef4444 5%, var(--surface-bg));
+		border: 1px solid color-mix(in srgb, var(--error-text-color) 30%, var(--surface-border));
+		background-color: color-mix(in srgb, var(--error-text-color) 5%, var(--surface-bg));
 	}
 
 	.cs-warning-title {

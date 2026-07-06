@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Loader2 } from 'lucide-svelte';
+	import { Button, Input, Select, Badge } from '$lib/components/ui';
 	import type { DatabaseDetail, ParamMeta } from './types';
 
 	let {
@@ -34,17 +35,18 @@
 		</p>
 		{#if database.mode === 'cnpg'}
 			<div class="flex gap-2">
-				<button class="btn btn-ghost btn-sm" onclick={onFetchSettings} disabled={settingsSaving}>
-					<span>Discard</span>
-				</button>
-				<button
-					class="btn btn-primary btn-sm"
+				<Button variant="ghost" size="sm" onclick={onFetchSettings} disabled={settingsSaving}>
+					Discard
+				</Button>
+				<Button
+					variant="primary"
+					size="sm"
 					onclick={onSaveSettings}
-					disabled={settingsSaving || !settingsDirty}
+					loading={settingsSaving}
+					disabled={!settingsDirty}
 				>
-					{#if settingsSaving}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
-					<span>Save</span>
-				</button>
+					Save
+				</Button>
 			</div>
 		{/if}
 	</div>
@@ -69,7 +71,7 @@
 							<label for={`param-${p.key}`} class="db-setting-label">{p.label}</label>
 							<code class="db-inline-code">{p.key}</code>
 							{#if p.requiresRestart}
-								<span class="db-status-pill db-status-pill-warn">restart required</span>
+								<Badge tone="warning">Restart required</Badge>
 							{/if}
 						</div>
 						<p class="db-setting-help">
@@ -78,36 +80,37 @@
 					</div>
 					<div class="db-setting-control">
 						{#if p.kind === 'int'}
-							<input
+							<Input
 								id={`param-${p.key}`}
 								type="number"
 								min={p.min}
 								max={p.max}
-								class="input font-mono text-sm"
+								class="font-mono text-sm"
 								value={paramValue(p.key)}
-								oninput={(e) => setParam(p.key, (e.currentTarget as HTMLInputElement).value)}
+								oninput={(e: Event) => setParam(p.key, (e.currentTarget as HTMLInputElement).value)}
 								placeholder={p.defaultValue}
 							/>
 						{:else if p.kind === 'memory'}
-							<input
+							<Input
 								id={`param-${p.key}`}
 								type="text"
-								class="input font-mono text-sm"
+								class="font-mono text-sm"
 								value={paramValue(p.key)}
-								oninput={(e) => setParam(p.key, (e.currentTarget as HTMLInputElement).value)}
+								oninput={(e: Event) => setParam(p.key, (e.currentTarget as HTMLInputElement).value)}
 								placeholder={p.defaultValue}
 							/>
 						{:else if p.kind === 'string' && p.enum}
-							<select
+							<Select
 								id={`param-${p.key}`}
-								class="input text-sm"
+								class="text-sm"
 								value={paramValue(p.key)}
-								onchange={(e) => setParam(p.key, (e.currentTarget as HTMLSelectElement).value)}
+								onchange={(e: Event) =>
+									setParam(p.key, (e.currentTarget as HTMLSelectElement).value)}
 							>
-								{#each p.enum as opt}
+								{#each p.enum as opt (opt)}
 									<option value={opt}>{opt}</option>
 								{/each}
-							</select>
+							</Select>
 						{/if}
 					</div>
 				</div>

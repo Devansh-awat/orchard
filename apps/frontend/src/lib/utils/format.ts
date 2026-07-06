@@ -56,63 +56,75 @@ export function formatBuildDurationBetween(
 	return formatBuildDuration(Math.round(ms / 1000));
 }
 
+// eslint-disable-next-line no-control-regex
+const ANSI_CODE_RE = /\x1b\[[0-9;]*m/g;
+const ISO_TS_RE = /\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g;
+
+function timestampPill(ts: string): string {
+	try {
+		const d = new Date(ts);
+		const h = d.getHours().toString().padStart(2, '0');
+		const m = d.getMinutes().toString().padStart(2, '0');
+		const s = d.getSeconds().toString().padStart(2, '0');
+		const ms = d.getMilliseconds().toString().padStart(3, '0');
+
+		const fullLocal = d.toLocaleString(undefined, {
+			weekday: 'short',
+			year: 'numeric',
+			month: 'short',
+			day: 'numeric',
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit',
+			fractionalSecondDigits: 3
+		});
+		const utcStr = d.toLocaleString(undefined, {
+			hour: '2-digit',
+			minute: '2-digit',
+			second: '2-digit',
+			timeZone: 'UTC',
+			timeZoneName: 'short'
+		});
+		const ago = formatRelativeTime(d);
+		const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
+
+		return `<span class="log-ts" data-tooltip-local="${fullLocal}" data-tooltip-utc="${utcStr}" data-tooltip-ago="${ago}" data-tooltip-tz="${tz}" data-tooltip-raw="${ts}">${h}:${m}:${s}<span class="log-ts-ms">.${ms}</span></span>`;
+	} catch {
+		return ts;
+	}
+}
+
+// Per-line conversion cache: log views re-render the same lines on every poll,
+// so memoizing per line makes repeat conversions free. Bounded to keep memory
+// in check; a full clear is fine because entries repopulate on next render.
+const lineCache = new Map<string, string>();
+const LINE_CACHE_MAX = 30_000;
+
+function ansiLineToHtml(line: string): string {
+	const cached = lineCache.get(line);
+	if (cached !== undefined) return cached;
+	const html = ansi.ansi_to_html(line).replace(ISO_TS_RE, timestampPill);
+	if (lineCache.size >= LINE_CACHE_MAX) lineCache.clear();
+	lineCache.set(line, html);
+	return html;
+}
+
+/** Convert ANSI log text to per-line HTML fragments, skipping empty lines. */
+export function ansiToHtmlLines(text: string): string[] {
+	if (!text) return [];
+
+	const out: string[] = [];
+	for (const line of text.replace(/\r/g, '').split('\n')) {
+		const stripped = line.replace(ANSI_CODE_RE, '').replace(ISO_TS_RE, '').trim();
+		if (!stripped) continue;
+		out.push(ansiLineToHtml(line));
+	}
+	return out;
+}
+
 /** Convert ANSI escape codes to HTML with color spans and formatted timestamps */
 export function ansiToHtml(text: string): string {
-	if (!text) return '';
-
-	// Strip lines that contain only a timestamp (and optional whitespace/ANSI codes)
-	const cleaned = text
-		.replace(/\r/g, '')
-		.split('\n')
-		.filter((line) => {
-			const stripped = line
-				// eslint-disable-next-line no-control-regex
-				.replace(/\x1b\[[0-9;]*m/g, '')
-				.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, '')
-				.trim();
-			return stripped.length > 0;
-		})
-		.join('\n');
-
-	// Convert ANSI to HTML (ansi_up handles escaping and all ANSI codes)
-	let result = ansi.ansi_to_html(cleaned);
-
-	// Replace ISO timestamps with compact local-time pills with rich tooltip
-	result = result.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z/g, (ts) => {
-		try {
-			const d = new Date(ts);
-			const h = d.getHours().toString().padStart(2, '0');
-			const m = d.getMinutes().toString().padStart(2, '0');
-			const s = d.getSeconds().toString().padStart(2, '0');
-			const ms = d.getMilliseconds().toString().padStart(3, '0');
-
-			const fullLocal = d.toLocaleString(undefined, {
-				weekday: 'short',
-				year: 'numeric',
-				month: 'short',
-				day: 'numeric',
-				hour: '2-digit',
-				minute: '2-digit',
-				second: '2-digit',
-				fractionalSecondDigits: 3
-			});
-			const utcStr = d.toLocaleString(undefined, {
-				hour: '2-digit',
-				minute: '2-digit',
-				second: '2-digit',
-				timeZone: 'UTC',
-				timeZoneName: 'short'
-			});
-			const ago = formatRelativeTime(d);
-			const tz = Intl.DateTimeFormat().resolvedOptions().timeZone;
-
-			return `<span class="log-ts" data-tooltip-local="${fullLocal}" data-tooltip-utc="${utcStr}" data-tooltip-ago="${ago}" data-tooltip-tz="${tz}" data-tooltip-raw="${ts}">${h}:${m}:${s}<span class="log-ts-ms">.${ms}</span></span>`;
-		} catch {
-			return ts;
-		}
-	});
-
-	return result;
+	return ansiToHtmlLines(text).join('\n');
 }
 
 /** Redact sensitive tokens from log output */

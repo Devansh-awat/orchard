@@ -175,14 +175,14 @@
 		<div class="tpl-filters">
 			<div class="skeleton" style="height: 2.25rem; width: 100%; border-radius: 0.5rem;"></div>
 			<div style="display: flex; gap: 0.375rem;">
-				{#each Array(4) as _}
+				{#each Array(4) as _, i (i)}
 					<div class="skeleton" style="height: 1.75rem; width: 4rem; border-radius: 9999px;"></div>
 				{/each}
 			</div>
 		</div>
 		<!-- Skeleton: Cards -->
 		<div class="tpl-grid">
-			{#each Array(6) as _}
+			{#each Array(6) as _, i (i)}
 				<div class="tpl-card" style="pointer-events: none;">
 					<div class="tpl-card-top">
 						<div
@@ -200,7 +200,7 @@
 						<div class="skeleton" style="height: 0.8125rem; width: 70%;"></div>
 					</div>
 					<div class="tpl-card-tags">
-						{#each Array(3) as _}
+						{#each Array(3) as _, i (i)}
 							<div
 								class="skeleton"
 								style="height: 1.125rem; width: 3rem; border-radius: 0.25rem;"
@@ -283,7 +283,7 @@
 			>
 				All
 			</button>
-			{#each categories() as cat}
+			{#each categories() as cat (cat)}
 				<button
 					class="tpl-cat-btn"
 					class:tpl-cat-active={selectedCategory === cat}
@@ -305,7 +305,7 @@
 			</div>
 		{:else}
 			<div class="tpl-grid">
-				{#each filteredTemplates as template}
+				{#each filteredTemplates as template (template.id)}
 					{@const Icon = getIconForTemplate(template.icon)}
 					<a
 						href="/{orgSlug}/workspaces/{wsSlug}/projects/{projectSlug}/templates/deploy/{template.id}"
@@ -350,7 +350,7 @@
 						</div>
 						{#if template.tags.length}
 							<div class="tpl-card-tags">
-								{#each template.tags.slice(0, 4) as tag}
+								{#each template.tags.slice(0, 4) as tag (tag)}
 									<span class="tpl-card-tag">{tag}</span>
 								{/each}
 							</div>
@@ -367,6 +367,7 @@
 		bind:open={showDeleteModal}
 		title={`Delete "${templateToDelete.displayName}"?`}
 		description="This will permanently <strong>delete this template</strong>. Any existing instances will not be affected, but no new deployments can be made from it."
+		html
 		confirmLabel="Delete Template"
 		onconfirm={deleteTemplate}
 		oncancel={() => (templateToDelete = null)}

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Loader2, Link2, Copy, Check, Trash2, KeyRound, TriangleAlert } from 'lucide-svelte';
 	import { UserCog } from '@jis3r/icons';
+	import { Button, Field, Input } from '$lib/components/ui';
 	import SettingsSection from '$lib/components/user-settings/SettingsSection.svelte';
 
 	type ScimToken = {
@@ -81,20 +82,20 @@
 			<div class="scim-section">
 				<h3 class="scim-section-title">
 					<Link2 class="h-3.5 w-3.5" />
-					SCIM Endpoint
+					SCIM endpoint
 				</h3>
 				<div class="scim-endpoint-row">
-					<input type="text" class="input scim-endpoint-input" value={scimBaseUrl} readonly />
-					<button class="btn btn-secondary" onclick={() => copy(scimBaseUrl, 'endpoint')}>
+					<Input class="scim-endpoint-input" value={scimBaseUrl} readonly />
+					<Button variant="secondary" onclick={() => copy(scimBaseUrl, 'endpoint')}>
 						{#if copiedField === 'endpoint'}<Check class="h-4 w-4" />{:else}<Copy
 								class="h-4 w-4"
 							/>{/if}
 						{copiedField === 'endpoint' ? 'Copied' : 'Copy'}
-					</button>
+					</Button>
 				</div>
 				<p class="scim-hint">
 					Paste this URL and a bearer token below into your identity provider's SCIM 2.0 connector
-					(Okta, Entra ID, Google Workspace). Authentication uses OAuth Bearer Token.
+					(Okta, Entra ID, Google Workspace). Authentication uses an OAuth bearer token.
 				</p>
 			</div>
 
@@ -104,26 +105,22 @@
 					<div class="scim-reveal">
 						<div class="scim-reveal-head">
 							<TriangleAlert class="h-4 w-4" />
-							<span>Copy this token now — it won't be shown again.</span>
+							<span>Copy this token now. It won't be shown again.</span>
 						</div>
 						<div class="scim-endpoint-row">
-							<input
-								type="text"
-								class="input scim-endpoint-input scim-token-value"
+							<Input
+								class="scim-endpoint-input scim-token-value"
 								value={scimCreatedToken.token}
 								readonly
 							/>
-							<button
-								class="btn btn-secondary"
-								onclick={() => copy(scimCreatedToken!.token, 'newtoken')}
-							>
+							<Button variant="secondary" onclick={() => copy(scimCreatedToken!.token, 'newtoken')}>
 								{#if copiedField === 'newtoken'}<Check class="h-4 w-4" />{:else}<Copy
 										class="h-4 w-4"
 									/>{/if}
 								{copiedField === 'newtoken' ? 'Copied' : 'Copy'}
-							</button>
+							</Button>
 						</div>
-						<button class="scim-reveal-dismiss" onclick={onDismissCreatedToken}>Done</button>
+						<Button variant="ghost" size="sm" onclick={onDismissCreatedToken}>Done</Button>
 					</div>
 				</div>
 			{/if}
@@ -132,7 +129,7 @@
 			<div class="scim-section">
 				<h3 class="scim-section-title">
 					<KeyRound class="h-3.5 w-3.5" />
-					Bearer Tokens
+					Bearer tokens
 				</h3>
 
 				{#if scimTokens.length === 0}
@@ -148,8 +145,9 @@
 										{#if token.expiresAt}· Expires {formatDate(token.expiresAt)}{/if}
 									</p>
 								</div>
-								<button
-									class="scim-token-revoke"
+								<Button
+									variant="ghost"
+									size="sm"
 									onclick={() => onRevokeToken(token.id)}
 									disabled={scimRevokingId === token.id}
 									aria-label="Revoke token"
@@ -159,7 +157,7 @@
 									{:else}
 										<Trash2 class="h-4 w-4" />
 									{/if}
-								</button>
+								</Button>
 							</div>
 						{/each}
 					</div>
@@ -168,27 +166,27 @@
 
 			<!-- Create -->
 			<div class="scim-section scim-create">
-				<div class="scim-field scim-create-field">
-					<label class="scim-field-label" for="scim-token-name">New Token Name</label>
-					<input
-						id="scim-token-name"
-						type="text"
-						class="input"
-						bind:value={scimNewName}
-						placeholder="Okta production"
-						onkeydown={(e) => {
-							if (e.key === 'Enter' && scimNewName.trim()) onCreateToken();
-						}}
-					/>
+				<div class="scim-create-field">
+					<Field label="New token name" for="scim-token-name">
+						<Input
+							id="scim-token-name"
+							bind:value={scimNewName}
+							placeholder="Okta production"
+							onkeydown={(e: KeyboardEvent) => {
+								if (e.key === 'Enter' && scimNewName.trim()) onCreateToken();
+							}}
+						/>
+					</Field>
 				</div>
-				<button
-					class="btn btn-primary scim-create-btn"
+				<Button
+					variant="primary"
+					class="scim-create-btn"
 					onclick={onCreateToken}
-					disabled={scimCreating || !scimNewName.trim()}
+					loading={scimCreating}
+					disabled={!scimNewName.trim()}
 				>
-					{#if scimCreating}<Loader2 class="h-4 w-4 animate-spin" />{/if}
-					Generate Token
-				</button>
+					Generate token
+				</Button>
 			</div>
 		{/if}
 	</SettingsSection>
@@ -236,13 +234,13 @@
 		gap: 0.5rem;
 	}
 
-	.scim-endpoint-input {
+	.scim-endpoint-row :global(.scim-endpoint-input) {
 		flex: 1;
 		font-family: var(--font-mono, ui-monospace, monospace);
 		font-size: 0.8rem;
 	}
 
-	.scim-token-value {
+	.scim-endpoint-row :global(.scim-token-value) {
 		color: var(--center-channel-color);
 	}
 
@@ -272,19 +270,8 @@
 		color: var(--away-indicator);
 	}
 
-	.scim-reveal-dismiss {
+	.scim-reveal :global(.btn) {
 		align-self: flex-start;
-		font-size: 0.75rem;
-		font-weight: 500;
-		color: var(--surface-muted);
-		background: transparent;
-		border: none;
-		cursor: pointer;
-		padding: 0;
-	}
-
-	.scim-reveal-dismiss:hover {
-		color: var(--center-channel-color);
 	}
 
 	.scim-empty {
@@ -327,49 +314,6 @@
 		margin: 0.15rem 0 0;
 	}
 
-	.scim-token-revoke {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 2rem;
-		height: 2rem;
-		border-radius: 0.5rem;
-		flex-shrink: 0;
-		background: transparent;
-		border: 1px solid var(--surface-border);
-		color: var(--surface-muted);
-		cursor: pointer;
-		transition:
-			color 120ms ease,
-			border-color 120ms ease,
-			background-color 120ms ease;
-	}
-
-	.scim-token-revoke:hover:not(:disabled) {
-		color: var(--error-text-color, #ef4444);
-		border-color: color-mix(in srgb, var(--error-text-color, #ef4444) 40%, transparent);
-		background: color-mix(in srgb, var(--error-text-color, #ef4444) 8%, transparent);
-	}
-
-	.scim-token-revoke:disabled {
-		opacity: 0.6;
-		cursor: default;
-	}
-
-	.scim-field {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-	}
-
-	.scim-field-label {
-		font-size: 0.75rem;
-		font-weight: 500;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--surface-muted);
-	}
-
 	.scim-create {
 		flex-direction: row;
 		align-items: flex-end;
@@ -380,7 +324,7 @@
 		flex: 1;
 	}
 
-	.scim-create-btn {
+	.scim-create :global(.scim-create-btn) {
 		flex-shrink: 0;
 	}
 

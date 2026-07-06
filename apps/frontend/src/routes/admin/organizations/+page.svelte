@@ -12,6 +12,7 @@
 		ChevronRight,
 		Gauge
 	} from 'lucide-svelte';
+	import { Modal, Button, Field, Input, Select, EmptyState } from '$lib/components/ui';
 	import { formatCpuMilli, formatMemoryBytes } from '$lib/quantity';
 
 	interface OrgItem {
@@ -444,21 +445,21 @@
 			class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2"
 			style="color: var(--surface-muted);"
 		/>
-		<input
+		<Input
 			type="text"
 			bind:value={searchQuery}
 			oninput={handleSearch}
 			placeholder="Search organizations by name or slug..."
-			class="input w-full pl-10"
+			class="w-full pl-10"
 		/>
 	</div>
 	<span class="text-sm whitespace-nowrap" style="color: var(--surface-muted);">
 		{total} total
 	</span>
-	<button onclick={openCreateModal} class="btn btn-primary whitespace-nowrap">
+	<Button variant="primary" class="whitespace-nowrap" onclick={openCreateModal}>
 		<Plus class="h-4 w-4" />
 		Create
-	</button>
+	</Button>
 </div>
 
 <!-- Table -->
@@ -471,7 +472,7 @@
 			<Loader2 class="h-6 w-6 animate-spin text-primary-600" />
 		</div>
 	{:else if organizations.length === 0}
-		<div class="p-8 text-center" style="color: var(--surface-muted);">No organizations found</div>
+		<EmptyState title="No organizations found" />
 	{:else}
 		<div class="overflow-x-auto">
 			<table class="w-full text-sm">
@@ -487,7 +488,7 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each organizations as org}
+					{#each organizations as org (org.id)}
 						<tr
 							style="border-bottom: 1px solid var(--surface-border); color: var(--center-channel-color);"
 							class="transition hover:bg-[color-mix(in_srgb,var(--surface-border)_20%,transparent)]"
@@ -536,27 +537,31 @@
 							</td>
 							<td class="px-4 py-3">
 								<div class="flex items-center justify-end gap-1">
-									<button
+									<Button
+										variant="ghost"
+										size="sm"
 										onclick={() => openQuota(org)}
-										class="btn btn-ghost btn-sm"
 										title="Resource quotas"
 									>
 										<Gauge class="h-4 w-4" />
-									</button>
-									<button
+									</Button>
+									<Button
+										variant="ghost"
+										size="sm"
 										onclick={() => openEdit(org)}
-										class="btn btn-ghost btn-sm"
 										title="Edit organization"
 									>
 										<Pencil class="h-4 w-4" />
-									</button>
-									<button
+									</Button>
+									<Button
+										variant="ghost"
+										size="sm"
+										style="color: var(--error-text-color);"
 										onclick={() => (deletingOrg = org)}
-										class="btn btn-ghost btn-sm text-red-500"
 										title="Delete organization"
 									>
 										<Trash2 class="h-4 w-4" />
-									</button>
+									</Button>
 								</div>
 							</td>
 						</tr>
@@ -570,400 +575,340 @@
 <!-- Pagination -->
 {#if totalPages > 1}
 	<div class="mt-4 flex items-center justify-center gap-2">
-		<button
+		<Button
+			variant="ghost"
+			size="sm"
 			onclick={() => fetchOrganizations(currentPage - 1)}
 			disabled={currentPage <= 1}
-			class="btn btn-ghost btn-sm"
 		>
 			<ChevronLeft class="h-4 w-4" />
-		</button>
+		</Button>
 		<span class="text-sm" style="color: var(--surface-muted);">
 			Page {currentPage} of {totalPages}
 		</span>
-		<button
+		<Button
+			variant="ghost"
+			size="sm"
 			onclick={() => fetchOrganizations(currentPage + 1)}
 			disabled={currentPage >= totalPages}
-			class="btn btn-ghost btn-sm"
 		>
 			<ChevronRight class="h-4 w-4" />
-		</button>
+		</Button>
 	</div>
 {/if}
 
-<!-- Create Modal -->
-{#if showCreate}
-	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-		<div
-			class="w-full max-w-md rounded-2xl border p-6 shadow-xl"
-			style="background-color: var(--center-channel-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
+<Modal bind:open={showCreate} title="Create organization">
+	<div class="space-y-4">
+		<Field label="Name" for="create-org-name">
+			<Input
+				id="create-org-name"
+				type="text"
+				bind:value={createName}
+				oninput={generateSlug}
+				placeholder="My Organization"
+				class="w-full"
+			/>
+		</Field>
+		<Field label="Slug" for="create-org-slug">
+			<Input
+				id="create-org-slug"
+				type="text"
+				bind:value={createSlug}
+				placeholder="my-organization"
+				class="w-full font-mono text-sm"
+			/>
+		</Field>
+		<Field label="Description (optional)" for="create-org-description">
+			<textarea
+				id="create-org-description"
+				bind:value={createDescription}
+				rows="3"
+				placeholder="A brief description..."
+				class="input w-full"
+			></textarea>
+		</Field>
+		<Field label="Image URL (optional)" for="create-org-image-url">
+			<Input
+				id="create-org-image-url"
+				type="url"
+				bind:value={createImageUrl}
+				placeholder="https://..."
+				class="w-full"
+			/>
+		</Field>
+		<Field label="Plan (optional)" for="create-org-plan">
+			<Select id="create-org-plan" bind:value={createPlan} class="w-full">
+				<option value="">None</option>
+				{#each PLAN_OPTIONS as opt (opt)}
+					<option value={opt}>{opt}</option>
+				{/each}
+			</Select>
+		</Field>
+		<Field
+			label="Primary owner email (optional)"
+			for="create-primary-owner-email"
+			hint="If they have an account, they become owner now. Otherwise they’re invited and become owner when they accept."
 		>
-			<div class="flex items-center justify-between mb-4">
-				<h3 class="text-lg font-semibold">Create Organization</h3>
-				<button onclick={() => (showCreate = false)} class="btn btn-ghost btn-sm">
-					<X class="h-4 w-4" />
-				</button>
-			</div>
-
-			<div class="space-y-4">
-				<div>
-					<label class="block text-sm font-medium mb-1">Name</label>
-					<input
-						type="text"
-						bind:value={createName}
-						oninput={generateSlug}
-						placeholder="My Organization"
-						class="input w-full"
-					/>
-				</div>
-				<div>
-					<label class="block text-sm font-medium mb-1">Slug</label>
-					<input
-						type="text"
-						bind:value={createSlug}
-						placeholder="my-organization"
-						class="input w-full font-mono text-sm"
-					/>
-				</div>
-				<div>
-					<label class="block text-sm font-medium mb-1">Description (optional)</label>
-					<textarea
-						bind:value={createDescription}
-						rows="3"
-						placeholder="A brief description..."
-						class="input w-full"
-					></textarea>
-				</div>
-				<div>
-					<label class="block text-sm font-medium mb-1">Image URL (optional)</label>
-					<input
-						type="url"
-						bind:value={createImageUrl}
-						placeholder="https://..."
-						class="input w-full"
-					/>
-				</div>
-				<div>
-					<label class="block text-sm font-medium mb-1">Plan (optional)</label>
-					<select bind:value={createPlan} class="input w-full">
-						<option value="">None</option>
-						{#each PLAN_OPTIONS as opt}
-							<option value={opt}>{opt}</option>
-						{/each}
-					</select>
-				</div>
-				<div>
-					<label for="create-primary-owner-email" class="block text-sm font-medium mb-1"
-						>Primary owner email (optional)</label
-					>
-					<input
-						id="create-primary-owner-email"
-						type="email"
-						bind:value={createPrimaryOwnerEmail}
-						placeholder="client@example.com"
-						class="input w-full"
-					/>
-					<p class="text-xs mt-1" style="color: var(--surface-muted);">
-						If they have an account, they become owner now. Otherwise they’re invited and become
-						owner when they accept.
-					</p>
-				</div>
-			</div>
-
-			<div class="mt-6 flex justify-end gap-2">
-				<button onclick={() => (showCreate = false)} class="btn btn-secondary">Cancel</button>
-				<button
-					onclick={createOrganization}
-					disabled={creating || !createName || !createSlug}
-					class="btn btn-primary"
-				>
-					{#if creating}
-						<Loader2 class="h-4 w-4 animate-spin" />
-					{/if}
-					Create
-				</button>
-			</div>
-		</div>
+			<Input
+				id="create-primary-owner-email"
+				type="email"
+				bind:value={createPrimaryOwnerEmail}
+				placeholder="client@example.com"
+				class="w-full"
+			/>
+		</Field>
 	</div>
-{/if}
-
-<!-- Edit Modal -->
-{#if editingOrg}
-	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-		<div
-			class="w-full max-w-md rounded-2xl border p-6 shadow-xl"
-			style="background-color: var(--center-channel-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
+	{#snippet footer()}
+		<Button variant="secondary" onclick={() => (showCreate = false)}>Cancel</Button>
+		<Button
+			variant="primary"
+			onclick={createOrganization}
+			loading={creating}
+			disabled={!createName || !createSlug}
 		>
-			<div class="flex items-center justify-between mb-4">
-				<h3 class="text-lg font-semibold">Edit Organization</h3>
-				<button onclick={closeEdit} class="btn btn-ghost btn-sm">
-					<X class="h-4 w-4" />
-				</button>
-			</div>
+			Create
+		</Button>
+	{/snippet}
+</Modal>
 
-			<div class="space-y-4">
-				<div>
-					<label class="block text-sm font-medium mb-1">Name</label>
-					<input type="text" bind:value={editName} class="input w-full" />
-				</div>
-				<div>
-					<label class="block text-sm font-medium mb-1">Description</label>
-					<textarea bind:value={editDescription} rows="3" class="input w-full"></textarea>
-				</div>
-			</div>
-
-			<div class="mt-6 flex justify-end gap-2">
-				<button onclick={closeEdit} class="btn btn-secondary">Cancel</button>
-				<button onclick={saveOrg} disabled={saving} class="btn btn-primary">
-					{#if saving}
-						<Loader2 class="h-4 w-4 animate-spin" />
-					{/if}
-					Save Changes
-				</button>
-			</div>
-		</div>
+<Modal
+	bind:open={
+		() => editingOrg !== null,
+		(v) => {
+			if (!v) closeEdit();
+		}
+	}
+	title="Edit organization"
+>
+	<div class="space-y-4">
+		<Field label="Name" for="edit-org-name">
+			<Input id="edit-org-name" type="text" bind:value={editName} class="w-full" />
+		</Field>
+		<Field label="Description" for="edit-org-description">
+			<textarea id="edit-org-description" bind:value={editDescription} rows="3" class="input w-full"
+			></textarea>
+		</Field>
 	</div>
-{/if}
+	{#snippet footer()}
+		<Button variant="secondary" onclick={closeEdit}>Cancel</Button>
+		<Button variant="primary" onclick={saveOrg} loading={saving}>Save changes</Button>
+	{/snippet}
+</Modal>
 
-<!-- Delete Confirmation -->
-{#if deletingOrg}
-	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-		<div
-			class="w-full max-w-sm rounded-2xl border p-6 shadow-xl"
-			style="background-color: var(--center-channel-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
-		>
-			<h3 class="text-lg font-semibold mb-2">Delete Organization</h3>
-			<p class="text-sm mb-1" style="color: var(--surface-muted);">
-				Are you sure you want to delete this organization?
-			</p>
-			<p class="text-sm font-medium mb-4">{deletingOrg.name} ({deletingOrg.slug})</p>
-			<p class="text-xs text-red-500 mb-4">
-				This will permanently delete the organization and all its workspaces, projects, and
-				deployments.
-			</p>
-			<div class="flex justify-end gap-2">
-				<button onclick={() => (deletingOrg = null)} class="btn btn-secondary">Cancel</button>
-				<button
-					onclick={confirmDelete}
-					disabled={deleting}
-					class="btn bg-red-600 text-white hover:bg-red-700"
-				>
-					{#if deleting}
-						<Loader2 class="h-4 w-4 animate-spin" />
-					{/if}
-					Delete
-				</button>
-			</div>
-		</div>
-	</div>
-{/if}
+<Modal
+	bind:open={
+		() => deletingOrg !== null,
+		(v) => {
+			if (!v) deletingOrg = null;
+		}
+	}
+	title="Delete organization"
+	size="sm"
+>
+	{#if deletingOrg}
+		<p class="text-sm mb-1" style="color: var(--surface-muted);">
+			Are you sure you want to delete this organization?
+		</p>
+		<p class="text-sm font-medium mb-4">{deletingOrg.name} ({deletingOrg.slug})</p>
+		<p class="text-xs" style="color: var(--error-text-color);">
+			This will permanently delete the organization and all its workspaces, projects, and
+			deployments.
+		</p>
+	{/if}
+	{#snippet footer()}
+		<Button variant="secondary" onclick={() => (deletingOrg = null)}>Cancel</Button>
+		<Button variant="danger" onclick={confirmDelete} loading={deleting}>Delete</Button>
+	{/snippet}
+</Modal>
 
-<!-- Quota Modal -->
-{#if quotaOrg}
-	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-		<div
-			class="w-full max-w-lg rounded-2xl border p-6 shadow-xl"
-			style="background-color: var(--center-channel-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
-		>
-			<div class="flex items-center justify-between mb-4">
-				<div>
-					<h3 class="text-lg font-semibold">Resource quotas</h3>
-					<p class="text-xs" style="color: var(--surface-muted);">{quotaOrg.name}</p>
-				</div>
-				<button onclick={closeQuota} class="btn btn-ghost btn-sm"><X class="h-4 w-4" /></button>
-			</div>
+<Modal
+	bind:open={
+		() => quotaOrg !== null,
+		(v) => {
+			if (!v) closeQuota();
+		}
+	}
+	title="Resource quotas"
+	size="lg"
+>
+	{#if quotaOrg}
+		<p class="text-xs mb-4" style="color: var(--surface-muted);">{quotaOrg.name}</p>
 
-			{#if quotaLoading}
-				<div class="flex justify-center py-10"><Loader2 class="h-6 w-6 animate-spin" /></div>
-			{:else}
-				{#if quotaUsage}
-					<div class="rounded-xl border p-3 mb-4" style="border-color: var(--surface-border);">
-						<p class="text-xs font-medium mb-1" style="color: var(--surface-muted);">
-							Current usage
-						</p>
-						<div class="grid grid-cols-2 gap-2 text-sm">
-							<div>CPU: <strong>{formatCpuMilli(quotaUsage.cpuMilli)}</strong></div>
-							<div>Memory: <strong>{formatMemoryBytes(quotaUsage.memoryBytes)}</strong></div>
-							<div>Pods: <strong>{quotaUsage.pods}</strong></div>
-							<div>Services: <strong>{quotaUsage.services}</strong></div>
-						</div>
+		{#if quotaLoading}
+			<div class="flex justify-center py-10"><Loader2 class="h-6 w-6 animate-spin" /></div>
+		{:else}
+			{#if quotaUsage}
+				<div class="rounded-xl border p-3 mb-4" style="border-color: var(--surface-border);">
+					<p class="text-xs font-medium mb-1" style="color: var(--surface-muted);">Current usage</p>
+					<div class="grid grid-cols-2 gap-2 text-sm">
+						<div>CPU: <strong>{formatCpuMilli(quotaUsage.cpuMilli)}</strong></div>
+						<div>Memory: <strong>{formatMemoryBytes(quotaUsage.memoryBytes)}</strong></div>
+						<div>Pods: <strong>{quotaUsage.pods}</strong></div>
+						<div>Services: <strong>{quotaUsage.services}</strong></div>
 					</div>
-				{/if}
-
-				<p class="text-xs mb-3" style="color: var(--surface-muted);">
-					Click <strong>Unlimited</strong> or leave blank to remove a cap. Limits apply across all projects
-					in this org. Kubernetes enforces them at pod-admission time.
-				</p>
-
-				<div class="grid grid-cols-2 gap-3">
-					<label class="text-xs">
-						CPU (millicores)
-						<div class="flex items-center gap-2 mt-1">
-							<input type="number" bind:value={qCpu} placeholder="unlimited" class="input flex-1" />
-							<button
-								type="button"
-								class="text-xs px-2 py-1 rounded border"
-								style="border-color: var(--surface-border);"
-								onclick={() => (qCpu = '')}>Unlimited</button
-							>
-						</div>
-					</label>
-					<label class="text-xs">
-						Memory (MiB)
-						<div class="flex items-center gap-2 mt-1">
-							<input
-								type="number"
-								bind:value={qMemMi}
-								placeholder="unlimited"
-								class="input flex-1"
-							/>
-							<button
-								type="button"
-								class="text-xs px-2 py-1 rounded border"
-								style="border-color: var(--surface-border);"
-								onclick={() => (qMemMi = '')}>Unlimited</button
-							>
-						</div>
-					</label>
-					<label class="text-xs">
-						Max pods
-						<div class="flex items-center gap-2 mt-1">
-							<input
-								type="number"
-								bind:value={qPods}
-								placeholder="unlimited"
-								class="input flex-1"
-							/>
-							<button
-								type="button"
-								class="text-xs px-2 py-1 rounded border"
-								style="border-color: var(--surface-border);"
-								onclick={() => (qPods = '')}>Unlimited</button
-							>
-						</div>
-					</label>
-					<label class="text-xs">
-						Max services
-						<div class="flex items-center gap-2 mt-1">
-							<input
-								type="number"
-								bind:value={qServices}
-								placeholder="unlimited"
-								class="input flex-1"
-							/>
-							<button
-								type="button"
-								class="text-xs px-2 py-1 rounded border"
-								style="border-color: var(--surface-border);"
-								onclick={() => (qServices = '')}>Unlimited</button
-							>
-						</div>
-					</label>
-				</div>
-
-				<h4 class="text-sm font-semibold mt-4 mb-2">Per-pod defaults (LimitRange)</h4>
-				<p class="text-xs mb-2" style="color: var(--surface-muted);">
-					Applied to containers that don't specify requests. Required if CPU/memory quotas are set.
-				</p>
-				<div class="grid grid-cols-2 gap-3">
-					<label class="text-xs">
-						Default CPU / pod (millicores)
-						<input
-							type="number"
-							bind:value={qDefaultCpu}
-							placeholder="100"
-							class="input w-full mt-1"
-						/>
-					</label>
-					<label class="text-xs">
-						Default memory / pod (MiB)
-						<input
-							type="number"
-							bind:value={qDefaultMemMi}
-							placeholder="128"
-							class="input w-full mt-1"
-						/>
-					</label>
-				</div>
-
-				<h4 class="text-sm font-semibold mt-4 mb-2">Connected organizations</h4>
-				<p class="text-xs mb-2" style="color: var(--surface-muted);">
-					Connected orgs mirror the same caps and draw from the <strong>same usage pool</strong>.
-					Connecting org A (10 CPU) to org B means both show 10 CPU, but the sum of their usage
-					still cannot exceed 10.
-				</p>
-
-				{#if qConnections.length > 0}
-					<div class="space-y-1 mb-3">
-						{#each qConnections as conn}
-							<div
-								class="flex items-center justify-between rounded-lg border px-3 py-2 text-sm"
-								style="border-color: var(--surface-border);"
-							>
-								<div>
-									<div class="font-medium">{conn.name}</div>
-									<div class="font-mono text-xs" style="color: var(--surface-muted);">
-										{conn.slug}
-									</div>
-								</div>
-								<button
-									type="button"
-									onclick={disconnectQuota}
-									disabled={qConnectBusy}
-									class="btn btn-ghost btn-sm text-red-500"
-									title="Disconnect from shared pool"
-								>
-									<X class="h-4 w-4" />
-								</button>
-							</div>
-						{/each}
-					</div>
-				{:else}
-					<p class="text-xs mb-2 italic" style="color: var(--surface-muted);">
-						Not connected to any other org.
-					</p>
-				{/if}
-
-				<div class="relative">
-					<input
-						type="text"
-						bind:value={qConnectSearch}
-						oninput={handleConnectSearch}
-						placeholder="Search for an organization to connect..."
-						class="input w-full"
-					/>
-					{#if qConnectResults.length > 0}
-						<div
-							class="mt-1 rounded-lg border overflow-hidden"
-							style="border-color: var(--surface-border); background-color: var(--center-channel-bg);"
-						>
-							{#each qConnectResults as r}
-								<button
-									type="button"
-									onclick={() => connectOrg(r)}
-									disabled={qConnectBusy}
-									class="w-full text-left px-3 py-2 text-sm hover:bg-[color-mix(in_srgb,var(--surface-border)_20%,transparent)] flex items-center justify-between"
-								>
-									<span>
-										<span class="font-medium">{r.name}</span>
-										<span class="font-mono text-xs ml-2" style="color: var(--surface-muted);"
-											>{r.slug}</span
-										>
-									</span>
-									<Plus class="h-4 w-4" />
-								</button>
-							{/each}
-						</div>
-					{/if}
-				</div>
-
-				<div class="mt-6 flex justify-end gap-2">
-					<button onclick={closeQuota} class="btn btn-secondary">Cancel</button>
-					<button onclick={saveQuota} disabled={quotaSaving} class="btn btn-primary">
-						{#if quotaSaving}<Loader2 class="h-4 w-4 animate-spin" />{/if}
-						Save quotas
-					</button>
 				</div>
 			{/if}
-		</div>
-	</div>
-{/if}
+
+			<p class="text-xs mb-3" style="color: var(--surface-muted);">
+				Click <strong>Unlimited</strong> or leave blank to remove a cap. Limits apply across all projects
+				in this org. Kubernetes enforces them at pod-admission time.
+			</p>
+
+			<div class="grid grid-cols-2 gap-3">
+				<Field label="CPU (millicores)" for="quota-cpu">
+					<div class="flex items-center gap-2">
+						<Input
+							id="quota-cpu"
+							type="number"
+							bind:value={qCpu}
+							placeholder="unlimited"
+							class="flex-1"
+						/>
+						<Button variant="secondary" size="sm" onclick={() => (qCpu = '')}>Unlimited</Button>
+					</div>
+				</Field>
+				<Field label="Memory (MiB)" for="quota-memory">
+					<div class="flex items-center gap-2">
+						<Input
+							id="quota-memory"
+							type="number"
+							bind:value={qMemMi}
+							placeholder="unlimited"
+							class="flex-1"
+						/>
+						<Button variant="secondary" size="sm" onclick={() => (qMemMi = '')}>Unlimited</Button>
+					</div>
+				</Field>
+				<Field label="Max pods" for="quota-pods">
+					<div class="flex items-center gap-2">
+						<Input
+							id="quota-pods"
+							type="number"
+							bind:value={qPods}
+							placeholder="unlimited"
+							class="flex-1"
+						/>
+						<Button variant="secondary" size="sm" onclick={() => (qPods = '')}>Unlimited</Button>
+					</div>
+				</Field>
+				<Field label="Max services" for="quota-services">
+					<div class="flex items-center gap-2">
+						<Input
+							id="quota-services"
+							type="number"
+							bind:value={qServices}
+							placeholder="unlimited"
+							class="flex-1"
+						/>
+						<Button variant="secondary" size="sm" onclick={() => (qServices = '')}>
+							Unlimited
+						</Button>
+					</div>
+				</Field>
+			</div>
+
+			<h4 class="text-sm font-semibold mt-4 mb-2">Per-pod defaults (LimitRange)</h4>
+			<p class="text-xs mb-2" style="color: var(--surface-muted);">
+				Applied to containers that don't specify requests. Required if CPU/memory quotas are set.
+			</p>
+			<div class="grid grid-cols-2 gap-3">
+				<Field label="Default CPU / pod (millicores)" for="quota-default-cpu">
+					<Input
+						id="quota-default-cpu"
+						type="number"
+						bind:value={qDefaultCpu}
+						placeholder="100"
+						class="w-full"
+					/>
+				</Field>
+				<Field label="Default memory / pod (MiB)" for="quota-default-memory">
+					<Input
+						id="quota-default-memory"
+						type="number"
+						bind:value={qDefaultMemMi}
+						placeholder="128"
+						class="w-full"
+					/>
+				</Field>
+			</div>
+
+			<h4 class="text-sm font-semibold mt-4 mb-2">Connected organizations</h4>
+			<p class="text-xs mb-2" style="color: var(--surface-muted);">
+				Connected orgs mirror the same caps and draw from the <strong>same usage pool</strong>.
+				Connecting org A (10 CPU) to org B means both show 10 CPU, but the sum of their usage still
+				cannot exceed 10.
+			</p>
+
+			{#if qConnections.length > 0}
+				<div class="space-y-1 mb-3">
+					{#each qConnections as conn (conn.id)}
+						<div
+							class="flex items-center justify-between rounded-lg border px-3 py-2 text-sm"
+							style="border-color: var(--surface-border);"
+						>
+							<div>
+								<div class="font-medium">{conn.name}</div>
+								<div class="font-mono text-xs" style="color: var(--surface-muted);">
+									{conn.slug}
+								</div>
+							</div>
+							<Button
+								variant="ghost"
+								size="sm"
+								style="color: var(--error-text-color);"
+								onclick={disconnectQuota}
+								disabled={qConnectBusy}
+								title="Disconnect from shared pool"
+							>
+								<X class="h-4 w-4" />
+							</Button>
+						</div>
+					{/each}
+				</div>
+			{:else}
+				<p class="text-xs mb-2 italic" style="color: var(--surface-muted);">
+					Not connected to any other org.
+				</p>
+			{/if}
+
+			<div class="relative">
+				<Input
+					type="text"
+					bind:value={qConnectSearch}
+					oninput={handleConnectSearch}
+					placeholder="Search for an organization to connect..."
+					class="w-full"
+				/>
+				{#if qConnectResults.length > 0}
+					<div
+						class="mt-1 rounded-lg border overflow-hidden"
+						style="border-color: var(--surface-border); background-color: var(--center-channel-bg);"
+					>
+						{#each qConnectResults as r (r.id)}
+							<button
+								type="button"
+								onclick={() => connectOrg(r)}
+								disabled={qConnectBusy}
+								class="w-full text-left px-3 py-2 text-sm hover:bg-[color-mix(in_srgb,var(--surface-border)_20%,transparent)] flex items-center justify-between"
+							>
+								<span>
+									<span class="font-medium">{r.name}</span>
+									<span class="font-mono text-xs ml-2" style="color: var(--surface-muted);"
+										>{r.slug}</span
+									>
+								</span>
+								<Plus class="h-4 w-4" />
+							</button>
+						{/each}
+					</div>
+				{/if}
+			</div>
+		{/if}
+	{/if}
+	{#snippet footer()}
+		{#if !quotaLoading}
+			<Button variant="secondary" onclick={closeQuota}>Cancel</Button>
+			<Button variant="primary" onclick={saveQuota} loading={quotaSaving}>Save quotas</Button>
+		{/if}
+	{/snippet}
+</Modal>

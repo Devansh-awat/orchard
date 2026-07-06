@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { Loader2, UserPlus, Trash2, ChevronDown, Check, Mail, X } from 'lucide-svelte';
 	import { UsersRound, MailCheck } from '@jis3r/icons';
-	import { scale } from 'svelte/transition';
 	import { motionStagger, springHover } from '$lib/utils/motion.svelte';
+	import { Button, Badge, Menu, MenuItem } from '$lib/components/ui';
 	import SettingsSection from '$lib/components/user-settings/SettingsSection.svelte';
 
 	interface Member {
@@ -42,6 +42,7 @@
 		addingMember,
 		resendingInvitationId,
 		cancellingInvitationId,
+		removingMemberId = null,
 		onAddMember,
 		onRemoveMember,
 		onUpdateMemberRole,
@@ -58,6 +59,7 @@
 		addingMember: boolean;
 		resendingInvitationId: string | null;
 		cancellingInvitationId: string | null;
+		removingMemberId?: string | null;
 		onAddMember: () => void;
 		onRemoveMember: (memberId: string) => void;
 		onUpdateMemberRole: (memberId: string, role: 'owner' | 'admin' | 'member' | 'guest') => void;
@@ -71,9 +73,6 @@
 		{ value: 'admin', label: 'Admin' },
 		{ value: 'owner', label: 'Owner' }
 	];
-
-	let inviteRoleOpen = $state(false);
-	let memberRoleOpen = $state<string | null>(null);
 
 	function formatRole(role: string) {
 		return role.charAt(0).toUpperCase() + role.slice(1);
@@ -92,50 +91,34 @@
 				placeholder="Email address"
 				class="om-invite-input"
 			/>
-			<div class="om-role-wrapper">
-				<button
-					type="button"
-					onclick={() => (inviteRoleOpen = !inviteRoleOpen)}
-					class="om-role-trigger"
-					{@attach springHover()}
-				>
-					<span>{roleOptions.find((r) => r.value === newMemberRole)?.label || 'Role'}</span>
-					<ChevronDown class="h-3.5 w-3.5" />
-				</button>
-				{#if inviteRoleOpen}
-					<div class="om-role-dropdown" transition:scale={{ duration: 120, start: 0.96 }}>
-						{#each roleOptions as option}
-							<button
-								type="button"
-								onclick={() => {
-									newMemberRole = option.value;
-									inviteRoleOpen = false;
-								}}
-								class="om-role-option"
-							>
-								<span>{option.label}</span>
-								{#if newMemberRole === option.value}<Check class="h-3.5 w-3.5 om-check-icon" />{/if}
-							</button>
-						{/each}
-					</div>
-				{/if}
-			</div>
-			<button
+			<Menu placement="bottom-end">
+				{#snippet trigger(attrs, _open)}
+					<button type="button" class="om-role-trigger" {...attrs} {@attach springHover()}>
+						<span>{roleOptions.find((r) => r.value === newMemberRole)?.label || 'Role'}</span>
+						<ChevronDown class="h-3.5 w-3.5" />
+					</button>
+				{/snippet}
+				{#each roleOptions as option (option.value)}
+					<MenuItem onclick={() => (newMemberRole = option.value)}>
+						<span class="om-option-label">{option.label}</span>
+						{#if newMemberRole === option.value}<Check class="h-3.5 w-3.5 om-check-icon" />{/if}
+					</MenuItem>
+				{/each}
+			</Menu>
+			<Button
+				variant="primary"
 				onclick={onAddMember}
-				disabled={addingMember || !newMemberEmail}
-				class="om-invite-btn"
-				{@attach springHover()}
+				loading={addingMember}
+				disabled={!newMemberEmail}
 			>
-				{#if addingMember}<Loader2 class="h-4 w-4 animate-spin" />{:else}<UserPlus
-						class="h-4 w-4"
-					/>{/if}
+				{#if !addingMember}<UserPlus class="h-4 w-4" />{/if}
 				Invite
-			</button>
+			</Button>
 		</div>
 	{/if}
 
 	<div class="om-member-list">
-		{#each members as member, i}
+		{#each members as member, i (member.user.id)}
 			<div class="om-member" {@attach motionStagger({ index: i, stride: 0.03 })}>
 				<div class="om-member-left">
 					{#if member.user.imageUrl}
@@ -155,9 +138,9 @@
 							{member.user.lastName || ''}
 							{#if member.role === 'guest'}
 								<span
-									class="om-guest-pill"
+									class="om-guest-wrap"
 									title="Guests are only members of specific projects, not the whole organization"
-									>Guest</span
+									><Badge tone="warning">Guest</Badge></span
 								>
 							{/if}
 						</p>
@@ -166,48 +149,34 @@
 				</div>
 				<div class="om-member-right">
 					{#if isOwner}
-						<div class="om-role-wrapper">
-							<button
-								type="button"
-								onclick={() => (memberRoleOpen = memberRoleOpen === member.id ? null : member.id)}
-								class="om-role-trigger"
-								{@attach springHover()}
-							>
-								<span>{formatRole(member.role)}</span>
-								<ChevronDown class="h-3.5 w-3.5" />
-							</button>
-							{#if memberRoleOpen === member.id}
-								<div class="om-role-dropdown" transition:scale={{ duration: 120, start: 0.96 }}>
-									{#each roleOptions as option}
-										<button
-											type="button"
-											onclick={() => {
-												onUpdateMemberRole(member.id, option.value);
-												memberRoleOpen = null;
-											}}
-											class="om-role-option"
-										>
-											<span>{option.label}</span>
-											{#if member.role === option.value}<Check
-													class="h-3.5 w-3.5 om-check-icon"
-												/>{/if}
-										</button>
-									{/each}
-								</div>
-							{/if}
-						</div>
+						<Menu placement="bottom-end">
+							{#snippet trigger(attrs, _open)}
+								<button type="button" class="om-role-trigger" {...attrs} {@attach springHover()}>
+									<span>{formatRole(member.role)}</span>
+									<ChevronDown class="h-3.5 w-3.5" />
+								</button>
+							{/snippet}
+							{#each roleOptions as option (option.value)}
+								<MenuItem onclick={() => onUpdateMemberRole(member.id, option.value)}>
+									<span class="om-option-label">{option.label}</span>
+									{#if member.role === option.value}<Check class="h-3.5 w-3.5 om-check-icon" />{/if}
+								</MenuItem>
+							{/each}
+						</Menu>
 					{:else}
-						<span class="om-role-badge">{formatRole(member.role)}</span>
+						<Badge tone="neutral">{formatRole(member.role)}</Badge>
 					{/if}
 					{#if canInvite && member.role !== 'owner'}
-						<button
+						<Button
+							variant="ghost"
+							size="sm"
 							onclick={() => onRemoveMember(member.id)}
-							class="om-remove-btn"
+							loading={removingMemberId === member.id}
+							disabled={removingMemberId !== null}
 							title="Remove member"
-							{@attach springHover()}
 						>
-							<Trash2 class="h-3.5 w-3.5" />
-						</button>
+							{#if removingMemberId !== member.id}<Trash2 class="h-3.5 w-3.5" />{/if}
+						</Button>
 					{/if}
 				</div>
 			</div>
@@ -217,7 +186,7 @@
 
 {#if canInvite && invitations.length > 0}
 	<SettingsSection
-		title="Pending Invitations"
+		title="Pending invitations"
 		description="Invitations awaiting acceptance"
 		iconColor="amber"
 		index={index + 1}
@@ -226,7 +195,7 @@
 		{#snippet badge()}<span class="om-count">{invitations.length}</span>{/snippet}
 
 		<div class="om-member-list">
-			{#each invitations as invitation, i}
+			{#each invitations as invitation, i (invitation.id)}
 				<div class="om-member" {@attach motionStagger({ index: i, stride: 0.03 })}>
 					<div class="om-member-left">
 						<div class="om-avatar-fallback om-avatar-pending">
@@ -242,29 +211,29 @@
 						</div>
 					</div>
 					<div class="om-member-right">
-						<span class="om-role-badge">{formatRole(invitation.role)}</span>
-						<button
+						<Badge tone="neutral">{formatRole(invitation.role)}</Badge>
+						<Button
+							variant="ghost"
+							size="sm"
 							onclick={() => onResendInvitation(invitation.id)}
 							disabled={resendingInvitationId === invitation.id}
-							class="om-action-btn"
 							title="Resend"
-							{@attach springHover()}
 						>
 							{#if resendingInvitationId === invitation.id}<Loader2
 									class="h-3.5 w-3.5 animate-spin"
 								/>{:else}<Mail class="h-3.5 w-3.5" />{/if}
-						</button>
-						<button
+						</Button>
+						<Button
+							variant="ghost"
+							size="sm"
 							onclick={() => onCancelInvitation(invitation.id)}
 							disabled={cancellingInvitationId === invitation.id}
-							class="om-remove-btn"
 							title="Cancel"
-							{@attach springHover()}
 						>
 							{#if cancellingInvitationId === invitation.id}<Loader2
 									class="h-3.5 w-3.5 animate-spin"
 								/>{:else}<X class="h-3.5 w-3.5" />{/if}
-						</button>
+						</Button>
 					</div>
 				</div>
 			{/each}
@@ -317,10 +286,6 @@
 		color: var(--surface-muted);
 	}
 
-	.om-role-wrapper {
-		position: relative;
-	}
-
 	.om-role-trigger {
 		display: flex;
 		align-items: center;
@@ -341,64 +306,13 @@
 		border-color: color-mix(in srgb, var(--center-channel-color) 30%, transparent);
 	}
 
-	.om-role-dropdown {
-		position: absolute;
-		top: calc(100% + 0.25rem);
-		right: 0;
-		z-index: 50;
-		min-width: 8rem;
-		padding: 0.25rem;
-		border-radius: 0.5rem;
-		border: 1px solid var(--surface-border);
-		background-color: var(--center-channel-bg);
-		box-shadow:
-			0 4px 12px rgb(0 0 0 / 0.08),
-			0 1px 3px rgb(0 0 0 / 0.04);
-	}
-
-	.om-role-option {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		gap: 0.5rem;
-		width: 100%;
-		padding: 0.4375rem 0.625rem;
-		border-radius: 0.375rem;
-		border: none;
-		background: none;
-		color: var(--center-channel-color);
-		font-size: 0.8125rem;
-		cursor: pointer;
-		transition: background-color 100ms;
-	}
-
-	.om-role-option:hover {
-		background-color: color-mix(in srgb, var(--center-channel-color) 6%, transparent);
+	.om-option-label {
+		flex: 1;
+		text-align: left;
 	}
 
 	:global(.om-check-icon) {
 		color: var(--button-bg);
-	}
-
-	.om-invite-btn {
-		display: flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.5rem 0.875rem;
-		border-radius: 0.5rem;
-		border: none;
-		background-color: var(--button-bg);
-		color: var(--button-color);
-		font-size: 0.8125rem;
-		font-weight: 600;
-		cursor: pointer;
-		white-space: nowrap;
-		transition: opacity 120ms;
-	}
-
-	.om-invite-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
 	}
 
 	.om-member-list {
@@ -472,17 +386,8 @@
 		white-space: nowrap;
 	}
 
-	.om-guest-pill {
+	.om-guest-wrap {
 		display: inline-flex;
-		align-items: center;
-		padding: 0.0625rem 0.4375rem;
-		border-radius: 2rem;
-		font-size: 0.625rem;
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-		background-color: color-mix(in srgb, var(--away-indicator) 12%, transparent);
-		color: var(--away-indicator);
 	}
 
 	.om-member-email {
@@ -499,69 +404,6 @@
 		align-items: center;
 		gap: 0.5rem;
 		flex-shrink: 0;
-	}
-
-	.om-role-badge {
-		display: inline-flex;
-		align-items: center;
-		padding: 0.25rem 0.625rem;
-		border-radius: 0.375rem;
-		font-size: 0.75rem;
-		font-weight: 550;
-		background-color: color-mix(in srgb, var(--center-channel-color) 6%, transparent);
-		color: var(--surface-muted);
-	}
-
-	.om-remove-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.75rem;
-		height: 1.75rem;
-		border-radius: 0.375rem;
-		border: none;
-		background: none;
-		color: var(--surface-muted);
-		cursor: pointer;
-		transition:
-			color 120ms,
-			background-color 120ms;
-	}
-
-	.om-remove-btn:hover {
-		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
-		color: var(--error-text-color);
-	}
-
-	.om-remove-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.om-action-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.75rem;
-		height: 1.75rem;
-		border-radius: 0.375rem;
-		border: none;
-		background: none;
-		color: var(--surface-muted);
-		cursor: pointer;
-		transition:
-			color 120ms,
-			background-color 120ms;
-	}
-
-	.om-action-btn:hover {
-		background-color: color-mix(in srgb, var(--button-bg) 10%, transparent);
-		color: var(--button-bg);
-	}
-
-	.om-action-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
 	}
 
 	@media (max-width: 640px) {

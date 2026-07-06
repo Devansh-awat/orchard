@@ -2,14 +2,17 @@
 	import { Plus, Loader2 } from 'lucide-svelte';
 	import { Eye, EyeOff, Trash2 } from '@jis3r/icons';
 	import { slide } from 'svelte/transition';
+	import { SectionCard } from '$lib/components/ui';
 	import { envVarsToRaw, rawToEnvVars } from '$lib/utils/format';
 
 	let {
 		envVars = $bindable<Array<{ key: string; value: string }>>(),
+		isEditing = $bindable(false),
 		savingEnv,
 		onSave
 	}: {
 		envVars: Array<{ key: string; value: string }>;
+		isEditing?: boolean;
 		savingEnv: boolean;
 		onSave: () => void;
 	} = $props();
@@ -17,7 +20,6 @@
 	let envViewMode = $state<'ui' | 'raw'>('ui');
 	let envRawText = $state('');
 	let revealedIndices = $state<Set<number>>(new Set());
-	let isEditing = $state(false);
 
 	function toggleReveal(index: number) {
 		revealedIndices = new Set(revealedIndices);
@@ -60,11 +62,8 @@
 	}
 </script>
 
-<div class="card rounded-2xl p-5">
-	<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-		<p class="text-sm font-semibold" style="color: var(--center-channel-color);">
-			Environment variables
-		</p>
+<SectionCard title="Environment variables">
+	{#snippet actions()}
 		<div class="relative flex rounded-lg p-0.5" style="background-color: var(--control-bg);">
 			<div
 				class="absolute top-0.5 bottom-0.5 rounded-md shadow-sm transition-all duration-200 ease-in-out"
@@ -88,10 +87,10 @@
 					: 'var(--surface-muted)'};">Raw</button
 			>
 		</div>
-	</div>
+	{/snippet}
 	<div class="env-container">
 		{#if envViewMode === 'ui'}
-			{#each envVars as env, index}
+			{#each envVars as env, index (index)}
 				{@const isRevealed = revealedIndices.has(index)}
 				{@const hasKey = env.key.trim().length > 0}
 				<div class="env-row" transition:slide={{ duration: 150 }}>
@@ -152,9 +151,9 @@
 	</div>
 	<div class="env-footer">
 		<p class="env-footer-hint">Saving will restart pods with new variables.</p>
-		<button onclick={handleSave} disabled={savingEnv} class="btn btn-primary">
+		<button onclick={handleSave} disabled={savingEnv || !isEditing} class="btn btn-primary">
 			{#if savingEnv}<Loader2 class="h-4 w-4 animate-spin" />{/if}
 			<span>Save</span>
 		</button>
 	</div>
-</div>
+</SectionCard>

@@ -15,8 +15,8 @@
 		CalendarRange
 	} from 'lucide-svelte';
 
-	type Props = { deploymentId: string | null };
-	const { deploymentId }: Props = $props();
+	type Props = { kind: 'deployment' | 'database'; id: string | null; active?: boolean };
+	const { kind, id: entityId, active = true }: Props = $props();
 
 	type QuickRange = {
 		id: '5m' | '15m' | '30m' | '1h' | '6h' | '24h' | '7d';
@@ -129,7 +129,7 @@
 		if (!hasData()) initialLoading = true;
 		try {
 			const res = await apiFetch(
-				`/apiv1/deployments/${encodeURIComponent(id)}/metrics?start=${start}&end=${end}&step=${stepMs}`
+				`/apiv1/${kind === 'database' ? 'databases' : 'deployments'}/${encodeURIComponent(id)}/metrics?start=${start}&end=${end}&step=${stepMs}`
 			);
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
 			const body = await res.json();
@@ -153,8 +153,8 @@
 		const start = windowStart;
 		const end = windowEnd;
 		const s = step;
-		const id = deploymentId;
-		if (!id) return;
+		const id = entityId;
+		if (!id || !active) return;
 		untrack(() => {
 			// A stale crosshair timestamp from a wider range falls outside
 			// a narrower one and the plugin silently skips drawing it.
@@ -323,7 +323,7 @@
 
 	let tickHandle: ReturnType<typeof setInterval> | null = null;
 	$effect(() => {
-		if (!isLive) return;
+		if (!isLive || !active) return;
 		// 15s matches the upstream scrape interval — no point refetching faster.
 		tickHandle = setInterval(() => {
 			now = Date.now();
@@ -523,7 +523,7 @@
 
 {#snippet controls()}
 	<div class="metrics-rangepick" role="tablist" aria-label="Time range">
-		{#each QUICK_RANGES as r}
+		{#each QUICK_RANGES as r (r.id)}
 			<button
 				class="metrics-rangebtn"
 				class:active={activeQuickId === r.id}
@@ -667,7 +667,7 @@
 	</div>
 
 	<div class="metrics-grid">
-		{#each CARDS as c}
+		{#each CARDS as c (c.id)}
 			{@render card(c, '120px', true)}
 		{/each}
 	</div>

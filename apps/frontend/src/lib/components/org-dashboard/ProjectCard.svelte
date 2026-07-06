@@ -10,12 +10,19 @@
 		Container,
 		Ellipsis
 	} from 'lucide-svelte';
-	import { motionStagger, motionPopover } from '$lib/utils/motion.svelte';
+	import { motionStagger } from '$lib/utils/motion.svelte';
 	import { projectGradientEnabled } from '$lib/stores';
-	import { projectStatusSummary, meshBakedBg, springRotate, bodyAttach } from './helpers.svelte';
+	import {
+		projectStatusSummary,
+		meshBakedBg,
+		springRotate,
+		bodyAttach,
+		knownIcon
+	} from './helpers.svelte';
+	import { Menu, MenuItem } from '$lib/components/ui';
 	import DeploymentCard from './DeploymentCard.svelte';
 	import DatabaseCard from './DatabaseCard.svelte';
-	import type { ProjectGroup, ProjectMeta, DeploymentSummary } from './types';
+	import type { ProjectGroup, ProjectMeta, DeploymentSummary, LiveMetricsEntry } from './types';
 
 	let {
 		group,
@@ -25,14 +32,12 @@
 		rendered,
 		favouriteIds,
 		failedFav,
-		openMenuId,
-		renderMenuId,
+		liveMetrics,
 		projectBodyEls,
 		getRenderedProjectBodies,
 		setRenderedProjectBodies,
 		onToggleExpand,
 		onToggleFav,
-		onToggleMenu,
 		onRestart,
 		onCopyUrl,
 		onVisit,
@@ -45,14 +50,12 @@
 		rendered: boolean;
 		favouriteIds: Set<string>;
 		failedFav: Set<string>;
-		openMenuId: string | null;
-		renderMenuId: string | null;
+		liveMetrics?: ReadonlyMap<string, LiveMetricsEntry>;
 		projectBodyEls: Map<string, HTMLElement>;
 		getRenderedProjectBodies: () => Set<string>;
 		setRenderedProjectBodies: (s: Set<string>) => void;
 		onToggleExpand: (id: string, e: Event) => void;
 		onToggleFav: (dep: DeploymentSummary, e: Event) => void;
-		onToggleMenu: (id: string, e: Event) => void;
 		onRestart: (dep: DeploymentSummary, e: Event) => void;
 		onCopyUrl: (dep: DeploymentSummary, e: Event) => void;
 		onVisit: (dep: DeploymentSummary, e: Event) => void;
@@ -61,44 +64,23 @@
 
 	const summary = $derived(projectStatusSummary(group));
 
-	let newOpen = $state(false);
-	let newRender = $state(false);
-	let menuTop = $state(0);
-	let menuRight = $state(0);
-
-	function portal(node: HTMLElement) {
-		document.body.appendChild(node);
-		return () => {
-			if (node.parentNode) node.parentNode.removeChild(node);
-		};
-	}
-
-	function toggleNew(e: Event) {
-		e.stopPropagation();
-		e.preventDefault();
-		if (newOpen) {
-			newOpen = false;
-			return;
+	const depIcons = $derived.by(() => {
+		const icons: { id: string; src: string }[] = [];
+		for (const dep of group.deps) {
+			if (icons.length >= 3) break;
+			const known = knownIcon(dep.image);
+			if (known) {
+				icons.push({ id: dep.id, src: known });
+				continue;
+			}
+			if (!failedFav.has(dep.id) && dep.faviconUrl) {
+				icons.push({ id: dep.id, src: dep.faviconUrl });
+			}
 		}
-		const r = (e.currentTarget as HTMLElement).getBoundingClientRect();
-		menuTop = r.bottom + 6;
-		menuRight = window.innerWidth - r.right;
-		newRender = true;
-		newOpen = true;
-	}
-
-	$effect(() => {
-		if (!newOpen) return;
-		const close = () => (newOpen = false);
-		window.addEventListener('click', close);
-		window.addEventListener('scroll', close, true);
-		window.addEventListener('resize', close);
-		return () => {
-			window.removeEventListener('click', close);
-			window.removeEventListener('scroll', close, true);
-			window.removeEventListener('resize', close);
-		};
+		return icons;
 	});
+
+	let newOpen = $state(false);
 </script>
 
 <div
@@ -127,13 +109,29 @@
 		>
 			<ChevronRight size={16} />
 		</div>
-		<div class="proj-av" class:proj-av--fallback={!meta?.icon || !/^https?:\/\//.test(meta.icon)}>
+		<div
+			class="proj-av"
+			class:proj-av--fallback={meta?.icon ? !/^https?:\/\//.test(meta.icon) : depIcons.length === 0}
+			class:proj-av--cluster={!meta?.icon && depIcons.length > 0}
+		>
 			{#if meta?.icon}
 				{#if /^https?:\/\//.test(meta.icon)}
 					<img src={meta.icon} alt="" class="proj-av-img" loading="lazy" decoding="async" />
 				{:else}
 					<span class="proj-av-emoji">{meta.icon}</span>
 				{/if}
+			{:else if depIcons.length > 0}
+				<div class="proj-av-cluster proj-av-cluster--{depIcons.length}">
+					{#each depIcons as ic (ic.id)}
+						<img
+							src={ic.src}
+							alt=""
+							class="proj-av-mini"
+							decoding="async"
+							onerror={() => onFavErr(ic.id)}
+						/>
+					{/each}
+				</div>
 			{:else}
 				<Folder size={16} />
 			{/if}
@@ -160,56 +158,41 @@
 				</span>
 			{/if}
 		</div>
-		<span
-			class="proj-new"
-			role="button"
-			tabindex="0"
-			onclick={toggleNew}
-			onkeydown={(e) => {
-				if (e.key === 'Enter' || e.key === ' ') toggleNew(e);
-			}}
-			aria-haspopup="menu"
-			aria-expanded={newOpen}
-			aria-label="Add new to this project"
-		>
-			<Plus size={12} /> New
-		</span>
-		{#if newRender}
-			<div
-				class="menu proj-new-menu"
-				role="menu"
-				style="position: fixed; top: {menuTop}px; right: {menuRight}px;"
-				onclick={(e) => e.stopPropagation()}
-				onkeydown={(e) => e.stopPropagation()}
-				tabindex="-1"
-				{@attach portal}
-				{@attach motionPopover({
-					from: { y: -6, scale: 0.94 },
-					stiffness: 540,
-					damping: 28,
-					closing: () => !newOpen,
-					onClosed: () => (newRender = false)
-				})}
-			>
-				<a
-					class="menu-item"
-					role="menuitem"
-					href="/{orgSlug}/projects/{group.slug}/deployments/new?source=image"
+		<Menu placement="bottom-end" bind:open={newOpen}>
+			{#snippet trigger(attrs, open)}
+				<span
+					class="proj-new"
+					role="button"
+					tabindex="0"
+					{...attrs}
+					onclick={(e: MouseEvent) => {
+						e.stopPropagation();
+						(attrs as { onclick?: (e: Event) => void }).onclick?.(e);
+					}}
+					onkeydown={(e: KeyboardEvent) => {
+						if (e.key === 'Enter' || e.key === ' ') {
+							e.preventDefault();
+							e.stopPropagation();
+							newOpen = !newOpen;
+						}
+					}}
+					aria-haspopup="menu"
+					aria-expanded={open}
+					aria-label="Add new to this project"
 				>
-					<Container size={14} /> Dockerfile
-				</a>
-				<a
-					class="menu-item"
-					role="menuitem"
-					href="/{orgSlug}/projects/{group.slug}/deployments/new?source=github"
-				>
-					<Github size={14} /> Github Repo
-				</a>
-				<a class="menu-item" role="menuitem" href="/{orgSlug}/new?projectSlug={group.slug}">
-					<Ellipsis size={14} /> Others
-				</a>
-			</div>
-		{/if}
+					<Plus size={12} /> New
+				</span>
+			{/snippet}
+			<MenuItem href="/{orgSlug}/projects/{group.slug}/deployments/new?source=image">
+				<Container size={14} /> Dockerfile
+			</MenuItem>
+			<MenuItem href="/{orgSlug}/projects/{group.slug}/deployments/new?source=github">
+				<Github size={14} /> GitHub repo
+			</MenuItem>
+			<MenuItem href="/{orgSlug}/new?projectSlug={group.slug}">
+				<Ellipsis size={14} /> Something else
+			</MenuItem>
+		</Menu>
 		<a
 			href="/{orgSlug}/projects/{group.slug}"
 			class="proj-open"
@@ -239,10 +222,8 @@
 							{orgSlug}
 							isFavourite={favouriteIds.has(dep.id)}
 							{failedFav}
-							{openMenuId}
-							{renderMenuId}
+							{liveMetrics}
 							{onToggleFav}
-							{onToggleMenu}
 							{onRestart}
 							{onCopyUrl}
 							{onVisit}

@@ -1,11 +1,9 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
-	import { apiFetch, toasts, refreshTree } from '$lib/stores';
+	import { onDestroy, onMount } from 'svelte';
+	import { apiFetch, toasts, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
 	import {
 		ArrowLeft,
-		Loader2,
 		LayoutTemplate,
 		Trash2,
 		Database,
@@ -14,6 +12,7 @@
 		ExternalLink
 	} from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import { Button, StatusPill, Skeleton } from '$lib/components/ui';
 
 	interface TemplateInstance {
 		id: string;
@@ -42,33 +41,33 @@
 	const orgSlug = $derived($page.params.orgSlug);
 	const instanceId = $derived($page.params.instanceId);
 
-	function getStatusColor(status: string) {
+	function getStatusTone(status: string): 'online' | 'warn' | 'error' | 'muted' {
 		switch (status?.toLowerCase()) {
 			case 'active':
 			case 'running':
 			case 'ready':
-				return '#22c55e';
+				return 'online';
 			case 'deploying':
 			case 'pending':
 			case 'building':
-				return '#f59e0b';
+				return 'warn';
 			case 'failed':
 			case 'error':
 			case 'deleting':
-				return 'var(--error-text-color)';
+				return 'error';
 			default:
-				return 'var(--surface-muted)';
+				return 'muted';
 		}
 	}
 
 	async function fetchInstance() {
-		loading = true;
+		if (!instance) loading = true;
 		try {
 			const response = await apiFetch(`/apiv1/template-instances/${instanceId}`);
 			if (!response.ok) throw new Error('Failed to fetch template instance');
 			instance = await response.json();
 		} catch (e) {
-			error = e instanceof Error ? e.message : 'Failed to load instance';
+			if (!instance) error = e instanceof Error ? e.message : 'Failed to load instance';
 		} finally {
 			loading = false;
 		}
@@ -93,7 +92,6 @@
 				color: 'success'
 			});
 
-			refreshTree();
 			history.back();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to delete';
@@ -102,29 +100,69 @@
 		}
 	}
 
+	let unsub: (() => void) | null = null;
+	let subscribedOrgId: string | null = null;
+	let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+	let pollTimer: ReturnType<typeof setInterval> | null = null;
+
+	$effect(() => {
+		const id = $selectedOrganization?.id ?? null;
+		if (!id || id === subscribedOrgId) return;
+		subscribedOrgId = id;
+		unsub?.();
+		unsub = subscribeOrgEvents(id, (ev) => {
+			if (
+				ev.type !== 'deployment.changed' &&
+				ev.type !== 'database.changed' &&
+				ev.type !== 'project.changed'
+			)
+				return;
+			if (refreshTimer) return;
+			refreshTimer = setTimeout(() => {
+				refreshTimer = null;
+				fetchInstance();
+			}, 500);
+		});
+	});
+
+	$effect(() => {
+		const status = instance?.status?.toLowerCase();
+		const inFlight = status === 'provisioning' || status === 'pending' || status === 'deploying';
+		if (inFlight && !pollTimer) {
+			pollTimer = setInterval(fetchInstance, 10_000);
+		} else if (!inFlight && pollTimer) {
+			clearInterval(pollTimer);
+			pollTimer = null;
+		}
+	});
+
+	onDestroy(() => {
+		unsub?.();
+		if (refreshTimer) clearTimeout(refreshTimer);
+		if (pollTimer) clearInterval(pollTimer);
+	});
+
 	onMount(fetchInstance);
 </script>
 
 <div class="ti-page">
 	{#if loading}
 		<div class="ti-skeleton">
-			<div class="skeleton" style="width: 3.5rem; height: 0.875rem; margin-bottom: 1.5rem;"></div>
-			<div style="display: flex; align-items: flex-start; gap: 0.75rem; margin-bottom: 1.5rem;">
-				<div class="skeleton" style="width: 2.5rem; height: 2.5rem; border-radius: 0.75rem;"></div>
+			<div class="ti-skel-back">
+				<Skeleton width="3.5rem" height="0.875rem" rounded="0.25rem" />
+			</div>
+			<div class="ti-skel-head">
+				<Skeleton width="2.5rem" height="2.5rem" rounded="0.75rem" />
 				<div>
-					<div
-						class="skeleton"
-						style="width: 10rem; height: 1.25rem; margin-bottom: 0.375rem;"
-					></div>
-					<div class="skeleton" style="width: 8rem; height: 0.75rem;"></div>
+					<div class="ti-skel-title">
+						<Skeleton width="10rem" height="1.25rem" rounded="0.25rem" />
+					</div>
+					<Skeleton width="8rem" height="0.75rem" rounded="0.25rem" />
 				</div>
 			</div>
-			<div class="skeleton" style="width: 6rem; height: 0.75rem; margin-bottom: 0.75rem;"></div>
-			<div
-				class="skeleton"
-				style="width: 100%; height: 3.5rem; border-radius: 0.75rem; margin-bottom: 0.5rem;"
-			></div>
-			<div class="skeleton" style="width: 100%; height: 3.5rem; border-radius: 0.75rem;"></div>
+			<div class="ti-skel-label"><Skeleton width="6rem" height="0.75rem" rounded="0.25rem" /></div>
+			<div class="ti-skel-row"><Skeleton width="100%" height="3.5rem" rounded="0.75rem" /></div>
+			<Skeleton width="100%" height="3.5rem" rounded="0.75rem" />
 		</div>
 	{:else if instance}
 		<button onclick={() => history.back()} class="ti-back">
@@ -132,7 +170,6 @@
 			Back
 		</button>
 
-		<!-- Header -->
 		<div class="ti-header">
 			<div class="ti-header-info">
 				<div class="ti-header-icon">
@@ -140,44 +177,31 @@
 				</div>
 				<div>
 					<h1 class="ti-title">{instance.name}</h1>
-					<p class="ti-meta">
-						{instance.template.displayName} &middot;
-						<span class="ti-status" style="color: {getStatusColor(instance.status)}">
-							{instance.status}
-						</span>
-					</p>
+					<div class="ti-meta">
+						<span>{instance.template.displayName}</span>
+						<StatusPill label={instance.status} tone={getStatusTone(instance.status)} />
+					</div>
 				</div>
 			</div>
-			<button
-				onclick={() => (showDeleteModal = true)}
-				disabled={deleting}
-				class="ti-btn ti-btn-danger"
-			>
-				{#if deleting}
-					<Loader2 class="h-4 w-4 animate-spin" />
-					Deleting...
-				{:else}
-					<Trash2 class="h-4 w-4" />
-					Delete All Resources
-				{/if}
-			</button>
+			<Button variant="danger" loading={deleting} onclick={() => (showDeleteModal = true)}>
+				{#if !deleting}<Trash2 class="h-4 w-4" />{/if}
+				Delete all resources
+			</Button>
 		</div>
 
 		{#if error}
 			<div class="ti-error">{error}</div>
 		{/if}
 
-		<!-- Resources -->
 		<div class="ti-sections">
-			<!-- Deployments -->
 			{#if instance.deployments.length}
 				<div class="ti-section">
 					<h2 class="ti-section-title">
-						<Server class="h-4 w-4" style="color: #3b82f6" />
+						<Server class="h-4 w-4" />
 						Deployments ({instance.deployments.length})
 					</h2>
 					<div class="ti-resource-list">
-						{#each instance.deployments as dep}
+						{#each instance.deployments as dep (dep.id)}
 							<a href="/{orgSlug}/deployments/{dep.id}" class="ti-resource-card">
 								<div class="ti-resource-info">
 									<span class="ti-resource-name">{dep.name}</span>
@@ -186,9 +210,7 @@
 									{/if}
 								</div>
 								<div class="ti-resource-right">
-									<span class="ti-resource-status" style="color: {getStatusColor(dep.status)}">
-										{dep.status}
-									</span>
+									<StatusPill label={dep.status} tone={getStatusTone(dep.status)} />
 									<ExternalLink class="h-3.5 w-3.5" style="color: var(--surface-muted)" />
 								</div>
 							</a>
@@ -197,24 +219,21 @@
 				</div>
 			{/if}
 
-			<!-- Databases -->
 			{#if instance.databases.length}
 				<div class="ti-section">
 					<h2 class="ti-section-title">
-						<Database class="h-4 w-4" style="color: #22c55e" />
+						<Database class="h-4 w-4" />
 						Databases ({instance.databases.length})
 					</h2>
 					<div class="ti-resource-list">
-						{#each instance.databases as db}
+						{#each instance.databases as db (db.id)}
 							<a href="/{orgSlug}/databases/{db.id}" class="ti-resource-card">
 								<div class="ti-resource-info">
 									<span class="ti-resource-name">{db.name}</span>
 									<span class="ti-resource-detail">{db.dbName}</span>
 								</div>
 								<div class="ti-resource-right">
-									<span class="ti-resource-status" style="color: {getStatusColor(db.status)}">
-										{db.status}
-									</span>
+									<StatusPill label={db.status} tone={getStatusTone(db.status)} />
 									<ExternalLink class="h-3.5 w-3.5" style="color: var(--surface-muted)" />
 								</div>
 							</a>
@@ -223,15 +242,14 @@
 				</div>
 			{/if}
 
-			<!-- Ingresses -->
 			{#if instance.ingresses.length}
 				<div class="ti-section">
 					<h2 class="ti-section-title">
-						<Globe class="h-4 w-4" style="color: #f59e0b" />
+						<Globe class="h-4 w-4" />
 						Ingresses ({instance.ingresses.length})
 					</h2>
 					<div class="ti-resource-list">
-						{#each instance.ingresses as ing}
+						{#each instance.ingresses as ing (ing.id)}
 							<a
 								href="https://{ing.host}{ing.path}"
 								target="_blank"
@@ -251,11 +269,10 @@
 			{/if}
 		</div>
 
-		<!-- Parameters used -->
 		<div class="ti-section">
-			<h2 class="ti-section-title">Parameters Used</h2>
+			<h2 class="ti-section-title">Parameters used</h2>
 			<div class="ti-params">
-				{#each Object.entries(instance.parameters) as [key, value]}
+				{#each Object.entries(instance.parameters) as [key, value] (key)}
 					<div class="ti-param">
 						<span class="ti-param-key">{key}</span>
 						<span class="ti-param-value">{value}</span>
@@ -271,7 +288,8 @@
 		bind:open={showDeleteModal}
 		title={`Delete "${instance.name}"?`}
 		description="This will permanently <strong>delete all resources</strong> created by this template (deployments, databases, and ingresses). This cannot be undone."
-		confirmLabel="Delete All"
+		html
+		confirmLabel="Delete all"
 		onconfirm={deleteInstance}
 		oncancel={() => {}}
 	/>
@@ -286,6 +304,24 @@
 
 	.ti-skeleton {
 		padding: 2.5rem 0;
+	}
+	.ti-skel-back {
+		margin-bottom: 1.5rem;
+	}
+	.ti-skel-head {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.75rem;
+		margin-bottom: 1.5rem;
+	}
+	.ti-skel-title {
+		margin-bottom: 0.375rem;
+	}
+	.ti-skel-label {
+		margin-bottom: 0.75rem;
+	}
+	.ti-skel-row {
+		margin-bottom: 0.5rem;
 	}
 
 	.ti-back {
@@ -306,7 +342,6 @@
 		color: var(--center-channel-color);
 	}
 
-	/* Header */
 	.ti-header {
 		display: flex;
 		align-items: flex-start;
@@ -341,14 +376,12 @@
 	}
 
 	.ti-meta {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
 		font-size: 0.8125rem;
 		color: var(--surface-muted);
-		margin: 0.25rem 0 0;
-	}
-
-	.ti-status {
-		font-weight: 500;
-		text-transform: capitalize;
+		margin-top: 0.25rem;
 	}
 
 	.ti-error {
@@ -361,37 +394,6 @@
 		margin-bottom: 1.5rem;
 	}
 
-	/* Button */
-	.ti-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.4375rem 0.875rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		font-weight: 500;
-		border: none;
-		cursor: pointer;
-		transition: opacity 0.15s;
-		white-space: nowrap;
-		flex-shrink: 0;
-	}
-
-	.ti-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.ti-btn-danger {
-		background-color: color-mix(in srgb, var(--error-text-color) 12%, transparent);
-		color: var(--error-text-color);
-	}
-
-	.ti-btn-danger:hover:not(:disabled) {
-		background-color: color-mix(in srgb, var(--error-text-color) 20%, transparent);
-	}
-
-	/* Sections */
 	.ti-sections {
 		display: flex;
 		flex-direction: column;
@@ -472,13 +474,6 @@
 		flex-shrink: 0;
 	}
 
-	.ti-resource-status {
-		font-size: 0.75rem;
-		font-weight: 500;
-		text-transform: capitalize;
-	}
-
-	/* Parameters */
 	.ti-params {
 		display: grid;
 		grid-template-columns: 1fr 1fr;

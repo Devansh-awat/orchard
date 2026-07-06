@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Users, Loader2, Trash2, ChevronDown, Check, Mail, UserPlus } from 'lucide-svelte';
 	import { motionStagger, motionPopover } from '$lib/utils/motion.svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import type { ProjectMember, OrgMember, PendingInvitation } from './types';
 	import { ROLE_OPTIONS } from './types';
 
@@ -57,6 +58,16 @@
 	let pickerOpen = $state(false);
 	let pickerRender = $state(false);
 	let renderRoleMenuId = $state<string | null>(null);
+
+	let memberToRemove = $state<ProjectMember | null>(null);
+	let showRemoveModal = $state(false);
+	let inviteToRevoke = $state<PendingInvitation | null>(null);
+	let showRevokeModal = $state(false);
+
+	function memberDisplayName(m: ProjectMember) {
+		const name = [m.user.firstName, m.user.lastName].filter(Boolean).join(' ');
+		return name || m.user.email;
+	}
 
 	$effect(() => {
 		if (pickerOpen) pickerRender = true;
@@ -287,7 +298,7 @@
 										})}
 										{@attach portalUnder(() => document.getElementById(triggerId))}
 									>
-										{#each ROLE_OPTIONS as opt}
+										{#each ROLE_OPTIONS as opt (opt.value)}
 											<button
 												type="button"
 												role="option"
@@ -324,7 +335,10 @@
 								class="pj-member-remove"
 								title="Remove member"
 								aria-label="Remove {m.user.firstName ?? m.user.email}"
-								onclick={() => onRemoveMember(m.id)}
+								onclick={() => {
+									memberToRemove = m;
+									showRemoveModal = true;
+								}}
 								disabled={removingMemberId === m.id}
 							>
 								{#if removingMemberId === m.id}
@@ -384,7 +398,10 @@
 							class="pj-member-remove"
 							title="Revoke invitation"
 							aria-label="Revoke invitation for {inv.email}"
-							onclick={() => onRevokeInvitation?.(inv.id)}
+							onclick={() => {
+								inviteToRevoke = inv;
+								showRevokeModal = true;
+							}}
 							disabled={revokingInviteId === inv.id}
 						>
 							{#if revokingInviteId === inv.id}
@@ -399,3 +416,29 @@
 		{/if}
 	</div>
 </div>
+
+<ConfirmModal
+	bind:open={showRemoveModal}
+	title="Remove member"
+	description={memberToRemove
+		? `Remove ${memberDisplayName(memberToRemove)} from this project?`
+		: ''}
+	confirmLabel="Remove"
+	onconfirm={() => {
+		if (memberToRemove) onRemoveMember(memberToRemove.id);
+	}}
+	oncancel={() => {}}
+/>
+
+<ConfirmModal
+	bind:open={showRevokeModal}
+	title="Revoke invitation"
+	description={inviteToRevoke
+		? `Revoke the invitation for ${inviteToRevoke.email}? They won't be able to join with it anymore.`
+		: ''}
+	confirmLabel="Revoke"
+	onconfirm={() => {
+		if (inviteToRevoke) onRevokeInvitation?.(inviteToRevoke.id);
+	}}
+	oncancel={() => {}}
+/>

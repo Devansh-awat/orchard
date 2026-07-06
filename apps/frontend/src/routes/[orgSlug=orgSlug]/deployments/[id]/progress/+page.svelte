@@ -91,20 +91,16 @@
 	$effect(() => {
 		const orgId = $selectedOrganization?.id;
 		if (!orgId) return;
-		return subscribeOrgEvents(
-			orgId,
-			(ev) => {
-				if (ev.id !== deploymentId) return;
-				if (
-					ev.type === 'deployment.changed' ||
-					ev.type === 'build.changed' ||
-					ev.type === 'pod.changed'
-				) {
-					queueFetch();
-				}
-			},
-			{ invalidateDependencies: [] }
-		);
+		return subscribeOrgEvents(orgId, (ev) => {
+			if (ev.id !== deploymentId) return;
+			if (
+				ev.type === 'deployment.changed' ||
+				ev.type === 'build.changed' ||
+				ev.type === 'pod.changed'
+			) {
+				queueFetch();
+			}
+		});
 	});
 
 	const isGitHubDeploy = $derived(Boolean(deployment?.githubRepo));

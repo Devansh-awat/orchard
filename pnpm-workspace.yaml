@@ -17,4 +17,4 @@ allowBuilds:
   prisma: true
   protobufjs: true
   sharp: false
-  unrs-resolver: set this to true or false
+  unrs-resolver: true

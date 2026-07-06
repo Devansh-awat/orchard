@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { Loader2 } from 'lucide-svelte';
-	import { Check, Clock, Maximize2, Minimize2, X } from '@jis3r/icons';
-	import { motionPopover, motionBackdrop } from '$lib/utils/motion.svelte';
+	import { Check, Clock, Maximize2, X } from '@jis3r/icons';
+	import { motionPopover } from '$lib/utils/motion.svelte';
+	import { Button, Modal } from '$lib/components/ui';
 	import DeploymentProgress from '$lib/components/DeploymentProgress.svelte';
 	import AnimatedNumber from '$lib/components/AnimatedNumber.svelte';
 
@@ -9,7 +10,6 @@
 		deployment,
 		// Build modal
 		showBuildModal = $bindable(),
-		showBuildModalRender = $bindable(),
 		buildModalStatus,
 		buildModalStep,
 		buildModalError,
@@ -31,7 +31,6 @@
 	}: {
 		deployment: any;
 		showBuildModal: boolean;
-		showBuildModalRender: boolean;
 		buildModalStatus: string;
 		buildModalStep: string | null;
 		buildModalError: string | null;
@@ -53,90 +52,47 @@
 </script>
 
 <!-- Build Progress Modal -->
-{#if showBuildModalRender}
+<Modal
+	bind:open={showBuildModal}
+	title="Redeploying {deployment?.name ?? 'app'}"
+	size="lg"
+	onclose={onMinimizeBuildModal}
+>
 	<div
-		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4"
-		role="dialog"
-		aria-modal="true"
-		aria-label="Deployment progress"
-		onclick={(e) => {
-			if (e.target === e.currentTarget) onMinimizeBuildModal();
-		}}
-		onkeydown={(e) => {
-			if (e.key === 'Escape') onMinimizeBuildModal();
-		}}
-		{@attach motionBackdrop(
-			() => !showBuildModal,
-			() => {
-				showBuildModalRender = false;
-			}
-		)}
+		class="mb-4 flex items-center gap-1.5 text-sm"
+		style="color: var(--surface-muted);"
+		title="Elapsed time"
 	>
-		<div
-			class="build-modal card w-full max-w-2xl rounded-2xl shadow-2xl"
-			{@attach motionPopover({
-				closing: () => !showBuildModal,
-				onClosed: () => {},
-				from: { y: 14, scale: 0.94, opacity: 0 },
-				stiffness: 460,
-				damping: 30,
-				mass: 0.95
-			})}
-		>
-			<div
-				class="flex items-center justify-between border-b px-6 py-4"
-				style="border-color: var(--surface-border);"
-			>
-				<div class="flex items-center gap-3">
-					<h2 class="text-lg font-semibold">Redeploying {deployment?.name ?? 'app'}</h2>
-					<div class="flex items-center gap-1.5 text-sm" style="color: var(--surface-muted);">
-						<Clock size={14} class="h-3.5 w-3.5" />
-						<AnimatedNumber value={buildElapsed} format={formatBuildElapsed} class="font-mono" />
-					</div>
-				</div>
-				<button
-					onclick={onMinimizeBuildModal}
-					class="btn-icon rounded-lg p-1.5 transition-colors"
-					title="Minimize"
-				>
-					<Minimize2 size={16} class="h-4 w-4" />
-				</button>
-			</div>
-
-			<div class="p-6">
-				<DeploymentProgress
-					status={deployment?.status ?? 'pending'}
-					buildStatus={buildModalStatus}
-					buildStep={buildModalStep}
-					buildLogs={accumulatedBuildLogs}
-					buildError={buildModalError}
-					isGitHubDeploy={true}
-					warnings={buildModalWarnings}
-					buildStepTimestamps={buildModalTimestamps}
-				/>
-			</div>
-
-			<div
-				class="flex justify-end gap-3 border-t px-6 py-4"
-				style="border-color: var(--surface-border);"
-			>
-				{#if buildModalStatus === 'failed'}
-					<button onclick={onCloseBuildModal} class="btn btn-secondary text-sm"> Close </button>
-				{:else if canCancelBuild}
-					<button onclick={onCancelBuild} disabled={cancelingBuild} class="btn btn-danger text-sm">
-						{#if cancelingBuild}
-							<Loader2 class="h-3.5 w-3.5 animate-spin" />
-							Cancelling...
-						{:else}
-							<X size={14} />
-							Cancel deployment
-						{/if}
-					</button>
-				{/if}
-			</div>
-		</div>
+		<Clock size={14} class="h-3.5 w-3.5" />
+		<AnimatedNumber value={buildElapsed} format={formatBuildElapsed} class="font-mono" />
 	</div>
-{/if}
+
+	<DeploymentProgress
+		status={deployment?.status ?? 'pending'}
+		buildStatus={buildModalStatus}
+		buildStep={buildModalStep}
+		buildLogs={accumulatedBuildLogs}
+		buildError={buildModalError}
+		isGitHubDeploy={true}
+		warnings={buildModalWarnings}
+		buildStepTimestamps={buildModalTimestamps}
+	/>
+
+	{#snippet footer()}
+		{#if buildModalStatus === 'failed'}
+			<Button variant="secondary" onclick={onCloseBuildModal}>Close</Button>
+		{:else if canCancelBuild}
+			<Button variant="danger" loading={cancelingBuild} onclick={onCancelBuild}>
+				{#if cancelingBuild}
+					Cancelling...
+				{:else}
+					<X size={14} />
+					Cancel deployment
+				{/if}
+			</Button>
+		{/if}
+	{/snippet}
+</Modal>
 
 <!-- Floating Build Card -->
 {#if showBuildCardRender}

@@ -258,7 +258,7 @@
 					<div class="alert alert-error">{error}</div>
 				{:else if loading}
 					<div style="display: flex; flex-direction: column; gap: 0.375rem; padding: 0.25rem 0;">
-						{#each [1, 2] as _}
+						{#each [1, 2] as _ (_)}
 							<div
 								style="display: flex; align-items: center; justify-content: space-between; padding: 0.875rem 1rem; border: 1px solid var(--surface-border); border-radius: 0.625rem;"
 							>
@@ -279,7 +279,7 @@
 					</p>
 				{:else}
 					<div class="token-list">
-						{#each tokens as token}
+						{#each tokens as token (token.id)}
 							<div class="token-item">
 								<div class="flex-1 min-w-0">
 									<p class="settings-field-value">{token.name}</p>
@@ -354,6 +354,7 @@
 		bind:open={showRevokeModal}
 		title={`Revoke "${tokenToRevoke.name}"?`}
 		description="Any tools or integrations using this token will <strong>stop working</strong> immediately."
+		html
 		confirmLabel="Revoke Token"
 		onconfirm={() => revokeToken(tokenToRevoke!)}
 		oncancel={() => {

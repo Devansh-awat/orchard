@@ -20,6 +20,7 @@
 		Link2,
 		PartyPopper
 	} from 'lucide-svelte';
+	import { Button, Field, Input } from '$lib/components/ui';
 
 	type Step = 'loading' | 'profile' | 'github' | 'done';
 
@@ -113,13 +114,6 @@
 				lastName: cleanLastName,
 				username: un || undefined
 			};
-			console.log('[Setup] Continue clicked. Form values:', {
-				firstName: fn,
-				lastName: ln,
-				username: un
-			});
-			console.log('[Setup] Sending PATCH payload:', JSON.stringify(payload));
-
 			const response = await apiFetch('/apiv1/auth/me', {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
@@ -127,7 +121,6 @@
 			});
 
 			const updatedUser = await response.json();
-			console.log('[Setup] PATCH response:', response.status, JSON.stringify(updatedUser));
 
 			if (!response.ok) throw new Error('Failed to update profile');
 
@@ -147,11 +140,6 @@
 	}
 
 	function handleProfileSkip() {
-		console.log('[Setup] Skip clicked. Form values:', {
-			firstName: firstName.trim(),
-			lastName: lastName.trim(),
-			username: username.trim()
-		});
 		currentStep = 'github';
 		checkGitHubStatus();
 	}
@@ -186,7 +174,13 @@
 			for (const invitation of invitations) {
 				await pendingInvitations.accept(invitation.id, true);
 			}
+		} catch {
+			toasts.add({ title: "We couldn't accept your invitation. Try again.", color: 'error' });
+			completing = false;
+			return;
+		}
 
+		try {
 			const orgsResponse = await apiFetch('/apiv1/organizations/user');
 			if (orgsResponse.ok) {
 				const orgs = await orgsResponse.json();
@@ -266,7 +260,7 @@
 				<!-- Progress bar -->
 				<div class="card-header">
 					<div class="setup-steps">
-						{#each steps as step, i}
+						{#each steps as step, i (step.key)}
 							<button
 								class="setup-step"
 								class:setup-step--active={getStepIndex(currentStep) >= i}
@@ -327,48 +321,33 @@
 
 							<div class="setup-form-row">
 								<div class="setup-form-field">
-									<label for="first-name" class="setup-label">First name</label>
-									<input
-										id="first-name"
-										type="text"
-										class="input"
-										bind:value={firstName}
-										placeholder="First name"
-									/>
+									<Field label="First name" for="first-name">
+										<Input id="first-name" bind:value={firstName} placeholder="First name" />
+									</Field>
 								</div>
 								<div class="setup-form-field">
-									<label for="last-name" class="setup-label">Last name</label>
-									<input
-										id="last-name"
-										type="text"
-										class="input"
-										bind:value={lastName}
-										placeholder="Last name"
-									/>
+									<Field label="Last name" for="last-name">
+										<Input id="last-name" bind:value={lastName} placeholder="Last name" />
+									</Field>
 								</div>
 							</div>
 
 							<div class="setup-form-field" style="margin-top: 1rem;">
-								<label for="username" class="setup-label">Username</label>
-								<input
-									id="username"
-									type="text"
-									class="input"
-									bind:value={username}
-									placeholder="username"
-								/>
+								<Field label="Username" for="username">
+									<Input id="username" bind:value={username} placeholder="username" />
+								</Field>
 							</div>
 
 							<div class="setup-actions">
-								<button onclick={handleProfileSkip} class="btn btn-secondary flex-1">Skip</button>
-								<button
+								<Button variant="secondary" class="flex-1" onclick={handleProfileSkip}>Skip</Button>
+								<Button
+									variant="primary"
+									class="flex-1"
 									onclick={handleProfileSave}
-									disabled={saving}
-									class="btn btn-primary flex-1"
+									loading={saving}
 								>
-									{#if saving}<Loader2 class="h-4 w-4 animate-spin" />{/if}
 									Continue <ArrowRight class="h-4 w-4" />
-								</button>
+								</Button>
 							</div>
 						</div>
 					{:else if currentStep === 'github'}
@@ -392,10 +371,10 @@
 							{:else if githubLinked}
 								<div class="setup-github-connected">
 									<div class="setup-github-check">
-										<Check class="h-4 w-4 text-green-600" />
+										<Check class="h-4 w-4" style="color: var(--success-muted);" />
 									</div>
 									<div>
-										<p class="setup-profile-name">GitHub Connected</p>
+										<p class="setup-profile-name">GitHub connected</p>
 										{#if githubUsername}
 											<p class="setup-profile-email">@{githubUsername}</p>
 										{/if}
@@ -403,9 +382,9 @@
 								</div>
 
 								<div class="setup-actions setup-actions--stacked">
-									<button onclick={handleGithubNext} class="btn btn-primary w-full">
+									<Button variant="primary" class="w-full" onclick={handleGithubNext}>
 										Continue <ArrowRight class="h-4 w-4" />
-									</button>
+									</Button>
 									<button onclick={handleBack} class="setup-back-link">
 										<ArrowLeft class="h-3.5 w-3.5" /> Back
 									</button>
@@ -422,12 +401,12 @@
 
 								<div class="setup-actions setup-actions--stacked">
 									<div class="flex gap-3 w-full">
-										<button onclick={handleGithubSkip} class="btn btn-secondary flex-1"
-											>Skip for now</button
-										>
-										<button onclick={handleLinkGithub} class="btn btn-primary flex-1">
+										<Button variant="secondary" class="flex-1" onclick={handleGithubSkip}>
+											Skip for now
+										</Button>
+										<Button variant="primary" class="flex-1" onclick={handleLinkGithub}>
 											<Link2 class="h-4 w-4" /> Connect GitHub
-										</button>
+										</Button>
 									</div>
 									<button onclick={handleBack} class="setup-back-link">
 										<ArrowLeft class="h-3.5 w-3.5" /> Back
@@ -442,7 +421,7 @@
 									<PartyPopper class="h-5 w-5" />
 								</div>
 								<div>
-									<h2 class="setup-step-title">You're all set!</h2>
+									<h2 class="setup-step-title">You're all set</h2>
 									<p class="setup-step-desc">
 										{#if orgName}
 											Welcome to <strong>{orgName}</strong>. You're ready to start deploying.
@@ -454,17 +433,16 @@
 							</div>
 
 							<div class="setup-actions setup-actions--stacked">
-								<button
+								<Button
+									variant="primary"
+									class="w-full"
 									onclick={handleComplete}
-									disabled={completing}
-									class="btn btn-primary w-full"
+									loading={completing}
 								>
-									{#if completing}
-										<Loader2 class="h-4 w-4 animate-spin" />
-									{:else}
-										Go to Dashboard <ArrowRight class="h-4 w-4" />
+									{#if !completing}
+										Go to dashboard <ArrowRight class="h-4 w-4" />
 									{/if}
-								</button>
+								</Button>
 								<button onclick={handleBack} class="setup-back-link">
 									<ArrowLeft class="h-3.5 w-3.5" /> Back
 								</button>
@@ -726,14 +704,6 @@
 		gap: 0.5rem;
 	}
 
-	.setup-label {
-		font-size: 0.6875rem;
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--surface-muted);
-	}
-
 	.setup-actions {
 		display: flex;
 		gap: 0.75rem;
@@ -780,7 +750,7 @@
 		width: 2.25rem;
 		height: 2.25rem;
 		border-radius: 9999px;
-		background-color: color-mix(in srgb, #22c55e 15%, transparent);
+		background-color: color-mix(in srgb, var(--online-indicator) 15%, transparent);
 		display: flex;
 		align-items: center;
 		justify-content: center;

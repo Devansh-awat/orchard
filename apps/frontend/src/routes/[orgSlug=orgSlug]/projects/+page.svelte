@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { goto, invalidate } from '$app/navigation';
 	import { onDestroy } from 'svelte';
-	import { apiFetch, toasts, refreshTree, subscribeOrgEvents } from '$lib/stores';
-	import { Plus, Loader2, Folder, Trash2, Rocket, Globe, Database } from 'lucide-svelte';
+	import { apiFetch, toasts, subscribeOrgEvents } from '$lib/stores';
+	import { Plus, Folder, Trash2, Rocket, Globe, Database } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import { Button, Input, EmptyState, Skeleton } from '$lib/components/ui';
 	import type { PageData } from './$types';
 
 	let { data } = $props<{ data: PageData }>();
@@ -60,7 +61,6 @@
 			toasts.add({ title: `Created "${name}"`, color: 'success' });
 			newName = '';
 			showCreate = false;
-			refreshTree();
 			fetchProjects();
 		} catch (e) {
 			toasts.add({ title: e instanceof Error ? e.message : 'Failed to create', color: 'error' });
@@ -90,7 +90,6 @@
 			}
 			toasts.add({ title: `Deleted "${deleteTarget.name}"`, color: 'success' });
 			deleteTarget = null;
-			refreshTree();
 			fetchProjects();
 		} catch (e) {
 			toasts.add({ title: e instanceof Error ? e.message : 'Failed to delete', color: 'error' });
@@ -120,15 +119,6 @@
 				projects = list ?? [];
 				loadedOrgSlug = slug;
 				loading = false;
-				unsub?.();
-				unsub = subscribeOrgEvents(
-					organizationId,
-					(ev) => {
-						if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
-						invalidate(`org:${orgSlug}:overview`);
-					},
-					{ invalidateDependencies: [] }
-				);
 			})
 			.catch((e) => {
 				console.error('Failed to load projects:', e);
@@ -136,70 +126,92 @@
 			});
 	});
 
-	onDestroy(() => unsub?.());
+	let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+	let subscribedOrgId: string | null = null;
+	$effect(() => {
+		const id = orgId;
+		if (!id || id === subscribedOrgId) return;
+		subscribedOrgId = id;
+		unsub?.();
+		unsub = subscribeOrgEvents(id, (ev) => {
+			if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
+			if (refreshTimer) return;
+			refreshTimer = setTimeout(() => {
+				refreshTimer = null;
+				invalidate(`org:${orgSlug}:overview`);
+			}, 2000);
+		});
+	});
+
+	onDestroy(() => {
+		unsub?.();
+		if (refreshTimer) clearTimeout(refreshTimer);
+	});
 </script>
 
 <div class="page">
 	<header class="header">
 		<h1 class="title">Projects</h1>
-		<button class="btn-primary" onclick={() => (showCreate = true)}
-			><Plus size={15} /> New Project</button
-		>
+		<Button variant="primary" onclick={() => (showCreate = true)}>
+			<Plus size={15} /> New project
+		</Button>
 	</header>
 
 	{#if showCreate}
 		<div class="create-bar">
-			<input
-				type="text"
-				class="create-input"
-				placeholder="Project name..."
-				bind:value={newName}
-				onkeydown={(e) => {
-					if (e.key === 'Enter') createProject();
-					if (e.key === 'Escape') {
-						showCreate = false;
-						newName = '';
-					}
-				}}
-			/>
-			<button
-				class="btn-primary btn-sm"
+			<div class="create-input-wrap">
+				<Input
+					type="text"
+					placeholder="Project name"
+					bind:value={newName}
+					onkeydown={(e: KeyboardEvent) => {
+						if (e.key === 'Enter') createProject();
+						if (e.key === 'Escape') {
+							showCreate = false;
+							newName = '';
+						}
+					}}
+				/>
+			</div>
+			<Button
+				variant="primary"
+				size="sm"
 				onclick={createProject}
-				disabled={!newName.trim() || creating}
+				loading={creating}
+				disabled={!newName.trim()}
 			>
-				{#if creating}<Loader2 size={13} class="spin" />{/if}
 				Create
-			</button>
-			<button
-				class="btn-ghost btn-sm"
+			</Button>
+			<Button
+				variant="ghost"
+				size="sm"
 				onclick={() => {
 					showCreate = false;
 					newName = '';
-				}}>Cancel</button
+				}}>Cancel</Button
 			>
 		</div>
 	{/if}
 
 	{#if loading}
 		<div class="grid">
-			{#each Array(3) as _}
+			{#each Array(3) as _, i (i)}
 				<div class="card card--skel">
 					<div class="card-top">
-						<div class="sk sk-icon"></div>
+						<Skeleton width="2.25rem" height="2.25rem" rounded="0.5rem" />
 						<div class="sk-col">
-							<div class="sk" style="width:7rem;height:0.7rem"></div>
-							<div class="sk" style="width:10rem;height:0.5rem"></div>
+							<Skeleton width="7rem" height="0.7rem" rounded="0.25rem" />
+							<Skeleton width="10rem" height="0.5rem" rounded="0.25rem" />
 						</div>
 					</div>
-					<div class="card-bot"><div class="sk" style="width:5rem;height:0.5rem"></div></div>
+					<div class="card-bot"><Skeleton width="5rem" height="0.5rem" rounded="0.25rem" /></div>
 				</div>
 			{/each}
 		</div>
 	{:else if projects.length === 0}
-		<div class="empty">
-			<Folder size={28} />
-			<p>No projects yet. Create one to get started.</p>
-		</div>
+		<EmptyState title="No projects yet" description="Create one to get started.">
+			{#snippet icon()}<Folder size={28} />{/snippet}
+		</EmptyState>
 	{:else}
 		<div class="grid">
 			{#each projects as proj (proj.id)}
@@ -261,7 +273,7 @@
 		description={hasDeployments
 			? `This project has ${deploymentCount} deployment${deploymentCount === 1 ? '' : 's'}. Delete them first before removing the project.`
 			: 'This will permanently delete this project and all its databases and ingresses. This cannot be undone.'}
-		confirmLabel={hasDeployments ? 'OK' : 'Delete Project'}
+		confirmLabel={hasDeployments ? 'OK' : 'Delete project'}
 		danger={!hasDeployments}
 		onconfirm={hasDeployments
 			? () => {
@@ -295,49 +307,6 @@
 		letter-spacing: -0.02em;
 	}
 
-	.btn-primary {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.5rem 1rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		font-weight: 600;
-		background: var(--button-bg);
-		color: var(--button-color);
-		border: none;
-		cursor: pointer;
-		transition: opacity 0.15s;
-		white-space: nowrap;
-	}
-	.btn-primary:hover {
-		opacity: 0.85;
-	}
-	.btn-primary:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-	.btn-ghost {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.5rem 0.75rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		font-weight: 500;
-		background: none;
-		color: var(--surface-muted);
-		border: none;
-		cursor: pointer;
-	}
-	.btn-ghost:hover {
-		color: var(--center-channel-color);
-	}
-	.btn-sm {
-		padding: 0.375rem 0.75rem;
-		font-size: 0.75rem;
-	}
-
 	.create-bar {
 		display: flex;
 		align-items: center;
@@ -350,21 +319,9 @@
 			0 1px 2px rgba(0, 0, 0, 0.04),
 			0 3px 8px rgba(0, 0, 0, 0.03);
 	}
-	.create-input {
+	.create-input-wrap {
 		flex: 1;
-		padding: 0.4375rem 0.75rem;
-		border-radius: 0.375rem;
-		border: 1px solid var(--surface-border);
-		background: var(--center-channel-bg);
-		color: var(--center-channel-color);
-		font-size: 0.8125rem;
-	}
-	.create-input:focus {
-		outline: none;
-		border-color: var(--sidebar-text-active-border);
-	}
-	.create-input::placeholder {
-		color: var(--surface-muted);
+		min-width: 0;
 	}
 
 	.grid {
@@ -414,8 +371,8 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		background: color-mix(in srgb, #4a8aff 10%, transparent);
-		color: #4a8aff;
+		background: color-mix(in srgb, var(--sidebar-text-active-border) 10%, transparent);
+		color: var(--sidebar-text-active-border);
 	}
 	.card-text {
 		flex: 1;
@@ -477,57 +434,10 @@
 		color: var(--surface-muted);
 	}
 
-	.empty {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 4rem 2rem;
-		text-align: center;
-		color: var(--surface-muted);
-		font-size: 0.875rem;
-	}
-
-	/* Skeletons */
-	.sk-icon {
-		width: 2.25rem;
-		height: 2.25rem;
-		border-radius: 0.5rem;
-	}
 	.sk-col {
 		display: flex;
 		flex-direction: column;
 		gap: 0.3rem;
 		flex: 1;
-	}
-	:global(.sk) {
-		background: linear-gradient(
-			90deg,
-			color-mix(in srgb, var(--surface-border) 40%, transparent) 25%,
-			color-mix(in srgb, var(--surface-border) 18%, transparent) 50%,
-			color-mix(in srgb, var(--surface-border) 40%, transparent) 75%
-		);
-		background-size: 200% 100%;
-		animation: shimmer 1.5s infinite;
-		border-radius: 0.25rem;
-	}
-	:global(.spin) {
-		animation: spin 1s linear infinite;
-	}
-	@keyframes shimmer {
-		0% {
-			background-position: 200% 0;
-		}
-		100% {
-			background-position: -200% 0;
-		}
-	}
-	@keyframes spin {
-		from {
-			transform: rotate(0deg);
-		}
-		to {
-			transform: rotate(360deg);
-		}
 	}
 </style>

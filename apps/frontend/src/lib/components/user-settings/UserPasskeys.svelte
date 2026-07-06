@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Loader2, Fingerprint } from 'lucide-svelte';
 	import { KeyRound, Pencil, Trash2, Check, X, Plus } from '@jis3r/icons';
+	import { Button } from '$lib/components/ui';
 	import SettingsSection from './SettingsSection.svelte';
 	import IconButton from './IconButton.svelte';
 
@@ -83,7 +84,7 @@
 	{:else}
 		{#if passkeys.length > 0}
 			<div class="pk-list">
-				{#each passkeys as passkey}
+				{#each passkeys as passkey (passkey.id)}
 					<div class="pk-item">
 						<div class="pk-dot"></div>
 						<div class="pk-body">
@@ -145,22 +146,16 @@
 					placeholder="Device name (optional)"
 					bind:value={newPasskeyName}
 				/>
-				<button
-					class="pk-btn pk-btn--solid"
-					type="button"
-					onclick={onRegister}
-					disabled={registerLoading}
-				>
-					{#if registerLoading}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+				<Button variant="primary" size="sm" onclick={onRegister} loading={registerLoading}>
 					Register
-				</button>
-				<button
-					class="pk-btn pk-btn--ghost"
-					type="button"
+				</Button>
+				<Button
+					variant="ghost"
+					size="sm"
 					onclick={() => {
 						showAddPasskey = false;
 						newPasskeyName = '';
-					}}>Cancel</button
+					}}>Cancel</Button
 				>
 			</div>
 		{:else}
@@ -308,38 +303,8 @@
 		padding: 0.5rem 0;
 		margin: 0;
 	}
-	.pk-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.4375rem 0.875rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		font-weight: 550;
-		border: none;
-		cursor: pointer;
-		transition: all 120ms;
-		white-space: nowrap;
+	.pk-add-row :global(.btn) {
 		flex-shrink: 0;
-	}
-	.pk-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-	.pk-btn--solid {
-		background-color: var(--button-bg);
-		color: var(--button-color);
-	}
-	.pk-btn--solid:hover:not(:disabled) {
-		opacity: 0.9;
-	}
-	.pk-btn--ghost {
-		background: none;
-		color: var(--surface-muted);
-	}
-	.pk-btn--ghost:hover:not(:disabled) {
-		color: var(--center-channel-color);
-		background-color: color-mix(in srgb, var(--center-channel-color) 5%, transparent);
 	}
 	@media (max-width: 640px) {
 		.pk-add-row {

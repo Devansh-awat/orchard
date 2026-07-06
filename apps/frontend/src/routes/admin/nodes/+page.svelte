@@ -3,6 +3,7 @@
 	import { apiFetch, toasts } from '$lib/stores';
 	import { formatCpuMilli, formatMemoryBytes } from '$lib/quantity';
 	import { Loader2, RefreshCw, Server, X, Trash2 } from 'lucide-svelte';
+	import { Button, Badge, Field, Input, Select, EmptyState } from '$lib/components/ui';
 
 	interface NodeItem {
 		id: string;
@@ -61,7 +62,7 @@
 			if (!res.ok) throw new Error('Failed to load nodes');
 			nodes = await res.json();
 		} catch (e) {
-			toasts.add({ message: e instanceof Error ? e.message : 'Failed', variant: 'error' });
+			toasts.add({ title: e instanceof Error ? e.message : 'Request failed', color: 'error' });
 		} finally {
 			loading = false;
 		}
@@ -82,9 +83,9 @@
 			const res = await apiFetch('/apiv1/admin/nodes/sync', { method: 'POST' });
 			if (!res.ok) throw new Error('Sync failed');
 			await loadNodes();
-			toasts.add({ message: 'Nodes synced from cluster', variant: 'success' });
+			toasts.add({ title: 'Nodes synced from cluster', color: 'success' });
 		} catch (e) {
-			toasts.add({ message: e instanceof Error ? e.message : 'Sync failed', variant: 'error' });
+			toasts.add({ title: e instanceof Error ? e.message : 'Sync failed', color: 'error' });
 		} finally {
 			syncing = false;
 		}
@@ -98,7 +99,7 @@
 			if (!res.ok) throw new Error('Failed to load node');
 			selectedNode = await res.json();
 		} catch (e) {
-			toasts.add({ message: e instanceof Error ? e.message : 'Failed', variant: 'error' });
+			toasts.add({ title: e instanceof Error ? e.message : 'Request failed', color: 'error' });
 		} finally {
 			detailLoading = false;
 		}
@@ -124,7 +125,7 @@
 			await loadNodes();
 			if (selectedNode?.id === node.id) await openNode(node.id);
 		} catch (e) {
-			toasts.add({ message: e instanceof Error ? e.message : 'Failed', variant: 'error' });
+			toasts.add({ title: e instanceof Error ? e.message : 'Request failed', color: 'error' });
 		}
 	}
 
@@ -148,9 +149,9 @@
 			addCpuLimit = '';
 			addMemoryLimit = '';
 			addMaxServices = '';
-			toasts.add({ message: 'Assignment saved', variant: 'success' });
+			toasts.add({ title: 'Assignment saved', color: 'success' });
 		} catch (e) {
-			toasts.add({ message: e instanceof Error ? e.message : 'Failed', variant: 'error' });
+			toasts.add({ title: e instanceof Error ? e.message : 'Request failed', color: 'error' });
 		} finally {
 			savingAssignment = false;
 		}
@@ -168,7 +169,7 @@
 			await openNode(selectedNode.id);
 			await loadNodes();
 		} catch (e) {
-			toasts.add({ message: e instanceof Error ? e.message : 'Failed', variant: 'error' });
+			toasts.add({ title: e instanceof Error ? e.message : 'Request failed', color: 'error' });
 		}
 	}
 
@@ -188,19 +189,12 @@
 	<div class="text-sm" style="color: var(--surface-muted);">
 		{nodes.length} node{nodes.length === 1 ? '' : 's'} in cluster
 	</div>
-	<button
-		class="flex items-center gap-2 rounded-xl px-3 py-2 text-sm font-medium border transition hover:bg-[var(--control-bg)]"
-		style="border-color: var(--surface-border);"
-		onclick={syncNow}
-		disabled={syncing}
-	>
-		{#if syncing}
-			<Loader2 class="h-4 w-4 animate-spin" />
-		{:else}
+	<Button variant="secondary" onclick={syncNow} loading={syncing}>
+		{#if !syncing}
 			<RefreshCw class="h-4 w-4" />
 		{/if}
 		Sync from cluster
-	</button>
+	</Button>
 </div>
 
 {#if loading}
@@ -208,11 +202,10 @@
 		<Loader2 class="h-8 w-8 animate-spin text-primary-600" />
 	</div>
 {:else if nodes.length === 0}
-	<div class="rounded-2xl border p-8 text-center" style="border-color: var(--surface-border);">
-		<Server class="h-10 w-10 mx-auto mb-2" style="color: var(--surface-muted);" />
-		<p class="text-sm" style="color: var(--surface-muted);">
-			No nodes synced yet. Click "Sync from cluster" to import them.
-		</p>
+	<div class="rounded-2xl border" style="border-color: var(--surface-border);">
+		<EmptyState title="No nodes synced yet" description="Sync from cluster to import them.">
+			{#snippet icon()}<Server class="h-10 w-10" />{/snippet}
+		</EmptyState>
 	</div>
 {:else}
 	<div class="rounded-2xl border overflow-hidden" style="border-color: var(--surface-border);">
@@ -228,7 +221,7 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#each nodes as node}
+				{#each nodes as node (node.id)}
 					<tr
 						class="border-t cursor-pointer hover:bg-[var(--control-bg)]"
 						style="border-color: var(--surface-border);"
@@ -236,14 +229,9 @@
 					>
 						<td class="px-4 py-3 font-medium">{node.name}</td>
 						<td class="px-4 py-3">
-							<span
-								class="inline-flex items-center rounded-full px-2 py-0.5 text-xs"
-								style={node.schedulable
-									? 'background-color: #dcfce7; color: #166534;'
-									: 'background-color: #fee2e2; color: #991b1b;'}
-							>
+							<Badge tone={node.schedulable ? 'success' : 'error'}>
 								{node.schedulable ? 'Schedulable' : 'Cordoned'}
-							</span>
+							</Badge>
 						</td>
 						<td class="px-4 py-3">
 							{formatCpuMilli(node.usage.cpuMilli)}
@@ -268,7 +256,8 @@
 
 {#if selectedNode || detailLoading}
 	<div
-		class="fixed inset-0 z-40 bg-black/40 flex justify-end"
+		class="fixed inset-0 bg-black/40 flex justify-end"
+		style="z-index: var(--z-modal);"
 		onclick={closeDetail}
 		onkeydown={(e) => e.key === 'Escape' && closeDetail()}
 		role="dialog"
@@ -294,19 +283,15 @@
 							)}
 						</p>
 					</div>
-					<button onclick={closeDetail} class="p-1 rounded hover:bg-[var(--control-bg)]">
+					<Button variant="ghost" size="sm" onclick={closeDetail} aria-label="Close">
 						<X class="h-5 w-5" />
-					</button>
+					</Button>
 				</div>
 
 				<div class="flex gap-2 mb-6">
-					<button
-						class="rounded-xl border px-3 py-1.5 text-sm"
-						style="border-color: var(--surface-border);"
-						onclick={() => toggleSchedulable(selectedNode!)}
-					>
+					<Button variant="secondary" size="sm" onclick={() => toggleSchedulable(selectedNode!)}>
 						{selectedNode.schedulable ? 'Cordon' : 'Uncordon'}
-					</button>
+					</Button>
 				</div>
 
 				<h3 class="text-sm font-semibold mb-2">Organization assignments</h3>
@@ -316,32 +301,28 @@
 					</p>
 				{:else}
 					<div class="space-y-2 mb-4">
-						{#each selectedNode.assignments as a}
+						{#each selectedNode.assignments as a (a.id)}
 							<div class="rounded-xl border p-3" style="border-color: var(--surface-border);">
 								<div class="flex items-start justify-between">
 									<div>
 										<div class="flex items-center gap-2">
 											<span class="font-medium">{a.organization.name}</span>
-											<span
-												class="inline-flex items-center rounded-full px-2 py-0.5 text-xs"
-												style={a.mode === 'allow'
-													? 'background-color: #dcfce7; color: #166534;'
-													: 'background-color: #fee2e2; color: #991b1b;'}
-											>
-												{a.mode}
-											</span>
+											<Badge tone={a.mode === 'allow' ? 'success' : 'error'}>{a.mode}</Badge>
 										</div>
 										<div class="text-xs mt-1" style="color: var(--surface-muted);">
 											CPU: {a.cpuLimit || '∞'} · Memory: {a.memoryLimit || '∞'} · Services: {a.maxServices ??
 												'∞'}
 										</div>
 									</div>
-									<button
-										class="p-1 rounded hover:bg-[var(--control-bg)]"
+									<Button
+										variant="ghost"
+										size="sm"
+										style="color: var(--error-text-color);"
 										onclick={() => deleteAssignment(a)}
+										title="Remove assignment"
 									>
 										<Trash2 class="h-4 w-4" />
-									</button>
+									</Button>
 								</div>
 							</div>
 						{/each}
@@ -351,67 +332,57 @@
 				<div class="rounded-xl border p-3" style="border-color: var(--surface-border);">
 					<h4 class="text-sm font-semibold mb-2">Add / update assignment</h4>
 					<div class="grid grid-cols-2 gap-2">
-						<label class="col-span-2 text-xs">
-							Organization
-							<select
-								bind:value={addOrgId}
-								class="w-full rounded-lg border px-2 py-1 text-sm"
-								style="border-color: var(--surface-border); background-color: var(--center-channel-bg);"
-							>
-								<option value="">Select org…</option>
-								{#each assignableOrgs as o}
-									<option value={o.id}>{o.name}</option>
-								{/each}
-							</select>
-						</label>
-						<label class="text-xs">
-							Mode
-							<select
-								bind:value={addMode}
-								class="w-full rounded-lg border px-2 py-1 text-sm"
-								style="border-color: var(--surface-border); background-color: var(--center-channel-bg);"
-							>
+						<div class="col-span-2">
+							<Field label="Organization" for="assign-org">
+								<Select id="assign-org" bind:value={addOrgId} class="w-full">
+									<option value="">Select org…</option>
+									{#each assignableOrgs as o (o.id)}
+										<option value={o.id}>{o.name}</option>
+									{/each}
+								</Select>
+							</Field>
+						</div>
+						<Field label="Mode" for="assign-mode">
+							<Select id="assign-mode" bind:value={addMode} class="w-full">
 								<option value="allow">allow</option>
 								<option value="deny">deny</option>
-							</select>
-						</label>
-						<label class="text-xs">
-							Max services
-							<input
+							</Select>
+						</Field>
+						<Field label="Max services" for="assign-max-services">
+							<Input
+								id="assign-max-services"
 								type="number"
 								bind:value={addMaxServices}
 								placeholder="∞"
-								class="w-full rounded-lg border px-2 py-1 text-sm"
-								style="border-color: var(--surface-border); background-color: var(--center-channel-bg);"
+								class="w-full"
 							/>
-						</label>
-						<label class="text-xs">
-							CPU limit (e.g. 2, 500m)
-							<input
+						</Field>
+						<Field label="CPU limit (e.g. 2, 500m)" for="assign-cpu-limit">
+							<Input
+								id="assign-cpu-limit"
 								bind:value={addCpuLimit}
 								placeholder="unlimited"
-								class="w-full rounded-lg border px-2 py-1 text-sm"
-								style="border-color: var(--surface-border); background-color: var(--center-channel-bg);"
+								class="w-full"
 							/>
-						</label>
-						<label class="text-xs">
-							Memory limit (e.g. 4Gi)
-							<input
+						</Field>
+						<Field label="Memory limit (e.g. 4Gi)" for="assign-memory-limit">
+							<Input
+								id="assign-memory-limit"
 								bind:value={addMemoryLimit}
 								placeholder="unlimited"
-								class="w-full rounded-lg border px-2 py-1 text-sm"
-								style="border-color: var(--surface-border); background-color: var(--center-channel-bg);"
+								class="w-full"
 							/>
-						</label>
+						</Field>
 					</div>
-					<button
-						class="mt-3 w-full rounded-xl px-3 py-2 text-sm font-medium"
-						style="background-color: var(--primary-600); color: white;"
-						disabled={!addOrgId || savingAssignment}
+					<Button
+						variant="primary"
+						class="mt-3 w-full"
+						disabled={!addOrgId}
+						loading={savingAssignment}
 						onclick={saveAssignment}
 					>
-						{savingAssignment ? 'Saving…' : 'Save assignment'}
-					</button>
+						Save assignment
+					</Button>
 				</div>
 			{/if}
 		</div>

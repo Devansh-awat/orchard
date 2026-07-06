@@ -2,10 +2,11 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { apiFetch, toasts, refreshTree, fetchProjectContext, buildBasePath } from '$lib/stores';
-	import { Loader2, Rocket, Database, Server, Globe, LayoutTemplate } from 'lucide-svelte';
+	import { apiFetch, toasts, fetchProjectContext, buildBasePath } from '$lib/stores';
+	import { Rocket, Database, Server, Globe, LayoutTemplate } from 'lucide-svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
+	import { Button, Input, Select } from '$lib/components/ui';
 
 	interface ParameterDef {
 		name: string;
@@ -73,11 +74,11 @@
 	function getResourceColor(type: string) {
 		switch (type) {
 			case 'database':
-				return '#22c55e';
+				return 'var(--online-indicator)';
 			case 'deployment':
-				return '#3b82f6';
+				return 'var(--link-color)';
 			case 'ingress':
-				return '#f59e0b';
+				return 'var(--away-indicator)';
 			default:
 				return 'var(--surface-muted)';
 		}
@@ -144,11 +145,10 @@
 
 			toasts.add({
 				title: 'Template deployed',
-				description: `${template.displayName} has been deployed successfully`,
+				description: `${template.displayName} is deployed`,
 				color: 'success'
 			});
 
-			refreshTree();
 			goto(`/${orgSlug}/template-instances/${instance.id}`);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to deploy template';
@@ -186,7 +186,7 @@
 			</div>
 		</div>
 	{:else if template}
-		<h1 class="td-page-title">Deploy Template</h1>
+		<h1 class="td-page-title">Deploy template</h1>
 
 		<!-- Main card -->
 		<div class="td-main-card">
@@ -227,7 +227,7 @@
 			<div class="td-resources">
 				<span class="td-resources-label">This template creates</span>
 				<div class="td-resources-list">
-					{#each template.resources as resource}
+					{#each template.resources as resource (resource.name)}
 						{@const Icon = getResourceIcon(resource.type)}
 						{@const color = getResourceColor(resource.type)}
 						<div class="td-resource-chip">
@@ -251,7 +251,7 @@
 				}}
 				class="td-form"
 			>
-				{#each template.parameters as param}
+				{#each template.parameters as param (param.name)}
 					<div class="td-field">
 						{#if param.type === 'boolean'}
 							<label class="td-toggle-row">
@@ -280,21 +280,20 @@
 							</label>
 
 							{#if param.type === 'select'}
-								<select
+								<Select
 									id="p-{param.name}"
-									class="td-input"
 									bind:value={paramValues[param.name]}
 									disabled={deploying}
 								>
-									{#each param.options || [] as option}
+									{#each param.options || [] as option (option.value)}
 										<option value={option.value}>{option.label}</option>
 									{/each}
-								</select>
+								</Select>
 							{:else if param.type === 'number'}
 								<input
 									id="p-{param.name}"
 									type="number"
-									class="td-input"
+									class="input"
 									min={param.validation?.min}
 									max={param.validation?.max}
 									bind:value={paramValues[param.name]}
@@ -302,10 +301,8 @@
 									disabled={deploying}
 								/>
 							{:else}
-								<input
+								<Input
 									id="p-{param.name}"
-									type="text"
-									class="td-input"
 									placeholder={param.placeholder || ''}
 									bind:value={paramValues[param.name]}
 									required={param.required}
@@ -337,16 +334,11 @@
 				{/if}
 
 				<div class="td-actions">
-					<a href={basePath} class="td-btn td-btn-secondary">Cancel</a>
-					<button type="submit" class="td-btn td-btn-primary" disabled={deploying}>
-						{#if deploying}
-							<Loader2 class="h-4 w-4 animate-spin" />
-							Deploying...
-						{:else}
-							<Rocket class="h-4 w-4" />
-							Deploy
-						{/if}
-					</button>
+					<Button variant="ghost" href={basePath}>Cancel</Button>
+					<Button variant="primary" type="submit" loading={deploying}>
+						{#if !deploying}<Rocket class="h-4 w-4" />{/if}
+						Deploy
+					</Button>
 				</div>
 			</form>
 		</div>
@@ -539,30 +531,6 @@
 		margin-left: 0.125rem;
 	}
 
-	.td-input {
-		width: 100%;
-		padding: 0.4375rem 0.75rem;
-		border-radius: 0.5rem;
-		border: 1px solid var(--surface-border);
-		background-color: var(--center-channel-bg);
-		color: var(--center-channel-color);
-		font-size: 0.8125rem;
-		transition: border-color 0.15s;
-	}
-
-	.td-input::placeholder {
-		color: var(--surface-muted);
-	}
-
-	.td-input:focus {
-		outline: none;
-		border-color: var(--sidebar-text-active-border);
-	}
-
-	.td-input:disabled {
-		opacity: 0.5;
-	}
-
 	.td-hint {
 		font-size: 0.75rem;
 		color: var(--surface-muted);
@@ -614,7 +582,7 @@
 		left: 0.1875rem;
 		width: 0.875rem;
 		height: 0.875rem;
-		background-color: #fff;
+		background-color: var(--button-color);
 		border-radius: 50%;
 		transition: transform 0.2s;
 		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
@@ -644,48 +612,5 @@
 		justify-content: flex-end;
 		gap: 0.5rem;
 		padding-top: 0.25rem;
-	}
-
-	.td-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.4375rem 0.875rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		font-weight: 500;
-		border: none;
-		cursor: pointer;
-		text-decoration: none;
-		transition: opacity 0.15s;
-		white-space: nowrap;
-	}
-
-	.td-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.td-btn-primary {
-		background-color: var(--sidebar-text-active-border);
-		color: #fff;
-		box-shadow:
-			0 1px 2px rgb(0 0 0 / 0.08),
-			0 1px 1px rgb(0 0 0 / 0.04);
-	}
-
-	.td-btn-primary:hover:not(:disabled) {
-		opacity: 0.95;
-	}
-
-	.td-btn-secondary {
-		background-color: transparent;
-		color: var(--surface-muted);
-		border: 1px solid var(--surface-border);
-	}
-
-	.td-btn-secondary:hover:not(:disabled) {
-		background-color: var(--control-hover-bg);
-		color: var(--center-channel-color);
 	}
 </style>

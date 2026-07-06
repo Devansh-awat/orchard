@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { ArrowLeft, Loader2, Database, Trash2 } from 'lucide-svelte';
+	import { ArrowLeft, Database, Trash2 } from 'lucide-svelte';
+	import { Button } from '$lib/components/ui';
 	import type { DatabaseDetail } from './types';
 
 	let {
@@ -43,12 +44,10 @@
 			<span class="db-status db-status-{effectiveStatus}">{effectiveStatus}</span>
 		</div>
 	</div>
-	<button onclick={onOpenDeleteModal} disabled={deleting} class="db-btn db-btn-danger">
-		{#if deleting}
-			<Loader2 class="h-4 w-4 animate-spin" />
-		{:else}
+	<Button variant="danger" size="sm" onclick={onOpenDeleteModal} loading={deleting}>
+		{#if !deleting}
 			<Trash2 class="h-4 w-4" />
 		{/if}
 		Delete
-	</button>
+	</Button>
 </div>

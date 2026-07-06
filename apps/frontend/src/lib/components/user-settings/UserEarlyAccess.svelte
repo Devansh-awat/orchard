@@ -24,7 +24,7 @@
 {#if earlyAccessLoading || earlyAccessFeatures.length > 0}
 	<SettingsSection
 		{index}
-		title="Early Access"
+		title="Early access"
 		description="Try features still in development. Expect rough edges."
 		iconColor="amber"
 	>

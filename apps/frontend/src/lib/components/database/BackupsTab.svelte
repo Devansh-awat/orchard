@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Loader2 } from 'lucide-svelte';
+	import { Button, Field, Input, Select, StatusPill } from '$lib/components/ui';
 	import type { DatabaseDetail, Backup, SchedulePreset } from './types';
 
 	let {
@@ -41,6 +42,12 @@
 		formatBytes: (bytes: number | null) => string;
 		formatDate: (s: string) => string;
 	} = $props();
+
+	function backupTone(status: string): 'online' | 'warn' | 'error' {
+		if (status === 'completed') return 'online';
+		if (status === 'failed') return 'error';
+		return 'warn';
+	}
 </script>
 
 <div class="space-y-5">
@@ -50,33 +57,31 @@
 				<p class="text-sm font-semibold" style="color: var(--center-channel-color);">
 					Backup schedule
 				</p>
-				<button class="btn btn-primary btn-sm" onclick={onSaveSchedule} disabled={scheduleSaving}>
-					{#if scheduleSaving}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
-					<span>{schedulePreset === 'none' ? 'Clear' : 'Save'}</span>
-				</button>
+				<Button variant="primary" size="sm" onclick={onSaveSchedule} loading={scheduleSaving}>
+					{schedulePreset === 'none' ? 'Clear' : 'Save'}
+				</Button>
 			</div>
 
 			<div class="grid gap-3 md:grid-cols-2">
-				<div>
-					<p class="text-xs mb-1" style="color: var(--surface-muted);">Run backups</p>
-					<select class="input text-sm" bind:value={schedulePreset} disabled={scheduleSaving}>
+				<Field label="Run backups" for="backup-schedule-preset">
+					<Select id="backup-schedule-preset" bind:value={schedulePreset} disabled={scheduleSaving}>
 						<option value="none">Never (manual only)</option>
-						{#each schedulePresets as p}
+						{#each schedulePresets as p (p.id)}
 							<option value={p.id}>{p.label}</option>
 						{/each}
-					</select>
-				</div>
+					</Select>
+				</Field>
 				{#if schedulePreset === 'custom'}
-					<div>
-						<p class="text-xs mb-1" style="color: var(--surface-muted);">Cron expression</p>
-						<input
+					<Field label="Cron expression" for="backup-schedule-cron">
+						<Input
+							id="backup-schedule-cron"
 							type="text"
-							class="input font-mono text-sm"
+							class="font-mono text-sm"
 							placeholder="0 2 * * *"
 							bind:value={scheduleCustomCron}
 							disabled={scheduleSaving}
 						/>
-					</div>
+					</Field>
 				{/if}
 			</div>
 
@@ -112,10 +117,9 @@
 				{/if}
 			</div>
 			{#if (database.mode === 'cnpg' || database.mode === 'container') && database.backupsEnabled}
-				<button class="btn btn-primary btn-sm" onclick={onCreateBackup} disabled={creatingBackup}>
-					{#if creatingBackup}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
-					<span>Create backup</span>
-				</button>
+				<Button variant="primary" size="sm" onclick={onCreateBackup} loading={creatingBackup}>
+					Create backup
+				</Button>
 			{/if}
 		</div>
 
@@ -157,7 +161,7 @@
 						<div class="min-w-0 flex-1">
 							<div class="flex items-center gap-2 flex-wrap">
 								<span class="db-list-name">{backup.label}</span>
-								<span class="db-status-pill db-status-pill-{backup.status}">{backup.status}</span>
+								<StatusPill tone={backupTone(backup.status)} label={backup.status} />
 							</div>
 							<div class="db-list-meta">
 								<span class="db-list-meta-tag">{backup.type}</span>
@@ -173,16 +177,15 @@
 							{/if}
 						</div>
 						{#if backup.status === 'completed'}
-							<button
-								class="btn btn-secondary btn-sm shrink-0"
+							<Button
+								variant="secondary"
+								size="sm"
+								class="shrink-0"
 								onclick={() => onRestoreBackup(backup)}
-								disabled={restoringBackupId === backup.id}
+								loading={restoringBackupId === backup.id}
 							>
-								{#if restoringBackupId === backup.id}<Loader2
-										class="h-3.5 w-3.5 animate-spin"
-									/>{/if}
-								<span>Restore</span>
-							</button>
+								Restore
+							</Button>
 						{/if}
 					</div>
 				{/each}

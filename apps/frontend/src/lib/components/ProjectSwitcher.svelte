@@ -241,7 +241,7 @@
 
 			<div class="ps-divider"></div>
 
-			{#each projects as p}
+			{#each projects as p (p.id)}
 				<button
 					class="ps-option"
 					class:ps-option-active={p.slug === currentSlug}

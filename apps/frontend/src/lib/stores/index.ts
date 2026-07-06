@@ -7,7 +7,6 @@ export {
 	organizationsLoading,
 	type Organization
 } from './organizations';
-export { tree, treeLoading, treeError, refreshTree, type TreeItem } from './tree';
 export { pinnedItems, type PinnedItem } from './pinnedItems';
 export { sidebarCollapsed } from './sidebarState';
 export { projectGradientEnabled } from './preferences';

@@ -233,7 +233,7 @@
 								style="border-color: var(--surface-border); background-color: var(--center-channel-bg); color: var(--center-channel-color);"
 								bind:value={choices[key]}
 							>
-								{#each RESOURCE_PRESETS as p}
+								{#each RESOURCE_PRESETS as p (p.id)}
 									<option value={p.id}>
 										{p.label} — {formatCpu(p.cpuMilli)} · {formatMemory(p.memoryBytes)}
 										{#if r.recommendation?.presetId === p.id}

@@ -52,9 +52,9 @@
 	let revealHovered = $state(false);
 
 	const fields = $derived([
-		{ key: 'firstName', label: 'First name', value: user?.firstName || '—', mono: false },
-		{ key: 'lastName', label: 'Last name', value: user?.lastName || '—', mono: false },
-		{ key: 'username', label: 'Username', value: user?.username || '—', mono: true }
+		{ key: 'firstName', label: 'First name', value: user?.firstName || 'Not set', mono: false },
+		{ key: 'lastName', label: 'Last name', value: user?.lastName || 'Not set', mono: false },
+		{ key: 'username', label: 'Username', value: user?.username || 'Not set', mono: true }
 	]);
 </script>
 
@@ -137,7 +137,7 @@
 	</div>
 
 	<div class="up-fields">
-		{#each fields as field}
+		{#each fields as field (field.key)}
 			<SettingsField
 				label={field.label}
 				value={field.value}

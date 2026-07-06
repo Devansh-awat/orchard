@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { apiFetch, toasts } from '$lib/stores';
-	import { Loader2, ScrollText, User, ArrowDown } from 'lucide-svelte';
+	import { Loader2, ScrollText, User, ArrowDown, RefreshCw } from 'lucide-svelte';
+	import { Button } from '$lib/components/ui';
 
 	interface Props {
 		// One of: 'global' | { organizationId: string } | { deploymentId: string }
@@ -49,8 +50,7 @@
 
 	async function load(reset = false) {
 		if (reset) {
-			loading = true;
-			entries = [];
+			if (!entries.length) loading = true;
 			nextCursor = null;
 		} else {
 			loadingMore = true;
@@ -140,14 +140,19 @@
 			<h3 class="text-sm font-semibold" style="color: var(--center-channel-color);">{title}</h3>
 			<span class="text-xs" style="color: var(--surface-muted);">— last 180 days</span>
 		</div>
-		<input
-			type="text"
-			bind:value={actionFilter}
-			oninput={onFilterInput}
-			placeholder="Filter by action (e.g. deployment.restarted)"
-			class="rounded-lg border px-3 py-1 text-sm"
-			style="border-color: var(--surface-border); background-color: var(--control-bg); color: var(--center-channel-color); min-width: 280px;"
-		/>
+		<div class="flex items-center gap-2">
+			<input
+				type="text"
+				bind:value={actionFilter}
+				oninput={onFilterInput}
+				placeholder="Filter by action (e.g. deployment.restarted)"
+				class="rounded-lg border px-3 py-1 text-sm"
+				style="border-color: var(--surface-border); background-color: var(--control-bg); color: var(--center-channel-color); min-width: 280px;"
+			/>
+			<Button variant="ghost" size="sm" aria-label="Refresh audit log" onclick={() => load(true)}>
+				<RefreshCw size={14} />
+			</Button>
+		</div>
 	</div>
 
 	{#if loading}

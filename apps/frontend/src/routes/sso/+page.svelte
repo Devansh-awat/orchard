@@ -3,6 +3,7 @@
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
 	import { Loader2, Shield, Lock } from 'lucide-svelte';
+	import { Button } from '$lib/components/ui';
 	import { apiFetch, initApiBase } from '$lib/stores';
 	import { env } from '$env/dynamic/public';
 
@@ -199,29 +200,28 @@
 			{/if}
 
 			{#if branding.ssoEnabled}
-				<button
-					class="sso-btn sso-btn-primary"
+				<Button
+					variant="primary"
+					class="w-full"
 					onclick={startSsoLogin}
-					disabled={ssoLoading}
+					loading={ssoLoading}
 					style="background: {primaryColor};"
 				>
-					{#if ssoLoading}
-						<Loader2 class="h-4 w-4 animate-spin" />
-					{/if}
 					<Shield class="h-4 w-4" />
 					Sign in with SSO
-				</button>
+				</Button>
 
 				{#if !branding.ssoEnforced}
 					{#if !showOtpFallback}
-						<button
-							class="sso-btn sso-btn-link"
+						<Button
+							variant="ghost"
+							size="sm"
 							onclick={() => {
 								showOtpFallback = true;
 							}}
 						>
 							Sign in with email instead
-						</button>
+						</Button>
 					{/if}
 				{/if}
 			{:else}
@@ -264,9 +264,8 @@
 								bind:value={otpCode}
 								autocomplete="one-time-code"
 							/>
-							<button
-								type="button"
-								class="sso-btn sso-btn-ghost"
+							<Button
+								variant="secondary"
 								onclick={() => {
 									otpStep = 'email';
 									otpCode = '';
@@ -274,7 +273,7 @@
 								}}
 							>
 								Back
-							</button>
+							</Button>
 						</div>
 					{/if}
 
@@ -285,16 +284,14 @@
 						<p class="sso-success-text">{otpMessage}</p>
 					{/if}
 
-					<button
-						class="sso-btn sso-btn-secondary"
+					<Button
+						variant="secondary"
+						class="w-full"
 						type="submit"
-						disabled={otpRequesting || otpVerifying}
+						loading={otpRequesting || otpVerifying}
 					>
-						{#if otpRequesting || otpVerifying}
-							<Loader2 class="h-4 w-4 animate-spin" />
-						{/if}
 						{otpStep === 'email' ? 'Send code' : 'Verify'}
-					</button>
+					</Button>
 				</form>
 			{/if}
 
@@ -362,6 +359,12 @@
 		align-items: center;
 		gap: 1.25rem;
 		backdrop-filter: blur(24px);
+		--control-bg: rgba(255, 255, 255, 0.08);
+		--control-hover-bg: rgba(255, 255, 255, 0.12);
+		--control-text: rgba(255, 255, 255, 0.9);
+		--surface-border: rgba(255, 255, 255, 0.1);
+		--surface-muted: rgba(255, 255, 255, 0.5);
+		--center-channel-color: rgba(255, 255, 255, 0.9);
 	}
 
 	.sso-loading {
@@ -411,64 +414,6 @@
 		color: #fca5a5;
 		width: 100%;
 		text-align: center;
-	}
-
-	.sso-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		gap: 0.5rem;
-		width: 100%;
-		padding: 0.75rem 1.25rem;
-		border-radius: 0.5rem;
-		font-size: 0.875rem;
-		font-weight: 500;
-		cursor: pointer;
-		border: none;
-		transition: opacity 0.15s;
-	}
-
-	.sso-btn:disabled {
-		opacity: 0.6;
-		cursor: not-allowed;
-	}
-
-	.sso-btn-primary {
-		color: white;
-		background: var(--sso-primary);
-	}
-
-	.sso-btn-primary:hover:not(:disabled) {
-		opacity: 0.9;
-	}
-
-	.sso-btn-secondary {
-		background: rgba(255, 255, 255, 0.08);
-		color: rgba(255, 255, 255, 0.9);
-		border: 1px solid rgba(255, 255, 255, 0.1);
-	}
-
-	.sso-btn-secondary:hover:not(:disabled) {
-		background: rgba(255, 255, 255, 0.12);
-	}
-
-	.sso-btn-link {
-		background: transparent;
-		color: rgba(255, 255, 255, 0.5);
-		font-size: 0.8rem;
-		padding: 0.5rem;
-	}
-
-	.sso-btn-link:hover {
-		color: rgba(255, 255, 255, 0.8);
-	}
-
-	.sso-btn-ghost {
-		background: transparent;
-		color: rgba(255, 255, 255, 0.5);
-		border: 1px solid rgba(255, 255, 255, 0.1);
-		width: auto;
-		flex-shrink: 0;
 	}
 
 	.sso-divider {

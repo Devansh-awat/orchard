@@ -183,7 +183,7 @@
 		>
 			<!-- Header -->
 			<div class="nr-header">
-				<h2 class="nr-title">Create New Resource</h2>
+				<h2 class="nr-title">Create new resource</h2>
 				<button class="nr-close" onclick={() => (open = false)}>
 					<X size={16} />
 				</button>
@@ -205,9 +205,9 @@
 				<!-- Quick Actions -->
 				{#if filteredActions.length > 0}
 					<div class="nr-section">
-						<h3 class="nr-section-title">Quick Start</h3>
+						<h3 class="nr-section-title">Quick start</h3>
 						<div class="nr-quick-grid">
-							{#each filteredActions as action}
+							{#each filteredActions as action (action.id)}
 								{@const Icon = action.icon}
 								<button class="nr-quick-card" onclick={() => navigateToNew(action.id)}>
 									<div
@@ -243,7 +243,7 @@
 
 					{#if loadingTemplates}
 						<div class="nr-tpl-grid">
-							{#each Array(4) as _}
+							{#each Array(4) as _, i (i)}
 								<div class="nr-tpl-card nr-tpl-skeleton">
 									<div
 										class="skeleton"
@@ -265,7 +265,7 @@
 						</div>
 					{:else}
 						<div class="nr-tpl-grid">
-							{#each filteredTemplates as template}
+							{#each filteredTemplates as template (template.id)}
 								{@const Icon = getIconForTemplate(template.icon)}
 								<button class="nr-tpl-card" onclick={() => navigateToTemplate(template.id)}>
 									<div

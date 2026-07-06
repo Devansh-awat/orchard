@@ -350,7 +350,7 @@
 				</div>
 				<div class="card-body">
 					<div class="grid gap-4 sm:grid-cols-2">
-						{#each [defaultLightTheme, defaultDarkTheme] as theme}
+						{#each [defaultLightTheme, defaultDarkTheme] as theme (theme.id)}
 							{@const preview = getThemePreviewColors(theme)}
 							{@const isActive = activeThemeId === theme.id}
 							<div
@@ -439,7 +439,7 @@
 					</div>
 					<div class="card-body">
 						<div class="grid gap-4 sm:grid-cols-2">
-							{#each allThemes.filter((t) => !t.isBuiltIn) as theme}
+							{#each allThemes.filter((t) => !t.isBuiltIn) as theme (theme.id)}
 								{@const preview = getThemePreviewColors(theme)}
 								{@const isActive = activeThemeId === theme.id}
 								<div

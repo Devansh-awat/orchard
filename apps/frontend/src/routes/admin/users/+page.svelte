@@ -7,11 +7,10 @@
 		Shield,
 		Trash2,
 		Pencil,
-		X,
-		Check,
 		ChevronLeft,
 		ChevronRight
 	} from 'lucide-svelte';
+	import { Modal, Button, Field, Input, Badge, EmptyState } from '$lib/components/ui';
 
 	interface UserItem {
 		id: string;
@@ -156,12 +155,12 @@
 			class="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2"
 			style="color: var(--surface-muted);"
 		/>
-		<input
+		<Input
 			type="text"
 			bind:value={searchQuery}
 			oninput={handleSearch}
 			placeholder="Search users by name, email, or username..."
-			class="input w-full pl-10"
+			class="w-full pl-10"
 		/>
 	</div>
 	<span class="text-sm whitespace-nowrap" style="color: var(--surface-muted);">
@@ -179,7 +178,7 @@
 			<Loader2 class="h-6 w-6 animate-spin text-primary-600" />
 		</div>
 	{:else if users.length === 0}
-		<div class="p-8 text-center" style="color: var(--surface-muted);">No users found</div>
+		<EmptyState title="No users found" />
 	{:else}
 		<div class="overflow-x-auto">
 			<table class="w-full text-sm">
@@ -195,7 +194,7 @@
 					</tr>
 				</thead>
 				<tbody>
-					{#each users as user}
+					{#each users as user (user.id)}
 						<tr
 							style="border-bottom: 1px solid var(--surface-border); color: var(--center-channel-color);"
 							class="transition hover:bg-[color-mix(in_srgb,var(--surface-border)_20%,transparent)]"
@@ -231,12 +230,9 @@
 							<td class="px-4 py-3 font-mono text-xs">{user.username}</td>
 							<td class="px-4 py-3">
 								{#if user.isSuperAdmin}
-									<span class="badge badge-success flex items-center gap-1 w-fit">
-										<Shield class="h-3 w-3" />
-										Admin
-									</span>
+									<Badge tone="success"><Shield class="mr-1 h-3 w-3" />Admin</Badge>
 								{:else}
-									<span class="badge badge-neutral">User</span>
+									<Badge tone="neutral">User</Badge>
 								{/if}
 							</td>
 							<td class="px-4 py-3">{user._count.organizationMembers}</td>
@@ -246,20 +242,23 @@
 							</td>
 							<td class="px-4 py-3">
 								<div class="flex items-center justify-end gap-1">
-									<button
+									<Button
+										variant="ghost"
+										size="sm"
 										onclick={() => openEdit(user)}
-										class="btn btn-ghost btn-sm"
 										title="Edit user"
 									>
 										<Pencil class="h-4 w-4" />
-									</button>
-									<button
+									</Button>
+									<Button
+										variant="ghost"
+										size="sm"
+										style="color: var(--error-text-color);"
 										onclick={() => (deletingUser = user)}
-										class="btn btn-ghost btn-sm text-red-500"
 										title="Delete user"
 									>
 										<Trash2 class="h-4 w-4" />
-									</button>
+									</Button>
 								</div>
 							</td>
 						</tr>
@@ -273,117 +272,98 @@
 <!-- Pagination -->
 {#if totalPages > 1}
 	<div class="mt-4 flex items-center justify-center gap-2">
-		<button
+		<Button
+			variant="ghost"
+			size="sm"
 			onclick={() => fetchUsers(currentPage - 1)}
 			disabled={currentPage <= 1}
-			class="btn btn-ghost btn-sm"
 		>
 			<ChevronLeft class="h-4 w-4" />
-		</button>
+		</Button>
 		<span class="text-sm" style="color: var(--surface-muted);">
 			Page {currentPage} of {totalPages}
 		</span>
-		<button
+		<Button
+			variant="ghost"
+			size="sm"
 			onclick={() => fetchUsers(currentPage + 1)}
 			disabled={currentPage >= totalPages}
-			class="btn btn-ghost btn-sm"
 		>
 			<ChevronRight class="h-4 w-4" />
-		</button>
+		</Button>
 	</div>
 {/if}
 
-<!-- Edit Modal -->
-{#if editingUser}
-	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-		<div
-			class="w-full max-w-md rounded-2xl border p-6 shadow-xl"
-			style="background-color: var(--center-channel-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
-		>
-			<div class="flex items-center justify-between mb-4">
-				<h3 class="text-lg font-semibold">Edit User</h3>
-				<button onclick={closeEdit} class="btn btn-ghost btn-sm">
-					<X class="h-4 w-4" />
-				</button>
+<Modal
+	bind:open={
+		() => editingUser !== null,
+		(v) => {
+			if (!v) closeEdit();
+		}
+	}
+	title="Edit user"
+>
+	{#if editingUser}
+		<div class="space-y-4">
+			<Field label="Email" for="edit-user-email">
+				<Input id="edit-user-email" value={editingUser.email} disabled class="w-full opacity-60" />
+			</Field>
+			<div class="grid grid-cols-2 gap-3">
+				<Field label="First name" for="edit-user-first-name">
+					<Input id="edit-user-first-name" bind:value={editFirstName} class="w-full" />
+				</Field>
+				<Field label="Last name" for="edit-user-last-name">
+					<Input id="edit-user-last-name" bind:value={editLastName} class="w-full" />
+				</Field>
 			</div>
-
-			<div class="space-y-4">
-				<div>
-					<label class="block text-sm font-medium mb-1">Email</label>
-					<input type="text" value={editingUser.email} disabled class="input w-full opacity-60" />
-				</div>
-				<div class="grid grid-cols-2 gap-3">
-					<div>
-						<label class="block text-sm font-medium mb-1">First Name</label>
-						<input type="text" bind:value={editFirstName} class="input w-full" />
-					</div>
-					<div>
-						<label class="block text-sm font-medium mb-1">Last Name</label>
-						<input type="text" bind:value={editLastName} class="input w-full" />
-					</div>
-				</div>
-				<div class="flex items-center gap-3">
-					<button
-						type="button"
-						onclick={() => (editIsSuperAdmin = !editIsSuperAdmin)}
-						class="flex h-5 w-9 items-center rounded-full p-0.5 transition-colors"
-						style={editIsSuperAdmin
-							? 'background-color: var(--primary-600);'
-							: 'background-color: var(--surface-border);'}
-					>
-						<div
-							class="h-4 w-4 rounded-full bg-white shadow transition-transform"
-							style={editIsSuperAdmin ? 'transform: translateX(16px);' : ''}
-						></div>
-					</button>
-					<label class="text-sm font-medium">Super Admin</label>
-				</div>
-			</div>
-
-			<div class="mt-6 flex justify-end gap-2">
-				<button onclick={closeEdit} class="btn btn-secondary">Cancel</button>
-				<button onclick={saveUser} disabled={saving} class="btn btn-primary">
-					{#if saving}
-						<Loader2 class="h-4 w-4 animate-spin" />
-					{/if}
-					Save Changes
-				</button>
-			</div>
-		</div>
-	</div>
-{/if}
-
-<!-- Delete Confirmation -->
-{#if deletingUser}
-	<div class="fixed inset-0 z-50 flex items-center justify-center bg-black/50">
-		<div
-			class="w-full max-w-sm rounded-2xl border p-6 shadow-xl"
-			style="background-color: var(--center-channel-bg); border-color: var(--surface-border); color: var(--center-channel-color);"
-		>
-			<h3 class="text-lg font-semibold mb-2">Delete User</h3>
-			<p class="text-sm mb-1" style="color: var(--surface-muted);">
-				Are you sure you want to delete this user?
-			</p>
-			<p class="text-sm font-medium mb-4">
-				{deletingUser.firstName || ''}
-				{deletingUser.lastName || ''} ({deletingUser.email})
-			</p>
-			<p class="text-xs text-red-500 mb-4">
-				This action cannot be undone. All their data will be permanently deleted.
-			</p>
-			<div class="flex justify-end gap-2">
-				<button onclick={() => (deletingUser = null)} class="btn btn-secondary">Cancel</button>
+			<div class="flex items-center gap-3">
 				<button
-					onclick={confirmDelete}
-					disabled={deleting}
-					class="btn bg-red-600 text-white hover:bg-red-700"
+					type="button"
+					onclick={() => (editIsSuperAdmin = !editIsSuperAdmin)}
+					class="flex h-5 w-9 items-center rounded-full p-0.5 transition-colors"
+					style={editIsSuperAdmin
+						? 'background-color: var(--color-primary-600);'
+						: 'background-color: var(--surface-border);'}
 				>
-					{#if deleting}
-						<Loader2 class="h-4 w-4 animate-spin" />
-					{/if}
-					Delete
+					<div
+						class="h-4 w-4 rounded-full bg-white shadow transition-transform"
+						style={editIsSuperAdmin ? 'transform: translateX(16px);' : ''}
+					></div>
 				</button>
+				<span class="text-sm font-medium">Super admin</span>
 			</div>
 		</div>
-	</div>
-{/if}
+	{/if}
+	{#snippet footer()}
+		<Button variant="secondary" onclick={closeEdit}>Cancel</Button>
+		<Button variant="primary" onclick={saveUser} loading={saving}>Save changes</Button>
+	{/snippet}
+</Modal>
+
+<Modal
+	bind:open={
+		() => deletingUser !== null,
+		(v) => {
+			if (!v) deletingUser = null;
+		}
+	}
+	title="Delete user"
+	size="sm"
+>
+	{#if deletingUser}
+		<p class="text-sm mb-1" style="color: var(--surface-muted);">
+			Are you sure you want to delete this user?
+		</p>
+		<p class="text-sm font-medium mb-4">
+			{deletingUser.firstName || ''}
+			{deletingUser.lastName || ''} ({deletingUser.email})
+		</p>
+		<p class="text-xs" style="color: var(--error-text-color);">
+			This action cannot be undone. All their data will be permanently deleted.
+		</p>
+	{/if}
+	{#snippet footer()}
+		<Button variant="secondary" onclick={() => (deletingUser = null)}>Cancel</Button>
+		<Button variant="danger" onclick={confirmDelete} loading={deleting}>Delete</Button>
+	{/snippet}
+</Modal>

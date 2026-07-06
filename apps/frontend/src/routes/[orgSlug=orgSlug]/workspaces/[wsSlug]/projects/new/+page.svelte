@@ -2,9 +2,10 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { apiFetch, toasts, refreshTree } from '$lib/stores';
-	import { ArrowLeft, Loader2 } from 'lucide-svelte';
+	import { apiFetch, toasts } from '$lib/stores';
+	import { ArrowLeft } from 'lucide-svelte';
 	import { Progress } from 'melt/builders';
+	import { Button, Field, Input } from '$lib/components/ui';
 	import { cubicOut } from 'svelte/easing';
 	import NumberFlow from '@number-flow/svelte';
 
@@ -201,11 +202,10 @@
 
 			toasts.add({
 				title: 'Project created',
-				description: `${project.name} has been created successfully`,
+				description: `${project.name} is ready`,
 				color: 'success'
 			});
 
-			refreshTree();
 			goto(`/${orgSlug}/workspaces/${workspaceSlug}/projects/${project.slug}`);
 		} catch (e) {
 			await fakeDelay;
@@ -251,7 +251,7 @@
 				<div class="card">
 					<div class="card-body">
 						<div style="display: flex; flex-direction: column; gap: 1.5rem;">
-							{#each [1, 2, 3] as _}
+							{#each [1, 2, 3] as n (n)}
 								<div>
 									<div
 										class="skeleton"
@@ -276,7 +276,7 @@
 				>
 					<p class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">Create</p>
 					<h1 class="mt-1 text-2xl font-bold" style="color: var(--center-channel-color);">
-						New Project
+						New project
 					</h1>
 					<p class="mt-2 text-sm" style="color: var(--surface-muted);">
 						Create a new project in {workspace.name}
@@ -292,84 +292,45 @@
 						<div class="relative">
 							<div class={['space-y-6', showingProgress ? 'opacity-0' : '']}>
 								<!-- Project Name -->
-								<div>
-									<label
-										for="name"
-										class="mb-2 block text-sm font-medium"
-										style="color: var(--center-channel-color);"
-									>
-										Project name
-									</label>
-									<input
-										id="name"
-										type="text"
-										bind:value={name}
-										placeholder="My Project"
-										class="input rounded-xl"
-										style="background-color: var(--control-bg); color: var(--center-channel-color); border-color: var(--surface-border);"
-									/>
-								</div>
+								<Field label="Project name" for="name">
+									<Input id="name" bind:value={name} placeholder="My Project" />
+								</Field>
 
 								<!-- Project Slug -->
-								<div>
-									<label
-										for="slug"
-										class="mb-2 block text-sm font-medium"
-										style="color: var(--center-channel-color);"
-									>
-										Project slug
-									</label>
-									<input
+								<Field
+									label="Project slug"
+									for="slug"
+									hint="Used in URLs and Kubernetes namespace generation"
+								>
+									<Input
 										id="slug"
-										type="text"
 										bind:value={slug}
 										oninput={handleSlugInput}
 										placeholder="my-project"
-										class="input rounded-xl font-mono"
-										style="background-color: var(--control-bg); color: var(--center-channel-color); border-color: var(--surface-border);"
+										class="font-mono"
 									/>
-									<p class="mt-1 text-xs" style="color: var(--surface-muted);">
-										Used in URLs and Kubernetes namespace generation
-									</p>
-								</div>
+								</Field>
 
 								<!-- Repository URL -->
-								<div>
-									<label
-										for="repositoryUrl"
-										class="mb-2 block text-sm font-medium"
-										style="color: var(--center-channel-color);"
-									>
-										Repository URL (optional)
-									</label>
-									<input
+								<Field label="Repository URL (optional)" for="repositoryUrl">
+									<Input
 										id="repositoryUrl"
-										type="text"
 										bind:value={repositoryUrl}
 										placeholder="https://github.com/org/repo"
-										class="input rounded-xl font-mono"
-										style="background-color: var(--control-bg); color: var(--center-channel-color); border-color: var(--surface-border);"
+										class="font-mono"
 									/>
-								</div>
+								</Field>
 
 								<!-- Description -->
-								<div>
-									<label
-										for="description"
-										class="mb-2 block text-sm font-medium"
-										style="color: var(--center-channel-color);"
-									>
-										Description (optional)
-									</label>
+								<Field label="Description (optional)" for="description">
 									<textarea
 										id="description"
 										bind:value={description}
 										placeholder="A brief description of this project"
 										rows="3"
-										class="input rounded-xl"
-										style="background-color: var(--control-bg); color: var(--center-channel-color); border-color: var(--surface-border);"
+										class="input"
 									></textarea>
-								</div>
+								</Field>
 
 								<!-- Namespace Preview -->
 								{#if slug && workspace.organization}
@@ -391,15 +352,12 @@
 									class="flex items-center justify-end gap-3 pt-4 border-t"
 									style="border-color: var(--surface-border);"
 								>
-									<a href="/{orgSlug}/workspaces/{workspaceSlug}" class="btn btn-secondary">
+									<Button variant="secondary" href="/{orgSlug}/workspaces/{workspaceSlug}">
 										Cancel
-									</a>
-									<button onclick={submit} disabled={submitting} class="btn btn-primary">
-										{#if submitting}
-											<Loader2 class="h-4 w-4 animate-spin" />
-										{/if}
+									</Button>
+									<Button variant="primary" onclick={submit} loading={submitting}>
 										Create project
-									</button>
+									</Button>
 								</div>
 							</div>
 

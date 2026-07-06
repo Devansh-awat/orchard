@@ -3,6 +3,7 @@
 	import { MailCheck } from '@jis3r/icons';
 	import type { PendingInvitation } from '$lib/stores';
 	import { pendingInvitations } from '$lib/stores';
+	import { Button } from '$lib/components/ui';
 	import SettingsSection from './SettingsSection.svelte';
 
 	let {
@@ -25,7 +26,7 @@
 {#if invitations.length > 0}
 	<SettingsSection
 		{index}
-		title="Pending Invitations"
+		title="Pending invitations"
 		description="{invitations.length} organization{invitations.length === 1 ? '' : 's'} invited you"
 		iconColor="blue"
 	>
@@ -55,8 +56,9 @@
 						</span>
 					</div>
 					<div class="ui-item-actions">
-						<button
-							class="ui-btn ui-btn--ghost"
+						<Button
+							variant="ghost"
+							size="sm"
 							onclick={() => onDecline(invitation)}
 							disabled={acceptingInvitation !== null || decliningInvitation !== null}
 						>
@@ -64,9 +66,10 @@
 									class="h-3.5 w-3.5 animate-spin"
 								/>{/if}
 							Decline
-						</button>
-						<button
-							class="ui-btn ui-btn--solid"
+						</Button>
+						<Button
+							variant="primary"
+							size="sm"
 							onclick={() => onAccept(invitation)}
 							disabled={acceptingInvitation !== null || decliningInvitation !== null}
 						>
@@ -74,7 +77,7 @@
 									class="h-3.5 w-3.5 animate-spin"
 								/>{/if}
 							Accept
-						</button>
+						</Button>
 					</div>
 				</div>
 			{/each}
@@ -146,38 +149,6 @@
 		display: flex;
 		gap: 0.375rem;
 		flex-shrink: 0;
-	}
-	.ui-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.4375rem 0.875rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		font-weight: 550;
-		border: none;
-		cursor: pointer;
-		transition: all 120ms;
-		white-space: nowrap;
-	}
-	.ui-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-	.ui-btn--solid {
-		background-color: var(--button-bg);
-		color: var(--button-color);
-	}
-	.ui-btn--solid:hover:not(:disabled) {
-		opacity: 0.9;
-	}
-	.ui-btn--ghost {
-		background: none;
-		color: var(--surface-muted);
-	}
-	.ui-btn--ghost:hover:not(:disabled) {
-		color: var(--center-channel-color);
-		background-color: color-mix(in srgb, var(--center-channel-color) 5%, transparent);
 	}
 	@media (max-width: 640px) {
 		.ui-item {

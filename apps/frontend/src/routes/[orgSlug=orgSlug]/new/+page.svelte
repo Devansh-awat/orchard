@@ -2,7 +2,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { apiFetch, selectedOrganization, toasts, refreshTree, user } from '$lib/stores';
+	import { apiFetch, selectedOrganization, toasts, user } from '$lib/stores';
 	import {
 		Loader2,
 		Github,
@@ -153,7 +153,6 @@
 			throw new Error(d.message || 'Failed to create project');
 		}
 		const proj = await projRes.json();
-		refreshTree();
 		return proj.slug;
 	}
 
@@ -220,7 +219,7 @@
 </script>
 
 <div class="nr-page">
-	<Breadcrumb crumbs={[{ label: 'Home', href: `/${orgSlug}` }, { label: 'New Resource' }]} />
+	<Breadcrumb crumbs={[{ label: 'Home', href: `/${orgSlug}` }, { label: 'New resource' }]} />
 
 	<div class="nr-header">
 		<h1 class="nr-title">Create a new resource</h1>
@@ -229,7 +228,7 @@
 
 	{#if loading}
 		<div class="nr-type-grid">
-			{#each Array(4) as _}
+			{#each Array(4) as _, i (i)}
 				<div class="nr-type-card nr-type-skeleton">
 					<div
 						class="skeleton"
@@ -244,7 +243,7 @@
 		</div>
 	{:else}
 		<div class="nr-type-grid">
-			{#each resourceOptions as opt}
+			{#each resourceOptions as opt (opt.id)}
 				{@const Icon = opt.icon}
 				<button
 					class="nr-type-card"
@@ -294,7 +293,7 @@
 					<p class="nr-tpl-empty">No templates match your search</p>
 				{:else}
 					<div class="nr-tpl-grid">
-						{#each filteredTemplates as template}
+						{#each filteredTemplates as template (template.id)}
 							{@const Icon = getIconForTemplate(template.icon)}
 							{@const color = getCategoryColor(template.category)}
 							<button

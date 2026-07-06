@@ -5,7 +5,6 @@
 	import { apiFetch, toasts } from '$lib/stores';
 	import {
 		ArrowLeft,
-		Loader2,
 		Search,
 		LayoutTemplate,
 		Database,
@@ -16,6 +15,7 @@
 		Trash2
 	} from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import { Button, Input, Badge, EmptyState, Skeleton } from '$lib/components/ui';
 
 	interface Template {
 		id: string;
@@ -81,18 +81,17 @@
 		}
 	}
 
-	function getCategoryColor(category?: string) {
+	function getCategoryTone(category?: string): 'success' | 'warning' | 'info' | 'neutral' {
 		switch (category) {
 			case 'cms':
-				return '#8b5cf6';
 			case 'backend':
-				return '#3b82f6';
+				return 'info';
 			case 'frontend':
-				return '#22c55e';
+				return 'success';
 			case 'database':
-				return '#f59e0b';
+				return 'warning';
 			default:
-				return 'var(--surface-muted)';
+				return 'neutral';
 		}
 	}
 
@@ -158,79 +157,65 @@
 	{/if}
 
 	{#if loading}
-		<!-- Skeleton: Back link -->
-		<div class="skeleton" style="height: 0.8125rem; width: 6rem; margin-bottom: 1rem;"></div>
-		<!-- Skeleton: Header -->
+		<div class="tpl-skel-back"><Skeleton width="6rem" height="0.8125rem" rounded="0.25rem" /></div>
 		<div class="tpl-header">
 			<div class="tpl-header-info">
-				<div class="skeleton" style="height: 1.5rem; width: 10rem; margin-bottom: 0.375rem;"></div>
-				<div class="skeleton" style="height: 0.875rem; width: 24rem;"></div>
+				<div class="tpl-skel-title">
+					<Skeleton width="10rem" height="1.5rem" rounded="0.25rem" />
+				</div>
+				<Skeleton width="24rem" height="0.875rem" rounded="0.25rem" />
 			</div>
 			<div class="tpl-header-actions">
-				<div class="skeleton" style="height: 2rem; width: 7rem; border-radius: 0.5rem;"></div>
+				<Skeleton width="7rem" height="2rem" rounded="0.5rem" />
 			</div>
 		</div>
-		<!-- Skeleton: Filters -->
 		<div class="tpl-filters">
-			<div class="skeleton" style="height: 2.25rem; width: 100%; border-radius: 0.5rem;"></div>
-			<div style="display: flex; gap: 0.375rem;">
-				{#each Array(4) as _}
-					<div class="skeleton" style="height: 1.75rem; width: 4rem; border-radius: 9999px;"></div>
+			<Skeleton width="100%" height="2.25rem" rounded="0.5rem" />
+			<div class="tpl-skel-chips">
+				{#each Array(4) as _, i (i)}
+					<Skeleton width="4rem" height="1.75rem" rounded="9999px" />
 				{/each}
 			</div>
 		</div>
-		<!-- Skeleton: Cards -->
 		<div class="tpl-grid">
-			{#each Array(6) as _}
-				<div class="tpl-card" style="pointer-events: none;">
+			{#each Array(6) as _, i (i)}
+				<div class="tpl-card tpl-card--skel">
 					<div class="tpl-card-top">
-						<div
-							class="skeleton"
-							style="width: 2.75rem; height: 2.75rem; border-radius: 0.75rem;"
-						></div>
-						<div
-							class="skeleton"
-							style="height: 1.25rem; width: 3.5rem; border-radius: 9999px;"
-						></div>
+						<Skeleton width="2.75rem" height="2.75rem" rounded="0.75rem" />
+						<Skeleton width="3.5rem" height="1.25rem" rounded="9999px" />
 					</div>
 					<div class="tpl-card-body">
-						<div class="skeleton" style="height: 0.9375rem; width: 60%;"></div>
-						<div class="skeleton" style="height: 0.8125rem; width: 90%;"></div>
-						<div class="skeleton" style="height: 0.8125rem; width: 70%;"></div>
+						<Skeleton width="60%" height="0.9375rem" rounded="0.25rem" />
+						<Skeleton width="90%" height="0.8125rem" rounded="0.25rem" />
+						<Skeleton width="70%" height="0.8125rem" rounded="0.25rem" />
 					</div>
 					<div class="tpl-card-tags">
-						{#each Array(3) as _}
-							<div
-								class="skeleton"
-								style="height: 1.125rem; width: 3rem; border-radius: 0.25rem;"
-							></div>
+						{#each Array(3) as _, j (j)}
+							<Skeleton width="3rem" height="1.125rem" rounded="0.25rem" />
 						{/each}
 					</div>
 				</div>
 			{/each}
 		</div>
 	{:else}
-		<!-- Back link -->
 		<button onclick={() => goto(`/${orgSlug}/projects/${projectSlug}`)} class="tpl-back">
 			<ArrowLeft class="h-4 w-4" />
-			Back to Project
+			Back to project
 		</button>
 
-		<!-- Header -->
 		<div class="tpl-header">
 			<div class="tpl-header-info">
 				<h1 class="tpl-title">Templates</h1>
 				<p class="tpl-subtitle">Deploy pre-configured application stacks with a single click.</p>
 			</div>
 			<div class="tpl-header-actions">
-				<a href="/{orgSlug}/projects/{projectSlug}/templates/new" class="tpl-btn tpl-btn-primary">
+				<Button variant="primary" href="/{orgSlug}/projects/{projectSlug}/templates/new">
 					<Plus class="h-4 w-4" />
-					Create Template
-				</a>
+					Create template
+				</Button>
 			</div>
 		</div>
 
-		<!-- Stats -->
 		<div class="tpl-stats">
 			<div class="tpl-stat">
 				<Package class="h-4 w-4" />
@@ -252,15 +237,14 @@
 			{/if}
 		</div>
 
-		<!-- Filters -->
 		<div class="tpl-section-header">
-			<h2 class="tpl-section-title">Browse Templates</h2>
+			<h2 class="tpl-section-title">Browse templates</h2>
 			<div class="tpl-toolbar">
 				<div class="tpl-search-wrap">
 					<Search class="h-4 w-4 tpl-search-icon" />
-					<input
+					<Input
 						type="search"
-						placeholder="Search templates..."
+						placeholder="Search templates"
 						class="tpl-search"
 						bind:value={search}
 					/>
@@ -276,13 +260,10 @@
 			>
 				All
 			</button>
-			{#each categories() as cat}
+			{#each categories() as cat (cat)}
 				<button
 					class="tpl-cat-btn"
 					class:tpl-cat-active={selectedCategory === cat}
-					style={selectedCategory === cat
-						? `background-color: ${getCategoryColor(cat)}; border-color: ${getCategoryColor(cat)};`
-						: ''}
 					onclick={() => (selectedCategory = selectedCategory === cat ? null : cat)}
 				>
 					{cat}
@@ -290,39 +271,25 @@
 			{/each}
 		</div>
 
-		<!-- Grid -->
 		{#if filteredTemplates.length === 0}
-			<div class="tpl-empty">
-				<LayoutTemplate class="h-10 w-10" style="color: var(--surface-muted)" />
-				<p>No templates found</p>
-			</div>
+			<EmptyState title="No templates found">
+				{#snippet icon()}<LayoutTemplate size={28} />{/snippet}
+			</EmptyState>
 		{:else}
 			<div class="tpl-grid">
-				{#each filteredTemplates as template}
+				{#each filteredTemplates as template (template.id)}
 					{@const Icon = getIconForTemplate(template.icon)}
 					<a
 						href="/{orgSlug}/projects/{projectSlug}/templates/deploy/{template.id}"
 						class="tpl-card"
 					>
 						<div class="tpl-card-top">
-							<div
-								class="tpl-card-icon"
-								style="background-color: color-mix(in srgb, {getCategoryColor(
-									template.category
-								)} 12%, transparent)"
-							>
-								<Icon class="h-5 w-5" style="color: {getCategoryColor(template.category)}" />
+							<div class="tpl-card-icon">
+								<Icon class="h-5 w-5" />
 							</div>
 							<div class="tpl-card-top-right">
 								{#if template.category}
-									<span
-										class="tpl-card-badge"
-										style="background-color: color-mix(in srgb, {getCategoryColor(
-											template.category
-										)} 15%, transparent); color: {getCategoryColor(template.category)}"
-									>
-										{template.category}
-									</span>
+									<Badge tone={getCategoryTone(template.category)}>{template.category}</Badge>
 								{/if}
 								{#if !template.isBuiltIn}
 									<button
@@ -343,7 +310,7 @@
 						</div>
 						{#if template.tags.length}
 							<div class="tpl-card-tags">
-								{#each template.tags.slice(0, 4) as tag}
+								{#each template.tags.slice(0, 4) as tag (tag)}
 									<span class="tpl-card-tag">{tag}</span>
 								{/each}
 							</div>
@@ -360,7 +327,8 @@
 		bind:open={showDeleteModal}
 		title={`Delete "${templateToDelete.displayName}"?`}
 		description="This will permanently <strong>delete this template</strong>. Any existing instances will not be affected, but no new deployments can be made from it."
-		confirmLabel="Delete Template"
+		html
+		confirmLabel="Delete template"
 		onconfirm={deleteTemplate}
 		oncancel={() => (templateToDelete = null)}
 	/>
@@ -391,7 +359,17 @@
 		color: var(--center-channel-color);
 	}
 
-	/* Header — matches project page layout */
+	.tpl-skel-back {
+		margin-bottom: 1rem;
+	}
+	.tpl-skel-title {
+		margin-bottom: 0.375rem;
+	}
+	.tpl-skel-chips {
+		display: flex;
+		gap: 0.375rem;
+	}
+
 	.tpl-header {
 		display: flex;
 		align-items: flex-start;
@@ -425,7 +403,6 @@
 		margin: 0.25rem 0 0;
 	}
 
-	/* Stats — matches project page stats row */
 	.tpl-stats {
 		display: flex;
 		flex-wrap: wrap;
@@ -449,7 +426,6 @@
 		color: var(--center-channel-color);
 	}
 
-	/* Section header — matches project page deployments header */
 	.tpl-section-header {
 		display: flex;
 		align-items: center;
@@ -484,7 +460,6 @@
 		margin-bottom: 1.5rem;
 	}
 
-	/* Filters */
 	.tpl-filters {
 		display: flex;
 		flex-direction: column;
@@ -504,25 +479,13 @@
 		transform: translateY(-50%);
 		color: var(--surface-muted);
 		pointer-events: none;
+		z-index: 1;
 	}
 
-	.tpl-search {
-		width: 100%;
+	.tpl-search-wrap :global(.tpl-search) {
 		padding: 0.4375rem 0.75rem 0.4375rem 2.25rem;
-		border-radius: 0.5rem;
-		border: 1px solid var(--surface-border);
-		background-color: var(--center-channel-bg);
-		color: var(--center-channel-color);
 		font-size: 0.8125rem;
-	}
-
-	.tpl-search::placeholder {
-		color: var(--surface-muted);
-	}
-
-	.tpl-search:focus {
-		outline: none;
-		border-color: var(--sidebar-text-active-border);
+		border-radius: 0.5rem;
 	}
 
 	.tpl-categories {
@@ -553,14 +516,13 @@
 	.tpl-cat-active {
 		background-color: var(--sidebar-text-active-border);
 		border-color: var(--sidebar-text-active-border);
-		color: #fff;
+		color: var(--button-color);
 	}
 
 	.tpl-cat-active:hover {
-		color: #fff;
+		color: var(--button-color);
 	}
 
-	/* Grid — card layout matching project deployment cards */
 	.tpl-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
@@ -591,6 +553,10 @@
 		box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-text-active-border) 25%, transparent);
 	}
 
+	.tpl-card--skel {
+		pointer-events: none;
+	}
+
 	.tpl-card-top {
 		display: flex;
 		align-items: flex-start;
@@ -605,6 +571,8 @@
 		height: 2.75rem;
 		border-radius: 0.75rem;
 		flex-shrink: 0;
+		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
+		color: var(--sidebar-text-active-border);
 	}
 
 	.tpl-card-body {
@@ -652,15 +620,6 @@
 		background-color: color-mix(in srgb, var(--error-text-color) 12%, transparent);
 	}
 
-	.tpl-card-badge {
-		font-size: 0.6875rem;
-		font-weight: 500;
-		padding: 0.125rem 0.5rem;
-		border-radius: 9999px;
-		text-transform: capitalize;
-		flex-shrink: 0;
-	}
-
 	.tpl-card-desc {
 		font-size: 0.8125rem;
 		color: var(--surface-muted);
@@ -684,53 +643,5 @@
 		border-radius: 0.25rem;
 		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
 		color: var(--surface-muted);
-	}
-
-	/* Buttons — matches project page button system */
-	.tpl-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.4375rem 0.875rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		font-weight: 500;
-		border: none;
-		cursor: pointer;
-		text-decoration: none;
-		transition:
-			opacity 0.15s,
-			transform 0.15s,
-			box-shadow 0.15s;
-		white-space: nowrap;
-	}
-
-	.tpl-btn-primary {
-		background-color: var(--sidebar-text-active-border);
-		color: #fff;
-		box-shadow:
-			0 1px 2px rgb(0 0 0 / 0.08),
-			0 1px 1px rgb(0 0 0 / 0.04);
-	}
-
-	.tpl-btn-primary:hover {
-		opacity: 0.95;
-		transform: translateY(-0.5px);
-		box-shadow:
-			0 2px 4px rgb(0 0 0 / 0.08),
-			0 4px 12px rgb(0 0 0 / 0.06);
-	}
-
-	/* Empty */
-	.tpl-empty {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 4rem 1.5rem;
-		color: var(--surface-muted);
-		font-size: 0.875rem;
-		border: 1px dashed var(--surface-border);
-		border-radius: 1rem;
 	}
 </style>

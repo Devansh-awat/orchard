@@ -1,10 +1,11 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
-	import { apiFetch, toasts } from '$lib/stores';
+	import { onMount, onDestroy } from 'svelte';
+	import { apiFetch, toasts, subscribeOrgEvents } from '$lib/stores';
 	import { env } from '$env/dynamic/public';
 	import { Loader2 } from 'lucide-svelte';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import {
 		OrgGeneralTab,
 		OrgMembersTab,
@@ -75,6 +76,10 @@
 
 	let resendingInvitationId = $state<string | null>(null);
 	let cancellingInvitationId = $state<string | null>(null);
+	let removingMemberId = $state<string | null>(null);
+	let memberToRemove = $state<Member | null>(null);
+	let showRemoveMemberModal = $state(false);
+	let updatingRoleMemberId = $state<string | null>(null);
 
 	let backupLoading = $state(false);
 	let backupSaving = $state(false);
@@ -115,6 +120,8 @@
 		null
 	);
 	let ssoTesting = $state(false);
+	let ssoDeleting = $state(false);
+	let showDeleteSsoModal = $state(false);
 
 	let scimLoading = $state(false);
 	let scimBaseUrl = $state('');
@@ -144,7 +151,7 @@
 	);
 
 	async function fetchOrganization() {
-		loading = true;
+		if (!organization) loading = true;
 		error = null;
 		try {
 			const response = await apiFetch(`/apiv1/organizations/slug/${organizationSlug}`);
@@ -368,8 +375,22 @@
 		}
 	}
 
+	function memberDisplayName(member: Member) {
+		const name = [member.user.firstName, member.user.lastName].filter(Boolean).join(' ');
+		return name || member.user.email;
+	}
+
+	function requestRemoveMember(memberId: string) {
+		if (removingMemberId) return;
+		const member = members.find((m) => m.id === memberId);
+		if (!member) return;
+		memberToRemove = member;
+		showRemoveMemberModal = true;
+	}
+
 	async function removeMember(memberId: string) {
-		if (!organization) return;
+		if (!organization || removingMemberId) return;
+		removingMemberId = memberId;
 		try {
 			const r = await apiFetch(`/apiv1/organizations/${organization.id}/members/${memberId}`, {
 				method: 'DELETE'
@@ -383,6 +404,8 @@
 				description: e instanceof Error ? e.message : 'Failed to remove member',
 				color: 'error'
 			});
+		} finally {
+			removingMemberId = null;
 		}
 	}
 
@@ -390,7 +413,10 @@
 		memberId: string,
 		newRole: 'owner' | 'admin' | 'member' | 'guest'
 	) {
-		if (!organization) return;
+		if (!organization || updatingRoleMemberId) return;
+		const member = members.find((m) => m.id === memberId);
+		if (member && member.role === newRole) return;
+		updatingRoleMemberId = memberId;
 		try {
 			const r = await apiFetch(`/apiv1/organizations/${organization.id}/members/${memberId}`, {
 				method: 'PATCH',
@@ -406,6 +432,8 @@
 				description: e instanceof Error ? e.message : 'Failed to update role',
 				color: 'error'
 			});
+		} finally {
+			updatingRoleMemberId = null;
 		}
 	}
 
@@ -655,7 +683,8 @@
 	}
 
 	async function deleteSsoConfig() {
-		if (!organization) return;
+		if (!organization || ssoDeleting) return;
+		ssoDeleting = true;
 		try {
 			const r = await apiFetch(`/apiv1/organizations/${organization.id}/sso`, { method: 'DELETE' });
 			if (!r.ok) throw new Error('Failed to delete');
@@ -669,6 +698,8 @@
 				description: e instanceof Error ? e.message : 'Failed to delete',
 				color: 'error'
 			});
+		} finally {
+			ssoDeleting = false;
 		}
 	}
 
@@ -729,7 +760,13 @@
 	}
 
 	async function revokeScimToken(tokenId: string) {
-		if (!organization) return;
+		if (!organization || scimRevokingId) return;
+		if (
+			!confirm(
+				'Revoke this SCIM token? Provisioning from your identity provider will stop working immediately.'
+			)
+		)
+			return;
 		scimRevokingId = tokenId;
 		try {
 			const r = await apiFetch(`/apiv1/organizations/${organization.id}/scim/tokens/${tokenId}`, {
@@ -754,6 +791,29 @@
 
 	onMount(() => {
 		fetchOrganization();
+	});
+
+	let orgEventsUnsub: (() => void) | null = null;
+	let membersRefreshTimer: ReturnType<typeof setTimeout> | null = null;
+	let subscribedOrgId: string | null = null;
+	$effect(() => {
+		const id = organization?.id ?? null;
+		if (!id || id === subscribedOrgId) return;
+		subscribedOrgId = id;
+		orgEventsUnsub?.();
+		orgEventsUnsub = subscribeOrgEvents(id, (ev) => {
+			if (ev.type !== 'membership.changed') return;
+			if (membersRefreshTimer) return;
+			membersRefreshTimer = setTimeout(() => {
+				membersRefreshTimer = null;
+				fetchOrganization();
+			}, 500);
+		});
+	});
+
+	onDestroy(() => {
+		orgEventsUnsub?.();
+		if (membersRefreshTimer) clearTimeout(membersRefreshTimer);
 	});
 </script>
 
@@ -801,8 +861,9 @@
 					{addingMember}
 					{resendingInvitationId}
 					{cancellingInvitationId}
+					{removingMemberId}
 					onAddMember={addMember}
-					onRemoveMember={removeMember}
+					onRemoveMember={requestRemoveMember}
 					onUpdateMemberRole={updateMemberRole}
 					onResendInvitation={resendInvitation}
 					onCancelInvitation={cancelInvitation}
@@ -864,10 +925,11 @@
 					bind:ssoLoginWelcomeText
 					{ssoTestResult}
 					{ssoTesting}
+					{ssoDeleting}
 					onSaveSubdomain={saveSubdomain}
 					onSaveSsoConfig={saveSsoConfig}
 					onTestSsoConnection={testSsoConnection}
-					onDeleteSsoConfig={deleteSsoConfig}
+					onDeleteSsoConfig={() => (showDeleteSsoModal = true)}
 				/>
 			{/if}
 			{#if activeTab === 'scim' && isEnterprise}
@@ -890,6 +952,29 @@
 		</div>
 	</div>
 {/if}
+
+<ConfirmModal
+	bind:open={showRemoveMemberModal}
+	title="Remove member"
+	description={memberToRemove
+		? `Remove ${memberDisplayName(memberToRemove)} from the organization?`
+		: ''}
+	confirmLabel="Remove"
+	onconfirm={() => {
+		if (memberToRemove) removeMember(memberToRemove.id);
+	}}
+	oncancel={() => {}}
+/>
+
+<ConfirmModal
+	bind:open={showDeleteSsoModal}
+	title="Delete SSO configuration?"
+	description="This <strong>disables SSO login</strong> for the organization. Members who sign in through your identity provider will no longer be able to log in with it."
+	html
+	confirmLabel="Delete SSO config"
+	onconfirm={deleteSsoConfig}
+	oncancel={() => {}}
+/>
 
 <style>
 	.osp-page {

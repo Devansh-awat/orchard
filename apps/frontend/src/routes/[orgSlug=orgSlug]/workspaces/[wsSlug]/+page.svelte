@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { onMount } from 'svelte';
-	import { apiFetch, user, toasts, selectedOrganization, refreshTree } from '$lib/stores';
+	import { onDestroy, onMount } from 'svelte';
+	import { apiFetch, user, toasts, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
 	import { mergeAttrs } from 'melt';
 	import { SpatialMenu } from 'melt/builders';
 	import {
@@ -134,7 +134,7 @@
 	const orgSlug = $derived($page.params.orgSlug);
 
 	async function fetchWorkspace() {
-		loading = true;
+		if (!workspace) loading = true;
 		error = null;
 
 		try {
@@ -325,6 +325,30 @@
 		}
 	}
 
+	let unsub: (() => void) | null = null;
+	let subscribedOrgId: string | null = null;
+	let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+	$effect(() => {
+		const id = $selectedOrganization?.id ?? null;
+		if (!id || id === subscribedOrgId) return;
+		subscribedOrgId = id;
+		unsub?.();
+		unsub = subscribeOrgEvents(id, (ev) => {
+			if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
+			if (refreshTimer) return;
+			refreshTimer = setTimeout(() => {
+				refreshTimer = null;
+				fetchWorkspace();
+			}, 2000);
+		});
+	});
+
+	onDestroy(() => {
+		unsub?.();
+		if (refreshTimer) clearTimeout(refreshTimer);
+	});
+
 	onMount(async () => {
 		await user.fetchUser();
 		await fetchWorkspace();
@@ -361,7 +385,6 @@
 				throw new Error(data.message || 'Failed to delete workspace');
 			}
 
-			refreshTree();
 			goto(`/${orgSlug}`);
 		} catch (e) {
 			deleteError = e instanceof Error ? e.message : 'Failed to delete workspace';
@@ -388,7 +411,7 @@
 		</div>
 		<!-- Skeleton: Stats -->
 		<div class="ws-stats">
-			{#each Array(3) as _}
+			{#each Array(3) as _, i (i)}
 				<div class="skeleton" style="height: 1.75rem; width: 5.5rem; border-radius: 0.5rem;"></div>
 			{/each}
 		</div>
@@ -398,7 +421,7 @@
 		</div>
 		<!-- Skeleton: Project cards -->
 		<div class="ws-project-grid">
-			{#each Array(4) as _}
+			{#each Array(4) as _, i (i)}
 				<div class="ws-project-card" style="pointer-events: none;">
 					<div class="ws-project-card-top">
 						<div class="skeleton skeleton-icon"></div>
@@ -417,7 +440,7 @@
 				<div class="skeleton" style="height: 0.75rem; width: 4rem;"></div>
 			</div>
 			<div class="ws-team-avatars">
-				{#each Array(3) as _}
+				{#each Array(3) as _, i (i)}
 					<div class="skeleton" style="width: 5rem; height: 1.875rem; border-radius: 9999px;"></div>
 				{/each}
 			</div>
@@ -518,7 +541,7 @@
 			</div>
 		{:else if filteredProjects.length}
 			<div class="ws-project-grid">
-				{#each filteredProjects as project}
+				{#each filteredProjects as project (project.id)}
 					{@const href = `/${orgSlug}/workspaces/${wsSlug}/projects/${project.slug}`}
 					{@const item = projectMenu.getItem(project, {
 						onSelect: () => openProject(project.slug)
@@ -613,7 +636,7 @@
 
 			{#if workspace.members?.length}
 				<div class="ws-team-avatars">
-					{#each workspace.members as member}
+					{#each workspace.members as member (member.user.id)}
 						<div
 							class="ws-team-member"
 							title="{member.user.firstName || ''} {member.user.lastName || ''} ({member.role
@@ -684,7 +707,7 @@
 						{:else}
 							<select class="ws-select" bind:value={selectedUserId} disabled={inviting}>
 								<option value="">Select a member...</option>
-								{#each availableMembers as orgMember}
+								{#each availableMembers as orgMember (orgMember.user.id)}
 									<option value={orgMember.user.id}>
 										{orgMember.user.firstName}
 										{orgMember.user.lastName || ''} ({orgMember.user.email})
@@ -699,7 +722,7 @@
 					<label class="ws-label">Role</label>
 					<select class="ws-select" bind:value={selectedRoleId} disabled={inviting}>
 						<option value="">Select a role...</option>
-						{#each roles as role}
+						{#each roles as role (role.id)}
 							<option value={role.id}>{role.name}</option>
 						{/each}
 					</select>
@@ -740,6 +763,7 @@
 		bind:open={showLeaveModal}
 		title="Leave this workspace?"
 		description="You will need to be <strong>invited again</strong> to rejoin this workspace."
+		html
 		confirmLabel="Leave"
 		danger={false}
 		onconfirm={leaveWorkspace}
@@ -749,6 +773,7 @@
 		bind:open={showDeleteWorkspaceModal}
 		title={`Delete "${workspace.name}"?`}
 		description="This will permanently <strong>delete this workspace</strong> and all its projects, deployments, databases, and ingresses. This cannot be undone."
+		html
 		confirmLabel="Delete Workspace"
 		onconfirm={deleteWorkspace}
 		oncancel={() => {}}

@@ -320,7 +320,7 @@
 			<!-- Theme switcher -->
 			<div class="user-menu-section" {@attach motionStagger(1)}>
 				<div class="user-menu-theme-group">
-					{#each [{ mode: 'light' as const, icon: Sun, label: 'Light' }, { mode: 'dark' as const, icon: Moon, label: 'Dark' }, { mode: 'system' as const, icon: Monitor, label: 'System' }] as { mode, icon: Icon, label }}
+					{#each [{ mode: 'light' as const, icon: Sun, label: 'Light' }, { mode: 'dark' as const, icon: Moon, label: 'Dark' }, { mode: 'system' as const, icon: Monitor, label: 'System' }] as { mode, icon: Icon, label } (mode)}
 						<button
 							onclick={() => applyQuickTheme(mode)}
 							class="user-menu-theme-btn"
@@ -423,3 +423,291 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	.user-menu.is-collapsed {
+		position: relative;
+		display: flex;
+		justify-content: center;
+	}
+	.user-menu-trigger-collapsed {
+		position: relative;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.25rem;
+		height: 2.25rem;
+		padding: 0;
+		border-radius: 0.75rem;
+		background-color: transparent;
+		color: var(--sidebar-text);
+		transition:
+			background-color 120ms ease,
+			box-shadow 120ms ease;
+		cursor: pointer;
+	}
+	.user-menu-trigger-collapsed:hover {
+		background-color: var(--sidebar-text-hover-bg);
+	}
+	.user-menu-trigger-collapsed.is-open {
+		background-color: var(--sidebar-text-active-bg);
+		box-shadow: 0 0 0 2px color-mix(in srgb, var(--sidebar-text-active-border) 40%, transparent);
+	}
+	.user-menu-trigger-collapsed:hover .sidebar-collapsed-tooltip {
+		opacity: 1;
+	}
+	.user-menu-trigger-collapsed .sidebar-notification-dot {
+		top: -2px;
+		right: -2px;
+	}
+
+	.user-menu-panel.user-menu-panel-collapsed {
+		left: calc(100% + 0.5rem);
+		right: auto;
+		bottom: 0;
+		width: 17rem;
+		margin-bottom: 0;
+	}
+
+	.user-menu-trigger {
+		background-color: transparent;
+		color: var(--sidebar-text);
+		transition: background-color 150ms ease;
+	}
+
+	.user-menu-trigger:hover {
+		background-color: var(--sidebar-text-hover-bg);
+	}
+
+	.user-menu-avatar-fallback {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		border-radius: 0.5rem;
+		flex-shrink: 0;
+		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 15%, transparent);
+		color: var(--sidebar-text-active-border);
+	}
+
+	.user-menu-name {
+		color: var(--sidebar-text);
+	}
+
+	.user-menu-panel .user-menu-name {
+		color: var(--center-channel-color);
+	}
+
+	.user-menu-email {
+		color: color-mix(in srgb, var(--sidebar-text) 55%, transparent);
+	}
+
+	.user-menu-panel .user-menu-email {
+		color: var(--surface-muted);
+	}
+
+	.user-menu-chevron {
+		color: color-mix(in srgb, var(--sidebar-text) 45%, transparent);
+		transition: transform 200ms ease;
+	}
+
+	.user-menu-chevron.is-open {
+		transform: rotate(180deg);
+	}
+
+	.user-menu-panel {
+		background-color: var(--surface-bg);
+		border-color: var(--surface-border);
+		color: var(--center-channel-color);
+		box-shadow:
+			0 4px 6px rgb(0 0 0 / 0.04),
+			0 12px 32px rgb(0 0 0 / 0.1);
+		gap: 0.25rem;
+		overflow: hidden;
+	}
+
+	.user-menu-profile {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding-bottom: 0.75rem;
+		margin-bottom: 0.25rem;
+		border-bottom: 1px solid var(--surface-border);
+	}
+
+	.user-menu-profile-avatar {
+		width: 2.25rem;
+		height: 2.25rem;
+		border-radius: 0.625rem;
+		object-fit: cover;
+		flex-shrink: 0;
+	}
+
+	.user-menu-profile-avatar-fallback {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.25rem;
+		height: 2.25rem;
+		border-radius: 0.625rem;
+		flex-shrink: 0;
+		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
+		color: var(--sidebar-text-active-border);
+	}
+
+	.user-menu-profile-info {
+		min-width: 0;
+		flex: 1;
+	}
+
+	.user-menu-signout {
+		border-top: 1px solid var(--surface-border);
+		padding-top: 0.25rem;
+		margin-top: 0.25rem;
+	}
+
+	.user-menu-section {
+		padding: 0.375rem 0;
+	}
+
+	.user-menu-theme-group {
+		display: flex;
+		gap: 0.125rem;
+		background-color: color-mix(in srgb, var(--center-channel-color) 6%, transparent);
+		border-radius: 0.375rem;
+		padding: 0.125rem;
+		min-width: 0;
+		width: 100%;
+		box-sizing: border-box;
+	}
+
+	.user-menu-theme-btn {
+		flex: 1;
+		min-width: 0;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		gap: 0.25rem;
+		padding: 0.25rem 0;
+		border-radius: 0.25rem;
+		font-size: 0.6875rem;
+		font-weight: 500;
+		color: var(--surface-muted);
+		background: transparent;
+		transition:
+			background-color 150ms ease,
+			color 150ms ease;
+	}
+
+	.user-menu-theme-btn:hover {
+		color: var(--center-channel-color);
+		background-color: color-mix(in srgb, var(--center-channel-color) 8%, transparent);
+	}
+
+	.user-menu-theme-btn.is-active {
+		background-color: var(--surface-bg);
+		color: var(--center-channel-color);
+		box-shadow: 0 1px 3px color-mix(in srgb, #000 10%, transparent);
+	}
+
+	.user-menu-section-footer {
+		padding-top: 0.25rem;
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+	}
+
+	.user-menu-item {
+		display: flex;
+		width: 100%;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.5rem;
+		font-size: 0.875rem;
+		border-radius: 0.5rem;
+		color: var(--center-channel-color);
+		background: transparent;
+		transition: background-color 120ms ease;
+	}
+
+	.user-menu-item:hover {
+		background-color: var(--control-hover-bg);
+	}
+
+	.user-menu-item.is-danger {
+		color: var(--error-text-color);
+	}
+
+	.user-menu-item.is-danger:hover {
+		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
+	}
+
+	.user-menu-item.user-menu-item--highlight {
+		color: var(--button-bg);
+		font-weight: 550;
+	}
+
+	.user-menu-item.user-menu-item--highlight:hover {
+		background-color: color-mix(in srgb, var(--button-bg) 8%, transparent);
+	}
+
+	.user-menu-invite-dot {
+		width: 0.375rem;
+		height: 0.375rem;
+		border-radius: 50%;
+		background-color: var(--sidebar-text-active-border);
+		flex-shrink: 0;
+		margin-left: auto;
+		animation: invite-pulse 2s ease-in-out infinite;
+	}
+
+	.user-menu-notification-dot {
+		position: absolute;
+		top: -2px;
+		right: -2px;
+		width: 0.5rem;
+		height: 0.5rem;
+		border-radius: 50%;
+		background-color: var(--sidebar-text-active-border);
+		border: 2px solid var(--sidebar-bg);
+		animation: invite-pulse 2s ease-in-out infinite;
+	}
+
+	.sidebar-notification-dot {
+		position: absolute;
+		top: -1px;
+		right: -1px;
+		width: 0.5rem;
+		height: 0.5rem;
+		border-radius: 50%;
+		background-color: var(--sidebar-text-active-border);
+		border: 2px solid var(--sidebar-bg);
+		animation: invite-pulse 2s ease-in-out infinite;
+	}
+
+	@keyframes invite-pulse {
+		0%,
+		100% {
+			opacity: 1;
+		}
+		50% {
+			opacity: 0.5;
+		}
+	}
+
+	.sidebar-footer-avatar {
+		display: flex;
+		width: 2.25rem;
+		height: 2.25rem;
+		align-items: center;
+		justify-content: center;
+		border-radius: 0.75rem;
+		background-color: var(--sidebar-text-hover-bg);
+		color: var(--sidebar-text);
+		transition: background-color 120ms ease;
+	}
+	.sidebar-footer-avatar:hover {
+		background-color: var(--sidebar-text-active-bg);
+	}
+</style>

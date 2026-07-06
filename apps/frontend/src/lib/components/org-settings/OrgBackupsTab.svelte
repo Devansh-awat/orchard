@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Loader2, Pencil, Check, Lock } from 'lucide-svelte';
 	import { CloudUpload } from '@jis3r/icons';
+	import { Button, Field, Input } from '$lib/components/ui';
 	import SettingsSection from '$lib/components/user-settings/SettingsSection.svelte';
 
 	let {
@@ -45,7 +46,7 @@
 </script>
 
 <SettingsSection
-	title="Database Backups (R2)"
+	title="Database backups (R2)"
 	description="Configure Cloudflare R2 for pgBackRest backups"
 	iconColor="amber"
 	{index}
@@ -54,10 +55,10 @@
 
 	{#snippet badge()}
 		{#if !backupLoading && backupConfigured && !backupEditMode && isOwner}
-			<button onclick={() => (backupEditMode = true)} class="ob-edit-btn">
+			<Button variant="ghost" size="sm" onclick={() => (backupEditMode = true)}>
 				<Pencil class="h-3.5 w-3.5" />
 				Edit
-			</button>
+			</Button>
 		{/if}
 	{/snippet}
 
@@ -73,19 +74,19 @@
 	{:else if backupConfigured && !backupEditMode}
 		<dl class="ob-readonly">
 			<div class="ob-readonly-row">
-				<dt>R2 Endpoint</dt>
-				<dd class="ob-mono">{backupEndpoint || '—'}</dd>
+				<dt>R2 endpoint</dt>
+				<dd class="ob-mono">{backupEndpoint || 'Not set'}</dd>
 			</div>
 			<div class="ob-readonly-row">
 				<dt>Bucket</dt>
-				<dd class="ob-mono">{backupBucket || '—'}</dd>
+				<dd class="ob-mono">{backupBucket || 'Not set'}</dd>
 			</div>
 			<div class="ob-readonly-row">
 				<dt>Region</dt>
 				<dd>{backupRegion || 'auto'}</dd>
 			</div>
 			<div class="ob-readonly-row">
-				<dt>Access Key ID</dt>
+				<dt>Access key ID</dt>
 				<dd class="ob-mono">
 					{#if backupAccessKeyConfigured}
 						{#if backupAccessKeyLast4}
@@ -97,12 +98,12 @@
 							</span>
 						{/if}
 					{:else}
-						—
+						Not set
 					{/if}
 				</dd>
 			</div>
 			<div class="ob-readonly-row">
-				<dt>Secret Access Key</dt>
+				<dt>Secret access key</dt>
 				<dd>
 					<span class="ob-status-ok">
 						<Check class="h-3 w-3" />
@@ -119,92 +120,60 @@
 		{/if}
 	{:else}
 		<div class="ob-form">
-			<div class="ob-field">
-				<label class="ob-field-label" for="ob-endpoint">R2 Endpoint</label>
-				<input
+			<Field label="R2 endpoint" for="ob-endpoint">
+				<Input
 					id="ob-endpoint"
-					type="text"
-					class="ob-input"
 					placeholder="https://<account-id>.r2.cloudflarestorage.com"
 					bind:value={backupEndpoint}
 				/>
-			</div>
+			</Field>
 
-			<div class="ob-field">
-				<label class="ob-field-label" for="ob-bucket">Bucket</label>
-				<input
-					id="ob-bucket"
-					type="text"
-					class="ob-input"
-					placeholder="orchard-backups"
-					bind:value={backupBucket}
-				/>
-			</div>
+			<Field label="Bucket" for="ob-bucket">
+				<Input id="ob-bucket" placeholder="orchard-backups" bind:value={backupBucket} />
+			</Field>
 
-			<div class="ob-field">
-				<label class="ob-field-label" for="ob-region">Region</label>
-				<input
-					id="ob-region"
-					type="text"
-					class="ob-input"
-					placeholder="auto"
-					bind:value={backupRegion}
-				/>
-			</div>
+			<Field label="Region" for="ob-region">
+				<Input id="ob-region" placeholder="auto" bind:value={backupRegion} />
+			</Field>
 
-			<div class="ob-field">
-				<label class="ob-field-label" for="ob-access-key">
-					Access Key ID
-					{#if backupAccessKeyConfigured}
-						<span class="ob-field-hint">
-							(configured{#if backupAccessKeyLast4}
-								· ends in {backupAccessKeyLast4}{/if} · leave empty to keep)
-						</span>
-					{/if}
-				</label>
-				<input
+			<Field
+				label="Access key ID"
+				for="ob-access-key"
+				hint={backupAccessKeyConfigured
+					? `Configured${backupAccessKeyLast4 ? `, ends in ${backupAccessKeyLast4}` : ''}, leave empty to keep`
+					: undefined}
+			>
+				<Input
 					id="ob-access-key"
-					type="text"
-					class="ob-input"
 					placeholder={backupAccessKeyConfigured ? '••••••••••••' : 'R2 access key'}
 					bind:value={backupAccessKey}
 				/>
-			</div>
+			</Field>
 
-			<div class="ob-field">
-				<label class="ob-field-label" for="ob-secret-key">
-					Secret Access Key
-					{#if backupSecretConfigured}
-						<span class="ob-field-hint">(configured · leave empty to keep)</span>
-					{/if}
-				</label>
-				<input
+			<Field
+				label="Secret access key"
+				for="ob-secret-key"
+				hint={backupSecretConfigured ? 'Configured, leave empty to keep' : undefined}
+			>
+				<Input
 					id="ob-secret-key"
 					type="password"
-					class="ob-input"
 					placeholder={backupSecretConfigured ? '••••••••••••' : 'R2 secret key'}
 					bind:value={backupSecretKey}
 				/>
-			</div>
+			</Field>
 
 			<div class="ob-actions">
-				<button onclick={onSaveBackupSettings} disabled={backupSaving} class="ob-btn ob-btn--solid">
-					{#if backupSaving}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
+				<Button variant="primary" onclick={onSaveBackupSettings} loading={backupSaving}>
 					Save backup settings
-				</button>
+				</Button>
 				{#if backupEditMode && backupConfigured}
-					<button onclick={onCancelEdit} disabled={backupSaving} class="ob-btn ob-btn--ghost">
-						Cancel
-					</button>
+					<Button variant="ghost" onclick={onCancelEdit} disabled={backupSaving}>Cancel</Button>
 				{/if}
 				{#if backupSecretConfigured && isOwner}
-					<button
-						onclick={onClearBackupSettings}
-						disabled={backupSaving}
-						class="ob-btn ob-btn--ghost"
-					>
+					<Button variant="ghost" onclick={onClearBackupSettings} disabled={backupSaving}>
 						Clear
-					</button>
+					</Button>
 				{/if}
 			</div>
 		</div>
@@ -232,25 +201,6 @@
 		color: var(--surface-muted);
 		margin: 0.75rem 0 0;
 	}
-	.ob-edit-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.25rem 0.625rem;
-		border-radius: 0.375rem;
-		font-size: 0.75rem;
-		font-weight: 550;
-		border: none;
-		cursor: pointer;
-		background: none;
-		color: var(--surface-muted);
-		transition: all 120ms;
-	}
-	.ob-edit-btn:hover {
-		color: var(--center-channel-color);
-		background-color: color-mix(in srgb, var(--center-channel-color) 5%, transparent);
-	}
-
 	/* Readonly display */
 	.ob-readonly {
 		margin: 0;
@@ -297,72 +247,11 @@
 		flex-direction: column;
 		gap: 0.875rem;
 	}
-	.ob-field {
-		display: flex;
-		flex-direction: column;
-		gap: 0.375rem;
-	}
-	.ob-field-label {
-		font-size: 0.75rem;
-		font-weight: 600;
-		color: var(--center-channel-color);
-	}
-	.ob-field-hint {
-		font-weight: 400;
-		color: var(--surface-muted);
-		margin-left: 0.375rem;
-	}
-	.ob-input {
-		padding: 0.4375rem 0.75rem;
-		font-size: 0.8125rem;
-		border: 1px solid var(--surface-border);
-		border-radius: 0.5rem;
-		background-color: var(--surface-bg);
-		color: var(--center-channel-color);
-		transition: border-color 150ms;
-	}
-	.ob-input:focus {
-		outline: none;
-		border-color: var(--sidebar-text-active-border);
-		box-shadow: 0 0 0 2px color-mix(in srgb, var(--sidebar-text-active-border) 10%, transparent);
-	}
 	.ob-actions {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
 		padding-top: 0.25rem;
-	}
-	.ob-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.4375rem 0.875rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		font-weight: 550;
-		border: none;
-		cursor: pointer;
-		transition: all 120ms;
-		white-space: nowrap;
-	}
-	.ob-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-	.ob-btn--solid {
-		background-color: var(--button-bg);
-		color: var(--button-color);
-	}
-	.ob-btn--solid:hover:not(:disabled) {
-		opacity: 0.9;
-	}
-	.ob-btn--ghost {
-		background: none;
-		color: var(--surface-muted);
-	}
-	.ob-btn--ghost:hover:not(:disabled) {
-		color: var(--center-channel-color);
-		background-color: color-mix(in srgb, var(--center-channel-color) 5%, transparent);
 	}
 
 	@media (max-width: 640px) {

@@ -9,5 +9,4 @@ export { default as SettingsSection } from './SettingsSection.svelte';
 export { default as SettingsField } from './SettingsField.svelte';
 export { default as IntegrationCard } from './IntegrationCard.svelte';
 export { default as ConnectPrompt } from './ConnectPrompt.svelte';
-export { default as StatusPill } from './StatusPill.svelte';
 export { default as IconButton } from './IconButton.svelte';

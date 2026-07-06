@@ -22,10 +22,35 @@
 		Wrench
 	} from 'lucide-svelte';
 	import { tick } from 'svelte';
-	import { marked } from 'marked';
+	import { marked, type Tokens } from 'marked';
 
 	const aiEnabled = featureFlag('ai-agent');
 	marked.setOptions({ breaks: true, gfm: true });
+
+	function escapeHtml(value: string): string {
+		return value.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+	}
+
+	function isSafeHref(href: string): boolean {
+		try {
+			const proto = new URL(href, 'https://relative.invalid').protocol;
+			return proto === 'https:' || proto === 'http:' || proto === 'mailto:';
+		} catch {
+			return false;
+		}
+	}
+
+	marked.use({
+		renderer: {
+			html({ text }: Tokens.HTML | Tokens.Tag) {
+				return escapeHtml(text);
+			},
+			link(token: Tokens.Link) {
+				if (isSafeHref(token.href)) return false;
+				return this.parser.parseInline(token.tokens);
+			}
+		}
+	});
 
 	function renderMarkdown(text: string): string {
 		return marked.parse(text) as string;
@@ -304,7 +329,7 @@
 							more.
 						</p>
 						<div class="suggestions">
-							{#each suggestions as s, i}
+							{#each suggestions as s, i (s)}
 								<button
 									class="suggestion"
 									onclick={() => useSuggestion(s)}
@@ -323,7 +348,7 @@
 							<div class="msg-body">
 								{#if msg.role === 'assistant' && msg.toolCalls && msg.toolCalls.length > 0}
 									<div class="tool-calls">
-										{#each msg.toolCalls as tc, ti}
+										{#each msg.toolCalls as tc, ti (ti)}
 											{@const meta = getToolMeta(tc.name)}
 											<div
 												class="tool-card"
@@ -360,7 +385,7 @@
 													<div class="tool-cards">
 														{#if Array.isArray(tc.data)}
 															<div class="od-grid">
-																{#each tc.data.slice(0, 9) as item, ci}
+																{#each tc.data.slice(0, 9) as item, ci (ci)}
 																	<div
 																		class="card"
 																		{@attach motionStagger({
@@ -479,7 +504,7 @@
 															</div>
 															{#if tc.data.deployments?.length || tc.data.databases?.length}
 																<div class="od-grid" style="margin-top:0.5rem">
-																	{#each (tc.data.deployments ?? []).slice(0, 6) as dep, ci}
+																	{#each (tc.data.deployments ?? []).slice(0, 6) as dep, ci (ci)}
 																		<div
 																			class="card"
 																			{@attach motionStagger({
@@ -512,7 +537,7 @@
 																			</div>
 																		</div>
 																	{/each}
-																	{#each (tc.data.databases ?? []).slice(0, 4) as db, ci}
+																	{#each (tc.data.databases ?? []).slice(0, 4) as db, ci (ci)}
 																		<div
 																			class="card"
 																			{@attach motionStagger({
@@ -560,6 +585,7 @@
 
 								{#if msg.content}
 									{#if msg.role === 'assistant'}
+										<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 										<div class="msg-text msg-text--md">{@html renderMarkdown(msg.content)}</div>
 									{:else}
 										<div class="msg-text">{msg.content}</div>
@@ -617,7 +643,7 @@
 					aria-label="Send"
 					{@attach springHover({ lift: -1, stiffness: 520, damping: 28 })}
 				>
-					{#if streaming}<Loader2 size={18} class="spin" />{:else}<Send size={18} />{/if}
+					{#if streaming}<Loader2 size={18} class="animate-spin" />{:else}<Send size={18} />{/if}
 				</button>
 			</form>
 		</div>

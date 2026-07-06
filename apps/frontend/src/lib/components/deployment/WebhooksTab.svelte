@@ -174,7 +174,7 @@
 				</div>
 			{:else}
 				<div class="space-y-2">
-					{#each webhookTokens as token}
+					{#each webhookTokens as token (token.id)}
 						<div class="wh-token-card" transition:slide={{ duration: 120 }}>
 							<div class="wh-token-icon">
 								<Lock class="h-3.5 w-3.5" />
@@ -199,7 +199,15 @@
 							</div>
 							<button
 								class="btn btn-ghost btn-sm wh-delete-btn"
-								onclick={() => onDeleteToken(token.id)}
+								onclick={() => {
+									if (
+										!confirm(
+											'Delete this webhook token? Anything calling this webhook will stop working.'
+										)
+									)
+										return;
+									onDeleteToken(token.id);
+								}}
 								disabled={deletingWebhookTokenId === token.id}
 								title="Delete token"
 							>

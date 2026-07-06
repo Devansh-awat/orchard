@@ -12,6 +12,7 @@
 		showOnboarding
 	} from '$lib/stores';
 	import { Loader2, Building2, UserPlus, AlertCircle, LogOut } from 'lucide-svelte';
+	import { Badge, Button } from '$lib/components/ui';
 
 	interface InvitationDetails {
 		id: string;
@@ -56,14 +57,14 @@
 		return inviter.email;
 	}
 
-	function getRoleBadgeColor(role: string): string {
+	function getRoleTone(role: string): 'warning' | 'info' | 'neutral' {
 		switch (role) {
 			case 'owner':
-				return 'bg-purple-100 text-purple-800 dark:bg-purple-900/30 dark:text-purple-300';
+				return 'warning';
 			case 'admin':
-				return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+				return 'info';
 			default:
-				return 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
+				return 'neutral';
 		}
 	}
 
@@ -92,8 +93,8 @@
 			if ($isSignedIn && $user && invitation) {
 				emailMismatch = $user.email?.toLowerCase() !== invitation.email.toLowerCase();
 			}
-		} catch (e) {
-			error = 'Failed to load invitation. Please try again.';
+		} catch {
+			error = 'Failed to load invitation. Try again.';
 		} finally {
 			loading = false;
 		}
@@ -116,8 +117,8 @@
 			}
 
 			toasts.add({
-				title: 'Welcome!',
-				description: `You've joined ${invitation.organization.name}`,
+				title: 'Invitation accepted',
+				description: `You joined ${invitation.organization.name}`,
 				color: 'success'
 			});
 
@@ -210,34 +211,36 @@
 		{:else if error}
 			<div class="card p-8 text-center">
 				<div
-					class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-red-100 dark:bg-red-900/30"
+					class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full"
+					style="background-color: color-mix(in srgb, var(--error-text-color) 12%, transparent);"
 				>
-					<AlertCircle class="h-6 w-6 text-red-600 dark:text-red-400" />
+					<AlertCircle class="h-6 w-6" style="color: var(--error-text-color);" />
 				</div>
 				<h1 class="mb-2 text-xl font-semibold" style="color: var(--center-channel-color);">
-					Invalid Invitation
+					Invalid invitation
 				</h1>
 				<p class="mb-6" style="color: var(--surface-muted);">{error}</p>
-				<a href="/" class="btn btn-primary">Go to Home</a>
+				<Button variant="primary" href="/">Go to home</Button>
 			</div>
 		{:else if showLogoutWarning}
 			<div class="card p-8 text-center">
 				<div
-					class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full bg-yellow-100 dark:bg-yellow-900/30"
+					class="mx-auto mb-4 flex h-12 w-12 items-center justify-center rounded-full"
+					style="background-color: var(--warning-bg);"
 				>
-					<LogOut class="h-6 w-6 text-yellow-600 dark:text-yellow-400" />
+					<LogOut class="h-6 w-6" style="color: var(--warning-text);" />
 				</div>
 				<h1 class="mb-2 text-xl font-semibold" style="color: var(--center-channel-color);">
-					No Organization Access
+					No organization access
 				</h1>
 				<p class="mb-6" style="color: var(--surface-muted);">
 					You need to be part of an organization to use Orchard. Since you declined this invitation
 					and don't belong to any other organization, you'll be logged out.
 				</p>
-				<button onclick={handleLogout} class="btn btn-primary w-full">
+				<Button variant="primary" class="w-full" onclick={handleLogout}>
 					<LogOut class="h-4 w-4" />
-					Sign Out
-				</button>
+					Sign out
+				</Button>
 			</div>
 		{:else if invitation}
 			<div class="card overflow-hidden">
@@ -282,10 +285,8 @@
 							<p class="text-xs uppercase tracking-wide" style="color: var(--surface-muted);">
 								Role
 							</p>
-							<span
-								class={`inline-block rounded-full px-2 py-0.5 text-xs font-medium capitalize ${getRoleBadgeColor(invitation.role)}`}
-							>
-								{invitation.role}
+							<span class="inline-block capitalize">
+								<Badge tone={getRoleTone(invitation.role)}>{invitation.role}</Badge>
 							</span>
 						</div>
 					</div>
@@ -301,48 +302,47 @@
 								Sign in with <strong>{invitation.email}</strong> to accept this invitation.
 							</p>
 						</div>
-						<button onclick={handleSignIn} class="btn btn-primary w-full">
-							Sign In to Accept
-						</button>
+						<Button variant="primary" class="w-full" onclick={handleSignIn}>
+							Sign in to accept
+						</Button>
 					{:else if emailMismatch}
 						<!-- Email mismatch -->
 						<div
-							class="rounded-xl border border-yellow-200 bg-yellow-50 p-4 dark:border-yellow-900/40 dark:bg-yellow-900/20"
+							class="rounded-xl border p-4"
+							style="border-color: var(--warning-border); background-color: var(--warning-bg);"
 						>
-							<p class="text-sm text-yellow-800 dark:text-yellow-200">
+							<p class="text-sm" style="color: var(--warning-text);">
 								This invitation was sent to <strong>{invitation.email}</strong>, but you're signed
 								in as <strong>{$user?.email}</strong>.
 							</p>
-							<p class="mt-2 text-sm text-yellow-700 dark:text-yellow-300">
-								Please sign in with the correct email to accept this invitation.
+							<p class="mt-2 text-sm" style="color: var(--warning-text);">
+								Sign in with the correct email to accept this invitation.
 							</p>
 						</div>
-						<button onclick={() => user.signOut()} class="btn btn-secondary w-full">
-							Sign Out and Use Different Account
-						</button>
+						<Button variant="secondary" class="w-full" onclick={() => user.signOut()}>
+							Sign out and use a different account
+						</Button>
 					{:else}
 						<!-- Can accept -->
 						<div class="flex gap-3">
-							<button
+							<Button
+								variant="secondary"
+								class="flex-1"
 								onclick={handleDecline}
-								disabled={declining || accepting}
-								class="btn btn-secondary flex-1"
+								loading={declining}
+								disabled={accepting}
 							>
-								{#if declining}
-									<Loader2 class="h-4 w-4 animate-spin" />
-								{/if}
 								Decline
-							</button>
-							<button
+							</Button>
+							<Button
+								variant="primary"
+								class="flex-1"
 								onclick={handleAccept}
-								disabled={accepting || declining}
-								class="btn btn-primary flex-1"
+								loading={accepting}
+								disabled={declining}
 							>
-								{#if accepting}
-									<Loader2 class="h-4 w-4 animate-spin" />
-								{/if}
-								Accept Invitation
-							</button>
+								Accept invitation
+							</Button>
 						</div>
 					{/if}
 				</div>

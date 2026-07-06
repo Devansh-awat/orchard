@@ -1,7 +1,5 @@
-import type { QueryClient } from '@tanstack/svelte-query';
 import { get, writable, derived, type Readable } from 'svelte/store';
 import { browser } from '$app/environment';
-import { invalidate } from '$app/navigation';
 import { apiBase } from './api';
 import { queryClient } from '../query';
 
@@ -30,7 +28,6 @@ interface Subscription {
 	source: EventSource | null;
 	listeners: Set<(ev: OrgEvent) => void>;
 	orgId: string;
-	dependencies: Set<string>;
 	status: SseStatus;
 	lastEventAt: number;
 	lastEventId: string | null;
@@ -81,24 +78,14 @@ function applyEventToCache(sub: Subscription, ev: OrgEvent) {
 			// debounced — no query uses an ['org', id, 'overview'] key)
 			qc.invalidateQueries({ queryKey: ['projects', sub.orgId] });
 			if (ev.id) qc.invalidateQueries({ queryKey: ['deployment', ev.id] });
-			if (ev.projectId) qc.invalidateQueries({ queryKey: ['project', ev.projectId] });
 			break;
 		case 'pod.changed':
-			qc.invalidateQueries({ queryKey: ['projects', sub.orgId] });
-			if (ev.projectId) qc.invalidateQueries({ queryKey: ['project', ev.projectId] });
-			break;
 		case 'membership.changed':
-			qc.invalidateQueries({ queryKey: ['org', sub.orgId] });
 			qc.invalidateQueries({ queryKey: ['projects', sub.orgId] });
 			break;
 		default:
 			break;
 	}
-}
-
-function applyEventToLoaders(sub: Subscription, ev: OrgEvent) {
-	if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
-	for (const dep of sub.dependencies) invalidate(dep);
 }
 
 function scheduleReconnect(sub: Subscription) {
@@ -146,7 +133,6 @@ function connect(sub: Subscription) {
 			return;
 		}
 		applyEventToCache(sub, ev);
-		applyEventToLoaders(sub, ev);
 		for (const l of sub.listeners) l(ev);
 	};
 	source.onerror = () => {
@@ -167,11 +153,7 @@ function connect(sub: Subscription) {
  * Subscribe to server-sent events for an organization. Multiple callers for the
  * same orgId share one EventSource.
  */
-export function subscribeOrgEvents(
-	orgId: string,
-	listener: (ev: OrgEvent) => void,
-	opts?: { queryClient?: QueryClient; invalidateDependencies?: string[] }
-): () => void {
+export function subscribeOrgEvents(orgId: string, listener: (ev: OrgEvent) => void): () => void {
 	if (!browser) return () => {};
 	if (typeof window.location !== 'undefined' && window.location.search.includes('nosse')) {
 		return () => {};
@@ -184,7 +166,6 @@ export function subscribeOrgEvents(
 			source: null,
 			listeners: new Set(),
 			orgId,
-			dependencies: new Set(opts?.invalidateDependencies ?? []),
 			status: 'connecting',
 			lastEventAt: Date.now(),
 			lastEventId: null,
@@ -205,8 +186,6 @@ export function subscribeOrgEvents(
 			}
 		}, 10_000);
 		subscriptions.set(orgId, sub);
-	} else if (opts?.invalidateDependencies) {
-		for (const d of opts.invalidateDependencies) sub.dependencies.add(d);
 	}
 
 	sub.listeners.add(listener);

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Loader2, Globe } from 'lucide-svelte';
+	import { Button, StatusPill } from '$lib/components/ui';
 	import SettingsSection from './SettingsSection.svelte';
-	import StatusPill from './StatusPill.svelte';
 	import IntegrationCard from './IntegrationCard.svelte';
 	import ConnectPrompt from './ConnectPrompt.svelte';
 
@@ -82,21 +82,23 @@
 						if (e.key === 'Enter') onLink();
 					}}
 				/>
-				<button
+				<Button
+					variant="ghost"
+					size="sm"
 					onclick={() => {
 						showTailscaleForm = false;
 						tailscaleApiKey = '';
-					}}
-					class="ut-btn ut-btn--ghost">Cancel</button
+					}}>Cancel</Button
 				>
-				<button
+				<Button
+					variant="primary"
+					size="sm"
 					onclick={onLink}
-					disabled={linkingTailscale || !tailscaleApiKey.trim()}
-					class="ut-btn ut-btn--solid"
+					loading={linkingTailscale}
+					disabled={!tailscaleApiKey.trim()}
 				>
-					{#if linkingTailscale}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
 					Connect
-				</button>
+				</Button>
 			</div>
 		</div>
 	{:else}
@@ -166,37 +168,5 @@
 		outline: none;
 		border-color: var(--sidebar-text-active-border);
 		box-shadow: 0 0 0 2px color-mix(in srgb, var(--sidebar-text-active-border) 10%, transparent);
-	}
-	.ut-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.4375rem 0.875rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		font-weight: 550;
-		border: none;
-		cursor: pointer;
-		transition: all 120ms;
-		white-space: nowrap;
-	}
-	.ut-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-	.ut-btn--solid {
-		background-color: var(--button-bg);
-		color: var(--button-color);
-	}
-	.ut-btn--solid:hover:not(:disabled) {
-		opacity: 0.9;
-	}
-	.ut-btn--ghost {
-		background: none;
-		color: var(--surface-muted);
-	}
-	.ut-btn--ghost:hover:not(:disabled) {
-		color: var(--center-channel-color);
-		background-color: color-mix(in srgb, var(--center-channel-color) 5%, transparent);
 	}
 </style>

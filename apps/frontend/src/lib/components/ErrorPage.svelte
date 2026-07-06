@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { ArrowLeft } from 'lucide-svelte';
+	import { Button } from '$lib/components/ui';
 
 	interface Props {
 		status?: number;
@@ -14,7 +15,7 @@
 		403: "You don't have access to this page.",
 		404: "The page you're looking for doesn't exist.",
 		408: 'The request took too long.',
-		429: 'Too many requests. Please slow down.',
+		429: 'Too many requests. Try again in a moment.',
 		500: 'Something went wrong on our end.',
 		502: 'The server is temporarily unavailable.',
 		503: 'The service is temporarily unavailable.',
@@ -42,10 +43,10 @@
 			}}
 		/>
 		<h1 class="nf-title">{displayMessage}</h1>
-		<a href="/" class="nf-btn">
+		<Button variant="primary" href="/">
 			<ArrowLeft size={16} />
-			Back to Dashboard
-		</a>
+			Back to dashboard
+		</Button>
 	</div>
 </div>
 
@@ -108,7 +109,7 @@
 	.nf-orb-3 {
 		width: 250px;
 		height: 250px;
-		background: color-mix(in srgb, var(--button-bg) 40%, #33d6a6);
+		background: color-mix(in srgb, var(--button-bg) 40%, var(--online-indicator));
 		top: 40%;
 		left: 50%;
 		animation: nf-float-3 15s ease-in-out infinite;
@@ -182,34 +183,5 @@
 		color: var(--center-channel-color);
 		margin-bottom: 1.5rem;
 		line-height: 1.5;
-	}
-
-	.nf-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.75rem 1.5rem;
-		font-size: 0.875rem;
-		font-weight: 600;
-		color: var(--button-color);
-		background: var(--button-bg);
-		border-radius: 0.75rem;
-		text-decoration: none;
-		transition: all 0.2s ease;
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.1),
-			0 4px 12px rgb(0 0 0 / 0.06);
-	}
-
-	.nf-btn:hover {
-		box-shadow:
-			0 2px 6px rgb(0 0 0 / 0.15),
-			0 8px 24px rgb(0 0 0 / 0.1);
-		transform: translateY(-1px);
-	}
-
-	.nf-btn:active {
-		transform: translateY(0);
-		box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
 	}
 </style>

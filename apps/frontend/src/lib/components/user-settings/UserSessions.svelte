@@ -63,7 +63,7 @@
 
 <SettingsSection
 	{index}
-	title="Active Sessions"
+	title="Active sessions"
 	description="Devices where you're currently signed in"
 	iconColor="green"
 >

@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Loader2, RefreshCw, Plus } from 'lucide-svelte';
+	import { Button, Input, StatusPill } from '$lib/components/ui';
 	import type { DatabaseDetail, ExtInfo } from './types';
 
 	let {
@@ -32,23 +33,22 @@
 		<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Extensions</p>
 		{#if database.mode === 'cnpg'}
 			<div class="flex items-center gap-2 flex-1 justify-end" style="min-width: 200px;">
-				<input
+				<Input
 					type="search"
 					placeholder="Search extensions…"
-					class="input text-sm"
+					class="text-sm"
 					style="max-width: 20rem;"
 					bind:value={extensionSearch}
 				/>
-				<button
-					class="btn btn-secondary btn-sm"
+				<Button
+					variant="secondary"
+					size="sm"
 					onclick={onFetchExtensions}
-					disabled={extensionsLoading}
+					loading={extensionsLoading}
 					aria-label="Refresh"
 				>
-					{#if extensionsLoading}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw
-							class="h-3.5 w-3.5"
-						/>{/if}
-				</button>
+					{#if !extensionsLoading}<RefreshCw class="h-3.5 w-3.5" />{/if}
+				</Button>
 			</div>
 		{/if}
 	</div>
@@ -77,16 +77,18 @@
 						<div class="flex items-center gap-2 flex-wrap">
 							<span class="db-list-name">{ext.name}</span>
 							{#if ext.installed}
-								<span class="db-status-pill db-status-pill-completed"
-									>installed{ext.version ? ` · ${ext.version}` : ''}</span
-								>
+								<StatusPill
+									tone="online"
+									label={`installed${ext.version ? ` · ${ext.version}` : ''}`}
+								/>
 							{:else}
-								<span class="db-status-pill db-status-pill-muted"
-									>available{ext.defaultVersion ? ` · ${ext.defaultVersion}` : ''}</span
-								>
+								<StatusPill
+									tone="muted"
+									label={`available${ext.defaultVersion ? ` · ${ext.defaultVersion}` : ''}`}
+								/>
 							{/if}
 							{#if preloadedExts.includes(ext.name)}
-								<span class="db-status-pill db-status-pill-warn">preloaded</span>
+								<StatusPill tone="warn" label="preloaded" />
 							{/if}
 						</div>
 						{#if ext.description}
@@ -94,25 +96,26 @@
 						{/if}
 					</div>
 					{#if ext.installed}
-						<button
-							class="btn btn-secondary btn-sm shrink-0"
+						<Button
+							variant="secondary"
+							size="sm"
+							class="shrink-0"
 							onclick={() => onUninstallExtension(ext.name, preloadedExts.includes(ext.name))}
-							disabled={busyExtension === ext.name}
+							loading={busyExtension === ext.name}
 						>
-							{#if busyExtension === ext.name}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
-							<span>Uninstall</span>
-						</button>
+							Uninstall
+						</Button>
 					{:else}
-						<button
-							class="btn btn-primary btn-sm shrink-0"
+						<Button
+							variant="primary"
+							size="sm"
+							class="shrink-0"
 							onclick={() => onInstallExtension(ext.name, Boolean(ext.requiresPreload))}
-							disabled={busyExtension === ext.name}
+							loading={busyExtension === ext.name}
 						>
-							{#if busyExtension === ext.name}<Loader2
-									class="h-3.5 w-3.5 animate-spin"
-								/>{:else}<Plus class="h-3.5 w-3.5" />{/if}
-							<span>Install</span>
-						</button>
+							{#if busyExtension !== ext.name}<Plus class="h-3.5 w-3.5" />{/if}
+							Install
+						</Button>
 					{/if}
 				</div>
 			{/each}

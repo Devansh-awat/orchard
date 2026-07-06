@@ -4,6 +4,7 @@
 	import { UserCog, Rocket } from '@jis3r/icons';
 	import { fade } from 'svelte/transition';
 	import { Avatar as AvatarBuilder } from 'melt/builders';
+	import { Button } from '$lib/components/ui';
 	import SettingsSection from '$lib/components/user-settings/SettingsSection.svelte';
 	import { springHover } from '$lib/utils/motion.svelte';
 
@@ -118,10 +119,10 @@
 						<p class="og-hero-slug">{organization.slug}</p>
 					</div>
 					{#if canEditOrg}
-						<button onclick={onStartEditing} class="btn btn-ghost btn-sm">
+						<Button variant="ghost" size="sm" onclick={onStartEditing}>
 							<PencilAnim class="h-3.5 w-3.5" />
 							Edit
-						</button>
+						</Button>
 					{/if}
 				</div>
 				{#if organization.description}
@@ -159,11 +160,8 @@
 						></textarea>
 					</div>
 					<div class="og-edit-actions">
-						<button onclick={onCancelEditing} class="btn btn-secondary">Cancel</button>
-						<button onclick={onSave} disabled={updating} class="btn btn-primary">
-							{#if updating}<Loader2 class="h-4 w-4 animate-spin" />{/if}
-							Save
-						</button>
+						<Button variant="secondary" onclick={onCancelEditing}>Cancel</Button>
+						<Button variant="primary" onclick={onSave} loading={updating}>Save</Button>
 					</div>
 				</div>
 			{/if}
@@ -171,7 +169,7 @@
 	</div>
 </SettingsSection>
 
-<SettingsSection title="Quick Actions" description="Common organization tasks" index={index + 1}>
+<SettingsSection title="Quick actions" description="Common organization tasks" index={index + 1}>
 	{#snippet icon(hovered)}
 		<Rocket size={18} animate={hovered} />
 	{/snippet}
@@ -186,7 +184,7 @@
 				<Activity class="h-4 w-4" />
 			</div>
 			<div class="og-quick-action-body">
-				<p class="og-quick-action-title">Usage & Allowances</p>
+				<p class="og-quick-action-title">Usage and allowances</p>
 				<p class="og-quick-action-desc">Org capacity, per-user limits, provisioning</p>
 			</div>
 			<ArrowRight class="h-4 w-4 og-quick-action-arrow" />
@@ -285,8 +283,8 @@
 	.og-avatar-remove {
 		top: -0.25rem;
 		right: -0.25rem;
-		background-color: var(--error-text);
-		color: #fff;
+		background-color: var(--error-text-color);
+		color: var(--button-color);
 	}
 
 	.og-avatar-edit:hover,
@@ -423,18 +421,18 @@
 	}
 
 	.og-quick-action-icon--amber {
-		background-color: #fef3c7;
-		color: #b45309;
+		background-color: color-mix(in srgb, var(--away-indicator) 15%, transparent);
+		color: var(--away-indicator);
 	}
 
 	.og-quick-action-icon--blue {
-		background-color: #dbeafe;
-		color: #1d4ed8;
+		background-color: color-mix(in srgb, var(--button-bg) 12%, transparent);
+		color: var(--button-bg);
 	}
 
 	.og-quick-action-icon--default {
-		background-color: #e2e8f0;
-		color: #475569;
+		background-color: color-mix(in srgb, var(--center-channel-color) 8%, transparent);
+		color: var(--surface-muted);
 	}
 
 	.og-quick-action-body {

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { onMount } from 'svelte';
-	import { apiFetch, toasts, refreshTree } from '$lib/stores';
+	import { onMount, onDestroy } from 'svelte';
+	import { apiFetch, toasts, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
 	import {
 		ArrowLeft,
 		Loader2,
@@ -26,6 +26,7 @@
 
 	interface ComposeStack {
 		id: string;
+		projectId: string;
 		name: string;
 		composeYaml: string;
 		status: string;
@@ -83,7 +84,7 @@
 	}
 
 	async function fetchStack() {
-		loading = true;
+		if (!stack) loading = true;
 		try {
 			const response = await apiFetch(`/apiv1/compose-stacks/${stackId}`);
 			if (!response.ok) throw new Error('Failed to fetch compose stack');
@@ -108,7 +109,6 @@
 				throw new Error(data.message || 'Failed to redeploy');
 			}
 			stack = await response.json();
-			refreshTree();
 			toasts.add({
 				title: 'Redeployed',
 				description: 'Pulled fresh compose from GitHub',
@@ -134,7 +134,12 @@
 				const data = await response.json().catch(() => ({}));
 				throw new Error(data.message || 'Failed to update auto-deploy');
 			}
-			stack = await response.json();
+			const updated: ComposeStack = await response.json();
+			stack = updated;
+			toasts.add({
+				title: updated.autoDeployEnabled ? 'Auto-deploy enabled' : 'Auto-deploy disabled',
+				color: 'success'
+			});
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to update auto-deploy';
 		} finally {
@@ -156,7 +161,6 @@
 				description: `${stack.name} and its services have been removed`,
 				color: 'success'
 			});
-			refreshTree();
 			history.back();
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to delete';
@@ -166,6 +170,39 @@
 	}
 
 	onMount(fetchStack);
+
+	let sseUnsub: (() => void) | null = null;
+	let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+	let subscribedOrgId: string | null = null;
+	$effect(() => {
+		const id = $selectedOrganization?.id ?? null;
+		if (!id || id === subscribedOrgId) return;
+		subscribedOrgId = id;
+		sseUnsub?.();
+		sseUnsub = subscribeOrgEvents(id, (ev) => {
+			if (
+				ev.type !== 'deployment.changed' &&
+				ev.type !== 'build.changed' &&
+				ev.type !== 'project.changed'
+			)
+				return;
+			const projectId = stack?.projectId;
+			if (!projectId) return;
+			const relevant =
+				ev.projectId === projectId || (ev.type === 'project.changed' && ev.id === projectId);
+			if (!relevant) return;
+			if (refreshTimer) return;
+			refreshTimer = setTimeout(() => {
+				refreshTimer = null;
+				fetchStack();
+			}, 2000);
+		});
+	});
+
+	onDestroy(() => {
+		sseUnsub?.();
+		if (refreshTimer) clearTimeout(refreshTimer);
+	});
 </script>
 
 <div class="cs-page">
@@ -293,7 +330,7 @@
 				<Server class="h-4 w-4" style="color: #3b82f6" /> Services ({stack.deployments.length})
 			</h2>
 			<div class="cs-resource-list">
-				{#each stack.deployments as dep}
+				{#each stack.deployments as dep (dep.id)}
 					<a href="/{orgSlug}/deployments/{dep.id}" class="cs-resource-card">
 						<div class="cs-resource-info">
 							<span class="cs-resource-name">{dep.composeServiceName ?? dep.name}</span>
@@ -338,6 +375,7 @@
 		bind:open={showDeleteModal}
 		title={`Delete "${stack.name}"?`}
 		description="This will permanently <strong>delete all services</strong> in this compose stack. This cannot be undone."
+		html
 		confirmLabel="Delete stack"
 		onconfirm={deleteStack}
 		oncancel={() => {}}

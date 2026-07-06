@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { type TreeItem } from '$lib/stores';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { overviewQueryOptions } from '$lib/queries/overview';
 	import { Package, Rocket, Search, X, Database, LayoutTemplate } from 'lucide-svelte';
@@ -18,6 +17,14 @@
 		...overviewQueryOptions(orgSlug),
 		enabled: open && !!orgSlug
 	}));
+
+	interface TreeItem {
+		id: string;
+		name: string;
+		type: 'project' | 'deployment' | 'ingress' | 'database' | 'templateInstance';
+		href: string;
+		children?: TreeItem[];
+	}
 
 	type ProjectRef = { id: string; name: string; slug: string };
 	type OverviewLite = {
@@ -467,7 +474,7 @@
 						{#if group.project && (group.items.length > 1 || group.items[0].item.id !== group.project.id)}
 							<div class="quick-search-group-header">
 								<span class="quick-search-group-label">
-									{#each segments(group.project.name, group.projectSpans) as seg}
+									{#each segments(group.project.name, group.projectSpans) as seg, si (si)}
 										<span class:hl={seg.hit}>{seg.text}</span>
 									{/each}
 								</span>
@@ -492,7 +499,7 @@
 								<Icon class="quick-search-item-icon" />
 								<div class="quick-search-item-content">
 									<div class="quick-search-item-name">
-										{#each segments(hit.item.name, hit.spans) as seg}
+										{#each segments(hit.item.name, hit.spans) as seg, si (si)}
 											<span class:hl={seg.hit}>{seg.text}</span>
 										{/each}
 									</div>

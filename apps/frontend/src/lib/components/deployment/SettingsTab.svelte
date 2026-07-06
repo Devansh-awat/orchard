@@ -20,6 +20,8 @@
 		// Build options
 		buildFromRoot = $bindable(false),
 		buildWithDepot = $bindable(false),
+		persistentBuildCache = $bindable(false),
+		buildOptionsDirty = $bindable(false),
 		savingAdvanced,
 		onSaveAdvanced,
 		// Auto-deploy
@@ -58,6 +60,8 @@
 		onSaveStrategy: () => void;
 		buildFromRoot: boolean;
 		buildWithDepot: boolean;
+		persistentBuildCache: boolean;
+		buildOptionsDirty?: boolean;
 		savingAdvanced: boolean;
 		onSaveAdvanced: () => void;
 		autoDeployStatus: AutoDeployStatus | null;
@@ -101,6 +105,8 @@
 		{onSaveStrategy}
 		bind:buildFromRoot
 		bind:buildWithDepot
+		bind:persistentBuildCache
+		bind:buildOptionsDirty
 		{savingAdvanced}
 		{onSaveAdvanced}
 		{autoDeployStatus}
@@ -138,7 +144,7 @@
 				<ClipboardList size={16} animate={!auditOpen} />
 			</div>
 			<div class="st-section-title-group">
-				<h3 class="st-section-title">Audit Log</h3>
+				<h3 class="st-section-title">Audit log</h3>
 			</div>
 			<svg
 				class="st-chevron"
@@ -210,11 +216,6 @@
 		font-weight: 600;
 		margin: 0;
 		line-height: 1.3;
-	}
-	.st-section-desc {
-		font-size: 0.6875rem;
-		color: var(--surface-muted);
-		margin: 0.0625rem 0 0;
 	}
 	.st-chevron {
 		width: 1rem;

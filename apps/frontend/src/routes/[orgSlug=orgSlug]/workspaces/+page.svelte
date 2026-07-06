@@ -1,10 +1,10 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
-	import { apiFetch, selectedOrganization, toasts, refreshTree } from '$lib/stores';
-	import { Plus, Loader2, Users, Boxes, ArrowRight, Trash2 } from 'lucide-svelte';
+	import { onDestroy, onMount } from 'svelte';
+	import { apiFetch, selectedOrganization, toasts, subscribeOrgEvents } from '$lib/stores';
+	import { Plus, Users, Boxes, ArrowRight, Trash2 } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import { Button, Input, EmptyState, Skeleton } from '$lib/components/ui';
 
 	const orgSlug = $derived($page.params.orgSlug);
 
@@ -38,7 +38,7 @@
 	}
 
 	async function fetchWorkspaces() {
-		loading = true;
+		if (!workspaces.length) loading = true;
 		try {
 			const res = await apiFetch('/apiv1/workspaces');
 			if (!res.ok) throw new Error();
@@ -96,7 +96,6 @@
 			toasts.add({ title: `Created "${name}"`, color: 'success' });
 			newName = '';
 			showCreate = false;
-			refreshTree();
 			fetchWorkspaces();
 		} catch (e) {
 			toasts.add({ title: e instanceof Error ? e.message : 'Failed to create', color: 'error' });
@@ -118,7 +117,6 @@
 			}
 			toasts.add({ title: `Deleted "${deleteTarget.name}"`, color: 'success' });
 			deleteTarget = null;
-			refreshTree();
 			fetchWorkspaces();
 		} catch (e) {
 			toasts.add({ title: e instanceof Error ? e.message : 'Failed to delete', color: 'error' });
@@ -126,6 +124,30 @@
 			deleting = false;
 		}
 	}
+
+	let unsub: (() => void) | null = null;
+	let subscribedOrgId: string | null = null;
+	let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+	$effect(() => {
+		const id = $selectedOrganization?.id ?? null;
+		if (!id || id === subscribedOrgId) return;
+		subscribedOrgId = id;
+		unsub?.();
+		unsub = subscribeOrgEvents(id, (ev) => {
+			if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
+			if (refreshTimer) return;
+			refreshTimer = setTimeout(() => {
+				refreshTimer = null;
+				fetchWorkspaces();
+			}, 2000);
+		});
+	});
+
+	onDestroy(() => {
+		unsub?.();
+		if (refreshTimer) clearTimeout(refreshTimer);
+	});
 
 	onMount(fetchWorkspaces);
 </script>
@@ -136,59 +158,63 @@
 			<h1 class="pg-title">Workspaces</h1>
 			<p class="pg-sub">Manage your workspaces and their members.</p>
 		</div>
-		<button class="btn-primary" onclick={() => (showCreate = true)}
-			><Plus size={15} /> New Workspace</button
-		>
+		<Button variant="primary" onclick={() => (showCreate = true)}>
+			<Plus size={15} /> New workspace
+		</Button>
 	</div>
 
 	{#if showCreate}
 		<div class="create-bar">
-			<input
-				type="text"
-				class="create-input"
-				placeholder="Workspace name..."
-				bind:value={newName}
-				onkeydown={(e) => {
-					if (e.key === 'Enter') createWorkspace();
-					if (e.key === 'Escape') {
-						showCreate = false;
-						newName = '';
-					}
-				}}
-			/>
-			<button
-				class="btn-primary btn-sm"
+			<div class="create-input-wrap">
+				<Input
+					type="text"
+					placeholder="Workspace name"
+					bind:value={newName}
+					onkeydown={(e: KeyboardEvent) => {
+						if (e.key === 'Enter') createWorkspace();
+						if (e.key === 'Escape') {
+							showCreate = false;
+							newName = '';
+						}
+					}}
+				/>
+			</div>
+			<Button
+				variant="primary"
+				size="sm"
 				onclick={createWorkspace}
-				disabled={!newName.trim() || creating}
+				loading={creating}
+				disabled={!newName.trim()}
 			>
-				{#if creating}<Loader2 size={13} class="spin" />{/if}
 				Create
-			</button>
-			<button
-				class="btn-ghost btn-sm"
+			</Button>
+			<Button
+				variant="ghost"
+				size="sm"
 				onclick={() => {
 					showCreate = false;
 					newName = '';
-				}}>Cancel</button
+				}}>Cancel</Button
 			>
 		</div>
 	{/if}
 
 	{#if loading}
 		<div class="ws-grid">
-			{#each Array(3) as _}
+			{#each Array(3) as _, i (i)}
 				<div class="ws-card ws-card--skel">
-					<div class="sk" style="width:8rem;height:0.875rem"></div>
-					<div class="sk" style="width:12rem;height:0.625rem;margin-top:0.5rem"></div>
-					<div class="ws-card-foot"><div class="sk" style="width:5rem;height:0.5rem"></div></div>
+					<Skeleton width="8rem" height="0.875rem" rounded="0.25rem" />
+					<Skeleton width="12rem" height="0.625rem" rounded="0.25rem" />
+					<div class="ws-card-foot">
+						<Skeleton width="5rem" height="0.5rem" rounded="0.25rem" />
+					</div>
 				</div>
 			{/each}
 		</div>
 	{:else if workspaces.length === 0}
-		<div class="empty">
-			<Boxes size={28} />
-			<p>No workspaces yet. Create one to get started.</p>
-		</div>
+		<EmptyState title="No workspaces yet" description="Create one to get started.">
+			{#snippet icon()}<Boxes size={28} />{/snippet}
+		</EmptyState>
 	{:else}
 		<div class="ws-grid">
 			{#each workspaces as ws (ws.id)}
@@ -234,7 +260,7 @@
 		}
 		title={`Delete "${deleteTarget.name}"?`}
 		description="This will permanently delete this workspace and all its projects, deployments, databases, and ingresses. This cannot be undone."
-		confirmLabel="Delete Workspace"
+		confirmLabel="Delete workspace"
 		onconfirm={deleteWorkspace}
 		oncancel={() => (deleteTarget = null)}
 	/>
@@ -265,49 +291,6 @@
 		margin: 0.25rem 0 0;
 	}
 
-	.btn-primary {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.5rem 1rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		font-weight: 600;
-		background: var(--center-channel-color);
-		color: var(--center-channel-bg);
-		border: none;
-		cursor: pointer;
-		transition: opacity 0.15s;
-		white-space: nowrap;
-	}
-	.btn-primary:hover {
-		opacity: 0.85;
-	}
-	.btn-primary:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-	.btn-ghost {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.5rem 0.75rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		font-weight: 500;
-		background: none;
-		color: var(--surface-muted);
-		border: none;
-		cursor: pointer;
-	}
-	.btn-ghost:hover {
-		color: var(--center-channel-color);
-	}
-	.btn-sm {
-		padding: 0.375rem 0.75rem;
-		font-size: 0.75rem;
-	}
-
 	.create-bar {
 		display: flex;
 		align-items: center;
@@ -320,21 +303,9 @@
 			0 0 0 1px color-mix(in srgb, var(--surface-border) 60%, transparent),
 			0 1px 3px rgba(0, 0, 0, 0.04);
 	}
-	.create-input {
+	.create-input-wrap {
 		flex: 1;
-		padding: 0.4375rem 0.75rem;
-		border-radius: 0.375rem;
-		border: 1px solid var(--surface-border);
-		background: var(--center-channel-bg);
-		color: var(--center-channel-color);
-		font-size: 0.8125rem;
-	}
-	.create-input:focus {
-		outline: none;
-		border-color: var(--sidebar-text-active-border);
-	}
-	.create-input::placeholder {
-		color: var(--surface-muted);
+		min-width: 0;
 	}
 
 	.ws-grid {
@@ -448,47 +419,5 @@
 	}
 	.ws-card:hover :global(.ws-card-arrow) {
 		opacity: 1;
-	}
-
-	.empty {
-		display: flex;
-		flex-direction: column;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 4rem 2rem;
-		text-align: center;
-		color: var(--surface-muted);
-		font-size: 0.875rem;
-	}
-
-	:global(.sk) {
-		background: linear-gradient(
-			90deg,
-			color-mix(in srgb, var(--surface-border) 40%, transparent) 25%,
-			color-mix(in srgb, var(--surface-border) 18%, transparent) 50%,
-			color-mix(in srgb, var(--surface-border) 40%, transparent) 75%
-		);
-		background-size: 200% 100%;
-		animation: shimmer 1.5s infinite;
-		border-radius: 0.25rem;
-	}
-	:global(.spin) {
-		animation: spin 1s linear infinite;
-	}
-	@keyframes shimmer {
-		0% {
-			background-position: 200% 0;
-		}
-		100% {
-			background-position: -200% 0;
-		}
-	}
-	@keyframes spin {
-		from {
-			transform: rotate(0deg);
-		}
-		to {
-			transform: rotate(360deg);
-		}
 	}
 </style>

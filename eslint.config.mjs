@@ -84,7 +84,7 @@ export default [
 		rules: {
 			'no-nested-ternary': 'off',
 			'svelte/no-navigation-without-resolve': 'off',
-			'svelte/require-each-key': 'warn',
+			'svelte/require-each-key': 'error',
 			'svelte/prefer-svelte-reactivity': 'warn',
 			'svelte/no-at-html-tags': 'warn'
 		}

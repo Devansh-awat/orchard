@@ -204,7 +204,7 @@
 
 	<!-- Color categories -->
 	<div class="space-y-3">
-		{#each themeColorCategories as category}
+		{#each themeColorCategories as category (category.name)}
 			<div
 				class="rounded-xl border overflow-hidden"
 				style="background-color: var(--surface-bg); border-color: var(--surface-border);"
@@ -233,7 +233,7 @@
 						transition:slide={{ duration: 200 }}
 					>
 						<div class="grid gap-4 sm:grid-cols-2">
-							{#each category.colors as colorDef}
+							{#each category.colors as colorDef (colorDef.key)}
 								{@const colorKey = colorDef.key as keyof SimpleThemeColors}
 								{@const colorValue = safeEditingColors[colorKey]}
 								<div

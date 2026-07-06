@@ -2,17 +2,17 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { apiFetch, selectedOrganization, toasts, refreshTree } from '$lib/stores';
+	import { apiFetch, selectedOrganization, toasts } from '$lib/stores';
 	import {
 		Github,
 		Container,
 		Database,
-		Loader2,
 		ArrowRight,
 		Image as ImageIcon,
 		ImagePlus
 	} from 'lucide-svelte';
 	import { springHover, motionStagger, springPop } from '$lib/utils/motion.svelte';
+	import { Button } from '$lib/components/ui';
 
 	const orgSlug = $derived($page.params.orgSlug);
 	const selectedOrgId = $derived($selectedOrganization?.id ?? '');
@@ -115,8 +115,6 @@
 			} catch {
 				toasts.add({ title: 'Project created, but an image upload failed', color: 'error' });
 			}
-			refreshTree();
-
 			const base = `/${orgSlug}/projects/${proj.slug}`;
 			if (selected === 'github') goto(`${base}/deployments/new?source=github`);
 			else if (selected === 'image') goto(`${base}/deployments/new?source=image`);
@@ -226,7 +224,7 @@
 				>Start with</span
 			>
 			<div class="np-grid">
-				{#each resources as r, i}
+				{#each resources as r, i (r.id)}
 					{@const Icon = r.icon}
 					<button
 						type="button"
@@ -250,19 +248,19 @@
 			</div>
 		</div>
 
-		<button
+		<Button
+			variant="primary"
 			type="submit"
-			class="btn btn-primary np-submit"
+			class="np-submit"
 			disabled={!name.trim() || submitting}
+			loading={submitting}
 			{@attach motionStagger({ index: 5, from: { y: 10 } })}
 			{@attach springHover({ lift: -1, stiffness: 480, damping: 26 })}
 		>
-			{#if submitting}
-				<Loader2 size={16} class="animate-spin" />
-			{:else}
+			{#if !submitting}
 				{selected ? 'Continue' : 'Create project'} <ArrowRight size={16} />
 			{/if}
-		</button>
+		</Button>
 	</form>
 </div>
 

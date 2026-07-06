@@ -4,15 +4,15 @@
 	import {
 		apiFetch,
 		toasts,
-		refreshTree,
 		fetchProjectContext,
 		buildBasePath,
 		type ProjectContext
 	} from '$lib/stores';
-	import { Loader2, Database } from 'lucide-svelte';
+	import { Database } from 'lucide-svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
+	import { Button, Field, Input } from '$lib/components/ui';
 
 	let project = $state<ProjectContext | null>(null);
 	let loading = $state(true);
@@ -86,7 +86,6 @@
 				color: 'success'
 			});
 
-			refreshTree();
 			goto(`/${orgSlug}/databases/${database.id}`);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to create database';
@@ -118,21 +117,21 @@
 			crumbs={[
 				{ label: 'Home', href: `/${orgSlug}` },
 				{ label: project?.name || projectSlug || '', href: basePath },
-				{ label: 'New Database' }
+				{ label: 'New database' }
 			]}
 		/>
 
 		<div class="nd-header">
 			<div class="nd-header-top">
-				<h1 class="nd-title">New Database</h1>
+				<h1 class="nd-title">New database</h1>
 				<ProjectSwitcher
 					currentProjectName={project?.name || projectSlug}
 					pathSuffix="/databases/new"
 				/>
 			</div>
 			<p class="nd-subtitle">
-				Create a PostgreSQL database on the shared cluster. A unique user and password will be
-				generated automatically.
+				Create a PostgreSQL database on the shared cluster. Orchard generates a unique user and
+				password for you.
 			</p>
 		</div>
 
@@ -147,28 +146,28 @@
 			}}
 		>
 			<div class="nd-card">
-				<h2 class="nd-card-title">Database Details</h2>
+				<h2 class="nd-card-title">Database details</h2>
 
-				<div class="nd-field">
-					<label for="db-name" class="nd-label">Database Name</label>
-					<input
+				<Field label="Database name" for="db-name">
+					<Input
 						id="db-name"
-						type="text"
 						bind:value={name}
 						placeholder="my-app-db"
-						class="nd-input"
 						required
 						disabled={submitting}
 					/>
 					<p class="nd-hint">
-						A slug-friendly name. The database will be created as <code class="nd-mono"
+						A slug-friendly name. The database is created as <code class="font-mono"
 							>{generatedDbName()}</code
 						>
 					</p>
-				</div>
+				</Field>
 
-				<div class="nd-field">
-					<label for="db-size" class="nd-label">Storage Size (GiB)</label>
+				<Field
+					label="Storage size (GiB)"
+					for="db-size"
+					hint="Persistent volume size for this database. Defaults to 1 GiB."
+				>
 					<input
 						id="db-size"
 						type="number"
@@ -176,53 +175,46 @@
 						max="1024"
 						step="1"
 						bind:value={storageSizeGi}
-						class="nd-input"
+						class="input"
 						disabled={submitting}
 					/>
-					<p class="nd-hint">Persistent volume size for this database. Defaults to 1 GiB.</p>
-				</div>
+				</Field>
 
-				<div class="nd-field">
-					<label for="db-restore-url" class="nd-label"
-						>Restore from existing database (optional)</label
-					>
-					<input
+				<Field
+					label="Restore from existing database (optional)"
+					for="db-restore-url"
+					hint="If set, Orchard bootstraps the new database by importing data from this PostgreSQL connection URL. The source database must be reachable from the cluster."
+				>
+					<Input
 						id="db-restore-url"
-						type="text"
 						bind:value={restoreFromUrl}
 						placeholder="postgresql://user:password@host:5432/dbname"
-						class="nd-input"
 						disabled={submitting}
 						autocomplete="off"
 						spellcheck="false"
 					/>
-					<p class="nd-hint">
-						If provided, the new database will be bootstrapped by importing data from this
-						PostgreSQL connection URL. The source database must be reachable from the cluster.
-					</p>
-				</div>
+				</Field>
 
-				<div class="nd-field" style="grid-column: 1 / -1;">
-					<span class="nd-label">Resources</span>
+				<Field label="Resources">
 					<ResourcePicker
 						bind:cpuMilli={resourceCpuMilli}
 						bind:memoryBytes={resourceMemoryBytes}
 						disabled={submitting}
 					/>
-				</div>
+				</Field>
 			</div>
 
 			<div class="nd-actions">
-				<a href={basePath} class="nd-btn nd-btn-secondary">Cancel</a>
-				<button type="submit" class="nd-btn nd-btn-primary" disabled={submitting || !name.trim()}>
-					{#if submitting}
-						<Loader2 class="h-4 w-4 animate-spin" />
-						Creating...
-					{:else}
-						<Database class="h-4 w-4" />
-						Create Database
-					{/if}
-				</button>
+				<Button variant="ghost" href={basePath}>Cancel</Button>
+				<Button
+					variant="primary"
+					type="submit"
+					loading={submitting}
+					disabled={submitting || !name.trim()}
+				>
+					{#if !submitting}<Database class="h-4 w-4" />{/if}
+					Create database
+				</Button>
 			</div>
 		</form>
 	{/if}
@@ -278,46 +270,6 @@
 		margin: 0;
 	}
 
-	.nd-field {
-		display: flex;
-		flex-direction: column;
-		gap: 0.375rem;
-	}
-
-	.nd-label {
-		font-size: 0.8125rem;
-		font-weight: 500;
-		color: var(--center-channel-color);
-	}
-
-	.nd-input {
-		width: 100%;
-		padding: 0.4375rem 0.75rem;
-		border-radius: 0.5rem;
-		border: 1px solid var(--surface-border);
-		background-color: var(--center-channel-bg);
-		color: var(--center-channel-color);
-		font-size: 0.8125rem;
-		transition: border-color 0.15s;
-	}
-
-	.nd-input::placeholder {
-		color: var(--surface-muted);
-	}
-
-	.nd-input:focus {
-		outline: none;
-		border-color: var(--sidebar-text-active-border);
-	}
-
-	.nd-input:disabled {
-		opacity: 0.5;
-	}
-
-	.nd-mono {
-		font-family: var(--font-mono);
-	}
-
 	.nd-hint {
 		font-size: 0.75rem;
 		color: var(--surface-muted);
@@ -339,48 +291,5 @@
 		justify-content: flex-end;
 		gap: 0.5rem;
 		margin-top: 0.5rem;
-	}
-
-	.nd-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.4375rem 0.875rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		font-weight: 500;
-		border: none;
-		cursor: pointer;
-		text-decoration: none;
-		transition: opacity 0.15s;
-		white-space: nowrap;
-	}
-
-	.nd-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.nd-btn-primary {
-		background-color: var(--sidebar-text-active-border);
-		color: #fff;
-		box-shadow:
-			0 1px 2px rgb(0 0 0 / 0.08),
-			0 1px 1px rgb(0 0 0 / 0.04);
-	}
-
-	.nd-btn-primary:hover:not(:disabled) {
-		opacity: 0.95;
-	}
-
-	.nd-btn-secondary {
-		background-color: transparent;
-		color: var(--surface-muted);
-		border: 1px solid var(--surface-border);
-	}
-
-	.nd-btn-secondary:hover:not(:disabled) {
-		background-color: var(--control-hover-bg);
-		color: var(--center-channel-color);
 	}
 </style>

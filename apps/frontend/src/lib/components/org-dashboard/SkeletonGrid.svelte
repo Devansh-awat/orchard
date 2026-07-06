@@ -1,19 +1,20 @@
 <script lang="ts">
+	import { Skeleton } from '$lib/components/ui';
 </script>
 
 <div class="od-grid">
-	{#each Array(6) as _}
-		<div class="card card--skel">
+	{#each Array(6) as _, i (i)}
+		<div class="dash-card dash-card--skel">
 			<div class="card-top">
-				<div class="sk sk-icon"></div>
+				<Skeleton width="1.75rem" height="1.75rem" rounded="0.375rem" />
 				<div class="sk-col">
-					<div class="sk" style="width:7rem;height:0.7rem"></div>
-					<div class="sk" style="width:10rem;height:0.5rem"></div>
+					<Skeleton width="7rem" height="0.7rem" rounded="0.25rem" />
+					<Skeleton width="10rem" height="0.5rem" rounded="0.25rem" />
 				</div>
 			</div>
 			<div class="card-bot">
-				<div class="sk" style="width:4rem;height:0.5rem"></div>
-				<div class="sk" style="width:3rem;height:0.5rem"></div>
+				<Skeleton width="4rem" height="0.5rem" rounded="0.25rem" />
+				<Skeleton width="3rem" height="0.5rem" rounded="0.25rem" />
 			</div>
 		</div>
 	{/each}

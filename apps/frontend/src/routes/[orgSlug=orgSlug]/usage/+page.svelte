@@ -9,6 +9,7 @@
 	import DonutChart from '$lib/components/DonutChart.svelte';
 	import HorizontalBars from '$lib/components/HorizontalBars.svelte';
 	import { Loader2, Activity, Gauge, Users, BarChart3, Pencil, Check, X } from 'lucide-svelte';
+	import { TabBar } from '$lib/components/ui';
 
 	const formatPods = (n: number) => `${n}`;
 	import type { PageData } from './$types';
@@ -157,6 +158,7 @@
 	}
 
 	let usageUnsub: (() => void) | null = null;
+	let usageRefreshTimer: ReturnType<typeof setTimeout> | null = null;
 	let hasLoadedOnce = false;
 
 	$effect(() => {
@@ -176,14 +178,14 @@
 				hasLoadedOnce = true;
 				loading = false;
 				usageUnsub?.();
-				usageUnsub = subscribeOrgEvents(
-					p.orgId,
-					(ev) => {
-						if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
+				usageUnsub = subscribeOrgEvents(p.orgId, (ev) => {
+					if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
+					if (usageRefreshTimer) return;
+					usageRefreshTimer = setTimeout(() => {
+						usageRefreshTimer = null;
 						invalidate(`org:${orgSlug}:usage`);
-					},
-					{ invalidateDependencies: [] }
-				);
+					}, 2000);
+				});
 			})
 			.catch((e: any) => {
 				if (isInitial) loading = false;
@@ -195,7 +197,10 @@
 			});
 	});
 
-	onDestroy(() => usageUnsub?.());
+	onDestroy(() => {
+		usageUnsub?.();
+		if (usageRefreshTimer) clearTimeout(usageRefreshTimer);
+	});
 
 	// ---- Default member allowance editing ----
 	let editingDefault = $state(false);
@@ -383,7 +388,7 @@
 	}
 
 	function utilPctStr(u: number | null): string {
-		if (u === null) return '—';
+		if (u === null) return 'n/a';
 		return `${Math.round(u * 100)}%`;
 	}
 
@@ -471,25 +476,10 @@
 	{:else}
 		<!-- Tab bar -->
 		<div class="usage-tabs-row">
-			<div class="usage-tabs" role="tablist">
-				{#each availableTabs as t (t.id)}
-					{@const Icon = t.icon}
-					<button
-						type="button"
-						role="tab"
-						aria-selected={activeTab === t.id}
-						class="usage-tab"
-						class:is-active={activeTab === t.id}
-						onclick={() => setTab(t.id)}
-					>
-						<Icon class="h-3.5 w-3.5" />
-						{t.label}
-					</button>
-				{/each}
-			</div>
+			<TabBar tabs={availableTabs} bind:value={() => activeTab, (v) => setTab(v as Tab)} />
 			{#if activeTab === 'provisioning'}
 				<div class="usage-range">
-					{#each RANGES as r}
+					{#each RANGES as r (r.value)}
 						<button
 							type="button"
 							class="usage-range-btn"
@@ -584,7 +574,7 @@
 										</tr>
 									</thead>
 									<tbody>
-										{#each projects as p}
+										{#each projects as p (p.id)}
 											<tr>
 												<td>
 													<a href={`/${orgSlug}/projects/${p.slug}`} class="link-cell">{p.name}</a>
@@ -637,7 +627,7 @@
 									formatValue={formatCpuMilli}
 									size="lg"
 									caption={userCpuCap === null && myUsage.orgCap.cpuLimitMilli !== null
-										? `Unlimited — org cap: ${formatCpuMilli(myUsage.orgCap.cpuLimitMilli)}`
+										? `Unlimited, org cap ${formatCpuMilli(myUsage.orgCap.cpuLimitMilli)}`
 										: effectiveCpu !== null
 											? `${formatCpuMilli(effectiveCpu)} available to assign`
 											: null}
@@ -649,7 +639,7 @@
 									formatValue={formatMemoryBytes}
 									size="lg"
 									caption={userMemCap === null && myUsage.orgCap.memoryLimitBytes !== null
-										? `Unlimited — org cap: ${formatMemoryBytes(myUsage.orgCap.memoryLimitBytes)}`
+										? `Unlimited, org cap ${formatMemoryBytes(myUsage.orgCap.memoryLimitBytes)}`
 										: effectiveMem !== null
 											? `${formatMemoryBytes(effectiveMem)} available to assign`
 											: null}
@@ -696,7 +686,7 @@
 										</tr>
 									</thead>
 									<tbody>
-										{#each myUsage.usage.breakdown as item}
+										{#each myUsage.usage.breakdown as item (`${item.kind}:${item.id}`)}
 											<tr>
 												<td class="strong">{item.name}</td>
 												<td>{item.projectName}</td>
@@ -1176,7 +1166,7 @@
 										</tr>
 									</thead>
 									<tbody>
-										{#each provisioning as r}
+										{#each provisioning as r (`${r.kind}:${r.id}`)}
 											<tr>
 												<td>
 													<div class="strong">{r.name}</div>
@@ -1198,7 +1188,7 @@
 														<div class="util-text">
 															<span class="util-actual">
 																{r.actualCpuMilliP95 === null
-																	? '—'
+																	? 'n/a'
 																	: formatCpuMilli(r.actualCpuMilliP95)}
 															</span>
 															<span class="util-sep">/</span>
@@ -1225,7 +1215,7 @@
 														<div class="util-text">
 															<span class="util-actual">
 																{r.actualMemoryBytesP95 === null
-																	? '—'
+																	? 'n/a'
 																	: formatMemoryBytes(r.actualMemoryBytesP95)}
 															</span>
 															<span class="util-sep">/</span>
@@ -1303,59 +1293,12 @@
 		padding: 4rem 0;
 	}
 
-	/* Tab bar — matches project page surface */
 	.usage-tabs-row {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
 		gap: 0.75rem;
-		padding: 0.375rem;
-		border-radius: 1rem;
-		background-color: color-mix(in srgb, var(--surface-bg) 55%, transparent);
-		border: 1px solid color-mix(in srgb, var(--surface-border) 70%, transparent);
-		backdrop-filter: blur(10px) saturate(1.2);
-		-webkit-backdrop-filter: blur(10px) saturate(1.2);
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.03),
-			0 1px 2px rgb(0 0 0 / 0.02);
 		flex-wrap: wrap;
-	}
-	.usage-tabs {
-		display: inline-flex;
-		gap: 0.125rem;
-	}
-	.usage-tab {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.4375rem;
-		padding: 0.4375rem 0.75rem;
-		border: none;
-		background: transparent;
-		color: color-mix(in srgb, var(--center-channel-color) 70%, var(--surface-muted));
-		border-radius: 0.625rem;
-		font-size: 0.8125rem;
-		font-weight: 600;
-		cursor: pointer;
-		font-family: inherit;
-		transition:
-			color 0.18s ease,
-			background-color 0.25s cubic-bezier(0.22, 1, 0.36, 1),
-			box-shadow 0.25s cubic-bezier(0.22, 1, 0.36, 1),
-			transform 0.15s ease;
-	}
-	.usage-tab:active {
-		transform: scale(0.97);
-	}
-	.usage-tab:hover {
-		color: var(--center-channel-color);
-		background: color-mix(in srgb, var(--surface-border) 30%, transparent);
-	}
-	.usage-tab.is-active {
-		color: var(--center-channel-color);
-		background: color-mix(in srgb, var(--center-channel-bg) 80%, transparent);
-		box-shadow:
-			0 1px 2px rgba(0, 0, 0, 0.05),
-			0 0 0 1px color-mix(in srgb, var(--surface-border) 60%, transparent);
 	}
 
 	.usage-range {

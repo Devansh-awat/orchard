@@ -9,6 +9,7 @@
 	let {
 		deployment,
 		rebuilding,
+		rollingBackId = null,
 		onRebuild,
 		onOpenLogModal,
 		onRollback,
@@ -16,6 +17,7 @@
 	}: {
 		deployment: Deployment;
 		rebuilding: boolean;
+		rollingBackId?: string | null;
 		onRebuild: () => void;
 		onOpenLogModal: (historyId: string) => void;
 		onRollback: (historyId: string) => void;
@@ -35,7 +37,11 @@
 			<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Deployments</p>
 		</div>
 		{#if deployment.githubRepo}
-			<button onclick={onRebuild} disabled={rebuilding} class="btn btn-secondary btn-sm">
+			<button
+				onclick={onRebuild}
+				disabled={rebuilding || isBuilding}
+				class="btn btn-secondary btn-sm"
+			>
 				{#if rebuilding}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw
 						size={14}
 						class="h-3.5 w-3.5"
@@ -94,17 +100,19 @@
 					<div class="dep-col-status">
 						<span class="dep-status">
 							<span class="dep-status-dot dep-status-dot--failed"></span>
-							<span class="dep-status-label" style="color: #ef4444;">Error</span>
+							<span class="dep-status-label" style="color: var(--error-text-color);">Error</span>
 						</span>
 					</div>
 					<div class="dep-col-commit">
 						<div class="dep-commit-stack">
-							<span class="dep-commit-msg" style="color: #ef4444;">Deployment failed</span>
+							<span class="dep-commit-msg" style="color: var(--error-text-color);"
+								>Deployment failed</span
+							>
 							{#if deployment.buildError}
 								<div class="dep-commit-meta">
 									<span
 										class="dep-meta-text font-mono"
-										style="color: color-mix(in srgb, #ef4444 60%, var(--surface-muted)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;"
+										style="color: color-mix(in srgb, var(--error-text-color) 60%, var(--surface-muted)); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 100%;"
 										>{deployment.buildError.split('\n')[0]}</span
 									>
 								</div>
@@ -130,7 +138,7 @@
 				</div>
 			{/if}
 
-			{#each deployment.imageHistory ?? [] as history, _hi}
+			{#each deployment.imageHistory ?? [] as history, _hi (history.id)}
 				{@const timeAgo = (() => {
 					const diff = Date.now() - new Date(history.createdAt).getTime();
 					const mins = Math.floor(diff / 60000);
@@ -252,8 +260,13 @@
 								onclick={() => onRollback(history.id)}
 								class="dep-action-btn dep-action-btn--primary"
 								title="Promote to production"
+								disabled={!!rollingBackId}
 							>
-								<RefreshCw size={14} class="h-3.5 w-3.5" />
+								{#if rollingBackId === history.id}
+									<Loader2 class="h-3.5 w-3.5 animate-spin" />
+								{:else}
+									<RefreshCw size={14} class="h-3.5 w-3.5" />
+								{/if}
 							</button>
 						{/if}
 					</div>

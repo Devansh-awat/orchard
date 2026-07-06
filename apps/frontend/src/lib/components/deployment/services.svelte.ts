@@ -313,7 +313,7 @@ export class ServicesController {
 			toasts.add({
 				title: 'Public exposure failed',
 				description: e instanceof Error ? e.message : 'Unknown error',
-				color: 'danger'
+				color: 'error'
 			});
 		} finally {
 			this.portPublicBusyId = null;
@@ -378,6 +378,7 @@ export class ServicesController {
 	}
 
 	async delete(serviceId: string) {
+		if (this.deletingId) return;
 		this.deletingId = serviceId;
 
 		try {

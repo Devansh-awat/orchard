@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { selectedOrganization, apiFetch, toasts, refreshTree } from '$lib/stores';
+	import { selectedOrganization, apiFetch, toasts } from '$lib/stores';
 	import { Loader2, Building2, FolderKanban } from 'lucide-svelte';
 
 	const orgSlug = $derived($page.params.orgSlug);
@@ -77,7 +77,6 @@
 				color: 'success'
 			});
 
-			refreshTree();
 			goto(`/${orgSlug}/workspaces/${workspace.slug}`);
 		} catch (e) {
 			error = e instanceof Error ? e.message : 'Failed to create workspace';

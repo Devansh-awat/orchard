@@ -58,7 +58,7 @@
 					</div>
 					<div class="dba-body">
 						<div class="dba-title-row">
-							<span class="dba-title">OOMKilled — out of memory</span>
+							<span class="dba-title">OOMKilled: out of memory</span>
 							{#if restartCount > 0}
 								<span class="dba-restart-badge">
 									<RotateCcw size={11} />
@@ -100,7 +100,7 @@
 						<RotateCcw size={16} strokeWidth={2.25} />
 					</div>
 					<div class="dba-body">
-						<span class="dba-title">CrashLoopBackOff — keeps restarting</span>
+						<span class="dba-title">CrashLoopBackOff: keeps restarting</span>
 						<span class="dba-desc">
 							The database keeps crashing on startup and Kubernetes is restarting it in a loop.
 							Check the logs for the root cause.

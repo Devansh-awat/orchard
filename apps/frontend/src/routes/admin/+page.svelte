@@ -58,7 +58,7 @@
 	<div class="alert alert-error">{error}</div>
 {:else}
 	<div class="grid grid-cols-2 gap-4 lg:grid-cols-3 xl:grid-cols-5">
-		{#each statCards as card}
+		{#each statCards as card (card.label)}
 			{@const Tag = card.href ? 'a' : 'div'}
 			<svelte:element
 				this={Tag}

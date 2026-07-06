@@ -16,7 +16,7 @@
 
 <a
 	href="/{orgSlug}/databases/{db.id}"
-	class="card"
+	class="dash-card"
 	{@attach springHover({ lift: -3, stiffness: 360, damping: 22 })}
 	{@attach cardTilt({ max: 4 })}
 >

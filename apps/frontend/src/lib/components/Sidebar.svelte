@@ -454,7 +454,7 @@
 								<div class="tree-icon-badge" style="background-color: #22c55e">
 									<Leaf size={10} class="tree-icon-svg" />
 								</div>
-								<span class="tree-node-label">Overview</span>
+								<span class="tree-node-label">Your Apps</span>
 							</a>
 							<a
 								href="/{orgSlug}/projects"
@@ -510,7 +510,7 @@
 							<div class="tree-icon-badge" style="background-color: #22c55e">
 								<Leaf size={11} class="tree-icon-svg" />
 							</div>
-							<span class="sidebar-collapsed-tooltip">Overview</span>
+							<span class="sidebar-collapsed-tooltip">Your Apps</span>
 						</a>
 						<a
 							href="/{orgSlug}/projects"
@@ -589,5 +589,65 @@
 	   bouncy spring. Use the original short CSS transition there. */
 	.sidebar--css-transition {
 		transition: width 200ms ease;
+	}
+	/* Settings/org section tree items (moved from app.css) */
+	.tree-node-content {
+		display: flex;
+		align-items: center;
+		gap: 8px;
+		padding: 8px 10px;
+		margin: 1px 0;
+		border-radius: 0.5rem;
+		cursor: pointer;
+		transition: background-color 120ms ease;
+		min-width: 0;
+	}
+
+	.tree-node-content:hover {
+		background-color: var(--sidebar-text-hover-bg);
+	}
+
+	.tree-node-content.is-active {
+		background-color: var(--sidebar-text-active-bg);
+		color: var(--sidebar-text-active-color);
+	}
+
+	.tree-icon-badge {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 22px;
+		height: 22px;
+		border-radius: 6px;
+		flex-shrink: 0;
+	}
+
+	.tree-icon-badge :global(.tree-icon-svg) {
+		color: #ffffff !important;
+		stroke: #ffffff !important;
+	}
+
+	.tree-node-label {
+		font-size: 0.8125rem;
+		font-weight: 500;
+		user-select: none;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		min-width: 0;
+		line-height: 1.3;
+	}
+
+	.tree-node-content.is-active .tree-node-label {
+		font-weight: 600;
+	}
+
+	.sidebar-collapsed-icon .tree-icon-badge {
+		width: 1.375rem;
+		height: 1.375rem;
+	}
+	.sidebar-collapsed-icon .tree-icon-badge :global(svg) {
+		width: 11px;
+		height: 11px;
 	}
 </style>

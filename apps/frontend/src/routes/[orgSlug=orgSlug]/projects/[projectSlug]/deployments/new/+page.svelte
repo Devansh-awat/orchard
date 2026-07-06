@@ -6,29 +6,29 @@
 	import {
 		apiFetch,
 		toasts,
-		refreshTree,
 		isSuperAdmin,
 		fetchProjectContext,
 		buildBasePath,
 		selectedOrganization,
 		type ProjectContext
 	} from '$lib/stores';
-	import { Loader2, Container, Github, Plus, Trash2, Eye, EyeOff, HardDrive } from 'lucide-svelte';
+	import {
+		Loader2,
+		Container,
+		Github,
+		Plus,
+		Trash2,
+		Eye,
+		EyeOff,
+		ChevronDown,
+		X
+	} from 'lucide-svelte';
 	import { envVarsToRaw, rawToEnvVars } from '$lib/utils/format';
 	import { springHover, motionStagger, springPop } from '$lib/utils/motion.svelte';
+	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
-
-	function handleClickOutside(event: MouseEvent, dropdownType: 'repo' | 'branch' | 'dockerfile') {
-		const target = event.target as HTMLElement;
-		if (dropdownType === 'repo' && !target.closest('[data-repo-dropdown]')) {
-			showRepoDropdown = false;
-		} else if (dropdownType === 'branch' && !target.closest('[data-branch-dropdown]')) {
-			showBranchDropdown = false;
-		} else if (dropdownType === 'dockerfile' && !target.closest('[data-dockerfile-dropdown]')) {
-			showDockerfileDropdown = false;
-		}
-	}
+	import { Button, PopoverPanel, Field, Input, Select, Badge } from '$lib/components/ui';
 
 	interface Repository {
 		id: number;
@@ -75,9 +75,6 @@
 	let selectedStage = $state<string>('');
 	let dockerfileInputTimeout: ReturnType<typeof setTimeout> | null = null;
 	let repoInputTimeout: ReturnType<typeof setTimeout> | null = null;
-	let showRepoDropdown = $state(false);
-	let showBranchDropdown = $state(false);
-	let showDockerfileDropdown = $state(false);
 
 	// Form state
 	let name = $state('');
@@ -253,7 +250,6 @@
 	function handleDockerfileInput(value: string) {
 		dockerfileSearch = value;
 		dockerfilePath = value;
-		showDockerfileDropdown = dockerfiles.length > 0;
 
 		if (dockerfileInputTimeout) {
 			clearTimeout(dockerfileInputTimeout);
@@ -273,7 +269,6 @@
 	function selectDockerfile(df: string) {
 		dockerfileSearch = df;
 		dockerfilePath = df;
-		showDockerfileDropdown = false;
 		const ownerRepo = getOwnerRepo();
 		if (ownerRepo && branch) {
 			fetchDockerfileInfo(ownerRepo.owner, ownerRepo.repo, branch, df);
@@ -335,7 +330,6 @@
 		selectedRepo = repo;
 		repoUrl = repo.clone_url;
 		repoSearch = repo.full_name;
-		showRepoDropdown = false;
 		fetchBranches(repo);
 	}
 
@@ -353,9 +347,6 @@
 		dockerfileStages = [];
 		selectedStage = '';
 		buildFromRoot = false;
-		showRepoDropdown = false;
-		showBranchDropdown = false;
-		showDockerfileDropdown = false;
 	}
 
 	function parseRepoInput(value: string): { owner: string; repo: string; url: string } | null {
@@ -420,7 +411,6 @@
 	function handleRepoSearchInput(value: string) {
 		if (selectedRepo) return;
 		repoSearch = value;
-		showRepoDropdown = value.length > 0 && repositories.length > 0;
 
 		if (repoInputTimeout) {
 			clearTimeout(repoInputTimeout);
@@ -443,7 +433,6 @@
 		selectedBranch = b;
 		branch = b.name;
 		branchSearch = b.name;
-		showBranchDropdown = false;
 		if (selectedRepo) {
 			fetchDockerfiles(selectedRepo, b.name);
 		}
@@ -459,15 +448,12 @@
 		dockerfileStages = [];
 		selectedStage = '';
 		buildFromRoot = false;
-		showBranchDropdown = false;
-		showDockerfileDropdown = false;
 	}
 
 	function handleBranchSearchInput(value: string) {
 		if (selectedBranch) return;
 		branchSearch = value;
 		branch = value;
-		showBranchDropdown = value.length > 0 && branches.length > 0;
 	}
 
 	function addPort() {
@@ -622,7 +608,6 @@
 					slug: created.slug
 				} as ProjectContext;
 				pendingProjectName = null;
-				refreshTree();
 			}
 
 			if (!targetProjectId) {
@@ -681,7 +666,6 @@
 				color: 'success'
 			});
 
-			refreshTree();
 			// Redirect to progress page for GitHub deployments, main page for image deployments
 			if (deploymentSource === 'github') {
 				goto(`/${orgSlug}/deployments/${deployment.id}/progress`);
@@ -716,16 +700,15 @@
 		}
 	});
 
-	$effect(() => {
-		const handleClick = (e: MouseEvent) => {
-			handleClickOutside(e, 'repo');
-			handleClickOutside(e, 'branch');
-			handleClickOutside(e, 'dockerfile');
-		};
-
-		window.addEventListener('click', handleClick);
-		return () => window.removeEventListener('click', handleClick);
-	});
+	const filteredRepos = $derived(
+		repositories.filter((r) => r.full_name.toLowerCase().includes(repoSearch.toLowerCase()))
+	);
+	const filteredBranches = $derived(
+		branches.filter((b) => b.name.toLowerCase().includes(branchSearch.toLowerCase()))
+	);
+	const filteredDockerfiles = $derived(
+		dockerfiles.filter((d) => d.toLowerCase().includes(dockerfileSearch.toLowerCase()))
+	);
 </script>
 
 <div class="nd-page">
@@ -745,8 +728,16 @@
 			</div>
 		</div>
 	{:else if project}
+		<Breadcrumb
+			crumbs={[
+				{ label: 'Home', href: `/${orgSlug}` },
+				{ label: project?.name || projectSlug || '', href: basePath },
+				{ label: 'New app' }
+			]}
+		/>
+
 		<div class="nd-hero" {@attach motionStagger({ index: 0, from: { y: 12 } })}>
-			<h1 class="nd-page-title">New App</h1>
+			<h1 class="nd-page-title">New app</h1>
 			<p class="nd-page-subtitle">Configure and launch a new service.</p>
 		</div>
 
@@ -794,18 +785,12 @@
 							{/if}
 						</p>
 						{#if deploymentSource === 'image'}
-							<div class="nd-field">
-								<label class="nd-label">Docker image</label>
-								<input
-									type="text"
-									bind:value={image}
-									placeholder="ghcr.io/org/app:latest"
-									class="nd-input nd-mono"
-								/>
-								<p class="nd-hint">
-									Include the registry and tag. Public images work out of the box.
-								</p>
-							</div>
+							<Field
+								label="Docker image"
+								hint="Include the registry and tag. Public images work out of the box."
+							>
+								<Input bind:value={image} placeholder="ghcr.io/org/app:latest" class="font-mono" />
+							</Field>
 						{:else}
 							{#if !githubLinked}
 								<div class="nd-warning" style="margin-bottom: 0.75rem;">
@@ -825,119 +810,152 @@
 										with minimal permissions.
 									</p>
 									{#if githubAppInstallUrl}
-										<a
+										<Button
+											variant="secondary"
+											size="sm"
 											href={githubAppInstallUrl}
 											target="_blank"
-											class="nd-btn nd-btn-secondary"
-											style="margin-top: 0.5rem;">Install GitHub App</a
+											style="margin-top: 0.5rem;">Install GitHub App</Button
 										>
 									{/if}
 								</div>
 							{/if}
-							<div class="nd-field nd-relative" data-repo-dropdown>
-								<label class="nd-label">Repository</label>
-								<div class="nd-relative">
-									<input
-										type="text"
-										bind:value={repoSearch}
-										oninput={(e) => handleRepoSearchInput((e.target as HTMLInputElement).value)}
-										onfocus={() => {
-											if (!selectedRepo)
-												showRepoDropdown = repoSearch.length > 0 && repositories.length > 0;
-										}}
-										placeholder="owner/repo or GitHub URL"
-										class="nd-input"
-										readonly={selectedRepo !== null}
-										style={selectedRepo ? 'opacity: 0.7;' : ''}
-									/>
-									{#if loadingRepos || loadingBranches}
-										<div class="nd-input-suffix"><Loader2 class="h-4 w-4 animate-spin" /></div>
-									{:else if selectedRepo}
-										<button
-											onclick={clearRepoSelection}
-											class="nd-input-suffix nd-input-clear"
-											type="button"
-										>
-											<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"
-												><path
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													stroke-width="2"
-													d="M6 18L18 6M6 6l12 12"
-												/></svg
-											>
-										</button>
-									{/if}
-								</div>
-								{#if showRepoDropdown && repoSearch && !loadingRepos && !selectedRepo}
-									<div class="nd-dropdown">
-										{#each repositories.filter((r) => r.full_name
-												.toLowerCase()
-												.includes(repoSearch.toLowerCase())) as repo}
-											<button onclick={() => selectRepo(repo)} class="nd-dropdown-item">
-												<div class="nd-dropdown-item-content">
+							<Field label="Repository">
+								<PopoverPanel sameWidth>
+									{#snippet trigger(attrs, open)}
+										<div class="picker-wrap">
+											<button type="button" class="picker-trigger" {...attrs}>
+												{#if selectedRepo}
 													<Github class="h-4 w-4 shrink-0" />
-													<span class="nd-truncate">{repo.full_name}</span>
-													{#if repo.private}<span class="nd-badge">Private</span>{/if}
-												</div>
+													<span class="picker-value">{selectedRepo.full_name}</span>
+												{:else if repoSearch}
+													<span class="picker-value">{repoSearch}</span>
+												{:else}
+													<span class="picker-placeholder">owner/repo or GitHub URL</span>
+												{/if}
 											</button>
-										{/each}
-									</div>
-								{/if}
-							</div>
+											{#if loadingRepos || loadingBranches}
+												<span class="picker-suffix"><Loader2 class="h-4 w-4 animate-spin" /></span>
+											{:else if selectedRepo}
+												<button
+													type="button"
+													class="picker-suffix picker-clear"
+													aria-label="Clear repository"
+													onclick={clearRepoSelection}
+												>
+													<X size={15} />
+												</button>
+											{:else}
+												<span class="picker-suffix picker-chevron" class:picker-chevron--open={open}
+													><ChevronDown size={15} /></span
+												>
+											{/if}
+										</div>
+									{/snippet}
+									{#snippet children({ close })}
+										<Input
+											value={repoSearch}
+											oninput={(e: Event) =>
+												handleRepoSearchInput((e.target as HTMLInputElement).value)}
+											placeholder="owner/repo or GitHub URL"
+											readonly={selectedRepo !== null}
+										/>
+										<div class="picker-list">
+											{#if loadingRepos}
+												<div class="picker-empty">
+													<Loader2 class="h-4 w-4 animate-spin" /> Loading repositories
+												</div>
+											{:else}
+												{#each filteredRepos as repo (repo.full_name)}
+													<button
+														type="button"
+														class="picker-option"
+														onclick={() => {
+															selectRepo(repo);
+															close();
+														}}
+													>
+														<Github class="h-4 w-4 shrink-0" />
+														<span class="picker-option-text">{repo.full_name}</span>
+														{#if repo.private}<Badge tone="neutral">Private</Badge>{/if}
+													</button>
+												{:else}
+													<div class="picker-empty">No matching repositories</div>
+												{/each}
+											{/if}
+										</div>
+									{/snippet}
+								</PopoverPanel>
+							</Field>
 
 							{#if selectedRepo || repoUrl}
-								<div class="nd-field nd-relative" data-branch-dropdown>
-									<label class="nd-label">Branch</label>
-									<div class="nd-relative">
-										<input
-											type="text"
-											bind:value={branchSearch}
-											oninput={(e) => handleBranchSearchInput((e.target as HTMLInputElement).value)}
-											onfocus={() => {
-												if (!selectedBranch)
-													showBranchDropdown = branchSearch.length > 0 && branches.length > 0;
-											}}
-											placeholder="main"
-											class="nd-input"
-											disabled={loadingBranches}
-											readonly={selectedBranch !== null}
-											style={selectedBranch ? 'opacity: 0.7;' : ''}
-										/>
-										{#if selectedBranch}
-											<button
-												onclick={clearBranchSelection}
-												class="nd-input-suffix nd-input-clear"
-												type="button"
-											>
-												<svg class="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"
-													><path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														stroke-width="2"
-														d="M6 18L18 6M6 6l12 12"
-													/></svg
+								<Field label="Branch">
+									<PopoverPanel sameWidth>
+										{#snippet trigger(attrs, open)}
+											<div class="picker-wrap">
+												<button
+													type="button"
+													class="picker-trigger"
+													disabled={loadingBranches}
+													{...attrs}
 												>
-											</button>
-										{/if}
-									</div>
-									{#if showBranchDropdown && branchSearch && !loadingBranches && !selectedBranch}
-										<div class="nd-dropdown">
-											{#each branches.filter((b) => b.name
-													.toLowerCase()
-													.includes(branchSearch.toLowerCase())) as b}
-												<button onclick={() => selectBranch(b)} class="nd-dropdown-item"
-													><span class="nd-truncate">{b.name}</span></button
-												>
-											{/each}
-										</div>
-									{/if}
-								</div>
+													{#if branchSearch}
+														<span class="picker-value">{branchSearch}</span>
+													{:else}
+														<span class="picker-placeholder">main</span>
+													{/if}
+												</button>
+												{#if loadingBranches}
+													<span class="picker-suffix"><Loader2 class="h-4 w-4 animate-spin" /></span
+													>
+												{:else if selectedBranch}
+													<button
+														type="button"
+														class="picker-suffix picker-clear"
+														aria-label="Clear branch"
+														onclick={clearBranchSelection}
+													>
+														<X size={15} />
+													</button>
+												{:else}
+													<span
+														class="picker-suffix picker-chevron"
+														class:picker-chevron--open={open}><ChevronDown size={15} /></span
+													>
+												{/if}
+											</div>
+										{/snippet}
+										{#snippet children({ close })}
+											<Input
+												value={branchSearch}
+												oninput={(e: Event) =>
+													handleBranchSearchInput((e.target as HTMLInputElement).value)}
+												placeholder="main"
+												readonly={selectedBranch !== null}
+											/>
+											<div class="picker-list">
+												{#each filteredBranches as b (b.name)}
+													<button
+														type="button"
+														class="picker-option"
+														onclick={() => {
+															selectBranch(b);
+															close();
+														}}
+													>
+														<span class="picker-option-text">{b.name}</span>
+													</button>
+												{:else}
+													<div class="picker-empty">No matching branches</div>
+												{/each}
+											</div>
+										{/snippet}
+									</PopoverPanel>
+								</Field>
 							{/if}
 
 							{#if selectedBranch || branch}
-								<div class="nd-field">
-									<label class="nd-label">How should we build it?</label>
+								<Field label="How should we build it?">
 									<div class="nd-grid-2">
 										<button
 											type="button"
@@ -990,62 +1008,75 @@
 											<div>
 												<div class="nd-build-label">Automatic</div>
 												<p class="nd-build-desc">
-													No Dockerfile needed — we detect your language and build it for you.
+													No Dockerfile needed. We detect your language and build it for you.
 												</p>
 											</div>
 										</button>
 									</div>
-								</div>
+								</Field>
 
 								{#if buildType === 'dockerfile'}
-									<div class="nd-field nd-relative" data-dockerfile-dropdown>
-										<label class="nd-label">Dockerfile</label>
-										<div class="nd-relative">
-											<input
-												type="text"
-												bind:value={dockerfileSearch}
-												oninput={(e) => handleDockerfileInput((e.target as HTMLInputElement).value)}
-												onfocus={() => {
-													if (dockerfiles.length > 0) showDockerfileDropdown = true;
-												}}
-												placeholder="Dockerfile"
-												class="nd-input nd-mono"
-											/>
-											{#if loadingDockerfiles}<div class="nd-input-suffix">
-													<Loader2 class="h-4 w-4 animate-spin" />
-												</div>{/if}
-										</div>
-										{#if showDockerfileDropdown && !loadingDockerfiles && dockerfiles.length > 0}
-											<div class="nd-dropdown">
-												{#each dockerfiles.filter((d) => d
-														.toLowerCase()
-														.includes(dockerfileSearch.toLowerCase())) as df}
-													<button
-														onclick={() => selectDockerfile(df)}
-														class="nd-dropdown-item nd-mono"
-														><span class="nd-truncate">{df}</span></button
-													>
-												{/each}
-											</div>
-										{/if}
-									</div>
+									<Field label="Dockerfile">
+										<PopoverPanel sameWidth>
+											{#snippet trigger(attrs, open)}
+												<div class="picker-wrap">
+													<button type="button" class="picker-trigger font-mono" {...attrs}>
+														{#if dockerfileSearch}
+															<span class="picker-value">{dockerfileSearch}</span>
+														{:else}
+															<span class="picker-placeholder">Dockerfile</span>
+														{/if}
+													</button>
+													{#if loadingDockerfiles}
+														<span class="picker-suffix"
+															><Loader2 class="h-4 w-4 animate-spin" /></span
+														>
+													{:else}
+														<span
+															class="picker-suffix picker-chevron"
+															class:picker-chevron--open={open}><ChevronDown size={15} /></span
+														>
+													{/if}
+												</div>
+											{/snippet}
+											{#snippet children({ close })}
+												<Input
+													value={dockerfileSearch}
+													oninput={(e: Event) =>
+														handleDockerfileInput((e.target as HTMLInputElement).value)}
+													placeholder="Dockerfile"
+													class="font-mono"
+												/>
+												<div class="picker-list">
+													{#each filteredDockerfiles as df (df)}
+														<button
+															type="button"
+															class="picker-option font-mono"
+															onclick={() => {
+																selectDockerfile(df);
+																close();
+															}}
+														>
+															<span class="picker-option-text">{df}</span>
+														</button>
+													{:else}
+														<div class="picker-empty">No Dockerfiles found in this branch</div>
+													{/each}
+												</div>
+											{/snippet}
+										</PopoverPanel>
+									</Field>
 									{#if dockerfilePath && dockerfileStages.length > 0}
-										<div class="nd-field">
-											<label class="nd-label">Build Stage</label>
-											<select
-												class="nd-input"
-												value={selectedStage}
-												onchange={(e) => {
-													selectedStage = (e.target as HTMLSelectElement).value;
-												}}
-											>
-												{#each dockerfileStages as stage}<option value={stage}>{stage}</option
+										<Field
+											label="Build stage"
+											hint="Select which stage to build from the multi-stage Dockerfile"
+										>
+											<Select bind:value={selectedStage}>
+												{#each dockerfileStages as stage (stage)}<option value={stage}
+														>{stage}</option
 													>{/each}
-											</select>
-											<p class="nd-hint">
-												Select which stage to build from the multi-stage Dockerfile
-											</p>
-										</div>
+											</Select>
+										</Field>
 									{/if}
 
 									<label
@@ -1061,7 +1092,7 @@
 										<div>
 											<span class="nd-checkbox-label">Using a monorepo?</span>
 											<p class="nd-hint">
-												{#if dockerfileInSubdir}Your Dockerfile is in a subfolder — building from
+												{#if dockerfileInSubdir}Your Dockerfile is in a subfolder, so building from
 													the repo root lets it reach shared files. We turned this on for you.{:else}Build
 													from the repo root instead of the Dockerfile's folder.{/if}
 											</p>
@@ -1084,21 +1115,21 @@
 						The port your app listens on inside the container.
 					</p>
 				</div>
-				<button onclick={addPort} class="nd-btn nd-btn-secondary nd-btn-sm"
-					><Plus class="h-4 w-4" /> Add port</button
+				<Button variant="secondary" size="sm" onclick={addPort}
+					><Plus class="h-4 w-4" /> Add port</Button
 				>
 			</div>
 			<div class="nd-stack">
-				{#each ports as port, index}
+				{#each ports as port, index (index)}
 					<div class="nd-port-row-simple">
-						<div class="nd-field" style="flex: 1; min-width: 80px; max-width: 120px;">
+						<div style="flex: 1; min-width: 80px; max-width: 120px;">
 							<input
 								type="number"
 								bind:value={port.containerPort}
 								oninput={() => (portsManuallyEdited = true)}
 								min="1"
 								placeholder="80"
-								class="nd-input"
+								class="input"
 							/>
 						</div>
 						<div class="nd-protocol-toggle">
@@ -1136,7 +1167,7 @@
 		<!-- ═══ Environment Variables ═══ -->
 		<div class="nd-card" {@attach motionStagger({ index: 3, from: { y: 14 } })}>
 			<div class="nd-card-header">
-				<h2 class="nd-card-title">Environment Variables</h2>
+				<h2 class="nd-card-title">Environment variables</h2>
 				<div class="nd-pill-group">
 					<button
 						type="button"
@@ -1219,17 +1250,17 @@
 		<div class="nd-card" {@attach motionStagger({ index: 4, from: { y: 14 } })}>
 			<div class="nd-card-header">
 				<div>
-					<h2 class="nd-card-title">Persistent Storage</h2>
+					<h2 class="nd-card-title">Persistent storage</h2>
 					<p class="nd-hint" style="margin-top: 0.125rem;">
 						Attach storage that persists across restarts.
 					</p>
 				</div>
-				<button onclick={addVolume} class="nd-btn nd-btn-secondary nd-btn-sm"
-					><Plus class="h-4 w-4" /> Add Storage</button
+				<Button variant="secondary" size="sm" onclick={addVolume}
+					><Plus class="h-4 w-4" /> Add storage</Button
 				>
 			</div>
 			<div class="nd-stack">
-				{#each volumes as volume, index}
+				{#each volumes as volume, index (index)}
 					<div class="nd-vol-card">
 						<div class="nd-vol-row">
 							<div class="nd-vol-num">{index + 1}</div>
@@ -1248,7 +1279,7 @@
 										type="text"
 										bind:value={volume.mountPath}
 										placeholder="/data"
-										class="nd-vol-input nd-mono"
+										class="nd-vol-input font-mono"
 									/>
 								</div>
 							</div>
@@ -1288,11 +1319,9 @@
 				<summary class="nd-card-title nd-summary">Advanced</summary>
 				<div class="nd-advanced-body">
 					<div class="nd-grid-2">
-						<div class="nd-field">
-							<span class="nd-label-sm">Replicas</span>
-							<input type="number" bind:value={replicas} min="1" class="nd-input" />
-							<p class="nd-hint">Number of pod replicas to run</p>
-						</div>
+						<Field label="Replicas" hint="Number of pod replicas to run">
+							<input type="number" bind:value={replicas} min="1" class="input" />
+						</Field>
 						<div></div>
 					</div>
 					{#if $isSuperAdmin && deploymentSource === 'github'}
@@ -1315,18 +1344,8 @@
 		{/if}
 
 		<div class="nd-actions">
-			<a href={basePath} class="nd-btn nd-btn-ghost">Cancel</a>
-			<button
-				onclick={submit}
-				disabled={submitting}
-				class="nd-btn nd-btn-primary nd-btn-create"
-				{@attach springHover({ lift: -1, stiffness: 480, damping: 26 })}
-			>
-				{#if submitting}
-					<Loader2 class="h-4 w-4 animate-spin" />
-				{/if}
-				Deploy
-			</button>
+			<Button variant="ghost" href={basePath}>Cancel</Button>
+			<Button variant="primary" onclick={submit} loading={submitting}>Deploy</Button>
 		</div>
 	{/if}
 </div>
@@ -1517,59 +1536,6 @@
 		margin: 0;
 	}
 
-	/* Fields */
-	.nd-field {
-		display: flex;
-		flex-direction: column;
-		gap: 0.375rem;
-	}
-
-	.nd-label {
-		font-size: 0.8125rem;
-		font-weight: 500;
-		color: var(--center-channel-color);
-	}
-
-	.nd-label-sm {
-		font-size: 0.75rem;
-		font-weight: 500;
-		color: var(--surface-muted);
-	}
-
-	.nd-input {
-		width: 100%;
-		padding: 0.4375rem 0.75rem;
-		border-radius: 0.5rem;
-		border: 1px solid var(--surface-border);
-		background-color: var(--center-channel-bg);
-		color: var(--center-channel-color);
-		font-size: 0.8125rem;
-		transition: border-color 0.15s;
-	}
-
-	.nd-input::placeholder {
-		color: var(--surface-muted);
-	}
-
-	.nd-input:focus {
-		outline: none;
-		border-color: var(--sidebar-text-active-border);
-		box-shadow: 0 0 0 2px color-mix(in srgb, var(--sidebar-text-active-border) 15%, transparent);
-	}
-
-	.nd-input:disabled {
-		opacity: 0.5;
-	}
-
-	.nd-mono {
-		font-family: var(--font-mono);
-	}
-
-	.nd-textarea {
-		min-height: 6rem;
-		resize: vertical;
-	}
-
 	.nd-hint {
 		font-size: 0.75rem;
 		color: var(--surface-muted);
@@ -1587,38 +1553,94 @@
 		gap: 0.75rem;
 	}
 
-	.nd-relative {
+	/* Pickers */
+	.picker-wrap {
 		position: relative;
 	}
 
-	.nd-truncate {
+	.picker-trigger {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		width: 100%;
+		padding: 0.625rem 2.25rem 0.625rem 0.875rem;
+		border-radius: 0.5rem;
+		border: 1px solid var(--surface-border);
+		background-color: var(--surface-bg);
+		color: var(--center-channel-color);
+		font-size: 0.875rem;
+		line-height: 1.5;
+		text-align: left;
+		cursor: pointer;
+		transition:
+			border-color 150ms ease,
+			box-shadow 150ms ease;
+	}
+
+	.picker-trigger:focus-visible {
+		outline: none;
+		border-color: var(--sidebar-text-active-border);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
+	}
+
+	.picker-trigger:disabled {
+		opacity: 0.5;
+		cursor: default;
+	}
+
+	.picker-value {
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+		min-width: 0;
 	}
 
-	/* Dropdown */
-	.nd-dropdown {
+	.picker-placeholder {
+		color: color-mix(in srgb, var(--surface-muted) 65%, transparent);
+	}
+
+	.picker-suffix {
 		position: absolute;
-		top: 100%;
-		left: 0;
-		z-index: 20;
-		margin-top: 0.25rem;
-		max-height: 12rem;
-		width: 100%;
-		overflow-y: auto;
-		border-radius: 0.75rem;
-		border: 1px solid var(--surface-border);
-		padding: 0.375rem;
-		background-color: var(--surface-bg);
-		box-shadow:
-			0 4px 16px rgb(0 0 0 / 0.08),
-			0 8px 24px rgb(0 0 0 / 0.04);
-	}
-
-	.nd-dropdown-item {
+		right: 0.75rem;
+		top: 50%;
+		transform: translateY(-50%);
 		display: flex;
 		align-items: center;
+		color: var(--surface-muted);
+	}
+
+	.picker-clear {
+		background: none;
+		border: none;
+		cursor: pointer;
+		padding: 0;
+	}
+
+	.picker-clear:hover {
+		color: var(--center-channel-color);
+	}
+
+	.picker-chevron {
+		pointer-events: none;
+		transition: transform 150ms ease;
+	}
+
+	.picker-chevron--open {
+		transform: translateY(-50%) rotate(180deg);
+	}
+
+	.picker-list {
+		display: flex;
+		flex-direction: column;
+		margin-top: 0.5rem;
+		max-height: 12rem;
+		overflow-y: auto;
+	}
+
+	.picker-option {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
 		width: 100%;
 		border-radius: 0.5rem;
 		padding: 0.4375rem 0.75rem;
@@ -1631,45 +1653,25 @@
 		transition: background-color 0.1s;
 	}
 
-	.nd-dropdown-item:hover {
+	.picker-option:hover {
 		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);
 	}
 
-	.nd-dropdown-item-content {
+	.picker-option-text {
+		flex: 1;
+		min-width: 0;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.picker-empty {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		min-width: 0;
-		flex: 1;
-	}
-
-	.nd-badge {
-		font-size: 0.6875rem;
-		padding: 0.0625rem 0.375rem;
-		border-radius: 0.25rem;
-		background-color: color-mix(in srgb, var(--surface-border) 60%, transparent);
+		padding: 0.625rem 0.75rem;
+		font-size: 0.75rem;
 		color: var(--surface-muted);
-		flex-shrink: 0;
-	}
-
-	.nd-input-suffix {
-		position: absolute;
-		right: 0.75rem;
-		top: 50%;
-		transform: translateY(-50%);
-		color: var(--surface-muted);
-		display: flex;
-	}
-
-	.nd-input-clear {
-		background: none;
-		border: none;
-		cursor: pointer;
-		padding: 0;
-	}
-
-	.nd-input-clear:hover {
-		color: var(--center-channel-color);
 	}
 
 	/* Build method cards */
@@ -1743,17 +1745,12 @@
 		color: var(--center-channel-color);
 	}
 
-	.nd-checkbox-label-sm {
-		font-size: 0.8125rem;
-		color: var(--center-channel-color);
-	}
-
 	/* Warning */
 	.nd-warning {
 		padding: 1rem;
 		border-radius: 0.75rem;
-		background-color: color-mix(in srgb, #f59e0b 8%, transparent);
-		border: 1px solid color-mix(in srgb, #f59e0b 25%, transparent);
+		background-color: color-mix(in srgb, var(--away-indicator) 8%, transparent);
+		border: 1px solid color-mix(in srgb, var(--away-indicator) 25%, transparent);
 	}
 
 	.nd-warning-title {
@@ -1774,13 +1771,6 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.5rem;
-	}
-
-	.nd-port-row {
-		display: grid;
-		grid-template-columns: 1fr 1fr 1fr 1fr auto;
-		gap: 0.5rem;
-		align-items: end;
 	}
 
 	.nd-port-row-simple {
@@ -1813,7 +1803,7 @@
 
 	.nd-proto-active {
 		background-color: var(--sidebar-text-active-border);
-		color: #fff;
+		color: var(--button-color);
 	}
 
 	/* Volumes — inline card style */
@@ -1840,12 +1830,8 @@
 		width: 1.5rem;
 		height: 1.5rem;
 		border-radius: 0.375rem;
-		background: linear-gradient(
-			135deg,
-			var(--sidebar-text-active-border),
-			color-mix(in srgb, var(--sidebar-text-active-border) 60%, #a855f7)
-		);
-		color: #fff;
+		background: var(--sidebar-text-active-border);
+		color: var(--button-color);
 		font-size: 0.6875rem;
 		font-weight: 600;
 		display: flex;
@@ -1955,7 +1941,7 @@
 		width: 1rem;
 		height: 1rem;
 		border-radius: 50%;
-		background-color: #fff;
+		background-color: var(--button-color);
 		box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
 		transition: transform 0.2s;
 	}
@@ -1973,13 +1959,6 @@
 	.nd-vol-empty {
 		text-align: center;
 		padding: 2rem 0;
-	}
-
-	.nd-vol-empty-icon {
-		width: 2rem;
-		height: 2rem;
-		margin: 0 auto 0.5rem;
-		color: var(--surface-muted);
 	}
 
 	.nd-vol-empty-title {
@@ -2094,8 +2073,8 @@
 	}
 
 	.env-action-delete:hover {
-		color: var(--error-text-color, #ef4444);
-		background-color: color-mix(in srgb, var(--error-text-color, #ef4444) 8%, transparent);
+		color: var(--error-text-color);
+		background-color: color-mix(in srgb, var(--error-text-color) 8%, transparent);
 	}
 
 	.env-add-btn {
@@ -2151,77 +2130,6 @@
 
 	.nd-summary {
 		cursor: pointer;
-	}
-
-	/* Buttons */
-	.nd-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.4375rem 0.875rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		font-weight: 500;
-		border: none;
-		cursor: pointer;
-		text-decoration: none;
-		transition: opacity 0.15s;
-		white-space: nowrap;
-	}
-
-	.nd-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-
-	.nd-btn-primary {
-		background: linear-gradient(
-			135deg,
-			var(--sidebar-text-active-border),
-			color-mix(in srgb, var(--sidebar-text-active-border) 70%, #a855f7)
-		);
-		color: #fff;
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.1),
-			0 1px 2px rgb(0 0 0 / 0.06);
-	}
-
-	.nd-btn-primary:hover:not(:disabled) {
-		opacity: 0.92;
-		box-shadow: 0 2px 6px rgb(0 0 0 / 0.15);
-	}
-
-	.nd-btn-create {
-		padding: 0.5rem 1.5rem;
-		font-size: 0.875rem;
-		font-weight: 600;
-	}
-
-	.nd-btn-secondary {
-		background-color: transparent;
-		color: var(--surface-muted);
-		border: 1px solid var(--surface-border);
-	}
-
-	.nd-btn-secondary:hover:not(:disabled) {
-		background-color: var(--control-hover-bg);
-		color: var(--center-channel-color);
-	}
-
-	.nd-btn-ghost {
-		background-color: transparent;
-		color: var(--surface-muted);
-		border: none;
-	}
-
-	.nd-btn-ghost:hover:not(:disabled) {
-		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);
-		color: var(--center-channel-color);
-	}
-
-	.nd-btn-sm {
-		padding: 0.3125rem 0.625rem;
-		font-size: 0.75rem;
 	}
 
 	.nd-icon-btn {

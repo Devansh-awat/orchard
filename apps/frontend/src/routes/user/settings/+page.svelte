@@ -253,7 +253,7 @@
 				organizations.initializeSelected();
 			}
 			toasts.add({
-				title: 'Welcome!',
+				title: 'Welcome',
 				description: `You've joined ${invitation.organization.name}`,
 				color: 'success'
 			});
@@ -319,7 +319,7 @@
 			githubLinked = false;
 			githubUsername = null;
 			toasts.add({
-				title: 'GitHub Unlinked',
+				title: 'GitHub unlinked',
 				description: 'Your GitHub account has been disconnected',
 				color: 'success'
 			});
@@ -368,7 +368,7 @@
 			tailscaleApiKey = '';
 			showTailscaleForm = false;
 			toasts.add({
-				title: 'Tailscale Connected',
+				title: 'Tailscale connected',
 				description: `Linked to ${data.tailnet}`,
 				color: 'success'
 			});
@@ -390,7 +390,7 @@
 			tailscaleLinked = false;
 			tailscaleTailnet = null;
 			toasts.add({
-				title: 'Tailscale Disconnected',
+				title: 'Tailscale disconnected',
 				description: 'Your Tailscale account has been disconnected',
 				color: 'success'
 			});
@@ -817,7 +817,7 @@
 		title="Sign out this device?"
 		description="This will immediately end the session on {sessionToRevoke.deviceName ||
 			'this device'}. They will need to sign in again."
-		confirmLabel="Sign Out"
+		confirmLabel="Sign out"
 		danger
 		onconfirm={() => revokeSession(sessionToRevoke!)}
 		oncancel={() => {
@@ -829,7 +829,7 @@
 	bind:open={showRevokeAllModal}
 	title="Sign out all other devices?"
 	description="This will end all sessions except your current one. Other devices will need to sign in again."
-	confirmLabel="Sign Out All"
+	confirmLabel="Sign out all"
 	danger
 	onconfirm={revokeAllSessions}
 	oncancel={() => {
@@ -841,7 +841,7 @@
 		bind:open={showDeletePasskeyModal}
 		title={`Remove "${passkeyToDelete.friendlyName || 'this passkey'}"?`}
 		description="This passkey will be permanently removed. You will no longer be able to use it to sign in."
-		confirmLabel="Remove Passkey"
+		confirmLabel="Remove passkey"
 		danger
 		onconfirm={() => deletePasskey(passkeyToDelete!)}
 		oncancel={() => {

@@ -191,7 +191,7 @@
 
 					{#if iconMode === 'emoji'}
 						<div class="cm-emoji-grid" role="radiogroup" aria-label="Emoji suggestions">
-							{#each emojiSuggestions as emoji}
+							{#each emojiSuggestions as emoji (emoji)}
 								<button
 									type="button"
 									role="radio"

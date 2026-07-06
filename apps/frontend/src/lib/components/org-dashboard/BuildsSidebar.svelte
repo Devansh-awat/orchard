@@ -25,7 +25,7 @@
 <aside class="aside">
 	<h2 class="label aside-label">Recent Deployments</h2>
 	{#if buildsLoading}
-		{#each Array(3) as _}
+		{#each Array(3) as _, i (i)}
 			<div class="bld bld--skel">
 				<div class="sk" style="width:1.5rem;height:1.5rem;border-radius:0.375rem"></div>
 				<div class="sk-col" style="flex:1">
@@ -44,7 +44,7 @@
 				class="bld bld--live"
 				{@attach motionStagger({ index: i, stride: 0.04, from: { y: 6, scale: 1 } })}
 			>
-				<div class="bld-dot bld-dot--building"><Loader2 size={13} class="spin" /></div>
+				<div class="bld-dot bld-dot--building"><Loader2 size={13} class="animate-spin" /></div>
 				<div class="bld-info">
 					<span class="bld-row"
 						>{#if ic}<img

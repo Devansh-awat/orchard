@@ -3,6 +3,7 @@
 	import { flip } from 'svelte/animate';
 	import { backOut } from 'svelte/easing';
 	import BuildSteps from './BuildSteps.svelte';
+	import { Alert } from '$lib/components/ui';
 	import AnimatedNumber from './AnimatedNumber.svelte';
 
 	interface Props {
@@ -57,10 +58,41 @@
 		return sanitized;
 	}
 
-	const sanitizedBuildLogs = $derived(sanitizeLogs(buildLogs));
-	const sanitizedBuildError = $derived(sanitizeLogs(buildError));
+	// Build logs are grow-only: sanitize only content appended since the last
+	// call, re-running from the last committed newline so a secret can't
+	// straddle the boundary.
+	let sanRawPrefix = '';
+	let sanOutPrefix = '';
+	function sanitizeGrowing(raw: string | null | undefined): string {
+		if (!raw) return '';
+		if (!raw.startsWith(sanRawPrefix)) {
+			sanRawPrefix = '';
+			sanOutPrefix = '';
+		}
+		const suffix = raw.slice(sanRawPrefix.length);
+		const nl = suffix.lastIndexOf('\n');
+		if (nl >= 0) {
+			sanOutPrefix += sanitizeLogs(suffix.slice(0, nl + 1));
+			sanRawPrefix = raw.slice(0, sanRawPrefix.length + nl + 1);
+			return sanOutPrefix + sanitizeLogs(suffix.slice(nl + 1));
+		}
+		return sanOutPrefix + sanitizeLogs(suffix);
+	}
+
+	const sanitizedBuildLogs = $derived(sanitizeGrowing(buildLogs));
 
 	let showLogs = $state(true); // Default to showing logs
+	let failureShown = false;
+	$effect(() => {
+		if (buildStatus === 'failed') {
+			if (!failureShown) {
+				failureShown = true;
+				showLogs = true;
+			}
+		} else {
+			failureShown = false;
+		}
+	});
 	let logsPanel: HTMLDivElement | undefined = $state();
 	let previousLogsLength = $state(0);
 	let currentTime = $state(Date.now());
@@ -256,38 +288,18 @@
 		{/each}
 	</div>
 
-	{#if buildError && buildStatus === 'failed'}
-		<div class="error-box mt-4 rounded-lg p-4">
-			<p class="text-sm font-medium">Error</p>
-			<p class="mt-1 text-sm font-mono whitespace-pre-wrap">
-				{sanitizedBuildError}
-			</p>
-		</div>
-	{/if}
-
 	{#if warnings?.length && buildStatus !== 'building'}
-		<div class="warning-box mt-4 rounded-lg p-4">
-			<div class="flex items-start gap-2 mb-2">
-				<svg class="h-5 w-5 shrink-0 mt-0.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-					<path
-						stroke-linecap="round"
-						stroke-linejoin="round"
-						stroke-width="2"
-						d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"
-					/>
-				</svg>
-				<div class="flex-1 min-w-0">
-					<p class="text-sm font-medium">Pod Warnings</p>
-					<div class="mt-2 space-y-2">
-						{#each warnings as warning}
-							<div class="text-xs">
-								<span class="font-mono font-semibold">{warning.podName}:</span>
-								<span class="ml-1">{warning.message}</span>
-							</div>
-						{/each}
-					</div>
+		<div class="mt-4">
+			<Alert tone="warning" title="Pod warnings">
+				<div class="space-y-2">
+					{#each warnings as warning, i (i)}
+						<div class="text-xs">
+							<span class="font-mono font-semibold">{warning.podName}:</span>
+							<span class="ml-1">{warning.message}</span>
+						</div>
+					{/each}
 				</div>
-			</div>
+			</Alert>
 		</div>
 	{/if}
 
@@ -392,18 +404,6 @@
 	.step-text-pending {
 		color: var(--surface-muted);
 		opacity: 0.7;
-	}
-
-	.error-box {
-		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
-		border: 1px solid var(--error-text-color);
-		color: var(--error-text-color);
-	}
-
-	.warning-box {
-		background-color: var(--warning-bg);
-		border: 1px solid var(--warning-border);
-		color: var(--warning-text);
 	}
 
 	.logs-toggle {

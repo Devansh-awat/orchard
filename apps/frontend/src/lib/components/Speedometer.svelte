@@ -87,7 +87,7 @@
 			/>
 		{/if}
 		<!-- Tick marks -->
-		{#each ticks as t}
+		{#each ticks as t (t)}
 			{@const e = tickEnd(t, dims.r - dims.sw / 2 - 4, dims.r - dims.sw / 2 - 10)}
 			<line
 				x1={e.x1}

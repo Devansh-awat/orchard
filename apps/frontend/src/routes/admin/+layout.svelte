@@ -61,7 +61,7 @@
 				class="flex gap-1 rounded-2xl border p-1"
 				style="border-color: var(--surface-border); background-color: var(--control-bg);"
 			>
-				{#each tabs as tab}
+				{#each tabs as tab (tab.href)}
 					<a
 						href={tab.href}
 						class="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition"

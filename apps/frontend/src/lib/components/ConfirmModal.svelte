@@ -6,6 +6,7 @@
 		open: boolean;
 		title: string;
 		description: string;
+		html?: boolean;
 		confirmLabel?: string;
 		cancelLabel?: string;
 		danger?: boolean;
@@ -17,6 +18,7 @@
 		open = $bindable(false),
 		title,
 		description,
+		html = false,
 		confirmLabel = 'Delete',
 		cancelLabel = 'Cancel',
 		danger = true,
@@ -53,7 +55,12 @@
 			</div>
 
 			<h2 class="cm-title">{title}</h2>
-			<p class="cm-desc">{@html description}</p>
+			{#if html}
+				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+				<p class="cm-desc">{@html description}</p>
+			{:else}
+				<p class="cm-desc">{description}</p>
+			{/if}
 
 			<div class="cm-actions">
 				<button class="cm-btn cm-btn-cancel" onclick={handleCancel}>

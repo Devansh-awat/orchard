@@ -2,6 +2,7 @@
 	import { Plus, Loader2, TriangleAlert } from 'lucide-svelte';
 	import { HardDriveDownload, Trash2 } from '@jis3r/icons';
 	import { slide, fade } from 'svelte/transition';
+	import { SectionCard } from '$lib/components/ui';
 
 	interface VolumeEntry {
 		name: string;
@@ -15,17 +16,20 @@
 
 	let {
 		volumes = $bindable<VolumeEntry[]>(),
+		isEditing = $bindable(false),
 		savingVolumes,
 		hasPvcVolume,
 		onSave
 	}: {
 		volumes: VolumeEntry[];
+		isEditing?: boolean;
 		savingVolumes: boolean;
 		hasPvcVolume: boolean;
 		onSave: () => void;
 	} = $props();
 
 	function addVolume() {
+		isEditing = true;
 		volumes = [
 			...volumes,
 			{ name: '', type: 'pvc', mountPath: '', pvcName: '', storageSize: '1Gi', readOnly: false }
@@ -33,34 +37,35 @@
 	}
 
 	function removeVolume(index: number) {
+		isEditing = true;
 		volumes = volumes.filter((_, i) => i !== index);
+	}
+
+	function handleSave() {
+		isEditing = false;
+		onSave();
 	}
 </script>
 
-<div class="card rounded-2xl p-5">
-	<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-		<div>
-			<p class="text-sm font-semibold" style="color: var(--center-channel-color);">
-				Persistent Storage
-			</p>
-		</div>
+<SectionCard title="Persistent storage">
+	{#snippet actions()}
 		<button onclick={addVolume} class="btn btn-secondary btn-sm">
 			<Plus class="h-4 w-4" />
-			<span>Add Storage</span>
+			<span>Add storage</span>
 		</button>
-	</div>
+	{/snippet}
 	{#if hasPvcVolume}
 		<div class="strategy-note mb-4">
 			<TriangleAlert class="h-3.5 w-3.5 shrink-0" />
 			<span
 				>Rolling deployments are disabled because this app uses a PVC volume. Updates run with the <strong
 					>Recreate</strong
-				> strategy — pods are torn down before new ones start.</span
+				> strategy, so pods are torn down before new ones start.</span
 			>
 		</div>
 	{/if}
-	<div class="space-y-3">
-		{#each volumes as volume, index}
+	<div class="space-y-3" onfocusin={() => (isEditing = true)}>
+		{#each volumes as volume, index (index)}
 			<div class="vol-card" transition:slide={{ duration: 200 }}>
 				<div class="vol-card-header">
 					<div class="vol-card-number">{index + 1}</div>
@@ -121,9 +126,9 @@
 		<p class="text-xs" style="color: var(--surface-muted);">
 			Saving will restart your app with the new storage config.
 		</p>
-		<button onclick={onSave} disabled={savingVolumes} class="btn btn-primary">
+		<button onclick={handleSave} disabled={savingVolumes || !isEditing} class="btn btn-primary">
 			{#if savingVolumes}<Loader2 class="h-4 w-4 animate-spin" />{/if}
 			<span>Save</span>
 		</button>
 	</div>
-</div>
+</SectionCard>

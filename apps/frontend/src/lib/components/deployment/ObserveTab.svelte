@@ -3,6 +3,7 @@
 	import { browser } from '$app/environment';
 	import { apiFetch, toasts } from '$lib/stores';
 	import { formatRelativeTime, ansiToHtml } from '$lib/utils/format';
+	import { Button, Select } from '$lib/components/ui';
 	import { motionStagger, springHover } from '$lib/utils/motion.svelte';
 	import {
 		Clock,
@@ -24,7 +25,7 @@
 		PartyPopper
 	} from 'lucide-svelte';
 
-	let { deployment }: { deployment: any } = $props();
+	let { deployment, active = true }: { deployment: any; active?: boolean } = $props();
 
 	type SubTab = 'logs' | 'http' | 'traces' | 'errors' | 'killed';
 
@@ -213,8 +214,28 @@
 		return entries;
 	});
 
-	function logKey(entry: any, i: number): string {
-		return `${entry.timestamp ?? ''}|${i}|${(entry.message ?? '').slice(0, 64)}`;
+	const RENDER_WINDOW_STEP = 1000;
+	let renderWindow = $state(RENDER_WINDOW_STEP);
+	const visibleLogs = $derived(
+		filteredLogs.length > renderWindow ? filteredLogs.slice(-renderWindow) : filteredLogs
+	);
+	const hiddenLogCount = $derived(filteredLogs.length - visibleLogs.length);
+
+	function keyEntries(entries: any[]) {
+		const seen = new Map<string, number>();
+		for (const e of entries) {
+			const base = `${e.timestamp ?? ''}|${e.raw ?? e.message ?? ''}`;
+			const n = seen.get(base) ?? 0;
+			seen.set(base, n + 1);
+			e._key = n ? `${base}#${n}` : base;
+		}
+	}
+
+	function mergeEntries(prev: any[], next: any[]): any[] {
+		keyEntries(next);
+		if (!prev.length) return next;
+		const prevByKey = new Map(prev.map((e) => [e._key, e]));
+		return next.map((n) => prevByKey.get(n._key) ?? n);
 	}
 
 	function toggleLog(key: string) {
@@ -310,14 +331,29 @@
 		const { scrollTop, scrollHeight, clientHeight } = logViewerEl;
 		userScrolledUp = scrollHeight - scrollTop - clientHeight > 60;
 
-		// Scroll-to-top loads earlier logs (disabled while filtering — search/level
-		// already scan the whole window server-side).
-		if (logSearch.trim() || logLevel !== 'all') return;
-		if (loadingMoreLogs || logsAtMax || logTail >= LOG_MAX_LINES) return;
 		if (scrollTop > 80) return;
 		const now = Date.now();
 		if (now - lastLoadMoreAt < 400) return;
 		lastLoadMoreAt = now;
+
+		// First reveal already-loaded rows hidden by the render window, then fall
+		// back to fetching earlier lines from the server.
+		if (hiddenLogCount > 0) {
+			const el = logViewerEl;
+			const prevHeight = el.scrollHeight;
+			const prevTop = el.scrollTop;
+			renderWindow += RENDER_WINDOW_STEP;
+			tick().then(() => {
+				if (!logViewerEl) return;
+				logViewerEl.scrollTop = prevTop + (logViewerEl.scrollHeight - prevHeight);
+			});
+			return;
+		}
+
+		// Scroll-to-top loads earlier logs (disabled while filtering — search/level
+		// already scan the whole window server-side).
+		if (logSearch.trim() || logLevel !== 'all') return;
+		if (loadingMoreLogs || logsAtMax || logTail >= LOG_MAX_LINES) return;
 		loadingMoreLogs = true;
 		logTail = Math.min(logTail + LOG_PAGE_SIZE, LOG_MAX_LINES);
 		fetchLogs({ preserveScroll: true }).finally(() => {
@@ -412,7 +448,7 @@
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
 			const body = await res.json();
 			const next = body?.entries ?? body?.logs ?? body ?? [];
-			logEntries = next;
+			logEntries = mergeEntries(logEntries, next);
 			// k8s caps tailLines at the retained buffer; if asking for more didn't
 			// yield more entries, we've reached the start of available logs.
 			if (opts?.preserveScroll && next.length <= prevCount) logsAtMax = true;
@@ -529,9 +565,11 @@
 		expandedErrors = next;
 	}
 
+	let bootstrappedId: string | null = null;
 	$effect(() => {
 		const id = deployment?.id;
-		if (!id) return;
+		if (!id || !active || id === bootstrappedId) return;
+		bootstrappedId = id;
 		untrack(() => {
 			fetchCapabilities();
 			fetchOverview();
@@ -575,7 +613,7 @@
 	});
 
 	$effect(() => {
-		if (!liveTail) return;
+		if (!liveTail || !active) return;
 		liveTailHandle = setInterval(() => {
 			fetchLogs();
 		}, 2000);
@@ -762,7 +800,7 @@
 			.replace(/>/g, '&gt;')
 			.replace(
 				/^(\w+(?:Error|Exception|Fault|Failure)[^\n]*)/m,
-				'<span style="color: #d04a4a; font-weight: 600;">$1</span>'
+				'<span style="color: var(--error-text-color); font-weight: 600;">$1</span>'
 			)
 			.replace(/^(    at .+)$/gm, '<span style="color: var(--surface-muted);">$1</span>')
 			.replace(/^(Traceback .+)$/gm, '<span style="color: var(--surface-muted);">$1</span>');
@@ -808,7 +846,7 @@
 				</div>
 			</div>
 		{/if}
-		{#each [{ icon: Clock, label: 'Uptime', value: formatUptime(overviewStats.uptime), show: true }, { icon: Boxes, label: 'Pods', value: `${overviewStats.running}/${overviewStats.total}`, show: true }, { icon: Cpu, label: 'CPU', value: overviewStats.cpuPct != null ? `${overviewStats.cpuPct.toFixed(1)}%` : '--', show: true }, { icon: MemoryStick, label: 'Memory', value: overviewStats.memPct != null ? `${overviewStats.memPct.toFixed(1)}%` : '--', show: true }, { icon: Activity, label: 'Req/s', value: overviewStats.reqRate != null ? fmtReqRate(overviewStats.reqRate) : '--', show: hasIngress }, { icon: AlertTriangle, label: 'Error rate', value: overviewStats.errorRate != null ? fmtPercent(overviewStats.errorRate) : '--', show: hasIngress }, { icon: Clock, label: 'Avg latency', value: overviewStats.avgLatency != null ? fmtLatency(overviewStats.avgLatency) : '--', show: hasIngress }].filter((s) => s.show) as stat, i}
+		{#each [{ icon: Clock, label: 'Uptime', value: formatUptime(overviewStats.uptime), show: true }, { icon: Boxes, label: 'Pods', value: `${overviewStats.running}/${overviewStats.total}`, show: true }, { icon: Cpu, label: 'CPU', value: overviewStats.cpuPct != null ? `${overviewStats.cpuPct.toFixed(1)}%` : '--', show: true }, { icon: MemoryStick, label: 'Memory', value: overviewStats.memPct != null ? `${overviewStats.memPct.toFixed(1)}%` : '--', show: true }, { icon: Activity, label: 'Req/s', value: overviewStats.reqRate != null ? fmtReqRate(overviewStats.reqRate) : '--', show: hasIngress }, { icon: AlertTriangle, label: 'Error rate', value: overviewStats.errorRate != null ? fmtPercent(overviewStats.errorRate) : '--', show: hasIngress }, { icon: Clock, label: 'Avg latency', value: overviewStats.avgLatency != null ? fmtLatency(overviewStats.avgLatency) : '--', show: hasIngress }].filter((s) => s.show) as stat, i (stat.label)}
 			{@const Icon = stat.icon}
 			<div
 				class="observe-stat"
@@ -837,7 +875,7 @@
 				style="transform: translateX({activeTabIndex *
 					100}%); width: calc(100% / {visibleTabs.length});"
 			></div>
-			{#each visibleTabs as tab}
+			{#each visibleTabs as tab (tab)}
 				<button
 					class="observe-tab"
 					class:observe-tab--active={activeTab === tab}
@@ -871,33 +909,30 @@
 					/>
 				</div>
 
-				<div class="observe-log-level">
-					<select bind:value={logLevel} class="observe-select">
-						<option value="all">All levels</option>
-						<option value="debug">Debug</option>
-						<option value="info">Info</option>
-						<option value="warn">Warn</option>
-						<option value="error">Error</option>
-					</select>
-				</div>
+				<Select bind:value={logLevel} aria-label="Log level">
+					<option value="all">All levels</option>
+					<option value="debug">Debug</option>
+					<option value="info">Info</option>
+					<option value="warn">Warn</option>
+					<option value="error">Error</option>
+				</Select>
 
-				<button
-					class="observe-tail-btn"
-					class:observe-tail-btn--active={liveTail}
+				<Button
+					size="sm"
+					variant={liveTail ? 'primary' : 'secondary'}
 					onclick={() => (liveTail = !liveTail)}
-					type="button"
 				>
 					{#if liveTail}
 						<span class="observe-tail-dot"></span>
 					{/if}
 					Live
-				</button>
+				</Button>
 			</div>
 
 			<div class="observe-log-viewer" bind:this={logViewerEl} onscroll={handleLogScroll}>
 				{#if logsLoading && !logEntries.length}
 					<div class="observe-log-skeleton">
-						{#each Array(12) as _, i}
+						{#each Array(12) as _, i (i)}
 							<div class="observe-skeleton-line" style="animation-delay: {i * 60}ms;">
 								<div class="observe-skeleton-num"></div>
 								<div class="observe-skeleton-ts"></div>
@@ -908,7 +943,7 @@
 					</div>
 				{:else if logsError}
 					<div class="observe-empty">
-						<AlertTriangle class="h-5 w-5" style="color: #d04a4a;" />
+						<AlertTriangle class="h-5 w-5" style="color: var(--error-text-color);" />
 						<span>Failed to load logs: {logsError}</span>
 					</div>
 				{:else if filteredLogs.length === 0}
@@ -926,7 +961,7 @@
 							</div>
 						{:else if logsAtMax || logTail >= LOG_MAX_LINES}
 							<div class="observe-log-loadmore observe-log-loadmore--end">
-								— start of available logs —
+								Start of available logs
 							</div>
 						{:else}
 							<div class="observe-log-loadmore observe-log-loadmore--hint">
@@ -934,16 +969,17 @@
 							</div>
 						{/if}
 					{/if}
-					{#each filteredLogs as entry, i}
+					{#each visibleLogs as entry, i (entry._key)}
 						{@const detail = (entry.lines?.length ?? 0) > 1 ? entry.lines.slice(1) : []}
-						{@const key = logKey(entry, i)}
+						{@const key = entry._key}
 						{@const open = expandedLogs.has(key)}
+						{@const headline = ansiToHtml(entry.lines?.[0] ?? entry.message ?? '')}
 						<div
 							class="observe-log-entry"
 							class:observe-log-entry--alt={i % 2 === 1}
 							class:observe-log-entry--group={detail.length > 0}
 						>
-							<span class="observe-log-num">{i + 1}</span>
+							<span class="observe-log-num">{hiddenLogCount + i + 1}</span>
 							<span
 								class="observe-log-level-badge"
 								style="color: {levelColor(entry.level)}; background: {levelBg(entry.level)};"
@@ -963,14 +999,14 @@
 											style="transform: rotate({open ? 90 : 0}deg);"
 										/>
 									{/if}
-									<span class="observe-log-msg"
-										>{@html ansiToHtml(entry.lines?.[0] ?? entry.message ?? '')}</span
-									>
+									<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+									<span class="observe-log-msg">{@html headline}</span>
 									{#if detail.length > 0 && !open}
 										<span class="observe-log-more">+{detail.length}</span>
 									{/if}
 								</button>
 								{#if detail.length > 0 && open}
+									<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 									<pre class="observe-log-detail">{@html ansiToHtml(detail.join('\n'))}</pre>
 								{/if}
 							</div>
@@ -995,7 +1031,7 @@
 			{:else}
 				<div class="observe-http-toolbar">
 					<div class="observe-rangepick">
-						{#each TIME_RANGES as r}
+						{#each TIME_RANGES as r (r.id)}
 							<button
 								class="observe-rangebtn"
 								class:active={timeRange === r.id}
@@ -1011,12 +1047,12 @@
 
 				{#if httpError}
 					<div class="observe-empty">
-						<AlertTriangle class="h-5 w-5" style="color: #d04a4a;" />
+						<AlertTriangle class="h-5 w-5" style="color: var(--error-text-color);" />
 						<span>Failed to load HTTP metrics: {httpError}</span>
 					</div>
 				{:else if httpLoading && !httpMetrics}
 					<div class="observe-chart-grid">
-						{#each Array(4) as _, i}
+						{#each Array(4) as _, i (i)}
 							<div
 								class="observe-chart-card"
 								{@attach motionStagger({
@@ -1036,7 +1072,7 @@
 					</div>
 				{:else}
 					<div class="observe-chart-grid">
-						{#each [{ label: 'Request Rate', series: httpMetrics?.requestRate ?? [], color: '#7c5cff', formatter: fmtReqRate }, { label: 'Error Rate', series: httpMetrics?.errorRate ?? [], color: '#d04a4a', formatter: fmtPercent }, { label: 'Avg Latency', series: httpMetrics?.latencyAvg ?? [], color: '#22c0a8', formatter: fmtLatency }, { label: 'Max Latency', series: httpMetrics?.latencyMax ?? [], color: '#ff7e6b', formatter: fmtLatency }] as chart, i}
+						{#each [{ label: 'Request rate', series: httpMetrics?.requestRate ?? [], color: '#7c5cff', formatter: fmtReqRate }, { label: 'Error rate', series: httpMetrics?.errorRate ?? [], color: '#d04a4a', formatter: fmtPercent }, { label: 'Avg latency', series: httpMetrics?.latencyAvg ?? [], color: '#22c0a8', formatter: fmtLatency }, { label: 'Max latency', series: httpMetrics?.latencyMax ?? [], color: '#ff7e6b', formatter: fmtLatency }] as chart, i (chart.label)}
 							{@const latest = latestValue(chart.series)}
 							<div
 								class="observe-chart-card"
@@ -1104,16 +1140,18 @@
 						</div>
 						<div class="observe-cmd-row">
 							<code class="observe-sdk-cmd">{runtimeGuide.install}</code>
-							<button
-								class="observe-copy-btn"
+							<Button
+								size="sm"
+								variant="secondary"
+								aria-label="Copy install command"
 								onclick={() => copyToClipboard(runtimeGuide.install, 'guide-install')}
-								type="button"
 							>
 								{#if copiedId === 'guide-install'}<Check class="h-3 w-3" />{:else}<Copy
 										class="h-3 w-3"
 									/>{/if}
-							</button>
+							</Button>
 						</div>
+						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 						<pre class="observe-guide-snippet">{@html highlightCode(runtimeGuide.snippet)}</pre>
 					</div>
 
@@ -1133,7 +1171,7 @@
 						</button>
 						{#if tracesOtherExpanded}
 							<div class="observe-sdk-grid">
-								{#each otherSdks as sdk, i}
+								{#each otherSdks as sdk, i (sdk.name)}
 									<div
 										class="observe-sdk-card"
 										{@attach springHover()}
@@ -1148,15 +1186,16 @@
 										</div>
 										<div class="observe-cmd-row">
 											<code class="observe-sdk-cmd">{sdk.cmd}</code>
-											<button
-												class="observe-copy-btn"
+											<Button
+												size="sm"
+												variant="secondary"
+												aria-label="Copy install command"
 												onclick={() => copyToClipboard(sdk.cmd, `sdk-${sdk.name}`)}
-												type="button"
 											>
 												{#if copiedId === `sdk-${sdk.name}`}<Check class="h-3 w-3" />{:else}<Copy
 														class="h-3 w-3"
 													/>{/if}
-											</button>
+											</Button>
 										</div>
 									</div>
 								{/each}
@@ -1165,7 +1204,7 @@
 					{/if}
 				{:else}
 					<div class="observe-sdk-grid">
-						{#each SDK_LIST as sdk, i}
+						{#each SDK_LIST as sdk, i (sdk.name)}
 							<div
 								class="observe-sdk-card"
 								{@attach springHover()}
@@ -1180,15 +1219,16 @@
 								</div>
 								<div class="observe-cmd-row">
 									<code class="observe-sdk-cmd">{sdk.cmd}</code>
-									<button
-										class="observe-copy-btn"
+									<Button
+										size="sm"
+										variant="secondary"
+										aria-label="Copy install command"
 										onclick={() => copyToClipboard(sdk.cmd, `sdk-${sdk.name}`)}
-										type="button"
 									>
 										{#if copiedId === `sdk-${sdk.name}`}<Check class="h-3 w-3" />{:else}<Copy
 												class="h-3 w-3"
 											/>{/if}
-									</button>
+									</Button>
 								</div>
 							</div>
 						{/each}
@@ -1198,7 +1238,7 @@
 		{:else if activeTab === 'errors'}
 			<div class="observe-errors-toolbar">
 				<div class="observe-rangepick">
-					{#each ERROR_WINDOWS as w}
+					{#each ERROR_WINDOWS as w (w.id)}
 						<button
 							class="observe-rangebtn"
 							class:active={errorWindow === w.id}
@@ -1214,7 +1254,7 @@
 
 			{#if errorsError}
 				<div class="observe-empty">
-					<AlertTriangle class="h-5 w-5" style="color: #d04a4a;" />
+					<AlertTriangle class="h-5 w-5" style="color: var(--error-text-color);" />
 					<span>Failed to load errors: {errorsError}</span>
 				</div>
 			{:else if errorsLoading && !errorGroups.length}
@@ -1225,11 +1265,11 @@
 			{:else if errorGroups.length === 0}
 				<div class="observe-empty-state">
 					<div class="observe-empty-icon-ring observe-empty-icon-ring--celebrate">
-						<PartyPopper class="h-10 w-10" style="color: #22c0a8;" />
+						<PartyPopper class="h-10 w-10" style="color: var(--online-indicator);" />
 					</div>
-					<p class="observe-empty-title">All clear!</p>
+					<p class="observe-empty-title">All clear</p>
 					<p class="observe-empty-desc">
-						No errors in the selected time window &mdash; your app is running clean
+						No errors in the selected time window. Your app is running clean.
 					</p>
 				</div>
 			{:else}
@@ -1245,7 +1285,7 @@
 				</div>
 
 				<div class="observe-errors-list">
-					{#each errorGroups as group, i}
+					{#each errorGroups as group, i (group.fingerprint)}
 						{@const isExpanded = expandedErrors.has(group.fingerprint)}
 						<div
 							class="observe-error-card"
@@ -1295,7 +1335,7 @@
 										<div class="observe-error-samples-label">
 											Recent occurrences ({group.samples.length})
 										</div>
-										{#each group.samples as sample, si}
+										{#each group.samples as sample, si (si)}
 											<div class="observe-error-sample">
 												{#if sample.timestamp}
 													<div
@@ -1308,6 +1348,7 @@
 												{/if}
 												{#if sample.stackTrace}
 													<div class="observe-stack-wrapper">
+														<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 														<pre class="observe-error-stack">{@html highlightStack(
 																sample.stackTrace
 															)}</pre>
@@ -1340,19 +1381,12 @@
 				<span class="observe-killed-hint">
 					Containers terminated in the last 24h, with the logs they printed before dying
 				</span>
-				<button
-					class="observe-rangebtn"
-					onclick={() => fetchKilled()}
-					disabled={killedLoading}
-					type="button"
-				>
-					{#if killedLoading}<Loader2 class="h-3 w-3 animate-spin" />{:else}Refresh{/if}
-				</button>
+				<Button size="sm" loading={killedLoading} onclick={() => fetchKilled()}>Refresh</Button>
 			</div>
 
 			{#if killedError}
 				<div class="observe-empty">
-					<AlertTriangle class="h-5 w-5" style="color: #d04a4a;" />
+					<AlertTriangle class="h-5 w-5" style="color: var(--error-text-color);" />
 					<span>Failed to load killed containers: {killedError}</span>
 				</div>
 			{:else if killedLoading && !killedList.length}
@@ -1363,7 +1397,7 @@
 			{:else if killedList.length === 0}
 				<div class="observe-empty-state">
 					<div class="observe-empty-icon-ring observe-empty-icon-ring--celebrate">
-						<PartyPopper class="h-10 w-10" style="color: #22c0a8;" />
+						<PartyPopper class="h-10 w-10" style="color: var(--online-indicator);" />
 					</div>
 					<p class="observe-empty-title">No recently killed containers</p>
 					<p class="observe-empty-desc">
@@ -1419,6 +1453,7 @@
 										</div>
 									{:else if killedLogs[k.entryId]}
 										<div class="observe-stack-wrapper">
+											<!-- eslint-disable-next-line svelte/no-at-html-tags -->
 											<pre class="observe-error-stack observe-killed-logs">{@html ansiToHtml(
 													killedLogs[k.entryId]
 												)}</pre>
@@ -1634,41 +1669,6 @@
 		color: var(--surface-muted);
 	}
 
-	.observe-log-level {
-		position: relative;
-	}
-
-	.observe-select {
-		padding: 6px 30px 6px 12px;
-		border-radius: 8px;
-		border: 1px solid var(--surface-border);
-		background-color: var(--surface-bg);
-		color: var(--center-channel-color);
-		font-size: 0.78rem;
-		font-weight: 500;
-		font-family: inherit;
-		cursor: pointer;
-		appearance: none;
-		background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23888' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M6 9l6 6 6-6'/%3E%3C/svg%3E");
-		background-repeat: no-repeat;
-		background-position: right 9px center;
-		transition:
-			border-color 120ms ease,
-			box-shadow 120ms ease,
-			background-color 120ms ease;
-	}
-
-	.observe-select:hover {
-		border-color: var(--surface-muted);
-		background-color: rgba(120, 120, 128, 0.06);
-	}
-
-	.observe-select:focus-visible {
-		outline: none;
-		border-color: var(--button-bg, #7c5cff);
-		box-shadow: 0 0 0 3px rgba(124, 92, 255, 0.18);
-	}
-
 	.observe-rangepick {
 		display: inline-flex;
 		padding: 2px;
@@ -1705,51 +1705,23 @@
 		background: rgba(255, 255, 255, 0.08);
 	}
 
-	.observe-tail-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 5px;
-		padding: 5px 12px;
-		font-size: 0.78rem;
-		font-weight: 500;
-		border: 1px solid var(--surface-border);
-		background: var(--surface-bg);
-		color: var(--surface-muted);
-		border-radius: 8px;
-		cursor: pointer;
-		transition:
-			background 80ms ease,
-			color 80ms ease,
-			border-color 80ms ease;
-	}
-
-	.observe-tail-btn:hover {
-		color: var(--center-channel-color);
-	}
-
-	.observe-tail-btn--active {
-		border-color: var(--online-indicator);
-		color: var(--online-indicator);
-		background: rgba(34, 192, 168, 0.06);
-	}
-
 	.observe-tail-dot {
 		width: 6px;
 		height: 6px;
 		border-radius: 50%;
-		background: var(--online-indicator);
+		background: currentColor;
 		animation: observe-pulse 1.6s ease-out infinite;
 	}
 
 	@keyframes observe-pulse {
 		0% {
-			box-shadow: 0 0 0 0 rgba(34, 192, 168, 0.55);
+			box-shadow: 0 0 0 0 color-mix(in srgb, currentColor 55%, transparent);
 		}
 		70% {
-			box-shadow: 0 0 0 6px rgba(34, 192, 168, 0);
+			box-shadow: 0 0 0 6px transparent;
 		}
 		100% {
-			box-shadow: 0 0 0 0 rgba(34, 192, 168, 0);
+			box-shadow: 0 0 0 0 transparent;
 		}
 	}
 
@@ -2049,7 +2021,7 @@
 	.observe-empty-icon-ring--celebrate {
 		width: 68px;
 		height: 68px;
-		border-color: rgba(34, 192, 168, 0.25);
+		border-color: color-mix(in srgb, var(--online-indicator) 25%, transparent);
 	}
 
 	.observe-empty-title {
@@ -2229,28 +2201,6 @@
 		text-overflow: ellipsis;
 		flex: 1;
 		min-width: 0;
-	}
-
-	.observe-copy-btn {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 24px;
-		height: 24px;
-		border-radius: 6px;
-		border: 1px solid var(--surface-border);
-		background: var(--surface-bg);
-		color: var(--surface-muted);
-		cursor: pointer;
-		flex-shrink: 0;
-		transition:
-			color 80ms ease,
-			background 80ms ease;
-	}
-
-	.observe-copy-btn:hover {
-		color: var(--center-channel-color);
-		background: rgba(120, 120, 128, 0.06);
 	}
 
 	.observe-guide-card {

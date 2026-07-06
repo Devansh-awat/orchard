@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Loader2, Globe, Lock } from 'lucide-svelte';
 	import { ShieldCheck } from '@jis3r/icons';
+	import { Button, TabBar, Field, Input } from '$lib/components/ui';
 	import SettingsSection from '$lib/components/user-settings/SettingsSection.svelte';
 
 	let {
@@ -30,6 +31,7 @@
 		ssoLoginWelcomeText = $bindable(''),
 		ssoTestResult,
 		ssoTesting,
+		ssoDeleting = false,
 		onSaveSubdomain,
 		onSaveSsoConfig,
 		onTestSsoConnection,
@@ -62,12 +64,18 @@
 		ssoLoginWelcomeText: string;
 		ssoTestResult: { success: boolean; testLoginUrl?: string; error?: string } | null;
 		ssoTesting: boolean;
+		ssoDeleting?: boolean;
 		onSaveSubdomain: () => void;
 		onSaveSsoConfig: () => void;
 		onTestSsoConnection: () => void;
 		onDeleteSsoConfig: () => void;
 		index?: number;
 	} = $props();
+
+	const ssoTabs = [
+		{ id: 'config', label: 'Provider configuration' },
+		{ id: 'branding', label: 'Login page customization' }
+	];
 </script>
 
 {#if isOwner}
@@ -88,20 +96,14 @@
 			<div class="sso-section">
 				<h3 class="sso-section-title">
 					<Globe class="h-3.5 w-3.5" />
-					Custom Subdomain
+					Custom subdomain
 				</h3>
 				<div class="sso-subdomain-row">
-					<input
-						type="text"
-						bind:value={ssoSubdomain}
-						placeholder="yourcompany"
-						class="input sso-subdomain-input"
-					/>
+					<Input bind:value={ssoSubdomain} placeholder="yourcompany" class="sso-subdomain-input" />
 					<span class="sso-subdomain-suffix">.{baseDomain}</span>
-					<button onclick={onSaveSubdomain} disabled={ssoSubdomainSaving} class="btn btn-secondary">
-						{#if ssoSubdomainSaving}<Loader2 class="h-4 w-4 animate-spin" />{/if}
+					<Button variant="secondary" onclick={onSaveSubdomain} loading={ssoSubdomainSaving}>
 						Save
-					</button>
+					</Button>
 				</div>
 				{#if ssoSubdomain}
 					<p class="sso-hint">
@@ -110,147 +112,108 @@
 				{/if}
 			</div>
 
-			<!-- SSO tabs -->
-			<div class="sso-tabs">
-				<button
-					class="sso-tab"
-					class:sso-tab-active={ssoTab === 'config'}
-					onclick={() => {
-						ssoTab = 'config';
-					}}
-				>
-					Provider Configuration
-				</button>
-				<button
-					class="sso-tab"
-					class:sso-tab-active={ssoTab === 'branding'}
-					onclick={() => {
-						ssoTab = 'branding';
-					}}
-				>
-					Login Page Customization
-				</button>
-			</div>
+			<TabBar
+				tabs={ssoTabs}
+				bind:value={() => ssoTab, (v) => (ssoTab = v as 'config' | 'branding')}
+			/>
 
 			{#if ssoTab === 'config'}
 				<!-- Provider selection -->
 				<div class="sso-section">
-					<h3 class="sso-section-title">Provider Type</h3>
+					<h3 class="sso-section-title">Provider type</h3>
 					<div class="sso-provider-toggle">
-						<button
-							class="sso-provider-btn"
-							class:sso-provider-active={ssoProvider === 'oidc'}
+						<Button
+							variant={ssoProvider === 'oidc' ? 'primary' : 'secondary'}
+							size="sm"
 							onclick={() => {
 								ssoProvider = 'oidc';
 							}}
 						>
 							OpenID Connect (OIDC)
-						</button>
-						<button
-							class="sso-provider-btn"
-							class:sso-provider-active={ssoProvider === 'saml'}
+						</Button>
+						<Button
+							variant={ssoProvider === 'saml' ? 'primary' : 'secondary'}
+							size="sm"
 							onclick={() => {
 								ssoProvider = 'saml';
 							}}
 						>
 							SAML 2.0
-						</button>
+						</Button>
 					</div>
 				</div>
 
 				<!-- OIDC config -->
 				{#if ssoProvider === 'oidc'}
 					<div class="sso-section">
-						<div class="sso-field">
-							<label class="sso-field-label" for="oidc-issuer">Issuer URL</label>
-							<input
+						<Field label="Issuer URL" for="oidc-issuer">
+							<Input
 								id="oidc-issuer"
 								type="url"
 								bind:value={ssoOidcIssuerUrl}
 								placeholder="https://accounts.google.com"
-								class="input"
 							/>
-						</div>
-						<div class="sso-field">
-							<label class="sso-field-label" for="oidc-client-id">Client ID</label>
-							<input
+						</Field>
+						<Field label="Client ID" for="oidc-client-id">
+							<Input
 								id="oidc-client-id"
-								type="text"
 								bind:value={ssoOidcClientId}
 								placeholder="your-client-id"
-								class="input"
 							/>
-						</div>
-						<div class="sso-field">
-							<label class="sso-field-label" for="oidc-client-secret">Client Secret</label>
-							<input
+						</Field>
+						<Field label="Client secret" for="oidc-client-secret">
+							<Input
 								id="oidc-client-secret"
 								type="password"
 								bind:value={ssoOidcClientSecret}
 								placeholder={ssoConfig?.oidcClientSecret === '••••••••'
 									? '(already set, leave blank to keep)'
 									: 'your-client-secret'}
-								class="input"
 							/>
-						</div>
-						<div class="sso-field">
-							<label class="sso-field-label" for="oidc-scopes">Scopes</label>
-							<input
+						</Field>
+						<Field label="Scopes" for="oidc-scopes">
+							<Input
 								id="oidc-scopes"
-								type="text"
 								bind:value={ssoOidcScopes}
 								placeholder="openid email profile"
-								class="input"
 							/>
-						</div>
+						</Field>
 					</div>
 				{/if}
 
 				<!-- SAML config -->
 				{#if ssoProvider === 'saml'}
 					<div class="sso-section">
-						<div class="sso-field">
-							<label class="sso-field-label" for="saml-metadata">Metadata URL (optional)</label>
-							<input
+						<Field label="Metadata URL (optional)" for="saml-metadata">
+							<Input
 								id="saml-metadata"
 								type="url"
 								bind:value={ssoSamlMetadataUrl}
 								placeholder="https://idp.example.com/metadata"
-								class="input"
 							/>
-						</div>
-						<div class="sso-field">
-							<label class="sso-field-label" for="saml-entry">SSO Entry Point URL</label>
-							<input
+						</Field>
+						<Field label="SSO entry point URL" for="saml-entry">
+							<Input
 								id="saml-entry"
 								type="url"
 								bind:value={ssoSamlEntryPoint}
 								placeholder="https://idp.example.com/sso"
-								class="input"
 							/>
-						</div>
-						<div class="sso-field">
-							<label class="sso-field-label" for="saml-issuer">Issuer</label>
-							<input
-								id="saml-issuer"
-								type="text"
-								bind:value={ssoSamlIssuer}
-								placeholder="urn:idp:example"
-								class="input"
-							/>
-						</div>
-						<div class="sso-field">
-							<label class="sso-field-label" for="saml-cert">IdP Certificate (PEM)</label>
+						</Field>
+						<Field label="Issuer" for="saml-issuer">
+							<Input id="saml-issuer" bind:value={ssoSamlIssuer} placeholder="urn:idp:example" />
+						</Field>
+						<Field label="IdP certificate (PEM)" for="saml-cert">
 							<textarea
 								id="saml-cert"
 								bind:value={ssoSamlCertificate}
 								rows="4"
 								placeholder={ssoConfig?.samlCertificate === '(configured)'
 									? '(already set, leave blank to keep)'
-									: 'Paste the X.509 certificate here...'}
+									: 'Paste the X.509 certificate here'}
 								class="input"
 							></textarea>
-						</div>
+						</Field>
 					</div>
 				{/if}
 
@@ -282,22 +245,16 @@
 
 				<!-- Actions -->
 				<div class="sso-actions">
-					<button onclick={onSaveSsoConfig} disabled={ssoSaving} class="btn btn-primary">
-						{#if ssoSaving}<Loader2 class="h-4 w-4 animate-spin" />{/if}
-						Save SSO Configuration
-					</button>
-					<button onclick={onTestSsoConnection} disabled={ssoTesting} class="btn btn-secondary">
-						{#if ssoTesting}<Loader2 class="h-4 w-4 animate-spin" />{/if}
-						Test Connection
-					</button>
+					<Button variant="primary" onclick={onSaveSsoConfig} loading={ssoSaving}>
+						Save SSO configuration
+					</Button>
+					<Button variant="secondary" onclick={onTestSsoConnection} loading={ssoTesting}>
+						Test connection
+					</Button>
 					{#if ssoConfig}
-						<button
-							onclick={onDeleteSsoConfig}
-							class="btn btn-secondary"
-							style="color: var(--error-color, #ef4444);"
-						>
-							Delete SSO Config
-						</button>
+						<Button variant="danger" onclick={onDeleteSsoConfig} loading={ssoDeleting}>
+							Delete SSO config
+						</Button>
 					{/if}
 				</div>
 
@@ -324,52 +281,45 @@
 
 			{#if ssoTab === 'branding'}
 				<div class="sso-section">
-					<div class="sso-field">
-						<label class="sso-field-label" for="sso-logo">Logo URL</label>
-						<input
+					<Field label="Logo URL" for="sso-logo">
+						<Input
 							id="sso-logo"
 							type="url"
 							bind:value={ssoLoginLogoUrl}
 							placeholder="https://example.com/logo.png"
-							class="input"
 						/>
-					</div>
-					<div class="sso-field">
-						<label class="sso-field-label" for="sso-welcome">Welcome Text</label>
-						<input
+					</Field>
+					<Field label="Welcome text" for="sso-welcome">
+						<Input
 							id="sso-welcome"
-							type="text"
 							bind:value={ssoLoginWelcomeText}
 							placeholder="Sign in to Your Company"
-							class="input"
 						/>
-					</div>
+					</Field>
 					<div class="sso-color-row">
-						<div class="sso-field" style="flex: 1;">
-							<label class="sso-field-label" for="sso-primary-color">Primary Color</label>
-							<div class="sso-color-input">
-								<input id="sso-primary-color" type="color" bind:value={ssoLoginPrimaryColor} />
-								<input
-									type="text"
-									bind:value={ssoLoginPrimaryColor}
-									placeholder="#6366f1"
-									class="input"
-									style="flex: 1;"
-								/>
-							</div>
+						<div class="sso-color-col">
+							<Field label="Primary color" for="sso-primary-color">
+								<div class="sso-color-input">
+									<input id="sso-primary-color" type="color" bind:value={ssoLoginPrimaryColor} />
+									<Input
+										bind:value={ssoLoginPrimaryColor}
+										placeholder="#6366f1"
+										class="sso-color-text"
+									/>
+								</div>
+							</Field>
 						</div>
-						<div class="sso-field" style="flex: 1;">
-							<label class="sso-field-label" for="sso-bg-color">Background Color</label>
-							<div class="sso-color-input">
-								<input id="sso-bg-color" type="color" bind:value={ssoLoginBgColor} />
-								<input
-									type="text"
-									bind:value={ssoLoginBgColor}
-									placeholder="#0a0a0f"
-									class="input"
-									style="flex: 1;"
-								/>
-							</div>
+						<div class="sso-color-col">
+							<Field label="Background color" for="sso-bg-color">
+								<div class="sso-color-input">
+									<input id="sso-bg-color" type="color" bind:value={ssoLoginBgColor} />
+									<Input
+										bind:value={ssoLoginBgColor}
+										placeholder="#0a0a0f"
+										class="sso-color-text"
+									/>
+								</div>
+							</Field>
 						</div>
 					</div>
 
@@ -395,10 +345,9 @@
 						</div>
 					</div>
 
-					<button onclick={onSaveSsoConfig} disabled={ssoSaving} class="btn btn-primary">
-						{#if ssoSaving}<Loader2 class="h-4 w-4 animate-spin" />{/if}
-						Save Branding
-					</button>
+					<Button variant="primary" onclick={onSaveSsoConfig} loading={ssoSaving}>
+						Save branding
+					</Button>
 				</div>
 			{/if}
 		{/if}
@@ -448,7 +397,7 @@
 		gap: 0.5rem;
 	}
 
-	.sso-subdomain-input {
+	.sso-subdomain-row :global(.sso-subdomain-input) {
 		max-width: 200px;
 	}
 
@@ -468,72 +417,9 @@
 		color: var(--center-channel-color);
 	}
 
-	.sso-tabs {
-		display: flex;
-		gap: 0;
-		border-bottom: 1px solid var(--surface-border);
-	}
-
-	.sso-tab {
-		padding: 0.625rem 1rem;
-		font-size: 0.8rem;
-		font-weight: 500;
-		color: var(--surface-muted);
-		cursor: pointer;
-		border-bottom: 2px solid transparent;
-		transition:
-			color 120ms ease,
-			border-color 120ms ease;
-		background: transparent;
-		border-top: none;
-		border-left: none;
-		border-right: none;
-	}
-
-	.sso-tab:hover {
-		color: var(--center-channel-color);
-	}
-
-	.sso-tab-active {
-		color: var(--center-channel-color);
-		border-bottom-color: var(--button-bg);
-	}
-
 	.sso-provider-toggle {
 		display: flex;
 		gap: 0.5rem;
-	}
-
-	.sso-provider-btn {
-		padding: 0.5rem 1rem;
-		font-size: 0.8rem;
-		font-weight: 500;
-		border-radius: 0.375rem;
-		cursor: pointer;
-		transition: all 120ms ease;
-		background: transparent;
-		border: 1px solid var(--surface-border);
-		color: var(--surface-muted);
-	}
-
-	.sso-provider-active {
-		background: var(--button-bg);
-		color: var(--button-color);
-		border-color: var(--button-bg);
-	}
-
-	.sso-field {
-		display: flex;
-		flex-direction: column;
-		gap: 0.25rem;
-	}
-
-	.sso-field-label {
-		font-size: 0.75rem;
-		font-weight: 500;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--surface-muted);
 	}
 
 	.sso-toggle-row {
@@ -633,10 +519,18 @@
 		gap: 1rem;
 	}
 
+	.sso-color-col {
+		flex: 1;
+	}
+
 	.sso-color-input {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
+	}
+
+	.sso-color-input :global(.sso-color-text) {
+		flex: 1;
 	}
 
 	.sso-color-input input[type='color'] {

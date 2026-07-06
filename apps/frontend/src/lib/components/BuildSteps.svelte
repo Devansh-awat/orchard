@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { ChevronRight, Check, X, Loader2, Database, Info } from 'lucide-svelte';
 	import {
-		parseBuildkitLogs,
+		createBuildkitParser,
 		formatDuration,
 		formatTimestamp,
 		buildSummary,
@@ -21,7 +21,8 @@
 
 	let { logs, showMessages = true, fill = false }: Props = $props();
 
-	const parsed = $derived<ParsedBuildLogs>(parseBuildkitLogs(logs));
+	const parseIncremental = createBuildkitParser();
+	const parsed = $derived<ParsedBuildLogs>(parseIncremental(logs));
 	const summary = $derived(buildSummary(parsed));
 
 	let filter = $state('');
@@ -31,6 +32,16 @@
 	function toggle(id: string) {
 		expanded[id] = !expanded[id];
 	}
+
+	const autoExpanded = new Set<string>();
+	$effect(() => {
+		for (const step of parsed.steps) {
+			if (step.status === 'error' && !autoExpanded.has(step.id)) {
+				autoExpanded.add(step.id);
+				if (step.output.length > 0 || step.error) expanded[step.id] = true;
+			}
+		}
+	});
 
 	const filteredSteps = $derived.by(() => {
 		const q = filter.trim().toLowerCase();
@@ -172,7 +183,7 @@
 					System messages ({parsed.messages.length})
 				</summary>
 				<div class="bs-messages-list">
-					{#each parsed.messages as msg}
+					{#each parsed.messages as msg, i (i)}
 						<div class="bs-message bs-message-{msg.level.toLowerCase()}">
 							{#if msg.timestamp}
 								<span class="bs-timestamp">{formatTimestamp(msg.timestamp)}</span>

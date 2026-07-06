@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Loader2, MemoryStick } from 'lucide-svelte';
+	import { Loader2, MemoryStick, TriangleAlert } from 'lucide-svelte';
 	import {
 		Activity,
 		Boxes,
@@ -12,8 +12,9 @@
 		Trash2,
 		X
 	} from '@jis3r/icons';
-	import { formatCpu, formatMemory, formatRelativeTime, ansiToHtml } from '$lib/utils/format';
-	import { motionPopover } from '$lib/utils/motion.svelte';
+	import { formatCpu, formatMemory, formatRelativeTime, ansiToHtmlLines } from '$lib/utils/format';
+	import { Button, Menu, MenuItem } from '$lib/components/ui';
+	import { ArrowDown } from 'lucide-svelte';
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
 	import type { Pod, TerminalTabInfo } from '$lib/types/deployment';
 
@@ -25,6 +26,7 @@
 		scaleReplicas = $bindable(),
 		logs,
 		logsLoading,
+		logsError = null,
 		loadingMoreLogs,
 		logsAtMax,
 		tailLines,
@@ -40,22 +42,20 @@
 		deletingPod,
 		activeConsoleTab = $bindable(),
 		terminalTabs = $bindable(),
-		showNewShellMenu = $bindable(),
-		showNewShellMenuRender = $bindable(),
-		showLogsPodMenu = $bindable(),
-		showLogsPodMenuRender = $bindable(),
 		onFetchLogs,
+		liveLogs = false,
+		onToggleLiveLogs,
 		showPreviousLogs,
 		selectedContainerHasPrevious,
 		onTogglePreviousLogs,
 		onScaleDeployment,
 		onDeletePod,
 		onToggleConsoleExpand,
-		onHandleNewShell,
 		onOpenShell,
 		onCloseTerminalTab,
 		onSelectLogsPod,
 		onLogsScroll,
+		logsScrolledUp = false,
 		onPointerDown,
 		onPointerMove,
 		onPointerUp,
@@ -73,6 +73,7 @@
 		scaleReplicas: number;
 		logs: string;
 		logsLoading: boolean;
+		logsError?: string | null;
 		loadingMoreLogs: boolean;
 		logsAtMax: boolean;
 		tailLines: number;
@@ -88,22 +89,20 @@
 		deletingPod: string | null;
 		activeConsoleTab: string;
 		terminalTabs: TerminalTabInfo[];
-		showNewShellMenu: boolean;
-		showNewShellMenuRender: boolean;
-		showLogsPodMenu: boolean;
-		showLogsPodMenuRender: boolean;
 		onFetchLogs: () => void;
+		liveLogs?: boolean;
+		onToggleLiveLogs?: () => void;
 		showPreviousLogs: boolean;
 		selectedContainerHasPrevious: boolean;
 		onTogglePreviousLogs: () => void;
 		onScaleDeployment: () => void;
 		onDeletePod: (podName: string) => void;
 		onToggleConsoleExpand: () => void;
-		onHandleNewShell: () => void;
 		onOpenShell: (podName: string, container: string) => void;
 		onCloseTerminalTab: (id: string) => void;
 		onSelectLogsPod: (podName: string, containerName?: string) => void;
 		onLogsScroll: (e: Event) => void;
+		logsScrolledUp?: boolean;
 		onPointerDown: (e: PointerEvent) => void;
 		onPointerMove: (e: PointerEvent) => void;
 		onPointerUp: (e: PointerEvent) => void;
@@ -116,6 +115,38 @@
 	} = $props();
 
 	const LOG_MAX_LINES = 50_000;
+
+	const logLines = $derived.by(() => {
+		if (!logs) return [] as { key: string; html: string }[];
+		const seen = new Map<string, number>();
+		return ansiToHtmlLines(logs).map((html) => {
+			const n = seen.get(html) ?? 0;
+			seen.set(html, n + 1);
+			return { key: n ? `${html}#${n}` : html, html };
+		});
+	});
+
+	let newLogsWhileScrolled = $state(false);
+	let prevLogLineCount = 0;
+	$effect(() => {
+		const count = logLines.length;
+		if (count > prevLogLineCount && logsScrolledUp) newLogsWhileScrolled = true;
+		if (!logsScrolledUp) newLogsWhileScrolled = false;
+		prevLogLineCount = count;
+	});
+
+	function jumpToLatest() {
+		newLogsWhileScrolled = false;
+		if (logsOutputRef) {
+			logsOutputRef.scrollTo({ top: logsOutputRef.scrollHeight, behavior: 'smooth' });
+		}
+	}
+
+	const shellCombos = $derived(
+		((deployment.pods ?? []) as Pod[]).flatMap((pod) =>
+			(pod.containers ?? []).map((c) => ({ podName: pod.name, container: c.name }))
+		)
+	);
 
 	function podTermination(pod: Pod): { reason: string; exitCode?: number | null } | null {
 		for (const c of pod.containers ?? []) {
@@ -148,16 +179,16 @@
 				<div class="console-toolbar-left">
 					<!-- Logs tab with source picker -->
 					<button
-						class="console-tab-btn"
-						class:console-tab-btn--active={activeConsoleTab === 'logs'}
+						class="console-btn"
+						class:console-btn--active={activeConsoleTab === 'logs'}
 						onclick={() => (activeConsoleTab = 'logs')}>Logs</button
 					>
 
 					<!-- Terminal tabs -->
 					{#each terminalTabs as ttab (ttab.id)}
 						<button
-							class="console-tab-btn"
-							class:console-tab-btn--active={activeConsoleTab === ttab.id}
+							class="console-btn"
+							class:console-btn--active={activeConsoleTab === ttab.id}
 							onclick={() => (activeConsoleTab = ttab.id)}
 						>
 							{ttab.label}
@@ -184,56 +215,39 @@
 
 				<div class="console-toolbar-right">
 					{#if activeConsoleTab === 'logs'}
-						<!-- Pod / container picker -->
-						<div class="relative custom-dropdown-container">
-							<button
-								class="console-source-btn"
-								onclick={() => (showLogsPodMenu = !showLogsPodMenu)}
-							>
-								<Boxes size={12} class="h-3 w-3 opacity-40" />
-								<span
-									>{podLabel(selectedPod)}{selectedContainer ? ` / ${selectedContainer}` : ''}</span
-								>
-								<ChevronDown size={10} class="h-2.5 w-2.5 opacity-40" />
-							</button>
-							{#if showLogsPodMenuRender}
-								<div
-									class="console-compact-menu"
-									style="transform-origin: top left;"
-									{@attach motionPopover({
-										closing: () => !showLogsPodMenu,
-										onClosed: () => {
-											showLogsPodMenuRender = false;
-										},
-										from: { y: -4, scale: 0.96, opacity: 0 }
-									})}
-								>
-									{#each deployment.pods ?? [] as pod}
-										{#each pod.containers ?? [] as cont}
-											<button
-												type="button"
-												onclick={() => onSelectLogsPod(pod.name, cont.name)}
-												class="console-compact-item"
-												class:console-compact-item--active={selectedPod === pod.name &&
-													selectedContainer === cont.name}
-											>
-												<Boxes size={10} class="h-2.5 w-2.5 shrink-0 opacity-30" />
-												{podLabel(pod.name)}<span class="console-compact-sep">/</span><span
-													class="console-compact-hl">{cont.name}</span
-												>
-											</button>
-										{/each}
-									{/each}
-								</div>
-							{/if}
-						</div>
+						<Menu placement="bottom-end">
+							{#snippet trigger(attrs, _open)}
+								<button class="console-btn" {...attrs}>
+									<Boxes size={12} class="h-3 w-3 opacity-40" />
+									<span
+										>{podLabel(selectedPod)}{selectedContainer
+											? ` / ${selectedContainer}`
+											: ''}</span
+									>
+									<ChevronDown size={10} class="h-2.5 w-2.5 opacity-40" />
+								</button>
+							{/snippet}
+							{#each deployment.pods ?? [] as pod (pod.name)}
+								{#each pod.containers ?? [] as cont (cont.name)}
+									<MenuItem onclick={() => onSelectLogsPod(pod.name, cont.name)}>
+										<Boxes size={14} class="shrink-0 opacity-40" />
+										<span
+											class:font-semibold={selectedPod === pod.name &&
+												selectedContainer === cont.name}>{podLabel(pod.name)} / {cont.name}</span
+										>
+									</MenuItem>
+								{/each}
+							{/each}
+						</Menu>
 
 						<button
 							onclick={onTogglePreviousLogs}
 							disabled={!selectedContainerHasPrevious && !showPreviousLogs}
-							class="console-source-btn {showPreviousLogs ? 'text-amber-500 font-semibold' : ''}"
+							class="console-btn"
+							class:console-btn--warn={showPreviousLogs}
+							class:console-btn--active={showPreviousLogs}
 							title={showPreviousLogs
-								? 'Showing logs from the previous (terminated) container — click for current'
+								? 'Showing logs from the previous (terminated) container. Click for current.'
 								: selectedContainerHasPrevious
 									? 'Show logs from the previous (terminated) container'
 									: 'No previous container logs available'}
@@ -244,56 +258,68 @@
 						<button
 							onclick={onFetchLogs}
 							disabled={logsLoading}
-							class="console-icon-btn"
+							class="console-btn console-btn--icon"
 							title="Refresh"
+							aria-label="Refresh logs"
 						>
 							{#if logsLoading}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw
 									size={14}
 									class="h-3.5 w-3.5"
 								/>{/if}
 						</button>
+
+						{#if onToggleLiveLogs}
+							<button
+								class="console-btn"
+								class:console-btn--live={liveLogs}
+								onclick={onToggleLiveLogs}
+								title={liveLogs ? 'Stop following new logs' : 'Follow new logs as they arrive'}
+							>
+								{#if liveLogs}
+									<span class="console-tail-dot"></span>
+								{/if}
+								Live
+							</button>
+						{/if}
 					{/if}
 
-					<!-- New shell -->
-					<div class="relative custom-dropdown-container">
-						<button class="console-action-btn" onclick={onHandleNewShell} title="Open shell in pod">
-							<Terminal size={12} class="h-3 w-3" />
-							Shell
-						</button>
-						{#if showNewShellMenuRender}
-							<div
-								class="console-compact-menu"
-								style="transform-origin: top left;"
-								{@attach motionPopover({
-									closing: () => !showNewShellMenu,
-									onClosed: () => {
-										showNewShellMenuRender = false;
-									},
-									from: { y: -4, scale: 0.96, opacity: 0 }
-								})}
+					<Menu placement="bottom-end">
+						{#snippet trigger(attrs, _open)}
+							<button
+								class="console-btn console-btn--outline"
+								title={shellCombos.length === 0
+									? 'No running containers to open a shell in'
+									: 'Open shell in pod'}
+								disabled={shellCombos.length === 0}
+								{...attrs}
+								onclick={(e: MouseEvent) => {
+									if (shellCombos.length === 0) return;
+									if (shellCombos.length === 1) {
+										onOpenShell(shellCombos[0].podName, shellCombos[0].container);
+										return;
+									}
+									(attrs as { onclick?: (e: Event) => void }).onclick?.(e);
+								}}
 							>
-								{#each deployment.pods ?? [] as pod}
-									{#each pod.containers ?? [] as cont}
-										<button
-											type="button"
-											onclick={() => onOpenShell(pod.name, cont.name)}
-											class="console-compact-item"
-										>
-											<Terminal size={10} class="h-2.5 w-2.5 shrink-0 opacity-40" />
-											{podLabel(pod.name)}<span class="console-compact-sep">/</span><span
-												class="console-compact-hl">{cont.name}</span
-											>
-										</button>
-									{/each}
-								{/each}
-							</div>
-						{/if}
-					</div>
+								<Terminal size={12} class="h-3 w-3" />
+								Shell
+							</button>
+						{/snippet}
+						{#each deployment.pods ?? [] as pod (pod.name)}
+							{#each pod.containers ?? [] as cont (cont.name)}
+								<MenuItem onclick={() => onOpenShell(pod.name, cont.name)}>
+									<Terminal size={14} class="shrink-0 opacity-40" />
+									{podLabel(pod.name)} / {cont.name}
+								</MenuItem>
+							{/each}
+						{/each}
+					</Menu>
 
 					<button
 						onclick={onToggleConsoleExpand}
-						class="console-icon-btn"
+						class="console-btn console-btn--icon"
 						title={consoleExpanded ? 'Collapse' : 'Expand'}
+						aria-label={consoleExpanded ? 'Collapse console' : 'Expand console'}
 					>
 						{#if consoleExpanded}<Minimize2 size={14} class="h-3.5 w-3.5" />{:else}<Maximize2
 								size={14}
@@ -318,9 +344,20 @@
 							onscroll={onLogsScroll}>{#if loadingMoreLogs}<div class="logs-loading-more"><Loader2
 										class="h-3 w-3 animate-spin"
 									/> Loading earlier logs…</div>{:else if logsAtMax || tailLines >= LOG_MAX_LINES}<div
-									class="logs-loading-more logs-loading-more--end">— start of available logs —</div>{/if}{@html ansiToHtml(
-								logs
-							)}</pre>
+									class="logs-loading-more logs-loading-more--end">Start of available logs</div>{/if}{#each logLines as line (line.key)}<span
+									class="console-line"
+									><!-- eslint-disable-line svelte/no-at-html-tags -->{@html line.html}</span
+								>{/each}</pre>
+						{#if newLogsWhileScrolled}
+							<button type="button" class="console-newlogs" onclick={jumpToLatest}>
+								<ArrowDown size={12} /> New logs
+							</button>
+						{/if}
+					{:else if logsError}
+						<div class="console-empty">
+							<TriangleAlert class="h-4 w-4" style="color: var(--error-text-color);" />
+							<span style="color: var(--error-text-color);">{logsError}</span>
+						</div>
 					{:else}
 						<div class="console-empty">
 							<Terminal size={16} class="h-4 w-4 opacity-30" />
@@ -346,7 +383,7 @@
 		<!-- Resource stats as compact cards. Charts moved to the Metrics tab. -->
 		<div class="stat-card">
 			<div class="stat-card-header">
-				<Cpu size={14} class="h-3.5 w-3.5" style="color: #b33346;" />
+				<Cpu size={14} class="h-3.5 w-3.5" style="color: var(--color-primary-600);" />
 				<span class="stat-card-label">CPU</span>
 				<button
 					class="stat-card-expand"
@@ -362,7 +399,7 @@
 
 		<div class="stat-card">
 			<div class="stat-card-header">
-				<MemoryStick class="h-3.5 w-3.5" style="color: #e87485;" />
+				<MemoryStick class="h-3.5 w-3.5" style="color: var(--color-primary-400);" />
 				<span class="stat-card-label">Memory</span>
 				<button
 					class="stat-card-expand"
@@ -429,14 +466,15 @@
 					class="flex items-center justify-end pt-2.5 mt-2.5 border-t"
 					style="border-color: var(--surface-border);"
 				>
-					<button
+					<Button
+						variant="primary"
+						size="sm"
+						class="w-full"
+						loading={scaling}
 						onclick={onScaleDeployment}
-						disabled={scaling}
-						class="btn btn-primary btn-sm w-full"
 					>
-						{#if scaling}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
 						Scale to {scaleReplicas}
-					</button>
+					</Button>
 				</div>
 			{/if}
 
@@ -456,13 +494,17 @@
 					</div>
 					<div class="flex gap-2.5 text-[11px]" style="color: var(--surface-muted);">
 						<span class="inline-flex items-center gap-1"
-							><span class="h-1.5 w-1.5 rounded-full bg-green-500"></span>{activePods.filter(
-								(pod) => pod.status?.toLowerCase() === 'ready'
-							).length} ready</span
+							><span
+								class="h-1.5 w-1.5 rounded-full"
+								style="background-color: var(--online-indicator);"
+							></span>{activePods.filter((pod) => pod.status?.toLowerCase() === 'ready').length} ready</span
 						>
 						{#if activePods.filter((pod) => !['ready'].includes(pod.status?.toLowerCase() ?? '')).length > 0}
 							<span class="inline-flex items-center gap-1"
-								><span class="h-1.5 w-1.5 rounded-full bg-yellow-500"></span>{activePods.filter(
+								><span
+									class="h-1.5 w-1.5 rounded-full"
+									style="background-color: var(--away-indicator);"
+								></span>{activePods.filter(
 									(pod) => !['ready'].includes(pod.status?.toLowerCase() ?? '')
 								).length} other</span
 							>
@@ -471,7 +513,7 @@
 				</div>
 				{#if activePods.length}
 					<div class="space-y-1 overview-pods-scroll">
-						{#each activePods as pod}
+						{#each activePods as pod (pod.name)}
 							{@const term = podTermination(pod)}
 							<div class="console-pod-row-wrap">
 								<button
@@ -484,14 +526,14 @@
 								>
 									<div class="flex items-center gap-2 min-w-0">
 										<span
-											class="h-1.5 w-1.5 rounded-full shrink-0 {pod.status?.toLowerCase() ===
-											'ready'
-												? 'bg-green-500'
+											class="h-1.5 w-1.5 rounded-full shrink-0"
+											style="background-color: {pod.status?.toLowerCase() === 'ready'
+												? 'var(--online-indicator)'
 												: ['crashing', 'failed', 'error'].includes(pod.status?.toLowerCase() ?? '')
-													? 'bg-red-500'
+													? 'var(--error-text-color)'
 													: pod.status?.toLowerCase() === 'scheduled'
-														? 'bg-yellow-500'
-														: 'bg-gray-400'}"
+														? 'var(--away-indicator)'
+														: 'var(--surface-muted)'};"
 										></span>
 										<span class="font-mono text-xs truncate">{podLabel(pod.name)}</span>
 									</div>
@@ -503,14 +545,16 @@
 											>{/if}
 										{#if term}
 											<span
-												class="badge text-[9px] px-1 py-0.5 bg-red-500/15 text-red-500"
+												class="badge text-[9px] px-1 py-0.5"
+												style="background-color: color-mix(in srgb, var(--error-text-color) 15%, transparent); color: var(--error-text-color);"
 												title="Last terminated: {term.reason}{term.exitCode != null
 													? ` (exit ${term.exitCode})`
 													: ''}">{term.reason}</span
 											>
 										{:else if (pod.restartCount ?? 0) > 0}
 											<span
-												class="badge text-[9px] px-1 py-0.5 bg-yellow-500/15 text-yellow-600"
+												class="badge text-[9px] px-1 py-0.5"
+												style="background-color: color-mix(in srgb, var(--away-indicator) 15%, transparent); color: var(--away-indicator);"
 												title="{pod.restartCount} restart(s)">↻ {pod.restartCount}</span
 											>
 										{/if}

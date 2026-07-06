@@ -77,7 +77,7 @@
 				</tr>
 			</thead>
 			<tbody>
-				{#each rows as r}
+				{#each rows as r (r.organization.id)}
 					<tr
 						class="border-t cursor-pointer hover:bg-[var(--control-bg)]"
 						style="border-color: var(--surface-border);"
@@ -93,7 +93,7 @@
 						<tr style="background-color: var(--control-bg);">
 							<td colspan="5" class="px-4 py-3">
 								<div class="space-y-1">
-									{#each r.byNode as n}
+									{#each r.byNode as n (n.nodeName)}
 										<div class="flex items-center justify-between text-xs">
 											<span class="font-mono">{n.nodeName}</span>
 											<span style="color: var(--surface-muted);">

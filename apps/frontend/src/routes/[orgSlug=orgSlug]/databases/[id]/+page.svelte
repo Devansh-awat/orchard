@@ -3,13 +3,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import {
-		apiFetch,
-		toasts,
-		refreshTree,
-		selectedOrganization,
-		subscribeOrgEvents
-	} from '$lib/stores';
+	import { apiFetch, toasts, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
 	import type { PageData } from './$types';
 	import {
 		Loader2,
@@ -21,16 +15,16 @@
 		Activity,
 		Cpu
 	} from 'lucide-svelte';
-	import { Tabs } from 'melt/builders';
+	import { TabBar, Skeleton } from '$lib/components/ui';
 	import DatabaseProvisioning from '$lib/components/DatabaseProvisioning.svelte';
+	import DeploymentMetrics from '$lib/components/DeploymentMetrics.svelte';
+	import ResourceLimits from '$lib/components/ResourceLimits.svelte';
 	import {
 		ConnectionTab,
 		BackupsTab,
 		TerminalTab,
 		ExtensionsTab,
 		SettingsTab,
-		MetricsTab,
-		ResourcesTab,
 		DatabaseHeader,
 		DeleteModal,
 		DatabaseAlerts
@@ -236,9 +230,12 @@
 		{ id: 'metrics', label: 'Metrics', icon: Activity },
 		{ id: 'resources', label: 'Resources', icon: Cpu },
 		{ id: 'settings', label: 'Settings', icon: SettingsIcon }
-	] as const;
-	type TabId = (typeof tabSections)[number]['id'];
-	const tabs = new Tabs<TabId>({ value: 'connection', loop: true });
+	];
+	let activeTab = $state('connection');
+	let terminalVisited = $state(false);
+	$effect(() => {
+		if (activeTab === 'terminal') terminalVisited = true;
+	});
 
 	// SSE
 	let dbSseUnsub: (() => void) | null = null;
@@ -274,7 +271,7 @@
 	// --- Effects ---
 	$effect(() => {
 		if (
-			tabs.value === 'extensions' &&
+			activeTab === 'extensions' &&
 			database?.mode === 'cnpg' &&
 			!extensionsLoaded &&
 			!extensionsLoading
@@ -282,20 +279,20 @@
 			fetchExtensions();
 		}
 		if (
-			tabs.value === 'settings' &&
+			activeTab === 'settings' &&
 			database?.mode === 'cnpg' &&
 			!settingsLoaded &&
 			!settingsLoading
 		) {
 			fetchSettings();
 		}
-		if (tabs.value === 'backups' && database?.mode === 'cnpg' && !scheduleLoaded) {
+		if (activeTab === 'backups' && database?.mode === 'cnpg' && !scheduleLoaded) {
 			fetchSchedule();
 		}
 	});
 
 	$effect(() => {
-		if (tabs.value === 'terminal' && activeConsoleTab === 'logs' && database?.pods?.[0]?.name) {
+		if (activeTab === 'terminal' && activeConsoleTab === 'logs' && database?.pods?.[0]?.name) {
 			fetchLogs();
 		}
 	});
@@ -348,7 +345,7 @@
 		} catch (e) {
 			toasts.add({
 				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed',
+				description: e instanceof Error ? e.message : 'Failed to update resources',
 				color: 'error'
 			});
 		} finally {
@@ -357,7 +354,7 @@
 	}
 
 	async function fetchBackups() {
-		backupsLoading = true;
+		if (!backups.length) backupsLoading = true;
 		try {
 			const response = await apiFetch(`/apiv1/databases/${dbId}/backups`);
 			if (!response.ok) return;
@@ -555,7 +552,7 @@
 
 	// Extensions
 	async function fetchExtensions() {
-		extensionsLoading = true;
+		if (!extensionsLoaded) extensionsLoading = true;
 		try {
 			const r = await apiFetch(`/apiv1/databases/${dbId}/extensions`);
 			if (r.ok) {
@@ -588,7 +585,7 @@
 				toasts.add({
 					title: `${name} installed`,
 					description: data.preloadAdded
-						? 'Added to shared_preload_libraries — restart required'
+						? 'Added to shared_preload_libraries. Restart required.'
 						: 'Extension is ready to use',
 					color: 'success'
 				});
@@ -627,7 +624,7 @@
 
 	// Settings
 	async function fetchSettings() {
-		settingsLoading = true;
+		if (!settingsLoaded) settingsLoading = true;
 		try {
 			const r = await apiFetch(`/apiv1/databases/${dbId}/settings`);
 			if (r.ok) {
@@ -691,7 +688,7 @@
 		if (!database?.namespace) return;
 		const pod = database.pods?.[0];
 		if (!pod?.name) return;
-		logsLoading = true;
+		if (!logs) logsLoading = true;
 		try {
 			const r = await apiFetch(
 				`/apiv1/pods/${pod.name}/logs?namespace=${database.namespace}&container=postgres&tailLines=${tailLines}`
@@ -781,7 +778,6 @@
 				description: `${database.name} has been deleted`,
 				color: 'success'
 			});
-			refreshTree();
 			const ws = database.project?.workspace;
 			if (ws) {
 				goto(`/${orgSlug}/workspaces/${ws.slug}/projects/${database.project!.slug}`);
@@ -881,16 +877,17 @@
 		fetchQuota();
 		const orgIdForSse = $selectedOrganization?.id;
 		if (orgIdForSse) {
-			dbSseUnsub = subscribeOrgEvents(
-				orgIdForSse,
-				(ev) => {
-					if (ev.id === dbId) {
-						fetchDatabase(true);
-						if (database?.backupsEnabled) fetchBackups();
+			dbSseUnsub = subscribeOrgEvents(orgIdForSse, (ev) => {
+				if (ev.id === dbId) {
+					fetchDatabase(true);
+					if (database?.backupsEnabled) fetchBackups();
+					if (ev.type === 'database.changed') {
+						if (extensionsLoaded) fetchExtensions();
+						if (scheduleLoaded) fetchSchedule();
+						if (settingsLoaded && !settingsDirty) fetchSettings();
 					}
-				},
-				{ invalidateDependencies: [] }
-			);
+				}
+			});
 		}
 		return () => {
 			dbSseUnsub?.();
@@ -901,23 +898,25 @@
 <div class="db-page">
 	{#if loading}
 		<div class="db-skeleton">
-			<div class="skeleton" style="width: 4rem; height: 0.875rem; margin-bottom: 1.5rem;"></div>
+			<div style="margin-bottom: 1.5rem;">
+				<Skeleton width="4rem" height="0.875rem" />
+			</div>
 			<div
 				style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 1.5rem;"
 			>
 				<div style="display: flex; align-items: center; gap: 0.75rem;">
-					<div class="skeleton" style="width: 2rem; height: 2rem; border-radius: 0.5rem;"></div>
-					<div class="skeleton" style="width: 10rem; height: 1.25rem;"></div>
-					<div class="skeleton" style="width: 3.5rem; height: 1rem; border-radius: 9999px;"></div>
+					<Skeleton width="2rem" height="2rem" />
+					<Skeleton width="10rem" height="1.25rem" />
+					<Skeleton width="3.5rem" height="1rem" rounded="9999px" />
 				</div>
-				<div class="skeleton" style="width: 5rem; height: 2rem; border-radius: 0.5rem;"></div>
+				<Skeleton width="5rem" height="2rem" />
 			</div>
 			<div style="display: flex; gap: 0.75rem; margin-bottom: 1.5rem;">
-				<div class="skeleton" style="flex: 1; height: 4rem; border-radius: 0.75rem;"></div>
-				<div class="skeleton" style="flex: 1; height: 4rem; border-radius: 0.75rem;"></div>
-				<div class="skeleton" style="flex: 1; height: 4rem; border-radius: 0.75rem;"></div>
+				<Skeleton height="4rem" rounded="0.75rem" class="flex-1" />
+				<Skeleton height="4rem" rounded="0.75rem" class="flex-1" />
+				<Skeleton height="4rem" rounded="0.75rem" class="flex-1" />
 			</div>
-			<div class="skeleton" style="width: 100%; height: 12rem; border-radius: 0.75rem;"></div>
+			<Skeleton height="12rem" rounded="0.75rem" />
 		</div>
 	{:else if error}
 		<div class="db-error">{error}</div>
@@ -944,10 +943,10 @@
 		<DatabaseAlerts
 			{database}
 			onGoToResources={() => {
-				tabs.value = 'resources';
+				activeTab = 'resources';
 			}}
 			onViewLogs={() => {
-				tabs.value = 'terminal';
+				activeTab = 'terminal';
 				activeConsoleTab = 'logs';
 			}}
 		/>
@@ -999,148 +998,135 @@
 				</div>
 			{/if}
 
-			<!-- Tab nav -->
-			<nav class="dep-tabs" {...tabs.triggerList}>
-				<div class="dep-tabs-inner">
-					{#each tabSections as tab}
-						{@const Icon = tab.icon}
-						<button class="tabs-trigger dep-tab" {...tabs.getTrigger(tab.id)}>
-							<Icon class="h-3.5 w-3.5" />
-							<span>{tab.label}</span>
-						</button>
-					{/each}
-				</div>
-			</nav>
+			<div class="db-tabs">
+				<TabBar tabs={tabSections} bind:value={activeTab} />
+			</div>
 
-			<!-- Connection tab -->
-			<section {...tabs.getContent('connection')} hidden={undefined} class="tab-panel">
-				<ConnectionTab
-					{database}
-					{orgSlug}
-					bind:copiedField
-					bind:showPassword
-					bind:showConnectionString
-					bind:showPublicConnectionString
-					{togglingPublic}
-					onEnablePublic={enablePublic}
-					onDisablePublic={disablePublic}
-					onCopy={copyToClipboard}
-				/>
-			</section>
-
-			<!-- Backups tab -->
-			<section {...tabs.getContent('backups')} hidden={undefined} class="tab-panel">
-				<BackupsTab
-					{database}
-					{orgSlug}
-					{backups}
-					{backupsLoading}
-					{creatingBackup}
-					{restoringBackupId}
-					bind:schedulePreset
-					bind:scheduleCustomCron
-					{scheduleCron}
-					{scheduleLoaded}
-					{scheduleSaving}
-					maxBackups={MAX_BACKUPS}
-					schedulePresets={[...SCHEDULE_PRESETS]}
-					onCreateBackup={createBackup}
-					onRestoreBackup={restoreBackup}
-					onSaveSchedule={saveSchedule}
-					{formatBytes}
-					{formatDate}
-				/>
-			</section>
-
-			<!-- Terminal tab -->
-			<section {...tabs.getContent('terminal')} hidden={undefined} class="tab-panel">
-				<TerminalTab
-					{database}
-					{logs}
-					{logsLoading}
-					bind:logsRef
-					bind:activeConsoleTab
-					bind:terminalTabs
-					bind:consoleExpanded
-					bind:tailLines
-					onFetchLogs={fetchLogs}
-					onOpenShellTab={openShellTab}
-					onCloseTerminalTab={closeTerminalTab}
-					{podShortName}
-				/>
-			</section>
-
-			<!-- Extensions tab -->
-			<section {...tabs.getContent('extensions')} hidden={undefined} class="tab-panel">
-				<ExtensionsTab
-					{database}
-					{filteredExtensions}
-					{preloadedExts}
-					{extensionsLoading}
-					bind:extensionSearch
-					{busyExtension}
-					onFetchExtensions={fetchExtensions}
-					onInstallExtension={installExtension}
-					onUninstallExtension={uninstallExtension}
-				/>
-			</section>
-
-			<!-- Metrics tab -->
-			<section {...tabs.getContent('metrics')} hidden={undefined} class="tab-panel">
-				{#if database?.mode !== 'shared'}
-					<div class="card rounded-2xl p-5">
-						<MetricsTab databaseId={database?.id ?? null} />
-					</div>
-				{:else}
-					<div class="db-empty-state">
-						<p>
-							Metrics are not available for shared databases. Create a dedicated (CNPG) database for
-							full metrics.
-						</p>
-					</div>
-				{/if}
-			</section>
-
-			<!-- Resources tab -->
-			<section {...tabs.getContent('resources')} hidden={undefined} class="tab-panel">
-				{#if database?.mode !== 'shared'}
-					<ResourcesTab
+			{#if activeTab === 'connection'}
+				<section class="tab-panel">
+					<ConnectionTab
 						{database}
-						bind:resourceCpuMilli
-						bind:resourceMemoryBytes
-						{orgDefaultCpuMilli}
-						{orgDefaultMemoryBytes}
-						{effectiveCpuLimit}
-						{effectiveMemLimit}
-						bind:resourcesDirty
-						{savingResources}
-						onSaveResources={saveResources}
+						{orgSlug}
+						bind:copiedField
+						bind:showPassword
+						bind:showConnectionString
+						bind:showPublicConnectionString
+						{togglingPublic}
+						onEnablePublic={enablePublic}
+						onDisablePublic={disablePublic}
+						onCopy={copyToClipboard}
 					/>
-				{:else}
-					<div class="db-empty-state">
-						<p>Resource configuration is not available for shared databases.</p>
-					</div>
-				{/if}
-			</section>
-
-			<!-- Settings tab -->
-			<section {...tabs.getContent('settings')} hidden={undefined} class="tab-panel">
-				<SettingsTab
-					{database}
-					paramSchema={PARAM_SCHEMA}
-					{settingsLoading}
-					{settingsLoaded}
-					{settingsSaving}
-					{settingsDirty}
-					onFetchSettings={() => {
-						settingsLoaded = false;
-						fetchSettings();
-					}}
-					onSaveSettings={saveSettings}
-					{paramValue}
-					{setParam}
-				/>
-			</section>
+				</section>
+			{:else if activeTab === 'backups'}
+				<section class="tab-panel">
+					<BackupsTab
+						{database}
+						{orgSlug}
+						{backups}
+						{backupsLoading}
+						{creatingBackup}
+						{restoringBackupId}
+						bind:schedulePreset
+						bind:scheduleCustomCron
+						{scheduleCron}
+						{scheduleLoaded}
+						{scheduleSaving}
+						maxBackups={MAX_BACKUPS}
+						schedulePresets={[...SCHEDULE_PRESETS]}
+						onCreateBackup={createBackup}
+						onRestoreBackup={restoreBackup}
+						onSaveSchedule={saveSchedule}
+						{formatBytes}
+						{formatDate}
+					/>
+				</section>
+			{:else if activeTab === 'extensions'}
+				<section class="tab-panel">
+					<ExtensionsTab
+						{database}
+						{filteredExtensions}
+						{preloadedExts}
+						{extensionsLoading}
+						bind:extensionSearch
+						{busyExtension}
+						onFetchExtensions={fetchExtensions}
+						onInstallExtension={installExtension}
+						onUninstallExtension={uninstallExtension}
+					/>
+				</section>
+			{:else if activeTab === 'metrics'}
+				<section class="tab-panel">
+					{#if database?.mode !== 'shared'}
+						<div class="card rounded-2xl p-5">
+							<DeploymentMetrics kind="database" id={database?.id ?? null} />
+						</div>
+					{:else}
+						<div class="db-empty-state">
+							<p>
+								Metrics are not available for shared databases. Create a dedicated (CNPG) database
+								for full metrics.
+							</p>
+						</div>
+					{/if}
+				</section>
+			{:else if activeTab === 'resources'}
+				<section class="tab-panel">
+					{#if database?.mode !== 'shared'}
+						<ResourceLimits
+							entity={database}
+							bind:resourceCpuMilli
+							bind:resourceMemoryBytes
+							{orgDefaultCpuMilli}
+							{orgDefaultMemoryBytes}
+							{effectiveCpuLimit}
+							{effectiveMemLimit}
+							bind:resourcesDirty
+							{savingResources}
+							onSaveResources={saveResources}
+						/>
+					{:else}
+						<div class="db-empty-state">
+							<p>Resource configuration is not available for shared databases.</p>
+						</div>
+					{/if}
+				</section>
+			{:else if activeTab === 'settings'}
+				<section class="tab-panel">
+					<SettingsTab
+						{database}
+						paramSchema={PARAM_SCHEMA}
+						{settingsLoading}
+						{settingsLoaded}
+						{settingsSaving}
+						{settingsDirty}
+						onFetchSettings={() => {
+							settingsLoaded = false;
+							fetchSettings();
+						}}
+						onSaveSettings={saveSettings}
+						{paramValue}
+						{setParam}
+					/>
+				</section>
+			{/if}
+			{#if terminalVisited}
+				<section class="tab-panel" hidden={activeTab !== 'terminal'}>
+					<TerminalTab
+						{database}
+						{logs}
+						{logsLoading}
+						bind:logsRef
+						bind:activeConsoleTab
+						bind:terminalTabs
+						bind:consoleExpanded
+						bind:tailLines
+						onFetchLogs={fetchLogs}
+						onOpenShellTab={openShellTab}
+						onCloseTerminalTab={closeTerminalTab}
+						{podShortName}
+					/>
+				</section>
+			{/if}
 		{/if}
 	{/if}
 </div>
@@ -1237,13 +1223,13 @@
 	}
 
 	.db-pod-dot-ready {
-		background-color: #22c55e;
-		box-shadow: 0 0 0 3px color-mix(in srgb, #22c55e 20%, transparent);
+		background-color: var(--online-indicator);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--online-indicator) 20%, transparent);
 	}
 
 	.db-pod-dot-pending {
-		background-color: #f59e0b;
-		box-shadow: 0 0 0 3px color-mix(in srgb, #f59e0b 20%, transparent);
+		background-color: var(--away-indicator);
+		box-shadow: 0 0 0 3px color-mix(in srgb, var(--away-indicator) 20%, transparent);
 	}
 
 	.db-pod-dot-error {
@@ -1257,67 +1243,12 @@
 		margin-top: 0.125rem;
 	}
 
-	.dep-tabs {
-		border-bottom: 1px solid color-mix(in srgb, var(--surface-border) 60%, transparent);
-		position: relative;
+	.db-tabs {
 		margin-bottom: 1.5rem;
 	}
 
-	.dep-tabs-inner {
-		display: flex;
-		gap: 0.125rem;
-		overflow-x: auto;
-		scrollbar-width: none;
-	}
-
-	.dep-tabs-inner::-webkit-scrollbar {
-		display: none;
-	}
-
-	.dep-tab {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.625rem 0.875rem;
-		font-size: 0.8125rem;
-		font-weight: 500;
-		white-space: nowrap;
-		border: none;
-		border-radius: 0;
-		background: transparent;
-		color: var(--surface-muted);
-		position: relative;
-		cursor: pointer;
-	}
-
-	.dep-tab:hover {
-		color: var(--center-channel-color);
-		background: transparent;
-	}
-
-	.dep-tab[data-active] {
-		color: var(--center-channel-color);
-		background: transparent;
-	}
-
-	.dep-tab[data-active]::after {
-		content: '';
-		position: absolute;
-		bottom: -1px;
-		left: 0.5rem;
-		right: 0.5rem;
-		height: 2px;
-		border-radius: 2px 2px 0 0;
-		background-color: var(--sidebar-text-active-border, var(--center-channel-color));
-	}
-
 	.tab-panel {
-		display: none;
 		color: var(--center-channel-color);
-	}
-
-	.tab-panel[data-active] {
-		display: block;
 		animation: tab-panel-in 260ms cubic-bezier(0.22, 1, 0.36, 1);
 	}
 

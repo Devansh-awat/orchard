@@ -10,8 +10,8 @@
 		isSuperAdmin
 	} from '$lib/stores';
 	import { queryClient } from '$lib/query';
-	import { overviewQueryOptions } from '$lib/queries/overview';
-	import { Plus, Star } from 'lucide-svelte';
+	import { overviewQueryOptions, buildsQueryOptions } from '$lib/queries/overview';
+	import { Plus, Star, ChevronDown } from 'lucide-svelte';
 	import { onDestroy, untrack } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
 	import { springHover, motionStagger } from '$lib/utils/motion.svelte';
@@ -49,6 +49,7 @@
 	let deployments = $state<DeploymentSummary[]>([]);
 	let databases = $state<DatabaseSummary[]>([]);
 	const projectMetas = new SvelteMap<string, ProjectMeta>();
+	const liveMetrics = new SvelteMap<string, { cpuMilli: number; memoryBytes: number }>();
 	let activeBuilds = $state<ActiveBuild[]>([]);
 	let recentBuilds = $state<RecentBuild[]>([]);
 	let sseStatusValue = $state<'connecting' | 'connected' | 'disconnected'>('connecting');
@@ -58,9 +59,21 @@
 		enabled: !!orgSlug,
 		refetchInterval: (() => {
 			const sseUp = sseStatusValue === 'connected';
-			if (activeBuilds.length > 0) return sseUp ? 8_000 : 3_000;
+			if (activeBuilds.length > 0) return sseUp ? 15_000 : 8_000;
 			if (!sseUp) return 10_000;
 			return 30_000;
+		})(),
+		refetchIntervalInBackground: true
+	}));
+
+	const buildsQuery = createQuery(() => ({
+		...buildsQueryOptions(orgSlug),
+		enabled: !!orgSlug,
+		refetchInterval: (() => {
+			const sseUp = sseStatusValue === 'connected';
+			if (activeBuilds.length > 0) return 5_000;
+			if (!sseUp) return 15_000;
+			return 60_000;
 		})(),
 		refetchIntervalInBackground: true
 	}));
@@ -156,7 +169,6 @@
 				// Only show loading skeleton on initial load, not background refetch
 				if (!lastDataRef) {
 					loading = true;
-					buildsLoading = true;
 				}
 				return;
 			}
@@ -164,7 +176,6 @@
 				const e = qError as any;
 				loadError = { status: e?.status ?? 0, message: e?.message ?? String(e) };
 				loading = false;
-				buildsLoading = false;
 				return;
 			}
 			if (!qData || qData === lastDataRef) return;
@@ -174,8 +185,6 @@
 			syncList(deployments, qData.deployments ?? []);
 			syncList(databases, qData.databases ?? []);
 			syncMap(projectMetas, qData.projects ?? []);
-			syncList(activeBuilds, qData.builds?.active ?? []);
-			syncList(recentBuilds, qData.builds?.recent ?? []);
 
 			const newOrgId = qData.organization?.id ?? null;
 			if (newOrgId && newOrgId !== orgId) orgId = newOrgId;
@@ -205,6 +214,25 @@
 			projOrder = mergeOrder(projOrder, projItems, (x) => x.t);
 
 			loading = false;
+		});
+	});
+
+	let lastBuildsRef: any = null;
+	$effect(() => {
+		const qData = buildsQuery.data;
+		const qPending = buildsQuery.isPending;
+		untrack(() => {
+			if (qPending) {
+				if (!lastBuildsRef) buildsLoading = true;
+				return;
+			}
+			if (!qData || qData === lastBuildsRef) {
+				buildsLoading = false;
+				return;
+			}
+			lastBuildsRef = qData;
+			syncList(activeBuilds, qData.active ?? []);
+			syncList(recentBuilds, qData.recent ?? []);
 			buildsLoading = false;
 		});
 	});
@@ -223,6 +251,7 @@
 				currentOrgRole = null;
 				isSyntheticMembership = false;
 				lastDataRef = null;
+				lastBuildsRef = null;
 				depOrder = [];
 				dbOrder = [];
 				projOrder = [];
@@ -231,6 +260,7 @@
 				activeBuilds.length = 0;
 				recentBuilds.length = 0;
 				projectMetas.clear();
+				liveMetrics.clear();
 			}
 			lastSlug = slug;
 		});
@@ -242,8 +272,10 @@
 	let unsub: (() => void) | null = null;
 	let sseOrgId: string | null = null;
 	// Builds emit a burst of SSE events; collapse them into one refetch per
-	// 2s window instead of refetching the full overview on every event.
+	// 2s window instead of refetching the full overview on every event. The
+	// builds feed is cheap, so it gets its own tight 400ms window.
 	let invalidateTimer: ReturnType<typeof setTimeout> | null = null;
+	let buildsInvalidateTimer: ReturnType<typeof setTimeout> | null = null;
 
 	$effect(() => {
 		const id = orgId;
@@ -253,18 +285,29 @@
 			sseOrgId = id;
 			unsub?.();
 			if (!id) return;
-			unsub = subscribeOrgEvents(
-				id,
-				(ev) => {
-					if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
-					if (invalidateTimer) return;
-					invalidateTimer = setTimeout(() => {
-						invalidateTimer = null;
-						queryClient.invalidateQueries({ queryKey: ['overview', slug] });
-					}, 2000);
-				},
-				{ invalidateDependencies: [] }
-			);
+			unsub = subscribeOrgEvents(id, (ev) => {
+				if (ev.type === 'deployment.metrics') {
+					if (ev.id && ev.payload) {
+						liveMetrics.set(ev.id, {
+							cpuMilli: ev.payload.totalCpuUsage ?? 0,
+							memoryBytes: ev.payload.totalMemoryUsage ?? 0
+						});
+					}
+					return;
+				}
+				if (ev.type === 'heartbeat') return;
+				if (ev.type === 'build.changed' && !buildsInvalidateTimer) {
+					buildsInvalidateTimer = setTimeout(() => {
+						buildsInvalidateTimer = null;
+						queryClient.invalidateQueries({ queryKey: ['builds', slug] });
+					}, 400);
+				}
+				if (invalidateTimer) return;
+				invalidateTimer = setTimeout(() => {
+					invalidateTimer = null;
+					queryClient.invalidateQueries({ queryKey: ['overview', slug] });
+				}, 2000);
+			});
 		});
 	});
 
@@ -283,6 +326,7 @@
 	onDestroy(() => {
 		unsub?.();
 		if (invalidateTimer) clearTimeout(invalidateTimer);
+		if (buildsInvalidateTimer) clearTimeout(buildsInvalidateTimer);
 	});
 
 	// ── Expand state (persisted) ──
@@ -323,12 +367,6 @@
 
 	// ── Filtering ──
 	let searchQuery = $state('');
-	let openMenuId = $state<string | null>(null);
-	let renderMenuId = $state<string | null>(null);
-	$effect(() => {
-		if (openMenuId !== null) renderMenuId = openMenuId;
-	});
-
 	const favouriteIds = new SvelteSet<string>();
 	$effect(() => {
 		const next = new Set($pinnedItems.filter((i) => i.type === 'deployment').map((i) => i.id));
@@ -416,24 +454,17 @@
 		return ordered;
 	});
 
-	// Pagination
-	const PROJECTS_PER_TAB = 10;
-	let projectTab = $state(0);
-	const totalProjectTabs = $derived(
-		Math.max(1, Math.ceil(projectGroups.length / PROJECTS_PER_TAB))
-	);
-	$effect(() => {
-		if (projectTab >= totalProjectTabs) projectTab = Math.max(0, totalProjectTabs - 1);
-	});
+	const PROJECTS_INITIAL = 12;
+	const PROJECTS_STEP = 24;
+	let visibleCount = $state(PROJECTS_INITIAL);
 	$effect(() => {
 		searchQuery;
 		untrack(() => {
-			projectTab = 0;
+			visibleCount = PROJECTS_INITIAL;
 		});
 	});
-	const visibleProjectGroups = $derived(
-		projectGroups.slice(projectTab * PROJECTS_PER_TAB, (projectTab + 1) * PROJECTS_PER_TAB)
-	);
+	const visibleProjectGroups = $derived(projectGroups.slice(0, visibleCount));
+	const hiddenProjectCount = $derived(Math.max(0, projectGroups.length - visibleCount));
 
 	// ── Actions ──
 	let failedFav = $state<Set<string>>(new Set());
@@ -451,15 +482,6 @@
 			href: `/${orgSlug}/deployments/${dep.id}`
 		});
 	}
-	function toggleMenu(id: string, e: Event) {
-		e.preventDefault();
-		e.stopPropagation();
-		openMenuId = openMenuId === id ? null : id;
-	}
-	function closeAll() {
-		openMenuId = null;
-	}
-
 	async function joinOrganization() {
 		if (!orgId || joiningOrg) return;
 		joiningOrg = true;
@@ -486,7 +508,6 @@
 	async function restart(dep: DeploymentSummary, e: Event) {
 		e.preventDefault();
 		e.stopPropagation();
-		openMenuId = null;
 		try {
 			const r = await apiFetch(`/apiv1/deployments/${dep.id}/restart`, { method: 'POST' });
 			if (r.ok) {
@@ -500,7 +521,6 @@
 	function cpUrl(dep: DeploymentSummary, e: Event) {
 		e.preventDefault();
 		e.stopPropagation();
-		openMenuId = null;
 		if (dep.ingresses.length) {
 			navigator.clipboard.writeText(`https://${dep.ingresses[0].host.split('/')[0]}`);
 			toasts.add({ title: 'Copied', color: 'success' });
@@ -509,18 +529,15 @@
 	function visit(dep: DeploymentSummary, e: Event) {
 		e.preventDefault();
 		e.stopPropagation();
-		openMenuId = null;
 		if (dep.ingresses.length)
 			window.open(`https://${dep.ingresses[0].host.split('/')[0]}`, '_blank');
 	}
 </script>
 
-<svelte:window onclick={closeAll} />
-
 <div class="page">
 	<!-- Header -->
 	<header class="header" {@attach motionStagger({ index: 0, from: { y: -6 } })}>
-		<h1 class="title">Overview</h1>
+		<h1 class="title">Your Apps</h1>
 		<div style="display: flex; gap: 8px; align-items: center;">
 			{#if $isSuperAdmin && isSyntheticMembership}
 				<button
@@ -566,10 +583,8 @@
 										{orgSlug}
 										isFavourite={favouriteIds.has(dep.id)}
 										{failedFav}
-										{openMenuId}
-										{renderMenuId}
+										{liveMetrics}
 										onToggleFav={toggleFav}
-										onToggleMenu={toggleMenu}
 										onRestart={restart}
 										onCopyUrl={cpUrl}
 										onVisit={visit}
@@ -583,24 +598,6 @@
 
 				<!-- Project Groups -->
 				{#if projectGroups.length > 0}
-					{#if totalProjectTabs > 1}
-						<nav class="proj-tabs" aria-label="Project pages">
-							{#each Array(totalProjectTabs) as _, ti}
-								<button
-									type="button"
-									class="proj-tab"
-									class:proj-tab--active={projectTab === ti}
-									onclick={() => (projectTab = ti)}
-									aria-current={projectTab === ti ? 'page' : undefined}
-								>
-									{ti * PROJECTS_PER_TAB + 1}–{Math.min(
-										(ti + 1) * PROJECTS_PER_TAB,
-										projectGroups.length
-									)}
-								</button>
-							{/each}
-						</nav>
-					{/if}
 					{#each visibleProjectGroups as group, gi (group.id)}
 						<section
 							class="section"
@@ -614,14 +611,12 @@
 								rendered={renderedProjectBodies.has(group.id)}
 								{favouriteIds}
 								{failedFav}
-								{openMenuId}
-								{renderMenuId}
+								{liveMetrics}
 								{projectBodyEls}
 								getRenderedProjectBodies={() => renderedProjectBodies}
 								setRenderedProjectBodies={(s) => (renderedProjectBodies = s)}
 								onToggleExpand={toggleExpand}
 								onToggleFav={toggleFav}
-								onToggleMenu={toggleMenu}
 								onRestart={restart}
 								onCopyUrl={cpUrl}
 								onVisit={visit}
@@ -629,6 +624,16 @@
 							/>
 						</section>
 					{/each}
+					{#if hiddenProjectCount > 0}
+						<button type="button" class="show-more" onclick={() => (visibleCount += PROJECTS_STEP)}>
+							<ChevronDown size={14} />
+							Show {Math.min(hiddenProjectCount, PROJECTS_STEP)} more
+							{hiddenProjectCount === 1 ? 'project' : 'projects'}
+							<span class="show-more-count"
+								>{visibleProjectGroups.length} of {projectGroups.length}</span
+							>
+						</button>
+					{/if}
 				{/if}
 				{#if filtered.length === 0 && filteredDbs.length === 0}
 					<p class="no-results">

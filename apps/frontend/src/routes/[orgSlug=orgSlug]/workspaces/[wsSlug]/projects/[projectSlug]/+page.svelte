@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
-	import { onMount } from 'svelte';
-	import { apiFetch, toasts, refreshTree } from '$lib/stores';
+	import { onDestroy, onMount } from 'svelte';
+	import { apiFetch, toasts, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
 	import { mergeAttrs } from 'melt';
 	import { SpatialMenu } from 'melt/builders';
 	import {
@@ -124,7 +124,7 @@
 	const projectSlug = $derived($page.params.projectSlug);
 
 	async function fetchProject() {
-		loading = true;
+		if (!project) loading = true;
 		error = null;
 
 		try {
@@ -221,7 +221,6 @@
 				color: 'success'
 			});
 
-			refreshTree();
 			goto(`/${orgSlug}/workspaces/${workspaceSlug}`);
 		} catch (e) {
 			toasts.add({
@@ -273,6 +272,30 @@
 		}
 	}
 
+	let unsub: (() => void) | null = null;
+	let subscribedOrgId: string | null = null;
+	let refreshTimer: ReturnType<typeof setTimeout> | null = null;
+
+	$effect(() => {
+		const id = $selectedOrganization?.id ?? null;
+		if (!id || id === subscribedOrgId) return;
+		subscribedOrgId = id;
+		unsub?.();
+		unsub = subscribeOrgEvents(id, (ev) => {
+			if (ev.type === 'deployment.metrics' || ev.type === 'heartbeat') return;
+			if (refreshTimer) return;
+			refreshTimer = setTimeout(() => {
+				refreshTimer = null;
+				fetchProject();
+			}, 2000);
+		});
+	});
+
+	onDestroy(() => {
+		unsub?.();
+		if (refreshTimer) clearTimeout(refreshTimer);
+	});
+
 	onMount(() => {
 		fetchProject();
 	});
@@ -313,7 +336,7 @@
 		</div>
 		<!-- Skeleton: Stats -->
 		<div class="pj-stats">
-			{#each Array(3) as _}
+			{#each Array(3) as _, i (i)}
 				<div class="skeleton" style="height: 1.75rem; width: 6rem; border-radius: 0.5rem;"></div>
 			{/each}
 		</div>
@@ -323,7 +346,7 @@
 		</div>
 		<!-- Skeleton: Deployment cards -->
 		<div class="pj-deployment-grid">
-			{#each Array(3) as _}
+			{#each Array(3) as _, i (i)}
 				<div class="pj-deployment-card" style="pointer-events: none;">
 					<div class="pj-deployment-card-top">
 						<div class="skeleton skeleton-icon"></div>
@@ -448,7 +471,7 @@
 			</div>
 		{:else if filteredDeployments.length}
 			<div class="pj-deployment-grid">
-				{#each filteredDeployments as deployment}
+				{#each filteredDeployments as deployment (deployment.id)}
 					{@const href = `/${orgSlug}/deployments/${deployment.id}`}
 					{@const item = deploymentMenu.getItem(deployment, {
 						onSelect: () => openDeployment(deployment.id)
@@ -518,7 +541,7 @@
 				</h2>
 			</div>
 			<div class="pj-deployment-grid">
-				{#each templateInstances as ti}
+				{#each templateInstances as ti (ti.id)}
 					<a href="/{orgSlug}/template-instances/{ti.id}" class="pj-deployment-card">
 						<div class="pj-deployment-card-top">
 							<div
@@ -601,6 +624,7 @@
 		bind:open={showDeleteModal}
 		title={`Delete "${project.name}"?`}
 		description="This will permanently <strong>delete this project</strong> and all its resources (apps, databases, ingresses). This cannot be undone."
+		html
 		confirmLabel="Delete Project"
 		onconfirm={deleteProject}
 		oncancel={() => {}}

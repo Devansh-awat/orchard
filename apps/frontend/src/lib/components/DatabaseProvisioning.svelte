@@ -109,13 +109,9 @@
 	$effect(() => {
 		const orgId = $selectedOrganization?.id;
 		if (!orgId) return;
-		return subscribeOrgEvents(
-			orgId,
-			(ev) => {
-				if (ev.type === 'database.changed' && ev.id === dbId) queueFetch();
-			},
-			{ invalidateDependencies: [] }
-		);
+		return subscribeOrgEvents(orgId, (ev) => {
+			if (ev.type === 'database.changed' && ev.id === dbId) queueFetch();
+		});
 	});
 
 	$effect(() => {
@@ -138,7 +134,7 @@
 			if (/unbound immediate persistentvolumeclaim/i.test(m)) {
 				return {
 					title: 'Waiting for storage to be ready',
-					hint: 'The Postgres pod is waiting on its PersistentVolumeClaim to bind. This usually resolves on its own once Longhorn provisions the volume — give it a few seconds.'
+					hint: 'The Postgres pod is waiting on its PersistentVolumeClaim to bind. This usually resolves on its own once Longhorn provisions the volume. Give it a few seconds.'
 				};
 			}
 			if (/insufficient (cpu|memory)/i.test(m)) {
@@ -155,7 +151,7 @@
 			}
 			return {
 				title: "Couldn't place the pod on any node",
-				hint: 'Kubernetes will retry — if it persists, capacity is exhausted or scheduling constraints are too strict.'
+				hint: 'Kubernetes will retry. If it persists, capacity is exhausted or scheduling constraints are too strict.'
 			};
 		}
 		if (
@@ -195,7 +191,7 @@
 		if (/secret.*not found|configmap.*not found/i.test(m)) {
 			return {
 				title: 'A referenced secret or config is missing',
-				hint: 'The cluster references an object that does not exist in this namespace yet — typically transient during create.'
+				hint: 'The cluster references an object that does not exist in this namespace yet. Usually transient during create.'
 			};
 		}
 		if (/dnsconfig|dns/i.test(m) && /fail/i.test(m)) {
@@ -289,7 +285,7 @@
 					{#if overallStatus === 'ready'}
 						Database is ready
 					{:else if overallStatus === 'failed'}
-						Provisioning failed — see details below
+						Provisioning failed. See details below
 					{:else if data?.hasImport}
 						Provisioning database & migrating data
 					{:else}
@@ -466,15 +462,15 @@
 		height: 2.25rem;
 		border-radius: 0.625rem;
 		background-color: color-mix(in srgb, var(--button-bg) 14%, transparent);
-		color: var(--button-bg, rgb(59, 130, 246));
+		color: var(--button-bg);
 	}
 	.prov-icon[data-status='ready'] {
-		background-color: rgba(34, 197, 94, 0.18);
-		color: rgb(34, 197, 94);
+		background-color: color-mix(in srgb, var(--online-indicator) 18%, transparent);
+		color: var(--online-indicator);
 	}
 	.prov-icon[data-status='failed'] {
-		background-color: rgba(239, 68, 68, 0.18);
-		color: rgb(239, 68, 68);
+		background-color: color-mix(in srgb, var(--error-text-color) 18%, transparent);
+		color: var(--error-text-color);
 	}
 
 	.prov-title {
@@ -512,11 +508,11 @@
 
 	.prov-bar-fill {
 		height: 100%;
-		background-color: var(--button-bg, rgb(59, 130, 246));
+		background-color: var(--button-bg);
 		transition: width 400ms ease;
 	}
 	.prov-bar-fill[data-failed='true'] {
-		background-color: rgb(239, 68, 68);
+		background-color: var(--error-text-color);
 	}
 
 	.prov-count {
@@ -538,8 +534,8 @@
 		color: var(--surface-muted);
 	}
 	.prov-error {
-		color: rgb(239, 68, 68);
-		border-color: rgba(239, 68, 68, 0.4);
+		color: var(--error-text-color);
+		border-color: color-mix(in srgb, var(--error-text-color) 40%, transparent);
 	}
 
 	.prov-steps {
@@ -565,7 +561,7 @@
 		background-color: color-mix(in srgb, var(--button-bg) 5%, transparent);
 	}
 	.prov-step-error {
-		background-color: color-mix(in srgb, rgb(239, 68, 68) 7%, transparent);
+		background-color: color-mix(in srgb, var(--error-text-color) 7%, transparent);
 	}
 
 	.prov-step-icon {
@@ -579,15 +575,15 @@
 		margin-top: 0.125rem;
 	}
 	.prov-step-icon[data-status='done'] {
-		background-color: rgb(34, 197, 94);
+		background-color: var(--online-indicator);
 		color: white;
 	}
 	.prov-step-icon[data-status='error'] {
-		background-color: rgb(239, 68, 68);
+		background-color: var(--error-text-color);
 		color: white;
 	}
 	.prov-step-icon[data-status='running'] {
-		color: var(--button-bg, rgb(59, 130, 246));
+		color: var(--button-bg);
 	}
 	.prov-step-icon[data-status='pending'] {
 		background-color: transparent;
@@ -625,8 +621,8 @@
 		word-break: break-word;
 	}
 	.prov-step-detail-error {
-		color: rgb(239, 68, 68);
-		background-color: rgba(239, 68, 68, 0.1);
+		color: var(--error-text-color);
+		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
 	}
 
 	.prov-panel {
@@ -636,7 +632,7 @@
 		overflow: hidden;
 	}
 	.prov-panel-warning {
-		border-color: color-mix(in srgb, rgb(245, 158, 11) 40%, var(--surface-border));
+		border-color: color-mix(in srgb, var(--away-indicator) 40%, var(--surface-border));
 	}
 
 	.prov-panel-header {
@@ -683,16 +679,16 @@
 		letter-spacing: 0.04em;
 	}
 	.prov-pill-done {
-		background-color: rgba(34, 197, 94, 0.18);
-		color: rgb(34, 197, 94);
+		background-color: color-mix(in srgb, var(--online-indicator) 18%, transparent);
+		color: var(--online-indicator);
 	}
 	.prov-pill-running {
 		background-color: color-mix(in srgb, var(--button-bg) 18%, transparent);
-		color: var(--button-bg, rgb(59, 130, 246));
+		color: var(--button-bg);
 	}
 	.prov-pill-error {
-		background-color: rgba(239, 68, 68, 0.18);
-		color: rgb(239, 68, 68);
+		background-color: color-mix(in srgb, var(--error-text-color) 18%, transparent);
+		color: var(--error-text-color);
 	}
 
 	.prov-logs {
@@ -733,8 +729,8 @@
 		width: 1.75rem;
 		height: 1.75rem;
 		border-radius: 0.5rem;
-		background-color: rgba(245, 158, 11, 0.15);
-		color: rgb(245, 158, 11);
+		background-color: color-mix(in srgb, var(--away-indicator) 15%, transparent);
+		color: var(--away-indicator);
 		flex-shrink: 0;
 	}
 
@@ -768,8 +764,8 @@
 		font-size: 0.7rem;
 		padding: 0.05rem 0.4rem;
 		border-radius: 999px;
-		background-color: color-mix(in srgb, rgb(245, 158, 11) 18%, transparent);
-		color: rgb(245, 158, 11);
+		background-color: color-mix(in srgb, var(--away-indicator) 18%, transparent);
+		color: var(--away-indicator);
 		font-weight: 600;
 	}
 
@@ -820,6 +816,6 @@
 	}
 
 	:global(.prov-warn-head-icon) {
-		color: rgb(245, 158, 11);
+		color: var(--away-indicator);
 	}
 </style>

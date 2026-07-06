@@ -3,7 +3,6 @@
 	import { goto } from '$app/navigation';
 	import { apiFetch, toasts, buildBasePath } from '$lib/stores';
 	import {
-		Loader2,
 		LayoutTemplate,
 		Plus,
 		Trash2,
@@ -13,6 +12,7 @@
 		ChevronUp
 	} from 'lucide-svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
+	import { Button, Field, Input, Select } from '$lib/components/ui';
 
 	type ParamType = 'string' | 'number' | 'boolean' | 'select';
 	type ResourceType = 'deployment' | 'database' | 'ingress';
@@ -421,14 +421,14 @@ resources:
 		crumbs={[
 			{ label: 'Home', href: `/${orgSlug}` },
 			{ label: 'Templates', href: `${basePath}/templates` },
-			{ label: 'New Template' }
+			{ label: 'New template' }
 		]}
 	/>
 
 	<div class="nt-header">
 		<LayoutTemplate class="h-6 w-6" style="color: var(--sidebar-text-active-border)" />
 		<div>
-			<h1 class="nt-title">New Template</h1>
+			<h1 class="nt-title">New template</h1>
 			<p class="nt-subtitle">Create a reusable application stack template</p>
 		</div>
 	</div>
@@ -437,11 +437,11 @@ resources:
 	<div class="nt-mode-toggle">
 		<button class="nt-mode-btn" class:nt-mode-active={mode === 'visual'} onclick={switchToVisual}>
 			<SlidersHorizontal class="h-4 w-4" />
-			Visual Editor
+			Visual editor
 		</button>
 		<button class="nt-mode-btn" class:nt-mode-active={mode === 'yaml'} onclick={switchToYaml}>
 			<Code class="h-4 w-4" />
-			YAML Editor
+			YAML editor
 		</button>
 	</div>
 
@@ -474,44 +474,23 @@ resources:
 			<section class="nt-section">
 				<h2 class="nt-section-title">Metadata</h2>
 				<div class="nt-grid-2">
-					<div class="nt-field">
-						<label for="meta-name" class="nt-label">Name <span class="nt-req">*</span></label>
-						<input
-							id="meta-name"
-							type="text"
-							class="nt-input"
-							bind:value={metaName}
-							placeholder="my-template"
-						/>
-						<p class="nt-hint">Unique identifier (lowercase, hyphens)</p>
-					</div>
-					<div class="nt-field">
-						<label for="meta-display" class="nt-label"
-							>Display Name <span class="nt-req">*</span></label
-						>
-						<input
-							id="meta-display"
-							type="text"
-							class="nt-input"
-							bind:value={metaDisplayName}
-							placeholder="My Template"
-						/>
-					</div>
+					<Field label="Name *" for="meta-name" hint="Unique identifier (lowercase, hyphens)">
+						<Input id="meta-name" bind:value={metaName} placeholder="my-template" />
+					</Field>
+					<Field label="Display name *" for="meta-display">
+						<Input id="meta-display" bind:value={metaDisplayName} placeholder="My Template" />
+					</Field>
 				</div>
-				<div class="nt-field">
-					<label for="meta-desc" class="nt-label">Description</label>
-					<input
+				<Field label="Description" for="meta-desc">
+					<Input
 						id="meta-desc"
-						type="text"
-						class="nt-input"
 						bind:value={metaDescription}
 						placeholder="What this template does"
 					/>
-				</div>
+				</Field>
 				<div class="nt-grid-3">
-					<div class="nt-field">
-						<label for="meta-icon" class="nt-label">Icon</label>
-						<select id="meta-icon" class="nt-input nt-select" bind:value={metaIcon}>
+					<Field label="Icon" for="meta-icon">
+						<Select id="meta-icon" bind:value={metaIcon}>
 							<option value="">None</option>
 							<option value="server">Server</option>
 							<option value="database">Database</option>
@@ -519,49 +498,38 @@ resources:
 							<option value="nodejs">Node.js</option>
 							<option value="wordpress">WordPress</option>
 							<option value="ghost">Ghost</option>
-						</select>
-					</div>
-					<div class="nt-field">
-						<label for="meta-cat" class="nt-label">Category</label>
-						<select id="meta-cat" class="nt-input nt-select" bind:value={metaCategory}>
+						</Select>
+					</Field>
+					<Field label="Category" for="meta-cat">
+						<Select id="meta-cat" bind:value={metaCategory}>
 							<option value="">None</option>
 							<option value="backend">Backend</option>
 							<option value="frontend">Frontend</option>
 							<option value="cms">CMS</option>
 							<option value="database">Database</option>
-						</select>
-					</div>
-					<div class="nt-field">
-						<label for="meta-version" class="nt-label">Version</label>
-						<input
-							id="meta-version"
-							type="text"
-							class="nt-input"
-							bind:value={metaVersion}
-							placeholder="1.0.0"
-						/>
-					</div>
+						</Select>
+					</Field>
+					<Field label="Version" for="meta-version">
+						<Input id="meta-version" bind:value={metaVersion} placeholder="1.0.0" />
+					</Field>
 				</div>
-				<div class="nt-field">
-					<label for="meta-tags" class="nt-label">Tags</label>
-					<input
+				<Field label="Tags" for="meta-tags">
+					<Input
 						id="meta-tags"
-						type="text"
-						class="nt-input"
 						bind:value={metaTags}
 						placeholder="nodejs, api, postgres (comma-separated)"
 					/>
-				</div>
+				</Field>
 			</section>
 
 			<!-- Parameters -->
 			<section class="nt-section">
 				<div class="nt-section-header">
 					<h2 class="nt-section-title">Parameters</h2>
-					<button class="nt-add-btn" onclick={addParameter}>
+					<Button variant="secondary" size="sm" onclick={addParameter}>
 						<Plus class="h-3.5 w-3.5" />
 						Add
-					</button>
+					</Button>
 				</div>
 				<p class="nt-section-desc">
 					Parameters let users customize the template at deploy time. Use <code
@@ -569,7 +537,7 @@ resources:
 					> to reference them in resources.
 				</p>
 
-				{#each parameters as param, i}
+				{#each parameters as param, i (i)}
 					<div class="nt-param-card">
 						<div class="nt-param-header">
 							<span class="nt-param-num">#{i + 1}</span>
@@ -585,12 +553,12 @@ resources:
 						</div>
 						<div class="nt-grid-2">
 							<div class="nt-field">
-								<label class="nt-label-sm">Display Name</label>
+								<label class="nt-label-sm">Display name</label>
 								<input
 									type="text"
 									class="nt-input nt-input-sm"
 									bind:value={param.displayName}
-									placeholder="Display Name"
+									placeholder="Display name"
 								/>
 							</div>
 							<div class="nt-field">
@@ -642,7 +610,7 @@ resources:
 						{#if param.type === 'string'}
 							<div class="nt-grid-2">
 								<div class="nt-field">
-									<label class="nt-label-sm">Validation Pattern</label>
+									<label class="nt-label-sm">Validation pattern</label>
 									<input
 										type="text"
 										class="nt-input nt-input-sm nt-input-mono"
@@ -651,7 +619,7 @@ resources:
 									/>
 								</div>
 								<div class="nt-field">
-									<label class="nt-label-sm">Validation Message</label>
+									<label class="nt-label-sm">Validation message</label>
 									<input
 										type="text"
 										class="nt-input nt-input-sm"
@@ -684,7 +652,7 @@ resources:
 						{:else if param.type === 'select'}
 							<div class="nt-options">
 								<label class="nt-label-sm">Options</label>
-								{#each param.options as opt, oi}
+								{#each param.options as opt, oi (oi)}
 									<div class="nt-option-row">
 										<input
 											type="text"
@@ -703,9 +671,9 @@ resources:
 										</button>
 									</div>
 								{/each}
-								<button class="nt-add-btn-sm" onclick={() => addOption(i)}>
-									<Plus class="h-3 w-3" /> Add Option
-								</button>
+								<Button variant="secondary" size="sm" onclick={() => addOption(i)}>
+									<Plus class="h-3 w-3" /> Add option
+								</Button>
 							</div>
 						{/if}
 					</div>
@@ -720,17 +688,17 @@ resources:
 			<section class="nt-section">
 				<div class="nt-section-header">
 					<h2 class="nt-section-title">Resources</h2>
-					<button class="nt-add-btn" onclick={addResource}>
+					<Button variant="secondary" size="sm" onclick={addResource}>
 						<Plus class="h-3.5 w-3.5" />
 						Add
-					</button>
+					</Button>
 				</div>
 				<p class="nt-section-desc">
 					Resources are created when deploying. Use <code>{'{{ resources.name.field }}'}</code> to reference
-					other resources. Order matters &mdash; resources can only reference resources listed above them.
+					other resources. Order matters: resources can only reference resources listed above them.
 				</p>
 
-				{#each resources as res, ri}
+				{#each resources as res, ri (ri)}
 					<div class="nt-res-card">
 						<div class="nt-res-header">
 							<button
@@ -769,7 +737,7 @@ resources:
 							<div class="nt-res-body">
 								{#if res.type === 'database'}
 									<div class="nt-field">
-										<label class="nt-label-sm">Database Name</label>
+										<label class="nt-label-sm">Database name</label>
 										<input
 											type="text"
 											class="nt-input nt-input-sm"
@@ -809,11 +777,11 @@ resources:
 									<div class="nt-sub-section">
 										<div class="nt-sub-header">
 											<span class="nt-label-sm">Ports</span>
-											<button class="nt-add-btn-sm" onclick={() => addPort(ri)}>
+											<Button variant="secondary" size="sm" onclick={() => addPort(ri)}>
 												<Plus class="h-3 w-3" /> Add
-											</button>
+											</Button>
 										</div>
-										{#each res.ports as port, pi}
+										{#each res.ports as port, pi (pi)}
 											<div class="nt-port-row">
 												<input
 													type="text"
@@ -847,12 +815,12 @@ resources:
 									<!-- Env vars -->
 									<div class="nt-sub-section">
 										<div class="nt-sub-header">
-											<span class="nt-label-sm">Environment Variables</span>
-											<button class="nt-add-btn-sm" onclick={() => addEnvVar(ri)}>
+											<span class="nt-label-sm">Environment variables</span>
+											<Button variant="secondary" size="sm" onclick={() => addEnvVar(ri)}>
 												<Plus class="h-3 w-3" /> Add
-											</button>
+											</Button>
 										</div>
-										{#each res.env as env, ei}
+										{#each res.env as env, ei (ei)}
 											<div class="nt-env-row">
 												<input
 													type="text"
@@ -891,7 +859,7 @@ resources:
 										<div class="nt-field nt-field-check" style="padding-top: 1.25rem">
 											<label class="nt-check-label">
 												<input type="checkbox" bind:checked={res.tlsEnabled} />
-												TLS Enabled
+												TLS enabled
 											</label>
 										</div>
 									</div>
@@ -900,11 +868,11 @@ resources:
 									<div class="nt-sub-section">
 										<div class="nt-sub-header">
 											<span class="nt-label-sm">Routes</span>
-											<button class="nt-add-btn-sm" onclick={() => addRoute(ri)}>
+											<Button variant="secondary" size="sm" onclick={() => addRoute(ri)}>
 												<Plus class="h-3 w-3" /> Add
-											</button>
+											</Button>
 										</div>
-										{#each res.routes as route, roi}
+										{#each res.routes as route, roi (roi)}
 											<div class="nt-route-row">
 												<input
 													type="text"
@@ -952,15 +920,10 @@ resources:
 
 	<!-- Actions -->
 	<div class="nt-actions">
-		<button class="nt-btn nt-btn-primary" onclick={save} disabled={saving}>
-			{#if saving}
-				<Loader2 class="h-4 w-4 animate-spin" />
-				Creating...
-			{:else}
-				<LayoutTemplate class="h-4 w-4" />
-				Create Template
-			{/if}
-		</button>
+		<Button variant="primary" onclick={save} loading={saving}>
+			{#if !saving}<LayoutTemplate class="h-4 w-4" />{/if}
+			Create template
+		</Button>
 	</div>
 </div>
 
@@ -969,23 +932,6 @@ resources:
 		max-width: 48rem;
 		margin: 0 auto;
 		padding: 2.5rem 2.5rem 4rem;
-	}
-
-	.nt-back {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		font-size: 0.8125rem;
-		color: var(--surface-muted);
-		background: none;
-		border: none;
-		cursor: pointer;
-		padding: 0;
-		margin-bottom: 1.5rem;
-		transition: color 0.15s;
-	}
-	.nt-back:hover {
-		color: var(--center-channel-color);
 	}
 
 	.nt-header {
@@ -1035,7 +981,7 @@ resources:
 	}
 	.nt-mode-active {
 		background-color: var(--sidebar-text-active-border);
-		color: #fff;
+		color: var(--button-color);
 	}
 
 	.nt-error {
@@ -1140,18 +1086,10 @@ resources:
 	.nt-field-check {
 		justify-content: center;
 	}
-	.nt-label {
-		font-size: 0.8125rem;
-		font-weight: 500;
-		color: var(--surface-muted);
-	}
 	.nt-label-sm {
 		font-size: 0.75rem;
 		font-weight: 500;
 		color: var(--surface-muted);
-	}
-	.nt-req {
-		color: var(--error-text-color);
 	}
 	.nt-hint {
 		font-size: 0.6875rem;
@@ -1293,43 +1231,6 @@ resources:
 	}
 
 	/* Buttons */
-	.nt-add-btn {
-		display: flex;
-		align-items: center;
-		gap: 0.25rem;
-		padding: 0.3125rem 0.75rem;
-		border-radius: 0.375rem;
-		font-size: 0.75rem;
-		font-weight: 500;
-		border: 1px solid var(--surface-border);
-		background: transparent;
-		color: var(--center-channel-color);
-		cursor: pointer;
-		transition: all 0.15s;
-	}
-	.nt-add-btn:hover {
-		border-color: var(--sidebar-text-active-border);
-		color: var(--sidebar-text-active-border);
-	}
-
-	.nt-add-btn-sm {
-		display: flex;
-		align-items: center;
-		gap: 0.25rem;
-		padding: 0.1875rem 0.5rem;
-		border-radius: 0.25rem;
-		font-size: 0.6875rem;
-		border: 1px dashed var(--surface-border);
-		background: transparent;
-		color: var(--surface-muted);
-		cursor: pointer;
-		transition: all 0.15s;
-	}
-	.nt-add-btn-sm:hover {
-		border-color: var(--sidebar-text-active-border);
-		color: var(--sidebar-text-active-border);
-	}
-
 	.nt-remove-btn {
 		display: flex;
 		align-items: center;
@@ -1400,35 +1301,5 @@ resources:
 		margin-top: 1.5rem;
 		padding-top: 1.25rem;
 		border-top: 1px solid var(--surface-border);
-	}
-	.nt-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.5rem 1.25rem;
-		border-radius: 0.5rem;
-		font-size: 0.875rem;
-		font-weight: 500;
-		border: none;
-		cursor: pointer;
-		transition: opacity 0.15s;
-	}
-	.nt-btn:disabled {
-		opacity: 0.5;
-		cursor: not-allowed;
-	}
-	.nt-btn-primary {
-		background-color: var(--sidebar-text-active-border);
-		color: #fff;
-		box-shadow:
-			0 1px 2px rgb(0 0 0 / 0.08),
-			0 1px 1px rgb(0 0 0 / 0.04);
-	}
-	.nt-btn-primary:hover:not(:disabled) {
-		opacity: 0.95;
-		transform: translateY(-0.5px);
-		box-shadow:
-			0 2px 4px rgb(0 0 0 / 0.08),
-			0 4px 12px rgb(0 0 0 / 0.06);
 	}
 </style>

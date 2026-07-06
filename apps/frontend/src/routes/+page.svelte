@@ -1,4 +1,5 @@
 <script lang="ts">
+	import './home-page.css';
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
@@ -657,7 +658,7 @@
 
 		{#if loading}
 			<div class="hp-stats">
-				{#each Array(4) as _}
+				{#each Array(4) as _, i (i)}
 					<div class="hp-stat">
 						<div class="skeleton" style="width: 2rem; height: 2rem; border-radius: 0.5rem;"></div>
 						<div class="hp-stat-info">
@@ -668,7 +669,7 @@
 				{/each}
 			</div>
 			<div class="hp-grid">
-				{#each Array(4) as _}
+				{#each Array(4) as _, i (i)}
 					<div class="hp-card hp-skeleton-card">
 						<div class="hp-card-top">
 							<div class="skeleton skeleton-icon"></div>
@@ -756,7 +757,7 @@
 					</div>
 				{:else if filteredWorkspaces.length}
 					<div class="hp-grid">
-						{#each filteredWorkspaces as workspace}
+						{#each filteredWorkspaces as workspace (workspace.id)}
 							<a
 								href={`/workspaces/${workspace.slug}`}
 								onclick={(event) => handleWorkspaceClick(event, workspace.slug)}

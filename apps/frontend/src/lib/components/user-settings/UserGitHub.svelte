@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { Loader2, Github, Building2, ExternalLink, TriangleAlert } from 'lucide-svelte';
 	import { Plus } from '@jis3r/icons';
+	import { Button, StatusPill } from '$lib/components/ui';
 	import SettingsSection from './SettingsSection.svelte';
-	import StatusPill from './StatusPill.svelte';
 	import IntegrationCard from './IntegrationCard.svelte';
 	import ConnectPrompt from './ConnectPrompt.svelte';
 
@@ -71,7 +71,7 @@
 						Reconnect to view repository access and deploy from your repositories.
 					</span>
 				</div>
-				<button type="button" class="ug-expired-btn" onclick={onLink}>Reconnect</button>
+				<Button variant="primary" size="sm" onclick={onLink}>Reconnect</Button>
 			</div>
 		{/if}
 
@@ -91,7 +91,7 @@
 
 				{#if githubInstallations.length > 0}
 					<div class="ug-install-list">
-						{#each githubInstallations as inst}
+						{#each githubInstallations as inst (inst.id)}
 							{@const isOrg = inst.accountType === 'Organization'}
 							{@const manageUrl = isOrg
 								? `https://github.com/organizations/${inst.accountLogin}/settings/installations/${inst.installationId}`
@@ -152,9 +152,9 @@
 		margin-top: 0.75rem;
 		padding: 0.75rem 0.875rem;
 		border-radius: 0.625rem;
-		border: 1px solid color-mix(in srgb, var(--warning, #ff8c37) 45%, transparent);
-		background-color: color-mix(in srgb, var(--warning, #ff8c37) 12%, transparent);
-		color: color-mix(in srgb, var(--warning, #ff8c37) 80%, var(--center-channel-color));
+		border: 1px solid color-mix(in srgb, var(--away-indicator) 45%, transparent);
+		background-color: color-mix(in srgb, var(--away-indicator) 12%, transparent);
+		color: color-mix(in srgb, var(--away-indicator) 80%, var(--center-channel-color));
 	}
 	.ug-expired-text {
 		flex: 1;
@@ -172,20 +172,8 @@
 		font-size: 0.6875rem;
 		color: var(--surface-muted);
 	}
-	.ug-expired-btn {
+	.ug-expired :global(.btn) {
 		flex-shrink: 0;
-		padding: 0.375rem 0.75rem;
-		border-radius: 0.5rem;
-		border: none;
-		font-size: 0.75rem;
-		font-weight: 600;
-		cursor: pointer;
-		background-color: var(--sidebar-text-active-border);
-		color: #fff;
-		transition: opacity 0.15s;
-	}
-	.ug-expired-btn:hover {
-		opacity: 0.9;
 	}
 	.ug-repos {
 		margin-top: 1rem;

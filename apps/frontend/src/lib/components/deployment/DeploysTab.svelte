@@ -14,6 +14,7 @@
 		// History
 		deployment,
 		rebuilding,
+		rollingBackId = null,
 		onRebuild,
 		onOpenLogModal,
 		onRollback,
@@ -31,6 +32,7 @@
 	}: {
 		deployment: any;
 		rebuilding: boolean;
+		rollingBackId?: string | null;
 		onRebuild: () => void;
 		onOpenLogModal: (id: string) => void;
 		onRollback: (image: string) => void;
@@ -54,6 +56,7 @@
 	<HistoryTab
 		{deployment}
 		{rebuilding}
+		{rollingBackId}
 		{onRebuild}
 		{onOpenLogModal}
 		{onRollback}
@@ -68,7 +71,7 @@
 					<Webhook class="h-4 w-4" />
 				</div>
 				<div class="dt-section-title-group">
-					<h3 class="dt-section-title">Webhook Triggers</h3>
+					<h3 class="dt-section-title">Webhook triggers</h3>
 				</div>
 				<svg
 					class="dt-chevron"
@@ -148,11 +151,6 @@
 		font-weight: 600;
 		margin: 0;
 		line-height: 1.3;
-	}
-	.dt-section-desc {
-		font-size: 0.6875rem;
-		color: var(--surface-muted);
-		margin: 0.0625rem 0 0;
 	}
 	.dt-chevron {
 		width: 1rem;

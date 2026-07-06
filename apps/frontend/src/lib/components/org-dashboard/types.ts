@@ -18,6 +18,11 @@ export interface DeploymentSummary {
 	};
 }
 
+export interface LiveMetricsEntry {
+	cpuMilli: number;
+	memoryBytes: number;
+}
+
 export interface DatabaseSummary {
 	id: string;
 	name: string;

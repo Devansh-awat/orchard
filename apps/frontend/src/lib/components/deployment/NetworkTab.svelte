@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Loader2, Lock, Shield, Check } from 'lucide-svelte';
 	import { ChevronDown, Copy, Plus, RefreshCw, Settings, Trash2, Wifi, X } from '@jis3r/icons';
+	import { Button, SectionCard, Select } from '$lib/components/ui';
 	import { slide } from 'svelte/transition';
 	import { env } from '$env/dynamic/public';
 	import type { Service, ServiceFormState, ServicePortForm } from '$lib/types/deployment';
@@ -153,10 +154,7 @@
 <div class="space-y-5">
 	<!-- Tailscale (gated behind early access flag) -->
 	{#if tailscaleFeatureEnabled}
-		<div class="card rounded-2xl p-5">
-			<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-				<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Tailscale</p>
-			</div>
+		<SectionCard title="Tailscale">
 			{#if deployment?.tailscaleExposed}
 				<div
 					class="rounded-xl"
@@ -198,7 +196,7 @@
 					</div>
 					{#if (tailscaleDns || tailscaleIp) && deployment.services?.length}
 						<div style="border-top: 1px solid var(--surface-border);">
-							{#each deployment.services as service}
+							{#each deployment.services as service (service.id)}
 								{@const tsHost = tailscaleDns || tailscaleIp}
 								{@const displayedPorts = service.ports?.length
 									? service.ports
@@ -209,7 +207,7 @@
 												protocol: service.protocol
 											}
 										]}
-								{#each displayedPorts as port}
+								{#each displayedPorts as port (`${port.targetPort}/${port.protocol ?? 'TCP'}`)}
 									{@const addr = `${tsHost}:${port.targetPort}`}
 									<div
 										class="flex items-center justify-between gap-2 px-4 py-2"
@@ -260,13 +258,11 @@
 					> to expose apps to your private network.
 				</p>
 			{/if}
-		</div>
+		</SectionCard>
 	{/if}
 
-	<!-- Ports -->
-	<div class="card rounded-2xl p-5">
-		<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-			<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Ports</p>
+	<SectionCard title="Ports">
+		{#snippet actions()}
 			<button
 				type="button"
 				class="btn btn-secondary btn-sm"
@@ -289,7 +285,7 @@
 					<span>Add</span>
 				{/if}
 			</button>
-		</div>
+		{/snippet}
 
 		{#if showServiceForm}
 			<div
@@ -352,7 +348,7 @@
 
 		<div class="space-y-2">
 			{#if deployment.services?.length}
-				{#each deployment.services as service}
+				{#each deployment.services as service (service.id)}
 					{@const displayedPorts =
 						service.ports && service.ports.length
 							? service.ports
@@ -365,7 +361,7 @@
 										nodePort: service.nodePort ?? null
 									}
 								]}
-					{#each displayedPorts as port, portIndex}
+					{#each displayedPorts as port, portIndex (port.id ?? `${port.targetPort}/${port.protocol ?? 'TCP'}`)}
 						<div
 							class="svc-port-row flex items-center gap-2 rounded-xl px-4 py-3"
 							class:svc-port-editing={serviceEditForms[service.id]}
@@ -484,7 +480,8 @@
 							{/if}
 							<button
 								type="button"
-								class="btn btn-ghost btn-sm text-red-500"
+								class="btn btn-ghost btn-sm"
+								style="color: var(--error-text-color);"
 								onclick={() => onDeleteService(service.id)}
 								disabled={serviceDeletingId === service.id}
 							>
@@ -524,12 +521,10 @@
 				</p>
 			{/if}
 		</div>
-	</div>
+	</SectionCard>
 
-	<!-- Domains -->
-	<div class="card rounded-2xl p-5">
-		<div class="flex flex-wrap items-center justify-between gap-3 mb-4">
-			<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Domains</p>
+	<SectionCard title="Domains">
+		{#snippet actions()}
 			{#if deployment.project?.id}
 				<button
 					type="button"
@@ -548,7 +543,7 @@
 					{/if}
 				</button>
 			{/if}
-		</div>
+		{/snippet}
 
 		{#if showDomainForm}
 			<div
@@ -582,11 +577,11 @@
 				{#if domainServiceOptions.length > 1}
 					<div class="mt-3">
 						<p class="text-xs mb-1" style="color: var(--surface-muted);">Forward to</p>
-						<select class="input text-sm" bind:value={newDomainServiceKey}>
-							{#each domainServiceOptions as option}
+						<Select bind:value={newDomainServiceKey}>
+							{#each domainServiceOptions as option (option.key)}
 								<option value={option.key}>{option.label}</option>
 							{/each}
-						</select>
+						</Select>
 					</div>
 				{/if}
 
@@ -653,6 +648,12 @@
 					</div>
 				{/if}
 
+				{#if domainServiceOptions.length === 0}
+					<p class="text-xs mt-3" style="color: var(--surface-muted);">
+						Add a port above first so this domain has somewhere to route.
+					</p>
+				{/if}
+
 				{#if domainFormError}
 					<div class="alert alert-error mt-3">{domainFormError}</div>
 				{/if}
@@ -685,7 +686,7 @@
 		{/if}
 		<div class="space-y-2">
 			{#if deployment.ingresses?.length}
-				{#each deployment.ingresses as ingress}
+				{#each deployment.ingresses as ingress (ingress.id)}
 					<div
 						class="rounded-xl overflow-hidden"
 						style="background-color: var(--control-bg); border: 1px solid var(--surface-border);"
@@ -698,14 +699,14 @@
 								class="flex-1 min-w-0 text-left no-underline transition hover:opacity-80"
 							>
 								{#if ingress.protectionMode && ingress.protectionMode !== 'none'}
-									<p class="text-xs text-indigo-400 mb-1">
+									<p class="text-xs mb-1" style="color: var(--sidebar-text-active-border);">
 										<Shield class="inline h-3 w-3 mr-1" />
 										{ingress.protectionMode === 'password'
 											? 'Password protected'
 											: 'Orchard sign-in'}
 									</p>
 								{:else if ingress.annotations?.['traefik.ingress.kubernetes.io/router.middlewares']?.includes('auth@kubernetescrd')}
-									<p class="text-xs text-amber-500 mb-1">
+									<p class="text-xs mb-1" style="color: var(--away-indicator);">
 										<Lock class="inline h-3 w-3 mr-1" />
 										Auth
 									</p>
@@ -721,39 +722,37 @@
 							</a>
 							<div class="flex items-center gap-1.5">
 								{#if onUpdateProtection}
-									<button
-										type="button"
-										onclick={(e) => {
+									<Button
+										variant="ghost"
+										size="sm"
+										aria-label="Protection settings"
+										style={protectionExpandedId === ingress.id
+											? 'color: var(--sidebar-text-active-border);'
+											: undefined}
+										onclick={(e: MouseEvent) => {
 											e.stopPropagation();
 											toggleProtection(ingress);
 										}}
-										class="btn btn-sm"
-										style="background-color: transparent; border: 1px solid var(--surface-border); color: {protectionExpandedId ===
-										ingress.id
-											? 'var(--sidebar-text-active-border)'
-											: 'var(--surface-muted)'};"
-										aria-label="Protection settings"
 									>
 										<Shield size={16} class="h-4 w-4" />
-									</button>
+									</Button>
 								{/if}
-								<button
-									type="button"
-									onclick={(e) => {
+								<Button
+									variant="ghost"
+									size="sm"
+									aria-label="Remove domain"
+									disabled={deletingIngressId === ingress.id}
+									onclick={(e: MouseEvent) => {
 										e.stopPropagation();
 										onDeleteIngress(ingress.id);
 									}}
-									disabled={deletingIngressId === ingress.id}
-									class="btn btn-sm"
-									style="background-color: transparent; border: 1px solid var(--surface-border); color: var(--surface-muted);"
-									aria-label="Remove domain"
 								>
 									{#if deletingIngressId === ingress.id}
 										<Loader2 class="h-4 w-4 animate-spin" />
 									{:else}
 										<Trash2 size={16} class="h-4 w-4" />
 									{/if}
-								</button>
+								</Button>
 							</div>
 						</div>
 
@@ -764,7 +763,7 @@
 								transition:slide={{ duration: 150 }}
 							>
 								<p class="text-xs font-medium mb-2" style="color: var(--center-channel-color);">
-									App Protection
+									App protection
 								</p>
 								<div class="flex flex-col gap-2">
 									<label
@@ -826,18 +825,22 @@
 											>
 												{ingress.protectionBypassSecret}
 											</code>
-											<button
-												type="button"
-												class="btn btn-sm"
-												style="background-color: transparent; border: 1px solid var(--surface-border); color: var(--surface-muted);"
+											<Button
+												variant="ghost"
+												size="sm"
+												aria-label="Copy bypass secret"
 												onclick={() => copyBypassSecret(ingress.protectionBypassSecret)}
 											>
 												{#if copiedBypass}
-													<Check size={14} class="h-3.5 w-3.5 text-green-400" />
+													<Check
+														size={14}
+														class="h-3.5 w-3.5"
+														style="color: var(--online-indicator);"
+													/>
 												{:else}
 													<Copy size={14} class="h-3.5 w-3.5" />
 												{/if}
-											</button>
+											</Button>
 										</div>
 										<p class="text-xs mt-1" style="color: var(--surface-muted);">
 											Send as <code>x-orchard-protection-bypass</code> header to skip auth.
@@ -867,5 +870,5 @@
 				</p>
 			{/if}
 		</div>
-	</div>
+	</SectionCard>
 </div>
