@@ -195,7 +195,7 @@ Pass null for either field to clear it and fall back to the default.`,
   server.registerTool(
     'expand_database_storage',
     {
-      description: `Expand the storage volume of a CNPG database. Storage can ONLY grow, never shrink — requests smaller than or equal to the current size are rejected. Expansion happens online (Longhorn resizes the volume in place); if the database was down due to a full disk, CNPG restarts it once headroom is available. Maximum size is 100Gi.`,
+      description: `Expand the storage volume of a CNPG database. Storage can ONLY grow, never shrink — requests smaller than or equal to the current size are rejected. Expansion happens online (Longhorn resizes the volume in place); if the database was down due to a full disk, CNPG restarts it once headroom is available. Maximum size is 200Gi.`,
       annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
       inputSchema: {
         databaseId: z.string().describe('The database UUID'),

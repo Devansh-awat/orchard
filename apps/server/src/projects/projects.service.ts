@@ -348,8 +348,8 @@ export class ProjectsService {
     if (!/^\d+(Mi|Gi|Ti)$/.test(size)) {
       throw new BadRequestException('Storage size must be a Kubernetes quantity like "10Gi"');
     }
-    if (parseMemory(size) > parseMemory('100Gi')) {
-      throw new BadRequestException('Storage size cannot exceed 100Gi');
+    if (parseMemory(size) > parseMemory('200Gi')) {
+      throw new BadRequestException('Storage size cannot exceed 200Gi');
     }
 
     const { previousSize } = await this.k8sCnpg.expandCnpgClusterStorage(
