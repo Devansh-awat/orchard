@@ -41,10 +41,6 @@ BigInt.prototype.toJSON = function() {
 };
 
 async function bootstrap() {
-  // bodyParser: false — parsers are registered manually below AFTER the
-  // protection proxy middleware. The proxy streams request bodies verbatim
-  // to tenant upstreams; a parser in front of it would consume the stream
-  // and every proxied POST would arrive empty.
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true, bodyParser: false, logger: new OtelConsoleLogger() });
 
   const protectionService = app.get(ProtectionService);
@@ -127,9 +123,6 @@ async function bootstrap() {
 
   // Attach WebSocket terminal handler to the underlying HTTP server
   const httpServer = app.getHttpServer();
-  // Protected-host websocket upgrades (e.g. graphql-ws on a tenant app) are
-  // tunneled by the protection service; everything else falls through to the
-  // terminal gateway's own upgrade listener.
   httpServer.on('upgrade', (req, socket, head) => {
     protectionService.handleUpgrade(req, socket, head).catch(() => socket.destroy());
   });

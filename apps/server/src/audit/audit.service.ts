@@ -46,11 +46,6 @@ const REDACTED_PLACEHOLDER = '[redacted]';
 export class AuditService {
   private readonly logger = new Logger(AuditService.name);
 
-  // Optional: the standalone MCP process registers AuditService without
-  // EventsModule (and without ScheduleModule, so the prune cron never runs
-  // there). It must not provide LeaderElectionService itself — that would
-  // join the shared leader lock and could steal leadership from the server
-  // replicas' informers.
   constructor(
     private readonly prisma: PrismaService,
     private readonly analytics: AnalyticsService,

@@ -278,13 +278,6 @@ export class ProtectionService {
     return true;
   }
 
-  /**
-   * Tunnel websocket upgrades for protected hosts to their upstream. The
-   * HTTP proxy path can't carry upgrades (http.request has no upgrade
-   * semantics), so raw TCP piping is required. Returns false when the host
-   * isn't protected so other upgrade listeners (terminal gateway) can act.
-   * Unauthenticated upgrades on protected hosts are rejected, never proxied.
-   */
   async handleUpgrade(req: http.IncomingMessage, socket: Duplex, head: Buffer): Promise<boolean> {
     const host = String(req.headers.host || '').toLowerCase().replace(/:\d+$/, '');
     const ingress = await this.resolveIngressFromHost(host);
@@ -353,8 +346,6 @@ export class ProtectionService {
       headers['host'] = `${upstreamHost}:${upstreamPort}`;
       delete headers['connection'];
       delete headers['x-orchard-protection-bypass'];
-      // Node re-chunks bodies without a content-length; forwarding the
-      // original transfer-encoding header would double-encode them.
       delete headers['transfer-encoding'];
 
       const proxyReq = http.request(

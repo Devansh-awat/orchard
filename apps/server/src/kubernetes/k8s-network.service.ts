@@ -76,14 +76,6 @@ export class K8sNetworkService implements OnModuleInit {
     }
   }
 
-  /**
-   * Heals ingresses whose paths still point at orchard-protection-proxy even
-   * though protection is off in the DB and the proxy Service is gone (e.g. a
-   * disable flow that deleted the Service but failed to restore the backend).
-   * Only acts when the proxy Service is absent, so an in-flight enable (which
-   * creates the Service before rewriting the ingress and committing the DB
-   * row) can never be undone into an unprotected page.
-   */
   private async restoreOrphanedProtectionBackends(protectedKeys: Set<string>): Promise<void> {
     const proxyServiceName = 'orchard-protection-proxy';
     const networkingApi = this.kc.makeApiClient(k8s.NetworkingV1Api);
@@ -487,9 +479,6 @@ export class K8sNetworkService implements OnModuleInit {
     const authServerPort = parseInt(process.env.ORCHARD_SERVER_PORT || '3001', 10);
     const proxyServiceName = 'orchard-protection-proxy';
 
-    // The EndpointSlice must hold the server Service's ClusterIP, not pod
-    // IPs: the slice is only written here, so pod IPs go stale on every
-    // server rollout and HAProxy is left with no live backend.
     const serverService = await coreApi.readNamespacedService('server', authServerNamespace);
     const clusterIP = serverService.body.spec?.clusterIP;
     if (!clusterIP || clusterIP === 'None') {
@@ -532,8 +521,6 @@ export class K8sNetworkService implements OnModuleInit {
       },
       addressType: 'IPv4',
       ports: [{ port: authServerPort, protocol: 'TCP' }],
-      // ready must be set explicitly: HAProxy's controller skips endpoints
-      // whose ready condition is nil, leaving the backend with zero servers.
       endpoints: [{ addresses, conditions: { ready: true, serving: true } }],
     };
 
