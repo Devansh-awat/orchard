@@ -21,7 +21,7 @@ import { ProjectAccessService } from './project-access.service';
 import { DeploymentsService } from './deployments.service';
 import { FaviconService } from './favicon.service';
 import { ProjectsService } from './projects.service';
-import { formatSlug } from './projects.utils';
+import { formatSlug, truncateK8sName } from './projects.utils';
 
 const TENANT_INGRESS_CLASS = 'haproxy';
 
@@ -388,7 +388,7 @@ export class IngressService {
       baseName = `ingress-${Math.floor(Date.now() / 1000)}`;
     }
 
-    baseName = baseName.substring(0, 48) || `ingress-${Math.floor(Date.now() / 1000)}`;
+    baseName = truncateK8sName(baseName, 48) || `ingress-${Math.floor(Date.now() / 1000)}`;
 
     let ingressName = baseName;
     let suffixCounter = 1;
@@ -405,12 +405,7 @@ export class IngressService {
         break;
       }
 
-      ingressName = `${baseName}-${suffixCounter++}`;
-      ingressName = ingressName.substring(0, 63);
-
-      if (!ingressName) {
-        ingressName = `${baseName.substring(0, 40)}-${suffixCounter}`;
-      }
+      ingressName = truncateK8sName(`${baseName}-${suffixCounter++}`);
 
       if (suffixCounter > 50) {
         throw new BadRequestException('Failed to generate unique ingress name');
@@ -644,7 +639,9 @@ export class IngressService {
       .map((s) => formatSlug(s))
       .filter((s) => s.length > 0)
       .join('-');
-    const baseName = formatSlug(`${deployment.name}-${hostSlug}`.substring(0, 48)) || `ingress-${Math.floor(Date.now() / 1000)}`;
+    const baseName =
+      truncateK8sName(formatSlug(`${deployment.name}-${hostSlug}`), 48) ||
+      `ingress-${Math.floor(Date.now() / 1000)}`;
     let ingressName = baseName;
     let suffixCounter = 1;
 
@@ -653,7 +650,7 @@ export class IngressService {
         where: { namespace: deployment.namespace, name: ingressName },
       });
       if (!existing) break;
-      ingressName = `${baseName}-${suffixCounter++}`.substring(0, 63);
+      ingressName = truncateK8sName(`${baseName}-${suffixCounter++}`);
       if (suffixCounter > 50) {
         throw new BadRequestException('Failed to generate unique ingress name');
       }
@@ -977,7 +974,9 @@ export class IngressService {
       .map((s) => formatSlug(s))
       .filter((s) => s.length > 0)
       .join('-');
-    const baseName = formatSlug(`${project.slug}-${hostSlug}`.substring(0, 48)) || `ingress-${Math.floor(Date.now() / 1000)}`;
+    const baseName =
+      truncateK8sName(formatSlug(`${project.slug}-${hostSlug}`), 48) ||
+      `ingress-${Math.floor(Date.now() / 1000)}`;
     let ingressName = baseName;
     let suffixCounter = 1;
 
@@ -986,7 +985,7 @@ export class IngressService {
         where: { namespace: project.namespace, name: ingressName },
       });
       if (!existing) break;
-      ingressName = `${baseName}-${suffixCounter++}`.substring(0, 63);
+      ingressName = truncateK8sName(`${baseName}-${suffixCounter++}`);
       if (suffixCounter > 50) {
         throw new BadRequestException('Failed to generate unique ingress name');
       }

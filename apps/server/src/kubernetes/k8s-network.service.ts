@@ -12,6 +12,7 @@ import {
   ALLOWED_INGRESS_ANNOTATION_KEYS,
 } from './kubernetes.service';
 import { mapServicePorts, ensureUniqueServicePorts, sanitizePortEntries } from './port-utils';
+import { truncateK8sName } from '../projects/projects.utils';
 
 /**
  * All Kubernetes network/edge resources: Services, Ingress (Cilium),
@@ -1315,7 +1316,7 @@ export class K8sNetworkService {
         let base = (desired || `port-${fallbackIndex}`).trim().toLowerCase();
         base = base.replace(/[^a-z0-9-]/g, '-').replace(/^-+|-+$/g, '');
         if (!base) base = `port-${fallbackIndex}`;
-        if (base.length > 63) base = base.substring(0, 63);
+        if (base.length > 63) base = truncateK8sName(base, 63) || `port-${fallbackIndex}`;
         if (!usedNames.has(base)) {
           usedNames.add(base);
           return base;
@@ -1691,7 +1692,7 @@ export class K8sNetworkService {
 
 
   private publicServiceName(clusterName: string): string {
-    return `${clusterName}-public`.substring(0, 63);
+    return truncateK8sName(`${clusterName}-public`, 63);
   }
 
   private sharedIpAnnotations(ip: string): Record<string, string> {
@@ -1781,7 +1782,7 @@ export class K8sNetworkService {
   }
 
   private publicDatabaseNetworkPolicyName(clusterName: string): string {
-    return `${clusterName}-allow-public`.substring(0, 63);
+    return truncateK8sName(`${clusterName}-allow-public`, 63);
   }
 
   async upsertPublicDatabaseNetworkPolicy(namespace: string, clusterName: string): Promise<void> {
@@ -1848,7 +1849,7 @@ export class K8sNetworkService {
 
   private publicDeploymentServiceName(deploymentName: string, port: number, protocol: string): string {
     const proto = protocol.toLowerCase() === 'udp' ? 'u' : 't';
-    return `${deploymentName}-pub-${proto}${port}`.substring(0, 63);
+    return truncateK8sName(`${deploymentName}-pub-${proto}${port}`, 63);
   }
 
   async exposeDeploymentPortPublic(options: {
@@ -1945,7 +1946,7 @@ export class K8sNetworkService {
   }
 
   private publicDeploymentNetworkPolicyName(deploymentName: string): string {
-    return `${deploymentName}-allow-public`.substring(0, 63);
+    return truncateK8sName(`${deploymentName}-allow-public`, 63);
   }
 
   async upsertPublicDeploymentNetworkPolicy(

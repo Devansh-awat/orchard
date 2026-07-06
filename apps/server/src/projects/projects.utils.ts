@@ -12,8 +12,18 @@ export function formatSlug(value: string): string {
   return value
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '-')
-    .replace(/^-+|-+$/g, '')
-    .substring(0, 60);
+    .replace(/^-+/, '')
+    .substring(0, 60)
+    .replace(/-+$/, '');
+}
+
+/**
+ * Truncate a generated Kubernetes object name without leaving a trailing
+ * dash, which DNS-1123 forbids. Truncation can land mid-separator, so the
+ * trim must happen after the cut, never before.
+ */
+export function truncateK8sName(name: string, max = 63): string {
+  return name.substring(0, max).replace(/-+$/, '');
 }
 
 /**

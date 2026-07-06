@@ -1,5 +1,6 @@
 import { Injectable } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
+import { truncateK8sName } from '../projects/projects.utils';
 
 interface DaemonInfo {
   podName: string;
@@ -68,11 +69,14 @@ export class BuildKitPoolService {
   }
 
   private sanitizeLabel(v: string): string {
-    return v.toLowerCase().replace(/[^a-z0-9-]/g, '-').slice(0, 63);
+    return truncateK8sName(
+      v.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+/, ''),
+      63,
+    );
   }
 
   private podName(tenantKey: string): string {
-    return `buildkitd-${this.sanitizeLabel(tenantKey)}`.slice(0, 63);
+    return truncateK8sName(`buildkitd-${this.sanitizeLabel(tenantKey)}`, 63);
   }
 
   /**

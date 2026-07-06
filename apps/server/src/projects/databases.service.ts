@@ -19,7 +19,7 @@ import { AuthorizationService } from '../auth/authorization.service';
 import { AuditService } from '../audit/audit.service';
 import { QuotasService } from '../quotas/quotas.service';
 import { ProjectAccessService } from './project-access.service';
-import { formatSlug, redactDatabaseForViewer, stripR2ProxyCreds } from './projects.utils';
+import { formatSlug, redactDatabaseForViewer, stripR2ProxyCreds, truncateK8sName } from './projects.utils';
 
 @Injectable()
 export class DatabasesService {
@@ -887,12 +887,15 @@ export class DatabasesService {
 
     await this.pruneOldBackups({ id: database.id, namespace: database.namespace, clusterName: database.clusterName });
 
-    const backupName = (data.label || `backup-${new Date().toISOString().replace(/[:.]/g, '-').toLowerCase()}`)
-      .trim()
-      .replace(/[^a-z0-9-]/g, '-')
-      .replace(/-+/g, '-')
-      .replace(/^-+|-+$/g, '')
-      .substring(0, 63);
+    const backupName = truncateK8sName(
+      (data.label || `backup-${new Date().toISOString().replace(/[:.]/g, '-').toLowerCase()}`)
+        .trim()
+        .toLowerCase()
+        .replace(/[^a-z0-9-]/g, '-')
+        .replace(/-+/g, '-')
+        .replace(/^-+/, ''),
+      63,
+    );
 
     const record = await this.prisma.databaseBackup.create({
       data: {
@@ -1038,7 +1041,7 @@ export class DatabasesService {
     // for it (when the proxy is enabled) BEFORE the cluster spins up. The
     // suffix matches the format used inside restoreCnpgCluster.
     const restoreSuffix = Date.now().toString(36);
-    const predictedNewClusterName = `${oldClusterName}-r${restoreSuffix}`.substring(0, 53);
+    const predictedNewClusterName = truncateK8sName(`${oldClusterName}-r${restoreSuffix}`, 53);
     const restoreR2 = await this.buildBackupR2Config(
       org,
       database.namespace!,
