@@ -1728,6 +1728,9 @@ exit $rc`,
     for (const [key, value] of Object.entries(envVars)) {
       args.push('--opt', `build-arg:${key}=${value}`);
     }
+    if (!('BUILDKIT_DOCKERFILE_CHECK' in envVars)) {
+      args.push('--opt', 'build-arg:BUILDKIT_DOCKERFILE_CHECK=skip=SecretsUsedInArgOrEnv');
+    }
 
     // Add cache arguments (namespaced per image to prevent cross-deployment contamination)
     // Skip when using persistent daemon — its content store IS the cache.

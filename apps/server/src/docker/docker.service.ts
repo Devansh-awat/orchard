@@ -326,6 +326,9 @@ export class DockerService {
           buildArgs.push('--build-arg', `${key}=${value}`);
         }
       }
+      if (!('BUILDKIT_DOCKERFILE_CHECK' in envVars)) {
+        buildArgs.push('--build-arg', 'BUILDKIT_DOCKERFILE_CHECK=skip=SecretsUsedInArgOrEnv');
+      }
 
       buildArgs.push('.');
 
@@ -536,6 +539,9 @@ export class DockerService {
         if (value !== undefined && value !== null) {
           depotArgs.push('--build-arg', `${key}=${value}`);
         }
+      }
+      if (!('BUILDKIT_DOCKERFILE_CHECK' in envVars)) {
+        depotArgs.push('--build-arg', 'BUILDKIT_DOCKERFILE_CHECK=skip=SecretsUsedInArgOrEnv');
       }
       depotArgs.push('.');
 
