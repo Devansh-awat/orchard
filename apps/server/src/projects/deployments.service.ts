@@ -1372,6 +1372,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployments');
 
+    const changesSuperAdminFlags =
+      (buildWithDepot !== undefined && buildWithDepot !== (deployment.buildWithDepot ?? false)) ||
+      (persistentBuildCache !== undefined && persistentBuildCache !== (deployment.persistentBuildCache ?? false));
+    if (changesSuperAdminFlags && !(await this.authz.isSuperAdmin(user.id))) {
+      throw new ForbiddenException('Super builds and persistent build cache are superadmin-only settings');
+    }
+
     await this.prisma.deployment.update({
       where: { id: deploymentId },
       data: {
@@ -3994,6 +4001,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     if (Array.isArray(data.volumes) && data.volumes.some((v) => v && v.type === 'hostPath')) {
       throw new ForbiddenException('hostPath volumes are not permitted');
+    }
+
+    if ((data.buildWithDepot || data.persistentBuildCache) && !(await this.authz.isSuperAdmin(user.id))) {
+      throw new ForbiddenException('Super builds and persistent build cache are superadmin-only settings');
     }
 
     const nameInput = String(data.name || '').trim();

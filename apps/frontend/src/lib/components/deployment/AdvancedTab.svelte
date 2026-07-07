@@ -183,31 +183,31 @@
 					<span class="adv-switch-track"></span>
 				</label>
 			</div>
-			<!-- svelte-ignore a11y_click_events_have_key_events -->
-			<!-- svelte-ignore a11y_no_static_element_interactions -->
-			<div
-				class="adv-toggle-row"
-				onclick={() => {
-					persistentBuildCache = !persistentBuildCache;
-					buildOptionsDirty = true;
-				}}
-			>
-				<div class="adv-toggle-info">
-					<span class="adv-toggle-label">Persistent build cache</span>
-					<span class="adv-toggle-desc"
-						>Keep a warm build daemon between deploys so unchanged layers rebuild instantly</span
-					>
-				</div>
-				<label class="adv-switch" onclick={(e) => e.stopPropagation()}>
-					<input
-						type="checkbox"
-						bind:checked={persistentBuildCache}
-						onchange={() => (buildOptionsDirty = true)}
-					/>
-					<span class="adv-switch-track"></span>
-				</label>
-			</div>
 			{#if $isSuperAdmin}
+				<!-- svelte-ignore a11y_click_events_have_key_events -->
+				<!-- svelte-ignore a11y_no_static_element_interactions -->
+				<div
+					class="adv-toggle-row"
+					onclick={() => {
+						persistentBuildCache = !persistentBuildCache;
+						buildOptionsDirty = true;
+					}}
+				>
+					<div class="adv-toggle-info">
+						<span class="adv-toggle-label">Persistent build cache</span>
+						<span class="adv-toggle-desc"
+							>Keep a warm build daemon between deploys so unchanged layers rebuild instantly</span
+						>
+					</div>
+					<label class="adv-switch" onclick={(e) => e.stopPropagation()}>
+						<input
+							type="checkbox"
+							bind:checked={persistentBuildCache}
+							onchange={() => (buildOptionsDirty = true)}
+						/>
+						<span class="adv-switch-track"></span>
+					</label>
+				</div>
 				<!-- svelte-ignore a11y_click_events_have_key_events -->
 				<!-- svelte-ignore a11y_no_static_element_interactions -->
 				<div
