@@ -1095,7 +1095,7 @@ export class K8sCnpgService {
     await ignore404(coreApi.deleteNamespacedSecret(`${name}-import-source`, ns));
   }
 
-  async getCnpgClusterStatus(namespace: string, clusterName: string): Promise<any> {
+  async getCnpgClusterStatus(namespace: string, clusterName: string, dbName?: string): Promise<any> {
     this.ensureKubeConfig();
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
@@ -1177,6 +1177,29 @@ export class K8sCnpgService {
         message = lastTerminationReason;
       }
 
+      // Same psql-variable pattern as getPostgresContainerStatus: pass dbName
+      // via `-v` and reference it as `:'dbname'` so it's client-side-quoted
+      // instead of interpolated into SQL. Best-effort — a failed exec just
+      // leaves size/connections undefined.
+      let size: string | undefined;
+      let connections: number | undefined;
+      const currentPrimary: string | undefined = cluster.status?.currentPrimary;
+      if (ready && dbName && currentPrimary) {
+        try {
+          const exec = async (sql: string): Promise<string> => {
+            const r = await this.execInPod(namespace, currentPrimary, 'postgres', [
+              'psql', '-U', 'postgres',
+              '-v', `dbname=${dbName}`,
+              '-t', '-A', '-c', sql,
+            ]);
+            return r.stdout.trim();
+          };
+          size = await exec(`SELECT pg_size_pretty(pg_database_size(:'dbname'));`);
+          const connRaw = await exec(`SELECT count(*) FROM pg_stat_activity WHERE datname = :'dbname';`);
+          connections = parseInt(connRaw, 10) || 0;
+        } catch { /* best-effort */ }
+      }
+
       return {
         exists: true,
         phase,
@@ -1184,6 +1207,8 @@ export class K8sCnpgService {
         readyReplicas: readyInstances,
         replicas: instances,
         currentPrimary: cluster.status?.currentPrimary,
+        size,
+        connections,
         conditions: cluster.status?.conditions || [],
         restartCount,
         message,

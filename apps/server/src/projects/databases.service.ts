@@ -418,7 +418,7 @@ export class DatabasesService {
     let liveStatus: any;
     let pods: any[] = [];
     if (database.mode === 'cnpg' && database.namespace && database.clusterName) {
-      liveStatus = await this.k8sCnpg.getCnpgClusterStatus(database.namespace, database.clusterName);
+      liveStatus = await this.k8sCnpg.getCnpgClusterStatus(database.namespace, database.clusterName, database.dbName);
       try {
         const podList = await this.k8sWorkload.listPods(database.namespace);
         pods = (podList?.pods || []).filter((p: any) =>
