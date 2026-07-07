@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.16.0](https://github.com/LeafdTK/leaf/compare/server/v1.15.2...server/v1.16.0) (2026-07-07)
+
+
+### Features
+
+* make warm cache a superadmin only setting ([6793747](https://github.com/LeafdTK/leaf/commit/6793747d4167d6c605267e4a4ea064acbc65f51f))
+
 ## [1.15.2](https://github.com/LeafdTK/leaf/compare/server/v1.15.1...server/v1.15.2) (2026-07-07)
 
 

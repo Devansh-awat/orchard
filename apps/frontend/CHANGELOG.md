@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.12.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.11.2...frontend/v0.12.0) (2026-07-07)
+
+
+### Features
+
+* make warm cache a superadmin only setting ([6793747](https://github.com/LeafdTK/leaf/commit/6793747d4167d6c605267e4a4ea064acbc65f51f))
+
 ## [0.11.2](https://github.com/LeafdTK/leaf/compare/frontend/v0.11.1...frontend/v0.11.2) (2026-07-07)
 
 
