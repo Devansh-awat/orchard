@@ -85,6 +85,8 @@ export class BuildKitPoolService {
   async getOrCreateDaemon(tenantKey: string): Promise<DaemonInfo> {
     if (!this.kc) throw new Error('Kubernetes API not available');
 
+    await this.ensureDaemonNetworkPolicy();
+
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
 
     // Look for an existing daemon pod
@@ -116,6 +118,50 @@ export class BuildKitPoolService {
 
     // No daemon exists — create one
     return this.createDaemon(tenantKey);
+  }
+
+  // buildkitd's tcp addr has no auth of its own — anything that can route to
+  // the pod can run builds and read the tenant's layer cache. Restrict
+  // ingress to build-job pods in this namespace.
+  private async ensureDaemonNetworkPolicy(): Promise<void> {
+    const networkingApi = this.kc!.makeApiClient(k8s.NetworkingV1Api);
+    const name = 'buildkit-daemon-ingress';
+
+    const body: k8s.V1NetworkPolicy = {
+      metadata: {
+        name,
+        namespace: this.namespace,
+        labels: {
+          'app.kubernetes.io/name': 'buildkit-daemon',
+          'app.kubernetes.io/managed-by': 'orchard',
+        },
+      },
+      spec: {
+        podSelector: {
+          matchLabels: { 'orchard.dev/buildkit-daemon': 'true' },
+        },
+        policyTypes: ['Ingress'],
+        ingress: [
+          {
+            from: [
+              { podSelector: { matchLabels: { 'app.kubernetes.io/name': 'image-builder' } } },
+            ],
+            ports: [{ protocol: 'TCP', port: 1234 }],
+          },
+        ],
+      },
+    };
+
+    try {
+      await networkingApi.readNamespacedNetworkPolicy(name, this.namespace);
+      await networkingApi.replaceNamespacedNetworkPolicy(name, this.namespace, body);
+    } catch (err) {
+      if ((err.statusCode ?? err.response?.statusCode) === 404) {
+        await networkingApi.createNamespacedNetworkPolicy(this.namespace, body);
+      } else {
+        throw err;
+      }
+    }
   }
 
   private async createDaemon(tenantKey: string): Promise<DaemonInfo> {
