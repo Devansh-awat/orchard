@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.15.2](https://github.com/LeafdTK/leaf/compare/server/v1.15.1...server/v1.15.2) (2026-07-07)
+
+
+### Bug Fixes
+
+* fetch size and connections for cnpg databases ([c3f0dd6](https://github.com/LeafdTK/leaf/commit/c3f0dd69ce52ab877529d10823653d0ef8579822))
+* restrict buildkit daemon ingress to build-job pods ([9e9709f](https://github.com/LeafdTK/leaf/commit/9e9709fa12a808545f389ebf301d3e04176f98b6))
+* tailscale proxy rbac and pod env for containerboot ([6e27afb](https://github.com/LeafdTK/leaf/commit/6e27afb05d4f93cea61fc6bd4f34e7c987811458))
+
 ## [1.15.1](https://github.com/LeafdTK/leaf/compare/server/v1.15.0...server/v1.15.1) (2026-07-06)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.11.2](https://github.com/LeafdTK/leaf/compare/frontend/v0.11.1...frontend/v0.11.2) (2026-07-07)
+
+
+### Bug Fixes
+
+* stop overview cards replaying expand/stagger animations on refetch ([4e52809](https://github.com/LeafdTK/leaf/commit/4e5280910a08a5af582df7f143854860218ba6bf))
+
 ## [0.11.1](https://github.com/LeafdTK/leaf/compare/frontend/v0.11.0...frontend/v0.11.1) (2026-07-06)
 
 
