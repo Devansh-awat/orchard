@@ -2484,20 +2484,35 @@ export class K8sWorkloadService {
 
     // 3. Create RBAC (the Tailscale container needs to read/write its state secret)
     const rbacApi = this.kc.makeApiClient(k8s.RbacAuthorizationV1Api);
+    const roleBody: k8s.V1Role = {
+      metadata: { name: tsDeployName, labels: orchardLabels },
+      rules: [
+        {
+          apiGroups: [''],
+          resources: ['secrets'],
+          verbs: ['create'],
+        },
+        {
+          apiGroups: [''],
+          resources: ['secrets'],
+          verbs: ['get', 'update', 'patch'],
+          resourceNames: [secretName],
+        },
+        {
+          apiGroups: [''],
+          resources: ['events'],
+          verbs: ['get', 'create', 'patch'],
+        },
+      ],
+    };
     try {
-      await rbacApi.createNamespacedRole(namespace, {
-        metadata: { name: tsDeployName, labels: orchardLabels },
-        rules: [
-          {
-            apiGroups: [''],
-            resources: ['secrets'],
-            verbs: ['get', 'update', 'patch'],
-            resourceNames: [secretName],
-          },
-        ],
-      });
+      await rbacApi.createNamespacedRole(namespace, roleBody);
     } catch (error: any) {
-      if (error.response?.statusCode !== 409) throw error;
+      if (error.response?.statusCode === 409) {
+        await rbacApi.replaceNamespacedRole(tsDeployName, namespace, roleBody);
+      } else {
+        throw error;
+      }
     }
     try {
       await rbacApi.createNamespacedRoleBinding(namespace, {
@@ -2561,6 +2576,8 @@ export class K8sWorkloadService {
                   { name: 'TS_USERSPACE', value: 'true' },
                   { name: 'TS_KUBE_SECRET', value: secretName },
                   { name: 'TS_SERVE_CONFIG', value: '/config/serve-config.json' },
+                  { name: 'POD_NAME', valueFrom: { fieldRef: { fieldPath: 'metadata.name' } } },
+                  { name: 'POD_UID', valueFrom: { fieldRef: { fieldPath: 'metadata.uid' } } },
                 ],
                 resources: {
                   requests: { cpu: '10m', memory: '64Mi' },
