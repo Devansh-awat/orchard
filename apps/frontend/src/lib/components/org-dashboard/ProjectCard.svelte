@@ -81,6 +81,16 @@
 	});
 
 	let newOpen = $state(false);
+
+	// Stable attachment — rebuilding it on every `group` identity change would
+	// re-run the mount animation (height 0 → auto) on each overview refetch.
+	const bodyAttachment = bodyAttach(
+		group.id,
+		() => expanded,
+		projectBodyEls,
+		getRenderedProjectBodies,
+		setRenderedProjectBodies
+	);
 </script>
 
 <div
@@ -203,16 +213,7 @@
 		</a>
 	</button>
 	{#if rendered}
-		<div
-			class="proj-body"
-			{@attach bodyAttach(
-				group.id,
-				() => expanded,
-				projectBodyEls,
-				getRenderedProjectBodies,
-				setRenderedProjectBodies
-			)}
-		>
+		<div class="proj-body" {@attach bodyAttachment}>
 			<div class="od-grid">
 				{#each group.deps as dep, i (dep.id)}
 					<div {@attach motionStagger({ index: i, stride: 0.04, from: { y: 8 } })}>

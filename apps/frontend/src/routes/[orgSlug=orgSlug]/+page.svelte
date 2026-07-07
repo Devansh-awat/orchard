@@ -78,23 +78,26 @@
 		refetchIntervalInBackground: true
 	}));
 
-	// ── Stable ordering ──
+	// ── Stable ordering (existing cards keep their position; new ids are
+	// rank-sorted and appended). Returns `prev` untouched when nothing changed
+	// so downstream deriveds don't churn on every refetch. ──
 	let depOrder = $state<string[]>([]);
 	let dbOrder = $state<string[]>([]);
 	let projOrder = $state<string[]>([]);
 
 	function mergeOrder<T extends { id: string }>(
-		existing: string[],
+		prev: string[],
 		items: T[],
 		rank: (item: T) => number
 	): string[] {
 		const present = new Set(items.map((x) => x.id));
-		const kept = existing.filter((id) => present.has(id));
+		const kept = prev.filter((id) => present.has(id));
 		const known = new Set(kept);
 		const fresh = items
 			.filter((x) => !known.has(x.id))
 			.sort((a, b) => rank(b) - rank(a))
 			.map((x) => x.id);
+		if (fresh.length === 0 && kept.length === prev.length) return prev;
 		return [...kept, ...fresh];
 	}
 

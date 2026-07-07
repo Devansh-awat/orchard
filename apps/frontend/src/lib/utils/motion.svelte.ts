@@ -48,6 +48,8 @@ export function getLastPointerSpeed(): number {
 
 // ---- Motion attachments -----------------------------------------------------------
 
+const staggeredEls = new WeakSet<Element>();
+
 export function springHover(
 	opts: { rest?: number; lift?: number; stiffness?: number; damping?: number } = {}
 ) {
@@ -113,6 +115,10 @@ export function motionStagger(
 		scale: opts.from?.scale ?? 0.99
 	};
 	return (el: Element) => {
+		// Entrance plays once per element — a re-run of the attachment (index
+		// shift, list reorder) must not replay the fade-in on live DOM.
+		if (staggeredEls.has(el)) return;
+		staggeredEls.add(el);
 		animate(
 			el as HTMLElement,
 			{ opacity: [from.opacity, 1], y: [from.y, 0], scale: [from.scale, 1] },
