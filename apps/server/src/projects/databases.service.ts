@@ -19,6 +19,7 @@ import { AuthorizationService } from '../auth/authorization.service';
 import { AuditService } from '../audit/audit.service';
 import { QuotasService } from '../quotas/quotas.service';
 import { ProjectAccessService } from './project-access.service';
+import { BackupSyncService } from './backup-sync.service';
 import { formatSlug, redactDatabaseForViewer, stripR2ProxyCreds, truncateK8sName } from './projects.utils';
 
 @Injectable()
@@ -38,6 +39,7 @@ export class DatabasesService {
     private readonly access: ProjectAccessService,
     @Inject(forwardRef(() => QuotasService))
     private readonly quotasService: QuotasService,
+    private readonly backupSync: BackupSyncService,
   ) {}
 
   // ── Database (PostgreSQL) Management ──
@@ -773,101 +775,18 @@ export class DatabasesService {
 
   async listDatabaseBackups(databaseId: string, clerkId: string, userData?: any) {
     const { database } = await this.access.assertDatabaseEditorOrViewer(databaseId, clerkId, userData, { allowViewer: true });
-    const records = await this.prisma.databaseBackup.findMany({
+
+    const anyNewlyCompleted = await this.backupSync
+      .reconcileDatabase(database, { ingest: true })
+      .catch(() => false);
+    if (anyNewlyCompleted) {
+      await this.backupSync.pruneOldBackups({ id: database.id, namespace: database.namespace, clusterName: database.clusterName });
+    }
+
+    return this.prisma.databaseBackup.findMany({
       where: { databaseId: database.id },
       orderBy: { createdAt: 'desc' },
     });
-
-    // For CNPG, reconcile our records with live status from the Backup CRs.
-    // Also, pick up any scheduled backups created directly by CNPG that we don't yet have a record for.
-    if (database.mode === 'cnpg' && database.namespace && database.clusterName) {
-      let anyNewlyCompleted = false;
-
-      const runningOrPending = records.filter((r) => r.status === 'running' || r.status === 'pending');
-      for (const r of runningOrPending) {
-        try {
-          const live = await this.k8sCnpg.getCnpgBackup(database.namespace, r.backupName);
-          if (!live) continue;
-          const phase: string | undefined = live.status?.phase;
-          if (!phase) continue;
-          let newStatus: string | null = null;
-          if (phase === 'completed') newStatus = 'completed';
-          else if (phase === 'failed') newStatus = 'failed';
-          else if (phase === 'running' || phase === 'started') newStatus = 'running';
-          if (newStatus && newStatus !== r.status) {
-            const completedAt = newStatus === 'completed' || newStatus === 'failed' ? new Date() : r.completedAt;
-            const errorMessage = newStatus === 'failed' ? (live.status?.error || '').substring(0, 2000) : r.errorMessage;
-            await this.prisma.databaseBackup.update({
-              where: { id: r.id },
-              data: { status: newStatus, completedAt, errorMessage },
-            });
-            r.status = newStatus;
-            r.completedAt = completedAt || null;
-            if (errorMessage !== undefined) r.errorMessage = errorMessage || null;
-            if (newStatus === 'completed') anyNewlyCompleted = true;
-          }
-        } catch { /* ignore */ }
-      }
-
-      try {
-        const liveBackups = await this.k8sCnpg.listCnpgBackups(database.namespace, database.clusterName);
-        const known = new Set(records.map((r) => r.backupName));
-        for (const lb of liveBackups) {
-          const name: string | undefined = lb.metadata?.name;
-          if (!name || known.has(name)) continue;
-          const phase: string | undefined = lb.status?.phase;
-          let status = 'running';
-          if (phase === 'completed') status = 'completed';
-          else if (phase === 'failed') status = 'failed';
-          const completedAt = (status === 'completed' || status === 'failed') ? new Date(lb.status?.stoppedAt || Date.now()) : null;
-          try {
-            const created = await this.prisma.databaseBackup.create({
-              data: {
-                databaseId: database.id,
-                label: name,
-                backupName: name,
-                type: lb.metadata?.labels?.['cnpg.io/scheduled-backup'] ? 'scheduled' : 'full',
-                status,
-                completedAt,
-                createdAt: new Date(lb.metadata?.creationTimestamp || Date.now()),
-              },
-            });
-            records.unshift(created);
-            if (status === 'completed') anyNewlyCompleted = true;
-          } catch { /* race: another request created it */ }
-        }
-      } catch { /* ignore */ }
-
-      if (anyNewlyCompleted) {
-        await this.pruneOldBackups({ id: database.id, namespace: database.namespace, clusterName: database.clusterName });
-      }
-    }
-
-    return records;
-  }
-
-  private readonly MAX_COMPLETED_BACKUPS = 10;
-
-  private async pruneOldBackups(database: { id: string; namespace: string | null; clusterName: string | null }) {
-    if (!database.namespace || !database.clusterName) return;
-    const completed = await this.prisma.databaseBackup.findMany({
-      where: { databaseId: database.id, status: 'completed' },
-      orderBy: { createdAt: 'desc' },
-    });
-    if (completed.length <= this.MAX_COMPLETED_BACKUPS) return;
-    const toDelete = completed.slice(this.MAX_COMPLETED_BACKUPS);
-    for (const b of toDelete) {
-      try {
-        await this.k8sCnpg.deleteCnpgBackup(database.namespace, b.backupName);
-      } catch (e: any) {
-        console.error(`[DB/backup] Failed to delete old backup CR ${b.backupName}: ${e?.message}`);
-      }
-      try {
-        await this.prisma.databaseBackup.delete({ where: { id: b.id } });
-      } catch (e: any) {
-        console.error(`[DB/backup] Failed to delete old backup record ${b.id}: ${e?.message}`);
-      }
-    }
   }
 
   async createDatabaseBackup(
@@ -885,7 +804,7 @@ export class DatabasesService {
     }
     await this.getOrgR2Config(database.project.organizationId);
 
-    await this.pruneOldBackups({ id: database.id, namespace: database.namespace, clusterName: database.clusterName });
+    await this.backupSync.pruneOldBackups({ id: database.id, namespace: database.namespace, clusterName: database.clusterName });
 
     const backupName = truncateK8sName(
       (data.label || `backup-${new Date().toISOString().replace(/[:.]/g, '-').toLowerCase()}`)

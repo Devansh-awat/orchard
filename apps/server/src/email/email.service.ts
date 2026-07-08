@@ -40,6 +40,15 @@ export interface OtpEmailData {
   expiryMinutes: number;
 }
 
+export interface NotificationEmailData {
+  recipients: string[];
+  subject: string;
+  title: string;
+  body: string;
+  contextLine: string;
+  ctaUrl: string;
+}
+
 @Injectable()
 export class EmailService {
   private transporter: Transporter | null = null;
@@ -106,6 +115,36 @@ export class EmailService {
       console.warn(`MJML warnings for ${templateName}:`, errors);
     }
     return html;
+  }
+
+  async sendNotificationEmail(data: NotificationEmailData): Promise<boolean> {
+    if (!this.isConfigured()) {
+      console.warn('Email service not configured. Skipping notification email.');
+      return false;
+    }
+
+    const html = this.renderTemplate('notification', {
+      title: data.title,
+      body: data.body,
+      contextLine: data.contextLine,
+      ctaUrl: data.ctaUrl,
+      frontendUrl: this.frontendUrl,
+    });
+
+    const mailOptions = {
+      from: `"${this.fromName}" <${this.fromEmail}>`,
+      to: data.recipients.join(', '),
+      subject: data.subject,
+      html,
+    };
+
+    try {
+      await this.transporter!.sendMail(mailOptions);
+      return true;
+    } catch (error) {
+      console.error('[EmailService] Failed to send notification email:', error);
+      return false;
+    }
   }
 
   async sendOrganizationInviteEmail(

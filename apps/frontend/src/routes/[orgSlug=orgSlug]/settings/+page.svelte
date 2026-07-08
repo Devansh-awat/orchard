@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { onMount, onDestroy } from 'svelte';
 	import { apiFetch, toasts, subscribeOrgEvents } from '$lib/stores';
+	import { featureFlag } from '$lib/posthog';
 	import { env } from '$env/dynamic/public';
 	import { Loader2 } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
@@ -12,8 +13,13 @@
 		OrgDatabaseTab,
 		OrgBackupsTab,
 		OrgSsoTab,
-		OrgScimTab
+		OrgScimTab,
+		OrgNotificationsTab
 	} from '$lib/components/org-settings';
+	import type {
+		NotificationChannel,
+		ChannelPayload
+	} from '$lib/components/org-settings/notification-types';
 
 	interface Member {
 		id: string;
@@ -123,6 +129,17 @@
 	let ssoDeleting = $state(false);
 	let showDeleteSsoModal = $state(false);
 
+	let notifLoading = $state(false);
+	let notifChannels = $state<NotificationChannel[]>([]);
+	let notifProjects = $state<{ id: string; name: string }[]>([]);
+	let notifSaving = $state(false);
+	let notifDeletingId = $state<string | null>(null);
+	let notifTestingId = $state<string | null>(null);
+	let notifTogglingId = $state<string | null>(null);
+	let channelToDelete = $state<NotificationChannel | null>(null);
+	let showDeleteChannelModal = $state(false);
+	let notifCreatedSecret = $state<string | null>(null);
+
 	let scimLoading = $state(false);
 	let scimBaseUrl = $state('');
 	let scimTokens = $state<
@@ -139,6 +156,7 @@
 	let scimRevokingId = $state<string | null>(null);
 	let scimCreatedToken = $state<{ name: string; token: string } | null>(null);
 
+	const notificationsEnabled = featureFlag('notifications');
 	const organizationSlug = $derived($page.params.orgSlug);
 	const activeTab = $derived($page.url.searchParams.get('tab') || 'general');
 	const canEditOrg = $derived(currentUserRole === 'owner' || currentUserRole === 'admin');
@@ -166,6 +184,7 @@
 				if (roleData.role === 'owner' || roleData.role === 'admin') {
 					await fetchInvitations();
 					await fetchBackupSettings();
+					await fetchNotificationChannels();
 					if (data.plan === 'enterprise') {
 						ssoSubdomain = data.subdomain || '';
 						await fetchSsoConfig();
@@ -211,6 +230,142 @@
 			publicIp = d.databasePublicIp || '';
 		} finally {
 			backupLoading = false;
+		}
+	}
+
+	async function fetchNotificationChannels() {
+		if (!organization) return;
+		notifLoading = true;
+		try {
+			const [channelsRes, projectsRes] = await Promise.all([
+				apiFetch(`/apiv1/organizations/${organization.id}/notification-channels`),
+				apiFetch(`/apiv1/projects?orgId=${organization.id}`)
+			]);
+			if (channelsRes.ok) notifChannels = await channelsRes.json();
+			if (projectsRes.ok) {
+				const projectsData = await projectsRes.json();
+				notifProjects = (projectsData || []).map((p: { id: string; name: string }) => ({
+					id: p.id,
+					name: p.name
+				}));
+			}
+		} catch (e) {
+			console.error('Failed to fetch notification channels:', e);
+		} finally {
+			notifLoading = false;
+		}
+	}
+
+	async function saveNotificationChannel(
+		payload: ChannelPayload,
+		channelId: string | null
+	): Promise<boolean> {
+		if (!organization) return false;
+		notifSaving = true;
+		try {
+			const r = await apiFetch(
+				channelId
+					? `/apiv1/organizations/${organization.id}/notification-channels/${channelId}`
+					: `/apiv1/organizations/${organization.id}/notification-channels`,
+				{
+					method: channelId ? 'PATCH' : 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify(payload)
+				}
+			);
+			const d = await r.json().catch(() => ({}));
+			if (!r.ok) {
+				throw new Error(d.message || 'Failed to save channel');
+			}
+			if (d.webhookSecret) notifCreatedSecret = d.webhookSecret;
+			toasts.add({ title: channelId ? 'Channel updated' : 'Channel added', color: 'success' });
+			await fetchNotificationChannels();
+			return true;
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to save channel',
+				color: 'error'
+			});
+			return false;
+		} finally {
+			notifSaving = false;
+		}
+	}
+
+	async function deleteNotificationChannel(channelId: string) {
+		if (!organization || notifDeletingId) return;
+		notifDeletingId = channelId;
+		try {
+			const r = await apiFetch(
+				`/apiv1/organizations/${organization.id}/notification-channels/${channelId}`,
+				{ method: 'DELETE' }
+			);
+			if (!r.ok) throw new Error('Failed to delete channel');
+			toasts.add({ title: 'Channel deleted', color: 'success' });
+			notifChannels = notifChannels.filter((c) => c.id !== channelId);
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to delete channel',
+				color: 'error'
+			});
+		} finally {
+			notifDeletingId = null;
+		}
+	}
+
+	async function testNotificationChannel(channelId: string) {
+		if (!organization || notifTestingId) return;
+		notifTestingId = channelId;
+		try {
+			const r = await apiFetch(
+				`/apiv1/organizations/${organization.id}/notification-channels/${channelId}/test`,
+				{ method: 'POST' }
+			);
+			const d = await r.json().catch(() => ({}));
+			if (r.ok && d.success) {
+				toasts.add({ title: 'Test notification sent', color: 'success' });
+			} else {
+				throw new Error(d.error || d.message || 'Test delivery failed');
+			}
+		} catch (e) {
+			toasts.add({
+				title: 'Test failed',
+				description: e instanceof Error ? e.message : 'Test delivery failed',
+				color: 'error'
+			});
+		} finally {
+			notifTestingId = null;
+			await fetchNotificationChannels();
+		}
+	}
+
+	async function toggleNotificationChannel(channelId: string, enabled: boolean) {
+		if (!organization || notifTogglingId) return;
+		notifTogglingId = channelId;
+		try {
+			const r = await apiFetch(
+				`/apiv1/organizations/${organization.id}/notification-channels/${channelId}`,
+				{
+					method: 'PATCH',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ enabled })
+				}
+			);
+			if (!r.ok) throw new Error('Failed to update channel');
+			const updated = await r.json();
+			notifChannels = notifChannels.map((c) =>
+				c.id === channelId ? { ...c, enabled: updated.enabled } : c
+			);
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to update channel',
+				color: 'error'
+			});
+		} finally {
+			notifTogglingId = null;
 		}
 	}
 
@@ -897,6 +1052,29 @@
 					}}
 				/>
 			{/if}
+			{#if activeTab === 'notifications' && $notificationsEnabled}
+				<OrgNotificationsTab
+					{canEditOrg}
+					loading={notifLoading}
+					channels={notifChannels}
+					projects={notifProjects}
+					saving={notifSaving}
+					deletingId={notifDeletingId}
+					testingId={notifTestingId}
+					togglingId={notifTogglingId}
+					createdSecret={notifCreatedSecret}
+					onDismissSecret={() => {
+						notifCreatedSecret = null;
+					}}
+					onSaveChannel={saveNotificationChannel}
+					onDeleteChannel={(channel) => {
+						channelToDelete = channel;
+						showDeleteChannelModal = true;
+					}}
+					onTestChannel={testNotificationChannel}
+					onToggleChannel={toggleNotificationChannel}
+				/>
+			{/if}
 			{#if activeTab === 'sso' && isEnterprise}
 				<OrgSsoTab
 					{organization}
@@ -962,6 +1140,17 @@
 	confirmLabel="Remove"
 	onconfirm={() => {
 		if (memberToRemove) removeMember(memberToRemove.id);
+	}}
+	oncancel={() => {}}
+/>
+
+<ConfirmModal
+	bind:open={showDeleteChannelModal}
+	title="Delete notification channel"
+	description={channelToDelete ? `Delete "${channelToDelete.name}"? Notifications to this destination will stop immediately.` : ''}
+	confirmLabel="Delete channel"
+	onconfirm={() => {
+		if (channelToDelete) deleteNotificationChannel(channelToDelete.id);
 	}}
 	oncancel={() => {}}
 />

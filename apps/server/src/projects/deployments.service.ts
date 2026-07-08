@@ -23,6 +23,7 @@ import { MembershipCacheService } from '../auth/membership-cache.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { AuditService } from '../audit/audit.service';
 import { LeaderElectionService } from '../events/leader-election.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { ProjectAccessService } from './project-access.service';
 import { NodesService } from '../nodes/nodes.service';
 import { formatSlug } from './projects.utils';
@@ -55,6 +56,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     @Inject(forwardRef(() => NodesService))
     private readonly nodesService: NodesService,
     private readonly leaderElection: LeaderElectionService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   onModuleInit() {
@@ -4846,6 +4848,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
 
       console.log(`[Projects] Deployment ${deploymentId} completed successfully`);
+
+      this.notifications
+        .notifyDeploy(deploymentId, 'succeeded')
+        .catch((err) => this.logger.warn(`deploy notification failed for ${deploymentId}: ${err?.message ?? err}`));
 
       // Update GitHub deployment status to success
       if (data.githubDeploymentId && data.repoInfo && data.githubAccessToken) {

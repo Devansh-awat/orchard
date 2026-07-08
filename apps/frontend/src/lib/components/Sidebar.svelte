@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { animate } from 'motion';
-	import { Leaf, Folder, Shield, Globe, ScrollText } from 'lucide-svelte';
+	import { Leaf, Folder, Shield, Globe, ScrollText, Bell } from 'lucide-svelte';
 	import {
 		PanelLeftClose,
 		PanelRightClose,
@@ -17,6 +17,7 @@
 	import WorkspacesMenu from './WorkspacesMenu.svelte';
 	import UserMenu from './UserMenu.svelte';
 	import { selectedOrganization, sidebarCollapsed } from '$lib/stores';
+	import { featureFlag } from '$lib/posthog';
 
 	const isMac = $derived.by(() => {
 		if (typeof window === 'undefined') return false;
@@ -26,6 +27,7 @@
 
 	const orgSlug = $derived($selectedOrganization?.slug ?? '');
 	const isEnterprise = $derived($selectedOrganization?.plan === 'enterprise');
+	const notificationsEnabled = featureFlag('notifications');
 	const isSettingsRoute = $derived($page.url.pathname.startsWith('/' + orgSlug + '/settings'));
 	const settingsTab = $derived($page.url.searchParams.get('tab') || 'general');
 	const isAuditLogsRoute = $derived(
@@ -295,12 +297,26 @@
 							</div>
 							<span class="tree-node-label">Backups</span>
 						</a>
+						{#if $notificationsEnabled}
+							<a
+								href="/{orgSlug}/settings?tab=notifications"
+								class="tree-node-content"
+								class:is-active={settingsTab === 'notifications'}
+								{@attach navStagger(4)}
+								{@attach springHover({ lift: -1 })}
+							>
+								<div class="tree-icon-badge" style="background-color: #ec4899">
+									<Bell size={10} class="tree-icon-svg" />
+								</div>
+								<span class="tree-node-label">Notifications</span>
+							</a>
+						{/if}
 						{#if isEnterprise}
 							<a
 								href="/{orgSlug}/settings?tab=sso"
 								class="tree-node-content"
 								class:is-active={settingsTab === 'sso'}
-								{@attach navStagger(4)}
+								{@attach navStagger(5)}
 								{@attach springHover({ lift: -1 })}
 							>
 								<div class="tree-icon-badge" style="background-color: #ef4444">
@@ -312,7 +328,7 @@
 								href="/{orgSlug}/settings?tab=scim"
 								class="tree-node-content"
 								class:is-active={settingsTab === 'scim'}
-								{@attach navStagger(5)}
+								{@attach navStagger(6)}
 								{@attach springHover({ lift: -1 })}
 							>
 								<div class="tree-icon-badge" style="background-color: #f59e0b">
@@ -325,7 +341,7 @@
 							href="/{orgSlug}/settings/audit-logs"
 							class="tree-node-content"
 							class:is-active={isAuditLogsRoute}
-							{@attach navStagger(6)}
+							{@attach navStagger(7)}
 							{@attach springHover({ lift: -1 })}
 						>
 							<div class="tree-icon-badge" style="background-color: #475569">
@@ -394,6 +410,20 @@
 						</div>
 						<span class="sidebar-collapsed-tooltip">Backups</span>
 					</a>
+					{#if $notificationsEnabled}
+						<a
+							href="/{orgSlug}/settings?tab=notifications"
+							class="sidebar-collapsed-icon"
+							class:is-active={settingsTab === 'notifications'}
+							aria-label="Notifications"
+							{@attach springHover()}
+						>
+							<div class="tree-icon-badge" style="background-color: #ec4899">
+								<Bell size={11} class="tree-icon-svg" />
+							</div>
+							<span class="sidebar-collapsed-tooltip">Notifications</span>
+						</a>
+					{/if}
 					{#if isEnterprise}
 						<a
 							href="/{orgSlug}/settings?tab=sso"

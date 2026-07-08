@@ -259,6 +259,7 @@ model Organization {
   ssoConfig   SsoConfig?
   nodeAssignments OrgNodeAssignment[]
   scimTokens  ScimToken[]
+  notificationChannels NotificationChannel[]
 
   @@index([quotaGroupId], map: "idx_organizations_quota_group")
   @@map("organizations")
@@ -953,6 +954,43 @@ model SsoConfig {
 
   @@index([organizationId], map: "idx_sso_config_org")
   @@map("sso_configs")
+}
+
+// Outbound notification destination (discord/slack webhook, generic webhook, or
+// email recipient list). Org-scoped; projectIds null/empty = all projects
+// (Vercel-style scoping). `events` holds the subscribed event names.
+model NotificationChannel {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  name           String   @db.VarChar(100)
+  type           String   @db.VarChar(20)
+  config         Json     @default("{}") @db.JsonB
+  events         Json     @default("[]") @db.JsonB
+  projectIds     Json?    @map("project_ids") @db.JsonB
+  enabled        Boolean  @default(true)
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deliveries   NotificationDelivery[]
+
+  @@index([organizationId], map: "idx_notification_channels_org")
+  @@map("notification_channels")
+}
+
+model NotificationDelivery {
+  id        String   @id @default(uuid()) @db.Uuid
+  channelId String   @map("channel_id") @db.Uuid
+  event     String   @db.VarChar(50)
+  targetId  String?  @map("target_id") @db.Uuid
+  status    String   @db.VarChar(20)
+  error     String?  @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+
+  channel NotificationChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+
+  @@index([channelId, createdAt], map: "idx_notification_deliveries_lookup")
+  @@map("notification_deliveries")
 }
 
 // Long-lived bearer credential an IdP presents to the SCIM endpoints. Scoped to

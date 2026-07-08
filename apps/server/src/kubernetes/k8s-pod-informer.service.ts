@@ -4,12 +4,15 @@ import { KubernetesService } from './kubernetes.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrgEventsService } from '../events/org-events.service';
 import { LeaderElectionService } from '../events/leader-election.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PodLogCaptureService } from './pod-log-capture.service';
 
 const ORCHARD_SELECTOR = 'app.kubernetes.io/managed-by=orchard';
 const POSITIVE_TTL_MS = 10 * 60 * 1000;
 const NEGATIVE_TTL_MS = 30 * 1000;
 const EMIT_COALESCE_MS = 250;
+const CRASH_NOTIFY_COOLDOWN_MS = 15 * 60 * 1000;
+const CRASH_CONFIRM_MS = 30 * 1000;
 
 interface Ctx {
   deploymentId: string;
@@ -21,6 +24,13 @@ interface PendingEmit {
   ctx: Ctx;
   payload: unknown;
   timer: ReturnType<typeof setTimeout>;
+}
+
+interface CrashTrack {
+  crashing: boolean;
+  notifiedCrash: boolean;
+  lastNotifiedAt: number;
+  confirmTimer?: ReturnType<typeof setTimeout>;
 }
 
 @Injectable()
@@ -41,12 +51,15 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
 
   private readonly pending = new Map<string, PendingEmit>();
 
+  private readonly crashTracks = new Map<string, CrashTrack>();
+
   constructor(
     private readonly kubernetes: KubernetesService,
     private readonly prisma: PrismaService,
     private readonly orgEvents: OrgEventsService,
     private readonly leader: LeaderElectionService,
     private readonly logCapture: PodLogCaptureService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async onModuleInit() {
@@ -80,6 +93,10 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
     if (this.restartTimer) clearTimeout(this.restartTimer);
     for (const p of this.pending.values()) clearTimeout(p.timer);
     this.pending.clear();
+    for (const t of this.crashTracks.values()) {
+      if (t.confirmTimer) clearTimeout(t.confirmTimer);
+    }
+    this.crashTracks.clear();
     try {
       await this.informer?.stop();
     } catch {}
@@ -116,6 +133,7 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
     if (!ctx) return;
 
     await this.syncPod(type, ctx.deploymentId, pod);
+    void this.trackCrashState(type, ctx);
 
     if (type !== 'delete') {
       void this.logCapture.capture(ctx.deploymentId, ns, pod);
@@ -219,6 +237,91 @@ export class K8sPodInformerService implements OnModuleInit, OnModuleDestroy {
       this.logger.warn(
         `syncPod(${deploymentId}/${name}) failed: ${(err as Error)?.message ?? err}`,
       );
+    }
+  }
+
+  private async trackCrashState(type: 'add' | 'update' | 'delete', ctx: Ctx) {
+    try {
+      const pods = await this.prisma.pod.findMany({
+        where: { deploymentId: ctx.deploymentId },
+        select: { status: true },
+      });
+      const crashing = pods.some((p) => p.status === 'crashing');
+      const track = this.crashTracks.get(ctx.deploymentId);
+
+      if (!track) {
+        if (type === 'add') {
+          this.crashTracks.set(ctx.deploymentId, { crashing, notifiedCrash: false, lastNotifiedAt: 0 });
+          return;
+        }
+        this.crashTracks.set(ctx.deploymentId, { crashing: false, notifiedCrash: false, lastNotifiedAt: 0 });
+        if (crashing) this.scheduleCrashConfirm(ctx);
+        return;
+      }
+
+      if (crashing && !track.crashing) {
+        this.scheduleCrashConfirm(ctx);
+        return;
+      }
+
+      if (!crashing && track.crashing) {
+        if (track.confirmTimer) {
+          clearTimeout(track.confirmTimer);
+          track.confirmTimer = undefined;
+        }
+        track.crashing = false;
+        if (track.notifiedCrash) {
+          track.notifiedCrash = false;
+          this.notifications
+            .notifyPodState(ctx.deploymentId, 'recovered')
+            .catch((err) => this.logger.warn(`recovery notification failed for ${ctx.deploymentId}: ${err?.message ?? err}`));
+        }
+      }
+
+      if (pods.length === 0) {
+        const remaining = this.crashTracks.get(ctx.deploymentId);
+        if (remaining?.confirmTimer) clearTimeout(remaining.confirmTimer);
+        this.crashTracks.delete(ctx.deploymentId);
+      }
+    } catch (err) {
+      this.logger.warn(`trackCrashState(${ctx.deploymentId}) failed: ${(err as Error)?.message ?? err}`);
+    }
+  }
+
+  private scheduleCrashConfirm(ctx: Ctx) {
+    const track = this.crashTracks.get(ctx.deploymentId);
+    if (!track) return;
+    track.crashing = true;
+    if (track.confirmTimer) return;
+    track.confirmTimer = setTimeout(() => {
+      track.confirmTimer = undefined;
+      void this.confirmCrash(ctx);
+    }, CRASH_CONFIRM_MS);
+  }
+
+  private async confirmCrash(ctx: Ctx) {
+    if (this.stopped || !this.leader.isLeader()) return;
+    const track = this.crashTracks.get(ctx.deploymentId);
+    if (!track || !track.crashing || track.notifiedCrash) return;
+    try {
+      const crashingPod = await this.prisma.pod.findFirst({
+        where: { deploymentId: ctx.deploymentId, status: 'crashing' },
+        select: { lastTerminationReason: true, lastExitCode: true },
+      });
+      if (!crashingPod) {
+        track.crashing = false;
+        return;
+      }
+      const now = Date.now();
+      if (now - track.lastNotifiedAt < CRASH_NOTIFY_COOLDOWN_MS) return;
+      track.notifiedCrash = true;
+      track.lastNotifiedAt = now;
+      const detail = crashingPod.lastTerminationReason
+        ? `${crashingPod.lastTerminationReason}${crashingPod.lastExitCode != null ? ` (exit code ${crashingPod.lastExitCode})` : ''}`
+        : undefined;
+      await this.notifications.notifyPodState(ctx.deploymentId, 'crashing', detail);
+    } catch (err) {
+      this.logger.warn(`confirmCrash(${ctx.deploymentId}) failed: ${(err as Error)?.message ?? err}`);
     }
   }
 

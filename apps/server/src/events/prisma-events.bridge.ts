@@ -1,6 +1,7 @@
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { MembershipCacheService } from '../auth/membership-cache.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { OrgEventsService, OrgEventType } from './org-events.service';
 
 /**
@@ -39,6 +40,7 @@ export class PrismaEventsBridge implements OnModuleInit {
     private readonly prisma: PrismaService,
     private readonly orgEvents: OrgEventsService,
     private readonly membershipCache: MembershipCacheService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   onModuleInit() {
@@ -131,6 +133,13 @@ export class PrismaEventsBridge implements OnModuleInit {
     const isBuild = 'buildStatus' in data || 'buildStep' in data;
     const type: OrgEventType = isBuild ? 'build.changed' : 'deployment.changed';
     this.orgEvents.emit({ organizationId: ctx.orgId, type, id, projectId: ctx.projectId });
+
+    const buildStatus = typeof data.buildStatus === 'string' ? data.buildStatus : data.buildStatus?.set;
+    if (buildStatus === 'succeeded' || buildStatus === 'failed') {
+      this.notifications
+        .notifyDeploy(id!, buildStatus)
+        .catch((err) => this.logger.warn(`deploy notification failed for ${id}: ${err?.message ?? err}`));
+    }
   }
 
   private async emitForDatabase(params: any, result: any) {
