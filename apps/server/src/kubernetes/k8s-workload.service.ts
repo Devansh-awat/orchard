@@ -2701,6 +2701,38 @@ export class K8sWorkloadService {
         throw error;
       }
     }
+
+    // 7. Under Cilium, ipBlock rules can't select the apiserver (it has the
+    //    reserved kube-apiserver identity), so the egress rule above is inert
+    //    there — mirror it as a CiliumNetworkPolicy, same as allow-cnpg-apiserver.
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    const tsApiServerPolicy = {
+      apiVersion: 'cilium.io/v2',
+      kind: 'CiliumNetworkPolicy',
+      metadata: {
+        name: `ts-apiserver-${deploymentName}`,
+        namespace,
+        labels: orchardLabels,
+      },
+      spec: {
+        endpointSelector: {
+          matchLabels: { 'app.kubernetes.io/name': tsDeployName },
+        },
+        egress: [{ toEntities: ['kube-apiserver'] }],
+      },
+    };
+    try {
+      await customApi.createNamespacedCustomObject(
+        'cilium.io', 'v2', namespace, 'ciliumnetworkpolicies', tsApiServerPolicy,
+      );
+    } catch (e: any) {
+      const code = e.response?.statusCode;
+      if (code === 404) {
+        // Cilium CRD not installed — the vanilla NetworkPolicy rule covers it.
+      } else if (code !== 409) {
+        throw e;
+      }
+    }
   }
 
   /**
@@ -2735,6 +2767,16 @@ export class K8sWorkloadService {
       await networkingApi.deleteNamespacedNetworkPolicy(netpolName, namespace);
     } catch (e: any) {
       if (e.response?.statusCode !== 404) console.error(`[K8s] Failed to delete NetworkPolicy ${netpolName}:`, e);
+    }
+
+    // Delete the apiserver CiliumNetworkPolicy
+    try {
+      const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+      await customApi.deleteNamespacedCustomObject(
+        'cilium.io', 'v2', namespace, 'ciliumnetworkpolicies', `ts-apiserver-${deploymentName}`,
+      );
+    } catch (e: any) {
+      if (e.response?.statusCode !== 404) console.error(`[K8s] Failed to delete CNP ts-apiserver-${deploymentName}:`, e);
     }
 
     // Delete the ConfigMap
