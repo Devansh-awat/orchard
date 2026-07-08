@@ -215,8 +215,10 @@
 					</Button>
 				</div>
 				<p class="nc-hint">
-					Each delivery is signed: <code>x-orchard-signature: sha256=HMAC(secret, timestamp +
-						"." + body)</code> with the timestamp in <code>x-orchard-timestamp</code>.
+					Each delivery is signed: <code
+						>x-orchard-signature: sha256=HMAC(secret, timestamp + "." + body)</code
+					>
+					with the timestamp in <code>x-orchard-timestamp</code>.
 				</p>
 				<Button variant="ghost" size="sm" onclick={onDismissSecret}>Done</Button>
 			</div>
@@ -397,7 +399,13 @@
 					<Button variant="ghost" size="sm" onclick={() => (formOpen = false)} disabled={saving}>
 						Cancel
 					</Button>
-					<Button variant="primary" size="sm" onclick={submit} loading={saving} disabled={!formValid}>
+					<Button
+						variant="primary"
+						size="sm"
+						onclick={submit}
+						loading={saving}
+						disabled={!formValid}
+					>
 						{editingId ? 'Save channel' : 'Add channel'}
 					</Button>
 				</div>

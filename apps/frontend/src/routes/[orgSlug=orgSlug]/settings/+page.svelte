@@ -1147,7 +1147,9 @@
 <ConfirmModal
 	bind:open={showDeleteChannelModal}
 	title="Delete notification channel"
-	description={channelToDelete ? `Delete "${channelToDelete.name}"? Notifications to this destination will stop immediately.` : ''}
+	description={channelToDelete
+		? `Delete "${channelToDelete.name}"? Notifications to this destination will stop immediately.`
+		: ''}
 	confirmLabel="Delete channel"
 	onconfirm={() => {
 		if (channelToDelete) deleteNotificationChannel(channelToDelete.id);
