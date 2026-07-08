@@ -1327,6 +1327,7 @@ export class K8sCnpgService {
     // Import progress
     let importStatus: 'pending' | 'running' | 'completed' | 'failed' | undefined;
     let importLogs: string | undefined;
+    let importError: string | undefined;
     if (hasImport) {
       if (importPod) {
         const ipPhase = importPod.status?.phase;
@@ -1341,6 +1342,20 @@ export class K8sCnpgService {
           c.state?.waiting?.reason && /Err|BackOff|Failed/.test(c.state.waiting.reason),
         );
         if (crashy) importStatus = 'failed';
+
+        const oomKilled = ipContainers.find((c) => {
+          const reason = c.state?.terminated?.reason ?? c.lastState?.terminated?.reason;
+          return reason === 'OOMKilled';
+        });
+        if (oomKilled) {
+          importStatus = 'failed';
+          importError =
+            'The import ran out of memory while restoring data (OOMKilled). Recreate the database with more memory, or contact an admin if this keeps happening.';
+        } else if (importStatus === 'failed') {
+          const reason = crashy?.state?.waiting?.reason
+            ?? ipContainers.find((c) => c.state?.terminated || c.lastState?.terminated)?.state?.terminated?.reason;
+          if (reason) importError = `The import pod failed (${reason}). Check the migration logs below.`;
+        }
 
         if (opts?.fetchImportLogs && importPod.metadata?.name) {
           try {
@@ -1373,6 +1388,7 @@ export class K8sCnpgService {
       readyInstances,
       instances,
       hasImport,
+      importError,
       pvc,
       instancePod: instancePod
         ? {

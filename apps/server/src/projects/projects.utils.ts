@@ -67,3 +67,19 @@ export function stripR2ProxyCreds<
     r2ProxySecret: null,
   } as T;
 }
+
+export const GIB = 1024 * 1024 * 1024;
+
+export function parseStorageSize(size: string): number | null {
+  const m = size.match(/^(\d+)(Mi|Gi|Ti)$/);
+  if (!m) return null;
+  const n = Number(m[1]);
+  if (m[2] === 'Mi') return n * 1024 * 1024;
+  if (m[2] === 'Gi') return n * GIB;
+  return n * 1024 * GIB;
+}
+
+export function formatBytes(bytes: number): string {
+  if (bytes >= GIB) return `${(bytes / GIB).toFixed(bytes % GIB === 0 ? 0 : 1)}GiB`;
+  return `${Math.max(1, Math.round(bytes / (1024 * 1024)))}MiB`;
+}

@@ -295,6 +295,12 @@ export class ProjectsService {
       throw new BadRequestException('Database does not support resource updates');
     }
 
+    if (database.importBoosted) {
+      throw new BadRequestException(
+        'Resources cannot be changed while the initial import is running. Try again once provisioning completes.',
+      );
+    }
+
     const resolved = await this.quotasService.resolvePodResources(database.projectId, {
       cpuRequestMilli: data.cpuRequestMilli,
       memoryRequestBytes: data.memoryRequestBytes,

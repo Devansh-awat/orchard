@@ -20,7 +20,7 @@ import { AuditService } from '../audit/audit.service';
 import { QuotasService } from '../quotas/quotas.service';
 import { ProjectAccessService } from './project-access.service';
 import { BackupSyncService } from './backup-sync.service';
-import { formatSlug, redactDatabaseForViewer, stripR2ProxyCreds, truncateK8sName } from './projects.utils';
+import { formatSlug, redactDatabaseForViewer, stripR2ProxyCreds, truncateK8sName, parseStorageSize, formatBytes, GIB } from './projects.utils';
 
 @Injectable()
 export class DatabasesService {
@@ -45,6 +45,13 @@ export class DatabasesService {
   // ── Database (PostgreSQL) Management ──
 
   private readonly TARGET_PG_MAJOR = 17;
+
+  // pg_restore under CNPG's import-optimized config OOMs at small memory
+  // limits, so imports provision at least this much and settle back down
+  // once bootstrap completes (ImportSettleService).
+  private readonly IMPORT_BOOST_CPU_MILLI = 500;
+
+  private readonly IMPORT_BOOST_MEMORY_BYTES = 1024 * 1024 * 1024;
 
   /**
    * Build the R2/backup config object that gets handed to the in-cluster
@@ -124,7 +131,7 @@ export class DatabasesService {
     password: string;
     database: string;
     sslMode?: string;
-  }): Promise<void> {
+  }): Promise<{ sourceSizeBytes: number | null }> {
     const ssl = src.sslMode && src.sslMode !== 'disable'
       ? { rejectUnauthorized: false }
       : false;
@@ -182,6 +189,17 @@ export class DatabasesService {
           `Source PostgreSQL major version (${sourceMajor}) is newer than the target (${this.TARGET_PG_MAJOR}); import is not supported.`,
         );
       }
+
+      let sourceSizeBytes: number | null = null;
+      try {
+        const r = await client.query('SELECT pg_database_size(current_database()) AS size');
+        const size = Number(r.rows?.[0]?.size);
+        if (Number.isFinite(size) && size > 0) sourceSizeBytes = size;
+      } catch {
+        // Providers that deny pg_database_size shouldn't block the import;
+        // the storage guard just doesn't apply.
+      }
+      return { sourceSizeBytes };
     } finally {
       try { await client.end(); } catch { /* ignore */ }
     }
@@ -267,23 +285,6 @@ export class DatabasesService {
     const sizeRaw = typeof data.storageSize === 'string' ? data.storageSize.trim() : '';
     const storageSize = /^\d+(Mi|Gi|Ti)$/.test(sizeRaw) ? sizeRaw : '1Gi';
 
-    const dbResources = await this.quotasService.resolvePodResources(projectId, {
-      cpuRequestMilli: data.cpuRequestMilli ?? null,
-      memoryRequestBytes: data.memoryRequestBytes ?? null,
-    });
-    await this.quotasService.enforceOrgCapForNewPod(project.organizationId, {
-      cpuMilli: dbResources.cpuMilli,
-      memoryBytes: dbResources.memoryBytes,
-    });
-    await this.quotasService.enforceMemberAllowanceForNewPod(
-      project.organizationId,
-      project.ownerId,
-      { cpuMilli: dbResources.cpuMilli, memoryBytes: dbResources.memoryBytes },
-    );
-    await this.quotasService.applyProjectQuota(projectId).catch((err) => {
-      console.error('[Projects] applyProjectQuota (db) failed:', err);
-    });
-
     let importFrom: {
       host: string;
       port?: number;
@@ -317,8 +318,53 @@ export class DatabasesService {
     }
 
     if (importFrom) {
-      await this.validateImportSource(importFrom);
+      const { sourceSizeBytes } = await this.validateImportSource(importFrom);
+      // CNPG's microservice import writes the pg_dump onto the same volume the
+      // data is restored into, so the PVC has to hold both at once.
+      if (sourceSizeBytes) {
+        const storageBytes = parseStorageSize(storageSize);
+        const requiredBytes = sourceSizeBytes * 2;
+        if (storageBytes != null && storageBytes < requiredBytes) {
+          const suggestedGi = Math.max(1, Math.ceil(requiredBytes / GIB));
+          throw new BadRequestException(
+            `The source database is ${formatBytes(sourceSizeBytes)}, and the import needs room for both the dump and the restored data on the same volume. Choose at least ${suggestedGi}Gi of storage.`,
+          );
+        }
+      }
     }
+
+    const dbResources = await this.quotasService.resolvePodResources(projectId, {
+      cpuRequestMilli: data.cpuRequestMilli ?? null,
+      memoryRequestBytes: data.memoryRequestBytes ?? null,
+    });
+    const provisionResources = importFrom
+      ? {
+          cpuMilli: Math.max(dbResources.cpuMilli, this.IMPORT_BOOST_CPU_MILLI),
+          memoryBytes: Math.max(dbResources.memoryBytes, this.IMPORT_BOOST_MEMORY_BYTES),
+        }
+      : { cpuMilli: dbResources.cpuMilli, memoryBytes: dbResources.memoryBytes };
+    const importBoosted =
+      provisionResources.cpuMilli !== dbResources.cpuMilli ||
+      provisionResources.memoryBytes !== dbResources.memoryBytes;
+
+    try {
+      await this.quotasService.enforceOrgCapForNewPod(project.organizationId, provisionResources);
+      await this.quotasService.enforceMemberAllowanceForNewPod(
+        project.organizationId,
+        project.ownerId,
+        provisionResources,
+      );
+    } catch (e: any) {
+      if (importBoosted) {
+        throw new BadRequestException(
+          `Importing a database temporarily provisions it with ${this.IMPORT_BOOST_CPU_MILLI}m CPU / ${formatBytes(this.IMPORT_BOOST_MEMORY_BYTES)} memory while the migration runs (it scales back down afterwards), and your quota can't fit that right now. ${e?.message || ''}`.trim(),
+        );
+      }
+      throw e;
+    }
+    await this.quotasService.applyProjectQuota(projectId).catch((err) => {
+      console.error('[Projects] applyProjectQuota (db) failed:', err);
+    });
 
     let host: string;
     let port: number;
@@ -331,7 +377,7 @@ export class DatabasesService {
         dbPassword,
         storageSize,
         r2,
-        resources: dbResources,
+        resources: provisionResources,
         importFrom,
       }));
     } catch (e) {
@@ -359,6 +405,7 @@ export class DatabasesService {
           storageSize,
           cpuRequestMilli: data.cpuRequestMilli ?? null,
           memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
+          importBoosted,
           host,
           port,
           createdBy: user.id,
@@ -616,7 +663,10 @@ export class DatabasesService {
       steps.push({
         id: 'import',
         label: 'Migrating data from source database',
-        description: 'CloudNativePG is dumping the source DB and restoring into this cluster.',
+        description:
+          importStatus === 'error' && k.importError
+            ? k.importError
+            : 'CloudNativePG is dumping the source DB and restoring into this cluster.',
         status: importStatus,
       });
     }

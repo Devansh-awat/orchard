@@ -791,6 +791,10 @@ model Database {
   sharedPreloadLibs Json?    @map("shared_preload_libs")
   installedExtensions Json?  @map("installed_extensions")
   backupScheduleCron String?  @map("backup_schedule_cron") @db.VarChar(100)
+
+  // Resources were raised above the user's request for the initial import;
+  // the settle loop scales the cluster back down once bootstrap completes.
+  importBoosted     Boolean  @default(false) @map("import_boosted")
   publicEnabled      Boolean  @default(false) @map("public_enabled")
   publicIp           String?  @map("public_ip") @db.VarChar(45)
   publicPort         Int?     @map("public_port")
