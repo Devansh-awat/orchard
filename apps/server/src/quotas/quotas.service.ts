@@ -4,6 +4,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { K8sNamespaceService } from '../kubernetes/k8s-namespace.service';
 import { DEFAULT_CPU_MILLI, DEFAULT_MEMORY_BYTES } from '../kubernetes/presets';
+import { formatBytes } from '../projects/projects.utils';
 
 export interface Caps {
   cpuLimitMilli: number | null;
@@ -191,7 +192,7 @@ export class QuotasService {
     }
     if (capMem && usage.memoryBytes + requested.memoryBytes > capMem) {
       throw new ForbiddenException(
-        `Organization memory quota exceeded: need ${usage.memoryBytes + requested.memoryBytes}B, limit ${capMem}B`,
+        `Organization memory quota exceeded: need ${formatBytes(usage.memoryBytes + requested.memoryBytes)}, limit ${formatBytes(capMem)}`,
       );
     }
     if (capPods && usage.pods + 1 > capPods) {
@@ -594,7 +595,7 @@ export class QuotasService {
       usage.memoryBytes + requested.memoryBytes > allowance.memoryBytes
     ) {
       throw new ForbiddenException(
-        `User memory allowance exceeded: need ${usage.memoryBytes + requested.memoryBytes}B, allowance ${allowance.memoryBytes}B`,
+        `User memory allowance exceeded: need ${formatBytes(usage.memoryBytes + requested.memoryBytes)}, allowance ${formatBytes(allowance.memoryBytes)}`,
       );
     }
   }

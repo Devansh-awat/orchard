@@ -1524,7 +1524,8 @@
 				body: JSON.stringify({ replicas: scaleReplicas })
 			});
 			if (!response.ok) {
-				throw new Error('Failed to scale app');
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to scale app');
 			}
 			toasts.add({
 				title: 'App scaled',
