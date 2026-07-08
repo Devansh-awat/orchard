@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.17.1](https://github.com/LeafdTK/leaf/compare/server/v1.17.0...server/v1.17.1) (2026-07-08)
+
+
+### Bug Fixes
+
+* allow kube apiserver egress in tailscale proxy network policy ([b976cca](https://github.com/LeafdTK/leaf/commit/b976ccaa7c93872bd51e12dec029b077f8997c76))
+* boost db resources during import, settle after, and guard storage size ([e593566](https://github.com/LeafdTK/leaf/commit/e593566ae9e0e17c6659c050bd1abc7a841f353f))
+* make depot build failures loud and match buildkit lint behavior ([2cad74a](https://github.com/LeafdTK/leaf/commit/2cad74ac66ccd3d9d8992be35557d4a56997f2ed))
+* run ANALYZE after cnpg import so restored dbs have planner stats ([6f8458a](https://github.com/LeafdTK/leaf/commit/6f8458a61f895bb0d6735374bd5b0aaf42288417))
+* surface real error when scaling fails ([bfb963b](https://github.com/LeafdTK/leaf/commit/bfb963bb820b12f5b1bc71a652a27b3e669a9560))
+
 ## [1.17.0](https://github.com/LeafdTK/leaf/compare/server/v1.16.0...server/v1.17.0) (2026-07-08)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.13.1](https://github.com/LeafdTK/leaf/compare/frontend/v0.13.0...frontend/v0.13.1) (2026-07-08)
+
+
+### Bug Fixes
+
+* surface real error when scaling fails ([bfb963b](https://github.com/LeafdTK/leaf/commit/bfb963bb820b12f5b1bc71a652a27b3e669a9560))
+
 ## [0.13.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.12.0...frontend/v0.13.0) (2026-07-08)
 
 
