@@ -687,42 +687,54 @@ ${registryConfigs}
       .map(([key]) => `--build-arg "${key}=\${${key}}"`)
       .join(' ');
 
+    // Same lint behavior as the BuildKit path: without this, a repo's
+    // "# check=error=true" directive fails depot builds that pass locally.
+    const checkArgLine = 'BUILDKIT_DOCKERFILE_CHECK' in envVars
+      ? ''
+      : '--build-arg "BUILDKIT_DOCKERFILE_CHECK=skip=SecretsUsedInArgOrEnv"';
+
     const targetFlag = target ? `--target "${target}"` : '';
 
     const depotScript = `set -e
 echo "=== Installing Super Build tools ==="
-apt-get update -qq && apt-get install -y -qq curl >/dev/null 2>&1
-curl -L https://depot.dev/install-cli.sh | sh
+if ! command -v curl >/dev/null 2>&1; then
+  apt-get update -qq
+  apt-get install -y -qq curl
+fi
+curl -fsSL https://depot.dev/install-cli.sh | sh
 export PATH="/root/.depot/bin:$PATH"
+command -v depot >/dev/null 2>&1 || { echo "ERROR: Super Build CLI install failed"; exit 1; }
 
-# Create docker config with registry credentials for Depot to use when pushing
-mkdir -p /tmp/.docker
-cat > /tmp/.docker/config.json << 'DOCKERCFG'
-{"auths":{"$REGISTRY_HOST":{"username":"$REGISTRY_USER","password":"$REGISTRY_PASS","auth":"$(echo -n $REGISTRY_USER:$REGISTRY_PASS | base64)"}}}
-DOCKERCFG
-# Re-expand env vars in the config
 REGISTRY_AUTH=$(echo -n "$REGISTRY_USER:$REGISTRY_PASS" | base64)
+mkdir -p /tmp/.docker
 cat > /tmp/.docker/config.json << EOF
 {"auths":{"$REGISTRY_HOST":{"username":"$REGISTRY_USER","password":"$REGISTRY_PASS","auth":"$REGISTRY_AUTH"}}}
 EOF
 export DOCKER_CONFIG=/tmp/.docker
 
 echo "=== Building with Super Builds ==="
-depot build \\
+echo 0 > /tmp/build_rc
+{ depot build \\
   --platform linux/amd64 \\
   -f "${dockerfileFlag}" \\
   -t "${fullImageName}" \\
   --push \\
   ${targetFlag} \\
+  ${checkArgLine} \\
   ${buildArgLines} \\
-  "${contextDir}" 2>&1 | sed -e 's/\\[depot\\]/[super-build]/gi' -e 's|https://depot\\.dev/[^ ]*||g' -e 's/depot build/super build/gi'
+  "${contextDir}" 2>&1 || echo "$?" > /tmp/build_rc; } | sed -e 's/\\[depot\\]/[super-build]/gi' -e 's|https://depot\\.dev/[^ ]*||g' -e 's/depot build/super build/gi'
+BUILD_RC=$(cat /tmp/build_rc)
+if [ "$BUILD_RC" -ne 0 ]; then
+  echo "=== Super Build failed (exit code $BUILD_RC) ==="
+  exit "$BUILD_RC"
+fi
 
 echo "=== Super Build completed ==="
 `;
 
     return {
       name: 'depot-build',
-      image: 'debian:bookworm-slim',
+      image: 'buildpack-deps:bookworm-curl',
       command: ['/bin/sh', '-c'],
       args: [depotScript],
       workingDir: '/workspace',
