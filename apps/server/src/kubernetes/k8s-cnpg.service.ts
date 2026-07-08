@@ -999,6 +999,9 @@ export class K8sCnpgService {
         type: 'microservice',
         databases: [options.importFrom.database],
         source: { externalCluster: sourceName },
+        // pg_restore never runs ANALYZE, so without this the planner has zero
+        // statistics until autoanalyze catches up and every query misplans.
+        postImportApplicationSQL: ['ANALYZE'],
       };
     }
 
