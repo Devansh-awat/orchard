@@ -2617,6 +2617,26 @@ export class K8sWorkloadService {
 
     // 6. Create a strict NetworkPolicy — the TS proxy pod can ONLY talk to the
     //    target deployment's pods. No internet, no other namespaces, no DNS even.
+    //
+    // The TS container stores its state in the ts-auth Secret (see RBAC above),
+    // so it must also reach the kube apiserver. NetworkPolicy is enforced after
+    // kube-proxy DNAT, so allow the real endpoint IPs behind kubernetes.default,
+    // not the service ClusterIP.
+    let apiServerPeers: k8s.V1NetworkPolicyPeer[] = [];
+    let apiServerPorts: k8s.V1NetworkPolicyPort[] = [{ port: 6443 as any, protocol: 'TCP' as any }];
+    try {
+      const eps = await coreApi.readNamespacedEndpoints('kubernetes', 'default');
+      const subsets = eps.body.subsets ?? [];
+      const ips = subsets.flatMap((s) => (s.addresses ?? []).map((a) => a.ip));
+      const ports = subsets.flatMap((s) => (s.ports ?? []).map((p) => p.port));
+      if (ips.length && ports.length) {
+        apiServerPeers = ips.map((ip) => ({ ipBlock: { cidr: `${ip}/32` } }));
+        apiServerPorts = [...new Set(ports)].map((port) => ({ port: port as any, protocol: 'TCP' as any }));
+      }
+    } catch {
+      // Fall back to allowing 6443 to any peer.
+    }
+
     const netpolName = `ts-isolate-${deploymentName}`;
     const netpolBody: k8s.V1NetworkPolicy = {
       metadata: { name: netpolName, namespace, labels: orchardLabels },
@@ -2662,6 +2682,11 @@ export class K8sWorkloadService {
               { port: 3478, protocol: 'UDP' as any },   // STUN
               { port: 41641, protocol: 'UDP' as any },  // WireGuard direct
             ],
+          },
+          // Allow the kube apiserver (state Secret reads/writes)
+          {
+            to: apiServerPeers,
+            ports: apiServerPorts,
           },
         ],
       },
