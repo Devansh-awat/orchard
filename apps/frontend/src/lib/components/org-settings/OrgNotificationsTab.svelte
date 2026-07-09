@@ -55,7 +55,10 @@
 		index?: number;
 	} = $props();
 
-	const EVENT_GROUPS: { label: string; options: { value: string; label: string; tone: 'ok' | 'fail' }[] }[] = [
+	const EVENT_GROUPS: {
+		label: string;
+		options: { value: string; label: string; tone: 'ok' | 'fail' }[];
+	}[] = [
 		{
 			label: 'Deploys',
 			options: [
@@ -75,6 +78,13 @@
 			options: [
 				{ value: 'backup.completed', label: 'Completed', tone: 'ok' },
 				{ value: 'backup.failed', label: 'Failed', tone: 'fail' }
+			]
+		},
+		{
+			label: 'Jobs',
+			options: [
+				{ value: 'job.succeeded', label: 'Succeeded', tone: 'ok' },
+				{ value: 'job.failed', label: 'Failed', tone: 'fail' }
 			]
 		}
 	];
@@ -252,7 +262,7 @@
 			<div class="nc-secret-reveal" {@attach motionStagger({ from: { y: 6 } })}>
 				<div class="nc-secret-head">
 					<TriangleAlert class="h-4 w-4" />
-				<span>Webhook signing secret. Copy it now, it won't be shown again.</span>
+					<span>Webhook signing secret. Copy it now, it won't be shown again.</span>
 				</div>
 				<div class="nc-secret-row">
 					<Input class="nc-secret-input" value={createdSecret} readonly />

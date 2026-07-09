@@ -11,6 +11,8 @@ export type OrgEventType =
 	| 'pod.changed'
 	| 'membership.changed'
 	| 'deployment.metrics'
+	| 'job.changed'
+	| 'jobrun.changed'
 	| 'heartbeat';
 
 export interface OrgEvent {
@@ -83,6 +85,20 @@ function applyEventToCache(sub: Subscription, ev: OrgEvent) {
 		case 'membership.changed':
 			qc.invalidateQueries({ queryKey: ['projects', sub.orgId] });
 			break;
+		case 'job.changed':
+			qc.invalidateQueries({ queryKey: ['jobs', sub.orgId] });
+			if (ev.id) qc.invalidateQueries({ queryKey: ['job', ev.id] });
+			break;
+		case 'jobrun.changed': {
+			qc.invalidateQueries({ queryKey: ['jobs', sub.orgId] });
+			const jobId = ev.payload?.jobId;
+			if (jobId) {
+				qc.invalidateQueries({ queryKey: ['job', jobId] });
+				qc.invalidateQueries({ queryKey: ['job-runs', jobId] });
+			}
+			if (ev.id) qc.invalidateQueries({ queryKey: ['job-run', ev.id] });
+			break;
+		}
 		default:
 			break;
 	}

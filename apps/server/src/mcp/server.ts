@@ -5,6 +5,7 @@ import { registerDeploymentTools } from './tools/deployments';
 import { registerConfigurationTools } from './tools/configuration';
 import { registerResourceTools } from './tools/resources';
 import { registerNotificationTools } from './tools/notifications';
+import { registerJobTools } from './tools/jobs';
 import { registerDangerousTools } from './tools/dangerous';
 
 export function createOrchardMcpServer(token?: string, actingUser?: ActingUser) {
@@ -31,6 +32,9 @@ export function createOrchardMcpServer(token?: string, actingUser?: ActingUser) 
 
   // Notification channels (list, create, update, test, deliveries)
   registerNotificationTools(server, client);
+
+  // Jobs (scheduled/on-demand pipelines: CRUD, run, history, logs)
+  registerJobTools(server, client);
 
   // Destructive operations (all deletes)
   registerDangerousTools(server, client);

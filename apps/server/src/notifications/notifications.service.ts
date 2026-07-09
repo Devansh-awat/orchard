@@ -179,6 +179,58 @@ export class NotificationsService {
     });
   }
 
+  async notifyJobRun(runId: string, status: 'succeeded' | 'failed') {
+    const run = await this.prisma.jobRun.findUnique({
+      where: { id: runId },
+      select: {
+        id: true,
+        number: true,
+        trigger: true,
+        errorMessage: true,
+        job: {
+          select: {
+            id: true,
+            name: true,
+            project: {
+              select: {
+                id: true,
+                name: true,
+                organizationId: true,
+                organization: { select: { slug: true } },
+              },
+            },
+          },
+        },
+        steps: {
+          where: { status: { in: ['failed', 'timed_out'] } },
+          orderBy: { stepOrder: 'asc' },
+          take: 1,
+          select: { name: true, stepOrder: true, reason: true },
+        },
+      },
+    });
+    if (!run) return;
+    const { job } = run;
+    const succeeded = status === 'succeeded';
+    const failedStep = run.steps[0];
+    await this.notify(job.project.organizationId, {
+      event: succeeded ? 'job.succeeded' : 'job.failed',
+      title: `Job run ${status}: ${job.name} #${run.number}`,
+      body: succeeded
+        ? `Run #${run.number} of "${job.name}" completed successfully.`
+        : `Run #${run.number} of "${job.name}" failed${failedStep ? ` at step ${failedStep.stepOrder} (${failedStep.name})` : ''}${run.errorMessage ? `: ${truncate(run.errorMessage, 300)}` : '.'}`,
+      url: `${this.frontendUrl}/${job.project.organization.slug}/jobs/${job.id}/runs/${run.id}`,
+      projectId: job.project.id,
+      projectName: job.project.name,
+      targetId: run.id,
+      targetName: job.name,
+      fields: [
+        { name: 'Trigger', value: run.trigger },
+        ...(failedStep?.reason ? [{ name: 'Reason', value: failedStep.reason }] : []),
+      ],
+    });
+  }
+
   async notify(organizationId: string, message: NotificationMessage) {
     // Dispatch kill switch. The 'notifications' flag is enrollment-based (early
     // access), so force the enrollment property here: disabling the flag stops

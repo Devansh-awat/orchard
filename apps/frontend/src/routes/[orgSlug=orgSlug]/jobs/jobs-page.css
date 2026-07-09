@@ -1,0 +1,124 @@
+.jobs-page {
+	max-width: 62rem;
+	margin: 0 auto;
+	padding: 2rem 1.5rem 4rem;
+}
+
+.jobs-page-header {
+	display: flex;
+	align-items: flex-end;
+	justify-content: space-between;
+	gap: 1rem;
+	margin-bottom: 1.5rem;
+	flex-wrap: wrap;
+}
+
+.jobs-page-title {
+	font-size: 1.5rem;
+	font-weight: 700;
+	color: var(--center-channel-color);
+}
+
+.jobs-page-header-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+}
+
+.jobs-page-header-actions :global(.jobs-project-filter) {
+	min-width: 11rem;
+}
+
+.jobs-list {
+	display: flex;
+	flex-direction: column;
+	gap: 0.7rem;
+}
+
+.jobs-empty {
+	display: flex;
+	flex-direction: column;
+	align-items: center;
+	gap: 0.5rem;
+	padding: 4rem 1.5rem 4.5rem;
+	border-radius: 1rem;
+	border: 1px dashed var(--surface-border);
+}
+
+.jobs-empty-title {
+	font-size: 1rem;
+	font-weight: 650;
+	color: var(--center-channel-color);
+	margin-top: 1.5rem;
+}
+
+.jobs-empty-desc {
+	font-size: 0.82rem;
+	color: var(--surface-muted);
+	margin-bottom: 1rem;
+}
+
+.jobs-ghost {
+	display: flex;
+	flex-direction: column;
+	width: 15rem;
+	opacity: 0.75;
+}
+
+.jobs-ghost-tag {
+	display: block;
+	width: 3.2rem;
+	height: 0.85rem;
+	margin-left: 0.8rem;
+	margin-bottom: -1px;
+	border: 1px solid var(--surface-border);
+	border-bottom: none;
+	border-radius: 0.45rem 0.45rem 0 0;
+	background: var(--control-bg);
+}
+
+.jobs-ghost-card {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+	padding: 0.7rem 0.9rem;
+	border: 1px solid var(--surface-border);
+	border-radius: 0.75rem;
+	border-top-left-radius: 0;
+	background: var(--surface-bg);
+	box-shadow:
+		0 1px 2px rgb(0 0 0 / 0.03),
+		0 6px 18px rgb(0 0 0 / 0.05);
+}
+
+.jobs-ghost-ring {
+	width: 18px;
+	height: 18px;
+	border-radius: 9999px;
+	border: 1.5px solid var(--surface-border);
+	flex-shrink: 0;
+}
+
+.jobs-ghost-line {
+	height: 7px;
+	border-radius: 9999px;
+	background: var(--control-bg);
+}
+
+.jobs-ghost-connector {
+	height: 1.1rem;
+	margin-left: calc(0.9rem + 9px);
+	border-left: 2px dashed var(--surface-border);
+}
+
+.jobs-form-wrap {
+	display: flex;
+	flex-direction: column;
+	gap: 1.25rem;
+}
+
+.jobs-form-actions {
+	display: flex;
+	align-items: center;
+	gap: 0.6rem;
+}

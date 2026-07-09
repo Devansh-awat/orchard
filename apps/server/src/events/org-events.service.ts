@@ -10,7 +10,9 @@ export type OrgEventType =
   | 'project.changed'
   | 'pod.changed'
   | 'membership.changed'
-  | 'deployment.metrics';
+  | 'deployment.metrics'
+  | 'job.changed'
+  | 'jobrun.changed';
 
 export interface OrgEvent {
   organizationId: string;

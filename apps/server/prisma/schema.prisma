@@ -49,6 +49,8 @@ model User {
   triggeredBuilds              ImageHistory[]
   createdWebhookTokens         DeploymentWebhookToken[] @relation("WebhookTokenCreator")
   tailscaleConnection          TailscaleConnection?
+  createdJobs                  Job[]                    @relation("JobCreator")
+  triggeredJobRuns             JobRun[]                 @relation("JobRunTrigger")
 
   @@map("users")
 }
@@ -385,6 +387,7 @@ model Project {
   databases         Database[]
   templateInstances TemplateInstance[]
   composeStacks     ComposeStack[]
+  jobs              Job[]
 
   @@unique([organizationId, slug])
   @@index([organizationId], map: "idx_projects_organization")
@@ -501,6 +504,7 @@ model Deployment {
   volumes            DeploymentVolume[]
   githubDeployments  GitHubDeployment[]
   webhookTokens      DeploymentWebhookToken[]
+  jobSteps           JobStep[]
 
   @@unique([projectId, name])
   @@index([projectId], map: "idx_deployments_project")
@@ -840,6 +844,111 @@ model DatabaseBackup {
 
   @@index([databaseId, createdAt], map: "idx_database_backups_lookup")
   @@map("database_backups")
+}
+
+model Job {
+  id                String   @id @default(uuid()) @db.Uuid
+  projectId         String   @map("project_id") @db.Uuid
+  name              String   @db.VarChar(255)
+  description       String?  @db.Text
+  // 5-field cron, UTC unless timeZone set. Null = manual-only.
+  scheduleCron      String?  @map("schedule_cron") @db.VarChar(100)
+  timeZone          String?  @map("time_zone") @db.VarChar(64)
+  enabled           Boolean  @default(true)
+  concurrencyPolicy String   @default("forbid") @map("concurrency_policy") @db.VarChar(20)
+  runTimeoutSeconds Int      @default(21600) @map("run_timeout_seconds")
+  cronJobName       String?  @map("cronjob_name") @db.VarChar(63)
+  runCounter        Int      @default(0) @map("run_counter")
+  createdBy         String?  @map("created_by") @db.Uuid
+  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  project Project   @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  creator User?     @relation("JobCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  steps   JobStep[]
+  runs    JobRun[]
+
+  @@unique([projectId, name])
+  @@index([projectId], map: "idx_jobs_project")
+  @@map("jobs")
+}
+
+model JobStep {
+  id                 String  @id @default(uuid()) @db.Uuid
+  jobId              String  @map("job_id") @db.Uuid
+  stepOrder          Int     @map("step_order")
+  name               String  @db.VarChar(255)
+  type               String  @db.VarChar(20)
+  deploymentId       String? @map("deployment_id") @db.Uuid
+  image              String? @db.VarChar(500)
+  command            Json?   @db.JsonB
+  script             String? @db.Text
+  scriptRuntime      String? @map("script_runtime") @db.VarChar(20)
+  envVars            Json    @default("[]") @map("env_vars") @db.JsonB
+  cpuRequestMilli    Int?    @map("cpu_request_milli")
+  memoryRequestBytes BigInt? @map("memory_request_bytes")
+  timeoutSeconds     Int     @default(1800) @map("timeout_seconds")
+  retries            Int     @default(0)
+
+  job        Job         @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  deployment Deployment? @relation(fields: [deploymentId], references: [id], onDelete: SetNull)
+
+  @@unique([jobId, stepOrder])
+  @@index([jobId], map: "idx_job_steps_job")
+  @@index([deploymentId], map: "idx_job_steps_deployment")
+  @@map("job_steps")
+}
+
+model JobRun {
+  id               String    @id @default(uuid()) @db.Uuid
+  jobId            String    @map("job_id") @db.Uuid
+  number           Int
+  trigger          String    @db.VarChar(20)
+  triggeredBy      String?   @map("triggered_by") @db.Uuid
+  status           String    @default("pending") @db.VarChar(20)
+  // Fully-resolved step specs frozen at materialization; run history renders
+  // from this, never from live JobStep rows.
+  stepsSnapshot    Json      @map("steps_snapshot") @db.JsonB
+  currentStepOrder Int?      @map("current_step_order")
+  errorMessage     String?   @map("error_message") @db.Text
+  scheduledFor     DateTime? @map("scheduled_for") @db.Timestamp(6)
+  startedAt        DateTime? @map("started_at") @db.Timestamp(6)
+  finishedAt       DateTime? @map("finished_at") @db.Timestamp(6)
+  createdAt        DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+
+  job       Job          @relation(fields: [jobId], references: [id], onDelete: Cascade)
+  triggerer User?        @relation("JobRunTrigger", fields: [triggeredBy], references: [id], onDelete: SetNull)
+  steps     JobRunStep[]
+
+  @@unique([jobId, number])
+  @@index([jobId, createdAt(sort: Desc)], map: "idx_job_runs_job_created")
+  @@index([status], map: "idx_job_runs_status")
+  @@map("job_runs")
+}
+
+model JobRunStep {
+  id            String    @id @default(uuid()) @db.Uuid
+  runId         String    @map("run_id") @db.Uuid
+  stepOrder     Int       @map("step_order")
+  name          String    @db.VarChar(255)
+  type          String    @db.VarChar(20)
+  resolvedImage String?   @map("resolved_image") @db.VarChar(500)
+  command       Json?     @db.JsonB
+  k8sJobName    String?   @map("k8s_job_name") @db.VarChar(63)
+  k8sJobUid     String?   @unique @map("k8s_job_uid") @db.VarChar(64)
+  status        String    @default("pending") @db.VarChar(20)
+  exitCode      Int?      @map("exit_code")
+  reason        String?   @db.VarChar(255)
+  logs          String?   @db.Text
+  logsTruncated Boolean   @default(false) @map("logs_truncated")
+  startedAt     DateTime? @map("started_at") @db.Timestamp(6)
+  finishedAt    DateTime? @map("finished_at") @db.Timestamp(6)
+
+  run JobRun @relation(fields: [runId], references: [id], onDelete: Cascade)
+
+  @@unique([runId, stepOrder])
+  @@index([runId], map: "idx_job_run_steps_run")
+  @@map("job_run_steps")
 }
 
 model Template {

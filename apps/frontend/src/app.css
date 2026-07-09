@@ -608,6 +608,111 @@ html {
 	color: var(--surface-muted);
 }
 
+.ui-dropdown-trigger {
+	@apply w-full rounded-lg border text-sm focus:outline-none;
+	display: inline-flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.5rem;
+	padding: 0.625rem 0.75rem 0.625rem 0.875rem;
+	border-color: var(--surface-border);
+	background-color: var(--surface-bg);
+	color: var(--center-channel-color);
+	cursor: pointer;
+	text-align: left;
+	transition:
+		border-color 150ms ease,
+		background-color 150ms ease,
+		box-shadow 150ms ease;
+}
+
+.ui-dropdown-trigger:hover:not(:disabled) {
+	background-color: var(--control-bg);
+}
+
+.ui-dropdown-trigger:focus-visible,
+.ui-dropdown-trigger--open {
+	border-color: var(--button-bg);
+	box-shadow: 0 0 0 3px color-mix(in srgb, var(--button-bg) 18%, transparent);
+}
+
+.ui-dropdown-trigger:disabled {
+	opacity: 0.5;
+	cursor: default;
+}
+
+.ui-dropdown-value {
+	white-space: nowrap;
+	overflow: hidden;
+	text-overflow: ellipsis;
+	min-width: 0;
+}
+
+.ui-dropdown-value--placeholder {
+	color: var(--surface-muted);
+}
+
+.ui-dropdown-chevron {
+	display: inline-flex;
+	color: var(--surface-muted);
+	flex-shrink: 0;
+}
+
+.ui-dropdown-list {
+	display: flex;
+	flex-direction: column;
+	gap: 1px;
+	max-height: inherit;
+	overflow-y: auto;
+}
+
+.ui-dropdown-option {
+	display: flex;
+	align-items: center;
+	justify-content: space-between;
+	gap: 0.6rem;
+	width: 100%;
+	padding: 0.5rem 0.625rem;
+	border-radius: 0.5rem;
+	font-size: 0.8125rem;
+	color: var(--center-channel-color);
+	text-align: left;
+	cursor: pointer;
+	transition: background-color 100ms ease;
+}
+
+.ui-dropdown-option:hover {
+	background-color: var(--control-bg);
+}
+
+.ui-dropdown-option--selected {
+	background-color: color-mix(in srgb, var(--button-bg) 8%, transparent);
+	font-weight: 550;
+}
+
+.ui-dropdown-option-main {
+	display: flex;
+	flex-direction: column;
+	gap: 0.1rem;
+	min-width: 0;
+}
+
+.ui-dropdown-option-desc {
+	font-size: 0.7rem;
+	color: var(--surface-muted);
+	font-weight: 400;
+}
+
+.ui-dropdown-option :global(.ui-dropdown-check) {
+	color: var(--button-bg);
+	flex-shrink: 0;
+}
+
+.ui-dropdown-mono {
+	font-family: var(--font-mono, ui-monospace, monospace);
+	font-size: 0.78em;
+}
+
 .ui-status-pill {
 	display: inline-flex;
 	align-items: center;

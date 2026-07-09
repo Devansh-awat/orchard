@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { animate } from 'motion';
-	import { Leaf, Folder, Shield, Globe, ScrollText, Bell } from 'lucide-svelte';
+	import { Leaf, Folder, Shield, Globe, ScrollText, Bell, Zap } from 'lucide-svelte';
 	import {
 		PanelLeftClose,
 		PanelRightClose,
@@ -499,10 +499,22 @@
 								<span class="tree-node-label">Projects</span>
 							</a>
 							<a
+								href="/{orgSlug}/jobs"
+								class="tree-node-content"
+								class:is-active={$page.url.pathname.startsWith('/' + orgSlug + '/jobs')}
+								{@attach navStagger(2)}
+								{@attach springHover({ lift: -1 })}
+							>
+								<div class="tree-icon-badge" style="background-color: #a855f7">
+									<Zap size={10} class="tree-icon-svg" />
+								</div>
+								<span class="tree-node-label">Jobs</span>
+							</a>
+							<a
 								href="/{orgSlug}/usage"
 								class="tree-node-content"
 								class:is-active={$page.url.pathname.startsWith('/' + orgSlug + '/usage')}
-								{@attach navStagger(2)}
+								{@attach navStagger(3)}
 								{@attach springHover({ lift: -1 })}
 							>
 								<div class="tree-icon-badge" style="background-color: #f59e0b">
@@ -553,6 +565,18 @@
 								<Folder size={11} class="tree-icon-svg" />
 							</div>
 							<span class="sidebar-collapsed-tooltip">Projects</span>
+						</a>
+						<a
+							href="/{orgSlug}/jobs"
+							class="sidebar-collapsed-icon"
+							class:is-active={$page.url.pathname.startsWith('/' + orgSlug + '/jobs')}
+							aria-label="Jobs"
+							{@attach springHover()}
+						>
+							<div class="tree-icon-badge" style="background-color: #a855f7">
+								<Zap size={11} class="tree-icon-svg" />
+							</div>
+							<span class="sidebar-collapsed-tooltip">Jobs</span>
 						</a>
 						<a
 							href="/{orgSlug}/usage"

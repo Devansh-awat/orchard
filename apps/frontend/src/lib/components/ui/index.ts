@@ -13,3 +13,5 @@ export { default as EmptyState } from './EmptyState.svelte';
 export { default as SectionCard } from './SectionCard.svelte';
 export { default as Alert } from './Alert.svelte';
 export { default as Skeleton } from './Skeleton.svelte';
+export { default as Dropdown } from './Dropdown.svelte';
+export type { DropdownOption } from './Dropdown.svelte';
