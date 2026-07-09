@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.19.0](https://github.com/LeafdTK/leaf/compare/server/v1.18.0...server/v1.19.0) (2026-07-09)
+
+
+### Features
+
+* orchard jobs — scheduled multi-step pipelines on kubernetes ([#93](https://github.com/LeafdTK/leaf/issues/93)) ([721f190](https://github.com/LeafdTK/leaf/commit/721f190dfada0e2777e47c9b0f3d04bd1ba87535))
+
 ## [1.18.0](https://github.com/LeafdTK/leaf/compare/server/v1.17.1...server/v1.18.0) (2026-07-09)
 
 
