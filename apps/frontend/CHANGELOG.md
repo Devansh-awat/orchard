@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.14.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.13.1...frontend/v0.14.0) (2026-07-09)
+
+
+### Features
+
+* redesign notification channels UI with type tiles and event chips ([6995b2c](https://github.com/LeafdTK/leaf/commit/6995b2cd1d0cb5975d8203d2f9a251e4713ff5f9))
+
 ## [0.13.1](https://github.com/LeafdTK/leaf/compare/frontend/v0.13.0...frontend/v0.13.1) (2026-07-08)
 
 

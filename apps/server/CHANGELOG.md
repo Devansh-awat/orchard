@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.18.0](https://github.com/LeafdTK/leaf/compare/server/v1.17.1...server/v1.18.0) (2026-07-09)
+
+
+### Features
+
+* notification channel MCP tools ([ab74f5c](https://github.com/LeafdTK/leaf/commit/ab74f5c72b17d278da1d87fdd14e25f21e195031))
+
+
+### Bug Fixes
+
+* tailscale proxy apiserver egress via CiliumNetworkPolicy ([fcca09d](https://github.com/LeafdTK/leaf/commit/fcca09da032f0a44c233a1d305c5666a5ba379fc))
+
 ## [1.17.1](https://github.com/LeafdTK/leaf/compare/server/v1.17.0...server/v1.17.1) (2026-07-08)
 
 
