@@ -14,8 +14,10 @@
 		Webhook
 	} from 'lucide-svelte';
 	import { Bell } from '@jis3r/icons';
-	import { Button, Field, Input, Select, Badge } from '$lib/components/ui';
+	import { Button, Field, Input, Badge, EmptyState } from '$lib/components/ui';
 	import SettingsSection from '$lib/components/user-settings/SettingsSection.svelte';
+	import { motionStagger } from '$lib/utils/motion.svelte';
+	import { formatRelativeTime } from '$lib/utils/format';
 
 	import type { NotificationChannel, ChannelPayload } from './notification-types';
 
@@ -53,24 +55,62 @@
 		index?: number;
 	} = $props();
 
-	const EVENT_OPTIONS = [
-		{ value: 'deploy.succeeded', label: 'Deploy succeeded' },
-		{ value: 'deploy.failed', label: 'Deploy failed' },
-		{ value: 'pod.crashing', label: 'App crashing' },
-		{ value: 'pod.recovered', label: 'App recovered' },
-		{ value: 'backup.completed', label: 'Backup completed' },
-		{ value: 'backup.failed', label: 'Backup failed' }
+	const EVENT_GROUPS: { label: string; options: { value: string; label: string; tone: 'ok' | 'fail' }[] }[] = [
+		{
+			label: 'Deploys',
+			options: [
+				{ value: 'deploy.succeeded', label: 'Succeeded', tone: 'ok' },
+				{ value: 'deploy.failed', label: 'Failed', tone: 'fail' }
+			]
+		},
+		{
+			label: 'App health',
+			options: [
+				{ value: 'pod.crashing', label: 'Crashing', tone: 'fail' },
+				{ value: 'pod.recovered', label: 'Recovered', tone: 'ok' }
+			]
+		},
+		{
+			label: 'Backups',
+			options: [
+				{ value: 'backup.completed', label: 'Completed', tone: 'ok' },
+				{ value: 'backup.failed', label: 'Failed', tone: 'fail' }
+			]
+		}
 	];
 
-	const TYPE_META: Record<string, { label: string; icon: typeof Webhook; placeholder: string }> = {
+	const TYPE_META: Record<
+		string,
+		{ label: string; icon: typeof Webhook; placeholder: string; hue: string; hint: string }
+	> = {
 		discord: {
 			label: 'Discord',
 			icon: MessageSquare,
-			placeholder: 'https://discord.com/api/webhooks/…'
+			placeholder: 'https://discord.com/api/webhooks/…',
+			hue: '#5865f2',
+			hint: 'Channel settings → Integrations → Webhooks'
 		},
-		slack: { label: 'Slack', icon: Slack, placeholder: 'https://hooks.slack.com/services/…' },
-		webhook: { label: 'Webhook', icon: Webhook, placeholder: 'https://example.com/orchard-hook' },
-		email: { label: 'Email', icon: Mail, placeholder: 'alerts@example.com, oncall@example.com' }
+		slack: {
+			label: 'Slack',
+			icon: Slack,
+			placeholder: 'https://hooks.slack.com/services/…',
+			hue: '#2eb67d',
+			hint: 'Slack app → Incoming Webhooks'
+		},
+		webhook: {
+			label: 'Webhook',
+			icon: Webhook,
+			placeholder: 'https://example.com/orchard-hook',
+			hue: '#8b8ea3',
+			hint: 'Signed JSON POST to any HTTPS endpoint'
+		},
+		email: {
+			label: 'Email',
+			icon: Mail,
+			placeholder: 'alerts@example.com, oncall@example.com',
+			hue: '#d99a2b',
+			hint: 'Sent to org members only'
+		}
 	};
 
 	let formOpen = $state(false);
@@ -178,6 +218,12 @@
 		if (!channel.lastDelivery) return 'none';
 		return channel.lastDelivery.status === 'sent' ? 'ok' : 'fail';
 	}
+
+	function deliverySummary(channel: NotificationChannel): string {
+		if (!channel.lastDelivery) return '';
+		const verb = channel.lastDelivery.status === 'sent' ? 'delivered' : 'failed';
+		return `${verb} ${formatRelativeTime(new Date(channel.lastDelivery.createdAt))}`;
+	}
 </script>
 
 <SettingsSection
@@ -188,7 +234,7 @@
 >
 	{#snippet icon(hovered)}<Bell size={18} animate={hovered} />{/snippet}
 	{#snippet actions()}
-		{#if canEditOrg && !loading}
+		{#if canEditOrg && !loading && (channels.length > 0 || formOpen)}
 			<Button variant="secondary" size="sm" onclick={openCreate}>
 				<Plus class="h-4 w-4" />
 				Add channel
@@ -198,14 +244,15 @@
 
 	{#if loading}
 		<div class="nc-loading">
-			<Loader2 class="h-5 w-5 animate-spin" />
+			<div class="nc-skeleton"></div>
+			<div class="nc-skeleton"></div>
 		</div>
 	{:else}
 		{#if createdSecret}
-			<div class="nc-secret-reveal">
+			<div class="nc-secret-reveal" {@attach motionStagger({ from: { y: 6 } })}>
 				<div class="nc-secret-head">
 					<TriangleAlert class="h-4 w-4" />
-					<span>Webhook signing secret — copy it now, it won't be shown again.</span>
+				<span>Webhook signing secret. Copy it now, it won't be shown again.</span>
 				</div>
 				<div class="nc-secret-row">
 					<Input class="nc-secret-input" value={createdSecret} readonly />
@@ -225,17 +272,31 @@
 		{/if}
 
 		{#if channels.length === 0 && !formOpen}
-			<p class="nc-empty">
-				No channels yet. Add one to get pinged when a deploy fails, an app starts crashing, or a
-				backup finishes.
-			</p>
+			<EmptyState
+				title="No channels yet"
+				description="Get pinged when a deploy fails, an app starts crashing, or a backup finishes."
+			>
+				{#snippet icon()}<Bell size={22} />{/snippet}
+				{#if canEditOrg}
+					<Button variant="secondary" size="sm" onclick={openCreate}>
+						<Plus class="h-4 w-4" />
+						Add channel
+					</Button>
+				{/if}
+			</EmptyState>
 		{/if}
 
 		{#if channels.length > 0}
 			<div class="nc-list">
-				{#each channels as channel (channel.id)}
+				{#each channels as channel, i (channel.id)}
 					{@const meta = TYPE_META[channel.type]}
-					<div class="nc-item" class:nc-item-disabled={!channel.enabled}>
+					{@const tone = deliveryTone(channel)}
+					<div
+						class="nc-item"
+						class:nc-item-disabled={!channel.enabled}
+						style="--nc-hue: {meta.hue}"
+						{@attach motionStagger({ index: i, stride: 0.05 })}
+					>
 						<div class="nc-item-icon">
 							<meta.icon size={15} />
 						</div>
@@ -255,9 +316,9 @@
 								{/if}
 								{#if channel.lastDelivery}
 									· <span
-										class="nc-delivery nc-delivery-{deliveryTone(channel)}"
+										class="nc-delivery nc-delivery-{tone}"
 										title={channel.lastDelivery.error || undefined}
-										>last delivery {channel.lastDelivery.status}</span
+										><span class="nc-dot"></span>{deliverySummary(channel)}</span
 									>
 								{/if}
 							</p>
@@ -317,20 +378,34 @@
 		{/if}
 
 		{#if formOpen && canEditOrg}
-			<div class="nc-form">
-				<div class="nc-form-row">
-					<Field label="Type" for="nc-type">
-						<Select id="nc-type" bind:value={formType} disabled={editingId !== null}>
-							<option value="discord">Discord</option>
-							<option value="slack">Slack</option>
-							<option value="webhook">Generic webhook</option>
-							<option value="email">Email</option>
-						</Select>
-					</Field>
-					<Field label="Name" for="nc-name">
-						<Input id="nc-name" bind:value={formName} placeholder="#deploys" maxlength={100} />
-					</Field>
+			<div class="nc-form" {@attach motionStagger({ from: { y: 10 } })}>
+				<div class="nc-form-group">
+					<span class="nc-form-label">Send to</span>
+					<div class="nc-type-grid" role="radiogroup" aria-label="Channel type">
+						{#each Object.entries(TYPE_META) as [value, meta] (value)}
+							<button
+								type="button"
+								role="radio"
+								aria-checked={formType === value}
+								class="nc-type-tile"
+								class:nc-type-tile-active={formType === value}
+								style="--nc-hue: {meta.hue}"
+								disabled={editingId !== null && formType !== value}
+								onclick={() => (formType = value)}
+							>
+								<span class="nc-type-tile-icon"><meta.icon size={16} /></span>
+								<span class="nc-type-tile-text">
+									<span class="nc-type-tile-label">{meta.label}</span>
+									<span class="nc-type-tile-hint">{meta.hint}</span>
+								</span>
+							</button>
+						{/each}
+					</div>
 				</div>
+
+				<Field label="Name" for="nc-name">
+					<Input id="nc-name" bind:value={formName} placeholder="#deploys" maxlength={100} />
+				</Field>
 
 				{#if formType === 'email'}
 					<Field label="Recipients (comma-separated)" for="nc-recipients">
@@ -347,7 +422,7 @@
 							id="nc-url"
 							bind:value={formUrl}
 							placeholder={editingId && editingChannel?.config.urlConfigured
-								? `${editingChannel.config.urlPreview ?? 'configured'} — leave blank to keep`
+								? `${editingChannel.config.urlPreview ?? 'configured'} (leave blank to keep)`
 								: TYPE_META[formType].placeholder}
 						/>
 					</Field>
@@ -355,40 +430,71 @@
 
 				<div class="nc-form-group">
 					<span class="nc-form-label">Events</span>
-					<div class="nc-checks">
-						{#each EVENT_OPTIONS as opt (opt.value)}
-							<label class="nc-check">
-								<input
-									type="checkbox"
-									checked={formEvents.includes(opt.value)}
-									onchange={() => toggleEvent(opt.value)}
-								/>
-								{opt.label}
-							</label>
+					<div class="nc-event-groups">
+						{#each EVENT_GROUPS as group (group.label)}
+							<div class="nc-event-group">
+								<span class="nc-event-group-label">{group.label}</span>
+								<div class="nc-chips">
+									{#each group.options as opt (opt.value)}
+										{@const active = formEvents.includes(opt.value)}
+										<button
+											type="button"
+											class="nc-chip nc-chip-{opt.tone}"
+											class:nc-chip-active={active}
+											aria-pressed={active}
+											onclick={() => toggleEvent(opt.value)}
+										>
+											<span class="nc-chip-dot"></span>
+											{opt.label}
+										</button>
+									{/each}
+								</div>
+							</div>
 						{/each}
 					</div>
 				</div>
 
 				<div class="nc-form-group">
 					<span class="nc-form-label">Projects</span>
-					<Select bind:value={formScope} class="nc-scope-select">
-						<option value="all">All projects</option>
-						<option value="custom">Specific projects</option>
-					</Select>
+					<div class="nc-seg" role="radiogroup" aria-label="Project scope">
+						<button
+							type="button"
+							role="radio"
+							aria-checked={formScope === 'all'}
+							class="nc-seg-btn"
+							class:nc-seg-btn-active={formScope === 'all'}
+							onclick={() => (formScope = 'all')}
+						>
+							All projects
+						</button>
+						<button
+							type="button"
+							role="radio"
+							aria-checked={formScope === 'custom'}
+							class="nc-seg-btn"
+							class:nc-seg-btn-active={formScope === 'custom'}
+							onclick={() => (formScope = 'custom')}
+						>
+							Specific projects
+						</button>
+					</div>
 					{#if formScope === 'custom'}
 						{#if projects.length === 0}
 							<p class="nc-hint">No projects in this organization yet.</p>
 						{:else}
-							<div class="nc-checks">
+							<div class="nc-chips">
 								{#each projects as project (project.id)}
-									<label class="nc-check">
-										<input
-											type="checkbox"
-											checked={formProjectIds.includes(project.id)}
-											onchange={() => toggleProject(project.id)}
-										/>
+									{@const active = formProjectIds.includes(project.id)}
+									<button
+										type="button"
+										class="nc-chip"
+										class:nc-chip-active={active}
+										aria-pressed={active}
+										onclick={() => toggleProject(project.id)}
+									>
+										{#if active}<Check size={12} />{/if}
 										{project.name}
-									</label>
+									</button>
 								{/each}
 							</div>
 						{/if}
@@ -417,16 +523,28 @@
 <style>
 	.nc-loading {
 		display: flex;
-		justify-content: center;
-		padding: 2rem;
-		color: var(--surface-muted);
+		flex-direction: column;
+		gap: 0.5rem;
+		padding: 0.5rem 0;
 	}
 
-	.nc-empty {
-		font-size: 0.8rem;
-		color: var(--surface-muted);
-		margin: 0;
-		padding: 0.5rem 0;
+	.nc-skeleton {
+		height: 3.25rem;
+		border-radius: 0.625rem;
+		background: linear-gradient(
+			100deg,
+			color-mix(in srgb, var(--center-channel-color) 3%, transparent) 40%,
+			color-mix(in srgb, var(--center-channel-color) 7%, transparent) 50%,
+			color-mix(in srgb, var(--center-channel-color) 3%, transparent) 60%
+		);
+		background-size: 200% 100%;
+		animation: nc-shimmer 1.4s ease infinite;
+	}
+
+	@keyframes nc-shimmer {
+		to {
+			background-position: -200% 0;
+		}
 	}
 
 	.nc-list {
@@ -444,6 +562,14 @@
 		border-radius: 0.625rem;
 		border: 1px solid var(--surface-border);
 		background: color-mix(in srgb, var(--center-channel-color) 2%, transparent);
+		transition:
+			border-color 0.2s ease,
+			background-color 0.2s ease;
+	}
+
+	.nc-item:hover {
+		border-color: color-mix(in srgb, var(--nc-hue) 30%, var(--surface-border));
+		background: color-mix(in srgb, var(--center-channel-color) 3.5%, transparent);
 	}
 
 	.nc-item-disabled {
@@ -457,8 +583,8 @@
 		width: 2rem;
 		height: 2rem;
 		border-radius: 0.5rem;
-		background: color-mix(in srgb, var(--center-channel-color) 5%, transparent);
-		color: var(--surface-muted);
+		background: color-mix(in srgb, var(--nc-hue) 12%, transparent);
+		color: color-mix(in srgb, var(--nc-hue) 80%, var(--center-channel-color));
 		flex-shrink: 0;
 	}
 
@@ -489,6 +615,27 @@
 	.nc-url-preview {
 		font-family: var(--font-mono, ui-monospace, monospace);
 		font-size: 0.68rem;
+	}
+
+	.nc-delivery {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.3rem;
+	}
+
+	.nc-dot {
+		width: 0.4rem;
+		height: 0.4rem;
+		border-radius: 50%;
+		background: currentColor;
+	}
+
+	.nc-delivery-ok {
+		color: var(--online-indicator, #22c55e);
+	}
+
+	.nc-delivery-fail {
+		color: var(--error-text, #ef4444);
 	}
 
 	.nc-secret-reveal {
@@ -531,14 +678,6 @@
 		font-size: 0.7rem;
 	}
 
-	.nc-delivery-ok {
-		color: var(--online-indicator, #22c55e);
-	}
-
-	.nc-delivery-fail {
-		color: var(--error-text, #ef4444);
-	}
-
 	.nc-item-actions {
 		display: flex;
 		align-items: center;
@@ -549,18 +688,12 @@
 	.nc-form {
 		display: flex;
 		flex-direction: column;
-		gap: 0.875rem;
+		gap: 1rem;
 		margin-top: 0.5rem;
 		padding: 1rem;
 		border-radius: 0.625rem;
 		border: 1px solid var(--surface-border);
 		background: color-mix(in srgb, var(--center-channel-color) 2%, transparent);
-	}
-
-	.nc-form-row {
-		display: grid;
-		grid-template-columns: 12rem 1fr;
-		gap: 0.75rem;
 	}
 
 	.nc-form-group {
@@ -577,30 +710,207 @@
 		letter-spacing: 0.02em;
 	}
 
-	.nc-checks {
+	.nc-type-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(11rem, 1fr));
-		gap: 0.375rem 0.75rem;
+		grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+		gap: 0.5rem;
 	}
 
-	.nc-check {
+	.nc-type-tile {
 		display: flex;
 		align-items: center;
-		gap: 0.45rem;
+		gap: 0.625rem;
+		padding: 0.625rem 0.75rem;
+		border-radius: 0.625rem;
+		border: 1px solid var(--surface-border);
+		background: transparent;
+		cursor: pointer;
+		text-align: left;
+		font: inherit;
+		transition:
+			border-color 0.2s ease,
+			background-color 0.2s ease;
+	}
+
+	.nc-type-tile:hover:not(:disabled) {
+		border-color: color-mix(in srgb, var(--nc-hue) 40%, var(--surface-border));
+		background: color-mix(in srgb, var(--nc-hue) 4%, transparent);
+	}
+
+	.nc-type-tile:focus-visible {
+		outline: 2px solid color-mix(in srgb, var(--button-bg, #6366f1) 60%, transparent);
+		outline-offset: 2px;
+	}
+
+	.nc-type-tile:active:not(:disabled) {
+		transform: scale(0.98);
+	}
+
+	.nc-type-tile:disabled {
+		opacity: 0.4;
+		cursor: not-allowed;
+	}
+
+	.nc-type-tile-active {
+		border-color: color-mix(in srgb, var(--nc-hue) 55%, transparent);
+		background: color-mix(in srgb, var(--nc-hue) 8%, transparent);
+	}
+
+	.nc-type-tile-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		border-radius: 0.5rem;
+		background: color-mix(in srgb, var(--nc-hue) 14%, transparent);
+		color: color-mix(in srgb, var(--nc-hue) 85%, var(--center-channel-color));
+		flex-shrink: 0;
+	}
+
+	.nc-type-tile-text {
+		display: flex;
+		flex-direction: column;
+		gap: 0.1rem;
+		min-width: 0;
+	}
+
+	.nc-type-tile-label {
 		font-size: 0.8rem;
+		font-weight: 600;
 		color: var(--center-channel-color);
+	}
+
+	.nc-type-tile-hint {
+		font-size: 0.68rem;
+		color: var(--surface-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.nc-event-groups {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+		gap: 0.75rem;
+	}
+
+	.nc-event-group {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+	}
+
+	.nc-event-group-label {
+		font-size: 0.72rem;
+		font-weight: 500;
+		color: var(--surface-muted);
+	}
+
+	.nc-chips {
+		display: flex;
+		flex-wrap: wrap;
+		gap: 0.375rem;
+	}
+
+	.nc-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.35rem;
+		padding: 0.3rem 0.65rem;
+		border-radius: 999px;
+		border: 1px solid var(--surface-border);
+		background: transparent;
+		font: inherit;
+		font-size: 0.75rem;
+		color: var(--surface-muted);
 		cursor: pointer;
 		user-select: none;
+		transition:
+			border-color 0.2s ease,
+			background-color 0.2s ease,
+			color 0.2s ease;
 	}
 
-	.nc-check input {
-		accent-color: var(--button-bg, #6366f1);
-		width: 0.9rem;
-		height: 0.9rem;
+	.nc-chip:hover {
+		border-color: color-mix(in srgb, var(--center-channel-color) 25%, transparent);
+		color: var(--center-channel-color);
 	}
 
-	.nc-form :global(.nc-scope-select) {
-		max-width: 14rem;
+	.nc-chip:focus-visible {
+		outline: 2px solid color-mix(in srgb, var(--button-bg, #6366f1) 60%, transparent);
+		outline-offset: 2px;
+	}
+
+	.nc-chip:active {
+		transform: scale(0.97);
+	}
+
+	.nc-chip-active {
+		border-color: color-mix(in srgb, var(--button-bg, #6366f1) 45%, transparent);
+		background: color-mix(in srgb, var(--button-bg, #6366f1) 10%, transparent);
+		color: var(--center-channel-color);
+	}
+
+	.nc-chip-dot {
+		width: 0.4rem;
+		height: 0.4rem;
+		border-radius: 50%;
+		background: color-mix(in srgb, var(--center-channel-color) 25%, transparent);
+		transition: background-color 0.2s ease;
+	}
+
+	.nc-chip-ok.nc-chip-active .nc-chip-dot {
+		background: var(--online-indicator, #22c55e);
+	}
+
+	.nc-chip-fail.nc-chip-active .nc-chip-dot {
+		background: var(--error-text, #ef4444);
+	}
+
+	.nc-chip-ok.nc-chip-active {
+		border-color: color-mix(in srgb, var(--online-indicator, #22c55e) 40%, transparent);
+		background: color-mix(in srgb, var(--online-indicator, #22c55e) 8%, transparent);
+	}
+
+	.nc-chip-fail.nc-chip-active {
+		border-color: color-mix(in srgb, var(--error-text, #ef4444) 40%, transparent);
+		background: color-mix(in srgb, var(--error-text, #ef4444) 8%, transparent);
+	}
+
+	.nc-seg {
+		display: inline-flex;
+		align-self: flex-start;
+		padding: 0.125rem;
+		border-radius: 0.5rem;
+		border: 1px solid var(--surface-border);
+		background: color-mix(in srgb, var(--center-channel-color) 3%, transparent);
+	}
+
+	.nc-seg-btn {
+		padding: 0.3rem 0.75rem;
+		border: none;
+		border-radius: 0.375rem;
+		background: transparent;
+		font: inherit;
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: var(--surface-muted);
+		cursor: pointer;
+		transition:
+			background-color 0.2s ease,
+			color 0.2s ease;
+	}
+
+	.nc-seg-btn:focus-visible {
+		outline: 2px solid color-mix(in srgb, var(--button-bg, #6366f1) 60%, transparent);
+		outline-offset: 1px;
+	}
+
+	.nc-seg-btn-active {
+		background: var(--center-channel-bg, #fff);
+		color: var(--center-channel-color);
+		box-shadow: 0 1px 2px color-mix(in srgb, var(--center-channel-color) 12%, transparent);
 	}
 
 	.nc-hint {
@@ -616,10 +926,6 @@
 	}
 
 	@media (max-width: 640px) {
-		.nc-form-row {
-			grid-template-columns: 1fr;
-		}
-
 		.nc-item {
 			flex-wrap: wrap;
 		}
