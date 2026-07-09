@@ -4,6 +4,7 @@ import { registerQueryTools } from './tools/query';
 import { registerDeploymentTools } from './tools/deployments';
 import { registerConfigurationTools } from './tools/configuration';
 import { registerResourceTools } from './tools/resources';
+import { registerNotificationTools } from './tools/notifications';
 import { registerDangerousTools } from './tools/dangerous';
 
 export function createOrchardMcpServer(token?: string, actingUser?: ActingUser) {
@@ -27,6 +28,9 @@ export function createOrchardMcpServer(token?: string, actingUser?: ActingUser) 
 
   // Resource creation (projects, databases, templates)
   registerResourceTools(server, client);
+
+  // Notification channels (list, create, update, test, deliveries)
+  registerNotificationTools(server, client);
 
   // Destructive operations (all deletes)
   registerDangerousTools(server, client);

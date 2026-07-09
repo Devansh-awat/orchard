@@ -175,4 +175,20 @@ export function registerDangerousTools(server: McpServer, client: OrchardClient)
       };
     },
   );
+
+  server.registerTool(
+    'delete_notification_channel',
+    {
+      description: `DANGEROUS: Permanently delete a notification channel. Alerts stop immediately and a webhook channel's signing secret is lost. Requires org admin.`,
+      annotations: { destructiveHint: true, readOnlyHint: false },
+      inputSchema: {
+        organizationId: z.string().describe('The organization UUID'),
+        channelId: z.string().describe('The notification channel UUID'),
+      },
+    },
+    async ({ organizationId, channelId }) => {
+      const result = await client.delete(`/organizations/${organizationId}/notification-channels/${channelId}`);
+      return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
+    },
+  );
 }
