@@ -13,6 +13,8 @@ export type OrgEventType =
 	| 'deployment.metrics'
 	| 'job.changed'
 	| 'jobrun.changed'
+	| 'environment.changed'
+	| 'sharedvars.changed'
 	| 'heartbeat';
 
 export interface OrgEvent {
@@ -99,6 +101,13 @@ function applyEventToCache(sub: Subscription, ev: OrgEvent) {
 			if (ev.id) qc.invalidateQueries({ queryKey: ['job-run', ev.id] });
 			break;
 		}
+		case 'environment.changed':
+			if (ev.projectId) qc.invalidateQueries({ queryKey: ['environments', ev.projectId] });
+			qc.invalidateQueries({ queryKey: ['projects', sub.orgId] });
+			break;
+		case 'sharedvars.changed':
+			if (ev.id) qc.invalidateQueries({ queryKey: ['shared-vars', ev.id] });
+			break;
 		default:
 			break;
 	}

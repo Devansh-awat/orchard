@@ -25,6 +25,8 @@ import { AuditService } from '../audit/audit.service';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ProjectAccessService } from './project-access.service';
+import { EnvironmentsService } from './environments.service';
+import { resolveEnvVars, EnvVar } from '../env/env-resolver';
 import { NodesService } from '../nodes/nodes.service';
 import { formatSlug } from './projects.utils';
 import { startBuildTrace } from '../analytics/datadog';
@@ -57,6 +59,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     private readonly nodesService: NodesService,
     private readonly leaderElection: LeaderElectionService,
     private readonly notifications: NotificationsService,
+    @Inject(forwardRef(() => EnvironmentsService))
+    private readonly environments: EnvironmentsService,
   ) {}
 
   onModuleInit() {
@@ -543,6 +547,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           include: {
             organization: true,
           },
+        },
+        environment: {
+          select: { id: true, name: true, slug: true, isDefault: true },
         },
         services: {
           include: {
@@ -1183,7 +1190,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
   async updateDeploymentEnvVars(
     deploymentId: string,
-    env: { key: string; value: string }[],
+    env: { key: string; value: string; secret?: boolean }[],
     clerkId: string,
     userData?: {
       email?: string;
@@ -1222,6 +1229,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           .map((entry) => ({
             key: entry.key.trim(),
             value: entry.value !== undefined && entry.value !== null ? String(entry.value) : '',
+            secret: Boolean(entry.secret),
           }))
           .filter((entry) => entry.key.length > 0)
       : [];
@@ -1237,14 +1245,15 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    const uniqueEnv = new Map<string, string>();
+    const uniqueEnv = new Map<string, { value: string; secret: boolean }>();
     for (const entry of envEntries) {
-      uniqueEnv.set(entry.key, entry.value);
+      uniqueEnv.set(entry.key, { value: entry.value, secret: entry.secret });
     }
 
-    const envList = Array.from(uniqueEnv.entries()).map(([key, value]) => ({
+    const envList = Array.from(uniqueEnv.entries()).map(([key, e]) => ({
       key,
-      value,
+      value: e.value,
+      secret: e.secret,
     }));
 
     // Only push to K8s if the deployment actually exists in the cluster.
@@ -1255,10 +1264,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     ).then((d) => d !== null).catch(() => false);
 
     if (k8sExists) {
+      // Resolve ${{shared.KEY}} against the environment's shared vars, then
+      // push the resolved values (secrets routed to a k8s Secret) to the pod.
+      const sharedVars = await this.loadSharedVarsForDeployment(deployment.id, deployment.environmentId);
+      const { resolved } = resolveEnvVars(envList, sharedVars);
       await this.k8sWorkload.updateDeploymentEnv({
         namespace: deployment.namespace,
         deploymentName: deployment.name,
-        env: envList,
+        env: resolved,
       });
     }
 
@@ -1290,6 +1303,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             deploymentId: deployment.id,
             key: entry.key,
             value: entry.value,
+            secret: entry.secret,
           })),
         });
       }
@@ -2896,10 +2910,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       nodePort: port.nodePort || undefined,
     })) || [];
 
-    const env = deployment.envVars.map(ev => ({
-      key: ev.key,
-      value: ev.value,
-    }));
+    const { resolved: env } = resolveEnvVars(
+      deployment.envVars.map((ev) => ({ key: ev.key, value: ev.value, secret: ev.secret })),
+      await this.loadSharedVarsForDeployment(deployment.id, deployment.environmentId),
+    );
 
     const volumes = (deployment.volumes || []).map(vol => ({
       name: vol.name,
@@ -3147,6 +3161,36 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     });
 
     return { enabled: false };
+  }
+
+  /** Load the shared vars of a deployment's environment (empty if none). */
+  async loadSharedVarsForDeployment(
+    deploymentId: string,
+    environmentId: string | null,
+  ): Promise<EnvVar[]> {
+    if (!environmentId) return [];
+    const vars = await this.prisma.environmentSharedVar.findMany({
+      where: { environmentId },
+      select: { key: true, value: true, secret: true },
+    });
+    return vars;
+  }
+
+  /**
+   * Load a deployment's own env vars + its environment's shared vars, resolve
+   * ${{shared.KEY}} references, and return the injectable list. Used by both
+   * the runtime (pod env) and build (build args) paths so they never diverge.
+   */
+  async loadResolvedEnvForDeployment(
+    deploymentId: string,
+    environmentId: string | null,
+  ): Promise<{ resolved: EnvVar[]; errors: { key: string; missingRef: string }[] }> {
+    const own = await this.prisma.deploymentEnvVar.findMany({
+      where: { deploymentId },
+      select: { key: true, value: true, secret: true },
+    });
+    const shared = await this.loadSharedVarsForDeployment(deploymentId, environmentId);
+    return resolveEnvVars(own, shared);
   }
 
   scrubDeploymentForViewer<
@@ -3648,6 +3692,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       composeServiceName?: string;
       cpuRequestMilli?: number | null;
       memoryRequestBytes?: number | null;
+      environmentId?: string;
     },
     clerkId: string,
     userData?: {
@@ -3677,6 +3722,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     await this.authz.requireProjectEdit(project.id, user.id, 'create deployments');
 
+    // Resolve the target environment (explicit id or the project default).
+    // The environment owns the namespace the resource deploys into.
+    const environment = await this.environments.resolveEnvironment(project.id, data.environmentId);
+
     if (Array.isArray(data.volumes) && data.volumes.some((v) => v && v.type === 'hostPath')) {
       throw new ForbiddenException('hostPath volumes are not permitted');
     }
@@ -3699,17 +3748,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('Deployment name cannot be empty');
     }
 
-    const existingDeployment = await this.prisma.deployment.findUnique({
-      where: {
-        projectId_name: {
-          projectId: project.id,
-          name,
-        },
-      },
+    const existingDeployment = await this.prisma.deployment.findFirst({
+      where: { environmentId: environment.id, name },
     });
 
     if (existingDeployment) {
-      throw new BadRequestException('A deployment with this name already exists in the project');
+      throw new BadRequestException('A deployment with this name already exists in this environment');
     }
 
     const envEntries = Array.isArray(data.env)
@@ -3718,19 +3762,27 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           .map((entry) => ({
             key: entry.key.trim(),
             value: entry.value !== undefined && entry.value !== null ? String(entry.value) : '',
+            secret: Boolean((entry as any).secret),
           }))
           .filter((entry) => entry.key.length > 0)
       : [];
 
-    const uniqueEnv = new Map<string, string>();
+    const uniqueEnv = new Map<string, { value: string; secret: boolean }>();
     for (const entry of envEntries) {
-      uniqueEnv.set(entry.key, entry.value);
+      uniqueEnv.set(entry.key, { value: entry.value, secret: entry.secret });
     }
 
-    const env = Array.from(uniqueEnv.entries()).map(([key, value]) => ({
+    // Stored form keeps the literal ${{shared.KEY}} + secret flag.
+    const env = Array.from(uniqueEnv.entries()).map(([key, e]) => ({
       key,
-      value,
+      value: e.value,
+      secret: e.secret,
     }));
+
+    // Injected form resolves shared references against the environment's shared
+    // vars (secrets — own or inherited — route to a k8s Secret downstream).
+    const sharedVars = await this.loadSharedVarsForDeployment('', environment.id);
+    const { resolved: resolvedEnv } = resolveEnvVars(env, sharedVars);
 
     const exposePublic = Boolean(data.exposePublic);
 
@@ -3776,12 +3828,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const hasPvcOnCreate = (volumes ?? []).some((v) => v.type === 'pvc');
     const initialStrategy: 'rollingUpdate' | 'recreate' = hasPvcOnCreate ? 'recreate' : 'rollingUpdate';
     const deploymentResult = await this.k8sWorkload.createDeployment({
-      namespace: project.namespace,
+      namespace: environment.namespace,
       name,
       image,
       replicas,
       ports: rawPorts,
-      env,
+      env: resolvedEnv,
       serviceType: exposePublic ? 'NodePort' : 'ClusterIP',
       volumes,
       allowedNodes: placement.allowedNodes,
@@ -3796,8 +3848,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       const deployment = await tx.deployment.create({
         data: {
           projectId: project.id,
+          environmentId: environment.id,
           name,
-          namespace: project.namespace,
+          namespace: environment.namespace,
           image,
           replicas,
           status: 'running',
@@ -3817,6 +3870,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             deploymentId: deployment.id,
             key: entry.key,
             value: entry.value,
+            secret: entry.secret,
           })),
         });
       }
@@ -3911,8 +3965,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       });
       });
     } catch (e) {
-      try { await this.k8sWorkload.deleteDeployment(name, project.namespace); } catch { /* ignore */ }
-      try { await this.k8sNetwork.deleteService(project.namespace, name); } catch { /* ignore */ }
+      try { await this.k8sWorkload.deleteDeployment(name, environment.namespace); } catch { /* ignore */ }
+      try { await this.k8sNetwork.deleteService(environment.namespace, name); } catch { /* ignore */ }
       throw e;
     }
 
@@ -4000,6 +4054,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     await this.authz.requireProjectEdit(project.id, user.id, 'create deployments');
+
+    const environment = await this.environments.resolveEnvironment(project.id, (data as any).environmentId);
 
     if (Array.isArray(data.volumes) && data.volumes.some((v) => v && v.type === 'hostPath')) {
       throw new ForbiddenException('hostPath volumes are not permitted');
@@ -4092,17 +4148,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('Deployment name cannot be empty');
     }
 
-    const existingDeployment = await this.prisma.deployment.findUnique({
-      where: {
-        projectId_name: {
-          projectId: project.id,
-          name,
-        },
-      },
+    const existingDeployment = await this.prisma.deployment.findFirst({
+      where: { environmentId: environment.id, name },
     });
 
     if (existingDeployment) {
-      throw new BadRequestException('A deployment with this name already exists in the project');
+      throw new BadRequestException('A deployment with this name already exists in this environment');
     }
 
     const imageName = `${project.namespace}-${name}`;
@@ -4117,19 +4168,27 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           .map((entry) => ({
             key: entry.key.trim(),
             value: entry.value !== undefined && entry.value !== null ? String(entry.value) : '',
+            secret: Boolean((entry as any).secret),
           }))
           .filter((entry) => entry.key.length > 0)
       : [];
 
-    const uniqueEnv = new Map<string, string>();
+    const uniqueEnv = new Map<string, { value: string; secret: boolean }>();
     for (const entry of envEntries) {
-      uniqueEnv.set(entry.key, entry.value);
+      uniqueEnv.set(entry.key, { value: entry.value, secret: entry.secret });
     }
 
-    const env = Array.from(uniqueEnv.entries()).map(([key, value]) => ({
+    // Stored form keeps the literal ${{shared.KEY}} + secret flag.
+    const env = Array.from(uniqueEnv.entries()).map(([key, e]) => ({
       key,
-      value,
+      value: e.value,
+      secret: e.secret,
     }));
+
+    // Injected form resolves shared references against the environment's shared
+    // vars (secrets — own or inherited — route to a k8s Secret downstream).
+    const sharedVars = await this.loadSharedVarsForDeployment('', environment.id);
+    const { resolved: resolvedEnv } = resolveEnvVars(env, sharedVars);
 
     const exposePublic = Boolean(data.exposePublic);
 
@@ -4178,8 +4237,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const deployment = await this.prisma.deployment.create({
       data: {
         projectId: project.id,
+        environmentId: environment.id,
         name,
-        namespace: project.namespace,
+        namespace: environment.namespace,
         image: `${this.dockerService.getImagePath(imageName, uniqueTag)}`, // Placeholder, will be updated
         replicas,
         status: 'pending',
@@ -4211,6 +4271,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           deploymentId: deployment.id,
           key: entry.key,
           value: entry.value,
+          secret: entry.secret,
         })),
       });
     }
@@ -4297,11 +4358,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         buildType,
         imageName,
         tag: uniqueTag,
-        namespace: project.namespace,
+        namespace: environment.namespace,
         name,
         replicas,
         rawPorts,
-        env,
+        env: resolvedEnv,
         exposePublic,
         volumes,
         isRebuild: false,
@@ -5227,10 +5288,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       nodePort: port.nodePort || undefined,
     })) || [];
 
-    const env = deployment.envVars.map(ev => ({
-      key: ev.key,
-      value: ev.value,
-    }));
+    const { resolved: env } = resolveEnvVars(
+      deployment.envVars.map((ev) => ({ key: ev.key, value: ev.value, secret: ev.secret })),
+      await this.loadSharedVarsForDeployment(deployment.id, deployment.environmentId),
+    );
 
     const volumes = (deployment.volumes || []).map(vol => ({
       name: vol.name,

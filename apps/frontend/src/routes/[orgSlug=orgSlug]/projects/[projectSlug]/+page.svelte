@@ -24,6 +24,8 @@
 		MembersTab,
 		CustomizeModal
 	} from '$lib/components/project';
+	import { SharedVarsEditor } from '$lib/components/environment';
+	import { environmentsQueryOptions } from '$lib/queries/environments';
 	import type {
 		Project,
 		Deployment,
@@ -166,6 +168,17 @@
 	});
 
 	// --- Filtered deployments ---
+	let selectedEnvId = $state('');
+	const projectEnvQuery = createQuery(() => ({
+		...environmentsQueryOptions(project?.id ?? ''),
+		enabled: !!project?.id
+	}));
+	const selectedEnvObj = $derived(
+		(projectEnvQuery.data ?? []).find((e: any) => e.id === selectedEnvId) ?? null
+	);
+	const selectedEnvName = $derived(selectedEnvObj?.name ?? '');
+	const selectedEnvSlug = $derived(selectedEnvObj?.slug ?? '');
+
 	let filteredDeployments = $derived.by(() => {
 		const deployments = project?.deployments ?? [];
 		const query = deploymentSearch.trim().toLowerCase();
@@ -177,6 +190,23 @@
 			return name.includes(query) || status.includes(query) || image.includes(query);
 		});
 	});
+
+	// Scope resources to the selected environment. A row matches when its
+	// environmentId equals the selected env; rows without an environmentId
+	// (legacy/unmigrated) fall into the default env only, never every env.
+	const selectedEnvIsDefault = $derived(selectedEnvObj?.isDefault ?? false);
+	function matchesEnv(row: { environmentId?: string | null }): boolean {
+		if (!selectedEnvId) return true;
+		return row.environmentId === selectedEnvId || (!row.environmentId && selectedEnvIsDefault);
+	}
+
+	let envFilteredDeployments = $derived.by(() => filteredDeployments.filter(matchesEnv));
+	let envFilteredDatabases = $derived.by(() => databases.filter(matchesEnv));
+	// Template instances aren't environment-scoped, so surface them in the
+	// default environment only rather than duplicating across every env.
+	let envFilteredTemplateInstances = $derived.by(() =>
+		!selectedEnvId || selectedEnvIsDefault ? templateInstances : []
+	);
 
 	async function fetchProject() {
 		await queryClient.invalidateQueries({ queryKey: ['project-detail', orgSlug, projectSlug] });
@@ -653,9 +683,9 @@
 			<!-- Tab bar -->
 			<ProjectTabs
 				bind:activeTab
-				resourceCount={(project.deployments?.length ?? 0) +
-					databases.length +
-					templateInstances.length}
+				resourceCount={envFilteredDeployments.length +
+					envFilteredDatabases.length +
+					envFilteredTemplateInstances.length}
 				composeCount={composeStacks.length}
 				membersCount={projectMembers.length}
 				repositoryUrl={project.repositoryUrl}
@@ -664,14 +694,16 @@
 				onNewResource={() => (showNewResourceModal = true)}
 				bind:tabsRowEl
 				{deploymentMenu}
+				projectId={project.id}
+				bind:selectedEnvId
 			/>
 
 			{#if activeTab === 'resources'}
 				<div class="pj-tab-panel" {@attach tabPanelEnter}>
 					<ResourcesTab
-						{filteredDeployments}
-						{databases}
-						{templateInstances}
+						filteredDeployments={envFilteredDeployments}
+						databases={envFilteredDatabases}
+						templateInstances={envFilteredTemplateInstances}
 						orgSlug={orgSlug ?? ''}
 						{deploymentSearch}
 						{deploymentMenu}
@@ -680,6 +712,22 @@
 						onNewResource={() => (showNewResourceModal = true)}
 						onOpenDeployment={openDeployment}
 					/>
+				</div>
+			{/if}
+
+			{#if activeTab === 'variables'}
+				<div class="pj-tab-panel" {@attach tabPanelEnter}>
+					<div class="pj-vars-panel card rounded-2xl p-5">
+						{#if selectedEnvId}
+							<SharedVarsEditor
+								environmentId={selectedEnvId}
+								envName={selectedEnvName}
+								envSlug={selectedEnvSlug}
+							/>
+						{:else}
+							<p class="pj-vars-empty">Select an environment to manage its variables.</p>
+						{/if}
+					</div>
 				</div>
 			{/if}
 
@@ -747,6 +795,14 @@
 {/if}
 
 <style>
+	.pj-vars-panel {
+		max-width: 46rem;
+	}
+	.pj-vars-empty {
+		font-size: 0.85rem;
+		color: var(--surface-muted);
+	}
+
 	.pj-sse-alert {
 		display: flex;
 		align-items: flex-start;

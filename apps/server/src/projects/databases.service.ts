@@ -259,11 +259,18 @@ export class DatabasesService {
     const dbUser = `u_${dbBase}`;
     const dbPassword = this.generatePassword();
 
-    // Check uniqueness in our records
-    const existing = await this.prisma.database.findUnique({
-      where: { projectId_name: { projectId, name: nameInput } },
+    // Resolve the target environment (default = production) so the database is
+    // scoped to it. The database keeps its own (CNPG) namespace.
+    const dbEnv = await this.prisma.environment.findFirst({
+      where: { projectId, isDefault: true },
+      select: { id: true },
     });
-    if (existing) throw new BadRequestException('A database with this name already exists in this project');
+
+    // Check uniqueness in our records (now per environment)
+    const existing = await this.prisma.database.findFirst({
+      where: { environmentId: dbEnv?.id ?? undefined, projectId, name: nameInput },
+    });
+    if (existing) throw new BadRequestException('A database with this name already exists in this environment');
 
     const dbNameExists = await this.prisma.database.findUnique({
       where: { dbName },
@@ -394,6 +401,7 @@ export class DatabasesService {
       database = await this.prisma.database.create({
         data: {
           projectId,
+          environmentId: dbEnv?.id ?? null,
           name: nameInput,
           dbName,
           dbUser,

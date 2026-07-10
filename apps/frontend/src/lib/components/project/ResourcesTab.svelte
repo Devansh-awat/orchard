@@ -195,10 +195,7 @@
 <!-- Databases -->
 {#if databases.length}
 	<div class="pj-deployments-header" style="margin-top: 1rem;">
-		<h2 class="pj-section-title">
-			<DatabaseIcon class="h-4 w-4" style="color: var(--pj-color-green); display: inline;" />
-			Databases
-		</h2>
+		<h2 class="pj-section-title">Databases</h2>
 	</div>
 	<div class="pj-deployment-grid">
 		{#each databases as db, i (db.id)}
@@ -262,13 +259,7 @@
 <!-- Template Instances -->
 {#if templateInstances.length}
 	<div class="pj-deployments-header" style="margin-top: 1rem;">
-		<h2 class="pj-section-title">
-			<LayoutTemplate
-				class="h-4 w-4"
-				style="color: var(--sidebar-text-active-border); display: inline;"
-			/>
-			Template Instances
-		</h2>
+		<h2 class="pj-section-title">Template Instances</h2>
 	</div>
 	<div class="pj-deployment-grid">
 		{#each templateInstances as ti, i (ti.id)}

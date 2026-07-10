@@ -1,0 +1,177 @@
+import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
+import { PrismaService } from '../prisma/prisma.service';
+import { AuditService } from '../audit/audit.service';
+import { OrgEventsService } from '../events/org-events.service';
+import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
+import { referencedSharedKeys, resolveEnvVars, EnvVar } from '../env/env-resolver';
+
+const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+
+export interface SharedVarInput {
+  key: string;
+  value: string;
+  secret?: boolean;
+}
+
+@Injectable()
+export class EnvironmentSharedVarsService {
+  private readonly logger = new Logger(EnvironmentSharedVarsService.name);
+
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly audit: AuditService,
+    private readonly orgEvents: OrgEventsService,
+    private readonly k8sWorkload: K8sWorkloadService,
+  ) {}
+
+  /**
+   * Re-inject every deployment in the environment whose resolved env changed
+   * between the old and new shared-var sets. Deployments that reference none of
+   * the changed keys are left untouched (no rollout storm).
+   */
+  private async propagateToDeployments(
+    environmentId: string,
+    before: EnvVar[],
+    after: EnvVar[],
+  ): Promise<void> {
+    const deployments = await this.prisma.deployment.findMany({
+      where: { environmentId },
+      select: {
+        id: true,
+        name: true,
+        namespace: true,
+        envVars: { select: { key: true, value: true, secret: true } },
+      },
+    });
+    await Promise.allSettled(
+      deployments.map(async (dep) => {
+        const own = dep.envVars;
+        const resolvedBefore = resolveEnvVars(own, before).resolved;
+        const resolvedAfter = resolveEnvVars(own, after).resolved;
+        if (JSON.stringify(resolvedBefore) === JSON.stringify(resolvedAfter)) return;
+        const exists = await this.k8sWorkload
+          .getKubernetesDeployment(dep.name, dep.namespace)
+          .then((d) => d !== null)
+          .catch(() => false);
+        if (!exists) return;
+        await this.k8sWorkload
+          .updateDeploymentEnv({ namespace: dep.namespace, deploymentName: dep.name, env: resolvedAfter })
+          .catch((e) => this.logger.warn(`re-inject ${dep.name} failed: ${e?.message}`));
+      }),
+    );
+  }
+
+  private async envOrThrow(environmentId: string) {
+    const env = await this.prisma.environment.findUnique({
+      where: { id: environmentId },
+      include: { project: { select: { id: true, organizationId: true } } },
+    });
+    if (!env) throw new NotFoundException('Environment not found');
+    return env;
+  }
+
+  /** Raw shared vars for the resolver (no redaction — server-internal). */
+  async getRawForInjection(environmentId: string) {
+    const vars = await this.prisma.environmentSharedVar.findMany({
+      where: { environmentId },
+      select: { key: true, value: true, secret: true },
+    });
+    return vars;
+  }
+
+  async getSharedVars(environmentId: string, canEdit: boolean) {
+    await this.envOrThrow(environmentId);
+    const vars = await this.prisma.environmentSharedVar.findMany({
+      where: { environmentId },
+      orderBy: { key: 'asc' },
+      select: { key: true, value: true, secret: true },
+    });
+    // Viewers never see values; secret values are additionally never returned.
+    return vars.map((v) => ({
+      key: v.key,
+      secret: v.secret,
+      value: !canEdit || v.secret ? null : v.value,
+    }));
+  }
+
+  async updateSharedVars(environmentId: string, input: SharedVarInput[], userId: string) {
+    const env = await this.envOrThrow(environmentId);
+
+    const seen = new Map<string, SharedVarInput>();
+    for (const raw of Array.isArray(input) ? input : []) {
+      const key = String(raw?.key ?? '').trim();
+      if (!key) continue;
+      if (!ENV_KEY_RE.test(key)) {
+        throw new BadRequestException(`Invalid environment variable key: ${key}`);
+      }
+      seen.set(key, {
+        key,
+        value: raw.value != null ? String(raw.value) : '',
+        secret: Boolean(raw.secret),
+      });
+    }
+    const vars = Array.from(seen.values());
+
+    const before = await this.prisma.environmentSharedVar.findMany({
+      where: { environmentId },
+      select: { key: true, value: true, secret: true },
+    });
+    const beforeMap = new Map(before.map((v) => [v.key, v]));
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.environmentSharedVar.deleteMany({ where: { environmentId } });
+      if (vars.length > 0) {
+        await tx.environmentSharedVar.createMany({
+          data: vars.map((v) => ({ environmentId, key: v.key, value: v.value, secret: v.secret })),
+        });
+      }
+    });
+
+    // Restart deployments whose resolved env actually changed.
+    void this.propagateToDeployments(
+      environmentId,
+      before.map((v) => ({ key: v.key, value: v.value, secret: v.secret })),
+      vars.map((v) => ({ key: v.key, value: v.value, secret: v.secret })),
+    ).catch((e) => this.logger.warn(`shared-var propagation failed: ${e?.message}`));
+
+    // Save-time reference validation → warnings, not errors (don't force
+    // insertion order; a user may reference a key they're about to add).
+    const definedKeys = new Set(vars.map((v) => v.key));
+    const warnings: { key: string; missingRef: string }[] = [];
+    for (const v of vars) {
+      for (const ref of referencedSharedKeys([v])) {
+        if (!definedKeys.has(ref)) warnings.push({ key: v.key, missingRef: ref });
+      }
+    }
+
+    const added = vars.filter((v) => !beforeMap.has(v.key)).map((v) => v.key);
+    const removed = before.filter((v) => !seen.has(v.key)).map((v) => v.key);
+    const changed = vars
+      .filter((v) => beforeMap.has(v.key) && beforeMap.get(v.key)!.value !== v.value)
+      .map((v) => v.key);
+
+    void this.audit.log({
+      action: 'environment.sharedvars.updated',
+      actorUserId: userId,
+      organizationId: env.project.organizationId,
+      projectId: env.project.id,
+      targetType: 'environment',
+      targetId: env.id,
+      targetLabel: env.name,
+      metadata: {
+        added: added.join(',') || null,
+        removed: removed.join(',') || null,
+        changed: changed.join(',') || null,
+      },
+    });
+
+    this.orgEvents.emit({
+      organizationId: env.project.organizationId,
+      type: 'sharedvars.changed',
+      id: env.id,
+      projectId: env.project.id,
+    });
+
+    return { vars: await this.getSharedVars(environmentId, true), warnings };
+  }
+}

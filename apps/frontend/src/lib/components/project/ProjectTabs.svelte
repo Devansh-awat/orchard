@@ -1,9 +1,10 @@
 <script lang="ts">
 	import { animate } from 'motion';
 	import { tick } from 'svelte';
-	import { Server, FileText, Users, ExternalLink, Plus } from 'lucide-svelte';
+	import { Server, FileText, Users, KeyRound, ExternalLink, Plus } from 'lucide-svelte';
 	import { springPop } from '$lib/utils/motion.svelte';
 	import { SpatialMenu } from 'melt/builders';
+	import { EnvironmentSwitcher } from '$lib/components/environment';
 
 	let {
 		activeTab = $bindable('resources'),
@@ -15,9 +16,11 @@
 		deploymentSearch = $bindable(''),
 		onNewResource,
 		tabsRowEl = $bindable<HTMLElement | null>(null),
-		deploymentMenu
+		deploymentMenu,
+		projectId = '',
+		selectedEnvId = $bindable('')
 	}: {
-		activeTab?: 'resources' | 'compose' | 'members';
+		activeTab?: 'resources' | 'variables' | 'compose' | 'members';
 		resourceCount?: number;
 		composeCount?: number;
 		membersCount?: number;
@@ -27,10 +30,18 @@
 		onNewResource?: () => void;
 		tabsRowEl?: HTMLElement | null;
 		deploymentMenu: any;
+		projectId?: string;
+		selectedEnvId?: string;
 	} = $props();
 </script>
 
 <div class="pj-tabs-row" bind:this={tabsRowEl}>
+	{#if projectId}
+		<div class="pj-env-context">
+			<EnvironmentSwitcher {projectId} bind:selectedEnvId />
+		</div>
+		<div class="pj-env-divider"></div>
+	{/if}
 	<div class="pj-tabs" role="tablist">
 		<button
 			type="button"
@@ -42,8 +53,20 @@
 			{@attach springPop(() => activeTab === 'resources')}
 		>
 			<Server class="h-3.5 w-3.5" />
-			Resources
+			Apps
 			<span class="pj-tab-count">{resourceCount}</span>
+		</button>
+		<button
+			type="button"
+			role="tab"
+			aria-selected={activeTab === 'variables'}
+			class="pj-tab"
+			class:is-active={activeTab === 'variables'}
+			onclick={() => (activeTab = 'variables')}
+			{@attach springPop(() => activeTab === 'variables')}
+		>
+			<KeyRound class="h-3.5 w-3.5" />
+			Variables
 		</button>
 		<button
 			type="button"
@@ -86,17 +109,6 @@
 			</a>
 		{/if}
 		{#if activeTab === 'resources'}
-			{#if hasDeployments}
-				<div class="pj-deployment-search-bar" {...deploymentMenu.root}>
-					<input
-						type="search"
-						placeholder="Search…"
-						class="pj-search-input"
-						bind:value={deploymentSearch}
-						{...deploymentMenu.input}
-					/>
-				</div>
-			{/if}
 			<button class="pj-btn pj-btn-primary pj-btn--sm" onclick={onNewResource}>
 				<Plus class="h-4 w-4" />
 				New

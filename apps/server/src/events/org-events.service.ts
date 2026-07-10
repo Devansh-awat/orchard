@@ -12,7 +12,9 @@ export type OrgEventType =
   | 'membership.changed'
   | 'deployment.metrics'
   | 'job.changed'
-  | 'jobrun.changed';
+  | 'jobrun.changed'
+  | 'environment.changed'
+  | 'sharedvars.changed';
 
 export interface OrgEvent {
   organizationId: string;

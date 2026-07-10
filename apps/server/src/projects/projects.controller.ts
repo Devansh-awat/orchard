@@ -921,7 +921,7 @@ export class DeploymentsController {
     @Param('id') id: string,
     @Body()
     body: {
-      env: { key: string; value: string }[];
+      env: { key: string; value: string; secret?: boolean }[];
     },
     @Request() req
   ) {

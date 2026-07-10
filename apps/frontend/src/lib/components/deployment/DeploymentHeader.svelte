@@ -2,6 +2,7 @@
 	import { Loader2, ExternalLink } from 'lucide-svelte';
 	import { Play, RefreshCw, Trash2 } from '@jis3r/icons';
 	import { motionStagger, cardTilt } from '$lib/utils/motion.svelte';
+	import { envBadgeColor } from '$lib/utils/format';
 
 	let {
 		deployment,
@@ -86,6 +87,16 @@
 				<span class="dep-status-dot"></span>
 				{deploymentStatusChip.label}
 			</span>
+			{#if deployment.environment}
+				<span
+					class="dep-env-chip"
+					style="--env-c: {envBadgeColor(deployment.environment.slug)}"
+					title="Environment: {deployment.environment.name}"
+				>
+					<span class="dep-env-dot"></span>
+					{deployment.environment.name}
+				</span>
+			{/if}
 			{#each debugChips as chip (chip.label)}
 				<span class="dep-status-chip dep-status-chip--{chip.tone}">
 					<span class="dep-status-dot"></span>

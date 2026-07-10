@@ -202,8 +202,13 @@ export class JobsService {
     const data = await this.validateJobInput(input, projectId);
     const steps = await this.validateSteps(input.steps, projectId);
 
-    const existing = await this.prisma.job.findUnique({
-      where: { projectId_name: { projectId, name: data.name } },
+    const defaultEnv = await this.prisma.environment.findFirst({
+      where: { projectId, isDefault: true },
+      select: { id: true },
+    });
+
+    const existing = await this.prisma.job.findFirst({
+      where: { projectId, name: data.name },
       select: { id: true },
     });
     if (existing) {
@@ -213,6 +218,7 @@ export class JobsService {
     const job = await this.prisma.job.create({
       data: {
         projectId,
+        environmentId: defaultEnv?.id ?? null,
         name: data.name,
         description: data.description,
         scheduleCron: data.scheduleCron,
@@ -238,8 +244,8 @@ export class JobsService {
     const data = await this.validateJobInput({ ...input, name: input.name ?? job.name, steps: [] }, job.projectId, true);
 
     if (input.name !== undefined && data.name !== job.name) {
-      const clash = await this.prisma.job.findUnique({
-        where: { projectId_name: { projectId: job.projectId, name: data.name } },
+      const clash = await this.prisma.job.findFirst({
+        where: { projectId: job.projectId, name: data.name },
         select: { id: true },
       });
       if (clash) {

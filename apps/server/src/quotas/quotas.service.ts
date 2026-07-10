@@ -104,7 +104,7 @@ export class QuotasService {
   async applyProjectQuota(projectId: string) {
     const project = await this.prisma.project.findUnique({
       where: { id: projectId },
-      select: { namespace: true },
+      select: { namespace: true, environments: { select: { namespace: true } } },
     });
     if (!project) return;
     const { caps, defaultPodCpuMilli, defaultPodMemoryBytes } = await this.resolveProjectCaps(projectId);
@@ -119,15 +119,27 @@ export class QuotasService {
     const podsWithHeadroom = caps.maxPods
       ? caps.maxPods + Math.max(1, Math.ceil(caps.maxPods * 0.25))
       : caps.maxPods;
-    await this.k8sNamespace.applyNamespaceQuota({
-      namespace: project.namespace,
-      cpuLimitMilli: withHeadroom(caps.cpuLimitMilli),
-      memoryLimitBytes: withHeadroom(caps.memoryLimitBytes),
-      maxPods: podsWithHeadroom,
-      maxServices: caps.maxServices,
-      defaultPodCpuMilli,
-      defaultPodMemoryBytes,
-    });
+    // Each environment has its own namespace; push the project's cap as the
+    // per-namespace ceiling to every one of them (real per-org/member totals
+    // are still held by the API-layer aggregation). Union the legacy project
+    // namespace in case an environment row is missing (belt and suspenders).
+    const namespaces = new Set<string>([
+      project.namespace,
+      ...project.environments.map((e) => e.namespace),
+    ]);
+    await Promise.allSettled(
+      Array.from(namespaces).map((namespace) =>
+        this.k8sNamespace.applyNamespaceQuota({
+          namespace,
+          cpuLimitMilli: withHeadroom(caps.cpuLimitMilli),
+          memoryLimitBytes: withHeadroom(caps.memoryLimitBytes),
+          maxPods: podsWithHeadroom,
+          maxServices: caps.maxServices,
+          defaultPodCpuMilli,
+          defaultPodMemoryBytes,
+        }),
+      ),
+    );
   }
 
   // Reapply quotas to every project in an org (after org-level caps change).
@@ -148,19 +160,34 @@ export class QuotasService {
   // Returns namespaces for `organizationId` plus any orgs sharing its quotaGroupId.
   // Linked orgs share both the cap and the usage pool — total usage is summed across them.
   private async getQuotaGroupNamespaces(organizationId: string): Promise<string[]> {
+    // Union the project's own namespace with every environment namespace so
+    // staging/dev pods count toward org caps. The prod env namespace equals
+    // the project namespace, so a Set dedupes the overlap.
+    const projectSelect = {
+      namespace: true,
+      environments: { select: { namespace: true } },
+    } as const;
     const self = await this.prisma.organization.findUnique({
       where: { id: organizationId },
-      select: { quotaGroupId: true, projects: { select: { namespace: true } } },
+      select: { quotaGroupId: true, projects: { select: projectSelect } },
     });
     if (!self) return [];
-    const namespaces = self.projects.map((p) => p.namespace);
-    if (!self.quotaGroupId) return namespaces;
-    const others = await this.prisma.organization.findMany({
-      where: { quotaGroupId: self.quotaGroupId, id: { not: organizationId } },
-      select: { projects: { select: { namespace: true } } },
-    });
-    for (const o of others) for (const p of o.projects) namespaces.push(p.namespace);
-    return namespaces;
+    const namespaces = new Set<string>();
+    const collect = (projects: { namespace: string; environments: { namespace: string }[] }[]) => {
+      for (const p of projects) {
+        namespaces.add(p.namespace);
+        for (const e of p.environments) namespaces.add(e.namespace);
+      }
+    };
+    collect(self.projects);
+    if (self.quotaGroupId) {
+      const others = await this.prisma.organization.findMany({
+        where: { quotaGroupId: self.quotaGroupId, id: { not: organizationId } },
+        select: { projects: { select: projectSelect } },
+      });
+      for (const o of others) collect(o.projects);
+    }
+    return Array.from(namespaces);
   }
 
   // Org-wide admission check used at deploy time. Throws if the requested delta would push

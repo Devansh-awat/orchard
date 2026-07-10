@@ -516,32 +516,16 @@ export class K8sWorkloadService {
       throw new BadRequestException('Image is required');
     }
 
-    const envEntries = Array.isArray(options.env)
-      ? options.env
-          .filter((entry) => entry && typeof entry.key === 'string')
-          .map((entry) => ({
-            key: String(entry.key).trim(),
-            value: entry.value !== undefined && entry.value !== null ? String(entry.value) : ''
-          }))
-          .filter((entry) => entry.key.length > 0)
-      : [];
-
-    const uniqueEnv = new Map<string, string>();
-    for (const entry of envEntries) {
-      uniqueEnv.set(entry.key, entry.value);
+    // Split env into inline (normal) and k8s-Secret-backed (secret) entries.
+    // Secret values never appear inline in the pod spec — they're referenced
+    // via secretKeyRef into a per-deployment Secret.
+    const { envList, secretData } = this.buildEnvAndSecret(cleanName, options.env, {
+      HOST: '0.0.0.0',
+      FORCE_COLOR: '1',
+    });
+    if (secretData) {
+      await this.upsertEnvSecret(cleanNamespace, cleanName, secretData);
     }
-
-    if (!uniqueEnv.has('HOST')) {
-      uniqueEnv.set('HOST', '0.0.0.0');
-    }
-    if (!uniqueEnv.has('FORCE_COLOR')) {
-      uniqueEnv.set('FORCE_COLOR', '1');
-    }
-
-    const envList = Array.from(uniqueEnv.entries()).map(([key, value]) => ({
-      name: key,
-      value
-    }));
 
     let requestedServiceType: 'LoadBalancer' | 'NodePort' | 'ClusterIP' = 'ClusterIP';
     if (options.serviceType === 'LoadBalancer') requestedServiceType = 'LoadBalancer';
@@ -835,6 +819,75 @@ export class K8sWorkloadService {
     };
   }
 
+  /**
+   * Split env vars into inline entries and secretKeyRef entries. Secret values
+   * are collected into `secretData` (goes into a per-deployment k8s Secret);
+   * the container references them via secretKeyRef so plaintext never lands in
+   * the pod spec. `extras` are inline defaults added only when not already set.
+   */
+  private buildEnvAndSecret(
+    deploymentName: string,
+    env: { key: string; value: string; secret?: boolean }[] | undefined,
+    extras: Record<string, string> = {},
+  ): { envList: k8s.V1EnvVar[]; secretData: Record<string, string> | null } {
+    const secretName = `${deploymentName}-env`;
+    const normal = new Map<string, string>();
+    const secret = new Map<string, string>();
+    for (const entry of Array.isArray(env) ? env : []) {
+      if (!entry || typeof entry.key !== 'string') continue;
+      const key = entry.key.trim();
+      if (!key) continue;
+      const value = entry.value != null ? String(entry.value) : '';
+      if (entry.secret) secret.set(key, value);
+      else normal.set(key, value);
+    }
+    for (const [k, v] of Object.entries(extras)) {
+      if (!normal.has(k) && !secret.has(k)) normal.set(k, v);
+    }
+    const envList: k8s.V1EnvVar[] = [
+      ...Array.from(normal, ([name, value]) => ({ name, value })),
+      ...Array.from(secret.keys(), (name) => ({
+        name,
+        valueFrom: { secretKeyRef: { name: secretName, key: name } },
+      })),
+    ];
+    return { envList, secretData: secret.size > 0 ? Object.fromEntries(secret) : null };
+  }
+
+  /** Upsert (or delete when null) the per-deployment env Secret. */
+  private async upsertEnvSecret(
+    namespace: string,
+    deploymentName: string,
+    secretData: Record<string, string> | null,
+  ): Promise<void> {
+    const name = `${deploymentName}-env`;
+    const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
+    if (!secretData) {
+      await coreApi.deleteNamespacedSecret(name, namespace).catch(() => {});
+      return;
+    }
+    const body: k8s.V1Secret = {
+      metadata: {
+        name,
+        labels: {
+          'app.kubernetes.io/managed-by': 'orchard',
+          'app.kubernetes.io/name': deploymentName,
+        },
+      },
+      type: 'Opaque',
+      stringData: secretData,
+    };
+    try {
+      const existing = await coreApi.readNamespacedSecret(name, namespace);
+      body.metadata!.resourceVersion = existing.body.metadata?.resourceVersion;
+      await coreApi.replaceNamespacedSecret(name, namespace, body);
+    } catch (err: any) {
+      const code = err?.statusCode ?? err?.response?.statusCode;
+      if (code === 404) await coreApi.createNamespacedSecret(namespace, body);
+      else throw err;
+    }
+  }
+
   async updateDeploymentEnv(options: UpdateDeploymentEnvOptions) {
     this.ensureKubeConfig();
 
@@ -849,32 +902,13 @@ export class K8sWorkloadService {
       throw new BadRequestException('Deployment name is required');
     }
 
-    const envEntries = Array.isArray(options.env)
-      ? options.env
-          .filter((entry) => entry && typeof entry.key === 'string')
-          .map((entry) => ({
-            key: String(entry.key).trim(),
-            value: entry.value !== undefined && entry.value !== null ? String(entry.value) : ''
-          }))
-          .filter((entry) => entry.key.length > 0)
-      : [];
-
-    const uniqueEnv = new Map<string, string>();
-    for (const entry of envEntries) {
-      uniqueEnv.set(entry.key, entry.value);
-    }
-
-    if (!uniqueEnv.has('HOST')) {
-      uniqueEnv.set('HOST', '0.0.0.0');
-    }
-    if (!uniqueEnv.has('FORCE_COLOR')) {
-      uniqueEnv.set('FORCE_COLOR', '1');
-    }
-
-    const envList = Array.from(uniqueEnv.entries()).map(([key, value]) => ({
-      name: key,
-      value
-    }));
+    const { envList, secretData } = this.buildEnvAndSecret(cleanName, options.env, {
+      HOST: '0.0.0.0',
+      FORCE_COLOR: '1',
+    });
+    // Upsert (or clear) the per-deployment env Secret before patching so the
+    // secretKeyRef entries resolve. An empty secret set removes the Secret.
+    await this.upsertEnvSecret(cleanNamespace, cleanName, secretData);
 
     try {
       const appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
@@ -1347,28 +1381,32 @@ export class K8sWorkloadService {
           status = 'pending';
         }
 
-        const deploymentRecord = await this.prisma.deployment.upsert({
-          where: {
-            projectId_name: {
-              projectId: project.id,
-              name: deploymentName,
-            },
-          },
-          update: {
-            namespace,
-            image,
-            replicas,
-            status,
-          },
-          create: {
-            projectId: project.id,
-            name: deploymentName,
-            namespace,
-            image,
-            replicas,
-            status,
-          },
+        const existingRecord = await this.prisma.deployment.findFirst({
+          where: { projectId: project.id, name: deploymentName },
         });
+        let deploymentRecord;
+        if (existingRecord) {
+          deploymentRecord = await this.prisma.deployment.update({
+            where: { id: existingRecord.id },
+            data: { namespace, image, replicas, status },
+          });
+        } else {
+          const defaultEnv = await this.prisma.environment.findFirst({
+            where: { projectId: project.id, isDefault: true },
+            select: { id: true },
+          });
+          deploymentRecord = await this.prisma.deployment.create({
+            data: {
+              projectId: project.id,
+              environmentId: defaultEnv?.id ?? null,
+              name: deploymentName,
+              namespace,
+              image,
+              replicas,
+              status,
+            },
+          });
+        }
         
         const containerEnv = k8sDeployment.spec.template.spec.containers?.[0]?.env || [];
         const envKeys = new Set<string>();
@@ -1737,18 +1775,11 @@ export class K8sWorkloadService {
       });
       
       if (project) {
-        await this.prisma.deployment.update({
-          where: {
-            projectId_name: {
-              projectId: project.id,
-              name: cleanDeploymentName
-            }
-          },
-          data: {
-            replicas
-          }
+        await this.prisma.deployment.updateMany({
+          where: { projectId: project.id, name: cleanDeploymentName },
+          data: { replicas },
         });
-        
+
         console.log('[API] Updated deployment replicas in database');
       }
       
@@ -1872,15 +1903,10 @@ export class K8sWorkloadService {
       });
       
       if (project) {
-        const deployment = await this.prisma.deployment.findUnique({
-          where: {
-            projectId_name: {
-              projectId: project.id,
-              name: cleanDeploymentName,
-            },
-          },
+        const deployment = await this.prisma.deployment.findFirst({
+          where: { projectId: project.id, name: cleanDeploymentName },
         });
-        
+
         if (deployment) {
           await this.prisma.deployment.update({
             where: { id: deployment.id },

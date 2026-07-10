@@ -92,19 +92,14 @@
 			});
 
 			const colorMatrix = new ColorMatrixFilter();
-			const grade = (dark: boolean) => {
+			// Grade the gradient identically in both themes so the shader reads the
+			// same regardless of light/dark mode. (Previously light mode lifted the
+			// shadows, which washed the gradient out.)
+			const grade = () => {
 				colorMatrix.reset();
 				colorMatrix.saturate(saturation, true);
-				if (!dark) {
-					const m = colorMatrix.matrix.slice();
-					m[4] += shadowLift;
-					m[9] += shadowLift;
-					m[14] += shadowLift;
-					colorMatrix.matrix = m;
-				}
 			};
-			const root = document.documentElement;
-			grade(root.classList.contains('dark'));
+			grade();
 			const twist = new TwistFilter({
 				radius: size * 0.62,
 				angle: 3.2,
@@ -116,13 +111,6 @@
 			stage.filters = [colorMatrix, twist, kawase];
 			stage.filterArea = new Rectangle(0, 0, size, size);
 			app.stage.addChild(stage);
-
-			const onTheme = new MutationObserver(() => {
-				grade(root.classList.contains('dark'));
-				if (app) app.render();
-			});
-			onTheme.observe(root, { attributes: true, attributeFilter: ['class'] });
-			cleanups.push(() => onTheme.disconnect());
 
 			let t = 0;
 			const tick = () => {

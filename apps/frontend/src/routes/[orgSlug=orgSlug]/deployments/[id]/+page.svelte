@@ -878,7 +878,9 @@
 
 	const sliderPercentage = $derived((scaleReplicas / 20) * 100);
 
-	let envVars = $state<Array<{ key: string; value: string }>>([{ key: '', value: '' }]);
+	let envVars = $state<Array<{ key: string; value: string; secret?: boolean }>>([
+		{ key: '', value: '' }
+	]);
 	let envViewMode = $state<'ui' | 'raw'>('ui');
 	let envRawText = $state('');
 	let revealedIndices = $state<Set<number>>(new Set());
@@ -1300,9 +1302,10 @@
 			if (!isEditingEnv) {
 				if (data.envVars && Array.isArray(data.envVars) && data.envVars.length > 0) {
 					envVars = [
-						...data.envVars.map((ev: { key: string; value: string }) => ({
+						...data.envVars.map((ev: { key: string; value: string; secret?: boolean }) => ({
 							key: ev.key || '',
-							value: ev.value || ''
+							value: ev.value || '',
+							secret: Boolean(ev.secret)
 						})),
 						{ key: '', value: '' }
 					];
@@ -1739,13 +1742,68 @@
 		domainFormError = null;
 	}
 
+	const SLUG_ADJECTIVES = [
+		'sunny',
+		'mossy',
+		'brave',
+		'swift',
+		'golden',
+		'quiet',
+		'wild',
+		'fuzzy',
+		'minty',
+		'rosy',
+		'lucky',
+		'breezy',
+		'peachy',
+		'snowy',
+		'zesty',
+		'amber',
+		'coral',
+		'dapper',
+		'misty',
+		'tiny'
+	];
+	const SLUG_NOUNS = [
+		'fox',
+		'otter',
+		'sprout',
+		'acorn',
+		'fern',
+		'robin',
+		'pebble',
+		'willow',
+		'comet',
+		'badger',
+		'plum',
+		'birch',
+		'wren',
+		'clover',
+		'hazel',
+		'pine',
+		'sage',
+		'petal',
+		'finch',
+		'maple'
+	];
+
 	function generateRandomDomainForNew() {
-		const chars = 'abcdefghijklmnopqrstuvwxyz0123456789';
-		let randomPart = '';
-		for (let i = 0; i < 6; i++) {
-			randomPart += chars.charAt(Math.floor(Math.random() * chars.length));
-		}
-		newDomainHost = `${randomPart}.${APP_DOMAIN}`;
+		const adjective = SLUG_ADJECTIVES[Math.floor(Math.random() * SLUG_ADJECTIVES.length)];
+		const noun = SLUG_NOUNS[Math.floor(Math.random() * SLUG_NOUNS.length)];
+		const number = Math.floor(Math.random() * 90) + 10;
+		newDomainHost = `${adjective}-${noun}-${number}.${APP_DOMAIN}`;
+	}
+
+	async function checkDomainDns(domain: string): Promise<{ valid: boolean; message: string }> {
+		if (!deployment?.project?.id) throw new Error('Project not loaded');
+		const response = await apiFetch('/apiv1/projects/ingresses/validate-dns', {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ projectId: deployment.project.id, domain })
+		});
+		const data = await response.json().catch(() => ({}));
+		if (!response.ok) throw new Error(data.message || 'Failed to check DNS');
+		return { valid: !!data.valid, message: data.message || '' };
 	}
 
 	async function createDomain() {
@@ -2936,6 +2994,7 @@
 							onDeleteIngress={deleteIngress}
 							onResetDomainForm={resetDomainForm}
 							onGenerateRandomDomain={generateRandomDomainForNew}
+							onCheckDns={checkDomainDns}
 							onUpdateProtection={updateProtection}
 							{protectionUpdatingId}
 							{toasts}

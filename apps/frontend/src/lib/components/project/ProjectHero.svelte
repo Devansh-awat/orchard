@@ -29,8 +29,13 @@
 	let heroDescEl = $state<HTMLElement | null>(null);
 	let firstRun = true;
 
+	// Tabs that don't need the big banner collapse the hero to a compact strip.
+	const heroCompact = $derived(
+		activeTab === 'members' || activeTab === 'variables' || activeTab === 'compose'
+	);
+
 	$effect(() => {
-		const compact = activeTab === 'members';
+		const compact = heroCompact;
 		const heroPx = compact ? 7.5 * 16 : 18 * 16;
 		const titlePx = compact ? 1.0625 * 16 : 1.25 * 16;
 		const descOp = compact ? 0 : 1;
@@ -69,7 +74,7 @@
 		aria-hidden="true"
 	></div>
 {/if}
-<div class="pj-hero" class:pj-hero--compact={activeTab === 'members'} bind:this={heroEl}>
+<div class="pj-hero" class:pj-hero--compact={heroCompact} bind:this={heroEl}>
 	<img
 		class="pj-hero-img"
 		src={project.backgroundImage}

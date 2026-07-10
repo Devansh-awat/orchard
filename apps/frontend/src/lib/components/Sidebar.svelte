@@ -74,6 +74,14 @@
 	$effect(() => {
 		const collapsed = $sidebarCollapsed;
 		const home = isHomeRoute;
+		// Expose the sidebar width so overlays (modals) can center within the
+		// content area instead of the whole viewport.
+		if (typeof document !== 'undefined') {
+			document.documentElement.style.setProperty(
+				'--app-sidebar-w',
+				collapsed ? COLLAPSED_W : EXPANDED_W
+			);
+		}
 		if (!asideEl) return;
 		if (!didInitWidth) {
 			asideEl.style.width = collapsed ? COLLAPSED_W : EXPANDED_W;

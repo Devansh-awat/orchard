@@ -35,6 +35,7 @@ export function buildNodeAffinity(
 export interface DeploymentEnvVarInput {
   key: string;
   value: string;
+  secret?: boolean;
 }
 
 export interface DeploymentPortInput {

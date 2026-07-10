@@ -19,6 +19,7 @@ import { SessionsService } from '../auth/sessions.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { AuditService } from '../audit/audit.service';
 import { ProjectAccessService } from './project-access.service';
+import { EnvironmentsService } from './environments.service';
 import { DeploymentsService } from './deployments.service';
 import { formatSlug, redactDatabaseForViewer, stripR2ProxyCreds } from './projects.utils';
 import { parseMemory } from '../kubernetes/quantity';
@@ -50,6 +51,7 @@ export class ProjectsService {
     private readonly access: ProjectAccessService,
     @Inject(forwardRef(() => DeploymentsService))
     private readonly deployments: DeploymentsService,
+    private readonly environments: EnvironmentsService,
   ) {}
 
   private scrubMembersForViewer<
@@ -253,6 +255,13 @@ export class ProjectsService {
           },
         },
       },
+    });
+
+    // Create the default production environment. It reuses the namespace we
+    // just provisioned (no second k8s namespace) so the project's resources
+    // land in it directly.
+    await this.environments.ensureDefaultEnvironment(project.id).catch((err) => {
+      console.error('[Projects] default environment creation failed:', err);
     });
 
     // Push the effective ResourceQuota/LimitRange to the new namespace.
@@ -1209,6 +1218,7 @@ export class ProjectsService {
             githubRepo: true,
             githubBranch: true,
             projectId: true,
+            environmentId: true,
             updatedAt: true,
             createdAt: true,
             creator: {
@@ -1247,6 +1257,7 @@ export class ProjectsService {
             createdAt: true,
             namespace: true,
             clusterName: true,
+            environmentId: true,
           },
         },
         templateInstances: {

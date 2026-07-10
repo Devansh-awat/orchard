@@ -1,21 +1,26 @@
 <script lang="ts">
-	import { Plus, Loader2 } from 'lucide-svelte';
+	import { Plus, Loader2, Lock, LockOpen } from 'lucide-svelte';
 	import { Eye, EyeOff, Trash2 } from '@jis3r/icons';
 	import { slide } from 'svelte/transition';
 	import { SectionCard } from '$lib/components/ui';
 	import { envVarsToRaw, rawToEnvVars } from '$lib/utils/format';
 
 	let {
-		envVars = $bindable<Array<{ key: string; value: string }>>(),
+		envVars = $bindable<Array<{ key: string; value: string; secret?: boolean }>>(),
 		isEditing = $bindable(false),
 		savingEnv,
 		onSave
 	}: {
-		envVars: Array<{ key: string; value: string }>;
+		envVars: Array<{ key: string; value: string; secret?: boolean }>;
 		isEditing?: boolean;
 		savingEnv: boolean;
 		onSave: () => void;
 	} = $props();
+
+	function toggleSecret(index: number) {
+		isEditing = true;
+		envVars = envVars.map((e, i) => (i === index ? { ...e, secret: !e.secret } : e));
+	}
 
 	let envViewMode = $state<'ui' | 'raw'>('ui');
 	let envRawText = $state('');
@@ -126,6 +131,16 @@
 									/>{/if}
 							</button>
 							<button
+								type="button"
+								onclick={() => toggleSecret(index)}
+								class="env-action-btn"
+								class:env-action-secret={env.secret}
+								aria-label={env.secret ? 'Secret (stored in a Kubernetes Secret)' : 'Mark as secret'}
+								title={env.secret ? 'Secret — stored in a Kubernetes Secret' : 'Mark as secret'}
+							>
+								{#if env.secret}<Lock size={14} class="h-3.5 w-3.5" />{:else}<LockOpen size={14} class="h-3.5 w-3.5" />{/if}
+							</button>
+							<button
 								onclick={() => removeEnvRow(index)}
 								class="env-action-btn env-action-delete"
 								aria-label="Remove"
@@ -150,10 +165,17 @@
 		{/if}
 	</div>
 	<div class="env-footer">
-		<p class="env-footer-hint">Saving will restart pods with new variables.</p>
+		<p class="env-footer-hint">Saving restarts pods.</p>
 		<button onclick={handleSave} disabled={savingEnv || !isEditing} class="btn btn-primary">
 			{#if savingEnv}<Loader2 class="h-4 w-4 animate-spin" />{/if}
 			<span>Save</span>
 		</button>
 	</div>
 </SectionCard>
+
+<style>
+	.env-action-secret {
+		color: #d97706;
+		background: color-mix(in srgb, #f59e0b 12%, transparent);
+	}
+</style>
