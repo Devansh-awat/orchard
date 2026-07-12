@@ -10,6 +10,7 @@ import (
 func projectCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:     "project",
+		GroupID: groupResources,
 		Aliases: []string{"projects", "proj"},
 		Short:   "Manage projects",
 	}
@@ -33,7 +34,7 @@ func projectListCmd() *cobra.Command {
 				path += "?orgId=" + url.QueryEscape(org)
 			}
 			var raw any
-			if err := cl.GetJSON(path, &raw); err != nil {
+			if err := cl.GetJSON(cmd.Context(), path, &raw); err != nil {
 				return err
 			}
 			if fmtFlag() == output.FormatJSON {
@@ -67,7 +68,7 @@ func projectGetCmd() *cobra.Command {
 				return err
 			}
 			var raw any
-			if err := cl.GetJSON("/projects/"+url.PathEscape(args[0]), &raw); err != nil {
+			if err := cl.GetJSON(cmd.Context(), "/projects/"+url.PathEscape(args[0]), &raw); err != nil {
 				return err
 			}
 			return output.JSON(raw)

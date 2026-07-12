@@ -2,6 +2,7 @@ package tui
 
 import (
 	"bytes"
+	"context"
 	"strconv"
 
 	"github.com/LeafdTK/leaf/cli/internal/api"
@@ -110,7 +111,7 @@ type logsResp struct {
 // helpers shared by commands
 func getList[T any](cl *api.Client, path string) ([]T, error) {
 	var out []T
-	if err := cl.GetJSON(path, &out); err != nil {
+	if err := cl.GetJSON(context.Background(), path, &out); err != nil {
 		return nil, err
 	}
 	return out, nil

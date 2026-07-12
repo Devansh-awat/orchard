@@ -52,12 +52,27 @@ Config lives at `~/.orchard/config.json`. Overridable via env:
 
 ```
 orchard auth login|status|logout
+orchard use org|project|env <id-or-slug>   # save default scope
+orchard context show|clear
 orchard project list|get
 orchard deploy list|get|scale|restart|rebuild|logs
 orchard db list|get
 orchard ui                       # interactive dashboard (bubbletea)
 orchard api <METHOD> <path>      # raw escape hatch — full API parity
 ```
+
+Global flags: `--org/--project/--env` (id or slug, override the saved
+context; also via `ORCHARD_ORG/PROJECT/ENV`), `--yes/-y` (skip confirmation
+prompts — required for destructive commands when stdin is not a TTY; the CLI
+never blocks waiting for input in a pipe), `-o json|table`.
+
+## Exit codes
+
+`0` ok · `1` generic/network · `2` usage or refused prompt · `3` auth ·
+`4` not found · `5` validation/conflict · `6` rate limited · `7` server error ·
+`8` --wait/--timeout deadline · `130` interrupted. With `-o json` (or piped),
+errors print as one-line JSON to stderr:
+`{"error":{"status":429,"code":6,"message":"…"}}`.
 
 The `api` command reaches **any** endpoint, so the CLI has complete coverage
 before a friendly wrapper exists:

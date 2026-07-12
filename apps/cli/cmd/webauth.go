@@ -116,7 +116,7 @@ func webLogin(cfg *config.Config, webBase string, openBrowserFlag bool) error {
 	// Verify and persist.
 	cl := api.New(cfg.APIURL, cfg.Token)
 	var me map[string]any
-	if err := cl.GetJSON("/auth/me", &me); err != nil {
+	if err := cl.GetJSON(context.Background(), "/auth/me", &me); err != nil {
 		return fmt.Errorf("token verification failed: %w", err)
 	}
 	if err := cfg.Save(); err != nil {

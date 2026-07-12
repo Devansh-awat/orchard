@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"fmt"
 	"net/url"
 	"strings"
@@ -46,7 +47,7 @@ type (
 func fetchDetail(cl *api.Client, id string) tea.Cmd {
 	return func() tea.Msg {
 		var d Deployment
-		err := cl.GetJSON("/deployments/"+id, &d)
+		err := cl.GetJSON(context.Background(), "/deployments/"+id, &d)
 		if err != nil {
 			return detailMsg{nil, err}
 		}
@@ -62,14 +63,14 @@ func fetchPods(cl *api.Client, id string) tea.Cmd {
 func fetchMetrics(cl *api.Client, id string) tea.Cmd {
 	return func() tea.Msg {
 		var m MetricsResp
-		err := cl.GetJSON("/deployments/"+id+"/metrics", &m)
+		err := cl.GetJSON(context.Background(), "/deployments/"+id+"/metrics", &m)
 		return metricsMsg{m, err}
 	}
 }
 func fetchLogs(cl *api.Client, id string) tea.Cmd {
 	return func() tea.Msg {
 		var l logsResp
-		err := cl.GetJSON("/deployments/"+id+"/logs", &l)
+		err := cl.GetJSON(context.Background(), "/deployments/"+id+"/logs", &l)
 		return logsMsg{l, err}
 	}
 }
@@ -87,7 +88,7 @@ func fetchRuntimeLogs(cl *api.Client, podName, namespace string) tea.Cmd {
 		if namespace != "" {
 			path += "&namespace=" + url.QueryEscape(namespace)
 		}
-		err := cl.GetJSON(path, &r)
+		err := cl.GetJSON(context.Background(), path, &r)
 		return runtimeLogsMsg{logs: r.Logs, err: err}
 	}
 }
@@ -494,7 +495,7 @@ func (s *deploymentScreen) viewEnv(height int) string {
 // doAction runs a mutating request and reports the result.
 func doAction(cl *api.Client, method, path string, body any, okText string) tea.Cmd {
 	return func() tea.Msg {
-		err := cl.Send(method, path, body, nil)
+		err := cl.Send(context.Background(), method, path, body, nil)
 		return actionMsg{okText, err}
 	}
 }

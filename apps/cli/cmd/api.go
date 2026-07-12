@@ -16,8 +16,9 @@ import (
 func apiCmd() *cobra.Command {
 	var data string
 	c := &cobra.Command{
-		Use:   "api <METHOD> <path>",
-		Short: "Make a raw authenticated request to the Orchard API",
+		Use:     "api <METHOD> <path>",
+		GroupID: groupUtility,
+		Short:   "Make a raw authenticated request to the Orchard API",
 		Long: "Call any /apiv1 endpoint directly.\n\n" +
 			"Examples:\n" +
 			"  orchard api GET /projects\n" +
@@ -43,7 +44,7 @@ func apiCmd() *cobra.Command {
 				body = []byte(data)
 			}
 
-			res, err := cl.Do(method, path, body)
+			res, err := cl.Do(cmd.Context(), method, path, body)
 			if err != nil {
 				return err
 			}

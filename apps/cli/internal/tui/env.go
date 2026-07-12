@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"strings"
 
 	"github.com/LeafdTK/leaf/cli/internal/api"
@@ -61,7 +62,7 @@ func (s *envScreen) submit() (screen, tea.Cmd) {
 	id := s.id
 	cl := s.cl
 	return s, func() tea.Msg {
-		err := cl.Send("PUT", "/deployments/"+id+"/env", map[string]any{"env": vars}, nil)
+		err := cl.Send(context.Background(), "PUT", "/deployments/"+id+"/env", map[string]any{"env": vars}, nil)
 		return formResult{ok: envSavedMsg{}, err: err}
 	}
 }

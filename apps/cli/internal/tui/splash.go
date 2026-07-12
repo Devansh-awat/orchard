@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"github.com/LeafdTK/leaf/cli/internal/api"
 	tea "github.com/charmbracelet/bubbletea"
 	"github.com/charmbracelet/lipgloss"
@@ -27,7 +28,7 @@ type meMsg struct {
 func fetchMe(cl *api.Client) tea.Cmd {
 	return func() tea.Msg {
 		var me map[string]any
-		if err := cl.GetJSON("/auth/me", &me); err != nil {
+		if err := cl.GetJSON(context.Background(), "/auth/me", &me); err != nil {
 			return meMsg{err: err}
 		}
 		email, _ := me["email"].(string)

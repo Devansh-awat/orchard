@@ -2,6 +2,7 @@ package output
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"strings"
@@ -119,14 +120,66 @@ func pad(s string, w int) string {
 	return s + strings.Repeat(" ", gap)
 }
 
+// Status lines go to stderr so piped stdout stays pure data (agents parse it).
 func Successf(format string, a ...any) {
-	fmt.Println(okStyle.Render("✓ ") + fmt.Sprintf(format, a...))
+	fmt.Fprintln(os.Stderr, okStyle.Render("✓ ")+fmt.Sprintf(format, a...))
 }
-func Warnf(format string, a ...any) { fmt.Println(warnStyle.Render("! ") + fmt.Sprintf(format, a...)) }
+func Warnf(format string, a ...any) {
+	fmt.Fprintln(os.Stderr, warnStyle.Render("! ")+fmt.Sprintf(format, a...))
+}
 func Errorf(format string, a ...any) {
 	fmt.Fprintln(os.Stderr, errStyle.Render("✗ ")+fmt.Sprintf(format, a...))
 }
 func Dim(s string) string { return dimStyle.Render(s) }
+
+// KV renders an aligned key/value detail view (the table-mode counterpart of
+// a JSON `get` dump).
+func KV(pairs [][2]string) {
+	w := 0
+	for _, p := range pairs {
+		if lipgloss.Width(p[0]) > w {
+			w = lipgloss.Width(p[0])
+		}
+	}
+	var b strings.Builder
+	for _, p := range pairs {
+		b.WriteString(dimStyle.Render(pad(p[0], w)))
+		b.WriteString("  ")
+		b.WriteString(p[1])
+		b.WriteString("\n")
+	}
+	fmt.Print(b.String())
+}
+
+// NDJSON prints v as a single line (streaming: events tail, --follow).
+func NDJSON(v any) error {
+	enc := json.NewEncoder(os.Stdout)
+	enc.SetEscapeHTML(false)
+	return enc.Encode(v)
+}
+
+// ErrPromptRefused is returned when a confirmation would block a non-TTY
+// caller; commands surface it as a usage error (exit 2).
+var ErrPromptRefused = errors.New("refusing to prompt in non-interactive mode; pass --yes to confirm")
+
+// Confirm gates destructive actions. --yes skips it; without a terminal it
+// fails immediately rather than hanging an agent or CI job.
+func Confirm(prompt string, yes bool) error {
+	if yes {
+		return nil
+	}
+	if !term.IsTerminal(int(os.Stdin.Fd())) || !IsTTY() {
+		return ErrPromptRefused
+	}
+	fmt.Fprintf(os.Stderr, "%s [y/N] ", prompt)
+	var line string
+	_, _ = fmt.Fscanln(os.Stdin, &line)
+	switch strings.ToLower(strings.TrimSpace(line)) {
+	case "y", "yes":
+		return nil
+	}
+	return errors.New("aborted")
+}
 
 // Status colorizes common lifecycle states for table cells.
 func Status(s string) string {

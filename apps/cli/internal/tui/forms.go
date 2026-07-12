@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"strconv"
 	"strings"
 
@@ -163,7 +164,7 @@ func newDeployFormImage(cl *api.Client, p Project) *formScreen {
 				if n, err := strconv.Atoi(v["replicas"]); err == nil {
 					body["replicas"] = n
 				}
-				err := cl.Send("POST", "/projects/"+p.ID+"/deployments", body, nil)
+				err := cl.Send(context.Background(), "POST", "/projects/"+p.ID+"/deployments", body, nil)
 				return formResult{ok: createdMsg{"created deployment " + v["name"]}, err: err}
 			}
 		})
@@ -191,7 +192,7 @@ func newDeployFormGithub(cl *api.Client, p Project) *formScreen {
 				if n, err := strconv.Atoi(v["port"]); err == nil {
 					body["port"] = n
 				}
-				err := cl.Send("POST", "/projects/"+p.ID+"/deployments/from-github", body, nil)
+				err := cl.Send(context.Background(), "POST", "/projects/"+p.ID+"/deployments/from-github", body, nil)
 				return formResult{ok: createdMsg{"building deployment " + v["name"]}, err: err}
 			}
 		})
@@ -210,7 +211,7 @@ func newDatabaseFormScreen(cl *api.Client, p Project) *formScreen {
 				if v["storageSize"] != "" {
 					body["storageSize"] = v["storageSize"]
 				}
-				err := cl.Send("POST", "/projects/"+p.ID+"/databases", body, nil)
+				err := cl.Send(context.Background(), "POST", "/projects/"+p.ID+"/databases", body, nil)
 				return formResult{ok: createdMsg{"creating database " + v["name"]}, err: err}
 			}
 		})
@@ -228,7 +229,7 @@ func newScaleScreen(cl *api.Client, depID string, current int) *formScreen {
 				if err != nil {
 					return formResult{err: errInvalid("replicas must be a number")}
 				}
-				err = cl.Send("POST", "/deployments/"+depID+"/scale", map[string]any{"replicas": n}, nil)
+				err = cl.Send(context.Background(), "POST", "/deployments/"+depID+"/scale", map[string]any{"replicas": n}, nil)
 				return formResult{ok: actionMsg{text: "scaled to " + v["replicas"]}, err: err}
 			}
 		})

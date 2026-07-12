@@ -12,6 +12,7 @@ import (
 func deployCmd() *cobra.Command {
 	c := &cobra.Command{
 		Use:     "deploy",
+		GroupID: groupResources,
 		Aliases: []string{"deployment", "deployments"},
 		Short:   "Manage deployments",
 	}
@@ -42,7 +43,7 @@ func deployListCmd() *cobra.Command {
 				path = "/projects/" + url.PathEscape(project) + "/deployments"
 			}
 			var raw any
-			if err := cl.GetJSON(path, &raw); err != nil {
+			if err := cl.GetJSON(cmd.Context(), path, &raw); err != nil {
 				return err
 			}
 			if fmtFlag() == output.FormatJSON {
@@ -77,7 +78,7 @@ func deployGetCmd() *cobra.Command {
 				return err
 			}
 			var raw any
-			if err := cl.GetJSON("/deployments/"+url.PathEscape(args[0]), &raw); err != nil {
+			if err := cl.GetJSON(cmd.Context(), "/deployments/"+url.PathEscape(args[0]), &raw); err != nil {
 				return err
 			}
 			return output.JSON(raw)
@@ -100,7 +101,7 @@ func deployScaleCmd() *cobra.Command {
 				return perr
 			}
 			body := map[string]any{"replicas": replicas}
-			if err := cl.Send(http.MethodPost, "/deployments/"+url.PathEscape(args[0])+"/scale", body, nil); err != nil {
+			if err := cl.Send(cmd.Context(), http.MethodPost, "/deployments/"+url.PathEscape(args[0])+"/scale", body, nil); err != nil {
 				return err
 			}
 			output.Successf("scaled %s to %d replicas", args[0], replicas)
@@ -119,7 +120,7 @@ func deployRestartCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := cl.Send(http.MethodPost, "/deployments/"+url.PathEscape(args[0])+"/restart", nil, nil); err != nil {
+			if err := cl.Send(cmd.Context(), http.MethodPost, "/deployments/"+url.PathEscape(args[0])+"/restart", nil, nil); err != nil {
 				return err
 			}
 			output.Successf("restarted %s", args[0])
@@ -138,7 +139,7 @@ func deployRebuildCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := cl.Send(http.MethodPost, "/deployments/"+url.PathEscape(args[0])+"/rebuild", nil, nil); err != nil {
+			if err := cl.Send(cmd.Context(), http.MethodPost, "/deployments/"+url.PathEscape(args[0])+"/rebuild", nil, nil); err != nil {
 				return err
 			}
 			output.Successf("triggered rebuild of %s", args[0])
@@ -157,7 +158,7 @@ func deployLogsCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			res, err := cl.Do(http.MethodGet, "/deployments/"+url.PathEscape(args[0])+"/logs", nil)
+			res, err := cl.Do(cmd.Context(), http.MethodGet, "/deployments/"+url.PathEscape(args[0])+"/logs", nil)
 			if err != nil {
 				return err
 			}

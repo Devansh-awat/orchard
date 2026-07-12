@@ -1,6 +1,7 @@
 package tui
 
 import (
+	"context"
 	"strings"
 
 	"github.com/LeafdTK/leaf/cli/internal/api"
@@ -256,5 +257,5 @@ func boxedInput(view string, focused bool, w int) string {
 }
 
 func cl_send(cl *api.Client, method, path string, body any) error {
-	return cl.Send(method, path, body, nil)
+	return cl.Send(context.Background(), method, path, body, nil)
 }

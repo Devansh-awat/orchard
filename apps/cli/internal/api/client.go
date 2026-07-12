@@ -2,10 +2,14 @@ package api
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
+	"math/rand/v2"
+	"mime/multipart"
 	"net/http"
+	"strconv"
 	"strings"
 	"time"
 )
@@ -16,11 +20,14 @@ type Client struct {
 	BaseURL string
 	Token   string
 	http    *http.Client
+	stream  *http.Client
 }
 
 type APIError struct {
 	Status  int
 	Message string
+
+	retryAfter time.Duration
 }
 
 func (e *APIError) Error() string {
@@ -32,30 +39,49 @@ func New(baseURL, token string) *Client {
 		BaseURL: strings.TrimRight(baseURL, "/"),
 		Token:   token,
 		http:    &http.Client{Timeout: 60 * time.Second},
+		stream: &http.Client{Transport: &http.Transport{
+			ResponseHeaderTimeout: 30 * time.Second,
+		}},
 	}
 }
 
+const maxRetries = 3
+
 // Do performs a request against /apiv1<path> and returns the raw response body.
 // body may be nil. It is used directly by the `orchard api` escape hatch.
-func (c *Client) Do(method, path string, body []byte) ([]byte, error) {
-	if !strings.HasPrefix(path, "/") {
-		path = "/" + path
+// GETs retry on 429 (honoring Retry-After) and 5xx; mutations never retry.
+func (c *Client) Do(ctx context.Context, method, path string, body []byte) ([]byte, error) {
+	for attempt := 0; ; attempt++ {
+		data, err := c.once(ctx, method, path, body)
+		if err == nil || method != http.MethodGet || attempt >= maxRetries {
+			return data, err
+		}
+		apiErr, ok := err.(*APIError)
+		if !ok || (apiErr.Status != http.StatusTooManyRequests && apiErr.Status < 500) {
+			return data, err
+		}
+		select {
+		case <-time.After(retryDelay(apiErr, attempt)):
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		}
 	}
-	url := c.BaseURL + "/apiv1" + path
+}
 
-	var reader io.Reader
-	if body != nil {
-		reader = bytes.NewReader(body)
+func retryDelay(e *APIError, attempt int) time.Duration {
+	if e.retryAfter > 0 {
+		return e.retryAfter
 	}
-	req, err := http.NewRequest(method, url, reader)
+	base := time.Second << attempt
+	return base + time.Duration(rand.Int64N(int64(base/2)))
+}
+
+func (c *Client) once(ctx context.Context, method, path string, body []byte) ([]byte, error) {
+	req, err := c.newRequest(ctx, method, path, bodyReader(body))
 	if err != nil {
 		return nil, err
 	}
-	if c.Token != "" {
-		req.Header.Set("Authorization", "Bearer "+c.Token)
-	}
 	req.Header.Set("Content-Type", "application/json")
-	req.Header.Set("Accept", "application/json")
 
 	res, err := c.http.Do(req)
 	if err != nil {
@@ -69,9 +95,41 @@ func (c *Client) Do(method, path string, body []byte) ([]byte, error) {
 	}
 
 	if res.StatusCode < 200 || res.StatusCode >= 300 {
-		return nil, &APIError{Status: res.StatusCode, Message: extractMessage(data)}
+		return nil, errorFrom(res, data)
 	}
 	return data, nil
+}
+
+func (c *Client) newRequest(ctx context.Context, method, path string, body io.Reader) (*http.Request, error) {
+	if !strings.HasPrefix(path, "/") {
+		path = "/" + path
+	}
+	req, err := http.NewRequestWithContext(ctx, method, c.BaseURL+"/apiv1"+path, body)
+	if err != nil {
+		return nil, err
+	}
+	if c.Token != "" {
+		req.Header.Set("Authorization", "Bearer "+c.Token)
+	}
+	req.Header.Set("Accept", "application/json")
+	return req, nil
+}
+
+func bodyReader(body []byte) io.Reader {
+	if body == nil {
+		return nil
+	}
+	return bytes.NewReader(body)
+}
+
+func errorFrom(res *http.Response, data []byte) *APIError {
+	e := &APIError{Status: res.StatusCode, Message: extractMessage(data)}
+	if s := res.Header.Get("Retry-After"); s != "" {
+		if secs, err := strconv.Atoi(s); err == nil && secs > 0 {
+			e.retryAfter = time.Duration(secs) * time.Second
+		}
+	}
+	return e
 }
 
 func extractMessage(data []byte) string {
@@ -98,8 +156,8 @@ func extractMessage(data []byte) string {
 }
 
 // GetJSON decodes a GET response into out.
-func (c *Client) GetJSON(path string, out any) error {
-	data, err := c.Do(http.MethodGet, path, nil)
+func (c *Client) GetJSON(ctx context.Context, path string, out any) error {
+	data, err := c.Do(ctx, http.MethodGet, path, nil)
 	if err != nil {
 		return err
 	}
@@ -110,7 +168,7 @@ func (c *Client) GetJSON(path string, out any) error {
 }
 
 // Send marshals in (if non-nil) and decodes the response into out (if non-nil).
-func (c *Client) Send(method, path string, in, out any) error {
+func (c *Client) Send(ctx context.Context, method, path string, in, out any) error {
 	var body []byte
 	if in != nil {
 		b, err := json.Marshal(in)
@@ -119,7 +177,7 @@ func (c *Client) Send(method, path string, in, out any) error {
 		}
 		body = b
 	}
-	data, err := c.Do(method, path, body)
+	data, err := c.Do(ctx, method, path, body)
 	if err != nil {
 		return err
 	}
@@ -127,4 +185,41 @@ func (c *Client) Send(method, path string, in, out any) error {
 		return json.Unmarshal(data, out)
 	}
 	return nil
+}
+
+// Upload POSTs r as a multipart file field (avatars, project icons).
+func (c *Client) Upload(ctx context.Context, path, field, filename string, r io.Reader) ([]byte, error) {
+	var buf bytes.Buffer
+	w := multipart.NewWriter(&buf)
+	part, err := w.CreateFormFile(field, filename)
+	if err != nil {
+		return nil, err
+	}
+	if _, err := io.Copy(part, r); err != nil {
+		return nil, err
+	}
+	if err := w.Close(); err != nil {
+		return nil, err
+	}
+
+	req, err := c.newRequest(ctx, http.MethodPost, path, &buf)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", w.FormDataContentType())
+
+	res, err := c.http.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer res.Body.Close()
+
+	data, err := io.ReadAll(res.Body)
+	if err != nil {
+		return nil, err
+	}
+	if res.StatusCode < 200 || res.StatusCode >= 300 {
+		return nil, errorFrom(res, data)
+	}
+	return data, nil
 }

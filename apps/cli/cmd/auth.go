@@ -14,8 +14,9 @@ import (
 
 func authCmd() *cobra.Command {
 	c := &cobra.Command{
-		Use:   "auth",
-		Short: "Manage authentication",
+		Use:     "auth",
+		GroupID: groupCore,
+		Short:   "Manage authentication",
 	}
 	c.AddCommand(authLoginCmd(), authStatusCmd(), authLogoutCmd())
 	return c
@@ -55,7 +56,7 @@ func authLoginCmd() *cobra.Command {
 				cfg.Token = token
 				cl := api.New(cfg.APIURL, cfg.Token)
 				var me map[string]any
-				if err := cl.GetJSON("/auth/me", &me); err != nil {
+				if err := cl.GetJSON(cmd.Context(), "/auth/me", &me); err != nil {
 					return fmt.Errorf("token rejected by %s: %w", cfg.APIURL, err)
 				}
 				if err := cfg.Save(); err != nil {
@@ -92,7 +93,7 @@ func authStatusCmd() *cobra.Command {
 				return err
 			}
 			var me map[string]any
-			if err := cl.GetJSON("/auth/me", &me); err != nil {
+			if err := cl.GetJSON(cmd.Context(), "/auth/me", &me); err != nil {
 				return err
 			}
 			if fmtFlag() == output.FormatJSON {

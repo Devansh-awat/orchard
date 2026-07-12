@@ -11,6 +11,7 @@ import (
 func uiCmd() *cobra.Command {
 	return &cobra.Command{
 		Use:     "ui",
+		GroupID: groupCore,
 		Aliases: []string{"dash", "tui"},
 		Short:   "Launch the interactive dashboard",
 		RunE: func(cmd *cobra.Command, args []string) error {

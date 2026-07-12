@@ -10,8 +10,21 @@ import (
 const DefaultAPIURL = "https://orchard.infra.hackclub.com"
 
 type Config struct {
-	APIURL string `json:"apiUrl"`
-	Token  string `json:"token"`
+	APIURL  string  `json:"apiUrl"`
+	Token   string  `json:"token"`
+	Context Context `json:"context,omitzero"`
+}
+
+// Context is the default scope written by `orchard use` so commands don't
+// need --org/--project/--env every time. IDs are what the API wants; the
+// slug/name doubles are only for display.
+type Context struct {
+	OrgID       string `json:"orgId,omitempty"`
+	OrgSlug     string `json:"orgSlug,omitempty"`
+	ProjectID   string `json:"projectId,omitempty"`
+	ProjectSlug string `json:"projectSlug,omitempty"`
+	EnvID       string `json:"envId,omitempty"`
+	EnvName     string `json:"envName,omitempty"`
 }
 
 func dir() (string, error) {

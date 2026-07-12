@@ -1,19 +1,62 @@
 package cmd
 
 import (
+	"context"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"os"
+
 	"github.com/LeafdTK/leaf/cli/internal/api"
 	"github.com/LeafdTK/leaf/cli/internal/config"
+	"github.com/LeafdTK/leaf/cli/internal/exitcode"
 	"github.com/LeafdTK/leaf/cli/internal/output"
 	"github.com/spf13/cobra"
 )
 
-var outputFlag string
+var (
+	outputFlag  string
+	yesFlag     bool
+	orgFlag     string
+	projectFlag string
+	envFlag     string
+)
 
 // Version is set via -ldflags at build time.
 var Version = "dev"
 
-func Execute() error {
-	return rootCmd().Execute()
+const (
+	groupCore      = "core"
+	groupResources = "resources"
+	groupUtility   = "utility"
+)
+
+// Execute runs the CLI and returns the process exit code, rendering the error
+// in whichever format the invocation asked for.
+func Execute(ctx context.Context) int {
+	root := rootCmd()
+	err := root.ExecuteContext(ctx)
+	if err == nil {
+		return exitcode.OK
+	}
+
+	code := exitcode.FromError(err)
+	if output.Resolve(outputFlag) == output.FormatJSON {
+		status := 0
+		var apiErr *api.APIError
+		if errors.As(err, &apiErr) {
+			status = apiErr.Status
+		}
+		line, _ := json.Marshal(map[string]any{"error": map[string]any{
+			"status":  status,
+			"code":    code,
+			"message": err.Error(),
+		}})
+		fmt.Fprintln(os.Stderr, string(line))
+	} else {
+		output.Errorf("%s", err.Error())
+	}
+	return code
 }
 
 func rootCmd() *cobra.Command {
@@ -30,9 +73,26 @@ func rootCmd() *cobra.Command {
 		SilenceErrors: true,
 	}
 	root.PersistentFlags().StringVarP(&outputFlag, "output", "o", "", "output format: table|json (default: auto by TTY)")
+	root.PersistentFlags().BoolVarP(&yesFlag, "yes", "y", false, "skip confirmation prompts (required for mutations when not a TTY)")
+	root.PersistentFlags().StringVar(&orgFlag, "org", "", "organization id or slug (overrides the saved context)")
+	root.PersistentFlags().StringVar(&projectFlag, "project", "", "project id or slug (overrides the saved context)")
+	root.PersistentFlags().StringVar(&envFlag, "env", "", "environment id or name (overrides the saved context)")
+	root.SetFlagErrorFunc(func(_ *cobra.Command, err error) error {
+		return &exitcode.UsageError{Err: err}
+	})
+
+	root.AddGroup(
+		&cobra.Group{ID: groupCore, Title: "Core Commands:"},
+		&cobra.Group{ID: groupResources, Title: "Resource Commands:"},
+		&cobra.Group{ID: groupUtility, Title: "Utility Commands:"},
+	)
+	root.SetHelpCommandGroupID(groupUtility)
+	root.SetCompletionCommandGroupID(groupUtility)
 
 	root.AddCommand(
 		authCmd(),
+		useCmd(),
+		contextCmd(),
 		apiCmd(),
 		projectCmd(),
 		deployCmd(),

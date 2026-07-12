@@ -1,15 +1,17 @@
 package main
 
 import (
-	"fmt"
+	"context"
 	"os"
+	"os/signal"
+	"syscall"
 
 	"github.com/LeafdTK/leaf/cli/cmd"
 )
 
 func main() {
-	if err := cmd.Execute(); err != nil {
-		fmt.Fprintln(os.Stderr, "✗ "+err.Error())
-		os.Exit(1)
-	}
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	code := cmd.Execute(ctx)
+	stop()
+	os.Exit(code)
 }
