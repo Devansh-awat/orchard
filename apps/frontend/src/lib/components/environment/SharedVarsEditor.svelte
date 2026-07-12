@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { KeyRound } from 'lucide-svelte';
+	import { KeyRound, Lock } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
 	import { envBadgeColor } from '$lib/utils/format';
 	import { Button, Alert } from '$lib/components/ui';
@@ -84,6 +84,16 @@
 		<EnvVarGrid bind:rows />
 	{/if}
 
+	{#if !loading && rows.some((r) => r.secret)}
+		<p class="sharedvars-secret-note">
+			<Lock size={12} />
+			<span>
+				Secret values are write-only — they're encrypted at rest and never shown again. Enter a new
+				value to replace one.
+			</span>
+		</p>
+	{/if}
+
 	{#if warnings.length > 0}
 		<Alert tone="warning">
 			Unresolved: {warnings.map((w) => `\${{shared.${w.missingRef}}}`).join(', ')}
@@ -96,6 +106,18 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.85rem;
+	}
+	.sharedvars-secret-note {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.4rem;
+		font-size: 0.75rem;
+		line-height: 1.4;
+		color: var(--surface-muted);
+	}
+	.sharedvars-secret-note :global(svg) {
+		flex-shrink: 0;
+		margin-top: 0.1rem;
 	}
 	.sharedvars-head {
 		display: flex;

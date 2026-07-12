@@ -3,9 +3,15 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { OrgEventsService } from '../events/org-events.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
+import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { referencedSharedKeys, resolveEnvVars, EnvVar } from '../env/env-resolver';
 
 const ENV_KEY_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
+// Generous ceilings — unreachable in normal use, but bound what a single env can
+// store so a client can't bloat the DB or blow past the 1MB k8s Secret limit.
+const MAX_VARS = 1000;
+const MAX_KEY_LEN = 256;
+const MAX_VALUE_BYTES = 64 * 1024;
 
 export interface SharedVarInput {
   key: string;
@@ -22,6 +28,7 @@ export class EnvironmentSharedVarsService {
     private readonly audit: AuditService,
     private readonly orgEvents: OrgEventsService,
     private readonly k8sWorkload: K8sWorkloadService,
+    private readonly crypto: SecretCryptoService,
   ) {}
 
   /**
@@ -45,7 +52,9 @@ export class EnvironmentSharedVarsService {
     });
     await Promise.allSettled(
       deployments.map(async (dep) => {
-        const own = dep.envVars;
+        // Decrypt secret values before resolution so plaintext flows to k8s.
+        // `before`/`after` are already plaintext (see updateSharedVars).
+        const own = dep.envVars.map((v) => this.crypto.maybeDecrypt(v));
         const resolvedBefore = resolveEnvVars(own, before).resolved;
         const resolvedAfter = resolveEnvVars(own, after).resolved;
         if (JSON.stringify(resolvedBefore) === JSON.stringify(resolvedAfter)) return;
@@ -70,15 +79,6 @@ export class EnvironmentSharedVarsService {
     return env;
   }
 
-  /** Raw shared vars for the resolver (no redaction — server-internal). */
-  async getRawForInjection(environmentId: string) {
-    const vars = await this.prisma.environmentSharedVar.findMany({
-      where: { environmentId },
-      select: { key: true, value: true, secret: true },
-    });
-    return vars;
-  }
-
   async getSharedVars(environmentId: string, canEdit: boolean) {
     await this.envOrThrow(environmentId);
     const vars = await this.prisma.environmentSharedVar.findMany({
@@ -101,28 +101,43 @@ export class EnvironmentSharedVarsService {
     for (const raw of Array.isArray(input) ? input : []) {
       const key = String(raw?.key ?? '').trim();
       if (!key) continue;
+      if (key.length > MAX_KEY_LEN) {
+        throw new BadRequestException(`Environment variable key too long: ${key.slice(0, 32)}…`);
+      }
       if (!ENV_KEY_RE.test(key)) {
         throw new BadRequestException(`Invalid environment variable key: ${key}`);
       }
-      seen.set(key, {
-        key,
-        value: raw.value != null ? String(raw.value) : '',
-        secret: Boolean(raw.secret),
-      });
+      const value = raw.value != null ? String(raw.value) : '';
+      if (Buffer.byteLength(value, 'utf8') > MAX_VALUE_BYTES) {
+        throw new BadRequestException(`Value for ${key} exceeds ${MAX_VALUE_BYTES / 1024}KB`);
+      }
+      seen.set(key, { key, value, secret: Boolean(raw.secret) });
+    }
+    if (seen.size > MAX_VARS) {
+      throw new BadRequestException(`Too many variables (max ${MAX_VARS})`);
     }
     const vars = Array.from(seen.values());
 
-    const before = await this.prisma.environmentSharedVar.findMany({
-      where: { environmentId },
-      select: { key: true, value: true, secret: true },
-    });
+    // Decrypt secret values from the current set so change-detection and
+    // rollout propagation compare plaintext against plaintext.
+    const before = (
+      await this.prisma.environmentSharedVar.findMany({
+        where: { environmentId },
+        select: { key: true, value: true, secret: true },
+      })
+    ).map((v) => this.crypto.maybeDecrypt(v));
     const beforeMap = new Map(before.map((v) => [v.key, v]));
 
     await this.prisma.$transaction(async (tx) => {
       await tx.environmentSharedVar.deleteMany({ where: { environmentId } });
       if (vars.length > 0) {
         await tx.environmentSharedVar.createMany({
-          data: vars.map((v) => ({ environmentId, key: v.key, value: v.value, secret: v.secret })),
+          data: vars.map((v) => ({
+            environmentId,
+            key: v.key,
+            value: this.crypto.encryptIfSecret(v.value, v.secret),
+            secret: v.secret,
+          })),
         });
       }
     });

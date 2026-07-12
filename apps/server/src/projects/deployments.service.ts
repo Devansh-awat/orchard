@@ -27,6 +27,7 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { ProjectAccessService } from './project-access.service';
 import { EnvironmentsService } from './environments.service';
 import { resolveEnvVars, EnvVar } from '../env/env-resolver';
+import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { NodesService } from '../nodes/nodes.service';
 import { formatSlug } from './projects.utils';
 import { startBuildTrace } from '../analytics/datadog';
@@ -61,6 +62,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     private readonly notifications: NotificationsService,
     @Inject(forwardRef(() => EnvironmentsService))
     private readonly environments: EnvironmentsService,
+    private readonly crypto: SecretCryptoService,
   ) {}
 
   onModuleInit() {
@@ -3173,7 +3175,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       where: { environmentId },
       select: { key: true, value: true, secret: true },
     });
-    return vars;
+    // Secret values are stored encrypted at rest — decrypt before they feed the
+    // resolver so plaintext reaches the pod/build.
+    return vars.map((v) => this.crypto.maybeDecrypt(v));
   }
 
   /**

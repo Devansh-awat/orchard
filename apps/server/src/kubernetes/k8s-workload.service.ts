@@ -1318,6 +1318,9 @@ export class K8sWorkloadService {
         }
       }
 
+      // Clean up the per-deployment env Secret so it doesn't orphan.
+      await coreApi.deleteNamespacedSecret(`${cleanName}-env`, cleanNamespace).catch(() => {});
+
       return {
         success: true,
         deployment: cleanName,

@@ -6,6 +6,7 @@ import { HealthModule } from './health/health.module';
 import { KubernetesModule } from './kubernetes/kubernetes.module';
 import { AuthModule } from './auth/auth.module';
 import { PrismaModule } from './prisma/prisma.module';
+import { CryptoModule } from './crypto/crypto.module';
 import { ProjectsModule } from './projects/projects.module';
 import { OrganizationsModule } from './organizations/organizations.module';
 import { UsersModule } from './users/users.module';
@@ -37,6 +38,7 @@ import { JobsModule } from './jobs/jobs.module';
     // with @Throttle({...}) or exempt with @SkipThrottle().
     ThrottlerModule.forRoot([{ ttl: 60000, limit: 200 }]),
     PrismaModule,
+    CryptoModule,
     AuthModule,
     UsersModule,
     HealthModule,
