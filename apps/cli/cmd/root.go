@@ -102,6 +102,13 @@ func rootCmd() *cobra.Command {
 		podCmd(),
 		serviceCmd(),
 		domainCmd(),
+		jobCmd(),
+		jobRunCmd(),
+		templateCmd(),
+		composeCmd(),
+		githubCmd(),
+		tailscaleCmd(),
+		webhookCmd(),
 		uiCmd(),
 	)
 	return root
