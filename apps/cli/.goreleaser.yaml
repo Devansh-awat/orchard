@@ -1,0 +1,59 @@
+# goreleaser v2 config for the Orchard CLI.
+#
+# Releases are cut by release-please with monorepo component tags (cli/vX.Y.Z).
+# goreleaser's native monorepo support (monorepo.tag_prefix + monorepo.dir) is
+# a GoReleaser Pro feature and the OSS binary rejects it, so the release
+# workflow compensates: it checks out the cli/vX.Y.Z tag, creates a local
+# plain vX.Y.Z tag for goreleaser to version from, runs this config with
+# publishing disabled, and uploads dist/ assets to the existing GitHub
+# release via gh (see .github/workflows/release.yml, job cli-binaries).
+version: 2
+
+project_name: orchard
+
+builds:
+  - main: .
+    binary: orchard
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - darwin
+      - linux
+      - windows
+    goarch:
+      - amd64
+      - arm64
+    ldflags:
+      - -s -w -X github.com/LeafdTK/leaf/cli/cmd.Version={{ .Version }}
+
+archives:
+  - name_template: "orchard_{{ .Version }}_{{ .Os }}_{{ .Arch }}"
+    formats: [tar.gz]
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+
+checksum:
+  name_template: checksums.txt
+
+changelog:
+  disable: true
+
+# release-please owns the GitHub release (tag cli/vX.Y.Z, notes from the
+# changelog); the workflow attaches binaries to it with gh release upload.
+release:
+  disable: true
+
+# TODO(seb): homebrew tap. The tap repo does not exist yet; create something
+# like LeafdTK/homebrew-tap, then uncomment this and give the release job a
+# token that can push to it (the default GITHUB_TOKEN only covers this repo).
+# brews:
+#   - name: orchard
+#     repository:
+#       owner: LeafdTK
+#       name: homebrew-tap
+#     directory: Formula
+#     homepage: https://github.com/LeafdTK/leaf
+#     description: Orchard platform CLI
+#     install: |
+#       bin.install "orchard"

@@ -1,0 +1,41 @@
+---
+name: orchard-cli
+description: Deploy and manage apps, databases, scheduled jobs, domains, and logs on Orchard (HackClub's app platform) via the orchard CLI. Use when deploying from GitHub or an image, scaling or restarting deployments, tailing logs, managing env vars, running jobs, creating databases, or scripting against the Orchard API on HackClub infra.
+---
+
+# orchard CLI
+
+`orchard` drives the Orchard platform (HackClub infra) over the same `/apiv1` REST API as the web UI. Full agent contract: `AGENTS.md` next to this skill (apps/cli/AGENTS.md in the repo).
+
+## Setup
+
+- Auth: `export ORCHARD_API_TOKEN=orch_xxx` (mint via `orchard auth token create --name x --scope deploy --expires-in 30d`, or web Settings, API Tokens). Scopes nest: read < deploy < exec (exec covers `pod exec/shell`, `db psql`).
+- Scope: flags `--org/--project/--env` beat env vars `ORCHARD_ORG/PROJECT/ENV`, which beat the saved `orchard use ...` context. Values are ids or slugs.
+
+## Output and exit codes
+
+- Piped output is JSON on stdout; status lines go to stderr. `ORCHARD_JSON=1` or `-o json` forces it.
+- `events tail` emits NDJSON; `--follow` log commands stream plain lines.
+- Errors in JSON mode: one stderr line `{"error":{"status":<http>,"code":<exit>,"message":"..."}}`.
+- Exit codes: 0 ok, 1 generic, 2 usage/refused prompt, 3 auth, 4 not found, 5 validation, 6 rate limited, 7 server, 8 wait timeout, 130 interrupted.
+
+## Rules
+
+- Destructive commands (delete/revoke/restore) need `--yes` when not a TTY; the CLI never prompts in a pipe (it exits 2 instead).
+- Async ops (`deploy create|scale|restart|rebuild|rollback`, `db create`, `db backup create`, `job run`) take `--wait --timeout 10m`; deadline exits 8.
+- Paginated lists (`audit list`, `job runs`) take `--limit/--cursor/--all`; JSON includes `nextCursor`.
+- Rate limit is 200 req/60s per IP: prefer `orchard events tail --types ...` over polling.
+- Anything without a wrapper: `orchard api METHOD /path [--data JSON|-]`. Route list: `apps/server/test/auth-coverage.snapshot.json`.
+
+## Common commands
+
+```sh
+orchard deploy create --name web --github owner/repo#main --port 3000 --wait
+orchard deploy logs <id> --follow            # --build for build logs
+orchard deploy scale <id> 3 --wait
+orchard env vars set --file .env             # --secret for write-only vars
+orchard deploy env set <id> KEY=VAL          # per-deployment, pods restart
+orchard db create --name pg --wait && orchard db connection <id>
+run_id=$(orchard job run <jobId> --wait | jq -r .id); orchard job-run logs "$run_id"
+orchard events tail --types deployment.changed,build.changed
+```

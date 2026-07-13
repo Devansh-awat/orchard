@@ -119,6 +119,8 @@ func rootCmd() *cobra.Command {
 		overviewCmd(),
 		userCmd(),
 		uiCmd(),
+		commandsCmd(),
+		exitCodesCmd(),
 	)
 	return root
 }

@@ -78,6 +78,48 @@ jobs:
       context: apps/r2-proxy
       version: ${{ needs.release-please.outputs.r2_proxy_v }}
 
+  # Builds cli binaries with goreleaser and attaches them to the release that
+  # release-please just cut for tag cli/vX.Y.Z. OSS goreleaser cannot parse
+  # monorepo component tags (monorepo.tag_prefix is a Pro feature), so we lay
+  # a local plain vX.Y.Z tag for version templating and upload dist/ with gh;
+  # goreleaser's own publisher is disabled in apps/cli/.goreleaser.yaml.
+  cli-binaries:
+    needs: release-please
+    if: needs.release-please.outputs.cli == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    env:
+      CLI_TAG: cli/v${{ needs.release-please.outputs.cli_v }}
+      CLI_VERSION: ${{ needs.release-please.outputs.cli_v }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: cli/v${{ needs.release-please.outputs.cli_v }}
+          fetch-depth: 0
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: apps/cli/go.mod
+          cache-dependency-path: apps/cli/go.sum
+      - name: Lay local semver tag for goreleaser
+        run: git tag -f "v${CLI_VERSION}"
+      - uses: goreleaser/goreleaser-action@v6
+        with:
+          version: "~> v2"
+          workdir: apps/cli
+          args: release --clean
+        env:
+          GORELEASER_CURRENT_TAG: v${{ needs.release-please.outputs.cli_v }}
+      - name: Upload binaries to the cli release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          gh release upload "$CLI_TAG" \
+            apps/cli/dist/*.tar.gz \
+            apps/cli/dist/*.zip \
+            apps/cli/dist/checksums.txt \
+            --clobber --repo "$GITHUB_REPOSITORY"
+
   # Runs after the (possibly-skipped) image jobs as long as none FAILED.
   publish-chart:
     needs: [release-please, image-frontend, image-server, image-mcp, image-r2-proxy]
