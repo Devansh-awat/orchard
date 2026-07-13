@@ -1,0 +1,100 @@
+:root {
+	--bg-app: var(--center-channel-bg);
+	--bg-surface: var(--surface-bg);
+	--bg-raised: var(--card-bg);
+	--bg-sunken: var(--control-bg);
+	--bg-hover: var(--control-hover-bg);
+	--bg-overlay: var(--dropdown-bg);
+
+	--text-default: var(--center-channel-color);
+	--text-muted: var(--surface-muted);
+	--text-faint: color-mix(in srgb, var(--surface-muted) 65%, transparent);
+	--text-link: var(--link-color);
+	--text-on-accent: var(--button-color);
+
+	--border-default: var(--surface-border);
+	--border-strong: color-mix(in srgb, var(--surface-border) 60%, var(--center-channel-color));
+
+	--accent: var(--button-bg);
+	--accent-subtle: color-mix(in srgb, var(--button-bg) 10%, transparent);
+	--focus-ring: color-mix(in srgb, var(--button-bg) 18%, transparent);
+
+	--status-success: var(--online-indicator);
+	--status-warning: var(--away-indicator);
+	--status-error: var(--error-text-color);
+	--status-info: #3b82f6;
+	--status-neutral: var(--surface-muted);
+	--status-progress: var(--away-indicator);
+
+	--status-success-bg: color-mix(in srgb, var(--status-success) 10%, var(--bg-surface));
+	--status-success-border: color-mix(in srgb, var(--status-success) 25%, var(--border-default));
+	--status-warning-bg: color-mix(in srgb, var(--status-warning) 10%, var(--bg-surface));
+	--status-warning-border: color-mix(in srgb, var(--status-warning) 25%, var(--border-default));
+	--status-error-bg: color-mix(in srgb, var(--status-error) 10%, var(--bg-surface));
+	--status-error-border: color-mix(in srgb, var(--status-error) 25%, var(--border-default));
+	--status-info-bg: color-mix(in srgb, var(--status-info) 10%, var(--bg-surface));
+	--status-info-border: color-mix(in srgb, var(--status-info) 25%, var(--border-default));
+	--status-neutral-bg: color-mix(in srgb, var(--status-neutral) 8%, var(--bg-surface));
+	--status-neutral-border: color-mix(in srgb, var(--status-neutral) 20%, var(--border-default));
+	--status-progress-bg: color-mix(in srgb, var(--status-progress) 10%, var(--bg-surface));
+	--status-progress-border: color-mix(in srgb, var(--status-progress) 25%, var(--border-default));
+
+	--hue-gray: #6b7280;
+	--hue-slate: #64748b;
+	--hue-blue: #3b82f6;
+	--hue-green: #10b981;
+	--hue-emerald: #22c55e;
+	--hue-violet: #8b5cf6;
+	--hue-pink: #ec4899;
+	--hue-red: #ef4444;
+	--hue-amber: #f59e0b;
+}
+
+:root.dark {
+	--status-info: #60a5fa;
+
+	--hue-gray: #9ca3af;
+	--hue-slate: #94a3b8;
+	--hue-blue: #60a5fa;
+	--hue-green: #34d399;
+	--hue-emerald: #4ade80;
+	--hue-violet: #a78bfa;
+	--hue-pink: #f472b6;
+	--hue-red: #f87171;
+	--hue-amber: #fbbf24;
+}
+
+@theme inline {
+	--color-fg: var(--text-default);
+	--color-muted: var(--text-muted);
+	--color-faint: var(--text-faint);
+	--color-surface: var(--bg-surface);
+	--color-raised: var(--bg-raised);
+	--color-sunken: var(--bg-sunken);
+	--color-edge: var(--border-default);
+	--color-accent: var(--accent);
+}
+
+.status--success {
+	color: var(--status-success);
+}
+
+.status--warning {
+	color: var(--status-warning);
+}
+
+.status--error {
+	color: var(--status-error);
+}
+
+.status--info {
+	color: var(--status-info);
+}
+
+.status--neutral {
+	color: var(--status-neutral);
+}
+
+.status--progress {
+	color: var(--status-progress);
+}

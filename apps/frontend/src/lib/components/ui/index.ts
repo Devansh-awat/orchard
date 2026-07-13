@@ -9,6 +9,16 @@ export { default as Input } from './Input.svelte';
 export { default as Select } from './Select.svelte';
 export { default as Badge } from './Badge.svelte';
 export { default as StatusPill } from './StatusPill.svelte';
+export { default as StatusDot } from './StatusDot.svelte';
+export { default as StatusBadge } from './StatusBadge.svelte';
+export {
+	resourceStatus,
+	buildStatusMeta,
+	runStatus,
+	podStatus,
+	RUN_STATUS_LABELS
+} from './status';
+export type { StatusKind, StatusMeta } from './status';
 export { default as EmptyState } from './EmptyState.svelte';
 export { default as SectionCard } from './SectionCard.svelte';
 export { default as Alert } from './Alert.svelte';
