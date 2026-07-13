@@ -1,10 +1,17 @@
 package cmd
 
 import (
+	"errors"
+	"fmt"
+	"maps"
 	"net/http"
 	"net/url"
+	"slices"
 	"strconv"
+	"strings"
+	"time"
 
+	"github.com/LeafdTK/leaf/cli/internal/api"
 	"github.com/LeafdTK/leaf/cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -19,28 +26,76 @@ func deployCmd() *cobra.Command {
 	c.AddCommand(
 		deployListCmd(),
 		deployGetCmd(),
+		deployCreateCmd(),
+		deployDeleteCmd(),
 		deployScaleCmd(),
 		deployRestartCmd(),
 		deployRebuildCmd(),
+		deployCancelCmd(),
+		deployRollbackCmd(),
+		deployImageCmd(),
+		deployHistoryCmd(),
 		deployLogsCmd(),
+		deployPodsCmd(),
+		deployMetricsCmd(),
+		deployEnvCmd(),
+		deployResourcesCmd(),
+		deployVolumesCmd(),
+		deployStrategyCmd(),
+		deployHealthCheckCmd(),
+		deployBuildRootCmd(),
+		deployKilledCmd(),
+		deployAutoDeployCmd(),
+		deployWebhookTokenCmd(),
+		deployGithubDeploymentsCmd(),
 	)
 	return c
 }
 
+func deployPath(id string, rest ...string) string {
+	p := "/deployments/" + url.PathEscape(id)
+	if len(rest) > 0 {
+		p += "/" + strings.Join(rest, "/")
+	}
+	return p
+}
+
+func deployWaitRunning(id string) api.WaitSpec {
+	return api.WaitSpec{
+		Path:    deployPath(id),
+		Field:   "status",
+		Success: []string{"running"},
+		Failure: []string{"failed", "error"},
+	}
+}
+
+func deployWaitBuild(id string) api.WaitSpec {
+	return api.WaitSpec{
+		Path:    deployPath(id),
+		Field:   "buildStatus",
+		Success: []string{"succeeded"},
+		Failure: []string{"failed"},
+	}
+}
+
 func deployListCmd() *cobra.Command {
-	var project string
-	c := &cobra.Command{
+	return &cobra.Command{
 		Use:     "list",
 		Aliases: []string{"ls"},
-		Short:   "List deployments",
+		Short:   "List deployments (scoped to the current project when one is set)",
+		Args:    cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			cl, _, err := client()
+			cl, cfg, err := client()
 			if err != nil {
 				return err
 			}
 			path := "/deployments"
-			if project != "" {
-				path = "/projects/" + url.PathEscape(project) + "/deployments"
+			if scope := scopedProject(cfg); scope != "" {
+				proj, rerr := resolveProject(cmd.Context(), cl, scope)
+				if rerr != nil {
+					return rerr
+				}
+				path = "/projects/" + url.PathEscape(str(proj["id"])) + "/deployments"
 			}
 			var raw any
 			if err := cl.GetJSON(cmd.Context(), path, &raw); err != nil {
@@ -63,8 +118,6 @@ func deployListCmd() *cobra.Command {
 			return nil
 		},
 	}
-	c.Flags().StringVarP(&project, "project", "p", "", "filter by project id")
-	return c
 }
 
 func deployGetCmd() *cobra.Command {
@@ -77,17 +130,211 @@ func deployGetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			var raw any
-			if err := cl.GetJSON(cmd.Context(), "/deployments/"+url.PathEscape(args[0]), &raw); err != nil {
+			var raw map[string]any
+			if err := cl.GetJSON(cmd.Context(), deployPath(args[0]), &raw); err != nil {
 				return err
 			}
-			return output.JSON(raw)
+			if fmtFlag() == output.FormatJSON {
+				return output.JSON(raw)
+			}
+			pairs := [][2]string{
+				{"id", pick(raw, "id")},
+				{"name", pick(raw, "name")},
+				{"status", output.Status(pick(raw, "status"))},
+				{"build status", output.Status(pick(raw, "buildStatus"))},
+				{"image", pick(raw, "image")},
+				{"replicas", pick(raw, "replicas")},
+				{"namespace", pick(raw, "namespace")},
+				{"strategy", pick(raw, "deployStrategy")},
+			}
+			for _, opt := range [][2]string{
+				{"build type", pick(raw, "buildType")},
+				{"github repo", pick(raw, "githubRepo")},
+				{"github branch", pick(raw, "githubBranch")},
+				{"dockerfile", pick(raw, "dockerfilePath")},
+				{"build from root", pick(raw, "buildFromRoot")},
+				{"auto-deploy", pick(raw, "autoDeployEnabled")},
+				{"auto-deploy branch", pick(raw, "autoDeployBranch")},
+				{"cpu (milli)", pick(raw, "cpuRequestMilli")},
+				{"memory (bytes)", pick(raw, "memoryRequestBytes")},
+				{"health check", pick(raw, "healthCheckEnabled")},
+				{"created", pick(raw, "createdAt")},
+			} {
+				if opt[1] != "" {
+					pairs = append(pairs, opt)
+				}
+			}
+			output.KV(pairs)
+			return nil
+		},
+	}
+}
+
+func deployCreateCmd() *cobra.Command {
+	var (
+		name, image, github, dockerfile, memory, envFile string
+		railpack, buildRoot                              bool
+		port, replicas, cpu                              int
+		envs                                             []string
+		wait                                             *bool
+		timeout                                          *time.Duration
+	)
+	c := &cobra.Command{
+		Use:   "create",
+		Short: "Create a deployment from a Docker image or a GitHub repo",
+		Args:  cobra.NoArgs,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if (image == "") == (github == "") {
+				return errors.New("exactly one of --image or --github is required")
+			}
+			if image != "" && (dockerfile != "" || railpack || buildRoot) {
+				return errors.New("--dockerfile, --railpack and --build-root only apply to --github deployments")
+			}
+			envList, err := deployEnvArgs(envs, envFile)
+			if err != nil {
+				return err
+			}
+			cl, cfg, err := client()
+			if err != nil {
+				return err
+			}
+			projectID, err := requireProject(cmd.Context(), cl, cfg)
+			if err != nil {
+				return err
+			}
+
+			body := map[string]any{"name": name}
+			if replicas > 0 {
+				body["replicas"] = replicas
+			}
+			if port > 0 {
+				body["port"] = port
+			}
+			if len(envList) > 0 {
+				body["env"] = envList
+			}
+			if cpu > 0 {
+				body["cpuRequestMilli"] = cpu
+			}
+			if memory != "" {
+				b, perr := dbParseMemory(memory)
+				if perr != nil {
+					return perr
+				}
+				body["memoryRequestBytes"] = b
+			}
+
+			path := "/projects/" + url.PathEscape(projectID) + "/deployments"
+			if github != "" {
+				repo, branch, _ := strings.Cut(github, "#")
+				if !strings.Contains(repo, "/") {
+					return fmt.Errorf("--github expects owner/repo[#branch], got %q", github)
+				}
+				body["githubRepo"] = repo
+				if branch != "" {
+					body["branch"] = branch
+				}
+				if railpack {
+					body["buildType"] = "railpack"
+				}
+				if dockerfile != "" {
+					body["dockerfilePath"] = dockerfile
+				}
+				body["buildFromRoot"] = buildRoot
+				path += "/from-github"
+			} else {
+				body["image"] = image
+			}
+
+			var raw map[string]any
+			if err := cl.Send(cmd.Context(), http.MethodPost, path, body, &raw); err != nil {
+				return err
+			}
+			id := str(raw["id"])
+			output.Successf("created deployment %s (%s)", name, id)
+			if fmtFlag() == output.FormatJSON {
+				if err := output.JSON(raw); err != nil {
+					return err
+				}
+			}
+			if *wait && id != "" {
+				spec := deployWaitRunning(id)
+				if github != "" {
+					spec = deployWaitBuild(id)
+				}
+				return runWait(cmd.Context(), cl, spec, *timeout)
+			}
+			return nil
+		},
+	}
+	c.Flags().StringVar(&name, "name", "", "deployment name (required)")
+	c.Flags().StringVar(&image, "image", "", "Docker image reference (e.g. nginx:latest)")
+	c.Flags().StringVar(&github, "github", "", "GitHub source as owner/repo[#branch]")
+	c.Flags().StringVar(&dockerfile, "dockerfile", "", "path to the Dockerfile relative to the repo root")
+	c.Flags().BoolVar(&railpack, "railpack", false, "build with railpack instead of a Dockerfile")
+	c.Flags().BoolVar(&buildRoot, "build-root", false, "use the repo root as the build context")
+	c.Flags().IntVar(&port, "port", 0, "port the container listens on (server default 80 / EXPOSE autodetect)")
+	c.Flags().IntVar(&replicas, "replicas", 0, "number of replicas (server default 1)")
+	c.Flags().StringArrayVar(&envs, "env", nil, "environment variable KEY=VAL (repeatable)")
+	c.Flags().StringVar(&envFile, "env-file", "", "read environment variables from a dotenv-style file")
+	c.Flags().IntVar(&cpu, "cpu", 0, "CPU request in millicores (e.g. 500)")
+	c.Flags().StringVar(&memory, "memory", "", `memory request in bytes or with unit (e.g. "512Mi")`)
+	_ = c.MarkFlagRequired("name")
+	wait, timeout = addWaitFlags(c)
+	return c
+}
+
+// deployEnvArgs merges --env-file and --env KEY=VAL values into the API env
+// list shape; flag values override file values, keys are sorted for stable
+// request bodies.
+func deployEnvArgs(flags []string, file string) ([]map[string]any, error) {
+	merged := map[string]string{}
+	if file != "" {
+		fromFile, err := parseEnvFile(file)
+		if err != nil {
+			return nil, err
+		}
+		maps.Copy(merged, fromFile)
+	}
+	fromFlags, err := parseKVArgs(flags)
+	if err != nil {
+		return nil, err
+	}
+	maps.Copy(merged, fromFlags)
+	out := make([]map[string]any, 0, len(merged))
+	for _, k := range slices.Sorted(maps.Keys(merged)) {
+		out = append(out, map[string]any{"key": k, "value": merged[k]})
+	}
+	return out, nil
+}
+
+func deployDeleteCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "delete <id>",
+		Aliases: []string{"rm"},
+		Short:   "Delete a deployment and its Kubernetes resources",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if err := output.Confirm(fmt.Sprintf("permanently delete deployment %s", args[0]), yesFlag); err != nil {
+				return err
+			}
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			if err := cl.Send(cmd.Context(), http.MethodDelete, deployPath(args[0]), nil, nil); err != nil {
+				return err
+			}
+			output.Successf("deleted deployment %s", args[0])
+			return nil
 		},
 	}
 }
 
 func deployScaleCmd() *cobra.Command {
-	return &cobra.Command{
+	var wait *bool
+	var timeout *time.Duration
+	c := &cobra.Command{
 		Use:   "scale <id> <replicas>",
 		Short: "Scale a deployment to N replicas",
 		Args:  cobra.ExactArgs(2),
@@ -101,17 +348,24 @@ func deployScaleCmd() *cobra.Command {
 				return perr
 			}
 			body := map[string]any{"replicas": replicas}
-			if err := cl.Send(cmd.Context(), http.MethodPost, "/deployments/"+url.PathEscape(args[0])+"/scale", body, nil); err != nil {
+			if err := cl.Send(cmd.Context(), http.MethodPost, deployPath(args[0], "scale"), body, nil); err != nil {
 				return err
 			}
 			output.Successf("scaled %s to %d replicas", args[0], replicas)
+			if *wait {
+				return runWait(cmd.Context(), cl, deployWaitRunning(args[0]), *timeout)
+			}
 			return nil
 		},
 	}
+	wait, timeout = addWaitFlags(c)
+	return c
 }
 
 func deployRestartCmd() *cobra.Command {
-	return &cobra.Command{
+	var wait *bool
+	var timeout *time.Duration
+	c := &cobra.Command{
 		Use:   "restart <id>",
 		Short: "Restart a deployment's pods",
 		Args:  cobra.ExactArgs(1),
@@ -120,50 +374,224 @@ func deployRestartCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if err := cl.Send(cmd.Context(), http.MethodPost, "/deployments/"+url.PathEscape(args[0])+"/restart", nil, nil); err != nil {
+			if err := cl.Send(cmd.Context(), http.MethodPost, deployPath(args[0], "restart"), nil, nil); err != nil {
 				return err
 			}
 			output.Successf("restarted %s", args[0])
+			if *wait {
+				return runWait(cmd.Context(), cl, deployWaitRunning(args[0]), *timeout)
+			}
 			return nil
 		},
 	}
+	wait, timeout = addWaitFlags(c)
+	return c
 }
 
 func deployRebuildCmd() *cobra.Command {
-	return &cobra.Command{
+	var wait *bool
+	var timeout *time.Duration
+	c := &cobra.Command{
 		Use:   "rebuild <id>",
-		Short: "Rebuild a deployment",
+		Short: "Rebuild a deployment from source",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, _, err := client()
 			if err != nil {
 				return err
 			}
-			if err := cl.Send(cmd.Context(), http.MethodPost, "/deployments/"+url.PathEscape(args[0])+"/rebuild", nil, nil); err != nil {
+			if err := cl.Send(cmd.Context(), http.MethodPost, deployPath(args[0], "rebuild"), nil, nil); err != nil {
 				return err
 			}
 			output.Successf("triggered rebuild of %s", args[0])
+			if *wait {
+				return runWait(cmd.Context(), cl, deployWaitBuild(args[0]), *timeout)
+			}
+			return nil
+		},
+	}
+	wait, timeout = addWaitFlags(c)
+	return c
+}
+
+func deployCancelCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "cancel <id>",
+		Short: "Cancel an in-progress build",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			if err := cl.Send(cmd.Context(), http.MethodPost, deployPath(args[0], "cancel"), nil, nil); err != nil {
+				return err
+			}
+			output.Successf("cancelled build of %s", args[0])
 			return nil
 		},
 	}
 }
 
 func deployLogsCmd() *cobra.Command {
-	return &cobra.Command{
+	var build bool
+	var tail int
+	c := &cobra.Command{
 		Use:   "logs <id>",
-		Short: "Fetch deployment logs",
+		Short: "Fetch runtime pod logs (or build logs with --build)",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			cl, _, err := client()
 			if err != nil {
 				return err
 			}
-			res, err := cl.Do(cmd.Context(), http.MethodGet, "/deployments/"+url.PathEscape(args[0])+"/logs", nil)
-			if err != nil {
+			if build {
+				res, derr := cl.Do(cmd.Context(), http.MethodGet, deployPath(args[0], "logs"), nil)
+				if derr != nil {
+					return derr
+				}
+				output.Raw(res)
+				return nil
+			}
+			var dep map[string]any
+			if err := cl.GetJSON(cmd.Context(), deployPath(args[0]), &dep); err != nil {
 				return err
 			}
-			output.Raw(res)
+			ns := str(dep["namespace"])
+			if ns == "" {
+				return errors.New("deployment has no namespace; use --build for build logs")
+			}
+			var podsRaw any
+			if err := cl.GetJSON(cmd.Context(), deployPath(args[0], "pods"), &podsRaw); err != nil {
+				return err
+			}
+			pods := asList(podsRaw)
+			if len(pods) == 0 {
+				output.Warnf("no pods found for deployment %s", args[0])
+				return nil
+			}
+			entries := []map[string]any{}
+			for _, p := range pods {
+				podName := pick(p, "name")
+				if podName == "" {
+					continue
+				}
+				q := url.Values{"namespace": {ns}, "tailLines": {strconv.Itoa(tail)}}
+				var lr map[string]any
+				if err := cl.GetJSON(cmd.Context(), "/pods/"+url.PathEscape(podName)+"/logs?"+q.Encode(), &lr); err != nil {
+					return err
+				}
+				entries = append(entries, map[string]any{"pod": podName, "container": lr["container"], "logs": lr["logs"]})
+			}
+			if fmtFlag() == output.FormatJSON {
+				return output.JSON(entries)
+			}
+			for _, e := range entries {
+				if len(entries) > 1 {
+					fmt.Println(output.Dim("── pod " + str(e["pod"])))
+				}
+				logs := str(e["logs"])
+				fmt.Print(logs)
+				if logs != "" && !strings.HasSuffix(logs, "\n") {
+					fmt.Println()
+				}
+			}
 			return nil
 		},
 	}
+	c.Flags().BoolVar(&build, "build", false, "fetch build logs instead of runtime pod logs")
+	c.Flags().IntVar(&tail, "tail", 100, "lines of recent logs per pod")
+	return c
+}
+
+func deployPodsCmd() *cobra.Command {
+	var live bool
+	c := &cobra.Command{
+		Use:   "pods <id>",
+		Short: "List a deployment's pods",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			path := deployPath(args[0], "pods")
+			if live {
+				path = deployPath(args[0], "pods-live")
+			}
+			var raw any
+			if err := cl.GetJSON(cmd.Context(), path, &raw); err != nil {
+				return err
+			}
+			if fmtFlag() == output.FormatJSON {
+				return output.JSON(raw)
+			}
+			list := asList(raw)
+			if len(list) == 0 {
+				// pods-live wraps the array: {"pods": [...], "warnings": [...]}
+				if m, ok := raw.(map[string]any); ok {
+					list = asList(m["pods"])
+				}
+			}
+			rows := [][]string{}
+			for _, p := range list {
+				rows = append(rows, []string{
+					pick(p, "name"),
+					output.Status(pick(p, "status", "phase")),
+					pick(p, "ip", "podIp"),
+					pick(p, "nodeName", "node"),
+					pick(p, "restartCount", "restarts"),
+				})
+			}
+			output.Table([]string{"name", "status", "ip", "node", "restarts"}, rows)
+			return nil
+		},
+	}
+	c.Flags().BoolVar(&live, "live", false, "query the cluster directly (includes usage and warnings)")
+	return c
+}
+
+func deployMetricsCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "metrics <id>",
+		Short: "Show CPU/memory/network metrics for the last hour",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			var raw map[string]any
+			if err := cl.GetJSON(cmd.Context(), deployPath(args[0], "metrics"), &raw); err != nil {
+				return err
+			}
+			if fmtFlag() == output.FormatJSON {
+				return output.JSON(raw)
+			}
+			data, _ := raw["data"].(map[string]any)
+			output.KV([][2]string{
+				{"cpu (millicores)", deployMetricLatest(data["cpu"])},
+				{"memory (MB)", deployMetricLatest(data["mem"])},
+				{"net rx (KB/s)", deployMetricLatest(data["rx"])},
+				{"net tx (KB/s)", deployMetricLatest(data["tx"])},
+			})
+			return nil
+		},
+	}
+}
+
+func deployMetricLatest(v any) string {
+	pts, ok := v.([]any)
+	if !ok || len(pts) == 0 {
+		return "-"
+	}
+	m, ok := pts[len(pts)-1].(map[string]any)
+	if !ok {
+		return "-"
+	}
+	y, ok := m["y"].(float64)
+	if !ok {
+		return "-"
+	}
+	return strconv.FormatFloat(y, 'f', 1, 64)
 }

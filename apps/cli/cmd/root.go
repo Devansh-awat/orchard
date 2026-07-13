@@ -94,9 +94,14 @@ func rootCmd() *cobra.Command {
 		useCmd(),
 		contextCmd(),
 		apiCmd(),
+		orgCmd(),
 		projectCmd(),
+		envCmd(),
 		deployCmd(),
 		dbCmd(),
+		podCmd(),
+		serviceCmd(),
+		domainCmd(),
 		uiCmd(),
 	)
 	return root

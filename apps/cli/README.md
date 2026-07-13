@@ -54,12 +54,24 @@ Config lives at `~/.orchard/config.json`. Overridable via env:
 orchard auth login|status|logout
 orchard use org|project|env <id-or-slug>   # save default scope
 orchard context show|clear
-orchard project list|get
-orchard deploy list|get|scale|restart|rebuild|logs
-orchard db list|get
+orchard org list|get|update|avatar|backup-settings
+orchard project list|get|create|update|delete|sync|icon|background|member|invitation
+orchard env list|get|create|delete|set-default|vars get|set|unset
+orchard deploy list|get|create|delete|scale|restart|rebuild|cancel|rollback|logs
+        image|history|env|resources|volumes|strategy|health-check|build-root
+        pods|metrics|killed|auto-deploy|webhook-token|github-deployments
+orchard db list|get|create|delete|connection|metrics|logs|psql
+        backup|backup-schedule|extension|settings|public|resources|storage
+orchard pod list|get|logs|delete|exec|shell
+orchard service list|create|update|delete|exposure|port
+orchard domain list|get|create|update|delete|protection|validate-dns
 orchard ui                       # interactive dashboard (bubbletea)
 orchard api <METHOD> <path>      # raw escape hatch — full API parity
 ```
+
+Async operations take `--wait/--timeout`; destructive ones require `--yes`
+when piped. Interactive terminals: `orchard pod shell`, `orchard db psql`
+(websocket, needs an exec-scope token).
 
 Global flags: `--org/--project/--env` (id or slug, override the saved
 context; also via `ORCHARD_ORG/PROJECT/ENV`), `--yes/-y` (skip confirmation

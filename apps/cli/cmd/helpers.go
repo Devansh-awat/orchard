@@ -3,8 +3,11 @@ package cmd
 import (
 	"context"
 	"errors"
+	"fmt"
 	"net/url"
+	"os"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/LeafdTK/leaf/cli/internal/api"
@@ -43,6 +46,46 @@ func addPageFlags(c *cobra.Command) (limit *int, cursor *string, all *bool) {
 	cursor = c.Flags().String("cursor", "", "resume from a previous nextCursor")
 	all = c.Flags().Bool("all", false, "fetch every page (capped at 100 pages)")
 	return limit, cursor, all
+}
+
+// parseKVArgs turns KEY=VAL command arguments into a map.
+func parseKVArgs(args []string) (map[string]string, error) {
+	out := map[string]string{}
+	for _, a := range args {
+		k, v, ok := strings.Cut(a, "=")
+		if !ok || k == "" {
+			return nil, fmt.Errorf("expected KEY=VAL, got %q", a)
+		}
+		out[k] = v
+	}
+	return out, nil
+}
+
+// parseEnvFile reads dotenv-style lines (KEY=VAL, # comments, blanks, optional
+// surrounding quotes on values).
+func parseEnvFile(path string) (map[string]string, error) {
+	data, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+	out := map[string]string{}
+	for line := range strings.Lines(string(data)) {
+		line = strings.TrimSpace(line)
+		if line == "" || strings.HasPrefix(line, "#") {
+			continue
+		}
+		line = strings.TrimPrefix(line, "export ")
+		k, v, ok := strings.Cut(line, "=")
+		if !ok || strings.TrimSpace(k) == "" {
+			continue
+		}
+		v = strings.TrimSpace(v)
+		if len(v) >= 2 && (v[0] == '"' && v[len(v)-1] == '"' || v[0] == '\'' && v[len(v)-1] == '\'') {
+			v = v[1 : len(v)-1]
+		}
+		out[strings.TrimSpace(k)] = v
+	}
+	return out, nil
 }
 
 const maxPages = 100
