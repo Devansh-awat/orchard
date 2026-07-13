@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/LeafdTK/leaf/cli/internal/api"
+	"github.com/LeafdTK/leaf/cli/internal/exitcode"
 	"github.com/LeafdTK/leaf/cli/internal/output"
 	"github.com/LeafdTK/leaf/cli/internal/termsession"
 	"github.com/coder/websocket"
@@ -102,11 +103,15 @@ func dbListCmd() *cobra.Command {
 }
 
 func dbGetCmd() *cobra.Command {
-	return &cobra.Command{
+	var watch bool
+	c := &cobra.Command{
 		Use:   "get <id>",
 		Short: "Show a database",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if watch && !output.IsTTY() {
+				return &exitcode.UsageError{Err: errors.New("--watch needs an interactive terminal")}
+			}
 			cl, _, err := client()
 			if err != nil {
 				return err
@@ -115,33 +120,62 @@ func dbGetCmd() *cobra.Command {
 			if err != nil {
 				return err
 			}
-			if fmtFlag() == output.FormatJSON {
-				return output.JSON(raw)
+			if !watch {
+				if fmtFlag() == output.FormatJSON {
+					return output.JSON(raw)
+				}
+				dbRenderKV(raw)
+				return nil
 			}
-			pairs := [][2]string{
-				{"id", pick(raw, "id")},
-				{"name", pick(raw, "name")},
-				{"status", output.Status(pick(raw, "status"))},
-				{"mode", pick(raw, "mode")},
-				{"project", pick(raw, "projectId")},
-				{"storage", pick(raw, "storageSize")},
-				{"host", pick(raw, "internalHost", "host")},
-				{"database", pick(raw, "dbName")},
-				{"user", pick(raw, "dbUser")},
-				{"public", pick(raw, "publicEnabled")},
-				{"namespace", pick(raw, "namespace")},
-				{"created", pick(raw, "createdAt")},
+			refresh := func(ctx context.Context) error {
+				cur, ferr := dbFetch(ctx, cl, args[0])
+				if ferr != nil {
+					return ferr
+				}
+				fmt.Print(eventsClearScreen)
+				dbRenderKV(cur)
+				return nil
 			}
-			if live, ok := raw["liveStatus"].(map[string]any); ok {
-				pairs = append(pairs,
-					[2]string{"ready", pick(live, "ready")},
-					[2]string{"connections", pick(live, "connections")},
-				)
+			fmt.Print(eventsClearScreen)
+			dbRenderKV(raw)
+			id := str(raw["id"])
+			if id == "" {
+				id = args[0]
 			}
-			output.KV(dbTrimEmpty(pairs))
-			return nil
+			orgID := eventsOrgID(raw)
+			if orgID == "" {
+				return eventsWatchPoll(cmd.Context(), 5*time.Second, refresh)
+			}
+			return eventsWatchSSE(cmd.Context(), cl, orgID, "database.changed", id, refresh)
 		},
 	}
+	c.Flags().BoolVar(&watch, "watch", false, "keep re-rendering as the database changes (TTY only)")
+	return c
+}
+
+// dbRenderKV prints the table-mode detail view for one database.
+func dbRenderKV(raw map[string]any) {
+	pairs := [][2]string{
+		{"id", pick(raw, "id")},
+		{"name", pick(raw, "name")},
+		{"status", output.Status(pick(raw, "status"))},
+		{"mode", pick(raw, "mode")},
+		{"project", pick(raw, "projectId")},
+		{"storage", pick(raw, "storageSize")},
+		{"host", pick(raw, "internalHost", "host")},
+		{"database", pick(raw, "dbName")},
+		{"user", pick(raw, "dbUser")},
+		{"public", pick(raw, "publicEnabled")},
+		{"namespace", pick(raw, "namespace")},
+		{"created", pick(raw, "createdAt")},
+	}
+	if live, ok := raw["liveStatus"].(map[string]any); ok {
+		pairs = append(pairs,
+			[2]string{"ready", pick(live, "ready")},
+			[2]string{"connections", pick(live, "connections")},
+		)
+	}
+	output.KV(dbTrimEmpty(pairs))
 }
 
 func dbCreateCmd() *cobra.Command {

@@ -9,6 +9,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/LeafdTK/leaf/cli/internal/api"
 	"github.com/LeafdTK/leaf/cli/internal/config"
@@ -224,7 +225,7 @@ func containerState(v any) string {
 func podLogsCmd() *cobra.Command {
 	var container string
 	var tail int
-	var previous bool
+	var previous, follow bool
 	c := &cobra.Command{
 		Use:   "logs <name>",
 		Short: "Fetch runtime logs from a pod",
@@ -244,6 +245,16 @@ func podLogsCmd() *cobra.Command {
 			}
 			if previous {
 				q.Set("previous", "true")
+			}
+			if follow {
+				fetch := func(ctx context.Context) (string, error) {
+					var lr map[string]any
+					if err := cl.GetJSON(ctx, "/pods/"+url.PathEscape(args[0])+"/logs?"+q.Encode(), &lr); err != nil {
+						return "", err
+					}
+					return str(lr["logs"]), nil
+				}
+				return followLines(cmd.Context(), 3*time.Second, fetch, os.Stdout)
 			}
 			var raw map[string]any
 			if err := cl.GetJSON(cmd.Context(), "/pods/"+url.PathEscape(args[0])+"/logs?"+q.Encode(), &raw); err != nil {
@@ -270,6 +281,7 @@ func podLogsCmd() *cobra.Command {
 	c.Flags().StringVarP(&container, "container", "c", "", "container name (default: the pod's only container)")
 	c.Flags().IntVar(&tail, "tail", 100, "number of log lines to fetch")
 	c.Flags().BoolVar(&previous, "previous", false, "logs from the previous (terminated) container instance")
+	c.Flags().BoolVarP(&follow, "follow", "f", false, "keep polling for new log lines until interrupted")
 	return c
 }
 

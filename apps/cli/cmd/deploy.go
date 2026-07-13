@@ -1,17 +1,20 @@
 package cmd
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"maps"
 	"net/http"
 	"net/url"
+	"os"
 	"slices"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/LeafdTK/leaf/cli/internal/api"
+	"github.com/LeafdTK/leaf/cli/internal/exitcode"
 	"github.com/LeafdTK/leaf/cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -121,11 +124,15 @@ func deployListCmd() *cobra.Command {
 }
 
 func deployGetCmd() *cobra.Command {
-	return &cobra.Command{
+	var watch bool
+	c := &cobra.Command{
 		Use:   "get <id>",
 		Short: "Show a deployment",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if watch && !output.IsTTY() {
+				return &exitcode.UsageError{Err: errors.New("--watch needs an interactive terminal")}
+			}
 			cl, _, err := client()
 			if err != nil {
 				return err
@@ -134,40 +141,69 @@ func deployGetCmd() *cobra.Command {
 			if err := cl.GetJSON(cmd.Context(), deployPath(args[0]), &raw); err != nil {
 				return err
 			}
-			if fmtFlag() == output.FormatJSON {
-				return output.JSON(raw)
-			}
-			pairs := [][2]string{
-				{"id", pick(raw, "id")},
-				{"name", pick(raw, "name")},
-				{"status", output.Status(pick(raw, "status"))},
-				{"build status", output.Status(pick(raw, "buildStatus"))},
-				{"image", pick(raw, "image")},
-				{"replicas", pick(raw, "replicas")},
-				{"namespace", pick(raw, "namespace")},
-				{"strategy", pick(raw, "deployStrategy")},
-			}
-			for _, opt := range [][2]string{
-				{"build type", pick(raw, "buildType")},
-				{"github repo", pick(raw, "githubRepo")},
-				{"github branch", pick(raw, "githubBranch")},
-				{"dockerfile", pick(raw, "dockerfilePath")},
-				{"build from root", pick(raw, "buildFromRoot")},
-				{"auto-deploy", pick(raw, "autoDeployEnabled")},
-				{"auto-deploy branch", pick(raw, "autoDeployBranch")},
-				{"cpu (milli)", pick(raw, "cpuRequestMilli")},
-				{"memory (bytes)", pick(raw, "memoryRequestBytes")},
-				{"health check", pick(raw, "healthCheckEnabled")},
-				{"created", pick(raw, "createdAt")},
-			} {
-				if opt[1] != "" {
-					pairs = append(pairs, opt)
+			if !watch {
+				if fmtFlag() == output.FormatJSON {
+					return output.JSON(raw)
 				}
+				deployRenderKV(raw)
+				return nil
 			}
-			output.KV(pairs)
-			return nil
+			refresh := func(ctx context.Context) error {
+				var cur map[string]any
+				if err := cl.GetJSON(ctx, deployPath(args[0]), &cur); err != nil {
+					return err
+				}
+				fmt.Print(eventsClearScreen)
+				deployRenderKV(cur)
+				return nil
+			}
+			fmt.Print(eventsClearScreen)
+			deployRenderKV(raw)
+			id := str(raw["id"])
+			if id == "" {
+				id = args[0]
+			}
+			orgID := eventsOrgID(raw)
+			if orgID == "" {
+				return eventsWatchPoll(cmd.Context(), 5*time.Second, refresh)
+			}
+			return eventsWatchSSE(cmd.Context(), cl, orgID, "deployment.changed", id, refresh)
 		},
 	}
+	c.Flags().BoolVar(&watch, "watch", false, "keep re-rendering as the deployment changes (TTY only)")
+	return c
+}
+
+// deployRenderKV prints the table-mode detail view for one deployment.
+func deployRenderKV(raw map[string]any) {
+	pairs := [][2]string{
+		{"id", pick(raw, "id")},
+		{"name", pick(raw, "name")},
+		{"status", output.Status(pick(raw, "status"))},
+		{"build status", output.Status(pick(raw, "buildStatus"))},
+		{"image", pick(raw, "image")},
+		{"replicas", pick(raw, "replicas")},
+		{"namespace", pick(raw, "namespace")},
+		{"strategy", pick(raw, "deployStrategy")},
+	}
+	for _, opt := range [][2]string{
+		{"build type", pick(raw, "buildType")},
+		{"github repo", pick(raw, "githubRepo")},
+		{"github branch", pick(raw, "githubBranch")},
+		{"dockerfile", pick(raw, "dockerfilePath")},
+		{"build from root", pick(raw, "buildFromRoot")},
+		{"auto-deploy", pick(raw, "autoDeployEnabled")},
+		{"auto-deploy branch", pick(raw, "autoDeployBranch")},
+		{"cpu (milli)", pick(raw, "cpuRequestMilli")},
+		{"memory (bytes)", pick(raw, "memoryRequestBytes")},
+		{"health check", pick(raw, "healthCheckEnabled")},
+		{"created", pick(raw, "createdAt")},
+	} {
+		if opt[1] != "" {
+			pairs = append(pairs, opt)
+		}
+	}
+	output.KV(pairs)
 }
 
 func deployCreateCmd() *cobra.Command {
@@ -434,7 +470,7 @@ func deployCancelCmd() *cobra.Command {
 }
 
 func deployLogsCmd() *cobra.Command {
-	var build bool
+	var build, follow bool
 	var tail int
 	c := &cobra.Command{
 		Use:   "logs <id>",
@@ -446,6 +482,16 @@ func deployLogsCmd() *cobra.Command {
 				return err
 			}
 			if build {
+				if follow {
+					fetch := func(ctx context.Context) (string, error) {
+						var lr map[string]any
+						if err := cl.GetJSON(ctx, deployPath(args[0], "logs"), &lr); err != nil {
+							return "", err
+						}
+						return str(lr["logs"]), nil
+					}
+					return followLines(cmd.Context(), 3*time.Second, fetch, os.Stdout)
+				}
 				res, derr := cl.Do(cmd.Context(), http.MethodGet, deployPath(args[0], "logs"), nil)
 				if derr != nil {
 					return derr
@@ -460,6 +506,9 @@ func deployLogsCmd() *cobra.Command {
 			ns := str(dep["namespace"])
 			if ns == "" {
 				return errors.New("deployment has no namespace; use --build for build logs")
+			}
+			if follow {
+				return deployFollowPodLogs(cmd.Context(), cl, args[0], ns, tail)
 			}
 			var podsRaw any
 			if err := cl.GetJSON(cmd.Context(), deployPath(args[0], "pods"), &podsRaw); err != nil {
@@ -500,8 +549,55 @@ func deployLogsCmd() *cobra.Command {
 		},
 	}
 	c.Flags().BoolVar(&build, "build", false, "fetch build logs instead of runtime pod logs")
+	c.Flags().BoolVarP(&follow, "follow", "f", false, "keep polling for new log lines until interrupted")
 	c.Flags().IntVar(&tail, "tail", 100, "lines of recent logs per pod")
 	return c
+}
+
+// deployFollowPodLogs re-polls the pod list and each pod's log tail every 3s,
+// emitting only newly-appended lines per pod (diffAppend, same strategy as
+// followLines but with one overlap window per pod).
+func deployFollowPodLogs(ctx context.Context, cl *api.Client, id, ns string, tail int) error {
+	prev := map[string]string{}
+	for {
+		var podsRaw any
+		if err := cl.GetJSON(ctx, deployPath(id, "pods"), &podsRaw); err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return err
+		}
+		pods := asList(podsRaw)
+		for _, p := range pods {
+			podName := pick(p, "name")
+			if podName == "" {
+				continue
+			}
+			q := url.Values{"namespace": {ns}, "tailLines": {strconv.Itoa(tail)}}
+			var lr map[string]any
+			if err := cl.GetJSON(ctx, "/pods/"+url.PathEscape(podName)+"/logs?"+q.Encode(), &lr); err != nil {
+				if ctx.Err() != nil {
+					return nil
+				}
+				return err
+			}
+			cur := str(lr["logs"])
+			delta := diffAppend(prev[podName], cur)
+			prev[podName] = cur
+			if delta == "" {
+				continue
+			}
+			if len(pods) > 1 {
+				fmt.Println(output.Dim("── pod " + podName))
+			}
+			fmt.Print(strings.TrimSuffix(delta, "\n") + "\n")
+		}
+		select {
+		case <-time.After(3 * time.Second):
+		case <-ctx.Done():
+			return nil
+		}
+	}
 }
 
 func deployPodsCmd() *cobra.Command {

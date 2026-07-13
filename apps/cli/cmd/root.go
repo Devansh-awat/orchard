@@ -109,6 +109,15 @@ func rootCmd() *cobra.Command {
 		githubCmd(),
 		tailscaleCmd(),
 		webhookCmd(),
+		eventsCmd(),
+		observeCmd(),
+		memberCmd(),
+		invitationCmd(),
+		notifyCmd(),
+		auditCmd(),
+		quotaCmd(),
+		overviewCmd(),
+		userCmd(),
 		uiCmd(),
 	)
 	return root

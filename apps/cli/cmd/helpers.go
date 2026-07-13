@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"fmt"
+	"io"
 	"net/url"
 	"os"
 	"strconv"
@@ -46,6 +47,68 @@ func addPageFlags(c *cobra.Command) (limit *int, cursor *string, all *bool) {
 	cursor = c.Flags().String("cursor", "", "resume from a previous nextCursor")
 	all = c.Flags().Bool("all", false, "fetch every page (capped at 100 pages)")
 	return limit, cursor, all
+}
+
+// followLines polls fetch and writes only newly-appended lines: the log
+// endpoints are one-shot tails, so "follow" means refetch + overlap diff
+// (same approach as the web UI). Approximate under very fast rotation.
+func followLines(ctx context.Context, interval time.Duration, fetch func(context.Context) (string, error), w io.Writer) error {
+	prev := ""
+	first := true
+	for {
+		cur, err := fetch(ctx)
+		if err != nil {
+			if ctx.Err() != nil {
+				return nil
+			}
+			return err
+		}
+		delta := cur
+		if !first {
+			delta = diffAppend(prev, cur)
+		}
+		if delta != "" {
+			if _, werr := io.WriteString(w, strings.TrimSuffix(delta, "\n")+"\n"); werr != nil {
+				return werr
+			}
+		}
+		prev, first = cur, false
+		select {
+		case <-time.After(interval):
+		case <-ctx.Done():
+			return nil
+		}
+	}
+}
+
+// diffAppend returns the part of cur that follows prev: fast path when prev is
+// a literal prefix (growing log), otherwise anchored on the last lines of prev
+// (tail window slid forward). No anchor at all means the stream rotated; emit
+// cur whole rather than dropping it.
+func diffAppend(prev, cur string) string {
+	if prev == "" || prev == cur {
+		if prev == cur {
+			return ""
+		}
+		return cur
+	}
+	if strings.HasPrefix(cur, prev) {
+		return cur[len(prev):]
+	}
+	lines := strings.Split(strings.TrimSuffix(prev, "\n"), "\n")
+	for anchor := 3; anchor >= 1; anchor-- {
+		if len(lines) < anchor {
+			continue
+		}
+		block := strings.Join(lines[len(lines)-anchor:], "\n")
+		if block == "" {
+			continue
+		}
+		if i := strings.LastIndex(cur, block); i >= 0 {
+			return strings.TrimPrefix(cur[i+len(block):], "\n")
+		}
+	}
+	return cur
 }
 
 // parseKVArgs turns KEY=VAL command arguments into a map.

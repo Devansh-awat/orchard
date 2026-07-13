@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"errors"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -9,6 +10,7 @@ import (
 	"reflect"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/LeafdTK/leaf/cli/internal/api"
 )
@@ -117,6 +119,79 @@ func TestFetchPagedQueryParams(t *testing.T) {
 	}
 	if got := gotQuery.Get("projectId"); got != "p1" {
 		t.Errorf("projectId = %q, want p1", got)
+	}
+}
+
+func TestDiffAppend(t *testing.T) {
+	tests := []struct{ name, prev, cur, want string }{
+		{"empty prev emits everything", "", "a\nb\n", "a\nb\n"},
+		{"both empty", "", "", ""},
+		{"identical", "a\nb\n", "a\nb\n", ""},
+		{"growing log", "a\nb\n", "a\nb\nc\n", "c\n"},
+		{"slid tail window", "a\nb\nc\n", "b\nc\nd\n", "d\n"},
+		{"slid past all but one anchor line", "a\nb\nc\n", "c\nd\ne\n", "d\ne\n"},
+		{"rotation emits whole", "a\nb\nc\n", "x\ny\nz\n", "x\ny\nz\n"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			if got := diffAppend(tt.prev, tt.cur); got != tt.want {
+				t.Errorf("diffAppend(%q, %q) = %q, want %q", tt.prev, tt.cur, got, tt.want)
+			}
+		})
+	}
+}
+
+func TestFollowLinesEmitsOnlyNewLines(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	// scripted fetch sequence: initial tail, no change, growth, slid window;
+	// once exhausted the fetch cancels the ctx so followLines returns nil.
+	seq := []string{"a\nb\n", "a\nb\n", "a\nb\nc\n", "b\nc\nd\n"}
+	calls := 0
+	var buf strings.Builder
+	fetch := func(context.Context) (string, error) {
+		if calls >= len(seq) {
+			cancel()
+			return seq[len(seq)-1], nil
+		}
+		s := seq[calls]
+		calls++
+		return s, nil
+	}
+	if err := followLines(ctx, time.Millisecond, fetch, &buf); err != nil {
+		t.Fatalf("followLines: %v", err)
+	}
+	if got, want := buf.String(), "a\nb\nc\nd\n"; got != want {
+		t.Errorf("output = %q, want %q", got, want)
+	}
+	if calls != len(seq) {
+		t.Errorf("fetch calls = %d, want %d", calls, len(seq))
+	}
+}
+
+func TestFollowLinesPropagatesFetchError(t *testing.T) {
+	boom := errors.New("boom")
+	err := followLines(context.Background(), time.Millisecond, func(context.Context) (string, error) {
+		return "", boom
+	}, io.Discard)
+	if !errors.Is(err, boom) {
+		t.Errorf("err = %v, want %v", err, boom)
+	}
+}
+
+func TestFollowLinesFetchErrorAfterCancelIsClean(t *testing.T) {
+	ctx, cancel := context.WithCancel(context.Background())
+	first := true
+	err := followLines(ctx, time.Millisecond, func(context.Context) (string, error) {
+		if first {
+			first = false
+			return "a\n", nil
+		}
+		cancel()
+		return "", context.Canceled
+	}, io.Discard)
+	if err != nil {
+		t.Errorf("err = %v, want nil (Ctrl-C must exit 0)", err)
 	}
 }
 
