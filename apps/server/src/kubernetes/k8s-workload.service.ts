@@ -1,5 +1,6 @@
 import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
+import * as https from 'https';
 import { PassThrough } from 'stream';
 import { ServiceType } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
@@ -312,7 +313,7 @@ export class K8sWorkloadService {
     }
   }
 
-  async getPodLogs(podName: string, namespace = 'midnight-staging', containerName?: string, tailLines = 100, previous = false) {
+  async getPodLogs(podName: string, namespace = 'midnight-staging', containerName?: string, tailLines = 100, previous = false, sinceSeconds?: number, sinceTime?: string) {
     this.ensureKubeConfig();
 
     const cleanNamespace = String(namespace || 'midnight-staging').trim();
@@ -354,27 +355,31 @@ export class K8sWorkloadService {
       console.log('[API] Fetching logs for container:', targetContainer);
       
       try {
-        const logs = await api.readNamespacedPodLog(
-          cleanPodName,
-          cleanNamespace,
-          targetContainer,
-          false,
-          false,
-          undefined,
-          undefined,
-          previous,
-          undefined,
-          tailLines,
-          true
-        );
+        const logs = sinceTime
+          ? await this.readPodLogSinceTime(cleanPodName, cleanNamespace, targetContainer, sinceTime, tailLines, previous)
+          : (await api.readNamespacedPodLog(
+              cleanPodName,
+              cleanNamespace,
+              targetContainer,
+              false,
+              false,
+              undefined,
+              undefined,
+              previous,
+              sinceSeconds,
+              tailLines,
+              true
+            )).body;
 
         return {
           podName: cleanPodName,
           container: targetContainer,
           namespace: cleanNamespace,
-          logs: logs.body,
+          logs,
           tailLines,
           previous,
+          sinceSeconds,
+          sinceTime,
         };
       } catch (logError) {
         const statusCode = logError.response?.statusCode;
@@ -448,6 +453,49 @@ export class K8sWorkloadService {
         message: error.message
       });
     }
+  }
+
+  // The generated client in @kubernetes/client-node 0.21 exposes sinceSeconds
+  // but not sinceTime on readNamespacedPodLog, so sinceTime reads hit the API
+  // server directly with the kubeconfig's TLS/auth applied. Errors are shaped
+  // like the generated client's ({ response: { statusCode, body } }) so the
+  // caller's error handling works unchanged.
+  private async readPodLogSinceTime(podName: string, namespace: string, container: string, sinceTime: string, tailLines: number, previous: boolean): Promise<string> {
+    const cluster = this.kc.getCurrentCluster();
+    if (!cluster) {
+      throw new BadRequestException({
+        error: 'Failed to fetch logs',
+        message: 'No current cluster in kubeconfig',
+      });
+    }
+
+    const params = new URLSearchParams({ container, sinceTime, timestamps: 'true', tailLines: String(tailLines) });
+    if (previous) params.set('previous', 'true');
+    const url = new URL(`${cluster.server}/api/v1/namespaces/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(podName)}/log?${params.toString()}`);
+
+    const opts: https.RequestOptions = { method: 'GET' };
+    await this.kc.applyToHTTPSOptions(opts);
+
+    return new Promise<string>((resolve, reject) => {
+      const req = https.request(url, opts, (res) => {
+        let body = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk) => { body += chunk; });
+        res.on('end', () => {
+          if (res.statusCode >= 400) {
+            let parsed: any;
+            try { parsed = JSON.parse(body); } catch { parsed = { message: body }; }
+            reject(Object.assign(new Error(parsed?.message || `Log request failed with status ${res.statusCode}`), {
+              response: { statusCode: res.statusCode, body: parsed },
+            }));
+            return;
+          }
+          resolve(body);
+        });
+      });
+      req.on('error', reject);
+      req.end();
+    });
   }
 
   async listDeployments(namespace = 'midnight-staging') {

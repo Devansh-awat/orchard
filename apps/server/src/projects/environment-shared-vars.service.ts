@@ -15,7 +15,9 @@ const MAX_VALUE_BYTES = 64 * 1024;
 
 export interface SharedVarInput {
   key: string;
-  value: string;
+  // null = keep the currently stored value (secret values are write-only over GET,
+  // so read-modify-write clients can't echo them back).
+  value: string | null;
   secret?: boolean;
 }
 
@@ -97,27 +99,6 @@ export class EnvironmentSharedVarsService {
   async updateSharedVars(environmentId: string, input: SharedVarInput[], userId: string) {
     const env = await this.envOrThrow(environmentId);
 
-    const seen = new Map<string, SharedVarInput>();
-    for (const raw of Array.isArray(input) ? input : []) {
-      const key = String(raw?.key ?? '').trim();
-      if (!key) continue;
-      if (key.length > MAX_KEY_LEN) {
-        throw new BadRequestException(`Environment variable key too long: ${key.slice(0, 32)}…`);
-      }
-      if (!ENV_KEY_RE.test(key)) {
-        throw new BadRequestException(`Invalid environment variable key: ${key}`);
-      }
-      const value = raw.value != null ? String(raw.value) : '';
-      if (Buffer.byteLength(value, 'utf8') > MAX_VALUE_BYTES) {
-        throw new BadRequestException(`Value for ${key} exceeds ${MAX_VALUE_BYTES / 1024}KB`);
-      }
-      seen.set(key, { key, value, secret: Boolean(raw.secret) });
-    }
-    if (seen.size > MAX_VARS) {
-      throw new BadRequestException(`Too many variables (max ${MAX_VARS})`);
-    }
-    const vars = Array.from(seen.values());
-
     // Decrypt secret values from the current set so change-detection and
     // rollout propagation compare plaintext against plaintext.
     const before = (
@@ -127,6 +108,47 @@ export class EnvironmentSharedVarsService {
       })
     ).map((v) => this.crypto.maybeDecrypt(v));
     const beforeMap = new Map(before.map((v) => [v.key, v]));
+
+    // PUT is full-replace but secret values are write-only (GET returns null),
+    // so a read-modify-write client can never echo them back. The keep rules:
+    // value === null keeps the stored value for an existing key, and value === ''
+    // keeps it when the row is secret both before and after (the web editor shows
+    // untouched secrets as blank). Un-marking a secret without a value is rejected
+    // rather than silently publishing the plaintext. New keys with null/empty
+    // values are stored empty, as before.
+    const seen = new Map<string, { key: string; value: string; secret: boolean }>();
+    for (const raw of Array.isArray(input) ? input : []) {
+      const key = String(raw?.key ?? '').trim();
+      if (!key) continue;
+      if (key.length > MAX_KEY_LEN) {
+        throw new BadRequestException(`Environment variable key too long: ${key.slice(0, 32)}…`);
+      }
+      if (!ENV_KEY_RE.test(key)) {
+        throw new BadRequestException(`Invalid environment variable key: ${key}`);
+      }
+      const secret = Boolean(raw.secret);
+      const existing = beforeMap.get(key);
+      let value: string;
+      if (raw.value == null) {
+        if (existing?.secret && !secret) {
+          throw new BadRequestException(
+            `Cannot un-mark ${key} as secret without providing a value`,
+          );
+        }
+        value = existing ? existing.value : '';
+      } else {
+        value = String(raw.value);
+        if (value === '' && secret && existing?.secret) value = existing.value;
+      }
+      if (Buffer.byteLength(value, 'utf8') > MAX_VALUE_BYTES) {
+        throw new BadRequestException(`Value for ${key} exceeds ${MAX_VALUE_BYTES / 1024}KB`);
+      }
+      seen.set(key, { key, value, secret });
+    }
+    if (seen.size > MAX_VARS) {
+      throw new BadRequestException(`Too many variables (max ${MAX_VARS})`);
+    }
+    const vars = Array.from(seen.values());
 
     await this.prisma.$transaction(async (tx) => {
       await tx.environmentSharedVar.deleteMany({ where: { environmentId } });

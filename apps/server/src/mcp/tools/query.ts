@@ -368,11 +368,12 @@ export function registerQueryTools(server: McpServer, client: OrchardClient) {
       description: "Validate that a domain's DNS is correctly pointed to the Orchard cluster. Run this before creating an ingress.",
       annotations: { readOnlyHint: true, destructiveHint: false },
       inputSchema: {
+        projectId: z.string().describe('The project UUID the domain belongs to (from list_projects, or the projectId on get_deployment)'),
         domain: z.string().describe('The domain to validate (e.g. myapp.example.com)'),
       },
     },
-    async ({ domain }) => {
-      const result = await client.post('/projects/ingresses/validate-dns', { domain });
+    async ({ projectId, domain }) => {
+      const result = await client.post('/projects/ingresses/validate-dns', { projectId, domain });
       return { content: [{ type: 'text', text: JSON.stringify(result, null, 2) }] };
     },
   );

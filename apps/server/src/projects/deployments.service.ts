@@ -29,7 +29,7 @@ import { EnvironmentsService } from './environments.service';
 import { resolveEnvVars, EnvVar } from '../env/env-resolver';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { NodesService } from '../nodes/nodes.service';
-import { formatSlug } from './projects.utils';
+import { formatSlug, scrubIngress } from './projects.utils';
 import { startBuildTrace } from '../analytics/datadog';
 
 @Injectable()
@@ -530,6 +530,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
         const merged = {
           ...deployment,
+          ingresses: deployment.ingresses.map((ing) => scrubIngress(ing)),
           pods,
           status: computedStatus,
           warnings,
@@ -694,7 +695,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
                 servicePort: ing.service?.port || 0,
               },
             ];
-        return { ingress: { ...ing, routes }, k8sPaths };
+        return { ingress: scrubIngress({ ...ing, routes }), k8sPaths };
       };
 
       const directEnriched = directIngresses.map((ing) => enrich(ing).ingress);
@@ -1350,7 +1351,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       });
     }
 
-    return updatedDeployment;
+    return this.addInternalUrlsToDeployment(updatedDeployment);
   }
 
   async updateDeploymentBuildFromRoot(
@@ -1760,7 +1761,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       metadata: { count: volumesList.length, names: volumesList.map((v) => v.name).join(',') || null },
     });
 
-    return updatedDeployment;
+    return this.addInternalUrlsToDeployment(updatedDeployment);
   }
 
   async createDeploymentService(
@@ -3211,7 +3212,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         ? d.envVars.map((ev) => ({ ...ev, value: null }))
         : d.envVars,
       ingresses: d.ingresses
-        ? d.ingresses.map(({ protectionBypassSecret: _protectionBypassSecret, ...ing }) => ing)
+        ? d.ingresses.map((ing) => scrubIngress(ing))
         : d.ingresses,
       buildLogs: null,
       buildError: null,
@@ -3405,18 +3406,18 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   }
 
   addInternalUrlsToDeployment(deployment: any) {
-    if (!deployment || !deployment.namespace) {
+    if (!deployment) {
       return deployment;
     }
 
     const result = { ...deployment };
 
-    if (result.services && Array.isArray(result.services)) {
+    if (result.namespace && result.services && Array.isArray(result.services)) {
       result.services = this.addInternalUrlsToServices(result.services, result.namespace);
     }
 
     if (result.ingresses && Array.isArray(result.ingresses)) {
-      result.ingresses = result.ingresses.map(({ protectionPasswordHash: _protectionPasswordHash, ...ing }: any) => ing);
+      result.ingresses = result.ingresses.map((ing: any) => scrubIngress(ing));
     }
 
     return result;
@@ -3989,7 +3990,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       });
     }
 
-    return createdDeployment;
+    return this.addInternalUrlsToDeployment(createdDeployment);
   }
 
   async createDeploymentFromGitHub(

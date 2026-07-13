@@ -1,7 +1,8 @@
 import { Module } from '@nestjs/common';
 import { ScheduleModule } from '@nestjs/schedule';
-import { ThrottlerModule, ThrottlerGuard } from '@nestjs/throttler';
+import { ThrottlerModule } from '@nestjs/throttler';
 import { APP_GUARD } from '@nestjs/core';
+import { ApiThrottlerGuard, apiThrottlerLimit } from './auth/api-throttler.guard';
 import { HealthModule } from './health/health.module';
 import { KubernetesModule } from './kubernetes/kubernetes.module';
 import { AuthModule } from './auth/auth.module';
@@ -34,9 +35,11 @@ import { JobsModule } from './jobs/jobs.module';
 @Module({
   imports: [
     ScheduleModule.forRoot(),
-    // Per-IP rate limiting across the whole API (200 req/60s). Tune per-route
-    // with @Throttle({...}) or exempt with @SkipThrottle().
-    ThrottlerModule.forRoot([{ ttl: 60000, limit: 200 }]),
+    // Rate limiting across the whole API: 200 req/60s per IP, or 600 req/60s
+    // per token for PAT bearers (ApiThrottlerGuard keys those buckets on a
+    // sha256 of the token). Tune per-route with @Throttle({...}) or exempt
+    // with @SkipThrottle().
+    ThrottlerModule.forRoot([{ ttl: 60000, limit: apiThrottlerLimit }]),
     PrismaModule,
     CryptoModule,
     AuthModule,
@@ -66,7 +69,7 @@ import { JobsModule } from './jobs/jobs.module';
     NotificationsModule,
     JobsModule,
   ],
-  providers: [{ provide: APP_GUARD, useClass: ThrottlerGuard }],
+  providers: [{ provide: APP_GUARD, useClass: ApiThrottlerGuard }],
 })
 export class AppModule {}
 

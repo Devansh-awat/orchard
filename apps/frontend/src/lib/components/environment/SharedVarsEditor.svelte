@@ -21,6 +21,7 @@
 	let loading = $state(true);
 	let saving = $state(false);
 	let warnings = $state<SharedVarWarning[]>([]);
+	let secretKeys = new Set<string>();
 
 	async function load() {
 		loading = true;
@@ -29,6 +30,7 @@
 			if (res.ok) {
 				const data = await res.json();
 				rows = data.map((v: any) => ({ key: v.key, value: v.value ?? '', secret: v.secret }));
+				secretKeys = new Set(data.filter((v: any) => v.secret).map((v: any) => v.key));
 			}
 		} finally {
 			loading = false;
@@ -39,7 +41,13 @@
 		saving = true;
 		warnings = [];
 		try {
-			const vars = rows.filter((r) => r.key.trim()).map((r) => ({ key: r.key.trim(), value: r.value, secret: r.secret }));
+			const vars = rows
+				.filter((r) => r.key.trim())
+				.map((r) => {
+					const key = r.key.trim();
+					const untouched = r.value === '' && secretKeys.has(key);
+					return { key, value: untouched ? null : r.value, secret: r.secret };
+				});
 			const res = await apiFetch(`/apiv1/environments/${environmentId}/shared-vars`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },

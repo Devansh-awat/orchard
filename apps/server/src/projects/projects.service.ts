@@ -21,7 +21,7 @@ import { AuditService } from '../audit/audit.service';
 import { ProjectAccessService } from './project-access.service';
 import { EnvironmentsService } from './environments.service';
 import { DeploymentsService } from './deployments.service';
-import { formatSlug, redactDatabaseForViewer, stripR2ProxyCreds } from './projects.utils';
+import { formatSlug, redactDatabaseForViewer, scrubIngress, stripR2ProxyCreds } from './projects.utils';
 import { parseMemory } from '../kubernetes/quantity';
 
 @Injectable()
@@ -330,7 +330,7 @@ export class ProjectsService {
       resolved,
     );
 
-    return this.prisma.database.update({
+    const updated = await this.prisma.database.update({
       where: { id: databaseId },
       data: {
         cpuRequestMilli: data.cpuRequestMilli,
@@ -341,6 +341,7 @@ export class ProjectsService {
         status: 'restarting',
       },
     });
+    return stripR2ProxyCreds(updated);
   }
 
 
@@ -641,6 +642,7 @@ export class ProjectsService {
 
         const merged = {
           ...deployment,
+          ingresses: deployment.ingresses.map((ing) => scrubIngress(ing)),
           status: computedStatus,
         };
         return access.canEdit ? merged : this.deployments.scrubDeploymentForViewer(merged);
@@ -1075,6 +1077,12 @@ export class ProjectsService {
   async getProjectBySlug(organizationId: string, slug: string, clerkId: string, userData?: any) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
     if (!user) throw new NotFoundException('User not found');
+    // Prisma throws a 500-producing validation error when the compound unique
+    // key is queried with an undefined organizationId, so a missing orgId
+    // query param must 404 before the lookup.
+    if (!organizationId) {
+      throw new NotFoundException(`Project with slug ${slug} not found`);
+    }
     const proj = await this.prisma.project.findUnique({
       where: { organizationId_slug: { organizationId, slug } },
       select: { id: true, organizationId: true },
@@ -1142,6 +1150,7 @@ export class ProjectsService {
 
         return {
           ...deployment,
+          ingresses: deployment.ingresses.map((ing) => scrubIngress(ing)),
           status: computedStatus,
         };
       })
@@ -1322,7 +1331,11 @@ export class ProjectsService {
         // same fallback.
         const prefetched = nsMap?.get(deployment.name) ?? undefined;
         const computedStatus = await this.deployments.computeDeploymentStatus(deployment, prefetched);
-        const merged = { ...deployment, status: computedStatus };
+        const merged = {
+          ...deployment,
+          ingresses: deployment.ingresses.map((ing) => scrubIngress(ing)),
+          status: computedStatus,
+        };
         return access.canEdit ? merged : this.deployments.scrubDeploymentForViewer(merged as any);
       }),
     );

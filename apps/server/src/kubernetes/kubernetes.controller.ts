@@ -8,6 +8,7 @@ import { AuthorizationService } from '../auth/authorization.service';
 import { PrismaService } from '../prisma/prisma.service';
 
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+const RFC3339_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:\d{2})$/;
 
 @Auth()
 @Controller()
@@ -84,11 +85,23 @@ export class KubernetesController {
     @Query('container') container?: string,
     @Query('tailLines') tailLines?: string,
     @Query('previous') previous?: string,
+    @Query('sinceSeconds') sinceSeconds?: string,
+    @Query('sinceTime') sinceTime?: string,
   ) {
     await this.resolveNamespace(namespace, req, 'edit', 'stream pod logs');
+    if (sinceSeconds && sinceTime) {
+      throw new BadRequestException('sinceSeconds and sinceTime are mutually exclusive');
+    }
+    const parsedSinceSeconds = sinceSeconds ? parseInt(sinceSeconds, 10) : undefined;
+    if (sinceSeconds && (!Number.isInteger(parsedSinceSeconds) || parsedSinceSeconds <= 0)) {
+      throw new BadRequestException('sinceSeconds must be a positive integer');
+    }
+    if (sinceTime && (!RFC3339_RE.test(sinceTime) || Number.isNaN(Date.parse(sinceTime)))) {
+      throw new BadRequestException('sinceTime must be an RFC3339 timestamp');
+    }
     const parsedTailLines = tailLines ? parseInt(tailLines, 10) : 100;
     const wantPrevious = previous === 'true' || previous === '1';
-    return this.k8sWorkload.getPodLogs(podName, namespace, container, parsedTailLines, wantPrevious);
+    return this.k8sWorkload.getPodLogs(podName, namespace, container, parsedTailLines, wantPrevious, parsedSinceSeconds, sinceTime);
   }
 
   // Synchronous one-shot exec. Used by the MCP exec tool and any non-WS

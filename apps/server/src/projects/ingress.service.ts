@@ -21,7 +21,7 @@ import { ProjectAccessService } from './project-access.service';
 import { DeploymentsService } from './deployments.service';
 import { FaviconService } from './favicon.service';
 import { ProjectsService } from './projects.service';
-import { formatSlug, truncateK8sName } from './projects.utils';
+import { formatSlug, scrubIngress, truncateK8sName } from './projects.utils';
 
 const TENANT_INGRESS_CLASS = 'haproxy';
 
@@ -1127,7 +1127,7 @@ export class IngressService {
     }
 
     return {
-      ...ingress,
+      ...scrubIngress(ingress),
       tlsEnabled: !!ingress.tlsSecretName,
       address: ingress.statusAddress,
       routes: k8sRoutes,

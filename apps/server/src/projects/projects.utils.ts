@@ -68,6 +68,25 @@ export function stripR2ProxyCreds<
   } as T;
 }
 
+/**
+ * Strip protection secrets from an ingress row. The bypass secret and the
+ * password hash must only ever leave the server via the dedicated
+ * protection endpoints, which require project edit.
+ */
+export function scrubIngress<
+  T extends {
+    protectionPasswordHash?: string | null;
+    protectionBypassSecret?: string | null;
+  },
+>(ing: T): Omit<T, 'protectionPasswordHash' | 'protectionBypassSecret'> {
+  const {
+    protectionPasswordHash: _protectionPasswordHash,
+    protectionBypassSecret: _protectionBypassSecret,
+    ...rest
+  } = ing;
+  return rest;
+}
+
 export const GIB = 1024 * 1024 * 1024;
 
 export function parseStorageSize(size: string): number | null {
