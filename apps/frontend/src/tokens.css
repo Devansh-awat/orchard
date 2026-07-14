@@ -48,6 +48,11 @@
 	--hue-pink: #ec4899;
 	--hue-red: #ef4444;
 	--hue-amber: #f59e0b;
+
+	--console-bg: #0d1117;
+	--console-text: #c9d1d9;
+	--console-edge: rgba(255, 255, 255, 0.14);
+	--console-raised: rgba(22, 27, 34, 0.95);
 }
 
 :root.dark {

@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Loader2, MemoryStick, TriangleAlert } from 'lucide-svelte';
+	import { Loader2, MemoryStick } from 'lucide-svelte';
 	import {
 		Activity,
 		Boxes,
@@ -12,9 +12,18 @@
 		Trash2,
 		X
 	} from '@jis3r/icons';
-	import { formatCpu, formatMemory, formatRelativeTime, ansiToHtmlLines } from '$lib/utils/format';
-	import { Button, Menu, MenuItem, StatusDot, StatusBadge, podStatus } from '$lib/components/ui';
-	import { ArrowDown } from 'lucide-svelte';
+	import { untrack } from 'svelte';
+	import { formatCpu, formatMemory, formatRelativeTime } from '$lib/utils/format';
+	import {
+		Button,
+		Menu,
+		MenuItem,
+		StatusDot,
+		StatusBadge,
+		podStatus,
+		LogViewer
+	} from '$lib/components/ui';
+	import { PodLogSource } from '$lib/utils/log-sources.svelte';
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
 	import type { Pod, TerminalTabInfo } from '$lib/types/deployment';
 
@@ -24,13 +33,6 @@
 		selectedPod = $bindable(),
 		selectedContainer = $bindable(),
 		scaleReplicas = $bindable(),
-		logs,
-		logsLoading,
-		logsError = null,
-		loadingMoreLogs,
-		logsAtMax,
-		tailLines,
-		logsOutputRef = $bindable(),
 		consoleExpanded,
 		consoleAnimating,
 		consoleRef = $bindable(),
@@ -42,20 +44,12 @@
 		deletingPod,
 		activeConsoleTab = $bindable(),
 		terminalTabs = $bindable(),
-		onFetchLogs,
-		liveLogs = false,
-		onToggleLiveLogs,
-		showPreviousLogs,
-		selectedContainerHasPrevious,
-		onTogglePreviousLogs,
 		onScaleDeployment,
 		onDeletePod,
 		onToggleConsoleExpand,
 		onOpenShell,
 		onCloseTerminalTab,
 		onSelectLogsPod,
-		onLogsScroll,
-		logsScrolledUp = false,
 		onPointerDown,
 		onPointerMove,
 		onPointerUp,
@@ -70,13 +64,6 @@
 		selectedPod: string;
 		selectedContainer: string;
 		scaleReplicas: number;
-		logs: string;
-		logsLoading: boolean;
-		logsError?: string | null;
-		loadingMoreLogs: boolean;
-		logsAtMax: boolean;
-		tailLines: number;
-		logsOutputRef: HTMLPreElement | null;
 		consoleExpanded: boolean;
 		consoleAnimating: boolean;
 		consoleRef: HTMLDivElement | null;
@@ -88,20 +75,12 @@
 		deletingPod: string | null;
 		activeConsoleTab: string;
 		terminalTabs: TerminalTabInfo[];
-		onFetchLogs: () => void;
-		liveLogs?: boolean;
-		onToggleLiveLogs?: () => void;
-		showPreviousLogs: boolean;
-		selectedContainerHasPrevious: boolean;
-		onTogglePreviousLogs: () => void;
 		onScaleDeployment: () => void;
 		onDeletePod: (podName: string) => void;
 		onToggleConsoleExpand: () => void;
 		onOpenShell: (podName: string, container: string) => void;
 		onCloseTerminalTab: (id: string) => void;
 		onSelectLogsPod: (podName: string, containerName?: string) => void;
-		onLogsScroll: (e: Event) => void;
-		logsScrolledUp?: boolean;
 		onPointerDown: (e: PointerEvent) => void;
 		onPointerMove: (e: PointerEvent) => void;
 		onPointerUp: (e: PointerEvent) => void;
@@ -112,33 +91,50 @@
 		podLabel: (podName: string) => string;
 	} = $props();
 
-	const LOG_MAX_LINES = 50_000;
+	let showPreviousLogs = $state(false);
+	let liveLogs = $state(false);
+	let logsScrolledUp = $state(false);
 
-	const logLines = $derived.by(() => {
-		if (!logs) return [] as { key: string; html: string }[];
-		const seen = new Map<string, number>();
-		return ansiToHtmlLines(logs).map((html) => {
-			const n = seen.get(html) ?? 0;
-			seen.set(html, n + 1);
-			return { key: n ? `${html}#${n}` : html, html };
+	const logSource = new PodLogSource({
+		podName: () => selectedPod,
+		namespace: () => deployment?.namespace ?? 'default',
+		container: () => selectedContainer,
+		previous: () => showPreviousLogs
+	});
+
+	$effect(() => {
+		const pod = selectedPod;
+		const container = selectedContainer;
+		if (!pod || !container) return;
+		untrack(() => {
+			showPreviousLogs = false;
+			logsScrolledUp = false;
+			logSource.clear();
+			logSource.refresh();
 		});
 	});
 
-	let newLogsWhileScrolled = $state(false);
-	let prevLogLineCount = 0;
 	$effect(() => {
-		const count = logLines.length;
-		if (count > prevLogLineCount && logsScrolledUp) newLogsWhileScrolled = true;
-		if (!logsScrolledUp) newLogsWhileScrolled = false;
-		prevLogLineCount = count;
+		if (!liveLogs || activeConsoleTab !== 'logs') return;
+		if (!selectedPod || !selectedContainer) return;
+		const handle = setInterval(() => {
+			if (document.hidden) return;
+			logSource.refresh();
+		}, 3000);
+		return () => clearInterval(handle);
 	});
 
-	function jumpToLatest() {
-		newLogsWhileScrolled = false;
-		if (logsOutputRef) {
-			logsOutputRef.scrollTo({ top: logsOutputRef.scrollHeight, behavior: 'smooth' });
-		}
+	function togglePreviousLogs() {
+		showPreviousLogs = !showPreviousLogs;
+		logSource.resetPagination();
+		logSource.refresh();
 	}
+
+	const selectedContainerHasPrevious = $derived.by(() => {
+		const pod = ((deployment?.pods ?? []) as Pod[]).find((p) => p.name === selectedPod);
+		const cont = pod?.containers?.find((c) => c.name === selectedContainer);
+		return !!cont?.lastTermination || (cont?.restartCount ?? 0) > 0;
+	});
 
 	const shellCombos = $derived(
 		((deployment.pods ?? []) as Pod[]).flatMap((pod) =>
@@ -239,7 +235,7 @@
 						</Menu>
 
 						<button
-							onclick={onTogglePreviousLogs}
+							onclick={togglePreviousLogs}
 							disabled={!selectedContainerHasPrevious && !showPreviousLogs}
 							class="console-btn"
 							class:console-btn--warn={showPreviousLogs}
@@ -254,31 +250,29 @@
 						</button>
 
 						<button
-							onclick={onFetchLogs}
-							disabled={logsLoading}
+							onclick={() => logSource.refresh()}
+							disabled={logSource.loading}
 							class="console-btn console-btn--icon"
 							title="Refresh"
 							aria-label="Refresh logs"
 						>
-							{#if logsLoading}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw
+							{#if logSource.loading}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw
 									size={14}
 									class="h-3.5 w-3.5"
 								/>{/if}
 						</button>
 
-						{#if onToggleLiveLogs}
-							<button
-								class="console-btn"
-								class:console-btn--live={liveLogs}
-								onclick={onToggleLiveLogs}
-								title={liveLogs ? 'Stop following new logs' : 'Follow new logs as they arrive'}
-							>
-								{#if liveLogs}
-									<span class="console-tail-dot"></span>
-								{/if}
-								Live
-							</button>
-						{/if}
+						<button
+							class="console-btn"
+							class:console-btn--live={liveLogs}
+							onclick={() => (liveLogs = !liveLogs)}
+							title={liveLogs ? 'Stop following new logs' : 'Follow new logs as they arrive'}
+						>
+							{#if liveLogs}
+								<span class="console-tail-dot"></span>
+							{/if}
+							Live
+						</button>
 					{/if}
 
 					<Menu placement="bottom-end">
@@ -330,38 +324,22 @@
 			<!-- Console body -->
 			<div class="console-body">
 				{#if activeConsoleTab === 'logs'}
-					{#if logsLoading && !logs}
-						<div class="console-empty">
-							<Loader2 class="h-4 w-4 animate-spin" />
-							<span>Loading logs...</span>
-						</div>
-					{:else if logs}
-						<pre
-							class="console-output"
-							bind:this={logsOutputRef}
-							onscroll={onLogsScroll}>{#if loadingMoreLogs}<div class="logs-loading-more"><Loader2
-										class="h-3 w-3 animate-spin"
-									/> Loading earlier logs…</div>{:else if logsAtMax || tailLines >= LOG_MAX_LINES}<div
-									class="logs-loading-more logs-loading-more--end">Start of available logs</div>{/if}{#each logLines as line (line.key)}<span
-									class="console-line"
-									><!-- eslint-disable-line svelte/no-at-html-tags -->{@html line.html}</span
-								>{/each}</pre>
-						{#if newLogsWhileScrolled}
-							<button type="button" class="console-newlogs" onclick={jumpToLatest}>
-								<ArrowDown size={12} /> New logs
-							</button>
-						{/if}
-					{:else if logsError}
-						<div class="console-empty">
-							<TriangleAlert class="h-4 w-4" style="color: var(--error-text-color);" />
-							<span style="color: var(--error-text-color);">{logsError}</span>
-						</div>
-					{:else}
-						<div class="console-empty">
-							<Terminal size={16} class="h-4 w-4 opacity-30" />
-							<span>{selectedPod ? 'No output yet' : 'Select a pod to view logs'}</span>
-						</div>
-					{/if}
+					<LogViewer
+						lines={logSource.lines}
+						loading={logSource.loading}
+						loadingMore={logSource.loadingMore}
+						error={logSource.error}
+						atStart={logSource.atStart}
+						bind:scrolledUp={logsScrolledUp}
+						onLoadEarlier={() => logSource.loadEarlier()}
+					>
+						{#snippet empty()}
+							<div class="console-empty">
+								<Terminal size={16} class="h-4 w-4 opacity-30" />
+								<span>{selectedPod ? 'No output yet' : 'Select a pod to view logs'}</span>
+							</div>
+						{/snippet}
+					</LogViewer>
 				{:else}
 					{#each terminalTabs as ttab (ttab.id)}
 						<PodTerminal

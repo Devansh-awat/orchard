@@ -715,19 +715,6 @@
 	let selectedPod = $state<string>('');
 	let selectedContainer = $state<string>('');
 	let manualPodSelection = $state(false);
-	const LOG_PAGE_SIZE = 500;
-	const LOG_INITIAL_LINES = 100;
-	const LOG_MAX_LINES = 50_000;
-	let tailLines = $state(LOG_INITIAL_LINES);
-	let logsAtMax = $state(false);
-	let loadingMoreLogs = $state(false);
-	let logs = $state<string>('');
-	let logsLoading = $state(false);
-	let logsError = $state<string | null>(null);
-	let liveLogs = $state(false);
-	let logsScrolledUp = $state(false);
-	let showPreviousLogs = $state(false);
-	let logsOutputRef = $state<HTMLPreElement | null>(null);
 	let buildLogs = $state<string>('');
 	let buildLogsLoading = $state(false);
 
@@ -758,29 +745,8 @@
 		const pod = (deployment?.pods ?? []).find((p) => p.name === podName);
 		selectedContainer = containerName || pod?.containers?.[0]?.name || '';
 		manualPodSelection = true;
-		showPreviousLogs = false;
-		logsScrolledUp = false;
-		fetchLogs();
 	}
 
-	function togglePreviousLogs() {
-		showPreviousLogs = !showPreviousLogs;
-		tailLines = LOG_INITIAL_LINES;
-		logsAtMax = false;
-		fetchLogs();
-	}
-
-	const selectedContainerHasPrevious = $derived.by(() => {
-		const pod = (deployment?.pods ?? []).find((p) => p.name === selectedPod);
-		const cont = pod?.containers?.find((c) => c.name === selectedContainer);
-		return !!cont?.lastTermination || (cont?.restartCount ?? 0) > 0;
-	});
-
-	function scrollLogsToBottom() {
-		if (logsOutputRef) {
-			logsOutputRef.scrollTop = logsOutputRef.scrollHeight;
-		}
-	}
 	let scaleReplicas = $state(1);
 	let sliderRef = $state<HTMLDivElement | null>(null);
 	let isDragging = $state(false);
@@ -1359,76 +1325,6 @@
 			}
 		}
 		loading = false;
-	}
-
-	async function fetchLogs(opts?: { preserveScroll?: boolean }) {
-		if (!selectedPod || !selectedContainer) return;
-
-		const preserveScroll = opts?.preserveScroll === true;
-		// Capture scroll geometry before swap so we can re-anchor after.
-		const el = logsOutputRef;
-		const prevScrollHeight = preserveScroll && el ? el.scrollHeight : 0;
-		const prevScrollTop = preserveScroll && el ? el.scrollTop : 0;
-
-		logsLoading = true;
-		try {
-			const response = await apiFetch(
-				`/apiv1/pods/${selectedPod}/logs?namespace=${deployment?.namespace}&container=${selectedContainer}&tailLines=${tailLines}${showPreviousLogs ? '&previous=true' : ''}`
-			);
-			if (response.ok) {
-				const data = await response.json();
-				const next: string = data.logs || '';
-				const prevLineCount = logs ? logs.split('\n').length : 0;
-				const nextLineCount = next ? next.split('\n').length : 0;
-				logs = next;
-				// k8s caps `tailLines` at total pod log buffer; if we asked for more
-				// than is available, line count won't grow. Mark as exhausted so we
-				// stop trying.
-				if (preserveScroll && nextLineCount <= prevLineCount) {
-					logsAtMax = true;
-				}
-				if (preserveScroll && el) {
-					requestAnimationFrame(() => {
-						const cur = logsOutputRef;
-						if (!cur) return;
-						const delta = cur.scrollHeight - prevScrollHeight;
-						cur.scrollTop = prevScrollTop + delta;
-					});
-				}
-				logsError = null;
-			} else {
-				logsError = 'Failed to load logs';
-			}
-		} catch {
-			logsError = 'Failed to load logs';
-		} finally {
-			logsLoading = false;
-		}
-	}
-
-	let lastLoadMoreAt = 0;
-	function onLogsScroll(e: Event) {
-		const el = e.currentTarget as HTMLPreElement;
-		logsScrolledUp = el.scrollHeight - el.scrollTop - el.clientHeight > 60;
-		if (loadingMoreLogs || logsAtMax || tailLines >= LOG_MAX_LINES) return;
-		// Trigger a bit before reaching the very top so it feels seamless.
-		if (el.scrollTop > 80) return;
-		// Throttle so a fast scroll doesn't fire two requests.
-		const now = Date.now();
-		if (now - lastLoadMoreAt < 400) return;
-		lastLoadMoreAt = now;
-
-		loadingMoreLogs = true;
-		tailLines = Math.min(tailLines + LOG_PAGE_SIZE, LOG_MAX_LINES);
-		fetchLogs({ preserveScroll: true }).finally(() => {
-			loadingMoreLogs = false;
-		});
-	}
-
-	function resetLogPagination() {
-		tailLines = LOG_INITIAL_LINES;
-		logsAtMax = false;
-		logsScrolledUp = false;
 	}
 
 	async function fetchBuildLogs() {
@@ -2244,45 +2140,12 @@
 		}
 	}
 
-	// Auto-scroll logs to bottom when they change — but only on initial load /
-	// fresh tail, not when the user is scrolling up to load more historical lines
-	// (that path manages its own scroll position) or has scrolled away from the
-	// bottom to read older output.
-	$effect(() => {
-		if (logs && !loadingMoreLogs && !logsScrolledUp) {
-			requestAnimationFrame(scrollLogsToBottom);
-		}
-	});
-
 	// Build logs are refreshed by fetchDeployment, which is triggered by SSE
 	// `build.changed` events. Just kick off a single fetch on transition.
 	$effect(() => {
 		if (deployment?.buildStatus === 'building') {
 			fetchBuildLogs();
 		}
-	});
-
-	// Pod logs: fetch once when the overview tab is active and selection changes.
-	// The opt-in Live toggle below layers polling on top; logs otherwise refresh
-	// on tab activation, container switch, or manual refresh.
-	$effect(() => {
-		if (tabs.value === 'overview' && selectedPod && selectedContainer) {
-			resetLogPagination();
-			fetchLogs();
-		}
-	});
-
-	// Opt-in live tail for the overview console: poll while the overview tab is
-	// active and the logs console tab is showing. Cleaned up on toggle-off, tab
-	// switch, or unmount.
-	$effect(() => {
-		if (!liveLogs || tabs.value !== 'overview' || activeConsoleTab !== 'logs') return;
-		if (!selectedPod || !selectedContainer) return;
-		const handle = setInterval(() => {
-			if (document.hidden) return;
-			fetchLogs();
-		}, 3000);
-		return () => clearInterval(handle);
 	});
 
 	let projectIngressesFetched = false;
@@ -2339,10 +2202,6 @@
 		selectedPod = '';
 		selectedContainer = '';
 		manualPodSelection = false;
-		logs = '';
-		logsError = null;
-		logsScrolledUp = false;
-		liveLogs = false;
 		buildLogs = '';
 		accumulatedBuildLogs = null;
 		autoDeployFetched = false;
@@ -2807,14 +2666,6 @@
 							bind:selectedPod
 							bind:selectedContainer
 							bind:scaleReplicas
-							{logs}
-							{logsLoading}
-							{logsError}
-							{logsScrolledUp}
-							{loadingMoreLogs}
-							{logsAtMax}
-							{tailLines}
-							bind:logsOutputRef
 							{consoleExpanded}
 							{consoleAnimating}
 							bind:consoleRef
@@ -2826,19 +2677,12 @@
 							{deletingPod}
 							bind:activeConsoleTab
 							bind:terminalTabs
-							onFetchLogs={fetchLogs}
-							{liveLogs}
-							onToggleLiveLogs={() => (liveLogs = !liveLogs)}
-							{showPreviousLogs}
-							{selectedContainerHasPrevious}
-							onTogglePreviousLogs={togglePreviousLogs}
 							onScaleDeployment={scaleDeployment}
 							onDeletePod={deletePod}
 							onToggleConsoleExpand={toggleConsoleExpand}
 							onOpenShell={openShell}
 							onCloseTerminalTab={closeTerminalTab}
 							onSelectLogsPod={selectLogsPod}
-							{onLogsScroll}
 							onPointerDown={handlePointerDown}
 							onPointerMove={handlePointerMove}
 							onPointerUp={handlePointerUp}
