@@ -1,10 +1,11 @@
 <script lang="ts">
-	import { goto, invalidate } from '$app/navigation';
+	import { invalidate } from '$app/navigation';
 	import { onDestroy } from 'svelte';
 	import { apiFetch, toasts, subscribeOrgEvents } from '$lib/stores';
-	import { Plus, Folder, Trash2, Rocket, Globe, Database } from 'lucide-svelte';
+	import { Plus, Folder, Trash2, Rocket, Globe, Database, MoreVertical } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
-	import { Button, Input, EmptyState, Skeleton } from '$lib/components/ui';
+	import { Button, Input, EmptyState, Skeleton, Table, Menu, MenuItem } from '$lib/components/ui';
+	import { formatRelativeTime } from '$lib/utils/format';
 	import type { PageData } from './$types';
 
 	let { data } = $props<{ data: PageData }>();
@@ -38,6 +39,21 @@
 			.replace(/[^a-z0-9]+/g, '-')
 			.replace(/^-|-$/g, '');
 	}
+
+	function swatchStyle(slug: string): string {
+		let hash = 0;
+		for (let i = 0; i < slug.length; i++) hash = (hash * 31 + slug.charCodeAt(i)) >>> 0;
+		const h1 = hash % 360;
+		const h2 = (h1 + 40 + (hash % 80)) % 360;
+		return `background: linear-gradient(135deg, hsl(${h1} 65% 62%), hsl(${h2} 70% 48%))`;
+	}
+
+	const COLUMNS = [
+		{ id: 'name', label: 'Project', width: 'minmax(0, 2fr)' },
+		{ id: 'resources', label: 'Resources', width: 'minmax(0, 1fr)' },
+		{ id: 'created', label: 'Created', width: '7rem' },
+		{ id: 'actions', label: '', width: '2.5rem' }
+	];
 
 	async function fetchProjects() {
 		await invalidate(`org:${orgSlug}:overview`);
@@ -194,17 +210,12 @@
 	{/if}
 
 	{#if loading}
-		<div class="grid">
-			{#each Array(3) as _, i (i)}
-				<div class="card card--skel">
-					<div class="card-top">
-						<Skeleton width="2.25rem" height="2.25rem" rounded="0.5rem" />
-						<div class="sk-col">
-							<Skeleton width="7rem" height="0.7rem" rounded="0.25rem" />
-							<Skeleton width="10rem" height="0.5rem" rounded="0.25rem" />
-						</div>
-					</div>
-					<div class="card-bot"><Skeleton width="5rem" height="0.5rem" rounded="0.25rem" /></div>
+		<div class="skel-rows">
+			{#each Array(4) as _, i (i)}
+				<div class="skel-row">
+					<Skeleton width="1.75rem" height="1.75rem" rounded="0.5rem" />
+					<Skeleton width="10rem" height="0.7rem" rounded="0.25rem" />
+					<Skeleton width="7rem" height="0.55rem" rounded="0.25rem" />
 				</div>
 			{/each}
 		</div>
@@ -213,52 +224,64 @@
 			{#snippet icon()}<Folder size={28} />{/snippet}
 		</EmptyState>
 	{:else}
-		<div class="grid">
-			{#each projects as proj (proj.id)}
-				<div
-					class="card"
-					role="link"
-					tabindex="0"
-					onclick={() => goto(`/${orgSlug}/projects/${proj.slug}`)}
-					onkeydown={(e) => {
-						if (e.key === 'Enter') goto(`/${orgSlug}/projects/${proj.slug}`);
-					}}
-				>
-					<div class="card-top">
-						<div class="card-av"><Folder size={14} /></div>
-						<div class="card-text">
-							<span class="card-name">{proj.name}</span>
-							{#if proj.description}
-								<span class="card-sub">{proj.description}</span>
-							{/if}
-						</div>
-						<button
-							class="card-del"
-							onclick={(e) => {
-								e.stopPropagation();
+		<Table
+			columns={COLUMNS}
+			rows={projects}
+			rowKey={(p) => p.id}
+			rowHref={(p) => `/${orgSlug}/projects/${p.slug}`}
+		>
+			{#snippet row(proj)}
+				<span class="cell-name">
+					<span class="swatch" style={swatchStyle(proj.slug)}></span>
+					<span class="cell-name-text">
+						<span class="cell-name-title">{proj.name}</span>
+						{#if proj.description}
+							<span class="cell-name-sub">{proj.description}</span>
+						{/if}
+					</span>
+				</span>
+				<span class="cell-stats">
+					<span class="stat"
+						><Rocket size={11} /> {proj._count?.deployments ?? proj.deployments?.length ?? 0}</span
+					>
+					<span class="stat"
+						><Globe size={11} /> {proj._count?.ingresses ?? proj.ingresses?.length ?? 0}</span
+					>
+					<span class="stat"
+						><Database size={11} /> {proj._count?.databases ?? proj.databases?.length ?? 0}</span
+					>
+				</span>
+				<span class="cell-created" title={new Date(proj.createdAt).toLocaleString()}>
+					{formatRelativeTime(new Date(proj.createdAt))}
+				</span>
+				<span class="cell-actions">
+					<Menu placement="bottom-end">
+						{#snippet trigger(attrs, _open)}
+							<button
+								class="row-menu-btn"
+								aria-label="Project actions"
+								{...attrs}
+								onclick={(e: MouseEvent) => {
+									e.preventDefault();
+									e.stopPropagation();
+									(attrs as { onclick?: (e: Event) => void }).onclick?.(e);
+								}}
+							>
+								<MoreVertical size={14} />
+							</button>
+						{/snippet}
+						<MenuItem
+							onclick={() => {
 								deleteTarget = proj;
 								deleteModalOpen = true;
 							}}
-							aria-label="Delete"
 						>
-							<Trash2 size={13} />
-						</button>
-					</div>
-					<div class="card-bot">
-						<span class="card-stat"
-							><Rocket size={11} />
-							{proj._count?.deployments ?? proj.deployments?.length ?? 0}</span
-						>
-						<span class="card-stat"
-							><Globe size={11} /> {proj._count?.ingresses ?? proj.ingresses?.length ?? 0}</span
-						>
-						<span class="card-stat"
-							><Database size={11} /> {proj._count?.databases ?? proj.databases?.length ?? 0}</span
-						>
-					</div>
-				</div>
-			{/each}
-		</div>
+							<Trash2 size={14} /> Delete project
+						</MenuItem>
+					</Menu>
+				</span>
+			{/snippet}
+		</Table>
 	{/if}
 </div>
 
@@ -324,120 +347,99 @@
 		min-width: 0;
 	}
 
-	.grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(18rem, 1fr));
-		gap: 0.875rem;
-	}
-
-	.card {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-		padding: 1rem;
-		border-radius: 0.625rem;
-		background: var(--center-channel-bg);
-		text-decoration: none;
-		color: var(--center-channel-color);
-		min-height: 8rem;
-		box-shadow:
-			0 1px 2px rgba(0, 0, 0, 0.04),
-			0 3px 8px rgba(0, 0, 0, 0.03);
-		transition:
-			box-shadow 0.15s,
-			transform 0.15s;
-		cursor: pointer;
-	}
-	.card:hover {
-		box-shadow:
-			0 2px 4px rgba(0, 0, 0, 0.06),
-			0 6px 16px rgba(0, 0, 0, 0.07);
-		transform: translateY(-1px);
-	}
-	.card--skel {
-		pointer-events: none;
-	}
-
-	.card-top {
+	.cell-name {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-	}
-	.card-av {
-		width: 2.25rem;
-		height: 2.25rem;
-		border-radius: 0.5rem;
-		flex-shrink: 0;
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		background: color-mix(in srgb, var(--sidebar-text-active-border) 10%, transparent);
-		color: var(--sidebar-text-active-border);
-	}
-	.card-text {
-		flex: 1;
+		gap: 0.625rem;
 		min-width: 0;
 	}
-	.card-name {
-		display: block;
-		font-size: 0.9375rem;
-		font-weight: 600;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-	.card-sub {
-		display: block;
-		font-size: 0.75rem;
-		color: var(--surface-muted);
-		margin-top: 0.0625rem;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
 
-	.card-del {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.5rem;
-		height: 1.5rem;
-		border-radius: 0.25rem;
-		border: none;
-		background: none;
-		color: var(--surface-muted);
-		cursor: pointer;
-		opacity: 0;
-		transition: all 0.1s;
+	.swatch {
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: 0.5rem;
 		flex-shrink: 0;
 	}
-	.card:hover .card-del {
-		opacity: 1;
-	}
-	.card-del:hover {
-		color: var(--error-text-color);
-		background: color-mix(in srgb, var(--error-text-color) 10%, transparent);
+
+	.cell-name-text {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
 	}
 
-	.card-bot {
+	.cell-name-title {
+		font-size: 0.875rem;
+		font-weight: 600;
+		color: var(--text-default);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.cell-name-sub {
+		font-size: 0.75rem;
+		color: var(--text-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.cell-stats {
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-		margin-top: auto;
-		padding-top: 0.5rem;
 	}
-	.card-stat {
+
+	.stat {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
 		font-size: 0.6875rem;
-		color: var(--surface-muted);
+		color: var(--text-muted);
 	}
 
-	.sk-col {
+	.cell-created {
+		font-size: 0.75rem;
+		color: var(--text-muted);
+		white-space: nowrap;
+	}
+
+	.cell-actions {
+		display: flex;
+		justify-content: flex-end;
+	}
+
+	.row-menu-btn {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: 0.375rem;
+		border: none;
+		background: none;
+		color: var(--text-muted);
+		cursor: pointer;
+		transition:
+			color 120ms ease,
+			background-color 120ms ease;
+	}
+
+	.row-menu-btn:hover {
+		color: var(--text-default);
+		background-color: var(--bg-hover);
+	}
+
+	.skel-rows {
 		display: flex;
 		flex-direction: column;
-		gap: 0.3rem;
-		flex: 1;
+		gap: 0.375rem;
+	}
+
+	.skel-row {
+		display: flex;
+		align-items: center;
+		gap: 0.75rem;
+		padding: 0.625rem 0.75rem;
 	}
 </style>
