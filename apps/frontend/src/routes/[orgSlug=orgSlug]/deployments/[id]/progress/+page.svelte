@@ -5,6 +5,8 @@
 	import { apiFetch, toasts, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
 	import { ArrowLeft, Loader2, ExternalLink, X } from 'lucide-svelte';
 	import DeploymentProgress from '$lib/components/DeploymentProgress.svelte';
+	import MeshGradient from '$lib/components/MeshGradient.svelte';
+	import { Button, Alert, StatusDot, resourceStatus } from '$lib/components/ui';
 
 	interface Deployment {
 		id: string;
@@ -19,10 +21,12 @@
 		githubBranch?: string | null;
 		buildType?: 'dockerfile' | 'railpack' | null;
 		warnings?: Array<{ podName: string; message: string; timestamp: string }>;
+		ingresses?: Array<{ host: string }>;
 		project?: {
 			id: string;
 			name: string;
 			slug: string;
+			backgroundImage?: string | null;
 		};
 	}
 
@@ -138,10 +142,39 @@
 	}
 
 	const canCancel = $derived(deployment?.status === 'building' || deployment?.status === 'pending');
+
+	const failed = $derived(
+		deployment?.status === 'failed' || deployment?.buildStatus === 'failed'
+	);
+
+	const statusChip = $derived(
+		deployment ? resourceStatus(deployment.status, deployment.buildStatus) : null
+	);
+
+	const headline = $derived.by(() => {
+		if (!deployment) return '';
+		if (failed) return `${deployment.name} failed to deploy`;
+		if (canCancel || deployment.buildStatus === 'building') return `Building ${deployment.name}`;
+		return `Deploying ${deployment.name}`;
+	});
+
+	const bgSrc = $derived.by(() => {
+		if (deployment?.project?.backgroundImage) return deployment.project.backgroundImage;
+		const host = deployment?.ingresses?.[0]?.host?.split('/')[0];
+		if (host) return `/apiv1/deployments/favicon?domain=${encodeURIComponent(host)}`;
+		return null;
+	});
+
+	const buildErrorLead = $derived(deployment?.buildError?.trim().split('\n')[0] ?? null);
 </script>
 
 <div class="progress-page min-h-screen">
-	<div class="mx-auto max-w-2xl px-4 py-12">
+	{#if bgSrc}
+		<div class="progress-ambient" aria-hidden="true">
+			<MeshGradient src={bgSrc} class="progress-mesh" />
+		</div>
+	{/if}
+	<div class="progress-content mx-auto max-w-2xl px-4 py-12">
 		<button
 			onclick={() => window.history.back()}
 			class="back-link mb-8 inline-flex items-center gap-2 text-sm cursor-pointer"
@@ -151,31 +184,31 @@
 		</button>
 
 		{#if error}
-			<div class="error-box rounded-lg p-4">
-				<p class="text-sm">{error}</p>
-			</div>
+			<Alert tone="error" title={error} />
 		{:else if loading}
 			<div class="flex flex-col items-center justify-center py-16">
 				<Loader2 class="h-12 w-12 animate-spin text-primary-600" />
-				<p class="mt-4 muted-text">Loading app...</p>
+				<p class="mt-4 text-muted">Loading app...</p>
 			</div>
 		{:else if deployment}
-			<div class="card rounded-2xl p-8 shadow-lg">
+			<div class="rounded-2xl border border-edge bg-surface p-8 shadow-lg">
 				<div class="text-center mb-8">
-					<h1 class="text-2xl font-bold">{deployment.name}</h1>
+					<h1 class="progress-headline">
+						{#if statusChip}
+							<StatusDot meta={statusChip} size={10} />
+						{/if}
+						{headline}
+					</h1>
 					{#if deployment.githubRepo}
-						<div class="mt-2 flex items-center justify-center gap-2 text-sm muted-text">
+						<div class="mt-2 flex items-center justify-center gap-2 text-sm text-muted">
 							<span class="font-mono">{deployment.githubBranch}</span>
 							{#if deployment.buildType}
-								<span
-									class="rounded-full px-2 py-0.5 text-xs font-medium {deployment.buildType ===
-									'railpack'
-										? 'bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-400'
-										: 'bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-400'}"
-								>
+								<span class="progress-meta-sep">&middot;</span>
+								<span class="font-mono">
 									{deployment.buildType === 'railpack' ? 'Railpack' : 'Dockerfile'}
 								</span>
 							{/if}
+							<span class="progress-meta-sep">&middot;</span>
 							<a
 								href={deployment.githubRepo}
 								target="_blank"
@@ -187,6 +220,12 @@
 						</div>
 					{/if}
 				</div>
+
+				{#if failed && buildErrorLead}
+					<div class="mb-6">
+						<Alert tone="error" title={buildErrorLead} />
+					</div>
+				{/if}
 
 				<DeploymentProgress
 					status={deployment.status}
@@ -201,11 +240,7 @@
 
 				<div class="mt-8 flex justify-center gap-3">
 					{#if canCancel}
-						<button
-							onclick={cancelBuild}
-							disabled={canceling}
-							class="btn btn-secondary flex items-center gap-2"
-						>
+						<Button variant="secondary" onclick={cancelBuild} disabled={canceling}>
 							{#if canceling}
 								<Loader2 class="h-4 w-4 animate-spin" />
 								Cancelling...
@@ -213,56 +248,74 @@
 								<X class="h-4 w-4" />
 								Cancel deployment
 							{/if}
-						</button>
+						</Button>
 					{/if}
-					{#if deployment.status === 'failed'}
-						<button onclick={() => window.history.back()} class="btn btn-secondary">
+					{#if failed}
+						<Button variant="secondary" onclick={() => window.history.back()}>
 							Back to project
-						</button>
-						<a href="/{orgSlug}/deployments/{deployment.id}" class="btn btn-primary"> View app </a>
+						</Button>
+						<Button variant="primary" href="/{orgSlug}/deployments/{deployment.id}">View app</Button>
 					{/if}
 				</div>
 			</div>
 
-			<div class="mt-6 text-center text-sm muted-text">
-				{#if deployment.status === 'building' || deployment.status === 'pending'}
+			{#if canCancel}
+				<div class="mt-6 text-center text-sm text-muted">
 					<p>You'll be redirected automatically when the app is ready.</p>
-				{/if}
-			</div>
+				</div>
+			{/if}
 		{/if}
 	</div>
 </div>
 
 <style>
 	.progress-page {
-		background-color: var(--center-channel-bg);
-		color: var(--center-channel-color);
+		position: relative;
+		background-color: var(--bg-app);
+		color: var(--text-default);
+		overflow: hidden;
+	}
+
+	.progress-ambient {
+		position: fixed;
+		inset: 0;
+		overflow: hidden;
+		pointer-events: none;
+		opacity: 0.45;
+	}
+
+	.progress-ambient :global(.progress-mesh) {
+		position: absolute;
+		left: 50%;
+		top: -22rem;
+		transform: translateX(-50%);
+		width: min(72rem, 130vw);
+		height: auto;
+		filter: blur(64px) saturate(1.15);
+	}
+
+	.progress-content {
+		position: relative;
+	}
+
+	.progress-headline {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.625rem;
+		font-size: 1.375rem;
+		font-weight: 700;
+		letter-spacing: -0.01em;
+	}
+
+	.progress-meta-sep {
+		opacity: 0.5;
 	}
 
 	.back-link {
-		color: var(--surface-muted);
+		color: var(--text-muted);
 	}
 
 	.back-link:hover {
-		color: var(--center-channel-color);
-	}
-
-	.muted-text {
-		color: var(--surface-muted);
-	}
-
-	.card {
-		background-color: var(--surface-bg);
-		border: 1px solid var(--surface-border);
-		color: var(--center-channel-color);
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.03),
-			0 1px 2px rgb(0 0 0 / 0.02);
-	}
-
-	.error-box {
-		background-color: rgba(214, 60, 86, 0.1);
-		border: 1px solid var(--error-text-color);
-		color: var(--error-text-color);
+		color: var(--text-default);
 	}
 </style>
