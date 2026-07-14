@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Loader2, RefreshCw, Plus } from 'lucide-svelte';
-	import { Button, Input, StatusPill } from '$lib/components/ui';
+	import { Button, Input, StatusBadge, statusMeta } from '$lib/components/ui';
 	import type { DatabaseDetail, ExtInfo } from './types';
 
 	let {
@@ -77,18 +77,19 @@
 						<div class="flex items-center gap-2 flex-wrap">
 							<span class="db-list-name">{ext.name}</span>
 							{#if ext.installed}
-								<StatusPill
-									tone="online"
-									label={`installed${ext.version ? ` · ${ext.version}` : ''}`}
+								<StatusBadge
+									meta={statusMeta('success', `installed${ext.version ? ` · ${ext.version}` : ''}`)}
 								/>
 							{:else}
-								<StatusPill
-									tone="muted"
-									label={`available${ext.defaultVersion ? ` · ${ext.defaultVersion}` : ''}`}
+								<StatusBadge
+									meta={statusMeta(
+										'neutral',
+										`available${ext.defaultVersion ? ` · ${ext.defaultVersion}` : ''}`
+									)}
 								/>
 							{/if}
 							{#if preloadedExts.includes(ext.name)}
-								<StatusPill tone="warn" label="preloaded" />
+								<StatusBadge meta={statusMeta('warning', 'preloaded')} />
 							{/if}
 						</div>
 						{#if ext.description}

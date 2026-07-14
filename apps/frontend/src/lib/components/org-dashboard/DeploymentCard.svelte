@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { Star, MoreVertical, ExternalLink, RefreshCw, Pin, PinOff, Copy } from 'lucide-svelte';
 	import { springHover, cardTilt } from '$lib/utils/motion.svelte';
-	import { knownIcon, favUrl, dotClass, statusText, timeAgo, springPop } from './helpers.svelte';
-	import { Menu, MenuItem } from '$lib/components/ui';
+	import { knownIcon, favUrl, timeAgo, springPop } from './helpers.svelte';
+	import { Menu, MenuItem, resourceStatus } from '$lib/components/ui';
 	import type { DeploymentSummary, LiveMetricsEntry } from './types';
 
 	let {
@@ -33,6 +33,7 @@
 
 	const icon = $derived(knownIcon(dep.image));
 	const metrics = $derived(liveMetrics?.get(dep.id));
+	const m = $derived(resourceStatus(dep.status, dep.buildStatus));
 
 	function fmtCpu(milli: number): string {
 		if (milli < 1000) return `${Math.round(milli)}m`;
@@ -115,8 +116,8 @@
 	</div>
 	<div class="card-bot">
 		<span class="card-status"
-			><span class="dot {dotClass(dep.status, dep.buildStatus)}"></span>
-			{statusText(dep.status, dep.buildStatus)}</span
+			><span class="dot status--{m.kind}"></span>
+			{m.label}</span
 		>
 		{#if metrics}
 			<span class="card-metrics">{fmtCpu(metrics.cpuMilli)} · {fmtMem(metrics.memoryBytes)}</span>

@@ -12,7 +12,7 @@
 		ExternalLink
 	} from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
-	import { Button, StatusPill, Skeleton } from '$lib/components/ui';
+	import { Button, StatusBadge, resourceStatus, Skeleton } from '$lib/components/ui';
 
 	interface TemplateInstance {
 		id: string;
@@ -40,25 +40,6 @@
 
 	const orgSlug = $derived($page.params.orgSlug);
 	const instanceId = $derived($page.params.instanceId);
-
-	function getStatusTone(status: string): 'online' | 'warn' | 'error' | 'muted' {
-		switch (status?.toLowerCase()) {
-			case 'active':
-			case 'running':
-			case 'ready':
-				return 'online';
-			case 'deploying':
-			case 'pending':
-			case 'building':
-				return 'warn';
-			case 'failed':
-			case 'error':
-			case 'deleting':
-				return 'error';
-			default:
-				return 'muted';
-		}
-	}
 
 	async function fetchInstance() {
 		if (!instance) loading = true;
@@ -179,7 +160,7 @@
 					<h1 class="ti-title">{instance.name}</h1>
 					<div class="ti-meta">
 						<span>{instance.template.displayName}</span>
-						<StatusPill label={instance.status} tone={getStatusTone(instance.status)} />
+						<StatusBadge meta={resourceStatus(instance.status)} />
 					</div>
 				</div>
 			</div>
@@ -210,8 +191,8 @@
 									{/if}
 								</div>
 								<div class="ti-resource-right">
-									<StatusPill label={dep.status} tone={getStatusTone(dep.status)} />
-									<ExternalLink class="h-3.5 w-3.5" style="color: var(--surface-muted)" />
+									<StatusBadge meta={resourceStatus(dep.status)} />
+									<ExternalLink class="h-3.5 w-3.5 text-muted" />
 								</div>
 							</a>
 						{/each}
@@ -233,8 +214,8 @@
 									<span class="ti-resource-detail">{db.dbName}</span>
 								</div>
 								<div class="ti-resource-right">
-									<StatusPill label={db.status} tone={getStatusTone(db.status)} />
-									<ExternalLink class="h-3.5 w-3.5" style="color: var(--surface-muted)" />
+									<StatusBadge meta={resourceStatus(db.status)} />
+									<ExternalLink class="h-3.5 w-3.5 text-muted" />
 								</div>
 							</a>
 						{/each}

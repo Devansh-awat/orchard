@@ -408,7 +408,8 @@
 	line-height: 1.4;
 	letter-spacing: 0.01em;
 	white-space: nowrap;
-	border: 1px solid transparent;
+	border: 1px solid color-mix(in srgb, currentColor 28%, transparent);
+	background-color: color-mix(in srgb, currentColor 14%, transparent);
 }
 .dep-status-dot {
 	width: 0.4rem;
@@ -418,27 +419,39 @@
 	box-shadow: 0 0 0 3px color-mix(in srgb, currentColor 25%, transparent);
 }
 .dep-status-chip--success {
-	color: #fff;
-	background-color: #16a34a;
+	color: var(--status-success);
 }
 .dep-status-chip--warning {
-	color: #fff;
-	background-color: #d97706;
+	color: var(--status-warning);
 }
 .dep-status-chip--error {
-	color: #fff;
-	background-color: #dc2626;
+	color: var(--status-error);
 }
 .dep-status-chip--info {
-	color: #fff;
-	background-color: #2563eb;
+	color: var(--status-info);
 }
 .dep-status-chip--neutral {
-	color: var(--button-color);
-	background-color: var(--surface-muted);
+	color: var(--status-neutral);
 }
-.dep-status-chip .dep-status-dot {
-	box-shadow: 0 0 0 3px rgb(255 255 255 / 0.25);
+.dep-status-chip--progress {
+	color: var(--status-progress);
+}
+.dep-status-dot--pulse {
+	animation: dep-status-dot-pulse 1.6s ease-in-out infinite;
+}
+@keyframes dep-status-dot-pulse {
+	0%,
+	100% {
+		opacity: 1;
+	}
+	50% {
+		opacity: 0.35;
+	}
+}
+@media (prefers-reduced-motion: reduce) {
+	.dep-status-dot--pulse {
+		animation: none;
+	}
 }
 .dep-header-card--hasbg .dep-status-chip {
 	backdrop-filter: blur(8px);

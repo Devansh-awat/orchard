@@ -4,7 +4,7 @@
 	import { invalidate } from '$app/navigation';
 	import { apiFetch, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
 	import { ArrowLeft, Loader2, RefreshCw, Container } from 'lucide-svelte';
-	import { Button, Badge, Select, Input } from '$lib/components/ui';
+	import { Button, Select, Input, StatusBadge, podStatus, statusMeta } from '$lib/components/ui';
 	import type { PageData } from './$types';
 
 	interface ContainerStatus {
@@ -100,20 +100,6 @@
 		}
 	}
 
-	function getStatusTone(phase: string): 'success' | 'warning' | 'error' | 'neutral' {
-		switch (phase?.toLowerCase()) {
-			case 'running':
-				return 'success';
-			case 'pending':
-				return 'warning';
-			case 'failed':
-			case 'error':
-				return 'error';
-			default:
-				return 'neutral';
-		}
-	}
-
 	$effect(() => {
 		if (selectedContainer) {
 			fetchLogs();
@@ -171,7 +157,7 @@
 					{pod.metadata.name}
 				</h1>
 				<span class="mt-2 inline-block">
-					<Badge tone={getStatusTone(pod.status.phase)}>{pod.status.phase}</Badge>
+					<StatusBadge meta={podStatus(pod.status.phase)} />
 				</span>
 			</div>
 			<Button variant="secondary" onclick={() => fetchPodDetails()} disabled={loading}>
@@ -192,7 +178,7 @@
 					<div>
 						<p class="text-sm font-medium" style="color: var(--surface-muted);">Status</p>
 						<span class="mt-1 inline-block">
-							<Badge tone={getStatusTone(pod.status.phase)}>{pod.status.phase}</Badge>
+							<StatusBadge meta={podStatus(pod.status.phase)} />
 						</span>
 					</div>
 					<div>
@@ -237,9 +223,9 @@
 									</div>
 								</div>
 								{#if status}
-									<Badge tone={status.ready ? 'success' : 'error'}>
-										{status.ready ? 'Ready' : 'Not ready'}
-									</Badge>
+									<StatusBadge
+										meta={statusMeta(status.ready ? 'success' : 'error', status.ready ? 'Ready' : 'Not ready')}
+									/>
 								{/if}
 							</div>
 						</div>

@@ -26,27 +26,35 @@ const KIND_ICONS: Record<StatusKind, typeof CircleCheck> = {
 	progress: Loader2
 };
 
-function meta(kind: StatusKind, label: string, pulse = false): StatusMeta {
+export function statusMeta(kind: StatusKind, label: string, pulse = false): StatusMeta {
 	return { kind, label, icon: KIND_ICONS[kind], pulse };
 }
+
+const meta = statusMeta;
 
 function capitalize(s: string): string {
 	return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
 }
 
 export function resourceStatus(status?: string, buildStatus?: string): StatusMeta {
-	if (buildStatus?.toLowerCase() === 'building') return meta('progress', 'Building', true);
+	const bs = buildStatus?.toLowerCase();
+	if (bs === 'building' || bs === 'pending') return meta('progress', 'Building', true);
 	const s = status?.toLowerCase();
 	if (!s) return meta('neutral', 'Unknown');
 	switch (s) {
 		case 'running':
 		case 'ready':
+		case 'active':
+		case 'succeeded':
 			return meta('success', capitalize(s));
 		case 'pending':
 		case 'scaling':
 		case 'restarting':
 		case 'scheduled':
 		case 'deploying':
+		case 'updating':
+		case 'building':
+		case 'creating':
 			return meta('progress', capitalize(s), true);
 		case 'unhealthy':
 			return meta('warning', 'Unhealthy');
@@ -109,13 +117,16 @@ export function podStatus(phase?: string): StatusMeta {
 	if (!p) return meta('neutral', 'Unknown');
 	switch (p) {
 		case 'running':
-			return meta('success', 'Running');
+		case 'ready':
+			return meta('success', capitalize(p));
 		case 'pending':
-			return meta('progress', 'Pending', true);
+		case 'scheduled':
+			return meta('progress', capitalize(p), true);
 		case 'succeeded':
 			return meta('success', 'Succeeded');
 		case 'failed':
 		case 'error':
+		case 'crashing':
 			return meta('error', capitalize(p));
 		case 'terminating':
 			return meta('error', 'Terminating', true);

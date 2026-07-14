@@ -13,7 +13,7 @@
 		X
 	} from '@jis3r/icons';
 	import { formatCpu, formatMemory, formatRelativeTime, ansiToHtmlLines } from '$lib/utils/format';
-	import { Button, Menu, MenuItem } from '$lib/components/ui';
+	import { Button, Menu, MenuItem, StatusDot, StatusBadge, podStatus } from '$lib/components/ui';
 	import { ArrowDown } from 'lucide-svelte';
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
 	import type { Pod, TerminalTabInfo } from '$lib/types/deployment';
@@ -63,7 +63,6 @@
 		onTrackClick,
 		onSetTabMetrics,
 		onKeydownSlider,
-		getStatusColor,
 		podLabel
 	}: {
 		deployment: any;
@@ -110,7 +109,6 @@
 		onTrackClick: (e: MouseEvent) => void;
 		onSetTabMetrics: () => void;
 		onKeydownSlider: (e: KeyboardEvent) => void;
-		getStatusColor: (status: string) => string;
 		podLabel: (podName: string) => string;
 	} = $props();
 
@@ -525,16 +523,7 @@
 									}}
 								>
 									<div class="flex items-center gap-2 min-w-0">
-										<span
-											class="h-1.5 w-1.5 rounded-full shrink-0"
-											style="background-color: {pod.status?.toLowerCase() === 'ready'
-												? 'var(--online-indicator)'
-												: ['crashing', 'failed', 'error'].includes(pod.status?.toLowerCase() ?? '')
-													? 'var(--error-text-color)'
-													: pod.status?.toLowerCase() === 'scheduled'
-														? 'var(--away-indicator)'
-														: 'var(--surface-muted)'};"
-										></span>
+										<StatusDot meta={podStatus(pod.status)} size={6} />
 										<span class="font-mono text-xs truncate">{podLabel(pod.name)}</span>
 									</div>
 									<div
@@ -546,7 +535,7 @@
 										{#if term}
 											<span
 												class="badge text-[9px] px-1 py-0.5"
-												style="background-color: color-mix(in srgb, var(--error-text-color) 15%, transparent); color: var(--error-text-color);"
+												style="background-color: color-mix(in srgb, var(--status-error) 15%, transparent); color: var(--status-error);"
 												title="Last terminated: {term.reason}{term.exitCode != null
 													? ` (exit ${term.exitCode})`
 													: ''}">{term.reason}</span
@@ -554,13 +543,11 @@
 										{:else if (pod.restartCount ?? 0) > 0}
 											<span
 												class="badge text-[9px] px-1 py-0.5"
-												style="background-color: color-mix(in srgb, var(--away-indicator) 15%, transparent); color: var(--away-indicator);"
+												style="background-color: color-mix(in srgb, var(--status-warning) 15%, transparent); color: var(--status-warning);"
 												title="{pod.restartCount} restart(s)">↻ {pod.restartCount}</span
 											>
 										{/if}
-										<span class="badge {getStatusColor(pod.status)} text-[9px] px-1 py-0.5"
-											>{pod.status}</span
-										>
+										<StatusBadge meta={podStatus(pod.status)} />
 									</div>
 								</button>
 								<button

@@ -2,6 +2,7 @@
 	import { Server, GitBranch, Plus, Database as DatabaseIcon, LayoutTemplate } from 'lucide-svelte';
 	import { motionStagger, springHover, cardTilt } from '$lib/utils/motion.svelte';
 	import { mergeAttrs } from 'melt';
+	import { StatusBadge, resourceStatus, statusMeta } from '$lib/components/ui';
 	import type { Deployment, DatabaseSummary, TemplateInstanceSummary } from './types';
 
 	let {
@@ -55,45 +56,6 @@
 		return null;
 	}
 
-	function getStatusColor(status: string) {
-		switch (status?.toLowerCase()) {
-			case 'running':
-				return 'pj-status-running';
-			case 'pending':
-			case 'restarting':
-			case 'scaling':
-				return 'pj-status-pending';
-			case 'failed':
-			case 'error':
-			case 'stopped':
-			case 'unhealthy':
-				return 'pj-status-error';
-			default:
-				return 'pj-status-neutral';
-		}
-	}
-
-	function getStatusLabel(status: string) {
-		switch (status?.toLowerCase()) {
-			case 'running':
-				return 'Running';
-			case 'restarting':
-				return 'Restarting';
-			case 'scaling':
-				return 'Scaling';
-			case 'failed':
-				return 'Failed';
-			case 'stopped':
-				return 'Stopped';
-			case 'unhealthy':
-				return 'Unhealthy';
-			case 'pending':
-				return 'Pending';
-			default:
-				return status || 'Unknown';
-		}
-	}
-
 	// Derive whether there are any deployments at all (before filtering)
 	const hasAnyDeployments = $derived(
 		filteredDeployments.length > 0 || deploymentSearch.trim().length > 0
@@ -117,6 +79,7 @@
 				onSelect: () => onOpenDeployment(deployment.id)
 			})}
 			{@const host = deployment.ingresses?.[0]?.host?.split('/')[0]}
+			{@const m = resourceStatus(deployment.status)}
 			<a
 				class="pj-deployment-card"
 				class:is-highlighted={item.highlighted}
@@ -141,12 +104,10 @@
 								>{deployment.name.charAt(0).toUpperCase()}</span
 							>
 						{/if}
-						<span class="pj-deployment-favicon-dot {getStatusColor(deployment.status)}"></span>
+						<span class="pj-deployment-favicon-dot status--{m.kind}"></span>
 					</div>
 					<div class="pj-deployment-badges">
-						<span class="pj-deployment-status-badge {getStatusColor(deployment.status)}">
-							{getStatusLabel(deployment.status)}
-						</span>
+						<StatusBadge meta={m} />
 						{#if deployment.buildStatus && deployment.buildStatus !== 'none' && deployment.buildStatus !== 'succeeded'}
 							<span class="pj-deployment-build-badge pj-build-{deployment.buildStatus}">
 								Deploy: {deployment.buildStatus === 'building'
@@ -208,13 +169,7 @@
 					(ls?.lastTerminationReason && ls.lastTerminationReason !== 'Completed') ||
 					(ls?.restartCount ?? 0) >= 5
 				)}
-			{@const effectiveStatus = unhealthy ? 'unhealthy' : db.status}
-			{@const badgeColor =
-				effectiveStatus === 'ready'
-					? 'var(--pj-color-green)'
-					: effectiveStatus === 'error' || effectiveStatus === 'unhealthy'
-						? 'var(--pj-color-red)'
-						: 'var(--pj-color-amber)'}
+			{@const dbMeta = unhealthy ? statusMeta('warning', 'Unhealthy', true) : resourceStatus(db.status)}
 			<a
 				href="/{orgSlug}/databases/{db.id}"
 				class="pj-deployment-card"
@@ -223,24 +178,10 @@
 				{@attach cardTilt({ max: 5 })}
 			>
 				<div class="pj-deployment-card-top">
-					<div
-						class="pj-deployment-indicator"
-						style="background-color: color-mix(in srgb, {unhealthy
-							? 'var(--pj-color-red)'
-							: 'var(--pj-color-green)'} 12%, transparent)"
-					>
-						<DatabaseIcon
-							class="h-5 w-5"
-							style="color: {unhealthy ? 'var(--pj-color-red)' : 'var(--pj-color-green)'}"
-						/>
+					<div class="pj-deployment-indicator status--{dbMeta.kind}">
+						<DatabaseIcon class="h-5 w-5" />
 					</div>
-					<span
-						class="pj-deployment-status-badge"
-						class:pj-status-unhealthy={unhealthy}
-						style="background-color: color-mix(in srgb, {badgeColor} 15%, transparent); color: {badgeColor}"
-					>
-						{effectiveStatus}
-					</span>
+					<StatusBadge meta={dbMeta} />
 				</div>
 				<div class="pj-deployment-card-body">
 					<span class="pj-deployment-name">{db.name}</span>
@@ -271,26 +212,10 @@
 				{@attach cardTilt({ max: 5 })}
 			>
 				<div class="pj-deployment-card-top">
-					<div
-						class="pj-deployment-indicator"
-						style="background-color: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent)"
-					>
-						<LayoutTemplate class="h-5 w-5" style="color: var(--sidebar-text-active-border)" />
+					<div class="pj-deployment-indicator" style="color: var(--accent)">
+						<LayoutTemplate class="h-5 w-5" />
 					</div>
-					<span
-						class="pj-deployment-status-badge"
-						style="background-color: color-mix(in srgb, {ti.status === 'active'
-							? 'var(--pj-color-green)'
-							: ti.status === 'failed'
-								? 'var(--pj-color-red)'
-								: 'var(--pj-color-amber)'} 15%, transparent); color: {ti.status === 'active'
-							? 'var(--pj-color-green)'
-							: ti.status === 'failed'
-								? 'var(--pj-color-red)'
-								: 'var(--pj-color-amber)'}"
-					>
-						{ti.status}
-					</span>
+					<StatusBadge meta={resourceStatus(ti.status)} />
 				</div>
 				<div class="pj-deployment-card-body">
 					<span class="pj-deployment-name">{ti.name}</span>

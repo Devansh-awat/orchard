@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Loader2, Github, Building2, ExternalLink, TriangleAlert } from 'lucide-svelte';
 	import { Plus } from '@jis3r/icons';
-	import { Button, StatusPill } from '$lib/components/ui';
+	import { Button, StatusBadge, statusMeta } from '$lib/components/ui';
 	import SettingsSection from './SettingsSection.svelte';
 	import IntegrationCard from './IntegrationCard.svelte';
 	import ConnectPrompt from './ConnectPrompt.svelte';
@@ -43,7 +43,12 @@
 	{#snippet icon(_hovered)}<Github class="h-[18px] w-[18px]" />{/snippet}
 	{#snippet badge()}
 		{#if !loading}
-			<StatusPill active={githubLinked} label={githubLinked ? 'Connected' : 'Not connected'} />
+			<StatusBadge
+				meta={statusMeta(
+					githubLinked ? 'success' : 'neutral',
+					githubLinked ? 'Connected' : 'Not connected'
+				)}
+			/>
 		{/if}
 	{/snippet}
 

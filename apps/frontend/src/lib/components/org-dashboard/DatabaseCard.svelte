@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { springHover, cardTilt } from '$lib/utils/motion.svelte';
 	import { IMG_ICONS, timeAgo } from './helpers.svelte';
+	import { resourceStatus } from '$lib/components/ui';
 	import type { DatabaseSummary } from './types';
 
 	let {
@@ -12,6 +13,7 @@
 	} = $props();
 
 	const dbIcon = IMG_ICONS.postgres;
+	const m = $derived(resourceStatus(db.status));
 </script>
 
 <a
@@ -29,14 +31,8 @@
 	</div>
 	<div class="card-bot">
 		<span class="card-status">
-			<span
-				class="dot {db.status === 'ready'
-					? 'dot--green'
-					: db.status === 'error'
-						? 'dot--red'
-						: 'dot--amber'}"
-			></span>
-			{db.status === 'ready' ? 'Running' : db.status.charAt(0).toUpperCase() + db.status.slice(1)}
+			<span class="dot status--{m.kind}"></span>
+			{m.label}
 		</span>
 		<span class="card-meta">{timeAgo(db.updatedAt)}</span>
 	</div>

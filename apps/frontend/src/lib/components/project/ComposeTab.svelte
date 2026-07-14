@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { FileText, Plus, Loader2 } from 'lucide-svelte';
 	import { motionStagger, springHover, cardTilt } from '$lib/utils/motion.svelte';
+	import { StatusBadge, resourceStatus } from '$lib/components/ui';
 	import type { ComposeStackSummary } from './types';
 
 	let {
@@ -60,26 +61,10 @@
 				{@attach cardTilt({ max: 5 })}
 			>
 				<div class="pj-deployment-card-top">
-					<div
-						class="pj-deployment-indicator"
-						style="background-color: color-mix(in srgb, #0db7ed 12%, transparent)"
-					>
-						<FileText class="h-5 w-5" style="color: #0db7ed" />
+					<div class="pj-deployment-indicator" style="color: var(--hue-blue)">
+						<FileText class="h-5 w-5" />
 					</div>
-					<span
-						class="pj-deployment-status-badge"
-						style="background-color: color-mix(in srgb, {cs.status === 'active'
-							? 'var(--pj-color-green)'
-							: cs.status === 'failed'
-								? 'var(--pj-color-red)'
-								: 'var(--pj-color-amber)'} 15%, transparent); color: {cs.status === 'active'
-							? 'var(--pj-color-green)'
-							: cs.status === 'failed'
-								? 'var(--pj-color-red)'
-								: 'var(--pj-color-amber)'}"
-					>
-						{cs.status}
-					</span>
+					<StatusBadge meta={resourceStatus(cs.status)} />
 				</div>
 				<div class="pj-deployment-card-body">
 					<span class="pj-deployment-name">{cs.name}</span>

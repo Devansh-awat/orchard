@@ -3,6 +3,7 @@
 	import { Play, RefreshCw, Trash2 } from '@jis3r/icons';
 	import { motionStagger, cardTilt } from '$lib/utils/motion.svelte';
 	import { envBadgeColor } from '$lib/utils/format';
+	import type { StatusMeta } from '$lib/components/ui';
 
 	let {
 		deployment,
@@ -35,8 +36,8 @@
 		projectBgImage: string | null;
 		headerCollapsed: boolean;
 		springCollapse: (collapsed: () => boolean) => (el: Element) => void;
-		deploymentStatusChip: { label: string; tone: string };
-		debugChips?: { label: string; tone: string }[];
+		deploymentStatusChip: StatusMeta;
+		debugChips?: StatusMeta[];
 		repoUrl: string | undefined;
 		rebuilding: boolean;
 		restarting: boolean;
@@ -83,8 +84,9 @@
 	<div class="dep-header-top">
 		<div class="dep-header-identity">
 			<h1 class="dep-header-name">{deployment.name}</h1>
-			<span class="dep-status-chip dep-status-chip--{deploymentStatusChip.tone}">
-				<span class="dep-status-dot"></span>
+			<span class="dep-status-chip dep-status-chip--{deploymentStatusChip.kind}">
+				<span class="dep-status-dot" class:dep-status-dot--pulse={deploymentStatusChip.pulse}
+				></span>
 				{deploymentStatusChip.label}
 			</span>
 			{#if deployment.environment}
@@ -98,8 +100,8 @@
 				</span>
 			{/if}
 			{#each debugChips as chip (chip.label)}
-				<span class="dep-status-chip dep-status-chip--{chip.tone}">
-					<span class="dep-status-dot"></span>
+				<span class="dep-status-chip dep-status-chip--{chip.kind}">
+					<span class="dep-status-dot" class:dep-status-dot--pulse={chip.pulse}></span>
 					{chip.label}
 				</span>
 			{/each}

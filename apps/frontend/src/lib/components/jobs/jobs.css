@@ -37,30 +37,6 @@
 	color: var(--center-channel-color);
 }
 
-.job-status-dot {
-	display: inline-block;
-	width: 6px;
-	height: 6px;
-	border-radius: 9999px;
-	background: currentColor;
-	margin-right: 0.3rem;
-	flex-shrink: 0;
-}
-
-.job-status-dot--pulse {
-	animation: job-pulse 1.4s ease-in-out infinite;
-}
-
-@keyframes job-pulse {
-	0%,
-	100% {
-		opacity: 1;
-	}
-	50% {
-		opacity: 0.35;
-	}
-}
-
 /* ------------------------------------------------------------- card list */
 
 .job-card {

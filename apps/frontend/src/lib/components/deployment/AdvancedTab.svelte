@@ -10,7 +10,7 @@
 		Wifi
 	} from '@jis3r/icons';
 	import { isSuperAdmin } from '$lib/stores';
-	import { SectionCard, StatusPill } from '$lib/components/ui';
+	import { SectionCard, StatusBadge, statusMeta } from '$lib/components/ui';
 	import type { AutoDeployStatus, GitHubDeploymentRecord } from '$lib/types/deployment';
 
 	let {
@@ -243,7 +243,7 @@
 	<SectionCard title="Auto-deploy">
 		{#snippet actions()}
 			{#if deployment.githubRepo && autoDeployStatus?.enabled}
-				<StatusPill tone="online" label="Active" />
+				<StatusBadge meta={statusMeta('success', 'Active')} />
 				<button
 					onclick={onDisableAutoDeploy}
 					disabled={disablingAutoDeploy}

@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Loader2 } from 'lucide-svelte';
-	import { Button, Field, Input, Select, StatusPill } from '$lib/components/ui';
+	import { Button, Field, Input, Select, StatusBadge, statusMeta } from '$lib/components/ui';
+	import type { StatusMeta } from '$lib/components/ui';
 	import type { DatabaseDetail, Backup, SchedulePreset } from './types';
 
 	let {
@@ -43,10 +44,10 @@
 		formatDate: (s: string) => string;
 	} = $props();
 
-	function backupTone(status: string): 'online' | 'warn' | 'error' {
-		if (status === 'completed') return 'online';
-		if (status === 'failed') return 'error';
-		return 'warn';
+	function backupMeta(status: string): StatusMeta {
+		if (status === 'completed') return statusMeta('success', status);
+		if (status === 'failed') return statusMeta('error', status);
+		return statusMeta('progress', status, true);
 	}
 </script>
 
@@ -161,7 +162,7 @@
 						<div class="min-w-0 flex-1">
 							<div class="flex items-center gap-2 flex-wrap">
 								<span class="db-list-name">{backup.label}</span>
-								<StatusPill tone={backupTone(backup.status)} label={backup.status} />
+								<StatusBadge meta={backupMeta(backup.status)} />
 							</div>
 							<div class="db-list-meta">
 								<span class="db-list-meta-tag">{backup.type}</span>

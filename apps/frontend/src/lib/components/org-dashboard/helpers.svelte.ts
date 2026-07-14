@@ -1,4 +1,6 @@
 import { animate } from 'motion';
+import { resourceStatus } from '$lib/components/ui';
+import type { StatusKind } from '$lib/components/ui';
 import type { ProjectGroup } from './types';
 
 export const IMG_ICONS: Record<string, string> = {
@@ -34,22 +36,6 @@ export function knownIcon(img?: string): string | null {
 	return null;
 }
 
-export function dotClass(s?: string, bs?: string) {
-	if (bs === 'building') return 'dot--amber';
-	if (!s) return 'dot--gray';
-	const l = s.toLowerCase();
-	if (l === 'running') return 'dot--green';
-	if (['pending', 'restarting', 'scaling'].includes(l)) return 'dot--amber';
-	if (['failed', 'error', 'deleting', 'stopped', 'unhealthy'].includes(l)) return 'dot--red';
-	return 'dot--gray';
-}
-
-export function statusText(s?: string, bs?: string): string {
-	if (bs === 'building') return 'Building';
-	if (!s) return 'Unknown';
-	return s.charAt(0).toUpperCase() + s.slice(1).toLowerCase();
-}
-
 export function timeAgo(d?: string): string {
 	if (!d) return '';
 	const s = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
@@ -71,15 +57,13 @@ export function projectStatusSummary(g: ProjectGroup) {
 	let green = 0;
 	let amber = 0;
 	let red = 0;
-	const bump = (cls: string) => {
-		if (cls === 'dot--green') green++;
-		else if (cls === 'dot--amber') amber++;
-		else if (cls === 'dot--red') red++;
+	const bump = (kind: StatusKind) => {
+		if (kind === 'success') green++;
+		else if (kind === 'progress' || kind === 'warning') amber++;
+		else if (kind === 'error') red++;
 	};
-	for (const d of g.deps) bump(dotClass(d.status, d.buildStatus));
-	for (const db of g.dbs) {
-		bump(db.status === 'ready' ? 'dot--green' : db.status === 'error' ? 'dot--red' : 'dot--amber');
-	}
+	for (const d of g.deps) bump(resourceStatus(d.status, d.buildStatus).kind);
+	for (const db of g.dbs) bump(resourceStatus(db.status).kind);
 	if (!green && !amber && !red) return null;
 	return { green, amber, red };
 }

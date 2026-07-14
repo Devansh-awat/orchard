@@ -16,10 +16,9 @@
 		formatBuildElapsed,
 		sanitizeLogs,
 		envVarsToRaw,
-		rawToEnvVars,
-		getStatusColor,
-		getDeploymentStatusLabel
+		rawToEnvVars
 	} from '$lib/components/deployment/deployment-helpers';
+	import { resourceStatus } from '$lib/components/ui';
 	import {
 		apiFetch,
 		toasts,
@@ -493,25 +492,11 @@
 	});
 	const noPodsReady = $derived(debugAlerts || noPodsReadyConfirmed);
 
-	// Deployment status chip: derives a single user-facing label + tone from
-	// buildStatus + status. buildStatus dominates when a build is in flight.
-	type StatusTone = 'success' | 'warning' | 'error' | 'neutral' | 'info';
 	const deploymentStatusChip = $derived.by(() => {
 		const forced = debugStatus;
-		const bs = forced === 'building' ? 'building' : forced ? 'none' : deployment?.buildStatus;
-		const s = (forced && forced !== 'building' ? forced : (deployment?.status ?? '')).toLowerCase();
-		if (bs === 'building' || bs === 'pending')
-			return { label: 'Building', tone: 'info' as StatusTone };
-		if (!s) return { label: 'Unknown', tone: 'neutral' as StatusTone };
-		if (s === 'running') return { label: 'Running', tone: 'success' as StatusTone };
-		if (s === 'pending') return { label: 'Pending', tone: 'warning' as StatusTone };
-		if (s === 'scaling') return { label: 'Scaling', tone: 'warning' as StatusTone };
-		if (s === 'restarting') return { label: 'Restarting', tone: 'warning' as StatusTone };
-		if (s === 'unhealthy') return { label: 'Unhealthy', tone: 'error' as StatusTone };
-		if (s === 'failed' || s === 'error') return { label: 'Failed', tone: 'error' as StatusTone };
-		if (s === 'stopped') return { label: 'Stopped', tone: 'neutral' as StatusTone };
-		if (s === 'deleting') return { label: 'Deleting', tone: 'error' as StatusTone };
-		return { label: s.charAt(0).toUpperCase() + s.slice(1), tone: 'neutral' as StatusTone };
+		if (forced === 'building') return resourceStatus('', 'building');
+		if (forced) return resourceStatus(forced);
+		return resourceStatus(deployment?.status ?? '', deployment?.buildStatus);
 	});
 	const activePods = $derived(
 		deployment?.pods?.filter((pod) => pod.status?.toLowerCase() !== 'succeeded') ?? []
@@ -1119,15 +1104,15 @@
 	const debugAlerts = $derived($page.url.searchParams.has('debugAlerts'));
 	const debugStatus = $derived($page.url.searchParams.get('debugStatus'));
 	const DEBUG_CHIPS = [
-		{ label: 'Building', tone: 'info' },
-		{ label: 'Pending', tone: 'warning' },
-		{ label: 'Scaling', tone: 'warning' },
-		{ label: 'Restarting', tone: 'warning' },
-		{ label: 'Unhealthy', tone: 'error' },
-		{ label: 'Failed', tone: 'error' },
-		{ label: 'Stopped', tone: 'neutral' },
-		{ label: 'Deleting', tone: 'error' },
-		{ label: 'Unknown', tone: 'neutral' }
+		resourceStatus('', 'building'),
+		resourceStatus('pending'),
+		resourceStatus('scaling'),
+		resourceStatus('restarting'),
+		resourceStatus('unhealthy'),
+		resourceStatus('failed'),
+		resourceStatus('stopped'),
+		resourceStatus('deleting'),
+		resourceStatus('')
 	];
 	const DEBUG_POD_WARNINGS = [
 		{
@@ -2250,19 +2235,6 @@
 		}
 	}
 
-	function getBuildStatusColor(buildStatus: string) {
-		switch (buildStatus?.toLowerCase()) {
-			case 'succeeded':
-				return 'badge-success';
-			case 'building':
-				return 'badge-warning';
-			case 'failed':
-				return 'badge-error';
-			default:
-				return 'badge-neutral';
-		}
-	}
-
 	function formatBuildDuration(seconds: number): string {
 		if (seconds < 60) {
 			return `${seconds}s`;
@@ -2902,7 +2874,6 @@
 								tabs.value = 'metrics';
 							}}
 							onKeydownSlider={handleSliderKeydown}
-							{getStatusColor}
 							{podLabel}
 						/>
 					{:else if tab.id === 'environment'}

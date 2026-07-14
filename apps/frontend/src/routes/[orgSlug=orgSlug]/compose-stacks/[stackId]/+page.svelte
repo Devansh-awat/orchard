@@ -13,6 +13,7 @@
 		RefreshCw
 	} from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import { resourceStatus } from '$lib/components/ui';
 
 	interface ChildDeployment {
 		id: string;
@@ -51,27 +52,6 @@
 
 	const orgSlug = $derived($page.params.orgSlug);
 	const stackId = $derived($page.params.stackId);
-
-	function getStatusColor(status: string) {
-		switch (status?.toLowerCase()) {
-			case 'active':
-			case 'running':
-			case 'ready':
-			case 'succeeded':
-				return '#22c55e';
-			case 'deploying':
-			case 'updating':
-			case 'pending':
-			case 'building':
-				return '#f59e0b';
-			case 'failed':
-			case 'error':
-			case 'deleting':
-				return 'var(--error-text-color)';
-			default:
-				return 'var(--surface-muted)';
-		}
-	}
 
 	function githubRepoLabel(url: string | null | undefined): string {
 		if (!url) return '—';
@@ -223,14 +203,14 @@
 		<div class="cs-header">
 			<div class="cs-header-info">
 				<div class="cs-header-icon">
-					<FileText class="h-5 w-5" style="color: #0db7ed" />
+					<FileText class="h-5 w-5" style="color: var(--hue-blue)" />
 				</div>
 				<div>
 					<h1 class="cs-title">{stack.name}</h1>
 					<p class="cs-meta">
 						Compose stack &middot;
-						<span class="cs-status" style="color: {getStatusColor(stack.status)}"
-							>{stack.status}</span
+						<span class="cs-status status--{resourceStatus(stack.status).kind}"
+							>{resourceStatus(stack.status).label}</span
 						>
 					</p>
 				</div>
@@ -340,15 +320,16 @@
 						</div>
 						<div class="cs-resource-right">
 							{#if dep.buildStatus === 'building'}
-								<span class="cs-resource-status" style="color: #f59e0b">
+								<span class="cs-resource-status status--progress">
 									<Loader2 class="h-3 w-3 animate-spin" /> building
 								</span>
 							{:else}
-								<span class="cs-resource-status" style="color: {getStatusColor(dep.status)}">
-									{dep.status}
+								{@const m = resourceStatus(dep.status)}
+								<span class="cs-resource-status status--{m.kind}">
+									{m.label}
 								</span>
 							{/if}
-							<ExternalLink class="h-3.5 w-3.5" style="color: var(--surface-muted)" />
+							<ExternalLink class="h-3.5 w-3.5 text-muted" />
 						</div>
 					</a>
 				{:else}

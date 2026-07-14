@@ -153,61 +153,6 @@ export function sanitizeLogs(logs: string): string {
 	return sanitized;
 }
 
-export function getStatusColor(status: string) {
-	switch (status?.toLowerCase()) {
-		case 'ready':
-		case 'running':
-			return 'badge-success';
-		case 'scheduled':
-		case 'scaling':
-		case 'restarting':
-		case 'pending':
-			return 'badge-warning';
-		case 'unhealthy':
-			return 'badge-warning';
-		case 'stopped':
-		case 'failed':
-		case 'error':
-		case 'crashing':
-			return 'badge-error';
-		default:
-			return 'badge-neutral';
-	}
-}
-
-export function getDeploymentStatusLabel(status: string) {
-	switch (status?.toLowerCase()) {
-		case 'running':
-			return 'Running';
-		case 'restarting':
-			return 'Restarting';
-		case 'scaling':
-			return 'Scaling';
-		case 'failed':
-			return 'Failed';
-		case 'stopped':
-			return 'Stopped';
-		case 'unhealthy':
-			return 'Unhealthy';
-		case 'pending':
-			return 'Pending';
-		default:
-			return status || 'Unknown';
-	}
-}
-
-export function getBuildStatusColor(buildStatus: string) {
-	switch (buildStatus?.toLowerCase()) {
-		case 'succeeded':
-			return 'badge-success';
-		case 'building':
-			return 'badge-warning';
-		case 'failed':
-			return 'badge-error';
-		default:
-			return 'badge-neutral';
-	}
-}
 
 /** Translate raw kubelet/controller messages into plain-English */
 export type WarningSeverity = 'critical' | 'error' | 'warning' | 'info';

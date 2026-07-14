@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Loader2, Globe } from 'lucide-svelte';
-	import { Button, StatusPill } from '$lib/components/ui';
+	import { Button, StatusBadge, statusMeta } from '$lib/components/ui';
 	import SettingsSection from './SettingsSection.svelte';
 	import IntegrationCard from './IntegrationCard.svelte';
 	import ConnectPrompt from './ConnectPrompt.svelte';
@@ -34,9 +34,11 @@
 	{#snippet icon(_hovered)}<Globe class="h-[18px] w-[18px]" />{/snippet}
 	{#snippet badge()}
 		{#if !tailscaleLoading}
-			<StatusPill
-				active={tailscaleLinked}
-				label={tailscaleLinked ? 'Connected' : 'Not connected'}
+			<StatusBadge
+				meta={statusMeta(
+					tailscaleLinked ? 'success' : 'neutral',
+					tailscaleLinked ? 'Connected' : 'Not connected'
+				)}
 			/>
 		{/if}
 	{/snippet}

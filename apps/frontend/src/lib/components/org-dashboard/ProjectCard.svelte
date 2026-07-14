@@ -162,9 +162,9 @@
 			{/if}
 			{#if summary}
 				<span class="proj-summary">
-					{#if summary.green > 0}<span class="dot dot--green"></span>{summary.green}{/if}
-					{#if summary.amber > 0}<span class="dot dot--amber"></span>{summary.amber}{/if}
-					{#if summary.red > 0}<span class="dot dot--red"></span>{summary.red}{/if}
+					{#if summary.green > 0}<span class="dot status--success"></span>{summary.green}{/if}
+					{#if summary.amber > 0}<span class="dot status--warning"></span>{summary.amber}{/if}
+					{#if summary.red > 0}<span class="dot status--error"></span>{summary.red}{/if}
 				</span>
 			{/if}
 		</div>
