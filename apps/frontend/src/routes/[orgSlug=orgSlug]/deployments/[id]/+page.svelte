@@ -1,7 +1,7 @@
 <script lang="ts">
 	import './deployment-page.css';
 	import { page } from '$app/stores';
-	import { goto } from '$app/navigation';
+	import { goto, replaceState } from '$app/navigation';
 	import { onMount, onDestroy, untrack } from 'svelte';
 	import { Tabs } from 'melt/builders';
 	import { createQuery } from '@tanstack/svelte-query';
@@ -203,60 +203,15 @@
 	}
 
 	const tabSections = [
-		{
-			id: 'overview',
-			label: 'Overview',
-			description: 'Console, status & pods',
-			icon: ServerCog
-		},
-		{
-			id: 'environment',
-			label: 'Environment',
-			description: 'Config & secrets',
-			icon: Settings
-		},
-		{
-			id: 'resources',
-			label: 'Resources',
-			description: 'CPU & memory',
-			icon: Cpu
-		},
-		{
-			id: 'volumes',
-			label: 'Storage',
-			description: 'Persistent volumes',
-			icon: HardDriveDownload
-		},
-		{
-			id: 'network',
-			label: 'Network',
-			description: 'Ports & domains',
-			icon: Wifi
-		},
-		{
-			id: 'observe',
-			label: 'Observe',
-			description: 'Logs, HTTP & traces',
-			icon: Eye
-		},
-		{
-			id: 'metrics',
-			label: 'Metrics',
-			description: 'Live charts & history',
-			icon: Activity
-		},
-		{
-			id: 'deploys',
-			label: 'Deploys',
-			description: 'History, rollbacks & triggers',
-			icon: History
-		},
-		{
-			id: 'settings',
-			label: 'Advanced',
-			description: 'Strategy, health checks & audit log',
-			icon: SlidersHorizontal
-		}
+		{ id: 'overview', label: 'Overview', icon: ServerCog },
+		{ id: 'environment', label: 'Environment', icon: Settings },
+		{ id: 'resources', label: 'Resources', icon: Cpu },
+		{ id: 'volumes', label: 'Storage', icon: HardDriveDownload },
+		{ id: 'network', label: 'Network', icon: Wifi },
+		{ id: 'observe', label: 'Observe', icon: Eye },
+		{ id: 'metrics', label: 'Metrics', icon: Activity },
+		{ id: 'deploys', label: 'Deploys', icon: History },
+		{ id: 'settings', label: 'Advanced', icon: SlidersHorizontal }
 	] as const;
 
 	type TabId = (typeof tabSections)[number]['id'];
@@ -266,9 +221,28 @@
 		$advancedObservability ? tabSections : tabSections.filter((t) => t.id !== 'observe')
 	);
 
+	function tabFromUrl(url: URL): TabId {
+		const t = url.searchParams.get('tab');
+		return t && visibleTabs.some((s) => s.id === t) ? (t as TabId) : 'overview';
+	}
+
 	const tabs = new Tabs<TabId>({
-		value: 'overview',
+		value: tabFromUrl($page.url),
 		loop: true
+	});
+
+	$effect(() => {
+		const fromUrl = tabFromUrl($page.url);
+		if (tabs.value !== fromUrl) tabs.value = fromUrl;
+	});
+
+	$effect(() => {
+		const v = tabs.value;
+		const url = new URL($page.url);
+		if (tabFromUrl(url) === v) return;
+		if (v === 'overview') url.searchParams.delete('tab');
+		else url.searchParams.set('tab', v);
+		replaceState(url, {});
 	});
 
 	// movingicons.dev animations are gated on each icon's internal mouseenter. We want
