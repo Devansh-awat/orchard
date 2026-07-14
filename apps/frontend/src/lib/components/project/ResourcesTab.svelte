@@ -169,7 +169,9 @@
 					(ls?.lastTerminationReason && ls.lastTerminationReason !== 'Completed') ||
 					(ls?.restartCount ?? 0) >= 5
 				)}
-			{@const dbMeta = unhealthy ? statusMeta('warning', 'Unhealthy', true) : resourceStatus(db.status)}
+			{@const dbMeta = unhealthy
+				? statusMeta('warning', 'Unhealthy', true)
+				: resourceStatus(db.status)}
 			<a
 				href="/{orgSlug}/databases/{db.id}"
 				class="pj-deployment-card"

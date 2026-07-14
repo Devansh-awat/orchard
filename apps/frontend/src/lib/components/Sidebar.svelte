@@ -79,7 +79,9 @@
 			{ label: 'Members', tab: 'members', icon: Users },
 			{ label: 'Database', tab: 'database', icon: Globe },
 			{ label: 'Backups', tab: 'backups', icon: Shield },
-			...($notificationsEnabled ? [{ label: 'Notifications', tab: 'notifications', icon: Bell }] : []),
+			...($notificationsEnabled
+				? [{ label: 'Notifications', tab: 'notifications', icon: Bell }]
+				: []),
 			...(isEnterprise
 				? [
 						{ label: 'SSO', tab: 'sso', icon: Key },

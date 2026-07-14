@@ -1,11 +1,4 @@
-import {
-	CircleCheck,
-	CircleDashed,
-	CircleX,
-	Info,
-	Loader2,
-	TriangleAlert
-} from 'lucide-svelte';
+import { CircleCheck, CircleDashed, CircleX, Info, Loader2, TriangleAlert } from 'lucide-svelte';
 import type { RunStatus } from '$lib/types/jobs';
 
 export type StatusKind = 'success' | 'warning' | 'error' | 'info' | 'neutral' | 'progress';

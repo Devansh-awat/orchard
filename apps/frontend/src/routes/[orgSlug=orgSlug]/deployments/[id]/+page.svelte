@@ -80,7 +80,6 @@
 	import { MemoryStick } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
-	import DeploymentMetrics from '$lib/components/DeploymentMetrics.svelte';
 	import AuditLogList from '$lib/components/AuditLogList.svelte';
 	import { formatCpu as fmtCpuPreset, formatMemory as fmtMemoryPreset } from '$lib/presets';
 
@@ -209,7 +208,6 @@
 		{ id: 'volumes', label: 'Storage', icon: HardDriveDownload },
 		{ id: 'network', label: 'Network', icon: Wifi },
 		{ id: 'observe', label: 'Observe', icon: Eye },
-		{ id: 'metrics', label: 'Metrics', icon: Activity },
 		{ id: 'deploys', label: 'Deploys', icon: History },
 		{ id: 'settings', label: 'Advanced', icon: SlidersHorizontal }
 	] as const;
@@ -218,11 +216,14 @@
 
 	const isDockerImageDeployment = $derived(!deployment?.githubRepo);
 	const visibleTabs = $derived(
-		$advancedObservability ? tabSections : tabSections.filter((t) => t.id !== 'observe')
+		tabSections.map((t) =>
+			t.id === 'observe' && !$advancedObservability ? { ...t, label: 'Metrics', icon: Activity } : t
+		)
 	);
 
 	function tabFromUrl(url: URL): TabId {
 		const t = url.searchParams.get('tab');
+		if (t === 'metrics') return 'observe';
 		return t && visibleTabs.some((s) => s.id === t) ? (t as TabId) : 'overview';
 	}
 
@@ -231,17 +232,26 @@
 		loop: true
 	});
 
+	let observeView = $state<string>($page.url.searchParams.get('view') ?? 'metrics');
+
 	$effect(() => {
 		const fromUrl = tabFromUrl($page.url);
 		if (tabs.value !== fromUrl) tabs.value = fromUrl;
+		const v = $page.url.searchParams.get('view');
+		if (fromUrl === 'observe' && v && v !== observeView) observeView = v;
 	});
 
 	$effect(() => {
 		const v = tabs.value;
+		const view = observeView;
 		const url = new URL($page.url);
-		if (tabFromUrl(url) === v) return;
+		const wantView = v === 'observe' && view !== 'metrics' ? view : null;
+		const curView = url.searchParams.get('view');
+		if (tabFromUrl(url) === v && curView === wantView) return;
 		if (v === 'overview') url.searchParams.delete('tab');
 		else url.searchParams.set('tab', v);
+		if (wantView) url.searchParams.set('view', wantView);
+		else url.searchParams.delete('view');
 		replaceState(url, {});
 	});
 
@@ -2689,7 +2699,8 @@
 							onPointerCancel={handlePointerCancel}
 							onTrackClick={handleTrackClick}
 							onSetTabMetrics={() => {
-								tabs.value = 'metrics';
+								observeView = 'metrics';
+								tabs.value = 'observe';
 							}}
 							onKeydownSlider={handleSliderKeydown}
 							{podLabel}
@@ -2790,14 +2801,11 @@
 						/>
 					{:else if tab.id === 'observe'}
 						<div class="card rounded-2xl p-5">
-							<ObserveTab {deployment} active={tabs.value === 'observe'} />
-						</div>
-					{:else if tab.id === 'metrics'}
-						<div class="card rounded-2xl p-5">
-							<DeploymentMetrics
-								kind="deployment"
-								id={deployment?.id ?? null}
-								active={tabs.value === 'metrics'}
+							<ObserveTab
+								{deployment}
+								active={tabs.value === 'observe'}
+								metricsOnly={!$advancedObservability}
+								bind:activeTab={observeView}
 							/>
 						</div>
 					{:else if tab.id === 'deploys'}

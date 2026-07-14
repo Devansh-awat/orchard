@@ -143,9 +143,7 @@
 
 	const canCancel = $derived(deployment?.status === 'building' || deployment?.status === 'pending');
 
-	const failed = $derived(
-		deployment?.status === 'failed' || deployment?.buildStatus === 'failed'
-	);
+	const failed = $derived(deployment?.status === 'failed' || deployment?.buildStatus === 'failed');
 
 	const statusChip = $derived(
 		deployment ? resourceStatus(deployment.status, deployment.buildStatus) : null
@@ -254,7 +252,8 @@
 						<Button variant="secondary" onclick={() => window.history.back()}>
 							Back to project
 						</Button>
-						<Button variant="primary" href="/{orgSlug}/deployments/{deployment.id}">View app</Button>
+						<Button variant="primary" href="/{orgSlug}/deployments/{deployment.id}">View app</Button
+						>
 					{/if}
 				</div>
 			</div>

@@ -359,37 +359,37 @@
 	<!-- Right sidebar: stats + scale + pods -->
 	<div class="flex flex-col gap-4 overview-right min-h-0">
 		<!-- Resource stats as compact cards. Charts moved to the Metrics tab. -->
-		<div class="stat-card">
+		<button
+			type="button"
+			class="stat-card stat-card--link"
+			title="Open metrics"
+			onclick={onSetTabMetrics}
+		>
 			<div class="stat-card-header">
 				<Cpu size={14} class="h-3.5 w-3.5" style="color: var(--color-primary-600);" />
 				<span class="stat-card-label">CPU</span>
-				<button
-					class="stat-card-expand"
-					title="Open Metrics tab"
-					aria-label="Open Metrics tab"
-					onclick={onSetTabMetrics}
-				>
+				<span class="stat-card-expand">
 					<Activity size={12} class="h-3 w-3" />
-				</button>
+				</span>
 			</div>
 			<p class="stat-card-value">{formatCpu(deployment.totalCpuUsage)}</p>
-		</div>
+		</button>
 
-		<div class="stat-card">
+		<button
+			type="button"
+			class="stat-card stat-card--link"
+			title="Open metrics"
+			onclick={onSetTabMetrics}
+		>
 			<div class="stat-card-header">
 				<MemoryStick class="h-3.5 w-3.5" style="color: var(--color-primary-400);" />
 				<span class="stat-card-label">Memory</span>
-				<button
-					class="stat-card-expand"
-					title="Open Metrics tab"
-					aria-label="Open Metrics tab"
-					onclick={onSetTabMetrics}
-				>
+				<span class="stat-card-expand">
 					<Activity size={12} class="h-3 w-3" />
-				</button>
+				</span>
 			</div>
 			<p class="stat-card-value">{formatMemory(deployment.totalMemoryUsage)}</p>
-		</div>
+		</button>
 
 		<!-- Scale -->
 		<div class="card rounded-2xl p-4">

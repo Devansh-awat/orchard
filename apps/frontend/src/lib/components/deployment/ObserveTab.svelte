@@ -4,6 +4,7 @@
 	import { apiFetch, toasts } from '$lib/stores';
 	import { formatRelativeTime, ansiToHtml } from '$lib/utils/format';
 	import { Button, Select } from '$lib/components/ui';
+	import DeploymentMetrics from '$lib/components/DeploymentMetrics.svelte';
 	import { motionStagger, springHover } from '$lib/utils/motion.svelte';
 	import {
 		Clock,
@@ -25,9 +26,19 @@
 		PartyPopper
 	} from 'lucide-svelte';
 
-	let { deployment, active = true }: { deployment: any; active?: boolean } = $props();
+	let {
+		deployment,
+		active = true,
+		metricsOnly = false,
+		activeTab = $bindable('metrics')
+	}: {
+		deployment: any;
+		active?: boolean;
+		metricsOnly?: boolean;
+		activeTab?: SubTab;
+	} = $props();
 
-	type SubTab = 'logs' | 'http' | 'traces' | 'errors' | 'killed';
+	type SubTab = 'metrics' | 'logs' | 'http' | 'traces' | 'errors' | 'killed';
 
 	type KilledContainer = {
 		entryId: string;
@@ -161,7 +172,6 @@
 		return 30_000;
 	}
 
-	let activeTab = $state<SubTab>('logs');
 	let timeRange = $state<TimeRange>('1h');
 	let logSearch = $state('');
 	let logLevel = $state<LogLevel>('all');
@@ -252,11 +262,15 @@
 	}
 
 	const visibleTabs = $derived(
-		(['logs', 'http', 'traces', 'errors', 'killed'] as SubTab[]).filter(
+		(['metrics', 'logs', 'http', 'traces', 'errors', 'killed'] as SubTab[]).filter(
 			(t) => t !== 'http' || hasIngress
 		)
 	);
 	const activeTabIndex = $derived(visibleTabs.indexOf(activeTab));
+
+	$effect(() => {
+		if (!visibleTabs.includes(activeTab)) activeTab = 'metrics';
+	});
 
 	let killedList = $state<KilledContainer[]>([]);
 	let killedLoading = $state(false);
@@ -829,659 +843,679 @@
 	}
 </script>
 
-<div class="observe-root">
-	<div class="observe-strip">
-		{#if runtimeDisplay}
-			<div
-				class="observe-stat observe-stat--runtime"
-				{@attach springHover()}
-				{@attach motionStagger({ index: 0, stride: 0.04, from: { y: 8, opacity: 0, scale: 0.98 } })}
-			>
-				<div class="observe-stat-content">
-					<span class="observe-stat-label">Runtime</span>
-					<span class="observe-stat-value">{runtimeDisplay.name}</span>
-					{#if runtimeDisplay.version}
-						<span class="observe-stat-sub">{runtimeDisplay.version}</span>
-					{/if}
-				</div>
-			</div>
-		{/if}
-		{#each [{ icon: Clock, label: 'Uptime', value: formatUptime(overviewStats.uptime), show: true }, { icon: Boxes, label: 'Pods', value: `${overviewStats.running}/${overviewStats.total}`, show: true }, { icon: Cpu, label: 'CPU', value: overviewStats.cpuPct != null ? `${overviewStats.cpuPct.toFixed(1)}%` : '--', show: true }, { icon: MemoryStick, label: 'Memory', value: overviewStats.memPct != null ? `${overviewStats.memPct.toFixed(1)}%` : '--', show: true }, { icon: Activity, label: 'Req/s', value: overviewStats.reqRate != null ? fmtReqRate(overviewStats.reqRate) : '--', show: hasIngress }, { icon: AlertTriangle, label: 'Error rate', value: overviewStats.errorRate != null ? fmtPercent(overviewStats.errorRate) : '--', show: hasIngress }, { icon: Clock, label: 'Avg latency', value: overviewStats.avgLatency != null ? fmtLatency(overviewStats.avgLatency) : '--', show: hasIngress }].filter((s) => s.show) as stat, i (stat.label)}
-			{@const Icon = stat.icon}
-			<div
-				class="observe-stat"
-				{@attach springHover()}
-				{@attach motionStagger({
-					index: i + statOffset,
-					stride: 0.04,
-					from: { y: 8, opacity: 0, scale: 0.98 }
-				})}
-			>
-				<div class="observe-stat-icon">
-					<Icon class="h-3.5 w-3.5" />
-				</div>
-				<div class="observe-stat-content">
-					<span class="observe-stat-label">{stat.label}</span>
-					<span class="observe-stat-value">{stat.value}</span>
-				</div>
-			</div>
-		{/each}
-	</div>
-
-	<div class="observe-tabs">
-		<div class="observe-tabs-track">
-			<div
-				class="observe-tab-indicator"
-				style="transform: translateX({activeTabIndex *
-					100}%); width: calc(100% / {visibleTabs.length});"
-			></div>
-			{#each visibleTabs as tab (tab)}
-				<button
-					class="observe-tab"
-					class:observe-tab--active={activeTab === tab}
-					onclick={() => (activeTab = tab)}
-					type="button"
+{#if metricsOnly}
+	<DeploymentMetrics kind="deployment" id={deployment?.id ?? null} {active} />
+{:else}
+	<div class="observe-root">
+		<div class="observe-strip">
+			{#if runtimeDisplay}
+				<div
+					class="observe-stat observe-stat--runtime"
+					{@attach springHover()}
+					{@attach motionStagger({
+						index: 0,
+						stride: 0.04,
+						from: { y: 8, opacity: 0, scale: 0.98 }
+					})}
 				>
-					{tab === 'logs'
-						? 'Logs'
-						: tab === 'http'
-							? 'HTTP'
-							: tab === 'traces'
-								? 'Traces'
-								: tab === 'errors'
-									? 'Errors'
-									: 'Killed'}
-				</button>
+					<div class="observe-stat-content">
+						<span class="observe-stat-label">Runtime</span>
+						<span class="observe-stat-value">{runtimeDisplay.name}</span>
+						{#if runtimeDisplay.version}
+							<span class="observe-stat-sub">{runtimeDisplay.version}</span>
+						{/if}
+					</div>
+				</div>
+			{/if}
+			{#each [{ icon: Clock, label: 'Uptime', value: formatUptime(overviewStats.uptime), show: true }, { icon: Boxes, label: 'Pods', value: `${overviewStats.running}/${overviewStats.total}`, show: true }, { icon: Activity, label: 'Req/s', value: overviewStats.reqRate != null ? fmtReqRate(overviewStats.reqRate) : '--', show: hasIngress }, { icon: AlertTriangle, label: 'Error rate', value: overviewStats.errorRate != null ? fmtPercent(overviewStats.errorRate) : '--', show: hasIngress }, { icon: Clock, label: 'Avg latency', value: overviewStats.avgLatency != null ? fmtLatency(overviewStats.avgLatency) : '--', show: hasIngress }].filter((s) => s.show) as stat, i (stat.label)}
+				{@const Icon = stat.icon}
+				<div
+					class="observe-stat"
+					{@attach springHover()}
+					{@attach motionStagger({
+						index: i + statOffset,
+						stride: 0.04,
+						from: { y: 8, opacity: 0, scale: 0.98 }
+					})}
+				>
+					<div class="observe-stat-icon">
+						<Icon class="h-3.5 w-3.5" />
+					</div>
+					<div class="observe-stat-content">
+						<span class="observe-stat-label">{stat.label}</span>
+						<span class="observe-stat-value">{stat.value}</span>
+					</div>
+				</div>
 			{/each}
 		</div>
-	</div>
 
-	<div class="observe-body">
-		{#if activeTab === 'logs'}
-			<div class="observe-log-toolbar">
-				<div class="observe-log-search">
-					<span class="observe-log-search-icon"><Search class="h-3.5 w-3.5" /></span>
-					<input
-						type="text"
-						class="observe-log-search-input"
-						placeholder="Search logs..."
-						bind:value={logSearch}
-					/>
+		<div class="observe-tabs">
+			<div class="observe-tabs-track">
+				<div
+					class="observe-tab-indicator"
+					style="transform: translateX({activeTabIndex *
+						100}%); width: calc(100% / {visibleTabs.length});"
+				></div>
+				{#each visibleTabs as tab (tab)}
+					<button
+						class="observe-tab"
+						class:observe-tab--active={activeTab === tab}
+						onclick={() => (activeTab = tab)}
+						type="button"
+					>
+						{tab === 'metrics'
+							? 'Metrics'
+							: tab === 'logs'
+								? 'Logs'
+								: tab === 'http'
+									? 'HTTP'
+									: tab === 'traces'
+										? 'Traces'
+										: tab === 'errors'
+											? 'Errors'
+											: 'Killed'}
+					</button>
+				{/each}
+			</div>
+		</div>
+
+		<div class="observe-body">
+			{#if activeTab === 'metrics'}
+				<DeploymentMetrics
+					kind="deployment"
+					id={deployment?.id ?? null}
+					active={active && activeTab === 'metrics'}
+				/>
+			{:else if activeTab === 'logs'}
+				<div class="observe-log-toolbar">
+					<div class="observe-log-search">
+						<span class="observe-log-search-icon"><Search class="h-3.5 w-3.5" /></span>
+						<input
+							type="text"
+							class="observe-log-search-input"
+							placeholder="Search logs..."
+							bind:value={logSearch}
+						/>
+					</div>
+
+					<Select bind:value={logLevel} aria-label="Log level">
+						<option value="all">All levels</option>
+						<option value="debug">Debug</option>
+						<option value="info">Info</option>
+						<option value="warn">Warn</option>
+						<option value="error">Error</option>
+					</Select>
+
+					<Button
+						size="sm"
+						variant={liveTail ? 'primary' : 'secondary'}
+						onclick={() => (liveTail = !liveTail)}
+					>
+						{#if liveTail}
+							<span class="observe-tail-dot"></span>
+						{/if}
+						Live
+					</Button>
 				</div>
 
-				<Select bind:value={logLevel} aria-label="Log level">
-					<option value="all">All levels</option>
-					<option value="debug">Debug</option>
-					<option value="info">Info</option>
-					<option value="warn">Warn</option>
-					<option value="error">Error</option>
-				</Select>
-
-				<Button
-					size="sm"
-					variant={liveTail ? 'primary' : 'secondary'}
-					onclick={() => (liveTail = !liveTail)}
-				>
-					{#if liveTail}
-						<span class="observe-tail-dot"></span>
-					{/if}
-					Live
-				</Button>
-			</div>
-
-			<div class="observe-log-viewer" bind:this={logViewerEl} onscroll={handleLogScroll}>
-				{#if logsLoading && !logEntries.length}
-					<div class="observe-log-skeleton">
-						{#each Array(12) as _, i (i)}
-							<div class="observe-skeleton-line" style="animation-delay: {i * 60}ms;">
-								<div class="observe-skeleton-num"></div>
-								<div class="observe-skeleton-ts"></div>
-								<div class="observe-skeleton-badge"></div>
-								<div class="observe-skeleton-msg" style="width: {40 + Math.random() * 45}%;"></div>
+				<div class="observe-log-viewer" bind:this={logViewerEl} onscroll={handleLogScroll}>
+					{#if logsLoading && !logEntries.length}
+						<div class="observe-log-skeleton">
+							{#each Array(12) as _, i (i)}
+								<div class="observe-skeleton-line" style="animation-delay: {i * 60}ms;">
+									<div class="observe-skeleton-num"></div>
+									<div class="observe-skeleton-ts"></div>
+									<div class="observe-skeleton-badge"></div>
+									<div
+										class="observe-skeleton-msg"
+										style="width: {40 + Math.random() * 45}%;"
+									></div>
+								</div>
+							{/each}
+						</div>
+					{:else if logsError}
+						<div class="observe-empty">
+							<AlertTriangle class="h-5 w-5" style="color: var(--error-text-color);" />
+							<span>Failed to load logs: {logsError}</span>
+						</div>
+					{:else if filteredLogs.length === 0}
+						<div class="observe-empty">
+							<div class="observe-empty-icon-ring">
+								<TerminalIcon class="h-5 w-5" style="color: var(--surface-muted);" />
+							</div>
+							<span>No log entries{logSearch || logLevel !== 'all' ? ' matching filters' : ''}</span
+							>
+						</div>
+					{:else}
+						{#if !logSearch.trim() && logLevel === 'all'}
+							{#if loadingMoreLogs}
+								<div class="observe-log-loadmore">
+									<Loader2 class="h-3.5 w-3.5 animate-spin" /> Loading earlier logs…
+								</div>
+							{:else if logsAtMax || logTail >= LOG_MAX_LINES}
+								<div class="observe-log-loadmore observe-log-loadmore--end">
+									Start of available logs
+								</div>
+							{:else}
+								<div class="observe-log-loadmore observe-log-loadmore--hint">
+									Scroll up to load earlier logs
+								</div>
+							{/if}
+						{/if}
+						{#each visibleLogs as entry, i (entry._key)}
+							{@const detail = (entry.lines?.length ?? 0) > 1 ? entry.lines.slice(1) : []}
+							{@const key = entry._key}
+							{@const open = expandedLogs.has(key)}
+							{@const headline = ansiToHtml(entry.lines?.[0] ?? entry.message ?? '')}
+							<div
+								class="observe-log-entry"
+								class:observe-log-entry--alt={i % 2 === 1}
+								class:observe-log-entry--group={detail.length > 0}
+							>
+								<span class="observe-log-num">{hiddenLogCount + i + 1}</span>
+								<span
+									class="observe-log-level-badge"
+									style="color: {levelColor(entry.level)}; background: {levelBg(entry.level)};"
+								>
+									{(entry.level ?? 'log').toUpperCase()}
+								</span>
+								<div class="observe-log-body">
+									<button
+										type="button"
+										class="observe-log-headline"
+										class:observe-log-headline--btn={detail.length > 0}
+										onclick={() => detail.length > 0 && toggleLog(key)}
+									>
+										{#if detail.length > 0}
+											<ChevronRight
+												class="observe-log-caret"
+												style="transform: rotate({open ? 90 : 0}deg);"
+											/>
+										{/if}
+										<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+										<span class="observe-log-msg">{@html headline}</span>
+										{#if detail.length > 0 && !open}
+											<span class="observe-log-more">+{detail.length}</span>
+										{/if}
+									</button>
+									{#if detail.length > 0 && open}
+										<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+										<pre class="observe-log-detail">{@html ansiToHtml(detail.join('\n'))}</pre>
+									{/if}
+								</div>
 							</div>
 						{/each}
-					</div>
-				{:else if logsError}
-					<div class="observe-empty">
-						<AlertTriangle class="h-5 w-5" style="color: var(--error-text-color);" />
-						<span>Failed to load logs: {logsError}</span>
-					</div>
-				{:else if filteredLogs.length === 0}
-					<div class="observe-empty">
+					{/if}
+					{#if userScrolledUp && filteredLogs.length > 0}
+						<button class="observe-scroll-bottom" onclick={scrollToBottom} type="button">
+							<ArrowDown class="h-3.5 w-3.5" />
+						</button>
+					{/if}
+				</div>
+			{:else if activeTab === 'http'}
+				{#if !hasIngress}
+					<div class="observe-empty-state">
 						<div class="observe-empty-icon-ring">
-							<TerminalIcon class="h-5 w-5" style="color: var(--surface-muted);" />
+							<Activity class="h-8 w-8" style="color: var(--surface-muted);" />
 						</div>
-						<span>No log entries{logSearch || logLevel !== 'all' ? ' matching filters' : ''}</span>
+						<p class="observe-empty-title">No ingress configured</p>
+						<p class="observe-empty-desc">Add a domain to see HTTP metrics</p>
 					</div>
 				{:else}
-					{#if !logSearch.trim() && logLevel === 'all'}
-						{#if loadingMoreLogs}
-							<div class="observe-log-loadmore">
-								<Loader2 class="h-3.5 w-3.5 animate-spin" /> Loading earlier logs…
-							</div>
-						{:else if logsAtMax || logTail >= LOG_MAX_LINES}
-							<div class="observe-log-loadmore observe-log-loadmore--end">
-								Start of available logs
-							</div>
-						{:else}
-							<div class="observe-log-loadmore observe-log-loadmore--hint">
-								Scroll up to load earlier logs
-							</div>
-						{/if}
-					{/if}
-					{#each visibleLogs as entry, i (entry._key)}
-						{@const detail = (entry.lines?.length ?? 0) > 1 ? entry.lines.slice(1) : []}
-						{@const key = entry._key}
-						{@const open = expandedLogs.has(key)}
-						{@const headline = ansiToHtml(entry.lines?.[0] ?? entry.message ?? '')}
-						<div
-							class="observe-log-entry"
-							class:observe-log-entry--alt={i % 2 === 1}
-							class:observe-log-entry--group={detail.length > 0}
-						>
-							<span class="observe-log-num">{hiddenLogCount + i + 1}</span>
-							<span
-								class="observe-log-level-badge"
-								style="color: {levelColor(entry.level)}; background: {levelBg(entry.level)};"
-							>
-								{(entry.level ?? 'log').toUpperCase()}
-							</span>
-							<div class="observe-log-body">
+					<div class="observe-http-toolbar">
+						<div class="observe-rangepick">
+							{#each TIME_RANGES as r (r.id)}
 								<button
-									type="button"
-									class="observe-log-headline"
-									class:observe-log-headline--btn={detail.length > 0}
-									onclick={() => detail.length > 0 && toggleLog(key)}
+									class="observe-rangebtn"
+									class:active={timeRange === r.id}
+									onclick={() => (timeRange = r.id)}
+									type="button">{r.label}</button
 								>
-									{#if detail.length > 0}
-										<ChevronRight
-											class="observe-log-caret"
-											style="transform: rotate({open ? 90 : 0}deg);"
-										/>
-									{/if}
-									<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-									<span class="observe-log-msg">{@html headline}</span>
-									{#if detail.length > 0 && !open}
-										<span class="observe-log-more">+{detail.length}</span>
-									{/if}
-								</button>
-								{#if detail.length > 0 && open}
-									<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-									<pre class="observe-log-detail">{@html ansiToHtml(detail.join('\n'))}</pre>
-								{/if}
-							</div>
+							{/each}
 						</div>
-					{/each}
-				{/if}
-				{#if userScrolledUp && filteredLogs.length > 0}
-					<button class="observe-scroll-bottom" onclick={scrollToBottom} type="button">
-						<ArrowDown class="h-3.5 w-3.5" />
-					</button>
-				{/if}
-			</div>
-		{:else if activeTab === 'http'}
-			{#if !hasIngress}
-				<div class="observe-empty-state">
-					<div class="observe-empty-icon-ring">
-						<Activity class="h-8 w-8" style="color: var(--surface-muted);" />
+						{#if httpLoading}
+							<Loader2 class="h-3.5 w-3.5 animate-spin" style="color: var(--surface-muted);" />
+						{/if}
 					</div>
-					<p class="observe-empty-title">No ingress configured</p>
-					<p class="observe-empty-desc">Add a domain to see HTTP metrics</p>
+
+					{#if httpError}
+						<div class="observe-empty">
+							<AlertTriangle class="h-5 w-5" style="color: var(--error-text-color);" />
+							<span>Failed to load HTTP metrics: {httpError}</span>
+						</div>
+					{:else if httpLoading && !httpMetrics}
+						<div class="observe-chart-grid">
+							{#each Array(4) as _, i (i)}
+								<div
+									class="observe-chart-card"
+									{@attach motionStagger({
+										index: i,
+										stride: 0.05,
+										from: { y: 10, opacity: 0, scale: 0.98 }
+									})}
+								>
+									<div class="observe-chart-header">
+										<div class="observe-skeleton-label"></div>
+									</div>
+									<div class="observe-chart-area">
+										<div class="observe-chart-skeleton"></div>
+									</div>
+								</div>
+							{/each}
+						</div>
+					{:else}
+						<div class="observe-chart-grid">
+							{#each [{ label: 'Request rate', series: httpMetrics?.requestRate ?? [], color: '#7c5cff', formatter: fmtReqRate }, { label: 'Error rate', series: httpMetrics?.errorRate ?? [], color: '#d04a4a', formatter: fmtPercent }, { label: 'Avg latency', series: httpMetrics?.latencyAvg ?? [], color: '#22c0a8', formatter: fmtLatency }, { label: 'Max latency', series: httpMetrics?.latencyMax ?? [], color: '#ff7e6b', formatter: fmtLatency }] as chart, i (chart.label)}
+								{@const latest = latestValue(chart.series)}
+								<div
+									class="observe-chart-card"
+									{@attach motionStagger({
+										index: i,
+										stride: 0.05,
+										from: { y: 10, opacity: 0, scale: 0.98 }
+									})}
+								>
+									<div class="observe-chart-header">
+										<span class="observe-chart-label">{chart.label}</span>
+										{#if latest != null}
+											<span class="observe-chart-current" style="color: {chart.color};"
+												>{chart.formatter(latest)}</span
+											>
+										{/if}
+									</div>
+									<div class="observe-chart-area">
+										{#if chartReady && Line}
+											<svelte:component
+												this={Line}
+												data={makeChartData(chart.series, chart.color)}
+												options={makeChartOptions(chart.formatter)}
+											/>
+										{:else}
+											<div class="observe-chart-skeleton"></div>
+										{/if}
+									</div>
+								</div>
+							{/each}
+						</div>
+					{/if}
+				{/if}
+			{:else if activeTab === 'traces'}
+				<div class="observe-traces-cta">
+					<div class="observe-traces-header">
+						<Package class="h-6 w-6" style="color: var(--button-bg);" />
+						<div>
+							<p class="observe-traces-title">Traces require OpenTelemetry instrumentation</p>
+							<p class="observe-traces-desc">
+								Add the OpenTelemetry SDK to your app to collect distributed traces. Traces will
+								appear here automatically once instrumented.
+							</p>
+						</div>
+					</div>
+
+					{#if runtimeGuide && runtimeGuideLang}
+						<div
+							class="observe-guide-card"
+							{@attach motionStagger({
+								index: 0,
+								stride: 0.04,
+								from: { y: 6, opacity: 0, scale: 0.98 }
+							})}
+						>
+							<div class="observe-guide-header">
+								{#if detectedRuntime}
+									<span
+										class="observe-guide-dot"
+										style="background: {LANGUAGE_COLORS[detectedRuntime.language] ??
+											'var(--surface-muted)'};"
+									></span>
+								{/if}
+								<span class="observe-guide-lang">Setup for {runtimeGuideLang}</span>
+							</div>
+							<div class="observe-cmd-row">
+								<code class="observe-sdk-cmd">{runtimeGuide.install}</code>
+								<Button
+									size="sm"
+									variant="secondary"
+									aria-label="Copy install command"
+									onclick={() => copyToClipboard(runtimeGuide.install, 'guide-install')}
+								>
+									{#if copiedId === 'guide-install'}<Check class="h-3 w-3" />{:else}<Copy
+											class="h-3 w-3"
+										/>{/if}
+								</Button>
+							</div>
+							<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+							<pre class="observe-guide-snippet">{@html highlightCode(runtimeGuide.snippet)}</pre>
+						</div>
+
+						{#if otherSdks.length > 0}
+							<button
+								class="observe-other-toggle"
+								onclick={() => (tracesOtherExpanded = !tracesOtherExpanded)}
+								type="button"
+							>
+								<ChevronRight
+									class="h-3.5 w-3.5 observe-other-chevron"
+									style="transform: rotate({tracesOtherExpanded
+										? 90
+										: 0}deg); transition: transform 150ms ease;"
+								/>
+								Other SDKs
+							</button>
+							{#if tracesOtherExpanded}
+								<div class="observe-sdk-grid">
+									{#each otherSdks as sdk, i (sdk.name)}
+										<div
+											class="observe-sdk-card"
+											{@attach springHover()}
+											{@attach motionStagger({
+												index: i,
+												stride: 0.04,
+												from: { y: 6, opacity: 0, scale: 0.98 }
+											})}
+										>
+											<div class="observe-sdk-top">
+												<span class="observe-sdk-name">{sdk.name}</span>
+											</div>
+											<div class="observe-cmd-row">
+												<code class="observe-sdk-cmd">{sdk.cmd}</code>
+												<Button
+													size="sm"
+													variant="secondary"
+													aria-label="Copy install command"
+													onclick={() => copyToClipboard(sdk.cmd, `sdk-${sdk.name}`)}
+												>
+													{#if copiedId === `sdk-${sdk.name}`}<Check class="h-3 w-3" />{:else}<Copy
+															class="h-3 w-3"
+														/>{/if}
+												</Button>
+											</div>
+										</div>
+									{/each}
+								</div>
+							{/if}
+						{/if}
+					{:else}
+						<div class="observe-sdk-grid">
+							{#each SDK_LIST as sdk, i (sdk.name)}
+								<div
+									class="observe-sdk-card"
+									{@attach springHover()}
+									{@attach motionStagger({
+										index: i,
+										stride: 0.04,
+										from: { y: 6, opacity: 0, scale: 0.98 }
+									})}
+								>
+									<div class="observe-sdk-top">
+										<span class="observe-sdk-name">{sdk.name}</span>
+									</div>
+									<div class="observe-cmd-row">
+										<code class="observe-sdk-cmd">{sdk.cmd}</code>
+										<Button
+											size="sm"
+											variant="secondary"
+											aria-label="Copy install command"
+											onclick={() => copyToClipboard(sdk.cmd, `sdk-${sdk.name}`)}
+										>
+											{#if copiedId === `sdk-${sdk.name}`}<Check class="h-3 w-3" />{:else}<Copy
+													class="h-3 w-3"
+												/>{/if}
+										</Button>
+									</div>
+								</div>
+							{/each}
+						</div>
+					{/if}
 				</div>
-			{:else}
-				<div class="observe-http-toolbar">
+			{:else if activeTab === 'errors'}
+				<div class="observe-errors-toolbar">
 					<div class="observe-rangepick">
-						{#each TIME_RANGES as r (r.id)}
+						{#each ERROR_WINDOWS as w (w.id)}
 							<button
 								class="observe-rangebtn"
-								class:active={timeRange === r.id}
-								onclick={() => (timeRange = r.id)}
-								type="button">{r.label}</button
+								class:active={errorWindow === w.id}
+								onclick={() => (errorWindow = w.id)}
+								type="button">{w.label}</button
 							>
 						{/each}
 					</div>
-					{#if httpLoading}
+					{#if errorsLoading}
 						<Loader2 class="h-3.5 w-3.5 animate-spin" style="color: var(--surface-muted);" />
 					{/if}
 				</div>
 
-				{#if httpError}
+				{#if errorsError}
 					<div class="observe-empty">
 						<AlertTriangle class="h-5 w-5" style="color: var(--error-text-color);" />
-						<span>Failed to load HTTP metrics: {httpError}</span>
+						<span>Failed to load errors: {errorsError}</span>
 					</div>
-				{:else if httpLoading && !httpMetrics}
-					<div class="observe-chart-grid">
-						{#each Array(4) as _, i (i)}
-							<div
-								class="observe-chart-card"
-								{@attach motionStagger({
-									index: i,
-									stride: 0.05,
-									from: { y: 10, opacity: 0, scale: 0.98 }
-								})}
-							>
-								<div class="observe-chart-header">
-									<div class="observe-skeleton-label"></div>
-								</div>
-								<div class="observe-chart-area">
-									<div class="observe-chart-skeleton"></div>
-								</div>
-							</div>
-						{/each}
+				{:else if errorsLoading && !errorGroups.length}
+					<div class="observe-empty">
+						<Loader2 class="h-5 w-5 animate-spin" />
+						<span>Loading errors...</span>
 					</div>
-				{:else}
-					<div class="observe-chart-grid">
-						{#each [{ label: 'Request rate', series: httpMetrics?.requestRate ?? [], color: '#7c5cff', formatter: fmtReqRate }, { label: 'Error rate', series: httpMetrics?.errorRate ?? [], color: '#d04a4a', formatter: fmtPercent }, { label: 'Avg latency', series: httpMetrics?.latencyAvg ?? [], color: '#22c0a8', formatter: fmtLatency }, { label: 'Max latency', series: httpMetrics?.latencyMax ?? [], color: '#ff7e6b', formatter: fmtLatency }] as chart, i (chart.label)}
-							{@const latest = latestValue(chart.series)}
-							<div
-								class="observe-chart-card"
-								{@attach motionStagger({
-									index: i,
-									stride: 0.05,
-									from: { y: 10, opacity: 0, scale: 0.98 }
-								})}
-							>
-								<div class="observe-chart-header">
-									<span class="observe-chart-label">{chart.label}</span>
-									{#if latest != null}
-										<span class="observe-chart-current" style="color: {chart.color};"
-											>{chart.formatter(latest)}</span
-										>
-									{/if}
-								</div>
-								<div class="observe-chart-area">
-									{#if chartReady && Line}
-										<svelte:component
-											this={Line}
-											data={makeChartData(chart.series, chart.color)}
-											options={makeChartOptions(chart.formatter)}
-										/>
-									{:else}
-										<div class="observe-chart-skeleton"></div>
-									{/if}
-								</div>
-							</div>
-						{/each}
-					</div>
-				{/if}
-			{/if}
-		{:else if activeTab === 'traces'}
-			<div class="observe-traces-cta">
-				<div class="observe-traces-header">
-					<Package class="h-6 w-6" style="color: var(--button-bg);" />
-					<div>
-						<p class="observe-traces-title">Traces require OpenTelemetry instrumentation</p>
-						<p class="observe-traces-desc">
-							Add the OpenTelemetry SDK to your app to collect distributed traces. Traces will
-							appear here automatically once instrumented.
+				{:else if errorGroups.length === 0}
+					<div class="observe-empty-state">
+						<div class="observe-empty-icon-ring observe-empty-icon-ring--celebrate">
+							<PartyPopper class="h-10 w-10" style="color: var(--online-indicator);" />
+						</div>
+						<p class="observe-empty-title">All clear</p>
+						<p class="observe-empty-desc">
+							No errors in the selected time window. Your app is running clean.
 						</p>
 					</div>
-				</div>
-
-				{#if runtimeGuide && runtimeGuideLang}
-					<div
-						class="observe-guide-card"
-						{@attach motionStagger({
-							index: 0,
-							stride: 0.04,
-							from: { y: 6, opacity: 0, scale: 0.98 }
-						})}
-					>
-						<div class="observe-guide-header">
-							{#if detectedRuntime}
-								<span
-									class="observe-guide-dot"
-									style="background: {LANGUAGE_COLORS[detectedRuntime.language] ??
-										'var(--surface-muted)'};"
-								></span>
-							{/if}
-							<span class="observe-guide-lang">Setup for {runtimeGuideLang}</span>
+				{:else}
+					<div class="observe-errors-summary">
+						<div class="observe-errors-summary-stat">
+							<span class="observe-errors-summary-value">{totalErrorCount.toLocaleString()}</span>
+							<span class="observe-errors-summary-label">total errors</span>
 						</div>
-						<div class="observe-cmd-row">
-							<code class="observe-sdk-cmd">{runtimeGuide.install}</code>
-							<Button
-								size="sm"
-								variant="secondary"
-								aria-label="Copy install command"
-								onclick={() => copyToClipboard(runtimeGuide.install, 'guide-install')}
-							>
-								{#if copiedId === 'guide-install'}<Check class="h-3 w-3" />{:else}<Copy
-										class="h-3 w-3"
-									/>{/if}
-							</Button>
+						<div class="observe-errors-summary-stat">
+							<span class="observe-errors-summary-value">{uniqueErrorTypes}</span>
+							<span class="observe-errors-summary-label">unique types</span>
 						</div>
-						<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-						<pre class="observe-guide-snippet">{@html highlightCode(runtimeGuide.snippet)}</pre>
 					</div>
 
-					{#if otherSdks.length > 0}
-						<button
-							class="observe-other-toggle"
-							onclick={() => (tracesOtherExpanded = !tracesOtherExpanded)}
-							type="button"
-						>
-							<ChevronRight
-								class="h-3.5 w-3.5 observe-other-chevron"
-								style="transform: rotate({tracesOtherExpanded
-									? 90
-									: 0}deg); transition: transform 150ms ease;"
-							/>
-							Other SDKs
-						</button>
-						{#if tracesOtherExpanded}
-							<div class="observe-sdk-grid">
-								{#each otherSdks as sdk, i (sdk.name)}
-									<div
-										class="observe-sdk-card"
-										{@attach springHover()}
-										{@attach motionStagger({
-											index: i,
-											stride: 0.04,
-											from: { y: 6, opacity: 0, scale: 0.98 }
-										})}
-									>
-										<div class="observe-sdk-top">
-											<span class="observe-sdk-name">{sdk.name}</span>
-										</div>
-										<div class="observe-cmd-row">
-											<code class="observe-sdk-cmd">{sdk.cmd}</code>
-											<Button
-												size="sm"
-												variant="secondary"
-												aria-label="Copy install command"
-												onclick={() => copyToClipboard(sdk.cmd, `sdk-${sdk.name}`)}
-											>
-												{#if copiedId === `sdk-${sdk.name}`}<Check class="h-3 w-3" />{:else}<Copy
-														class="h-3 w-3"
-													/>{/if}
-											</Button>
-										</div>
-									</div>
-								{/each}
-							</div>
-						{/if}
-					{/if}
-				{:else}
-					<div class="observe-sdk-grid">
-						{#each SDK_LIST as sdk, i (sdk.name)}
+					<div class="observe-errors-list">
+						{#each errorGroups as group, i (group.fingerprint)}
+							{@const isExpanded = expandedErrors.has(group.fingerprint)}
 							<div
-								class="observe-sdk-card"
-								{@attach springHover()}
+								class="observe-error-card"
 								{@attach motionStagger({
 									index: i,
-									stride: 0.04,
-									from: { y: 6, opacity: 0, scale: 0.98 }
+									stride: 0.03,
+									from: { y: 6, opacity: 0 }
 								})}
 							>
-								<div class="observe-sdk-top">
-									<span class="observe-sdk-name">{sdk.name}</span>
-								</div>
-								<div class="observe-cmd-row">
-									<code class="observe-sdk-cmd">{sdk.cmd}</code>
-									<Button
-										size="sm"
-										variant="secondary"
-										aria-label="Copy install command"
-										onclick={() => copyToClipboard(sdk.cmd, `sdk-${sdk.name}`)}
-									>
-										{#if copiedId === `sdk-${sdk.name}`}<Check class="h-3 w-3" />{:else}<Copy
-												class="h-3 w-3"
-											/>{/if}
-									</Button>
-								</div>
+								<button
+									class="observe-error-header"
+									onclick={() => toggleError(group.fingerprint)}
+									type="button"
+								>
+									<ChevronRight
+										class="h-3.5 w-3.5 observe-error-chevron"
+										style="transform: rotate({isExpanded
+											? 90
+											: 0}deg); transition: transform 150ms ease; flex-shrink: 0;"
+									/>
+									<div class="observe-error-main">
+										<div class="observe-error-titlerow">
+											<span class="observe-error-type">{group.type}</span>
+											<span class="observe-error-fp">{group.fingerprint.slice(0, 8)}</span>
+										</div>
+										<div class="observe-error-message-line">{group.message}</div>
+										<div class="observe-error-meta">
+											<Clock class="h-3 w-3" />
+											{formatRelativeTime(new Date(group.lastSeen))}
+											<span class="observe-error-meta-sep">&middot;</span>
+											first seen {formatRelativeTime(new Date(group.firstSeen))}
+										</div>
+									</div>
+									<div class="observe-error-stats">
+										<span class="observe-error-count-num">{group.count.toLocaleString()}</span>
+										<span class="observe-error-count-label"
+											>{group.count === 1 ? 'event' : 'events'}</span
+										>
+									</div>
+								</button>
+
+								{#if isExpanded}
+									<div class="observe-error-detail">
+										<p class="observe-error-full-msg">{group.message}</p>
+
+										{#if group.samples.length > 0}
+											<div class="observe-error-samples-label">
+												Recent occurrences ({group.samples.length})
+											</div>
+											{#each group.samples as sample, si (si)}
+												<div class="observe-error-sample">
+													{#if sample.timestamp}
+														<div
+															class="observe-error-sample-ts"
+															title={fullTimestamp(sample.timestamp)}
+														>
+															<Clock class="h-3 w-3" />
+															{formatRelativeTime(new Date(sample.timestamp))}
+														</div>
+													{/if}
+													{#if sample.stackTrace}
+														<div class="observe-stack-wrapper">
+															<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+															<pre class="observe-error-stack">{@html highlightStack(
+																	sample.stackTrace
+																)}</pre>
+															<button
+																class="observe-stack-copy"
+																onclick={() =>
+																	copyToClipboard(
+																		sample.stackTrace ?? '',
+																		`stack-${group.fingerprint}-${si}`
+																	)}
+																type="button"
+															>
+																{#if copiedId === `stack-${group.fingerprint}-${si}`}<Check
+																		class="h-3 w-3"
+																	/>{:else}<Copy class="h-3 w-3" />{/if}
+															</button>
+														</div>
+													{/if}
+												</div>
+											{/each}
+										{/if}
+									</div>
+								{/if}
 							</div>
 						{/each}
 					</div>
 				{/if}
-			</div>
-		{:else if activeTab === 'errors'}
-			<div class="observe-errors-toolbar">
-				<div class="observe-rangepick">
-					{#each ERROR_WINDOWS as w (w.id)}
-						<button
-							class="observe-rangebtn"
-							class:active={errorWindow === w.id}
-							onclick={() => (errorWindow = w.id)}
-							type="button">{w.label}</button
-						>
-					{/each}
+			{:else if activeTab === 'killed'}
+				<div class="observe-errors-toolbar">
+					<span class="observe-killed-hint">
+						Containers terminated in the last 24h, with the logs they printed before dying
+					</span>
+					<Button size="sm" loading={killedLoading} onclick={() => fetchKilled()}>Refresh</Button>
 				</div>
-				{#if errorsLoading}
-					<Loader2 class="h-3.5 w-3.5 animate-spin" style="color: var(--surface-muted);" />
-				{/if}
-			</div>
 
-			{#if errorsError}
-				<div class="observe-empty">
-					<AlertTriangle class="h-5 w-5" style="color: var(--error-text-color);" />
-					<span>Failed to load errors: {errorsError}</span>
-				</div>
-			{:else if errorsLoading && !errorGroups.length}
-				<div class="observe-empty">
-					<Loader2 class="h-5 w-5 animate-spin" />
-					<span>Loading errors...</span>
-				</div>
-			{:else if errorGroups.length === 0}
-				<div class="observe-empty-state">
-					<div class="observe-empty-icon-ring observe-empty-icon-ring--celebrate">
-						<PartyPopper class="h-10 w-10" style="color: var(--online-indicator);" />
+				{#if killedError}
+					<div class="observe-empty">
+						<AlertTriangle class="h-5 w-5" style="color: var(--error-text-color);" />
+						<span>Failed to load killed containers: {killedError}</span>
 					</div>
-					<p class="observe-empty-title">All clear</p>
-					<p class="observe-empty-desc">
-						No errors in the selected time window. Your app is running clean.
-					</p>
-				</div>
-			{:else}
-				<div class="observe-errors-summary">
-					<div class="observe-errors-summary-stat">
-						<span class="observe-errors-summary-value">{totalErrorCount.toLocaleString()}</span>
-						<span class="observe-errors-summary-label">total errors</span>
+				{:else if killedLoading && !killedList.length}
+					<div class="observe-empty">
+						<Loader2 class="h-5 w-5 animate-spin" />
+						<span>Loading...</span>
 					</div>
-					<div class="observe-errors-summary-stat">
-						<span class="observe-errors-summary-value">{uniqueErrorTypes}</span>
-						<span class="observe-errors-summary-label">unique types</span>
-					</div>
-				</div>
-
-				<div class="observe-errors-list">
-					{#each errorGroups as group, i (group.fingerprint)}
-						{@const isExpanded = expandedErrors.has(group.fingerprint)}
-						<div
-							class="observe-error-card"
-							{@attach motionStagger({
-								index: i,
-								stride: 0.03,
-								from: { y: 6, opacity: 0 }
-							})}
-						>
-							<button
-								class="observe-error-header"
-								onclick={() => toggleError(group.fingerprint)}
-								type="button"
-							>
-								<ChevronRight
-									class="h-3.5 w-3.5 observe-error-chevron"
-									style="transform: rotate({isExpanded
-										? 90
-										: 0}deg); transition: transform 150ms ease; flex-shrink: 0;"
-								/>
-								<div class="observe-error-main">
-									<div class="observe-error-titlerow">
-										<span class="observe-error-type">{group.type}</span>
-										<span class="observe-error-fp">{group.fingerprint.slice(0, 8)}</span>
-									</div>
-									<div class="observe-error-message-line">{group.message}</div>
-									<div class="observe-error-meta">
-										<Clock class="h-3 w-3" />
-										{formatRelativeTime(new Date(group.lastSeen))}
-										<span class="observe-error-meta-sep">&middot;</span>
-										first seen {formatRelativeTime(new Date(group.firstSeen))}
-									</div>
-								</div>
-								<div class="observe-error-stats">
-									<span class="observe-error-count-num">{group.count.toLocaleString()}</span>
-									<span class="observe-error-count-label"
-										>{group.count === 1 ? 'event' : 'events'}</span
-									>
-								</div>
-							</button>
-
-							{#if isExpanded}
-								<div class="observe-error-detail">
-									<p class="observe-error-full-msg">{group.message}</p>
-
-									{#if group.samples.length > 0}
-										<div class="observe-error-samples-label">
-											Recent occurrences ({group.samples.length})
-										</div>
-										{#each group.samples as sample, si (si)}
-											<div class="observe-error-sample">
-												{#if sample.timestamp}
-													<div
-														class="observe-error-sample-ts"
-														title={fullTimestamp(sample.timestamp)}
-													>
-														<Clock class="h-3 w-3" />
-														{formatRelativeTime(new Date(sample.timestamp))}
-													</div>
-												{/if}
-												{#if sample.stackTrace}
-													<div class="observe-stack-wrapper">
-														<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-														<pre class="observe-error-stack">{@html highlightStack(
-																sample.stackTrace
-															)}</pre>
-														<button
-															class="observe-stack-copy"
-															onclick={() =>
-																copyToClipboard(
-																	sample.stackTrace ?? '',
-																	`stack-${group.fingerprint}-${si}`
-																)}
-															type="button"
-														>
-															{#if copiedId === `stack-${group.fingerprint}-${si}`}<Check
-																	class="h-3 w-3"
-																/>{:else}<Copy class="h-3 w-3" />{/if}
-														</button>
-													</div>
-												{/if}
-											</div>
-										{/each}
-									{/if}
-								</div>
-							{/if}
+				{:else if killedList.length === 0}
+					<div class="observe-empty-state">
+						<div class="observe-empty-icon-ring observe-empty-icon-ring--celebrate">
+							<PartyPopper class="h-10 w-10" style="color: var(--online-indicator);" />
 						</div>
-					{/each}
-				</div>
-			{/if}
-		{:else if activeTab === 'killed'}
-			<div class="observe-errors-toolbar">
-				<span class="observe-killed-hint">
-					Containers terminated in the last 24h, with the logs they printed before dying
-				</span>
-				<Button size="sm" loading={killedLoading} onclick={() => fetchKilled()}>Refresh</Button>
-			</div>
-
-			{#if killedError}
-				<div class="observe-empty">
-					<AlertTriangle class="h-5 w-5" style="color: var(--error-text-color);" />
-					<span>Failed to load killed containers: {killedError}</span>
-				</div>
-			{:else if killedLoading && !killedList.length}
-				<div class="observe-empty">
-					<Loader2 class="h-5 w-5 animate-spin" />
-					<span>Loading...</span>
-				</div>
-			{:else if killedList.length === 0}
-				<div class="observe-empty-state">
-					<div class="observe-empty-icon-ring observe-empty-icon-ring--celebrate">
-						<PartyPopper class="h-10 w-10" style="color: var(--online-indicator);" />
+						<p class="observe-empty-title">No recently killed containers</p>
+						<p class="observe-empty-desc">
+							Nothing has crashed or been OOMKilled in the last 24 hours
+						</p>
 					</div>
-					<p class="observe-empty-title">No recently killed containers</p>
-					<p class="observe-empty-desc">
-						Nothing has crashed or been OOMKilled in the last 24 hours
-					</p>
-				</div>
-			{:else}
-				<div class="observe-errors-list">
-					{#each killedList as k, i (k.entryId)}
-						{@const isExpanded = expandedKilled === k.entryId}
-						<div
-							class="observe-error-card"
-							{@attach motionStagger({
-								index: i,
-								stride: 0.03,
-								from: { y: 6, opacity: 0 }
-							})}
-						>
-							<button
-								class="observe-error-header"
-								onclick={() => toggleKilled(k.entryId)}
-								type="button"
+				{:else}
+					<div class="observe-errors-list">
+						{#each killedList as k, i (k.entryId)}
+							{@const isExpanded = expandedKilled === k.entryId}
+							<div
+								class="observe-error-card"
+								{@attach motionStagger({
+									index: i,
+									stride: 0.03,
+									from: { y: 6, opacity: 0 }
+								})}
 							>
-								<ChevronRight
-									class="h-3.5 w-3.5 observe-error-chevron"
-									style="transform: rotate({isExpanded
-										? 90
-										: 0}deg); transition: transform 150ms ease; flex-shrink: 0;"
-								/>
-								<div class="observe-error-main">
-									<div class="observe-error-titlerow">
-										<span class="observe-error-type">{k.reason}</span>
-										{#if k.exitCode != null}
-											<span class="observe-error-fp">exit {k.exitCode}</span>
+								<button
+									class="observe-error-header"
+									onclick={() => toggleKilled(k.entryId)}
+									type="button"
+								>
+									<ChevronRight
+										class="h-3.5 w-3.5 observe-error-chevron"
+										style="transform: rotate({isExpanded
+											? 90
+											: 0}deg); transition: transform 150ms ease; flex-shrink: 0;"
+									/>
+									<div class="observe-error-main">
+										<div class="observe-error-titlerow">
+											<span class="observe-error-type">{k.reason}</span>
+											{#if k.exitCode != null}
+												<span class="observe-error-fp">exit {k.exitCode}</span>
+											{/if}
+										</div>
+										<div class="observe-error-message-line">{k.pod} / {k.container}</div>
+										{#if k.finishedAt}
+											<div class="observe-error-meta">
+												<Clock class="h-3 w-3" />
+												{formatRelativeTime(new Date(k.finishedAt))}
+											</div>
 										{/if}
 									</div>
-									<div class="observe-error-message-line">{k.pod} / {k.container}</div>
-									{#if k.finishedAt}
-										<div class="observe-error-meta">
-											<Clock class="h-3 w-3" />
-											{formatRelativeTime(new Date(k.finishedAt))}
-										</div>
-									{/if}
-								</div>
-							</button>
+								</button>
 
-							{#if isExpanded}
-								<div class="observe-error-detail">
-									{#if killedLogsLoading === k.entryId}
-										<div class="observe-empty">
-											<Loader2 class="h-4 w-4 animate-spin" />
-											<span>Loading captured logs...</span>
-										</div>
-									{:else if killedLogs[k.entryId]}
-										<div class="observe-stack-wrapper">
-											<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-											<pre class="observe-error-stack observe-killed-logs">{@html ansiToHtml(
-													killedLogs[k.entryId]
-												)}</pre>
-											<button
-												class="observe-stack-copy"
-												onclick={() =>
-													copyToClipboard(killedLogs[k.entryId], `killed-${k.entryId}`)}
-												type="button"
-											>
-												{#if copiedId === `killed-${k.entryId}`}<Check
-														class="h-3 w-3"
-													/>{:else}<Copy class="h-3 w-3" />{/if}
-											</button>
-										</div>
-									{:else}
-										<p class="observe-empty-desc">
-											No logs were captured for this container before it died
-										</p>
-									{/if}
-								</div>
-							{/if}
-						</div>
-					{/each}
-				</div>
+								{#if isExpanded}
+									<div class="observe-error-detail">
+										{#if killedLogsLoading === k.entryId}
+											<div class="observe-empty">
+												<Loader2 class="h-4 w-4 animate-spin" />
+												<span>Loading captured logs...</span>
+											</div>
+										{:else if killedLogs[k.entryId]}
+											<div class="observe-stack-wrapper">
+												<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+												<pre class="observe-error-stack observe-killed-logs">{@html ansiToHtml(
+														killedLogs[k.entryId]
+													)}</pre>
+												<button
+													class="observe-stack-copy"
+													onclick={() =>
+														copyToClipboard(killedLogs[k.entryId], `killed-${k.entryId}`)}
+													type="button"
+												>
+													{#if copiedId === `killed-${k.entryId}`}<Check
+															class="h-3 w-3"
+														/>{:else}<Copy class="h-3 w-3" />{/if}
+												</button>
+											</div>
+										{:else}
+											<p class="observe-empty-desc">
+												No logs were captured for this container before it died
+											</p>
+										{/if}
+									</div>
+								{/if}
+							</div>
+						{/each}
+					</div>
+				{/if}
 			{/if}
-		{/if}
+		</div>
 	</div>
-</div>
+{/if}
 
 <style>
 	.observe-root {

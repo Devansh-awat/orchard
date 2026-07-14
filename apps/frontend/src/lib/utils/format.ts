@@ -153,7 +153,6 @@ export function sanitizeLogs(logs: string): string {
 	return sanitized;
 }
 
-
 /** Translate raw kubelet/controller messages into plain-English */
 export type WarningSeverity = 'critical' | 'error' | 'warning' | 'info';
 

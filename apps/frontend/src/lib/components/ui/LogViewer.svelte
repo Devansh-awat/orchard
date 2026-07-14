@@ -85,7 +85,15 @@
 			{#each lines as line (line.key)}
 				<span class="lv-line">
 					{#if line.lineNo != null}<span class="lv-no">{line.lineNo}</span>{/if}
-					{#if line.level}<span class="lv-level status--{line.level === 'warn' ? 'warning' : line.level === 'error' ? 'error' : line.level === 'debug' ? 'neutral' : 'info'}">{line.level}</span>{/if}
+					{#if line.level}<span
+							class="lv-level status--{line.level === 'warn'
+								? 'warning'
+								: line.level === 'error'
+									? 'error'
+									: line.level === 'debug'
+										? 'neutral'
+										: 'info'}">{line.level}</span
+						>{/if}
 					<!-- eslint-disable-next-line svelte/no-at-html-tags -->{@html line.html}
 				</span>
 			{/each}

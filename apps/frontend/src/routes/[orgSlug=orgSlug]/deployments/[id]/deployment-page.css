@@ -1137,6 +1137,19 @@ a.dep-meta-lead-link:hover {
 	transition: box-shadow 0.18s ease;
 }
 
+.stat-card--link {
+	font: inherit;
+	color: inherit;
+	text-align: start;
+	cursor: pointer;
+	width: 100%;
+	display: block;
+}
+
+.stat-card--link:hover {
+	box-shadow: 0 2px 8px rgb(0 0 0 / 0.06);
+}
+
 .stat-card-header {
 	display: flex;
 	align-items: center;

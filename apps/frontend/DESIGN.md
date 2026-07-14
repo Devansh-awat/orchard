@@ -31,19 +31,19 @@ Semantic layer aliased over the legacy theme vocabulary. Components use ONLY the
 (`--center-channel-*`, `--sidebar-*`, `--surface-*`, `--control-*`, ...) are the private
 engine layer for `app.css`/`theme.ts` and must not appear in components.
 
-| Token | Meaning |
-| --- | --- |
-| `--bg-app` | page background |
-| `--bg-surface` | default component surface |
-| `--bg-raised` | card surface |
-| `--bg-sunken` | inputs, wells |
-| `--bg-hover` | hover fill |
-| `--bg-overlay` | dropdowns, popovers |
-| `--text-default` / `--text-muted` / `--text-faint` | text hierarchy |
-| `--text-link` / `--text-on-accent` | link text, text on accent fills |
-| `--border-default` / `--border-strong` | borders |
-| `--accent` / `--accent-subtle` / `--focus-ring` | brand crimson interactions |
-| `--status-success/-warning/-error/-info/-neutral/-progress` | status colors (each also has `-bg` and `-border` recipes) |
+| Token                                                               | Meaning                                                                  |
+| ------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| `--bg-app`                                                          | page background                                                          |
+| `--bg-surface`                                                      | default component surface                                                |
+| `--bg-raised`                                                       | card surface                                                             |
+| `--bg-sunken`                                                       | inputs, wells                                                            |
+| `--bg-hover`                                                        | hover fill                                                               |
+| `--bg-overlay`                                                      | dropdowns, popovers                                                      |
+| `--text-default` / `--text-muted` / `--text-faint`                  | text hierarchy                                                           |
+| `--text-link` / `--text-on-accent`                                  | link text, text on accent fills                                          |
+| `--border-default` / `--border-strong`                              | borders                                                                  |
+| `--accent` / `--accent-subtle` / `--focus-ring`                     | brand crimson interactions                                               |
+| `--status-success/-warning/-error/-info/-neutral/-progress`         | status colors (each also has `-bg` and `-border` recipes)                |
 | `--hue-gray/-slate/-blue/-green/-emerald/-violet/-pink/-red/-amber` | decorative categorical palette (nav badges, env colors, brand-ish icons) |
 
 Tailwind utilities from the same layer: `text-fg`, `text-muted`, `text-faint`,

@@ -4,10 +4,7 @@
 	let { meta, size = 8 }: { meta: StatusMeta; size?: number } = $props();
 </script>
 
-<span
-	class="dot status--{meta.kind}"
-	class:dot--pulse={meta.pulse}
-	style="--dot-size: {size}px"
+<span class="dot status--{meta.kind}" class:dot--pulse={meta.pulse} style="--dot-size: {size}px"
 ></span>
 
 <style>
