@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Star, MoreVertical, ExternalLink, RefreshCw, Pin, PinOff, Copy } from 'lucide-svelte';
-	import { springHover, cardTilt } from '$lib/utils/motion.svelte';
-	import { knownIcon, favUrl, timeAgo, springPop } from './helpers.svelte';
+	import { springHover, cardTilt, springPop } from '$lib/utils/motion.svelte';
+	import { knownIcon, favUrl, timeAgo } from './helpers.svelte';
 	import { Menu, MenuItem, resourceStatus } from '$lib/components/ui';
 	import type { DeploymentSummary, LiveMetricsEntry } from './types';
 

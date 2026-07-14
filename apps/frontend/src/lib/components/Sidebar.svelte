@@ -16,6 +16,7 @@
 	} from '@jis3r/icons';
 	import WorkspacesMenu from './WorkspacesMenu.svelte';
 	import UserMenu from './UserMenu.svelte';
+	import { springHover as motionSpringHover } from '$lib/utils/motion.svelte';
 	import { selectedOrganization, sidebarCollapsed } from '$lib/stores';
 	import { featureFlag } from '$lib/posthog';
 
@@ -145,38 +146,8 @@
 		);
 	}
 
-	// Velocity-aware lift + forwards mouseenter to descendant @jis3r icons so
-	// they auto-animate when the parent (button/row) is hovered, not only when
-	// the cursor lands directly on the icon's hit area.
 	function springHover(opts: { lift?: number; stiffness?: number; damping?: number } = {}) {
-		const { lift = -1, stiffness = 380, damping = 22 } = opts;
-		return (el: Element) => {
-			const t = el as HTMLElement;
-			const enter = () => {
-				animate(t, { y: lift }, { type: 'spring', stiffness, damping });
-				t.querySelectorAll('[role="img"]').forEach((icon) => {
-					icon.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
-				});
-			};
-			const leave = () =>
-				animate(t, { y: 0 }, { type: 'spring', stiffness: stiffness * 0.8, damping: damping + 4 });
-			const press = () =>
-				animate(t, { scale: 0.94 }, { type: 'spring', stiffness: 600, damping: 28 });
-			const release = () =>
-				animate(t, { scale: 1 }, { type: 'spring', stiffness: 420, damping: 18 });
-			t.addEventListener('mouseenter', enter);
-			t.addEventListener('mouseleave', leave);
-			t.addEventListener('pointerdown', press);
-			t.addEventListener('pointerup', release);
-			t.addEventListener('pointerleave', release);
-			return () => {
-				t.removeEventListener('mouseenter', enter);
-				t.removeEventListener('mouseleave', leave);
-				t.removeEventListener('pointerdown', press);
-				t.removeEventListener('pointerup', release);
-				t.removeEventListener('pointerleave', release);
-			};
-		};
+		return motionSpringHover({ lift: -1, forwardIconHover: true, ...opts });
 	}
 
 	// One-shot pop whenever the collapsed state flips — gives the toggle button

@@ -1,6 +1,6 @@
 <script lang="ts">
-	import { fade, scale } from 'svelte/transition';
-	import { AlertTriangle, X, Trash2 } from 'lucide-svelte';
+	import { AlertTriangle, Trash2 } from 'lucide-svelte';
+	import { Modal, Button } from '$lib/components/ui';
 
 	interface Props {
 		open: boolean;
@@ -37,80 +37,31 @@
 	}
 </script>
 
-{#if open}
-	<!-- svelte-ignore a11y_click_events_have_key_events a11y_no_static_element_interactions -->
-	<div class="cm-overlay" transition:fade={{ duration: 150 }} onclick={handleCancel}>
-		<div
-			class="cm-card"
-			transition:scale={{ duration: 200, start: 0.95 }}
-			onclick={(e) => e.stopPropagation()}
-		>
-			<div class="cm-header">
-				<div class="cm-icon" class:cm-icon-danger={danger} class:cm-icon-neutral={!danger}>
-					<AlertTriangle size={20} />
-				</div>
-				<button class="cm-close" onclick={handleCancel}>
-					<X size={16} />
-				</button>
-			</div>
-
-			<h2 class="cm-title">{title}</h2>
-			{#if html}
-				<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-				<p class="cm-desc">{@html description}</p>
-			{:else}
-				<p class="cm-desc">{description}</p>
-			{/if}
-
-			<div class="cm-actions">
-				<button class="cm-btn cm-btn-cancel" onclick={handleCancel}>
-					{cancelLabel}
-				</button>
-				<button
-					class="cm-btn"
-					class:cm-btn-danger={danger}
-					class:cm-btn-primary={!danger}
-					onclick={handleConfirm}
-				>
-					{#if danger}
-						<Trash2 class="h-4 w-4" />
-					{/if}
-					{confirmLabel}
-				</button>
-			</div>
+<Modal bind:open size="sm" onclose={() => oncancel?.()}>
+	{#snippet header()}
+		<div class="cm-icon" class:cm-icon-danger={danger} class:cm-icon-neutral={!danger}>
+			<AlertTriangle size={20} />
 		</div>
-	</div>
-{/if}
+	{/snippet}
+	<h2 class="cm-title">{title}</h2>
+	{#if html}
+		<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+		<p class="cm-desc">{@html description}</p>
+	{:else}
+		<p class="cm-desc">{description}</p>
+	{/if}
+	{#snippet footer()}
+		<Button variant="secondary" onclick={handleCancel}>{cancelLabel}</Button>
+		<Button variant={danger ? 'danger' : 'primary'} onclick={handleConfirm}>
+			{#if danger}
+				<Trash2 class="h-4 w-4" />
+			{/if}
+			{confirmLabel}
+		</Button>
+	{/snippet}
+</Modal>
 
 <style>
-	.cm-overlay {
-		position: fixed;
-		inset: 0;
-		background-color: rgba(0, 0, 0, 0.5);
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		z-index: 1000;
-		padding: 1rem;
-	}
-
-	.cm-card {
-		background-color: var(--center-channel-bg);
-		border: 1px solid var(--surface-border);
-		border-radius: 1rem;
-		padding: 1.5rem;
-		width: 100%;
-		max-width: 26rem;
-		box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
-	}
-
-	.cm-header {
-		display: flex;
-		align-items: flex-start;
-		justify-content: space-between;
-		margin-bottom: 1rem;
-	}
-
 	.cm-icon {
 		display: flex;
 		align-items: center;
@@ -121,98 +72,31 @@
 	}
 
 	.cm-icon-danger {
-		background-color: color-mix(in srgb, var(--error-text-color) 12%, transparent);
-		color: var(--error-text-color);
+		background-color: color-mix(in srgb, var(--status-error) 12%, transparent);
+		color: var(--status-error);
 	}
 
 	.cm-icon-neutral {
-		background-color: color-mix(in srgb, #f59e0b 12%, transparent);
-		color: #f59e0b;
-	}
-
-	.cm-close {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.75rem;
-		height: 1.75rem;
-		border-radius: 0.375rem;
-		border: none;
-		background: none;
-		color: var(--surface-muted);
-		cursor: pointer;
-		transition:
-			color 0.15s,
-			background-color 0.15s;
-	}
-
-	.cm-close:hover {
-		color: var(--center-channel-color);
-		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
+		background-color: color-mix(in srgb, var(--status-warning) 12%, transparent);
+		color: var(--status-warning);
 	}
 
 	.cm-title {
 		font-size: 1rem;
 		font-weight: 600;
-		color: var(--center-channel-color);
+		color: var(--text-default);
 		margin: 0 0 0.5rem;
 	}
 
 	.cm-desc {
 		font-size: 0.8125rem;
-		color: var(--surface-muted);
-		margin: 0 0 1.25rem;
+		color: var(--text-muted);
+		margin: 0;
 		line-height: 1.5;
 	}
 
 	.cm-desc :global(strong) {
-		color: var(--error-text-color);
+		color: var(--status-error);
 		font-weight: 600;
-	}
-
-	.cm-actions {
-		display: flex;
-		gap: 0.5rem;
-		justify-content: flex-end;
-	}
-
-	.cm-btn {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.4375rem 1rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		font-weight: 500;
-		border: none;
-		cursor: pointer;
-		transition: opacity 0.15s;
-	}
-
-	.cm-btn-cancel {
-		background-color: color-mix(in srgb, var(--surface-border) 60%, transparent);
-		color: var(--center-channel-color);
-	}
-
-	.cm-btn-cancel:hover {
-		background-color: color-mix(in srgb, var(--surface-border) 90%, transparent);
-	}
-
-	.cm-btn-danger {
-		background-color: color-mix(in srgb, var(--error-text-color) 15%, transparent);
-		color: var(--error-text-color);
-	}
-
-	.cm-btn-danger:hover {
-		opacity: 0.85;
-	}
-
-	.cm-btn-primary {
-		background-color: var(--sidebar-text-active-border);
-		color: #fff;
-	}
-
-	.cm-btn-primary:hover {
-		opacity: 0.9;
 	}
 </style>

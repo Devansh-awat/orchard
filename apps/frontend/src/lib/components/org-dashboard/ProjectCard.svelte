@@ -10,15 +10,9 @@
 		Container,
 		Ellipsis
 	} from 'lucide-svelte';
-	import { motionStagger } from '$lib/utils/motion.svelte';
+	import { motionStagger, springRotate } from '$lib/utils/motion.svelte';
 	import { projectGradientEnabled } from '$lib/stores';
-	import {
-		projectStatusSummary,
-		meshBakedBg,
-		springRotate,
-		bodyAttach,
-		knownIcon
-	} from './helpers.svelte';
+	import { projectStatusSummary, meshBakedBg, bodyAttach, knownIcon } from './helpers.svelte';
 	import { Menu, MenuItem } from '$lib/components/ui';
 	import DeploymentCard from './DeploymentCard.svelte';
 	import DatabaseCard from './DatabaseCard.svelte';

@@ -51,7 +51,13 @@ export function getLastPointerSpeed(): number {
 const staggeredEls = new WeakSet<Element>();
 
 export function springHover(
-	opts: { rest?: number; lift?: number; stiffness?: number; damping?: number } = {}
+	opts: {
+		rest?: number;
+		lift?: number;
+		stiffness?: number;
+		damping?: number;
+		forwardIconHover?: boolean;
+	} = {}
 ) {
 	const rest = opts.rest ?? 0;
 	const lift = opts.lift ?? -3;
@@ -59,7 +65,14 @@ export function springHover(
 	const damping = opts.damping ?? 22;
 	return (el: Element) => {
 		const target = el as HTMLElement;
-		const enter = () => animate(target, { y: lift }, { type: 'spring', stiffness, damping });
+		const enter = () => {
+			animate(target, { y: lift }, { type: 'spring', stiffness, damping });
+			if (opts.forwardIconHover) {
+				target.querySelectorAll('[role="img"]').forEach((icon) => {
+					icon.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
+				});
+			}
+		};
 		const leave = () =>
 			animate(
 				target,

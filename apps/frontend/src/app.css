@@ -461,7 +461,6 @@ html {
 
 .ui-modal[open] {
 	display: flex;
-	animation: ui-modal-in 180ms cubic-bezier(0.22, 1, 0.36, 1);
 }
 
 .ui-modal--sm {
@@ -478,17 +477,18 @@ html {
 
 .ui-modal::backdrop {
 	background: rgb(0 0 0 / 0.5);
+	opacity: 1;
+	transition: opacity 160ms ease;
 }
 
-@keyframes ui-modal-in {
-	from {
+@starting-style {
+	.ui-modal[open]::backdrop {
 		opacity: 0;
-		transform: translateY(10px) scale(0.97);
 	}
-	to {
-		opacity: 1;
-		transform: translateY(0) scale(1);
-	}
+}
+
+.ui-modal--closing::backdrop {
+	opacity: 0;
 }
 
 .ui-modal-header {

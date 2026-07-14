@@ -148,46 +148,6 @@ export function meshBakedBg(url: string) {
 	};
 }
 
-export function springPop(active: () => boolean) {
-	return (el: Element) => {
-		const target = el as HTMLElement;
-		let prev = active();
-		$effect(() => {
-			const next = active();
-			if (next && !prev) {
-				animate(
-					target,
-					{ scale: [0.9, 1.06, 1] },
-					{ type: 'spring', stiffness: 480, damping: 16, mass: 0.85 }
-				);
-			}
-			prev = next;
-		});
-	};
-}
-
-export function springRotate(
-	active: () => boolean,
-	opts: { rest?: number; on?: number; stiffness?: number; damping?: number; mass?: number } = {}
-) {
-	const rest = opts.rest ?? 0;
-	const on = opts.on ?? 90;
-	const stiffness = opts.stiffness ?? 380;
-	const damping = opts.damping ?? 24;
-	const mass = opts.mass ?? 0.7;
-	return (el: Element) => {
-		const target = el as HTMLElement;
-		target.style.transform = `rotate(${active() ? on : rest}deg)`;
-		let prev = active();
-		$effect(() => {
-			const next = active();
-			if (next === prev) return;
-			prev = next;
-			animate(target, { rotate: next ? on : rest }, { type: 'spring', stiffness, damping, mass });
-		});
-	};
-}
-
 export function bodyAttach(
 	id: string,
 	isExpanded: () => boolean,
