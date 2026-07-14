@@ -13,6 +13,8 @@
 		X
 	} from '@jis3r/icons';
 	import { untrack } from 'svelte';
+	import { page } from '$app/stores';
+	import { SquareArrowOutUpRight } from 'lucide-svelte';
 	import { formatCpu, formatMemory, formatRelativeTime } from '$lib/utils/format';
 	import {
 		Button,
@@ -528,6 +530,15 @@
 										<StatusBadge meta={podStatus(pod.status)} />
 									</div>
 								</button>
+								<a
+									class="pod-delete-btn"
+									title="Open pod details"
+									aria-label="Open pod details"
+									href="/{$page.params.orgSlug}/pods/{pod.name}?namespace={deployment?.namespace ??
+										'default'}"
+								>
+									<SquareArrowOutUpRight size={12} class="h-3 w-3" />
+								</a>
 								<button
 									class="pod-delete-btn"
 									title="Delete pod"

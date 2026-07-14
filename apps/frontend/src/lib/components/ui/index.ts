@@ -26,3 +26,4 @@ export { default as Skeleton } from './Skeleton.svelte';
 export { default as Dropdown } from './Dropdown.svelte';
 export type { DropdownOption } from './Dropdown.svelte';
 export { default as LogViewer } from './LogViewer.svelte';
+export { default as PageHeader } from './PageHeader.svelte';

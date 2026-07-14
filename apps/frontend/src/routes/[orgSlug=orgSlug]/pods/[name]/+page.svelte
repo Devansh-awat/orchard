@@ -1,10 +1,23 @@
 <script lang="ts">
 	import { page } from '$app/stores';
-	import { onMount, onDestroy } from 'svelte';
-	import { invalidate } from '$app/navigation';
-	import { apiFetch, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
-	import { ArrowLeft, Loader2, RefreshCw, Container } from 'lucide-svelte';
-	import { Button, Select, Input, StatusBadge, podStatus, statusMeta } from '$lib/components/ui';
+	import { onMount, onDestroy, untrack } from 'svelte';
+	import { apiFetch, toasts, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
+	import { Loader2, RefreshCw, MoreVertical, Trash2, Terminal } from 'lucide-svelte';
+	import {
+		Button,
+		Select,
+		Alert,
+		Menu,
+		MenuItem,
+		StatusDot,
+		PageHeader,
+		LogViewer,
+		podStatus,
+		statusMeta
+	} from '$lib/components/ui';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import { PodLogSource } from '$lib/utils/log-sources.svelte';
+	import { formatRelativeTime } from '$lib/utils/format';
 	import type { PageData } from './$types';
 
 	interface ContainerStatus {
@@ -36,19 +49,27 @@
 
 	let pod = $state<Pod | null>(null);
 	let loading = $state(true);
-	let logsLoading = $state(false);
 	let error = $state<string | null>(null);
-	let logsError = $state<string | null>(null);
-
-	let logs = $state<string>('');
 	let selectedContainer = $state<string>('');
-	let tailLines = $state(100);
+	let live = $state(false);
+	let scrolledUp = $state(false);
+	let showDeleteModal = $state(false);
+	let deleting = $state(false);
 
 	let { data } = $props<{ data: PageData }>();
 	const podName = $derived(data.podName);
 	const orgSlug = $derived($page.params.orgSlug);
 	const namespace = $derived(data.namespace);
 	let podSseUnsub: (() => void) | null = null;
+
+	const logSource = new PodLogSource({
+		podName: () => podName,
+		namespace: () => namespace,
+		container: () => selectedContainer
+	});
+
+	const containers = $derived(pod?.spec?.containers ?? []);
+	const singleImage = $derived(containers.length === 1 ? containers[0].image : null);
 
 	async function fetchPodDetails(opts?: { silent?: boolean }) {
 		const silent = opts?.silent === true;
@@ -63,11 +84,8 @@
 				throw new Error('Failed to fetch pod details');
 			}
 			pod = await response.json();
-
-			// Set default container
 			if (pod?.spec?.containers?.length && !selectedContainer) {
 				selectedContainer = pod.spec.containers[0].name;
-				await fetchLogs();
 			}
 		} catch (e) {
 			if (!silent) {
@@ -78,32 +96,50 @@
 		}
 	}
 
-	async function fetchLogs() {
-		if (!selectedContainer) return;
-
-		logsLoading = true;
-		logsError = null;
-
+	async function deletePod() {
+		if (deleting) return;
+		deleting = true;
 		try {
-			const response = await apiFetch(
-				`/apiv1/pods/${podName}/logs?namespace=${namespace}&container=${selectedContainer}&tailLines=${tailLines}`
-			);
-			if (!response.ok) {
-				throw new Error('Failed to fetch logs');
+			const res = await apiFetch(`/apiv1/pods/${podName}?namespace=${namespace}`, {
+				method: 'DELETE'
+			});
+			if (!res.ok) {
+				const d = await res.json().catch(() => ({}));
+				throw new Error(d.message || 'Failed to delete pod');
 			}
-			const data = await response.json();
-			logs = data.logs || '';
+			toasts.add({
+				title: 'Pod deleted',
+				description: 'A replacement pod will be scheduled automatically',
+				color: 'success'
+			});
+			window.history.back();
 		} catch (e) {
-			logsError = e instanceof Error ? e.message : 'Failed to fetch logs';
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to delete pod',
+				color: 'error'
+			});
 		} finally {
-			logsLoading = false;
+			deleting = false;
 		}
 	}
 
 	$effect(() => {
-		if (selectedContainer) {
-			fetchLogs();
-		}
+		const container = selectedContainer;
+		if (!container) return;
+		untrack(() => {
+			logSource.clear();
+			logSource.refresh();
+		});
+	});
+
+	$effect(() => {
+		if (!live || !selectedContainer) return;
+		const handle = setInterval(() => {
+			if (document.hidden) return;
+			logSource.refresh();
+		}, 3000);
+		return () => clearInterval(handle);
 	});
 
 	onMount(() => {
@@ -132,145 +168,217 @@
 	onDestroy(() => podSseUnsub?.());
 </script>
 
-<div class="p-6">
-	<Button variant="ghost" size="sm" href="/{orgSlug}" class="mb-6">
-		<ArrowLeft class="h-4 w-4" />
-		Back
-	</Button>
-
+<div class="mx-auto max-w-5xl p-6">
 	{#if error}
-		<div class="alert alert-error mb-6">{error}</div>
+		<div class="mb-6">
+			<Alert tone="error" title={error} />
+		</div>
 	{/if}
 
 	{#if loading}
 		<div class="flex justify-center py-12">
 			<div class="text-center">
 				<Loader2 class="mx-auto h-8 w-8 animate-spin text-primary-600" />
-				<p class="mt-2 text-sm" style="color: var(--surface-muted);">Loading pod details...</p>
+				<p class="mt-2 text-sm text-muted">Loading pod details...</p>
 			</div>
 		</div>
 	{:else if pod}
-		<!-- Header -->
-		<div class="mb-6 flex items-start justify-between">
-			<div>
-				<h1 class="text-2xl font-bold" style="color: var(--center-channel-color);">
-					{pod.metadata.name}
-				</h1>
-				<span class="mt-2 inline-block">
-					<StatusBadge meta={podStatus(pod.status.phase)} />
-				</span>
-			</div>
-			<Button variant="secondary" onclick={() => fetchPodDetails()} disabled={loading}>
-				<RefreshCw class="h-4 w-4 {loading ? 'animate-spin' : ''}" />
-				Refresh
-			</Button>
-		</div>
+		<PageHeader
+			back={{ label: 'Back', onclick: () => window.history.back() }}
+			title={pod.metadata.name}
+			mono
+			status={podStatus(pod.status.phase)}
+		>
+			{#snippet meta()}
+				<span>{pod.metadata.namespace}</span>
+				{#if pod.status.startTime}
+					<span class="meta-sep">&middot;</span>
+					<span title={new Date(pod.status.startTime).toLocaleString()}>
+						started {formatRelativeTime(new Date(pod.status.startTime))}
+					</span>
+				{/if}
+				{#if pod.status.podIP}
+					<span class="meta-sep">&middot;</span>
+					<span class="font-mono">{pod.status.podIP}</span>
+				{/if}
+				{#if pod.status.hostIP}
+					<span class="font-mono">&rarr; node {pod.status.hostIP}</span>
+				{/if}
+				{#if singleImage}
+					<span class="meta-sep">&middot;</span>
+					<span class="font-mono truncate" title={singleImage}>{singleImage}</span>
+				{/if}
+			{/snippet}
+			{#snippet actions()}
+				<Button variant="secondary" size="sm" onclick={() => fetchPodDetails()} disabled={loading}>
+					<RefreshCw class="h-4 w-4" />
+					Refresh
+				</Button>
+				<Menu placement="bottom-end">
+					{#snippet trigger(attrs, _open)}
+						<Button variant="ghost" size="sm" aria-label="More actions" {...attrs}>
+							<MoreVertical class="h-4 w-4" />
+						</Button>
+					{/snippet}
+					<MenuItem onclick={() => (showDeleteModal = true)}>
+						<Trash2 size={14} /> Delete pod
+					</MenuItem>
+				</Menu>
+			{/snippet}
+		</PageHeader>
 
-		<!-- Pod Info -->
-		<div class="card mb-6">
-			<div class="card-body">
-				<h2 class="text-lg font-semibold mb-4">Pod information</h2>
-				<div class="grid grid-cols-2 gap-4">
-					<div>
-						<p class="text-sm font-medium" style="color: var(--surface-muted);">Namespace</p>
-						<p class="mt-1">{pod.metadata.namespace}</p>
-					</div>
-					<div>
-						<p class="text-sm font-medium" style="color: var(--surface-muted);">Status</p>
-						<span class="mt-1 inline-block">
-							<StatusBadge meta={podStatus(pod.status.phase)} />
-						</span>
-					</div>
-					<div>
-						<p class="text-sm font-medium" style="color: var(--surface-muted);">Pod IP</p>
-						<p class="mt-1 font-mono text-sm">{pod.status.podIP || 'N/A'}</p>
-					</div>
-					<div>
-						<p class="text-sm font-medium" style="color: var(--surface-muted);">Host IP</p>
-						<p class="mt-1 font-mono text-sm">{pod.status.hostIP || 'N/A'}</p>
-					</div>
-					<div class="col-span-2">
-						<p class="text-sm font-medium" style="color: var(--surface-muted);">Start time</p>
-						<p class="mt-1">
-							{pod.status.startTime ? new Date(pod.status.startTime).toLocaleString() : 'N/A'}
-						</p>
-					</div>
-				</div>
-			</div>
-		</div>
-
-		<!-- Containers -->
-		{#if pod.spec?.containers?.length}
-			<div class="card mb-6">
-				<div class="card-header">
-					<h2 class="font-semibold">Containers ({pod.spec.containers.length})</h2>
-				</div>
-				<div class="divide-y divide-[var(--surface-border)]">
-					{#each pod.spec.containers as container (container.name)}
-						{@const status = pod.status.containerStatuses?.find((cs) => cs.name === container.name)}
-						<div class="p-4">
-							<div class="flex items-start justify-between">
-								<div class="flex items-center gap-3">
-									<Container class="h-5 w-5" style="color: var(--surface-muted);" />
-									<div>
-										<p class="font-medium">{container.name}</p>
-										<p
-											class="text-sm font-mono truncate max-w-md"
-											style="color: var(--surface-muted);"
-										>
-											{container.image}
-										</p>
-									</div>
-								</div>
-								{#if status}
-									<StatusBadge
-										meta={statusMeta(status.ready ? 'success' : 'error', status.ready ? 'Ready' : 'Not ready')}
-									/>
-								{/if}
-							</div>
-						</div>
-					{/each}
-				</div>
+		{#if containers.length > 1}
+			<div class="pod-containers">
+				{#each containers as container (container.name)}
+					{@const cs = pod.status.containerStatuses?.find((s) => s.name === container.name)}
+					<button
+						type="button"
+						class="pod-container-row"
+						class:pod-container-row--active={selectedContainer === container.name}
+						onclick={() => (selectedContainer = container.name)}
+					>
+						<StatusDot
+							meta={statusMeta(cs?.ready ? 'success' : 'error', cs?.ready ? 'Ready' : 'Not ready')}
+							size={6}
+						/>
+						<span class="pod-container-name">{container.name}</span>
+						<span class="pod-container-image" title={container.image}>{container.image}</span>
+					</button>
+				{/each}
 			</div>
 		{/if}
 
-		<!-- Logs -->
-		<div class="card">
-			<div class="card-header">
-				<div class="flex items-center justify-between">
-					<h2 class="font-semibold">Logs</h2>
-					<div class="flex items-center gap-2">
-						<Select bind:value={selectedContainer} onchange={() => fetchLogs()}>
-							{#each pod.spec?.containers ?? [] as container (container.name)}
-								<option value={container.name}>{container.name}</option>
-							{/each}
-						</Select>
-						<Input type="number" bind:value={tailLines} placeholder="Lines" class="w-20" />
-						<Button variant="secondary" size="sm" onclick={fetchLogs} loading={logsLoading}>
-							{#if !logsLoading}
-								<RefreshCw class="h-4 w-4" />
-							{/if}
-						</Button>
-					</div>
-				</div>
-			</div>
-			<div class="card-body">
-				{#if logsError}
-					<div class="alert alert-error mb-4">{logsError}</div>
+		<div class="pod-logs">
+			<div class="pod-logs-toolbar">
+				{#if containers.length > 1}
+					<Select bind:value={selectedContainer}>
+						{#each containers as container (container.name)}
+							<option value={container.name}>{container.name}</option>
+						{/each}
+					</Select>
 				{/if}
-
-				{#if logsLoading}
-					<div class="flex justify-center py-8">
-						<Loader2 class="h-6 w-6 animate-spin text-primary-600" />
-					</div>
-				{:else if logs}
-					<div class="log-viewer max-h-96 overflow-y-auto">
-						<pre>{logs}</pre>
-					</div>
-				{:else}
-					<p class="text-center py-8" style="color: var(--surface-muted);">No logs available</p>
-				{/if}
+				<div class="flex-1"></div>
+				<Button variant={live ? 'primary' : 'secondary'} size="sm" onclick={() => (live = !live)}>
+					Live
+				</Button>
+				<Button
+					variant="secondary"
+					size="sm"
+					onclick={() => logSource.refresh()}
+					loading={logSource.loading}
+					aria-label="Refresh logs"
+				>
+					{#if !logSource.loading}
+						<RefreshCw class="h-4 w-4" />
+					{/if}
+				</Button>
 			</div>
+			<LogViewer
+				surface="dark"
+				lines={logSource.lines}
+				loading={logSource.loading}
+				loadingMore={logSource.loadingMore}
+				error={logSource.error}
+				atStart={logSource.atStart}
+				bind:scrolledUp
+				onLoadEarlier={() => logSource.loadEarlier()}
+			>
+				{#snippet empty()}
+					<div class="pod-logs-empty">
+						<Terminal size={16} class="h-4 w-4 opacity-30" />
+						<span>No output yet</span>
+					</div>
+				{/snippet}
+			</LogViewer>
 		</div>
 	{/if}
 </div>
+
+<ConfirmModal
+	bind:open={showDeleteModal}
+	title="Delete pod"
+	description="The pod will be terminated and a replacement scheduled by its deployment."
+	confirmLabel="Delete pod"
+	onconfirm={deletePod}
+	oncancel={() => {}}
+/>
+
+<style>
+	.meta-sep {
+		opacity: 0.5;
+	}
+
+	.pod-containers {
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+		margin-bottom: 1rem;
+	}
+
+	.pod-container-row {
+		display: flex;
+		align-items: center;
+		gap: 0.625rem;
+		padding: 0.5rem 0.625rem;
+		border-radius: 0.5rem;
+		border: none;
+		background: none;
+		text-align: start;
+		cursor: pointer;
+		min-width: 0;
+		transition: background-color 120ms ease;
+	}
+
+	.pod-container-row:hover {
+		background-color: var(--bg-hover);
+	}
+
+	.pod-container-row--active {
+		background-color: var(--accent-subtle);
+	}
+
+	.pod-container-name {
+		font-size: 0.8125rem;
+		font-weight: 550;
+		color: var(--text-default);
+		flex-shrink: 0;
+	}
+
+	.pod-container-image {
+		font-family: var(--font-mono);
+		font-size: 0.75rem;
+		color: var(--text-muted);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		min-width: 0;
+	}
+
+	.pod-logs {
+		display: flex;
+		flex-direction: column;
+		min-height: 0;
+	}
+
+	.pod-logs-toolbar {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-bottom: 0.625rem;
+	}
+
+	.pod-logs :global(.lv--dark) {
+		height: min(62vh, 40rem);
+	}
+
+	.pod-logs-empty {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: 0.5rem;
+		padding: 3rem 1rem;
+		opacity: 0.7;
+		font-size: 0.75rem;
+	}
+</style>
