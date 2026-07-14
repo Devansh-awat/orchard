@@ -8,7 +8,7 @@
     "dev:gateway": "pnpm --filter gateway dev",
     "build": "pnpm --parallel run build",
     "build:server": "pnpm --filter server build",
-    "lint": "eslint apps/server/src apps/frontend/src",
+    "lint": "eslint apps/server/src apps/frontend/src && node apps/frontend/scripts/check-design.mjs",
     "lint:fix": "eslint apps/server/src apps/frontend/src --fix",
     "prisma:generate": "pnpm --filter server prisma:generate"
   },

@@ -9,6 +9,30 @@
 - **Package manager:** pnpm (never bun)
 - **Type checking:** don't run `tsc` / `svelte-check` — it's slow and has pre-existing noise
 
+## Design System (hard rules)
+
+Full reference: `apps/frontend/DESIGN.md`. Guardrail: `pnpm check:design` fails any diff
+that adds hex colors, legacy tokens, or legacy classes to `.svelte` files.
+
+- Never write a hex color in a `.svelte` file. Use semantic tokens from `src/tokens.css`
+  (`--bg-*`, `--text-*`, `--border-*`, `--accent*`, `--status-*`, `--hue-*`) or the
+  Tailwind utilities `text-fg/text-muted/text-faint/bg-surface/bg-raised/border-edge`.
+- Never use legacy tokens in components (`--center-channel-*`, `--sidebar-*`,
+  `--surface-*`, `--control-*`, `--mention-*`, `--online/away/dnd-indicator`,
+  `--button-bg/color`, `--error-text-color`, `--link-color`, `--card-bg`). They are the
+  private engine layer under `tokens.css`.
+- Never use raw `.btn/.card/.badge/.alert/.input/.dropdown/.skeleton` classes in new
+  markup. Use `ui/` components (`Button`, `SectionCard`, `Badge`, `Alert`, `Input`,
+  `Menu`/`Dropdown`/`PopoverPanel`, `Skeleton`, `EmptyState`, `Modal`).
+- All status rendering goes through `ui/status.ts` (`resourceStatus`/`podStatus`/
+  `buildStatusMeta`/`runStatus`/`statusMeta`) rendered as `StatusBadge`/`StatusDot`.
+  Never hand-roll a status switch; status is never color alone.
+- No left-accent borders. Alerts/callouts are tinted bg + subtle full border.
+- Labels are a last resort: combine into the value or de-emphasize under it. No
+  "Label: value" grids.
+- No comments in authored code. No em dashes in UI copy.
+- Never redefine motion utilities locally; import from `$lib/utils/motion.svelte`.
+
 ## Motion System
 
 All interactive animation uses spring physics from `motion`. CSS `transition` is only for color/opacity on hover states. Any movement, scaling, or layout change must go through a Motion spring.
