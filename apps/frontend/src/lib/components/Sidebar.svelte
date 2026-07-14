@@ -39,6 +39,70 @@
 	// On just that page, fall back to the original short CSS width transition.
 	const isHomeRoute = $derived($page.url.pathname === '/' + orgSlug);
 
+	type NavEntry = {
+		label: string;
+		href: string;
+		icon: typeof Settings;
+		active: boolean;
+	};
+
+	const mainNav: NavEntry[] = $derived([
+		{
+			label: 'Your Apps',
+			href: `/${orgSlug}`,
+			icon: Leaf,
+			active: $page.url.pathname === '/' + orgSlug
+		},
+		{
+			label: 'Projects',
+			href: `/${orgSlug}/projects`,
+			icon: Folder,
+			active: $page.url.pathname.startsWith('/' + orgSlug + '/projects')
+		},
+		{
+			label: 'Jobs',
+			href: `/${orgSlug}/jobs`,
+			icon: Zap,
+			active: $page.url.pathname.startsWith('/' + orgSlug + '/jobs')
+		},
+		{
+			label: 'Usage',
+			href: `/${orgSlug}/usage`,
+			icon: Activity,
+			active: $page.url.pathname.startsWith('/' + orgSlug + '/usage')
+		}
+	]);
+
+	const settingsNav: NavEntry[] = $derived.by(() => {
+		const tabs = [
+			{ label: 'General', tab: 'general', icon: Settings },
+			{ label: 'Members', tab: 'members', icon: Users },
+			{ label: 'Database', tab: 'database', icon: Globe },
+			{ label: 'Backups', tab: 'backups', icon: Shield },
+			...($notificationsEnabled ? [{ label: 'Notifications', tab: 'notifications', icon: Bell }] : []),
+			...(isEnterprise
+				? [
+						{ label: 'SSO', tab: 'sso', icon: Key },
+						{ label: 'SCIM', tab: 'scim', icon: UserCog }
+					]
+				: [])
+		];
+		return [
+			...tabs.map((t) => ({
+				label: t.label,
+				href: `/${orgSlug}/settings?tab=${t.tab}`,
+				icon: t.icon,
+				active: settingsTab === t.tab && !isAuditLogsRoute
+			})),
+			{
+				label: 'Audit Log',
+				href: `/${orgSlug}/settings/audit-logs`,
+				icon: ScrollText,
+				active: isAuditLogsRoute
+			}
+		];
+	});
+
 	const COLLAPSED_W = '4.5rem';
 	const EXPANDED_W = '16.5rem';
 
@@ -169,6 +233,32 @@
 	}
 </script>
 
+{#snippet navItem(item: NavEntry, index: number)}
+	<a
+		href={item.href}
+		class="tree-node-content"
+		class:is-active={item.active}
+		{@attach navStagger(index)}
+		{@attach springHover({ lift: -1 })}
+	>
+		<item.icon size={15} class="tree-icon" />
+		<span class="tree-node-label">{item.label}</span>
+	</a>
+{/snippet}
+
+{#snippet navItemCollapsed(item: NavEntry)}
+	<a
+		href={item.href}
+		class="sidebar-collapsed-icon"
+		class:is-active={item.active}
+		aria-label={item.label}
+		{@attach springHover()}
+	>
+		<item.icon size={17} class="tree-icon" />
+		<span class="sidebar-collapsed-tooltip">{item.label}</span>
+	</a>
+{/snippet}
+
 <aside bind:this={asideEl} class="sidebar" class:sidebar--css-transition={isHomeRoute}>
 	<div class="sidebar-inner">
 		<div class="sidebar-team-bar" class:is-collapsed={$sidebarCollapsed}>
@@ -228,106 +318,9 @@
 				<div class="sidebar-nav-animated" {@attach navIn}>
 					<div class="settings-sidebar-title">Organization Settings</div>
 					<div class="sidebar-home-link">
-						<a
-							href="/{orgSlug}/settings?tab=general"
-							class="tree-node-content"
-							class:is-active={settingsTab === 'general'}
-							{@attach navStagger(0)}
-							{@attach springHover({ lift: -1 })}
-						>
-							<div class="tree-icon-badge" style="background-color: #6b7280">
-								<Settings size={10} class="tree-icon-svg" />
-							</div>
-							<span class="tree-node-label">General</span>
-						</a>
-						<a
-							href="/{orgSlug}/settings?tab=members"
-							class="tree-node-content"
-							class:is-active={settingsTab === 'members'}
-							{@attach navStagger(1)}
-							{@attach springHover({ lift: -1 })}
-						>
-							<div class="tree-icon-badge" style="background-color: #3b82f6">
-								<Users size={10} class="tree-icon-svg" />
-							</div>
-							<span class="tree-node-label">Members</span>
-						</a>
-						<a
-							href="/{orgSlug}/settings?tab=database"
-							class="tree-node-content"
-							class:is-active={settingsTab === 'database'}
-							{@attach navStagger(2)}
-							{@attach springHover({ lift: -1 })}
-						>
-							<div class="tree-icon-badge" style="background-color: #10b981">
-								<Globe size={10} class="tree-icon-svg" />
-							</div>
-							<span class="tree-node-label">Database</span>
-						</a>
-						<a
-							href="/{orgSlug}/settings?tab=backups"
-							class="tree-node-content"
-							class:is-active={settingsTab === 'backups'}
-							{@attach navStagger(3)}
-							{@attach springHover({ lift: -1 })}
-						>
-							<div class="tree-icon-badge" style="background-color: #8b5cf6">
-								<Shield size={10} class="tree-icon-svg" />
-							</div>
-							<span class="tree-node-label">Backups</span>
-						</a>
-						{#if $notificationsEnabled}
-							<a
-								href="/{orgSlug}/settings?tab=notifications"
-								class="tree-node-content"
-								class:is-active={settingsTab === 'notifications'}
-								{@attach navStagger(4)}
-								{@attach springHover({ lift: -1 })}
-							>
-								<div class="tree-icon-badge" style="background-color: #ec4899">
-									<Bell size={10} class="tree-icon-svg" />
-								</div>
-								<span class="tree-node-label">Notifications</span>
-							</a>
-						{/if}
-						{#if isEnterprise}
-							<a
-								href="/{orgSlug}/settings?tab=sso"
-								class="tree-node-content"
-								class:is-active={settingsTab === 'sso'}
-								{@attach navStagger(5)}
-								{@attach springHover({ lift: -1 })}
-							>
-								<div class="tree-icon-badge" style="background-color: #ef4444">
-									<Key size={10} class="tree-icon-svg" />
-								</div>
-								<span class="tree-node-label">SSO</span>
-							</a>
-							<a
-								href="/{orgSlug}/settings?tab=scim"
-								class="tree-node-content"
-								class:is-active={settingsTab === 'scim'}
-								{@attach navStagger(6)}
-								{@attach springHover({ lift: -1 })}
-							>
-								<div class="tree-icon-badge" style="background-color: #f59e0b">
-									<UserCog size={10} class="tree-icon-svg" />
-								</div>
-								<span class="tree-node-label">SCIM</span>
-							</a>
-						{/if}
-						<a
-							href="/{orgSlug}/settings/audit-logs"
-							class="tree-node-content"
-							class:is-active={isAuditLogsRoute}
-							{@attach navStagger(7)}
-							{@attach springHover({ lift: -1 })}
-						>
-							<div class="tree-icon-badge" style="background-color: #475569">
-								<ScrollText size={10} class="tree-icon-svg" />
-							</div>
-							<span class="tree-node-label">Audit Log</span>
-						</a>
+						{#each settingsNav as item, i (item.href)}
+							{@render navItem(item, i)}
+						{/each}
 					</div>
 				</div>
 			{:else}
@@ -341,94 +334,9 @@
 						<ArrowLeft size={18} />
 						<span class="sidebar-collapsed-tooltip">Back</span>
 					</a>
-					<a
-						href="/{orgSlug}/settings?tab=general"
-						class="sidebar-collapsed-icon"
-						class:is-active={settingsTab === 'general'}
-						aria-label="General"
-						{@attach springHover()}
-					>
-						<div class="tree-icon-badge" style="background-color: #6b7280">
-							<Settings size={11} class="tree-icon-svg" />
-						</div>
-						<span class="sidebar-collapsed-tooltip">General</span>
-					</a>
-					<a
-						href="/{orgSlug}/settings?tab=members"
-						class="sidebar-collapsed-icon"
-						class:is-active={settingsTab === 'members'}
-						aria-label="Members"
-						{@attach springHover()}
-					>
-						<div class="tree-icon-badge" style="background-color: #3b82f6">
-							<Users size={11} class="tree-icon-svg" />
-						</div>
-						<span class="sidebar-collapsed-tooltip">Members</span>
-					</a>
-					<a
-						href="/{orgSlug}/settings?tab=database"
-						class="sidebar-collapsed-icon"
-						class:is-active={settingsTab === 'database'}
-						aria-label="Database"
-						{@attach springHover()}
-					>
-						<div class="tree-icon-badge" style="background-color: #10b981">
-							<Globe size={11} class="tree-icon-svg" />
-						</div>
-						<span class="sidebar-collapsed-tooltip">Database</span>
-					</a>
-					<a
-						href="/{orgSlug}/settings?tab=backups"
-						class="sidebar-collapsed-icon"
-						class:is-active={settingsTab === 'backups'}
-						aria-label="Backups"
-						{@attach springHover()}
-					>
-						<div class="tree-icon-badge" style="background-color: #8b5cf6">
-							<Shield size={11} class="tree-icon-svg" />
-						</div>
-						<span class="sidebar-collapsed-tooltip">Backups</span>
-					</a>
-					{#if $notificationsEnabled}
-						<a
-							href="/{orgSlug}/settings?tab=notifications"
-							class="sidebar-collapsed-icon"
-							class:is-active={settingsTab === 'notifications'}
-							aria-label="Notifications"
-							{@attach springHover()}
-						>
-							<div class="tree-icon-badge" style="background-color: #ec4899">
-								<Bell size={11} class="tree-icon-svg" />
-							</div>
-							<span class="sidebar-collapsed-tooltip">Notifications</span>
-						</a>
-					{/if}
-					{#if isEnterprise}
-						<a
-							href="/{orgSlug}/settings?tab=sso"
-							class="sidebar-collapsed-icon"
-							class:is-active={settingsTab === 'sso'}
-							aria-label="SSO"
-							{@attach springHover()}
-						>
-							<div class="tree-icon-badge" style="background-color: #ef4444">
-								<Key size={11} class="tree-icon-svg" />
-							</div>
-							<span class="sidebar-collapsed-tooltip">SSO</span>
-						</a>
-						<a
-							href="/{orgSlug}/settings?tab=scim"
-							class="sidebar-collapsed-icon"
-							class:is-active={settingsTab === 'scim'}
-							aria-label="SCIM"
-							{@attach springHover()}
-						>
-							<div class="tree-icon-badge" style="background-color: #f59e0b">
-								<UserCog size={11} class="tree-icon-svg" />
-							</div>
-							<span class="sidebar-collapsed-tooltip">SCIM</span>
-						</a>
-					{/if}
+					{#each settingsNav as item (item.href)}
+						{@render navItemCollapsed(item)}
+					{/each}
 				</div>
 			{/if}
 		{:else}
@@ -453,54 +361,9 @@
 					     render as "//projects" — a protocol-relative external URL. -->
 					{#if orgSlug}
 						<div class="sidebar-home-link">
-							<a
-								href="/{orgSlug}"
-								class="tree-node-content"
-								class:is-active={$page.url.pathname === '/' + orgSlug}
-								{@attach navStagger(0)}
-								{@attach springHover({ lift: -1 })}
-							>
-								<div class="tree-icon-badge" style="background-color: #22c55e">
-									<Leaf size={10} class="tree-icon-svg" />
-								</div>
-								<span class="tree-node-label">Your Apps</span>
-							</a>
-							<a
-								href="/{orgSlug}/projects"
-								class="tree-node-content"
-								class:is-active={$page.url.pathname.startsWith('/' + orgSlug + '/projects')}
-								{@attach navStagger(1)}
-								{@attach springHover({ lift: -1 })}
-							>
-								<div class="tree-icon-badge" style="background-color: #4a8aff">
-									<Folder size={10} class="tree-icon-svg" />
-								</div>
-								<span class="tree-node-label">Projects</span>
-							</a>
-							<a
-								href="/{orgSlug}/jobs"
-								class="tree-node-content"
-								class:is-active={$page.url.pathname.startsWith('/' + orgSlug + '/jobs')}
-								{@attach navStagger(2)}
-								{@attach springHover({ lift: -1 })}
-							>
-								<div class="tree-icon-badge" style="background-color: #a855f7">
-									<Zap size={10} class="tree-icon-svg" />
-								</div>
-								<span class="tree-node-label">Jobs</span>
-							</a>
-							<a
-								href="/{orgSlug}/usage"
-								class="tree-node-content"
-								class:is-active={$page.url.pathname.startsWith('/' + orgSlug + '/usage')}
-								{@attach navStagger(3)}
-								{@attach springHover({ lift: -1 })}
-							>
-								<div class="tree-icon-badge" style="background-color: #f59e0b">
-									<Activity size={10} class="tree-icon-svg" />
-								</div>
-								<span class="tree-node-label">Usage</span>
-							</a>
+							{#each mainNav as item, i (item.href)}
+								{@render navItem(item, i)}
+							{/each}
 						</div>
 					{/if}
 				</div>
@@ -521,54 +384,9 @@
 						>
 					</button>
 					{#if orgSlug}
-						<a
-							href="/{orgSlug}"
-							class="sidebar-collapsed-icon"
-							class:is-active={$page.url.pathname === '/' + orgSlug}
-							aria-label="Overview"
-							{@attach springHover()}
-						>
-							<div class="tree-icon-badge" style="background-color: #22c55e">
-								<Leaf size={11} class="tree-icon-svg" />
-							</div>
-							<span class="sidebar-collapsed-tooltip">Your Apps</span>
-						</a>
-						<a
-							href="/{orgSlug}/projects"
-							class="sidebar-collapsed-icon"
-							class:is-active={$page.url.pathname.startsWith('/' + orgSlug + '/projects')}
-							aria-label="Projects"
-							{@attach springHover()}
-						>
-							<div class="tree-icon-badge" style="background-color: #4a8aff">
-								<Folder size={11} class="tree-icon-svg" />
-							</div>
-							<span class="sidebar-collapsed-tooltip">Projects</span>
-						</a>
-						<a
-							href="/{orgSlug}/jobs"
-							class="sidebar-collapsed-icon"
-							class:is-active={$page.url.pathname.startsWith('/' + orgSlug + '/jobs')}
-							aria-label="Jobs"
-							{@attach springHover()}
-						>
-							<div class="tree-icon-badge" style="background-color: #a855f7">
-								<Zap size={11} class="tree-icon-svg" />
-							</div>
-							<span class="sidebar-collapsed-tooltip">Jobs</span>
-						</a>
-						<a
-							href="/{orgSlug}/usage"
-							class="sidebar-collapsed-icon"
-							class:is-active={$page.url.pathname.startsWith('/' + orgSlug + '/usage')}
-							aria-label="Usage"
-							{@attach springHover()}
-						>
-							<div class="tree-icon-badge" style="background-color: #f59e0b">
-								<Activity size={11} class="tree-icon-svg" />
-							</div>
-							<span class="sidebar-collapsed-tooltip">Usage</span>
-						</a>
+						{#each mainNav as item (item.href)}
+							{@render navItemCollapsed(item)}
+						{/each}
 					{/if}
 				</div>
 			{/if}
@@ -645,19 +463,21 @@
 		color: var(--sidebar-text-active-color);
 	}
 
-	.tree-icon-badge {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 22px;
-		height: 22px;
-		border-radius: 6px;
+	.tree-node-content :global(.tree-icon) {
 		flex-shrink: 0;
+		opacity: 0.65;
+		transition:
+			opacity 120ms ease,
+			color 120ms ease;
 	}
 
-	.tree-icon-badge :global(.tree-icon-svg) {
-		color: #ffffff !important;
-		stroke: #ffffff !important;
+	.tree-node-content:hover :global(.tree-icon) {
+		opacity: 0.9;
+	}
+
+	.tree-node-content.is-active :global(.tree-icon) {
+		opacity: 1;
+		color: var(--accent);
 	}
 
 	.tree-node-label {
@@ -675,12 +495,19 @@
 		font-weight: 600;
 	}
 
-	.sidebar-collapsed-icon .tree-icon-badge {
-		width: 1.375rem;
-		height: 1.375rem;
+	:global(.sidebar-collapsed-icon .tree-icon) {
+		opacity: 0.65;
+		transition:
+			opacity 120ms ease,
+			color 120ms ease;
 	}
-	.sidebar-collapsed-icon .tree-icon-badge :global(svg) {
-		width: 11px;
-		height: 11px;
+
+	:global(.sidebar-collapsed-icon:hover .tree-icon) {
+		opacity: 0.9;
+	}
+
+	:global(.sidebar-collapsed-icon.is-active .tree-icon) {
+		opacity: 1;
+		color: var(--accent);
 	}
 </style>
