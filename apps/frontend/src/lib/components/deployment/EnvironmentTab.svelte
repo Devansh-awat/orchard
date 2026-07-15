@@ -180,7 +180,7 @@
 
 <style>
 	.env-action-secret {
-		color: #d97706;
-		background: color-mix(in srgb, #f59e0b 12%, transparent);
+		color: var(--status-warning);
+		background: color-mix(in srgb, var(--status-warning) 12%, transparent);
 	}
 </style>

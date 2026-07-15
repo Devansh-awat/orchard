@@ -2290,7 +2290,7 @@ a.dep-meta-lead-link:hover {
 	gap: 0;
 	flex-shrink: 0;
 	padding-right: 0.25rem;
-	opacity: 0;
+	opacity: 0.45;
 	transition: opacity 0.15s;
 }
 
