@@ -11,7 +11,6 @@
 		Globe,
 		Server,
 		Plus,
-		Package,
 		Trash2
 	} from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
@@ -65,6 +64,11 @@
 		}
 		return result;
 	});
+
+	function formatCategory(cat: string): string {
+		if (cat.length <= 3) return cat.toUpperCase();
+		return cat.charAt(0).toUpperCase() + cat.slice(1);
+	}
 
 	function getIconForTemplate(icon?: string) {
 		switch (icon) {
@@ -216,27 +220,6 @@
 			</div>
 		</div>
 
-		<div class="tpl-stats">
-			<div class="tpl-stat">
-				<Package class="h-4 w-4" />
-				<span class="tpl-stat-value">{templates.length}</span>
-				<span class="tpl-stat-label">Available</span>
-			</div>
-			{#if templates.filter((t) => t.isBuiltIn).length}
-				<div class="tpl-stat">
-					<LayoutTemplate class="h-4 w-4" />
-					<span class="tpl-stat-value">{templates.filter((t) => t.isBuiltIn).length}</span>
-					<span class="tpl-stat-label">Built-in</span>
-				</div>
-			{/if}
-			{#if categories().length}
-				<div class="tpl-stat">
-					<span class="tpl-stat-value">{categories().length}</span>
-					<span class="tpl-stat-label">Categories</span>
-				</div>
-			{/if}
-		</div>
-
 		<div class="tpl-section-header">
 			<h2 class="tpl-section-title">Browse templates</h2>
 			<div class="tpl-toolbar">
@@ -266,7 +249,7 @@
 					class:tpl-cat-active={selectedCategory === cat}
 					onclick={() => (selectedCategory = selectedCategory === cat ? null : cat)}
 				>
-					{cat}
+					{formatCategory(cat)}
 				</button>
 			{/each}
 		</div>
@@ -289,7 +272,9 @@
 							</div>
 							<div class="tpl-card-top-right">
 								{#if template.category}
-									<Badge tone={getCategoryTone(template.category)}>{template.category}</Badge>
+									<Badge tone={getCategoryTone(template.category)}
+										>{formatCategory(template.category)}</Badge
+									>
 								{/if}
 								{#if !template.isBuiltIn}
 									<button
@@ -401,29 +386,6 @@
 		font-size: 0.875rem;
 		color: var(--surface-muted);
 		margin: 0.25rem 0 0;
-	}
-
-	.tpl-stats {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.5rem;
-		margin-bottom: 1.5rem;
-	}
-
-	.tpl-stat {
-		display: flex;
-		align-items: center;
-		gap: 0.375rem;
-		padding: 0.375rem 0.75rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		color: var(--surface-muted);
-		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);
-	}
-
-	.tpl-stat-value {
-		font-weight: 600;
-		color: var(--center-channel-color);
 	}
 
 	.tpl-section-header {

@@ -54,7 +54,7 @@
 		>
 			<Server class="h-3.5 w-3.5" />
 			Apps
-			<span class="pj-tab-count">{resourceCount}</span>
+			{#if resourceCount > 0}<span class="pj-tab-count">{resourceCount}</span>{/if}
 		</button>
 		<button
 			type="button"
@@ -79,7 +79,7 @@
 		>
 			<FileText class="h-3.5 w-3.5" />
 			Compose
-			<span class="pj-tab-count">{composeCount}</span>
+			{#if composeCount > 0}<span class="pj-tab-count">{composeCount}</span>{/if}
 		</button>
 		<button
 			type="button"
@@ -92,7 +92,7 @@
 		>
 			<Users class="h-3.5 w-3.5" />
 			Members
-			<span class="pj-tab-count">{membersCount}</span>
+			{#if membersCount > 0}<span class="pj-tab-count">{membersCount}</span>{/if}
 		</button>
 	</div>
 	<div class="pj-tabs-actions">
