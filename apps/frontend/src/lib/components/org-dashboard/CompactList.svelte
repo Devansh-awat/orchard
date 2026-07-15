@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Star, Database as DatabaseIcon } from 'lucide-svelte';
+	import { Star, Plus, Database as DatabaseIcon } from 'lucide-svelte';
 	import { StatusDot, resourceStatus } from '$lib/components/ui';
 	import { formatCpu, formatMemory } from '$lib/utils/format';
 	import { timeAgo, projectSwatch, knownIcon, favUrl, IMG_ICONS } from './helpers.svelte';
@@ -63,11 +63,21 @@
 
 	{#each groups as group, gi (group.id)}
 		<section class="cl-group" {@attach motionStagger({ index: gi + 1, from: { y: 8 } })}>
-			<a class="cl-head" href="/{orgSlug}/projects/{group.slug}">
-				<span class="cl-swatch" style={projectSwatch(group.slug)}></span>
-				<span class="cl-gname">{group.name}</span>
-				<span class="cl-gcount">{group.deps.length + group.dbs.length}</span>
-			</a>
+			<div class="cl-headrow">
+				<a class="cl-head" href="/{orgSlug}/projects/{group.slug}">
+					<span class="cl-swatch" style={projectSwatch(group.slug)}></span>
+					<span class="cl-gname">{group.name}</span>
+					<span class="cl-gcount">{group.deps.length + group.dbs.length}</span>
+				</a>
+				<a
+					class="cl-new"
+					href="/{orgSlug}/new?projectSlug={group.slug}"
+					title="New in {group.name}"
+					aria-label="New in {group.name}"
+				>
+					<Plus size={13} />
+				</a>
+			</div>
 			{#each group.deps as dep (dep.id)}
 				{@render depRow(dep)}
 			{/each}
@@ -121,6 +131,12 @@
 		flex-direction: column;
 	}
 
+	.cl-headrow {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+	}
+
 	.cl-head {
 		display: flex;
 		align-items: center;
@@ -130,9 +146,29 @@
 		text-decoration: none;
 		color: inherit;
 		min-width: 0;
+		flex: 1;
 	}
 
 	a.cl-head:hover {
+		background-color: var(--bg-hover);
+	}
+
+	.cl-new {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.5rem;
+		height: 1.5rem;
+		border-radius: 0.375rem;
+		color: var(--text-faint);
+		flex-shrink: 0;
+		transition:
+			color 120ms ease,
+			background-color 120ms ease;
+	}
+
+	.cl-new:hover {
+		color: var(--text-default);
 		background-color: var(--bg-hover);
 	}
 

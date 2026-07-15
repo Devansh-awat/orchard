@@ -187,14 +187,17 @@
 					<Plus size={12} /> New
 				</span>
 			{/snippet}
-			<MenuItem href="/{orgSlug}/projects/{group.slug}/deployments/new?source=image">
-				<Container size={14} /> Dockerfile
-			</MenuItem>
 			<MenuItem href="/{orgSlug}/projects/{group.slug}/deployments/new?source=github">
 				<Github size={14} /> GitHub repo
 			</MenuItem>
+			<MenuItem href="/{orgSlug}/projects/{group.slug}/deployments/new?source=image">
+				<Container size={14} /> Docker image
+			</MenuItem>
+			<MenuItem href="/{orgSlug}/projects/{group.slug}/databases/new">
+				<Database size={14} /> Database
+			</MenuItem>
 			<MenuItem href="/{orgSlug}/new?projectSlug={group.slug}">
-				<Ellipsis size={14} /> Something else
+				<Ellipsis size={14} /> Templates and more
 			</MenuItem>
 		</Menu>
 		<a
