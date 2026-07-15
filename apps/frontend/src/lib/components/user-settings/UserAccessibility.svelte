@@ -26,7 +26,7 @@
 
 	const CONTRAST_OPTIONS: { value: ContrastLevel; label: string; hint: string }[] = [
 		{ value: 'default', label: 'Default', hint: 'Standard colors and borders' },
-		{ value: 'high', label: 'High', hint: 'Stronger text, borders, and status colors' }
+		{ value: 'high', label: 'High', hint: 'Darker text and visible borders on everything' }
 	];
 
 	const TEXT_OPTIONS: { value: TextScale; label: string; hint: string }[] = [

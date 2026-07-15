@@ -56,24 +56,40 @@
 }
 
 html.contrast-high {
-	--text-muted: #5f4a4e;
-	--text-faint: color-mix(in srgb, var(--text-muted) 90%, transparent);
-	--border-default: #d9bfc4;
-	--border-strong: color-mix(in srgb, var(--border-default) 30%, var(--text-default));
+	--surface-border: #9a7880 !important;
+	--dropdown-border: #9a7880 !important;
+	--surface-muted: #5f4a4e !important;
+	--text-faint: color-mix(in srgb, var(--surface-muted) 90%, transparent);
+	--border-strong: color-mix(in srgb, var(--surface-border) 30%, var(--text-default));
 	--status-success: #0e9f72;
 	--status-warning: #b35400;
-	--status-neutral: #5f4a4e;
 	--status-progress: #b35400;
 }
 
 html.dark.contrast-high {
-	--text-muted: #f0dade;
-	--text-faint: color-mix(in srgb, var(--text-muted) 90%, transparent);
-	--border-default: #4d4d50;
+	--surface-border: #78787d !important;
+	--dropdown-border: #78787d !important;
+	--surface-muted: #f0dade !important;
 	--status-success: #4fe3b8;
 	--status-warning: #ffb257;
-	--status-neutral: #f0dade;
 	--status-progress: #ffb257;
+}
+
+html.contrast-high .dash-card,
+html.contrast-high .proj-card,
+html.contrast-high .cl-row,
+html.contrast-high .cl-head,
+html.contrast-high .ui-table-row,
+html.contrast-high .btn,
+html.contrast-high .console-btn,
+html.contrast-high .tree-node-content,
+html.contrast-high .sidebar-collapsed-icon,
+html.contrast-high .sidebar-search-trigger,
+html.contrast-high .stat-card,
+html.contrast-high .ua-seg-btn--active,
+html.contrast-high .density-btn--active {
+	outline: 1px solid var(--border-default);
+	outline-offset: -1px;
 }
 
 html.reduce-transparency {
