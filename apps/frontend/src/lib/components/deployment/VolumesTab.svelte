@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Plus, Loader2, TriangleAlert } from 'lucide-svelte';
 	import { HardDriveDownload, Trash2 } from '@jis3r/icons';
-	import { slide, fade } from 'svelte/transition';
+	import { slide, fade } from '$lib/utils/transitions';
 	import { SectionCard } from '$lib/components/ui';
 
 	interface VolumeEntry {

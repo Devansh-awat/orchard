@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Plus, Loader2, Lock, TriangleAlert, ExternalLink, Webhook } from 'lucide-svelte';
 	import { Check, Copy, RefreshCw, Boxes, Trash2, X } from '@jis3r/icons';
-	import { slide } from 'svelte/transition';
+	import { slide } from '$lib/utils/transitions';
 	import type { WebhookToken } from '$lib/types/deployment';
 
 	let {

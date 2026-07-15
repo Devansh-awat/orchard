@@ -2,7 +2,7 @@
 	import { Loader2, Camera, X, Users, Activity, ScrollText, ArrowRight } from 'lucide-svelte';
 	import { Pencil as PencilAnim } from 'lucide-svelte';
 	import { UserCog, Rocket } from '@jis3r/icons';
-	import { fade } from 'svelte/transition';
+	import { fade } from '$lib/utils/transitions';
 	import { Avatar as AvatarBuilder } from 'melt/builders';
 	import { Button } from '$lib/components/ui';
 	import SettingsSection from '$lib/components/user-settings/SettingsSection.svelte';

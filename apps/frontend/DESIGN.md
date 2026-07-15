@@ -83,6 +83,12 @@ Render with `<StatusBadge meta={...} />` (tinted pill, dot + label) or
 See CLAUDE.md Motion System. One canonical implementation per utility in
 `$lib/utils/motion.svelte.ts`; never redefine locally.
 
+Every animation must respect the user animation level (Settings → Accessibility):
+the motion utilities gate themselves; svelte transitions come from
+`$lib/utils/transitions` (never `svelte/transition` directly); one-off `animate()`
+calls guard with `decorativeMotion()`/`functionalMotion()`; looping css keyframes
+join the `html.motion-reduce` kill list in `tokens.css`.
+
 ## Guardrail
 
 `pnpm check:design` (also runs in root `pnpm lint`). Counts hex colors, legacy token

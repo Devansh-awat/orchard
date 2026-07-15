@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Loader2, GitBranch, GitCommit } from 'lucide-svelte';
 	import { History, RefreshCw, Terminal } from '@jis3r/icons';
-	import { slide } from 'svelte/transition';
+	import { slide } from '$lib/utils/transitions';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import { formatBuildDurationBetween } from '$lib/utils/format';
 	import type { Deployment, ImageHistory } from '$lib/types/deployment';

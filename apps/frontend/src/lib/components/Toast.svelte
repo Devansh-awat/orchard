@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { toasts } from '$lib/stores';
-	import { fly, fade } from 'svelte/transition';
+	import { fly, fade } from '$lib/utils/transitions';
 	import { X, CheckCircle2, AlertCircle, AlertTriangle, Info } from 'lucide-svelte';
 
 	const iconMap = {

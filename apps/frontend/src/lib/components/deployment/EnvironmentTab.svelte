@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Plus, Loader2, Lock, LockOpen } from 'lucide-svelte';
 	import { Eye, EyeOff, Trash2 } from '@jis3r/icons';
-	import { slide } from 'svelte/transition';
+	import { slide } from '$lib/utils/transitions';
 	import { SectionCard } from '$lib/components/ui';
 	import { envVarsToRaw, rawToEnvVars } from '$lib/utils/format';
 

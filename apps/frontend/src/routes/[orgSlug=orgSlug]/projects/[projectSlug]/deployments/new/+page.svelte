@@ -2,7 +2,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { slide } from 'svelte/transition';
+	import { slide } from '$lib/utils/transitions';
 	import {
 		apiFetch,
 		toasts,

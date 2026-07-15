@@ -3,7 +3,7 @@
 	import { onDestroy, onMount, tick, untrack } from 'svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { animate } from 'motion';
-	import { springPop } from '$lib/utils/motion.svelte';
+	import { springPop, decorativeMotion } from '$lib/utils/motion.svelte';
 	import { apiFetch, toasts, subscribeOrgEvents, sseStatusFor } from '$lib/stores';
 	import { queryClient } from '$lib/query';
 	import type { PageData } from './$types';
@@ -115,6 +115,7 @@
 			firstTabRun = false;
 			return;
 		}
+		if (!decorativeMotion()) return;
 		const dir = activeTab === 'members' ? -1 : 1;
 		tick().then(() => {
 			if (tabsRowEl) {
@@ -133,6 +134,7 @@
 			firstPanelMount = false;
 			return;
 		}
+		if (!decorativeMotion()) return;
 		const dir = activeTab === 'members' ? -1 : 1;
 		node.style.transform = `translateY(${dir * 9}px)`;
 		animate(node, { y: [dir * 9, 0] }, { type: 'spring', stiffness: 180, damping: 15, mass: 1.2 });

@@ -32,6 +32,9 @@ that adds hex colors, legacy tokens, or legacy classes to `.svelte` files.
   "Label: value" grids.
 - No comments in authored code. No em dashes in UI copy.
 - Never redefine motion utilities locally; import from `$lib/utils/motion.svelte`.
+- Svelte transitions come from `$lib/utils/transitions`, never `svelte/transition`.
+  Raw `animate()` calls guard with `decorativeMotion()`/`functionalMotion()`; looping
+  css keyframes join the `html.motion-reduce` kill list in `tokens.css`.
 
 ## Motion System
 

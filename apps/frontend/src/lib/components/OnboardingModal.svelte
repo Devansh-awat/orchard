@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { fly } from 'svelte/transition';
+	import { fly } from '$lib/utils/transitions';
 	import { user, showOnboarding, lastAcceptedOrganization, apiFetch, toasts } from '$lib/stores';
 	import { Loader2, User, Github, PartyPopper, ArrowRight, Check, Link2 } from 'lucide-svelte';
 	import { Modal, Button, Field, Input } from '$lib/components/ui';

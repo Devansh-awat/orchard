@@ -2,7 +2,7 @@
 	import { onDestroy } from 'svelte';
 	import { goto, invalidate } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { fly, fade } from 'svelte/transition';
+	import { fly, fade } from '$lib/utils/transitions';
 	import { apiFetch, toasts, subscribeOrgEvents } from '$lib/stores';
 	import { formatCpuMilli, formatMemoryBytes } from '$lib/quantity';
 	import Speedometer from '$lib/components/Speedometer.svelte';

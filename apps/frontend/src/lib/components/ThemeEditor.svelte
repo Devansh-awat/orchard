@@ -10,7 +10,7 @@
 	} from '$lib/stores/theme';
 	import { toasts } from '$lib/stores';
 	import { ChevronDown, ChevronUp, Copy, RotateCcw, Check, X } from 'lucide-svelte';
-	import { slide } from 'svelte/transition';
+	import { slide } from '$lib/utils/transitions';
 
 	interface Props {
 		theme: Theme;

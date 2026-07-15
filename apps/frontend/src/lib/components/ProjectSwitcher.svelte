@@ -4,7 +4,7 @@
 	import { apiFetch, selectedOrganization } from '$lib/stores';
 	import { ChevronDown, Check, Plus, X, Sparkles } from 'lucide-svelte';
 	import { onMount, tick } from 'svelte';
-	import { scale } from 'svelte/transition';
+	import { scale } from '$lib/utils/transitions';
 	import { createQuery } from '@tanstack/svelte-query';
 
 	interface Props {

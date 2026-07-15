@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { goto } from '$app/navigation';
-	import { fly } from 'svelte/transition';
+	import { fly } from '$lib/utils/transitions';
 	import {
 		pendingInvitations,
 		organizations,

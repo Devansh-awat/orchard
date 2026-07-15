@@ -75,7 +75,7 @@
 		User,
 		Wifi
 	} from '@jis3r/icons';
-	import { scale, fade, slide } from 'svelte/transition';
+	import { scale, fade, slide } from '$lib/utils/transitions';
 	import { animate } from 'motion';
 	import { MemoryStick } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
@@ -96,7 +96,8 @@
 		motionPopover,
 		motionBackdrop,
 		cardTilt,
-		pressSpringDelegate
+		pressSpringDelegate,
+		functionalMotion
 	} from '$lib/utils/motion.svelte';
 	import {
 		portal,
@@ -317,6 +318,12 @@
 				if (!armed || isCollapsed === last) return;
 				last = isCollapsed;
 				target.style.marginTop = isCollapsed ? '0px' : `${naturalMargin}px`;
+				if (!functionalMotion()) {
+					target.style.height = isCollapsed ? '0px' : 'auto';
+					target.style.opacity = isCollapsed ? '0' : '1';
+					if (!isCollapsed) target.style.marginTop = '';
+					return;
+				}
 				const fullHeight = naturalHeight();
 				const card = target.parentElement;
 				if (isCollapsed) {

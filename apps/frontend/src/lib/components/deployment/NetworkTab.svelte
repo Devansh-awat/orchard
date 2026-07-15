@@ -2,7 +2,7 @@
 	import { Loader2, Lock, Shield, Check } from 'lucide-svelte';
 	import { ChevronDown, Copy, Plus, RefreshCw, Settings, Trash2, Wifi, X } from '@jis3r/icons';
 	import { Button, SectionCard, Select } from '$lib/components/ui';
-	import { slide } from 'svelte/transition';
+	import { slide } from '$lib/utils/transitions';
 	import { env } from '$env/dynamic/public';
 	import type { Service, ServiceFormState, ServicePortForm } from '$lib/types/deployment';
 

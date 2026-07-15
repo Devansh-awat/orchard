@@ -110,7 +110,18 @@ html.motion-reduce .pj-deployment-favicon-dot::after,
 html.motion-reduce .console-tail-dot,
 html.motion-reduce .ui-menu[data-open],
 html.motion-reduce .ui-popover[data-open],
-html.motion-reduce .ui-modal[open] {
+html.motion-reduce .ui-modal[open],
+html.motion-reduce .ui-skeleton,
+html.motion-reduce .skeleton,
+html.motion-reduce .sk,
+html.motion-reduce .login-orb-1,
+html.motion-reduce .login-orb-2,
+html.motion-reduce .login-orb-3,
+html.motion-reduce .login-orb-4,
+html.motion-reduce .job-cron-preview-dot,
+html.motion-reduce .job-logs-live-dot,
+html.motion-reduce .job-history-bar--live,
+html.motion-reduce .job-step-dot--running {
 	animation: none !important;
 }
 

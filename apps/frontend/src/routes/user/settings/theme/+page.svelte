@@ -21,7 +21,7 @@
 		Sparkles,
 		X
 	} from 'lucide-svelte';
-	import { slide } from 'svelte/transition';
+	import { slide } from '$lib/utils/transitions';
 
 	let allThemes = $state<Theme[]>([defaultLightTheme, defaultDarkTheme]);
 	let activeTheme = $state<Theme>(defaultLightTheme);
