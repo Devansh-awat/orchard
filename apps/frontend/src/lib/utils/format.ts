@@ -434,9 +434,9 @@ export function envVarsToRaw(vars: { key: string; value: string }[]): string {
 
 export function envBadgeColor(slug: string): string {
 	const s = (slug || '').toLowerCase();
-	if (s.startsWith('prod')) return '#f43f5e';
-	if (s.startsWith('stag')) return '#f59e0b';
-	if (s.startsWith('dev')) return '#3b82f6';
-	if (s.startsWith('test') || s.startsWith('qa')) return '#8b5cf6';
-	return '#64748b';
+	if (s.startsWith('prod')) return 'var(--hue-emerald)';
+	if (s.startsWith('stag')) return 'var(--hue-amber)';
+	if (s.startsWith('dev')) return 'var(--hue-blue)';
+	if (s.startsWith('test') || s.startsWith('qa')) return 'var(--hue-violet)';
+	return 'var(--hue-slate)';
 }

@@ -120,7 +120,7 @@
 					onclick={onCustomize}
 					class="pj-icon-btn pj-icon-btn--onhero"
 					aria-label="Customize project"
-					title="Customize"
+					title="Customize project"
 				>
 					<Palette class="h-4 w-4" />
 				</button>
@@ -131,7 +131,7 @@
 					disabled={deleting}
 					class="pj-icon-btn pj-icon-btn--danger pj-icon-btn--onhero"
 					aria-label="Delete project"
-					title="Delete"
+					title="Delete project"
 				>
 					{#if deleting}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Trash2
 							class="h-4 w-4"

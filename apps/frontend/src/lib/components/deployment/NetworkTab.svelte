@@ -887,6 +887,7 @@
 										variant="ghost"
 										size="sm"
 										aria-label="Protection settings"
+										title="Access protection"
 										style={protectionExpandedId === ingress.id
 											? 'color: var(--sidebar-text-active-border);'
 											: undefined}
@@ -902,6 +903,7 @@
 									variant="ghost"
 									size="sm"
 									aria-label="Remove domain"
+									title="Remove domain"
 									disabled={deletingIngressId === ingress.id}
 									onclick={(e: MouseEvent) => {
 										e.stopPropagation();

@@ -541,15 +541,17 @@
 }
 
 .dep-delete-btn {
-	color: #fff !important;
-	border: 1px solid #dc2626 !important;
-	background-color: #ef4444 !important;
+	color: var(--status-error) !important;
+	border: 1px solid var(--status-error-border) !important;
+	background-color: var(--status-error-bg) !important;
 	opacity: 1 !important;
-	transition: background-color 0.15s;
+	transition:
+		background-color 0.15s,
+		color 0.15s;
 }
 .dep-delete-btn:hover {
-	background-color: var(--error-text-color) !important;
-	color: #fff !important;
+	background-color: var(--status-error) !important;
+	color: var(--text-on-accent) !important;
 }
 
 /* Meta: single line of supporting text. Same baseline, no chips, no borders. */

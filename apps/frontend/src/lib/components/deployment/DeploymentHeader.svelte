@@ -137,6 +137,8 @@
 				onclick={onShowDeleteModal}
 				disabled={deleting}
 				class="btn btn-sm dep-delete-btn"
+				aria-label="Delete app"
+				title="Delete app"
 				onmouseenter={() => onTriggerActionAnim('delete')}
 			>
 				{#if deleting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2
