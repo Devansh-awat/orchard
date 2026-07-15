@@ -384,21 +384,10 @@
 		}
 	}
 
-	$effect(() => {
-		if ($dashboardDensity !== 'expanded') return;
-		const ids = projectGroups.map((g) => g.id);
-		untrack(() => {
-			let changed = false;
-			const next = new Set(expandedProjects);
-			for (const id of ids) {
-				if (!next.has(id)) {
-					next.add(id);
-					changed = true;
-				}
-			}
-			if (changed) persistExpanded(next);
-		});
-	});
+	function setDensity(value: DashboardDensity) {
+		dashboardDensity.set(value);
+		if (value !== 'expanded') persistExpanded(new Set());
+	}
 
 	// ── Filtering ──
 	let searchQuery = $state('');
@@ -616,7 +605,7 @@
 								class:density-btn--active={$dashboardDensity === opt.value}
 								title={opt.label}
 								aria-label={opt.label}
-								onclick={() => dashboardDensity.set(opt.value)}
+								onclick={() => setDensity(opt.value)}
 							>
 								<Icon size={14} />
 							</button>
@@ -625,7 +614,14 @@
 				</div>
 
 				{#if $dashboardDensity === 'compact'}
-					<CompactList groups={projectGroups} {favDeps} {orgSlug} {liveMetrics} />
+					<CompactList
+						groups={projectGroups}
+						{favDeps}
+						{orgSlug}
+						{liveMetrics}
+						{failedFav}
+						onFavErr={favErr}
+					/>
 					{#if filtered.length === 0 && filteredDbs.length === 0}
 						<p class="no-results">
 							{searchQuery ? `No results for "${searchQuery}"` : 'Nothing here yet'}
@@ -669,8 +665,8 @@
 									{group}
 									meta={projectMetas.get(group.id)}
 									{orgSlug}
-									expanded={expandedProjects.has(group.id)}
-									rendered={renderedProjectBodies.has(group.id)}
+									expanded={$dashboardDensity === 'expanded' || expandedProjects.has(group.id)}
+									rendered={$dashboardDensity === 'expanded' || renderedProjectBodies.has(group.id)}
 									{favouriteIds}
 									{failedFav}
 									{liveMetrics}

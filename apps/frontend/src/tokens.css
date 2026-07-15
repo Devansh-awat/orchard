@@ -107,6 +107,27 @@
 html.motion-reduce .dot--pulse,
 html.motion-reduce .dep-status-dot--pulse,
 html.motion-reduce .pj-deployment-favicon-dot::after,
-html.motion-reduce .console-tail-dot {
+html.motion-reduce .console-tail-dot,
+html.motion-reduce .ui-menu[data-open],
+html.motion-reduce .ui-popover[data-open],
+html.motion-reduce .ui-modal[open] {
 	animation: none !important;
+}
+
+html.motion-off *,
+html.motion-off *::before,
+html.motion-off *::after {
+	animation-duration: 0.01ms !important;
+	animation-iteration-count: 1 !important;
+	transition-duration: 0.01ms !important;
+}
+
+html.motion-off .animate-spin {
+	animation-duration: 1s !important;
+	animation-iteration-count: infinite !important;
+}
+
+html.motion-off .lds-ellipsis div {
+	animation-duration: 0.6s !important;
+	animation-iteration-count: infinite !important;
 }

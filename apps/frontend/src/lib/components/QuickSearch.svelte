@@ -5,7 +5,11 @@
 	import { overviewQueryOptions } from '$lib/queries/overview';
 	import { Package, Rocket, Search, X, Database, LayoutTemplate } from 'lucide-svelte';
 	import { onMount } from 'svelte';
-	import { animate } from 'motion';
+	import {
+		motionPopover as motionPopoverBase,
+		motionBackdrop as motionBackdropBase,
+		motionStagger as motionStaggerBase
+	} from '$lib/utils/motion.svelte';
 
 	let open = $state(false);
 	let query = $state('');
@@ -345,64 +349,22 @@
 
 	// ── Motion ──
 	function motionPopover(closing: () => boolean, onClosed: () => void) {
-		return (el: Element) => {
-			const target = el as HTMLElement;
-			animate(
-				target,
-				{ opacity: [0, 1], scale: [0.96, 1], y: [-8, 0] },
-				{ type: 'spring', stiffness: 540, damping: 30, mass: 0.85 }
-			);
-			let firstRun = true;
-			$effect(() => {
-				const isClosing = closing();
-				if (firstRun) {
-					firstRun = false;
-					return;
-				}
-				if (isClosing) {
-					animate(
-						target,
-						{ opacity: 0, scale: 0.96, y: -8 },
-						{ type: 'spring', stiffness: 600, damping: 36, mass: 0.85 }
-					).finished.then(() => {
-						if (closing()) onClosed();
-					});
-				}
-			});
-		};
+		return motionPopoverBase({
+			closing,
+			onClosed,
+			from: { opacity: 0, scale: 0.96, y: -8 },
+			stiffness: 540
+		});
 	}
 	function motionBackdrop(closing: () => boolean) {
-		return (el: Element) => {
-			const target = el as HTMLElement;
-			animate(target, { opacity: [0, 1] }, { type: 'spring', stiffness: 280, damping: 32 });
-			let firstRun = true;
-			$effect(() => {
-				const isClosing = closing();
-				if (firstRun) {
-					firstRun = false;
-					return;
-				}
-				if (isClosing) {
-					animate(target, { opacity: 0 }, { duration: 0.18, ease: [0.4, 0, 1, 1] });
-				}
-			});
-		};
+		return motionBackdropBase(closing, () => {});
 	}
 	function rowStagger(index: number) {
-		return (el: Element) => {
-			const target = el as HTMLElement;
-			animate(
-				target,
-				{ opacity: [0, 1], y: [4, 0] },
-				{
-					type: 'spring',
-					stiffness: 320,
-					damping: 26,
-					mass: 0.7,
-					delay: Math.min(index, 12) * 0.018
-				}
-			);
-		};
+		return motionStaggerBase({
+			index: Math.min(index, 12),
+			stride: 0.018,
+			from: { y: 4, opacity: 0, scale: 1 }
+		});
 	}
 
 	// Drive open/close of the modal with a render-flag pattern so the OUT

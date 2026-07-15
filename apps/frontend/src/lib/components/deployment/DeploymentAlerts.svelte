@@ -4,7 +4,7 @@
 	import { X } from 'lucide-svelte';
 	import { ShieldAlert, TriangleAlert, CircleAlert } from '@jis3r/icons';
 	import { animate } from 'motion';
-	import { motionStagger } from '$lib/utils/motion.svelte';
+	import { motionStagger, functionalMotion } from '$lib/utils/motion.svelte';
 	import { humanizeWarning, type WarningSeverity } from '$lib/utils/format';
 
 	interface Warning {
@@ -187,6 +187,10 @@
 	}
 
 	function dismissWithAnimation(el: HTMLElement, id: string) {
+		if (!functionalMotion()) {
+			dismissed.add(id);
+			return;
+		}
 		animate(
 			el,
 			{ opacity: 0, scale: 0.95, x: 20 },

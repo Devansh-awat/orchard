@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { animate } from 'motion';
+	import { functionalMotion } from '$lib/utils/motion.svelte';
 	import { tick } from 'svelte';
 	import { Palette, Trash2, Loader2 } from 'lucide-svelte';
 	import type { Project } from './types';
@@ -39,6 +40,14 @@
 		const heroPx = compact ? 7.5 * 16 : 18 * 16;
 		const titlePx = compact ? 1.0625 * 16 : 1.25 * 16;
 		const descOp = compact ? 0 : 1;
+
+		if (!functionalMotion()) {
+			if (heroEl) heroEl.style.height = `${heroPx}px`;
+			if (heroTitleEl) heroTitleEl.style.fontSize = `${titlePx}px`;
+			if (heroDescEl) heroDescEl.style.opacity = `${descOp}`;
+			firstRun = false;
+			return;
+		}
 
 		if (heroEl) {
 			animate(

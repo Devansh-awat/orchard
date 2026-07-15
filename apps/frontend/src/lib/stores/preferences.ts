@@ -111,6 +111,7 @@ if (browser) {
 	const apply = () => {
 		currentEffective = level === 'system' ? (systemReduced ? 'reduced' : 'full') : level;
 		document.documentElement.classList.toggle('motion-reduce', currentEffective !== 'full');
+		document.documentElement.classList.toggle('motion-off', currentEffective === 'off');
 	};
 	animationStore.subscribe((l) => {
 		level = l;

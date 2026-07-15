@@ -2,7 +2,7 @@
 	import { Star, Database as DatabaseIcon } from 'lucide-svelte';
 	import { StatusDot, resourceStatus } from '$lib/components/ui';
 	import { formatCpu, formatMemory } from '$lib/utils/format';
-	import { timeAgo, projectSwatch } from './helpers.svelte';
+	import { timeAgo, projectSwatch, knownIcon, favUrl, IMG_ICONS } from './helpers.svelte';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import type { ProjectGroup, DeploymentSummary, LiveMetricsEntry } from './types';
 
@@ -10,13 +10,26 @@
 		groups,
 		favDeps,
 		orgSlug,
-		liveMetrics
+		liveMetrics,
+		failedFav,
+		onFavErr
 	}: {
 		groups: ProjectGroup[];
 		favDeps: DeploymentSummary[];
 		orgSlug: string;
 		liveMetrics?: ReadonlyMap<string, LiveMetricsEntry>;
+		failedFav: Set<string>;
+		onFavErr: (id: string) => void;
 	} = $props();
+
+	function depIcon(dep: DeploymentSummary): string | null {
+		const known = knownIcon(dep.image);
+		if (known) return known;
+		if (failedFav.has(dep.id)) return null;
+		if (dep.faviconUrl) return dep.faviconUrl;
+		const host = dep.ingresses?.[0]?.host?.split('/')[0];
+		return host ? favUrl(host) : null;
+	}
 
 	function subtitle(dep: DeploymentSummary): string {
 		const host = dep.ingresses?.[0]?.host?.split('/')[0];
@@ -61,6 +74,7 @@
 			{#each group.dbs as db (db.id)}
 				<a class="cl-row" href="/{orgSlug}/databases/{db.id}">
 					<StatusDot meta={resourceStatus(db.status)} size={6} />
+					<img src={IMG_ICONS.postgres} alt="" class="cl-ic" loading="lazy" decoding="async" />
 					<span class="cl-name">{db.name}</span>
 					<span class="cl-sub"><DatabaseIcon size={10} /> {db.dbName}</span>
 					<span class="cl-end">{timeAgo(db.updatedAt)}</span>
@@ -71,8 +85,21 @@
 </div>
 
 {#snippet depRow(dep: DeploymentSummary)}
+	{@const icon = depIcon(dep)}
 	<a class="cl-row" href="/{orgSlug}/deployments/{dep.id}">
 		<StatusDot meta={resourceStatus(dep.status, dep.buildStatus)} size={6} />
+		{#if icon}
+			<img
+				src={icon}
+				alt=""
+				class="cl-ic"
+				loading="lazy"
+				decoding="async"
+				onerror={() => onFavErr(dep.id)}
+			/>
+		{:else}
+			<span class="cl-av">{dep.name.charAt(0).toUpperCase()}</span>
+		{/if}
 		<span class="cl-name">{dep.name}</span>
 		<span class="cl-sub">{subtitle(dep)}</span>
 		{#if metrics(dep)}
@@ -151,6 +178,28 @@
 
 	.cl-row:hover {
 		background-color: var(--bg-hover);
+	}
+
+	.cl-ic {
+		width: 1rem;
+		height: 1rem;
+		border-radius: 0.25rem;
+		object-fit: contain;
+		flex-shrink: 0;
+	}
+
+	.cl-av {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1rem;
+		height: 1rem;
+		border-radius: 0.25rem;
+		background-color: var(--bg-hover);
+		color: var(--text-muted);
+		font-size: 0.5625rem;
+		font-weight: 700;
+		flex-shrink: 0;
 	}
 
 	.cl-name {

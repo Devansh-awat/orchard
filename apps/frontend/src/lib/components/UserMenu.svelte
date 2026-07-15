@@ -4,7 +4,13 @@
 	import { Moon, Monitor, Palette, Mail } from 'lucide-svelte';
 	import { User, Settings, LogOut, Sun, ChevronUp, KeyRound } from '@jis3r/icons';
 	import { browser } from '$app/environment';
-	import { animate } from 'motion';
+	import {
+		motionPopover,
+		motionStagger as motionStaggerBase,
+		springHover as springHoverBase,
+		springRotate as springRotateBase,
+		springPop
+	} from '$lib/utils/motion.svelte';
 
 	interface Props {
 		collapsed?: boolean;
@@ -77,133 +83,16 @@
 		return false;
 	}
 
-	// Physics primitives — same vocabulary as the project page / sidebar.
-	function motionPopover(opts: {
-		from?: { opacity?: number; scale?: number; y?: number };
-		stiffness?: number;
-		damping?: number;
-		mass?: number;
-		closing: () => boolean;
-		onClosed: () => void;
-	}) {
-		const from = {
-			opacity: opts.from?.opacity ?? 0,
-			scale: opts.from?.scale ?? 0.96,
-			y: opts.from?.y ?? 6
-		};
-		const stiffness = opts.stiffness ?? 520;
-		const damping = opts.damping ?? 30;
-		const mass = opts.mass ?? 0.85;
-		return (el: Element) => {
-			const target = el as HTMLElement;
-			animate(
-				target,
-				{ opacity: [from.opacity, 1], scale: [from.scale, 1], y: [from.y, 0] },
-				{ type: 'spring', stiffness, damping, mass }
-			);
-			let firstRun = true;
-			$effect(() => {
-				const closing = opts.closing();
-				if (firstRun) {
-					firstRun = false;
-					return;
-				}
-				if (closing) {
-					animate(
-						target,
-						{ opacity: from.opacity, scale: from.scale, y: from.y },
-						{ type: 'spring', stiffness: stiffness * 1.1, damping: damping + 6, mass }
-					).finished.then(() => {
-						if (opts.closing()) opts.onClosed();
-					});
-				} else {
-					animate(
-						target,
-						{ opacity: 1, scale: 1, y: 0 },
-						{ type: 'spring', stiffness, damping, mass }
-					);
-				}
-			});
-		};
-	}
-
 	function motionStagger(index: number, stride = 0.03) {
-		return (el: Element) => {
-			const target = el as HTMLElement;
-			animate(
-				target,
-				{ opacity: [0, 1], y: [4, 0] },
-				{ type: 'spring', stiffness: 320, damping: 26, mass: 0.7, delay: index * stride }
-			);
-		};
+		return motionStaggerBase({ index, stride, from: { y: 4, opacity: 0, scale: 1 } });
 	}
 
 	function springHover(opts: { lift?: number; stiffness?: number; damping?: number } = {}) {
-		const { lift = -1, stiffness = 380, damping = 22 } = opts;
-		return (el: Element) => {
-			const t = el as HTMLElement;
-			const enter = () => {
-				animate(t, { y: lift }, { type: 'spring', stiffness, damping });
-				t.querySelectorAll('[role="img"]').forEach((icon) => {
-					icon.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
-				});
-			};
-			const leave = () =>
-				animate(t, { y: 0 }, { type: 'spring', stiffness: stiffness * 0.8, damping: damping + 4 });
-			const press = () =>
-				animate(t, { scale: 0.97 }, { type: 'spring', stiffness: 600, damping: 28 });
-			const release = () =>
-				animate(t, { scale: 1 }, { type: 'spring', stiffness: 420, damping: 18 });
-			t.addEventListener('mouseenter', enter);
-			t.addEventListener('mouseleave', leave);
-			t.addEventListener('pointerdown', press);
-			t.addEventListener('pointerup', release);
-			t.addEventListener('pointerleave', release);
-			return () => {
-				t.removeEventListener('mouseenter', enter);
-				t.removeEventListener('mouseleave', leave);
-				t.removeEventListener('pointerdown', press);
-				t.removeEventListener('pointerup', release);
-				t.removeEventListener('pointerleave', release);
-			};
-		};
+		return springHoverBase({ lift: -1, forwardIconHover: true, ...opts });
 	}
 
 	function springRotate(active: () => boolean, on = 180) {
-		return (el: Element) => {
-			const t = el as HTMLElement;
-			t.style.transform = `rotate(${active() ? on : 0}deg)`;
-			let prev = active();
-			$effect(() => {
-				const next = active();
-				if (next === prev) return;
-				prev = next;
-				animate(
-					t,
-					{ rotate: next ? on : 0 },
-					{ type: 'spring', stiffness: 380, damping: 24, mass: 0.7 }
-				);
-			});
-		};
-	}
-
-	// Theme button pop on activation.
-	function springPop(active: () => boolean) {
-		return (el: Element) => {
-			const t = el as HTMLElement;
-			let prev = active();
-			$effect(() => {
-				const next = active();
-				if (next && !prev) {
-					animate(
-						t,
-						{ scale: [0.88, 1.08, 1] },
-						{ type: 'spring', stiffness: 480, damping: 16, mass: 0.85 }
-					);
-				}
-				prev = next;
-			});
-		};
+		return springRotateBase(active, { rest: 0, on, damping: 24 });
 	}
 </script>
 

@@ -16,7 +16,11 @@
 	} from '@jis3r/icons';
 	import WorkspacesMenu from './WorkspacesMenu.svelte';
 	import UserMenu from './UserMenu.svelte';
-	import { springHover as motionSpringHover } from '$lib/utils/motion.svelte';
+	import {
+		springHover as motionSpringHover,
+		decorativeMotion,
+		functionalMotion
+	} from '$lib/utils/motion.svelte';
 	import { selectedOrganization, sidebarCollapsed } from '$lib/stores';
 	import { featureFlag } from '$lib/posthog';
 
@@ -154,6 +158,10 @@
 		}
 		if (collapsed === prevCollapsed) return;
 		prevCollapsed = collapsed;
+		if (!functionalMotion()) {
+			asideEl.style.width = collapsed ? COLLAPSED_W : EXPANDED_W;
+			return;
+		}
 		if (home) {
 			// Plain CSS transition — see .sidebar--css-transition rule. We pair
 			// transitionend with a safety timeout matching the CSS duration.
@@ -188,6 +196,7 @@
 	// physics-driven and consistent with the project page.
 	function navStagger(index: number, stride = 0.035) {
 		return (el: Element) => {
+			if (!decorativeMotion()) return;
 			const target = el as HTMLElement;
 			animate(
 				target,
@@ -200,6 +209,7 @@
 	// IN spring for the nav container. Pairs with svelte out:fade for the exit
 	// (a snappier, cheaper close — user is done with it, get out of the way).
 	function navIn(el: Element) {
+		if (!decorativeMotion()) return;
 		const target = el as HTMLElement;
 		animate(
 			target,
@@ -219,7 +229,7 @@
 		let prev = $sidebarCollapsed;
 		$effect(() => {
 			const next = $sidebarCollapsed;
-			if (next !== prev) {
+			if (next !== prev && decorativeMotion()) {
 				animate(
 					target,
 					{ scale: [0.82, 1.08, 1], rotate: [next ? 8 : -8, 0] },

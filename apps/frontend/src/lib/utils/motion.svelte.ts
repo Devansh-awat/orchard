@@ -8,8 +8,8 @@ import { animate } from 'motion';
 import { browser } from '$app/environment';
 import { effectiveAnimationLevel } from '$lib/stores/preferences';
 
-const decorativeMotion = () => effectiveAnimationLevel() === 'full';
-const functionalMotion = () => effectiveAnimationLevel() !== 'off';
+export const decorativeMotion = () => effectiveAnimationLevel() === 'full';
+export const functionalMotion = () => effectiveAnimationLevel() !== 'off';
 
 // ---- Pointer "hardness" tracker -------------------------------------------------
 // Tracks pointer velocity in real time. On press, callers read `pointerHardness()`
