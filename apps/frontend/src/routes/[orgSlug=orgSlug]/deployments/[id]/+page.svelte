@@ -214,6 +214,8 @@
 
 	type TabId = (typeof tabSections)[number]['id'];
 
+	const advancedObservability = featureFlag('advanced-observability');
+
 	const isDockerImageDeployment = $derived(!deployment?.githubRepo);
 	const visibleTabs = $derived(
 		tabSections.map((t) =>
@@ -236,23 +238,27 @@
 
 	$effect(() => {
 		const fromUrl = tabFromUrl($page.url);
-		if (tabs.value !== fromUrl) tabs.value = fromUrl;
 		const v = $page.url.searchParams.get('view');
-		if (fromUrl === 'observe' && v && v !== observeView) observeView = v;
+		untrack(() => {
+			if (tabs.value !== fromUrl) tabs.value = fromUrl;
+			if (fromUrl === 'observe' && v && v !== observeView) observeView = v;
+		});
 	});
 
 	$effect(() => {
 		const v = tabs.value;
 		const view = observeView;
-		const url = new URL($page.url);
-		const wantView = v === 'observe' && view !== 'metrics' ? view : null;
-		const curView = url.searchParams.get('view');
-		if (tabFromUrl(url) === v && curView === wantView) return;
-		if (v === 'overview') url.searchParams.delete('tab');
-		else url.searchParams.set('tab', v);
-		if (wantView) url.searchParams.set('view', wantView);
-		else url.searchParams.delete('view');
-		replaceState(url, {});
+		untrack(() => {
+			const url = new URL($page.url);
+			const wantView = v === 'observe' && view !== 'metrics' ? view : null;
+			const curView = url.searchParams.get('view');
+			if (tabFromUrl(url) === v && curView === wantView) return;
+			if (v === 'overview') url.searchParams.delete('tab');
+			else url.searchParams.set('tab', v);
+			if (wantView) url.searchParams.set('view', wantView);
+			else url.searchParams.delete('view');
+			replaceState(url, {});
+		});
 	});
 
 	// movingicons.dev animations are gated on each icon's internal mouseenter. We want
@@ -526,7 +532,6 @@
 	let persistentBuildCache = $state(false);
 
 	const tailscaleEnabled = featureFlag('tailscale-integration');
-	const advancedObservability = featureFlag('advanced-observability');
 	const tailscale = new TailscaleController({
 		deploymentId: () => deploymentId,
 		isExposed: () => !!deployment?.tailscaleExposed,

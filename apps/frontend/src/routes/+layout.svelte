@@ -42,62 +42,65 @@
 
 	onMount(async () => {
 		if (!browser) return;
+		try {
+			// Initialize theme as early as possible to prevent flash
+			themeStore.init();
 
-		// Initialize theme as early as possible to prevent flash
-		themeStore.init();
+			// Initialize PostHog analytics (no-op if PUBLIC_POSTHOG_KEY is unset)
+			initPostHog();
 
-		// Initialize PostHog analytics (no-op if PUBLIC_POSTHOG_KEY is unset)
-		initPostHog();
+			// Initialize API base from environment or default
+			const apiBase = env.PUBLIC_API_BASE || '';
+			initApiBase(apiBase);
 
-		// Initialize API base from environment or default
-		const apiBase = env.PUBLIC_API_BASE || '';
-		initApiBase(apiBase);
-
-		const orgSlug = $page.params.orgSlug;
-		const userPromise = user.fetchUser();
-		const orgsPromise = apiFetch('/apiv1/organizations/user').catch((e) => {
-			console.error('Failed to load organizations:', e);
-			return null;
-		});
-
-		await userPromise;
-
-		if ($isSignedIn && $user) {
-			identifyUser({
-				id: $user.id,
-				email: $user.email ?? $user.primaryEmailAddress?.emailAddress,
-				name: $user.fullName ?? $user.name,
-				username: $user.username
-			});
-		}
-		if ($isSignedIn) {
-			// Redirect to setup if not completed (unless already on setup/invite/callback)
-			if ($user?.setupCompleted === false && !shouldSkipChecks($page.url.pathname)) {
-				goto('/setup', { replaceState: true });
-				loading = false;
-				return;
-			}
-
-			const wantInvitations = !shouldSkipChecks($page.url.pathname) && $user?.setupCompleted;
-			if (wantInvitations) {
-				void pendingInvitations
-					.fetchPending()
-					.catch((e) => console.error('Failed to load pending invitations:', e));
-			}
-
-			try {
-				const response = await orgsPromise;
-				if (response?.ok) {
-					const orgs = await response.json();
-					organizations.set(orgs);
-					organizations.initializeSelected(orgSlug);
-				}
-			} catch (e) {
+			const orgSlug = $page.params.orgSlug;
+			const userPromise = user.fetchUser();
+			const orgsPromise = apiFetch('/apiv1/organizations/user').catch((e) => {
 				console.error('Failed to load organizations:', e);
-			}
-		}
+				return null;
+			});
 
-		loading = false;
+			await userPromise;
+
+			if ($isSignedIn && $user) {
+				identifyUser({
+					id: $user.id,
+					email: $user.email ?? $user.primaryEmailAddress?.emailAddress,
+					name: $user.fullName ?? $user.name,
+					username: $user.username
+				});
+			}
+			if ($isSignedIn) {
+				// Redirect to setup if not completed (unless already on setup/invite/callback)
+				if ($user?.setupCompleted === false && !shouldSkipChecks($page.url.pathname)) {
+					goto('/setup', { replaceState: true });
+					loading = false;
+					return;
+				}
+
+				const wantInvitations = !shouldSkipChecks($page.url.pathname) && $user?.setupCompleted;
+				if (wantInvitations) {
+					void pendingInvitations
+						.fetchPending()
+						.catch((e) => console.error('Failed to load pending invitations:', e));
+				}
+
+				try {
+					const response = await orgsPromise;
+					if (response?.ok) {
+						const orgs = await response.json();
+						organizations.set(orgs);
+						organizations.initializeSelected(orgSlug);
+					}
+				} catch (e) {
+					console.error('Failed to load organizations:', e);
+				}
+			}
+		} catch (e) {
+			console.error('LAYOUT INIT FAILED:', e);
+		} finally {
+			loading = false;
+		}
 	});
 </script>
 
