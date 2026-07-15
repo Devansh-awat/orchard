@@ -14,8 +14,13 @@ export {
 	animationLevel,
 	effectiveAnimationLevel,
 	dashboardDensity,
+	contrastLevel,
+	textScale,
+	reduceTransparency,
 	type AnimationLevel,
-	type DashboardDensity
+	type DashboardDensity,
+	type ContrastLevel,
+	type TextScale
 } from './preferences';
 export {
 	pendingInvitations,

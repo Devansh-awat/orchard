@@ -55,6 +55,40 @@
 	--console-raised: rgba(22, 27, 34, 0.95);
 }
 
+html.contrast-high {
+	--text-muted: #5f4a4e;
+	--text-faint: color-mix(in srgb, var(--text-muted) 90%, transparent);
+	--border-default: #d9bfc4;
+	--border-strong: color-mix(in srgb, var(--border-default) 30%, var(--text-default));
+	--status-success: #0e9f72;
+	--status-warning: #b35400;
+	--status-neutral: #5f4a4e;
+	--status-progress: #b35400;
+}
+
+html.dark.contrast-high {
+	--text-muted: #f0dade;
+	--text-faint: color-mix(in srgb, var(--text-muted) 90%, transparent);
+	--border-default: #4d4d50;
+	--status-success: #4fe3b8;
+	--status-warning: #ffb257;
+	--status-neutral: #f0dade;
+	--status-progress: #ffb257;
+}
+
+html.reduce-transparency {
+	--glass-bg: var(--bg-surface);
+	--glass-blur: none;
+	--glass-border: var(--border-default);
+	--glass-shadow: 0 6px 24px rgb(0 0 0 / 0.08);
+}
+
+html.reduce-transparency *,
+html.reduce-transparency *::before,
+html.reduce-transparency *::after {
+	backdrop-filter: none !important;
+}
+
 :root.dark {
 	--status-info: #60a5fa;
 
