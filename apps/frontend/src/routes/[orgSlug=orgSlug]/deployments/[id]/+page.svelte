@@ -227,6 +227,7 @@
 	function tabFromUrl(url: URL): TabId {
 		const t = url.searchParams.get('tab');
 		if (t === 'metrics') return 'observe';
+		if (t === 'advanced') return 'settings';
 		return t && visibleTabs.some((s) => s.id === t) ? (t as TabId) : 'overview';
 	}
 
