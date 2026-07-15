@@ -2,6 +2,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
+	import { env } from '$env/dynamic/public';
 	import { apiFetch, toasts, fetchProjectContext, buildBasePath } from '$lib/stores';
 	import { Rocket, Database, Server, Globe, LayoutTemplate } from 'lucide-svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
@@ -57,6 +58,29 @@
 	const wsSlug = $derived($page.params.wsSlug);
 	const templateId = $derived($page.params.templateId ?? '');
 	const basePath = $derived(buildBasePath({ orgSlug, projectSlug, wsSlug }));
+
+	const APP_DOMAIN = env.PUBLIC_APP_DOMAIN || 'a.lfdl.ink';
+
+	function isDomainParam(param: ParameterDef): boolean {
+		if (param.type !== 'string') return false;
+		const tokens = param.name.split(/(?=[A-Z])|[_\s-]/).map((t) => t.toLowerCase());
+		return tokens.some((t) => t === 'domain' || t === 'host' || t === 'hostname');
+	}
+
+	const appNameValue = $derived.by(() => {
+		const nameParam = template?.parameters.find((p) => /name/i.test(p.name) && p.type === 'string');
+		const v = nameParam ? paramValues[nameParam.name] : '';
+		return typeof v === 'string' ? v.trim() : '';
+	});
+
+	const suggestedDomain = $derived(
+		appNameValue
+			? `${appNameValue
+					.toLowerCase()
+					.replace(/[^a-z0-9-]+/g, '-')
+					.replace(/^-+|-+$/g, '')}.${APP_DOMAIN}`
+			: null
+	);
 
 	function getResourceIcon(type: string) {
 		switch (type) {
@@ -178,7 +202,6 @@
 	{#if loading}
 		<div class="skeleton" style="height: 1.5rem; width: 14rem; margin-bottom: 1.5rem;"></div>
 		<div class="td-main-card">
-			<div class="td-card-top-bar"></div>
 			<div style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
 				<div class="skeleton" style="height: 1rem; width: 10rem;"></div>
 				<div class="skeleton" style="height: 2.25rem; border-radius: 0.5rem;"></div>
@@ -190,9 +213,6 @@
 
 		<!-- Main card -->
 		<div class="td-main-card">
-			<!-- Accent top bar -->
-			<div class="td-card-top-bar"></div>
-
 			<!-- Template info header -->
 			<div class="td-info">
 				<div class="td-info-icon">
@@ -216,7 +236,6 @@
 
 			<!-- Project selector -->
 			<div class="td-project-row">
-				<span class="td-project-label">Project</span>
 				<ProjectSwitcher
 					currentProjectName={project?.name || projectSlug}
 					pathSuffix={`/templates/deploy/${templateId}`}
@@ -308,6 +327,15 @@
 									required={param.required}
 									disabled={deploying}
 								/>
+								{#if isDomainParam(param) && suggestedDomain && paramValues[param.name] !== suggestedDomain}
+									<button
+										type="button"
+										class="td-suggest"
+										onclick={() => (paramValues[param.name] = suggestedDomain)}
+									>
+										Use the free <strong>{suggestedDomain}</strong>
+									</button>
+								{/if}
 							{/if}
 
 							{#if param.description}
@@ -367,11 +395,6 @@
 		background-color: var(--surface-bg);
 		margin-bottom: 1.25rem;
 		overflow: hidden;
-	}
-
-	.td-card-top-bar {
-		height: 3px;
-		background: var(--sidebar-text-active-border);
 	}
 
 	/* Template info header */
@@ -435,10 +458,29 @@
 		background: color-mix(in srgb, var(--surface-border) 15%, transparent);
 	}
 
-	.td-project-label {
+	.td-suggest {
+		align-self: flex-start;
+		margin-top: 0.375rem;
+		padding: 0.25rem 0.625rem;
+		border: 1px dashed var(--border-default);
+		border-radius: 9999px;
+		background: none;
 		font-size: 0.75rem;
-		font-weight: 500;
-		color: var(--surface-muted);
+		color: var(--text-muted);
+		cursor: pointer;
+		transition:
+			color 120ms ease,
+			border-color 120ms ease;
+	}
+
+	.td-suggest:hover {
+		color: var(--text-default);
+		border-color: var(--border-strong);
+	}
+
+	.td-suggest strong {
+		font-weight: 650;
+		font-family: var(--font-mono);
 	}
 
 	/* Resources preview */
