@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.16.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.15.0...frontend/v0.16.0) (2026-07-15)
+
+
+### Features
+
+* encrypt shared-var secrets at rest, size limits, write-only UI ([d812836](https://github.com/LeafdTK/leaf/commit/d812836479bca60b9637769043963ec6d265cd23))
+* **frontend:** contrast, text size, and reduce transparency accessibility settings ([f0b17a4](https://github.com/LeafdTK/leaf/commit/f0b17a458d3d5a50dbfe4f82295d233ea8faba5c))
+* **frontend:** dashboard density modes (compact/normal/expanded), animation level + accessibility settings, retire /projects page ([ec61d4b](https://github.com/LeafdTK/leaf/commit/ec61d4bb82df4669817ee6468811309ccb22b42b))
+* **frontend:** deployment tab URL sync (?tab=), drop dead tab descriptions ([6d16c78](https://github.com/LeafdTK/leaf/commit/6d16c78ad2a73739905c308b1f23d86b7e0f33ba))
+* **frontend:** high contrast mode outlines cards, rows, and controls ([97f810c](https://github.com/LeafdTK/leaf/commit/97f810c770fcb0a92c58ac7622b95feb6f632913))
+* **frontend:** merge Metrics into Observe as default sub-view, ?view= deep links, clickable overview stat cards ([d1742ae](https://github.com/LeafdTK/leaf/commit/d1742ae96466cfc43aff8603404e64ae8e8f6bd7))
+* **frontend:** pod detail rebuilt on PageHeader + LogViewer, de-orphaned via pod row links ([b313712](https://github.com/LeafdTK/leaf/commit/b31371223b43570dab6ed53e056976e11fde117a))
+* **frontend:** semantic token layer + unified status module (StatusDot/StatusBadge) ([f7b1621](https://github.com/LeafdTK/leaf/commit/f7b162113ffc471cd11dbfad14bd0268dc95eeca))
+* **frontend:** status-led build progress page with ambient mesh gradient, surface buildError ([90b6ab1](https://github.com/LeafdTK/leaf/commit/90b6ab10e5c66534da86f5f3d72be279e6201c34))
+* **frontend:** ui/LogViewer + PodLogSource, overview console sheds 15 props from orchestrator ([fbefbd0](https://github.com/LeafdTK/leaf/commit/fbefbd04a7e6f8c9fe514b54fca1b13307f49d20))
+* **frontend:** ui/Table primitive, /projects becomes management table with gradient identity swatches ([3b0225a](https://github.com/LeafdTK/leaf/commit/3b0225af29872ce6bda5c6b4af448b43d92836b5))
+* project environments — namespace-isolated envs with shared + secret variables ([cfab235](https://github.com/LeafdTK/leaf/commit/cfab2358dbc6baebf5cfebc2f1c58b8538c79c8a))
+
+
+### Bug Fixes
+
+* **frontend:** animation setting now gates css keyframes + local motion copies (menus, quick search, hero, alerts, sidebar), compact rows get favicons, density switch collapses cards ([73a5413](https://github.com/LeafdTK/leaf/commit/73a54138a61c864d1a619a884ee6e8ee5ebdc2aa))
+* **frontend:** deep-link tab boot crash (flag store TDZ), untracked tab/url sync effects, layout init never strands the boot spinner ([b895423](https://github.com/LeafdTK/leaf/commit/b89542379846e53e159d1f912c39e4d1f0d2ea61))
+* **frontend:** gate remaining animations behind the setting (header collapse, project tabs, gated svelte transition wrappers, skeleton/orb/job pulse keyframes) ([b2f3487](https://github.com/LeafdTK/leaf/commit/b2f3487a5e81ae404c09c20f46f684805f7b6d4c))
+* **frontend:** two density modes only, gate accordion body springs behind animation setting ([14aac86](https://github.com/LeafdTK/leaf/commit/14aac8663b93dfa09977b3c1ea5052e86ae28463))
+* **server:** scrub ingress/db credential leaks, keep untouched secrets on shared-vars PUT, pod logs since params, per-PAT throttle, mcp validate_dns projectId ([eb7a3af](https://github.com/LeafdTK/leaf/commit/eb7a3af7bbd6aab3ddad6a1659b0ab719285ef36))
+
 ## [0.15.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.14.0...frontend/v0.15.0) (2026-07-09)
 
 

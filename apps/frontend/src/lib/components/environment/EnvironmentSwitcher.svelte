@@ -16,7 +16,10 @@
 		selectedEnvId?: string;
 	} = $props();
 
-	const envQuery = createQuery(() => ({ ...environmentsQueryOptions(projectId), enabled: !!projectId }));
+	const envQuery = createQuery(() => ({
+		...environmentsQueryOptions(projectId),
+		enabled: !!projectId
+	}));
 	const environments = $derived((envQuery.data ?? []) as Environment[]);
 
 	let defaulted = false;
@@ -47,7 +50,9 @@
 			{:else}
 				<span class="env-pill-name env-pill-name--muted">Select…</span>
 			{/if}
-			<span class="env-pill-chev" {@attach springRotate(() => isOpen, { rest: 0, on: 180 })}><ChevronDown size={14} /></span>
+			<span class="env-pill-chev" {@attach springRotate(() => isOpen, { rest: 0, on: 180 })}
+				><ChevronDown size={14} /></span
+			>
 		</button>
 	{/snippet}
 	{#snippet children({ close })}
@@ -69,11 +74,25 @@
 				</button>
 			{/each}
 			<div class="env-menu-divider"></div>
-			<button type="button" class="env-menu-action" onclick={() => { manageOpen = true; close(); }}>
+			<button
+				type="button"
+				class="env-menu-action"
+				onclick={() => {
+					manageOpen = true;
+					close();
+				}}
+			>
 				<Settings2 size={14} />
 				Manage environments
 			</button>
-			<button type="button" class="env-menu-action" onclick={() => { manageOpen = true; close(); }}>
+			<button
+				type="button"
+				class="env-menu-action"
+				onclick={() => {
+					manageOpen = true;
+					close();
+				}}
+			>
 				<Plus size={14} />
 				New environment
 			</button>

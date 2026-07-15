@@ -135,10 +135,15 @@
 								onclick={() => toggleSecret(index)}
 								class="env-action-btn"
 								class:env-action-secret={env.secret}
-								aria-label={env.secret ? 'Secret (stored in a Kubernetes Secret)' : 'Mark as secret'}
+								aria-label={env.secret
+									? 'Secret (stored in a Kubernetes Secret)'
+									: 'Mark as secret'}
 								title={env.secret ? 'Secret — stored in a Kubernetes Secret' : 'Mark as secret'}
 							>
-								{#if env.secret}<Lock size={14} class="h-3.5 w-3.5" />{:else}<LockOpen size={14} class="h-3.5 w-3.5" />{/if}
+								{#if env.secret}<Lock size={14} class="h-3.5 w-3.5" />{:else}<LockOpen
+										size={14}
+										class="h-3.5 w-3.5"
+									/>{/if}
 							</button>
 							<button
 								onclick={() => removeEnvRow(index)}

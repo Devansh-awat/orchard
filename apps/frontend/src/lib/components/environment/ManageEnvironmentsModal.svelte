@@ -16,7 +16,10 @@
 		projectId: string;
 	} = $props();
 
-	const envQuery = createQuery(() => ({ ...environmentsQueryOptions(projectId), enabled: open && !!projectId }));
+	const envQuery = createQuery(() => ({
+		...environmentsQueryOptions(projectId),
+		enabled: open && !!projectId
+	}));
 	const environments = $derived((envQuery.data ?? []) as Environment[]);
 
 	let newName = $state('');
@@ -79,10 +82,20 @@
 				<code class="env-row-ns">{env.namespace}</code>
 				<span class="env-row-actions">
 					{#if !env.isDefault}
-						<button class="env-icon-btn" title="Set as default" aria-label="Set as default" onclick={() => setDefault(env)}>
+						<button
+							class="env-icon-btn"
+							title="Set as default"
+							aria-label="Set as default"
+							onclick={() => setDefault(env)}
+						>
 							<Star size={14} />
 						</button>
-						<button class="env-icon-btn env-icon-btn--danger" title="Delete" aria-label="Delete" onclick={() => remove(env)}>
+						<button
+							class="env-icon-btn env-icon-btn--danger"
+							title="Delete"
+							aria-label="Delete"
+							onclick={() => remove(env)}
+						>
 							<Trash2 size={14} />
 						</button>
 					{/if}
@@ -93,7 +106,11 @@
 
 	{#snippet footer()}
 		<div class="env-modal-create">
-			<Input placeholder="staging" bind:value={newName} onkeydown={(e: KeyboardEvent) => e.key === 'Enter' && create()} />
+			<Input
+				placeholder="staging"
+				bind:value={newName}
+				onkeydown={(e: KeyboardEvent) => e.key === 'Enter' && create()}
+			/>
 			<Button variant="primary" size="sm" loading={creating} onclick={create}>
 				<Plus size={14} />
 				New environment

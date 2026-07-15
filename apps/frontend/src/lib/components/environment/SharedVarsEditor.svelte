@@ -84,7 +84,11 @@
 	{#if loading}
 		<div class="sharedvars-skeleton"></div>
 	{:else if rows.length === 0}
-		<button type="button" class="sharedvars-empty" onclick={() => (rows = [{ key: '', value: '', secret: false }])}>
+		<button
+			type="button"
+			class="sharedvars-empty"
+			onclick={() => (rows = [{ key: '', value: '', secret: false }])}
+		>
 			<span class="sharedvars-empty-icon"><KeyRound size={20} /></span>
 			<span class="sharedvars-empty-title">Add a shared variable</span>
 		</button>

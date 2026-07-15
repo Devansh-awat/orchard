@@ -669,9 +669,7 @@
 					</div>
 
 					<div class="dns-panel mt-3">
-						<p class="dns-panel-title">
-							Add this record wherever you manage DNS for your domain
-						</p>
+						<p class="dns-panel-title">Add this record wherever you manage DNS for your domain</p>
 						<div class="dns-record">
 							<div class="dns-cell">
 								<span class="dns-cell-label">Type</span>
@@ -777,7 +775,8 @@
 						<label class="dm-toggle-row">
 							<div class="dm-toggle-text">
 								<span class="dm-toggle-label">Enable SSL</span>
-								<span class="dm-toggle-hint">Automatically provisions a Let's Encrypt certificate</span
+								<span class="dm-toggle-hint"
+									>Automatically provisions a Let's Encrypt certificate</span
 								>
 							</div>
 							<input type="checkbox" class="dm-toggle-input" bind:checked={newDomainTlsEnabled} />
