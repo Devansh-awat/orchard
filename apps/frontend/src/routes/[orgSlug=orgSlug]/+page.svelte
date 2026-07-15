@@ -27,7 +27,7 @@
 		CompactList
 	} from '$lib/components/org-dashboard';
 	import { dashboardDensity, type DashboardDensity } from '$lib/stores';
-	import { Rows3, Rows4, ChevronsUpDown } from 'lucide-svelte';
+	import { Rows3, Rows4 } from 'lucide-svelte';
 	import type {
 		DeploymentSummary,
 		DatabaseSummary,
@@ -373,8 +373,7 @@
 
 	const DENSITY_OPTIONS: { value: DashboardDensity; icon: typeof Rows3; label: string }[] = [
 		{ value: 'compact', icon: Rows4, label: 'Compact' },
-		{ value: 'normal', icon: Rows3, label: 'Normal' },
-		{ value: 'expanded', icon: ChevronsUpDown, label: 'Expanded' }
+		{ value: 'normal', icon: Rows3, label: 'Normal' }
 	];
 
 	function persistExpanded(next: Set<string>) {
@@ -386,7 +385,6 @@
 
 	function setDensity(value: DashboardDensity) {
 		dashboardDensity.set(value);
-		if (value !== 'expanded') persistExpanded(new Set());
 	}
 
 	// ── Filtering ──
@@ -665,8 +663,8 @@
 									{group}
 									meta={projectMetas.get(group.id)}
 									{orgSlug}
-									expanded={$dashboardDensity === 'expanded' || expandedProjects.has(group.id)}
-									rendered={$dashboardDensity === 'expanded' || renderedProjectBodies.has(group.id)}
+									expanded={expandedProjects.has(group.id)}
+									rendered={renderedProjectBodies.has(group.id)}
 									{favouriteIds}
 									{failedFav}
 									{liveMetrics}

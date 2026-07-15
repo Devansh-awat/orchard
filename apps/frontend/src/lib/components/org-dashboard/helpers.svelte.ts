@@ -1,4 +1,5 @@
 import { animate } from 'motion';
+import { functionalMotion } from '$lib/utils/motion.svelte';
 import { resourceStatus } from '$lib/components/ui';
 import type { StatusKind } from '$lib/components/ui';
 import type { ProjectGroup } from './types';
@@ -191,6 +192,18 @@ export function bodyAttach(
 		$effect(() => {
 			const open = isExpanded();
 			const myGen = ++gen;
+			if (!functionalMotion()) {
+				firstEffect = false;
+				target.style.height = open ? 'auto' : '0px';
+				target.style.opacity = open ? '1' : '0';
+				if (!open) {
+					setRenderedProjectBodies(
+						new Set([...getRenderedProjectBodies()].filter((x) => x !== id))
+					);
+					projectBodyEls.delete(id);
+				}
+				return;
+			}
 			if (firstEffect) {
 				firstEffect = false;
 				target.style.opacity = '0';

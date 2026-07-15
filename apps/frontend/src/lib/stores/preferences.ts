@@ -39,7 +39,7 @@ export const projectGradientEnabled = {
 	}
 };
 
-export type DashboardDensity = 'compact' | 'normal' | 'expanded';
+export type DashboardDensity = 'compact' | 'normal';
 
 const DENSITY_KEY = 'dashboard-density';
 
@@ -47,7 +47,7 @@ function loadDensity(): DashboardDensity {
 	if (!browser) return 'normal';
 	try {
 		const v = localStorage.getItem(DENSITY_KEY);
-		return v === 'compact' || v === 'expanded' || v === 'normal' ? v : 'normal';
+		return v === 'compact' ? v : 'normal';
 	} catch {
 		return 'normal';
 	}
