@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { browser } from '$app/environment';
+	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import {
 		user,
@@ -678,7 +679,7 @@
 				const url = new URL(window.location.href);
 				url.searchParams.delete('error');
 				url.searchParams.delete('github');
-				window.history.replaceState({}, '', url.pathname + url.search + url.hash);
+				goto(url, { replaceState: true, keepFocus: true, noScroll: true });
 			}
 		}
 
