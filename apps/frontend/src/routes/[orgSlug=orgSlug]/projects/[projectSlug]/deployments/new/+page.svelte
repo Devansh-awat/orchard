@@ -64,6 +64,7 @@
 	let loadingRepos = $state(false);
 	let loadingBranches = $state(false);
 	let loadingDockerfiles = $state(false);
+	let reposError = $state<string | null>(null);
 
 	let selectedRepo = $state<Repository | null>(null);
 	let selectedBranch = $state<Branch | null>(null);
@@ -172,6 +173,7 @@
 
 	async function fetchRepositories() {
 		loadingRepos = true;
+		reposError = null;
 		try {
 			const response = await apiFetch('/apiv1/github/repositories');
 			if (response.ok) {
@@ -181,9 +183,13 @@
 				if (data.source === 'app') {
 					hasGitHubApp = true;
 				}
+			} else {
+				const body = await response.json().catch(() => null);
+				reposError = body?.message || 'Could not load your repositories.';
 			}
 		} catch (e) {
 			console.error('Failed to fetch repositories:', e);
+			reposError = 'Could not load your repositories.';
 		} finally {
 			loadingRepos = false;
 		}
@@ -326,11 +332,38 @@
 		}
 	}
 
+	let nameTouched = false;
+	let repoPickerOpen = $state(false);
+
+	$effect(() => {
+		if (!repoPickerOpen) return;
+		const t = setTimeout(() => document.getElementById('nd-repo-search')?.focus(), 30);
+		return () => clearTimeout(t);
+	});
+
+	function suggestName(repoFullName: string) {
+		if (nameTouched || name) return;
+		const repoName = repoFullName.split('/').pop() ?? '';
+		name = repoName
+			.toLowerCase()
+			.replace(/[^a-z0-9-]+/g, '-')
+			.replace(/^-+|-+$/g, '');
+	}
+
 	function selectRepo(repo: Repository) {
 		selectedRepo = repo;
 		repoUrl = repo.clone_url;
 		repoSearch = repo.full_name;
+		suggestName(repo.full_name);
 		fetchBranches(repo);
+	}
+
+	function confirmManualRepo(parsed: { owner: string; repo: string; url: string }) {
+		if (repoInputTimeout) clearTimeout(repoInputTimeout);
+		repoSearch = `${parsed.owner}/${parsed.repo}`;
+		repoUrl = parsed.url;
+		suggestName(`${parsed.owner}/${parsed.repo}`);
+		fetchBranchesManual(parsed.owner, parsed.repo);
 	}
 
 	function clearRepoSelection() {
@@ -703,6 +736,15 @@
 	const filteredRepos = $derived(
 		repositories.filter((r) => r.full_name.toLowerCase().includes(repoSearch.toLowerCase()))
 	);
+	const parsedRepoInput = $derived(selectedRepo ? null : parseRepoInput(repoSearch.trim()));
+	const parsedRepoIsListed = $derived(
+		!!parsedRepoInput &&
+			filteredRepos.some(
+				(r) =>
+					r.full_name.toLowerCase() ===
+					`${parsedRepoInput.owner}/${parsedRepoInput.repo}`.toLowerCase()
+			)
+	);
 	const filteredBranches = $derived(
 		branches.filter((b) => b.name.toLowerCase().includes(branchSearch.toLowerCase()))
 	);
@@ -771,7 +813,13 @@
 					onPendingProjectChange={(n) => (pendingProjectName = n)}
 				/>
 				<span class="nd-slash">/</span>
-				<input type="text" bind:value={name} placeholder="app-name" class="nd-name-input" />
+				<input
+					type="text"
+					bind:value={name}
+					oninput={() => (nameTouched = true)}
+					placeholder="app-name"
+					class="nd-name-input"
+				/>
 			</div>
 
 			<div class="nd-card-body">
@@ -821,7 +869,7 @@
 								</div>
 							{/if}
 							<Field label="Repository">
-								<PopoverPanel sameWidth>
+								<PopoverPanel sameWidth bind:open={repoPickerOpen}>
 									{#snippet trigger(attrs, open)}
 										<div class="picker-wrap">
 											<button type="button" class="picker-trigger" {...attrs}>
@@ -854,6 +902,7 @@
 									{/snippet}
 									{#snippet children({ close })}
 										<Input
+											id="nd-repo-search"
 											value={repoSearch}
 											oninput={(e: Event) =>
 												handleRepoSearchInput((e.target as HTMLInputElement).value)}
@@ -861,9 +910,25 @@
 											readonly={selectedRepo !== null}
 										/>
 										<div class="picker-list">
+											{#if parsedRepoInput && !parsedRepoIsListed}
+												<button
+													type="button"
+													class="picker-option picker-option--manual"
+													onclick={() => {
+														confirmManualRepo(parsedRepoInput);
+														close();
+													}}
+												>
+													<Github class="h-4 w-4 shrink-0" />
+													<span class="picker-option-text"
+														>Use <strong>{parsedRepoInput.owner}/{parsedRepoInput.repo}</strong
+														></span
+													>
+												</button>
+											{/if}
 											{#if loadingRepos}
 												<div class="picker-empty">
-													<Loader2 class="h-4 w-4 animate-spin" /> Loading repositories
+													<Loader2 class="h-4 w-4 animate-spin" /> Loading your repositories
 												</div>
 											{:else}
 												{#each filteredRepos as repo (repo.full_name)}
@@ -880,7 +945,21 @@
 														{#if repo.private}<Badge tone="neutral">Private</Badge>{/if}
 													</button>
 												{:else}
-													<div class="picker-empty">No matching repositories</div>
+													{#if reposError}
+														<div class="picker-note">
+															{reposError}
+															<a href="/user/settings">Connect GitHub</a>
+														</div>
+													{:else if !repoSearch}
+														<div class="picker-empty">
+															Search your repos, or paste owner/repo or a GitHub URL
+														</div>
+													{:else if !parsedRepoInput}
+														<div class="picker-empty">
+															No matches. Paste owner/repo or a GitHub URL to deploy any public
+															repo.
+														</div>
+													{/if}
 												{/each}
 											{/if}
 										</div>
@@ -1672,6 +1751,32 @@
 		padding: 0.625rem 0.75rem;
 		font-size: 0.75rem;
 		color: var(--surface-muted);
+	}
+
+	.picker-note {
+		padding: 0.625rem 0.75rem;
+		font-size: 0.75rem;
+		line-height: 1.5;
+		color: var(--text-muted);
+		background-color: var(--status-warning-bg);
+		border: 1px solid var(--status-warning-border);
+		border-radius: 0.5rem;
+		margin: 0.25rem;
+	}
+
+	.picker-note a {
+		color: var(--text-link);
+		font-weight: 600;
+		text-decoration: underline;
+	}
+
+	.picker-option--manual {
+		border-bottom: 1px solid var(--border-default);
+		border-radius: 0;
+	}
+
+	.picker-option--manual strong {
+		font-weight: 650;
 	}
 
 	/* Build method cards */

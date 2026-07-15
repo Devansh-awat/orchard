@@ -38,6 +38,7 @@
 	let repositories = $state<Repository[]>([]);
 	let branches = $state<Branch[]>([]);
 	let loadingRepos = $state(false);
+	let reposError = $state<string | null>(null);
 	let loadingBranches = $state(false);
 
 	let selectedRepo = $state<Repository | null>(null);
@@ -87,14 +88,19 @@
 
 	async function fetchRepositories() {
 		loadingRepos = true;
+		reposError = null;
 		try {
 			const response = await apiFetch('/apiv1/github/repositories');
 			if (response.ok) {
 				const data = await response.json();
 				repositories = Array.isArray(data) ? data : (data.repositories ?? []);
+			} else {
+				const body = await response.json().catch(() => null);
+				reposError = body?.message || 'Could not load your repositories.';
 			}
 		} catch (e) {
 			console.error('Failed to fetch repositories:', e);
+			reposError = 'Could not load your repositories.';
 		} finally {
 			loadingRepos = false;
 		}
@@ -326,7 +332,14 @@
 												{#if repo.private}<Badge tone="neutral">Private</Badge>{/if}
 											</button>
 										{:else}
-											<div class="picker-empty">No matching repositories</div>
+											{#if reposError}
+												<div class="picker-note">
+													{reposError}
+													<a href="/user/settings">Connect GitHub</a>
+												</div>
+											{:else}
+												<div class="picker-empty">No matching repositories</div>
+											{/if}
 										{/each}
 									{/if}
 								</div>
@@ -677,6 +690,23 @@
 		padding: 0.625rem 0.75rem;
 		font-size: 0.75rem;
 		color: var(--surface-muted);
+	}
+
+	.picker-note {
+		padding: 0.625rem 0.75rem;
+		font-size: 0.75rem;
+		line-height: 1.5;
+		color: var(--text-muted);
+		background-color: var(--status-warning-bg);
+		border: 1px solid var(--status-warning-border);
+		border-radius: 0.5rem;
+		margin: 0.25rem;
+	}
+
+	.picker-note a {
+		color: var(--text-link);
+		font-weight: 600;
+		text-decoration: underline;
 	}
 
 	.cs-hint {
