@@ -53,6 +53,14 @@ export function favUrl(host: string) {
 	return `/apiv1/deployments/favicon?domain=${encodeURIComponent(host)}`;
 }
 
+export function projectSwatch(slug: string): string {
+	let hash = 0;
+	for (let i = 0; i < slug.length; i++) hash = (hash * 31 + slug.charCodeAt(i)) >>> 0;
+	const h1 = hash % 360;
+	const h2 = (h1 + 40 + (hash % 80)) % 360;
+	return `background: linear-gradient(135deg, hsl(${h1} 65% 62%), hsl(${h2} 70% 48%))`;
+}
+
 export function projectStatusSummary(g: ProjectGroup) {
 	let green = 0;
 	let amber = 0;

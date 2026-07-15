@@ -23,8 +23,11 @@
 		DeploymentCard,
 		DatabaseCard,
 		ProjectCard,
-		BuildsSidebar
+		BuildsSidebar,
+		CompactList
 	} from '$lib/components/org-dashboard';
+	import { dashboardDensity, type DashboardDensity } from '$lib/stores';
+	import { Rows3, Rows4, ChevronsUpDown } from 'lucide-svelte';
 	import type {
 		DeploymentSummary,
 		DatabaseSummary,
@@ -368,6 +371,35 @@
 		}
 	}
 
+	const DENSITY_OPTIONS: { value: DashboardDensity; icon: typeof Rows3; label: string }[] = [
+		{ value: 'compact', icon: Rows4, label: 'Compact' },
+		{ value: 'normal', icon: Rows3, label: 'Normal' },
+		{ value: 'expanded', icon: ChevronsUpDown, label: 'Expanded' }
+	];
+
+	function persistExpanded(next: Set<string>) {
+		expandedProjects = next;
+		if (typeof localStorage !== 'undefined') {
+			localStorage.setItem(EXPAND_KEY, JSON.stringify([...next]));
+		}
+	}
+
+	$effect(() => {
+		if ($dashboardDensity !== 'expanded') return;
+		const ids = projectGroups.map((g) => g.id);
+		untrack(() => {
+			let changed = false;
+			const next = new Set(expandedProjects);
+			for (const id of ids) {
+				if (!next.has(id)) {
+					next.add(id);
+					changed = true;
+				}
+			}
+			if (changed) persistExpanded(next);
+		});
+	});
+
 	// ── Filtering ──
 	let searchQuery = $state('');
 	const favouriteIds = new SvelteSet<string>();
@@ -571,77 +603,109 @@
 			{:else if deployments.length === 0}
 				<EmptyState variant="empty" {canCreateProjects} {orgSlug} />
 			{:else}
-				<SearchBar bind:searchQuery />
-
-				<!-- Favourites -->
-				{#if favDeps.length > 0}
-					<section class="section">
-						<h2 class="label"><Star size={11} /> Favourites</h2>
-						<div class="od-grid">
-							{#each favDeps as dep, i (dep.id)}
-								<div {@attach motionStagger({ index: i, stride: 0.04, from: { y: 10 } })}>
-									<DeploymentCard
-										{dep}
-										isFav={true}
-										{orgSlug}
-										isFavourite={favouriteIds.has(dep.id)}
-										{failedFav}
-										{liveMetrics}
-										onToggleFav={toggleFav}
-										onRestart={restart}
-										onCopyUrl={cpUrl}
-										onVisit={visit}
-										onFavErr={favErr}
-									/>
-								</div>
-							{/each}
-						</div>
-					</section>
-				{/if}
-
-				<!-- Project Groups -->
-				{#if projectGroups.length > 0}
-					{#each visibleProjectGroups as group, gi (group.id)}
-						<section
-							class="section"
-							{@attach motionStagger({ index: gi, stride: 0.05, from: { y: 14 } })}
-						>
-							<ProjectCard
-								{group}
-								meta={projectMetas.get(group.id)}
-								{orgSlug}
-								expanded={expandedProjects.has(group.id)}
-								rendered={renderedProjectBodies.has(group.id)}
-								{favouriteIds}
-								{failedFav}
-								{liveMetrics}
-								{projectBodyEls}
-								getRenderedProjectBodies={() => renderedProjectBodies}
-								setRenderedProjectBodies={(s) => (renderedProjectBodies = s)}
-								onToggleExpand={toggleExpand}
-								onToggleFav={toggleFav}
-								onRestart={restart}
-								onCopyUrl={cpUrl}
-								onVisit={visit}
-								onFavErr={favErr}
-							/>
-						</section>
-					{/each}
-					{#if hiddenProjectCount > 0}
-						<button type="button" class="show-more" onclick={() => (visibleCount += PROJECTS_STEP)}>
-							<ChevronDown size={14} />
-							Show {Math.min(hiddenProjectCount, PROJECTS_STEP)} more
-							{hiddenProjectCount === 1 ? 'project' : 'projects'}
-							<span class="show-more-count"
-								>{visibleProjectGroups.length} of {projectGroups.length}</span
+				<div class="list-toolbar">
+					<div class="list-toolbar-search"><SearchBar bind:searchQuery /></div>
+					<div class="density-seg" role="radiogroup" aria-label="List density">
+						{#each DENSITY_OPTIONS as opt (opt.value)}
+							{@const Icon = opt.icon}
+							<button
+								type="button"
+								role="radio"
+								aria-checked={$dashboardDensity === opt.value}
+								class="density-btn"
+								class:density-btn--active={$dashboardDensity === opt.value}
+								title={opt.label}
+								aria-label={opt.label}
+								onclick={() => dashboardDensity.set(opt.value)}
 							>
-						</button>
+								<Icon size={14} />
+							</button>
+						{/each}
+					</div>
+				</div>
+
+				{#if $dashboardDensity === 'compact'}
+					<CompactList groups={projectGroups} {favDeps} {orgSlug} {liveMetrics} />
+					{#if filtered.length === 0 && filteredDbs.length === 0}
+						<p class="no-results">
+							{searchQuery ? `No results for "${searchQuery}"` : 'Nothing here yet'}
+						</p>
 					{/if}
-				{/if}
-				{#if filtered.length === 0 && filteredDbs.length === 0}
-					<p class="no-results">
-						{searchQuery ? `No results for "${searchQuery}"` : 'Nothing here yet'}
-					</p>
+				{:else}
+					<!-- Favourites -->
+					{#if favDeps.length > 0}
+						<section class="section">
+							<h2 class="label"><Star size={11} /> Favourites</h2>
+							<div class="od-grid">
+								{#each favDeps as dep, i (dep.id)}
+									<div {@attach motionStagger({ index: i, stride: 0.04, from: { y: 10 } })}>
+										<DeploymentCard
+											{dep}
+											isFav={true}
+											{orgSlug}
+											isFavourite={favouriteIds.has(dep.id)}
+											{failedFav}
+											{liveMetrics}
+											onToggleFav={toggleFav}
+											onRestart={restart}
+											onCopyUrl={cpUrl}
+											onVisit={visit}
+											onFavErr={favErr}
+										/>
+									</div>
+								{/each}
+							</div>
+						</section>
+					{/if}
+
+					<!-- Project Groups -->
+					{#if projectGroups.length > 0}
+						{#each visibleProjectGroups as group, gi (group.id)}
+							<section
+								class="section"
+								{@attach motionStagger({ index: gi, stride: 0.05, from: { y: 14 } })}
+							>
+								<ProjectCard
+									{group}
+									meta={projectMetas.get(group.id)}
+									{orgSlug}
+									expanded={expandedProjects.has(group.id)}
+									rendered={renderedProjectBodies.has(group.id)}
+									{favouriteIds}
+									{failedFav}
+									{liveMetrics}
+									{projectBodyEls}
+									getRenderedProjectBodies={() => renderedProjectBodies}
+									setRenderedProjectBodies={(s) => (renderedProjectBodies = s)}
+									onToggleExpand={toggleExpand}
+									onToggleFav={toggleFav}
+									onRestart={restart}
+									onCopyUrl={cpUrl}
+									onVisit={visit}
+									onFavErr={favErr}
+								/>
+							</section>
+						{/each}
+						{#if hiddenProjectCount > 0}
+							<button
+								type="button"
+								class="show-more"
+								onclick={() => (visibleCount += PROJECTS_STEP)}
+							>
+								<ChevronDown size={14} />
+								Show {Math.min(hiddenProjectCount, PROJECTS_STEP)} more
+								{hiddenProjectCount === 1 ? 'project' : 'projects'}
+								<span class="show-more-count"
+									>{visibleProjectGroups.length} of {projectGroups.length}</span
+								>
+							</button>
+						{/if}
+					{/if}
+					{#if filtered.length === 0 && filteredDbs.length === 0}
+						<p class="no-results">
+							{searchQuery ? `No results for "${searchQuery}"` : 'Nothing here yet'}
+						</p>
+					{/if}
 				{/if}
 			{/if}
 		</main>

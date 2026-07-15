@@ -25,7 +25,8 @@
 		UserTailscale,
 		UserPasskeys,
 		UserSessions,
-		UserEarlyAccess
+		UserEarlyAccess,
+		UserAccessibility
 	} from '$lib/components/user-settings';
 
 	let githubLinked = $state(false);
@@ -795,8 +796,10 @@
 				onShowRevokeAll={() => (showRevokeAllModal = true)}
 			/>
 
+			<UserAccessibility index={6} />
+
 			<UserEarlyAccess
-				index={6}
+				index={7}
 				{earlyAccessFeatures}
 				{earlyAccessLoading}
 				{earlyAccessEnrollment}

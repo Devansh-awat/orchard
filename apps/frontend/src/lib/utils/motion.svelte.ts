@@ -6,6 +6,10 @@
  */
 import { animate } from 'motion';
 import { browser } from '$app/environment';
+import { effectiveAnimationLevel } from '$lib/stores/preferences';
+
+const decorativeMotion = () => effectiveAnimationLevel() === 'full';
+const functionalMotion = () => effectiveAnimationLevel() !== 'off';
 
 // ---- Pointer "hardness" tracker -------------------------------------------------
 // Tracks pointer velocity in real time. On press, callers read `pointerHardness()`
@@ -66,20 +70,24 @@ export function springHover(
 	return (el: Element) => {
 		const target = el as HTMLElement;
 		const enter = () => {
-			animate(target, { y: lift }, { type: 'spring', stiffness, damping });
 			if (opts.forwardIconHover) {
 				target.querySelectorAll('[role="img"]').forEach((icon) => {
 					icon.dispatchEvent(new MouseEvent('mouseenter', { bubbles: false }));
 				});
 			}
+			if (!decorativeMotion()) return;
+			animate(target, { y: lift }, { type: 'spring', stiffness, damping });
 		};
-		const leave = () =>
+		const leave = () => {
+			if (!decorativeMotion()) return;
 			animate(
 				target,
 				{ y: rest, scale: 1 },
 				{ type: 'spring', stiffness: stiffness * 0.8, damping: damping + 4 }
 			);
+		};
 		const press = (e: Event) => {
+			if (!decorativeMotion()) return;
 			const h = pointerHardness(e as PointerEvent);
 			// 0.97 (soft tap) → 0.92 (hard slam). Higher stiffness on harder press.
 			const compress = 0.97 - h * 0.05;
@@ -87,6 +95,7 @@ export function springHover(
 			animate(target, { scale: compress }, { type: 'spring', stiffness: k, damping: 26 });
 		};
 		const release = () => {
+			if (!decorativeMotion()) return;
 			const h = lastPointerSpeed / 2;
 			const overshoot = 1 + Math.max(0, Math.min(1, h)) * 0.025;
 			animate(
@@ -132,6 +141,7 @@ export function motionStagger(
 		// shift, list reorder) must not replay the fade-in on live DOM.
 		if (staggeredEls.has(el)) return;
 		staggeredEls.add(el);
+		if (!decorativeMotion()) return;
 		animate(
 			el as HTMLElement,
 			{ opacity: [from.opacity, 1], y: [from.y, 0], scale: [from.scale, 1] },
@@ -164,16 +174,22 @@ export function motionPopover(opts: {
 	const mass = opts.mass ?? 0.85;
 	return (el: Element) => {
 		const target = el as HTMLElement;
-		animate(
-			target,
-			{ opacity: [from.opacity, 1], scale: [from.scale, 1], y: [from.y, 0] },
-			{ type: 'spring', stiffness, damping, mass }
-		);
+		if (functionalMotion()) {
+			animate(
+				target,
+				{ opacity: [from.opacity, 1], scale: [from.scale, 1], y: [from.y, 0] },
+				{ type: 'spring', stiffness, damping, mass }
+			);
+		}
 		let firstRun = true;
 		$effect(() => {
 			const closing = opts.closing();
 			if (firstRun) {
 				firstRun = false;
+				return;
+			}
+			if (!functionalMotion()) {
+				if (closing) opts.onClosed();
 				return;
 			}
 			if (closing) {
@@ -199,7 +215,9 @@ export function motionPopover(opts: {
 export function motionBackdrop(closing: () => boolean, onClosed: () => void) {
 	return (el: Element) => {
 		const target = el as HTMLElement;
-		animate(target, { opacity: [0, 1] }, { type: 'spring', stiffness: 320, damping: 30 });
+		if (functionalMotion()) {
+			animate(target, { opacity: [0, 1] }, { type: 'spring', stiffness: 320, damping: 30 });
+		}
 		let firstRun = true;
 		$effect(() => {
 			const c = closing();
@@ -207,15 +225,18 @@ export function motionBackdrop(closing: () => boolean, onClosed: () => void) {
 				firstRun = false;
 				return;
 			}
-			if (c) {
-				animate(
-					target,
-					{ opacity: 0 },
-					{ type: 'spring', stiffness: 360, damping: 32 }
-				).finished.then(() => {
-					if (closing()) onClosed();
-				});
+			if (!c) return;
+			if (!functionalMotion()) {
+				onClosed();
+				return;
 			}
+			animate(
+				target,
+				{ opacity: 0 },
+				{ type: 'spring', stiffness: 360, damping: 32 }
+			).finished.then(() => {
+				if (closing()) onClosed();
+			});
 		});
 	};
 }
@@ -232,6 +253,7 @@ export function cardTilt(opts: { max?: number } = {}) {
 			rect = target.getBoundingClientRect();
 		};
 		const onMove = (e: PointerEvent) => {
+			if (!decorativeMotion()) return;
 			if (!rect) rect = target.getBoundingClientRect();
 			const x = (e.clientX - rect.left) / rect.width - 0.5;
 			const y = (e.clientY - rect.top) / rect.height - 0.5;
@@ -275,6 +297,7 @@ export function scrollRubber(
 			pending = 0;
 		};
 		const onWheel = (e: WheelEvent) => {
+			if (!decorativeMotion()) return;
 			const delta = axis === 'y' ? e.deltaY : e.deltaX;
 			// Only apply rubber when at scroll bounds.
 			const atTop = target.scrollTop <= 0 && delta < 0;
@@ -300,6 +323,7 @@ export function scrollRubber(
 export function pressSpringDelegate(root: HTMLElement, selector: string) {
 	let hovered: HTMLElement | null = null;
 	const onMove = (e: PointerEvent) => {
+		if (!decorativeMotion()) return;
 		const t = (e.target as HTMLElement | null)?.closest?.(selector) as HTMLElement | null;
 		if (t === hovered) return;
 		if (hovered && !t?.contains(hovered) && !hovered.contains(t as Node)) {
@@ -317,6 +341,7 @@ export function pressSpringDelegate(root: HTMLElement, selector: string) {
 		}
 	};
 	const onDown = (e: PointerEvent) => {
+		if (!decorativeMotion()) return;
 		const t = (e.target as HTMLElement | null)?.closest?.(selector) as HTMLElement | null;
 		if (!t || !root.contains(t)) return;
 		const h = pointerHardness(e);
@@ -326,6 +351,7 @@ export function pressSpringDelegate(root: HTMLElement, selector: string) {
 		animate(t, { scale: compress, y: -2 }, { type: 'spring', stiffness: k, damping: 26 });
 	};
 	const onUp = (e: PointerEvent) => {
+		if (!decorativeMotion()) return;
 		const t = (e.target as HTMLElement | null)?.closest?.(selector) as HTMLElement | null;
 		if (!t || !root.contains(t)) return;
 		const h = Math.max(0, Math.min(1, lastPointerSpeed / 2));
@@ -382,6 +408,12 @@ export function springCollapse(collapsed: () => boolean) {
 			if (!armed || isCollapsed === last) return;
 			last = isCollapsed;
 			target.style.marginTop = isCollapsed ? '0px' : `${naturalMargin}px`;
+			if (!functionalMotion()) {
+				target.style.height = isCollapsed ? '0px' : 'auto';
+				target.style.opacity = isCollapsed ? '0' : '1';
+				if (!isCollapsed) target.style.marginTop = '';
+				return;
+			}
 			const to = isCollapsed ? 0 : naturalHeight();
 			const opts = isCollapsed
 				? { type: 'spring' as const, stiffness: 200, damping: 18, mass: 1.2 }
@@ -418,6 +450,10 @@ export function springRotate(
 			const next = active();
 			if (next === prev) return;
 			prev = next;
+			if (!functionalMotion()) {
+				target.style.rotate = `${next ? on : rest}deg`;
+				return;
+			}
 			animate(
 				target,
 				{ rotate: next ? on : rest },
@@ -441,6 +477,10 @@ export function springWidth(
 			const next = active();
 			if (next === prev) return;
 			prev = next;
+			if (!functionalMotion()) {
+				target.style.width = `${next ? opts.on : opts.rest}px`;
+				return;
+			}
 			animate(
 				target,
 				{ width: `${next ? opts.on : opts.rest}px` },
@@ -463,7 +503,7 @@ export function springPop(active: () => boolean) {
 		let prev = active();
 		$effect(() => {
 			const next = active();
-			if (next && !prev) {
+			if (next && !prev && decorativeMotion()) {
 				animate(
 					target,
 					{ scale: [0.92, 1.04, 1] },

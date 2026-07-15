@@ -5,6 +5,7 @@ export { default as DeploymentCard } from './DeploymentCard.svelte';
 export { default as DatabaseCard } from './DatabaseCard.svelte';
 export { default as ProjectCard } from './ProjectCard.svelte';
 export { default as BuildsSidebar } from './BuildsSidebar.svelte';
+export { default as CompactList } from './CompactList.svelte';
 export type {
 	DeploymentSummary,
 	DatabaseSummary,

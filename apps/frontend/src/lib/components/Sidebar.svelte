@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { animate } from 'motion';
-	import { Leaf, Folder, Shield, Globe, ScrollText, Bell, Zap } from 'lucide-svelte';
+	import { Leaf, Shield, Globe, ScrollText, Bell, Zap } from 'lucide-svelte';
 	import {
 		PanelLeftClose,
 		PanelRightClose,
@@ -51,13 +51,9 @@
 			label: 'Your Apps',
 			href: `/${orgSlug}`,
 			icon: Leaf,
-			active: $page.url.pathname === '/' + orgSlug
-		},
-		{
-			label: 'Projects',
-			href: `/${orgSlug}/projects`,
-			icon: Folder,
-			active: $page.url.pathname.startsWith('/' + orgSlug + '/projects')
+			active:
+				$page.url.pathname === '/' + orgSlug ||
+				$page.url.pathname.startsWith('/' + orgSlug + '/projects')
 		},
 		{
 			label: 'Jobs',

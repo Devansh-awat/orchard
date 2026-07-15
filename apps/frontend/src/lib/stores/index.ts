@@ -9,7 +9,14 @@ export {
 } from './organizations';
 export { pinnedItems, type PinnedItem } from './pinnedItems';
 export { sidebarCollapsed } from './sidebarState';
-export { projectGradientEnabled } from './preferences';
+export {
+	projectGradientEnabled,
+	animationLevel,
+	effectiveAnimationLevel,
+	dashboardDensity,
+	type AnimationLevel,
+	type DashboardDensity
+} from './preferences';
 export {
 	pendingInvitations,
 	invitationsLoading,

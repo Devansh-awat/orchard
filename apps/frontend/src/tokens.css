@@ -103,3 +103,10 @@
 .status--progress {
 	color: var(--status-progress);
 }
+
+html.motion-reduce .dot--pulse,
+html.motion-reduce .dep-status-dot--pulse,
+html.motion-reduce .pj-deployment-favicon-dot::after,
+html.motion-reduce .console-tail-dot {
+	animation: none !important;
+}
