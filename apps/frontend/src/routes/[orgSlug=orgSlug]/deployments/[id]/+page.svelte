@@ -1,7 +1,7 @@
 <script lang="ts">
 	import './deployment-page.css';
 	import { page } from '$app/stores';
-	import { goto, replaceState } from '$app/navigation';
+	import { goto } from '$app/navigation';
 	import { onMount, onDestroy, untrack } from 'svelte';
 	import { Tabs } from 'melt/builders';
 	import { createQuery } from '@tanstack/svelte-query';
@@ -231,36 +231,41 @@
 		return t && visibleTabs.some((s) => s.id === t) ? (t as TabId) : 'overview';
 	}
 
+	// The URL is the single source of truth for the active tab. melt reads it
+	// through the value getter and every change request funnels through gotoTab,
+	// which rewrites the URL; two-way sync effects deadlocked under rapid clicks.
 	const tabs = new Tabs<TabId>({
-		value: tabFromUrl($page.url),
+		value: () => tabFromUrl($page.url),
+		onValueChange: (v) => gotoTab(v),
 		loop: true
 	});
 
 	let observeView = $state<string>($page.url.searchParams.get('view') ?? 'metrics');
 
+	function gotoTab(v: TabId, view?: string) {
+		const url = new URL(window.location.href);
+		const effView = view ?? untrack(() => observeView);
+		const wantView = v === 'observe' && effView !== 'metrics' ? effView : null;
+		if (v === 'overview') url.searchParams.delete('tab');
+		else url.searchParams.set('tab', v);
+		if (wantView) url.searchParams.set('view', wantView);
+		else url.searchParams.delete('view');
+		if (url.href !== window.location.href) {
+			goto(url, { replaceState: true, keepFocus: true, noScroll: true });
+		}
+	}
+
 	$effect(() => {
 		const fromUrl = tabFromUrl($page.url);
 		const v = $page.url.searchParams.get('view');
 		untrack(() => {
-			if (tabs.value !== fromUrl) tabs.value = fromUrl;
 			if (fromUrl === 'observe' && v && v !== observeView) observeView = v;
 		});
 	});
 
 	$effect(() => {
-		const v = tabs.value;
 		const view = observeView;
-		untrack(() => {
-			const url = new URL($page.url);
-			const wantView = v === 'observe' && view !== 'metrics' ? view : null;
-			const curView = url.searchParams.get('view');
-			if (tabFromUrl(url) === v && curView === wantView) return;
-			if (v === 'overview') url.searchParams.delete('tab');
-			else url.searchParams.set('tab', v);
-			if (wantView) url.searchParams.set('view', wantView);
-			else url.searchParams.delete('view');
-			replaceState(url, {});
-		});
+		untrack(() => gotoTab(tabs.value, view));
 	});
 
 	// movingicons.dev animations are gated on each icon's internal mouseenter. We want
@@ -2675,7 +2680,7 @@
 				{resourcePressure}
 				onViewLogs={handleViewBuildLogs}
 				onGoToResources={() => {
-					tabs.value = 'resources';
+					gotoTab('resources');
 				}}
 			/>
 
@@ -2713,7 +2718,7 @@
 							onTrackClick={handleTrackClick}
 							onSetTabMetrics={() => {
 								observeView = 'metrics';
-								tabs.value = 'observe';
+								gotoTab('observe');
 							}}
 							onKeydownSlider={handleSliderKeydown}
 							{podLabel}
