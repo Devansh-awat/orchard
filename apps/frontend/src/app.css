@@ -276,6 +276,7 @@ a:hover {
 html {
 	scrollbar-width: thin;
 	scrollbar-color: color-mix(in srgb, var(--center-channel-color) 22%, transparent) transparent;
+	scrollbar-gutter: stable;
 }
 
 /* Button base styles — primary/secondary/tertiary hierarchy */
@@ -375,6 +376,7 @@ html {
 	min-width: 10rem;
 	max-height: min(60vh, var(--melt-popover-available-height, 60vh));
 	overflow-y: auto;
+	scrollbar-gutter: stable;
 }
 
 .ui-popover {

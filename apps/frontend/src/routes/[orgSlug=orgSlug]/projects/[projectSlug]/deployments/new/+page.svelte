@@ -1714,6 +1714,7 @@
 		margin-top: 0.5rem;
 		max-height: 12rem;
 		overflow-y: auto;
+		scrollbar-gutter: stable;
 	}
 
 	.picker-option {
