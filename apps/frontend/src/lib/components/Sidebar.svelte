@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { page } from '$app/stores';
 	import { animate } from 'motion';
-	import { Leaf, Shield, Globe, ScrollText, Bell, Zap } from 'lucide-svelte';
+	import { Leaf, Shield, Globe, ScrollText, Bell, Zap, Trees } from 'lucide-svelte';
 	import {
 		PanelLeftClose,
 		PanelRightClose,
@@ -70,6 +70,12 @@
 			href: `/${orgSlug}/usage`,
 			icon: Activity,
 			active: $page.url.pathname.startsWith('/' + orgSlug + '/usage')
+		},
+		{
+			label: 'The Grove',
+			href: '/grove',
+			icon: Trees,
+			active: $page.url.pathname.startsWith('/grove')
 		}
 	]);
 

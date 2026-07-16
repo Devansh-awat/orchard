@@ -31,6 +31,7 @@ import { AiChatModule } from './ai-chat/ai-chat.module';
 import { ObservabilityModule } from './observability/observability.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { JobsModule } from './jobs/jobs.module';
+import { ForumModule } from './forum/forum.module';
 
 @Module({
   imports: [
@@ -68,6 +69,7 @@ import { JobsModule } from './jobs/jobs.module';
     ObservabilityModule,
     NotificationsModule,
     JobsModule,
+    ForumModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ApiThrottlerGuard }],
 })
