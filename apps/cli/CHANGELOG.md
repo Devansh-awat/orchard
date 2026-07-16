@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.2](https://github.com/LeafdTK/leaf/compare/cli/v0.3.1...cli/v0.3.2) (2026-07-16)
+
+
+### Bug Fixes
+
+* **cli:** brew cask links binary orchard, not the cask name ([f4551a5](https://github.com/LeafdTK/leaf/commit/f4551a5508b2b048bdae7d37b9b305d3e16ad9c9))
+
 ## [0.3.1](https://github.com/LeafdTK/leaf/compare/cli/v0.3.0...cli/v0.3.1) (2026-07-16)
 
 
