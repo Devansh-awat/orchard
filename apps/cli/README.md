@@ -19,11 +19,12 @@ The cask is `orchard-cli` because homebrew core already owns the name
 `orchard` (an unrelated containers GUI); the installed binary is still
 `orchard`.
 
-Prebuilt binaries for macOS/Linux/Windows are attached to every `cli/v*`
-release, or use the installer:
+Prebuilt binaries for macOS/Linux/Windows live on the public
+[orchard-releases](https://github.com/LeafdTK/orchard-releases/releases) repo
+(the source monorepo is private, so binaries publish separately). Installer:
 
 ```sh
-curl -fsSL https://raw.githubusercontent.com/LeafdTK/leaf/main/apps/cli/scripts/install.sh | sh
+curl -fsSL https://raw.githubusercontent.com/LeafdTK/orchard-releases/main/install.sh | sh
 ```
 
 From source:

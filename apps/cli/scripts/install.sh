@@ -1,16 +1,20 @@
 #!/bin/sh
 # Orchard CLI installer.
 #
-# Releases live in the LeafdTK/leaf monorepo and are tagged cli/vX.Y.Z
-# (release-please component tags). Asset names come from apps/cli/.goreleaser.yaml:
+# Binaries publish to the public LeafdTK/orchard-releases repo under vX.Y.Z
+# tags (the source monorepo is private, so its release assets are not
+# anonymously downloadable). Canonical copy of this script lives at
+# apps/cli/scripts/install.sh in the monorepo; a mirror sits in
+# orchard-releases so it is publicly curl-able. Asset names come from
+# apps/cli/.goreleaser.yaml:
 #   orchard_<version>_<os>_<arch>.tar.gz (zip on windows) + checksums.txt
 #
 # Usage:
-#   curl -fsSL https://raw.githubusercontent.com/LeafdTK/leaf/main/apps/cli/scripts/install.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/LeafdTK/orchard-releases/main/install.sh | sh
 
 set -eu
 
-REPO="LeafdTK/leaf"
+REPO="LeafdTK/orchard-releases"
 
 say() { printf '%s\n' "$*"; }
 die() { printf 'install.sh: %s\n' "$*" >&2; exit 1; }
@@ -51,12 +55,12 @@ esac
 
 say "finding the latest orchard cli release..."
 TAG=$(fetch "https://api.github.com/repos/${REPO}/releases?per_page=100" |
-  grep -o '"tag_name": *"cli/v[0-9][^"]*"' | head -n 1 | cut -d'"' -f4)
-[ -n "${TAG}" ] || die "no cli/v* release found in the latest 100 releases of ${REPO}"
-VERSION=${TAG#cli/v}
+  grep -o '"tag_name": *"v[0-9][^"]*"' | head -n 1 | cut -d'"' -f4)
+[ -n "${TAG}" ] || die "no v* release found in the latest 100 releases of ${REPO}"
+VERSION=${TAG#v}
 
 ARCHIVE="orchard_${VERSION}_${OS}_${ARCH}.tar.gz"
-BASE_URL="https://github.com/${REPO}/releases/download/cli%2Fv${VERSION}"
+BASE_URL="https://github.com/${REPO}/releases/download/v${VERSION}"
 
 TMP=$(mktemp -d)
 trap 'rm -rf "$TMP"' EXIT INT TERM

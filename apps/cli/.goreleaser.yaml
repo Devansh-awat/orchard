@@ -39,15 +39,17 @@ checksum:
 changelog:
   disable: true
 
-# release-please owns the GitHub release (tag cli/vX.Y.Z, notes from the
-# changelog); the workflow attaches binaries to it with gh release upload.
+# The source repo is private, so its release assets 404 for anonymous
+# downloads (brew, install.sh). Binaries publish to the public releases-only
+# repo instead, under plain vX.Y.Z tags; release-please still owns the
+# cli/vX.Y.Z release on the source repo, which the workflow also feeds via
+# gh release upload for internal provenance.
 release:
-  disable: true
+  github:
+    owner: LeafdTK
+    name: orchard-releases
 
-# The download URL cannot use goreleaser's default template: the real release
-# tag is cli/vX.Y.Z (monorepo component tag) while goreleaser versions from
-# the local plain tag, so the slash must be spelled out (%2F) here. The
-# quarantine hook is the goreleaser-recommended replacement for signing:
+# The quarantine hook is the goreleaser-recommended replacement for signing:
 # binaries are not notarized, so Gatekeeper would block them otherwise.
 # Token is orchard-cli, not orchard: homebrew core already ships a cask named
 # orchard (a containers GUI), and the unqualified name resolves to that one.
@@ -59,7 +61,7 @@ homebrew_casks:
       name: homebrew-tap
       token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
     url:
-      template: "https://github.com/LeafdTK/leaf/releases/download/cli%2Fv{{ .Version }}/{{ .ArtifactName }}"
+      template: "https://github.com/LeafdTK/orchard-releases/releases/download/v{{ .Version }}/{{ .ArtifactName }}"
     homepage: https://github.com/LeafdTK/leaf
     description: Orchard platform CLI
     commit_author:
