@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.1](https://github.com/LeafdTK/leaf/compare/server/v1.20.0...server/v1.20.1) (2026-07-16)
+
+
+### Bug Fixes
+
+* username validation names the offending characters, strips invisible chars, backend enforces format ([4672510](https://github.com/LeafdTK/leaf/commit/46725103073c652bfeed0af0324b3da09e3522a4))
+
 ## [1.20.0](https://github.com/LeafdTK/leaf/compare/server/v1.19.0...server/v1.20.0) (2026-07-15)
 
 
