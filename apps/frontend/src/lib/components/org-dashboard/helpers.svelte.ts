@@ -56,29 +56,37 @@ export function favUrl(host: string) {
 
 const swatchCache = new Map<string, string>();
 
+const ORCHARD_HUES = [352, 335, 24, 38, 88, 130, 288, 220];
+
 export function projectSwatch(slug: string): string {
 	const cached = swatchCache.get(slug);
 	if (cached) return cached;
 	let hash = 0;
 	for (let i = 0; i < slug.length; i++) hash = (hash * 31 + slug.charCodeAt(i)) >>> 0;
-	const hue = hash % 360;
+	const hue = ORCHARD_HUES[hash % ORCHARD_HUES.length];
 	let bits = hash || 1;
 	const next = () => {
 		bits = (bits * 1103515245 + 12345) >>> 0;
 		return bits;
 	};
-	const cells: boolean[] = [];
-	for (let i = 0; i < 15; i++) cells.push(next() % 100 < 52);
-	if (!cells.some(Boolean)) cells[7] = true;
+	const ripe = `hsl(${hue} 62% 50%)`;
+	const shade = `hsl(${hue} 58% 37%)`;
 	let rects = '';
-	for (let i = 0; i < 15; i++) {
-		if (!cells[i]) continue;
-		const col = Math.floor(i / 5);
-		const row = i % 5;
-		rects += `<rect x='${col}' y='${row}' width='1' height='1'/>`;
-		if (col < 2) rects += `<rect x='${4 - col}' y='${row}' width='1' height='1'/>`;
+	let count = 0;
+	for (let col = 0; col < 4; col++) {
+		for (let row = 0; row < 7; row++) {
+			const edge = row === 0 || row === 6;
+			if (next() % 100 >= (edge ? 30 : 52)) continue;
+			const fill = next() % 100 < 30 ? shade : ripe;
+			count++;
+			rects += `<rect x='${col}' y='${row}' width='1' height='1' fill='${fill}'/>`;
+			if (col < 3) rects += `<rect x='${6 - col}' y='${row}' width='1' height='1' fill='${fill}'/>`;
+		}
 	}
-	const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 5 5' shape-rendering='crispEdges'><rect width='5' height='5' fill='hsl(${hue} 45% 92%)'/><g fill='hsl(${hue} 60% 48%)'>${rects}</g></svg>`;
+	if (count < 3) {
+		rects += `<rect x='3' y='2' width='1' height='1' fill='${shade}'/><rect x='2' y='3' width='1' height='1' fill='${ripe}'/><rect x='4' y='3' width='1' height='1' fill='${ripe}'/><rect x='3' y='4' width='1' height='1' fill='${ripe}'/>`;
+	}
+	const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 7 7' shape-rendering='crispEdges'><rect width='7' height='7' fill='hsl(${hue} 48% 93%)'/>${rects}</svg>`;
 	const style = `background-image: url("data:image/svg+xml,${encodeURIComponent(svg)}"); background-size: 100% 100%`;
 	swatchCache.set(slug, style);
 	return style;
