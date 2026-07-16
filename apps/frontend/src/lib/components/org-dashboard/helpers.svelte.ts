@@ -54,12 +54,34 @@ export function favUrl(host: string) {
 	return `/apiv1/deployments/favicon?domain=${encodeURIComponent(host)}`;
 }
 
+const swatchCache = new Map<string, string>();
+
 export function projectSwatch(slug: string): string {
+	const cached = swatchCache.get(slug);
+	if (cached) return cached;
 	let hash = 0;
 	for (let i = 0; i < slug.length; i++) hash = (hash * 31 + slug.charCodeAt(i)) >>> 0;
-	const h1 = hash % 360;
-	const h2 = (h1 + 40 + (hash % 80)) % 360;
-	return `background: linear-gradient(135deg, hsl(${h1} 65% 62%), hsl(${h2} 70% 48%))`;
+	const hue = hash % 360;
+	let bits = hash || 1;
+	const next = () => {
+		bits = (bits * 1103515245 + 12345) >>> 0;
+		return bits;
+	};
+	const cells: boolean[] = [];
+	for (let i = 0; i < 15; i++) cells.push(next() % 100 < 52);
+	if (!cells.some(Boolean)) cells[7] = true;
+	let rects = '';
+	for (let i = 0; i < 15; i++) {
+		if (!cells[i]) continue;
+		const col = Math.floor(i / 5);
+		const row = i % 5;
+		rects += `<rect x='${col}' y='${row}' width='1' height='1'/>`;
+		if (col < 2) rects += `<rect x='${4 - col}' y='${row}' width='1' height='1'/>`;
+	}
+	const svg = `<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 5 5' shape-rendering='crispEdges'><rect width='5' height='5' fill='hsl(${hue} 45% 92%)'/><g fill='hsl(${hue} 60% 48%)'>${rects}</g></svg>`;
+	const style = `background-image: url("data:image/svg+xml,${encodeURIComponent(svg)}"); background-size: 100% 100%`;
+	swatchCache.set(slug, style);
+	return style;
 }
 
 export function projectStatusSummary(g: ProjectGroup) {
