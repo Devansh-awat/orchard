@@ -51,6 +51,22 @@
 		if (!m) return null;
 		return `${formatCpu(m.cpuMilli)} · ${formatMemory(m.memoryBytes)}`;
 	}
+
+	function groupIcons(group: ProjectGroup): { id: string; src: string }[] {
+		const icons: { id: string; src: string }[] = [];
+		for (const dep of group.deps) {
+			if (icons.length >= 3) break;
+			const known = knownIcon(dep.image);
+			if (known) {
+				icons.push({ id: dep.id, src: known });
+				continue;
+			}
+			if (!failedFav.has(dep.id) && dep.faviconUrl) {
+				icons.push({ id: dep.id, src: dep.faviconUrl });
+			}
+		}
+		return icons;
+	}
 </script>
 
 <div class="cl">
@@ -68,6 +84,7 @@
 
 	{#each groups as group, gi (group.id)}
 		{@const isOpen = expandedProjects.has(group.id)}
+		{@const icons = groupIcons(group)}
 		<section class="cl-group" {@attach motionStagger({ index: gi + 1, from: { y: 8 } })}>
 			<div class="cl-headrow">
 				<button
@@ -79,7 +96,21 @@
 					<span class="cl-chevron" {@attach springRotate(() => isOpen, { rest: 0, on: 90 })}>
 						<ChevronRight size={13} />
 					</span>
-					<span class="cl-swatch" style={projectSwatch(group.slug)}></span>
+					{#if icons.length > 0}
+						<span class="cl-cluster cl-cluster--{icons.length}">
+							{#each icons as ic (ic.id)}
+								<img
+									src={ic.src}
+									alt=""
+									class="cl-mini"
+									decoding="async"
+									onerror={() => onFavErr(ic.id)}
+								/>
+							{/each}
+						</span>
+					{:else}
+						<span class="cl-swatch" style={projectSwatch(group.slug)}></span>
+					{/if}
 					<span class="cl-gname">{group.name}</span>
 					<span class="cl-gcount">{group.deps.length + group.dbs.length}</span>
 				</button>
@@ -219,6 +250,61 @@
 		height: 1.125rem;
 		border-radius: 0.375rem;
 		flex-shrink: 0;
+	}
+
+	.cl-cluster {
+		position: relative;
+		width: 1.125rem;
+		height: 1.125rem;
+		flex-shrink: 0;
+	}
+
+	.cl-mini {
+		position: absolute;
+		width: 0.75rem;
+		height: 0.75rem;
+		object-fit: cover;
+		border-radius: 0.1875rem;
+		box-shadow: 0 0 0 1px var(--bg-surface);
+	}
+
+	.cl-cluster--1 .cl-mini {
+		position: static;
+		width: 100%;
+		height: 100%;
+		border-radius: 0.25rem;
+		box-shadow: none;
+	}
+
+	.cl-cluster--2 .cl-mini:nth-child(1) {
+		top: 0;
+		left: 0;
+	}
+
+	.cl-cluster--2 .cl-mini:nth-child(2) {
+		bottom: 0;
+		right: 0;
+	}
+
+	.cl-cluster--3 .cl-mini {
+		width: 0.6875rem;
+		height: 0.6875rem;
+	}
+
+	.cl-cluster--3 .cl-mini:nth-child(1) {
+		top: 0;
+		left: 0;
+	}
+
+	.cl-cluster--3 .cl-mini:nth-child(2) {
+		top: 50%;
+		left: 50%;
+		transform: translate(-50%, -50%);
+	}
+
+	.cl-cluster--3 .cl-mini:nth-child(3) {
+		bottom: 0;
+		right: 0;
 	}
 
 	.cl-favstar {
