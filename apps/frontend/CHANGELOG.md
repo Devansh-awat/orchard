@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.16.1](https://github.com/LeafdTK/leaf/compare/frontend/v0.16.0...frontend/v0.16.1) (2026-07-15)
+
+
+### Bug Fixes
+
+* **frontend:** accept ?tab=advanced deep link alias ([985b76f](https://github.com/LeafdTK/leaf/commit/985b76f2b7b786959414b061a1a569e8054905c8))
+* **frontend:** compact rows get per-project new button, card menu speaks hub vocabulary (github repo, docker image, database, templates) ([76c8d4c](https://github.com/LeafdTK/leaf/commit/76c8d4c69474c9ee4a244a478c670410e0af8b0f))
+* **frontend:** defuse destructive-action styling, tooltips on icon-only actions, prod env badge no longer red ([7de037a](https://github.com/LeafdTK/leaf/commit/7de037a45d36303d61efc34bb897743bfbe5e3bb))
+* **frontend:** deployment tabs deadlocked under rapid switching, url is now single source of truth via controlled melt value ([c8e58c7](https://github.com/LeafdTK/leaf/commit/c8e58c7deaa5365a34c2dd7a5075d252eb0e268e))
+* **frontend:** env var row actions visible at rest, secret toggle on status tokens ([b473a48](https://github.com/LeafdTK/leaf/commit/b473a485c31246639199a72eba1c32d367d8da82))
+* **frontend:** repo picker surfaces github errors, offers explicit use-typed-repo row, autofocuses search, autofills app name ([77bfb62](https://github.com/LeafdTK/leaf/commit/77bfb620efc09ee134514aec2209cdd0aff090bc))
+* **frontend:** route github-link param cleanup through the router instead of raw history.replaceState ([3607ccd](https://github.com/LeafdTK/leaf/commit/3607ccd1c632f52b2b652b0f5b7fcd11927d0a02))
+* **frontend:** template deploy suggests free subdomain, drops double project label and alarm top bar ([ad5a3b5](https://github.com/LeafdTK/leaf/commit/ad5a3b53b1c6dd35141dfb819d389c164c371e18))
+
 ## [0.16.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.15.0...frontend/v0.16.0) (2026-07-15)
 
 
