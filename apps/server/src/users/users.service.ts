@@ -9,6 +9,19 @@ export interface HackClubUserData {
   slackId?: string;
 }
 
+// Auto-generated usernames must satisfy the same format rule updateProfile
+// enforces; email local-parts routinely contain dots and plus-tags, which
+// would strand users on a username they could never have chosen themselves.
+export function sanitizeUsername(raw: string): string {
+  const cleaned = raw
+    .normalize('NFKC')
+    .replace(/[^a-zA-Z0-9_-]+/g, '-')
+    .replace(/-{2,}/g, '-')
+    .replace(/^-+|-+$/g, '')
+    .slice(0, 30);
+  return cleaned || 'user';
+}
+
 // Every authenticated request currently triggers at least two user lookups:
 // SuperAdminGuard does one, then the service-layer findOrCreateByClerkId does
 // another. The User row barely changes (profile edits are rare), so a tiny
@@ -90,7 +103,7 @@ export class UsersService {
         const firstName = nameParts[0];
         const lastName = nameParts.slice(1).join(' ') || null;
 
-        const baseUsername = hackClubUser.email.split('@')[0];
+        const baseUsername = sanitizeUsername(hackClubUser.email.split('@')[0]);
         let username = baseUsername;
         let counter = 1;
 
@@ -226,11 +239,14 @@ export class UsersService {
         if (identifierIsUuid) return null;
 
         // Create a new user with the (presumably-real) Hack Club identifier.
-        let username = userData.username || userData.email.split('@')[0];
+        const baseUsername = sanitizeUsername(
+          userData.username || userData.email.split('@')[0],
+        );
+        let username = baseUsername;
         let counter = 1;
 
         while (await this.prisma.user.findUnique({ where: { username } })) {
-          username = `${userData.username || userData.email.split('@')[0]}${counter}`;
+          username = `${baseUsername}${counter}`;
           counter++;
         }
 

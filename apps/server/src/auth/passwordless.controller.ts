@@ -16,7 +16,7 @@ import { OtpService } from './otp.service';
 import { PasskeyService } from './passkey.service';
 import { OAuthService } from './oauth.service';
 import { SessionsService } from './sessions.service';
-import { UsersService } from '../users/users.service';
+import { UsersService, sanitizeUsername } from '../users/users.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthorizationService } from './authorization.service';
 import { AuditService } from '../audit/audit.service';
@@ -577,7 +577,7 @@ export class PasswordlessController {
 
     if (!user) {
       // Generate a unique username from email
-      const baseUsername = normalizedEmail.split('@')[0];
+      const baseUsername = sanitizeUsername(normalizedEmail.split('@')[0]);
       let username = baseUsername;
       let counter = 1;
 

@@ -5,7 +5,7 @@ import { SAML } from '@node-saml/node-saml';
 import { PrismaService } from '../prisma/prisma.service';
 import { OAuthService } from '../auth/oauth.service';
 import { SessionsService } from '../auth/sessions.service';
-import { UsersService } from '../users/users.service';
+import { UsersService, sanitizeUsername } from '../users/users.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { OidcStateStore } from './oidc-state.store';
@@ -657,7 +657,7 @@ export class SsoService {
     }
 
     if (!user) {
-      const baseUsername = normalizedEmail.split('@')[0];
+      const baseUsername = sanitizeUsername(normalizedEmail.split('@')[0]);
       let username = baseUsername;
       let counter = 1;
       while (await this.prisma.user.findUnique({ where: { username } })) {
