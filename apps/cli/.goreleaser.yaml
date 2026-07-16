@@ -56,6 +56,10 @@ release:
 # The installed binary is still `orchard`.
 homebrew_casks:
   - name: orchard-cli
+    # Without this goreleaser derives the linked binary from the cask NAME
+    # (orchard-cli), but the archive ships a binary named orchard.
+    binaries:
+      - orchard
     repository:
       owner: LeafdTK
       name: homebrew-tap
