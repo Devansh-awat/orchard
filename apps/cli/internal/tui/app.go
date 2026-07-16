@@ -25,6 +25,13 @@ type screen interface {
 	help() []keyHint
 }
 
+// orgEventHandler is an optional screen extension: screens implementing it
+// receive live org-bus events forwarded by the root (debounced per entity —
+// see sse.go) and return whatever refresh commands they need.
+type orgEventHandler interface {
+	OnOrgEvent(ev api.OrgEvent) tea.Cmd
+}
+
 // navigation + status messages
 type (
 	pushScreen    struct{ s screen }
@@ -52,6 +59,7 @@ type model struct {
 	stack  []screen
 	status string
 	stErr  bool
+	sse    sseState
 }
 
 func (m model) top() screen { return m.stack[len(m.stack)-1] }
@@ -63,6 +71,10 @@ func (m model) resizeTop() tea.Cmd {
 }
 
 func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
+	if cmd, handled := m.handleSSEMsg(msg); handled {
+		return m, cmd
+	}
+
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		m.w, m.h = msg.Width, msg.Height
@@ -72,16 +84,40 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 		if msg.String() == "ctrl+c" {
 			return m, tea.Quit
 		}
+		// global overlays — suppressed while the top screen is capturing text
+		// (forms, env editor, the overlays themselves) or showing a modal
+		if !grabsKeys(m.top()) {
+			switch msg.String() {
+			case "o":
+				return m, push(newSwitcherScreen(m.cl, m.sse.orgID, stackProject(m.stack)))
+			case "ctrl+k", "/":
+				return m, push(newSearchScreen(m.cl, m.sse.orgID))
+			}
+		}
+
+	case orgSelectedMsg:
+		// org switcher: collapse to a fresh projects list and re-point the
+		// event bus at the selected org
+		m.stack = []screen{newProjectsScreen(m.cl)}
+		m.status = ""
+		cmds := []tea.Cmd{m.top().Init(), m.resizeTop(), m.notifySSEStatus(),
+			flashf("switched to %s", msg.org.Name)}
+		if msg.org.ID != m.sse.orgID {
+			cmds = append(cmds, m.startSSE(msg.org.ID, ""))
+		}
+		return m, tea.Batch(cmds...)
 
 	case pushScreen:
 		m.stack = append(m.stack, msg.s)
 		m.status = ""
-		return m, tea.Batch(msg.s.Init(), m.resizeTop())
+		return m, tea.Batch(msg.s.Init(), m.resizeTop(),
+			m.switchSSE(screenOrg(msg.s)), m.notifySSEStatus())
 
 	case replaceScreen:
 		m.stack[len(m.stack)-1] = msg.s
 		m.status = ""
-		return m, tea.Batch(msg.s.Init(), m.resizeTop())
+		return m, tea.Batch(msg.s.Init(), m.resizeTop(),
+			m.switchSSE(screenOrg(msg.s)), m.notifySSEStatus())
 
 	case popScreen:
 		if len(m.stack) > 1 {
@@ -93,6 +129,21 @@ func (m model) Update(msg tea.Msg) (tea.Model, tea.Cmd) {
 	case flash:
 		m.status, m.stErr = msg.text, msg.isErr
 		return m, nil
+
+	case projectsMsg:
+		// the root piggybacks on the projects fetch to learn the active org
+		// for the event subscription; the message still flows to the screen
+		var boot tea.Cmd
+		if msg.err == nil && m.sse.orgID == "" {
+			if org := orgFromProjects(msg.items); org != "" {
+				boot = m.switchSSE(org)
+			} else {
+				boot = fetchRootOrgs(m.cl)
+			}
+		}
+		top, cmd := m.top().Update(msg)
+		m.stack[len(m.stack)-1] = top
+		return m, tea.Batch(cmd, boot)
 	}
 
 	top, cmd := m.top().Update(msg)
@@ -121,10 +172,26 @@ func (m model) headerBar() string {
 		parts[i] = st.Render(s.title())
 	}
 	crumb := strings.Join(parts, stBarMuted.Render(" › "))
-	content := brand + stBarMuted.Render("  ") + crumb
-	// One solid bar: lipgloss pads the remainder with the bar background, so it
+	left := brand + stBarMuted.Render("  ") + crumb
+
+	// live indicator: ● live while the org event stream delivers, ○ polling
+	// while screens are on their fast-poll fallback
+	live := stBarMuted.Render("○ polling ")
+	if m.sse.connected {
+		live = lipgloss.NewStyle().
+			Foreground(lipgloss.Color(colGreen)).
+			Background(lipgloss.Color(colHeaderBg)).
+			Render("● live ")
+	}
+	bg := lipgloss.NewStyle().Background(lipgloss.Color(colHeaderBg))
+	gap := m.w - lipgloss.Width(left) - lipgloss.Width(live)
+	if gap < 0 {
+		gap = 0
+	}
+	// One solid bar: lipgloss pads any remainder with the bar background, so it
 	// never depends on hand-counted widths.
-	return lipgloss.NewStyle().Background(lipgloss.Color(colHeaderBg)).Width(m.w).MaxHeight(1).Render(content)
+	return lipgloss.NewStyle().Background(lipgloss.Color(colHeaderBg)).Width(m.w).MaxHeight(1).
+		Render(left + bg.Render(strings.Repeat(" ", gap)) + live)
 }
 
 // renderTabs builds an inline tab strip ("Overview · Pods · Logs · Env") for
@@ -151,6 +218,12 @@ func (m model) bottomBar() string {
 	parts := make([]string, 0)
 	for _, h := range m.top().help() {
 		parts = append(parts, keyS.Render(" "+h[0]+" ")+lblS.Render(h[1]+" "))
+	}
+	// global overlay shortcuts, hidden while the top screen captures raw keys
+	if !grabsKeys(m.top()) {
+		for _, h := range []keyHint{{"o", "org"}, {"ctrl+k", "search"}} {
+			parts = append(parts, keyS.Render(" "+h[0]+" ")+lblS.Render(h[1]+" "))
+		}
 	}
 	left := bg.Render(" ") + strings.Join(parts, bg.Render(" "))
 
