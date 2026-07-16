@@ -618,6 +618,8 @@
 						{orgSlug}
 						{liveMetrics}
 						{failedFav}
+						{expandedProjects}
+						onToggleExpand={toggleExpand}
 						onFavErr={favErr}
 					/>
 					{#if filtered.length === 0 && filteredDbs.length === 0}
