@@ -2,7 +2,6 @@
 	import {
 		Plus,
 		ChevronRight,
-		Folder,
 		Rocket,
 		Database,
 		ArrowRight,
@@ -12,7 +11,13 @@
 	} from 'lucide-svelte';
 	import { motionStagger, springRotate } from '$lib/utils/motion.svelte';
 	import { projectGradientEnabled } from '$lib/stores';
-	import { projectStatusSummary, meshBakedBg, bodyAttach, knownIcon } from './helpers.svelte';
+	import {
+		projectStatusSummary,
+		meshBakedBg,
+		bodyAttach,
+		knownIcon,
+		projectSwatch
+	} from './helpers.svelte';
 	import { Menu, MenuItem } from '$lib/components/ui';
 	import DeploymentCard from './DeploymentCard.svelte';
 	import DatabaseCard from './DatabaseCard.svelte';
@@ -137,7 +142,7 @@
 					{/each}
 				</div>
 			{:else}
-				<Folder size={16} />
+				<span class="proj-av-swatch" style={projectSwatch(group.slug)}></span>
 			{/if}
 		</div>
 		<div class="proj-text">
