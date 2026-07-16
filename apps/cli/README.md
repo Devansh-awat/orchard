@@ -8,16 +8,31 @@ Output is **pretty in a terminal** and **JSON when piped** (or with
 
 ## Install
 
-From source, today:
+Homebrew (macOS):
+
+```sh
+brew tap leafdtk/tap
+brew install --cask orchard-cli
+```
+
+The cask is `orchard-cli` because homebrew core already owns the name
+`orchard` (an unrelated containers GUI); the installed binary is still
+`orchard`.
+
+Prebuilt binaries for macOS/Linux/Windows are attached to every `cli/v*`
+release, or use the installer:
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/LeafdTK/leaf/main/apps/cli/scripts/install.sh | sh
+```
+
+From source:
 
 ```sh
 go build -o orchard .
 # or install onto PATH
 go install github.com/LeafdTK/leaf/cli@latest
 ```
-
-Prebuilt binaries and a curl-able `install.sh` land with the M4 release, and a
-Homebrew formula is coming after that.
 
 ## Auth
 

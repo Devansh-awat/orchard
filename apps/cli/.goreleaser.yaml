@@ -49,8 +49,11 @@ release:
 # the local plain tag, so the slash must be spelled out (%2F) here. The
 # quarantine hook is the goreleaser-recommended replacement for signing:
 # binaries are not notarized, so Gatekeeper would block them otherwise.
+# Token is orchard-cli, not orchard: homebrew core already ships a cask named
+# orchard (a containers GUI), and the unqualified name resolves to that one.
+# The installed binary is still `orchard`.
 homebrew_casks:
-  - name: orchard
+  - name: orchard-cli
     repository:
       owner: LeafdTK
       name: homebrew-tap
