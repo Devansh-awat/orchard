@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.17.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.16.3...frontend/v0.17.0) (2026-07-16)
+
+
+### Features
+
+* **frontend:** collapsible project groups in compact dashboard view ([675e252](https://github.com/LeafdTK/leaf/commit/675e25294c60b4873b3bbb0ed585a77cbd8439f4))
+* **frontend:** favicon clusters on compact group headers ([3362e7c](https://github.com/LeafdTK/leaf/commit/3362e7c169a3c32bdfd1fc57af5eba6b66f59d22))
+* **frontend:** gradient swatch fallback for icon-less projects on cards ([15c0c84](https://github.com/LeafdTK/leaf/commit/15c0c84f7db0975c0a5ec7ec8eadaa7327649358))
+* **frontend:** orchard palette pixel sprites with finer grid ([cd4033d](https://github.com/LeafdTK/leaf/commit/cd4033d286ee712a4ac01d29e53237f6831a7c08))
+* **frontend:** pixel art identicons replace gradient swatches ([719f1d7](https://github.com/LeafdTK/leaf/commit/719f1d75c000d3b15cf663010812773275b9696e))
+
+
+### Bug Fixes
+
+* **frontend:** tighten compact group spacing ([9456f95](https://github.com/LeafdTK/leaf/commit/9456f95c004b3797bb7c541b903873abaeb8d85d))
+
 ## [0.16.3](https://github.com/LeafdTK/leaf/compare/frontend/v0.16.2...frontend/v0.16.3) (2026-07-16)
 
 

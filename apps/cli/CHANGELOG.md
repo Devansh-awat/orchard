@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.3.1](https://github.com/LeafdTK/leaf/compare/cli/v0.3.0...cli/v0.3.1) (2026-07-16)
+
+
+### Bug Fixes
+
+* **cli:** publish release binaries to public orchard-releases repo ([a44085c](https://github.com/LeafdTK/leaf/commit/a44085c8fb353500729dd9a350f2b89b0707ba42))
+* **cli:** rename brew cask to orchard-cli, homebrew core owns orchard ([75e49ab](https://github.com/LeafdTK/leaf/commit/75e49ab0ce99a2ea8f88fd0bcfd7843bfed07c7e))
+
 ## [0.3.0](https://github.com/LeafdTK/leaf/compare/cli/v0.2.0...cli/v0.3.0) (2026-07-16)
 
 
