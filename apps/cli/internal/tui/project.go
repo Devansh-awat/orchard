@@ -121,9 +121,16 @@ func (s *projectScreen) Update(msg tea.Msg) (screen, tea.Cmd) {
 			return s, push(newDeployMenuScreen(s.cl, s.project))
 		case "d":
 			return s, push(newDatabaseFormScreen(s.cl, s.project))
+		case "J":
+			return s, push(newJobsListScreen(s.cl, s.project.OrganizationID, s.project.ID))
+		case "O":
+			return s, push(newOrgSettingsScreen(s.cl, s.project.OrganizationID))
 		case "enter":
 			if s.focus == 0 && s.dCursor < len(s.deps) {
 				return s, push(newDeploymentScreen(s.cl, s.project, s.deps[s.dCursor].ID, s.deps[s.dCursor].Name))
+			}
+			if s.focus == 1 && s.bCursor < len(s.dbs) {
+				return s, push(newDatabaseScreen(s.cl, s.project, s.dbs[s.bCursor].ID, s.dbs[s.bCursor].Name))
 			}
 		}
 	}
@@ -187,7 +194,8 @@ func (s *projectScreen) View() string {
 
 func (s *projectScreen) help() []keyHint {
 	return []keyHint{{"tab", "switch"}, {"↑/↓", "move"}, {"enter", "open"},
-		{"n", "deploy"}, {"d", "database"}, {"r", "refresh"}, {"esc", "back"}}
+		{"n", "deploy"}, {"d", "database"}, {"J", "jobs"}, {"O", "org settings"},
+		{"r", "refresh"}, {"esc", "back"}}
 }
 
 func sectionErr(err error) string {
