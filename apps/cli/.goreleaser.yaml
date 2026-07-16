@@ -44,16 +44,27 @@ changelog:
 release:
   disable: true
 
-# TODO(seb): homebrew tap. The tap repo does not exist yet; create something
-# like LeafdTK/homebrew-tap, then uncomment this and give the release job a
-# token that can push to it (the default GITHUB_TOKEN only covers this repo).
-# brews:
-#   - name: orchard
-#     repository:
-#       owner: LeafdTK
-#       name: homebrew-tap
-#     directory: Formula
-#     homepage: https://github.com/LeafdTK/leaf
-#     description: Orchard platform CLI
-#     install: |
-#       bin.install "orchard"
+# The download URL cannot use goreleaser's default template: the real release
+# tag is cli/vX.Y.Z (monorepo component tag) while goreleaser versions from
+# the local plain tag, so the slash must be spelled out (%2F) here. The
+# quarantine hook is the goreleaser-recommended replacement for signing:
+# binaries are not notarized, so Gatekeeper would block them otherwise.
+homebrew_casks:
+  - name: orchard
+    repository:
+      owner: LeafdTK
+      name: homebrew-tap
+      token: "{{ .Env.HOMEBREW_TAP_TOKEN }}"
+    url:
+      template: "https://github.com/LeafdTK/leaf/releases/download/cli%2Fv{{ .Version }}/{{ .ArtifactName }}"
+    homepage: https://github.com/LeafdTK/leaf
+    description: Orchard platform CLI
+    commit_author:
+      name: leafdbot[bot]
+      email: leafdbot[bot]@users.noreply.github.com
+    hooks:
+      post:
+        install: |
+          if system_command("/usr/bin/xattr", args: ["-h"]).exit_status == 0
+            system_command "/usr/bin/xattr", args: ["-dr", "com.apple.quarantine", "#{staged_path}/orchard"]
+          end

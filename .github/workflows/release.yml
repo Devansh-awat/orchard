@@ -103,6 +103,15 @@ jobs:
           cache-dependency-path: apps/cli/go.sum
       - name: Lay local semver tag for goreleaser
         run: git tag -f "v${CLI_VERSION}"
+      # The default GITHUB_TOKEN cannot push to the tap repo; mint a leafdbot
+      # token scoped to it (the app must be installed on homebrew-tap).
+      - uses: actions/create-github-app-token@v1
+        id: tap-token
+        with:
+          app-id: 1090304
+          private-key: ${{ secrets.LEAFDBOT_PRIVATE_KEY }}
+          owner: LeafdTK
+          repositories: homebrew-tap
       - uses: goreleaser/goreleaser-action@v6
         with:
           version: "~> v2"
@@ -110,6 +119,7 @@ jobs:
           args: release --clean
         env:
           GORELEASER_CURRENT_TAG: v${{ needs.release-please.outputs.cli_v }}
+          HOMEBREW_TAP_TOKEN: ${{ steps.tap-token.outputs.token }}
       - name: Upload binaries to the cli release
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
