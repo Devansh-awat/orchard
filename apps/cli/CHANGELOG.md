@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.3.0](https://github.com/LeafdTK/leaf/compare/cli/v0.2.0...cli/v0.3.0) (2026-07-16)
+
+
+### Features
+
+* **cli:** database screen with backups, extensions, metrics and psql ([ffcf1d2](https://github.com/LeafdTK/leaf/commit/ffcf1d201ffb8f7676681ec7f6a14921f2dcc090))
+* **cli:** deployment screen tabs for deploys, network, storage, resources, advanced ([9923a19](https://github.com/LeafdTK/leaf/commit/9923a195d063e990a9fa20643f7c1cdcd7451a9e))
+* **cli:** jobs screens with cron and step editor ([eba1363](https://github.com/LeafdTK/leaf/commit/eba1363d0a5ff2fb8cb230f38923be9833055b90))
+* **cli:** org switcher, ctrl+k search and org settings screens ([66467ca](https://github.com/LeafdTK/leaf/commit/66467cab9bc1dff3b2e1d18c3cf9ca40d411e620))
+* **cli:** publish brew cask to homebrew-tap on release ([3785757](https://github.com/LeafdTK/leaf/commit/378575722d24b741c423e0f29a0c5d84a5cf074a))
+* **cli:** sse live updates and confirm modal in tui ([9ef4809](https://github.com/LeafdTK/leaf/commit/9ef4809f8d30a85fab111b60e0992cea92bb23d7))
+
 ## [0.2.0](https://github.com/LeafdTK/leaf/compare/cli/v0.1.0...cli/v0.2.0) (2026-07-15)
 
 

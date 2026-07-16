@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.20.2](https://github.com/LeafdTK/leaf/compare/server/v1.20.1...server/v1.20.2) (2026-07-16)
+
+
+### Bug Fixes
+
+* **server:** sanitize auto-generated usernames from email local-parts across all signup paths ([d3f2357](https://github.com/LeafdTK/leaf/commit/d3f23575637f8cf670c9186338fc213d9e48bab3))
+
 ## [1.20.1](https://github.com/LeafdTK/leaf/compare/server/v1.20.0...server/v1.20.1) (2026-07-16)
 
 

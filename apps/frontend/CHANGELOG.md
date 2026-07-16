@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.16.3](https://github.com/LeafdTK/leaf/compare/frontend/v0.16.2...frontend/v0.16.3) (2026-07-16)
+
+
+### Bug Fixes
+
+* **frontend:** stable scrollbar gutters so popovers and page never shift width while scrolling ([b13c3be](https://github.com/LeafdTK/leaf/commit/b13c3bebd35874aaa7fbce29611380a668c5ac80))
+
+
+### Performance Improvements
+
+* **frontend:** pause mesh spin layers at rest, throttle card tilt retargeting, drop transform from btn transitions, composited dash-card hover shadow ([6ef7d26](https://github.com/LeafdTK/leaf/commit/6ef7d26de396a1873f7fe2ece08ec0e83f26099a))
+
 ## [0.16.2](https://github.com/LeafdTK/leaf/compare/frontend/v0.16.1...frontend/v0.16.2) (2026-07-16)
 
 
