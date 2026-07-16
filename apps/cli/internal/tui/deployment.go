@@ -2,7 +2,9 @@ package tui
 
 import (
 	"context"
+	"errors"
 	"fmt"
+	"net/http"
 	"net/url"
 	"strings"
 	"time"
@@ -12,13 +14,27 @@ import (
 	tea "github.com/charmbracelet/bubbletea"
 )
 
-const refreshEvery = 4 * time.Second
+const (
+	refreshEvery    = 4 * time.Second  // fast poll while the event stream is down
+	refreshEverySSE = 30 * time.Second // slow safety net while SSE delivers
+)
 
-var depTabs = []string{"Overview", "Pods", "Logs", "Env"}
+// Tab layout mirrors the frontend deployment page.
+const (
+	tabOverview = iota
+	tabEnv
+	tabDeploys
+	tabNetwork
+	tabStorage
+	tabResources
+	tabAdvanced
+)
+
+var depTabs = []string{"Overview", "Env", "Deploys", "Network", "Storage", "Resources", "Advanced"}
 
 type (
 	detailMsg struct {
-		d   *Deployment
+		d   *DepDetail
 		err error
 	}
 	podsMsg struct {
@@ -41,12 +57,19 @@ type (
 		text string
 		err  error
 	}
-	tickMsg struct{ id string }
+	tickMsg struct {
+		id  string
+		gen int
+	}
+	deleteDoneMsg struct {
+		name string
+		err  error
+	}
 )
 
 func fetchDetail(cl *api.Client, id string) tea.Cmd {
 	return func() tea.Msg {
-		var d Deployment
+		var d DepDetail
 		err := cl.GetJSON(context.Background(), "/deployments/"+id, &d)
 		if err != nil {
 			return detailMsg{nil, err}
@@ -92,8 +115,13 @@ func fetchRuntimeLogs(cl *api.Client, podName, namespace string) tea.Cmd {
 		return runtimeLogsMsg{logs: r.Logs, err: err}
 	}
 }
-func tick(id string) tea.Cmd {
-	return tea.Tick(refreshEvery, func(time.Time) tea.Msg { return tickMsg{id} })
+
+// deleteDeployment removes the deployment and its Kubernetes resources.
+func deleteDeployment(cl *api.Client, id, name string) tea.Cmd {
+	return func() tea.Msg {
+		err := cl.Send(context.Background(), "DELETE", "/deployments/"+id, nil, nil)
+		return deleteDoneMsg{name, err}
+	}
 }
 
 type deploymentScreen struct {
@@ -102,20 +130,59 @@ type deploymentScreen struct {
 	id, name string
 	tab      int
 
-	detail  *Deployment
+	detail  *DepDetail
 	pods    []Pod
 	metrics MetricsResp
 	logs    logsResp
 	runtime string
 	logVP   viewport.Model
 
-	logSource int // 0 = runtime, 1 = build
+	logSource int  // 0 = runtime, 1 = build
+	follow    bool // auto-refetch + stick logs to the bottom
 	podCursor int
 	envCursor int
-	tabSpans  [][2]int // X ranges of each tab in the border row (Y==1)
-	hitPods   hitTable
-	loading   bool
-	w, h      int
+
+	// Deploys tab
+	deployPane int // 0 = history, 1 = webhook tokens
+	histCursor int
+	tokens     []WebhookToken
+	tokensErr  error
+	tokLoaded  bool
+	tokCursor  int
+	newToken   string // freshly minted webhook secret (shown once)
+
+	// Network tab
+	netPane   int // 0 = services, 1 = domains
+	svcCursor int
+	domCursor int
+	ts        TailscaleInfo
+	tsErr     error
+	tsLoaded  bool
+
+	// Storage tab
+	volCursor int
+
+	// Resources tab
+	quota       *QuotaMe
+	quotaErr    error
+	quotaLoaded bool
+
+	// Advanced tab
+	audit       []AuditEntry
+	auditErr    error
+	auditCursor int
+
+	execDenied   bool // token lacks the exec scope: hide the shell hint
+	shellPicking bool // pod picker for the shell is up
+	shellPick    int  // pod picker cursor
+
+	tabSpans [][2]int // X ranges of each tab in the border row (Y==1)
+	hitPods  hitTable
+	loading  bool
+	sseLive  bool // org event stream up → stretch the poll interval
+	tickGen  int  // invalidates in-flight ticks when the cadence changes
+	confirm  confirmModel
+	w, h     int
 }
 
 var logSources = []string{"Runtime", "Build"}
@@ -145,6 +212,8 @@ func (s *deploymentScreen) namespace() string {
 	return ""
 }
 
+func (s *deploymentScreen) orgID() string { return s.project.OrganizationID }
+
 // loadLogs fetches the currently selected log source.
 func (s *deploymentScreen) loadLogs() tea.Cmd {
 	if s.logSource == 1 {
@@ -167,11 +236,13 @@ func (s *deploymentScreen) setLogContent() {
 		}
 	}
 	s.logVP.SetContent(content)
-	s.logVP.GotoBottom()
+	if s.follow {
+		s.logVP.GotoBottom()
+	}
 }
 
 func newDeploymentScreen(cl *api.Client, p Project, id, name string) *deploymentScreen {
-	return &deploymentScreen{cl: cl, project: p, id: id, name: name, loading: true}
+	return &deploymentScreen{cl: cl, project: p, id: id, name: name, loading: true, follow: true}
 }
 
 func (s *deploymentScreen) title() string { return s.name }
@@ -182,13 +253,73 @@ func (s *deploymentScreen) Init() tea.Cmd {
 		fetchPods(s.cl, s.id),
 		fetchMetrics(s.cl, s.id),
 		fetchLogs(s.cl, s.id),
-		tick(s.id),
+		s.tick(),
 	)
 }
 
-// refreshLogs reloads the active log source if the Logs tab is showing.
+// tickEvery adapts the poll cadence to the event stream: 4s of hard polling
+// when SSE is down, a 30s safety net when events cover us.
+func (s *deploymentScreen) tickEvery() time.Duration {
+	if s.sseLive {
+		return refreshEverySSE
+	}
+	return refreshEvery
+}
+
+func (s *deploymentScreen) tick() tea.Cmd {
+	gen := s.tickGen
+	return tea.Tick(s.tickEvery(), func(time.Time) tea.Msg { return tickMsg{s.id, gen} })
+}
+
+// OnOrgEvent refreshes the panes a bus event invalidates, instead of waiting
+// out the tick. deployment.metrics feeds the graphs directly when the payload
+// parses; anything unparseable falls back to a refetch.
+func (s *deploymentScreen) OnOrgEvent(ev api.OrgEvent) tea.Cmd {
+	if ev.ID != s.id {
+		return nil
+	}
+	switch ev.Type {
+	case "deployment.changed", "build.changed":
+		cmds := []tea.Cmd{s.refresh(), s.refreshLogs()}
+		if s.tab == tabAdvanced {
+			cmds = append(cmds, fetchDepAudit(s.cl, s.id))
+		}
+		return tea.Batch(cmds...)
+	case "pod.changed":
+		return tea.Batch(fetchPods(s.cl, s.id), s.refreshLogs())
+	case "deployment.metrics":
+		if cpu, mem, ok := parseMetricsPayload(ev.Payload); ok {
+			s.pushMetricPoint(cpu, mem)
+			return nil
+		}
+		return fetchMetrics(s.cl, s.id)
+	}
+	return nil
+}
+
+// pushMetricPoint appends a live sample from the event bus to the graphs and
+// updates the headline usage numbers.
+func (s *deploymentScreen) pushMetricPoint(cpu, mem float64) {
+	ts := float64(time.Now().Unix())
+	const keep = 240
+	s.metrics.Data.CPU = append(s.metrics.Data.CPU, MetricPoint{Timestamp: ts, Value: cpu})
+	s.metrics.Data.Memory = append(s.metrics.Data.Memory, MetricPoint{Timestamp: ts, Value: mem})
+	if n := len(s.metrics.Data.CPU); n > keep {
+		s.metrics.Data.CPU = s.metrics.Data.CPU[n-keep:]
+	}
+	if n := len(s.metrics.Data.Memory); n > keep {
+		s.metrics.Data.Memory = s.metrics.Data.Memory[n-keep:]
+	}
+	if s.detail != nil {
+		s.detail.TotalCPUUsage = flexNum(cpu)
+		s.detail.TotalMemoryUsage = flexNum(mem)
+	}
+}
+
+// refreshLogs reloads the active log source when the Overview logs pane is
+// visible and following.
 func (s *deploymentScreen) refreshLogs() tea.Cmd {
-	if s.tab == 2 {
+	if s.tab == tabOverview && s.follow {
 		return s.loadLogs()
 	}
 	return nil
@@ -198,20 +329,88 @@ func (s *deploymentScreen) refresh() tea.Cmd {
 	return tea.Batch(fetchDetail(s.cl, s.id), fetchPods(s.cl, s.id), fetchMetrics(s.cl, s.id))
 }
 
+// tabDataCmd (re)loads the lazily fetched data behind the active tab.
+func (s *deploymentScreen) tabDataCmd() tea.Cmd {
+	switch s.tab {
+	case tabOverview:
+		return s.loadLogs()
+	case tabDeploys:
+		return fetchWebhookTokens(s.cl, s.id)
+	case tabNetwork:
+		return fetchTailscale(s.cl, s.id)
+	case tabResources:
+		return tea.Batch(fetchQuotaMe(s.cl, s.orgID()), fetchMetrics(s.cl, s.id))
+	case tabAdvanced:
+		return fetchDepAudit(s.cl, s.id)
+	}
+	return nil
+}
+
+// enterTab fires the first-visit fetches for the tab that just became active.
+func (s *deploymentScreen) enterTab() tea.Cmd {
+	switch s.tab {
+	case tabOverview:
+		return s.loadLogs()
+	case tabDeploys:
+		if !s.tokLoaded {
+			return fetchWebhookTokens(s.cl, s.id)
+		}
+	case tabNetwork:
+		if !s.tsLoaded {
+			return fetchTailscale(s.cl, s.id)
+		}
+	case tabResources:
+		if !s.quotaLoaded {
+			return tea.Batch(fetchQuotaMe(s.cl, s.orgID()), fetchMetrics(s.cl, s.id))
+		}
+	case tabAdvanced:
+		return fetchDepAudit(s.cl, s.id)
+	}
+	return nil
+}
+
+func (s *deploymentScreen) setTab(i int) tea.Cmd {
+	i = (i + len(depTabs)) % len(depTabs)
+	if s.tab == i {
+		return nil
+	}
+	s.tab = i
+	return s.enterTab()
+}
+
 func (s *deploymentScreen) Update(msg tea.Msg) (screen, tea.Cmd) {
+	if handled, cmd := s.confirm.Update(msg); handled {
+		return s, cmd
+	}
+	if s.shellPicking {
+		if handled, cmd := s.updateShellPicker(msg); handled {
+			return s, cmd
+		}
+	}
 	switch msg := msg.(type) {
 	case tea.WindowSizeMsg:
 		s.w, s.h = msg.Width, msg.Height
-		s.logVP.Width = s.w - 4
-		s.logVP.Height = s.h - chromeH - 2
+		s.sizeLogVP()
 	case tickMsg:
-		if msg.id == s.id {
-			return s, tea.Batch(s.refresh(), s.refreshLogs(), tick(s.id))
+		if msg.id == s.id && msg.gen == s.tickGen {
+			return s, tea.Batch(s.refresh(), s.refreshLogs(), s.tick())
 		}
+	case sseStatusMsg:
+		if s.sseLive != msg.connected {
+			s.sseLive = msg.connected
+			s.tickGen++ // orphan the in-flight tick, restart at the new cadence
+			return s, s.tick()
+		}
+	case deleteDoneMsg:
+		if msg.err != nil {
+			return s, errFlash(msg.err)
+		}
+		return s, finishForm(createdMsg{"deleted deployment " + msg.name})
 	case detailMsg:
 		s.loading = false
 		if msg.err == nil {
 			s.detail = msg.d
+			s.clampCursors()
 		}
 	case podsMsg:
 		hadPods := len(s.pods) > 0
@@ -220,7 +419,7 @@ func (s *deploymentScreen) Update(msg tea.Msg) (screen, tea.Cmd) {
 			s.podCursor = 0
 		}
 		// once pods are known we can stream runtime logs
-		if !hadPods && len(s.pods) > 0 && s.tab == 2 && s.logSource == 0 {
+		if !hadPods && len(s.pods) > 0 && s.tab == tabOverview && s.logSource == 0 {
 			return s, s.loadLogs()
 		}
 	case metricsMsg:
@@ -243,101 +442,196 @@ func (s *deploymentScreen) Update(msg tea.Msg) (screen, tea.Cmd) {
 		if s.logSource == 0 {
 			s.setLogContent()
 		}
+	case tokensMsg:
+		s.tokLoaded = true
+		s.tokens, s.tokensErr = msg.items, msg.err
+		if s.tokCursor >= len(s.tokens) {
+			s.tokCursor = 0
+		}
+	case tokenCreatedMsg:
+		s.newToken = msg.token
+		return s, tea.Batch(fetchWebhookTokens(s.cl, s.id),
+			flashf("webhook token created — the secret is shown once"))
+	case tailscaleMsg:
+		s.tsLoaded = true
+		s.ts, s.tsErr = msg.info, msg.err
+	case quotaMsg:
+		s.quotaLoaded = true
+		if msg.err != nil {
+			s.quotaErr = msg.err
+		} else {
+			q := msg.q
+			s.quota, s.quotaErr = &q, nil
+		}
+	case depAuditMsg:
+		s.audit, s.auditErr = msg.entries, msg.err
+		if s.auditCursor >= len(s.audit) {
+			s.auditCursor = 0
+		}
+	case shellDoneMsg:
+		return s, s.handleShellDone(msg.err)
 	case actionMsg:
 		if msg.err != nil {
 			return s, errFlash(msg.err)
 		}
-		return s, tea.Batch(s.refresh(), flashf("%s", msg.text))
+		return s, tea.Batch(s.refresh(), s.tabDataCmd(), flashf("%s", msg.text))
 	case envSavedMsg:
 		return s, tea.Batch(fetchDetail(s.cl, s.id), flashf("environment updated — redeploying"))
 	case tea.MouseMsg:
-		// click a tab in the panel border row (Y == 1)
-		if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress && msg.Y == 1 {
-			for i, sp := range s.tabSpans {
-				if msg.X >= sp[0] && msg.X <= sp[1] {
-					if s.tab != i {
-						s.tab = i
-						return s, s.refreshLogs()
-					}
-					return s, nil
-				}
-			}
-		}
-		switch msg.Button {
-		case tea.MouseButtonWheelUp:
-			if s.tab == 1 && s.podCursor > 0 {
-				s.podCursor--
-			} else if s.tab == 3 && s.envCursor > 0 {
-				s.envCursor--
-			}
-		case tea.MouseButtonWheelDown:
-			if s.tab == 1 && s.podCursor < len(s.pods)-1 {
-				s.podCursor++
-			} else if s.tab == 3 && s.detail != nil && s.envCursor < len(s.detail.EnvVars)-1 {
-				s.envCursor++
-			}
-		case tea.MouseButtonLeft:
-			if msg.Action == tea.MouseActionPress && s.tab == 1 {
-				if idx := s.hitPods.rowAt(msg.X, msg.Y, s.podCursor); idx >= 0 {
-					s.podCursor = idx
-				}
-			}
-		}
+		return s, s.handleMouse(msg)
 	case tea.KeyMsg:
-		switch msg.String() {
-		case "esc":
-			return s, pop
-		case "tab", "right":
-			s.tab = (s.tab + 1) % len(depTabs)
-			return s, s.refreshLogs()
-		case "left", "h":
-			s.tab = (s.tab - 1 + len(depTabs)) % len(depTabs)
-			return s, s.refreshLogs()
-		case "1", "2", "3", "4":
-			s.tab = int(msg.String()[0] - '1')
-			return s, s.refreshLogs()
-		case "b":
-			if s.tab == 2 {
-				s.logSource = 1 - s.logSource
-				s.setLogContent()
-				return s, s.loadLogs()
-			}
-		case "r":
-			return s, tea.Batch(s.refresh(), s.refreshLogs())
-		case "R":
-			return s, doAction(s.cl, "POST", "/deployments/"+s.id+"/restart", nil, "restart triggered")
-		case "B":
-			return s, doAction(s.cl, "POST", "/deployments/"+s.id+"/rebuild", nil, "rebuild triggered")
-		case "s":
-			return s, push(newScaleScreen(s.cl, s.id, s.curReplicas()))
-		case "e":
-			if s.tab == 3 && s.detail != nil {
-				return s, push(newEnvScreen(s.cl, s.id, s.detail.EnvVars))
-			}
-		case "up", "k":
-			if s.tab == 1 && s.podCursor > 0 {
-				s.podCursor--
-			} else if s.tab == 3 && s.envCursor > 0 {
-				s.envCursor--
-			} else if s.tab == 2 {
-				s.logVP.LineUp(1)
-			}
-		case "down", "j":
-			if s.tab == 1 && s.podCursor < len(s.pods)-1 {
-				s.podCursor++
-			} else if s.tab == 3 && s.detail != nil && s.envCursor < len(s.detail.EnvVars)-1 {
-				s.envCursor++
-			} else if s.tab == 2 {
-				s.logVP.LineDown(1)
-			}
+		if cmd, handled := s.handleGlobalKey(msg); handled {
+			return s, cmd
+		}
+		if cmd, handled := s.handleTabKey(msg); handled {
+			return s, cmd
 		}
 	}
-	if s.tab == 2 {
+	if s.tab == tabOverview {
 		var cmd tea.Cmd
 		s.logVP, cmd = s.logVP.Update(msg)
 		return s, cmd
 	}
 	return s, nil
+}
+
+// clampCursors keeps every per-tab cursor inside the freshly fetched lists.
+func (s *deploymentScreen) clampCursors() {
+	d := s.detail
+	if d == nil {
+		return
+	}
+	clamp := func(c *int, n int) {
+		if *c >= n {
+			*c = max(n-1, 0)
+		}
+	}
+	clamp(&s.envCursor, len(d.EnvVars))
+	clamp(&s.histCursor, len(d.ImageHistory))
+	clamp(&s.svcCursor, len(d.Services))
+	clamp(&s.domCursor, len(d.Ingresses))
+	clamp(&s.volCursor, len(d.Volumes))
+}
+
+func (s *deploymentScreen) sizeLogVP() {
+	bodyH := s.h - chromeH
+	s.logVP.Width = s.w - s.overviewLeftW() - 4
+	s.logVP.Height = bodyH - s.overviewInfoH() - 2
+	if s.logVP.Height < 1 {
+		s.logVP.Height = 1
+	}
+}
+
+func (s *deploymentScreen) handleGlobalKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+	switch msg.String() {
+	case "esc":
+		return pop, true
+	case "]", "tab", "right":
+		return s.setTab(s.tab + 1), true
+	case "[", "left":
+		return s.setTab(s.tab - 1), true
+	case "1", "2", "3", "4", "5", "6", "7":
+		return s.setTab(int(msg.String()[0] - '1')), true
+	case "r":
+		return tea.Batch(s.refresh(), s.tabDataCmd()), true
+	}
+	return nil, false
+}
+
+func (s *deploymentScreen) handleTabKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+	switch s.tab {
+	case tabOverview:
+		return s.overviewKey(msg)
+	case tabEnv:
+		return s.envKey(msg)
+	case tabDeploys:
+		return s.deploysKey(msg)
+	case tabNetwork:
+		return s.networkKey(msg)
+	case tabStorage:
+		return s.storageKey(msg)
+	case tabResources:
+		return s.resourcesKey(msg)
+	case tabAdvanced:
+		return s.advancedKey(msg)
+	}
+	return nil, false
+}
+
+func (s *deploymentScreen) handleMouse(msg tea.MouseMsg) tea.Cmd {
+	// click a tab in the panel border row (Y == 1)
+	if msg.Button == tea.MouseButtonLeft && msg.Action == tea.MouseActionPress && msg.Y == 1 {
+		for i, sp := range s.tabSpans {
+			if msg.X >= sp[0] && msg.X <= sp[1] {
+				return s.setTab(i)
+			}
+		}
+	}
+	switch msg.Button {
+	case tea.MouseButtonWheelUp:
+		s.wheel(-1, msg.X)
+	case tea.MouseButtonWheelDown:
+		s.wheel(1, msg.X)
+	case tea.MouseButtonLeft:
+		if msg.Action == tea.MouseActionPress && s.tab == tabOverview {
+			if idx := s.hitPods.rowAt(msg.X, msg.Y, s.podCursor); idx >= 0 {
+				s.podCursor = idx
+			}
+		}
+	}
+	return nil
+}
+
+// wheel scrolls whatever list sits under the pointer on the active tab.
+func (s *deploymentScreen) wheel(dir, x int) {
+	move := func(c *int, n int) {
+		*c += dir
+		if *c < 0 {
+			*c = 0
+		}
+		if *c >= n && n > 0 {
+			*c = n - 1
+		}
+		if n == 0 {
+			*c = 0
+		}
+	}
+	switch s.tab {
+	case tabOverview:
+		if x >= s.overviewLeftW() {
+			if dir < 0 {
+				s.logVP.LineUp(2)
+			} else {
+				s.logVP.LineDown(2)
+			}
+		} else {
+			move(&s.podCursor, len(s.pods))
+		}
+	case tabEnv:
+		if s.detail != nil {
+			move(&s.envCursor, len(s.detail.EnvVars))
+		}
+	case tabDeploys:
+		if s.deployPane == 0 && s.detail != nil {
+			move(&s.histCursor, len(s.detail.ImageHistory))
+		} else {
+			move(&s.tokCursor, len(s.tokens))
+		}
+	case tabNetwork:
+		if s.detail != nil {
+			if s.netPane == 0 {
+				move(&s.svcCursor, len(s.detail.Services))
+			} else {
+				move(&s.domCursor, len(s.detail.Ingresses))
+			}
+		}
+	case tabStorage:
+		if s.detail != nil {
+			move(&s.volCursor, len(s.detail.Volumes))
+		}
+	case tabAdvanced:
+		move(&s.auditCursor, len(s.audit))
+	}
 }
 
 func (s *deploymentScreen) curReplicas() int {
@@ -348,14 +642,55 @@ func (s *deploymentScreen) curReplicas() int {
 }
 
 func (s *deploymentScreen) help() []keyHint {
-	if s.tab == 2 {
-		return []keyHint{{"←/→", "tabs"}, {"b", "build/runtime"}, {"↑/↓", "scroll"}, {"r", "refresh"}, {"esc", "back"}}
+	if s.confirm.Active() {
+		return s.confirm.help()
 	}
-	return []keyHint{{"←/→", "tabs"}, {"s", "scale"}, {"R", "restart"},
-		{"B", "rebuild"}, {"e", "edit env"}, {"r", "refresh"}, {"esc", "back"}}
+	if s.shellPicking {
+		return []keyHint{{"↑/↓", "pod"}, {"enter", "open shell"}, {"esc", "cancel"}}
+	}
+	base := []keyHint{{"[/]", "tabs"}}
+	switch s.tab {
+	case tabOverview:
+		base = append(base, keyHint{"f", "follow"}, keyHint{"b", "build/runtime"})
+		if !s.execDenied {
+			base = append(base, keyHint{"s", "shell"})
+		}
+		base = append(base, keyHint{"S", "scale"}, keyHint{"+/-", "replicas"},
+			keyHint{"R", "restart"}, keyHint{"B", "rebuild"}, keyHint{"x", "delete"})
+	case tabEnv:
+		base = append(base, keyHint{"↑/↓", "move"}, keyHint{"e", "edit env"})
+	case tabDeploys:
+		base = append(base, keyHint{"p", "pane"}, keyHint{"↑/↓", "move"})
+		if s.deployPane == 0 {
+			base = append(base, keyHint{"R", "rollback"}, keyHint{"a", "auto-deploy"})
+		} else {
+			base = append(base, keyHint{"n", "new token"}, keyHint{"x", "delete token"})
+		}
+	case tabNetwork:
+		base = append(base, keyHint{"p", "pane"}, keyHint{"↑/↓", "move"}, keyHint{"a", "add"})
+		if s.netPane == 0 {
+			base = append(base, keyHint{"e", "expose/unexpose"})
+		} else {
+			base = append(base, keyHint{"m", "protection"})
+		}
+		base = append(base, keyHint{"t", "tailscale"}, keyHint{"x", "delete"})
+	case tabStorage:
+		base = append(base, keyHint{"↑/↓", "move"}, keyHint{"a", "add volume"}, keyHint{"x", "remove"})
+	case tabResources:
+		base = append(base, keyHint{"e", "edit requests"})
+	case tabAdvanced:
+		base = append(base, keyHint{"t", "strategy"}, keyHint{"h", "health check"},
+			keyHint{"g", "build-root"}, keyHint{"D", "depot"}, keyHint{"c", "cache"}, keyHint{"C", "cancel build"})
+	}
+	return append(base, keyHint{"r", "refresh"}, keyHint{"esc", "back"})
 }
 
 func (s *deploymentScreen) View() string {
+	base := s.confirm.Overlay(s.view(), s.w, s.h-chromeH)
+	return s.shellPickerOverlay(base)
+}
+
+func (s *deploymentScreen) view() string {
 	if s.loading && s.detail == nil {
 		return stMuted.Render("\n  loading deployment…")
 	}
@@ -372,113 +707,44 @@ func (s *deploymentScreen) View() string {
 	s.tabSpans = spans
 
 	switch s.tab {
-	case 0:
+	case tabOverview:
 		return s.viewOverview(bodyH, strip)
-	case 1:
-		s.hitPods = hitTable{topY: 4, visible: bodyH - 4, count: len(s.pods), minX: 0, maxX: s.w - 1}
-		return panelRaw(strip, s.viewPods(bodyH), s.w, bodyH, true)
-	case 2:
-		title := strip + stMuted.Render("   source: ") + renderTabs(logSources, s.logSource)
-		return panelRaw(title, s.logVP.View(), s.w, bodyH, true)
-	case 3:
+	case tabEnv:
 		return panelRaw(strip, s.viewEnv(bodyH), s.w, bodyH, true)
+	case tabDeploys:
+		return s.viewDeploys(bodyH, strip)
+	case tabNetwork:
+		return s.viewNetwork(bodyH, strip)
+	case tabStorage:
+		return panelRaw(strip, s.viewStorage(bodyH), s.w, bodyH, true)
+	case tabResources:
+		return panelRaw(strip, s.viewResources(bodyH), s.w, bodyH, true)
+	case tabAdvanced:
+		return s.viewAdvanced(bodyH, strip)
 	}
 	return ""
 }
 
-func (s *deploymentScreen) viewOverview(height int, strip string) string {
-	d := s.detail
-	if d == nil {
-		return stMuted.Render("  no data")
-	}
-	st := d.Status
-	if d.BuildStatus == "building" {
-		st = "building"
-		if d.BuildStep != "" {
-			st = "building: " + d.BuildStep
+// ---- Env tab ----
+
+func (s *deploymentScreen) envKey(msg tea.KeyMsg) (tea.Cmd, bool) {
+	switch msg.String() {
+	case "e", "enter":
+		if s.detail != nil {
+			return push(newEnvScreen(s.cl, s.id, s.detail.EnvVars)), true
 		}
-	}
-	leftW := s.w * 3 / 5
-	rightW := s.w - leftW
-
-	// left: info
-	var info strings.Builder
-	row := func(k, v string) {
-		info.WriteString(stKey.Render(pad(k, 11)) + " " + v + "\n")
-	}
-	row("Status", badge(st))
-	row("Replicas", fmt.Sprintf("%d / %d", d.AvailableReplicas, d.Replicas))
-	row("Image", stMuted.Render(d.Image))
-	if d.GithubRepo != "" {
-		row("Source", stMuted.Render(fmt.Sprintf("%s @ %s", d.GithubRepo, orDash(d.GithubBranch))))
-	}
-	if len(d.Ingresses) > 0 {
-		for i, ig := range d.Ingresses {
-			k := "URL"
-			if i > 0 {
-				k = ""
-			}
-			row(k, stLink.Render("https://"+ig.Host))
+	case "up", "k":
+		if s.envCursor > 0 {
+			s.envCursor--
 		}
-	}
-
-	// right: resources — braille area graphs + usage-vs-request bars (btop style)
-	cpu := float64(d.TotalCPUUsage)
-	mem := float64(d.TotalMemoryUsage)
-	cpuReq := float64(d.CPURequestMilli)
-	memReq := float64(d.MemoryRequestB)
-	gw := rightW - 4
-	graphH := (height - 2 - 9) / 2
-	if graphH < 2 {
-		graphH = 2
-	}
-
-	var res strings.Builder
-	cpuHdr := stKey.Render("CPU") + "   " + stGreen.Render(fmtCPU(cpu))
-	if cpuReq > 0 {
-		cpuHdr += stMuted.Render(" / " + fmtCPU(cpuReq))
-	}
-	res.WriteString(cpuHdr + "\n")
-	res.WriteString(brailleGraph(values(s.metrics.Data.CPU), gw, graphH) + "\n")
-	if cpuReq > 0 {
-		res.WriteString(barMeter(cpu, cpuReq, gw) + "\n")
-	}
-	res.WriteString("\n")
-
-	memHdr := stKey.Render("Memory") + "  " + stGreen.Render(fmtBytes(mem))
-	if memReq > 0 {
-		memHdr += stMuted.Render(" / " + fmtBytes(memReq))
-	}
-	res.WriteString(memHdr + "\n")
-	res.WriteString(brailleGraph(values(s.metrics.Data.Memory), gw, graphH) + "\n")
-	if memReq > 0 {
-		res.WriteString(barMeter(mem, memReq, gw) + "\n")
-	}
-	res.WriteString("\n" + stMuted.Render(fmt.Sprintf("⟳ live · every %s", refreshEvery)))
-
-	left := panelRaw(strip, info.String(), leftW, height, true)
-	right := panel("Resources", res.String(), rightW, height, false)
-	return sideBySide(left, right)
-}
-
-func (s *deploymentScreen) viewPods(height int) string {
-	rows := make([][]string, len(s.pods))
-	for i, p := range s.pods {
-		age := p.Age
-		if age == "" {
-			age = p.CreatedAt
+		return nil, true
+	case "down", "j":
+		if s.detail != nil && s.envCursor < len(s.detail.EnvVars)-1 {
+			s.envCursor++
 		}
-		rows[i] = []string{
-			p.Name,
-			statusDot(p.Status),
-			orDash(p.Ready),
-			fmt.Sprintf("%d", p.RestartCount),
-			stMuted.Render(orDash(p.NodeName)),
-			stMuted.Render(age),
-		}
+		return nil, true
 	}
-	cols := []col{{title: "POD"}, {title: "STATUS"}, {title: "READY"}, {title: "RESTARTS"}, {title: "NODE"}, {title: "AGE"}}
-	return renderTable(cols, rows, s.podCursor, s.w-2, height-2)
+	return nil, false
 }
 
 func (s *deploymentScreen) viewEnv(height int) string {
@@ -513,4 +779,44 @@ func orDash(s string) string {
 		return "—"
 	}
 	return s
+}
+
+func is403(err error) bool {
+	var apiErr *api.APIError
+	if errors.As(err, &apiErr) {
+		return apiErr.Status == http.StatusForbidden
+	}
+	return err != nil && strings.Contains(err.Error(), "403")
+}
+
+func shortSha(s string) string {
+	if len(s) > 7 {
+		return s[:7]
+	}
+	return s
+}
+
+func onOff(v bool) string {
+	if v {
+		return stGreen.Render("on")
+	}
+	return stMuted.Render("off")
+}
+
+func fmtDate(ts string) string {
+	if len(ts) >= 16 {
+		return strings.ReplaceAll(ts[:16], "T", " ")
+	}
+	return ts
+}
+
+func yesNo(v bool) string {
+	if v {
+		return "yes"
+	}
+	return "—"
+}
+
+func fmtInt(n flexNum) string {
+	return fmt.Sprintf("%d", int(n))
 }

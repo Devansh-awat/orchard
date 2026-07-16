@@ -98,13 +98,12 @@ func TestDeploymentScreenTabs(t *testing.T) {
 	if !strings.Contains(overview, "api.example.com") {
 		t.Fatalf("overview missing ingress URL:\n%s", overview)
 	}
-	// Pods tab
-	s, _ = s.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
-	if v := s.View(); !strings.Contains(v, "api-abc") {
-		t.Fatalf("pods tab missing pod:\n%s", v)
+	// pods are folded into the Overview board
+	if !strings.Contains(overview, "api-abc") {
+		t.Fatalf("overview missing pod:\n%s", overview)
 	}
 	// Env tab
-	s, _ = s.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("4")})
+	s, _ = s.Update(tea.KeyMsg{Type: tea.KeyRunes, Runes: []rune("2")})
 	if v := s.View(); !strings.Contains(v, "PORT") {
 		t.Fatalf("env tab missing var:\n%s", v)
 	}
