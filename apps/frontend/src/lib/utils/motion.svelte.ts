@@ -249,14 +249,23 @@ export function cardTilt(opts: { max?: number } = {}) {
 		target.style.transformStyle = 'preserve-3d';
 		target.style.perspective = '1000px';
 		let rect: DOMRect | null = null;
+		let lastRetarget = 0;
+		let lastX = 0;
+		let lastY = 0;
 		const onEnter = () => {
 			rect = target.getBoundingClientRect();
 		};
 		const onMove = (e: PointerEvent) => {
 			if (!decorativeMotion()) return;
 			if (!rect) rect = target.getBoundingClientRect();
+			const now = performance.now();
+			if (now - lastRetarget < 40) return;
 			const x = (e.clientX - rect.left) / rect.width - 0.5;
 			const y = (e.clientY - rect.top) / rect.height - 0.5;
+			if (Math.abs(x - lastX) < 0.02 && Math.abs(y - lastY) < 0.02) return;
+			lastRetarget = now;
+			lastX = x;
+			lastY = y;
 			animate(
 				target,
 				{ rotateX: -y * max, rotateY: x * max },

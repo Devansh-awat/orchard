@@ -144,15 +144,8 @@ export function meshBakedBg(url: string) {
 			target.classList.add('proj-card-backdrop--ready');
 		});
 
-		const io = new IntersectionObserver((entries) => {
-			const on = entries.some((e) => e.isIntersecting);
-			target.classList.toggle('proj-card-backdrop--offscreen', !on);
-		});
-		io.observe(target);
-
 		return () => {
 			cancelled = true;
-			io.disconnect();
 		};
 	};
 }
