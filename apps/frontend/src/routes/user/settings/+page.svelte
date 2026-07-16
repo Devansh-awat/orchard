@@ -141,14 +141,25 @@
 	}
 	async function saveField() {
 		if (savingField || !editingField) return;
-		const trimmed = editValue.trim();
-		if (editingField === 'username' && trimmed && !/^[a-zA-Z0-9_-]+$/.test(trimmed)) {
-			toasts.add({
-				title: 'Invalid username',
-				description: 'Letters, numbers, underscores, and hyphens only',
-				color: 'error'
-			});
-			return;
+		let trimmed = editValue.trim();
+		if (editingField === 'username' && trimmed) {
+			trimmed = trimmed.normalize('NFKC').replace(/[\u200B-\u200D\u2060\uFEFF]/g, '');
+			const bad = [...new Set([...trimmed].filter((ch) => !/[a-zA-Z0-9_-]/.test(ch)))];
+			if (bad.length) {
+				const shown = bad
+					.map((ch) =>
+						ch.codePointAt(0)! > 126
+							? `"${ch}" (U+${ch.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')})`
+							: `"${ch}"`
+					)
+					.join(', ');
+				toasts.add({
+					title: 'Invalid username',
+					description: `Not allowed: ${shown}. Use letters, numbers, underscores, and hyphens.`,
+					color: 'error'
+				});
+				return;
+			}
 		}
 		savingField = true;
 		try {

@@ -1,4 +1,4 @@
-import { ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 
@@ -263,8 +263,13 @@ export class UsersService {
   }
 
   async updateProfile(userId: string, data: { firstName?: string | null; lastName?: string | null; username?: string; setupCompleted?: boolean; imageUrl?: string | null }) {
-    // If username is being updated, check for uniqueness
+    // If username is being updated, check format and uniqueness
     if (data.username !== undefined) {
+      if (!/^[a-zA-Z0-9_-]{1,39}$/.test(data.username)) {
+        throw new BadRequestException(
+          'Username may only contain letters, numbers, underscores, and hyphens (max 39 characters)',
+        );
+      }
       const existingUser = await this.prisma.user.findUnique({
         where: { username: data.username }
       });
