@@ -442,9 +442,9 @@
 		color: var(--text-faint);
 	}
 
-	:global(.gv-filter-dd) {
+	:global(.ui-dropdown-trigger.gv-filter-dd) {
+		width: auto;
 		min-width: 0;
-		height: auto;
 		padding: 0.3125rem 0.625rem 0.3125rem 0.75rem;
 		border-radius: 999px;
 		border: 1px solid var(--border-default);
@@ -452,15 +452,16 @@
 		color: var(--text-muted);
 		font-size: 0.75rem;
 		font-weight: 550;
+		line-height: 1.2;
 		gap: 0.25rem;
 	}
 
-	:global(.gv-filter-dd:hover) {
+	:global(.ui-dropdown-trigger.gv-filter-dd:hover) {
 		color: var(--text-default);
 		border-color: var(--border-strong);
 	}
 
-	:global(.gv-filter-dd--set) {
+	:global(.ui-dropdown-trigger.gv-filter-dd--set) {
 		background: var(--accent-subtle);
 		border-color: var(--accent);
 		color: var(--text-default);
