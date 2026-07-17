@@ -2,7 +2,7 @@
 	import { page } from '$app/stores';
 	import { env as publicEnv } from '$env/dynamic/public';
 	import { animate } from 'motion';
-	import { Leaf, Shield, Globe, ScrollText, Bell, Zap, Trees } from 'lucide-svelte';
+	import { Leaf, Shield, Globe, ScrollText, Bell, Zap, Trees, TriangleAlert } from 'lucide-svelte';
 	import {
 		PanelLeftClose,
 		PanelRightClose,
@@ -17,13 +17,23 @@
 	} from '@jis3r/icons';
 	import WorkspacesMenu from './WorkspacesMenu.svelte';
 	import UserMenu from './UserMenu.svelte';
+	import { createQuery } from '@tanstack/svelte-query';
+	import { overviewQueryOptions } from '$lib/queries/overview';
+	import { StatusDot, resourceStatus } from '$lib/components/ui';
 	import {
 		springHover as motionSpringHover,
 		decorativeMotion,
 		functionalMotion
 	} from '$lib/utils/motion.svelte';
-	import { selectedOrganization, sidebarCollapsed } from '$lib/stores';
+	import { selectedOrganization, sidebarCollapsed, pinnedItems } from '$lib/stores';
 	import { featureFlag } from '$lib/posthog';
+
+	interface OverviewDep {
+		id: string;
+		name: string;
+		status: string;
+		buildStatus: string;
+	}
 
 	const isMac = $derived.by(() => {
 		if (typeof window === 'undefined') return false;
@@ -88,6 +98,25 @@
 	);
 
 	const mainNav: NavEntry[] = $derived([...platformNav, ...communityNav]);
+
+	const overviewQuery = createQuery(() => ({
+		...overviewQueryOptions(orgSlug),
+		enabled: !!orgSlug && !isSettingsRoute,
+		refetchInterval: 45000,
+		staleTime: 15000
+	}));
+
+	const orgDeps: OverviewDep[] = $derived(overviewQuery.data?.deployments ?? []);
+	const failingDeps = $derived(
+		orgDeps.filter((d) => resourceStatus(d.status, d.buildStatus).kind === 'error').slice(0, 4)
+	);
+	const pinnedDeps = $derived.by(() => {
+		const byId = new Map(orgDeps.map((d) => [d.id, d]));
+		return $pinnedItems
+			.filter((i) => i.type === 'deployment')
+			.slice(0, 6)
+			.map((i) => ({ ...i, live: byId.get(i.id) ?? null }));
+	});
 
 	const settingsNav: NavEntry[] = $derived.by(() => {
 		const tabs = [
@@ -385,14 +414,57 @@
 					     render as "//projects" — a protocol-relative external URL. -->
 					{#if orgSlug}
 						<div class="sidebar-home-link">
-							<div class="sidebar-section-label">Platform</div>
+							{#if failingDeps.length > 0}
+								<div class="sidebar-section-label sidebar-attention-label">
+									Needs attention
+									<span class="sidebar-attention-count">{failingDeps.length}</span>
+								</div>
+								{#each failingDeps as dep, i (dep.id)}
+									<a
+										href="/{orgSlug}/deployments/{dep.id}"
+										class="tree-node-content sidebar-dep-row"
+										{@attach navStagger(i)}
+										{@attach springHover({ lift: -1 })}
+									>
+										<StatusDot meta={resourceStatus(dep.status, dep.buildStatus)} size={7} />
+										<span class="tree-node-label">{dep.name}</span>
+									</a>
+								{/each}
+							{/if}
+							<div
+								class="sidebar-section-label"
+								class:sidebar-section-label--spaced={failingDeps.length > 0}
+							>
+								Platform
+							</div>
 							{#each platformNav as item, i (item.href)}
 								{@render navItem(item, i)}
 							{/each}
+							{#if pinnedDeps.length > 0}
+								<div class="sidebar-section-label sidebar-section-label--spaced">Pinned</div>
+								{#each pinnedDeps as pin, i (pin.id)}
+									<a
+										href={pin.href}
+										class="tree-node-content sidebar-dep-row"
+										{@attach navStagger(platformNav.length + i)}
+										{@attach springHover({ lift: -1 })}
+									>
+										{#if pin.live}
+											<StatusDot
+												meta={resourceStatus(pin.live.status, pin.live.buildStatus)}
+												size={7}
+											/>
+										{:else}
+											<span class="sidebar-pin-dot"></span>
+										{/if}
+										<span class="tree-node-label">{pin.name}</span>
+									</a>
+								{/each}
+							{/if}
 							{#if communityNav.length > 0}
 								<div class="sidebar-section-label sidebar-section-label--spaced">Community</div>
 								{#each communityNav as item, i (item.href)}
-									{@render navItem(item, platformNav.length + i)}
+									{@render navItem(item, platformNav.length + pinnedDeps.length + i)}
 								{/each}
 							{/if}
 						</div>
@@ -415,6 +487,22 @@
 						>
 					</button>
 					{#if orgSlug}
+						{#if failingDeps.length > 0}
+							<a
+								href="/{orgSlug}/deployments/{failingDeps[0].id}"
+								class="sidebar-collapsed-icon sidebar-collapsed-icon--alert"
+								aria-label="{failingDeps.length} failing"
+								{@attach springHover()}
+							>
+								<TriangleAlert size={16} />
+								<span class="sidebar-collapsed-alert-count">{failingDeps.length}</span>
+								<span class="sidebar-collapsed-tooltip"
+									>{failingDeps.length} failing deployment{failingDeps.length === 1
+										? ''
+										: 's'}</span
+								>
+							</a>
+						{/if}
 						{#each mainNav as item (item.href)}
 							{@render navItemCollapsed(item)}
 						{/each}
@@ -486,6 +574,54 @@
 
 	.sidebar-section-label--spaced {
 		padding-top: 1rem;
+	}
+
+	.sidebar-attention-label {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		opacity: 1;
+		color: var(--status-error);
+	}
+
+	.sidebar-attention-count {
+		font-size: 0.625rem;
+		line-height: 1;
+		padding: 0.1875rem 0.375rem;
+		border-radius: 999px;
+		background: var(--status-error-bg);
+		border: 1px solid var(--status-error-border);
+	}
+
+	.sidebar-dep-row {
+		gap: 9px;
+		padding-left: 11px;
+	}
+
+	.sidebar-pin-dot {
+		width: 7px;
+		height: 7px;
+		border-radius: 999px;
+		flex-shrink: 0;
+		background: color-mix(in srgb, var(--sidebar-text) 30%, transparent);
+	}
+
+	:global(.sidebar-collapsed-icon--alert) {
+		color: var(--status-error);
+	}
+
+	.sidebar-collapsed-alert-count {
+		position: absolute;
+		top: -0.125rem;
+		right: -0.125rem;
+		font-size: 0.5625rem;
+		line-height: 1;
+		font-weight: 600;
+		padding: 0.125rem 0.25rem;
+		border-radius: 999px;
+		color: var(--status-error);
+		background: var(--status-error-bg);
+		border: 1px solid var(--status-error-border);
 	}
 
 	.tree-node-content {
