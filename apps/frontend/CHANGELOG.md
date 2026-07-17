@@ -1,5 +1,25 @@
 # Changelog
 
+## [0.18.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.17.0...frontend/v0.18.0) (2026-07-17)
+
+
+### Features
+
+* **frontend:** grove composer redesign with type cards and scope chips, pill filter dropdowns ([8a72be6](https://github.com/LeafdTK/leaf/commit/8a72be67aeec156055a609dd37278ef334330ef1))
+* grove becomes an issue tracker with numbers, priorities, triage statuses, image attachments and chat style replies ([1142e46](https://github.com/LeafdTK/leaf/commit/1142e461fe79f1b6231e3d071a66d910f563b758))
+* grove delete for own posts and replies, superadmins delete anything ([2718719](https://github.com/LeafdTK/leaf/commit/271871957ee2739db164a1ac9ba63c5ec70e99f9))
+* grove gated behind GROVE_ENABLED / PUBLIC_GROVE_ENABLED env flags ([a3f9f34](https://github.com/LeafdTK/leaf/commit/a3f9f34ac9966de7df769a74dbe8e90d06aa882f))
+* grove scopes replace emoji categories, bugs and feature requests only ([6901477](https://github.com/LeafdTK/leaf/commit/6901477454598e9a6ab3c5ae0a34f358ecda5ecf))
+* the grove, a community forum for bugs, ideas and showcase with votes, statuses and orchard pixel sprites ([178fb96](https://github.com/LeafdTK/leaf/commit/178fb96aff66a0159ff4719e8df42fd9126e3734))
+
+
+### Bug Fixes
+
+* drop dashboard scope, main platform covers it ([3ae9e45](https://github.com/LeafdTK/leaf/commit/3ae9e4574154b463998c701ef75fd67ad1e717b3))
+* **frontend:** grove filter dropdowns actually render as pills ([0e71d3e](https://github.com/LeafdTK/leaf/commit/0e71d3efa676a968c7287854d8f305212f72696a))
+* **frontend:** grove filters and admin controls on ui dropdown ([8ffe062](https://github.com/LeafdTK/leaf/commit/8ffe062006a1d1fe35b184f7124478fddb3ce679))
+* volume attach failures now validated with real error messages, sizes and names normalized ([ba7fd9d](https://github.com/LeafdTK/leaf/commit/ba7fd9d0b88cf01cb278568364a71b6e4ab96fc9))
+
 ## [0.17.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.16.3...frontend/v0.17.0) (2026-07-16)
 
 
