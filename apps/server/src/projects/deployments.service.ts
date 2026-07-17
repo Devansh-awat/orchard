@@ -1669,6 +1669,37 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           })
       : [];
 
+    // Validate the values that flow into the PVC manifest and pod spec before
+    // touching Kubernetes. The API rejects bad names/quantities with a 422 the
+    // client library flattens into an opaque "HTTP request failed", so catching
+    // them here is the only way the user gets an actionable message.
+    const DNS1123 = /^[a-z0-9]([-a-z0-9]*[a-z0-9])?$/;
+    const K8S_QUANTITY = /^\d+(\.\d+)?(Ei|Pi|Ti|Gi|Mi|Ki|E|P|T|G|M|k)?$/;
+    for (const vol of volumesList) {
+      if (!DNS1123.test(vol.name) || vol.name.length > 63) {
+        throw new BadRequestException(
+          `Volume name "${vol.name}" must be 1-63 lowercase letters, numbers, or hyphens`,
+        );
+      }
+      if (!vol.mountPath.startsWith('/')) {
+        throw new BadRequestException(
+          `Mount path "${vol.mountPath}" must be an absolute path starting with /`,
+        );
+      }
+      if (vol.type === 'pvc') {
+        if (!DNS1123.test(vol.pvcName!) || vol.pvcName!.length > 63) {
+          throw new BadRequestException(
+            `Volume name "${vol.pvcName}" must be 1-63 lowercase letters, numbers, or hyphens`,
+          );
+        }
+        if (vol.storageSize && !K8S_QUANTITY.test(vol.storageSize)) {
+          throw new BadRequestException(
+            `Storage size "${vol.storageSize}" is not valid, use a size like 1Gi or 500Mi`,
+          );
+        }
+      }
+    }
+
     // Compute the effective strategy: PVC forces Recreate, otherwise keep
     // whatever the deployment was previously set to. The persisted
     // `deployStrategy` is also auto-reverted to rollingUpdate when the last

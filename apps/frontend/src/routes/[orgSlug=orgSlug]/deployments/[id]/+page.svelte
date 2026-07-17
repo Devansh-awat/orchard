@@ -2085,6 +2085,28 @@
 		}
 	}
 
+	function normalizeVolumeName(raw: string): string {
+		return raw
+			.trim()
+			.toLowerCase()
+			.replace(/[^a-z0-9-]+/g, '-')
+			.replace(/-{2,}/g, '-')
+			.replace(/^-+|-+$/g, '')
+			.slice(0, 63);
+	}
+
+	function normalizeStorageSize(raw: string): string {
+		const s = raw.trim();
+		if (/^\d+(\.\d+)?$/.test(s)) return `${s}Gi`;
+		const m = s.match(/^(\d+(?:\.\d+)?)\s*(gib?|mib?|tib?|gb|mb|tb)$/i);
+		if (m) {
+			const unit = m[2].toLowerCase();
+			const suffix = unit.startsWith('g') ? 'Gi' : unit.startsWith('m') ? 'Mi' : 'Ti';
+			return `${m[1]}${suffix}`;
+		}
+		return s;
+	}
+
 	async function saveVolumes() {
 		savingVolumes = true;
 		try {
@@ -2096,12 +2118,12 @@
 					// and broke the strategic-merge patch (400) for any volume whose
 					// name differs from its pvcName. New volumes start with name='',
 					// so fall back to pvcName only then.
-					name: v.name?.trim() || v.pvcName!.trim(),
+					name: normalizeVolumeName(v.name?.trim() || v.pvcName!),
 					type: 'pvc' as const,
 					mountPath: v.mountPath.trim(),
 					readOnly: v.readOnly,
-					pvcName: v.pvcName!.trim(),
-					storageSize: v.storageSize?.trim() || '1Gi'
+					pvcName: normalizeVolumeName(v.pvcName!),
+					storageSize: normalizeStorageSize(v.storageSize || '') || '1Gi'
 				}));
 
 			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/volumes`, {
@@ -2111,7 +2133,8 @@
 			});
 
 			if (!response.ok) {
-				throw new Error('Failed to update volumes');
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data?.message || 'Failed to update volumes');
 			}
 
 			toasts.add({

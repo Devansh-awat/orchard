@@ -1204,10 +1204,19 @@ export class K8sWorkloadService {
 
     const volumesList = Array.isArray(options.volumes) ? options.volumes : [];
 
-    // Create PVCs in Kubernetes before referencing them
+    // Create PVCs in Kubernetes before referencing them. Surface the API's own
+    // reason on failure; the client library's HttpError message is a useless
+    // generic string.
     for (const vol of volumesList) {
       if (vol.type === 'pvc' && vol.pvcName) {
-        await this.createPVC(cleanNamespace, vol.pvcName, vol.storageSize || '1Gi');
+        try {
+          await this.createPVC(cleanNamespace, vol.pvcName, vol.storageSize || '1Gi');
+        } catch (error) {
+          throw new BadRequestException({
+            error: 'Failed to create volume',
+            message: error.response?.body?.message || error.message,
+          });
+        }
       }
     }
 
