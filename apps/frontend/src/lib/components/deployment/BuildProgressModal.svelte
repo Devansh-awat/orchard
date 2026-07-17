@@ -5,6 +5,7 @@
 	import { Button, Modal } from '$lib/components/ui';
 	import DeploymentProgress from '$lib/components/DeploymentProgress.svelte';
 	import AnimatedNumber from '$lib/components/AnimatedNumber.svelte';
+	import BuildQueue from './BuildQueue.svelte';
 
 	let {
 		deployment,
@@ -94,73 +95,83 @@
 	{/snippet}
 </Modal>
 
-<!-- Floating Build Card -->
-{#if showBuildCardRender}
-	<button
-		class="build-card fixed bottom-6 right-6 z-40 w-72 cursor-pointer rounded-xl shadow-lg hover:shadow-xl"
-		style="transform-origin: bottom right;"
-		onclick={onExpandBuildCard}
-		{@attach motionPopover({
-			closing: () => !(showBuildCard && !showBuildModal),
-			onClosed: () => {
-				showBuildCardRender = false;
-			},
-			from: { y: 18, scale: 0.86, opacity: 0 },
-			stiffness: 500,
-			damping: 28,
-			mass: 0.9
-		})}
-	>
-		<div class="flex items-center justify-between px-4 py-3">
-			<div class="flex items-center gap-2 min-w-0">
-				{#if buildModalStatus === 'building' || buildModalStatus === 'pending'}
-					<Loader2 class="h-4 w-4 animate-spin shrink-0 text-primary-500" />
-				{:else if buildModalStatus === 'failed'}
-					<X size={16} class="shrink-0 text-red-500" />
-				{:else if buildModalStatus === 'running'}
-					<Check size={16} class="h-4 w-4 shrink-0 text-green-500" />
-				{/if}
-				<span class="truncate text-sm font-medium">{deployment?.name ?? 'App'}</span>
-			</div>
-			<div class="flex items-center gap-2 shrink-0">
-				<div class="flex items-center gap-1 text-xs font-mono" style="color: var(--surface-muted);">
-					<Clock size={12} class="h-3 w-3" />
-					<AnimatedNumber value={buildElapsed} format={formatBuildElapsed} />
+<!-- Floating Build Card + Queue stack (bottom-right) -->
+<div class="pointer-events-none fixed right-6 bottom-6 z-40 flex w-72 flex-col gap-2">
+	{#if deployment?.id}
+		<div class="pointer-events-auto">
+			<BuildQueue deploymentId={deployment.id} />
+		</div>
+	{/if}
+	{#if showBuildCardRender}
+		<button
+			class="build-card pointer-events-auto w-full cursor-pointer rounded-xl shadow-lg hover:shadow-xl"
+			style="transform-origin: bottom right;"
+			onclick={onExpandBuildCard}
+			{@attach motionPopover({
+				closing: () => !(showBuildCard && !showBuildModal),
+				onClosed: () => {
+					showBuildCardRender = false;
+				},
+				from: { y: 18, scale: 0.86, opacity: 0 },
+				stiffness: 500,
+				damping: 28,
+				mass: 0.9
+			})}
+		>
+			<div class="flex items-center justify-between px-4 py-3">
+				<div class="flex items-center gap-2 min-w-0">
+					{#if buildModalStatus === 'building' || buildModalStatus === 'pending'}
+						<Loader2 class="h-4 w-4 animate-spin shrink-0 text-primary-500" />
+					{:else if buildModalStatus === 'failed'}
+						<X size={16} class="shrink-0 text-red-500" />
+					{:else if buildModalStatus === 'running'}
+						<Check size={16} class="h-4 w-4 shrink-0 text-green-500" />
+					{/if}
+					<span class="truncate text-sm font-medium">{deployment?.name ?? 'App'}</span>
 				</div>
-				<Maximize2 size={14} class="h-3.5 w-3.5" style="color: var(--surface-muted);" />
+				<div class="flex items-center gap-2 shrink-0">
+					<div
+						class="flex items-center gap-1 text-xs font-mono"
+						style="color: var(--surface-muted);"
+					>
+						<Clock size={12} class="h-3 w-3" />
+						<AnimatedNumber value={buildElapsed} format={formatBuildElapsed} />
+					</div>
+					<Maximize2 size={14} class="h-3.5 w-3.5" style="color: var(--surface-muted);" />
+				</div>
 			</div>
-		</div>
-		<div class="px-4 pb-3">
-			<div class="build-card-track h-1.5 w-full overflow-hidden rounded-full">
-				<div
-					class="h-full transition-all duration-500 ease-out rounded-full {buildModalStatus ===
-					'failed'
-						? 'bg-red-500'
-						: buildModalStatus === 'running'
-							? 'bg-green-500'
-							: 'bg-primary-500'}"
-					style="width: {buildProgressValue()}%"
-				></div>
+			<div class="px-4 pb-3">
+				<div class="build-card-track h-1.5 w-full overflow-hidden rounded-full">
+					<div
+						class="h-full transition-all duration-500 ease-out rounded-full {buildModalStatus ===
+						'failed'
+							? 'bg-red-500'
+							: buildModalStatus === 'running'
+								? 'bg-green-500'
+								: 'bg-primary-500'}"
+						style="width: {buildProgressValue()}%"
+					></div>
+				</div>
+				<p class="mt-1.5 text-xs" style="color: var(--surface-muted);">
+					{#if buildModalStatus === 'building'}
+						{buildModalStep === 'cloning'
+							? 'Scheduling builder...'
+							: buildModalStep === 'building'
+								? 'Building image...'
+								: buildModalStep === 'pushing'
+									? 'Pushing image...'
+									: buildModalStep === 'deploying'
+										? 'Creating app...'
+										: 'Building...'}
+					{:else if buildModalStatus === 'pending'}
+						Starting deployment...
+					{:else if buildModalStatus === 'failed'}
+						Deployment failed
+					{:else if buildModalStatus === 'running'}
+						Deployment complete
+					{/if}
+				</p>
 			</div>
-			<p class="mt-1.5 text-xs" style="color: var(--surface-muted);">
-				{#if buildModalStatus === 'building'}
-					{buildModalStep === 'cloning'
-						? 'Scheduling builder...'
-						: buildModalStep === 'building'
-							? 'Building image...'
-							: buildModalStep === 'pushing'
-								? 'Pushing image...'
-								: buildModalStep === 'deploying'
-									? 'Creating app...'
-									: 'Building...'}
-				{:else if buildModalStatus === 'pending'}
-					Starting deployment...
-				{:else if buildModalStatus === 'failed'}
-					Deployment failed
-				{:else if buildModalStatus === 'running'}
-					Deployment complete
-				{/if}
-			</p>
-		</div>
-	</button>
-{/if}
+		</button>
+	{/if}
+</div>

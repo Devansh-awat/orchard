@@ -2,7 +2,6 @@
 	import { onMount } from 'svelte';
 	import { GitCommit, Layers } from 'lucide-svelte';
 	import { apiFetch } from '$lib/stores';
-	import { StatusBadge, buildRunStatus } from '$lib/components/ui';
 	import { timeAgo } from '$lib/components/org-dashboard/helpers.svelte';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import { slide } from '$lib/utils/transitions';
@@ -13,34 +12,18 @@
 		triggerType: string;
 		commitSha?: string | null;
 		commitMessage?: string | null;
-		commitAuthorUsername?: string | null;
 		branch?: string | null;
-		detail?: string | null;
-		scheduledAt: string;
-		startedAt?: string | null;
-		finishedAt?: string | null;
 		createdAt: string;
 	}
 
 	let { deploymentId }: { deploymentId: string } = $props();
 
 	let runs = $state<BuildRun[]>([]);
-	let loaded = $state(false);
-
-	const active = $derived(runs.filter((r) => r.status === 'building' || r.status === 'scheduled'));
-	const history = $derived(runs.filter((r) => r.status !== 'building' && r.status !== 'scheduled'));
-	const hasActive = $derived(active.length > 0);
-
-	const TRIGGER_LABEL: Record<string, string> = {
-		auto: 'Auto',
-		manual: 'Manual',
-		rebuild: 'Rebuild'
-	};
+	const queued = $derived(runs.filter((r) => r.status === 'scheduled'));
 
 	async function fetchRuns() {
-		const res = await apiFetch(`/apiv1/deployments/${deploymentId}/build-runs`);
+		const res = await apiFetch(`/apiv1/deployments/${deploymentId}/build-runs?limit=20`);
 		if (res.ok) runs = await res.json();
-		loaded = true;
 	}
 
 	onMount(() => {
@@ -50,98 +33,63 @@
 	});
 </script>
 
-{#if loaded && runs.length > 0}
-	<div class="bq">
-		{#if hasActive}
-			<div class="bq-active" transition:slide={{ duration: 160 }}>
-				<div class="bq-active-head">
-					<Layers size={14} class="bq-active-icon" />
-					<span class="bq-active-title">Build queue</span>
-					<span class="bq-active-count">{active.length} active</span>
+{#if queued.length > 0}
+	<div class="bq-card" transition:slide={{ duration: 160 }}>
+		<div class="bq-head">
+			<Layers size={13} class="bq-head-icon" />
+			<span class="bq-head-title">Queued</span>
+			<span class="bq-head-count">{queued.length}</span>
+		</div>
+		<div class="bq-rows">
+			{#each queued as run, i (run.id)}
+				<div class="bq-row" {@attach motionStagger({ index: i, from: { y: 5 } })}>
+					{#if run.commitSha}
+						<span class="bq-sha"><GitCommit size={11} />{run.commitSha.slice(0, 7)}</span>
+					{/if}
+					<span class="bq-msg">{run.commitMessage?.split('\n')[0] || 'Queued build'}</span>
+					<span class="bq-when">{timeAgo(run.createdAt)}</span>
 				</div>
-				<div class="bq-rows">
-					{#each active as run, i (run.id)}
-						{@render runRow(run, i)}
-					{/each}
-				</div>
-			</div>
-		{/if}
-
-		{#if history.length > 0}
-			<div class="bq-section-label">Recent builds</div>
-			<div class="bq-rows">
-				{#each history as run, i (run.id)}
-					{@render runRow(run, i)}
-				{/each}
-			</div>
-		{/if}
+			{/each}
+		</div>
 	</div>
 {/if}
 
-{#snippet runRow(run: BuildRun, i: number)}
-	<div class="bq-row" {@attach motionStagger({ index: i, from: { y: 6 } })}>
-		<StatusBadge meta={buildRunStatus(run.status)} />
-		{#if run.commitSha}
-			<span class="bq-sha"><GitCommit size={12} />{run.commitSha.slice(0, 7)}</span>
-		{/if}
-		<span class="bq-msg">
-			{run.commitMessage?.split('\n')[0] || run.detail || 'Build'}
-		</span>
-		<span class="bq-meta">
-			<span class="bq-trigger">{TRIGGER_LABEL[run.triggerType] ?? run.triggerType}</span>
-			<span class="bq-when">{timeAgo(run.startedAt || run.createdAt)}</span>
-		</span>
-	</div>
-{/snippet}
-
 <style>
-	.bq {
-		display: flex;
-		flex-direction: column;
-		gap: 0.75rem;
-	}
-
-	.bq-active {
-		border: 1px solid var(--status-info-border);
-		background: var(--status-info-bg);
+	.bq-card {
 		border-radius: 0.75rem;
-		padding: 0.75rem 0.875rem;
+		border: 1px solid var(--border-default);
+		background: var(--bg-overlay, var(--bg-surface));
+		box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
+		padding: 0.5rem 0.625rem 0.625rem;
 	}
 
-	.bq-active-head {
+	.bq-head {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		margin-bottom: 0.5rem;
+		gap: 0.375rem;
+		padding: 0.125rem 0.25rem 0.375rem;
 	}
 
-	.bq-active :global(.bq-active-icon) {
-		color: var(--status-info);
+	.bq-card :global(.bq-head-icon) {
+		color: var(--text-muted);
 	}
 
-	.bq-active-title {
-		font-size: 0.8125rem;
+	.bq-head-title {
+		font-size: 0.6875rem;
 		font-weight: 650;
-		color: var(--text-default);
-	}
-
-	.bq-active-count {
-		font-size: 0.6875rem;
-		font-weight: 550;
-		color: var(--status-info);
-		background: color-mix(in srgb, var(--status-info) 12%, transparent);
-		border-radius: 999px;
-		padding: 0.125rem 0.5rem;
-		margin-left: auto;
-	}
-
-	.bq-section-label {
-		font-size: 0.6875rem;
-		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: var(--text-muted);
-		padding: 0 0.25rem;
+	}
+
+	.bq-head-count {
+		font-size: 0.625rem;
+		font-weight: 600;
+		color: var(--text-muted);
+		background: var(--bg-sunken);
+		border-radius: 999px;
+		padding: 0.0625rem 0.375rem;
+		margin-left: auto;
 	}
 
 	.bq-rows {
@@ -152,8 +100,8 @@
 	.bq-row {
 		display: flex;
 		align-items: center;
-		gap: 0.625rem;
-		padding: 0.5rem 0.25rem;
+		gap: 0.375rem;
+		padding: 0.3125rem 0.25rem;
 		min-width: 0;
 	}
 
@@ -164,15 +112,15 @@
 	.bq-sha {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.1875rem;
+		gap: 0.125rem;
 		font-family: var(--font-mono, ui-monospace, monospace);
-		font-size: 0.75rem;
+		font-size: 0.6875rem;
 		color: var(--text-muted);
 		flex-shrink: 0;
 	}
 
 	.bq-msg {
-		font-size: 0.8125rem;
+		font-size: 0.75rem;
 		color: var(--text-default);
 		white-space: nowrap;
 		overflow: hidden;
@@ -181,32 +129,10 @@
 		flex: 1;
 	}
 
-	.bq-meta {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		flex-shrink: 0;
-	}
-
-	.bq-trigger {
-		font-size: 0.6875rem;
-		font-weight: 550;
-		color: var(--text-muted);
-		background: var(--bg-sunken);
-		border-radius: 999px;
-		padding: 0.125rem 0.5rem;
-	}
-
 	.bq-when {
-		font-size: 0.6875rem;
+		font-size: 0.625rem;
 		color: var(--text-faint);
 		white-space: nowrap;
-	}
-
-	@media (max-width: 560px) {
-		.bq-msg {
-			flex-basis: 100%;
-			order: 3;
-		}
+		flex-shrink: 0;
 	}
 </style>

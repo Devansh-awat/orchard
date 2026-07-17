@@ -8,7 +8,6 @@
 	import { springCollapse } from '$lib/utils/motion.svelte';
 	import HistoryTab from './HistoryTab.svelte';
 	import WebhooksTab from './WebhooksTab.svelte';
-	import BuildQueue from './BuildQueue.svelte';
 	import type { WebhookToken } from '$lib/types/deployment';
 
 	let {
@@ -53,8 +52,6 @@
 </script>
 
 <div class="dt-stack">
-	<BuildQueue {deploymentId} />
-
 	<!-- History always visible -->
 	<HistoryTab
 		{deployment}
