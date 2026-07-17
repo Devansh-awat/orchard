@@ -645,14 +645,16 @@
 	}
 
 	.tree-node-content.is-active {
-		background-color: var(--sidebar-text-active-bg);
+		background-color: color-mix(in srgb, var(--accent) 9%, transparent);
 		color: var(--sidebar-text-active-color);
 	}
 
 	.tree-node-content :global(.tree-icon) {
 		flex-shrink: 0;
 		opacity: 0.55;
-		transition: opacity 120ms ease;
+		transition:
+			opacity 120ms ease,
+			color 120ms ease;
 	}
 
 	.tree-node-content:hover :global(.tree-icon) {
@@ -661,6 +663,7 @@
 
 	.tree-node-content.is-active :global(.tree-icon) {
 		opacity: 1;
+		color: var(--accent);
 	}
 
 	.tree-node-label {
@@ -684,10 +687,11 @@
 	}
 
 	:global(.sidebar-collapsed-icon.is-active) {
-		background-color: var(--sidebar-text-active-bg);
+		background-color: color-mix(in srgb, var(--accent) 9%, transparent);
 	}
 
 	:global(.sidebar-collapsed-icon.is-active .tree-icon) {
 		opacity: 1;
+		color: var(--accent);
 	}
 </style>
