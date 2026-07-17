@@ -3,17 +3,7 @@
 	import { onMount } from 'svelte';
 	import { ArrowLeft, ArrowUp, ImageIcon, MessageSquare, Pin, Plus } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
-	import {
-		Button,
-		Modal,
-		Field,
-		Input,
-		Select,
-		Dropdown,
-		StatusBadge,
-		EmptyState,
-		Skeleton
-	} from '$lib/components/ui';
+	import { Button, Modal, Dropdown, StatusBadge, EmptyState, Skeleton } from '$lib/components/ui';
 	import { timeAgo, projectSwatch } from '$lib/components/org-dashboard/helpers.svelte';
 	import { springHover, motionStagger } from '$lib/utils/motion.svelte';
 	import {
@@ -149,7 +139,7 @@
 				{/each}
 			</div>
 			<Button variant="primary" onclick={() => (composerOpen = true)}>
-				<Plus class="h-4 w-4" /> New post
+				<Plus class="h-4 w-4" /> New issue
 			</Button>
 		</header>
 
@@ -177,7 +167,7 @@
 			</div>
 			<Dropdown
 				bind:value={scopeFilter}
-				class="gv-filter-dd"
+				class="gv-filter-dd{scopeFilter ? ' gv-filter-dd--set' : ''}"
 				options={[
 					{ value: '', label: 'All scopes' },
 					...GROVE_SCOPES.map((s) => ({ value: s.value, label: s.label }))
@@ -186,7 +176,7 @@
 			/>
 			<Dropdown
 				bind:value={statusFilter}
-				class="gv-filter-dd"
+				class="gv-filter-dd{statusFilter ? ' gv-filter-dd--set' : ''}"
 				options={[
 					{ value: '', label: 'All statuses' },
 					...GROVE_STATUSES.map((s) => ({ value: s, label: groveStatus(s).label }))
@@ -229,7 +219,7 @@
 				description="Be the first to plant a post in this part of the grove."
 			>
 				<Button variant="primary" onclick={() => (composerOpen = true)}>
-					<Plus class="h-4 w-4" /> New post
+					<Plus class="h-4 w-4" /> New issue
 				</Button>
 			</EmptyState>
 		{:else}
@@ -284,49 +274,67 @@
 	</div>
 </div>
 
-<Modal bind:open={composerOpen} title="New post" size="md">
+<Modal bind:open={composerOpen} title="New issue" size="md">
 	<div class="gv-form">
-		<div class="gv-form-row">
-			<Field label="Type">
-				<Select bind:value={composerCat}>
-					{#each categories as cat (cat.slug)}
-						<option value={cat.slug}>{cat.name}</option>
-					{/each}
-				</Select>
-			</Field>
-			<Field label="Scope">
-				<Select bind:value={composerScope}>
-					{#each GROVE_SCOPES as s (s.value)}
-						<option value={s.value}>{s.label}</option>
-					{/each}
-				</Select>
-			</Field>
+		<div class="gv-type-row" role="radiogroup" aria-label="Type">
+			{#each categories as cat (cat.slug)}
+				<button
+					type="button"
+					role="radio"
+					aria-checked={composerCat === cat.slug}
+					class="gv-type-card"
+					class:gv-type-card--active={composerCat === cat.slug}
+					onclick={() => (composerCat = cat.slug)}
+				>
+					<span class="gv-type-name">{cat.name}</span>
+					{#if cat.description}<span class="gv-type-desc">{cat.description}</span>{/if}
+				</button>
+			{/each}
 		</div>
-		<Field label="Title">
-			<Input bind:value={composerTitle} placeholder="Short and specific" maxlength={200} />
-		</Field>
-		<Field label="Details">
-			<textarea
-				class="gv-textarea"
-				name="grove-post-body"
-				aria-label="Details"
-				bind:value={composerBody}
-				rows="6"
-				maxlength={10000}
-				placeholder="What happened, what you expected, or what you wish existed"
-			></textarea>
-		</Field>
-		<ImageAttach bind:images={composerImages} disabled={submitting} />
+		<div class="gv-scope-row" role="radiogroup" aria-label="Scope">
+			{#each GROVE_SCOPES as s (s.value)}
+				<button
+					type="button"
+					role="radio"
+					aria-checked={composerScope === s.value}
+					class="gv-chip"
+					class:gv-chip--active={composerScope === s.value}
+					onclick={() => (composerScope = s.value)}
+				>
+					{s.label}
+				</button>
+			{/each}
+		</div>
+		<input
+			class="gv-title-input"
+			name="grove-post-title"
+			aria-label="Title"
+			bind:value={composerTitle}
+			maxlength={200}
+			placeholder="Title"
+		/>
+		<textarea
+			class="gv-textarea"
+			name="grove-post-body"
+			aria-label="Details"
+			bind:value={composerBody}
+			rows="6"
+			maxlength={10000}
+			placeholder="What happened, what you expected, or what you wish existed"
+		></textarea>
 		<div class="gv-form-actions">
-			<Button variant="ghost" onclick={() => (composerOpen = false)}>Cancel</Button>
-			<Button
-				variant="primary"
-				disabled={composerTitle.trim().length < 4 || composerBody.trim().length < 1}
-				loading={submitting}
-				onclick={submitThread}
-			>
-				Plant it
-			</Button>
+			<ImageAttach bind:images={composerImages} disabled={submitting} />
+			<div class="gv-form-buttons">
+				<Button variant="ghost" onclick={() => (composerOpen = false)}>Cancel</Button>
+				<Button
+					variant="primary"
+					disabled={composerTitle.trim().length < 4 || composerBody.trim().length < 1}
+					loading={submitting}
+					onclick={submitThread}
+				>
+					Plant it
+				</Button>
+			</div>
 		</div>
 	</div>
 </Modal>
@@ -446,7 +454,27 @@
 	}
 
 	:global(.gv-filter-dd) {
-		min-width: 9rem;
+		min-width: 0;
+		height: auto;
+		padding: 0.3125rem 0.625rem 0.3125rem 0.75rem;
+		border-radius: 999px;
+		border: 1px solid var(--border-default);
+		background: var(--bg-surface);
+		color: var(--text-muted);
+		font-size: 0.75rem;
+		font-weight: 550;
+		gap: 0.25rem;
+	}
+
+	:global(.gv-filter-dd:hover) {
+		color: var(--text-default);
+		border-color: var(--border-strong);
+	}
+
+	:global(.gv-filter-dd--set) {
+		background: var(--accent-subtle);
+		border-color: var(--accent);
+		color: var(--text-default);
 	}
 
 	.gv-sort {
@@ -616,16 +644,88 @@
 		gap: 0.875rem;
 	}
 
-	.gv-form-row {
+	.gv-type-row {
 		display: grid;
 		grid-template-columns: 1fr 1fr;
-		gap: 0.75rem;
+		gap: 0.5rem;
 	}
 
 	@media (max-width: 480px) {
-		.gv-form-row {
+		.gv-type-row {
 			grid-template-columns: 1fr;
 		}
+	}
+
+	.gv-type-card {
+		display: flex;
+		flex-direction: column;
+		align-items: flex-start;
+		gap: 0.125rem;
+		padding: 0.625rem 0.75rem;
+		border-radius: 0.625rem;
+		border: 1px solid var(--border-default);
+		background: var(--bg-surface);
+		cursor: pointer;
+		text-align: left;
+		transition:
+			border-color 120ms ease,
+			background-color 120ms ease;
+	}
+
+	.gv-type-card:hover {
+		border-color: var(--border-strong);
+	}
+
+	.gv-type-card--active {
+		border-color: var(--accent);
+		background: var(--accent-subtle);
+	}
+
+	.gv-type-name {
+		font-size: 0.8125rem;
+		font-weight: 650;
+		color: var(--text-default);
+	}
+
+	.gv-type-desc {
+		font-size: 0.71875rem;
+		color: var(--text-muted);
+		line-height: 1.35;
+	}
+
+	.gv-scope-row {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		flex-wrap: wrap;
+	}
+
+	.gv-title-input {
+		width: 100%;
+		border: 1px solid var(--border-default);
+		border-radius: 0.5rem;
+		background: var(--bg-surface);
+		color: var(--text-default);
+		font-size: 1rem;
+		font-weight: 600;
+		line-height: 1.4;
+		padding: 0.625rem 0.75rem;
+	}
+
+	.gv-title-input::placeholder {
+		color: var(--text-faint);
+		font-weight: 500;
+	}
+
+	.gv-title-input:focus-visible {
+		outline: 2px solid var(--focus-ring);
+		outline-offset: -1px;
+	}
+
+	.gv-form-buttons {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
 	}
 
 	.gv-textarea {
@@ -647,7 +747,8 @@
 
 	.gv-form-actions {
 		display: flex;
-		justify-content: flex-end;
+		align-items: center;
+		justify-content: space-between;
 		gap: 0.5rem;
 	}
 
