@@ -283,6 +283,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       SET "build_logs" = COALESCE("build_logs", '') || ${`\n[ERROR] ${reason}\n`}
       WHERE "id" = ${deploymentId}::uuid
     `.catch(() => {});
+    this.drainAutoDeployQueue(deploymentId).catch(() => {});
   }
 
   private async markBuildSucceeded(deploymentId: string, logMessage: string) {
@@ -306,6 +307,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       SET "build_logs" = COALESCE("build_logs", '') || ${`\n${logMessage}\n`}
       WHERE "id" = ${deploymentId}::uuid
     `.catch(() => {});
+    this.drainAutoDeployQueue(deploymentId).catch(() => {});
   }
 
   async listDeploymentsSummary(userId: string, orgId?: string) {
@@ -2819,8 +2821,23 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (deployment.buildStatus === 'building') {
-      console.log(`[Projects] Skipping auto-deploy for deployment ${deploymentId}: build already in progress (buildStatus: ${deployment.buildStatus})`);
-      throw new BadRequestException('A build is already in progress for this deployment');
+      // A build is already running. Park this commit so it deploys once the
+      // current build settles, instead of dropping it (the old behaviour that
+      // forced users to manually re-deploy their latest commit). The queue
+      // holds a single slot: a newer push supersedes an older queued one, so
+      // we never build stale intermediate commits.
+      await this.prisma.deployment.update({
+        where: { id: deploymentId },
+        data: {
+          queuedCommitSha: commitSha,
+          queuedCommitMessage: commitMessage,
+          queuedCommitAuthorName: commitAuthorName ?? null,
+          queuedCommitAuthorUsername: commitAuthorUsername ?? null,
+          queuedAt: new Date(),
+        },
+      });
+      console.log(`[Projects] Build in progress for ${deploymentId}; queued commit ${commitSha?.substring(0, 7)} for next build (supersedes any prior queued commit)`);
+      return { queued: true, commitSha };
     }
 
     // Parse repo info for GitHub API calls
@@ -2914,7 +2931,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       }
     }
 
-    // Reset build status to building
+    // Reset build status to building. Clear any queued commit: this build is
+    // starting now, so a commit that was parked for "next build" is being
+    // consumed here (or a fresh push is taking priority).
     await this.prisma.deployment.update({
       where: { id: deploymentId },
       data: {
@@ -2922,6 +2941,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         buildStepTimestamps: { __start: Date.now() },
         buildLogs: `Auto-deploy triggered by push to ${deployment.autoDeployBranch || deployment.githubBranch}\nCommit: ${commitSha?.substring(0, 7)} - ${commitMessage.split('\n')[0]}\n\n`,
         buildError: null,
+        queuedCommitSha: null,
+        queuedCommitMessage: null,
+        queuedCommitAuthorName: null,
+        queuedCommitAuthorUsername: null,
+        queuedAt: null,
       },
     });
 
@@ -2994,6 +3018,54 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     ).catch((error) => {
       console.error(`[Projects] Auto-deploy failed for deployment ${deploymentId}:`, error);
     });
+  }
+
+  /**
+   * Called whenever a build settles (success or failure). If a commit was
+   * queued while that build ran, claim it atomically and kick off a fresh
+   * auto-deploy. The compare-and-swap on `queuedCommitSha` makes concurrent
+   * completions safe: only the caller that clears the slot triggers the build,
+   * so a queued commit can never be double-deployed.
+   */
+  async drainAutoDeployQueue(deploymentId: string) {
+    const dep = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: {
+        queuedCommitSha: true,
+        queuedCommitMessage: true,
+        queuedCommitAuthorName: true,
+        queuedCommitAuthorUsername: true,
+      },
+    });
+    if (!dep?.queuedCommitSha) return;
+
+    // Claim the slot: only succeeds if the queued commit is still the one we
+    // read. A concurrent drain (or a fresh push that already started building)
+    // will lose the race and no-op.
+    const claim = await this.prisma.deployment.updateMany({
+      where: { id: deploymentId, queuedCommitSha: dep.queuedCommitSha },
+      data: {
+        queuedCommitSha: null,
+        queuedCommitMessage: null,
+        queuedCommitAuthorName: null,
+        queuedCommitAuthorUsername: null,
+        queuedAt: null,
+      },
+    });
+    if (claim.count === 0) return;
+
+    console.log(`[Projects] Draining queued commit ${dep.queuedCommitSha.substring(0, 7)} for deployment ${deploymentId}`);
+    try {
+      await this.triggerAutoDeploy(
+        deploymentId,
+        dep.queuedCommitSha,
+        dep.queuedCommitMessage ?? 'Queued deploy',
+        dep.queuedCommitAuthorName ?? undefined,
+        dep.queuedCommitAuthorUsername ?? undefined,
+      );
+    } catch (err) {
+      console.error(`[Projects] Failed to drain queued deploy for ${deploymentId}:`, err);
+    }
   }
 
   async getAutoDeployStatus(deploymentId: string, clerkId: string) {
@@ -4950,6 +5022,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         .notifyDeploy(deploymentId, 'succeeded')
         .catch((err) => this.logger.warn(`deploy notification failed for ${deploymentId}: ${err?.message ?? err}`));
 
+      this.drainAutoDeployQueue(deploymentId).catch((err) =>
+        this.logger.warn(`deploy queue drain failed for ${deploymentId}: ${err?.message ?? err}`),
+      );
+
       // Update GitHub deployment status to success
       if (data.githubDeploymentId && data.repoInfo && data.githubAccessToken) {
         try {
@@ -5126,6 +5202,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             buildLogs: (currentDeployment?.buildLogs || '') + errorLogEntry,
           },
         });
+
+        // A failed build still drains the queue: a newer queued commit may be
+        // the fix, so it deserves its own build rather than being stranded.
+        this.drainAutoDeployQueue(deploymentId).catch((drainErr) =>
+          this.logger.warn(`deploy queue drain failed for ${deploymentId}: ${drainErr?.message ?? drainErr}`),
+        );
       } catch (dbErr) {
         buildTrace.finishFailure(error); // no-op if already finished above
         console.error(`[Projects] Failed to update error status in database:`, {

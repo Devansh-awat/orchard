@@ -2707,6 +2707,22 @@
 				}}
 			/>
 
+			{#if deployment?.queuedCommitSha}
+				<div class="deploy-queue-banner">
+					<Clock size={15} class="deploy-queue-icon" />
+					<div class="deploy-queue-text">
+						<span class="deploy-queue-title">Next deploy queued</span>
+						<span class="deploy-queue-detail">
+							<span class="deploy-queue-sha">{deployment.queuedCommitSha.slice(0, 7)}</span>
+							{#if deployment.queuedCommitMessage}
+								· {deployment.queuedCommitMessage.split('\n')[0]}
+							{/if}
+							· builds when the current one finishes
+						</span>
+					</div>
+				</div>
+			{/if}
+
 			<!-- Tab panels -->
 			{#each visibleTabs as tab (tab.id)}
 				<section {...tabs.getContent(tab.id)} hidden={undefined} class="tab-panel">

@@ -525,6 +525,15 @@ model Deployment {
   // a repo by full_name.
   githubInstallationId BigInt? @map("github_installation_id")
 
+  // A push that arrives while a build is in flight parks its commit here
+  // instead of being dropped. Coalesces to the latest push (newer supersedes),
+  // and drains into a fresh build when the current one settles.
+  queuedCommitSha            String?   @map("queued_commit_sha") @db.VarChar(255)
+  queuedCommitMessage        String?   @map("queued_commit_message") @db.Text
+  queuedCommitAuthorName     String?   @map("queued_commit_author_name") @db.VarChar(255)
+  queuedCommitAuthorUsername String?   @map("queued_commit_author_username") @db.VarChar(255)
+  queuedAt                   DateTime? @map("queued_at") @db.Timestamp(6)
+
   // Health check configuration
   healthCheckEnabled      Boolean  @default(false) @map("health_check_enabled")
   healthCheckPath         String?  @map("health_check_path") @db.VarChar(500)

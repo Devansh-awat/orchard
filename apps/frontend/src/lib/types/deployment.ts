@@ -130,6 +130,10 @@ export interface Deployment {
 	buildStepTimestamps?: Record<string, number> | null;
 	autoDeployEnabled?: boolean;
 	autoDeployBranch?: string;
+	queuedCommitSha?: string | null;
+	queuedCommitMessage?: string | null;
+	queuedCommitAuthorUsername?: string | null;
+	queuedAt?: string | null;
 	healthCheckEnabled?: boolean;
 	healthCheckPath?: string;
 	healthCheckPort?: number;

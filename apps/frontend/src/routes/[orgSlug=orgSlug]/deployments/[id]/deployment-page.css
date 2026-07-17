@@ -2848,3 +2848,45 @@ a.dep-meta-lead-link:hover {
 		justify-content: center;
 	}
 }
+
+.deploy-queue-banner {
+	display: flex;
+	align-items: center;
+	gap: 0.625rem;
+	padding: 0.625rem 0.875rem;
+	margin-bottom: 0.75rem;
+	border-radius: 0.625rem;
+	background: var(--status-info-bg);
+	border: 1px solid var(--status-info-border);
+	color: var(--text-default);
+}
+
+.deploy-queue-banner :global(.deploy-queue-icon) {
+	color: var(--status-info);
+	flex-shrink: 0;
+}
+
+.deploy-queue-text {
+	display: flex;
+	flex-direction: column;
+	gap: 0.0625rem;
+	min-width: 0;
+}
+
+.deploy-queue-title {
+	font-size: 0.8125rem;
+	font-weight: 600;
+}
+
+.deploy-queue-detail {
+	font-size: 0.75rem;
+	color: var(--text-muted);
+	overflow: hidden;
+	text-overflow: ellipsis;
+	white-space: nowrap;
+}
+
+.deploy-queue-sha {
+	font-family: var(--font-mono, ui-monospace, monospace);
+	color: var(--text-default);
+}
