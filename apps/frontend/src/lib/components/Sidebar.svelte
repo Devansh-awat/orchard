@@ -51,7 +51,7 @@
 		active: boolean;
 	};
 
-	const mainNav: NavEntry[] = $derived([
+	const platformNav: NavEntry[] = $derived([
 		{
 			label: 'Your Apps',
 			href: `/${orgSlug}`,
@@ -71,8 +71,11 @@
 			href: `/${orgSlug}/usage`,
 			icon: Activity,
 			active: $page.url.pathname.startsWith('/' + orgSlug + '/usage')
-		},
-		...(publicEnv.PUBLIC_GROVE_ENABLED === 'true'
+		}
+	]);
+
+	const communityNav: NavEntry[] = $derived(
+		publicEnv.PUBLIC_GROVE_ENABLED === 'true'
 			? [
 					{
 						label: 'The Grove',
@@ -81,8 +84,10 @@
 						active: $page.url.pathname.startsWith('/grove')
 					}
 				]
-			: [])
-	]);
+			: []
+	);
+
+	const mainNav: NavEntry[] = $derived([...platformNav, ...communityNav]);
 
 	const settingsNav: NavEntry[] = $derived.by(() => {
 		const tabs = [
@@ -380,9 +385,16 @@
 					     render as "//projects" — a protocol-relative external URL. -->
 					{#if orgSlug}
 						<div class="sidebar-home-link">
-							{#each mainNav as item, i (item.href)}
+							<div class="sidebar-section-label">Platform</div>
+							{#each platformNav as item, i (item.href)}
 								{@render navItem(item, i)}
 							{/each}
+							{#if communityNav.length > 0}
+								<div class="sidebar-section-label sidebar-section-label--spaced">Community</div>
+								{#each communityNav as item, i (item.href)}
+									{@render navItem(item, platformNav.length + i)}
+								{/each}
+							{/if}
 						</div>
 					{/if}
 				</div>
@@ -461,20 +473,39 @@
 		transition: width 200ms ease;
 	}
 	/* Settings/org section tree items (moved from app.css) */
+	.sidebar-section-label {
+		font-size: 0.6875rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--sidebar-text);
+		opacity: 0.4;
+		padding: 0.375rem 0.625rem 0.25rem;
+		user-select: none;
+	}
+
+	.sidebar-section-label--spaced {
+		padding-top: 1rem;
+	}
+
 	.tree-node-content {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 8px 10px;
+		padding: 6px 10px;
 		margin: 1px 0;
-		border-radius: 0.5rem;
+		border-radius: 0.375rem;
 		cursor: pointer;
-		transition: background-color 120ms ease;
+		color: color-mix(in srgb, var(--sidebar-text) 75%, transparent);
+		transition:
+			background-color 120ms ease,
+			color 120ms ease;
 		min-width: 0;
 	}
 
 	.tree-node-content:hover {
 		background-color: var(--sidebar-text-hover-bg);
+		color: var(--sidebar-text);
 	}
 
 	.tree-node-content.is-active {
@@ -484,19 +515,16 @@
 
 	.tree-node-content :global(.tree-icon) {
 		flex-shrink: 0;
-		opacity: 0.65;
-		transition:
-			opacity 120ms ease,
-			color 120ms ease;
+		opacity: 0.55;
+		transition: opacity 120ms ease;
 	}
 
 	.tree-node-content:hover :global(.tree-icon) {
-		opacity: 0.9;
+		opacity: 0.8;
 	}
 
 	.tree-node-content.is-active :global(.tree-icon) {
 		opacity: 1;
-		color: var(--accent);
 	}
 
 	.tree-node-label {
@@ -510,23 +538,20 @@
 		line-height: 1.3;
 	}
 
-	.tree-node-content.is-active .tree-node-label {
-		font-weight: 600;
-	}
-
 	:global(.sidebar-collapsed-icon .tree-icon) {
-		opacity: 0.65;
-		transition:
-			opacity 120ms ease,
-			color 120ms ease;
+		opacity: 0.55;
+		transition: opacity 120ms ease;
 	}
 
 	:global(.sidebar-collapsed-icon:hover .tree-icon) {
-		opacity: 0.9;
+		opacity: 0.8;
+	}
+
+	:global(.sidebar-collapsed-icon.is-active) {
+		background-color: var(--sidebar-text-active-bg);
 	}
 
 	:global(.sidebar-collapsed-icon.is-active .tree-icon) {
 		opacity: 1;
-		color: var(--accent);
 	}
 </style>

@@ -1009,18 +1009,13 @@ select.input:focus {
 }
 
 .sidebar-team-bar {
-	padding: 0.5rem;
-	border-radius: 1rem;
-	background-color: var(--sidebar-team-bar-bg);
-	border: 1px solid color-mix(in srgb, var(--sidebar-text) 8%, transparent);
+	padding: 0.25rem 0.125rem 0.375rem;
 	overflow: visible;
 }
 
 .sidebar-footer {
-	padding: 0.5rem;
-	border-radius: 1rem;
-	background-color: color-mix(in srgb, var(--sidebar-text-hover-bg) 50%, var(--sidebar-bg));
-	border: 1px solid color-mix(in srgb, var(--sidebar-text) 8%, transparent);
+	padding: 0.625rem 0.125rem 0.125rem;
+	border-top: 1px solid color-mix(in srgb, var(--sidebar-text) 8%, transparent);
 	margin-top: auto;
 }
 
@@ -1089,19 +1084,16 @@ select.input:focus {
 /* Compact search button — mirrors `.sidebar-search-trigger` styling so the
    search affordance reads as a search field even when collapsed. */
 .sidebar-collapsed-icon--search {
-	background-color: color-mix(in srgb, var(--sidebar-text-hover-bg) 40%, transparent);
-	border: 1px solid color-mix(in srgb, var(--sidebar-text) 6%, transparent);
+	background-color: color-mix(in srgb, var(--sidebar-text-hover-bg) 55%, transparent);
 	color: color-mix(in srgb, var(--sidebar-text) 50%, transparent);
-	transition: all 160ms ease;
+	transition:
+		background-color 160ms ease,
+		color 160ms ease;
 }
 
 .sidebar-collapsed-icon--search:hover {
 	background-color: var(--sidebar-text-hover-bg);
-	border-color: color-mix(in srgb, var(--sidebar-text) 12%, transparent);
 	color: var(--sidebar-text);
-	box-shadow:
-		0 1px 3px color-mix(in srgb, var(--center-channel-color) 4%, transparent),
-		0 4px 8px color-mix(in srgb, var(--center-channel-color) 3%, transparent);
 }
 
 .sidebar-collapsed-icon--search .sidebar-search-icon-wrapper {
@@ -1168,21 +1160,17 @@ select.input:focus {
 	align-items: center;
 	gap: 0.5rem;
 	width: 100%;
-	padding: 0.5rem 0.75rem;
-	background-color: color-mix(in srgb, var(--sidebar-text-hover-bg) 40%, transparent);
-	border: 1px solid color-mix(in srgb, var(--sidebar-text) 6%, transparent);
-	border-radius: 0.625rem;
+	padding: 0.4375rem 0.625rem;
+	background-color: color-mix(in srgb, var(--sidebar-text-hover-bg) 55%, transparent);
+	border: none;
+	border-radius: 0.5rem;
 	color: var(--sidebar-text);
 	cursor: pointer;
-	transition: all 160ms ease;
+	transition: background-color 160ms ease;
 }
 
 .sidebar-search-trigger:hover {
 	background-color: var(--sidebar-text-hover-bg);
-	border-color: color-mix(in srgb, var(--sidebar-text) 12%, transparent);
-	box-shadow:
-		0 1px 3px color-mix(in srgb, var(--center-channel-color) 4%, transparent),
-		0 4px 8px color-mix(in srgb, var(--center-channel-color) 3%, transparent);
 }
 
 .sidebar-search-icon-wrapper {
