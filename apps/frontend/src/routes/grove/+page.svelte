@@ -18,7 +18,9 @@
 	import {
 		groveStatus,
 		grovePriority,
+		scopeLabel,
 		GROVE_STATUSES,
+		GROVE_SCOPES,
 		type GroveCategory,
 		type GroveThread
 	} from '$lib/components/grove/grove';
@@ -29,9 +31,11 @@
 	let loading = $state(true);
 	let activeCat = $state('');
 	let statusFilter = $state('');
+	let scopeFilter = $state('');
 	let sort = $state<'latest' | 'top'>('latest');
 	let composerOpen = $state(false);
 	let composerCat = $state('bugs');
+	let composerScope = $state('platform');
 	let composerTitle = $state('');
 	let composerBody = $state('');
 	let composerImages = $state<string[]>([]);
@@ -47,6 +51,7 @@
 		const params = new URLSearchParams();
 		if (activeCat) params.set('category', activeCat);
 		if (statusFilter) params.set('status', statusFilter);
+		if (scopeFilter) params.set('scope', scopeFilter);
 		if (sort === 'top') params.set('sort', 'top');
 		const qs = params.toString();
 		const res = await apiFetch(`/apiv1/forum/threads${qs ? `?${qs}` : ''}`);
@@ -93,6 +98,7 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({
 					categorySlug: composerCat,
+					scope: composerScope,
 					title: composerTitle,
 					body: composerBody,
 					images: composerImages
@@ -163,12 +169,17 @@
 						class:gv-chip--active={activeCat === cat.slug}
 						onclick={() => pickCat(cat.slug)}
 					>
-						<span>{cat.emoji}</span>
 						{cat.name}
 						{#if cat.threadCount > 0}<span class="gv-chip-count">{cat.threadCount}</span>{/if}
 					</button>
 				{/each}
 			</div>
+			<Select bind:value={scopeFilter} onchange={fetchThreads} aria-label="Filter by scope">
+				<option value="">All scopes</option>
+				{#each GROVE_SCOPES as s (s.value)}
+					<option value={s.value}>{s.label}</option>
+				{/each}
+			</Select>
 			<Select bind:value={statusFilter} onchange={fetchThreads} aria-label="Filter by status">
 				<option value="">All statuses</option>
 				{#each GROVE_STATUSES as s (s)}
@@ -225,7 +236,8 @@
 					>
 						<div class="gv-card-top">
 							<span class="gv-num">#{t.number}</span>
-							<span class="gv-cat-tag">{t.category.emoji} {t.category.name}</span>
+							<span class="gv-cat-tag">{t.category.name}</span>
+							<span class="gv-cat-tag">{scopeLabel(t.scope)}</span>
 							{#if grovePriority(t.priority)}
 								<StatusBadge meta={grovePriority(t.priority)!} />
 							{/if}
@@ -267,13 +279,22 @@
 
 <Modal bind:open={composerOpen} title="New post" size="md">
 	<div class="gv-form">
-		<Field label="Category">
-			<Select bind:value={composerCat}>
-				{#each categories.filter((c) => c.slug !== 'announcements') as cat (cat.slug)}
-					<option value={cat.slug}>{cat.emoji} {cat.name}</option>
-				{/each}
-			</Select>
-		</Field>
+		<div class="gv-form-row">
+			<Field label="Type">
+				<Select bind:value={composerCat}>
+					{#each categories as cat (cat.slug)}
+						<option value={cat.slug}>{cat.name}</option>
+					{/each}
+				</Select>
+			</Field>
+			<Field label="Scope">
+				<Select bind:value={composerScope}>
+					{#each GROVE_SCOPES as s (s.value)}
+						<option value={s.value}>{s.label}</option>
+					{/each}
+				</Select>
+			</Field>
+		</div>
 		<Field label="Title">
 			<Input bind:value={composerTitle} placeholder="Short and specific" maxlength={200} />
 		</Field>
@@ -582,6 +603,18 @@
 		display: flex;
 		flex-direction: column;
 		gap: 0.875rem;
+	}
+
+	.gv-form-row {
+		display: grid;
+		grid-template-columns: 1fr 1fr;
+		gap: 0.75rem;
+	}
+
+	@media (max-width: 480px) {
+		.gv-form-row {
+			grid-template-columns: 1fr;
+		}
 	}
 
 	.gv-textarea {

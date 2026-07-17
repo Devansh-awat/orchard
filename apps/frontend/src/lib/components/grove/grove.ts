@@ -23,6 +23,7 @@ export interface GroveThread {
 	snippet: string;
 	status: string;
 	priority: string;
+	scope: string;
 	images: string[];
 	pinned: boolean;
 	locked: boolean;
@@ -53,6 +54,18 @@ export const GROVE_STATUSES = [
 ] as const;
 
 export const GROVE_PRIORITIES = ['none', 'low', 'medium', 'high', 'urgent'] as const;
+
+export const GROVE_SCOPES = [
+	{ value: 'platform', label: 'Main platform' },
+	{ value: 'dashboard', label: 'Dashboard' },
+	{ value: 'cli', label: 'CLI' },
+	{ value: 'mcp', label: 'MCP' },
+	{ value: 'other', label: 'Other' }
+] as const;
+
+export function scopeLabel(scope: string): string {
+	return GROVE_SCOPES.find((s) => s.value === scope)?.label ?? scope;
+}
 
 export function groveStatus(status: string): StatusMeta {
 	switch (status) {

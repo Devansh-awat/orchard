@@ -1301,6 +1301,7 @@ model ForumThread {
   body           String   @db.Text
   status         String   @default("open") @db.VarChar(20)
   priority       String   @default("none") @db.VarChar(20)
+  scope          String   @default("platform") @db.VarChar(30)
   images         String[] @default([])
   pinned         Boolean  @default(false)
   locked         Boolean  @default(false)

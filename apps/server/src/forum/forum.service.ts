@@ -24,12 +24,12 @@ function cleanImages(images: unknown): string[] {
 }
 
 const DEFAULT_CATEGORIES = [
-  { slug: 'announcements', name: 'Announcements', emoji: '📣', description: 'News from the Orchard team', sortOrder: 0 },
-  { slug: 'bugs', name: 'Bugs', emoji: '🐛', description: 'Something in the orchard is wormy', sortOrder: 1 },
-  { slug: 'features', name: 'Feature requests', emoji: '🌱', description: 'Plant an idea, watch it grow', sortOrder: 2 },
-  { slug: 'help', name: 'Help', emoji: '💬', description: 'Stuck? Ask the grove', sortOrder: 3 },
-  { slug: 'showcase', name: 'Showcase', emoji: '🧺', description: 'Show off what you harvested', sortOrder: 4 },
+  { slug: 'bugs', name: 'Bugs', emoji: '', description: 'Something is broken or behaving wrong', sortOrder: 0 },
+  { slug: 'features', name: 'Feature requests', emoji: '', description: 'Something Orchard should do', sortOrder: 1 },
 ];
+
+export const THREAD_SCOPES = ['platform', 'dashboard', 'cli', 'mcp', 'other'] as const;
+export type ThreadScope = (typeof THREAD_SCOPES)[number];
 
 const AUTHOR_SELECT = { id: true, username: true, imageUrl: true } as const;
 
@@ -64,6 +64,7 @@ export class ForumService implements OnModuleInit {
   async listThreads(opts: {
     categorySlug?: string;
     status?: string;
+    scope?: string;
     sort?: string;
     userId: string;
   }) {
@@ -71,6 +72,9 @@ export class ForumService implements OnModuleInit {
       ...(opts.categorySlug ? { category: { slug: opts.categorySlug } } : {}),
       ...(opts.status && THREAD_STATUSES.includes(opts.status as ThreadStatus)
         ? { status: opts.status }
+        : {}),
+      ...(opts.scope && THREAD_SCOPES.includes(opts.scope as ThreadScope)
+        ? { scope: opts.scope }
         : {}),
     };
     const threads = await this.prisma.forumThread.findMany({
@@ -120,7 +124,7 @@ export class ForumService implements OnModuleInit {
 
   async createThread(
     userId: string,
-    body: { categorySlug: string; title: string; body: string; images?: string[] },
+    body: { categorySlug: string; title: string; body: string; scope?: string; images?: string[] },
   ) {
     const title = body.title?.trim() ?? '';
     const text = body.body?.trim() ?? '';
@@ -129,6 +133,10 @@ export class ForumService implements OnModuleInit {
     }
     if (text.length < 1 || text.length > 10000) {
       throw new BadRequestException('Body must be between 1 and 10000 characters');
+    }
+    const scope = body.scope ?? 'platform';
+    if (!THREAD_SCOPES.includes(scope as ThreadScope)) {
+      throw new BadRequestException('Invalid scope');
     }
     const category = await this.prisma.forumCategory.findUnique({
       where: { slug: body.categorySlug },
@@ -140,6 +148,7 @@ export class ForumService implements OnModuleInit {
         authorId: userId,
         title,
         body: text,
+        scope,
         images: cleanImages(body.images),
       },
     });
@@ -230,6 +239,7 @@ export class ForumService implements OnModuleInit {
       snippet: String(t.body).slice(0, 200),
       status: t.status,
       priority: t.priority,
+      scope: t.scope,
       images: t.images,
       pinned: t.pinned,
       locked: t.locked,

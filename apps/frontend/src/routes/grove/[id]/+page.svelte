@@ -9,6 +9,7 @@
 	import {
 		groveStatus,
 		grovePriority,
+		scopeLabel,
 		GROVE_STATUSES,
 		GROVE_PRIORITIES,
 		type GroveThread,
@@ -178,7 +179,8 @@
 			<article class="gt-thread" {@attach motionStagger({ index: 0, from: { y: 10 } })}>
 				<div class="gt-meta">
 					<span class="gt-num">#{thread.number}</span>
-					<span class="gt-cat">{thread.category.emoji} {thread.category.name}</span>
+					<span class="gt-cat">{thread.category.name}</span>
+					<span class="gt-cat">{scopeLabel(thread.scope)}</span>
 					{#if grovePriority(thread.priority)}
 						<StatusBadge meta={grovePriority(thread.priority)!} />
 					{/if}

@@ -62,11 +62,13 @@ export class ForumController {
     @Req() req: any,
     @Query('category') category?: string,
     @Query('status') status?: string,
+    @Query('scope') scope?: string,
     @Query('sort') sort?: string,
   ) {
     return this.forum.listThreads({
       categorySlug: category || undefined,
       status: status || undefined,
+      scope: scope || undefined,
       sort: sort || undefined,
       userId: await this.userId(req),
     });
@@ -76,7 +78,8 @@ export class ForumController {
   @Post('threads')
   async createThread(
     @Req() req: any,
-    @Body() body: { categorySlug: string; title: string; body: string; images?: string[] },
+    @Body()
+    body: { categorySlug: string; title: string; body: string; scope?: string; images?: string[] },
   ) {
     return this.forum.createThread(await this.userId(req), body);
   }
