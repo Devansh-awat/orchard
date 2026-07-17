@@ -305,7 +305,7 @@
 							bind:value={replyBody}
 							rows="2"
 							maxlength={10000}
-							placeholder="Reply, enter to send, shift and enter for a new line"
+							placeholder="Reply"
 							onkeydown={onComposerKeydown}
 						></textarea>
 						<div class="gt-composer-actions">

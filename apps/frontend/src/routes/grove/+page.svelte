@@ -131,7 +131,6 @@
 		<header class="gv-hero" {@attach motionStagger({ index: 0, from: { y: 10 } })}>
 			<div class="gv-hero-text">
 				<h1 class="gv-title">The Grove</h1>
-				<p class="gv-sub">bugs, ideas, and harvest stories from the orchard community</p>
 			</div>
 			<div class="gv-hero-sprites" aria-hidden="true">
 				{#each ['pome', 'drupe', 'berry', 'citrus'] as seed (seed)}
@@ -214,10 +213,7 @@
 				{/each}
 			</div>
 		{:else if threads.length === 0}
-			<EmptyState
-				title="Nothing growing here yet"
-				description="Be the first to plant a post in this part of the grove."
-			>
+			<EmptyState title="No issues yet">
 				<Button variant="primary" onclick={() => (composerOpen = true)}>
 					<Plus class="h-4 w-4" /> New issue
 				</Button>
@@ -287,7 +283,6 @@
 					onclick={() => (composerCat = cat.slug)}
 				>
 					<span class="gv-type-name">{cat.name}</span>
-					{#if cat.description}<span class="gv-type-desc">{cat.description}</span>{/if}
 				</button>
 			{/each}
 		</div>
@@ -320,7 +315,7 @@
 			bind:value={composerBody}
 			rows="6"
 			maxlength={10000}
-			placeholder="What happened, what you expected, or what you wish existed"
+			placeholder="Details"
 		></textarea>
 		<div class="gv-form-actions">
 			<ImageAttach bind:images={composerImages} disabled={submitting} />
@@ -332,7 +327,7 @@
 					loading={submitting}
 					onclick={submitThread}
 				>
-					Plant it
+					Create
 				</Button>
 			</div>
 		</div>
@@ -381,12 +376,6 @@
 		font-weight: 700;
 		letter-spacing: -0.02em;
 		color: var(--text-default);
-	}
-
-	.gv-sub {
-		font-size: 0.8125rem;
-		color: var(--text-muted);
-		margin-top: 0.125rem;
 	}
 
 	.gv-hero-sprites {
@@ -685,12 +674,6 @@
 		font-size: 0.8125rem;
 		font-weight: 650;
 		color: var(--text-default);
-	}
-
-	.gv-type-desc {
-		font-size: 0.71875rem;
-		color: var(--text-muted);
-		line-height: 1.35;
 	}
 
 	.gv-scope-row {
