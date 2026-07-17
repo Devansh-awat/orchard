@@ -1,8 +1,32 @@
-import { Body, Controller, Delete, Get, Param, Patch, Post, Query, Req, UnauthorizedException } from '@nestjs/common';
+import {
+  Body,
+  CanActivate,
+  Controller,
+  Delete,
+  Get,
+  Injectable,
+  NotFoundException,
+  Param,
+  Patch,
+  Post,
+  Query,
+  Req,
+  UnauthorizedException,
+  UseGuards,
+} from '@nestjs/common';
 import { ForumService } from './forum.service';
 import { UsersService } from '../users/users.service';
 import { Auth, SuperAdmin } from '../auth/decorators';
 
+@Injectable()
+export class GroveEnabledGuard implements CanActivate {
+  canActivate(): boolean {
+    if (process.env.GROVE_ENABLED !== 'true') throw new NotFoundException();
+    return true;
+  }
+}
+
+@UseGuards(GroveEnabledGuard)
 @Controller('forum')
 export class ForumController {
   constructor(

@@ -19,6 +19,7 @@ export class ForumService implements OnModuleInit {
   constructor(private readonly prisma: PrismaService) {}
 
   async onModuleInit() {
+    if (process.env.GROVE_ENABLED !== 'true') return;
     for (const cat of DEFAULT_CATEGORIES) {
       await this.prisma.forumCategory
         .upsert({ where: { slug: cat.slug }, update: {}, create: cat })

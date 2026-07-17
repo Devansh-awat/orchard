@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { env as publicEnv } from '$env/dynamic/public';
 	import { animate } from 'motion';
 	import { Leaf, Shield, Globe, ScrollText, Bell, Zap, Trees } from 'lucide-svelte';
 	import {
@@ -71,12 +72,16 @@
 			icon: Activity,
 			active: $page.url.pathname.startsWith('/' + orgSlug + '/usage')
 		},
-		{
-			label: 'The Grove',
-			href: '/grove',
-			icon: Trees,
-			active: $page.url.pathname.startsWith('/grove')
-		}
+		...(publicEnv.PUBLIC_GROVE_ENABLED === 'true'
+			? [
+					{
+						label: 'The Grove',
+						href: '/grove',
+						icon: Trees,
+						active: $page.url.pathname.startsWith('/grove')
+					}
+				]
+			: [])
 	]);
 
 	const settingsNav: NavEntry[] = $derived.by(() => {
