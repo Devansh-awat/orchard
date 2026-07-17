@@ -1,4 +1,5 @@
 import {
+  BadRequestException,
   Body,
   CanActivate,
   Controller,
@@ -12,11 +13,17 @@ import {
   Query,
   Req,
   UnauthorizedException,
+  UploadedFile,
   UseGuards,
+  UseInterceptors,
 } from '@nestjs/common';
+import { FileInterceptor } from '@nestjs/platform-express';
 import { ForumService } from './forum.service';
 import { UsersService } from '../users/users.service';
+import { StorageService } from '../organizations/storage.service';
 import { Auth, SuperAdmin } from '../auth/decorators';
+
+const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
 
 @Injectable()
 export class GroveEnabledGuard implements CanActivate {
@@ -32,6 +39,7 @@ export class ForumController {
   constructor(
     private readonly forum: ForumService,
     private readonly users: UsersService,
+    private readonly storage: StorageService,
   ) {}
 
   private async userId(req: any): Promise<string> {
@@ -50,9 +58,15 @@ export class ForumController {
 
   @Auth()
   @Get('threads')
-  async listThreads(@Req() req: any, @Query('category') category?: string, @Query('sort') sort?: string) {
+  async listThreads(
+    @Req() req: any,
+    @Query('category') category?: string,
+    @Query('status') status?: string,
+    @Query('sort') sort?: string,
+  ) {
     return this.forum.listThreads({
       categorySlug: category || undefined,
+      status: status || undefined,
       sort: sort || undefined,
       userId: await this.userId(req),
     });
@@ -62,9 +76,25 @@ export class ForumController {
   @Post('threads')
   async createThread(
     @Req() req: any,
-    @Body() body: { categorySlug: string; title: string; body: string },
+    @Body() body: { categorySlug: string; title: string; body: string; images?: string[] },
   ) {
     return this.forum.createThread(await this.userId(req), body);
+  }
+
+  @Auth()
+  @Post('uploads')
+  @UseInterceptors(FileInterceptor('file'))
+  async uploadImage(@Req() req: any, @UploadedFile() file?: Express.Multer.File) {
+    await this.userId(req);
+    if (!file) throw new BadRequestException('A file is required');
+    if (!IMAGE_TYPES.includes(file.mimetype)) {
+      throw new BadRequestException('Only JPEG, PNG, GIF, and WebP images are allowed');
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      throw new BadRequestException('Maximum file size is 5MB');
+    }
+    const url = await this.storage.uploadFile(file, 'forum');
+    return { url };
   }
 
   @Auth()
@@ -75,8 +105,12 @@ export class ForumController {
 
   @Auth()
   @Post('threads/:id/replies')
-  async reply(@Req() req: any, @Param('id') id: string, @Body() body: { body: string }) {
-    return this.forum.createReply(await this.userId(req), id, body.body);
+  async reply(
+    @Req() req: any,
+    @Param('id') id: string,
+    @Body() body: { body: string; images?: string[] },
+  ) {
+    return this.forum.createReply(await this.userId(req), id, body.body, body.images);
   }
 
   @Auth()
@@ -95,6 +129,12 @@ export class ForumController {
   @Patch('threads/:id/status')
   setStatus(@Param('id') id: string, @Body() body: { status: string }) {
     return this.forum.setStatus(id, body.status);
+  }
+
+  @SuperAdmin()
+  @Patch('threads/:id/priority')
+  setPriority(@Param('id') id: string, @Body() body: { priority: string }) {
+    return this.forum.setPriority(id, body.priority);
   }
 
   @SuperAdmin()

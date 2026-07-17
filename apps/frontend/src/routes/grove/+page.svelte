@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { ArrowLeft, ArrowUp, MessageSquare, Pin, Plus } from 'lucide-svelte';
+	import { ArrowLeft, ArrowUp, ImageIcon, MessageSquare, Pin, Plus } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
 	import {
 		Button,
@@ -15,17 +15,26 @@
 	} from '$lib/components/ui';
 	import { timeAgo, projectSwatch } from '$lib/components/org-dashboard/helpers.svelte';
 	import { springHover, motionStagger } from '$lib/utils/motion.svelte';
-	import { groveStatus, type GroveCategory, type GroveThread } from '$lib/components/grove/grove';
+	import {
+		groveStatus,
+		grovePriority,
+		GROVE_STATUSES,
+		type GroveCategory,
+		type GroveThread
+	} from '$lib/components/grove/grove';
+	import ImageAttach from '$lib/components/grove/ImageAttach.svelte';
 
 	let categories = $state<GroveCategory[]>([]);
 	let threads = $state<GroveThread[]>([]);
 	let loading = $state(true);
 	let activeCat = $state('');
+	let statusFilter = $state('');
 	let sort = $state<'latest' | 'top'>('latest');
 	let composerOpen = $state(false);
 	let composerCat = $state('bugs');
 	let composerTitle = $state('');
 	let composerBody = $state('');
+	let composerImages = $state<string[]>([]);
 	let submitting = $state(false);
 
 	async function fetchCategories() {
@@ -37,6 +46,7 @@
 		loading = true;
 		const params = new URLSearchParams();
 		if (activeCat) params.set('category', activeCat);
+		if (statusFilter) params.set('status', statusFilter);
 		if (sort === 'top') params.set('sort', 'top');
 		const qs = params.toString();
 		const res = await apiFetch(`/apiv1/forum/threads${qs ? `?${qs}` : ''}`);
@@ -84,7 +94,8 @@
 				body: JSON.stringify({
 					categorySlug: composerCat,
 					title: composerTitle,
-					body: composerBody
+					body: composerBody,
+					images: composerImages
 				})
 			});
 			if (!res.ok) {
@@ -93,6 +104,9 @@
 			}
 			const created = await res.json();
 			composerOpen = false;
+			composerTitle = '';
+			composerBody = '';
+			composerImages = [];
 			goto(`/grove/${created.id}`);
 		} catch (e) {
 			toasts.add({
@@ -155,6 +169,12 @@
 					</button>
 				{/each}
 			</div>
+			<Select bind:value={statusFilter} onchange={fetchThreads} aria-label="Filter by status">
+				<option value="">All statuses</option>
+				{#each GROVE_STATUSES as s (s)}
+					<option value={s}>{groveStatus(s).label}</option>
+				{/each}
+			</Select>
 			<div class="gv-sort" role="radiogroup" aria-label="Sort">
 				<button
 					type="button"
@@ -204,7 +224,11 @@
 						{@attach springHover({ lift: -2, stiffness: 360, damping: 22 })}
 					>
 						<div class="gv-card-top">
+							<span class="gv-num">#{t.number}</span>
 							<span class="gv-cat-tag">{t.category.emoji} {t.category.name}</span>
+							{#if grovePriority(t.priority)}
+								<StatusBadge meta={grovePriority(t.priority)!} />
+							{/if}
 							<StatusBadge meta={groveStatus(t.status)} />
 							{#if t.pinned}<span class="gv-pin"><Pin size={12} /></span>{/if}
 						</div>
@@ -218,6 +242,9 @@
 							{/if}
 							<span class="gv-author">{t.author.username}</span>
 							<span class="gv-when">{timeAgo(t.lastActivityAt)}</span>
+							{#if t.images.length > 0}
+								<span class="gv-replies"><ImageIcon size={12} /> {t.images.length}</span>
+							{/if}
 							<span class="gv-replies"><MessageSquare size={12} /> {t.replyCount}</span>
 							<button
 								type="button"
@@ -253,12 +280,15 @@
 		<Field label="Details">
 			<textarea
 				class="gv-textarea"
+				name="grove-post-body"
+				aria-label="Details"
 				bind:value={composerBody}
 				rows="6"
 				maxlength={10000}
 				placeholder="What happened, what you expected, or what you wish existed"
 			></textarea>
 		</Field>
+		<ImageAttach bind:images={composerImages} disabled={submitting} />
 		<div class="gv-form-actions">
 			<Button variant="ghost" onclick={() => (composerOpen = false)}>Cancel</Button>
 			<Button
@@ -436,6 +466,12 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
+	}
+
+	.gv-num {
+		font-family: 'Space Mono', monospace;
+		font-size: 0.6875rem;
+		color: var(--text-faint);
 	}
 
 	.gv-cat-tag {

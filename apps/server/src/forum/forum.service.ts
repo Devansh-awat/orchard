@@ -1,8 +1,27 @@
 import { BadRequestException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 
-export const THREAD_STATUSES = ['open', 'planned', 'in-progress', 'done', 'declined'] as const;
+export const THREAD_STATUSES = [
+  'open',
+  'acknowledged',
+  'will-fix',
+  'in-progress',
+  'fixed',
+  'wont-fix',
+] as const;
 export type ThreadStatus = (typeof THREAD_STATUSES)[number];
+
+export const THREAD_PRIORITIES = ['none', 'low', 'medium', 'high', 'urgent'] as const;
+export type ThreadPriority = (typeof THREAD_PRIORITIES)[number];
+
+const MAX_IMAGES = 4;
+
+function cleanImages(images: unknown): string[] {
+  if (!Array.isArray(images)) return [];
+  return images
+    .filter((u): u is string => typeof u === 'string' && /^https?:\/\//.test(u) && u.length <= 500)
+    .slice(0, MAX_IMAGES);
+}
 
 const DEFAULT_CATEGORIES = [
   { slug: 'announcements', name: 'Announcements', emoji: '📣', description: 'News from the Orchard team', sortOrder: 0 },
@@ -42,8 +61,18 @@ export class ForumService implements OnModuleInit {
     }));
   }
 
-  async listThreads(opts: { categorySlug?: string; sort?: string; userId: string }) {
-    const where = opts.categorySlug ? { category: { slug: opts.categorySlug } } : {};
+  async listThreads(opts: {
+    categorySlug?: string;
+    status?: string;
+    sort?: string;
+    userId: string;
+  }) {
+    const where = {
+      ...(opts.categorySlug ? { category: { slug: opts.categorySlug } } : {}),
+      ...(opts.status && THREAD_STATUSES.includes(opts.status as ThreadStatus)
+        ? { status: opts.status }
+        : {}),
+    };
     const threads = await this.prisma.forumThread.findMany({
       where,
       orderBy:
@@ -82,13 +111,17 @@ export class ForumService implements OnModuleInit {
       replies: t.replies.map((r) => ({
         id: r.id,
         body: r.body,
+        images: r.images,
         createdAt: r.createdAt,
         author: r.author,
       })),
     };
   }
 
-  async createThread(userId: string, body: { categorySlug: string; title: string; body: string }) {
+  async createThread(
+    userId: string,
+    body: { categorySlug: string; title: string; body: string; images?: string[] },
+  ) {
     const title = body.title?.trim() ?? '';
     const text = body.body?.trim() ?? '';
     if (title.length < 4 || title.length > 200) {
@@ -102,12 +135,18 @@ export class ForumService implements OnModuleInit {
     });
     if (!category) throw new BadRequestException('Unknown category');
     const created = await this.prisma.forumThread.create({
-      data: { categoryId: category.id, authorId: userId, title, body: text },
+      data: {
+        categoryId: category.id,
+        authorId: userId,
+        title,
+        body: text,
+        images: cleanImages(body.images),
+      },
     });
     return this.getThread(created.id, userId);
   }
 
-  async createReply(userId: string, threadId: string, text: string) {
+  async createReply(userId: string, threadId: string, text: string, images?: string[]) {
     const body = text?.trim() ?? '';
     if (body.length < 1 || body.length > 10000) {
       throw new BadRequestException('Reply must be between 1 and 10000 characters');
@@ -116,14 +155,29 @@ export class ForumService implements OnModuleInit {
     if (!thread) throw new NotFoundException('Thread not found');
     if (thread.locked) throw new BadRequestException('Thread is locked');
     const reply = await this.prisma.forumReply.create({
-      data: { threadId, authorId: userId, body },
+      data: { threadId, authorId: userId, body, images: cleanImages(images) },
       include: { author: { select: AUTHOR_SELECT } },
     });
     await this.prisma.forumThread.update({
       where: { id: threadId },
       data: { lastActivityAt: new Date() },
     });
-    return { id: reply.id, body: reply.body, createdAt: reply.createdAt, author: reply.author };
+    return {
+      id: reply.id,
+      body: reply.body,
+      images: reply.images,
+      createdAt: reply.createdAt,
+      author: reply.author,
+    };
+  }
+
+  async setPriority(threadId: string, priority: string) {
+    if (!THREAD_PRIORITIES.includes(priority as ThreadPriority)) {
+      throw new BadRequestException('Invalid priority');
+    }
+    await this.ensureThread(threadId);
+    await this.prisma.forumThread.update({ where: { id: threadId }, data: { priority } });
+    return { priority };
   }
 
   async setVote(userId: string, threadId: string, on: boolean) {
@@ -171,9 +225,12 @@ export class ForumService implements OnModuleInit {
   private shapeThread(t: any) {
     return {
       id: t.id,
+      number: t.number,
       title: t.title,
       snippet: String(t.body).slice(0, 200),
       status: t.status,
+      priority: t.priority,
+      images: t.images,
       pinned: t.pinned,
       locked: t.locked,
       createdAt: t.createdAt,

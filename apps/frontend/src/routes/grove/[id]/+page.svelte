@@ -8,10 +8,13 @@
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import {
 		groveStatus,
+		grovePriority,
 		GROVE_STATUSES,
+		GROVE_PRIORITIES,
 		type GroveThread,
 		type GroveReply
 	} from '$lib/components/grove/grove';
+	import ImageAttach from '$lib/components/grove/ImageAttach.svelte';
 
 	type FullThread = GroveThread & { body: string; replies: GroveReply[] };
 
@@ -19,8 +22,10 @@
 	let loading = $state(true);
 	let error = $state<string | null>(null);
 	let replyBody = $state('');
+	let replyImages = $state<string[]>([]);
 	let replying = $state(false);
 	let adminStatus = $state('open');
+	let adminPriority = $state('none');
 	let adminBusy = $state(false);
 
 	const threadId = $derived($page.params.id ?? '');
@@ -31,10 +36,26 @@
 		if (res.ok) {
 			thread = await res.json();
 			adminStatus = thread?.status ?? 'open';
+			adminPriority = thread?.priority ?? 'none';
 		} else {
 			error = res.status === 404 ? 'This post does not exist' : 'Failed to load post';
 		}
 		loading = false;
+	}
+
+	async function refreshThread() {
+		if (replying) return;
+		const res = await apiFetch(`/apiv1/forum/threads/${threadId}`);
+		if (!res.ok || !thread) return;
+		const fresh: FullThread = await res.json();
+		thread.replies = fresh.replies;
+		thread.replyCount = fresh.replyCount;
+		thread.status = fresh.status;
+		thread.priority = fresh.priority;
+		thread.pinned = fresh.pinned;
+		thread.locked = fresh.locked;
+		thread.votes = fresh.votes;
+		thread.myVote = fresh.myVote;
 	}
 
 	async function toggleVote() {
@@ -59,7 +80,7 @@
 			const res = await apiFetch(`/apiv1/forum/threads/${thread.id}/replies`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ body: replyBody })
+				body: JSON.stringify({ body: replyBody, images: replyImages })
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => ({}));
@@ -69,6 +90,7 @@
 			thread.replies.push(reply);
 			thread.replyCount += 1;
 			replyBody = '';
+			replyImages = [];
 		} catch (e) {
 			toasts.add({
 				title: 'Error',
@@ -78,6 +100,25 @@
 		} finally {
 			replying = false;
 		}
+	}
+
+	function onComposerKeydown(e: KeyboardEvent) {
+		if (e.key === 'Enter' && !e.shiftKey) {
+			e.preventDefault();
+			submitReply();
+		}
+	}
+
+	async function applyPriority() {
+		if (!thread || adminBusy) return;
+		adminBusy = true;
+		const res = await apiFetch(`/apiv1/forum/threads/${thread.id}/priority`, {
+			method: 'PATCH',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({ priority: adminPriority })
+		});
+		if (res.ok) thread.priority = adminPriority;
+		adminBusy = false;
 	}
 
 	async function applyStatus() {
@@ -116,7 +157,11 @@
 		adminBusy = false;
 	}
 
-	onMount(fetchThread);
+	onMount(() => {
+		fetchThread();
+		const poll = setInterval(refreshThread, 8000);
+		return () => clearInterval(poll);
+	});
 </script>
 
 <svelte:head><title>{thread ? `${thread.title} · The Grove` : 'The Grove'}</title></svelte:head>
@@ -132,7 +177,11 @@
 		{:else}
 			<article class="gt-thread" {@attach motionStagger({ index: 0, from: { y: 10 } })}>
 				<div class="gt-meta">
+					<span class="gt-num">#{thread.number}</span>
 					<span class="gt-cat">{thread.category.emoji} {thread.category.name}</span>
+					{#if grovePriority(thread.priority)}
+						<StatusBadge meta={grovePriority(thread.priority)!} />
+					{/if}
 					<StatusBadge meta={groveStatus(thread.status)} />
 					{#if thread.pinned}<span class="gt-flag"><Pin size={12} /> Pinned</span>{/if}
 					{#if thread.locked}<span class="gt-flag"><Lock size={12} /> Locked</span>{/if}
@@ -164,12 +213,27 @@
 					</button>
 				</div>
 				<div class="gt-body">{thread.body}</div>
+				{#if thread.images.length > 0}
+					<div class="gt-images">
+						{#each thread.images as url (url)}
+							<a href={url} target="_blank" rel="noopener noreferrer" class="gt-image-link">
+								<img src={url} alt="" class="gt-image" loading="lazy" decoding="async" />
+							</a>
+						{/each}
+					</div>
+				{/if}
 
 				{#if $isSuperAdmin}
 					<div class="gt-admin">
-						<Select bind:value={adminStatus} onchange={applyStatus}>
+						<Select bind:value={adminStatus} onchange={applyStatus} aria-label="Status">
 							{#each GROVE_STATUSES as s (s)}
 								<option value={s}>{groveStatus(s).label}</option>
+							{/each}
+						</Select>
+						<Select bind:value={adminPriority} onchange={applyPriority} aria-label="Priority">
+							<option value="none">No priority</option>
+							{#each GROVE_PRIORITIES.filter((p) => p !== 'none') as p (p)}
+								<option value={p}>{grovePriority(p)?.label}</option>
 							{/each}
 						</Select>
 						<Button variant="ghost" size="sm" disabled={adminBusy} onclick={togglePinned}>
@@ -208,6 +272,15 @@
 								<span class="gt-when" title={reply.createdAt}>{timeAgo(reply.createdAt)}</span>
 							</div>
 							<div class="gt-reply-body">{reply.body}</div>
+							{#if reply.images.length > 0}
+								<div class="gt-images">
+									{#each reply.images as url (url)}
+										<a href={url} target="_blank" rel="noopener noreferrer" class="gt-image-link">
+											<img src={url} alt="" class="gt-image" loading="lazy" decoding="async" />
+										</a>
+									{/each}
+								</div>
+							{/if}
 						</div>
 					</div>
 				{/each}
@@ -218,12 +291,16 @@
 					<div class="gt-composer">
 						<textarea
 							class="gt-textarea"
+							name="grove-reply-body"
+							aria-label="Reply"
 							bind:value={replyBody}
-							rows="3"
+							rows="2"
 							maxlength={10000}
-							placeholder="Add to the conversation"
+							placeholder="Reply, enter to send, shift and enter for a new line"
+							onkeydown={onComposerKeydown}
 						></textarea>
 						<div class="gt-composer-actions">
+							<ImageAttach bind:images={replyImages} disabled={replying} />
 							<Button
 								variant="primary"
 								size="sm"
@@ -285,6 +362,12 @@
 		gap: 0.5rem;
 		flex-wrap: wrap;
 		margin-bottom: 0.625rem;
+	}
+
+	.gt-num {
+		font-family: 'Space Mono', monospace;
+		font-size: 0.75rem;
+		color: var(--text-faint);
 	}
 
 	.gt-cat {
@@ -377,6 +460,28 @@
 		overflow-wrap: anywhere;
 	}
 
+	.gt-images {
+		display: flex;
+		gap: 0.5rem;
+		flex-wrap: wrap;
+		margin-top: 0.625rem;
+	}
+
+	.gt-image-link {
+		display: block;
+		width: 8rem;
+		height: 6rem;
+	}
+
+	.gt-image {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
+		border-radius: 0.5rem;
+		outline: 1px solid var(--border-default);
+		outline-offset: -1px;
+	}
+
 	.gt-admin {
 		display: flex;
 		align-items: center;
@@ -458,7 +563,9 @@
 
 	.gt-composer-actions {
 		display: flex;
-		justify-content: flex-end;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
 		margin-top: 0.5rem;
 	}
 </style>

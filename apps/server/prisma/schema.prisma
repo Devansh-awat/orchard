@@ -1294,11 +1294,14 @@ model ForumCategory {
 
 model ForumThread {
   id             String   @id @default(uuid()) @db.Uuid
+  number         Int      @unique @default(autoincrement())
   categoryId     String   @map("category_id") @db.Uuid
   authorId       String   @map("author_id") @db.Uuid
   title          String   @db.VarChar(200)
   body           String   @db.Text
   status         String   @default("open") @db.VarChar(20)
+  priority       String   @default("none") @db.VarChar(20)
+  images         String[] @default([])
   pinned         Boolean  @default(false)
   locked         Boolean  @default(false)
   createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
@@ -1318,6 +1321,7 @@ model ForumReply {
   threadId  String   @map("thread_id") @db.Uuid
   authorId  String   @map("author_id") @db.Uuid
   body      String   @db.Text
+  images    String[] @default([])
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
 
   thread ForumThread @relation(fields: [threadId], references: [id], onDelete: Cascade)
