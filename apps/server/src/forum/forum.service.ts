@@ -23,10 +23,19 @@ export type ThreadPriority = (typeof THREAD_PRIORITIES)[number];
 
 const MAX_IMAGES = 4;
 
+// Only URLs our own upload endpoint can produce are stored. Anything else
+// would let a crafted create/delete cycle feed arbitrary same-bucket URLs
+// into storage.deleteFile, deleting other users' objects (e.g. avatars).
+function forumImageBase(): string {
+  const publicUrl = process.env.R2_PUBLIC_URL || `https://pub-${process.env.R2_ACCOUNT_ID}.r2.dev`;
+  return `${publicUrl}/forum/`;
+}
+
 function cleanImages(images: unknown): string[] {
   if (!Array.isArray(images)) return [];
+  const base = forumImageBase();
   return images
-    .filter((u): u is string => typeof u === 'string' && /^https?:\/\//.test(u) && u.length <= 500)
+    .filter((u): u is string => typeof u === 'string' && u.startsWith(base) && u.length <= 500)
     .slice(0, MAX_IMAGES);
 }
 
@@ -199,7 +208,10 @@ export class ForumService implements OnModuleInit {
     if (!isAdmin && thread.authorId !== userId) {
       throw new ForbiddenException('You can only delete your own posts');
     }
-    const images = [...thread.images, ...thread.replies.flatMap((r) => r.images)];
+    const base = forumImageBase();
+    const images = [...thread.images, ...thread.replies.flatMap((r) => r.images)].filter((u) =>
+      u.startsWith(base),
+    );
     await this.prisma.forumThread.delete({ where: { id: threadId } });
     for (const url of images) {
       void this.storage.deleteFile(url).catch(() => {});
@@ -217,7 +229,8 @@ export class ForumService implements OnModuleInit {
       throw new ForbiddenException('You can only delete your own replies');
     }
     await this.prisma.forumReply.delete({ where: { id: replyId } });
-    for (const url of reply.images) {
+    const base = forumImageBase();
+    for (const url of reply.images.filter((u) => u.startsWith(base))) {
       void this.storage.deleteFile(url).catch(() => {});
     }
     return { deleted: true };

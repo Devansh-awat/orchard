@@ -23,7 +23,12 @@ import { UsersService } from '../users/users.service';
 import { StorageService } from '../organizations/storage.service';
 import { Auth, SuperAdmin } from '../auth/decorators';
 
-const IMAGE_TYPES = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
+const IMAGE_TYPES: Record<string, string> = {
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/gif': 'gif',
+  'image/webp': 'webp',
+};
 
 @Injectable()
 export class GroveEnabledGuard implements CanActivate {
@@ -94,12 +99,14 @@ export class ForumController {
   async uploadImage(@Req() req: any, @UploadedFile() file?: Express.Multer.File) {
     await this.userId(req);
     if (!file) throw new BadRequestException('A file is required');
-    if (!IMAGE_TYPES.includes(file.mimetype)) {
+    const extension = IMAGE_TYPES[file.mimetype];
+    if (!extension) {
       throw new BadRequestException('Only JPEG, PNG, GIF, and WebP images are allowed');
     }
     if (file.size > 5 * 1024 * 1024) {
       throw new BadRequestException('Maximum file size is 5MB');
     }
+    file.originalname = `upload.${extension}`;
     const url = await this.storage.uploadFile(file, 'forum');
     return { url };
   }
