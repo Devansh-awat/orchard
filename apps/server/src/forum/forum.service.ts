@@ -28,7 +28,7 @@ const DEFAULT_CATEGORIES = [
   { slug: 'features', name: 'Feature requests', emoji: '', description: 'Something Orchard should do', sortOrder: 1 },
 ];
 
-export const THREAD_SCOPES = ['platform', 'dashboard', 'cli', 'mcp', 'other'] as const;
+export const THREAD_SCOPES = ['platform', 'cli', 'mcp', 'other'] as const;
 export type ThreadScope = (typeof THREAD_SCOPES)[number];
 
 const AUTHOR_SELECT = { id: true, username: true, imageUrl: true } as const;

@@ -57,7 +57,6 @@ export const GROVE_PRIORITIES = ['none', 'low', 'medium', 'high', 'urgent'] as c
 
 export const GROVE_SCOPES = [
 	{ value: 'platform', label: 'Main platform' },
-	{ value: 'dashboard', label: 'Dashboard' },
 	{ value: 'cli', label: 'CLI' },
 	{ value: 'mcp', label: 'MCP' },
 	{ value: 'other', label: 'Other' }
