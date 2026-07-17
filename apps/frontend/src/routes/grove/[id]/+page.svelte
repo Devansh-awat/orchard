@@ -1,9 +1,11 @@
 <script lang="ts">
 	import { page } from '$app/stores';
+	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { ArrowLeft, ArrowUp, Lock, Pin } from 'lucide-svelte';
-	import { apiFetch, toasts, isSuperAdmin } from '$lib/stores';
+	import { ArrowLeft, ArrowUp, Lock, Pin, Trash2 } from 'lucide-svelte';
+	import { apiFetch, toasts, isSuperAdmin, user } from '$lib/stores';
 	import { Button, Dropdown, StatusBadge, Skeleton } from '$lib/components/ui';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import { timeAgo, projectSwatch } from '$lib/components/org-dashboard/helpers.svelte';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import {
@@ -28,8 +30,52 @@
 	let adminStatus = $state('open');
 	let adminPriority = $state('none');
 	let adminBusy = $state(false);
+	let confirmThreadDelete = $state(false);
+	let replyToDelete = $state<GroveReply | null>(null);
+	let confirmReplyDelete = $state(false);
 
 	const threadId = $derived($page.params.id ?? '');
+	const canModerate = $derived($isSuperAdmin);
+	const canDeleteThread = $derived(!!thread && (canModerate || thread.author.id === $user?.id));
+
+	function canDeleteReply(reply: GroveReply): boolean {
+		return canModerate || reply.author.id === $user?.id;
+	}
+
+	async function deleteThread() {
+		if (!thread) return;
+		const res = await apiFetch(`/apiv1/forum/threads/${thread.id}`, { method: 'DELETE' });
+		if (res.ok) {
+			goto('/grove');
+		} else {
+			const data = await res.json().catch(() => ({}));
+			toasts.add({
+				title: 'Error',
+				description: data?.message || 'Failed to delete',
+				color: 'error'
+			});
+		}
+	}
+
+	async function deleteReply() {
+		if (!thread || !replyToDelete) return;
+		const target = replyToDelete;
+		replyToDelete = null;
+		const res = await apiFetch(`/apiv1/forum/threads/${thread.id}/replies/${target.id}`, {
+			method: 'DELETE'
+		});
+		if (res.ok) {
+			thread.replies = thread.replies.filter((r) => r.id !== target.id);
+			thread.replyCount = Math.max(0, thread.replyCount - 1);
+		} else {
+			const data = await res.json().catch(() => ({}));
+			toasts.add({
+				title: 'Error',
+				description: data?.message || 'Failed to delete',
+				color: 'error'
+			});
+		}
+	}
 
 	async function fetchThread() {
 		loading = true;
@@ -213,6 +259,16 @@
 						<ArrowUp size={13} />
 						{thread.votes}
 					</button>
+					{#if canDeleteThread}
+						<button
+							type="button"
+							class="gt-delete"
+							aria-label="Delete post"
+							onclick={() => (confirmThreadDelete = true)}
+						>
+							<Trash2 size={13} />
+						</button>
+					{/if}
 				</div>
 				<div class="gt-body">{thread.body}</div>
 				{#if thread.images.length > 0}
@@ -279,6 +335,19 @@
 							<div class="gt-reply-head">
 								<span class="gt-author">{reply.author.username}</span>
 								<span class="gt-when" title={reply.createdAt}>{timeAgo(reply.createdAt)}</span>
+								{#if canDeleteReply(reply)}
+									<button
+										type="button"
+										class="gt-delete gt-delete--reply"
+										aria-label="Delete reply"
+										onclick={() => {
+											replyToDelete = reply;
+											confirmReplyDelete = true;
+										}}
+									>
+										<Trash2 size={12} />
+									</button>
+								{/if}
 							</div>
 							<div class="gt-reply-body">{reply.body}</div>
 							{#if reply.images.length > 0}
@@ -326,6 +395,23 @@
 		{/if}
 	</div>
 </div>
+
+<ConfirmModal
+	bind:open={confirmThreadDelete}
+	title="Delete this post?"
+	description="The post, its replies, and attached images are removed permanently."
+	confirmLabel="Delete"
+	onconfirm={deleteThread}
+/>
+
+<ConfirmModal
+	bind:open={confirmReplyDelete}
+	title="Delete this reply?"
+	description="The reply and its attached images are removed permanently."
+	confirmLabel="Delete"
+	onconfirm={deleteReply}
+	oncancel={() => (replyToDelete = null)}
+/>
 
 <style>
 	.gt-page {
@@ -459,6 +545,33 @@
 		background: var(--accent-subtle);
 		border-color: var(--accent);
 		color: var(--accent);
+	}
+
+	.gt-delete {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: 0.4375rem;
+		border: none;
+		background: none;
+		color: var(--text-faint);
+		cursor: pointer;
+		transition:
+			color 120ms ease,
+			background-color 120ms ease;
+	}
+
+	.gt-delete:hover {
+		color: var(--status-error);
+		background: var(--status-error-bg);
+	}
+
+	.gt-delete--reply {
+		width: 1.5rem;
+		height: 1.5rem;
+		margin-left: auto;
 	}
 
 	.gt-body {

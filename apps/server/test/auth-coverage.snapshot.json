@@ -18,6 +18,8 @@
   "DELETE /deployments/:id": "authenticated",
   "DELETE /deployments/:id/webhook-tokens/:tokenId": "authenticated",
   "DELETE /environments/:id": "authenticated",
+  "DELETE /forum/threads/:id": "authenticated",
+  "DELETE /forum/threads/:id/replies/:replyId": "authenticated",
   "DELETE /forum/threads/:id/vote": "authenticated",
   "DELETE /github/unlink": "authenticated",
   "DELETE /jobs/:id": "authenticated",

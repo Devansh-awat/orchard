@@ -42,12 +42,16 @@ export class ForumController {
     private readonly storage: StorageService,
   ) {}
 
-  private async userId(req: any): Promise<string> {
+  private async requester(req: any): Promise<{ id: string; admin: boolean }> {
     const user = req.user.hackClubId
       ? await this.users.findByHackClubId(req.user.hackClubId)
       : await this.users.findByIdOrHackClubId(req.user.sub);
     if (!user) throw new UnauthorizedException('User not found');
-    return user.id;
+    return { id: user.id, admin: !!user.isSuperAdmin };
+  }
+
+  private async userId(req: any): Promise<string> {
+    return (await this.requester(req)).id;
   }
 
   @Auth()
@@ -114,6 +118,20 @@ export class ForumController {
     @Body() body: { body: string; images?: string[] },
   ) {
     return this.forum.createReply(await this.userId(req), id, body.body, body.images);
+  }
+
+  @Auth()
+  @Delete('threads/:id')
+  async deleteThread(@Req() req: any, @Param('id') id: string) {
+    const u = await this.requester(req);
+    return this.forum.deleteThread(id, u.id, u.admin);
+  }
+
+  @Auth()
+  @Delete('threads/:id/replies/:replyId')
+  async deleteReply(@Req() req: any, @Param('replyId') replyId: string) {
+    const u = await this.requester(req);
+    return this.forum.deleteReply(replyId, u.id, u.admin);
   }
 
   @Auth()

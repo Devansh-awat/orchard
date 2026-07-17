@@ -1,5 +1,12 @@
-import { BadRequestException, Injectable, NotFoundException, OnModuleInit } from '@nestjs/common';
+import {
+  BadRequestException,
+  ForbiddenException,
+  Injectable,
+  NotFoundException,
+  OnModuleInit,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
+import { StorageService } from '../organizations/storage.service';
 
 export const THREAD_STATUSES = [
   'open',
@@ -35,7 +42,10 @@ const AUTHOR_SELECT = { id: true, username: true, imageUrl: true } as const;
 
 @Injectable()
 export class ForumService implements OnModuleInit {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly storage: StorageService,
+  ) {}
 
   async onModuleInit() {
     if (process.env.GROVE_ENABLED !== 'true') return;
@@ -178,6 +188,39 @@ export class ForumService implements OnModuleInit {
       createdAt: reply.createdAt,
       author: reply.author,
     };
+  }
+
+  async deleteThread(threadId: string, userId: string, isAdmin: boolean) {
+    const thread = await this.prisma.forumThread.findUnique({
+      where: { id: threadId },
+      select: { id: true, authorId: true, images: true, replies: { select: { images: true } } },
+    });
+    if (!thread) throw new NotFoundException('Thread not found');
+    if (!isAdmin && thread.authorId !== userId) {
+      throw new ForbiddenException('You can only delete your own posts');
+    }
+    const images = [...thread.images, ...thread.replies.flatMap((r) => r.images)];
+    await this.prisma.forumThread.delete({ where: { id: threadId } });
+    for (const url of images) {
+      void this.storage.deleteFile(url).catch(() => {});
+    }
+    return { deleted: true };
+  }
+
+  async deleteReply(replyId: string, userId: string, isAdmin: boolean) {
+    const reply = await this.prisma.forumReply.findUnique({
+      where: { id: replyId },
+      select: { id: true, authorId: true, images: true },
+    });
+    if (!reply) throw new NotFoundException('Reply not found');
+    if (!isAdmin && reply.authorId !== userId) {
+      throw new ForbiddenException('You can only delete your own replies');
+    }
+    await this.prisma.forumReply.delete({ where: { id: replyId } });
+    for (const url of reply.images) {
+      void this.storage.deleteFile(url).catch(() => {});
+    }
+    return { deleted: true };
   }
 
   async setPriority(threadId: string, priority: string) {
