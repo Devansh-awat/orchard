@@ -9,6 +9,7 @@
 		Field,
 		Input,
 		Select,
+		Dropdown,
 		StatusBadge,
 		EmptyState,
 		Skeleton
@@ -174,18 +175,24 @@
 					</button>
 				{/each}
 			</div>
-			<Select bind:value={scopeFilter} onchange={fetchThreads} aria-label="Filter by scope">
-				<option value="">All scopes</option>
-				{#each GROVE_SCOPES as s (s.value)}
-					<option value={s.value}>{s.label}</option>
-				{/each}
-			</Select>
-			<Select bind:value={statusFilter} onchange={fetchThreads} aria-label="Filter by status">
-				<option value="">All statuses</option>
-				{#each GROVE_STATUSES as s (s)}
-					<option value={s}>{groveStatus(s).label}</option>
-				{/each}
-			</Select>
+			<Dropdown
+				bind:value={scopeFilter}
+				class="gv-filter-dd"
+				options={[
+					{ value: '', label: 'All scopes' },
+					...GROVE_SCOPES.map((s) => ({ value: s.value, label: s.label }))
+				]}
+				onchange={fetchThreads}
+			/>
+			<Dropdown
+				bind:value={statusFilter}
+				class="gv-filter-dd"
+				options={[
+					{ value: '', label: 'All statuses' },
+					...GROVE_STATUSES.map((s) => ({ value: s, label: groveStatus(s).label }))
+				]}
+				onchange={fetchThreads}
+			/>
 			<div class="gv-sort" role="radiogroup" aria-label="Sort">
 				<button
 					type="button"
@@ -436,6 +443,10 @@
 	.gv-chip-count {
 		font-size: 0.6875rem;
 		color: var(--text-faint);
+	}
+
+	:global(.gv-filter-dd) {
+		min-width: 9rem;
 	}
 
 	.gv-sort {

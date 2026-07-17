@@ -3,7 +3,7 @@
 	import { onMount } from 'svelte';
 	import { ArrowLeft, ArrowUp, Lock, Pin } from 'lucide-svelte';
 	import { apiFetch, toasts, isSuperAdmin } from '$lib/stores';
-	import { Button, Select, StatusBadge, Skeleton } from '$lib/components/ui';
+	import { Button, Dropdown, StatusBadge, Skeleton } from '$lib/components/ui';
 	import { timeAgo, projectSwatch } from '$lib/components/org-dashboard/helpers.svelte';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import {
@@ -227,17 +227,24 @@
 
 				{#if $isSuperAdmin}
 					<div class="gt-admin">
-						<Select bind:value={adminStatus} onchange={applyStatus} aria-label="Status">
-							{#each GROVE_STATUSES as s (s)}
-								<option value={s}>{groveStatus(s).label}</option>
-							{/each}
-						</Select>
-						<Select bind:value={adminPriority} onchange={applyPriority} aria-label="Priority">
-							<option value="none">No priority</option>
-							{#each GROVE_PRIORITIES.filter((p) => p !== 'none') as p (p)}
-								<option value={p}>{grovePriority(p)?.label}</option>
-							{/each}
-						</Select>
+						<Dropdown
+							bind:value={adminStatus}
+							class="gt-admin-dd"
+							options={GROVE_STATUSES.map((s) => ({ value: s, label: groveStatus(s).label }))}
+							onchange={applyStatus}
+						/>
+						<Dropdown
+							bind:value={adminPriority}
+							class="gt-admin-dd"
+							options={[
+								{ value: 'none', label: 'No priority' },
+								...GROVE_PRIORITIES.filter((p) => p !== 'none').map((p) => ({
+									value: p,
+									label: grovePriority(p)?.label ?? p
+								}))
+							]}
+							onchange={applyPriority}
+						/>
 						<Button variant="ghost" size="sm" disabled={adminBusy} onclick={togglePinned}>
 							<Pin class="h-3.5 w-3.5" />
 							{thread.pinned ? 'Unpin' : 'Pin'}
@@ -482,6 +489,10 @@
 		border-radius: 0.5rem;
 		outline: 1px solid var(--border-default);
 		outline-offset: -1px;
+	}
+
+	:global(.gt-admin-dd) {
+		min-width: 8.5rem;
 	}
 
 	.gt-admin {
