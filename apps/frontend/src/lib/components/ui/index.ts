@@ -14,11 +14,12 @@ export {
 	resourceStatus,
 	buildStatusMeta,
 	runStatus,
+	buildRunStatus,
 	podStatus,
 	statusMeta,
 	RUN_STATUS_LABELS
 } from './status';
-export type { StatusKind, StatusMeta } from './status';
+export type { StatusKind, StatusMeta, BuildRunStatus } from './status';
 export { default as EmptyState } from './EmptyState.svelte';
 export { default as SectionCard } from './SectionCard.svelte';
 export { default as Alert } from './Alert.svelte';

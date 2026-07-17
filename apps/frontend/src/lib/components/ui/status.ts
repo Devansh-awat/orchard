@@ -79,6 +79,32 @@ export function buildStatusMeta(buildStatus?: string): StatusMeta {
 	}
 }
 
+export type BuildRunStatus =
+	| 'scheduled'
+	| 'building'
+	| 'succeeded'
+	| 'failed'
+	| 'skipped'
+	| 'canceled';
+
+export function buildRunStatus(status: string): StatusMeta {
+	switch (status) {
+		case 'building':
+			return meta('progress', 'Building', true);
+		case 'succeeded':
+			return meta('success', 'Succeeded');
+		case 'failed':
+			return meta('error', 'Failed');
+		case 'skipped':
+			return meta('neutral', 'Skipped');
+		case 'canceled':
+			return meta('neutral', 'Canceled');
+		case 'scheduled':
+		default:
+			return meta('info', 'Scheduled');
+	}
+}
+
 export const RUN_STATUS_LABELS: Record<RunStatus, string> = {
 	pending: 'Queued',
 	running: 'Running',

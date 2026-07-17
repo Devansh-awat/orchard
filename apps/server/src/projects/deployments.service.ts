@@ -3068,6 +3068,29 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  async listBuildRuns(deploymentId: string, limit = 20) {
+    const runs = await this.prisma.buildRun.findMany({
+      where: { deploymentId },
+      orderBy: { createdAt: 'desc' },
+      take: Math.min(Math.max(limit, 1), 100),
+      include: { triggeredBy: { select: { username: true, imageUrl: true } } },
+    });
+    return runs.map((r) => ({
+      id: r.id,
+      status: r.status,
+      triggerType: r.triggerType,
+      commitSha: r.commitSha,
+      commitMessage: r.commitMessage,
+      commitAuthorUsername: r.commitAuthorUsername ?? r.triggeredBy?.username ?? null,
+      branch: r.branch,
+      detail: r.detail,
+      scheduledAt: r.scheduledAt,
+      startedAt: r.startedAt,
+      finishedAt: r.finishedAt,
+      createdAt: r.createdAt,
+    }));
+  }
+
   async getAutoDeployStatus(deploymentId: string, clerkId: string) {
     await this.access.assertDeploymentView(deploymentId, clerkId);
     const deployment = await this.prisma.deployment.findUnique({

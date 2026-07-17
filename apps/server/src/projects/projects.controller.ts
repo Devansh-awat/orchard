@@ -595,6 +595,15 @@ export class DeploymentsController {
     private readonly logCapture: PodLogCaptureService,
   ) {}
 
+  @Get(':id/build-runs')
+  async getBuildRuns(@Param('id') id: string, @Request() req, @Query('limit') limitStr?: string) {
+    await this.projectAccess.assertDeploymentView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+    return this.deployments.listBuildRuns(id, Number(limitStr) || 20);
+  }
+
   @Get(':id/metrics')
   async getDeploymentMetrics(
     @Param('id') id: string,

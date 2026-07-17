@@ -47,6 +47,7 @@ model User {
   createdTemplateInstances     TemplateInstance[]        @relation("TemplateInstanceCreator")
   createdComposeStacks         ComposeStack[]            @relation("ComposeStackCreator")
   triggeredBuilds              ImageHistory[]
+  triggeredBuildRuns           BuildRun[]               @relation("BuildRunTrigger")
   createdWebhookTokens         DeploymentWebhookToken[] @relation("WebhookTokenCreator")
   tailscaleConnection          TailscaleConnection?
   createdJobs                  Job[]                    @relation("JobCreator")
@@ -566,6 +567,7 @@ model Deployment {
   envVars            DeploymentEnvVar[]
   ingresses          Ingress[]
   imageHistory       ImageHistory[]
+  buildRuns          BuildRun[]
   volumes            DeploymentVolume[]
   githubDeployments  GitHubDeployment[]
   webhookTokens      DeploymentWebhookToken[]
@@ -631,6 +633,52 @@ model ImageHistory {
   @@index([deploymentId, isActive], map: "idx_image_history_deployment_active")
   @@index([createdAt(sort: Desc)], map: "idx_image_history_created")
   @@map("image_history")
+}
+
+// One row per build attempt (auto-deploy push, manual deploy, or rebuild).
+// The queue's source of truth: a distributed SKIP LOCKED claimer promotes
+// `scheduled` rows to `building` while respecting a global concurrency cap and
+// one-active-build-per-deployment. Newer scheduled runs coalesce older ones to
+// `skipped`. Heartbeats let a stale-worker sweep reclaim orphaned `building`
+// runs. See BuildQueueService.
+model BuildRun {
+  id           String @id @default(uuid()) @db.Uuid
+  deploymentId String @map("deployment_id") @db.Uuid
+  // scheduled | building | succeeded | failed | skipped | canceled
+  status       String @default("scheduled") @db.VarChar(20)
+  // auto | manual | rebuild
+  triggerType  String @map("trigger_type") @db.VarChar(20)
+
+  commitSha            String? @map("commit_sha") @db.VarChar(255)
+  commitMessage        String? @map("commit_message") @db.Text
+  commitAuthorName     String? @map("commit_author_name") @db.VarChar(255)
+  commitAuthorUsername String? @map("commit_author_username") @db.VarChar(255)
+  branch               String? @db.VarChar(255)
+
+  triggeredById String? @map("triggered_by_id") @db.Uuid
+
+  // Which server process claimed this run, plus a liveness heartbeat. If the
+  // heartbeat goes stale the reclaim sweep fails the run and frees its slot.
+  workerId    String?   @map("worker_id") @db.VarChar(120)
+  heartbeatAt DateTime? @map("heartbeat_at") @db.Timestamp(6)
+
+  // Failure message, or the reason a run was skipped/canceled.
+  detail String? @db.Text
+
+  scheduledAt DateTime  @default(now()) @map("scheduled_at") @db.Timestamp(6)
+  startedAt   DateTime? @map("started_at") @db.Timestamp(6)
+  finishedAt  DateTime? @map("finished_at") @db.Timestamp(6)
+  createdAt   DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  deployment  Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  triggeredBy User?      @relation("BuildRunTrigger", fields: [triggeredById], references: [id], onDelete: SetNull)
+
+  @@index([status, scheduledAt], map: "idx_build_runs_claim")
+  @@index([deploymentId, status], map: "idx_build_runs_deployment_status")
+  @@index([deploymentId, createdAt(sort: Desc)], map: "idx_build_runs_deployment_recent")
+  @@index([status, heartbeatAt], map: "idx_build_runs_reclaim")
+  @@map("build_runs")
 }
 
 model DeploymentWebhookToken {
