@@ -1,7 +1,8 @@
 <script lang="ts">
 	import { Loader2, ChevronDown, GripHorizontal } from 'lucide-svelte';
 	import { Check, Clock, Maximize2, X } from '@jis3r/icons';
-	import { springRotate, springCollapse } from '$lib/utils/motion.svelte';
+	import { animate } from 'motion';
+	import { springRotate, springCollapse, decorativeMotion } from '$lib/utils/motion.svelte';
 	import { page } from '$app/stores';
 	import { motionPopover } from '$lib/utils/motion.svelte';
 	import { Button, Modal } from '$lib/components/ui';
@@ -122,17 +123,54 @@
 		pos = { x: nx, y: ny };
 	}
 
+	function persistPos() {
+		if (!pos) return;
+		try {
+			localStorage.setItem(POS_KEY, JSON.stringify(pos));
+		} catch {
+			// ignore
+		}
+	}
+
+	// Snap the widget to the nearest corner (the quadrant its center sits in),
+	// gliding there with a spring so it feels magnetic.
+	function snapToNearest(el: HTMLElement | null) {
+		if (!pos) return;
+		const M = 24;
+		const h = el?.getBoundingClientRect().height ?? 120;
+		const vw = window.innerWidth;
+		const vh = window.innerHeight;
+		const cx = pos.x + WIDGET_W / 2;
+		const cy = pos.y + h / 2;
+		const tx = cx < vw / 2 ? M : vw - WIDGET_W - M;
+		const ty = cy < vh / 2 ? M : vh - h - M;
+		const sx = pos.x;
+		const sy = pos.y;
+		if (!decorativeMotion()) {
+			pos = { x: tx, y: ty };
+			persistPos();
+			return;
+		}
+		animate(0, 1, {
+			type: 'spring',
+			stiffness: 420,
+			damping: 32,
+			mass: 0.9,
+			onUpdate: (t: number) => {
+				pos = { x: sx + (tx - sx) * t, y: sy + (ty - sy) * t };
+			}
+		}).finished.then(() => {
+			pos = { x: tx, y: ty };
+			persistPos();
+		});
+	}
+
 	function onHeaderPointerUp(e: PointerEvent) {
 		if (!dragging) return;
 		dragging = false;
 		(e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
-		if (pos) {
-			try {
-				localStorage.setItem(POS_KEY, JSON.stringify(pos));
-			} catch {
-				// ignore
-			}
-		}
+		const widget = (e.currentTarget as HTMLElement).closest('.build-widget') as HTMLElement | null;
+		snapToNearest(widget);
 	}
 </script>
 
