@@ -45,6 +45,10 @@
 	];
 
 	let sseStatusValue = $state<'connecting' | 'connected' | 'disconnected'>('connecting');
+	// `runs` is a $state declared before the query so the query's
+	// refetchInterval can read it without a temporal-dead-zone cycle (the query
+	// feeds it via the effect below). Same shape the deployment query uses.
+	let runs = $state<BuildRun[]>([]);
 
 	const query = createQuery(() => ({
 		queryKey: ['build-runs', deploymentId],
@@ -67,7 +71,10 @@
 		refetchIntervalInBackground: false
 	}));
 
-	const runs = $derived(demo ? DEMO_RUNS : (query.data ?? []));
+	$effect(() => {
+		runs = demo ? DEMO_RUNS : (query.data ?? []);
+	});
+
 	const queued = $derived(runs.filter((r) => r.status === 'scheduled'));
 
 	// Live updates ride the same Redis Streams SSE bus as everything else; the
