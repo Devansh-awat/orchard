@@ -150,8 +150,8 @@
 						<a href={`/${orgSlug}/settings`} class="db-link">organization settings</a>
 						to enable pgBackRest backups for this database.
 					{:else}
-						Ask an organization admin to configure an R2 bucket to enable pgBackRest backups
-						for this database.
+						Ask an organization admin to configure an R2 bucket to enable pgBackRest backups for
+						this database.
 					{/if}
 				</p>
 			</div>

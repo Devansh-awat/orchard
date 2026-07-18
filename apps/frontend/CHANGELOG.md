@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.21.1](https://github.com/LeafdTK/leaf/compare/frontend/v0.21.0...frontend/v0.21.1) (2026-07-18)
+
+
+### Bug Fixes
+
+* hide org settings entry from non-admins ([c8c0250](https://github.com/LeafdTK/leaf/commit/c8c0250f2da931308425e6033975a841aabf497f))
+
 ## [0.21.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.20.0...frontend/v0.21.0) (2026-07-18)
 
 

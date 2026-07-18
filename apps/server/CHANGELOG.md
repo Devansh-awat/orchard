@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.24.1](https://github.com/LeafdTK/leaf/compare/server/v1.24.0...server/v1.24.1) (2026-07-18)
+
+
+### Bug Fixes
+
+* hide org settings entry from non-admins ([c8c0250](https://github.com/LeafdTK/leaf/commit/c8c0250f2da931308425e6033975a841aabf497f))
+
 ## [1.24.0](https://github.com/LeafdTK/leaf/compare/server/v1.23.0...server/v1.24.0) (2026-07-18)
 
 
