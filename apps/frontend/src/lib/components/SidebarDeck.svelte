@@ -458,7 +458,7 @@
 		height: 100%;
 		border-radius: 1rem;
 		border: 1px solid var(--border-default);
-		background-color: var(--bg-sunken);
+		background-color: var(--bg-raised);
 		color: var(--text-default);
 		box-shadow:
 			0 1px 3px rgb(0 0 0 / 0.04),
