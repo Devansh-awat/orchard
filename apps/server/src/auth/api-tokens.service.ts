@@ -177,6 +177,45 @@ export class ApiTokensService {
     return true;
   }
 
+  async rename(userId: string, tokenId: string, name: string) {
+    const trimmed = String(name || '').trim();
+    if (!trimmed) throw new BadRequestException('Name is required');
+    if (trimmed.length > 255) throw new BadRequestException('Name is too long');
+
+    const token = await this.prisma.apiToken.findFirst({
+      where: { id: tokenId, userId },
+    });
+
+    if (!token) {
+      return null;
+    }
+
+    const updated = await this.prisma.apiToken.update({
+      where: { id: tokenId },
+      data: { name: trimmed },
+      select: {
+        id: true,
+        name: true,
+        scopes: true,
+        restrictedProjectIds: true,
+        lastUsedAt: true,
+        expiresAt: true,
+        createdAt: true,
+      },
+    });
+
+    void this.audit.log({
+      action: 'api_token.renamed',
+      actorUserId: userId,
+      targetType: 'api_token',
+      targetId: tokenId,
+      targetLabel: trimmed,
+      metadata: { name: [token.name, trimmed] },
+    });
+
+    return updated;
+  }
+
   // Used by sessions.revokeAllSessions to revoke API tokens alongside browser
   // sessions, so "sign out everywhere" actually means everywhere.
   async revokeAllForUser(userId: string): Promise<number> {

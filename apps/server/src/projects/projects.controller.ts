@@ -1506,6 +1506,21 @@ export class DatabasesController {
     }, user.id);
   }
 
+  @Patch(':id/name')
+  async renameDatabase(
+    @Param('id') id: string,
+    @Body() body: { name?: string },
+    @Request() req,
+  ) {
+    return this.databases.renameDatabase(id, body?.name ?? '', req.user.sub, {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+      imageUrl: req.user.imageUrl,
+    });
+  }
+
   @Patch(':id/storage')
   async expandDatabaseStorage(
     @Param('id') id: string,

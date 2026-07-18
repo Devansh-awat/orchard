@@ -9,9 +9,12 @@
 		Trash2,
 		Copy,
 		Check,
-		ChevronRight
+		ChevronRight,
+		Pencil
 	} from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import RenameModal from '$lib/components/RenameModal.svelte';
+	import { Button } from '$lib/components/ui';
 
 	interface ApiToken {
 		id: string;
@@ -36,6 +39,11 @@
 	let deletingId = $state<string | null>(null);
 	let showRevokeModal = $state(false);
 	let tokenToRevoke = $state<ApiToken | null>(null);
+
+	// Rename state
+	let renameOpen = $state(false);
+	let renaming = $state(false);
+	let tokenToRename = $state<ApiToken | null>(null);
 
 	async function fetchTokens() {
 		loading = true;
@@ -122,6 +130,39 @@
 			});
 		} finally {
 			deletingId = null;
+		}
+	}
+
+	function openRename(token: ApiToken) {
+		tokenToRename = token;
+		renameOpen = true;
+	}
+
+	async function renameToken(name: string) {
+		if (!tokenToRename) return;
+		renaming = true;
+		try {
+			const response = await apiFetch(`/apiv1/auth/tokens/${tokenToRename.id}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ name })
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data?.message || 'Failed to rename token');
+			}
+			toasts.add({ title: 'Token renamed', color: 'success' });
+			renameOpen = false;
+			tokenToRename = null;
+			await fetchTokens();
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to rename token',
+				color: 'error'
+			});
+		} finally {
+			renaming = false;
 		}
 	}
 
@@ -292,6 +333,9 @@
 										{/if}
 									</p>
 								</div>
+								<Button variant="ghost" onclick={() => openRename(token)} title="Rename token">
+									<Pencil class="h-3.5 w-3.5" />
+								</Button>
 								<button
 									class="btn btn-ghost"
 									onclick={() => confirmRevokeToken(token)}
@@ -348,6 +392,16 @@
 		</section>
 	</div>
 </div>
+
+{#if tokenToRename}
+	<RenameModal
+		bind:open={renameOpen}
+		title="Rename token"
+		value={tokenToRename.name}
+		saving={renaming}
+		onSave={renameToken}
+	/>
+{/if}
 
 {#if tokenToRevoke}
 	<ConfirmModal

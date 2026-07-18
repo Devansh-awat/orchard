@@ -29,6 +29,7 @@
 		DeleteModal,
 		DatabaseAlerts
 	} from '$lib/components/database';
+	import RenameModal from '$lib/components/RenameModal.svelte';
 	import type {
 		DatabaseDetail,
 		Backup,
@@ -163,6 +164,8 @@
 	let database = $state<DatabaseDetail | null>(null);
 	let loading = $state(true);
 	let deleting = $state(false);
+	let renameOpen = $state(false);
+	let renaming = $state(false);
 	let error = $state<string | null>(null);
 	let showPassword = $state(false);
 	let showConnectionString = $state(false);
@@ -795,6 +798,34 @@
 		}
 	}
 
+	async function renameDatabase(name: string) {
+		if (!database) return;
+		renaming = true;
+		try {
+			const response = await apiFetch(`/apiv1/databases/${dbId}/name`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ name })
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to rename');
+			}
+			const updated = await response.json();
+			database.name = updated.name;
+			renameOpen = false;
+			toasts.add({ title: 'Database renamed', color: 'success' });
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to rename',
+				color: 'error'
+			});
+		} finally {
+			renaming = false;
+		}
+	}
+
 	// Helpers
 	function copyToClipboard(text: string, field: string) {
 		navigator.clipboard.writeText(text);
@@ -933,6 +964,7 @@
 			{orgSlug}
 			{deleting}
 			onOpenDeleteModal={openDeleteModal}
+			onRename={() => (renameOpen = true)}
 			statusOverride={database.status === 'restarting'
 				? undefined
 				: isUnhealthy
@@ -1130,6 +1162,16 @@
 		{/if}
 	{/if}
 </div>
+
+{#if database}
+	<RenameModal
+		bind:open={renameOpen}
+		title="Rename database"
+		value={database.name}
+		saving={renaming}
+		onSave={renameDatabase}
+	/>
+{/if}
 
 {#if showDeleteModal && database}
 	<DeleteModal

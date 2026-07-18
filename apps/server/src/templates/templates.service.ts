@@ -409,6 +409,29 @@ export class TemplatesService implements OnModuleInit {
     }
   }
 
+  async renameTemplateInstance(instanceId: string, name: string, clerkId: string, userData?: any) {
+    const userId = await this.resolveUserId(clerkId, userData);
+    const instance = await this.prisma.templateInstance.findUnique({
+      where: { id: instanceId },
+      select: { id: true, name: true, projectId: true },
+    });
+    if (!instance) throw new NotFoundException('Template instance not found');
+    await this.authz.requireProjectEdit(instance.projectId, userId, 'rename template instances');
+
+    const trimmed = String(name || '').trim();
+    if (!trimmed) throw new BadRequestException('Name is required');
+    if (trimmed.length > 255) throw new BadRequestException('Name is too long');
+
+    if (trimmed !== instance.name) {
+      await this.prisma.templateInstance.update({
+        where: { id: instanceId },
+        data: { name: trimmed },
+      });
+    }
+
+    return this.getTemplateInstance(instanceId, clerkId, userData);
+  }
+
   async getTemplateInstance(instanceId: string, clerkId: string, userData?: any) {
     const userId = await this.resolveUserId(clerkId, userData);
     const owner = await this.prisma.templateInstance.findUnique({

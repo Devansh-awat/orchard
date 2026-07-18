@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Param, Body, Request } from '@nestjs/common';
 import { TemplatesService } from './templates.service';
 import { Auth, SuperAdmin } from '../auth/decorators';
 
@@ -92,6 +92,18 @@ export class TemplatesController {
   @Get('template-instances/:id')
   async getTemplateInstance(@Param('id') id: string, @Request() req) {
     return this.templatesService.getTemplateInstance(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+  }
+
+  @Patch('template-instances/:id/name')
+  async renameTemplateInstance(
+    @Param('id') id: string,
+    @Body() body: { name?: string },
+    @Request() req,
+  ) {
+    return this.templatesService.renameTemplateInstance(id, body?.name ?? '', req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });

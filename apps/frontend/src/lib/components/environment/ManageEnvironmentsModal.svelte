@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
-	import { Star, Trash2, Plus } from 'lucide-svelte';
+	import { Star, Trash2, Plus, Pencil, Check, X } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
 	import { queryClient } from '$lib/query';
 	import { environmentsQueryOptions } from '$lib/queries/environments';
@@ -24,6 +24,9 @@
 
 	let newName = $state('');
 	let creating = $state(false);
+	let editingId = $state<string | null>(null);
+	let editName = $state('');
+	let savingRename = $state(false);
 
 	function invalidate() {
 		queryClient.invalidateQueries({ queryKey: ['environments', projectId] });
@@ -52,6 +55,39 @@
 		}
 	}
 
+	function startRename(env: Environment) {
+		editingId = env.id;
+		editName = env.name;
+	}
+
+	async function saveRename(env: Environment) {
+		const trimmed = editName.trim();
+		if (!trimmed || savingRename) return;
+		if (trimmed === env.name) {
+			editingId = null;
+			return;
+		}
+		savingRename = true;
+		try {
+			const res = await apiFetch(`/apiv1/environments/${env.id}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ name: trimmed })
+			});
+			if (!res.ok) {
+				const d = await res.json().catch(() => ({}));
+				throw new Error(d.message || 'Failed to rename environment');
+			}
+			toasts.add({ title: `Renamed to "${trimmed}"`, color: 'success' });
+			editingId = null;
+			invalidate();
+		} catch (e) {
+			toasts.add({ title: e instanceof Error ? e.message : 'Failed', color: 'error' });
+		} finally {
+			savingRename = false;
+		}
+	}
+
 	async function setDefault(env: Environment) {
 		const res = await apiFetch(`/apiv1/environments/${env.id}/set-default`, { method: 'POST' });
 		if (res.ok) {
@@ -77,29 +113,69 @@
 		{#each environments as env (env.id)}
 			<div class="env-row">
 				<span class="env-dot" style="background-color: {envBadgeColor(env.slug)}"></span>
-				<span class="env-row-name">{env.name}</span>
-				{#if env.isDefault}<span class="env-default-pill">default</span>{/if}
-				<code class="env-row-ns">{env.namespace}</code>
-				<span class="env-row-actions">
-					{#if !env.isDefault}
+				{#if editingId === env.id}
+					<span class="env-rename-input">
+						<Input
+							bind:value={editName}
+							onkeydown={(e: KeyboardEvent) => {
+								if (e.key === 'Enter') saveRename(env);
+								if (e.key === 'Escape') editingId = null;
+							}}
+						/>
+					</span>
+					<span class="env-row-actions">
 						<button
 							class="env-icon-btn"
-							title="Set as default"
-							aria-label="Set as default"
-							onclick={() => setDefault(env)}
+							title="Save"
+							aria-label="Save name"
+							disabled={savingRename}
+							onclick={() => saveRename(env)}
 						>
-							<Star size={14} />
+							<Check size={14} />
 						</button>
 						<button
-							class="env-icon-btn env-icon-btn--danger"
-							title="Delete"
-							aria-label="Delete"
-							onclick={() => remove(env)}
+							class="env-icon-btn"
+							title="Cancel"
+							aria-label="Cancel rename"
+							disabled={savingRename}
+							onclick={() => (editingId = null)}
 						>
-							<Trash2 size={14} />
+							<X size={14} />
 						</button>
-					{/if}
-				</span>
+					</span>
+				{:else}
+					<span class="env-row-name">{env.name}</span>
+					{#if env.isDefault}<span class="env-default-pill">default</span>{/if}
+					<code class="env-row-ns">{env.namespace}</code>
+					<span class="env-row-actions">
+						<button
+							class="env-icon-btn"
+							title="Rename"
+							aria-label="Rename"
+							onclick={() => startRename(env)}
+						>
+							<Pencil size={14} />
+						</button>
+						{#if !env.isDefault}
+							<button
+								class="env-icon-btn"
+								title="Set as default"
+								aria-label="Set as default"
+								onclick={() => setDefault(env)}
+							>
+								<Star size={14} />
+							</button>
+							<button
+								class="env-icon-btn env-icon-btn--danger"
+								title="Delete"
+								aria-label="Delete"
+								onclick={() => remove(env)}
+							>
+								<Trash2 size={14} />
+							</button>
+						{/if}
+					</span>
+				{/if}
 			</div>
 		{/each}
 	</div>
@@ -163,6 +239,11 @@
 	.env-row-actions {
 		display: flex;
 		gap: 0.2rem;
+		margin-left: auto;
+	}
+	.env-rename-input {
+		flex: 1;
+		min-width: 0;
 	}
 	.env-icon-btn {
 		display: inline-flex;

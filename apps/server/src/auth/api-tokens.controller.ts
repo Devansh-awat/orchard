@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Delete, Body, Param, Req, NotFoundException } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Delete, Body, Param, Req, NotFoundException } from '@nestjs/common';
 import { Request } from 'express';
 import { Auth } from './decorators';
 import { ApiTokensService } from './api-tokens.service';
@@ -29,6 +29,21 @@ export class ApiTokensController {
   async list(@Req() req: Request) {
     const userId = req['auth'].userId;
     return this.apiTokensService.list(userId);
+  }
+
+  @Auth()
+  @Patch(':id')
+  async rename(
+    @Req() req: Request,
+    @Param('id') id: string,
+    @Body() body: { name?: string },
+  ) {
+    const userId = req['auth'].userId;
+    const result = await this.apiTokensService.rename(userId, id, body?.name ?? '');
+    if (!result) {
+      throw new NotFoundException('Token not found');
+    }
+    return result;
   }
 
   @Auth()

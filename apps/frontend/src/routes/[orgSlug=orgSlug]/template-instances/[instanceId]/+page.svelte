@@ -9,9 +9,11 @@
 		Database,
 		Server,
 		Globe,
-		ExternalLink
+		ExternalLink,
+		Pencil
 	} from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import RenameModal from '$lib/components/RenameModal.svelte';
 	import { Button, StatusBadge, resourceStatus, Skeleton } from '$lib/components/ui';
 
 	interface TemplateInstance {
@@ -37,6 +39,8 @@
 	let deleting = $state(false);
 	let error = $state<string | null>(null);
 	let showDeleteModal = $state(false);
+	let renameOpen = $state(false);
+	let renaming = $state(false);
 
 	const orgSlug = $derived($page.params.orgSlug);
 	const instanceId = $derived($page.params.instanceId);
@@ -51,6 +55,33 @@
 			if (!instance) error = e instanceof Error ? e.message : 'Failed to load instance';
 		} finally {
 			loading = false;
+		}
+	}
+
+	async function renameInstance(name: string) {
+		if (!instance) return;
+		renaming = true;
+		try {
+			const response = await apiFetch(`/apiv1/template-instances/${instanceId}/name`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ name })
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to rename');
+			}
+			instance = await response.json();
+			renameOpen = false;
+			toasts.add({ title: 'Template instance renamed', color: 'success' });
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to rename',
+				color: 'error'
+			});
+		} finally {
+			renaming = false;
 		}
 	}
 
@@ -157,7 +188,17 @@
 					<LayoutTemplate class="h-5 w-5" style="color: var(--sidebar-text-active-border)" />
 				</div>
 				<div>
-					<h1 class="ti-title">{instance.name}</h1>
+					<div class="ti-title-row">
+						<h1 class="ti-title">{instance.name}</h1>
+						<button
+							class="ti-rename-btn"
+							title="Rename"
+							aria-label="Rename template instance"
+							onclick={() => (renameOpen = true)}
+						>
+							<Pencil size={14} />
+						</button>
+					</div>
 					<div class="ti-meta">
 						<span>{instance.template.displayName}</span>
 						<StatusBadge meta={resourceStatus(instance.status)} />
@@ -274,6 +315,13 @@
 		onconfirm={deleteInstance}
 		oncancel={() => {}}
 	/>
+	<RenameModal
+		bind:open={renameOpen}
+		title="Rename template instance"
+		value={instance.name}
+		saving={renaming}
+		onSave={renameInstance}
+	/>
 {/if}
 
 <style>
@@ -354,6 +402,27 @@
 		color: var(--center-channel-color);
 		margin: 0;
 		letter-spacing: -0.02em;
+	}
+
+	.ti-title-row {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	.ti-rename-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 26px;
+		height: 26px;
+		border-radius: 0.45rem;
+		color: var(--text-muted);
+	}
+
+	.ti-rename-btn:hover {
+		background: var(--bg-hover);
+		color: var(--text-default);
 	}
 
 	.ti-meta {

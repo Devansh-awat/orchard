@@ -57,6 +57,21 @@
 	letter-spacing: -0.02em;
 }
 
+.db-rename-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	border-radius: 0.45rem;
+	color: var(--text-muted);
+}
+
+.db-rename-btn:hover {
+	background: var(--bg-hover);
+	color: var(--text-default);
+}
+
 .db-status {
 	font-size: 0.75rem;
 	font-weight: 500;

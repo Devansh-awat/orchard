@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { ArrowLeft, Database, Trash2 } from 'lucide-svelte';
+	import { ArrowLeft, Database, Pencil, Trash2 } from 'lucide-svelte';
 	import { Button } from '$lib/components/ui';
 	import type { DatabaseDetail } from './types';
 
@@ -9,12 +9,14 @@
 		orgSlug,
 		deleting,
 		onOpenDeleteModal,
+		onRename,
 		statusOverride
 	}: {
 		database: DatabaseDetail;
 		orgSlug: string;
 		deleting: boolean;
 		onOpenDeleteModal: () => void;
+		onRename?: () => void;
 		statusOverride?: string;
 	} = $props();
 
@@ -41,6 +43,16 @@
 				<Database size={16} />
 			</div>
 			<h1 class="db-title">{database.name}</h1>
+			{#if onRename}
+				<button
+					class="db-rename-btn"
+					title="Rename"
+					aria-label="Rename database"
+					onclick={onRename}
+				>
+					<Pencil size={14} />
+				</button>
+			{/if}
 			<span class="db-status db-status-{effectiveStatus}">{effectiveStatus}</span>
 		</div>
 	</div>

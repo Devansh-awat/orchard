@@ -10,9 +10,11 @@
 		Server,
 		ExternalLink,
 		Github,
-		RefreshCw
+		RefreshCw,
+		Pencil
 	} from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import RenameModal from '$lib/components/RenameModal.svelte';
 	import { resourceStatus } from '$lib/components/ui';
 
 	interface ChildDeployment {
@@ -46,6 +48,8 @@
 	let loading = $state(true);
 	let deleting = $state(false);
 	let redeploying = $state(false);
+	let renameOpen = $state(false);
+	let renaming = $state(false);
 	let togglingAutoDeploy = $state(false);
 	let error = $state<string | null>(null);
 	let showDeleteModal = $state(false);
@@ -124,6 +128,34 @@
 			error = e instanceof Error ? e.message : 'Failed to update auto-deploy';
 		} finally {
 			togglingAutoDeploy = false;
+		}
+	}
+
+	async function renameStack(name: string) {
+		if (!stack) return;
+		renaming = true;
+		try {
+			const response = await apiFetch(`/apiv1/compose-stacks/${stackId}/name`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ name })
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to rename');
+			}
+			const updated: ComposeStack = await response.json();
+			stack = updated;
+			renameOpen = false;
+			toasts.add({ title: 'Stack renamed', color: 'success' });
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to rename',
+				color: 'error'
+			});
+		} finally {
+			renaming = false;
 		}
 	}
 
@@ -206,7 +238,17 @@
 					<FileText class="h-5 w-5" style="color: var(--hue-blue)" />
 				</div>
 				<div>
-					<h1 class="cs-title">{stack.name}</h1>
+					<div class="cs-title-row">
+						<h1 class="cs-title">{stack.name}</h1>
+						<button
+							class="cs-rename-btn"
+							title="Rename"
+							aria-label="Rename stack"
+							onclick={() => (renameOpen = true)}
+						>
+							<Pencil size={14} />
+						</button>
+					</div>
 					<p class="cs-meta">
 						Compose stack &middot;
 						<span class="cs-status status--{resourceStatus(stack.status).kind}"
@@ -361,6 +403,13 @@
 		onconfirm={deleteStack}
 		oncancel={() => {}}
 	/>
+	<RenameModal
+		bind:open={renameOpen}
+		title="Rename stack"
+		value={stack.name}
+		saving={renaming}
+		onSave={renameStack}
+	/>
 {/if}
 
 <style>
@@ -428,6 +477,27 @@
 		color: var(--center-channel-color);
 		margin: 0;
 		letter-spacing: -0.02em;
+	}
+
+	.cs-title-row {
+		display: flex;
+		align-items: center;
+		gap: 0.4rem;
+	}
+
+	.cs-rename-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 26px;
+		height: 26px;
+		border-radius: 0.45rem;
+		color: var(--text-muted);
+	}
+
+	.cs-rename-btn:hover {
+		background: var(--bg-hover);
+		color: var(--text-default);
 	}
 
 	.cs-meta {

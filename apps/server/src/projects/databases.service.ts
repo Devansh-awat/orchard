@@ -821,6 +821,67 @@ export class DatabasesService {
     return { success: true, message: `Database "${database.name}" deleted` };
   }
 
+  async renameDatabase(
+    databaseId: string,
+    name: string,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) throw new NotFoundException('User not found');
+
+    const database = await this.prisma.database.findUnique({
+      where: { id: databaseId },
+      include: { project: { include: { organization: true } } },
+    });
+    if (!database) throw new NotFoundException('Database not found');
+
+    await this.authz.requireProjectEdit(database.project.id, user.id, 'rename databases');
+
+    const trimmed = String(name || '').trim();
+    if (!trimmed) throw new BadRequestException('Name is required');
+    if (trimmed.length > 255) throw new BadRequestException('Name is too long');
+
+    if (trimmed !== database.name) {
+      const existing = await this.prisma.database.findFirst({
+        where: {
+          projectId: database.projectId,
+          environmentId: database.environmentId,
+          name: trimmed,
+          id: { not: databaseId },
+        },
+      });
+      if (existing) {
+        throw new BadRequestException('A database with this name already exists in this environment');
+      }
+    }
+
+    const updated = await this.prisma.database.update({
+      where: { id: databaseId },
+      data: { name: trimmed },
+    });
+
+    void this.audit.log({
+      action: 'database.renamed',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: database.project.organizationId,
+      projectId: database.projectId,
+      targetType: 'database',
+      targetId: databaseId,
+      targetLabel: trimmed,
+      metadata: { name: [database.name, trimmed] },
+    });
+
+    return updated;
+  }
+
   // ── Database backup management ──
 
   private async getOrgR2Config(organizationId: string) {

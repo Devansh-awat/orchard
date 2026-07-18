@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Put, Delete, Param, Body, Request } from '@nestjs/common';
+import { Controller, Get, Post, Put, Patch, Delete, Param, Body, Request } from '@nestjs/common';
 import { ComposeStacksService } from './compose-stacks.service';
 import { Auth } from '../auth/decorators';
 
@@ -58,6 +58,15 @@ export class ComposeStacksController {
     @Request() req: any,
   ) {
     return this.composeStacks.setAutoDeploy(id, Boolean(body?.enabled), clerkId(req), userBag(req));
+  }
+
+  @Patch('compose-stacks/:id/name')
+  async rename(
+    @Param('id') id: string,
+    @Body() body: { name?: string },
+    @Request() req: any,
+  ) {
+    return this.composeStacks.renameComposeStack(id, body?.name ?? '', clerkId(req), userBag(req));
   }
 
   @Delete('compose-stacks/:id')

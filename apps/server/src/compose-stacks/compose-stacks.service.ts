@@ -456,6 +456,37 @@ export class ComposeStacksService {
     return this.getComposeStack(stackId, clerkId, userData);
   }
 
+  async renameComposeStack(
+    stackId: string,
+    name: string,
+    clerkId: string,
+    userData?: UserData,
+  ) {
+    const stack = await this.prisma.composeStack.findUnique({ where: { id: stackId } });
+    if (!stack) throw new NotFoundException('Compose stack not found');
+    const userId = await this.resolveUserId(clerkId, userData);
+    await this.authz.requireProjectEdit(stack.projectId, userId, 'rename a compose stack');
+
+    const trimmed = String(name || '').trim();
+    if (!trimmed) throw new BadRequestException('Name is required');
+    if (trimmed.length > 255) throw new BadRequestException('Name is too long');
+
+    if (trimmed !== stack.name) {
+      const existing = await this.prisma.composeStack.findFirst({
+        where: { projectId: stack.projectId, name: trimmed, id: { not: stackId } },
+      });
+      if (existing) {
+        throw new BadRequestException('A compose stack with this name already exists in this project');
+      }
+      await this.prisma.composeStack.update({
+        where: { id: stackId },
+        data: { name: trimmed },
+      });
+    }
+
+    return this.getComposeStack(stackId, clerkId, userData);
+  }
+
   async getComposeStack(stackId: string, clerkId: string, userData?: UserData) {
     const userId = await this.resolveUserId(clerkId, userData);
     const stack = await this.prisma.composeStack.findUnique({
