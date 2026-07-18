@@ -3,23 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { env as publicEnv } from '$env/dynamic/public';
-	import {
-		Leaf,
-		Zap,
-		Trees,
-		GripVertical,
-		Eye,
-		EyeOff,
-		Pencil,
-		Check,
-		RotateCcw,
-		ChevronDown,
-		ChevronRight,
-		Palette,
-		Mail,
-		Moon,
-		Monitor
-	} from 'lucide-svelte';
+	import { Leaf, Zap, Trees, ChevronDown, ChevronRight, Palette, Mail, Moon, Monitor } from 'lucide-svelte';
 	import { Search, Activity, Settings, LogOut, KeyRound, Sun } from '@jis3r/icons';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { overviewQueryOptions } from '$lib/queries/overview';
@@ -37,8 +21,6 @@
 		selectedOrganization,
 		pinnedItems,
 		pendingInvitations,
-		sidebarPrefs,
-		applyPrefs,
 		type Organization
 	} from '$lib/stores';
 	import { themeStore } from '$lib/stores/theme';
@@ -75,7 +57,7 @@
 		active: boolean;
 	};
 
-	const allNav: NavEntry[] = $derived([
+	const nav: NavEntry[] = $derived([
 		{
 			id: 'apps',
 			label: 'Your Apps',
@@ -111,37 +93,6 @@
 				]
 			: [])
 	]);
-
-	let customizing = $state(false);
-	const orderedNav = $derived(applyPrefs(allNav, $sidebarPrefs));
-	const visibleNav = $derived(orderedNav.filter((i) => !$sidebarPrefs.hidden.includes(i.id)));
-	const navToRender = $derived(customizing ? orderedNav : visibleNav);
-
-	let draggingId = $state<string | null>(null);
-
-	function handleDragStart(e: DragEvent, id: string) {
-		draggingId = id;
-		if (e.dataTransfer) {
-			e.dataTransfer.effectAllowed = 'move';
-			e.dataTransfer.setData('text/plain', id);
-		}
-	}
-
-	function handleDragOver(e: DragEvent, overId: string) {
-		e.preventDefault();
-		if (!draggingId || draggingId === overId) return;
-		const ids = orderedNav.map((i) => i.id);
-		const from = ids.indexOf(draggingId);
-		const to = ids.indexOf(overId);
-		if (from === -1 || to === -1) return;
-		ids.splice(from, 1);
-		ids.splice(to, 0, draggingId);
-		sidebarPrefs.setOrder(ids);
-	}
-
-	function handleDragEnd() {
-		draggingId = null;
-	}
 
 	const overviewQuery = createQuery(() => ({
 		...overviewQueryOptions(orgSlug),
@@ -239,30 +190,6 @@
 	</span>
 {/snippet}
 
-{#snippet orgMenuRows(close: () => void)}
-	{#each $organizations as org (org.id)}
-		{#if org.id !== $selectedOrganization?.id}
-			<button
-				type="button"
-				class="deck-menu-item"
-				onclick={() => {
-					selectOrg(org);
-					close();
-				}}
-			>
-				{@render orgAvatar(org, 'sm')}
-				<span class="deck-org-row-name">{org.name}</span>
-			</button>
-		{/if}
-	{/each}
-	{#if canOpenOrgSettings}
-		<a class="deck-menu-item deck-menu-item--muted" href={`/${orgSlug}/settings`} onclick={close}>
-			<Settings size={14} />
-			Organization settings
-		</a>
-	{/if}
-{/snippet}
-
 {#snippet failingRow(dep: OverviewDep, i: number)}
 	<a
 		href="/{orgSlug}/deployments/{dep.id}"
@@ -273,68 +200,6 @@
 		<StatusDot meta={resourceStatus(dep.status, dep.buildStatus)} size={7} />
 		<span class="deck-row-label">{dep.displayName || dep.name}</span>
 	</a>
-{/snippet}
-
-{#snippet userMenuItems(close: () => void)}
-	{#if invitationCount > 0}
-		<a class="deck-menu-item" href="/user/settings#invitations" onclick={close}>
-			<Mail size={14} />
-			Invitations
-			<span class="deck-user-badge">{invitationCount}</span>
-		</a>
-	{/if}
-	<a class="deck-menu-item" href="/user/settings" onclick={close}>
-		<Settings size={14} />
-		Settings
-	</a>
-	<a class="deck-menu-item" href="/user/api-tokens" onclick={close}>
-		<KeyRound size={14} />
-		API tokens
-	</a>
-	<a class="deck-menu-item" href="/user/settings/theme" onclick={close}>
-		<Palette size={14} />
-		Theme
-	</a>
-	<button
-		type="button"
-		class="deck-menu-item deck-menu-item--danger"
-		onclick={() => user.signOut()}
-	>
-		<LogOut size={14} />
-		Sign out
-	</button>
-{/snippet}
-
-{#snippet themeTrio()}
-	<div class="deck-theme-trio">
-		<button
-			type="button"
-			class="deck-theme-btn"
-			class:deck-theme-btn--active={isThemeActive('light')}
-			aria-label="Light theme"
-			onclick={() => applyQuickTheme('light')}
-		>
-			<Sun size={14} />
-		</button>
-		<button
-			type="button"
-			class="deck-theme-btn"
-			class:deck-theme-btn--active={isThemeActive('dark')}
-			aria-label="Dark theme"
-			onclick={() => applyQuickTheme('dark')}
-		>
-			<Moon size={14} />
-		</button>
-		<button
-			type="button"
-			class="deck-theme-btn"
-			class:deck-theme-btn--active={isThemeActive('system')}
-			aria-label="System theme"
-			onclick={() => applyQuickTheme('system')}
-		>
-			<Monitor size={14} />
-		</button>
-	</div>
 {/snippet}
 
 {#snippet userAvatarEl()}
@@ -366,7 +231,31 @@
 			{/snippet}
 			{#snippet children({ close })}
 				<div class="deck-menu">
-					{@render orgMenuRows(close)}
+					{#each $organizations as org (org.id)}
+						{#if org.id !== $selectedOrganization?.id}
+							<button
+								type="button"
+								class="deck-menu-item"
+								onclick={() => {
+									selectOrg(org);
+									close();
+								}}
+							>
+								{@render orgAvatar(org, 'sm')}
+								<span class="deck-org-row-name">{org.name}</span>
+							</button>
+						{/if}
+					{/each}
+					{#if canOpenOrgSettings}
+						<a
+							class="deck-menu-item deck-menu-item--muted"
+							href={`/${orgSlug}/settings`}
+							onclick={close}
+						>
+							<Settings size={14} />
+							Organization settings
+						</a>
+					{/if}
 				</div>
 			{/snippet}
 		</PopoverPanel>
@@ -384,7 +273,7 @@
 
 		{#if orgSlug}
 			<div class="deck-scroll">
-				{#if failingDeps.length > 0 && !customizing}
+				{#if failingDeps.length > 0}
 					<button
 						type="button"
 						class="deck-strip"
@@ -410,85 +299,29 @@
 					<div class="deck-gap"></div>
 				{/if}
 
-				<div class="deck-section-head">
-					<span>Platform</span>
-					<span class="deck-section-tools">
-						{#if customizing}
-							<button
-								type="button"
-								class="deck-tool"
-								aria-label="Reset sidebar layout"
-								title="Reset layout"
-								onclick={() => sidebarPrefs.reset()}
-							>
-								<RotateCcw size={11} />
-							</button>
-						{/if}
-						<button
-							type="button"
-							class="deck-tool"
-							aria-label={customizing ? 'Done customizing' : 'Customize sidebar'}
-							title={customizing ? 'Done' : 'Customize sidebar'}
-							onclick={() => (customizing = !customizing)}
-						>
-							{#if customizing}<Check size={12} />{:else}<Pencil size={11} />{/if}
-						</button>
-					</span>
-				</div>
+				<div class="deck-section-head"><span>Platform</span></div>
+				{#each nav as item, i (item.id)}
+					<a
+						href={item.href}
+						class="deck-row"
+						class:deck-row--active={item.active}
+						{@attach navStagger(i)}
+						{@attach springHover()}
+					>
+						<span class="deck-tile" class:deck-tile--active={item.active}>
+							<item.icon size={15} />
+						</span>
+						<span class="deck-row-label">{item.label}</span>
+					</a>
+				{/each}
 
-				<div role="list">
-					{#each navToRender as item, i (item.id)}
-						{#if customizing}
-							<div
-								class="deck-row deck-row--edit"
-								class:deck-row--dim={$sidebarPrefs.hidden.includes(item.id)}
-								class:deck-row--dragging={draggingId === item.id}
-								draggable="true"
-								role="listitem"
-								ondragstart={(e) => handleDragStart(e, item.id)}
-								ondragover={(e) => handleDragOver(e, item.id)}
-								ondragend={handleDragEnd}
-							>
-								<GripVertical size={13} class="deck-grip" />
-								<span class="deck-tile"><item.icon size={15} /></span>
-								<span class="deck-row-label">{item.label}</span>
-								<button
-									type="button"
-									class="deck-tool deck-tool--visible"
-									aria-label={$sidebarPrefs.hidden.includes(item.id)
-										? `Show ${item.label}`
-										: `Hide ${item.label}`}
-									onclick={() => sidebarPrefs.toggleHidden(item.id)}
-								>
-									{#if $sidebarPrefs.hidden.includes(item.id)}<EyeOff size={13} />{:else}<Eye
-											size={13}
-										/>{/if}
-								</button>
-							</div>
-						{:else}
-							<a
-								href={item.href}
-								class="deck-row"
-								class:deck-row--active={item.active}
-								{@attach navStagger(i)}
-								{@attach springHover()}
-							>
-								<span class="deck-tile" class:deck-tile--active={item.active}>
-									<item.icon size={15} />
-								</span>
-								<span class="deck-row-label">{item.label}</span>
-							</a>
-						{/if}
-					{/each}
-				</div>
-
-				{#if pinnedDeps.length > 0 && !customizing}
+				{#if pinnedDeps.length > 0}
 					<div class="deck-section-head deck-section-head--spaced"><span>Pinned</span></div>
 					{#each pinnedDeps as pin, i (pin.id)}
 						<a
 							href={pin.href}
 							class="deck-row"
-							{@attach navStagger(navToRender.length + i)}
+							{@attach navStagger(nav.length + i)}
 							{@attach springHover()}
 						>
 							<span class="deck-tile deck-tile--fav">
@@ -528,9 +361,63 @@
 				{/snippet}
 				{#snippet children({ close })}
 					<div class="deck-menu">
-						{@render themeTrio()}
+						<div class="deck-theme-trio">
+							<button
+								type="button"
+								class="deck-theme-btn"
+								class:deck-theme-btn--active={isThemeActive('light')}
+								aria-label="Light theme"
+								onclick={() => applyQuickTheme('light')}
+							>
+								<Sun size={14} />
+							</button>
+							<button
+								type="button"
+								class="deck-theme-btn"
+								class:deck-theme-btn--active={isThemeActive('dark')}
+								aria-label="Dark theme"
+								onclick={() => applyQuickTheme('dark')}
+							>
+								<Moon size={14} />
+							</button>
+							<button
+								type="button"
+								class="deck-theme-btn"
+								class:deck-theme-btn--active={isThemeActive('system')}
+								aria-label="System theme"
+								onclick={() => applyQuickTheme('system')}
+							>
+								<Monitor size={14} />
+							</button>
+						</div>
 						<div class="deck-menu-divider"></div>
-						{@render userMenuItems(close)}
+						{#if invitationCount > 0}
+							<a class="deck-menu-item" href="/user/settings#invitations" onclick={close}>
+								<Mail size={14} />
+								Invitations
+								<span class="deck-user-badge">{invitationCount}</span>
+							</a>
+						{/if}
+						<a class="deck-menu-item" href="/user/settings" onclick={close}>
+							<Settings size={14} />
+							Settings
+						</a>
+						<a class="deck-menu-item" href="/user/api-tokens" onclick={close}>
+							<KeyRound size={14} />
+							API tokens
+						</a>
+						<a class="deck-menu-item" href="/user/settings/theme" onclick={close}>
+							<Palette size={14} />
+							Theme
+						</a>
+						<button
+							type="button"
+							class="deck-menu-item deck-menu-item--danger"
+							onclick={() => user.signOut()}
+						>
+							<LogOut size={14} />
+							Sign out
+						</button>
 					</div>
 				{/snippet}
 			</PopoverPanel>
@@ -571,7 +458,7 @@
 		height: 100%;
 		border-radius: 1rem;
 		border: 1px solid var(--border-default);
-		background-color: var(--bg-surface);
+		background-color: var(--bg-sunken);
 		color: var(--text-default);
 		box-shadow:
 			0 1px 3px rgb(0 0 0 / 0.04),
@@ -694,19 +581,6 @@
 	.deck-gap {
 		height: 0.75rem;
 	}
-	.deck-attention-row {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 0.3125rem 0.375rem;
-		border-radius: 0.45rem;
-		color: color-mix(in srgb, currentColor 85%, transparent);
-		text-decoration: none;
-		transition: background-color 120ms;
-	}
-	.deck-attention-row:hover {
-		background-color: color-mix(in srgb, currentColor 7%, transparent);
-	}
 	.deck-strip {
 		display: flex;
 		align-items: center;
@@ -741,6 +615,19 @@
 	.deck-strip-body {
 		padding: 0.125rem 0.25rem 0.25rem;
 	}
+	.deck-attention-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.3125rem 0.375rem;
+		border-radius: 0.45rem;
+		color: color-mix(in srgb, currentColor 85%, transparent);
+		text-decoration: none;
+		transition: background-color 120ms;
+	}
+	.deck-attention-row:hover {
+		background-color: color-mix(in srgb, currentColor 7%, transparent);
+	}
 	.deck-section-head {
 		display: flex;
 		align-items: center;
@@ -753,39 +640,8 @@
 		padding: 0.25rem 0.5rem 0.375rem;
 		user-select: none;
 	}
-	.deck-section-head:hover {
-		opacity: 0.8;
-	}
 	.deck-section-head--spaced {
 		padding-top: 1rem;
-	}
-	.deck-section-tools {
-		display: flex;
-		gap: 0.25rem;
-	}
-	.deck-tool {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		width: 1.125rem;
-		height: 1.125rem;
-		border-radius: 0.3rem;
-		border: none;
-		background: none;
-		color: currentColor;
-		opacity: 0;
-		cursor: pointer;
-		padding: 0;
-		transition:
-			opacity 120ms,
-			background-color 120ms;
-	}
-	.deck-section-head:hover .deck-tool,
-	.deck-tool--visible {
-		opacity: 0.8;
-	}
-	.deck-tool:hover {
-		background-color: color-mix(in srgb, currentColor 12%, transparent);
 	}
 	.deck-row {
 		display: flex;
@@ -854,22 +710,6 @@
 		text-overflow: ellipsis;
 		min-width: 0;
 		flex: 1;
-	}
-	.deck-row--edit {
-		cursor: grab;
-		border: 1px dashed color-mix(in srgb, currentColor 20%, transparent);
-		background-color: color-mix(in srgb, currentColor 4%, transparent);
-	}
-	.deck-row--dim {
-		opacity: 0.45;
-	}
-	.deck-row--dragging {
-		opacity: 0.55;
-		cursor: grabbing;
-	}
-	.deck-row :global(.deck-grip) {
-		flex-shrink: 0;
-		opacity: 0.5;
 	}
 	.deck-spacer {
 		flex: 1;
