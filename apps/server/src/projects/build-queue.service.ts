@@ -55,7 +55,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
     triggeredById?: string | null;
   }): Promise<{ startNow: boolean; runId: string }> {
     return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(${this.LOCK_KEY})`;
+      await tx.$executeRaw`SELECT pg_advisory_xact_lock(${this.LOCK_KEY})`;
 
       await tx.buildRun.updateMany({
         where: { deploymentId: opts.deploymentId, status: 'scheduled' },
