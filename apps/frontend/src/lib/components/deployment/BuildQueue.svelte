@@ -25,10 +25,6 @@
 	}
 
 	let sseStatusValue = $state<'connecting' | 'connected' | 'disconnected'>('connecting');
-	// `runs` is a $state declared before the query so the query's
-	// refetchInterval can read it without a temporal-dead-zone cycle (the query
-	// feeds it via the effect below). Same shape the deployment query uses.
-	let runs = $state<BuildRun[]>([]);
 
 	const query = createQuery(() => ({
 		queryKey: ['build-runs', deploymentId],
@@ -38,23 +34,18 @@
 			return (await res.json()) as BuildRun[];
 		},
 		enabled: !!deploymentId,
-		// Adaptive polling matches the deployment query: SSE is the primary
-		// channel, polling is the fallback. Something in flight + SSE down =
-		// poll hard; idle + SSE up = lean on the event bus.
-		refetchInterval: (() => {
-			const hasActive = runs.some((r) => r.status === 'scheduled' || r.status === 'building');
+		refetchInterval: (q) => {
+			const rows = (q.state.data as BuildRun[] | undefined) ?? [];
+			const hasActive = rows.some((r) => r.status === 'scheduled' || r.status === 'building');
 			const sseUp = sseStatusValue === 'connected';
 			if (hasActive) return sseUp ? 15_000 : 3_000;
 			if (!sseUp) return 20_000;
 			return 60_000;
-		})(),
+		},
 		refetchIntervalInBackground: false
 	}));
 
-	$effect(() => {
-		runs = query.data ?? [];
-	});
-
+	const runs = $derived<BuildRun[]>(query.data ?? []);
 	const queued = $derived(runs.filter((r) => r.status === 'scheduled'));
 
 	// Live updates ride the same Redis Streams SSE bus as everything else; the
