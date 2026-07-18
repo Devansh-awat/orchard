@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.19.1](https://github.com/LeafdTK/leaf/compare/frontend/v0.19.0...frontend/v0.19.1) (2026-07-18)
+
+
+### Bug Fixes
+
+* build queue widget froze the page, refetchinterval read reactive runs that its own effect wrote, breaking via q.state.data ([7658eae](https://github.com/LeafdTK/leaf/commit/7658eae44b5d07b1eaa782b9b110fce85462169b))
+
 ## [0.19.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.18.0...frontend/v0.19.0) (2026-07-18)
 
 
