@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.1](https://github.com/LeafdTK/leaf/compare/server/v1.22.0...server/v1.22.1) (2026-07-18)
+
+
+### Bug Fixes
+
+* build queue crash-looped the server on boot via circular dep, resolve with moduleref and a non-blocking claim lock ([4d28aec](https://github.com/LeafdTK/leaf/commit/4d28aec87c1984ca07beba548a92a1bcd3fe9d61))
+
 ## [1.22.0](https://github.com/LeafdTK/leaf/compare/server/v1.21.0...server/v1.22.0) (2026-07-18)
 
 
