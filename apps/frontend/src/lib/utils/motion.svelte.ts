@@ -424,8 +424,11 @@ export function springCollapse(collapsed: () => boolean) {
 				return;
 			}
 			const to = isCollapsed ? 0 : naturalHeight();
+			// Collapse is near-critically damped: overshooting toward a closed
+			// (negative) height reads as a wrong-direction bounce. Expand keeps
+			// the lively overshoot since growing past the target looks good.
 			const opts = isCollapsed
-				? { type: 'spring' as const, stiffness: 200, damping: 18, mass: 1.2 }
+				? { type: 'spring' as const, stiffness: 220, damping: 30, mass: 1.1 }
 				: { type: 'spring' as const, stiffness: 180, damping: 16, mass: 1.3 };
 			const ctrl = animate(target, { height: to, opacity: isCollapsed ? 0 : 1 }, opts);
 			if (!isCollapsed) {
