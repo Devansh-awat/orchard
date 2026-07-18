@@ -1,5 +1,18 @@
 # Changelog
 
+## [0.21.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.20.0...frontend/v0.21.0) (2026-07-18)
+
+
+### Features
+
+* rename apps via display name, k8s name stays frozen ([898fd5e](https://github.com/LeafdTK/leaf/commit/898fd5e2746646eb2c744629db38987df6ac47ed))
+* rename databases, compose stacks, template instances, environments and api tokens ([625ee58](https://github.com/LeafdTK/leaf/commit/625ee58d7657538e2127cd6a399221ab13c7a33b))
+
+
+### Bug Fixes
+
+* cmd+k search falls back to selected org outside org routes ([afa45e9](https://github.com/LeafdTK/leaf/commit/afa45e9ec8aec6f53cb6dbe06a30ac10d878927d))
+
 ## [0.20.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.19.1...frontend/v0.20.0) (2026-07-18)
 
 

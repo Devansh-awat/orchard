@@ -87,12 +87,7 @@
 		<div class="dep-header-identity">
 			<h1 class="dep-header-name">{deployment.displayName || deployment.name}</h1>
 			{#if onRename}
-				<button
-					class="dep-rename-btn"
-					title="Rename"
-					aria-label="Rename app"
-					onclick={onRename}
-				>
+				<button class="dep-rename-btn" title="Rename" aria-label="Rename app" onclick={onRename}>
 					<Pencil size={13} />
 				</button>
 			{/if}

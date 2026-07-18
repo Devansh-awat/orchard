@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.24.0](https://github.com/LeafdTK/leaf/compare/server/v1.23.0...server/v1.24.0) (2026-07-18)
+
+
+### Features
+
+* rename apps via display name, k8s name stays frozen ([898fd5e](https://github.com/LeafdTK/leaf/commit/898fd5e2746646eb2c744629db38987df6ac47ed))
+* rename databases, compose stacks, template instances, environments and api tokens ([625ee58](https://github.com/LeafdTK/leaf/commit/625ee58d7657538e2127cd6a399221ab13c7a33b))
+
 ## [1.23.0](https://github.com/LeafdTK/leaf/compare/server/v1.22.3...server/v1.23.0) (2026-07-18)
 
 
