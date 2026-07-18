@@ -11,10 +11,15 @@
 	} from '@jis3r/icons';
 	import { isSuperAdmin } from '$lib/stores';
 	import { SectionCard, StatusBadge, statusMeta } from '$lib/components/ui';
+	import GitHubSourceCard from './GitHubSourceCard.svelte';
 	import type { AutoDeployStatus, GitHubDeploymentRecord } from '$lib/types/deployment';
 
 	let {
 		deployment,
+		// Source
+		onSourceUpdated,
+		onRebuild,
+		rebuilding,
 		// Strategy
 		strategyValue = $bindable(),
 		savingStrategy,
@@ -57,6 +62,9 @@
 		onSaveHealthCheck
 	}: {
 		deployment: any;
+		onSourceUpdated: (updated: any) => void;
+		onRebuild: () => void;
+		rebuilding: boolean;
 		strategyValue: 'rollingUpdate' | 'recreate';
 		savingStrategy: boolean;
 		hasPvcVolume: boolean;
@@ -97,6 +105,10 @@
 </script>
 
 <div class="space-y-5">
+	{#if deployment.githubRepo}
+		<GitHubSourceCard {deployment} onUpdated={onSourceUpdated} {onRebuild} {rebuilding} />
+	{/if}
+
 	<SectionCard title="Update strategy">
 		<div class="strategy-grid">
 			<button

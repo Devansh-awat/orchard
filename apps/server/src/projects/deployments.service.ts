@@ -1456,6 +1456,158 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     return this.getDeployment(deploymentId);
   }
 
+  async updateDeploymentGitHubRepo(
+    deploymentId: string,
+    data: {
+      repoUrl: string;
+      branch: string;
+      dockerfilePath?: string;
+    },
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+      },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    if (!deployment.githubRepo) {
+      throw new BadRequestException('This deployment was not created from GitHub');
+    }
+
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployments');
+
+    let repoUrl = String(data.repoUrl || '').trim();
+    if (repoUrl && !repoUrl.startsWith('http')) {
+      repoUrl = `https://github.com/${repoUrl}`;
+    }
+    repoUrl = repoUrl.replace(/\.git$/, '');
+    const branch = String(data.branch || '').trim();
+    const dockerfilePath = String(data.dockerfilePath ?? deployment.dockerfilePath ?? '').trim();
+
+    if (!repoUrl) {
+      throw new BadRequestException('Repository URL is required');
+    }
+
+    if (!branch) {
+      throw new BadRequestException('Branch is required');
+    }
+
+    // Same boundary checks as createDeploymentFromGitHub; DockerService
+    // re-validates on clone as defence in depth.
+    const GIT_REF_RE = /^[A-Za-z0-9._/-]+$/;
+    if (branch.length > 200 || branch.startsWith('-') || branch.includes('..') || !GIT_REF_RE.test(branch)) {
+      throw new BadRequestException('Invalid branch name');
+    }
+    if (dockerfilePath) {
+      if (
+        dockerfilePath.length > 500 ||
+        dockerfilePath.startsWith('/') ||
+        dockerfilePath.startsWith('\\') ||
+        dockerfilePath.includes('..') ||
+        dockerfilePath.includes('\0') ||
+        !/^[A-Za-z0-9._/\- ]+$/.test(dockerfilePath)
+      ) {
+        throw new BadRequestException('Invalid Dockerfile path');
+      }
+    }
+
+    if (deployment.buildType === 'dockerfile' && !dockerfilePath) {
+      throw new BadRequestException('Dockerfile path is required for Dockerfile builds');
+    }
+
+    const parsed = this.githubService.parseRepoUrl(repoUrl);
+    if (!parsed) {
+      throw new BadRequestException('Could not parse repository URL');
+    }
+    const canAccess = await this.githubService.verifyUserCanAccessRepo(user.id, parsed.owner, parsed.repo);
+    if (!canAccess) {
+      const isPublic = await this.githubService.isRepoPublic(parsed.owner, parsed.repo);
+      if (!isPublic) {
+        throw new ForbiddenException(
+          'You do not have access to this repository on GitHub. Connect your GitHub account or request access to the repo.'
+        );
+      }
+    }
+
+    const repoInstallation = await this.githubService.findInstallationForRepo(parsed.owner, parsed.repo);
+
+    const repoChanged = repoUrl !== deployment.githubRepo;
+    // Auto-deploy webhooks are matched on githubInstallationId, so it must be
+    // re-pinned to the new repo's installation. If the app has no access to
+    // the new repo, auto-deploy can't fire and gets disabled.
+    const keepAutoDeploy = deployment.autoDeployEnabled && !!repoInstallation;
+    let autoDeployBranch: string | null = null;
+    if (keepAutoDeploy) {
+      autoDeployBranch = repoChanged ? branch : deployment.autoDeployBranch;
+    }
+
+    await this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: {
+        githubRepo: repoUrl,
+        githubBranch: branch,
+        dockerfilePath: dockerfilePath || null,
+        githubInstallationId: repoInstallation?.installationId ?? null,
+        autoDeployEnabled: keepAutoDeploy,
+        autoDeployBranch,
+        ...(repoChanged
+          ? {
+              queuedCommitSha: null,
+              queuedCommitMessage: null,
+              queuedCommitAuthorName: null,
+              queuedCommitAuthorUsername: null,
+              queuedAt: null,
+            }
+          : {}),
+      },
+    });
+
+    void this.audit.log({
+      action: 'deployment.github_repo.updated',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: deployment.name,
+      metadata: {
+        githubRepo: [deployment.githubRepo, repoUrl],
+        githubBranch: [deployment.githubBranch, branch],
+        ...(dockerfilePath !== (deployment.dockerfilePath ?? '')
+          ? { dockerfilePath: [deployment.dockerfilePath, dockerfilePath || null] }
+          : {}),
+        ...(deployment.autoDeployEnabled && !keepAutoDeploy ? { autoDeployEnabled: [true, false] } : {}),
+      },
+    });
+
+    return this.getDeployment(deploymentId);
+  }
+
   async updateDeploymentHealthCheck(
     deploymentId: string,
     healthCheck: {

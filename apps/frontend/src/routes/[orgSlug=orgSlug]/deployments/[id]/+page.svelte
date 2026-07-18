@@ -1901,6 +1901,13 @@
 		}
 	}
 
+	function handleSourceUpdated(updated: Deployment) {
+		if (deployment) mergeInto(deployment, updated);
+		else deployment = updated;
+		autoDeployBranch = '';
+		loadAutoDeployStatus();
+	}
+
 	async function saveHealthCheck() {
 		if (!deployment) return;
 
@@ -2899,6 +2906,9 @@
 					{:else if tab.id === 'settings'}
 						<SettingsTab
 							{deployment}
+							onSourceUpdated={handleSourceUpdated}
+							onRebuild={rebuild}
+							{rebuilding}
 							bind:strategyValue
 							{savingStrategy}
 							{hasPvcVolume}

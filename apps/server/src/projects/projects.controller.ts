@@ -976,6 +976,37 @@ export class DeploymentsController {
     );
   }
 
+  @Put(':id/github-repo')
+
+  async updateDeploymentGitHubRepo(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      repoUrl?: string;
+      githubRepo?: string;
+      branch?: string;
+      dockerfilePath?: string;
+    },
+    @Request() req
+  ) {
+    return this.deployments.updateDeploymentGitHubRepo(
+      id,
+      {
+        repoUrl: body.repoUrl || body.githubRepo || '',
+        branch: body.branch || '',
+        dockerfilePath: body.dockerfilePath,
+      },
+      req.user.sub,
+      {
+        email: req.user.email,
+        username: req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        imageUrl: req.user.imageUrl,
+      }
+    );
+  }
+
   @Put(':id/health-check')
 
   async updateDeploymentHealthCheck(

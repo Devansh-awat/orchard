@@ -291,6 +291,7 @@
   "PUT /deployments/:deploymentId/services/:serviceId": "authenticated",
   "PUT /deployments/:id/build-from-root": "authenticated",
   "PUT /deployments/:id/env": "authenticated",
+  "PUT /deployments/:id/github-repo": "authenticated",
   "PUT /deployments/:id/health-check": "authenticated",
   "PUT /deployments/:id/volumes": "authenticated",
   "PUT /environments/:id/shared-vars": "authenticated",

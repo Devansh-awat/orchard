@@ -12,6 +12,10 @@
 
 	let {
 		deployment,
+		// Source
+		onSourceUpdated,
+		onRebuild,
+		rebuilding,
 		// Strategy
 		strategyValue = $bindable<'rollingUpdate' | 'recreate'>('rollingUpdate'),
 		savingStrategy,
@@ -54,6 +58,9 @@
 		onSaveHealthCheck
 	}: {
 		deployment: any;
+		onSourceUpdated: (updated: any) => void;
+		onRebuild: () => void;
+		rebuilding: boolean;
 		strategyValue: 'rollingUpdate' | 'recreate';
 		savingStrategy: boolean;
 		hasPvcVolume: boolean;
@@ -99,6 +106,9 @@
 	<!-- Advanced settings (always open, it's the primary content) -->
 	<AdvancedTab
 		{deployment}
+		{onSourceUpdated}
+		{onRebuild}
+		{rebuilding}
 		bind:strategyValue
 		{savingStrategy}
 		{hasPvcVolume}
