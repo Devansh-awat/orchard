@@ -1,4 +1,4 @@
-import { Injectable, BadRequestException } from '@nestjs/common';
+import { Injectable, BadRequestException, ConflictException } from '@nestjs/common';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { OAuthService } from '../auth/oauth.service';
@@ -298,6 +298,16 @@ export class GitHubService {
   async linkGitHubAccount(userId: string, code: string): Promise<void> {
     const tokens = await this.exchangeCodeForToken(code);
     const githubUser = await this.getGitHubUser(tokens.accessToken);
+
+    const existing = await this.prisma.user.findUnique({
+      where: { githubId: String(githubUser.id) },
+      select: { id: true },
+    });
+    if (existing && existing.id !== userId) {
+      throw new ConflictException(
+        `This GitHub account (@${githubUser.login}) is already linked to another Orchard account. Disconnect it there first, then try again.`,
+      );
+    }
 
     await this.prisma.user.update({
       where: { id: userId },

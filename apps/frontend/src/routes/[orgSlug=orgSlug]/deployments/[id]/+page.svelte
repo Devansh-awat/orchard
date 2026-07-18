@@ -23,6 +23,7 @@
 		apiFetch,
 		toasts,
 		isSuperAdmin,
+		user,
 		selectedOrganization,
 		subscribeOrgEvents,
 		sseStatusFor
@@ -2696,7 +2697,9 @@
 			<DeploymentAlerts
 				buildFailed={buildFailedActive}
 				buildError={debugAlerts
-					? 'Build failed: process "/bin/sh -c npm ci" did not complete successfully: exit code 1'
+					? $page.url.searchParams.get('debugAlerts') === 'github'
+						? 'Build failed: ERROR: GitHub authentication failed.'
+						: 'Build failed: process "/bin/sh -c npm ci" did not complete successfully: exit code 1'
 					: (deployment?.buildError ?? '')}
 				{noPodsReady}
 				podWarnings={activePodWarnings}
@@ -2704,6 +2707,12 @@
 				onViewLogs={handleViewBuildLogs}
 				onGoToResources={() => {
 					gotoTab('resources');
+				}}
+				githubRepoUrl={deployment?.githubRepo ?? ''}
+				canReconnectGithub={!!deployment?.createdBy && deployment.createdBy === $user?.id}
+				onReconnectGithub={() => {
+					const back = $page.url.pathname + $page.url.search;
+					window.location.href = '/apiv1/github/link?redirect=' + encodeURIComponent(back);
 				}}
 			/>
 

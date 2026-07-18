@@ -34,7 +34,10 @@
 			any: false
 		},
 		onViewLogs,
-		onGoToResources
+		onGoToResources,
+		onReconnectGithub,
+		canReconnectGithub = false,
+		githubRepoUrl = ''
 	}: {
 		buildFailed?: boolean;
 		buildError?: string;
@@ -43,7 +46,16 @@
 		resourcePressure?: ResourcePressure;
 		onViewLogs?: () => void;
 		onGoToResources?: () => void;
+		onReconnectGithub?: () => void;
+		canReconnectGithub?: boolean;
+		githubRepoUrl?: string;
 	} = $props();
+
+	interface AlertAction {
+		label: string;
+		onAction?: () => void;
+		href?: string;
+	}
 
 	interface AlertItem {
 		id: string;
@@ -52,6 +64,7 @@
 		hint: string;
 		action?: string;
 		onAction?: () => void;
+		actions?: AlertAction[];
 		animateIcon?: boolean;
 	}
 
@@ -116,17 +129,40 @@
 		const items: AlertItem[] = [];
 
 		if (buildFailed) {
-			items.push({
-				id: `build-failed:${buildError.slice(0, 80)}`,
-				severity: 'critical',
-				title: 'Deployment failed',
-				hint: buildError
-					? buildError.split('\n')[0].slice(0, 200)
-					: 'The last deployment did not complete successfully.',
-				action: 'View deployment logs',
-				onAction: onViewLogs,
-				animateIcon: true
-			});
+			const isGithubAuth =
+				/github authentication failed|could not read username|terminal prompts disabled|repository not found/i.test(
+					buildError
+				);
+			if (isGithubAuth) {
+				const actions: AlertAction[] = [];
+				const repo = githubRepoUrl.replace(/\.git$/, '');
+				if (repo) actions.push({ label: 'Check repo access', href: repo });
+				if (canReconnectGithub && onReconnectGithub)
+					actions.push({ label: 'Reconnect GitHub', onAction: onReconnectGithub });
+				if (onViewLogs) actions.push({ label: 'View logs', onAction: onViewLogs });
+				items.push({
+					id: 'build-failed-github-auth',
+					severity: 'critical',
+					title: 'Cannot access the GitHub repository',
+					hint: canReconnectGithub
+						? 'The build could not read this repository. Confirm you can open it on GitHub, or reconnect your GitHub account if your access changed.'
+						: 'The build could not read this repository. Confirm you can open it on GitHub, or ask the deployment owner to reconnect their GitHub account.',
+					actions,
+					animateIcon: true
+				});
+			} else {
+				items.push({
+					id: `build-failed:${buildError.slice(0, 80)}`,
+					severity: 'critical',
+					title: 'Deployment failed',
+					hint: buildError
+						? buildError.split('\n')[0].slice(0, 200)
+						: 'The last deployment did not complete successfully.',
+					action: 'View deployment logs',
+					onAction: onViewLogs,
+					animateIcon: true
+				});
+			}
 		}
 
 		if (noPodsReady) {
@@ -224,7 +260,26 @@
 					<span class="da-alert-title">{alert.title}</span>
 					<span class="da-alert-hint">{alert.hint}</span>
 				</div>
-				{#if alert.action && alert.onAction}
+				{#if alert.actions && alert.actions.length > 0}
+					<div class="da-alert-actions">
+						{#each alert.actions as act (act.label)}
+							{#if act.href}
+								<a
+									class="da-alert-action"
+									href={act.href}
+									target="_blank"
+									rel="noopener noreferrer"
+								>
+									{act.label}
+								</a>
+							{:else}
+								<button class="da-alert-action" onclick={act.onAction}>
+									{act.label}
+								</button>
+							{/if}
+						{/each}
+					</div>
+				{:else if alert.action && alert.onAction}
 					<button class="da-alert-action" onclick={alert.onAction}>
 						{alert.action}
 					</button>
@@ -295,6 +350,15 @@
 		line-height: 1.4;
 		opacity: 0.75;
 	}
+	.da-alert-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		flex-shrink: 0;
+		align-self: center;
+		flex-wrap: wrap;
+		justify-content: flex-end;
+	}
 	.da-alert-action {
 		display: inline-flex;
 		align-items: center;
@@ -310,6 +374,7 @@
 		flex-shrink: 0;
 		transition: background-color 120ms;
 		align-self: center;
+		text-decoration: none;
 	}
 	.da-alert-action:hover {
 		background-color: color-mix(in srgb, var(--da-tone) 10%, var(--surface-bg));
@@ -337,8 +402,12 @@
 		.da-alert {
 			flex-wrap: wrap;
 		}
-		.da-alert-action {
+		.da-alert-actions {
 			width: 100%;
+			margin-top: 0.25rem;
+		}
+		.da-alert-action {
+			flex: 1;
 			justify-content: center;
 			margin-top: 0.25rem;
 		}
