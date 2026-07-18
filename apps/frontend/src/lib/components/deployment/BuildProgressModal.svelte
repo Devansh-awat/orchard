@@ -65,25 +65,41 @@
 	const cardName = $derived(deployment?.name ?? (demo ? 'widget' : 'App'));
 
 	// Real-widget behaviour: draggable by the header, collapsible, and both the
-	// position and collapsed state persist across visits.
-	const POS_KEY = 'build-widget-pos';
+	// snapped corner and collapsed state persist across visits.
+	type Corner = { h: 'left' | 'right'; v: 'top' | 'bottom' };
+	const CORNER_KEY = 'build-widget-corner';
 	const COLLAPSED_KEY = 'build-widget-collapsed';
 	const WIDGET_W = 288;
+	const MARGIN = 24;
 
-	function loadPos(): { x: number; y: number } | null {
-		if (typeof localStorage === 'undefined') return null;
+	function loadCorner(): Corner {
+		if (typeof localStorage === 'undefined') return { h: 'right', v: 'bottom' };
 		try {
-			const raw = localStorage.getItem(POS_KEY);
-			return raw ? JSON.parse(raw) : null;
+			const raw = localStorage.getItem(CORNER_KEY);
+			const c = raw ? JSON.parse(raw) : null;
+			if (c && (c.h === 'left' || c.h === 'right') && (c.v === 'top' || c.v === 'bottom')) return c;
 		} catch {
-			return null;
+			// ignore
 		}
+		return { h: 'right', v: 'bottom' };
 	}
 
-	let pos = $state<{ x: number; y: number } | null>(loadPos());
+	// While free-dragging, `pos` (viewport left/top px) drives position. Once
+	// released it snaps and `pos` clears, handing positioning back to `corner`,
+	// which anchors by the actual snapped edges so height changes (expand /
+	// collapse) grow away from the corner instead of drifting off-screen.
+	let corner = $state<Corner>(loadCorner());
+	let pos = $state<{ x: number; y: number } | null>(null);
 	let collapsed = $state(
 		typeof localStorage !== 'undefined' && localStorage.getItem(COLLAPSED_KEY) === 'true'
 	);
+
+	const anchorStyle = $derived.by(() => {
+		if (pos) return `left:${pos.x}px; top:${pos.y}px;`;
+		const hs = corner.h === 'left' ? `left:${MARGIN}px;` : `right:${MARGIN}px;`;
+		const vs = corner.v === 'top' ? `top:${MARGIN}px;` : `bottom:${MARGIN}px;`;
+		return hs + vs;
+	});
 
 	function toggleCollapsed() {
 		collapsed = !collapsed;
@@ -97,18 +113,15 @@
 	let dragging = $state(false);
 	let dragStart = { px: 0, py: 0, x: 0, y: 0 };
 
-	function currentXY(el: HTMLElement): { x: number; y: number } {
-		if (pos) return pos;
-		const r = el.getBoundingClientRect();
-		return { x: r.left, y: r.top };
-	}
-
 	function onHeaderPointerDown(e: PointerEvent) {
 		if ((e.target as HTMLElement).closest('button')) return;
 		const widget = (e.currentTarget as HTMLElement).closest('.build-widget') as HTMLElement | null;
 		if (!widget) return;
-		const start = currentXY(widget);
-		dragStart = { px: e.clientX, py: e.clientY, x: start.x, y: start.y };
+		// Switch from corner anchoring to pixel anchoring at the current on-screen
+		// position so grabbing it never jumps.
+		const r = widget.getBoundingClientRect();
+		pos = { x: r.left, y: r.top };
+		dragStart = { px: e.clientX, py: e.clientY, x: r.left, y: r.top };
 		dragging = true;
 		(e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
 		e.preventDefault();
@@ -123,34 +136,37 @@
 		pos = { x: nx, y: ny };
 	}
 
-	function persistPos() {
-		if (!pos) return;
+	function persistCorner() {
 		try {
-			localStorage.setItem(POS_KEY, JSON.stringify(pos));
+			localStorage.setItem(CORNER_KEY, JSON.stringify(corner));
 		} catch {
 			// ignore
 		}
 	}
 
-	// Snap the widget to the nearest corner (the quadrant its center sits in),
-	// gliding there with a spring so it feels magnetic.
+	// Snap to the nearest corner (the quadrant the widget's center sits in),
+	// gliding there with a spring, then hand positioning back to the corner
+	// anchor so it stays flush no matter how the widget's height changes.
 	function snapToNearest(el: HTMLElement | null) {
 		if (!pos) return;
-		const M = 24;
 		const h = el?.getBoundingClientRect().height ?? 120;
 		const vw = window.innerWidth;
 		const vh = window.innerHeight;
-		const cx = pos.x + WIDGET_W / 2;
-		const cy = pos.y + h / 2;
-		const tx = cx < vw / 2 ? M : vw - WIDGET_W - M;
-		const ty = cy < vh / 2 ? M : vh - h - M;
-		const sx = pos.x;
-		const sy = pos.y;
+		const ch: 'left' | 'right' = pos.x + WIDGET_W / 2 < vw / 2 ? 'left' : 'right';
+		const cv: 'top' | 'bottom' = pos.y + h / 2 < vh / 2 ? 'top' : 'bottom';
+		const tx = ch === 'left' ? MARGIN : vw - WIDGET_W - MARGIN;
+		const ty = cv === 'top' ? MARGIN : vh - h - MARGIN;
+		const settle = () => {
+			corner = { h: ch, v: cv };
+			pos = null;
+			persistCorner();
+		};
 		if (!decorativeMotion()) {
-			pos = { x: tx, y: ty };
-			persistPos();
+			settle();
 			return;
 		}
+		const sx = pos.x;
+		const sy = pos.y;
 		animate(0, 1, {
 			type: 'spring',
 			stiffness: 420,
@@ -159,10 +175,7 @@
 			onUpdate: (t: number) => {
 				pos = { x: sx + (tx - sx) * t, y: sy + (ty - sy) * t };
 			}
-		}).finished.then(() => {
-			pos = { x: tx, y: ty };
-			persistPos();
-		});
+		}).finished.then(settle, settle);
 	}
 
 	function onHeaderPointerUp(e: PointerEvent) {
@@ -221,7 +234,7 @@
 <div
 	class="pointer-events-none fixed z-40 flex w-72 flex-col"
 	class:build-widget--pinned={!pos}
-	style={pos ? `left:${pos.x}px; top:${pos.y}px;` : 'right:1.5rem; bottom:1.5rem;'}
+	style={anchorStyle}
 >
 	{#if cardVisible}
 		<div
@@ -320,7 +333,11 @@
 							{/if}
 						</p>
 					</div>
-					<BuildQueue deploymentId={deployment?.id ?? ''} />
+					<BuildQueue
+						deploymentId={deployment?.id ?? ''}
+						githubRepo={deployment?.githubRepo ??
+							(demo ? 'https://github.com/hackclub/widget' : '')}
+					/>
 				</div>
 			</div>
 		</div>

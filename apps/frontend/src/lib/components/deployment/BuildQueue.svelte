@@ -18,7 +18,12 @@
 		createdAt: string;
 	}
 
-	let { deploymentId }: { deploymentId: string } = $props();
+	let { deploymentId, githubRepo = '' }: { deploymentId: string; githubRepo?: string } = $props();
+
+	function commitHref(sha?: string | null): string | null {
+		if (!sha || !githubRepo) return null;
+		return `${githubRepo.replace(/\.git$/, '')}/commit/${sha}`;
+	}
 
 	// `?buildqueue=demo` injects mock rows entirely client-side (no DB, no API)
 	// so the widget can be reviewed on any deployment.
@@ -105,13 +110,22 @@
 		</div>
 		<div class="bq-rows">
 			{#each queued as run, i (run.id)}
-				<div class="bq-row" {@attach motionStagger({ index: i, from: { y: 5 } })}>
+				{@const href = commitHref(run.commitSha)}
+				<svelte:element
+					this={href ? 'a' : 'div'}
+					class="bq-row"
+					class:bq-row--link={!!href}
+					href={href || undefined}
+					target={href ? '_blank' : undefined}
+					rel={href ? 'noopener noreferrer' : undefined}
+					{@attach motionStagger({ index: i, from: { y: 5 } })}
+				>
 					{#if run.commitSha}
 						<span class="bq-sha"><GitCommit size={11} />{run.commitSha.slice(0, 7)}</span>
 					{/if}
 					<span class="bq-msg">{run.commitMessage?.split('\n')[0] || 'Queued build'}</span>
 					<span class="bq-when">{timeAgo(run.createdAt)}</span>
-				</div>
+				</svelte:element>
 			{/each}
 		</div>
 	</div>
@@ -167,6 +181,25 @@
 
 	.bq-rows .bq-row:not(:last-child) {
 		border-bottom: 1px solid var(--border-default);
+	}
+
+	.bq-row--link {
+		margin: 0 -0.5rem;
+		padding-left: 0.5rem;
+		padding-right: 0.5rem;
+		border-radius: 0.375rem;
+		text-decoration: none;
+		color: inherit;
+		cursor: pointer;
+		transition: background-color 120ms ease;
+	}
+
+	.bq-row--link:hover {
+		background-color: color-mix(in srgb, var(--text-default) 6%, transparent);
+	}
+
+	.bq-row--link:hover .bq-sha {
+		color: var(--text-link);
 	}
 
 	.bq-sha {
