@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.22.2](https://github.com/LeafdTK/leaf/compare/server/v1.22.1...server/v1.22.2) (2026-07-18)
+
+
+### Bug Fixes
+
+* enqueue advisory lock threw deserializing void, use executeraw not queryraw ([18763b8](https://github.com/LeafdTK/leaf/commit/18763b80fcd95eba8ad81149dd8cf86c81e0fd00))
+
 ## [1.22.1](https://github.com/LeafdTK/leaf/compare/server/v1.22.0...server/v1.22.1) (2026-07-18)
 
 
