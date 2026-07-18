@@ -5,16 +5,18 @@
 	import { apiFetch, toasts, subscribeOrgEvents } from '$lib/stores';
 	import { featureFlag } from '$lib/posthog';
 	import { env } from '$env/dynamic/public';
-	import { Loader2 } from 'lucide-svelte';
+	import { Loader2, ArrowLeft } from 'lucide-svelte';
+	import AuditLogList from '$lib/components/AuditLogList.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import {
-		OrgGeneralTab,
 		OrgMembersTab,
 		OrgDatabaseTab,
 		OrgBackupsTab,
 		OrgSsoTab,
 		OrgScimTab,
-		OrgNotificationsTab
+		OrgNotificationsTab,
+		OrgHero,
+		OrgTabSummaryGrid
 	} from '$lib/components/org-settings';
 	import type {
 		NotificationChannel,
@@ -163,6 +165,56 @@
 	const canInvite = $derived(currentUserRole === 'owner' || currentUserRole === 'admin');
 	const isOwner = $derived(currentUserRole === 'owner');
 	const isEnterprise = $derived(organization?.plan === 'enterprise');
+
+	const SETTINGS_RAIL = $derived(
+		[
+			{
+				label: 'Organization',
+				items: [
+					{ id: 'general', label: 'Overview', href: `/${organizationSlug}/settings?tab=general` },
+					{ id: 'members', label: 'Members', href: `/${organizationSlug}/settings?tab=members` }
+				]
+			},
+			{
+				label: 'Platform',
+				items: [
+					{
+						id: 'database',
+						label: 'Database defaults',
+						href: `/${organizationSlug}/settings?tab=database`
+					},
+					{ id: 'backups', label: 'Backups', href: `/${organizationSlug}/settings?tab=backups` },
+					...($notificationsEnabled
+						? [
+								{
+									id: 'notifications',
+									label: 'Notifications',
+									href: `/${organizationSlug}/settings?tab=notifications`
+								}
+							]
+						: [])
+				]
+			},
+			...(isEnterprise
+				? [
+						{
+							label: 'Access',
+							items: [
+								{ id: 'sso', label: 'SSO', href: `/${organizationSlug}/settings?tab=sso` },
+								{ id: 'scim', label: 'SCIM', href: `/${organizationSlug}/settings?tab=scim` }
+							]
+						}
+					]
+				: []),
+			{
+				label: 'Activity',
+				items: [
+					{ id: 'usage', label: 'Usage', href: `/${organizationSlug}/usage` },
+					{ id: 'audit', label: 'Audit log', href: `/${organizationSlug}/settings?tab=audit` }
+				]
+			}
+		].filter((g) => g.items.length > 0)
+	);
 	const baseDomain = env.PUBLIC_BASE_DOMAIN || 'orchard.my';
 	const backupConfigured = $derived(
 		Boolean(backupEndpoint && backupBucket && backupSecretConfigured)
@@ -989,26 +1041,65 @@
 	</div>
 {:else if organization}
 	<div class="osp-page">
+		<a href={`/${organizationSlug}`} class="osp-back">
+			<ArrowLeft class="h-3.5 w-3.5" />
+			Back
+		</a>
+		<OrgHero
+			{organization}
+			{organizationSlug}
+			{currentUserRole}
+			{canEditOrg}
+			pendingInvites={invitations.length}
+			bind:isEditing
+			bind:editingName
+			bind:editingDescription
+			{updating}
+			{uploadingAvatar}
+			{deletingAvatar}
+			onStartEditing={startEditing}
+			onCancelEditing={cancelEditing}
+			onSave={saveOrganization}
+			onUploadAvatar={uploadAvatar}
+			onDeleteAvatar={deleteAvatar}
+			bind:avatarInputRef={avatarInput}
+			index={0}
+		/>
+		<div class="osp-grid">
+			<aside class="osp-rail" aria-label="Organization settings sections">
+				{#each SETTINGS_RAIL as group (group.label)}
+					<div class="osp-rail-group">
+						<p class="osp-rail-eyebrow">{group.label}</p>
+						{#each group.items as item (item.id)}
+							<a
+								href={item.href}
+								class="osp-rail-link"
+								class:osp-rail-link--active={activeTab === item.id}
+								aria-current={activeTab === item.id ? 'page' : undefined}
+							>
+								{item.label}
+							</a>
+						{/each}
+					</div>
+				{/each}
+			</aside>
 		<div class="osp-stack">
 			{#if activeTab === 'general'}
-				<OrgGeneralTab
-					{organization}
+				<OrgTabSummaryGrid
 					{organizationSlug}
-					{currentUserRole}
+					memberCount={members.length}
+					pendingInvites={invitations.length}
+					backupsConfigured={backupConfigured}
+					channelCount={notifChannels.length}
+					showNotifications={$notificationsEnabled}
+					{isEnterprise}
+					{ssoEnabled}
 					{canEditOrg}
-					bind:isEditing
-					bind:editingName
-					bind:editingDescription
-					{updating}
-					{uploadingAvatar}
-					{deletingAvatar}
-					onStartEditing={startEditing}
-					onCancelEditing={cancelEditing}
-					onSave={saveOrganization}
-					onUploadAvatar={uploadAvatar}
-					onDeleteAvatar={deleteAvatar}
-					bind:avatarInputRef={avatarInput}
+					index={1}
 				/>
+			{/if}
+			{#if activeTab === 'audit'}
+				<AuditLogList scope={{ organizationId: organization.id }} />
 			{/if}
 			{#if activeTab === 'members'}
 				<OrgMembersTab
@@ -1133,6 +1224,7 @@
 				/>
 			{/if}
 		</div>
+		</div>
 	</div>
 {/if}
 
@@ -1175,13 +1267,97 @@
 <style>
 	.osp-page {
 		padding: 2.5rem 2.5rem 3rem;
-		max-width: 52rem;
+		max-width: 64rem;
 		margin: 0 auto;
+	}
+	.osp-back {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		font-size: 0.8125rem;
+		font-weight: 450;
+		color: var(--text-muted);
+		text-decoration: none;
+		margin-bottom: 1.5rem;
+		transition: color 120ms;
+	}
+	.osp-back:hover {
+		color: var(--text-default);
+	}
+	.osp-grid {
+		display: grid;
+		grid-template-columns: 10.5rem minmax(0, 1fr);
+		gap: 2rem;
+		align-items: start;
+		margin-top: 1.25rem;
+	}
+	.osp-rail {
+		position: sticky;
+		top: 1.25rem;
+		display: flex;
+		flex-direction: column;
+		gap: 1.125rem;
+	}
+	.osp-rail-group {
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+	}
+	.osp-rail-eyebrow {
+		font-size: 0.625rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--text-faint);
+		margin: 0 0 0.25rem;
+		padding-left: 0.625rem;
+	}
+	.osp-rail-link {
+		display: block;
+		font-size: 0.8125rem;
+		color: var(--text-muted);
+		text-decoration: none;
+		border-radius: 0.5rem;
+		padding: 0.3rem 0.625rem;
+		transition:
+			color 120ms,
+			background-color 120ms;
+	}
+	.osp-rail-link:hover,
+	.osp-rail-link--active {
+		color: var(--text-default);
+		background-color: var(--bg-hover);
 	}
 	.osp-stack {
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
+		min-width: 0;
+	}
+	@media (max-width: 900px) {
+		.osp-grid {
+			grid-template-columns: 1fr;
+			gap: 1rem;
+		}
+		.osp-rail {
+			position: static;
+			flex-direction: row;
+			overflow-x: auto;
+			gap: 1rem;
+			padding-bottom: 0.25rem;
+		}
+		.osp-rail-group {
+			flex-direction: row;
+			align-items: center;
+			gap: 0.125rem;
+			flex-shrink: 0;
+		}
+		.osp-rail-eyebrow {
+			display: none;
+		}
+		.osp-rail-link {
+			white-space: nowrap;
+		}
 	}
 	.osp-loading {
 		display: flex;
