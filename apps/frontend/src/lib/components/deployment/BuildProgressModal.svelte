@@ -3,7 +3,6 @@
 	import { Check, Clock, Maximize2, X } from '@jis3r/icons';
 	import { animate } from 'motion';
 	import { springRotate, springCollapse, decorativeMotion } from '$lib/utils/motion.svelte';
-	import { page } from '$app/stores';
 	import { motionPopover } from '$lib/utils/motion.svelte';
 	import { Button, Modal } from '$lib/components/ui';
 	import DeploymentProgress from '$lib/components/DeploymentProgress.svelte';
@@ -54,15 +53,12 @@
 		onExpandBuildCard: () => void;
 	} = $props();
 
-	// `?buildqueue=demo` fakes an in-flight build so the merged widget (current
-	// build + queued-behind) can be reviewed without a live deploy.
-	const demo = $derived($page.url.searchParams.get('buildqueue') === 'demo');
-	const cardVisible = $derived(showBuildCardRender || demo);
-	const cardStatus = $derived(demo ? 'building' : buildModalStatus);
-	const cardStep = $derived(demo ? 'building' : buildModalStep);
-	const cardElapsed = $derived(demo ? 47 : buildElapsed);
-	const cardProgress = $derived(demo ? 64 : buildProgressValue());
-	const cardName = $derived(deployment?.name ?? (demo ? 'widget' : 'App'));
+	const cardVisible = $derived(showBuildCardRender);
+	const cardStatus = $derived(buildModalStatus);
+	const cardStep = $derived(buildModalStep);
+	const cardElapsed = $derived(buildElapsed);
+	const cardProgress = $derived(buildProgressValue());
+	const cardName = $derived(deployment?.name ?? 'App');
 
 	// Real-widget behaviour: draggable by the header, collapsible, and both the
 	// snapped corner and collapsed state persist across visits.
@@ -242,7 +238,7 @@
 			class:build-widget--dragging={dragging}
 			style="transform-origin: bottom right;"
 			{@attach motionPopover({
-				closing: () => !demo && !(showBuildCard && !showBuildModal),
+				closing: () => !(showBuildCard && !showBuildModal),
 				onClosed: () => {
 					showBuildCardRender = false;
 				},
@@ -335,8 +331,7 @@
 					</div>
 					<BuildQueue
 						deploymentId={deployment?.id ?? ''}
-						githubRepo={deployment?.githubRepo ??
-							(demo ? 'https://github.com/hackclub/widget' : '')}
+						githubRepo={deployment?.githubRepo ?? ''}
 					/>
 				</div>
 			</div>

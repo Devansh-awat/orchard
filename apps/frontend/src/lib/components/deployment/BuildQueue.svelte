@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { GitCommit, Layers } from 'lucide-svelte';
-	import { page } from '$app/stores';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { queryClient } from '$lib/query';
 	import { apiFetch, selectedOrganization, subscribeOrgEvents, sseStatusFor } from '$lib/stores';
@@ -25,30 +24,6 @@
 		return `${githubRepo.replace(/\.git$/, '')}/commit/${sha}`;
 	}
 
-	// `?buildqueue=demo` injects mock rows entirely client-side (no DB, no API)
-	// so the widget can be reviewed on any deployment.
-	const demo = $derived($page.url.searchParams.get('buildqueue') === 'demo');
-	const DEMO_RUNS: BuildRun[] = [
-		{
-			id: 'demo-1',
-			status: 'scheduled',
-			triggerType: 'auto',
-			commitSha: 'de0d8394f75fd46ee8e2023fdfac39386b52aa58',
-			commitMessage: 'feat: add dark mode toggle to the widget header',
-			branch: 'main',
-			createdAt: new Date(Date.now() - 12000).toISOString()
-		},
-		{
-			id: 'demo-2',
-			status: 'scheduled',
-			triggerType: 'auto',
-			commitSha: 'fe0752d614e8305981a8e210b0246571eee1cb64',
-			commitMessage: 'chore: bump embed sdk to 2.4.0',
-			branch: 'main',
-			createdAt: new Date(Date.now() - 4000).toISOString()
-		}
-	];
-
 	let sseStatusValue = $state<'connecting' | 'connected' | 'disconnected'>('connecting');
 	// `runs` is a $state declared before the query so the query's
 	// refetchInterval can read it without a temporal-dead-zone cycle (the query
@@ -62,7 +37,7 @@
 			if (!res.ok) throw new Error(`build-runs ${res.status}`);
 			return (await res.json()) as BuildRun[];
 		},
-		enabled: !!deploymentId && !demo,
+		enabled: !!deploymentId,
 		// Adaptive polling matches the deployment query: SSE is the primary
 		// channel, polling is the fallback. Something in flight + SSE down =
 		// poll hard; idle + SSE up = lean on the event bus.
@@ -77,7 +52,7 @@
 	}));
 
 	$effect(() => {
-		runs = demo ? DEMO_RUNS : (query.data ?? []);
+		runs = query.data ?? [];
 	});
 
 	const queued = $derived(runs.filter((r) => r.status === 'scheduled'));
