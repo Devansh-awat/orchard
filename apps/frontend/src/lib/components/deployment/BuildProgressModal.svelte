@@ -253,7 +253,7 @@
 					<div class="px-4 pb-3">
 						<div class="build-card-track h-1.5 w-full overflow-hidden rounded-full">
 							<div
-								class="h-full transition-all duration-500 ease-out rounded-full {cardStatus ===
+								class="h-full transition-[width] duration-500 ease-out rounded-full {cardStatus ===
 								'failed'
 									? 'bg-red-500'
 									: cardStatus === 'running'
