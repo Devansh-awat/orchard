@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { GitCommit, Layers } from 'lucide-svelte';
+	import { page } from '$app/stores';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { queryClient } from '$lib/query';
 	import { apiFetch, selectedOrganization, subscribeOrgEvents, sseStatusFor } from '$lib/stores';
@@ -19,6 +20,30 @@
 
 	let { deploymentId }: { deploymentId: string } = $props();
 
+	// `?buildqueue=demo` injects mock rows entirely client-side (no DB, no API)
+	// so the widget can be reviewed on any deployment.
+	const demo = $derived($page.url.searchParams.get('buildqueue') === 'demo');
+	const DEMO_RUNS: BuildRun[] = [
+		{
+			id: 'demo-1',
+			status: 'scheduled',
+			triggerType: 'auto',
+			commitSha: 'b2c3d4e5f6a7b8c9',
+			commitMessage: 'feat: add dark mode toggle to the widget header',
+			branch: 'main',
+			createdAt: new Date(Date.now() - 12000).toISOString()
+		},
+		{
+			id: 'demo-2',
+			status: 'scheduled',
+			triggerType: 'auto',
+			commitSha: 'c3d4e5f6a7b8c9d0',
+			commitMessage: 'chore: bump embed sdk to 2.4.0',
+			branch: 'main',
+			createdAt: new Date(Date.now() - 4000).toISOString()
+		}
+	];
+
 	let sseStatusValue = $state<'connecting' | 'connected' | 'disconnected'>('connecting');
 
 	const query = createQuery(() => ({
@@ -28,7 +53,7 @@
 			if (!res.ok) throw new Error(`build-runs ${res.status}`);
 			return (await res.json()) as BuildRun[];
 		},
-		enabled: !!deploymentId,
+		enabled: !!deploymentId && !demo,
 		// Adaptive polling matches the deployment query: SSE is the primary
 		// channel, polling is the fallback. Something in flight + SSE down =
 		// poll hard; idle + SSE up = lean on the event bus.
@@ -42,7 +67,7 @@
 		refetchIntervalInBackground: false
 	}));
 
-	const runs = $derived(query.data ?? []);
+	const runs = $derived(demo ? DEMO_RUNS : (query.data ?? []));
 	const queued = $derived(runs.filter((r) => r.status === 'scheduled'));
 
 	// Live updates ride the same Redis Streams SSE bus as everything else; the
