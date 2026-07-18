@@ -35,3 +35,21 @@ export function clearSessionCookie(res: Response): void {
     domain: process.env.COOKIE_DOMAIN || undefined,
   });
 }
+
+const GITHUB_OAUTH_STATE_COOKIE = 'github_oauth_state';
+const GITHUB_OAUTH_STATE_PATH = '/apiv1/github';
+const TEN_MINUTES_MS = 10 * 60 * 1000;
+
+export function setGithubOauthStateCookie(res: Response, state: string): void {
+  res.cookie(GITHUB_OAUTH_STATE_COOKIE, state, {
+    httpOnly: true,
+    secure: isSessionCookieSecure(),
+    sameSite: 'lax',
+    maxAge: TEN_MINUTES_MS,
+    path: GITHUB_OAUTH_STATE_PATH,
+  });
+}
+
+export function clearGithubOauthStateCookie(res: Response): void {
+  res.clearCookie(GITHUB_OAUTH_STATE_COOKIE, { path: GITHUB_OAUTH_STATE_PATH });
+}
