@@ -20,7 +20,8 @@
 		type EarlyAccessFeature
 	} from '$lib/posthog';
 	import {
-		UserProfile,
+		UserIdentityHero,
+		SettingsLinkRow,
 		UserInvitations,
 		UserGitHub,
 		UserTailscale,
@@ -29,6 +30,8 @@
 		UserEarlyAccess,
 		UserAccessibility
 	} from '$lib/components/user-settings';
+	import { KeyRound, ServerCog } from '@jis3r/icons';
+	import { Palette } from 'lucide-svelte';
 
 	let githubLinked = $state(false);
 	let githubUsername = $state<string | null>(null);
@@ -117,6 +120,62 @@
 	const frontendVersion = __APP_VERSION__;
 
 	const tailscaleEnabled = featureFlag('tailscale-integration');
+
+	let activeSection = $state('b-profile');
+	const RAIL_GROUPS = $derived([
+		{
+			label: 'Account',
+			items: [
+				{ id: 'b-profile', label: 'Profile' },
+				...(invitations.length ? [{ id: 'b-invitations', label: 'Invitations' }] : [])
+			]
+		},
+		{
+			label: 'Connections',
+			items: [
+				{ id: 'b-github', label: 'GitHub' },
+				...($tailscaleEnabled ? [{ id: 'b-tailscale', label: 'Tailscale' }] : []),
+				{ id: 'b-integrations', label: 'Tokens and MCP' }
+			]
+		},
+		{
+			label: 'Security',
+			items: [
+				{ id: 'b-passkeys', label: 'Passkeys' },
+				{ id: 'b-sessions', label: 'Devices' }
+			]
+		},
+		{
+			label: 'Preferences',
+			items: [
+				{ id: 'b-appearance', label: 'Appearance' },
+				{ id: 'b-accessibility', label: 'Accessibility' },
+				{ id: 'b-early-access', label: 'Early access' }
+			]
+		}
+	]);
+	const RAIL_IDS = $derived(RAIL_GROUPS.flatMap((g) => g.items.map((i) => i.id)));
+
+	function jumpToSection(id: string) {
+		document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+	}
+
+	$effect(() => {
+		if (!browser) return;
+		const ids = RAIL_IDS;
+		const els = ids.map((id) => document.getElementById(id)).filter(Boolean) as HTMLElement[];
+		if (!els.length) return;
+		const observer = new IntersectionObserver(
+			(entries) => {
+				for (const entry of entries) {
+					if (entry.isIntersecting) activeSection = entry.target.id;
+				}
+			},
+			{ rootMargin: '-15% 0px -70% 0px' }
+		);
+		for (const el of els) observer.observe(el);
+		return () => observer.disconnect();
+	});
 
 	function censorEmail(email: string): string {
 		const [local, domain] = email.split('@');
@@ -720,8 +779,8 @@
 			><ArrowLeft class="h-3.5 w-3.5" /> Back</button
 		>
 
-		<div class="us-stack">
-			<UserProfile
+		<div id="b-profile" class="usb-anchor">
+			<UserIdentityHero
 				index={0}
 				user={$user}
 				{displayEmail}
@@ -738,86 +797,157 @@
 				onUploadAvatar={uploadAvatar}
 				onDeleteAvatar={deleteAvatar}
 				bind:avatarInputRef={avatarInput}
-			/>
-
-			<UserInvitations
-				index={1}
-				{invitations}
-				{acceptingInvitation}
-				{decliningInvitation}
-				onAccept={handleAcceptInvitation}
-				onDecline={handleDeclineInvitation}
-			/>
-
-			<UserGitHub
-				index={2}
-				{loading}
+				passkeyCount={passkeysLoading ? null : passkeys.length}
+				sessionCount={sessionsLoading ? null : sessions.length}
 				{githubLinked}
-				{githubUsername}
-				{githubInstallations}
-				{githubAppInstallUrl}
-				{githubTokenExpired}
-				{unlinking}
-				onLink={linkGitHub}
-				onUnlink={unlinkGitHub}
+				onJump={jumpToSection}
 			/>
+		</div>
 
-			{#if $tailscaleEnabled}
-				<UserTailscale
-					index={3}
-					{tailscaleLoading}
-					{tailscaleLinked}
-					{tailscaleTailnet}
-					{unlinkingTailscale}
-					bind:showTailscaleForm
-					bind:tailscaleApiKey
-					{linkingTailscale}
-					onLink={linkTailscale}
-					onUnlink={unlinkTailscale}
-				/>
-			{/if}
+		<div class="usb-grid">
+			<aside class="usb-rail" aria-label="Settings sections">
+				{#each RAIL_GROUPS as group (group.label)}
+					<div class="usb-rail-group">
+						<p class="usb-rail-eyebrow">{group.label}</p>
+						{#each group.items as item (item.id)}
+							<button
+								type="button"
+								class="usb-rail-link"
+								class:usb-rail-link--active={activeSection === item.id}
+								aria-current={activeSection === item.id ? 'true' : undefined}
+								onclick={() => jumpToSection(item.id)}
+							>
+								{item.label}
+							</button>
+						{/each}
+					</div>
+				{/each}
+			</aside>
 
-			<UserPasskeys
-				index={4}
-				{passkeys}
-				{passkeysLoading}
-				{passkeyListError}
-				{passkeyEnvWarning}
-				{registerLoading}
-				bind:showAddPasskey
-				bind:newPasskeyName
-				bind:editingPasskeyId
-				bind:renameValue
-				{renaming}
-				{deletingPasskeyId}
-				onRegister={registerPasskey}
-				onStartRenaming={startRenaming}
-				onCancelRenaming={cancelRenaming}
-				onSavePasskeyName={savePasskeyName}
-				onConfirmDelete={confirmDeletePasskey}
-				{formatTimestamp}
-			/>
+			<div class="usb-sections">
+				{#if invitations.length}
+					<div id="b-invitations" class="usb-anchor">
+						<UserInvitations
+							index={0}
+							{invitations}
+							{acceptingInvitation}
+							{decliningInvitation}
+							onAccept={handleAcceptInvitation}
+							onDecline={handleDeclineInvitation}
+						/>
+					</div>
+				{/if}
 
-			<UserSessions
-				index={5}
-				{sessions}
-				{sessionsLoading}
-				{sessionsError}
-				{revokingSessionId}
-				onConfirmRevokeSession={confirmRevokeSession}
-				onShowRevokeAll={() => (showRevokeAllModal = true)}
-			/>
+				<div id="b-github" class="usb-anchor">
+					<UserGitHub
+						index={1}
+						{loading}
+						{githubLinked}
+						{githubUsername}
+						{githubInstallations}
+						{githubAppInstallUrl}
+						{githubTokenExpired}
+						{unlinking}
+						onLink={linkGitHub}
+						onUnlink={unlinkGitHub}
+					/>
+				</div>
 
-			<UserAccessibility index={6} />
+				{#if $tailscaleEnabled}
+					<div id="b-tailscale" class="usb-anchor">
+						<UserTailscale
+							index={2}
+							{tailscaleLoading}
+							{tailscaleLinked}
+							{tailscaleTailnet}
+							{unlinkingTailscale}
+							bind:showTailscaleForm
+							bind:tailscaleApiKey
+							{linkingTailscale}
+							onLink={linkTailscale}
+							onUnlink={unlinkTailscale}
+						/>
+					</div>
+				{/if}
 
-			<UserEarlyAccess
-				index={7}
-				{earlyAccessFeatures}
-				{earlyAccessLoading}
-				{earlyAccessEnrollment}
-				{togglingFeature}
-				onToggleFeature={toggleEarlyAccessFeature}
-			/>
+				<div id="b-integrations" class="usb-anchor usb-links">
+					<SettingsLinkRow
+						href="/user/api-tokens"
+						title="API tokens"
+						description="Create and revoke tokens for the CLI and API"
+						index={3}
+					>
+						{#snippet icon(hovered)}<KeyRound size={16} animate={hovered} />{/snippet}
+					</SettingsLinkRow>
+					<SettingsLinkRow
+						href="/user/mcp"
+						title="MCP servers"
+						description="Connect agents and assistants to your account"
+						index={3}
+					>
+						{#snippet icon(hovered)}<ServerCog size={16} animate={hovered} />{/snippet}
+					</SettingsLinkRow>
+				</div>
+
+				<div id="b-passkeys" class="usb-anchor">
+					<UserPasskeys
+						index={4}
+						{passkeys}
+						{passkeysLoading}
+						{passkeyListError}
+						{passkeyEnvWarning}
+						{registerLoading}
+						bind:showAddPasskey
+						bind:newPasskeyName
+						bind:editingPasskeyId
+						bind:renameValue
+						{renaming}
+						{deletingPasskeyId}
+						onRegister={registerPasskey}
+						onStartRenaming={startRenaming}
+						onCancelRenaming={cancelRenaming}
+						onSavePasskeyName={savePasskeyName}
+						onConfirmDelete={confirmDeletePasskey}
+						{formatTimestamp}
+					/>
+				</div>
+
+				<div id="b-sessions" class="usb-anchor">
+					<UserSessions
+						index={5}
+						{sessions}
+						{sessionsLoading}
+						{sessionsError}
+						{revokingSessionId}
+						onConfirmRevokeSession={confirmRevokeSession}
+						onShowRevokeAll={() => (showRevokeAllModal = true)}
+					/>
+				</div>
+
+				<div id="b-appearance" class="usb-anchor">
+					<SettingsLinkRow
+						href="/user/settings/theme"
+						title="Appearance"
+						description="Themes, colors, and the theme editor"
+						index={6}
+					>
+						{#snippet icon()}<Palette size={16} />{/snippet}
+					</SettingsLinkRow>
+				</div>
+
+				<div id="b-accessibility" class="usb-anchor"><UserAccessibility index={7} /></div>
+
+				<div id="b-early-access" class="usb-anchor">
+					<UserEarlyAccess
+						index={8}
+						{earlyAccessFeatures}
+						{earlyAccessLoading}
+						{earlyAccessEnrollment}
+						{togglingFeature}
+						onToggleFeature={toggleEarlyAccessFeature}
+					/>
+				</div>
+			</div>
 		</div>
 
 		<p class="us-version">
@@ -894,9 +1024,77 @@
 	.us-content {
 		position: relative;
 		z-index: 1;
-		max-width: 42rem;
+		max-width: 64rem;
 		margin: 0 auto;
 		padding: 2.5rem 2rem 4rem;
+	}
+	.usb-grid {
+		display: grid;
+		grid-template-columns: 10.5rem minmax(0, 1fr);
+		gap: 2rem;
+		align-items: start;
+		margin-top: 1.25rem;
+	}
+	.usb-rail {
+		position: sticky;
+		top: 1.25rem;
+		display: flex;
+		flex-direction: column;
+		gap: 1.125rem;
+	}
+	.usb-rail-group {
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+	}
+	.usb-rail-eyebrow {
+		font-size: 0.625rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.08em;
+		color: var(--text-faint);
+		margin: 0 0 0.25rem;
+		padding-left: 0.625rem;
+	}
+	.usb-rail-link {
+		text-align: left;
+		font-size: 0.8125rem;
+		color: var(--text-muted);
+		background: none;
+		border: none;
+		border-radius: 0.5rem;
+		padding: 0.3rem 0.625rem;
+		cursor: pointer;
+		transition:
+			color 120ms,
+			background-color 120ms;
+	}
+	.usb-rail-link:hover,
+	.usb-rail-link--active {
+		color: var(--text-default);
+		background-color: var(--bg-hover);
+	}
+	.usb-sections {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+		min-width: 0;
+	}
+	.usb-anchor {
+		scroll-margin-top: 1.25rem;
+	}
+	.usb-links {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+	}
+	@media (max-width: 900px) {
+		.usb-grid {
+			grid-template-columns: 1fr;
+		}
+		.usb-rail {
+			display: none;
+		}
 	}
 	.us-back {
 		display: inline-flex;
@@ -914,11 +1112,6 @@
 	}
 	.us-back:hover {
 		color: var(--center-channel-color);
-	}
-	.us-stack {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
 	}
 	.us-version {
 		text-align: center;

@@ -1,4 +1,5 @@
-export { default as UserProfile } from './UserProfile.svelte';
+export { default as UserIdentityHero } from './UserIdentityHero.svelte';
+export { default as SettingsLinkRow } from './SettingsLinkRow.svelte';
 export { default as UserInvitations } from './UserInvitations.svelte';
 export { default as UserGitHub } from './UserGitHub.svelte';
 export { default as UserTailscale } from './UserTailscale.svelte';
