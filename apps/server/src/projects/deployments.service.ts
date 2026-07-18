@@ -346,6 +346,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       select: {
         id: true,
         name: true,
+        displayName: true,
         namespace: true,
         status: true,
         buildStatus: true,
@@ -455,6 +456,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       select: {
         id: true,
         name: true,
+        displayName: true,
         image: true,
         status: true,
         buildStatus: true,
@@ -483,6 +485,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           select: {
             id: true,
             name: true,
+            displayName: true,
             image: true,
             buildStatus: true,
             ingresses: { select: { host: true }, take: 1 },
@@ -1451,6 +1454,86 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         ...(buildWithDepot !== undefined ? { buildWithDepot: [deployment.buildWithDepot, buildWithDepot] } : {}),
         ...(persistentBuildCache !== undefined ? { persistentBuildCache: [deployment.persistentBuildCache, persistentBuildCache] } : {}),
       },
+    });
+
+    return this.getDeployment(deploymentId);
+  }
+
+  async renameDeployment(
+    deploymentId: string,
+    name: string,
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    }
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: {
+          include: {
+            organization: true,
+          },
+        },
+      },
+    });
+
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'rename deployments');
+
+    const trimmed = String(name || '').trim();
+    if (!trimmed) throw new BadRequestException('Name is required');
+    if (trimmed.length > 255) throw new BadRequestException('Name is too long');
+
+    // The internal name is frozen (it is baked into the k8s object names),
+    // so a rename only touches displayName. Renaming back to the internal
+    // name clears the override.
+    const nextDisplayName = trimmed === deployment.name ? null : trimmed;
+
+    if (nextDisplayName) {
+      const conflict = await this.prisma.deployment.findFirst({
+        where: {
+          environmentId: deployment.environmentId,
+          id: { not: deploymentId },
+          OR: [{ name: nextDisplayName }, { displayName: nextDisplayName }],
+        },
+        select: { id: true },
+      });
+      if (conflict) {
+        throw new BadRequestException('A deployment with this name already exists in this environment');
+      }
+    }
+
+    const previousEffective = deployment.displayName ?? deployment.name;
+    await this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: { displayName: nextDisplayName },
+    });
+
+    void this.audit.log({
+      action: 'deployment.renamed',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: deployment.project.organizationId,
+      projectId: deployment.projectId,
+      deploymentId,
+      targetType: 'deployment',
+      targetId: deploymentId,
+      targetLabel: trimmed,
+      metadata: { displayName: [previousEffective, trimmed] },
     });
 
     return this.getDeployment(deploymentId);

@@ -187,9 +187,15 @@
 		if (!query) return deployments;
 		return deployments.filter((deployment) => {
 			const name = deployment.name?.toLowerCase() ?? '';
+			const displayName = deployment.displayName?.toLowerCase() ?? '';
 			const status = deployment.status?.toLowerCase() ?? '';
 			const image = deployment.image?.toLowerCase() ?? '';
-			return name.includes(query) || status.includes(query) || image.includes(query);
+			return (
+				name.includes(query) ||
+				displayName.includes(query) ||
+				status.includes(query) ||
+				image.includes(query)
+			);
 		});
 	});
 

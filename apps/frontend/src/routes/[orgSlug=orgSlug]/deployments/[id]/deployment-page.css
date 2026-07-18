@@ -534,6 +534,22 @@
 	text-overflow: ellipsis;
 }
 
+.dep-rename-btn {
+	display: inline-flex;
+	align-items: center;
+	justify-content: center;
+	width: 26px;
+	height: 26px;
+	border-radius: 0.45rem;
+	color: var(--text-muted);
+	flex-shrink: 0;
+}
+
+.dep-rename-btn:hover {
+	background: var(--bg-hover);
+	color: var(--text-default);
+}
+
 .dep-header-domains {
 	display: flex;
 	flex-wrap: wrap;

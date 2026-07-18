@@ -403,6 +403,7 @@
 			r = r.filter(
 				(d) =>
 					d.name.toLowerCase().includes(q) ||
+					(d.displayName?.toLowerCase().includes(q) ?? false) ||
 					(d.project?.name?.toLowerCase().includes(q) ?? false) ||
 					(d.githubRepo?.toLowerCase().includes(q) ?? false) ||
 					d.ingresses.some((i) => i.host.toLowerCase().includes(q))
@@ -499,7 +500,7 @@
 		e.stopPropagation();
 		pinnedItems.toggle({
 			id: dep.id,
-			name: dep.name,
+			name: dep.displayName || dep.name,
 			type: 'deployment',
 			href: `/${orgSlug}/deployments/${dep.id}`
 		});
@@ -533,7 +534,7 @@
 		try {
 			const r = await apiFetch(`/apiv1/deployments/${dep.id}/restart`, { method: 'POST' });
 			if (r.ok) {
-				toasts.add({ title: `Restarting ${dep.name}...`, color: 'success' });
+				toasts.add({ title: `Restarting ${dep.displayName || dep.name}...`, color: 'success' });
 				queryClient.invalidateQueries({ queryKey: ['overview', orgSlug] });
 			} else toasts.add({ title: 'Restart failed', color: 'error' });
 		} catch {

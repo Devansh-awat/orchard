@@ -9,6 +9,7 @@ export interface DeploymentUser {
 export interface Deployment {
 	id: string;
 	name: string;
+	displayName?: string | null;
 	status: string;
 	buildStatus?: string;
 	replicas: number;

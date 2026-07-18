@@ -101,7 +101,7 @@
 							/>
 						{:else}
 							<span class="pj-deployment-favicon-letter"
-								>{deployment.name.charAt(0).toUpperCase()}</span
+								>{(deployment.displayName || deployment.name).charAt(0).toUpperCase()}</span
 							>
 						{/if}
 						<span class="pj-deployment-favicon-dot status--{m.kind}"></span>
@@ -120,7 +120,7 @@
 					</div>
 				</div>
 				<div class="pj-deployment-card-body">
-					<span class="pj-deployment-name">{deployment.name}</span>
+					<span class="pj-deployment-name">{deployment.displayName || deployment.name}</span>
 					{#if deployment.githubRepo}
 						<span class="pj-deployment-detail">{deployment.githubRepo}</span>
 						{#if deployment.githubBranch}

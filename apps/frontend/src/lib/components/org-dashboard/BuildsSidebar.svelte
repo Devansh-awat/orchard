@@ -54,7 +54,7 @@
 								loading="lazy"
 								decoding="async"
 								onerror={() => onFavErr('b-' + b.id)}
-							/>{/if}<span class="bld-name">{b.name}</span></span
+							/>{/if}<span class="bld-name">{b.displayName || b.name}</span></span
 					>
 					<span class="bld-sub"
 						>{#if b.project?.name}<strong>{b.project.name}</strong> ·
@@ -94,7 +94,7 @@
 								loading="lazy"
 								decoding="async"
 								onerror={() => onFavErr('b-' + b.deployment.id)}
-							/>{/if}<span class="bld-name">{b.deployment.name}</span></span
+							/>{/if}<span class="bld-name">{b.deployment.displayName || b.deployment.name}</span></span
 					>
 					<span class="bld-sub"
 						>{#if b.deployment.project?.name}<strong>{b.deployment.project.name}</strong

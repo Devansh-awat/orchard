@@ -1,5 +1,5 @@
 <script lang="ts">
-	import { Loader2, ExternalLink } from 'lucide-svelte';
+	import { Loader2, ExternalLink, Pencil } from 'lucide-svelte';
 	import { Play, RefreshCw, Trash2 } from '@jis3r/icons';
 	import { motionStagger, cardTilt } from '$lib/utils/motion.svelte';
 	import { envBadgeColor } from '$lib/utils/format';
@@ -22,6 +22,7 @@
 		_isBuilding,
 		onRebuild,
 		onRestart,
+		onRename,
 		onShowDeleteModal,
 		onTriggerActionAnim,
 		onViewBuildLogs,
@@ -46,6 +47,7 @@
 		_isBuilding: boolean;
 		onRebuild: () => void;
 		onRestart: () => void;
+		onRename?: () => void;
 		onShowDeleteModal: () => void;
 		onTriggerActionAnim: (id: string) => void;
 		onViewBuildLogs: () => void;
@@ -83,7 +85,17 @@
 	{/if}
 	<div class="dep-header-top">
 		<div class="dep-header-identity">
-			<h1 class="dep-header-name">{deployment.name}</h1>
+			<h1 class="dep-header-name">{deployment.displayName || deployment.name}</h1>
+			{#if onRename}
+				<button
+					class="dep-rename-btn"
+					title="Rename"
+					aria-label="Rename app"
+					onclick={onRename}
+				>
+					<Pencil size={13} />
+				</button>
+			{/if}
 			<span class="dep-status-chip dep-status-chip--{deploymentStatusChip.kind}">
 				<span class="dep-status-dot" class:dep-status-dot--pulse={deploymentStatusChip.pulse}
 				></span>

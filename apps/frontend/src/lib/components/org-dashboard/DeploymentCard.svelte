@@ -67,10 +67,10 @@
 				onerror={() => onFavErr(dep.id)}
 			/>
 		{:else}
-			<div class="card-av">{dep.name.charAt(0).toUpperCase()}</div>
+			<div class="card-av">{(dep.displayName || dep.name).charAt(0).toUpperCase()}</div>
 		{/if}
 		<div class="card-text">
-			<span class="card-name">{dep.name}</span>
+			<span class="card-name">{dep.displayName || dep.name}</span>
 			{#if dep.ingresses.length > 0}
 				<span class="card-sub">{dep.ingresses[0].host.split('/')[0]}</span>
 			{:else if dep.githubRepo}

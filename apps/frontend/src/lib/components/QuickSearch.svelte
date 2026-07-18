@@ -33,7 +33,12 @@
 
 	type ProjectRef = { id: string; name: string; slug: string };
 	type OverviewLite = {
-		deployments?: Array<{ id: string; name: string; project?: ProjectRef }>;
+		deployments?: Array<{
+			id: string;
+			name: string;
+			displayName?: string | null;
+			project?: ProjectRef;
+		}>;
 		databases?: Array<{ id: string; name: string; project?: ProjectRef }>;
 		projects?: ProjectRef[];
 	};
@@ -60,7 +65,7 @@
 			if (!d.project) continue;
 			ensureProject(d.project).children!.push({
 				id: d.id,
-				name: d.name,
+				name: d.displayName || d.name,
 				type: 'deployment',
 				href: `/${orgSlug}/deployments/${d.id}`
 			});

@@ -1,6 +1,7 @@
 export interface DeploymentSummary {
 	id: string;
 	name: string;
+	displayName?: string | null;
 	status: string;
 	buildStatus: string;
 	image?: string;
@@ -36,6 +37,7 @@ export interface DatabaseSummary {
 export interface ActiveBuild {
 	id: string;
 	name: string;
+	displayName?: string | null;
 	image?: string;
 	status: string;
 	buildStatus: string;
@@ -58,6 +60,7 @@ export interface RecentBuild {
 	deployment: {
 		id: string;
 		name: string;
+		displayName?: string | null;
 		image?: string;
 		buildStatus: string;
 		faviconUrl?: string | null;

@@ -1218,6 +1218,7 @@ export class ProjectsService {
           select: {
             id: true,
             name: true,
+            displayName: true,
             status: true,
             buildStatus: true,
             buildStep: true,
@@ -1434,6 +1435,7 @@ export class ProjectsService {
           select: {
             id: true,
             name: true,
+            displayName: true,
             status: true,
             ingresses: { select: { id: true, host: true } },
           },

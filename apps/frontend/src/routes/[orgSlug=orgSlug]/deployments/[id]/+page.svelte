@@ -80,6 +80,7 @@
 	import { animate } from 'motion';
 	import { MemoryStick } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import RenameModal from '$lib/components/RenameModal.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
 	import AuditLogList from '$lib/components/AuditLogList.svelte';
 	import { formatCpu as fmtCpuPreset, formatMemory as fmtMemoryPreset } from '$lib/presets';
@@ -537,6 +538,8 @@
 	let deleting = $state(false);
 	let showDeleteModal = $state(false);
 	let rebuilding = $state(false);
+	let renameOpen = $state(false);
+	let renamingApp = $state(false);
 	let savingEnv = $state(false);
 	let savingVolumes = $state(false);
 	let savingAdvanced = $state(false);
@@ -1901,6 +1904,34 @@
 		}
 	}
 
+	async function renameApp(name: string) {
+		if (!deployment) return;
+		renamingApp = true;
+		try {
+			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/name`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ name })
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to rename');
+			}
+			const updated = await response.json();
+			deployment.displayName = updated.displayName ?? null;
+			renameOpen = false;
+			toasts.add({ title: 'App renamed', color: 'success' });
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to rename',
+				color: 'error'
+			});
+		} finally {
+			renamingApp = false;
+		}
+	}
+
 	function handleSourceUpdated(updated: Deployment) {
 		if (deployment) mergeInto(deployment, updated);
 		else deployment = updated;
@@ -2672,6 +2703,7 @@
 				{_isBuilding}
 				onRebuild={rebuild}
 				onRestart={restart}
+				onRename={() => (renameOpen = true)}
 				onShowDeleteModal={() => (showDeleteModal = true)}
 				onTriggerActionAnim={triggerActionAnim}
 				onViewBuildLogs={handleViewBuildLogs}
@@ -2977,9 +3009,16 @@
 />
 
 {#if deployment}
+	<RenameModal
+		bind:open={renameOpen}
+		title="Rename app"
+		value={deployment.displayName || deployment.name}
+		saving={renamingApp}
+		onSave={renameApp}
+	/>
 	<ConfirmModal
 		bind:open={showDeleteModal}
-		title={`Delete "${deployment.name}"?`}
+		title={`Delete "${deployment.displayName || deployment.name}"?`}
 		description="This will permanently <strong>delete this app</strong> and all its associated services and ingresses. This cannot be undone."
 		html
 		confirmLabel="Delete App"

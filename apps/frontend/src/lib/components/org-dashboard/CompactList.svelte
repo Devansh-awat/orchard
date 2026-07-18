@@ -165,9 +165,9 @@
 				onerror={() => onFavErr(dep.id)}
 			/>
 		{:else}
-			<span class="cl-av">{dep.name.charAt(0).toUpperCase()}</span>
+			<span class="cl-av">{(dep.displayName || dep.name).charAt(0).toUpperCase()}</span>
 		{/if}
-		<span class="cl-name">{dep.name}</span>
+		<span class="cl-name">{dep.displayName || dep.name}</span>
 		<span class="cl-sub">{subtitle(dep)}</span>
 		{#if metrics(dep)}
 			<span class="cl-metrics">{metrics(dep)}</span>
