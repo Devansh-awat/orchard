@@ -2,6 +2,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { createQuery } from '@tanstack/svelte-query';
+	import { selectedOrganization } from '$lib/stores';
 	import { overviewQueryOptions } from '$lib/queries/overview';
 	import { Package, Rocket, Search, X, Database, LayoutTemplate } from 'lucide-svelte';
 	import { onMount } from 'svelte';
@@ -15,7 +16,7 @@
 	let query = $state('');
 	let selectedIndex = $state(0);
 
-	const orgSlug = $derived($page.params.orgSlug);
+	const orgSlug = $derived($page.params.orgSlug ?? $selectedOrganization?.slug);
 
 	const overview = createQuery(() => ({
 		...overviewQueryOptions(orgSlug),
