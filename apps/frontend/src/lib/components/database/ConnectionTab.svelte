@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Copy, Check, Eye, EyeOff } from 'lucide-svelte';
+	import { selectedOrganization } from '$lib/stores';
 	import { Button, Badge } from '$lib/components/ui';
 	import type { DatabaseDetail } from './types';
 
@@ -26,6 +27,10 @@
 		onDisablePublic: () => void;
 		onCopy: (text: string, field: string) => void;
 	} = $props();
+
+	const canManageOrg = $derived(
+		$selectedOrganization?.myRole === 'owner' || $selectedOrganization?.myRole === 'admin'
+	);
 </script>
 
 <div class="space-y-5">
@@ -261,8 +266,13 @@
 				<div class="db-empty-box">
 					<p class="text-sm" style="color: var(--surface-muted);">
 						Not publicly exposed. Click <strong>Enable</strong> to assign a random free port on your
-						organization's shared database IP. If no shared IP is configured, set one in
-						<a href={`/${orgSlug}/settings`} class="db-link">organization settings</a>.
+						organization's shared database IP.
+						{#if canManageOrg}
+							If no shared IP is configured, set one in
+							<a href={`/${orgSlug}/settings`} class="db-link">organization settings</a>.
+						{:else}
+							If no shared IP is configured, ask an organization admin to set one.
+						{/if}
 					</p>
 				</div>
 			{/if}

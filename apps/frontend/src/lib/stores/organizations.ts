@@ -8,6 +8,7 @@ export interface Organization {
 	description?: string;
 	avatarUrl?: string;
 	plan?: string | null;
+	myRole?: 'owner' | 'admin' | 'member' | 'guest' | null;
 	workspaces?: unknown[];
 	members?: unknown[];
 }

@@ -191,6 +191,11 @@
 						await fetchScimTokens();
 					}
 				} else {
+					toasts.add({
+						title: 'No access',
+						description: 'Only organization owners and admins can open settings',
+						color: 'error'
+					});
 					await goto(`/${organizationSlug}`, { replaceState: true });
 					return;
 				}

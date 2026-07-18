@@ -152,7 +152,7 @@
 							</button>
 						{/each}
 					</div>
-					{#if $selectedOrganization}
+					{#if $selectedOrganization && ($selectedOrganization.myRole === 'owner' || $selectedOrganization.myRole === 'admin')}
 						<div class="org-menu-footer">
 							<a
 								href="/{$selectedOrganization.slug}/settings"

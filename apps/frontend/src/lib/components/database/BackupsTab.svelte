@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { Loader2 } from 'lucide-svelte';
+	import { selectedOrganization } from '$lib/stores';
 	import { Button, Field, Input, Select, StatusBadge, statusMeta } from '$lib/components/ui';
 	import type { StatusMeta } from '$lib/components/ui';
 	import type { DatabaseDetail, Backup, SchedulePreset } from './types';
@@ -43,6 +44,10 @@
 		formatBytes: (bytes: number | null) => string;
 		formatDate: (s: string) => string;
 	} = $props();
+
+	const canManageOrg = $derived(
+		$selectedOrganization?.myRole === 'owner' || $selectedOrganization?.myRole === 'admin'
+	);
 
 	function backupMeta(status: string): StatusMeta {
 		if (status === 'completed') return statusMeta('success', status);
@@ -139,9 +144,15 @@
 		{:else if !database.backupsEnabled}
 			<div class="db-empty-box">
 				<p class="text-sm" style="color: var(--surface-muted);">
-					Backups are disabled. Configure an R2 bucket in
-					<a href={`/${orgSlug}/settings`} class="db-link">organization settings</a>
-					to enable pgBackRest backups for this database.
+					Backups are disabled.
+					{#if canManageOrg}
+						Configure an R2 bucket in
+						<a href={`/${orgSlug}/settings`} class="db-link">organization settings</a>
+						to enable pgBackRest backups for this database.
+					{:else}
+						Ask an organization admin to configure an R2 bucket to enable pgBackRest backups
+						for this database.
+					{/if}
 				</p>
 			</div>
 		{:else if backupsLoading && backups.length === 0}
