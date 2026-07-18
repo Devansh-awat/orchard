@@ -1,5 +1,32 @@
 # Changelog
 
+## [0.19.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.18.0...frontend/v0.19.0) (2026-07-18)
+
+
+### Features
+
+* auto-deploy queues the latest commit when a build is in progress instead of dropping it ([68f49a9](https://github.com/LeafdTK/leaf/commit/68f49a951e2fe6df47be4c332bb40a44e5c4dcb2))
+* build queue rides the redis-streams sse bus with adaptive polling like the rest ([1a6c76b](https://github.com/LeafdTK/leaf/commit/1a6c76b161d293209d709d522294bfe99965f138))
+* build queue view in Deploys tab with live run states, buildRunStatus badges, read API ([e102780](https://github.com/LeafdTK/leaf/commit/e1027802011392494f65913609794eb5d2e02f20))
+* **frontend:** build widget is now draggable and collapsible with persisted position and state ([8c84c86](https://github.com/LeafdTK/leaf/commit/8c84c86b92f8649554ea498d826007c33cd68fb7))
+* **frontend:** build widget snaps to the nearest corner on release with a spring glide ([9586cdb](https://github.com/LeafdTK/leaf/commit/9586cdb43d46c99b14303b31175f670a9a99110f))
+* **frontend:** buildqueue=demo url param renders mock queue rows client-side ([5fddb96](https://github.com/LeafdTK/leaf/commit/5fddb96643a42cc860d12fc20b04a7360943aed9))
+* **frontend:** deployment queue moves into the floating build widget, deploys tab is just deployments ([e7ff111](https://github.com/LeafdTK/leaf/commit/e7ff111eb673c02bc8dceb9e6d999cc200e1ea47))
+* **frontend:** queue merges into the build widget as an up-next section, one card ([d6b5ddb](https://github.com/LeafdTK/leaf/commit/d6b5ddbb31b1428931aa0fdb4e4d430106f48481))
+* **frontend:** quiet sidebar redesign, flat surfaces, section labels, guideline-clean active states ([20a2ba0](https://github.com/LeafdTK/leaf/commit/20a2ba0165f52f921aa25c719045da3e953fe68b))
+* **frontend:** sidebar surfaces failing and pinned deployments with live status ([5b766ed](https://github.com/LeafdTK/leaf/commit/5b766edb22ab470e34c7793d11199e6b60425a3b))
+* **frontend:** sidebar warmth, crimson wash actives and tinted org panel ([376e263](https://github.com/LeafdTK/leaf/commit/376e263d0e805fd07a88330c5fc55b11ce9fbc7a))
+
+
+### Bug Fixes
+
+* **frontend:** always mount build queue widget so demo mode shows without deployment id gate ([7d4043b](https://github.com/LeafdTK/leaf/commit/7d4043bf92a2b705c055714ca2aeb4f4da37f7bb))
+* **frontend:** build queue TDZ crash, runs is now state read by refetchInterval ([5952643](https://github.com/LeafdTK/leaf/commit/5952643a59882e107b1da6c95723bbdff5daaa53))
+* **frontend:** build widget anchors by its snapped corner so resize stays flush, queued commits link to github ([b2c3c1a](https://github.com/LeafdTK/leaf/commit/b2c3c1a6cb4a29a04c33d182709ba1896dc82c5c))
+* **frontend:** near-critically damp springCollapse close so it doesnt overshoot the wrong way ([87a4dfd](https://github.com/LeafdTK/leaf/commit/87a4dfd91b0d09ea89915d7b6b30cc2817fa9d8b))
+* **frontend:** realistic 40-char demo commit shas so github links are valid, gitignore local notes ([01c1a60](https://github.com/LeafdTK/leaf/commit/01c1a601330cc7a4237e82570d44cc34e7a49647))
+* **frontend:** scope build widget progress bar transition to width so collapse doesnt stutter ([280a74d](https://github.com/LeafdTK/leaf/commit/280a74d74f3b7f54df39c5d08f167d3c4de7dbc6))
+
 ## [0.18.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.17.0...frontend/v0.18.0) (2026-07-17)
 
 

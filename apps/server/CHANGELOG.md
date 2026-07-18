@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.22.0](https://github.com/LeafdTK/leaf/compare/server/v1.21.0...server/v1.22.0) (2026-07-18)
+
+
+### Features
+
+* auto-deploy queues the latest commit when a build is in progress instead of dropping it ([68f49a9](https://github.com/LeafdTK/leaf/commit/68f49a951e2fe6df47be4c332bb40a44e5c4dcb2))
+* build queue rides the redis-streams sse bus with adaptive polling like the rest ([1a6c76b](https://github.com/LeafdTK/leaf/commit/1a6c76b161d293209d709d522294bfe99965f138))
+* build queue view in Deploys tab with live run states, buildRunStatus badges, read API ([e102780](https://github.com/LeafdTK/leaf/commit/e1027802011392494f65913609794eb5d2e02f20))
+* the build queue is real now, postgres skip-locked gates every build path through per-app and per-instance caps ([a8a1485](https://github.com/LeafdTK/leaf/commit/a8a1485118f6cf11006ef2970a3d699a34cfded5))
+
 ## [1.21.0](https://github.com/LeafdTK/leaf/compare/server/v1.20.2...server/v1.21.0) (2026-07-17)
 
 
