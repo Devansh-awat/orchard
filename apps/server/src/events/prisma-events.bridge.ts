@@ -15,6 +15,7 @@ const WATCHED_MODELS = [
   'database',
   'databaseBackup',
   'imageHistory',
+  'buildRun',
   'project',
   'ingress',
   'organizationMember',
@@ -91,6 +92,8 @@ export class PrismaEventsBridge implements OnModuleInit {
         return this.emitForDatabaseBackup(params, result);
       case 'ImageHistory':
         return this.emitForImageHistory(params, result);
+      case 'BuildRun':
+        return this.emitForBuildRun(params, result);
       case 'Project':
         return this.emitForProject(params, result);
       case 'Ingress':
@@ -176,6 +179,34 @@ export class PrismaEventsBridge implements OnModuleInit {
 
   private async emitForImageHistory(params: any, result: any) {
     const deploymentId = result?.deploymentId ?? params?.args?.data?.deploymentId;
+    const ctx = await this.resolveOrgIdFromDeployment(deploymentId);
+    if (!ctx) return;
+    this.orgEvents.emit({
+      organizationId: ctx.orgId,
+      type: 'build.changed',
+      id: deploymentId,
+      projectId: ctx.projectId,
+    });
+  }
+
+  private async emitForBuildRun(params: any, result: any) {
+    // deploymentId can come from the returned row, the create payload, or a
+    // where-clause (coalesce updateMany filters by deploymentId). A claim
+    // (update by id) has none of those, so fall back to looking the run up.
+    let deploymentId =
+      result?.deploymentId ??
+      params?.args?.data?.deploymentId ??
+      params?.args?.where?.deploymentId;
+    if (!deploymentId) {
+      const id = result?.id ?? params?.args?.where?.id;
+      if (id) {
+        const br = await this.prisma.buildRun.findUnique({
+          where: { id },
+          select: { deploymentId: true },
+        });
+        deploymentId = br?.deploymentId;
+      }
+    }
     const ctx = await this.resolveOrgIdFromDeployment(deploymentId);
     if (!ctx) return;
     this.orgEvents.emit({

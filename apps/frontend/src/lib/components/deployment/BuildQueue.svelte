@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { onMount } from 'svelte';
 	import { GitCommit, Layers } from 'lucide-svelte';
-	import { apiFetch } from '$lib/stores';
+	import { createQuery } from '@tanstack/svelte-query';
+	import { queryClient } from '$lib/query';
+	import { apiFetch, selectedOrganization, subscribeOrgEvents, sseStatusFor } from '$lib/stores';
 	import { timeAgo } from '$lib/components/org-dashboard/helpers.svelte';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import { slide } from '$lib/utils/transitions';
@@ -18,18 +19,48 @@
 
 	let { deploymentId }: { deploymentId: string } = $props();
 
-	let runs = $state<BuildRun[]>([]);
+	let sseStatusValue = $state<'connecting' | 'connected' | 'disconnected'>('connecting');
+
+	const query = createQuery(() => ({
+		queryKey: ['build-runs', deploymentId],
+		queryFn: async () => {
+			const res = await apiFetch(`/apiv1/deployments/${deploymentId}/build-runs?limit=20`);
+			if (!res.ok) throw new Error(`build-runs ${res.status}`);
+			return (await res.json()) as BuildRun[];
+		},
+		enabled: !!deploymentId,
+		// Adaptive polling matches the deployment query: SSE is the primary
+		// channel, polling is the fallback. Something in flight + SSE down =
+		// poll hard; idle + SSE up = lean on the event bus.
+		refetchInterval: (() => {
+			const hasActive = runs.some((r) => r.status === 'scheduled' || r.status === 'building');
+			const sseUp = sseStatusValue === 'connected';
+			if (hasActive) return sseUp ? 15_000 : 3_000;
+			if (!sseUp) return 20_000;
+			return 60_000;
+		})(),
+		refetchIntervalInBackground: false
+	}));
+
+	const runs = $derived(query.data ?? []);
 	const queued = $derived(runs.filter((r) => r.status === 'scheduled'));
 
-	async function fetchRuns() {
-		const res = await apiFetch(`/apiv1/deployments/${deploymentId}/build-runs?limit=20`);
-		if (res.ok) runs = await res.json();
-	}
-
-	onMount(() => {
-		fetchRuns();
-		const poll = setInterval(fetchRuns, 5000);
-		return () => clearInterval(poll);
+	// Live updates ride the same Redis Streams SSE bus as everything else; the
+	// queue emits `build.changed` for this deployment, which we invalidate on.
+	$effect(() => {
+		const orgId = $selectedOrganization?.id ?? null;
+		if (!orgId) return;
+		const statusStore = sseStatusFor(orgId);
+		const unsubStatus = statusStore.subscribe((v) => (sseStatusValue = v));
+		const unsub = subscribeOrgEvents(orgId, (ev) => {
+			if (ev.type === 'build.changed' && ev.id === deploymentId) {
+				queryClient.invalidateQueries({ queryKey: ['build-runs', deploymentId] });
+			}
+		});
+		return () => {
+			unsub();
+			unsubStatus();
+		};
 	});
 </script>
 
