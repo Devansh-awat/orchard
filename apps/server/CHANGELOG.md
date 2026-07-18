@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.23.0](https://github.com/LeafdTK/leaf/compare/server/v1.22.3...server/v1.23.0) (2026-07-18)
+
+
+### Features
+
+* change github repo, branch and dockerfile of an app after creation ([c5b99da](https://github.com/LeafdTK/leaf/commit/c5b99da385ebe9d1f2951ddb71bd2322808be905))
+
 ## [1.22.3](https://github.com/LeafdTK/leaf/compare/server/v1.22.2...server/v1.22.3) (2026-07-18)
 
 

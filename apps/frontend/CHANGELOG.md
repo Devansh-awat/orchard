@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.20.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.19.1...frontend/v0.20.0) (2026-07-18)
+
+
+### Features
+
+* change github repo, branch and dockerfile of an app after creation ([c5b99da](https://github.com/LeafdTK/leaf/commit/c5b99da385ebe9d1f2951ddb71bd2322808be905))
+
+
+### Bug Fixes
+
+* friendly message when github is already linked elsewhere, and github-auth build failures now prompt to check repo access or reconnect (owner) ([f8e8402](https://github.com/LeafdTK/leaf/commit/f8e840288d264c6696d17b6050d50d63cf8584e3))
+
 ## [0.19.1](https://github.com/LeafdTK/leaf/compare/frontend/v0.19.0...frontend/v0.19.1) (2026-07-18)
 
 

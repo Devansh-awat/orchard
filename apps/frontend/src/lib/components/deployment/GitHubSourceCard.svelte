@@ -1,7 +1,15 @@
 <script lang="ts">
 	import { Loader2, X, ChevronDown, Github } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
-	import { SectionCard, Field, Input, Button, Badge, PopoverPanel, Alert } from '$lib/components/ui';
+	import {
+		SectionCard,
+		Field,
+		Input,
+		Button,
+		Badge,
+		PopoverPanel,
+		Alert
+	} from '$lib/components/ui';
 
 	interface Repository {
 		id: number;
