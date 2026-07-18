@@ -26,6 +26,7 @@ import { LeaderElectionService } from '../events/leader-election.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { ProjectAccessService } from './project-access.service';
 import { EnvironmentsService } from './environments.service';
+import { BuildQueueService } from './build-queue.service';
 import { resolveEnvVars, EnvVar } from '../env/env-resolver';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { NodesService } from '../nodes/nodes.service';
@@ -63,7 +64,33 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     @Inject(forwardRef(() => EnvironmentsService))
     private readonly environments: EnvironmentsService,
     private readonly crypto: SecretCryptoService,
+    @Inject(forwardRef(() => BuildQueueService))
+    private readonly buildQueue: BuildQueueService,
   ) {}
+
+  async runQueuedBuild(run: {
+    id: string;
+    deploymentId: string;
+    triggerType: string;
+    commitSha: string | null;
+    commitMessage: string | null;
+    commitAuthorName: string | null;
+    commitAuthorUsername: string | null;
+    triggeredById: string | null;
+  }) {
+    if (run.triggerType === 'manual') {
+      await this.rebuildFromQueue(run.deploymentId, run.triggeredById, run.id);
+    } else {
+      await this.triggerAutoDeploy(
+        run.deploymentId,
+        run.commitSha ?? '',
+        run.commitMessage ?? 'Queued deploy',
+        run.commitAuthorName ?? undefined,
+        run.commitAuthorUsername ?? undefined,
+        run.id,
+      );
+    }
+  }
 
   onModuleInit() {
     setTimeout(() => this.recoverStuckBuilds(), 5_000);
@@ -283,7 +310,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       SET "build_logs" = COALESCE("build_logs", '') || ${`\n[ERROR] ${reason}\n`}
       WHERE "id" = ${deploymentId}::uuid
     `.catch(() => {});
-    this.drainAutoDeployQueue(deploymentId).catch(() => {});
+    this.buildQueue.onBuildFinished(deploymentId).catch(() => {});
   }
 
   private async markBuildSucceeded(deploymentId: string, logMessage: string) {
@@ -307,7 +334,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       SET "build_logs" = COALESCE("build_logs", '') || ${`\n${logMessage}\n`}
       WHERE "id" = ${deploymentId}::uuid
     `.catch(() => {});
-    this.drainAutoDeployQueue(deploymentId).catch(() => {});
+    this.buildQueue.onBuildFinished(deploymentId).catch(() => {});
   }
 
   async listDeploymentsSummary(userId: string, orgId?: string) {
@@ -2786,13 +2813,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     return this.addInternalUrlsToDeployment(updated);
   }
 
-  // Called by the webhook handler to trigger a deploy
   async triggerAutoDeploy(
     deploymentId: string,
     commitSha: string,
     commitMessage: string,
     commitAuthorName?: string,
     commitAuthorUsername?: string,
+    fromQueueRunId?: string,
   ) {
     const deployment = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
@@ -2820,24 +2847,20 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       throw new BadRequestException('This deployment was not created from GitHub');
     }
 
-    if (deployment.buildStatus === 'building') {
-      // A build is already running. Park this commit so it deploys once the
-      // current build settles, instead of dropping it (the old behaviour that
-      // forced users to manually re-deploy their latest commit). The queue
-      // holds a single slot: a newer push supersedes an older queued one, so
-      // we never build stale intermediate commits.
-      await this.prisma.deployment.update({
-        where: { id: deploymentId },
-        data: {
-          queuedCommitSha: commitSha,
-          queuedCommitMessage: commitMessage,
-          queuedCommitAuthorName: commitAuthorName ?? null,
-          queuedCommitAuthorUsername: commitAuthorUsername ?? null,
-          queuedAt: new Date(),
-        },
+    if (!fromQueueRunId) {
+      const { startNow } = await this.buildQueue.enqueue({
+        deploymentId,
+        triggerType: 'auto',
+        commitSha,
+        commitMessage,
+        commitAuthorName,
+        commitAuthorUsername,
+        branch: deployment.autoDeployBranch || deployment.githubBranch,
       });
-      console.log(`[Projects] Build in progress for ${deploymentId}; queued commit ${commitSha?.substring(0, 7)} for next build (supersedes any prior queued commit)`);
-      return { queued: true, commitSha };
+      if (!startNow) {
+        console.log(`[Projects] Queued auto-deploy for ${deploymentId} (commit ${commitSha?.substring(0, 7)})`);
+        return { queued: true, commitSha };
+      }
     }
 
     // Parse repo info for GitHub API calls
@@ -3018,54 +3041,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     ).catch((error) => {
       console.error(`[Projects] Auto-deploy failed for deployment ${deploymentId}:`, error);
     });
-  }
-
-  /**
-   * Called whenever a build settles (success or failure). If a commit was
-   * queued while that build ran, claim it atomically and kick off a fresh
-   * auto-deploy. The compare-and-swap on `queuedCommitSha` makes concurrent
-   * completions safe: only the caller that clears the slot triggers the build,
-   * so a queued commit can never be double-deployed.
-   */
-  async drainAutoDeployQueue(deploymentId: string) {
-    const dep = await this.prisma.deployment.findUnique({
-      where: { id: deploymentId },
-      select: {
-        queuedCommitSha: true,
-        queuedCommitMessage: true,
-        queuedCommitAuthorName: true,
-        queuedCommitAuthorUsername: true,
-      },
-    });
-    if (!dep?.queuedCommitSha) return;
-
-    // Claim the slot: only succeeds if the queued commit is still the one we
-    // read. A concurrent drain (or a fresh push that already started building)
-    // will lose the race and no-op.
-    const claim = await this.prisma.deployment.updateMany({
-      where: { id: deploymentId, queuedCommitSha: dep.queuedCommitSha },
-      data: {
-        queuedCommitSha: null,
-        queuedCommitMessage: null,
-        queuedCommitAuthorName: null,
-        queuedCommitAuthorUsername: null,
-        queuedAt: null,
-      },
-    });
-    if (claim.count === 0) return;
-
-    console.log(`[Projects] Draining queued commit ${dep.queuedCommitSha.substring(0, 7)} for deployment ${deploymentId}`);
-    try {
-      await this.triggerAutoDeploy(
-        deploymentId,
-        dep.queuedCommitSha,
-        dep.queuedCommitMessage ?? 'Queued deploy',
-        dep.queuedCommitAuthorName ?? undefined,
-        dep.queuedCommitAuthorUsername ?? undefined,
-      );
-    } catch (err) {
-      console.error(`[Projects] Failed to drain queued deploy for ${deploymentId}:`, err);
-    }
   }
 
   async listBuildRuns(deploymentId: string, limit = 20) {
@@ -4462,6 +4437,15 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     console.log(`[Projects] Created deployment record ${deployment.id}, starting async build`);
 
+    await this.buildQueue
+      .recordActiveBuild({
+        deploymentId: deployment.id,
+        triggerType: 'initial',
+        branch,
+        triggeredById: user.id,
+      })
+      .catch((err) => this.logger.warn(`recordActiveBuild failed for ${deployment.id}: ${err?.message ?? err}`));
+
     void this.audit.log({
       action: 'deployment.created',
       actorUserId: user.id,
@@ -5045,8 +5029,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         .notifyDeploy(deploymentId, 'succeeded')
         .catch((err) => this.logger.warn(`deploy notification failed for ${deploymentId}: ${err?.message ?? err}`));
 
-      this.drainAutoDeployQueue(deploymentId).catch((err) =>
-        this.logger.warn(`deploy queue drain failed for ${deploymentId}: ${err?.message ?? err}`),
+      this.buildQueue.onBuildFinished(deploymentId).catch((err) =>
+        this.logger.warn(`build queue release failed for ${deploymentId}: ${err?.message ?? err}`),
       );
 
       // Update GitHub deployment status to success
@@ -5226,10 +5210,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           },
         });
 
-        // A failed build still drains the queue: a newer queued commit may be
-        // the fix, so it deserves its own build rather than being stranded.
-        this.drainAutoDeployQueue(deploymentId).catch((drainErr) =>
-          this.logger.warn(`deploy queue drain failed for ${deploymentId}: ${drainErr?.message ?? drainErr}`),
+        this.buildQueue.onBuildFinished(deploymentId).catch((relErr) =>
+          this.logger.warn(`build queue release failed for ${deploymentId}: ${relErr?.message ?? relErr}`),
         );
       } catch (dbErr) {
         buildTrace.finishFailure(error); // no-op if already finished above
@@ -5337,6 +5319,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  async rebuildFromQueue(deploymentId: string, triggeredById: string | null, runId: string) {
+    const user = triggeredById ? await this.usersService.findById(triggeredById) : null;
+    if (!user) {
+      throw new NotFoundException('Triggering user for queued rebuild not found');
+    }
+    return this.rebuildDeployment(deploymentId, user.hackClubId ?? user.id, undefined, runId);
+  }
+
   async rebuildDeployment(
     deploymentId: string,
     clerkId: string,
@@ -5346,7 +5336,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       firstName?: string;
       lastName?: string;
       imageUrl?: string;
-    }
+    },
+    fromQueueRunId?: string,
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
 
@@ -5387,8 +5378,17 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'rebuild deployments');
 
-    if (deployment.buildStatus === 'building') {
-      throw new BadRequestException('A build is already in progress for this deployment. Please cancel it before starting a new build.');
+    if (!fromQueueRunId) {
+      const { startNow } = await this.buildQueue.enqueue({
+        deploymentId,
+        triggerType: 'manual',
+        branch: deployment.githubBranch,
+        triggeredById: user.id,
+      });
+      if (!startNow) {
+        console.log(`[Projects] Queued manual rebuild for ${deploymentId}`);
+        return this.getDeployment(deploymentId, true, user.id);
+      }
     }
 
     console.log(`[Projects] Cancelling any existing build jobs for deployment ${deploymentId}`);

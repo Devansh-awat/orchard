@@ -19,6 +19,7 @@ import { DatabasesService } from './databases.service';
 import { BackupSyncService } from './backup-sync.service';
 import { ImportSettleService } from './import-settle.service';
 import { DeploymentsService } from './deployments.service';
+import { BuildQueueService } from './build-queue.service';
 import { IngressService } from './ingress.service';
 import { FaviconService } from './favicon.service';
 import { ProjectsController, DeploymentsController, IngressesController, DatabasesController } from './projects.controller';
@@ -27,7 +28,7 @@ import { OverviewController } from './overview.controller';
 
 @Module({
   imports: [KubernetesModule, UsersModule, forwardRef(() => GitHubModule), DockerModule, WebhooksModule, OrganizationsModule, forwardRef(() => NodesModule), forwardRef(() => QuotasModule), TailscaleModule, AuthModule, EventsModule, MetricsModule],
-  providers: [ProjectsService, ProjectAccessService, EnvironmentsService, EnvironmentSharedVarsService, DatabasesService, BackupSyncService, ImportSettleService, DeploymentsService, IngressService, FaviconService],
+  providers: [ProjectsService, ProjectAccessService, EnvironmentsService, EnvironmentSharedVarsService, DatabasesService, BackupSyncService, ImportSettleService, DeploymentsService, BuildQueueService, IngressService, FaviconService],
   controllers: [ProjectsController, DeploymentsController, IngressesController, DatabasesController, EnvironmentsController, OverviewController],
   exports: [ProjectsService, ProjectAccessService, EnvironmentsService, EnvironmentSharedVarsService, DatabasesService, DeploymentsService, IngressService],
 })
