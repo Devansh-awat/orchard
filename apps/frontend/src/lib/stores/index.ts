@@ -9,6 +9,7 @@ export {
 } from './organizations';
 export { pinnedItems, type PinnedItem } from './pinnedItems';
 export { sidebarCollapsed } from './sidebarState';
+export { sidebarPrefs, applyPrefs, type SidebarPrefs } from './sidebarPrefs';
 export {
 	projectGradientEnabled,
 	animationLevel,

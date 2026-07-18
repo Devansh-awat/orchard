@@ -1,5 +1,4 @@
 export { default as ToastContainer } from './Toast.svelte';
-export { default as Sidebar } from './Sidebar.svelte';
 export { default as ErrorPage } from './ErrorPage.svelte';
 export { default as WorkspacesMenu } from './WorkspacesMenu.svelte';
 export { default as UserMenu } from './UserMenu.svelte';

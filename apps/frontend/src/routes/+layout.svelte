@@ -13,7 +13,8 @@
 		pendingInvitations,
 		themeStore
 	} from '$lib/stores';
-	import { Sidebar, ToastContainer, OnboardingModal } from '$lib/components';
+	import { ToastContainer, OnboardingModal } from '$lib/components';
+	import SidebarDeck from '$lib/components/SidebarDeck.svelte';
 	import QuickSearch from '$lib/components/QuickSearch.svelte';
 	import { QueryClientProvider } from '@tanstack/svelte-query';
 	import { queryClient } from '$lib/query';
@@ -125,7 +126,7 @@
 		{@render children()}
 	{:else if $isSignedIn}
 		<div class="flex h-screen overflow-hidden">
-			<Sidebar />
+			<SidebarDeck />
 			<main class="flex-1 overflow-y-auto overflow-x-hidden">
 				{@render children()}
 			</main>
