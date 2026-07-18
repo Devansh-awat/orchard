@@ -140,17 +140,13 @@ export class GitHubController {
       }
 
       const payload = await this.githubService.verifySessionToken(token);
-      const hackClubId = payload.hackClubId || payload.sub;
+      const user = payload.hackClubId
+        ? await this.usersService.findByHackClubId(payload.hackClubId)
+        : await this.usersService.findById(payload.sub);
 
-      if (!hackClubId) {
-        return res.redirect(`${frontendUrl}/user/settings?error=${encodeURIComponent('Invalid session token')}`);
+      if (!user) {
+        return res.redirect(`${frontendUrl}/user/settings?error=${encodeURIComponent('Not authenticated')}`);
       }
-
-      const user = await this.usersService.findOrCreateByHackClubId({
-        id: hackClubId,
-        email: payload.email,
-        name: payload.name,
-      });
 
       await this.githubService.linkGitHubAccount(user.id, code);
       this.usersService.invalidateUserCache(user);
