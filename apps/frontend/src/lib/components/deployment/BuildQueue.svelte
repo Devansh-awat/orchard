@@ -97,10 +97,10 @@
 </script>
 
 {#if queued.length > 0}
-	<div class="bq-card" transition:slide={{ duration: 160 }}>
+	<div class="bq-section" transition:slide={{ duration: 160 }}>
 		<div class="bq-head">
-			<Layers size={13} class="bq-head-icon" />
-			<span class="bq-head-title">Queued</span>
+			<Layers size={12} class="bq-head-icon" />
+			<span class="bq-head-title">Up next</span>
 			<span class="bq-head-count">{queued.length}</span>
 		</div>
 		<div class="bq-rows">
@@ -118,22 +118,19 @@
 {/if}
 
 <style>
-	.bq-card {
-		border-radius: 0.75rem;
-		border: 1px solid var(--border-default);
-		background: var(--bg-overlay, var(--bg-surface));
-		box-shadow: 0 8px 24px rgb(0 0 0 / 0.12);
-		padding: 0.5rem 0.625rem 0.625rem;
+	.bq-section {
+		border-top: 1px solid var(--border-default);
+		padding: 0.5rem 1rem 0.75rem;
 	}
 
 	.bq-head {
 		display: flex;
 		align-items: center;
 		gap: 0.375rem;
-		padding: 0.125rem 0.25rem 0.375rem;
+		padding: 0.125rem 0 0.375rem;
 	}
 
-	.bq-card :global(.bq-head-icon) {
+	.bq-section :global(.bq-head-icon) {
 		color: var(--text-muted);
 	}
 
