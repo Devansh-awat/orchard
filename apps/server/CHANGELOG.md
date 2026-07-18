@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.22.3](https://github.com/LeafdTK/leaf/compare/server/v1.22.2...server/v1.22.3) (2026-07-18)
+
+
+### Bug Fixes
+
+* csrf-protect github link oauth flow with an httponly nonce cookie checked against state, rejects forged callbacks ([9bbfada](https://github.com/LeafdTK/leaf/commit/9bbfadab8538a442a49ea2633bb05743db850ed4))
+* github link threw account-exists for otp/passkey sessions, resolve existing user by hackclubid or internal id instead of findorcreate on sub ([c8d8173](https://github.com/LeafdTK/leaf/commit/c8d8173b45410070a802ab2780ff6e1ff2ed2d78))
+
 ## [1.22.2](https://github.com/LeafdTK/leaf/compare/server/v1.22.1...server/v1.22.2) (2026-07-18)
 
 
