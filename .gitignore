@@ -19,3 +19,6 @@ graphify-out/
 
 # OS
 .DS_Store
+
+# Local agent operating notes (personal, not shared)
+CLAUDE.local.md

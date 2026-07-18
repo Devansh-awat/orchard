@@ -33,7 +33,7 @@
 			id: 'demo-1',
 			status: 'scheduled',
 			triggerType: 'auto',
-			commitSha: 'b2c3d4e5f6a7b8c9',
+			commitSha: 'de0d8394f75fd46ee8e2023fdfac39386b52aa58',
 			commitMessage: 'feat: add dark mode toggle to the widget header',
 			branch: 'main',
 			createdAt: new Date(Date.now() - 12000).toISOString()
@@ -42,7 +42,7 @@
 			id: 'demo-2',
 			status: 'scheduled',
 			triggerType: 'auto',
-			commitSha: 'c3d4e5f6a7b8c9d0',
+			commitSha: 'fe0752d614e8305981a8e210b0246571eee1cb64',
 			commitMessage: 'chore: bump embed sdk to 2.4.0',
 			branch: 'main',
 			createdAt: new Date(Date.now() - 4000).toISOString()
