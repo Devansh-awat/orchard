@@ -1,10 +1,11 @@
-import { forwardRef, Inject, Injectable, Logger, OnModuleInit } from '@nestjs/common';
+import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
+import { ModuleRef } from '@nestjs/core';
 import { hostname } from 'os';
 import { PrismaService } from '../prisma/prisma.service';
 import { DeploymentsService } from './deployments.service';
 
 @Injectable()
-export class BuildQueueService implements OnModuleInit {
+export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(BuildQueueService.name);
   private readonly workerId = `${hostname()}-${process.pid}`;
   private readonly maxConcurrent = Math.max(
@@ -12,24 +13,35 @@ export class BuildQueueService implements OnModuleInit {
     parseInt(process.env.MAX_CONCURRENT_BUILDS || '15', 10) || 15,
   );
   private readonly LOCK_KEY = 528491;
+  private readonly txOpts = { maxWait: 10_000, timeout: 20_000 };
   private draining = false;
   private drainAgain = false;
+  private drainInterval: NodeJS.Timeout | null = null;
+  private bootTimeout: NodeJS.Timeout | null = null;
 
   constructor(
     private readonly prisma: PrismaService,
-    @Inject(forwardRef(() => DeploymentsService))
-    private readonly deployments: DeploymentsService,
+    private readonly moduleRef: ModuleRef,
   ) {}
 
   onModuleInit() {
-    setInterval(() => {
+    this.drainInterval = setInterval(() => {
       this.reclaim().catch((e) => this.logger.warn(`reclaim failed: ${e?.message ?? e}`));
       this.kick();
-    }, 30_000).unref?.();
-    setTimeout(() => {
+    }, 30_000);
+    this.drainInterval.unref?.();
+    this.bootTimeout = setTimeout(() => {
       this.reclaim().catch(() => {});
       this.kick();
     }, 4_000);
+    this.bootTimeout.unref?.();
+  }
+
+  onModuleDestroy() {
+    if (this.drainInterval) clearInterval(this.drainInterval);
+    if (this.bootTimeout) clearTimeout(this.bootTimeout);
+    this.drainInterval = null;
+    this.bootTimeout = null;
   }
 
   async enqueue(opts: {
@@ -81,7 +93,7 @@ export class BuildQueueService implements OnModuleInit {
         },
       });
       return { startNow, runId: run.id };
-    });
+    }, this.txOpts);
   }
 
   async recordActiveBuild(opts: {
@@ -160,7 +172,10 @@ export class BuildQueueService implements OnModuleInit {
 
   private async claimOne() {
     return this.prisma.$transaction(async (tx) => {
-      await tx.$queryRaw`SELECT pg_advisory_xact_lock(${this.LOCK_KEY})`;
+      const [{ locked }] = await tx.$queryRaw<{ locked: boolean }[]>`
+        SELECT pg_try_advisory_xact_lock(${this.LOCK_KEY}) AS locked
+      `;
+      if (!locked) return null;
       const buildingGlobal = await tx.buildRun.count({ where: { status: 'building' } });
       if (buildingGlobal >= this.maxConcurrent) return null;
 
@@ -187,7 +202,7 @@ export class BuildQueueService implements OnModuleInit {
         where: { id },
         data: { status: 'building', workerId: this.workerId, startedAt: now, heartbeatAt: now },
       });
-    });
+    }, this.txOpts);
   }
 
   private async execute(run: {
@@ -201,7 +216,8 @@ export class BuildQueueService implements OnModuleInit {
     triggeredById: string | null;
   }) {
     try {
-      await this.deployments.runQueuedBuild(run);
+      const deployments = this.moduleRef.get(DeploymentsService, { strict: false });
+      await deployments.runQueuedBuild(run);
     } catch (e) {
       this.logger.error(`queued build ${run.id} threw: ${(e as Error)?.message ?? e}`);
       await this.prisma.buildRun
