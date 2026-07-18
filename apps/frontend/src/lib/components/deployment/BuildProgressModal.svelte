@@ -97,11 +97,9 @@
 
 <!-- Floating Build Card + Queue stack (bottom-right) -->
 <div class="pointer-events-none fixed right-6 bottom-6 z-40 flex w-72 flex-col gap-2">
-	{#if deployment?.id}
-		<div class="pointer-events-auto">
-			<BuildQueue deploymentId={deployment.id} />
-		</div>
-	{/if}
+	<div class="pointer-events-auto">
+		<BuildQueue deploymentId={deployment?.id ?? ''} />
+	</div>
 	{#if showBuildCardRender}
 		<button
 			class="build-card pointer-events-auto w-full cursor-pointer rounded-xl shadow-lg hover:shadow-xl"
