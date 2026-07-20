@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.2](https://github.com/LeafdTK/leaf/compare/server/v1.25.1...server/v1.25.2) (2026-07-20)
+
+
+### Bug Fixes
+
+* tenant namespaces allow cnpg operator to instance managers ([1082bae](https://github.com/LeafdTK/leaf/commit/1082bae50ac20872fcb2263369ee90fe4c3deabd))
+
 ## [1.25.1](https://github.com/LeafdTK/leaf/compare/server/v1.25.0...server/v1.25.1) (2026-07-20)
 
 
