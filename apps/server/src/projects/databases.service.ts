@@ -49,6 +49,7 @@ export class DatabasesService {
   // CNPG's import runs pg_dump from the target image, and an older pg_dump
   // cannot dump a newer server.
   private readonly DEFAULT_PG_MAJOR = 17;
+
   private readonly MAX_PG_MAJOR = 18;
 
   // pg_restore under CNPG's import-optimized config OOMs at small memory
