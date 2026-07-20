@@ -7,7 +7,10 @@ import (
 	"path/filepath"
 )
 
-const DefaultAPIURL = "https://orchard.infra.hackclub.com"
+// DefaultAPIURL can be overridden at build time:
+//
+//	go build -ldflags "-X github.com/LeafdTK/leaf/cli/internal/config.DefaultAPIURL=https://your-orchard.example.com"
+var DefaultAPIURL = "https://orchard.infra.hackclub.com"
 
 type Config struct {
 	APIURL  string  `json:"apiUrl"`
