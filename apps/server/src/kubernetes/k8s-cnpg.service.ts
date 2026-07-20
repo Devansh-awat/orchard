@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException, ServiceUnavailableException, OnApplicationBootstrap } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import { PassThrough } from 'stream';
 import { PrismaService } from '../prisma/prisma.service';
@@ -16,13 +16,95 @@ import { cpuMilliToK8s, memoryBytesToK8s, parseMemory } from './quantity';
  * `this.kc`, `this.ensureKubeConfig()`, `this.createPVC()` — delegated below.
  */
 @Injectable()
-export class K8sCnpgService {
+export class K8sCnpgService implements OnApplicationBootstrap {
   private readonly logger = new Logger(K8sCnpgService.name);
+
+  // The operator reaches every instance's manager API (:8000) for status
+  // probes and lifecycle management. Tenant namespaces default-deny ingress,
+  // so each one carries an explicit allow for the operator; without it the
+  // operator goes blind ("Instance Status Extraction Error") and any pod
+  // disturbance becomes a restart it cannot manage (2026-07-20 incident).
+  private readonly CNPG_OPERATOR_NAMESPACE =
+    process.env.CNPG_OPERATOR_NAMESPACE || 'postgresql';
 
   constructor(
     private readonly prisma: PrismaService,
     private readonly kubernetes: KubernetesService,
   ) {}
+
+  async onApplicationBootstrap() {
+    void this.backfillOperatorIngressPolicies();
+  }
+
+  async ensureCnpgOperatorIngress(namespace: string): Promise<void> {
+    this.ensureKubeConfig();
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    const policy = {
+      apiVersion: 'cilium.io/v2',
+      kind: 'CiliumNetworkPolicy',
+      metadata: {
+        name: 'allow-cnpg-operator',
+        namespace,
+        labels: { 'orchard.dev/managed': 'true' },
+      },
+      spec: {
+        endpointSelector: {
+          matchExpressions: [{ key: 'cnpg.io/cluster', operator: 'Exists' }],
+        },
+        ingress: [
+          {
+            fromEndpoints: [
+              {
+                matchLabels: {
+                  'app.kubernetes.io/name': 'cloudnative-pg',
+                  'io.kubernetes.pod.namespace': this.CNPG_OPERATOR_NAMESPACE,
+                },
+              },
+            ],
+            toPorts: [{ ports: [{ port: '8000', protocol: 'TCP' }] }],
+          },
+        ],
+      },
+    };
+    try {
+      await customApi.createNamespacedCustomObject(
+        'cilium.io', 'v2', namespace, 'ciliumnetworkpolicies', policy,
+      );
+    } catch (e: any) {
+      if (e.response?.statusCode !== 409) throw e;
+    }
+  }
+
+  private async backfillOperatorIngressPolicies(): Promise<void> {
+    try {
+      this.ensureKubeConfig();
+    } catch {
+      return;
+    }
+    try {
+      const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+      const res: any = await customApi.listClusterCustomObject(
+        'postgresql.cnpg.io', 'v1', 'clusters',
+      );
+      const namespaces = new Set<string>(
+        (res.body?.items ?? [])
+          .map((c: any) => c?.metadata?.namespace)
+          .filter(Boolean),
+      );
+      for (const ns of namespaces) {
+        try {
+          await this.ensureCnpgOperatorIngress(ns);
+        } catch (e: any) {
+          this.logger.warn(`allow-cnpg-operator backfill failed for ${ns}: ${e?.message || e}`);
+        }
+      }
+      if (namespaces.size > 0) {
+        this.logger.log(`allow-cnpg-operator ensured in ${namespaces.size} namespaces`);
+      }
+    } catch (e: any) {
+      this.logger.warn(`allow-cnpg-operator backfill skipped: ${e?.message || e}`);
+    }
+  }
 
   private get kc(): k8s.KubeConfig | null {
     return this.kubernetes.kc;
@@ -906,6 +988,11 @@ export class K8sCnpgService {
     };
   }): Promise<{ host: string; port: number }> {
     this.ensureKubeConfig();
+    await this.ensureCnpgOperatorIngress(
+      String(options.namespace || '').trim(),
+    ).catch((e) => {
+      this.logger.warn(`allow-cnpg-operator ensure failed: ${e?.message || e}`);
+    });
     const ns = options.namespace.trim();
     const name = options.clusterName.trim();
     if (!ns || !name) throw new BadRequestException('namespace and clusterName required');
@@ -1516,6 +1603,11 @@ export class K8sCnpgService {
     },
   ): Promise<{ host: string; port: number; newClusterName: string }> {
     this.ensureKubeConfig();
+    await this.ensureCnpgOperatorIngress(
+      String(namespace || '').trim(),
+    ).catch((e) => {
+      this.logger.warn(`allow-cnpg-operator ensure failed: ${e?.message || e}`);
+    });
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
 
