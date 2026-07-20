@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.1](https://github.com/LeafdTK/leaf/compare/server/v1.25.0...server/v1.25.1) (2026-07-20)
+
+
+### Bug Fixes
+
+* scrub credentials from clone logs and check run output ([581ed88](https://github.com/LeafdTK/leaf/commit/581ed886188fe76774bb6b73442a26b8057bfc3e))
+
 ## [1.25.0](https://github.com/LeafdTK/leaf/compare/server/v1.24.1...server/v1.25.0) (2026-07-20)
 
 

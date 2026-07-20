@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.22.1](https://github.com/LeafdTK/leaf/compare/frontend/v0.22.0...frontend/v0.22.1) (2026-07-20)
+
+
+### Bug Fixes
+
+* empty projects show on the apps page ([b070d6f](https://github.com/LeafdTK/leaf/commit/b070d6fb837795b22596ffa6d83af2b3b421872b))
+
 ## [0.22.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.21.1...frontend/v0.22.0) (2026-07-20)
 
 
