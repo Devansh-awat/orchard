@@ -465,6 +465,12 @@
 			}
 			map.get(p.id)!.dbs.push(db);
 		}
+		const q = searchQuery.trim().toLowerCase();
+		for (const p of projectMetas.values()) {
+			if (map.has(p.id)) continue;
+			if (q && !p.name.toLowerCase().includes(q) && !p.slug.toLowerCase().includes(q)) continue;
+			map.set(p.id, { id: p.id, name: p.name, slug: p.slug, deps: [], dbs: [] });
+		}
 		const ordered: ProjectGroup[] = [];
 		for (const id of projOrder) {
 			const g = map.get(id);
