@@ -1603,6 +1603,14 @@ export class GitHubService {
   formatLogsForCheck(logs: string, maxLength = 60000): string {
     if (!logs) return '';
 
+    // Check run output is world readable on public repos. Even though the
+    // build pipeline redacts at the source, strip anything token shaped as a
+    // last line of defence before it leaves the platform.
+    logs = logs
+      .replace(/\bgh[pousr]_[A-Za-z0-9_]{16,}\b/g, '***')
+      .replace(/\bgithub_pat_[A-Za-z0-9_]{16,}\b/g, '***')
+      .replace(/https:\/\/[^@\/\s']+@/g, 'https://');
+
     // GitHub uses markdown for check output
     let formatted = `\`\`\`\n${  logs  }\n\`\`\``;
 

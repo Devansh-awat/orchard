@@ -143,6 +143,16 @@ export class DockerService {
     return crypto.createHash('sha256').update(secretsString).digest('hex');
   }
 
+  // Git prints the full remote URL (credentials included) in failure
+  // messages like `fatal: unable to access 'https://x-access-token:ghs_...@...'`.
+  // Anything derived from clone output must pass through here before it can
+  // reach build logs, which are mirrored to GitHub check runs on the repo.
+  private redactCloneSecrets(text: string, accessToken?: string): string {
+    let out = text.replace(/https:\/\/[^@\/\s']+@/g, 'https://');
+    if (accessToken) out = out.split(accessToken).join('***');
+    return out;
+  }
+
   async cloneRepository(repoUrl: string, branch: string, accessToken?: string, deploymentId?: string): Promise<string> {
     // git treats argv entries that start with `-` as options even when
     // they're positionally an argument (notably `--branch <ref>` accepts
@@ -241,7 +251,7 @@ export class DockerService {
                 await this.appendLog(deploymentId, `Resolving deltas: ${percent}% (${current}/${total})`);
               }
             } else if (line.trim() && !line.includes('Cloning into')) {
-              await this.appendLog(deploymentId, line.trim());
+              await this.appendLog(deploymentId, this.redactCloneSecrets(line.trim(), accessToken));
             }
           }
         });
@@ -260,7 +270,7 @@ export class DockerService {
             await this.appendLog(deploymentId, successMsg);
             resolve(tempDir);
           } else {
-            const errorMsg = `Failed to clone repository (took ${elapsedTime}s): ${stderr || 'Unknown error'}`;
+            const errorMsg = `Failed to clone repository (took ${elapsedTime}s): ${this.redactCloneSecrets(stderr, accessToken) || 'Unknown error'}`;
             await this.appendLog(deploymentId, errorMsg, 'ERROR');
             await fs.rm(tempDir, { recursive: true, force: true }).catch(() => {});
             reject(new BadRequestException(errorMsg));
