@@ -88,6 +88,11 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       // first policy selecting orchard-db's endpoints flipped them to
       // default-deny, cutting the server off from its database
       // (2026-07-20 incident, second half).
+      // The platform's own database is deliberately NOT in this set even
+      // when it is a cnpg cluster: its namespace belongs to the installer
+      // (kubeops here), so its network policies must live there
+      // declaratively. Stamping it from app code depends on an out-of-band
+      // allow existing and breaks installs whose platform db has none.
       const rows = await this.prisma.database.findMany({
         where: { mode: 'cnpg', namespace: { not: null } },
         select: { namespace: true },
@@ -96,10 +101,6 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       const namespaces = new Set<string>(
         rows.map((r) => r.namespace).filter(Boolean) as string[],
       );
-      // The platform's own cnpg cluster needs the operator allow too:
-      // orchard-db-allow-control-plane (kubeops) selects its endpoints, so
-      // without this the operator cannot reach its instance manager.
-      namespaces.add(process.env.ORCHARD_PLATFORM_NAMESPACE || 'orchard');
       for (const ns of namespaces) {
         try {
           await this.ensureCnpgOperatorIngress(ns);
