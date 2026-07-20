@@ -274,10 +274,6 @@ export class UsersService {
     return user;
   }
 
-  async syncImageUrlFromClerk(_hackClubId: string): Promise<string | null> {
-    return null;
-  }
-
   async updateProfile(userId: string, data: { firstName?: string | null; lastName?: string | null; username?: string; setupCompleted?: boolean; imageUrl?: string | null }) {
     // If username is being updated, check format and uniqueness
     if (data.username !== undefined) {

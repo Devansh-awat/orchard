@@ -182,15 +182,6 @@ export class OrganizationsService {
       throw new NotFoundException(`Organization ${organizationId} not found`);
     }
 
-    await Promise.all(
-      organization.members.map(async (member) => {
-        if (!member.user.imageUrl && member.user.hackClubId) {
-          const imageUrl = await this.usersService.syncImageUrlFromClerk(member.user.hackClubId);
-          if (imageUrl) member.user.imageUrl = imageUrl;
-        }
-      }),
-    );
-
     // Guests only see members who share at least one project with them.
     if (access.role === 'guest') {
       const coMemberIds = new Set<string>();
@@ -239,15 +230,6 @@ export class OrganizationsService {
       },
       orderBy: { addedAt: 'asc' },
     });
-
-    await Promise.all(
-      members.map(async (member) => {
-        if (!member.user.imageUrl && member.user.hackClubId) {
-          const imageUrl = await this.usersService.syncImageUrlFromClerk(member.user.hackClubId);
-          if (imageUrl) member.user.imageUrl = imageUrl;
-        }
-      }),
-    );
 
     // Guests only see members who share at least one project with them.
     if (access.role === 'guest') {
@@ -322,15 +304,6 @@ export class OrganizationsService {
     if (!organization) {
       throw new NotFoundException(`Organization with slug ${slug} not found`);
     }
-
-    await Promise.all(
-      organization.members.map(async (member) => {
-        if (!member.user.imageUrl && member.user.hackClubId) {
-          const imageUrl = await this.usersService.syncImageUrlFromClerk(member.user.hackClubId);
-          if (imageUrl) member.user.imageUrl = imageUrl;
-        }
-      }),
-    );
 
     // Guests only see members who share at least one project with them.
     if (access.role === 'guest') {

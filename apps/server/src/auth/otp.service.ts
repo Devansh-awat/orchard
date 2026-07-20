@@ -87,8 +87,12 @@ export class OtpService {
     await this.rateLimitService.incrementRateLimit(ipAddress, 'ip', 'otp_request');
 
     if (!emailSent) {
-      console.warn(`Failed to send OTP email to ${normalizedEmail}`);
-      // Still return success to avoid email enumeration
+      if (process.env.NODE_ENV !== 'production' && !this.emailService.isConfigured()) {
+        console.warn(`[dev] SMTP not configured — OTP for ${normalizedEmail}: ${plainCode}`);
+      } else {
+        console.warn(`Failed to send OTP email to ${normalizedEmail}`);
+        // Still return success to avoid email enumeration
+      }
     }
 
     return {

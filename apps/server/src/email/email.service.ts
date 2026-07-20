@@ -86,7 +86,7 @@ export class EmailService {
     }
   }
 
-  private isConfigured(): boolean {
+  isConfigured(): boolean {
     return this.transporter !== null;
   }
 
