@@ -81,6 +81,7 @@
 	let passkeyError = $state<string | null>(null);
 
 	let privateBetaBlocked = $state(false);
+	let signupsDisabled = $state(false);
 
 	async function fetchWorkspaces() {
 		loading = true;
@@ -302,7 +303,11 @@
 
 			if (!response.ok) {
 				const data = await response.json().catch(() => ({}));
-				if (response.status === 403 && data?.message === 'private_beta') {
+				if (
+					response.status === 403 &&
+					(data?.message === 'private_beta' || data?.message === 'signups_disabled')
+				) {
+					signupsDisabled = data.message === 'signups_disabled';
 					privateBetaBlocked = true;
 					return;
 				}
@@ -374,7 +379,11 @@
 
 			if (!verifyResponse.ok) {
 				const data = await verifyResponse.json().catch(() => ({}));
-				if (verifyResponse.status === 403 && data?.message === 'private_beta') {
+				if (
+					verifyResponse.status === 403 &&
+					(data?.message === 'private_beta' || data?.message === 'signups_disabled')
+				) {
+					signupsDisabled = data.message === 'signups_disabled';
 					privateBetaBlocked = true;
 					return;
 				}
@@ -499,10 +508,13 @@
 								>
 							</div>
 						</div>
-						<h3 class="login-beta-title">Private Beta</h3>
+						<h3 class="login-beta-title">
+							{signupsDisabled ? 'Signups Disabled' : 'Private Beta'}
+						</h3>
 						<p class="login-beta-desc">
-							Orchard is currently in private beta. You need an invitation from an existing
-							organization to access the platform.
+							{signupsDisabled
+								? 'Signups are disabled on this Orchard instance. Contact your administrator for access.'
+								: 'Orchard is currently in private beta. You need an invitation from an existing organization to access the platform.'}
 						</p>
 						<button
 							class="btn btn-primary login-submit"

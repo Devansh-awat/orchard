@@ -10,7 +10,7 @@ export function initPostHog() {
 	const key = env.PUBLIC_POSTHOG_KEY;
 	if (!key) return;
 	posthog.init(key, {
-		api_host: env.PUBLIC_POSTHOG_HOST || 'https://at.leafd.dev',
+		api_host: env.PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com',
 		ui_host: 'https://us.posthog.com',
 		defaults: '2025-05-24',
 		capture_pageview: 'history_change',

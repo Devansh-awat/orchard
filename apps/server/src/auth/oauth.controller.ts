@@ -11,6 +11,7 @@ import { AuthorizationService } from './authorization.service';
 import { setSessionCookie, clearSessionCookie } from './cookies';
 import { Public, Auth } from './decorators';
 import { getClientIp } from './client-ip';
+import { signupMode, signupDeniedError } from './signup-mode';
 
 @Public()
 @Controller('auth')
@@ -32,6 +33,7 @@ export class OAuthController {
     email: string,
     existingUser: { id: string; isSuperAdmin: boolean } | null,
   ): Promise<boolean> {
+    if (signupMode() === 'open') return true;
     if (existingUser?.isSuperAdmin) return true;
 
     if (existingUser) {
@@ -40,6 +42,8 @@ export class OAuthController {
       });
       if (membership) return true;
     }
+
+    if (signupMode() === 'closed') return false;
 
     const invitation = await this.prisma.organizationInvitation.findFirst({
       where: {
@@ -165,7 +169,7 @@ export class OAuthController {
       );
       if (!hasAccess) {
         return res.redirect(
-          `${frontendBase}/oauth/callback?error=${encodeURIComponent('private_beta')}`
+          `${frontendBase}/oauth/callback?error=${encodeURIComponent(signupDeniedError())}`
         );
       }
 

@@ -55,7 +55,7 @@ export const handle: Handle = async ({ event, resolve }) => {
 export const handleError: HandleServerError = ({ error, event, status, message }) => {
 	const key = env.PUBLIC_POSTHOG_KEY;
 	if (!key) return;
-	const host = env.PUBLIC_POSTHOG_HOST || 'https://at.leafd.dev';
+	const host = env.PUBLIC_POSTHOG_HOST || 'https://us.i.posthog.com';
 	const err = error instanceof Error ? error : new Error(String(error));
 	const payload = {
 		api_key: key,

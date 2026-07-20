@@ -23,6 +23,7 @@ import { AuditService } from '../audit/audit.service';
 import { setSessionCookie } from './cookies';
 import { Public, Auth } from './decorators';
 import { getClientIp } from './client-ip';
+import { signupMode, signupDeniedError } from './signup-mode';
 
 // DTOs
 interface RequestOtpDto {
@@ -76,6 +77,7 @@ export class PasswordlessController {
     email: string,
     existingUser: { id: string; isSuperAdmin: boolean } | null,
   ): Promise<boolean> {
+    if (signupMode() === 'open') return true;
     if (existingUser?.isSuperAdmin) return true;
 
     if (existingUser) {
@@ -84,6 +86,8 @@ export class PasswordlessController {
       });
       if (membership) return true;
     }
+
+    if (signupMode() === 'closed') return false;
 
     const invitation = await this.prisma.organizationInvitation.findFirst({
       where: {
@@ -188,7 +192,7 @@ export class PasswordlessController {
       existingUser,
     );
     if (!hasAccess) {
-      throw new HttpException('private_beta', HttpStatus.FORBIDDEN);
+      throw new HttpException(signupDeniedError(), HttpStatus.FORBIDDEN);
     }
 
     // H-1: refuse OTP login when the user's org enforces SSO.
@@ -358,7 +362,7 @@ export class PasswordlessController {
       isSuperAdmin: user.isSuperAdmin,
     });
     if (!hasAccess) {
-      throw new HttpException('private_beta', HttpStatus.FORBIDDEN);
+      throw new HttpException(signupDeniedError(), HttpStatus.FORBIDDEN);
     }
 
     // H-1: refuse passkey login when the user's org enforces SSO.

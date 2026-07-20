@@ -106,6 +106,9 @@ export class EmailService {
     const templatePath = path.join(this.templatesDir, `${templateName}.mjml`);
     let mjmlContent = fs.readFileSync(templatePath, 'utf-8');
 
+    const assetBaseUrl = (process.env.EMAIL_ASSET_BASE_URL || 'https://orchard.my').replace(/\/$/, '');
+    mjmlContent = mjmlContent.replaceAll('{{assetBaseUrl}}', assetBaseUrl);
+
     for (const [key, value] of Object.entries(variables)) {
       mjmlContent = mjmlContent.replaceAll(`{{${key}}}`, this.escapeHtml(value));
     }

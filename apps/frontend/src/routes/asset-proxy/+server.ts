@@ -1,6 +1,12 @@
+import { env } from '$env/dynamic/private';
 import type { RequestHandler } from './$types';
 
-const hostAllowed = (host: string) => host.endsWith('.r2.dev') || host === 'assets.orchard.my';
+const allowedHosts = (env.ASSET_PROXY_HOSTS || 'assets.orchard.my')
+	.split(',')
+	.map((h) => h.trim())
+	.filter(Boolean);
+
+const hostAllowed = (host: string) => host.endsWith('.r2.dev') || allowedHosts.includes(host);
 
 export const GET: RequestHandler = async ({ url, fetch, setHeaders }) => {
 	const target = url.searchParams.get('u');

@@ -8,13 +8,15 @@
 
 	let error = $state<string | null>(null);
 	let isPrivateBeta = $state(false);
+	let signupsDisabled = $state(false);
 
 	onMount(async () => {
 		// Check for error in URL params
 		const errorParam = $page.url.searchParams.get('error');
 		if (errorParam) {
-			if (errorParam === 'private_beta') {
+			if (errorParam === 'private_beta' || errorParam === 'signups_disabled') {
 				isPrivateBeta = true;
+				signupsDisabled = errorParam === 'signups_disabled';
 			} else {
 				error = errorParam;
 			}
@@ -57,11 +59,12 @@
 				<Lock class="h-6 w-6" style="color: var(--surface-muted);" />
 			</div>
 			<h1 class="mb-2 text-xl font-semibold" style="color: var(--center-channel-color);">
-				Private Beta
+				{signupsDisabled ? 'Signups Disabled' : 'Private Beta'}
 			</h1>
 			<p class="mb-4" style="color: var(--surface-muted);">
-				Orchard is currently in private beta. You need an invitation from an existing organization
-				to access the platform.
+				{signupsDisabled
+					? 'Signups are disabled on this Orchard instance. Contact your administrator for access.'
+					: 'Orchard is currently in private beta. You need an invitation from an existing organization to access the platform.'}
 			</p>
 			<a href="/" class="btn btn-primary"> Return Home </a>
 		{:else if error}

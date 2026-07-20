@@ -19,7 +19,7 @@ export function startTelemetry(): void {
   const key = process.env.POSTHOG_API_KEY;
   if (!key) return;
 
-  const host = process.env.POSTHOG_HOST || 'https://at.leafd.dev';
+  const host = process.env.POSTHOG_HOST || 'https://us.i.posthog.com';
   // PostHog Logs OTLP endpoint. See docs/logs/installation/nodejs.
   const endpoint = process.env.POSTHOG_OTLP_LOGS_ENDPOINT || `${host}/i/v1/logs`;
 

@@ -8,7 +8,7 @@
     <mj-style>
       @font-face {
         font-family: 'Plus Jakarta Sans';
-        src: url('https://orchard.my/fonts/Plus_Jakarta_Sans/PlusJakartaSans-VariableFont_wght.ttf') format('truetype');
+        src: url('{{assetBaseUrl}}/fonts/Plus_Jakarta_Sans/PlusJakartaSans-VariableFont_wght.ttf') format('truetype');
         font-weight: 200 800;
         font-style: normal;
       }
