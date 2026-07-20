@@ -116,37 +116,6 @@
 		elixir: 'Elixir'
 	};
 
-	const OTEL_GUIDES: Record<string, { install: string; snippet: string }> = {
-		node: {
-			install: 'npm install @opentelemetry/sdk-node @opentelemetry/auto-instrumentations-node',
-			snippet:
-				"const { NodeSDK } = require('@opentelemetry/sdk-node');\nconst { getNodeAutoInstrumentations } = require('@opentelemetry/auto-instrumentations-node');\n\nconst sdk = new NodeSDK({ instrumentations: [getNodeAutoInstrumentations()] });\nsdk.start();"
-		},
-		python: {
-			install: 'pip install opentelemetry-distro opentelemetry-exporter-otlp',
-			snippet: '# auto-instrument your app:\nopentelemetry-instrument python app.py'
-		},
-		go: {
-			install: 'go get go.opentelemetry.io/otel',
-			snippet:
-				'provider := sdktrace.NewTracerProvider(\n    sdktrace.WithBatcher(exporter),\n)\notel.SetTracerProvider(provider)'
-		},
-		ruby: {
-			install: 'gem install opentelemetry-sdk opentelemetry-instrumentation-all',
-			snippet: "require 'opentelemetry/sdk'\nOpenTelemetry::SDK.configure do |c|\n  c.use_all\nend"
-		},
-		java: {
-			install: "implementation 'io.opentelemetry:opentelemetry-sdk'",
-			snippet:
-				'SdkTracerProvider tracerProvider = SdkTracerProvider.builder()\n    .addSpanProcessor(BatchSpanProcessor.builder(exporter).build())\n    .build();'
-		},
-		dotnet: {
-			install: 'dotnet add package OpenTelemetry.Extensions.Hosting',
-			snippet:
-				'builder.Services.AddOpenTelemetry()\n    .WithTracing(b => b.AddAspNetCoreInstrumentation());'
-		}
-	};
-
 	const ERROR_WINDOWS: { id: ErrorTimeWindow; label: string; minutes: number }[] = [
 		{ id: '15m', label: '15m', minutes: 15 },
 		{ id: '1h', label: '1h', minutes: 60 },
@@ -195,7 +164,6 @@
 	let errorsError = $state<string | null>(null);
 	let errorWindow = $state<ErrorTimeWindow>('1h');
 	let expandedErrors = $state(new Set<string>());
-	let tracesOtherExpanded = $state(false);
 	let Line: any = $state(null);
 	let chartReady = $state(false);
 	let logsFetchSeq = 0;
@@ -266,7 +234,6 @@
 			(t) => t !== 'http' || hasIngress
 		)
 	);
-	const activeTabIndex = $derived(visibleTabs.indexOf(activeTab));
 
 	$effect(() => {
 		if (!visibleTabs.includes(activeTab)) activeTab = 'metrics';
@@ -518,32 +485,6 @@
 
 	const statOffset = $derived(runtimeDisplay ? 1 : 0);
 
-	const runtimeGuide = $derived.by(() => {
-		const rt = detectedRuntime;
-		if (!rt || rt.language === 'unknown') return null;
-		return OTEL_GUIDES[rt.language] ?? null;
-	});
-
-	const runtimeGuideLang = $derived(
-		detectedRuntime
-			? (LANGUAGE_DISPLAY[detectedRuntime.language] ?? detectedRuntime.language)
-			: null
-	);
-
-	const otherSdks = $derived.by(() => {
-		const rt = detectedRuntime;
-		if (!rt || rt.language === 'unknown') return SDK_LIST;
-		return SDK_LIST.filter((s) => {
-			if (rt.language === 'node' && s.name === 'Node.js') return false;
-			if (rt.language === 'python' && s.name === 'Python') return false;
-			if (rt.language === 'go' && s.name === 'Go') return false;
-			if (rt.language === 'java' && s.name === 'Java') return false;
-			if (rt.language === 'ruby' && s.name === 'Ruby') return false;
-			if (rt.language === 'dotnet' && s.name === '.NET') return false;
-			return true;
-		});
-	});
-
 	const errorWindowMinutes = $derived(
 		ERROR_WINDOWS.find((w) => w.id === errorWindow)?.minutes ?? 60
 	);
@@ -750,35 +691,6 @@
 	const fmtPercent = (v: number) => `${v.toFixed(2)}%`;
 	const fmtLatency = (v: number) => (v >= 1000 ? `${(v / 1000).toFixed(1)}s` : `${v.toFixed(0)}ms`);
 
-	const SDK_LIST = [
-		{ name: 'Node.js', pkg: '@opentelemetry/sdk-node', cmd: 'npm install @opentelemetry/sdk-node' },
-		{
-			name: 'Python',
-			pkg: 'opentelemetry-sdk',
-			cmd: 'pip install opentelemetry-sdk opentelemetry-exporter-otlp'
-		},
-		{
-			name: 'Go',
-			pkg: 'go.opentelemetry.io/otel',
-			cmd: 'go get go.opentelemetry.io/otel'
-		},
-		{
-			name: 'Java',
-			pkg: 'io.opentelemetry:opentelemetry-sdk',
-			cmd: 'implementation "io.opentelemetry:opentelemetry-sdk:1.+"'
-		},
-		{
-			name: 'Ruby',
-			pkg: 'opentelemetry-sdk',
-			cmd: 'gem install opentelemetry-sdk'
-		},
-		{
-			name: '.NET',
-			pkg: 'OpenTelemetry',
-			cmd: 'dotnet add package OpenTelemetry'
-		}
-	];
-
 	const overviewStats = $derived.by(() => {
 		const pods = deployment?.pods ?? [];
 		const running = pods.filter((p: any) => (p.status ?? '').toLowerCase() === 'ready').length;
@@ -807,6 +719,46 @@
 		};
 	});
 
+	const stripStats = $derived(
+		[
+			runtimeDisplay && {
+				label: 'Runtime',
+				value: runtimeDisplay.name,
+				sub: runtimeDisplay.version ?? null
+			},
+			{ label: 'Uptime', value: formatUptime(overviewStats.uptime), sub: null },
+			{
+				label: 'Pods',
+				value: `${overviewStats.running}/${overviewStats.total}`,
+				sub: null
+			},
+			hasIngress && {
+				label: 'Req/s',
+				value: overviewStats.reqRate != null ? fmtReqRate(overviewStats.reqRate) : '--',
+				sub: null
+			},
+			hasIngress && {
+				label: 'Error rate',
+				value: overviewStats.errorRate != null ? fmtPercent(overviewStats.errorRate) : '--',
+				sub: null
+			},
+			hasIngress && {
+				label: 'Avg latency',
+				value: overviewStats.avgLatency != null ? fmtLatency(overviewStats.avgLatency) : '--',
+				sub: null
+			}
+		].filter(Boolean) as { label: string; value: string; sub: string | null }[]
+	);
+
+	const TAB_LABELS: Record<SubTab, string> = {
+		metrics: 'Metrics',
+		logs: 'Logs',
+		http: 'HTTP',
+		traces: 'Traces',
+		errors: 'Errors',
+		killed: 'Killed'
+	};
+
 	function highlightStack(stack: string): string {
 		return stack
 			.replace(/&/g, '&amp;')
@@ -820,19 +772,6 @@
 			.replace(/^(Traceback .+)$/gm, '<span style="color: var(--surface-muted);">$1</span>');
 	}
 
-	function highlightCode(code: string): string {
-		return code
-			.replace(/&/g, '&amp;')
-			.replace(/</g, '&lt;')
-			.replace(/>/g, '&gt;')
-			.replace(/(\/\/.+$|#.+$)/gm, '<span style="color: #6a9955;">$1</span>')
-			.replace(/('(?:[^'\\]|\\.)*'|"(?:[^"\\]|\\.)*")/g, '<span style="color: #ce9178;">$1</span>')
-			.replace(
-				/\b(const|let|var|require|import|from|new|function|def|class|module|do|end|package|go|get)\b/g,
-				'<span style="color: #c586c0;">$1</span>'
-			)
-			.replace(/\b(true|false|nil|null|undefined)\b/g, '<span style="color: #569cd6;">$1</span>');
-	}
 
 	function formatUptime(seconds: number | null): string {
 		if (seconds == null) return '--';
@@ -847,76 +786,33 @@
 	<DeploymentMetrics kind="deployment" id={deployment?.id ?? null} {active} />
 {:else}
 	<div class="observe-root">
-		<div class="observe-strip">
-			{#if runtimeDisplay}
+		<div class="ov-statrow">
+			{#each stripStats as stat, i (stat.label)}
 				<div
-					class="observe-stat observe-stat--runtime"
-					{@attach springHover()}
-					{@attach motionStagger({
-						index: 0,
-						stride: 0.04,
-						from: { y: 8, opacity: 0, scale: 0.98 }
-					})}
+					class="ov-statcell"
+					{@attach motionStagger({ index: i, stride: 0.04, from: { y: 8, opacity: 0 } })}
 				>
-					<div class="observe-stat-content">
-						<span class="observe-stat-label">Runtime</span>
-						<span class="observe-stat-value">{runtimeDisplay.name}</span>
-						{#if runtimeDisplay.version}
-							<span class="observe-stat-sub">{runtimeDisplay.version}</span>
-						{/if}
-					</div>
-				</div>
-			{/if}
-			{#each [{ icon: Clock, label: 'Uptime', value: formatUptime(overviewStats.uptime), show: true }, { icon: Boxes, label: 'Pods', value: `${overviewStats.running}/${overviewStats.total}`, show: true }, { icon: Activity, label: 'Req/s', value: overviewStats.reqRate != null ? fmtReqRate(overviewStats.reqRate) : '--', show: hasIngress }, { icon: AlertTriangle, label: 'Error rate', value: overviewStats.errorRate != null ? fmtPercent(overviewStats.errorRate) : '--', show: hasIngress }, { icon: Clock, label: 'Avg latency', value: overviewStats.avgLatency != null ? fmtLatency(overviewStats.avgLatency) : '--', show: hasIngress }].filter((s) => s.show) as stat, i (stat.label)}
-				{@const Icon = stat.icon}
-				<div
-					class="observe-stat"
-					{@attach springHover()}
-					{@attach motionStagger({
-						index: i + statOffset,
-						stride: 0.04,
-						from: { y: 8, opacity: 0, scale: 0.98 }
-					})}
-				>
-					<div class="observe-stat-icon">
-						<Icon class="h-3.5 w-3.5" />
-					</div>
-					<div class="observe-stat-content">
-						<span class="observe-stat-label">{stat.label}</span>
-						<span class="observe-stat-value">{stat.value}</span>
-					</div>
+					<span class="ov-statcell-label">{stat.label}</span>
+					<span class="ov-statcell-value"
+						>{stat.value}{#if stat.sub}<span class="ov-statcell-sub">{stat.sub}</span>{/if}</span
+					>
 				</div>
 			{/each}
 		</div>
 
-		<div class="observe-tabs">
-			<div class="observe-tabs-track">
-				<div
-					class="observe-tab-indicator"
-					style="transform: translateX({activeTabIndex *
-						100}%); width: calc(100% / {visibleTabs.length});"
-				></div>
-				{#each visibleTabs as tab (tab)}
-					<button
-						class="observe-tab"
-						class:observe-tab--active={activeTab === tab}
-						onclick={() => (activeTab = tab)}
-						type="button"
-					>
-						{tab === 'metrics'
-							? 'Metrics'
-							: tab === 'logs'
-								? 'Logs'
-								: tab === 'http'
-									? 'HTTP'
-									: tab === 'traces'
-										? 'Traces'
-										: tab === 'errors'
-											? 'Errors'
-											: 'Killed'}
-					</button>
-				{/each}
-			</div>
+		<div class="ov-ultabs" role="tablist">
+			{#each visibleTabs as tab (tab)}
+				<button
+					class="ov-ultab"
+					class:ov-ultab--active={activeTab === tab}
+					aria-selected={activeTab === tab}
+					role="tab"
+					onclick={() => (activeTab = tab)}
+					type="button"
+				>
+					{TAB_LABELS[tab]}{#if tab === 'traces'}<span class="ov-ultab-soon">Soon</span>{/if}
+				</button>
+			{/each}
 		</div>
 
 		<div class="observe-body">
@@ -1140,133 +1036,13 @@
 					{/if}
 				{/if}
 			{:else if activeTab === 'traces'}
-				<div class="observe-traces-cta">
-					<div class="observe-traces-header">
-						<Package class="h-6 w-6" style="color: var(--button-bg);" />
-						<div>
-							<p class="observe-traces-title">Traces require OpenTelemetry instrumentation</p>
-							<p class="observe-traces-desc">
-								Add the OpenTelemetry SDK to your app to collect distributed traces. Traces will
-								appear here automatically once instrumented.
-							</p>
-						</div>
-					</div>
-
-					{#if runtimeGuide && runtimeGuideLang}
-						<div
-							class="observe-guide-card"
-							{@attach motionStagger({
-								index: 0,
-								stride: 0.04,
-								from: { y: 6, opacity: 0, scale: 0.98 }
-							})}
-						>
-							<div class="observe-guide-header">
-								{#if detectedRuntime}
-									<span
-										class="observe-guide-dot"
-										style="background: {LANGUAGE_COLORS[detectedRuntime.language] ??
-											'var(--surface-muted)'};"
-									></span>
-								{/if}
-								<span class="observe-guide-lang">Setup for {runtimeGuideLang}</span>
-							</div>
-							<div class="observe-cmd-row">
-								<code class="observe-sdk-cmd">{runtimeGuide.install}</code>
-								<Button
-									size="sm"
-									variant="secondary"
-									aria-label="Copy install command"
-									onclick={() => copyToClipboard(runtimeGuide.install, 'guide-install')}
-								>
-									{#if copiedId === 'guide-install'}<Check class="h-3 w-3" />{:else}<Copy
-											class="h-3 w-3"
-										/>{/if}
-								</Button>
-							</div>
-							<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-							<pre class="observe-guide-snippet">{@html highlightCode(runtimeGuide.snippet)}</pre>
-						</div>
-
-						{#if otherSdks.length > 0}
-							<button
-								class="observe-other-toggle"
-								onclick={() => (tracesOtherExpanded = !tracesOtherExpanded)}
-								type="button"
-							>
-								<ChevronRight
-									class="h-3.5 w-3.5 observe-other-chevron"
-									style="transform: rotate({tracesOtherExpanded
-										? 90
-										: 0}deg); transition: transform 150ms ease;"
-								/>
-								Other SDKs
-							</button>
-							{#if tracesOtherExpanded}
-								<div class="observe-sdk-grid">
-									{#each otherSdks as sdk, i (sdk.name)}
-										<div
-											class="observe-sdk-card"
-											{@attach springHover()}
-											{@attach motionStagger({
-												index: i,
-												stride: 0.04,
-												from: { y: 6, opacity: 0, scale: 0.98 }
-											})}
-										>
-											<div class="observe-sdk-top">
-												<span class="observe-sdk-name">{sdk.name}</span>
-											</div>
-											<div class="observe-cmd-row">
-												<code class="observe-sdk-cmd">{sdk.cmd}</code>
-												<Button
-													size="sm"
-													variant="secondary"
-													aria-label="Copy install command"
-													onclick={() => copyToClipboard(sdk.cmd, `sdk-${sdk.name}`)}
-												>
-													{#if copiedId === `sdk-${sdk.name}`}<Check class="h-3 w-3" />{:else}<Copy
-															class="h-3 w-3"
-														/>{/if}
-												</Button>
-											</div>
-										</div>
-									{/each}
-								</div>
-							{/if}
-						{/if}
-					{:else}
-						<div class="observe-sdk-grid">
-							{#each SDK_LIST as sdk, i (sdk.name)}
-								<div
-									class="observe-sdk-card"
-									{@attach springHover()}
-									{@attach motionStagger({
-										index: i,
-										stride: 0.04,
-										from: { y: 6, opacity: 0, scale: 0.98 }
-									})}
-								>
-									<div class="observe-sdk-top">
-										<span class="observe-sdk-name">{sdk.name}</span>
-									</div>
-									<div class="observe-cmd-row">
-										<code class="observe-sdk-cmd">{sdk.cmd}</code>
-										<Button
-											size="sm"
-											variant="secondary"
-											aria-label="Copy install command"
-											onclick={() => copyToClipboard(sdk.cmd, `sdk-${sdk.name}`)}
-										>
-											{#if copiedId === `sdk-${sdk.name}`}<Check class="h-3 w-3" />{:else}<Copy
-													class="h-3 w-3"
-												/>{/if}
-										</Button>
-									</div>
-								</div>
-							{/each}
-						</div>
-					{/if}
+				<div class="observe-traces-disabled">
+					<div class="observe-traces-disabled-icon"><Package class="h-5 w-5" /></div>
+					<p class="observe-traces-disabled-title">Traces are coming soon</p>
+					<p class="observe-traces-disabled-desc">
+						Distributed tracing is being built into the platform. When it lands, your app will be
+						instrumented automatically. There is nothing to install or configure.
+					</p>
 				</div>
 			{:else if activeTab === 'errors'}
 				<div class="observe-errors-toolbar">
@@ -1522,6 +1298,75 @@
 		display: flex;
 		flex-direction: column;
 		gap: 16px;
+	}
+
+
+	.ov-statrow {
+		display: flex;
+		align-items: stretch;
+		flex-wrap: wrap;
+	}
+	.ov-statcell {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding: 4px 20px 6px 0;
+		min-width: 0;
+	}
+	.ov-statcell + .ov-statcell {
+		padding-left: 20px;
+		border-left: 1px solid color-mix(in srgb, var(--text-default) 10%, transparent);
+	}
+	.ov-statcell-label {
+		font-size: 0.6875rem;
+		font-weight: 500;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		color: var(--text-faint);
+		white-space: nowrap;
+	}
+	.ov-statcell-value {
+		font-size: 1.0625rem;
+		font-weight: 650;
+		font-variant-numeric: tabular-nums;
+		letter-spacing: -0.01em;
+		color: var(--text-default);
+		white-space: nowrap;
+	}
+	.ov-statcell-sub {
+		font-size: 0.6875rem;
+		font-weight: 500;
+		color: var(--text-muted);
+		margin-left: 5px;
+	}
+
+	.ov-ultabs {
+		display: flex;
+		gap: 2px;
+		border-bottom: 1px solid color-mix(in srgb, var(--text-default) 10%, transparent);
+		overflow-x: auto;
+	}
+	.ov-ultab {
+		padding: 7px 12px 9px;
+		font-size: 0.8125rem;
+		font-weight: 500;
+		color: var(--text-muted);
+		background: none;
+		border: none;
+		border-bottom: 2px solid transparent;
+		margin-bottom: -1px;
+		cursor: pointer;
+		white-space: nowrap;
+		transition:
+			color 120ms,
+			border-color 120ms;
+	}
+	.ov-ultab:hover {
+		color: var(--text-default);
+	}
+	.ov-ultab--active {
+		color: var(--text-default);
+		border-bottom-color: var(--accent);
 	}
 
 	.observe-strip {
@@ -2146,160 +1991,27 @@
 		}
 	}
 
-	.observe-traces-cta {
-		border: 1px solid var(--surface-border);
-		border-radius: 0.875rem;
-		background: var(--surface-bg);
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.03),
-			0 1px 2px rgb(0 0 0 / 0.02);
-		padding: 24px;
-		display: flex;
-		flex-direction: column;
-		gap: 20px;
-	}
 
-	.observe-traces-header {
-		display: flex;
-		align-items: flex-start;
-		gap: 14px;
-	}
 
-	.observe-traces-title {
-		font-size: 0.95rem;
-		font-weight: 600;
-		color: var(--center-channel-color);
-		margin: 0;
-	}
 
-	.observe-traces-desc {
-		font-size: 0.8rem;
-		color: var(--surface-muted);
-		margin: 4px 0 0;
-		line-height: 1.5;
-	}
 
-	.observe-sdk-grid {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));
-		gap: 8px;
-	}
 
-	.observe-sdk-card {
-		display: flex;
-		flex-direction: column;
-		gap: 6px;
-		padding: 12px 14px;
-		border-radius: 0.875rem;
-		border: 1px solid var(--surface-border);
-		background: rgba(120, 120, 128, 0.03);
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.03),
-			0 1px 2px rgb(0 0 0 / 0.02);
-		transition: box-shadow 150ms ease;
-	}
 
-	.observe-sdk-card:hover {
-		box-shadow:
-			0 2px 8px rgb(0 0 0 / 0.06),
-			0 1px 3px rgb(0 0 0 / 0.04);
-	}
 
-	.observe-sdk-top {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-	}
 
-	.observe-sdk-name {
-		font-size: 0.78rem;
-		font-weight: 600;
-		color: var(--center-channel-color);
-	}
 
-	.observe-cmd-row {
-		display: flex;
-		align-items: center;
-		gap: 6px;
-	}
 
-	.observe-sdk-cmd {
-		font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
-		font-size: 0.7rem;
-		color: var(--surface-muted);
-		padding: 4px 8px;
-		border-radius: 6px;
-		background: rgba(120, 120, 128, 0.06);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-		flex: 1;
-		min-width: 0;
-	}
 
-	.observe-guide-card {
-		display: flex;
-		flex-direction: column;
-		gap: 10px;
-		padding: 16px;
-		border-radius: 0.875rem;
-		border: 1px solid var(--button-bg);
-		background: rgba(124, 92, 255, 0.04);
-	}
 
-	.observe-guide-header {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-	}
 
-	.observe-guide-dot {
-		width: 8px;
-		height: 8px;
-		border-radius: 50%;
-		flex-shrink: 0;
-	}
 
-	.observe-guide-lang {
-		font-size: 0.85rem;
-		font-weight: 600;
-		color: var(--center-channel-color);
-	}
 
-	.observe-guide-snippet {
-		font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
-		font-size: 0.72rem;
-		line-height: 1.6;
-		color: var(--center-channel-color);
-		background: rgba(120, 120, 128, 0.06);
-		border-radius: 8px;
-		padding: 10px 14px;
-		margin: 0;
-		overflow-x: auto;
-		white-space: pre;
-	}
 
 	:global(:root.dark) .observe-guide-snippet {
 		background: rgba(255, 255, 255, 0.04);
 	}
 
-	.observe-other-toggle {
-		display: inline-flex;
-		align-items: center;
-		gap: 6px;
-		padding: 0;
-		border: 0;
-		background: transparent;
-		color: var(--surface-muted);
-		font-size: 0.78rem;
-		font-weight: 500;
-		cursor: pointer;
-		transition: color 80ms ease;
-	}
 
-	.observe-other-toggle:hover {
-		color: var(--center-channel-color);
-	}
 
 	.observe-errors-toolbar {
 		display: flex;
@@ -2608,8 +2320,48 @@
 			border-radius: 0.75rem;
 		}
 
-		.observe-sdk-grid {
-			grid-template-columns: 1fr;
 		}
+	.observe-traces-disabled {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		text-align: center;
+		gap: 0.375rem;
+		padding: 3rem 1.5rem;
+	}
+	.observe-traces-disabled-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.5rem;
+		height: 2.5rem;
+		border-radius: 0.75rem;
+		background-color: color-mix(in srgb, var(--text-default) 6%, transparent);
+		color: var(--text-muted);
+		margin-bottom: 0.375rem;
+	}
+	.observe-traces-disabled-title {
+		font-size: 0.9375rem;
+		font-weight: 650;
+		color: var(--text-default);
+		margin: 0;
+	}
+	.observe-traces-disabled-desc {
+		font-size: 0.8125rem;
+		color: var(--text-muted);
+		max-width: 26rem;
+		line-height: 1.5;
+		margin: 0;
+	}
+	.ov-ultab-soon {
+		font-size: 0.5625rem;
+		font-weight: 650;
+		text-transform: uppercase;
+		letter-spacing: 0.05em;
+		padding: 0.125rem 0.3125rem;
+		border-radius: 999px;
+		background-color: color-mix(in srgb, var(--text-default) 8%, transparent);
+		color: var(--text-muted);
+		margin-left: 0.3125rem;
 	}
 </style>

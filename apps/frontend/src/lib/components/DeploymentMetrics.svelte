@@ -3,6 +3,11 @@
 	import { browser } from '$app/environment';
 	import { apiFetch } from '$lib/stores';
 	import {
+		METRIC_COLORS_LIGHT,
+		METRIC_COLORS_DARK,
+		type MetricId
+	} from '$lib/utils/metric-colors';
+	import {
 		Activity,
 		Cpu,
 		MemoryStick,
@@ -67,39 +72,51 @@
 
 	type Series = { x: number; y: number }[];
 	type MetricCard = {
-		id: 'cpu' | 'mem' | 'rx' | 'tx';
+		id: MetricId;
 		label: string;
-		color: string;
 		icon: any;
 		formatter: (v: number) => string;
 	};
+
+	let isDark = $state(false);
+	$effect(() => {
+		if (!browser) return;
+		const el = document.documentElement;
+		const update = () => (isDark = el.classList.contains('dark'));
+		update();
+		const mo = new MutationObserver(update);
+		mo.observe(el, { attributes: true, attributeFilter: ['class'] });
+		return () => mo.disconnect();
+	});
+
+	function colorOf(id: MetricId): string {
+		return isDark ? METRIC_COLORS_DARK[id] : METRIC_COLORS_LIGHT[id];
+	}
+
+	let tip = $state<{ id: MetricId; x: number; y: number } | null>(null);
 
 	const CARDS: MetricCard[] = [
 		{
 			id: 'cpu',
 			label: 'CPU usage',
-			color: '#7c5cff',
 			icon: Cpu,
 			formatter: (v) => (v >= 1000 ? `${(v / 1000).toFixed(2)} cores` : `${v.toFixed(0)}m`)
 		},
 		{
 			id: 'mem',
 			label: 'Memory',
-			color: '#22c0a8',
 			icon: MemoryStick,
 			formatter: (v) => (v >= 1024 ? `${(v / 1024).toFixed(2)} GB` : `${v.toFixed(0)} MB`)
 		},
 		{
 			id: 'rx',
 			label: 'Network in',
-			color: '#3aa8ff',
 			icon: ArrowDown,
 			formatter: (v) => (v >= 1024 ? `${(v / 1024).toFixed(2)} MB/s` : `${v.toFixed(0)} KB/s`)
 		},
 		{
 			id: 'tx',
 			label: 'Network out',
-			color: '#ff7e6b',
 			icon: ArrowUp,
 			formatter: (v) => (v >= 1024 ? `${(v / 1024).toFixed(2)} MB/s` : `${v.toFixed(0)} KB/s`)
 		}
@@ -349,25 +366,37 @@
 		return { dataMin: s[0].x, dataMax: s[s.length - 1].x, stroke };
 	}
 
-	function chartData(card: MetricCard) {
+	function chartData(card: MetricCard, style: 'flat' | 'gradient' = 'flat') {
+		const col = colorOf(card.id);
+		const backgroundColor =
+			style === 'flat'
+				? col + '22'
+				: (context: any) => {
+						const { ctx, chartArea } = context.chart;
+						if (!chartArea) return col + '33';
+						const g = ctx.createLinearGradient(0, chartArea.top, 0, chartArea.bottom);
+						g.addColorStop(0, col + '4d');
+						g.addColorStop(1, col + '00');
+						return g;
+					};
 		return {
 			datasets: [
 				{
 					data: series[card.id] as any,
-					borderColor: card.color,
-					backgroundColor: card.color + '22',
-					borderWidth: 1.5,
+					borderColor: col,
+					backgroundColor,
+					borderWidth: style === 'gradient' ? 2 : 1.5,
 					pointRadius: 0,
 					pointHoverRadius: 0,
 					fill: true,
-					tension: 0.25,
+					tension: style === 'gradient' ? 0.3 : 0.25,
 					spanGaps: true
 				}
 			]
 		};
 	}
 
-	function chartOptions(card: MetricCard) {
+	function chartOptions(card: MetricCard, opts: { xTicks?: boolean; dense?: boolean } = {}) {
 		return {
 			responsive: true,
 			maintainAspectRatio: false,
@@ -387,13 +416,14 @@
 					min: windowStart,
 					max: windowEnd,
 					ticks: {
+						display: opts.xTicks !== false,
 						color: 'rgba(140,140,150,0.85)',
 						maxRotation: 0,
 						autoSkip: true,
 						maxTicksLimit: 6,
 						callback: (v: any) => formatTick(v as number)
 					},
-					grid: { color: 'rgba(120,120,128,0.08)' }
+					grid: opts.dense ? { display: false } : { color: 'rgba(120,120,128,0.08)' }
 				},
 				y: {
 					beginAtZero: true,
@@ -433,7 +463,7 @@
 		return Math.abs(a.x - crosshairX) < Math.abs(b.x - crosshairX) ? a.y : b.y;
 	}
 
-	function onChartMove(e: PointerEvent, wrapper: HTMLElement) {
+	function onChartMove(e: PointerEvent, wrapper: HTMLElement, tipId?: MetricId) {
 		const canvas = wrapper.querySelector('canvas') as HTMLCanvasElement | null;
 		if (!canvas) return;
 		const chart = findChartFor(canvas);
@@ -443,14 +473,28 @@
 		const v = chart.scales?.x?.getValueForPixel(px);
 		if (v == null || !isFinite(v)) return;
 		crosshairX = v;
+		if (tipId) {
+			const wrect = wrapper.getBoundingClientRect();
+			tip = { id: tipId, x: e.clientX - wrect.left, y: e.clientY - wrect.top };
+		}
 		redrawAll();
 	}
 
 	function onChartLeave() {
+		tip = null;
 		if (crosshairX != null) {
 			crosshairX = null;
 			redrawAll();
 		}
+	}
+
+	function fmtTipTime(t: number): string {
+		const d = new Date(t);
+		const pad = (n: number) => String(n).padStart(2, '0');
+		if (effectiveWindowMs > 24 * 60 * 60 * 1000) {
+			return `${d.getMonth() + 1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+		}
+		return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
 	}
 
 	function setQuickRange(ms: number) {
@@ -598,7 +642,7 @@
 	{@const Icon = c.icon}
 	{@const sum = summaries[c.id]}
 	{@const hover = valueAtCrosshair(series[c.id])}
-	<article class="metrics-card" style="--accent: {c.color}">
+	<article class="metrics-card" style="--accent: {colorOf(c.id)}">
 		<div class="metrics-card-head">
 			<div class="metrics-card-label">
 				<Icon class="h-3.5 w-3.5" />
@@ -622,7 +666,7 @@
 		<div
 			class="metrics-card-chart"
 			style="height: {height}"
-			onpointermove={(e) => onChartMove(e, e.currentTarget)}
+			onpointermove={(e) => onChartMove(e, e.currentTarget, c.id)}
 			onpointerleave={onChartLeave}
 		>
 			{#if chartReady && Line}
@@ -630,6 +674,7 @@
 			{:else}
 				<div class="metrics-card-skeleton"></div>
 			{/if}
+			{@render chartTip(c, 0)}
 		</div>
 		<dl class="metrics-card-stats">
 			<div>
@@ -646,6 +691,96 @@
 			</div>
 		</dl>
 	</article>
+{/snippet}
+
+{#snippet chartTip(c: MetricCard, wrapperWidth: number)}
+	{#if tip && tip.id === c.id && crosshairX != null}
+		<div
+			class="mtx-tip"
+			class:mtx-tip--flip={wrapperWidth > 0 && tip.x > wrapperWidth - 150}
+			style="left: {tip.x}px; top: {Math.max(tip.y - 8, 4)}px"
+		>
+			<span class="mtx-tip-time">{fmtTipTime(crosshairX)}</span>
+			<span class="mtx-tip-val">
+				<span class="mtx-chip" style="background: {colorOf(c.id)}"></span>
+				{c.formatter(valueAtCrosshair(series[c.id]) ?? 0)}
+			</span>
+		</div>
+	{/if}
+{/snippet}
+
+{#snippet boardCell(c: MetricCard)}
+	{@const sum = summaries[c.id]}
+	<article class="mtx-cell">
+		<div class="mtx-cell-head">
+			<span class="mtx-chip" style="background: {colorOf(c.id)}"></span>
+			<span class="mtx-cell-label">{c.label}</span>
+			<span class="mtx-cell-now">{c.formatter(sum.current)}</span>
+			<button
+				class="metrics-iconbtn metrics-iconbtn--small"
+				onclick={() => (expandedCardId = c.id)}
+				type="button"
+				title="Expand"
+				aria-label="Expand {c.label}"><Maximize2 class="h-3 w-3" /></button
+			>
+		</div>
+		<div
+			class="mtx-cell-chart"
+			onpointermove={(e) => onChartMove(e, e.currentTarget, c.id)}
+			onpointerleave={onChartLeave}
+		>
+			{#if chartReady && Line}
+				<svelte:component
+					this={Line}
+					data={chartData(c, 'gradient')}
+					options={chartOptions(c, { dense: true })}
+				/>
+			{:else}
+				<div class="metrics-card-skeleton"></div>
+			{/if}
+			{@render chartTip(c, 0)}
+		</div>
+		<div class="mtx-cell-foot">
+			<span>avg <b>{c.formatter(sum.avg)}</b></span>
+			<span>p95 <b>{c.formatter(sum.p95)}</b></span>
+			<span>max <b>{c.formatter(sum.max)}</b></span>
+		</div>
+	</article>
+{/snippet}
+
+{#snippet band(c: MetricCard, isLast: boolean)}
+	{@const sum = summaries[c.id]}
+	<div class="mtx-band">
+		<div class="mtx-band-gutter">
+			<div class="mtx-band-label">
+				<span class="mtx-chip" style="background: {colorOf(c.id)}"></span>
+				{c.label}
+			</div>
+			<div class="mtx-band-now">{c.formatter(sum.current)}</div>
+			<div class="mtx-band-stats">
+				<span>avg {c.formatter(sum.avg)}</span>
+				<span>p95 {c.formatter(sum.p95)}</span>
+				<span>max {c.formatter(sum.max)}</span>
+			</div>
+		</div>
+		<div
+			class="mtx-band-chart"
+			style="height: {isLast ? '110px' : '88px'}"
+			onpointermove={(e) => onChartMove(e, e.currentTarget, c.id)}
+			onpointerleave={onChartLeave}
+		>
+			{#if chartReady && Line}
+				<svelte:component
+					this={Line}
+					data={chartData(c, 'gradient')}
+					options={chartOptions(c, { dense: true, xTicks: isLast })}
+				/>
+			{:else}
+				<div class="metrics-card-skeleton"></div>
+			{/if}
+			{@render chartTip(c, 0)}
+		</div>
+	</div>
 {/snippet}
 
 <div class="metrics-root">
@@ -666,9 +801,9 @@
 		{fmtFull(windowStart)} → {fmtFull(windowEnd)}
 	</div>
 
-	<div class="metrics-grid">
+	<div class="mtx-board">
 		{#each CARDS as c (c.id)}
-			{@render card(c, '120px', true)}
+			{@render boardCell(c)}
 		{/each}
 	</div>
 
@@ -697,7 +832,7 @@
 		>
 			<header class="metrics-modal-head">
 				<div class="metrics-title">
-					<Activity class="h-4 w-4" style="color: {expandedCard.color}" />
+					<Activity class="h-4 w-4" style="color: {colorOf(expandedCard.id)}" />
 					<span>{expandedCard.label}</span>
 					{@render stateBadge()}
 				</div>
@@ -1128,6 +1263,181 @@
 	.btn-mini--primary:hover {
 		filter: brightness(1.08);
 	}
+
+	.mtx-chip {
+		width: 8px;
+		height: 8px;
+		border-radius: 2px;
+		flex-shrink: 0;
+		display: inline-block;
+	}
+
+	.mtx-tip {
+		position: absolute;
+		z-index: 5;
+		transform: translate(12px, -100%);
+		pointer-events: none;
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		padding: 6px 9px;
+		border-radius: 6px;
+		background: var(--surface, white);
+		border: 1px solid rgba(120, 120, 128, 0.25);
+		box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+		font-size: 0.72rem;
+		white-space: nowrap;
+	}
+	:global(:root.dark) .mtx-tip {
+		background: rgba(33, 33, 33, 0.97);
+		border-color: rgba(255, 255, 255, 0.12);
+	}
+	.mtx-tip--flip {
+		transform: translate(calc(-100% - 12px), -100%);
+	}
+	.mtx-tip-time {
+		color: var(--text-muted, rgba(140, 140, 150, 0.95));
+		font-variant-numeric: tabular-nums;
+	}
+	.mtx-tip-val {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-weight: 600;
+		font-variant-numeric: tabular-nums;
+	}
+
+	.mtx-board {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 10px;
+	}
+	@media (max-width: 720px) {
+		.mtx-board {
+			grid-template-columns: 1fr;
+		}
+	}
+	.mtx-cell {
+		display: flex;
+		flex-direction: column;
+		gap: 4px;
+		padding: 10px 12px 8px;
+		border-radius: 8px;
+		background: var(--surface, white);
+		border: 1px solid rgba(120, 120, 128, 0.14);
+		min-width: 0;
+	}
+	:global(:root.dark) .mtx-cell {
+		background: rgba(255, 255, 255, 0.03);
+		border-color: rgba(255, 255, 255, 0.07);
+	}
+	.mtx-cell-head {
+		display: flex;
+		align-items: center;
+		gap: 7px;
+		min-width: 0;
+	}
+	.mtx-cell-label {
+		flex: 1;
+		font-size: 0.75rem;
+		font-weight: 500;
+		color: var(--text-muted, rgba(140, 140, 150, 0.95));
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.mtx-cell-now {
+		font-size: 0.95rem;
+		font-weight: 650;
+		font-variant-numeric: tabular-nums;
+		letter-spacing: -0.01em;
+		color: var(--text-primary, inherit);
+	}
+	.mtx-cell-chart {
+		position: relative;
+		height: 150px;
+		min-width: 0;
+		touch-action: none;
+	}
+	.mtx-cell-foot {
+		display: flex;
+		gap: 14px;
+		font-size: 0.68rem;
+		color: var(--text-muted, rgba(140, 140, 150, 0.9));
+		font-variant-numeric: tabular-nums;
+		padding-top: 2px;
+	}
+	.mtx-cell-foot b {
+		font-weight: 600;
+		color: var(--text-primary, inherit);
+	}
+
+	.mtx-bands {
+		display: flex;
+		flex-direction: column;
+	}
+	.mtx-band {
+		display: grid;
+		grid-template-columns: 9.5rem minmax(0, 1fr);
+		gap: 14px;
+		align-items: stretch;
+		padding: 10px 0;
+	}
+	.mtx-band + .mtx-band {
+		border-top: 1px solid rgba(120, 120, 128, 0.14);
+	}
+	.mtx-band-gutter {
+		display: flex;
+		flex-direction: column;
+		gap: 2px;
+		min-width: 0;
+		padding-top: 2px;
+	}
+	.mtx-band-label {
+		display: inline-flex;
+		align-items: center;
+		gap: 6px;
+		font-size: 0.72rem;
+		font-weight: 500;
+		color: var(--text-muted, rgba(140, 140, 150, 0.95));
+	}
+	.mtx-band-now {
+		font-size: 1.25rem;
+		font-weight: 650;
+		font-variant-numeric: tabular-nums;
+		letter-spacing: -0.015em;
+		color: var(--text-primary, inherit);
+	}
+	.mtx-band-stats {
+		display: flex;
+		flex-direction: column;
+		gap: 1px;
+		font-size: 0.66rem;
+		color: var(--text-muted, rgba(140, 140, 150, 0.9));
+		font-variant-numeric: tabular-nums;
+	}
+	.mtx-band-chart {
+		position: relative;
+		min-width: 0;
+		touch-action: none;
+	}
+	@media (max-width: 720px) {
+		.mtx-band {
+			grid-template-columns: 1fr;
+			gap: 6px;
+		}
+		.mtx-band-gutter {
+			flex-direction: row;
+			align-items: baseline;
+			gap: 10px;
+		}
+		.mtx-band-stats {
+			flex-direction: row;
+			gap: 8px;
+			margin-left: auto;
+		}
+	}
+
 	.btn-mini--ghost {
 		border: 0;
 		padding: 3px 8px;
