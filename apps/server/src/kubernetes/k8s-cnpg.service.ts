@@ -1041,7 +1041,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       primaryUpdateStrategy: 'unsupervised',
       storage: {
         size: options.storageSize || '1Gi',
-        storageClass: 'longhorn',
+        storageClass: process.env.K8S_STORAGE_CLASS || 'longhorn',
       },
       bootstrap: {
         initdb: {
@@ -1642,7 +1642,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     const spec: any = {
       instances: 1,
       imageName: options.imageName || 'ghcr.io/cloudnative-pg/postgresql:17',
-      storage: { size: options.storageSize || '1Gi', storageClass: 'longhorn' },
+      storage: { size: options.storageSize || '1Gi', storageClass: process.env.K8S_STORAGE_CLASS || 'longhorn' },
       bootstrap: {
         recovery: {
           backup: { name: backupName },

@@ -18,6 +18,7 @@ const RESERVED_NAMESPACES = new Set<string>([
   'orchard', 'orchard-builders', 'orchard-r2-proxy',
   'harbor', 'postgresql', 'network', 'longhorn-system',
   'flux-system', 'monitoring', 'cert-manager',
+  ...(process.env.RESERVED_NAMESPACES_EXTRA || '').split(',').map((ns) => ns.trim()).filter(Boolean),
 ]);
 
 @Injectable()

@@ -23,7 +23,28 @@ import { FaviconService } from './favicon.service';
 import { ProjectsService } from './projects.service';
 import { formatSlug, scrubIngress, truncateK8sName } from './projects.utils';
 
-const TENANT_INGRESS_CLASS = 'haproxy';
+const TENANT_INGRESS_CLASS = process.env.K8S_INGRESS_CLASS || 'haproxy';
+
+const CERT_CLUSTER_ISSUER = process.env.CERT_CLUSTER_ISSUER || 'letsencrypt-prod';
+
+const PLATFORM_WILDCARD_DOMAINS = (
+  process.env.PLATFORM_WILDCARD_DOMAINS || '.k.hackclub.dev=wildcard-k-hackclub-dev-tls'
+)
+  .split(',')
+  .map((entry) => entry.trim())
+  .filter(Boolean)
+  .flatMap((entry) => {
+    const [suffix, secret] = entry.split('=').map((part) => part.trim());
+    return suffix && secret ? [{ suffix, secret }] : [];
+  });
+
+function wildcardTlsSecretFor(host: string): string | null {
+  return PLATFORM_WILDCARD_DOMAINS.find((w) => host.endsWith(w.suffix))?.secret ?? null;
+}
+
+function isWildcardTlsSecret(name: string | null): boolean {
+  return !!name && PLATFORM_WILDCARD_DOMAINS.some((w) => w.secret === name);
+}
 
 @Injectable()
 export class IngressService {
@@ -221,16 +242,16 @@ export class IngressService {
     const ingressClassName = TENANT_INGRESS_CLASS;
 
     const tlsEnabled = data.tlsEnabled !== false;
-    const isWildcardDomain = rawHost.endsWith('.k.hackclub.dev');
+    const wildcardSecret = wildcardTlsSecretFor(rawHost);
     let tlsSecretName: string | null = null;
     if (tlsEnabled) {
-      tlsSecretName = isWildcardDomain ? 'wildcard-k-hackclub-dev-tls' : `leaf-cert-${randomUUID()}`;
+      tlsSecretName = wildcardSecret ?? `leaf-cert-${randomUUID()}`;
       if (tlsSecretName.length > 255) {
         throw new BadRequestException('TLS secret name is too long');
       }
     }
 
-    const clusterIssuer = tlsEnabled && !isWildcardDomain ? 'letsencrypt-prod' : null;
+    const clusterIssuer = tlsEnabled && !wildcardSecret ? CERT_CLUSTER_ISSUER : null;
 
     const entrypoints = tlsEnabled ? ['websecure'] : ['web'];
 
@@ -610,13 +631,13 @@ export class IngressService {
     }
 
     const tlsEnabled = data.tlsEnabled !== false;
-    const isWildcardDomain = rawHost.endsWith('.k.hackclub.dev');
+    const wildcardSecret = wildcardTlsSecretFor(rawHost);
     let tlsSecretName: string | null = null;
     if (tlsEnabled) {
-      tlsSecretName = isWildcardDomain ? 'wildcard-k-hackclub-dev-tls' : `leaf-cert-${randomUUID()}`;
+      tlsSecretName = wildcardSecret ?? `leaf-cert-${randomUUID()}`;
     }
     const tlsHosts = tlsSecretName ? [rawHost] : [];
-    const clusterIssuer = tlsEnabled && !isWildcardDomain ? 'letsencrypt-prod' : null;
+    const clusterIssuer = tlsEnabled && !wildcardSecret ? CERT_CLUSTER_ISSUER : null;
     const entrypoints = tlsEnabled ? ['websecure'] : ['web'];
 
     const sanitizedAnnotations: Record<string, string> = {};
@@ -952,13 +973,13 @@ export class IngressService {
     }
 
     const tlsEnabled = data.tlsEnabled !== false;
-    const isWildcardDomain = rawHost.endsWith('.k.hackclub.dev');
+    const wildcardSecret = wildcardTlsSecretFor(rawHost);
     let tlsSecretName: string | null = null;
     if (tlsEnabled) {
-      tlsSecretName = isWildcardDomain ? 'wildcard-k-hackclub-dev-tls' : `leaf-cert-${randomUUID()}`;
+      tlsSecretName = wildcardSecret ?? `leaf-cert-${randomUUID()}`;
     }
     const tlsHosts = tlsSecretName ? [rawHost] : [];
-    const clusterIssuer = tlsEnabled && !isWildcardDomain ? 'letsencrypt-prod' : null;
+    const clusterIssuer = tlsEnabled && !wildcardSecret ? CERT_CLUSTER_ISSUER : null;
     const entrypoints = tlsEnabled ? ['websecure'] : ['web'];
 
     const sanitizedAnnotations: Record<string, string> = {};
@@ -1335,19 +1356,19 @@ export class IngressService {
     }
 
     const tlsEnabled = data.tlsEnabled !== false;
-    const isWildcardDomain = rawHost.endsWith('.k.hackclub.dev');
+    const wildcardSecret = wildcardTlsSecretFor(rawHost);
     let tlsSecretName: string | null = ingress.tlsSecretName;
     if (tlsEnabled) {
-      if (isWildcardDomain) {
-        tlsSecretName = 'wildcard-k-hackclub-dev-tls';
-      } else if (!tlsSecretName || tlsSecretName === 'wildcard-k-hackclub-dev-tls') {
+      if (wildcardSecret) {
+        tlsSecretName = wildcardSecret;
+      } else if (!tlsSecretName || isWildcardTlsSecret(tlsSecretName)) {
         tlsSecretName = `leaf-cert-${randomUUID()}`;
       }
     } else {
       tlsSecretName = null;
     }
     const tlsHosts = tlsSecretName ? [rawHost] : [];
-    const clusterIssuer = tlsEnabled && !isWildcardDomain ? 'letsencrypt-prod' : null;
+    const clusterIssuer = tlsEnabled && !wildcardSecret ? CERT_CLUSTER_ISSUER : null;
     const entrypoints = tlsEnabled ? ['websecure'] : ['web'];
 
     const sanitizedAnnotations: Record<string, string> = {};
@@ -1733,12 +1754,12 @@ export class IngressService {
     const ingressClassName = TENANT_INGRESS_CLASS;
 
     const tlsEnabled = data.tlsEnabled !== false;
-    const isWildcardDomain = rawHost.endsWith('.k.hackclub.dev');
+    const wildcardSecret = wildcardTlsSecretFor(rawHost);
     let tlsSecretName: string | null = ingress.tlsSecretName;
     if (tlsEnabled) {
-      if (isWildcardDomain) {
-        tlsSecretName = 'wildcard-k-hackclub-dev-tls';
-      } else if (!tlsSecretName || tlsSecretName === 'wildcard-k-hackclub-dev-tls') {
+      if (wildcardSecret) {
+        tlsSecretName = wildcardSecret;
+      } else if (!tlsSecretName || isWildcardTlsSecret(tlsSecretName)) {
         tlsSecretName = `leaf-cert-${randomUUID()}`;
         if (tlsSecretName.length > 255) {
           throw new BadRequestException('TLS secret name is too long');
@@ -1748,7 +1769,7 @@ export class IngressService {
       tlsSecretName = null;
     }
 
-    const clusterIssuer = tlsEnabled && !isWildcardDomain ? 'letsencrypt-prod' : null;
+    const clusterIssuer = tlsEnabled && !wildcardSecret ? CERT_CLUSTER_ISSUER : null;
 
     const entrypoints = tlsEnabled ? ['websecure'] : ['web'];
 
