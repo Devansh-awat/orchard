@@ -10,7 +10,7 @@ Run from the repo root so the gateway and API come up too:
 pnpm dev
 ```
 
-Open http://localhost:4000 — the gateway proxies the API; running Vite alone
+Open http://localhost:4000: the gateway proxies the API; running Vite alone
 on :3000 breaks logins.
 
 Frontend-only commands:

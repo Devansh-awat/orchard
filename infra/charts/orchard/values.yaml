@@ -54,6 +54,19 @@ server:
   env: []
   envFrom: []
 
+# Signup policy for the platform: open | invite_only | closed.
+signupMode: invite_only
+
+# Cluster knobs for tenant workloads (user apps/databases). Empty values fall
+# back to the app defaults (longhorn / haproxy / letsencrypt-prod).
+tenant:
+  storageClass: ""
+  ingressClass: ""
+  certClusterIssuer: ""
+  # Comma-separated domain=tlsSecretName pairs for wildcard certs you manage,
+  # e.g. ".apps.example.com=wildcard-apps-example-com-tls"
+  wildcardDomains: ""
+
 # Control-plane Redis. Backs the cross-replica SSE event bus (Redis Streams)
 # so live updates reach SSE clients on every server replica, and is available
 # as a general cache. REDIS_URL is injected into the server automatically when

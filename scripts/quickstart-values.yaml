@@ -1,0 +1,54 @@
+image:
+  repository: leafdtk/leaf
+
+datadog:
+  enabled: false
+
+signupMode: open
+
+tenant:
+  storageClass: local-path
+  ingressClass: traefik
+  certClusterIssuer: selfsigned
+
+ingress:
+  host: orchard.127.0.0.1.nip.io
+  entryPoints: [web]
+  tls:
+    enabled: false
+
+gateway:
+  http:
+    appDomain: apps.127.0.0.1.nip.io
+
+postgres:
+  storage:
+    size: 2Gi
+    storageClass: local-path
+
+redis:
+  storage: 512Mi
+  storageClass: local-path
+
+mcp:
+  enabled: false
+
+metrics:
+  enabled: false
+
+certificates:
+  enabled: false
+
+builders:
+  enabled: false
+
+server:
+  replicas: 1
+  env:
+    - { name: JWT_SECRET, value: quickstart-insecure-jwt-secret }
+    - { name: SECRETS_ENCRYPTION_KEY, value: quickstart-insecure-enc-key0000 }
+    - { name: APP_DOMAIN, value: apps.127.0.0.1.nip.io }
+    - { name: FRONTEND_URL, value: 'http://orchard.127.0.0.1.nip.io:8080' }
+
+frontend:
+  replicas: 1

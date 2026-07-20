@@ -96,6 +96,23 @@ spec:
               value: {{ .db.localSecret | quote }}
             {{- end }}
             {{- end }}
+            {{- if .Values.signupMode }}
+            - { name: SIGNUP_MODE, value: {{ .Values.signupMode | quote }} }
+            {{- end }}
+            {{- with .Values.tenant }}
+            {{- if .storageClass }}
+            - { name: K8S_STORAGE_CLASS, value: {{ .storageClass | quote }} }
+            {{- end }}
+            {{- if .ingressClass }}
+            - { name: K8S_INGRESS_CLASS, value: {{ .ingressClass | quote }} }
+            {{- end }}
+            {{- if .certClusterIssuer }}
+            - { name: CERT_CLUSTER_ISSUER, value: {{ .certClusterIssuer | quote }} }
+            {{- end }}
+            {{- if .wildcardDomains }}
+            - { name: PLATFORM_WILDCARD_DOMAINS, value: {{ .wildcardDomains | quote }} }
+            {{- end }}
+            {{- end }}
             {{- with .Values.server.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

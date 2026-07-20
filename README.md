@@ -1,6 +1,6 @@
 # Orchard
 
-A self-service deployment platform on Kubernetes — deploy from GitHub, manage
+A self-service deployment platform on Kubernetes: deploy from GitHub, manage
 databases, organizations, quotas, and compose stacks, with a SvelteKit web app,
 a NestJS API, and supporting Go services.
 
@@ -40,12 +40,12 @@ pnpm dev                                          # frontend + server + gateway
 ```
 
 Open http://localhost:4000 (the gateway proxies `/apiv1/*` to the API on 3001
-and everything else to Vite on 3000 — always use :4000 or logins break).
+and everything else to Vite on 3000: always use :4000 or logins break).
 
 The seed gives you `admin@orchard.dev` in the `orchard-demo` org; sign in with
 an email OTP (codes print to the server console when SMTP is unconfigured).
 
-A Kubernetes cluster is **not** required for UI/API development — the server
+A Kubernetes cluster is **not** required for UI/API development: the server
 boots without one and deploy/build features return 503 until you point
 `KUBECONFIG_PATH` at a cluster. See `docs/self-hosting.md` for running the
 full platform.

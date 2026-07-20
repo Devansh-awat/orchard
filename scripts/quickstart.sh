@@ -1,0 +1,88 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+CLUSTER=${ORCHARD_CLUSTER:-orchard-dev}
+HTTP_PORT=${ORCHARD_HTTP_PORT:-8080}
+HTTPS_PORT=${ORCHARD_HTTPS_PORT:-8443}
+GATEWAY_API_VERSION=v1.2.1
+REPO_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+
+step() { printf '\n\033[1;32m==> %s\033[0m\n' "$*"; }
+need() { command -v "$1" >/dev/null 2>&1 || { echo "missing dependency: $1" >&2; exit 1; }; }
+
+need docker
+need k3d
+need kubectl
+need helm
+
+if k3d cluster list "$CLUSTER" >/dev/null 2>&1; then
+  echo "cluster $CLUSTER already exists; delete it with: k3d cluster delete $CLUSTER" >&2
+  exit 1
+fi
+
+step "Creating k3d cluster $CLUSTER"
+k3d cluster create "$CLUSTER" \
+  -p "$HTTP_PORT:80@loadbalancer" \
+  -p "$HTTPS_PORT:443@loadbalancer" \
+  --k3s-arg "--disable=traefik@server:0" \
+  --wait
+
+step "Installing Gateway API CRDs"
+kubectl apply -f "https://github.com/kubernetes-sigs/gateway-api/releases/download/$GATEWAY_API_VERSION/standard-install.yaml"
+
+step "Adding helm repos"
+helm repo add traefik https://traefik.github.io/charts >/dev/null
+helm repo add cnpg https://cloudnative-pg.github.io/charts >/dev/null
+helm repo add jetstack https://charts.jetstack.io >/dev/null
+helm repo update >/dev/null
+
+step "Installing Traefik (with Gateway API provider)"
+helm upgrade --install traefik traefik/traefik \
+  --namespace traefik --create-namespace \
+  --set providers.kubernetesGateway.enabled=true \
+  --set gateway.enabled=false \
+  --wait
+
+step "Installing CloudNativePG operator"
+helm upgrade --install cnpg cnpg/cloudnative-pg \
+  --namespace cnpg-system --create-namespace \
+  --wait
+
+step "Installing cert-manager"
+helm upgrade --install cert-manager jetstack/cert-manager \
+  --namespace cert-manager --create-namespace \
+  --set crds.enabled=true \
+  --wait
+
+step "Creating self-signed ClusterIssuer"
+kubectl apply -f - <<'EOF'
+apiVersion: cert-manager.io/v1
+kind: ClusterIssuer
+metadata:
+  name: selfsigned
+spec:
+  selfSigned: {}
+EOF
+
+step "Installing Orchard"
+helm upgrade --install orchard "$REPO_ROOT/infra/charts/orchard" \
+  --namespace orchard --create-namespace \
+  -f "$REPO_ROOT/scripts/quickstart-values.yaml" \
+  --wait --timeout 15m
+
+step "Done"
+cat <<EOF
+
+Orchard is up:
+
+  http://orchard.127.0.0.1.nip.io:$HTTP_PORT
+
+Signups are open; use the email OTP flow. Without SMTP configured, the OTP
+code is printed in the server logs:
+
+  kubectl logs -n orchard deploy/server -f | grep OTP
+
+Image builds are disabled in the quickstart (no registry). To tear down:
+
+  k3d cluster delete $CLUSTER
+EOF

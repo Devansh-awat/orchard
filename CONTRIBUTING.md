@@ -39,7 +39,7 @@ forget).
 ## Code style
 
 - No code comments; write code that reads on its own (see AGENTS.md).
-- Frontend work must follow `apps/frontend/DESIGN.md` — semantic tokens only,
+- Frontend work must follow `apps/frontend/DESIGN.md`: semantic tokens only,
   no raw hex colors, `ui/` components over legacy classes. `pnpm check:design`
   enforces the basics.
 - Database changes go through Prisma migrations
