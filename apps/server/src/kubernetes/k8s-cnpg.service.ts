@@ -82,15 +82,24 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       return;
     }
     try {
-      const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
-      const res: any = await customApi.listClusterCustomObject(
-        'postgresql.cnpg.io', 'v1', 'clusters',
-      );
+      // Target only namespaces this server provisioned clusters into (from
+      // its own database), never "any namespace with a cnpg cluster": a
+      // cluster-wide sweep stamped the platform's own namespace and the
+      // first policy selecting orchard-db's endpoints flipped them to
+      // default-deny, cutting the server off from its database
+      // (2026-07-20 incident, second half).
+      const rows = await this.prisma.database.findMany({
+        where: { mode: 'cnpg', namespace: { not: null } },
+        select: { namespace: true },
+        distinct: ['namespace'],
+      });
       const namespaces = new Set<string>(
-        (res.body?.items ?? [])
-          .map((c: any) => c?.metadata?.namespace)
-          .filter(Boolean),
+        rows.map((r) => r.namespace).filter(Boolean) as string[],
       );
+      // The platform's own cnpg cluster needs the operator allow too:
+      // orchard-db-allow-control-plane (kubeops) selects its endpoints, so
+      // without this the operator cannot reach its instance manager.
+      namespaces.add(process.env.ORCHARD_PLATFORM_NAMESPACE || 'orchard');
       for (const ns of namespaces) {
         try {
           await this.ensureCnpgOperatorIngress(ns);
