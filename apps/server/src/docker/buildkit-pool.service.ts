@@ -252,7 +252,7 @@ export class BuildKitPoolService {
           {
             name: 'docker-config',
             secret: {
-              secretName: 'harbor-registry-creds',
+              secretName: process.env.REGISTRY_PULL_SECRET_NAME || 'harbor-registry-creds',
               items: [{ key: '.dockerconfigjson', path: 'config.json' }],
             },
           },

@@ -51,7 +51,13 @@ export class DockerService {
 
   private readonly harborRegistryPull = process.env.DOCKER_REGISTRY_PULL || 'harbor.1mp.dev';
 
-  private readonly harborProject = 'orchard';
+  private readonly harborProject = process.env.REGISTRY_PROJECT || 'orchard';
+
+  private readonly registryNoProxy = [
+    this.harborRegistryPush,
+    this.harborRegistryPull,
+    ...(process.env.BUILD_NO_PROXY_EXTRA || '').split(',').filter(Boolean),
+  ].join(',');
 
   private activeBuilds = 0;
 
@@ -348,8 +354,8 @@ export class DockerService {
         env: {
           ...process.env,
           DOCKER_HOST: process.env.DOCKER_HOST || 'unix:///var/run/docker.sock',
-          NO_PROXY: `${process.env.NO_PROXY || ''},178.156.144.127,harbor.1mp.dev,harbor-core.harbor.svc.cluster.local`.replace(/^,/, ''),
-          no_proxy: `${process.env.no_proxy || ''},178.156.144.127,harbor.1mp.dev,harbor-core.harbor.svc.cluster.local`.replace(/^,/, ''),
+          NO_PROXY: `${process.env.NO_PROXY || ''},${this.registryNoProxy}`.replace(/^,/, ''),
+          no_proxy: `${process.env.no_proxy || ''},${this.registryNoProxy}`.replace(/^,/, ''),
           HTTP_PROXY: '',
           HTTPS_PROXY: '',
           http_proxy: '',
@@ -741,8 +747,8 @@ export class DockerService {
         ...envVars,
         DOCKER_BUILDKIT: '1',
         DOCKER_HOST: process.env.DOCKER_HOST || 'unix:///var/run/docker.sock',
-        NO_PROXY: `${process.env.NO_PROXY || ''},178.156.144.127,harbor.1mp.dev,harbor-core.harbor.svc.cluster.local,ghcr.io`.replace(/^,/, ''),
-        no_proxy: `${process.env.no_proxy || ''},178.156.144.127,harbor.1mp.dev,harbor-core.harbor.svc.cluster.local,ghcr.io`.replace(/^,/, ''),
+        NO_PROXY: `${process.env.NO_PROXY || ''},${this.registryNoProxy},ghcr.io`.replace(/^,/, ''),
+        no_proxy: `${process.env.no_proxy || ''},${this.registryNoProxy},ghcr.io`.replace(/^,/, ''),
         HTTP_PROXY: '',
         HTTPS_PROXY: '',
         http_proxy: '',
@@ -923,8 +929,8 @@ export class DockerService {
             env: {
               ...process.env,
               DOCKER_HOST: process.env.DOCKER_HOST || 'unix:///var/run/docker.sock',
-              NO_PROXY: `${process.env.NO_PROXY || ''},178.156.144.127,harbor.1mp.dev,harbor-core.harbor.svc.cluster.local`.replace(/^,/, ''),
-              no_proxy: `${process.env.no_proxy || ''},178.156.144.127,harbor.1mp.dev,harbor-core.harbor.svc.cluster.local`.replace(/^,/, ''),
+              NO_PROXY: `${process.env.NO_PROXY || ''},${this.registryNoProxy}`.replace(/^,/, ''),
+              no_proxy: `${process.env.no_proxy || ''},${this.registryNoProxy}`.replace(/^,/, ''),
               HTTP_PROXY: '',
               HTTPS_PROXY: '',
               http_proxy: '',

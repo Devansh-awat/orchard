@@ -63,7 +63,9 @@ export class ImageBuilderService {
 
   private readonly harborRegistryPull = process.env.DOCKER_REGISTRY_PULL || 'harbor.1mp.dev';
 
-  private readonly harborProject = 'orchard';
+  private readonly harborProject = process.env.REGISTRY_PROJECT || 'orchard';
+
+  private readonly registrySecretName = process.env.REGISTRY_PULL_SECRET_NAME || 'harbor-registry-creds';
 
   // Depot configuration
   private readonly depotToken = process.env.DEPOT_TOKEN;
@@ -461,7 +463,7 @@ export class ImageBuilderService {
       },
     };
 
-    const registrySecretName = 'harbor-registry-creds';
+    const registrySecretName = this.registrySecretName;
     try {
       await coreApi.readNamespacedSecret(registrySecretName, this.builderNamespace);
       // Update existing secret
@@ -538,10 +540,11 @@ export class ImageBuilderService {
     const configMapName = 'buildkit-config';
 
     // Internal registries that use plain HTTP (no TLS)
-    const httpRegistries = new Set<string>([
-      'harbor-core.harbor.svc.cluster.local',
-      '178.156.144.127',
-    ]);
+    const httpRegistries = new Set<string>(
+      (process.env.REGISTRY_HTTP_HOSTS || 'harbor-core.harbor.svc.cluster.local,178.156.144.127')
+        .split(',')
+        .filter(Boolean),
+    );
 
     // For plain HTTP registries, use ONLY http=true
     // insecure=true means "HTTPS with self-signed cert", NOT "allow HTTP"
@@ -1601,7 +1604,7 @@ exit $rc`,
               {
                 name: 'docker-config',
                 secret: {
-                  secretName: 'harbor-registry-creds',
+                  secretName: this.registrySecretName,
                   items: [
                     {
                       key: '.dockerconfigjson',
