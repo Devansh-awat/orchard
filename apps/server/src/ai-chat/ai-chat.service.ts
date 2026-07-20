@@ -34,7 +34,7 @@ interface ChatMessage {
 export interface ChatActingUser {
   sub: string;
   email?: string;
-  hackClubId?: string;
+  externalAuthId?: string;
   sessionId: string;
   token: string;
 }

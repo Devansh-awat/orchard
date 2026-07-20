@@ -55,7 +55,11 @@ export class OAuthController {
   }
 
   @Get('login')
-  login(@Res() res: Response) {
+  async login(@Res() res: Response) {
+    if (!this.oauthService.oauthEnabled) {
+      const frontendBase = process.env.FRONTEND_URL || 'http://localhost:3000';
+      return res.redirect(`${frontendBase}?error=${encodeURIComponent('oauth_disabled')}`);
+    }
     const state = crypto.randomBytes(32).toString('hex');
     res.cookie('oauth_state', state, {
       httpOnly: true,
@@ -64,7 +68,7 @@ export class OAuthController {
       maxAge: 10 * 60 * 1000,
       path: '/apiv1/auth',
     });
-    const authUrl = this.oauthService.getAuthorizationUrl(state);
+    const authUrl = await this.oauthService.getAuthorizationUrl(state);
     return res.redirect(authUrl);
   }
 
@@ -121,7 +125,7 @@ export class OAuthController {
       const hackClubUser = await this.oauthService.getUserInfo(accessToken);
 
       let existingUser = await this.prisma.user.findUnique({
-        where: { hackClubId: hackClubUser.id },
+        where: { externalAuthId: hackClubUser.id },
       });
 
       if (!existingUser) {
@@ -129,7 +133,7 @@ export class OAuthController {
           where: { email: hackClubUser.email },
         });
         if (emailOwner) {
-          if (emailOwner.hackClubId && emailOwner.hackClubId !== hackClubUser.id) {
+          if (emailOwner.externalAuthId && emailOwner.externalAuthId !== hackClubUser.id) {
             // Existing account is already linked to a different Hack Club
             // identity — refuse with a generic error to avoid an enumeration
             // oracle.
@@ -140,7 +144,7 @@ export class OAuthController {
           // Email row exists but isn't linked to a Hack Club identity yet
           // (typically an OTP-registered user). Treat it as the existing
           // user for downstream SSO / private-beta checks; the actual link
-          // happens in findOrCreateByHackClubId below.
+          // happens in findOrCreateByExternalAuthId below.
           existingUser = emailOwner;
         }
       }
@@ -173,7 +177,7 @@ export class OAuthController {
         );
       }
 
-      const user = await this.usersService.findOrCreateByHackClubId(hackClubUser);
+      const user = await this.usersService.findOrCreateByExternalAuthId(hackClubUser);
 
       const sessionId = await this.sessionsService.createSession({
         userId: user.id,
@@ -206,9 +210,9 @@ export class OAuthController {
         if (payload.sessionId) {
           // Resolve user ID
           let userId = payload.sub;
-          if (payload.hackClubId) {
+          if (payload.externalAuthId) {
             const dbUser = await this.prisma.user.findUnique({
-              where: { hackClubId: payload.hackClubId },
+              where: { externalAuthId: payload.externalAuthId },
               select: { id: true },
             });
             if (dbUser) userId = dbUser.id;
@@ -235,17 +239,17 @@ export class OAuthController {
     const userId = req.user.sub;
 
     let user;
-    if (req.user.hackClubId) {
-      user = await this.usersService.findByHackClubId(req.user.hackClubId);
+    if (req.user.externalAuthId) {
+      user = await this.usersService.findByExternalAuthId(req.user.externalAuthId);
       if (!user) {
-        user = await this.usersService.findOrCreateByHackClubId({
-          id: req.user.hackClubId,
+        user = await this.usersService.findOrCreateByExternalAuthId({
+          id: req.user.externalAuthId,
           email: req.user.email,
           name: req.user.name,
         });
       }
     } else {
-      user = await this.usersService.findByIdOrHackClubId(userId);
+      user = await this.usersService.findByIdOrExternalAuthId(userId);
       if (!user) {
         throw new HttpException('User not found', HttpStatus.NOT_FOUND);
       }
@@ -261,7 +265,8 @@ export class OAuthController {
       firstName: user.firstName,
       lastName: user.lastName,
       imageUrl: user.imageUrl,
-      hackClubId: req.user.hackClubId || user.hackClubId,
+      externalAuthId: req.user.externalAuthId || user.externalAuthId,
+      hackClubId: req.user.externalAuthId || user.externalAuthId,
       setupCompleted: user.setupCompleted,
     };
     return user.isSuperAdmin ? { ...base, isSuperAdmin: true } : base;
@@ -276,17 +281,17 @@ export class OAuthController {
     const userId = req.user.sub;
 
     let user;
-    if (req.user.hackClubId) {
-      user = await this.usersService.findByHackClubId(req.user.hackClubId);
+    if (req.user.externalAuthId) {
+      user = await this.usersService.findByExternalAuthId(req.user.externalAuthId);
       if (!user) {
-        user = await this.usersService.findOrCreateByHackClubId({
-          id: req.user.hackClubId,
+        user = await this.usersService.findOrCreateByExternalAuthId({
+          id: req.user.externalAuthId,
           email: req.user.email,
           name: req.user.name,
         });
       }
     } else {
-      user = await this.usersService.findByIdOrHackClubId(userId);
+      user = await this.usersService.findByIdOrExternalAuthId(userId);
       if (!user) {
         throw new HttpException('User not found', HttpStatus.NOT_FOUND);
       }
@@ -313,16 +318,16 @@ export class OAuthController {
   }
 
   private async resolveUser(req: any) {
-    if (req.user.hackClubId) {
-      const user = await this.usersService.findByHackClubId(req.user.hackClubId);
+    if (req.user.externalAuthId) {
+      const user = await this.usersService.findByExternalAuthId(req.user.externalAuthId);
       if (user) return user;
-      return this.usersService.findOrCreateByHackClubId({
-        id: req.user.hackClubId,
+      return this.usersService.findOrCreateByExternalAuthId({
+        id: req.user.externalAuthId,
         email: req.user.email,
         name: req.user.name,
       });
     }
-    const user = await this.usersService.findByIdOrHackClubId(req.user.sub);
+    const user = await this.usersService.findByIdOrExternalAuthId(req.user.sub);
     if (!user) throw new HttpException('User not found', HttpStatus.NOT_FOUND);
     return user;
   }

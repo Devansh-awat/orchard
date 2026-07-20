@@ -5559,7 +5559,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (!user) {
       throw new NotFoundException('Triggering user for queued rebuild not found');
     }
-    return this.rebuildDeployment(deploymentId, user.hackClubId ?? user.id, undefined, runId);
+    return this.rebuildDeployment(deploymentId, user.externalAuthId ?? user.id, undefined, runId);
   }
 
   async rebuildDeployment(

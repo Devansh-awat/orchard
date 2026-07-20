@@ -66,7 +66,7 @@ export class TemplatesController {
       projectId,
       body.templateId,
       body.parameters,
-      req.user.hackClubId || req.user.sub,
+      req.user.externalAuthId || req.user.sub,
       {
         email: req.user.email,
         username: req.user.username,
@@ -113,7 +113,7 @@ export class TemplatesController {
   async deleteTemplateInstance(@Param('id') id: string, @Request() req) {
     return this.templatesService.deleteTemplateInstance(
       id,
-      req.user.hackClubId || req.user.sub,
+      req.user.externalAuthId || req.user.sub,
       {
         email: req.user.email,
         username: req.user.username,

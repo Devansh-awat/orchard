@@ -52,3 +52,5 @@ server:
 
 frontend:
   replicas: 1
+  env:
+    - { name: PUBLIC_OAUTH_PROVIDER, value: none }

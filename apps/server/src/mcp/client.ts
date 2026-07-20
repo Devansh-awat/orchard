@@ -5,7 +5,7 @@ const SERVICE_TOKEN = process.env.MCP_SERVICE_TOKEN || '';
 export interface ActingUser {
   sub: string;
   email?: string;
-  hackClubId?: string;
+  externalAuthId?: string;
   sessionId: string;
 }
 
@@ -60,8 +60,8 @@ export class OrchardClient {
       if (this.actingUser.email) {
         headers['X-Acting-User-Email'] = this.actingUser.email;
       }
-      if (this.actingUser.hackClubId) {
-        headers['X-Acting-User-HackClub-Id'] = this.actingUser.hackClubId;
+      if (this.actingUser.externalAuthId) {
+        headers['X-Acting-User-HackClub-Id'] = this.actingUser.externalAuthId;
       }
     }
 

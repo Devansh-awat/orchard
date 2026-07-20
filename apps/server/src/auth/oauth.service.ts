@@ -12,45 +12,142 @@ export interface TokenPayload {
   sub: string;
   email: string;
   name: string;
-  hackClubId?: string;
+  externalAuthId?: string;
   authMethod?: 'oauth' | 'otp' | 'passkey';
   sessionId?: string;
   iat: number;
   exp: number;
 }
 
+export type AuthProvider = 'hackclub' | 'oidc' | 'none';
+
+interface OAuthEndpoints {
+  authorizeUrl: string;
+  tokenUrl: string;
+  userinfoUrl: string;
+}
+
+const HACKCLUB_ENDPOINTS: OAuthEndpoints = {
+  authorizeUrl: 'https://account.hackclub.com/oauth/authorize',
+  tokenUrl: 'https://account.hackclub.com/oauth/token',
+  userinfoUrl: 'https://account.hackclub.com/api/v1/me',
+};
+
+function claimPath(data: unknown, path: string): unknown {
+  return path
+    .split('.')
+    .reduce<unknown>((obj, key) => (obj && typeof obj === 'object' ? (obj as Record<string, unknown>)[key] : undefined), data);
+}
+
 @Injectable()
 export class OAuthService {
-  private readonly clientId: string;
+  private readonly provider: AuthProvider;
 
-  private readonly clientSecret: string;
+  private readonly clientId?: string;
 
-  private readonly redirectUri: string;
+  private readonly clientSecret?: string;
+
+  private readonly redirectUri?: string;
+
+  private readonly scopes: string;
 
   private readonly jwtSecret: Uint8Array;
 
-  constructor() {
-    this.clientId = process.env.HACKCLUB_CLIENT_ID;
-    this.clientSecret = process.env.HACKCLUB_CLIENT_SECRET;
-    this.redirectUri = process.env.HACKCLUB_REDIRECT_URI;
+  private oidcEndpoints: OAuthEndpoints | null = null;
 
+  constructor() {
     const jwtSecretString = process.env.JWT_SECRET;
     if (!jwtSecretString) {
       throw new Error('JWT_SECRET environment variable is required');
     }
-
     this.jwtSecret = new TextEncoder().encode(jwtSecretString);
 
-    if (!this.clientId || !this.clientSecret || !this.redirectUri) {
-      throw new Error('Missing Hack Club OAuth configuration');
+    const configured = process.env.AUTH_PROVIDER;
+    if (configured === 'hackclub' || configured === 'oidc' || configured === 'none') {
+      this.provider = configured;
+    } else {
+      this.provider = process.env.HACKCLUB_CLIENT_ID ? 'hackclub' : 'none';
+    }
+
+    if (this.provider === 'hackclub') {
+      this.clientId = process.env.HACKCLUB_CLIENT_ID;
+      this.clientSecret = process.env.HACKCLUB_CLIENT_SECRET;
+      this.redirectUri = process.env.HACKCLUB_REDIRECT_URI;
+      this.scopes = 'email name';
+      if (!this.clientId || !this.clientSecret || !this.redirectUri) {
+        throw new Error('AUTH_PROVIDER=hackclub requires HACKCLUB_CLIENT_ID, HACKCLUB_CLIENT_SECRET and HACKCLUB_REDIRECT_URI');
+      }
+    } else if (this.provider === 'oidc') {
+      this.clientId = process.env.AUTH_OAUTH_CLIENT_ID;
+      this.clientSecret = process.env.AUTH_OAUTH_CLIENT_SECRET;
+      this.redirectUri = process.env.AUTH_OAUTH_REDIRECT_URI;
+      this.scopes = process.env.AUTH_OAUTH_SCOPES || 'openid email profile';
+      const hasExplicitEndpoints =
+        process.env.AUTH_OAUTH_AUTHORIZE_URL &&
+        process.env.AUTH_OAUTH_TOKEN_URL &&
+        process.env.AUTH_OAUTH_USERINFO_URL;
+      if (!this.clientId || !this.clientSecret || !this.redirectUri) {
+        throw new Error('AUTH_PROVIDER=oidc requires AUTH_OAUTH_CLIENT_ID, AUTH_OAUTH_CLIENT_SECRET and AUTH_OAUTH_REDIRECT_URI');
+      }
+      if (!process.env.AUTH_OAUTH_ISSUER && !hasExplicitEndpoints) {
+        throw new Error('AUTH_PROVIDER=oidc requires AUTH_OAUTH_ISSUER or AUTH_OAUTH_AUTHORIZE_URL + AUTH_OAUTH_TOKEN_URL + AUTH_OAUTH_USERINFO_URL');
+      }
+    } else {
+      this.scopes = '';
     }
   }
 
-  getAuthorizationUrl(state?: string): string {
+  get providerName(): AuthProvider {
+    return this.provider;
+  }
+
+  get oauthEnabled(): boolean {
+    return this.provider !== 'none';
+  }
+
+  private async getEndpoints(): Promise<OAuthEndpoints> {
+    if (this.provider === 'hackclub') return HACKCLUB_ENDPOINTS;
+    if (this.provider === 'none') {
+      throw new Error('OAuth login is disabled (AUTH_PROVIDER=none)');
+    }
+    if (this.oidcEndpoints) return this.oidcEndpoints;
+
+    if (
+      process.env.AUTH_OAUTH_AUTHORIZE_URL &&
+      process.env.AUTH_OAUTH_TOKEN_URL &&
+      process.env.AUTH_OAUTH_USERINFO_URL
+    ) {
+      this.oidcEndpoints = {
+        authorizeUrl: process.env.AUTH_OAUTH_AUTHORIZE_URL,
+        tokenUrl: process.env.AUTH_OAUTH_TOKEN_URL,
+        userinfoUrl: process.env.AUTH_OAUTH_USERINFO_URL,
+      };
+      return this.oidcEndpoints;
+    }
+
+    const issuer = process.env.AUTH_OAUTH_ISSUER!.replace(/\/$/, '');
+    const response = await fetch(`${issuer}/.well-known/openid-configuration`);
+    if (!response.ok) {
+      throw new Error(`OIDC discovery failed for ${issuer}: ${response.status}`);
+    }
+    const discovery = await response.json();
+    if (!discovery.authorization_endpoint || !discovery.token_endpoint || !discovery.userinfo_endpoint) {
+      throw new Error(`OIDC discovery document for ${issuer} is missing required endpoints`);
+    }
+    this.oidcEndpoints = {
+      authorizeUrl: discovery.authorization_endpoint,
+      tokenUrl: discovery.token_endpoint,
+      userinfoUrl: discovery.userinfo_endpoint,
+    };
+    return this.oidcEndpoints;
+  }
+
+  async getAuthorizationUrl(state?: string): Promise<string> {
+    const endpoints = await this.getEndpoints();
     const params = new URLSearchParams({
-      client_id: this.clientId,
-      redirect_uri: this.redirectUri,
-      scope: 'email name',
+      client_id: this.clientId!,
+      redirect_uri: this.redirectUri!,
+      scope: this.scopes,
       response_type: 'code',
     });
 
@@ -58,19 +155,20 @@ export class OAuthService {
       params.append('state', state);
     }
 
-    return `https://account.hackclub.com/oauth/authorize?${params.toString()}`;
+    return `${endpoints.authorizeUrl}?${params.toString()}`;
   }
 
   async exchangeCodeForToken(code: string): Promise<string> {
+    const endpoints = await this.getEndpoints();
     const params = new URLSearchParams({
-      client_id: this.clientId,
-      client_secret: this.clientSecret,
-      redirect_uri: this.redirectUri,
+      client_id: this.clientId!,
+      client_secret: this.clientSecret!,
+      redirect_uri: this.redirectUri!,
       code,
       grant_type: 'authorization_code',
     });
 
-    const response = await fetch('https://account.hackclub.com/oauth/token', {
+    const response = await fetch(endpoints.tokenUrl, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/x-www-form-urlencoded',
@@ -88,7 +186,8 @@ export class OAuthService {
   }
 
   async getUserInfo(accessToken: string): Promise<HackClubUser> {
-    const response = await fetch('https://account.hackclub.com/api/v1/me', {
+    const endpoints = await this.getEndpoints();
+    const response = await fetch(endpoints.userinfoUrl, {
       headers: {
         Authorization: `Bearer ${accessToken}`,
       },
@@ -99,13 +198,33 @@ export class OAuthService {
     }
 
     const data = await response.json();
-    const identity = data.identity;
+
+    if (this.provider === 'hackclub') {
+      const identity = data.identity;
+      return {
+        id: identity.id,
+        email: identity.primary_email,
+        name: `${identity.first_name} ${identity.last_name}`,
+        slackId: identity.slack_id,
+      };
+    }
+
+    const id = claimPath(data, process.env.AUTH_OAUTH_CLAIM_ID || 'sub');
+    const email = claimPath(data, process.env.AUTH_OAUTH_CLAIM_EMAIL || 'email');
+    const name =
+      claimPath(data, process.env.AUTH_OAUTH_CLAIM_NAME || 'name') ||
+      [claimPath(data, 'given_name'), claimPath(data, 'family_name')].filter(Boolean).join(' ') ||
+      claimPath(data, 'preferred_username') ||
+      email;
+
+    if (!id || !email) {
+      throw new Error('OIDC userinfo response is missing the id or email claim');
+    }
 
     return {
-      id: identity.id,
-      email: identity.primary_email,
-      name: `${identity.first_name} ${identity.last_name}`,
-      slackId: identity.slack_id,
+      id: String(id),
+      email: String(email),
+      name: String(name),
     };
   }
 
@@ -113,7 +232,7 @@ export class OAuthService {
     const payload: Record<string, unknown> = {
       email: user.email,
       name: user.name,
-      hackClubId: user.id,
+      externalAuthId: user.id,
       authMethod: 'oauth',
     };
     if (sessionId) payload.sessionId = sessionId;
@@ -174,7 +293,7 @@ export class OAuthService {
         sub: payload.sub as string,
         email: payload.email as string,
         name: payload.name as string,
-        hackClubId: payload.hackClubId as string | undefined,
+        externalAuthId: (payload.externalAuthId ?? payload.hackClubId) as string | undefined,
         authMethod: (payload.authMethod as 'oauth' | 'otp' | 'passkey') || 'oauth',
         sessionId: payload.sessionId as string | undefined,
         iat: payload.iat as number,

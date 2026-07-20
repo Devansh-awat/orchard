@@ -60,16 +60,16 @@ export class UsersService {
     this.userCache.set(key, { value, expiresAt: Date.now() + USER_CACHE_TTL_MS });
   }
 
-  invalidateUserCache(user: { id?: string; hackClubId?: string | null; email?: string | null } | null | undefined) {
+  invalidateUserCache(user: { id?: string; externalAuthId?: string | null; email?: string | null } | null | undefined) {
     if (!user) return;
     if (user.id) this.userCache.delete(user.id);
-    if (user.hackClubId) this.userCache.delete(user.hackClubId);
+    if (user.externalAuthId) this.userCache.delete(user.externalAuthId);
     if (user.email) this.userCache.delete(`email:${user.email.toLowerCase()}`);
   }
 
-  async findOrCreateByHackClubId(hackClubUser: HackClubUserData) {
+  async findOrCreateByExternalAuthId(hackClubUser: HackClubUserData) {
     let user = await this.prisma.user.findUnique({
-      where: { hackClubId: hackClubUser.id }
+      where: { externalAuthId: hackClubUser.id }
     });
 
     if (!user) {
@@ -78,7 +78,7 @@ export class UsersService {
       });
 
       if (user) {
-        if (user.hackClubId && user.hackClubId !== hackClubUser.id) {
+        if (user.externalAuthId && user.externalAuthId !== hackClubUser.id) {
           // Email row is already linked to a different Hack Club identity.
           throw new ConflictException(
             'An account with this email already exists. Sign in with your email first, then link your Hack Club account from settings.',
@@ -88,7 +88,7 @@ export class UsersService {
         user = await this.prisma.user.update({
           where: { id: user.id },
           data: {
-            hackClubId: hackClubUser.id,
+            externalAuthId: hackClubUser.id,
             // Hack Club is the identity provider asserting this address, so
             // treat it as verified. Don't clobber an existing verification.
             ...(user.emailVerified
@@ -114,7 +114,7 @@ export class UsersService {
 
         user = await this.prisma.user.create({
           data: {
-            hackClubId: hackClubUser.id,
+            externalAuthId: hackClubUser.id,
             email: hackClubUser.email,
             username,
             firstName,
@@ -138,7 +138,7 @@ export class UsersService {
       // Only sync email; do not overwrite firstName/lastName
       // as the user may have manually updated them via profile settings.
       user = await this.prisma.user.update({
-        where: { hackClubId: hackClubUser.id },
+        where: { externalAuthId: hackClubUser.id },
         data: {
           email: hackClubUser.email,
           // Backfill verification for existing Hack Club OAuth users created
@@ -153,12 +153,12 @@ export class UsersService {
     return user;
   }
 
-  async findByHackClubId(hackClubId: string) {
-    const cached = this.cacheGet(hackClubId);
+  async findByExternalAuthId(externalAuthId: string) {
+    const cached = this.cacheGet(externalAuthId);
     if (cached) return cached;
-    const user = await this.prisma.user.findUnique({ where: { hackClubId } });
+    const user = await this.prisma.user.findUnique({ where: { externalAuthId } });
     if (user) {
-      this.cacheSet(hackClubId, user);
+      this.cacheSet(externalAuthId, user);
       this.cacheSet(user.id, user);
     }
     return user;
@@ -170,7 +170,7 @@ export class UsersService {
     const user = await this.prisma.user.findUnique({ where: { id } });
     if (user) {
       this.cacheSet(id, user);
-      if (user.hackClubId) this.cacheSet(user.hackClubId, user);
+      if (user.externalAuthId) this.cacheSet(user.externalAuthId, user);
     }
     return user;
   }
@@ -179,27 +179,27 @@ export class UsersService {
     return user.imageUrl || null;
   }
 
-  async getUserIdFromHackClubId(hackClubId: string): Promise<string> {
-    const user = await this.findByHackClubId(hackClubId);
+  async getUserIdFromExternalAuthId(externalAuthId: string): Promise<string> {
+    const user = await this.findByExternalAuthId(externalAuthId);
     if (!user) {
-      throw new Error(`User not found for Hack Club ID: ${hackClubId}`);
+      throw new Error(`User not found for Hack Club ID: ${externalAuthId}`);
     }
     return user.id;
   }
 
-  async findByIdOrHackClubId(identifier: string) {
+  async findByIdOrExternalAuthId(identifier: string) {
     const uuidRegex =
       /^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
     if (uuidRegex.test(identifier)) {
       return this.findById(identifier);
     } 
-      return this.findByHackClubId(identifier);
+      return this.findByExternalAuthId(identifier);
     
   }
 
   async findOrCreateByClerkId(identifier: string, userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string }) {
-    let user = await this.findByIdOrHackClubId(identifier);
+    let user = await this.findByIdOrExternalAuthId(identifier);
 
     if (!user && userData?.email) {
       // Try to find by email first
@@ -212,11 +212,11 @@ export class UsersService {
       const identifierIsUuid = uuidRegex.test(identifier);
 
       if (user) {
-        // Link the hackClubId to the existing user — but never overwrite it
+        // Link the externalAuthId to the existing user — but never overwrite it
         // with a UUID. Callers pass `req.user.sub` here, which SuperAdminGuard
         // has already resolved to the DB UUID for OAuth users. Writing that
-        // UUID into `hackClubId` clobbers the real Hack Club ID and breaks
-        // every future SuperAdminGuard lookup (`findUnique({ hackClubId })`
+        // UUID into `externalAuthId` clobbers the real Hack Club ID and breaks
+        // every future SuperAdminGuard lookup (`findUnique({ externalAuthId })`
         // returns null → `dbUserId` falls back to `payload.sub` (a HCID) →
         // membership queries run against a non-UUID userId → 403 "Not a
         // member of this organization" forever, until the user logs out.
@@ -224,7 +224,7 @@ export class UsersService {
         user = await this.prisma.user.update({
           where: { id: user.id },
           data: {
-            ...(identifierIsUuid ? {} : { hackClubId: identifier }),
+            ...(identifierIsUuid ? {} : { externalAuthId: identifier }),
             ...(userData.firstName && { firstName: userData.firstName }),
             ...(userData.lastName && { lastName: userData.lastName }),
             ...(userData.imageUrl && { imageUrl: userData.imageUrl }),
@@ -233,9 +233,9 @@ export class UsersService {
         this.invalidateUserCache(previous);
         this.invalidateUserCache(user);
       } else {
-        // No existing record by id, hackClubId, or email. If the identifier
+        // No existing record by id, externalAuthId, or email. If the identifier
         // looks like a UUID we cannot legitimately create a Hack Club–linked
-        // user from it — bail out so we don't write garbage into hackClubId.
+        // user from it — bail out so we don't write garbage into externalAuthId.
         if (identifierIsUuid) return null;
 
         // Create a new user with the (presumably-real) Hack Club identifier.
@@ -252,7 +252,7 @@ export class UsersService {
 
         user = await this.prisma.user.create({
           data: {
-            hackClubId: identifier,
+            externalAuthId: identifier,
             email: userData.email,
             username,
             firstName: userData.firstName || null,
@@ -306,7 +306,7 @@ export class UsersService {
         firstName: true,
         lastName: true,
         imageUrl: true,
-        hackClubId: true,
+        externalAuthId: true,
         setupCompleted: true,
       }
     });

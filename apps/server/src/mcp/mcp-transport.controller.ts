@@ -61,7 +61,7 @@ export class McpTransportController {
         {
           sub: auth.sub,
           email: auth.email,
-          hackClubId: auth.hackClubId,
+          externalAuthId: auth.externalAuthId,
           sessionId: auth.sessionId,
         },
       );

@@ -115,7 +115,7 @@ export class ProjectsController {
     return this.projectsService.createProject(
       organizationId,
       { name, slug, description, repositoryUrl, icon, backgroundImage },
-      req.user.hackClubId || req.user.sub,
+      req.user.externalAuthId || req.user.sub,
       {
         email: req.user.email,
         username: req.user.username,
@@ -569,7 +569,7 @@ export class ProjectsController {
     return this.deployments.createDeploymentFromGitHub(
       id,
       body,
-      req.user.hackClubId || req.user.sub,
+      req.user.externalAuthId || req.user.sub,
       {
         email: req.user.email,
         username: req.user.username,

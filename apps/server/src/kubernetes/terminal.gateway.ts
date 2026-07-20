@@ -96,11 +96,11 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
       const sessionValid = await sessions.validateSession(sessionId);
       if (!sessionValid) return reject(401, 'Unauthorized');
 
-      // Resolve sub → internal user UUID (sub may be hackClubId for OAuth).
+      // Resolve sub → internal user UUID (sub may be externalAuthId for OAuth).
       let dbUserId = payload.sub as string;
-      if (payload.hackClubId) {
+      if (payload.externalAuthId) {
         const dbUser = await prisma.user.findUnique({
-          where: { hackClubId: payload.hackClubId as string },
+          where: { externalAuthId: payload.externalAuthId as string },
           select: { id: true, email: true },
         });
         if (dbUser) {
@@ -113,7 +113,7 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
         // still misses, refuse rather than let downstream membership checks
         // run with a non-UUID and silently fail closed in confusing ways.
         const dbUser = await prisma.user.findFirst({
-          where: { hackClubId: dbUserId },
+          where: { externalAuthId: dbUserId },
           select: { id: true, email: true },
         });
         if (!dbUser) return reject(401, 'Unauthorized');

@@ -48,9 +48,9 @@ export class ForumController {
   ) {}
 
   private async requester(req: any): Promise<{ id: string; admin: boolean }> {
-    const user = req.user.hackClubId
-      ? await this.users.findByHackClubId(req.user.hackClubId)
-      : await this.users.findByIdOrHackClubId(req.user.sub);
+    const user = req.user.externalAuthId
+      ? await this.users.findByExternalAuthId(req.user.externalAuthId)
+      : await this.users.findByIdOrExternalAuthId(req.user.sub);
     if (!user) throw new UnauthorizedException('User not found');
     return { id: user.id, admin: !!user.isSuperAdmin };
   }

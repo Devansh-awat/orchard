@@ -24,7 +24,7 @@ interface McpTokenClaims {
   sub: string;
   email?: string;
   name?: string;
-  hackClubId?: string;
+  externalAuthId?: string;
   authMethod?: string;
   sessionId: string;
 }
@@ -288,7 +288,7 @@ export class McpOAuthService {
       sub: payload.sub,
       email: payload.email,
       name: payload.name,
-      hackClubId: payload.hackClubId,
+      externalAuthId: payload.externalAuthId,
       authMethod: payload.authMethod,
       sessionId: payload.sessionId,
     });
@@ -325,7 +325,7 @@ export class McpOAuthService {
       type: 'mcp',
       email: claims.email,
       name: claims.name,
-      hackClubId: claims.hackClubId,
+      externalAuthId: claims.externalAuthId,
       authMethod: claims.authMethod || 'otp',
       sessionId: claims.sessionId,
     })
@@ -347,7 +347,7 @@ export class McpOAuthService {
       type: 'mcp_refresh',
       email: claims.email,
       name: claims.name,
-      hackClubId: claims.hackClubId,
+      externalAuthId: claims.externalAuthId,
       authMethod: claims.authMethod || 'otp',
       sessionId: claims.sessionId,
       clientId,
@@ -374,7 +374,7 @@ export class McpOAuthService {
       sub: payload.sub,
       email: payload.email,
       name: payload.name,
-      hackClubId: payload.hackClubId,
+      externalAuthId: payload.externalAuthId,
       authMethod: payload.authMethod,
       sessionId: payload.sessionId,
     };
@@ -531,7 +531,7 @@ export class McpOAuthService {
     token: string;
     sub: string;
     email?: string;
-    hackClubId?: string;
+    externalAuthId?: string;
     sessionId: string;
   } | null> {
     if (!authHeader?.startsWith('Bearer ')) {
@@ -582,7 +582,7 @@ export class McpOAuthService {
         token,
         sub,
         email: result.payload.email as string | undefined,
-        hackClubId: result.payload.hackClubId as string | undefined,
+        externalAuthId: result.payload.externalAuthId as string | undefined,
         sessionId,
       };
     } catch (err) {

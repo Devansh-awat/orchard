@@ -13,7 +13,7 @@ function userBag(req: any) {
 }
 
 function clerkId(req: any) {
-  return req.user.hackClubId || req.user.sub;
+  return req.user.externalAuthId || req.user.sub;
 }
 
 @Auth()

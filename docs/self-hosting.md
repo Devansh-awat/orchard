@@ -85,8 +85,12 @@ server:
 ```
 
 Login options out of the box: email OTP (needs `SMTP_*` env) and passkeys.
-Hack Club OAuth activates when `HACKCLUB_CLIENT_*` env is set; enterprise
-SSO/SCIM is configurable per organization in the UI.
+For SSO against your own IdP, set `AUTH_PROVIDER=oidc` plus the
+`AUTH_OAUTH_*` env (issuer discovery, PKCE-less code flow, claim mapping;
+works with Keycloak, Authentik, Dex, Google, ...), and
+`PUBLIC_OAUTH_PROVIDER=oidc` / `PUBLIC_OAUTH_PROVIDER_LABEL` on the frontend
+for the login button. Hack Club OAuth is the `hackclub` preset. Enterprise
+SSO/SCIM is additionally configurable per organization in the UI.
 
 ## What is not included
 

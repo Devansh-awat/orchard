@@ -39,7 +39,7 @@ export class AiChatController {
       for await (const chunk of this.aiChatService.streamChat(body.messages, {
         sub: user.sub,
         email: user.email,
-        hackClubId: user.hackClubId,
+        externalAuthId: user.externalAuthId,
         sessionId: user.sessionId,
         token,
       })) {

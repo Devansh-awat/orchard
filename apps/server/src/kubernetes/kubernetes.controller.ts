@@ -46,7 +46,7 @@ export class KubernetesController {
     const sub = req.user?.sub as string | undefined;
     if (!sub) throw new ForbiddenException('Not authenticated');
     if (UUID_RE.test(sub)) return sub;
-    const user = await this.prisma.user.findFirst({ where: { hackClubId: sub }, select: { id: true } });
+    const user = await this.prisma.user.findFirst({ where: { externalAuthId: sub }, select: { id: true } });
     if (!user) throw new ForbiddenException('User not found');
     return user.id;
   }

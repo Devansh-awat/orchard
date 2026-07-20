@@ -4,6 +4,7 @@
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
 	import { get } from 'svelte/store';
+	import { env } from '$env/dynamic/public';
 	import {
 		user,
 		isSignedIn,
@@ -82,6 +83,10 @@
 
 	let privateBetaBlocked = $state(false);
 	let signupsDisabled = $state(false);
+
+	const oauthProvider = env.PUBLIC_OAUTH_PROVIDER || 'hackclub';
+	const oauthLabel =
+		env.PUBLIC_OAUTH_PROVIDER_LABEL || (oauthProvider === 'hackclub' ? 'Hack Club' : 'SSO');
 
 	async function fetchWorkspaces() {
 		loading = true;
@@ -531,27 +536,29 @@
 							<h2 class="login-panel-title">Sign in to Orchard</h2>
 						</div>
 
-						<button class="login-primary" onclick={() => user.signIn()}>
-							<svg
-								xmlns="http://www.w3.org/2000/svg"
-								width="18"
-								height="18"
-								viewBox="0 0 24 24"
-								fill="none"
-								stroke="currentColor"
-								stroke-width="2"
-								stroke-linecap="round"
-								stroke-linejoin="round"
-								><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline
-									points="10 17 15 12 10 7"
-								/><line x1="15" y1="12" x2="3" y2="12" /></svg
-							>
-							Continue with Hack Club
-						</button>
+						{#if oauthProvider !== 'none'}
+							<button class="login-primary" onclick={() => user.signIn()}>
+								<svg
+									xmlns="http://www.w3.org/2000/svg"
+									width="18"
+									height="18"
+									viewBox="0 0 24 24"
+									fill="none"
+									stroke="currentColor"
+									stroke-width="2"
+									stroke-linecap="round"
+									stroke-linejoin="round"
+									><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline
+										points="10 17 15 12 10 7"
+									/><line x1="15" y1="12" x2="3" y2="12" /></svg
+								>
+								Continue with {oauthLabel}
+							</button>
 
-						<div class="login-divider">
-							<span>or continue with email</span>
-						</div>
+							<div class="login-divider">
+								<span>or continue with email</span>
+							</div>
+						{/if}
 
 						<form
 							class="login-form"

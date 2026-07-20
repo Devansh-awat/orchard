@@ -170,7 +170,7 @@ export class OrganizationsService {
                 firstName: true,
                 lastName: true,
                 imageUrl: true,
-                hackClubId: true
+                externalAuthId: true
               }
             }
           }
@@ -224,7 +224,7 @@ export class OrganizationsService {
             firstName: true,
             lastName: true,
             imageUrl: true,
-            hackClubId: true,
+            externalAuthId: true,
           },
         },
       },
@@ -293,7 +293,7 @@ export class OrganizationsService {
                 firstName: true,
                 lastName: true,
                 imageUrl: true,
-                hackClubId: true
+                externalAuthId: true
               }
             }
           }

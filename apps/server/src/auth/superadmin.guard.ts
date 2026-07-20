@@ -70,7 +70,7 @@ export class SuperAdminGuard implements CanActivate {
       const actingSub = request.headers['x-acting-user-sub'] as string | undefined;
       const actingSessionId = request.headers['x-acting-user-session-id'] as string | undefined;
       const actingEmail = request.headers['x-acting-user-email'] as string | undefined;
-      const actingHackClubId = request.headers['x-acting-user-hackclub-id'] as string | undefined;
+      const actingExternalAuthId = request.headers['x-acting-user-hackclub-id'] as string | undefined;
 
       if (!actingSub || !actingSessionId) {
         throw new UnauthorizedException('MCP gateway request missing acting-user headers');
@@ -86,9 +86,9 @@ export class SuperAdminGuard implements CanActivate {
       // checks and downstream queries work identically whether the request
       // came in directly or via the MCP gateway.
       let dbUserId = actingSub;
-      if (actingHackClubId) {
+      if (actingExternalAuthId) {
         let dbUser = await this.prisma.user.findUnique({
-          where: { hackClubId: actingHackClubId },
+          where: { externalAuthId: actingExternalAuthId },
           select: { id: true },
         });
         if (!dbUser && actingEmail) {
@@ -107,7 +107,7 @@ export class SuperAdminGuard implements CanActivate {
       request['user'] = {
         sub: dbUserId,
         email: actingEmail,
-        hackClubId: actingHackClubId,
+        externalAuthId: actingExternalAuthId,
         sessionId: actingSessionId,
         viaMcpGateway: true,
       };
@@ -146,14 +146,14 @@ export class SuperAdminGuard implements CanActivate {
       }
 
       // Resolve the real DB user ID for OAuth users (where sub is a Hack Club ID, not a UUID).
-      // Fall back to email if hackClubId lookup fails — without this, a user whose
-      // hackClubId column got nulled or overwritten ends up with dbUserId = a Hack Club ID,
+      // Fall back to email if externalAuthId lookup fails — without this, a user whose
+      // externalAuthId column got nulled or overwritten ends up with dbUserId = a Hack Club ID,
       // and every downstream membership query runs against a non-UUID and returns empty
       // (surfacing as a permanent 403 on org-scoped endpoints until they log out).
       let dbUserId = payload.sub as string;
-      if (payload.hackClubId) {
+      if (payload.externalAuthId) {
         let dbUser = await this.prisma.user.findUnique({
-          where: { hackClubId: payload.hackClubId as string },
+          where: { externalAuthId: payload.externalAuthId as string },
           select: { id: true },
         });
         if (!dbUser && payload.email) {
@@ -163,7 +163,7 @@ export class SuperAdminGuard implements CanActivate {
           });
         }
         if (!dbUser) {
-          // Neither hackClubId nor email mapped to a User. Falling through
+          // Neither externalAuthId nor email mapped to a User. Falling through
           // would leave dbUserId set to the raw Hack Club ID — a non-UUID —
           // and every downstream Prisma query keyed on it would silently
           // return empty, surfacing as confusing permanent 403/404s. Refuse
@@ -193,7 +193,7 @@ export class SuperAdminGuard implements CanActivate {
         sub: dbUserId,
         email: payload.email,
         name: payload.name,
-        hackClubId: payload.hackClubId,
+        externalAuthId: payload.externalAuthId,
         sessionId,
       };
       // Session-auth: no token-scope restrictions to publish to the request context.
@@ -212,7 +212,7 @@ export class SuperAdminGuard implements CanActivate {
 
       const apiToken = await this.prisma.apiToken.findUnique({
         where: { tokenHash: hashApiToken(token) },
-        include: { user: { select: { id: true, email: true, username: true, firstName: true, lastName: true, hackClubId: true } } },
+        include: { user: { select: { id: true, email: true, username: true, firstName: true, lastName: true, externalAuthId: true } } },
       });
 
       if (!apiToken) {
@@ -246,7 +246,7 @@ export class SuperAdminGuard implements CanActivate {
         sub: user.id,
         email: user.email,
         name,
-        hackClubId: user.hackClubId,
+        externalAuthId: user.externalAuthId,
       };
 
       // Update lastUsedAt in the background
@@ -275,7 +275,7 @@ export class SuperAdminGuard implements CanActivate {
       where: {
         OR: [
           ...(userId.match(/^[0-9a-f]{8}-[0-9a-f]{4}-[1-5][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i) ? [{ id: userId }] : []),
-          { hackClubId: userId },
+          { externalAuthId: userId },
         ],
       },
       select: { id: true, isSuperAdmin: true },

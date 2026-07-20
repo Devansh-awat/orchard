@@ -111,7 +111,7 @@ export class PasswordlessController {
     }
 
     // Always try Hack Club IDs as a fallback
-    where.OR!.push({ hackClubId: userId });
+    where.OR!.push({ externalAuthId: userId });
 
     const user = await this.prisma.user.findFirst({ where });
 

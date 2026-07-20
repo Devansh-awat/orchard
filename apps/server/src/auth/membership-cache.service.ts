@@ -41,7 +41,7 @@ export class MembershipCacheService {
     const cached = this.subToInternal.get(sub);
     if (cached) return cached;
     const user = await this.prisma.user.findFirst({
-      where: { hackClubId: sub },
+      where: { externalAuthId: sub },
       select: { id: true },
     });
     if (!user) return null;
