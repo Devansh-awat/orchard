@@ -77,16 +77,24 @@ jobs:
     runs-on: ubuntu-latest
     permissions:
       contents: write
+    env:
+      # Fork PRs have no access to the bot app secret, so they get a plain
+      # checkout and a prettier --check instead of the self-commit flow.
+      SAME_REPO: ${{ github.event.pull_request.head.repo.full_name == github.repository }}
     steps:
       - uses: actions/create-github-app-token@v1
         id: app-token
+        if: env.SAME_REPO == 'true'
         with:
           app-id: 1090304
           private-key: ${{ secrets.LEAFDBOT_PRIVATE_KEY }}
       - uses: actions/checkout@v4
+        if: env.SAME_REPO == 'true'
         with:
           token: ${{ steps.app-token.outputs.token }}
           ref: ${{ github.head_ref }}
+      - uses: actions/checkout@v4
+        if: env.SAME_REPO != 'true'
       - uses: pnpm/action-setup@v4
         with:
           version: 10
@@ -96,6 +104,7 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - name: Prettier (auto-fix + self-commit)
+        if: env.SAME_REPO == 'true'
         run: |
           pnpm --filter frontend exec prettier --write .
           if git diff --quiet; then echo "already formatted"; exit 0; fi
@@ -107,6 +116,9 @@ jobs:
           git config user.email "192038741+leafdbot[bot]@users.noreply.github.com"
           git commit -am "chore(ci): apply linter fixes"
           git push
+      - name: Prettier (check only)
+        if: env.SAME_REPO != 'true'
+        run: pnpm --filter frontend exec prettier --check .
       - name: Build
         run: pnpm --filter frontend build
 

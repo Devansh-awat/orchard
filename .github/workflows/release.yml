@@ -12,7 +12,10 @@ permissions:
 jobs:
   # release-please maintains the release PR and, when it merges, cuts the
   # GitHub releases/tags. Its per-package outputs decide what gets built.
+  # Repository-gated so forks never attempt releases, image pushes, or
+  # notifications that need org secrets.
   release-please:
+    if: github.repository == 'LeafdTK/leaf'
     runs-on: ubuntu-latest
     outputs:
       any: ${{ steps.rp.outputs.releases_created }}
