@@ -44,7 +44,12 @@ export class DatabasesService {
 
   // ── Database (PostgreSQL) Management ──
 
-  private readonly TARGET_PG_MAJOR = 17;
+  // Default major for new clusters. Imports from a newer source
+  // auto-provision at the source's major (capped at MAX_PG_MAJOR) because
+  // CNPG's import runs pg_dump from the target image, and an older pg_dump
+  // cannot dump a newer server.
+  private readonly DEFAULT_PG_MAJOR = 17;
+  private readonly MAX_PG_MAJOR = 18;
 
   // pg_restore under CNPG's import-optimized config OOMs at small memory
   // limits, so imports provision at least this much and settle back down
@@ -131,7 +136,7 @@ export class DatabasesService {
     password: string;
     database: string;
     sslMode?: string;
-  }): Promise<{ sourceSizeBytes: number | null }> {
+  }): Promise<{ sourceSizeBytes: number | null; sourceMajor: number }> {
     const ssl = src.sslMode && src.sslMode !== 'disable'
       ? { rejectUnauthorized: false }
       : false;
@@ -184,9 +189,9 @@ export class DatabasesService {
         throw new BadRequestException('Could not determine source PostgreSQL version');
       }
       const sourceMajor = Math.floor(versionNum / 10000);
-      if (sourceMajor > this.TARGET_PG_MAJOR) {
+      if (sourceMajor > this.MAX_PG_MAJOR) {
         throw new BadRequestException(
-          `Source PostgreSQL major version (${sourceMajor}) is newer than the target (${this.TARGET_PG_MAJOR}); import is not supported.`,
+          `Source PostgreSQL major version (${sourceMajor}) is newer than the newest version the platform supports (${this.MAX_PG_MAJOR}); import is not supported yet.`,
         );
       }
 
@@ -199,7 +204,7 @@ export class DatabasesService {
         // Providers that deny pg_database_size shouldn't block the import;
         // the storage guard just doesn't apply.
       }
-      return { sourceSizeBytes };
+      return { sourceSizeBytes, sourceMajor };
     } finally {
       try { await client.end(); } catch { /* ignore */ }
     }
@@ -324,8 +329,10 @@ export class DatabasesService {
       }
     }
 
+    let pgMajor = this.DEFAULT_PG_MAJOR;
     if (importFrom) {
-      const { sourceSizeBytes } = await this.validateImportSource(importFrom);
+      const { sourceSizeBytes, sourceMajor } = await this.validateImportSource(importFrom);
+      pgMajor = Math.max(pgMajor, sourceMajor);
       // CNPG's microservice import writes the pg_dump onto the same volume the
       // data is restored into, so the PVC has to hold both at once.
       if (sourceSizeBytes) {
@@ -386,6 +393,7 @@ export class DatabasesService {
         r2,
         resources: provisionResources,
         importFrom,
+        imageName: `ghcr.io/cloudnative-pg/postgresql:${pgMajor}`,
       }));
     } catch (e) {
       if (r2ProxyAccessKey) {
@@ -408,6 +416,7 @@ export class DatabasesService {
           dbPassword,
           status: 'provisioning',
           mode: 'cnpg',
+          pgMajor,
           namespace,
           clusterName,
           storageSize,
@@ -1099,6 +1108,7 @@ export class DatabasesService {
             sharedPreloadLibraries: (database.sharedPreloadLibs as string[] | null) || undefined,
             r2: restoreR2.r2,
             newClusterName: predictedNewClusterName,
+            imageName: `ghcr.io/cloudnative-pg/postgresql:${database.pgMajor ?? 17}`,
           },
         );
 
