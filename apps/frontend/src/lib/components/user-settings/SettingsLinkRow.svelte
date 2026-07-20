@@ -84,7 +84,9 @@
 	.slr-root :global(.slr-chevron) {
 		flex-shrink: 0;
 		color: var(--text-faint);
-		transition: color 120ms, transform 150ms ease;
+		transition:
+			color 120ms,
+			transform 150ms ease;
 	}
 	.slr-root:hover :global(.slr-chevron) {
 		color: var(--text-muted);

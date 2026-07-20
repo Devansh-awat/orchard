@@ -164,8 +164,13 @@
 					</div>
 					<div class="oh-field">
 						<label for="oh-org-desc" class="oh-field-label">Description</label>
-						<textarea id="oh-org-desc" name="description" rows="2" class="oh-textarea"
-							bind:value={editingDescription}></textarea>
+						<textarea
+							id="oh-org-desc"
+							name="description"
+							rows="2"
+							class="oh-textarea"
+							bind:value={editingDescription}
+						></textarea>
 					</div>
 					<div class="oh-edit-actions">
 						<Button variant="secondary" size="sm" onclick={onCancelEditing}>Cancel</Button>

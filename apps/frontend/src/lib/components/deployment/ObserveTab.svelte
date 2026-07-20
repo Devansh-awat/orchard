@@ -772,7 +772,6 @@
 			.replace(/^(Traceback .+)$/gm, '<span style="color: var(--surface-muted);">$1</span>');
 	}
 
-
 	function formatUptime(seconds: number | null): string {
 		if (seconds == null) return '--';
 		if (seconds < 60) return `${Math.floor(seconds)}s`;
@@ -1299,7 +1298,6 @@
 		flex-direction: column;
 		gap: 16px;
 	}
-
 
 	.ov-statrow {
 		display: flex;
@@ -1991,27 +1989,9 @@
 		}
 	}
 
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 	:global(:root.dark) .observe-guide-snippet {
 		background: rgba(255, 255, 255, 0.04);
 	}
-
-
 
 	.observe-errors-toolbar {
 		display: flex;
@@ -2319,8 +2299,7 @@
 		.observe-error-card {
 			border-radius: 0.75rem;
 		}
-
-		}
+	}
 	.observe-traces-disabled {
 		display: flex;
 		flex-direction: column;

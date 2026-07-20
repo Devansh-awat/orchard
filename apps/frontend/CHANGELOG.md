@@ -1,5 +1,21 @@
 # Changelog
 
+## [0.22.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.21.1...frontend/v0.22.0) (2026-07-20)
+
+
+### Features
+
+* command deck sidebar with customizable nav ([3a426bf](https://github.com/LeafdTK/leaf/commit/3a426bf79e695a83a5e164b2c7ec5ea61c82c153))
+* observe tab redesign, traces marked coming soon ([725a33c](https://github.com/LeafdTK/leaf/commit/725a33c870b9f436f2d4cc10cc8b97f47c233236))
+* org settings shell with hero, grouped rail and overview grid ([b86ffe8](https://github.com/LeafdTK/leaf/commit/b86ffe8c119a47b88ab4c9df2325595ac13b1343))
+* redesign user settings with identity hero and section rail ([25464b0](https://github.com/LeafdTK/leaf/commit/25464b0ca634aded2caf0428596a165fe755c22c))
+
+
+### Bug Fixes
+
+* deck panel uses raised surface tone ([edab8da](https://github.com/LeafdTK/leaf/commit/edab8da2e36b8d28dadf888eda01bc21a2be270b))
+* deck sidebar panel tint on app bg, drop customize mode ([2f028c0](https://github.com/LeafdTK/leaf/commit/2f028c09a9bd3f0da43e2904baabb531821ca460))
+
 ## [0.21.1](https://github.com/LeafdTK/leaf/compare/frontend/v0.21.0...frontend/v0.21.1) (2026-07-18)
 
 

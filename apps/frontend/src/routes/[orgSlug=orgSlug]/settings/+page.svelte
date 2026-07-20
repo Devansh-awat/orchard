@@ -1083,147 +1083,152 @@
 					</div>
 				{/each}
 			</aside>
-		<div class="osp-stack">
-			{#if activeTab === 'general'}
-				<OrgTabSummaryGrid
-					{organizationSlug}
-					memberCount={members.length}
-					pendingInvites={invitations.length}
-					backupsConfigured={backupConfigured}
-					channelCount={notifChannels.length}
-					showNotifications={$notificationsEnabled}
-					{isEnterprise}
-					{ssoEnabled}
-					{canEditOrg}
-					index={1}
-				/>
-			{/if}
-			{#if activeTab === 'audit'}
-				<AuditLogList scope={{ organizationId: organization.id }} />
-			{/if}
-			{#if activeTab === 'members'}
-				<OrgMembersTab
-					{members}
-					{invitations}
-					{canInvite}
-					{isOwner}
-					bind:newMemberEmail
-					bind:newMemberRole
-					{addingMember}
-					{resendingInvitationId}
-					{cancellingInvitationId}
-					{removingMemberId}
-					onAddMember={addMember}
-					onRemoveMember={requestRemoveMember}
-					onUpdateMemberRole={updateMemberRole}
-					onResendInvitation={resendInvitation}
-					onCancelInvitation={cancelInvitation}
-				/>
-			{/if}
-			{#if activeTab === 'database'}
-				<OrgDatabaseTab {canEditOrg} bind:publicIp {publicIpSaving} onSavePublicIp={savePublicIp} />
-			{/if}
-			{#if activeTab === 'backups'}
-				<OrgBackupsTab
-					{canEditOrg}
-					{isOwner}
-					{backupLoading}
-					{backupSaving}
-					{backupConfigured}
-					bind:backupEditMode
-					bind:backupEndpoint
-					bind:backupBucket
-					bind:backupRegion
-					bind:backupAccessKey
-					bind:backupSecretKey
-					{backupAccessKeyConfigured}
-					{backupAccessKeyLast4}
-					{backupSecretConfigured}
-					onSaveBackupSettings={saveBackupSettings}
-					onClearBackupSettings={clearBackupSettings}
-					onCancelEdit={() => {
-						backupEditMode = false;
-						backupSecretKey = '';
-						fetchBackupSettings();
-					}}
-				/>
-			{/if}
-			{#if activeTab === 'notifications' && $notificationsEnabled}
-				<OrgNotificationsTab
-					{canEditOrg}
-					loading={notifLoading}
-					channels={notifChannels}
-					projects={notifProjects}
-					saving={notifSaving}
-					deletingId={notifDeletingId}
-					testingId={notifTestingId}
-					togglingId={notifTogglingId}
-					createdSecret={notifCreatedSecret}
-					onDismissSecret={() => {
-						notifCreatedSecret = null;
-					}}
-					onSaveChannel={saveNotificationChannel}
-					onDeleteChannel={(channel) => {
-						channelToDelete = channel;
-						showDeleteChannelModal = true;
-					}}
-					onTestChannel={testNotificationChannel}
-					onToggleChannel={toggleNotificationChannel}
-				/>
-			{/if}
-			{#if activeTab === 'sso' && isEnterprise}
-				<OrgSsoTab
-					{organization}
-					{isOwner}
-					{baseDomain}
-					{ssoLoading}
-					{ssoSaving}
-					bind:ssoTab
-					{ssoConfig}
-					bind:ssoSubdomain
-					{ssoSubdomainSaving}
-					bind:ssoProvider
-					bind:ssoOidcIssuerUrl
-					bind:ssoOidcClientId
-					bind:ssoOidcClientSecret
-					bind:ssoOidcScopes
-					bind:ssoSamlEntryPoint
-					bind:ssoSamlIssuer
-					bind:ssoSamlCertificate
-					bind:ssoSamlMetadataUrl
-					bind:ssoEnabled
-					bind:ssoEnforced
-					bind:ssoLoginLogoUrl
-					bind:ssoLoginPrimaryColor
-					bind:ssoLoginBgColor
-					bind:ssoLoginWelcomeText
-					{ssoTestResult}
-					{ssoTesting}
-					{ssoDeleting}
-					onSaveSubdomain={saveSubdomain}
-					onSaveSsoConfig={saveSsoConfig}
-					onTestSsoConnection={testSsoConnection}
-					onDeleteSsoConfig={() => (showDeleteSsoModal = true)}
-				/>
-			{/if}
-			{#if activeTab === 'scim' && isEnterprise}
-				<OrgScimTab
-					{isOwner}
-					{scimLoading}
-					{scimBaseUrl}
-					{scimTokens}
-					bind:scimNewName
-					{scimCreating}
-					{scimRevokingId}
-					{scimCreatedToken}
-					onCreateToken={createScimToken}
-					onRevokeToken={revokeScimToken}
-					onDismissCreatedToken={() => {
-						scimCreatedToken = null;
-					}}
-				/>
-			{/if}
-		</div>
+			<div class="osp-stack">
+				{#if activeTab === 'general'}
+					<OrgTabSummaryGrid
+						{organizationSlug}
+						memberCount={members.length}
+						pendingInvites={invitations.length}
+						backupsConfigured={backupConfigured}
+						channelCount={notifChannels.length}
+						showNotifications={$notificationsEnabled}
+						{isEnterprise}
+						{ssoEnabled}
+						{canEditOrg}
+						index={1}
+					/>
+				{/if}
+				{#if activeTab === 'audit'}
+					<AuditLogList scope={{ organizationId: organization.id }} />
+				{/if}
+				{#if activeTab === 'members'}
+					<OrgMembersTab
+						{members}
+						{invitations}
+						{canInvite}
+						{isOwner}
+						bind:newMemberEmail
+						bind:newMemberRole
+						{addingMember}
+						{resendingInvitationId}
+						{cancellingInvitationId}
+						{removingMemberId}
+						onAddMember={addMember}
+						onRemoveMember={requestRemoveMember}
+						onUpdateMemberRole={updateMemberRole}
+						onResendInvitation={resendInvitation}
+						onCancelInvitation={cancelInvitation}
+					/>
+				{/if}
+				{#if activeTab === 'database'}
+					<OrgDatabaseTab
+						{canEditOrg}
+						bind:publicIp
+						{publicIpSaving}
+						onSavePublicIp={savePublicIp}
+					/>
+				{/if}
+				{#if activeTab === 'backups'}
+					<OrgBackupsTab
+						{canEditOrg}
+						{isOwner}
+						{backupLoading}
+						{backupSaving}
+						{backupConfigured}
+						bind:backupEditMode
+						bind:backupEndpoint
+						bind:backupBucket
+						bind:backupRegion
+						bind:backupAccessKey
+						bind:backupSecretKey
+						{backupAccessKeyConfigured}
+						{backupAccessKeyLast4}
+						{backupSecretConfigured}
+						onSaveBackupSettings={saveBackupSettings}
+						onClearBackupSettings={clearBackupSettings}
+						onCancelEdit={() => {
+							backupEditMode = false;
+							backupSecretKey = '';
+							fetchBackupSettings();
+						}}
+					/>
+				{/if}
+				{#if activeTab === 'notifications' && $notificationsEnabled}
+					<OrgNotificationsTab
+						{canEditOrg}
+						loading={notifLoading}
+						channels={notifChannels}
+						projects={notifProjects}
+						saving={notifSaving}
+						deletingId={notifDeletingId}
+						testingId={notifTestingId}
+						togglingId={notifTogglingId}
+						createdSecret={notifCreatedSecret}
+						onDismissSecret={() => {
+							notifCreatedSecret = null;
+						}}
+						onSaveChannel={saveNotificationChannel}
+						onDeleteChannel={(channel) => {
+							channelToDelete = channel;
+							showDeleteChannelModal = true;
+						}}
+						onTestChannel={testNotificationChannel}
+						onToggleChannel={toggleNotificationChannel}
+					/>
+				{/if}
+				{#if activeTab === 'sso' && isEnterprise}
+					<OrgSsoTab
+						{organization}
+						{isOwner}
+						{baseDomain}
+						{ssoLoading}
+						{ssoSaving}
+						bind:ssoTab
+						{ssoConfig}
+						bind:ssoSubdomain
+						{ssoSubdomainSaving}
+						bind:ssoProvider
+						bind:ssoOidcIssuerUrl
+						bind:ssoOidcClientId
+						bind:ssoOidcClientSecret
+						bind:ssoOidcScopes
+						bind:ssoSamlEntryPoint
+						bind:ssoSamlIssuer
+						bind:ssoSamlCertificate
+						bind:ssoSamlMetadataUrl
+						bind:ssoEnabled
+						bind:ssoEnforced
+						bind:ssoLoginLogoUrl
+						bind:ssoLoginPrimaryColor
+						bind:ssoLoginBgColor
+						bind:ssoLoginWelcomeText
+						{ssoTestResult}
+						{ssoTesting}
+						{ssoDeleting}
+						onSaveSubdomain={saveSubdomain}
+						onSaveSsoConfig={saveSsoConfig}
+						onTestSsoConnection={testSsoConnection}
+						onDeleteSsoConfig={() => (showDeleteSsoModal = true)}
+					/>
+				{/if}
+				{#if activeTab === 'scim' && isEnterprise}
+					<OrgScimTab
+						{isOwner}
+						{scimLoading}
+						{scimBaseUrl}
+						{scimTokens}
+						bind:scimNewName
+						{scimCreating}
+						{scimRevokingId}
+						{scimCreatedToken}
+						onCreateToken={createScimToken}
+						onRevokeToken={revokeScimToken}
+						onDismissCreatedToken={() => {
+							scimCreatedToken = null;
+						}}
+					/>
+				{/if}
+			</div>
 		</div>
 	</div>
 {/if}

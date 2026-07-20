@@ -2,11 +2,7 @@
 	import { onDestroy, untrack } from 'svelte';
 	import { browser } from '$app/environment';
 	import { apiFetch } from '$lib/stores';
-	import {
-		METRIC_COLORS_LIGHT,
-		METRIC_COLORS_DARK,
-		type MetricId
-	} from '$lib/utils/metric-colors';
+	import { METRIC_COLORS_LIGHT, METRIC_COLORS_DARK, type MetricId } from '$lib/utils/metric-colors';
 	import {
 		Activity,
 		Cpu,

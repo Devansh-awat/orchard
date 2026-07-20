@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.25.0](https://github.com/LeafdTK/leaf/compare/server/v1.24.1...server/v1.25.0) (2026-07-20)
+
+
+### Features
+
+* version aware db imports, provision cluster at source pg major ([7d22a8a](https://github.com/LeafdTK/leaf/commit/7d22a8a4b27f89e35633c640b5ed132f5be6c543))
+
 ## [1.24.1](https://github.com/LeafdTK/leaf/compare/server/v1.24.0...server/v1.24.1) (2026-07-18)
 
 

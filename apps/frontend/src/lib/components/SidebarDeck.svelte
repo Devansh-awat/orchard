@@ -3,7 +3,17 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { env as publicEnv } from '$env/dynamic/public';
-	import { Leaf, Zap, Trees, ChevronDown, ChevronRight, Palette, Mail, Moon, Monitor } from 'lucide-svelte';
+	import {
+		Leaf,
+		Zap,
+		Trees,
+		ChevronDown,
+		ChevronRight,
+		Palette,
+		Mail,
+		Moon,
+		Monitor
+	} from 'lucide-svelte';
 	import { Search, Activity, Settings, LogOut, KeyRound, Sun } from '@jis3r/icons';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { overviewQueryOptions } from '$lib/queries/overview';
