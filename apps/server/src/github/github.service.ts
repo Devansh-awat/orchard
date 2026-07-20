@@ -1606,16 +1606,16 @@ export class GitHubService {
     // Check run output is world readable on public repos. Even though the
     // build pipeline redacts at the source, strip anything token shaped as a
     // last line of defence before it leaves the platform.
-    logs = logs
+    const scrubbed = logs
       .replace(/\bgh[pousr]_[A-Za-z0-9_]{16,}\b/g, '***')
       .replace(/\bgithub_pat_[A-Za-z0-9_]{16,}\b/g, '***')
-      .replace(/https:\/\/[^@\/\s']+@/g, 'https://');
+      .replace(/https:\/\/[^@/\s']+@/g, 'https://');
 
     // GitHub uses markdown for check output
-    let formatted = `\`\`\`\n${  logs  }\n\`\`\``;
+    let formatted = `\`\`\`\n${  scrubbed  }\n\`\`\``;
 
     if (formatted.length > maxLength) {
-      const truncated = logs.substring(logs.length - (maxLength - 100));
+      const truncated = scrubbed.substring(scrubbed.length - (maxLength - 100));
       formatted = `\`\`\`\n... (truncated, showing last portion)\n\n${  truncated  }\n\`\`\``;
     }
 

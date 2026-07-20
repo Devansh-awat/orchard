@@ -148,7 +148,7 @@ export class DockerService {
   // Anything derived from clone output must pass through here before it can
   // reach build logs, which are mirrored to GitHub check runs on the repo.
   private redactCloneSecrets(text: string, accessToken?: string): string {
-    let out = text.replace(/https:\/\/[^@\/\s']+@/g, 'https://');
+    let out = text.replace(/https:\/\/[^@/\s']+@/g, 'https://');
     if (accessToken) out = out.split(accessToken).join('***');
     return out;
   }
