@@ -8,6 +8,7 @@ export interface DatabaseDetail {
 	port: number;
 	status: string;
 	mode?: string;
+	pgMajor?: number;
 	namespace?: string;
 	containerName?: string;
 	storageSize?: string;

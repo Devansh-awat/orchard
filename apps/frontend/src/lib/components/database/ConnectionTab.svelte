@@ -31,137 +31,135 @@
 	const canManageOrg = $derived(
 		$selectedOrganization?.myRole === 'owner' || $selectedOrganization?.myRole === 'admin'
 	);
+
+	let connFormat = $state<'uri' | 'psql' | 'env' | 'jdbc'>('uri');
+
+	const maskedUri = $derived(
+		`postgresql://${database.dbUser}:••••••••@${database.host}:${database.port}/${database.dbName}`
+	);
+	const visibleUri = $derived(showConnectionString ? database.connectionString : maskedUri);
+	const snippet = $derived.by(() => {
+		const uri = visibleUri;
+		if (connFormat === 'psql') return `psql "${uri}"`;
+		if (connFormat === 'env') return `DATABASE_URL="${uri}"`;
+		if (connFormat === 'jdbc') {
+			const pw = showConnectionString ? database.dbPassword : '••••••••';
+			return `jdbc:postgresql://${database.host}:${database.port}/${database.dbName}?user=${database.dbUser}&password=${pw}`;
+		}
+		return uri;
+	});
+	const copySnippet = $derived.by(() => {
+		const uri = database.connectionString;
+		if (connFormat === 'psql') return `psql "${uri}"`;
+		if (connFormat === 'env') return `DATABASE_URL="${uri}"`;
+		if (connFormat === 'jdbc') {
+			return `jdbc:postgresql://${database.host}:${database.port}/${database.dbName}?user=${database.dbUser}&password=${database.dbPassword}`;
+		}
+		return uri;
+	});
+
+	const FORMATS = [
+		{ id: 'uri', label: 'URI' },
+		{ id: 'psql', label: 'psql' },
+		{ id: 'env', label: '.env' },
+		{ id: 'jdbc', label: 'JDBC' }
+	] as const;
+
+	const dlRows = $derived([
+		{ key: 'host', label: 'Host', value: database.host, copy: database.host },
+		{ key: 'port', label: 'Port', value: String(database.port), copy: String(database.port) },
+		{ key: 'database', label: 'Database', value: database.dbName, copy: database.dbName },
+		{ key: 'user', label: 'User', value: database.dbUser, copy: database.dbUser },
+		{
+			key: 'password',
+			label: 'Password',
+			value: showPassword ? database.dbPassword : '••••••••',
+			copy: database.dbPassword
+		}
+	]);
 </script>
 
-<div class="space-y-5">
-	<div class="card rounded-2xl p-5">
-		<p class="text-sm font-semibold mb-4" style="color: var(--center-channel-color);">
-			Connection details
-		</p>
-		<div class="db-kv-grid">
-			<span class="db-kv-label">Host (internal)</span>
-			<div class="db-kv-value">
-				<code class="db-kv-code">{database.host}</code>
-				<Button
-					variant="ghost"
-					size="sm"
-					class="shrink-0"
-					onclick={() => onCopy(database.host, 'host')}
-					aria-label="Copy host"
-				>
-					{#if copiedField === 'host'}<Check class="h-3.5 w-3.5" />{:else}<Copy
-							class="h-3.5 w-3.5"
-						/>{/if}
-				</Button>
-			</div>
-
-			<span class="db-kv-label">Port</span>
-			<div class="db-kv-value">
-				<code class="db-kv-code">{database.port}</code>
-				<Button
-					variant="ghost"
-					size="sm"
-					class="shrink-0"
-					onclick={() => onCopy(String(database.port), 'port')}
-					aria-label="Copy port"
-				>
-					{#if copiedField === 'port'}<Check class="h-3.5 w-3.5" />{:else}<Copy
-							class="h-3.5 w-3.5"
-						/>{/if}
-				</Button>
-			</div>
-
-			<span class="db-kv-label">Database</span>
-			<div class="db-kv-value">
-				<code class="db-kv-code">{database.dbName}</code>
-				<Button
-					variant="ghost"
-					size="sm"
-					class="shrink-0"
-					onclick={() => onCopy(database.dbName, 'dbName')}
-					aria-label="Copy database"
-				>
-					{#if copiedField === 'dbName'}<Check class="h-3.5 w-3.5" />{:else}<Copy
-							class="h-3.5 w-3.5"
-						/>{/if}
-				</Button>
-			</div>
-
-			<span class="db-kv-label">Username</span>
-			<div class="db-kv-value">
-				<code class="db-kv-code">{database.dbUser}</code>
-				<Button
-					variant="ghost"
-					size="sm"
-					class="shrink-0"
-					onclick={() => onCopy(database.dbUser, 'user')}
-					aria-label="Copy username"
-				>
-					{#if copiedField === 'user'}<Check class="h-3.5 w-3.5" />{:else}<Copy
-							class="h-3.5 w-3.5"
-						/>{/if}
-				</Button>
-			</div>
-
-			<span class="db-kv-label">Password</span>
-			<div class="db-kv-value">
-				<code class="db-kv-code">{showPassword ? database.dbPassword : '••••••••••••'}</code>
-				<Button
-					variant="ghost"
-					size="sm"
-					class="shrink-0"
-					onclick={() => (showPassword = !showPassword)}
-					aria-label={showPassword ? 'Hide' : 'Show'}
-				>
-					{#if showPassword}<EyeOff class="h-3.5 w-3.5" />{:else}<Eye class="h-3.5 w-3.5" />{/if}
-				</Button>
-				<Button
-					variant="ghost"
-					size="sm"
-					class="shrink-0"
-					onclick={() => onCopy(database.dbPassword, 'password')}
-					aria-label="Copy password"
-				>
-					{#if copiedField === 'password'}<Check class="h-3.5 w-3.5" />{:else}<Copy
-							class="h-3.5 w-3.5"
-						/>{/if}
-				</Button>
-			</div>
-		</div>
-	</div>
-
-	<div class="card rounded-2xl p-5">
-		<p class="text-sm font-semibold mb-3" style="color: var(--center-channel-color);">
-			Connection string
-		</p>
-		<div class="db-connstr-card">
-			<code class="db-connstr-code"
-				>{showConnectionString
-					? database.connectionString
-					: `postgresql://${database.dbUser}:••••••••@${database.host}:${database.port}/${database.dbName}`}</code
+{#snippet formatChips()}
+	<div class="dbc-formats dbc-formats--tab" role="tablist" aria-label="Connection format">
+		{#each FORMATS as f (f.id)}
+			<button
+				type="button"
+				class="dbc-format"
+				class:dbc-format--active={connFormat === f.id}
+				aria-selected={connFormat === f.id}
+				role="tab"
+				onclick={() => (connFormat = f.id)}
 			>
-			<div class="flex gap-1 shrink-0">
+				{f.label}
+			</button>
+		{/each}
+	</div>
+{/snippet}
+
+{#snippet detailList()}
+	<dl class="dbc-dl">
+		{#each dlRows as row (row.key)}
+			<div class="dbc-dl-row">
+				<dt class="dbc-dt">{row.label}</dt>
+				<dd class="dbc-dd">
+					<button
+						type="button"
+						class="dbc-dd-copy"
+						onclick={() => onCopy(row.copy, row.key)}
+						aria-label={`Copy ${row.label.toLowerCase()}`}
+					>
+						<span class="dbc-dd-value">{row.value}</span>
+						{#if copiedField === row.key}<Check class="h-3 w-3" />{:else}<Copy
+								class="dbc-dd-icon h-3 w-3"
+							/>{/if}
+					</button>
+					{#if row.key === 'password'}
+						<button
+							type="button"
+							class="dbc-reveal"
+							onclick={() => (showPassword = !showPassword)}
+							aria-label={showPassword ? 'Hide password' : 'Show password'}
+						>
+							{#if showPassword}<EyeOff class="h-3 w-3" />{:else}<Eye class="h-3 w-3" />{/if}
+						</button>
+					{/if}
+				</dd>
+			</div>
+		{/each}
+	</dl>
+{/snippet}
+
+<div class="space-y-5">
+	<div class="dbc-fused">
+		{@render formatChips()}
+		<div class="dbc-fused-body">
+			<code class="dbc-fused-code">{snippet}</code>
+			<div class="dbc-uri-actions">
 				<Button
 					variant="ghost"
 					size="sm"
 					onclick={() => (showConnectionString = !showConnectionString)}
-					aria-label={showConnectionString ? 'Hide' : 'Show'}
+					aria-label={showConnectionString ? 'Hide credentials' : 'Show credentials'}
 				>
 					{#if showConnectionString}<EyeOff class="h-3.5 w-3.5" />{:else}<Eye
 							class="h-3.5 w-3.5"
 						/>{/if}
 				</Button>
 				<Button
-					variant="ghost"
+					variant="secondary"
 					size="sm"
-					onclick={() => onCopy(database.connectionString, 'connstr')}
+					onclick={() => onCopy(copySnippet, 'connstr')}
 					aria-label="Copy connection string"
 				>
 					{#if copiedField === 'connstr'}<Check class="h-3.5 w-3.5" />{:else}<Copy
 							class="h-3.5 w-3.5"
 						/>{/if}
+					Copy
 				</Button>
 			</div>
+		</div>
+		<div class="dbc-fused-footer">
+			{@render detailList()}
 		</div>
 	</div>
 
@@ -279,3 +277,180 @@
 		</div>
 	{/if}
 </div>
+
+<style>
+	.dbc-formats {
+		display: flex;
+		gap: 0.25rem;
+		overflow-x: auto;
+	}
+	.dbc-format {
+		padding: 0.25rem 0.625rem;
+		font-size: 0.75rem;
+		font-weight: 500;
+		font-family: var(--font-mono, monospace);
+		color: var(--text-muted);
+		background: none;
+		border: 1px solid transparent;
+		border-radius: 0.5rem;
+		cursor: pointer;
+		white-space: nowrap;
+		transition:
+			color 120ms,
+			background-color 120ms,
+			border-color 120ms;
+	}
+	.dbc-format:hover {
+		color: var(--text-default);
+		background-color: var(--bg-hover);
+	}
+	.dbc-format--active {
+		color: var(--text-default);
+		background-color: var(--bg-sunken);
+		border-color: color-mix(in srgb, var(--border-default) 80%, transparent);
+	}
+	.dbc-uri {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		padding: 0.75rem 0.875rem;
+		border: 1px solid var(--border-default);
+		border-radius: 0.75rem;
+		background-color: var(--bg-sunken);
+	}
+	.dbc-uri-actions {
+		display: flex;
+		gap: 0.25rem;
+		flex-shrink: 0;
+	}
+	.dbc-dl {
+		display: grid;
+		grid-template-columns: max-content 1fr;
+		gap: 0 1.5rem;
+		margin: 1rem 0 0;
+	}
+	.dbc-dl-row {
+		display: grid;
+		grid-column: 1 / -1;
+		grid-template-columns: subgrid;
+		align-items: center;
+		padding: 0.4375rem 0;
+	}
+	.dbc-dl-row:not(:first-child) {
+		border-top: 1px solid color-mix(in srgb, var(--border-default) 55%, transparent);
+	}
+	.dbc-dt {
+		font-size: 0.8125rem;
+		font-weight: 550;
+		color: var(--text-default);
+	}
+	.dbc-dd {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		margin: 0;
+		min-width: 0;
+	}
+	.dbc-dd-copy {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		min-width: 0;
+		padding: 0.125rem 0.375rem;
+		margin-left: -0.375rem;
+		border: none;
+		border-radius: 0.375rem;
+		background: none;
+		color: var(--text-muted);
+		cursor: pointer;
+		transition:
+			color 120ms,
+			background-color 120ms;
+	}
+	.dbc-dd-copy:hover {
+		color: var(--text-default);
+		background-color: var(--bg-hover);
+	}
+	.dbc-dd-value {
+		font-size: 0.8125rem;
+		font-family: var(--font-mono, monospace);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+	.dbc-dd-copy :global(.dbc-dd-icon) {
+		opacity: 0;
+		flex-shrink: 0;
+		transition: opacity 120ms;
+	}
+	.dbc-dd-copy:hover :global(.dbc-dd-icon) {
+		opacity: 0.7;
+	}
+	.dbc-reveal {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.25rem;
+		border: none;
+		border-radius: 0.375rem;
+		background: none;
+		color: var(--text-muted);
+		cursor: pointer;
+		flex-shrink: 0;
+		transition: color 120ms;
+	}
+	.dbc-reveal:hover {
+		color: var(--text-default);
+	}
+	.dbc-console-btn:hover {
+		opacity: 0.8;
+	}
+	.dbc-fused {
+		border: 1px solid var(--border-default);
+		border-radius: 1rem;
+		background-color: var(--bg-surface);
+		overflow: hidden;
+	}
+	.dbc-formats--tab {
+		display: flex;
+		gap: 0;
+		border-bottom: 1px solid var(--border-default);
+		background-color: var(--bg-surface);
+		padding: 0 0.5rem;
+		overflow-x: auto;
+	}
+	.dbc-formats--tab .dbc-format {
+		border: none;
+		border-radius: 0;
+		border-bottom: 2px solid transparent;
+		padding: 0.625rem 0.75rem;
+		margin-bottom: -1px;
+	}
+	.dbc-formats--tab .dbc-format:hover {
+		background: none;
+	}
+	.dbc-formats--tab .dbc-format--active {
+		background: none;
+		border-bottom-color: var(--accent);
+		color: var(--text-default);
+	}
+	.dbc-fused-body {
+		display: flex;
+		align-items: flex-start;
+		gap: 0.5rem;
+		padding: 1rem 1.125rem;
+		background-color: var(--bg-sunken);
+	}
+	.dbc-fused-code {
+		flex: 1;
+		min-width: 0;
+		font-size: 0.8125rem;
+		font-family: var(--font-mono, monospace);
+		color: var(--text-default);
+		word-break: break-all;
+		line-height: 1.55;
+	}
+	.dbc-fused-footer {
+		padding: 0.25rem 1.125rem 0.875rem;
+		border-top: 1px solid var(--border-default);
+	}
+</style>
