@@ -1599,27 +1599,4 @@ export class GitHubService {
     }
   }
 
-  // Format build logs for GitHub check output (GitHub has a 65535 char limit for text)
-  formatLogsForCheck(logs: string, maxLength = 60000): string {
-    if (!logs) return '';
-
-    // Check run output is world readable on public repos. Even though the
-    // build pipeline redacts at the source, strip anything token shaped as a
-    // last line of defence before it leaves the platform.
-    const scrubbed = logs
-      .replace(/\bgh[pousr]_[A-Za-z0-9_]{16,}\b/g, '***')
-      .replace(/\bgithub_pat_[A-Za-z0-9_]{16,}\b/g, '***')
-      .replace(/https:\/\/[^@/\s']+@/g, 'https://');
-
-    // GitHub uses markdown for check output
-    let formatted = `\`\`\`\n${  scrubbed  }\n\`\`\``;
-
-    if (formatted.length > maxLength) {
-      const truncated = scrubbed.substring(scrubbed.length - (maxLength - 100));
-      formatted = `\`\`\`\n... (truncated, showing last portion)\n\n${  truncated  }\n\`\`\``;
-    }
-
-    return formatted;
-  }
 }
-

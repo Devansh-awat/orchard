@@ -666,6 +666,12 @@ model BuildRun {
   workerId    String?   @map("worker_id") @db.VarChar(120)
   heartbeatAt DateTime? @map("heartbeat_at") @db.Timestamp(6)
 
+  // GitHub artifacts opened for this run, so the reclaim sweep can close
+  // them when the owning process dies mid-build.
+  checkRunId           BigInt? @map("check_run_id")
+  githubInstallationId BigInt? @map("github_installation_id")
+  repoFullName         String? @map("repo_full_name") @db.VarChar(255)
+
   // Failure message, or the reason a run was skipped/canceled.
   detail String? @db.Text
 

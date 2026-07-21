@@ -3142,6 +3142,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
           checkRunId = checkRun.id;
           console.log(`[Projects] Created GitHub check run ${checkRunId} for deployment ${deploymentId}`);
+          await this.buildQueue.attachGitHubContext(deploymentId, {
+            checkRunId,
+            installationId,
+            repoFullName: `${repoInfo.owner}/${repoInfo.repo}`,
+          });
 
           // Also create a GitHub Deployment (appears under "Deployments" section)
           try {
@@ -3268,6 +3273,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         commitAuthorUsername,
         // GitHub Check Run info (uses App, not user)
         checkRunId,
+        checkLogUrl: logUrl,
         installationId: installationId ? installationId.toString() : null,
         repoInfo,
         triggerType: 'auto',
@@ -4793,6 +4799,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       repoInfo?: { owner: string; repo: string } | null;
       // GitHub Checks API support (new - via App)
       checkRunId?: number | null;
+      checkLogUrl?: string | null;
       installationId?: string | null;
       // Build trigger info
       triggerType?: string;
@@ -4823,52 +4830,51 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       console.warn(`[Projects] Failed to cancel existing build jobs:`, error);
     }
 
-    // Set up periodic log updates to GitHub Check Run
+    // Build logs never leave Orchard: check run output only carries the
+    // current step and a link. On public repos the check output is visible
+    // to everyone, and build logs can leak submodule URLs, file listings,
+    // and whatever the build prints.
     let logUpdateInterval: NodeJS.Timeout | null = null;
-    let lastLogLength = 0;
+    let lastStep: string | null = null;
 
     if (data.checkRunId && data.installationId && data.repoInfo) {
       logUpdateInterval = setInterval(async () => {
         try {
           const currentDeployment = await this.prisma.deployment.findUnique({
             where: { id: deploymentId },
-            select: { buildLogs: true, buildStep: true },
+            select: { buildStep: true },
           });
 
-          const currentLogs = currentDeployment?.buildLogs || '';
+          const step = currentDeployment?.buildStep ?? null;
+          if (step === lastStep) return;
+          lastStep = step;
 
-          // Only update if logs have changed
-          if (currentLogs.length > lastLogLength) {
-            lastLogLength = currentLogs.length;
+          const stepLabels: Record<string, string> = {
+            cloning: 'Scheduling builder...',
+            building: 'Building image...',
+            pushing: 'Pushing to registry...',
+            deploying: 'Deploying to cluster...',
+          };
+          const stepLabel = stepLabels[step ?? ''] || 'Building...';
 
-            const stepLabels: Record<string, string> = {
-              cloning: 'Scheduling builder...',
-              building: 'Building image...',
-              pushing: 'Pushing to registry...',
-              deploying: 'Deploying to cluster...',
-            };
-            const stepLabel = stepLabels[currentDeployment?.buildStep ?? ''] || 'Building...';
-
-            await this.githubService.updateCheckRun(
-              BigInt(data.installationId),
-              data.repoInfo.owner,
-              data.repoInfo.repo,
-              data.checkRunId,
-              {
-                status: 'in_progress',
-                output: {
-                  title: stepLabel,
-                  summary: `Deploying \`${data.name}\` from commit \`${data.commitSha?.substring(0, 7) || 'unknown'}\``,
-                  text: this.githubService.formatLogsForCheck(currentLogs),
-                },
-              }
-            );
-          }
+          await this.githubService.updateCheckRun(
+            BigInt(data.installationId),
+            data.repoInfo.owner,
+            data.repoInfo.repo,
+            data.checkRunId,
+            {
+              status: 'in_progress',
+              output: {
+                title: stepLabel,
+                summary: `Deploying \`${data.name}\` from commit \`${data.commitSha?.substring(0, 7) || 'unknown'}\``,
+                text: data.checkLogUrl ? `[View the full build log in Orchard](${data.checkLogUrl})` : 'Open the deployment in Orchard to view the full build log.',
+              },
+            }
+          );
         } catch (err) {
-          // Don't fail the build if log updates fail
-          console.error(`[Projects] Failed to update check run logs: ${err.message}`);
+          console.error(`[Projects] Failed to update check run step: ${err.message}`);
         }
-      }, 10000); // Update every 10 seconds
+      }, 10000);
     }
 
     try {
@@ -5321,10 +5327,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         try {
           const finalDeployment = await this.prisma.deployment.findUnique({
             where: { id: deploymentId },
-            select: { buildLogs: true, ingresses: { select: { host: true } } },
+            select: { ingresses: { select: { host: true } } },
           });
 
-          const buildLogs = finalDeployment?.buildLogs || '';
           const environmentUrl = finalDeployment?.ingresses?.[0]?.host
             ? `https://${finalDeployment.ingresses[0].host}`
             : undefined;
@@ -5342,7 +5347,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
                 summary: environmentUrl
                   ? `\`${data.name}\` is live at [${environmentUrl}](${environmentUrl}).`
                   : `\`${data.name}\` deployed successfully.`,
-                text: this.githubService.formatLogsForCheck(buildLogs),
+                text: data.checkLogUrl ? `[View the full build log in Orchard](${data.checkLogUrl})` : 'Open the deployment in Orchard to view the full build log.',
               },
             }
           );
@@ -5523,13 +5528,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       // Update GitHub Check Run to failure (via App)
       if (data.checkRunId && data.installationId && data.repoInfo) {
         try {
-          const failedDeployment = await this.prisma.deployment.findUnique({
-            where: { id: deploymentId },
-            select: { buildLogs: true },
-          });
-
-          const buildLogs = failedDeployment?.buildLogs || '';
-
           await this.githubService.updateCheckRun(
             BigInt(data.installationId),
             data.repoInfo.owner,
@@ -5541,7 +5539,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
               output: {
                 title: 'Deployment Failed',
                 summary: `❌ Failed to deploy \`${data.name}\`: ${error.message?.substring(0, 200) || 'Unknown error'}`,
-                text: this.githubService.formatLogsForCheck(buildLogs),
+                text: data.checkLogUrl ? `[View the full build log in Orchard](${data.checkLogUrl})` : 'Open the deployment in Orchard to view the full build log.',
               },
             }
           );

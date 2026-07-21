@@ -3,6 +3,7 @@ import { ModuleRef } from '@nestjs/core';
 import { hostname } from 'os';
 import { PrismaService } from '../prisma/prisma.service';
 import { DeploymentsService } from './deployments.service';
+import { GitHubService } from '../github/github.service';
 
 @Injectable()
 export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
@@ -26,6 +27,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     this.drainInterval = setInterval(() => {
+      this.heartbeat().catch(() => {});
       this.reclaim().catch((e) => this.logger.warn(`reclaim failed: ${e?.message ?? e}`));
       this.kick();
     }, 30_000);
@@ -94,6 +96,32 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
       });
       return { startNow, runId: run.id };
     }, this.txOpts);
+  }
+
+  // Stamp the GitHub artifacts (check run, installation, repo) onto the run
+  // that owns this deployment's in-flight build, so the reclaim sweep can
+  // conclude them if the owning process dies before the finalizers run.
+  async attachGitHubContext(
+    deploymentId: string,
+    ctx: { checkRunId: number; installationId: bigint; repoFullName: string },
+  ): Promise<void> {
+    await this.prisma.buildRun
+      .updateMany({
+        where: { deploymentId, status: 'building', checkRunId: null },
+        data: {
+          checkRunId: BigInt(ctx.checkRunId),
+          githubInstallationId: ctx.installationId,
+          repoFullName: ctx.repoFullName,
+        },
+      })
+      .catch(() => {});
+  }
+
+  private async heartbeat(): Promise<void> {
+    await this.prisma.buildRun.updateMany({
+      where: { workerId: this.workerId, status: 'building' },
+      data: { heartbeatAt: new Date() },
+    });
   }
 
   async recordActiveBuild(opts: {
@@ -238,10 +266,22 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
   private async reclaim() {
     const building = await this.prisma.buildRun.findMany({
       where: { status: 'building' },
-      select: { id: true, deploymentId: true, startedAt: true },
+      select: {
+        id: true,
+        deploymentId: true,
+        startedAt: true,
+        heartbeatAt: true,
+        workerId: true,
+        checkRunId: true,
+        githubInstallationId: true,
+        repoFullName: true,
+      },
     });
     if (building.length === 0) return;
     const STUCK_MS = 45 * 60 * 1000;
+    // Owning workers bump heartbeatAt every 30s; a run whose heartbeat is
+    // minutes old belongs to a process that died mid-build (restart, OOM).
+    const DEAD_MS = 3 * 60 * 1000;
     const now = Date.now();
     for (const run of building) {
       const dep = await this.prisma.deployment.findUnique({
@@ -257,17 +297,82 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
             workerId: null,
           },
         });
-      } else if (run.startedAt && now - run.startedAt.getTime() > STUCK_MS) {
-        await this.prisma.buildRun.updateMany({
-          where: { id: run.id, status: 'building' },
-          data: {
-            status: 'failed',
-            finishedAt: new Date(),
-            detail: 'Build exceeded the maximum runtime',
-            workerId: null,
-          },
-        });
+        continue;
       }
+      const lastSeen = run.heartbeatAt?.getTime() ?? run.startedAt?.getTime() ?? 0;
+      const workerDead = run.workerId !== this.workerId && lastSeen > 0 && now - lastSeen > DEAD_MS;
+      const overRuntime = run.startedAt && now - run.startedAt.getTime() > STUCK_MS;
+      if (!workerDead && !overRuntime) continue;
+      const detail = workerDead
+        ? 'Build interrupted by a platform restart'
+        : 'Build exceeded the maximum runtime';
+      const claimed = await this.prisma.buildRun.updateMany({
+        where: { id: run.id, status: 'building' },
+        data: {
+          status: 'failed',
+          finishedAt: new Date(),
+          detail,
+          workerId: null,
+        },
+      });
+      if (claimed.count === 0) continue;
+      await this.prisma.deployment.updateMany({
+        where: { id: run.deploymentId, buildStatus: 'building' },
+        data: { buildStatus: 'failed', buildError: detail, status: 'running' },
+      });
+      await this.closeGitHubArtifacts(run, detail).catch((e) =>
+        this.logger.warn(`failed to close github artifacts for run ${run.id}: ${e?.message ?? e}`),
+      );
+      this.logger.warn(`reclaimed run ${run.id} (${detail})`);
+    }
+  }
+
+  private async closeGitHubArtifacts(
+    run: {
+      deploymentId: string;
+      checkRunId: bigint | null;
+      githubInstallationId: bigint | null;
+      repoFullName: string | null;
+    },
+    detail: string,
+  ) {
+    if (!run.githubInstallationId || !run.repoFullName) return;
+    const [owner, repo] = run.repoFullName.split('/');
+    if (!owner || !repo) return;
+    const github = this.moduleRef.get(GitHubService, { strict: false });
+    if (run.checkRunId) {
+      await github
+        .updateCheckRun(run.githubInstallationId, owner, repo, Number(run.checkRunId), {
+          status: 'completed',
+          conclusion: 'cancelled',
+          output: {
+            title: 'Build interrupted',
+            summary: detail,
+          },
+        })
+        .catch((e: any) => this.logger.warn(`check run close failed: ${e?.message ?? e}`));
+    }
+    const marker = await this.prisma.gitHubDeployment.findFirst({
+      where: {
+        deploymentId: run.deploymentId,
+        status: { in: ['pending', 'in_progress'] },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+    if (marker) {
+      await github
+        .updateDeploymentStatusWithApp(
+          run.githubInstallationId,
+          marker.owner,
+          marker.repo,
+          Number(marker.githubDeploymentId),
+          'error',
+          { description: detail, logUrl: marker.logUrl ?? undefined },
+        )
+        .catch((e: any) => this.logger.warn(`deployment marker close failed: ${e?.message ?? e}`));
+      await this.prisma.gitHubDeployment
+        .update({ where: { id: marker.id }, data: { status: 'error' } })
+        .catch(() => {});
     }
   }
 }
