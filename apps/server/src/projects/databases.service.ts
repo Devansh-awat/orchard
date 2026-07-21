@@ -1228,6 +1228,39 @@ export class DatabasesService {
 
   // ── Extensions ──
 
+  // 15s TTL keeps refresh-hammering from stressing tenant pods; the read
+  // itself is a single fixed-SQL exec against the tenant's own instance.
+  private readonly queryStatsCache = new Map<string, { at: number; data: unknown }>();
+
+  private readonly QUERY_STATS_TTL_MS = 15_000;
+
+  async getDatabaseQueryStats(databaseId: string) {
+    const database = await this.prisma.database.findUnique({ where: { id: databaseId } });
+    if (!database) throw new NotFoundException('Database not found');
+    if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
+      throw new BadRequestException('Query statistics require a CNPG-backed database');
+    }
+    const cached = this.queryStatsCache.get(databaseId);
+    if (cached && Date.now() - cached.at < this.QUERY_STATS_TTL_MS) return cached.data;
+    const data = await this.k8sCnpg.getQueryStats(
+      database.namespace, database.clusterName, database.dbName,
+    );
+    this.queryStatsCache.set(databaseId, { at: Date.now(), data });
+    return data;
+  }
+
+  async resetDatabaseQueryStats(databaseId: string, clerkId: string, userData?: any) {
+    const { database } = await this.access.assertDatabaseEditor(databaseId, clerkId, userData);
+    if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
+      throw new BadRequestException('Query statistics require a CNPG-backed database');
+    }
+    const result = await this.k8sCnpg.resetQueryStats(
+      database.namespace, database.clusterName, database.dbName,
+    );
+    this.queryStatsCache.delete(databaseId);
+    return result;
+  }
+
   async listDatabaseExtensions(databaseId: string, clerkId: string, userData?: any) {
     const { database } = await this.access.assertDatabaseEditorOrViewer(databaseId, clerkId, userData, { allowViewer: true });
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {

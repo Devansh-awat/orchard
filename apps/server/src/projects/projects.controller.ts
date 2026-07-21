@@ -1531,6 +1531,23 @@ export class DatabasesController {
     }, user.id);
   }
 
+  @Get(':id/query-stats')
+  async getDatabaseQueryStats(@Param('id') id: string, @Request() req) {
+    await this.projectAccess.assertDatabaseView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+    return this.databases.getDatabaseQueryStats(id);
+  }
+
+  @Post(':id/query-stats/reset')
+  async resetDatabaseQueryStats(@Param('id') id: string, @Request() req) {
+    return this.databases.resetDatabaseQueryStats(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+  }
+
   @Patch(':id/name')
   async renameDatabase(
     @Param('id') id: string,

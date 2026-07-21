@@ -1789,6 +1789,58 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     return { success: r.success, output: r.stdout + r.stderr };
   }
 
+  // Per-query statistics from pg_stat_statements. The SQL is a fixed
+  // string on purpose: nothing user-controlled is ever interpolated, the
+  // read stays inside the tenant's own dedicated instance over the same
+  // exec channel the size/connection stats use, and sorting/filtering
+  // happen client-side on the capped result.
+  async getQueryStats(
+    namespace: string,
+    clusterName: string,
+    dbName: string,
+  ): Promise<{ installed: boolean; reason?: string; queries: unknown[] }> {
+    const sql = `SELECT coalesce(json_agg(t), '[]'::json) FROM (
+      SELECT queryid::text AS id,
+             left(query, 300) AS query,
+             calls,
+             round(total_exec_time::numeric, 2) AS total_ms,
+             round(mean_exec_time::numeric, 3) AS mean_ms,
+             round(max_exec_time::numeric, 2) AS max_ms,
+             rows,
+             shared_blks_hit AS blks_hit,
+             shared_blks_read AS blks_read
+      FROM pg_stat_statements
+      WHERE dbid = (SELECT oid FROM pg_database WHERE datname = current_database())
+      ORDER BY total_exec_time DESC
+      LIMIT 100
+    ) t;`;
+    const r = await this.runPsqlInCnpg(namespace, clusterName, dbName, sql);
+    if (!r.success) {
+      const out = (r.stdout + r.stderr).toLowerCase();
+      if (out.includes('does not exist') || out.includes('shared_preload_libraries')) {
+        return { installed: false, reason: 'extension_missing', queries: [] };
+      }
+      throw new Error(`query stats failed: ${r.stderr || r.stdout}`);
+    }
+    try {
+      const parsed = JSON.parse(r.stdout.trim() || '[]');
+      return { installed: true, queries: Array.isArray(parsed) ? parsed : [] };
+    } catch {
+      return { installed: true, queries: [] };
+    }
+  }
+
+  async resetQueryStats(
+    namespace: string,
+    clusterName: string,
+    dbName: string,
+  ): Promise<{ success: boolean; output: string }> {
+    const r = await this.runPsqlInCnpg(
+      namespace, clusterName, dbName, 'SELECT pg_stat_statements_reset();',
+    );
+    return { success: r.success, output: r.stdout + r.stderr };
+  }
+
   private scheduledBackupName(clusterName: string): string {
     return `${clusterName}-schedule`.substring(0, 63);
   }

@@ -2,6 +2,7 @@ export { default as ConnectionTab } from './ConnectionTab.svelte';
 export { default as BackupsTab } from './BackupsTab.svelte';
 export { default as TerminalTab } from './TerminalTab.svelte';
 export { default as ExtensionsTab } from './ExtensionsTab.svelte';
+export { default as QueriesTab } from './QueriesTab.svelte';
 export { default as SettingsTab } from './SettingsTab.svelte';
 export { default as DatabaseHeader } from './DatabaseHeader.svelte';
 export { default as DeleteModal } from './DeleteModal.svelte';

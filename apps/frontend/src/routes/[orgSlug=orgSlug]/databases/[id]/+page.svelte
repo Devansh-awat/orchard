@@ -13,7 +13,8 @@
 		Puzzle,
 		Settings as SettingsIcon,
 		Activity,
-		Cpu
+		Cpu,
+		Timer
 	} from 'lucide-svelte';
 	import { UnderlineTabs, Skeleton, EmptyState } from '$lib/components/ui';
 	import DatabaseProvisioning from '$lib/components/DatabaseProvisioning.svelte';
@@ -27,7 +28,8 @@
 		SettingsTab,
 		DatabaseHeader,
 		DeleteModal,
-		DatabaseAlerts
+		DatabaseAlerts,
+		QueriesTab
 	} from '$lib/components/database';
 	import RenameModal from '$lib/components/RenameModal.svelte';
 	import type {
@@ -230,6 +232,7 @@
 		{ id: 'backups', label: 'Backups', icon: Archive },
 		{ id: 'terminal', label: 'Terminal', icon: TerminalIcon },
 		{ id: 'extensions', label: 'Extensions', icon: Puzzle },
+		{ id: 'queries', label: 'Queries', icon: Timer },
 		{ id: 'metrics', label: 'Metrics', icon: Activity },
 		{ id: 'resources', label: 'Resources', icon: Cpu },
 		{ id: 'settings', label: 'Settings', icon: SettingsIcon }
@@ -241,6 +244,65 @@
 	});
 
 	// SSE
+	interface QueryStatsPayload {
+		installed: boolean;
+		queries: import('$lib/components/database/QueriesTab.svelte').QueryStat[];
+	}
+	let queryStats = $state<QueryStatsPayload | null>(null);
+	let queryStatsLoading = $state(false);
+	let queryStatsRefreshing = $state(false);
+	let queryStatsResetting = $state(false);
+	let queryStatsEnabling = $state(false);
+	let querySearch = $state('');
+	let showResetStatsModal = $state(false);
+
+	async function fetchQueryStats(silent = false) {
+		if (silent) queryStatsRefreshing = true;
+		else queryStatsLoading = true;
+		try {
+			const response = await apiFetch(`/apiv1/databases/${dbId}/query-stats`);
+			if (response.ok) queryStats = await response.json();
+		} catch {
+			queryStats = queryStats ?? null;
+		} finally {
+			queryStatsLoading = false;
+			queryStatsRefreshing = false;
+		}
+	}
+
+	async function resetQueryStats() {
+		queryStatsResetting = true;
+		try {
+			const response = await apiFetch(`/apiv1/databases/${dbId}/query-stats/reset`, {
+				method: 'POST'
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to reset statistics');
+			}
+			toasts.add({ title: 'Statistics reset', color: 'success' });
+			await fetchQueryStats(true);
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to reset statistics',
+				color: 'error'
+			});
+		} finally {
+			queryStatsResetting = false;
+		}
+	}
+
+	async function enableQueryStats() {
+		queryStatsEnabling = true;
+		try {
+			await installExtension('pg_stat_statements', true);
+			await fetchQueryStats(true);
+		} finally {
+			queryStatsEnabling = false;
+		}
+	}
+
 	let dbSseUnsub: (() => void) | null = null;
 
 	// Live updates ride the org SSE bus (redis streams). Polling is the
@@ -320,6 +382,9 @@
 		}
 		if (activeTab === 'backups' && database?.mode === 'cnpg' && !scheduleLoaded) {
 			fetchSchedule();
+		}
+		if (activeTab === 'queries' && database?.mode === 'cnpg' && !queryStats && !queryStatsLoading) {
+			fetchQueryStats();
 		}
 	});
 
@@ -1135,6 +1200,21 @@
 						onUninstallExtension={uninstallExtension}
 					/>
 				</section>
+			{:else if activeTab === 'queries'}
+				<section class="tab-panel">
+					<QueriesTab
+						{database}
+						stats={queryStats}
+						loading={queryStatsLoading}
+						refreshing={queryStatsRefreshing}
+						resetting={queryStatsResetting}
+						enabling={queryStatsEnabling}
+						bind:querySearch
+						onRefresh={() => fetchQueryStats(true)}
+						onReset={() => (showResetStatsModal = true)}
+						onEnable={enableQueryStats}
+					/>
+				</section>
 			{:else if activeTab === 'metrics'}
 				<section class="tab-panel">
 					{#if database?.mode !== 'shared'}
@@ -1220,6 +1300,16 @@
 		onSave={renameDatabase}
 	/>
 {/if}
+
+<ConfirmModal
+	bind:open={showResetStatsModal}
+	title="Reset query statistics?"
+	description="All recorded query timings and counts start over from zero. This does not affect your data or running queries."
+	confirmLabel="Reset statistics"
+	danger={false}
+	onconfirm={resetQueryStats}
+	oncancel={() => {}}
+/>
 
 {#if showDeleteModal && database}
 	<DeleteModal
