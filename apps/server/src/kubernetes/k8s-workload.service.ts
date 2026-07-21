@@ -1926,9 +1926,30 @@ export class K8sWorkloadService {
     
     try {
       const api = this.kc.makeApiClient(k8s.AppsV1Api);
-      
+
+      // A rolling update cannot hand a ReadWriteOnce PVC from the old pod to
+      // the new one (Multi-Attach when they land on different nodes), so a
+      // redeploy must roll out with Recreate whenever the pod mounts a PVC.
+      // Objects created or volume-edited today already carry Recreate, but
+      // this is the hot path every redeploy goes through, so self-heal any
+      // live object that still has RollingUpdate + PVC from before those
+      // guards existed.
+      let forceRecreate = false;
+      try {
+        const live = await api.readNamespacedDeployment(cleanDeploymentName, cleanNamespace);
+        const hasPvc = (live.body.spec?.template?.spec?.volumes ?? []).some(
+          (v) => v.persistentVolumeClaim?.claimName,
+        );
+        forceRecreate = hasPvc && live.body.spec?.strategy?.type !== 'Recreate';
+      } catch {
+        // If the read fails the patch below will fail too and report properly.
+      }
+
       const patch = {
         spec: {
+          ...(forceRecreate
+            ? { strategy: { type: 'Recreate', rollingUpdate: null as any } }
+            : {}),
           template: {
             spec: {
               containers: [
@@ -1941,7 +1962,11 @@ export class K8sWorkloadService {
           },
         },
       };
-      
+
+      if (forceRecreate) {
+        console.log('[API] PVC volume detected with RollingUpdate strategy, switching to Recreate:', cleanDeploymentName);
+      }
+
       await api.patchNamespacedDeployment(
         cleanDeploymentName,
         cleanNamespace,
@@ -1970,7 +1995,10 @@ export class K8sWorkloadService {
         if (deployment) {
           await this.prisma.deployment.update({
             where: { id: deployment.id },
-            data: { image: cleanImage },
+            data: {
+              image: cleanImage,
+              ...(forceRecreate ? { deployStrategy: 'recreate' } : {}),
+            },
           });
         }
       }
