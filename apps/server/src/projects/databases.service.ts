@@ -546,7 +546,7 @@ export class DatabasesService {
     let publicHostname: string | null = null;
     let publicConnectionString: string | null = null;
     if (database.publicEnabled && database.publicIp && database.publicPort && database.mode === 'cnpg' && database.clusterName && database.namespace) {
-      publicHostname = this.k8sCnpg.publicTlsHostname(database.clusterName);
+      publicHostname = this.k8sCnpg.publicTlsHostname(database.namespace!, database.clusterName);
       publicConnectionString = `postgresql://${database.dbUser}:${database.dbPassword}@${publicHostname}:${database.publicPort}/${database.dbName}?sslmode=verify-full&sslrootcert=system`;
       // Opportunistically refresh the local TLS secret copy if cert-manager rotated it.
       try {
@@ -1582,10 +1582,11 @@ export class DatabasesService {
 
     // Copy the wildcard TLS secret into the project namespace and wire it into the CNPG Cluster
     // so Postgres serves the Let's Encrypt cert instead of its self-signed default.
-    const hostname = this.k8sCnpg.publicTlsHostname(database.clusterName);
+    const hostname = this.k8sCnpg.publicTlsHostname(database.namespace, database.clusterName);
+    const legacyHostname = this.k8sCnpg.legacyPublicTlsHostname(database.clusterName);
     try {
       await this.k8sCnpg.syncPublicTlsSecret(database.namespace);
-      await this.k8sCnpg.patchCnpgClusterTls(database.namespace, database.clusterName, [hostname]);
+      await this.k8sCnpg.patchCnpgClusterTls(database.namespace, database.clusterName, [hostname, legacyHostname]);
     } catch (e: any) {
       console.error(`[DB/public] Failed to configure TLS: ${e?.message}`);
     }

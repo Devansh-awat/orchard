@@ -1,6 +1,7 @@
 import { Injectable, Logger, BadRequestException, NotFoundException, ServiceUnavailableException, OnApplicationBootstrap } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import { PassThrough } from 'stream';
+import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from './kubernetes.service';
 import { cpuMilliToK8s, memoryBytesToK8s, parseMemory } from './quantity';
@@ -1956,7 +1957,23 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     return this.PUBLIC_TLS_BASE_DOMAIN;
   }
 
-  publicTlsHostname(clusterName: string): string {
+  // The label is namespace-qualified because bare cluster names are only
+  // unique within a namespace: two orgs with identically named databases
+  // would otherwise mint the same public hostname under the wildcard cert.
+  // Namespaces are unique cluster-wide, so this label is too. Long
+  // combinations fall back to a hash suffix to stay inside the 63-char
+  // DNS label limit without reintroducing collisions.
+  publicTlsHostname(namespace: string, clusterName: string): string {
+    const label = `${namespace}-${clusterName}`;
+    const safe = label.length <= 63
+      ? label
+      : `${label.slice(0, 54)}-${createHash('sha256').update(label).digest('hex').slice(0, 8)}`;
+    return `${safe}.${this.PUBLIC_TLS_BASE_DOMAIN}`;
+  }
+
+  // Hostname format that predates namespace qualification. Kept in the TLS
+  // SANs so connection strings issued before the change keep verifying.
+  legacyPublicTlsHostname(clusterName: string): string {
     return `${clusterName}.${this.PUBLIC_TLS_BASE_DOMAIN}`;
   }
 
