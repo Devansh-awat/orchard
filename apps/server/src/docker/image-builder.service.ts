@@ -1545,17 +1545,17 @@ exit $rc`,
         labels: {
           'app.kubernetes.io/name': 'image-builder',
           'app.kubernetes.io/managed-by': 'orchard',
-          'orchard.dev/deployment-id': deploymentId || 'unknown',
-          'orchard.dev/image-name': truncateK8sName(
+          'orchard.my/deployment-id': deploymentId || 'unknown',
+          'orchard.my/image-name': truncateK8sName(
             imageName.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+/, ''),
             63,
           ),
-          'orchard.dev/build-type': buildType,
+          'orchard.my/build-type': buildType,
         },
         annotations: {
-          'orchard.dev/repo-url': repoUrl,
-          'orchard.dev/branch': branch,
-          'orchard.dev/full-image': fullImageName,
+          'orchard.my/repo-url': repoUrl,
+          'orchard.my/branch': branch,
+          'orchard.my/full-image': fullImageName,
         },
       },
       spec: {
@@ -1566,7 +1566,7 @@ exit $rc`,
           metadata: {
             labels: {
               'app.kubernetes.io/name': 'image-builder',
-              'orchard.dev/deployment-id': deploymentId || 'unknown',
+              'orchard.my/deployment-id': deploymentId || 'unknown',
             },
           },
           spec: {
@@ -2115,7 +2115,7 @@ exit $rc`,
         }
       }
 
-      const imageRef = jobSpec.metadata?.annotations?.['orchard.dev/full-image'];
+      const imageRef = jobSpec.metadata?.annotations?.['orchard.my/full-image'];
 
       return {
         jobName,
@@ -2289,7 +2289,7 @@ exit $rc`,
     const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
 
     try {
-      const labelSelector = `orchard.dev/deployment-id=${deploymentId}`;
+      const labelSelector = `orchard.my/deployment-id=${deploymentId}`;
       console.log(`[ImageBuilder] Looking for build jobs with label selector: ${labelSelector}`);
 
       const jobs = await batchApi.listNamespacedJob(
@@ -2584,7 +2584,7 @@ exit $rc`,
       const jobs = await batchApi.listNamespacedJob(
         this.builderNamespace,
         undefined, undefined, undefined, undefined,
-        `orchard.dev/deployment-id=${deploymentId}`,
+        `orchard.my/deployment-id=${deploymentId}`,
       );
       return jobs.body.items
         .sort((a, b) => {
@@ -2599,7 +2599,7 @@ exit $rc`,
           else if (j.status?.active) status = 'running';
           return {
             name: j.metadata?.name || '',
-            image: j.metadata?.annotations?.['orchard.dev/full-image'] || null,
+            image: j.metadata?.annotations?.['orchard.my/full-image'] || null,
             status,
           };
         });

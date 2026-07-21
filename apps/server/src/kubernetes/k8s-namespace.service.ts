@@ -199,7 +199,7 @@ export class K8sNamespaceService {
         metadata: {
           name: cleanNamespace,
           labels: {
-            'orchard.dev/managed': 'true',
+            'orchard.my/managed': 'true',
             name: cleanNamespace,
             // PodSecurity `baseline` blocks the classic container-escape
             // primitives at admission: hostPath, privileged, hostNetwork,
@@ -367,7 +367,7 @@ export class K8sNamespaceService {
           name: 'default-deny-all',
           namespace: cleanNamespace,
           labels: {
-            'orchard.dev/managed': 'true',
+            'orchard.my/managed': 'true',
           },
         },
         spec: {
@@ -495,7 +495,7 @@ export class K8sNamespaceService {
         metadata: {
           name: 'allow-cilium-ingress',
           namespace: cleanNamespace,
-          labels: { 'orchard.dev/managed': 'true' },
+          labels: { 'orchard.my/managed': 'true' },
         },
         spec: {
           endpointSelector: {},
@@ -529,7 +529,7 @@ export class K8sNamespaceService {
         metadata: {
           name: 'allow-cnpg-apiserver',
           namespace: cleanNamespace,
-          labels: { 'orchard.dev/managed': 'true' },
+          labels: { 'orchard.my/managed': 'true' },
         },
         spec: {
           endpointSelector: {

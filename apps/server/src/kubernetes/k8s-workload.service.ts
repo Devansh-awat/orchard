@@ -979,7 +979,7 @@ export class K8sWorkloadService {
           template: {
             metadata: {
               annotations: {
-                'orchard.dev/env-updated-at': new Date().toISOString()
+                'orchard.my/env-updated-at': new Date().toISOString()
               }
             },
             spec: {
@@ -1120,7 +1120,7 @@ export class K8sWorkloadService {
           template: {
             metadata: {
               annotations: {
-                'orchard.dev/health-check-updated-at': new Date().toISOString()
+                'orchard.my/health-check-updated-at': new Date().toISOString()
               }
             },
             spec: {
@@ -1276,7 +1276,7 @@ export class K8sWorkloadService {
           template: {
             metadata: {
               annotations: {
-                'orchard.dev/volumes-updated-at': new Date().toISOString()
+                'orchard.my/volumes-updated-at': new Date().toISOString()
               }
             },
             spec: {
@@ -2533,8 +2533,8 @@ export class K8sWorkloadService {
 
     const orchardLabels = {
       'app.kubernetes.io/managed-by': 'orchard',
-      'orchard.dev/tailscale': 'true',
-      'orchard.dev/target-deployment': deploymentName,
+      'orchard.my/tailscale': 'true',
+      'orchard.my/target-deployment': deploymentName,
     };
 
     const podLabels = {

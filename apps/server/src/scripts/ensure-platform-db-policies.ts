@@ -40,7 +40,7 @@ function buildPolicies(namespace: string) {
       metadata: {
         name: 'orchard-platform-db-control-plane',
         namespace,
-        labels: { 'orchard.dev/managed': 'true' },
+        labels: { 'orchard.my/managed': 'true' },
       },
       spec: {
         description:
@@ -62,7 +62,7 @@ function buildPolicies(namespace: string) {
       metadata: {
         name: 'orchard-platform-db-operator',
         namespace,
-        labels: { 'orchard.dev/managed': 'true' },
+        labels: { 'orchard.my/managed': 'true' },
       },
       spec: {
         description:

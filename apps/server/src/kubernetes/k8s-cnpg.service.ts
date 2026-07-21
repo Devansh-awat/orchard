@@ -45,7 +45,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       metadata: {
         name: 'allow-cnpg-operator',
         namespace,
-        labels: { 'orchard.dev/managed': 'true' },
+        labels: { 'orchard.my/managed': 'true' },
       },
       spec: {
         endpointSelector: {
@@ -1886,7 +1886,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         namespace: targetNamespace,
         labels: {
           'app.kubernetes.io/managed-by': 'orchard',
-          'orchard.dev/tls-source-rv': srcRv,
+          'orchard.my/tls-source-rv': srcRv,
         },
       },
       type: 'kubernetes.io/tls',
@@ -1899,7 +1899,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
 
     try {
       const { body: existing } = await coreApi.readNamespacedSecret(targetName, targetNamespace);
-      const existingRv = existing.metadata?.labels?.['orchard.dev/tls-source-rv'];
+      const existingRv = existing.metadata?.labels?.['orchard.my/tls-source-rv'];
       if (existingRv === srcRv) return false;
       await coreApi.replaceNamespacedSecret(targetName, targetNamespace, body);
       return true;

@@ -65,7 +65,7 @@ export class BuildKitPoolService {
   }
 
   private labelSelector(tenantKey: string): string {
-    return `orchard.dev/buildkit-daemon=true,orchard.dev/tenant-key=${this.sanitizeLabel(tenantKey)}`;
+    return `orchard.my/buildkit-daemon=true,orchard.my/tenant-key=${this.sanitizeLabel(tenantKey)}`;
   }
 
   private sanitizeLabel(v: string): string {
@@ -138,7 +138,7 @@ export class BuildKitPoolService {
       },
       spec: {
         podSelector: {
-          matchLabels: { 'orchard.dev/buildkit-daemon': 'true' },
+          matchLabels: { 'orchard.my/buildkit-daemon': 'true' },
         },
         policyTypes: ['Ingress'],
         ingress: [
@@ -176,13 +176,13 @@ export class BuildKitPoolService {
         name,
         namespace: this.namespace,
         labels: {
-          'orchard.dev/buildkit-daemon': 'true',
-          'orchard.dev/tenant-key': sanitizedKey,
+          'orchard.my/buildkit-daemon': 'true',
+          'orchard.my/tenant-key': sanitizedKey,
           'app.kubernetes.io/name': 'buildkit-daemon',
           'app.kubernetes.io/managed-by': 'orchard',
         },
         annotations: {
-          'orchard.dev/last-used': new Date().toISOString(),
+          'orchard.my/last-used': new Date().toISOString(),
         },
       },
       spec: {
@@ -317,7 +317,7 @@ export class BuildKitPoolService {
       await coreApi.patchNamespacedPod(
         podName,
         this.namespace,
-        { metadata: { annotations: { 'orchard.dev/last-used': new Date().toISOString() } } },
+        { metadata: { annotations: { 'orchard.my/last-used': new Date().toISOString() } } },
         undefined,
         undefined,
         undefined,
@@ -345,12 +345,12 @@ export class BuildKitPoolService {
         undefined,
         undefined,
         undefined,
-        'orchard.dev/buildkit-daemon=true',
+        'orchard.my/buildkit-daemon=true',
       );
 
       const now = Date.now();
       for (const pod of pods.body.items) {
-        const lastUsed = pod.metadata?.annotations?.['orchard.dev/last-used'];
+        const lastUsed = pod.metadata?.annotations?.['orchard.my/last-used'];
         const name = pod.metadata?.name;
         if (!name) continue;
 

@@ -48,7 +48,7 @@ export class ProjectAccessService {
     }
 
     // Platform-owned hostnames are never registerable by a tenant. Without
-    // this check a tenant could claim e.g. `app.orchard.dev` (the platform
+    // this check a tenant could claim e.g. `app.orchard.my` (the platform
     // login host) — their IngressRoute would then live alongside the
     // platform's chart-managed Ingress, and depending on Traefik
     // priority/ordering the tenant route could shadow the platform's and

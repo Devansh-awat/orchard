@@ -1196,7 +1196,7 @@ export class K8sNetworkService implements OnModuleInit {
           template: {
             metadata: {
               annotations: {
-                'orchard.dev/service-updated-at': new Date().toISOString(),
+                'orchard.my/service-updated-at': new Date().toISOString(),
               },
             },
             spec: {
@@ -1488,7 +1488,7 @@ export class K8sNetworkService implements OnModuleInit {
             template: {
               metadata: {
                 annotations: {
-                  'orchard.dev/service-updated-at': new Date().toISOString(),
+                  'orchard.my/service-updated-at': new Date().toISOString(),
                 },
               },
               spec: {
@@ -1527,7 +1527,7 @@ export class K8sNetworkService implements OnModuleInit {
           name: serviceName,
           labels: {
             ...(deployment.body.spec?.template?.metadata?.labels || {}),
-            'orchard.dev/managed': 'true',
+            'orchard.my/managed': 'true',
           },
         },
         spec: {
@@ -1671,7 +1671,7 @@ export class K8sNetworkService implements OnModuleInit {
                   template: {
                     metadata: {
                       annotations: {
-                        'orchard.dev/service-updated-at': new Date().toISOString(),
+                        'orchard.my/service-updated-at': new Date().toISOString(),
                       },
                     },
                     spec: {
@@ -1990,7 +1990,7 @@ export class K8sNetworkService implements OnModuleInit {
         labels: {
           'app.kubernetes.io/managed-by': 'orchard',
           'app.kubernetes.io/name': options.deploymentName,
-          'orchard.dev/public-deployment': options.deploymentName,
+          'orchard.my/public-deployment': options.deploymentName,
         },
         annotations: this.sharedIpAnnotations(options.loadBalancerIp),
       },
@@ -2047,7 +2047,7 @@ export class K8sNetworkService implements OnModuleInit {
     try {
       const { body } = await coreApi.listNamespacedService(
         namespace, undefined, undefined, undefined, undefined,
-        `orchard.dev/public-deployment=${deploymentName}`,
+        `orchard.my/public-deployment=${deploymentName}`,
       );
       for (const svc of body.items) {
         const n = svc.metadata?.name;
