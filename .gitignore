@@ -22,3 +22,6 @@ graphify-out/
 
 # Local agent operating notes (personal, not shared)
 CLAUDE.local.md
+
+# conductor personal settings
+.conductor/settings.local.toml
