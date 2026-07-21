@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { goto } from '$app/navigation';
-	import { ArrowLeft, Database, Pencil, Trash2 } from 'lucide-svelte';
+	import { ArrowLeft, Database, Pencil, Trash2, Play, RefreshCw, Square } from 'lucide-svelte';
 	import { Button } from '$lib/components/ui';
 	import type { DatabaseDetail } from './types';
 
@@ -8,15 +8,29 @@
 		database,
 		orgSlug,
 		deleting,
+		stopped = false,
+		stopping = false,
+		starting = false,
+		restarting = false,
 		onOpenDeleteModal,
 		onRename,
+		onStop,
+		onStart,
+		onRestart,
 		statusOverride
 	}: {
 		database: DatabaseDetail;
 		orgSlug: string;
 		deleting: boolean;
+		stopped?: boolean;
+		stopping?: boolean;
+		starting?: boolean;
+		restarting?: boolean;
 		onOpenDeleteModal: () => void;
 		onRename?: () => void;
+		onStop?: () => void;
+		onStart?: () => void;
+		onRestart?: () => void;
 		statusOverride?: string;
 	} = $props();
 
@@ -66,14 +80,45 @@
 			{/if}
 		</div>
 	</div>
-	<Button variant="danger" size="sm" onclick={onOpenDeleteModal} loading={deleting}>
-		{#if !deleting}
-			<Trash2 class="h-4 w-4" />
+	<div class="dbh-actions">
+		{#if database.mode === 'cnpg'}
+			{#if stopped}
+				{#if onStart}
+					<Button variant="primary" size="sm" onclick={onStart} loading={starting}>
+						{#if !starting}<Play class="h-3.5 w-3.5" />{/if}
+						Start
+					</Button>
+				{/if}
+			{:else}
+				{#if onRestart}
+					<Button variant="secondary" size="sm" onclick={onRestart} loading={restarting}>
+						{#if !restarting}<RefreshCw class="h-3.5 w-3.5" />{/if}
+						Restart
+					</Button>
+				{/if}
+				{#if onStop}
+					<Button variant="secondary" size="sm" onclick={onStop} loading={stopping}>
+						{#if !stopping}<Square class="h-3.5 w-3.5" />{/if}
+						Stop
+					</Button>
+				{/if}
+			{/if}
 		{/if}
-		Delete
-	</Button></div>
+		<Button variant="danger" size="sm" onclick={onOpenDeleteModal} loading={deleting}>
+			{#if !deleting}
+				<Trash2 class="h-4 w-4" />
+			{/if}
+			Delete
+		</Button>
+	</div></div>
 
 <style>
+	.dbh-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		flex-shrink: 0;
+	}
 	.dbh-hero {
 		display: flex;
 		align-items: flex-start;

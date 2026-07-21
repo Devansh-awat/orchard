@@ -256,6 +256,49 @@
 	let queryStatsEnabling = $state(false);
 	let querySearch = $state('');
 	let showResetStatsModal = $state(false);
+	let stoppingDb = $state(false);
+	let startingDb = $state(false);
+	let restartingDb = $state(false);
+	let showStopModal = $state(false);
+	let showRestartModal = $state(false);
+
+	const dbStopped = $derived(
+		database?.liveStatus?.phase === 'hibernated' || database?.status === 'stopped'
+	);
+
+	async function lifecycleAction(kind: 'stop' | 'start' | 'restart') {
+		if (kind === 'stop') stoppingDb = true;
+		else if (kind === 'start') startingDb = true;
+		else restartingDb = true;
+		try {
+			const response = await apiFetch(`/apiv1/databases/${dbId}/${kind}`, { method: 'POST' });
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || `Failed to ${kind} database`);
+			}
+			toasts.add({
+				title:
+					kind === 'stop'
+						? 'Database stopping'
+						: kind === 'start'
+							? 'Database starting'
+							: 'Database restarting',
+				color: 'success'
+			});
+			await fetchDatabase(true);
+			void fetchLive();
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : `Failed to ${kind} database`,
+				color: 'error'
+			});
+		} finally {
+			stoppingDb = false;
+			startingDb = false;
+			restartingDb = false;
+		}
+	}
 
 	async function fetchQueryStats(silent = false) {
 		if (silent) queryStatsRefreshing = true;
@@ -1080,11 +1123,20 @@
 			{deleting}
 			onOpenDeleteModal={openDeleteModal}
 			onRename={() => (renameOpen = true)}
-			statusOverride={database.status === 'restarting'
-				? undefined
-				: isUnhealthy
-					? 'unhealthy'
-					: undefined}
+			stopped={dbStopped}
+			stopping={stoppingDb}
+			starting={startingDb}
+			restarting={restartingDb}
+			onStop={() => (showStopModal = true)}
+			onStart={() => lifecycleAction('start')}
+			onRestart={() => (showRestartModal = true)}
+			statusOverride={dbStopped
+				? 'stopped'
+				: database.status === 'restarting'
+					? undefined
+					: isUnhealthy
+						? 'unhealthy'
+						: undefined}
 		/>
 
 		<DatabaseAlerts
@@ -1301,6 +1353,25 @@
 		onSave={renameDatabase}
 	/>
 {/if}
+
+<ConfirmModal
+	bind:open={showStopModal}
+	title="Stop this database?"
+	description="Apps using it will lose their connection until you start it again. Your data stays on disk."
+	confirmLabel="Stop database"
+	onconfirm={() => lifecycleAction('stop')}
+	oncancel={() => {}}
+/>
+
+<ConfirmModal
+	bind:open={showRestartModal}
+	title="Restart this database?"
+	description="Instances restart one at a time. Expect a brief interruption while connections fail over."
+	confirmLabel="Restart"
+	danger={false}
+	onconfirm={() => lifecycleAction('restart')}
+	oncancel={() => {}}
+/>
 
 <ConfirmModal
 	bind:open={showResetStatsModal}

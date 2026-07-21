@@ -350,6 +350,7 @@ export class ProjectsController {
       cpuRequestMilli?: number | null;
       memoryRequestBytes?: number | null;
       restoreFromUrl?: string;
+      pgMajor?: number;
     },
     @Request() req
   ) {
@@ -1529,6 +1530,30 @@ export class DatabasesController {
       cpuRequestMilli: body.cpuRequestMilli ?? null,
       memoryRequestBytes: body.memoryRequestBytes ?? null,
     }, user.id);
+  }
+
+  @Post(':id/stop')
+  async stopDatabase(@Param('id') id: string, @Request() req) {
+    return this.databases.stopDatabase(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+  }
+
+  @Post(':id/start')
+  async startDatabase(@Param('id') id: string, @Request() req) {
+    return this.databases.startDatabase(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+  }
+
+  @Post(':id/restart')
+  async restartDatabase(@Param('id') id: string, @Request() req) {
+    return this.databases.restartDatabase(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
   }
 
   @Get(':id/query-stats')

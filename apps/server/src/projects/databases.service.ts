@@ -226,6 +226,7 @@ export class DatabasesService {
       cpuRequestMilli?: number | null;
       memoryRequestBytes?: number | null;
       restoreFromUrl?: string;
+      pgMajor?: number;
     },
     clerkId: string,
     userData?: {
@@ -331,6 +332,15 @@ export class DatabasesService {
     }
 
     let pgMajor = this.DEFAULT_PG_MAJOR;
+    if (data.pgMajor !== undefined && data.pgMajor !== null) {
+      const requested = Number(data.pgMajor);
+      if (!Number.isInteger(requested) || requested < 13 || requested > this.MAX_PG_MAJOR) {
+        throw new BadRequestException(
+          `Unsupported PostgreSQL version. Choose a major between 13 and ${this.MAX_PG_MAJOR}.`,
+        );
+      }
+      pgMajor = requested;
+    }
     if (importFrom) {
       const { sourceSizeBytes, sourceMajor } = await this.validateImportSource(importFrom);
       pgMajor = Math.max(pgMajor, sourceMajor);
@@ -892,6 +902,75 @@ export class DatabasesService {
     });
 
     return { success: true, message: `Database "${database.name}" deleted` };
+  }
+
+  async stopDatabase(databaseId: string, clerkId: string, userData?: any) {
+    const { user, database } = await this.access.assertDatabaseEditor(databaseId, clerkId, userData);
+    if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
+      throw new BadRequestException('Stop and start require a CNPG-backed database');
+    }
+    await this.k8sCnpg.setCnpgHibernation(database.namespace, database.clusterName, true);
+    await this.prisma.database.update({
+      where: { id: databaseId },
+      data: { status: 'stopped' },
+    });
+    void this.audit.log({
+      action: 'database.stopped',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: database.project?.organizationId,
+      projectId: database.projectId,
+      targetType: 'database',
+      targetId: databaseId,
+      targetLabel: database.name,
+    });
+    return { success: true };
+  }
+
+  async startDatabase(databaseId: string, clerkId: string, userData?: any) {
+    const { user, database } = await this.access.assertDatabaseEditor(databaseId, clerkId, userData);
+    if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
+      throw new BadRequestException('Stop and start require a CNPG-backed database');
+    }
+    await this.k8sCnpg.setCnpgHibernation(database.namespace, database.clusterName, false);
+    await this.prisma.database.update({
+      where: { id: databaseId },
+      data: { status: 'restarting' },
+    });
+    void this.audit.log({
+      action: 'database.started',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: database.project?.organizationId,
+      projectId: database.projectId,
+      targetType: 'database',
+      targetId: databaseId,
+      targetLabel: database.name,
+    });
+    return { success: true };
+  }
+
+  async restartDatabase(databaseId: string, clerkId: string, userData?: any) {
+    const { user, database } = await this.access.assertDatabaseEditor(databaseId, clerkId, userData);
+    if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
+      throw new BadRequestException('Restart requires a CNPG-backed database');
+    }
+    await this.k8sCnpg.rolloutRestartCnpgCluster(database.namespace, database.clusterName);
+    await this.prisma.database.update({
+      where: { id: databaseId },
+      data: { status: 'restarting' },
+    });
+    void this.audit.log({
+      action: 'database.restarted',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: database.project?.organizationId,
+      projectId: database.projectId,
+      targetType: 'database',
+      targetId: databaseId,
+      targetLabel: database.name,
+    });
+    return { success: true };
   }
 
   async renameDatabase(

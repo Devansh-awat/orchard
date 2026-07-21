@@ -110,6 +110,12 @@
 	}
 }
 
+.db-status-stopped {
+	background: color-mix(in srgb, var(--text-default) 7%, transparent);
+	color: var(--text-muted);
+	border: 1px solid color-mix(in srgb, var(--border-default) 80%, transparent);
+}
+
 .db-status-error,
 .db-status-unhealthy {
 	background-color: color-mix(in srgb, var(--error-text-color) 15%, transparent);

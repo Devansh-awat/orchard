@@ -1291,6 +1291,13 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         message = lastTerminationReason;
       }
 
+      if (cluster.metadata?.annotations?.['cnpg.io/hibernation'] === 'on') {
+        return {
+          exists: true, ready: false, phase: 'hibernated',
+          replicas: 0, readyReplicas: 0, message: 'Database is stopped',
+        };
+      }
+
       // psql does not expand `-v` variables inside `-c` commands, so the
       // name is inlined behind a strict character allowlist (see
       // getPostgresContainerStatus). Best-effort — a failed exec just
@@ -1839,6 +1846,38 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       namespace, clusterName, dbName, 'SELECT pg_stat_statements_reset();',
     );
     return { success: r.success, output: r.stdout + r.stderr };
+  }
+
+  private async annotateCnpgCluster(
+    namespace: string,
+    clusterName: string,
+    annotations: Record<string, string>,
+  ): Promise<void> {
+    this.ensureKubeConfig();
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    await customApi.patchNamespacedCustomObject(
+      this.CNPG_GROUP, this.CNPG_VERSION, namespace, this.CNPG_PLURAL, clusterName,
+      { metadata: { annotations } },
+      undefined, undefined, undefined,
+      { headers: { 'Content-Type': 'application/merge-patch+json' } },
+    );
+  }
+
+  // Declarative hibernation: the operator scales the cluster to zero and
+  // keeps the PVCs. Turning it off boots the same data back up.
+  async setCnpgHibernation(namespace: string, clusterName: string, on: boolean): Promise<void> {
+    await this.annotateCnpgCluster(namespace, clusterName, {
+      'cnpg.io/hibernation': on ? 'on' : 'off',
+    });
+  }
+
+  // Same trigger the kubectl-cnpg restart plugin uses: bumping the
+  // restartedAt annotation makes the operator do a supervised rolling
+  // restart of the instances.
+  async rolloutRestartCnpgCluster(namespace: string, clusterName: string): Promise<void> {
+    await this.annotateCnpgCluster(namespace, clusterName, {
+      'cnpg.io/restartedAt': new Date().toISOString(),
+    });
   }
 
   private scheduledBackupName(clusterName: string): string {

@@ -12,7 +12,7 @@
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
-	import { Button, Field, Input } from '$lib/components/ui';
+	import { Button, Field, Input, Select } from '$lib/components/ui';
 
 	let project = $state<ProjectContext | null>(null);
 	let loading = $state(true);
@@ -20,6 +20,8 @@
 	let error = $state<string | null>(null);
 	let name = $state('');
 	let storageSizeGi = $state(1);
+	let pgMajor = $state(17);
+	const PG_VERSIONS = [18, 17, 16, 15, 14, 13];
 	let resourceCpuMilli = $state<number | null>(null);
 	let resourceMemoryBytes = $state<number | null>(null);
 	let restoreFromUrl = $state('');
@@ -69,7 +71,8 @@
 					storageSize: `${size}Gi`,
 					cpuRequestMilli: resourceCpuMilli,
 					memoryRequestBytes: resourceMemoryBytes,
-					restoreFromUrl: restoreFromUrl.trim() || undefined
+					restoreFromUrl: restoreFromUrl.trim() || undefined,
+					pgMajor
 				})
 			});
 
@@ -178,6 +181,18 @@
 						class="input"
 						disabled={submitting}
 					/>
+				</Field>
+
+				<Field
+					label="PostgreSQL version"
+					for="db-pg-major"
+					hint="17 is the recommended default. Imports from a newer source automatically use the source's version."
+				>
+					<Select id="db-pg-major" bind:value={pgMajor} disabled={submitting}>
+						{#each PG_VERSIONS as v (v)}
+							<option value={v}>PostgreSQL {v}</option>
+						{/each}
+					</Select>
 				</Field>
 
 				<Field
