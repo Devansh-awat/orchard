@@ -70,6 +70,7 @@
   "GET /databases/:id/backup-schedule": "authenticated",
   "GET /databases/:id/backups": "authenticated",
   "GET /databases/:id/extensions": "authenticated",
+  "GET /databases/:id/live": "authenticated",
   "GET /databases/:id/metrics": "authenticated",
   "GET /databases/:id/provisioning": "authenticated",
   "GET /databases/:id/settings": "authenticated",

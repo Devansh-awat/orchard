@@ -464,7 +464,7 @@ export class DatabasesService {
     return stripR2ProxyCreds(database as any);
   }
 
-  async getDatabase(databaseId: string, canEdit = true, userId?: string) {
+  async getDatabase(databaseId: string, canEdit = true, userId?: string, skipLive = false) {
     const database = await this.prisma.database.findUnique({
       where: { id: databaseId },
       include: {
@@ -484,7 +484,9 @@ export class DatabasesService {
 
     let liveStatus: any;
     let pods: any[] = [];
-    if (database.mode === 'cnpg' && database.namespace && database.clusterName) {
+    if (skipLive) {
+      ({ liveStatus, pods } = { liveStatus: undefined, pods: [] });
+    } else if (database.mode === 'cnpg' && database.namespace && database.clusterName) {
       liveStatus = await this.k8sCnpg.getCnpgClusterStatus(database.namespace, database.clusterName, database.dbName);
       try {
         const podList = await this.k8sWorkload.listPods(database.namespace);
@@ -560,6 +562,67 @@ export class DatabasesService {
     // (and the in-cluster provisioning path that reads prisma directly)
     // should ever see them.
     return stripR2ProxyCreds(result);
+  }
+
+  // The slow half of getDatabase: live cluster state, pod list, and the
+  // stored-status reconcile. Split out so the page can render from row data
+  // immediately and fill this in when it arrives (multi-second k8s
+  // roundtrips, including pod execs for size/connections).
+  async getDatabaseLive(databaseId: string, userId?: string) {
+    const database = await this.prisma.database.findUnique({
+      where: { id: databaseId },
+      select: {
+        id: true, mode: true, namespace: true, clusterName: true,
+        containerName: true, dbName: true, dbUser: true, status: true,
+        projectId: true,
+      },
+    });
+    if (!database) throw new NotFoundException('Database not found');
+    if (userId) {
+      await this.authz.requireProjectView(database.projectId, userId);
+    }
+
+    let liveStatus: any;
+    let pods: any[] = [];
+    let status = database.status;
+    if (database.mode === 'cnpg' && database.namespace && database.clusterName) {
+      liveStatus = await this.k8sCnpg.getCnpgClusterStatus(database.namespace, database.clusterName, database.dbName);
+      try {
+        const podList = await this.k8sWorkload.listPods(database.namespace);
+        pods = (podList?.pods || []).filter((p: any) =>
+          p.labels?.['cnpg.io/cluster'] === database.clusterName,
+        );
+      } catch { /* ignore */ }
+      if (liveStatus.ready && status !== 'ready' && status !== 'restoring') {
+        try {
+          await this.prisma.database.update({ where: { id: database.id }, data: { status: 'ready' } });
+          status = 'ready';
+        } catch { /* ignore */ }
+      } else if (!liveStatus.exists && status !== 'error') {
+        try {
+          await this.prisma.database.update({ where: { id: database.id }, data: { status: 'error' } });
+          status = 'error';
+        } catch { /* ignore */ }
+      }
+    } else if (database.mode === 'container' && database.namespace && database.containerName) {
+      liveStatus = await this.k8sCnpg.getPostgresContainerStatus(
+        database.namespace,
+        database.containerName,
+        database.dbName,
+        database.dbUser,
+      );
+      try {
+        const podData = await this.k8sWorkload.getDeploymentPods(
+          database.containerName,
+          database.namespace,
+        );
+        pods = podData?.pods || [];
+      } catch { /* ignore */ }
+    } else {
+      liveStatus = await this.k8sCnpg.getPostgresDatabaseStatus(database.dbName);
+    }
+
+    return { liveStatus, pods, status };
   }
 
   async getDatabaseProvisioning(databaseId: string, userId?: string) {

@@ -305,11 +305,10 @@
 		if (!silent) loading = true;
 		error = null;
 		try {
-			const response = await apiFetch(`/apiv1/databases/${dbId}`);
+			const response = await apiFetch(`/apiv1/databases/${dbId}?fast=1`);
 			if (!response.ok) throw new Error('Failed to fetch database');
 			database = await response.json();
 			if (database?.backupsEnabled) fetchBackups();
-			// Sync resource state
 			if (!resourcesDirty) {
 				resourceCpuMilli = database?.cpuRequestMilli ?? null;
 				resourceMemoryBytes =
@@ -319,6 +318,27 @@
 			if (!silent) error = e instanceof Error ? e.message : 'Failed to load database';
 		} finally {
 			if (!silent) loading = false;
+		}
+		void fetchLive();
+	}
+
+	let liveInFlight = false;
+
+	async function fetchLive() {
+		if (liveInFlight || !database) return;
+		liveInFlight = true;
+		try {
+			const response = await apiFetch(`/apiv1/databases/${dbId}/live`);
+			if (!response.ok) return;
+			const live = await response.json();
+			if (!database) return;
+			database.liveStatus = live.liveStatus;
+			database.pods = live.pods;
+			if (live.status) database.status = live.status;
+		} catch {
+			return;
+		} finally {
+			liveInFlight = false;
 		}
 	}
 

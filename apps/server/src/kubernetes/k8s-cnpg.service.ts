@@ -116,6 +116,16 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     }
   }
 
+  // Size/connection stats cost a pod exec (a websocket roundtrip through
+  // the apiserver), which dominated database page loads at 4-9s. Cache them
+  // briefly so only the first view pays, and refetches render instantly.
+  private readonly dbStatsCache = new Map<
+    string,
+    { size?: string; connections?: number; at: number }
+  >();
+
+  private readonly DB_STATS_TTL_MS = 20_000;
+
   private get kc(): k8s.KubeConfig | null {
     return this.kubernetes.kc;
   }
@@ -932,23 +942,28 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       let connections: number | undefined;
       if (ready && dbName && dbUser) {
         try {
-          const pod = await this.findPostgresPod(namespace, name);
-          // psql does not expand `-v` variables inside `-c` commands, so the
-          // name is inlined behind a strict character allowlist instead.
-          // dbName is slug-constructed ([a-z0-9_]); anything else means the
-          // row is corrupt and stats are skipped rather than risk injection.
-          const safeDb = dbName.replace(/[^a-zA-Z0-9_]/g, '');
-          if (safeDb !== dbName) throw new Error('unexpected characters in dbName');
-          const exec = async (sql: string): Promise<string> => {
+          const cacheKey = `${namespace}/${name}`;
+          const cached = this.dbStatsCache.get(cacheKey);
+          if (cached && Date.now() - cached.at < this.DB_STATS_TTL_MS) {
+            size = cached.size;
+            connections = cached.connections;
+          } else {
+            const pod = await this.findPostgresPod(namespace, name);
+            // psql does not expand `-v` variables inside `-c` commands, so the
+            // name is inlined behind a strict character allowlist instead.
+            // dbName is slug-constructed ([a-z0-9_]); anything else means the
+            // row is corrupt and stats are skipped rather than risk injection.
+            const safeDb = dbName.replace(/[^a-zA-Z0-9_]/g, '');
+            if (safeDb !== dbName) throw new Error('unexpected characters in dbName');
             const r = await this.execInPod(namespace, pod, 'postgres', [
-              'psql', '-U', dbUser, '-d', dbName,
-              '-t', '-A', '-c', sql,
+              'psql', '-U', dbUser, '-d', dbName, '-t', '-A', '-c',
+              `SELECT pg_size_pretty(pg_database_size('${safeDb}')) || '|' || (SELECT count(*) FROM pg_stat_activity WHERE datname = '${safeDb}');`,
             ]);
-            return r.stdout.trim();
-          };
-          size = await exec(`SELECT pg_size_pretty(pg_database_size('${safeDb}'));`);
-          const connRaw = await exec(`SELECT count(*) FROM pg_stat_activity WHERE datname = '${safeDb}';`);
-          connections = parseInt(connRaw, 10) || 0;
+            const [sizeRaw, connRaw] = r.stdout.trim().split('|');
+            size = sizeRaw || undefined;
+            connections = parseInt(connRaw, 10) || 0;
+            this.dbStatsCache.set(cacheKey, { size, connections, at: Date.now() });
+          }
         } catch {}
       }
 
@@ -1285,18 +1300,23 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       const currentPrimary: string | undefined = cluster.status?.currentPrimary;
       if (ready && dbName && currentPrimary) {
         try {
-          const safeDb = dbName.replace(/[^a-zA-Z0-9_]/g, '');
-          if (safeDb !== dbName) throw new Error('unexpected characters in dbName');
-          const exec = async (sql: string): Promise<string> => {
+          const cacheKey = `${namespace}/${currentPrimary}/${dbName}`;
+          const cached = this.dbStatsCache.get(cacheKey);
+          if (cached && Date.now() - cached.at < this.DB_STATS_TTL_MS) {
+            size = cached.size;
+            connections = cached.connections;
+          } else {
+            const safeDb = dbName.replace(/[^a-zA-Z0-9_]/g, '');
+            if (safeDb !== dbName) throw new Error('unexpected characters in dbName');
             const r = await this.execInPod(namespace, currentPrimary, 'postgres', [
-              'psql', '-U', 'postgres',
-              '-t', '-A', '-c', sql,
+              'psql', '-U', 'postgres', '-t', '-A', '-c',
+              `SELECT pg_size_pretty(pg_database_size('${safeDb}')) || '|' || (SELECT count(*) FROM pg_stat_activity WHERE datname = '${safeDb}');`,
             ]);
-            return r.stdout.trim();
-          };
-          size = await exec(`SELECT pg_size_pretty(pg_database_size('${safeDb}'));`);
-          const connRaw = await exec(`SELECT count(*) FROM pg_stat_activity WHERE datname = '${safeDb}';`);
-          connections = parseInt(connRaw, 10) || 0;
+            const [sizeRaw, connRaw] = r.stdout.trim().split('|');
+            size = sizeRaw || undefined;
+            connections = parseInt(connRaw, 10) || 0;
+            this.dbStatsCache.set(cacheKey, { size, connections, at: Date.now() });
+          }
         } catch { /* best-effort */ }
       }
 

@@ -1461,12 +1461,21 @@ export class DatabasesController {
 
   @Get(':id')
 
-  async getDatabase(@Param('id') id: string, @Request() req) {
+  async getDatabase(@Param('id') id: string, @Request() req, @Query('fast') fast?: string) {
     const { user, access } = await this.projectAccess.assertDatabaseView(id, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
-    return this.databases.getDatabase(id, access.canEdit, user.id);
+    return this.databases.getDatabase(id, access.canEdit, user.id, fast === '1');
+  }
+
+  @Get(':id/live')
+  async getDatabaseLive(@Param('id') id: string, @Request() req) {
+    const { user } = await this.projectAccess.assertDatabaseView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+    return this.databases.getDatabaseLive(id, user.id);
   }
 
   @Get(':id/metrics')
