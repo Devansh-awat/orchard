@@ -2045,13 +2045,21 @@ export class K8sNetworkService implements OnModuleInit {
     this.ensureKubeConfig();
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
     try {
-      const { body } = await coreApi.listNamespacedService(
-        namespace, undefined, undefined, undefined, undefined,
-        `orchard.my/public-deployment=${deploymentName}`,
-      );
-      for (const svc of body.items) {
+      const [current, legacy] = await Promise.all([
+        coreApi.listNamespacedService(
+          namespace, undefined, undefined, undefined, undefined,
+          `orchard.my/public-deployment=${deploymentName}`,
+        ),
+        coreApi.listNamespacedService(
+          namespace, undefined, undefined, undefined, undefined,
+          `orchard.dev/public-deployment=${deploymentName}`,
+        ),
+      ]);
+      const seen = new Set<string>();
+      for (const svc of [...current.body.items, ...legacy.body.items]) {
         const n = svc.metadata?.name;
-        if (!n) continue;
+        if (!n || seen.has(n)) continue;
+        seen.add(n);
         try {
           await coreApi.deleteNamespacedService(n, namespace);
         } catch (e: any) {

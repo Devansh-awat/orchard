@@ -68,6 +68,10 @@ export class BuildKitPoolService {
     return `orchard.my/buildkit-daemon=true,orchard.my/tenant-key=${this.sanitizeLabel(tenantKey)}`;
   }
 
+  private legacyLabelSelector(tenantKey: string): string {
+    return `orchard.dev/buildkit-daemon=true,orchard.dev/tenant-key=${this.sanitizeLabel(tenantKey)}`;
+  }
+
   private sanitizeLabel(v: string): string {
     return truncateK8sName(
       v.toLowerCase().replace(/[^a-z0-9-]/g, '-').replace(/^-+/, ''),
@@ -90,16 +94,26 @@ export class BuildKitPoolService {
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
 
     // Look for an existing daemon pod
-    const existing = await coreApi.listNamespacedPod(
-      this.namespace,
-      undefined,
-      undefined,
-      undefined,
-      undefined,
-      this.labelSelector(tenantKey),
-    );
+    const [existing, legacy] = await Promise.all([
+      coreApi.listNamespacedPod(
+        this.namespace,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        this.labelSelector(tenantKey),
+      ),
+      coreApi.listNamespacedPod(
+        this.namespace,
+        undefined,
+        undefined,
+        undefined,
+        undefined,
+        this.legacyLabelSelector(tenantKey),
+      ),
+    ]);
 
-    for (const pod of existing.body.items) {
+    for (const pod of [...existing.body.items, ...legacy.body.items]) {
       const phase = pod.status?.phase;
       const ip = pod.status?.podIP;
       const name = pod.metadata?.name;
@@ -339,20 +353,33 @@ export class BuildKitPoolService {
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
 
     try {
-      const pods = await coreApi.listNamespacedPod(
-        this.namespace,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        'orchard.my/buildkit-daemon=true',
-      );
+      const [pods, legacyPods] = await Promise.all([
+        coreApi.listNamespacedPod(
+          this.namespace,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          'orchard.my/buildkit-daemon=true',
+        ),
+        coreApi.listNamespacedPod(
+          this.namespace,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          'orchard.dev/buildkit-daemon=true',
+        ),
+      ]);
 
       const now = Date.now();
-      for (const pod of pods.body.items) {
-        const lastUsed = pod.metadata?.annotations?.['orchard.my/last-used'];
+      const seen = new Set<string>();
+      for (const pod of [...pods.body.items, ...legacyPods.body.items]) {
+        const annotations = pod.metadata?.annotations;
+        const lastUsed = annotations?.['orchard.my/last-used'] ?? annotations?.['orchard.dev/last-used'];
         const name = pod.metadata?.name;
-        if (!name) continue;
+        if (!name || seen.has(name)) continue;
+        seen.add(name);
 
         const lastUsedMs = lastUsed ? new Date(lastUsed).getTime() : 0;
         const idleMs = now - lastUsedMs;

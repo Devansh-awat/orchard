@@ -1899,7 +1899,8 @@ export class K8sCnpgService implements OnApplicationBootstrap {
 
     try {
       const { body: existing } = await coreApi.readNamespacedSecret(targetName, targetNamespace);
-      const existingRv = existing.metadata?.labels?.['orchard.my/tls-source-rv'];
+      const existingRv = existing.metadata?.labels?.['orchard.my/tls-source-rv']
+        ?? existing.metadata?.labels?.['orchard.dev/tls-source-rv'];
       if (existingRv === srcRv) return false;
       await coreApi.replaceNamespacedSecret(targetName, targetNamespace, body);
       return true;

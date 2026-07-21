@@ -2115,7 +2115,8 @@ exit $rc`,
         }
       }
 
-      const imageRef = jobSpec.metadata?.annotations?.['orchard.my/full-image'];
+      const imageRef = jobSpec.metadata?.annotations?.['orchard.my/full-image']
+        ?? jobSpec.metadata?.annotations?.['orchard.dev/full-image'];
 
       return {
         jobName,
@@ -2292,14 +2293,35 @@ exit $rc`,
       const labelSelector = `orchard.my/deployment-id=${deploymentId}`;
       console.log(`[ImageBuilder] Looking for build jobs with label selector: ${labelSelector}`);
 
-      const jobs = await batchApi.listNamespacedJob(
-        this.builderNamespace,
-        undefined,
-        undefined,
-        undefined,
-        undefined,
-        labelSelector
-      );
+      const [current, legacy] = await Promise.all([
+        batchApi.listNamespacedJob(
+          this.builderNamespace,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          labelSelector
+        ),
+        batchApi.listNamespacedJob(
+          this.builderNamespace,
+          undefined,
+          undefined,
+          undefined,
+          undefined,
+          `orchard.dev/deployment-id=${deploymentId}`
+        ),
+      ]);
+      const jobNames = new Set<string>();
+      const jobs = {
+        body: {
+          items: [...current.body.items, ...legacy.body.items].filter((j) => {
+            const n = j.metadata?.name;
+            if (!n || jobNames.has(n)) return false;
+            jobNames.add(n);
+            return true;
+          }),
+        },
+      };
 
       if (jobs.body.items.length === 0) {
         console.log(`[ImageBuilder] No build jobs found for deployment ${deploymentId}`);
@@ -2581,12 +2603,26 @@ exit $rc`,
     this.ensureKubeConfig();
     try {
       const batchApi = this.kc!.makeApiClient(k8s.BatchV1Api);
-      const jobs = await batchApi.listNamespacedJob(
-        this.builderNamespace,
-        undefined, undefined, undefined, undefined,
-        `orchard.my/deployment-id=${deploymentId}`,
-      );
-      return jobs.body.items
+      const [current, legacy] = await Promise.all([
+        batchApi.listNamespacedJob(
+          this.builderNamespace,
+          undefined, undefined, undefined, undefined,
+          `orchard.my/deployment-id=${deploymentId}`,
+        ),
+        batchApi.listNamespacedJob(
+          this.builderNamespace,
+          undefined, undefined, undefined, undefined,
+          `orchard.dev/deployment-id=${deploymentId}`,
+        ),
+      ]);
+      const seen = new Set<string>();
+      const items = [...current.body.items, ...legacy.body.items].filter((j) => {
+        const n = j.metadata?.name;
+        if (!n || seen.has(n)) return false;
+        seen.add(n);
+        return true;
+      });
+      return items
         .sort((a, b) => {
           const ta = a.metadata?.creationTimestamp?.getTime() ?? 0;
           const tb = b.metadata?.creationTimestamp?.getTime() ?? 0;
@@ -2599,7 +2635,7 @@ exit $rc`,
           else if (j.status?.active) status = 'running';
           return {
             name: j.metadata?.name || '',
-            image: j.metadata?.annotations?.['orchard.my/full-image'] || null,
+            image: j.metadata?.annotations?.['orchard.my/full-image'] || j.metadata?.annotations?.['orchard.dev/full-image'] || null,
             status,
           };
         });
