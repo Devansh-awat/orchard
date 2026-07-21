@@ -420,6 +420,8 @@ data:
       # Keep only the three backend series the dashboard reads to bound the
       # cardinality the per-server/process firehose would otherwise add.
       - job_name: haproxy-ingress
+        params:
+          scope: [backend]
         kubernetes_sd_configs:
           - role: pod
             namespaces: { names: [network] }
@@ -474,6 +476,7 @@ spec:
           image: victoriametrics/vmagent:v1.106.1
           args:
             - "-promscrape.config=/config/scrape.yaml"
+            - "-promscrape.maxScrapeSize=64MB"
             # Hot-reload the scrape config when the ConfigMap changes, so adding
             # a scrape job doesn't require a manual vmagent restart.
             - "-promscrape.configCheckInterval=30s"
