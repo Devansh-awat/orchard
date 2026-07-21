@@ -27,6 +27,11 @@
 				{#if toast.description}
 					<p class="toast-desc">{toast.description}</p>
 				{/if}
+				{#if toast.action}
+					<button class="toast-action" onclick={toast.action.onClick}>
+						{toast.action.label}
+					</button>
+				{/if}
 			</div>
 			<button
 				class="toast-close"
@@ -134,6 +139,23 @@
 		margin: 0.1875rem 0 0;
 		line-height: 1.45;
 		overflow-wrap: anywhere;
+	}
+
+	.toast-action {
+		margin-top: 0.375rem;
+		padding: 0.25rem 0.625rem;
+		font-size: 0.75rem;
+		font-weight: 600;
+		border: none;
+		border-radius: 0.375rem;
+		background-color: var(--button-bg);
+		color: var(--button-color);
+		cursor: pointer;
+		transition: opacity 0.15s;
+	}
+
+	.toast-action:hover {
+		opacity: 0.85;
 	}
 
 	.toast-close {

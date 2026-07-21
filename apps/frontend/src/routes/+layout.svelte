@@ -11,7 +11,8 @@
 		apiFetch,
 		initApiBase,
 		pendingInvitations,
-		themeStore
+		themeStore,
+		toasts
 	} from '$lib/stores';
 	import { ToastContainer, OnboardingModal } from '$lib/components';
 	import SidebarDeck from '$lib/components/SidebarDeck.svelte';
@@ -41,6 +42,22 @@
 	beforeNavigate(({ willUnload, to }) => {
 		if (!dev && $updated && !willUnload && to?.url) {
 			location.href = to.url.href;
+		}
+	});
+
+	// The guard above only helps tabs that navigate. Parked tabs (logs,
+	// metrics) would run the stale build indefinitely — prompt them instead.
+	let updatePromptShown = false;
+	$effect(() => {
+		if (!dev && $updated && !updatePromptShown) {
+			updatePromptShown = true;
+			toasts.add({
+				title: 'A new version of Orchard is available',
+				description: 'Reload to pick up the latest changes.',
+				color: 'info',
+				duration: 0,
+				action: { label: 'Reload', onClick: () => location.reload() }
+			});
 		}
 	});
 
