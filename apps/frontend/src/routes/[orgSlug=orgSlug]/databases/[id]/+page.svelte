@@ -3,7 +3,13 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { apiFetch, toasts, selectedOrganization, subscribeOrgEvents, sseStatusFor } from '$lib/stores';
+	import {
+		apiFetch,
+		toasts,
+		selectedOrganization,
+		subscribeOrgEvents,
+		sseStatusFor
+	} from '$lib/stores';
 	import type { PageData } from './$types';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import {

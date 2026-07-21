@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.25.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.24.0...frontend/v0.25.0) (2026-07-21)
+
+
+### Features
+
+* **frontend:** prompt parked tabs to reload when a new version ships ([23d91ce](https://github.com/LeafdTK/leaf/commit/23d91ce07eebbbd33e328959b9203cda5776bfbd))
+
 ## [0.24.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.23.0...frontend/v0.24.0) (2026-07-21)
 
 

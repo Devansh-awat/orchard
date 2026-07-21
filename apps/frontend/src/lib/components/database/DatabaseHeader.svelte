@@ -110,7 +110,8 @@
 			{/if}
 			Delete
 		</Button>
-	</div></div>
+	</div>
+</div>
 
 <style>
 	.dbh-actions {
@@ -195,5 +196,5 @@
 		.dbh-hero {
 			flex-wrap: wrap;
 		}
-		}
+	}
 </style>

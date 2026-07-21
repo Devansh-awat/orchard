@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.27.1](https://github.com/LeafdTK/leaf/compare/server/v1.27.0...server/v1.27.1) (2026-07-21)
+
+
+### Bug Fixes
+
+* public db hostnames are namespace qualified to prevent cross org collisions ([60b424a](https://github.com/LeafdTK/leaf/commit/60b424a18fd5279cdbe82df4ca8efb2c78900863))
+
 ## [1.27.0](https://github.com/LeafdTK/leaf/compare/server/v1.26.2...server/v1.27.0) (2026-07-21)
 
 

@@ -1,7 +1,17 @@
 <script lang="ts">
 	import { Loader2 } from 'lucide-svelte';
 	import { selectedOrganization } from '$lib/stores';
-	import { Button, Field, Input, Select, StatusBadge, statusMeta, SectionCard, EmptyState, Badge } from '$lib/components/ui';
+	import {
+		Button,
+		Field,
+		Input,
+		Select,
+		StatusBadge,
+		statusMeta,
+		SectionCard,
+		EmptyState,
+		Badge
+	} from '$lib/components/ui';
 	import type { StatusMeta } from '$lib/components/ui';
 	import type { DatabaseDetail, Backup, SchedulePreset } from './types';
 

@@ -1,6 +1,13 @@
 <script lang="ts">
 	import { Loader2, RefreshCw, Plus } from 'lucide-svelte';
-	import { Button, Input, StatusBadge, statusMeta, SectionCard, EmptyState } from '$lib/components/ui';
+	import {
+		Button,
+		Input,
+		StatusBadge,
+		statusMeta,
+		SectionCard,
+		EmptyState
+	} from '$lib/components/ui';
 	import type { DatabaseDetail, ExtInfo } from './types';
 
 	let {

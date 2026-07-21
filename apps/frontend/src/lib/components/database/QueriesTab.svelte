@@ -168,7 +168,11 @@
 			<div class="qs-head" role="row">
 				<span class="qs-head-cell qs-head-cell--query">Query</span>
 				{#each HEADERS as h (h.id)}
-					<button type="button" class="qs-head-cell qs-head-cell--sort" onclick={() => toggleSort(h.id)}>
+					<button
+						type="button"
+						class="qs-head-cell qs-head-cell--sort"
+						onclick={() => toggleSort(h.id)}
+					>
 						{h.label}
 						{#if sortField === h.id}
 							{#if sortAsc}<ArrowUp class="h-3 w-3" />{:else}<ArrowDown class="h-3 w-3" />{/if}
@@ -208,8 +212,8 @@
 			{/each}
 		</div>
 		<p class="qs-foot">
-			Top {visible.length} normalized queries by total execution time since the last reset.
-			Literals are replaced with placeholders before anything is recorded.
+			Top {visible.length} normalized queries by total execution time since the last reset. Literals are
+			replaced with placeholders before anything is recorded.
 		</p>
 	{/if}
 </SectionCard>
