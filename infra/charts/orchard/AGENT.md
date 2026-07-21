@@ -105,7 +105,7 @@ Every key the chart honors, with defaults from `values.yaml`.
 | Key | Default | Description |
 |---|---|---|
 | `image.registry` | `ghcr.io` | Container registry host. |
-| `image.repository` | `hackclub/leaf` | Repository prefix. Final ref = `{registry}/{repository}/{component}:{tag}`. Override to `leafdtk/leaf` if pulling from your fork's GHCR. |
+| `image.repository` | `leafdtk/leaf` | Repository prefix. Final ref = `{registry}/{repository}/{component}:{tag}`. Matches where CI publishes images; override if pulling from your own registry. |
 | `image.pullPolicy` | `IfNotPresent` | Applied to all app containers. |
 | `image.pullSecrets` | `[]` | List of `imagePullSecrets` names. Required if images are private. |
 

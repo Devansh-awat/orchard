@@ -6,7 +6,7 @@ createNamespace: true
 
 image:
   registry: ghcr.io
-  repository: hackclub/leaf
+  repository: leafdtk/leaf
   # tags default to .Chart.AppVersion; override per-component to pin a sha
   pullPolicy: IfNotPresent
   pullSecrets: []
@@ -92,7 +92,6 @@ mcp:
   replicas: 1
   image:
     name: mcp
-    repository: leafdtk/leaf  # overrides global image.repository for the mcp image
     tag: "latest"
   service:
     port: 3100
