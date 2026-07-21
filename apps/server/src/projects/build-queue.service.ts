@@ -279,9 +279,6 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
     });
     if (building.length === 0) return;
     const STUCK_MS = 45 * 60 * 1000;
-    // Owning workers bump heartbeatAt every 30s; a run whose heartbeat is
-    // minutes old belongs to a process that died mid-build (restart, OOM).
-    const DEAD_MS = 3 * 60 * 1000;
     const now = Date.now();
     for (const run of building) {
       const dep = await this.prisma.deployment.findUnique({
@@ -299,13 +296,13 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
         });
         continue;
       }
-      const lastSeen = run.heartbeatAt?.getTime() ?? run.startedAt?.getTime() ?? 0;
-      const workerDead = run.workerId !== this.workerId && lastSeen > 0 && now - lastSeen > DEAD_MS;
+      // A dead worker's run is NOT failed here: builds run as in-cluster
+      // jobs and BuildRecovery (deployments.service) re-adopts them within
+      // minutes, finishing the deploy and concluding the GitHub check from
+      // the ids persisted on this run. Only the absolute runtime cap kills.
       const overRuntime = run.startedAt && now - run.startedAt.getTime() > STUCK_MS;
-      if (!workerDead && !overRuntime) continue;
-      const detail = workerDead
-        ? 'Build interrupted by a platform restart'
-        : 'Build exceeded the maximum runtime';
+      if (!overRuntime) continue;
+      const detail = 'Build exceeded the maximum runtime';
       const claimed = await this.prisma.buildRun.updateMany({
         where: { id: run.id, status: 'building' },
         data: {

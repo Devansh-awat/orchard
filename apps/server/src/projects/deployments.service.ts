@@ -300,6 +300,53 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     })();
   }
 
+  // Recovery finalizer companion: conclude the GitHub check run and
+  // deployment marker that the dead process left open. The ids live on the
+  // BuildRun row (persisted at check creation) precisely so a different
+  // process can close them.
+  private async closeGitHubCheckForDeployment(deploymentId: string, ok: boolean, detail: string) {
+    try {
+      const run = await this.prisma.buildRun.findFirst({
+        where: { deploymentId, checkRunId: { not: null } },
+        orderBy: { scheduledAt: 'desc' },
+        select: { checkRunId: true, githubInstallationId: true, repoFullName: true },
+      });
+      if (!run?.checkRunId || !run.githubInstallationId || !run.repoFullName) return;
+      const [owner, repo] = run.repoFullName.split('/');
+      if (!owner || !repo) return;
+      const logUrl = await this.getDeploymentProgressUrl(deploymentId);
+      await this.githubService.updateCheckRun(
+        run.githubInstallationId, owner, repo, Number(run.checkRunId),
+        {
+          status: 'completed',
+          conclusion: ok ? 'success' : 'failure',
+          output: {
+            title: ok ? 'Deployment Successful' : 'Deployment Failed',
+            summary: detail,
+            text: logUrl ? `[View the full build log in Orchard](${logUrl})` : undefined,
+          },
+        },
+      );
+      const marker = await this.prisma.gitHubDeployment.findFirst({
+        where: { deploymentId, status: { in: ['pending', 'in_progress'] } },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (marker) {
+        await this.githubService.updateDeploymentStatusWithApp(
+          run.githubInstallationId, marker.owner, marker.repo,
+          Number(marker.githubDeploymentId), ok ? 'success' : 'failure',
+          { description: detail.substring(0, 130), logUrl: logUrl ?? undefined },
+        );
+        await this.prisma.gitHubDeployment.update({
+          where: { id: marker.id },
+          data: { status: ok ? 'success' : 'failure' },
+        }).catch(() => {});
+      }
+    } catch (e: any) {
+      this.logger.warn(`[BuildRecovery] Failed to close GitHub check for ${deploymentId}: ${e?.message || e}`);
+    }
+  }
+
   private async markBuildFailed(deploymentId: string, reason: string) {
     await this.prisma.deployment.update({
       where: { id: deploymentId },
@@ -311,6 +358,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       WHERE "id" = ${deploymentId}::uuid
     `.catch(() => {});
     this.buildQueue.onBuildFinished(deploymentId).catch(() => {});
+    void this.closeGitHubCheckForDeployment(deploymentId, false, reason);
   }
 
   private async markBuildSucceeded(deploymentId: string, logMessage: string) {
@@ -335,6 +383,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       WHERE "id" = ${deploymentId}::uuid
     `.catch(() => {});
     this.buildQueue.onBuildFinished(deploymentId).catch(() => {});
+    void this.closeGitHubCheckForDeployment(deploymentId, true, logMessage);
   }
 
   async listDeploymentsSummary(userId: string, orgId?: string) {
