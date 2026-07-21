@@ -288,7 +288,7 @@ export class McpOAuthService {
       sub: payload.sub,
       email: payload.email,
       name: payload.name,
-      externalAuthId: payload.externalAuthId,
+      externalAuthId: payload.externalAuthId ?? payload.hackClubId,
       authMethod: payload.authMethod,
       sessionId: payload.sessionId,
     });
@@ -374,7 +374,7 @@ export class McpOAuthService {
       sub: payload.sub,
       email: payload.email,
       name: payload.name,
-      externalAuthId: payload.externalAuthId,
+      externalAuthId: payload.externalAuthId ?? payload.hackClubId,
       authMethod: payload.authMethod,
       sessionId: payload.sessionId,
     };
@@ -582,7 +582,7 @@ export class McpOAuthService {
         token,
         sub,
         email: result.payload.email as string | undefined,
-        externalAuthId: result.payload.externalAuthId as string | undefined,
+        externalAuthId: (result.payload.externalAuthId ?? result.payload.hackClubId) as string | undefined,
         sessionId,
       };
     } catch (err) {

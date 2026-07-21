@@ -140,7 +140,7 @@ app.post('/authorize/complete', async (req, res) => {
   const orchardToken = await new SignJWT({
     email: payload.email,
     name: payload.name,
-    externalAuthId: payload.externalAuthId,
+    externalAuthId: payload.externalAuthId ?? payload.hackClubId,
     authMethod: payload.authMethod || 'otp',
   })
     .setProtectedHeader({ alg: 'HS256' })

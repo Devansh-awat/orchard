@@ -98,9 +98,10 @@ export function attachTerminalWebSocket(server: http.Server, app: INestApplicati
 
       // Resolve sub → internal user UUID (sub may be externalAuthId for OAuth).
       let dbUserId = payload.sub as string;
-      if (payload.externalAuthId) {
+      const externalAuthId = (payload.externalAuthId ?? payload.hackClubId) as string | undefined;
+      if (externalAuthId) {
         const dbUser = await prisma.user.findUnique({
-          where: { externalAuthId: payload.externalAuthId as string },
+          where: { externalAuthId },
           select: { id: true, email: true },
         });
         if (dbUser) {

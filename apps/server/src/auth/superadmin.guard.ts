@@ -151,9 +151,10 @@ export class SuperAdminGuard implements CanActivate {
       // and every downstream membership query runs against a non-UUID and returns empty
       // (surfacing as a permanent 403 on org-scoped endpoints until they log out).
       let dbUserId = payload.sub as string;
-      if (payload.externalAuthId) {
+      const externalAuthId = (payload.externalAuthId ?? payload.hackClubId) as string | undefined;
+      if (externalAuthId) {
         let dbUser = await this.prisma.user.findUnique({
-          where: { externalAuthId: payload.externalAuthId as string },
+          where: { externalAuthId },
           select: { id: true },
         });
         if (!dbUser && payload.email) {
@@ -193,7 +194,7 @@ export class SuperAdminGuard implements CanActivate {
         sub: dbUserId,
         email: payload.email,
         name: payload.name,
-        externalAuthId: payload.externalAuthId,
+        externalAuthId,
         sessionId,
       };
       // Session-auth: no token-scope restrictions to publish to the request context.
