@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.4.0](https://github.com/LeafdTK/leaf/compare/cli/v0.3.2...cli/v0.4.0) (2026-07-21)
+
+
+### Features
+
+* allow overriding cli default api url via ldflags ([bbb6143](https://github.com/LeafdTK/leaf/commit/bbb6143cd3fec40c2a6310f293ddd01272c1f466))
+
 ## [0.3.2](https://github.com/LeafdTK/leaf/compare/cli/v0.3.1...cli/v0.3.2) (2026-07-16)
 
 

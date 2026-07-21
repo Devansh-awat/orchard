@@ -1,5 +1,24 @@
 # Changelog
 
+## [1.26.0](https://github.com/LeafdTK/leaf/compare/server/v1.25.2...server/v1.26.0) (2026-07-21)
+
+
+### Features
+
+* add signup_mode flag and de-hardcode asset, posthog and email hosts ([2b2bfb5](https://github.com/LeafdTK/leaf/commit/2b2bfb54bfeecedd47dc8b7e100e4a24b649cadc))
+* generic oidc login provider and externalauthid rename ([d241af9](https://github.com/LeafdTK/leaf/commit/d241af93e8c50a06e7a08f31c5aa949ec9f10351))
+* make registry project, pull secret and no_proxy configurable ([99cca73](https://github.com/LeafdTK/leaf/commit/99cca7318c9f2d2843a08cdf9176d01981427bc4))
+* make storage class, ingress class, cert issuer and wildcard domains configurable ([33816bc](https://github.com/LeafdTK/leaf/commit/33816bcbd364b4b57fb0d7e61637b2ac1d74585a))
+* real env examples, dev compose stack, contributor docs and clerk cleanup ([e5b849b](https://github.com/LeafdTK/leaf/commit/e5b849b6fe08c181078af2209af0bde28524fd7f))
+
+
+### Bug Fixes
+
+* cnpg operator netpol sweep targets only orchard managed namespaces ([b67abe0](https://github.com/LeafdTK/leaf/commit/b67abe020bd88aa92327da14a91523d12037f3bc))
+* platform ensures its own db network policies at boot ([5ac7f0c](https://github.com/LeafdTK/leaf/commit/5ac7f0cf2db11ba5d4c5a62eb7adb762046047a9))
+* read legacy orchard.dev labels and annotations during rename transition ([c88528f](https://github.com/LeafdTK/leaf/commit/c88528f00ef9f58dbc4ba73d27a1fdf7b2308b17))
+* unify k8s label and annotation keys on orchard.my ([d1b42b2](https://github.com/LeafdTK/leaf/commit/d1b42b2c0d8c324f8a28fdc013ffb5983f962561))
+
 ## [1.25.2](https://github.com/LeafdTK/leaf/compare/server/v1.25.1...server/v1.25.2) (2026-07-20)
 
 

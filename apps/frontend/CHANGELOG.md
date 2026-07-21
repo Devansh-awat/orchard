@@ -1,5 +1,15 @@
 # Changelog
 
+## [0.23.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.22.1...frontend/v0.23.0) (2026-07-21)
+
+
+### Features
+
+* add signup_mode flag and de-hardcode asset, posthog and email hosts ([2b2bfb5](https://github.com/LeafdTK/leaf/commit/2b2bfb54bfeecedd47dc8b7e100e4a24b649cadc))
+* generic oidc login provider and externalauthid rename ([d241af9](https://github.com/LeafdTK/leaf/commit/d241af93e8c50a06e7a08f31c5aa949ec9f10351))
+* real env examples, dev compose stack, contributor docs and clerk cleanup ([e5b849b](https://github.com/LeafdTK/leaf/commit/e5b849b6fe08c181078af2209af0bde28524fd7f))
+* self-hosting docs, k3d quickstart and chart tenant knobs ([9989f77](https://github.com/LeafdTK/leaf/commit/9989f772e518df2d468b1cc819810fd15c2a50da))
+
 ## [0.22.1](https://github.com/LeafdTK/leaf/compare/frontend/v0.22.0...frontend/v0.22.1) (2026-07-20)
 
 
