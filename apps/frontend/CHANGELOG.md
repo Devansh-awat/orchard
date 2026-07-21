@@ -1,5 +1,24 @@
 # Changelog
 
+## [0.24.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.23.0...frontend/v0.24.0) (2026-07-21)
+
+
+### Features
+
+* database page adaptive polling fallback for sse ([dda9ba0](https://github.com/LeafdTK/leaf/commit/dda9ba0b5db1d8ddb6bc9ad61152264e85831f5a))
+* database page engine hero and fused tab connection card ([69a39bf](https://github.com/LeafdTK/leaf/commit/69a39bfef035864cebe9c76778c66153031a39e3))
+* database page underline tabs, divider stats and shared card primitives ([cd500e5](https://github.com/LeafdTK/leaf/commit/cd500e5144141a1e22c6d7a5ab6ccdadc9afe2bd))
+* per query statistics tab from pg_stat_statements ([7654b99](https://github.com/LeafdTK/leaf/commit/7654b9977a4962b80d262cad754f8714e624211f))
+* postgres version choice and database stop start restart ([8e8660a](https://github.com/LeafdTK/leaf/commit/8e8660a2a5366015c53ec47b248afb8ddc158d02))
+
+
+### Bug Fixes
+
+* confirm modal import on database page ([04f79dc](https://github.com/LeafdTK/leaf/commit/04f79dc34558e839244c9ff2cd3b9404b9fb9141))
+* database page renders instantly, live stats load separately ([d7c90a7](https://github.com/LeafdTK/leaf/commit/d7c90a78d90115d5a8c15edca37b4e87d5ce4cdf))
+* full page navigation after deploys so stale tabs keep working ([3de4f0d](https://github.com/LeafdTK/leaf/commit/3de4f0d59c78013d9e27ee42fa016a3adb6d0481))
+* stale build reload guard only runs in production ([f26dc8c](https://github.com/LeafdTK/leaf/commit/f26dc8ccae4851be26612feee4b199e837d09f85))
+
 ## [0.23.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.22.1...frontend/v0.23.0) (2026-07-21)
 
 

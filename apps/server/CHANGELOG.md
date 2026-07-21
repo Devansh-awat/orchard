@@ -1,5 +1,19 @@
 # Changelog
 
+## [1.27.0](https://github.com/LeafdTK/leaf/compare/server/v1.26.2...server/v1.27.0) (2026-07-21)
+
+
+### Features
+
+* per query statistics tab from pg_stat_statements ([7654b99](https://github.com/LeafdTK/leaf/commit/7654b9977a4962b80d262cad754f8714e624211f))
+* postgres version choice and database stop start restart ([8e8660a](https://github.com/LeafdTK/leaf/commit/8e8660a2a5366015c53ec47b248afb8ddc158d02))
+
+
+### Bug Fixes
+
+* database page renders instantly, live stats load separately ([d7c90a7](https://github.com/LeafdTK/leaf/commit/d7c90a78d90115d5a8c15edca37b4e87d5ce4cdf))
+* database size and connection stats, psql vars do not expand in -c ([a632218](https://github.com/LeafdTK/leaf/commit/a6322189f7299765324a3636d76013076792033d))
+
 ## [1.26.2](https://github.com/LeafdTK/leaf/compare/server/v1.26.1...server/v1.26.2) (2026-07-21)
 
 
