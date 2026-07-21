@@ -10,7 +10,7 @@
 		Minimize2
 	} from 'lucide-svelte';
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
-	import { Button, TabBar } from '$lib/components/ui';
+	import { Button, TabBar, EmptyState } from '$lib/components/ui';
 	import type { DatabaseDetail, TerminalTab as TerminalTabType } from './types';
 
 	let {
@@ -48,9 +48,10 @@
 </script>
 
 {#if database.mode !== 'cnpg' && database.mode !== 'container'}
-	<div class="backups-empty">
-		<p class="db-hint">Terminal access requires a managed database (CNPG or container mode).</p>
-	</div>
+	<EmptyState
+		title="Terminal needs a dedicated database"
+		description="Terminal access requires a managed database (CNPG or container mode)."
+	/>
 {:else if !database.pods || !database.pods.length}
 	<div class="backups-empty">
 		<Loader2 class="h-4 w-4 animate-spin" />

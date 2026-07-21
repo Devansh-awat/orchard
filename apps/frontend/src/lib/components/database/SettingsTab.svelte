@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Loader2 } from 'lucide-svelte';
-	import { Button, Input, Select, Badge } from '$lib/components/ui';
+	import { Button, Input, Select, Badge, SectionCard, EmptyState } from '$lib/components/ui';
 	import type { DatabaseDetail, ParamMeta } from './types';
 
 	let {
@@ -28,35 +28,29 @@
 	} = $props();
 </script>
 
-<div class="card rounded-2xl p-5">
-	<div class="flex items-center justify-between mb-4">
-		<p class="text-sm font-semibold" style="color: var(--center-channel-color);">
-			PostgreSQL parameters
-		</p>
+<SectionCard title="PostgreSQL parameters">
+	{#snippet actions()}
 		{#if database.mode === 'cnpg'}
-			<div class="flex gap-2">
-				<Button variant="ghost" size="sm" onclick={onFetchSettings} disabled={settingsSaving}>
-					Discard
-				</Button>
-				<Button
-					variant="primary"
-					size="sm"
-					onclick={onSaveSettings}
-					loading={settingsSaving}
-					disabled={!settingsDirty}
-				>
-					Save
-				</Button>
-			</div>
+			<Button variant="ghost" size="sm" onclick={onFetchSettings} disabled={settingsSaving}>
+				Discard
+			</Button>
+			<Button
+				variant="primary"
+				size="sm"
+				onclick={onSaveSettings}
+				loading={settingsSaving}
+				disabled={!settingsDirty}
+			>
+				Save
+			</Button>
 		{/if}
-	</div>
+	{/snippet}
 
 	{#if database.mode !== 'cnpg'}
-		<div class="db-empty-box">
-			<p class="text-sm" style="color: var(--surface-muted);">
-				Database settings are only configurable for CNPG-backed databases.
-			</p>
-		</div>
+		<EmptyState
+			title="Settings need a dedicated database"
+			description="PostgreSQL parameters are only configurable for CNPG-backed databases."
+		/>
 	{:else if settingsLoading && !settingsLoaded}
 		<div class="db-empty-box flex items-center gap-2">
 			<Loader2 class="h-4 w-4 animate-spin" />
@@ -117,4 +111,4 @@
 			{/each}
 		</div>
 	{/if}
-</div>
+</SectionCard>

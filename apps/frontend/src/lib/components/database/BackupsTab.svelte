@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Loader2 } from 'lucide-svelte';
 	import { selectedOrganization } from '$lib/stores';
-	import { Button, Field, Input, Select, StatusBadge, statusMeta } from '$lib/components/ui';
+	import { Button, Field, Input, Select, StatusBadge, statusMeta, SectionCard, EmptyState, Badge } from '$lib/components/ui';
 	import type { StatusMeta } from '$lib/components/ui';
 	import type { DatabaseDetail, Backup, SchedulePreset } from './types';
 
@@ -58,15 +58,12 @@
 
 <div class="space-y-5">
 	{#if database.mode === 'cnpg' && database.backupsEnabled}
-		<div class="card rounded-2xl p-5">
-			<div class="flex items-center justify-between mb-3">
-				<p class="text-sm font-semibold" style="color: var(--center-channel-color);">
-					Backup schedule
-				</p>
+		<SectionCard title="Backup schedule">
+			{#snippet actions()}
 				<Button variant="primary" size="sm" onclick={onSaveSchedule} loading={scheduleSaving}>
 					{schedulePreset === 'none' ? 'Clear' : 'Save'}
 				</Button>
-			</div>
+			{/snippet}
 
 			<div class="grid gap-3 md:grid-cols-2">
 				<Field label="Run backups" for="backup-schedule-preset">
@@ -109,25 +106,22 @@
 					Currently active: <code class="db-inline-code">{scheduleCron}</code>
 				</p>
 			{/if}
-		</div>
+		</SectionCard>
 	{/if}
 
-	<div class="card rounded-2xl p-5">
-		<div class="flex items-center justify-between mb-3">
-			<div class="flex items-center gap-2">
-				<p class="text-sm font-semibold" style="color: var(--center-channel-color);">Backups</p>
-				{#if backups.length > 0}
-					<span class="db-badge-count"
-						>{backups.filter((b) => b.status === 'completed').length} / {maxBackups}</span
-					>
-				{/if}
-			</div>
+	<SectionCard title="Backups">
+		{#snippet actions()}
+			{#if backups.length > 0}
+				<Badge tone="neutral"
+					>{backups.filter((b) => b.status === 'completed').length} / {maxBackups}</Badge
+				>
+			{/if}
 			{#if (database.mode === 'cnpg' || database.mode === 'container') && database.backupsEnabled}
 				<Button variant="primary" size="sm" onclick={onCreateBackup} loading={creatingBackup}>
 					Create backup
 				</Button>
 			{/if}
-		</div>
+		{/snippet}
 
 		{#if database.mode === 'cnpg' && database.backupsEnabled && backups.length > 0}
 			<p class="text-xs mb-3" style="color: var(--surface-muted);">
@@ -136,11 +130,10 @@
 		{/if}
 
 		{#if database.mode !== 'cnpg' && database.mode !== 'container'}
-			<div class="db-empty-box">
-				<p class="text-sm" style="color: var(--surface-muted);">
-					Backups require a managed database (CNPG). Recreate this database to enable backups.
-				</p>
-			</div>
+			<EmptyState
+				title="Backups need a managed database"
+				description="Recreate this database as a dedicated one to enable backups."
+			/>
 		{:else if !database.backupsEnabled}
 			<div class="db-empty-box">
 				<p class="text-sm" style="color: var(--surface-muted);">
@@ -161,11 +154,10 @@
 				<span class="text-sm" style="color: var(--surface-muted);">Loading backups…</span>
 			</div>
 		{:else if backups.length === 0}
-			<div class="db-empty-box">
-				<p class="text-sm" style="color: var(--surface-muted);">
-					No backups yet. Create your first backup to enable point-in-time restores.
-				</p>
-			</div>
+			<EmptyState
+				title="No backups yet"
+				description="Create your first backup to enable restores."
+			/>
 		{:else}
 			<div class="space-y-2">
 				{#each backups as backup (backup.id)}
@@ -203,5 +195,5 @@
 				{/each}
 			</div>
 		{/if}
-	</div>
+	</SectionCard>
 </div>

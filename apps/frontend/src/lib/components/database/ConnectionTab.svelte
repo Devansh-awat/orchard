@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Copy, Check, Eye, EyeOff } from 'lucide-svelte';
 	import { selectedOrganization } from '$lib/stores';
-	import { Button, Badge } from '$lib/components/ui';
+	import { Button, Badge, SectionCard } from '$lib/components/ui';
 	import type { DatabaseDetail } from './types';
 
 	let {
@@ -164,16 +164,11 @@
 	</div>
 
 	{#if database.mode === 'cnpg'}
-		<div class="card rounded-2xl p-5">
-			<div class="flex items-center justify-between mb-3 flex-wrap gap-2">
-				<div>
-					<p class="text-sm font-semibold" style="color: var(--center-channel-color);">
-						Public access
-					</p>
-					<p class="text-xs mt-1" style="color: var(--surface-muted);">
-						Expose this database on a shared organization IP with a unique port.
-					</p>
-				</div>
+		<SectionCard
+			title="Public access"
+			description="Expose this database on a shared organization IP with a unique port."
+		>
+			{#snippet actions()}
 				{#if database.publicEnabled}
 					<Button variant="secondary" size="sm" onclick={onDisablePublic} loading={togglingPublic}>
 						Disable
@@ -183,7 +178,7 @@
 						Enable
 					</Button>
 				{/if}
-			</div>
+			{/snippet}
 
 			{#if database.publicEnabled && database.publicIp && database.publicPort}
 				<div class="db-kv-grid">
@@ -274,7 +269,7 @@
 					</p>
 				</div>
 			{/if}
-		</div>
+		</SectionCard>
 	{/if}
 </div>
 

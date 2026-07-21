@@ -15,7 +15,7 @@
 		Activity,
 		Cpu
 	} from 'lucide-svelte';
-	import { TabBar, Skeleton } from '$lib/components/ui';
+	import { UnderlineTabs, Skeleton, EmptyState } from '$lib/components/ui';
 	import DatabaseProvisioning from '$lib/components/DatabaseProvisioning.svelte';
 	import DeploymentMetrics from '$lib/components/DeploymentMetrics.svelte';
 	import ResourceLimits from '$lib/components/ResourceLimits.svelte';
@@ -1031,7 +1031,7 @@
 			{/if}
 
 			<div class="db-tabs">
-				<TabBar tabs={tabSections} bind:value={activeTab} />
+				<UnderlineTabs tabs={tabSections} bind:value={activeTab} />
 			</div>
 
 			{#if activeTab === 'connection'}
@@ -1093,12 +1093,10 @@
 							<DeploymentMetrics kind="database" id={database?.id ?? null} />
 						</div>
 					{:else}
-						<div class="db-empty-state">
-							<p>
-								Metrics are not available for shared databases. Create a dedicated (CNPG) database
-								for full metrics.
-							</p>
-						</div>
+						<EmptyState
+							title="Metrics need a dedicated database"
+							description="Create a dedicated database for full metrics."
+						/>
 					{/if}
 				</section>
 			{:else if activeTab === 'resources'}
@@ -1117,9 +1115,10 @@
 							onSaveResources={saveResources}
 						/>
 					{:else}
-						<div class="db-empty-state">
-							<p>Resource configuration is not available for shared databases.</p>
-						</div>
+						<EmptyState
+							title="Resources need a dedicated database"
+							description="Resource configuration is not available for shared databases."
+						/>
 					{/if}
 				</section>
 			{:else if activeTab === 'settings'}
@@ -1206,23 +1205,26 @@
 
 	.db-stats {
 		display: flex;
-		gap: 0.75rem;
+		align-items: stretch;
 		margin-bottom: 1.5rem;
 		flex-wrap: wrap;
+		row-gap: 0.5rem;
 	}
 
 	.db-stat {
 		display: flex;
 		flex-direction: column;
 		gap: 0.25rem;
-		padding: 0.75rem 1.125rem;
-		border-radius: 0.75rem;
-		background-color: var(--surface-bg);
-		border: 1px solid var(--surface-border);
+		padding: 0.25rem 1.25rem;
 		min-width: 6rem;
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.03),
-			0 1px 2px rgb(0 0 0 / 0.02);
+	}
+
+	.db-stat:not(:first-child) {
+		border-left: 1px solid color-mix(in srgb, var(--surface-border) 60%, transparent);
+	}
+
+	.db-stat:first-child {
+		padding-left: 0;
 	}
 
 	.db-stat-label {
