@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.26.1](https://github.com/LeafdTK/leaf/compare/server/v1.26.0...server/v1.26.1) (2026-07-21)
+
+
+### Bug Fixes
+
+* accept legacy hackclubid jwt claim in raw token readers ([3638dde](https://github.com/LeafdTK/leaf/commit/3638dde44c40476f088d9cb7f191e9cf0f02555e))
+
 ## [1.26.0](https://github.com/LeafdTK/leaf/compare/server/v1.25.2...server/v1.26.0) (2026-07-21)
 
 
