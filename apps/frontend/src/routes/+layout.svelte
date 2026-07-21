@@ -1,7 +1,7 @@
 <script lang="ts">
 	import '../app.css';
 	import { onMount } from 'svelte';
-	import { browser } from '$app/environment';
+	import { browser, dev } from '$app/environment';
 	import { goto, beforeNavigate } from '$app/navigation';
 	import { page, updated } from '$app/stores';
 	import {
@@ -39,7 +39,7 @@
 	// When a new build is detected, turn the next navigation into a full
 	// page load so the tab picks up the new build transparently.
 	beforeNavigate(({ willUnload, to }) => {
-		if ($updated && !willUnload && to?.url) {
+		if (!dev && $updated && !willUnload && to?.url) {
 			location.href = to.url.href;
 		}
 	});

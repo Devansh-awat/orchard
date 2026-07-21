@@ -13,7 +13,11 @@ const config = {
 		// See https://svelte.dev/docs/kit/adapters for more information about adapters.
 		adapter: adapter(),
 		version: {
-			pollInterval: 60000
+			// Poll only in real builds: in dev a restarted vite changes the
+			// build version under an open tab, which would flip `updated`
+			// permanently and turn the layout's stale-build reload guard
+			// into a reload loop.
+			pollInterval: process.env.NODE_ENV === 'production' ? 60000 : 0
 		},
 		alias: {
 			$routes: 'src/routes'
