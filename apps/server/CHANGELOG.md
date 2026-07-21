@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.26.2](https://github.com/LeafdTK/leaf/compare/server/v1.26.1...server/v1.26.2) (2026-07-21)
+
+
+### Bug Fixes
+
+* github checks link to orchard logs instead of embedding them, reclaim closes orphaned runs ([1a7943f](https://github.com/LeafdTK/leaf/commit/1a7943f415afc18946aaa1bd6831fe243eb5cd41))
+* redeploy forces recreate strategy when a pvc volume is mounted ([41d5f30](https://github.com/LeafdTK/leaf/commit/41d5f30cd1a55779d2250091ef0c2deb35404bcf))
+
 ## [1.26.1](https://github.com/LeafdTK/leaf/compare/server/v1.26.0...server/v1.26.1) (2026-07-21)
 
 
