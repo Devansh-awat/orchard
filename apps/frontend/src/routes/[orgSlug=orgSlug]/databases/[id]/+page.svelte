@@ -3,7 +3,7 @@
 	import { page } from '$app/stores';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
-	import { apiFetch, toasts, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
+	import { apiFetch, toasts, selectedOrganization, subscribeOrgEvents, sseStatusFor } from '$lib/stores';
 	import type { PageData } from './$types';
 	import {
 		Loader2,
@@ -242,6 +242,35 @@
 
 	// SSE
 	let dbSseUnsub: (() => void) | null = null;
+
+	// Live updates ride the org SSE bus (redis streams). Polling is the
+	// fallback and the drift-catcher: fast cadence while the bus is
+	// disconnected, slow cadence while it is healthy so size/connection
+	// stats stay fresh (they never emit bus events).
+	let sseState = $state<'connecting' | 'connected' | 'disconnected'>('connecting');
+	$effect(() => {
+		const orgId = $selectedOrganization?.id;
+		if (!orgId) return;
+		const unsub = sseStatusFor(orgId).subscribe((v) => (sseState = v));
+		return unsub;
+	});
+
+	$effect(() => {
+		if (!database) return;
+		const degraded = sseState !== 'connected';
+		const interval = setInterval(
+			() => {
+				if (document.hidden) return;
+				if (degraded) {
+					fetchDatabase(true);
+				} else {
+					void fetchLive();
+				}
+			},
+			degraded ? 10_000 : 30_000
+		);
+		return () => clearInterval(interval);
+	});
 
 	// --- Derived ---
 	let filteredExtensions = $derived.by(() => {
