@@ -2,8 +2,8 @@
 	import '../app.css';
 	import { onMount } from 'svelte';
 	import { browser } from '$app/environment';
-	import { goto } from '$app/navigation';
-	import { page } from '$app/stores';
+	import { goto, beforeNavigate } from '$app/navigation';
+	import { page, updated } from '$app/stores';
 	import {
 		user,
 		isSignedIn,
@@ -33,6 +33,16 @@
 	}
 
 	const publicRoutes = ['/invite', '/oauth/callback', '/sso', '/mcp', '/cli', '/auth/protect'];
+
+	// After a deploy, the chunks a running tab knows about no longer exist
+	// on the server, so client-side navigation loads nothing until a reload.
+	// When a new build is detected, turn the next navigation into a full
+	// page load so the tab picks up the new build transparently.
+	beforeNavigate(({ willUnload, to }) => {
+		if ($updated && !willUnload && to?.url) {
+			location.href = to.url.href;
+		}
+	});
 
 	$effect(() => {
 		if (loading || $isSignedIn) return;
