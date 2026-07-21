@@ -933,22 +933,21 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       if (ready && dbName && dbUser) {
         try {
           const pod = await this.findPostgresPod(namespace, name);
-          // Pass dbName via a psql variable (`-v name=value`) and reference
-          // it as `:'dbname'`, which psql client-side-quotes as a
-          // SQL string literal. This avoids string-interpolating the
-          // database name into SQL even though dbName originates from a
-          // DB row (defence in depth — if a future code path lets users
-          // pick the name, the SQL stays safe).
+          // psql does not expand `-v` variables inside `-c` commands, so the
+          // name is inlined behind a strict character allowlist instead.
+          // dbName is slug-constructed ([a-z0-9_]); anything else means the
+          // row is corrupt and stats are skipped rather than risk injection.
+          const safeDb = dbName.replace(/[^a-zA-Z0-9_]/g, '');
+          if (safeDb !== dbName) throw new Error('unexpected characters in dbName');
           const exec = async (sql: string): Promise<string> => {
             const r = await this.execInPod(namespace, pod, 'postgres', [
               'psql', '-U', dbUser, '-d', dbName,
-              '-v', `dbname=${dbName}`,
               '-t', '-A', '-c', sql,
             ]);
             return r.stdout.trim();
           };
-          size = await exec(`SELECT pg_size_pretty(pg_database_size(:'dbname'));`);
-          const connRaw = await exec(`SELECT count(*) FROM pg_stat_activity WHERE datname = :'dbname';`);
+          size = await exec(`SELECT pg_size_pretty(pg_database_size('${safeDb}'));`);
+          const connRaw = await exec(`SELECT count(*) FROM pg_stat_activity WHERE datname = '${safeDb}';`);
           connections = parseInt(connRaw, 10) || 0;
         } catch {}
       }
@@ -1277,25 +1276,26 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         message = lastTerminationReason;
       }
 
-      // Same psql-variable pattern as getPostgresContainerStatus: pass dbName
-      // via `-v` and reference it as `:'dbname'` so it's client-side-quoted
-      // instead of interpolated into SQL. Best-effort — a failed exec just
+      // psql does not expand `-v` variables inside `-c` commands, so the
+      // name is inlined behind a strict character allowlist (see
+      // getPostgresContainerStatus). Best-effort — a failed exec just
       // leaves size/connections undefined.
       let size: string | undefined;
       let connections: number | undefined;
       const currentPrimary: string | undefined = cluster.status?.currentPrimary;
       if (ready && dbName && currentPrimary) {
         try {
+          const safeDb = dbName.replace(/[^a-zA-Z0-9_]/g, '');
+          if (safeDb !== dbName) throw new Error('unexpected characters in dbName');
           const exec = async (sql: string): Promise<string> => {
             const r = await this.execInPod(namespace, currentPrimary, 'postgres', [
               'psql', '-U', 'postgres',
-              '-v', `dbname=${dbName}`,
               '-t', '-A', '-c', sql,
             ]);
             return r.stdout.trim();
           };
-          size = await exec(`SELECT pg_size_pretty(pg_database_size(:'dbname'));`);
-          const connRaw = await exec(`SELECT count(*) FROM pg_stat_activity WHERE datname = :'dbname';`);
+          size = await exec(`SELECT pg_size_pretty(pg_database_size('${safeDb}'));`);
+          const connRaw = await exec(`SELECT count(*) FROM pg_stat_activity WHERE datname = '${safeDb}';`);
           connections = parseInt(connRaw, 10) || 0;
         } catch { /* best-effort */ }
       }
