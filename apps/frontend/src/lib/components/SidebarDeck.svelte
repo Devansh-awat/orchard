@@ -36,7 +36,7 @@
 		type Organization
 	} from '$lib/stores';
 	import { themeStore } from '$lib/stores/theme';
-	import { fade, fly, slide } from '$lib/utils/transitions';
+	import { fade, fly } from '$lib/utils/transitions';
 
 	interface OverviewDep {
 		id: string;
@@ -376,17 +376,13 @@
 							</span>
 						{/if}
 					</button>
-					{#if !collapsed}
-						<div transition:slide={{ duration: 160 }}>
-							<div {@attach springCollapse(() => !attentionOpen)}>
-								<div class="deck-strip-body">
-									{#each failingDeps as dep, i (dep.id)}
-										{@render failingRow(dep, i)}
-									{/each}
-								</div>
-							</div>
+					<div {@attach springCollapse(() => !attentionOpen || collapsed)}>
+						<div class="deck-strip-body">
+							{#each failingDeps as dep, i (dep.id)}
+								{@render failingRow(dep, i)}
+							{/each}
 						</div>
-					{/if}
+					</div>
 					<div class="deck-gap"></div>
 				{/if}
 
