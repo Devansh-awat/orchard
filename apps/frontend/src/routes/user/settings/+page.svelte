@@ -21,7 +21,6 @@
 	} from '$lib/posthog';
 	import { page } from '$app/stores';
 	import {
-		UserIdentityHero,
 		UserInvitations,
 		UserGitHub,
 		UserTailscale,
@@ -81,13 +80,6 @@
 	let showDeletePasskeyModal = $state(false);
 	let passkeyToDelete = $state<PasskeyRecord | null>(null);
 
-	let editingField = $state<string | null>(null);
-	let editValue = $state('');
-	let savingField = $state(false);
-	let emailRevealed = $state(false);
-	let uploadingAvatar = $state(false);
-	let deletingAvatar = $state(false);
-	let avatarInput = $state<HTMLInputElement | undefined>(undefined);
 
 	let acceptingInvitation = $state<string | null>(null);
 	let decliningInvitation = $state<string | null>(null);
@@ -122,13 +114,11 @@
 
 	const tailscaleEnabled = featureFlag('tailscale-integration');
 
-	const activeTab = $derived($page.url.searchParams.get('tab') || 'profile');
-	let heroHeight = $state(0);
+	const activeTab = $derived.by(() => {
+		const t = $page.url.searchParams.get('tab');
+		return !t || t === 'profile' ? 'connections' : t;
+	});
 	const RAIL_GROUPS = $derived([
-		{
-			label: 'Account',
-			items: [{ id: 'profile', label: 'Profile' }]
-		},
 		{
 			label: 'Connections',
 			items: [
@@ -151,159 +141,7 @@
 		}
 	]);
 
-	const SECTION_TABS: Record<string, string> = {
-		'b-profile': 'profile',
-		'b-invitations': 'profile',
-		'b-github': 'connections',
-		'b-tailscale': 'connections',
-		'b-integrations': 'tokens',
-		'b-passkeys': 'security',
-		'b-sessions': 'security',
-		'b-appearance': 'appearance',
-		'b-accessibility': 'accessibility',
-		'b-early-access': 'early-access'
-	};
 
-	function jumpToSection(id: string) {
-		const tab = SECTION_TABS[id] ?? id;
-		goto(`/user/settings?tab=${tab}`, { keepFocus: true, noScroll: false });
-	}
-
-	function censorEmail(email: string): string {
-		const [local, domain] = email.split('@');
-		if (!domain) return '••••••';
-		return `${local.slice(0, 2)}${'•'.repeat(Math.max(local.length - 2, 3))}@${domain}`;
-	}
-	let displayEmail = $derived.by(() => {
-		const email = $user?.email || '';
-		if (!email) return '';
-		return emailRevealed ? email : censorEmail(email);
-	});
-
-	function startEditField(field: string) {
-		if (field === 'firstName') editValue = $user?.firstName || '';
-		else if (field === 'lastName') editValue = $user?.lastName || '';
-		else if (field === 'username') editValue = $user?.username || '';
-		editingField = field;
-	}
-	function cancelEditField() {
-		editingField = null;
-		editValue = '';
-	}
-	async function saveField() {
-		if (savingField || !editingField) return;
-		let trimmed = editValue.trim();
-		if (editingField === 'username' && trimmed) {
-			trimmed = trimmed.normalize('NFKC').replace(/[\u200B-\u200D\u2060\uFEFF]/g, '');
-			const bad = [...new Set([...trimmed].filter((ch) => !/[a-zA-Z0-9_-]/.test(ch)))];
-			if (bad.length) {
-				const shown = bad
-					.map((ch) =>
-						ch.codePointAt(0)! > 126
-							? `"${ch}" (U+${ch.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')})`
-							: `"${ch}"`
-					)
-					.join(', ');
-				toasts.add({
-					title: 'Invalid username',
-					description: `Not allowed: ${shown}. Use letters, numbers, underscores, and hyphens.`,
-					color: 'error'
-				});
-				return;
-			}
-		}
-		savingField = true;
-		try {
-			const body: Record<string, string | undefined> = {};
-			body[editingField] = trimmed || undefined;
-			const response = await apiFetch('/apiv1/auth/me', {
-				method: 'PATCH',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(body)
-			});
-			if (!response.ok) {
-				const data = await response.json().catch(() => ({}));
-				throw new Error(data?.message || 'Failed to update');
-			}
-			const updatedUser = await response.json();
-			user.set({ ...$user, ...updatedUser });
-			toasts.add({ title: 'Updated', color: 'success' });
-			editingField = null;
-			editValue = '';
-		} catch (e) {
-			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to update',
-				color: 'error'
-			});
-		} finally {
-			savingField = false;
-		}
-	}
-	function handleFieldKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter') saveField();
-		else if (e.key === 'Escape') cancelEditField();
-	}
-
-	async function uploadAvatar(event: Event) {
-		const input = event.target as HTMLInputElement;
-		const file = input.files?.[0];
-		if (!file) return;
-		const allowedTypes = ['image/jpeg', 'image/png', 'image/gif', 'image/webp'];
-		if (!allowedTypes.includes(file.type)) {
-			toasts.add({
-				title: 'Invalid file type',
-				description: 'Only JPEG, PNG, GIF, and WebP images are allowed',
-				color: 'error'
-			});
-			return;
-		}
-		if (file.size > 5 * 1024 * 1024) {
-			toasts.add({
-				title: 'File too large',
-				description: 'Maximum file size is 5MB',
-				color: 'error'
-			});
-			return;
-		}
-		uploadingAvatar = true;
-		try {
-			const formData = new FormData();
-			formData.append('file', file);
-			const response = await apiFetch('/apiv1/auth/me/avatar', { method: 'POST', body: formData });
-			if (!response.ok) throw new Error('Failed to upload avatar');
-			const updated = await response.json();
-			user.set({ ...$user, ...updated });
-			toasts.add({ title: 'Avatar updated', color: 'success' });
-		} catch (e) {
-			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to upload avatar',
-				color: 'error'
-			});
-		} finally {
-			uploadingAvatar = false;
-			if (avatarInput) avatarInput.value = '';
-		}
-	}
-	async function deleteAvatar() {
-		deletingAvatar = true;
-		try {
-			const response = await apiFetch('/apiv1/auth/me/avatar', { method: 'DELETE' });
-			if (!response.ok) throw new Error('Failed to remove avatar');
-			const updated = await response.json();
-			user.set({ ...$user, ...updated });
-			toasts.add({ title: 'Avatar removed', color: 'success' });
-		} catch (e) {
-			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to remove avatar',
-				color: 'error'
-			});
-		} finally {
-			deletingAvatar = false;
-		}
-	}
 
 	async function handleAcceptInvitation(invitation: PendingInvitation) {
 		if (acceptingInvitation || decliningInvitation) return;
@@ -767,32 +605,18 @@
 			><ArrowLeft class="h-3.5 w-3.5" /> Back</button
 		>
 
-		<div class="usb-hero-sticky" bind:clientHeight={heroHeight}>
-			<UserIdentityHero
+		{#if invitations.length}
+			<UserInvitations
 				index={0}
-				user={$user}
-				{displayEmail}
-				bind:emailRevealed
-				bind:editingField
-				bind:editValue
-				{savingField}
-				{uploadingAvatar}
-				{deletingAvatar}
-				onStartEditField={startEditField}
-				onCancelEditField={cancelEditField}
-				onSaveField={saveField}
-				onFieldKeydown={handleFieldKeydown}
-				onUploadAvatar={uploadAvatar}
-				onDeleteAvatar={deleteAvatar}
-				bind:avatarInputRef={avatarInput}
-				passkeyCount={passkeysLoading ? null : passkeys.length}
-				sessionCount={sessionsLoading ? null : sessions.length}
-				{githubLinked}
-				onJump={jumpToSection}
+				{invitations}
+				{acceptingInvitation}
+				{decliningInvitation}
+				onAccept={handleAcceptInvitation}
+				onDecline={handleDeclineInvitation}
 			/>
-		</div>
+		{/if}
 
-		<div class="usb-grid" style="--usb-rail-top: {heroHeight + 16}px">
+		<div class="usb-grid">
 			<aside class="usb-rail" aria-label="Settings sections">
 				{#each RAIL_GROUPS as group (group.label)}
 					<div class="usb-rail-group">
@@ -812,17 +636,6 @@
 			</aside>
 
 			<div class="usb-sections">
-				{#if activeTab === 'profile' && invitations.length}
-					<UserInvitations
-						index={0}
-						{invitations}
-						{acceptingInvitation}
-						{decliningInvitation}
-						onAccept={handleAcceptInvitation}
-						onDecline={handleDeclineInvitation}
-					/>
-				{/if}
-
 				{#if activeTab === 'connections'}
 					<UserGitHub
 						index={0}
@@ -961,8 +774,8 @@
 <style>
 	.us-page {
 		position: relative;
-		min-height: 100%;
-		overflow-y: auto;
+		height: 100%;
+		overflow: hidden;
 	}
 	.us-grid-fade {
 		position: fixed;
@@ -989,31 +802,28 @@
 		z-index: 1;
 		max-width: 64rem;
 		margin: 0 auto;
-		padding: 2.5rem 2rem 4rem;
+		padding: 2.5rem 2rem 1.5rem;
+		display: flex;
+		flex-direction: column;
+		height: 100%;
+		min-height: 0;
 	}
 	.usb-grid {
 		display: grid;
 		grid-template-columns: 10.5rem minmax(0, 1fr);
 		gap: 2rem;
-		align-items: start;
+		align-items: stretch;
 		margin-top: 1.25rem;
-	}
-
-	.usb-hero-sticky {
-		position: sticky;
-		top: 0;
-		z-index: 20;
-		background: var(--bg-app);
-		padding-bottom: 0.25rem;
+		flex: 1;
+		min-height: 0;
 	}
 
 	.usb-rail {
-		position: sticky;
-		top: var(--usb-rail-top, 1.25rem);
-		align-self: start;
 		display: flex;
 		flex-direction: column;
 		gap: 1.125rem;
+		overflow-y: auto;
+		padding-bottom: 1rem;
 	}
 	.usb-rail-group {
 		display: flex;
@@ -1052,6 +862,10 @@
 		flex-direction: column;
 		gap: 1rem;
 		min-width: 0;
+		min-height: 0;
+		overflow-y: auto;
+		padding-right: 0.25rem;
+		padding-bottom: 1.5rem;
 	}
 	.usb-anchor {
 		scroll-margin-top: 1.25rem;
