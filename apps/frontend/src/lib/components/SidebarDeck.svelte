@@ -12,7 +12,9 @@
 		Palette,
 		Mail,
 		Moon,
-		Monitor
+		Monitor,
+		PanelLeftClose,
+		PanelLeftOpen
 	} from 'lucide-svelte';
 	import { Search, Activity, Settings, LogOut, KeyRound, Sun } from '@jis3r/icons';
 	import { createQuery } from '@tanstack/svelte-query';
@@ -22,7 +24,8 @@
 		springHover as motionSpringHover,
 		springRotate,
 		springCollapse,
-		decorativeMotion
+		decorativeMotion,
+		functionalMotion
 	} from '$lib/utils/motion.svelte';
 	import { animate } from 'motion';
 	import {
@@ -34,6 +37,7 @@
 		type Organization
 	} from '$lib/stores';
 	import { themeStore } from '$lib/stores/theme';
+	import { fade, fly, slide } from '$lib/utils/transitions';
 
 	interface OverviewDep {
 		id: string;
@@ -125,9 +129,57 @@
 
 	let attentionOpen = $state(false);
 
-	const DECK_W = '17.5rem';
+	const EXPANDED_W = 280;
+	const COLLAPSED_W = 88;
+	const COLLAPSE_KEY = 'sidebar-collapsed';
+
+	let collapsed = $state(browser && localStorage.getItem(COLLAPSE_KEY) === '1');
 	let asideEl: HTMLElement | undefined = $state();
 	let visible = $state(true);
+
+	function toggleCollapsed() {
+		collapsed = !collapsed;
+		if (browser) localStorage.setItem(COLLAPSE_KEY, collapsed ? '1' : '0');
+	}
+
+	let widthInitialized = false;
+	$effect(() => {
+		const el = asideEl;
+		const width = `${collapsed ? COLLAPSED_W : EXPANDED_W}px`;
+		if (!el) return;
+		if (!widthInitialized || !functionalMotion()) {
+			widthInitialized = true;
+			el.style.width = width;
+			return;
+		}
+		document.documentElement.dataset.sidebarAnimating = 'true';
+		const done = () => {
+			delete document.documentElement.dataset.sidebarAnimating;
+		};
+		animate(el, { width }, { type: 'spring', stiffness: 240, damping: 26, mass: 1 }).finished.then(
+			done,
+			done
+		);
+	});
+
+	function onWindowKeydown(e: KeyboardEvent) {
+		if (e.key !== 'b') return;
+		if (isMac ? !e.metaKey || e.ctrlKey : !e.ctrlKey) return;
+		if (e.shiftKey || e.altKey) return;
+		const t = e.target as HTMLElement | null;
+		if (t && (t.tagName === 'INPUT' || t.tagName === 'TEXTAREA' || t.isContentEditable)) return;
+		e.preventDefault();
+		toggleCollapsed();
+	}
+
+	function onStripClick() {
+		if (collapsed) {
+			toggleCollapsed();
+			attentionOpen = true;
+		} else {
+			attentionOpen = !attentionOpen;
+		}
+	}
 
 	$effect(() => {
 		if (!asideEl) return;
@@ -141,7 +193,10 @@
 	$effect(() => {
 		if (!visible) return;
 		if (typeof document !== 'undefined') {
-			document.documentElement.style.setProperty('--app-sidebar-w', DECK_W);
+			document.documentElement.style.setProperty(
+				'--app-sidebar-w',
+				`${collapsed ? COLLAPSED_W : EXPANDED_W}px`
+			);
 		}
 	});
 
@@ -222,21 +277,35 @@
 	</span>
 {/snippet}
 
-<aside bind:this={asideEl} class="sidebar deck-host">
+<svelte:window onkeydown={onWindowKeydown} />
+
+<aside bind:this={asideEl} class="sidebar deck-host" class:deck-host--collapsed={collapsed}>
 	<div class="deck-panel">
-		<PopoverPanel placement="bottom-start" sameWidth>
+		<PopoverPanel placement="bottom-start" sameWidth={!collapsed}>
 			{#snippet trigger(attrs, open)}
-				<button type="button" class="deck-org-trigger" {...attrs} {@attach springHover()}>
+				<button
+					type="button"
+					class="deck-org-trigger"
+					class:deck-org-trigger--collapsed={collapsed}
+					title={collapsed ? ($selectedOrganization?.name ?? 'Select org') : undefined}
+					{...attrs}
+					{@attach springHover()}
+				>
 					{@render orgAvatar($selectedOrganization, 'md')}
-					<span class="deck-org-text">
-						<span class="deck-org-name">{$selectedOrganization?.name ?? 'Select org'}</span>
-						{#if $selectedOrganization?.plan}
-							<span class="deck-org-plan">{$selectedOrganization.plan}</span>
-						{/if}
-					</span>
-					<span {@attach springRotate(() => open, { rest: 0, on: 180 })}>
-						<ChevronDown size={15} class="deck-org-chevron" />
-					</span>
+					{#if !collapsed}
+						<span class="deck-org-text" transition:fade={{ duration: 120 }}>
+							<span class="deck-org-name">{$selectedOrganization?.name ?? 'Select org'}</span>
+							{#if $selectedOrganization?.plan}
+								<span class="deck-org-plan">{$selectedOrganization.plan}</span>
+							{/if}
+						</span>
+						<span
+							transition:fade={{ duration: 120 }}
+							{@attach springRotate(() => open, { rest: 0, on: 180 })}
+						>
+							<ChevronDown size={15} class="deck-org-chevron" />
+						</span>
+					{/if}
 				</button>
 			{/snippet}
 			{#snippet children({ close })}
@@ -273,12 +342,16 @@
 		<button
 			type="button"
 			class="deck-search"
+			class:deck-search--collapsed={collapsed}
+			title={collapsed ? `Search (${isMac ? '⌘' : 'Ctrl+'}K)` : undefined}
 			onclick={() => window.dispatchEvent(new CustomEvent('open-quick-search'))}
 			{@attach springHover()}
 		>
 			<Search size={14} />
-			<span class="deck-search-label">Search</span>
-			<kbd class="deck-kbd">{isMac ? '⌘' : 'Ctrl'}K</kbd>
+			{#if !collapsed}
+				<span class="deck-search-label" transition:fade={{ duration: 120 }}>Search</span>
+				<kbd class="deck-kbd" transition:fade={{ duration: 120 }}>{isMac ? '⌘' : 'Ctrl'}K</kbd>
+			{/if}
 		</button>
 
 		{#if orgSlug}
@@ -287,50 +360,73 @@
 					<button
 						type="button"
 						class="deck-strip"
-						aria-expanded={attentionOpen}
-						onclick={() => (attentionOpen = !attentionOpen)}
+						class:deck-strip--collapsed={collapsed}
+						aria-expanded={!collapsed && attentionOpen}
+						title={collapsed ? `${failingDeps.length} failing` : undefined}
+						onclick={onStripClick}
 					>
 						<span class="deck-strip-dot"></span>
-						{failingDeps.length} failing
-						<span
-							class="deck-strip-chevron"
-							{@attach springRotate(() => attentionOpen, { rest: 0, on: 90 })}
-						>
-							<ChevronRight size={12} />
-						</span>
+						{#if !collapsed}
+							<span transition:fade={{ duration: 120 }}>{failingDeps.length} failing</span>
+							<span
+								class="deck-strip-chevron"
+								transition:fade={{ duration: 120 }}
+								{@attach springRotate(() => attentionOpen, { rest: 0, on: 90 })}
+							>
+								<ChevronRight size={12} />
+							</span>
+						{:else}
+							<span transition:fade={{ duration: 120 }}>{failingDeps.length}</span>
+						{/if}
 					</button>
-					<div {@attach springCollapse(() => !attentionOpen)}>
-						<div class="deck-strip-body">
-							{#each failingDeps as dep, i (dep.id)}
-								{@render failingRow(dep, i)}
-							{/each}
+					{#if !collapsed}
+						<div transition:slide={{ duration: 160 }}>
+							<div {@attach springCollapse(() => !attentionOpen)}>
+								<div class="deck-strip-body">
+									{#each failingDeps as dep, i (dep.id)}
+										{@render failingRow(dep, i)}
+									{/each}
+								</div>
+							</div>
 						</div>
-					</div>
+					{/if}
 					<div class="deck-gap"></div>
 				{/if}
 
-				<div class="deck-section-head"><span>Platform</span></div>
+				{#if !collapsed}
+					<div class="deck-section-head" transition:slide={{ duration: 160 }}><span>Platform</span></div>
+				{/if}
 				{#each nav as item, i (item.id)}
 					<a
 						href={item.href}
 						class="deck-row"
 						class:deck-row--active={item.active}
+						title={collapsed ? item.label : undefined}
 						{@attach navStagger(i)}
 						{@attach springHover()}
 					>
 						<span class="deck-tile" class:deck-tile--active={item.active}>
 							<item.icon size={15} />
 						</span>
-						<span class="deck-row-label">{item.label}</span>
+						{#if !collapsed}
+							<span class="deck-row-label" transition:fly={{ x: -6, duration: 160 }}>{item.label}</span>
+						{/if}
 					</a>
 				{/each}
 
 				{#if pinnedDeps.length > 0}
-					<div class="deck-section-head deck-section-head--spaced"><span>Pinned</span></div>
+					{#if !collapsed}
+						<div class="deck-section-head deck-section-head--spaced" transition:slide={{ duration: 160 }}>
+							<span>Pinned</span>
+						</div>
+					{:else}
+						<div class="deck-gap"></div>
+					{/if}
 					{#each pinnedDeps as pin, i (pin.id)}
 						<a
 							href={pin.href}
 							class="deck-row"
+							title={collapsed ? depName(pin) : undefined}
 							{@attach navStagger(nav.length + i)}
 							{@attach springHover()}
 						>
@@ -349,7 +445,9 @@
 									</span>
 								{/if}
 							</span>
-							<span class="deck-row-label">{depName(pin)}</span>
+							{#if !collapsed}
+								<span class="deck-row-label" transition:fly={{ x: -6, duration: 160 }}>{depName(pin)}</span>
+							{/if}
 						</a>
 					{/each}
 				{/if}
@@ -358,14 +456,25 @@
 
 		<div class="deck-spacer"></div>
 
-		<div class="deck-split">
+		<div class="deck-split" class:deck-split--collapsed={collapsed}>
 			<PopoverPanel placement="top-start">
 				{#snippet trigger(attrs)}
-					<button type="button" class="deck-split-id" {...attrs} {@attach springHover()}>
+					<button
+						type="button"
+						class="deck-split-id"
+						class:deck-split-id--collapsed={collapsed}
+						title={collapsed ? `@${$user?.username ?? 'you'}` : undefined}
+						{...attrs}
+						{@attach springHover()}
+					>
 						{@render userAvatarEl()}
-						<span class="deck-user-name deck-user-name--mono">@{$user?.username ?? 'you'}</span>
-						{#if invitationCount > 0}
-							<span class="deck-user-badge">{invitationCount}</span>
+						{#if !collapsed}
+							<span class="deck-user-name deck-user-name--mono" transition:fade={{ duration: 120 }}>
+								@{$user?.username ?? 'you'}
+							</span>
+							{#if invitationCount > 0}
+								<span class="deck-user-badge" transition:fade={{ duration: 120 }}>{invitationCount}</span>
+							{/if}
 						{/if}
 					</button>
 				{/snippet}
@@ -431,24 +540,42 @@
 					</div>
 				{/snippet}
 			</PopoverPanel>
-			<a
-				class="deck-split-action"
-				href="/user/settings"
-				aria-label="Your settings"
-				title="Settings"
-				{@attach springHover()}
-			>
-				<Settings size={15} />
-			</a>
+			{#if !collapsed}
+				<a
+					class="deck-split-action"
+					href="/user/settings"
+					aria-label="Your settings"
+					title="Settings"
+					transition:fade={{ duration: 140 }}
+					{@attach springHover()}
+				>
+					<Settings size={15} />
+				</a>
+				<button
+					type="button"
+					class="deck-split-action deck-split-action--danger"
+					aria-label="Sign out"
+					title="Sign out"
+					transition:fade={{ duration: 140 }}
+					onclick={() => user.signOut()}
+					{@attach springHover()}
+				>
+					<LogOut size={15} />
+				</button>
+			{/if}
 			<button
 				type="button"
-				class="deck-split-action deck-split-action--danger"
-				aria-label="Sign out"
-				title="Sign out"
-				onclick={() => user.signOut()}
+				class="deck-split-action"
+				aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
+				title="{collapsed ? 'Expand' : 'Collapse'} sidebar ({isMac ? '⌘' : 'Ctrl+'}B)"
+				onclick={toggleCollapsed}
 				{@attach springHover()}
 			>
-				<LogOut size={15} />
+				{#if collapsed}
+					<PanelLeftOpen size={15} />
+				{:else}
+					<PanelLeftClose size={15} />
+				{/if}
 			</button>
 		</div>
 	</div>
@@ -461,6 +588,30 @@
 		padding: 0.75rem;
 		border-right: none;
 		background-color: var(--bg-app);
+	}
+	.deck-host--collapsed .deck-panel {
+		padding: 0.5rem;
+	}
+	.deck-org-trigger--collapsed {
+		padding: 0.25rem;
+	}
+	.deck-search--collapsed {
+		padding: 0.5rem 0 0.5rem 1rem;
+	}
+	.deck-strip--collapsed {
+		flex-direction: column;
+		align-items: center;
+		gap: 0.1875rem;
+		padding: 0.375rem 0.25rem;
+	}
+	.deck-split--collapsed {
+		flex-direction: column;
+		gap: 0.375rem;
+	}
+	.deck-split-id--collapsed {
+		flex: none;
+		justify-content: center;
+		padding: 0.25rem;
 	}
 	.deck-panel {
 		display: flex;
@@ -576,6 +727,7 @@
 	.deck-search-label {
 		flex: 1;
 		text-align: left;
+		white-space: nowrap;
 	}
 	.deck-kbd {
 		font-size: 0.625rem;
@@ -594,6 +746,7 @@
 	.deck-strip {
 		display: flex;
 		align-items: center;
+		white-space: nowrap;
 		gap: 0.5rem;
 		width: 100%;
 		padding: 0.375rem 0.5rem;
