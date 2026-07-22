@@ -632,14 +632,15 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (!projectFilter) return { active: [], recent: [] };
 
     if (scope === 'mine') {
+      const memberUserId = (await this.access.resolveMemberUserId(userId)) ?? userId;
       const mineCount = await this.prisma.project.count({
         where: {
           ...(orgId ? { organizationId: orgId } : {}),
-          members: { some: { userId } },
+          members: { some: { userId: memberUserId } },
         },
       });
       if (mineCount > 0) {
-        projectFilter = { AND: [projectFilter, { members: { some: { userId } } }] };
+        projectFilter = { AND: [projectFilter, { members: { some: { userId: memberUserId } } }] };
       }
     }
 

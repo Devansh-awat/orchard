@@ -210,9 +210,9 @@
 }
 .proj-card:hover {
 	box-shadow:
-		0 0 0 1px var(--border-strong),
-		0 2px 4px rgba(0, 0, 0, 0.06),
-		0 6px 16px rgba(0, 0, 0, 0.07);
+		0 0 0 1px color-mix(in srgb, var(--accent) 22%, var(--border-default)),
+		0 2px 4px rgba(0, 0, 0, 0.04),
+		0 6px 16px rgba(0, 0, 0, 0.05);
 }
 .proj-card--expanded {
 	box-shadow:

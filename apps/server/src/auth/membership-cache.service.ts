@@ -49,6 +49,16 @@ export class MembershipCacheService {
     return user.id;
   }
 
+  /**
+   * Public sub → internal user UUID resolution. Prisma conditions that
+   * compare against user-id FK columns (projectMember.userId etc.) must go
+   * through this — the raw JWT sub may be a Hack Club id, which silently
+   * matches nothing against a UUID column.
+   */
+  async resolveUserId(sub: string): Promise<string | null> {
+    return this.resolveInternalId(sub);
+  }
+
   async getMemberships(sub: string): Promise<CachedEntry['memberships']> {
     const now = Date.now();
     const hit = this.cache.get(sub);

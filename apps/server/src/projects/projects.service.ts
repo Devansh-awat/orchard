@@ -1464,8 +1464,9 @@ export class ProjectsService {
     const projectIds = projects.map((p) => p.id);
     const projectMembersByProjectId = new Map<string, string>();
     if (!isSuperAdmin) {
+      const memberUserId = (await this.membershipCache.resolveUserId(userId)) ?? userId;
       const rows = await this.prisma.projectMember.findMany({
-        where: { userId, projectId: { in: projectIds } },
+        where: { userId: memberUserId, projectId: { in: projectIds } },
         select: { projectId: true, role: { select: { name: true } } },
       });
       for (const r of rows) projectMembersByProjectId.set(r.projectId, r.role.name);
