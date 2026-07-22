@@ -24,21 +24,78 @@ func addWaitFlags(c *cobra.Command) (wait *bool, timeout *time.Duration) {
 }
 
 // runWait polls spec with progress on stderr, honoring the command context.
+// Interactive terminals get an animated spinner; non-TTY runs keep plain
+// one-line-per-transition output.
 func runWait(ctx context.Context, cl *api.Client, spec api.WaitSpec, timeout time.Duration) error {
 	spec.Timeout = timeout
+	var sp *output.Spinner
 	if spec.Progress == nil {
-		spec.Progress = func(status string) {
-			if status != "" {
-				output.Warnf("status: %s", status)
+		if output.StderrIsTTY() && fmtFlag() != output.FormatJSON {
+			sp = output.NewSpinner("waiting")
+			spec.Progress = func(status string) {
+				if status != "" {
+					sp.Update("status: " + status)
+				}
+			}
+		} else {
+			spec.Progress = func(status string) {
+				if status != "" {
+					output.Warnf("status: %s", status)
+				}
 			}
 		}
 	}
 	status, err := cl.WaitFor(ctx, spec)
+	if sp != nil {
+		sp.Stop()
+	}
 	if err != nil {
 		return err
 	}
 	output.Successf("reached %s", status)
 	return nil
+}
+
+// firstIngressHost returns the first ingress host attached to a deployment
+// payload, or "".
+func firstIngressHost(raw map[string]any) string {
+	ings, _ := raw["ingresses"].([]any)
+	for _, e := range ings {
+		if m, ok := e.(map[string]any); ok {
+			if h := str(m["host"]); h != "" {
+				return h
+			}
+		}
+	}
+	return ""
+}
+
+// orgSlugOf digs the organization slug out of a deployment payload that
+// includes project.organization.
+func orgSlugOf(raw map[string]any) string {
+	if p, ok := raw["project"].(map[string]any); ok {
+		if o, ok := p["organization"].(map[string]any); ok {
+			return str(o["slug"])
+		}
+	}
+	return ""
+}
+
+// printDeploySuccess fetches the deployment and prints the live URL plus
+// follow-up pointers after a successful create/rebuild wait. Best-effort:
+// failures here never fail the command.
+func printDeploySuccess(ctx context.Context, cl *api.Client, apiURL, id string) {
+	var raw map[string]any
+	if err := cl.GetJSON(ctx, deployPath(id), &raw); err != nil {
+		return
+	}
+	if host := firstIngressHost(raw); host != "" {
+		output.Successf("live at https://%s", host)
+	}
+	if slug := orgSlugOf(raw); slug != "" {
+		fmt.Fprintln(os.Stderr, "  "+output.Dim("dashboard")+"  "+strings.TrimRight(apiURL, "/")+"/"+slug+"/deployments/"+str(raw["id"]))
+	}
+	fmt.Fprintln(os.Stderr, "  "+output.Dim("logs")+"       orchard deploy logs "+str(raw["id"])+" -f")
 }
 
 // addPageFlags wires cursor pagination onto list commands that support it.

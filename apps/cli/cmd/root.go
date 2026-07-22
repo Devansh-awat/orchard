@@ -117,6 +117,7 @@ func rootCmd() *cobra.Command {
 		auditCmd(),
 		quotaCmd(),
 		overviewCmd(),
+		openCmd(),
 		userCmd(),
 		uiCmd(),
 		commandsCmd(),

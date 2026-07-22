@@ -304,7 +304,11 @@ func deployCreateCmd() *cobra.Command {
 				if github != "" {
 					spec = deployWaitBuild(id)
 				}
-				return runWait(cmd.Context(), cl, spec, *timeout)
+				if werr := runWait(cmd.Context(), cl, spec, *timeout); werr != nil {
+					return werr
+				}
+				printDeploySuccess(cmd.Context(), cl, cfg.APIURL, id)
+				return nil
 			}
 			return nil
 		},
