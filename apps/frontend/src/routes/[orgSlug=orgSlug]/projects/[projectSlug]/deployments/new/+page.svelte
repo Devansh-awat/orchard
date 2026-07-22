@@ -881,13 +881,6 @@
 			<div class="nd-card-body">
 				{#key deploymentSource}
 					<div class="nd-source-pane" {@attach motionStagger({ index: 0, from: { y: 8 } })}>
-						<p class="nd-hint nd-source-hint">
-							{#if deploymentSource === 'image'}
-								Run a prebuilt container image from any registry.
-							{:else}
-								Build and deploy straight from a Git repository.
-							{/if}
-						</p>
 						{#if deploymentSource === 'image'}
 							<Field
 								label="Docker image"
@@ -1643,6 +1636,9 @@
 	.nd-owner-row--after {
 		border-bottom: none;
 		border-top: 1px solid var(--border-default);
+		background: var(--bg-raised);
+		border-radius: 0 0 0.875rem 0.875rem;
+		padding: 0.875rem 1.5rem;
 	}
 
 	.nd-owner-row :global(.ps-trigger) {
