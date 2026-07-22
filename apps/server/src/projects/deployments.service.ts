@@ -3298,6 +3298,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     let installationId: bigint | null = null;
     let checkRunId: number | null = null;
     let installationAccessToken: string | null = null;
+    let logUrl: string | null = null;
 
     if (repoInfo) {
       try {
@@ -3310,7 +3311,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
           const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
           const orgSlug = deployment.project?.organization?.slug;
-          const logUrl = orgSlug
+          logUrl = orgSlug
             ? `${frontendUrl}/${orgSlug}/deployments/${deploymentId}/progress`
             : `${frontendUrl}/deployments/${deploymentId}/progress`;
 
