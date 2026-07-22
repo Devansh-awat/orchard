@@ -30,6 +30,7 @@ function detectNamespace(): string | null {
 function buildPolicies(namespace: string) {
   const operatorNamespace = process.env.CNPG_OPERATOR_NAMESPACE || 'postgresql';
   const metricsNamespace = process.env.PLATFORM_METRICS_NAMESPACE || 'orchard-metrics';
+  const r2ProxyNamespace = process.env.PLATFORM_R2_PROXY_NAMESPACE || 'orchard-r2-proxy';
   const dbSelector = {
     matchExpressions: [{ key: 'cnpg.io/cluster', operator: 'Exists' }],
   };
@@ -51,6 +52,7 @@ function buildPolicies(namespace: string) {
             fromEndpoints: [
               {},
               { matchLabels: { 'io.kubernetes.pod.namespace': metricsNamespace } },
+              { matchLabels: { 'io.kubernetes.pod.namespace': r2ProxyNamespace } },
             ],
           },
         ],
