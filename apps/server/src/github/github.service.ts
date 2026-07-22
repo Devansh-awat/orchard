@@ -1386,10 +1386,10 @@ export class GitHubService {
   // List repositories the user can access within a specific installation (intersection
   // of installation repos and the user's GitHub permissions). Requires user OAuth token.
   async getUserAccessibleInstallationRepos(userToken: string, installationId: bigint): Promise<GitHubRepo[]> {
-    const repos: GitHubRepo[] = [];
-    let page = 1;
     const perPage = 100;
-    while (page <= 10) {
+    const maxPages = 10;
+
+    const fetchPage = async (page: number): Promise<{ repos: GitHubRepo[]; lastPage: number | null }> => {
       const response = await fetch(
         `https://api.github.com/user/installations/${installationId}/repositories?per_page=${perPage}&page=${page}`,
         {
@@ -1402,15 +1402,26 @@ export class GitHubService {
         }
       );
       if (!response.ok) {
-        if (response.status === 404) return repos;
+        if (response.status === 404) return { repos: [], lastPage: null };
         throw new BadRequestException(`Failed to get user-accessible installation repos: ${await response.text()}`);
       }
+      const link = response.headers.get('link') || '';
+      const lastMatch = link.match(/[?&]page=(\d+)[^>]*>;\s*rel="last"/);
       const data = await response.json();
-      repos.push(...(data.repositories || []));
-      if ((data.repositories || []).length < perPage) break;
-      page++;
-    }
-    return repos;
+      return {
+        repos: data.repositories || [],
+        lastPage: lastMatch ? Number(lastMatch[1]) : null,
+      };
+    };
+
+    const first = await fetchPage(1);
+    if (!first.lastPage || first.lastPage <= 1) return first.repos;
+
+    const lastPage = Math.min(first.lastPage, maxPages);
+    const rest = await Promise.all(
+      Array.from({ length: lastPage - 1 }, (_, i) => fetchPage(i + 2)),
+    );
+    return [first, ...rest].flatMap((r) => r.repos);
   }
 
   // Resolve an access token for a specific repo — prefers App installation token, falls back to user OAuth token.
@@ -1436,8 +1447,8 @@ export class GitHubService {
 
   private static readonly REPOS_CACHE_FRESH_MS = 60 * 1000;
 
-  /** Drop cached repo lists (all users) — called when installation webhooks
-   * land so a freshly added account shows up on the next fetch. */
+  private readonly reposRefreshInflight = new Set<string>();
+
   clearUserReposCache() {
     this.userReposCache.clear();
   }
@@ -1445,14 +1456,34 @@ export class GitHubService {
   // Get all repos accessible to a user across all their installations, intersected with the
   // repos the user can see on GitHub (via their user OAuth token). Without a user token we
   // cannot verify access, so we return no repos — the user must link their GitHub identity.
-  // Results are cached briefly per user; when GitHub is unreachable mid-refresh the last
-  // good list is served instead of a partial one.
+  // Any cached list is served immediately; a stale one triggers a background refresh so the
+  // next read is current. When GitHub is unreachable mid-refresh the last good list wins
+  // over a partial one.
   async getAllUserRepositories(userId: string): Promise<{ repos: GitHubRepo[]; installations: any[]; hasInstallations: boolean; userLinked: boolean }> {
     const cached = this.userReposCache.get(userId);
-    if (cached && Date.now() - cached.at < GitHubService.REPOS_CACHE_FRESH_MS) {
+    if (cached) {
+      if (Date.now() - cached.at >= GitHubService.REPOS_CACHE_FRESH_MS) {
+        this.refreshUserRepositoriesInBackground(userId);
+      }
       return cached.result;
     }
+    return this.fetchAllUserRepositories(userId);
+  }
 
+  private refreshUserRepositoriesInBackground(userId: string) {
+    if (this.reposRefreshInflight.has(userId)) return;
+    this.reposRefreshInflight.add(userId);
+    void this.fetchAllUserRepositories(userId)
+      .catch((e) => {
+        console.warn(`[GitHub] background repo refresh failed: ${e?.message ?? e}`);
+      })
+      .finally(() => {
+        this.reposRefreshInflight.delete(userId);
+      });
+  }
+
+  private async fetchAllUserRepositories(userId: string): Promise<{ repos: GitHubRepo[]; installations: any[]; hasInstallations: boolean; userLinked: boolean }> {
+    const cached = this.userReposCache.get(userId);
     const userToken = await this.getValidUserToken(userId);
 
     const installations = await this.getUserInstallations(userId);
