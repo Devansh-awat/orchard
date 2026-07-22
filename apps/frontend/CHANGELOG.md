@@ -1,5 +1,33 @@
 # Changelog
 
+## [0.30.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.29.0...frontend/v0.30.0) (2026-07-22)
+
+
+### Features
+
+* auto-generated protected url on deployment create ([ad7b7d2](https://github.com/LeafdTK/leaf/commit/ad7b7d2a5be0319cef570e6b8fb7ddd80aeaefd9))
+* create form notes auto deploy on branch pushes ([1dce9eb](https://github.com/LeafdTK/leaf/commit/1dce9ebd3a277e10923ff0e06e1727285e2c9af7))
+* hero restored as fixed header, rail and content detached ([eed91d3](https://github.com/LeafdTK/leaf/commit/eed91d36a9fbb634fcb41ac83de823337e8dfc5c))
+* live build log streaming over sse ([32e8b2f](https://github.com/LeafdTK/leaf/commit/32e8b2f4aadd4fbe66c61cbdea658ca4033a4cf5))
+* one-shot github import endpoint and orchard import ([70398a2](https://github.com/LeafdTK/leaf/commit/70398a2efac3300e7400b951a7cca016ca351fc6))
+* repo-first create form with detection summary ([d5db91c](https://github.com/LeafdTK/leaf/commit/d5db91cbd1de0666c8adfb679f359e1dc83820f8))
+* runtime log streaming over sse and event-driven metrics refresh ([81dc35f](https://github.com/LeafdTK/leaf/commit/81dc35fc16953aba8a58d3a60f6e70899d33806c))
+* settings without hero, tab pane scrolls internally ([fa2f690](https://github.com/LeafdTK/leaf/commit/fa2f69030966a81807f907614707282f8b1a149d))
+* split repo selector into account and repo pickers ([15fe925](https://github.com/LeafdTK/leaf/commit/15fe9257c9515da60ef01ed5a72b99b5293ba97d))
+* stepper and toggle rows for advanced section ([830aa62](https://github.com/LeafdTK/leaf/commit/830aa626c53f14ec86b6cc707401bb3123abbd32))
+* swatch grid appearance tab, sticky hero and rail ([2b9d2bb](https://github.com/LeafdTK/leaf/commit/2b9d2bb8f79a057af95ca842f53b7b7d5f0962d2))
+* ui togglerow component, sized owner row, tighter url copy ([3c07c9c](https://github.com/LeafdTK/leaf/commit/3c07c9cecd7bbf0e4c1f8e631ac6a680b7d582ce))
+* unified user settings tabs, three new built-in themes ([efcee2f](https://github.com/LeafdTK/leaf/commit/efcee2ff7b81c0c41048052202bf71643895471e))
+* zero-config repo detection endpoint and create form pre-fill ([53ebf72](https://github.com/LeafdTK/leaf/commit/53ebf72057e7b859b64526db9f569f084e4d34ee))
+
+
+### Bug Fixes
+
+* drop empty profile tab hint ([61616fb](https://github.com/LeafdTK/leaf/commit/61616fbd1f3927b06230e760a3fe5f148f2afbc0))
+* equal heights for account and repo pickers ([d5ded5d](https://github.com/LeafdTK/leaf/commit/d5ded5da0ae177e002a8dc58352e7df60fd59539))
+* resolve sub to uuid in project member filters, creamy card hover ([c71be35](https://github.com/LeafdTK/leaf/commit/c71be35e01850e73f5233eb0b66d1995cd756560))
+* tidy source card, footer treatment for project name row ([b426f6e](https://github.com/LeafdTK/leaf/commit/b426f6e942067cd022d4689530391856b931bfb4))
+
 ## [0.29.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.28.0...frontend/v0.29.0) (2026-07-22)
 
 

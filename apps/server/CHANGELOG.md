@@ -1,5 +1,25 @@
 # Changelog
 
+## [1.31.0](https://github.com/LeafdTK/leaf/compare/server/v1.30.1...server/v1.31.0) (2026-07-22)
+
+
+### Features
+
+* auto deploy on by default for github deployments ([c09109d](https://github.com/LeafdTK/leaf/commit/c09109d49a2f28a1634e7573e31a6af3a1a3df09))
+* auto-generated protected url on deployment create ([ad7b7d2](https://github.com/LeafdTK/leaf/commit/ad7b7d2a5be0319cef570e6b8fb7ddd80aeaefd9))
+* gate local deploys behind LOCAL_DEPLOYS_ENABLED, off by default ([d37baeb](https://github.com/LeafdTK/leaf/commit/d37baeb1322c2bb9d7e57bd88229b5200364e4d8))
+* live build log streaming over sse ([32e8b2f](https://github.com/LeafdTK/leaf/commit/32e8b2f4aadd4fbe66c61cbdea658ca4033a4cf5))
+* one-shot github import endpoint and orchard import ([70398a2](https://github.com/LeafdTK/leaf/commit/70398a2efac3300e7400b951a7cca016ca351fc6))
+* orchard up local directory deploys ([685b735](https://github.com/LeafdTK/leaf/commit/685b7350af9cff84abf50ac42e02339a3a3c558a))
+* runtime log streaming over sse and event-driven metrics refresh ([81dc35f](https://github.com/LeafdTK/leaf/commit/81dc35fc16953aba8a58d3a60f6e70899d33806c))
+* zero-config repo detection endpoint and create form pre-fill ([53ebf72](https://github.com/LeafdTK/leaf/commit/53ebf72057e7b859b64526db9f569f084e4d34ee))
+
+
+### Bug Fixes
+
+* resolve sub to uuid in project member filters, creamy card hover ([c71be35](https://github.com/LeafdTK/leaf/commit/c71be35e01850e73f5233eb0b66d1995cd756560))
+* timeout, parallelize and cache github repo listing ([fdae0be](https://github.com/LeafdTK/leaf/commit/fdae0be26ffa96821a9f953ec14fc8440bdc4f09))
+
 ## [1.30.1](https://github.com/LeafdTK/leaf/compare/server/v1.30.0...server/v1.30.1) (2026-07-22)
 
 

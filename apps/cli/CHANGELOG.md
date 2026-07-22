@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.5.0](https://github.com/LeafdTK/leaf/compare/cli/v0.4.0...cli/v0.5.0) (2026-07-22)
+
+
+### Features
+
+* auto-generated protected url on deployment create ([ad7b7d2](https://github.com/LeafdTK/leaf/commit/ad7b7d2a5be0319cef570e6b8fb7ddd80aeaefd9))
+* cli spinner, orchard open, deploy success block ([4d5bba4](https://github.com/LeafdTK/leaf/commit/4d5bba44c725b38f5c88cae843056b6de930c20d))
+* live build log streaming over sse ([32e8b2f](https://github.com/LeafdTK/leaf/commit/32e8b2f4aadd4fbe66c61cbdea658ca4033a4cf5))
+* one-shot github import endpoint and orchard import ([70398a2](https://github.com/LeafdTK/leaf/commit/70398a2efac3300e7400b951a7cca016ca351fc6))
+* orchard env pull ([ce899ca](https://github.com/LeafdTK/leaf/commit/ce899ca6b79bb5df1eb0b51a8299ecd1d8430065))
+* orchard link per-directory project context ([8f557b5](https://github.com/LeafdTK/leaf/commit/8f557b5ef493000bf00be770843ae1b231319df6))
+* orchard up local directory deploys ([685b735](https://github.com/LeafdTK/leaf/commit/685b7350af9cff84abf50ac42e02339a3a3c558a))
+* runtime log streaming over sse and event-driven metrics refresh ([81dc35f](https://github.com/LeafdTK/leaf/commit/81dc35fc16953aba8a58d3a60f6e70899d33806c))
+
 ## [0.4.0](https://github.com/LeafdTK/leaf/compare/cli/v0.3.2...cli/v0.4.0) (2026-07-21)
 
 
