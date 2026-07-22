@@ -45,7 +45,7 @@ function buildPolicies(namespace: string) {
       },
       spec: {
         description:
-          'Keep the platform database reachable from platform pods and metrics regardless of other policies selecting it.',
+          'Keep the platform database reachable from platform pods, metrics, and the r2 backup proxy regardless of other policies selecting it.',
         endpointSelector: dbSelector,
         ingress: [
           {
