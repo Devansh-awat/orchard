@@ -30,7 +30,7 @@
 	import RepoDetectionSummary from '$lib/components/deployment/RepoDetectionSummary.svelte';
 	import RepoAccountPicker from '$lib/components/deployment/RepoAccountPicker.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
-	import { Button, PopoverPanel, Field, Input, Select, Badge, ToggleRow } from '$lib/components/ui';
+	import { Button, PopoverPanel, Field, Input, Select, Badge, ToggleRow, Stepper } from '$lib/components/ui';
 
 	interface Repository {
 		id: number;
@@ -1503,22 +1503,21 @@
 			<details>
 				<summary class="nd-card-title nd-summary">Advanced</summary>
 				<div class="nd-advanced-body">
-					<div class="nd-grid-2">
-						<Field label="Replicas" hint="Number of pod replicas to run">
-							<input type="number" bind:value={replicas} min="1" class="input" />
-						</Field>
-						<div></div>
+					<div class="nd-adv-row">
+						<div class="nd-adv-info">
+							<span class="nd-adv-label">Replicas</span>
+							<span class="nd-adv-hint">Copies of your app running at once</span>
+						</div>
+						<Stepper bind:value={replicas} min={1} max={20} />
 					</div>
 					{#if $isSuperAdmin && deploymentSource === 'github'}
-						<label class="nd-checkbox-row">
-							<input type="checkbox" bind:checked={buildWithDepot} class="nd-checkbox" />
-							<div>
-								<span class="nd-checkbox-label">Orchard's Super Builds</span>
-								<p class="nd-hint">
-									Use Orchard's high-performance hosted builders for faster builds
-								</p>
-							</div>
-						</label>
+						<div class="nd-adv-row">
+							<ToggleRow
+								bind:checked={buildWithDepot}
+								label="Orchard's super builds"
+								hint="Faster builds on hosted high-performance builders"
+							/>
+						</div>
 					{/if}
 				</div>
 			</details>
@@ -2380,8 +2379,42 @@
 	.nd-advanced-body {
 		display: flex;
 		flex-direction: column;
+		margin-top: 0.75rem;
+	}
+
+	.nd-adv-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
 		gap: 1rem;
-		margin-top: 1rem;
+		padding: 0.75rem 0;
+	}
+
+	.nd-adv-row + .nd-adv-row {
+		border-top: 1px solid var(--border-default);
+	}
+
+	.nd-adv-row :global(.toggle-row) {
+		flex: 1;
+	}
+
+	.nd-adv-info {
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+		min-width: 0;
+	}
+
+	.nd-adv-label {
+		font-size: 0.8125rem;
+		font-weight: 600;
+		color: var(--text-default);
+	}
+
+	.nd-adv-hint {
+		font-size: 0.75rem;
+		line-height: 1.4;
+		color: var(--text-muted);
 	}
 
 	.nd-summary {

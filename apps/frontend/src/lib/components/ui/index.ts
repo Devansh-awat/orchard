@@ -31,3 +31,4 @@ export { default as LogViewer } from './LogViewer.svelte';
 export { default as PageHeader } from './PageHeader.svelte';
 export { default as Table } from './Table.svelte';
 export { default as ToggleRow } from './ToggleRow.svelte';
+export { default as Stepper } from './Stepper.svelte';
