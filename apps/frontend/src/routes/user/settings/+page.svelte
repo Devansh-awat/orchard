@@ -811,22 +811,15 @@
 			</aside>
 
 			<div class="usb-sections">
-				{#if activeTab === 'profile'}
-					{#if invitations.length}
-						<UserInvitations
-							index={0}
-							{invitations}
-							{acceptingInvitation}
-							{decliningInvitation}
-							onAccept={handleAcceptInvitation}
-							onDecline={handleDeclineInvitation}
-						/>
-					{:else}
-						<p class="usb-tab-hint">
-							Your profile lives above. Organization invitations show up here when you have
-							any pending.
-						</p>
-					{/if}
+				{#if activeTab === 'profile' && invitations.length}
+					<UserInvitations
+						index={0}
+						{invitations}
+						{acceptingInvitation}
+						{decliningInvitation}
+						onAccept={handleAcceptInvitation}
+						onDecline={handleDeclineInvitation}
+					/>
 				{/if}
 
 				{#if activeTab === 'connections'}
@@ -1003,12 +996,6 @@
 		gap: 2rem;
 		align-items: start;
 		margin-top: 1.25rem;
-	}
-
-	.usb-tab-hint {
-		font-size: 0.8125rem;
-		color: var(--text-muted);
-		padding: 0.5rem 0;
 	}
 
 	.usb-rail {
