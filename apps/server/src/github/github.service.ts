@@ -628,6 +628,117 @@ export class GitHubService {
     };
   }
 
+  /**
+   * One-shot build-config detection for the zero-config create flow: prefer a
+   * Dockerfile (with EXPOSE/ENV/stage parsing) and fall back to a Railpack
+   * build with a framework guess from root manifests. Every field is a
+   * suggestion the caller can override.
+   */
+  async detectRepoConfig(
+    accessToken: string,
+    owner: string,
+    repo: string,
+    branch?: string
+  ): Promise<{
+    buildType: 'dockerfile' | 'railpack';
+    dockerfilePath: string | null;
+    dockerfiles: string[];
+    stages: string[];
+    ports: number[];
+    env: { key: string; value: string }[];
+    framework: string | null;
+    suggestedName: string;
+  }> {
+    const suggestedName = repo
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '-')
+      .replace(/^-+|-+$/g, '')
+      .slice(0, 60);
+
+    const [dockerfiles, rootContents] = await Promise.all([
+      this.findDockerfiles(accessToken, owner, repo, branch).catch(() => [] as string[]),
+      this.getRepoContents(accessToken, owner, repo, '', branch).catch(() => []),
+    ]);
+
+    if (dockerfiles.length > 0) {
+      const dockerfilePath = [...dockerfiles].sort(
+        (a, b) => a.split('/').length - b.split('/').length || a.length - b.length
+      )[0];
+      const info = await this.getDockerfileInfo(accessToken, owner, repo, dockerfilePath, branch).catch(
+        () => null
+      );
+      return {
+        buildType: 'dockerfile',
+        dockerfilePath,
+        dockerfiles,
+        stages: info?.stages ?? [],
+        ports: info?.exposedPorts ?? [],
+        env: info?.envVars ?? [],
+        framework: null,
+        suggestedName,
+      };
+    }
+
+    const rootFiles = new Set(
+      (Array.isArray(rootContents) ? rootContents : [])
+        .filter((c: any) => c?.type === 'file')
+        .map((c: any) => String(c.name).toLowerCase())
+    );
+
+    let framework: string | null = null;
+    let port = 3000;
+
+    if (rootFiles.has('package.json')) {
+      framework = 'node';
+      try {
+        const pkg = JSON.parse(await this.getFileContent(accessToken, owner, repo, 'package.json', branch));
+        const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
+        if (deps['next']) framework = 'nextjs';
+        else if (deps['@sveltejs/kit']) framework = 'sveltekit';
+        else if (deps['nuxt']) framework = 'nuxt';
+        else if (deps['astro']) {
+          framework = 'astro';
+          port = 4321;
+        } else if (deps['@remix-run/node']) framework = 'remix';
+        else if (deps['@nestjs/core']) framework = 'nestjs';
+        else if (deps['fastify']) framework = 'fastify';
+        else if (deps['express']) framework = 'express';
+        else if (deps['vite']) framework = 'vite';
+      } catch {
+        // package.json unreadable: keep the generic node guess
+      }
+    } else if (rootFiles.has('go.mod')) {
+      framework = 'go';
+      port = 8080;
+    } else if (rootFiles.has('requirements.txt') || rootFiles.has('pyproject.toml')) {
+      framework = 'python';
+      port = 8000;
+    } else if (rootFiles.has('gemfile')) {
+      framework = 'ruby';
+      port = 3000;
+    } else if (rootFiles.has('cargo.toml')) {
+      framework = 'rust';
+      port = 8080;
+    } else if (rootFiles.has('composer.json')) {
+      framework = 'php';
+      port = 8080;
+    } else if (rootFiles.has('index.html')) {
+      framework = 'static';
+      port = 80;
+    }
+
+    return {
+      buildType: 'railpack',
+      dockerfilePath: null,
+      dockerfiles: [],
+      stages: [],
+      ports: [port],
+      env: [{ key: 'PORT', value: String(port) }],
+      framework,
+      suggestedName,
+    };
+  }
+
   parseDockerfileStages(dockerfileContent: string): string[] {
     const stages: string[] = [];
     const lines = dockerfileContent.split('\n');

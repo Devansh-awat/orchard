@@ -83,6 +83,8 @@
 	let repoUrl = $state('');
 	let branch = $state('');
 	let buildType = $state<'dockerfile' | 'railpack'>('dockerfile');
+	let buildTypeTouched = false;
+	let detectedFramework = $state<string | null>(null);
 	let dockerfilePath = $state('Dockerfile');
 	let buildFromRoot = $state(false);
 	let replicas = $state(1);
@@ -232,13 +234,43 @@
 		try {
 			const [owner, repoName] = repo.full_name.split('/');
 			const response = await apiFetch(
-				`/apiv1/github/repositories/${owner}/${repoName}/dockerfiles?branch=${encodeURIComponent(branchName)}`
+				`/apiv1/github/repositories/${owner}/${repoName}/detect?branch=${encodeURIComponent(branchName)}`
 			);
-			if (response.ok) {
-				dockerfiles = await response.json();
+			if (!response.ok) return;
+			const det: {
+				buildType: 'dockerfile' | 'railpack';
+				dockerfilePath: string | null;
+				dockerfiles: string[];
+				stages: string[];
+				ports: number[];
+				env: { key: string; value: string }[];
+				framework: string | null;
+			} = await response.json();
+
+			dockerfiles = det.dockerfiles;
+			detectedFramework = det.framework;
+			if (!buildTypeTouched) {
+				buildType = det.buildType;
+			}
+			if (det.buildType === 'dockerfile' && det.dockerfilePath) {
+				dockerfilePath = det.dockerfilePath;
+				dockerfileSearch = det.dockerfilePath;
+				dockerfileStages = det.stages;
+				selectedStage = det.stages[0] ?? '';
+			}
+			if (det.ports.length > 0 && !portsManuallyEdited) {
+				ports = det.ports.map((p, i) => ({
+					name: `port-${i + 1}`,
+					containerPort: p,
+					servicePort: p,
+					protocol: 'TCP'
+				}));
+			}
+			if (det.env.length > 0 && !envsManuallyEdited) {
+				envVars = det.env.map((e) => ({ key: e.key, value: e.value }));
 			}
 		} catch (e) {
-			console.error('Failed to fetch Dockerfiles:', e);
+			console.error('Failed to detect repo config:', e);
 		} finally {
 			loadingDockerfiles = false;
 		}
@@ -1042,6 +1074,7 @@
 											type="button"
 											onclick={() => {
 												buildType = 'dockerfile';
+												buildTypeTouched = true;
 												if (!dockerfilePath.trim()) {
 													dockerfilePath = 'Dockerfile';
 													dockerfileSearch = 'Dockerfile';
@@ -1064,7 +1097,10 @@
 										</button>
 										<button
 											type="button"
-											onclick={() => (buildType = 'railpack')}
+											onclick={() => {
+												buildType = 'railpack';
+												buildTypeTouched = true;
+											}}
 											class="nd-build-option"
 											class:nd-build-active={buildType === 'railpack'}
 											{@attach springHover({ lift: -2, stiffness: 420, damping: 22 })}
@@ -1094,6 +1130,12 @@
 											</div>
 										</button>
 									</div>
+									{#if detectedFramework && buildType === 'railpack'}
+										<p class="nd-hint" style="margin-top: 0.375rem;">
+											Looks like a {detectedFramework} app. We picked the build and port for you,
+											everything stays editable.
+										</p>
+									{/if}
 								</Field>
 
 								{#if buildType === 'dockerfile'}

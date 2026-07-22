@@ -105,6 +105,7 @@
   "GET /github/repositories": "authenticated",
   "GET /github/repositories/:owner/:repo/branches": "authenticated",
   "GET /github/repositories/:owner/:repo/contents": "authenticated",
+  "GET /github/repositories/:owner/:repo/detect": "authenticated",
   "GET /github/repositories/:owner/:repo/dockerfile-info": "authenticated",
   "GET /github/repositories/:owner/:repo/dockerfile-stages": "authenticated",
   "GET /github/repositories/:owner/:repo/dockerfiles": "authenticated",

@@ -380,6 +380,29 @@ export class GitHubController {
     return this.githubService.getRepoContents(token, owner, repo, path || '', branch);
   }
 
+  @Get('repositories/:owner/:repo/detect')
+  async detectRepoConfig(
+    @Req() req: any,
+    @Param('owner') owner: string,
+    @Param('repo') repo: string,
+    @Query('branch') branch?: string
+  ) {
+    const externalAuthId = req.user.externalAuthId || req.user.sub;
+    const user = await this.usersService.findOrCreateByClerkId(externalAuthId, {
+      email: req.user.email,
+      firstName: req.user.firstName,
+      lastName: req.user.lastName,
+    });
+
+    if (!user) {
+      throw new HttpException('User not found', HttpStatus.UNAUTHORIZED);
+    }
+
+    const token = await this.resolveRepoAccess(user, owner, repo);
+
+    return this.githubService.detectRepoConfig(token, owner, repo, branch);
+  }
+
   @Get('repositories/:owner/:repo/dockerfile-stages')
   async getDockerfileStages(
     @Req() req: any,
