@@ -1383,19 +1383,19 @@ export class GitHubService {
     return response.ok;
   }
 
-  // List repositories the user can access within a specific installation (intersection
-  // of installation repos and the user's GitHub permissions). Requires user OAuth token.
-  async getUserAccessibleInstallationRepos(userToken: string, installationId: bigint): Promise<GitHubRepo[]> {
+  // Full repo set visible to an installation token, paginated in parallel via
+  // the Link header. Used only to (re)seed the mirror table.
+  private async listInstallationRepos(installationToken: string): Promise<any[]> {
     const perPage = 100;
-    const maxPages = 10;
+    const maxPages = 30;
 
-    const fetchPage = async (page: number): Promise<{ repos: GitHubRepo[]; lastPage: number | null }> => {
+    const fetchPage = async (page: number): Promise<{ repos: any[]; lastPage: number | null }> => {
       const response = await fetch(
-        `https://api.github.com/user/installations/${installationId}/repositories?per_page=${perPage}&page=${page}`,
+        `https://api.github.com/installation/repositories?per_page=${perPage}&page=${page}`,
         {
           signal: AbortSignal.timeout(8000),
           headers: {
-            'Authorization': `Bearer ${userToken}`,
+            'Authorization': `Bearer ${installationToken}`,
             'Accept': 'application/vnd.github+json',
             'X-GitHub-Api-Version': '2022-11-28',
           },
@@ -1403,7 +1403,7 @@ export class GitHubService {
       );
       if (!response.ok) {
         if (response.status === 404) return { repos: [], lastPage: null };
-        throw new BadRequestException(`Failed to get user-accessible installation repos: ${await response.text()}`);
+        throw new BadRequestException(`Failed to list installation repos: ${await response.text()}`);
       }
       const link = response.headers.get('link') || '';
       const lastMatch = link.match(/[?&]page=(\d+)[^>]*>;\s*rel="last"/);
@@ -1418,10 +1418,102 @@ export class GitHubService {
     if (!first.lastPage || first.lastPage <= 1) return first.repos;
 
     const lastPage = Math.min(first.lastPage, maxPages);
+    if (first.lastPage > maxPages) {
+      console.warn(`[GitHub] installation has more than ${maxPages * perPage} repos, mirror truncated`);
+    }
     const rest = await Promise.all(
       Array.from({ length: lastPage - 1 }, (_, i) => fetchPage(i + 2)),
     );
     return [first, ...rest].flatMap((r) => r.repos);
+  }
+
+  private readonly mirrorSyncInflight = new Set<string>();
+
+  async syncInstallationRepos(appInstallation: { id: string; installationId: bigint }): Promise<void> {
+    if (this.mirrorSyncInflight.has(appInstallation.id)) return;
+    this.mirrorSyncInflight.add(appInstallation.id);
+    try {
+      const token = await this.getOrRefreshInstallationToken(appInstallation.installationId);
+      const repos = await this.listInstallationRepos(token);
+      const now = new Date();
+      await this.prisma.$transaction([
+        this.prisma.gitHubRepoMirror.deleteMany({ where: { appInstallationId: appInstallation.id } }),
+        this.prisma.gitHubRepoMirror.createMany({
+          data: repos.map((r) => ({
+            appInstallationId: appInstallation.id,
+            githubRepoId: BigInt(r.id),
+            fullName: r.full_name,
+            private: Boolean(r.private),
+            defaultBranch: r.default_branch ?? null,
+            pushedAt: r.pushed_at ? new Date(r.pushed_at) : null,
+            syncedAt: now,
+          })),
+          skipDuplicates: true,
+        }),
+      ]);
+      console.log(`[GitHub] mirrored ${repos.length} repos for installation ${appInstallation.installationId}`);
+    } finally {
+      this.mirrorSyncInflight.delete(appInstallation.id);
+    }
+  }
+
+  async syncInstallationReposById(installationId: bigint): Promise<void> {
+    const inst = await this.prisma.gitHubAppInstallation.findUnique({ where: { installationId } });
+    if (!inst) return;
+    await this.syncInstallationRepos(inst);
+  }
+
+  async applyInstallationReposEvent(installationId: bigint, added: any[], removed: any[]): Promise<void> {
+    const inst = await this.prisma.gitHubAppInstallation.findUnique({ where: { installationId } });
+    if (!inst) return;
+    if (removed.length > 0) {
+      await this.prisma.gitHubRepoMirror.deleteMany({
+        where: { appInstallationId: inst.id, githubRepoId: { in: removed.map((r) => BigInt(r.id)) } },
+      });
+    }
+    for (const r of added) {
+      await this.prisma.gitHubRepoMirror.upsert({
+        where: { appInstallationId_githubRepoId: { appInstallationId: inst.id, githubRepoId: BigInt(r.id) } },
+        update: { fullName: r.full_name, private: Boolean(r.private), syncedAt: new Date() },
+        create: {
+          appInstallationId: inst.id,
+          githubRepoId: BigInt(r.id),
+          fullName: r.full_name,
+          private: Boolean(r.private),
+          pushedAt: new Date(),
+        },
+      });
+    }
+  }
+
+  async applyRepositoryEvent(installationId: bigint, action: string, repo: any): Promise<void> {
+    if (!repo?.id) return;
+    const inst = await this.prisma.gitHubAppInstallation.findUnique({ where: { installationId } });
+    if (!inst) return;
+    const githubRepoId = BigInt(repo.id);
+    if (action === 'deleted' || action === 'transferred') {
+      await this.prisma.gitHubRepoMirror.deleteMany({ where: { appInstallationId: inst.id, githubRepoId } });
+      return;
+    }
+    await this.prisma.gitHubRepoMirror.updateMany({
+      where: { appInstallationId: inst.id, githubRepoId },
+      data: {
+        fullName: repo.full_name,
+        private: Boolean(repo.private),
+        defaultBranch: repo.default_branch ?? null,
+        syncedAt: new Date(),
+      },
+    });
+  }
+
+  async touchRepoPush(installationId: bigint, repo: { id?: number; full_name?: string }): Promise<void> {
+    if (!repo?.id) return;
+    const inst = await this.prisma.gitHubAppInstallation.findUnique({ where: { installationId } });
+    if (!inst) return;
+    await this.prisma.gitHubRepoMirror.updateMany({
+      where: { appInstallationId: inst.id, githubRepoId: BigInt(repo.id) },
+      data: { pushedAt: new Date(), ...(repo.full_name ? { fullName: repo.full_name } : {}) },
+    });
   }
 
   // Resolve an access token for a specific repo — prefers App installation token, falls back to user OAuth token.
@@ -1440,111 +1532,103 @@ export class GitHubService {
     return this.getValidUserToken(userId);
   }
 
-  private readonly userReposCache = new Map<
-    string,
-    { at: number; result: { repos: GitHubRepo[]; installations: any[]; hasInstallations: boolean; userLinked: boolean } }
-  >();
+  private readonly userInstallationsCache = new Map<string, { at: number; rows: any[] }>();
 
-  private static readonly REPOS_CACHE_FRESH_MS = 60 * 1000;
+  private static readonly INSTALLATIONS_CACHE_MS = 5 * 60 * 1000;
 
-  private readonly reposRefreshInflight = new Set<string>();
+  private static readonly MIRROR_STALE_MS = 24 * 60 * 60 * 1000;
 
-  clearUserReposCache() {
-    this.userReposCache.clear();
+  clearUserInstallationsCache() {
+    this.userInstallationsCache.clear();
   }
 
-  // Get all repos accessible to a user across all their installations, intersected with the
-  // repos the user can see on GitHub (via their user OAuth token). Without a user token we
-  // cannot verify access, so we return no repos — the user must link their GitHub identity.
-  // Any cached list is served immediately; a stale one triggers a background refresh so the
-  // next read is current. When GitHub is unreachable mid-refresh the last good list wins
-  // over a partial one.
+  // The repo list is served from the DB mirror (kept current by installation,
+  // repository, and push webhooks), never from live GitHub pagination. An
+  // installation with no mirror rows is seeded synchronously on first read;
+  // a stale mirror reseeds in the background. Per-user repo permissions are
+  // enforced at deploy time (verifyUserCanAccessRepo), not at list time.
   async getAllUserRepositories(userId: string): Promise<{ repos: GitHubRepo[]; installations: any[]; hasInstallations: boolean; userLinked: boolean }> {
-    const cached = this.userReposCache.get(userId);
-    if (cached) {
-      if (Date.now() - cached.at >= GitHubService.REPOS_CACHE_FRESH_MS) {
-        this.refreshUserRepositoriesInBackground(userId);
-      }
-      return cached.result;
+    let installations: any[];
+    const cachedInst = this.userInstallationsCache.get(userId);
+    if (cachedInst && Date.now() - cachedInst.at < GitHubService.INSTALLATIONS_CACHE_MS) {
+      installations = cachedInst.rows;
+    } else {
+      installations = await this.getUserInstallations(userId);
+      this.userInstallationsCache.set(userId, { at: Date.now(), rows: installations });
     }
-    return this.fetchAllUserRepositories(userId);
-  }
 
-  private refreshUserRepositoriesInBackground(userId: string) {
-    if (this.reposRefreshInflight.has(userId)) return;
-    this.reposRefreshInflight.add(userId);
-    void this.fetchAllUserRepositories(userId)
-      .catch((e) => {
-        console.warn(`[GitHub] background repo refresh failed: ${e?.message ?? e}`);
-      })
-      .finally(() => {
-        this.reposRefreshInflight.delete(userId);
+    const userLinked = Boolean(await this.getValidUserToken(userId));
+
+    if (installations.length === 0) {
+      return { repos: [], installations: [], hasInstallations: false, userLinked };
+    }
+
+    const instIds = installations.map((i) => i.id);
+    const loadRows = () =>
+      this.prisma.gitHubRepoMirror.findMany({
+        where: { appInstallationId: { in: instIds } },
+        orderBy: [{ pushedAt: { sort: 'desc', nulls: 'last' } }, { fullName: 'asc' }],
       });
-  }
 
-  private async fetchAllUserRepositories(userId: string): Promise<{ repos: GitHubRepo[]; installations: any[]; hasInstallations: boolean; userLinked: boolean }> {
-    const cached = this.userReposCache.get(userId);
-    const userToken = await this.getValidUserToken(userId);
-
-    const installations = await this.getUserInstallations(userId);
-    const allRepos: GitHubRepo[] = [];
-    const installationData: any[] = [];
-
-    if (!userToken) {
-      // No way to verify what the user themselves can access — surface installations only.
-      for (const installation of installations) {
-        installationData.push({
-          id: installation.id,
-          installationId: installation.installationId.toString(),
-          accountLogin: installation.accountLogin,
-          accountType: installation.accountType,
-          repositoryCount: 0,
-        });
+    let rows = await loadRows();
+    const seeded = new Set(rows.map((r) => r.appInstallationId));
+    const unseeded = installations.filter((i) => !seeded.has(i.id));
+    if (unseeded.length > 0) {
+      await Promise.all(
+        unseeded.map((i) =>
+          this.syncInstallationRepos(i).catch((e) =>
+            console.error(`[GitHub] mirror seed failed for installation ${i.installationId}:`, e?.message ?? e),
+          ),
+        ),
+      );
+      rows = await loadRows();
+    } else {
+      const oldestByInst = new Map<string, number>();
+      for (const r of rows) {
+        const t = r.syncedAt.getTime();
+        const prev = oldestByInst.get(r.appInstallationId);
+        if (prev === undefined || t < prev) oldestByInst.set(r.appInstallationId, t);
       }
-      return { repos: [], installations: installationData, hasInstallations: installations.length > 0, userLinked: false };
-    }
-
-    let failures = 0;
-    const perInstallation = await Promise.all(
-      installations.map(async (installation) => {
-        try {
-          const repos = await this.getUserAccessibleInstallationRepos(userToken, installation.installationId);
-          return { installation, repos };
-        } catch (e) {
-          failures += 1;
-          console.error(`[GitHub] Failed to get user-accessible repos for installation ${installation.installationId}:`, e);
-          return { installation, repos: null as GitHubRepo[] | null };
+      for (const i of installations) {
+        const oldest = oldestByInst.get(i.id);
+        if (oldest !== undefined && Date.now() - oldest > GitHubService.MIRROR_STALE_MS) {
+          void this.syncInstallationRepos(i).catch(() => {});
         }
-      }),
-    );
-
-    for (const { installation, repos } of perInstallation) {
-      installationData.push({
-        id: installation.id,
-        installationId: installation.installationId.toString(),
-        accountLogin: installation.accountLogin,
-        accountType: installation.accountType,
-        repositoryCount: repos?.length ?? 0,
-      });
-      for (const repo of repos ?? []) {
-        allRepos.push({
-          ...repo,
-          installationId: installation.installationId.toString(),
-          accountLogin: installation.accountLogin,
-        } as any);
       }
     }
 
-    const result = { repos: allRepos, installations: installationData, hasInstallations: installations.length > 0, userLinked: true };
+    const instById = new Map(installations.map((i) => [i.id, i]));
+    const countByInst = new Map<string, number>();
+    for (const r of rows) {
+      countByInst.set(r.appInstallationId, (countByInst.get(r.appInstallationId) ?? 0) + 1);
+    }
 
-    if (failures > 0 && cached) {
-      console.warn(`[GitHub] serving cached repo list (${failures} installation lookup(s) failed)`);
-      return cached.result;
-    }
-    if (failures === 0) {
-      this.userReposCache.set(userId, { at: Date.now(), result });
-    }
-    return result;
+    const repos = rows.flatMap((r) => {
+      const inst = instById.get(r.appInstallationId);
+      if (!inst) return [];
+      return [
+        {
+          id: Number(r.githubRepoId),
+          full_name: r.fullName,
+          private: r.private,
+          default_branch: r.defaultBranch ?? 'main',
+          clone_url: `https://github.com/${r.fullName}.git`,
+          pushed_at: r.pushedAt?.toISOString() ?? null,
+          installationId: inst.installationId.toString(),
+          accountLogin: inst.accountLogin,
+        } as any,
+      ];
+    });
+
+    const installationData = installations.map((i) => ({
+      id: i.id,
+      installationId: i.installationId.toString(),
+      accountLogin: i.accountLogin,
+      accountType: i.accountType,
+      repositoryCount: countByInst.get(i.id) ?? 0,
+    }));
+
+    return { repos, installations: installationData, hasInstallations: true, userLinked };
   }
 
   /**

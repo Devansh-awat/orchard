@@ -493,7 +493,27 @@ export class GitHubController {
         body.installation,
         body.sender
       );
-      this.githubService.clearUserReposCache();
+      this.githubService.clearUserInstallationsCache();
+      if (event === 'installation_repositories') {
+        await this.githubService.applyInstallationReposEvent(
+          BigInt(body.installation.id),
+          body.repositories_added ?? [],
+          body.repositories_removed ?? [],
+        );
+      } else if (body.action === 'created') {
+        void this.githubService
+          .syncInstallationReposById(BigInt(body.installation.id))
+          .catch((e) => console.error('[GitHub App] mirror seed on install failed:', e?.message ?? e));
+      }
+      return { received: true, action: 'processed', event };
+    }
+
+    if (event === 'repository' && body.installation?.id) {
+      await this.githubService.applyRepositoryEvent(
+        BigInt(body.installation.id),
+        body.action,
+        body.repository,
+      );
       return { received: true, action: 'processed', event };
     }
 
@@ -518,6 +538,9 @@ export class GitHubController {
       }
 
       console.log(`[GitHub App] Push to ${repoFullName}:${pushedBranch} - ${commitSha?.substring(0, 7)}`);
+      void this.githubService
+        .touchRepoPush(BigInt(senderInstallationId), body.repository)
+        .catch(() => {});
 
       const repoUrl = `https://github.com/${repoFullName}`;
       const installationIdBig = BigInt(senderInstallationId);

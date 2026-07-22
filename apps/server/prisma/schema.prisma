@@ -145,11 +145,29 @@ model GitHubAppInstallation {
   updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
   user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  repos GitHubRepoMirror[]
 
   @@index([userId], map: "idx_github_app_installations_user")
   @@index([accountLogin], map: "idx_github_app_installations_account")
   @@index([accountId], map: "idx_github_app_installations_account_id")
   @@map("github_app_installations")
+}
+
+model GitHubRepoMirror {
+  id                String    @id @default(uuid()) @db.Uuid
+  appInstallationId String    @map("app_installation_id") @db.Uuid
+  githubRepoId      BigInt    @map("github_repo_id")
+  fullName          String    @map("full_name") @db.VarChar(255)
+  private           Boolean   @default(false)
+  defaultBranch     String?   @map("default_branch") @db.VarChar(255)
+  pushedAt          DateTime? @map("pushed_at") @db.Timestamp(6)
+  syncedAt          DateTime  @default(now()) @map("synced_at") @db.Timestamp(6)
+
+  installation GitHubAppInstallation @relation(fields: [appInstallationId], references: [id], onDelete: Cascade)
+
+  @@unique([appInstallationId, githubRepoId])
+  @@index([appInstallationId, pushedAt(sort: Desc)], map: "idx_github_repo_mirror_pushed")
+  @@map("github_repo_mirror")
 }
 
 // OTP codes for email-based authentication
