@@ -29,7 +29,7 @@
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
 	import RepoDetectionSummary from '$lib/components/deployment/RepoDetectionSummary.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
-	import { Button, PopoverPanel, Field, Input, Select, Badge } from '$lib/components/ui';
+	import { Button, PopoverPanel, Field, Input, Select, Badge, ToggleRow } from '$lib/components/ui';
 
 	interface Repository {
 		id: number;
@@ -1296,17 +1296,13 @@
 					</div>
 				{/each}
 
-				<label class="nd-checkbox-row">
-					<input type="checkbox" bind:checked={autoUrl} class="nd-checkbox" />
-					<div>
-						<span class="nd-checkbox-label">Generate a URL</span>
-						<p class="nd-hint">
-							Your app gets its own https address the moment it deploys, visible only to
-							members of your organization until you make it public. Skip this for workers
-							and other apps that don't serve web traffic.
-						</p>
-					</div>
-				</label>
+				<div class="nd-url-toggle">
+					<ToggleRow
+						bind:checked={autoUrl}
+						label="Generate a URL"
+						hint="An org-only https address, live the moment it deploys. Skip for workers."
+					/>
+				</div>
 			</div>
 		</div>
 
@@ -1597,6 +1593,25 @@
 	.nd-owner-row--after {
 		border-bottom: none;
 		border-top: 1px solid var(--border-default);
+	}
+
+	.nd-owner-row :global(.ps-trigger) {
+		height: 2.25rem;
+		align-items: center;
+	}
+
+	.nd-owner-row .nd-name-input {
+		height: 2.25rem;
+		padding-top: 0;
+		padding-bottom: 0;
+	}
+
+	.nd-url-toggle {
+		margin-top: 0.25rem;
+		padding: 0.625rem 0.75rem;
+		border: 1px solid var(--border-default);
+		border-radius: 0.5rem;
+		background: var(--bg-raised);
 	}
 
 	/* Card body */
