@@ -1,4 +1,5 @@
-import { Controller, Get, Param, Query, Request, BadRequestException } from '@nestjs/common';
+import { Controller, Get, Param, Query, Request, BadRequestException, Sse, MessageEvent } from '@nestjs/common';
+import { Observable } from 'rxjs';
 import { Auth } from '../auth/decorators';
 import { ProjectAccessService } from '../projects/project-access.service';
 import { ObservabilityService } from './observability.service';
@@ -31,6 +32,19 @@ export class ObservabilityController {
     const step = Math.max(1000, Number(stepStr) || 30_000);
     if (end <= start) throw new BadRequestException('end must be > start');
     return this.observability.getHttpMetrics(id, start, end, step);
+  }
+
+  @Sse('deployments/:id/build-logs/stream')
+  async streamBuildLogs(
+    @Param('id') id: string,
+    @Request() req,
+    @Query('offset') offsetStr?: string,
+  ): Promise<Observable<MessageEvent>> {
+    await this.assertAccess(id, req);
+    const lastEventId =
+      typeof req.headers?.['last-event-id'] === 'string' ? req.headers['last-event-id'] : undefined;
+    const offset = Math.max(0, Number(lastEventId ?? offsetStr) || 0);
+    return this.observability.streamBuildLogs(id, offset) as Observable<MessageEvent>;
   }
 
   @Get('deployments/:id/logs/structured')

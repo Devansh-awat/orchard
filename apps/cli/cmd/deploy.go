@@ -494,6 +494,9 @@ func deployLogsCmd() *cobra.Command {
 			}
 			if build {
 				if follow {
+					if err := followBuildLogsSSE(cmd.Context(), cl, args[0]); !errors.Is(err, errSSEUnsupported) {
+						return err
+					}
 					fetch := func(ctx context.Context) (string, error) {
 						var lr map[string]any
 						if err := cl.GetJSON(ctx, deployPath(args[0], "logs"), &lr); err != nil {

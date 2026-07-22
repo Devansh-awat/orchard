@@ -50,8 +50,9 @@
 			}
 			const data = await response.json();
 
-			// Update accumulated logs - only update if new logs are longer or different
-			if (data.buildLogs) {
+			// The SSE stream owns the log text; the fetched blob only wins while
+			// the stream has not delivered anything longer yet.
+			if (data.buildLogs && data.buildLogs.length > (accumulatedLogs?.length ?? 0)) {
 				accumulatedLogs = data.buildLogs;
 			}
 
@@ -81,15 +82,49 @@
 		}, 250);
 	}
 
+	let logSource: EventSource | null = null;
+	let streamedLogs = '';
+
+	function startLogStream() {
+		logSource = new EventSource(`/apiv1/observe/deployments/${deploymentId}/build-logs/stream`);
+		logSource.onmessage = (e) => {
+			let data: {
+				type?: string;
+				chunk?: string;
+				reset?: boolean;
+				done?: boolean;
+			};
+			try {
+				data = JSON.parse(e.data);
+			} catch {
+				return;
+			}
+			if (data.type === 'heartbeat') return;
+			if (data.chunk !== undefined) {
+				streamedLogs = data.reset ? data.chunk : streamedLogs + data.chunk;
+				if (data.reset || streamedLogs.length > (accumulatedLogs?.length ?? 0)) {
+					accumulatedLogs = streamedLogs;
+				}
+			}
+			if (data.done) {
+				logSource?.close();
+				logSource = null;
+				fetchDeployment();
+			}
+		};
+	}
+
 	onMount(() => {
 		fetchDeployment();
-		pollInterval = setInterval(fetchDeployment, 10_000);
+		pollInterval = setInterval(fetchDeployment, 30_000);
+		startLogStream();
 	});
 
 	onDestroy(() => {
 		if (pollInterval) {
 			clearInterval(pollInterval);
 		}
+		logSource?.close();
 	});
 
 	$effect(() => {
@@ -247,7 +282,7 @@
 					status={deployment.status}
 					buildStatus={deployment.buildStatus}
 					buildStep={deployment.buildStep}
-					buildLogs={deployment.buildLogs ?? accumulatedLogs}
+					buildLogs={accumulatedLogs ?? deployment.buildLogs}
 					buildError={deployment.buildError}
 					{isGitHubDeploy}
 					warnings={deployment.warnings}

@@ -78,6 +78,18 @@ export class OrgEventsService implements OnModuleInit {
     return allowed.has(event.projectId);
   }
 
+  /**
+   * Raw per-deployment event tap for internal streams (build-log tail).
+   * Callers must have authorized access to the deployment themselves; no
+   * project scoping is applied here.
+   */
+  forDeployment(type: OrgEventType, deploymentId: string): Observable<OrgEvent> {
+    return this.subject.asObservable().pipe(
+      filter((d) => d.event.type === type && d.event.id === deploymentId),
+      map((d) => d.event),
+    );
+  }
+
   forOrgAsSseScoped(
     organizationId: string,
     userId: string,

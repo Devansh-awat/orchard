@@ -1,7 +1,17 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { createHash } from 'crypto';
+import { Observable, merge, of, from, interval, map, concatMap, mergeMap, takeWhile } from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
+import { OrgEventsService } from '../events/org-events.service';
+
+interface BuildLogMessage {
+  id?: string;
+  data:
+    | { offset: number; chunk: string; reset?: boolean }
+    | { done: true; status: string; step?: string | null }
+    | { type: 'heartbeat'; ts: number };
+}
 
 export interface SeriesPoint { x: number; y: number }
 
@@ -79,7 +89,78 @@ export class ObservabilityService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly k8sWorkload: K8sWorkloadService,
+    private readonly orgEvents: OrgEventsService,
   ) {}
+
+  /**
+   * Offset-addressed live tail of a deployment's build logs. The DB column is
+   * the source of truth; build.changed bus events (plus a slow safety poll)
+   * only trigger delta reads, so no log payload ever rides the event bus. The
+   * SSE id is the character offset after each chunk, which makes Last-Event-ID
+   * reconnects resume exactly. The stream closes itself after emitting a
+   * terminal `{done}` event once the build settles.
+   */
+  streamBuildLogs(deploymentId: string, fromOffset: number): Observable<BuildLogMessage> {
+    let offset = Math.max(0, fromOffset);
+
+    const readDelta = async (): Promise<BuildLogMessage[]> => {
+      const rows = await this.prisma.$queryRaw<
+        { chunk: string | null; total: number | null; build_status: string; build_step: string | null }[]
+      >`
+        SELECT substring(build_logs from ${offset + 1}) AS chunk,
+               length(build_logs) AS total,
+               build_status,
+               build_step
+        FROM deployments
+        WHERE id = ${deploymentId}::uuid
+      `;
+      const row = rows[0];
+      if (!row) {
+        return [{ data: { done: true, status: 'deleted' } }];
+      }
+
+      const events: BuildLogMessage[] = [];
+      const total = Number(row.total ?? 0);
+      if (total > offset && row.chunk) {
+        offset = total;
+        events.push({ id: String(offset), data: { offset, chunk: row.chunk } });
+      } else if (total < offset) {
+        // The log column shrank: a new build replaced it. Restart the tail
+        // from zero and re-read immediately so the fresh logs follow the
+        // reset marker in the same batch.
+        offset = 0;
+        const fresh = await readDelta();
+        return [{ id: '0', data: { offset: 0, chunk: '', reset: true } }, ...fresh];
+      }
+
+      const active = ['building', 'pending', 'queued', 'scheduled'].includes(row.build_status);
+      if (!active) {
+        events.push({
+          data: { done: true, status: row.build_status, step: row.build_step },
+        });
+      }
+      return events;
+    };
+
+    const triggers$ = merge(
+      of(0),
+      this.orgEvents.forDeployment('build.changed', deploymentId),
+      interval(5000),
+    );
+
+    const logs$ = triggers$.pipe(
+      concatMap(() => from(readDelta())),
+      mergeMap((events) => from(events)),
+    );
+
+    const heartbeat$ = interval(25_000).pipe(
+      map(() => ({ data: { type: 'heartbeat', ts: Date.now() } }) as BuildLogMessage),
+    );
+
+    return merge(logs$, heartbeat$).pipe(
+      takeWhile((ev) => !(ev.data as any)?.done, true),
+    );
+  }
 
   async getCapabilities(deploymentId: string): Promise<Capabilities> {
     const [ingressCount, runtime] = await Promise.all([
