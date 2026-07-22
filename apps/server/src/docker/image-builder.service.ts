@@ -319,7 +319,7 @@ export class ImageBuilderService {
     const chunk = this.takeLogChunk(jobName, fullLogs);
     if (chunk === null) return;
 
-    await this.appendStreamedChunk(deploymentId, chunk);
+    await this.appendStreamedChunk(deploymentId, chunk, jobName, fullLogs.length);
 
     if (!this.buildkitBuildingDetected.has(jobName) && BUILDKIT_STEP_RE.test(chunk)) {
       this.buildkitBuildingDetected.add(jobName);
@@ -338,8 +338,27 @@ export class ImageBuilderService {
     if (!deploymentId || !pusherLogs) return;
     const chunk = this.takeLogChunk(`${jobName}:pusher`, pusherLogs);
     if (chunk === null) return;
-    await this.appendStreamedChunk(deploymentId, chunk);
+    await this.appendStreamedChunk(deploymentId, chunk, `${jobName}:pusher`, pusherLogs.length);
     this.emitBuildChanged(deploymentId).catch(() => {});
+  }
+
+  private async seedLogOffsets(jobName: string, deploymentId?: string) {
+    if (!deploymentId || this.buildkitLogOffsets.has(jobName)) return;
+    try {
+      const deployment = await this.prisma.deployment.findUnique({
+        where: { id: deploymentId },
+        select: { buildStepTimestamps: true },
+      });
+      const offsets = ((deployment?.buildStepTimestamps as Record<string, any>)?.__logOffsets ?? {}) as Record<string, unknown>;
+      for (const [key, value] of Object.entries(offsets)) {
+        if (key !== jobName && !key.startsWith(`${jobName}:`)) continue;
+        if (typeof value === 'number' && !this.buildkitLogOffsets.has(key)) {
+          this.buildkitLogOffsets.set(key, value);
+        }
+      }
+    } catch {
+      return;
+    }
   }
 
   private takeLogChunk(offsetKey: string, fullLogs: string): string | null {
@@ -349,9 +368,33 @@ export class ImageBuilderService {
     return fullLogs.slice(offset);
   }
 
-  private async appendStreamedChunk(deploymentId: string, chunk: string) {
+  private async appendStreamedChunk(deploymentId: string, chunk: string, offsetKey?: string, offsetValue?: number) {
     try {
       const sanitized = this.sanitizeLogMessage(chunk);
+      if (offsetKey !== undefined && offsetValue !== undefined) {
+        await this.prisma.$executeRaw`
+          UPDATE "deployments"
+          SET "build_logs" = CASE
+            WHEN "build_logs" IS NULL OR "build_logs" = '' THEN ${sanitized}
+            WHEN RIGHT("build_logs", 1) = E'\n' THEN "build_logs" || ${sanitized}
+            ELSE "build_logs" || E'\n' || ${sanitized}
+          END,
+          "build_step_timestamps" = jsonb_set(
+            jsonb_set(
+              COALESCE("build_step_timestamps", '{}'::jsonb),
+              '{__logOffsets}',
+              COALESCE("build_step_timestamps"->'__logOffsets', '{}'::jsonb),
+              true
+            ),
+            ARRAY['__logOffsets', ${offsetKey}],
+            to_jsonb(${offsetValue}::bigint),
+            true
+          ),
+          "updated_at" = NOW()
+          WHERE "id" = ${deploymentId}::uuid
+        `;
+        return;
+      }
       await this.prisma.$executeRaw`
         UPDATE "deployments"
         SET "build_logs" = CASE
@@ -2173,6 +2216,7 @@ exit $rc`,
     let pollCount = 0;
 
     console.log(`[ImageBuilder] Starting to wait for build job ${jobName} (timeout: ${timeoutMs / 1000}s, deploymentId: ${deploymentId})`);
+    await this.seedLogOffsets(jobName, deploymentId);
     await this.appendLog(deploymentId, `Waiting for build job ${jobName} to complete...`);
 
     // Scheduling wait: job submitted → pod actually running. Finishes on the

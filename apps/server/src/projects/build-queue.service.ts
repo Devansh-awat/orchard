@@ -18,6 +18,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
   private draining = false;
   private drainAgain = false;
   private drainInterval: NodeJS.Timeout | null = null;
+  private heartbeatInterval: NodeJS.Timeout | null = null;
   private bootTimeout: NodeJS.Timeout | null = null;
 
   constructor(
@@ -26,8 +27,11 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
-    this.drainInterval = setInterval(() => {
+    this.heartbeatInterval = setInterval(() => {
       this.heartbeat().catch(() => {});
+    }, 10_000);
+    this.heartbeatInterval.unref?.();
+    this.drainInterval = setInterval(() => {
       this.reclaim().catch((e) => this.logger.warn(`reclaim failed: ${e?.message ?? e}`));
       this.kick();
     }, 30_000);
@@ -41,8 +45,10 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
 
   onModuleDestroy() {
     if (this.drainInterval) clearInterval(this.drainInterval);
+    if (this.heartbeatInterval) clearInterval(this.heartbeatInterval);
     if (this.bootTimeout) clearTimeout(this.bootTimeout);
     this.drainInterval = null;
+    this.heartbeatInterval = null;
     this.bootTimeout = null;
   }
 
@@ -165,14 +171,17 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
         select: { buildStatus: true },
       });
       const ok = dep?.buildStatus === 'succeeded';
-      await this.prisma.buildRun.updateMany({
-        where: { deploymentId, status: 'building' },
-        data: {
-          status: ok ? 'succeeded' : 'failed',
-          finishedAt: new Date(),
-          workerId: null,
-        },
-      });
+      await this.prisma.$executeRaw`
+        UPDATE "build_runs" br
+        SET "status" = ${ok ? 'succeeded' : 'failed'},
+            "finished_at" = NOW(),
+            "worker_id" = NULL,
+            "logs" = d."build_logs"
+        FROM "deployments" d
+        WHERE d."id" = br."deployment_id"
+          AND br."deployment_id" = ${deploymentId}::uuid
+          AND br."status" = 'building'
+      `;
     } catch (e) {
       this.logger.warn(`onBuildFinished(${deploymentId}) failed: ${(e as Error)?.message ?? e}`);
     }
@@ -312,16 +321,19 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
       const overRuntime = run.startedAt && now - run.startedAt.getTime() > STUCK_MS;
       if (!overRuntime) continue;
       const detail = 'Build exceeded the maximum runtime';
-      const claimed = await this.prisma.buildRun.updateMany({
-        where: { id: run.id, status: 'building' },
-        data: {
-          status: 'failed',
-          finishedAt: new Date(),
-          detail,
-          workerId: null,
-        },
-      });
-      if (claimed.count === 0) continue;
+      const claimed = await this.prisma.$executeRaw`
+        UPDATE "build_runs" br
+        SET "status" = 'failed',
+            "finished_at" = NOW(),
+            "detail" = ${detail},
+            "worker_id" = NULL,
+            "logs" = d."build_logs"
+        FROM "deployments" d
+        WHERE d."id" = br."deployment_id"
+          AND br."id" = ${run.id}::uuid
+          AND br."status" = 'building'
+      `;
+      if (claimed === 0) continue;
       await this.prisma.deployment.updateMany({
         where: { id: run.deploymentId, buildStatus: 'building' },
         data: { buildStatus: 'failed', buildError: detail, status: 'running' },

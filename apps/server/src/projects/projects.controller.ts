@@ -605,6 +605,19 @@ export class DeploymentsController {
     return this.deployments.listBuildRuns(id, Number(limitStr) || 20);
   }
 
+  @Get(':id/build-runs/:runId/logs')
+  async getBuildRunLogs(
+    @Param('id') id: string,
+    @Param('runId') runId: string,
+    @Request() req,
+  ) {
+    await this.projectAccess.assertDeploymentView(id, req.user.sub, {
+      email: req.user.email, username: req.user.username,
+      firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
+    });
+    return this.deployments.getBuildRunLogs(id, runId);
+  }
+
   @Get(':id/metrics')
   async getDeploymentMetrics(
     @Param('id') id: string,

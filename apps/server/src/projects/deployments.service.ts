@@ -94,7 +94,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
   onModuleInit() {
     setTimeout(() => this.recoverStuckBuilds(), 5_000);
-    this.buildReconcileInterval = setInterval(() => this.recoverStuckBuilds(), 60_000);
+    this.buildReconcileInterval = setInterval(() => this.recoverStuckBuilds(), 15_000);
   }
 
   onModuleDestroy() {
@@ -110,7 +110,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       const stuckBuilds = await this.prisma.deployment.findMany({
         where: {
           buildStatus: 'building',
-          updatedAt: { lt: new Date(Date.now() - 2 * 60 * 1000) },
+          updatedAt: { lt: new Date(Date.now() - 15_000) },
         },
         select: {
           id: true,
@@ -145,7 +145,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   }) {
     if (this.activeRecoveries.has(deployment.id)) return;
 
-    const staleCutoff = new Date(Date.now() - 2 * 60 * 1000);
+    const staleCutoff = new Date(Date.now() - 15_000);
     const claimed: number = await this.prisma.$executeRaw`
       UPDATE "deployments"
       SET "updated_at" = NOW()
@@ -179,28 +179,20 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     if (
       activeRun?.workerId &&
       activeRun.heartbeatAt &&
-      Date.now() - activeRun.heartbeatAt.getTime() < 90_000
+      Date.now() - activeRun.heartbeatAt.getTime() < 30_000
     ) {
-      this.activeRecoveries.delete(deployment.id);
-      return;
+      const workerAlive = await this.isWorkerPodAlive(activeRun.workerId);
+      if (workerAlive !== false) {
+        this.activeRecoveries.delete(deployment.id);
+        return;
+      }
+      this.logger.log(`[BuildRecovery] Worker pod for ${deployment.id} is gone; adopting immediately`);
     }
 
     this.logger.log(`[BuildRecovery] Recovering deployment ${deployment.id} (step: ${deployment.buildStep})`);
 
     if (deployment.buildStep === 'deploying' && deployment.image) {
-      try {
-        const k8sExists = await this.k8sWorkload.getKubernetesDeployment(deployment.name, deployment.namespace)
-          .then(d => d !== null).catch(() => false);
-        if (k8sExists) {
-          await this.k8sWorkload.updateDeploymentImage(deployment.name, deployment.namespace, deployment.image);
-          await this.markBuildSucceeded(deployment.id, 'Recovered after server restart.');
-          this.logger.log(`[BuildRecovery] Completed deploying-state build for ${deployment.id}`);
-        } else {
-          await this.markBuildFailed(deployment.id, 'Server restarted during deployment and k8s deployment not found. Please redeploy.');
-        }
-      } catch (error) {
-        await this.markBuildFailed(deployment.id, `Server restarted during deployment: ${error.message}`);
-      }
+      await this.finishRecoveredBuild(deployment, deployment.image);
       this.activeRecoveries.delete(deployment.id);
       return;
     }
@@ -276,6 +268,21 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
+  private async isWorkerPodAlive(workerId: string): Promise<boolean | null> {
+    if (!process.env.KUBERNETES_SERVICE_HOST) return null;
+    const podName = workerId.replace(/-\d+$/, '');
+    if (!podName || podName === workerId) return null;
+    const namespace =
+      process.env.ORCHARD_SERVER_NAMESPACE || process.env.POD_NAMESPACE || 'orchard';
+    try {
+      await this.k8sWorkload.getPod(podName, namespace);
+      return true;
+    } catch (error) {
+      if (error instanceof NotFoundException) return false;
+      return null;
+    }
+  }
+
   private async finishRecoveredBuild(
     deployment: { id: string; name: string; namespace: string },
     image: string,
@@ -289,6 +296,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           data: { image, buildStep: 'deploying' },
         });
         await this.k8sWorkload.updateDeploymentImage(deployment.name, deployment.namespace, image);
+        await this.recordRecoveredImageHistory(deployment.id, image).catch((error) => {
+          this.logger.warn(`[BuildRecovery] Failed to record image history for ${deployment.id}: ${error.message}`);
+        });
         await this.markBuildSucceeded(deployment.id, 'Build recovered after server restart.');
         this.logger.log(`[BuildRecovery] Completed succeeded build for ${deployment.id}`);
       } else {
@@ -297,6 +307,70 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       await this.markBuildFailed(deployment.id, `Recovery failed: ${error.message}`);
     }
+  }
+
+  private async recordRecoveredImageHistory(deploymentId: string, image: string) {
+    const run = await this.prisma.buildRun.findFirst({
+      where: { deploymentId, status: 'building' },
+      orderBy: { startedAt: 'desc' },
+      select: {
+        commitSha: true,
+        commitMessage: true,
+        commitAuthorName: true,
+        commitAuthorUsername: true,
+        branch: true,
+        triggerType: true,
+        triggeredById: true,
+        startedAt: true,
+      },
+    });
+    const dep = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { buildLogs: true },
+    });
+    await this.prisma.$transaction(async (tx) => {
+      const existing = await tx.imageHistory.findFirst({
+        where: { deploymentId, image },
+        orderBy: { createdAt: 'desc' },
+      });
+      if (existing) {
+        await tx.imageHistory.updateMany({
+          where: { deploymentId, isActive: true, id: { not: existing.id } },
+          data: { isActive: false },
+        });
+        await tx.imageHistory.update({
+          where: { id: existing.id },
+          data: {
+            isActive: true,
+            buildLogs: existing.buildLogs ?? dep?.buildLogs ?? null,
+            buildCompletedAt: existing.buildCompletedAt ?? new Date(),
+          },
+        });
+        return;
+      }
+      await tx.imageHistory.updateMany({
+        where: { deploymentId, isActive: true },
+        data: { isActive: false },
+      });
+      await tx.imageHistory.create({
+        data: {
+          deploymentId,
+          image,
+          tag: image.split(':').pop() || 'latest',
+          commitSha: run?.commitSha ?? null,
+          commitMessage: run?.commitMessage ?? null,
+          commitAuthorName: run?.commitAuthorName ?? null,
+          commitAuthorUsername: run?.commitAuthorUsername ?? null,
+          branch: run?.branch ?? null,
+          buildLogs: dep?.buildLogs ?? null,
+          buildStartedAt: run?.startedAt ?? null,
+          buildCompletedAt: new Date(),
+          triggerType: run?.triggerType ?? null,
+          triggeredById: run?.triggeredById ?? null,
+          isActive: true,
+        },
+      });
+    });
   }
 
   private resumeBuildWatch(
@@ -322,19 +396,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           return;
         }
 
-        const k8sExists = await this.k8sWorkload.getKubernetesDeployment(deployment.name, deployment.namespace)
-          .then(d => d !== null).catch(() => false);
-        if (k8sExists) {
-          await this.prisma.deployment.update({
-            where: { id: deployment.id },
-            data: { image: resolvedImage, buildStep: 'deploying' },
-          });
-          await this.k8sWorkload.updateDeploymentImage(deployment.name, deployment.namespace, resolvedImage);
-          await this.markBuildSucceeded(deployment.id, 'Build recovered after server restart.');
-          this.logger.log(`[BuildRecovery] Successfully resumed and completed build for ${deployment.id}`);
-        } else {
-          await this.markBuildFailed(deployment.id, 'Build succeeded but k8s deployment not found. Please redeploy.');
-        }
+        await this.finishRecoveredBuild(deployment, resolvedImage);
       } catch (error) {
         await this.markBuildFailed(deployment.id, `Build failed after resume: ${error.message}`).catch(() => {});
         this.logger.error(`[BuildRecovery] Resumed build failed for ${deployment.id}: ${error.message}`);
@@ -3436,6 +3498,30 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       finishedAt: r.finishedAt,
       createdAt: r.createdAt,
     }));
+  }
+
+  async getBuildRunLogs(deploymentId: string, runId: string) {
+    if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(runId)) {
+      throw new NotFoundException(`Build run ${runId} not found`);
+    }
+    const run = await this.prisma.buildRun.findFirst({
+      where: { id: runId, deploymentId },
+      select: { logs: true, status: true },
+    });
+    if (!run) {
+      throw new NotFoundException(`Build run ${runId} not found`);
+    }
+    if (run.logs !== null) {
+      return { logs: run.logs, live: false };
+    }
+    if (run.status === 'building') {
+      const deployment = await this.prisma.deployment.findUnique({
+        where: { id: deploymentId },
+        select: { buildLogs: true },
+      });
+      return { logs: deployment?.buildLogs ?? null, live: true };
+    }
+    return { logs: null, live: false };
   }
 
   async getAutoDeployStatus(deploymentId: string, clerkId: string) {

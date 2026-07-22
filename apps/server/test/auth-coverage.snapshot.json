@@ -79,6 +79,7 @@
   "GET /deployments/:id": "authenticated",
   "GET /deployments/:id/auto-deploy": "authenticated",
   "GET /deployments/:id/build-runs": "authenticated",
+  "GET /deployments/:id/build-runs/:runId/logs": "authenticated",
   "GET /deployments/:id/github-deployments": "authenticated",
   "GET /deployments/:id/image-history": "authenticated",
   "GET /deployments/:id/image-history/:imageHistoryId/logs": "authenticated",
