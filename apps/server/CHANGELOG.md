@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.29.1](https://github.com/LeafdTK/leaf/compare/server/v1.29.0...server/v1.29.1) (2026-07-22)
+
+
+### Bug Fixes
+
+* watchdog timeout on build start so hung pre-job phases fail instead of spinning forever ([b91ee34](https://github.com/LeafdTK/leaf/commit/b91ee34859ee2b4308885be23185c5361f3badb4))
+
 ## [1.29.0](https://github.com/LeafdTK/leaf/compare/server/v1.28.0...server/v1.29.0) (2026-07-22)
 
 
