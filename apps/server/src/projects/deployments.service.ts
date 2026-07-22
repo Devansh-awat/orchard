@@ -212,7 +212,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (!foundJob) {
-      await this.markBuildFailed(deployment.id, 'Build job not found after server restart');
+      const requeued = await this.requeueOrphanedBuild(deployment.id);
+      if (requeued) {
+        this.logger.log(`[BuildRecovery] No build job found for ${deployment.id}; requeued the build`);
+      } else {
+        await this.markBuildFailed(deployment.id, 'Build job not found after server restart');
+      }
       this.activeRecoveries.delete(deployment.id);
       return;
     }
@@ -345,6 +350,49 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     } catch (e: any) {
       this.logger.warn(`[BuildRecovery] Failed to close GitHub check for ${deploymentId}: ${e?.message || e}`);
     }
+  }
+
+  // The server died in the window between claiming a build and creating its
+  // k8s job (check-run creation, env assembly, railpack detection), so there
+  // is nothing in-cluster to re-adopt. The buildRun row still holds the full
+  // trigger context — put it back in the queue instead of failing the deploy.
+  // The detail marker caps this at one retry per run so a crash-looping
+  // server cannot requeue the same build forever.
+  private static readonly REQUEUE_DETAIL = 'Requeued after server restart';
+
+  private async requeueOrphanedBuild(deploymentId: string): Promise<boolean> {
+    const run = await this.prisma.buildRun.findFirst({
+      where: { deploymentId, status: 'building' },
+      orderBy: { startedAt: 'desc' },
+    });
+    if (!run) return false;
+    if (run.detail === DeploymentsService.REQUEUE_DETAIL) return false;
+    if (run.triggerType !== 'auto' && run.triggerType !== 'manual') return false;
+
+    await this.prisma.buildRun.update({
+      where: { id: run.id },
+      data: {
+        status: 'scheduled',
+        detail: DeploymentsService.REQUEUE_DETAIL,
+        workerId: null,
+        startedAt: null,
+        heartbeatAt: null,
+        checkRunId: null,
+        githubInstallationId: null,
+        repoFullName: null,
+      },
+    });
+    await this.prisma.deployment.updateMany({
+      where: { id: deploymentId, buildStatus: 'building' },
+      data: { buildStatus: 'pending' },
+    });
+    await this.prisma.$executeRaw`
+      UPDATE "deployments"
+      SET "build_logs" = COALESCE("build_logs", '') || ${`\n[INFO] Server restarted before the build job was created; the build was requeued automatically.\n`}
+      WHERE "id" = ${deploymentId}::uuid
+    `.catch(() => {});
+    this.buildQueue.kick();
+    return true;
   }
 
   private async markBuildFailed(deploymentId: string, reason: string) {
