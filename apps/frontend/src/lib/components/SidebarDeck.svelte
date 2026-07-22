@@ -359,14 +359,14 @@
 					<button
 						type="button"
 						class="deck-strip"
-						class:deck-strip--collapsed={collapsed}
 						aria-expanded={!collapsed && attentionOpen}
 						title={collapsed ? `${failingDeps.length} failing` : undefined}
 						onclick={onStripClick}
 					>
 						<span class="deck-strip-dot"></span>
+						<span>{failingDeps.length}</span>
 						{#if !collapsed}
-							<span transition:fade={{ duration: 120 }}>{failingDeps.length} failing</span>
+							<span transition:fade={{ duration: 120 }}>failing</span>
 							<span
 								class="deck-strip-chevron"
 								transition:fade={{ duration: 120 }}
@@ -374,8 +374,6 @@
 							>
 								<ChevronRight size={12} />
 							</span>
-						{:else}
-							<span transition:fade={{ duration: 120 }}>{failingDeps.length}</span>
 						{/if}
 					</button>
 					{#if !collapsed}
@@ -392,11 +390,11 @@
 					<div class="deck-gap"></div>
 				{/if}
 
-				{#if !collapsed}
-					<div class="deck-section-head" transition:slide={{ duration: 160 }}>
-						<span transition:fade={{ duration: 100 }}>Platform</span>
-					</div>
-				{/if}
+				<div class="deck-section-head" class:deck-section-head--collapsed={collapsed}>
+					{#if !collapsed}
+						<span transition:fade={{ duration: 120 }}>Platform</span>
+					{/if}
+				</div>
 				{#each nav as item, i (item.id)}
 					<a
 						href={item.href}
@@ -416,13 +414,14 @@
 				{/each}
 
 				{#if pinnedDeps.length > 0}
-					{#if !collapsed}
-						<div class="deck-section-head deck-section-head--spaced" transition:slide={{ duration: 160 }}>
-							<span transition:fade={{ duration: 100 }}>Pinned</span>
-						</div>
-					{:else}
-						<div class="deck-gap"></div>
-					{/if}
+					<div
+						class="deck-section-head deck-section-head--spaced"
+						class:deck-section-head--collapsed={collapsed}
+					>
+						{#if !collapsed}
+							<span transition:fade={{ duration: 120 }}>Pinned</span>
+						{/if}
+					</div>
 					{#each pinnedDeps as pin, i (pin.id)}
 						<a
 							href={pin.href}
@@ -598,12 +597,6 @@
 	}
 	.deck-search--collapsed {
 		padding: 0.5rem 0 0.5rem 1rem;
-	}
-	.deck-strip--collapsed {
-		flex-direction: column;
-		align-items: center;
-		gap: 0.1875rem;
-		padding: 0.375rem 0.25rem;
 	}
 	.deck-split--collapsed {
 		flex-direction: column;
@@ -793,19 +786,32 @@
 		background-color: color-mix(in srgb, currentColor 7%, transparent);
 	}
 	.deck-section-head {
+		position: relative;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
+		height: 1.625rem;
 		font-size: 0.6875rem;
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
 		opacity: 0.45;
-		padding: 0.25rem 0.5rem 0.375rem;
+		padding: 0 0.5rem;
 		user-select: none;
 	}
 	.deck-section-head--spaced {
-		padding-top: 1rem;
+		margin-top: 1rem;
+	}
+	.deck-section-head--collapsed::before {
+		content: '';
+		position: absolute;
+		left: 50%;
+		top: 50%;
+		transform: translate(-50%, -50%);
+		width: 1.25rem;
+		height: 1px;
+		background-color: currentColor;
+		opacity: 0.6;
 	}
 	.deck-row {
 		display: flex;
