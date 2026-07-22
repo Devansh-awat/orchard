@@ -7,11 +7,6 @@ import {
 import type { FadeParams, FlyParams, ScaleParams, SlideParams } from 'svelte/transition';
 import { effectiveAnimationLevel } from '$lib/stores/preferences';
 
-/* Three tiers from the accessibility setting: 'full' plays transitions as
-   authored, 'off' jumps straight to the end state, and 'reduced' keeps only
-   opacity — movement (fly offsets, scale, slide heights) is stripped so
-   nothing travels across the screen. */
-
 type AnyParams = { duration?: number; delay?: number };
 
 function instant<P extends AnyParams>(params?: P): P {

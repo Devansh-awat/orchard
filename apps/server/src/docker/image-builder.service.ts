@@ -835,10 +835,6 @@ fi
 `;
   }
 
-  // GIT_SHA is resolved inside the build container (the clone keeps .git in
-  // /workspace) because the server assembles these scripts before the commit
-  // is known for branch-triggered builds. The value rides an unquoted shell
-  // expansion appended after the shell-quoted static args.
   private static readonly GIT_SHA_PREAMBLE =
     'GIT_SHA=$(git -C /workspace rev-parse HEAD 2>/dev/null || echo unknown)\n';
   private static readonly GIT_SHA_BUILDCTL_OPT = ' --opt build-arg:GIT_SHA="$GIT_SHA"';

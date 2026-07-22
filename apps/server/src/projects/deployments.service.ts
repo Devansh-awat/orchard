@@ -352,12 +352,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  // The server died in the window between claiming a build and creating its
-  // k8s job (check-run creation, env assembly, railpack detection), so there
-  // is nothing in-cluster to re-adopt. The buildRun row still holds the full
-  // trigger context — put it back in the queue instead of failing the deploy.
-  // The detail marker caps this at one retry per run so a crash-looping
-  // server cannot requeue the same build forever.
   private static readonly REQUEUE_DETAIL = 'Requeued after server restart';
 
   private async requeueOrphanedBuild(deploymentId: string): Promise<boolean> {
