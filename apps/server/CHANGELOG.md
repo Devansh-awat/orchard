@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.30.1](https://github.com/LeafdTK/leaf/compare/server/v1.30.0...server/v1.30.1) (2026-07-22)
+
+
+### Bug Fixes
+
+* hoist logUrl so auto deploys stop crashing on scope ([4c1561b](https://github.com/LeafdTK/leaf/commit/4c1561bf89b1f984977139de3e4b6f80e584d04d))
+
 ## [1.30.0](https://github.com/LeafdTK/leaf/compare/server/v1.29.1...server/v1.30.0) (2026-07-22)
 
 
