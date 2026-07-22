@@ -122,6 +122,7 @@
   "GET /observe/deployments/:id/capabilities": "authenticated",
   "GET /observe/deployments/:id/errors": "authenticated",
   "GET /observe/deployments/:id/http-metrics": "authenticated",
+  "GET /observe/deployments/:id/logs/stream": "authenticated",
   "GET /observe/deployments/:id/logs/structured": "authenticated",
   "GET /observe/deployments/:id/overview": "authenticated",
   "GET /observe/deployments/:id/runtime": "authenticated",

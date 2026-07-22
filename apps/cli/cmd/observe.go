@@ -3,6 +3,7 @@ package cmd
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/url"
 	"os"
@@ -98,6 +99,11 @@ func observeLogsCmd() *cobra.Command {
 			path := observePath(args[0], "logs", "structured") + "?" + q.Encode()
 			asJSON := fmtFlag() == output.FormatJSON
 			if follow {
+				if level == "" && search == "" && !asJSON {
+					if err := followRuntimeLogsSSE(cmd.Context(), cl, args[0], tail); !errors.Is(err, errSSEUnsupported) {
+						return err
+					}
+				}
 				fetch := func(ctx context.Context) (string, error) {
 					var raw map[string]any
 					if err := cl.GetJSON(ctx, path, &raw); err != nil {

@@ -47,6 +47,21 @@ export class ObservabilityController {
     return this.observability.streamBuildLogs(id, offset) as Observable<MessageEvent>;
   }
 
+  @Sse('deployments/:id/logs/stream')
+  async streamRuntimeLogs(
+    @Param('id') id: string,
+    @Request() req,
+    @Query('tailLines') tailLinesStr?: string,
+    @Query('sinceTime') sinceTimeQuery?: string,
+  ): Promise<Observable<MessageEvent>> {
+    await this.assertAccess(id, req);
+    const tailLines = Math.min(Math.max(1, Number(tailLinesStr) || 100), 5000);
+    const lastEventId =
+      typeof req.headers?.['last-event-id'] === 'string' ? req.headers['last-event-id'] : undefined;
+    const sinceTime = lastEventId || sinceTimeQuery || undefined;
+    return this.observability.streamRuntimeLogs(id, req.user.sub, tailLines, sinceTime) as Observable<MessageEvent>;
+  }
+
   @Get('deployments/:id/logs/structured')
   async getStructuredLogs(
     @Param('id') id: string,

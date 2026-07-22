@@ -498,6 +498,96 @@ export class K8sWorkloadService {
     });
   }
 
+  async getPodContainers(podName: string, namespace: string): Promise<string[]> {
+    this.ensureKubeConfig();
+    const api = this.kc.makeApiClient(k8s.CoreV1Api);
+    const pod = await api.readNamespacedPod(podName, namespace);
+    return (pod.body.spec?.containers ?? []).map((c) => c.name);
+  }
+
+  /**
+   * Live-follow a pod's logs with the raw API-server endpoint (the generated
+   * client cannot stream follow=true reads). Complete lines are delivered via
+   * onLine; onEnd fires exactly once when the stream closes (container
+   * restart, pod gone, network) or errors. Returns an abort function. The
+   * caller owns reconnect policy.
+   */
+  followPodLogStream(
+    podName: string,
+    namespace: string,
+    container: string | undefined,
+    opts: { sinceTime?: string; tailLines?: number },
+    onLine: (line: string) => void,
+    onEnd: (err?: Error) => void,
+  ): () => void {
+    this.ensureKubeConfig();
+    const cluster = this.kc.getCurrentCluster();
+    if (!cluster) {
+      onEnd(new Error('No current cluster in kubeconfig'));
+      return () => {};
+    }
+
+    const params = new URLSearchParams({ follow: 'true', timestamps: 'true' });
+    if (container) params.set('container', container);
+    if (opts.sinceTime) params.set('sinceTime', opts.sinceTime);
+    else if (opts.tailLines !== undefined) params.set('tailLines', String(opts.tailLines));
+    const url = new URL(
+      `${cluster.server}/api/v1/namespaces/${encodeURIComponent(namespace)}/pods/${encodeURIComponent(podName)}/log?${params.toString()}`,
+    );
+
+    let ended = false;
+    const finish = (err?: Error) => {
+      if (ended) return;
+      ended = true;
+      onEnd(err);
+    };
+
+    let req: import('http').ClientRequest | null = null;
+    const start = async () => {
+      const httpsOpts: https.RequestOptions = { method: 'GET' };
+      await this.kc.applyToHTTPSOptions(httpsOpts);
+      req = https.request(url, httpsOpts, (res) => {
+        if ((res.statusCode ?? 500) >= 400) {
+          let body = '';
+          res.setEncoding('utf8');
+          res.on('data', (c) => { body += c; });
+          res.on('end', () => {
+            let parsed: any;
+            try { parsed = JSON.parse(body); } catch { parsed = { message: body }; }
+            finish(Object.assign(new Error(parsed?.message || `Log stream failed with status ${res.statusCode}`), {
+              response: { statusCode: res.statusCode, body: parsed },
+            }));
+          });
+          return;
+        }
+        let partial = '';
+        res.setEncoding('utf8');
+        res.on('data', (chunk: string) => {
+          partial += chunk;
+          let idx: number;
+          while ((idx = partial.indexOf('\n')) >= 0) {
+            const line = partial.slice(0, idx);
+            partial = partial.slice(idx + 1);
+            if (line) onLine(line);
+          }
+        });
+        res.on('end', () => {
+          if (partial) onLine(partial);
+          finish();
+        });
+        res.on('error', (err) => finish(err as Error));
+      });
+      req.on('error', (err) => finish(err as Error));
+      req.end();
+    };
+    start().catch((err) => finish(err as Error));
+
+    return () => {
+      try { req?.destroy(); } catch { /* already gone */ }
+      finish();
+    };
+  }
+
   async listDeployments(namespace = 'midnight-staging') {
     this.ensureKubeConfig();
     

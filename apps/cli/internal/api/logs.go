@@ -17,6 +17,54 @@ type BuildLogEvent struct {
 	Type   string `json:"type"`
 }
 
+// RuntimeLogLine is one pod log line from the runtime stream.
+type RuntimeLogLine struct {
+	Pod  string `json:"pod"`
+	TS   string `json:"ts"`
+	Line string `json:"line"`
+}
+
+// RuntimeLogEvent is one message from the runtime log SSE stream.
+type RuntimeLogEvent struct {
+	Lines  []RuntimeLogLine `json:"lines"`
+	Pod    string           `json:"pod"`
+	Gone   bool             `json:"gone"`
+	Done   bool             `json:"done"`
+	Status string           `json:"status"`
+	Type   string           `json:"type"`
+}
+
+// FollowRuntimeLogs tails a deployment's pod logs live over SSE, fanned in
+// across pods with server-side batching. Heartbeats are filtered. A 404 on the
+// error channel before any data means the server predates the endpoint.
+func (c *Client) FollowRuntimeLogs(ctx context.Context, deploymentID string, tailLines int) (<-chan RuntimeLogEvent, <-chan error) {
+	path := "/observe/deployments/" + url.PathEscape(deploymentID) + "/logs/stream"
+	if tailLines > 0 {
+		path += "?tailLines=" + strconv.Itoa(tailLines)
+	}
+	frames, errs := c.StreamSSE(ctx, path, "")
+
+	events := make(chan RuntimeLogEvent)
+	go func() {
+		defer close(events)
+		for f := range frames {
+			var ev RuntimeLogEvent
+			if json.Unmarshal(f.Data, &ev) != nil {
+				continue
+			}
+			if ev.Type == "heartbeat" {
+				continue
+			}
+			select {
+			case events <- ev:
+			case <-ctx.Done():
+				return
+			}
+		}
+	}()
+	return events, errs
+}
+
 // FollowBuildLogs tails a deployment's build logs live over SSE from the given
 // character offset. Heartbeats are filtered out. The caller should cancel ctx
 // after receiving an event with Done set; the error channel surfaces

@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { onDestroy, untrack } from 'svelte';
 	import { browser } from '$app/environment';
-	import { apiFetch } from '$lib/stores';
+	import { apiFetch, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
 	import { METRIC_COLORS_LIGHT, METRIC_COLORS_DARK, type MetricId } from '$lib/utils/metric-colors';
 	import {
 		Activity,
@@ -347,6 +347,21 @@
 				tickHandle = null;
 			}
 		};
+	});
+
+	// Fresh-scrape push: the metrics pusher emits deployment.metrics on the org
+	// bus right after new samples land, so the chart refreshes the moment data
+	// exists instead of on the next 15s tick (which stays as the fallback).
+	$effect(() => {
+		if (!isLive || !active || kind === 'database') return;
+		const orgId = $selectedOrganization?.id;
+		const id = entityId;
+		if (!orgId || !id) return;
+		return subscribeOrgEvents(orgId, (ev) => {
+			if (ev.type === 'deployment.metrics' && ev.id === id) {
+				now = Date.now();
+			}
+		});
 	});
 	onDestroy(() => {
 		if (tickHandle) clearInterval(tickHandle);

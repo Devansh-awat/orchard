@@ -1,6 +1,21 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { createHash } from 'crypto';
-import { Observable, merge, of, from, interval, map, concatMap, mergeMap, takeWhile } from 'rxjs';
+import {
+  Observable,
+  Subject,
+  defer,
+  merge,
+  of,
+  from,
+  interval,
+  map,
+  filter,
+  concatMap,
+  mergeMap,
+  takeWhile,
+  bufferTime,
+  finalize,
+} from 'rxjs';
 import { PrismaService } from '../prisma/prisma.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { OrgEventsService } from '../events/org-events.service';
@@ -12,6 +27,23 @@ interface BuildLogMessage {
     | { done: true; status: string; step?: string | null }
     | { type: 'heartbeat'; ts: number };
 }
+
+interface RuntimeLogLine {
+  pod: string;
+  ts: string;
+  line: string;
+}
+
+interface RuntimeLogMessage {
+  id?: string;
+  data:
+    | { lines: RuntimeLogLine[] }
+    | { pod: string; gone: true }
+    | { done: true; status: string }
+    | { type: 'heartbeat'; ts: number };
+}
+
+const MAX_RUNTIME_STREAMS_PER_KEY = 5;
 
 export interface SeriesPoint { x: number; y: number }
 
@@ -160,6 +192,148 @@ export class ObservabilityService {
     return merge(logs$, heartbeat$).pipe(
       takeWhile((ev) => !(ev.data as any)?.done, true),
     );
+  }
+
+  private readonly activeRuntimeStreams = new Map<string, number>();
+
+  /**
+   * Live runtime log tail: one k8s follow=true stream per pod, fanned into a
+   * single SSE flow with 100ms batching. Pod churn is reconciled from the
+   * informer-maintained Pod mirror every 10s (new pods attach, gone pods emit
+   * a marker). Per-pod streams that end (container restart, rotation) reopen
+   * from the last seen timestamp. The SSE id is the newest line timestamp, so
+   * Last-Event-ID reconnects resume via sinceTime (k8s second granularity can
+   * duplicate a boundary line; clients dedupe by exact (pod, ts, line)).
+   * Streams are capped per user+deployment to bound API-server connections.
+   */
+  streamRuntimeLogs(
+    deploymentId: string,
+    userId: string,
+    tailLines: number,
+    sinceTime?: string,
+  ): Observable<RuntimeLogMessage> {
+    return defer(() => {
+      const key = `${userId}:${deploymentId}`;
+      const current = this.activeRuntimeStreams.get(key) ?? 0;
+      if (current >= MAX_RUNTIME_STREAMS_PER_KEY) {
+        throw new BadRequestException('Too many concurrent log streams for this deployment');
+      }
+      this.activeRuntimeStreams.set(key, current + 1);
+
+      const lines$ = new Subject<RuntimeLogLine>();
+      const meta$ = new Subject<RuntimeLogMessage>();
+      const aborts = new Map<string, () => void>();
+      let closed = false;
+      let started = false;
+      let namespace = '';
+      let lastTs = sinceTime ?? '';
+      let reconcileTimer: ReturnType<typeof setInterval> | undefined;
+
+      const attach = (podName: string, since?: string, container?: string) => {
+        if (closed || aborts.has(podName)) return;
+        const abort = this.k8sWorkload.followPodLogStream(
+          podName,
+          namespace,
+          container,
+          since ? { sinceTime: since } : { tailLines },
+          (raw) => {
+            const sp = raw.indexOf(' ');
+            const ts = sp > 0 ? raw.slice(0, sp) : '';
+            const line = sp > 0 ? raw.slice(sp + 1) : raw;
+            if (ts > lastTs) lastTs = ts;
+            lines$.next({ pod: podName, ts, line });
+          },
+          (err) => {
+            const wasActive = aborts.delete(podName);
+            if (!wasActive || closed) return;
+            const status = (err as any)?.response?.statusCode;
+            const msg = String(err?.message ?? '');
+            if (!container && status === 400 && /container/i.test(msg)) {
+              this.k8sWorkload
+                .getPodContainers(podName, namespace)
+                .then((containers) => {
+                  if (!closed && containers.length > 0) {
+                    attach(podName, since, containers[0]);
+                  }
+                })
+                .catch(() => {});
+              return;
+            }
+            setTimeout(() => {
+              if (!closed) attach(podName, lastTs || undefined, container);
+            }, 1000);
+          },
+        );
+        aborts.set(podName, abort);
+      };
+
+      const reconcile = async () => {
+        const pods = await this.prisma.pod.findMany({
+          where: { deploymentId },
+          select: { name: true },
+        });
+        const names = new Set(pods.map((p) => p.name));
+        for (const name of names) {
+          if (!aborts.has(name)) {
+            attach(name, started ? lastTs || undefined : sinceTime);
+          }
+        }
+        started = true;
+        for (const [name, abort] of aborts) {
+          if (!names.has(name)) {
+            aborts.delete(name);
+            abort();
+            meta$.next({ data: { pod: name, gone: true } });
+          }
+        }
+      };
+
+      (async () => {
+        const dep = await this.prisma.deployment.findUnique({
+          where: { id: deploymentId },
+          select: { namespace: true },
+        });
+        if (!dep) {
+          meta$.next({ data: { done: true, status: 'deleted' } });
+          return;
+        }
+        namespace = dep.namespace;
+        await reconcile();
+        reconcileTimer = setInterval(() => {
+          reconcile().catch(() => {});
+        }, 10_000);
+      })().catch((err) => {
+        this.logger.warn(`runtime log stream init failed for ${deploymentId}: ${err?.message}`);
+        meta$.next({ data: { done: true, status: 'error' } });
+      });
+
+      const batched$ = lines$.pipe(
+        bufferTime(100),
+        filter((batch) => batch.length > 0),
+        map(
+          (batch): RuntimeLogMessage => ({
+            id: batch[batch.length - 1].ts || undefined,
+            data: { lines: batch },
+          }),
+        ),
+      );
+      const heartbeat$ = interval(25_000).pipe(
+        map(() => ({ data: { type: 'heartbeat', ts: Date.now() } }) as RuntimeLogMessage),
+      );
+
+      return merge(batched$, meta$, heartbeat$).pipe(
+        takeWhile((ev) => !(ev.data as any)?.done, true),
+        finalize(() => {
+          closed = true;
+          if (reconcileTimer) clearInterval(reconcileTimer);
+          for (const [, abort] of aborts) abort();
+          aborts.clear();
+          const n = (this.activeRuntimeStreams.get(key) ?? 1) - 1;
+          if (n <= 0) this.activeRuntimeStreams.delete(key);
+          else this.activeRuntimeStreams.set(key, n);
+        }),
+      );
+    });
   }
 
   async getCapabilities(deploymentId: string): Promise<Capabilities> {

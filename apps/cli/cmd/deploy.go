@@ -522,6 +522,9 @@ func deployLogsCmd() *cobra.Command {
 				return errors.New("deployment has no namespace; use --build for build logs")
 			}
 			if follow {
+				if err := followRuntimeLogsSSE(cmd.Context(), cl, args[0], tail); !errors.Is(err, errSSEUnsupported) {
+					return err
+				}
 				return deployFollowPodLogs(cmd.Context(), cl, args[0], ns, tail)
 			}
 			var podsRaw any

@@ -569,10 +569,35 @@
 
 	$effect(() => {
 		if (!liveTail || !active) return;
+		const id = deployment?.id;
+		if (!id) return;
+		// The SSE stream is the wake-up signal: refetch structured entries only
+		// when new lines actually arrive. The 2s poll only runs while the stream
+		// has not connected (older server or proxy trouble).
+		let streamHealthy = false;
+		let debounce: ReturnType<typeof setTimeout> | null = null;
+		const es = new EventSource(
+			`/apiv1/observe/deployments/${encodeURIComponent(id)}/logs/stream?tailLines=1`
+		);
+		es.onopen = () => (streamHealthy = true);
+		es.onmessage = (e) => {
+			try {
+				const data = JSON.parse(e.data);
+				if (data.type === 'heartbeat' || debounce) return;
+				debounce = setTimeout(() => {
+					debounce = null;
+					fetchLogs();
+				}, 250);
+			} catch {
+				/* ignore malformed frames */
+			}
+		};
 		liveTailHandle = setInterval(() => {
-			fetchLogs();
+			if (!streamHealthy) fetchLogs();
 		}, 2000);
 		return () => {
+			es.close();
+			if (debounce) clearTimeout(debounce);
 			if (liveTailHandle) {
 				clearInterval(liveTailHandle);
 				liveTailHandle = null;
