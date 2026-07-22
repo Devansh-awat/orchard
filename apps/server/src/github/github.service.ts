@@ -628,6 +628,21 @@ export class GitHubService {
     };
   }
 
+  async getDefaultBranch(accessToken: string | null, owner: string, repo: string): Promise<string> {
+    try {
+      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+        headers: this.githubApiHeaders(accessToken ?? ''),
+      });
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.default_branch) return String(data.default_branch);
+      }
+    } catch {
+      // fall through to the conventional default
+    }
+    return 'main';
+  }
+
   /**
    * One-shot build-config detection for the zero-config create flow: prefer a
    * Dockerfile (with EXPOSE/ENV/stage parsing) and fall back to a Railpack

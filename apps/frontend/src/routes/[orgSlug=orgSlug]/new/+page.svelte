@@ -47,13 +47,15 @@
 		desc: string;
 		icon: typeof Github;
 		color: string;
+		recommended?: boolean;
 	}> = [
 		{
 			id: 'deployment-github',
 			label: 'GitHub Repository',
-			desc: 'Build and deploy from a GitHub repo',
+			desc: 'Pick a repo. We detect the build, deploy it, and give it a URL.',
 			icon: Github,
-			color: '#6e5494'
+			color: '#6e5494',
+			recommended: true
 		},
 		{
 			id: 'deployment-image',
@@ -258,7 +260,10 @@
 						<Icon size={18} style="color: {opt.color}" />
 					</div>
 					<div class="nr-type-text">
-						<span class="nr-type-label">{opt.label}</span>
+						<span class="nr-type-label">
+							{opt.label}
+							{#if opt.recommended}<span class="nr-type-badge">Fastest</span>{/if}
+						</span>
 						<span class="nr-type-desc">{opt.desc}</span>
 					</div>
 					{#if selectedResource === opt.id && navigating}
@@ -418,6 +423,19 @@
 		font-size: 0.8125rem;
 		font-weight: 600;
 		color: var(--center-channel-color);
+	}
+
+	.nr-type-badge {
+		display: inline-block;
+		margin-left: 0.375rem;
+		padding: 0.0625rem 0.375rem;
+		border-radius: 9999px;
+		font-size: 0.625rem;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--accent);
+		background: var(--accent-subtle);
 	}
 
 	.nr-type-desc {

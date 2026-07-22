@@ -12,6 +12,8 @@ import { StorageService } from '../organizations/storage.service';
 import { Auth } from '../auth/decorators';
 import { MetricsService } from '../metrics/metrics.service';
 import { PodLogCaptureService } from '../kubernetes/pod-log-capture.service';
+import { GitHubService } from '../github/github.service';
+import { UsersService } from '../users/users.service';
 
 @Auth()
 @Controller('projects')
@@ -23,7 +25,146 @@ export class ProjectsController {
     private readonly deployments: DeploymentsService,
     private readonly ingress: IngressService,
     private readonly storageService: StorageService,
+    private readonly githubService: GitHubService,
+    private readonly usersService: UsersService,
   ) {}
+
+  /**
+   * One-shot import: repo in, live app out. Detects the build config, creates
+   * a project named after the repo, kicks off the first build with auto-deploy
+   * on, and attaches a protected platform URL. Partial failures surface the
+   * ids that were created so the client can resume instead of retrying from
+   * scratch.
+   */
+  @Post('import')
+  async importFromGitHub(
+    @Body()
+    body: {
+      organizationId: string;
+      repoUrl: string;
+      branch?: string;
+      overrides?: {
+        name?: string;
+        port?: number;
+        buildType?: 'dockerfile' | 'railpack';
+        dockerfilePath?: string;
+        replicas?: number;
+        cpuRequestMilli?: number | null;
+        memoryRequestBytes?: number | null;
+        env?: { key: string; value: string; secret?: boolean }[];
+      };
+    },
+    @Request() req
+  ) {
+    const clerkId = req.user.externalAuthId || req.user.sub;
+    const userData = {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName || req.user.name?.split(' ')[0],
+      lastName: req.user.lastName || req.user.name?.split(' ').slice(1).join(' '),
+      imageUrl: req.user.imageUrl,
+    };
+
+    let repoUrl = String(body.repoUrl || '').trim();
+    if (repoUrl && !repoUrl.startsWith('http')) {
+      repoUrl = `https://github.com/${repoUrl}`;
+    }
+    repoUrl = repoUrl.replace(/\.git$/, '');
+    const parsed = this.githubService.parseRepoUrl(repoUrl);
+    if (!parsed) {
+      throw new BadRequestException('Could not parse repository URL');
+    }
+
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) {
+      throw new BadRequestException('User not found');
+    }
+    const token = await this.githubService.getValidUserToken(user.id);
+
+    const branch =
+      String(body.branch || '').trim() ||
+      (await this.githubService.getDefaultBranch(token, parsed.owner, parsed.repo));
+
+    const det = await this.githubService.detectRepoConfig(token, parsed.owner, parsed.repo, branch);
+    const overrides = body.overrides ?? {};
+    const name = String(overrides.name || det.suggestedName || parsed.repo).trim();
+
+    const project = await this.projectsService.createProject(
+      body.organizationId,
+      { name, repositoryUrl: repoUrl },
+      clerkId,
+      userData
+    );
+
+    const buildType = overrides.buildType ?? det.buildType;
+    const dockerfilePath = overrides.dockerfilePath ?? det.dockerfilePath ?? undefined;
+    const ports = overrides.port
+      ? [overrides.port]
+      : det.ports;
+
+    const envByKey = new Map<string, { key: string; value: string; secret?: boolean }>();
+    for (const e of det.env) envByKey.set(e.key, e);
+    for (const e of overrides.env ?? []) envByKey.set(e.key, e);
+
+    let deployment;
+    try {
+      deployment = await this.deployments.createDeploymentFromGitHub(
+        project.id,
+        {
+          name,
+          repoUrl,
+          branch,
+          buildType,
+          dockerfilePath,
+          ports: ports.map((p, i) => ({
+            name: `port-${i + 1}`,
+            containerPort: p,
+            servicePort: p,
+            protocol: 'TCP',
+          })),
+          replicas: overrides.replicas,
+          env: Array.from(envByKey.values()),
+          cpuRequestMilli: overrides.cpuRequestMilli ?? null,
+          memoryRequestBytes: overrides.memoryRequestBytes ?? null,
+          autoDeployEnabled: true,
+          autoDeployBranch: branch,
+        },
+        clerkId,
+        userData
+      );
+    } catch (error) {
+      throw new BadRequestException({
+        message: `Project ${project.slug} was created but the deployment failed: ${error?.message ?? error}`,
+        projectId: project.id,
+        projectSlug: project.slug,
+      });
+    }
+
+    let liveUrl: string | null = null;
+    if (ports.length > 0) {
+      try {
+        const withUrl = await this.ingress.createAutoIngressForDeployment(
+          deployment.id,
+          clerkId,
+          userData
+        );
+        liveUrl = (withUrl as any)?.url ?? null;
+      } catch (error) {
+        console.warn(`[Projects] Auto URL creation failed for import ${deployment.id}:`, error?.message ?? error);
+      }
+    }
+
+    return {
+      projectId: project.id,
+      projectSlug: project.slug,
+      deploymentId: deployment.id,
+      deploymentName: deployment.name,
+      branch,
+      buildType,
+      framework: det.framework,
+      url: liveUrl,
+    };
+  }
 
   @Get()
 
