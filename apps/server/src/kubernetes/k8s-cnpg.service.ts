@@ -1328,6 +1328,10 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         } catch { /* best-effort */ }
       }
 
+      const archivingCond = (cluster.status?.conditions || []).find(
+        (c: any) => c.type === 'ContinuousArchiving',
+      );
+
       return {
         exists: true,
         phase,
@@ -1338,6 +1342,15 @@ export class K8sCnpgService implements OnApplicationBootstrap {
         size,
         connections,
         conditions: cluster.status?.conditions || [],
+        archiving: archivingCond
+          ? {
+              ok: archivingCond.status === 'True',
+              message: archivingCond.message || null,
+              since: archivingCond.lastTransitionTime || null,
+            }
+          : null,
+        firstRecoverabilityPoint: cluster.status?.firstRecoverabilityPoint || null,
+        lastSuccessfulBackup: cluster.status?.lastSuccessfulBackup || null,
         restartCount,
         message,
         lastTerminationReason,

@@ -5,6 +5,8 @@ export const NOTIFICATION_EVENTS = [
   'pod.recovered',
   'backup.completed',
   'backup.failed',
+  'db.archiving_failing',
+  'db.archiving_recovered',
   'job.succeeded',
   'job.failed',
 ] as const;
@@ -34,6 +36,8 @@ export const EVENT_TONE: Record<NotificationEventName, 'success' | 'failure'> = 
   'pod.recovered': 'success',
   'backup.completed': 'success',
   'backup.failed': 'failure',
+  'db.archiving_failing': 'failure',
+  'db.archiving_recovered': 'success',
   'job.succeeded': 'success',
   'job.failed': 'failure',
 };

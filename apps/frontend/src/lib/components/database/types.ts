@@ -30,6 +30,7 @@ export interface DatabaseDetail {
 	internalHost: string;
 	createdAt: string;
 	backupsEnabled?: boolean;
+	backupScheduleCron?: string | null;
 	liveStatus?: {
 		exists: boolean;
 		size?: string;
@@ -43,6 +44,9 @@ export interface DatabaseDetail {
 		lastTerminationReason?: string;
 		lastTerminationExitCode?: number;
 		lastTerminationAt?: string;
+		archiving?: { ok: boolean; message?: string | null; since?: string | null } | null;
+		firstRecoverabilityPoint?: string | null;
+		lastSuccessfulBackup?: string | null;
 	};
 	project?: {
 		id: string;

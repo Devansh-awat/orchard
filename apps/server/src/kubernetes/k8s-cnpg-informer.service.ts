@@ -4,11 +4,14 @@ import { KubernetesService } from './kubernetes.service';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrgEventsService } from '../events/org-events.service';
 import { LeaderElectionService } from '../events/leader-election.service';
+import { NotificationsService } from '../notifications/notifications.service';
 
 const CNPG_SELECTOR = 'cnpg.io/cluster';
 const POSITIVE_TTL_MS = 10 * 60 * 1000;
 const NEGATIVE_TTL_MS = 60 * 1000;
 const EMIT_COALESCE_MS = 250;
+const ARCHIVING_SWEEP_MS = 2 * 60 * 1000;
+const FRESH_TRANSITION_MS = 10 * 60 * 1000;
 
 interface Ctx {
   databaseId: string;
@@ -40,11 +43,16 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
 
   private readonly pending = new Map<string, PendingEmit>();
 
+  private readonly archivingState = new Map<string, boolean>();
+
+  private archivingTimer?: ReturnType<typeof setInterval>;
+
   constructor(
     private readonly kubernetes: KubernetesService,
     private readonly prisma: PrismaService,
     private readonly orgEvents: OrgEventsService,
     private readonly leader: LeaderElectionService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async onModuleInit() {
@@ -71,10 +79,19 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
       this.scheduleRestart();
     });
     await this.start();
+
+    this.archivingTimer = setInterval(() => {
+      void this.sweepArchiving();
+    }, ARCHIVING_SWEEP_MS);
+    this.archivingTimer.unref?.();
+    setTimeout(() => {
+      void this.sweepArchiving();
+    }, 15_000).unref?.();
   }
 
   async onModuleDestroy() {
     this.stopped = true;
+    if (this.archivingTimer) clearInterval(this.archivingTimer);
     if (this.restartTimer) clearTimeout(this.restartTimer);
     for (const p of this.pending.values()) clearTimeout(p.timer);
     this.pending.clear();
@@ -167,6 +184,44 @@ export class K8sCnpgInformerService implements OnModuleInit, OnModuleDestroy {
         ? { reason: term.reason, exitCode: term.exitCode, finishedAt: term.finishedAt }
         : null,
     };
+  }
+
+  private async sweepArchiving() {
+    if (this.stopped || !this.leader.isLeader()) return;
+    const kc = this.kubernetes.kc;
+    if (!kc) return;
+    try {
+      const api = kc.makeApiClient(k8s.CustomObjectsApi);
+      const { body } = await api.listClusterCustomObject('postgresql.cnpg.io', 'v1', 'clusters');
+      const items: any[] = (body as any)?.items || [];
+      for (const cluster of items) {
+        const ns = cluster.metadata?.namespace;
+        const name = cluster.metadata?.name;
+        if (!ns || !name) continue;
+        const cond = (cluster.status?.conditions || []).find(
+          (c: any) => c.type === 'ContinuousArchiving',
+        );
+        if (!cond) continue;
+        const ok = cond.status === 'True';
+        const key = `${ns}/${name}`;
+        const prev = this.archivingState.get(key);
+        this.archivingState.set(key, ok);
+        if (prev === ok) continue;
+        if (prev === undefined) {
+          const t = cond.lastTransitionTime ? Date.parse(cond.lastTransitionTime) : NaN;
+          const fresh = !Number.isNaN(t) && Date.now() - t < FRESH_TRANSITION_MS;
+          if (ok || !fresh) continue;
+        }
+        const ctx = await this.resolveCtx(ns, name);
+        if (!ctx) continue;
+        this.scheduleEmit(ctx, { archiving: ok });
+        await this.notifications
+          .notifyDbArchiving(ctx.databaseId, ok ? 'recovered' : 'failing', cond.message || undefined)
+          .catch(() => {});
+      }
+    } catch (err) {
+      this.logger.warn(`archiving sweep failed: ${(err as Error)?.message ?? err}`);
+    }
   }
 
   private async resolveCtx(ns: string, clusterName: string): Promise<Ctx | null> {

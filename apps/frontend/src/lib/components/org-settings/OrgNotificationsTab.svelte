@@ -77,7 +77,9 @@
 			label: 'Backups',
 			options: [
 				{ value: 'backup.completed', label: 'Completed', tone: 'ok' },
-				{ value: 'backup.failed', label: 'Failed', tone: 'fail' }
+				{ value: 'backup.failed', label: 'Failed', tone: 'fail' },
+				{ value: 'db.archiving_failing', label: 'Archiving failing', tone: 'fail' },
+				{ value: 'db.archiving_recovered', label: 'Archiving recovered', tone: 'ok' }
 			]
 		},
 		{

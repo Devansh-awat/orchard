@@ -179,6 +179,40 @@ export class NotificationsService {
     });
   }
 
+  async notifyDbArchiving(databaseId: string, state: 'failing' | 'recovered', detail?: string) {
+    const db = await this.prisma.database.findUnique({
+      where: { id: databaseId },
+      select: {
+        id: true,
+        name: true,
+        project: {
+          select: {
+            id: true,
+            name: true,
+            organizationId: true,
+            organization: { select: { slug: true } },
+          },
+        },
+      },
+    });
+    if (!db) return;
+    const failing = state === 'failing';
+    await this.notify(db.project.organizationId, {
+      event: failing ? 'db.archiving_failing' : 'db.archiving_recovered',
+      title: failing
+        ? `Backup archiving failing: ${db.name}`
+        : `Backup archiving recovered: ${db.name}`,
+      body: failing
+        ? `WAL archiving for ${db.name} is failing${detail ? `: ${truncate(detail, 300)}` : '.'} Restores are falling behind and disk usage will grow until it recovers.`
+        : `WAL archiving for ${db.name} is healthy again.`,
+      url: `${this.frontendUrl}/${db.project.organization.slug}/databases/${db.id}`,
+      projectId: db.project.id,
+      projectName: db.project.name,
+      targetId: db.id,
+      targetName: db.name,
+    });
+  }
+
   async notifyJobRun(runId: string, status: 'succeeded' | 'failed') {
     const run = await this.prisma.jobRun.findUnique({
       where: { id: runId },

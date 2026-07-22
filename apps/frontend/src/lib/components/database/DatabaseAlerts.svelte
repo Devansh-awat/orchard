@@ -9,17 +9,19 @@
 
 <script lang="ts">
 	import { motionStagger } from '$lib/utils/motion.svelte';
-	import { Zap, MemoryStick, RotateCcw } from 'lucide-svelte';
+	import { Zap, MemoryStick, RotateCcw, CloudOff, DatabaseBackup } from 'lucide-svelte';
 	import type { DatabaseDetail } from './types';
 
 	let {
 		database,
 		onGoToResources,
-		onViewLogs
+		onViewLogs,
+		onGoToBackups
 	}: {
 		database: DatabaseDetail;
 		onGoToResources?: () => void;
 		onViewLogs?: () => void;
+		onGoToBackups?: () => void;
 	} = $props();
 
 	// --- Detect conditions from liveStatus ---
@@ -36,9 +38,28 @@
 
 	const restartCount = $derived(database.liveStatus?.restartCount ?? 0);
 	const highRestarts = $derived(restartCount >= 5);
-	// Suppress alerts during an in-flight restart — the user just acted to fix this.
 	const isRestarting = $derived(database.status === 'restarting');
-	const hasAlert = $derived(!isRestarting && (isOOM || isCrashLoop || highRestarts));
+
+	const archiving = $derived(database.liveStatus?.archiving);
+	const archivingFailing = $derived(
+		!!archiving && !archiving.ok && database.mode === 'cnpg' && database.status !== 'stopped'
+	);
+	const archivingMessage = $derived(
+		(archiving?.message || '').split('\n')[0].slice(0, 180)
+	);
+
+	const noBackups = $derived(
+		database.mode === 'cnpg' &&
+			!!database.backupsEnabled &&
+			!database.backupScheduleCron &&
+			!database.liveStatus?.firstRecoverabilityPoint &&
+			database.status === 'ready' &&
+			!archivingFailing
+	);
+
+	const hasAlert = $derived(
+		(!isRestarting && (isOOM || isCrashLoop || highRestarts)) || archivingFailing || noBackups
+	);
 </script>
 
 {#if hasAlert}
@@ -136,6 +157,63 @@
 					</div>
 					{#if onViewLogs}
 						<button class="dba-action" onclick={onViewLogs}> View logs </button>
+					{/if}
+				</div>
+			</div>
+		{/if}
+
+		{#if archivingFailing}
+			<div
+				class="dba-alert dba-alert--archiving"
+				{@attach motionStagger({
+					index: 1,
+					stride: 0.06,
+					from: { y: -8, opacity: 0, scale: 0.98 }
+				})}
+			>
+				<div class="dba-alert-inner">
+					<div class="dba-icon-wrap">
+						<CloudOff size={16} strokeWidth={2.25} />
+					</div>
+					<div class="dba-body">
+						<span class="dba-title">Backup archiving is failing</span>
+						<span class="dba-desc">
+							WAL segments are not reaching the backup store, so restores are falling behind and
+							files will pile up on disk until archiving recovers.
+						</span>
+						{#if archivingMessage}
+							<span class="dba-detail">{archivingMessage}</span>
+						{/if}
+					</div>
+					{#if onGoToBackups}
+						<button class="dba-action" onclick={onGoToBackups}> View backups </button>
+					{/if}
+				</div>
+			</div>
+		{/if}
+
+		{#if noBackups}
+			<div
+				class="dba-alert dba-alert--nobackups"
+				{@attach motionStagger({
+					index: 1,
+					stride: 0.06,
+					from: { y: -8, opacity: 0, scale: 0.98 }
+				})}
+			>
+				<div class="dba-alert-inner">
+					<div class="dba-icon-wrap">
+						<DatabaseBackup size={16} strokeWidth={2.25} />
+					</div>
+					<div class="dba-body">
+						<span class="dba-title">No backups configured</span>
+						<span class="dba-desc">
+							This database has no backup schedule and no backups yet. Restores are only possible
+							from a backup.
+						</span>
+					</div>
+					{#if onGoToBackups}
+						<button class="dba-action" onclick={onGoToBackups}> Set a schedule </button>
 					{/if}
 				</div>
 			</div>
@@ -284,6 +362,26 @@
 		background-color: color-mix(in srgb, var(--warning-text) 6%, transparent);
 		border-color: color-mix(in srgb, var(--warning-text) 18%, transparent);
 		color: var(--warning-text);
+	}
+
+	.dba-alert--archiving {
+		background-color: color-mix(in srgb, var(--status-error) 6%, transparent);
+		border-color: color-mix(in srgb, var(--status-error) 18%, transparent);
+		color: var(--status-error);
+	}
+
+	.dba-alert--nobackups {
+		background-color: color-mix(in srgb, var(--status-warning) 6%, transparent);
+		border-color: color-mix(in srgb, var(--status-warning) 18%, transparent);
+		color: var(--status-warning);
+	}
+
+	.dba-detail {
+		font-size: 0.6875rem;
+		font-family: var(--font-mono, 'Space Mono', monospace);
+		opacity: 0.7;
+		line-height: 1.4;
+		overflow-wrap: anywhere;
 	}
 
 	@keyframes dba-bar-sweep {

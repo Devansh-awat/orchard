@@ -1147,6 +1147,9 @@
 
 		<DatabaseAlerts
 			{database}
+			onGoToBackups={() => {
+				activeTab = 'backups';
+			}}
 			onGoToResources={() => {
 				activeTab = 'resources';
 			}}
