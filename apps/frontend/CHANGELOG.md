@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.27.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.26.0...frontend/v0.27.0) (2026-07-22)
+
+
+### Features
+
+* better contrast color scheme ([c0dfad1](https://github.com/LeafdTK/leaf/commit/c0dfad167a578c977e995fe7154f742b401e97f8))
+
 ## [0.26.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.25.1...frontend/v0.26.0) (2026-07-22)
 
 
