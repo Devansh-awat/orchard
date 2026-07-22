@@ -1064,6 +1064,12 @@
 											</div>
 										{/snippet}
 									</PopoverPanel>
+									{#if selectedBranch || branch}
+										<p class="nd-hint" style="margin-top: 0.375rem;">
+											Every push to {branch || 'this branch'} deploys automatically. You can turn
+											that off later in the app's settings.
+										</p>
+									{/if}
 								</Field>
 							{/if}
 
