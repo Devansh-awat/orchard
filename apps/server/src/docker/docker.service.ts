@@ -43,6 +43,9 @@ interface BuildOptions {
   // namespace.
   cacheTenantKey?: string;
   persistentBuildCache?: boolean;
+  // Presigned GET URL for an uploaded build-context tarball ("orchard up").
+  // Kubernetes build mode only; the local Docker fallback cannot use it.
+  localContextUrl?: string;
 }
 
 @Injectable()
@@ -1193,6 +1196,7 @@ export class DockerService {
         buildWithDepot: options.buildWithDepot,
         cacheTenantKey: options.cacheTenantKey,
         persistentBuildCache: options.persistentBuildCache,
+        localContextUrl: options.localContextUrl,
       });
 
       console.log('[Docker Service] Build completed successfully:', result);

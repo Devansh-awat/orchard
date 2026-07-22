@@ -20,6 +20,11 @@ interface BuildJobOptions {
   buildType?: 'dockerfile' | 'railpack';
   envVars?: Record<string, string>;
   buildWithDepot?: boolean;
+  // Presigned GET URL for an uploaded build-context tarball ("orchard up").
+  // When set, the git-clone init container is replaced by a fetch-and-extract
+  // step; everything downstream (BuildKit, phases, log streaming) is
+  // unchanged.
+  localContextUrl?: string;
   // Per-tenant key used as the subPath on the shared buildkit-cache PVC.
   // Without this, every build pod sees the entire PVC and a malicious build
   // (root inside the Kata VM) can read/poison cache entries from other
@@ -1092,6 +1097,7 @@ exit $EXIT_CODE
       buildWithDepot = false,
       cacheTenantKey,
       persistentBuildCache = false,
+      localContextUrl,
     } = options;
 
     // Sanitize the tenant key for use as a PVC subPath. Anything outside
@@ -1150,9 +1156,45 @@ exit $EXIT_CODE
 
     const batchApi = this.kc!.makeApiClient(k8s.BatchV1Api);
 
-    // Build init containers list
-    const initContainers: k8s.V1Container[] = [
-      {
+    // Build init containers list. Local-upload builds fetch the uploaded
+    // tarball via a short-lived presigned URL instead of cloning; the URL is
+    // passed as an env var so it never appears in the pod command (visible to
+    // anyone who can read the pod spec).
+    const sourceInit: k8s.V1Container = localContextUrl
+      ? {
+          name: 'context-fetch',
+          image: 'alpine:latest',
+          command: ['/bin/sh', '-c'],
+          args: [
+            `set -e
+echo "=== Fetching uploaded build context ==="
+wget -qO /tmp/context.tar.gz "$CONTEXT_URL"
+mkdir -p /workspace
+tar xzf /tmp/context.tar.gz -C /workspace
+rm -f /tmp/context.tar.gz
+echo "=== Build context extracted ==="
+ls -la /workspace
+`,
+          ],
+          env: [{ name: 'CONTEXT_URL', value: localContextUrl }],
+          volumeMounts: [
+            {
+              name: 'workspace',
+              mountPath: '/workspace',
+            },
+          ],
+          resources: {
+            requests: {
+              cpu: '100m',
+              memory: '256Mi',
+            },
+            limits: {
+              cpu: '500m',
+              memory: '512Mi',
+            },
+          },
+        }
+      : {
         name: 'git-clone',
         image: 'alpine/git:latest',
         command: ['/bin/sh', '-c'],
@@ -1212,8 +1254,9 @@ ls -la /workspace
             memory: '512Mi',
           },
         },
-      },
-    ];
+      };
+
+    const initContainers: k8s.V1Container[] = [sourceInit];
 
     // Env keys flow into Dockerfile directives and unquoted shell positions
     // below; a key containing a newline or shell metachar would inject

@@ -30,8 +30,10 @@ import { BuildQueueService } from './build-queue.service';
 import { resolveEnvVars, EnvVar } from '../env/env-resolver';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { NodesService } from '../nodes/nodes.service';
+import { StorageService } from '../organizations/storage.service';
 import { formatSlug, scrubIngress } from './projects.utils';
 import { startBuildTrace } from '../analytics/datadog';
+import { createHash, randomUUID } from 'crypto';
 
 @Injectable()
 export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
@@ -66,6 +68,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     private readonly crypto: SecretCryptoService,
     @Inject(forwardRef(() => BuildQueueService))
     private readonly buildQueue: BuildQueueService,
+    private readonly storage: StorageService,
   ) {}
 
   async runQueuedBuild(run: {
@@ -1224,6 +1227,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     // Delete the K8s deployment itself
     await this.k8sWorkload.deleteDeployment(deployment.name, deployment.namespace);
+
+    if (deployment.buildContextKey) {
+      this.storage.deleteBuildContext(deployment.buildContextKey).catch(() => {});
+    }
 
     // Delete the DB record (cascades to pods, services, envVars, ingresses, volumes, imageHistory)
     await this.prisma.deployment.delete({
@@ -4974,6 +4981,358 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     return this.addInternalUrlsToDeployment(result);
   }
 
+  /**
+   * Record-only creation for "orchard up": the deployment exists (name, build
+   * config, env, service/port rows) but nothing builds until a context tarball
+   * is uploaded. Gated on the private build-context bucket being configured.
+   */
+  async createDeploymentFromLocal(
+    projectId: string,
+    data: {
+      name: string;
+      buildType?: 'dockerfile' | 'railpack';
+      dockerfilePath?: string;
+      port?: number;
+      ports?: { name?: string; containerPort?: number; servicePort?: number; protocol?: string }[];
+      replicas?: number;
+      env?: { key: string; value: string }[];
+      cpuRequestMilli?: number | null;
+      memoryRequestBytes?: number | null;
+      environmentId?: string;
+    },
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    },
+  ) {
+    if (!this.storage.buildContextEnabled()) {
+      throw new BadRequestException('Local deploys are not enabled on this server (build-context storage is not configured)');
+    }
+
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const project = await this.prisma.project.findUnique({
+      where: { id: projectId },
+      include: { organization: true },
+    });
+    if (!project) {
+      throw new NotFoundException(`Project ${projectId} not found`);
+    }
+
+    await this.authz.requireProjectEdit(project.id, user.id, 'create deployments');
+    const environment = await this.environments.resolveEnvironment(project.id, data.environmentId);
+
+    const nameInput = String(data.name || '').trim();
+    if (!nameInput) {
+      throw new BadRequestException('Deployment name is required');
+    }
+    const name = formatSlug(nameInput);
+    if (!name) {
+      throw new BadRequestException('Deployment name cannot be empty');
+    }
+
+    const buildType = data.buildType === 'railpack' ? 'railpack' : 'dockerfile';
+    const dockerfilePath = String(data.dockerfilePath || '').trim();
+    if (buildType === 'dockerfile' && !dockerfilePath) {
+      throw new BadRequestException('Dockerfile path is required for Dockerfile builds');
+    }
+    if (dockerfilePath) {
+      if (
+        dockerfilePath.length > 500 ||
+        dockerfilePath.startsWith('/') ||
+        dockerfilePath.startsWith('\\') ||
+        dockerfilePath.includes('..') ||
+        dockerfilePath.includes('\0') ||
+        !/^[A-Za-z0-9._/\- ]+$/.test(dockerfilePath)
+      ) {
+        throw new BadRequestException('Invalid Dockerfile path');
+      }
+    }
+
+    const existingDeployment = await this.prisma.deployment.findFirst({
+      where: { environmentId: environment.id, name },
+    });
+    if (existingDeployment) {
+      throw new BadRequestException('A deployment with this name already exists in this environment');
+    }
+
+    const replicas = data.replicas && Number.isInteger(data.replicas) && data.replicas > 0 ? data.replicas : 1;
+
+    const envEntries = Array.isArray(data.env)
+      ? data.env
+          .filter((entry) => entry && typeof entry.key === 'string')
+          .map((entry) => ({
+            key: entry.key.trim(),
+            value: entry.value !== undefined && entry.value !== null ? String(entry.value) : '',
+            secret: Boolean((entry as any).secret),
+          }))
+          .filter((entry) => entry.key.length > 0)
+      : [];
+    const uniqueEnv = new Map<string, { value: string; secret: boolean }>();
+    for (const entry of envEntries) {
+      uniqueEnv.set(entry.key, { value: entry.value, secret: entry.secret });
+    }
+    const env = Array.from(uniqueEnv.entries()).map(([key, e]) => ({
+      key,
+      value: e.value,
+      secret: e.secret,
+    }));
+
+    const rawPorts = Array.isArray(data.ports) && data.ports.length > 0
+      ? data.ports
+      : [
+          {
+            name: 'http',
+            containerPort: data.port && Number.isInteger(data.port) && data.port > 0 ? data.port : 80,
+            servicePort: data.port && Number.isInteger(data.port) && data.port > 0 ? data.port : 80,
+            protocol: 'TCP',
+          },
+        ];
+
+    const imageName = `${project.namespace}-${name}`;
+    const deployment = await this.prisma.deployment.create({
+      data: {
+        projectId: project.id,
+        environmentId: environment.id,
+        name,
+        namespace: environment.namespace,
+        image: `${this.dockerService.getImagePath(imageName, 'pending')}`,
+        replicas,
+        status: 'pending',
+        buildStatus: 'none',
+        buildType,
+        dockerfilePath: buildType === 'dockerfile' ? dockerfilePath : null,
+        createdBy: user.id,
+        buildLogs: `[INFO] Created local deployment ${name}; waiting for a build context upload (orchard up)\n`,
+        cpuRequestMilli: data.cpuRequestMilli ?? null,
+        memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
+      },
+    });
+
+    if (env.length > 0) {
+      await this.prisma.deploymentEnvVar.createMany({
+        data: env.map((entry) => ({
+          deploymentId: deployment.id,
+          key: entry.key,
+          value: entry.value,
+          secret: entry.secret,
+        })),
+      });
+    }
+
+    const service = await this.prisma.service.create({
+      data: {
+        deploymentId: deployment.id,
+        name,
+        type: ServiceType.internal,
+        port: rawPorts[0].servicePort,
+        targetPort: rawPorts[0].containerPort,
+        protocol: rawPorts[0].protocol || 'TCP',
+        externalIp: null,
+        nodePort: null,
+      },
+    });
+    await this.prisma.servicePort.createMany({
+      data: rawPorts.map((portEntry) => ({
+        serviceId: service.id,
+        name: portEntry.name,
+        port: portEntry.servicePort,
+        targetPort: portEntry.containerPort,
+        protocol: portEntry.protocol || 'TCP',
+        nodePort: null,
+      })),
+    });
+
+    void this.audit.log({
+      action: 'deployment.created',
+      actorUserId: user.id,
+      actorEmail: user.email,
+      organizationId: project.organizationId,
+      projectId: project.id,
+      deploymentId: deployment.id,
+      targetType: 'deployment',
+      targetId: deployment.id,
+      targetLabel: deployment.name,
+      metadata: { source: 'local', buildType },
+    });
+
+    const result = await this.prisma.deployment.findUnique({
+      where: { id: deployment.id },
+      include: {
+        pods: true,
+        services: { include: { ports: true } },
+        envVars: true,
+        ingresses: { include: { service: true } },
+        project: { include: { organization: true } },
+      },
+    });
+    return this.addInternalUrlsToDeployment(result);
+  }
+
+  /**
+   * Store an uploaded build-context tarball in the private bucket and kick
+   * off the standard in-cluster build with it. Replaces (and deletes) the
+   * previous context so each deployment holds at most one object.
+   */
+  async uploadBuildContextAndBuild(
+    deploymentId: string,
+    file: { buffer: Buffer; size: number },
+    clerkId: string,
+    userData?: {
+      email?: string;
+      username?: string;
+      firstName?: string;
+      lastName?: string;
+      imageUrl?: string;
+    },
+  ) {
+    if (!this.storage.buildContextEnabled()) {
+      throw new BadRequestException('Local deploys are not enabled on this server (build-context storage is not configured)');
+    }
+
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: {
+        project: { include: { organization: true } },
+        services: { include: { ports: true } },
+        volumes: true,
+      },
+    });
+    if (!deployment) {
+      throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    }
+
+    await this.authz.requireProjectEdit(deployment.projectId, user.id, 'deploy from a local build context');
+
+    if (deployment.githubRepo) {
+      throw new BadRequestException('This deployment builds from GitHub; push to the repository instead');
+    }
+    if (!file?.buffer?.length) {
+      throw new BadRequestException('Build context is empty');
+    }
+    if (file.size > 100 * 1024 * 1024) {
+      throw new BadRequestException('Build context exceeds the 100MB limit');
+    }
+    if (file.buffer[0] !== 0x1f || file.buffer[1] !== 0x8b) {
+      throw new BadRequestException('Build context must be a gzipped tarball');
+    }
+
+    const sha = createHash('sha256').update(file.buffer).digest('hex');
+    const key = `build-contexts/${deployment.project.organizationId}/${deployment.id}/${randomUUID()}.tar.gz`;
+    await this.storage.putBuildContext(key, file.buffer);
+    const previousKey = deployment.buildContextKey;
+
+    const timestamp = new Date().toISOString().replace(/[-:]/g, '').replace(/\..+/, '').slice(0, 14);
+    const uniqueTag = `v${timestamp}`;
+    const imageName = `${deployment.project.namespace}-${deployment.name}`;
+    const buildMethodLabel = deployment.buildType === 'railpack' ? 'Railpack' : 'Dockerfile';
+
+    await this.prisma.deployment.update({
+      where: { id: deployment.id },
+      data: {
+        buildContextKey: key,
+        buildContextSha: sha,
+        status: 'pending',
+        buildStatus: 'building',
+        buildError: null,
+        buildLogs: `[INFO] Starting ${buildMethodLabel} build from uploaded context (${(file.size / 1024 / 1024).toFixed(1)}MB, sha256 ${sha.slice(0, 12)})\n`,
+        buildStepTimestamps: { __start: Date.now() },
+      },
+    });
+
+    if (previousKey && previousKey !== key) {
+      this.storage.deleteBuildContext(previousKey).catch(() => {});
+    }
+
+    await this.buildQueue
+      .recordActiveBuild({
+        deploymentId: deployment.id,
+        triggerType: 'manual',
+        branch: 'local',
+        triggeredById: user.id,
+      })
+      .catch((err) => this.logger.warn(`recordActiveBuild failed for ${deployment.id}: ${err?.message ?? err}`));
+
+    const targetService = deployment.services?.[0];
+    const rawPorts = targetService?.ports?.length
+      ? targetService.ports.map((p) => ({
+          name: p.name ?? undefined,
+          containerPort: p.targetPort,
+          servicePort: p.port,
+          protocol: p.protocol,
+        }))
+      : [{ name: 'http', containerPort: 80, servicePort: 80, protocol: 'TCP' }];
+
+    const storedEnv = await this.prisma.deploymentEnvVar.findMany({
+      where: { deploymentId: deployment.id },
+    });
+    const sharedVars = await this.loadSharedVarsForDeployment('', deployment.environmentId);
+    const { resolved: resolvedEnv } = resolveEnvVars(
+      storedEnv.map((e) => ({ key: e.key, value: e.value, secret: e.secret })),
+      sharedVars,
+    );
+
+    const volumes = (deployment.volumes ?? []).map((vol) => ({
+      name: vol.name,
+      type: vol.type as 'pvc' | 'hostPath' | 'emptyDir',
+      mountPath: vol.mountPath,
+      pvcName: vol.pvcName ?? undefined,
+      storageSize: vol.storageSize ?? undefined,
+      hostPath: vol.hostPath ?? undefined,
+      readOnly: vol.readOnly,
+    }));
+
+    this.buildAndDeployAsync(
+      deployment.id,
+      {
+        repoUrl: '',
+        localContextKey: key,
+        branch: 'local',
+        dockerfilePath: deployment.dockerfilePath ?? undefined,
+        buildType: deployment.buildType as 'dockerfile' | 'railpack',
+        imageName,
+        tag: uniqueTag,
+        namespace: deployment.namespace,
+        name: deployment.name,
+        replicas: deployment.replicas,
+        rawPorts,
+        env: resolvedEnv,
+        exposePublic: targetService?.type === ServiceType.external,
+        volumes,
+        isRebuild: Boolean(previousKey),
+        triggerType: 'manual',
+        triggeredById: user.id,
+      },
+      null,
+    ).catch((error) => {
+      console.error(`[Projects] Async local build failed for deployment ${deployment.id}:`, error);
+    });
+
+    const result = await this.prisma.deployment.findUnique({
+      where: { id: deployment.id },
+      include: {
+        pods: true,
+        services: { include: { ports: true } },
+        envVars: true,
+        ingresses: { include: { service: true } },
+        project: { include: { organization: true } },
+      },
+    });
+    return this.addInternalUrlsToDeployment(result);
+  }
+
   private async getDeploymentProgressUrl(deploymentId: string): Promise<string> {
     const frontendUrl = process.env.FRONTEND_URL || 'http://localhost:3000';
     const deployment = await this.prisma.deployment.findUnique({
@@ -5022,6 +5381,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       // Build trigger info
       triggerType?: string;
       triggeredById?: string;
+      // Local-upload builds: R2 key of the uploaded context tarball. A
+      // presigned GET is minted just before job creation.
+      localContextKey?: string;
     },
     githubAccessToken?: string,
   ) {
@@ -5106,9 +5468,15 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       });
 
       const buildStartTime = Date.now();
-      
+
+      let localContextUrl: string | undefined;
+      if (data.localContextKey) {
+        localContextUrl = await this.storage.signBuildContextGet(data.localContextKey, 15 * 60);
+      }
+
       const image = await buildTrace.activate(() => this.dockerService.buildAndPushFromGitHub({
         repoUrl: data.repoUrl,
+        localContextUrl,
         branch: data.branch,
         dockerfilePath: data.dockerfilePath || 'Dockerfile',
         target: data.target,

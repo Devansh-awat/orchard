@@ -686,6 +686,47 @@ export class ProjectsController {
     return result;
   }
 
+  @Post(':id/deployments/from-local')
+  async createDeploymentFromLocal(
+    @Param('id') id: string,
+    @Body()
+    body: {
+      name: string;
+      buildType?: 'dockerfile' | 'railpack';
+      dockerfilePath?: string;
+      port?: number;
+      ports?: { name?: string; containerPort?: number; servicePort?: number; protocol?: string }[];
+      replicas?: number;
+      env?: { key: string; value: string }[];
+      cpuRequestMilli?: number | null;
+      memoryRequestBytes?: number | null;
+      environmentId?: string;
+      autoUrl?: boolean;
+    },
+    @Request() req
+  ) {
+    const clerkId = req.user.externalAuthId || req.user.sub;
+    const userData = {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName || req.user.name?.split(' ')[0],
+      lastName: req.user.lastName || req.user.name?.split(' ').slice(1).join(' '),
+      imageUrl: req.user.imageUrl,
+    };
+    const result = await this.deployments.createDeploymentFromLocal(id, body, clerkId, userData);
+
+    const declaredPort = Boolean(body.port || (Array.isArray(body.ports) && body.ports.length > 0));
+    if ((body.autoUrl ?? declaredPort) && result?.id) {
+      try {
+        const withUrl = await this.ingress.createAutoIngressForDeployment(result.id, clerkId, userData);
+        if (withUrl) return withUrl;
+      } catch (error) {
+        console.warn(`[Projects] Auto URL creation failed for deployment ${result.id}:`, error?.message ?? error);
+      }
+    }
+    return result;
+  }
+
   @Post(':id/deployments/from-github')
 
   async createDeploymentFromGitHub(
@@ -1015,6 +1056,30 @@ export class DeploymentsController {
     const entry = await this.logCapture.getLogs(id, entryId);
     if (!entry) throw new NotFoundException('Captured logs expired or not found');
     return entry;
+  }
+
+  @Post(':id/build-context')
+  @UseInterceptors(FileInterceptor('context', { limits: { fileSize: 100 * 1024 * 1024 } }))
+  async uploadBuildContext(
+    @Param('id') id: string,
+    @UploadedFile() file: Express.Multer.File,
+    @Request() req
+  ) {
+    if (!file) {
+      throw new BadRequestException('Attach the build context as multipart field "context"');
+    }
+    return this.deployments.uploadBuildContextAndBuild(
+      id,
+      { buffer: file.buffer, size: file.size },
+      req.user.externalAuthId || req.user.sub,
+      {
+        email: req.user.email,
+        username: req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        imageUrl: req.user.imageUrl,
+      }
+    );
   }
 
   @Post(':id/rebuild')

@@ -510,6 +510,11 @@ model Deployment {
   buildFromRoot  Boolean    @default(false) @map("build_from_root")
   buildWithDepot Boolean    @default(false) @map("build_with_depot")
   persistentBuildCache Boolean @default(false) @map("persistent_build_cache")
+  // Local-upload builds ("orchard up"): R2 object key + sha256 of the last
+  // uploaded build context. A deployment with a key and no githubRepo builds
+  // from the uploaded tarball instead of a clone.
+  buildContextKey String?   @map("build_context_key") @db.VarChar(500)
+  buildContextSha String?   @map("build_context_sha") @db.VarChar(100)
   buildLogs      String?    @map("build_logs") @db.Text
   buildError     String?    @map("build_error") @db.Text
   buildStepTimestamps Json?  @map("build_step_timestamps") @db.JsonB

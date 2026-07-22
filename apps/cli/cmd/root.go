@@ -92,6 +92,7 @@ func rootCmd() *cobra.Command {
 	root.AddCommand(
 		authCmd(),
 		useCmd(),
+		upCmd(),
 		importCmd(),
 		linkCmd(),
 		unlinkCmd(),
