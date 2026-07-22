@@ -27,6 +27,7 @@
 	import { springHover, motionStagger, springPop } from '$lib/utils/motion.svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
+	import RepoDetectionSummary from '$lib/components/deployment/RepoDetectionSummary.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
 	import { Button, PopoverPanel, Field, Input, Select, Badge } from '$lib/components/ui';
 
@@ -839,23 +840,6 @@
 				</div>
 			</div>
 
-			<div class="nd-owner-row">
-				<ProjectSwitcher
-					currentProjectName={project?.name || projectSlug}
-					pathSuffix={`/deployments/new?source=${deploymentSource}`}
-					{pendingProjectName}
-					onPendingProjectChange={(n) => (pendingProjectName = n)}
-				/>
-				<span class="nd-slash">/</span>
-				<input
-					type="text"
-					bind:value={name}
-					oninput={() => (nameTouched = true)}
-					placeholder="app-name"
-					class="nd-name-input"
-				/>
-			</div>
-
 			<div class="nd-card-body">
 				{#key deploymentSource}
 					<div class="nd-source-pane" {@attach motionStagger({ index: 0, from: { y: 8 } })}>
@@ -1074,6 +1058,16 @@
 							{/if}
 
 							{#if selectedBranch || branch}
+								<RepoDetectionSummary
+									loading={loadingDockerfiles}
+									framework={detectedFramework}
+									{buildType}
+									{dockerfilePath}
+									port={ports[0]?.containerPort || null}
+								/>
+							{/if}
+
+							{#if selectedBranch || branch}
 								<Field label="How should we build it?">
 									<div class="nd-grid-2">
 										<button
@@ -1136,12 +1130,6 @@
 											</div>
 										</button>
 									</div>
-									{#if detectedFramework && buildType === 'railpack'}
-										<p class="nd-hint" style="margin-top: 0.375rem;">
-											Looks like a {detectedFramework} app. We picked the build and port for you,
-											everything stays editable.
-										</p>
-									{/if}
 								</Field>
 
 								{#if buildType === 'dockerfile'}
@@ -1232,6 +1220,23 @@
 						{/if}
 					</div>
 				{/key}
+			</div>
+
+			<div class="nd-owner-row nd-owner-row--after">
+				<ProjectSwitcher
+					currentProjectName={project?.name || projectSlug}
+					pathSuffix={`/deployments/new?source=${deploymentSource}`}
+					{pendingProjectName}
+					onPendingProjectChange={(n) => (pendingProjectName = n)}
+				/>
+				<span class="nd-slash">/</span>
+				<input
+					type="text"
+					bind:value={name}
+					oninput={() => (nameTouched = true)}
+					placeholder="app-name"
+					class="nd-name-input"
+				/>
 			</div>
 		</div>
 
@@ -1587,6 +1592,11 @@
 		gap: 0.5rem;
 		padding: 1.25rem 1.5rem;
 		border-bottom: 1px solid var(--surface-border);
+	}
+
+	.nd-owner-row--after {
+		border-bottom: none;
+		border-top: 1px solid var(--border-default);
 	}
 
 	/* Card body */
