@@ -1,13 +1,10 @@
 <script lang="ts">
-	import { browser } from '$app/environment';
 	import { onMount } from 'svelte';
-	import { themeStore, defaultLightTheme, defaultDarkTheme, type Theme } from '$lib/stores/theme';
+	import { themeStore, defaultLightTheme, builtInThemes, type Theme } from '$lib/stores/theme';
 	import { toasts, projectGradientEnabled } from '$lib/stores';
 	import ThemeEditor from '$lib/components/ThemeEditor.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import {
-		ArrowLeft,
-		Palette,
 		Plus,
 		Download,
 		Upload,
@@ -23,11 +20,10 @@
 	} from 'lucide-svelte';
 	import { slide } from '$lib/utils/transitions';
 
-	let allThemes = $state<Theme[]>([defaultLightTheme, defaultDarkTheme]);
+	let allThemes = $state<Theme[]>([...builtInThemes]);
 	let activeTheme = $state<Theme>(defaultLightTheme);
 	let activeThemeId = $state<string | null>(null);
 
-	// Subscribe to the stores
 	$effect(() => {
 		const unsubAll = themeStore.allThemes.subscribe((val) => {
 			allThemes = val;
@@ -80,7 +76,6 @@
 
 	function stopEditing() {
 		editingTheme = null;
-		// Reapply the current active theme
 		if (activeTheme) {
 			themeStore.applyTheme(activeTheme);
 		}
@@ -94,7 +89,6 @@
 				description: `"${newTheme.name}" created`,
 				color: 'success'
 			});
-			// Start editing the new theme
 			startEditing(newTheme);
 		}
 	}
@@ -154,7 +148,6 @@
 				color: 'success'
 			});
 			closeImportModal();
-			// Optionally start editing or apply the new theme
 			themeStore.setActiveTheme(newTheme.id);
 		} else {
 			importError = 'Invalid theme format. Please check the JSON structure.';
@@ -170,7 +163,6 @@
 		reader.onload = (e) => {
 			const content = e.target?.result as string;
 			importJson = content;
-			// Auto-import
 			handleImport();
 		};
 		reader.onerror = () => {
@@ -178,7 +170,6 @@
 		};
 		reader.readAsText(file);
 
-		// Reset file input
 		target.value = '';
 	}
 
@@ -192,7 +183,6 @@
 		startEditing(newTheme);
 	}
 
-	// Get a preview of theme colors
 	function getThemePreviewColors(theme: Theme) {
 		return {
 			bg: theme.colors.centerChannelBg,
@@ -203,37 +193,8 @@
 	}
 </script>
 
-<div class="p-6">
-	<div class="mb-6">
-		<button
-			onclick={() => window.history.back()}
-			class="mb-4 inline-flex items-center gap-2 text-sm cursor-pointer"
-			style="color: var(--surface-muted);"
-		>
-			<ArrowLeft class="h-4 w-4" />
-			Back
-		</button>
-
-		<div class="flex items-center gap-3">
-			<div
-				class="flex h-10 w-10 items-center justify-center rounded-xl"
-				style="background-color: var(--sidebar-text-hover-bg); color: var(--sidebar-text);"
-			>
-				<Palette class="h-5 w-5" />
-			</div>
-			<div>
-				<h1 class="text-2xl font-bold" style="color: var(--center-channel-color);">
-					Theme Settings
-				</h1>
-				<p class="text-sm" style="color: var(--surface-muted);">
-					Customize the appearance of your workspace
-				</p>
-			</div>
-		</div>
-	</div>
-
+<div class="settings-body">
 	{#if editingTheme}
-		<!-- Theme Editor View -->
 		<div class="card" transition:slide={{ duration: 200 }}>
 			<div class="card-header flex items-center justify-between">
 				<h2 class="font-semibold">
@@ -257,9 +218,7 @@
 			</div>
 		</div>
 	{:else}
-		<!-- Theme Selection View -->
 		<div class="space-y-6">
-			<!-- Quick Actions -->
 			<div class="flex flex-wrap gap-3">
 				<button type="button" class="btn btn-primary" onclick={createNewTheme}>
 					<Plus class="h-4 w-4" />
@@ -278,7 +237,6 @@
 				/>
 			</div>
 
-			<!-- System Theme Option -->
 			<div class="card">
 				<div class="card-body">
 					<button
@@ -310,7 +268,6 @@
 				</div>
 			</div>
 
-			<!-- Effects -->
 			<div class="card">
 				<div class="card-header">
 					<h2 class="font-semibold">Effects</h2>
@@ -343,14 +300,13 @@
 				</div>
 			</div>
 
-			<!-- Built-in Themes -->
 			<div class="card">
 				<div class="card-header">
 					<h2 class="font-semibold">Built-in Themes</h2>
 				</div>
 				<div class="card-body">
 					<div class="grid gap-4 sm:grid-cols-2">
-						{#each [defaultLightTheme, defaultDarkTheme] as theme (theme.id)}
+						{#each builtInThemes as theme (theme.id)}
 							{@const preview = getThemePreviewColors(theme)}
 							{@const isActive = activeThemeId === theme.id}
 							<div
@@ -359,7 +315,6 @@
 								class:ring-primary-500={isActive}
 								style="border-color: var(--surface-border);"
 							>
-								<!-- Color Preview -->
 								<div class="h-20 flex">
 									<div class="w-1/4" style="background-color: {preview.sidebar};"></div>
 									<div class="flex-1 flex flex-col" style="background-color: {preview.bg};">
@@ -372,7 +327,6 @@
 									</div>
 								</div>
 
-								<!-- Theme Info -->
 								<div class="p-4" style="background-color: var(--surface-bg);">
 									<div class="flex items-center justify-between">
 										<div class="flex items-center gap-2">
@@ -431,7 +385,6 @@
 				</div>
 			</div>
 
-			<!-- Custom Themes -->
 			{#if allThemes.filter((t) => !t.isBuiltIn).length > 0}
 				<div class="card">
 					<div class="card-header">
@@ -448,7 +401,6 @@
 									class:ring-primary-500={isActive}
 									style="border-color: var(--surface-border);"
 								>
-									<!-- Color Preview -->
 									<div class="h-20 flex">
 										<div class="w-1/4" style="background-color: {preview.sidebar};"></div>
 										<div class="flex-1 flex flex-col" style="background-color: {preview.bg};">
@@ -461,7 +413,6 @@
 										</div>
 									</div>
 
-									<!-- Theme Info -->
 									<div class="p-4" style="background-color: var(--surface-bg);">
 										<div class="flex items-center justify-between">
 											<div class="flex items-center gap-2">
@@ -532,7 +483,6 @@
 	{/if}
 </div>
 
-<!-- Import Modal -->
 {#if showImportModal}
 	<div
 		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"

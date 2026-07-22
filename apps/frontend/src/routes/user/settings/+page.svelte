@@ -19,19 +19,20 @@
 		featureFlag,
 		type EarlyAccessFeature
 	} from '$lib/posthog';
+	import { page } from '$app/stores';
 	import {
 		UserIdentityHero,
-		SettingsLinkRow,
 		UserInvitations,
 		UserGitHub,
 		UserTailscale,
 		UserPasskeys,
 		UserSessions,
 		UserEarlyAccess,
-		UserAccessibility
+		UserAccessibility,
+		UserApiTokens,
+		UserMcp,
+		UserAppearance
 	} from '$lib/components/user-settings';
-	import { KeyRound, ServerCog } from '@jis3r/icons';
-	import { Palette } from 'lucide-svelte';
 
 	let githubLinked = $state(false);
 	let githubUsername = $state<string | null>(null);
@@ -121,61 +122,51 @@
 
 	const tailscaleEnabled = featureFlag('tailscale-integration');
 
-	let activeSection = $state('b-profile');
+	const activeTab = $derived($page.url.searchParams.get('tab') || 'profile');
 	const RAIL_GROUPS = $derived([
 		{
 			label: 'Account',
-			items: [
-				{ id: 'b-profile', label: 'Profile' },
-				...(invitations.length ? [{ id: 'b-invitations', label: 'Invitations' }] : [])
-			]
+			items: [{ id: 'profile', label: 'Profile' }]
 		},
 		{
 			label: 'Connections',
 			items: [
-				{ id: 'b-github', label: 'GitHub' },
-				...($tailscaleEnabled ? [{ id: 'b-tailscale', label: 'Tailscale' }] : []),
-				{ id: 'b-integrations', label: 'Tokens and MCP' }
+				{ id: 'connections', label: 'GitHub and Tailscale' },
+				{ id: 'tokens', label: 'API tokens' },
+				{ id: 'mcp', label: 'MCP' }
 			]
 		},
 		{
 			label: 'Security',
-			items: [
-				{ id: 'b-passkeys', label: 'Passkeys' },
-				{ id: 'b-sessions', label: 'Devices' }
-			]
+			items: [{ id: 'security', label: 'Passkeys and devices' }]
 		},
 		{
 			label: 'Preferences',
 			items: [
-				{ id: 'b-appearance', label: 'Appearance' },
-				{ id: 'b-accessibility', label: 'Accessibility' },
-				{ id: 'b-early-access', label: 'Early access' }
+				{ id: 'appearance', label: 'Appearance' },
+				{ id: 'accessibility', label: 'Accessibility' },
+				{ id: 'early-access', label: 'Early access' }
 			]
 		}
 	]);
-	const RAIL_IDS = $derived(RAIL_GROUPS.flatMap((g) => g.items.map((i) => i.id)));
+
+	const SECTION_TABS: Record<string, string> = {
+		'b-profile': 'profile',
+		'b-invitations': 'profile',
+		'b-github': 'connections',
+		'b-tailscale': 'connections',
+		'b-integrations': 'tokens',
+		'b-passkeys': 'security',
+		'b-sessions': 'security',
+		'b-appearance': 'appearance',
+		'b-accessibility': 'accessibility',
+		'b-early-access': 'early-access'
+	};
 
 	function jumpToSection(id: string) {
-		document.getElementById(id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+		const tab = SECTION_TABS[id] ?? id;
+		goto(`/user/settings?tab=${tab}`, { keepFocus: true, noScroll: false });
 	}
-
-	$effect(() => {
-		if (!browser) return;
-		const ids = RAIL_IDS;
-		const els = ids.map((id) => document.getElementById(id)).filter(Boolean) as HTMLElement[];
-		if (!els.length) return;
-		const observer = new IntersectionObserver(
-			(entries) => {
-				for (const entry of entries) {
-					if (entry.isIntersecting) activeSection = entry.target.id;
-				}
-			},
-			{ rootMargin: '-15% 0px -70% 0px' }
-		);
-		for (const el of els) observer.observe(el);
-		return () => observer.disconnect();
-	});
 
 	function censorEmail(email: string): string {
 		const [local, domain] = email.split('@');
@@ -763,11 +754,7 @@
 			.then((d) => (backendVersion = d.version))
 			.catch(() => {});
 		if (browser && window.location.hash === '#invitations') {
-			requestAnimationFrame(() => {
-				document
-					.getElementById('invitations')
-					?.scrollIntoView({ behavior: 'smooth', block: 'center' });
-			});
+			goto('/user/settings?tab=profile', { replaceState: true });
 		}
 	});
 </script>
@@ -810,23 +797,22 @@
 					<div class="usb-rail-group">
 						<p class="usb-rail-eyebrow">{group.label}</p>
 						{#each group.items as item (item.id)}
-							<button
-								type="button"
+							<a
+								href={`/user/settings?tab=${item.id}`}
 								class="usb-rail-link"
-								class:usb-rail-link--active={activeSection === item.id}
-								aria-current={activeSection === item.id ? 'true' : undefined}
-								onclick={() => jumpToSection(item.id)}
+								class:usb-rail-link--active={activeTab === item.id}
+								aria-current={activeTab === item.id ? 'page' : undefined}
 							>
 								{item.label}
-							</button>
+							</a>
 						{/each}
 					</div>
 				{/each}
 			</aside>
 
 			<div class="usb-sections">
-				{#if invitations.length}
-					<div id="b-invitations" class="usb-anchor">
+				{#if activeTab === 'profile'}
+					{#if invitations.length}
 						<UserInvitations
 							index={0}
 							{invitations}
@@ -835,12 +821,17 @@
 							onAccept={handleAcceptInvitation}
 							onDecline={handleDeclineInvitation}
 						/>
-					</div>
+					{:else}
+						<p class="usb-tab-hint">
+							Your profile lives above. Organization invitations show up here when you have
+							any pending.
+						</p>
+					{/if}
 				{/if}
 
-				<div id="b-github" class="usb-anchor">
+				{#if activeTab === 'connections'}
 					<UserGitHub
-						index={1}
+						index={0}
 						{loading}
 						{githubLinked}
 						{githubUsername}
@@ -851,12 +842,9 @@
 						onLink={linkGitHub}
 						onUnlink={unlinkGitHub}
 					/>
-				</div>
-
-				{#if $tailscaleEnabled}
-					<div id="b-tailscale" class="usb-anchor">
+					{#if $tailscaleEnabled}
 						<UserTailscale
-							index={2}
+							index={1}
 							{tailscaleLoading}
 							{tailscaleLinked}
 							{tailscaleTailnet}
@@ -867,31 +855,20 @@
 							onLink={linkTailscale}
 							onUnlink={unlinkTailscale}
 						/>
-					</div>
+					{/if}
 				{/if}
 
-				<div id="b-integrations" class="usb-anchor usb-links">
-					<SettingsLinkRow
-						href="/user/api-tokens"
-						title="API tokens"
-						description="Create and revoke tokens for the CLI and API"
-						index={3}
-					>
-						{#snippet icon(hovered)}<KeyRound size={16} animate={hovered} />{/snippet}
-					</SettingsLinkRow>
-					<SettingsLinkRow
-						href="/user/mcp"
-						title="MCP servers"
-						description="Connect agents and assistants to your account"
-						index={3}
-					>
-						{#snippet icon(hovered)}<ServerCog size={16} animate={hovered} />{/snippet}
-					</SettingsLinkRow>
-				</div>
+				{#if activeTab === 'tokens'}
+					<UserApiTokens />
+				{/if}
 
-				<div id="b-passkeys" class="usb-anchor">
+				{#if activeTab === 'mcp'}
+					<UserMcp />
+				{/if}
+
+				{#if activeTab === 'security'}
 					<UserPasskeys
-						index={4}
+						index={0}
 						{passkeys}
 						{passkeysLoading}
 						{passkeyListError}
@@ -910,11 +887,8 @@
 						onConfirmDelete={confirmDeletePasskey}
 						{formatTimestamp}
 					/>
-				</div>
-
-				<div id="b-sessions" class="usb-anchor">
 					<UserSessions
-						index={5}
+						index={1}
 						{sessions}
 						{sessionsLoading}
 						{sessionsError}
@@ -922,31 +896,26 @@
 						onConfirmRevokeSession={confirmRevokeSession}
 						onShowRevokeAll={() => (showRevokeAllModal = true)}
 					/>
-				</div>
+				{/if}
 
-				<div id="b-appearance" class="usb-anchor">
-					<SettingsLinkRow
-						href="/user/settings/theme"
-						title="Appearance"
-						description="Themes, colors, and the theme editor"
-						index={6}
-					>
-						{#snippet icon()}<Palette size={16} />{/snippet}
-					</SettingsLinkRow>
-				</div>
+				{#if activeTab === 'appearance'}
+					<UserAppearance />
+				{/if}
 
-				<div id="b-accessibility" class="usb-anchor"><UserAccessibility index={7} /></div>
+				{#if activeTab === 'accessibility'}
+					<UserAccessibility index={0} />
+				{/if}
 
-				<div id="b-early-access" class="usb-anchor">
+				{#if activeTab === 'early-access'}
 					<UserEarlyAccess
-						index={8}
+						index={0}
 						{earlyAccessFeatures}
 						{earlyAccessLoading}
 						{earlyAccessEnrollment}
 						{togglingFeature}
 						onToggleFeature={toggleEarlyAccessFeature}
 					/>
-				</div>
+				{/if}
 			</div>
 		</div>
 
@@ -1035,6 +1004,13 @@
 		align-items: start;
 		margin-top: 1.25rem;
 	}
+
+	.usb-tab-hint {
+		font-size: 0.8125rem;
+		color: var(--text-muted);
+		padding: 0.5rem 0;
+	}
+
 	.usb-rail {
 		position: sticky;
 		top: 1.25rem;

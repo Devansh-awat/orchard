@@ -227,7 +227,7 @@
 			{#if $pendingInvitations.length > 0}
 				<div class="user-menu-section-footer" {@attach motionStagger(2)}>
 					<a
-						href="/user/settings#invitations"
+						href="/user/settings?tab=profile"
 						class="user-menu-item user-menu-item--highlight"
 						onclick={() => (open = false)}
 						{@attach springHover({ lift: -1 })}
@@ -253,7 +253,7 @@
 					User Settings
 				</a>
 				<a
-					href="/user/mcp"
+					href="/user/settings?tab=mcp"
 					class="user-menu-item"
 					onclick={() => (open = false)}
 					{@attach springHover({ lift: -1 })}
@@ -279,7 +279,7 @@
 					MCP Server
 				</a>
 				<a
-					href="/user/api-tokens"
+					href="/user/settings?tab=tokens"
 					class="user-menu-item"
 					onclick={() => (open = false)}
 					{@attach springHover({ lift: -1 })}
@@ -288,7 +288,7 @@
 					API Tokens
 				</a>
 				<a
-					href="/user/settings/theme"
+					href="/user/settings?tab=appearance"
 					class="user-menu-item"
 					onclick={() => (open = false)}
 					{@attach springHover({ lift: -1 })}

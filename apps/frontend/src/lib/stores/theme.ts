@@ -410,6 +410,132 @@ export const defaultDarkTheme: Theme = {
 	}
 };
 
+const creamSimple: SimpleThemeColors = {
+	accent: '#d53044',
+	accentForeground: '#ffffff',
+	background: '#f8f3e9',
+	foreground: '#372e22',
+	muted: '#8a7c68',
+	border: '#e9deca',
+	card: '#fffcf5',
+	sidebarBackground: '#f2ecdd',
+	sidebarForeground: '#372e22',
+	error: '#d53044',
+	success: '#33d6a6',
+	warning: '#ff8c37'
+};
+
+export const creamTheme: Theme = {
+	id: 'cream',
+	name: 'Cream',
+	isDark: false,
+	isBuiltIn: true,
+	simpleColors: creamSimple,
+	colors: {
+		...generateThemeColors(creamSimple, false),
+		...orchardPrimaryPalette,
+		primary50: '#fffcf5',
+		sidebarUnreadText: '#161314',
+		sidebarTextHoverBg: '#eee4d2',
+		sidebarTextActiveColor: '#8a2c37',
+		sidebarTextActiveBg: '#eee4d2',
+		mentionHighlightBg: '#eee4d2',
+		mentionHighlightLink: '#8a2c37',
+		newMessageSeparator: '#ea485c',
+		linkColor: '#8a2c37',
+		buttonBg: '#ae2a3a',
+		controlBg: '#fffcf5',
+		controlHoverBg: '#eee4d2',
+		dropdownHoverBg: '#f1ead9',
+		orgTriggerBg: '#fffcf5',
+		orgTriggerHoverBg: '#eee4d2'
+	}
+};
+
+const midnightSimple: SimpleThemeColors = {
+	accent: '#4d8dff',
+	accentForeground: '#ffffff',
+	background: '#0e1420',
+	foreground: '#e2e8f6',
+	muted: '#93a0bd',
+	border: '#273250',
+	card: '#161e30',
+	sidebarBackground: '#0b101a',
+	sidebarForeground: '#e2e8f6',
+	error: '#fb5e71',
+	success: '#33d6a6',
+	warning: '#f1c40f'
+};
+
+export const midnightTheme: Theme = {
+	id: 'midnight',
+	name: 'Midnight',
+	isDark: true,
+	isBuiltIn: true,
+	simpleColors: midnightSimple,
+	colors: {
+		...generateThemeColors(midnightSimple, true),
+		sidebarTextHoverBg: '#0e1420',
+		sidebarTextActiveBg: '#273250',
+		sidebarHeaderBg: '#0e1420',
+		sidebarTeamBarBg: '#0e1420',
+		mentionHighlightBg: '#273250',
+		mentionHighlightLink: '#7caeff',
+		newMessageSeparator: '#4d8dff',
+		linkColor: '#7caeff',
+		buttonBg: '#3b7ceb',
+		controlHoverBg: '#273250',
+		dropdownHoverBg: '#0e1420',
+		orgTriggerHoverBg: '#273250'
+	}
+};
+
+const electricSimple: SimpleThemeColors = {
+	accent: '#00d4c8',
+	accentForeground: '#031312',
+	background: '#0a0101',
+	foreground: '#e7f5f2',
+	muted: '#8fa5a1',
+	border: '#22292b',
+	card: '#140d0e',
+	sidebarBackground: '#070101',
+	sidebarForeground: '#e7f5f2',
+	error: '#ff5e6c',
+	success: '#33d6a6',
+	warning: '#ffb454'
+};
+
+export const electricTheme: Theme = {
+	id: 'electric',
+	name: 'Electric',
+	isDark: true,
+	isBuiltIn: true,
+	simpleColors: electricSimple,
+	colors: {
+		...generateThemeColors(electricSimple, true),
+		sidebarTextHoverBg: '#140d0e',
+		sidebarTextActiveBg: '#1b2426',
+		sidebarHeaderBg: '#0a0101',
+		sidebarTeamBarBg: '#0a0101',
+		mentionHighlightBg: '#1b2426',
+		mentionHighlightLink: '#4be8dc',
+		newMessageSeparator: '#00d4c8',
+		linkColor: '#4be8dc',
+		buttonBg: '#00b5aa',
+		controlHoverBg: '#1b2426',
+		dropdownHoverBg: '#0f0809',
+		orgTriggerHoverBg: '#1b2426'
+	}
+};
+
+export const builtInThemes: Theme[] = [
+	defaultLightTheme,
+	creamTheme,
+	defaultDarkTheme,
+	midnightTheme,
+	electricTheme
+];
+
 // Theme color categories for the editor UI - simplified!
 export const themeColorCategories = [
 	{
@@ -493,8 +619,7 @@ function createThemeStore() {
 	const activeThemeId = writable<string | null>(loadActiveThemeId());
 
 	const allThemes = derived(customThemes, ($customThemes) => [
-		defaultLightTheme,
-		defaultDarkTheme,
+		...builtInThemes,
 		...$customThemes
 	]);
 

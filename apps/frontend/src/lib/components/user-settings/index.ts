@@ -12,3 +12,6 @@ export { default as SettingsField } from './SettingsField.svelte';
 export { default as IntegrationCard } from './IntegrationCard.svelte';
 export { default as ConnectPrompt } from './ConnectPrompt.svelte';
 export { default as IconButton } from './IconButton.svelte';
+export { default as UserApiTokens } from './UserApiTokens.svelte';
+export { default as UserMcp } from './UserMcp.svelte';
+export { default as UserAppearance } from './UserAppearance.svelte';

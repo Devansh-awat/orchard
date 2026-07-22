@@ -513,7 +513,7 @@
 						</div>
 						<div class="deck-menu-divider"></div>
 						{#if invitationCount > 0}
-							<a class="deck-menu-item" href="/user/settings#invitations" onclick={close}>
+							<a class="deck-menu-item" href="/user/settings?tab=profile" onclick={close}>
 								<Mail size={14} />
 								Invitations
 								<span class="deck-user-badge">{invitationCount}</span>
@@ -523,11 +523,11 @@
 							<Settings size={14} />
 							Settings
 						</a>
-						<a class="deck-menu-item" href="/user/api-tokens" onclick={close}>
+						<a class="deck-menu-item" href="/user/settings?tab=tokens" onclick={close}>
 							<KeyRound size={14} />
 							API tokens
 						</a>
-						<a class="deck-menu-item" href="/user/settings/theme" onclick={close}>
+						<a class="deck-menu-item" href="/user/settings?tab=appearance" onclick={close}>
 							<Palette size={14} />
 							Theme
 						</a>
