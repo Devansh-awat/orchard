@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.28.0](https://github.com/LeafdTK/leaf/compare/server/v1.27.1...server/v1.28.0) (2026-07-22)
+
+
+### Features
+
+* pass GIT_SHA build arg with checked out commit to image builds ([b346611](https://github.com/LeafdTK/leaf/commit/b34661142bf858ca69258c65635094f056870efd))
+
 ## [1.27.1](https://github.com/LeafdTK/leaf/compare/server/v1.27.0...server/v1.27.1) (2026-07-21)
 
 
