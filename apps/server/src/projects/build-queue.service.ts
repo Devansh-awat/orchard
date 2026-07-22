@@ -251,6 +251,23 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
     }, this.txOpts);
   }
 
+  private withTimeout<T>(promise: Promise<T>, ms: number, message: string): Promise<T> {
+    return new Promise<T>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(message)), ms);
+      timer.unref?.();
+      promise.then(
+        (value) => {
+          clearTimeout(timer);
+          resolve(value);
+        },
+        (err) => {
+          clearTimeout(timer);
+          reject(err);
+        },
+      );
+    });
+  }
+
   private async execute(run: {
     id: string;
     deploymentId: string;
@@ -263,20 +280,49 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
   }) {
     try {
       const deployments = this.moduleRef.get(DeploymentsService, { strict: false });
-      await deployments.runQueuedBuild(run);
+      await this.withTimeout(
+        deployments.runQueuedBuild(run),
+        4 * 60_000,
+        'Build did not start within 4 minutes',
+      );
     } catch (e) {
-      this.logger.error(`queued build ${run.id} threw: ${(e as Error)?.message ?? e}`);
-      await this.prisma.buildRun
+      const detail = (e as Error)?.message ?? 'Build failed to start';
+      this.logger.error(`queued build ${run.id} threw: ${detail}`);
+      const claimed = await this.prisma.buildRun
         .updateMany({
           where: { id: run.id, status: 'building' },
           data: {
             status: 'failed',
             finishedAt: new Date(),
-            detail: (e as Error)?.message ?? 'Build failed to start',
+            detail,
             workerId: null,
           },
         })
-        .catch(() => {});
+        .catch(() => ({ count: 0 }));
+      if (claimed.count > 0) {
+        await this.prisma.deployment
+          .updateMany({
+            where: { id: run.deploymentId, buildStatus: 'building' },
+            data: { buildStatus: 'failed', buildError: detail, status: 'running' },
+          })
+          .catch(() => {});
+        const fullRun = await this.prisma.buildRun
+          .findUnique({
+            where: { id: run.id },
+            select: {
+              deploymentId: true,
+              checkRunId: true,
+              githubInstallationId: true,
+              repoFullName: true,
+            },
+          })
+          .catch(() => null);
+        if (fullRun) {
+          await this.closeGitHubArtifacts(fullRun, detail).catch((err) =>
+            this.logger.warn(`failed to close github artifacts for run ${run.id}: ${err?.message ?? err}`),
+          );
+        }
+      }
       this.kick();
     }
   }
