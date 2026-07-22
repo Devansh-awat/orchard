@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.28.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.27.0...frontend/v0.28.0) (2026-07-22)
+
+
+### Features
+
+* colors 1 darker ([d3bd882](https://github.com/LeafdTK/leaf/commit/d3bd882f58800e2b08a8089076e9fb0711e8a998))
+
 ## [0.27.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.26.0...frontend/v0.27.0) (2026-07-22)
 
 

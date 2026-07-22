@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.29.0](https://github.com/LeafdTK/leaf/compare/server/v1.28.0...server/v1.29.0) (2026-07-22)
+
+
+### Features
+
+* seamless build recovery with log continuity and deploy history ([aab1df3](https://github.com/LeafdTK/leaf/commit/aab1df31c34177f2e29cc3e9c01c54d204e3085a))
+
+
+### Bug Fixes
+
+* recover finished builds from job status or registry instead of marking lost ([e0763db](https://github.com/LeafdTK/leaf/commit/e0763db429e6451683859257ccdd0d77a8fb0745))
+* requeue builds orphaned by server restart instead of failing ([3e6e12f](https://github.com/LeafdTK/leaf/commit/3e6e12fc00003997ed01ce06366eac2ecf82c305))
+
 ## [1.28.0](https://github.com/LeafdTK/leaf/compare/server/v1.27.1...server/v1.28.0) (2026-07-22)
 
 
