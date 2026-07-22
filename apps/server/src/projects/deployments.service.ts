@@ -5010,7 +5010,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     },
   ) {
     if (!this.storage.buildContextEnabled()) {
-      throw new BadRequestException('Local deploys are not enabled on this server (build-context storage is not configured)');
+      throw new BadRequestException('Local deploys are disabled on this server (set LOCAL_DEPLOYS_ENABLED=true and configure R2_BUILD_CONTEXT_BUCKET)');
     }
 
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
@@ -5194,7 +5194,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     },
   ) {
     if (!this.storage.buildContextEnabled()) {
-      throw new BadRequestException('Local deploys are not enabled on this server (build-context storage is not configured)');
+      throw new BadRequestException('Local deploys are disabled on this server (set LOCAL_DEPLOYS_ENABLED=true and configure R2_BUILD_CONTEXT_BUCKET)');
     }
 
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);

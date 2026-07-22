@@ -91,11 +91,15 @@ export class StorageService {
 
   // Build contexts hold user source code, so they live in a separate PRIVATE
   // bucket (the main bucket is public: it serves org avatars/backgrounds).
-  // The feature is off until R2_BUILD_CONTEXT_BUCKET is configured; access is
-  // only ever via short-lived presigned GETs handed to the build init
-  // container.
+  // Local deploys are opt-in: LOCAL_DEPLOYS_ENABLED must be set explicitly
+  // AND the private bucket must be configured. Access is only ever via
+  // short-lived presigned GETs handed to the build init container.
 
   buildContextEnabled(): boolean {
+    const flag = String(process.env.LOCAL_DEPLOYS_ENABLED || '').toLowerCase();
+    if (flag !== 'true' && flag !== '1') {
+      return false;
+    }
     return Boolean(
       process.env.R2_BUILD_CONTEXT_BUCKET &&
         process.env.R2_ACCOUNT_ID &&
