@@ -7,14 +7,47 @@ import (
 	"net/url"
 	"os"
 	"strings"
+	"sync"
 
 	"github.com/LeafdTK/leaf/cli/internal/api"
 	"github.com/LeafdTK/leaf/cli/internal/config"
+	"github.com/LeafdTK/leaf/cli/internal/output"
 )
 
-// Scope precedence: flag > env var > `orchard use` context. The raw value may
-// be an id or a slug/name; resolve* turns it into an id via the slug lookup
-// endpoints, falling back to treating it as an id.
+// Scope precedence: flag > env var > directory link (.orchard/project.json)
+// > `orchard use` context. The raw value may be an id or a slug/name;
+// resolve* turns it into an id via the slug lookup endpoints, falling back to
+// treating it as an id.
+
+var (
+	dirLinkOnce    sync.Once
+	dirLinkVal     *config.Link
+	linkNoticeOnce sync.Once
+)
+
+func dirLink() *config.Link {
+	dirLinkOnce.Do(func() {
+		cwd, err := os.Getwd()
+		if err != nil {
+			return
+		}
+		if l, _, ok := config.FindLink(cwd); ok {
+			dirLinkVal = l
+		}
+	})
+	return dirLinkVal
+}
+
+// linkNotice tells interactive users where their scope came from, once per
+// invocation. Silent in JSON mode so piped output stays parseable.
+func linkNotice(kind, label string) {
+	linkNoticeOnce.Do(func() {
+		if fmtFlag() == output.FormatJSON || !output.StderrIsTTY() {
+			return
+		}
+		fmt.Fprintln(os.Stderr, output.Dim("· "+kind+" "+label+" from .orchard/project.json"))
+	})
+}
 
 func scopedOrg(cfg *config.Config) string {
 	if orgFlag != "" {
@@ -22,6 +55,14 @@ func scopedOrg(cfg *config.Config) string {
 	}
 	if v := os.Getenv("ORCHARD_ORG"); v != "" {
 		return v
+	}
+	if l := dirLink(); l != nil && l.OrgID != "" {
+		label := l.OrgSlug
+		if label == "" {
+			label = l.OrgID
+		}
+		linkNotice("org", label)
+		return l.OrgID
 	}
 	return cfg.Context.OrgID
 }
@@ -33,6 +74,14 @@ func scopedProject(cfg *config.Config) string {
 	if v := os.Getenv("ORCHARD_PROJECT"); v != "" {
 		return v
 	}
+	if l := dirLink(); l != nil && l.ProjectID != "" {
+		label := l.ProjectSlug
+		if label == "" {
+			label = l.ProjectID
+		}
+		linkNotice("project", label)
+		return l.ProjectID
+	}
 	return cfg.Context.ProjectID
 }
 
@@ -42,6 +91,14 @@ func scopedEnv(cfg *config.Config) string {
 	}
 	if v := os.Getenv("ORCHARD_ENV"); v != "" {
 		return v
+	}
+	if l := dirLink(); l != nil && l.EnvID != "" {
+		label := l.EnvName
+		if label == "" {
+			label = l.EnvID
+		}
+		linkNotice("env", label)
+		return l.EnvID
 	}
 	return cfg.Context.EnvID
 }

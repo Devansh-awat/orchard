@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"errors"
+	"os"
 
 	"github.com/LeafdTK/leaf/cli/internal/config"
 	"github.com/LeafdTK/leaf/cli/internal/output"
@@ -92,12 +93,20 @@ func contextCmd() *cobra.Command {
 			if fmtFlag() == output.FormatJSON {
 				return output.JSON(cfg.Context)
 			}
-			output.KV([][2]string{
+			pairs := [][2]string{
 				{"api", cfg.APIURL},
 				{"org", labeled(cfg.Context.OrgSlug, cfg.Context.OrgID)},
 				{"project", labeled(cfg.Context.ProjectSlug, cfg.Context.ProjectID)},
 				{"env", labeled(cfg.Context.EnvName, cfg.Context.EnvID)},
-			})
+			}
+			if cwd, cerr := os.Getwd(); cerr == nil {
+				if l, dir, ok := config.FindLink(cwd); ok {
+					pairs = append(pairs,
+						[2]string{"linked project", labeled(l.ProjectSlug, l.ProjectID) + " " + output.Dim("("+config.LinkPath(dir)+", overrides context)")},
+					)
+				}
+			}
+			output.KV(pairs)
 			return nil
 		},
 	}
