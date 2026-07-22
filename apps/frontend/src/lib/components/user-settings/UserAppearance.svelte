@@ -1,9 +1,16 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
-	import { themeStore, defaultLightTheme, builtInThemes, type Theme } from '$lib/stores/theme';
+	import {
+		themeStore,
+		defaultLightTheme,
+		defaultDarkTheme,
+		builtInThemes,
+		type Theme
+	} from '$lib/stores/theme';
 	import { toasts, projectGradientEnabled } from '$lib/stores';
 	import ThemeEditor from '$lib/components/ThemeEditor.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import { Button, SectionCard, ToggleRow } from '$lib/components/ui';
 	import {
 		Plus,
 		Download,
@@ -15,7 +22,6 @@
 		Moon,
 		Monitor,
 		Pencil,
-		Sparkles,
 		X
 	} from 'lucide-svelte';
 	import { slide } from '$lib/utils/transitions';
@@ -183,14 +189,18 @@
 		startEditing(newTheme);
 	}
 
-	function getThemePreviewColors(theme: Theme) {
-		return {
-			bg: theme.colors.centerChannelBg,
-			sidebar: theme.colors.sidebarBg,
-			primary: theme.colors.primary500,
-			text: theme.colors.centerChannelColor
-		};
-	}
+	let gradientOn = $state(true);
+
+	$effect(() => {
+		const unsub = projectGradientEnabled.subscribe((v) => {
+			gradientOn = v;
+		});
+		return unsub;
+	});
+
+	const customThemes = $derived(allThemes.filter((t) => !t.isBuiltIn));
+	const lightPreview = defaultLightTheme.simpleColors;
+	const darkPreview = defaultDarkTheme.simpleColors;
 </script>
 
 <div class="settings-body">
@@ -218,267 +228,127 @@
 			</div>
 		</div>
 	{:else}
-		<div class="space-y-6">
-			<div class="flex flex-wrap gap-3">
-				<button type="button" class="btn btn-primary" onclick={createNewTheme}>
-					<Plus class="h-4 w-4" />
-					Create Theme
-				</button>
-				<button type="button" class="btn btn-secondary" onclick={openImportModal}>
-					<Upload class="h-4 w-4" />
-					Import Theme
-				</button>
-				<input
-					type="file"
-					accept=".json,application/json"
-					class="hidden"
-					bind:this={fileInput}
-					onchange={handleFileImport}
-				/>
-			</div>
+		<div class="ap-stack">
+			<input
+				type="file"
+				accept=".json,application/json"
+				class="hidden"
+				bind:this={fileInput}
+				onchange={handleFileImport}
+			/>
 
-			<div class="card">
-				<div class="card-body">
-					<button
-						type="button"
-						class="flex w-full items-center gap-4 rounded-xl p-4 transition-colors"
-						class:ring-2={!activeThemeId}
-						class:ring-primary-500={!activeThemeId}
-						style="background-color: var(--control-bg);"
-						onclick={useSystemTheme}
-					>
-						<div
-							class="flex h-12 w-12 items-center justify-center rounded-lg"
-							style="background-color: var(--surface-bg); border: 1px solid var(--surface-border);"
-						>
-							<Monitor class="h-6 w-6" style="color: var(--center-channel-color);" />
-						</div>
-						<div class="flex-1 text-left">
-							<p class="font-medium" style="color: var(--center-channel-color);">
-								System Preference
-							</p>
-							<p class="text-sm" style="color: var(--surface-muted);">
-								Automatically switch between light and dark based on your system settings
-							</p>
-						</div>
-						{#if !activeThemeId}
-							<Check class="h-5 w-5 text-primary-600" />
-						{/if}
-					</button>
-				</div>
-			</div>
-
-			<div class="card">
-				<div class="card-header">
-					<h2 class="font-semibold">Effects</h2>
-				</div>
-				<div class="card-body">
-					<label class="grad-toggle-row">
-						<div
-							class="flex h-12 w-12 items-center justify-center rounded-lg"
-							style="background-color: var(--surface-bg); border: 1px solid var(--surface-border);"
-						>
-							<Sparkles class="h-6 w-6" style="color: var(--center-channel-color);" />
-						</div>
-						<div class="grad-toggle-text">
-							<p class="font-medium" style="color: var(--center-channel-color);">
-								Project background gradient
-							</p>
-							<p class="text-sm" style="color: var(--surface-muted);">
-								Animated flowing gradient on project pages and cards. Turn off to reduce motion or
-								save GPU.
-							</p>
-						</div>
-						<input
-							type="checkbox"
-							class="grad-toggle-input"
-							checked={$projectGradientEnabled}
-							onchange={(e) => projectGradientEnabled.set(e.currentTarget.checked)}
-						/>
-						<span class="grad-toggle-track"><span class="grad-toggle-thumb"></span></span>
-					</label>
-				</div>
-			</div>
-
-			<div class="card">
-				<div class="card-header">
-					<h2 class="font-semibold">Built-in Themes</h2>
-				</div>
-				<div class="card-body">
-					<div class="grid gap-4 sm:grid-cols-2">
-						{#each builtInThemes as theme (theme.id)}
-							{@const preview = getThemePreviewColors(theme)}
-							{@const isActive = activeThemeId === theme.id}
-							<div
-								class="rounded-xl border overflow-hidden transition-all"
-								class:ring-2={isActive}
-								class:ring-primary-500={isActive}
-								style="border-color: var(--surface-border);"
-							>
-								<div class="h-20 flex">
-									<div class="w-1/4" style="background-color: {preview.sidebar};"></div>
-									<div class="flex-1 flex flex-col" style="background-color: {preview.bg};">
-										<div class="flex-1 flex items-center justify-center">
-											<div
-												class="h-8 w-24 rounded"
-												style="background-color: {preview.primary};"
-											></div>
-										</div>
-									</div>
-								</div>
-
-								<div class="p-4" style="background-color: var(--surface-bg);">
-									<div class="flex items-center justify-between">
-										<div class="flex items-center gap-2">
-											{#if theme.isDark}
-												<Moon class="h-4 w-4" style="color: var(--surface-muted);" />
-											{:else}
-												<Sun class="h-4 w-4" style="color: var(--surface-muted);" />
-											{/if}
-											<p class="font-medium" style="color: var(--center-channel-color);">
-												{theme.name}
-											</p>
-											{#if isActive}
-												<span class="badge badge-success text-xs">Active</span>
-											{/if}
-										</div>
-									</div>
-
-									<div class="mt-3 flex gap-2">
-										<button
-											type="button"
-											class="btn btn-secondary flex-1"
-											onclick={() => selectTheme(theme.id)}
-											disabled={isActive}
-										>
-											{isActive ? 'Active' : 'Apply'}
-										</button>
-										<button
-											type="button"
-											class="btn btn-secondary"
-											onclick={() => startEditing(theme)}
-											title="Customize"
-										>
-											<Pencil class="h-4 w-4" />
-										</button>
-										<button
-											type="button"
-											class="btn btn-secondary"
-											onclick={() => duplicateTheme(theme)}
-											title="Duplicate"
-										>
-											<Copy class="h-4 w-4" />
-										</button>
-										<button
-											type="button"
-											class="btn btn-secondary"
-											onclick={() => exportTheme(theme)}
-											title="Export"
-										>
-											<Download class="h-4 w-4" />
-										</button>
-									</div>
-								</div>
-							</div>
-						{/each}
-					</div>
-				</div>
-			</div>
-
-			{#if allThemes.filter((t) => !t.isBuiltIn).length > 0}
-				<div class="card">
-					<div class="card-header">
-						<h2 class="font-semibold">Custom Themes</h2>
-					</div>
-					<div class="card-body">
-						<div class="grid gap-4 sm:grid-cols-2">
-							{#each allThemes.filter((t) => !t.isBuiltIn) as theme (theme.id)}
-								{@const preview = getThemePreviewColors(theme)}
-								{@const isActive = activeThemeId === theme.id}
-								<div
-									class="rounded-xl border overflow-hidden transition-all"
-									class:ring-2={isActive}
-									class:ring-primary-500={isActive}
-									style="border-color: var(--surface-border);"
+			<SectionCard title="Themes" description="Pick how Orchard looks for you. Click a theme to apply it.">
+				{#snippet actions()}
+					<Button variant="secondary" size="sm" onclick={createNewTheme}>
+						<Plus class="h-3.5 w-3.5" /> New theme
+					</Button>
+					<Button variant="ghost" size="sm" onclick={openImportModal}>
+						<Upload class="h-3.5 w-3.5" /> Import
+					</Button>
+				{/snippet}
+				<div class="ap-grid">
+					<div class="ap-swatch" class:ap-swatch--active={!activeThemeId}>
+						<button type="button" class="ap-swatch-main" onclick={useSystemTheme}>
+							<span class="ap-preview ap-preview--split">
+								<span
+									class="ap-preview-half"
+									style="background-color: {lightPreview.background};"
 								>
-									<div class="h-20 flex">
-										<div class="w-1/4" style="background-color: {preview.sidebar};"></div>
-										<div class="flex-1 flex flex-col" style="background-color: {preview.bg};">
-											<div class="flex-1 flex items-center justify-center">
-												<div
-													class="h-8 w-24 rounded"
-													style="background-color: {preview.primary};"
-												></div>
-											</div>
-										</div>
-									</div>
-
-									<div class="p-4" style="background-color: var(--surface-bg);">
-										<div class="flex items-center justify-between">
-											<div class="flex items-center gap-2">
-												{#if theme.isDark}
-													<Moon class="h-4 w-4" style="color: var(--surface-muted);" />
-												{:else}
-													<Sun class="h-4 w-4" style="color: var(--surface-muted);" />
-												{/if}
-												<p class="font-medium" style="color: var(--center-channel-color);">
-													{theme.name}
-												</p>
-												{#if isActive}
-													<span class="badge badge-success text-xs">Active</span>
-												{/if}
-											</div>
-										</div>
-
-										<div class="mt-3 flex gap-2">
-											<button
-												type="button"
-												class="btn btn-secondary flex-1"
-												onclick={() => selectTheme(theme.id)}
-												disabled={isActive}
-											>
-												{isActive ? 'Active' : 'Apply'}
-											</button>
-											<button
-												type="button"
-												class="btn btn-secondary"
-												onclick={() => startEditing(theme)}
-												title="Edit"
-											>
-												<Pencil class="h-4 w-4" />
-											</button>
-											<button
-												type="button"
-												class="btn btn-secondary"
-												onclick={() => duplicateTheme(theme)}
-												title="Duplicate"
-											>
-												<Copy class="h-4 w-4" />
-											</button>
-											<button
-												type="button"
-												class="btn btn-secondary"
-												onclick={() => exportTheme(theme)}
-												title="Export"
-											>
-												<Download class="h-4 w-4" />
-											</button>
-											<button
-												type="button"
-												class="btn btn-ghost text-red-600"
-												onclick={() => confirmDeleteTheme(theme)}
-												title="Delete"
-											>
-												<Trash2 class="h-4 w-4" />
-											</button>
-										</div>
-									</div>
-								</div>
-							{/each}
-						</div>
+									<span class="ap-dot" style="background-color: {lightPreview.accent};"></span>
+								</span>
+								<span class="ap-preview-half" style="background-color: {darkPreview.background};">
+									<span class="ap-dot" style="background-color: {darkPreview.accent};"></span>
+								</span>
+							</span>
+							<span class="ap-meta">
+								<Monitor size={13} />
+								<span class="ap-name">System</span>
+								{#if !activeThemeId}<span class="ap-check"><Check size={12} /></span>{/if}
+							</span>
+						</button>
 					</div>
+
+					{#each allThemes as theme (theme.id)}
+						{@const c = theme.simpleColors}
+						{@const isActive = activeThemeId === theme.id}
+						<div class="ap-swatch" class:ap-swatch--active={isActive}>
+							<button type="button" class="ap-swatch-main" onclick={() => selectTheme(theme.id)}>
+								<span
+									class="ap-preview"
+									style="background-color: {c.background}; border-color: {c.border};"
+								>
+									<span class="ap-preview-side" style="background-color: {c.sidebarBackground};"
+									></span>
+									<span class="ap-preview-body">
+										<span class="ap-line" style="background-color: {c.foreground};"></span>
+										<span class="ap-line ap-line--dim" style="background-color: {c.muted};"></span>
+										<span class="ap-dot" style="background-color: {c.accent};"></span>
+									</span>
+								</span>
+								<span class="ap-meta">
+									{#if theme.isDark}<Moon size={13} />{:else}<Sun size={13} />{/if}
+									<span class="ap-name">{theme.name}</span>
+									{#if isActive}<span class="ap-check"><Check size={12} /></span>{/if}
+								</span>
+							</button>
+							<div class="ap-actions">
+								<button
+									type="button"
+									class="ap-action"
+									title="Customize"
+									aria-label="Customize {theme.name}"
+									onclick={() => startEditing(theme)}
+								>
+									<Pencil size={13} />
+								</button>
+								<button
+									type="button"
+									class="ap-action"
+									title="Duplicate"
+									aria-label="Duplicate {theme.name}"
+									onclick={() => duplicateTheme(theme)}
+								>
+									<Copy size={13} />
+								</button>
+								<button
+									type="button"
+									class="ap-action"
+									title="Export"
+									aria-label="Export {theme.name}"
+									onclick={() => exportTheme(theme)}
+								>
+									<Download size={13} />
+								</button>
+								{#if !theme.isBuiltIn}
+									<button
+										type="button"
+										class="ap-action ap-action--danger"
+										title="Delete"
+										aria-label="Delete {theme.name}"
+										onclick={() => confirmDeleteTheme(theme)}
+									>
+										<Trash2 size={13} />
+									</button>
+								{/if}
+							</div>
+						</div>
+					{/each}
 				</div>
-			{/if}
+				{#if customThemes.length === 0}
+					<p class="ap-footnote">
+						Duplicate a theme or create a new one to start customizing colors.
+					</p>
+				{/if}
+			</SectionCard>
+
+			<SectionCard title="Effects">
+				<ToggleRow
+					bind:checked={gradientOn}
+					label="Project background gradient"
+					hint="Animated gradient on project pages. Turn off to reduce motion or save GPU."
+					onchange={() => projectGradientEnabled.set(gradientOn)}
+				/>
+			</SectionCard>
 		</div>
 	{/if}
 </div>
@@ -573,62 +443,179 @@
 {/if}
 
 <style>
-	.grad-toggle-row {
+	.ap-stack {
+		display: flex;
+		flex-direction: column;
+		gap: 1rem;
+	}
+
+	.ap-grid {
+		display: grid;
+		grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
+		gap: 0.75rem;
+	}
+
+	.ap-swatch {
+		position: relative;
+		border: 1px solid var(--border-default);
+		border-radius: 0.75rem;
+		background: var(--bg-raised);
+		overflow: hidden;
+		transition: border-color 0.15s ease;
+	}
+
+	.ap-swatch:hover {
+		border-color: var(--border-strong);
+	}
+
+	.ap-swatch--active {
+		border-color: var(--accent);
+		box-shadow: 0 0 0 1px var(--accent);
+	}
+
+	.ap-swatch-main {
+		display: flex;
+		flex-direction: column;
+		width: 100%;
+		border: none;
+		background: transparent;
+		padding: 0;
+		cursor: pointer;
+		text-align: left;
+	}
+
+	.ap-preview {
+		display: flex;
+		width: 100%;
+		height: 4.25rem;
+		border-bottom: 1px solid var(--border-default);
+	}
+
+	.ap-preview--split .ap-preview-half {
+		flex: 1;
 		display: flex;
 		align-items: center;
-		gap: 1rem;
-		padding: 1rem;
-		border-radius: 0.75rem;
-		cursor: pointer;
-		background-color: var(--control-bg);
-		transition: background-color 0.15s;
+		justify-content: center;
 	}
 
-	.grad-toggle-text {
+	.ap-preview-side {
+		width: 22%;
+		opacity: 0.9;
+	}
+
+	.ap-preview-body {
+		flex: 1;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		gap: 0.3rem;
+		padding: 0 0.75rem;
+	}
+
+	.ap-line {
+		display: block;
+		height: 0.25rem;
+		width: 55%;
+		border-radius: 999px;
+		opacity: 0.85;
+	}
+
+	.ap-line--dim {
+		width: 35%;
+		opacity: 0.45;
+	}
+
+	.ap-dot {
+		display: block;
+		height: 0.5rem;
+		width: 1.5rem;
+		border-radius: 999px;
+	}
+
+	.ap-meta {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		width: 100%;
+		padding: 0.5rem 0.625rem;
+		font-size: 0.75rem;
+		font-weight: 600;
+		color: var(--text-default);
+	}
+
+	.ap-meta :global(svg) {
+		color: var(--text-muted);
+		flex-shrink: 0;
+	}
+
+	.ap-name {
 		flex: 1;
 		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
 	}
 
-	.grad-toggle-input {
-		position: absolute;
-		opacity: 0;
-		width: 0;
-		height: 0;
-		pointer-events: none;
-	}
-
-	.grad-toggle-track {
-		position: relative;
-		flex-shrink: 0;
-		width: 2.25rem;
-		height: 1.25rem;
-		border-radius: 0.625rem;
-		background-color: color-mix(in srgb, var(--surface-border) 80%, var(--center-channel-color));
-		transition: background-color 0.2s;
-	}
-
-	.grad-toggle-input:checked + .grad-toggle-track {
-		background-color: var(--sidebar-text-active-border);
-	}
-
-	.grad-toggle-thumb {
-		position: absolute;
-		top: 0.125rem;
-		left: 0.125rem;
+	.ap-check {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		width: 1rem;
 		height: 1rem;
 		border-radius: 50%;
-		background-color: #fff;
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
-		transition: transform 0.2s;
+		background: var(--accent);
+		color: var(--accent-fg, white);
 	}
 
-	.grad-toggle-input:checked + .grad-toggle-track .grad-toggle-thumb {
-		transform: translateX(1rem);
+	.ap-check :global(svg) {
+		color: inherit;
 	}
 
-	.grad-toggle-input:focus-visible + .grad-toggle-track {
-		outline: 2px solid var(--sidebar-text-active-border);
-		outline-offset: 2px;
+	.ap-actions {
+		position: absolute;
+		top: 0.375rem;
+		right: 0.375rem;
+		display: flex;
+		gap: 0.125rem;
+		padding: 0.125rem;
+		border-radius: 0.5rem;
+		background: color-mix(in srgb, var(--bg-raised) 85%, transparent);
+		backdrop-filter: blur(4px);
+		opacity: 0;
+		transition: opacity 0.15s ease;
+	}
+
+	.ap-swatch:hover .ap-actions,
+	.ap-actions:focus-within {
+		opacity: 1;
+	}
+
+	.ap-action {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.5rem;
+		height: 1.5rem;
+		border: none;
+		border-radius: 0.375rem;
+		background: transparent;
+		color: var(--text-muted);
+		cursor: pointer;
+		transition: background-color 0.15s ease, color 0.15s ease;
+	}
+
+	.ap-action:hover {
+		background: var(--accent-subtle);
+		color: var(--text-default);
+	}
+
+	.ap-action--danger:hover {
+		color: var(--status-error);
+	}
+
+	.ap-footnote {
+		margin-top: 0.75rem;
+		font-size: 0.75rem;
+		color: var(--text-muted);
 	}
 </style>

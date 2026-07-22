@@ -123,6 +123,7 @@
 	const tailscaleEnabled = featureFlag('tailscale-integration');
 
 	const activeTab = $derived($page.url.searchParams.get('tab') || 'profile');
+	let heroHeight = $state(0);
 	const RAIL_GROUPS = $derived([
 		{
 			label: 'Account',
@@ -766,7 +767,7 @@
 			><ArrowLeft class="h-3.5 w-3.5" /> Back</button
 		>
 
-		<div id="b-profile" class="usb-anchor">
+		<div class="usb-hero-sticky" bind:clientHeight={heroHeight}>
 			<UserIdentityHero
 				index={0}
 				user={$user}
@@ -791,7 +792,7 @@
 			/>
 		</div>
 
-		<div class="usb-grid">
+		<div class="usb-grid" style="--usb-rail-top: {heroHeight + 16}px">
 			<aside class="usb-rail" aria-label="Settings sections">
 				{#each RAIL_GROUPS as group (group.label)}
 					<div class="usb-rail-group">
@@ -998,9 +999,18 @@
 		margin-top: 1.25rem;
 	}
 
+	.usb-hero-sticky {
+		position: sticky;
+		top: 0;
+		z-index: 20;
+		background: var(--bg-app);
+		padding-bottom: 0.25rem;
+	}
+
 	.usb-rail {
 		position: sticky;
-		top: 1.25rem;
+		top: var(--usb-rail-top, 1.25rem);
+		align-self: start;
 		display: flex;
 		flex-direction: column;
 		gap: 1.125rem;
