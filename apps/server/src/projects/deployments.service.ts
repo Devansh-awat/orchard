@@ -4831,7 +4831,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
         composeStackId: data.composeStackId ?? null,
         composeServiceName: data.composeServiceName ?? null,
-        autoDeployEnabled: data.autoDeployEnabled ?? false,
+        // Auto-deploy defaults ON when the GitHub App installation covers the
+        // repo (push webhooks can actually fire); without one the toggle
+        // would be dead weight, so it stays off unless explicitly requested.
+        autoDeployEnabled: data.autoDeployEnabled ?? repoInstallation != null,
         autoDeployBranch: data.autoDeployBranch ?? null,
       },
     });
