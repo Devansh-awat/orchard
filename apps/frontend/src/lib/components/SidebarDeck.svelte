@@ -24,8 +24,7 @@
 		springHover as motionSpringHover,
 		springRotate,
 		springCollapse,
-		decorativeMotion,
-		functionalMotion
+		decorativeMotion
 	} from '$lib/utils/motion.svelte';
 	import { animate } from 'motion';
 	import {
@@ -147,7 +146,7 @@
 		const el = asideEl;
 		const width = `${collapsed ? COLLAPSED_W : EXPANDED_W}px`;
 		if (!el) return;
-		if (!widthInitialized || !functionalMotion()) {
+		if (!widthInitialized || !decorativeMotion()) {
 			widthInitialized = true;
 			el.style.width = width;
 			return;
@@ -394,7 +393,9 @@
 				{/if}
 
 				{#if !collapsed}
-					<div class="deck-section-head" transition:slide={{ duration: 160 }}><span>Platform</span></div>
+					<div class="deck-section-head" transition:slide={{ duration: 160 }}>
+						<span transition:fade={{ duration: 100 }}>Platform</span>
+					</div>
 				{/if}
 				{#each nav as item, i (item.id)}
 					<a
@@ -417,7 +418,7 @@
 				{#if pinnedDeps.length > 0}
 					{#if !collapsed}
 						<div class="deck-section-head deck-section-head--spaced" transition:slide={{ duration: 160 }}>
-							<span>Pinned</span>
+							<span transition:fade={{ duration: 100 }}>Pinned</span>
 						</div>
 					{:else}
 						<div class="deck-gap"></div>
