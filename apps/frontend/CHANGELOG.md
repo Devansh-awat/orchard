@@ -1,5 +1,13 @@
 # Changelog
 
+## [0.25.1](https://github.com/LeafdTK/leaf/compare/frontend/v0.25.0...frontend/v0.25.1) (2026-07-22)
+
+
+### Bug Fixes
+
+* hide hero bleed when mesh gradient is active ([5f6d18a](https://github.com/LeafdTK/leaf/commit/5f6d18a264b32d090ccf32f201b42c76fcee2205))
+* project gradient bg continues under the sidebar ([61f42ed](https://github.com/LeafdTK/leaf/commit/61f42ed607611a9ebcc8929c3a01a7797785e2bb))
+
 ## [0.25.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.24.0...frontend/v0.25.0) (2026-07-21)
 
 
