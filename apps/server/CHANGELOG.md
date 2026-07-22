@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.32.0](https://github.com/LeafdTK/leaf/compare/server/v1.31.0...server/v1.32.0) (2026-07-22)
+
+
+### Features
+
+* github repo mirror, picker served from db ([3284a3d](https://github.com/LeafdTK/leaf/commit/3284a3d48c7e7436c613106da9d7aba88d4244a5))
+
+
+### Performance Improvements
+
+* parallel repo pagination, serve cached list instantly ([22ce7c7](https://github.com/LeafdTK/leaf/commit/22ce7c7817a369cc970bffd0a80efbc803241183))
+
 ## [1.31.0](https://github.com/LeafdTK/leaf/compare/server/v1.30.1...server/v1.31.0) (2026-07-22)
 
 
