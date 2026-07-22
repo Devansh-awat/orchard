@@ -127,11 +127,34 @@ The complete route list (method + path for every endpoint) lives in the repo at 
 
 ## Recipes
 
+One-shot import (creates the project, detects the build, deploys, returns the URL):
+
+```sh
+orchard import owner/repo --wait
+```
+
 Deploy from GitHub and wait for it to come up:
 
 ```sh
 export ORCHARD_PROJECT=my-app
 orchard deploy create --name web --github owner/repo#main --port 3000 --wait --timeout 15m
+```
+
+Deployments with a port get an auto-generated platform URL (org-protected;
+`--auto-url=false` to skip). The create response carries it as `url`.
+
+Deploy a local directory (requires server-side build-context storage):
+
+```sh
+orchard link --project my-app   # once per checkout; writes .orchard/project.json
+orchard up                      # pack, upload, build, follow logs
+```
+
+Pull environment variables into a local dotenv file (secrets come out as
+commented placeholders, values are write-only):
+
+```sh
+orchard env pull                # writes .env.orchard
 ```
 
 Tail logs:

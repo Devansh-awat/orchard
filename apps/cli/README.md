@@ -83,12 +83,18 @@ Config lives at `~/.orchard/config.json`. Overridable via env:
 
 ```sh
 orchard auth login
-orchard use org my-org                # save a default scope
-orchard use project my-app
-orchard deploy create --name web --github owner/repo#main --port 3000 --wait
+orchard import owner/repo             # project + build + deploy + URL in one shot
+orchard link --project my-app         # or: bind this directory to a project
+orchard up                            # deploy the current directory
+orchard open                          # open the app in your browser
 orchard deploy logs <deploymentId> --follow
+orchard env pull                      # write vars to .env.orchard
 orchard pod shell <podName>           # interactive shell (exec-scope token)
 ```
+
+Deployments created with a port get a generated `https://` URL on the platform
+domain automatically, protected by org-member auth until you make it public
+(disable with `--auto-url=false`).
 
 ## Commands
 
@@ -101,6 +107,11 @@ subcommands.
 orchard auth        login | status | logout | token list|create|revoke |
                     session list|revoke|revoke-all
 orchard use         <org|project|env> <id-or-slug>     save default scope
+orchard link        [--status] / orchard unlink        per-directory scope
+                    (.orchard/project.json, gitignored; wins over `use`)
+orchard up          [dir]                              deploy the directory
+orchard import      <owner/repo[#branch]>              one-shot GitHub import
+orchard open        [deployment] [--dash]              open the app URL
 orchard context     show | clear
 orchard events      tail                               live org events (SSE)
 orchard overview                                       org dashboard at a glance
@@ -118,7 +129,7 @@ orchard project     list | get | create | update | delete | sync |
                     icon set | background set |
                     member list|add|remove|set-role | invitation revoke
 orchard env         list | get | create | delete | set-default |
-                    vars get|set|unset
+                    vars get|set|unset | pull
 orchard deploy      list | get | create | delete | scale | restart | rebuild |
                     cancel | rollback | logs | pods | metrics |
                     image set | history | killed list|logs |
@@ -182,7 +193,8 @@ echo '{"replicas":3}' | orchard api POST /deployments/abc/scale --data -
 
 - `--org / --project / --env`: scope by id or slug; overrides the saved
   context (also via `ORCHARD_ORG/PROJECT/ENV`; precedence is flag, then env
-  var, then `orchard use` context)
+  var, then the directory link written by `orchard link`, then `orchard use`
+  context)
 - `--yes / -y`: skip confirmation prompts (required for destructive commands
   when stdin is not a TTY)
 - `-o, --output json|table`: force the output format (default: auto by TTY)
