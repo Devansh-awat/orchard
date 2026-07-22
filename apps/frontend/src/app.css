@@ -74,14 +74,14 @@
 	--z-toast: 900;
 	--z-tooltip: 1000;
 	--sidebar-bg: #ffffff;
-	--sidebar-text: #3e3234;
+	--sidebar-text: #302627;
 	--sidebar-unread-text: #161314;
 	--sidebar-text-hover-bg: #efdddf;
 	--sidebar-text-active-border: #d53044;
 	--sidebar-text-active-color: #8a2c37;
 	--sidebar-text-active-bg: #efdddf;
 	--sidebar-header-bg: #ffffff;
-	--sidebar-header-text: #3e3234;
+	--sidebar-header-text: #302627;
 	--sidebar-team-bar-bg: #ffffff;
 	--online-indicator: #33d6a6;
 	--away-indicator: #ff8c37;
@@ -89,7 +89,7 @@
 	--mention-bg: #d53044;
 	--mention-color: #ffffff;
 	--center-channel-bg: #ffffff;
-	--center-channel-color: #3e3234;
+	--center-channel-color: #302627;
 	--new-message-separator: #ea485c;
 	--link-color: #8a2c37;
 	--button-bg: #ae2a3a;
@@ -106,7 +106,7 @@
 	--surface-muted: #80696b;
 	--control-bg: #ffffff;
 	--control-hover-bg: #efdddf;
-	--control-text: #3e3234;
+	--control-text: #302627;
 	--dropdown-bg: #ffffff;
 	--dropdown-border: #efdddf;
 	--dropdown-hover-bg: #efdddf;
@@ -118,7 +118,7 @@
 	--glass-border: color-mix(in srgb, #ffffff 55%, var(--surface-border));
 	--glass-shadow:
 		inset 0 1px 0 0 rgba(255, 255, 255, 0.55), inset 0 0 0 1px rgba(255, 255, 255, 0.1),
-		0 6px 24px rgba(62, 50, 52, 0.08);
+		0 6px 24px rgba(48, 38, 39, 0.08);
 	--divider-color: #efdddf;
 	--org-trigger-bg: #ffffff;
 	--org-trigger-hover-bg: #efdddf;
@@ -136,55 +136,55 @@
 
 :root.dark {
 	color-scheme: dark;
-	--sidebar-bg: #302627;
+	--sidebar-bg: #251e1f;
 	--sidebar-text: #efdddf;
 	--sidebar-unread-text: #ffffff;
 	--sidebar-text-hover-bg: #161314;
 	--sidebar-text-active-border: #d53044;
 	--sidebar-text-active-color: #ffffff;
-	--sidebar-text-active-bg: #3e3234;
-	--sidebar-header-bg: #251e1f;
+	--sidebar-text-active-bg: #302627;
+	--sidebar-header-bg: #161314;
 	--sidebar-header-text: #efdddf;
-	--sidebar-team-bar-bg: #251e1f;
+	--sidebar-team-bar-bg: #161314;
 	--online-indicator: #33d6a6;
 	--away-indicator: #f1c40f;
 	--dnd-indicator: #fb5e71;
 	--mention-bg: #d53044;
 	--mention-color: #efdddf;
-	--center-channel-bg: #251e1f;
+	--center-channel-bg: #161314;
 	--center-channel-color: #efdddf;
 	--new-message-separator: #ea485c;
 	--link-color: #fb5e71;
 	--button-bg: #ae2a3a;
 	--button-color: #efdddf;
 	--error-text-color: #fb5e71;
-	--mention-highlight-bg: #3e3234;
+	--mention-highlight-bg: #302627;
 	--mention-highlight-link: #fb5e71;
 	--code-theme: monokai;
 	--warning-bg: #451a03;
 	--warning-border: #f59e0b;
 	--warning-text: #fef3c7;
-	--surface-bg: #251e1f;
-	--surface-border: #3e3234;
+	--surface-bg: #161314;
+	--surface-border: #302627;
 	--surface-muted: #ba9da0;
-	--control-bg: #251e1f;
-	--control-hover-bg: #3e3234;
+	--control-bg: #161314;
+	--control-hover-bg: #302627;
 	--control-text: #efdddf;
-	--dropdown-bg: #302627;
-	--dropdown-border: #3e3234;
+	--dropdown-bg: #251e1f;
+	--dropdown-border: #302627;
 	--dropdown-hover-bg: #161314;
-	--divider-color: #3e3234;
-	--org-trigger-bg: #251e1f;
+	--divider-color: #302627;
+	--org-trigger-bg: #161314;
 	/* Liquid-glass recipe (dark). Darker translucent fill, a faint white top
 	   highlight for refraction, deeper ambient shadow. */
-	--glass-bg: color-mix(in srgb, #251e1f 46%, transparent);
+	--glass-bg: color-mix(in srgb, #161314 46%, transparent);
 	--glass-blur: blur(16px) saturate(1.8) brightness(1.05);
 	--glass-border: color-mix(in srgb, #ffffff 10%, transparent);
 	--glass-shadow:
 		inset 0 1px 0 0 rgba(255, 255, 255, 0.08), inset 0 0 0 1px rgba(255, 255, 255, 0.03),
 		0 8px 30px rgba(0, 0, 0, 0.4);
-	--org-trigger-hover-bg: #3e3234;
-	--card-bg: #302627;
+	--org-trigger-hover-bg: #302627;
+	--card-bg: #251e1f;
 	--success-bg: #052e16;
 	--success-border: #166534;
 	--success-text: #86efac;
