@@ -698,7 +698,11 @@ ${registryConfigs}
 
     const targetFlag = target ? `--target "${target}"` : '';
 
+    const injectGitSha = buildType !== 'railpack' && !('GIT_SHA' in envVars);
+    const gitShaArgLine = injectGitSha ? '--build-arg "GIT_SHA=$GIT_SHA"' : '';
+
     const depotScript = `set -e
+GIT_SHA=$(git -C /workspace rev-parse HEAD 2>/dev/null || echo unknown)
 echo "=== Installing Super Build tools ==="
 if ! command -v curl >/dev/null 2>&1; then
   apt-get update -qq
@@ -724,6 +728,7 @@ echo 0 > /tmp/build_rc
   --push \\
   ${targetFlag} \\
   ${checkArgLine} \\
+  ${gitShaArgLine} \\
   ${buildArgLines} \\
   "${contextDir}" 2>&1 || echo "$?" > /tmp/build_rc; } | sed -e 's/\\[depot\\]/[super-build]/gi' -e 's|https://depot\\.dev/[^ ]*||g' -e 's/depot build/super build/gi'
 BUILD_RC=$(cat /tmp/build_rc)
@@ -830,17 +835,28 @@ fi
 `;
   }
 
-  private generateBuildScriptWithCacheFallback(buildctlArgs: string[]): string {
+  // GIT_SHA is resolved inside the build container (the clone keeps .git in
+  // /workspace) because the server assembles these scripts before the commit
+  // is known for branch-triggered builds. The value rides an unquoted shell
+  // expansion appended after the shell-quoted static args.
+  private static readonly GIT_SHA_PREAMBLE =
+    'GIT_SHA=$(git -C /workspace rev-parse HEAD 2>/dev/null || echo unknown)\n';
+  private static readonly GIT_SHA_BUILDCTL_OPT = ' --opt build-arg:GIT_SHA="$GIT_SHA"';
+
+  private generateBuildScriptWithCacheFallback(buildctlArgs: string[], injectGitSha = false): string {
     const cacheArgs = this.buildCacheArgs();
     const hasCacheEnabled = cacheArgs.length > 0;
 
     const shellQuote = (arg: string) =>
       /^[A-Za-z0-9_\-./:=@,+%]+$/.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`;
 
-    const argsWithCache = buildctlArgs.map(shellQuote).join(' ');
+    const gitShaPreamble = injectGitSha ? ImageBuilderService.GIT_SHA_PREAMBLE : '';
+    const gitShaOpt = injectGitSha ? ImageBuilderService.GIT_SHA_BUILDCTL_OPT : '';
+
+    const argsWithCache = buildctlArgs.map(shellQuote).join(' ') + gitShaOpt;
 
     if (!hasCacheEnabled) {
-      return this.generateRetryScript(`buildctl-daemonless.sh ${argsWithCache}`);
+      return gitShaPreamble + this.generateRetryScript(`buildctl-daemonless.sh ${argsWithCache}`);
     }
 
     // Extract local cache dest dir from --export-cache arg so we can mkdir -p it
@@ -856,10 +872,11 @@ fi
         return false;
       }
       return true;
-    }).map(shellQuote).join(' ');
+    }).map(shellQuote).join(' ') + gitShaOpt;
 
     return `
 set +e
+${gitShaPreamble}
 ulimit -n 1048576 2>/dev/null || true
 ${this.ramdiskPreamble}${this.cachePrunePreamble}
 ${mkdirLine}
@@ -1090,6 +1107,8 @@ exit $EXIT_CODE
       skipCache: persistentBuildCache && !!this.buildKitPool,
     });
 
+    const injectGitSha = buildType !== 'railpack' && !('GIT_SHA' in envVars);
+
     const batchApi = this.kc!.makeApiClient(k8s.BatchV1Api);
 
     // Build init containers list
@@ -1134,6 +1153,7 @@ CLONE_OUTPUT=$(GIT_TERMINAL_PROMPT=0 git clone --depth 1 --recurse-submodules --
 echo "$CLONE_OUTPUT" | sed -E 's/(x-access-token:|ghs_|ghp_|github_pat_)[^ @]*/***REDACTED***/g'
 
 echo "=== Repository cloned successfully ==="
+echo "Checked out commit: $(git -C /workspace rev-parse HEAD 2>/dev/null || echo unknown)"
 ls -la /workspace
 `,
         ],
@@ -1324,8 +1344,12 @@ fi
         // over gRPC, so the client needs /workspace but NOT privilege.
         const shellQuote = (arg: string) =>
           /^[A-Za-z0-9_\-./:=@,+%]+$/.test(arg) ? arg : `'${arg.replace(/'/g, `'\\''`)}'`;
-        const clientCmd = `buildctl --addr tcp://${daemonIp}:1234 ${buildctlArgs.map(shellQuote).join(' ')}`;
-        const clientScript = this.generateRetryScript(clientCmd);
+        const clientCmd = `buildctl --addr tcp://${daemonIp}:1234 ${buildctlArgs.map(shellQuote).join(' ')}${
+          injectGitSha ? ImageBuilderService.GIT_SHA_BUILDCTL_OPT : ''
+        }`;
+        const clientScript =
+          (injectGitSha ? ImageBuilderService.GIT_SHA_PREAMBLE : '') +
+          this.generateRetryScript(clientCmd);
 
         return {
           name: 'buildkit',
@@ -1364,7 +1388,7 @@ fi
         image: 'moby/buildkit:latest',
         securityContext: { privileged: true },
         command: ['/bin/sh', '-c'],
-        args: [this.generateBuildScriptWithCacheFallback(scriptArgs)],
+        args: [this.generateBuildScriptWithCacheFallback(scriptArgs, injectGitSha)],
         workingDir: '/workspace',
         env: [
           ...(this.sidecarPushEnabled

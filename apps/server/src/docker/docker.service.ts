@@ -293,6 +293,24 @@ export class DockerService {
       });
   }
 
+  private async resolveGitSha(buildDir: string): Promise<string | null> {
+    return new Promise((resolve) => {
+      const proc = spawn('git', ['-C', buildDir, 'rev-parse', 'HEAD'], {
+        stdio: ['ignore', 'pipe', 'ignore'],
+      });
+      let out = '';
+      proc.stdout.on('data', (d) => (out += d));
+      proc.on('close', (code) => resolve(code === 0 ? out.trim() : null));
+      proc.on('error', () => resolve(null));
+    });
+  }
+
+  private async injectGitShaBuildArg(buildDir: string, envVars: Record<string, string>): Promise<void> {
+    if ('GIT_SHA' in envVars) return;
+    const gitSha = await this.resolveGitSha(buildDir);
+    if (gitSha) envVars.GIT_SHA = gitSha;
+  }
+
   async buildImage(buildDir: string, dockerfilePath: string, imageName: string, deploymentId?: string, target?: string, buildFromRoot?: boolean): Promise<void> {
     const fullImageName = `${this.harborRegistryPush}/${this.harborProject}/${imageName}`;
     const dockerfileFull = path.join(buildDir, dockerfilePath);
@@ -322,6 +340,8 @@ export class DockerService {
         console.error('[Docker Service] Failed to get deployment env vars:', error);
       }
     }
+
+    await this.injectGitShaBuildArg(buildDir, envVars);
 
     const startTime = Date.now();
     await this.setBuildStep(deploymentId, 'building');
@@ -538,6 +558,8 @@ export class DockerService {
         console.error('[Docker Service] Failed to get deployment env vars:', error);
       }
     }
+
+    await this.injectGitShaBuildArg(buildDir, envVars);
 
     const startTime = Date.now();
     await this.setBuildStep(deploymentId, 'building');
