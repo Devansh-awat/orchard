@@ -1670,6 +1670,11 @@
 		gap: 0.5rem;
 	}
 
+	.nd-repo-split :global(.acct-trigger),
+	.nd-repo-split :global(.picker-trigger) {
+		height: 2.75rem;
+	}
+
 	@media (max-width: 640px) {
 		.nd-repo-split {
 			grid-template-columns: 1fr;
