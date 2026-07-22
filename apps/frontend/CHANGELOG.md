@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.29.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.28.0...frontend/v0.29.0) (2026-07-22)
+
+
+### Features
+
+* alert on failing wal archiving and missing backup schedules ([d9a2c3b](https://github.com/LeafdTK/leaf/commit/d9a2c3bdb824a5d82355319d84b89299899269ef))
+
 ## [0.28.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.27.0...frontend/v0.28.0) (2026-07-22)
 
 

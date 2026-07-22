@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.30.0](https://github.com/LeafdTK/leaf/compare/server/v1.29.1...server/v1.30.0) (2026-07-22)
+
+
+### Features
+
+* alert on failing wal archiving and missing backup schedules ([d9a2c3b](https://github.com/LeafdTK/leaf/commit/d9a2c3bdb824a5d82355319d84b89299899269ef))
+
+
+### Bug Fixes
+
+* platform db policy allows r2-proxy namespace ([1d3209c](https://github.com/LeafdTK/leaf/commit/1d3209ccdace68514679f2e25ae8e57d637ba977))
+
 ## [1.29.1](https://github.com/LeafdTK/leaf/compare/server/v1.29.0...server/v1.29.1) (2026-07-22)
 
 
