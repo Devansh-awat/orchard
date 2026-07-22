@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.26.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.25.1...frontend/v0.26.0) (2026-07-22)
+
+
+### Features
+
+* collapsible sidebar with spring width and label transitions ([192123d](https://github.com/LeafdTK/leaf/commit/192123d017abe2f84a89cfb37724cb41063bfe2d))
+* landing style login page with smart passkey flow ([baffce5](https://github.com/LeafdTK/leaf/commit/baffce52db8900a5d38a1c40d010a82f2c67255f))
+
+
+### Bug Fixes
+
+* sidebar animations honor animation accessibility levels ([3678c72](https://github.com/LeafdTK/leaf/commit/3678c72da585db848842910d9e3cd0e76fb77b70))
+* stable strip and section head layout during sidebar collapse ([1b662e7](https://github.com/LeafdTK/leaf/commit/1b662e7e9ae00aad98915568e2be080967a91e47))
+
 ## [0.25.1](https://github.com/LeafdTK/leaf/compare/frontend/v0.25.0...frontend/v0.25.1) (2026-07-22)
 
 

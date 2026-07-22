@@ -404,7 +404,9 @@
 							<item.icon size={15} />
 						</span>
 						{#if !collapsed}
-							<span class="deck-row-label" transition:fly={{ x: -6, duration: 160 }}>{item.label}</span>
+							<span class="deck-row-label" transition:fly={{ x: -6, duration: 160 }}
+								>{item.label}</span
+							>
 						{/if}
 					</a>
 				{/each}
@@ -442,7 +444,9 @@
 								{/if}
 							</span>
 							{#if !collapsed}
-								<span class="deck-row-label" transition:fly={{ x: -6, duration: 160 }}>{depName(pin)}</span>
+								<span class="deck-row-label" transition:fly={{ x: -6, duration: 160 }}
+									>{depName(pin)}</span
+								>
 							{/if}
 						</a>
 					{/each}
@@ -469,7 +473,9 @@
 								@{$user?.username ?? 'you'}
 							</span>
 							{#if invitationCount > 0}
-								<span class="deck-user-badge" transition:fade={{ duration: 120 }}>{invitationCount}</span>
+								<span class="deck-user-badge" transition:fade={{ duration: 120 }}
+									>{invitationCount}</span
+								>
 							{/if}
 						{/if}
 					</button>
