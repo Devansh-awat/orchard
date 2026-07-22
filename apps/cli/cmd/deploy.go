@@ -209,7 +209,7 @@ func deployRenderKV(raw map[string]any) {
 func deployCreateCmd() *cobra.Command {
 	var (
 		name, image, github, dockerfile, memory, envFile string
-		railpack, buildRoot                              bool
+		railpack, buildRoot, autoURL                     bool
 		port, replicas, cpu                              int
 		envs                                             []string
 		wait                                             *bool
@@ -259,6 +259,9 @@ func deployCreateCmd() *cobra.Command {
 				}
 				body["memoryRequestBytes"] = b
 			}
+			if cmd.Flags().Changed("auto-url") {
+				body["autoUrl"] = autoURL
+			}
 
 			path := "/projects/" + url.PathEscape(projectID) + "/deployments"
 			if github != "" {
@@ -288,6 +291,9 @@ func deployCreateCmd() *cobra.Command {
 			}
 			id := str(raw["id"])
 			output.Successf("created deployment %s (%s)", name, id)
+			if u := str(raw["url"]); u != "" {
+				output.Successf("live at %s (visible to your org until made public)", u)
+			}
 			if fmtFlag() == output.FormatJSON {
 				if err := output.JSON(raw); err != nil {
 					return err
@@ -309,6 +315,7 @@ func deployCreateCmd() *cobra.Command {
 	c.Flags().StringVar(&dockerfile, "dockerfile", "", "path to the Dockerfile relative to the repo root")
 	c.Flags().BoolVar(&railpack, "railpack", false, "build with railpack instead of a Dockerfile")
 	c.Flags().BoolVar(&buildRoot, "build-root", false, "use the repo root as the build context")
+	c.Flags().BoolVar(&autoURL, "auto-url", true, "generate a platform URL for the deployment (org-protected by default)")
 	c.Flags().IntVar(&port, "port", 0, "port the container listens on (server default 80 / EXPOSE autodetect)")
 	c.Flags().IntVar(&replicas, "replicas", 0, "number of replicas (server default 1)")
 	c.Flags().StringArrayVar(&envs, "env", nil, "environment variable KEY=VAL (repeatable)")

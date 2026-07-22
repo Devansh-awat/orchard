@@ -509,11 +509,12 @@ export class ProjectsController {
       }[];
       cpuRequestMilli?: number | null;
       memoryRequestBytes?: number | null;
+      autoUrl?: boolean;
     },
     @Request() req
   ) {
     const { name, image, port, ports, replicas, env, exposePublic, volumes, cpuRequestMilli, memoryRequestBytes } = body;
-    return this.deployments.createDeployment(
+    const result = await this.deployments.createDeployment(
       id,
       { name, image, port, ports, replicas, env, exposePublic, volumes, cpuRequestMilli, memoryRequestBytes },
       req.user.sub,
@@ -525,6 +526,23 @@ export class ProjectsController {
         imageUrl: req.user.imageUrl,
       }
     );
+
+    const declaredPort = Boolean(port || (Array.isArray(ports) && ports.length > 0));
+    if ((body.autoUrl ?? declaredPort) && result?.id) {
+      try {
+        const withUrl = await this.ingress.createAutoIngressForDeployment(result.id, req.user.sub, {
+          email: req.user.email,
+          username: req.user.username,
+          firstName: req.user.firstName,
+          lastName: req.user.lastName,
+          imageUrl: req.user.imageUrl,
+        });
+        if (withUrl) return withUrl;
+      } catch (error) {
+        console.warn(`[Projects] Auto URL creation failed for deployment ${result.id}:`, error?.message ?? error);
+      }
+    }
+    return result;
   }
 
   @Post(':id/deployments/from-github')
@@ -564,21 +582,45 @@ export class ProjectsController {
       }[];
       cpuRequestMilli?: number | null;
       memoryRequestBytes?: number | null;
+      autoUrl?: boolean;
     },
     @Request() req
   ) {
-    return this.deployments.createDeploymentFromGitHub(
+    const userData = {
+      email: req.user.email,
+      username: req.user.username,
+      firstName: req.user.firstName || req.user.name?.split(' ')[0],
+      lastName: req.user.lastName || req.user.name?.split(' ').slice(1).join(' '),
+      imageUrl: req.user.imageUrl,
+    };
+    const result = await this.deployments.createDeploymentFromGitHub(
       id,
       body,
       req.user.externalAuthId || req.user.sub,
-      {
-        email: req.user.email,
-        username: req.user.username,
-        firstName: req.user.firstName || req.user.name?.split(' ')[0],
-        lastName: req.user.lastName || req.user.name?.split(' ').slice(1).join(' '),
-        imageUrl: req.user.imageUrl,
-      }
+      userData
     );
+
+    // HTTP-shaped: an explicitly declared port, or a port the server detected
+    // from the Dockerfile EXPOSE (anything other than the 80 fallback).
+    const declaredPort = Boolean(body.port || (Array.isArray(body.ports) && body.ports.length > 0));
+    const exposeDetected =
+      !declaredPort &&
+      (result?.services ?? []).some((s: any) =>
+        (s.ports ?? []).some((p: any) => Number(p.port) !== 80),
+      );
+    if ((body.autoUrl ?? (declaredPort || exposeDetected)) && result?.id) {
+      try {
+        const withUrl = await this.ingress.createAutoIngressForDeployment(
+          result.id,
+          req.user.externalAuthId || req.user.sub,
+          userData,
+        );
+        if (withUrl) return withUrl;
+      } catch (error) {
+        console.warn(`[Projects] Auto URL creation failed for deployment ${result.id}:`, error?.message ?? error);
+      }
+    }
+    return result;
   }
 }
 

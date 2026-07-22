@@ -164,6 +164,11 @@
 	});
 
 	const buildErrorLead = $derived(deployment?.buildError?.trim().split('\n')[0] ?? null);
+
+	const liveUrl = $derived.by(() => {
+		const host = deployment?.ingresses?.[0]?.host?.split('/')[0];
+		return host ? `https://${host}` : null;
+	});
 </script>
 
 <div class="progress-page min-h-screen">
@@ -213,6 +218,19 @@
 								rel="noopener noreferrer"
 								class="inline-flex items-center gap-1 text-primary-600 hover:text-primary-700"
 							>
+								<ExternalLink class="h-3.5 w-3.5" />
+							</a>
+						</div>
+					{/if}
+					{#if liveUrl}
+						<div class="mt-3 flex items-center justify-center">
+							<a
+								href={liveUrl}
+								target="_blank"
+								rel="noopener noreferrer"
+								class="progress-url inline-flex items-center gap-1.5 font-mono text-sm"
+							>
+								{liveUrl.replace('https://', '')}
 								<ExternalLink class="h-3.5 w-3.5" />
 							</a>
 						</div>
@@ -315,6 +333,18 @@
 	}
 
 	.back-link:hover {
+		color: var(--text-default);
+	}
+
+	.progress-url {
+		color: var(--accent);
+		border: 1px solid var(--border-default);
+		border-radius: 9999px;
+		padding: 0.25rem 0.75rem;
+		background: var(--bg-raised);
+	}
+
+	.progress-url:hover {
 		color: var(--text-default);
 	}
 </style>

@@ -87,6 +87,7 @@
 	let buildFromRoot = $state(false);
 	let replicas = $state(1);
 	let exposePublic = $state(false);
+	let autoUrl = $state(true);
 	let resourceCpuMilli = $state<number | null>(null);
 	let resourceMemoryBytes = $state<number | null>(null);
 	let ports = $state([{ name: 'http', containerPort: 80, servicePort: 80, protocol: 'TCP' }]);
@@ -658,6 +659,7 @@
 				ports: validPorts,
 				env: validEnv,
 				exposePublic,
+				autoUrl,
 				volumes: validVolumes,
 				cpuRequestMilli: resourceCpuMilli,
 				memoryRequestBytes: resourceMemoryBytes
@@ -1240,6 +1242,18 @@
 						</button>
 					</div>
 				{/each}
+
+				<label class="nd-checkbox-row">
+					<input type="checkbox" bind:checked={autoUrl} class="nd-checkbox" />
+					<div>
+						<span class="nd-checkbox-label">Generate a URL</span>
+						<p class="nd-hint">
+							Your app gets its own https address the moment it deploys, visible only to
+							members of your organization until you make it public. Skip this for workers
+							and other apps that don't serve web traffic.
+						</p>
+					</div>
+				</label>
 			</div>
 		</div>
 
