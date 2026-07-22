@@ -1,5 +1,7 @@
 <script lang="ts">
 	import './home-page.css';
+	import AsciiVine from '$lib/components/AsciiVine.svelte';
+	import { Button, Input } from '$lib/components/ui';
 	import { browser } from '$app/environment';
 	import { goto } from '$app/navigation';
 	import { onMount } from 'svelte';
@@ -17,7 +19,6 @@
 	} from '$lib/stores';
 	import type { User } from '$lib/stores';
 	import {
-		Loader2,
 		Plus,
 		Users,
 		FolderKanban,
@@ -66,7 +67,6 @@
 		return u.firstName || u.name || u.username || u.email?.split('@')[0] || '';
 	});
 	let passkeySupported = $state(false);
-	let passkeySupportReason = $state<string | null>(null);
 
 	type OtpStep = 'email' | 'code';
 	let otpEmail = $state('');
@@ -83,6 +83,9 @@
 
 	let privateBetaBlocked = $state(false);
 	let signupsDisabled = $state(false);
+
+	const vineTone =
+		browser && document.documentElement.classList.contains('dark') ? 'dark' : 'light';
 
 	const oauthProvider = env.PUBLIC_OAUTH_PROVIDER || 'hackclub';
 	const oauthLabel =
@@ -158,16 +161,8 @@
 
 	onMount(() => {
 		if (browser && typeof window !== 'undefined') {
-			if (!window.isSecureContext) {
-				passkeySupported = false;
-				passkeySupportReason = `Passkeys require a secure origin (https:// or http://localhost). You're on ${window.location.origin}.`;
-			} else if (typeof window.PublicKeyCredential !== 'undefined') {
-				passkeySupported = true;
-				passkeySupportReason = null;
-			} else {
-				passkeySupported = false;
-				passkeySupportReason = 'This browser does not expose WebAuthn support.';
-			}
+			passkeySupported =
+				window.isSecureContext && typeof window.PublicKeyCredential !== 'undefined';
 		}
 
 		if ($isSignedIn) {
@@ -328,6 +323,64 @@
 		}
 	}
 
+	let authMode = $state<'start' | 'passkey' | 'code'>('start');
+	let authChecking = $state(false);
+
+	async function continueWithEmail() {
+		if (authChecking || otpRequesting) return;
+
+		const email = otpEmail.trim().toLowerCase();
+		if (!email) {
+			otpError = 'Enter the email address you use with Orchard.';
+			return;
+		}
+
+		authChecking = true;
+		otpError = null;
+		passkeyError = null;
+
+		try {
+			let hasPasskeys = false;
+			if (passkeySupported) {
+				try {
+					const response = await apiFetch(
+						`/apiv1/auth/passkey/check?email=${encodeURIComponent(email)}`
+					);
+					const data = await response.json().catch(() => ({}));
+					hasPasskeys = Boolean(data?.hasPasskeys);
+				} catch {
+					hasPasskeys = false;
+				}
+			}
+
+			if (hasPasskeys) {
+				passkeyEmail = email;
+				authMode = 'passkey';
+				await signInWithPasskey();
+			} else {
+				await requestOtp();
+				if (otpStep === 'code') authMode = 'code';
+			}
+		} finally {
+			authChecking = false;
+		}
+	}
+
+	async function useCodeInstead() {
+		passkeyError = null;
+		await requestOtp();
+		if (otpStep === 'code') authMode = 'code';
+	}
+
+	function resetAuth() {
+		authMode = 'start';
+		otpStep = 'email';
+		otpCode = '';
+		otpMessage = null;
+		otpError = null;
+		passkeyError = null;
+	}
+
 	async function signInWithPasskey() {
 		if (passkeyLoading) return;
 
@@ -410,249 +463,149 @@
 </script>
 
 {#if !$isSignedIn}
-	<div class="login-page">
-		<!-- Animated background -->
-		<div class="login-bg">
-			<div class="login-orb login-orb-1"></div>
-			<div class="login-orb login-orb-2"></div>
-			<div class="login-orb login-orb-3"></div>
-			<div class="login-orb login-orb-4"></div>
-			<div class="login-grid-overlay"></div>
+	<div class="lg2-page">
+		<div class="lg-vine" aria-hidden="true">
+			<AsciiVine class="lg-vine-canvas" tone={vineTone} seed={23} band={[0.25, 0.7]} />
 		</div>
-
-		<div class="login-container">
-			<!-- Left branding side -->
-			<div class="login-hero">
-				<div class="login-hero-content">
-					<img src="/logo/logofulldm.svg" alt="Orchard" class="login-hero-logo" />
-					<p class="login-hero-subtitle">Deploy, manage, and scale your applications with ease.</p>
-					<div class="login-hero-features">
-						<div class="login-hero-feature">
-							<div class="login-hero-feature-icon">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="20"
-									height="20"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									><path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path
-										d="M2 12l10 5 10-5"
-									/></svg
-								>
-							</div>
-							<span>One-click deployments</span>
-						</div>
-						<div class="login-hero-feature">
-							<div class="login-hero-feature-icon">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="20"
-									height="20"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									><rect width="18" height="18" x="3" y="3" rx="2" /><path d="M3 9h18" /><path
-										d="M9 21V9"
-									/></svg
-								>
-							</div>
-							<span>Workspace collaboration</span>
-						</div>
-						<div class="login-hero-feature">
-							<div class="login-hero-feature-icon">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="20"
-									height="20"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10" /></svg
-								>
-							</div>
-							<span>Built-in security</span>
-						</div>
-					</div>
-				</div>
+		<div class="lg2-grid">
+			<div class="lg2-hero">
+				<img src="/logo/logocolor.svg" alt="Orchard" class="lg2-logo logo-light" />
+				<img src="/logo/logocolordm.svg" alt="Orchard" class="lg2-logo logo-dark" />
+				<h1 class="lg2-headline">Welcome <em>back</em>.</h1>
 			</div>
-
-			<!-- Right form side -->
-			<div class="login-form-side">
+			<div class="lg2-card">
 				{#if privateBetaBlocked}
-					<div class="login-panel" style="text-align: center;">
-						<div class="login-panel-header">
-							<h2 class="login-panel-title">Orchard</h2>
-						</div>
-						<div
-							style="margin-bottom: 1.25rem; display: flex; align-items: center; justify-content: center;"
-						>
-							<div class="login-lock-icon">
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="24"
-									height="24"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									><rect width="18" height="11" x="3" y="11" rx="2" ry="2" /><path
-										d="M7 11V7a5 5 0 0 1 10 0v4"
-									/></svg
-								>
-							</div>
-						</div>
-						<h3 class="login-beta-title">
-							{signupsDisabled ? 'Signups Disabled' : 'Private Beta'}
-						</h3>
-						<p class="login-beta-desc">
+					<div class="lg-beta">
+						<h2 class="lg-beta-title">
+							{signupsDisabled ? 'Signups disabled' : 'Private beta'}
+						</h2>
+						<p class="lg-beta-desc">
 							{signupsDisabled
 								? 'Signups are disabled on this Orchard instance. Contact your administrator for access.'
 								: 'Orchard is currently in private beta. You need an invitation from an existing organization to access the platform.'}
 						</p>
-						<button
-							class="btn btn-primary login-submit"
+						<Button
+							variant="primary"
+							class="lg-wide"
 							onclick={() => {
 								privateBetaBlocked = false;
 							}}
 						>
-							Back to Sign In
-						</button>
+							Back to sign in
+						</Button>
 					</div>
 				{:else}
-					<div class="login-panel">
-						<div class="login-panel-header">
-							<h2 class="login-panel-title">Sign in to Orchard</h2>
-						</div>
-
-						{#if oauthProvider !== 'none'}
-							<button class="login-primary" onclick={() => user.signIn()}>
-								<svg
-									xmlns="http://www.w3.org/2000/svg"
-									width="18"
-									height="18"
-									viewBox="0 0 24 24"
-									fill="none"
-									stroke="currentColor"
-									stroke-width="2"
-									stroke-linecap="round"
-									stroke-linejoin="round"
-									><path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4" /><polyline
-										points="10 17 15 12 10 7"
-									/><line x1="15" y1="12" x2="3" y2="12" /></svg
-								>
-								Continue with {oauthLabel}
-							</button>
-
-							<div class="login-divider">
-								<span>or continue with email</span>
-							</div>
-						{/if}
-
+					{#if oauthProvider !== 'none'}
+						<Button variant="primary" class="lg-wide" onclick={() => user.signIn()}>
+							Continue with {oauthLabel}
+						</Button>
+						<div class="lg-divider"><span>or</span></div>
+					{/if}
+					{#if authMode === 'start'}
 						<form
-							class="login-form"
+							class="lg-form"
 							novalidate
 							onsubmit={(e) => {
 								e.preventDefault();
-								if (otpStep === 'email') requestOtp();
-								else verifyOtp();
+								continueWithEmail();
 							}}
 						>
-							<label class="login-label" for="otp-email">Email address</label>
-							<input
-								class="input login-input"
+							<label class="lg-label" for="otp-email">Email address</label>
+							<Input
 								type="email"
+								name="email"
 								placeholder="you@example.com"
 								id="otp-email"
 								bind:value={otpEmail}
-								autocomplete="email"
+								autocomplete="email webauthn"
 								required
+								class="lg-wide"
 							/>
-							{#if otpStep === 'code'}
-								<label class="login-label" for="otp-code">Verification code</label>
-								<div class="login-otp-row">
-									<input
-										class="input login-input login-code"
-										type="text"
-										inputmode="numeric"
-										maxlength="6"
-										placeholder="000000"
-										id="otp-code"
-										bind:value={otpCode}
-										autocomplete="one-time-code"
-									/>
-									<button
-										type="button"
-										class="login-back"
-										onclick={() => {
-											otpStep = 'email';
-											otpCode = '';
-											otpMessage = null;
-										}}
-									>
-										Back
-									</button>
-								</div>
-							{/if}
 							{#if otpError}
-								<p class="login-error">{otpError}</p>
+								<p class="lg-error">{otpError}</p>
 							{/if}
-							{#if otpMessage}
-								<p class="login-success">{otpMessage}</p>
-							{/if}
-							<button
-								class="btn btn-primary login-submit"
+							<Button
+								variant="secondary"
 								type="submit"
-								disabled={otpRequesting || otpVerifying}
+								loading={authChecking || otpRequesting}
+								class="lg-wide lg-action"
 							>
-								{#if otpRequesting || otpVerifying}
-									<Loader2 class="h-4 w-4 animate-spin" />
-								{/if}
-								{otpStep === 'email' ? 'Send code' : 'Verify'}
-							</button>
+								Continue
+							</Button>
 						</form>
-
-						{#if passkeySupported}
-							<div class="login-passkey">
-								<label class="login-label" for="passkey-email">Passkey sign in</label>
-								<input
-									class="input login-input"
-									type="email"
-									placeholder="Email (optional)"
-									id="passkey-email"
-									bind:value={passkeyEmail}
-								/>
-								<button
-									class="btn btn-secondary login-passkey-btn"
-									type="button"
-									onclick={signInWithPasskey}
-									disabled={passkeyLoading}
-								>
-									{#if passkeyLoading}
-										<Loader2 class="h-4 w-4 animate-spin" />
-									{/if}
+					{:else if authMode === 'passkey'}
+						<div class="lg-step">
+							<div class="lg-step-head">
+								<p class="lg-step-title">{otpEmail}</p>
+							</div>
+							<Button
+								variant="secondary"
+								class="lg-wide"
+								loading={passkeyLoading}
+								onclick={signInWithPasskey}
+							>
+								{#if !passkeyLoading}
 									<KeyRound class="h-4 w-4" />
-									Sign in with Passkey
-								</button>
-								{#if passkeyError}
-									<p class="login-error">{passkeyError}</p>
+								{/if}
+								Sign in with your passkey
+							</Button>
+							{#if passkeyError}
+								<p class="lg-error">{passkeyError}</p>
+							{/if}
+							<Button
+								variant="ghost"
+								class="lg-wide"
+								loading={otpRequesting}
+								onclick={useCodeInstead}
+							>
+								Email me a code instead
+							</Button>
+							{#if otpError}
+								<p class="lg-error">{otpError}</p>
+							{/if}
+							<Button variant="ghost" size="sm" class="lg-center" onclick={resetAuth}>Back</Button>
+						</div>
+					{:else}
+						<form
+							class="lg-form"
+							novalidate
+							onsubmit={(e) => {
+								e.preventDefault();
+								verifyOtp();
+							}}
+						>
+							<div class="lg-step-head">
+								<p class="lg-step-title">{otpEmail}</p>
+								{#if otpMessage}
+									<p class="lg-step-hint">{otpMessage}</p>
 								{/if}
 							</div>
-						{:else if passkeySupportReason}
-							<p class="login-muted">{passkeySupportReason}</p>
-						{/if}
-					</div>
+							<label class="lg-label" for="otp-code">Verification code</label>
+							<Input
+								type="text"
+								name="code"
+								inputmode="numeric"
+								maxlength="6"
+								placeholder="000000"
+								id="otp-code"
+								bind:value={otpCode}
+								autocomplete="one-time-code"
+								class="lg-wide lg-code"
+							/>
+							{#if otpError}
+								<p class="lg-error">{otpError}</p>
+							{/if}
+							<Button
+								variant="secondary"
+								type="submit"
+								loading={otpVerifying}
+								class="lg-wide lg-action"
+							>
+								Verify
+							</Button>
+							<Button variant="ghost" size="sm" class="lg-center" onclick={resetAuth}>Back</Button>
+						</form>
+					{/if}
 				{/if}
 			</div>
 		</div>
