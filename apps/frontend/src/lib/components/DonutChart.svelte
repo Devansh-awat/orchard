@@ -28,7 +28,7 @@
 
 	// Stable palette pulled from the platform's accent + chart-friendly hues.
 	const DEFAULT_PALETTE = [
-		'#b33346', // primary (--button-bg)
+		'#ae2a3a', // primary (--button-bg)
 		'#4a8aff',
 		'#22c55e',
 		'#f59e0b',

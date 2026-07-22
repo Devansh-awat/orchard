@@ -56,9 +56,9 @@
 }
 
 html.contrast-high {
-	--surface-border: #9a7880 !important;
-	--dropdown-border: #9a7880 !important;
-	--surface-muted: #5f4a4e !important;
+	--surface-border: #9a7c7e !important;
+	--dropdown-border: #9a7c7e !important;
+	--surface-muted: #645254 !important;
 	--text-faint: color-mix(in srgb, var(--surface-muted) 90%, transparent);
 	--border-strong: color-mix(in srgb, var(--surface-border) 30%, var(--text-default));
 	--status-success: #0e9f72;
@@ -67,9 +67,9 @@ html.contrast-high {
 }
 
 html.dark.contrast-high {
-	--surface-border: #78787d !important;
-	--dropdown-border: #78787d !important;
-	--surface-muted: #f0dade !important;
+	--surface-border: #80696b !important;
+	--dropdown-border: #80696b !important;
+	--surface-muted: #efdddf !important;
 	--status-success: #4fe3b8;
 	--status-warning: #ffb257;
 	--status-progress: #ffb257;

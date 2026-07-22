@@ -180,12 +180,18 @@
 	.cl {
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
+		gap: 0.625rem;
 	}
 
 	.cl-group {
 		display: flex;
 		flex-direction: column;
+		padding: 0.25rem;
+		border-radius: 0.625rem;
+		background: var(--bg-raised);
+		box-shadow:
+			0 0 0 1px var(--border-default),
+			0 1px 2px rgba(0, 0, 0, 0.04);
 	}
 
 	.cl-headrow {
@@ -265,7 +271,7 @@
 		height: 0.75rem;
 		object-fit: cover;
 		border-radius: 0.1875rem;
-		box-shadow: 0 0 0 1px var(--bg-surface);
+		box-shadow: 0 0 0 1px var(--bg-raised);
 	}
 
 	.cl-cluster--1 .cl-mini {

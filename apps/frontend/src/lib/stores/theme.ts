@@ -312,34 +312,50 @@ export function generateThemeColors(simple: SimpleThemeColors, isDark: boolean):
 
 // Default simple colors for light theme
 const defaultLightSimple: SimpleThemeColors = {
-	accent: '#c93a4f',
+	accent: '#d53044',
 	accentForeground: '#ffffff',
 	background: '#ffffff',
-	foreground: '#5d3a3f',
-	muted: '#857073',
-	border: '#f3dfe2',
-	card: '#fdf7f8',
-	sidebarBackground: '#fdf7f8',
-	sidebarForeground: '#5d3a3f',
-	error: '#d63c56',
+	foreground: '#3e3234',
+	muted: '#80696b',
+	border: '#efdddf',
+	card: '#ffffff',
+	sidebarBackground: '#ffffff',
+	sidebarForeground: '#3e3234',
+	error: '#d53044',
 	success: '#33d6a6',
 	warning: '#ff8c37'
 };
 
 // Default simple colors for dark theme
 const defaultDarkSimple: SimpleThemeColors = {
-	accent: '#c93a4f',
-	accentForeground: '#f9e8ea',
-	background: '#1d1d1f',
-	foreground: '#f9e8ea',
-	muted: '#dcb8be',
-	border: '#262627',
-	card: '#212121',
-	sidebarBackground: '#212121',
-	sidebarForeground: '#f9e8ea',
-	error: '#ff6b7d',
+	accent: '#d53044',
+	accentForeground: '#efdddf',
+	background: '#251e1f',
+	foreground: '#efdddf',
+	muted: '#ba9da0',
+	border: '#3e3234',
+	card: '#302627',
+	sidebarBackground: '#302627',
+	sidebarForeground: '#efdddf',
+	error: '#fb5e71',
 	success: '#33d6a6',
 	warning: '#f1c40f'
+};
+
+// Hand-tuned Orchard primary ramp; overrides the HSL-generated approximations
+// so the applied built-in themes match the static palette in app.css exactly
+const orchardPrimaryPalette = {
+	primary50: '#ffffff',
+	primary100: '#efdddf',
+	primary200: '#ba9da0',
+	primary300: '#fb5e71',
+	primary400: '#ea485c',
+	primary500: '#d53044',
+	primary600: '#ae2a3a',
+	primary700: '#8a2c37',
+	primary800: '#8a2c37',
+	primary900: '#8a2c37',
+	primary950: '#161314'
 };
 
 // Default light theme
@@ -349,7 +365,24 @@ export const defaultLightTheme: Theme = {
 	isDark: false,
 	isBuiltIn: true,
 	simpleColors: defaultLightSimple,
-	colors: generateThemeColors(defaultLightSimple, false)
+	colors: {
+		...generateThemeColors(defaultLightSimple, false),
+		...orchardPrimaryPalette,
+		sidebarUnreadText: '#161314',
+		sidebarTextHoverBg: '#efdddf',
+		sidebarTextActiveColor: '#8a2c37',
+		sidebarTextActiveBg: '#efdddf',
+		mentionHighlightBg: '#efdddf',
+		mentionHighlightLink: '#8a2c37',
+		newMessageSeparator: '#ea485c',
+		linkColor: '#8a2c37',
+		buttonBg: '#ae2a3a',
+		controlBg: '#ffffff',
+		controlHoverBg: '#efdddf',
+		dropdownHoverBg: '#efdddf',
+		orgTriggerBg: '#ffffff',
+		orgTriggerHoverBg: '#efdddf'
+	}
 };
 
 // Default dark theme
@@ -359,7 +392,22 @@ export const defaultDarkTheme: Theme = {
 	isDark: true,
 	isBuiltIn: true,
 	simpleColors: defaultDarkSimple,
-	colors: generateThemeColors(defaultDarkSimple, true)
+	colors: {
+		...generateThemeColors(defaultDarkSimple, true),
+		...orchardPrimaryPalette,
+		sidebarTextHoverBg: '#161314',
+		sidebarTextActiveBg: '#3e3234',
+		sidebarHeaderBg: '#251e1f',
+		sidebarTeamBarBg: '#251e1f',
+		mentionHighlightBg: '#3e3234',
+		mentionHighlightLink: '#fb5e71',
+		newMessageSeparator: '#ea485c',
+		linkColor: '#fb5e71',
+		buttonBg: '#ae2a3a',
+		controlHoverBg: '#3e3234',
+		dropdownHoverBg: '#161314',
+		orgTriggerHoverBg: '#3e3234'
+	}
 };
 
 // Theme color categories for the editor UI - simplified!

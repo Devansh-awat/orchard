@@ -200,8 +200,9 @@
 .proj-card {
 	position: relative;
 	border-radius: 0.75rem;
-	background: var(--center-channel-bg);
+	background: var(--bg-raised);
 	box-shadow:
+		0 0 0 1px color-mix(in srgb, var(--border-default) 60%, transparent),
 		0 1px 2px rgba(0, 0, 0, 0.04),
 		0 3px 8px rgba(0, 0, 0, 0.03);
 	transition: box-shadow 0.15s;
@@ -209,12 +210,13 @@
 }
 .proj-card:hover {
 	box-shadow:
+		0 0 0 1px var(--border-strong),
 		0 2px 4px rgba(0, 0, 0, 0.06),
 		0 6px 16px rgba(0, 0, 0, 0.07);
 }
 .proj-card--expanded {
 	box-shadow:
-		0 0 0 1px color-mix(in srgb, var(--surface-border) 55%, transparent),
+		0 0 0 1px var(--border-default),
 		0 2px 4px rgba(0, 0, 0, 0.05),
 		0 8px 20px rgba(0, 0, 0, 0.06);
 }
@@ -354,7 +356,7 @@
 	box-sizing: border-box;
 }
 .proj-card--hasbg .proj-body :global(.dash-card) {
-	background: var(--center-channel-bg);
+	background: var(--bg-surface);
 	box-shadow:
 		0 2px 8px rgba(0, 0, 0, 0.08),
 		0 10px 24px rgba(0, 0, 0, 0.12);
@@ -396,10 +398,10 @@
 	width: 1.25rem;
 	height: 1.25rem;
 	flex-shrink: 0;
-	color: var(--surface-muted);
+	color: var(--text-muted);
 }
 .proj-chev--open {
-	color: var(--center-channel-color);
+	color: var(--text-default);
 }
 .proj-av {
 	width: 2.25rem;
@@ -422,7 +424,7 @@
 	height: 1.25rem;
 	object-fit: cover;
 	border-radius: 0.25rem;
-	box-shadow: 0 0 0 1.5px var(--control-bg);
+	box-shadow: 0 0 0 1.5px var(--bg-raised);
 }
 .proj-av-cluster--1 .proj-av-mini {
 	position: static;
@@ -481,17 +483,18 @@
 .proj-name {
 	font-size: 0.9375rem;
 	font-weight: 600;
+	color: var(--text-default);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
 }
 .proj-owner {
-	color: var(--surface-muted);
+	color: var(--text-muted);
 	font-weight: 500;
 }
 .proj-sub {
 	font-size: 0.75rem;
-	color: var(--surface-muted);
+	color: var(--text-muted);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -507,7 +510,7 @@
 	align-items: center;
 	gap: 0.25rem;
 	font-size: 0.75rem;
-	color: var(--surface-muted);
+	color: var(--text-faint);
 	font-variant-numeric: tabular-nums;
 }
 .proj-summary {
@@ -515,10 +518,10 @@
 	align-items: center;
 	gap: 0.25rem;
 	font-size: 0.75rem;
-	color: var(--surface-muted);
+	color: var(--text-faint);
 	font-variant-numeric: tabular-nums;
 	padding-left: 0.75rem;
-	border-left: 1px solid color-mix(in srgb, var(--surface-border) 45%, transparent);
+	border-left: 1px solid color-mix(in srgb, var(--border-default) 45%, transparent);
 }
 .proj-summary .dot {
 	margin-right: 0.0625rem;
@@ -541,8 +544,8 @@
 	cursor: pointer;
 }
 .proj-new:hover {
-	color: var(--sidebar-text-active-border);
-	border-color: var(--sidebar-text-active-border);
+	color: var(--accent);
+	border-color: var(--accent);
 }
 .proj-open {
 	display: flex;
@@ -557,12 +560,12 @@
 	transition: all 0.12s;
 }
 .proj-open:hover {
-	color: var(--sidebar-text-active-border);
-	background: color-mix(in srgb, var(--sidebar-text-active-border) 10%, transparent);
+	color: var(--accent);
+	background: var(--accent-subtle);
 }
 
 .proj-body {
-	padding: 0 1.125rem 1.125rem;
+	padding: 0.375rem 1.125rem 1.125rem;
 	box-sizing: border-box;
 }
 
@@ -582,14 +585,18 @@
 	gap: 0.5rem;
 	padding: 1rem;
 	border-radius: 0.625rem;
-	background: var(--center-channel-bg);
+	background: var(--bg-raised);
 	min-height: 8rem;
 	text-decoration: none;
-	color: var(--center-channel-color);
+	color: var(--text-default);
 	box-shadow:
+		0 0 0 1px var(--border-default),
 		0 1px 2px rgba(0, 0, 0, 0.04),
 		0 3px 8px rgba(0, 0, 0, 0.03);
 	cursor: pointer;
+}
+.proj-body .dash-card {
+	background: var(--bg-surface);
 }
 .dash-card::after {
 	content: '';
@@ -608,7 +615,7 @@
 }
 .dash-card--fav {
 	box-shadow:
-		0 0 0 1.5px color-mix(in srgb, var(--sidebar-text-active-border) 25%, transparent),
+		0 0 0 1.5px color-mix(in srgb, var(--accent) 40%, transparent),
 		0 1px 2px rgba(0, 0, 0, 0.04),
 		0 3px 8px rgba(0, 0, 0, 0.03);
 }
@@ -638,10 +645,10 @@
 	justify-content: center;
 	background: linear-gradient(
 		135deg,
-		color-mix(in srgb, var(--sidebar-text-active-border) 15%, transparent),
-		color-mix(in srgb, var(--sidebar-text-active-border) 5%, transparent)
+		color-mix(in srgb, var(--accent) 15%, transparent),
+		color-mix(in srgb, var(--accent) 5%, transparent)
 	);
-	color: var(--sidebar-text-active-border);
+	color: var(--accent);
 	font-size: 0.75rem;
 	font-weight: 700;
 }
@@ -653,6 +660,7 @@
 	display: block;
 	font-size: 0.9375rem;
 	font-weight: 600;
+	color: var(--text-default);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -660,7 +668,7 @@
 .card-sub {
 	display: block;
 	font-size: 0.75rem;
-	color: var(--surface-muted);
+	color: var(--text-muted);
 	white-space: nowrap;
 	overflow: hidden;
 	text-overflow: ellipsis;
@@ -679,18 +687,18 @@
 	align-items: center;
 	gap: 0.3rem;
 	font-size: 0.6875rem;
-	color: var(--surface-muted);
-	font-weight: 500;
+	color: var(--text-muted);
+	font-weight: 550;
 }
 .card-meta {
 	font-size: 0.6875rem;
-	color: var(--surface-muted);
+	color: var(--text-faint);
 	white-space: nowrap;
 }
 .card-metrics {
 	margin-left: auto;
 	font-size: 0.6875rem;
-	color: var(--surface-muted);
+	color: var(--text-faint);
 	font-variant-numeric: tabular-nums;
 	white-space: nowrap;
 }
@@ -719,13 +727,13 @@
 	border-radius: 0.25rem;
 	border: none;
 	background: none;
-	color: var(--surface-muted);
+	color: var(--text-muted);
 	cursor: pointer;
 	transition: all 0.1s;
 }
 .abtn:hover {
-	background: color-mix(in srgb, var(--surface-border) 50%, transparent);
-	color: var(--center-channel-color);
+	background: color-mix(in srgb, var(--border-default) 50%, transparent);
+	color: var(--text-default);
 }
 .fav--on {
 	color: #eab308;
