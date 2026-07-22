@@ -69,6 +69,9 @@ body:has(.pj-page--hasbg) .sidebar.deck-host {
 	overflow: hidden;
 	margin: 0;
 }
+.pj-page--hasbg .pj-hero-bleed {
+	display: none;
+}
 .pj-hero-bleed {
 	position: absolute;
 	top: 2.5rem;
