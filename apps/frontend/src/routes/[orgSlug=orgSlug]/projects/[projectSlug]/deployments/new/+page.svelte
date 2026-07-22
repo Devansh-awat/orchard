@@ -28,6 +28,7 @@
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
 	import RepoDetectionSummary from '$lib/components/deployment/RepoDetectionSummary.svelte';
+	import RepoAccountPicker from '$lib/components/deployment/RepoAccountPicker.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
 	import { Button, PopoverPanel, Field, Input, Select, Badge, ToggleRow } from '$lib/components/ui';
 
@@ -384,7 +385,15 @@
 			.replace(/^-+|-+$/g, '');
 	}
 
+	function selectAccount(login: string) {
+		selectedAccount = login;
+		if (!selectedRepo) {
+			repoSearch = '';
+		}
+	}
+
 	function selectRepo(repo: Repository) {
+		selectedAccount = repo.full_name.split('/')[0];
 		selectedRepo = repo;
 		repoUrl = repo.clone_url;
 		repoSearch = repo.full_name;
@@ -768,8 +777,37 @@
 		}
 	});
 
+	let selectedAccount = $state<string | null>(null);
+	let accountAutoSet = false;
+
+	const accounts = $derived.by(() => {
+		const counts = new Map<string, number>();
+		for (const r of repositories) {
+			const owner = r.full_name.split('/')[0];
+			counts.set(owner, (counts.get(owner) ?? 0) + 1);
+		}
+		return Array.from(counts.entries())
+			.map(([login, count]) => ({ login, count }))
+			.sort((a, b) => b.count - a.count || a.login.localeCompare(b.login));
+	});
+
+	$effect(() => {
+		const first = accounts[0]?.login;
+		if (!first || accountAutoSet) return;
+		accountAutoSet = true;
+		if (!selectedAccount) selectedAccount = first;
+	});
+
 	const filteredRepos = $derived(
-		repositories.filter((r) => r.full_name.toLowerCase().includes(repoSearch.toLowerCase()))
+		repositories.filter((r) => {
+			const q = repoSearch.toLowerCase();
+			const matchesText =
+				r.full_name.toLowerCase().includes(q) ||
+				r.full_name.split('/')[1].toLowerCase().includes(q);
+			if (!matchesText) return false;
+			if (q.includes('/')) return true;
+			return !selectedAccount || r.full_name.split('/')[0] === selectedAccount;
+		})
 	);
 	const parsedRepoInput = $derived(selectedRepo ? null : parseRepoInput(repoSearch.trim()));
 	const parsedRepoIsListed = $derived(
@@ -887,6 +925,13 @@
 								</div>
 							{/if}
 							<Field label="Repository">
+								<div class="nd-repo-split">
+									<RepoAccountPicker
+										{accounts}
+										selected={selectedAccount}
+										onSelect={selectAccount}
+										installUrl={githubAppInstallUrl}
+									/>
 								<PopoverPanel sameWidth bind:open={repoPickerOpen}>
 									{#snippet trigger(attrs, open)}
 										<div class="picker-wrap">
@@ -897,7 +942,7 @@
 												{:else if repoSearch}
 													<span class="picker-value">{repoSearch}</span>
 												{:else}
-													<span class="picker-placeholder">owner/repo or GitHub URL</span>
+													<span class="picker-placeholder">Pick a repo, or paste owner/repo</span>
 												{/if}
 											</button>
 											{#if loadingRepos || loadingBranches}
@@ -959,7 +1004,11 @@
 														}}
 													>
 														<Github class="h-4 w-4 shrink-0" />
-														<span class="picker-option-text">{repo.full_name}</span>
+														<span class="picker-option-text">
+															{repo.full_name.split('/')[0] === selectedAccount
+																? repo.full_name.split('/')[1]
+																: repo.full_name}
+														</span>
 														{#if repo.private}<Badge tone="neutral">Private</Badge>{/if}
 													</button>
 												{:else}
@@ -983,6 +1032,7 @@
 										</div>
 									{/snippet}
 								</PopoverPanel>
+								</div>
 							</Field>
 
 							{#if selectedRepo || repoUrl}
@@ -1612,6 +1662,18 @@
 		border: 1px solid var(--border-default);
 		border-radius: 0.5rem;
 		background: var(--bg-raised);
+	}
+
+	.nd-repo-split {
+		display: grid;
+		grid-template-columns: minmax(9rem, 13rem) 1fr;
+		gap: 0.5rem;
+	}
+
+	@media (max-width: 640px) {
+		.nd-repo-split {
+			grid-template-columns: 1fr;
+		}
 	}
 
 	/* Card body */
