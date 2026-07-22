@@ -1393,6 +1393,7 @@ export class GitHubService {
       const response = await fetch(
         `https://api.github.com/user/installations/${installationId}/repositories?per_page=${perPage}&page=${page}`,
         {
+          signal: AbortSignal.timeout(8000),
           headers: {
             'Authorization': `Bearer ${userToken}`,
             'Accept': 'application/vnd.github+json',
@@ -1428,10 +1429,30 @@ export class GitHubService {
     return this.getValidUserToken(userId);
   }
 
+  private readonly userReposCache = new Map<
+    string,
+    { at: number; result: { repos: GitHubRepo[]; installations: any[]; hasInstallations: boolean; userLinked: boolean } }
+  >();
+
+  private static readonly REPOS_CACHE_FRESH_MS = 60 * 1000;
+
+  /** Drop cached repo lists (all users) — called when installation webhooks
+   * land so a freshly added account shows up on the next fetch. */
+  clearUserReposCache() {
+    this.userReposCache.clear();
+  }
+
   // Get all repos accessible to a user across all their installations, intersected with the
   // repos the user can see on GitHub (via their user OAuth token). Without a user token we
   // cannot verify access, so we return no repos — the user must link their GitHub identity.
+  // Results are cached briefly per user; when GitHub is unreachable mid-refresh the last
+  // good list is served instead of a partial one.
   async getAllUserRepositories(userId: string): Promise<{ repos: GitHubRepo[]; installations: any[]; hasInstallations: boolean; userLinked: boolean }> {
+    const cached = this.userReposCache.get(userId);
+    if (cached && Date.now() - cached.at < GitHubService.REPOS_CACHE_FRESH_MS) {
+      return cached.result;
+    }
+
     const userToken = await this.getValidUserToken(userId);
 
     const installations = await this.getUserInstallations(userId);
@@ -1452,29 +1473,47 @@ export class GitHubService {
       return { repos: [], installations: installationData, hasInstallations: installations.length > 0, userLinked: false };
     }
 
-    for (const installation of installations) {
-      try {
-        const repos = await this.getUserAccessibleInstallationRepos(userToken, installation.installationId);
-        installationData.push({
-          id: installation.id,
+    let failures = 0;
+    const perInstallation = await Promise.all(
+      installations.map(async (installation) => {
+        try {
+          const repos = await this.getUserAccessibleInstallationRepos(userToken, installation.installationId);
+          return { installation, repos };
+        } catch (e) {
+          failures += 1;
+          console.error(`[GitHub] Failed to get user-accessible repos for installation ${installation.installationId}:`, e);
+          return { installation, repos: null as GitHubRepo[] | null };
+        }
+      }),
+    );
+
+    for (const { installation, repos } of perInstallation) {
+      installationData.push({
+        id: installation.id,
+        installationId: installation.installationId.toString(),
+        accountLogin: installation.accountLogin,
+        accountType: installation.accountType,
+        repositoryCount: repos?.length ?? 0,
+      });
+      for (const repo of repos ?? []) {
+        allRepos.push({
+          ...repo,
           installationId: installation.installationId.toString(),
           accountLogin: installation.accountLogin,
-          accountType: installation.accountType,
-          repositoryCount: repos.length,
-        });
-        for (const repo of repos) {
-          allRepos.push({
-            ...repo,
-            installationId: installation.installationId.toString(),
-            accountLogin: installation.accountLogin,
-          } as any);
-        }
-      } catch (e) {
-        console.error(`[GitHub] Failed to get user-accessible repos for installation ${installation.installationId}:`, e);
+        } as any);
       }
     }
 
-    return { repos: allRepos, installations: installationData, hasInstallations: installations.length > 0, userLinked: true };
+    const result = { repos: allRepos, installations: installationData, hasInstallations: installations.length > 0, userLinked: true };
+
+    if (failures > 0 && cached) {
+      console.warn(`[GitHub] serving cached repo list (${failures} installation lookup(s) failed)`);
+      return cached.result;
+    }
+    if (failures === 0) {
+      this.userReposCache.set(userId, { at: Date.now(), result });
+    }
+    return result;
   }
 
   /**

@@ -493,6 +493,7 @@ export class GitHubController {
         body.installation,
         body.sender
       );
+      this.githubService.clearUserReposCache();
       return { received: true, action: 'processed', event };
     }
 
