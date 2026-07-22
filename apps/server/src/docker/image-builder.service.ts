@@ -1688,9 +1688,13 @@ exit $rc`,
           UPDATE "deployments"
           SET "build_logs" = COALESCE("build_logs", '') || ${logLine},
               "build_step_timestamps" = jsonb_set(
-                COALESCE("build_step_timestamps", '{}'::jsonb),
-                '{__jobName}',
-                ${JSON.stringify(jobName)}::jsonb
+                jsonb_set(
+                  COALESCE("build_step_timestamps", '{}'::jsonb),
+                  '{__jobName}',
+                  ${JSON.stringify(jobName)}::jsonb
+                ),
+                '{__image}',
+                ${JSON.stringify(`${this.harborRegistryPull}/${this.harborProject}/${imageName}:${tag}`)}::jsonb
               ),
               "updated_at" = NOW()
           WHERE "id" = ${deploymentId}::uuid
@@ -2619,7 +2623,7 @@ exit $rc`,
     }
   }
 
-  async findBuildJobsForDeployment(deploymentId: string): Promise<{ name: string; image: string | null; status: string }[]> {
+  async findBuildJobsForDeployment(deploymentId: string): Promise<{ name: string; image: string | null; status: string }[] | null> {
     this.ensureKubeConfig();
     try {
       const batchApi = this.kc!.makeApiClient(k8s.BatchV1Api);
@@ -2660,7 +2664,23 @@ exit $rc`,
           };
         });
     } catch {
-      return [];
+      return null;
+    }
+  }
+
+  async imageExistsInRegistry(image: string): Promise<boolean | null> {
+    try {
+      const { repoName, tag } = this.parseImageRef(image);
+      if (!tag) return null;
+      const auth = this.getHarborAuth();
+      if (!auth) return null;
+      const url = `${auth.registryUrl}/api/v2.0/projects/${this.harborProject}/repositories/${encodeURIComponent(repoName)}/artifacts/${encodeURIComponent(tag)}`;
+      const response = await fetch(url, { headers: { Authorization: auth.authHeader } });
+      if (response.ok) return true;
+      if (response.status === 404) return false;
+      return null;
+    } catch {
+      return null;
     }
   }
 

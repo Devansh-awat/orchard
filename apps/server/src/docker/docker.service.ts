@@ -1422,8 +1422,13 @@ export class DockerService {
     await this.imageBuilderService.deleteBuildJob(jobName);
   }
 
-  async findBuildJobsForDeployment(deploymentId: string): Promise<{ name: string; image: string | null; status: string }[]> {
+  async findBuildJobsForDeployment(deploymentId: string): Promise<{ name: string; image: string | null; status: string }[] | null> {
     if (!this.imageBuilderService) return [];
     return this.imageBuilderService.findBuildJobsForDeployment(deploymentId);
+  }
+
+  async imageExistsInRegistry(image: string): Promise<boolean | null> {
+    if (!this.imageBuilderService) return null;
+    return this.imageBuilderService.imageExistsInRegistry(image);
   }
 }

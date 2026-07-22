@@ -117,6 +117,15 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
       .catch(() => {});
   }
 
+  async adoptRun(deploymentId: string): Promise<void> {
+    await this.prisma.buildRun
+      .updateMany({
+        where: { deploymentId, status: 'building' },
+        data: { workerId: this.workerId, heartbeatAt: new Date() },
+      })
+      .catch(() => {});
+  }
+
   private async heartbeat(): Promise<void> {
     await this.prisma.buildRun.updateMany({
       where: { workerId: this.workerId, status: 'building' },

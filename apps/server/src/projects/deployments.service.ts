@@ -171,6 +171,20 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   }) {
     const metadata = (deployment.buildStepTimestamps as Record<string, any>) || {};
 
+    const activeRun = await this.prisma.buildRun.findFirst({
+      where: { deploymentId: deployment.id, status: 'building' },
+      orderBy: { startedAt: 'desc' },
+      select: { workerId: true, heartbeatAt: true },
+    });
+    if (
+      activeRun?.workerId &&
+      activeRun.heartbeatAt &&
+      Date.now() - activeRun.heartbeatAt.getTime() < 90_000
+    ) {
+      this.activeRecoveries.delete(deployment.id);
+      return;
+    }
+
     this.logger.log(`[BuildRecovery] Recovering deployment ${deployment.id} (step: ${deployment.buildStep})`);
 
     if (deployment.buildStep === 'deploying' && deployment.image) {
@@ -192,6 +206,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     const jobs = await this.dockerService.findBuildJobsForDeployment(deployment.id);
+    if (jobs === null) {
+      this.logger.warn(`[BuildRecovery] Could not list build jobs for ${deployment.id}; retrying next scan`);
+      this.activeRecoveries.delete(deployment.id);
+      return;
+    }
     const jobName = metadata.__jobName as string | undefined;
     let foundJob: { name: string; image: string | null; status: string } | null = null;
 
@@ -211,10 +230,26 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       foundJob = jobs[0];
     }
 
+    const expectedImage = (metadata.__image as string | undefined) || null;
+
     if (!foundJob) {
+      if (expectedImage) {
+        const pushed = await this.dockerService.imageExistsInRegistry(expectedImage);
+        if (pushed === true) {
+          this.logger.log(`[BuildRecovery] Build job for ${deployment.id} is gone but ${expectedImage} exists in the registry; finishing deploy`);
+          await this.finishRecoveredBuild(deployment, expectedImage);
+          this.activeRecoveries.delete(deployment.id);
+          return;
+        }
+        if (pushed === null) {
+          this.logger.warn(`[BuildRecovery] Could not check registry for ${deployment.id}; retrying next scan`);
+          this.activeRecoveries.delete(deployment.id);
+          return;
+        }
+      }
       const requeued = await this.requeueOrphanedBuild(deployment.id);
       if (requeued) {
-        this.logger.log(`[BuildRecovery] No build job found for ${deployment.id}; requeued the build`);
+        this.logger.log(`[BuildRecovery] No build job or pushed image found for ${deployment.id}; requeued the build`);
       } else {
         await this.markBuildFailed(deployment.id, 'Build job not found after server restart');
       }
@@ -223,30 +258,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
 
     if (foundJob.status === 'succeeded') {
-      const expectedImage = foundJob.image;
-      if (!expectedImage) {
+      const image = foundJob.image || expectedImage;
+      if (!image) {
         await this.markBuildFailed(deployment.id, 'Build succeeded but image path unknown');
-        this.dockerService.deleteBuildJob(foundJob.name).catch(() => {});
-        this.activeRecoveries.delete(deployment.id);
-        return;
-      }
-
-      try {
-        const k8sExists = await this.k8sWorkload.getKubernetesDeployment(deployment.name, deployment.namespace)
-          .then(d => d !== null).catch(() => false);
-        if (k8sExists) {
-          await this.prisma.deployment.update({
-            where: { id: deployment.id },
-            data: { image: expectedImage, buildStep: 'deploying' },
-          });
-          await this.k8sWorkload.updateDeploymentImage(deployment.name, deployment.namespace, expectedImage);
-          await this.markBuildSucceeded(deployment.id, 'Build recovered after server restart.');
-          this.logger.log(`[BuildRecovery] Completed succeeded build for ${deployment.id}`);
-        } else {
-          await this.markBuildFailed(deployment.id, 'Build succeeded but k8s deployment not found. Please redeploy.');
-        }
-      } catch (error) {
-        await this.markBuildFailed(deployment.id, `Recovery failed: ${error.message}`);
+      } else {
+        await this.finishRecoveredBuild(deployment, image);
       }
       this.dockerService.deleteBuildJob(foundJob.name).catch(() => {});
       this.activeRecoveries.delete(deployment.id);
@@ -255,7 +271,31 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       this.dockerService.deleteBuildJob(foundJob.name).catch(() => {});
       this.activeRecoveries.delete(deployment.id);
     } else if (foundJob.status === 'running' || foundJob.status === 'pending') {
-      this.resumeBuildWatch(deployment, foundJob.name, foundJob.image);
+      await this.buildQueue.adoptRun(deployment.id);
+      this.resumeBuildWatch(deployment, foundJob.name, foundJob.image || expectedImage);
+    }
+  }
+
+  private async finishRecoveredBuild(
+    deployment: { id: string; name: string; namespace: string },
+    image: string,
+  ) {
+    try {
+      const k8sExists = await this.k8sWorkload.getKubernetesDeployment(deployment.name, deployment.namespace)
+        .then(d => d !== null).catch(() => false);
+      if (k8sExists) {
+        await this.prisma.deployment.update({
+          where: { id: deployment.id },
+          data: { image, buildStep: 'deploying' },
+        });
+        await this.k8sWorkload.updateDeploymentImage(deployment.name, deployment.namespace, image);
+        await this.markBuildSucceeded(deployment.id, 'Build recovered after server restart.');
+        this.logger.log(`[BuildRecovery] Completed succeeded build for ${deployment.id}`);
+      } else {
+        await this.markBuildFailed(deployment.id, 'Build succeeded but k8s deployment not found. Please redeploy.');
+      }
+    } catch (error) {
+      await this.markBuildFailed(deployment.id, `Recovery failed: ${error.message}`);
     }
   }
 
@@ -275,7 +315,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         let resolvedImage = expectedImage;
         if (!resolvedImage) {
           const jobs = await this.dockerService.findBuildJobsForDeployment(deployment.id);
-          resolvedImage = jobs.find(j => j.name === jobName)?.image || null;
+          resolvedImage = jobs?.find(j => j.name === jobName)?.image || null;
         }
         if (!resolvedImage) {
           await this.markBuildFailed(deployment.id, 'Build succeeded but image path unknown');
