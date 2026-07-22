@@ -29,6 +29,7 @@ func envCmd() *cobra.Command {
 		envDeleteCmd(),
 		envSetDefaultCmd(),
 		envVarsCmd(),
+		envPullCmd(),
 	)
 	return c
 }

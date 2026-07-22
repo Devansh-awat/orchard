@@ -90,7 +90,7 @@ func linkCmd() *cobra.Command {
 			output.Warnf("wrote %s", p)
 
 			if !noGitignore {
-				if note := ensureGitignored(cwd); note != "" {
+				if note := ensureGitignored(cwd, ".orchard/"); note != "" {
 					output.Warnf("%s", note)
 				}
 			}
@@ -127,10 +127,10 @@ func unlinkCmd() *cobra.Command {
 	}
 }
 
-// ensureGitignored appends ".orchard/" to the repo root .gitignore unless it
-// is already covered. Returns a human note describing what happened ("" when
-// nothing needed doing or there is no repo).
-func ensureGitignored(start string) string {
+// ensureGitignored appends pattern to the repo root .gitignore unless an
+// equivalent line already covers it. Returns a human note describing what
+// happened ("" when nothing needed doing or there is no repo).
+func ensureGitignored(start, pattern string) string {
 	root := start
 	for {
 		if _, err := os.Stat(filepath.Join(root, ".git")); err == nil {
@@ -143,11 +143,12 @@ func ensureGitignored(start string) string {
 		root = parent
 	}
 
+	bare := strings.Trim(pattern, "/")
 	giPath := filepath.Join(root, ".gitignore")
 	data, _ := os.ReadFile(giPath)
 	for line := range strings.Lines(string(data)) {
 		switch strings.TrimSpace(line) {
-		case ".orchard", ".orchard/", "/.orchard", "/.orchard/":
+		case bare, bare + "/", "/" + bare, "/" + bare + "/":
 			return ""
 		}
 	}
@@ -161,8 +162,8 @@ func ensureGitignored(start string) string {
 	if len(data) > 0 && data[len(data)-1] != '\n' {
 		prefix = "\n"
 	}
-	if _, err := fmt.Fprint(f, prefix+".orchard/\n"); err != nil {
+	if _, err := fmt.Fprint(f, prefix+pattern+"\n"); err != nil {
 		return "could not update " + giPath + ": " + err.Error()
 	}
-	return "added .orchard/ to " + giPath + " (use --no-gitignore to skip)"
+	return "added " + pattern + " to " + giPath
 }
