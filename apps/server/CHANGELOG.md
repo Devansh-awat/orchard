@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.1](https://github.com/LeafdTK/leaf/compare/server/v1.32.0...server/v1.32.1) (2026-07-23)
+
+
+### Bug Fixes
+
+* **builder:** move buildkit-state and output emptyDirs off tmpfs to disk ([fe4d790](https://github.com/LeafdTK/leaf/commit/fe4d79066a04908dedfeda6218bd182634cf4396))
+
 ## [1.32.0](https://github.com/LeafdTK/leaf/compare/server/v1.31.0...server/v1.32.0) (2026-07-22)
 
 
