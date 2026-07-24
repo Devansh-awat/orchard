@@ -1533,7 +1533,7 @@ fi
         ],
         resources: {
           requests: { cpu: '500m', memory: '2Gi' },
-          limits: { cpu: '4', memory: '16Gi' },
+          limits: { cpu: '4', memory: process.env.BUILDER_MEMORY_LIMIT || '32Gi' },
         },
       } as k8s.V1Container;
     })();
