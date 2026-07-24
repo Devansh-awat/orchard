@@ -1734,11 +1734,11 @@ exit $rc`,
               }] : []),
               ...(this.sidecarPushEnabled ? [{
                 name: 'output',
-                emptyDir: {},
+                emptyDir: this.workspaceTmpfs ? { medium: 'Memory' } : {},
               }] : []),
               ...(!daemonIp && this.workspaceTmpfs ? [{
                 name: 'buildkit-state',
-                emptyDir: {},
+                emptyDir: { medium: 'Memory' },
               }] : []),
               ...(!daemonIp && this.localCacheEnabled ? [{
                 name: 'buildkit-cache',
