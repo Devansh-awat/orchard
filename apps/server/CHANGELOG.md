@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.33.0](https://github.com/LeafdTK/leaf/compare/server/v1.32.6...server/v1.33.0) (2026-07-24)
+
+
+### Features
+
+* **builder:** block-device scratch mode so build state lands on disk not ram ([5b2e8a8](https://github.com/LeafdTK/leaf/commit/5b2e8a83c04d420a423c45b99da048d34ac4bb28))
+
 ## [1.32.6](https://github.com/LeafdTK/leaf/compare/server/v1.32.5...server/v1.32.6) (2026-07-24)
 
 
