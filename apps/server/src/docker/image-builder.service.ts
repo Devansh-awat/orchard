@@ -923,6 +923,8 @@ fi
       return true;
     }).map(shellQuote).join(' ') + gitShaOpt;
 
+    const stateRoot = this.workspaceTmpfs ? '/buildkit-state' : '/var/lib/buildkit';
+
     return `
 set +e
 ${gitShaPreamble}
@@ -984,7 +986,12 @@ if grep -qi "failed to check file presence in cache\\|BadRequest\\|Bad Request\\
   BUILD_OUTPUT=$(mktemp)
   FIFO=$(mktemp -u)
   mkfifo "$FIFO"
-  
+
+  if [ -d "${stateRoot}" ]; then
+    echo "=== Clearing build state before no-cache retry ==="
+    rm -rf "${stateRoot}"/* "${stateRoot}"/.[!.]* 2>/dev/null || true
+  fi
+
   echo "=== Retrying build without cache ==="
   
   for attempt in $(seq 1 $MAX_RETRIES); do
