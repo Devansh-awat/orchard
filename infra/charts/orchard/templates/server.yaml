@@ -85,6 +85,9 @@ spec:
             - { name: BUILDER_SCRATCH_SIZE, value: {{ .Values.builderSandbox.scratch.size | quote }} }
             - { name: BUILDER_SCRATCH_STORAGE_CLASS, value: {{ .Values.builderSandbox.scratch.storageClass | quote }} }
             {{- end }}
+            {{- if .Values.builderSandbox.memoryLimit }}
+            - { name: BUILDER_MEMORY_LIMIT, value: {{ .Values.builderSandbox.memoryLimit | quote }} }
+            {{- end }}
             {{- end }}
             {{- if .Values.r2Proxy.enabled }}
             - { name: BACKUP_PROXY_ENABLED, value: "true" }

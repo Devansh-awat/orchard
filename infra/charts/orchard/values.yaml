@@ -357,6 +357,7 @@ builderSandbox:
     mode: tmpfs
     size: 40Gi
     storageClass: longhorn-ssd
+  memoryLimit: ""
 
 # Public-TLS reflection — tells the server which Secret to copy from when
 # exposing a CNPG cluster publicly with TLS.
