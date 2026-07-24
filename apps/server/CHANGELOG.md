@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.5](https://github.com/LeafdTK/leaf/compare/server/v1.32.4...server/v1.32.5) (2026-07-24)
+
+
+### Bug Fixes
+
+* **builder:** raise build vm memory so tmpfs fits large builds ([c11c07c](https://github.com/LeafdTK/leaf/commit/c11c07c3913b6072711edd828d4e6ef5f94665cd))
+
 ## [1.32.4](https://github.com/LeafdTK/leaf/compare/server/v1.32.3...server/v1.32.4) (2026-07-24)
 
 
