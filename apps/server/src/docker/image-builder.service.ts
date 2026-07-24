@@ -36,6 +36,7 @@ interface BuildJobOptions {
   // each Job. The daemon keeps its layer cache warm between builds, so
   // unchanged layers are instant cache hits (like Depot).
   persistentBuildCache?: boolean;
+  disableSharedCache?: boolean;
 }
 
 interface BuildJobStatus {
@@ -99,6 +100,8 @@ export class ImageBuilderService {
   // Local cache configuration — when enabled, overrides S3 cache and uses a
   // path inside the build pod (optionally backed by a PVC for persistence).
   private readonly localCacheEnabled = process.env.BUILDKIT_LOCAL_CACHE_ENABLED === 'true';
+
+  private readonly buildkitImage = process.env.BUILDKIT_IMAGE || 'moby/buildkit:v0.31.1';
 
   private readonly localCachePath = process.env.BUILDKIT_LOCAL_CACHE_PATH || '/cache/buildkit';
 
@@ -1437,7 +1440,7 @@ fi
 
         return {
           name: 'buildkit',
-          image: 'moby/buildkit:latest',
+          image: this.buildkitImage,
           // Not privileged — just a gRPC client. The daemon pod has registry
           // creds and pushes directly, so the client doesn't need docker-config.
           command: ['/bin/sh', '-c'],
@@ -1469,7 +1472,7 @@ fi
         : buildctlArgs;
       return {
         name: 'buildkit',
-        image: 'moby/buildkit:latest',
+        image: this.buildkitImage,
         securityContext: { privileged: true },
         command: ['/bin/sh', '-c'],
         args: [this.generateBuildScriptWithCacheFallback(scriptArgs, injectGitSha)],
@@ -1739,7 +1742,7 @@ exit $rc`,
               }] : []),
               ...(!daemonIp && this.localCacheEnabled ? [{
                 name: 'buildkit-cache',
-                ...(this.localCachePvc
+                ...(this.localCachePvc && !options.disableSharedCache
                   ? { persistentVolumeClaim: { claimName: this.localCachePvc } }
                   : { emptyDir: {} }),
               }] : []),
@@ -2574,9 +2577,27 @@ exit $rc`,
 
       return fullImagePath;
     } catch (error) {
+      if (!options.disableSharedCache && this.localCacheEnabled && this.localCachePvc) {
+        let logTail = '';
+        if (deploymentId) {
+          const dep = await this.prisma.deployment
+            .findUnique({ where: { id: deploymentId }, select: { buildLogs: true } })
+            .catch(() => null);
+          logTail = (dep?.buildLogs ?? '').slice(-20000);
+        }
+        if (/no space left on device|ENOSPC/i.test(`${error?.message ?? ''}\n${logTail}`)) {
+          console.warn(`[ImageBuilder] Cache-full failure for ${imageName}:${tag}, retrying without shared cache`);
+          await this.appendLog(
+            deploymentId,
+            'Shared build cache ran out of space. Retrying the build without it.',
+          ).catch(() => {});
+          return this.buildAndPush({ ...options, disableSharedCache: true });
+        }
+      }
+
       const errorMsg = `Build failed: ${error.message}`;
       const errorStack = error.stack || 'No stack trace available';
-      
+
       console.error('[ImageBuilder] Build failed:', {
         deploymentId,
         imageName,
