@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.4](https://github.com/LeafdTK/leaf/compare/server/v1.32.3...server/v1.32.4) (2026-07-24)
+
+
+### Bug Fixes
+
+* **builder:** keep buildkit state on tmpfs, virtiofs causes ebadf ([c6bd76c](https://github.com/LeafdTK/leaf/commit/c6bd76cd3ceaa5c3fa7428af1978d3112769fb47))
+
 ## [1.32.3](https://github.com/LeafdTK/leaf/compare/server/v1.32.2...server/v1.32.3) (2026-07-24)
 
 
