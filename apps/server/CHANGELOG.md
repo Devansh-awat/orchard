@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.3](https://github.com/LeafdTK/leaf/compare/server/v1.32.2...server/v1.32.3) (2026-07-24)
+
+
+### Bug Fixes
+
+* pin buildkit, retry builds without cache when it fills ([38e17be](https://github.com/LeafdTK/leaf/commit/38e17becb82086970c7ee88965ee0d35ead12ca7))
+
 ## [1.32.2](https://github.com/LeafdTK/leaf/compare/server/v1.32.1...server/v1.32.2) (2026-07-24)
 
 
