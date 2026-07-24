@@ -180,7 +180,7 @@ builders:
     requestsCpu: "16"
     requestsMemory: "32Gi"
     limitsCpu: "32"
-    limitsMemory: "128Gi"
+    limitsMemory: "100Gi"
     pods: "10"
 
 # Orchard-metrics stack (VictoriaMetrics single-node + vmagent + exporters).
