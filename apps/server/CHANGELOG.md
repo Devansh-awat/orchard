@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.6](https://github.com/LeafdTK/leaf/compare/server/v1.32.5...server/v1.32.6) (2026-07-24)
+
+
+### Bug Fixes
+
+* **builder:** clear buildkit state before no-cache retry ([0cf60fb](https://github.com/LeafdTK/leaf/commit/0cf60fbab82aee5153fdf0cbff92b54ec81e82e3))
+
 ## [1.32.5](https://github.com/LeafdTK/leaf/compare/server/v1.32.4...server/v1.32.5) (2026-07-24)
 
 
