@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.32.2](https://github.com/LeafdTK/leaf/compare/server/v1.32.1...server/v1.32.2) (2026-07-24)
+
+
+### Bug Fixes
+
+* buildkit gc so the cache volume stops filling up ([024b7ba](https://github.com/LeafdTK/leaf/commit/024b7ba2b032db04b81db934e4403f87191dc760))
+
 ## [1.32.1](https://github.com/LeafdTK/leaf/compare/server/v1.32.0...server/v1.32.1) (2026-07-23)
 
 
