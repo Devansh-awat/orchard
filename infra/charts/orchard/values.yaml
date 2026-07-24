@@ -353,6 +353,10 @@ builderSandbox:
   # Bypasses virtio-fs overhead in kata VMs — filesystem ops happen at memory
   # speed inside the guest. Counts against the container's memory limit.
   tmpfsWorkspace: false
+  scratch:
+    mode: tmpfs
+    size: 40Gi
+    storageClass: longhorn-ssd
 
 # Public-TLS reflection — tells the server which Secret to copy from when
 # exposing a CNPG cluster publicly with TLS.

@@ -130,6 +130,16 @@ export class ImageBuilderService {
 
   private readonly workspaceTmpfs = process.env.BUILDER_WORKSPACE_TMPFS === 'true';
 
+  private readonly scratchMode = (process.env.BUILDER_SCRATCH_MODE || 'tmpfs').trim();
+
+  private readonly scratchBlock = this.scratchMode === 'block';
+
+  private readonly scratchSize = process.env.BUILDER_SCRATCH_SIZE || '40Gi';
+
+  private readonly scratchStorageClass = process.env.BUILDER_SCRATCH_STORAGE_CLASS || 'longhorn-ssd';
+
+  private static readonly SCRATCH_DEVICE = '/dev/buildscratch';
+
   private builderInfraReady = false;
 
   private deploymentOrgCache = new Map<string, { orgId: string; projectId: string }>();
@@ -832,6 +842,29 @@ echo "=== Super Build completed ==="
 
   private readonly ramdiskPreamble: string = '';
 
+  private get scratchMountPreamble(): string {
+    if (!this.scratchBlock) return '';
+    const dev = ImageBuilderService.SCRATCH_DEVICE;
+    return `
+if ! mountpoint -q /buildkit-state 2>/dev/null; then
+  mkdir -p /buildkit-state
+  for _i in $(seq 1 20); do [ -b ${dev} ] && [ "$(blockdev --getsize64 ${dev} 2>/dev/null)" -gt 0 ] 2>/dev/null && break; sleep 0.25; done
+  if [ -b ${dev} ]; then
+    command -v mkfs.ext4 >/dev/null 2>&1 || apk add --no-cache e2fsprogs >/dev/null 2>&1
+    mkfs.ext4 -q -F -E lazy_itable_init=1 ${dev} && sync
+    for _i in 1 2 3 4 5; do mount ${dev} /buildkit-state 2>/dev/null && break; sleep 0.5; done
+    if mountpoint -q /buildkit-state; then
+      echo "=== Build scratch mounted on a dedicated disk ($(df -h /buildkit-state | awk 'NR==2{print $2}')) ==="
+    else
+      echo "WARNING: build scratch device present but mount failed; using container filesystem"
+    fi
+  else
+    echo "WARNING: build scratch device ${dev} not present; using container filesystem"
+  fi
+fi
+`;
+  }
+
   /**
    * Generate a shell snippet that prunes the local cache directory when disk
    * usage exceeds 80%. Removes the oldest subdirectories (by mtime) until
@@ -929,7 +962,7 @@ fi
 set +e
 ${gitShaPreamble}
 ulimit -n 1048576 2>/dev/null || true
-${this.ramdiskPreamble}${this.cachePrunePreamble}
+${this.ramdiskPreamble}${this.scratchMountPreamble}${this.cachePrunePreamble}
 ${mkdirLine}
 echo "=== Attempting build with cache enabled ==="
 BUILD_OUTPUT=$(mktemp)
@@ -1044,7 +1077,7 @@ fi
     return `
 set +e
 ulimit -n 1048576 2>/dev/null || true
-${this.ramdiskPreamble}${this.cachePrunePreamble}
+${this.ramdiskPreamble}${this.scratchMountPreamble}${this.cachePrunePreamble}
 MAX_RETRIES=3
 RETRY_DELAY=2
 BUILD_OUTPUT=$(mktemp)
@@ -1488,7 +1521,7 @@ fi
           ...(this.sidecarPushEnabled
             ? []
             : [{ name: 'DOCKER_CONFIG', value: '/root/.docker' }]),
-          { name: 'BUILDKITD_FLAGS', value: `--config /etc/buildkit/buildkitd.toml${this.workspaceTmpfs ? ' --root /buildkit-state' : ''}` },
+          { name: 'BUILDKITD_FLAGS', value: `--config /etc/buildkit/buildkitd.toml${this.workspaceTmpfs || this.scratchBlock ? ' --root /buildkit-state' : ''}` },
           ...(this.s3CacheEnabled && !this.localCacheEnabled ? [
             {
               name: 'AWS_ACCESS_KEY_ID',
@@ -1528,7 +1561,7 @@ fi
             name: 'output',
             mountPath: '/output',
           }] : []),
-          ...(this.workspaceTmpfs ? [{
+          ...(this.workspaceTmpfs && !this.scratchBlock ? [{
             name: 'buildkit-state',
             mountPath: '/buildkit-state',
           }] : []),
@@ -1538,6 +1571,9 @@ fi
             subPath: cacheSubPath,
           }] : []),
         ],
+        ...(this.scratchBlock ? {
+          volumeDevices: [{ name: 'buildkit-state', devicePath: ImageBuilderService.SCRATCH_DEVICE }],
+        } : {}),
         resources: {
           requests: { cpu: '500m', memory: '2Gi' },
           limits: { cpu: '4', memory: process.env.BUILDER_MEMORY_LIMIT || '32Gi' },
@@ -1620,7 +1656,7 @@ exec skopeo copy --authfile /root/.docker/config.json --dest-tls-verify=false oc
 
       buildkitContainer.args = [
         `mkdir -p /output
-
+${this.scratchMountPreamble}
 # Start buildkitd ourselves and replace buildctl-daemonless.sh with a
 # passthrough so the inner build script (with all its retry logic) reuses
 # our daemon instead of spawning its own.
@@ -1743,9 +1779,22 @@ exit $rc`,
                 name: 'output',
                 emptyDir: this.workspaceTmpfs ? { medium: 'Memory' } : {},
               }] : []),
-              ...(!daemonIp && this.workspaceTmpfs ? [{
+              ...(!daemonIp && (this.workspaceTmpfs || this.scratchBlock) ? [{
                 name: 'buildkit-state',
-                emptyDir: { medium: 'Memory' },
+                ...(this.scratchBlock
+                  ? {
+                      ephemeral: {
+                        volumeClaimTemplate: {
+                          spec: {
+                            accessModes: ['ReadWriteOnce'],
+                            storageClassName: this.scratchStorageClass,
+                            volumeMode: 'Block',
+                            resources: { requests: { storage: this.scratchSize } },
+                          },
+                        },
+                      },
+                    }
+                  : { emptyDir: { medium: 'Memory' } }),
               }] : []),
               ...(!daemonIp && this.localCacheEnabled ? [{
                 name: 'buildkit-cache',

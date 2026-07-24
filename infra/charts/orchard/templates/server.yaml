@@ -80,6 +80,11 @@ spec:
             {{- if .Values.builderSandbox.tmpfsWorkspace }}
             - { name: BUILDER_WORKSPACE_TMPFS, value: "true" }
             {{- end }}
+            {{- if .Values.builderSandbox.scratch }}
+            - { name: BUILDER_SCRATCH_MODE, value: {{ .Values.builderSandbox.scratch.mode | quote }} }
+            - { name: BUILDER_SCRATCH_SIZE, value: {{ .Values.builderSandbox.scratch.size | quote }} }
+            - { name: BUILDER_SCRATCH_STORAGE_CLASS, value: {{ .Values.builderSandbox.scratch.storageClass | quote }} }
+            {{- end }}
             {{- end }}
             {{- if .Values.r2Proxy.enabled }}
             - { name: BACKUP_PROXY_ENABLED, value: "true" }
