@@ -608,6 +608,8 @@ debug = true
 
 [worker.oci]
   max-parallelism = 4
+  gc = true
+  gckeepstorage = 35000000000
 
   [[worker.oci.rlimits]]
     type = "RLIMIT_NOFILE"
