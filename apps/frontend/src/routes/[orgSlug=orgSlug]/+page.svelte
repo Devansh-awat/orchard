@@ -594,7 +594,7 @@
 				<SkeletonGrid />
 			{:else if loadError}
 				<EmptyState variant="error" {canCreateProjects} {orgSlug} {loadError} />
-			{:else if deployments.length === 0}
+			{:else if deployments.length === 0 && databases.length === 0 && projectMetas.size === 0}
 				<EmptyState variant="empty" {canCreateProjects} {orgSlug} />
 			{:else}
 				<div class="list-toolbar">
@@ -629,7 +629,7 @@
 						onToggleExpand={toggleExpand}
 						onFavErr={favErr}
 					/>
-					{#if filtered.length === 0 && filteredDbs.length === 0}
+					{#if projectGroups.length === 0 && favDeps.length === 0}
 						<p class="no-results">
 							{searchQuery ? `No results for "${searchQuery}"` : 'Nothing here yet'}
 						</p>
@@ -704,7 +704,7 @@
 							</button>
 						{/if}
 					{/if}
-					{#if filtered.length === 0 && filteredDbs.length === 0}
+					{#if projectGroups.length === 0 && favDeps.length === 0}
 						<p class="no-results">
 							{searchQuery ? `No results for "${searchQuery}"` : 'Nothing here yet'}
 						</p>
