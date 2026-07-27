@@ -5,8 +5,7 @@
 	import { apiFetch, toasts, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
 	import { ArrowLeft, Loader2, ExternalLink, X } from 'lucide-svelte';
 	import DeploymentProgress from '$lib/components/DeploymentProgress.svelte';
-	import MeshGradient from '$lib/components/MeshGradient.svelte';
-	import { Button, Alert, StatusDot, resourceStatus } from '$lib/components/ui';
+	import { Button, Alert, SectionCard, StatusDot, resourceStatus } from '$lib/components/ui';
 
 	interface Deployment {
 		id: string;
@@ -22,12 +21,6 @@
 		buildType?: 'dockerfile' | 'railpack' | null;
 		warnings?: Array<{ podName: string; message: string; timestamp: string }>;
 		ingresses?: Array<{ host: string }>;
-		project?: {
-			id: string;
-			name: string;
-			slug: string;
-			backgroundImage?: string | null;
-		};
 	}
 
 	let deployment = $state<Deployment | null>(null);
@@ -191,13 +184,6 @@
 		return `Deploying ${deployment.name}`;
 	});
 
-	const bgSrc = $derived.by(() => {
-		if (deployment?.project?.backgroundImage) return deployment.project.backgroundImage;
-		const host = deployment?.ingresses?.[0]?.host?.split('/')[0];
-		if (host) return `/apiv1/deployments/favicon?domain=${encodeURIComponent(host)}`;
-		return null;
-	});
-
 	const buildErrorLead = $derived(deployment?.buildError?.trim().split('\n')[0] ?? null);
 
 	const liveUrl = $derived.by(() => {
@@ -207,11 +193,6 @@
 </script>
 
 <div class="progress-page min-h-screen">
-	{#if bgSrc}
-		<div class="progress-ambient" aria-hidden="true">
-			<MeshGradient src={bgSrc} class="progress-mesh" />
-		</div>
-	{/if}
 	<div class="progress-content mx-auto max-w-2xl px-4 py-12">
 		<button
 			onclick={() => window.history.back()}
@@ -229,7 +210,7 @@
 				<p class="mt-4 text-muted">Loading app...</p>
 			</div>
 		{:else if deployment}
-			<div class="rounded-2xl border border-edge bg-surface p-8 shadow-lg">
+			<SectionCard>
 				<div class="text-center mb-8">
 					<h1 class="progress-headline">
 						{#if statusChip}
@@ -309,7 +290,7 @@
 						>
 					{/if}
 				</div>
-			</div>
+			</SectionCard>
 
 			{#if canCancel}
 				<div class="mt-6 text-center text-sm text-muted">
@@ -325,25 +306,6 @@
 		position: relative;
 		background-color: var(--bg-app);
 		color: var(--text-default);
-		overflow: hidden;
-	}
-
-	.progress-ambient {
-		position: fixed;
-		inset: 0;
-		overflow: hidden;
-		pointer-events: none;
-		opacity: 0.45;
-	}
-
-	.progress-ambient :global(.progress-mesh) {
-		position: absolute;
-		left: 50%;
-		top: -22rem;
-		transform: translateX(-50%);
-		width: min(72rem, 130vw);
-		height: auto;
-		filter: blur(64px) saturate(1.15);
 	}
 
 	.progress-content {
