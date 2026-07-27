@@ -70,6 +70,7 @@
 		ServerCog,
 		Settings,
 		SlidersHorizontal,
+		Hammer,
 		Terminal,
 		Trash2,
 		TriangleAlert,
@@ -139,7 +140,8 @@
 		DeploymentAlerts,
 		DeploysTab,
 		SettingsTab,
-		ObserveTab
+		ObserveTab,
+		BuildTab
 	} from '$lib/components/deployment';
 
 	const APP_DOMAIN = env.PUBLIC_APP_DOMAIN || 'a.lfdl.ink';
@@ -212,6 +214,7 @@
 		{ id: 'network', label: 'Network', icon: Wifi },
 		{ id: 'observe', label: 'Observe', icon: Eye },
 		{ id: 'deploys', label: 'Deploys', icon: History },
+		{ id: 'build', label: 'Build', icon: Hammer },
 		{ id: 'settings', label: 'Advanced', icon: SlidersHorizontal }
 	] as const;
 
@@ -1866,12 +1869,46 @@
 		volumes = volumes.filter((_, i) => i !== index);
 	}
 
+	let savingBuildConfig = $state(false);
+
+	async function saveBuildConfig(body: Record<string, string | null>) {
+		if (!deployment) return;
+		savingBuildConfig = true;
+		try {
+			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/build-config`, {
+				method: 'PUT',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(body)
+			});
+			if (!response.ok) {
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to update build settings');
+			}
+			const updated = await response.json();
+			if (deployment) mergeInto(deployment, updated);
+			else deployment = updated;
+			toasts.add({
+				title: 'Build settings updated',
+				description: 'They will apply on the next build',
+				color: 'success'
+			});
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to update build settings',
+				color: 'error'
+			});
+		} finally {
+			savingBuildConfig = false;
+		}
+	}
+
 	async function saveAdvanced() {
 		if (!deployment) return;
 
 		savingAdvanced = true;
 		try {
-			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/build-from-root`, {
+			const response = await apiFetch(`/apiv1/deployments/${deploymentId}/build-config`, {
 				method: 'PUT',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ buildFromRoot, buildWithDepot, persistentBuildCache })
@@ -2913,6 +2950,8 @@
 								bind:activeTab={observeView}
 							/>
 						</div>
+					{:else if tab.id === 'build'}
+						<BuildTab {deployment} saving={savingBuildConfig} onSave={saveBuildConfig} />
 					{:else if tab.id === 'deploys'}
 						<DeploysTab
 							{deployment}

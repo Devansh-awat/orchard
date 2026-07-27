@@ -24,13 +24,37 @@
 		X
 	} from 'lucide-svelte';
 	import { envVarsToRaw, rawToEnvVars } from '$lib/utils/format';
-	import { springHover, motionStagger, springPop } from '$lib/utils/motion.svelte';
+	import { motionStagger } from '$lib/utils/motion.svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
-	import RepoDetectionSummary from '$lib/components/deployment/RepoDetectionSummary.svelte';
 	import RepoAccountPicker from '$lib/components/deployment/RepoAccountPicker.svelte';
+	import FrameworkIcon from '$lib/components/deployment/FrameworkIcon.svelte';
 	import ResourcePicker from '$lib/components/ResourcePicker.svelte';
-	import { Button, PopoverPanel, Field, Input, Select, Badge, ToggleRow, Stepper } from '$lib/components/ui';
+	import {
+		Button,
+		PopoverPanel,
+		Dropdown,
+		Field,
+		Input,
+		Select,
+		Badge,
+		Skeleton,
+		ToggleRow,
+		Stepper
+	} from '$lib/components/ui';
+	import {
+		frameworkLabel,
+		appDirLabel,
+		FRAMEWORK_CHOICES,
+		FRAMEWORK_PRESETS,
+		type DetectedApp
+	} from '$lib/components/deployment/deployment-helpers';
+
+	const DOCKERFILE_OPTION = '__dockerfile';
+	const FRAMEWORK_OPTIONS = [
+		{ value: DOCKERFILE_OPTION, label: 'Dockerfile' },
+		...FRAMEWORK_CHOICES.map((fw) => ({ value: fw, label: frameworkLabel(fw) ?? fw }))
+	];
 
 	interface Repository {
 		id: number;
@@ -66,6 +90,7 @@
 	let loadingRepos = $state(false);
 	let loadingBranches = $state(false);
 	let loadingDockerfiles = $state(false);
+	let detectRun = 0;
 	let reposError = $state<string | null>(null);
 
 	let selectedRepo = $state<Repository | null>(null);
@@ -87,6 +112,15 @@
 	let buildType = $state<'dockerfile' | 'railpack'>('dockerfile');
 	let buildTypeTouched = false;
 	let detectedFramework = $state<string | null>(null);
+	let detectedApps = $state<DetectedApp[]>([]);
+	let isWorkspace = $state(false);
+	let rootDirectory = $state('');
+	let rootDirectoryTouched = false;
+	let installCommand = $state('');
+	let buildCommand = $state('');
+	let startCommand = $state('');
+	let outputDirectory = $state('');
+	let buildSettingsTouched = false;
 	let dockerfilePath = $state('Dockerfile');
 	let buildFromRoot = $state(false);
 	let replicas = $state(1);
@@ -209,6 +243,11 @@
 		dockerfileSearch = 'Dockerfile';
 		buildFromRoot = false;
 
+		// Detection is the slow half and it only needs a ref, so it runs against
+		// the repo's default branch straight away instead of waiting for the
+		// branch list to come back.
+		if (repo.default_branch) fetchDockerfiles(repo, repo.default_branch);
+
 		try {
 			const [owner, repoName] = repo.full_name.split('/');
 			const response = await apiFetch(`/apiv1/github/repositories/${owner}/${repoName}/branches`);
@@ -219,7 +258,7 @@
 					selectedBranch = defaultBranch;
 					branch = defaultBranch.name;
 					branchSearch = defaultBranch.name;
-					fetchDockerfiles(repo, defaultBranch.name);
+					if (!repo.default_branch) fetchDockerfiles(repo, defaultBranch.name);
 				}
 			}
 		} catch (e) {
@@ -229,7 +268,65 @@
 		}
 	}
 
+	const frameworkValue = $derived.by(() => {
+		if (buildType === 'dockerfile') return DOCKERFILE_OPTION;
+		const fw = detectedFramework ?? 'node';
+		return FRAMEWORK_OPTIONS.some((o) => o.value === fw) ? fw : 'node';
+	});
+
+	const rootDirectoryOptions = $derived(
+		detectedApps.map((app) => ({
+			value: app.dir,
+			label: appDirLabel(app.dir),
+			description: frameworkLabel(app.framework) ?? undefined
+		}))
+	);
+
+	function frameworkOfDir(dir: string): string | null {
+		return detectedApps.find((a) => a.dir === dir)?.framework ?? null;
+	}
+
+	function onFrameworkPicked(value: string) {
+		buildTypeTouched = true;
+		if (value === DOCKERFILE_OPTION) {
+			buildType = 'dockerfile';
+			if (!dockerfilePath.trim()) {
+				dockerfilePath = dockerfiles[0] ?? 'Dockerfile';
+				dockerfileSearch = dockerfilePath;
+			}
+			return;
+		}
+		buildType = 'railpack';
+		detectedFramework = value;
+		const preset = FRAMEWORK_PRESETS[value];
+		if (preset && !buildSettingsTouched) {
+			outputDirectory = preset.outputDirectory ?? '';
+			if (!portsManuallyEdited) {
+				ports = [
+					{ name: 'port-1', containerPort: preset.port, servicePort: preset.port, protocol: 'TCP' }
+				];
+			}
+		}
+	}
+
+	function applyDetectedApp(app: DetectedApp | undefined) {
+		detectedFramework = app?.framework ?? detectedFramework;
+		installCommand = app?.installCommand ?? '';
+		buildCommand = app?.buildCommand ?? '';
+		startCommand = app?.startCommand ?? '';
+		outputDirectory = app?.outputDirectory ?? '';
+	}
+
+	function selectRootDirectory(app: DetectedApp) {
+		rootDirectory = app.dir;
+		rootDirectoryTouched = true;
+		if (!buildSettingsTouched) applyDetectedApp(app);
+	}
+
 	async function fetchDockerfiles(repo: Repository, branchName: string) {
+		// Detection starts before the branch list lands, so two runs can overlap.
+		// Only the newest one is allowed to write to the form.
+		const run = ++detectRun;
 		loadingDockerfiles = true;
 		dockerfiles = [];
 
@@ -238,7 +335,7 @@
 			const response = await apiFetch(
 				`/apiv1/github/repositories/${owner}/${repoName}/detect?branch=${encodeURIComponent(branchName)}`
 			);
-			if (!response.ok) return;
+			if (!response.ok || run !== detectRun) return;
 			const det: {
 				buildType: 'dockerfile' | 'railpack';
 				dockerfilePath: string | null;
@@ -247,12 +344,23 @@
 				ports: number[];
 				env: { key: string; value: string }[];
 				framework: string | null;
+				apps?: DetectedApp[];
+				workspace?: { isWorkspace: boolean; packageManager: string };
+				rootDirectory?: string | null;
 			} = await response.json();
 
 			dockerfiles = det.dockerfiles;
 			detectedFramework = det.framework;
+			detectedApps = det.apps ?? [];
+			isWorkspace = det.workspace?.isWorkspace ?? false;
 			if (!buildTypeTouched) {
 				buildType = det.buildType;
+			}
+			if (!rootDirectoryTouched) {
+				rootDirectory = det.rootDirectory ?? '';
+			}
+			if (!buildSettingsTouched) {
+				applyDetectedApp(detectedApps.find((a) => a.dir === rootDirectory));
 			}
 			if (det.buildType === 'dockerfile' && det.dockerfilePath) {
 				dockerfilePath = det.dockerfilePath;
@@ -274,7 +382,7 @@
 		} catch (e) {
 			console.error('Failed to detect repo config:', e);
 		} finally {
-			loadingDockerfiles = false;
+			if (run === detectRun) loadingDockerfiles = false;
 		}
 	}
 
@@ -712,6 +820,16 @@
 				body.branch = branch;
 				body.buildType = buildType;
 				body.buildWithDepot = buildWithDepot;
+				if (buildType === 'railpack') {
+					if (rootDirectory) body.rootDirectory = rootDirectory;
+					if (detectedFramework) body.framework = detectedFramework;
+					if (installCommand.trim()) body.installCommand = installCommand.trim();
+					if (buildCommand.trim()) body.buildCommand = buildCommand.trim();
+					if (outputDirectory.trim()) body.outputDirectory = outputDirectory.trim();
+					if (startCommand.trim() && !outputDirectory.trim()) {
+						body.startCommand = startCommand.trim();
+					}
+				}
 				if (buildType === 'dockerfile') {
 					body.dockerfilePath = dockerfilePath;
 					body.buildFromRoot = buildFromRoot;
@@ -821,9 +939,6 @@
 	const filteredBranches = $derived(
 		branches.filter((b) => b.name.toLowerCase().includes(branchSearch.toLowerCase()))
 	);
-	const filteredDockerfiles = $derived(
-		dockerfiles.filter((d) => d.toLowerCase().includes(dockerfileSearch.toLowerCase()))
-	);
 </script>
 
 <div class="nd-page">
@@ -925,106 +1040,108 @@
 										onSelect={selectAccount}
 										installUrl={githubAppInstallUrl}
 									/>
-								<PopoverPanel sameWidth bind:open={repoPickerOpen}>
-									{#snippet trigger(attrs, open)}
-										<div class="picker-wrap">
-											<button type="button" class="picker-trigger" {...attrs}>
-												{#if selectedRepo}
-													<Github class="h-4 w-4 shrink-0" />
-													<span class="picker-value">{selectedRepo.full_name}</span>
-												{:else if repoSearch}
-													<span class="picker-value">{repoSearch}</span>
-												{:else}
-													<span class="picker-placeholder">Pick a repo, or paste owner/repo</span>
-												{/if}
-											</button>
-											{#if loadingRepos || loadingBranches}
-												<span class="picker-suffix"><Loader2 class="h-4 w-4 animate-spin" /></span>
-											{:else if selectedRepo}
-												<button
-													type="button"
-													class="picker-suffix picker-clear"
-													aria-label="Clear repository"
-													onclick={clearRepoSelection}
-												>
-													<X size={15} />
+									<PopoverPanel sameWidth bind:open={repoPickerOpen}>
+										{#snippet trigger(attrs, open)}
+											<div class="picker-wrap">
+												<button type="button" class="picker-trigger" {...attrs}>
+													{#if selectedRepo}
+														<Github class="h-4 w-4 shrink-0" />
+														<span class="picker-value">{selectedRepo.full_name}</span>
+													{:else if repoSearch}
+														<span class="picker-value">{repoSearch}</span>
+													{:else}
+														<span class="picker-placeholder">Pick a repo, or paste owner/repo</span>
+													{/if}
 												</button>
-											{:else}
-												<span class="picker-suffix picker-chevron" class:picker-chevron--open={open}
-													><ChevronDown size={15} /></span
-												>
-											{/if}
-										</div>
-									{/snippet}
-									{#snippet children({ close })}
-										<Input
-											id="nd-repo-search"
-											value={repoSearch}
-											oninput={(e: Event) =>
-												handleRepoSearchInput((e.target as HTMLInputElement).value)}
-											placeholder="owner/repo or GitHub URL"
-											readonly={selectedRepo !== null}
-										/>
-										<div class="picker-list">
-											{#if parsedRepoInput && !parsedRepoIsListed}
-												<button
-													type="button"
-													class="picker-option picker-option--manual"
-													onclick={() => {
-														confirmManualRepo(parsedRepoInput);
-														close();
-													}}
-												>
-													<Github class="h-4 w-4 shrink-0" />
-													<span class="picker-option-text"
-														>Use <strong>{parsedRepoInput.owner}/{parsedRepoInput.repo}</strong
-														></span
+												{#if loadingRepos || loadingBranches}
+													<span class="picker-suffix"><Loader2 class="h-4 w-4 animate-spin" /></span
 													>
-												</button>
-											{/if}
-											{#if loadingRepos}
-												<div class="picker-empty">
-													<Loader2 class="h-4 w-4 animate-spin" /> Loading your repositories
-												</div>
-											{:else}
-												{#each filteredRepos as repo (repo.full_name)}
+												{:else if selectedRepo}
 													<button
 														type="button"
-														class="picker-option"
+														class="picker-suffix picker-clear"
+														aria-label="Clear repository"
+														onclick={clearRepoSelection}
+													>
+														<X size={15} />
+													</button>
+												{:else}
+													<span
+														class="picker-suffix picker-chevron"
+														class:picker-chevron--open={open}><ChevronDown size={15} /></span
+													>
+												{/if}
+											</div>
+										{/snippet}
+										{#snippet children({ close })}
+											<Input
+												id="nd-repo-search"
+												value={repoSearch}
+												oninput={(e: Event) =>
+													handleRepoSearchInput((e.target as HTMLInputElement).value)}
+												placeholder="owner/repo or GitHub URL"
+												readonly={selectedRepo !== null}
+											/>
+											<div class="picker-list">
+												{#if parsedRepoInput && !parsedRepoIsListed}
+													<button
+														type="button"
+														class="picker-option picker-option--manual"
 														onclick={() => {
-															selectRepo(repo);
+															confirmManualRepo(parsedRepoInput);
 															close();
 														}}
 													>
 														<Github class="h-4 w-4 shrink-0" />
-														<span class="picker-option-text">
-															{repo.full_name.split('/')[0] === selectedAccount
-																? repo.full_name.split('/')[1]
-																: repo.full_name}
-														</span>
-														{#if repo.private}<Badge tone="neutral">Private</Badge>{/if}
+														<span class="picker-option-text"
+															>Use <strong>{parsedRepoInput.owner}/{parsedRepoInput.repo}</strong
+															></span
+														>
 													</button>
+												{/if}
+												{#if loadingRepos}
+													<div class="picker-empty">
+														<Loader2 class="h-4 w-4 animate-spin" /> Loading your repositories
+													</div>
 												{:else}
-													{#if reposError}
-														<div class="picker-note">
-															{reposError}
-															<a href="/user/settings">Connect GitHub</a>
-														</div>
-													{:else if !repoSearch}
-														<div class="picker-empty">
-															Search your repos, or paste owner/repo or a GitHub URL
-														</div>
-													{:else if !parsedRepoInput}
-														<div class="picker-empty">
-															No matches. Paste owner/repo or a GitHub URL to deploy any public
-															repo.
-														</div>
-													{/if}
-												{/each}
-											{/if}
-										</div>
-									{/snippet}
-								</PopoverPanel>
+													{#each filteredRepos as repo (repo.full_name)}
+														<button
+															type="button"
+															class="picker-option"
+															onclick={() => {
+																selectRepo(repo);
+																close();
+															}}
+														>
+															<Github class="h-4 w-4 shrink-0" />
+															<span class="picker-option-text">
+																{repo.full_name.split('/')[0] === selectedAccount
+																	? repo.full_name.split('/')[1]
+																	: repo.full_name}
+															</span>
+															{#if repo.private}<Badge tone="neutral">Private</Badge>{/if}
+														</button>
+													{:else}
+														{#if reposError}
+															<div class="picker-note">
+																{reposError}
+																<a href="/user/settings">Connect GitHub</a>
+															</div>
+														{:else if !repoSearch}
+															<div class="picker-empty">
+																Search your repos, or paste owner/repo or a GitHub URL
+															</div>
+														{:else if !parsedRepoInput}
+															<div class="picker-empty">
+																No matches. Paste owner/repo or a GitHub URL to deploy any public
+																repo.
+															</div>
+														{/if}
+													{/each}
+												{/if}
+											</div>
+										{/snippet}
+									</PopoverPanel>
 								</div>
 							</Field>
 
@@ -1091,174 +1208,158 @@
 											</div>
 										{/snippet}
 									</PopoverPanel>
-									{#if selectedBranch || branch}
-										<p class="nd-hint" style="margin-top: 0.375rem;">
-											Every push to {branch || 'this branch'} deploys automatically. You can turn
-											that off later in the app's settings.
-										</p>
-									{/if}
 								</Field>
 							{/if}
 
 							{#if selectedBranch || branch}
-								<RepoDetectionSummary
-									loading={loadingDockerfiles}
-									framework={detectedFramework}
-									{buildType}
-									{dockerfilePath}
-									port={ports[0]?.containerPort || null}
-								/>
-							{/if}
-
-							{#if selectedBranch || branch}
-								<Field label="How should we build it?">
-									<div class="nd-grid-2">
-										<button
-											type="button"
-											onclick={() => {
-												buildType = 'dockerfile';
-												buildTypeTouched = true;
-												if (!dockerfilePath.trim()) {
-													dockerfilePath = 'Dockerfile';
-													dockerfileSearch = 'Dockerfile';
-												}
-											}}
-											class="nd-build-option"
-											class:nd-build-active={buildType === 'dockerfile'}
-											{@attach springHover({ lift: -2, stiffness: 420, damping: 22 })}
-										>
-											<span
-												class="nd-build-icon"
-												{@attach springPop(() => buildType === 'dockerfile')}
-											>
-												<Container class="h-5 w-5 shrink-0" />
-											</span>
-											<div>
-												<div class="nd-build-label">Dockerfile</div>
-												<p class="nd-build-desc">Use your own Dockerfile for full control.</p>
-											</div>
-										</button>
-										<button
-											type="button"
-											onclick={() => {
-												buildType = 'railpack';
-												buildTypeTouched = true;
-											}}
-											class="nd-build-option"
-											class:nd-build-active={buildType === 'railpack'}
-											{@attach springHover({ lift: -2, stiffness: 420, damping: 22 })}
-										>
-											<span
-												class="nd-build-icon"
-												{@attach springPop(() => buildType === 'railpack')}
-											>
-												<svg
-													class="h-5 w-5 shrink-0"
-													viewBox="0 0 24 24"
-													fill="none"
-													stroke="currentColor"
-													stroke-width="2"
-													stroke-linecap="round"
-													stroke-linejoin="round"
-													><path d="M12 2L2 7l10 5 10-5-10-5z" /><path d="M2 17l10 5 10-5" /><path
-														d="M2 12l10 5 10-5"
-													/></svg
+								<div class="nd-cfg">
+									<div class="nd-cfg-row">
+										<span class="nd-cfg-label" id="nd-framework-label">Build with</span>
+										<div class="nd-cfg-val">
+											{#if loadingDockerfiles}
+												<Skeleton height="2.625rem" rounded="0.5rem" />
+											{:else}
+												<Dropdown
+													id="nd-framework"
+													ariaLabelledby="nd-framework-label"
+													value={frameworkValue}
+													options={FRAMEWORK_OPTIONS}
+													onchange={onFrameworkPicked}
 												>
-											</span>
-											<div>
-												<div class="nd-build-label">Automatic</div>
-												<p class="nd-build-desc">
-													No Dockerfile needed. We detect your language and build it for you.
-												</p>
-											</div>
-										</button>
-									</div>
-								</Field>
-
-								{#if buildType === 'dockerfile'}
-									<Field label="Dockerfile">
-										<PopoverPanel sameWidth>
-											{#snippet trigger(attrs, open)}
-												<div class="picker-wrap">
-													<button type="button" class="picker-trigger font-mono" {...attrs}>
-														{#if dockerfileSearch}
-															<span class="picker-value">{dockerfileSearch}</span>
-														{:else}
-															<span class="picker-placeholder">Dockerfile</span>
-														{/if}
-													</button>
-													{#if loadingDockerfiles}
-														<span class="picker-suffix"
-															><Loader2 class="h-4 w-4 animate-spin" /></span
-														>
-													{:else}
-														<span
-															class="picker-suffix picker-chevron"
-															class:picker-chevron--open={open}><ChevronDown size={15} /></span
-														>
-													{/if}
-												</div>
-											{/snippet}
-											{#snippet children({ close })}
-												<Input
-													value={dockerfileSearch}
-													oninput={(e: Event) =>
-														handleDockerfileInput((e.target as HTMLInputElement).value)}
-													placeholder="Dockerfile"
-													class="font-mono"
-												/>
-												<div class="picker-list">
-													{#each filteredDockerfiles as df (df)}
-														<button
-															type="button"
-															class="picker-option font-mono"
-															onclick={() => {
-																selectDockerfile(df);
-																close();
-															}}
-														>
-															<span class="picker-option-text">{df}</span>
-														</button>
-													{:else}
-														<div class="picker-empty">No Dockerfiles found in this branch</div>
-													{/each}
-												</div>
-											{/snippet}
-										</PopoverPanel>
-									</Field>
-									{#if dockerfilePath && dockerfileStages.length > 0}
-										<Field
-											label="Build stage"
-											hint="Select which stage to build from the multi-stage Dockerfile"
-										>
-											<Select bind:value={selectedStage}>
-												{#each dockerfileStages as stage (stage)}<option value={stage}
-														>{stage}</option
-													>{/each}
-											</Select>
-										</Field>
-									{/if}
-
-									<label
-										class="nd-checkbox-row nd-monorepo"
-										class:nd-monorepo--on={dockerfileInSubdir}
-									>
-										<input
-											type="checkbox"
-											bind:checked={buildFromRoot}
-											onchange={() => (buildFromRootTouched = true)}
-											class="nd-checkbox"
-										/>
-										<div>
-											<span class="nd-checkbox-label">Using a monorepo?</span>
-											<p class="nd-hint">
-												{#if dockerfileInSubdir}Your Dockerfile is in a subfolder, so building from
-													the repo root lets it reach shared files. We turned this on for you.{:else}Build
-													from the repo root instead of the Dockerfile's folder.{/if}
-											</p>
+													{#snippet icon(value)}
+														<FrameworkIcon
+															framework={value === DOCKERFILE_OPTION ? 'dockerfile' : value}
+														/>
+													{/snippet}
+												</Dropdown>
+											{/if}
 										</div>
-									</label>
-								{/if}
+									</div>
+
+									{#if !loadingDockerfiles}
+										{#if buildType === 'railpack' && detectedApps.length > 1}
+											<div class="nd-cfg-row">
+												<span class="nd-cfg-label" id="nd-root-label">Root directory</span>
+												<div class="nd-cfg-val">
+													<Dropdown
+														id="nd-root"
+														ariaLabelledby="nd-root-label"
+														value={rootDirectory}
+														options={rootDirectoryOptions}
+														onchange={(dir) => {
+															const app = detectedApps.find((a) => a.dir === dir);
+															if (app) selectRootDirectory(app);
+														}}
+													>
+														{#snippet icon(dir)}
+															<FrameworkIcon framework={frameworkOfDir(dir)} />
+														{/snippet}
+													</Dropdown>
+												</div>
+											</div>
+										{/if}
+
+										<details class="nd-fold">
+											<summary class="nd-fold-summary">
+												Build and output settings
+												<span class="nd-fold-note">Optional</span>
+											</summary>
+											<div class="nd-fold-body">
+												{#if buildType === 'dockerfile'}
+													<Field label="Dockerfile path">
+														{#if dockerfiles.length > 1}
+															<Select
+																value={dockerfilePath}
+																onchange={(e: Event) =>
+																	selectDockerfile((e.currentTarget as HTMLSelectElement).value)}
+															>
+																{#each dockerfiles as df (df)}
+																	<option value={df}>{df}</option>
+																{/each}
+															</Select>
+														{:else}
+															<Input
+																value={dockerfilePath}
+																oninput={(e: Event) =>
+																	handleDockerfileInput(
+																		(e.currentTarget as HTMLInputElement).value
+																	)}
+																placeholder="Dockerfile"
+																class="font-mono"
+															/>
+														{/if}
+													</Field>
+													{#if dockerfileStages.length > 0}
+														<Field label="Build stage">
+															<Select bind:value={selectedStage}>
+																{#each dockerfileStages as stage (stage)}
+																	<option value={stage}>{stage}</option>
+																{/each}
+															</Select>
+														</Field>
+													{/if}
+													<ToggleRow
+														bind:checked={buildFromRoot}
+														onchange={() => (buildFromRootTouched = true)}
+														label="Build from the repository root"
+														hint="Turn this on if your Dockerfile copies files from outside its own folder."
+													/>
+												{:else}
+													<Field label="Install command">
+														<Input
+															value={installCommand}
+															oninput={(e: Event) => {
+																installCommand = (e.currentTarget as HTMLInputElement).value;
+																buildSettingsTouched = true;
+															}}
+															placeholder="Detected automatically"
+															class="font-mono"
+														/>
+													</Field>
+													<Field label="Build command">
+														<Input
+															value={buildCommand}
+															oninput={(e: Event) => {
+																buildCommand = (e.currentTarget as HTMLInputElement).value;
+																buildSettingsTouched = true;
+															}}
+															placeholder="Detected automatically"
+															class="font-mono"
+														/>
+													</Field>
+													<Field
+														label="Output directory"
+														hint="Set this to serve the built files as a static site instead of running a server."
+													>
+														<Input
+															value={outputDirectory}
+															oninput={(e: Event) => {
+																outputDirectory = (e.currentTarget as HTMLInputElement).value;
+																buildSettingsTouched = true;
+															}}
+															placeholder="Detected automatically"
+															class="font-mono"
+														/>
+													</Field>
+													<Field label="Start command">
+														<Input
+															value={startCommand}
+															oninput={(e: Event) => {
+																startCommand = (e.currentTarget as HTMLInputElement).value;
+																buildSettingsTouched = true;
+															}}
+															placeholder={outputDirectory
+																? 'Not used for a static site'
+																: 'Detected automatically'}
+															disabled={Boolean(outputDirectory)}
+															class="font-mono"
+														/>
+													</Field>
+												{/if}
+											</div>
+										</details>
+									{/if}
+								</div>
 							{/if}
 						{/if}
 					</div>
@@ -1689,22 +1790,6 @@
 		flex-direction: column;
 		gap: 1rem;
 	}
-
-	.nd-monorepo {
-		padding: 0.75rem 0.875rem;
-		border-radius: 0.625rem;
-		border: 1px solid var(--surface-border);
-		background: color-mix(in srgb, var(--surface-border) 12%, transparent);
-		transition:
-			border-color 0.2s,
-			background-color 0.2s;
-	}
-
-	.nd-monorepo--on {
-		border-color: color-mix(in srgb, var(--sidebar-text-active-border) 45%, transparent);
-		background: color-mix(in srgb, var(--sidebar-text-active-border) 7%, transparent);
-	}
-
 	.nd-slash {
 		font-size: 1.25rem;
 		font-weight: 300;
@@ -1928,78 +2013,77 @@
 	.picker-option--manual strong {
 		font-weight: 650;
 	}
-
-	/* Build method cards */
-	.nd-build-option {
+	.nd-cfg {
 		display: flex;
-		align-items: flex-start;
-		gap: 0.75rem;
-		padding: 0.875rem;
-		border: 1px solid var(--surface-border);
-		border-radius: 0.75rem;
-		background: transparent;
-		cursor: pointer;
-		text-align: left;
-		color: var(--surface-muted);
-		transition:
-			border-color 0.15s,
-			box-shadow 0.15s;
+		flex-direction: column;
+		gap: 0.875rem;
 	}
 
-	.nd-build-option:hover {
-		border-color: color-mix(in srgb, var(--surface-border) 60%, var(--center-channel-color));
+	.nd-cfg-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 1.5rem;
+		min-height: 2.625rem;
 	}
 
-	.nd-build-active {
-		border-color: var(--sidebar-text-active-border);
-		box-shadow: 0 0 0 1px color-mix(in srgb, var(--sidebar-text-active-border) 25%, transparent);
-		color: var(--sidebar-text-active-border);
-		background: color-mix(in srgb, var(--sidebar-text-active-border) 4%, transparent);
+	.nd-cfg-label {
+		flex: 1;
+		min-width: 0;
+		font-size: 0.8125rem;
+		font-weight: 600;
+		color: var(--text-default);
 	}
 
-	.nd-build-icon {
-		display: inline-flex;
+	.nd-cfg-val {
+		width: 18rem;
+		max-width: 60%;
 		flex-shrink: 0;
 	}
 
-	.nd-build-label {
-		display: flex;
-		align-items: center;
-		gap: 0.375rem;
+	.nd-fold {
+		border-top: 1px solid var(--border-default);
+		padding-top: 0.875rem;
+	}
+
+	.nd-fold-summary {
+		cursor: pointer;
 		font-size: 0.8125rem;
 		font-weight: 600;
-		color: var(--center-channel-color);
-	}
-
-	.nd-build-active .nd-build-label {
-		color: var(--sidebar-text-active-border);
-	}
-
-	.nd-build-desc {
-		font-size: 0.6875rem;
-		color: var(--surface-muted);
-		margin: 0;
-	}
-
-	/* Checkbox */
-	.nd-checkbox-row {
+		color: var(--text-default);
 		display: flex;
-		align-items: flex-start;
-		gap: 0.75rem;
-		cursor: pointer;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.5rem;
+		list-style: none;
 	}
 
-	.nd-checkbox {
-		margin-top: 0.125rem;
-		border-radius: 0.25rem;
+	.nd-fold-summary::-webkit-details-marker {
+		display: none;
 	}
 
-	.nd-checkbox-label {
-		font-size: 0.8125rem;
+	.nd-fold-note {
+		font-size: 0.75rem;
 		font-weight: 500;
-		color: var(--center-channel-color);
+		color: var(--text-muted);
 	}
 
+	.nd-fold-body {
+		display: flex;
+		flex-direction: column;
+		gap: 0.875rem;
+		padding-top: 0.875rem;
+	}
+	@media (max-width: 640px) {
+		.nd-cfg-row {
+			flex-direction: column;
+			gap: 0.5rem;
+		}
+
+		.nd-cfg-val {
+			width: 100%;
+		}
+	}
 	/* Warning */
 	.nd-warning {
 		padding: 1rem;

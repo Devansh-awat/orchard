@@ -126,6 +126,19 @@ export interface Deployment {
 	dockerfilePath?: string;
 	buildFromRoot?: boolean;
 	buildWithDepot?: boolean;
+	rootDirectory?: string | null;
+	framework?: string | null;
+	installCommand?: string | null;
+	buildCommand?: string | null;
+	startCommand?: string | null;
+	outputDirectory?: string | null;
+	detectedConfig?: {
+		framework?: string | null;
+		providers?: string[];
+		isStatic?: boolean;
+		packageManager?: string | null;
+		railpackVersion?: string | null;
+	} | null;
 	buildLogs?: string;
 	buildError?: string;
 	buildStepTimestamps?: Record<string, number> | null;
