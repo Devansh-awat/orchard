@@ -28,6 +28,7 @@ import { ProjectAccessService } from './project-access.service';
 import { EnvironmentsService } from './environments.service';
 import { BuildQueueService } from './build-queue.service';
 import { resolveEnvVars, EnvVar } from '../env/env-resolver';
+import { normalizeRootDirectory } from '../docker/build-config';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { NodesService } from '../nodes/nodes.service';
 import { StorageService } from '../organizations/storage.service';
@@ -1587,9 +1588,29 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     return this.addInternalUrlsToDeployment(updatedDeployment);
   }
 
-  async updateDeploymentBuildFromRoot(
+  /**
+   * Update a deployment's build settings.
+   *
+   * Every field is optional and only applied when present, so a caller can
+   * change one setting without restating the rest. The zero-config commands
+   * additionally accept an explicit null, which clears the override and hands
+   * the decision back to Railpack's own detection — that is a different
+   * intent from "leave unchanged", hence the `in body` checks.
+   */
+  async updateDeploymentBuildConfig(
     deploymentId: string,
-    buildFromRoot: boolean,
+    body: {
+      buildFromRoot?: boolean;
+      buildWithDepot?: boolean;
+      persistentBuildCache?: boolean;
+      buildType?: 'dockerfile' | 'railpack';
+      rootDirectory?: string | null;
+      framework?: string | null;
+      installCommand?: string | null;
+      buildCommand?: string | null;
+      startCommand?: string | null;
+      outputDirectory?: string | null;
+    },
     clerkId: string,
     userData?: {
       email?: string;
@@ -1598,8 +1619,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       lastName?: string;
       imageUrl?: string;
     },
-    buildWithDepot?: boolean,
-    persistentBuildCache?: boolean,
   ) {
     const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
 
@@ -1624,6 +1643,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployments');
 
+    const { buildWithDepot, persistentBuildCache, buildFromRoot } = body;
+
     const changesSuperAdminFlags =
       (buildWithDepot !== undefined && buildWithDepot !== (deployment.buildWithDepot ?? false)) ||
       (persistentBuildCache !== undefined && persistentBuildCache !== (deployment.persistentBuildCache ?? false));
@@ -1631,14 +1652,47 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       throw new ForbiddenException('Super builds and persistent build cache are superadmin-only settings');
     }
 
+    // Super builds cannot execute a Railpack plan, so refuse the combination
+    // here rather than letting the next build fail inside the builder.
+    const nextBuildType = body.buildType ?? deployment.buildType;
+    const nextDepot = buildWithDepot ?? deployment.buildWithDepot ?? false;
+    if (nextBuildType === 'railpack' && nextDepot) {
+      throw new BadRequestException(
+        'Super builds do not support automatic (Railpack) builds. Turn off super builds, or use a Dockerfile build.',
+      );
+    }
+
+    const rootDirectory = 'rootDirectory' in body
+      ? normalizeRootDirectory(body.rootDirectory)
+      : undefined;
+    if ('rootDirectory' in body && body.rootDirectory && rootDirectory === null && body.rootDirectory.trim() !== '') {
+      throw new BadRequestException(
+        'Root directory must be a path inside the repository, without ".." segments.',
+      );
+    }
+
+    /** Trim, and treat an emptied input as clearing the override. */
+    const override = (key: keyof typeof body) =>
+      (key in body ? { [key]: (body[key] as string | null)?.trim() || null } : {});
+
     await this.prisma.deployment.update({
       where: { id: deploymentId },
       data: {
-        buildFromRoot,
+        ...(buildFromRoot !== undefined && { buildFromRoot }),
         ...(buildWithDepot !== undefined && { buildWithDepot }),
         ...(persistentBuildCache !== undefined && { persistentBuildCache }),
+        ...(body.buildType !== undefined && { buildType: body.buildType }),
+        ...(rootDirectory !== undefined && { rootDirectory }),
+        ...override('framework'),
+        ...override('installCommand'),
+        ...override('buildCommand'),
+        ...override('startCommand'),
+        ...override('outputDirectory'),
       },
     });
+
+    const changed = (key: string, before: unknown, after: unknown) =>
+      (after !== undefined && after !== before ? { [key]: [before, after] } : {});
 
     void this.audit.log({
       action: 'deployment.build_options.updated',
@@ -1651,9 +1705,15 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       targetId: deploymentId,
       targetLabel: deployment.name,
       metadata: {
-        buildFromRoot: [deployment.buildFromRoot, buildFromRoot],
-        ...(buildWithDepot !== undefined ? { buildWithDepot: [deployment.buildWithDepot, buildWithDepot] } : {}),
-        ...(persistentBuildCache !== undefined ? { persistentBuildCache: [deployment.persistentBuildCache, persistentBuildCache] } : {}),
+        ...changed('buildFromRoot', deployment.buildFromRoot, buildFromRoot),
+        ...changed('buildWithDepot', deployment.buildWithDepot, buildWithDepot),
+        ...changed('persistentBuildCache', deployment.persistentBuildCache, persistentBuildCache),
+        ...changed('buildType', deployment.buildType, body.buildType),
+        ...changed('rootDirectory', deployment.rootDirectory, rootDirectory),
+        ...changed('installCommand', deployment.installCommand, body.installCommand),
+        ...changed('buildCommand', deployment.buildCommand, body.buildCommand),
+        ...changed('startCommand', deployment.startCommand, body.startCommand),
+        ...changed('outputDirectory', deployment.outputDirectory, body.outputDirectory),
       },
     });
 
@@ -4574,6 +4634,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       buildWithDepot?: boolean;
       persistentBuildCache?: boolean;
       buildType?: 'dockerfile' | 'railpack';
+      rootDirectory?: string | null;
+      framework?: string | null;
+      installCommand?: string | null;
+      buildCommand?: string | null;
+      startCommand?: string | null;
+      outputDirectory?: string | null;
       port?: number;
       ports?: {
         name?: string;
@@ -4825,6 +4891,13 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         buildFromRoot: data.buildFromRoot ?? false,
         buildWithDepot: data.buildWithDepot ?? false,
         persistentBuildCache: data.persistentBuildCache ?? false,
+        // Only meaningful for Railpack builds; null everywhere means "detect".
+        rootDirectory: buildType === 'railpack' ? normalizeRootDirectory(data.rootDirectory) : null,
+        framework: data.framework?.trim() || null,
+        installCommand: data.installCommand?.trim() || null,
+        buildCommand: data.buildCommand?.trim() || null,
+        startCommand: data.startCommand?.trim() || null,
+        outputDirectory: data.outputDirectory?.trim() || null,
         createdBy: user.id,
         buildLogs: `[INFO] Starting ${buildMethodLabel} build for ${repoUrl}@${branch}\n`,
         buildStepTimestamps: { __start: Date.now() },
@@ -4996,6 +5069,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       name: string;
       buildType?: 'dockerfile' | 'railpack';
       dockerfilePath?: string;
+      rootDirectory?: string | null;
+      framework?: string | null;
+      installCommand?: string | null;
+      buildCommand?: string | null;
+      startCommand?: string | null;
+      outputDirectory?: string | null;
       port?: number;
       ports?: { name?: string; containerPort?: number; servicePort?: number; protocol?: string }[];
       replicas?: number;
@@ -5113,6 +5192,12 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         buildStatus: 'none',
         buildType,
         dockerfilePath: buildType === 'dockerfile' ? dockerfilePath : null,
+        rootDirectory: buildType === 'railpack' ? normalizeRootDirectory(data.rootDirectory) : null,
+        framework: data.framework?.trim() || null,
+        installCommand: data.installCommand?.trim() || null,
+        buildCommand: data.buildCommand?.trim() || null,
+        startCommand: data.startCommand?.trim() || null,
+        outputDirectory: data.outputDirectory?.trim() || null,
         createdBy: user.id,
         buildLogs: `[INFO] Created local deployment ${name}; waiting for a build context upload (orchard up)\n`,
         cpuRequestMilli: data.cpuRequestMilli ?? null,

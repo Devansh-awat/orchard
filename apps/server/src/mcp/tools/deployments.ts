@@ -94,7 +94,8 @@ Before using this tool:
 - Ask if the app needs a public domain (use create_ingress tool after deployment)
 - If the repo needs additional services like Redis, inform the user
 - IMPORTANT: If no port is specified, the server will try to auto-detect the port from the Dockerfile's EXPOSE directive. If the Dockerfile has no EXPOSE directive, it defaults to port 80. If you are unsure about the port, check the Dockerfile first using get_repo_contents or ask the user what port their app listens on.
-- If the Dockerfile copies files from the repo root (e.g. pnpm-workspace.yaml, package.json), set buildFromRoot to true`,
+- If the Dockerfile copies files from the repo root (e.g. pnpm-workspace.yaml, package.json), set buildFromRoot to true
+- If the repo has no Dockerfile, call detect_repo_config first: it reports every deployable app in the repo and the framework, commands and output directory detected for each. Pass buildType "railpack" plus the rootDirectory of the app the user wants, and leave the command fields unset unless detection got them wrong.`,
       annotations: { readOnlyHint: false, destructiveHint: false },
       inputSchema: {
         projectId: z.string().describe('The project UUID'),
@@ -103,6 +104,13 @@ Before using this tool:
         branch: z.string().optional().describe('Branch to deploy from (default: main)'),
         dockerfilePath: z.string().optional().describe('Path to Dockerfile relative to repo root (default: Dockerfile)'),
         buildFromRoot: z.boolean().optional().describe('Whether to use repo root as build context (default: false)'),
+        buildType: z.enum(['dockerfile', 'railpack']).optional().describe('"dockerfile" builds the repo Dockerfile; "railpack" detects the language/framework and builds with no Dockerfile'),
+        rootDirectory: z.string().optional().describe('Directory of the app inside the repo, e.g. apps/web. Only for railpack builds. Leave unset for a single-app repo'),
+        framework: z.string().optional().describe('Framework label, e.g. vite or nextjs. Normally left unset so Railpack detects it'),
+        installCommand: z.string().optional().describe('Override the install step. Leave unset to use Railpack detection'),
+        buildCommand: z.string().optional().describe('Override the build step. Leave unset to use Railpack detection'),
+        startCommand: z.string().optional().describe('Override the container start command. Leave unset to use Railpack detection'),
+        outputDirectory: z.string().optional().describe('Directory of built static files, e.g. dist. Setting this makes the app a static site served by Caddy instead of a running server'),
         port: z.number().optional().describe('Port the application listens on. If not specified, auto-detected from Dockerfile EXPOSE directive, falling back to 80'),
         env: z.array(z.object({
           key: z.string().describe('Environment variable name'),
@@ -122,13 +130,24 @@ Before using this tool:
           .describe('Memory request in bytes per pod. Subject to project/org/member quotas.'),
       },
     },
-    async ({ projectId, name, githubRepo, branch, dockerfilePath, buildFromRoot, port, env, cpuRequestMilli, memoryRequestBytes }) => {
+    async ({
+      projectId, name, githubRepo, branch, dockerfilePath, buildFromRoot, port, env,
+      cpuRequestMilli, memoryRequestBytes,
+      buildType, rootDirectory, framework, installCommand, buildCommand, startCommand, outputDirectory,
+    }) => {
       const deployment = await client.post(`/projects/${projectId}/deployments/from-github`, {
         name,
         githubRepo,
         branch: branch ?? 'main',
         dockerfilePath,
         buildFromRoot: buildFromRoot ?? false,
+        ...(buildType && { buildType }),
+        ...(rootDirectory && { rootDirectory }),
+        ...(framework && { framework }),
+        ...(installCommand && { installCommand }),
+        ...(buildCommand && { buildCommand }),
+        ...(startCommand && { startCommand }),
+        ...(outputDirectory && { outputDirectory }),
         ...(port && { port }),
         ...(env && { env }),
         ...(cpuRequestMilli != null && { cpuRequestMilli }),

@@ -6,6 +6,14 @@ import * as fs from 'fs/promises';
 import * as os from 'os';
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
+import { SecretCryptoService } from '../crypto/secret-crypto.service';
+import { resolveEnvVars } from '../env/env-resolver';
+import {
+  railpackOverrideEnv,
+  parseRailpackInfo,
+  normalizeRootDirectory,
+  RAILPACK_INFO_MARKER,
+} from './build-config';
 import { ImageBuilderService } from './image-builder.service';
 
 const execAsync = promisify(exec);
@@ -73,10 +81,107 @@ export class DockerService {
   // Default build mode - can be overridden per-build or via environment variable
   private readonly defaultBuildMode: BuildMode = (process.env.BUILD_MODE as BuildMode) || 'kubernetes';
 
+  // Kept in lockstep with ImageBuilderService's pin — the local-docker fallback
+  // must execute plans with the same frontend the Kubernetes path uses.
+  private readonly railpackFrontendImage =
+    process.env.RAILPACK_FRONTEND_IMAGE || 'ghcr.io/railwayapp/railpack-frontend:v0.0.32';
+
   constructor(
     private readonly prisma: PrismaService,
+    private readonly secretCrypto: SecretCryptoService,
     @Optional() private readonly imageBuilderService?: ImageBuilderService,
   ) {}
+
+  /**
+   * The app's directory inside the repo, re-validated on the way out. Stored
+   * values were normalized when they were saved, but this string is
+   * interpolated into the build pod's shell script, so it is checked again
+   * rather than trusted.
+   */
+  private async loadRootDirectory(deploymentId: string | undefined): Promise<string | null> {
+    if (!deploymentId) return null;
+    try {
+      const deployment = await this.prisma.deployment.findUnique({
+        where: { id: deploymentId },
+        select: { rootDirectory: true },
+      });
+      return normalizeRootDirectory(deployment?.rootDirectory);
+    } catch {
+      return null;
+    }
+  }
+
+  /**
+   * Build-time env for a deployment: its own vars with ${{shared.KEY}} expanded
+   * against the environment's shared vars, matching what the runtime pod gets,
+   * plus the RAILPACK_* overrides derived from its build settings.
+   *
+   * The build path used to read the raw stored values, so a referenced shared
+   * var reached the builder as the literal string `${{shared.API_URL}}` — and
+   * for a framework build that string gets baked into the client bundle.
+   *
+   * The RAILPACK_* overrides are deliberately assembled here rather than
+   * threaded through the call chain: every trigger (create, rebuild, webhook
+   * auto-deploy, `orchard up`) reads the same deployment row, so they cannot
+   * drift apart the way `buildFromRoot` has to be passed at four separate
+   * sites. They never become DeploymentEnvVar rows, so they stay out of the
+   * runtime pod and the Environment tab.
+   */
+  private async loadBuildEnv(
+    deploymentId: string | undefined,
+    buildType?: string,
+  ): Promise<Record<string, string>> {
+    if (!deploymentId) return {};
+
+    try {
+      const deployment = await this.prisma.deployment.findUnique({
+        where: { id: deploymentId },
+        select: {
+          environmentId: true,
+          installCommand: true,
+          buildCommand: true,
+          startCommand: true,
+          outputDirectory: true,
+          envVars: { select: { key: true, value: true, secret: true } },
+        },
+      });
+      if (!deployment) return {};
+
+      const sharedRows = deployment.environmentId
+        ? await this.prisma.environmentSharedVar.findMany({
+          where: { environmentId: deployment.environmentId },
+          select: { key: true, value: true, secret: true },
+        })
+        : [];
+      // Secret shared values are encrypted at rest — decrypt before resolving.
+      const shared = sharedRows.map((v) => this.secretCrypto.maybeDecrypt(v));
+
+      const { resolved, errors } = resolveEnvVars(deployment.envVars, shared);
+      for (const e of errors) {
+        await this.appendLog(
+          deploymentId,
+          `Environment variable ${e.key} references unknown shared variable ${e.missingRef}; it resolved to an empty string`,
+          'WARNING',
+        );
+      }
+
+      const env = Object.fromEntries(resolved.map((v) => [v.key, v.value]));
+
+      // Only Railpack reads these; on a Dockerfile build they would just be
+      // dead build args.
+      if (buildType === 'railpack') {
+        Object.assign(env, railpackOverrideEnv(deployment));
+      }
+
+      return env;
+    } catch (error) {
+      console.error('[Docker Service] Failed to resolve build env vars:', {
+        deploymentId,
+        error: error.message,
+      });
+      return {};
+    }
+  }
 
   private async appendLog(deploymentId: string | undefined, message: string, level: 'INFO' | 'ERROR' | 'WARNING' = 'INFO') {
     if (!deploymentId) return;
@@ -325,24 +430,7 @@ export class DockerService {
       throw new BadRequestException(errorMsg);
     }
 
-    let envVars: Record<string, string> = {};
-    if (deploymentId) {
-      try {
-        const deployment = await this.prisma.deployment.findUnique({
-          where: { id: deploymentId },
-          include: { envVars: true },
-        });
-
-        if (deployment?.envVars && Array.isArray(deployment.envVars)) {
-          envVars = deployment.envVars.reduce((acc, envVar) => {
-            acc[envVar.key] = envVar.value;
-            return acc;
-          }, {} as Record<string, string>);
-        }
-      } catch (error) {
-        console.error('[Docker Service] Failed to get deployment env vars:', error);
-      }
-    }
+    const envVars = await this.loadBuildEnv(deploymentId);
 
     await this.injectGitShaBuildArg(buildDir, envVars);
 
@@ -544,23 +632,7 @@ export class DockerService {
   ): Promise<void> {
     const fullImageName = `${this.harborRegistryPush}/${this.harborProject}/${imageName}`;
 
-    let envVars: Record<string, string> = {};
-    if (deploymentId) {
-      try {
-        const deployment = await this.prisma.deployment.findUnique({
-          where: { id: deploymentId },
-          include: { envVars: true },
-        });
-        if (deployment?.envVars && Array.isArray(deployment.envVars)) {
-          envVars = deployment.envVars.reduce((acc, envVar) => {
-            acc[envVar.key] = envVar.value;
-            return acc;
-          }, {} as Record<string, string>);
-        }
-      } catch (error) {
-        console.error('[Docker Service] Failed to get deployment env vars:', error);
-      }
-    }
+    const envVars = await this.loadBuildEnv(deploymentId);
 
     await this.injectGitShaBuildArg(buildDir, envVars);
 
@@ -664,26 +736,9 @@ export class DockerService {
     const infoPath = path.join(buildDir, 'railpack-info.json');
 
     await this.appendLog(deploymentId, 'Preparing build with Railpack...');
-    
-    let envVars: Record<string, string> = {};
-    if (deploymentId) {
-      try {
-        const deployment = await this.prisma.deployment.findUnique({
-          where: { id: deploymentId },
-          include: { envVars: true },
-        });
 
-        if (deployment?.envVars && Array.isArray(deployment.envVars)) {
-          envVars = deployment.envVars.reduce((acc, envVar) => {
-            acc[envVar.key] = envVar.value;
-            return acc;
-          }, {} as Record<string, string>);
-        }
-      } catch (error) {
-        console.error('[Docker Service] Failed to get deployment env vars:', error);
-      }
-    }
-    
+    const envVars = await this.loadBuildEnv(deploymentId, 'railpack');
+
     try {
       const prepareArgs = [
         'prepare',
@@ -737,6 +792,27 @@ export class DockerService {
       });
 
       await this.appendLog(deploymentId, 'Build plan generated successfully');
+
+      // The local path writes railpack-info.json straight to disk, so it can be
+      // read directly rather than scraped back out of a log.
+      if (deploymentId) {
+        try {
+          const detection = parseRailpackInfo(
+            RAILPACK_INFO_MARKER + (await fs.readFile(infoPath, 'utf8')).replace(/\n/g, ''),
+          );
+          if (detection) {
+            await this.prisma.deployment.update({
+              where: { id: deploymentId },
+              data: {
+                detectedConfig: detection as unknown as object,
+                ...(detection.framework ? { framework: detection.framework } : {}),
+              },
+            });
+          }
+        } catch {
+          // Detection metadata is a nicety; never fail a good build over it.
+        }
+      }
     } catch (error) {
       const errorMsg = `Failed to prepare build with Railpack: ${error.message}`;
       await this.appendLog(deploymentId, errorMsg, 'ERROR');
@@ -751,7 +827,7 @@ export class DockerService {
         '--progress=plain',
         '--platform', 'linux/amd64',
         '-t', fullImageName,
-        '--build-arg', 'BUILDKIT_SYNTAX=ghcr.io/railwayapp/railpack-frontend',
+        '--build-arg', `BUILDKIT_SYNTAX=${this.railpackFrontendImage}`,
         '-f', planPath,
       ];
 
@@ -1156,29 +1232,12 @@ export class DockerService {
 
     await this.appendLog(deploymentId, `Using Kubernetes BuildKit builder for ${repoUrl}@${branch}`);
 
-    let envVars: Record<string, string> = {};
-    if (deploymentId) {
-      try {
-        const deployment = await this.prisma.deployment.findUnique({
-          where: { id: deploymentId },
-          include: { envVars: true },
-        });
+    const envVars = await this.loadBuildEnv(deploymentId, buildType);
+    console.log(`[Docker Service] Loaded ${Object.keys(envVars).length} environment variables for deployment ${deploymentId}`);
 
-        if (deployment?.envVars && Array.isArray(deployment.envVars)) {
-          envVars = deployment.envVars.reduce((acc, envVar) => {
-            acc[envVar.key] = envVar.value;
-            return acc;
-          }, {} as Record<string, string>);
-          console.log(`[Docker Service] Loaded ${Object.keys(envVars).length} environment variables for deployment ${deploymentId}`);
-        }
-      } catch (error) {
-        console.error('[Docker Service] Failed to get deployment env vars:', {
-          deploymentId,
-          error: error.message,
-          stack: error.stack,
-        });
-      }
-    }
+    const rootDirectory = buildType === 'railpack'
+      ? await this.loadRootDirectory(deploymentId)
+      : null;
 
     try {
       const result = await this.imageBuilderService.buildAndPush({
@@ -1187,6 +1246,7 @@ export class DockerService {
         dockerfilePath,
         imageName,
         tag,
+        rootDirectory,
         deploymentId,
         accessToken,
         target,

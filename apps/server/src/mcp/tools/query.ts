@@ -787,6 +787,28 @@ The response also surfaces \`deployStrategy\` and a \`pvcCount\` so callers can 
   );
 
   server.registerTool(
+    'detect_repo_config',
+    {
+      description: `Work out how a GitHub repository should be built, before deploying it.
+
+Returns the build type Orchard would pick, plus, for repos with no Dockerfile, an "apps" array describing every deployable app found: its directory, framework, install/build/start commands and output directory. An app with an outputDirectory is a static site. "workspace" reports whether the repo is a pnpm/npm/yarn workspace.
+
+Use this to answer "can I deploy this repo" and "which app in this monorepo did the user mean" before calling deploy_from_github. Everything it returns is a suggestion the deploy call can override.`,
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      inputSchema: {
+        owner: z.string().describe('Repository owner'),
+        repo: z.string().describe('Repository name'),
+        branch: z.string().optional().describe('Branch to inspect (default: the repository default branch)'),
+      },
+    },
+    async ({ owner, repo, branch }) => {
+      const query = branch ? `?branch=${encodeURIComponent(branch)}` : '';
+      const detected = await client.get(`/github/repositories/${owner}/${repo}/detect${query}`);
+      return { content: [{ type: 'text', text: JSON.stringify(detected, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
     'get_repo_contents',
     {
       description: 'Get the file/directory listing of a GitHub repository. Useful to analyze what the app needs.',

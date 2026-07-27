@@ -75,7 +75,7 @@ func onOffPlain(v bool) string {
 }
 
 // buildConfigCmd sends the full build config with one toggle applied
-// (PUT /deployments/:id/build-from-root, mirroring cmd/deploy_config.go).
+// (PUT /deployments/:id/build-config, mirroring cmd/deploy_config.go).
 func (s *deploymentScreen) buildConfigCmd(mutate func(map[string]any, *DepDetail) string) tea.Cmd {
 	d := s.detail
 	if d == nil {
@@ -87,7 +87,7 @@ func (s *deploymentScreen) buildConfigCmd(mutate func(map[string]any, *DepDetail
 		"persistentBuildCache": d.PersistentBuildCache,
 	}
 	text := mutate(body, d)
-	return doAction(s.cl, "PUT", "/deployments/"+url.PathEscape(s.id)+"/build-from-root", body, text)
+	return doAction(s.cl, "PUT", "/deployments/"+url.PathEscape(s.id)+"/build-config", body, text)
 }
 
 func (s *deploymentScreen) viewAdvanced(height int, strip string) string {

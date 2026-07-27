@@ -107,12 +107,12 @@ var routeCoverage = map[string]string{
 	"GET /deployments/:id/github-deployments":                 "deploy github-deployments",
 
 	// deployments: config
-	"PUT /deployments/:id/env":             "deploy env set",
-	"PATCH /deployments/:id/resources":     "deploy resources set",
-	"PUT /deployments/:id/volumes":         "deploy volumes set",
-	"PATCH /deployments/:id/strategy":      "deploy strategy set",
-	"PUT /deployments/:id/health-check":    "deploy health-check set",
-	"PUT /deployments/:id/build-from-root": "deploy build-root set",
+	"PUT /deployments/:id/env":          "deploy env set",
+	"PATCH /deployments/:id/resources":  "deploy resources set",
+	"PUT /deployments/:id/volumes":      "deploy volumes set",
+	"PATCH /deployments/:id/strategy":   "deploy strategy set",
+	"PUT /deployments/:id/health-check": "deploy health-check set",
+	"PUT /deployments/:id/build-config": "deploy build-root set",
 
 	// deployments: auto-deploy + webhook tokens
 	"GET /deployments/:id/auto-deploy":                "deploy auto-deploy status",

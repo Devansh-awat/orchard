@@ -2145,6 +2145,54 @@
         "tags": [
           "auth"
         ]
+      },
+      "patch": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /auth/tokens/:id",
+        "tags": [
+          "auth"
+        ]
       }
     },
     "/authorize": {
@@ -2340,6 +2388,56 @@
           }
         ],
         "summary": "PUT /compose-stacks/:id/auto-deploy",
+        "tags": [
+          "compose-stacks"
+        ]
+      }
+    },
+    "/compose-stacks/{id}/name": {
+      "patch": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /compose-stacks/:id/name",
         "tags": [
           "compose-stacks"
         ]
@@ -3485,6 +3583,46 @@
         ]
       }
     },
+    "/databases/{id}/live": {
+      "get": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /databases/:id/live",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
     "/databases/{id}/metrics": {
       "get": {
         "description": "Auth: authenticated (scope: read)",
@@ -3649,6 +3787,56 @@
           }
         ],
         "summary": "Get CPU, memory, and network time series for a database",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
+    "/databases/{id}/name": {
+      "patch": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /databases/:id/name",
         "tags": [
           "databases"
         ]
@@ -3922,6 +4110,96 @@
           }
         ],
         "summary": "Expose a database publicly with TLS on a shared organization IP",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
+    "/databases/{id}/query-stats": {
+      "get": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /databases/:id/query-stats",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
+    "/databases/{id}/query-stats/reset": {
+      "post": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /databases/:id/query-stats/reset",
         "tags": [
           "databases"
         ]
@@ -4253,6 +4531,56 @@
         ]
       }
     },
+    "/databases/{id}/restart": {
+      "post": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /databases/:id/restart",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
     "/databases/{id}/restore": {
       "post": {
         "description": "Auth: authenticated (scope: deploy)",
@@ -4445,6 +4773,106 @@
           }
         ],
         "summary": "Update PostgreSQL parameters on a database",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
+    "/databases/{id}/start": {
+      "post": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /databases/:id/start",
+        "tags": [
+          "databases"
+        ]
+      }
+    },
+    "/databases/{id}/stop": {
+      "post": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /databases/:id/stop",
         "tags": [
           "databases"
         ]
@@ -4693,6 +5121,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -4768,6 +5202,13 @@
                       ],
                       "type": "string"
                     },
+                    "detectedConfig": {
+                      "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "dockerfilePath": {
                       "type": [
                         "string",
@@ -4820,6 +5261,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "framework": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "githubBranch": {
                       "type": [
@@ -5161,6 +5608,12 @@
                       },
                       "type": "array"
                     },
+                    "installCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "livenessEnabled": {
                       "type": "boolean"
                     },
@@ -5182,6 +5635,12 @@
                     },
                     "namespace": {
                       "type": "string"
+                    },
+                    "outputDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "persistentBuildCache": {
                       "type": "boolean"
@@ -5331,6 +5790,12 @@
                     "replicas": {
                       "type": "number"
                     },
+                    "rootDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "services": {
                       "items": {
                         "properties": {
@@ -5459,6 +5924,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "startCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "startupEnabled": {
                       "type": "boolean"
@@ -5707,6 +6178,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -5782,6 +6259,13 @@
                       ],
                       "type": "string"
                     },
+                    "detectedConfig": {
+                      "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "dockerfilePath": {
                       "type": [
                         "string",
@@ -5834,6 +6318,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "framework": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "githubBranch": {
                       "type": [
@@ -6175,6 +6665,12 @@
                       },
                       "type": "array"
                     },
+                    "installCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "livenessEnabled": {
                       "type": "boolean"
                     },
@@ -6196,6 +6692,12 @@
                     },
                     "namespace": {
                       "type": "string"
+                    },
+                    "outputDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "persistentBuildCache": {
                       "type": "boolean"
@@ -6345,6 +6847,12 @@
                     "replicas": {
                       "type": "number"
                     },
+                    "rootDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "services": {
                       "items": {
                         "properties": {
@@ -6473,6 +6981,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "startCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "startupEnabled": {
                       "type": "boolean"
@@ -6691,6 +7205,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -6766,6 +7286,13 @@
                       ],
                       "type": "string"
                     },
+                    "detectedConfig": {
+                      "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "dockerfilePath": {
                       "type": [
                         "string",
@@ -6818,6 +7345,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "framework": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "githubBranch": {
                       "type": [
@@ -7159,6 +7692,12 @@
                       },
                       "type": "array"
                     },
+                    "installCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "livenessEnabled": {
                       "type": "boolean"
                     },
@@ -7180,6 +7719,12 @@
                     },
                     "namespace": {
                       "type": "string"
+                    },
+                    "outputDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "persistentBuildCache": {
                       "type": "boolean"
@@ -7329,6 +7874,12 @@
                     "replicas": {
                       "type": "number"
                     },
+                    "rootDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "services": {
                       "items": {
                         "properties": {
@@ -7457,6 +8008,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "startCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "startupEnabled": {
                       "type": "boolean"
@@ -7633,6 +8190,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -7708,6 +8271,13 @@
                       ],
                       "type": "string"
                     },
+                    "detectedConfig": {
+                      "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "dockerfilePath": {
                       "type": [
                         "string",
@@ -7760,6 +8330,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "framework": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "githubBranch": {
                       "type": [
@@ -8101,6 +8677,12 @@
                       },
                       "type": "array"
                     },
+                    "installCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "livenessEnabled": {
                       "type": "boolean"
                     },
@@ -8122,6 +8704,12 @@
                     },
                     "namespace": {
                       "type": "string"
+                    },
+                    "outputDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "persistentBuildCache": {
                       "type": "boolean"
@@ -8271,6 +8859,12 @@
                     "replicas": {
                       "type": "number"
                     },
+                    "rootDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "services": {
                       "items": {
                         "properties": {
@@ -8399,6 +8993,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "startCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "startupEnabled": {
                       "type": "boolean"
@@ -8613,6 +9213,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -8688,6 +9294,13 @@
                       ],
                       "type": "string"
                     },
+                    "detectedConfig": {
+                      "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "dockerfilePath": {
                       "type": [
                         "string",
@@ -8740,6 +9353,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "framework": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "githubBranch": {
                       "type": [
@@ -9081,6 +9700,12 @@
                       },
                       "type": "array"
                     },
+                    "installCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "livenessEnabled": {
                       "type": "boolean"
                     },
@@ -9102,6 +9727,12 @@
                     },
                     "namespace": {
                       "type": "string"
+                    },
+                    "outputDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "persistentBuildCache": {
                       "type": "boolean"
@@ -9251,6 +9882,12 @@
                     "replicas": {
                       "type": "number"
                     },
+                    "rootDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "services": {
                       "items": {
                         "properties": {
@@ -9379,6 +10016,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "startCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "startupEnabled": {
                       "type": "boolean"
@@ -9572,6 +10215,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -9647,6 +10296,13 @@
                       ],
                       "type": "string"
                     },
+                    "detectedConfig": {
+                      "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "dockerfilePath": {
                       "type": [
                         "string",
@@ -9699,6 +10355,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "framework": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "githubBranch": {
                       "type": [
@@ -10040,6 +10702,12 @@
                       },
                       "type": "array"
                     },
+                    "installCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "livenessEnabled": {
                       "type": "boolean"
                     },
@@ -10061,6 +10729,12 @@
                     },
                     "namespace": {
                       "type": "string"
+                    },
+                    "outputDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "persistentBuildCache": {
                       "type": "boolean"
@@ -10210,6 +10884,12 @@
                     "replicas": {
                       "type": "number"
                     },
+                    "rootDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "services": {
                       "items": {
                         "properties": {
@@ -10338,6 +11018,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "startCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "startupEnabled": {
                       "type": "boolean"
@@ -10712,6 +11398,12 @@
                     "availableReplicas": {
                       "type": "number"
                     },
+                    "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -10786,6 +11478,13 @@
                         "recreate"
                       ],
                       "type": "string"
+                    },
+                    "detectedConfig": {
+                      "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
                     },
                     "dockerfilePath": {
                       "type": [
@@ -10865,6 +11564,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "framework": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "githubBranch": {
                       "type": [
@@ -11330,6 +12035,12 @@
                       },
                       "type": "array"
                     },
+                    "installCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "livenessEnabled": {
                       "type": "boolean"
                     },
@@ -11351,6 +12062,12 @@
                     },
                     "namespace": {
                       "type": "string"
+                    },
+                    "outputDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "persistentBuildCache": {
                       "type": "boolean"
@@ -11500,6 +12217,12 @@
                     "replicas": {
                       "type": "number"
                     },
+                    "rootDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "services": {
                       "items": {
                         "properties": {
@@ -11628,6 +12351,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "startCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "startupEnabled": {
                       "type": "boolean"
@@ -11880,6 +12609,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -11955,6 +12690,13 @@
                       ],
                       "type": "string"
                     },
+                    "detectedConfig": {
+                      "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "dockerfilePath": {
                       "type": [
                         "string",
@@ -12007,6 +12749,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "framework": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "githubBranch": {
                       "type": [
@@ -12348,6 +13096,12 @@
                       },
                       "type": "array"
                     },
+                    "installCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "livenessEnabled": {
                       "type": "boolean"
                     },
@@ -12369,6 +13123,12 @@
                     },
                     "namespace": {
                       "type": "string"
+                    },
+                    "outputDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "persistentBuildCache": {
                       "type": "boolean"
@@ -12518,6 +13278,12 @@
                     "replicas": {
                       "type": "number"
                     },
+                    "rootDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "services": {
                       "items": {
                         "properties": {
@@ -12646,6 +13412,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "startCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "startupEnabled": {
                       "type": "boolean"
@@ -12831,6 +13603,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -12906,6 +13684,13 @@
                       ],
                       "type": "string"
                     },
+                    "detectedConfig": {
+                      "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "dockerfilePath": {
                       "type": [
                         "string",
@@ -12958,6 +13743,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "framework": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "githubBranch": {
                       "type": [
@@ -13299,6 +14090,12 @@
                       },
                       "type": "array"
                     },
+                    "installCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "livenessEnabled": {
                       "type": "boolean"
                     },
@@ -13320,6 +14117,12 @@
                     },
                     "namespace": {
                       "type": "string"
+                    },
+                    "outputDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "persistentBuildCache": {
                       "type": "boolean"
@@ -13469,6 +14272,12 @@
                     "replicas": {
                       "type": "number"
                     },
+                    "rootDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "services": {
                       "items": {
                         "properties": {
@@ -13597,6 +14406,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "startCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "startupEnabled": {
                       "type": "boolean"
@@ -13737,7 +14552,7 @@
         ]
       }
     },
-    "/deployments/{id}/build-from-root": {
+    "/deployments/{id}/build-config": {
       "put": {
         "description": "Auth: authenticated (scope: deploy)",
         "parameters": [
@@ -13755,19 +14570,59 @@
             "application/json": {
               "schema": {
                 "properties": {
+                  "buildCommand": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "buildFromRoot": {
                     "type": "boolean"
+                  },
+                  "buildType": {
+                    "enum": [
+                      "dockerfile",
+                      "railpack"
+                    ],
+                    "type": "string"
                   },
                   "buildWithDepot": {
                     "type": "boolean"
                   },
+                  "framework": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "installCommand": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "outputDirectory": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "persistentBuildCache": {
                     "type": "boolean"
+                  },
+                  "rootDirectory": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "startCommand": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   }
                 },
-                "required": [
-                  "buildFromRoot"
-                ],
                 "type": "object"
               }
             }
@@ -13790,6 +14645,12 @@
                     },
                     "availableReplicas": {
                       "type": "number"
+                    },
+                    "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "buildError": {
                       "type": [
@@ -13865,6 +14726,13 @@
                         "recreate"
                       ],
                       "type": "string"
+                    },
+                    "detectedConfig": {
+                      "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
                     },
                     "dockerfilePath": {
                       "type": [
@@ -13944,6 +14812,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "framework": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "githubBranch": {
                       "type": [
@@ -14409,6 +15283,12 @@
                       },
                       "type": "array"
                     },
+                    "installCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "livenessEnabled": {
                       "type": "boolean"
                     },
@@ -14430,6 +15310,12 @@
                     },
                     "namespace": {
                       "type": "string"
+                    },
+                    "outputDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "persistentBuildCache": {
                       "type": "boolean"
@@ -14579,6 +15465,12 @@
                     "replicas": {
                       "type": "number"
                     },
+                    "rootDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "services": {
                       "items": {
                         "properties": {
@@ -14707,6 +15599,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "startCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "startupEnabled": {
                       "type": "boolean"
@@ -14857,7 +15755,145 @@
             "cookieAuth": []
           }
         ],
-        "summary": "Update build context options",
+        "summary": "Update build settings",
+        "tags": [
+          "deployments"
+        ]
+      }
+    },
+    "/deployments/{id}/build-context": {
+      "post": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /deployments/:id/build-context",
+        "tags": [
+          "deployments"
+        ]
+      }
+    },
+    "/deployments/{id}/build-runs": {
+      "get": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /deployments/:id/build-runs",
+        "tags": [
+          "deployments"
+        ]
+      }
+    },
+    "/deployments/{id}/build-runs/{runId}/logs": {
+      "get": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "runId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /deployments/:id/build-runs/:runId/logs",
         "tags": [
           "deployments"
         ]
@@ -14991,6 +16027,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -15066,6 +16108,13 @@
                       ],
                       "type": "string"
                     },
+                    "detectedConfig": {
+                      "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "dockerfilePath": {
                       "type": [
                         "string",
@@ -15118,6 +16167,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "framework": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "githubBranch": {
                       "type": [
@@ -15459,6 +16514,12 @@
                       },
                       "type": "array"
                     },
+                    "installCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "livenessEnabled": {
                       "type": "boolean"
                     },
@@ -15480,6 +16541,12 @@
                     },
                     "namespace": {
                       "type": "string"
+                    },
+                    "outputDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "persistentBuildCache": {
                       "type": "boolean"
@@ -15629,6 +16696,12 @@
                     "replicas": {
                       "type": "number"
                     },
+                    "rootDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "services": {
                       "items": {
                         "properties": {
@@ -15757,6 +16830,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "startCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "startupEnabled": {
                       "type": "boolean"
@@ -16006,6 +17085,56 @@
         ]
       }
     },
+    "/deployments/{id}/github-repo": {
+      "put": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PUT /deployments/:id/github-repo",
+        "tags": [
+          "deployments"
+        ]
+      }
+    },
     "/deployments/{id}/health-check": {
       "put": {
         "description": "Auth: authenticated (scope: deploy)",
@@ -16095,6 +17224,12 @@
                     "availableReplicas": {
                       "type": "number"
                     },
+                    "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -16169,6 +17304,13 @@
                         "recreate"
                       ],
                       "type": "string"
+                    },
+                    "detectedConfig": {
+                      "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
                     },
                     "dockerfilePath": {
                       "type": [
@@ -16248,6 +17390,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "framework": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "githubBranch": {
                       "type": [
@@ -16713,6 +17861,12 @@
                       },
                       "type": "array"
                     },
+                    "installCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "livenessEnabled": {
                       "type": "boolean"
                     },
@@ -16734,6 +17888,12 @@
                     },
                     "namespace": {
                       "type": "string"
+                    },
+                    "outputDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "persistentBuildCache": {
                       "type": "boolean"
@@ -16883,6 +18043,12 @@
                     "replicas": {
                       "type": "number"
                     },
+                    "rootDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "services": {
                       "items": {
                         "properties": {
@@ -17011,6 +18177,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "startCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "startupEnabled": {
                       "type": "boolean"
@@ -17212,6 +18384,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -17287,6 +18465,13 @@
                       ],
                       "type": "string"
                     },
+                    "detectedConfig": {
+                      "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "dockerfilePath": {
                       "type": [
                         "string",
@@ -17294,6 +18479,12 @@
                       ]
                     },
                     "environmentId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "framework": {
                       "type": [
                         "string",
                         "null"
@@ -17366,6 +18557,12 @@
                         "null"
                       ]
                     },
+                    "installCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "livenessEnabled": {
                       "type": "boolean"
                     },
@@ -17388,6 +18585,12 @@
                     "namespace": {
                       "type": "string"
                     },
+                    "outputDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "persistentBuildCache": {
                       "type": "boolean"
                     },
@@ -17399,6 +18602,18 @@
                     },
                     "replicas": {
                       "type": "number"
+                    },
+                    "rootDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "startCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "startupEnabled": {
                       "type": "boolean"
@@ -17777,6 +18992,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -17852,6 +19073,13 @@
                       ],
                       "type": "string"
                     },
+                    "detectedConfig": {
+                      "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "dockerfilePath": {
                       "type": [
                         "string",
@@ -17904,6 +19132,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "framework": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "githubBranch": {
                       "type": [
@@ -18245,6 +19479,12 @@
                       },
                       "type": "array"
                     },
+                    "installCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "livenessEnabled": {
                       "type": "boolean"
                     },
@@ -18266,6 +19506,12 @@
                     },
                     "namespace": {
                       "type": "string"
+                    },
+                    "outputDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "persistentBuildCache": {
                       "type": "boolean"
@@ -18415,6 +19661,12 @@
                     "replicas": {
                       "type": "number"
                     },
+                    "rootDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "services": {
                       "items": {
                         "properties": {
@@ -18543,6 +19795,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "startCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "startupEnabled": {
                       "type": "boolean"
@@ -19073,6 +20331,56 @@
         ]
       }
     },
+    "/deployments/{id}/name": {
+      "patch": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /deployments/:id/name",
+        "tags": [
+          "deployments"
+        ]
+      }
+    },
     "/deployments/{id}/pods": {
       "get": {
         "description": "Auth: authenticated (scope: read)",
@@ -19457,6 +20765,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -19532,6 +20846,13 @@
                       ],
                       "type": "string"
                     },
+                    "detectedConfig": {
+                      "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "dockerfilePath": {
                       "type": [
                         "string",
@@ -19584,6 +20905,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "framework": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "githubBranch": {
                       "type": [
@@ -19925,6 +21252,12 @@
                       },
                       "type": "array"
                     },
+                    "installCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "livenessEnabled": {
                       "type": "boolean"
                     },
@@ -19946,6 +21279,12 @@
                     },
                     "namespace": {
                       "type": "string"
+                    },
+                    "outputDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "persistentBuildCache": {
                       "type": "boolean"
@@ -20095,6 +21434,12 @@
                     "replicas": {
                       "type": "number"
                     },
+                    "rootDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "services": {
                       "items": {
                         "properties": {
@@ -20223,6 +21568,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "startCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "startupEnabled": {
                       "type": "boolean"
@@ -20414,6 +21765,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -20489,6 +21846,13 @@
                       ],
                       "type": "string"
                     },
+                    "detectedConfig": {
+                      "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "dockerfilePath": {
                       "type": [
                         "string",
@@ -20496,6 +21860,12 @@
                       ]
                     },
                     "environmentId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "framework": {
                       "type": [
                         "string",
                         "null"
@@ -20568,6 +21938,12 @@
                         "null"
                       ]
                     },
+                    "installCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "livenessEnabled": {
                       "type": "boolean"
                     },
@@ -20590,6 +21966,12 @@
                     "namespace": {
                       "type": "string"
                     },
+                    "outputDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "persistentBuildCache": {
                       "type": "boolean"
                     },
@@ -20601,6 +21983,18 @@
                     },
                     "replicas": {
                       "type": "number"
+                    },
+                    "rootDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "startCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "startupEnabled": {
                       "type": "boolean"
@@ -20777,6 +22171,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -20852,6 +22252,13 @@
                       ],
                       "type": "string"
                     },
+                    "detectedConfig": {
+                      "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "dockerfilePath": {
                       "type": [
                         "string",
@@ -20904,6 +22311,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "framework": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "githubBranch": {
                       "type": [
@@ -21245,6 +22658,12 @@
                       },
                       "type": "array"
                     },
+                    "installCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "livenessEnabled": {
                       "type": "boolean"
                     },
@@ -21266,6 +22685,12 @@
                     },
                     "namespace": {
                       "type": "string"
+                    },
+                    "outputDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "persistentBuildCache": {
                       "type": "boolean"
@@ -21415,6 +22840,12 @@
                     "replicas": {
                       "type": "number"
                     },
+                    "rootDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "services": {
                       "items": {
                         "properties": {
@@ -21543,6 +22974,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "startCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "startupEnabled": {
                       "type": "boolean"
@@ -21808,6 +23245,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -21883,6 +23326,13 @@
                       ],
                       "type": "string"
                     },
+                    "detectedConfig": {
+                      "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "dockerfilePath": {
                       "type": [
                         "string",
@@ -21890,6 +23340,12 @@
                       ]
                     },
                     "environmentId": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "framework": {
                       "type": [
                         "string",
                         "null"
@@ -21962,6 +23418,12 @@
                         "null"
                       ]
                     },
+                    "installCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "livenessEnabled": {
                       "type": "boolean"
                     },
@@ -21984,6 +23446,12 @@
                     "namespace": {
                       "type": "string"
                     },
+                    "outputDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "persistentBuildCache": {
                       "type": "boolean"
                     },
@@ -21995,6 +23463,18 @@
                     },
                     "replicas": {
                       "type": "number"
+                    },
+                    "rootDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "startCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "startupEnabled": {
                       "type": "boolean"
@@ -22137,6 +23617,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -22212,6 +23698,13 @@
                       ],
                       "type": "string"
                     },
+                    "detectedConfig": {
+                      "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "dockerfilePath": {
                       "type": [
                         "string",
@@ -22264,6 +23757,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "framework": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "githubBranch": {
                       "type": [
@@ -22605,6 +24104,12 @@
                       },
                       "type": "array"
                     },
+                    "installCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "livenessEnabled": {
                       "type": "boolean"
                     },
@@ -22626,6 +24131,12 @@
                     },
                     "namespace": {
                       "type": "string"
+                    },
+                    "outputDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "persistentBuildCache": {
                       "type": "boolean"
@@ -22775,6 +24286,12 @@
                     "replicas": {
                       "type": "number"
                     },
+                    "rootDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "services": {
                       "items": {
                         "properties": {
@@ -22903,6 +24420,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "startCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "startupEnabled": {
                       "type": "boolean"
@@ -23972,6 +25495,608 @@
         ]
       }
     },
+    "/forum/categories": {
+      "get": {
+        "description": "Auth: authenticated",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /forum/categories",
+        "tags": [
+          "forum"
+        ]
+      }
+    },
+    "/forum/threads": {
+      "get": {
+        "description": "Auth: authenticated",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /forum/threads",
+        "tags": [
+          "forum"
+        ]
+      },
+      "post": {
+        "description": "Auth: authenticated",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /forum/threads",
+        "tags": [
+          "forum"
+        ]
+      }
+    },
+    "/forum/threads/{id}": {
+      "delete": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "DELETE /forum/threads/:id",
+        "tags": [
+          "forum"
+        ]
+      },
+      "get": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /forum/threads/:id",
+        "tags": [
+          "forum"
+        ]
+      }
+    },
+    "/forum/threads/{id}/locked": {
+      "patch": {
+        "description": "Auth: superadmin",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /forum/threads/:id/locked",
+        "tags": [
+          "forum"
+        ]
+      }
+    },
+    "/forum/threads/{id}/pinned": {
+      "patch": {
+        "description": "Auth: superadmin",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /forum/threads/:id/pinned",
+        "tags": [
+          "forum"
+        ]
+      }
+    },
+    "/forum/threads/{id}/priority": {
+      "patch": {
+        "description": "Auth: superadmin",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /forum/threads/:id/priority",
+        "tags": [
+          "forum"
+        ]
+      }
+    },
+    "/forum/threads/{id}/replies": {
+      "post": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /forum/threads/:id/replies",
+        "tags": [
+          "forum"
+        ]
+      }
+    },
+    "/forum/threads/{id}/replies/{replyId}": {
+      "delete": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "replyId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "DELETE /forum/threads/:id/replies/:replyId",
+        "tags": [
+          "forum"
+        ]
+      }
+    },
+    "/forum/threads/{id}/status": {
+      "patch": {
+        "description": "Auth: superadmin",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /forum/threads/:id/status",
+        "tags": [
+          "forum"
+        ]
+      }
+    },
+    "/forum/threads/{id}/vote": {
+      "delete": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "DELETE /forum/threads/:id/vote",
+        "tags": [
+          "forum"
+        ]
+      },
+      "post": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /forum/threads/:id/vote",
+        "tags": [
+          "forum"
+        ]
+      }
+    },
+    "/forum/uploads": {
+      "post": {
+        "description": "Auth: authenticated",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /forum/uploads",
+        "tags": [
+          "forum"
+        ]
+      }
+    },
     "/github/app/install": {
       "get": {
         "description": "Auth: authenticated",
@@ -24272,6 +26397,54 @@
         ]
       }
     },
+    "/github/repositories/{owner}/{repo}/detect": {
+      "get": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "owner",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "repo",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /github/repositories/:owner/:repo/detect",
+        "tags": [
+          "github"
+        ]
+      }
+    },
     "/github/repositories/{owner}/{repo}/dockerfile-info": {
       "get": {
         "description": "Auth: authenticated",
@@ -24550,6 +26723,12 @@
                         "autoDeployEnabled": {
                           "type": "boolean"
                         },
+                        "buildCommand": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
                         "buildError": {
                           "type": [
                             "string",
@@ -24625,6 +26804,13 @@
                           ],
                           "type": "string"
                         },
+                        "detectedConfig": {
+                          "additionalProperties": {},
+                          "type": [
+                            "object",
+                            "null"
+                          ]
+                        },
                         "dockerfilePath": {
                           "type": [
                             "string",
@@ -24632,6 +26818,12 @@
                           ]
                         },
                         "environmentId": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "framework": {
                           "type": [
                             "string",
                             "null"
@@ -24704,6 +26896,12 @@
                             "null"
                           ]
                         },
+                        "installCommand": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
                         "livenessEnabled": {
                           "type": "boolean"
                         },
@@ -24726,6 +26924,12 @@
                         "namespace": {
                           "type": "string"
                         },
+                        "outputDirectory": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
                         "persistentBuildCache": {
                           "type": "boolean"
                         },
@@ -24737,6 +26941,18 @@
                         },
                         "replicas": {
                           "type": "number"
+                        },
+                        "rootDirectory": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "startCommand": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
                         },
                         "startupEnabled": {
                           "type": "boolean"
@@ -27716,6 +29932,46 @@
         ]
       }
     },
+    "/observe/deployments/{id}/build-logs/stream": {
+      "get": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /observe/deployments/:id/build-logs/stream",
+        "tags": [
+          "observe"
+        ]
+      }
+    },
     "/observe/deployments/{id}/capabilities": {
       "get": {
         "description": "Auth: authenticated",
@@ -27831,6 +30087,46 @@
           }
         ],
         "summary": "GET /observe/deployments/:id/http-metrics",
+        "tags": [
+          "observe"
+        ]
+      }
+    },
+    "/observe/deployments/{id}/logs/stream": {
+      "get": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /observe/deployments/:id/logs/stream",
         "tags": [
           "observe"
         ]
@@ -31194,6 +33490,12 @@
                       "autoDeployEnabled": {
                         "type": "boolean"
                       },
+                      "buildCommand": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
                       "buildError": {
                         "type": [
                           "string",
@@ -31269,6 +33571,13 @@
                         ],
                         "type": "string"
                       },
+                      "detectedConfig": {
+                        "additionalProperties": {},
+                        "type": [
+                          "object",
+                          "null"
+                        ]
+                      },
                       "dockerfilePath": {
                         "type": [
                           "string",
@@ -31321,6 +33630,12 @@
                           "type": "object"
                         },
                         "type": "array"
+                      },
+                      "framework": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "githubBranch": {
                         "type": [
@@ -31662,6 +33977,12 @@
                         },
                         "type": "array"
                       },
+                      "installCommand": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
                       "livenessEnabled": {
                         "type": "boolean"
                       },
@@ -31683,6 +34004,12 @@
                       },
                       "namespace": {
                         "type": "string"
+                      },
+                      "outputDirectory": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "persistentBuildCache": {
                         "type": "boolean"
@@ -31832,6 +34159,12 @@
                       "replicas": {
                         "type": "number"
                       },
+                      "rootDirectory": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
+                      },
                       "services": {
                         "items": {
                           "properties": {
@@ -31960,6 +34293,12 @@
                           "type": "object"
                         },
                         "type": "array"
+                      },
+                      "startCommand": {
+                        "type": [
+                          "string",
+                          "null"
+                        ]
                       },
                       "startupEnabled": {
                         "type": "boolean"
@@ -32253,6 +34592,12 @@
                     "autoDeployEnabled": {
                       "type": "boolean"
                     },
+                    "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "buildError": {
                       "type": [
                         "string",
@@ -32328,6 +34673,13 @@
                       ],
                       "type": "string"
                     },
+                    "detectedConfig": {
+                      "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "dockerfilePath": {
                       "type": [
                         "string",
@@ -32380,6 +34732,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "framework": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "githubBranch": {
                       "type": [
@@ -32721,6 +35079,12 @@
                       },
                       "type": "array"
                     },
+                    "installCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "livenessEnabled": {
                       "type": "boolean"
                     },
@@ -32742,6 +35106,12 @@
                     },
                     "namespace": {
                       "type": "string"
+                    },
+                    "outputDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "persistentBuildCache": {
                       "type": "boolean"
@@ -32891,6 +35261,12 @@
                     "replicas": {
                       "type": "number"
                     },
+                    "rootDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "services": {
                       "items": {
                         "properties": {
@@ -33019,6 +35395,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "startCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "startupEnabled": {
                       "type": "boolean"
@@ -33180,6 +35562,12 @@
                   "branch": {
                     "type": "string"
                   },
+                  "buildCommand": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "buildFromRoot": {
                     "type": "boolean"
                   },
@@ -33226,8 +35614,20 @@
                   "exposePublic": {
                     "type": "boolean"
                   },
+                  "framework": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "githubRepo": {
                     "type": "string"
+                  },
+                  "installCommand": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "memoryRequestBytes": {
                     "type": [
@@ -33237,6 +35637,12 @@
                   },
                   "name": {
                     "type": "string"
+                  },
+                  "outputDirectory": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "port": {
                     "type": "integer"
@@ -33269,6 +35675,18 @@
                   },
                   "repoUrl": {
                     "type": "string"
+                  },
+                  "rootDirectory": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "startCommand": {
+                    "type": [
+                      "string",
+                      "null"
+                    ]
                   },
                   "tag": {
                     "type": "string"
@@ -33338,6 +35756,12 @@
                     },
                     "autoDeployEnabled": {
                       "type": "boolean"
+                    },
+                    "buildCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "buildError": {
                       "type": [
@@ -33414,6 +35838,13 @@
                       ],
                       "type": "string"
                     },
+                    "detectedConfig": {
+                      "additionalProperties": {},
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "dockerfilePath": {
                       "type": [
                         "string",
@@ -33466,6 +35897,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "framework": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "githubBranch": {
                       "type": [
@@ -33807,6 +36244,12 @@
                       },
                       "type": "array"
                     },
+                    "installCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "livenessEnabled": {
                       "type": "boolean"
                     },
@@ -33828,6 +36271,12 @@
                     },
                     "namespace": {
                       "type": "string"
+                    },
+                    "outputDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "persistentBuildCache": {
                       "type": "boolean"
@@ -33977,6 +36426,12 @@
                     "replicas": {
                       "type": "number"
                     },
+                    "rootDirectory": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "services": {
                       "items": {
                         "properties": {
@@ -34105,6 +36560,12 @@
                         "type": "object"
                       },
                       "type": "array"
+                    },
+                    "startCommand": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
                     },
                     "startupEnabled": {
                       "type": "boolean"
@@ -34240,6 +36701,56 @@
           }
         ],
         "summary": "Create a deployment built from a GitHub repository",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
+    "/projects/{id}/deployments/from-local": {
+      "post": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /projects/:id/deployments/from-local",
         "tags": [
           "projects"
         ]
@@ -36124,6 +38635,46 @@
         ]
       }
     },
+    "/projects/import": {
+      "post": {
+        "description": "Auth: authenticated",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /projects/import",
+        "tags": [
+          "projects"
+        ]
+      }
+    },
     "/projects/ingresses/validate-dns": {
       "post": {
         "description": "Auth: authenticated (scope: read)",
@@ -37135,6 +39686,56 @@
           }
         ],
         "summary": "GET /template-instances/:id",
+        "tags": [
+          "template-instances"
+        ]
+      }
+    },
+    "/template-instances/{id}/name": {
+      "patch": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /template-instances/:id/name",
         "tags": [
           "template-instances"
         ]

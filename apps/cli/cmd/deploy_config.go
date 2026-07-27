@@ -585,7 +585,7 @@ func deployBuildRootSetCmd() *cobra.Command {
 			if f.Changed("persistent-cache") {
 				body["persistentBuildCache"] = cache
 			}
-			if err := cl.Send(cmd.Context(), http.MethodPut, deployPath(args[0], "build-from-root"), body, nil); err != nil {
+			if err := cl.Send(cmd.Context(), http.MethodPut, deployPath(args[0], "build-config"), body, nil); err != nil {
 				return err
 			}
 			output.Successf("set build-from-root of %s to %v", args[0], val)

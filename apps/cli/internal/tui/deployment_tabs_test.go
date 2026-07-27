@@ -406,12 +406,12 @@ func TestAdvancedTabTogglesAndAudit(t *testing.T) {
 
 	// build config toggles PUT the full config with one flip
 	runMsgs(t, d, depKey(t, d, "g"))
-	body, _ := hitBody(cap, "PUT /apiv1/deployments/d1/build-from-root")
+	body, _ := hitBody(cap, "PUT /apiv1/deployments/d1/build-config")
 	if !strings.Contains(body, `"buildFromRoot":true`) || !strings.Contains(body, `"persistentBuildCache":true`) {
 		t.Fatalf("build-root toggle body wrong: %q", body)
 	}
 	runMsgs(t, d, depKey(t, d, "D"))
-	body, _ = hitBody(cap, "PUT /apiv1/deployments/d1/build-from-root")
+	body, _ = hitBody(cap, "PUT /apiv1/deployments/d1/build-config")
 	if !strings.Contains(body, `"buildWithDepot":true`) {
 		t.Fatalf("depot toggle body wrong: %q", body)
 	}

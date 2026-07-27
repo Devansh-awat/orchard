@@ -208,12 +208,13 @@ func deployRenderKV(raw map[string]any) {
 
 func deployCreateCmd() *cobra.Command {
 	var (
-		name, image, github, dockerfile, memory, envFile string
-		railpack, buildRoot, autoURL                     bool
-		port, replicas, cpu                              int
-		envs                                             []string
-		wait                                             *bool
-		timeout                                          *time.Duration
+		name, image, github, dockerfile, memory, envFile   string
+		rootDir, installCmd, buildCmd, startCmd, outputDir string
+		railpack, buildRoot, autoURL                       bool
+		port, replicas, cpu                                int
+		envs                                               []string
+		wait                                               *bool
+		timeout                                            *time.Duration
 	)
 	c := &cobra.Command{
 		Use:   "create",
@@ -280,6 +281,17 @@ func deployCreateCmd() *cobra.Command {
 					body["dockerfilePath"] = dockerfile
 				}
 				body["buildFromRoot"] = buildRoot
+				for k, v := range map[string]string{
+					"rootDirectory":   rootDir,
+					"installCommand":  installCmd,
+					"buildCommand":    buildCmd,
+					"startCommand":    startCmd,
+					"outputDirectory": outputDir,
+				} {
+					if v != "" {
+						body[k] = v
+					}
+				}
 				path += "/from-github"
 			} else {
 				body["image"] = image
@@ -319,6 +331,11 @@ func deployCreateCmd() *cobra.Command {
 	c.Flags().StringVar(&dockerfile, "dockerfile", "", "path to the Dockerfile relative to the repo root")
 	c.Flags().BoolVar(&railpack, "railpack", false, "build with railpack instead of a Dockerfile")
 	c.Flags().BoolVar(&buildRoot, "build-root", false, "use the repo root as the build context")
+	c.Flags().StringVar(&rootDir, "root", "", "directory of the app inside the repo (monorepos)")
+	c.Flags().StringVar(&installCmd, "install-cmd", "", "override the detected install command")
+	c.Flags().StringVar(&buildCmd, "build-cmd", "", "override the detected build command")
+	c.Flags().StringVar(&startCmd, "start-cmd", "", "override the detected start command")
+	c.Flags().StringVar(&outputDir, "output-dir", "", "directory of built static files; serves the app as a static site")
 	c.Flags().BoolVar(&autoURL, "auto-url", true, "generate a platform URL for the deployment (org-protected by default)")
 	c.Flags().IntVar(&port, "port", 0, "port the container listens on (server default 80 / EXPOSE autodetect)")
 	c.Flags().IntVar(&replicas, "replicas", 0, "number of replicas (server default 1)")

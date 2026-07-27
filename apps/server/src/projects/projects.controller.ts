@@ -694,6 +694,12 @@ export class ProjectsController {
       name: string;
       buildType?: 'dockerfile' | 'railpack';
       dockerfilePath?: string;
+      rootDirectory?: string | null;
+      framework?: string | null;
+      installCommand?: string | null;
+      buildCommand?: string | null;
+      startCommand?: string | null;
+      outputDirectory?: string | null;
       port?: number;
       ports?: { name?: string; containerPort?: number; servicePort?: number; protocol?: string }[];
       replicas?: number;
@@ -743,6 +749,12 @@ export class ProjectsController {
       buildFromRoot?: boolean;
       buildWithDepot?: boolean;
       buildType?: 'dockerfile' | 'railpack';
+      rootDirectory?: string | null;
+      framework?: string | null;
+      installCommand?: string | null;
+      buildCommand?: string | null;
+      startCommand?: string | null;
+      outputDirectory?: string | null;
       port?: number;
       ports?: {
         name?: string;
@@ -1210,21 +1222,27 @@ export class DeploymentsController {
     );
   }
 
-  @Put(':id/build-from-root')
-
-  async updateDeploymentBuildFromRoot(
+  @Put(':id/build-config')
+  async updateDeploymentBuildConfig(
     @Param('id') id: string,
     @Body()
     body: {
-      buildFromRoot: boolean;
+      buildFromRoot?: boolean;
       buildWithDepot?: boolean;
       persistentBuildCache?: boolean;
+      buildType?: 'dockerfile' | 'railpack';
+      rootDirectory?: string | null;
+      framework?: string | null;
+      installCommand?: string | null;
+      buildCommand?: string | null;
+      startCommand?: string | null;
+      outputDirectory?: string | null;
     },
     @Request() req
   ) {
-    return this.deployments.updateDeploymentBuildFromRoot(
+    return this.deployments.updateDeploymentBuildConfig(
       id,
-      body.buildFromRoot,
+      body,
       req.user.sub,
       {
         email: req.user.email,
@@ -1233,8 +1251,6 @@ export class DeploymentsController {
         lastName: req.user.lastName,
         imageUrl: req.user.imageUrl,
       },
-      body.buildWithDepot,
-      body.persistentBuildCache,
     );
   }
 

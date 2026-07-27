@@ -536,8 +536,8 @@ func TestDeployBuildRootSet(t *testing.T) {
 	if err := root.Execute(); err != nil {
 		t.Fatalf("deploy build-root set: %v", err)
 	}
-	if gotMethod != http.MethodPut || gotPath != "/apiv1/deployments/d1/build-from-root" {
-		t.Errorf("request = %s %s, want PUT /apiv1/deployments/d1/build-from-root", gotMethod, gotPath)
+	if gotMethod != http.MethodPut || gotPath != "/apiv1/deployments/d1/build-config" {
+		t.Errorf("request = %s %s, want PUT /apiv1/deployments/d1/build-config", gotMethod, gotPath)
 	}
 	if gotBody["buildFromRoot"] != true {
 		t.Errorf("buildFromRoot = %v, want true", gotBody["buildFromRoot"])

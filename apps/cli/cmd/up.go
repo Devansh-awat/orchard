@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/LeafdTK/leaf/cli/internal/buildctx"
+	"github.com/LeafdTK/leaf/cli/internal/config"
 	"github.com/LeafdTK/leaf/cli/internal/output"
 	"github.com/spf13/cobra"
 )
@@ -21,6 +22,7 @@ var exposeRe = regexp.MustCompile(`(?im)^\s*EXPOSE\s+(\d+)`)
 
 func upCmd() *cobra.Command {
 	var name, dockerfile string
+	var rootDir, installCmd, buildCmd, startCmd, outputDir string
 	var port int
 	var railpack, detach bool
 	c := &cobra.Command{
@@ -41,6 +43,32 @@ func upCmd() *cobra.Command {
 			abs, err := filepath.Abs(dir)
 			if err != nil {
 				return err
+			}
+
+			// orchard.json supplies defaults; an explicit flag always wins.
+			buildCfg, _, _ := config.FindBuildConfig(abs)
+			if buildCfg != nil {
+				if !cmd.Flags().Changed("root") {
+					rootDir = buildCfg.RootDirectory
+				}
+				if !cmd.Flags().Changed("install-cmd") {
+					installCmd = buildCfg.InstallCommand
+				}
+				if !cmd.Flags().Changed("build-cmd") {
+					buildCmd = buildCfg.BuildCommand
+				}
+				if !cmd.Flags().Changed("start-cmd") {
+					startCmd = buildCfg.StartCommand
+				}
+				if !cmd.Flags().Changed("output-dir") {
+					outputDir = buildCfg.OutputDirectory
+				}
+				if !cmd.Flags().Changed("dockerfile") {
+					dockerfile = buildCfg.Dockerfile
+				}
+				if !cmd.Flags().Changed("port") && buildCfg.Port > 0 {
+					port = buildCfg.Port
+				}
 			}
 
 			cl, cfg, err := client()
@@ -114,6 +142,17 @@ func upCmd() *cobra.Command {
 				}
 				if buildType == "railpack" {
 					body["env"] = []map[string]any{{"key": "PORT", "value": fmt.Sprintf("%d", resolvedPort)}}
+					for k, v := range map[string]string{
+						"rootDirectory":   rootDir,
+						"installCommand":  installCmd,
+						"buildCommand":    buildCmd,
+						"startCommand":    startCmd,
+						"outputDirectory": outputDir,
+					} {
+						if v != "" {
+							body[k] = v
+						}
+					}
 				}
 				var created map[string]any
 				if err := cl.Send(cmd.Context(), http.MethodPost, "/projects/"+url.PathEscape(projectID)+"/deployments/from-local", body, &created); err != nil {
@@ -162,6 +201,11 @@ func upCmd() *cobra.Command {
 	c.Flags().BoolVar(&railpack, "railpack", false, "force a Railpack build even when a Dockerfile exists")
 	c.Flags().IntVar(&port, "port", 0, "port the app listens on (default: EXPOSE or 3000)")
 	c.Flags().BoolVar(&detach, "detach", false, "start the build without following its logs")
+	c.Flags().StringVar(&rootDir, "root", "", "directory of the app inside the repo (monorepos)")
+	c.Flags().StringVar(&installCmd, "install-cmd", "", "override the detected install command")
+	c.Flags().StringVar(&buildCmd, "build-cmd", "", "override the detected build command")
+	c.Flags().StringVar(&startCmd, "start-cmd", "", "override the detected start command")
+	c.Flags().StringVar(&outputDir, "output-dir", "", "directory of built static files; serves the app as a static site")
 	return c
 }
 

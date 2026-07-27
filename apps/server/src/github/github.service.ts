@@ -2,6 +2,39 @@ import { Injectable, BadRequestException, ConflictException } from '@nestjs/comm
 import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { OAuthService } from '../auth/oauth.service';
+import {
+  detectApps,
+  primaryApp,
+  type DetectedApp,
+  type WorkspaceInfo,
+  type RepoBuildConfig,
+  type FileReader,
+} from './framework-detect';
+
+/** What the create form and the CLI get back from a detection run. */
+export interface RepoConfigDetection {
+  buildType: 'dockerfile' | 'railpack';
+  dockerfilePath: string | null;
+  dockerfiles: string[];
+  stages: string[];
+  ports: number[];
+  env: { key: string; value: string }[];
+  framework: string | null;
+  suggestedName: string;
+  apps: DetectedApp[];
+  workspace: WorkspaceInfo;
+  repoConfig: RepoBuildConfig | null;
+  rootDirectory: string | null;
+  installCommand: string | null;
+  buildCommand: string | null;
+  startCommand: string | null;
+  outputDirectory: string | null;
+}
+
+/** Long enough to cover the create form's repeated detects, short enough that a
+ *  push shows up on the next visit. */
+const DETECT_CACHE_TTL_MS = 60_000;
+const DETECT_CACHE_MAX = 200;
 
 export interface GitHubUser {
   id: string;
@@ -447,13 +480,18 @@ export class GitHubService {
     return await response.json();
   }
 
-  async findDockerfiles(
+  /**
+   * Flat list of every blob path in the repo from one recursive Git Trees call.
+   * Returns null when the tree is unavailable (bad ref, or truncated because
+   * the repo exceeds GitHub's tree limit) so callers can fall back rather than
+   * silently detect against a partial repo.
+   */
+  async getRepoTree(
     accessToken: string,
     owner: string,
     repo: string,
     branch?: string
-  ): Promise<string[]> {
-    // Use Git Trees API with recursive flag - single API call for entire repo
+  ): Promise<string[] | null> {
     const ref = branch || 'HEAD';
     const url = `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`;
 
@@ -461,31 +499,41 @@ export class GitHubService {
       const response = await fetch(url, {
         headers: this.githubApiHeaders(accessToken),
       });
-
-      if (!response.ok) {
-        // Fallback to root-only scan if tree API fails
-        return this.findDockerfilesFallback(accessToken, owner, repo, branch);
-      }
+      if (!response.ok) return null;
 
       const tree = await response.json();
-      const dockerfiles: string[] = [];
+      if (!Array.isArray(tree?.tree)) return null;
 
-      for (const item of tree.tree) {
-        if (item.type !== 'blob') continue;
-        // Skip node_modules and .git paths
-        if (item.path.includes('node_modules/') || item.path.includes('.git/')) continue;
-
-        const fileName = item.path.split('/').pop()?.toLowerCase() ?? '';
-        if (fileName === 'dockerfile' || fileName.startsWith('dockerfile.')) {
-          dockerfiles.push(item.path);
-        }
-      }
-
-      return dockerfiles;
+      return tree.tree
+        .filter((item: any) => item.type === 'blob')
+        .map((item: any) => String(item.path));
     } catch (error) {
-      console.error('Git tree API failed, falling back:', error.message);
+      console.error('Git tree API failed:', error.message);
+      return null;
+    }
+  }
+
+  async findDockerfiles(
+    accessToken: string,
+    owner: string,
+    repo: string,
+    branch?: string
+  ): Promise<string[]> {
+    const paths = await this.getRepoTree(accessToken, owner, repo, branch);
+    if (!paths) {
+      // Fallback to root-only scan if tree API fails
       return this.findDockerfilesFallback(accessToken, owner, repo, branch);
     }
+    return this.dockerfilesFromTree(paths);
+  }
+
+  private dockerfilesFromTree(paths: string[]): string[] {
+    return paths.filter((p) => {
+      // Skip node_modules and .git paths
+      if (p.includes('node_modules/') || p.includes('.git/')) return false;
+      const fileName = p.split('/').pop()?.toLowerCase() ?? '';
+      return fileName === 'dockerfile' || fileName.startsWith('dockerfile.');
+    });
   }
 
   private async findDockerfilesFallback(
@@ -644,36 +692,87 @@ export class GitHubService {
   }
 
   /**
-   * One-shot build-config detection for the zero-config create flow: prefer a
-   * Dockerfile (with EXPOSE/ENV/stage parsing) and fall back to a Railpack
-   * build with a framework guess from root manifests. Every field is a
-   * suggestion the caller can override.
+   * One-shot build-config detection for the zero-config create flow.
+   *
+   * Prefers a Dockerfile (with EXPOSE/ENV/stage parsing); otherwise mirrors
+   * Railpack's provider rules to describe every deployable app in the repo, so
+   * a monorepo can offer a root-directory picker instead of failing to build.
+   * Every field is a suggestion the caller can override, and the real answer is
+   * reconciled from railpack-info.json once the first build runs.
+   *
+   * The create form re-detects whenever the repo or branch changes, so results
+   * are memoised briefly. The key includes the caller's token: two users with
+   * different access to the same repo must never share an answer. In-flight
+   * promises are cached too, which collapses the duplicate request the form
+   * fires when the branch list confirms the default branch.
    */
   async detectRepoConfig(
     accessToken: string,
     owner: string,
     repo: string,
     branch?: string
-  ): Promise<{
-    buildType: 'dockerfile' | 'railpack';
-    dockerfilePath: string | null;
-    dockerfiles: string[];
-    stages: string[];
-    ports: number[];
-    env: { key: string; value: string }[];
-    framework: string | null;
-    suggestedName: string;
-  }> {
+  ): Promise<RepoConfigDetection> {
+    const key = [
+      crypto.createHash('sha256').update(accessToken).digest('hex').slice(0, 16),
+      owner,
+      repo,
+      branch ?? '',
+    ].join(' ');
+
+    const now = Date.now();
+    const hit = this.detectCache.get(key);
+    if (hit && now - hit.at < DETECT_CACHE_TTL_MS) return hit.value;
+
+    const value = this.computeRepoConfig(accessToken, owner, repo, branch);
+    this.detectCache.set(key, { at: now, value });
+    // A failure must not be remembered, or the next attempt returns the same
+    // rejection from cache instead of retrying.
+    value.catch(() => this.detectCache.delete(key));
+
+    if (this.detectCache.size > DETECT_CACHE_MAX) {
+      for (const [k, entry] of this.detectCache) {
+        if (now - entry.at >= DETECT_CACHE_TTL_MS) this.detectCache.delete(k);
+      }
+      while (this.detectCache.size > DETECT_CACHE_MAX) {
+        this.detectCache.delete(this.detectCache.keys().next().value);
+      }
+    }
+
+    return value;
+  }
+
+  private readonly detectCache = new Map<
+    string,
+    { at: number; value: Promise<RepoConfigDetection> }
+  >();
+
+  private async computeRepoConfig(
+    accessToken: string,
+    owner: string,
+    repo: string,
+    branch?: string
+  ): Promise<RepoConfigDetection> {
     const suggestedName = repo
       .toLowerCase()
       .replace(/[^a-z0-9]+/g, '-')
       .replace(/^-+|-+$/g, '')
       .slice(0, 60);
 
-    const [dockerfiles, rootContents] = await Promise.all([
-      this.findDockerfiles(accessToken, owner, repo, branch).catch(() => [] as string[]),
-      this.getRepoContents(accessToken, owner, repo, '', branch).catch(() => []),
-    ]);
+    const tree = await this.getRepoTree(accessToken, owner, repo, branch).catch(() => null);
+    const dockerfiles = tree
+      ? this.dockerfilesFromTree(tree)
+      : await this.findDockerfiles(accessToken, owner, repo, branch).catch(() => [] as string[]);
+
+    const empty = {
+      apps: [] as DetectedApp[],
+      workspace: { isWorkspace: false, packageManager: 'npm' } as WorkspaceInfo,
+      repoConfig: null,
+      rootDirectory: null,
+      installCommand: null,
+      buildCommand: null,
+      startCommand: null,
+      outputDirectory: null,
+    };
 
     if (dockerfiles.length > 0) {
       const dockerfilePath = [...dockerfiles].sort(
@@ -691,66 +790,64 @@ export class GitHubService {
         env: info?.envVars ?? [],
         framework: null,
         suggestedName,
+        ...empty,
       };
     }
 
-    const rootFiles = new Set(
-      (Array.isArray(rootContents) ? rootContents : [])
-        .filter((c: any) => c?.type === 'file')
-        .map((c: any) => String(c.name).toLowerCase())
-    );
-
-    let framework: string | null = null;
-    let port = 3000;
-
-    if (rootFiles.has('package.json')) {
-      framework = 'node';
-      try {
-        const pkg = JSON.parse(await this.getFileContent(accessToken, owner, repo, 'package.json', branch));
-        const deps = { ...(pkg.dependencies ?? {}), ...(pkg.devDependencies ?? {}) };
-        if (deps['next']) framework = 'nextjs';
-        else if (deps['@sveltejs/kit']) framework = 'sveltekit';
-        else if (deps['nuxt']) framework = 'nuxt';
-        else if (deps['astro']) {
-          framework = 'astro';
-          port = 4321;
-        } else if (deps['@remix-run/node']) framework = 'remix';
-        else if (deps['@nestjs/core']) framework = 'nestjs';
-        else if (deps['fastify']) framework = 'fastify';
-        else if (deps['express']) framework = 'express';
-        else if (deps['vite']) framework = 'vite';
-      } catch {
-        // package.json unreadable: keep the generic node guess
-      }
-    } else if (rootFiles.has('go.mod')) {
-      framework = 'go';
-      port = 8080;
-    } else if (rootFiles.has('requirements.txt') || rootFiles.has('pyproject.toml')) {
-      framework = 'python';
-      port = 8000;
-    } else if (rootFiles.has('gemfile')) {
-      framework = 'ruby';
-      port = 3000;
-    } else if (rootFiles.has('cargo.toml')) {
-      framework = 'rust';
-      port = 8080;
-    } else if (rootFiles.has('composer.json')) {
-      framework = 'php';
-      port = 8080;
-    } else if (rootFiles.has('index.html')) {
-      framework = 'static';
-      port = 80;
+    if (!tree) {
+      // Tree unavailable (bad ref, or a repo past GitHub's tree limit). Rather
+      // than detect against a partial view, hand back a bare Railpack build and
+      // let its own detection do the work at build time.
+      return {
+        buildType: 'railpack',
+        dockerfilePath: null,
+        dockerfiles: [],
+        stages: [],
+        ports: [3000],
+        env: [{ key: 'PORT', value: '3000' }],
+        framework: null,
+        suggestedName,
+        ...empty,
+      };
     }
+
+    // One cache per detection run: several presets read the same package.json,
+    // and a missing file is a legitimate (cached) answer, not an error.
+    const fileCache = new Map<string, Promise<string | null>>();
+    const read: FileReader = (path) => {
+      if (!fileCache.has(path)) {
+        fileCache.set(
+          path,
+          this.getFileContent(accessToken, owner, repo, path, branch).catch(() => null)
+        );
+      }
+      return fileCache.get(path)!;
+    };
+
+    const { apps, workspace, repoConfig } = await detectApps(tree, read);
+    // An orchard.json naming a directory picks the app; otherwise the usual
+    // "recognised root app, else shallowest" rule applies.
+    const primary = (repoConfig?.rootDirectory
+      && apps.find((a) => a.dir === repoConfig.rootDirectory))
+      || primaryApp(apps);
 
     return {
       buildType: 'railpack',
       dockerfilePath: null,
       dockerfiles: [],
       stages: [],
-      ports: [port],
-      env: [{ key: 'PORT', value: String(port) }],
-      framework,
+      ports: [primary?.port ?? 3000],
+      env: [{ key: 'PORT', value: String(primary?.port ?? 3000) }],
+      framework: primary?.framework ?? null,
       suggestedName,
+      apps,
+      workspace,
+      repoConfig,
+      rootDirectory: primary?.dir || null,
+      installCommand: primary?.installCommand ?? null,
+      buildCommand: primary?.buildCommand ?? null,
+      startCommand: primary?.startCommand ?? null,
+      outputDirectory: primary?.outputDirectory ?? null,
     };
   }
 

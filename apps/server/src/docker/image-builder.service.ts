@@ -6,6 +6,7 @@ import { BuildKitPoolService } from './buildkit-pool.service';
 import { OrgEventsService } from '../events/org-events.service';
 import { startPhaseSpan, recordPhaseSpan } from '../analytics/datadog';
 import { truncateK8sName } from '../projects/projects.utils';
+import { RAILPACK_INFO_MARKER, parseRailpackInfo } from './build-config';
 
 interface BuildJobOptions {
   repoUrl: string;
@@ -18,6 +19,12 @@ interface BuildJobOptions {
   target?: string;
   buildFromRoot?: boolean;
   buildType?: 'dockerfile' | 'railpack';
+  /**
+   * Repo-relative directory of the app for Railpack builds. Already validated
+   * by normalizeRootDirectory before it reaches here — it is interpolated into
+   * the prepare container's shell script.
+   */
+  rootDirectory?: string | null;
   envVars?: Record<string, string>;
   buildWithDepot?: boolean;
   // Presigned GET URL for an uploaded build-context tarball ("orchard up").
@@ -45,6 +52,8 @@ interface BuildJobStatus {
   logs?: string;
   pusherLogs?: string;
   imageRef?: string;
+  /** Raw railpack-info.json line, when the prepare init container produced one. */
+  railpackInfoLog?: string;
 }
 
 const BUILDKIT_PUSH_PHASE_RE =
@@ -61,6 +70,8 @@ export class ImageBuilderService {
   private buildkitPushDetected = new Set<string>();
 
   private buildkitBuildingDetected = new Set<string>();
+
+  private railpackInfoFetched = new Set<string>();
 
   private readonly builderNamespace = process.env.BUILDER_NAMESPACE || 'orchard-builders';
 
@@ -102,6 +113,20 @@ export class ImageBuilderService {
   private readonly localCacheEnabled = process.env.BUILDKIT_LOCAL_CACHE_ENABLED === 'true';
 
   private readonly buildkitImage = process.env.BUILDKIT_IMAGE || 'moby/buildkit:v0.31.1';
+
+  // Railpack ships three artefacts on independent version lines: the CLI that
+  // writes the plan, the BuildKit gateway frontend that executes it, and the
+  // mise base image the prepare step runs in. They all used to float on
+  // `latest`, so a Railway release could change every Orchard build with no
+  // deploy on our side — and a CLI/frontend plan-schema mismatch would break
+  // builds outright. Pin them together; bump deliberately.
+  private readonly railpackVersion = process.env.RAILPACK_VERSION || 'v0.33.0';
+
+  private readonly railpackFrontendImage =
+    process.env.RAILPACK_FRONTEND_IMAGE || 'ghcr.io/railwayapp/railpack-frontend:v0.0.32';
+
+  private readonly railpackMiseImage =
+    process.env.RAILPACK_MISE_IMAGE || 'ghcr.io/railwayapp/railpack-mise:20260227';
 
   private readonly localCachePath = process.env.BUILDKIT_LOCAL_CACHE_PATH || '/cache/buildkit';
 
@@ -736,14 +761,22 @@ ${registryConfigs}
       }
     }
 
+    // Depot has never actually supported Railpack here: this branch used to
+    // point at a plain `Dockerfile`, but the Railpack path writes a BuildKit
+    // frontend plan (`railpack-plan.json`) and no Dockerfile ever exists, so
+    // the build failed deep inside depot with a confusing "not found". Fail
+    // fast with something actionable instead.
+    if (buildType === 'railpack') {
+      throw new BadRequestException(
+        'Super builds do not support automatic (Railpack) builds yet. Turn off super builds for this app, or switch it to a Dockerfile build.',
+      );
+    }
+
     // Determine context directory and dockerfile flag
     let contextDir = '.';
     let dockerfileFlag = dockerfilePath;
 
-    if (buildType === 'railpack') {
-      dockerfileFlag = 'Dockerfile';
-      contextDir = '.';
-    } else if (!buildFromRoot && dockerfilePath.includes('/')) {
+    if (!buildFromRoot && dockerfilePath.includes('/')) {
       contextDir = dockerfilePath.substring(0, dockerfilePath.lastIndexOf('/'));
       dockerfileFlag = dockerfilePath.substring(dockerfilePath.lastIndexOf('/') + 1);
     }
@@ -925,6 +958,21 @@ fi
     'GIT_SHA=$(git -C /workspace rev-parse HEAD 2>/dev/null || echo unknown)\n';
   private static readonly GIT_SHA_BUILDCTL_OPT = ' --opt build-arg:GIT_SHA="$GIT_SHA"';
 
+  /**
+   * The railpack-prepare init container picks the directory the plan was
+   * generated for (the repo root, or an app subdirectory outside a workspace)
+   * and leaves it here. BuildKit's `--local context=.` has to resolve against
+   * that same directory, and workingDir is fixed in the pod spec long before
+   * the repository has been cloned. Dockerfile builds never write the file and
+   * stay at /workspace.
+   */
+  private static readonly BUILD_DIR_PREAMBLE = `
+if [ -f /workspace/.orchard-build-dir ]; then
+  cd "$(cat /workspace/.orchard-build-dir)" || exit 1
+  echo "=== Building in $(pwd) ==="
+fi
+`;
+
   private generateBuildScriptWithCacheFallback(buildctlArgs: string[], injectGitSha = false): string {
     const cacheArgs = this.buildCacheArgs();
     const hasCacheEnabled = cacheArgs.length > 0;
@@ -937,8 +985,11 @@ fi
 
     const argsWithCache = buildctlArgs.map(shellQuote).join(' ') + gitShaOpt;
 
+    const buildDirPreamble = ImageBuilderService.BUILD_DIR_PREAMBLE;
+
     if (!hasCacheEnabled) {
-      return gitShaPreamble + this.generateRetryScript(`buildctl-daemonless.sh ${argsWithCache}`);
+      return gitShaPreamble + buildDirPreamble
+        + this.generateRetryScript(`buildctl-daemonless.sh ${argsWithCache}`);
     }
 
     // Extract local cache dest dir from --export-cache arg so we can mkdir -p it
@@ -960,7 +1011,7 @@ fi
 
     return `
 set +e
-${gitShaPreamble}
+${gitShaPreamble}${buildDirPreamble}
 ulimit -n 1048576 2>/dev/null || true
 ${this.ramdiskPreamble}${this.scratchMountPreamble}${this.cachePrunePreamble}
 ${mkdirLine}
@@ -1138,6 +1189,7 @@ exit $EXIT_CODE
       target,
       buildFromRoot = false,
       buildType = 'dockerfile',
+      rootDirectory,
       envVars = {},
       buildWithDepot = false,
       cacheTenantKey,
@@ -1327,7 +1379,7 @@ ls -la /workspace
           `set -ex
 echo "=== Injecting ARG/ENV declarations into Dockerfile ==="
 
-DOCKERFILE_PATH="${buildFromRoot ? dockerfilePath : dockerfilePath}"
+DOCKERFILE_PATH="${dockerfilePath}"
 DOCKERFILE="/workspace/\${DOCKERFILE_PATH}"
 
 if [ ! -f "\${DOCKERFILE}" ]; then
@@ -1380,7 +1432,7 @@ head -n 20 "\${DOCKERFILE}"
 
       initContainers.push({
         name: 'railpack-prepare',
-        image: 'ghcr.io/railwayapp/railpack-mise:latest',
+        image: this.railpackMiseImage,
         command: ['/bin/sh', '-c'],
         args: [
           `set -ex
@@ -1399,12 +1451,50 @@ elif command -v yum >/dev/null 2>&1; then
   yum install -y curl
 fi
 
-echo "=== Installing Railpack ==="
-curl -sSL https://railpack.com/install.sh | sh
-export PATH="$PATH:/root/.local/bin:/usr/local/bin"
+echo "=== Installing Railpack ${this.railpackVersion} ==="
+case "$(uname -m)" in
+  x86_64) RAILPACK_TARGET=x86_64-unknown-linux-musl ;;
+  aarch64|arm64) RAILPACK_TARGET=arm64-unknown-linux-musl ;;
+  *) echo "unsupported architecture: $(uname -m)"; exit 1 ;;
+esac
+RAILPACK_ASSET=railpack-${this.railpackVersion}-$RAILPACK_TARGET.tar.gz
+RAILPACK_RELEASE=https://github.com/railwayapp/railpack/releases/download/${this.railpackVersion}
+cd /tmp
+curl -fsSL --retry 3 --retry-all-errors -O "$RAILPACK_RELEASE/$RAILPACK_ASSET"
+curl -fsSL --retry 3 --retry-all-errors -O "$RAILPACK_RELEASE/checksums.txt"
+grep " $RAILPACK_ASSET$" checksums.txt | sha256sum -c -
+tar xzf "$RAILPACK_ASSET" railpack
+install -m 0755 railpack /usr/local/bin/railpack
+export PATH="$PATH:/usr/local/bin"
+railpack --version
+
+echo "=== Selecting build directory ==="
+# Two monorepo shapes need opposite treatment:
+#   * A plain repo with frontend/ and backend/ — point Railpack straight at the
+#     subdirectory; it supports that natively via its app source dir.
+#   * A pnpm/npm/yarn workspace — the lockfile and shared packages live at the
+#     root, so building inside the subdirectory would fail to install. Stay at
+#     the root; the build/start commands are already scoped to the package and
+#     the output directory is already repo-relative.
+ORCHARD_ROOT_DIR=${JSON.stringify(rootDirectory ?? '')}
+ORCHARD_BUILD_DIR=/workspace
+if [ -n "$ORCHARD_ROOT_DIR" ]; then
+  if [ -f /workspace/pnpm-workspace.yaml ] || grep -q '"workspaces"' /workspace/package.json 2>/dev/null; then
+    echo "workspace detected: building from the repo root, scoped to $ORCHARD_ROOT_DIR"
+  elif [ -d "/workspace/$ORCHARD_ROOT_DIR" ]; then
+    ORCHARD_BUILD_DIR="/workspace/$ORCHARD_ROOT_DIR"
+    echo "building from $ORCHARD_BUILD_DIR"
+  else
+    echo "root directory '$ORCHARD_ROOT_DIR' not found in the repository"; exit 1
+  fi
+fi
+# The BuildKit container reads this back: its working directory has to match
+# the one the plan was generated for, and it is fixed in the pod spec before
+# any of the above is known.
+echo "$ORCHARD_BUILD_DIR" > /workspace/.orchard-build-dir
 
 echo "=== Running Railpack prepare ==="
-cd /workspace
+cd "$ORCHARD_BUILD_DIR"
 railpack prepare . --plan-out railpack-plan.json --info-out railpack-info.json ${envArgs}
 
 echo "=== Railpack prepare completed ==="
@@ -1415,6 +1505,13 @@ ls -la railpack-plan.json railpack-info.json 2>/dev/null || echo "Warning: Some 
 if [ -f railpack-info.json ]; then
   echo "=== Build Info ==="
   cat railpack-info.json
+  # Single-line copy behind a sentinel so the server can reconcile what
+  # Railpack actually detected against what the create form guessed. The
+  # pretty-printed dump above is for humans reading the build log.
+  # Container runtimes split log lines past ~16KB; if this info ever grows
+  # beyond that the parser simply finds no detection, which costs a label
+  # and never the build.
+  echo "${RAILPACK_INFO_MARKER}$(tr -d '\\n' < railpack-info.json)"
 fi
 `,
         ],
@@ -1476,6 +1573,10 @@ fi
         }`;
         const clientScript =
           (injectGitSha ? ImageBuilderService.GIT_SHA_PREAMBLE : '') +
+          // Same directory handoff as the daemonless path: buildctl streams the
+          // local context from the client's cwd, so it must match the directory
+          // railpack-prepare generated the plan for.
+          ImageBuilderService.BUILD_DIR_PREAMBLE +
           this.generateRetryScript(clientCmd);
 
         return {
@@ -1976,7 +2077,7 @@ exit $rc`,
       'build',
       '--progress', 'plain',
       '--frontend', 'gateway.v0',
-      '--opt', 'source=ghcr.io/railwayapp/railpack-frontend',
+      '--opt', `source=${this.railpackFrontendImage}`,
       '--local', 'context=.',
       '--local', 'dockerfile=.',
     ];
@@ -2100,6 +2201,71 @@ exit $rc`,
     }
   }
 
+  /**
+   * Record what Railpack actually detected, so the UI can show the real answer
+   * instead of the create-form's guess. Best effort: a build that succeeded
+   * must never fail because we could not store a label.
+   */
+  private async persistRailpackDetection(
+    deploymentId: string | undefined,
+    infoLog: string,
+  ): Promise<void> {
+    if (!deploymentId) return;
+
+    const detection = parseRailpackInfo(infoLog);
+    if (!detection) return;
+
+    try {
+      await this.prisma.deployment.update({
+        where: { id: deploymentId },
+        data: {
+          detectedConfig: detection as unknown as object,
+          ...(detection.framework ? { framework: detection.framework } : {}),
+        },
+      });
+    } catch (error) {
+      console.warn(`[ImageBuilder] Could not persist Railpack detection for ${deploymentId}:`, error.message);
+    }
+  }
+
+  /**
+   * Pull the marker line the railpack-prepare init container echoed.
+   *
+   * The normal log path only reads the buildkit container — init container
+   * logs are a failure-path fallback — so this is a targeted read. It runs at
+   * most once per job (the status poll is on a timer) and only after the
+   * container has terminated, since the marker is the last thing it prints.
+   */
+  private async readRailpackInfoLog(
+    coreApi: k8s.CoreV1Api,
+    podName: string | undefined,
+    jobName: string,
+    initContainerStatuses: k8s.V1ContainerStatus[] | undefined,
+  ): Promise<string | undefined> {
+    if (!podName || this.railpackInfoFetched.has(jobName)) return undefined;
+
+    const prepare = initContainerStatuses?.find((ics) => ics.name === 'railpack-prepare');
+    if (!prepare?.state?.terminated) return undefined;
+
+    this.railpackInfoFetched.add(jobName);
+
+    try {
+      const res = await coreApi.readNamespacedPodLog(
+        podName,
+        this.builderNamespace,
+        'railpack-prepare',
+        undefined, undefined, undefined, undefined, undefined, undefined,
+        // The marker is the final line; a small tail keeps this cheap even
+        // though railpack's own output can be long.
+        50,
+      );
+      return typeof res.body === 'string' ? res.body : undefined;
+    } catch (error) {
+      console.warn(`[ImageBuilder] Could not read railpack-prepare logs for ${podName}:`, error.message);
+      return undefined;
+    }
+  }
+
   async getBuildJobStatus(jobName: string): Promise<BuildJobStatus> {
     this.ensureKubeConfig();
     const batchApi = this.kc!.makeApiClient(k8s.BatchV1Api);
@@ -2121,6 +2287,7 @@ exit $rc`,
       let status: BuildJobStatus['status'] = 'unknown';
       let logs = '';
       let pusherLogs = '';
+      let railpackInfoLog: string | undefined;
 
       if (jobSpec.status?.succeeded && jobSpec.status.succeeded > 0) {
         status = 'succeeded';
@@ -2152,6 +2319,13 @@ exit $rc`,
           const podConditions = pod.status?.conditions;
           const containerStatuses = pod.status?.containerStatuses;
           const initContainerStatuses = pod.status?.initContainerStatuses;
+
+          railpackInfoLog = await this.readRailpackInfoLog(
+            coreApi,
+            podName,
+            jobName,
+            initContainerStatuses,
+          );
 
           console.log(`[ImageBuilder] Pod ${podName} details:`, JSON.stringify({
             phase: podPhase,
@@ -2295,6 +2469,7 @@ exit $rc`,
         logs,
         pusherLogs,
         imageRef,
+        railpackInfoLog,
       };
     } catch (error) {
       if (error.statusCode === 404) {
@@ -2336,6 +2511,10 @@ exit $rc`,
       
       try {
         const status = await this.getBuildJobStatus(jobName);
+
+        if (status.railpackInfoLog) {
+          await this.persistRailpackDetection(deploymentId, status.railpackInfoLog);
+        }
 
         if (status.status !== 'pending' && status.status !== 'unknown') {
           scheduleSpan.finish({ 'build.schedule_outcome': status.status });

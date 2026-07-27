@@ -528,6 +528,27 @@ model Deployment {
   buildFromRoot  Boolean    @default(false) @map("build_from_root")
   buildWithDepot Boolean    @default(false) @map("build_with_depot")
   persistentBuildCache Boolean @default(false) @map("persistent_build_cache")
+  // Zero-config build settings for `railpack` builds. Every one of these is
+  // null by default, meaning "whatever Railpack detected" — a non-null value
+  // becomes a RAILPACK_* override on the build. Railpack's own merge order
+  // (options < env < railpack.json) means a repo that commits a railpack.json
+  // still wins over anything set here, which is the intended escape hatch.
+  //
+  // rootDirectory is the app's directory inside the repo. For a plain repo we
+  // point Railpack straight at it; inside a detected workspace we keep the
+  // build at the repo root (so the lockfile resolves) and scope the commands
+  // to the package instead.
+  rootDirectory   String?  @map("root_directory") @db.VarChar(500)
+  framework       String?  @map("framework") @db.VarChar(50)
+  installCommand  String?  @map("install_command") @db.VarChar(2000)
+  buildCommand    String?  @map("build_command") @db.VarChar(2000)
+  startCommand    String?  @map("start_command") @db.VarChar(2000)
+  // Non-null turns the app into a static site: Railpack builds it, then serves
+  // this directory with Caddy on $PORT with index.html fallback.
+  outputDirectory String?  @map("output_directory") @db.VarChar(500)
+  // Reconciled from the build's railpack-info.json — what Railpack actually
+  // detected, as opposed to what the create-form guessed.
+  detectedConfig  Json?    @map("detected_config") @db.JsonB
   // Local-upload builds ("orchard up"): R2 object key + sha256 of the last
   // uploaded build context. A deployment with a key and no githubRepo builds
   // from the uploaded tarball instead of a clone.
