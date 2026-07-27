@@ -1,4 +1,5 @@
 <script lang="ts">
+	import type { Snippet } from 'svelte';
 	import { Check, ChevronDown } from 'lucide-svelte';
 	import PopoverPanel from './PopoverPanel.svelte';
 	import { springRotate } from '$lib/utils/motion.svelte';
@@ -18,7 +19,9 @@
 		disabled = false,
 		placement = 'bottom-start',
 		class: className = '',
-		onchange = undefined
+		onchange = undefined,
+		icon = undefined,
+		ariaLabelledby = undefined
 	}: {
 		value?: string;
 		options: DropdownOption[];
@@ -28,6 +31,8 @@
 		placement?: 'bottom-start' | 'bottom-end';
 		class?: string;
 		onchange?: (value: string) => void;
+		icon?: Snippet<[string]>;
+		ariaLabelledby?: string;
 	} = $props();
 
 	let open = $state(false);
@@ -40,17 +45,21 @@
 	}
 </script>
 
-<PopoverPanel bind:open {placement} sameWidth>
+<PopoverPanel bind:open {placement} sameWidth class="ui-popover--menu">
 	{#snippet trigger(props, isOpen)}
 		<button
 			type="button"
 			{id}
 			{disabled}
+			aria-labelledby={ariaLabelledby}
 			class="ui-dropdown-trigger{className ? ` ${className}` : ''}"
 			class:ui-dropdown-trigger--open={isOpen}
 			{...props}
 		>
 			<span class="ui-dropdown-value" class:ui-dropdown-value--placeholder={!selected}>
+				{#if icon && selected}
+					<span class="ui-dropdown-icon">{@render icon(selected.value)}</span>
+				{/if}
 				{#if selected}
 					{#if selected.mono}<code class="ui-dropdown-mono">{selected.label}</code
 						>{:else}{selected.label}{/if}
@@ -82,6 +91,9 @@
 					class:ui-dropdown-option--selected={option.value === value}
 					onclick={() => pick(option, close)}
 				>
+					{#if icon}
+						<span class="ui-dropdown-icon">{@render icon(option.value)}</span>
+					{/if}
 					<span class="ui-dropdown-option-main">
 						{#if option.mono}<code class="ui-dropdown-mono">{option.label}</code
 							>{:else}{option.label}{/if}

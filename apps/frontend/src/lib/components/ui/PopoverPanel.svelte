@@ -7,12 +7,14 @@
 		placement = 'bottom-start',
 		open = $bindable(false),
 		sameWidth = false,
+		class: className = '',
 		trigger,
 		children
 	}: {
 		placement?: Placement;
 		open?: boolean;
 		sameWidth?: boolean;
+		class?: string;
 		trigger: Snippet<[Record<string, unknown>, boolean]>;
 		children: Snippet<[{ close: () => void }]>;
 	} = $props();
@@ -29,6 +31,6 @@
 </script>
 
 {@render trigger(popover.trigger, open)}
-<div {...popover.content} class="ui-popover">
+<div {...popover.content} class="ui-popover{className ? ` ${className}` : ''}">
 	{@render children({ close: () => (open = false) })}
 </div>
