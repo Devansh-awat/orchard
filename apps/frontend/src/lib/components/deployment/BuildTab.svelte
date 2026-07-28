@@ -99,7 +99,7 @@
 
 		<SectionCard
 			title="Build and output settings"
-			description="Leave a field empty to use what we detect. Anything set here takes precedence over a railpack.json in the repository."
+			description="Leave a field empty to use what we detect. Anything you set here overrides a railpack.json in the repository."
 		>
 			{#snippet actions()}
 				<Button variant="ghost" size="sm" onclick={reset} disabled={!dirty || saving}>

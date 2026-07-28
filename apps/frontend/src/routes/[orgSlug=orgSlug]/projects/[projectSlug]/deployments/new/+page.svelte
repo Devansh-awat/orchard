@@ -1353,6 +1353,10 @@
 														hint="Turn this on if your Dockerfile copies files from outside its own folder."
 													/>
 												{:else}
+													<p class="nd-fold-hint">
+														Leave a field empty to use what we detect. Anything you set here
+														overrides a <code>railpack.json</code> in the repository.
+													</p>
 													<Field label="Install command">
 														<Input
 															value={installCommand}
@@ -2126,6 +2130,21 @@
 		flex-direction: column;
 		gap: 0.875rem;
 		padding-top: 0.875rem;
+	}
+
+	.nd-fold-hint {
+		margin: 0;
+		font-size: 0.75rem;
+		line-height: 1.5;
+		color: var(--text-muted);
+	}
+
+	.nd-fold-hint code {
+		font-size: 0.6875rem;
+		padding: 0.0625rem 0.25rem;
+		border-radius: 0.25rem;
+		background: var(--bg-raised);
+		color: var(--text-default);
 	}
 	@media (max-width: 640px) {
 		.nd-cfg-row {
