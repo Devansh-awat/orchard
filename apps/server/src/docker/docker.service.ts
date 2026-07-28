@@ -803,10 +803,7 @@ export class DockerService {
           if (detection) {
             await this.prisma.deployment.update({
               where: { id: deploymentId },
-              data: {
-                detectedConfig: detection as unknown as object,
-                ...(detection.framework ? { framework: detection.framework } : {}),
-              },
+              data: { detectedConfig: detection as unknown as object },
             });
           }
         } catch {
