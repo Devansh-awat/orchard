@@ -24,7 +24,7 @@
 		X
 	} from 'lucide-svelte';
 	import { envVarsToRaw, rawToEnvVars } from '$lib/utils/format';
-	import { motionStagger } from '$lib/utils/motion.svelte';
+	import { motionStagger, springRotate } from '$lib/utils/motion.svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import ProjectSwitcher from '$lib/components/ProjectSwitcher.svelte';
 	import RepoAccountPicker from '$lib/components/deployment/RepoAccountPicker.svelte';
@@ -111,6 +111,14 @@
 	let branch = $state('');
 	let buildType = $state<'dockerfile' | 'railpack'>('dockerfile');
 	let buildTypeTouched = false;
+	let buildFoldOpen = $state(false);
+	let buildFoldBuildType: string | null = null;
+
+	$effect(() => {
+		if (buildType === buildFoldBuildType) return;
+		buildFoldBuildType = buildType;
+		buildFoldOpen = buildType === 'dockerfile';
+	});
 	let detectedFramework = $state<string | null>(null);
 	let detectedApps = $state<DetectedApp[]>([]);
 	let isWorkspace = $state(false);
@@ -1294,8 +1302,13 @@
 											</div>
 										{/if}
 
-										<details class="nd-fold">
+										<details class="nd-fold" bind:open={buildFoldOpen}>
 											<summary class="nd-fold-summary">
+												<span
+													class="nd-fold-chevron"
+													{@attach springRotate(() => buildFoldOpen, { rest: 0, on: 180 })}
+													><ChevronDown size={15} /></span
+												>
 												Build and output settings
 												<span class="nd-fold-note">Optional</span>
 											</summary>
@@ -2088,9 +2101,13 @@
 		color: var(--text-default);
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: 0.5rem;
+		gap: 0.375rem;
 		list-style: none;
+	}
+
+	.nd-fold-chevron {
+		display: inline-flex;
+		color: var(--text-muted);
 	}
 
 	.nd-fold-summary::-webkit-details-marker {
@@ -2098,6 +2115,7 @@
 	}
 
 	.nd-fold-note {
+		margin-left: auto;
 		font-size: 0.75rem;
 		font-weight: 500;
 		color: var(--text-muted);
