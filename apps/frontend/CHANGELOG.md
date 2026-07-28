@@ -1,5 +1,14 @@
 # Changelog
 
+## [0.32.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.31.0...frontend/v0.32.0) (2026-07-28)
+
+
+### Features
+
+* **frontend:** add a direct link option to the repo account picker ([8344f75](https://github.com/LeafdTK/leaf/commit/8344f7552a84f867ad8bfe61692255ff6a0f21e1))
+* **frontend:** auto-expand build settings for dockerfile and add a disclosure chevron ([366cf7e](https://github.com/LeafdTK/leaf/commit/366cf7e07d2414b72ac1d78a1010b60fc8a49729))
+* **frontend:** surface that build settings override a repo railpack.json ([5f21011](https://github.com/LeafdTK/leaf/commit/5f21011b3a6163b57bc9b77df520155ada1aecb4))
+
 ## [0.31.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.30.0...frontend/v0.31.0) (2026-07-28)
 
 
