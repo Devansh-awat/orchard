@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.3](https://github.com/LeafdTK/leaf/compare/server/v1.34.2...server/v1.34.3) (2026-07-28)
+
+
+### Bug Fixes
+
+* **builder:** pin the railpack frontend to the cli version and stop spurious no-cache retries ([4ab7892](https://github.com/LeafdTK/leaf/commit/4ab7892c2e86ff3ac5cfa4da1fc206c6120ea9fb))
+
 ## [1.34.2](https://github.com/LeafdTK/leaf/compare/server/v1.34.1...server/v1.34.2) (2026-07-28)
 
 
