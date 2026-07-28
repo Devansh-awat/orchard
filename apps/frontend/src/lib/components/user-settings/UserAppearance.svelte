@@ -237,7 +237,10 @@
 				onchange={handleFileImport}
 			/>
 
-			<SectionCard title="Themes" description="Pick how Orchard looks for you. Click a theme to apply it.">
+			<SectionCard
+				title="Themes"
+				description="Pick how Orchard looks for you. Click a theme to apply it."
+			>
 				{#snippet actions()}
 					<Button variant="secondary" size="sm" onclick={createNewTheme}>
 						<Plus class="h-3.5 w-3.5" /> New theme
@@ -250,10 +253,7 @@
 					<div class="ap-swatch" class:ap-swatch--active={!activeThemeId}>
 						<button type="button" class="ap-swatch-main" onclick={useSystemTheme}>
 							<span class="ap-preview ap-preview--split">
-								<span
-									class="ap-preview-half"
-									style="background-color: {lightPreview.background};"
-								>
+								<span class="ap-preview-half" style="background-color: {lightPreview.background};">
 									<span class="ap-dot" style="background-color: {lightPreview.accent};"></span>
 								</span>
 								<span class="ap-preview-half" style="background-color: {darkPreview.background};">
@@ -601,7 +601,9 @@
 		background: transparent;
 		color: var(--text-muted);
 		cursor: pointer;
-		transition: background-color 0.15s ease, color 0.15s ease;
+		transition:
+			background-color 0.15s ease,
+			color 0.15s ease;
 	}
 
 	.ap-action:hover {

@@ -618,10 +618,7 @@ function createThemeStore() {
 	const customThemes = writable<Theme[]>(loadCustomThemes());
 	const activeThemeId = writable<string | null>(loadActiveThemeId());
 
-	const allThemes = derived(customThemes, ($customThemes) => [
-		...builtInThemes,
-		...$customThemes
-	]);
+	const allThemes = derived(customThemes, ($customThemes) => [...builtInThemes, ...$customThemes]);
 
 	const activeTheme = derived([allThemes, activeThemeId], ([$allThemes, $activeThemeId]) => {
 		if ($activeThemeId) {

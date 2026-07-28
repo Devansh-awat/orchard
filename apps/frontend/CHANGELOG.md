@@ -1,5 +1,19 @@
 # Changelog
 
+## [0.31.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.30.0...frontend/v0.31.0) (2026-07-28)
+
+
+### Features
+
+* **frontend:** framework picker and build settings in the create flow ([bbd6791](https://github.com/LeafdTK/leaf/commit/bbd6791bcb994c217f0fd26277bc309d5e4d709a))
+
+
+### Bug Fixes
+
+* **frontend:** drop the favicon mesh wash from the build progress page ([8a52c89](https://github.com/LeafdTK/leaf/commit/8a52c894bbb99b34210a983f89fe2df980da54fe))
+* **frontend:** show projects on the dashboard when they have no deployments ([6485beb](https://github.com/LeafdTK/leaf/commit/6485bebcc8648f80da543c8ff0bdb8557ae8e1ea))
+* **ui:** revive dead global rules, invisible skeletons and nested dropdown scrolling ([e4380bc](https://github.com/LeafdTK/leaf/commit/e4380bc2d411dbea2bcd7ecbb1f9b749d918ce0f))
+
 ## [0.30.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.29.0...frontend/v0.30.0) (2026-07-22)
 
 

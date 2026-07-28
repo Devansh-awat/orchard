@@ -81,7 +81,6 @@
 	let showDeletePasskeyModal = $state(false);
 	let passkeyToDelete = $state<PasskeyRecord | null>(null);
 
-
 	let editingField = $state<string | null>(null);
 	let editValue = $state('');
 	let savingField = $state(false);
@@ -149,8 +148,6 @@
 			]
 		}
 	]);
-
-
 
 	function censorEmail(email: string): string {
 		const [local, domain] = email.split('@');

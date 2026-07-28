@@ -52,8 +52,8 @@
 		<div class="settings-section-content">
 			<p class="settings-hint">
 				Go to <strong>Settings &rarr; Connectors</strong>, scroll to the bottom and click
-				<strong>Add custom connector</strong>, then enter the URL below. You'll be prompted to
-				sign in with your Orchard account to authorize access.
+				<strong>Add custom connector</strong>, then enter the URL below. You'll be prompted to sign
+				in with your Orchard account to authorize access.
 			</p>
 
 			<div class="mcp-field">

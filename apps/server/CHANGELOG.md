@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.0](https://github.com/LeafdTK/leaf/compare/server/v1.33.0...server/v1.34.0) (2026-07-28)
+
+
+### Features
+
+* **builder:** detect frameworks and expose build overrides on railpack builds ([d827c87](https://github.com/LeafdTK/leaf/commit/d827c87780f095f389b3d06759aa5a529074e228))
+
 ## [1.33.0](https://github.com/LeafdTK/leaf/compare/server/v1.32.6...server/v1.33.0) (2026-07-24)
 
 

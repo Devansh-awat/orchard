@@ -44,9 +44,7 @@
 	const archivingFailing = $derived(
 		!!archiving && !archiving.ok && database.mode === 'cnpg' && database.status !== 'stopped'
 	);
-	const archivingMessage = $derived(
-		(archiving?.message || '').split('\n')[0].slice(0, 180)
-	);
+	const archivingMessage = $derived((archiving?.message || '').split('\n')[0].slice(0, 180));
 
 	const noBackups = $derived(
 		database.mode === 'cnpg' &&

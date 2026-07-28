@@ -222,8 +222,8 @@
 		{#if showCreate}
 			<div class="settings-section-content">
 				<p class="settings-hint">
-					Tokens have the same permissions as your account. Use them with the Orchard MCP server
-					or API.
+					Tokens have the same permissions as your account. Use them with the Orchard MCP server or
+					API.
 				</p>
 				<div class="token-create-form">
 					<input

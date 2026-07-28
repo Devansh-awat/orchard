@@ -67,7 +67,9 @@
 		background: transparent;
 		color: var(--text-muted);
 		cursor: pointer;
-		transition: background-color 0.15s ease, color 0.15s ease;
+		transition:
+			background-color 0.15s ease,
+			color 0.15s ease;
 	}
 
 	.stepper-btn:hover:not(:disabled) {
