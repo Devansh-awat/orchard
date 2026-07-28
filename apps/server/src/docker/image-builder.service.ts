@@ -1459,12 +1459,17 @@ case "$(uname -m)" in
 esac
 RAILPACK_ASSET=railpack-${this.railpackVersion}-$RAILPACK_TARGET.tar.gz
 RAILPACK_RELEASE=https://github.com/railwayapp/railpack/releases/download/${this.railpackVersion}
-cd /tmp
+# Unpack outside /tmp: Railpack keeps its mise cache in /tmp/railpack, and the
+# extracted binary sitting on that path makes the cache mkdir fail.
+RAILPACK_TMP=$(mktemp -d)
+cd "$RAILPACK_TMP"
 curl -fsSL --retry 3 --retry-all-errors -O "$RAILPACK_RELEASE/$RAILPACK_ASSET"
 curl -fsSL --retry 3 --retry-all-errors -O "$RAILPACK_RELEASE/checksums.txt"
 grep " $RAILPACK_ASSET$" checksums.txt | sha256sum -c -
 tar xzf "$RAILPACK_ASSET" railpack
 install -m 0755 railpack /usr/local/bin/railpack
+cd /
+rm -rf "$RAILPACK_TMP"
 export PATH="$PATH:/usr/local/bin"
 railpack --version
 
