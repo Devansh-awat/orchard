@@ -900,53 +900,45 @@ fi
 
   /**
    * Generate a shell snippet that prunes the local cache directory when disk
-   * usage exceeds 80%. Removes the oldest subdirectories (by mtime) until
-   * usage drops below 70% or only one directory remains.
+   * usage exceeds 80%. Removes the oldest idle subdirectories (by mtime) until
+   * usage drops below 70%.
+   *
+   * The cache PVC is shared by every builder pod on the node, so a cache
+   * subdirectory may belong to a build that is running right now. Deleting one
+   * strands the owning build against a half-read cache, which surfaces as
+   * "could not lock <dir>/index.json.lock", "blob not found" or a failed
+   * commit on a ref — and the owner has no way to recover. Nothing in here may
+   * touch a directory that is in use, however full the disk gets: a build that
+   * runs out of cache space fails on its own, while a trampled one takes every
+   * concurrent build down with it.
    */
-  private get cachePrunePreamble(): string {
+  private cachePrunePreamble(selfCacheDir = ''): string {
     if (!this.localCacheEnabled) return '';
     return `
 # --- Prune local build cache if disk is getting full ---
-# Two modes:
-#  - >80%: gentle prune to 70%, skipping dirs touched in the last 10 min
-#    (so we don't trample concurrent builds).
-#  - >=90%: critical prune to 50%, ignoring the "recent" guard. The current
-#    build's cache export can write ~hundreds of MB, so leaving headroom
-#    matters more than preserving warm caches for parallel jobs.
 CACHE_ROOT="${this.localCachePath}"
+CACHE_SELF="${selfCacheDir}"
 if [ -d "$CACHE_ROOT" ]; then
   USAGE=$(df "$CACHE_ROOT" | awk 'NR==2 {sub(/%/,"",$5); print $5}')
-  CRITICAL=0
-  TARGET=70
-  if [ "$USAGE" -ge 90 ] 2>/dev/null; then
-    CRITICAL=1
-    TARGET=50
-    echo "=== Cache disk CRITICAL at \${USAGE}% — aggressive prune to \${TARGET}% ==="
-  elif [ "$USAGE" -gt 80 ] 2>/dev/null; then
-    echo "=== Cache disk usage at \${USAGE}% — pruning oldest entries ==="
-  fi
   if [ "$USAGE" -gt 80 ] 2>/dev/null; then
+    echo "=== Cache disk usage at \${USAGE}% — pruning oldest idle entries ==="
     ls -1dt "$CACHE_ROOT"/*/ 2>/dev/null | tac | while read -r dir; do
       [ -d "$dir" ] || continue
-      if [ "$CRITICAL" -eq 0 ]; then
-        if find "$dir" -maxdepth 0 -mmin -10 2>/dev/null | grep -q .; then continue; fi
-      fi
+      # Our own cache, and any cache another build has touched recently, are
+      # off limits. 30 min comfortably covers a slow build.
+      [ -n "$CACHE_SELF" ] && [ "\${dir%/}" = "\${CACHE_SELF%/}" ] && continue
+      if find "$dir" -maxdepth 1 -mmin -30 2>/dev/null | grep -q .; then continue; fi
       USAGE=$(df "$CACHE_ROOT" | awk 'NR==2 {sub(/%/,"",$5); print $5}')
-      if [ "$USAGE" -le "$TARGET" ]; then
+      if [ "$USAGE" -le 70 ]; then
         echo "=== Cache pruned down to \${USAGE}% ==="
         break
       fi
-      echo "Removing old cache: $dir"
+      echo "Removing idle cache: $dir"
       rm -rf "$dir"
     done
-    # Final guard: if still critical (only one cache dir, can't prune
-    # without nuking our own warm cache), wipe the lot to free space.
     USAGE=$(df "$CACHE_ROOT" | awk 'NR==2 {sub(/%/,"",$5); print $5}')
-    if [ "$USAGE" -ge 90 ] 2>/dev/null; then
-      echo "=== Cache still at \${USAGE}% after prune — wiping all cache dirs ==="
-      rm -rf "$CACHE_ROOT"/*
-      USAGE=$(df "$CACHE_ROOT" | awk 'NR==2 {sub(/%/,"",$5); print $5}')
-      echo "=== Cache wiped, now at \${USAGE}% ==="
+    if [ "$USAGE" -gt 80 ] 2>/dev/null; then
+      echo "=== WARNING: cache disk still at \${USAGE}%; every remaining entry is in use or is ours. Continuing without pruning further ==="
     fi
   fi
 fi
@@ -1013,7 +1005,7 @@ fi
 set +e
 ${gitShaPreamble}${buildDirPreamble}
 ulimit -n 1048576 2>/dev/null || true
-${this.ramdiskPreamble}${this.scratchMountPreamble}${this.cachePrunePreamble}
+${this.ramdiskPreamble}${this.scratchMountPreamble}${this.cachePrunePreamble(destMatch?.[1] ?? '')}
 ${mkdirLine}
 echo "=== Attempting build with cache enabled ==="
 BUILD_OUTPUT=$(mktemp)
@@ -1072,6 +1064,20 @@ if grep -qi "failed to check file presence in cache\\|BadRequest\\|Bad Request\\
   mkfifo "$FIFO"
 
   if [ -d "${stateRoot}" ]; then
+    # buildctl-daemonless.sh signals its buildkitd on exit but does not wait for
+    # it, so the daemon can still own this directory. Wiping it out from under a
+    # live daemon leaves the retry solving against a worker root that no longer
+    # exists, which fails as "lstat ${stateRoot}/runc-overlayfs: no such file or
+    # directory" and buries the error that sent us down this path.
+    if command -v pgrep >/dev/null 2>&1; then
+      for _i in $(seq 1 30); do
+        pgrep buildkitd >/dev/null 2>&1 || break
+        [ "$_i" = 1 ] && echo "=== Waiting for buildkitd to exit before clearing build state ==="
+        pkill -TERM buildkitd 2>/dev/null || true
+        sleep 1
+      done
+      pgrep buildkitd >/dev/null 2>&1 && pkill -KILL buildkitd 2>/dev/null && sleep 1
+    fi
     echo "=== Clearing build state before no-cache retry ==="
     rm -rf "${stateRoot}"/* "${stateRoot}"/.[!.]* 2>/dev/null || true
   fi
@@ -1128,7 +1134,7 @@ fi
     return `
 set +e
 ulimit -n 1048576 2>/dev/null || true
-${this.ramdiskPreamble}${this.scratchMountPreamble}${this.cachePrunePreamble}
+${this.ramdiskPreamble}${this.scratchMountPreamble}${this.cachePrunePreamble()}
 MAX_RETRIES=3
 RETRY_DELAY=2
 BUILD_OUTPUT=$(mktemp)
