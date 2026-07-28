@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.35.0](https://github.com/LeafdTK/leaf/compare/server/v1.34.3...server/v1.35.0) (2026-07-28)
+
+
+### Features
+
+* **builder:** make orchard build settings outrank a repo railpack.json ([0590c6c](https://github.com/LeafdTK/leaf/commit/0590c6c3986296ce1078222e1725da39d63d2b2f))
+
+
+### Bug Fixes
+
+* **builder:** detect the sveltekit adapter from config, not installed deps ([60c281b](https://github.com/LeafdTK/leaf/commit/60c281bc3a1b877b9b1b93eb9bd928b669816a96))
+* **builder:** stop the local build path overwriting the chosen framework too ([82c9af5](https://github.com/LeafdTK/leaf/commit/82c9af5c49258f6a54168d77afb0cc3627e60f8e))
+
 ## [1.34.3](https://github.com/LeafdTK/leaf/compare/server/v1.34.2...server/v1.34.3) (2026-07-28)
 
 
