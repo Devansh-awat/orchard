@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.1](https://github.com/LeafdTK/leaf/compare/server/v1.34.0...server/v1.34.1) (2026-07-28)
+
+
+### Bug Fixes
+
+* **builder:** stop the railpack binary squatting on railpack's cache dir ([12b5b07](https://github.com/LeafdTK/leaf/commit/12b5b073843e53288c848079be248823bb18aa65))
+
 ## [1.34.0](https://github.com/LeafdTK/leaf/compare/server/v1.33.0...server/v1.34.0) (2026-07-28)
 
 
