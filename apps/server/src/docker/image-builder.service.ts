@@ -2214,10 +2214,7 @@ exit $rc`,
     try {
       await this.prisma.deployment.update({
         where: { id: deploymentId },
-        data: {
-          detectedConfig: detection as unknown as object,
-          ...(detection.framework ? { framework: detection.framework } : {}),
-        },
+        data: { detectedConfig: detection as unknown as object },
       });
     } catch (error) {
       console.warn(`[ImageBuilder] Could not persist Railpack detection for ${deploymentId}:`, error.message);

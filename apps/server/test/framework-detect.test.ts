@@ -61,9 +61,29 @@ test('SvelteKit with adapter-static is static', async () => {
       scripts: { build: 'vite build' },
       devDependencies: { '@sveltejs/kit': '^2', '@sveltejs/adapter-static': '^3' },
     }),
+    'svelte.config.js': "import adapter from '@sveltejs/adapter-static';\nexport default { kit: { adapter: adapter() } };",
   });
   const { apps } = await detectApps(paths, read);
   assert.equal(primaryApp(apps)!.outputDirectory, 'build');
+});
+
+test('SvelteKit shipping adapter-static but configuring adapter-node is a server app', async () => {
+  const { paths, read } = repo({
+    'package.json': pkg({
+      scripts: { build: 'vite build' },
+      devDependencies: {
+        '@sveltejs/kit': '^2',
+        '@sveltejs/adapter-auto': '^7',
+        '@sveltejs/adapter-node': '^5',
+        '@sveltejs/adapter-static': '^3',
+      },
+    }),
+    'vite.config.js': "import adapter from '@sveltejs/adapter-node';\nexport default { plugins: [sveltekit({ adapter: adapter() })] };",
+  });
+  const { apps } = await detectApps(paths, read);
+  const app = primaryApp(apps)!;
+  assert.equal(app.framework, 'sveltekit');
+  assert.equal(app.outputDirectory, null, 'an adapter-node build must not be served as static');
 });
 
 test('Next.js is a server app unless output: export is configured', async () => {

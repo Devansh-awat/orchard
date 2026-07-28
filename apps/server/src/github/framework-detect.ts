@@ -258,9 +258,16 @@ async function classify(
     // Order mirrors spa.go:getOutputDirectory — the first match wins.
     if (deps['@sveltejs/kit']) {
       // SvelteKit is not static by default (vite.go:29 excludes it explicitly);
-      // adapter-static is the exception.
+      // adapter-static is the exception, and only when it is the adapter the
+      // config actually selects.
       app.framework = 'sveltekit';
-      if (deps['@sveltejs/adapter-static']) app.outputDirectory = 'build';
+      const svelteConfig = await firstExisting(
+        'svelte.config.js', 'svelte.config.mjs', 'svelte.config.ts',
+        'vite.config.js', 'vite.config.mjs', 'vite.config.ts',
+      );
+      if (svelteConfig && /@sveltejs\/adapter-static/.test(svelteConfig)) {
+        app.outputDirectory = 'build';
+      }
     } else if (deps['react-router'] && buildScript.includes('react-router build')) {
       app.framework = 'react-router';
       app.outputDirectory = 'build/client';
