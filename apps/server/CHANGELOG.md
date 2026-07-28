@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.34.2](https://github.com/LeafdTK/leaf/compare/server/v1.34.1...server/v1.34.2) (2026-07-28)
+
+
+### Bug Fixes
+
+* **builder:** stop the cache prune and no-cache retry trampling live builds ([d3eda11](https://github.com/LeafdTK/leaf/commit/d3eda11cc70150c32caeb6084ef09ce7fa48bf4c))
+
 ## [1.34.1](https://github.com/LeafdTK/leaf/compare/server/v1.34.0...server/v1.34.1) (2026-07-28)
 
 
