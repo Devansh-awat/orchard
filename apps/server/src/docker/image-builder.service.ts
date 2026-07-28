@@ -902,15 +902,6 @@ fi
    * Generate a shell snippet that prunes the local cache directory when disk
    * usage exceeds 80%. Removes the oldest idle subdirectories (by mtime) until
    * usage drops below 70%.
-   *
-   * The cache PVC is shared by every builder pod on the node, so a cache
-   * subdirectory may belong to a build that is running right now. Deleting one
-   * strands the owning build against a half-read cache, which surfaces as
-   * "could not lock <dir>/index.json.lock", "blob not found" or a failed
-   * commit on a ref — and the owner has no way to recover. Nothing in here may
-   * touch a directory that is in use, however full the disk gets: a build that
-   * runs out of cache space fails on its own, while a trampled one takes every
-   * concurrent build down with it.
    */
   private cachePrunePreamble(selfCacheDir = ''): string {
     if (!this.localCacheEnabled) return '';
@@ -924,8 +915,6 @@ if [ -d "$CACHE_ROOT" ]; then
     echo "=== Cache disk usage at \${USAGE}% — pruning oldest idle entries ==="
     ls -1dt "$CACHE_ROOT"/*/ 2>/dev/null | tac | while read -r dir; do
       [ -d "$dir" ] || continue
-      # Our own cache, and any cache another build has touched recently, are
-      # off limits. 30 min comfortably covers a slow build.
       [ -n "$CACHE_SELF" ] && [ "\${dir%/}" = "\${CACHE_SELF%/}" ] && continue
       if find "$dir" -maxdepth 1 -mmin -30 2>/dev/null | grep -q .; then continue; fi
       USAGE=$(df "$CACHE_ROOT" | awk 'NR==2 {sub(/%/,"",$5); print $5}')
@@ -1064,11 +1053,6 @@ if grep -qi "failed to check file presence in cache\\|BadRequest\\|Bad Request\\
   mkfifo "$FIFO"
 
   if [ -d "${stateRoot}" ]; then
-    # buildctl-daemonless.sh signals its buildkitd on exit but does not wait for
-    # it, so the daemon can still own this directory. Wiping it out from under a
-    # live daemon leaves the retry solving against a worker root that no longer
-    # exists, which fails as "lstat ${stateRoot}/runc-overlayfs: no such file or
-    # directory" and buries the error that sent us down this path.
     if command -v pgrep >/dev/null 2>&1; then
       for _i in $(seq 1 30); do
         pgrep buildkitd >/dev/null 2>&1 || break
@@ -1465,8 +1449,6 @@ case "$(uname -m)" in
 esac
 RAILPACK_ASSET=railpack-${this.railpackVersion}-$RAILPACK_TARGET.tar.gz
 RAILPACK_RELEASE=https://github.com/railwayapp/railpack/releases/download/${this.railpackVersion}
-# Unpack outside /tmp: Railpack keeps its mise cache in /tmp/railpack, and the
-# extracted binary sitting on that path makes the cache mkdir fail.
 RAILPACK_TMP=$(mktemp -d)
 cd "$RAILPACK_TMP"
 curl -fsSL --retry 3 --retry-all-errors -O "$RAILPACK_RELEASE/$RAILPACK_ASSET"
