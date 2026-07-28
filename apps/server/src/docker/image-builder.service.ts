@@ -6,7 +6,12 @@ import { BuildKitPoolService } from './buildkit-pool.service';
 import { OrgEventsService } from '../events/org-events.service';
 import { startPhaseSpan, recordPhaseSpan } from '../analytics/datadog';
 import { truncateK8sName } from '../projects/projects.utils';
-import { RAILPACK_INFO_MARKER, parseRailpackInfo } from './build-config';
+import {
+  RAILPACK_INFO_MARKER,
+  ORCHARD_RAILPACK_CONFIG,
+  parseRailpackInfo,
+  railpackConfigOverride,
+} from './build-config';
 
 interface BuildJobOptions {
   repoUrl: string;
@@ -1423,6 +1428,28 @@ head -n 20 "\${DOCKERFILE}"
         .map(([key, value]) => `--env '${key}=${value.replace(/'/g, "'\\''")}'`)
         .join(' ');
 
+      // A railpack.json in the repo outranks env overrides, so the build
+      // settings are re-emitted as the config file to keep the UI authoritative.
+      // JSON.stringify never emits a raw newline, so the quoted heredoc below
+      // cannot be broken out of by a command containing quotes or $.
+      const overrideConfig = railpackConfigOverride(envVars);
+      const configOverrideJson = overrideConfig ? JSON.stringify(overrideConfig) : '';
+      const configFileArg = overrideConfig ? ` --config-file ${ORCHARD_RAILPACK_CONFIG}` : '';
+      const configOverrideBlock = overrideConfig ? `
+echo "=== Applying Orchard build settings over the repository config ==="
+cat > /tmp/orchard-override.json <<'ORCHARD_RAILPACK_OVERRIDE'
+${configOverrideJson}
+ORCHARD_RAILPACK_OVERRIDE
+if [ -f railpack.json ] && command -v jq >/dev/null 2>&1; then
+  jq -s '.[0] * .[1]' railpack.json /tmp/orchard-override.json > ${ORCHARD_RAILPACK_CONFIG}
+elif [ -f railpack.json ]; then
+  echo "WARNING: jq unavailable; the build settings you set take precedence and railpack.json is ignored"
+  cp /tmp/orchard-override.json ${ORCHARD_RAILPACK_CONFIG}
+else
+  cp /tmp/orchard-override.json ${ORCHARD_RAILPACK_CONFIG}
+fi
+` : '';
+
       initContainers.push({
         name: 'railpack-prepare',
         image: this.railpackMiseImage,
@@ -1430,18 +1457,18 @@ head -n 20 "\${DOCKERFILE}"
         args: [
           `set -ex
 echo "=== Installing curl ==="
-if command -v curl >/dev/null 2>&1; then
+if command -v curl >/dev/null 2>&1${configOverrideJson ? ' && command -v jq >/dev/null 2>&1' : ''}; then
   echo "curl already installed, skipping"
 elif command -v apt-get >/dev/null 2>&1; then
   # Tolerate non-fatal apt cleanup errors (e.g. I/O error closing
   # /var/lib/apt/extended_states) — verify curl exists after install.
   apt-get update || true
-  apt-get install -y curl || true
+  apt-get install -y curl ${configOverrideJson ? 'jq' : ''} || true
   command -v curl >/dev/null 2>&1 || { echo "curl install failed"; exit 1; }
 elif command -v apk >/dev/null 2>&1; then
-  apk add --no-cache curl
+  apk add --no-cache curl ${configOverrideJson ? 'jq' : ''}
 elif command -v yum >/dev/null 2>&1; then
-  yum install -y curl
+  yum install -y curl ${configOverrideJson ? 'jq' : ''}
 fi
 
 echo "=== Installing Railpack ${this.railpackVersion} ==="
@@ -1489,9 +1516,10 @@ fi
 # any of the above is known.
 echo "$ORCHARD_BUILD_DIR" > /workspace/.orchard-build-dir
 
-echo "=== Running Railpack prepare ==="
 cd "$ORCHARD_BUILD_DIR"
-railpack prepare . --plan-out railpack-plan.json --info-out railpack-info.json ${envArgs}
+${configOverrideBlock}
+echo "=== Running Railpack prepare ==="
+railpack prepare . --plan-out railpack-plan.json --info-out railpack-info.json ${envArgs}${configFileArg}
 
 echo "=== Railpack prepare completed ==="
 echo "Generated files:"

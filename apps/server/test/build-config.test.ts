@@ -2,6 +2,7 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import {
   railpackOverrideEnv,
+  railpackConfigOverride,
   normalizeRootDirectory,
   parseRailpackInfo,
   RAILPACK_INFO_MARKER,
@@ -150,4 +151,54 @@ test('the last marker wins when a log contains several', () => {
   const logs = infoLine({ detectedProviders: ['node'], metadata: { nodeRuntime: 'vite' } })
     + infoLine({ detectedProviders: ['node'], metadata: { nodeRuntime: 'next' } });
   assert.equal(parseRailpackInfo(logs)!.framework, 'next');
+});
+
+test('no build settings means no config file, leaving the repo railpack.json alone', () => {
+  assert.equal(railpackConfigOverride({}), null);
+  assert.equal(railpackConfigOverride({ RAILPACK_SPA_OUTPUT_DIR: 'dist' }), null);
+});
+
+test('commands become a config file so the UI outranks a repo railpack.json', () => {
+  // Railpack merges Merge(cliOptions, env, railpack.json) with the last source
+  // winning, so overrides only stick if they arrive as the config file.
+  assert.deepEqual(
+    railpackConfigOverride({
+      RAILPACK_INSTALL_CMD: 'pnpm install',
+      RAILPACK_BUILD_CMD: 'pnpm build',
+      RAILPACK_START_CMD: 'node build',
+    }),
+    {
+      steps: {
+        install: {
+          commands: [
+            { src: '.', dest: '.' },
+            { cmd: "sh -c 'pnpm install'", customName: 'pnpm install' },
+          ],
+        },
+        build: {
+          commands: [
+            { src: '.', dest: '.' },
+            { cmd: "sh -c 'pnpm build'", customName: 'pnpm build' },
+          ],
+        },
+      },
+      deploy: { startCommand: 'node build' },
+    },
+  );
+});
+
+test('a command containing a colon stays an object, not a prefixed string', () => {
+  // UnmarshalStringCommand splits a bare string on ':' as a type prefix, so
+  // `npm run build:prod` would be parsed as command type "npm run build".
+  const cfg = railpackConfigOverride({ RAILPACK_BUILD_CMD: 'npm run build:prod' })!;
+  const cmd = cfg.steps.build.commands[1];
+  assert.equal(typeof cmd, 'object');
+  assert.equal(cmd.cmd, "sh -c 'npm run build:prod'");
+});
+
+test('a start command alone does not invent empty build steps', () => {
+  assert.deepEqual(
+    railpackConfigOverride({ RAILPACK_START_CMD: 'node build' }),
+    { deploy: { startCommand: 'node build' } },
+  );
 });

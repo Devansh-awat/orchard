@@ -97,6 +97,56 @@ export function normalizeRootDirectory(raw?: string | null): string | null {
   return trimmed;
 }
 
+/** Filename we hand to `railpack prepare --config-file`, inside the build dir. */
+export const ORCHARD_RAILPACK_CONFIG = '.orchard-railpack.json';
+
+/**
+ * The same overrides as a Railpack *config* object.
+ *
+ * Railpack resolves Merge(cliOptions, env, railpack.json) with the last source
+ * winning (core.go:160, config.go:62), so a railpack.json committed to the repo
+ * silently beats anything set in the UI. Emitting the overrides as the config
+ * file instead — merged over the repo's own, ours last — puts them in the slot
+ * that wins.
+ *
+ * Reads the RAILPACK_* variables rather than the columns so the file and the
+ * env can never disagree, and shapes them exactly as
+ * GenerateConfigFromEnvironment does (core.go:201-227). RAILPACK_SPA_OUTPUT_DIR
+ * is absent on purpose: the node provider reads it straight from the
+ * environment (spa.go:16), so no config file can outrank it.
+ *
+ * Returns null when there is nothing to override, so the caller can leave the
+ * repo's config untouched.
+ */
+export function railpackConfigOverride(env: Record<string, string>): Record<string, any> | null {
+  const out: Record<string, any> = {};
+
+  // NewCopyCommand('.') then NewExecShellCommand(cmd), whose object form is
+  // what UnmarshalJsonCommand dispatches on (command.go:101-140). The exec
+  // command must stay an object: a bare string is split on ':' as a type
+  // prefix, which would mangle `npm run build:prod`.
+  const step = (cmd: string) => ({
+    commands: [
+      { src: '.', dest: '.' },
+      { cmd: `sh -c '${cmd}'`, customName: cmd },
+    ],
+  });
+
+  const install = env.RAILPACK_INSTALL_CMD?.trim();
+  const build = env.RAILPACK_BUILD_CMD?.trim();
+  const start = env.RAILPACK_START_CMD?.trim();
+
+  if (install || build) {
+    out.steps = {
+      ...(install ? { install: step(install) } : {}),
+      ...(build ? { build: step(build) } : {}),
+    };
+  }
+  if (start) out.deploy = { startCommand: start };
+
+  return Object.keys(out).length ? out : null;
+}
+
 /**
  * Map stored build settings onto RAILPACK_* overrides.
  *
