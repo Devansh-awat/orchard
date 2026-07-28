@@ -123,7 +123,7 @@ export class ImageBuilderService {
   private readonly railpackVersion = process.env.RAILPACK_VERSION || 'v0.33.0';
 
   private readonly railpackFrontendImage =
-    process.env.RAILPACK_FRONTEND_IMAGE || 'ghcr.io/railwayapp/railpack-frontend:v0.0.32';
+    process.env.RAILPACK_FRONTEND_IMAGE || `ghcr.io/railwayapp/railpack-frontend:${process.env.RAILPACK_VERSION || 'v0.33.0'}`;
 
   private readonly railpackMiseImage =
     process.env.RAILPACK_MISE_IMAGE || 'ghcr.io/railwayapp/railpack-mise:20260227';
@@ -990,6 +990,22 @@ fi
 
     const stateRoot = this.workspaceTmpfs ? '/buildkit-state' : '/var/lib/buildkit';
 
+    const stateClearing = this.scratchBlock ? '' : `
+  if [ -d "${stateRoot}" ]; then
+    if command -v pgrep >/dev/null 2>&1; then
+      for _i in $(seq 1 30); do
+        pgrep buildkitd >/dev/null 2>&1 || break
+        [ "$_i" = 1 ] && echo "=== Waiting for buildkitd to exit before clearing build state ==="
+        pkill -TERM buildkitd 2>/dev/null || true
+        sleep 1
+      done
+      pgrep buildkitd >/dev/null 2>&1 && pkill -KILL buildkitd 2>/dev/null && sleep 1
+    fi
+    echo "=== Clearing build state before no-cache retry ==="
+    rm -rf "${stateRoot}"/* "${stateRoot}"/.[!.]* 2>/dev/null || true
+  fi
+`;
+
     return `
 set +e
 ${gitShaPreamble}${buildDirPreamble}
@@ -1040,7 +1056,7 @@ for attempt in $(seq 1 $MAX_RETRIES); do
   break
 done
 
-if grep -qi "failed to check file presence in cache\\|BadRequest\\|Bad Request\\|operation error S3\\|api error BadRequest\\|no space left on device\\|no such file or directory" "$BUILD_OUTPUT"; then
+if grep -v "skipped due to err" "$BUILD_OUTPUT" | grep -qi "failed to check file presence in cache\\|operation error S3\\|api error BadRequest\\|no space left on device"; then
   echo "=================================================="
   echo "WARNING: Cache operation failed (S3 error or disk full)"
   echo "Failed to save/load cache - skipping cache"
@@ -1052,20 +1068,7 @@ if grep -qi "failed to check file presence in cache\\|BadRequest\\|Bad Request\\
   FIFO=$(mktemp -u)
   mkfifo "$FIFO"
 
-  if [ -d "${stateRoot}" ]; then
-    if command -v pgrep >/dev/null 2>&1; then
-      for _i in $(seq 1 30); do
-        pgrep buildkitd >/dev/null 2>&1 || break
-        [ "$_i" = 1 ] && echo "=== Waiting for buildkitd to exit before clearing build state ==="
-        pkill -TERM buildkitd 2>/dev/null || true
-        sleep 1
-      done
-      pgrep buildkitd >/dev/null 2>&1 && pkill -KILL buildkitd 2>/dev/null && sleep 1
-    fi
-    echo "=== Clearing build state before no-cache retry ==="
-    rm -rf "${stateRoot}"/* "${stateRoot}"/.[!.]* 2>/dev/null || true
-  fi
-
+${stateClearing}
   echo "=== Retrying build without cache ==="
   
   for attempt in $(seq 1 $MAX_RETRIES); do
