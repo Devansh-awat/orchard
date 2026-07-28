@@ -1,24 +1,31 @@
 <script lang="ts">
-	import { ChevronDown, Plus } from 'lucide-svelte';
+	import { ChevronDown, Plus, Link2 } from 'lucide-svelte';
 	import { PopoverPanel } from '$lib/components/ui';
 
 	let {
 		accounts = [],
 		selected = null,
 		onSelect,
-		installUrl = null
+		installUrl = null,
+		directLink = false,
+		onDirectLink
 	}: {
 		accounts?: { login: string; count: number }[];
 		selected?: string | null;
 		onSelect: (login: string) => void;
 		installUrl?: string | null;
+		directLink?: boolean;
+		onDirectLink?: () => void;
 	} = $props();
 </script>
 
 <PopoverPanel sameWidth>
 	{#snippet trigger(attrs, open)}
 		<button type="button" class="acct-trigger" {...attrs}>
-			{#if selected}
+			{#if directLink}
+				<span class="acct-link-icon"><Link2 size={14} /></span>
+				<span class="acct-login">Direct link</span>
+			{:else if selected}
 				<img class="acct-avatar" src="https://github.com/{selected}.png?size=40" alt="" />
 				<span class="acct-login">{selected}</span>
 			{:else}
@@ -33,7 +40,7 @@
 				<button
 					type="button"
 					class="acct-option"
-					class:acct-option--active={account.login === selected}
+					class:acct-option--active={!directLink && account.login === selected}
 					onclick={() => {
 						onSelect(account.login);
 						close();
@@ -46,6 +53,23 @@
 			{:else}
 				<div class="acct-empty">No connected accounts yet</div>
 			{/each}
+			{#if onDirectLink || installUrl}
+				<div class="acct-sep"></div>
+			{/if}
+			{#if onDirectLink}
+				<button
+					type="button"
+					class="acct-option"
+					class:acct-option--active={directLink}
+					onclick={() => {
+						onDirectLink();
+						close();
+					}}
+				>
+					<span class="acct-link-icon"><Link2 size={14} /></span>
+					<span class="acct-login">Direct link</span>
+				</button>
+			{/if}
 			{#if installUrl}
 				<a class="acct-option acct-add" href={installUrl} target="_blank" rel="noopener noreferrer">
 					<span class="acct-add-icon"><Plus size={14} /></span>
@@ -154,10 +178,13 @@
 	}
 
 	.acct-add {
-		margin-top: 0.125rem;
-		border-top: 1px solid var(--border-default);
-		border-radius: 0 0 0.375rem 0.375rem;
 		color: var(--text-muted);
+	}
+
+	.acct-sep {
+		height: 1px;
+		margin: 0.25rem 0.5rem;
+		background: var(--border-default);
 	}
 
 	.acct-add-icon {
@@ -165,4 +192,13 @@
 		width: 1.125rem;
 		justify-content: center;
 	}
+
+	.acct-link-icon {
+		display: inline-flex;
+		width: 1.125rem;
+		justify-content: center;
+		color: var(--text-muted);
+		flex-shrink: 0;
+	}
+
 </style>

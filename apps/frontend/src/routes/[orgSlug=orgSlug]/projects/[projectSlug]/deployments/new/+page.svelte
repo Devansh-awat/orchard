@@ -494,10 +494,18 @@
 	}
 
 	function selectAccount(login: string) {
+		if (directLinkMode) clearRepoSelection();
+		directLinkMode = false;
 		selectedAccount = login;
 		if (!selectedRepo) {
 			repoSearch = '';
 		}
+	}
+
+	function useDirectLink() {
+		clearRepoSelection();
+		directLinkMode = true;
+		repoPickerOpen = false;
 	}
 
 	function selectRepo(repo: Repository) {
@@ -896,6 +904,7 @@
 	});
 
 	let selectedAccount = $state<string | null>(null);
+	let directLinkMode = $state(false);
 	let accountAutoSet = false;
 
 	const accounts = $derived.by(() => {
@@ -1039,7 +1048,32 @@
 										selected={selectedAccount}
 										onSelect={selectAccount}
 										installUrl={githubAppInstallUrl}
+										directLink={directLinkMode}
+										onDirectLink={useDirectLink}
 									/>
+									{#if directLinkMode}
+										<div class="picker-wrap">
+											<Input
+												value={repoSearch}
+												oninput={(e: Event) =>
+													handleRepoSearchInput((e.target as HTMLInputElement).value)}
+												placeholder="https://github.com/owner/repo"
+												class="font-mono pr-9"
+											/>
+											{#if loadingBranches}
+												<span class="picker-suffix"><Loader2 class="h-4 w-4 animate-spin" /></span>
+											{:else if repoSearch}
+												<button
+													type="button"
+													class="picker-suffix picker-clear"
+													aria-label="Clear repository"
+													onclick={clearRepoSelection}
+												>
+													<X size={15} />
+												</button>
+											{/if}
+										</div>
+									{:else}
 									<PopoverPanel sameWidth bind:open={repoPickerOpen}>
 										{#snippet trigger(attrs, open)}
 											<div class="picker-wrap">
@@ -1050,7 +1084,7 @@
 													{:else if repoSearch}
 														<span class="picker-value">{repoSearch}</span>
 													{:else}
-														<span class="picker-placeholder">Pick a repo, or paste owner/repo</span>
+														<span class="picker-placeholder">Search your repositories</span>
 													{/if}
 												</button>
 												{#if loadingRepos || loadingBranches}
@@ -1142,6 +1176,7 @@
 											</div>
 										{/snippet}
 									</PopoverPanel>
+									{/if}
 								</div>
 							</Field>
 
