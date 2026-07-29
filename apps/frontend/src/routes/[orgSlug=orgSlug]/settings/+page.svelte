@@ -607,7 +607,10 @@
 			const r = await apiFetch(`/apiv1/organizations/${organization.id}/members/${memberId}`, {
 				method: 'DELETE'
 			});
-			if (!r.ok) throw new Error('Failed to remove member');
+			if (!r.ok) {
+				const d = await r.json().catch(() => ({}));
+				throw new Error(d.message || 'Failed to remove member');
+			}
 			toasts.add({ title: 'Member removed', color: 'success' });
 			fetchOrganization();
 		} catch (e) {
@@ -635,7 +638,10 @@
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ role: newRole })
 			});
-			if (!r.ok) throw new Error('Failed to update member role');
+			if (!r.ok) {
+				const d = await r.json().catch(() => ({}));
+				throw new Error(d.message || 'Failed to update member role');
+			}
 			toasts.add({ title: 'Role updated', color: 'success' });
 			fetchOrganization();
 		} catch (e) {

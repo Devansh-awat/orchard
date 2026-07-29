@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ForbiddenException, ConflictException, Logger } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ForbiddenException, Logger } from '@nestjs/common';
 import { OrganizationRole } from '@prisma/client';
 import { randomBytes, createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -1434,30 +1434,12 @@ export class OrganizationsService {
     // Remove org membership AND all project memberships in this org atomically
     // to prevent stale ProjectMember rows from reactivating if the user is later
     // re-invited (e.g. as a guest — they'd inherit their old project admin roles).
+    // No sole-project-admin guard here: org owners and admins resolve as
+    // project admins on every project in the org (resolveProjectAccess ->
+    // source: 'orgAdmin'), so a project is never left unmanageable. Blocking
+    // the org removal instead left the member with org access and no way out
+    // short of promoting a new admin in every project they held.
     await this.prisma.$transaction(async (tx) => {
-      const adminProjects = await tx.projectMember.findMany({
-        where: {
-          userId: member.userId,
-          project: { organizationId },
-          role: { name: 'admin' },
-        },
-        select: { projectId: true, project: { select: { name: true } } },
-      });
-      for (const ap of adminProjects) {
-        const otherAdmins = await tx.projectMember.count({
-          where: {
-            projectId: ap.projectId,
-            role: { name: 'admin' },
-            NOT: { userId: member.userId },
-          },
-        });
-        if (otherAdmins === 0) {
-          throw new ConflictException(
-            `Cannot remove this member: they are the sole admin of project "${ap.project.name}". Promote another admin first.`,
-          );
-        }
-      }
-
       await tx.projectMember.deleteMany({
         where: {
           userId: member.userId,
