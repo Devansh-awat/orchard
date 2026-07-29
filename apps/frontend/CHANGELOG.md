@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.32.1](https://github.com/LeafdTK/leaf/compare/frontend/v0.32.0...frontend/v0.32.1) (2026-07-29)
+
+
+### Bug Fixes
+
+* allow removing an org member who is the sole admin of a project ([3497ad6](https://github.com/LeafdTK/leaf/commit/3497ad6d30028378d92df0c0bcefb8988f4cefed))
+
 ## [0.32.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.31.0...frontend/v0.32.0) (2026-07-28)
 
 

@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.35.1](https://github.com/LeafdTK/leaf/compare/server/v1.35.0...server/v1.35.1) (2026-07-29)
+
+
+### Bug Fixes
+
+* allow removing an org member who is the sole admin of a project ([3497ad6](https://github.com/LeafdTK/leaf/commit/3497ad6d30028378d92df0c0bcefb8988f4cefed))
+
 ## [1.35.0](https://github.com/LeafdTK/leaf/compare/server/v1.34.3...server/v1.35.0) (2026-07-28)
 
 
