@@ -48,7 +48,7 @@ export class ImportSettleService {
           const requested = await this.quotas.resolvePodResources(db.projectId, {
             cpuRequestMilli: db.cpuRequestMilli,
             memoryRequestBytes: db.memoryRequestBytes != null ? Number(db.memoryRequestBytes) : null,
-          });
+          }, 'postgres');
           await this.k8sCnpg.updateCnpgClusterResources(db.namespace, db.clusterName, {
             cpuMilli: requested.cpuMilli,
             memoryBytes: requested.memoryBytes,

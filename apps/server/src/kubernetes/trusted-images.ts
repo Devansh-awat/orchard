@@ -56,6 +56,8 @@ const matchPattern = (pattern: TrustedImagePattern, image: string): boolean => {
   return globToRegex(patTag).test(tag);
 };
 
+export const imageRepo = (image: string): string => parseRef(image).repo;
+
 export const isTrustedImage = (image: string): boolean => {
   if (!image) return false;
   const extra = (process.env.TRUSTED_IMAGES_EXTRA || '')

@@ -361,7 +361,7 @@ export class DatabasesService {
     const dbResources = await this.quotasService.resolvePodResources(projectId, {
       cpuRequestMilli: data.cpuRequestMilli ?? null,
       memoryRequestBytes: data.memoryRequestBytes ?? null,
-    });
+    }, 'postgres');
     const provisionResources = importFrom
       ? {
           cpuMilli: Math.max(dbResources.cpuMilli, this.IMPORT_BOOST_CPU_MILLI),

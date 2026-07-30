@@ -313,7 +313,7 @@ export class ProjectsService {
     const resolved = await this.quotasService.resolvePodResources(database.projectId, {
       cpuRequestMilli: data.cpuRequestMilli,
       memoryRequestBytes: data.memoryRequestBytes,
-    });
+    }, 'postgres');
     await this.quotasService.enforceOrgCapForNewPod(database.project.organizationId, {
       cpuMilli: resolved.cpuMilli,
       memoryBytes: resolved.memoryBytes,

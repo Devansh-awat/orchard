@@ -1314,7 +1314,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         cpuRequestMilli: deployment.cpuRequestMilli ?? null,
         memoryRequestBytes:
           deployment.memoryRequestBytes != null ? Number(deployment.memoryRequestBytes) : null,
-      });
+      }, deployment.image);
       const requested = {
         cpuMilli: perPod.cpuMilli * delta,
         memoryBytes: perPod.memoryBytes * delta,
@@ -4267,7 +4267,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       const resolved = await this.quotasService.resolvePodResources(deployment.projectId, {
         cpuRequestMilli: data.cpuRequestMilli,
         memoryRequestBytes: data.memoryRequestBytes,
-      });
+      }, deployment.image);
 
       // The deployment's current footprint is already counted in org/member
       // usage, so only the increase is additive — charging the full new
@@ -4282,7 +4282,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             cpuRequestMilli: deployment.cpuRequestMilli,
             memoryRequestBytes:
               deployment.memoryRequestBytes != null ? Number(deployment.memoryRequestBytes) : null,
-          });
+          }, deployment.image);
       const replicasRes = deployment.replicas || 1;
       const increase = {
         cpuMilli: Math.max(0, (resolved.cpuMilli - current.cpuMilli) * replicasRes),
@@ -4461,7 +4461,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     const podResources = await this.quotasService.resolvePodResources(project.id, {
       cpuRequestMilli: data.cpuRequestMilli ?? null,
       memoryRequestBytes: data.memoryRequestBytes ?? null,
-    });
+    }, image);
 
     await this.quotasService.enforceOrgCapForNewPod(project.organizationId, {
       cpuMilli: podResources.cpuMilli * replicas,
@@ -5776,7 +5776,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           rebuildResources = await this.quotasService.resolvePodResources(deploymentRow.projectId, {
             cpuRequestMilli: deploymentRow.cpuRequestMilli,
             memoryRequestBytes: deploymentRow.memoryRequestBytes ? Number(deploymentRow.memoryRequestBytes) : null,
-          });
+          }, deploymentRow.image);
           if (!k8sDeploymentExists) {
             await this.quotasService.enforceOrgCapForNewPod(deploymentRow.project.organizationId, {
               cpuMilli: rebuildResources.cpuMilli * (deploymentRow.replicas || 1),

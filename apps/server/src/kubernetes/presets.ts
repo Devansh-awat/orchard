@@ -1,4 +1,6 @@
 // Shared resource presets. Keep in sync with frontend/src/lib/presets.ts.
+import { imageRepo } from './trusted-images';
+
 export interface ResourcePreset {
   id: string;
   label: string;
@@ -20,3 +22,31 @@ export const RESOURCE_PRESETS: ResourcePreset[] = [
 
 export const DEFAULT_CPU_MILLI = 100;
 export const DEFAULT_MEMORY_BYTES = 128 * MiB;
+
+const DATABASE_IMAGE_REPOS = new Set([
+  'postgres',
+  'postgis/postgis',
+  'pgvector/pgvector',
+  'timescale/timescaledb',
+  'supabase/postgres',
+  'mysql',
+  'mariadb',
+  'mongo',
+  'redis',
+  'valkey/valkey',
+  'clickhouse/clickhouse-server',
+  'elasticsearch',
+  'opensearchproject/opensearch',
+]);
+
+const DATABASE_DEFAULT_CPU_MILLI = 500;
+const DATABASE_DEFAULT_MEMORY_BYTES = 1024 * MiB;
+
+export function defaultPodResourcesForImage(
+  image?: string | null,
+): { cpuMilli: number; memoryBytes: number } {
+  if (image && DATABASE_IMAGE_REPOS.has(imageRepo(image))) {
+    return { cpuMilli: DATABASE_DEFAULT_CPU_MILLI, memoryBytes: DATABASE_DEFAULT_MEMORY_BYTES };
+  }
+  return { cpuMilli: DEFAULT_CPU_MILLI, memoryBytes: DEFAULT_MEMORY_BYTES };
+}

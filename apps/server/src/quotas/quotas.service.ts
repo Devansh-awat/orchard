@@ -3,7 +3,7 @@ import { randomUUID } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { K8sNamespaceService } from '../kubernetes/k8s-namespace.service';
-import { DEFAULT_CPU_MILLI, DEFAULT_MEMORY_BYTES } from '../kubernetes/presets';
+import { defaultPodResourcesForImage } from '../kubernetes/presets';
 import { formatBytes } from '../projects/projects.utils';
 
 export interface Caps {
@@ -87,16 +87,18 @@ export class QuotasService {
   async resolvePodResources(
     projectId: string,
     override?: { cpuRequestMilli?: number | null; memoryRequestBytes?: number | null },
+    image?: string | null,
   ): Promise<{ cpuMilli: number; memoryBytes: number }> {
     const { defaultPodCpuMilli, defaultPodMemoryBytes } = await this.resolveProjectCaps(projectId);
+    const fallback = defaultPodResourcesForImage(image);
     const cpu =
       override?.cpuRequestMilli ??
       defaultPodCpuMilli ??
-      DEFAULT_CPU_MILLI;
+      fallback.cpuMilli;
     const mem =
       override?.memoryRequestBytes ??
       defaultPodMemoryBytes ??
-      DEFAULT_MEMORY_BYTES;
+      fallback.memoryBytes;
     return { cpuMilli: cpu, memoryBytes: mem };
   }
 
