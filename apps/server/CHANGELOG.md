@@ -1,5 +1,15 @@
 # Changelog
 
+## [1.35.4](https://github.com/LeafdTK/leaf/compare/server/v1.35.3...server/v1.35.4) (2026-07-30)
+
+
+### Bug Fixes
+
+* **builder:** make scratch reset survive the daemonless buildkitd lifecycle ([0eedf5b](https://github.com/LeafdTK/leaf/commit/0eedf5b67b8c5cb231834afb1fa3ec6f4ff1feb1))
+* **compose:** claim a pvc for named volumes instead of silently mounting emptydir ([7959700](https://github.com/LeafdTK/leaf/commit/7959700ef7e7ad8d847cc4f7e36c05975651c666))
+* **deployments:** keep public port exposure across namespace sync and exposure toggle ([fb0fea7](https://github.com/LeafdTK/leaf/commit/fb0fea7b370b1cb2018395a8eb09722a378ec95c))
+* **quotas:** give database images a workable resource default ([a300234](https://github.com/LeafdTK/leaf/commit/a3002346c55ac27243dcd8e2cb7593a21fee98e8))
+
 ## [1.35.3](https://github.com/LeafdTK/leaf/compare/server/v1.35.2...server/v1.35.3) (2026-07-30)
 
 
