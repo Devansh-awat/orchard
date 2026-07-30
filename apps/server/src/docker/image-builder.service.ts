@@ -177,6 +177,9 @@ export class ImageBuilderService {
 
   private readonly scratchStorageClass = process.env.BUILDER_SCRATCH_STORAGE_CLASS || 'longhorn-ssd';
 
+  private readonly retryDockerfileFailures =
+    process.env.BUILDER_RETRY_DOCKERFILE_FAILURES === 'true';
+
   private readonly pendingScheduleTimeoutSeconds = Number(
     process.env.BUILDER_PENDING_SCHEDULE_TIMEOUT_SECONDS || 300,
   );
@@ -965,6 +968,27 @@ reset_build_scratch() {
   }
 
   /**
+   * Stop the retry loop when a Dockerfile step is what failed.
+   *
+   * The transient predicates below grep the whole build output, and that output
+   * includes the user's own program logs. A Django traceback ending in
+   * "connection timeout expired" matches the network predicate's "timeout", so
+   * a deterministic application failure got retried three times — roughly
+   * tripling the build's wall clock and holding a builder slot the whole time,
+   * for a build that could never succeed. A failing RUN step is the user's
+   * build breaking, not infrastructure, so it is not ours to retry.
+   */
+  private get dockerfileFailureGuard(): string {
+    if (this.retryDockerfileFailures) return '';
+    return `
+  if grep -q "did not complete successfully: exit code:" "$BUILD_OUTPUT"; then
+    echo "=== Build failed inside a Dockerfile step - not retrying ==="
+    break
+  fi
+`;
+  }
+
+  /**
    * Retry branch for storage errors. EIO from the scratch device was not
    * matched by the network predicate below it, so those builds failed on the
    * first attempt without ever retrying.
@@ -1134,7 +1158,7 @@ for attempt in $(seq 1 $MAX_RETRIES); do
   fi
   
   echo "=== Build with cache failed (exit code: $BUILD_EXIT_CODE) ==="
-${this.ioErrorRetryBranch}
+${this.ioErrorRetryBranch}${this.dockerfileFailureGuard}
   if grep -qi "timeout\\|connection refused\\|connection reset\\|proxyconnect\\|network\\|dial tcp\\|i/o timeout\\|EOF\\|buildkitd.sock\\|failed to list workers" "$BUILD_OUTPUT"; then
     if [ $attempt -lt $MAX_RETRIES ]; then
       echo "=================================================="
@@ -1185,7 +1209,7 @@ ${stateClearing}
     fi
     
     echo "=== Build without cache failed (exit code: $BUILD_EXIT_CODE) ==="
-${this.ioErrorRetryBranch}
+${this.ioErrorRetryBranch}${this.dockerfileFailureGuard}
     if grep -qi "timeout\\|connection refused\\|connection reset\\|proxyconnect\\|network\\|dial tcp\\|i/o timeout\\|EOF\\|buildkitd.sock\\|failed to list workers" "$BUILD_OUTPUT"; then
       if [ $attempt -lt $MAX_RETRIES ]; then
         echo "=================================================="
@@ -1241,7 +1265,7 @@ for attempt in $(seq 1 $MAX_RETRIES); do
   fi
   
   echo "=== Build failed (exit code: $EXIT_CODE) ==="
-${this.ioErrorRetryBranch}
+${this.ioErrorRetryBranch}${this.dockerfileFailureGuard}
   if grep -qi "timeout\\|connection refused\\|connection reset\\|proxyconnect\\|network\\|dial tcp\\|i/o timeout\\|EOF\\|buildkitd.sock\\|failed to list workers" "$BUILD_OUTPUT"; then
     if [ $attempt -lt $MAX_RETRIES ]; then
       echo "=================================================="
