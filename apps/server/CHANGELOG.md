@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.37.0](https://github.com/LeafdTK/leaf/compare/server/v1.36.0...server/v1.37.0) (2026-07-30)
+
+
+### Features
+
+* **builder:** make tmpfs scratch an explicit bounded mode ([19f0f5a](https://github.com/LeafdTK/leaf/commit/19f0f5a3a6f5e4a3a53f3c16afd6617e3e19df80))
+
+
+### Bug Fixes
+
+* **builder:** drop build retries and skip the cache instead of rebuilding ([9950e25](https://github.com/LeafdTK/leaf/commit/9950e2535fa45ad2aefeced1e285428e0e5f926a))
+* **builder:** stop retrying builds that failed inside a dockerfile step ([43569e1](https://github.com/LeafdTK/leaf/commit/43569e1b62f7004c919ba575a16b0b2d32770ca5))
+
 ## [1.36.0](https://github.com/LeafdTK/leaf/compare/server/v1.35.4...server/v1.36.0) (2026-07-30)
 
 
