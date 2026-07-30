@@ -4,6 +4,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from './kubernetes.service';
 import { parseCpu, parseMemory } from './quantity';
 
+export const TENANT_NAMESPACE_EGRESS_PEERS: k8s.V1NetworkPolicyPeer[] = [
+  { namespaceSelector: { matchExpressions: [{ key: 'orchard.my/managed', operator: 'Exists' }] } },
+  { namespaceSelector: { matchExpressions: [{ key: 'orchard.dev/managed', operator: 'Exists' }] } },
+];
+
 /**
  * Per-tenant namespace lifecycle: creation, deletion, ResourceQuota +
  * LimitRange enforcement, per-namespace usage aggregation, RBAC bootstrap
@@ -404,14 +409,16 @@ export class K8sNamespaceService {
           //   1. Talk to other pods in the same tenant namespace.
           //   2. Resolve DNS via kube-dns in kube-system (UDP/TCP 53).
           //   3. Talk to the `network` namespace (ingress controllers).
-          //   4. Reach the public internet — but NOT in-cluster Services
-          //      (10.0.0.0/8 RFC1918, the service/pod CIDR is in there),
-          //      link-local / cloud metadata (169.254.0.0/16), or other
-          //      RFC1918 ranges that the platform's own infra may live on.
+          //   4. Reach the public internet — but NOT link-local / cloud
+          //      metadata (169.254.0.0/16) or the RFC1918 ranges the
+          //      platform's own infra lives on.
+          //   5. Reach other Orchard tenant namespaces. Those namespaces are
+          //      still default-deny on ingress, so this only lands on what a
+          //      tenant has explicitly published via an `-allow-public`
+          //      policy — the same surface the public internet already has.
           // This blocks tenant pods from reaching the kube-apiserver,
-          // platform Postgres/Harbor/server, other tenants, and the cloud
-          // metadata IMDS — while still letting them call out to the
-          // public internet for normal app traffic.
+          // platform Postgres/Harbor/server, other tenants' unpublished
+          // services, and the cloud metadata IMDS.
           egress: [
             {
               to: [
@@ -464,6 +471,9 @@ export class K8sNamespaceService {
                   },
                 },
               ],
+            },
+            {
+              to: TENANT_NAMESPACE_EGRESS_PEERS,
             },
             // CNPG barman sidecars in tenant namespaces stream WAL/backups to
             // r2-proxy, which lives at a ClusterIP in 10.x — blanket RFC1918

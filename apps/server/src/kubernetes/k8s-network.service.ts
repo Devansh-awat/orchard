@@ -1927,7 +1927,7 @@ export class K8sNetworkService implements OnModuleInit {
         policyTypes: ['Ingress'],
         ingress: [
           {
-            from: [{ ipBlock: { cidr: '0.0.0.0/0' } }],
+            from: [{ ipBlock: { cidr: '0.0.0.0/0' } }, { namespaceSelector: {} }],
             ports: [{ protocol: 'TCP', port: 5432 }],
           },
         ],
@@ -2105,7 +2105,7 @@ export class K8sNetworkService implements OnModuleInit {
         policyTypes: ['Ingress'],
         ingress: [
           {
-            from: [{ ipBlock: { cidr: '0.0.0.0/0' } }],
+            from: [{ ipBlock: { cidr: '0.0.0.0/0' } }, { namespaceSelector: {} }],
             ports: ports.map((p) => ({
               protocol: p.protocol.toUpperCase() === 'UDP' ? 'UDP' : 'TCP',
               port: p.port,
