@@ -2,6 +2,7 @@ import {
   Injectable,
   NotFoundException,
   BadRequestException,
+  ForbiddenException,
   Logger,
 } from '@nestjs/common';
 import * as yaml from 'js-yaml';
@@ -159,6 +160,17 @@ export class ComposeStacksService {
   ): Promise<{ composeYaml: string; installationId: bigint | null }> {
     const parsed = this.github.parseRepoUrl(repoUrl);
     if (!parsed) throw new BadRequestException('Could not parse repository URL');
+
+    const canAccess = await this.github.verifyUserCanAccessRepo(userId, parsed.owner, parsed.repo);
+    if (!canAccess) {
+      const isPublic = await this.github.isRepoPublic(parsed.owner, parsed.repo);
+      if (!isPublic) {
+        throw new ForbiddenException(
+          'You do not have access to this repository on GitHub. Connect your GitHub account or request access to the repo.',
+        );
+      }
+    }
+
     const token = await this.github.resolveRepoToken(userId, parsed.owner, parsed.repo);
     if (!token) {
       throw new BadRequestException(

@@ -18,6 +18,7 @@
     "test:auth-coverage": "tsx --test test/auth-coverage.test.ts",
     "test:throttler": "tsx --test test/api-throttler.test.ts",
     "test:build-config": "tsx --test test/build-config.test.ts",
+    "test:github-access": "tsx --test test/github-repo-access.test.ts",
     "mcp": "tsx src/mcp/index.ts",
     "mcp:remote": "ts-node --swc src/mcp/main.ts"
   },

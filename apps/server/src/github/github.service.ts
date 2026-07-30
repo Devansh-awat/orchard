@@ -433,7 +433,7 @@ export class GitHubService {
     const MAX_PAGES = 10;
     const fetchPage = async (page: number): Promise<GitHubBranch[]> => {
       const response = await fetch(
-        `https://api.github.com/repos/${owner}/${repo}/branches?per_page=100&page=${page}`,
+        `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/branches?per_page=100&page=${page}`,
         {
           headers: this.githubApiHeaders(accessToken),
         },
@@ -456,6 +456,22 @@ export class GitHubService {
     return all.flat();
   }
 
+  /**
+   * Encode a repo-relative path for a contents URL.
+   *
+   * `fetch` resolves dot segments before the request goes out, so an unencoded
+   * `..` escapes the owner/repo the caller was authorized against and reaches
+   * anything else the token covers, including `/installation/repositories`.
+   * Traversal is rejected and every surviving segment is encoded.
+   */
+  private static encodeRepoPath(path: string): string {
+    const segments = path.split('/').filter((s) => s.length > 0);
+    if (segments.some((s) => s === '.' || s === '..' || s.includes('\\'))) {
+      throw new BadRequestException('Invalid file path');
+    }
+    return segments.map((s) => encodeURIComponent(s)).join('/');
+  }
+
   async getRepoContents(
     accessToken: string,
     owner: string,
@@ -463,8 +479,8 @@ export class GitHubService {
     path = '',
     branch?: string
   ): Promise<GitHubContent[]> {
-    let url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
-    
+    let url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${GitHubService.encodeRepoPath(path)}`;
+
     if (branch) {
       url += `?ref=${encodeURIComponent(branch)}`;
     }
@@ -493,7 +509,7 @@ export class GitHubService {
     branch?: string
   ): Promise<string[] | null> {
     const ref = branch || 'HEAD';
-    const url = `https://api.github.com/repos/${owner}/${repo}/git/trees/${encodeURIComponent(ref)}?recursive=1`;
+    const url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/git/trees/${encodeURIComponent(ref)}?recursive=1`;
 
     try {
       const response = await fetch(url, {
@@ -563,8 +579,8 @@ export class GitHubService {
     path: string,
     branch?: string
   ): Promise<string> {
-    let url = `https://api.github.com/repos/${owner}/${repo}/contents/${path}`;
-    
+    let url = `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/contents/${GitHubService.encodeRepoPath(path)}`;
+
     if (branch) {
       url += `?ref=${encodeURIComponent(branch)}`;
     }
@@ -678,7 +694,7 @@ export class GitHubService {
 
   async getDefaultBranch(accessToken: string | null, owner: string, repo: string): Promise<string> {
     try {
-      const response = await fetch(`https://api.github.com/repos/${owner}/${repo}`, {
+      const response = await fetch(`https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`, {
         headers: this.githubApiHeaders(accessToken ?? ''),
       });
       if (response.ok) {
@@ -917,7 +933,7 @@ export class GitHubService {
     secret: string
   ): Promise<{ id: number; active: boolean }> {
     const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/hooks`,
+      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/hooks`,
       {
         method: 'POST',
         headers: {
@@ -956,7 +972,7 @@ export class GitHubService {
     webhookId: string
   ): Promise<void> {
     const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/hooks/${webhookId}`,
+      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/hooks/${webhookId}`,
       {
         method: 'DELETE',
         headers: {
@@ -983,7 +999,7 @@ export class GitHubService {
     description?: string
   ): Promise<GitHubDeploymentResponse> {
     const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/deployments`,
+      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/deployments`,
       {
         method: 'POST',
         headers: {
@@ -1039,7 +1055,7 @@ export class GitHubService {
     }
 
     const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/deployments/${deploymentId}/statuses`,
+      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/deployments/${deploymentId}/statuses`,
       {
         method: 'POST',
         headers: {
@@ -1067,7 +1083,7 @@ export class GitHubService {
     ref: string
   ): Promise<string> {
     const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/commits/${ref}`,
+      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/commits/${encodeURIComponent(ref)}`,
       {
         headers: {
           'Authorization': `Bearer ${accessToken}`,
@@ -1308,7 +1324,7 @@ export class GitHubService {
     const token = await this.getOrRefreshInstallationToken(installationId);
 
     const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}`,
+      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
       {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1365,7 +1381,7 @@ export class GitHubService {
     try {
       const jwt = this.generateAppJwt();
       const response = await fetch(
-        `https://api.github.com/repos/${owner}/${repo}/installation`,
+        `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/installation`,
         {
           headers: {
             'Authorization': `Bearer ${jwt}`,
@@ -1444,7 +1460,7 @@ export class GitHubService {
   async isRepoPublic(owner: string, repo: string): Promise<boolean> {
     try {
       const response = await fetch(
-        `https://api.github.com/repos/${owner}/${repo}`,
+        `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
         {
           headers: {
             'Accept': 'application/vnd.github+json',
@@ -1468,7 +1484,7 @@ export class GitHubService {
     if (!token) return false;
 
     const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}`,
+      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}`,
       {
         headers: {
           'Authorization': `Bearer ${token}`,
@@ -1525,6 +1541,62 @@ export class GitHubService {
   }
 
   private readonly mirrorSyncInflight = new Set<string>();
+
+  /**
+   * Repo ids the user can actually see through one installation.
+   *
+   * The mirror table is installation-scoped, so it contains every repo the App
+   * was granted — including ones an org member has no permission on. GitHub's
+   * user-to-server `/user/installations/{id}/repositories` returns the
+   * intersection of the installation grant and the caller's own access, which
+   * is what we have to list against. Returns null when we could not determine
+   * the set, so callers can fail closed rather than fall back to the mirror.
+   */
+  private async getUserAccessibleRepoIds(userToken: string, installationId: bigint): Promise<Set<string> | null> {
+    const perPage = 100;
+    const maxPages = 30;
+
+    const fetchPage = async (page: number): Promise<{ ids: string[]; lastPage: number | null }> => {
+      const response = await fetch(
+        `https://api.github.com/user/installations/${installationId}/repositories?per_page=${perPage}&page=${page}`,
+        {
+          signal: AbortSignal.timeout(8000),
+          headers: {
+            'Authorization': `Bearer ${userToken}`,
+            'Accept': 'application/vnd.github+json',
+            'X-GitHub-Api-Version': '2022-11-28',
+          },
+        }
+      );
+      if (!response.ok) {
+        throw new Error(`/user/installations/${installationId}/repositories -> ${response.status}`);
+      }
+      const link = response.headers.get('link') || '';
+      const lastMatch = link.match(/[?&]page=(\d+)[^>]*>;\s*rel="last"/);
+      const data = await response.json();
+      return {
+        ids: (data.repositories || []).map((r: any) => String(r.id)),
+        lastPage: lastMatch ? Number(lastMatch[1]) : null,
+      };
+    };
+
+    try {
+      const first = await fetchPage(1);
+      if (!first.lastPage || first.lastPage <= 1) return new Set(first.ids);
+
+      const lastPage = Math.min(first.lastPage, maxPages);
+      if (first.lastPage > maxPages) {
+        console.warn(`[GitHub] user-accessible repo list for installation ${installationId} truncated at ${maxPages * perPage}`);
+      }
+      const rest = await Promise.all(
+        Array.from({ length: lastPage - 1 }, (_, i) => fetchPage(i + 2)),
+      );
+      return new Set([first, ...rest].flatMap((r) => r.ids));
+    } catch (e: any) {
+      console.warn(`[GitHub] could not resolve user-accessible repos for installation ${installationId}:`, e?.message ?? e);
+      return null;
+    }
+  }
 
   async syncInstallationRepos(appInstallation: { id: string; installationId: bigint }): Promise<void> {
     if (this.mirrorSyncInflight.has(appInstallation.id)) return;
@@ -1631,19 +1703,28 @@ export class GitHubService {
 
   private readonly userInstallationsCache = new Map<string, { at: number; rows: any[] }>();
 
+  private readonly accessibleReposCache = new Map<string, { at: number; ids: Set<string> }>();
+
   private static readonly INSTALLATIONS_CACHE_MS = 5 * 60 * 1000;
+
+  private static readonly ACCESSIBLE_REPOS_CACHE_MS = 60 * 1000;
 
   private static readonly MIRROR_STALE_MS = 24 * 60 * 60 * 1000;
 
   clearUserInstallationsCache() {
     this.userInstallationsCache.clear();
+    this.accessibleReposCache.clear();
   }
 
-  // The repo list is served from the DB mirror (kept current by installation,
+  // Repo metadata is served from the DB mirror (kept current by installation,
   // repository, and push webhooks), never from live GitHub pagination. An
   // installation with no mirror rows is seeded synchronously on first read;
-  // a stale mirror reseeds in the background. Per-user repo permissions are
-  // enforced at deploy time (verifyUserCanAccessRepo), not at list time.
+  // a stale mirror reseeds in the background.
+  //
+  // The mirror is installation-scoped, so it is then intersected with the repos
+  // this user can actually see through each installation. An org member with
+  // access to one repo must not be shown the rest of the org's private repos
+  // just because the App is installed org-wide.
   async getAllUserRepositories(userId: string): Promise<{ repos: GitHubRepo[]; installations: any[]; hasInstallations: boolean; userLinked: boolean }> {
     let installations: any[];
     const cachedInst = this.userInstallationsCache.get(userId);
@@ -1654,10 +1735,17 @@ export class GitHubService {
       this.userInstallationsCache.set(userId, { at: Date.now(), rows: installations });
     }
 
-    const userLinked = Boolean(await this.getValidUserToken(userId));
+    const userToken = await this.getValidUserToken(userId);
+    const userLinked = Boolean(userToken);
 
     if (installations.length === 0) {
       return { repos: [], installations: [], hasInstallations: false, userLinked };
+    }
+
+    // Without a user token we cannot tell which of the installation's repos this
+    // person is allowed to see, so we show none rather than all of them.
+    if (!userToken) {
+      return { repos: [], installations: [], hasInstallations: true, userLinked };
     }
 
     const instIds = installations.map((i) => i.id);
@@ -1695,6 +1783,24 @@ export class GitHubService {
     }
 
     const instById = new Map(installations.map((i) => [i.id, i]));
+
+    const allowedByInst = new Map<string, Set<string> | null>(
+      await Promise.all(
+        installations.map(async (i): Promise<[string, Set<string> | null]> => {
+          const key = `${userId}:${i.installationId}`;
+          const cached = this.accessibleReposCache.get(key);
+          if (cached && Date.now() - cached.at < GitHubService.ACCESSIBLE_REPOS_CACHE_MS) {
+            return [i.id, cached.ids];
+          }
+          const ids = await this.getUserAccessibleRepoIds(userToken, i.installationId);
+          if (ids) this.accessibleReposCache.set(key, { at: Date.now(), ids });
+          return [i.id, ids];
+        }),
+      ),
+    );
+
+    rows = rows.filter((r) => allowedByInst.get(r.appInstallationId)?.has(r.githubRepoId.toString()) ?? false);
+
     const countByInst = new Map<string, number>();
     for (const r of rows) {
       countByInst.set(r.appInstallationId, (countByInst.get(r.appInstallationId) ?? 0) + 1);
@@ -1894,7 +2000,7 @@ export class GitHubService {
     }
 
     const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/check-runs`,
+      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/check-runs`,
       {
         method: 'POST',
         headers: {
@@ -1956,7 +2062,7 @@ export class GitHubService {
     }
 
     const response = await fetch(
-      `https://api.github.com/repos/${owner}/${repo}/check-runs/${checkRunId}`,
+      `https://api.github.com/repos/${encodeURIComponent(owner)}/${encodeURIComponent(repo)}/check-runs/${checkRunId}`,
       {
         method: 'PATCH',
         headers: {
