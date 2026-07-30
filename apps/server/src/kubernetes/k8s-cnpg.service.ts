@@ -1094,16 +1094,22 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       }, labels);
 
       const sourceName = 'import-source';
+      const sslMode = options.importFrom.sslMode || 'prefer';
+      const verifiesServerCert = sslMode === 'verify-ca' || sslMode === 'verify-full';
+      const connectionParameters: Record<string, string> = {
+        host: options.importFrom.host,
+        port: String(options.importFrom.port || 5432),
+        user: options.importFrom.user,
+        dbname: options.importFrom.database,
+        sslmode: sslMode,
+      };
+      if (verifiesServerCert) {
+        connectionParameters.sslrootcert = 'system';
+      }
       clusterSpec.externalClusters = [
         {
           name: sourceName,
-          connectionParameters: {
-            host: options.importFrom.host,
-            port: String(options.importFrom.port || 5432),
-            user: options.importFrom.user,
-            dbname: options.importFrom.database,
-            sslmode: options.importFrom.sslMode || 'prefer',
-          },
+          connectionParameters,
           password: { name: importSecretName, key: 'password' },
         },
       ];
