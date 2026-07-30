@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.36.0](https://github.com/LeafdTK/leaf/compare/server/v1.35.4...server/v1.36.0) (2026-07-30)
+
+
+### Features
+
+* **builder:** add disk-backed scratch mode as an alternative to block and tmpfs ([d3355f0](https://github.com/LeafdTK/leaf/commit/d3355f0b639eaca306dc873c6a09d6ee9ce82d49))
+
+
+### Bug Fixes
+
+* **databases:** send sslrootcert=system when the import source verifies its certificate ([86468fd](https://github.com/LeafdTK/leaf/commit/86468fd941e36844c124a79523c8c7d5161ac6eb))
+* **network:** let in-cluster pods reach publicly exposed databases and deployments ([ba56e71](https://github.com/LeafdTK/leaf/commit/ba56e718c758a425bfd3cfe697577c8d3ad1428c))
+
 ## [1.35.4](https://github.com/LeafdTK/leaf/compare/server/v1.35.3...server/v1.35.4) (2026-07-30)
 
 
