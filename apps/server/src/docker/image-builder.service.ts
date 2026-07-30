@@ -173,6 +173,12 @@ export class ImageBuilderService {
   // driver, which makes it the portable option where none is configured.
   private readonly scratchDisk = this.scratchMode === 'disk';
 
+  // RAM-backed scratch. tmpfs supports d_type and xattrs, so overlayfs can use
+  // it as an upperdir and BuildKit keeps its copy-on-write snapshotter. It is
+  // charged to the pod's memory cgroup and is not reclaimable, so it carries a
+  // sizeLimit — without one a single build can consume the whole node.
+  private readonly scratchTmpfs = this.scratchMode === 'tmpfs';
+
   private readonly scratchSize = process.env.BUILDER_SCRATCH_SIZE || '40Gi';
 
   private readonly scratchStorageClass = process.env.BUILDER_SCRATCH_STORAGE_CLASS || 'longhorn-ssd';
@@ -1558,7 +1564,7 @@ fi
           ...(this.sidecarPushEnabled
             ? []
             : [{ name: 'DOCKER_CONFIG', value: '/root/.docker' }]),
-          { name: 'BUILDKITD_FLAGS', value: `--config /etc/buildkit/buildkitd.toml${this.workspaceTmpfs || this.scratchBlock || this.scratchDisk ? ' --root /buildkit-state' : ''}` },
+          { name: 'BUILDKITD_FLAGS', value: `--config /etc/buildkit/buildkitd.toml${this.workspaceTmpfs || this.scratchBlock || this.scratchDisk || this.scratchTmpfs ? ' --root /buildkit-state' : ''}` },
           ...(this.s3CacheEnabled && !this.localCacheEnabled ? [
             {
               name: 'AWS_ACCESS_KEY_ID',
@@ -1598,7 +1604,7 @@ fi
             name: 'output',
             mountPath: '/output',
           }] : []),
-          ...((this.workspaceTmpfs || this.scratchDisk) && !this.scratchBlock ? [{
+          ...((this.workspaceTmpfs || this.scratchDisk || this.scratchTmpfs) && !this.scratchBlock ? [{
             name: 'buildkit-state',
             mountPath: '/buildkit-state',
           }] : []),
@@ -1816,7 +1822,7 @@ exit $rc`,
                 name: 'output',
                 emptyDir: this.workspaceTmpfs ? { medium: 'Memory' } : {},
               }] : []),
-              ...(!daemonIp && (this.workspaceTmpfs || this.scratchBlock || this.scratchDisk) ? [{
+              ...(!daemonIp && (this.workspaceTmpfs || this.scratchBlock || this.scratchDisk || this.scratchTmpfs) ? [{
                 name: 'buildkit-state',
                 ...(this.scratchBlock
                   ? {
@@ -1833,7 +1839,7 @@ exit $rc`,
                     }
                   : this.scratchDisk
                     ? { emptyDir: { sizeLimit: this.scratchSize } }
-                    : { emptyDir: { medium: 'Memory' } }),
+                    : { emptyDir: { medium: 'Memory', sizeLimit: this.scratchSize } }),
               }] : []),
               ...(!daemonIp && this.localCacheEnabled ? [{
                 name: 'buildkit-cache',
