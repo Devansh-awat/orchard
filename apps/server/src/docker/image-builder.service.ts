@@ -166,6 +166,13 @@ export class ImageBuilderService {
 
   private readonly scratchBlock = this.scratchMode === 'block';
 
+  // Disk-backed scratch: a plain emptyDir on the node, reached over virtio-fs
+  // instead of the hypervisor's virtio-blk path. Slower than a raw block device
+  // for snapshotter metadata, but it is not RAM, so it does not compete with the
+  // build's memory limit the way medium: Memory does. It also needs no CSI
+  // driver, which makes it the portable option where none is configured.
+  private readonly scratchDisk = this.scratchMode === 'disk';
+
   private readonly scratchSize = process.env.BUILDER_SCRATCH_SIZE || '40Gi';
 
   private readonly scratchStorageClass = process.env.BUILDER_SCRATCH_STORAGE_CLASS || 'longhorn-ssd';
@@ -1732,7 +1739,7 @@ fi
           ...(this.sidecarPushEnabled
             ? []
             : [{ name: 'DOCKER_CONFIG', value: '/root/.docker' }]),
-          { name: 'BUILDKITD_FLAGS', value: `--config /etc/buildkit/buildkitd.toml${this.workspaceTmpfs || this.scratchBlock ? ' --root /buildkit-state' : ''}` },
+          { name: 'BUILDKITD_FLAGS', value: `--config /etc/buildkit/buildkitd.toml${this.workspaceTmpfs || this.scratchBlock || this.scratchDisk ? ' --root /buildkit-state' : ''}` },
           ...(this.s3CacheEnabled && !this.localCacheEnabled ? [
             {
               name: 'AWS_ACCESS_KEY_ID',
@@ -1772,7 +1779,7 @@ fi
             name: 'output',
             mountPath: '/output',
           }] : []),
-          ...(this.workspaceTmpfs && !this.scratchBlock ? [{
+          ...((this.workspaceTmpfs || this.scratchDisk) && !this.scratchBlock ? [{
             name: 'buildkit-state',
             mountPath: '/buildkit-state',
           }] : []),
@@ -1990,7 +1997,7 @@ exit $rc`,
                 name: 'output',
                 emptyDir: this.workspaceTmpfs ? { medium: 'Memory' } : {},
               }] : []),
-              ...(!daemonIp && (this.workspaceTmpfs || this.scratchBlock) ? [{
+              ...(!daemonIp && (this.workspaceTmpfs || this.scratchBlock || this.scratchDisk) ? [{
                 name: 'buildkit-state',
                 ...(this.scratchBlock
                   ? {
@@ -2005,7 +2012,9 @@ exit $rc`,
                         },
                       },
                     }
-                  : { emptyDir: { medium: 'Memory' } }),
+                  : this.scratchDisk
+                    ? { emptyDir: { sizeLimit: this.scratchSize } }
+                    : { emptyDir: { medium: 'Memory' } }),
               }] : []),
               ...(!daemonIp && this.localCacheEnabled ? [{
                 name: 'buildkit-cache',
