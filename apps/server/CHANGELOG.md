@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.35.3](https://github.com/LeafdTK/leaf/compare/server/v1.35.2...server/v1.35.3) (2026-07-30)
+
+
+### Bug Fixes
+
+* **builder:** derive build status from pod phase and fail fast on unschedulable pods ([86e0e42](https://github.com/LeafdTK/leaf/commit/86e0e42e8c57690b66e4e21dab93fd7c87fb71ec))
+* **builder:** retry storage io errors and rebuild scratch filesystem before retrying ([99545bb](https://github.com/LeafdTK/leaf/commit/99545bbb5e4a32b824d52baa806a375cefdd89ba))
+* **builder:** stop stripping local cache export for sidecar push ([c522eac](https://github.com/LeafdTK/leaf/commit/c522eacabfcf4d4cebaed51874ff59b9e7caf1bb))
+
 ## [1.35.2](https://github.com/LeafdTK/leaf/compare/server/v1.35.1...server/v1.35.2) (2026-07-30)
 
 
