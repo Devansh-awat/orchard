@@ -59,6 +59,8 @@ interface BuildJobStatus {
   imageRef?: string;
   /** Raw railpack-info.json line, when the prepare init container produced one. */
   railpackInfoLog?: string;
+  /** Scheduler's reason when the pod could not be placed, e.g. an unbound PVC. */
+  schedulingMessage?: string;
 }
 
 const BUILDKIT_PUSH_PHASE_RE =
@@ -167,6 +169,10 @@ export class ImageBuilderService {
   private readonly scratchSize = process.env.BUILDER_SCRATCH_SIZE || '40Gi';
 
   private readonly scratchStorageClass = process.env.BUILDER_SCRATCH_STORAGE_CLASS || 'longhorn-ssd';
+
+  private readonly pendingScheduleTimeoutSeconds = Number(
+    process.env.BUILDER_PENDING_SCHEDULE_TIMEOUT_SECONDS || 300,
+  );
 
   private static readonly SCRATCH_DEVICE = '/dev/buildscratch';
 
@@ -2319,6 +2325,7 @@ exit $rc`,
       let logs = '';
       let pusherLogs = '';
       let railpackInfoLog: string | undefined;
+      let schedulingMessage: string | undefined;
 
       if (jobSpec.status?.succeeded && jobSpec.status.succeeded > 0) {
         status = 'succeeded';
@@ -2326,6 +2333,8 @@ exit $rc`,
         status = 'failed';
         console.error(`[ImageBuilder] Job ${jobName} failed. Conditions:`, JSON.stringify(jobSpec.status?.conditions));
       } else if (jobSpec.status?.active && jobSpec.status.active > 0) {
+        // A Job counts an unscheduled pod as active, so this is only a
+        // provisional 'running' — the pod's own phase decides, below.
         status = 'running';
       } else {
         status = 'pending';
@@ -2350,6 +2359,17 @@ exit $rc`,
           const podConditions = pod.status?.conditions;
           const containerStatuses = pod.status?.containerStatuses;
           const initContainerStatuses = pod.status?.initContainerStatuses;
+
+          if (status === 'running' && podPhase === 'Pending') {
+            status = 'pending';
+          }
+
+          const scheduled = podConditions?.find(c => c.type === 'PodScheduled');
+          if (scheduled?.status === 'False') {
+            schedulingMessage = [scheduled.reason, scheduled.message]
+              .filter(Boolean)
+              .join(': ') || 'pod is not schedulable';
+          }
 
           railpackInfoLog = await this.readRailpackInfoLog(
             coreApi,
@@ -2423,7 +2443,7 @@ exit $rc`,
                 undefined,
                 5000
               );
-              logs += logResponse.body;
+              logs += logResponse.body ?? '';
 
               const hasPusherContainer = containerStatuses?.some((cs) => cs.name === 'pusher');
               if (hasPusherContainer && status !== 'pending') {
@@ -2468,7 +2488,7 @@ exit $rc`,
                         undefined,
                         1000
                       );
-                      allContainerLogs.push(`\n=== Init Container: ${ics.name} ===\n${initLogResponse.body}`);
+                      allContainerLogs.push(`\n=== Init Container: ${ics.name} ===\n${initLogResponse.body ?? ''}`);
                     } catch (initLogErr) {
                       console.warn(`[ImageBuilder] Could not fetch logs for init container ${ics.name}:`, initLogErr.message);
                     }
@@ -2501,6 +2521,7 @@ exit $rc`,
         pusherLogs,
         imageRef,
         railpackInfoLog,
+        schedulingMessage,
       };
     } catch (error) {
       if (error.statusCode === 404) {
@@ -2602,9 +2623,22 @@ exit $rc`,
         }
 
         if (status.status === 'pending' && elapsedSeconds > 60) {
-          console.warn(`[ImageBuilder] Job ${jobName} still pending after ${elapsedSeconds}s - possible scheduling issue`);
+          const detail = status.schedulingMessage ? ` (${status.schedulingMessage})` : '';
+          console.warn(`[ImageBuilder] Job ${jobName} still pending after ${elapsedSeconds}s - possible scheduling issue${detail}`);
+
+          // An unschedulable pod does not recover on its own often enough to
+          // justify burning the whole build timeout on it. Give the scheduler
+          // a grace window, then fail with the reason instead of a silent wait.
+          if (status.schedulingMessage && elapsedSeconds > this.pendingScheduleTimeoutSeconds) {
+            await this.appendLog(deploymentId, `Build job could not be scheduled after ${elapsedSeconds}s: ${status.schedulingMessage}`, 'ERROR');
+            await this.deleteBuildJob(jobName).catch(() => {});
+            throw new BadRequestException(
+              `Build failed: could not schedule build pod after ${elapsedSeconds}s - ${status.schedulingMessage}`,
+            );
+          }
+
           if (elapsedSeconds % 30 === 0) {
-            await this.appendLog(deploymentId, `Build job still pending after ${elapsedSeconds}s - waiting for pod to be scheduled...`, 'WARNING');
+            await this.appendLog(deploymentId, `Build job still pending after ${elapsedSeconds}s${detail} - waiting for pod to be scheduled...`, 'WARNING');
           }
         }
 
