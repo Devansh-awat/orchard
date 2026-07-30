@@ -912,8 +912,14 @@ fi
   /**
    * Shell function that rebuilds the scratch filesystem after an I/O error.
    * An EIO from the underlying block device leaves ext4 aborted, so a plain
-   * retry reuses a filesystem that fails every write the same way. BuildKit
-   * has to be stopped before the unmount or it holds the mount open.
+   * retry reuses a filesystem that fails every write the same way.
+   *
+   * buildctl-daemonless.sh starts its own buildkitd per invocation and kills it
+   * from an EXIT trap, so by the time a retry runs the daemon is already on its
+   * way out. Signalling it again races that trap, and forcing the unmount while
+   * it still holds the mount leaves the next daemon on a half-torn-down root.
+   * So: wait for it to actually be gone, unmount cleanly, and prove the new
+   * filesystem is writable before telling the caller to retry.
    */
   private get scratchResetHelper(): string {
     if (!this.scratchBlock) return '';
@@ -924,14 +930,28 @@ reset_build_scratch() {
   if command -v pgrep >/dev/null 2>&1; then
     for _i in $(seq 1 30); do
       pgrep buildkitd >/dev/null 2>&1 || break
-      pkill -TERM buildkitd 2>/dev/null || true
       sleep 1
     done
-    pgrep buildkitd >/dev/null 2>&1 && pkill -KILL buildkitd 2>/dev/null && sleep 1
+    if pgrep buildkitd >/dev/null 2>&1; then
+      echo "=== buildkitd still running, stopping it ==="
+      pkill -KILL buildkitd 2>/dev/null || true
+      sleep 2
+    fi
   fi
-  umount -f /buildkit-state 2>/dev/null || true
+  rm -f /run/buildkit/buildkitd.sock 2>/dev/null || true
+  for _i in $(seq 1 10); do
+    mountpoint -q /buildkit-state 2>/dev/null || break
+    umount /buildkit-state 2>/dev/null && break
+    sleep 1
+  done
+  if mountpoint -q /buildkit-state 2>/dev/null; then
+    umount -l /buildkit-state 2>/dev/null || true
+    sleep 1
+  fi
   mkfs.ext4 -q -F -E lazy_itable_init=1,nodiscard ${dev} || return 1
   mount ${dev} /buildkit-state || return 1
+  touch /buildkit-state/.rw-probe 2>/dev/null || return 1
+  rm -f /buildkit-state/.rw-probe 2>/dev/null || true
   echo "=== Build scratch rebuilt, retrying ==="
 }
 `;
@@ -949,6 +969,9 @@ reset_build_scratch() {
       echo "=================================================="
       echo "WARNING: Storage I/O error detected"
       echo "=================================================="
+      echo "--- guest kernel log (last 40 lines) ---"
+      dmesg 2>/dev/null | tail -40 || echo "(dmesg unavailable)"
+      echo "--- end kernel log ---"
       command -v reset_build_scratch >/dev/null 2>&1 && reset_build_scratch
       continue
     fi
@@ -1105,7 +1128,7 @@ for attempt in $(seq 1 $MAX_RETRIES); do
   
   echo "=== Build with cache failed (exit code: $BUILD_EXIT_CODE) ==="
 ${this.ioErrorRetryBranch}
-  if grep -qi "timeout\\|connection refused\\|connection reset\\|proxyconnect\\|network\\|dial tcp\\|i/o timeout\\|EOF" "$BUILD_OUTPUT"; then
+  if grep -qi "timeout\\|connection refused\\|connection reset\\|proxyconnect\\|network\\|dial tcp\\|i/o timeout\\|EOF\\|buildkitd.sock\\|failed to list workers" "$BUILD_OUTPUT"; then
     if [ $attempt -lt $MAX_RETRIES ]; then
       echo "=================================================="
       echo "WARNING: Network/timeout error detected"
@@ -1156,7 +1179,7 @@ ${stateClearing}
     
     echo "=== Build without cache failed (exit code: $BUILD_EXIT_CODE) ==="
 ${this.ioErrorRetryBranch}
-    if grep -qi "timeout\\|connection refused\\|connection reset\\|proxyconnect\\|network\\|dial tcp\\|i/o timeout\\|EOF" "$BUILD_OUTPUT"; then
+    if grep -qi "timeout\\|connection refused\\|connection reset\\|proxyconnect\\|network\\|dial tcp\\|i/o timeout\\|EOF\\|buildkitd.sock\\|failed to list workers" "$BUILD_OUTPUT"; then
       if [ $attempt -lt $MAX_RETRIES ]; then
         echo "=================================================="
         echo "WARNING: Network/timeout error detected"
@@ -1212,7 +1235,7 @@ for attempt in $(seq 1 $MAX_RETRIES); do
   
   echo "=== Build failed (exit code: $EXIT_CODE) ==="
 ${this.ioErrorRetryBranch}
-  if grep -qi "timeout\\|connection refused\\|connection reset\\|proxyconnect\\|network\\|dial tcp\\|i/o timeout\\|EOF" "$BUILD_OUTPUT"; then
+  if grep -qi "timeout\\|connection refused\\|connection reset\\|proxyconnect\\|network\\|dial tcp\\|i/o timeout\\|EOF\\|buildkitd.sock\\|failed to list workers" "$BUILD_OUTPUT"; then
     if [ $attempt -lt $MAX_RETRIES ]; then
       echo "=================================================="
       echo "WARNING: Network/timeout error detected"
