@@ -895,7 +895,7 @@ if ! mountpoint -q /buildkit-state 2>/dev/null; then
   for _i in $(seq 1 20); do [ -b ${dev} ] && [ "$(blockdev --getsize64 ${dev} 2>/dev/null)" -gt 0 ] 2>/dev/null && break; sleep 0.25; done
   if [ -b ${dev} ]; then
     command -v mkfs.ext4 >/dev/null 2>&1 || apk add --no-cache e2fsprogs >/dev/null 2>&1
-    mkfs.ext4 -q -F -E lazy_itable_init=1 ${dev} && sync
+    mkfs.ext4 -q -F -E lazy_itable_init=1,nodiscard ${dev} && sync
     for _i in 1 2 3 4 5; do mount ${dev} /buildkit-state 2>/dev/null && break; sleep 0.5; done
     if mountpoint -q /buildkit-state; then
       echo "=== Build scratch mounted on a dedicated disk ($(df -h /buildkit-state | awk 'NR==2{print $2}')) ==="
@@ -906,6 +906,53 @@ if ! mountpoint -q /buildkit-state 2>/dev/null; then
     echo "WARNING: build scratch device ${dev} not present; using container filesystem"
   fi
 fi
+`;
+  }
+
+  /**
+   * Shell function that rebuilds the scratch filesystem after an I/O error.
+   * An EIO from the underlying block device leaves ext4 aborted, so a plain
+   * retry reuses a filesystem that fails every write the same way. BuildKit
+   * has to be stopped before the unmount or it holds the mount open.
+   */
+  private get scratchResetHelper(): string {
+    if (!this.scratchBlock) return '';
+    const dev = ImageBuilderService.SCRATCH_DEVICE;
+    return `
+reset_build_scratch() {
+  echo "=== I/O error on build scratch - rebuilding the scratch filesystem ==="
+  if command -v pgrep >/dev/null 2>&1; then
+    for _i in $(seq 1 30); do
+      pgrep buildkitd >/dev/null 2>&1 || break
+      pkill -TERM buildkitd 2>/dev/null || true
+      sleep 1
+    done
+    pgrep buildkitd >/dev/null 2>&1 && pkill -KILL buildkitd 2>/dev/null && sleep 1
+  fi
+  umount -f /buildkit-state 2>/dev/null || true
+  mkfs.ext4 -q -F -E lazy_itable_init=1,nodiscard ${dev} || return 1
+  mount ${dev} /buildkit-state || return 1
+  echo "=== Build scratch rebuilt, retrying ==="
+}
+`;
+  }
+
+  /**
+   * Retry branch for storage errors. EIO from the scratch device was not
+   * matched by the network predicate below it, so those builds failed on the
+   * first attempt without ever retrying.
+   */
+  private get ioErrorRetryBranch(): string {
+    return `
+  if grep -qi "input/output error" "$BUILD_OUTPUT"; then
+    if [ $attempt -lt $MAX_RETRIES ]; then
+      echo "=================================================="
+      echo "WARNING: Storage I/O error detected"
+      echo "=================================================="
+      command -v reset_build_scratch >/dev/null 2>&1 && reset_build_scratch
+      continue
+    fi
+  fi
 `;
   }
 
@@ -1025,7 +1072,7 @@ fi
 set +e
 ${gitShaPreamble}${buildDirPreamble}
 ulimit -n 1048576 2>/dev/null || true
-${this.ramdiskPreamble}${this.scratchMountPreamble}${this.cachePrunePreamble(cacheDirMatch?.[1] ?? '')}
+${this.ramdiskPreamble}${this.scratchMountPreamble}${this.scratchResetHelper}${this.cachePrunePreamble(cacheDirMatch?.[1] ?? '')}
 ${mkdirLine}
 echo "=== Attempting build with cache enabled ==="
 BUILD_OUTPUT=$(mktemp)
@@ -1057,7 +1104,7 @@ for attempt in $(seq 1 $MAX_RETRIES); do
   fi
   
   echo "=== Build with cache failed (exit code: $BUILD_EXIT_CODE) ==="
-  
+${this.ioErrorRetryBranch}
   if grep -qi "timeout\\|connection refused\\|connection reset\\|proxyconnect\\|network\\|dial tcp\\|i/o timeout\\|EOF" "$BUILD_OUTPUT"; then
     if [ $attempt -lt $MAX_RETRIES ]; then
       echo "=================================================="
@@ -1108,7 +1155,7 @@ ${stateClearing}
     fi
     
     echo "=== Build without cache failed (exit code: $BUILD_EXIT_CODE) ==="
-    
+${this.ioErrorRetryBranch}
     if grep -qi "timeout\\|connection refused\\|connection reset\\|proxyconnect\\|network\\|dial tcp\\|i/o timeout\\|EOF" "$BUILD_OUTPUT"; then
       if [ $attempt -lt $MAX_RETRIES ]; then
         echo "=================================================="
@@ -1136,7 +1183,7 @@ fi
     return `
 set +e
 ulimit -n 1048576 2>/dev/null || true
-${this.ramdiskPreamble}${this.scratchMountPreamble}${this.cachePrunePreamble()}
+${this.ramdiskPreamble}${this.scratchMountPreamble}${this.scratchResetHelper}${this.cachePrunePreamble()}
 MAX_RETRIES=3
 RETRY_DELAY=2
 BUILD_OUTPUT=$(mktemp)
@@ -1164,7 +1211,7 @@ for attempt in $(seq 1 $MAX_RETRIES); do
   fi
   
   echo "=== Build failed (exit code: $EXIT_CODE) ==="
-  
+${this.ioErrorRetryBranch}
   if grep -qi "timeout\\|connection refused\\|connection reset\\|proxyconnect\\|network\\|dial tcp\\|i/o timeout\\|EOF" "$BUILD_OUTPUT"; then
     if [ $attempt -lt $MAX_RETRIES ]; then
       echo "=================================================="
