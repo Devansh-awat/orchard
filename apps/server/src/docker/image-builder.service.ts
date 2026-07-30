@@ -177,9 +177,6 @@ export class ImageBuilderService {
 
   private readonly scratchStorageClass = process.env.BUILDER_SCRATCH_STORAGE_CLASS || 'longhorn-ssd';
 
-  private readonly retryDockerfileFailures =
-    process.env.BUILDER_RETRY_DOCKERFILE_FAILURES === 'true';
-
   private readonly pendingScheduleTimeoutSeconds = Number(
     process.env.BUILDER_PENDING_SCHEDULE_TIMEOUT_SECONDS || 300,
   );
@@ -919,96 +916,8 @@ fi
 `;
   }
 
-  /**
-   * Shell function that rebuilds the scratch filesystem after an I/O error.
-   * An EIO from the underlying block device leaves ext4 aborted, so a plain
-   * retry reuses a filesystem that fails every write the same way.
-   *
-   * buildctl-daemonless.sh starts its own buildkitd per invocation and kills it
-   * from an EXIT trap, so by the time a retry runs the daemon is already on its
-   * way out. Signalling it again races that trap, and forcing the unmount while
-   * it still holds the mount leaves the next daemon on a half-torn-down root.
-   * So: wait for it to actually be gone, unmount cleanly, and prove the new
-   * filesystem is writable before telling the caller to retry.
-   */
-  private get scratchResetHelper(): string {
-    if (!this.scratchBlock) return '';
-    const dev = ImageBuilderService.SCRATCH_DEVICE;
-    return `
-reset_build_scratch() {
-  echo "=== I/O error on build scratch - rebuilding the scratch filesystem ==="
-  if command -v pgrep >/dev/null 2>&1; then
-    for _i in $(seq 1 30); do
-      pgrep buildkitd >/dev/null 2>&1 || break
-      sleep 1
-    done
-    if pgrep buildkitd >/dev/null 2>&1; then
-      echo "=== buildkitd still running, stopping it ==="
-      pkill -KILL buildkitd 2>/dev/null || true
-      sleep 2
-    fi
-  fi
-  rm -f /run/buildkit/buildkitd.sock 2>/dev/null || true
-  for _i in $(seq 1 10); do
-    mountpoint -q /buildkit-state 2>/dev/null || break
-    umount /buildkit-state 2>/dev/null && break
-    sleep 1
-  done
-  if mountpoint -q /buildkit-state 2>/dev/null; then
-    umount -l /buildkit-state 2>/dev/null || true
-    sleep 1
-  fi
-  mkfs.ext4 -q -F -E lazy_itable_init=1,nodiscard ${dev} || return 1
-  mount ${dev} /buildkit-state || return 1
-  touch /buildkit-state/.rw-probe 2>/dev/null || return 1
-  rm -f /buildkit-state/.rw-probe 2>/dev/null || true
-  echo "=== Build scratch rebuilt, retrying ==="
-}
-`;
-  }
 
-  /**
-   * Stop the retry loop when a Dockerfile step is what failed.
-   *
-   * The transient predicates below grep the whole build output, and that output
-   * includes the user's own program logs. A Django traceback ending in
-   * "connection timeout expired" matches the network predicate's "timeout", so
-   * a deterministic application failure got retried three times — roughly
-   * tripling the build's wall clock and holding a builder slot the whole time,
-   * for a build that could never succeed. A failing RUN step is the user's
-   * build breaking, not infrastructure, so it is not ours to retry.
-   */
-  private get dockerfileFailureGuard(): string {
-    if (this.retryDockerfileFailures) return '';
-    return `
-  if grep -q "did not complete successfully: exit code:" "$BUILD_OUTPUT"; then
-    echo "=== Build failed inside a Dockerfile step - not retrying ==="
-    break
-  fi
-`;
-  }
 
-  /**
-   * Retry branch for storage errors. EIO from the scratch device was not
-   * matched by the network predicate below it, so those builds failed on the
-   * first attempt without ever retrying.
-   */
-  private get ioErrorRetryBranch(): string {
-    return `
-  if grep -qi "input/output error" "$BUILD_OUTPUT"; then
-    if [ $attempt -lt $MAX_RETRIES ]; then
-      echo "=================================================="
-      echo "WARNING: Storage I/O error detected"
-      echo "=================================================="
-      echo "--- guest kernel log (last 40 lines) ---"
-      dmesg 2>/dev/null | tail -40 || echo "(dmesg unavailable)"
-      echo "--- end kernel log ---"
-      command -v reset_build_scratch >/dev/null 2>&1 && reset_build_scratch
-      continue
-    fi
-  fi
-`;
-  }
 
   /**
    * Generate a shell snippet that prunes the local cache directory when disk
@@ -1082,204 +991,90 @@ fi
 
     if (!hasCacheEnabled) {
       return gitShaPreamble + buildDirPreamble
-        + this.generateRetryScript(`buildctl-daemonless.sh ${argsWithCache}`);
+        + this.generateBuildScript(`buildctl-daemonless.sh ${argsWithCache}`);
     }
 
-    // Extract the local cache dir from --export-cache dest= or --import-cache
-    // src= so we can mkdir -p it. BuildKit's local importer errors instead of
-    // reporting a miss when the directory is absent.
+    // Split the cache flags off the base args so the build can drop them at
+    // runtime. Values are restricted to shellQuote's safe charset (no spaces),
+    // so $CACHE_ARGS word-splits back into the original arguments.
+    const isCacheFlag = (arg: string, idx: number, arr: string[]) =>
+      arg === '--import-cache' || arg === '--export-cache'
+      || (idx > 0 && (arr[idx - 1] === '--import-cache' || arr[idx - 1] === '--export-cache'));
+
+    const baseArgs = buildctlArgs.filter((a, i, arr) => !isCacheFlag(a, i, arr))
+      .map(shellQuote).join(' ') + gitShaOpt;
+    const cacheOnlyArgs = buildctlArgs.filter(isCacheFlag).map(shellQuote).join(' ');
+
     const argAfter = (flag: string) =>
       buildctlArgs.find((_, i) => i > 0 && buildctlArgs[i - 1] === flag) || '';
     const cacheDirMatch = argAfter('--export-cache').match(/dest=([^,]+)/)
       || argAfter('--import-cache').match(/src=([^,]+)/);
-    const mkdirLine = cacheDirMatch ? `mkdir -p "${cacheDirMatch[1]}"` : '';
+    const cacheDir = cacheDirMatch?.[1] ?? '';
 
-    const argsWithoutCache = buildctlArgs.filter((arg, idx, arr) => {
-      if (arg === '--import-cache' || arg === '--export-cache') {
-        return false;
-      }
-      if (idx > 0 && (arr[idx - 1] === '--import-cache' || arr[idx - 1] === '--export-cache')) {
-        return false;
-      }
-      return true;
-    }).map(shellQuote).join(' ') + gitShaOpt;
-
-    const stateRoot = this.workspaceTmpfs ? '/buildkit-state' : '/var/lib/buildkit';
-
-    const stateClearing = this.scratchBlock ? '' : `
-  if [ -d "${stateRoot}" ]; then
-    if command -v pgrep >/dev/null 2>&1; then
-      for _i in $(seq 1 30); do
-        pgrep buildkitd >/dev/null 2>&1 || break
-        [ "$_i" = 1 ] && echo "=== Waiting for buildkitd to exit before clearing build state ==="
-        pkill -TERM buildkitd 2>/dev/null || true
-        sleep 1
-      done
-      pgrep buildkitd >/dev/null 2>&1 && pkill -KILL buildkitd 2>/dev/null && sleep 1
-    fi
-    echo "=== Clearing build state before no-cache retry ==="
-    rm -rf "${stateRoot}"/* "${stateRoot}"/.[!.]* 2>/dev/null || true
-  fi
+    // A broken cache is our problem, not the user's build's. Probe it up front
+    // and drop the cache flags if it is unusable, so the build still produces
+    // an image — but say so loudly, because a cache that silently stops working
+    // is exactly the kind of fault worth noticing.
+    const cachePreflight = cacheDir ? `
+CACHE_ARGS="${cacheOnlyArgs}"
+CACHE_DIR="${cacheDir}"
+if ! mkdir -p "$CACHE_DIR" 2>/dev/null || ! touch "$CACHE_DIR/.orchard-probe" 2>/dev/null; then
+  echo "=================================================="
+  echo "WARNING: build cache at $CACHE_DIR is not writable"
+  echo "Building WITHOUT cache. This is an Orchard-side fault, not a build error."
+  echo "=================================================="
+  CACHE_ARGS=""
+fi
+rm -f "$CACHE_DIR/.orchard-probe" 2>/dev/null || true
+` : `
+CACHE_ARGS="${cacheOnlyArgs}"
 `;
 
     return `
 set +e
 ${gitShaPreamble}${buildDirPreamble}
 ulimit -n 1048576 2>/dev/null || true
-${this.ramdiskPreamble}${this.scratchMountPreamble}${this.scratchResetHelper}${this.cachePrunePreamble(cacheDirMatch?.[1] ?? '')}
-${mkdirLine}
-echo "=== Attempting build with cache enabled ==="
-BUILD_OUTPUT=$(mktemp)
-FIFO=$(mktemp -u)
-mkfifo "$FIFO"
+${this.ramdiskPreamble}${this.scratchMountPreamble}${this.cachePrunePreamble(cacheDir)}${cachePreflight}
+echo "=== Building image ==="
+buildctl-daemonless.sh ${baseArgs} $CACHE_ARGS
+BUILD_EXIT_CODE=$?
 
-MAX_RETRIES=3
-RETRY_DELAY=2
-
-for attempt in $(seq 1 $MAX_RETRIES); do
-  if [ $attempt -gt 1 ]; then
-    WAIT_TIME=$((RETRY_DELAY * (2 ** (attempt - 2))))
-    echo "=== Retry attempt $attempt/$MAX_RETRIES (waiting \${WAIT_TIME}s) ==="
-    sleep $WAIT_TIME
-  fi
-  [ -p "$FIFO" ] || mkfifo "$FIFO"
-  
-  buildctl-daemonless.sh ${argsWithCache} > "$FIFO" 2>&1 &
-  BUILD_PID=$!
-  tee "$BUILD_OUTPUT" < "$FIFO"
-  wait $BUILD_PID
-  BUILD_EXIT_CODE=$?
-  rm -f "$FIFO"
-  
-  if [ "$BUILD_EXIT_CODE" -eq 0 ]; then
-    echo "=== Build completed successfully with cache ==="
-    rm -f "$BUILD_OUTPUT" "$FIFO"
-    exit 0
-  fi
-  
-  echo "=== Build with cache failed (exit code: $BUILD_EXIT_CODE) ==="
-${this.ioErrorRetryBranch}${this.dockerfileFailureGuard}
-  if grep -qi "timeout\\|connection refused\\|connection reset\\|proxyconnect\\|network\\|dial tcp\\|i/o timeout\\|EOF\\|buildkitd.sock\\|failed to list workers" "$BUILD_OUTPUT"; then
-    if [ $attempt -lt $MAX_RETRIES ]; then
-      echo "=================================================="
-      echo "WARNING: Network/timeout error detected"
-      echo "Retrying..."
-      echo "=================================================="
-      continue
-    fi
-  fi
-  
-  break
-done
-
-if grep -v "skipped due to err" "$BUILD_OUTPUT" | grep -qi "failed to check file presence in cache\\|operation error S3\\|api error BadRequest\\|no space left on device"; then
-  echo "=================================================="
-  echo "WARNING: Cache operation failed (S3 error or disk full)"
-  echo "Failed to save/load cache - skipping cache"
-  echo "Retrying without cache..."
-  echo "=================================================="
-  
-  rm -f "$BUILD_OUTPUT"
-  BUILD_OUTPUT=$(mktemp)
-  FIFO=$(mktemp -u)
-  mkfifo "$FIFO"
-
-${stateClearing}
-  echo "=== Retrying build without cache ==="
-  
-  for attempt in $(seq 1 $MAX_RETRIES); do
-    if [ $attempt -gt 1 ]; then
-      WAIT_TIME=$((RETRY_DELAY * (2 ** (attempt - 2))))
-      echo "=== Retry attempt $attempt/$MAX_RETRIES (waiting \${WAIT_TIME}s) ==="
-      sleep $WAIT_TIME
-    fi
-    rm -f "$FIFO"
-    mkfifo "$FIFO"
-    
-    buildctl-daemonless.sh ${argsWithoutCache} > "$FIFO" 2>&1 &
-    BUILD_PID=$!
-    tee "$BUILD_OUTPUT" < "$FIFO"
-    wait $BUILD_PID
-    BUILD_EXIT_CODE=$?
-    
-    if [ "$BUILD_EXIT_CODE" -eq 0 ]; then
-      echo "=== Build completed successfully (without cache) ==="
-      rm -f "$BUILD_OUTPUT" "$FIFO"
-      exit 0
-    fi
-    
-    echo "=== Build without cache failed (exit code: $BUILD_EXIT_CODE) ==="
-${this.ioErrorRetryBranch}${this.dockerfileFailureGuard}
-    if grep -qi "timeout\\|connection refused\\|connection reset\\|proxyconnect\\|network\\|dial tcp\\|i/o timeout\\|EOF\\|buildkitd.sock\\|failed to list workers" "$BUILD_OUTPUT"; then
-      if [ $attempt -lt $MAX_RETRIES ]; then
-        echo "=================================================="
-        echo "WARNING: Network/timeout error detected"
-        echo "Retrying..."
-        echo "=================================================="
-        continue
-      fi
-    fi
-    
-    break
-  done
-  
-  rm -f "$BUILD_OUTPUT" "$FIFO"
-  exit $BUILD_EXIT_CODE
-else
-  echo "=== Build failed with non-cache error ==="
-  rm -f "$BUILD_OUTPUT" "$FIFO"
-  exit $BUILD_EXIT_CODE
+if [ "$BUILD_EXIT_CODE" -eq 0 ]; then
+  echo "=== Build completed successfully ==="
+  exit 0
 fi
+
+echo "=== Build failed (exit code: $BUILD_EXIT_CODE) ==="
+exit $BUILD_EXIT_CODE
 `.trim();
   }
 
-  private generateRetryScript(command: string): string {
+  /**
+   * Run a build command once and surface its exit code.
+   *
+   * This used to retry three times, classifying failures by grepping the
+   * combined output for words like "timeout" and "network". That output
+   * includes the user's own program logs, so a Django traceback ending in
+   * "connection timeout expired" was read as a transient network blip and the
+   * build ran three more times — tripling wall clock and holding a builder slot
+   * for a build that could never succeed. Masking failures also hides our own
+   * infrastructure faults, which are the ones worth seeing. One attempt, real
+   * exit code, fail loudly.
+   */
+  private generateBuildScript(command: string): string {
     return `
 set +e
 ulimit -n 1048576 2>/dev/null || true
-${this.ramdiskPreamble}${this.scratchMountPreamble}${this.scratchResetHelper}${this.cachePrunePreamble()}
-MAX_RETRIES=3
-RETRY_DELAY=2
-BUILD_OUTPUT=$(mktemp)
-FIFO=$(mktemp -u)
+${this.ramdiskPreamble}${this.scratchMountPreamble}${this.cachePrunePreamble()}
+${command}
+EXIT_CODE=$?
 
-for attempt in $(seq 1 $MAX_RETRIES); do
-  if [ $attempt -gt 1 ]; then
-    WAIT_TIME=$((RETRY_DELAY * (2 ** (attempt - 2))))
-    echo "=== Retry attempt $attempt/$MAX_RETRIES (waiting \${WAIT_TIME}s) ==="
-    sleep $WAIT_TIME
-  fi
-  mkfifo "$FIFO"
-  
-  ( ${command} > "$FIFO" 2>&1 ) &
-  BUILD_PID=$!
-  tee "$BUILD_OUTPUT" < "$FIFO"
-  wait $BUILD_PID
-  EXIT_CODE=$?
-  rm -f "$FIFO"
-  
-  if [ "$EXIT_CODE" -eq 0 ]; then
-    echo "=== Build completed successfully ==="
-    rm -f "$BUILD_OUTPUT"
-    exit 0
-  fi
-  
-  echo "=== Build failed (exit code: $EXIT_CODE) ==="
-${this.ioErrorRetryBranch}${this.dockerfileFailureGuard}
-  if grep -qi "timeout\\|connection refused\\|connection reset\\|proxyconnect\\|network\\|dial tcp\\|i/o timeout\\|EOF\\|buildkitd.sock\\|failed to list workers" "$BUILD_OUTPUT"; then
-    if [ $attempt -lt $MAX_RETRIES ]; then
-      echo "=================================================="
-      echo "WARNING: Network/timeout error detected"
-      echo "Retrying..."
-      echo "=================================================="
-      continue
-    fi
-  fi
-  
-  break
-done
+if [ "$EXIT_CODE" -eq 0 ]; then
+  echo "=== Build completed successfully ==="
+  exit 0
+fi
 
-rm -f "$BUILD_OUTPUT" "$FIFO"
+echo "=== Build failed (exit code: $EXIT_CODE) ==="
 exit $EXIT_CODE
 `.trim();
   }
@@ -1712,7 +1507,7 @@ fi
           // local context from the client's cwd, so it must match the directory
           // railpack-prepare generated the plan for.
           ImageBuilderService.BUILD_DIR_PREAMBLE +
-          this.generateRetryScript(clientCmd);
+          this.generateBuildScript(clientCmd);
 
         return {
           name: 'buildkit',
