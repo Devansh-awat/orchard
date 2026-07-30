@@ -341,6 +341,7 @@ export class ComposeStacksService {
               name: v.name,
               type: v.type,
               mountPath: v.mountPath,
+              pvcName: v.name,
               storageSize: v.storageSize,
             })),
             composeStackId: stack.id,

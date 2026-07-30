@@ -51,6 +51,14 @@ function podBackoffReason(containerStatuses: any[] | undefined): string | null {
   return null;
 }
 
+function resolvePvcClaimName(vol: { name?: string; pvcName?: string | null }): string {
+  const claimName = vol.pvcName?.trim() || vol.name?.trim();
+  if (!claimName) {
+    throw new BadRequestException('A persistent volume needs a name to claim storage under');
+  }
+  return claimName;
+}
+
 @Injectable()
 export class K8sWorkloadService {
   private readonly logger = new Logger(K8sWorkloadService.name);
@@ -693,8 +701,8 @@ export class K8sWorkloadService {
 
       // Create PVCs in Kubernetes before referencing them
       for (const vol of volumes) {
-        if (vol.type === 'pvc' && vol.pvcName) {
-          await this.createPVC(cleanNamespace, vol.pvcName, vol.storageSize || '1Gi');
+        if (vol.type === 'pvc') {
+          await this.createPVC(cleanNamespace, resolvePvcClaimName(vol), vol.storageSize || '1Gi');
         }
       }
 
@@ -716,11 +724,11 @@ export class K8sWorkloadService {
           throw new Error('hostPath volumes are not permitted');
         }
 
-        if (vol.type === 'pvc' && vol.pvcName) {
+        if (vol.type === 'pvc') {
           volume.persistentVolumeClaim = {
-            claimName: vol.pvcName,
+            claimName: resolvePvcClaimName(vol),
           };
-        } else if (vol.type === 'emptyDir') {
+        } else {
           volume.emptyDir = {};
         }
 
@@ -1303,9 +1311,9 @@ export class K8sWorkloadService {
     // reason on failure; the client library's HttpError message is a useless
     // generic string.
     for (const vol of volumesList) {
-      if (vol.type === 'pvc' && vol.pvcName) {
+      if (vol.type === 'pvc') {
         try {
-          await this.createPVC(cleanNamespace, vol.pvcName, vol.storageSize || '1Gi');
+          await this.createPVC(cleanNamespace, resolvePvcClaimName(vol), vol.storageSize || '1Gi');
         } catch (error) {
           throw new BadRequestException({
             error: 'Failed to create volume',
@@ -1330,11 +1338,11 @@ export class K8sWorkloadService {
         throw new Error('hostPath volumes are not permitted');
       }
 
-      if (vol.type === 'pvc' && vol.pvcName) {
+      if (vol.type === 'pvc') {
         volume.persistentVolumeClaim = {
-          claimName: vol.pvcName,
+          claimName: resolvePvcClaimName(vol),
         };
-      } else if (vol.type === 'emptyDir') {
+      } else {
         volume.emptyDir = {};
       }
 
