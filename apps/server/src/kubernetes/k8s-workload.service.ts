@@ -10,7 +10,12 @@ import {
   DeploymentPortInput,
   UpdateDeploymentEnvOptions, buildNodeAffinity
 } from './kubernetes.service';
-import { sanitizePortEntries, mapServicePorts } from './port-utils';
+import {
+  sanitizePortEntries,
+  mapServicePorts,
+  snapshotPublicPortState,
+  publicPortKey,
+} from './port-utils';
 import { cpuMilliToK8s, memoryBytesToK8s } from './quantity';
 import { isTrustedImage, trustedSecurityContext, hardenedSecurityContext } from './trusted-images';
 
@@ -1713,20 +1718,32 @@ export class K8sWorkloadService {
             },
           });
 
+          const priorPublic = snapshotPublicPortState(
+            await this.prisma.servicePort.findMany({
+              where: { serviceId: serviceRecord.id },
+              select: { port: true, protocol: true, publicEnabled: true, publicPort: true },
+            }),
+          );
+
           await this.prisma.servicePort.deleteMany({
             where: { serviceId: serviceRecord.id },
           });
 
           await this.prisma.servicePort.createMany({
-            data: sanitizedServicePorts.map((port) => ({
-              serviceId: serviceRecord.id,
-              name: port.name,
-              port: port.servicePort,
-              targetPort: port.containerPort,
-              protocol: port.protocol,
-              nodePort:
-                port.nodePort !== undefined && port.nodePort !== null ? port.nodePort : null,
-            })),
+            data: sanitizedServicePorts.map((port) => {
+              const prior = priorPublic.get(publicPortKey(port.servicePort, port.protocol));
+              return {
+                serviceId: serviceRecord.id,
+                name: port.name,
+                port: port.servicePort,
+                targetPort: port.containerPort,
+                protocol: port.protocol,
+                nodePort:
+                  port.nodePort !== undefined && port.nodePort !== null ? port.nodePort : null,
+                publicEnabled: prior ? prior.publicEnabled : false,
+                publicPort: prior ? prior.publicPort : null,
+              };
+            }),
           });
         } catch (serviceError) {
           if (serviceError.response?.statusCode !== 404) {

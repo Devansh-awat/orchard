@@ -14,6 +14,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService, CreateDeploymentOptions } from '../kubernetes/kubernetes.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
+import { snapshotPublicPortState, publicPortKey } from '../kubernetes/port-utils';
 import { UsersService } from '../users/users.service';
 import { DockerService } from '../docker/docker.service';
 import { GitHubService } from '../github/github.service';
@@ -3045,6 +3046,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       nodePort: service.nodePort ?? null,
     };
 
+    const priorPublic = snapshotPublicPortState(service.ports);
+
     await this.prisma.$transaction(async (tx) => {
       await tx.service.update({
         where: { id: service.id },
@@ -3064,17 +3067,39 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
       if (normalizedPorts.length > 0) {
         await tx.servicePort.createMany({
-          data: normalizedPorts.map((port) => ({
-            serviceId: service.id,
-            name: port.name,
-            port: port.servicePort,
-            targetPort: port.containerPort,
-            protocol: port.protocol,
-            nodePort: port.nodePort,
-          })),
+          data: normalizedPorts.map((port) => {
+            const prior = priorPublic.get(publicPortKey(port.servicePort, port.protocol));
+            return {
+              serviceId: service.id,
+              name: port.name,
+              port: port.servicePort,
+              targetPort: port.containerPort,
+              protocol: port.protocol,
+              nodePort: port.nodePort,
+              publicEnabled: prior ? prior.publicEnabled : false,
+              publicPort: prior ? prior.publicPort : null,
+            };
+          }),
         });
       }
     });
+
+    const keptKeys = new Set(
+      normalizedPorts.map((port) => publicPortKey(port.servicePort, port.protocol)),
+    );
+    for (const [key, prior] of priorPublic) {
+      if (keptKeys.has(key) || !prior.publicPort) continue;
+      try {
+        await this.k8sNetwork.unexposeDeploymentPortPublic({
+          namespace: service.deployment.namespace,
+          deploymentName: service.deployment.name,
+          publicPort: prior.publicPort,
+          protocol: key.split(':')[1],
+        });
+      } catch (e: any) {
+        console.error(`[Deployment/public] Failed to unexpose dropped port: ${e?.message}`);
+      }
+    }
 
     const result = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },

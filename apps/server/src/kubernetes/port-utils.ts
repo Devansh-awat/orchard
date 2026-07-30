@@ -86,6 +86,34 @@ export function ensureUniqueServicePorts(ports: SanitizedPortEntry[]): Sanitized
   });
 }
 
+export interface PublicPortState {
+  publicEnabled: boolean;
+  publicPort: number | null;
+}
+
+export function publicPortKey(port: number, protocol: string | null | undefined): string {
+  return `${port}:${(protocol || 'TCP').toUpperCase()}`;
+}
+
+export function snapshotPublicPortState(
+  ports: {
+    port: number;
+    protocol: string | null;
+    publicEnabled: boolean;
+    publicPort: number | null;
+  }[],
+): Map<string, PublicPortState> {
+  const snapshot = new Map<string, PublicPortState>();
+  for (const port of ports) {
+    if (!port.publicEnabled || !port.publicPort) continue;
+    snapshot.set(publicPortKey(port.port, port.protocol), {
+      publicEnabled: true,
+      publicPort: port.publicPort,
+    });
+  }
+  return snapshot;
+}
+
 /**
  * Pure normalizer for user-supplied port specs into K8s-safe entries.
  * Drops invalid ports, generates unique DNS-safe names, defaults to TCP,
