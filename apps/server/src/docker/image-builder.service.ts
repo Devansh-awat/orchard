@@ -978,10 +978,14 @@ fi
         + this.generateRetryScript(`buildctl-daemonless.sh ${argsWithCache}`);
     }
 
-    // Extract local cache dest dir from --export-cache arg so we can mkdir -p it
-    const exportArg = buildctlArgs.find((_, i) => i > 0 && buildctlArgs[i - 1] === '--export-cache') || '';
-    const destMatch = exportArg.match(/dest=([^,]+)/);
-    const mkdirLine = destMatch ? `mkdir -p "${destMatch[1]}"` : '';
+    // Extract the local cache dir from --export-cache dest= or --import-cache
+    // src= so we can mkdir -p it. BuildKit's local importer errors instead of
+    // reporting a miss when the directory is absent.
+    const argAfter = (flag: string) =>
+      buildctlArgs.find((_, i) => i > 0 && buildctlArgs[i - 1] === flag) || '';
+    const cacheDirMatch = argAfter('--export-cache').match(/dest=([^,]+)/)
+      || argAfter('--import-cache').match(/src=([^,]+)/);
+    const mkdirLine = cacheDirMatch ? `mkdir -p "${cacheDirMatch[1]}"` : '';
 
     const argsWithoutCache = buildctlArgs.filter((arg, idx, arr) => {
       if (arg === '--import-cache' || arg === '--export-cache') {
@@ -1015,7 +1019,7 @@ fi
 set +e
 ${gitShaPreamble}${buildDirPreamble}
 ulimit -n 1048576 2>/dev/null || true
-${this.ramdiskPreamble}${this.scratchMountPreamble}${this.cachePrunePreamble(destMatch?.[1] ?? '')}
+${this.ramdiskPreamble}${this.scratchMountPreamble}${this.cachePrunePreamble(cacheDirMatch?.[1] ?? '')}
 ${mkdirLine}
 echo "=== Attempting build with cache enabled ==="
 BUILD_OUTPUT=$(mktemp)
@@ -1628,7 +1632,13 @@ fi
       }
 
       // --- Daemonless mode (original) ---
-      const scriptArgs = this.sidecarPushEnabled
+      // Cache export is only worth skipping for the S3 backend, which
+      // round-trips the whole cache over the network before the pusher can
+      // read the tarball. The local backend writes to a PVC and is
+      // independent of the push, so keep it — without the export nothing ever
+      // populates the cache dir and every build imports from an empty path.
+      const stripExportCache = this.sidecarPushEnabled && !this.localCacheEnabled;
+      const scriptArgs = stripExportCache
         ? buildctlArgs.filter((arg, idx, arr) => {
             if (arg === '--export-cache') return false;
             if (idx > 0 && arr[idx - 1] === '--export-cache') return false;
