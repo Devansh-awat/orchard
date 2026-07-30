@@ -1,6 +1,6 @@
 {
   "name": "server",
-  "version": "1.35.1",
+  "version": "1.35.2",
   "type": "commonjs",
   "private": true,
   "scripts": {
@@ -19,7 +19,6 @@
     "test:throttler": "tsx --test test/api-throttler.test.ts",
     "test:build-config": "tsx --test test/build-config.test.ts",
     "test:github-access": "tsx --test test/github-repo-access.test.ts",
-    "test:mcp-token": "tsx --test test/mcp-token-type.test.ts",
     "mcp": "tsx src/mcp/index.ts",
     "mcp:remote": "ts-node --swc src/mcp/main.ts"
   },

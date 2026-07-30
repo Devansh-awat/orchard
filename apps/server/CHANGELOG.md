@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.35.2](https://github.com/LeafdTK/leaf/compare/server/v1.35.1...server/v1.35.2) (2026-07-30)
+
+
+### Bug Fixes
+
+* **github:** only expose repos the user can access on github ([084d4d6](https://github.com/LeafdTK/leaf/commit/084d4d65fd378332d58d84266e4bcf96a5cc6bb8))
+
 ## [1.35.1](https://github.com/LeafdTK/leaf/compare/server/v1.35.0...server/v1.35.1) (2026-07-29)
 
 
