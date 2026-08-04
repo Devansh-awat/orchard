@@ -339,7 +339,9 @@ export class SandboxK8sService {
             spec: {
               accessModes: ['ReadWriteOnce'],
               volumeMode: sandboxHomeMode() === 'block' ? 'Block' : 'Filesystem',
-              storageClassName: process.env.SANDBOX_STORAGE_CLASS || 'longhorn-ssd',
+              ...(process.env.SANDBOX_STORAGE_CLASS
+                ? { storageClassName: process.env.SANDBOX_STORAGE_CLASS }
+                : {}),
               resources: { requests: { storage: spec.diskSize } },
             },
           },

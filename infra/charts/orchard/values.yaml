@@ -386,7 +386,8 @@ sandbox:
   maxLifetimeHours: 168
   # Default per-user sandbox cap; override per user via /admin/users.
   maxPerUserDefault: 1
-  storageClass: longhorn-ssd
+  # Empty = the cluster's default StorageClass.
+  storageClass: ""
   diskSize: 10Gi
   cpuLimit: "2"
   # Sizes the kata VM — keep >= 1Gi.
