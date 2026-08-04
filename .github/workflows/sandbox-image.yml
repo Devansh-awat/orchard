@@ -1,0 +1,23 @@
+name: sandbox-image
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "infra/images/sandbox/**"
+      - ".github/workflows/sandbox-image.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  packages: write
+
+jobs:
+  image-sandbox:
+    uses: ./.github/workflows/_image.yml
+    secrets: inherit
+    with:
+      service: sandbox
+      dockerfile: infra/images/sandbox/Dockerfile
+      context: infra/images/sandbox
+      version: 1.0.${{ github.run_number }}

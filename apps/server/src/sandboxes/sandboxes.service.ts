@@ -13,6 +13,7 @@ import { AuditService } from '../audit/audit.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { SandboxK8sService } from './sandbox-k8s.service';
 
+const DEFAULT_SANDBOX_IMAGE = 'ghcr.io/leafdtk/leaf/sandbox:latest';
 const NAME_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 const SSH_KEY_RE = /^(ssh-(rsa|ed25519)|ecdsa-sha2-\S+)\s+\S+/;
 const MAX_KEYS = 10;
@@ -162,9 +163,6 @@ export class SandboxesService {
     actorEmail: string | null,
     body: { name?: string; repoUrl?: string; sshPublicKeys?: string[]; importGithubKeys?: boolean },
   ): Promise<SandboxDto> {
-    if (!process.env.SANDBOX_IMAGE) {
-      throw new ServiceUnavailableException('SANDBOX_IMAGE is not configured on this server');
-    }
     const [count, user] = await Promise.all([
       this.prisma.sandbox.count({ where: { userId } }),
       this.prisma.user.findUnique({ where: { id: userId }, select: { maxSandboxes: true } }),
@@ -212,7 +210,7 @@ export class SandboxesService {
           status: 'creating',
           podName: '',
           namespace: this.k8s.namespace,
-          image: process.env.SANDBOX_IMAGE,
+          image: process.env.SANDBOX_IMAGE || DEFAULT_SANDBOX_IMAGE,
           repoUrl: body.repoUrl || null,
           sshPublicKeys: keys,
           cpuLimit: process.env.SANDBOX_CPU_LIMIT || '2',
