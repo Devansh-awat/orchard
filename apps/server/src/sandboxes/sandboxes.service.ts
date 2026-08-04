@@ -431,12 +431,13 @@ export class SandboxesService {
         'SECRETS_ENCRYPTION_KEY is not configured; refusing to store agent tokens in plaintext',
       );
     }
+    const clean = (v: string) => v.replace(/\s+/g, '');
     const data: { claudeToken?: string | null; openaiToken?: string | null } = {};
     if (body.claudeToken !== undefined) {
-      data.claudeToken = body.claudeToken ? this.crypto.encrypt(body.claudeToken) : null;
+      data.claudeToken = body.claudeToken ? this.crypto.encrypt(clean(body.claudeToken)) : null;
     }
     if (body.openaiToken !== undefined) {
-      data.openaiToken = body.openaiToken ? this.crypto.encrypt(body.openaiToken) : null;
+      data.openaiToken = body.openaiToken ? this.crypto.encrypt(clean(body.openaiToken)) : null;
     }
     await this.prisma.sandboxCredential.upsert({
       where: { userId },

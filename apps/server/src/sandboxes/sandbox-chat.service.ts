@@ -48,7 +48,9 @@ export class SandboxChatService {
     const credential = await this.prisma.sandboxCredential.findUnique({
       where: { userId: sandbox.userId },
     });
-    const claudeToken = credential?.claudeToken ? this.crypto.decrypt(credential.claudeToken) : null;
+    const claudeToken = credential?.claudeToken
+      ? this.crypto.decrypt(credential.claudeToken).replace(/\s+/g, '')
+      : null;
     if (!claudeToken) {
       throw new BadRequestException(
         'No Claude credentials configured; add a token in user settings first',
