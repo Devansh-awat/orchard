@@ -17,6 +17,10 @@ export class AnalyticsService implements OnModuleDestroy {
 
   private readonly client: PostHog | null;
 
+  get configured(): boolean {
+    return this.client !== null;
+  }
+
   constructor() {
     const key = process.env.POSTHOG_API_KEY;
     if (!key) {

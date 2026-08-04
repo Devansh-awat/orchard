@@ -83,16 +83,15 @@ export class SandboxChatService {
 
     const workdir = this.workspace.resolveWorkdir(sandbox, repo);
     const resume = sandbox.chatSessionId ? ` --resume '${sandbox.chatSessionId.replace(/[^a-zA-Z0-9_-]/g, '')}'` : '';
-    const quotedToken = `'${claudeToken.replace(/'/g, `'\\''`)}'`;
+    const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
     const command = [
       'su',
       '-l',
       'dev',
       '-c',
-      `export CLAUDE_CODE_OAUTH_TOKEN=${quotedToken}; cd '${workdir}' 2>/dev/null || cd /persist/home; claude -p --output-format stream-json --verbose --dangerously-skip-permissions${resume}`,
+      `export CLAUDE_CODE_OAUTH_TOKEN=${q(claudeToken)}; cd '${workdir}' 2>/dev/null || cd /persist/home; claude -p --output-format stream-json --verbose --dangerously-skip-permissions${resume} -- ${q(message)}`,
     ];
 
-    const stdin = new PassThrough();
     const stdout = new PassThrough();
     const stderr = new PassThrough();
     let stderrText = '';
@@ -167,7 +166,7 @@ export class SandboxChatService {
         command,
         stdout,
         stderr,
-        stdin,
+        null,
         false,
         (status) => {
           if (status.status === 'Success') {
@@ -180,7 +179,6 @@ export class SandboxChatService {
           }
         },
       );
-      stdin.end(message);
     } catch (e: any) {
       this.logger.warn(`chat exec failed for sandbox ${sandbox.id}: ${e?.message}`);
       void finish('error', e?.message || 'failed to reach the sandbox');

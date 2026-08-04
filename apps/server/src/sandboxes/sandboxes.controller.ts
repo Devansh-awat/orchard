@@ -4,6 +4,7 @@ import {
   Delete,
   Get,
   HttpException,
+  NotFoundException,
   Param,
   ParseUUIDPipe,
   Patch,
@@ -17,6 +18,7 @@ import {
 import type { Response } from 'express';
 import { Auth, RequireScope } from '../auth/decorators';
 import { UsersService } from '../users/users.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 import { SandboxEnabledGuard } from './sandbox-enabled.guard';
 import { SandboxesService, toSandboxDto } from './sandboxes.service';
 import { SandboxChatService } from './sandbox-chat.service';
@@ -31,12 +33,16 @@ export class SandboxesController {
     private readonly chat: SandboxChatService,
     private readonly workspace: SandboxWorkspaceService,
     private readonly usersService: UsersService,
+    private readonly analytics: AnalyticsService,
   ) {}
 
   private async resolveUser(req: any): Promise<{ id: string; email: string | null }> {
     const user = await this.usersService.findOrCreateByClerkId(req.user.sub, {
       email: req.user.email,
     });
+    if (this.analytics.configured && !(await this.analytics.isFeatureEnabled('greenhouse', user.id))) {
+      throw new NotFoundException('Sandbox feature is not enabled for your account');
+    }
     return { id: user.id, email: user.email ?? null };
   }
 

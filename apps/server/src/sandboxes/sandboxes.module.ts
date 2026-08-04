@@ -4,6 +4,7 @@ import { PrismaModule } from '../prisma/prisma.module';
 import { KubernetesModule } from '../kubernetes/kubernetes.module';
 import { UsersModule } from '../users/users.module';
 import { AuditModule } from '../audit/audit.module';
+import { AnalyticsModule } from '../analytics/analytics.module';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { SandboxesController } from './sandboxes.controller';
 import { SandboxesService } from './sandboxes.service';
@@ -16,7 +17,7 @@ import { SandboxEnabledGuard, sandboxFeatureEnabled } from './sandbox-enabled.gu
 const REAPER_INTERVAL_MS = 60_000;
 
 @Module({
-  imports: [AuthModule, PrismaModule, KubernetesModule, UsersModule, AuditModule],
+  imports: [AuthModule, PrismaModule, KubernetesModule, UsersModule, AuditModule, AnalyticsModule],
   controllers: [SandboxesController],
   providers: [SandboxesService, SandboxK8sService, SandboxChatService, SandboxWorkspaceService, SandboxReaperService, SandboxEnabledGuard],
   exports: [SandboxesService, SandboxK8sService],

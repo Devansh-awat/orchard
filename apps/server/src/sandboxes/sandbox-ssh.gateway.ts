@@ -9,6 +9,7 @@ import { SessionsService } from '../auth/sessions.service';
 import { AuditService } from '../audit/audit.service';
 import { hashApiToken } from '../auth/api-tokens.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 import { SandboxK8sService } from './sandbox-k8s.service';
 import { sandboxFeatureEnabled } from './sandbox-enabled.guard';
 
@@ -24,6 +25,7 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
   const audit = app.get(AuditService);
   const kubernetes = app.get(KubernetesService);
   const sandboxK8s = app.get(SandboxK8sService);
+  const analytics = app.get(AnalyticsService);
 
   const wss = new WebSocket.Server({ noServer: true });
   const jwtSecret = new TextEncoder().encode(process.env.JWT_SECRET || '');
@@ -94,6 +96,9 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
         .catch(() => {});
     }
     if (!userId) return reject(401, 'Unauthorized');
+    if (analytics.configured && !(await analytics.isFeatureEnabled('greenhouse', userId))) {
+      return reject(404, 'Not Found');
+    }
 
     const sandboxId = match[1];
     const authorize = async (): Promise<{ ok: boolean; podName?: string }> => {

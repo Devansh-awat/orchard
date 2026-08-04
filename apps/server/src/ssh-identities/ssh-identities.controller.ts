@@ -1,6 +1,17 @@
-import { Body, Controller, Delete, Get, Param, ParseUUIDPipe, Post, Req } from '@nestjs/common';
+import {
+  Body,
+  Controller,
+  Delete,
+  Get,
+  NotFoundException,
+  Param,
+  ParseUUIDPipe,
+  Post,
+  Req,
+} from '@nestjs/common';
 import { Auth } from '../auth/decorators';
 import { UsersService } from '../users/users.service';
+import { AnalyticsService } from '../analytics/analytics.service';
 import { SshIdentitiesService } from './ssh-identities.service';
 
 @Auth()
@@ -9,12 +20,16 @@ export class SshIdentitiesController {
   constructor(
     private readonly identities: SshIdentitiesService,
     private readonly usersService: UsersService,
+    private readonly analytics: AnalyticsService,
   ) {}
 
   private async userId(req: any): Promise<string> {
     const user = await this.usersService.findOrCreateByClerkId(req.user.sub, {
       email: req.user.email,
     });
+    if (this.analytics.configured && !(await this.analytics.isFeatureEnabled('greenhouse', user.id))) {
+      throw new NotFoundException('Sandbox feature is not enabled for your account');
+    }
     return user.id;
   }
 
