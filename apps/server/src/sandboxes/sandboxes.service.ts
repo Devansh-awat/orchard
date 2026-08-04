@@ -443,6 +443,35 @@ export class SandboxesService {
       create: { userId, ...data },
       update: data,
     });
+    const rows = await this.prisma.sandbox.findMany({
+      where: { userId },
+      include: { sshIdentity: { select: { publicKey: true } } },
+    });
+    for (const row of rows) {
+      try {
+        const secret = await this.buildSecretInput(
+          userId,
+          row.sshIdentity ? [row.sshIdentity.publicKey] : [],
+          row.setupScript,
+        );
+        await this.k8s.ensureAuthSecret(
+          {
+            id: row.id,
+            podName: row.podName,
+            userId: row.userId,
+            repoUrl: row.repoUrl,
+            image: row.image,
+            cpuLimit: row.cpuLimit,
+            memoryLimit: row.memoryLimit,
+            diskSize: row.diskSize,
+            setupScript: row.setupScript,
+          },
+          secret,
+        );
+      } catch (e: any) {
+        this.logger.warn(`credential refresh failed for sandbox ${row.id}: ${e?.message}`);
+      }
+    }
     this.audit
       .log({
         action: 'sandbox.credentials.update',

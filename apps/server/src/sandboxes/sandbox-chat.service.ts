@@ -3,6 +3,7 @@ import * as k8s from '@kubernetes/client-node';
 import { PassThrough } from 'stream';
 import type { Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
+import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { SandboxK8sService } from './sandbox-k8s.service';
 import { SandboxWorkspaceService } from './sandbox-workspace.service';
@@ -16,6 +17,7 @@ export class SandboxChatService {
 
   constructor(
     private readonly prisma: PrismaService,
+    private readonly crypto: SecretCryptoService,
     private readonly kubernetes: KubernetesService,
     private readonly sandboxK8s: SandboxK8sService,
     private readonly workspace: SandboxWorkspaceService,
@@ -24,6 +26,7 @@ export class SandboxChatService {
   async stream(
     sandbox: {
       id: string;
+      userId: string;
       podName: string;
       repoUrl: string | null;
       chatSessionId: string | null;
@@ -41,6 +44,15 @@ export class SandboxChatService {
     }
     if (!this.kubernetes.kc) {
       throw new BadRequestException('Kubernetes is not configured');
+    }
+    const credential = await this.prisma.sandboxCredential.findUnique({
+      where: { userId: sandbox.userId },
+    });
+    const claudeToken = credential?.claudeToken ? this.crypto.decrypt(credential.claudeToken) : null;
+    if (!claudeToken) {
+      throw new BadRequestException(
+        'No Claude credentials configured; add a token in user settings first',
+      );
     }
     const core = this.kubernetes.kc.makeApiClient(k8s.CoreV1Api);
     const pods = await core.listNamespacedPod(
@@ -71,12 +83,13 @@ export class SandboxChatService {
 
     const workdir = this.workspace.resolveWorkdir(sandbox, repo);
     const resume = sandbox.chatSessionId ? ` --resume '${sandbox.chatSessionId.replace(/[^a-zA-Z0-9_-]/g, '')}'` : '';
+    const quotedToken = `'${claudeToken.replace(/'/g, `'\\''`)}'`;
     const command = [
       'su',
       '-l',
       'dev',
       '-c',
-      `cd '${workdir}' 2>/dev/null || cd /persist/home; claude -p --output-format stream-json --verbose --dangerously-skip-permissions${resume}`,
+      `export CLAUDE_CODE_OAUTH_TOKEN=${quotedToken}; cd '${workdir}' 2>/dev/null || cd /persist/home; claude -p --output-format stream-json --verbose --dangerously-skip-permissions${resume}`,
     ];
 
     const stdin = new PassThrough();
