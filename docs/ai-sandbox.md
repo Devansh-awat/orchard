@@ -128,6 +128,8 @@ All routes are user-scoped: you see and touch only your own sandboxes
 | `DELETE /sandboxes/:id` | deploy | removes CR, secret, and volumes |
 | `GET /sandboxes/:id/ssh` | exec | websocket upgrade; raw SSH bytes |
 | `POST /sandboxes/:id/chat` | exec | Cloud Code: SSE stream of the in-sandbox claude agent |
+| `GET /sandboxes/:id/changes` | exec | git status and diffstat of the sandbox workspace |
+| `GET /sandboxes/:id/diff` | exec | git diff, whole tree or one file via `?file=` |
 | `GET /sandboxes/credentials` | read | `{ claude: boolean, openai: boolean }` |
 | `PUT /sandboxes/credentials` | deploy | set or clear agent tokens (null clears) |
 | `GET /ssh-identities` | read | named public keys attached to your user |

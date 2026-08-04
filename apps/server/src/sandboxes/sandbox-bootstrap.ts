@@ -15,6 +15,7 @@ if ! command -v node >/dev/null 2>&1; then
 fi
 command -v claude >/dev/null 2>&1 || npm install -g @anthropic-ai/claude-code >/dev/null 2>&1
 command -v codex >/dev/null 2>&1 || npm install -g @openai/codex >/dev/null 2>&1
+command -v opencode >/dev/null 2>&1 || npm install -g opencode-ai >/dev/null 2>&1
 
 if [ "\${SANDBOX_HOME_MODE:-filesystem}" = "block" ] && [ -b /dev/sandboxhome ]; then
   if ! blkid /dev/sandboxhome >/dev/null 2>&1; then

@@ -1,4 +1,5 @@
 export { default as SandboxCard } from './SandboxCard.svelte';
+export { default as SandboxChangesPanel } from './SandboxChangesPanel.svelte';
 export { default as SandboxChatPanel } from './SandboxChatPanel.svelte';
 export { default as SandboxCreateModal } from './SandboxCreateModal.svelte';
 export { default as SandboxConnectPanel } from './SandboxConnectPanel.svelte';

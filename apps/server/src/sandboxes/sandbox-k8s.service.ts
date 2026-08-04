@@ -51,6 +51,12 @@ export function k8sErrorMessage(e: any): string {
   return String(e?.message || 'unknown kubernetes error');
 }
 
+export function sandboxWorkdir(repoUrl: string | null): string {
+  if (!repoUrl) return '/persist/home';
+  const base = repoUrl.replace(/\.git$/, '').split('/').pop() || '';
+  return base ? `/persist/home/${base}` : '/persist/home';
+}
+
 export function sandboxHomeMode(): 'block' | 'filesystem' {
   const mode = process.env.SANDBOX_HOME_MODE || 'auto';
   if (mode === 'block' || mode === 'filesystem') return mode;
@@ -458,6 +464,43 @@ export class SandboxK8sService {
     );
     const running = pods.body.items.find((p) => p.status?.phase === 'Running');
     return running?.status?.podIP || null;
+  }
+
+  async execCapture(
+    sandboxId: string,
+    command: string[],
+    timeoutMs = 15000,
+  ): Promise<{ stdout: string; ok: boolean }> {
+    const pods = await this.core().listNamespacedPod(
+      this.namespace, undefined, undefined, undefined, undefined,
+      `orchard.my/sandbox-id=${sandboxId}`,
+    );
+    const pod = pods.body.items.find((p) => p.status?.phase === 'Running');
+    if (!pod?.metadata?.name) throw new Error('sandbox pod is not running');
+    const exec = new k8s.Exec(this.kc);
+    const stdout = new PassThrough();
+    let output = '';
+    stdout.on('data', (chunk: Buffer) => {
+      output += chunk.toString();
+    });
+    return Promise.race([
+      new Promise<{ stdout: string; ok: boolean }>((resolve, reject) => {
+        exec.exec(
+          this.namespace,
+          pod.metadata!.name!,
+          'sandbox',
+          command,
+          stdout,
+          null,
+          null,
+          false,
+          (status) => resolve({ stdout: output, ok: status.status === 'Success' }),
+        ).catch(reject);
+      }),
+      new Promise<{ stdout: string; ok: boolean }>((_, reject) => {
+        setTimeout(() => reject(new Error('sandbox command timed out')), timeoutMs);
+      }),
+    ]);
   }
 
   async isAgentBusy(sandboxId: string): Promise<boolean> {

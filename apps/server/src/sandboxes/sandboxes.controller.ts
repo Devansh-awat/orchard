@@ -9,6 +9,7 @@ import {
   Patch,
   Post,
   Put,
+  Query,
   Req,
   Res,
   UseGuards,
@@ -19,6 +20,7 @@ import { UsersService } from '../users/users.service';
 import { SandboxEnabledGuard } from './sandbox-enabled.guard';
 import { SandboxesService, toSandboxDto } from './sandboxes.service';
 import { SandboxChatService } from './sandbox-chat.service';
+import { SandboxWorkspaceService } from './sandbox-workspace.service';
 
 @Auth()
 @UseGuards(SandboxEnabledGuard)
@@ -27,6 +29,7 @@ export class SandboxesController {
   constructor(
     private readonly sandboxes: SandboxesService,
     private readonly chat: SandboxChatService,
+    private readonly workspace: SandboxWorkspaceService,
     private readonly usersService: UsersService,
   ) {}
 
@@ -71,6 +74,26 @@ export class SandboxesController {
   ) {
     const user = await this.resolveUser(req);
     return this.sandboxes.setCredentials(user.id, user.email, body || {});
+  }
+
+  @Get(':id/changes')
+  @RequireScope('exec')
+  async changes(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    const user = await this.resolveUser(req);
+    const row = await this.sandboxes.getOwned(id, user.id);
+    return this.workspace.changes(row);
+  }
+
+  @Get(':id/diff')
+  @RequireScope('exec')
+  async diff(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('file') file?: string,
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await this.sandboxes.getOwned(id, user.id);
+    return this.workspace.diff(row, file || undefined);
   }
 
   @Post(':id/chat')

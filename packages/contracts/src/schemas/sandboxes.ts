@@ -106,6 +106,27 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     response: z.object({ success: z.boolean() }),
     scope: 'deploy',
   },
+  'GET /sandboxes/:id/changes': {
+    summary: 'Git working-tree changes inside the sandbox workspace',
+    response: z.object({
+      isRepo: z.boolean(),
+      branch: z.string().nullable(),
+      files: z.array(
+        z.object({
+          path: z.string(),
+          status: z.string(),
+          additions: z.number().int().nullable(),
+          deletions: z.number().int().nullable(),
+        }),
+      ),
+    }),
+    scope: 'exec',
+  },
+  'GET /sandboxes/:id/diff': {
+    summary: 'Git diff inside the sandbox workspace, whole tree or one file via ?file=',
+    response: z.object({ diff: z.string(), truncated: z.boolean() }),
+    scope: 'exec',
+  },
   'POST /sandboxes/:id/chat': {
     summary:
       'Cloud Code: send a message to the claude agent inside the sandbox; responds with an SSE stream of claude stream-json events plus a final {type: "done"|"error"} frame',

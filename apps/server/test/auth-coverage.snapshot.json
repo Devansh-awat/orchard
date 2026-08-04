@@ -168,6 +168,8 @@
   "GET /projects/slug/:slug": "authenticated",
   "GET /sandboxes": "authenticated",
   "GET /sandboxes/:id": "authenticated",
+  "GET /sandboxes/:id/changes": "authenticated",
+  "GET /sandboxes/:id/diff": "authenticated",
   "GET /sandboxes/:id/ssh": "authenticated",
   "GET /sandboxes/credentials": "authenticated",
   "GET /scim/v2/Groups": "public",

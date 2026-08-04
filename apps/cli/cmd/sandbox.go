@@ -37,6 +37,7 @@ func sandboxCmd() *cobra.Command {
 		sandboxDeleteCmd(),
 		sandboxSSHCmd(),
 		sandboxChatCmd(),
+		sandboxDiffCmd(),
 		sandboxProxyCmd(),
 		sandboxSSHConfigCmd(),
 		sandboxCredentialsCmd(),
@@ -359,6 +360,73 @@ func sandboxUpdateCmd() *cobra.Command {
 	c.Flags().StringVar(&identity, "identity", "", "ssh identity name or id to switch to")
 	c.Flags().StringVar(&setupFile, "setup", "", "setup script file run once on first boot (- reads stdin)")
 	c.Flags().BoolVar(&noSetup, "no-setup", false, "remove the setup script")
+	return c
+}
+
+func sandboxDiffCmd() *cobra.Command {
+	var file string
+	var stat bool
+	c := &cobra.Command{
+		Use:   "diff <name>",
+		Short: "Show git changes inside the sandbox workspace",
+		Args:  cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			sb, err := resolveSandbox(cmd.Context(), cl, args[0])
+			if err != nil {
+				return err
+			}
+			id := str(sb["id"])
+			if stat {
+				var raw map[string]any
+				if err := cl.GetJSON(cmd.Context(), sandboxPath(id, "changes"), &raw); err != nil {
+					return sandboxDialError(err)
+				}
+				if fmtFlag() == output.FormatJSON {
+					return output.JSON(raw)
+				}
+				if b, ok := raw["isRepo"].(bool); ok && !b {
+					return errors.New("the sandbox workspace is not a git repository")
+				}
+				rows := [][]string{}
+				for _, f := range asList(raw["files"]) {
+					rows = append(rows, []string{
+						pick(f, "status"),
+						pick(f, "path"),
+						pick(f, "additions"),
+						pick(f, "deletions"),
+					})
+				}
+				if len(rows) == 0 {
+					fmt.Println(output.Dim("working tree clean"))
+					return nil
+				}
+				output.Table([]string{"st", "file", "+", "-"}, rows)
+				return nil
+			}
+			path := sandboxPath(id, "diff")
+			if file != "" {
+				path += "?file=" + url.QueryEscape(file)
+			}
+			var raw map[string]any
+			if err := cl.GetJSON(cmd.Context(), path, &raw); err != nil {
+				return sandboxDialError(err)
+			}
+			if fmtFlag() == output.FormatJSON {
+				return output.JSON(raw)
+			}
+			fmt.Print(str(raw["diff"]))
+			if b, ok := raw["truncated"].(bool); ok && b {
+				fmt.Fprintln(os.Stderr, output.Dim("diff truncated"))
+			}
+			return nil
+		},
+	}
+	c.Flags().StringVar(&file, "file", "", "limit the diff to one file")
+	c.Flags().BoolVar(&stat, "stat", false, "list changed files instead of the diff")
 	return c
 }
 

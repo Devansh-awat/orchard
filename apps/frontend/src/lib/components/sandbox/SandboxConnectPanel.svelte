@@ -1,6 +1,5 @@
 <script lang="ts">
 	import { Check, Copy } from 'lucide-svelte';
-	import { SectionCard } from '$lib/components/ui';
 
 	let { name }: { name: string } = $props();
 
@@ -21,8 +20,8 @@
 	}
 </script>
 
-<SectionCard title="Connect" description="SSH into your sandbox with the Orchard CLI.">
-	<div class="scp-body">
+<div class="scp-body">
+	<p class="scp-lede">SSH into your sandbox with the Orchard CLI.</p>
 		<div class="scp-block">
 			<div class="scp-code-row">
 				<code class="scp-code">{sshCommand}</code>
@@ -58,15 +57,20 @@
 				orchard-sandbox-{name}. In VS Code, run "Remote-SSH: Connect to Host" and pick it from the
 				list.
 			</p>
-		</div>
 	</div>
-</SectionCard>
+</div>
 
 <style>
 	.scp-body {
 		display: flex;
 		flex-direction: column;
 		gap: 1rem;
+	}
+
+	.scp-lede {
+		font-size: var(--text-footnote);
+		line-height: 1.5;
+		color: var(--text-muted);
 	}
 
 	.scp-block {

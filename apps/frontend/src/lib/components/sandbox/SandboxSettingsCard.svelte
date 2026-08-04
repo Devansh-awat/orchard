@@ -2,7 +2,7 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { apiFetch, toasts } from '$lib/stores';
 	import { queryClient } from '$lib/query';
-	import { Button, Field, Input, SectionCard, Select } from '$lib/components/ui';
+	import { Button, Field, Input, Select } from '$lib/components/ui';
 	import { sshIdentitiesQueryOptions } from '$lib/queries/sandboxes';
 	import type { Sandbox, SandboxPatchInput } from '$lib/types/sandbox';
 
@@ -73,8 +73,7 @@
 	}
 </script>
 
-<SectionCard title="Settings">
-	<div class="sbs-body">
+<div class="sbs-body">
 		<Field label="Name" for="sbs-name">
 			<div class="sbs-row">
 				<Input id="sbs-name" bind:value={name} maxlength={63} />
@@ -141,9 +140,8 @@
 			{:else}
 				<span class="sbs-repo-note">No repository linked</span>
 			{/if}
-		</div>
 	</div>
-</SectionCard>
+</div>
 
 <style>
 	.sbs-body {
