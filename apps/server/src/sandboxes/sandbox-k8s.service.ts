@@ -84,6 +84,120 @@ export class SandboxK8sService {
     return `${podName}-auth`;
   }
 
+  private async ensureNamespace(): Promise<void> {
+    const core = this.core();
+    let exists = true;
+    try {
+      await core.readNamespace(this.namespace);
+    } catch (e: any) {
+      if (e.response?.statusCode !== 404) throw e;
+      exists = false;
+    }
+    if (!exists) {
+      try {
+        await core.createNamespace({
+          metadata: {
+            name: this.namespace,
+            labels: {
+              'app.kubernetes.io/managed-by': 'Helm',
+              'pod-security.kubernetes.io/enforce': 'privileged',
+              'pod-security.kubernetes.io/audit': 'privileged',
+              'pod-security.kubernetes.io/warn': 'privileged',
+            },
+            annotations: {
+              'meta.helm.sh/release-name': 'orchard',
+              'meta.helm.sh/release-namespace':
+                process.env.ORCHARD_SERVER_NAMESPACE || 'orchard',
+            },
+          },
+        });
+        this.logger.log(`created sandbox namespace ${this.namespace}`);
+      } catch (e: any) {
+        if (e.response?.statusCode !== 409) throw e;
+      }
+    }
+    await this.ensureNetworkPolicy();
+  }
+
+  private async ensureNetworkPolicy(): Promise<void> {
+    const net = this.kc.makeApiClient(k8s.NetworkingV1Api);
+    try {
+      await net.readNamespacedNetworkPolicy('sandbox-isolation', this.namespace);
+      return;
+    } catch (e: any) {
+      if (e.response?.statusCode !== 404) throw e;
+    }
+    const serverNamespace = process.env.ORCHARD_SERVER_NAMESPACE || 'orchard';
+    const policy: k8s.V1NetworkPolicy = {
+      metadata: {
+        name: 'sandbox-isolation',
+        namespace: this.namespace,
+        labels: { 'app.kubernetes.io/managed-by': 'Helm' },
+        annotations: {
+          'meta.helm.sh/release-name': 'orchard',
+          'meta.helm.sh/release-namespace': serverNamespace,
+        },
+      },
+      spec: {
+        podSelector: {},
+        policyTypes: ['Ingress', 'Egress'],
+        ingress: [
+          {
+            from: [
+              {
+                namespaceSelector: {
+                  matchLabels: { 'kubernetes.io/metadata.name': serverNamespace },
+                },
+                podSelector: {
+                  matchLabels: { 'app.kubernetes.io/name': 'server' },
+                },
+              },
+            ],
+            ports: [{ protocol: 'TCP', port: 22 as any }],
+          },
+        ],
+        egress: [
+          {
+            to: [
+              {
+                namespaceSelector: {
+                  matchLabels: { 'kubernetes.io/metadata.name': 'kube-system' },
+                },
+                podSelector: { matchLabels: { 'k8s-app': 'kube-dns' } },
+              },
+            ],
+            ports: [
+              { protocol: 'UDP', port: 53 as any },
+              { protocol: 'TCP', port: 53 as any },
+            ],
+          },
+          {
+            to: [
+              {
+                ipBlock: {
+                  cidr: '0.0.0.0/0',
+                  except: [
+                    '10.0.0.0/8',
+                    '172.16.0.0/12',
+                    '192.168.0.0/16',
+                    '169.254.0.0/16',
+                    '100.64.0.0/10',
+                  ],
+                },
+              },
+            ],
+          },
+        ],
+      },
+    };
+    try {
+      await net.createNamespacedNetworkPolicy(this.namespace, policy);
+      this.logger.log(`created sandbox-isolation network policy in ${this.namespace}`);
+    } catch (e: any) {
+      if (e.response?.statusCode !== 409) throw e;
+    }
+  }
+
   async ensureAuthSecret(spec: SandboxSpecInput, input: SandboxSecretInput): Promise<void> {
     const core = this.core();
     const name = this.secretName(spec.podName);
@@ -235,6 +349,7 @@ export class SandboxK8sService {
   }
 
   async createSandbox(spec: SandboxSpecInput, secret: SandboxSecretInput): Promise<void> {
+    await this.ensureNamespace();
     await this.ensureAuthSecret(spec, secret);
     try {
       await this.custom().createNamespacedCustomObject(
