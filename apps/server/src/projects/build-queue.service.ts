@@ -14,6 +14,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
     parseInt(process.env.MAX_CONCURRENT_BUILDS || '15', 10) || 15,
   );
   private readonly LOCK_KEY = 528491;
+  private readonly workerDisabled = process.env.BUILD_WORKER_DISABLED === 'true';
   private readonly txOpts = { maxWait: 10_000, timeout: 20_000 };
   private draining = false;
   private drainAgain = false;
@@ -27,6 +28,10 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
   ) {}
 
   onModuleInit() {
+    if (this.workerDisabled) {
+      this.logger.log('BUILD_WORKER_DISABLED=true; this instance will enqueue builds but never claim or run them');
+      return;
+    }
     this.heartbeatInterval = setInterval(() => {
       this.heartbeat().catch(() => {});
     }, 10_000);
@@ -189,6 +194,7 @@ export class BuildQueueService implements OnModuleInit, OnModuleDestroy {
   }
 
   kick() {
+    if (this.workerDisabled) return;
     if (this.draining) {
       this.drainAgain = true;
       return;
