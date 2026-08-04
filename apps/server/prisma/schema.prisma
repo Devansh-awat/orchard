@@ -1681,6 +1681,7 @@ model Sandbox {
   image         String        @db.VarChar(500)
   repoUrl       String?       @map("repo_url") @db.VarChar(500)
   sshPublicKeys String[]      @default([]) @map("ssh_public_keys")
+  setupScript   String?       @map("setup_script") @db.Text
   cpuLimit      String        @map("cpu_limit") @db.VarChar(20)
   memoryLimit   String        @map("memory_limit") @db.VarChar(20)
   diskSize      String        @map("disk_size") @db.VarChar(20)

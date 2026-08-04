@@ -29,6 +29,7 @@ const sandbox = z.object({
   statusMessage: z.string().nullable(),
   repoUrl: z.string().nullable(),
   sshPublicKeys: z.array(z.string()),
+  setupScript: z.string().nullable(),
   image: z.string(),
   createdAt: z.string(),
   updatedAt: z.string(),
@@ -56,6 +57,12 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
         .boolean()
         .optional()
         .describe('Merge public keys from github.com/<your-username>.keys'),
+      setupScript: z
+        .string()
+        .max(65536)
+        .nullable()
+        .optional()
+        .describe('Shell script run once as the dev user on first boot (logged to ~/.setup.log)'),
     }),
     response: sandbox,
     scope: 'deploy',
@@ -85,6 +92,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
       name: sandboxName.optional(),
       sshPublicKeys: z.array(sshPublicKey).max(10).optional(),
       importGithubKeys: z.boolean().optional(),
+      setupScript: z.string().max(65536).nullable().optional(),
     }),
     response: sandbox,
     scope: 'deploy',

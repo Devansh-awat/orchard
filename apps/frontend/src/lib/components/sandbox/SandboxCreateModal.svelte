@@ -23,6 +23,7 @@
 	let name = $state('');
 	let repoUrl = $state('');
 	let sshKeysText = $state('');
+	let setupScript = $state('');
 	let importGithubKeys = $state(true);
 
 	let repositories = $state<Repository[]>([]);
@@ -92,6 +93,7 @@
 		if (name.trim()) input.name = name.trim();
 		if (repoUrl.trim()) input.repoUrl = repoUrl.trim();
 		if (keys.length > 0) input.sshPublicKeys = keys;
+		if (setupScript.trim()) input.setupScript = setupScript;
 		oncreate(input);
 	}
 </script>
@@ -160,6 +162,20 @@
 			label="Import GitHub keys"
 			hint="Fetch the public keys on your GitHub profile"
 		/>
+		<Field
+			label="Setup script"
+			hint="Optional, runs once as the dev user on first boot (logged to ~/.setup.log)"
+			for="sbx-setup"
+		>
+			<textarea
+				id="sbx-setup"
+				class="scm-keys"
+				bind:value={setupScript}
+				rows="4"
+				placeholder="#!/bin/bash&#10;sudo apt-get install -y postgresql-client"
+				spellcheck="false"
+			></textarea>
+		</Field>
 	</div>
 	{#snippet footer()}
 		<Button variant="secondary" onclick={() => (open = false)}>Cancel</Button>

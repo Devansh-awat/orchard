@@ -175,9 +175,25 @@ func defaultSSHKeys() []string {
 	return nil
 }
 
+func readSetupScript(v string) (string, error) {
+	if v == "-" {
+		data, err := io.ReadAll(os.Stdin)
+		if err != nil {
+			return "", fmt.Errorf("read setup script from stdin: %w", err)
+		}
+		return string(data), nil
+	}
+	data, err := os.ReadFile(v)
+	if err != nil {
+		return "", fmt.Errorf("read setup script: %w", err)
+	}
+	return string(data), nil
+}
+
 func sandboxCreateCmd() *cobra.Command {
 	var repo string
 	var keyValues []string
+	var setupFile string
 	var githubKeys bool
 	var wait *bool
 	var timeout *time.Duration
@@ -210,6 +226,13 @@ func sandboxCreateCmd() *cobra.Command {
 			if githubKeys {
 				body["importGithubKeys"] = true
 			}
+			if setupFile != "" {
+				script, err := readSetupScript(setupFile)
+				if err != nil {
+					return err
+				}
+				body["setupScript"] = script
+			}
 			var raw map[string]any
 			if err := cl.Send(cmd.Context(), http.MethodPost, "/sandboxes", body, &raw); err != nil {
 				return sandboxFeatureError(err)
@@ -229,6 +252,7 @@ func sandboxCreateCmd() *cobra.Command {
 	c.Flags().StringVar(&repo, "repo", "", "git repository URL to clone into the sandbox")
 	c.Flags().StringArrayVar(&keyValues, "key", nil, "ssh public key: literal, @file, or a file path (repeatable; default: ~/.ssh/id_ed25519.pub then id_rsa.pub)")
 	c.Flags().BoolVar(&githubKeys, "github-keys", false, "import your public ssh keys from GitHub")
+	c.Flags().StringVar(&setupFile, "setup", "", "setup script file run once on first boot (- reads stdin)")
 	wait, timeout = addWaitFlags(c)
 	return c
 }
@@ -319,6 +343,8 @@ func sandboxGetCmd() *cobra.Command {
 func sandboxUpdateCmd() *cobra.Command {
 	var name string
 	var keyValues []string
+	var setupFile string
+	var noSetup bool
 	var githubKeys bool
 	c := &cobra.Command{
 		Use:   "update <name>",
@@ -339,8 +365,17 @@ func sandboxUpdateCmd() *cobra.Command {
 			if githubKeys {
 				body["importGithubKeys"] = true
 			}
+			if noSetup {
+				body["setupScript"] = nil
+			} else if setupFile != "" {
+				script, err := readSetupScript(setupFile)
+				if err != nil {
+					return err
+				}
+				body["setupScript"] = script
+			}
 			if len(body) == 0 {
-				return errors.New("nothing to update: pass --name, --key or --github-keys")
+				return errors.New("nothing to update: pass --name, --key, --github-keys, --setup or --no-setup")
 			}
 			cl, _, err := client()
 			if err != nil {
@@ -364,6 +399,8 @@ func sandboxUpdateCmd() *cobra.Command {
 	c.Flags().StringVar(&name, "name", "", "new sandbox name")
 	c.Flags().StringArrayVar(&keyValues, "key", nil, "ssh public key: literal, @file, or a file path (repeatable; replaces all keys)")
 	c.Flags().BoolVar(&githubKeys, "github-keys", false, "import your public ssh keys from GitHub")
+	c.Flags().StringVar(&setupFile, "setup", "", "setup script file run once on first boot (- reads stdin)")
+	c.Flags().BoolVar(&noSetup, "no-setup", false, "remove the setup script")
 	return c
 }
 

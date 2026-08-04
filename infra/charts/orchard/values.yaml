@@ -376,7 +376,7 @@ builderSandbox:
 sandbox:
   enabled: false
   namespace: orchard-sandboxes
-  image: ghcr.io/leafdtk/leaf/sandbox:latest
+  image: debian:bookworm
   runtimeClassName: kata
   # Idle sandboxes are suspended after this many minutes without SSH activity
   # (0 = never). A running claude/codex process keeps the sandbox alive.

@@ -14,6 +14,7 @@ export interface Sandbox {
 	statusMessage: string | null;
 	repoUrl: string | null;
 	sshPublicKeys: string[];
+	setupScript: string | null;
 	image: string;
 	createdAt: string;
 	updatedAt: string;
@@ -35,6 +36,7 @@ export interface SandboxCreateInput {
 	repoUrl?: string;
 	sshPublicKeys?: string[];
 	importGithubKeys?: boolean;
+	setupScript?: string;
 }
 
 const TRANSITIONAL = new Set<SandboxStatus>(['creating', 'starting', 'stopping', 'deleting']);

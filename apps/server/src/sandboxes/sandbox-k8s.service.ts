@@ -2,6 +2,7 @@ import { Injectable, Logger } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import { PassThrough } from 'stream';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
+import { SANDBOX_BOOTSTRAP_SCRIPT } from './sandbox-bootstrap';
 
 const CRD_GROUP = 'agents.x-k8s.io';
 const CRD_VERSION = 'v1beta1';
@@ -17,6 +18,7 @@ export interface SandboxSpecInput {
   cpuLimit: string;
   memoryLimit: string;
   diskSize: string;
+  setupScript?: string | null;
 }
 
 export interface SandboxSecretInput {
@@ -24,6 +26,7 @@ export interface SandboxSecretInput {
   githubToken?: string | null;
   claudeToken?: string | null;
   openaiToken?: string | null;
+  setupScript?: string | null;
 }
 
 export interface SandboxCrStatus {
@@ -72,10 +75,12 @@ export class SandboxK8sService {
     const name = this.secretName(spec.podName);
     const stringData: Record<string, string> = {
       authorized_keys: `${input.authorizedKeys.join('\n')}\n`,
+      'bootstrap.sh': SANDBOX_BOOTSTRAP_SCRIPT,
     };
     if (input.githubToken) stringData['github-token'] = input.githubToken;
     if (input.claudeToken) stringData['claude-token'] = input.claudeToken;
     if (input.openaiToken) stringData['openai-token'] = input.openaiToken;
+    stringData['setup.sh'] = input.setupScript || '';
     const body: k8s.V1Secret = {
       metadata: {
         name,
@@ -109,6 +114,7 @@ export class SandboxK8sService {
     const container: Record<string, any> = {
       name: 'sandbox',
       image: spec.image,
+      command: ['/bin/bash', '/orchard-init/bootstrap.sh'],
       ports: [{ containerPort: 22, name: 'ssh' }],
       env: [
         { name: 'SANDBOX_REPO_URL', value: spec.repoUrl || '' },
@@ -140,6 +146,11 @@ export class SandboxK8sService {
         {
           name: 'authkeys',
           mountPath: '/etc/ssh/authorized_keys.d',
+          readOnly: true,
+        },
+        {
+          name: 'init',
+          mountPath: '/orchard-init',
           readOnly: true,
         },
       ],
@@ -175,6 +186,18 @@ export class SandboxK8sService {
                 secret: {
                   secretName: this.secretName(spec.podName),
                   items: [{ key: 'authorized_keys', path: 'authorized_keys' }],
+                  defaultMode: 0o644,
+                  optional: false,
+                },
+              },
+              {
+                name: 'init',
+                secret: {
+                  secretName: this.secretName(spec.podName),
+                  items: [
+                    { key: 'bootstrap.sh', path: 'bootstrap.sh' },
+                    { key: 'setup.sh', path: 'setup.sh' },
+                  ],
                   defaultMode: 0o644,
                   optional: false,
                 },

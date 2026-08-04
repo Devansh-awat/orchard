@@ -39205,6 +39205,12 @@
                               "null"
                             ]
                           },
+                          "setupScript": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
                           "sshPublicKeys": {
                             "items": {
                               "type": "string"
@@ -39240,6 +39246,7 @@
                           "statusMessage",
                           "repoUrl",
                           "sshPublicKeys",
+                          "setupScript",
                           "image",
                           "createdAt",
                           "updatedAt",
@@ -39297,6 +39304,14 @@
                     "format": "uri",
                     "type": "string"
                   },
+                  "setupScript": {
+                    "description": "Shell script run once as the dev user on first boot (logged to ~/.setup.log)",
+                    "maxLength": 65536,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "sshPublicKeys": {
                     "items": {
                       "maxLength": 4096,
@@ -39343,6 +39358,12 @@
                         "null"
                       ]
                     },
+                    "setupScript": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "sshPublicKeys": {
                       "items": {
                         "type": "string"
@@ -39378,6 +39399,7 @@
                     "statusMessage",
                     "repoUrl",
                     "sshPublicKeys",
+                    "setupScript",
                     "image",
                     "createdAt",
                     "updatedAt",
@@ -39493,6 +39515,12 @@
                         "null"
                       ]
                     },
+                    "setupScript": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "sshPublicKeys": {
                       "items": {
                         "type": "string"
@@ -39528,6 +39556,7 @@
                     "statusMessage",
                     "repoUrl",
                     "sshPublicKeys",
+                    "setupScript",
                     "image",
                     "createdAt",
                     "updatedAt",
@@ -39579,6 +39608,13 @@
                     "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
                     "type": "string"
                   },
+                  "setupScript": {
+                    "maxLength": 65536,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
                   "sshPublicKeys": {
                     "items": {
                       "maxLength": 4096,
@@ -39625,6 +39661,12 @@
                         "null"
                       ]
                     },
+                    "setupScript": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "sshPublicKeys": {
                       "items": {
                         "type": "string"
@@ -39660,6 +39702,7 @@
                     "statusMessage",
                     "repoUrl",
                     "sshPublicKeys",
+                    "setupScript",
                     "image",
                     "createdAt",
                     "updatedAt",
@@ -39780,6 +39823,12 @@
                         "null"
                       ]
                     },
+                    "setupScript": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "sshPublicKeys": {
                       "items": {
                         "type": "string"
@@ -39815,6 +39864,7 @@
                     "statusMessage",
                     "repoUrl",
                     "sshPublicKeys",
+                    "setupScript",
                     "image",
                     "createdAt",
                     "updatedAt",
@@ -39895,6 +39945,12 @@
                         "null"
                       ]
                     },
+                    "setupScript": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
                     "sshPublicKeys": {
                       "items": {
                         "type": "string"
@@ -39930,6 +39986,7 @@
                     "statusMessage",
                     "repoUrl",
                     "sshPublicKeys",
+                    "setupScript",
                     "image",
                     "createdAt",
                     "updatedAt",

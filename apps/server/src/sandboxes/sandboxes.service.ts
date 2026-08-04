@@ -13,11 +13,12 @@ import { AuditService } from '../audit/audit.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { SandboxK8sService } from './sandbox-k8s.service';
 
-const DEFAULT_SANDBOX_IMAGE = 'ghcr.io/leafdtk/leaf/sandbox:latest';
+const DEFAULT_SANDBOX_IMAGE = 'debian:bookworm';
 const NAME_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
 const SSH_KEY_RE = /^(ssh-(rsa|ed25519)|ecdsa-sha2-\S+)\s+\S+/;
 const MAX_KEYS = 10;
 const MAX_KEY_LENGTH = 4096;
+const MAX_SETUP_SCRIPT_LENGTH = 65536;
 
 export interface SandboxDto {
   id: string;
@@ -26,6 +27,7 @@ export interface SandboxDto {
   statusMessage: string | null;
   repoUrl: string | null;
   sshPublicKeys: string[];
+  setupScript: string | null;
   image: string;
   createdAt: Date;
   updatedAt: Date;
@@ -45,6 +47,7 @@ export function toSandboxDto(row: Sandbox): SandboxDto {
     statusMessage: row.statusMessage,
     repoUrl: row.repoUrl,
     sshPublicKeys: row.sshPublicKeys,
+    setupScript: row.setupScript,
     image: row.image,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
@@ -142,7 +145,17 @@ export class SandboxesService {
     return keys;
   }
 
-  private async buildSecretInput(userId: string, keys: string[]) {
+  private validateSetupScript(script: string | null | undefined): string | null {
+    if (script === undefined || script === null || script === '') return null;
+    if (script.length > MAX_SETUP_SCRIPT_LENGTH) {
+      throw new BadRequestException(
+        `Setup script must be at most ${MAX_SETUP_SCRIPT_LENGTH} characters`,
+      );
+    }
+    return script;
+  }
+
+  private async buildSecretInput(userId: string, keys: string[], setupScript: string | null) {
     const [user, credential] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: userId },
@@ -155,14 +168,22 @@ export class SandboxesService {
       githubToken: user?.githubAccessToken || null,
       claudeToken: credential?.claudeToken ? this.crypto.decrypt(credential.claudeToken) : null,
       openaiToken: credential?.openaiToken ? this.crypto.decrypt(credential.openaiToken) : null,
+      setupScript,
     };
   }
 
   async create(
     userId: string,
     actorEmail: string | null,
-    body: { name?: string; repoUrl?: string; sshPublicKeys?: string[]; importGithubKeys?: boolean },
+    body: {
+      name?: string;
+      repoUrl?: string;
+      sshPublicKeys?: string[];
+      importGithubKeys?: boolean;
+      setupScript?: string | null;
+    },
   ): Promise<SandboxDto> {
+    const setupScript = this.validateSetupScript(body.setupScript);
     const [count, user] = await Promise.all([
       this.prisma.sandbox.count({ where: { userId } }),
       this.prisma.user.findUnique({ where: { id: userId }, select: { maxSandboxes: true } }),
@@ -213,6 +234,7 @@ export class SandboxesService {
           image: process.env.SANDBOX_IMAGE || DEFAULT_SANDBOX_IMAGE,
           repoUrl: body.repoUrl || null,
           sshPublicKeys: keys,
+          setupScript,
           cpuLimit: process.env.SANDBOX_CPU_LIMIT || '2',
           memoryLimit: process.env.SANDBOX_MEMORY_LIMIT || '4Gi',
           diskSize: process.env.SANDBOX_DISK_SIZE || '10Gi',
@@ -240,7 +262,7 @@ export class SandboxesService {
       .catch(() => {});
 
     try {
-      const secret = await this.buildSecretInput(userId, keys);
+      const secret = await this.buildSecretInput(userId, keys, setupScript);
       await this.k8s.createSandbox(
         {
           id: row.id,
@@ -251,6 +273,7 @@ export class SandboxesService {
           cpuLimit: updated.cpuLimit,
           memoryLimit: updated.memoryLimit,
           diskSize: updated.diskSize,
+          setupScript,
         },
         secret,
       );
@@ -269,10 +292,18 @@ export class SandboxesService {
     id: string,
     userId: string,
     actorEmail: string | null,
-    body: { name?: string; sshPublicKeys?: string[]; importGithubKeys?: boolean },
+    body: {
+      name?: string;
+      sshPublicKeys?: string[];
+      importGithubKeys?: boolean;
+      setupScript?: string | null;
+    },
   ): Promise<SandboxDto> {
     const row = await this.getOwned(id, userId);
-    const data: { name?: string; sshPublicKeys?: string[] } = {};
+    const data: { name?: string; sshPublicKeys?: string[]; setupScript?: string | null } = {};
+    if (body.setupScript !== undefined) {
+      data.setupScript = this.validateSetupScript(body.setupScript);
+    }
     if (body.name !== undefined) {
       const name = body.name.trim();
       this.validateName(name);
@@ -297,8 +328,12 @@ export class SandboxesService {
         }
         throw e;
       });
-    if (data.sshPublicKeys) {
-      const secret = await this.buildSecretInput(row.userId, data.sshPublicKeys);
+    if (data.sshPublicKeys !== undefined || data.setupScript !== undefined) {
+      const secret = await this.buildSecretInput(
+        row.userId,
+        updated.sshPublicKeys,
+        updated.setupScript,
+      );
       await this.k8s.ensureAuthSecret(
         {
           id: updated.id,
@@ -309,6 +344,7 @@ export class SandboxesService {
           cpuLimit: updated.cpuLimit,
           memoryLimit: updated.memoryLimit,
           diskSize: updated.diskSize,
+          setupScript: updated.setupScript,
         },
         secret,
       );
@@ -320,7 +356,10 @@ export class SandboxesService {
           targetType: 'sandbox',
           targetId: updated.id,
           targetLabel: updated.name,
-          metadata: { keyCount: data.sshPublicKeys.length },
+          metadata: {
+            keyCount: updated.sshPublicKeys.length,
+            setupScript: data.setupScript === undefined ? 'unchanged' : data.setupScript ? 'set' : 'cleared',
+          },
         })
         .catch(() => {});
     }

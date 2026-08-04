@@ -43,7 +43,13 @@ export class SandboxesController {
   async create(
     @Req() req: any,
     @Body()
-    body: { name?: string; repoUrl?: string; sshPublicKeys?: string[]; importGithubKeys?: boolean },
+    body: {
+      name?: string;
+      repoUrl?: string;
+      sshPublicKeys?: string[];
+      importGithubKeys?: boolean;
+      setupScript?: string | null;
+    },
   ) {
     const user = await this.resolveUser(req);
     return this.sandboxes.create(user.id, user.email, body || {});
@@ -82,7 +88,13 @@ export class SandboxesController {
   async update(
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { name?: string; sshPublicKeys?: string[]; importGithubKeys?: boolean },
+    @Body()
+    body: {
+      name?: string;
+      sshPublicKeys?: string[];
+      importGithubKeys?: boolean;
+      setupScript?: string | null;
+    },
   ) {
     const user = await this.resolveUser(req);
     return this.sandboxes.update(id, user.id, user.email, body || {});
