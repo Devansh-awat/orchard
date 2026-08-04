@@ -199,6 +199,10 @@ func TestEventsTailTableLine(t *testing.T) {
 func TestDeployLogsBuildFollowFirstFetch(t *testing.T) {
 	hits := make(chan string, 8)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.URL.Path == "/apiv1/observe/deployments/d1/build-logs/stream" {
+			w.WriteHeader(404)
+			return
+		}
 		select {
 		case hits <- r.Method + " " + r.URL.Path:
 		default:
@@ -236,6 +240,8 @@ func TestDeployLogsFollowAggregatesPods(t *testing.T) {
 	logHits := make(chan string, 8)
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		switch r.URL.Path {
+		case "/apiv1/observe/deployments/d1/logs/stream":
+			w.WriteHeader(404)
 		case "/apiv1/deployments/d1":
 			io.WriteString(w, `{"id":"d1","namespace":"ns1"}`)
 		case "/apiv1/deployments/d1/pods":

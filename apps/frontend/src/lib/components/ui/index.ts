@@ -17,6 +17,7 @@ export {
 	runStatus,
 	buildRunStatus,
 	podStatus,
+	sandboxStatus,
 	statusMeta,
 	RUN_STATUS_LABELS
 } from './status';

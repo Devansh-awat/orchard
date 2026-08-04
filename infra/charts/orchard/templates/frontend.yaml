@@ -33,6 +33,9 @@ spec:
             - name: PUBLIC_MCP_URL
               value: {{ printf "%s://%s" (ternary "https" "http" .Values.mcp.ingress.tls.enabled) .Values.mcp.ingress.host | quote }}
             {{- end }}
+            {{- if .Values.sandbox.enabled }}
+            - { name: PUBLIC_SANDBOX_ENABLED, value: "true" }
+            {{- end }}
             {{- with .Values.frontend.env }}
             {{- toYaml . | nindent 12 }}
             {{- end }}

@@ -8,8 +8,10 @@
 	import Speedometer from '$lib/components/Speedometer.svelte';
 	import DonutChart from '$lib/components/DonutChart.svelte';
 	import HorizontalBars from '$lib/components/HorizontalBars.svelte';
-	import { Loader2, Activity, Gauge, Users, BarChart3, Pencil, Check, X } from 'lucide-svelte';
+	import { Loader2, Activity, Gauge, Users, BarChart3, Pencil, Check, X, Sprout } from 'lucide-svelte';
 	import { TabBar } from '$lib/components/ui';
+	import { env as publicEnv } from '$env/dynamic/public';
+	import { SandboxUsageTab } from '$lib/components/sandbox';
 
 	const formatPods = (n: number) => `${n}`;
 	import type { PageData } from './$types';
@@ -121,13 +123,16 @@
 	const orgSlug = $derived(data.orgSlug);
 	const range = $derived(data.range);
 
-	type Tab = 'overview' | 'me' | 'members' | 'provisioning';
+	type Tab = 'overview' | 'me' | 'members' | 'provisioning' | 'sandbox';
 
 	const availableTabs = $derived.by<Array<{ id: Tab; label: string; icon: any }>>(() => {
 		const tabs: Array<{ id: Tab; label: string; icon: any }> = [
 			{ id: 'overview', label: 'Overview', icon: Activity },
 			{ id: 'me', label: 'My usage', icon: Gauge }
 		];
+		if (publicEnv.PUBLIC_SANDBOX_ENABLED === 'true') {
+			tabs.push({ id: 'sandbox', label: 'Sandboxes', icon: Sprout });
+		}
 		if (isAdmin) {
 			tabs.push({ id: 'members', label: 'Members', icon: Users });
 			tabs.push({ id: 'provisioning', label: 'Provisioning', icon: BarChart3 });
@@ -703,6 +708,8 @@
 					{/if}
 
 					<!-- ───────── MEMBERS ───────── -->
+				{:else if activeTab === 'sandbox'}
+					<SandboxUsageTab />
 				{:else if activeTab === 'members' && isAdmin && membersData}
 					<div class="card">
 						<div class="card-head">

@@ -1,8 +1,9 @@
-{{- if .Values.builderSandbox.enabled }}
+{{- if or .Values.builderSandbox.enabled .Values.sandbox.enabled }}
 # Kata Containers RuntimeClass. The image-build Jobs (`orchard-builders`
 # namespace) set `runtimeClassName: kata` when BUILDER_RUNTIME_CLASS is
-# configured on the server. Each build pod runs inside its own lightweight
-# VM, so the privileged BuildKit container is privileged-in-VM, not
+# configured on the server, and AI sandbox pods (`orchard-sandboxes`
+# namespace) use it via SANDBOX_RUNTIME_CLASS. Each pod runs inside its own
+# lightweight VM, so the privileged container is privileged-in-VM, not
 # privileged-on-host.
 #
 # Requirement: each node must have the `siderolabs/kata-containers` Talos

@@ -23,6 +23,7 @@ model User {
   githubRefreshToken          String?   @map("github_refresh_token") @db.Text
   githubRefreshTokenExpiresAt DateTime? @map("github_refresh_token_expires_at") @db.Timestamp(6)
   isSuperAdmin                Boolean   @default(false) @map("is_super_admin")
+  maxSandboxes                Int?      @map("max_sandboxes")
   setupCompleted              Boolean   @default(false) @map("setup_completed")
   emailVerified               Boolean   @default(false) @map("email_verified")
   emailVerifiedAt             DateTime? @map("email_verified_at") @db.Timestamp(6)
@@ -61,6 +62,8 @@ model User {
   notificationSettings       UserNotificationSetting[]
   notificationDestinations   UserNotificationDestination[]
   createdNotificationRules   NotificationRule[]       @relation("NotificationRuleCreator")
+  sandboxes                  Sandbox[]
+  sandboxCredential          SandboxCredential?
 
   @@map("users")
 }
@@ -1655,4 +1658,52 @@ model ErrorOccurrence {
   @@unique([errorGroupId, imageHistoryId], map: "uq_error_occurrence_group_image")
   @@index([errorGroupId], map: "idx_error_occurrence_group")
   @@map("error_occurrences")
+}
+
+enum SandboxStatus {
+  creating
+  starting
+  running
+  stopping
+  stopped
+  deleting
+  error
+}
+
+model Sandbox {
+  id            String        @id @default(uuid()) @db.Uuid
+  userId        String        @map("user_id") @db.Uuid
+  name          String        @db.VarChar(63)
+  status        SandboxStatus @default(creating)
+  statusMessage String?       @map("status_message") @db.Text
+  podName       String        @unique @map("pod_name") @db.VarChar(253)
+  namespace     String        @db.VarChar(253)
+  image         String        @db.VarChar(500)
+  repoUrl       String?       @map("repo_url") @db.VarChar(500)
+  sshPublicKeys String[]      @default([]) @map("ssh_public_keys")
+  cpuLimit      String        @map("cpu_limit") @db.VarChar(20)
+  memoryLimit   String        @map("memory_limit") @db.VarChar(20)
+  diskSize      String        @map("disk_size") @db.VarChar(20)
+  lastActiveAt  DateTime      @default(now()) @map("last_active_at") @db.Timestamp(6)
+  createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, name])
+  @@index([status, lastActiveAt], map: "idx_sandboxes_status_active")
+  @@map("sandboxes")
+}
+
+model SandboxCredential {
+  id          String   @id @default(uuid()) @db.Uuid
+  userId      String   @unique @map("user_id") @db.Uuid
+  claudeToken String?  @map("claude_token") @db.Text
+  openaiToken String?  @map("openai_token") @db.Text
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt   DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@map("sandbox_credentials")
 }

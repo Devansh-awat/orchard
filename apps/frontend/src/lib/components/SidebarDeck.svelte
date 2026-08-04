@@ -18,6 +18,7 @@
 		TriangleAlert,
 		Search,
 		Activity,
+		Sprout,
 		Settings,
 		LogOut,
 		KeyRound,
@@ -103,6 +104,17 @@
 			icon: Activity,
 			active: $page.url.pathname.startsWith('/' + orgSlug + '/usage')
 		},
+		...(publicEnv.PUBLIC_SANDBOX_ENABLED === 'true'
+			? [
+					{
+						id: 'sandboxes',
+						label: 'Greenhouse',
+						href: '/sandboxes',
+						icon: Sprout,
+						active: $page.url.pathname.startsWith('/sandboxes')
+					}
+				]
+			: []),
 		...(publicEnv.PUBLIC_GROVE_ENABLED === 'true'
 			? [
 					{

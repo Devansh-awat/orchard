@@ -1,0 +1,139 @@
+{{- if .Values.sandbox.enabled }}
+{{- $sns := .Values.sandbox.namespace -}}
+{{- $appNs := .Values.namespace -}}
+# PSA privileged for the same reason as orchard-builders: the sandbox
+# container mounts/formats its block-device home in-guest, and the kata VM
+# is the real host boundary. The NetworkPolicy below is the actual
+# containment surface.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ $sns }}
+  labels:
+    app.kubernetes.io/managed-by: leaf
+    purpose: ai-sandboxes
+    pod-security.kubernetes.io/enforce: privileged
+    pod-security.kubernetes.io/audit: privileged
+    pod-security.kubernetes.io/warn: privileged
+---
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: sandbox-quota
+  namespace: {{ $sns }}
+spec:
+  hard:
+    pods: {{ .Values.sandbox.quota.pods | quote }}
+    limits.cpu: {{ .Values.sandbox.quota.cpu | quote }}
+    limits.memory: {{ .Values.sandbox.quota.memory | quote }}
+---
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: sandbox-limits
+  namespace: {{ $sns }}
+spec:
+  limits:
+    - default:
+        cpu: {{ .Values.sandbox.cpuLimit | quote }}
+        memory: {{ .Values.sandbox.memoryLimit | quote }}
+      defaultRequest:
+        cpu: "250m"
+        memory: "512Mi"
+      type: Container
+---
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: sandbox-isolation
+  namespace: {{ $sns }}
+spec:
+  podSelector: {}
+  policyTypes:
+    - Ingress
+    - Egress
+  # Stricter than the tenant policy: no same-namespace peers, no internal
+  # carve-outs. Ingress only from the orchard server (the SSH tunnel);
+  # egress only DNS + the public internet, minus RFC1918/link-local/CGNAT
+  # so a sandboxed agent can't reach the apiserver, IMDS, or any cluster
+  # service by IP.
+  ingress:
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: {{ $appNs }}
+          podSelector:
+            matchLabels:
+              app.kubernetes.io/name: server
+      ports:
+        - port: 22
+          protocol: TCP
+  egress:
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              kubernetes.io/metadata.name: kube-system
+          podSelector:
+            matchLabels:
+              k8s-app: kube-dns
+      ports:
+        - port: 53
+          protocol: UDP
+        - port: 53
+          protocol: TCP
+    - to:
+        - ipBlock:
+            cidr: 0.0.0.0/0
+            except:
+              - 10.0.0.0/8
+              - 172.16.0.0/12
+              - 192.168.0.0/16
+              - 169.254.0.0/16
+              - 100.64.0.0/10
+---
+# Namespace-scoped grants for the in-cluster server SA. Closes the RBAC gap
+# where the chart ClusterRole only grants read-only pods: the sandbox
+# lifecycle needs full control of agent-sandbox CRs, secrets, and PVCs here,
+# plus pods/exec for the reaper's busy check.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-sandbox-manager
+  namespace: {{ $sns }}
+  labels:
+    app.kubernetes.io/name: sandbox
+    app.kubernetes.io/managed-by: leaf
+rules:
+  - apiGroups: ["agents.x-k8s.io"]
+    resources: ["sandboxes"]
+    verbs: ["get", "list", "watch", "create", "patch", "delete"]
+  - apiGroups: [""]
+    resources: ["pods"]
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources: ["pods/log"]
+    verbs: ["get"]
+  - apiGroups: [""]
+    resources: ["pods/exec"]
+    verbs: ["create"]
+  - apiGroups: [""]
+    resources: ["secrets", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-sandbox-manager
+  namespace: {{ $sns }}
+  labels:
+    app.kubernetes.io/name: sandbox
+    app.kubernetes.io/managed-by: leaf
+subjects:
+  - kind: ServiceAccount
+    name: orchard-server
+    namespace: {{ $appNs }}
+roleRef:
+  kind: Role
+  name: {{ .Release.Name }}-sandbox-manager
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

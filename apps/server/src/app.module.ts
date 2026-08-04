@@ -32,6 +32,7 @@ import { ObservabilityModule } from './observability/observability.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { JobsModule } from './jobs/jobs.module';
 import { ForumModule } from './forum/forum.module';
+import { SandboxesModule } from './sandboxes/sandboxes.module';
 
 @Module({
   imports: [
@@ -70,6 +71,7 @@ import { ForumModule } from './forum/forum.module';
     NotificationsModule,
     JobsModule,
     ForumModule,
+    SandboxesModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ApiThrottlerGuard }],
 })

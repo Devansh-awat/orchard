@@ -1,4 +1,4 @@
-import { Injectable, ForbiddenException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { Prisma } from '@prisma/client';
 import { randomBytes, createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
@@ -53,6 +53,7 @@ export class AdminService {
           lastName: true,
           imageUrl: true,
           isSuperAdmin: true,
+          maxSandboxes: true,
           createdAt: true,
           _count: {
             select: {
@@ -109,10 +110,15 @@ export class AdminService {
   async updateUser(
     userId: string,
     requesterId: string,
-    data: { firstName?: string; lastName?: string; isSuperAdmin?: boolean },
+    data: { firstName?: string; lastName?: string; isSuperAdmin?: boolean; maxSandboxes?: number | null },
   ) {
     if (data.isSuperAdmin === false && userId === requesterId) {
       throw new ForbiddenException('Cannot remove your own superadmin status');
+    }
+    if (data.maxSandboxes !== undefined && data.maxSandboxes !== null) {
+      if (!Number.isInteger(data.maxSandboxes) || data.maxSandboxes < 0 || data.maxSandboxes > 100) {
+        throw new BadRequestException('maxSandboxes must be an integer between 0 and 100, or null');
+      }
     }
 
     const user = await this.prisma.user.findUnique({ where: { id: userId } });
@@ -126,6 +132,7 @@ export class AdminService {
         ...(data.firstName !== undefined && { firstName: data.firstName }),
         ...(data.lastName !== undefined && { lastName: data.lastName }),
         ...(data.isSuperAdmin !== undefined && { isSuperAdmin: data.isSuperAdmin }),
+        ...(data.maxSandboxes !== undefined && { maxSandboxes: data.maxSandboxes }),
       },
       select: {
         id: true,
@@ -134,6 +141,7 @@ export class AdminService {
         firstName: true,
         lastName: true,
         isSuperAdmin: true,
+        maxSandboxes: true,
       },
     });
 

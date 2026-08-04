@@ -45,7 +45,7 @@ export class AdminController {
   @Patch('users/:id')
   async updateUser(
     @Param('id') id: string,
-    @Body() body: { firstName?: string; lastName?: string; isSuperAdmin?: boolean },
+    @Body() body: { firstName?: string; lastName?: string; isSuperAdmin?: boolean; maxSandboxes?: number | null },
     @Req() req: any,
   ) {
     return this.adminService.updateUser(id, req.auth.userId, body);

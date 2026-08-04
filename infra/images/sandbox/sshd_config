@@ -1,0 +1,15 @@
+Port 22
+HostKey /etc/ssh/hostkeys/ssh_host_ed25519_key
+HostKey /etc/ssh/hostkeys/ssh_host_ecdsa_key
+HostKey /etc/ssh/hostkeys/ssh_host_rsa_key
+PermitRootLogin no
+PasswordAuthentication no
+KbdInteractiveAuthentication no
+AllowUsers dev
+AuthorizedKeysFile /etc/ssh/authorized_keys.d/authorized_keys
+ClientAliveInterval 30
+ClientAliveCountMax 3
+UsePAM yes
+PrintMotd no
+AcceptEnv LANG LC_*
+Subsystem sftp /usr/lib/openssh/sftp-server

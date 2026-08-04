@@ -359,6 +359,49 @@ builderSandbox:
     storageClass: longhorn-ssd
   memoryLimit: ""
 
+# AI dev sandboxes (Greenhouse). Isolated cloud dev environments: one kata VM
+# pod per sandbox in its own namespace, orchestrated through the
+# kubernetes-sigs/agent-sandbox controller, reachable only via the server's
+# SSH websocket tunnel. Disabled by default.
+#
+# REQUIREMENTS before flipping enabled=true:
+#   1. agent-sandbox controller + CRDs installed in the cluster (pinned
+#      release manifest, managed out-of-band — this chart does not install
+#      them and the server logs a boot warning if the CRD is missing).
+#   2. `image` set to a published build of infra/images/sandbox.
+#   3. For VM isolation: kata RuntimeClass available on the nodes (same
+#      requirement as builderSandbox). Leave runtimeClassName empty on dev
+#      clusters without kata; sandboxes then run unprivileged on runc with a
+#      Filesystem-mode home PVC (slower, no block-device fast path).
+sandbox:
+  enabled: false
+  namespace: orchard-sandboxes
+  image: ""
+  runtimeClassName: kata
+  # Idle sandboxes are suspended after this many minutes without SSH activity
+  # (0 = never). A running claude/codex process keeps the sandbox alive.
+  idleTimeoutMinutes: 60
+  # Running sandboxes are suspended after this many hours regardless of
+  # activity (0 = never).
+  maxLifetimeHours: 168
+  # Default per-user sandbox cap; override per user via /admin/users.
+  maxPerUserDefault: 1
+  storageClass: longhorn-ssd
+  diskSize: 10Gi
+  cpuLimit: "2"
+  # Sizes the kata VM — keep >= 1Gi.
+  memoryLimit: 4Gi
+  # SSH tunnel transport: empty → direct in-cluster TCP. Set "portforward"
+  # only for out-of-cluster dev servers.
+  tunnelMode: ""
+  # Home PVC mode: empty → auto (Block when runtimeClassName is set,
+  # Filesystem otherwise). Explicit "block" or "filesystem" to override.
+  homeMode: ""
+  quota:
+    pods: "20"
+    cpu: "40"
+    memory: "80Gi"
+
 # Public-TLS reflection — tells the server which Secret to copy from when
 # exposing a CNPG cluster publicly with TLS.
 publicTls:

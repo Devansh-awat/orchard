@@ -4,6 +4,7 @@ import { attachments as databases } from './databases';
 import { attachments as deployments } from './deployments';
 import { attachments as events } from './events';
 import { attachments as jobs } from './jobs';
+import { attachments as sandboxes } from './sandboxes';
 
 export const attachments: Record<string, RouteAttachment> = {
   ...common,
@@ -11,4 +12,5 @@ export const attachments: Record<string, RouteAttachment> = {
   ...deployments,
   ...events,
   ...jobs,
+  ...sandboxes,
 };

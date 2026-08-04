@@ -1463,6 +1463,46 @@
         ]
       }
     },
+    "/auth/me/seen-updates": {
+      "post": {
+        "description": "Auth: authenticated",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /auth/me/seen-updates",
+        "tags": [
+          "auth"
+        ]
+      }
+    },
     "/auth/otp/request": {
       "post": {
         "description": "Auth: public",
@@ -30052,6 +30092,64 @@
         ]
       }
     },
+    "/observe/deployments/{id}/errors/{fingerprint}": {
+      "patch": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "fingerprint",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /observe/deployments/:id/errors/:fingerprint",
+        "tags": [
+          "observe"
+        ]
+      }
+    },
     "/observe/deployments/{id}/http-metrics": {
       "get": {
         "description": "Auth: authenticated",
@@ -31136,6 +31234,64 @@
         ]
       }
     },
+    "/organizations/{id}/notification-channels/{channelId}/replay": {
+      "post": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "channelId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /organizations/:id/notification-channels/:channelId/replay",
+        "tags": [
+          "organizations"
+        ]
+      }
+    },
     "/organizations/{id}/notification-channels/{channelId}/test": {
       "post": {
         "description": "Auth: authenticated",
@@ -31189,6 +31345,198 @@
           }
         ],
         "summary": "POST /organizations/:id/notification-channels/:channelId/test",
+        "tags": [
+          "organizations"
+        ]
+      }
+    },
+    "/organizations/{id}/notification-rules": {
+      "get": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /organizations/:id/notification-rules",
+        "tags": [
+          "organizations"
+        ]
+      },
+      "post": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /organizations/:id/notification-rules",
+        "tags": [
+          "organizations"
+        ]
+      }
+    },
+    "/organizations/{id}/notification-rules/{ruleId}": {
+      "delete": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ruleId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "DELETE /organizations/:id/notification-rules/:ruleId",
+        "tags": [
+          "organizations"
+        ]
+      },
+      "patch": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "ruleId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PATCH /organizations/:id/notification-rules/:ruleId",
         "tags": [
           "organizations"
         ]
@@ -38817,6 +39165,906 @@
         ]
       }
     },
+    "/sandboxes": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "maxSandboxes": {
+                      "type": "integer"
+                    },
+                    "sandboxes": {
+                      "items": {
+                        "properties": {
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "image": {
+                            "type": "string"
+                          },
+                          "lastActiveAt": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "repoUrl": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "sshPublicKeys": {
+                            "items": {
+                              "type": "string"
+                            },
+                            "type": "array"
+                          },
+                          "status": {
+                            "enum": [
+                              "creating",
+                              "starting",
+                              "running",
+                              "stopping",
+                              "stopped",
+                              "deleting",
+                              "error"
+                            ],
+                            "type": "string"
+                          },
+                          "statusMessage": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "updatedAt": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "status",
+                          "statusMessage",
+                          "repoUrl",
+                          "sshPublicKeys",
+                          "image",
+                          "createdAt",
+                          "updatedAt",
+                          "lastActiveAt"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "sandboxes",
+                    "maxSandboxes"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "List your sandboxes with your effective sandbox limit",
+        "tags": [
+          "sandboxes"
+        ]
+      },
+      "post": {
+        "description": "Auth: authenticated (scope: deploy)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "importGithubKeys": {
+                    "description": "Merge public keys from github.com/<your-username>.keys",
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "description": "Defaults to \"sandbox\" (or a suffixed variant)",
+                    "maxLength": 63,
+                    "minLength": 1,
+                    "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+                    "type": "string"
+                  },
+                  "repoUrl": {
+                    "description": "https git URL cloned into the sandbox on boot",
+                    "format": "uri",
+                    "type": "string"
+                  },
+                  "sshPublicKeys": {
+                    "items": {
+                      "maxLength": 4096,
+                      "pattern": "^(ssh-(rsa|ed25519)|ecdsa-sha2-\\S+)\\s+\\S+",
+                      "type": "string"
+                    },
+                    "maxItems": 10,
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "image": {
+                      "type": "string"
+                    },
+                    "lastActiveAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "repoUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "sshPublicKeys": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "status": {
+                      "enum": [
+                        "creating",
+                        "starting",
+                        "running",
+                        "stopping",
+                        "stopped",
+                        "deleting",
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "statusMessage": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "status",
+                    "statusMessage",
+                    "repoUrl",
+                    "sshPublicKeys",
+                    "image",
+                    "createdAt",
+                    "updatedAt",
+                    "lastActiveAt"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Create an isolated cloud dev sandbox (Kata VM, internet egress only)",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}": {
+      "delete": {
+        "description": "Auth: authenticated (scope: deploy)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Delete a sandbox and its persistent workspace",
+        "tags": [
+          "sandboxes"
+        ]
+      },
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "image": {
+                      "type": "string"
+                    },
+                    "lastActiveAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "repoUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "sshPublicKeys": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "status": {
+                      "enum": [
+                        "creating",
+                        "starting",
+                        "running",
+                        "stopping",
+                        "stopped",
+                        "deleting",
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "statusMessage": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "status",
+                    "statusMessage",
+                    "repoUrl",
+                    "sshPublicKeys",
+                    "image",
+                    "createdAt",
+                    "updatedAt",
+                    "lastActiveAt"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Get a sandbox",
+        "tags": [
+          "sandboxes"
+        ]
+      },
+      "patch": {
+        "description": "Auth: authenticated (scope: deploy)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "importGithubKeys": {
+                    "type": "boolean"
+                  },
+                  "name": {
+                    "maxLength": 63,
+                    "minLength": 1,
+                    "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+                    "type": "string"
+                  },
+                  "sshPublicKeys": {
+                    "items": {
+                      "maxLength": 4096,
+                      "pattern": "^(ssh-(rsa|ed25519)|ecdsa-sha2-\\S+)\\s+\\S+",
+                      "type": "string"
+                    },
+                    "maxItems": 10,
+                    "type": "array"
+                  }
+                },
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "image": {
+                      "type": "string"
+                    },
+                    "lastActiveAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "repoUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "sshPublicKeys": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "status": {
+                      "enum": [
+                        "creating",
+                        "starting",
+                        "running",
+                        "stopping",
+                        "stopped",
+                        "deleting",
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "statusMessage": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "status",
+                    "statusMessage",
+                    "repoUrl",
+                    "sshPublicKeys",
+                    "image",
+                    "createdAt",
+                    "updatedAt",
+                    "lastActiveAt"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Rename a sandbox or replace its SSH public key set",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/ssh": {
+      "get": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "WebSocket tunnel to the sandbox sshd (binary frames carry raw TCP bytes; used by orchard sandbox ssh/proxy)",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/start": {
+      "post": {
+        "description": "Auth: authenticated (scope: deploy)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "image": {
+                      "type": "string"
+                    },
+                    "lastActiveAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "repoUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "sshPublicKeys": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "status": {
+                      "enum": [
+                        "creating",
+                        "starting",
+                        "running",
+                        "stopping",
+                        "stopped",
+                        "deleting",
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "statusMessage": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "status",
+                    "statusMessage",
+                    "repoUrl",
+                    "sshPublicKeys",
+                    "image",
+                    "createdAt",
+                    "updatedAt",
+                    "lastActiveAt"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Resume a stopped sandbox (workspace and host key persist)",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/stop": {
+      "post": {
+        "description": "Auth: authenticated (scope: deploy)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "image": {
+                      "type": "string"
+                    },
+                    "lastActiveAt": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "repoUrl": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "sshPublicKeys": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    },
+                    "status": {
+                      "enum": [
+                        "creating",
+                        "starting",
+                        "running",
+                        "stopping",
+                        "stopped",
+                        "deleting",
+                        "error"
+                      ],
+                      "type": "string"
+                    },
+                    "statusMessage": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "updatedAt": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "status",
+                    "statusMessage",
+                    "repoUrl",
+                    "sshPublicKeys",
+                    "image",
+                    "createdAt",
+                    "updatedAt",
+                    "lastActiveAt"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Suspend a running sandbox (workspace and host key persist)",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/credentials": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "claude": {
+                      "description": "Whether a Claude Code OAuth token is stored",
+                      "type": "boolean"
+                    },
+                    "openai": {
+                      "description": "Whether an OpenAI/Codex token is stored",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "claude",
+                    "openai"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Check which agent credentials are configured (presence only, never values)",
+        "tags": [
+          "sandboxes"
+        ]
+      },
+      "put": {
+        "description": "Auth: authenticated (scope: deploy)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "claudeToken": {
+                    "maxLength": 8192,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  },
+                  "openaiToken": {
+                    "maxLength": 8192,
+                    "type": [
+                      "string",
+                      "null"
+                    ]
+                  }
+                },
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "claude": {
+                      "description": "Whether a Claude Code OAuth token is stored",
+                      "type": "boolean"
+                    },
+                    "openai": {
+                      "description": "Whether an OpenAI/Codex token is stored",
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "claude",
+                    "openai"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Store or clear agent subscription tokens (encrypted at rest), null clears",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
     "/scim/v2/Groups": {
       "get": {
         "description": "Auth: public",
@@ -39972,6 +41220,430 @@
         "summary": "POST /token",
         "tags": [
           "token"
+        ]
+      }
+    },
+    "/users/me/notification-destinations": {
+      "get": {
+        "description": "Auth: authenticated",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /users/me/notification-destinations",
+        "tags": [
+          "users"
+        ]
+      },
+      "post": {
+        "description": "Auth: authenticated",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /users/me/notification-destinations",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/users/me/notification-destinations/{destinationId}": {
+      "delete": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "destinationId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "DELETE /users/me/notification-destinations/:destinationId",
+        "tags": [
+          "users"
+        ]
+      },
+      "put": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "destinationId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PUT /users/me/notification-destinations/:destinationId",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/users/me/notification-destinations/{destinationId}/test": {
+      "post": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "destinationId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "POST /users/me/notification-destinations/:destinationId/test",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/users/me/notification-settings": {
+      "get": {
+        "description": "Auth: authenticated",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /users/me/notification-settings",
+        "tags": [
+          "users"
+        ]
+      },
+      "put": {
+        "description": "Auth: authenticated",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PUT /users/me/notification-settings",
+        "tags": [
+          "users"
+        ]
+      }
+    },
+    "/users/me/notification-settings/{scopeType}/{scopeId}": {
+      "delete": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scopeType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scopeId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "DELETE /users/me/notification-settings/:scopeType/:scopeId",
+        "tags": [
+          "users"
+        ]
+      },
+      "get": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scopeType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scopeId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "GET /users/me/notification-settings/:scopeType/:scopeId",
+        "tags": [
+          "users"
+        ]
+      },
+      "put": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "scopeType",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          },
+          {
+            "in": "path",
+            "name": "scopeId",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "PUT /users/me/notification-settings/:scopeType/:scopeId",
+        "tags": [
+          "users"
         ]
       }
     },

@@ -37,3 +37,22 @@ func (c *Client) DialExec(ctx context.Context, pod, namespace, container string)
 	conn.SetReadLimit(1 << 20)
 	return conn, nil
 }
+
+// DialSandboxSSH opens the sandbox SSH tunnel websocket
+// (ws(s)://…/apiv1/sandboxes/:id/ssh). Binary frames carry raw TCP bytes to
+// the sandbox's sshd in both directions; requires an exec-scope token.
+func (c *Client) DialSandboxSSH(ctx context.Context, id string) (*websocket.Conn, error) {
+	wsBase := strings.Replace(c.BaseURL, "http", "ws", 1)
+	target := wsBase + "/apiv1/sandboxes/" + url.PathEscape(id) + "/ssh"
+
+	header := http.Header{}
+	if c.Token != "" {
+		header.Set("Authorization", "Bearer "+c.Token)
+	}
+	conn, _, err := websocket.Dial(ctx, target, &websocket.DialOptions{HTTPHeader: header})
+	if err != nil {
+		return nil, err
+	}
+	conn.SetReadLimit(1 << 20)
+	return conn, nil
+}

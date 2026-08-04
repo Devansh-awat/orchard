@@ -89,6 +89,29 @@ spec:
             - { name: BUILDER_MEMORY_LIMIT, value: {{ .Values.builderSandbox.memoryLimit | quote }} }
             {{- end }}
             {{- end }}
+            {{- with .Values.sandbox }}
+            {{- if .enabled }}
+            - { name: SANDBOX_ENABLED, value: "true" }
+            - { name: SANDBOX_NAMESPACE, value: {{ .namespace | quote }} }
+            - { name: SANDBOX_IMAGE, value: {{ .image | quote }} }
+            {{- if .runtimeClassName }}
+            - { name: SANDBOX_RUNTIME_CLASS, value: {{ .runtimeClassName | quote }} }
+            {{- end }}
+            - { name: SANDBOX_IDLE_TIMEOUT_MINUTES, value: {{ .idleTimeoutMinutes | quote }} }
+            - { name: SANDBOX_MAX_LIFETIME_HOURS, value: {{ .maxLifetimeHours | quote }} }
+            - { name: SANDBOX_MAX_PER_USER, value: {{ .maxPerUserDefault | quote }} }
+            - { name: SANDBOX_STORAGE_CLASS, value: {{ .storageClass | quote }} }
+            - { name: SANDBOX_DISK_SIZE, value: {{ .diskSize | quote }} }
+            - { name: SANDBOX_CPU_LIMIT, value: {{ .cpuLimit | quote }} }
+            - { name: SANDBOX_MEMORY_LIMIT, value: {{ .memoryLimit | quote }} }
+            {{- if .tunnelMode }}
+            - { name: SANDBOX_TUNNEL_MODE, value: {{ .tunnelMode | quote }} }
+            {{- end }}
+            {{- if .homeMode }}
+            - { name: SANDBOX_HOME_MODE, value: {{ .homeMode | quote }} }
+            {{- end }}
+            {{- end }}
+            {{- end }}
             {{- if .Values.r2Proxy.enabled }}
             - { name: BACKUP_PROXY_ENABLED, value: "true" }
             - name: BACKUP_PROXY_ENDPOINT

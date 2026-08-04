@@ -1,5 +1,6 @@
 import { CircleCheck, CircleDashed, CircleX, Info, Loader2, TriangleAlert } from 'lucide-svelte';
 import type { RunStatus } from '$lib/types/jobs';
+import type { SandboxStatus } from '$lib/types/sandbox';
 
 export type StatusKind = 'success' | 'warning' | 'error' | 'info' | 'neutral' | 'progress';
 
@@ -128,6 +129,25 @@ export function runStatus(status: RunStatus): StatusMeta {
 			return meta('neutral', RUN_STATUS_LABELS[status], false);
 		default:
 			return meta('neutral', RUN_STATUS_LABELS[status] ?? capitalize(status));
+	}
+}
+
+export function sandboxStatus(status: SandboxStatus): StatusMeta {
+	switch (status) {
+		case 'running':
+			return meta('success', 'Running');
+		case 'creating':
+		case 'starting':
+		case 'stopping':
+			return meta('progress', capitalize(status), true);
+		case 'stopped':
+			return meta('neutral', 'Stopped');
+		case 'deleting':
+			return meta('error', 'Deleting', true);
+		case 'error':
+			return meta('error', 'Error');
+		default:
+			return meta('neutral', capitalize(status));
 	}
 }
 

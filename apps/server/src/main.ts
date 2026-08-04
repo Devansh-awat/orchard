@@ -13,6 +13,7 @@ import { startTelemetry } from './analytics/telemetry';
 
 import { AppModule } from './app.module';
 import { attachTerminalWebSocket } from './kubernetes/terminal.gateway';
+import { attachSandboxSshWebSocket } from './sandboxes/sandbox-ssh.gateway';
 import { OtelConsoleLogger } from './analytics/otel-logger';
 import { AnalyticsService } from './analytics/analytics.service';
 import { AnalyticsExceptionFilter } from './analytics/exception.filter';
@@ -127,6 +128,7 @@ async function bootstrap() {
     protectionService.handleUpgrade(req, socket, head).catch(() => socket.destroy());
   });
   attachTerminalWebSocket(httpServer, app);
+  attachSandboxSshWebSocket(httpServer, app);
 
   console.log(`Server running on http://localhost:${port}`);
   console.log(`Frontend URL: ${process.env.FRONTEND_URL || 'http://localhost:5173'}`);
