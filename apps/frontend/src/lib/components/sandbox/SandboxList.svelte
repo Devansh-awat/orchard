@@ -46,6 +46,9 @@
 		<span class="sbx-status" title={s.statusMessage ?? undefined}>
 			<StatusDot meta={sandboxStatus(s.status)} size={7} />
 			{sandboxStatus(s.status).label}
+			{#if s.status === 'error' && s.statusMessage}
+				<span class="sbx-status-message">{s.statusMessage}</span>
+			{/if}
 		</span>
 		<span class="sbx-when">{timeAgo(s.createdAt)}</span>
 		<span class="sbx-when">{s.lastActiveAt ? timeAgo(s.lastActiveAt) : 'Never'}</span>
@@ -127,6 +130,16 @@
 		font-weight: 600;
 		color: var(--text-default);
 		white-space: nowrap;
+	}
+
+	.sbx-status-message {
+		font-weight: 400;
+		color: var(--text-muted);
+		white-space: normal;
+		overflow: hidden;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
 	}
 
 	.sbx-when {

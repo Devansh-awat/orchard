@@ -37,6 +37,20 @@ export interface SandboxCrStatus {
   podIp: string | null;
 }
 
+export function k8sErrorMessage(e: any): string {
+  const body = e?.body ?? e?.response?.body;
+  if (typeof body === 'string') {
+    try {
+      const parsed = JSON.parse(body);
+      if (parsed?.message) return String(parsed.message);
+    } catch {
+      if (body.trim()) return body.slice(0, 300);
+    }
+  }
+  if (body?.message) return String(body.message);
+  return String(e?.message || 'unknown kubernetes error');
+}
+
 export function sandboxHomeMode(): 'block' | 'filesystem' {
   const mode = process.env.SANDBOX_HOME_MODE || 'auto';
   if (mode === 'block' || mode === 'filesystem') return mode;

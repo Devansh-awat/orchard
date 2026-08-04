@@ -11,7 +11,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { AuditService } from '../audit/audit.service';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
-import { SandboxK8sService } from './sandbox-k8s.service';
+import { SandboxK8sService, k8sErrorMessage } from './sandbox-k8s.service';
 
 const DEFAULT_SANDBOX_IMAGE = 'debian:bookworm';
 const NAME_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
@@ -278,10 +278,10 @@ export class SandboxesService {
         secret,
       );
     } catch (e: any) {
-      this.logger.error(`sandbox ${row.id} create failed: ${e?.message}`);
+      this.logger.error(`sandbox ${row.id} create failed: ${k8sErrorMessage(e)}`);
       const failed = await this.prisma.sandbox.update({
         where: { id: row.id },
-        data: { status: 'error', statusMessage: `Failed to create sandbox: ${e?.message}` },
+        data: { status: 'error', statusMessage: `Failed to create sandbox: ${k8sErrorMessage(e)}` },
       });
       return toSandboxDto(failed);
     }
@@ -416,10 +416,10 @@ export class SandboxesService {
     try {
       await this.k8s.deleteSandbox({ id: row.id, podName: row.podName });
     } catch (e: any) {
-      this.logger.error(`sandbox ${row.id} delete failed: ${e?.message}`);
+      this.logger.error(`sandbox ${row.id} delete failed: ${k8sErrorMessage(e)}`);
       await this.prisma.sandbox.update({
         where: { id: row.id },
-        data: { status: 'error', statusMessage: `Failed to delete sandbox: ${e?.message}` },
+        data: { status: 'error', statusMessage: `Failed to delete sandbox: ${k8sErrorMessage(e)}` },
       });
       throw e;
     }
