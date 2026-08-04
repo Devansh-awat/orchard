@@ -970,8 +970,8 @@
 		<div class="nd-card">
 			<div class="skeleton" style="height: 1rem; width: 8rem; margin-bottom: 1rem;"></div>
 			<div class="nd-grid-2">
-				<div class="skeleton" style="height: 2.25rem; border-radius: 0.5rem;"></div>
-				<div class="skeleton" style="height: 2.25rem; border-radius: 0.5rem;"></div>
+				<div class="skeleton" style="height: 2.25rem; border-radius: var(--radius-sm);"></div>
+				<div class="skeleton" style="height: 2.25rem; border-radius: var(--radius-sm);"></div>
 			</div>
 		</div>
 	{:else if project}
@@ -1082,108 +1082,115 @@
 											{/if}
 										</div>
 									{:else}
-									<PopoverPanel sameWidth bind:open={repoPickerOpen}>
-										{#snippet trigger(attrs, open)}
-											<div class="picker-wrap">
-												<button type="button" class="picker-trigger" {...attrs}>
-													{#if selectedRepo}
-														<Github class="h-4 w-4 shrink-0" />
-														<span class="picker-value">{selectedRepo.full_name}</span>
-													{:else if repoSearch}
-														<span class="picker-value">{repoSearch}</span>
-													{:else}
-														<span class="picker-placeholder">Search your repositories</span>
-													{/if}
-												</button>
-												{#if loadingRepos || loadingBranches}
-													<span class="picker-suffix"><Loader2 class="h-4 w-4 animate-spin" /></span
-													>
-												{:else if selectedRepo}
+										<PopoverPanel sameWidth bind:open={repoPickerOpen}>
+											{#snippet trigger(attrs, open)}
+												<div class="picker-wrap">
 													<button
 														type="button"
-														class="picker-suffix picker-clear"
-														aria-label="Clear repository"
-														onclick={clearRepoSelection}
+														class="picker-trigger"
+														class:picker-trigger--locked={!!selectedRepo}
+														{...attrs}
+														disabled={!!selectedRepo}
 													>
-														<X size={15} />
+														{#if selectedRepo}
+															<Github class="h-4 w-4 shrink-0" />
+															<span class="picker-value">{selectedRepo.full_name}</span>
+														{:else if repoSearch}
+															<span class="picker-value">{repoSearch}</span>
+														{:else}
+															<span class="picker-placeholder">Search your repositories</span>
+														{/if}
 													</button>
-												{:else}
-													<span
-														class="picker-suffix picker-chevron"
-														class:picker-chevron--open={open}><ChevronDown size={15} /></span
-													>
-												{/if}
-											</div>
-										{/snippet}
-										{#snippet children({ close })}
-											<Input
-												id="nd-repo-search"
-												value={repoSearch}
-												oninput={(e: Event) =>
-													handleRepoSearchInput((e.target as HTMLInputElement).value)}
-												placeholder="owner/repo or GitHub URL"
-												readonly={selectedRepo !== null}
-											/>
-											<div class="picker-list">
-												{#if parsedRepoInput && !parsedRepoIsListed}
-													<button
-														type="button"
-														class="picker-option picker-option--manual"
-														onclick={() => {
-															confirmManualRepo(parsedRepoInput);
-															close();
-														}}
-													>
-														<Github class="h-4 w-4 shrink-0" />
-														<span class="picker-option-text"
-															>Use <strong>{parsedRepoInput.owner}/{parsedRepoInput.repo}</strong
-															></span
+													{#if loadingRepos || loadingBranches}
+														<span class="picker-suffix"
+															><Loader2 class="h-4 w-4 animate-spin" /></span
 														>
-													</button>
-												{/if}
-												{#if loadingRepos}
-													<div class="picker-empty">
-														<Loader2 class="h-4 w-4 animate-spin" /> Loading your repositories
-													</div>
-												{:else}
-													{#each filteredRepos as repo (repo.full_name)}
+													{:else if selectedRepo}
 														<button
 															type="button"
-															class="picker-option"
+															class="picker-suffix picker-clear"
+															aria-label="Clear repository"
+															onclick={clearRepoSelection}
+														>
+															<X size={15} />
+														</button>
+													{:else}
+														<span
+															class="picker-suffix picker-chevron"
+															class:picker-chevron--open={open}><ChevronDown size={15} /></span
+														>
+													{/if}
+												</div>
+											{/snippet}
+											{#snippet children({ close })}
+												<Input
+													id="nd-repo-search"
+													value={repoSearch}
+													oninput={(e: Event) =>
+														handleRepoSearchInput((e.target as HTMLInputElement).value)}
+													placeholder="owner/repo or GitHub URL"
+													readonly={selectedRepo !== null}
+												/>
+												<div class="picker-list">
+													{#if parsedRepoInput && !parsedRepoIsListed}
+														<button
+															type="button"
+															class="picker-option picker-option--manual"
 															onclick={() => {
-																selectRepo(repo);
+																confirmManualRepo(parsedRepoInput);
 																close();
 															}}
 														>
 															<Github class="h-4 w-4 shrink-0" />
-															<span class="picker-option-text">
-																{repo.full_name.split('/')[0] === selectedAccount
-																	? repo.full_name.split('/')[1]
-																	: repo.full_name}
-															</span>
-															{#if repo.private}<Badge tone="neutral">Private</Badge>{/if}
+															<span class="picker-option-text"
+																>Use <strong>{parsedRepoInput.owner}/{parsedRepoInput.repo}</strong
+																></span
+															>
 														</button>
+													{/if}
+													{#if loadingRepos}
+														<div class="picker-empty">
+															<Loader2 class="h-4 w-4 animate-spin" /> Loading your repositories
+														</div>
 													{:else}
-														{#if reposError}
-															<div class="picker-note">
-																{reposError}
-																<a href="/user/settings">Connect GitHub</a>
-															</div>
-														{:else if !repoSearch}
-															<div class="picker-empty">
-																Search your repos, or paste owner/repo or a GitHub URL
-															</div>
-														{:else if !parsedRepoInput}
-															<div class="picker-empty">
-																No matches. Paste owner/repo or a GitHub URL to deploy any public
-																repo.
-															</div>
-														{/if}
-													{/each}
-												{/if}
-											</div>
-										{/snippet}
-									</PopoverPanel>
+														{#each filteredRepos as repo (repo.full_name)}
+															<button
+																type="button"
+																class="picker-option"
+																onclick={() => {
+																	selectRepo(repo);
+																	close();
+																}}
+															>
+																<Github class="h-4 w-4 shrink-0" />
+																<span class="picker-option-text">
+																	{repo.full_name.split('/')[0] === selectedAccount
+																		? repo.full_name.split('/')[1]
+																		: repo.full_name}
+																</span>
+																{#if repo.private}<Badge tone="neutral">Private</Badge>{/if}
+															</button>
+														{:else}
+															{#if reposError}
+																<div class="picker-note">
+																	{reposError}
+																	<a href="/user/settings">Connect GitHub</a>
+																</div>
+															{:else if !repoSearch}
+																<div class="picker-empty">
+																	Search your repos, or paste owner/repo or a GitHub URL
+																</div>
+															{:else if !parsedRepoInput}
+																<div class="picker-empty">
+																	No matches. Paste owner/repo or a GitHub URL to deploy any public
+																	repo.
+																</div>
+															{/if}
+														{/each}
+													{/if}
+												</div>
+											{/snippet}
+										</PopoverPanel>
 									{/if}
 								</div>
 							</Field>
@@ -1700,7 +1707,7 @@
 	}
 
 	.nd-page-title {
-		font-size: 1.625rem;
+		font-size: var(--text-title-1);
 		font-weight: 700;
 		color: var(--center-channel-color);
 		margin: 0;
@@ -1709,15 +1716,16 @@
 	}
 
 	.nd-page-subtitle {
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		color: var(--surface-muted);
-		margin: 0.375rem 0 0;
+		margin: 0.5rem 0 0;
 	}
 
 	/* Main card */
 	.nd-main-card {
 		border: 1px solid color-mix(in srgb, var(--surface-border) 70%, transparent);
-		border-radius: 0.875rem;
+		border-radius: var(--radius-lg);
 		background-color: var(--surface-bg);
 		margin-bottom: 1.5rem;
 		display: flex;
@@ -1737,8 +1745,9 @@
 	}
 
 	.nd-source-label {
-		font-size: 0.75rem;
-		font-weight: 500;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		color: var(--surface-muted);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -1746,24 +1755,25 @@
 
 	.nd-pill-group {
 		display: flex;
-		border-radius: 0.5rem;
-		padding: 0.1875rem;
+		border-radius: var(--radius-sm);
+		padding: 0.25rem;
 		background-color: color-mix(in srgb, var(--surface-border) 30%, transparent);
 	}
 
 	.nd-pill {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		padding: 0.3125rem 0.75rem;
-		border-radius: 0.375rem;
-		font-size: 0.75rem;
-		font-weight: 500;
+		border-radius: var(--radius-xs);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		border: none;
 		cursor: pointer;
 		background: transparent;
 		color: var(--surface-muted);
-		transition: all 0.15s;
+		transition: all var(--dur-fast);
 	}
 
 	.nd-pill:hover {
@@ -1773,7 +1783,7 @@
 	.nd-pill-active {
 		background-color: var(--surface-bg);
 		color: var(--center-channel-color);
-		box-shadow: 0 1px 2px rgb(0 0 0 / 0.06);
+		box-shadow: var(--elev-1);
 	}
 
 	/* Owner / Name row */
@@ -1806,9 +1816,9 @@
 
 	.nd-url-toggle {
 		margin-top: 0.25rem;
-		padding: 0.625rem 0.75rem;
+		padding: 0.75rem 0.75rem;
 		border: 1px solid var(--border-default);
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		background: var(--bg-raised);
 	}
 
@@ -1843,7 +1853,8 @@
 		gap: 1rem;
 	}
 	.nd-slash {
-		font-size: 1.25rem;
+		font-size: var(--text-title-3);
+		line-height: var(--lh-title-3);
 		font-weight: 300;
 		color: var(--surface-muted);
 		user-select: none;
@@ -1851,15 +1862,16 @@
 
 	.nd-name-input {
 		flex: 1;
-		padding: 0.4375rem 0.75rem;
-		border-radius: 0.5rem;
+		padding: 0.5rem 0.75rem;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--surface-border);
 		background-color: var(--center-channel-bg);
 		color: var(--center-channel-color);
-		font-size: 0.9375rem;
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
 		font-weight: 600;
 		letter-spacing: -0.01em;
-		transition: border-color 0.15s;
+		transition: border-color var(--dur-fast);
 	}
 
 	.nd-name-input::placeholder {
@@ -1876,7 +1888,7 @@
 	/* Cards */
 	.nd-card {
 		border: 1px solid color-mix(in srgb, var(--surface-border) 70%, transparent);
-		border-radius: 0.875rem;
+		border-radius: var(--radius-lg);
 		background-color: var(--surface-bg);
 		padding: 1.5rem;
 		margin-bottom: 1.5rem;
@@ -1895,14 +1907,16 @@
 	}
 
 	.nd-card-title {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		color: var(--center-channel-color);
 		margin: 0;
 	}
 
 	.nd-hint {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--surface-muted);
 		margin: 0;
 	}
@@ -1928,28 +1942,34 @@
 		align-items: center;
 		gap: 0.5rem;
 		width: 100%;
-		padding: 0.625rem 2.25rem 0.625rem 0.875rem;
-		border-radius: 0.5rem;
+		padding: 0.75rem 2.25rem 0.75rem 0.875rem;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--surface-border);
 		background-color: var(--surface-bg);
 		color: var(--center-channel-color);
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
 		line-height: 1.5;
 		text-align: left;
 		cursor: pointer;
 		transition:
-			border-color 150ms ease,
-			box-shadow 150ms ease;
+			border-color var(--dur-fast) ease,
+			box-shadow var(--dur-fast) ease;
 	}
 
 	.picker-trigger:focus-visible {
-		outline: none;
+		outline: var(--focus-ring-width) solid var(--focus-ring-color);
+		outline-offset: var(--focus-ring-offset);
 		border-color: var(--sidebar-text-active-border);
 		box-shadow: 0 0 0 3px color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
 	}
 
 	.picker-trigger:disabled {
 		opacity: 0.5;
+		cursor: default;
+	}
+
+	.picker-trigger--locked:disabled {
+		opacity: 1;
 		cursor: default;
 	}
 
@@ -1987,7 +2007,7 @@
 
 	.picker-chevron {
 		pointer-events: none;
-		transition: transform 150ms ease;
+		transition: transform var(--dur-fast) ease;
 	}
 
 	.picker-chevron--open {
@@ -2008,15 +2028,16 @@
 		align-items: center;
 		gap: 0.5rem;
 		width: 100%;
-		border-radius: 0.5rem;
-		padding: 0.4375rem 0.75rem;
+		border-radius: var(--radius-sm);
+		padding: 0.5rem 0.75rem;
 		text-align: left;
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		border: none;
 		background: none;
 		color: var(--center-channel-color);
 		cursor: pointer;
-		transition: background-color 0.1s;
+		transition: background-color var(--dur-fast);
 	}
 
 	.picker-option:hover {
@@ -2035,19 +2056,20 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.625rem 0.75rem;
-		font-size: 0.75rem;
+		padding: 0.75rem 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--surface-muted);
 	}
 
 	.picker-note {
-		padding: 0.625rem 0.75rem;
-		font-size: 0.75rem;
+		padding: 0.75rem 0.75rem;
+		font-size: var(--text-caption);
 		line-height: 1.5;
 		color: var(--text-muted);
 		background-color: var(--status-warning-bg);
 		border: 1px solid var(--status-warning-border);
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		margin: 0.25rem;
 	}
 
@@ -2063,7 +2085,7 @@
 	}
 
 	.picker-option--manual strong {
-		font-weight: 650;
+		font-weight: 600;
 	}
 	.nd-cfg {
 		display: flex;
@@ -2082,7 +2104,8 @@
 	.nd-cfg-label {
 		flex: 1;
 		min-width: 0;
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		color: var(--text-default);
 	}
@@ -2100,12 +2123,13 @@
 
 	.nd-fold-summary {
 		cursor: pointer;
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		color: var(--text-default);
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		list-style: none;
 	}
 
@@ -2120,8 +2144,9 @@
 
 	.nd-fold-note {
 		margin-left: auto;
-		font-size: 0.75rem;
-		font-weight: 500;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		color: var(--text-muted);
 	}
 
@@ -2134,15 +2159,16 @@
 
 	.nd-fold-hint {
 		margin: 0;
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
 		line-height: 1.5;
 		color: var(--text-muted);
 	}
 
 	.nd-fold-hint code {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		padding: 0.0625rem 0.25rem;
-		border-radius: 0.25rem;
+		border-radius: var(--radius-xs);
 		background: var(--bg-raised);
 		color: var(--text-default);
 	}
@@ -2159,20 +2185,22 @@
 	/* Warning */
 	.nd-warning {
 		padding: 1rem;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		background-color: color-mix(in srgb, var(--away-indicator) 8%, transparent);
 		border: 1px solid color-mix(in srgb, var(--away-indicator) 25%, transparent);
 	}
 
 	.nd-warning-title {
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		font-weight: 600;
 		color: var(--center-channel-color);
 		margin: 0;
 	}
 
 	.nd-warning-desc {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 		margin: 0.25rem 0 0;
 	}
@@ -2192,20 +2220,21 @@
 
 	.nd-protocol-toggle {
 		display: flex;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		overflow: hidden;
 		border: 1px solid var(--surface-border);
 	}
 
 	.nd-proto-btn {
-		padding: 0.375rem 0.75rem;
-		font-size: 0.75rem;
-		font-weight: 500;
+		padding: 0.5rem 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		background: transparent;
 		color: var(--surface-muted);
 		border: none;
 		cursor: pointer;
-		transition: all 0.15s;
+		transition: all var(--dur-fast);
 	}
 
 	.nd-proto-btn:first-child {
@@ -2220,10 +2249,10 @@
 	/* Volumes — inline card style */
 	.nd-vol-card {
 		padding: 0.875rem 1rem;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		background-color: color-mix(in srgb, var(--surface-border) 15%, transparent);
 		border: 1px solid var(--surface-border);
-		transition: border-color 0.15s;
+		transition: border-color var(--dur-fast);
 	}
 
 	.nd-vol-card:hover {
@@ -2240,10 +2269,11 @@
 		flex-shrink: 0;
 		width: 1.5rem;
 		height: 1.5rem;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		background: var(--sidebar-text-active-border);
 		color: var(--button-color);
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		display: flex;
 		align-items: center;
@@ -2266,19 +2296,21 @@
 
 	.nd-vol-arrow {
 		color: var(--surface-muted);
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		flex-shrink: 0;
 	}
 
 	.nd-vol-input {
 		width: 100%;
-		padding: 0.375rem 0.625rem;
-		border-radius: 0.5rem;
+		padding: 0.5rem 0.75rem;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--surface-border);
 		background-color: var(--surface-bg);
 		color: var(--center-channel-color);
-		font-size: 0.8125rem;
-		transition: border-color 0.15s;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		transition: border-color var(--dur-fast);
 		outline: none;
 	}
 
@@ -2303,19 +2335,20 @@
 		align-items: center;
 		gap: 0.5rem;
 		padding: 0.25rem 0.5rem;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		cursor: pointer;
 	}
 
 	.nd-vol-toggle-label {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 		white-space: nowrap;
 	}
 
 	.nd-vol-remove {
 		opacity: 0.4;
-		transition: opacity 0.15s;
+		transition: opacity var(--dur-fast);
 	}
 
 	.nd-vol-card:hover .nd-vol-remove {
@@ -2336,9 +2369,9 @@
 		flex-shrink: 0;
 		width: 2.25rem;
 		height: 1.25rem;
-		border-radius: 0.625rem;
+		border-radius: var(--radius-md);
 		background-color: color-mix(in srgb, var(--surface-border) 80%, var(--center-channel-color));
-		transition: background-color 0.2s;
+		transition: background-color var(--dur-base);
 	}
 
 	.nd-toggle-input:checked + .nd-toggle-track {
@@ -2353,8 +2386,8 @@
 		height: 1rem;
 		border-radius: 50%;
 		background-color: var(--button-color);
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
-		transition: transform 0.2s;
+		box-shadow: var(--elev-1);
+		transition: transform var(--dur-base);
 	}
 
 	.nd-toggle-input:checked + .nd-toggle-track .nd-toggle-thumb {
@@ -2373,8 +2406,9 @@
 	}
 
 	.nd-vol-empty-title {
-		font-size: 0.8125rem;
-		font-weight: 500;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
 		color: var(--center-channel-color);
 		margin: 0 0 0.25rem;
 	}
@@ -2382,14 +2416,14 @@
 	/* Env editor — matches deployment Environment tab */
 	.env-container {
 		border: 1px solid var(--surface-border);
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		overflow: hidden;
 		background-color: var(--control-bg);
 	}
 
 	.env-row {
 		border-bottom: 1px solid var(--surface-border);
-		transition: background-color 0.12s;
+		transition: background-color var(--dur-fast);
 	}
 
 	.env-row:hover,
@@ -2420,7 +2454,8 @@
 		width: 100%;
 		padding: 0.5rem 0.75rem;
 		font-family: var(--font-mono);
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		background: transparent;
 		border: none;
 		outline: none;
@@ -2454,7 +2489,7 @@
 		flex-shrink: 0;
 		padding-right: 0.25rem;
 		opacity: 0;
-		transition: opacity 0.15s;
+		transition: opacity var(--dur-fast);
 	}
 
 	.env-row:hover .env-actions,
@@ -2468,14 +2503,14 @@
 		justify-content: center;
 		width: 2rem;
 		height: 2rem;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		background: transparent;
 		border: none;
 		color: var(--surface-muted);
 		cursor: pointer;
 		transition:
-			color 0.15s,
-			background-color 0.15s;
+			color var(--dur-fast),
+			background-color var(--dur-fast);
 	}
 
 	.env-action-btn:hover {
@@ -2493,17 +2528,18 @@
 		align-items: center;
 		gap: 0.5rem;
 		width: 100%;
-		padding: 0.625rem 0.75rem;
-		font-size: 0.8125rem;
-		font-weight: 500;
+		padding: 0.75rem 0.75rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
 		color: var(--surface-muted);
 		background: transparent;
 		border: none;
 		border-top: 1px dashed var(--surface-border);
 		cursor: pointer;
 		transition:
-			color 0.15s,
-			background-color 0.15s;
+			color var(--dur-fast),
+			background-color var(--dur-fast);
 	}
 
 	.env-add-btn:hover {
@@ -2517,7 +2553,7 @@
 		min-height: 220px;
 		padding: 0.75rem;
 		font-family: var(--font-mono);
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
 		line-height: 1.7;
 		color: var(--center-channel-color);
 		background: transparent;
@@ -2562,13 +2598,14 @@
 	}
 
 	.nd-adv-label {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		color: var(--text-default);
 	}
 
 	.nd-adv-hint {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
 		line-height: 1.4;
 		color: var(--text-muted);
 	}
@@ -2583,14 +2620,14 @@
 		justify-content: center;
 		width: 2rem;
 		height: 2rem;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		border: none;
 		background: none;
 		color: var(--surface-muted);
 		cursor: pointer;
 		transition:
-			color 0.15s,
-			background-color 0.15s;
+			color var(--dur-fast),
+			background-color var(--dur-fast);
 		flex-shrink: 0;
 	}
 
@@ -2629,8 +2666,9 @@
 	/* Error */
 	.nd-error {
 		padding: 0.75rem 1rem;
-		border-radius: 0.75rem;
-		font-size: 0.875rem;
+		border-radius: var(--radius-md);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
 		color: var(--error-text-color);
 		border: 1px solid color-mix(in srgb, var(--error-text-color) 25%, transparent);

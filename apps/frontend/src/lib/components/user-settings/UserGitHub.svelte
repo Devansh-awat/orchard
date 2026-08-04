@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { Loader2, Github, Building2, ExternalLink, TriangleAlert } from 'lucide-svelte';
+	import { Loader2, Github, Building2, ExternalLink } from 'lucide-svelte';
 	import { Plus } from '@jis3r/icons';
-	import { Button, StatusBadge, statusMeta } from '$lib/components/ui';
+	import { Alert, Button, StatusBadge, statusMeta } from '$lib/components/ui';
 	import SettingsSection from './SettingsSection.svelte';
 	import IntegrationCard from './IntegrationCard.svelte';
 	import ConnectPrompt from './ConnectPrompt.svelte';
@@ -68,15 +68,15 @@
 		</IntegrationCard>
 
 		{#if githubTokenExpired}
-			<div class="ug-expired" role="alert">
-				<TriangleAlert class="h-4 w-4" />
-				<div class="ug-expired-text">
-					<span class="ug-expired-title">GitHub session expired</span>
-					<span class="ug-expired-hint">
-						Reconnect to view repository access and deploy from your repositories.
-					</span>
-				</div>
-				<Button variant="primary" size="sm" onclick={onLink}>Reconnect</Button>
+			<div class="ug-expired">
+				<Alert tone="warning" title="GitHub session expired">
+					<div class="ug-expired-body">
+						<span class="ug-expired-hint">
+							Reconnect to view repository access and deploy from your repositories.
+						</span>
+						<Button variant="primary" size="sm" onclick={onLink}>Reconnect</Button>
+					</div>
+				</Alert>
 			</div>
 		{/if}
 
@@ -147,84 +147,73 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		padding: 1.5rem 0;
-		color: var(--surface-muted);
+		padding: var(--space-6) 0;
+		color: var(--text-muted);
 	}
 	.ug-expired {
+		margin-top: var(--space-3);
+	}
+	.ug-expired-body {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
-		margin-top: 0.75rem;
-		padding: 0.75rem 0.875rem;
-		border-radius: 0.625rem;
-		border: 1px solid color-mix(in srgb, var(--away-indicator) 45%, transparent);
-		background-color: color-mix(in srgb, var(--away-indicator) 12%, transparent);
-		color: color-mix(in srgb, var(--away-indicator) 80%, var(--center-channel-color));
-	}
-	.ug-expired-text {
-		flex: 1;
-		min-width: 0;
-		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
-	}
-	.ug-expired-title {
-		font-size: 0.8125rem;
-		font-weight: 600;
-		color: var(--center-channel-color);
+		justify-content: space-between;
+		gap: var(--space-3);
 	}
 	.ug-expired-hint {
-		font-size: 0.6875rem;
-		color: var(--surface-muted);
+		flex: 1;
+		min-width: 0;
+		color: var(--text-muted);
 	}
 	.ug-expired :global(.btn) {
 		flex-shrink: 0;
 	}
 	.ug-repos {
-		margin-top: 1rem;
-		padding-top: 1rem;
-		border-top: 1px dashed color-mix(in srgb, var(--surface-border) 70%, transparent);
+		margin-top: var(--space-4);
+		padding-top: var(--space-4);
+		border-top: 1px dashed var(--rule);
 		display: flex;
 		flex-direction: column;
-		gap: 0.625rem;
+		gap: 0.75rem;
 	}
 	.ug-repos-head {
 		display: flex;
 		align-items: baseline;
 		justify-content: space-between;
-		gap: 0.75rem;
+		gap: var(--space-3);
 	}
 	.ug-repos-title {
-		font-size: 0.8125rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		font-weight: 600;
-		color: var(--center-channel-color);
+		color: var(--text-default);
 	}
 	.ug-repos-meta {
-		font-size: 0.6875rem;
-		color: var(--surface-muted);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-muted);
 	}
 	.ug-install-list {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: var(--space-2);
 	}
 	.ug-install {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
-		padding: 0.625rem 0.875rem;
-		border-radius: 0.625rem;
-		border: 1px solid var(--surface-border);
-		background-color: var(--surface-bg);
+		gap: var(--space-3);
+		padding: 0.75rem 0.875rem;
+		border-radius: var(--radius-md);
+		border: 1px solid var(--border-default);
+		background-color: var(--bg-surface);
 		text-decoration: none;
-		color: var(--center-channel-color);
+		color: var(--text-default);
 		transition:
-			border-color 0.15s,
-			background-color 0.15s;
+			border-color var(--dur-fast),
+			background-color var(--dur-fast);
 	}
 	.ug-install:hover {
-		border-color: color-mix(in srgb, var(--sidebar-text-active-border) 60%, var(--surface-border));
-		background-color: color-mix(in srgb, var(--surface-border) 25%, var(--surface-bg));
+		border-color: color-mix(in srgb, var(--accent) 60%, var(--border-default));
+		background-color: var(--bg-hover);
 	}
 	.ug-install-icon {
 		flex-shrink: 0;
@@ -233,9 +222,9 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		border-radius: 0.5rem;
-		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
-		color: var(--center-channel-color);
+		border-radius: var(--radius-sm);
+		background-color: var(--fill-soft);
+		color: var(--text-default);
 	}
 	.ug-install-info {
 		flex: 1;
@@ -247,62 +236,72 @@
 	.ug-install-name {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.5rem;
-		font-size: 0.8125rem;
+		gap: var(--space-2);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		font-weight: 600;
 	}
 	.ug-install-type {
-		font-size: 0.625rem;
-		font-weight: 500;
-		padding: 0.0625rem 0.375rem;
-		border-radius: 9999px;
-		background-color: color-mix(in srgb, var(--surface-border) 60%, transparent);
-		color: var(--surface-muted);
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+		padding: 0.0625rem 0.5rem;
+		border-radius: var(--radius-pill);
+		background-color: var(--fill-medium);
+		color: var(--text-muted);
 	}
 	.ug-install-meta {
-		font-size: 0.6875rem;
-		color: var(--surface-muted);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-muted);
 	}
 	.ug-install-action {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.25rem;
-		font-size: 0.6875rem;
-		font-weight: 500;
-		color: var(--surface-muted);
+		gap: var(--space-1);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+		color: var(--text-muted);
 		flex-shrink: 0;
 	}
 	.ug-install:hover .ug-install-action {
-		color: var(--sidebar-text-active-border);
+		color: var(--accent);
 	}
 	.ug-add-link {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		align-self: flex-start;
-		font-size: 0.75rem;
-		font-weight: 500;
-		color: var(--surface-muted);
-		padding: 0.375rem 0.625rem;
-		border-radius: 0.5rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
+		color: var(--text-muted);
+		padding: 0.5rem 0.75rem;
+		border-radius: var(--radius-sm);
 		text-decoration: none;
 		transition:
-			background-color 0.15s,
-			color 0.15s;
+			background-color var(--dur-fast),
+			color var(--dur-fast);
 	}
 	.ug-add-link:hover {
-		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);
-		color: var(--center-channel-color);
+		background-color: var(--fill-soft);
+		color: var(--text-default);
 	}
 	.ug-add-link--primary {
-		color: var(--center-channel-color);
-		background-color: color-mix(in srgb, var(--center-channel-color) 4%, transparent);
-		border: 1px dashed color-mix(in srgb, var(--surface-border) 80%, transparent);
-		padding: 0.625rem 0.75rem;
-		font-size: 0.8125rem;
+		color: var(--text-default);
+		background-color: var(--fill-quiet);
+		border: 1px dashed color-mix(in srgb, var(--border-default) 80%, transparent);
+		padding: 0.625rem var(--space-3);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		width: 100%;
 		justify-content: center;
+	}
+	@media (max-width: 640px) {
+		.ug-expired-body {
+			flex-direction: column;
+			align-items: flex-start;
+		}
 	}
 </style>

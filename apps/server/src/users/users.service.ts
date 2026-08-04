@@ -1,6 +1,8 @@
-import { BadRequestException, ConflictException, Injectable } from '@nestjs/common';
+import { BadRequestException, ConflictException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+
+const MAX_SEEN_UPDATES = 100;
 
 export interface HackClubUserData {
   id: string;
@@ -308,10 +310,37 @@ export class UsersService {
         imageUrl: true,
         externalAuthId: true,
         setupCompleted: true,
+        seenUpdates: true,
       }
     });
     this.invalidateUserCache(updated);
     return updated;
+  }
+
+  async markUpdateSeen(userId: string, updateId: string) {
+    if (!/^[a-z0-9][a-z0-9-]{0,63}$/.test(updateId)) {
+      throw new BadRequestException('Invalid update id');
+    }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, email: true, externalAuthId: true, seenUpdates: true },
+    });
+    if (!user) {
+      throw new NotFoundException('User not found');
+    }
+    if (user.seenUpdates.includes(updateId)) {
+      return { seenUpdates: user.seenUpdates };
+    }
+
+    const next = [...user.seenUpdates, updateId].slice(-MAX_SEEN_UPDATES);
+    const updated = await this.prisma.user.update({
+      where: { id: userId },
+      data: { seenUpdates: next },
+      select: { seenUpdates: true },
+    });
+    this.invalidateUserCache(user);
+    return { seenUpdates: updated.seenUpdates };
   }
 }
 

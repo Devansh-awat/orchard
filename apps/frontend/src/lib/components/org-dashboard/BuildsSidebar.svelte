@@ -1,7 +1,8 @@
 <script lang="ts">
-	import { Loader2, CheckCircle2, XCircle, Clock } from 'lucide-svelte';
+	import { Loader2, CheckCircle2, XCircle } from 'lucide-svelte';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import BuildTimer from '$lib/components/BuildTimer.svelte';
+	import { RemoteImg } from '$lib/components/ui';
 	import { buildIcon, timeAgo } from './helpers.svelte';
 	import type { ActiveBuild, RecentBuild } from './types';
 
@@ -23,7 +24,7 @@
 </script>
 
 <aside class="aside">
-	<h2 class="label aside-label">Recent Deployments</h2>
+	<h2 class="label aside-label">Recent deployments</h2>
 	{#if buildsLoading}
 		{#each Array(3) as _, i (i)}
 			<div class="bld bld--skel">
@@ -42,22 +43,19 @@
 			<a
 				href="/{orgSlug}/deployments/{b.id}"
 				class="bld bld--live"
-				{@attach motionStagger({ index: i, stride: 0.04, from: { y: 6, scale: 1 } })}
+				{@attach motionStagger({ index: i, from: { y: 6 } })}
 			>
 				<div class="bld-dot bld-dot--building"><Loader2 size={13} class="animate-spin" /></div>
 				<div class="bld-info">
 					<span class="bld-row"
-						>{#if ic}<img
+						>{#if ic}<RemoteImg
 								src={ic}
-								alt=""
 								class="bld-ic"
-								loading="lazy"
-								decoding="async"
 								onerror={() => onFavErr('b-' + b.id)}
 							/>{/if}<span class="bld-name">{b.displayName || b.name}</span></span
 					>
 					<span class="bld-sub"
-						>{#if b.project?.name}<strong>{b.project.name}</strong> ·
+						>{#if b.project?.name}{b.project.name} ·
 						{/if}{b.buildStep ?? 'Building'}</span
 					>
 				</div>
@@ -78,8 +76,7 @@
 				class="bld"
 				{@attach motionStagger({
 					index: activeBuilds.length + i,
-					stride: 0.04,
-					from: { y: 6, scale: 1 }
+					from: { y: 6 }
 				})}
 			>
 				<div class="bld-dot" class:bld-dot--ok={ok} class:bld-dot--fail={!ok}>
@@ -87,19 +84,16 @@
 				</div>
 				<div class="bld-info">
 					<span class="bld-row"
-						>{#if ic}<img
+						>{#if ic}<RemoteImg
 								src={ic}
-								alt=""
 								class="bld-ic"
-								loading="lazy"
-								decoding="async"
 								onerror={() => onFavErr('b-' + b.deployment.id)}
 							/>{/if}<span class="bld-name">{b.deployment.displayName || b.deployment.name}</span
 						></span
 					>
 					<span class="bld-sub"
-						>{#if b.deployment.project?.name}<strong>{b.deployment.project.name}</strong
-							>{/if}{#if b.commitSha}{#if b.deployment.project?.name}
+						>{#if b.deployment.project?.name}{b.deployment.project
+								.name}{/if}{#if b.commitSha}{#if b.deployment.project?.name}
 								·
 							{/if}{b.commitSha.slice(
 								0,
@@ -109,7 +103,7 @@
 							{/if}{b.branch}{/if}</span
 					>
 				</div>
-				<span class="bld-time"><Clock size={10} /> {timeAgo(b.createdAt)}</span>
+				<span class="bld-time">{timeAgo(b.createdAt)}</span>
 			</a>
 		{/each}
 	{/if}

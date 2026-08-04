@@ -941,14 +941,16 @@ resources:
 		margin-bottom: 2rem;
 	}
 	.nt-title {
-		font-size: 1.25rem;
+		font-size: var(--text-title-3);
+		line-height: var(--lh-title-3);
 		font-weight: 700;
 		color: var(--center-channel-color);
 		margin: 0;
 		letter-spacing: -0.02em;
 	}
 	.nt-subtitle {
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		color: var(--surface-muted);
 		margin: 0.25rem 0 0;
 	}
@@ -959,22 +961,23 @@ resources:
 		gap: 0;
 		margin-bottom: 1.5rem;
 		border: 1px solid var(--surface-border);
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		overflow: hidden;
 		width: fit-content;
 	}
 	.nt-mode-btn {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		padding: 0.5rem 1rem;
-		font-size: 0.8125rem;
-		font-weight: 500;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
 		border: none;
 		background: transparent;
 		color: var(--surface-muted);
 		cursor: pointer;
-		transition: all 0.15s;
+		transition: all var(--dur-fast);
 	}
 	.nt-mode-btn:not(:last-child) {
 		border-right: 1px solid var(--surface-border);
@@ -986,8 +989,9 @@ resources:
 
 	.nt-error {
 		padding: 0.75rem 1rem;
-		border-radius: 0.75rem;
-		font-size: 0.875rem;
+		border-radius: var(--radius-md);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
 		color: var(--error-text-color);
 		border: 1px solid color-mix(in srgb, var(--error-text-color) 25%, transparent);
@@ -1001,7 +1005,8 @@ resources:
 		gap: 0.75rem;
 	}
 	.nt-yaml-hint {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 		margin: 0;
 	}
@@ -1018,12 +1023,12 @@ resources:
 		width: 100%;
 		min-height: 500px;
 		padding: 1rem;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		border: 1px solid var(--surface-border);
 		background-color: var(--center-channel-bg);
 		color: var(--center-channel-color);
 		font-family: var(--font-mono);
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
 		line-height: 1.6;
 		resize: vertical;
 		tab-size: 2;
@@ -1042,7 +1047,7 @@ resources:
 
 	.nt-section {
 		border: 1px solid var(--surface-border);
-		border-radius: 1rem;
+		border-radius: var(--radius-lg);
 		padding: 1.5rem;
 		background-color: var(--surface-bg);
 		display: flex;
@@ -1058,7 +1063,8 @@ resources:
 		justify-content: space-between;
 	}
 	.nt-section-title {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -1066,14 +1072,16 @@ resources:
 		margin: 0;
 	}
 	.nt-section-desc {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 		margin: -0.5rem 0 0;
 	}
 	.nt-section-desc code {
-		font-size: 0.75rem;
-		padding: 0.125rem 0.375rem;
-		border-radius: 0.25rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		padding: 0.125rem 0.5rem;
+		border-radius: var(--radius-xs);
 		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
 	}
 
@@ -1087,35 +1095,40 @@ resources:
 		justify-content: center;
 	}
 	.nt-label-sm {
-		font-size: 0.75rem;
-		font-weight: 500;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		color: var(--surface-muted);
 	}
 	.nt-hint {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 		margin: 0;
 	}
 
 	.nt-input {
 		padding: 0.5rem 0.75rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--surface-border);
 		background-color: var(--center-channel-bg);
 		color: var(--center-channel-color);
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 	}
 	.nt-input:focus {
 		outline: none;
 		border-color: var(--sidebar-text-active-border);
 	}
 	.nt-input-sm {
-		padding: 0.375rem 0.625rem;
-		font-size: 0.8125rem;
+		padding: 0.5rem 0.75rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 	}
 	.nt-input-xs {
 		padding: 0.25rem 0.5rem;
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 	}
 	.nt-input-mono {
 		font-family: var(--font-mono);
@@ -1127,8 +1140,9 @@ resources:
 	.nt-check-label {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
-		font-size: 0.8125rem;
+		gap: 0.5rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--center-channel-color);
 		cursor: pointer;
 	}
@@ -1148,7 +1162,7 @@ resources:
 	/* Param cards */
 	.nt-param-card {
 		border: 1px solid var(--surface-border);
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		padding: 1rem;
 		display: flex;
 		flex-direction: column;
@@ -1161,7 +1175,8 @@ resources:
 		gap: 0.5rem;
 	}
 	.nt-param-num {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		color: var(--surface-muted);
 		min-width: 1.5rem;
@@ -1170,7 +1185,7 @@ resources:
 	/* Resource cards */
 	.nt-res-card {
 		border: 1px solid var(--surface-border);
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		overflow: hidden;
 		background-color: var(--center-channel-bg);
 	}
@@ -1192,15 +1207,16 @@ resources:
 		display: flex;
 		flex-wrap: wrap;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		padding: 0.5rem 0.75rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		background-color: color-mix(in srgb, var(--surface-border) 30%, transparent);
 	}
 	.nt-res-context code {
-		font-size: 0.6875rem;
-		padding: 0.0625rem 0.375rem;
-		border-radius: 0.25rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		padding: 0.0625rem 0.5rem;
+		border-radius: var(--radius-xs);
 		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
 		color: var(--center-channel-color);
 	}
@@ -1224,7 +1240,7 @@ resources:
 	.nt-option-row {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 	}
 	.nt-env-row > input:first-child {
 		max-width: 12rem;
@@ -1237,13 +1253,13 @@ resources:
 		justify-content: center;
 		width: 1.75rem;
 		height: 1.75rem;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		border: none;
 		background: transparent;
 		color: var(--surface-muted);
 		cursor: pointer;
 		flex-shrink: 0;
-		transition: all 0.15s;
+		transition: all var(--dur-fast);
 	}
 	.nt-remove-btn:hover {
 		background-color: color-mix(in srgb, var(--error-text-color) 12%, transparent);
@@ -1256,7 +1272,7 @@ resources:
 		justify-content: center;
 		width: 1.5rem;
 		height: 1.5rem;
-		border-radius: 0.25rem;
+		border-radius: var(--radius-xs);
 		border: none;
 		background: transparent;
 		color: var(--surface-muted);
@@ -1283,17 +1299,18 @@ resources:
 	.nt-empty-inline {
 		padding: 1.5rem;
 		text-align: center;
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 		border: 1px dashed var(--surface-border);
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 	}
 
 	/* Options */
 	.nt-options {
 		display: flex;
 		flex-direction: column;
-		gap: 0.375rem;
+		gap: 0.5rem;
 	}
 
 	/* Actions */

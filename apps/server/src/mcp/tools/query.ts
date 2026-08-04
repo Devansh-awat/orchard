@@ -535,6 +535,59 @@ To diagnose an unhealthy database, check \`liveStatus.message\`, \`liveStatus.la
   );
 
   server.registerTool(
+    'list_deployment_errors',
+    {
+      description:
+        'List grouped application errors for a deployment, parsed from its logs and persisted across redeploys. Each group carries a stable fingerprint, occurrence count, triage status (unresolved/resolved/ignored), assignee, and deploy provenance: the commit it was first seen after, that commit message, the branch, and who deployed it. Use this to find what is broken, whether it is already triaged, and which release introduced it.',
+      annotations: { readOnlyHint: true, destructiveHint: false },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        window: z
+          .number()
+          .optional()
+          .describe('Look-back window in minutes (default 60, max 1440)'),
+      },
+    },
+    async ({ deploymentId, window }) => {
+      const qs = window ? `?window=${window}` : '';
+      const groups = await client.get(`/observe/deployments/${deploymentId}/errors${qs}`);
+      return { content: [{ type: 'text', text: JSON.stringify(groups, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
+    'triage_deployment_error',
+    {
+      description:
+        'Set the triage status of an error group, or assign it to a user. Status must be unresolved, resolved, or ignored. Resolving records who resolved it; if the error fires again after being resolved it automatically reopens. Get the fingerprint from list_deployment_errors.',
+      annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true },
+      inputSchema: {
+        deploymentId: z.string().describe('The deployment UUID'),
+        fingerprint: z.string().describe('The error group fingerprint (from list_deployment_errors)'),
+        status: z
+          .enum(['unresolved', 'resolved', 'ignored'])
+          .optional()
+          .describe('New triage status'),
+        assigneeId: z
+          .string()
+          .nullable()
+          .optional()
+          .describe('User UUID to assign, or null to unassign'),
+      },
+    },
+    async ({ deploymentId, fingerprint, status, assigneeId }) => {
+      const body: Record<string, unknown> = {};
+      if (status) body.status = status;
+      if (assigneeId !== undefined) body.assigneeId = assigneeId;
+      const res = await client.patch(
+        `/observe/deployments/${deploymentId}/errors/${encodeURIComponent(fingerprint)}`,
+        body,
+      );
+      return { content: [{ type: 'text', text: JSON.stringify(res, null, 2) }] };
+    },
+  );
+
+  server.registerTool(
     'get_pod_details',
     {
       description: 'Get detailed information about a specific pod including status, IP, node, and restart count',

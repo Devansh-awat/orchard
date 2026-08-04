@@ -632,7 +632,10 @@
 			<div class="hp-stats">
 				{#each Array(4) as _, i (i)}
 					<div class="hp-stat">
-						<div class="skeleton" style="width: 2rem; height: 2rem; border-radius: 0.5rem;"></div>
+						<div
+							class="skeleton"
+							style="width: 2rem; height: 2rem; border-radius: var(--radius-sm);"
+						></div>
 						<div class="hp-stat-info">
 							<div class="skeleton" style="width: 2rem; height: 1.25rem;"></div>
 							<div class="skeleton" style="width: 4rem; height: 0.75rem;"></div>

@@ -318,15 +318,15 @@
 	.pod-container-row {
 		display: flex;
 		align-items: center;
-		gap: 0.625rem;
-		padding: 0.5rem 0.625rem;
-		border-radius: 0.5rem;
+		gap: 0.75rem;
+		padding: 0.5rem 0.75rem;
+		border-radius: var(--radius-sm);
 		border: none;
 		background: none;
 		text-align: start;
 		cursor: pointer;
 		min-width: 0;
-		transition: background-color 120ms ease;
+		transition: background-color var(--dur-fast) ease;
 	}
 
 	.pod-container-row:hover {
@@ -338,15 +338,17 @@
 	}
 
 	.pod-container-name {
-		font-size: 0.8125rem;
-		font-weight: 550;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
 		color: var(--text-default);
 		flex-shrink: 0;
 	}
 
 	.pod-container-image {
 		font-family: var(--font-mono);
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--text-muted);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -364,7 +366,7 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		margin-bottom: 0.625rem;
+		margin-bottom: 0.75rem;
 	}
 
 	.pod-logs :global(.lv--dark) {
@@ -379,6 +381,7 @@
 		gap: 0.5rem;
 		padding: 3rem 1rem;
 		opacity: 0.7;
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 	}
 </style>

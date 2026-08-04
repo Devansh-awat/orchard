@@ -861,6 +861,7 @@ export class DeploymentsController {
     @Query('start') startStr?: string,
     @Query('end') endStr?: string,
     @Query('step') stepStr?: string,
+    @Query('groupBy') groupBy?: string,
   ) {
     const { user } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
       email: req.user.email, username: req.user.username,
@@ -874,6 +875,17 @@ export class DeploymentsController {
     const dep = await this.deployments.getDeployment(id, true, user.id);
     if (!dep?.namespace || !dep?.name) {
       throw new BadRequestException('Deployment has no namespace/name');
+    }
+
+    if (groupBy === 'pod') {
+      const grouped = await this.metricsService.fetchDeploymentMetricsByPod({
+        namespace: dep.namespace,
+        deploymentName: dep.name,
+        startMs: start,
+        endMs: end,
+        stepMs: step,
+      });
+      return { start, end, step, groupBy: 'pod', grouped };
     }
 
     const data = await this.metricsService.fetchDeploymentMetrics({

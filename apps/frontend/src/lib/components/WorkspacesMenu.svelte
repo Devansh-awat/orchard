@@ -28,16 +28,16 @@
 		goto(`/${org.slug}`);
 	}
 
-	function motionStagger(index: number, stride = 0.035) {
-		return motionStaggerBase({ index, stride, from: { y: -6, opacity: 0, scale: 1 } });
+	function motionStagger(index: number, stride?: number) {
+		return motionStaggerBase({ index, stride, from: { y: -6, opacity: 0 } });
 	}
 
-	function springHover(opts: { lift?: number; stiffness?: number; damping?: number } = {}) {
+	function springHover(opts: { lift?: number } = {}) {
 		return springHoverBase({ lift: -1, forwardIconHover: true, ...opts });
 	}
 
 	function springRotate(active: () => boolean, on = 180) {
-		return springRotateBase(active, { rest: 0, on, damping: 24 });
+		return springRotateBase(active, { rest: 0, on });
 	}
 </script>
 
@@ -121,8 +121,6 @@
 					style:transform-origin="top left"
 					{@attach motionPopover({
 						from: { y: -8, scale: 0.96 },
-						stiffness: 540,
-						damping: 30,
 						closing: () => !open,
 						onClosed: () => {
 							render = false;
@@ -186,15 +184,15 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 0.75rem;
-		border-radius: 0.75rem;
-		padding: 0.625rem 0.75rem;
-		font-size: 0.875rem;
+		border-radius: var(--radius-md);
+		padding: 0.75rem 0.75rem;
+		font-size: var(--text-callout);
 		line-height: 1.25rem;
-		font-weight: 500;
+		font-weight: 600;
 		text-align: left;
 		background-color: transparent;
 		color: var(--sidebar-text);
-		transition: background-color 150ms ease;
+		transition: background-color var(--dur-fast) ease;
 	}
 
 	.org-menu-trigger:hover {
@@ -205,7 +203,7 @@
 		width: 2rem;
 		height: 2rem;
 		flex-shrink: 0;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		object-fit: cover;
 	}
 
@@ -215,7 +213,7 @@
 		justify-content: center;
 		width: 2rem;
 		height: 2rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		flex-shrink: 0;
 		background-color: color-mix(in srgb, var(--sidebar-text) 15%, transparent);
 		color: var(--sidebar-text);
@@ -228,14 +226,15 @@
 		text-overflow: ellipsis;
 		white-space: nowrap;
 		text-align: left;
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
 		line-height: 1.25rem;
-		font-weight: 500;
+		font-weight: 600;
 		color: var(--sidebar-text);
 	}
 
 	.org-menu-trigger-placeholder {
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		color: color-mix(in srgb, var(--sidebar-text) 55%, transparent);
 	}
 
@@ -252,12 +251,12 @@
 		width: 2.25rem;
 		height: 2.25rem;
 		padding: 0;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		background-color: transparent;
 		color: var(--sidebar-text);
 		transition:
-			background-color 120ms ease,
-			box-shadow 120ms ease;
+			background-color var(--dur-fast) ease,
+			box-shadow var(--dur-fast) ease;
 		cursor: pointer;
 	}
 	.org-menu-trigger-collapsed:hover {
@@ -275,15 +274,15 @@
 		position: absolute;
 		left: 0;
 		top: 100%;
-		margin-top: 0.375rem;
+		margin-top: 0.5rem;
 		width: 100%;
 		z-index: 100;
 		display: flex;
 		flex-direction: column;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		border: 1px solid var(--surface-border);
 		padding: 0.75rem;
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
 		line-height: 1.25rem;
 		background-color: var(--surface-bg);
 		color: var(--center-channel-color);
@@ -310,15 +309,15 @@
 		width: 100%;
 		align-items: center;
 		gap: 0.75rem;
-		border-radius: 0.5rem;
-		padding: 0.625rem 0.75rem;
+		border-radius: var(--radius-sm);
+		padding: 0.75rem 0.75rem;
 		text-align: left;
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
 		line-height: 1.25rem;
 		color: var(--center-channel-color);
 		min-width: 0;
 		background: transparent;
-		transition: background-color 120ms ease;
+		transition: background-color var(--dur-fast) ease;
 	}
 
 	.org-menu-item:hover {
@@ -329,7 +328,7 @@
 		width: 1.5rem;
 		height: 1.5rem;
 		flex-shrink: 0;
-		border-radius: 0.25rem;
+		border-radius: var(--radius-xs);
 		object-fit: cover;
 	}
 
@@ -339,7 +338,7 @@
 		justify-content: center;
 		width: 1.5rem;
 		height: 1.5rem;
-		border-radius: 0.25rem;
+		border-radius: var(--radius-xs);
 		flex-shrink: 0;
 		background-color: color-mix(in srgb, var(--center-channel-color) 10%, transparent);
 		color: var(--center-channel-color);
@@ -356,7 +355,7 @@
 		width: 0.5rem;
 		height: 0.5rem;
 		flex-shrink: 0;
-		border-radius: 9999px;
+		border-radius: var(--radius-pill);
 		background-color: var(--sidebar-text-active-border);
 	}
 
@@ -370,13 +369,13 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		padding: 0.5rem 0.75rem;
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
 		line-height: 1.25rem;
 		color: var(--center-channel-color);
 		background: transparent;
-		transition: background-color 120ms ease;
+		transition: background-color var(--dur-fast) ease;
 	}
 
 	.org-menu-footer a:hover {
@@ -386,7 +385,7 @@
 	.sidebar-org-avatar {
 		width: 2.25rem;
 		height: 2.25rem;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		object-fit: cover;
 	}
 
@@ -396,7 +395,7 @@
 		height: 2.25rem;
 		align-items: center;
 		justify-content: center;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 15%, transparent);
 		color: var(--sidebar-text-active-border);
 	}

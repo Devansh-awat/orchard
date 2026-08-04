@@ -7,6 +7,7 @@
 	import { env } from '$env/dynamic/public';
 	import { Loader2, ArrowLeft } from 'lucide-svelte';
 	import AuditLogList from '$lib/components/AuditLogList.svelte';
+	import { SettingsRail } from '$lib/components/ui';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import {
 		OrgMembersTab,
@@ -15,8 +16,7 @@
 		OrgSsoTab,
 		OrgScimTab,
 		OrgNotificationsTab,
-		OrgHero,
-		OrgTabSummaryGrid
+		OrgHero
 	} from '$lib/components/org-settings';
 	import type {
 		NotificationChannel,
@@ -133,7 +133,6 @@
 
 	let notifLoading = $state(false);
 	let notifChannels = $state<NotificationChannel[]>([]);
-	let notifProjects = $state<{ id: string; name: string }[]>([]);
 	let notifSaving = $state(false);
 	let notifDeletingId = $state<string | null>(null);
 	let notifTestingId = $state<string | null>(null);
@@ -160,18 +159,40 @@
 
 	const notificationsEnabled = featureFlag('notifications');
 	const organizationSlug = $derived($page.params.orgSlug);
-	const activeTab = $derived($page.url.searchParams.get('tab') || 'general');
+	const activeTab = $derived($page.url.searchParams.get('tab') || 'members');
 	const canEditOrg = $derived(currentUserRole === 'owner' || currentUserRole === 'admin');
 	const canInvite = $derived(currentUserRole === 'owner' || currentUserRole === 'admin');
 	const isOwner = $derived(currentUserRole === 'owner');
 	const isEnterprise = $derived(organization?.plan === 'enterprise');
+
+	let revokingAccessId = $state<string | null>(null);
+
+	async function revokeProjectAccess(projectId: string, projectMemberId: string) {
+		if (revokingAccessId) return;
+		revokingAccessId = projectMemberId;
+		try {
+			const res = await apiFetch(`/apiv1/projects/${projectId}/members/${projectMemberId}`, {
+				method: 'DELETE'
+			});
+			if (res.ok) {
+				toasts.add({ title: 'Access revoked', color: 'success' });
+				await fetchOrganization();
+			} else {
+				const body = await res.json().catch(() => null);
+				toasts.add({ title: body?.message || 'Could not revoke access', color: 'error' });
+			}
+		} catch {
+			toasts.add({ title: 'Could not revoke access', color: 'error' });
+		} finally {
+			revokingAccessId = null;
+		}
+	}
 
 	const SETTINGS_RAIL = $derived(
 		[
 			{
 				label: 'Organization',
 				items: [
-					{ id: 'general', label: 'Overview', href: `/${organizationSlug}/settings?tab=general` },
 					{ id: 'members', label: 'Members', href: `/${organizationSlug}/settings?tab=members` }
 				]
 			},
@@ -234,6 +255,14 @@
 				const roleData = await roleResponse.json();
 				currentUserRole = roleData.role;
 				if (roleData.role === 'owner' || roleData.role === 'admin') {
+					// The slug payload omits per-member project access; the members
+					// endpoint inlines it for admins so the table can show + revoke.
+					try {
+						const mRes = await apiFetch(`/apiv1/organizations/${data.id}/members`);
+						if (mRes.ok) members = await mRes.json();
+					} catch {
+						/* keep the slug payload's members */
+					}
 					await fetchInvitations();
 					await fetchBackupSettings();
 					await fetchNotificationChannels();
@@ -294,18 +323,10 @@
 		if (!organization) return;
 		notifLoading = true;
 		try {
-			const [channelsRes, projectsRes] = await Promise.all([
-				apiFetch(`/apiv1/organizations/${organization.id}/notification-channels`),
-				apiFetch(`/apiv1/projects?orgId=${organization.id}`)
-			]);
+			const channelsRes = await apiFetch(
+				`/apiv1/organizations/${organization.id}/notification-channels`
+			);
 			if (channelsRes.ok) notifChannels = await channelsRes.json();
-			if (projectsRes.ok) {
-				const projectsData = await projectsRes.json();
-				notifProjects = (projectsData || []).map((p: { id: string; name: string }) => ({
-					id: p.id,
-					name: p.name
-				}));
-			}
 		} catch (e) {
 			console.error('Failed to fetch notification channels:', e);
 		} finally {
@@ -1049,8 +1070,9 @@
 	<div class="osp-page">
 		<a href={`/${organizationSlug}`} class="osp-back">
 			<ArrowLeft class="h-3.5 w-3.5" />
-			Back
+			Your Apps
 		</a>
+		<h1 class="osp-title">Settings</h1>
 		<OrgHero
 			{organization}
 			{organizationSlug}
@@ -1072,38 +1094,12 @@
 			index={0}
 		/>
 		<div class="osp-grid">
-			<aside class="osp-rail" aria-label="Organization settings sections">
-				{#each SETTINGS_RAIL as group (group.label)}
-					<div class="osp-rail-group">
-						<p class="osp-rail-eyebrow">{group.label}</p>
-						{#each group.items as item (item.id)}
-							<a
-								href={item.href}
-								class="osp-rail-link"
-								class:osp-rail-link--active={activeTab === item.id}
-								aria-current={activeTab === item.id ? 'page' : undefined}
-							>
-								{item.label}
-							</a>
-						{/each}
-					</div>
-				{/each}
-			</aside>
+			<SettingsRail
+				groups={SETTINGS_RAIL}
+				activeId={activeTab}
+				label="Organization settings sections"
+			/>
 			<div class="osp-stack">
-				{#if activeTab === 'general'}
-					<OrgTabSummaryGrid
-						{organizationSlug}
-						memberCount={members.length}
-						pendingInvites={invitations.length}
-						backupsConfigured={backupConfigured}
-						channelCount={notifChannels.length}
-						showNotifications={$notificationsEnabled}
-						{isEnterprise}
-						{ssoEnabled}
-						{canEditOrg}
-						index={1}
-					/>
-				{/if}
 				{#if activeTab === 'audit'}
 					<AuditLogList scope={{ organizationId: organization.id }} />
 				{/if}
@@ -1119,6 +1115,9 @@
 						{resendingInvitationId}
 						{cancellingInvitationId}
 						{removingMemberId}
+						{organizationSlug}
+						{revokingAccessId}
+						onRevokeProjectAccess={revokeProjectAccess}
 						onAddMember={addMember}
 						onRemoveMember={requestRemoveMember}
 						onUpdateMemberRole={updateMemberRole}
@@ -1162,9 +1161,9 @@
 				{#if activeTab === 'notifications' && $notificationsEnabled}
 					<OrgNotificationsTab
 						{canEditOrg}
+						organizationId={organization.id}
 						loading={notifLoading}
 						channels={notifChannels}
-						projects={notifProjects}
 						saving={notifSaving}
 						deletingId={notifDeletingId}
 						testingId={notifTestingId}
@@ -1277,97 +1276,57 @@
 
 <style>
 	.osp-page {
-		padding: 2.5rem 2.5rem 3rem;
-		max-width: 64rem;
+		padding: var(--space-8) var(--space-8) var(--space-12);
+		max-width: 84rem;
 		margin: 0 auto;
+	}
+	.osp-title {
+		margin: 0 0 var(--space-5);
+		font-size: var(--text-title-1);
+		font-weight: 600;
+		line-height: 1.15;
+		letter-spacing: var(--track-title);
+		color: var(--text-default);
 	}
 	.osp-back {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
-		font-size: 0.8125rem;
-		font-weight: 450;
+		gap: 0.25rem;
+		height: 1.75rem;
+		padding: 0 0.75rem 0 0.5rem;
+		border-radius: var(--radius-pill);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		font-weight: 600;
+		letter-spacing: var(--track-body);
 		color: var(--text-muted);
 		text-decoration: none;
-		margin-bottom: 1.5rem;
-		transition: color 120ms;
+		margin-bottom: var(--space-3);
+		transition:
+			color var(--dur-fast),
+			background-color var(--dur-fast);
 	}
 	.osp-back:hover {
 		color: var(--text-default);
+		background-color: var(--fill-soft);
 	}
 	.osp-grid {
 		display: grid;
-		grid-template-columns: 10.5rem minmax(0, 1fr);
-		gap: 2rem;
+		grid-template-columns: 12rem minmax(0, 1fr);
+		gap: var(--space-6);
 		align-items: start;
-		margin-top: 1.25rem;
-	}
-	.osp-rail {
-		position: sticky;
-		top: 1.25rem;
-		display: flex;
-		flex-direction: column;
-		gap: 1.125rem;
-	}
-	.osp-rail-group {
-		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
-	}
-	.osp-rail-eyebrow {
-		font-size: 0.625rem;
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.08em;
-		color: var(--text-faint);
-		margin: 0 0 0.25rem;
-		padding-left: 0.625rem;
-	}
-	.osp-rail-link {
-		display: block;
-		font-size: 0.8125rem;
-		color: var(--text-muted);
-		text-decoration: none;
-		border-radius: 0.5rem;
-		padding: 0.3rem 0.625rem;
-		transition:
-			color 120ms,
-			background-color 120ms;
-	}
-	.osp-rail-link:hover,
-	.osp-rail-link--active {
-		color: var(--text-default);
-		background-color: var(--bg-hover);
+		margin-top: var(--space-5);
 	}
 	.osp-stack {
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		gap: var(--space-4);
 		min-width: 0;
 	}
 	@media (max-width: 900px) {
 		.osp-grid {
 			grid-template-columns: 1fr;
-			gap: 1rem;
-		}
-		.osp-rail {
-			position: static;
-			flex-direction: row;
-			overflow-x: auto;
-			gap: 1rem;
-			padding-bottom: 0.25rem;
-		}
-		.osp-rail-group {
-			flex-direction: row;
-			align-items: center;
-			gap: 0.125rem;
-			flex-shrink: 0;
-		}
-		.osp-rail-eyebrow {
-			display: none;
-		}
-		.osp-rail-link {
-			white-space: nowrap;
+			gap: var(--space-4);
 		}
 	}
 	.osp-loading {

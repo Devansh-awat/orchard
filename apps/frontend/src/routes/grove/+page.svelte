@@ -225,7 +225,7 @@
 						href="/grove/{t.id}"
 						class="gv-card"
 						{@attach motionStagger({ index: i, from: { y: 10 } })}
-						{@attach springHover({ lift: -2, stiffness: 360, damping: 22 })}
+						{@attach springHover({ lift: -2 })}
 					>
 						<div class="gv-card-top">
 							<span class="gv-num">#{t.number}</span>
@@ -349,8 +349,9 @@
 	.gv-back {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
-		font-size: 0.8125rem;
+		gap: 0.5rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--text-muted);
 		text-decoration: none;
 		margin-bottom: 1.25rem;
@@ -372,7 +373,8 @@
 	}
 
 	.gv-title {
-		font-size: 1.5rem;
+		font-size: var(--text-title-2);
+		line-height: var(--lh-title-2);
 		font-weight: 700;
 		letter-spacing: -0.02em;
 		color: var(--text-default);
@@ -380,7 +382,7 @@
 
 	.gv-hero-sprites {
 		display: flex;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		margin-left: auto;
 		margin-right: 0.5rem;
 	}
@@ -388,7 +390,7 @@
 	.gv-sprite {
 		width: 1.5rem;
 		height: 1.5rem;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		border: 1px solid var(--border-default);
 	}
 
@@ -403,7 +405,7 @@
 	.gv-cats {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		flex-wrap: wrap;
 		min-width: 0;
 	}
@@ -411,19 +413,20 @@
 	.gv-chip {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		padding: 0.3125rem 0.75rem;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		border: 1px solid var(--border-default);
 		background: var(--bg-surface);
 		color: var(--text-muted);
-		font-size: 0.75rem;
-		font-weight: 550;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		cursor: pointer;
 		transition:
-			color 120ms ease,
-			background-color 120ms ease,
-			border-color 120ms ease;
+			color var(--dur-fast) ease,
+			background-color var(--dur-fast) ease,
+			border-color var(--dur-fast) ease;
 	}
 
 	.gv-chip:hover {
@@ -438,20 +441,21 @@
 	}
 
 	.gv-chip-count {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--text-faint);
 	}
 
 	:global(.ui-dropdown-trigger.gv-filter-dd) {
 		width: auto;
 		min-width: 0;
-		padding: 0.3125rem 0.625rem 0.3125rem 0.75rem;
-		border-radius: 999px;
+		padding: 0.3125rem 0.75rem 0.3125rem 0.75rem;
+		border-radius: var(--radius-pill);
 		border: 1px solid var(--border-default);
 		background: var(--bg-surface);
 		color: var(--text-muted);
-		font-size: 0.75rem;
-		font-weight: 550;
+		font-size: var(--text-caption);
+		font-weight: 600;
 		line-height: 1.2;
 		gap: 0.25rem;
 	}
@@ -471,8 +475,8 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.125rem;
-		padding: 0.1875rem;
-		border-radius: 0.625rem;
+		padding: 0.25rem;
+		border-radius: var(--radius-md);
 		background: var(--bg-sunken);
 		border: 1px solid var(--border-default);
 		margin-left: auto;
@@ -481,10 +485,11 @@
 	.gv-sort-btn {
 		border: none;
 		background: none;
-		padding: 0.25rem 0.625rem;
-		border-radius: 0.4375rem;
-		font-size: 0.75rem;
-		font-weight: 550;
+		padding: 0.25rem 0.75rem;
+		border-radius: var(--radius-xs);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		color: var(--text-muted);
 		cursor: pointer;
 	}
@@ -505,7 +510,7 @@
 		flex-direction: column;
 		gap: 0.5rem;
 		padding: 1rem;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		border: 1px solid var(--border-default);
 		background: var(--bg-surface);
 		text-decoration: none;
@@ -520,16 +525,18 @@
 
 	.gv-num {
 		font-family: 'Space Mono', monospace;
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--text-faint);
 	}
 
 	.gv-cat-tag {
-		font-size: 0.6875rem;
-		font-weight: 550;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
 		color: var(--text-muted);
 		background: var(--bg-sunken);
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		padding: 0.125rem 0.5rem;
 	}
 
@@ -540,8 +547,8 @@
 	}
 
 	.gv-card-title {
-		font-size: 0.9375rem;
-		font-weight: 650;
+		font-size: var(--text-body);
+		font-weight: 600;
 		line-height: 1.3;
 		display: -webkit-box;
 		-webkit-line-clamp: 2;
@@ -550,7 +557,7 @@
 	}
 
 	.gv-card-snippet {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
 		color: var(--text-muted);
 		line-height: 1.45;
 		display: -webkit-box;
@@ -570,14 +577,15 @@
 	.gv-av {
 		width: 1.125rem;
 		height: 1.125rem;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		flex-shrink: 0;
 		object-fit: cover;
 		display: inline-block;
 	}
 
 	.gv-author {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--text-muted);
 		white-space: nowrap;
 		overflow: hidden;
@@ -585,7 +593,8 @@
 	}
 
 	.gv-when {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--text-faint);
 		white-space: nowrap;
 	}
@@ -594,7 +603,8 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--text-muted);
 		margin-left: auto;
 	}
@@ -603,18 +613,19 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
-		padding: 0.1875rem 0.5rem;
-		border-radius: 999px;
+		padding: 0.25rem 0.5rem;
+		border-radius: var(--radius-pill);
 		border: 1px solid var(--border-default);
 		background: var(--bg-surface);
 		color: var(--text-muted);
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		font-weight: 600;
 		cursor: pointer;
 		transition:
-			color 120ms ease,
-			background-color 120ms ease,
-			border-color 120ms ease;
+			color var(--dur-fast) ease,
+			background-color var(--dur-fast) ease,
+			border-color var(--dur-fast) ease;
 	}
 
 	.gv-vote:hover {
@@ -651,15 +662,15 @@
 		flex-direction: column;
 		align-items: flex-start;
 		gap: 0.125rem;
-		padding: 0.625rem 0.75rem;
-		border-radius: 0.625rem;
+		padding: 0.75rem 0.75rem;
+		border-radius: var(--radius-md);
 		border: 1px solid var(--border-default);
 		background: var(--bg-surface);
 		cursor: pointer;
 		text-align: left;
 		transition:
-			border-color 120ms ease,
-			background-color 120ms ease;
+			border-color var(--dur-fast) ease,
+			background-color var(--dur-fast) ease;
 	}
 
 	.gv-type-card:hover {
@@ -672,37 +683,38 @@
 	}
 
 	.gv-type-name {
-		font-size: 0.8125rem;
-		font-weight: 650;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
 		color: var(--text-default);
 	}
 
 	.gv-scope-row {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		flex-wrap: wrap;
 	}
 
 	.gv-title-input {
 		width: 100%;
 		border: 1px solid var(--border-default);
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		background: var(--bg-surface);
 		color: var(--text-default);
-		font-size: 1rem;
+		font-size: var(--text-headline);
 		font-weight: 600;
 		line-height: 1.4;
-		padding: 0.625rem 0.75rem;
+		padding: 0.75rem 0.75rem;
 	}
 
 	.gv-title-input::placeholder {
 		color: var(--text-faint);
-		font-weight: 500;
+		font-weight: 600;
 	}
 
 	.gv-title-input:focus-visible {
-		outline: 2px solid var(--focus-ring);
+		outline: 2px solid var(--focus-ring-color);
 		outline-offset: -1px;
 	}
 
@@ -715,17 +727,17 @@
 	.gv-textarea {
 		width: 100%;
 		border: 1px solid var(--border-default);
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		background: var(--bg-surface);
 		color: var(--text-default);
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
 		line-height: 1.5;
-		padding: 0.625rem 0.75rem;
+		padding: 0.75rem 0.75rem;
 		resize: vertical;
 	}
 
 	.gv-textarea:focus-visible {
-		outline: 2px solid var(--focus-ring);
+		outline: 2px solid var(--focus-ring-color);
 		outline-offset: -1px;
 	}
 

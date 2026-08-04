@@ -431,32 +431,36 @@
 	.mcp-consent-details {
 		margin-top: 1.5rem;
 		padding: 1rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		background: rgba(255, 255, 255, 0.05);
 		border: 1px solid rgba(255, 255, 255, 0.1);
 		text-align: left;
 	}
 	.mcp-consent-label {
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		opacity: 0.75;
 		margin: 0 0 0.5rem 0;
 	}
 	.mcp-consent-host {
-		font-size: 1.125rem;
+		font-size: var(--text-title-3);
+		line-height: var(--lh-title-3);
 		font-weight: 600;
 		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 		margin: 0 0 0.25rem 0;
 		word-break: break-all;
 	}
 	.mcp-consent-uri {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		opacity: 0.6;
 		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 		margin: 0 0 0.75rem 0;
 		word-break: break-all;
 	}
 	.mcp-consent-warning {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		opacity: 0.8;
 		margin: 0;
 		padding-top: 0.75rem;

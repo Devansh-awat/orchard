@@ -31,7 +31,7 @@
 	z-index: 1;
 }
 .hp-greeting {
-	font-size: 1.5rem;
+	font-size: var(--text-title-2);
 	font-weight: 700;
 	letter-spacing: -0.025em;
 	color: var(--center-channel-color);
@@ -41,8 +41,9 @@
 
 .hp-error {
 	padding: 0.75rem 1rem;
-	border-radius: 0.75rem;
-	font-size: 0.875rem;
+	border-radius: var(--radius-md);
+	font-size: var(--text-callout);
+	line-height: var(--lh-callout);
 	background-color: color-mix(in srgb, var(--error-text-color) 8%, transparent);
 	color: var(--error-text-color);
 	border: 1px solid color-mix(in srgb, var(--error-text-color) 20%, transparent);
@@ -66,13 +67,13 @@
 	align-items: center;
 	gap: 0.875rem;
 	padding: 1rem 1.125rem;
-	border-radius: 0.875rem;
+	border-radius: var(--radius-lg);
 	background: var(--surface-bg);
 	border: 1px solid color-mix(in srgb, var(--surface-border) 70%, transparent);
-	box-shadow: 0 1px 2px rgb(0 0 0 / 0.03);
+	box-shadow: var(--elev-1);
 	transition:
-		border-color 0.15s,
-		box-shadow 0.15s;
+		border-color var(--dur-fast),
+		box-shadow var(--dur-fast);
 }
 .hp-stat:hover {
 	border-color: var(--surface-border);
@@ -86,7 +87,7 @@
 	justify-content: center;
 	width: 2.25rem;
 	height: 2.25rem;
-	border-radius: 0.625rem;
+	border-radius: var(--radius-md);
 	flex-shrink: 0;
 }
 .hp-stat-icon--workspaces {
@@ -110,16 +111,17 @@
 	flex-direction: column;
 }
 .hp-stat-value {
-	font-size: 1.25rem;
+	font-size: var(--text-title-3);
 	font-weight: 700;
 	color: var(--center-channel-color);
 	line-height: 1.1;
 	letter-spacing: -0.02em;
 }
 .hp-stat-label {
-	font-size: 0.6875rem;
+	font-size: var(--text-micro);
+	line-height: var(--lh-micro);
 	color: var(--surface-muted);
-	font-weight: 500;
+	font-weight: 600;
 	margin-top: 0.0625rem;
 	text-transform: lowercase;
 }
@@ -138,7 +140,8 @@
 	margin-bottom: 1rem;
 }
 .hp-section-title {
-	font-size: 0.75rem;
+	font-size: var(--text-caption);
+	line-height: var(--lh-caption);
 	font-weight: 600;
 	color: var(--surface-muted);
 	margin: 0;
@@ -152,12 +155,12 @@
 	gap: 0.5rem;
 	width: 12rem;
 	padding: 0 0.75rem;
-	border-radius: 0.5rem;
+	border-radius: var(--radius-sm);
 	border: 1px solid var(--surface-border);
 	background: var(--control-bg);
 	transition:
-		border-color 0.15s,
-		box-shadow 0.15s;
+		border-color var(--dur-fast),
+		box-shadow var(--dur-fast);
 }
 .hp-search-wrap:focus-within {
 	border-color: var(--sidebar-text-active-border);
@@ -166,11 +169,12 @@
 .hp-search {
 	flex: 1;
 	min-width: 0;
-	padding: 0.4375rem 0;
+	padding: 0.5rem 0;
 	border: none;
 	background: transparent;
 	color: var(--center-channel-color);
-	font-size: 0.8125rem;
+	font-size: var(--text-footnote);
+	line-height: var(--lh-footnote);
 	outline: none;
 }
 .hp-search::placeholder {
@@ -181,8 +185,9 @@
 	align-items: center;
 	gap: 0.5rem;
 	padding: 0.5rem 1rem;
-	border-radius: 0.625rem;
-	font-size: 0.8125rem;
+	border-radius: var(--radius-md);
+	font-size: var(--text-footnote);
+	line-height: var(--lh-footnote);
 	font-weight: 600;
 	background: var(--button-bg);
 	color: var(--button-color);
@@ -190,7 +195,7 @@
 	cursor: pointer;
 	text-decoration: none;
 	white-space: nowrap;
-	transition: all 0.15s ease;
+	transition: all var(--dur-fast) ease;
 	position: relative;
 	z-index: 1;
 	box-shadow:
@@ -207,7 +212,7 @@
 }
 .hp-new-btn:active {
 	transform: translateY(0);
-	box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+	box-shadow: var(--elev-1);
 }
 
 /* Empty state — generous spacing, clear hierarchy */
@@ -218,18 +223,19 @@
 	gap: 0.75rem;
 	padding: 4rem 2rem;
 	color: var(--surface-muted);
-	font-size: 0.875rem;
+	font-size: var(--text-callout);
+	line-height: var(--lh-callout);
 	text-align: center;
 }
 .hp-empty--dashed {
 	border: 2px dashed color-mix(in srgb, var(--surface-border) 80%, transparent);
-	border-radius: 1rem;
+	border-radius: var(--radius-lg);
 	background: color-mix(in srgb, var(--control-bg) 30%, transparent);
 }
 .hp-empty-icon {
 	width: 3rem;
 	height: 3rem;
-	border-radius: 0.75rem;
+	border-radius: var(--radius-md);
 	background: color-mix(in srgb, var(--button-bg) 8%, transparent);
 	color: var(--button-bg);
 	display: flex;
@@ -238,14 +244,14 @@
 	margin-bottom: 0.25rem;
 }
 .hp-empty-title {
-	font-size: 1rem;
+	font-size: var(--text-headline);
 	font-weight: 600;
 	color: var(--center-channel-color);
 	margin: 0;
 	line-height: 1.3;
 }
 .hp-empty-desc {
-	font-size: 0.8125rem;
+	font-size: var(--text-footnote);
 	color: var(--surface-muted);
 	max-width: 24rem;
 	margin: 0;
@@ -266,16 +272,16 @@
 	gap: 0.875rem;
 	padding: 1.25rem;
 	border: 1px solid color-mix(in srgb, var(--surface-border) 70%, transparent);
-	border-radius: 0.875rem;
+	border-radius: var(--radius-lg);
 	background: var(--surface-bg);
 	text-decoration: none;
 	color: var(--center-channel-color);
 	cursor: pointer;
-	box-shadow: 0 1px 2px rgb(0 0 0 / 0.02);
+	box-shadow: var(--elev-1);
 	transition:
-		border-color 0.15s,
-		box-shadow 0.15s,
-		transform 0.15s;
+		border-color var(--dur-fast),
+		box-shadow var(--dur-fast),
+		transform var(--dur-fast);
 }
 .hp-card:hover {
 	border-color: color-mix(in srgb, var(--sidebar-text-active-border) 40%, var(--surface-border));
@@ -300,7 +306,7 @@
 	justify-content: center;
 	width: 2.25rem;
 	height: 2.25rem;
-	border-radius: 0.625rem;
+	border-radius: var(--radius-md);
 	background: color-mix(in srgb, var(--sidebar-text-active-border) 10%, transparent);
 	color: var(--sidebar-text-active-border);
 	flex-shrink: 0;
@@ -313,8 +319,8 @@
 	opacity: 0;
 	transform: translateX(-3px);
 	transition:
-		opacity 0.15s,
-		transform 0.15s;
+		opacity var(--dur-fast),
+		transform var(--dur-fast);
 }
 .hp-card-body {
 	display: flex;
@@ -323,13 +329,13 @@
 	flex: 1;
 }
 .hp-card-name {
-	font-size: 0.9375rem;
+	font-size: var(--text-body);
 	font-weight: 600;
 	color: var(--center-channel-color);
 	line-height: 1.3;
 }
 .hp-card-desc {
-	font-size: 0.8125rem;
+	font-size: var(--text-footnote);
 	color: var(--surface-muted);
 	display: -webkit-box;
 	-webkit-line-clamp: 2;
@@ -348,9 +354,10 @@
 	display: inline-flex;
 	align-items: center;
 	gap: 0.25rem;
-	font-size: 0.6875rem;
+	font-size: var(--text-micro);
+	line-height: var(--lh-micro);
 	color: var(--surface-muted);
-	font-weight: 500;
+	font-weight: 600;
 }
 
 .hp-skeleton-card {
@@ -373,7 +380,8 @@
 		grid-template-columns: 1fr;
 	}
 	.hp-greeting {
-		font-size: 1.25rem;
+		font-size: var(--text-title-3);
+		line-height: var(--lh-title-3);
 	}
 }
 
@@ -424,7 +432,8 @@
 	margin-bottom: 2.5rem;
 }
 .lg2-headline {
-	font-size: 2.5rem;
+	font-size: var(--text-title-1);
+	line-height: var(--lh-title-1);
 	font-weight: 800;
 	letter-spacing: -0.025em;
 	text-wrap: balance;
@@ -432,7 +441,8 @@
 }
 @media (min-width: 768px) {
 	.lg2-headline {
-		font-size: 3.25rem;
+		font-size: var(--text-title-1);
+		line-height: var(--lh-title-1);
 	}
 }
 .lg2-headline em {
@@ -444,7 +454,7 @@
 	position: relative;
 	background: var(--bg-raised);
 	border: 1px solid var(--border-default);
-	border-radius: 1.5rem;
+	border-radius: var(--radius-2xl);
 	padding: 2rem;
 	box-shadow:
 		0 1px 3px rgb(0 0 0 / 0.04),
@@ -469,7 +479,8 @@
 	gap: 0.75rem;
 	margin: 1.25rem 0;
 	font-family: var(--font-mono);
-	font-size: 0.6875rem;
+	font-size: var(--text-micro);
+	line-height: var(--lh-micro);
 	letter-spacing: 0.08em;
 	text-transform: uppercase;
 	color: var(--text-faint);
@@ -485,10 +496,11 @@
 
 .lg-label {
 	display: block;
-	font-size: 0.8125rem;
+	font-size: var(--text-footnote);
+	line-height: var(--lh-footnote);
 	font-weight: 600;
 	color: var(--text-muted);
-	margin-bottom: 0.375rem;
+	margin-bottom: 0.5rem;
 }
 .lg-form .lg-label:not(:first-child) {
 	margin-top: 1rem;
@@ -511,17 +523,20 @@
 	margin-bottom: 0.25rem;
 }
 .lg-step-title {
-	font-size: 0.875rem;
+	font-size: var(--text-callout);
+	line-height: var(--lh-callout);
 	font-weight: 600;
 	overflow-wrap: anywhere;
 }
 .lg-step-hint {
-	font-size: 0.8125rem;
+	font-size: var(--text-footnote);
+	line-height: var(--lh-footnote);
 	color: var(--text-muted);
 }
 
 .lg-error {
-	font-size: 0.8125rem;
+	font-size: var(--text-footnote);
+	line-height: var(--lh-footnote);
 	color: var(--status-error);
 }
 .lg-form .lg-error {
@@ -534,12 +549,13 @@
 	gap: 0.75rem;
 }
 .lg-beta-title {
-	font-size: 1.25rem;
+	font-size: var(--text-title-3);
+	line-height: var(--lh-title-3);
 	font-weight: 700;
 	letter-spacing: -0.02em;
 }
 .lg-beta-desc {
-	font-size: 0.9375rem;
+	font-size: var(--text-body);
 	line-height: 1.6;
 	color: var(--text-muted);
 }

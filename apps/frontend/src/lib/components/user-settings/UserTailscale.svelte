@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Loader2, Globe } from 'lucide-svelte';
-	import { Button, StatusBadge, statusMeta } from '$lib/components/ui';
+	import { Button, Input, StatusBadge, statusMeta } from '$lib/components/ui';
 	import SettingsSection from './SettingsSection.svelte';
 	import IntegrationCard from './IntegrationCard.svelte';
 	import ConnectPrompt from './ConnectPrompt.svelte';
@@ -75,15 +75,16 @@
 				</ol>
 			</div>
 			<div class="ut-input-row">
-				<input
-					type="password"
-					class="ut-input"
-					placeholder="tskey-auth-..."
-					bind:value={tailscaleApiKey}
-					onkeydown={(e) => {
-						if (e.key === 'Enter') onLink();
-					}}
-				/>
+				<div class="ut-input-wrap">
+					<Input
+						type="password"
+						placeholder="tskey-auth-..."
+						bind:value={tailscaleApiKey}
+						onkeydown={(e: KeyboardEvent) => {
+							if (e.key === 'Enter') onLink();
+						}}
+					/>
+				</div>
 				<Button
 					variant="ghost"
 					size="sm"
@@ -119,56 +120,47 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		padding: 1.5rem 0;
-		color: var(--surface-muted);
+		padding: var(--space-6) 0;
+		color: var(--text-muted);
 	}
 	.ut-form {
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
+		gap: var(--space-3);
 	}
 	.ut-instructions {
 		display: flex;
 		flex-direction: column;
-		gap: 0.375rem;
+		gap: 0.5rem;
 	}
 	.ut-instructions-intro {
-		font-size: 0.75rem;
-		color: var(--surface-muted);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		color: var(--text-muted);
 		margin: 0;
 	}
 	.ut-instructions-list {
-		font-size: 0.75rem;
-		color: var(--surface-muted);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		color: var(--text-muted);
 		margin: 0;
-		padding-left: 1rem;
+		padding-left: var(--space-4);
 		list-style: decimal;
 		display: flex;
 		flex-direction: column;
-		gap: 0.25rem;
+		gap: var(--space-1);
 	}
 	.ut-link {
-		color: var(--button-bg);
+		color: var(--accent);
 		text-decoration: underline;
 	}
 	.ut-input-row {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--space-2);
 	}
-	.ut-input {
+	.ut-input-wrap {
 		flex: 1;
-		padding: 0.4375rem 0.75rem;
-		font-size: 0.8125rem;
-		border: 1px solid var(--surface-border);
-		border-radius: 0.5rem;
-		background-color: var(--surface-bg);
-		color: var(--center-channel-color);
-		transition: border-color 150ms;
-	}
-	.ut-input:focus {
-		outline: none;
-		border-color: var(--sidebar-text-active-border);
-		box-shadow: 0 0 0 2px color-mix(in srgb, var(--sidebar-text-active-border) 10%, transparent);
+		min-width: 0;
 	}
 </style>

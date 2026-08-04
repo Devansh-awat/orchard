@@ -67,10 +67,7 @@
 	const memberCount = $derived(organization.members?.length ?? 0);
 </script>
 
-<section
-	class="oh-root"
-	{@attach motionStagger({ index, stride: 0.06, from: { y: 12, opacity: 0, scale: 0.985 } })}
->
+<section class="oh-root" {@attach motionStagger({ index, from: { y: 12, opacity: 0 } })}>
 	<div class="oh-top">
 		<div class="oh-avatar-wrap">
 			<div class="oh-avatar">
@@ -191,12 +188,10 @@
 		pointer-events: none;
 	}
 	.oh-root {
-		border: 1px solid var(--border-default);
-		border-radius: 1rem;
-		background-color: var(--bg-surface);
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.03),
-			0 1px 2px rgb(0 0 0 / 0.02);
+		border: none;
+		border-radius: var(--radius-lg);
+		background-color: var(--bg-raised);
+		box-shadow: var(--elev-1);
 		overflow: hidden;
 	}
 	.oh-top {
@@ -215,7 +210,7 @@
 	.oh-avatar {
 		width: 4.5rem;
 		height: 4.5rem;
-		border-radius: 1.125rem;
+		border-radius: var(--radius-xl);
 		overflow: hidden;
 		display: flex;
 		align-items: center;
@@ -234,7 +229,8 @@
 		object-fit: cover;
 	}
 	.oh-avatar-fallback {
-		font-size: 1.625rem;
+		font-size: var(--text-title-1);
+		line-height: var(--lh-title-1);
 		font-weight: 700;
 		color: var(--accent);
 	}
@@ -245,7 +241,7 @@
 		display: flex;
 		gap: 0.125rem;
 		opacity: 0;
-		transition: opacity 150ms;
+		transition: opacity var(--dur-fast);
 	}
 	.oh-avatar-btn {
 		display: inline-flex;
@@ -258,7 +254,7 @@
 		background-color: var(--accent);
 		color: var(--text-on-accent);
 		cursor: pointer;
-		transition: opacity 120ms;
+		transition: opacity var(--dur-fast);
 		padding: 0;
 	}
 	.oh-avatar-btn:hover:not(:disabled) {
@@ -285,7 +281,7 @@
 		min-width: 0;
 	}
 	.oh-name {
-		font-size: 1.625rem;
+		font-size: var(--text-title-1);
 		font-weight: 700;
 		letter-spacing: -0.025em;
 		line-height: 1.15;
@@ -296,48 +292,50 @@
 		text-overflow: ellipsis;
 	}
 	.oh-slug {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		font-family: var(--font-mono, monospace);
 		color: var(--text-muted);
 		margin: 0.25rem 0 0;
 	}
 	.oh-desc {
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
 		color: var(--text-muted);
 		line-height: 1.5;
-		margin: 0.625rem 0 0;
+		margin: 0.75rem 0 0;
 	}
 	.oh-chips {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		margin-top: 0.875rem;
 	}
 	.oh-chip {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.3rem;
-		font-size: 0.6875rem;
-		font-weight: 500;
+		gap: 0.25rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
 		color: var(--text-muted);
 		background-color: var(--bg-sunken);
 		border: 1px solid color-mix(in srgb, var(--border-default) 70%, transparent);
-		border-radius: 9999px;
-		padding: 0.2rem 0.55rem;
+		border-radius: var(--radius-pill);
+		padding: 0.25rem 0.5rem;
 		text-decoration: none;
 	}
 	.oh-chip-label {
 		color: var(--text-muted);
 	}
 	.oh-chip-value {
-		font-weight: 650;
+		font-weight: 600;
 		color: var(--text-default);
 	}
 	.oh-chip--link {
 		cursor: pointer;
 		transition:
-			color 120ms,
-			background-color 120ms;
+			color var(--dur-fast),
+			background-color var(--dur-fast);
 	}
 	.oh-chip--link:hover {
 		background-color: var(--bg-hover);
@@ -350,29 +348,31 @@
 	.oh-field {
 		display: flex;
 		flex-direction: column;
-		gap: 0.375rem;
+		gap: 0.5rem;
 	}
 	.oh-field-label {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		color: var(--text-default);
 	}
 	.oh-textarea {
 		width: 100%;
-		padding: 0.625rem 0.875rem;
-		border-radius: 0.5rem;
+		padding: 0.75rem 0.875rem;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--border-default);
 		background-color: var(--bg-surface);
 		color: var(--text-default);
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
 		line-height: 1.5;
 		resize: vertical;
 		transition:
-			border-color 150ms ease,
-			box-shadow 150ms ease;
+			border-color var(--dur-fast) ease,
+			box-shadow var(--dur-fast) ease;
 	}
 	.oh-textarea:focus-visible {
-		outline: none;
+		outline: var(--focus-ring-width) solid var(--focus-ring-color);
+		outline-offset: var(--focus-ring-offset);
 		border-color: var(--accent);
 		box-shadow: 0 0 0 3px var(--focus-ring);
 	}
@@ -387,7 +387,8 @@
 			gap: 1rem;
 		}
 		.oh-name {
-			font-size: 1.25rem;
+			font-size: var(--text-title-3);
+			line-height: var(--lh-title-3);
 			white-space: normal;
 		}
 	}

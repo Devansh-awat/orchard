@@ -82,7 +82,6 @@
 	<SettingsSection
 		title="Single Sign-On"
 		description="Configure identity provider for your organization"
-		iconColor="primary"
 		{index}
 	>
 		{#snippet icon(hovered)}<ShieldCheck size={18} animate={hovered} />{/snippet}
@@ -356,7 +355,6 @@
 	<SettingsSection
 		title="Single Sign-On"
 		description="Configure identity provider for your organization"
-		iconColor="primary"
 		{index}
 	>
 		{#snippet icon(hovered)}<ShieldCheck size={18} animate={hovered} />{/snippet}
@@ -385,7 +383,8 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		font-size: 0.8rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		color: var(--center-channel-color);
 		margin: 0;
@@ -402,13 +401,15 @@
 	}
 
 	.sso-subdomain-suffix {
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		color: var(--surface-muted);
 		white-space: nowrap;
 	}
 
 	.sso-hint {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--surface-muted);
 		margin: 0;
 	}
@@ -430,14 +431,16 @@
 	}
 
 	.sso-toggle-label {
-		font-size: 0.8rem;
-		font-weight: 500;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
 		color: var(--center-channel-color);
 		margin: 0;
 	}
 
 	.sso-toggle-desc {
-		font-size: 0.7rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 		margin: 0;
 	}
@@ -461,8 +464,8 @@
 		cursor: pointer;
 		inset: 0;
 		background-color: var(--surface-border);
-		transition: background-color 200ms;
-		border-radius: 20px;
+		transition: background-color var(--dur-base);
+		border-radius: var(--radius-xl);
 	}
 
 	.sso-slider::before {
@@ -473,7 +476,7 @@
 		left: 3px;
 		bottom: 3px;
 		background-color: white;
-		transition: transform 200ms;
+		transition: transform var(--dur-base);
 		border-radius: 50%;
 	}
 
@@ -495,8 +498,9 @@
 
 	.sso-test-result {
 		padding: 0.75rem 1rem;
-		border-radius: 0.5rem;
-		font-size: 0.8rem;
+		border-radius: var(--radius-sm);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 	}
 
 	.sso-test-success {
@@ -537,14 +541,14 @@
 		width: 32px;
 		height: 32px;
 		border: 1px solid var(--surface-border);
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		cursor: pointer;
-		padding: 2px;
+		padding: 4px;
 		background: transparent;
 	}
 
 	.sso-preview {
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		padding: 2rem;
 		display: flex;
 		align-items: center;
@@ -555,7 +559,7 @@
 	.sso-preview-card {
 		background: rgba(255, 255, 255, 0.03);
 		border: 1px solid rgba(255, 255, 255, 0.08);
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		padding: 1.5rem;
 		width: 260px;
 		display: flex;
@@ -567,21 +571,22 @@
 	.sso-preview-logo {
 		width: 40px;
 		height: 40px;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		object-fit: cover;
 	}
 
 	.sso-preview-icon {
 		width: 40px;
 		height: 40px;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		display: flex;
 		align-items: center;
 		justify-content: center;
 	}
 
 	.sso-preview-text {
-		font-size: 0.8rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: rgba(255, 255, 255, 0.9);
 		text-align: center;
 		margin: 0;
@@ -590,15 +595,17 @@
 	.sso-preview-btn {
 		width: 100%;
 		padding: 0.5rem;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		text-align: center;
-		font-size: 0.75rem;
-		font-weight: 500;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		color: white;
 	}
 
 	.sso-no-access {
-		font-size: 0.8rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 		margin: 0;
 	}

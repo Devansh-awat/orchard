@@ -460,7 +460,7 @@
 		justify-content: center;
 		width: 2.25rem;
 		height: 2.25rem;
-		border-radius: 0.625rem;
+		border-radius: var(--radius-md);
 		background-color: color-mix(in srgb, var(--button-bg) 14%, transparent);
 		color: var(--button-bg);
 	}
@@ -475,33 +475,36 @@
 
 	.prov-title {
 		margin: 0;
-		font-size: 1.25rem;
+		font-size: var(--text-title-3);
+		line-height: var(--lh-title-3);
 		font-weight: 700;
 		color: var(--center-channel-color);
 	}
 
 	.prov-subtitle {
 		margin-top: 0.125rem;
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 	}
 
 	.prov-phase {
 		margin-left: 0.25rem;
 		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 	}
 
 	.prov-progress {
 		display: flex;
 		align-items: center;
-		gap: 0.625rem;
+		gap: 0.75rem;
 	}
 
 	.prov-bar {
 		flex: 1;
 		height: 0.4rem;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		background-color: color-mix(in srgb, var(--surface-border) 70%, transparent);
 		overflow: hidden;
 	}
@@ -509,7 +512,7 @@
 	.prov-bar-fill {
 		height: 100%;
 		background-color: var(--button-bg);
-		transition: width 400ms ease;
+		transition: width var(--dur-base) ease;
 	}
 	.prov-bar-fill[data-failed='true'] {
 		background-color: var(--error-text-color);
@@ -517,7 +520,8 @@
 
 	.prov-count {
 		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--surface-muted);
 	}
 
@@ -527,10 +531,11 @@
 		align-items: center;
 		gap: 0.5rem;
 		padding: 1rem 1.125rem;
-		border-radius: 0.625rem;
+		border-radius: var(--radius-md);
 		background-color: var(--control-bg);
 		border: 1px solid var(--surface-border);
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 	}
 	.prov-error {
@@ -542,7 +547,7 @@
 		display: flex;
 		flex-direction: column;
 		border: 1px solid var(--surface-border);
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		background-color: var(--control-bg);
 		overflow: hidden;
 	}
@@ -570,7 +575,7 @@
 		justify-content: center;
 		width: 1.25rem;
 		height: 1.25rem;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		flex-shrink: 0;
 		margin-top: 0.125rem;
 	}
@@ -592,31 +597,34 @@
 	.prov-step-dot {
 		width: 0.5rem;
 		height: 0.5rem;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		background-color: var(--surface-muted);
 		opacity: 0.5;
 	}
 
 	.prov-step-label {
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		font-weight: 600;
 		color: var(--center-channel-color);
 	}
 
 	.prov-step-desc {
 		margin-top: 0.125rem;
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--surface-muted);
 	}
 
 	.prov-step-detail {
-		margin-top: 0.375rem;
+		margin-top: 0.5rem;
 		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-		font-size: 0.72rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--center-channel-color);
 		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);
-		padding: 0.375rem 0.5rem;
-		border-radius: 0.375rem;
+		padding: 0.5rem 0.5rem;
+		border-radius: var(--radius-xs);
 		white-space: pre-wrap;
 		word-break: break-word;
 	}
@@ -627,7 +635,7 @@
 
 	.prov-panel {
 		border: 1px solid var(--surface-border);
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		background-color: var(--control-bg);
 		overflow: hidden;
 	}
@@ -640,14 +648,15 @@
 		align-items: center;
 		gap: 0.5rem;
 		width: 100%;
-		padding: 0.625rem 0.875rem;
+		padding: 0.75rem 0.875rem;
 		background: transparent;
 		border: none;
 		border-bottom: 1px solid var(--surface-border);
 		cursor: pointer;
 		color: var(--center-channel-color);
 		font-family: inherit;
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		text-align: left;
 	}
 	.prov-panel-header:hover {
@@ -656,7 +665,7 @@
 
 	.prov-chev {
 		color: var(--surface-muted);
-		transition: transform 150ms;
+		transition: transform var(--dur-fast);
 	}
 
 	.prov-panel-title {
@@ -665,16 +674,18 @@
 
 	.prov-panel-sub {
 		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-		font-size: 0.7rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 		margin-left: auto;
 	}
 
 	.prov-pill {
-		font-size: 0.65rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		padding: 0.1rem 0.45rem;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 	}
@@ -697,7 +708,7 @@
 		max-height: 22rem;
 		overflow-y: auto;
 		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-		font-size: 0.72rem;
+		font-size: var(--text-caption);
 		line-height: 1.5;
 		color: var(--center-channel-color);
 		white-space: pre-wrap;
@@ -728,7 +739,7 @@
 		justify-content: center;
 		width: 1.75rem;
 		height: 1.75rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		background-color: color-mix(in srgb, var(--away-indicator) 15%, transparent);
 		color: var(--away-indicator);
 		flex-shrink: 0;
@@ -737,7 +748,7 @@
 	.prov-warn-body {
 		display: flex;
 		flex-direction: column;
-		gap: 0.2rem;
+		gap: 0.25rem;
 		min-width: 0;
 	}
 
@@ -749,21 +760,24 @@
 	}
 
 	.prov-warn-title {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		color: var(--center-channel-color);
 	}
 
 	.prov-warn-kind {
 		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-		font-size: 0.7rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 	}
 
 	.prov-warn-count {
-		font-size: 0.7rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		padding: 0.05rem 0.4rem;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		background-color: color-mix(in srgb, var(--away-indicator) 18%, transparent);
 		color: var(--away-indicator);
 		font-weight: 600;
@@ -771,13 +785,14 @@
 
 	.prov-warn-time {
 		margin-left: auto;
-		font-size: 0.7rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 	}
 
 	.prov-warn-hint {
 		margin: 0.125rem 0 0;
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
 		line-height: 1.45;
 		color: var(--center-channel-color);
 		opacity: 0.78;
@@ -787,7 +802,7 @@
 	.prov-warn-raw {
 		margin: 0.125rem 0 0;
 		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-		font-size: 0.72rem;
+		font-size: var(--text-caption);
 		line-height: 1.45;
 		color: var(--center-channel-color);
 		opacity: 0.85;
@@ -797,18 +812,19 @@
 
 	.prov-warn-toggle {
 		align-self: flex-start;
-		margin-top: 0.375rem;
-		font-size: 0.7rem;
-		font-weight: 500;
+		margin-top: 0.5rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
 		padding: 0.1rem 0.45rem;
-		border-radius: 0.3rem;
+		border-radius: var(--radius-xs);
 		border: 1px solid color-mix(in srgb, var(--surface-border) 80%, transparent);
 		background: transparent;
 		color: var(--surface-muted);
 		cursor: pointer;
 		transition:
-			background-color 120ms,
-			color 120ms;
+			background-color var(--dur-fast),
+			color var(--dur-fast);
 	}
 	.prov-warn-toggle:hover {
 		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);

@@ -7,7 +7,9 @@
 		open = $bindable(false),
 		title = undefined,
 		size = 'md',
+		align = 'content',
 		closable = true,
+		dismissable = undefined,
 		onclose = undefined,
 		header = undefined,
 		children,
@@ -16,7 +18,9 @@
 		open?: boolean;
 		title?: string;
 		size?: 'sm' | 'md' | 'lg' | 'xl';
+		align?: 'content' | 'viewport';
 		closable?: boolean;
+		dismissable?: boolean;
 		onclose?: () => void;
 		header?: Snippet;
 		children: Snippet;
@@ -44,13 +48,15 @@
 		rendered = false;
 	}
 
+	const canDismiss = $derived(dismissable ?? closable);
+
 	function handleBackdropClick(e: MouseEvent) {
-		if (closable && e.target === dialogEl) requestClose();
+		if (canDismiss && e.target === dialogEl) requestClose();
 	}
 
 	function handleCancel(e: Event) {
 		e.preventDefault();
-		if (closable) requestClose();
+		if (canDismiss) requestClose();
 	}
 </script>
 
@@ -58,6 +64,7 @@
 	<dialog
 		bind:this={dialogEl}
 		class="ui-modal ui-modal--{size}"
+		class:ui-modal--viewport={align === 'viewport'}
 		class:ui-modal--closing={!open}
 		onclick={handleBackdropClick}
 		oncancel={handleCancel}

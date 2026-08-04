@@ -2,23 +2,23 @@
 	import {
 		Plus,
 		ChevronRight,
-		Rocket,
 		Database,
 		ArrowRight,
 		Github,
 		Container,
 		Ellipsis
 	} from 'lucide-svelte';
-	import { motionStagger, springRotate } from '$lib/utils/motion.svelte';
+	import { originBurst, springRotate, centerOf } from '$lib/utils/motion.svelte';
 	import { projectGradientEnabled } from '$lib/stores';
 	import {
 		projectStatusSummary,
 		meshBakedBg,
 		bodyAttach,
 		knownIcon,
-		projectSwatch
+		projectSwatch,
+		timeAgo
 	} from './helpers.svelte';
-	import { Menu, MenuItem } from '$lib/components/ui';
+	import { Menu, MenuItem, RemoteImg } from '$lib/components/ui';
 	import DeploymentCard from './DeploymentCard.svelte';
 	import DatabaseCard from './DatabaseCard.svelte';
 	import type { ProjectGroup, ProjectMeta, DeploymentSummary, LiveMetricsEntry } from './types';
@@ -62,6 +62,14 @@
 	} = $props();
 
 	const summary = $derived(projectStatusSummary(group));
+	const isEmpty = $derived(group.deps.length === 0 && group.dbs.length === 0);
+
+	const lastActivity = $derived.by(() => {
+		let newest = 0;
+		for (const d of group.deps) newest = Math.max(newest, new Date(d.updatedAt).getTime());
+		for (const d of group.dbs) newest = Math.max(newest, new Date(d.updatedAt).getTime());
+		return newest ? timeAgo(new Date(newest).toISOString()) : '';
+	});
 
 	const depIcons = $derived.by(() => {
 		const icons: { id: string; src: string }[] = [];
@@ -80,6 +88,10 @@
 	});
 
 	let newOpen = $state(false);
+	let avatarEl = $state<HTMLElement | undefined>();
+
+	const tileCount = $derived(group.deps.length + group.dbs.length);
+	const burstOrigin = () => (avatarEl ? centerOf(avatarEl) : null);
 
 	// Stable attachment — rebuilding it on every `group` identity change would
 	// re-run the mount animation (height 0 → auto) on each overview refetch.
@@ -105,40 +117,40 @@
 			<div class="proj-body-veil"></div>
 		</div>
 	{/if}
-	<button
+	<svelte:element
+		this={isEmpty ? 'div' : 'button'}
 		class="proj-head"
-		onclick={(e) => onToggleExpand(group.id, e)}
-		aria-expanded={expanded}
-		aria-label={expanded ? `Collapse ${group.name}` : `Expand ${group.name}`}
+		class:proj-head--static={isEmpty}
+		onclick={isEmpty ? undefined : (e: Event) => onToggleExpand(group.id, e)}
+		aria-expanded={isEmpty ? undefined : expanded}
+		aria-label={isEmpty ? undefined : expanded ? `Collapse ${group.name}` : `Expand ${group.name}`}
 	>
 		<div
 			class="proj-chev"
 			class:proj-chev--open={expanded}
+			class:proj-chev--empty={isEmpty}
 			{@attach springRotate(() => expanded, { rest: 0, on: 90 })}
 		>
-			<ChevronRight size={16} />
+			{#if !isEmpty}
+				<ChevronRight size={16} />
+			{/if}
 		</div>
 		<div
+			bind:this={avatarEl}
 			class="proj-av"
 			class:proj-av--fallback={meta?.icon ? !/^https?:\/\//.test(meta.icon) : depIcons.length === 0}
 			class:proj-av--cluster={!meta?.icon && depIcons.length > 0}
 		>
 			{#if meta?.icon}
 				{#if /^https?:\/\//.test(meta.icon)}
-					<img src={meta.icon} alt="" class="proj-av-img" loading="lazy" decoding="async" />
+					<RemoteImg src={meta.icon} class="proj-av-img" />
 				{:else}
 					<span class="proj-av-emoji">{meta.icon}</span>
 				{/if}
 			{:else if depIcons.length > 0}
 				<div class="proj-av-cluster proj-av-cluster--{depIcons.length}">
 					{#each depIcons as ic (ic.id)}
-						<img
-							src={ic.src}
-							alt=""
-							class="proj-av-mini"
-							decoding="async"
-							onerror={() => onFavErr(ic.id)}
-						/>
+						<RemoteImg src={ic.src} class="proj-av-mini" onerror={() => onFavErr(ic.id)} />
 					{/each}
 				</div>
 			{:else}
@@ -146,27 +158,48 @@
 			{/if}
 		</div>
 		<div class="proj-text">
-			<span class="proj-name"
-				>{#if meta?.owner?.username}<span class="proj-owner">{meta.owner.username}@</span
-					>{/if}{group.name}</span
-			>
-			{#if meta?.description}
-				<span class="proj-sub">{meta.description}</span>
-			{/if}
+			<p class="proj-name">
+				{group.name}
+			</p>
+			<p class="proj-meta">
+				{#if meta?.owner?.username}
+					<span class="proj-owner">{meta.owner.username}</span>
+					<span class="proj-dot" aria-hidden="true"></span>
+				{/if}
+				{#if isEmpty}
+					<span>Nothing deployed yet</span>
+				{:else}
+					<span>{group.deps.length} deployment{group.deps.length === 1 ? '' : 's'}</span>
+				{/if}
+				{#if group.dbs.length > 0}
+					<span class="proj-dot" aria-hidden="true"></span>
+					<span>{group.dbs.length} database{group.dbs.length === 1 ? '' : 's'}</span>
+				{/if}
+				{#if lastActivity}
+					<span class="proj-dot proj-dot--wide" aria-hidden="true"></span>
+					<span class="proj-when">{lastActivity}</span>
+				{/if}
+			</p>
 		</div>
-		<div class="proj-stats">
-			<span class="proj-stat" title="Deployments"><Rocket size={12} /> {group.deps.length}</span>
-			{#if group.dbs.length > 0}
-				<span class="proj-stat" title="Databases"><Database size={12} /> {group.dbs.length}</span>
-			{/if}
-			{#if summary}
-				<span class="proj-summary">
-					{#if summary.green > 0}<span class="dot status--success"></span>{summary.green}{/if}
-					{#if summary.amber > 0}<span class="dot status--warning"></span>{summary.amber}{/if}
-					{#if summary.red > 0}<span class="dot status--error"></span>{summary.red}{/if}
-				</span>
-			{/if}
-		</div>
+		{#if summary}
+			<div class="proj-stats">
+				{#if summary.red > 0}
+					<span class="proj-pill proj-pill--error">
+						<span class="dot status--error"></span>{summary.red}
+					</span>
+				{/if}
+				{#if summary.amber > 0}
+					<span class="proj-pill proj-pill--warning">
+						<span class="dot status--warning"></span>{summary.amber}
+					</span>
+				{/if}
+				{#if summary.green > 0}
+					<span class="proj-pill proj-pill--success">
+						<span class="dot status--success"></span>{summary.green}
+					</span>
+				{/if}
+			</div>
+		{/if}
 		<Menu placement="bottom-end" bind:open={newOpen}>
 			{#snippet trigger(attrs, open)}
 				<span
@@ -213,12 +246,19 @@
 		>
 			<ArrowRight size={14} />
 		</a>
-	</button>
-	{#if rendered}
+	</svelte:element>
+	{#if rendered && !isEmpty}
 		<div class="proj-body" {@attach bodyAttachment}>
 			<div class="od-grid">
 				{#each group.deps as dep, i (dep.id)}
-					<div {@attach motionStagger({ index: i, stride: 0.04, from: { y: 8 } })}>
+					<div
+						{@attach originBurst({
+							origin: burstOrigin,
+							index: i,
+							count: tileCount,
+							closing: () => !expanded
+						})}
+					>
 						<DeploymentCard
 							{dep}
 							isFav={false}
@@ -236,10 +276,11 @@
 				{/each}
 				{#each group.dbs as db, i (db.id)}
 					<div
-						{@attach motionStagger({
+						{@attach originBurst({
+							origin: burstOrigin,
 							index: group.deps.length + i,
-							stride: 0.04,
-							from: { y: 8 }
+							count: tileCount,
+							closing: () => !expanded
 						})}
 					>
 						<DatabaseCard {db} {orgSlug} />

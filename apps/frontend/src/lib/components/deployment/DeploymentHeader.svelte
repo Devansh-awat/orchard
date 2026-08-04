@@ -1,19 +1,17 @@
 <script lang="ts">
-	import { Loader2, ExternalLink, Pencil } from 'lucide-svelte';
+	import { Loader2, ExternalLink, EllipsisVertical, Pencil } from 'lucide-svelte';
 	import { Play, RefreshCw, Trash2 } from '@jis3r/icons';
-	import { motionStagger, cardTilt } from '$lib/utils/motion.svelte';
-	import { envBadgeColor } from '$lib/utils/format';
+	import { motionStagger, springCollapse } from '$lib/utils/motion.svelte';
+	import { formatRelativeTime } from '$lib/utils/format';
+	import { StatusBadge, Button, Menu, MenuItem } from '$lib/components/ui';
 	import type { StatusMeta } from '$lib/components/ui';
 
 	let {
 		deployment,
-		projectBgImage,
 		headerCollapsed,
-		springCollapse,
-		// Status
 		deploymentStatusChip,
+		buildStatusChip = null,
 		debugChips = [],
-		// Actions
 		repoUrl,
 		rebuilding,
 		restarting,
@@ -26,7 +24,6 @@
 		onShowDeleteModal,
 		onTriggerActionAnim,
 		onViewBuildLogs,
-		// Meta
 		_commitLead,
 		_commitLeadMono,
 		_activeBuild,
@@ -34,10 +31,9 @@
 		branch
 	}: {
 		deployment: any;
-		projectBgImage: string | null;
 		headerCollapsed: boolean;
-		springCollapse: (collapsed: () => boolean) => (el: Element) => void;
 		deploymentStatusChip: StatusMeta;
+		buildStatusChip?: StatusMeta | null;
 		debugChips?: StatusMeta[];
 		repoUrl: string | undefined;
 		rebuilding: boolean;
@@ -57,184 +53,343 @@
 		_buildFailed: boolean;
 		branch: string | undefined;
 	} = $props();
+
+	const repoLabel = $derived(
+		deployment?.githubRepo
+			? deployment.githubRepo.replace('https://github.com/', '').replace(/\.git$/, '')
+			: null
+	);
+	const commitUrl = $derived(
+		deployment?.githubRepo && _activeBuild?.commitSha
+			? `${deployment.githubRepo.replace(/\.git$/, '')}/commit/${_activeBuild.commitSha}`
+			: null
+	);
 </script>
 
-<section
-	class="dep-header dep-header-card"
-	class:dep-header-card--hasbg={!!projectBgImage}
-	class:dep-header-card--collapsed={headerCollapsed}
-	{@attach motionStagger({ index: 0, from: { y: 14, scale: 0.985 } })}
-	{@attach cardTilt({ max: 2 })}
->
-	{#if projectBgImage}
-		<div class="dep-header-backdrop" aria-hidden="true">
-			<div
-				class="dep-header-bg dep-header-bg--1"
-				style="background-image: url({JSON.stringify(projectBgImage)});"
-			></div>
-			<div
-				class="dep-header-bg dep-header-bg--2"
-				style="background-image: url({JSON.stringify(projectBgImage)});"
-			></div>
-			<div
-				class="dep-header-bg dep-header-bg--3"
-				style="background-image: url({JSON.stringify(projectBgImage)});"
-			></div>
-			<div class="dep-header-veil"></div>
-		</div>
-	{/if}
-	<div class="dep-header-top">
-		<div class="dep-header-identity">
-			<h1 class="dep-header-name">{deployment.displayName || deployment.name}</h1>
-			{#if onRename}
-				<button class="dep-rename-btn" title="Rename" aria-label="Rename app" onclick={onRename}>
-					<Pencil size={13} />
-				</button>
-			{/if}
-			<span class="dep-status-chip dep-status-chip--{deploymentStatusChip.kind}">
-				<span class="dep-status-dot" class:dep-status-dot--pulse={deploymentStatusChip.pulse}
-				></span>
-				{deploymentStatusChip.label}
+{#snippet identity()}
+	<div class="dh-identity">
+		<h1 class="dh-name">{deployment.displayName || deployment.name}</h1>
+		<StatusBadge meta={deploymentStatusChip} />
+		{#if buildStatusChip}
+			<StatusBadge meta={buildStatusChip} />
+		{/if}
+		{#if deployment.environment}
+			<span class="dh-env-chip" title="Environment: {deployment.environment.name}">
+				{deployment.environment.name}
 			</span>
-			{#if deployment.environment}
-				<span
-					class="dep-env-chip"
-					style="--env-c: {envBadgeColor(deployment.environment.slug)}"
-					title="Environment: {deployment.environment.name}"
-				>
-					<span class="dep-env-dot"></span>
-					{deployment.environment.name}
-				</span>
-			{/if}
-			{#each debugChips as chip (chip.label)}
-				<span class="dep-status-chip dep-status-chip--{chip.kind}">
-					<span class="dep-status-dot" class:dep-status-dot--pulse={chip.pulse}></span>
-					{chip.label}
-				</span>
-			{/each}
-		</div>
-		<div class="dep-header-actions">
-			{#if repoUrl}
-				<button
-					onclick={onRebuild}
-					disabled={rebuilding || _isBuilding}
-					class="btn btn-secondary btn-sm"
-					onmouseenter={() => onTriggerActionAnim('redeploy')}
-				>
-					{#if rebuilding}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw
-							size={14}
-							animate={actionAnim.redeploy ?? false}
-						/>{/if}
-					<span>Redeploy</span>
-				</button>
-			{/if}
-			<button
-				onclick={onRestart}
-				disabled={restarting}
-				class="btn btn-secondary btn-sm"
-				onmouseenter={() => onTriggerActionAnim('restart')}
-			>
-				{#if restarting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Play
-						size={14}
-						animate={actionAnim.restart ?? false}
-					/>{/if}
-				<span>Restart</span>
-			</button>
-			<button
-				onclick={onShowDeleteModal}
-				disabled={deleting}
-				class="btn btn-sm dep-delete-btn"
-				aria-label="Delete app"
-				title="Delete app"
-				onmouseenter={() => onTriggerActionAnim('delete')}
-			>
-				{#if deleting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Trash2
-						size={14}
-						animate={actionAnim.delete ?? false}
-					/>{/if}
-			</button>
-		</div>
+		{/if}
+		{#each debugChips as chip (chip.label)}
+			<StatusBadge meta={chip} />
+		{/each}
 	</div>
+{/snippet}
 
-	<!-- Body: meta + domains. Spring-collapses when the user leaves Overview. -->
-	<div class="dep-header-body" {@attach springCollapse(() => headerCollapsed)}>
-		<p class="dep-header-meta">
-			{#if _commitLead}
-				{#if deployment.githubRepo && _activeBuild?.commitSha}
-					<a
-						href="{deployment.githubRepo.replace(/\.git$/, '')}/commit/{_activeBuild.commitSha}"
-						target="_blank"
-						rel="noopener noreferrer"
-						class="dep-meta-lead dep-meta-lead-link"
-						class:dep-meta-mono={_commitLeadMono}>{_commitLead}</a
-					>
-				{:else}
-					<span class="dep-meta-lead" class:dep-meta-mono={_commitLeadMono}>{_commitLead}</span>
-				{/if}
+{#snippet actions()}
+	<div class="dh-actions">
+		{#if repoUrl}
+			<Button
+				variant="primary"
+				size="sm"
+				onclick={onRebuild}
+				disabled={rebuilding || _isBuilding}
+				onmouseenter={() => onTriggerActionAnim('redeploy')}
+			>
+				{#if rebuilding}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<RefreshCw
+						size={14}
+						animate={actionAnim.redeploy ?? false}
+					/>{/if}
+				<span>Redeploy</span>
+			</Button>
+		{/if}
+		<Button
+			variant="secondary"
+			size="sm"
+			onclick={onRestart}
+			disabled={restarting}
+			onmouseenter={() => onTriggerActionAnim('restart')}
+		>
+			{#if restarting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Play
+					size={14}
+					animate={actionAnim.restart ?? false}
+				/>{/if}
+			<span>Restart</span>
+		</Button>
+		<Menu placement="bottom-end">
+			{#snippet trigger(props, open)}
+				<button
+					{...props}
+					class="dh-more"
+					class:dh-more--open={open}
+					aria-label="More actions"
+					title="More actions"
+				>
+					<EllipsisVertical size={16} />
+				</button>
+			{/snippet}
+			{#if onRename}
+				<MenuItem onclick={onRename}>
+					<Pencil size={14} />
+					<span>Rename</span>
+				</MenuItem>
 			{/if}
-			{#if deployment.githubRepo}
-				{#if _commitLead}<span class="dep-meta-dot">·</span>{/if}
+			<MenuItem danger disabled={deleting} onclick={onShowDeleteModal}>
+				<Trash2 size={14} />
+				<span>Delete app</span>
+			</MenuItem>
+		</Menu>
+	</div>
+{/snippet}
+
+{#snippet metaLine()}
+	<p class="dh-meta">
+		{#if _commitLead}
+			{#if commitUrl}
 				<a
-					href={deployment.githubRepo.replace(/\.git$/, '')}
+					href={commitUrl}
 					target="_blank"
 					rel="noopener noreferrer"
-					class="dep-meta-link"
+					class="dh-meta-lead dh-meta-link"
+					class:dh-mono={_commitLeadMono}>{_commitLead}</a
 				>
-					{deployment.githubRepo.replace('https://github.com/', '').replace(/\.git$/, '')}
+			{:else}
+				<span class="dh-meta-lead" class:dh-mono={_commitLeadMono}>{_commitLead}</span>
+			{/if}
+		{/if}
+		{#if repoLabel}
+			{#if _commitLead}<span class="dh-meta-dot">·</span>{/if}
+			<a
+				href={deployment.githubRepo.replace(/\.git$/, '')}
+				target="_blank"
+				rel="noopener noreferrer"
+				class="dh-meta-link"
+			>
+				{repoLabel}
+			</a>
+		{/if}
+		{#if _activeBuild?.branch || branch}
+			{#if repoLabel}<span class="dh-meta-dot">·</span>{/if}
+			<span class="dh-mono">{_activeBuild?.branch || branch}</span>
+		{/if}
+		{#if _activeBuild}
+			<span class="dh-meta-dot">·</span>
+			<span>{formatRelativeTime(new Date(_activeBuild.createdAt))}</span>
+			{#if _activeBuild.triggerType === 'manual' && _activeBuild.triggeredBy}
+				<span>by @{_activeBuild.triggeredBy.username}</span>
+			{:else if _activeBuild.triggerType === 'auto'}
+				<span>via GitHub</span>
+			{/if}
+		{/if}
+		{#if _buildFailed && (deployment.buildLogs || deployment.buildError)}
+			<span class="dh-meta-dot">·</span>
+			<button class="dh-meta-link dh-meta-button" onclick={onViewBuildLogs}>
+				View deployment logs
+			</button>
+		{/if}
+	</p>
+{/snippet}
+
+{#snippet domains()}
+	{#if deployment.ingresses?.length}
+		<div class="dh-domains">
+			{#each deployment.ingresses.slice(0, 3) as ingress (ingress.id)}
+				<a
+					href="{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}{ingress.path}"
+					target="_blank"
+					rel="noopener noreferrer"
+					class="dh-domain"
+				>
+					{ingress.host}
+					<ExternalLink class="dh-domain-icon" size={12} />
+				</a>
+			{/each}
+			{#if deployment.ingresses.length > 3}
+				<a href="?tab=network" class="dh-domain dh-domain--more">
+					+{deployment.ingresses.length - 3} more
 				</a>
 			{/if}
-			{#if _activeBuild?.branch || branch}
-				{#if deployment.githubRepo}<span class="dep-meta-dot">·</span>{/if}
-				<span class="dep-meta-mono">{_activeBuild?.branch || branch}</span>
-			{/if}
-			{#if _activeBuild}
-				<span class="dep-meta-dot">·</span>
-				<span
-					>{(() => {
-						const diff = Date.now() - new Date(_activeBuild.createdAt).getTime();
-						const mins = Math.floor(diff / 60000);
-						if (mins < 1) return 'just now';
-						if (mins < 60) return `${mins}m ago`;
-						const hrs = Math.floor(mins / 60);
-						if (hrs < 24) return `${hrs}h ago`;
-						const days = Math.floor(hrs / 24);
-						if (days < 30) return `${days}d ago`;
-						return new Date(_activeBuild.createdAt).toLocaleDateString('en-US', {
-							month: 'short',
-							day: 'numeric'
-						});
-					})()}</span
-				>
-				{#if _activeBuild.triggerType === 'manual' && _activeBuild.triggeredBy}
-					<span>by</span>
-					<span class="dep-meta-strong">@{_activeBuild.triggeredBy.username}</span>
-				{:else if _activeBuild.triggerType === 'auto'}
-					<span>via GitHub</span>
-				{/if}
-			{/if}
-			{#if _buildFailed && (deployment.buildLogs || deployment.buildError)}
-				<span class="dep-meta-dot">·</span>
-				<button class="dep-meta-link dep-meta-button" onclick={onViewBuildLogs}
-					>View deployment logs</button
-				>
-			{/if}
-		</p>
+		</div>
+	{/if}
+{/snippet}
 
-		{#if deployment.ingresses?.length}
-			<div class="dep-header-divider" aria-hidden="true"></div>
-			<div class="dep-header-domains">
-				{#each deployment.ingresses.slice(0, 4) as ingress (ingress.id)}
-					<a
-						href="{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}{ingress.path}"
-						target="_blank"
-						rel="noopener noreferrer"
-						class="dep-meta-domain"
-					>
-						{ingress.host}
-						<ExternalLink class="dep-meta-domain-icon h-3 w-3" />
-					</a>
-				{/each}
-			</div>
-		{/if}
+<section class="dh-card" {@attach motionStagger({ index: 0, from: { y: 14 } })}>
+	<div class="dh-top">
+		{@render identity()}
+		{@render actions()}
+	</div>
+	<div class="dh-body" {@attach springCollapse(() => headerCollapsed)}>
+		<div class="dh-body-inner">
+			{@render metaLine()}
+			{@render domains()}
+		</div>
 	</div>
 </section>
+
+<style>
+	.dh-card {
+		background-color: var(--bg-raised);
+		border: none;
+		box-shadow: var(--elev-1);
+		border-radius: var(--radius-xl);
+		padding: var(--space-5) var(--space-6);
+	}
+	.dh-top {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-3) var(--space-4);
+		flex-wrap: wrap;
+		min-width: 0;
+	}
+	.dh-identity {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+		flex-wrap: wrap;
+		min-width: 0;
+		flex: 1 1 16rem;
+	}
+	.dh-name {
+		font-size: var(--text-title-1);
+		line-height: var(--lh-title-1);
+		letter-spacing: var(--track-title);
+		font-weight: 600;
+		color: var(--text-default);
+		margin: 0;
+		min-width: 0;
+		max-width: 100%;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+	.dh-env-chip {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.25rem 0.75rem;
+		border-radius: var(--radius-pill);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
+		white-space: nowrap;
+		color: var(--text-muted);
+		border: 1px solid var(--rule-strong);
+		background: transparent;
+	}
+	.dh-actions {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		flex-shrink: 0;
+	}
+	.dh-more {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 2rem;
+		height: 2rem;
+		border-radius: var(--radius-md);
+		border: none;
+		background: transparent;
+		color: var(--text-muted);
+		cursor: pointer;
+		transition:
+			background-color var(--dur-fast) var(--ease-out),
+			color var(--dur-fast) var(--ease-out);
+	}
+	.dh-more:hover,
+	.dh-more--open {
+		background-color: var(--fill-soft);
+		color: var(--text-default);
+	}
+	.dh-body {
+		overflow: hidden;
+	}
+	.dh-body-inner {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-3);
+		padding-top: var(--space-3);
+	}
+	.dh-meta {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		flex-wrap: wrap;
+		margin: 0;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		color: var(--text-muted);
+		min-width: 0;
+	}
+	.dh-meta-lead {
+		font-weight: 600;
+		color: var(--text-default);
+	}
+	.dh-mono {
+		font-family: var(--font-mono, monospace);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+	}
+	.dh-meta-dot {
+		color: var(--text-faint);
+	}
+	.dh-meta-link {
+		display: inline-flex;
+		align-items: center;
+		min-height: 1.5rem;
+		color: inherit;
+		text-decoration: none;
+		border-radius: var(--radius-xs);
+	}
+	.dh-meta-link:hover {
+		color: var(--text-default);
+		text-decoration: underline;
+	}
+	.dh-meta-button {
+		background: none;
+		border: none;
+		padding: 0;
+		font: inherit;
+		cursor: pointer;
+		color: var(--text-link);
+	}
+	.dh-meta-button:hover {
+		text-decoration: underline;
+	}
+	.dh-domains {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		flex-wrap: wrap;
+	}
+	.dh-domain {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
+		padding: 0.25rem 0.75rem;
+		border-radius: var(--radius-pill);
+		background-color: var(--fill-quiet);
+		color: var(--text-muted);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		text-decoration: none;
+		max-width: 100%;
+		min-width: 0;
+	}
+	.dh-domain:hover {
+		background-color: var(--fill-soft);
+		color: var(--text-default);
+	}
+	:global(.dh-domain-icon) {
+		flex-shrink: 0;
+		opacity: 0.6;
+	}
+	@media (max-width: 640px) {
+		.dh-card {
+			padding: var(--space-4);
+		}
+		.dh-actions {
+			width: 100%;
+			justify-content: flex-start;
+		}
+	}
+</style>

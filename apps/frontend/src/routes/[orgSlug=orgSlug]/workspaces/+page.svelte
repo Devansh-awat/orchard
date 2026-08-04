@@ -280,13 +280,15 @@
 		margin-bottom: 2rem;
 	}
 	.pg-title {
-		font-size: 1.5rem;
+		font-size: var(--text-title-2);
+		line-height: var(--lh-title-2);
 		font-weight: 700;
 		color: var(--center-channel-color);
 		margin: 0;
 	}
 	.pg-sub {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 		margin: 0.25rem 0 0;
 	}
@@ -297,7 +299,7 @@
 		gap: 0.5rem;
 		margin-bottom: 1.5rem;
 		padding: 0.75rem;
-		border-radius: 0.625rem;
+		border-radius: var(--radius-md);
 		background: var(--center-channel-bg);
 		box-shadow:
 			0 0 0 1px color-mix(in srgb, var(--surface-border) 60%, transparent),
@@ -319,14 +321,14 @@
 		flex-direction: column;
 		gap: 0.75rem;
 		padding: 1rem;
-		border-radius: 0.625rem;
+		border-radius: var(--radius-md);
 		background: var(--center-channel-bg);
 		box-shadow:
 			0 0 0 1px color-mix(in srgb, var(--surface-border) 50%, transparent),
 			0 1px 3px rgba(0, 0, 0, 0.04);
 		text-decoration: none;
 		color: var(--center-channel-color);
-		transition: box-shadow 0.15s;
+		transition: box-shadow var(--dur-fast);
 		cursor: pointer;
 	}
 	.ws-card:hover {
@@ -342,12 +344,12 @@
 	.ws-card-top {
 		display: flex;
 		align-items: flex-start;
-		gap: 0.625rem;
+		gap: 0.75rem;
 	}
 	.ws-card-icon {
 		width: 2rem;
 		height: 2rem;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		flex-shrink: 0;
 		display: flex;
 		align-items: center;
@@ -361,7 +363,8 @@
 	}
 	.ws-card-name {
 		display: block;
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		font-weight: 600;
 		white-space: nowrap;
 		overflow: hidden;
@@ -369,7 +372,8 @@
 	}
 	.ws-card-desc {
 		display: block;
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 		margin-top: 0.125rem;
 		white-space: nowrap;
@@ -382,13 +386,13 @@
 		justify-content: center;
 		width: 1.5rem;
 		height: 1.5rem;
-		border-radius: 0.25rem;
+		border-radius: var(--radius-xs);
 		border: none;
 		background: none;
 		color: var(--surface-muted);
 		cursor: pointer;
 		opacity: 0;
-		transition: all 0.1s;
+		transition: all var(--dur-fast);
 		flex-shrink: 0;
 	}
 	.ws-card:hover .ws-card-del {
@@ -408,14 +412,15 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 	}
 	:global(.ws-card-arrow) {
 		margin-left: auto;
 		color: var(--surface-muted);
 		opacity: 0;
-		transition: opacity 0.12s;
+		transition: opacity var(--dur-fast);
 	}
 	.ws-card:hover :global(.ws-card-arrow) {
 		opacity: 1;

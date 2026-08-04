@@ -123,7 +123,7 @@
 		display: flex;
 		align-items: flex-start;
 		gap: 0.4rem;
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
 		line-height: 1.4;
 		color: var(--surface-muted);
 	}
@@ -141,27 +141,29 @@
 		display: inline-flex;
 		align-items: baseline;
 		gap: 0.5rem;
-		font-size: 0.95rem;
-		font-weight: 650;
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
+		font-weight: 600;
 		color: var(--center-channel-color);
 		letter-spacing: -0.01em;
 	}
 	.sharedvars-title-sub {
-		font-size: 0.78rem;
-		font-weight: 500;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		color: var(--surface-muted);
 	}
 	.sharedvars-dot {
 		width: 9px;
 		height: 9px;
-		border-radius: 9999px;
+		border-radius: var(--radius-pill);
 		background: var(--env-c);
 		box-shadow: 0 0 0 3px color-mix(in srgb, var(--env-c) 18%, transparent);
 		align-self: center;
 	}
 	.sharedvars-skeleton {
 		height: 5rem;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		background: linear-gradient(
 			100deg,
 			var(--control-bg) 30%,
@@ -186,11 +188,11 @@
 		gap: 0.4rem;
 		padding: 2.25rem 1.5rem;
 		border: 1px dashed var(--surface-border);
-		border-radius: 0.85rem;
+		border-radius: var(--radius-lg);
 		text-align: center;
 		transition:
-			border-color 140ms ease,
-			background-color 140ms ease;
+			border-color var(--dur-fast) ease,
+			background-color var(--dur-fast) ease;
 	}
 	.sharedvars-empty:hover {
 		border-color: color-mix(in srgb, var(--env-c) 40%, var(--surface-border));
@@ -202,14 +204,15 @@
 		justify-content: center;
 		width: 2.5rem;
 		height: 2.5rem;
-		border-radius: 0.7rem;
+		border-radius: var(--radius-md);
 		background: color-mix(in srgb, var(--env-c) 12%, var(--control-bg));
 		color: var(--env-c);
-		margin-bottom: 0.2rem;
+		margin-bottom: 0.25rem;
 	}
 	.sharedvars-empty-title {
-		font-size: 0.85rem;
-		font-weight: 550;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		font-weight: 600;
 		color: var(--surface-muted);
 	}
 </style>

@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { Star, MoreVertical, ExternalLink, RefreshCw, Pin, PinOff, Copy } from 'lucide-svelte';
-	import { springHover, cardTilt, springPop } from '$lib/utils/motion.svelte';
+	import { springHover, springPop, stateEcho } from '$lib/utils/motion.svelte';
 	import { knownIcon, favUrl, timeAgo } from './helpers.svelte';
-	import { Menu, MenuItem, resourceStatus } from '$lib/components/ui';
+	import { Menu, MenuItem, resourceStatus, RemoteImg } from '$lib/components/ui';
 	import type { DeploymentSummary, LiveMetricsEntry } from './types';
 
 	let {
@@ -49,21 +49,18 @@
 
 <a
 	href="/{orgSlug}/deployments/{dep.id}"
-	class="dash-card"
+	class="dash-card motion-echo echo--{m.kind}"
 	class:dash-card--fav={isFav}
-	{@attach springHover({ lift: -3, stiffness: 360, damping: 22 })}
-	{@attach cardTilt({ max: 4 })}
+	{@attach springHover({ lift: -3 })}
+	{@attach stateEcho(() => m.kind)}
 >
 	<div class="card-top">
 		{#if icon}
-			<img src={icon} alt="" class="card-ic" loading="lazy" decoding="async" />
+			<RemoteImg src={icon} class="card-ic" />
 		{:else if (dep.faviconUrl || dep.ingresses.length > 0) && !failedFav.has(dep.id)}
-			<img
+			<RemoteImg
 				src={dep.faviconUrl ?? favUrl(dep.ingresses[0].host.split('/')[0])}
-				alt=""
 				class="card-ic"
-				loading="lazy"
-				decoding="async"
 				onerror={() => onFavErr(dep.id)}
 			/>
 		{:else}

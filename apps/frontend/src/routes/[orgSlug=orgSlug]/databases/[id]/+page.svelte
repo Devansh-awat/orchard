@@ -1207,7 +1207,12 @@
 			{/if}
 
 			<div class="db-tabs">
-				<UnderlineTabs tabs={tabSections} bind:value={activeTab} />
+				<UnderlineTabs
+					tabs={tabSections}
+					bind:value={activeTab}
+					variant="toolbar"
+					label="Database sections"
+				/>
 			</div>
 
 			{#if activeTab === 'connection'}
@@ -1416,8 +1421,9 @@
 
 	.db-error {
 		padding: 0.75rem 1rem;
-		border-radius: 0.75rem;
-		font-size: 0.875rem;
+		border-radius: var(--radius-md);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
 		color: var(--error-text-color);
 		border: 1px solid color-mix(in srgb, var(--error-text-color) 25%, transparent);
@@ -1440,7 +1446,7 @@
 	}
 
 	.db-stat:not(:first-child) {
-		border-left: 1px solid color-mix(in srgb, var(--surface-border) 60%, transparent);
+		border-left: 1px solid var(--rule);
 	}
 
 	.db-stat:first-child {
@@ -1448,25 +1454,31 @@
 	}
 
 	.db-stat-label {
-		font-size: 0.6875rem;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--surface-muted);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 500;
+		color: var(--text-faint);
+		white-space: nowrap;
 	}
 
 	.db-stat-value {
-		font-size: 0.9375rem;
+		font-size: var(--text-headline);
+		line-height: var(--lh-headline);
 		font-weight: 600;
-		color: var(--center-channel-color);
+		font-variant-numeric: tabular-nums;
+		letter-spacing: var(--track-headline);
+		color: var(--text-default);
+		white-space: nowrap;
 	}
 
 	.db-empty-state {
 		padding: 2rem 1.5rem;
 		text-align: center;
 		color: var(--surface-muted);
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		border: 1px dashed var(--surface-border);
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 	}
 
 	.db-stat-pod {
@@ -1482,7 +1494,7 @@
 	.db-pod-dot {
 		width: 0.5rem;
 		height: 0.5rem;
-		border-radius: 9999px;
+		border-radius: var(--radius-pill);
 		flex-shrink: 0;
 	}
 
@@ -1502,7 +1514,8 @@
 	}
 
 	.db-pod-sub {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 		margin-top: 0.125rem;
 	}

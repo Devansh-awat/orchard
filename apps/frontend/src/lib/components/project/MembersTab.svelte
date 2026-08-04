@@ -116,7 +116,7 @@
 />
 
 <div class="pj-members-section">
-	<div class="pj-members-card">
+	<div class="pj-members-card pj-glass">
 		<div class="pj-members-head">
 			<div class="pj-members-title">
 				<Users size={16} />
@@ -234,8 +234,7 @@
 						{@attach motionStagger({
 							index: i,
 							axis: 'x',
-							from: { y: -10, scale: 1 },
-							stride: 0.04
+							from: { y: -10 }
 						})}
 					>
 						{#if m.user.imageUrl}
@@ -289,8 +288,6 @@
 										onclick={(e) => e.stopPropagation()}
 										{@attach motionPopover({
 											from: { y: -6, scale: 0.9 },
-											stiffness: 540,
-											damping: 30,
 											closing: () => openRoleMenuId !== m.id,
 											onClosed: () => {
 												if (renderRoleMenuId === m.id) renderRoleMenuId = null;
@@ -371,8 +368,7 @@
 						{@attach motionStagger({
 							index: i,
 							axis: 'x',
-							from: { y: -10, scale: 1 },
-							stride: 0.04
+							from: { y: -10 }
 						})}
 					>
 						<div class="pj-member-avatar pj-member-avatar--letter">

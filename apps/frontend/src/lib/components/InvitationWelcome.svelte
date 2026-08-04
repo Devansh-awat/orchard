@@ -493,7 +493,7 @@
 	}
 
 	.setup-title {
-		font-size: 1.875rem;
+		font-size: var(--text-title-1);
 		font-weight: 800;
 		letter-spacing: -0.03em;
 		color: var(--center-channel-color);
@@ -507,7 +507,7 @@
 
 	.setup-subtitle {
 		color: var(--surface-muted);
-		font-size: 1rem;
+		font-size: var(--text-headline);
 		margin: 0;
 		line-height: 1.5;
 	}
@@ -570,17 +570,18 @@
 	.setup-step-dot {
 		width: 1.625rem;
 		height: 1.625rem;
-		border-radius: 9999px;
+		border-radius: var(--radius-pill);
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		font-size: 0.7rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 700;
 		background-color: var(--control-bg);
 		color: var(--surface-muted);
 		transition:
-			background-color 0.15s,
-			color 0.15s;
+			background-color var(--dur-fast),
+			color var(--dur-fast);
 		flex-shrink: 0;
 	}
 
@@ -590,10 +591,11 @@
 	}
 
 	.setup-step-label {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		color: var(--surface-muted);
-		transition: color 0.15s;
+		transition: color var(--dur-fast);
 	}
 
 	.setup-step--active .setup-step-label {
@@ -603,9 +605,9 @@
 	.setup-step-line {
 		flex: 0 0 2rem;
 		height: 2px;
-		border-radius: 1px;
+		border-radius: var(--radius-xs);
 		background-color: var(--surface-border);
-		transition: background-color 0.15s;
+		transition: background-color var(--dur-fast);
 	}
 
 	.setup-step-line--active {
@@ -623,7 +625,7 @@
 	.setup-step-icon {
 		width: 2.5rem;
 		height: 2.5rem;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -647,7 +649,7 @@
 	}
 
 	.setup-step-title {
-		font-size: 1.125rem;
+		font-size: var(--text-title-3);
 		font-weight: 700;
 		color: var(--center-channel-color);
 		margin: 0;
@@ -655,7 +657,7 @@
 	}
 
 	.setup-step-desc {
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
 		color: var(--surface-muted);
 		margin: 0.25rem 0 0;
 		line-height: 1.5;
@@ -667,7 +669,7 @@
 		align-items: center;
 		gap: 1.25rem;
 		padding: 1.25rem 1.5rem;
-		border-radius: 0.875rem;
+		border-radius: var(--radius-lg);
 		background-color: var(--control-bg);
 		margin-bottom: 2rem;
 	}
@@ -675,21 +677,23 @@
 	.setup-profile-avatar {
 		width: 3.5rem;
 		height: 3.5rem;
-		border-radius: 0.875rem;
+		border-radius: var(--radius-lg);
 		object-fit: cover;
 	}
 
 	.setup-profile-name {
 		font-weight: 600;
-		font-size: 0.9375rem;
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
 		color: var(--center-channel-color);
 		margin: 0;
 	}
 
 	.setup-profile-email {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
-		margin: 0.2rem 0 0;
+		margin: 0.25rem 0 0;
 	}
 
 	.setup-form-row {
@@ -725,11 +729,12 @@
 		border: none;
 		padding: 0.25rem 0;
 		font-family: inherit;
-		font-size: 0.8125rem;
-		font-weight: 500;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
 		color: var(--surface-muted);
 		cursor: pointer;
-		transition: color 0.15s;
+		transition: color var(--dur-fast);
 	}
 
 	.setup-back-link:hover {
@@ -742,14 +747,14 @@
 		align-items: center;
 		gap: 1rem;
 		padding: 1.25rem 1.5rem;
-		border-radius: 0.875rem;
+		border-radius: var(--radius-lg);
 		background-color: var(--control-bg);
 	}
 
 	.setup-github-check {
 		width: 2.25rem;
 		height: 2.25rem;
-		border-radius: 9999px;
+		border-radius: var(--radius-pill);
 		background-color: color-mix(in srgb, var(--online-indicator) 15%, transparent);
 		display: flex;
 		align-items: center;
@@ -759,13 +764,14 @@
 
 	.setup-github-info {
 		border: 1px solid var(--surface-border);
-		border-radius: 0.875rem;
+		border-radius: var(--radius-lg);
 		padding: 1.5rem 1.75rem;
 		background-color: var(--control-bg);
 	}
 
 	.setup-github-info-title {
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		font-weight: 600;
 		color: var(--center-channel-color);
 		margin: 0 0 0.75rem;
@@ -774,7 +780,7 @@
 	.setup-github-info-list {
 		list-style: disc;
 		padding-left: 1.25rem;
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
 		color: var(--surface-muted);
 		margin: 0;
 		display: flex;
@@ -788,7 +794,8 @@
 			padding: 1.75rem 1.5rem 1.5rem;
 		}
 		.setup-title {
-			font-size: 1.375rem;
+			font-size: var(--text-title-2);
+			line-height: var(--lh-title-2);
 			margin-top: 1.5rem;
 		}
 		.setup-content {

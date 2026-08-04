@@ -18,7 +18,7 @@
 		envVarsToRaw,
 		rawToEnvVars
 	} from '$lib/components/deployment/deployment-helpers';
-	import { resourceStatus } from '$lib/components/ui';
+	import { resourceStatus, statusMeta } from '$lib/components/ui';
 	import {
 		apiFetch,
 		toasts,
@@ -48,7 +48,6 @@
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import {
 		ArrowLeft,
-		Activity,
 		Bell,
 		Boxes,
 		Check,
@@ -96,9 +95,9 @@
 	// Extracted modules
 	import {
 		motionStagger,
+		motionPanel,
 		motionPopover,
 		motionBackdrop,
-		cardTilt,
 		pressSpringDelegate,
 		functionalMotion
 	} from '$lib/utils/motion.svelte';
@@ -128,20 +127,14 @@
 	} from '$lib/types/deployment';
 	import {
 		EnvironmentTab,
-		VolumesTab,
-		WebhooksTab,
-		HistoryTab,
-		ResourcesTab,
 		OverviewTab,
 		NetworkTab,
-		AdvancedTab,
 		DeploymentHeader,
 		BuildProgressModal,
 		DeploymentAlerts,
 		DeploysTab,
-		SettingsTab,
 		ObserveTab,
-		BuildTab
+		AppSettings
 	} from '$lib/components/deployment';
 
 	const APP_DOMAIN = env.PUBLIC_APP_DOMAIN || 'a.lfdl.ink';
@@ -208,32 +201,60 @@
 
 	const tabSections = [
 		{ id: 'overview', label: 'Overview', icon: ServerCog },
-		{ id: 'environment', label: 'Environment', icon: Settings },
-		{ id: 'resources', label: 'Resources', icon: Cpu },
-		{ id: 'volumes', label: 'Storage', icon: HardDriveDownload },
-		{ id: 'network', label: 'Network', icon: Wifi },
-		{ id: 'observe', label: 'Observe', icon: Eye },
+		{ id: 'variables', label: 'Variables', icon: Settings },
 		{ id: 'deploys', label: 'Deploys', icon: History },
-		{ id: 'build', label: 'Build', icon: Hammer },
-		{ id: 'settings', label: 'Advanced', icon: SlidersHorizontal }
+		{ id: 'observe', label: 'Observe', icon: Eye },
+		{ id: 'network', label: 'Network', icon: Wifi },
+		{ id: 'settings', label: 'Settings', icon: SlidersHorizontal }
 	] as const;
 
 	type TabId = (typeof tabSections)[number]['id'];
 
-	const advancedObservability = featureFlag('advanced-observability');
-
 	const isDockerImageDeployment = $derived(!deployment?.githubRepo);
-	const visibleTabs = $derived(
-		tabSections.map((t) =>
-			t.id === 'observe' && !$advancedObservability ? { ...t, label: 'Metrics', icon: Activity } : t
-		)
-	);
+	const visibleTabs = tabSections;
+
+	const LEGACY_TAB_SECTIONS: Record<string, string> = {
+		resources: 'resources',
+		volumes: 'storage',
+		build: 'source',
+		advanced: 'source'
+	};
+	const SETTINGS_SECTIONS = [
+		'source',
+		'resources',
+		'storage',
+		'health',
+		'behavior',
+		'notifications',
+		'audit',
+		'danger'
+	];
 
 	function tabFromUrl(url: URL): TabId {
 		const t = url.searchParams.get('tab');
 		if (t === 'metrics') return 'observe';
-		if (t === 'advanced') return 'settings';
+		if (t === 'environment') return 'variables';
+		if (t && t in LEGACY_TAB_SECTIONS) return 'settings';
 		return t && visibleTabs.some((s) => s.id === t) ? (t as TabId) : 'overview';
+	}
+
+	function settingsSectionFromUrl(url: URL): string {
+		const legacy = url.searchParams.get('tab');
+		const s = url.searchParams.get('s');
+		if (s && SETTINGS_SECTIONS.includes(s)) return s;
+		if (legacy && legacy in LEGACY_TAB_SECTIONS) return LEGACY_TAB_SECTIONS[legacy];
+		return 'source';
+	}
+
+	const settingsSection = $derived(settingsSectionFromUrl($page.url));
+
+	function settingsHref(section: string): string {
+		const url = new URL($page.url);
+		url.searchParams.set('tab', 'settings');
+		if (section === 'source') url.searchParams.delete('s');
+		else url.searchParams.set('s', section);
+		url.searchParams.delete('view');
+		return url.pathname + url.search;
 	}
 
 	// The URL is the single source of truth for the active tab. melt reads it
@@ -251,13 +272,23 @@
 		const url = new URL(window.location.href);
 		const effView = view ?? untrack(() => observeView);
 		const wantView = v === 'observe' && effView !== 'metrics' ? effView : null;
+		const prev = url.searchParams.get('tab');
+		if (v === 'settings' && !url.searchParams.has('s') && prev && prev in LEGACY_TAB_SECTIONS) {
+			if (LEGACY_TAB_SECTIONS[prev] !== 'source')
+				url.searchParams.set('s', LEGACY_TAB_SECTIONS[prev]);
+		}
 		if (v === 'overview') url.searchParams.delete('tab');
 		else url.searchParams.set('tab', v);
+		if (v !== 'settings') url.searchParams.delete('s');
 		if (wantView) url.searchParams.set('view', wantView);
 		else url.searchParams.delete('view');
 		if (url.href !== window.location.href) {
 			goto(url, { replaceState: true, keepFocus: true, noScroll: true });
 		}
+	}
+
+	function gotoSettings(section: string) {
+		goto(settingsHref(section), { replaceState: true, keepFocus: true, noScroll: true });
 	}
 
 	$effect(() => {
@@ -297,111 +328,6 @@
 	// build provenance + domains belong with the overview, while the title and the
 	// Redeploy/Restart/Delete actions stay visible everywhere.
 	const headerCollapsed = $derived(tabs.value !== 'overview');
-
-	// Spring-driven height collapse for the header body. Motion writes height/opacity;
-	// CSS handles overflow:hidden so the content clips cleanly mid-animation.
-	function springCollapse(collapsed: () => boolean) {
-		return (el: Element) => {
-			const target = el as HTMLElement;
-			target.style.overflow = 'hidden';
-			target.style.contain = 'content';
-			const naturalMargin = parseFloat(getComputedStyle(target).marginTop) || 0;
-			const naturalHeight = () => {
-				const prev = target.style.height;
-				target.style.height = 'auto';
-				const h = target.scrollHeight;
-				target.style.height = prev;
-				return h;
-			};
-			let armed = false;
-			let last: boolean | null = null;
-			setTimeout(() => {
-				armed = true;
-				last = collapsed();
-				if (last) {
-					target.style.height = '0px';
-					target.style.opacity = '0';
-					target.style.marginTop = '0px';
-				}
-			}, 80);
-			$effect(() => {
-				const isCollapsed = collapsed();
-				if (!armed || isCollapsed === last) return;
-				last = isCollapsed;
-				target.style.marginTop = isCollapsed ? '0px' : `${naturalMargin}px`;
-				if (!functionalMotion()) {
-					target.style.height = isCollapsed ? '0px' : 'auto';
-					target.style.opacity = isCollapsed ? '0' : '1';
-					if (!isCollapsed) target.style.marginTop = '';
-					return;
-				}
-				const fullHeight = naturalHeight();
-				const card = target.parentElement;
-				if (isCollapsed) {
-					// Height can't go below 0, so a spring to 0 can't bounce.
-					// Instead: collapse height quickly with an eased tween,
-					// then spring-bounce the parent card's Y to sell the motion.
-					animate(
-						target,
-						{ height: 0 },
-						{
-							duration: 0.28,
-							easing: [0.32, 0, 0.67, 0]
-						}
-					);
-					if (card) {
-						card.style.transformOrigin = 'top center';
-						card.style.overflow = 'visible';
-						animate(
-							card,
-							{ scaleY: 0.97 },
-							{
-								type: 'spring',
-								stiffness: 500,
-								damping: 10,
-								mass: 0.5
-							}
-						).finished.then(() => {
-							const ctrl = animate(
-								card,
-								{ scaleY: 1 },
-								{
-									type: 'spring',
-									stiffness: 260,
-									damping: 12,
-									mass: 0.8
-								}
-							);
-							ctrl.finished.then(() => {
-								card.style.overflow = '';
-							});
-						});
-					}
-				} else {
-					const expandCtrl = animate(
-						target,
-						{ height: fullHeight },
-						{ type: 'spring', stiffness: 120, damping: 15, mass: 1.2 }
-					);
-					expandCtrl.finished.then(() => {
-						if (!collapsed()) {
-							target.style.height = 'auto';
-							target.style.marginTop = '';
-						}
-					});
-				}
-				animate(
-					target,
-					{ opacity: isCollapsed ? 0 : 1 },
-					{
-						type: 'spring',
-						stiffness: 300,
-						damping: 28
-					}
-				);
-			});
-		};
-	}
 
 	let deployment = $state<Deployment | null>(null);
 	let loading = $state(true);
@@ -502,9 +428,15 @@
 
 	const deploymentStatusChip = $derived.by(() => {
 		const forced = debugStatus;
-		if (forced === 'building') return resourceStatus('', 'building');
-		if (forced) return resourceStatus(forced);
-		return resourceStatus(deployment?.status ?? '', deployment?.buildStatus);
+		if (forced && forced !== 'building') return resourceStatus(forced);
+		return resourceStatus(deployment?.status ?? '');
+	});
+	const buildStatusChip = $derived.by(() => {
+		const bs =
+			debugStatus === 'building' ? 'building' : (deployment?.buildStatus?.toLowerCase() ?? '');
+		if (bs === 'building' || bs === 'pending') return statusMeta('progress', 'Building', true);
+		if (bs === 'failed') return statusMeta('error', 'Build failed');
+		return null;
 	});
 	const activePods = $derived(
 		deployment?.pods?.filter((pod) => pod.status?.toLowerCase() !== 'succeeded') ?? []
@@ -590,9 +522,6 @@
 	// arrived yet. The user sees this in the resources tab.
 	const NEAR_LIMIT_RATIO = 0.85;
 	const resourcePressure = $derived.by(() => {
-		if (debugAlerts) {
-			return { cpuRatio: 0.93, memRatio: 0.97, cpuNear: true, memNear: true, any: true };
-		}
 		const replicas = deployment?.replicas ?? 1;
 		const cpuReq = deployment?.cpuRequestMilli ?? null;
 		const memReq =
@@ -600,18 +529,29 @@
 		const cpuUsage = deployment?.totalCpuUsage ?? null;
 		const memUsage = deployment?.totalMemoryUsage ?? null;
 
-		const cpuRatio =
-			cpuReq != null && cpuReq > 0 && cpuUsage != null && replicas > 0
-				? cpuUsage / (cpuReq * replicas)
-				: null;
-		const memRatio =
-			memReq != null && memReq > 0 && memUsage != null && replicas > 0
-				? memUsage / (memReq * replicas)
-				: null;
+		const cpuLimit = cpuReq != null && cpuReq > 0 && replicas > 0 ? cpuReq * replicas : null;
+		const memLimit = memReq != null && memReq > 0 && replicas > 0 ? memReq * replicas : null;
+
+		if (debugAlerts) {
+			return {
+				cpuLimit,
+				memLimit,
+				cpuRatio: 0.93,
+				memRatio: 0.97,
+				cpuNear: true,
+				memNear: true,
+				any: true
+			};
+		}
+
+		const cpuRatio = cpuLimit != null && cpuUsage != null ? cpuUsage / cpuLimit : null;
+		const memRatio = memLimit != null && memUsage != null ? memUsage / memLimit : null;
 
 		const cpuNear = cpuRatio != null && cpuRatio >= NEAR_LIMIT_RATIO;
 		const memNear = memRatio != null && memRatio >= NEAR_LIMIT_RATIO;
 		return {
+			cpuLimit,
+			memLimit,
 			cpuRatio,
 			memRatio,
 			cpuNear,
@@ -2412,7 +2352,7 @@
 		// press compresses proportional to pointer speed at click; release overshoots.
 		const detachPress = pressSpringDelegate(
 			document.body,
-			'.dep-action-btn, .dep-meta-tabs button, .console-action-btn, .console-icon-btn, .console-source-btn, .btn-icon, .btn, .tabs-trigger, .dep-tab, .dep-list-row:not(.dep-list-row--head)'
+			'.dep-action-btn, .dep-meta-tabs button, .console-action-btn, .console-icon-btn, .console-source-btn, .btn-icon, .btn, .tabs-trigger, .dep-tab, .dep-tab2'
 		);
 
 		return () => {
@@ -2617,7 +2557,7 @@
 	}
 </script>
 
-<div class="deployment-page p-6 max-w-[100rem] mx-auto">
+<div class="deployment-page dep-shell p-6 max-w-[100rem] mx-auto">
 	{#if deployment?.project?.slug}
 		<div class="mb-4">
 			<Breadcrumb
@@ -2707,7 +2647,7 @@
 						: null
 			: deployment.image || null}
 		{@const _commitLeadMono = !deployment.githubRepo && !!deployment.image}
-		<div class="space-y-5">
+		<div class="dep-stack">
 			{#if sseReloadPrompt || debugAlerts}
 				<div class="sse-reload-banner" role="alert" transition:slide={{ duration: 150 }}>
 					<div class="sse-reload-icon"><WifiOff size={22} /></div>
@@ -2727,10 +2667,9 @@
 
 			<DeploymentHeader
 				{deployment}
-				{projectBgImage}
 				{headerCollapsed}
-				{springCollapse}
 				{deploymentStatusChip}
+				{buildStatusChip}
 				debugChips={debugAlerts ? DEBUG_CHIPS : []}
 				{repoUrl}
 				{rebuilding}
@@ -2752,17 +2691,17 @@
 			/>
 
 			<!-- Tab nav -->
-			<nav class="dep-tabs" {...tabs.triggerList}>
-				<div class="dep-tabs-inner">
+			<nav class="dep-toolbar" aria-label="App sections">
+				<div class="dep-toolbar-tabs" {...tabs.triggerList}>
 					{#each visibleTabs as tab, _ti (tab.id)}
 						{@const Icon = tab.icon}
 						<button
-							class="tabs-trigger dep-tab"
+							class="dep-toolbar-tab"
 							{...tabs.getTrigger(tab.id)}
-							{@attach motionStagger({ index: _ti, stride: 0.03, from: { y: -6 } })}
+							{@attach motionStagger({ index: _ti, from: { y: -6 } })}
 							onmouseenter={() => triggerTabIconAnim(tab.id)}
 						>
-							<Icon class="dep-tab-icon" size={14} animate={tabIconAnim[tab.id] ?? false} />
+							<Icon class="dep-toolbar-icon" size={14} animate={tabIconAnim[tab.id] ?? false} />
 							<span>{tab.label}</span>
 						</button>
 					{/each}
@@ -2782,7 +2721,7 @@
 				{resourcePressure}
 				onViewLogs={handleViewBuildLogs}
 				onGoToResources={() => {
-					gotoTab('resources');
+					gotoSettings('resources');
 				}}
 				githubRepoUrl={deployment?.githubRepo ?? ''}
 				canReconnectGithub={!!deployment?.createdBy && deployment.createdBy === $user?.id}
@@ -2810,11 +2749,17 @@
 
 			<!-- Tab panels -->
 			{#each visibleTabs as tab (tab.id)}
-				<section {...tabs.getContent(tab.id)} hidden={undefined} class="tab-panel">
+				<section
+					{...tabs.getContent(tab.id)}
+					hidden={undefined}
+					class="tab-panel"
+					{@attach motionPanel(() => tabs.value === tab.id)}
+				>
 					{#if tab.id === 'overview'}
 						<OverviewTab
 							{deployment}
 							{activePods}
+							{resourcePressure}
 							bind:selectedPod
 							bind:selectedContainer
 							bind:scaleReplicas
@@ -2847,38 +2792,12 @@
 							onKeydownSlider={handleSliderKeydown}
 							{podLabel}
 						/>
-					{:else if tab.id === 'environment'}
+					{:else if tab.id === 'variables'}
 						<EnvironmentTab
 							bind:envVars
 							bind:isEditing={isEditingEnv}
 							{savingEnv}
 							onSave={saveEnv}
-						/>
-					{:else if tab.id === 'resources'}
-						<ResourcesTab
-							{deployment}
-							bind:resourceCpuMilli
-							bind:resourceMemoryBytes
-							{orgDefaultCpuMilli}
-							{orgDefaultMemoryBytes}
-							{effectiveCpuLimit}
-							{effectiveMemLimit}
-							bind:resourcesDirty
-							{savingResources}
-							{isImageSourceDeployment}
-							bind:imageInput
-							{imageDirty}
-							{savingImage}
-							onSaveResources={saveResources}
-							onSaveImage={saveImage}
-						/>
-					{:else if tab.id === 'volumes'}
-						<VolumesTab
-							bind:volumes
-							bind:isEditing={isEditingVolumes}
-							{savingVolumes}
-							{hasPvcVolume}
-							onSave={saveVolumes}
 						/>
 					{:else if tab.id === 'network'}
 						<NetworkTab
@@ -2942,16 +2861,11 @@
 							{toasts}
 						/>
 					{:else if tab.id === 'observe'}
-						<div class="card rounded-2xl p-5">
-							<ObserveTab
-								{deployment}
-								active={tabs.value === 'observe'}
-								metricsOnly={!$advancedObservability}
-								bind:activeTab={observeView}
-							/>
-						</div>
-					{:else if tab.id === 'build'}
-						<BuildTab {deployment} saving={savingBuildConfig} onSave={saveBuildConfig} />
+						<ObserveTab
+							{deployment}
+							active={tabs.value === 'observe'}
+							bind:activeTab={observeView}
+						/>
 					{:else if tab.id === 'deploys'}
 						<DeploysTab
 							{deployment}
@@ -2975,8 +2889,11 @@
 							onDeleteToken={deleteWebhookToken}
 						/>
 					{:else if tab.id === 'settings'}
-						<SettingsTab
+						<AppSettings
 							{deployment}
+							organizationId={$selectedOrganization?.id ?? null}
+							activeSection={settingsSection}
+							hrefFor={settingsHref}
 							onSourceUpdated={handleSourceUpdated}
 							onRebuild={rebuild}
 							{rebuilding}
@@ -2990,6 +2907,8 @@
 							bind:buildOptionsDirty={isEditingBuildOptions}
 							{savingAdvanced}
 							onSaveAdvanced={saveAdvanced}
+							{savingBuildConfig}
+							onSaveBuildConfig={saveBuildConfig}
 							{autoDeployStatus}
 							{autoDeployLoading}
 							bind:autoDeployBranch
@@ -3016,6 +2935,26 @@
 							{savingHealthCheck}
 							bind:isEditingHealthCheck
 							onSaveHealthCheck={saveHealthCheck}
+							bind:resourceCpuMilli
+							bind:resourceMemoryBytes
+							{orgDefaultCpuMilli}
+							{orgDefaultMemoryBytes}
+							{effectiveCpuLimit}
+							{effectiveMemLimit}
+							bind:resourcesDirty
+							{savingResources}
+							{isImageSourceDeployment}
+							bind:imageInput
+							{imageDirty}
+							{savingImage}
+							onSaveResources={saveResources}
+							onSaveImage={saveImage}
+							bind:volumes
+							bind:isEditingVolumes
+							{savingVolumes}
+							onSaveVolumes={saveVolumes}
+							{deleting}
+							onShowDeleteModal={() => (showDeleteModal = true)}
 						/>
 					{/if}
 				</section>
@@ -3096,10 +3035,7 @@
 				onClosed: () => {
 					logModalRender = false;
 				},
-				from: { y: 12, scale: 0.96, opacity: 0 },
-				stiffness: 480,
-				damping: 30,
-				mass: 0.9
+				from: { y: 12, scale: 0.96, opacity: 0 }
 			})}
 		>
 			<div class="log-modal-header">

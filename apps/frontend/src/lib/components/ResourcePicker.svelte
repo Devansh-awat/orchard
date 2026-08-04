@@ -241,8 +241,9 @@
 		gap: 0.5rem;
 	}
 	.rp-field-label {
-		font-size: 0.75rem;
-		font-weight: 650;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 		color: var(--center-channel-color);
@@ -250,18 +251,19 @@
 	.rp-unit-toggle {
 		display: flex;
 		border: 1px solid var(--surface-border);
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		overflow: hidden;
 	}
 	.rp-unit-btn {
-		padding: 0.1875rem 0.5rem;
-		font-size: 0.625rem;
-		font-weight: 550;
+		padding: 0.25rem 0.5rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
 		border: none;
 		background: none;
 		color: var(--surface-muted);
 		cursor: pointer;
-		transition: all 100ms;
+		transition: all var(--dur-fast);
 	}
 	.rp-unit-btn:not(:last-child) {
 		border-right: 1px solid var(--surface-border);
@@ -289,8 +291,9 @@
 		border: 1px solid var(--surface-border);
 		background-color: var(--surface-bg);
 		color: var(--center-channel-color);
-		border-radius: 0.5rem;
-		font-size: 0.9375rem;
+		border-radius: var(--radius-sm);
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
 		font-variant-numeric: tabular-nums;
 		font-family: var(--font-mono);
 	}
@@ -305,8 +308,9 @@
 	.rp-input-unit {
 		position: absolute;
 		right: 0.75rem;
-		font-size: 0.6875rem;
-		font-weight: 500;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
 		color: var(--surface-muted);
 		pointer-events: none;
 	}
@@ -320,20 +324,21 @@
 	.rp-bar-track {
 		flex: 1;
 		height: 0.375rem;
-		border-radius: 1rem;
+		border-radius: var(--radius-lg);
 		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
 		overflow: hidden;
 	}
 	.rp-bar-fill {
 		height: 100%;
-		border-radius: 1rem;
+		border-radius: var(--radius-lg);
 		transition:
-			width 400ms cubic-bezier(0.22, 1, 0.36, 1),
-			background-color 300ms;
+			width var(--dur-base) cubic-bezier(0.22, 1, 0.36, 1),
+			background-color var(--dur-base);
 		min-width: 2px;
 	}
 	.rp-bar-label {
-		font-size: 0.625rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		font-family: var(--font-mono);
 		white-space: nowrap;
@@ -342,13 +347,15 @@
 
 	/* Limit warnings */
 	.rp-limit-warn {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--error-text-color);
 		margin: 0;
-		font-weight: 550;
+		font-weight: 600;
 	}
 	.rp-limit-hint {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 		margin: 0;
 	}

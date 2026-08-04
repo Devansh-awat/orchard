@@ -49,13 +49,14 @@
 	}
 
 	.toggle-label {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		color: var(--text-default);
 	}
 
 	.toggle-hint {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
 		line-height: 1.4;
 		color: var(--text-muted);
 	}
@@ -77,9 +78,9 @@
 	.toggle-track {
 		width: 2.25rem;
 		height: 1.25rem;
-		border-radius: 9999px;
+		border-radius: var(--radius-pill);
 		background-color: var(--border-default);
-		transition: background-color 0.15s ease;
+		transition: background-color var(--dur-fast) ease;
 		position: relative;
 	}
 
@@ -92,8 +93,8 @@
 		height: 0.9375rem;
 		border-radius: 50%;
 		background: white;
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.15);
-		transition: transform 0.15s ease;
+		box-shadow: var(--elev-1);
+		transition: transform var(--dur-fast) ease;
 	}
 
 	.toggle-switch input:checked + .toggle-track {

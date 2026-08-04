@@ -75,7 +75,8 @@
 		padding: 1.5rem 0;
 		text-align: center;
 		color: var(--surface-muted);
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 	}
 	.hbar-row {
 		display: grid;
@@ -87,7 +88,8 @@
 		min-width: 0;
 	}
 	.hbar-label {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		color: var(--center-channel-color);
 		white-space: nowrap;
@@ -95,7 +97,8 @@
 		text-overflow: ellipsis;
 	}
 	.hbar-sublabel {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 		white-space: nowrap;
 		overflow: hidden;
@@ -104,16 +107,16 @@
 	.hbar-track {
 		height: 0.625rem;
 		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		overflow: hidden;
 		position: relative;
 	}
 	.hbar-fill {
 		height: 100%;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		position: relative;
 		animation: hbar-grow 500ms cubic-bezier(0.22, 1, 0.36, 1) both;
-		transition: width 250ms ease;
+		transition: width var(--dur-base) ease;
 	}
 	.hbar-inner {
 		position: absolute;
@@ -128,7 +131,8 @@
 		}
 	}
 	.hbar-value {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		font-weight: 600;
 		font-variant-numeric: tabular-nums;
 		color: var(--center-channel-color);

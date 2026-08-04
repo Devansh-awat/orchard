@@ -4,7 +4,7 @@
 	import { X } from 'lucide-svelte';
 	import { ShieldAlert, TriangleAlert, CircleAlert } from '@jis3r/icons';
 	import { animate } from 'motion';
-	import { motionStagger, functionalMotion } from '$lib/utils/motion.svelte';
+	import { motionStagger, motionEnabled, motion, transition } from '$lib/utils/motion.svelte';
 	import { humanizeWarning, type WarningSeverity } from '$lib/utils/format';
 
 	interface Warning {
@@ -223,21 +223,25 @@
 	}
 
 	function dismissWithAnimation(el: HTMLElement, id: string) {
-		if (!functionalMotion()) {
+		if (!motionEnabled()) {
 			dismissed.add(id);
 			return;
 		}
+		el.style.height = `${el.getBoundingClientRect().height}px`;
+		el.style.overflow = 'hidden';
+		motion(el, { opacity: 0, scale: 0.97, x: 16 }, 'smooth');
 		animate(
 			el,
-			{ opacity: 0, scale: 0.95, x: 20 },
-			{ type: 'spring', stiffness: 400, damping: 28, mass: 0.6 }
-		).finished.then(() => {
-			animate(
-				el,
-				{ height: 0, marginBottom: 0 },
-				{ duration: 0.15, easing: [0.22, 1, 0.36, 1] }
-			).finished.then(() => dismissed.add(id));
-		});
+			{
+				height: 0,
+				paddingTop: 0,
+				paddingBottom: 0,
+				marginBottom: 0,
+				borderTopWidth: 0,
+				borderBottomWidth: 0
+			},
+			transition('smooth', { delay: 0.03 })
+		).finished.then(() => dismissed.add(id));
 	}
 </script>
 
@@ -249,8 +253,7 @@
 				class="da-alert da-alert--{alert.severity}"
 				{@attach motionStagger({
 					index: i,
-					stride: 0.04,
-					from: { y: -8, opacity: 0, scale: 0.98 }
+					from: { y: -8, opacity: 0 }
 				})}
 			>
 				<div class="da-alert-icon">
@@ -284,17 +287,19 @@
 						{alert.action}
 					</button>
 				{/if}
-				<button
-					class="da-alert-dismiss"
-					onclick={(e) => {
-						const row = (e.currentTarget as HTMLElement).closest('.da-alert') as HTMLElement;
-						if (row) dismissWithAnimation(row, alert.id);
-						else dismissed.add(alert.id);
-					}}
-					title="Dismiss"
-				>
-					<X class="h-3.5 w-3.5" />
-				</button>
+				{#if alert.severity !== 'critical'}
+					<button
+						class="da-alert-dismiss"
+						onclick={(e) => {
+							const row = (e.currentTarget as HTMLElement).closest('.da-alert') as HTMLElement;
+							if (row) dismissWithAnimation(row, alert.id);
+							else dismissed.add(alert.id);
+						}}
+						title="Dismiss"
+					>
+						<X class="h-3.5 w-3.5" />
+					</button>
+				{/if}
 			</div>
 		{/each}
 	</div>
@@ -304,15 +309,17 @@
 	.da-stack {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+	}
+	.da-stack > :global(.da-alert:not(:last-child)) {
+		margin-bottom: var(--space-2);
 	}
 	.da-alert {
 		--da-tone: var(--warning-text);
 		display: flex;
 		align-items: flex-start;
-		gap: 0.625rem;
+		gap: 0.75rem;
 		padding: 0.75rem 1rem;
-		border-radius: 0.625rem;
+		border-radius: var(--radius-md);
 		border: 1px solid color-mix(in srgb, var(--da-tone) 22%, var(--surface-border));
 		background-color: color-mix(in srgb, var(--da-tone) 6%, var(--surface-bg));
 		color: var(--center-channel-color);
@@ -340,20 +347,20 @@
 		gap: 0.125rem;
 	}
 	.da-alert-title {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
 		font-weight: 600;
 		line-height: 1.3;
 		color: var(--da-tone);
 	}
 	.da-alert-hint {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
 		line-height: 1.4;
 		opacity: 0.75;
 	}
 	.da-alert-actions {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		flex-shrink: 0;
 		align-self: center;
 		flex-wrap: wrap;
@@ -362,9 +369,10 @@
 	.da-alert-action {
 		display: inline-flex;
 		align-items: center;
-		padding: 0.3125rem 0.625rem;
-		border-radius: 0.375rem;
-		font-size: 0.75rem;
+		padding: 0.3125rem 0.75rem;
+		border-radius: var(--radius-xs);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		font-weight: 600;
 		border: 1px solid color-mix(in srgb, var(--da-tone) 35%, var(--surface-border));
 		background-color: var(--surface-bg);
@@ -372,7 +380,7 @@
 		cursor: pointer;
 		white-space: nowrap;
 		flex-shrink: 0;
-		transition: background-color 120ms;
+		transition: background-color var(--dur-fast);
 		align-self: center;
 		text-decoration: none;
 	}
@@ -385,14 +393,14 @@
 		justify-content: center;
 		width: 1.5rem;
 		height: 1.5rem;
-		border-radius: 0.25rem;
+		border-radius: var(--radius-xs);
 		border: none;
 		background: none;
 		color: inherit;
 		cursor: pointer;
 		opacity: 0.45;
 		flex-shrink: 0;
-		transition: opacity 120ms;
+		transition: opacity var(--dur-fast);
 		align-self: flex-start;
 	}
 	.da-alert-dismiss:hover {

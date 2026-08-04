@@ -67,8 +67,7 @@
 				class="dba-alert dba-alert--oom"
 				{@attach motionStagger({
 					index: 0,
-					stride: 0.06,
-					from: { y: -8, opacity: 0, scale: 0.98 }
+					from: { y: -8, opacity: 0 }
 				})}
 			>
 				<div class="dba-alert-inner">
@@ -110,8 +109,7 @@
 				class="dba-alert dba-alert--crash"
 				{@attach motionStagger({
 					index: 0,
-					stride: 0.06,
-					from: { y: -8, opacity: 0, scale: 0.98 }
+					from: { y: -8, opacity: 0 }
 				})}
 			>
 				<div class="dba-alert-inner">
@@ -137,8 +135,7 @@
 				class="dba-alert dba-alert--restarts"
 				{@attach motionStagger({
 					index: 0,
-					stride: 0.06,
-					from: { y: -8, opacity: 0, scale: 0.98 }
+					from: { y: -8, opacity: 0 }
 				})}
 			>
 				<div class="dba-alert-inner">
@@ -165,8 +162,7 @@
 				class="dba-alert dba-alert--archiving"
 				{@attach motionStagger({
 					index: 1,
-					stride: 0.06,
-					from: { y: -8, opacity: 0, scale: 0.98 }
+					from: { y: -8, opacity: 0 }
 				})}
 			>
 				<div class="dba-alert-inner">
@@ -195,8 +191,7 @@
 				class="dba-alert dba-alert--nobackups"
 				{@attach motionStagger({
 					index: 1,
-					stride: 0.06,
-					from: { y: -8, opacity: 0, scale: 0.98 }
+					from: { y: -8, opacity: 0 }
 				})}
 			>
 				<div class="dba-alert-inner">
@@ -230,7 +225,7 @@
 	/* ---------- Shared alert — matches DeploymentAlerts look ---------- */
 	.dba-alert {
 		position: relative;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		overflow: hidden;
 		border: 1px solid;
 	}
@@ -261,22 +256,23 @@
 		flex-wrap: wrap;
 	}
 	.dba-title {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
 		font-weight: 600;
 		line-height: 1.3;
 	}
 	.dba-desc {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
 		opacity: 0.85;
 		line-height: 1.4;
 	}
 	.dba-action {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
-		padding: 0.3125rem 0.625rem;
-		border-radius: 0.375rem;
-		font-size: 0.75rem;
+		gap: 0.5rem;
+		padding: 0.3125rem 0.75rem;
+		border-radius: var(--radius-xs);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		font-weight: 600;
 		border: 1px solid currentColor;
 		background: none;
@@ -287,8 +283,8 @@
 		opacity: 0.9;
 		align-self: center;
 		transition:
-			opacity 120ms,
-			background-color 120ms;
+			opacity var(--dur-fast),
+			background-color var(--dur-fast);
 	}
 	.dba-action:hover {
 		opacity: 1;
@@ -298,9 +294,10 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
-		padding: 0.0625rem 0.4375rem;
-		border-radius: 9999px;
-		font-size: 0.625rem;
+		padding: 0.0625rem 0.5rem;
+		border-radius: var(--radius-pill);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 700;
 		font-family: var(--font-mono, 'Space Mono', monospace);
 		letter-spacing: 0.04em;
@@ -340,7 +337,8 @@
 	.dba-oom-bar-label {
 		position: relative;
 		z-index: 1;
-		font-size: 0.5625rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 700;
 		letter-spacing: 0.18em;
 		text-transform: uppercase;
@@ -375,7 +373,7 @@
 	}
 
 	.dba-detail {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
 		font-family: var(--font-mono, 'Space Mono', monospace);
 		opacity: 0.7;
 		line-height: 1.4;

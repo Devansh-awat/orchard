@@ -67,10 +67,7 @@
 					{placeholder}
 				{/if}
 			</span>
-			<span
-				class="ui-dropdown-chevron"
-				{@attach springRotate(() => isOpen, { rest: 0, on: 180, stiffness: 380, damping: 22 })}
-			>
+			<span class="ui-dropdown-chevron" {@attach springRotate(() => isOpen, { rest: 0, on: 180 })}>
 				<ChevronDown size={14} />
 			</span>
 		</button>

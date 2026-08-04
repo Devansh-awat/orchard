@@ -168,14 +168,14 @@
 	}
 	.speedo-fill {
 		animation: speedo-fill-in 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
-		transition: stroke 250ms ease;
+		transition: stroke var(--dur-base) ease;
 	}
 	.speedo-needle {
 		transform-origin: center;
 		animation: speedo-fill-in 600ms cubic-bezier(0.22, 1, 0.36, 1) both;
 		transition:
-			x2 250ms cubic-bezier(0.22, 1, 0.36, 1),
-			y2 250ms cubic-bezier(0.22, 1, 0.36, 1);
+			x2 var(--dur-base) cubic-bezier(0.22, 1, 0.36, 1),
+			y2 var(--dur-base) cubic-bezier(0.22, 1, 0.36, 1);
 	}
 	@keyframes speedo-fill-in {
 		from {
@@ -216,7 +216,8 @@
 		margin-top: -0.25rem;
 	}
 	.speedo-label {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -233,10 +234,11 @@
 	}
 	.speedo-muted {
 		color: var(--surface-muted);
-		font-weight: 500;
+		font-weight: 600;
 	}
 	.speedo-caption {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 		margin: 0.25rem 0 0;
 	}

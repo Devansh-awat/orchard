@@ -259,7 +259,7 @@
 									></div>
 									<div
 										class="skeleton"
-										style="width: 100%; height: 2.5rem; border-radius: 0.75rem;"
+										style="width: 100%; height: 2.5rem; border-radius: var(--radius-md);"
 									></div>
 								</div>
 							{/each}
@@ -382,7 +382,7 @@
 											<div
 												{...progress.progress}
 												class="h-full rounded-full"
-												style={`width: ${progressValue}%; transition: width 120ms linear; background-color: var(--link-color);`}
+												style={`width: ${progressValue}%; transition: width var(--dur-fast) linear; background-color: var(--link-color);`}
 											></div>
 										</div>
 									</div>

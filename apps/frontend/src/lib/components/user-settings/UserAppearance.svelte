@@ -10,7 +10,8 @@
 	import { toasts, projectGradientEnabled } from '$lib/stores';
 	import ThemeEditor from '$lib/components/ThemeEditor.svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
-	import { Button, SectionCard, ToggleRow } from '$lib/components/ui';
+	import { Alert, Button, ToggleRow } from '$lib/components/ui';
+	import SettingsSection from './SettingsSection.svelte';
 	import {
 		Plus,
 		Download,
@@ -21,7 +22,9 @@
 		Sun,
 		Moon,
 		Monitor,
+		Palette,
 		Pencil,
+		Sparkles,
 		X
 	} from 'lucide-svelte';
 	import { slide } from '$lib/utils/transitions';
@@ -180,13 +183,14 @@
 	}
 
 	function createNewTheme() {
-		const newTheme = themeStore.addTheme({
-			name: 'New Theme',
-			isDark: false,
+		startEditing({
+			...defaultLightTheme,
+			id: 'draft',
+			name: 'New theme',
+			isBuiltIn: false,
+			isDraft: true,
 			simpleColors: { ...defaultLightTheme.simpleColors }
 		});
-		themeStore.setActiveTheme(newTheme.id);
-		startEditing(newTheme);
 	}
 
 	let gradientOn = $state(true);
@@ -205,19 +209,22 @@
 
 <div class="settings-body">
 	{#if editingTheme}
-		<div class="card" transition:slide={{ duration: 200 }}>
-			<div class="card-header flex items-center justify-between">
-				<h2 class="font-semibold">
-					{editingTheme.isBuiltIn
-						? `Customize ${editingTheme.name} Theme`
+		<div transition:slide={{ duration: 200 }}>
+			<SettingsSection
+				index={0}
+				title={editingTheme.isDraft
+					? 'New theme'
+					: editingTheme.isBuiltIn
+						? `Customize ${editingTheme.name} theme`
 						: `Edit "${editingTheme.name}"`}
-				</h2>
-				<button type="button" class="btn btn-ghost" onclick={stopEditing}>
-					<X class="h-4 w-4" />
-					Close
-				</button>
-			</div>
-			<div class="card-body">
+			>
+				{#snippet icon(_hovered)}<Palette class="h-[18px] w-[18px]" />{/snippet}
+				{#snippet actions()}
+					<Button variant="ghost" size="sm" onclick={stopEditing}>
+						<X class="h-4 w-4" />
+						Close
+					</Button>
+				{/snippet}
 				<ThemeEditor
 					theme={editingTheme}
 					onSave={() => {
@@ -225,7 +232,7 @@
 					}}
 					onCancel={stopEditing}
 				/>
-			</div>
+			</SettingsSection>
 		</div>
 	{:else}
 		<div class="ap-stack">
@@ -237,17 +244,21 @@
 				onchange={handleFileImport}
 			/>
 
-			<SectionCard
+			<SettingsSection
+				index={0}
 				title="Themes"
 				description="Pick how Orchard looks for you. Click a theme to apply it."
 			>
+				{#snippet icon(_hovered)}<Palette class="h-[18px] w-[18px]" />{/snippet}
 				{#snippet actions()}
-					<Button variant="secondary" size="sm" onclick={createNewTheme}>
-						<Plus class="h-3.5 w-3.5" /> New theme
-					</Button>
-					<Button variant="ghost" size="sm" onclick={openImportModal}>
-						<Upload class="h-3.5 w-3.5" /> Import
-					</Button>
+					<div class="ap-head-actions">
+						<Button variant="secondary" size="sm" onclick={createNewTheme}>
+							<Plus class="h-3.5 w-3.5" /> New theme
+						</Button>
+						<Button variant="ghost" size="sm" onclick={openImportModal}>
+							<Upload class="h-3.5 w-3.5" /> Import
+						</Button>
+					</div>
 				{/snippet}
 				<div class="ap-grid">
 					<div class="ap-swatch" class:ap-swatch--active={!activeThemeId}>
@@ -339,86 +350,59 @@
 						Duplicate a theme or create a new one to start customizing colors.
 					</p>
 				{/if}
-			</SectionCard>
+			</SettingsSection>
 
-			<SectionCard title="Effects">
+			<SettingsSection index={1} title="Effects">
+				{#snippet icon(_hovered)}<Sparkles class="h-[18px] w-[18px]" />{/snippet}
 				<ToggleRow
 					bind:checked={gradientOn}
 					label="Project background gradient"
 					hint="Animated gradient on project pages. Turn off to reduce motion or save GPU."
 					onchange={() => projectGradientEnabled.set(gradientOn)}
 				/>
-			</SectionCard>
+			</SettingsSection>
 		</div>
 	{/if}
 </div>
 
 {#if showImportModal}
-	<div
-		class="fixed inset-0 z-50 flex items-center justify-center bg-black/50"
-		onclick={closeImportModal}
-	>
-		<div
-			class="w-full max-w-lg rounded-2xl border p-6 shadow-xl mx-4"
-			style="background-color: var(--surface-bg); border-color: var(--surface-border);"
-			onclick={(e) => e.stopPropagation()}
-			transition:slide={{ duration: 200 }}
-		>
-			<div class="flex items-center justify-between mb-4">
-				<h2 class="text-lg font-semibold" style="color: var(--center-channel-color);">
-					Import Theme
-				</h2>
-				<button type="button" class="btn btn-ghost" onclick={closeImportModal}>
+	<div class="ap-overlay" onclick={closeImportModal}>
+		<div class="ap-modal" onclick={(e) => e.stopPropagation()} transition:slide={{ duration: 200 }}>
+			<div class="ap-modal-head">
+				<h2 class="ap-modal-title">Import theme</h2>
+				<Button variant="ghost" size="sm" aria-label="Close" onclick={closeImportModal}>
 					<X class="h-4 w-4" />
-				</button>
+				</Button>
 			</div>
 
-			<div class="space-y-4">
-				<div>
-					<label
-						for="import-json"
-						class="block text-sm font-medium mb-2"
-						style="color: var(--center-channel-color);"
-					>
-						Theme JSON
-					</label>
+			<div class="ap-modal-body">
+				<div class="ap-field">
+					<label for="import-json" class="ap-field-label">Theme JSON</label>
 					<textarea
 						id="import-json"
-						class="input min-h-[200px] font-mono text-sm"
+						class="ap-textarea"
 						placeholder="Paste theme JSON here..."
 						bind:value={importJson}
 					></textarea>
 				</div>
 
 				{#if importError}
-					<div class="alert alert-error">
-						{importError}
-					</div>
+					<Alert tone="error">{importError}</Alert>
 				{/if}
 
-				<div class="text-center">
-					<p class="text-sm mb-2" style="color: var(--surface-muted);">Or import from file</p>
-					<button type="button" class="btn btn-secondary" onclick={() => fileInput?.click()}>
+				<div class="ap-modal-alt">
+					<p class="ap-modal-alt-text">Or import from file</p>
+					<Button variant="secondary" onclick={() => fileInput?.click()}>
 						<Upload class="h-4 w-4" />
-						Choose File
-					</button>
+						Choose file
+					</Button>
 				</div>
 
-				<div
-					class="flex justify-end gap-2 pt-4 border-t"
-					style="border-color: var(--divider-color);"
-				>
-					<button type="button" class="btn btn-secondary" onclick={closeImportModal}>
-						Cancel
-					</button>
-					<button
-						type="button"
-						class="btn btn-primary"
-						onclick={handleImport}
-						disabled={!importJson.trim()}
-					>
-						Import Theme
-					</button>
+				<div class="ap-modal-foot">
+					<Button variant="secondary" onclick={closeImportModal}>Cancel</Button>
+					<Button variant="primary" onclick={handleImport} disabled={!importJson.trim()}>
+						Import theme
+					</Button>
 				</div>
 			</div>
 		</div>
@@ -430,7 +414,7 @@
 		bind:open={showDeleteThemeModal}
 		title={`Delete "${themeToDelete.name}"?`}
 		description="This theme will be permanently deleted. This cannot be undone."
-		confirmLabel="Delete Theme"
+		confirmLabel="Delete theme"
 		danger
 		onconfirm={() => {
 			deleteTheme(themeToDelete!);
@@ -446,22 +430,30 @@
 	.ap-stack {
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
+		gap: var(--space-4);
+	}
+
+	.ap-head-actions {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
 	}
 
 	.ap-grid {
 		display: grid;
 		grid-template-columns: repeat(auto-fill, minmax(10.5rem, 1fr));
-		gap: 0.75rem;
+		gap: var(--space-3);
 	}
 
 	.ap-swatch {
 		position: relative;
 		border: 1px solid var(--border-default);
-		border-radius: 0.75rem;
+		border-radius: var(--radius-lg);
 		background: var(--bg-raised);
 		overflow: hidden;
-		transition: border-color 0.15s ease;
+		transition:
+			border-color var(--dur-fast) ease,
+			box-shadow var(--dur-fast) ease;
 	}
 
 	.ap-swatch:hover {
@@ -470,7 +462,7 @@
 
 	.ap-swatch--active {
 		border-color: var(--accent);
-		box-shadow: 0 0 0 1px var(--accent);
+		box-shadow: 0 0 0 3px var(--focus-ring);
 	}
 
 	.ap-swatch-main {
@@ -508,15 +500,15 @@
 		display: flex;
 		flex-direction: column;
 		justify-content: center;
-		gap: 0.3rem;
-		padding: 0 0.75rem;
+		gap: 0.25rem;
+		padding: 0 var(--space-3);
 	}
 
 	.ap-line {
 		display: block;
 		height: 0.25rem;
 		width: 55%;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		opacity: 0.85;
 	}
 
@@ -529,17 +521,19 @@
 		display: block;
 		height: 0.5rem;
 		width: 1.5rem;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 	}
 
 	.ap-meta {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		width: 100%;
-		padding: 0.5rem 0.625rem;
-		font-size: 0.75rem;
+		padding: var(--space-2) 0.625rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
+		letter-spacing: var(--track-body);
 		color: var(--text-default);
 	}
 
@@ -564,7 +558,7 @@
 		height: 1rem;
 		border-radius: 50%;
 		background: var(--accent);
-		color: var(--accent-fg, white);
+		color: var(--text-on-accent);
 	}
 
 	.ap-check :global(svg) {
@@ -578,11 +572,11 @@
 		display: flex;
 		gap: 0.125rem;
 		padding: 0.125rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		background: color-mix(in srgb, var(--bg-raised) 85%, transparent);
 		backdrop-filter: blur(4px);
 		opacity: 0;
-		transition: opacity 0.15s ease;
+		transition: opacity var(--dur-fast) ease;
 	}
 
 	.ap-swatch:hover .ap-actions,
@@ -597,13 +591,13 @@
 		width: 1.5rem;
 		height: 1.5rem;
 		border: none;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		background: transparent;
 		color: var(--text-muted);
 		cursor: pointer;
 		transition:
-			background-color 0.15s ease,
-			color 0.15s ease;
+			background-color var(--dur-fast) ease,
+			color var(--dur-fast) ease;
 	}
 
 	.ap-action:hover {
@@ -616,8 +610,115 @@
 	}
 
 	.ap-footnote {
-		margin-top: 0.75rem;
-		font-size: 0.75rem;
+		margin-top: var(--space-3);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--text-muted);
+	}
+
+	.ap-overlay {
+		position: fixed;
+		inset: 0;
+		z-index: 50;
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		padding: var(--space-4);
+		background-color: rgb(0 0 0 / 0.5);
+	}
+
+	.ap-modal {
+		width: 100%;
+		max-width: 32rem;
+		padding: var(--space-6);
+		border: none;
+		border-radius: var(--radius-2xl);
+		background-color: var(--bg-raised);
+		box-shadow: var(--elev-4);
+	}
+
+	.ap-modal-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-3);
+		margin-bottom: var(--space-4);
+	}
+
+	.ap-modal-title {
+		margin: 0;
+		font-size: var(--text-title-3);
+		line-height: var(--lh-title-3);
+		font-weight: 600;
+		letter-spacing: var(--track-headline);
+		color: var(--text-default);
+	}
+
+	.ap-modal-body {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+	}
+
+	.ap-field {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+	}
+
+	.ap-field-label {
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		font-weight: 600;
+		color: var(--text-default);
+	}
+
+	.ap-textarea {
+		width: 100%;
+		min-height: 12.5rem;
+		padding: 0.75rem 0.875rem;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-sm);
+		background-color: var(--bg-surface);
+		color: var(--text-default);
+		font-family: var(--font-mono);
+		font-size: var(--text-callout);
+		line-height: 1.5;
+		resize: vertical;
+		transition:
+			border-color var(--dur-fast) ease,
+			box-shadow var(--dur-fast) ease;
+	}
+
+	.ap-textarea::placeholder {
+		color: var(--text-faint);
+	}
+
+	.ap-textarea:focus {
+		outline: none;
+		border-color: var(--accent);
+		box-shadow: 0 0 0 3px var(--focus-ring);
+	}
+
+	.ap-modal-alt {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: var(--space-2);
+	}
+
+	.ap-modal-alt-text {
+		margin: 0;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		color: var(--text-muted);
+	}
+
+	.ap-modal-foot {
+		display: flex;
+		justify-content: flex-end;
+		gap: var(--space-2);
+		padding-top: var(--space-4);
+		border-top: 1px solid var(--rule);
 	}
 </style>

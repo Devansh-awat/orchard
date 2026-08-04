@@ -106,21 +106,22 @@
 	.env-pill {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.4375rem;
+		gap: 0.5rem;
 		/* Fixed width so the tab bar layout never shifts with the env name;
 		   longer names truncate with an ellipsis. */
 		width: 9.5rem;
 		height: 2.125rem;
-		padding: 0 0.625rem 0 0.5rem;
-		border-radius: 0.625rem;
+		padding: 0 0.75rem 0 0.5rem;
+		border-radius: var(--radius-md);
 		border: 1px solid color-mix(in srgb, var(--env-c) 30%, var(--surface-border));
 		background: color-mix(in srgb, var(--env-c) 7%, var(--surface-bg));
 		color: var(--center-channel-color);
-		font-size: 0.85rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		font-weight: 600;
 		transition:
-			background-color 140ms cubic-bezier(0.32, 0.72, 0, 1),
-			border-color 140ms cubic-bezier(0.32, 0.72, 0, 1);
+			background-color var(--dur-fast) cubic-bezier(0.32, 0.72, 0, 1),
+			border-color var(--dur-fast) cubic-bezier(0.32, 0.72, 0, 1);
 	}
 	.env-pill-name {
 		flex: 1;
@@ -142,7 +143,7 @@
 	.env-pill-dot {
 		width: 9px;
 		height: 9px;
-		border-radius: 9999px;
+		border-radius: var(--radius-pill);
 		background: var(--env-c);
 		box-shadow: 0 0 0 3px color-mix(in srgb, var(--env-c) 18%, transparent);
 		flex-shrink: 0;
@@ -165,9 +166,10 @@
 		align-items: center;
 		gap: 0.5rem;
 		width: 100%;
-		padding: 0.5rem 0.625rem;
-		border-radius: 0.5rem;
-		font-size: 0.82rem;
+		padding: 0.5rem 0.75rem;
+		border-radius: var(--radius-sm);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--center-channel-color);
 		text-align: left;
 	}
@@ -182,7 +184,8 @@
 		flex: 1;
 	}
 	.env-menu-default {
-		font-size: 0.6rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -197,6 +200,6 @@
 	.env-menu-divider {
 		height: 1px;
 		background: var(--surface-border);
-		margin: 0.3rem 0;
+		margin: 0.25rem 0;
 	}
 </style>

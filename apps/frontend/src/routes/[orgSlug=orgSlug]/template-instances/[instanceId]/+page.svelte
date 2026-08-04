@@ -344,7 +344,7 @@
 		margin-bottom: 1.5rem;
 	}
 	.ti-skel-title {
-		margin-bottom: 0.375rem;
+		margin-bottom: 0.5rem;
 	}
 	.ti-skel-label {
 		margin-bottom: 0.75rem;
@@ -356,15 +356,16 @@
 	.ti-back {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
-		font-size: 0.8125rem;
+		gap: 0.5rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 		background: none;
 		border: none;
 		cursor: pointer;
 		padding: 0;
 		margin-bottom: 1.5rem;
-		transition: color 0.15s;
+		transition: color var(--dur-fast);
 	}
 
 	.ti-back:hover {
@@ -391,13 +392,14 @@
 		justify-content: center;
 		width: 2.5rem;
 		height: 2.5rem;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
 		flex-shrink: 0;
 	}
 
 	.ti-title {
-		font-size: 1.25rem;
+		font-size: var(--text-title-3);
+		line-height: var(--lh-title-3);
 		font-weight: 700;
 		color: var(--center-channel-color);
 		margin: 0;
@@ -416,7 +418,7 @@
 		justify-content: center;
 		width: 26px;
 		height: 26px;
-		border-radius: 0.45rem;
+		border-radius: var(--radius-sm);
 		color: var(--text-muted);
 	}
 
@@ -429,15 +431,17 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 		margin-top: 0.25rem;
 	}
 
 	.ti-error {
 		padding: 0.75rem 1rem;
-		border-radius: 0.75rem;
-		font-size: 0.875rem;
+		border-radius: var(--radius-md);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
 		color: var(--error-text-color);
 		border: 1px solid color-mix(in srgb, var(--error-text-color) 25%, transparent);
@@ -459,7 +463,8 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -480,13 +485,13 @@
 		gap: 1rem;
 		padding: 0.875rem 1.125rem;
 		border: 1px solid var(--surface-border);
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		background-color: var(--surface-bg);
 		text-decoration: none;
 		color: var(--center-channel-color);
 		transition:
-			border-color 0.15s,
-			box-shadow 0.15s;
+			border-color var(--dur-fast),
+			box-shadow var(--dur-fast);
 		box-shadow:
 			0 1px 3px rgb(0 0 0 / 0.03),
 			0 1px 2px rgb(0 0 0 / 0.02);
@@ -504,12 +509,14 @@
 	}
 
 	.ti-resource-name {
-		font-size: 0.875rem;
-		font-weight: 500;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		font-weight: 600;
 	}
 
 	.ti-resource-detail {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--surface-muted);
 		font-family: var(--font-mono);
 		white-space: nowrap;
@@ -535,20 +542,22 @@
 		flex-direction: column;
 		gap: 0.125rem;
 		padding: 0.5rem 0.75rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		background-color: color-mix(in srgb, var(--surface-border) 30%, transparent);
 	}
 
 	.ti-param-key {
-		font-size: 0.6875rem;
-		font-weight: 500;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
 		color: var(--surface-muted);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 	}
 
 	.ti-param-value {
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		color: var(--center-channel-color);
 		font-family: var(--font-mono);
 		word-break: break-all;

@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { Loader2, Lock, Shield, Check } from 'lucide-svelte';
 	import { ChevronDown, Copy, Plus, RefreshCw, Settings, Trash2, Wifi, X } from '@jis3r/icons';
-	import { Button, SectionCard, Select } from '$lib/components/ui';
+	import { Button, SectionCard, Select, SegmentedControl } from '$lib/components/ui';
 	import { slide } from '$lib/utils/transitions';
+	import { springRotate } from '$lib/utils/motion.svelte';
 	import { env } from '$env/dynamic/public';
 	import type { Service, ServiceFormState, ServicePortForm } from '$lib/types/deployment';
 
@@ -216,114 +217,425 @@
 </script>
 
 <div class="space-y-5">
-	<!-- Tailscale (gated behind early access flag) -->
-	{#if tailscaleFeatureEnabled}
-		<SectionCard title="Tailscale">
-			{#if deployment?.tailscaleExposed}
-				<div
-					class="rounded-xl"
-					style="background-color: var(--control-bg); border: 1px solid var(--surface-border); overflow: hidden;"
-				>
-					<div class="flex items-center justify-between gap-3 px-4 py-3">
-						<div class="flex items-center gap-3">
-							<Wifi size={16} class="h-4 w-4 flex-shrink-0" style="color: var(--button-bg);" />
-							<div>
-								{#if tailscaleDns}
-									<p class="text-sm font-medium" style="color: var(--center-channel-color);">
-										{tailscaleDns}
-									</p>
-								{:else}
-									<p class="text-sm font-medium" style="color: var(--center-channel-color);">
-										{deployment.tailscaleHostname}
-									</p>
-								{/if}
-								{#if tailscaleIp}
-									<p class="text-xs" style="color: var(--surface-muted);">{tailscaleIp}</p>
-								{:else}
-									<p class="text-xs flex items-center gap-1" style="color: var(--surface-muted);">
-										<Loader2 class="h-3 w-3 animate-spin" />
-										Connecting to Tailscale...
-									</p>
-								{/if}
-							</div>
+	<SectionCard title="Domains">
+		{#snippet actions()}
+			{#if deployment.project?.id}
+				<button type="button" class="btn btn-secondary btn-sm" onclick={openDomainForm}>
+					{#if showDomainForm}
+						<X size={16} />
+						<span>Close</span>
+					{:else}
+						<Plus size={16} />
+						<span>Add</span>
+					{/if}
+				</button>
+			{/if}
+		{/snippet}
+
+		{#if showDomainForm}
+			<div class="dom-form" transition:slide={{ duration: 200 }}>
+				<SegmentedControl
+					label="Domain type"
+					value={domainMode}
+					onchange={(next) => setDomainMode(next as 'orchard' | 'custom')}
+					options={[
+						{ value: 'orchard', label: `Free ${APP_DOMAIN} subdomain` },
+						{ value: 'custom', label: 'Your own domain' }
+					]}
+				/>
+
+				{#if domainMode === 'orchard'}
+					<div class="dom-generated">
+						<div class="dom-field">
+							<span class="dom-field-sizer">
+								<span class="dom-field-ghost">{subdomainPrefix || 'my-app'}</span>
+								<input
+									type="text"
+									class="dom-field-input"
+									placeholder="my-app"
+									aria-label="Subdomain"
+									size="1"
+									value={subdomainPrefix}
+									oninput={(event) =>
+										updateSubdomainPrefix((event.currentTarget as HTMLInputElement).value)}
+								/>
+							</span>
+							<span class="dom-field-suffix">.{APP_DOMAIN}</span>
 						</div>
-						<button
-							onclick={onUnexposeTailscale}
-							disabled={tailscaleUnexposing}
-							class="btn btn-secondary btn-sm"
-						>
-							{#if tailscaleUnexposing}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<X
-									size={14}
-								/>{/if}
-							<span>Remove</span>
-						</button>
+						<Button variant="secondary" size="sm" onclick={onGenerateRandomDomain}>
+							<RefreshCw size={14} class="h-3.5 w-3.5" />
+							<span>New name</span>
+						</Button>
 					</div>
-					{#if (tailscaleDns || tailscaleIp) && deployment.services?.length}
-						<div style="border-top: 1px solid var(--surface-border);">
-							{#each deployment.services as service (service.id)}
-								{@const tsHost = tailscaleDns || tailscaleIp}
-								{@const displayedPorts = service.ports?.length
-									? service.ports
-									: [
-											{
-												port: service.port,
-												targetPort: service.targetPort,
-												protocol: service.protocol
-											}
-										]}
-								{#each displayedPorts as port (`${port.targetPort}/${port.protocol ?? 'TCP'}`)}
-									{@const addr = `${tsHost}:${port.targetPort}`}
-									<div
-										class="flex items-center justify-between gap-2 px-4 py-2"
-										style="border-bottom: 1px solid var(--surface-border);"
-									>
-										<div class="flex items-center gap-2 min-w-0">
-											<span
-												class="text-xs font-mono truncate"
-												style="color: var(--center-channel-color);">{addr}</span
-											>
-											<span
-												class="text-xs px-1.5 py-0.5 rounded"
-												style="background-color: var(--surface-border); color: var(--surface-muted);"
-												>{port.protocol || 'TCP'}</span
-											>
-										</div>
-										<button
-											class="btn btn-ghost btn-sm"
-											onclick={() => {
-												navigator.clipboard.writeText(addr);
-												toasts.add({ title: 'Copied', description: addr, color: 'success' });
-											}}
-										>
-											<Copy size={14} class="h-3.5 w-3.5" />
-										</button>
-									</div>
-								{/each}
+					<p class="dom-hint">HTTPS is set up for you. The domain works the moment you add it.</p>
+				{:else}
+					<input
+						type="text"
+						class="dom-input"
+						placeholder="app.example.com"
+						aria-label="Domain"
+						bind:value={newDomainHost}
+						oninput={() => (dnsCheckState = 'idle')}
+					/>
+
+					<div class="dns-panel">
+						<p class="dns-panel-title">Add this record wherever you manage DNS</p>
+						<dl class="dns-record">
+							<dt>Type</dt>
+							<dd><code>CNAME</code></dd>
+							<dt>Name</dt>
+							<dd><code>{newDomainNormalizedHost ? dnsRecordName : '@'}</code></dd>
+							<dt>Value</dt>
+							<dd>
+								<button
+									type="button"
+									class="dns-copy"
+									onclick={copyCnameTarget}
+									title="Copy to clipboard"
+								>
+									<code>{INGRESS_CNAME}</code>
+									{#if copiedCname}
+										<Check size={12} class="h-3 w-3 dns-copy-ok" />
+									{:else}
+										<Copy size={12} class="h-3 w-3 dns-copy-icon" />
+									{/if}
+								</button>
+							</dd>
+						</dl>
+						{#if newDomainNormalizedHost && dnsRecordName === '@'}
+							<p class="dns-note">
+								Root domains need a DNS provider that supports CNAME flattening, like Cloudflare.
+							</p>
+						{/if}
+						<div class="dns-check-row">
+							<span
+								class="dns-status"
+								class:dns-status-ok={dnsCheckState === 'valid'}
+								class:dns-status-pending={dnsCheckState === 'invalid'}
+							>
+								{#if dnsCheckState === 'valid'}
+									<Check size={12} class="h-3 w-3" />
+									DNS is set up correctly
+								{:else if dnsCheckState === 'invalid'}
+									Not detected yet. DNS changes can take a few minutes to spread.
+								{:else}
+									Add the domain now, it starts working once the record is live.
+								{/if}
+							</span>
+							<Button
+								variant="secondary"
+								size="sm"
+								onclick={checkDns}
+								loading={dnsCheckState === 'checking'}
+								disabled={dnsCheckState === 'checking' || !newDomainNormalizedHost}
+							>
+								Check DNS
+							</Button>
+						</div>
+					</div>
+				{/if}
+
+				{#if domainServiceOptions.length > 1}
+					<div class="dom-row">
+						<span class="dom-row-label">Forward to</span>
+						<Select bind:value={newDomainServiceKey} aria-label="Forward to">
+							{#each domainServiceOptions as option (option.key)}
+								<option value={option.key}>{option.label}</option>
 							{/each}
+						</Select>
+					</div>
+				{/if}
+
+				<div class="dom-advanced">
+					<button
+						type="button"
+						class="dom-advanced-trigger"
+						aria-expanded={showDomainAdvanced}
+						onclick={() => (showDomainAdvanced = !showDomainAdvanced)}
+					>
+						<span
+							class="dom-advanced-chevron"
+							{@attach springRotate(() => showDomainAdvanced, { rest: -90, on: 0 })}
+						>
+							<ChevronDown size={14} class="h-3.5 w-3.5" />
+						</span>
+						Advanced
+					</button>
+
+					{#if showDomainAdvanced}
+						<div class="dom-advanced-body" transition:slide={{ duration: 150 }}>
+							<div class="dom-row">
+								<span class="dom-row-label">Path</span>
+								<input
+									type="text"
+									class="dom-input dom-input--mono"
+									placeholder="/"
+									aria-label="Path"
+									bind:value={newDomainPath}
+								/>
+								<p class="dom-hint">
+									Route a specific path here, like <code>/api</code>. Leave it as <code>/</code> to catch
+									everything.
+								</p>
+							</div>
+							<label class="dm-toggle-row">
+								<div class="dm-toggle-text">
+									<span class="dm-toggle-label">Enable SSL</span>
+									<span class="dm-toggle-hint"
+										>Automatically provisions a Let's Encrypt certificate</span
+									>
+								</div>
+								<input type="checkbox" class="dm-toggle-input" bind:checked={newDomainTlsEnabled} />
+								<span class="dm-toggle-track"><span class="dm-toggle-thumb"></span></span>
+							</label>
 						</div>
 					{/if}
 				</div>
-			{:else if tailscaleLinked}
-				<button
-					onclick={onExposeTailscale}
-					disabled={tailscaleExposing}
-					class="btn btn-secondary btn-sm"
-				>
-					{#if tailscaleExposing}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Wifi
-							size={14}
-							class="h-3.5 w-3.5"
-						/>{/if}
-					<span>Expose to Tailscale</span>
-				</button>
+
+				{#if newDomainConflict}
+					<div
+						class="dom-callout"
+						class:dom-callout--error={newDomainConflict.pathCollision}
+						role={newDomainConflict.pathCollision ? 'alert' : undefined}
+					>
+						{#if newDomainConflict.pathCollision}
+							<strong>Path in use.</strong>
+							<code>{newDomainNormalizedHost}{newDomainNormalizedPath}</code> is already routed. Choose
+							a different path under Advanced.
+						{:else if newDomainConflict.otherDeployment}
+							<strong>Sharing domain.</strong>
+							{newDomainNormalizedHost} already routes to another app. Traffic to
+							<code>{newDomainNormalizedPath}</code> will be added to the existing ingress.
+						{:else}
+							Adding <code>{newDomainNormalizedPath}</code> to the existing {newDomainNormalizedHost}
+							ingress.
+						{/if}
+					</div>
+				{/if}
+
+				{#if domainServiceOptions.length === 0}
+					<p class="dom-hint">Add a port above first so this domain has somewhere to route.</p>
+				{/if}
+
+				{#if domainFormError}
+					<div class="dom-callout dom-callout--error" role="alert">{domainFormError}</div>
+				{/if}
+
+				<div class="dom-actions">
+					<Button
+						variant="secondary"
+						size="sm"
+						onclick={() => {
+							showDomainForm = false;
+							onResetDomainForm();
+						}}
+					>
+						Cancel
+					</Button>
+					<Button
+						variant="primary"
+						size="sm"
+						onclick={onCreateDomain}
+						loading={creatingDomain}
+						disabled={creatingDomain ||
+							!newDomainNormalizedHost ||
+							!newDomainServiceKey ||
+							newDomainConflict?.pathCollision}
+					>
+						Add domain
+					</Button>
+				</div>
+			</div>
+		{/if}
+		<div class="space-y-2">
+			{#if deployment.ingresses?.length}
+				{#each deployment.ingresses as ingress (ingress.id)}
+					<div
+						class="rounded-xl overflow-hidden"
+						style="background-color: var(--control-bg); border: 1px solid var(--surface-border);"
+					>
+						<div class="svc-port-row flex w-full items-center justify-between gap-3 p-3 text-left">
+							<a
+								href="{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}{ingress.path}"
+								target="_blank"
+								rel="noopener noreferrer"
+								class="flex-1 min-w-0 text-left no-underline transition hover:opacity-80"
+							>
+								{#if ingress.protectionMode && ingress.protectionMode !== 'none'}
+									<p class="text-xs mb-1" style="color: var(--sidebar-text-active-border);">
+										<Shield class="inline h-3 w-3 mr-1" />
+										{ingress.protectionMode === 'password'
+											? 'Password protected'
+											: 'Orchard sign-in'}
+									</p>
+								{:else if ingress.annotations?.['traefik.ingress.kubernetes.io/router.middlewares']?.includes('auth@kubernetescrd')}
+									<p class="text-xs mb-1" style="color: var(--away-indicator);">
+										<Lock class="inline h-3 w-3 mr-1" />
+										Auth
+									</p>
+								{/if}
+								<p class="text-sm font-medium truncate" style="color: var(--center-channel-color);">
+									{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}{ingress.path}
+								</p>
+								{#if ingress.address}
+									<p class="text-xs mt-0.5 truncate" style="color: var(--surface-muted);">
+										{ingress.address}
+									</p>
+								{/if}
+							</a>
+							<div class="flex items-center gap-1.5">
+								{#if onUpdateProtection}
+									<Button
+										variant="ghost"
+										size="sm"
+										aria-label="Protection settings"
+										title="Access protection"
+										style={protectionExpandedId === ingress.id
+											? 'color: var(--sidebar-text-active-border);'
+											: undefined}
+										onclick={(e: MouseEvent) => {
+											e.stopPropagation();
+											toggleProtection(ingress);
+										}}
+									>
+										<Shield size={16} class="h-4 w-4" />
+									</Button>
+								{/if}
+								<Button
+									variant="ghost"
+									size="sm"
+									aria-label="Remove domain"
+									title="Remove domain"
+									disabled={deletingIngressId === ingress.id}
+									onclick={(e: MouseEvent) => {
+										e.stopPropagation();
+										onDeleteIngress(ingress.id);
+									}}
+								>
+									{#if deletingIngressId === ingress.id}
+										<Loader2 class="h-4 w-4 animate-spin" />
+									{:else}
+										<Trash2 size={16} class="h-4 w-4" />
+									{/if}
+								</Button>
+							</div>
+						</div>
+
+						{#if protectionExpandedId === ingress.id}
+							<div
+								class="border-t px-3 pb-3 pt-2"
+								style="border-color: var(--surface-border);"
+								transition:slide={{ duration: 150 }}
+							>
+								<p class="text-xs font-medium mb-2" style="color: var(--center-channel-color);">
+									App protection
+								</p>
+								<div class="flex flex-col gap-2">
+									<label
+										class="flex items-center gap-2 text-xs cursor-pointer"
+										style="color: var(--center-channel-color);"
+									>
+										<input
+											type="radio"
+											name="protection-{ingress.id}"
+											value="none"
+											bind:group={protectionMode}
+										/>
+										None
+									</label>
+									<label
+										class="flex items-center gap-2 text-xs cursor-pointer"
+										style="color: var(--center-channel-color);"
+									>
+										<input
+											type="radio"
+											name="protection-{ingress.id}"
+											value="password"
+											bind:group={protectionMode}
+										/>
+										Password
+									</label>
+									<label
+										class="flex items-center gap-2 text-xs cursor-pointer"
+										style="color: var(--center-channel-color);"
+									>
+										<input
+											type="radio"
+											name="protection-{ingress.id}"
+											value="orchard"
+											bind:group={protectionMode}
+										/>
+										Sign in with Orchard
+									</label>
+								</div>
+
+								{#if protectionMode === 'password'}
+									<div class="mt-2">
+										<input
+											type="password"
+											class="input text-sm w-full"
+											placeholder="Enter password"
+											bind:value={protectionPassword}
+										/>
+									</div>
+								{/if}
+
+								{#if ingress.protectionBypassSecret && protectionMode !== 'none'}
+									<div class="mt-2">
+										<p class="text-xs mb-1" style="color: var(--surface-muted);">Bypass secret</p>
+										<div class="flex items-center gap-1.5">
+											<code
+												class="text-xs flex-1 truncate px-2 py-1 rounded"
+												style="background: var(--surface-bg); color: var(--surface-muted);"
+											>
+												{ingress.protectionBypassSecret}
+											</code>
+											<Button
+												variant="ghost"
+												size="sm"
+												aria-label="Copy bypass secret"
+												onclick={() => copyBypassSecret(ingress.protectionBypassSecret)}
+											>
+												{#if copiedBypass}
+													<Check
+														size={14}
+														class="h-3.5 w-3.5"
+														style="color: var(--online-indicator);"
+													/>
+												{:else}
+													<Copy size={14} class="h-3.5 w-3.5" />
+												{/if}
+											</Button>
+										</div>
+										<p class="text-xs mt-1" style="color: var(--surface-muted);">
+											Send as <code>x-orchard-protection-bypass</code> header to skip auth.
+										</p>
+									</div>
+								{/if}
+
+								<button
+									type="button"
+									class="btn btn-sm btn-primary mt-2"
+									disabled={protectionUpdatingId === ingress.id ||
+										(protectionMode === 'password' && !protectionPassword.trim())}
+									onclick={() => saveProtection(ingress.id)}
+								>
+									{#if protectionUpdatingId === ingress.id}
+										<Loader2 class="h-3.5 w-3.5 animate-spin" />
+									{/if}
+									Save
+								</button>
+							</div>
+						{/if}
+					</div>
+				{/each}
 			{:else}
-				<p class="text-xs" style="color: var(--surface-muted);">
-					Connect your Tailscale account in <a href="/user/settings" class="underline"
-						>user settings</a
-					> to expose apps to your private network.
+				<p class="text-sm text-center py-4" style="color: var(--surface-muted);">
+					No domains configured
 				</p>
 			{/if}
-		</SectionCard>
-	{/if}
+		</div>
+	</SectionCard>
 
 	<SectionCard title="Ports">
 		{#snippet actions()}
@@ -591,447 +903,112 @@
 		</div>
 	</SectionCard>
 
-	<SectionCard title="Domains">
-		{#snippet actions()}
-			{#if deployment.project?.id}
-				<button type="button" class="btn btn-secondary btn-sm" onclick={openDomainForm}>
-					{#if showDomainForm}
-						<X size={16} />
-						<span>Close</span>
-					{:else}
-						<Plus size={16} />
-						<span>Add</span>
-					{/if}
-				</button>
-			{/if}
-		{/snippet}
-
-		{#if showDomainForm}
-			<div
-				class="surface-form rounded-xl border border-dashed p-4 mb-4"
-				transition:slide={{ duration: 200 }}
-			>
-				<div class="dom-mode-toggle" role="tablist" aria-label="Domain type">
-					<button
-						type="button"
-						role="tab"
-						aria-selected={domainMode === 'orchard'}
-						class="dom-mode-btn"
-						class:dom-mode-active={domainMode === 'orchard'}
-						onclick={() => setDomainMode('orchard')}
-					>
-						Autogenerated domain
-					</button>
-					<button
-						type="button"
-						role="tab"
-						aria-selected={domainMode === 'custom'}
-						class="dom-mode-btn"
-						class:dom-mode-active={domainMode === 'custom'}
-						onclick={() => setDomainMode('custom')}
-					>
-						Custom domain
-					</button>
-				</div>
-
-				{#if domainMode === 'orchard'}
-					<div class="mt-3 flex items-center gap-2">
-						<div class="dom-subdomain-wrap flex-1">
-							<input
-								type="text"
-								class="dom-subdomain-input"
-								placeholder="my-app"
-								value={subdomainPrefix}
-								oninput={(event) =>
-									updateSubdomainPrefix((event.currentTarget as HTMLInputElement).value)}
-							/>
-							<span class="dom-subdomain-suffix">.{APP_DOMAIN}</span>
+	<!-- Tailscale (gated behind early access flag) -->
+	{#if tailscaleFeatureEnabled}
+		<SectionCard title="Tailscale">
+			{#if deployment?.tailscaleExposed}
+				<div
+					class="rounded-xl"
+					style="background-color: var(--control-bg); border: 1px solid var(--surface-border); overflow: hidden;"
+				>
+					<div class="flex items-center justify-between gap-3 px-4 py-3">
+						<div class="flex items-center gap-3">
+							<Wifi size={16} class="h-4 w-4 flex-shrink-0" style="color: var(--button-bg);" />
+							<div>
+								{#if tailscaleDns}
+									<p class="text-sm font-medium" style="color: var(--center-channel-color);">
+										{tailscaleDns}
+									</p>
+								{:else}
+									<p class="text-sm font-medium" style="color: var(--center-channel-color);">
+										{deployment.tailscaleHostname}
+									</p>
+								{/if}
+								{#if tailscaleIp}
+									<p class="text-xs" style="color: var(--surface-muted);">{tailscaleIp}</p>
+								{:else}
+									<p class="text-xs flex items-center gap-1" style="color: var(--surface-muted);">
+										<Loader2 class="h-3 w-3 animate-spin" />
+										Connecting to Tailscale...
+									</p>
+								{/if}
+							</div>
 						</div>
 						<button
-							type="button"
+							onclick={onUnexposeTailscale}
+							disabled={tailscaleUnexposing}
 							class="btn btn-secondary btn-sm"
-							onclick={onGenerateRandomDomain}
-							aria-label="Generate a new name"
-							title="Generate a new name"
 						>
-							<RefreshCw size={14} class="h-3.5 w-3.5" />
+							{#if tailscaleUnexposing}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<X
+									size={14}
+								/>{/if}
+							<span>Remove</span>
 						</button>
 					</div>
-				{:else}
-					<div class="mt-3">
-						<input
-							type="text"
-							class="input text-sm"
-							placeholder="app.example.com"
-							bind:value={newDomainHost}
-							oninput={() => (dnsCheckState = 'idle')}
-						/>
-					</div>
-
-					<div class="dns-panel mt-3">
-						<p class="dns-panel-title">Add this record wherever you manage DNS for your domain</p>
-						<div class="dns-record">
-							<div class="dns-cell">
-								<span class="dns-cell-label">Type</span>
-								<code>CNAME</code>
-							</div>
-							<div class="dns-cell">
-								<span class="dns-cell-label">Name</span>
-								<code>{newDomainNormalizedHost ? dnsRecordName : '@'}</code>
-							</div>
-							<div class="dns-cell">
-								<span class="dns-cell-label">Value</span>
-								<button
-									type="button"
-									class="dns-copy"
-									onclick={copyCnameTarget}
-									title="Copy to clipboard"
-								>
-									<code>{INGRESS_CNAME}</code>
-									{#if copiedCname}
-										<Check size={12} class="h-3 w-3" style="color: var(--online-indicator);" />
-									{:else}
-										<Copy size={12} class="h-3 w-3 opacity-60" />
-									{/if}
-								</button>
-							</div>
-						</div>
-						{#if newDomainNormalizedHost && dnsRecordName === '@'}
-							<p class="dns-note">
-								Root domains need a DNS provider that supports CNAME flattening, like Cloudflare.
-							</p>
-						{/if}
-						<div class="dns-check-row">
-							{#if dnsCheckState === 'valid'}
-								<span class="dns-status dns-status-ok">
-									<Check size={12} class="h-3 w-3" />
-									DNS is set up correctly
-								</span>
-							{:else if dnsCheckState === 'invalid'}
-								<span class="dns-status dns-status-pending">
-									Not detected yet. DNS changes can take a few minutes to spread.
-								</span>
-							{:else}
-								<span class="dns-status">&nbsp;</span>
-							{/if}
-							<button
-								type="button"
-								class="btn btn-secondary btn-sm"
-								onclick={checkDns}
-								disabled={dnsCheckState === 'checking' || !newDomainNormalizedHost}
-							>
-								{#if dnsCheckState === 'checking'}
-									<Loader2 class="h-3.5 w-3.5 animate-spin" />
-								{/if}
-								Check DNS
-							</button>
-						</div>
-					</div>
-					{#if dnsCheckState !== 'valid'}
-						<p class="text-xs mt-2" style="color: var(--surface-muted);">
-							You can add the domain now. It starts working once the DNS record is in place.
-						</p>
-					{/if}
-				{/if}
-
-				{#if domainServiceOptions.length > 1}
-					<div class="mt-3">
-						<p class="text-xs mb-1" style="color: var(--surface-muted);">Forward to</p>
-						<Select bind:value={newDomainServiceKey}>
-							{#each domainServiceOptions as option (option.key)}
-								<option value={option.key}>{option.label}</option>
-							{/each}
-						</Select>
-					</div>
-				{/if}
-
-				<button
-					type="button"
-					class="mt-3 text-xs font-medium inline-flex items-center gap-1"
-					style="color: var(--surface-muted); background: none; border: none; cursor: pointer; padding: 0;"
-					onclick={() => (showDomainAdvanced = !showDomainAdvanced)}
-				>
-					<ChevronDown
-						size={12}
-						class="h-3 w-3"
-						style={showDomainAdvanced ? '' : 'transform: rotate(-90deg);'}
-					/>
-					Advanced
-				</button>
-
-				{#if showDomainAdvanced}
-					<div class="mt-2" transition:slide={{ duration: 150 }}>
-						<p class="text-xs mb-1" style="color: var(--surface-muted);">Path</p>
-						<input
-							type="text"
-							class="input text-sm font-mono"
-							placeholder="/"
-							bind:value={newDomainPath}
-						/>
-						<p class="text-xs mt-1" style="color: var(--surface-muted);">
-							Route a specific path here (e.g. <code>/api</code>). Leave as <code>/</code> to catch all
-							traffic.
-						</p>
-						<label class="dm-toggle-row">
-							<div class="dm-toggle-text">
-								<span class="dm-toggle-label">Enable SSL</span>
-								<span class="dm-toggle-hint"
-									>Automatically provisions a Let's Encrypt certificate</span
-								>
-							</div>
-							<input type="checkbox" class="dm-toggle-input" bind:checked={newDomainTlsEnabled} />
-							<span class="dm-toggle-track"><span class="dm-toggle-thumb"></span></span>
-						</label>
-					</div>
-				{/if}
-
-				{#if newDomainConflict}
-					<div
-						class="mt-3 p-2 rounded-lg text-xs border"
-						style="background-color: color-mix(in srgb, {newDomainConflict.pathCollision
-							? 'var(--error-text-color)'
-							: 'var(--sidebar-text-active-border)'} 10%, transparent); border-color: color-mix(in srgb, {newDomainConflict.pathCollision
-							? 'var(--error-text-color)'
-							: 'var(--sidebar-text-active-border)'} 25%, transparent); color: var(--center-channel-color);"
-					>
-						{#if newDomainConflict.pathCollision}
-							<strong>Path in use.</strong>
-							<code>{newDomainNormalizedHost}{newDomainNormalizedPath}</code> is already routed. Choose
-							a different path below.
-						{:else if newDomainConflict.otherDeployment}
-							<strong>Sharing domain.</strong>
-							{newDomainNormalizedHost} already routes to another app. Traffic to
-							<code>{newDomainNormalizedPath}</code> will be added to the existing ingress.
-						{:else}
-							Adding <code>{newDomainNormalizedPath}</code> to the existing {newDomainNormalizedHost}
-							ingress.
-						{/if}
-					</div>
-				{/if}
-
-				{#if domainServiceOptions.length === 0}
-					<p class="text-xs mt-3" style="color: var(--surface-muted);">
-						Add a port above first so this domain has somewhere to route.
-					</p>
-				{/if}
-
-				{#if domainFormError}
-					<div class="alert alert-error mt-3">{domainFormError}</div>
-				{/if}
-
-				<div class="mt-3 flex justify-end gap-2">
-					<button
-						type="button"
-						class="btn btn-secondary btn-sm"
-						onclick={() => {
-							showDomainForm = false;
-							onResetDomainForm();
-						}}
-					>
-						Cancel
-					</button>
-					<button
-						type="button"
-						class="btn btn-primary btn-sm"
-						onclick={onCreateDomain}
-						disabled={creatingDomain ||
-							!newDomainNormalizedHost ||
-							!newDomainServiceKey ||
-							newDomainConflict?.pathCollision}
-					>
-						{#if creatingDomain}<Loader2 class="h-3.5 w-3.5 animate-spin" />{/if}
-						Add domain
-					</button>
-				</div>
-			</div>
-		{/if}
-		<div class="space-y-2">
-			{#if deployment.ingresses?.length}
-				{#each deployment.ingresses as ingress (ingress.id)}
-					<div
-						class="rounded-xl overflow-hidden"
-						style="background-color: var(--control-bg); border: 1px solid var(--surface-border);"
-					>
-						<div class="svc-port-row flex w-full items-center justify-between gap-3 p-3 text-left">
-							<a
-								href="{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}{ingress.path}"
-								target="_blank"
-								rel="noopener noreferrer"
-								class="flex-1 min-w-0 text-left no-underline transition hover:opacity-80"
-							>
-								{#if ingress.protectionMode && ingress.protectionMode !== 'none'}
-									<p class="text-xs mb-1" style="color: var(--sidebar-text-active-border);">
-										<Shield class="inline h-3 w-3 mr-1" />
-										{ingress.protectionMode === 'password'
-											? 'Password protected'
-											: 'Orchard sign-in'}
-									</p>
-								{:else if ingress.annotations?.['traefik.ingress.kubernetes.io/router.middlewares']?.includes('auth@kubernetescrd')}
-									<p class="text-xs mb-1" style="color: var(--away-indicator);">
-										<Lock class="inline h-3 w-3 mr-1" />
-										Auth
-									</p>
-								{/if}
-								<p class="text-sm font-medium" style="color: var(--center-channel-color);">
-									{ingress.tlsEnabled ? 'https' : 'http'}://{ingress.host}{ingress.path}
-								</p>
-								{#if ingress.address}
-									<p class="text-xs mt-0.5" style="color: var(--surface-muted);">
-										{ingress.address}
-									</p>
-								{/if}
-							</a>
-							<div class="flex items-center gap-1.5">
-								{#if onUpdateProtection}
-									<Button
-										variant="ghost"
-										size="sm"
-										aria-label="Protection settings"
-										title="Access protection"
-										style={protectionExpandedId === ingress.id
-											? 'color: var(--sidebar-text-active-border);'
-											: undefined}
-										onclick={(e: MouseEvent) => {
-											e.stopPropagation();
-											toggleProtection(ingress);
-										}}
+					{#if (tailscaleDns || tailscaleIp) && deployment.services?.length}
+						<div style="border-top: 1px solid var(--surface-border);">
+							{#each deployment.services as service (service.id)}
+								{@const tsHost = tailscaleDns || tailscaleIp}
+								{@const displayedPorts = service.ports?.length
+									? service.ports
+									: [
+											{
+												port: service.port,
+												targetPort: service.targetPort,
+												protocol: service.protocol
+											}
+										]}
+								{#each displayedPorts as port (`${port.targetPort}/${port.protocol ?? 'TCP'}`)}
+									{@const addr = `${tsHost}:${port.targetPort}`}
+									<div
+										class="flex items-center justify-between gap-2 px-4 py-2"
+										style="border-bottom: 1px solid var(--surface-border);"
 									>
-										<Shield size={16} class="h-4 w-4" />
-									</Button>
-								{/if}
-								<Button
-									variant="ghost"
-									size="sm"
-									aria-label="Remove domain"
-									title="Remove domain"
-									disabled={deletingIngressId === ingress.id}
-									onclick={(e: MouseEvent) => {
-										e.stopPropagation();
-										onDeleteIngress(ingress.id);
-									}}
-								>
-									{#if deletingIngressId === ingress.id}
-										<Loader2 class="h-4 w-4 animate-spin" />
-									{:else}
-										<Trash2 size={16} class="h-4 w-4" />
-									{/if}
-								</Button>
-							</div>
-						</div>
-
-						{#if protectionExpandedId === ingress.id}
-							<div
-								class="border-t px-3 pb-3 pt-2"
-								style="border-color: var(--surface-border);"
-								transition:slide={{ duration: 150 }}
-							>
-								<p class="text-xs font-medium mb-2" style="color: var(--center-channel-color);">
-									App protection
-								</p>
-								<div class="flex flex-col gap-2">
-									<label
-										class="flex items-center gap-2 text-xs cursor-pointer"
-										style="color: var(--center-channel-color);"
-									>
-										<input
-											type="radio"
-											name="protection-{ingress.id}"
-											value="none"
-											bind:group={protectionMode}
-										/>
-										None
-									</label>
-									<label
-										class="flex items-center gap-2 text-xs cursor-pointer"
-										style="color: var(--center-channel-color);"
-									>
-										<input
-											type="radio"
-											name="protection-{ingress.id}"
-											value="password"
-											bind:group={protectionMode}
-										/>
-										Password
-									</label>
-									<label
-										class="flex items-center gap-2 text-xs cursor-pointer"
-										style="color: var(--center-channel-color);"
-									>
-										<input
-											type="radio"
-											name="protection-{ingress.id}"
-											value="orchard"
-											bind:group={protectionMode}
-										/>
-										Sign in with Orchard
-									</label>
-								</div>
-
-								{#if protectionMode === 'password'}
-									<div class="mt-2">
-										<input
-											type="password"
-											class="input text-sm w-full"
-											placeholder="Enter password"
-											bind:value={protectionPassword}
-										/>
-									</div>
-								{/if}
-
-								{#if ingress.protectionBypassSecret && protectionMode !== 'none'}
-									<div class="mt-2">
-										<p class="text-xs mb-1" style="color: var(--surface-muted);">Bypass secret</p>
-										<div class="flex items-center gap-1.5">
-											<code
-												class="text-xs flex-1 truncate px-2 py-1 rounded"
-												style="background: var(--surface-bg); color: var(--surface-muted);"
+										<div class="flex items-center gap-2 min-w-0">
+											<span
+												class="text-xs font-mono truncate"
+												style="color: var(--center-channel-color);">{addr}</span
 											>
-												{ingress.protectionBypassSecret}
-											</code>
-											<Button
-												variant="ghost"
-												size="sm"
-												aria-label="Copy bypass secret"
-												onclick={() => copyBypassSecret(ingress.protectionBypassSecret)}
+											<span
+												class="text-xs px-1.5 py-0.5 rounded"
+												style="background-color: var(--surface-border); color: var(--surface-muted);"
+												>{port.protocol || 'TCP'}</span
 											>
-												{#if copiedBypass}
-													<Check
-														size={14}
-														class="h-3.5 w-3.5"
-														style="color: var(--online-indicator);"
-													/>
-												{:else}
-													<Copy size={14} class="h-3.5 w-3.5" />
-												{/if}
-											</Button>
 										</div>
-										<p class="text-xs mt-1" style="color: var(--surface-muted);">
-											Send as <code>x-orchard-protection-bypass</code> header to skip auth.
-										</p>
+										<button
+											class="btn btn-ghost btn-sm"
+											onclick={() => {
+												navigator.clipboard.writeText(addr);
+												toasts.add({ title: 'Copied', description: addr, color: 'success' });
+											}}
+										>
+											<Copy size={14} class="h-3.5 w-3.5" />
+										</button>
 									</div>
-								{/if}
-
-								<button
-									type="button"
-									class="btn btn-sm btn-primary mt-2"
-									disabled={protectionUpdatingId === ingress.id ||
-										(protectionMode === 'password' && !protectionPassword.trim())}
-									onclick={() => saveProtection(ingress.id)}
-								>
-									{#if protectionUpdatingId === ingress.id}
-										<Loader2 class="h-3.5 w-3.5 animate-spin" />
-									{/if}
-									Save
-								</button>
-							</div>
-						{/if}
-					</div>
-				{/each}
+								{/each}
+							{/each}
+						</div>
+					{/if}
+				</div>
+			{:else if tailscaleLinked}
+				<button
+					onclick={onExposeTailscale}
+					disabled={tailscaleExposing}
+					class="btn btn-secondary btn-sm"
+				>
+					{#if tailscaleExposing}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<Wifi
+							size={14}
+							class="h-3.5 w-3.5"
+						/>{/if}
+					<span>Expose to Tailscale</span>
+				</button>
 			{:else}
-				<p class="text-sm text-center py-4" style="color: var(--surface-muted);">
-					No domains configured
+				<p class="text-xs" style="color: var(--surface-muted);">
+					Connect your Tailscale account in <a href="/user/settings" class="underline"
+						>user settings</a
+					> to expose apps to your private network.
 				</p>
 			{/if}
-		</div>
-	</SectionCard>
+		</SectionCard>
+	{/if}
 </div>

@@ -14,8 +14,9 @@
 		themeStore,
 		toasts
 	} from '$lib/stores';
-	import { ToastContainer, OnboardingModal } from '$lib/components';
+	import { ToastContainer, OnboardingModal, UpdatesModal } from '$lib/components';
 	import SidebarDeck from '$lib/components/SidebarDeck.svelte';
+	import MobileTopBar from '$lib/components/MobileTopBar.svelte';
 	import QuickSearch from '$lib/components/QuickSearch.svelte';
 	import { QueryClientProvider } from '@tanstack/svelte-query';
 	import { queryClient } from '$lib/query';
@@ -25,6 +26,12 @@
 	let { children } = $props();
 
 	let loading = $state(true);
+	let mainScrolled = $state(false);
+
+	function onMainScroll(e: Event) {
+		const next = (e.currentTarget as HTMLElement).scrollTop > 4;
+		if (next !== mainScrolled) mainScrolled = next;
+	}
 
 	// Don't check for pending invitations or redirect on these routes
 	const skipRoutes = ['/invite', '/oauth/callback', '/setup', '/mcp/authorize'];
@@ -152,11 +159,14 @@
 	{:else if $isSignedIn && ($page.url.pathname.startsWith('/setup') || $page.url.pathname.startsWith('/auth/protect'))}
 		{@render children()}
 	{:else if $isSignedIn}
-		<div class="flex h-screen overflow-hidden">
+		<div class="app-shell">
 			<SidebarDeck />
-			<main class="flex-1 overflow-y-auto overflow-x-hidden">
-				{@render children()}
-			</main>
+			<div class="app-col">
+				<MobileTopBar scrolled={mainScrolled} />
+				<main class="app-main" onscroll={onMainScroll}>
+					{@render children()}
+				</main>
+			</div>
 		</div>
 	{:else}
 		<main class="min-h-screen">
@@ -166,10 +176,33 @@
 
 	<ToastContainer />
 	<OnboardingModal />
+	{#if !loading}
+		<UpdatesModal />
+	{/if}
 	<QuickSearch />
 </QueryClientProvider>
 
 <style>
+	.app-shell {
+		display: flex;
+		height: 100vh;
+		height: 100dvh;
+		overflow: hidden;
+	}
+	.app-col {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+	}
+	.app-main {
+		flex: 1;
+		overflow-y: auto;
+		overflow-x: hidden;
+		overscroll-behavior-y: contain;
+	}
+
 	.lds-ellipsis,
 	.lds-ellipsis div {
 		box-sizing: border-box;

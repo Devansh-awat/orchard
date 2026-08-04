@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
+	import { effectiveAnimation } from '$lib/stores/preferences';
 
 	let {
 		src,
@@ -18,6 +19,13 @@
 	} = $props();
 
 	let canvas = $state<HTMLCanvasElement | null>(null);
+	let drift = $derived($effectiveAnimation === 'full');
+	let setPlayState: (() => void) | null = null;
+
+	$effect(() => {
+		drift;
+		setPlayState?.();
+	});
 
 	function textureUrl(raw: string): string {
 		try {
@@ -36,7 +44,6 @@
 
 		(async () => {
 			if (!canvas || !src) return;
-			const reduce = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
 			const [pixi, filters] = await Promise.all([import('pixi.js'), import('pixi-filters')]);
 			if (destroyed) return;
@@ -126,20 +133,20 @@
 				}
 			};
 
-			if (reduce) {
-				app.render();
-				return;
-			}
-
 			app.ticker.maxFPS = 15;
 			app.ticker.add(tick);
+			app.render();
 
 			let onScreen = true;
 			const updatePlayState = () => {
 				if (!app) return;
-				if (onScreen && !document.hidden) app.start();
+				if (drift && onScreen && !document.hidden) app.start();
 				else app.stop();
 			};
+			setPlayState = updatePlayState;
+			cleanups.push(() => {
+				setPlayState = null;
+			});
 
 			const io = new IntersectionObserver((entries) => {
 				onScreen = entries.some((e) => e.isIntersecting);

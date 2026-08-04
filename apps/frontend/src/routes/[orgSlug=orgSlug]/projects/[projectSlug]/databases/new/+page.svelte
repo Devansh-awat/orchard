@@ -113,7 +113,7 @@
 		<div class="skeleton" style="height: 1.5rem; width: 12rem; margin-bottom: 1.5rem;"></div>
 		<div class="nd-card">
 			<div class="skeleton" style="height: 1rem; width: 8rem; margin-bottom: 1rem;"></div>
-			<div class="skeleton" style="height: 2.25rem; border-radius: 0.5rem;"></div>
+			<div class="skeleton" style="height: 2.25rem; border-radius: var(--radius-sm);"></div>
 		</div>
 	{:else if project}
 		<Breadcrumb
@@ -254,7 +254,8 @@
 	}
 
 	.nd-title {
-		font-size: 1.25rem;
+		font-size: var(--text-title-3);
+		line-height: var(--lh-title-3);
 		font-weight: 700;
 		color: var(--center-channel-color);
 		margin: 0;
@@ -262,14 +263,15 @@
 	}
 
 	.nd-subtitle {
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		color: var(--surface-muted);
 		margin: 0.25rem 0 0;
 	}
 
 	.nd-card {
 		border: 1px solid var(--surface-border);
-		border-radius: 1rem;
+		border-radius: var(--radius-lg);
 		background-color: var(--surface-bg);
 		padding: 1.25rem;
 		margin-bottom: 1rem;
@@ -279,22 +281,25 @@
 	}
 
 	.nd-card-title {
-		font-size: 0.9375rem;
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
 		font-weight: 600;
 		color: var(--center-channel-color);
 		margin: 0;
 	}
 
 	.nd-hint {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--surface-muted);
 		margin: 0;
 	}
 
 	.nd-error {
 		padding: 0.75rem 1rem;
-		border-radius: 0.75rem;
-		font-size: 0.875rem;
+		border-radius: var(--radius-md);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
 		color: var(--error-text-color);
 		border: 1px solid color-mix(in srgb, var(--error-text-color) 25%, transparent);

@@ -1,24 +1,24 @@
 import { animate } from 'motion';
-import { functionalMotion } from '$lib/utils/motion.svelte';
+import { motionEnabled, motion, transition, springToFloor } from '$lib/utils/motion.svelte';
 import { resourceStatus } from '$lib/components/ui';
 import type { StatusKind } from '$lib/components/ui';
 import type { ProjectGroup } from './types';
 
+const TECH = '/icons/tech';
+
 export const IMG_ICONS: Record<string, string> = {
-	postgres:
-		'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/postgresql/postgresql-original.svg',
-	postgresql:
-		'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/postgresql/postgresql-original.svg',
-	mysql: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/mysql/mysql-original.svg',
-	redis: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/redis/redis-original.svg',
-	mongo: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/mongodb/mongodb-original.svg',
-	mongodb: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/mongodb/mongodb-original.svg',
-	nginx: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/nginx/nginx-original.svg',
-	node: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/nodejs/nodejs-original.svg',
-	python: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/python/python-original.svg',
-	go: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/go/go-original.svg',
-	rust: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/rust/rust-original.svg',
-	grafana: 'https://cdn.jsdelivr.net/gh/devicons/devicon@2.17.0/icons/grafana/grafana-original.svg'
+	postgres: `${TECH}/postgresql-original.svg`,
+	postgresql: `${TECH}/postgresql-original.svg`,
+	mysql: `${TECH}/mysql-original.svg`,
+	redis: `${TECH}/redis-original.svg`,
+	mongo: `${TECH}/mongodb-original.svg`,
+	mongodb: `${TECH}/mongodb-original.svg`,
+	nginx: `${TECH}/nginx-original.svg`,
+	node: `${TECH}/nodejs-original.svg`,
+	python: `${TECH}/python-original.svg`,
+	go: `${TECH}/go-original.svg`,
+	rust: `${TECH}/rust-original.svg`,
+	grafana: `${TECH}/grafana-original.svg`
 };
 
 export function knownIcon(img?: string): string | null {
@@ -180,6 +180,8 @@ export function meshBakedBg(url: string) {
 	};
 }
 
+const bodyPad = new WeakMap<Element, number>();
+
 export function bodyAttach(
 	id: string,
 	isExpanded: () => boolean,
@@ -189,36 +191,144 @@ export function bodyAttach(
 ) {
 	return (el: Element) => {
 		const target = el as HTMLElement;
+		// Cached on first sight, while nothing is animating. This attachment is
+		// re-created when a sibling attribute changes; if that lands mid-collapse,
+		// a running WAAPI animation is driving padding and `getComputedStyle`
+		// reports a fraction of a pixel. Capturing that as the resting value is
+		// what left every later open 16px short and snapping at the end.
+		if (!bodyPad.has(target)) {
+			bodyPad.set(target, parseFloat(getComputedStyle(target).paddingTop) || 16);
+		}
+		const PAD = bodyPad.get(target)!;
 		projectBodyEls.set(id, target);
 		target.style.overflow = 'hidden';
-		target.style.willChange = 'height';
 		let firstEffect = true;
 		let gen = 0;
 		const measure = () => {
-			const cur = target.style.height;
+			const prevH = target.style.height;
+			const prevPT = target.style.paddingTop;
+			const prevPB = target.style.paddingBottom;
 			target.style.height = 'auto';
+			target.style.paddingTop = '';
+			target.style.paddingBottom = '';
 			const h = target.scrollHeight;
-			target.style.height = cur;
+			target.style.height = prevH;
+			target.style.paddingTop = prevPT;
+			target.style.paddingBottom = prevPB;
 			return h;
 		};
-		const sympathy = (compress: boolean) => {
+		// The tiles carry the open/close themselves via originBurst, flying out of
+		// and back into the project avatar. Moving or fading the grid on top of
+		// that drags every tile with it and hides them before they get home.
+		const resetGrid = () => {
 			const grid = target.querySelector<HTMLElement>('.od-grid');
-			if (grid) {
-				const yKick = compress ? 8 : -6;
-				animate(
-					grid,
-					{ y: [yKick, 0], scaleY: [compress ? 0.94 : 0.96, 1] },
-					{ type: 'spring', stiffness: 200, damping: 13, mass: 1, delay: 0.04 }
-				);
-			}
+			if (!grid) return;
+			grid.style.opacity = '';
+			grid.style.transform = '';
+		};
+
+		// The height/padding animation has to be cancellable: reversing direction
+		// mid-flight otherwise leaves the old run still driving padding back to 0,
+		// which fights the new one and lands the content 16px out of place.
+		let bodyAnim: { stop: () => void } | null = null;
+		const stopBodyAnim = () => {
+			bodyAnim?.stop();
+			bodyAnim = null;
+		};
+
+		let reflowRo: ResizeObserver | null = null;
+		let lastBodyH = 0;
+		let lastSlots: { x: number; y: number }[] = [];
+
+		const slotsOf = (grid: HTMLElement) =>
+			[...grid.children].map((c) => ({
+				x: (c as HTMLElement).offsetLeft,
+				y: (c as HTMLElement).offsetTop
+			}));
+
+		const stopReflowWatch = () => {
+			reflowRo?.disconnect();
+			reflowRo = null;
+		};
+
+		const startReflowWatch = (myGen: number) => {
+			stopReflowWatch();
+			const grid = target.querySelector<HTMLElement>('.od-grid');
+			if (!grid || typeof ResizeObserver === 'undefined') return;
+			lastBodyH = target.getBoundingClientRect().height;
+			lastSlots = slotsOf(grid);
+			let first = true;
+			reflowRo = new ResizeObserver(() => {
+				if (first) {
+					first = false;
+					return;
+				}
+				if (myGen !== gen || target.style.height !== 'auto') return;
+
+				const toH = target.getBoundingClientRect().height;
+				const fromH = lastBodyH;
+				const slots = slotsOf(grid);
+				const moved =
+					slots.length === lastSlots.length &&
+					slots.some(
+						(s, i) => Math.abs(s.x - lastSlots[i].x) > 1 || Math.abs(s.y - lastSlots[i].y) > 1
+					);
+
+				if (!moved && Math.abs(toH - fromH) < 4) {
+					lastBodyH = toH;
+					lastSlots = slots;
+					return;
+				}
+
+				if (moved) {
+					const kids = [...grid.children] as HTMLElement[];
+					const deltas = kids.map((_, i) => ({
+						dx: lastSlots[i].x - slots[i].x,
+						dy: lastSlots[i].y - slots[i].y
+					}));
+					kids.forEach((kid, i) => {
+						const { dx, dy } = deltas[i];
+						if (!dx && !dy) return;
+						kid.style.transform = `translate(${dx}px, ${dy}px)`;
+					});
+					void grid.offsetHeight;
+					kids.forEach((kid, i) => {
+						const { dx, dy } = deltas[i];
+						if (!dx && !dy) return;
+						motion(kid, { x: [dx, 0], y: [dy, 0] }, 'smooth');
+					});
+				}
+
+				lastBodyH = toH;
+				lastSlots = slots;
+
+				if (Math.abs(toH - fromH) >= 4) {
+					target.style.height = `${fromH}px`;
+					void target.offsetHeight;
+					animate(target, { height: toH }, transition('snappy')).finished.then(() => {
+						if (myGen !== gen) return;
+						target.style.height = 'auto';
+						lastBodyH = target.getBoundingClientRect().height;
+					});
+				}
+			});
+			reflowRo.observe(grid);
 		};
 		$effect(() => {
 			const open = isExpanded();
 			const myGen = ++gen;
-			if (!functionalMotion()) {
+			// Cancel before touching styles: stopping a Motion animation commits its
+			// current value inline, so cancelling later would clobber the padding we
+			// are about to restore and leave the content a pixel off its slot.
+			stopBodyAnim();
+			if (!motionEnabled()) {
 				firstEffect = false;
+				stopReflowWatch();
+				resetGrid();
 				target.style.height = open ? 'auto' : '0px';
 				target.style.opacity = open ? '1' : '0';
+				target.style.paddingTop = open ? '' : '0px';
+				target.style.paddingBottom = open ? '' : '0px';
 				if (!open) {
 					setRenderedProjectBodies(
 						new Set([...getRenderedProjectBodies()].filter((x) => x !== id))
@@ -231,68 +341,97 @@ export function bodyAttach(
 				firstEffect = false;
 				target.style.opacity = '0';
 				target.style.height = '0px';
+				target.style.paddingTop = `${PAD}px`;
+				target.style.paddingBottom = `${PAD}px`;
+				if (!open) {
+					setRenderedProjectBodies(
+						new Set([...getRenderedProjectBodies()].filter((x) => x !== id))
+					);
+					projectBodyEls.delete(id);
+					return;
+				}
+				target.style.paddingTop = `${PAD}px`;
+				target.style.paddingBottom = `${PAD}px`;
 				void target.offsetHeight;
-				const h = target.scrollHeight;
-				animate(
+				const h = measure();
+				bodyAnim = animate(
 					target,
 					{ height: h, opacity: 1 },
-					{ type: 'spring', stiffness: 220, damping: 16, mass: 0.9 }
-				).finished.then(() => {
+					transition('snappy', { distance: h })
+				);
+				bodyAnim.finished.then(() => {
 					if (myGen !== gen) return;
 					target.style.height = 'auto';
 					target.style.opacity = '1';
+					target.style.paddingTop = '';
+					target.style.paddingBottom = '';
+					startReflowWatch(myGen);
 				});
-				sympathy(false);
+				resetGrid();
 				return;
 			}
 			if (open) {
+				stopReflowWatch();
 				const cur = target.getBoundingClientRect().height;
 				target.style.height = `${cur}px`;
+				// Padding goes back up front, not in .finished. An interrupted close
+				// leaves it at 0, and restoring it only once the height animation
+				// ends drops the content 16px after everything has already settled.
+				target.style.paddingTop = `${PAD}px`;
+				target.style.paddingBottom = `${PAD}px`;
 				void target.offsetHeight;
 				const h = measure();
-				animate(
+				bodyAnim = animate(
 					target,
 					{ height: h, opacity: 1 },
-					{ type: 'spring', stiffness: 220, damping: 16, mass: 0.9 }
-				).finished.then(() => {
+					transition('snappy', { distance: h })
+				);
+				bodyAnim.finished.then(() => {
 					if (myGen !== gen) return;
 					target.style.height = 'auto';
 					target.style.opacity = '1';
+					target.style.paddingTop = '';
+					target.style.paddingBottom = '';
+					startReflowWatch(myGen);
 				});
-				sympathy(false);
+				resetGrid();
 			} else {
+				stopReflowWatch();
 				const cur = target.getBoundingClientRect().height;
 				target.style.height = `${cur}px`;
 				void target.offsetHeight;
 				const card = target.closest('.proj-card') as HTMLElement | null;
 				if (card) card.style.transformOrigin = 'top center';
-				const grid = target.querySelector<HTMLElement>('.od-grid');
-				if (grid) {
-					animate(
-						grid,
-						{ y: 6, scaleY: 0.96, opacity: 0.8 },
-						{ duration: 0.22, ease: [0.4, 0, 1, 1] }
-					);
-				}
-				animate(
-					target,
-					{ height: 0, opacity: 0 },
-					{ duration: 0.24, ease: [0.4, 0, 1, 1] }
-				).finished.then(() => {
-					if (myGen !== gen) return;
-					if (card) {
-						animate(card, { y: [-5, 0] }, { type: 'spring', stiffness: 120, damping: 10, mass: 1 });
-					}
-					if (!isExpanded()) {
-						setRenderedProjectBodies(
-							new Set([...getRenderedProjectBodies()].filter((x) => x !== id))
-						);
-						projectBodyEls.delete(id);
+				// Padding has to come down with the height, or the body settles at a
+				// 32px sliver and sits there until the tiles finish flying home.
+				// Padding is set directly and never handed to Motion. Motion retains
+				// ownership of every property it has animated on an element and
+				// re-applies its last value when the next animation starts, so a
+				// padding keyframe here silently clobbers the reset on reopen.
+				target.style.paddingTop = '0px';
+				target.style.paddingBottom = '0px';
+				// Not exit-scaled. `springToFloor` ends at the first zero crossing rather
+				// than at full settle, so an exit-shortened spring lands earlier still
+				// and the collapse reads as a fast-forward next to the ~460ms open.
+				animate(target, { opacity: 0 }, transition('snappy', { delay: 0.04 }));
+				bodyAnim = springToFloor(target, 'height', cur, {
+					name: 'snappy',
+					delay: 0.04,
+					onFloor: () => {
+						if (myGen !== gen) return;
+						if (!isExpanded()) {
+							setRenderedProjectBodies(
+								new Set([...getRenderedProjectBodies()].filter((x) => x !== id))
+							);
+							projectBodyEls.delete(id);
+						}
 					}
 				});
 			}
 		});
 		return () => {
+			stopReflowWatch();
+			stopBodyAnim();
 			projectBodyEls.delete(id);
 		};
 	};

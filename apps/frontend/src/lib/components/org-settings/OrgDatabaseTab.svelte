@@ -21,7 +21,6 @@
 <SettingsSection
 	title="Public database IP"
 	description="Shared external IP for public database exposure"
-	iconColor="green"
 	{index}
 >
 	{#snippet icon(_hovered)}<Database class="h-[18px] w-[18px]" />{/snippet}
@@ -50,7 +49,7 @@
 
 <style>
 	.od-hint {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
 		color: var(--surface-muted);
 		margin: 0 0 1rem;
 		line-height: 1.5;
@@ -64,7 +63,8 @@
 		flex: 1;
 	}
 	.od-no-access {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 		margin: 0;
 	}

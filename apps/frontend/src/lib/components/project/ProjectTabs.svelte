@@ -35,7 +35,7 @@
 	} = $props();
 </script>
 
-<div class="pj-tabs-row" bind:this={tabsRowEl}>
+<div class="pj-tabs-row pj-glass" bind:this={tabsRowEl}>
 	{#if projectId}
 		<div class="pj-env-context">
 			<EnvironmentSwitcher {projectId} bind:selectedEnvId />

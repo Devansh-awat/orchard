@@ -66,7 +66,7 @@
 						href={tab.href}
 						class="flex items-center gap-2 rounded-xl px-4 py-2 text-sm font-medium transition"
 						style={isActive(tab.href, tab.exact)
-							? 'background-color: var(--center-channel-bg); color: var(--center-channel-color); box-shadow: 0 1px 3px rgba(0,0,0,0.1);'
+							? 'background-color: var(--center-channel-bg); color: var(--center-channel-color); box-shadow: var(--elev-1);'
 							: 'color: var(--surface-muted);'}
 					>
 						<svelte:component this={tab.icon} class="h-4 w-4" />

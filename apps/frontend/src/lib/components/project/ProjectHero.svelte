@@ -1,8 +1,9 @@
 <script lang="ts">
 	import { animate } from 'motion';
-	import { functionalMotion } from '$lib/utils/motion.svelte';
+	import { motionEnabled, transition } from '$lib/utils/motion.svelte';
 	import { tick } from 'svelte';
-	import { Palette, Trash2, Loader2 } from 'lucide-svelte';
+	import { Palette, Trash2, Loader2, Ellipsis } from 'lucide-svelte';
+	import { Menu, MenuItem } from '$lib/components/ui';
 	import type { Project } from './types';
 
 	let {
@@ -38,10 +39,10 @@
 	$effect(() => {
 		const compact = heroCompact;
 		const heroPx = compact ? 7.5 * 16 : 18 * 16;
-		const titlePx = compact ? 1.0625 * 16 : 1.25 * 16;
+		const titlePx = compact ? 1.375 * 16 : 1.75 * 16;
 		const descOp = compact ? 0 : 1;
 
-		if (!functionalMotion()) {
+		if (!motionEnabled()) {
 			if (heroEl) heroEl.style.height = `${heroPx}px`;
 			if (heroTitleEl) heroTitleEl.style.fontSize = `${titlePx}px`;
 			if (heroDescEl) heroDescEl.style.opacity = `${descOp}`;
@@ -50,25 +51,13 @@
 		}
 
 		if (heroEl) {
-			animate(
-				heroEl,
-				{ height: `${heroPx}px` },
-				{ type: 'spring', stiffness: 180, damping: 19, mass: 1.3 }
-			);
+			animate(heroEl, { height: `${heroPx}px` }, transition('smooth'));
 		}
 		if (heroTitleEl) {
-			animate(
-				heroTitleEl,
-				{ fontSize: `${titlePx}px` },
-				{ type: 'spring', stiffness: 220, damping: 22, mass: 1 }
-			);
+			animate(heroTitleEl, { fontSize: `${titlePx}px` }, transition('smooth'));
 		}
 		if (heroDescEl) {
-			animate(
-				heroDescEl,
-				{ opacity: descOp },
-				{ type: 'spring', stiffness: 260, damping: 26, mass: 0.7 }
-			);
+			animate(heroDescEl, { opacity: descOp }, transition('smooth'));
 		}
 		if (firstRun) {
 			firstRun = false;
@@ -115,28 +104,35 @@
 			{/if}
 		</div>
 		<div class="pj-header-actions">
-			{#if canEdit}
-				<button
-					onclick={onCustomize}
-					class="pj-icon-btn pj-icon-btn--onhero"
-					aria-label="Customize project"
-					title="Customize project"
-				>
-					<Palette class="h-4 w-4" />
-				</button>
-			{/if}
-			{#if canDelete}
-				<button
-					onclick={onDelete}
-					disabled={deleting}
-					class="pj-icon-btn pj-icon-btn--danger pj-icon-btn--onhero"
-					aria-label="Delete project"
-					title="Delete project"
-				>
-					{#if deleting}<Loader2 class="h-4 w-4 animate-spin" />{:else}<Trash2
-							class="h-4 w-4"
-						/>{/if}
-				</button>
+			{#if canEdit || canDelete}
+				<Menu placement="bottom-end">
+					{#snippet trigger(attrs, open)}
+						<button
+							type="button"
+							class="pj-icon-btn pj-icon-btn--onhero"
+							aria-label="Project options"
+							aria-haspopup="menu"
+							aria-expanded={open}
+							{...attrs}
+						>
+							<Ellipsis class="h-4 w-4" />
+						</button>
+					{/snippet}
+					{#if canEdit}
+						<MenuItem onclick={() => onCustomize?.()}>
+							<Palette size={14} />
+							Customize appearance
+						</MenuItem>
+					{/if}
+					{#if canDelete}
+						<MenuItem danger disabled={deleting} onclick={() => onDelete?.()}>
+							{#if deleting}<Loader2 size={14} class="animate-spin" />{:else}<Trash2
+									size={14}
+								/>{/if}
+							Delete project
+						</MenuItem>
+					{/if}
+				</Menu>
 			{/if}
 		</div>
 	</div>

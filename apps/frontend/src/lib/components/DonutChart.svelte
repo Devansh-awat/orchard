@@ -182,13 +182,15 @@
 		pointer-events: none;
 	}
 	.donut-center-label {
-		font-size: 1rem;
+		font-size: var(--text-headline);
+		line-height: var(--lh-headline);
 		font-weight: 700;
 		color: var(--center-channel-color);
 		letter-spacing: -0.01em;
 	}
 	.donut-center-caption {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 		margin-top: 0.125rem;
 	}
@@ -206,14 +208,15 @@
 	.donut-legend-item {
 		display: flex;
 		align-items: center;
-		gap: 0.625rem;
-		font-size: 0.8125rem;
+		gap: 0.75rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--center-channel-color);
 	}
 	.donut-legend-swatch {
 		width: 0.625rem;
 		height: 0.625rem;
-		border-radius: 0.25rem;
+		border-radius: var(--radius-xs);
 		flex-shrink: 0;
 	}
 	.donut-legend-label {
@@ -221,7 +224,7 @@
 		overflow: hidden;
 		text-overflow: ellipsis;
 		white-space: nowrap;
-		font-weight: 500;
+		font-weight: 600;
 	}
 	.donut-legend-value {
 		display: inline-flex;
@@ -233,7 +236,8 @@
 		font-weight: 600;
 	}
 	.donut-legend-pct {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 		font-variant-numeric: tabular-nums;
 		min-width: 2.5rem;

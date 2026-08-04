@@ -325,19 +325,28 @@
 		<div class="pj-header">
 			<div class="pj-header-top">
 				<div class="pj-header-info">
-					<div class="skeleton" style="height: 1.5rem; width: 40%; margin-bottom: 0.375rem;"></div>
+					<div class="skeleton" style="height: 1.5rem; width: 40%; margin-bottom: 0.5rem;"></div>
 					<div class="skeleton" style="height: 0.875rem; width: 55%;"></div>
 				</div>
 				<div class="pj-header-actions">
-					<div class="skeleton" style="height: 2rem; width: 4.5rem; border-radius: 0.5rem;"></div>
-					<div class="skeleton" style="height: 2rem; width: 5rem; border-radius: 0.5rem;"></div>
+					<div
+						class="skeleton"
+						style="height: 2rem; width: 4.5rem; border-radius: var(--radius-sm);"
+					></div>
+					<div
+						class="skeleton"
+						style="height: 2rem; width: 5rem; border-radius: var(--radius-sm);"
+					></div>
 				</div>
 			</div>
 		</div>
 		<!-- Skeleton: Stats -->
 		<div class="pj-stats">
 			{#each Array(3) as _, i (i)}
-				<div class="skeleton" style="height: 1.75rem; width: 6rem; border-radius: 0.5rem;"></div>
+				<div
+					class="skeleton"
+					style="height: 1.75rem; width: 6rem; border-radius: var(--radius-sm);"
+				></div>
 			{/each}
 		</div>
 		<!-- Skeleton: Deployments header -->
@@ -657,13 +666,15 @@
 		gap: 0.75rem;
 		padding: 3rem 0;
 		color: var(--surface-muted);
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 	}
 
 	.pj-error {
 		padding: 0.75rem 1rem;
-		border-radius: 0.75rem;
-		font-size: 0.875rem;
+		border-radius: var(--radius-md);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
 		color: var(--error-text-color);
 		border: 1px solid color-mix(in srgb, var(--error-text-color) 25%, transparent);
@@ -688,7 +699,8 @@
 	}
 
 	.pj-title {
-		font-size: 1.25rem;
+		font-size: var(--text-title-3);
+		line-height: var(--lh-title-3);
 		font-weight: 700;
 		color: var(--center-channel-color);
 		margin: 0;
@@ -696,7 +708,8 @@
 	}
 
 	.pj-description {
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		color: var(--surface-muted);
 		margin: 0.25rem 0 0;
 	}
@@ -718,10 +731,11 @@
 	.pj-stat {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
-		padding: 0.375rem 0.75rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
+		gap: 0.5rem;
+		padding: 0.5rem 0.75rem;
+		border-radius: var(--radius-sm);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);
 		text-decoration: none;
@@ -737,7 +751,8 @@
 	}
 
 	.pj-stat-code {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		font-family: var(--font-mono);
 		color: var(--center-channel-color);
 	}
@@ -753,7 +768,8 @@
 	}
 
 	.pj-section-title {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -773,12 +789,13 @@
 
 	.pj-search-input {
 		width: 100%;
-		padding: 0.4375rem 0.75rem;
-		border-radius: 0.5rem;
+		padding: 0.5rem 0.75rem;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--surface-border);
 		background-color: var(--center-channel-bg);
 		color: var(--center-channel-color);
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 	}
 
 	.pj-search-input::placeholder {
@@ -804,13 +821,13 @@
 		gap: 0.875rem;
 		padding: 1.25rem;
 		border: 1px solid var(--surface-border);
-		border-radius: 1rem;
+		border-radius: var(--radius-lg);
 		background-color: var(--surface-bg);
 		text-decoration: none;
 		color: var(--center-channel-color);
 		transition:
-			border-color 0.15s,
-			box-shadow 0.15s;
+			border-color var(--dur-fast),
+			box-shadow var(--dur-fast);
 		cursor: pointer;
 		box-shadow:
 			0 1px 3px rgb(0 0 0 / 0.03),
@@ -835,7 +852,7 @@
 		justify-content: center;
 		width: 3rem;
 		height: 3rem;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		flex-shrink: 0;
 	}
 
@@ -887,13 +904,15 @@
 	}
 
 	.pj-deployment-name {
-		font-size: 0.9375rem;
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
 		font-weight: 600;
 		color: var(--center-channel-color);
 	}
 
 	.pj-deployment-detail {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 		font-family: var(--font-mono);
 		white-space: nowrap;
@@ -905,10 +924,11 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--surface-muted);
 		padding: 0.125rem 0.5rem;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);
 		width: fit-content;
 	}
@@ -918,16 +938,18 @@
 	}
 
 	.pj-deployment-replicas {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--surface-muted);
 	}
 
 	.pj-deployment-status-badge {
-		font-size: 0.75rem;
-		font-weight: 500;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		text-transform: capitalize;
-		padding: 0.25rem 0.625rem;
-		border-radius: 9999px;
+		padding: 0.25rem 0.75rem;
+		border-radius: var(--radius-pill);
 		flex-shrink: 0;
 	}
 
@@ -952,10 +974,11 @@
 	}
 
 	.pj-deployment-build-badge {
-		font-size: 0.7rem;
-		font-weight: 500;
-		padding: 0.2rem 0.5rem;
-		border-radius: 9999px;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
+		padding: 0.25rem 0.5rem;
+		border-radius: var(--radius-pill);
 		flex-shrink: 0;
 	}
 
@@ -977,9 +1000,10 @@
 		gap: 0.75rem;
 		padding: 4rem 1.5rem;
 		color: var(--surface-muted);
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		border: 1px dashed var(--surface-border);
-		border-radius: 1rem;
+		border-radius: var(--radius-lg);
 		margin-bottom: 1.5rem;
 	}
 
@@ -987,15 +1011,16 @@
 	.pj-btn {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
-		padding: 0.4375rem 0.875rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		font-weight: 500;
+		gap: 0.5rem;
+		padding: 0.5rem 0.875rem;
+		border-radius: var(--radius-sm);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
 		border: none;
 		cursor: pointer;
 		text-decoration: none;
-		transition: opacity 0.15s;
+		transition: opacity var(--dur-fast);
 		white-space: nowrap;
 	}
 
@@ -1058,7 +1083,7 @@
 	.pj-member {
 		display: flex;
 		align-items: center;
-		gap: 0.625rem;
+		gap: 0.75rem;
 		padding: 0.5rem 0;
 	}
 
@@ -1080,7 +1105,8 @@
 		justify-content: center;
 		background: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
 		color: var(--sidebar-text-active-border);
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 700;
 	}
 
@@ -1092,8 +1118,9 @@
 	}
 
 	.pj-member-name {
-		font-size: 0.8125rem;
-		font-weight: 500;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
 		color: var(--center-channel-color);
 		white-space: nowrap;
 		overflow: hidden;
@@ -1101,7 +1128,8 @@
 	}
 
 	.pj-member-email {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 		white-space: nowrap;
 		overflow: hidden;
@@ -1109,8 +1137,9 @@
 	}
 
 	.pj-member-role {
-		font-size: 0.6875rem;
-		font-weight: 500;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
 		color: var(--surface-muted);
 		text-transform: capitalize;
 		flex-shrink: 0;

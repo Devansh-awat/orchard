@@ -31,13 +31,17 @@
 	}
 
 	.bc-item {
-		font-size: 0.8125rem;
+		display: inline-flex;
+		align-items: center;
+		min-height: 1.5rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 	}
 
 	.bc-link {
 		text-decoration: none;
-		transition: color 0.15s;
+		transition: color var(--dur-fast);
 	}
 
 	.bc-link:hover {
@@ -46,7 +50,7 @@
 
 	.bc-current {
 		color: var(--center-channel-color);
-		font-weight: 500;
+		font-weight: 600;
 	}
 
 	:global(.bc-sep) {

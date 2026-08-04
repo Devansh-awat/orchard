@@ -9,11 +9,13 @@
 		Copy,
 		Check,
 		ChevronRight,
-		Pencil
+		Pencil,
+		BookOpen
 	} from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import RenameModal from '$lib/components/RenameModal.svelte';
-	import { Button } from '$lib/components/ui';
+	import { Alert, Button, EmptyState, Input, Skeleton } from '$lib/components/ui';
+	import { motionStagger } from '$lib/utils/motion.svelte';
 
 	interface ApiToken {
 		id: string;
@@ -175,26 +177,28 @@
 	});
 </script>
 
-<div class="settings-body">
+<div class="settings-body" {@attach motionStagger({ index: 0 })}>
 	{#if createdToken}
-		<div class="token-created-banner">
-			<div class="token-created-header">
-				<KeyRound class="h-4 w-4" />
-				<p class="token-created-title">Token created — copy it now, it won't be shown again</p>
-			</div>
-			<div class="token-created-value-row">
-				<code class="token-created-value">{createdToken}</code>
-				<button class="btn btn-primary" onclick={copyToken}>
-					{#if copied}
-						<Check class="h-4 w-4" />
-						Copied
-					{:else}
-						<Copy class="h-4 w-4" />
-						Copy
-					{/if}
-				</button>
-			</div>
-			<button class="btn btn-secondary btn-sm" onclick={closeCreated}>Done</button>
+		<div class="token-created">
+			<Alert tone="success" title="Token created">
+				{#snippet icon()}<KeyRound size={15} />{/snippet}
+				<p class="token-created-note">Copy it now, it won't be shown again.</p>
+				<div class="token-created-value-row">
+					<code class="code-block token-created-value">{createdToken}</code>
+					<Button variant="primary" onclick={copyToken}>
+						{#if copied}
+							<Check class="h-4 w-4" />
+							Copied
+						{:else}
+							<Copy class="h-4 w-4" />
+							Copy
+						{/if}
+					</Button>
+				</div>
+				<div class="token-created-actions">
+					<Button variant="secondary" size="sm" onclick={closeCreated}>Done</Button>
+				</div>
+			</Alert>
 		</div>
 	{/if}
 
@@ -206,7 +210,7 @@
 			}}
 		>
 			<div class="settings-section-trigger-left">
-				<Plus class="h-4 w-4" />
+				<span class="uat-icon"><Plus class="h-[18px] w-[18px]" /></span>
 				<div>
 					<p class="settings-section-label">Create new token</p>
 					<p class="settings-section-desc">
@@ -226,23 +230,23 @@
 					API.
 				</p>
 				<div class="token-create-form">
-					<input
-						class="input flex-1"
+					<Input
+						class="flex-1"
 						type="text"
 						placeholder="Token name (e.g. Claude Code, CI/CD)"
 						bind:value={newTokenName}
-						onkeydown={(e) => {
+						onkeydown={(e: KeyboardEvent) => {
 							if (e.key === 'Enter') createToken();
 						}}
 					/>
-					<button
-						class="btn btn-primary"
+					<Button
+						variant="primary"
 						onclick={createToken}
+						loading={creating}
 						disabled={creating || !newTokenName.trim()}
 					>
-						{#if creating}<Loader2 class="h-4 w-4 animate-spin" />{/if}
 						Create
-					</button>
+					</Button>
 				</div>
 			</div>
 		{/if}
@@ -251,52 +255,46 @@
 	<section class="settings-section">
 		<button class="settings-section-trigger" style="cursor: default;">
 			<div class="settings-section-trigger-left">
-				<KeyRound class="h-4 w-4" />
+				<span class="uat-icon"><KeyRound class="h-[18px] w-[18px]" /></span>
 				<div>
 					<p class="settings-section-label">Active tokens</p>
-					<p class="settings-section-desc">
+					<div class="settings-section-desc">
 						{#if loading}
-							<span class="skeleton" style="display: inline-block; width: 4rem; height: 0.75rem;"
-							></span>
+							<Skeleton width="4rem" height="0.75rem" />
 						{:else}
 							{tokens.length} token{tokens.length !== 1 ? 's' : ''}
 						{/if}
-					</p>
+					</div>
 				</div>
 			</div>
 		</button>
 
 		<div class="settings-section-content">
 			{#if error}
-				<div class="alert alert-error">{error}</div>
+				<Alert tone="error">{error}</Alert>
 			{:else if loading}
-				<div style="display: flex; flex-direction: column; gap: 0.375rem; padding: 0.25rem 0;">
+				<div class="token-list">
 					{#each [1, 2] as _ (_)}
-						<div
-							style="display: flex; align-items: center; justify-content: space-between; padding: 0.875rem 1rem; border: 1px solid var(--surface-border); border-radius: 0.625rem;"
-						>
-							<div style="display: flex; flex-direction: column; gap: 0.375rem; flex: 1;">
-								<div class="skeleton" style="width: 8rem; height: 0.875rem;"></div>
-								<div class="skeleton" style="width: 14rem; height: 0.6875rem;"></div>
+						<div class="token-item token-item--skeleton">
+							<div class="token-skeleton-lines">
+								<Skeleton width="8rem" height="0.875rem" />
+								<Skeleton width="14rem" height="0.6875rem" />
 							</div>
-							<div
-								class="skeleton"
-								style="width: 1.75rem; height: 1.75rem; border-radius: 0.375rem;"
-							></div>
+							<Skeleton width="1.75rem" height="1.75rem" rounded="var(--radius-xs)" />
 						</div>
 					{/each}
 				</div>
 			{:else if tokens.length === 0}
-				<p class="settings-hint" style="text-align: center; padding: 1rem 0;">
-					No API tokens yet. Create one to get started.
-				</p>
+				<EmptyState title="No API tokens yet" description="Create one to get started.">
+					{#snippet icon()}<KeyRound class="h-6 w-6" />{/snippet}
+				</EmptyState>
 			{:else}
 				<div class="token-list">
 					{#each tokens as token (token.id)}
 						<div class="token-item">
 							<div class="flex-1 min-w-0">
-								<p class="settings-field-value">{token.name}</p>
-								<p class="settings-field-label">
+								<p class="token-name">{token.name}</p>
+								<p class="token-meta">
 									Created {formatTimestamp(token.createdAt)} · Last used {formatTimestamp(
 										token.lastUsedAt
 									)}
@@ -308,19 +306,19 @@
 							<Button variant="ghost" onclick={() => openRename(token)} title="Rename token">
 								<Pencil class="h-3.5 w-3.5" />
 							</Button>
-							<button
-								class="btn btn-ghost"
+							<Button
+								variant="ghost"
 								onclick={() => confirmRevokeToken(token)}
 								disabled={deletingId === token.id}
 								title="Revoke token"
-								style="color: var(--error-text-color);"
+								class="uat-revoke"
 							>
 								{#if deletingId === token.id}
 									<Loader2 class="h-3.5 w-3.5 animate-spin" />
 								{:else}
 									<Trash2 class="h-3.5 w-3.5" />
 								{/if}
-							</button>
+							</Button>
 						</div>
 					{/each}
 				</div>
@@ -331,6 +329,7 @@
 	<section class="settings-section">
 		<button class="settings-section-trigger" onclick={() => {}} style="cursor: default;">
 			<div class="settings-section-trigger-left">
+				<span class="uat-icon"><BookOpen class="h-[18px] w-[18px]" /></span>
 				<div>
 					<p class="settings-section-label">Usage</p>
 					<p class="settings-section-desc">How to use your token</p>
@@ -340,8 +339,8 @@
 
 		<div class="settings-section-content">
 			<div class="usage-block">
-				<p class="settings-field-label">Claude Code / MCP Client</p>
-				<pre class="usage-code">{`{
+				<p class="usage-label">Claude Code / MCP client</p>
+				<pre class="code-block usage-code">{`{
   "mcpServers": {
     "orchard": {
       "type": "url",
@@ -355,8 +354,8 @@
 			</div>
 
 			<div class="usage-block">
-				<p class="settings-field-label">API (curl)</p>
-				<pre class="usage-code">{`curl -H "Authorization: Bearer orch_..." \\
+				<p class="usage-label">API (curl)</p>
+				<pre class="code-block usage-code">{`curl -H "Authorization: Bearer orch_..." \\
   https://yourdomain.com/apiv1/auth/me`}</pre>
 			</div>
 		</div>
@@ -391,18 +390,16 @@
 	.settings-body {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: var(--space-4);
 	}
 
 	.settings-section {
-		border: 1px solid var(--surface-border);
-		border-radius: 1rem;
+		border: none;
+		border-radius: var(--radius-lg);
 		overflow: hidden;
-		background-color: var(--surface-bg);
-		margin-bottom: 0.5rem;
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.03),
-			0 1px 2px rgb(0 0 0 / 0.02);
+		background-color: var(--bg-raised);
+		margin-bottom: var(--space-2);
+		box-shadow: var(--elev-1);
 	}
 
 	.settings-section-trigger {
@@ -410,40 +407,55 @@
 		align-items: center;
 		justify-content: space-between;
 		width: 100%;
-		padding: 1.125rem 1.375rem;
+		padding: var(--space-5) var(--space-6);
 		cursor: pointer;
 		background: transparent;
-		color: var(--center-channel-color);
-		transition: background-color 120ms ease;
+		color: var(--text-default);
+		transition: background-color var(--dur-fast) ease;
 	}
 
 	.settings-section-trigger:hover {
-		background-color: var(--control-hover-bg);
+		background-color: var(--bg-hover);
 	}
 
 	.settings-section-trigger-left {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
+		gap: var(--space-3);
+	}
+
+	.uat-icon {
+		display: flex;
+		align-items: center;
+		justify-content: center;
+		width: 2.25rem;
+		height: 2.25rem;
+		border-radius: var(--radius-md);
+		flex-shrink: 0;
+		background-color: var(--fill-soft);
+		color: var(--text-default);
 	}
 
 	.settings-section-label {
-		font-size: 0.875rem;
+		font-size: var(--text-title-3);
 		font-weight: 600;
-		color: var(--center-channel-color);
+		line-height: 1.3;
+		color: var(--text-default);
 		text-align: left;
-		letter-spacing: -0.01em;
+		letter-spacing: var(--track-headline);
 	}
 
 	.settings-section-desc {
-		font-size: 0.75rem;
-		color: var(--surface-muted);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		color: var(--text-muted);
 		text-align: left;
+		margin-top: 0.125rem;
 	}
 
 	.settings-section-chevron {
-		color: var(--surface-muted);
-		transition: transform 200ms ease;
+		color: var(--text-muted);
+		transition: transform var(--dur-base) ease;
 		flex-shrink: 0;
 	}
 
@@ -452,121 +464,151 @@
 	}
 
 	.settings-section-content {
-		padding: 0 1.375rem 1.375rem;
+		padding: 0 var(--space-6) var(--space-6);
 		display: flex;
 		flex-direction: column;
 		gap: 0.875rem;
-		border-top: 1px solid var(--surface-border);
-		padding-top: 1.125rem;
-	}
-
-	.settings-field-label {
-		font-size: 0.6875rem;
-		font-weight: 500;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--surface-muted);
-	}
-
-	.settings-field-value {
-		font-size: 0.875rem;
-		font-weight: 500;
-		color: var(--center-channel-color);
 	}
 
 	.settings-hint {
-		font-size: 0.8125rem;
-		color: var(--surface-muted);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		color: var(--text-muted);
 	}
 
-	.token-created-banner {
-		border: 1px solid var(--online-indicator);
-		border-left-width: 3px;
-		border-radius: 1rem;
-		padding: 1.375rem;
-		margin-bottom: 0.5rem;
-		background-color: color-mix(in srgb, var(--online-indicator) 8%, var(--center-channel-bg));
-		display: flex;
-		flex-direction: column;
-		gap: 0.875rem;
+	.token-created {
+		margin-bottom: var(--space-2);
 	}
 
-	.token-created-header {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		color: var(--online-indicator);
-		font-weight: 600;
-		font-size: 0.875rem;
-	}
-
-	.token-created-title {
-		font-size: 0.8125rem;
-		font-weight: 600;
+	.token-created-note {
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		color: var(--text-muted);
 	}
 
 	.token-created-value-row {
 		display: flex;
-		gap: 0.5rem;
+		gap: var(--space-2);
 		align-items: center;
+		margin-top: var(--space-3);
 	}
 
 	.token-created-value {
 		flex: 1;
-		font-size: 0.75rem;
-		font-family: var(--font-mono);
-		padding: 0.625rem 0.75rem;
-		border-radius: 0.5rem;
-		background-color: var(--surface-bg);
-		border: 1px solid var(--surface-border);
-		color: var(--center-channel-color);
+		min-width: 0;
+		padding: 0.625rem var(--space-3);
 		word-break: break-all;
 		user-select: all;
+		white-space: normal;
+	}
+
+	.token-created-actions {
+		margin-top: var(--space-3);
 	}
 
 	.token-create-form {
 		display: flex;
-		gap: 0.5rem;
+		gap: var(--space-2);
 	}
 
 	.token-list {
 		display: flex;
 		flex-direction: column;
-		gap: 0.375rem;
+		gap: 0.5rem;
+	}
+
+	.token-item :global(.uat-revoke) {
+		color: var(--status-error);
 	}
 
 	.token-item {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 1rem;
-		padding: 0.875rem 1rem;
-		border-radius: 0.625rem;
-		border: 1px solid var(--surface-border);
-		transition: background-color 120ms ease;
+		gap: var(--space-4);
+		padding: 0.875rem var(--space-4);
+		border-radius: var(--radius-md);
+		border: 1px solid var(--border-default);
+		transition: background-color var(--dur-fast) ease;
 	}
 
 	.token-item:hover {
-		background-color: color-mix(in srgb, var(--center-channel-color) 2%, transparent);
+		background-color: var(--fill-quiet);
+	}
+
+	.token-item--skeleton:hover {
+		background-color: transparent;
+	}
+
+	.token-skeleton-lines {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		flex: 1;
+	}
+
+	.token-name {
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
+		font-weight: 600;
+		color: var(--text-default);
+		overflow-wrap: anywhere;
+	}
+
+	.token-meta {
+		font-size: var(--text-footnote);
+		font-weight: 600;
+		color: var(--text-muted);
+		font-variant-numeric: tabular-nums;
+		line-height: 1.5;
+		margin-top: 0.125rem;
+		white-space: normal;
+		overflow-wrap: anywhere;
 	}
 
 	.usage-block {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: var(--space-2);
+	}
+
+	.usage-label {
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
+		color: var(--text-muted);
+	}
+
+	.code-block {
+		font-family: var(--font-mono);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		background-color: var(--bg-sunken);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-sm);
+		color: var(--text-default);
 	}
 
 	.usage-code {
-		font-size: 0.75rem;
-		font-family: var(--font-mono);
 		padding: 0.875rem 1.125rem;
-		border-radius: 0.625rem;
-		background-color: color-mix(in srgb, var(--surface-border) 30%, var(--center-channel-bg));
-		border: 1px solid var(--surface-border);
-		color: var(--center-channel-color);
 		overflow-x: auto;
 		white-space: pre;
 		line-height: 1.6;
 		margin: 0;
+	}
+
+	@media (max-width: 640px) {
+		.settings-section-trigger {
+			padding: var(--space-4) var(--space-5);
+		}
+
+		.settings-section-content {
+			padding: 0 var(--space-5) var(--space-5);
+		}
+
+		.token-created-value-row {
+			flex-direction: column;
+			align-items: stretch;
+		}
 	}
 </style>

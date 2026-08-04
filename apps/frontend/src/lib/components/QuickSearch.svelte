@@ -358,8 +358,7 @@
 		return motionPopoverBase({
 			closing,
 			onClosed,
-			from: { opacity: 0, scale: 0.96, y: -8 },
-			stiffness: 540
+			from: { opacity: 0, scale: 0.96, y: -8 }
 		});
 	}
 	function motionBackdrop(closing: () => boolean) {
@@ -368,7 +367,6 @@
 	function rowStagger(index: number) {
 		return motionStaggerBase({
 			index: Math.min(index, 12),
-			stride: 0.018,
 			from: { y: 4, opacity: 0, scale: 1 }
 		});
 	}
@@ -526,7 +524,7 @@
 		flex-direction: column;
 		background-color: var(--surface-bg);
 		border: 1px solid var(--surface-border);
-		border-radius: 0.875rem;
+		border-radius: var(--radius-lg);
 		box-shadow:
 			0 20px 25px -5px rgba(0, 0, 0, 0.1),
 			0 10px 10px -5px rgba(0, 0, 0, 0.04);
@@ -566,15 +564,16 @@
 		width: 100%;
 		margin: 0;
 		padding: 0.75rem 0.75rem 0.75rem 2.4rem;
-		font-size: 0.9375rem;
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
 		background-color: var(--control-bg);
 		border: 1px solid var(--surface-border);
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		color: var(--center-channel-color);
 		outline: none;
 		transition:
-			border-color 120ms ease,
-			box-shadow 120ms ease;
+			border-color var(--dur-fast) ease,
+			box-shadow var(--dur-fast) ease;
 	}
 
 	.quick-search-input:focus {
@@ -597,12 +596,12 @@
 		padding: 0;
 		background-color: transparent;
 		border: none;
-		border-radius: 0.25rem;
+		border-radius: var(--radius-xs);
 		color: var(--surface-muted);
 		cursor: pointer;
 		transition:
-			background-color 120ms ease,
-			color 120ms ease;
+			background-color var(--dur-fast) ease,
+			color var(--dur-fast) ease;
 	}
 
 	.quick-search-clear:hover {
@@ -621,8 +620,9 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.625rem 0.75rem 0.25rem;
-		font-size: 0.6875rem;
+		padding: 0.75rem 0.75rem 0.25rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
@@ -632,7 +632,8 @@
 	.quick-search-group-label {
 		text-transform: none;
 		letter-spacing: 0;
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		font-weight: 600;
 		color: color-mix(in srgb, var(--center-channel-color) 75%, transparent);
 	}
@@ -640,14 +641,15 @@
 	.quick-search-group-pill {
 		display: inline-flex;
 		align-items: center;
-		padding: 0.0625rem 0.4375rem;
-		font-size: 0.625rem;
-		font-weight: 500;
+		padding: 0.0625rem 0.5rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
 		color: var(--sidebar-text-active-border);
 		background: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 	}
 
 	.quick-search-item {
@@ -655,14 +657,14 @@
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-		padding: 0.625rem 0.75rem;
+		padding: 0.75rem 0.75rem;
 		text-align: left;
 		background-color: transparent;
 		border: none;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		color: var(--center-channel-color);
 		cursor: pointer;
-		transition: background-color 100ms ease;
+		transition: background-color var(--dur-fast) ease;
 	}
 
 	.quick-search-item.is-nested {
@@ -693,8 +695,9 @@
 	}
 
 	.quick-search-item-name {
-		font-size: 0.9375rem;
-		font-weight: 500;
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
+		font-weight: 600;
 		color: var(--center-channel-color);
 		white-space: nowrap;
 		overflow: hidden;
@@ -714,7 +717,8 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--surface-muted);
 	}
 
@@ -734,22 +738,24 @@
 	}
 
 	.quick-search-empty-text {
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		color: var(--center-channel-color);
 		margin: 0;
 	}
 
 	.quick-search-empty-hint {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--surface-muted);
-		margin: 0.375rem 0 0;
+		margin: 0.5rem 0 0;
 	}
 
 	.quick-search-footer {
 		display: flex;
 		align-items: center;
 		gap: 1rem;
-		padding: 0.625rem 1rem;
+		padding: 0.75rem 1rem;
 		border-top: 1px solid var(--surface-border);
 		background-color: var(--control-bg);
 	}
@@ -766,23 +772,26 @@
 		justify-content: center;
 		min-width: 1.5rem;
 		height: 1.5rem;
-		padding: 0 0.375rem;
-		font-size: 0.75rem;
-		font-weight: 500;
+		padding: 0 0.5rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		background-color: var(--surface-bg);
 		border: 1px solid var(--surface-border);
-		border-radius: 0.25rem;
+		border-radius: var(--radius-xs);
 		color: var(--center-channel-color);
 	}
 
 	.quick-search-hint-text {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--surface-muted);
 	}
 
 	.quick-search-count {
 		margin-left: auto;
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--surface-muted);
 	}
 </style>

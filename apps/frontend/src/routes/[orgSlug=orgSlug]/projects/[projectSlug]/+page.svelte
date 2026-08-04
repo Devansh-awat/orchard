@@ -3,15 +3,14 @@
 	import { onDestroy, onMount, tick, untrack } from 'svelte';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { animate } from 'motion';
-	import { springPop, decorativeMotion } from '$lib/utils/motion.svelte';
+	import { springPop, motionEnabled, transition } from '$lib/utils/motion.svelte';
 	import { apiFetch, toasts, subscribeOrgEvents, sseStatusFor } from '$lib/stores';
 	import { queryClient } from '$lib/query';
 	import type { PageData } from './$types';
 	import { SpatialMenu } from 'melt/builders';
-	import { Server, TriangleAlert } from 'lucide-svelte';
+	import { Server, TriangleAlert, ChevronLeft } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import NewResourceModal from '$lib/components/NewResourceModal.svelte';
-	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
 	import MeshGradient from '$lib/components/MeshGradient.svelte';
 	import { projectGradientEnabled } from '$lib/stores';
 
@@ -115,29 +114,23 @@
 			firstTabRun = false;
 			return;
 		}
-		if (!decorativeMotion()) return;
-		const dir = activeTab === 'members' ? -1 : 1;
+		if (!motionEnabled()) return;
 		tick().then(() => {
-			if (tabsRowEl) {
-				animate(
-					tabsRowEl,
-					{ y: [dir * 5, 0] },
-					{ type: 'spring', stiffness: 220, damping: 15, mass: 0.9 }
-				);
-			}
+			if (tabsRowEl) animate(tabsRowEl, { opacity: [0.72, 1] }, transition('smooth'));
 		});
 	});
 
 	let firstPanelMount = true;
+	// Transforms on an ancestor of a backdrop-filtered card re-resolve the
+	// backdrop root every frame, which reads as the glass snapping between
+	// solid and translucent. Fade instead.
 	function tabPanelEnter(node: HTMLElement) {
 		if (firstPanelMount) {
 			firstPanelMount = false;
 			return;
 		}
-		if (!decorativeMotion()) return;
-		const dir = activeTab === 'members' ? -1 : 1;
-		node.style.transform = `translateY(${dir * 9}px)`;
-		animate(node, { y: [dir * 9, 0] }, { type: 'spring', stiffness: 180, damping: 15, mass: 1.2 });
+		if (!motionEnabled()) return;
+		animate(node, { opacity: [0, 1] }, transition('smooth'));
 	}
 
 	// --- Org members for picker ---
@@ -592,6 +585,7 @@
 		<div class="pj-mesh-bg" aria-hidden="true">
 			<MeshGradient src={project.backgroundImage} class="pj-mesh-canvas" />
 			<div class="pj-mesh-scrim"></div>
+			<div class="pj-treat pj-treat--aura"></div>
 		</div>
 	{/if}
 
@@ -619,21 +613,27 @@
 			<div class="pj-header">
 				<div class="pj-header-top">
 					<div class="pj-header-info">
-						<div
-							class="skeleton"
-							style="height: 1.5rem; width: 40%; margin-bottom: 0.375rem;"
-						></div>
+						<div class="skeleton" style="height: 1.5rem; width: 40%; margin-bottom: 0.5rem;"></div>
 						<div class="skeleton" style="height: 0.875rem; width: 55%;"></div>
 					</div>
 					<div class="pj-header-actions">
-						<div class="skeleton" style="height: 2rem; width: 4.5rem; border-radius: 0.5rem;"></div>
-						<div class="skeleton" style="height: 2rem; width: 5rem; border-radius: 0.5rem;"></div>
+						<div
+							class="skeleton"
+							style="height: 2rem; width: 4.5rem; border-radius: var(--radius-sm);"
+						></div>
+						<div
+							class="skeleton"
+							style="height: 2rem; width: 5rem; border-radius: var(--radius-sm);"
+						></div>
 					</div>
 				</div>
 			</div>
 			<div class="pj-stats">
 				{#each Array(3) as _, i (i)}
-					<div class="skeleton" style="height: 1.75rem; width: 6rem; border-radius: 0.5rem;"></div>
+					<div
+						class="skeleton"
+						style="height: 1.75rem; width: 6rem; border-radius: var(--radius-sm);"
+					></div>
 				{/each}
 			</div>
 			<div class="pj-deployments-header">
@@ -657,13 +657,10 @@
 				{/each}
 			</div>
 		{:else if project}
-			<Breadcrumb
-				crumbs={[
-					{ label: 'Home', href: `/${orgSlug}` },
-					{ label: 'Projects', href: `/${orgSlug}` },
-					{ label: project.name }
-				]}
-			/>
+			<a class="pj-back" href="/{orgSlug}">
+				<ChevronLeft size={15} />
+				Your Apps
+			</a>
 
 			<!-- Hero / Header -->
 			{#if project.backgroundImage}
@@ -725,7 +722,7 @@
 
 			{#if activeTab === 'variables'}
 				<div class="pj-tab-panel" {@attach tabPanelEnter}>
-					<div class="pj-vars-panel card rounded-2xl p-5">
+					<div class="pj-section-card pj-glass">
 						{#if selectedEnvId}
 							<SharedVarsEditor
 								environmentId={selectedEnvId}
@@ -807,7 +804,8 @@
 		max-width: 46rem;
 	}
 	.pj-vars-empty {
-		font-size: 0.85rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		color: var(--surface-muted);
 	}
 
@@ -817,7 +815,7 @@
 		gap: 0.75rem;
 		padding: 0.75rem 1rem;
 		margin-bottom: 1rem;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		border: 1px solid color-mix(in srgb, var(--warning-text) 18%, transparent);
 		background-color: color-mix(in srgb, var(--warning-text) 6%, transparent);
 		color: var(--warning-text);
@@ -830,21 +828,22 @@
 		gap: 0.125rem;
 	}
 	.pj-sse-alert-title {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
 		font-weight: 600;
 		line-height: 1.3;
 	}
 	.pj-sse-alert-hint {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
 		opacity: 0.85;
 		line-height: 1.4;
 	}
 	.pj-sse-alert-action {
 		display: inline-flex;
 		align-items: center;
-		padding: 0.3125rem 0.625rem;
-		border-radius: 0.375rem;
-		font-size: 0.75rem;
+		padding: 0.3125rem 0.75rem;
+		border-radius: var(--radius-xs);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		font-weight: 600;
 		border: 1px solid currentColor;
 		background: none;
@@ -855,8 +854,8 @@
 		align-self: center;
 		opacity: 0.9;
 		transition:
-			opacity 120ms,
-			background-color 120ms;
+			opacity var(--dur-fast),
+			background-color var(--dur-fast);
 	}
 	.pj-sse-alert-action:hover {
 		opacity: 1;

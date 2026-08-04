@@ -315,8 +315,9 @@
 	.progress-headline {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.625rem;
-		font-size: 1.375rem;
+		gap: 0.75rem;
+		font-size: var(--text-title-2);
+		line-height: var(--lh-title-2);
 		font-weight: 700;
 		letter-spacing: -0.01em;
 	}
@@ -336,7 +337,7 @@
 	.progress-url {
 		color: var(--accent);
 		border: 1px solid var(--border-default);
-		border-radius: 9999px;
+		border-radius: var(--radius-pill);
 		padding: 0.25rem 0.75rem;
 		background: var(--bg-raised);
 	}

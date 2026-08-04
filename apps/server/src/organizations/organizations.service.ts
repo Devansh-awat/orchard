@@ -247,6 +247,38 @@ export class OrganizationsService {
       return members.filter((m) => coMemberIds.has(m.user.id));
     }
 
+    // Admins/owners get each member's project access inlined so the members
+    // table can show and revoke it without N per-row round trips.
+    if (access.role === 'owner' || access.role === 'admin') {
+      const projectMembers = await this.prisma.projectMember.findMany({
+        where: { project: { organizationId } },
+        select: {
+          id: true,
+          userId: true,
+          project: { select: { id: true, name: true, slug: true } },
+          role: { select: { name: true } },
+        },
+      });
+      const byUser = new Map<string, Record<string, unknown>[]>();
+      for (const pm of projectMembers) {
+        const list = byUser.get(pm.userId) ?? [];
+        list.push({
+          projectMemberId: pm.id,
+          id: pm.project.id,
+          name: pm.project.name,
+          slug: pm.project.slug,
+          role: pm.role?.name ?? 'member',
+        });
+        byUser.set(pm.userId, list);
+      }
+      return members.map((m) => ({
+        ...m,
+        projects: (byUser.get(m.user.id) ?? []).sort((a, b) =>
+          String(a.name).localeCompare(String(b.name)),
+        ),
+      }));
+    }
+
     return members;
   }
 

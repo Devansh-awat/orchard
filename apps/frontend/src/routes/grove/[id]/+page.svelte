@@ -428,8 +428,9 @@
 	.gt-back {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
-		font-size: 0.8125rem;
+		gap: 0.5rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--text-muted);
 		text-decoration: none;
 		margin-bottom: 1.25rem;
@@ -441,12 +442,13 @@
 
 	.gt-error {
 		color: var(--text-muted);
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 	}
 
 	.gt-thread {
 		border: 1px solid var(--border-default);
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		background: var(--bg-surface);
 		padding: 1.25rem;
 	}
@@ -456,21 +458,23 @@
 		align-items: center;
 		gap: 0.5rem;
 		flex-wrap: wrap;
-		margin-bottom: 0.625rem;
+		margin-bottom: 0.75rem;
 	}
 
 	.gt-num {
 		font-family: 'Space Mono', monospace;
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--text-faint);
 	}
 
 	.gt-cat {
-		font-size: 0.6875rem;
-		font-weight: 550;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
 		color: var(--text-muted);
 		background: var(--bg-sunken);
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		padding: 0.125rem 0.5rem;
 	}
 
@@ -478,12 +482,13 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--text-faint);
 	}
 
 	.gt-title {
-		font-size: 1.25rem;
+		font-size: var(--text-title-3);
 		font-weight: 700;
 		letter-spacing: -0.01em;
 		line-height: 1.3;
@@ -494,26 +499,28 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		margin: 0.625rem 0 0.875rem;
+		margin: 0.75rem 0 0.875rem;
 	}
 
 	.gt-av {
 		width: 1.375rem;
 		height: 1.375rem;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		flex-shrink: 0;
 		object-fit: cover;
 		display: inline-block;
 	}
 
 	.gt-author {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		color: var(--text-default);
 	}
 
 	.gt-when {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--text-faint);
 	}
 
@@ -521,19 +528,20 @@
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
-		padding: 0.25rem 0.625rem;
-		border-radius: 999px;
+		padding: 0.25rem 0.75rem;
+		border-radius: var(--radius-pill);
 		border: 1px solid var(--border-default);
 		background: var(--bg-surface);
 		color: var(--text-muted);
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		cursor: pointer;
 		margin-left: auto;
 		transition:
-			color 120ms ease,
-			background-color 120ms ease,
-			border-color 120ms ease;
+			color var(--dur-fast) ease,
+			background-color var(--dur-fast) ease,
+			border-color var(--dur-fast) ease;
 	}
 
 	.gt-vote:hover {
@@ -553,14 +561,14 @@
 		justify-content: center;
 		width: 1.75rem;
 		height: 1.75rem;
-		border-radius: 0.4375rem;
+		border-radius: var(--radius-xs);
 		border: none;
 		background: none;
 		color: var(--text-faint);
 		cursor: pointer;
 		transition:
-			color 120ms ease,
-			background-color 120ms ease;
+			color var(--dur-fast) ease,
+			background-color var(--dur-fast) ease;
 	}
 
 	.gt-delete:hover {
@@ -575,7 +583,7 @@
 	}
 
 	.gt-body {
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
 		line-height: 1.6;
 		color: var(--text-default);
 		white-space: pre-wrap;
@@ -586,7 +594,7 @@
 		display: flex;
 		gap: 0.5rem;
 		flex-wrap: wrap;
-		margin-top: 0.625rem;
+		margin-top: 0.75rem;
 	}
 
 	.gt-image-link {
@@ -599,7 +607,7 @@
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		outline: 1px solid var(--border-default);
 		outline-offset: -1px;
 	}
@@ -622,8 +630,9 @@
 	}
 
 	.gt-replies-title {
-		font-size: 0.8125rem;
-		font-weight: 650;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
 		color: var(--text-muted);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
@@ -632,7 +641,7 @@
 
 	.gt-reply {
 		display: flex;
-		gap: 0.625rem;
+		gap: 0.75rem;
 		padding: 0.875rem 0;
 		border-bottom: 1px solid var(--border-default);
 	}
@@ -650,7 +659,7 @@
 	}
 
 	.gt-reply-body {
-		font-size: 0.8438rem;
+		font-size: var(--text-callout);
 		line-height: 1.55;
 		color: var(--text-default);
 		white-space: pre-wrap;
@@ -660,8 +669,9 @@
 	.gt-locked-note {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
-		font-size: 0.8125rem;
+		gap: 0.5rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--text-faint);
 		margin-top: 1rem;
 	}
@@ -673,17 +683,17 @@
 	.gt-textarea {
 		width: 100%;
 		border: 1px solid var(--border-default);
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		background: var(--bg-surface);
 		color: var(--text-default);
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
 		line-height: 1.5;
-		padding: 0.625rem 0.75rem;
+		padding: 0.75rem 0.75rem;
 		resize: vertical;
 	}
 
 	.gt-textarea:focus-visible {
-		outline: 2px solid var(--focus-ring);
+		outline: 2px solid var(--focus-ring-color);
 		outline-offset: -1px;
 	}
 

@@ -50,15 +50,16 @@
 	.ph {
 		display: flex;
 		flex-direction: column;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		margin-bottom: 1.5rem;
 	}
 
 	.ph-back {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
-		font-size: 0.8125rem;
+		gap: 0.5rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--text-muted);
 		margin-bottom: 0.5rem;
 		align-self: flex-start;
@@ -66,7 +67,7 @@
 		border: none;
 		padding: 0;
 		cursor: pointer;
-		transition: color 120ms ease;
+		transition: color var(--dur-fast) ease;
 	}
 
 	.ph-back:hover {
@@ -76,7 +77,7 @@
 	.ph-row {
 		display: flex;
 		align-items: center;
-		gap: 0.625rem;
+		gap: 0.75rem;
 		min-width: 0;
 	}
 
@@ -87,7 +88,8 @@
 	}
 
 	.ph-title {
-		font-size: 1.25rem;
+		font-size: var(--text-title-3);
+		line-height: var(--lh-title-3);
 		font-weight: 700;
 		letter-spacing: -0.01em;
 		color: var(--text-default);
@@ -99,7 +101,8 @@
 
 	.ph-title--mono {
 		font-family: var(--font-mono);
-		font-size: 1.0625rem;
+		font-size: var(--text-headline);
+		line-height: var(--lh-headline);
 	}
 
 	.ph-spacer {
@@ -118,7 +121,8 @@
 		align-items: center;
 		flex-wrap: wrap;
 		gap: 0.5rem;
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--text-muted);
 		min-width: 0;
 	}

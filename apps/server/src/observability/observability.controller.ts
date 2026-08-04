@@ -1,14 +1,27 @@
-import { Controller, Get, Param, Query, Request, BadRequestException, Sse, MessageEvent } from '@nestjs/common';
+import {
+  Controller,
+  Get,
+  Patch,
+  Body,
+  Param,
+  Query,
+  Request,
+  BadRequestException,
+  Sse,
+  MessageEvent,
+} from '@nestjs/common';
 import { Observable } from 'rxjs';
 import { Auth } from '../auth/decorators';
 import { ProjectAccessService } from '../projects/project-access.service';
 import { ObservabilityService } from './observability.service';
+import { ErrorIngestService } from './error-ingest.service';
 
 @Auth()
 @Controller('observe')
 export class ObservabilityController {
   constructor(
     private readonly observability: ObservabilityService,
+    private readonly errorIngest: ErrorIngestService,
     private readonly projectAccess: ProjectAccessService,
   ) {}
 
@@ -95,7 +108,18 @@ export class ObservabilityController {
   ) {
     await this.assertAccess(id, req);
     const window = Math.min(Math.max(1, Number(windowStr) || 60), 1440);
-    return this.observability.getErrors(id, window);
+    return this.errorIngest.listGroups(id, window);
+  }
+
+  @Patch('deployments/:id/errors/:fingerprint')
+  async updateError(
+    @Param('id') id: string,
+    @Param('fingerprint') fingerprint: string,
+    @Body() body: { status?: string; assigneeId?: string | null },
+    @Request() req,
+  ) {
+    const { user } = await this.assertAccess(id, req);
+    return this.errorIngest.updateGroup(id, fingerprint, body, user.id);
   }
 
   private assertAccess(deploymentId: string, req) {

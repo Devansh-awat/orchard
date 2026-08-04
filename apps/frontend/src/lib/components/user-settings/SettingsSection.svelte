@@ -25,10 +25,7 @@
 	let headerHovered = $state(false);
 </script>
 
-<section
-	class="ss-root"
-	{@attach motionStagger({ index, stride: 0.06, from: { y: 12, opacity: 0, scale: 0.985 } })}
->
+<section class="ss-root" {@attach motionStagger({ index, from: { y: 12, opacity: 0 } })}>
 	<!-- svelte-ignore a11y_no_static_element_interactions -->
 	<header
 		class="ss-header"
@@ -64,19 +61,17 @@
 
 <style>
 	.ss-root {
-		border: 1px solid var(--surface-border);
-		border-radius: 0.875rem;
-		background-color: var(--surface-bg);
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.03),
-			0 1px 2px rgb(0 0 0 / 0.02);
+		border: none;
+		border-radius: var(--radius-lg);
+		background-color: var(--bg-raised);
+		box-shadow: var(--elev-1);
 		overflow: hidden;
 	}
 	.ss-header {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
-		padding: 1.25rem 1.5rem;
+		gap: var(--space-3);
+		padding: var(--space-5) var(--space-6);
 	}
 	.ss-icon {
 		display: flex;
@@ -84,43 +79,45 @@
 		justify-content: center;
 		width: 2.25rem;
 		height: 2.25rem;
-		border-radius: 0.625rem;
+		border-radius: var(--radius-md);
 		flex-shrink: 0;
 	}
 	.ss-icon--default {
-		background-color: color-mix(in srgb, var(--center-channel-color) 7%, transparent);
-		color: var(--center-channel-color);
+		background-color: var(--fill-soft);
+		color: var(--text-default);
 	}
 	.ss-icon--primary {
-		background-color: color-mix(in srgb, var(--button-bg) 10%, transparent);
-		color: var(--button-bg);
+		background-color: var(--accent-subtle);
+		color: var(--accent);
 	}
 	.ss-icon--green {
-		background-color: color-mix(in srgb, var(--online-indicator) 10%, transparent);
-		color: var(--online-indicator);
+		background-color: color-mix(in srgb, var(--status-success) 10%, transparent);
+		color: var(--status-success);
 	}
 	.ss-icon--amber {
-		background-color: color-mix(in srgb, var(--away-indicator) 12%, transparent);
-		color: var(--away-indicator);
+		background-color: color-mix(in srgb, var(--status-warning) 12%, transparent);
+		color: var(--status-warning);
 	}
 	.ss-icon--blue {
-		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 10%, transparent);
-		color: var(--sidebar-text-active-border);
+		background-color: color-mix(in srgb, var(--hue-blue) 10%, transparent);
+		color: var(--hue-blue);
 	}
 	.ss-title-group {
 		flex: 1;
 		min-width: 0;
 	}
 	.ss-title {
-		font-size: 0.9375rem;
-		font-weight: 650;
-		color: var(--center-channel-color);
+		font-size: var(--text-title-3);
+		font-weight: 600;
+		letter-spacing: var(--track-headline);
+		color: var(--text-default);
 		margin: 0;
 		line-height: 1.3;
 	}
 	.ss-desc {
-		font-size: 0.75rem;
-		color: var(--surface-muted);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		color: var(--text-muted);
 		margin: 0.125rem 0 0;
 	}
 	.ss-badge-slot {
@@ -130,14 +127,14 @@
 		flex-shrink: 0;
 	}
 	.ss-body {
-		padding: 0 1.5rem 1.5rem;
+		padding: 0 var(--space-6) var(--space-6);
 	}
 	@media (max-width: 640px) {
 		.ss-header {
-			padding: 1rem 1.25rem;
+			padding: var(--space-4) var(--space-5);
 		}
 		.ss-body {
-			padding: 0 1.25rem 1.25rem;
+			padding: 0 var(--space-5) var(--space-5);
 		}
 	}
 </style>

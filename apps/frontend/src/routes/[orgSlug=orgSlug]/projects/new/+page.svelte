@@ -232,7 +232,7 @@
 						class:np-card--on={selected === r.id}
 						onclick={() => (selected = selected === r.id ? null : r.id)}
 						{@attach motionStagger({ index: 2 + i, from: { y: 12 } })}
-						{@attach springHover({ lift: -2, stiffness: 420, damping: 22 })}
+						{@attach springHover({ lift: -2 })}
 					>
 						<div
 							class="np-cicon"
@@ -255,7 +255,7 @@
 			disabled={!name.trim() || submitting}
 			loading={submitting}
 			{@attach motionStagger({ index: 5, from: { y: 10 } })}
-			{@attach springHover({ lift: -1, stiffness: 480, damping: 26 })}
+			{@attach springHover({ lift: -1 })}
 		>
 			{#if !submitting}
 				{selected ? 'Continue' : 'Create project'} <ArrowRight size={16} />
@@ -375,13 +375,13 @@
 		flex-direction: column;
 		gap: 1.75rem;
 		padding: 1.5rem;
-		border-radius: 1.25rem;
+		border-radius: var(--radius-xl);
 		border: 1px solid transparent;
 		transition:
-			background 0.4s ease,
-			backdrop-filter 0.4s ease,
-			border-color 0.4s ease,
-			box-shadow 0.4s ease;
+			background var(--dur-base) ease,
+			backdrop-filter var(--dur-base) ease,
+			border-color var(--dur-base) ease,
+			box-shadow var(--dur-base) ease;
 	}
 
 	.np-form--glass {
@@ -435,7 +435,7 @@
 	.np-banner {
 		width: 100%;
 		height: 7rem;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		border: 1px dashed var(--surface-border);
 		background: color-mix(in srgb, var(--center-channel-color) 4%, transparent);
 		background-size: cover;
@@ -445,12 +445,13 @@
 		justify-content: center;
 		gap: 0.5rem;
 		color: var(--surface-muted);
-		font-size: 0.8125rem;
-		font-weight: 500;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
 		cursor: pointer;
 		transition:
-			border-color 0.15s,
-			color 0.15s;
+			border-color var(--dur-fast),
+			color var(--dur-fast);
 	}
 
 	.np-banner:hover {
@@ -474,7 +475,7 @@
 		flex-shrink: 0;
 		width: 4rem;
 		height: 4rem;
-		border-radius: 1.1rem;
+		border-radius: var(--radius-xl);
 		border: 3px solid var(--center-channel-bg);
 		background: color-mix(in srgb, var(--center-channel-color) 6%, var(--center-channel-bg));
 		display: flex;
@@ -483,7 +484,7 @@
 		color: var(--surface-muted);
 		cursor: pointer;
 		overflow: hidden;
-		transition: color 0.15s;
+		transition: color var(--dur-fast);
 	}
 
 	.np-icon-edit:hover {
@@ -504,11 +505,12 @@
 		border-bottom: 2px solid var(--surface-border);
 		background: transparent;
 		color: var(--center-channel-color);
-		font-size: 1.5rem;
+		font-size: var(--text-title-2);
+		line-height: var(--lh-title-2);
 		font-weight: 700;
 		letter-spacing: -0.02em;
 		padding: 0.35rem 0.25rem;
-		transition: border-color 0.15s ease;
+		transition: border-color var(--dur-fast) ease;
 	}
 
 	.np-name::placeholder {
@@ -524,11 +526,12 @@
 	.np-starter {
 		display: flex;
 		flex-direction: column;
-		gap: 0.625rem;
+		gap: 0.75rem;
 	}
 
 	.np-starter-label {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
@@ -547,14 +550,14 @@
 		align-items: flex-start;
 		gap: 0.5rem;
 		padding: 0.875rem;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		text-align: left;
 		border: 1px solid var(--surface-border);
 		background: var(--center-channel-bg);
 		cursor: pointer;
 		transition:
-			border-color 0.15s,
-			box-shadow 0.15s;
+			border-color var(--dur-fast),
+			box-shadow var(--dur-fast);
 	}
 
 	.np-card:hover {
@@ -569,21 +572,21 @@
 	.np-cicon {
 		width: 2rem;
 		height: 2rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		display: flex;
 		align-items: center;
 		justify-content: center;
 	}
 
 	.np-clabel {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
 		font-weight: 600;
 		color: var(--center-channel-color);
 		line-height: 1.2;
 	}
 
 	.np-cdesc {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
 		color: var(--surface-muted);
 		line-height: 1.2;
 	}

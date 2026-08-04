@@ -2,6 +2,7 @@
 	import {
 		Check,
 		Copy,
+		History,
 		Loader2,
 		Mail,
 		MessageSquare,
@@ -16,16 +17,18 @@
 	import { Bell } from '@jis3r/icons';
 	import { Button, Field, Input, Badge, EmptyState } from '$lib/components/ui';
 	import SettingsSection from '$lib/components/user-settings/SettingsSection.svelte';
+	import { NotificationRules, replayChannel } from '$lib/components/notifications';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import { formatRelativeTime } from '$lib/utils/format';
+	import { toasts } from '$lib/stores';
 
 	import type { NotificationChannel, ChannelPayload } from './notification-types';
 
 	let {
 		canEditOrg,
+		organizationId,
 		loading,
 		channels = [],
-		projects = [],
 		saving,
 		deletingId,
 		testingId,
@@ -39,9 +42,9 @@
 		index = 0
 	}: {
 		canEditOrg: boolean;
+		organizationId: string;
 		loading: boolean;
 		channels: NotificationChannel[];
-		projects: { id: string; name: string }[];
 		saving: boolean;
 		deletingId: string | null;
 		testingId: string | null;
@@ -55,42 +58,6 @@
 		index?: number;
 	} = $props();
 
-	const EVENT_GROUPS: {
-		label: string;
-		options: { value: string; label: string; tone: 'ok' | 'fail' }[];
-	}[] = [
-		{
-			label: 'Deploys',
-			options: [
-				{ value: 'deploy.succeeded', label: 'Succeeded', tone: 'ok' },
-				{ value: 'deploy.failed', label: 'Failed', tone: 'fail' }
-			]
-		},
-		{
-			label: 'App health',
-			options: [
-				{ value: 'pod.crashing', label: 'Crashing', tone: 'fail' },
-				{ value: 'pod.recovered', label: 'Recovered', tone: 'ok' }
-			]
-		},
-		{
-			label: 'Backups',
-			options: [
-				{ value: 'backup.completed', label: 'Completed', tone: 'ok' },
-				{ value: 'backup.failed', label: 'Failed', tone: 'fail' },
-				{ value: 'db.archiving_failing', label: 'Archiving failing', tone: 'fail' },
-				{ value: 'db.archiving_recovered', label: 'Archiving recovered', tone: 'ok' }
-			]
-		},
-		{
-			label: 'Jobs',
-			options: [
-				{ value: 'job.succeeded', label: 'Succeeded', tone: 'ok' },
-				{ value: 'job.failed', label: 'Failed', tone: 'fail' }
-			]
-		}
-	];
-
 	const TYPE_META: Record<
 		string,
 		{ label: string; icon: typeof Webhook; placeholder: string; hue: string; hint: string }
@@ -99,28 +66,28 @@
 			label: 'Discord',
 			icon: MessageSquare,
 			placeholder: 'https://discord.com/api/webhooks/…',
-			hue: '#5865f2',
+			hue: 'var(--hue-violet)',
 			hint: 'Channel settings → Integrations → Webhooks'
 		},
 		slack: {
 			label: 'Slack',
 			icon: Slack,
 			placeholder: 'https://hooks.slack.com/services/…',
-			hue: '#2eb67d',
+			hue: 'var(--hue-green)',
 			hint: 'Slack app → Incoming Webhooks'
 		},
 		webhook: {
 			label: 'Webhook',
 			icon: Webhook,
 			placeholder: 'https://example.com/orchard-hook',
-			hue: '#8b8ea3',
+			hue: 'var(--hue-slate)',
 			hint: 'Signed JSON POST to any HTTPS endpoint'
 		},
 		email: {
 			label: 'Email',
 			icon: Mail,
 			placeholder: 'alerts@example.com, oncall@example.com',
-			hue: '#d99a2b',
+			hue: 'var(--hue-amber)',
 			hint: 'Sent to org members only'
 		}
 	};
@@ -131,9 +98,7 @@
 	let formName = $state('');
 	let formUrl = $state('');
 	let formRecipients = $state('');
-	let formEvents = $state<string[]>(['deploy.failed', 'pod.crashing', 'backup.failed']);
-	let formScope = $state<'all' | 'custom'>('all');
-	let formProjectIds = $state<string[]>([]);
+	let replayingId = $state<string | null>(null);
 
 	function openCreate() {
 		editingId = null;
@@ -141,9 +106,6 @@
 		formName = '';
 		formUrl = '';
 		formRecipients = '';
-		formEvents = ['deploy.failed', 'pod.crashing', 'backup.failed'];
-		formScope = 'all';
-		formProjectIds = [];
 		formOpen = true;
 	}
 
@@ -153,31 +115,14 @@
 		formName = channel.name;
 		formUrl = '';
 		formRecipients = (channel.config.recipients || []).join(', ');
-		formEvents = [...channel.events];
-		formScope = channel.projectIds && channel.projectIds.length > 0 ? 'custom' : 'all';
-		formProjectIds = channel.projectIds ? [...channel.projectIds] : [];
 		formOpen = true;
-	}
-
-	function toggleEvent(value: string) {
-		formEvents = formEvents.includes(value)
-			? formEvents.filter((e) => e !== value)
-			: [...formEvents, value];
-	}
-
-	function toggleProject(id: string) {
-		formProjectIds = formProjectIds.includes(id)
-			? formProjectIds.filter((p) => p !== id)
-			: [...formProjectIds, id];
 	}
 
 	const formValid = $derived(
 		formName.trim().length > 0 &&
-			formEvents.length > 0 &&
 			(formType === 'email'
 				? formRecipients.trim().length > 0
-				: formUrl.trim().length > 0 || editingId !== null) &&
-			(formScope === 'all' || formProjectIds.length > 0)
+				: formUrl.trim().length > 0 || editingId !== null)
 	);
 
 	const editingChannel = $derived(channels.find((c) => c.id === editingId) ?? null);
@@ -208,40 +153,71 @@
 								.map((r) => r.trim())
 								.filter(Boolean)
 						}
-					: { url: formUrl.trim() || undefined },
-			events: formEvents,
-			projectIds: formScope === 'all' ? null : formProjectIds
+					: { url: formUrl.trim() || undefined }
 		};
 		const ok = await onSaveChannel(payload, editingId);
 		if (ok) formOpen = false;
 	}
 
-	function scopeSummary(channel: NotificationChannel): string {
-		if (!channel.projectIds || channel.projectIds.length === 0) return 'All projects';
-		const names = channel.projectIds
-			.map((id) => projects.find((p) => p.id === id)?.name)
-			.filter(Boolean);
-		if (names.length === 0) return `${channel.projectIds.length} projects`;
-		if (names.length <= 2) return names.join(', ');
-		return `${names.slice(0, 2).join(', ')} +${names.length - 2}`;
+	// The events were stored even while delivery was failing, so a channel that
+	// was pointed at a dead webhook can be handed everything it missed.
+	async function replay(channel: NotificationChannel) {
+		if (replayingId) return;
+		replayingId = channel.id;
+		try {
+			const result = await replayChannel(organizationId, channel.id, 24);
+			toasts.add({
+				title:
+					result.queued > 0
+						? `Queued ${result.queued} ${result.queued === 1 ? 'notification' : 'notifications'}`
+						: 'Nothing to replay from the last 24 hours',
+				description: result.message,
+				color: result.queued > 0 ? 'success' : 'info'
+			});
+		} catch (e) {
+			toasts.add({
+				title: 'Could not replay',
+				description: e instanceof Error ? e.message : undefined,
+				color: 'error'
+			});
+		} finally {
+			replayingId = null;
+		}
 	}
 
-	function deliveryTone(channel: NotificationChannel): 'ok' | 'fail' | 'none' {
-		if (!channel.lastDelivery) return 'none';
-		return channel.lastDelivery.status === 'sent' ? 'ok' : 'fail';
+	function healthSummary(channel: NotificationChannel): string | null {
+		const health = channel.health;
+		if (!health) return null;
+		if (health.state === 'auto_disabled') {
+			return 'turned off after a day of failures';
+		}
+		if (health.state === 'paused' && health.until) {
+			return `paused until ${formatRelativeTime(new Date(health.until))}`;
+		}
+		if (health.state === 'failing') {
+			return health.since
+				? `failing since ${formatRelativeTime(new Date(health.since))}`
+				: 'failing';
+		}
+		if (channel.lastDelivery) {
+			const verb = channel.lastDelivery.status === 'sent' ? 'delivered' : 'failed';
+			return `${verb} ${formatRelativeTime(new Date(channel.lastDelivery.createdAt))}`;
+		}
+		return null;
 	}
 
-	function deliverySummary(channel: NotificationChannel): string {
-		if (!channel.lastDelivery) return '';
-		const verb = channel.lastDelivery.status === 'sent' ? 'delivered' : 'failed';
-		return `${verb} ${formatRelativeTime(new Date(channel.lastDelivery.createdAt))}`;
+	function healthTone(channel: NotificationChannel): 'ok' | 'fail' | 'warn' | 'none' {
+		const state = channel.health?.state;
+		if (state === 'auto_disabled' || state === 'failing') return 'fail';
+		if (state === 'paused') return 'warn';
+		if (channel.lastDelivery) return channel.lastDelivery.status === 'sent' ? 'ok' : 'fail';
+		return 'none';
 	}
 </script>
 
 <SettingsSection
 	title="Notifications"
-	description="Send deploy, crash, and backup alerts to Discord, Slack, email, or webhooks"
-	iconColor="primary"
+	description="Destinations for deploy, crash, and backup alerts. Rules decide what each one receives"
 	{index}
 >
 	{#snippet icon(hovered)}<Bell size={18} animate={hovered} />{/snippet}
@@ -249,7 +225,7 @@
 		{#if canEditOrg && !loading && (channels.length > 0 || formOpen)}
 			<Button variant="secondary" size="sm" onclick={openCreate}>
 				<Plus class="h-4 w-4" />
-				Add channel
+				Add destination
 			</Button>
 		{/if}
 	{/snippet}
@@ -285,14 +261,14 @@
 
 		{#if channels.length === 0 && !formOpen}
 			<EmptyState
-				title="No channels yet"
-				description="Get pinged when a deploy fails, an app starts crashing, or a backup finishes."
+				title="No destinations yet"
+				description="Add a Slack or Discord channel, then write a rule to say what it should receive."
 			>
 				{#snippet icon()}<Bell size={22} />{/snippet}
 				{#if canEditOrg}
 					<Button variant="secondary" size="sm" onclick={openCreate}>
 						<Plus class="h-4 w-4" />
-						Add channel
+						Add destination
 					</Button>
 				{/if}
 			</EmptyState>
@@ -302,12 +278,13 @@
 			<div class="nc-list">
 				{#each channels as channel, i (channel.id)}
 					{@const meta = TYPE_META[channel.type]}
-					{@const tone = deliveryTone(channel)}
+					{@const tone = healthTone(channel)}
+					{@const summary = healthSummary(channel)}
 					<div
 						class="nc-item"
 						class:nc-item-disabled={!channel.enabled}
 						style="--nc-hue: {meta.hue}"
-						{@attach motionStagger({ index: i, stride: 0.05 })}
+						{@attach motionStagger({ index: i })}
 					>
 						<div class="nc-item-icon">
 							<meta.icon size={15} />
@@ -316,24 +293,31 @@
 							<div class="nc-item-title">
 								<span class="nc-item-name">{channel.name}</span>
 								<Badge>{meta.label}</Badge>
-								{#if !channel.enabled}
+								{#if channel.health?.state === 'auto_disabled'}
+									<Badge>Turned off</Badge>
+								{:else if !channel.enabled}
 									<Badge>Paused</Badge>
 								{/if}
 							</div>
 							<p class="nc-item-sub">
-								{channel.events.length}
-								{channel.events.length === 1 ? 'event' : 'events'} · {scopeSummary(channel)}
+								{channel.ruleCount}
+								{channel.ruleCount === 1 ? 'rule' : 'rules'}
 								{#if channel.config.urlPreview}
 									· <span class="nc-url-preview">{channel.config.urlPreview}</span>
 								{/if}
-								{#if channel.lastDelivery}
+								{#if summary}
 									· <span
 										class="nc-delivery nc-delivery-{tone}"
-										title={channel.lastDelivery.error || undefined}
-										><span class="nc-dot"></span>{deliverySummary(channel)}</span
+										title={channel.lastDelivery?.error || undefined}
+										><span class="nc-dot"></span>{summary}</span
 									>
 								{/if}
 							</p>
+							{#if channel.ruleCount === 0}
+								<p class="nc-item-warn">
+									Nothing routes here yet. Add a rule below or on an app to start sending.
+								</p>
+							{/if}
 						</div>
 						{#if canEditOrg}
 							<div class="nc-item-actions">
@@ -354,6 +338,20 @@
 								<Button
 									variant="ghost"
 									size="sm"
+									onclick={() => replay(channel)}
+									disabled={replayingId === channel.id || !channel.enabled}
+									aria-label="Replay the last 24 hours"
+									title="Replay the last 24 hours"
+								>
+									{#if replayingId === channel.id}
+										<Loader2 class="h-4 w-4 animate-spin" />
+									{:else}
+										<History class="h-4 w-4" />
+									{/if}
+								</Button>
+								<Button
+									variant="ghost"
+									size="sm"
 									onclick={() => onToggleChannel(channel.id, !channel.enabled)}
 									disabled={togglingId === channel.id}
 								>
@@ -363,8 +361,8 @@
 									variant="ghost"
 									size="sm"
 									onclick={() => openEdit(channel)}
-									aria-label="Edit channel"
-									title="Edit channel"
+									aria-label="Edit destination"
+									title="Edit destination"
 								>
 									<Pencil class="h-4 w-4" />
 								</Button>
@@ -373,8 +371,8 @@
 									size="sm"
 									onclick={() => onDeleteChannel(channel)}
 									disabled={deletingId === channel.id}
-									aria-label="Delete channel"
-									title="Delete channel"
+									aria-label="Delete destination"
+									title="Delete destination"
 								>
 									{#if deletingId === channel.id}
 										<Loader2 class="h-4 w-4 animate-spin" />
@@ -393,7 +391,7 @@
 			<div class="nc-form" {@attach motionStagger({ from: { y: 10 } })}>
 				<div class="nc-form-group">
 					<span class="nc-form-label">Send to</span>
-					<div class="nc-type-grid" role="radiogroup" aria-label="Channel type">
+					<div class="nc-type-grid" role="radiogroup" aria-label="Destination type">
 						{#each Object.entries(TYPE_META) as [value, meta] (value)}
 							<button
 								type="button"
@@ -440,79 +438,6 @@
 					</Field>
 				{/if}
 
-				<div class="nc-form-group">
-					<span class="nc-form-label">Events</span>
-					<div class="nc-event-groups">
-						{#each EVENT_GROUPS as group (group.label)}
-							<div class="nc-event-group">
-								<span class="nc-event-group-label">{group.label}</span>
-								<div class="nc-chips">
-									{#each group.options as opt (opt.value)}
-										{@const active = formEvents.includes(opt.value)}
-										<button
-											type="button"
-											class="nc-chip nc-chip-{opt.tone}"
-											class:nc-chip-active={active}
-											aria-pressed={active}
-											onclick={() => toggleEvent(opt.value)}
-										>
-											<span class="nc-chip-dot"></span>
-											{opt.label}
-										</button>
-									{/each}
-								</div>
-							</div>
-						{/each}
-					</div>
-				</div>
-
-				<div class="nc-form-group">
-					<span class="nc-form-label">Projects</span>
-					<div class="nc-seg" role="radiogroup" aria-label="Project scope">
-						<button
-							type="button"
-							role="radio"
-							aria-checked={formScope === 'all'}
-							class="nc-seg-btn"
-							class:nc-seg-btn-active={formScope === 'all'}
-							onclick={() => (formScope = 'all')}
-						>
-							All projects
-						</button>
-						<button
-							type="button"
-							role="radio"
-							aria-checked={formScope === 'custom'}
-							class="nc-seg-btn"
-							class:nc-seg-btn-active={formScope === 'custom'}
-							onclick={() => (formScope = 'custom')}
-						>
-							Specific projects
-						</button>
-					</div>
-					{#if formScope === 'custom'}
-						{#if projects.length === 0}
-							<p class="nc-hint">No projects in this organization yet.</p>
-						{:else}
-							<div class="nc-chips">
-								{#each projects as project (project.id)}
-									{@const active = formProjectIds.includes(project.id)}
-									<button
-										type="button"
-										class="nc-chip"
-										class:nc-chip-active={active}
-										aria-pressed={active}
-										onclick={() => toggleProject(project.id)}
-									>
-										{#if active}<Check size={12} />{/if}
-										{project.name}
-									</button>
-								{/each}
-							</div>
-						{/if}
-					{/if}
-				</div>
-
 				<div class="nc-form-actions">
 					<Button variant="ghost" size="sm" onclick={() => (formOpen = false)} disabled={saving}>
 						Cancel
@@ -524,9 +449,15 @@
 						loading={saving}
 						disabled={!formValid}
 					>
-						{editingId ? 'Save channel' : 'Add channel'}
+						{editingId ? 'Save destination' : 'Add destination'}
 					</Button>
 				</div>
+			</div>
+		{/if}
+
+		{#if channels.length > 0}
+			<div class="nc-rules">
+				<NotificationRules {organizationId} scopeType="org" canEdit={canEditOrg} />
 			</div>
 		{/if}
 	{/if}
@@ -542,20 +473,15 @@
 
 	.nc-skeleton {
 		height: 3.25rem;
-		border-radius: 0.625rem;
-		background: linear-gradient(
-			100deg,
-			color-mix(in srgb, var(--center-channel-color) 3%, transparent) 40%,
-			color-mix(in srgb, var(--center-channel-color) 7%, transparent) 50%,
-			color-mix(in srgb, var(--center-channel-color) 3%, transparent) 60%
-		);
-		background-size: 200% 100%;
+		border-radius: var(--radius-md);
+		background: var(--bg-raised);
+		opacity: 0.6;
 		animation: nc-shimmer 1.4s ease infinite;
 	}
 
 	@keyframes nc-shimmer {
-		to {
-			background-position: -200% 0;
+		50% {
+			opacity: 0.35;
 		}
 	}
 
@@ -571,17 +497,16 @@
 		align-items: center;
 		gap: 0.75rem;
 		padding: 0.75rem 0.875rem;
-		border-radius: 0.625rem;
-		border: 1px solid var(--surface-border);
-		background: color-mix(in srgb, var(--center-channel-color) 2%, transparent);
+		border-radius: var(--radius-md);
+		border: 1px solid var(--border-default);
+		background: var(--bg-raised);
 		transition:
-			border-color 0.2s ease,
-			background-color 0.2s ease;
+			border-color var(--dur-base) ease,
+			background-color var(--dur-base) ease;
 	}
 
 	.nc-item:hover {
-		border-color: color-mix(in srgb, var(--nc-hue) 30%, var(--surface-border));
-		background: color-mix(in srgb, var(--center-channel-color) 3.5%, transparent);
+		border-color: color-mix(in srgb, var(--nc-hue) 30%, var(--border-default));
 	}
 
 	.nc-item-disabled {
@@ -594,9 +519,9 @@
 		justify-content: center;
 		width: 2rem;
 		height: 2rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		background: color-mix(in srgb, var(--nc-hue) 12%, transparent);
-		color: color-mix(in srgb, var(--nc-hue) 80%, var(--center-channel-color));
+		color: color-mix(in srgb, var(--nc-hue) 80%, var(--text-fg));
 		flex-shrink: 0;
 	}
 
@@ -613,20 +538,25 @@
 	}
 
 	.nc-item-name {
-		font-size: 0.82rem;
+		font-size: 0.8125rem;
 		font-weight: 600;
-		color: var(--center-channel-color);
+		color: var(--text-fg);
 	}
 
 	.nc-item-sub {
-		font-size: 0.7rem;
-		color: var(--surface-muted);
-		margin: 0.15rem 0 0;
+		font-size: 0.75rem;
+		color: var(--text-muted);
+		margin: 0.2rem 0 0;
+	}
+
+	.nc-item-warn {
+		font-size: 0.6875rem;
+		color: var(--status-warning);
+		margin: 0.25rem 0 0;
 	}
 
 	.nc-url-preview {
 		font-family: var(--font-mono, ui-monospace, monospace);
-		font-size: 0.68rem;
 	}
 
 	.nc-delivery {
@@ -639,73 +569,36 @@
 		width: 0.4rem;
 		height: 0.4rem;
 		border-radius: 50%;
-		background: currentColor;
+		background: var(--text-faint);
 	}
 
-	.nc-delivery-ok {
-		color: var(--online-indicator, #22c55e);
+	.nc-delivery-ok .nc-dot {
+		background: var(--status-success);
 	}
 
-	.nc-delivery-fail {
-		color: var(--error-text, #ef4444);
+	.nc-delivery-fail .nc-dot {
+		background: var(--status-error);
 	}
 
-	.nc-secret-reveal {
-		display: flex;
-		flex-direction: column;
-		gap: 0.625rem;
-		margin: 0.5rem 0;
-		padding: 0.875rem 1rem;
-		border-radius: 0.625rem;
-		background: color-mix(in srgb, var(--away-indicator) 8%, transparent);
-		border: 1px solid color-mix(in srgb, var(--away-indicator) 25%, transparent);
-	}
-
-	.nc-secret-head {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-		font-size: 0.78rem;
-		font-weight: 500;
-		color: var(--away-indicator);
-	}
-
-	.nc-secret-row {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.nc-secret-row :global(.nc-secret-input) {
-		flex: 1;
-		font-family: var(--font-mono, ui-monospace, monospace);
-		font-size: 0.78rem;
-	}
-
-	.nc-secret-reveal :global(.btn) {
-		align-self: flex-start;
-	}
-
-	.nc-secret-reveal code {
-		font-size: 0.7rem;
+	.nc-delivery-warn .nc-dot {
+		background: var(--status-warning);
 	}
 
 	.nc-item-actions {
 		display: flex;
 		align-items: center;
-		gap: 0.125rem;
+		gap: 0.15rem;
 		flex-shrink: 0;
 	}
 
 	.nc-form {
 		display: flex;
 		flex-direction: column;
-		gap: 1rem;
-		margin-top: 0.5rem;
-		padding: 1rem;
-		border-radius: 0.625rem;
-		border: 1px solid var(--surface-border);
-		background: color-mix(in srgb, var(--center-channel-color) 2%, transparent);
+		gap: 0.875rem;
+		padding: 0.875rem;
+		border-radius: var(--radius-md);
+		border: 1px solid var(--border-default);
+		background: var(--bg-raised);
 	}
 
 	.nc-form-group {
@@ -715,47 +608,30 @@
 	}
 
 	.nc-form-label {
-		font-size: 0.72rem;
+		font-size: 0.75rem;
 		font-weight: 600;
-		color: var(--surface-muted);
-		text-transform: uppercase;
-		letter-spacing: 0.02em;
+		color: var(--text-muted);
 	}
 
 	.nc-type-grid {
 		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
+		grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
 		gap: 0.5rem;
 	}
 
 	.nc-type-tile {
 		display: flex;
 		align-items: center;
-		gap: 0.625rem;
-		padding: 0.625rem 0.75rem;
-		border-radius: 0.625rem;
-		border: 1px solid var(--surface-border);
+		gap: 0.6rem;
+		padding: 0.6rem 0.7rem;
+		border-radius: var(--radius-md);
+		border: 1px solid var(--border-default);
 		background: transparent;
 		cursor: pointer;
 		text-align: left;
-		font: inherit;
 		transition:
-			border-color 0.2s ease,
-			background-color 0.2s ease;
-	}
-
-	.nc-type-tile:hover:not(:disabled) {
-		border-color: color-mix(in srgb, var(--nc-hue) 40%, var(--surface-border));
-		background: color-mix(in srgb, var(--nc-hue) 4%, transparent);
-	}
-
-	.nc-type-tile:focus-visible {
-		outline: 2px solid color-mix(in srgb, var(--button-bg, #6366f1) 60%, transparent);
-		outline-offset: 2px;
-	}
-
-	.nc-type-tile:active:not(:disabled) {
-		transform: scale(0.98);
+			border-color var(--dur-base) ease,
+			background-color var(--dur-base) ease;
 	}
 
 	.nc-type-tile:disabled {
@@ -764,7 +640,7 @@
 	}
 
 	.nc-type-tile-active {
-		border-color: color-mix(in srgb, var(--nc-hue) 55%, transparent);
+		border-color: color-mix(in srgb, var(--nc-hue) 45%, var(--border-default));
 		background: color-mix(in srgb, var(--nc-hue) 8%, transparent);
 	}
 
@@ -772,163 +648,40 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 2rem;
-		height: 2rem;
-		border-radius: 0.5rem;
-		background: color-mix(in srgb, var(--nc-hue) 14%, transparent);
-		color: color-mix(in srgb, var(--nc-hue) 85%, var(--center-channel-color));
+		width: 1.75rem;
+		height: 1.75rem;
+		border-radius: var(--radius-sm);
+		background: color-mix(in srgb, var(--nc-hue) 12%, transparent);
+		color: color-mix(in srgb, var(--nc-hue) 80%, var(--text-fg));
 		flex-shrink: 0;
 	}
 
 	.nc-type-tile-text {
 		display: flex;
 		flex-direction: column;
-		gap: 0.1rem;
 		min-width: 0;
 	}
 
 	.nc-type-tile-label {
-		font-size: 0.8rem;
+		font-size: 0.8125rem;
 		font-weight: 600;
-		color: var(--center-channel-color);
+		color: var(--text-fg);
 	}
 
 	.nc-type-tile-hint {
-		font-size: 0.68rem;
-		color: var(--surface-muted);
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.nc-event-groups {
-		display: grid;
-		grid-template-columns: repeat(auto-fill, minmax(13rem, 1fr));
-		gap: 0.75rem;
-	}
-
-	.nc-event-group {
-		display: flex;
-		flex-direction: column;
-		gap: 0.375rem;
-	}
-
-	.nc-event-group-label {
-		font-size: 0.72rem;
-		font-weight: 500;
-		color: var(--surface-muted);
-	}
-
-	.nc-chips {
-		display: flex;
-		flex-wrap: wrap;
-		gap: 0.375rem;
-	}
-
-	.nc-chip {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.35rem;
-		padding: 0.3rem 0.65rem;
-		border-radius: 999px;
-		border: 1px solid var(--surface-border);
-		background: transparent;
-		font: inherit;
-		font-size: 0.75rem;
-		color: var(--surface-muted);
-		cursor: pointer;
-		user-select: none;
-		transition:
-			border-color 0.2s ease,
-			background-color 0.2s ease,
-			color 0.2s ease;
-	}
-
-	.nc-chip:hover {
-		border-color: color-mix(in srgb, var(--center-channel-color) 25%, transparent);
-		color: var(--center-channel-color);
-	}
-
-	.nc-chip:focus-visible {
-		outline: 2px solid color-mix(in srgb, var(--button-bg, #6366f1) 60%, transparent);
-		outline-offset: 2px;
-	}
-
-	.nc-chip:active {
-		transform: scale(0.97);
-	}
-
-	.nc-chip-active {
-		border-color: color-mix(in srgb, var(--button-bg, #6366f1) 45%, transparent);
-		background: color-mix(in srgb, var(--button-bg, #6366f1) 10%, transparent);
-		color: var(--center-channel-color);
-	}
-
-	.nc-chip-dot {
-		width: 0.4rem;
-		height: 0.4rem;
-		border-radius: 50%;
-		background: color-mix(in srgb, var(--center-channel-color) 25%, transparent);
-		transition: background-color 0.2s ease;
-	}
-
-	.nc-chip-ok.nc-chip-active .nc-chip-dot {
-		background: var(--online-indicator, #22c55e);
-	}
-
-	.nc-chip-fail.nc-chip-active .nc-chip-dot {
-		background: var(--error-text, #ef4444);
-	}
-
-	.nc-chip-ok.nc-chip-active {
-		border-color: color-mix(in srgb, var(--online-indicator, #22c55e) 40%, transparent);
-		background: color-mix(in srgb, var(--online-indicator, #22c55e) 8%, transparent);
-	}
-
-	.nc-chip-fail.nc-chip-active {
-		border-color: color-mix(in srgb, var(--error-text, #ef4444) 40%, transparent);
-		background: color-mix(in srgb, var(--error-text, #ef4444) 8%, transparent);
-	}
-
-	.nc-seg {
-		display: inline-flex;
-		align-self: flex-start;
-		padding: 0.125rem;
-		border-radius: 0.5rem;
-		border: 1px solid var(--surface-border);
-		background: color-mix(in srgb, var(--center-channel-color) 3%, transparent);
-	}
-
-	.nc-seg-btn {
-		padding: 0.3rem 0.75rem;
-		border: none;
-		border-radius: 0.375rem;
-		background: transparent;
-		font: inherit;
-		font-size: 0.75rem;
-		font-weight: 500;
-		color: var(--surface-muted);
-		cursor: pointer;
-		transition:
-			background-color 0.2s ease,
-			color 0.2s ease;
-	}
-
-	.nc-seg-btn:focus-visible {
-		outline: 2px solid color-mix(in srgb, var(--button-bg, #6366f1) 60%, transparent);
-		outline-offset: 1px;
-	}
-
-	.nc-seg-btn-active {
-		background: var(--center-channel-bg, #fff);
-		color: var(--center-channel-color);
-		box-shadow: 0 1px 2px color-mix(in srgb, var(--center-channel-color) 12%, transparent);
+		font-size: 0.6875rem;
+		color: var(--text-faint);
 	}
 
 	.nc-hint {
 		font-size: 0.75rem;
-		color: var(--surface-muted);
+		color: var(--text-muted);
 		margin: 0;
+	}
+
+	.nc-hint code {
+		font-family: var(--font-mono, ui-monospace, monospace);
+		font-size: 0.6875rem;
 	}
 
 	.nc-form-actions {
@@ -937,14 +690,34 @@
 		gap: 0.5rem;
 	}
 
-	@media (max-width: 640px) {
-		.nc-item {
-			flex-wrap: wrap;
-		}
+	.nc-secret-reveal {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		padding: 0.875rem;
+		border-radius: var(--radius-md);
+		border: 1px solid var(--status-warning-border);
+		background: var(--status-warning-bg);
+	}
 
-		.nc-item-actions {
-			width: 100%;
-			justify-content: flex-end;
-		}
+	.nc-secret-head {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		font-size: 0.8125rem;
+		font-weight: 600;
+		color: var(--text-fg);
+	}
+
+	.nc-secret-row {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.nc-rules {
+		padding-top: 0.75rem;
+		margin-top: 0.25rem;
+		border-top: 1px solid var(--border-default);
 	}
 </style>

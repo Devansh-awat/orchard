@@ -27,16 +27,17 @@
 	.sb {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
-		font-size: 0.6875rem;
-		font-weight: 550;
+		gap: 0.5rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
 		flex-shrink: 0;
 		white-space: nowrap;
 	}
 
 	.sb--subtle {
-		padding: 0.1875rem 0.625rem;
-		border-radius: 2rem;
+		padding: 0.25rem 0.75rem;
+		border-radius: var(--radius-2xl);
 		background-color: color-mix(in srgb, currentColor 10%, transparent);
 	}
 

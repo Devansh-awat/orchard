@@ -469,7 +469,8 @@
 	}
 
 	.cs-page-title {
-		font-size: 1.5rem;
+		font-size: var(--text-title-2);
+		line-height: var(--lh-title-2);
 		font-weight: 700;
 		color: var(--center-channel-color);
 		margin: 0;
@@ -485,7 +486,7 @@
 	}
 
 	.cs-page-subtitle {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
 		color: var(--surface-muted);
 		margin: 0.5rem 0 0;
 		line-height: 1.5;
@@ -495,15 +496,16 @@
 	.cs-hint code,
 	.cs-toggle-desc code {
 		font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		padding: 0.0625rem 0.25rem;
-		border-radius: 0.25rem;
+		border-radius: var(--radius-xs);
 		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
 	}
 
 	.cs-main-card {
 		border: 1px solid var(--surface-border);
-		border-radius: 0.875rem;
+		border-radius: var(--radius-lg);
 		background-color: var(--surface-bg);
 		display: flex;
 		flex-direction: column;
@@ -523,9 +525,10 @@
 	.cs-source-label {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
-		font-size: 0.75rem;
-		font-weight: 500;
+		gap: 0.5rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		color: var(--surface-muted);
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -540,7 +543,8 @@
 	}
 
 	.cs-slash {
-		font-size: 1.25rem;
+		font-size: var(--text-title-3);
+		line-height: var(--lh-title-3);
 		font-weight: 300;
 		color: var(--surface-muted);
 		user-select: none;
@@ -548,12 +552,13 @@
 
 	.cs-name-input {
 		flex: 1;
-		padding: 0.4375rem 0.75rem;
-		border-radius: 0.5rem;
+		padding: 0.5rem 0.75rem;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--surface-border);
 		background-color: var(--center-channel-bg);
 		color: var(--center-channel-color);
-		font-size: 0.9375rem;
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
 		font-weight: 600;
 		letter-spacing: -0.01em;
 	}
@@ -581,22 +586,23 @@
 		align-items: center;
 		gap: 0.5rem;
 		width: 100%;
-		padding: 0.625rem 2.25rem 0.625rem 0.875rem;
-		border-radius: 0.5rem;
+		padding: 0.75rem 2.25rem 0.75rem 0.875rem;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--surface-border);
 		background-color: var(--surface-bg);
 		color: var(--center-channel-color);
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
 		line-height: 1.5;
 		text-align: left;
 		cursor: pointer;
 		transition:
-			border-color 150ms ease,
-			box-shadow 150ms ease;
+			border-color var(--dur-fast) ease,
+			box-shadow var(--dur-fast) ease;
 	}
 
 	.picker-trigger:focus-visible {
-		outline: none;
+		outline: var(--focus-ring-width) solid var(--focus-ring-color);
+		outline-offset: var(--focus-ring-offset);
 		border-color: var(--sidebar-text-active-border);
 		box-shadow: 0 0 0 3px color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
 	}
@@ -640,7 +646,7 @@
 
 	.picker-chevron {
 		pointer-events: none;
-		transition: transform 150ms ease;
+		transition: transform var(--dur-fast) ease;
 	}
 
 	.picker-chevron--open {
@@ -660,15 +666,16 @@
 		align-items: center;
 		gap: 0.5rem;
 		width: 100%;
-		border-radius: 0.5rem;
-		padding: 0.4375rem 0.75rem;
+		border-radius: var(--radius-sm);
+		padding: 0.5rem 0.75rem;
 		text-align: left;
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		border: none;
 		background: none;
 		color: var(--center-channel-color);
 		cursor: pointer;
-		transition: background-color 0.1s;
+		transition: background-color var(--dur-fast);
 	}
 
 	.picker-option:hover {
@@ -687,19 +694,20 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.625rem 0.75rem;
-		font-size: 0.75rem;
+		padding: 0.75rem 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--surface-muted);
 	}
 
 	.picker-note {
-		padding: 0.625rem 0.75rem;
-		font-size: 0.75rem;
+		padding: 0.75rem 0.75rem;
+		font-size: var(--text-caption);
 		line-height: 1.5;
 		color: var(--text-muted);
 		background-color: var(--status-warning-bg);
 		border: 1px solid var(--status-warning-border);
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		margin: 0.25rem;
 	}
 
@@ -710,7 +718,8 @@
 	}
 
 	.cs-hint {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--surface-muted);
 		margin: 0;
 	}
@@ -718,16 +727,16 @@
 	.cs-toggle {
 		display: flex;
 		align-items: flex-start;
-		gap: 0.625rem;
+		gap: 0.75rem;
 		padding: 0.75rem 0.875rem;
-		border-radius: 0.625rem;
+		border-radius: var(--radius-md);
 		border: 1px solid var(--surface-border);
 		background-color: color-mix(in srgb, var(--surface-border) 12%, transparent);
 		cursor: pointer;
 	}
 
 	.cs-toggle input {
-		margin-top: 0.1875rem;
+		margin-top: 0.25rem;
 	}
 
 	.cs-toggle-label {
@@ -737,13 +746,14 @@
 	}
 
 	.cs-toggle-title {
-		font-size: 0.8125rem;
-		font-weight: 500;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
 		color: var(--center-channel-color);
 	}
 
 	.cs-toggle-desc {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
 		color: var(--surface-muted);
 		line-height: 1.45;
 	}
@@ -756,20 +766,22 @@
 
 	.cs-warning {
 		padding: 0.75rem 0.875rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		border: 1px solid color-mix(in srgb, var(--error-text-color) 30%, var(--surface-border));
 		background-color: color-mix(in srgb, var(--error-text-color) 5%, var(--surface-bg));
 	}
 
 	.cs-warning-title {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		margin: 0 0 0.25rem;
 		color: var(--center-channel-color);
 	}
 
 	.cs-warning-desc {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		margin: 0;
 		color: var(--surface-muted);
 	}
@@ -781,6 +793,7 @@
 		padding: 4rem 0;
 		justify-content: center;
 		color: var(--surface-muted);
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 	}
 </style>

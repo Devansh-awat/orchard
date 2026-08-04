@@ -177,7 +177,8 @@
 <style>
 	.job-run-step-meta {
 		margin-top: 0.45rem;
-		font-size: 0.72rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--surface-muted);
 		font-family: var(--font-mono, ui-monospace, monospace);
 	}

@@ -126,7 +126,7 @@
 		display: flex;
 		flex-direction: column;
 		font-family: var(--font-mono);
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
 		line-height: 1.65;
 		font-weight: 400;
 	}
@@ -134,7 +134,7 @@
 	.lv--dark {
 		background-color: var(--console-bg);
 		color: var(--console-text);
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		padding: 0.75rem;
 	}
 
@@ -155,7 +155,7 @@
 
 	.lv-scroll::-webkit-scrollbar-thumb {
 		background: rgba(255, 255, 255, 0.15);
-		border-radius: 3px;
+		border-radius: var(--radius-xs);
 	}
 
 	.lv-scroll::-webkit-scrollbar-thumb:hover {
@@ -182,8 +182,9 @@
 		display: inline-block;
 		margin-right: 0.5em;
 		padding: 0 0.35em;
-		border-radius: 0.25rem;
-		font-size: 0.625rem;
+		border-radius: var(--radius-xs);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 700;
 		text-transform: uppercase;
 		background-color: color-mix(in srgb, currentColor 12%, transparent);
@@ -193,10 +194,11 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		padding: 0.5rem 0;
 		color: var(--text-muted);
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		opacity: 0.75;
 	}
 
@@ -212,13 +214,14 @@
 		transform: translateX(-50%);
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
-		padding: 0.3rem 0.75rem;
+		gap: 0.5rem;
+		padding: 0.25rem 0.75rem;
 		border: 1px solid var(--console-edge);
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		background: var(--console-raised);
 		color: var(--console-text);
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		cursor: pointer;
 	}
@@ -235,7 +238,8 @@
 		gap: 0.5rem;
 		padding: 3rem 1rem;
 		opacity: 0.7;
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 	}
 
 	.lv-empty--error {

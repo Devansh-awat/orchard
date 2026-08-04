@@ -90,12 +90,10 @@
 
 <style>
 	.rl-card {
-		border: 1px solid var(--surface-border);
-		border-radius: 0.875rem;
-		background-color: var(--surface-bg);
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.03),
-			0 1px 2px rgb(0 0 0 / 0.02);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-xl);
+		background-color: var(--bg-raised);
+		box-shadow: var(--elev-1);
 		overflow: hidden;
 	}
 	.rl-card-header {
@@ -106,8 +104,8 @@
 		padding: 1.25rem 1.5rem;
 	}
 	.rl-card-title {
-		font-size: 0.9375rem;
-		font-weight: 650;
+		font-size: var(--text-body);
+		font-weight: 600;
 		color: var(--center-channel-color);
 		margin: 0;
 		line-height: 1.3;
@@ -115,9 +113,10 @@
 	.rl-current-badge {
 		display: inline-flex;
 		align-items: center;
-		padding: 0.25rem 0.625rem;
-		border-radius: 2rem;
-		font-size: 0.6875rem;
+		padding: 0.25rem 0.75rem;
+		border-radius: var(--radius-2xl);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		flex-shrink: 0;
 		background-color: color-mix(in srgb, var(--button-bg) 10%, transparent);

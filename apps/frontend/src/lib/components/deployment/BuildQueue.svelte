@@ -106,8 +106,8 @@
 	.bq-head {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
-		padding: 0.125rem 0 0.375rem;
+		gap: 0.5rem;
+		padding: 0.125rem 0 0.5rem;
 	}
 
 	.bq-section :global(.bq-head-icon) {
@@ -115,20 +115,22 @@
 	}
 
 	.bq-head-title {
-		font-size: 0.6875rem;
-		font-weight: 650;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: var(--text-muted);
 	}
 
 	.bq-head-count {
-		font-size: 0.625rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		color: var(--text-muted);
 		background: var(--bg-sunken);
-		border-radius: 999px;
-		padding: 0.0625rem 0.375rem;
+		border-radius: var(--radius-pill);
+		padding: 0.0625rem 0.5rem;
 		margin-left: auto;
 	}
 
@@ -140,7 +142,7 @@
 	.bq-row {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		padding: 0.3125rem 0.25rem;
 		min-width: 0;
 	}
@@ -153,11 +155,11 @@
 		margin: 0 -0.5rem;
 		padding-left: 0.5rem;
 		padding-right: 0.5rem;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		text-decoration: none;
 		color: inherit;
 		cursor: pointer;
-		transition: background-color 120ms ease;
+		transition: background-color var(--dur-fast) ease;
 	}
 
 	.bq-row--link:hover {
@@ -173,13 +175,15 @@
 		align-items: center;
 		gap: 0.125rem;
 		font-family: var(--font-mono, ui-monospace, monospace);
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--text-muted);
 		flex-shrink: 0;
 	}
 
 	.bq-msg {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--text-default);
 		white-space: nowrap;
 		overflow: hidden;
@@ -189,7 +193,8 @@
 	}
 
 	.bq-when {
-		font-size: 0.625rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--text-faint);
 		white-space: nowrap;
 		flex-shrink: 0;

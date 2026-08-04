@@ -2,7 +2,12 @@
 	import { Loader2, ChevronDown, GripHorizontal } from 'lucide-svelte';
 	import { Check, Clock, Maximize2, X } from '@jis3r/icons';
 	import { animate } from 'motion';
-	import { springRotate, springCollapse, decorativeMotion } from '$lib/utils/motion.svelte';
+	import {
+		springRotate,
+		springCollapse,
+		motionEnabled,
+		transition
+	} from '$lib/utils/motion.svelte';
 	import { motionPopover } from '$lib/utils/motion.svelte';
 	import { Button, Modal } from '$lib/components/ui';
 	import DeploymentProgress from '$lib/components/DeploymentProgress.svelte';
@@ -157,17 +162,14 @@
 			pos = null;
 			persistCorner();
 		};
-		if (!decorativeMotion()) {
+		if (!motionEnabled()) {
 			settle();
 			return;
 		}
 		const sx = pos.x;
 		const sy = pos.y;
 		animate(0, 1, {
-			type: 'spring',
-			stiffness: 420,
-			damping: 32,
-			mass: 0.9,
+			...transition('smooth'),
 			onUpdate: (t: number) => {
 				pos = { x: sx + (tx - sx) * t, y: sy + (ty - sy) * t };
 			}
@@ -242,10 +244,7 @@
 				onClosed: () => {
 					showBuildCardRender = false;
 				},
-				from: { y: 18, scale: 0.86, opacity: 0 },
-				stiffness: 500,
-				damping: 28,
-				mass: 0.9
+				from: { y: 18, scale: 0.86, opacity: 0 }
 			})}
 		>
 			<div
@@ -357,11 +356,11 @@
 		justify-content: center;
 		width: 1.5rem;
 		height: 1.5rem;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		color: var(--surface-muted);
 		transition:
-			background-color 120ms ease,
-			color 120ms ease;
+			background-color var(--dur-fast) ease,
+			color var(--dur-fast) ease;
 	}
 
 	.build-widget-btn:hover {

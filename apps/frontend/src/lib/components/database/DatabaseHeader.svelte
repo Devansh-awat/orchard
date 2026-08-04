@@ -126,7 +126,7 @@
 		gap: 1rem;
 		padding: 1.375rem 1.5rem;
 		border: 1px solid var(--border-default);
-		border-radius: 1rem;
+		border-radius: var(--radius-lg);
 		background-color: var(--bg-surface);
 		box-shadow:
 			0 1px 3px rgb(0 0 0 / 0.03),
@@ -139,7 +139,7 @@
 		justify-content: center;
 		width: 3rem;
 		height: 3rem;
-		border-radius: 0.875rem;
+		border-radius: var(--radius-lg);
 		flex-shrink: 0;
 		background: linear-gradient(
 			135deg,
@@ -159,7 +159,7 @@
 		min-width: 0;
 	}
 	.dbh-hero-name {
-		font-size: 1.5rem;
+		font-size: var(--text-title-2);
 		font-weight: 700;
 		letter-spacing: -0.02em;
 		line-height: 1.2;
@@ -172,19 +172,20 @@
 	.dbh-hero-chips {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		margin-top: 0.5rem;
 	}
 	.dbh-chip {
 		display: inline-flex;
 		align-items: center;
-		font-size: 0.6875rem;
-		font-weight: 550;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
 		color: var(--text-muted);
 		background-color: var(--bg-sunken);
 		border: 1px solid color-mix(in srgb, var(--border-default) 70%, transparent);
-		border-radius: 9999px;
-		padding: 0.2rem 0.55rem;
+		border-radius: var(--radius-pill);
+		padding: 0.25rem 0.5rem;
 	}
 	.dbh-chip--mono {
 		font-family: var(--font-mono, monospace);

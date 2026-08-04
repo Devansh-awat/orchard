@@ -6,34 +6,52 @@ import {
   Delete,
   Param,
   Body,
+  Query,
   Request,
   ForbiddenException,
   NotFoundException,
 } from '@nestjs/common';
 import { Throttle } from '@nestjs/throttler';
-import { NotificationsService, ChannelInput } from './notifications.service';
+import { NotificationChannelsService, ChannelInput } from './notification-channels.service';
+import { NotificationRulesService, RuleInput } from './notification-rules.service';
 import { OrganizationsService } from '../organizations/organizations.service';
 import { UsersService } from '../users/users.service';
 import { AnalyticsService } from '../analytics/analytics.service';
+import { AuthorizationService } from '../auth/authorization.service';
 import { Auth } from '../auth/decorators';
 
 @Auth()
 @Controller('organizations')
 export class NotificationChannelsController {
   constructor(
-    private readonly notifications: NotificationsService,
+    private readonly channels: NotificationChannelsService,
+    private readonly rules: NotificationRulesService,
     private readonly organizationsService: OrganizationsService,
     private readonly usersService: UsersService,
     private readonly analytics: AnalyticsService,
+    private readonly authz: AuthorizationService,
   ) {}
 
-  private async requireAdmin(organizationId: string, req: any) {
+  private async currentUser(req: any) {
     const user = await this.usersService.findOrCreateByClerkId(req.user.sub, {
       email: req.user.email,
       username: req.user.username,
     });
     if (!user) throw new NotFoundException('User not found');
+    return user;
+  }
+
+  private async requireAdmin(organizationId: string, req: any) {
+    const user = await this.currentUser(req);
     await this.organizationsService.checkPermission(organizationId, user.id, 'admin');
+    return user;
+  }
+
+  // Rules at a project or resource scope only need membership of that scope, so
+  // this stops at "are you in the org" and leaves the finer check to the service.
+  private async requireMember(organizationId: string, req: any) {
+    const user = await this.currentUser(req);
+    await this.authz.requireOrgMember(organizationId, user.id);
     return user;
   }
 
@@ -47,7 +65,7 @@ export class NotificationChannelsController {
   @Get(':id/notification-channels')
   async listChannels(@Param('id') organizationId: string, @Request() req) {
     await this.requireAdmin(organizationId, req);
-    return this.notifications.listChannels(organizationId);
+    return this.channels.listChannels(organizationId);
   }
 
   @Post(':id/notification-channels')
@@ -58,7 +76,7 @@ export class NotificationChannelsController {
   ) {
     const user = await this.requireAdmin(organizationId, req);
     await this.requireNotificationsFeature(user.id);
-    return this.notifications.createChannel(organizationId, body ?? {}, user);
+    return this.channels.createChannel(organizationId, body ?? {}, user);
   }
 
   @Patch(':id/notification-channels/:channelId')
@@ -70,7 +88,7 @@ export class NotificationChannelsController {
   ) {
     const user = await this.requireAdmin(organizationId, req);
     await this.requireNotificationsFeature(user.id);
-    return this.notifications.updateChannel(organizationId, channelId, body ?? {}, user);
+    return this.channels.updateChannel(organizationId, channelId, body ?? {}, user);
   }
 
   @Delete(':id/notification-channels/:channelId')
@@ -80,7 +98,7 @@ export class NotificationChannelsController {
     @Request() req,
   ) {
     const user = await this.requireAdmin(organizationId, req);
-    return this.notifications.deleteChannel(organizationId, channelId, user);
+    return this.channels.deleteChannel(organizationId, channelId, user);
   }
 
   @Get(':id/notification-channels/:channelId/deliveries')
@@ -90,7 +108,7 @@ export class NotificationChannelsController {
     @Request() req,
   ) {
     await this.requireAdmin(organizationId, req);
-    return this.notifications.listDeliveries(organizationId, channelId);
+    return this.channels.listDeliveries(organizationId, channelId);
   }
 
   @Throttle({ default: { ttl: 60000, limit: 10 } })
@@ -102,6 +120,59 @@ export class NotificationChannelsController {
   ) {
     const user = await this.requireAdmin(organizationId, req);
     await this.requireNotificationsFeature(user.id);
-    return this.notifications.testChannel(organizationId, channelId);
+    return this.channels.testChannel(organizationId, channelId);
+  }
+
+  @Throttle({ default: { ttl: 60000, limit: 5 } })
+  @Post(':id/notification-channels/:channelId/replay')
+  async replayChannel(
+    @Param('id') organizationId: string,
+    @Param('channelId') channelId: string,
+    @Body() body: { sinceHours?: number },
+    @Request() req,
+  ) {
+    const user = await this.requireAdmin(organizationId, req);
+    await this.requireNotificationsFeature(user.id);
+    return this.channels.replay(organizationId, channelId, body?.sinceHours ?? 24, user);
+  }
+
+  @Get(':id/notification-rules')
+  async listRules(
+    @Param('id') organizationId: string,
+    @Query('scopeType') scopeType: string,
+    @Query('scopeId') scopeId: string,
+    @Request() req,
+  ) {
+    await this.requireMember(organizationId, req);
+    return this.rules.listRules(organizationId, scopeType, scopeId);
+  }
+
+  @Post(':id/notification-rules')
+  async createRule(@Param('id') organizationId: string, @Body() body: RuleInput, @Request() req) {
+    const user = await this.requireMember(organizationId, req);
+    await this.requireNotificationsFeature(user.id);
+    return this.rules.createRule(organizationId, body ?? {}, user);
+  }
+
+  @Patch(':id/notification-rules/:ruleId')
+  async updateRule(
+    @Param('id') organizationId: string,
+    @Param('ruleId') ruleId: string,
+    @Body() body: RuleInput,
+    @Request() req,
+  ) {
+    const user = await this.requireMember(organizationId, req);
+    await this.requireNotificationsFeature(user.id);
+    return this.rules.updateRule(organizationId, ruleId, body ?? {}, user);
+  }
+
+  @Delete(':id/notification-rules/:ruleId')
+  async deleteRule(
+    @Param('id') organizationId: string,
+    @Param('ruleId') ruleId: string,
+    @Request() req,
+  ) {
+    const user = await this.requireMember(organizationId, req);
+    return this.rules.deleteRule(organizationId, ruleId, user);
   }
 }

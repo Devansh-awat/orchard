@@ -28,7 +28,6 @@
 		{index}
 		title="Pending invitations"
 		description="{invitations.length} organization{invitations.length === 1 ? '' : 's'} invited you"
-		iconColor="blue"
 	>
 		{#snippet icon(hovered)}<MailCheck size={18} animate={hovered} />{/snippet}
 		{#snippet badge()}
@@ -92,25 +91,26 @@
 		justify-content: center;
 		min-width: 1.25rem;
 		height: 1.25rem;
-		padding: 0 0.375rem;
-		border-radius: 2rem;
-		font-size: 0.6875rem;
-		font-weight: 650;
-		background-color: color-mix(in srgb, var(--button-bg) 10%, transparent);
-		color: var(--button-bg);
+		padding: 0 0.5rem;
+		border-radius: var(--radius-pill);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+		background-color: var(--accent-subtle);
+		color: var(--accent);
 	}
 	.ui-list {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: var(--space-2);
 	}
 	.ui-item {
 		display: flex;
 		align-items: center;
 		gap: 0.875rem;
-		padding: 0.875rem 1rem;
-		border-radius: 0.625rem;
-		background-color: color-mix(in srgb, var(--center-channel-color) 2%, transparent);
+		padding: 0.875rem var(--space-4);
+		border-radius: var(--radius-md);
+		background-color: var(--fill-quiet);
 	}
 	.ui-item-icon {
 		display: flex;
@@ -118,10 +118,10 @@
 		justify-content: center;
 		width: 2.5rem;
 		height: 2.5rem;
-		border-radius: 0.625rem;
+		border-radius: var(--radius-md);
 		flex-shrink: 0;
-		background-color: color-mix(in srgb, var(--button-bg) 8%, transparent);
-		color: var(--button-bg);
+		background-color: var(--accent-subtle);
+		color: var(--accent);
 		overflow: hidden;
 	}
 	.ui-item-avatar {
@@ -137,17 +137,21 @@
 		gap: 0.125rem;
 	}
 	.ui-item-name {
-		font-size: 0.875rem;
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
 		font-weight: 600;
-		color: var(--center-channel-color);
+		letter-spacing: var(--track-body);
+		color: var(--text-default);
 	}
 	.ui-item-meta {
-		font-size: 0.6875rem;
-		color: var(--surface-muted);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+		color: var(--text-muted);
 	}
 	.ui-item-actions {
 		display: flex;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		flex-shrink: 0;
 	}
 	@media (max-width: 640px) {
@@ -156,7 +160,7 @@
 		}
 		.ui-item-actions {
 			width: 100%;
-			margin-top: 0.25rem;
+			margin-top: var(--space-1);
 		}
 	}
 </style>

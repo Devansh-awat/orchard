@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Copy, Check, Eye, EyeOff } from 'lucide-svelte';
 	import { selectedOrganization } from '$lib/stores';
-	import { Button, Badge, SectionCard } from '$lib/components/ui';
+	import { Button, Badge, SectionCard, SegmentedControl } from '$lib/components/ui';
 	import type { DatabaseDetail } from './types';
 
 	let {
@@ -80,20 +80,12 @@
 </script>
 
 {#snippet formatChips()}
-	<div class="dbc-formats dbc-formats--tab" role="tablist" aria-label="Connection format">
-		{#each FORMATS as f (f.id)}
-			<button
-				type="button"
-				class="dbc-format"
-				class:dbc-format--active={connFormat === f.id}
-				aria-selected={connFormat === f.id}
-				role="tab"
-				onclick={() => (connFormat = f.id)}
-			>
-				{f.label}
-			</button>
-		{/each}
-	</div>
+	<SegmentedControl
+		label="Connection format"
+		value={connFormat}
+		onchange={(next) => (connFormat = next as typeof connFormat)}
+		options={FORMATS.map((f) => ({ value: f.id, label: f.label }))}
+	/>
 {/snippet}
 
 {#snippet detailList()}
@@ -131,7 +123,9 @@
 
 <div class="space-y-5">
 	<div class="dbc-fused">
-		{@render formatChips()}
+		<div class="dbc-fused-head">
+			{@render formatChips()}
+		</div>
 		<div class="dbc-fused-body">
 			<code class="dbc-fused-code">{snippet}</code>
 			<div class="dbc-uri-actions">
@@ -280,20 +274,21 @@
 		overflow-x: auto;
 	}
 	.dbc-format {
-		padding: 0.25rem 0.625rem;
-		font-size: 0.75rem;
-		font-weight: 500;
+		padding: 0.25rem 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		font-family: var(--font-mono, monospace);
 		color: var(--text-muted);
 		background: none;
 		border: 1px solid transparent;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		cursor: pointer;
 		white-space: nowrap;
 		transition:
-			color 120ms,
-			background-color 120ms,
-			border-color 120ms;
+			color var(--dur-fast),
+			background-color var(--dur-fast),
+			border-color var(--dur-fast);
 	}
 	.dbc-format:hover {
 		color: var(--text-default);
@@ -310,7 +305,7 @@
 		gap: 0.5rem;
 		padding: 0.75rem 0.875rem;
 		border: 1px solid var(--border-default);
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		background-color: var(--bg-sunken);
 	}
 	.dbc-uri-actions {
@@ -329,14 +324,15 @@
 		grid-column: 1 / -1;
 		grid-template-columns: subgrid;
 		align-items: center;
-		padding: 0.4375rem 0;
+		padding: 0.5rem 0;
 	}
 	.dbc-dl-row:not(:first-child) {
 		border-top: 1px solid color-mix(in srgb, var(--border-default) 55%, transparent);
 	}
 	.dbc-dt {
-		font-size: 0.8125rem;
-		font-weight: 550;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
 		color: var(--text-default);
 	}
 	.dbc-dd {
@@ -349,25 +345,26 @@
 	.dbc-dd-copy {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		min-width: 0;
-		padding: 0.125rem 0.375rem;
-		margin-left: -0.375rem;
+		padding: 0.125rem 0.5rem;
+		margin-left: -0.5rem;
 		border: none;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		background: none;
 		color: var(--text-muted);
 		cursor: pointer;
 		transition:
-			color 120ms,
-			background-color 120ms;
+			color var(--dur-fast),
+			background-color var(--dur-fast);
 	}
 	.dbc-dd-copy:hover {
 		color: var(--text-default);
 		background-color: var(--bg-hover);
 	}
 	.dbc-dd-value {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-family: var(--font-mono, monospace);
 		white-space: nowrap;
 		overflow: hidden;
@@ -376,7 +373,7 @@
 	.dbc-dd-copy :global(.dbc-dd-icon) {
 		opacity: 0;
 		flex-shrink: 0;
-		transition: opacity 120ms;
+		transition: opacity var(--dur-fast);
 	}
 	.dbc-dd-copy:hover :global(.dbc-dd-icon) {
 		opacity: 0.7;
@@ -386,12 +383,12 @@
 		align-items: center;
 		padding: 0.25rem;
 		border: none;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		background: none;
 		color: var(--text-muted);
 		cursor: pointer;
 		flex-shrink: 0;
-		transition: color 120ms;
+		transition: color var(--dur-fast);
 	}
 	.dbc-reveal:hover {
 		color: var(--text-default);
@@ -401,14 +398,20 @@
 	}
 	.dbc-fused {
 		border: 1px solid var(--border-default);
-		border-radius: 1rem;
+		border-radius: var(--radius-lg);
 		background-color: var(--bg-surface);
 		overflow: hidden;
+	}
+	.dbc-fused-head {
+		display: flex;
+		align-items: center;
+		padding: var(--space-3);
+		border-bottom: 1px solid var(--border-default);
+		background-color: var(--bg-surface);
 	}
 	.dbc-formats--tab {
 		display: flex;
 		gap: 0;
-		border-bottom: 1px solid var(--border-default);
 		background-color: var(--bg-surface);
 		padding: 0 0.5rem;
 		overflow-x: auto;
@@ -417,7 +420,7 @@
 		border: none;
 		border-radius: 0;
 		border-bottom: 2px solid transparent;
-		padding: 0.625rem 0.75rem;
+		padding: 0.75rem 0.75rem;
 		margin-bottom: -1px;
 	}
 	.dbc-formats--tab .dbc-format:hover {
@@ -438,7 +441,7 @@
 	.dbc-fused-code {
 		flex: 1;
 		min-width: 0;
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
 		font-family: var(--font-mono, monospace);
 		color: var(--text-default);
 		word-break: break-all;

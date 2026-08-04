@@ -106,18 +106,19 @@
 	.rt-image-input-wrap {
 		display: flex;
 		flex-direction: column;
-		gap: 0.375rem;
+		gap: 0.5rem;
 	}
 	.rt-image-input {
 		width: 100%;
 		padding: 0.5rem 0.75rem;
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-family: var(--font-mono);
 		border: 1px solid var(--surface-border);
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		background-color: var(--surface-bg);
 		color: var(--center-channel-color);
-		transition: border-color 150ms;
+		transition: border-color var(--dur-fast);
 	}
 	.rt-image-input:focus {
 		outline: none;
@@ -128,13 +129,15 @@
 		opacity: 0.6;
 	}
 	.rt-image-current {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 	}
 	.rt-image-current code {
 		font-family: var(--font-mono);
 		color: var(--center-channel-color);
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 	}
 	.rt-image-actions {
 		display: flex;

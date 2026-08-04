@@ -350,7 +350,7 @@
 		z-index: 1;
 		background: rgba(255, 255, 255, 0.03);
 		border: 1px solid rgba(255, 255, 255, 0.08);
-		border-radius: 1rem;
+		border-radius: var(--radius-lg);
 		padding: 2.5rem;
 		width: 100%;
 		max-width: 420px;
@@ -375,14 +375,14 @@
 	.sso-logo {
 		width: 56px;
 		height: 56px;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		object-fit: cover;
 	}
 
 	.sso-card-icon {
 		width: 56px;
 		height: 56px;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		display: flex;
 		align-items: center;
 		justify-content: center;
@@ -391,7 +391,8 @@
 	}
 
 	.sso-title {
-		font-size: 1.25rem;
+		font-size: var(--text-title-3);
+		line-height: var(--lh-title-3);
 		font-weight: 600;
 		color: rgba(255, 255, 255, 0.95);
 		text-align: center;
@@ -399,7 +400,8 @@
 	}
 
 	.sso-subtitle {
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		color: rgba(255, 255, 255, 0.5);
 		text-align: center;
 		margin: 0;
@@ -408,9 +410,10 @@
 	.sso-error {
 		background: rgba(239, 68, 68, 0.1);
 		border: 1px solid rgba(239, 68, 68, 0.2);
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		padding: 0.75rem 1rem;
-		font-size: 0.8rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: #fca5a5;
 		width: 100%;
 		text-align: center;
@@ -422,7 +425,8 @@
 		align-items: center;
 		gap: 0.75rem;
 		color: rgba(255, 255, 255, 0.3);
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 	}
 
 	.sso-divider::before,
@@ -441,21 +445,23 @@
 	}
 
 	.sso-label {
-		font-size: 0.75rem;
-		font-weight: 500;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		color: rgba(255, 255, 255, 0.6);
 	}
 
 	.sso-input {
 		width: 100%;
-		padding: 0.625rem 0.75rem;
+		padding: 0.75rem 0.75rem;
 		background: rgba(255, 255, 255, 0.04);
 		border: 1px solid rgba(255, 255, 255, 0.1);
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		color: rgba(255, 255, 255, 0.9);
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		outline: none;
-		transition: border-color 0.15s;
+		transition: border-color var(--dur-fast);
 	}
 
 	.sso-input:focus {
@@ -479,19 +485,22 @@
 	}
 
 	.sso-error-text {
-		font-size: 0.8rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: #fca5a5;
 		margin: 0;
 	}
 
 	.sso-success-text {
-		font-size: 0.8rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: #86efac;
 		margin: 0;
 	}
 
 	.sso-footer {
-		font-size: 0.7rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: rgba(255, 255, 255, 0.25);
 		margin-top: 0.5rem;
 	}

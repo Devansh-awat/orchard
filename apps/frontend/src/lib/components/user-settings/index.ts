@@ -1,5 +1,4 @@
 export { default as UserIdentityHero } from './UserIdentityHero.svelte';
-export { default as SettingsLinkRow } from './SettingsLinkRow.svelte';
 export { default as UserInvitations } from './UserInvitations.svelte';
 export { default as UserGitHub } from './UserGitHub.svelte';
 export { default as UserTailscale } from './UserTailscale.svelte';
@@ -8,10 +7,10 @@ export { default as UserSessions } from './UserSessions.svelte';
 export { default as UserEarlyAccess } from './UserEarlyAccess.svelte';
 export { default as UserAccessibility } from './UserAccessibility.svelte';
 export { default as SettingsSection } from './SettingsSection.svelte';
-export { default as SettingsField } from './SettingsField.svelte';
 export { default as IntegrationCard } from './IntegrationCard.svelte';
 export { default as ConnectPrompt } from './ConnectPrompt.svelte';
 export { default as IconButton } from './IconButton.svelte';
 export { default as UserApiTokens } from './UserApiTokens.svelte';
 export { default as UserMcp } from './UserMcp.svelte';
 export { default as UserAppearance } from './UserAppearance.svelte';
+export { default as UserNotifications } from './UserNotifications.svelte';

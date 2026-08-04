@@ -210,10 +210,11 @@
 		bottom: 0.5rem;
 		right: 0.75rem;
 		z-index: 10;
-		font-size: 0.625rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-family: var(--font-mono);
 		padding: 0.25rem 0.5rem;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 	}
 
 	.pod-terminal-error {
@@ -225,11 +226,12 @@
 		gap: 0.5rem;
 	}
 	.pod-terminal-error button {
-		padding: 0.125rem 0.375rem;
-		border-radius: 0.25rem;
+		padding: 0.125rem 0.5rem;
+		border-radius: var(--radius-xs);
 		background: rgba(248, 81, 73, 0.2);
 		color: #f85149;
-		font-size: 0.625rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		border: none;
 		cursor: pointer;
 	}

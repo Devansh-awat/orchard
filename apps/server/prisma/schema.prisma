@@ -8,53 +8,59 @@ datasource db {
 }
 
 model User {
-  id                String   @id @default(uuid()) @db.Uuid
-  externalAuthId        String?  @unique @map("hackclub_id") @db.VarChar(255)
-  email             String   @unique @db.VarChar(255)
-  username          String   @unique @db.VarChar(100)
-  passwordHash      String?  @map("password_hash") @db.VarChar(255)
-  firstName         String?  @map("first_name") @db.VarChar(100)
-  lastName          String?  @map("last_name") @db.VarChar(100)
-  imageUrl          String?  @map("image_url") @db.VarChar(500)
-  githubId          String?  @unique @map("github_id") @db.VarChar(255)
-  githubUsername    String?  @map("github_username") @db.VarChar(255)
-  githubAccessToken String?  @map("github_access_token") @db.Text
+  id                          String    @id @default(uuid()) @db.Uuid
+  externalAuthId              String?   @unique @map("hackclub_id") @db.VarChar(255)
+  email                       String    @unique @db.VarChar(255)
+  username                    String    @unique @db.VarChar(100)
+  passwordHash                String?   @map("password_hash") @db.VarChar(255)
+  firstName                   String?   @map("first_name") @db.VarChar(100)
+  lastName                    String?   @map("last_name") @db.VarChar(100)
+  imageUrl                    String?   @map("image_url") @db.VarChar(500)
+  githubId                    String?   @unique @map("github_id") @db.VarChar(255)
+  githubUsername              String?   @map("github_username") @db.VarChar(255)
+  githubAccessToken           String?   @map("github_access_token") @db.Text
   githubTokenExpiresAt        DateTime? @map("github_token_expires_at") @db.Timestamp(6)
   githubRefreshToken          String?   @map("github_refresh_token") @db.Text
   githubRefreshTokenExpiresAt DateTime? @map("github_refresh_token_expires_at") @db.Timestamp(6)
-  isSuperAdmin      Boolean  @default(false) @map("is_super_admin")
-  setupCompleted    Boolean  @default(false) @map("setup_completed")
-  emailVerified     Boolean   @default(false) @map("email_verified")
-  emailVerifiedAt   DateTime? @map("email_verified_at") @db.Timestamp(6)
-  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  isSuperAdmin                Boolean   @default(false) @map("is_super_admin")
+  setupCompleted              Boolean   @default(false) @map("setup_completed")
+  emailVerified               Boolean   @default(false) @map("email_verified")
+  emailVerifiedAt             DateTime? @map("email_verified_at") @db.Timestamp(6)
+  seenUpdates                 String[]  @default([]) @map("seen_updates")
+  createdAt                   DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt                   DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  createdProjects              Project[]                @relation("ProjectCreator")
-  ownedProjects                Project[]                @relation("ProjectOwner")
-  projectMembers               ProjectMember[]
-  projectInvitations           ProjectInvitation[]      @relation("ProjectInvitedBy")
-  receivedProjectInvitations   ProjectInvitation[]      @relation("ProjectInvitedUser")
-  addedProjectMembers          ProjectMember[]          @relation("ProjectMemberAdder")
-  createdDeployments           Deployment[]             @relation("DeploymentCreator")
-  createdOrganizations         Organization[]           @relation("OrganizationCreator")
-  organizationMembers          OrganizationMember[]
-  orgInvitationsSent           OrganizationInvitation[] @relation("OrgInvitationInviter")
-  passkeys                     Passkey[]
-  sessions                     Session[]
-  githubAppInstallations       GitHubAppInstallation[]
-  createdDatabases             Database[]               @relation("DatabaseCreator")
-  apiTokens                    ApiToken[]
-  createdTemplateInstances     TemplateInstance[]        @relation("TemplateInstanceCreator")
-  createdComposeStacks         ComposeStack[]            @relation("ComposeStackCreator")
-  triggeredBuilds              ImageHistory[]
-  triggeredBuildRuns           BuildRun[]               @relation("BuildRunTrigger")
-  createdWebhookTokens         DeploymentWebhookToken[] @relation("WebhookTokenCreator")
-  tailscaleConnection          TailscaleConnection?
-  createdJobs                  Job[]                    @relation("JobCreator")
-  triggeredJobRuns             JobRun[]                 @relation("JobRunTrigger")
-  forumThreads                 ForumThread[]            @relation("ForumThreadAuthor")
-  forumReplies                 ForumReply[]             @relation("ForumReplyAuthor")
-  forumVotes                   ForumVote[]              @relation("ForumVoteUser")
+  createdProjects            Project[]                @relation("ProjectCreator")
+  ownedProjects              Project[]                @relation("ProjectOwner")
+  projectMembers             ProjectMember[]
+  projectInvitations         ProjectInvitation[]      @relation("ProjectInvitedBy")
+  receivedProjectInvitations ProjectInvitation[]      @relation("ProjectInvitedUser")
+  addedProjectMembers        ProjectMember[]          @relation("ProjectMemberAdder")
+  createdDeployments         Deployment[]             @relation("DeploymentCreator")
+  createdOrganizations       Organization[]           @relation("OrganizationCreator")
+  organizationMembers        OrganizationMember[]
+  orgInvitationsSent         OrganizationInvitation[] @relation("OrgInvitationInviter")
+  passkeys                   Passkey[]
+  sessions                   Session[]
+  githubAppInstallations     GitHubAppInstallation[]
+  createdDatabases           Database[]               @relation("DatabaseCreator")
+  apiTokens                  ApiToken[]
+  createdTemplateInstances   TemplateInstance[]       @relation("TemplateInstanceCreator")
+  createdComposeStacks       ComposeStack[]           @relation("ComposeStackCreator")
+  triggeredBuilds            ImageHistory[]
+  assignedErrorGroups        ErrorGroup[]             @relation("ErrorGroupAssignee")
+  resolvedErrorGroups        ErrorGroup[]             @relation("ErrorGroupResolver")
+  triggeredBuildRuns         BuildRun[]               @relation("BuildRunTrigger")
+  createdWebhookTokens       DeploymentWebhookToken[] @relation("WebhookTokenCreator")
+  tailscaleConnection        TailscaleConnection?
+  createdJobs                Job[]                    @relation("JobCreator")
+  triggeredJobRuns           JobRun[]                 @relation("JobRunTrigger")
+  forumThreads               ForumThread[]            @relation("ForumThreadAuthor")
+  forumReplies               ForumReply[]             @relation("ForumReplyAuthor")
+  forumVotes                 ForumVote[]              @relation("ForumVoteUser")
+  notificationSettings       UserNotificationSetting[]
+  notificationDestinations   UserNotificationDestination[]
+  createdNotificationRules   NotificationRule[]       @relation("NotificationRuleCreator")
 
   @@map("users")
 }
@@ -77,28 +83,28 @@ model TailscaleConnection {
 }
 
 model ApiToken {
-  id         String    @id @default(uuid()) @db.Uuid
-  name       String    @db.VarChar(255)
+  id                   String    @id @default(uuid()) @db.Uuid
+  name                 String    @db.VarChar(255)
   // sha256 hex digest of the plaintext token. Plaintext is never persisted —
   // a DB compromise (read replica, backup leak) yields hashes, not working
   // credentials. Lookup is by hash, so authentication still hits one indexed row.
-  tokenHash  String    @unique @map("token_hash") @db.VarChar(128)
+  tokenHash            String    @unique @map("token_hash") @db.VarChar(128)
   // List of capability scopes (e.g. ["read"], ["read","exec"]). Empty array
   // means read-only. Sensitive surfaces (terminal exec) require explicit scope.
-  scopes     Json      @default("[]") @map("scopes")
+  scopes               Json      @default("[]") @map("scopes")
   // Optional project allowlist. Empty array = token can touch any project the
   // owning user has access to (legacy behaviour). Non-empty = token is rejected
   // for any project not in this list, regardless of the user's underlying role.
   // IDs are not FK-enforced: project deletion is rare, and a stale ID is simply
   // unmatchable, which is the safe direction.
-  restrictedProjectIds String[] @default([]) @map("restricted_project_ids") @db.Uuid
-  userId     String    @map("user_id") @db.Uuid
-  lastUsedAt DateTime? @map("last_used_at") @db.Timestamp(6)
-  expiresAt  DateTime? @map("expires_at") @db.Timestamp(6)
-  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt  DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+  restrictedProjectIds String[]  @default([]) @map("restricted_project_ids") @db.Uuid
+  userId               String    @map("user_id") @db.Uuid
+  lastUsedAt           DateTime? @map("last_used_at") @db.Timestamp(6)
+  expiresAt            DateTime? @map("expires_at") @db.Timestamp(6)
+  createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt            DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user                    User                     @relation(fields: [userId], references: [id], onDelete: Cascade)
   // H-3: when this API token is deleted (revocation or user removal),
   // cascade-delete any webhooks it minted so the trigger surface dies with
   // the parent credential. See DeploymentWebhookToken.originatingApiTokenId.
@@ -131,20 +137,20 @@ model Session {
 
 // GitHub App installations - tracks when users install the GitHub App on their repos
 model GitHubAppInstallation {
-  id               String   @id @default(uuid()) @db.Uuid
-  userId           String?  @map("user_id") @db.Uuid
-  installationId   BigInt   @unique @map("installation_id")
-  accountLogin     String   @map("account_login") @db.VarChar(255)
-  accountId        BigInt   @map("account_id")
-  accountType      String   @map("account_type") @db.VarChar(50)
-  accessToken      String?  @map("access_token") @db.Text
-  tokenExpiresAt   DateTime? @map("token_expires_at") @db.Timestamp(6)
-  repositorySelection String @default("all") @map("repository_selection") @db.VarChar(50)
-  suspendedAt      DateTime? @map("suspended_at") @db.Timestamp(6)
-  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  id                  String    @id @default(uuid()) @db.Uuid
+  userId              String?   @map("user_id") @db.Uuid
+  installationId      BigInt    @unique @map("installation_id")
+  accountLogin        String    @map("account_login") @db.VarChar(255)
+  accountId           BigInt    @map("account_id")
+  accountType         String    @map("account_type") @db.VarChar(50)
+  accessToken         String?   @map("access_token") @db.Text
+  tokenExpiresAt      DateTime? @map("token_expires_at") @db.Timestamp(6)
+  repositorySelection String    @default("all") @map("repository_selection") @db.VarChar(50)
+  suspendedAt         DateTime? @map("suspended_at") @db.Timestamp(6)
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  user User? @relation(fields: [userId], references: [id], onDelete: SetNull)
+  user  User?              @relation(fields: [userId], references: [id], onDelete: SetNull)
   repos GitHubRepoMirror[]
 
   @@index([userId], map: "idx_github_app_installations_user")
@@ -187,12 +193,12 @@ model OtpCode {
 
 // Rate limiting records for brute force protection
 model RateLimitRecord {
-  id         String   @id @default(uuid()) @db.Uuid
-  identifier String   @db.VarChar(255) // Email or IP address
-  type       String   @db.VarChar(50) // "email" or "ip"
-  action     String   @db.VarChar(50) // "otp_request", "otp_verify", "passkey_auth"
-  count      Int      @default(1)
-  windowStart DateTime @default(now()) @map("window_start") @db.Timestamp(6)
+  id           String    @id @default(uuid()) @db.Uuid
+  identifier   String    @db.VarChar(255) // Email or IP address
+  type         String    @db.VarChar(50) // "email" or "ip"
+  action       String    @db.VarChar(50) // "otp_request", "otp_verify", "passkey_auth"
+  count        Int       @default(1)
+  windowStart  DateTime  @default(now()) @map("window_start") @db.Timestamp(6)
   blockedUntil DateTime? @map("blocked_until") @db.Timestamp(6)
 
   @@unique([identifier, type, action])
@@ -203,18 +209,18 @@ model RateLimitRecord {
 
 // WebAuthn Passkeys for passwordless authentication
 model Passkey {
-  id                  String   @id @default(uuid()) @db.Uuid
-  userId              String   @map("user_id") @db.Uuid
-  credentialId        String   @unique @map("credential_id") @db.Text // Base64URL encoded credential ID
-  publicKey           String   @map("public_key") @db.Text // Base64URL encoded public key
-  counter             BigInt   @default(0) // Sign count for replay protection
-  deviceType          String   @map("device_type") @db.VarChar(32) // "singleDevice" or "multiDevice"
-  backedUp            Boolean  @default(false) @map("backed_up")
-  transports          String[] @default([]) // Array of transport hints (usb, ble, nfc, internal)
-  aaguid              String?  @db.VarChar(36) // Authenticator AAGUID
-  friendlyName        String?  @map("friendly_name") @db.VarChar(255) // User-provided name for the passkey
-  lastUsedAt          DateTime? @map("last_used_at") @db.Timestamp(6)
-  createdAt           DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  id           String    @id @default(uuid()) @db.Uuid
+  userId       String    @map("user_id") @db.Uuid
+  credentialId String    @unique @map("credential_id") @db.Text // Base64URL encoded credential ID
+  publicKey    String    @map("public_key") @db.Text // Base64URL encoded public key
+  counter      BigInt    @default(0) // Sign count for replay protection
+  deviceType   String    @map("device_type") @db.VarChar(32) // "singleDevice" or "multiDevice"
+  backedUp     Boolean   @default(false) @map("backed_up")
+  transports   String[]  @default([]) // Array of transport hints (usb, ble, nfc, internal)
+  aaguid       String?   @db.VarChar(36) // Authenticator AAGUID
+  friendlyName String?   @map("friendly_name") @db.VarChar(255) // User-provided name for the passkey
+  lastUsedAt   DateTime? @map("last_used_at") @db.Timestamp(6)
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -256,7 +262,7 @@ model Organization {
   backupR2AccessKey String? @map("backup_r2_access_key") @db.VarChar(255)
   backupR2SecretKey String? @map("backup_r2_secret_key") @db.VarChar(500)
 
-  databasePublicIp  String? @map("database_public_ip") @db.VarChar(45)
+  databasePublicIp String? @map("database_public_ip") @db.VarChar(45)
 
   // Org-wide resource caps (null = unlimited). CPU in millicores, memory in bytes.
   cpuLimitMilli    Int?    @map("cpu_limit_milli")
@@ -265,8 +271,8 @@ model Organization {
   maxServices      Int?    @map("max_services")
 
   // Per-project defaults applied via LimitRange (null = no default).
-  defaultPodCpuMilli     Int?    @map("default_pod_cpu_milli")
-  defaultPodMemoryBytes  BigInt? @map("default_pod_memory_bytes")
+  defaultPodCpuMilli    Int?    @map("default_pod_cpu_milli")
+  defaultPodMemoryBytes BigInt? @map("default_pod_memory_bytes")
 
   // Default per-member resource allowance handed to new members (null = unlimited default).
   defaultMemberCpuMilli    Int?    @map("default_member_cpu_milli")
@@ -276,14 +282,16 @@ model Organization {
   // same quotaGroupId mirror caps and aggregate usage when admission-checking.
   quotaGroupId String? @map("quota_group_id") @db.Uuid
 
-  creator     User?                    @relation("OrganizationCreator", fields: [createdBy], references: [id], onDelete: SetNull)
-  members     OrganizationMember[]
-  invitations OrganizationInvitation[]
-  projects    Project[]
-  ssoConfig   SsoConfig?
-  nodeAssignments OrgNodeAssignment[]
-  scimTokens  ScimToken[]
+  creator              User?                    @relation("OrganizationCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  members              OrganizationMember[]
+  invitations          OrganizationInvitation[]
+  projects             Project[]
+  ssoConfig            SsoConfig?
+  nodeAssignments      OrgNodeAssignment[]
+  scimTokens           ScimToken[]
   notificationChannels NotificationChannel[]
+  notificationRules    NotificationRule[]
+  notificationEvents   NotificationEvent[]
 
   @@index([quotaGroupId], map: "idx_organizations_quota_group")
   @@map("organizations")
@@ -307,17 +315,17 @@ model OrganizationMember {
   addedBy        String?          @map("added_by") @db.Uuid
 
   // Per-member resource allowance. Null + unlimited=false ⇒ inherit org default.
-  cpuAllowanceMilli         Int?     @map("cpu_allowance_milli")
-  memoryAllowanceBytes      BigInt?  @map("memory_allowance_bytes")
-  cpuAllowanceUnlimited     Boolean  @default(false) @map("cpu_allowance_unlimited")
-  memoryAllowanceUnlimited  Boolean  @default(false) @map("memory_allowance_unlimited")
+  cpuAllowanceMilli        Int?    @map("cpu_allowance_milli")
+  memoryAllowanceBytes     BigInt? @map("memory_allowance_bytes")
+  cpuAllowanceUnlimited    Boolean @default(false) @map("cpu_allowance_unlimited")
+  memoryAllowanceUnlimited Boolean @default(false) @map("memory_allowance_unlimited")
 
   // SCIM provisioning state. A membership is the unit an IdP provisions: SCIM
   // resource id = this row's id. scimExternalId is the IdP's stable handle for
   // the user (carried in `externalId`); scimManaged flags rows created via SCIM
   // so deprovisioning (active:false / DELETE) only removes IdP-owned memberships.
-  scimExternalId String?  @map("scim_external_id") @db.VarChar(255)
-  scimManaged    Boolean  @default(false) @map("scim_managed")
+  scimExternalId String? @map("scim_external_id") @db.VarChar(255)
+  scimManaged    Boolean @default(false) @map("scim_managed")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -377,33 +385,33 @@ model Role {
 }
 
 model Project {
-  id              String   @id @default(uuid()) @db.Uuid
-  organizationId  String   @map("organization_id") @db.Uuid
-  name            String   @db.VarChar(255)
-  slug            String   @db.VarChar(100)
-  description     String?  @db.Text
-  repositoryUrl   String?  @map("repository_url") @db.VarChar(500)
-  icon            String?  @db.VarChar(500)
-  backgroundImage String?  @map("background_image") @db.VarChar(1000)
-  namespace       String   @db.VarChar(100)
+  id               String   @id @default(uuid()) @db.Uuid
+  organizationId   String   @map("organization_id") @db.Uuid
+  name             String   @db.VarChar(255)
+  slug             String   @db.VarChar(100)
+  description      String?  @db.Text
+  repositoryUrl    String?  @map("repository_url") @db.VarChar(500)
+  icon             String?  @db.VarChar(500)
+  backgroundImage  String?  @map("background_image") @db.VarChar(1000)
+  namespace        String   @db.VarChar(100)
   // Per-project caps — override the org-level share (null = inherit from org).
-  cpuLimitMilli    Int?    @map("cpu_limit_milli")
-  memoryLimitBytes BigInt? @map("memory_limit_bytes")
-  maxPods          Int?    @map("max_pods")
-  maxServices      Int?    @map("max_services")
-  createdBy      String?  @map("created_by") @db.Uuid
+  cpuLimitMilli    Int?     @map("cpu_limit_milli")
+  memoryLimitBytes BigInt?  @map("memory_limit_bytes")
+  maxPods          Int?     @map("max_pods")
+  maxServices      Int?     @map("max_services")
+  createdBy        String?  @map("created_by") @db.Uuid
   // Project owner — deployments under this project are accredited to this user's allowance.
   // Backfilled from createdBy on migration; transferable later.
-  ownerId        String?  @map("owner_id") @db.Uuid
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  ownerId          String?  @map("owner_id") @db.Uuid
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  organization  Organization       @relation(fields: [organizationId], references: [id], onDelete: Cascade)
-  creator       User?              @relation("ProjectCreator", fields: [createdBy], references: [id], onDelete: SetNull)
-  owner         User?              @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
-  members       ProjectMember[]
-  invitations   ProjectInvitation[]
-  orgInvitations OrganizationInvitation[]
+  organization      Organization             @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator           User?                    @relation("ProjectCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  owner             User?                    @relation("ProjectOwner", fields: [ownerId], references: [id], onDelete: SetNull)
+  members           ProjectMember[]
+  invitations       ProjectInvitation[]
+  orgInvitations    OrganizationInvitation[]
   deployments       Deployment[]
   ingresses         Ingress[]
   databases         Database[]
@@ -418,23 +426,23 @@ model Project {
 }
 
 model Environment {
-  id             String   @id @default(uuid()) @db.Uuid
-  projectId      String   @map("project_id") @db.Uuid
-  name           String   @db.VarChar(100)
-  slug           String   @db.VarChar(100)
+  id               String   @id @default(uuid()) @db.Uuid
+  projectId        String   @map("project_id") @db.Uuid
+  name             String   @db.VarChar(100)
+  slug             String   @db.VarChar(100)
   // The k8s namespace this environment's resources live in. For the default
   // production environment this equals the project's original namespace
   // (zero-churn retrofit); new environments get a suffixed namespace.
-  namespace      String   @unique @db.VarChar(100)
-  isDefault      Boolean  @default(false) @map("is_default")
-  isProduction   Boolean  @default(false) @map("is_production")
+  namespace        String   @unique @db.VarChar(100)
+  isDefault        Boolean  @default(false) @map("is_default")
+  isProduction     Boolean  @default(false) @map("is_production")
   // Per-env caps override the project's share (null = inherit project → org).
-  cpuLimitMilli    Int?    @map("cpu_limit_milli")
-  memoryLimitBytes BigInt? @map("memory_limit_bytes")
-  maxPods          Int?    @map("max_pods")
-  maxServices      Int?    @map("max_services")
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  cpuLimitMilli    Int?     @map("cpu_limit_milli")
+  memoryLimitBytes BigInt?  @map("memory_limit_bytes")
+  maxPods          Int?     @map("max_pods")
+  maxServices      Int?     @map("max_services")
+  createdAt        DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt        DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
   project     Project                @relation(fields: [projectId], references: [id], onDelete: Cascade)
   deployments Deployment[]
@@ -503,31 +511,31 @@ model ProjectInvitation {
 }
 
 model Deployment {
-  id             String     @id @default(uuid()) @db.Uuid
-  projectId      String     @map("project_id") @db.Uuid
-  name           String     @db.VarChar(255)
+  id                   String             @id @default(uuid()) @db.Uuid
+  projectId            String             @map("project_id") @db.Uuid
+  name                 String             @db.VarChar(255)
   // User-facing name, renamable at any time. `name` stays frozen after
   // creation because it is baked into the k8s object names (Deployment,
   // Service, selectors, env Secret). Render displayName ?? name.
-  displayName    String?    @map("display_name") @db.VarChar(255)
-  namespace      String     @db.VarChar(100)
-  image          String?    @db.VarChar(500)
-  replicas       Int        @default(1)
+  displayName          String?            @map("display_name") @db.VarChar(255)
+  namespace            String             @db.VarChar(100)
+  image                String?            @db.VarChar(500)
+  replicas             Int                @default(1)
   // Per-container resource request (== limit; Guaranteed QoS).
   // Null means fall back to org defaultPodCpuMilli/defaultPodMemoryBytes, then 100m/128Mi.
-  cpuRequestMilli    Int?    @map("cpu_request_milli")
-  memoryRequestBytes BigInt? @map("memory_request_bytes")
-  status         String     @default("pending") @db.VarChar(50)
-  buildStatus    String     @default("none") @map("build_status") @db.VarChar(50)
-  buildStep      String?    @map("build_step") @db.VarChar(50)
-  buildType      BuildType  @default(dockerfile) @map("build_type")
-  deployStrategy DeploymentStrategy @default(rollingUpdate) @map("deploy_strategy")
-  githubRepo     String?    @map("github_repo") @db.VarChar(500)
-  githubBranch   String?    @map("github_branch") @db.VarChar(255)
-  dockerfilePath String?    @map("dockerfile_path") @db.VarChar(500)
-  buildFromRoot  Boolean    @default(false) @map("build_from_root")
-  buildWithDepot Boolean    @default(false) @map("build_with_depot")
-  persistentBuildCache Boolean @default(false) @map("persistent_build_cache")
+  cpuRequestMilli      Int?               @map("cpu_request_milli")
+  memoryRequestBytes   BigInt?            @map("memory_request_bytes")
+  status               String             @default("pending") @db.VarChar(50)
+  buildStatus          String             @default("none") @map("build_status") @db.VarChar(50)
+  buildStep            String?            @map("build_step") @db.VarChar(50)
+  buildType            BuildType          @default(dockerfile) @map("build_type")
+  deployStrategy       DeploymentStrategy @default(rollingUpdate) @map("deploy_strategy")
+  githubRepo           String?            @map("github_repo") @db.VarChar(500)
+  githubBranch         String?            @map("github_branch") @db.VarChar(255)
+  dockerfilePath       String?            @map("dockerfile_path") @db.VarChar(500)
+  buildFromRoot        Boolean            @default(false) @map("build_from_root")
+  buildWithDepot       Boolean            @default(false) @map("build_with_depot")
+  persistentBuildCache Boolean            @default(false) @map("persistent_build_cache")
   // Zero-config build settings for `railpack` builds. Every one of these is
   // null by default, meaning "whatever Railpack detected" — a non-null value
   // becomes a RAILPACK_* override on the build. Railpack's own merge order
@@ -538,37 +546,37 @@ model Deployment {
   // point Railpack straight at it; inside a detected workspace we keep the
   // build at the repo root (so the lockfile resolves) and scope the commands
   // to the package instead.
-  rootDirectory   String?  @map("root_directory") @db.VarChar(500)
-  framework       String?  @map("framework") @db.VarChar(50)
-  installCommand  String?  @map("install_command") @db.VarChar(2000)
-  buildCommand    String?  @map("build_command") @db.VarChar(2000)
-  startCommand    String?  @map("start_command") @db.VarChar(2000)
+  rootDirectory        String?            @map("root_directory") @db.VarChar(500)
+  framework            String?            @map("framework") @db.VarChar(50)
+  installCommand       String?            @map("install_command") @db.VarChar(2000)
+  buildCommand         String?            @map("build_command") @db.VarChar(2000)
+  startCommand         String?            @map("start_command") @db.VarChar(2000)
   // Non-null turns the app into a static site: Railpack builds it, then serves
   // this directory with Caddy on $PORT with index.html fallback.
-  outputDirectory String?  @map("output_directory") @db.VarChar(500)
+  outputDirectory      String?            @map("output_directory") @db.VarChar(500)
   // Reconciled from the build's railpack-info.json — what Railpack actually
   // detected, as opposed to what the create-form guessed.
-  detectedConfig  Json?    @map("detected_config") @db.JsonB
+  detectedConfig       Json?              @map("detected_config") @db.JsonB
   // Local-upload builds ("orchard up"): R2 object key + sha256 of the last
   // uploaded build context. A deployment with a key and no githubRepo builds
   // from the uploaded tarball instead of a clone.
-  buildContextKey String?   @map("build_context_key") @db.VarChar(500)
-  buildContextSha String?   @map("build_context_sha") @db.VarChar(100)
-  buildLogs      String?    @map("build_logs") @db.Text
-  buildError     String?    @map("build_error") @db.Text
-  buildStepTimestamps Json?  @map("build_step_timestamps") @db.JsonB
-  createdBy      String?    @map("created_by") @db.Uuid
-  createdAt      DateTime   @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt      DateTime   @updatedAt @map("updated_at") @db.Timestamp(6)
+  buildContextKey      String?            @map("build_context_key") @db.VarChar(500)
+  buildContextSha      String?            @map("build_context_sha") @db.VarChar(100)
+  buildLogs            String?            @map("build_logs") @db.Text
+  buildError           String?            @map("build_error") @db.Text
+  buildStepTimestamps  Json?              @map("build_step_timestamps") @db.JsonB
+  createdBy            String?            @map("created_by") @db.Uuid
+  createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt            DateTime           @updatedAt @map("updated_at") @db.Timestamp(6)
 
   // Tailscale integration
-  tailscaleExposed     Boolean  @default(false) @map("tailscale_exposed")
-  tailscaleHostname    String?  @map("tailscale_hostname") @db.VarChar(255)
-  tailscaleExposedBy   String?  @map("tailscale_exposed_by") @db.Uuid
+  tailscaleExposed   Boolean @default(false) @map("tailscale_exposed")
+  tailscaleHostname  String? @map("tailscale_hostname") @db.VarChar(255)
+  tailscaleExposedBy String? @map("tailscale_exposed_by") @db.Uuid
 
   // Auto-deploy configuration
-  autoDeployEnabled  Boolean  @default(false) @map("auto_deploy_enabled")
-  autoDeployBranch   String?  @map("auto_deploy_branch") @db.VarChar(255)
+  autoDeployEnabled    Boolean @default(false) @map("auto_deploy_enabled")
+  autoDeployBranch     String? @map("auto_deploy_branch") @db.VarChar(255)
   // GitHub App installation that owns this deployment's repo. Webhooks must
   // be matched against this id to prevent another installation impersonating
   // a repo by full_name.
@@ -584,42 +592,43 @@ model Deployment {
   queuedAt                   DateTime? @map("queued_at") @db.Timestamp(6)
 
   // Health check configuration
-  healthCheckEnabled      Boolean  @default(false) @map("health_check_enabled")
-  healthCheckPath         String?  @map("health_check_path") @db.VarChar(500)
-  healthCheckPort         Int?     @map("health_check_port")
-  healthCheckType         String   @default("http") @map("health_check_type") @db.VarChar(20)
-  healthCheckCommand      String?  @map("health_check_command") @db.VarChar(500)
-  livenessEnabled         Boolean  @default(true)  @map("liveness_enabled")
-  readinessEnabled        Boolean  @default(true)  @map("readiness_enabled")
-  startupEnabled          Boolean  @default(false) @map("startup_enabled")
-  healthCheckInterval     Int      @default(30)    @map("health_check_interval")
-  healthCheckTimeout      Int      @default(5)     @map("health_check_timeout")
-  healthCheckRetries      Int      @default(3)     @map("health_check_retries")
-  startupFailureThreshold Int      @default(30)    @map("startup_failure_threshold")
+  healthCheckEnabled      Boolean @default(false) @map("health_check_enabled")
+  healthCheckPath         String? @map("health_check_path") @db.VarChar(500)
+  healthCheckPort         Int?    @map("health_check_port")
+  healthCheckType         String  @default("http") @map("health_check_type") @db.VarChar(20)
+  healthCheckCommand      String? @map("health_check_command") @db.VarChar(500)
+  livenessEnabled         Boolean @default(true) @map("liveness_enabled")
+  readinessEnabled        Boolean @default(true) @map("readiness_enabled")
+  startupEnabled          Boolean @default(false) @map("startup_enabled")
+  healthCheckInterval     Int     @default(30) @map("health_check_interval")
+  healthCheckTimeout      Int     @default(5) @map("health_check_timeout")
+  healthCheckRetries      Int     @default(3) @map("health_check_retries")
+  startupFailureThreshold Int     @default(30) @map("startup_failure_threshold")
 
-  templateInstanceId String?  @map("template_instance_id") @db.Uuid
-  composeStackId     String?  @map("compose_stack_id") @db.Uuid
-  composeServiceName String?  @map("compose_service_name") @db.VarChar(255)
+  templateInstanceId String? @map("template_instance_id") @db.Uuid
+  composeStackId     String? @map("compose_stack_id") @db.Uuid
+  composeServiceName String? @map("compose_service_name") @db.VarChar(255)
   // Nullable during the expand phase so a rolling deploy of the old code (which
   // doesn't know this column) keeps inserting cleanly. New code always sets it;
   // a later release tightens to NOT NULL once old pods are gone.
-  environmentId      String?  @map("environment_id") @db.Uuid
+  environmentId      String? @map("environment_id") @db.Uuid
 
-  project            Project              @relation(fields: [projectId], references: [id], onDelete: Cascade)
-  environment        Environment?         @relation(fields: [environmentId], references: [id], onDelete: Cascade)
-  creator            User?                @relation("DeploymentCreator", fields: [createdBy], references: [id], onDelete: SetNull)
-  templateInstance   TemplateInstance?     @relation(fields: [templateInstanceId], references: [id], onDelete: SetNull)
-  composeStack       ComposeStack?        @relation(fields: [composeStackId], references: [id], onDelete: SetNull)
-  pods               Pod[]
-  services           Service[]
-  envVars            DeploymentEnvVar[]
-  ingresses          Ingress[]
-  imageHistory       ImageHistory[]
-  buildRuns          BuildRun[]
-  volumes            DeploymentVolume[]
-  githubDeployments  GitHubDeployment[]
-  webhookTokens      DeploymentWebhookToken[]
-  jobSteps           JobStep[]
+  project           Project                  @relation(fields: [projectId], references: [id], onDelete: Cascade)
+  environment       Environment?             @relation(fields: [environmentId], references: [id], onDelete: Cascade)
+  creator           User?                    @relation("DeploymentCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  templateInstance  TemplateInstance?        @relation(fields: [templateInstanceId], references: [id], onDelete: SetNull)
+  composeStack      ComposeStack?            @relation(fields: [composeStackId], references: [id], onDelete: SetNull)
+  pods              Pod[]
+  services          Service[]
+  envVars           DeploymentEnvVar[]
+  ingresses         Ingress[]
+  imageHistory      ImageHistory[]
+  errorGroups       ErrorGroup[]
+  buildRuns         BuildRun[]
+  volumes           DeploymentVolume[]
+  githubDeployments GitHubDeployment[]
+  webhookTokens     DeploymentWebhookToken[]
+  jobSteps          JobStep[]
 
   @@unique([environmentId, name])
   @@index([projectId], map: "idx_deployments_project")
@@ -673,8 +682,10 @@ model ImageHistory {
   isActive             Boolean   @default(false) @map("is_active")
   createdAt            DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
 
-  deployment  Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
-  triggeredBy User?      @relation(fields: [triggeredById], references: [id], onDelete: SetNull)
+  deployment           Deployment        @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  triggeredBy          User?             @relation(fields: [triggeredById], references: [id], onDelete: SetNull)
+  errorGroupsFirstSeen ErrorGroup[]
+  errorOccurrences     ErrorOccurrence[]
 
   @@index([deploymentId], map: "idx_image_history_deployment")
   @@index([deploymentId, createdAt], map: "idx_image_history_deployment_date")
@@ -738,29 +749,29 @@ model BuildRun {
 }
 
 model DeploymentWebhookToken {
-  id                String    @id @default(uuid()) @db.Uuid
-  deploymentId      String    @map("deployment_id") @db.Uuid
+  id                    String    @id @default(uuid()) @db.Uuid
+  deploymentId          String    @map("deployment_id") @db.Uuid
   // Legacy plaintext column. Kept nullable for rollback safety; new rows
   // write NULL here, old rows are nulled by the 20260515180000 migration
   // after their hash is backfilled. New code must look up by `tokenHash`.
-  token             String?   @unique @db.VarChar(128)
+  token                 String?   @unique @db.VarChar(128)
   // SHA-256 hex digest of the plaintext token. Webhook tokens are bearer
   // secrets — storing them in plaintext turned a DB-read foothold (backup
   // leak, replica access) into working triggers.
-  tokenHash         String    @unique @map("token_hash") @db.VarChar(128)
-  label             String?   @db.VarChar(100)
-  createdAt         DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
-  lastUsedAt        DateTime? @map("last_used_at") @db.Timestamp(6)
-  createdByUserId   String?   @map("created_by_user_id") @db.Uuid
+  tokenHash             String    @unique @map("token_hash") @db.VarChar(128)
+  label                 String?   @db.VarChar(100)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  lastUsedAt            DateTime? @map("last_used_at") @db.Timestamp(6)
+  createdByUserId       String?   @map("created_by_user_id") @db.Uuid
   // H-3: when a webhook is minted via an API token (vs a session), record
   // which API token authored it. Revoking the parent API token must also
   // kill any webhooks created with it, otherwise a project-scoped token's
   // deployment-trigger capability outlives the token itself.
-  originatingApiTokenId String? @map("originating_api_token_id") @db.Uuid
+  originatingApiTokenId String?   @map("originating_api_token_id") @db.Uuid
 
-  deployment            Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
-  createdByUser         User?      @relation("WebhookTokenCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
-  originatingApiToken   ApiToken?  @relation("WebhookTokenOriginatingApiToken", fields: [originatingApiTokenId], references: [id], onDelete: Cascade)
+  deployment          Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  createdByUser       User?      @relation("WebhookTokenCreator", fields: [createdByUserId], references: [id], onDelete: SetNull)
+  originatingApiToken ApiToken?  @relation("WebhookTokenOriginatingApiToken", fields: [originatingApiTokenId], references: [id], onDelete: Cascade)
 
   @@index([deploymentId], map: "idx_webhook_tokens_deployment")
   @@index([originatingApiTokenId], map: "idx_webhook_tokens_originating_api_token")
@@ -784,19 +795,19 @@ model DeploymentEnvVar {
 }
 
 model Pod {
-  id           String   @id @default(uuid()) @db.Uuid
-  deploymentId String   @map("deployment_id") @db.Uuid
-  name         String   @db.VarChar(255)
-  podIp        String?  @map("pod_ip") @db.VarChar(45)
-  nodeName     String?  @map("node_name") @db.VarChar(255)
-  status       String   @default("pending") @db.VarChar(50)
-  restartCount Int      @default(0) @map("restart_count")
-  ready        Boolean? @map("ready")
+  id                    String    @id @default(uuid()) @db.Uuid
+  deploymentId          String    @map("deployment_id") @db.Uuid
+  name                  String    @db.VarChar(255)
+  podIp                 String?   @map("pod_ip") @db.VarChar(45)
+  nodeName              String?   @map("node_name") @db.VarChar(255)
+  status                String    @default("pending") @db.VarChar(50)
+  restartCount          Int       @default(0) @map("restart_count")
+  ready                 Boolean?  @map("ready")
   lastTerminationReason String?   @map("last_termination_reason") @db.VarChar(100)
   lastExitCode          Int?      @map("last_exit_code")
   lastTerminatedAt      DateTime? @map("last_terminated_at") @db.Timestamp(6)
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  createdAt             DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt             DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
 
   deployment Deployment @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
 
@@ -838,31 +849,31 @@ model Service {
 }
 
 model Ingress {
-  id            String   @id @default(uuid()) @db.Uuid
-  projectId     String   @map("project_id") @db.Uuid
-  deploymentId  String?  @map("deployment_id") @db.Uuid
-  serviceId     String?  @map("service_id") @db.Uuid
-  name          String   @db.VarChar(255)
-  namespace     String   @db.VarChar(100)
-  host          String   @db.VarChar(255)
-  path          String   @default("/") @db.VarChar(255)
-  pathType      String   @default("Prefix") @map("path_type") @db.VarChar(32)
-  tlsSecretName String?  @map("tls_secret_name") @db.VarChar(255)
-  tlsHosts      String[] @default([]) @map("tls_hosts")
-  ingressClass  String?  @map("ingress_class") @db.VarChar(100)
-  entrypoints   String[] @default([])
-  clusterIssuer String?  @map("cluster_issuer") @db.VarChar(255)
-  annotations            Json?                  @db.Json
-  statusAddress          String?                @map("status_address") @db.VarChar(255)
-  protectionMode         IngressProtectionMode  @default(none) @map("protection_mode")
-  protectionPasswordHash String?                @map("protection_password_hash") @db.VarChar(255)
-  protectionBypassSecret String?                @map("protection_bypass_secret") @db.VarChar(128)
-  isAutoGenerated        Boolean                @default(false) @map("is_auto_generated")
-  createdAt              DateTime               @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt              DateTime               @updatedAt @map("updated_at") @db.Timestamp(6)
+  id                     String                @id @default(uuid()) @db.Uuid
+  projectId              String                @map("project_id") @db.Uuid
+  deploymentId           String?               @map("deployment_id") @db.Uuid
+  serviceId              String?               @map("service_id") @db.Uuid
+  name                   String                @db.VarChar(255)
+  namespace              String                @db.VarChar(100)
+  host                   String                @db.VarChar(255)
+  path                   String                @default("/") @db.VarChar(255)
+  pathType               String                @default("Prefix") @map("path_type") @db.VarChar(32)
+  tlsSecretName          String?               @map("tls_secret_name") @db.VarChar(255)
+  tlsHosts               String[]              @default([]) @map("tls_hosts")
+  ingressClass           String?               @map("ingress_class") @db.VarChar(100)
+  entrypoints            String[]              @default([])
+  clusterIssuer          String?               @map("cluster_issuer") @db.VarChar(255)
+  annotations            Json?                 @db.Json
+  statusAddress          String?               @map("status_address") @db.VarChar(255)
+  protectionMode         IngressProtectionMode @default(none) @map("protection_mode")
+  protectionPasswordHash String?               @map("protection_password_hash") @db.VarChar(255)
+  protectionBypassSecret String?               @map("protection_bypass_secret") @db.VarChar(128)
+  isAutoGenerated        Boolean               @default(false) @map("is_auto_generated")
+  createdAt              DateTime              @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt              DateTime              @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  templateInstanceId String?  @map("template_instance_id") @db.Uuid
-  environmentId      String?  @map("environment_id") @db.Uuid
+  templateInstanceId String? @map("template_instance_id") @db.Uuid
+  environmentId      String? @map("environment_id") @db.Uuid
 
   project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   environment      Environment?      @relation(fields: [environmentId], references: [id], onDelete: Cascade)
@@ -952,29 +963,29 @@ model DeploymentVolume {
 }
 
 model Database {
-  id            String   @id @default(uuid()) @db.Uuid
-  projectId     String   @map("project_id") @db.Uuid
-  name          String   @db.VarChar(255)
-  dbName        String   @map("db_name") @db.VarChar(63)
-  dbUser        String   @map("db_user") @db.VarChar(63)
-  dbPassword    String   @map("db_password") @db.VarChar(255)
-  status        String   @default("pending") @db.VarChar(50)
-  host          String   @default("postgresql-cluster-rw.postgresql.svc.cluster.local") @db.VarChar(255)
-  port          Int      @default(5432)
-  mode              String   @default("shared") @db.VarChar(20)
-  namespace         String?  @db.VarChar(100)
-  containerName     String?  @map("container_name") @db.VarChar(100)
-  storageSize       String?  @map("storage_size") @db.VarChar(20)
-  clusterName       String?  @map("cluster_name") @db.VarChar(100)
-  pgMajor           Int      @default(17) @map("pg_major")
-  pgParameters      Json?    @map("pg_parameters")
-  sharedPreloadLibs Json?    @map("shared_preload_libs")
-  installedExtensions Json?  @map("installed_extensions")
-  backupScheduleCron String?  @map("backup_schedule_cron") @db.VarChar(100)
+  id                  String  @id @default(uuid()) @db.Uuid
+  projectId           String  @map("project_id") @db.Uuid
+  name                String  @db.VarChar(255)
+  dbName              String  @map("db_name") @db.VarChar(63)
+  dbUser              String  @map("db_user") @db.VarChar(63)
+  dbPassword          String  @map("db_password") @db.VarChar(255)
+  status              String  @default("pending") @db.VarChar(50)
+  host                String  @default("postgresql-cluster-rw.postgresql.svc.cluster.local") @db.VarChar(255)
+  port                Int     @default(5432)
+  mode                String  @default("shared") @db.VarChar(20)
+  namespace           String? @db.VarChar(100)
+  containerName       String? @map("container_name") @db.VarChar(100)
+  storageSize         String? @map("storage_size") @db.VarChar(20)
+  clusterName         String? @map("cluster_name") @db.VarChar(100)
+  pgMajor             Int     @default(17) @map("pg_major")
+  pgParameters        Json?   @map("pg_parameters")
+  sharedPreloadLibs   Json?   @map("shared_preload_libs")
+  installedExtensions Json?   @map("installed_extensions")
+  backupScheduleCron  String? @map("backup_schedule_cron") @db.VarChar(100)
 
   // Resources were raised above the user's request for the initial import;
   // the settle loop scales the cluster back down once bootstrap completes.
-  importBoosted     Boolean  @default(false) @map("import_boosted")
+  importBoosted      Boolean  @default(false) @map("import_boosted")
   publicEnabled      Boolean  @default(false) @map("public_enabled")
   publicIp           String?  @map("public_ip") @db.VarChar(45)
   publicPort         Int?     @map("public_port")
@@ -982,14 +993,14 @@ model Database {
   memoryRequestBytes BigInt?  @map("memory_request_bytes")
   // Per-cluster fake AK/SK presented to barman when BACKUP_PROXY_ENABLED=true.
   // Real R2 credentials never live in the cluster's namespace.
-  r2ProxyAccessKey String? @map("r2_proxy_access_key") @db.VarChar(64)
-  r2ProxySecret    String? @map("r2_proxy_secret") @db.VarChar(128)
-  createdBy     String?  @map("created_by") @db.Uuid
-  createdAt     DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt     DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  r2ProxyAccessKey   String?  @map("r2_proxy_access_key") @db.VarChar(64)
+  r2ProxySecret      String?  @map("r2_proxy_secret") @db.VarChar(128)
+  createdBy          String?  @map("created_by") @db.Uuid
+  createdAt          DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt          DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  templateInstanceId String?  @map("template_instance_id") @db.Uuid
-  environmentId      String?  @map("environment_id") @db.Uuid
+  templateInstanceId String? @map("template_instance_id") @db.Uuid
+  environmentId      String? @map("environment_id") @db.Uuid
 
   project          Project           @relation(fields: [projectId], references: [id], onDelete: Cascade)
   environment      Environment?      @relation(fields: [environmentId], references: [id], onDelete: Cascade)
@@ -1007,17 +1018,17 @@ model Database {
 }
 
 model DatabaseBackup {
-  id          String   @id @default(uuid()) @db.Uuid
-  databaseId  String   @map("database_id") @db.Uuid
-  label       String   @db.VarChar(255)
-  backupName  String   @map("backup_name") @db.VarChar(255)
-  type        String   @default("full") @db.VarChar(20)
-  status      String   @default("pending") @db.VarChar(20)
-  sizeBytes   BigInt?  @map("size_bytes")
-  errorMessage String? @map("error_message") @db.Text
-  createdBy   String?  @map("created_by") @db.Uuid
-  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  completedAt DateTime? @map("completed_at") @db.Timestamp(6)
+  id           String    @id @default(uuid()) @db.Uuid
+  databaseId   String    @map("database_id") @db.Uuid
+  label        String    @db.VarChar(255)
+  backupName   String    @map("backup_name") @db.VarChar(255)
+  type         String    @default("full") @db.VarChar(20)
+  status       String    @default("pending") @db.VarChar(20)
+  sizeBytes    BigInt?   @map("size_bytes")
+  errorMessage String?   @map("error_message") @db.Text
+  createdBy    String?   @map("created_by") @db.Uuid
+  createdAt    DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  completedAt  DateTime? @map("completed_at") @db.Timestamp(6)
 
   database Database @relation(fields: [databaseId], references: [id], onDelete: Cascade)
 
@@ -1045,7 +1056,7 @@ model Job {
 
   project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   environment Environment? @relation(fields: [environmentId], references: [id], onDelete: Cascade)
-  creator     User?       @relation("JobCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  creator     User?        @relation("JobCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   steps       JobStep[]
   runs        JobRun[]
 
@@ -1155,15 +1166,15 @@ model Template {
 }
 
 model TemplateInstance {
-  id           String   @id @default(uuid()) @db.Uuid
-  templateId   String   @map("template_id") @db.Uuid
-  projectId    String   @map("project_id") @db.Uuid
-  name         String   @db.VarChar(255)
-  parameters   Json     @db.Json
-  status       String   @default("deploying") @db.VarChar(50)
-  createdBy    String?  @map("created_by") @db.Uuid
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  id         String   @id @default(uuid()) @db.Uuid
+  templateId String   @map("template_id") @db.Uuid
+  projectId  String   @map("project_id") @db.Uuid
+  name       String   @db.VarChar(255)
+  parameters Json     @db.Json
+  status     String   @default("deploying") @db.VarChar(50)
+  createdBy  String?  @map("created_by") @db.Uuid
+  createdAt  DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt  DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
   template    Template     @relation(fields: [templateId], references: [id], onDelete: Cascade)
   project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
@@ -1178,30 +1189,30 @@ model TemplateInstance {
 }
 
 model ComposeStack {
-  id           String   @id @default(uuid()) @db.Uuid
-  projectId    String   @map("project_id") @db.Uuid
-  name         String   @db.VarChar(255)
-  composeYaml  String   @map("compose_yaml") @db.Text
-  status       String   @default("deploying") @db.VarChar(50)
-  lastError    String?  @map("last_error") @db.Text
+  id          String  @id @default(uuid()) @db.Uuid
+  projectId   String  @map("project_id") @db.Uuid
+  name        String  @db.VarChar(255)
+  composeYaml String  @map("compose_yaml") @db.Text
+  status      String  @default("deploying") @db.VarChar(50)
+  lastError   String? @map("last_error") @db.Text
 
   // GitHub source — when set, the compose file is fetched from GitHub on
   // every (re)deploy and `build:` services are built into Harbor images.
-  githubRepo            String?  @map("github_repo") @db.VarChar(500)
-  githubBranch          String?  @map("github_branch") @db.VarChar(255)
-  composePath           String?  @map("compose_path") @db.VarChar(500)
-  githubInstallationId  BigInt?  @map("github_installation_id")
-  autoDeployEnabled     Boolean  @default(false) @map("auto_deploy_enabled")
-  autoDeployBranch      String?  @map("auto_deploy_branch") @db.VarChar(255)
-  lastCommitSha         String?  @map("last_commit_sha") @db.VarChar(64)
+  githubRepo           String? @map("github_repo") @db.VarChar(500)
+  githubBranch         String? @map("github_branch") @db.VarChar(255)
+  composePath          String? @map("compose_path") @db.VarChar(500)
+  githubInstallationId BigInt? @map("github_installation_id")
+  autoDeployEnabled    Boolean @default(false) @map("auto_deploy_enabled")
+  autoDeployBranch     String? @map("auto_deploy_branch") @db.VarChar(255)
+  lastCommitSha        String? @map("last_commit_sha") @db.VarChar(64)
 
   // Build pipeline state (mirrors Deployment build columns at the stack level).
-  buildStatus           String   @default("none") @map("build_status") @db.VarChar(50)
-  buildLogs             String?  @map("build_logs") @db.Text
+  buildStatus String  @default("none") @map("build_status") @db.VarChar(50)
+  buildLogs   String? @map("build_logs") @db.Text
 
-  createdBy    String?  @map("created_by") @db.Uuid
-  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt    DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  createdBy String?  @map("created_by") @db.Uuid
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
   project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   creator     User?        @relation("ComposeStackCreator", fields: [createdBy], references: [id], onDelete: SetNull)
@@ -1214,36 +1225,36 @@ model ComposeStack {
 }
 
 model SsoConfig {
-  id                String   @id @default(uuid()) @db.Uuid
-  organizationId    String   @unique @map("organization_id") @db.Uuid
+  id             String @id @default(uuid()) @db.Uuid
+  organizationId String @unique @map("organization_id") @db.Uuid
 
   // Provider type: "oidc" or "saml"
-  provider          String   @db.VarChar(10)
+  provider String @db.VarChar(10)
 
   // OIDC configuration
-  oidcIssuerUrl     String?  @map("oidc_issuer_url") @db.VarChar(500)
-  oidcClientId      String?  @map("oidc_client_id") @db.VarChar(255)
-  oidcClientSecret  String?  @map("oidc_client_secret") @db.Text
-  oidcScopes        String?  @map("oidc_scopes") @db.VarChar(500)
+  oidcIssuerUrl    String? @map("oidc_issuer_url") @db.VarChar(500)
+  oidcClientId     String? @map("oidc_client_id") @db.VarChar(255)
+  oidcClientSecret String? @map("oidc_client_secret") @db.Text
+  oidcScopes       String? @map("oidc_scopes") @db.VarChar(500)
 
   // SAML configuration
-  samlEntryPoint    String?  @map("saml_entry_point") @db.VarChar(500)
-  samlIssuer        String?  @map("saml_issuer") @db.VarChar(500)
-  samlCertificate   String?  @map("saml_certificate") @db.Text
-  samlMetadataUrl   String?  @map("saml_metadata_url") @db.VarChar(500)
+  samlEntryPoint  String? @map("saml_entry_point") @db.VarChar(500)
+  samlIssuer      String? @map("saml_issuer") @db.VarChar(500)
+  samlCertificate String? @map("saml_certificate") @db.Text
+  samlMetadataUrl String? @map("saml_metadata_url") @db.VarChar(500)
 
   // Login page customization
-  loginLogoUrl      String?  @map("login_logo_url") @db.VarChar(500)
-  loginPrimaryColor String?  @map("login_primary_color") @db.VarChar(7)
-  loginBgColor      String?  @map("login_bg_color") @db.VarChar(7)
-  loginWelcomeText  String?  @map("login_welcome_text") @db.VarChar(500)
+  loginLogoUrl      String? @map("login_logo_url") @db.VarChar(500)
+  loginPrimaryColor String? @map("login_primary_color") @db.VarChar(7)
+  loginBgColor      String? @map("login_bg_color") @db.VarChar(7)
+  loginWelcomeText  String? @map("login_welcome_text") @db.VarChar(500)
 
   // State
-  enabled           Boolean  @default(false)
-  enforced          Boolean  @default(false)
+  enabled  Boolean @default(false)
+  enforced Boolean @default(false)
 
-  createdAt         DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
 
@@ -1251,40 +1262,175 @@ model SsoConfig {
   @@map("sso_configs")
 }
 
-// Outbound notification destination (discord/slack webhook, generic webhook, or
-// email recipient list). Org-scoped; projectIds null/empty = all projects
-// (Vercel-style scoping). `events` holds the subscribed event names.
+// A destination and nothing else: where bytes go. Routing lives in
+// NotificationRule, personal preference in UserNotificationSetting. The breaker
+// fields are owned by the delivery worker: five consecutive failures parks the
+// destination until circuitOpenUntil so one dead webhook can't starve the pool.
 model NotificationChannel {
   id             String   @id @default(uuid()) @db.Uuid
   organizationId String   @map("organization_id") @db.Uuid
   name           String   @db.VarChar(100)
   type           String   @db.VarChar(20)
   config         Json     @default("{}") @db.JsonB
-  events         Json     @default("[]") @db.JsonB
-  projectIds     Json?    @map("project_ids") @db.JsonB
   enabled        Boolean  @default(true)
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  consecutiveFailures Int       @default(0) @map("consecutive_failures")
+  circuitOpenUntil    DateTime? @map("circuit_open_until") @db.Timestamp(6)
+  autoDisabledAt      DateTime? @map("auto_disabled_at") @db.Timestamp(6)
+  lastSuccessAt       DateTime? @map("last_success_at") @db.Timestamp(6)
+  lastErrorAt         DateTime? @map("last_error_at") @db.Timestamp(6)
+  lastError           String?   @map("last_error") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
   organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   deliveries   NotificationDelivery[]
+  rules        NotificationRule[]
 
   @@index([organizationId], map: "idx_notification_channels_org")
   @@map("notification_channels")
 }
 
-model NotificationDelivery {
+// Team routing. Rules are additive up the scope chain (resource -> project ->
+// org); a `mute` rule at a more specific scope cancels `deliver` rules for the
+// same (channel, event) at a broader one. scopeId is null iff scopeType = 'org'.
+model NotificationRule {
+  id             String   @id @default(uuid()) @db.Uuid
+  organizationId String   @map("organization_id") @db.Uuid
+  channelId      String   @map("channel_id") @db.Uuid
+  scopeType      String   @map("scope_type") @db.VarChar(20)
+  scopeId        String?  @map("scope_id") @db.Uuid
+  events         Json     @default("[]") @db.JsonB
+  mode           String   @default("deliver") @db.VarChar(10)
+  enabled        Boolean  @default(true)
+  createdById    String?  @map("created_by") @db.Uuid
+  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  organization Organization        @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  channel      NotificationChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  creator      User?               @relation("NotificationRuleCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  @@index([organizationId, scopeType, scopeId], map: "idx_notification_rules_scope")
+  @@index([channelId], map: "idx_notification_rules_channel")
+  @@map("notification_rules")
+}
+
+// Personal preference, Sentry-style fine tuning. One row per (user, scope,
+// category); absent rows inherit the next broader scope and finally the system
+// default 'subscribed'. Never suppresses a NotificationRule, only the personal lane.
+model UserNotificationSetting {
   id        String   @id @default(uuid()) @db.Uuid
-  channelId String   @map("channel_id") @db.Uuid
-  event     String   @db.VarChar(50)
-  targetId  String?  @map("target_id") @db.Uuid
-  status    String   @db.VarChar(20)
-  error     String?  @db.Text
+  userId    String   @map("user_id") @db.Uuid
+  scopeType String   @map("scope_type") @db.VarChar(20)
+  // Not a uuid column and not nullable: Postgres treats NULLs as distinct in a
+  // unique index, so a nullable scope would let the same global preference be
+  // inserted over and over. The account-wide row stores the literal 'global'.
+  scopeId   String   @map("scope_id") @db.VarChar(64)
+  category  String   @db.VarChar(20)
+  value     String   @db.VarChar(20)
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, scopeType, scopeId, category], map: "uq_user_notification_setting")
+  @@index([userId], map: "idx_user_notification_settings_user")
+  @@map("user_notification_settings")
+}
+
+// Where a person's own notifications go. The implicit email destination is
+// seeded from User.email on first save; webhook destinations pass the same SSRF
+// guard as org channels and carry their own breaker state.
+model UserNotificationDestination {
+  id      String  @id @default(uuid()) @db.Uuid
+  userId  String  @map("user_id") @db.Uuid
+  type    String  @db.VarChar(20)
+  config  Json    @default("{}") @db.JsonB
+  enabled Boolean @default(true)
+
+  consecutiveFailures Int       @default(0) @map("consecutive_failures")
+  circuitOpenUntil    DateTime? @map("circuit_open_until") @db.Timestamp(6)
+  lastSuccessAt       DateTime? @map("last_success_at") @db.Timestamp(6)
+  lastErrorAt         DateTime? @map("last_error_at") @db.Timestamp(6)
+  lastError           String?   @map("last_error") @db.Text
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user       User                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  deliveries NotificationDelivery[]
+
+  @@index([userId], map: "idx_user_notification_destinations_user")
+  @@map("user_notification_destinations")
+}
+
+// The outbox. One row per real-world state transition, keyed by a natural
+// dedupeKey so racing replicas insert once. Retains the rendered payload for 30
+// days, which is what makes replay-after-an-outage possible.
+model NotificationEvent {
+  id             String    @id @default(uuid()) @db.Uuid
+  organizationId String    @map("organization_id") @db.Uuid
+  event          String    @db.VarChar(50)
+  scopeType      String    @map("scope_type") @db.VarChar(20)
+  scopeId        String?   @map("scope_id") @db.Uuid
+  projectId      String?   @map("project_id") @db.Uuid
+  actorUserId    String?   @map("actor_user_id") @db.Uuid
+  payload        Json      @db.JsonB
+  dedupeKey      String    @unique(map: "uq_notification_events_dedupe") @map("dedupe_key") @db.VarChar(200)
+  status         String    @default("pending") @db.VarChar(20)
+  lockedBy       String?   @map("locked_by") @db.VarChar(120)
+  lockedAt       DateTime? @map("locked_at") @db.Timestamp(6)
+  occurredAt     DateTime  @default(now()) @map("occurred_at") @db.Timestamp(6)
+  fannedOutAt    DateTime? @map("fanned_out_at") @db.Timestamp(6)
+
+  organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  deliveries   NotificationDelivery[]
+
+  @@index([status, occurredAt], map: "idx_notification_events_pending")
+  @@index([organizationId, occurredAt], map: "idx_notification_events_org")
+  @@map("notification_events")
+}
+
+// One row per (event, destination). The unique constraint is what makes fanout
+// exactly-once across crashes and replicas; sending itself is at-least-once.
+model NotificationDelivery {
+  id             String @id @default(uuid()) @db.Uuid
+  eventId        String @map("event_id") @db.Uuid
+  destinationKey String @map("destination_key") @db.VarChar(120)
+
+  channelId  String? @map("channel_id") @db.Uuid
+  userDestId String? @map("user_destination_id") @db.Uuid
+  userId     String? @map("user_id") @db.Uuid
+
+  event    String  @db.VarChar(50)
+  targetId String? @map("target_id") @db.Uuid
+
+  status        String    @default("pending") @db.VarChar(20)
+  attempts      Int       @default(0)
+  nextAttemptAt DateTime  @default(now()) @map("next_attempt_at") @db.Timestamp(6)
+  lockedBy      String?   @map("locked_by") @db.VarChar(120)
+  lockedAt      DateTime? @map("locked_at") @db.Timestamp(6)
+
+  httpStatus     Int?      @map("http_status")
+  error          String?   @db.Text
+  coalescedInto  String?   @map("coalesced_into") @db.Uuid
+  coalescedCount Int?      @map("coalesced_count")
+  firstAttemptAt DateTime? @map("first_attempt_at") @db.Timestamp(6)
+  deliveredAt    DateTime? @map("delivered_at") @db.Timestamp(6)
+  durationMs     Int?      @map("duration_ms")
+
   createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
 
-  channel NotificationChannel @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  notificationEvent NotificationEvent            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  channel           NotificationChannel?         @relation(fields: [channelId], references: [id], onDelete: Cascade)
+  userDestination   UserNotificationDestination? @relation(fields: [userDestId], references: [id], onDelete: Cascade)
 
+  @@unique([eventId, destinationKey], map: "uq_notification_deliveries_event_dest")
+  @@index([status, nextAttemptAt], map: "idx_notification_deliveries_claim")
   @@index([channelId, createdAt], map: "idx_notification_deliveries_lookup")
+  @@index([userId, createdAt], map: "idx_notification_deliveries_user")
   @@map("notification_deliveries")
 }
 
@@ -1338,17 +1484,17 @@ model AuditLog {
 
 // Cluster nodes managed by admins. Synced from Kubernetes on demand.
 model Node {
-  id           String   @id @default(uuid()) @db.Uuid
-  name         String   @unique @db.VarChar(255)
-  labels       Json?    @db.JsonB
-  schedulable  Boolean  @default(true)
-  notes        String?  @db.Text
+  id             String    @id @default(uuid()) @db.Uuid
+  name           String    @unique @db.VarChar(255)
+  labels         Json?     @db.JsonB
+  schedulable    Boolean   @default(true)
+  notes          String?   @db.Text
   // Optional admin-set caps (overrides measured capacity when enforcing quotas)
-  cpuCapacity     String? @map("cpu_capacity") @db.VarChar(32)
-  memoryCapacity  String? @map("memory_capacity") @db.VarChar(32)
-  lastSeenAt      DateTime? @map("last_seen_at") @db.Timestamp(6)
-  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  cpuCapacity    String?   @map("cpu_capacity") @db.VarChar(32)
+  memoryCapacity String?   @map("memory_capacity") @db.VarChar(32)
+  lastSeenAt     DateTime? @map("last_seen_at") @db.Timestamp(6)
+  createdAt      DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
 
   assignments OrgNodeAssignment[]
 
@@ -1363,16 +1509,16 @@ enum NodeAssignmentMode {
 // Per-(org, node) placement + quota rule.
 // If an org has any ALLOW rows, it can only place on those nodes. DENY excludes a node.
 model OrgNodeAssignment {
-  id             String   @id @default(uuid()) @db.Uuid
-  organizationId String   @map("organization_id") @db.Uuid
-  nodeId         String   @map("node_id") @db.Uuid
+  id             String             @id @default(uuid()) @db.Uuid
+  organizationId String             @map("organization_id") @db.Uuid
+  nodeId         String             @map("node_id") @db.Uuid
   mode           NodeAssignmentMode @default(allow)
   // Quota (nullable = unlimited). CPU in cores (e.g. "2"), memory (e.g. "4Gi").
-  cpuLimit       String?  @map("cpu_limit") @db.VarChar(32)
-  memoryLimit    String?  @map("memory_limit") @db.VarChar(32)
-  maxServices    Int?     @map("max_services")
-  createdAt      DateTime @default(now()) @map("created_at") @db.Timestamp(6)
-  updatedAt      DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+  cpuLimit       String?            @map("cpu_limit") @db.VarChar(32)
+  memoryLimit    String?            @map("memory_limit") @db.VarChar(32)
+  maxServices    Int?               @map("max_services")
+  createdAt      DateTime           @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime           @updatedAt @map("updated_at") @db.Timestamp(6)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   node         Node         @relation(fields: [nodeId], references: [id], onDelete: Cascade)
@@ -1457,4 +1603,56 @@ model ForumVote {
 
   @@id([threadId, userId])
   @@map("forum_votes")
+}
+
+// Error groups are ingested server-side by a leader-elected sweep so history
+// survives redeploys and accumulates whether or not anyone is watching. A
+// group is unique per (deployment, fingerprint); occurrences roll up per
+// deploy so "seen in N deploys" and "introduced in <sha>" are real joins.
+model ErrorGroup {
+  id                  String    @id @default(uuid()) @db.Uuid
+  deploymentId        String    @map("deployment_id") @db.Uuid
+  fingerprint         String    @db.VarChar(64)
+  type                String    @db.VarChar(200)
+  message             String    @db.Text
+  status              String    @default("unresolved") @db.VarChar(20)
+  assigneeId          String?   @map("assignee_id") @db.Uuid
+  githubIssueUrl      String?   @map("github_issue_url") @db.VarChar(500)
+  githubIssueNumber   Int?      @map("github_issue_number")
+  totalCount          Int       @default(0) @map("total_count")
+  firstSeenAt         DateTime  @map("first_seen_at") @db.Timestamp(6)
+  lastSeenAt          DateTime  @map("last_seen_at") @db.Timestamp(6)
+  firstImageHistoryId String?   @map("first_image_history_id") @db.Uuid
+  resolvedAt          DateTime? @map("resolved_at") @db.Timestamp(6)
+  resolvedById        String?   @map("resolved_by_id") @db.Uuid
+  sampleStack         String?   @map("sample_stack") @db.Text
+  createdAt           DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt           DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  deployment        Deployment        @relation(fields: [deploymentId], references: [id], onDelete: Cascade)
+  assignee          User?             @relation("ErrorGroupAssignee", fields: [assigneeId], references: [id], onDelete: SetNull)
+  resolvedBy        User?             @relation("ErrorGroupResolver", fields: [resolvedById], references: [id], onDelete: SetNull)
+  firstImageHistory ImageHistory?     @relation(fields: [firstImageHistoryId], references: [id], onDelete: SetNull)
+  occurrences       ErrorOccurrence[]
+
+  @@unique([deploymentId, fingerprint], map: "uq_error_group_deployment_fingerprint")
+  @@index([deploymentId, status], map: "idx_error_group_deployment_status")
+  @@index([deploymentId, lastSeenAt(sort: Desc)], map: "idx_error_group_deployment_last_seen")
+  @@map("error_groups")
+}
+
+model ErrorOccurrence {
+  id             String   @id @default(uuid()) @db.Uuid
+  errorGroupId   String   @map("error_group_id") @db.Uuid
+  imageHistoryId String?  @map("image_history_id") @db.Uuid
+  count          Int      @default(0)
+  firstSeenAt    DateTime @map("first_seen_at") @db.Timestamp(6)
+  lastSeenAt     DateTime @map("last_seen_at") @db.Timestamp(6)
+
+  errorGroup   ErrorGroup    @relation(fields: [errorGroupId], references: [id], onDelete: Cascade)
+  imageHistory ImageHistory? @relation(fields: [imageHistoryId], references: [id], onDelete: SetNull)
+
+  @@unique([errorGroupId, imageHistoryId], map: "uq_error_occurrence_group_image")
+  @@index([errorGroupId], map: "idx_error_occurrence_group")
+  @@map("error_occurrences")
 }

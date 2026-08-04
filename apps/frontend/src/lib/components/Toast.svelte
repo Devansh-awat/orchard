@@ -67,7 +67,7 @@
 		padding: 0.75rem 0.875rem;
 		background-color: var(--surface-bg);
 		border: 1px solid var(--surface-border);
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		box-shadow:
 			0 10px 30px rgba(0, 0, 0, 0.12),
 			0 2px 6px rgba(0, 0, 0, 0.06);
@@ -86,7 +86,7 @@
 		justify-content: center;
 		width: 1.75rem;
 		height: 1.75rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		flex-shrink: 0;
 	}
 
@@ -125,7 +125,7 @@
 	}
 
 	.toast-title {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
 		font-weight: 600;
 		color: var(--center-channel-color);
 		margin: 0;
@@ -134,24 +134,25 @@
 	}
 
 	.toast-desc {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
 		color: var(--surface-muted);
-		margin: 0.1875rem 0 0;
+		margin: 0.25rem 0 0;
 		line-height: 1.45;
 		overflow-wrap: anywhere;
 	}
 
 	.toast-action {
-		margin-top: 0.375rem;
-		padding: 0.25rem 0.625rem;
-		font-size: 0.75rem;
+		margin-top: 0.5rem;
+		padding: 0.25rem 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		font-weight: 600;
 		border: none;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		background-color: var(--button-bg);
 		color: var(--button-color);
 		cursor: pointer;
-		transition: opacity 0.15s;
+		transition: opacity var(--dur-fast);
 	}
 
 	.toast-action:hover {
@@ -164,15 +165,15 @@
 		justify-content: center;
 		width: 1.5rem;
 		height: 1.5rem;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		border: none;
 		background: none;
 		color: var(--surface-muted);
 		cursor: pointer;
 		flex-shrink: 0;
 		transition:
-			color 0.15s,
-			background-color 0.15s;
+			color var(--dur-fast),
+			background-color var(--dur-fast);
 	}
 
 	.toast-close:hover {

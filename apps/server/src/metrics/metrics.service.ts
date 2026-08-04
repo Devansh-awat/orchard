@@ -4,6 +4,8 @@ import { PrismaService } from '../prisma/prisma.service';
 export interface SeriesPoint { x: number; y: number }
 export type SeriesId = 'cpu' | 'mem' | 'rx' | 'tx';
 export type SeriesBundle = Record<SeriesId, SeriesPoint[]>;
+export interface GroupedSeries { key: string; points: SeriesPoint[] }
+export type GroupedBundle = Record<SeriesId, GroupedSeries[]>;
 
 interface PromMatrix {
   status: string;
@@ -263,6 +265,80 @@ export class MetricsService {
       mem: mem.map((p) => ({ x: p.x, y: p.y / (1024 * 1024) })),
       rx:  rx.map((p)  => ({ x: p.x, y: p.y / 1024 })),
       tx:  tx.map((p)  => ({ x: p.x, y: p.y / 1024 })),
+    };
+  }
+
+  private async queryRangeGrouped(
+    promql: string,
+    startSec: number,
+    endSec: number,
+    stepSec: number,
+    label: string,
+  ): Promise<GroupedSeries[]> {
+    const params = new URLSearchParams({
+      query: promql,
+      start: String(startSec),
+      end: String(endSec),
+      step: String(stepSec),
+    });
+    const url = `${this.base}/api/v1/query_range?${params}`;
+    try {
+      const res = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+      if (!res.ok) {
+        this.logger.warn(`VM query_range ${res.status}: ${await res.text()}`);
+        return [];
+      }
+      const body = (await res.json()) as PromMatrix;
+      if (body.status !== 'success' || !body.data?.result?.length) return [];
+      return body.data.result
+        .map((r) => ({
+          key: r.metric?.[label] ?? 'unknown',
+          points: r.values.map(([t, v]) => ({ x: t * 1000, y: Number(v) })),
+        }))
+        .sort((a, b) => a.key.localeCompare(b.key));
+    } catch (err) {
+      this.logger.warn(`VM query_range failed: ${(err as Error).message}`);
+      return [];
+    }
+  }
+
+  async fetchDeploymentMetricsByPod(args: {
+    namespace: string;
+    deploymentName: string;
+    startMs: number;
+    endMs: number;
+    stepMs: number;
+  }): Promise<GroupedBundle> {
+    const ns = escapeLabel(args.namespace);
+    const podRe = `${escapeRegex(args.deploymentName)}-.*`;
+    const stepSec = Math.max(1, Math.round(args.stepMs / 1000));
+    const rateWin = Math.max(60, stepSec * 2);
+
+    const queries: Record<SeriesId, string> = {
+      cpu: `sum by (pod) (rate(container_cpu_usage_seconds_total{namespace="${ns}",pod=~"${podRe}",container="",image=""}[${rateWin}s])) * 1000`,
+      mem: `sum by (pod) (container_memory_working_set_bytes{namespace="${ns}",pod=~"${podRe}",container="",image=""})`,
+      rx: `sum by (pod) (rate(container_network_receive_bytes_total{namespace="${ns}",pod=~"${podRe}"}[${rateWin}s]))`,
+      tx: `sum by (pod) (rate(container_network_transmit_bytes_total{namespace="${ns}",pod=~"${podRe}"}[${rateWin}s]))`,
+    };
+
+    const startSec = Math.floor(args.startMs / 1000);
+    const endSec = Math.floor(args.endMs / 1000);
+
+    const [cpu, mem, rx, tx] = await Promise.all([
+      this.queryRangeGrouped(queries.cpu, startSec, endSec, stepSec, 'pod'),
+      this.queryRangeGrouped(queries.mem, startSec, endSec, stepSec, 'pod'),
+      this.queryRangeGrouped(queries.rx, startSec, endSec, stepSec, 'pod'),
+      this.queryRangeGrouped(queries.tx, startSec, endSec, stepSec, 'pod'),
+    ]);
+
+    const scale = (g: GroupedSeries[], f: number) =>
+      g.map((s) => ({ key: s.key, points: s.points.map((p) => ({ x: p.x, y: p.y / f })) }));
+
+    return {
+      cpu,
+      mem: scale(mem, 1024 * 1024),
+      rx: scale(rx, 1024),
+      tx: scale(tx, 1024),
     };
   }
 

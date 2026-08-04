@@ -104,8 +104,8 @@
 		<a
 			href={card.href}
 			class="otg-card"
-			{@attach motionStagger({ index: index + i, stride: 0.05, from: { y: 10, opacity: 0 } })}
-			{@attach springHover({ lift: -2, stiffness: 360, damping: 23 })}
+			{@attach motionStagger({ index: index + i, from: { y: 10, opacity: 0 } })}
+			{@attach springHover({ lift: -2 })}
 		>
 			<span class="otg-icon"><Icon class="h-4 w-4" /></span>
 			<span class="otg-text">
@@ -123,18 +123,23 @@
 <style>
 	.otg-grid {
 		display: grid;
-		grid-template-columns: 1fr 1fr;
-		gap: 0.625rem;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--space-3);
+	}
+	@media (max-width: 48rem) {
+		.otg-grid {
+			grid-template-columns: 1fr;
+		}
 	}
 	.otg-card {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
-		padding: 0.875rem 1rem;
-		border: 1px solid var(--border-default);
-		border-radius: 0.875rem;
-		background-color: var(--bg-surface);
-		box-shadow: 0 1px 2px rgb(0 0 0 / 0.02);
+		gap: var(--space-3);
+		padding: var(--space-4);
+		border: none;
+		border-radius: var(--radius-lg);
+		background-color: var(--bg-raised);
+		box-shadow: var(--elev-1);
 		text-decoration: none;
 		color: var(--text-default);
 	}
@@ -144,7 +149,7 @@
 		justify-content: center;
 		width: 2rem;
 		height: 2rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		flex-shrink: 0;
 		background-color: color-mix(in srgb, var(--text-default) 7%, transparent);
 		color: var(--text-default);
@@ -156,12 +161,13 @@
 		min-width: 0;
 	}
 	.otg-title {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
 		font-weight: 600;
 		line-height: 1.3;
 	}
 	.otg-value {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--text-muted);
 		margin-top: 0.0625rem;
 		white-space: nowrap;
@@ -170,24 +176,22 @@
 	}
 	.otg-detail {
 		display: inline-block;
-		margin-left: 0.375rem;
+		margin-left: 0.5rem;
 		color: var(--status-warning);
-		font-weight: 550;
+		font-weight: 600;
 	}
 	.otg-card :global(.otg-chevron) {
 		flex-shrink: 0;
 		color: var(--text-faint);
 		transition:
-			color 120ms,
-			transform 150ms ease;
+			color var(--dur-fast),
+			transform var(--dur-fast) ease;
+	}
+	.otg-card:hover {
+		box-shadow: var(--elev-2);
 	}
 	.otg-card:hover :global(.otg-chevron) {
 		color: var(--text-muted);
 		transform: translateX(2px);
-	}
-	@media (max-width: 640px) {
-		.otg-grid {
-			grid-template-columns: 1fr;
-		}
 	}
 </style>

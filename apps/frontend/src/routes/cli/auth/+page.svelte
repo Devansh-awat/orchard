@@ -162,13 +162,14 @@
 	.cli-details {
 		margin-top: 1.5rem;
 		padding: 1rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		background: rgba(255, 255, 255, 0.05);
 		border: 1px solid rgba(255, 255, 255, 0.1);
 		text-align: left;
 	}
 	.cli-label {
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		opacity: 0.75;
 		margin: 0 0 0.5rem 0;
 	}
@@ -176,18 +177,21 @@
 		display: flex;
 		align-items: center;
 		gap: 0.4rem;
-		font-size: 1.125rem;
+		font-size: var(--text-title-3);
+		line-height: var(--lh-title-3);
 		font-weight: 600;
 		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 		margin: 0 0 0.25rem 0;
 	}
 	.cli-name {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		opacity: 0.6;
 		margin: 0 0 0.75rem 0;
 	}
 	.cli-warning {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		opacity: 0.8;
 		margin: 0;
 		padding-top: 0.75rem;
@@ -196,7 +200,7 @@
 	.cli-warning code {
 		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
 		background: rgba(255, 255, 255, 0.08);
-		padding: 0.1rem 0.3rem;
-		border-radius: 0.25rem;
+		padding: 0.1rem 0.25rem;
+		border-radius: var(--radius-xs);
 	}
 </style>

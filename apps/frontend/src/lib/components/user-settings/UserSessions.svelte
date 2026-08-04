@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Loader2 } from 'lucide-svelte';
 	import { ShieldCheck, MonitorCheck, SmartphoneNfc, LogOut } from '@jis3r/icons';
+	import { Alert, Badge, EmptyState, Skeleton } from '$lib/components/ui';
 	import SettingsSection from './SettingsSection.svelte';
 	import IconButton from './IconButton.svelte';
 
@@ -65,7 +66,6 @@
 	{index}
 	title="Active sessions"
 	description="Devices where you're currently signed in"
-	iconColor="green"
 >
 	{#snippet icon(hovered)}<ShieldCheck size={18} animate={hovered} />{/snippet}
 	{#snippet badge()}
@@ -75,11 +75,21 @@
 	{/snippet}
 
 	{#if sessionsError}
-		<div class="se-error">{sessionsError}</div>
+		<div class="se-alert"><Alert tone="error">{sessionsError}</Alert></div>
 	{/if}
 
 	{#if sessionsLoading}
-		<div class="se-loading"><Loader2 class="h-4 w-4 animate-spin" /></div>
+		<div class="se-loading">
+			{#each [0, 1] as row (row)}
+				<div class="se-loading-row">
+					<Skeleton width="2rem" height="2rem" rounded="var(--radius-sm)" />
+					<div class="se-loading-lines">
+						<Skeleton width="9rem" height="0.875rem" rounded="var(--radius-xs)" />
+						<Skeleton width="13rem" height="0.6875rem" rounded="var(--radius-xs)" />
+					</div>
+				</div>
+			{/each}
+		</div>
 	{:else if sessions.length > 0}
 		<div class="se-list">
 			{#each sessions as session (session.id)}
@@ -96,7 +106,7 @@
 							<span class="se-item-device">
 								{session.deviceName || 'Unknown Device'}
 								{#if session.isCurrent}
-									<span class="se-current-badge">This device</span>
+									<Badge tone="success">This device</Badge>
 								{/if}
 							</span>
 						</div>
@@ -144,7 +154,9 @@
 			</button>
 		{/if}
 	{:else}
-		<p class="se-empty">No active sessions found.</p>
+		<EmptyState title="No active sessions found.">
+			{#snippet icon()}<MonitorCheck size={22} />{/snippet}
+		</EmptyState>
 	{/if}
 </SettingsSection>
 
@@ -155,27 +167,32 @@
 		justify-content: center;
 		min-width: 1.25rem;
 		height: 1.25rem;
-		padding: 0 0.375rem;
-		border-radius: 2rem;
-		font-size: 0.6875rem;
-		font-weight: 650;
-		background-color: color-mix(in srgb, var(--button-bg) 10%, transparent);
-		color: var(--button-bg);
+		padding: 0 0.5rem;
+		border-radius: var(--radius-pill);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+		background-color: var(--accent-subtle);
+		color: var(--accent);
+	}
+	.se-alert {
+		margin-bottom: var(--space-3);
 	}
 	.se-loading {
 		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 1.5rem 0;
-		color: var(--surface-muted);
+		flex-direction: column;
+		gap: var(--space-4);
+		padding: var(--space-3) 0;
 	}
-	.se-error {
-		padding: 0.625rem 0.875rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		background-color: color-mix(in srgb, var(--error-text-color) 8%, transparent);
-		color: var(--error-text-color);
-		border: 1px solid color-mix(in srgb, var(--error-text-color) 20%, transparent);
+	.se-loading-row {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+	}
+	.se-loading-lines {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
 	}
 	.se-list {
 		display: flex;
@@ -184,11 +201,11 @@
 	.se-item {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
+		gap: var(--space-3);
 		padding: 0.875rem 0;
 	}
 	.se-item + .se-item {
-		border-top: 1px solid color-mix(in srgb, var(--surface-border) 40%, transparent);
+		border-top: 1px solid var(--rule);
 	}
 	.se-item-icon {
 		display: flex;
@@ -196,14 +213,14 @@
 		justify-content: center;
 		width: 2rem;
 		height: 2rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		flex-shrink: 0;
-		background-color: color-mix(in srgb, var(--center-channel-color) 6%, transparent);
-		color: var(--surface-muted);
+		background-color: var(--fill-soft);
+		color: var(--text-muted);
 	}
 	.se-item--current .se-item-icon {
-		background-color: color-mix(in srgb, var(--online-indicator) 10%, transparent);
-		color: var(--online-indicator);
+		background-color: color-mix(in srgb, var(--status-success) 10%, transparent);
+		color: var(--status-success);
 	}
 	.se-item-body {
 		flex: 1;
@@ -215,31 +232,22 @@
 	.se-item-top {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--space-2);
 	}
 	.se-item-device {
-		font-size: 0.875rem;
-		font-weight: 550;
-		color: var(--center-channel-color);
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
+		font-weight: 600;
+		color: var(--text-default);
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-	}
-	.se-current-badge {
-		display: inline-flex;
-		align-items: center;
-		padding: 0.0625rem 0.4375rem;
-		border-radius: 2rem;
-		font-size: 0.625rem;
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-		background-color: color-mix(in srgb, var(--online-indicator) 12%, transparent);
-		color: var(--online-indicator);
+		gap: var(--space-2);
 	}
 	.se-item-meta {
-		font-size: 0.6875rem;
-		color: var(--surface-muted);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+		color: var(--text-muted);
 		display: flex;
 		align-items: center;
 		flex-wrap: wrap;
@@ -252,25 +260,20 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		width: 100%;
-		padding: 0.4375rem 0.875rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		font-weight: 550;
+		padding: 0.5rem 0.875rem;
+		border-radius: var(--radius-sm);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		font-weight: 600;
 		border: none;
 		cursor: pointer;
-		transition: all 120ms;
-		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
-		color: var(--error-text-color);
+		transition: background-color var(--dur-fast);
+		background-color: color-mix(in srgb, var(--status-error) 10%, transparent);
+		color: var(--status-error);
 	}
 	.se-revoke-all:hover {
-		background-color: color-mix(in srgb, var(--error-text-color) 16%, transparent);
-	}
-	.se-empty {
-		font-size: 0.8125rem;
-		color: var(--surface-muted);
-		padding: 0.5rem 0;
-		margin: 0;
+		background-color: color-mix(in srgb, var(--status-error) 16%, transparent);
 	}
 </style>

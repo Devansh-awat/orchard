@@ -1,6 +1,6 @@
 <script lang="ts">
 	import { Server, GitBranch, Plus, Database as DatabaseIcon, LayoutTemplate } from 'lucide-svelte';
-	import { motionStagger, springHover, cardTilt } from '$lib/utils/motion.svelte';
+	import { motionStagger, springHover } from '$lib/utils/motion.svelte';
 	import { mergeAttrs } from 'melt';
 	import { StatusBadge, resourceStatus, statusMeta } from '$lib/components/ui';
 	import type { Deployment, DatabaseSummary, TemplateInstanceSummary } from './types';
@@ -63,7 +63,7 @@
 </script>
 
 {#if !hasAnyDeployments && databases.length === 0 && templateInstances.length === 0}
-	<div class="pj-empty-card">
+	<div class="pj-empty-card pj-glass">
 		<span style:color="var(--surface-muted)"><Server class="h-10 w-10" /></span>
 		<p>No apps yet</p>
 		<button class="pj-btn pj-btn-primary pj-btn-mt" onclick={onNewResource}>
@@ -81,11 +81,10 @@
 			{@const host = deployment.ingresses?.[0]?.host?.split('/')[0]}
 			{@const m = resourceStatus(deployment.status)}
 			<a
-				class="pj-deployment-card"
+				class="pj-deployment-card pj-glass"
 				class:is-highlighted={item.highlighted}
 				{@attach motionStagger({ index: i, from: { y: 10 } })}
-				{@attach springHover({ lift: -4, stiffness: 360, damping: 22 })}
-				{@attach cardTilt({ max: 5 })}
+				{@attach springHover({ lift: -4 })}
 				{...mergeAttrs(item.attrs, {
 					href,
 					onclick: (event: Event) => onDeploymentClick(event as MouseEvent, deployment.id)
@@ -106,6 +105,7 @@
 						{/if}
 						<span class="pj-deployment-favicon-dot status--{m.kind}"></span>
 					</div>
+					<span class="pj-deployment-name">{deployment.displayName || deployment.name}</span>
 					<div class="pj-deployment-badges">
 						<StatusBadge meta={m} />
 						{#if deployment.buildStatus && deployment.buildStatus !== 'none' && deployment.buildStatus !== 'succeeded'}
@@ -120,7 +120,6 @@
 					</div>
 				</div>
 				<div class="pj-deployment-card-body">
-					<span class="pj-deployment-name">{deployment.displayName || deployment.name}</span>
 					{#if deployment.githubRepo}
 						<span class="pj-deployment-detail">{deployment.githubRepo}</span>
 						{#if deployment.githubBranch}
@@ -148,7 +147,7 @@
 		{/each}
 	</div>
 {:else if deploymentSearch.trim()}
-	<div class="pj-empty-card">
+	<div class="pj-empty-card pj-glass">
 		<p>No apps match "{deploymentSearch}"</p>
 	</div>
 {/if}
@@ -174,10 +173,9 @@
 				: resourceStatus(db.status)}
 			<a
 				href="/{orgSlug}/databases/{db.id}"
-				class="pj-deployment-card"
+				class="pj-deployment-card pj-glass"
 				{@attach motionStagger({ index: i, from: { y: 10 } })}
-				{@attach springHover({ lift: -4, stiffness: 360, damping: 22 })}
-				{@attach cardTilt({ max: 5 })}
+				{@attach springHover({ lift: -4 })}
 			>
 				<div class="pj-deployment-card-top">
 					<div class="pj-deployment-indicator status--{dbMeta.kind}">
@@ -208,10 +206,9 @@
 		{#each templateInstances as ti, i (ti.id)}
 			<a
 				href="/{orgSlug}/template-instances/{ti.id}"
-				class="pj-deployment-card"
+				class="pj-deployment-card pj-glass"
 				{@attach motionStagger({ index: i, from: { y: 10 } })}
-				{@attach springHover({ lift: -4, stiffness: 360, damping: 22 })}
-				{@attach cardTilt({ max: 5 })}
+				{@attach springHover({ lift: -4 })}
 			>
 				<div class="pj-deployment-card-top">
 					<div class="pj-deployment-indicator" style="color: var(--accent)">

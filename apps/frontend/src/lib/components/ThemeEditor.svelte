@@ -1,4 +1,6 @@
 <script lang="ts">
+	import { onDestroy } from 'svelte';
+	import { get } from 'svelte/store';
 	import {
 		themeStore,
 		themeColorCategories,
@@ -9,8 +11,9 @@
 		type SimpleThemeColors
 	} from '$lib/stores/theme';
 	import { toasts } from '$lib/stores';
-	import { ChevronDown, ChevronUp, Copy, RotateCcw, Check, X } from 'lucide-svelte';
-	import { slide } from '$lib/utils/transitions';
+	import { ChevronDown, RotateCcw } from 'lucide-svelte';
+	import { Button, ColorField, Input, SegmentedControl } from '$lib/components/ui';
+	import { springCollapse, springRotate } from '$lib/utils/motion.svelte';
 
 	interface Props {
 		theme: Theme;
@@ -20,55 +23,89 @@
 
 	let { theme, onSave, onCancel }: Props = $props();
 
+	const SCHEME_OPTIONS = [
+		{ value: 'light', label: 'Light' },
+		{ value: 'dark', label: 'Dark' }
+	];
+
+	const SURFACE_KEYS = [
+		'background',
+		'card',
+		'foreground',
+		'muted',
+		'border',
+		'sidebarBackground',
+		'sidebarForeground'
+	] as const satisfies readonly (keyof SimpleThemeColors)[];
+
 	let editingColors = $state<SimpleThemeColors | null>(null);
 	let themeName = $state('');
-	let isDark = $state(false);
-	let expandedCategories = $state<Set<string>>(new Set(['Brand', 'Base']));
+	let scheme = $state('light');
+	let collapsed = $state<Record<string, boolean>>({ Sidebar: true, Status: true });
 	let previousThemeId = $state('');
+	let restored = false;
 
-	// Initialize/reset editing state when theme prop changes
+	const isDark = $derived(scheme === 'dark');
+
 	$effect(() => {
 		if (theme.id !== previousThemeId) {
 			editingColors = { ...theme.simpleColors };
 			themeName = theme.name;
-			isDark = theme.isDark;
+			scheme = theme.isDark ? 'dark' : 'light';
 			previousThemeId = theme.id;
 		}
 	});
 
-	// Ensure editingColors is initialized
-	let safeEditingColors = $derived(editingColors ?? theme.simpleColors);
+	const safeEditingColors = $derived(editingColors ?? theme.simpleColors);
 
-	// Track changes
-	let hasChanges = $derived.by(() => {
+	const hasChanges = $derived.by(() => {
 		if (!editingColors) return false;
-		const colorsDiff = JSON.stringify(editingColors) !== JSON.stringify(theme.simpleColors);
-		const nameDiff = themeName !== theme.name;
-		const darkDiff = isDark !== theme.isDark;
-		return colorsDiff || nameDiff || darkDiff;
+		return (
+			JSON.stringify(editingColors) !== JSON.stringify(theme.simpleColors) ||
+			themeName !== theme.name ||
+			isDark !== theme.isDark
+		);
 	});
 
-	// Live preview - apply colors as they change
 	$effect(() => {
 		if (!editingColors) return;
-		const fullColors = generateThemeColors(editingColors, isDark);
 		const previewTheme: Theme = {
 			...theme,
 			name: themeName,
 			isDark,
 			simpleColors: editingColors,
-			colors: fullColors
+			colors: generateThemeColors(editingColors, isDark)
 		};
-		themeStore.applyTheme(previewTheme);
+		themeStore.applyTheme(previewTheme, { persist: false });
 	});
 
-	function toggleCategory(name: string) {
-		if (expandedCategories.has(name)) {
-			expandedCategories.delete(name);
-		} else {
-			expandedCategories.add(name);
+	function switchScheme(next: string) {
+		if (next === scheme) return;
+		const target = next === 'dark' ? defaultDarkTheme : defaultLightTheme;
+		if (editingColors) {
+			const swapped = { ...editingColors };
+			for (const key of SURFACE_KEYS) swapped[key] = target.simpleColors[key];
+			editingColors = swapped;
 		}
-		expandedCategories = new Set(expandedCategories);
+		scheme = next;
+		toasts.add({
+			title: next === 'dark' ? 'Switched to dark' : 'Switched to light',
+			description: 'Surface colors swapped. Your brand and status colors were kept.',
+			color: 'success'
+		});
+	}
+
+	function restoreActiveTheme() {
+		if (restored) return;
+		restored = true;
+		const active = get(themeStore.activeTheme);
+		if (active) themeStore.applyTheme(active);
+	}
+
+	onDestroy(restoreActiveTheme);
+
+	function toggleCategory(name: string) {
+		collapsed = { ...collapsed, [name]: !collapsed[name] };
 	}
 
 	function updateColor(key: keyof SimpleThemeColors, value: string) {
@@ -81,7 +118,7 @@
 		editingColors = { ...baseTheme.simpleColors };
 		toasts.add({
 			title: 'Colors reset',
-			description: `Reset to default ${isDark ? 'dark' : 'light'} theme colors`,
+			description: `Reset to the default ${isDark ? 'dark' : 'light'} palette`,
 			color: 'success'
 		});
 	}
@@ -90,218 +127,354 @@
 		if (!themeName.trim()) {
 			toasts.add({
 				title: 'Name required',
-				description: 'Please enter a name for this theme',
+				description: 'Give this theme a name before saving',
 				color: 'error'
 			});
 			return;
 		}
-
 		if (!editingColors) return;
 
-		if (theme.isBuiltIn) {
-			// Create a new theme based on built-in
+		restored = true;
+		if (theme.isBuiltIn || theme.isDraft) {
 			const newTheme = themeStore.addTheme({
 				name: themeName,
 				isDark,
 				simpleColors: editingColors
 			});
 			themeStore.setActiveTheme(newTheme.id);
-			toasts.add({
-				title: 'Theme created',
-				description: `"${themeName}" has been saved`,
-				color: 'success'
-			});
+			toasts.add({ title: 'Theme created', description: `"${themeName}" saved`, color: 'success' });
 		} else {
-			// Update existing custom theme
-			themeStore.updateTheme(theme.id, {
-				name: themeName,
-				isDark,
-				simpleColors: editingColors
-			});
-			toasts.add({
-				title: 'Theme updated',
-				description: `"${themeName}" has been saved`,
-				color: 'success'
-			});
+			themeStore.updateTheme(theme.id, { name: themeName, isDark, simpleColors: editingColors });
+			themeStore.setActiveTheme(theme.id);
+			toasts.add({ title: 'Theme updated', description: `"${themeName}" saved`, color: 'success' });
 		}
-
 		onSave?.();
 	}
 
 	function handleCancel() {
-		// Revert to the original theme
-		themeStore.applyTheme(theme);
+		restoreActiveTheme();
 		onCancel?.();
-	}
-
-	function copyColor(color: string) {
-		navigator.clipboard.writeText(color);
-		toasts.add({
-			title: 'Copied',
-			description: color,
-			color: 'success'
-		});
 	}
 </script>
 
-<div class="space-y-6">
-	<!-- Theme name and mode -->
-	<div class="grid gap-4 sm:grid-cols-2">
-		<div>
-			<label
-				for="theme-name"
-				class="block text-sm font-medium mb-2"
-				style="color: var(--center-channel-color);"
-			>
-				Theme Name
-			</label>
-			<input
+<div class="te-root">
+	<div class="te-head">
+		<div class="te-field">
+			<label for="theme-name" class="te-field-label">Name</label>
+			<Input
 				id="theme-name"
 				type="text"
-				class="input"
 				bind:value={themeName}
-				placeholder="My Custom Theme"
+				placeholder="My theme"
 				disabled={theme.isBuiltIn}
 			/>
 			{#if theme.isBuiltIn}
-				<p class="mt-1 text-xs" style="color: var(--surface-muted);">
-					Built-in themes can't be edited. Changes will be saved as a new theme.
-				</p>
+				<p class="te-field-hint">Built-in themes stay untouched. This saves as a new theme.</p>
 			{/if}
 		</div>
-		<div>
-			<label class="block text-sm font-medium mb-2" style="color: var(--center-channel-color);">
-				Color Scheme
-			</label>
-			<div class="flex gap-2">
-				<button
-					type="button"
-					class="flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
-					class:bg-primary-600={!isDark}
-					class:text-white={!isDark}
-					style={isDark
-						? `background-color: var(--control-bg); color: var(--control-text); border: 1px solid var(--surface-border);`
-						: ''}
-					onclick={() => (isDark = false)}
-				>
-					Light
-				</button>
-				<button
-					type="button"
-					class="flex-1 rounded-lg px-4 py-2 text-sm font-medium transition-colors"
-					class:bg-primary-600={isDark}
-					class:text-white={isDark}
-					style={!isDark
-						? `background-color: var(--control-bg); color: var(--control-text); border: 1px solid var(--surface-border);`
-						: ''}
-					onclick={() => (isDark = true)}
-				>
-					Dark
-				</button>
+		<div class="te-field te-field--scheme">
+			<span class="te-field-label">Color scheme</span>
+			<SegmentedControl
+				options={SCHEME_OPTIONS}
+				value={scheme}
+				label="Color scheme"
+				onchange={switchScheme}
+				grow
+			/>
+		</div>
+	</div>
+
+	<div
+		class="te-preview"
+		style="--p-bg: {safeEditingColors.background}; --p-card: {safeEditingColors.card}; --p-fg: {safeEditingColors.foreground}; --p-muted: {safeEditingColors.muted}; --p-border: {safeEditingColors.border}; --p-accent: {safeEditingColors.accent}; --p-accent-fg: {safeEditingColors.accentForeground}; --p-sidebar: {safeEditingColors.sidebarBackground}; --p-sidebar-fg: {safeEditingColors.sidebarForeground}; --p-success: {safeEditingColors.success}; --p-warning: {safeEditingColors.warning}; --p-error: {safeEditingColors.error}"
+	>
+		<div class="te-preview-rail">
+			<span class="te-preview-rail-dot"></span>
+			<span class="te-preview-rail-line"></span>
+			<span class="te-preview-rail-line te-preview-rail-line--short"></span>
+		</div>
+		<div class="te-preview-body">
+			<div class="te-preview-card">
+				<p class="te-preview-title">Deployment</p>
+				<p class="te-preview-sub">Running on 2 replicas</p>
+				<div class="te-preview-row">
+					<span class="te-preview-btn">Deploy</span>
+					<span class="te-preview-dots">
+						<span class="te-preview-dot te-preview-dot--success"></span>
+						<span class="te-preview-dot te-preview-dot--warning"></span>
+						<span class="te-preview-dot te-preview-dot--error"></span>
+					</span>
+				</div>
 			</div>
 		</div>
 	</div>
 
-	<!-- Color categories -->
-	<div class="space-y-3">
+	<div class="te-groups">
 		{#each themeColorCategories as category (category.name)}
-			<div
-				class="rounded-xl border overflow-hidden"
-				style="background-color: var(--surface-bg); border-color: var(--surface-border);"
-			>
+			<section class="te-group">
 				<button
 					type="button"
-					class="flex w-full items-center justify-between px-4 py-3 text-left transition-colors"
-					style="color: var(--center-channel-color);"
+					class="te-group-head"
+					aria-expanded={!collapsed[category.name]}
 					onclick={() => toggleCategory(category.name)}
 				>
-					<div>
-						<p class="font-medium">{category.name}</p>
-						<p class="text-xs" style="color: var(--surface-muted);">{category.description}</p>
-					</div>
-					{#if expandedCategories.has(category.name)}
-						<ChevronUp class="h-5 w-5" style="color: var(--surface-muted);" />
-					{:else}
-						<ChevronDown class="h-5 w-5" style="color: var(--surface-muted);" />
-					{/if}
-				</button>
-
-				{#if expandedCategories.has(category.name)}
-					<div
-						class="border-t px-4 py-4"
-						style="border-color: var(--surface-border);"
-						transition:slide={{ duration: 200 }}
+					<span class="te-group-text">
+						<span class="te-group-name">{category.name}</span>
+						<span class="te-group-desc">{category.description}</span>
+					</span>
+					<span
+						class="te-group-chevron"
+						{@attach springRotate(() => !collapsed[category.name], { rest: -90, on: 0 })}
 					>
-						<div class="grid gap-4 sm:grid-cols-2">
-							{#each category.colors as colorDef (colorDef.key)}
-								{@const colorKey = colorDef.key as keyof SimpleThemeColors}
-								{@const colorValue = safeEditingColors[colorKey]}
-								<div
-									class="flex items-center gap-3 p-3 rounded-lg"
-									style="background-color: var(--control-bg);"
-								>
-									<div class="relative">
-										<input
-											type="color"
-											value={colorValue}
-											oninput={(e) => updateColor(colorKey, e.currentTarget.value)}
-											class="h-12 w-12 cursor-pointer rounded-lg border-2 p-0.5"
-											style="border-color: var(--surface-border); background-color: var(--surface-bg);"
-										/>
-									</div>
-									<div class="flex-1 min-w-0">
-										<p class="text-sm font-medium" style="color: var(--center-channel-color);">
-											{colorDef.label}
-										</p>
-										<p class="text-xs mb-1" style="color: var(--surface-muted);">
-											{colorDef.description}
-										</p>
-										<button
-											type="button"
-											class="flex items-center gap-1 text-xs font-mono transition-colors hover:opacity-70"
-											style="color: var(--surface-muted);"
-											onclick={() => copyColor(colorValue)}
-										>
-											{colorValue}
-											<Copy class="h-3 w-3" />
-										</button>
-									</div>
-								</div>
-							{/each}
-						</div>
+						<ChevronDown class="h-4 w-4" />
+					</span>
+				</button>
+				<div {@attach springCollapse(() => collapsed[category.name] ?? false)}>
+					<div class="te-group-body">
+						{#each category.colors as colorDef (colorDef.key)}
+							{@const colorKey = colorDef.key as keyof SimpleThemeColors}
+							<ColorField
+								label={colorDef.label}
+								description={colorDef.description}
+								value={safeEditingColors[colorKey]}
+								onchange={(next) => updateColor(colorKey, next)}
+							/>
+						{/each}
 					</div>
-				{/if}
-			</div>
+				</div>
+			</section>
 		{/each}
 	</div>
 
-	<!-- Actions -->
-	<div
-		class="flex flex-wrap items-center justify-between gap-4 pt-4 border-t"
-		style="border-color: var(--divider-color);"
-	>
-		<div class="flex gap-2">
-			<button type="button" class="btn btn-secondary" onclick={resetToDefault}>
-				<RotateCcw class="h-4 w-4" />
-				Reset to Default
-			</button>
-		</div>
-		<div class="flex gap-2">
+	<div class="te-actions">
+		<Button variant="ghost" size="sm" onclick={resetToDefault}>
+			<RotateCcw class="h-3.5 w-3.5" />
+			Reset colors
+		</Button>
+		<div class="te-actions-right">
 			{#if onCancel}
-				<button type="button" class="btn btn-secondary" onclick={handleCancel}>
-					<X class="h-4 w-4" />
-					Cancel
-				</button>
+				<Button variant="secondary" size="sm" onclick={handleCancel}>Cancel</Button>
 			{/if}
-			<button
-				type="button"
-				class="btn btn-primary"
+			<Button
+				variant="primary"
+				size="sm"
 				onclick={handleSave}
-				disabled={!hasChanges && !theme.isBuiltIn}
+				disabled={!hasChanges && !theme.isBuiltIn && !theme.isDraft}
 			>
-				<Check class="h-4 w-4" />
-				{theme.isBuiltIn ? 'Save as New Theme' : 'Save Changes'}
-			</button>
+				{theme.isBuiltIn || theme.isDraft ? 'Create theme' : 'Save changes'}
+			</Button>
 		</div>
 	</div>
 </div>
+
+<style>
+	.te-root {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-5);
+	}
+	.te-head {
+		display: grid;
+		grid-template-columns: minmax(0, 1fr) auto;
+		gap: var(--space-4);
+		align-items: start;
+	}
+	.te-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		min-width: 0;
+	}
+	.te-field--scheme {
+		min-width: 11rem;
+	}
+	.te-field-label {
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		font-weight: 600;
+		letter-spacing: var(--track-body);
+		color: var(--text-default);
+	}
+	.te-field-hint {
+		margin: 0;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		color: var(--text-muted);
+	}
+
+	.te-preview {
+		display: flex;
+		gap: 0;
+		border-radius: var(--radius-md);
+		overflow: hidden;
+		border: 1px solid var(--border-default);
+		background-color: var(--p-bg);
+	}
+	.te-preview-rail {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		width: 4rem;
+		flex-shrink: 0;
+		padding: 0.75rem;
+		background-color: var(--p-sidebar);
+		border-right: 1px solid var(--p-border);
+	}
+	.te-preview-rail-dot {
+		width: 1.125rem;
+		height: 1.125rem;
+		border-radius: var(--radius-xs);
+		background-color: var(--p-accent);
+	}
+	.te-preview-rail-line {
+		height: 0.375rem;
+		border-radius: var(--radius-pill);
+		background-color: var(--p-sidebar-fg);
+		opacity: 0.35;
+	}
+	.te-preview-rail-line--short {
+		width: 60%;
+	}
+	.te-preview-body {
+		flex: 1;
+		min-width: 0;
+		padding: 0.75rem;
+		display: flex;
+	}
+	.te-preview-card {
+		flex: 1;
+		min-width: 0;
+		padding: 0.625rem var(--space-3);
+		border-radius: var(--radius-sm);
+		background-color: var(--p-card);
+		border: 1px solid var(--p-border);
+	}
+	.te-preview-title {
+		margin: 0;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		font-weight: 600;
+		color: var(--p-fg);
+	}
+	.te-preview-sub {
+		margin: 0.0625rem 0 0;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		color: var(--p-muted);
+	}
+	.te-preview-row {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-2);
+		margin-top: 0.5rem;
+	}
+	.te-preview-btn {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.25rem 0.5rem;
+		border-radius: var(--radius-pill);
+		background-color: var(--p-accent);
+		color: var(--p-accent-fg);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+	}
+	.te-preview-dots {
+		display: inline-flex;
+		gap: 0.25rem;
+	}
+	.te-preview-dot {
+		width: 0.5rem;
+		height: 0.5rem;
+		border-radius: var(--radius-pill);
+	}
+	.te-preview-dot--success {
+		background-color: var(--p-success);
+	}
+	.te-preview-dot--warning {
+		background-color: var(--p-warning);
+	}
+	.te-preview-dot--error {
+		background-color: var(--p-error);
+	}
+
+	.te-groups {
+		display: flex;
+		flex-direction: column;
+	}
+	.te-group {
+		border-top: 1px solid var(--rule);
+	}
+	.te-group-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-3);
+		width: 100%;
+		padding: 0.875rem var(--space-3);
+		border: none;
+		background: none;
+		cursor: pointer;
+		text-align: left;
+		border-radius: var(--radius-md);
+		transition: background-color var(--dur-fast);
+	}
+	.te-group-head:hover {
+		background-color: var(--fill-quiet);
+	}
+	.te-group-text {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+	.te-group-name {
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
+		font-weight: 600;
+		letter-spacing: var(--track-body);
+		color: var(--text-default);
+	}
+	.te-group-desc {
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		color: var(--text-muted);
+	}
+	.te-group-chevron {
+		display: inline-flex;
+		color: var(--text-faint);
+		flex-shrink: 0;
+	}
+	.te-group-body {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: 0 var(--space-4);
+		padding-bottom: var(--space-3);
+	}
+
+	.te-actions {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-4);
+		flex-wrap: wrap;
+		padding-top: var(--space-4);
+		border-top: 1px solid var(--rule);
+	}
+	.te-actions-right {
+		display: flex;
+		gap: var(--space-2);
+	}
+
+	@media (max-width: 720px) {
+		.te-head {
+			grid-template-columns: 1fr;
+		}
+		.te-group-body {
+			grid-template-columns: 1fr;
+		}
+		.te-preview-rail {
+			width: 3.5rem;
+		}
+	}
+</style>

@@ -48,7 +48,6 @@
 <SettingsSection
 	title="Database backups (R2)"
 	description="Configure Cloudflare R2 for pgBackRest backups"
-	iconColor="amber"
 	{index}
 >
 	{#snippet icon(hovered)}<CloudUpload size={18} animate={hovered} />{/snippet}
@@ -189,15 +188,17 @@
 		color: var(--surface-muted);
 	}
 	.ob-no-access {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 		margin: 0;
 	}
 	.ob-lock-note {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
-		font-size: 0.75rem;
+		gap: 0.5rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--surface-muted);
 		margin: 0.75rem 0 0;
 	}
@@ -220,24 +221,28 @@
 	.ob-readonly-row dt {
 		width: 10rem;
 		flex-shrink: 0;
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		font-weight: 600;
 		color: var(--surface-muted);
 	}
 	.ob-readonly-row dd {
 		margin: 0;
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--center-channel-color);
 	}
 	.ob-mono {
 		font-family: var(--font-mono, ui-monospace, monospace);
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 	}
 	.ob-status-ok {
 		display: inline-flex;
 		align-items: center;
 		gap: 0.25rem;
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--online-indicator);
 	}
 

@@ -1,8 +1,9 @@
 <script lang="ts">
-	import { Loader2, Camera, X, Fingerprint, MonitorSmartphone, Github } from 'lucide-svelte';
+	import { Loader2, Camera, X, Pencil } from 'lucide-svelte';
 	import { Eye, EyeOff } from '@jis3r/icons';
 	import { motionStagger } from '$lib/utils/motion.svelte';
-	import SettingsField from './SettingsField.svelte';
+	import { fade } from '$lib/utils/transitions';
+	import { Button, Input } from '$lib/components/ui';
 
 	interface UserData {
 		firstName?: string;
@@ -17,72 +18,85 @@
 		user,
 		displayEmail,
 		emailRevealed = $bindable(false),
-		editingField = $bindable<string | null>(null),
-		editValue = $bindable(''),
-		savingField,
+		isEditing = $bindable(false),
+		editFirstName = $bindable(''),
+		editLastName = $bindable(''),
+		editUsername = $bindable(''),
+		saving,
 		uploadingAvatar,
 		deletingAvatar,
-		onStartEditField,
-		onCancelEditField,
-		onSaveField,
-		onFieldKeydown,
+		onStartEditing,
+		onCancelEditing,
+		onSave,
 		onUploadAvatar,
 		onDeleteAvatar,
 		avatarInputRef = $bindable<HTMLInputElement | undefined>(undefined),
 		passkeyCount = null,
 		sessionCount = null,
 		githubLinked = false,
-		onJump = undefined,
 		index = 0
 	}: {
 		user: UserData | null;
 		displayEmail: string;
 		emailRevealed: boolean;
-		editingField: string | null;
-		editValue: string;
-		savingField: boolean;
+		isEditing: boolean;
+		editFirstName: string;
+		editLastName: string;
+		editUsername: string;
+		saving: boolean;
 		uploadingAvatar: boolean;
 		deletingAvatar: boolean;
-		onStartEditField: (field: string) => void;
-		onCancelEditField: () => void;
-		onSaveField: () => void;
-		onFieldKeydown: (e: KeyboardEvent) => void;
+		onStartEditing: () => void;
+		onCancelEditing: () => void;
+		onSave: () => void;
 		onUploadAvatar: (event: Event) => void;
 		onDeleteAvatar: () => void;
 		avatarInputRef?: HTMLInputElement | undefined;
 		passkeyCount?: number | null;
 		sessionCount?: number | null;
 		githubLinked?: boolean;
-		onJump?: (id: string) => void;
 		index?: number;
 	} = $props();
 
 	let revealHovered = $state(false);
 
-	const fields = $derived([
-		{ key: 'firstName', label: 'First name', value: user?.firstName || 'Not set', mono: false },
-		{ key: 'lastName', label: 'Last name', value: user?.lastName || 'Not set', mono: false },
-		{ key: 'username', label: 'Username', value: user?.username || 'Not set', mono: true }
-	]);
+	const displayName = $derived(
+		[user?.firstName, user?.lastName].filter(Boolean).join(' ') ||
+			user?.name ||
+			user?.username ||
+			'You'
+	);
 
 	const chips = $derived(
 		[
 			passkeyCount !== null && {
 				id: 'passkeys',
-				icon: Fingerprint,
-				label: `${passkeyCount} passkey${passkeyCount === 1 ? '' : 's'}`
+				href: '/user/settings?tab=security',
+				valueFirst: true,
+				value: String(passkeyCount),
+				label: `passkey${passkeyCount === 1 ? '' : 's'}`
 			},
 			sessionCount !== null && {
 				id: 'sessions',
-				icon: MonitorSmartphone,
-				label: `${sessionCount} device${sessionCount === 1 ? '' : 's'}`
+				href: '/user/settings?tab=security',
+				valueFirst: true,
+				value: String(sessionCount),
+				label: `device${sessionCount === 1 ? '' : 's'}`
 			},
 			{
 				id: 'github',
-				icon: Github,
-				label: githubLinked ? 'GitHub connected' : 'GitHub not connected'
+				href: '/user/settings?tab=connections',
+				valueFirst: false,
+				label: 'GitHub',
+				value: githubLinked ? 'Connected' : 'Not connected'
 			}
-		].filter(Boolean) as { id: string; icon: typeof Github; label: string }[]
+		].filter(Boolean) as {
+			id: string;
+			href: string;
+			valueFirst: boolean;
+			value: string;
+			label: string;
+		}[]
 	);
 </script>
 
@@ -95,17 +109,14 @@
 	onchange={onUploadAvatar}
 />
 
-<section
-	class="uh-root"
-	{@attach motionStagger({ index, stride: 0.06, from: { y: 12, opacity: 0, scale: 0.985 } })}
->
+<section class="uh-root" {@attach motionStagger({ index, from: { y: 12, opacity: 0 } })}>
 	<div class="uh-top">
 		<div class="uh-avatar-wrap">
 			<div class="uh-avatar">
 				{#if user?.imageUrl}
-					<img src={user.imageUrl} alt={user.name || 'You'} class="uh-avatar-img" />
+					<img src={user.imageUrl} alt={displayName} class="uh-avatar-img" />
 				{:else}
-					<span class="uh-avatar-letter">{user?.firstName?.[0] || user?.name?.[0] || 'U'}</span>
+					<span class="uh-avatar-letter">{displayName[0]}</span>
 				{/if}
 			</div>
 			<div class="uh-avatar-actions">
@@ -137,69 +148,74 @@
 				{/if}
 			</div>
 		</div>
+
 		<div class="uh-id">
-			<h1 class="uh-name">
-				{#if user?.firstName || user?.lastName}
-					{user?.firstName || ''} {user?.lastName || ''}
-				{:else}
-					{user?.name || user?.username || 'You'}
-				{/if}
-			</h1>
-			<p class="uh-sub">
-				{#if user?.username}<span class="uh-username">@{user.username}</span><span class="uh-dot"
-						>·</span
-					>{/if}
-				{displayEmail}
-				<button
-					type="button"
-					class="uh-reveal"
-					onclick={() => (emailRevealed = !emailRevealed)}
-					aria-label={emailRevealed ? 'Hide email' : 'Show email'}
-					onmouseenter={() => (revealHovered = true)}
-					onmouseleave={() => (revealHovered = false)}
-				>
-					{#if emailRevealed}<EyeOff size={13} animate={revealHovered} />{:else}<Eye
-							size={13}
-							animate={revealHovered}
-						/>{/if}
-				</button>
-			</p>
-			{#if chips.length}
+			{#if !isEditing}
+				<div class="uh-titlerow">
+					<div class="uh-titlegroup">
+						<h2 class="uh-name">{displayName}</h2>
+						<p class="uh-sub">
+							{#if user?.username}<span class="uh-username">{user.username}</span>
+								<span class="uh-dot">·</span>{/if}
+							<span class="uh-email-wrap">
+								<span class="uh-email">{displayEmail}</span>
+								<button
+									type="button"
+									class="uh-reveal"
+									onclick={() => (emailRevealed = !emailRevealed)}
+									aria-label={emailRevealed ? 'Hide email' : 'Show email'}
+									onmouseenter={() => (revealHovered = true)}
+									onmouseleave={() => (revealHovered = false)}
+								>
+									{#if emailRevealed}<EyeOff size={13} animate={revealHovered} />{:else}<Eye
+											size={13}
+											animate={revealHovered}
+										/>{/if}
+								</button>
+							</span>
+						</p>
+					</div>
+					<Button variant="ghost" size="sm" onclick={onStartEditing}>
+						<Pencil class="h-3.5 w-3.5" />
+						Edit
+					</Button>
+				</div>
 				<div class="uh-chips">
 					{#each chips as chip (chip.id)}
-						{@const Icon = chip.icon}
-						{#if onJump && chip.id !== 'github'}
-							<button type="button" class="uh-chip uh-chip--link" onclick={() => onJump(chip.id)}>
-								<Icon size={12} />
-								{chip.label}
-							</button>
-						{:else}
-							<span class="uh-chip">
-								<Icon size={12} />
-								{chip.label}
-							</span>
-						{/if}
+						<a class="uh-chip" href={chip.href}>
+							{#if chip.valueFirst}
+								<span class="uh-chip-value">{chip.value}</span>
+								<span class="uh-chip-label">{chip.label}</span>
+							{:else}
+								<span class="uh-chip-label">{chip.label}</span>
+								<span class="uh-chip-value">{chip.value}</span>
+							{/if}
+						</a>
 					{/each}
+				</div>
+			{:else}
+				<div class="uh-edit" transition:fade={{ duration: 150 }}>
+					<div class="uh-edit-grid">
+						<div class="uh-field">
+							<label for="uh-first-name" class="uh-field-label">First name</label>
+							<Input id="uh-first-name" name="firstName" bind:value={editFirstName} />
+						</div>
+						<div class="uh-field">
+							<label for="uh-last-name" class="uh-field-label">Last name</label>
+							<Input id="uh-last-name" name="lastName" bind:value={editLastName} />
+						</div>
+						<div class="uh-field">
+							<label for="uh-username" class="uh-field-label">Username</label>
+							<Input id="uh-username" name="username" bind:value={editUsername} />
+						</div>
+					</div>
+					<div class="uh-edit-actions">
+						<Button variant="secondary" size="sm" onclick={onCancelEditing}>Cancel</Button>
+						<Button variant="primary" size="sm" onclick={onSave} loading={saving}>Save</Button>
+					</div>
 				</div>
 			{/if}
 		</div>
-	</div>
-
-	<div class="uh-fields">
-		{#each fields as field (field.key)}
-			<SettingsField
-				label={field.label}
-				value={field.value}
-				mono={field.mono}
-				editing={editingField === field.key}
-				editValue={editingField === field.key ? editValue : ''}
-				saving={savingField}
-				onSave={onSaveField}
-				onCancel={onCancelEditField}
-				onStartEdit={() => onStartEditField(field.key)}
-				onKeydown={onFieldKeydown}
-			/>
-		{/each}
 	</div>
 </section>
 
@@ -212,19 +228,17 @@
 		pointer-events: none;
 	}
 	.uh-root {
-		border: 1px solid var(--border-default);
-		border-radius: 1rem;
-		background-color: var(--bg-surface);
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.03),
-			0 1px 2px rgb(0 0 0 / 0.02);
+		border: none;
+		border-radius: var(--radius-lg);
+		background-color: var(--bg-raised);
+		box-shadow: var(--elev-1);
 		overflow: hidden;
 	}
 	.uh-top {
 		display: flex;
-		align-items: center;
+		align-items: flex-start;
 		gap: 1.375rem;
-		padding: 1.75rem 1.75rem 1.5rem;
+		padding: var(--space-6) 1.75rem;
 	}
 	.uh-avatar-wrap {
 		position: relative;
@@ -236,7 +250,7 @@
 	.uh-avatar {
 		width: 4.5rem;
 		height: 4.5rem;
-		border-radius: 1.125rem;
+		border-radius: var(--radius-xl);
 		overflow: hidden;
 		display: flex;
 		align-items: center;
@@ -256,7 +270,8 @@
 		object-fit: cover;
 	}
 	.uh-avatar-letter {
-		font-size: 1.625rem;
+		font-size: var(--text-title-1);
+		line-height: var(--lh-title-1);
 		font-weight: 700;
 	}
 	.uh-avatar-actions {
@@ -266,7 +281,7 @@
 		display: flex;
 		gap: 0.125rem;
 		opacity: 0;
-		transition: opacity 150ms;
+		transition: opacity var(--dur-fast);
 	}
 	.uh-avatar-btn {
 		display: inline-flex;
@@ -275,11 +290,11 @@
 		width: 1.5rem;
 		height: 1.5rem;
 		border-radius: 50%;
-		border: 1.5px solid var(--bg-surface);
+		border: 1.5px solid var(--bg-raised);
 		background-color: var(--accent);
 		color: var(--text-on-accent);
 		cursor: pointer;
-		transition: opacity 120ms;
+		transition: opacity var(--dur-fast);
 		padding: 0;
 	}
 	.uh-avatar-btn:hover:not(:disabled) {
@@ -296,8 +311,17 @@
 		flex: 1;
 		min-width: 0;
 	}
+	.uh-titlerow {
+		display: flex;
+		align-items: flex-start;
+		justify-content: space-between;
+		gap: var(--space-3);
+	}
+	.uh-titlegroup {
+		min-width: 0;
+	}
 	.uh-name {
-		font-size: 1.625rem;
+		font-size: var(--text-title-1);
 		font-weight: 700;
 		letter-spacing: -0.025em;
 		line-height: 1.15;
@@ -310,29 +334,45 @@
 	.uh-sub {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
-		font-size: 0.8125rem;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		color: var(--text-muted);
 		margin: 0.25rem 0 0;
 		min-width: 0;
 	}
 	.uh-username {
 		font-family: var(--font-mono, monospace);
-		font-size: 0.75rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 	}
 	.uh-dot {
 		color: var(--text-faint);
 	}
+	.uh-email-wrap {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		min-width: 0;
+	}
+	.uh-email {
+		min-width: 0;
+		overflow-wrap: anywhere;
+	}
 	.uh-reveal {
 		display: inline-flex;
 		align-items: center;
-		padding: 0.2rem;
-		border-radius: 0.25rem;
+		justify-content: center;
+		min-width: 1.5rem;
+		min-height: 1.5rem;
+		padding: 0.25rem;
+		border-radius: var(--radius-xs);
 		color: var(--text-muted);
 		background: none;
 		border: none;
 		cursor: pointer;
-		transition: color 120ms;
+		transition: color var(--dur-fast);
 	}
 	.uh-reveal:hover {
 		color: var(--text-default);
@@ -340,53 +380,83 @@
 	.uh-chips {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.375rem;
-		margin-top: 0.75rem;
+		gap: 0.5rem;
+		margin-top: 0.875rem;
 	}
 	.uh-chip {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.3rem;
-		font-size: 0.6875rem;
-		font-weight: 500;
+		gap: 0.25rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		color: var(--text-muted);
 		background-color: var(--bg-sunken);
 		border: 1px solid color-mix(in srgb, var(--border-default) 70%, transparent);
-		border-radius: 9999px;
-		padding: 0.2rem 0.55rem;
-	}
-	.uh-chip--link {
-		cursor: pointer;
+		border-radius: var(--radius-pill);
+		padding: 0.25rem 0.5rem;
+		text-decoration: none;
 		transition:
-			color 120ms,
-			background-color 120ms;
+			color var(--dur-fast),
+			background-color var(--dur-fast);
 	}
-	.uh-chip--link:hover {
-		color: var(--text-default);
+	.uh-chip:hover {
 		background-color: var(--bg-hover);
 	}
-	.uh-fields {
-		display: grid;
-		grid-template-columns: 1fr 1fr 1fr;
-		border-top: 1px solid var(--border-default);
+	.uh-chip-label {
+		color: var(--text-muted);
 	}
-	.uh-fields > :global(:not(:first-child)) {
-		border-left: 1px solid color-mix(in srgb, var(--border-default) 60%, transparent);
+	.uh-chip-value {
+		font-weight: 600;
+		color: var(--text-default);
+	}
+	.uh-edit {
+		display: flex;
+		flex-direction: column;
+		gap: 0.875rem;
+	}
+	.uh-edit-grid {
+		display: grid;
+		grid-template-columns: repeat(3, minmax(0, 1fr));
+		gap: var(--space-3);
+	}
+	.uh-field {
+		display: flex;
+		flex-direction: column;
+		gap: 0.5rem;
+		min-width: 0;
+	}
+	.uh-field-label {
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		font-weight: 600;
+		color: var(--text-default);
+	}
+	.uh-edit-actions {
+		display: flex;
+		gap: var(--space-2);
+		justify-content: flex-end;
 	}
 	@media (max-width: 640px) {
 		.uh-top {
-			padding: 1.25rem 1.25rem 1rem;
-			gap: 1rem;
+			padding: var(--space-5);
+			gap: var(--space-4);
 		}
 		.uh-name {
-			font-size: 1.25rem;
+			font-size: var(--text-title-3);
+			line-height: var(--lh-title-3);
+			white-space: normal;
 		}
-		.uh-fields {
+		.uh-sub {
+			flex-direction: column;
+			align-items: flex-start;
+			gap: 0.125rem;
+		}
+		.uh-dot {
+			display: none;
+		}
+		.uh-edit-grid {
 			grid-template-columns: 1fr;
-		}
-		.uh-fields > :global(:not(:first-child)) {
-			border-left: none;
-			border-top: 1px solid color-mix(in srgb, var(--border-default) 40%, transparent);
 		}
 	}
 </style>

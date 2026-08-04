@@ -68,7 +68,7 @@
 		justify-content: center;
 		width: 2.5rem;
 		height: 2.5rem;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 	}
 
 	.cm-icon-danger {
@@ -82,14 +82,15 @@
 	}
 
 	.cm-title {
-		font-size: 1rem;
+		font-size: var(--text-headline);
+		line-height: var(--lh-headline);
 		font-weight: 600;
 		color: var(--text-default);
 		margin: 0 0 0.5rem;
 	}
 
 	.cm-desc {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
 		color: var(--text-muted);
 		margin: 0;
 		line-height: 1.5;

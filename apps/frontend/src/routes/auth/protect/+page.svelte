@@ -245,7 +245,7 @@
 		justify-content: center;
 		width: 3rem;
 		height: 3rem;
-		border-radius: 0.875rem;
+		border-radius: var(--radius-lg);
 		background: var(--surface-bg);
 		border: 1px solid var(--surface-border);
 		color: var(--center-channel-color);
@@ -259,7 +259,7 @@
 	}
 
 	.protect-title {
-		font-size: 1.25rem;
+		font-size: var(--text-title-3);
 		font-weight: 600;
 		letter-spacing: -0.02em;
 		color: var(--center-channel-color);
@@ -268,7 +268,7 @@
 	}
 
 	.protect-subtitle {
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
 		color: var(--surface-muted);
 		margin: 0 0 1.5rem;
 		line-height: 1.6;
@@ -277,8 +277,9 @@
 	.protect-host {
 		color: var(--center-channel-color);
 		font-family: var(--font-mono);
-		font-size: 0.8125rem;
-		font-weight: 500;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
 		white-space: nowrap;
 	}
 
@@ -300,7 +301,8 @@
 	}
 
 	.protect-error {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--error-text-color);
 		margin: 0;
 	}
@@ -311,6 +313,7 @@
 		justify-content: center;
 		gap: 0.5rem;
 		color: var(--surface-muted);
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 	}
 </style>

@@ -77,7 +77,7 @@
 	.ia {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		flex-wrap: wrap;
 	}
 
@@ -91,7 +91,7 @@
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		outline: 1px solid var(--border-default);
 		outline-offset: -1px;
 	}
@@ -105,7 +105,7 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		border: none;
 		background: var(--text-default);
 		color: var(--bg-surface);
@@ -118,14 +118,14 @@
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		border: 1px dashed var(--border-strong);
 		background: none;
 		color: var(--text-muted);
 		cursor: pointer;
 		transition:
-			color 120ms ease,
-			border-color 120ms ease;
+			color var(--dur-fast) ease,
+			border-color var(--dur-fast) ease;
 	}
 
 	.ia-add:hover {

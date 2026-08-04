@@ -204,8 +204,8 @@
 		<div class="td-main-card">
 			<div style="padding: 1.5rem; display: flex; flex-direction: column; gap: 1rem;">
 				<div class="skeleton" style="height: 1rem; width: 10rem;"></div>
-				<div class="skeleton" style="height: 2.25rem; border-radius: 0.5rem;"></div>
-				<div class="skeleton" style="height: 2.25rem; border-radius: 0.5rem;"></div>
+				<div class="skeleton" style="height: 2.25rem; border-radius: var(--radius-sm);"></div>
+				<div class="skeleton" style="height: 2.25rem; border-radius: var(--radius-sm);"></div>
 			</div>
 		</div>
 	{:else if template}
@@ -381,7 +381,8 @@
 	}
 
 	.td-page-title {
-		font-size: 1.375rem;
+		font-size: var(--text-title-2);
+		line-height: var(--lh-title-2);
 		font-weight: 700;
 		color: var(--center-channel-color);
 		margin: 0 0 1.25rem;
@@ -391,7 +392,7 @@
 	/* Main card */
 	.td-main-card {
 		border: 1px solid var(--surface-border);
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		background-color: var(--surface-bg);
 		margin-bottom: 1.25rem;
 		overflow: hidden;
@@ -409,7 +410,7 @@
 	.td-info-icon {
 		width: 2.25rem;
 		height: 2.25rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		flex-shrink: 0;
 		display: flex;
 		align-items: center;
@@ -427,22 +428,24 @@
 	}
 
 	.td-info-name {
-		font-size: 0.9375rem;
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
 		font-weight: 600;
 		color: var(--center-channel-color);
 	}
 
 	.td-info-desc {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
 		color: var(--surface-muted);
 		line-height: 1.4;
 	}
 
 	.td-info-badge {
-		font-size: 0.625rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		padding: 0.125rem 0.5rem;
-		border-radius: 9999px;
+		border-radius: var(--radius-pill);
 		text-transform: capitalize;
 		flex-shrink: 0;
 		margin-top: 0.125rem;
@@ -452,7 +455,7 @@
 	.td-project-row {
 		display: flex;
 		align-items: center;
-		gap: 0.625rem;
+		gap: 0.75rem;
 		padding: 0.875rem 1.5rem;
 		border-bottom: 1px solid var(--surface-border);
 		background: color-mix(in srgb, var(--surface-border) 15%, transparent);
@@ -460,17 +463,18 @@
 
 	.td-suggest {
 		align-self: flex-start;
-		margin-top: 0.375rem;
-		padding: 0.25rem 0.625rem;
+		margin-top: 0.5rem;
+		padding: 0.25rem 0.75rem;
 		border: 1px dashed var(--border-default);
-		border-radius: 9999px;
+		border-radius: var(--radius-pill);
 		background: none;
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--text-muted);
 		cursor: pointer;
 		transition:
-			color 120ms ease,
-			border-color 120ms ease;
+			color var(--dur-fast) ease,
+			border-color var(--dur-fast) ease;
 	}
 
 	.td-suggest:hover {
@@ -479,7 +483,7 @@
 	}
 
 	.td-suggest strong {
-		font-weight: 650;
+		font-weight: 600;
 		font-family: var(--font-mono);
 	}
 
@@ -489,29 +493,31 @@
 	}
 
 	.td-resources-label {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
 		color: var(--surface-muted);
 		display: block;
-		margin-bottom: 0.625rem;
+		margin-bottom: 0.75rem;
 	}
 
 	.td-resources-list {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.375rem;
+		gap: 0.5rem;
 	}
 
 	.td-resource-chip {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
-		padding: 0.25rem 0.625rem;
-		border-radius: 0.375rem;
+		gap: 0.5rem;
+		padding: 0.25rem 0.75rem;
+		border-radius: var(--radius-xs);
 		background: color-mix(in srgb, var(--surface-border) 30%, transparent);
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--center-channel-color);
 	}
 
@@ -523,7 +529,7 @@
 	}
 
 	.td-resource-name {
-		font-weight: 500;
+		font-weight: 600;
 	}
 
 	.td-resource-type {
@@ -533,7 +539,7 @@
 	/* Configuration card */
 	.td-card {
 		border: 1px solid var(--surface-border);
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		background-color: var(--surface-bg);
 		padding: 1.25rem 1.5rem;
 		margin-bottom: 1.25rem;
@@ -543,7 +549,8 @@
 	}
 
 	.td-card-title {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		color: var(--center-channel-color);
 		margin: 0;
@@ -559,12 +566,13 @@
 	.td-field {
 		display: flex;
 		flex-direction: column;
-		gap: 0.375rem;
+		gap: 0.5rem;
 	}
 
 	.td-label {
-		font-size: 0.8125rem;
-		font-weight: 500;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
 		color: var(--center-channel-color);
 	}
 
@@ -574,7 +582,8 @@
 	}
 
 	.td-hint {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--surface-muted);
 		margin: 0;
 	}
@@ -613,8 +622,8 @@
 		width: 2.25rem;
 		height: 1.25rem;
 		background-color: var(--surface-border);
-		border-radius: 9999px;
-		transition: background-color 0.2s;
+		border-radius: var(--radius-pill);
+		transition: background-color var(--dur-base);
 	}
 
 	.td-toggle-slider::after {
@@ -626,8 +635,8 @@
 		height: 0.875rem;
 		background-color: var(--button-color);
 		border-radius: 50%;
-		transition: transform 0.2s;
-		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.15);
+		transition: transform var(--dur-base);
+		box-shadow: var(--elev-1);
 	}
 
 	.td-toggle-switch input:checked + .td-toggle-slider {
@@ -641,8 +650,9 @@
 	/* Error */
 	.td-error {
 		padding: 0.75rem 1rem;
-		border-radius: 0.75rem;
-		font-size: 0.8125rem;
+		border-radius: var(--radius-md);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
 		color: var(--error-text-color);
 		border: 1px solid color-mix(in srgb, var(--error-text-color) 25%, transparent);

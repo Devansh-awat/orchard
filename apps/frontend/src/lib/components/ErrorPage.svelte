@@ -157,7 +157,7 @@
 		width: 100%;
 		padding: 2rem 2.5rem 2.5rem;
 		margin: 1.5rem;
-		border-radius: 1.5rem;
+		border-radius: var(--radius-2xl);
 		border: 1px solid var(--surface-border);
 		background: color-mix(in srgb, var(--surface-bg) 90%, transparent);
 		backdrop-filter: blur(24px);
@@ -171,14 +171,14 @@
 	.nf-cat {
 		width: 100%;
 		max-width: 20rem;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		margin: 0 auto 1.5rem;
 		display: block;
 		object-fit: cover;
 	}
 
 	.nf-title {
-		font-size: 1.125rem;
+		font-size: var(--text-title-3);
 		font-weight: 600;
 		color: var(--center-channel-color);
 		margin-bottom: 1.5rem;

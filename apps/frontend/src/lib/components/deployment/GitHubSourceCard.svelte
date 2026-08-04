@@ -513,11 +513,12 @@
 		gap: 0.5rem;
 		min-width: 0;
 		color: var(--text-default);
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 	}
 
 	.src-repo {
-		font-weight: 500;
+		font-weight: 600;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -532,7 +533,8 @@
 
 	.src-detail {
 		font-family: var(--font-mono, monospace);
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--text-muted);
 		white-space: nowrap;
 		overflow: hidden;
@@ -554,7 +556,8 @@
 	}
 
 	.src-note {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--text-muted);
 		margin: 0;
 	}
@@ -568,22 +571,23 @@
 		align-items: center;
 		gap: 0.5rem;
 		width: 100%;
-		padding: 0.625rem 2.25rem 0.625rem 0.875rem;
-		border-radius: 0.5rem;
+		padding: 0.75rem 2.25rem 0.75rem 0.875rem;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--border-default);
 		background-color: var(--bg-surface);
 		color: var(--text-default);
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
 		line-height: 1.5;
 		text-align: left;
 		cursor: pointer;
 		transition:
-			border-color 150ms ease,
-			box-shadow 150ms ease;
+			border-color var(--dur-fast) ease,
+			box-shadow var(--dur-fast) ease;
 	}
 
 	.src-picker-trigger:focus-visible {
-		outline: none;
+		outline: var(--focus-ring-width) solid var(--focus-ring-color);
+		outline-offset: var(--focus-ring-offset);
 		border-color: var(--accent);
 		box-shadow: 0 0 0 3px var(--focus-ring);
 	}
@@ -622,7 +626,7 @@
 
 	.src-picker-chevron {
 		pointer-events: none;
-		transition: transform 150ms ease;
+		transition: transform var(--dur-fast) ease;
 	}
 
 	.src-picker-chevron--open {
@@ -643,15 +647,16 @@
 		align-items: center;
 		gap: 0.5rem;
 		width: 100%;
-		border-radius: 0.5rem;
-		padding: 0.4375rem 0.75rem;
+		border-radius: var(--radius-sm);
+		padding: 0.5rem 0.75rem;
 		text-align: left;
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		border: none;
 		background: none;
 		color: var(--text-default);
 		cursor: pointer;
-		transition: background-color 0.1s;
+		transition: background-color var(--dur-fast);
 	}
 
 	.src-picker-option:hover {
@@ -670,8 +675,9 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.625rem 0.75rem;
-		font-size: 0.75rem;
+		padding: 0.75rem 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--text-muted);
 	}
 </style>

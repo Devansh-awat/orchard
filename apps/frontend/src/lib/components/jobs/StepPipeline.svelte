@@ -41,7 +41,7 @@
 			class="job-pipeline-step"
 			class:job-pipeline-step--last={i === steps.length - 1}
 			class:job-pipeline-step--done={segmentDone(step)}
-			{@attach motionStagger({ index: i, stride: 0.05, from: { y: 10, opacity: 0 } })}
+			{@attach motionStagger({ index: i, from: { y: 10, opacity: 0 } })}
 		>
 			<span class="job-node-tag">
 				<Icon size={11} />

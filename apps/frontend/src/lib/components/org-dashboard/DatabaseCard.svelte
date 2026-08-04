@@ -1,7 +1,7 @@
 <script lang="ts">
-	import { springHover, cardTilt } from '$lib/utils/motion.svelte';
+	import { springHover, stateEcho } from '$lib/utils/motion.svelte';
 	import { IMG_ICONS, timeAgo } from './helpers.svelte';
-	import { resourceStatus } from '$lib/components/ui';
+	import { resourceStatus, RemoteImg } from '$lib/components/ui';
 	import type { DatabaseSummary } from './types';
 
 	let {
@@ -18,12 +18,12 @@
 
 <a
 	href="/{orgSlug}/databases/{db.id}"
-	class="dash-card"
-	{@attach springHover({ lift: -3, stiffness: 360, damping: 22 })}
-	{@attach cardTilt({ max: 4 })}
+	class="dash-card motion-echo echo--{m.kind}"
+	{@attach springHover({ lift: -3 })}
+	{@attach stateEcho(() => m.kind)}
 >
 	<div class="card-top">
-		<img src={dbIcon} alt="" class="card-ic" />
+		<RemoteImg src={dbIcon} class="card-ic" />
 		<div class="card-text">
 			<span class="card-name">{db.name}</span>
 			<span class="card-sub">{db.dbName}</span>

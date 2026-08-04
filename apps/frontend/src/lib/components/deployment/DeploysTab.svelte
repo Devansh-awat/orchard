@@ -110,9 +110,9 @@
 	}
 	.dt-section {
 		border: 1px solid var(--surface-border);
-		border-radius: 0.875rem;
+		border-radius: var(--radius-lg);
 		background-color: var(--surface-bg);
-		box-shadow: 0 1px 3px rgb(0 0 0 / 0.03);
+		box-shadow: var(--elev-1);
 		overflow: hidden;
 	}
 	.dt-section-header {
@@ -126,7 +126,7 @@
 		cursor: pointer;
 		text-align: left;
 		color: var(--center-channel-color);
-		transition: background-color 120ms;
+		transition: background-color var(--dur-fast);
 	}
 	.dt-section-header:hover {
 		background-color: color-mix(in srgb, var(--center-channel-color) 2%, transparent);
@@ -137,7 +137,7 @@
 		justify-content: center;
 		width: 2rem;
 		height: 2rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		flex-shrink: 0;
 		background-color: color-mix(in srgb, var(--button-bg) 10%, transparent);
 		color: var(--button-bg);
@@ -147,7 +147,7 @@
 		min-width: 0;
 	}
 	.dt-section-title {
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
 		font-weight: 600;
 		margin: 0;
 		line-height: 1.3;
@@ -157,7 +157,7 @@
 		height: 1rem;
 		color: var(--surface-muted);
 		flex-shrink: 0;
-		transition: transform 200ms ease;
+		transition: transform var(--dur-base) ease;
 	}
 	.dt-chevron--closed {
 		transform: rotate(-90deg);

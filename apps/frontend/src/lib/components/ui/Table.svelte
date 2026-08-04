@@ -84,11 +84,12 @@
 		display: grid;
 		gap: 1rem;
 		align-items: center;
-		padding: 0.375rem 0.75rem;
+		padding: 0.5rem 0.75rem;
 	}
 
 	.ui-table-head-cell {
-		font-size: 0.65625rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
@@ -104,8 +105,8 @@
 		display: grid;
 		gap: 1rem;
 		align-items: center;
-		padding: 0.625rem 0.75rem;
-		border-radius: 0.625rem;
+		padding: 0.75rem 0.75rem;
+		border-radius: var(--radius-md);
 		color: inherit;
 		font: inherit;
 		text-align: start;
@@ -113,7 +114,7 @@
 		background: none;
 		border: none;
 		min-width: 0;
-		transition: background-color 120ms ease;
+		transition: background-color var(--dur-fast) ease;
 	}
 
 	a.ui-table-row,

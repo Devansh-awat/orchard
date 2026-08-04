@@ -34,7 +34,7 @@
 		class="ic-disconnect"
 		onmouseenter={() => (btnHovered = true)}
 		onmouseleave={() => (btnHovered = false)}
-		{@attach springHover({ lift: -1, stiffness: 400, damping: 26 })}
+		{@attach springHover({ lift: -1 })}
 	>
 		{#if disconnecting}<Loader2 class="h-3.5 w-3.5 animate-spin" />{:else}<span class="ic-icon-wrap"
 				><Unplug size={14} animate={btnHovered} /></span
@@ -48,45 +48,47 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 1rem;
-		padding: 0.75rem 1rem;
-		border-radius: 0.625rem;
-		background-color: color-mix(in srgb, var(--center-channel-color) 2%, transparent);
+		gap: var(--space-4);
+		padding: var(--space-3) var(--space-4);
+		border-radius: var(--radius-md);
+		background-color: var(--fill-quiet);
 	}
 	.ic-info {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		color: var(--center-channel-color);
+		gap: var(--space-2);
+		color: var(--text-default);
 	}
 	.ic-icon {
 		display: flex;
 		align-items: center;
-		color: var(--surface-muted);
+		color: var(--text-muted);
 	}
 	.ic-name {
-		font-size: 0.875rem;
-		font-weight: 550;
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
+		font-weight: 600;
 		font-family: var(--font-mono);
 	}
 	.ic-disconnect {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
-		padding: 0.4375rem 0.875rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		font-weight: 550;
+		gap: 0.5rem;
+		padding: 0.5rem 0.875rem;
+		border-radius: var(--radius-sm);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		font-weight: 600;
 		border: none;
 		cursor: pointer;
-		transition: all 120ms;
+		transition: background-color var(--dur-fast);
 		white-space: nowrap;
 		flex-shrink: 0;
-		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
-		color: var(--error-text-color);
+		background-color: color-mix(in srgb, var(--status-error) 10%, transparent);
+		color: var(--status-error);
 	}
 	.ic-disconnect:hover:not(:disabled) {
-		background-color: color-mix(in srgb, var(--error-text-color) 16%, transparent);
+		background-color: color-mix(in srgb, var(--status-error) 16%, transparent);
 	}
 	.ic-disconnect:disabled {
 		opacity: 0.5;

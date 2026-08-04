@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Loader2, Fingerprint } from 'lucide-svelte';
 	import { KeyRound, Pencil, Trash2, Check, X, Plus } from '@jis3r/icons';
-	import { Button } from '$lib/components/ui';
+	import { Alert, Button, EmptyState, Skeleton } from '$lib/components/ui';
 	import SettingsSection from './SettingsSection.svelte';
 	import IconButton from './IconButton.svelte';
 
@@ -62,7 +62,6 @@
 	{index}
 	title="Passkeys"
 	description="Sign in with Touch ID, Face ID, or Windows Hello"
-	iconColor="primary"
 >
 	{#snippet icon(hovered)}<KeyRound size={18} animate={hovered} />{/snippet}
 	{#snippet badge()}
@@ -72,15 +71,27 @@
 	{/snippet}
 
 	{#if passkeyEnvWarning}
-		<div class="pk-warning">{passkeyEnvWarning}</div>
+		<div class="pk-alert"><Alert tone="warning">{passkeyEnvWarning}</Alert></div>
 	{/if}
 
 	{#if passkeyListError}
-		<div class="pk-error">{passkeyListError}</div>
+		<div class="pk-alert"><Alert tone="error">{passkeyListError}</Alert></div>
 	{/if}
 
 	{#if passkeysLoading}
-		<div class="pk-loading"><Loader2 class="h-4 w-4 animate-spin" /></div>
+		<div class="pk-loading">
+			{#each [0, 1] as row (row)}
+				<div class="pk-loading-row">
+					<div class="pk-loading-dot">
+						<Skeleton width="0.5rem" height="0.5rem" rounded="var(--radius-pill)" />
+					</div>
+					<div class="pk-loading-lines">
+						<Skeleton width="7.5rem" height="0.875rem" rounded="var(--radius-xs)" />
+						<Skeleton width="12rem" height="0.6875rem" rounded="var(--radius-xs)" />
+					</div>
+				</div>
+			{/each}
+		</div>
 	{:else}
 		{#if passkeys.length > 0}
 			<div class="pk-list">
@@ -134,8 +145,22 @@
 					</div>
 				{/each}
 			</div>
-		{:else}
-			<p class="pk-empty">No passkeys yet. Add one to skip email codes when signing in.</p>
+		{:else if !showAddPasskey}
+			<EmptyState
+				title="No passkeys yet"
+				description="Add one to skip email codes when signing in."
+			>
+				{#snippet icon()}<Fingerprint size={22} />{/snippet}
+				<button
+					class="pk-add-btn"
+					onclick={() => (showAddPasskey = true)}
+					onmouseenter={() => (addBtnHovered = true)}
+					onmouseleave={() => (addBtnHovered = false)}
+				>
+					<Plus size={14} animate={addBtnHovered} />
+					Add passkey
+				</button>
+			</EmptyState>
 		{/if}
 
 		{#if showAddPasskey}
@@ -158,7 +183,7 @@
 					}}>Cancel</Button
 				>
 			</div>
-		{:else}
+		{:else if passkeys.length > 0}
 			<button
 				class="pk-add-btn"
 				onclick={() => (showAddPasskey = true)}
@@ -179,35 +204,36 @@
 		justify-content: center;
 		min-width: 1.25rem;
 		height: 1.25rem;
-		padding: 0 0.375rem;
-		border-radius: 2rem;
-		font-size: 0.6875rem;
-		font-weight: 650;
-		background-color: color-mix(in srgb, var(--button-bg) 10%, transparent);
-		color: var(--button-bg);
+		padding: 0 0.5rem;
+		border-radius: var(--radius-pill);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+		background-color: var(--accent-subtle);
+		color: var(--accent);
+	}
+	.pk-alert {
+		margin-bottom: var(--space-3);
 	}
 	.pk-loading {
 		display: flex;
-		align-items: center;
-		justify-content: center;
-		padding: 1.5rem 0;
-		color: var(--surface-muted);
+		flex-direction: column;
+		gap: var(--space-4);
+		padding: var(--space-3) 0;
 	}
-	.pk-warning {
-		padding: 0.625rem 0.875rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		background-color: color-mix(in srgb, var(--warning-text) 8%, transparent);
-		color: var(--warning-text);
-		border: 1px solid color-mix(in srgb, var(--warning-text) 20%, transparent);
+	.pk-loading-row {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-3);
 	}
-	.pk-error {
-		padding: 0.625rem 0.875rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		background-color: color-mix(in srgb, var(--error-text-color) 8%, transparent);
-		color: var(--error-text-color);
-		border: 1px solid color-mix(in srgb, var(--error-text-color) 20%, transparent);
+	.pk-loading-dot {
+		flex-shrink: 0;
+		margin-top: 0.5rem;
+	}
+	.pk-loading-lines {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
 	}
 	.pk-list {
 		display: flex;
@@ -216,19 +242,19 @@
 	.pk-item {
 		display: flex;
 		align-items: flex-start;
-		gap: 0.75rem;
+		gap: var(--space-3);
 		padding: 0.875rem 0;
 	}
 	.pk-item + .pk-item {
-		border-top: 1px solid color-mix(in srgb, var(--surface-border) 40%, transparent);
+		border-top: 1px solid var(--rule);
 	}
 	.pk-dot {
 		width: 0.5rem;
 		height: 0.5rem;
-		border-radius: 50%;
-		background-color: var(--button-bg);
+		border-radius: var(--radius-pill);
+		background-color: var(--accent);
 		flex-shrink: 0;
-		margin-top: 0.4375rem;
+		margin-top: 0.5rem;
 		opacity: 0.6;
 	}
 	.pk-body {
@@ -239,18 +265,21 @@
 		gap: 0.125rem;
 	}
 	.pk-name {
-		font-size: 0.875rem;
-		font-weight: 550;
-		color: var(--center-channel-color);
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
+		font-weight: 600;
+		color: var(--text-default);
 	}
 	.pk-meta {
-		font-size: 0.6875rem;
-		color: var(--surface-muted);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+		color: var(--text-muted);
 	}
 	.pk-edit-row {
 		display: flex;
 		align-items: center;
-		gap: 0.25rem;
+		gap: var(--space-1);
 	}
 	.pk-actions {
 		display: flex;
@@ -259,13 +288,13 @@
 		margin-top: 0.125rem;
 	}
 	.pk-input {
-		padding: 0.3125rem 0.5rem;
-		font-size: 0.8125rem;
-		border: 1px solid var(--sidebar-text-active-border);
-		border-radius: 0.375rem;
-		background-color: var(--surface-bg);
-		color: var(--center-channel-color);
-		box-shadow: 0 0 0 2px color-mix(in srgb, var(--sidebar-text-active-border) 10%, transparent);
+		padding: 0.3125rem var(--space-2);
+		font-size: var(--text-callout);
+		border: 1px solid var(--accent);
+		border-radius: var(--radius-xs);
+		background-color: var(--bg-surface);
+		color: var(--text-default);
+		box-shadow: 0 0 0 2px var(--accent-subtle);
 		line-height: 1.5;
 	}
 	.pk-input:focus {
@@ -278,30 +307,25 @@
 	}
 	.pk-add-row {
 		display: flex;
-		gap: 0.5rem;
+		gap: var(--space-2);
 		align-items: center;
 	}
 	.pk-add-btn {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
-		font-size: 0.8125rem;
-		font-weight: 550;
-		color: var(--button-bg);
+		gap: 0.5rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		font-weight: 600;
+		color: var(--accent);
 		background: none;
 		border: none;
 		cursor: pointer;
-		padding: 0.25rem 0;
-		transition: opacity 120ms;
+		padding: var(--space-1) 0;
+		transition: opacity var(--dur-fast);
 	}
 	.pk-add-btn:hover {
 		opacity: 0.75;
-	}
-	.pk-empty {
-		font-size: 0.8125rem;
-		color: var(--surface-muted);
-		padding: 0.5rem 0;
-		margin: 0;
 	}
 	.pk-add-row :global(.btn) {
 		flex-shrink: 0;

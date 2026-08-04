@@ -14,6 +14,7 @@
 		Search
 	} from 'lucide-svelte';
 	import Breadcrumb from '$lib/components/Breadcrumb.svelte';
+	import { Badge, SectionHeader } from '$lib/components/ui';
 
 	const orgSlug = $derived($page.params.orgSlug);
 	const selectedOrgId = $derived($selectedOrganization?.id ?? '');
@@ -73,19 +74,15 @@
 		}
 	];
 
-	function getCategoryColor(category?: string) {
-		switch (category) {
-			case 'cms':
-				return '#8b5cf6';
-			case 'backend':
-				return '#3b82f6';
-			case 'frontend':
-				return '#22c55e';
-			case 'database':
-				return '#f59e0b';
-			default:
-				return 'var(--surface-muted)';
-		}
+	const CATEGORY_LABELS: Record<string, string> = {
+		cms: 'CMS',
+		backend: 'Backend',
+		frontend: 'Frontend',
+		database: 'Database'
+	};
+
+	function formatCategory(category: string) {
+		return CATEGORY_LABELS[category] ?? category.charAt(0).toUpperCase() + category.slice(1);
 	}
 
 	function getIconForTemplate(icon?: string) {
@@ -234,7 +231,7 @@
 				<div class="nr-type-card nr-type-skeleton">
 					<div
 						class="skeleton"
-						style="width: 2.25rem; height: 2.25rem; border-radius: 0.5rem; flex-shrink: 0;"
+						style="width: 2.25rem; height: 2.25rem; border-radius: var(--radius-sm); flex-shrink: 0;"
 					></div>
 					<div style="flex: 1; display: flex; flex-direction: column; gap: 0.25rem;">
 						<div class="skeleton" style="height: 0.8125rem; width: 60%;"></div>
@@ -253,16 +250,13 @@
 					disabled={navigating}
 					onclick={() => selectResourceAndGo(opt.id)}
 				>
-					<div
-						class="nr-type-icon"
-						style="background: color-mix(in srgb, {opt.color} 12%, transparent);"
-					>
-						<Icon size={18} style="color: {opt.color}" />
+					<div class="nr-type-icon">
+						<Icon size={18} />
 					</div>
 					<div class="nr-type-text">
 						<span class="nr-type-label">
 							{opt.label}
-							{#if opt.recommended}<span class="nr-type-badge">Fastest</span>{/if}
+							{#if opt.recommended}<Badge tone="info">Fastest</Badge>{/if}
 						</span>
 						<span class="nr-type-desc">{opt.desc}</span>
 					</div>
@@ -280,7 +274,7 @@
 		{#if templates.length > 0}
 			<div class="nr-tpl-section">
 				<div class="nr-tpl-header">
-					<h2 class="nr-section-label">Templates</h2>
+					<SectionHeader title="Templates" count={templates.length} flush />
 					{#if templates.length > 6}
 						<div class="nr-tpl-search-wrap">
 							<Search size={14} class="nr-tpl-search-icon" />
@@ -300,17 +294,13 @@
 					<div class="nr-tpl-grid">
 						{#each filteredTemplates as template (template.id)}
 							{@const Icon = getIconForTemplate(template.icon)}
-							{@const color = getCategoryColor(template.category)}
 							<button
 								class="nr-tpl-card"
 								disabled={navigating}
 								onclick={() => deployTemplate(template.id)}
 							>
-								<div
-									class="nr-tpl-icon"
-									style="background: color-mix(in srgb, {color} 12%, transparent);"
-								>
-									<Icon size={16} style="color: {color}" />
+								<div class="nr-tpl-icon">
+									<Icon size={16} />
 								</div>
 								<div class="nr-tpl-text">
 									<span class="nr-tpl-name">{template.displayName}</span>
@@ -319,12 +309,7 @@
 									{/if}
 								</div>
 								{#if template.category}
-									<span
-										class="nr-tpl-badge"
-										style="background: color-mix(in srgb, {color} 12%, transparent); color: {color};"
-									>
-										{template.category}
-									</span>
+									<span class="nr-tpl-badge">{formatCategory(template.category)}</span>
 								{/if}
 							</button>
 						{/each}
@@ -347,7 +332,8 @@
 	}
 
 	.nr-title {
-		font-size: 1.375rem;
+		font-size: var(--text-title-2);
+		line-height: var(--lh-title-2);
 		font-weight: 700;
 		color: var(--center-channel-color);
 		margin: 0;
@@ -355,31 +341,39 @@
 	}
 
 	.nr-subtitle {
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		color: var(--surface-muted);
-		margin: 0.375rem 0 0;
+		margin: 0.5rem 0 0;
 	}
 
 	/* Resource type grid */
 	.nr-type-grid {
 		display: grid;
-		grid-template-columns: repeat(2, 1fr);
-		gap: 0.5rem;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--space-3);
+		align-items: stretch;
+	}
+	@media (max-width: 720px) {
+		.nr-type-grid {
+			grid-template-columns: minmax(0, 1fr);
+		}
 	}
 
 	.nr-type-card {
 		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 1rem 1.125rem;
-		border-radius: 0.75rem;
+		align-items: flex-start;
+		gap: var(--space-3);
+		padding: var(--space-4);
+		border-radius: var(--radius-lg);
 		text-align: left;
-		border: 1px solid var(--surface-border);
-		background: var(--center-channel-bg);
+		border: 1px solid var(--border-default);
+		background-color: var(--bg-raised);
+		box-shadow: var(--elev-1);
 		cursor: pointer;
 		transition:
-			border-color 0.15s,
-			box-shadow 0.15s;
+			border-color var(--dur-fast),
+			box-shadow var(--dur-fast);
 	}
 
 	.nr-type-card:hover:not(:disabled) {
@@ -404,11 +398,13 @@
 	.nr-type-icon {
 		width: 2.25rem;
 		height: 2.25rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-md);
 		flex-shrink: 0;
 		display: flex;
 		align-items: center;
 		justify-content: center;
+		background-color: var(--fill-soft);
+		color: var(--text-default);
 	}
 
 	.nr-type-text {
@@ -420,17 +416,19 @@
 	}
 
 	.nr-type-label {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		color: var(--center-channel-color);
 	}
 
 	.nr-type-badge {
 		display: inline-block;
-		margin-left: 0.375rem;
-		padding: 0.0625rem 0.375rem;
-		border-radius: 9999px;
-		font-size: 0.625rem;
+		margin-left: 0.5rem;
+		padding: 0.0625rem 0.5rem;
+		border-radius: var(--radius-pill);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
@@ -439,7 +437,8 @@
 	}
 
 	.nr-type-desc {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 	}
 
@@ -458,7 +457,8 @@
 	}
 
 	.nr-section-label {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
@@ -480,12 +480,13 @@
 	}
 
 	.nr-tpl-search {
-		padding: 0.3125rem 0.625rem 0.3125rem 1.75rem;
-		border-radius: 0.375rem;
+		padding: 0.3125rem 0.75rem 0.3125rem 1.75rem;
+		border-radius: var(--radius-xs);
 		border: 1px solid var(--surface-border);
 		background-color: var(--center-channel-bg);
 		color: var(--center-channel-color);
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		width: 12rem;
 	}
 
@@ -506,16 +507,16 @@
 
 	.nr-tpl-card {
 		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-		padding: 0.625rem 0.75rem;
-		border: 1px solid transparent;
-		border-radius: 0.5rem;
-		background: none;
+		align-items: flex-start;
+		gap: var(--space-3);
+		padding: var(--space-3);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-lg);
+		background-color: var(--bg-raised);
 		cursor: pointer;
 		transition:
-			background-color 0.12s,
-			border-color 0.12s;
+			background-color var(--dur-fast),
+			border-color var(--dur-fast);
 		text-align: left;
 		width: 100%;
 	}
@@ -531,9 +532,11 @@
 	}
 
 	.nr-tpl-icon {
+		background-color: var(--fill-soft);
+		color: var(--text-default);
 		width: 2rem;
 		height: 2rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		flex-shrink: 0;
 		display: flex;
 		align-items: center;
@@ -549,30 +552,38 @@
 	}
 
 	.nr-tpl-name {
-		font-size: 0.8125rem;
-		font-weight: 500;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
 		color: var(--center-channel-color);
 	}
 
 	.nr-tpl-desc {
-		font-size: 0.6875rem;
-		color: var(--surface-muted);
-		white-space: nowrap;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		-webkit-box-orient: vertical;
+		white-space: normal;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		color: var(--text-muted);
 		overflow: hidden;
-		text-overflow: ellipsis;
 	}
 
 	.nr-tpl-badge {
-		font-size: 0.625rem;
-		font-weight: 500;
-		padding: 0.0625rem 0.375rem;
-		border-radius: 9999px;
-		text-transform: capitalize;
 		flex-shrink: 0;
+		align-self: center;
+		padding: 0.125rem 0.5rem;
+		border-radius: var(--radius-pill);
+		background-color: var(--fill-soft);
+		color: var(--text-muted);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
 	}
 
 	.nr-tpl-empty {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 		text-align: center;
 		padding: 1rem 0;

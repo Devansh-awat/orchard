@@ -83,16 +83,16 @@
 		return false;
 	}
 
-	function motionStagger(index: number, stride = 0.03) {
-		return motionStaggerBase({ index, stride, from: { y: 4, opacity: 0, scale: 1 } });
+	function motionStagger(index: number, stride?: number) {
+		return motionStaggerBase({ index, stride, from: { y: 4, opacity: 0 } });
 	}
 
-	function springHover(opts: { lift?: number; stiffness?: number; damping?: number } = {}) {
+	function springHover(opts: { lift?: number } = {}) {
 		return springHoverBase({ lift: -1, forwardIconHover: true, ...opts });
 	}
 
 	function springRotate(active: () => boolean, on = 180) {
-		return springRotateBase(active, { rest: 0, on, damping: 24 });
+		return springRotateBase(active, { rest: 0, on });
 	}
 </script>
 
@@ -175,8 +175,6 @@
 			style:transform-origin="bottom left"
 			{@attach motionPopover({
 				from: { y: 8, scale: 0.96 },
-				stiffness: 540,
-				damping: 30,
 				closing: () => !open,
 				onClosed: () => {
 					render = false;
@@ -327,12 +325,12 @@
 		width: 2.25rem;
 		height: 2.25rem;
 		padding: 0;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		background-color: transparent;
 		color: var(--sidebar-text);
 		transition:
-			background-color 120ms ease,
-			box-shadow 120ms ease;
+			background-color var(--dur-fast) ease,
+			box-shadow var(--dur-fast) ease;
 		cursor: pointer;
 	}
 	.user-menu-trigger-collapsed:hover {
@@ -361,7 +359,7 @@
 	.user-menu-trigger {
 		background-color: transparent;
 		color: var(--sidebar-text);
-		transition: background-color 150ms ease;
+		transition: background-color var(--dur-fast) ease;
 	}
 
 	.user-menu-trigger:hover {
@@ -374,7 +372,7 @@
 		justify-content: center;
 		width: 2rem;
 		height: 2rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		flex-shrink: 0;
 		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 15%, transparent);
 		color: var(--sidebar-text-active-border);
@@ -398,7 +396,7 @@
 
 	.user-menu-chevron {
 		color: color-mix(in srgb, var(--sidebar-text) 45%, transparent);
-		transition: transform 200ms ease;
+		transition: transform var(--dur-base) ease;
 	}
 
 	.user-menu-chevron.is-open {
@@ -428,7 +426,7 @@
 	.user-menu-profile-avatar {
 		width: 2.25rem;
 		height: 2.25rem;
-		border-radius: 0.625rem;
+		border-radius: var(--radius-md);
 		object-fit: cover;
 		flex-shrink: 0;
 	}
@@ -439,7 +437,7 @@
 		justify-content: center;
 		width: 2.25rem;
 		height: 2.25rem;
-		border-radius: 0.625rem;
+		border-radius: var(--radius-md);
 		flex-shrink: 0;
 		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
 		color: var(--sidebar-text-active-border);
@@ -457,14 +455,14 @@
 	}
 
 	.user-menu-section {
-		padding: 0.375rem 0;
+		padding: 0.5rem 0;
 	}
 
 	.user-menu-theme-group {
 		display: flex;
 		gap: 0.125rem;
 		background-color: color-mix(in srgb, var(--center-channel-color) 6%, transparent);
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		padding: 0.125rem;
 		min-width: 0;
 		width: 100%;
@@ -479,14 +477,15 @@
 		justify-content: center;
 		gap: 0.25rem;
 		padding: 0.25rem 0;
-		border-radius: 0.25rem;
-		font-size: 0.6875rem;
-		font-weight: 500;
+		border-radius: var(--radius-xs);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
 		color: var(--surface-muted);
 		background: transparent;
 		transition:
-			background-color 150ms ease,
-			color 150ms ease;
+			background-color var(--dur-fast) ease,
+			color var(--dur-fast) ease;
 	}
 
 	.user-menu-theme-btn:hover {
@@ -513,11 +512,12 @@
 		align-items: center;
 		gap: 0.5rem;
 		padding: 0.5rem;
-		font-size: 0.875rem;
-		border-radius: 0.5rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		border-radius: var(--radius-sm);
 		color: var(--center-channel-color);
 		background: transparent;
-		transition: background-color 120ms ease;
+		transition: background-color var(--dur-fast) ease;
 	}
 
 	.user-menu-item:hover {
@@ -534,7 +534,7 @@
 
 	.user-menu-item.user-menu-item--highlight {
 		color: var(--button-bg);
-		font-weight: 550;
+		font-weight: 600;
 	}
 
 	.user-menu-item.user-menu-item--highlight:hover {
@@ -591,10 +591,10 @@
 		height: 2.25rem;
 		align-items: center;
 		justify-content: center;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		background-color: var(--sidebar-text-hover-bg);
 		color: var(--sidebar-text);
-		transition: background-color 120ms ease;
+		transition: background-color var(--dur-fast) ease;
 	}
 	.sidebar-footer-avatar:hover {
 		background-color: var(--sidebar-text-active-bg);

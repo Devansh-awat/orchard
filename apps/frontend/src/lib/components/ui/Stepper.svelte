@@ -53,7 +53,7 @@
 		align-items: stretch;
 		height: 2rem;
 		border: 1px solid var(--border-default);
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		background: var(--bg-raised);
 		overflow: hidden;
 	}
@@ -68,8 +68,8 @@
 		color: var(--text-muted);
 		cursor: pointer;
 		transition:
-			background-color 0.15s ease,
-			color 0.15s ease;
+			background-color var(--dur-fast) ease,
+			color var(--dur-fast) ease;
 	}
 
 	.stepper-btn:hover:not(:disabled) {
@@ -94,7 +94,8 @@
 		border-right: 1px solid var(--border-default);
 		background: transparent;
 		color: var(--text-default);
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		font-variant-numeric: tabular-nums;
 		text-align: center;

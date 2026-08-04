@@ -1,7 +1,13 @@
 <script lang="ts">
 	import { onDestroy, untrack } from 'svelte';
 	import { browser } from '$app/environment';
+	import { page } from '$app/stores';
 	import { apiFetch, selectedOrganization, subscribeOrgEvents } from '$lib/stores';
+	import {
+		demoResourceSeries,
+		demoResourceSeriesByPod,
+		demoHttpMetrics
+	} from '$lib/utils/observe-demo';
 	import { METRIC_COLORS_LIGHT, METRIC_COLORS_DARK, type MetricId } from '$lib/utils/metric-colors';
 	import {
 		Activity,
@@ -16,8 +22,28 @@
 		CalendarRange
 	} from 'lucide-svelte';
 
-	type Props = { kind: 'deployment' | 'database'; id: string | null; active?: boolean };
-	const { kind, id: entityId, active = true }: Props = $props();
+	type Props = {
+		kind: 'deployment' | 'database';
+		id: string | null;
+		active?: boolean;
+		showTitle?: boolean;
+		showHeader?: boolean;
+		source?: 'resources' | 'http';
+		windowMs?: number;
+		paused?: boolean;
+		groupBy?: 'none' | 'pod';
+	};
+	let {
+		kind,
+		id: entityId,
+		active = true,
+		showTitle = true,
+		showHeader = true,
+		source = 'resources',
+		windowMs = $bindable(60 * 60 * 1000),
+		paused = $bindable(false),
+		groupBy = $bindable<'none' | 'pod'>('none')
+	}: Props = $props();
 
 	type QuickRange = {
 		id: '5m' | '15m' | '30m' | '1h' | '6h' | '24h' | '7d';
@@ -45,13 +71,47 @@
 		return 30 * 60_000; // 7d+: 30m
 	}
 
-	let windowMs = $state<number>(60 * 60 * 1000);
-	let paused = $state(false);
 	let customStart = $state<number | null>(null);
 	let customEnd = $state<number | null>(null);
 	let now = $state(Date.now());
 	let expandedCardId = $state<'cpu' | 'mem' | 'rx' | 'tx' | null>(null);
 	let crosshairX = $state<number | null>(null);
+	let hoveringChart = $state(false);
+	let grouped = $state<Record<MetricId, { key: string; points: Series }[]>>({
+		cpu: [],
+		mem: [],
+		rx: [],
+		tx: []
+	});
+	const GROUP_HUES = [
+		'--hue-blue',
+		'--hue-amber',
+		'--hue-violet',
+		'--hue-emerald',
+		'--hue-pink',
+		'--hue-slate'
+	];
+	function groupColor(i: number): string {
+		if (typeof window === 'undefined') return '';
+		const root = getComputedStyle(document.documentElement);
+		return (
+			root.getPropertyValue(GROUP_HUES[i % GROUP_HUES.length]).trim() ||
+			root.getPropertyValue('--hue-slate').trim()
+		);
+	}
+	const podKeys = $derived(
+		[...new Set(Object.values(grouped).flatMap((g) => g.map((s) => s.key)))].sort()
+	);
+	const canGroup = $derived(kind === 'deployment' && source === 'resources');
+	let brushFrom = $state<number | null>(null);
+	let brushTo = $state<number | null>(null);
+	let brushEl = $state<HTMLDivElement | null>(null);
+	let brushDrag: {
+		mode: 'move' | 'from' | 'to' | 'new';
+		originX: number;
+		from: number;
+		to: number;
+	} | null = null;
 	let Line: any = $state(null);
 	let chartReady = $state(false);
 	let showCustom = $state(false);
@@ -91,7 +151,7 @@
 
 	let tip = $state<{ id: MetricId; x: number; y: number } | null>(null);
 
-	const CARDS: MetricCard[] = [
+	const RESOURCE_CARDS: MetricCard[] = [
 		{
 			id: 'cpu',
 			label: 'CPU usage',
@@ -118,11 +178,48 @@
 		}
 	];
 
+	const HTTP_CARDS: MetricCard[] = [
+		{
+			id: 'req',
+			label: 'Requests',
+			icon: Activity,
+			formatter: (v) => `${v.toFixed(v >= 10 ? 0 : 1)}/s`
+		},
+		{ id: 'err', label: 'Error rate', icon: Activity, formatter: (v) => `${v.toFixed(2)}%` },
+		{
+			id: 'lat',
+			label: 'Avg latency',
+			icon: Activity,
+			formatter: (v) => (v >= 1000 ? `${(v / 1000).toFixed(2)} s` : `${v.toFixed(0)} ms`)
+		},
+		{
+			id: 'latmax',
+			label: 'Max latency',
+			icon: Activity,
+			formatter: (v) => (v >= 1000 ? `${(v / 1000).toFixed(2)} s` : `${v.toFixed(0)} ms`)
+		}
+	];
+
+	const CARDS = $derived(source === 'http' ? HTTP_CARDS : RESOURCE_CARDS);
+	let lastCardKey = '';
+	$effect(() => {
+		const key = CARDS.map((c) => c.id).join(',');
+		if (key === lastCardKey) return;
+		lastCardKey = key;
+		untrack(() => {
+			series = Object.fromEntries(CARDS.map((c) => [c.id, []])) as Record<MetricId, Series>;
+			grouped = Object.fromEntries(CARDS.map((c) => [c.id, []])) as any;
+		});
+	});
+	const EMPTY_SERIES = $derived(
+		Object.fromEntries(CARDS.map((c) => [c.id, []])) as Record<MetricId, Series>
+	);
+
 	const expandedCard = $derived(
 		expandedCardId ? (CARDS.find((c) => c.id === expandedCardId) ?? null) : null
 	);
 
-	let series = $state<Record<MetricCard['id'], Series>>({ cpu: [], mem: [], rx: [], tx: [] });
+	let series = $state<Record<MetricId, Series>>({ cpu: [], mem: [], rx: [], tx: [] } as any);
 	let initialLoading = $state(false);
 	let fetchError = $state<string | null>(null);
 	let fetchSeq = 0;
@@ -134,20 +231,78 @@
 		);
 	}
 
+	const demo = $derived($page.url.searchParams.has('demo'));
+
 	async function loadSeries(start: number, end: number, stepMs: number, id: string) {
 		if (!id || inFlight) return;
+		if (demo) {
+			if (source === 'http') {
+				const h = demoHttpMetrics(start, end, stepMs);
+				grouped = EMPTY_SERIES as any;
+				series = {
+					req: h.requestRate,
+					err: h.errorRate,
+					lat: h.latencyAvg,
+					latmax: h.latencyMax
+				} as Record<MetricId, Series>;
+				fetchError = null;
+				initialLoading = false;
+				return;
+			}
+			if (groupBy === 'pod') {
+				const g = demoResourceSeriesByPod(start, end, stepMs);
+				grouped = g;
+				series = {
+					cpu: mergeGrouped(g.cpu),
+					mem: mergeGrouped(g.mem),
+					rx: mergeGrouped(g.rx),
+					tx: mergeGrouped(g.tx)
+				};
+			} else {
+				grouped = { cpu: [], mem: [], rx: [], tx: [] };
+				series = demoResourceSeries(start, end, stepMs);
+			}
+			fetchError = null;
+			initialLoading = false;
+			return;
+		}
 		inFlight = true;
 		const seq = ++fetchSeq;
 		// Show the skeleton only on the first load — silently refresh after.
 		if (!hasData()) initialLoading = true;
 		try {
-			const res = await apiFetch(
-				`/apiv1/${kind === 'database' ? 'databases' : 'deployments'}/${encodeURIComponent(id)}/metrics?start=${start}&end=${end}&step=${stepMs}`
-			);
+			const groupParam = groupBy === 'pod' ? '&groupBy=pod' : '';
+			const url =
+				source === 'http'
+					? `/apiv1/observe/deployments/${encodeURIComponent(id)}/http-metrics?start=${start}&end=${end}&step=${stepMs}`
+					: `/apiv1/${kind === 'database' ? 'databases' : 'deployments'}/${encodeURIComponent(id)}/metrics?start=${start}&end=${end}&step=${stepMs}${groupParam}`;
+			const res = await apiFetch(url);
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
 			const body = await res.json();
 			if (seq !== fetchSeq) return;
-			series = body?.data ?? { cpu: [], mem: [], rx: [], tx: [] };
+			if (source === 'http') {
+				grouped = EMPTY_SERIES as any;
+				series = {
+					req: body?.requestRate ?? [],
+					err: body?.errorRate ?? [],
+					lat: body?.latencyAvg ?? [],
+					latmax: body?.latencyMax ?? []
+				} as Record<MetricId, Series>;
+				fetchError = null;
+				return;
+			}
+			if (body?.groupBy === 'pod' && body?.grouped) {
+				grouped = body.grouped;
+				series = {
+					cpu: mergeGrouped(body.grouped.cpu),
+					mem: mergeGrouped(body.grouped.mem),
+					rx: mergeGrouped(body.grouped.rx),
+					tx: mergeGrouped(body.grouped.tx)
+				};
+			} else {
+				grouped = { cpu: [], mem: [], rx: [], tx: [] };
+				series = body?.data ?? { cpu: [], mem: [], rx: [], tx: [] };
+			}
 			fetchError = null;
 		} catch (err) {
 			if (seq !== fetchSeq) return;
@@ -167,6 +322,7 @@
 		const end = windowEnd;
 		const s = step;
 		const id = entityId;
+		void groupBy;
 		if (!id || !active) return;
 		untrack(() => {
 			// A stale crosshair timestamp from a wider range falls outside
@@ -177,6 +333,18 @@
 			loadSeries(start, end, s, id);
 		});
 	});
+
+	function shortPod(name: string): string {
+		const parts = name.split('-');
+		return parts.length > 1 ? parts[parts.length - 1] : name;
+	}
+
+	function mergeGrouped(g: { key: string; points: Series }[] | undefined): Series {
+		if (!g?.length) return [];
+		const acc = new Map<number, number>();
+		for (const s of g) for (const p of s.points) acc.set(p.x, (acc.get(p.x) ?? 0) + p.y);
+		return [...acc.entries()].sort((a, b) => a[0] - b[0]).map(([x, y]) => ({ x, y }));
+	}
 
 	function summarize(s: Series) {
 		if (!s.length) return { current: 0, avg: 0, max: 0, p95: 0 };
@@ -190,12 +358,12 @@
 		};
 	}
 
-	const summaries = $derived({
-		cpu: summarize(series.cpu),
-		mem: summarize(series.mem),
-		rx: summarize(series.rx),
-		tx: summarize(series.tx)
-	});
+	const summaries = $derived(
+		Object.fromEntries(CARDS.map((c) => [c.id, summarize(series[c.id] ?? [])])) as Record<
+			MetricId,
+			ReturnType<typeof summarize>
+		>
+	);
 
 	// Cached diagonal-hatch CanvasPattern, regenerated when the stroke
 	// color changes (light/dark theme switches).
@@ -339,6 +507,7 @@
 		if (!isLive || !active) return;
 		// 15s matches the upstream scrape interval — no point refetching faster.
 		tickHandle = setInterval(() => {
+			if (hoveringChart || brushActive) return;
 			now = Date.now();
 		}, 15_000);
 		return () => {
@@ -359,10 +528,27 @@
 		if (!orgId || !id) return;
 		return subscribeOrgEvents(orgId, (ev) => {
 			if (ev.type === 'deployment.metrics' && ev.id === id) {
+				if (hoveringChart || brushActive) return;
 				now = Date.now();
 			}
 		});
 	});
+	// A pointer that leaves via tab switch or window blur never fires
+	// pointerleave, so the hover freeze would strand live updates. Re-arm on
+	// blur; the next pointermove sets it again.
+	$effect(() => {
+		if (!browser) return;
+		const release = () => {
+			hoveringChart = false;
+		};
+		window.addEventListener('blur', release);
+		document.addEventListener('visibilitychange', release);
+		return () => {
+			window.removeEventListener('blur', release);
+			document.removeEventListener('visibilitychange', release);
+		};
+	});
+
 	onDestroy(() => {
 		if (tickHandle) clearInterval(tickHandle);
 	});
@@ -373,7 +559,7 @@
 		stroke: string;
 	} {
 		const stroke = 'rgba(120,120,128,0.35)';
-		if (!s.length) return { dataMin: null, dataMax: null, stroke };
+		if (!s?.length) return { dataMin: null, dataMax: null, stroke };
 		return { dataMin: s[0].x, dataMax: s[s.length - 1].x, stroke };
 	}
 
@@ -390,10 +576,27 @@
 						g.addColorStop(1, col + '00');
 						return g;
 					};
+		const g = grouped[card.id];
+		if (groupBy === 'pod' && g?.length) {
+			return {
+				datasets: g.map((s, i) => ({
+					label: s.key,
+					data: s.points as any,
+					borderColor: groupColor(i),
+					backgroundColor: 'transparent',
+					borderWidth: 1.75,
+					pointRadius: 0,
+					pointHoverRadius: 0,
+					fill: false,
+					tension: 0.25,
+					spanGaps: true
+				}))
+			};
+		}
 		return {
 			datasets: [
 				{
-					data: series[card.id] as any,
+					data: (series[card.id] ?? []) as any,
 					borderColor: col,
 					backgroundColor,
 					borderWidth: style === 'gradient' ? 2 : 1.5,
@@ -407,7 +610,10 @@
 		};
 	}
 
-	function chartOptions(card: MetricCard, opts: { xTicks?: boolean; dense?: boolean } = {}) {
+	function chartOptions(
+		card: MetricCard,
+		opts: { xTicks?: boolean; dense?: boolean; mini?: boolean; from?: number; to?: number } = {}
+	) {
 		return {
 			responsive: true,
 			maintainAspectRatio: false,
@@ -419,35 +625,165 @@
 				legend: { display: false },
 				tooltip: { enabled: false },
 				decimation: { enabled: true, algorithm: 'lttb' as const, samples: 200 },
-				pendingRegions: pendingExtent(series[card.id])
+				pendingRegions: pendingExtent(series[card.id] ?? [])
 			},
 			scales: {
 				x: {
 					type: 'linear' as const,
-					min: windowStart,
-					max: windowEnd,
+					min: opts.from ?? windowStart,
+					max: opts.to ?? windowEnd,
 					ticks: {
-						display: opts.xTicks !== false,
+						display: !opts.mini && opts.xTicks !== false,
 						color: 'rgba(140,140,150,0.85)',
 						maxRotation: 0,
 						autoSkip: true,
 						maxTicksLimit: 6,
 						callback: (v: any) => formatTick(v as number)
 					},
-					grid: opts.dense ? { display: false } : { color: 'rgba(120,120,128,0.08)' }
+					grid: opts.dense || opts.mini ? { display: false } : { color: 'rgba(120,120,128,0.08)' }
 				},
 				y: {
 					beginAtZero: true,
 					ticks: {
+						display: !opts.mini,
 						color: 'rgba(140,140,150,0.85)',
 						maxTicksLimit: 4,
-						callback: (v: any) => card.formatter(v as number)
+						callback: (v: any, i: number, arr: any[]) => {
+							const label = card.formatter(v as number);
+							if (i > 0 && card.formatter(arr[i - 1].value as number) === label) return undefined;
+							return label;
+						}
 					},
-					grid: { color: 'rgba(120,120,128,0.08)' }
+					grid: opts.mini ? { display: false } : { color: 'rgba(120,120,128,0.08)' }
 				}
 			}
 		};
 	}
+
+	const viewFrom = $derived(brushFrom ?? windowStart);
+	const viewTo = $derived(brushTo ?? windowEnd);
+	const brushActive = $derived(brushFrom != null && brushTo != null);
+
+	function clipSeries(s: Series, from: number, to: number): Series {
+		if (!s?.length) return s ?? [];
+		return s.filter((p) => p.x >= from && p.x <= to);
+	}
+
+	function resetBrush() {
+		brushFrom = null;
+		brushTo = null;
+	}
+
+	function brushPlot(): { left: number; width: number } | null {
+		const el = brushEl;
+		if (!el) return null;
+		const canvas = el.querySelector('canvas') as HTMLCanvasElement | null;
+		const chart = canvas ? findChartFor(canvas) : null;
+		const track = el.getBoundingClientRect();
+		if (!chart?.chartArea || !canvas) return { left: 0, width: track.width };
+		const cr = canvas.getBoundingClientRect();
+		const offset = cr.left - track.left;
+		return {
+			left: offset + chart.chartArea.left,
+			width: Math.max(1, chart.chartArea.right - chart.chartArea.left)
+		};
+	}
+
+	function pxToTime(clientX: number): number {
+		const el = brushEl;
+		const plot = brushPlot();
+		if (!el || !plot) return windowStart;
+		const r = el.getBoundingClientRect();
+		const ratio = Math.min(1, Math.max(0, (clientX - r.left - plot.left) / plot.width));
+		return windowStart + ratio * (windowEnd - windowStart);
+	}
+
+	function timeToPct(t: number): number {
+		const span = windowEnd - windowStart;
+		if (span <= 0) return 0;
+		const plot = brushPlot();
+		const el = brushEl;
+		const ratio = (t - windowStart) / span;
+		if (!plot || !el) return ratio * 100;
+		const trackW = el.getBoundingClientRect().width || 1;
+		return ((plot.left + ratio * plot.width) / trackW) * 100;
+	}
+
+	const MIN_BRUSH_MS = 15_000;
+
+	function startBrush(e: PointerEvent, mode: 'move' | 'from' | 'to' | 'new') {
+		e.preventDefault();
+		e.stopPropagation();
+		try {
+			(e.currentTarget as HTMLElement).setPointerCapture?.(e.pointerId);
+		} catch {
+			/* pointer may not be active (synthetic events, cancelled gestures) */
+		}
+		const t = pxToTime(e.clientX);
+		if (mode === 'new') {
+			brushFrom = t;
+			brushTo = t;
+			brushDrag = { mode: 'to', originX: e.clientX, from: t, to: t };
+		} else {
+			brushDrag = {
+				mode,
+				originX: e.clientX,
+				from: brushFrom ?? windowStart,
+				to: brushTo ?? windowEnd
+			};
+		}
+	}
+
+	function moveBrush(e: PointerEvent) {
+		const d = brushDrag;
+		if (!d) return;
+		const t = pxToTime(e.clientX);
+		const span = windowEnd - windowStart;
+		if (d.mode === 'from') {
+			brushFrom = Math.min(t, (brushTo ?? windowEnd) - MIN_BRUSH_MS);
+		} else if (d.mode === 'to') {
+			brushTo = Math.max(t, (brushFrom ?? windowStart) + MIN_BRUSH_MS);
+		} else {
+			const deltaRatio = (e.clientX - d.originX) / (brushEl?.getBoundingClientRect().width || 1);
+			let nf = d.from + deltaRatio * span;
+			let nt = d.to + deltaRatio * span;
+			const width = nt - nf;
+			if (nf < windowStart) {
+				nf = windowStart;
+				nt = nf + width;
+			}
+			if (nt > windowEnd) {
+				nt = windowEnd;
+				nf = nt - width;
+			}
+			brushFrom = nf;
+			brushTo = nt;
+		}
+	}
+
+	function endBrush(e: PointerEvent) {
+		try {
+			(e.currentTarget as HTMLElement).releasePointerCapture?.(e.pointerId);
+		} catch {
+			/* capture may already be released */
+		}
+		if (brushDrag && brushFrom != null && brushTo != null) {
+			if (brushTo - brushFrom < MIN_BRUSH_MS) resetBrush();
+			else {
+				const a = Math.min(brushFrom, brushTo);
+				const b = Math.max(brushFrom, brushTo);
+				brushFrom = a;
+				brushTo = b;
+			}
+		}
+		brushDrag = null;
+	}
+
+	$effect(() => {
+		void expandedCardId;
+		void windowMs;
+		untrack(() => resetBrush());
+	});
 
 	function formatTick(t: number): string {
 		const d = new Date(t);
@@ -461,7 +797,7 @@
 	}
 
 	function valueAtCrosshair(s: Series): number | null {
-		if (crosshairX == null || !s.length) return null;
+		if (crosshairX == null || !s?.length) return null;
 		let lo = 0,
 			hi = s.length - 1;
 		while (lo < hi) {
@@ -483,6 +819,7 @@
 		const px = e.clientX - rect.left;
 		const v = chart.scales?.x?.getValueForPixel(px);
 		if (v == null || !isFinite(v)) return;
+		hoveringChart = true;
 		crosshairX = v;
 		if (tipId) {
 			const wrect = wrapper.getBoundingClientRect();
@@ -493,6 +830,7 @@
 
 	function onChartLeave() {
 		tip = null;
+		hoveringChart = false;
 		if (crosshairX != null) {
 			crosshairX = null;
 			redrawAll();
@@ -577,6 +915,22 @@
 </script>
 
 {#snippet controls()}
+	{#if canGroup}
+		<div class="metrics-rangepick" role="tablist" aria-label="Group by">
+			<button
+				class="metrics-rangebtn"
+				class:active={groupBy === 'none'}
+				onclick={() => (groupBy = 'none')}
+				type="button">Total</button
+			>
+			<button
+				class="metrics-rangebtn"
+				class:active={groupBy === 'pod'}
+				onclick={() => (groupBy = 'pod')}
+				type="button">By pod</button
+			>
+		</div>
+	{/if}
 	<div class="metrics-rangepick" role="tablist" aria-label="Time range">
 		{#each QUICK_RANGES as r (r.id)}
 			<button
@@ -651,14 +1005,13 @@
 
 {#snippet card(c: MetricCard, height: string, showExpand: boolean)}
 	{@const Icon = c.icon}
-	{@const sum = summaries[c.id]}
-	{@const hover = valueAtCrosshair(series[c.id])}
+	{@const zoomed = !showExpand && brushActive}
+	{@const sum = zoomed
+		? summarize(clipSeries(series[c.id] ?? [], viewFrom, viewTo))
+		: (summaries[c.id] ?? summarize([]))}
+	{@const hover = valueAtCrosshair(series[c.id] ?? [])}
 	<article class="metrics-card" style="--accent: {colorOf(c.id)}">
 		<div class="metrics-card-head">
-			<div class="metrics-card-label">
-				<Icon class="h-3.5 w-3.5" />
-				<span>{c.label}</span>
-			</div>
 			<div class="metrics-card-head-right">
 				<div class="metrics-card-now">
 					{c.formatter(hover ?? sum.current)}
@@ -681,7 +1034,11 @@
 			onpointerleave={onChartLeave}
 		>
 			{#if chartReady && Line}
-				<svelte:component this={Line} data={chartData(c)} options={chartOptions(c)} />
+				<svelte:component
+					this={Line}
+					data={chartData(c)}
+					options={chartOptions(c, { from: viewFrom, to: viewTo })}
+				/>
 			{:else}
 				<div class="metrics-card-skeleton"></div>
 			{/if}
@@ -712,10 +1069,20 @@
 			style="left: {tip.x}px; top: {Math.max(tip.y - 8, 4)}px"
 		>
 			<span class="mtx-tip-time">{fmtTipTime(crosshairX)}</span>
-			<span class="mtx-tip-val">
-				<span class="mtx-chip" style="background: {colorOf(c.id)}"></span>
-				{c.formatter(valueAtCrosshair(series[c.id]) ?? 0)}
-			</span>
+			{#if groupBy === 'pod' && grouped[c.id]?.length}
+				{#each grouped[c.id] as s, i (s.key)}
+					<span class="mtx-tip-val">
+						<span class="mtx-chip" style="background: {groupColor(i)}"></span>
+						<span class="mtx-tip-key">{shortPod(s.key)}</span>
+						{c.formatter(valueAtCrosshair(s.points) ?? 0)}
+					</span>
+				{/each}
+			{:else}
+				<span class="mtx-tip-val">
+					<span class="mtx-chip" style="background: {colorOf(c.id)}"></span>
+					{c.formatter(valueAtCrosshair(series[c.id] ?? []) ?? 0)}
+				</span>
+			{/if}
 		</div>
 	{/if}
 {/snippet}
@@ -795,22 +1162,26 @@
 {/snippet}
 
 <div class="metrics-root">
-	<header class="metrics-header">
-		<div class="metrics-title">
-			<Activity class="h-4 w-4" />
-			<span>Metrics</span>
-			{@render stateBadge()}
-		</div>
-		<div class="metrics-controls">
-			{@render controls()}
-		</div>
-	</header>
+	{#if showHeader}
+		<header class="metrics-header">
+			<div class="metrics-heading">
+				<div class="metrics-title">
+					{#if showTitle}
+						<Activity class="h-4 w-4" />
+						<span>Metrics</span>
+					{/if}
+				</div>
+				<div class="metrics-rangelabel">
+					{fmtFull(windowStart)} → {fmtFull(windowEnd)}
+				</div>
+			</div>
+			<div class="metrics-controls">
+				{@render controls()}
+			</div>
+		</header>
 
-	{@render customPanel()}
-
-	<div class="metrics-rangelabel">
-		{fmtFull(windowStart)} → {fmtFull(windowEnd)}
-	</div>
+		{@render customPanel()}
+	{/if}
 
 	<div class="mtx-board">
 		{#each CARDS as c (c.id)}
@@ -845,7 +1216,6 @@
 				<div class="metrics-title">
 					<Activity class="h-4 w-4" style="color: {colorOf(expandedCard.id)}" />
 					<span>{expandedCard.label}</span>
-					{@render stateBadge()}
 				</div>
 				<div class="metrics-controls">
 					{@render controls()}
@@ -867,6 +1237,81 @@
 			<div class="metrics-modal-body">
 				{@render card(expandedCard, '420px', false)}
 			</div>
+
+			{#if groupBy === 'pod' && podKeys.length}
+				<div class="mtx-legend">
+					{#each podKeys as key, i (key)}
+						<span class="mtx-legend-item">
+							<span class="mtx-legend-swatch" style="background:{groupColor(i)}"></span>
+							<span class="mtx-legend-name">{key}</span>
+						</span>
+					{/each}
+				</div>
+			{/if}
+
+			<div class="mtx-brush">
+				<div class="mtx-brush-head">
+					<span class="mtx-brush-label">
+						{#if brushActive}
+							Showing {fmtFull(viewFrom)} to {fmtFull(viewTo)}
+						{:else}
+							Drag below to zoom into a range
+						{/if}
+					</span>
+					{#if brushActive}
+						<button class="mtx-brush-reset" type="button" onclick={resetBrush}>Reset zoom</button>
+					{/if}
+				</div>
+				<div
+					class="mtx-brush-track"
+					bind:this={brushEl}
+					role="slider"
+					tabindex="0"
+					aria-label="Zoom range"
+					aria-valuemin={windowStart}
+					aria-valuemax={windowEnd}
+					aria-valuenow={viewFrom}
+					onpointerdown={(e) => startBrush(e, 'new')}
+					onpointermove={moveBrush}
+					onpointerup={endBrush}
+					onpointercancel={endBrush}
+				>
+					{#if chartReady && Line}
+						<svelte:component
+							this={Line}
+							data={chartData(expandedCard, 'gradient')}
+							options={chartOptions(expandedCard, { mini: true })}
+						/>
+					{/if}
+					{#if brushActive}
+						<div
+							class="mtx-brush-mask"
+							style="left:0; width:{Math.max(0, timeToPct(viewFrom))}%"
+						></div>
+						<div
+							class="mtx-brush-mask"
+							style="left:{Math.min(100, timeToPct(viewTo))}%; right:0"
+						></div>
+						<div
+							class="mtx-brush-window"
+							style="left:{timeToPct(viewFrom)}%; width:{Math.max(
+								0.5,
+								timeToPct(viewTo) - timeToPct(viewFrom)
+							)}%"
+							onpointerdown={(e) => startBrush(e, 'move')}
+						>
+							<span
+								class="mtx-brush-handle mtx-brush-handle--from"
+								onpointerdown={(e) => startBrush(e, 'from')}
+							></span>
+							<span
+								class="mtx-brush-handle mtx-brush-handle--to"
+								onpointerdown={(e) => startBrush(e, 'to')}
+							></span>
+						</div>
+					{/if}
+				</div>
+			</div>
 		</div>
 	</div>
 {/if}
@@ -882,149 +1327,163 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 12px;
+		gap: var(--space-3);
 		flex-wrap: wrap;
+	}
+	.metrics-heading {
+		display: flex;
+		flex-direction: column;
+		gap: 0.125rem;
+		min-width: 0;
 	}
 	.metrics-controls {
 		display: inline-flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-2);
 		flex-wrap: wrap;
 	}
 
 	.metrics-title {
 		display: inline-flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-2);
 		font-weight: 600;
-		font-size: 0.95rem;
-		color: var(--text-primary, inherit);
+		font-size: var(--text-headline);
+		line-height: var(--lh-headline);
+		color: var(--text-default);
 	}
 
 	.metrics-badge {
 		display: inline-flex;
 		align-items: center;
-		gap: 5px;
-		padding: 2px 8px;
-		border-radius: 999px;
-		font-size: 0.7rem;
+		gap: 0.3125rem;
+		padding: 0.125rem 0.5rem;
+		border-radius: var(--radius-pill);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		font-weight: 600;
 		letter-spacing: 0.04em;
 		text-transform: uppercase;
 	}
 	.metrics-badge--live {
-		background: rgba(34, 192, 168, 0.12);
-		color: #1a8e7a;
+		background-color: var(--status-success-bg);
+		color: var(--status-success);
 	}
 	.metrics-badge--paused {
-		background: rgba(255, 165, 0, 0.14);
-		color: #b87100;
+		background-color: var(--status-warning-bg);
+		color: var(--status-warning);
 	}
 	.metrics-badge--custom {
-		background: rgba(124, 92, 255, 0.14);
-		color: #5a3ed1;
-	}
-	:global(:root.dark) .metrics-badge--live {
-		color: #6dd9c4;
-	}
-	:global(:root.dark) .metrics-badge--paused {
-		color: #ffb84d;
-	}
-	:global(:root.dark) .metrics-badge--custom {
-		color: #b09dff;
+		background-color: var(--status-info-bg);
+		color: var(--status-info);
 	}
 	.metrics-live-dot {
-		width: 6px;
-		height: 6px;
+		width: 0.375rem;
+		height: 0.375rem;
 		border-radius: 50%;
-		background: #22c0a8;
+		background-color: var(--status-success);
 		animation: metrics-pulse 1.6s ease-out infinite;
 	}
 	@keyframes metrics-pulse {
 		0% {
-			box-shadow: 0 0 0 0 rgba(34, 192, 168, 0.55);
+			box-shadow: 0 0 0 0 color-mix(in srgb, var(--status-success) 55%, transparent);
 		}
 		70% {
-			box-shadow: 0 0 0 8px rgba(34, 192, 168, 0);
+			box-shadow: 0 0 0 8px transparent;
 		}
 		100% {
-			box-shadow: 0 0 0 0 rgba(34, 192, 168, 0);
+			box-shadow: 0 0 0 0 transparent;
 		}
 	}
 
 	.metrics-rangepick {
 		display: inline-flex;
-		padding: 2px;
-		gap: 2px;
-		border-radius: 8px;
-		background: rgba(120, 120, 128, 0.08);
+		align-items: center;
+		gap: 0.125rem;
+		padding: 0.25rem;
+		border-radius: var(--radius-md);
+		background-color: var(--bg-sunken);
+		border: 1px solid var(--border-default);
 	}
 	.metrics-rangebtn {
-		padding: 4px 10px;
-		font-size: 0.78rem;
-		font-weight: 500;
-		border: 0;
-		background: transparent;
-		color: var(--text-muted, rgba(140, 140, 150, 0.95));
-		border-radius: 6px;
-		cursor: pointer;
-		transition:
-			background 80ms ease,
-			color 80ms ease;
 		display: inline-flex;
 		align-items: center;
-		gap: 4px;
+		justify-content: center;
+		gap: 0.25rem;
+		min-width: 2rem;
+		padding: 0.3125rem var(--space-3);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
+		border: 0;
+		background: none;
+		color: var(--text-muted);
+		border-radius: var(--radius-xs);
+		cursor: pointer;
+		transition:
+			background-color var(--dur-fast) var(--ease-out),
+			color var(--dur-fast) var(--ease-out);
 	}
 	.metrics-rangebtn--icon {
-		padding: 4px 8px;
+		padding: 0.3125rem var(--space-2);
 	}
 	.metrics-rangebtn:hover {
-		color: var(--text-primary, inherit);
+		color: var(--text-default);
 	}
 	.metrics-rangebtn.active {
-		background: var(--surface, white);
-		color: var(--text-primary, inherit);
-		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
-	}
-	:global(:root.dark) .metrics-rangebtn.active {
-		background: rgba(255, 255, 255, 0.08);
+		background-color: var(--bg-surface);
+		color: var(--text-default);
+		box-shadow: var(--elev-1);
 	}
 
 	.metrics-iconbtn {
 		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 28px;
-		height: 28px;
+		width: 1.875rem;
+		height: 1.875rem;
 		padding: 0;
-		border-radius: 6px;
+		border-radius: var(--radius-sm);
 		border: 0;
 		cursor: pointer;
-		background: rgba(120, 120, 128, 0.08);
-		color: var(--text-muted, rgba(140, 140, 150, 0.95));
+		background-color: var(--fill-soft);
+		color: var(--text-muted);
 		transition:
-			background 80ms ease,
-			color 80ms ease;
+			background-color var(--dur-fast) var(--ease-out),
+			color var(--dur-fast) var(--ease-out);
 	}
 	.metrics-iconbtn:hover {
-		background: rgba(120, 120, 128, 0.16);
-		color: var(--text-primary, inherit);
+		background-color: var(--fill-medium);
+		color: var(--text-default);
 	}
 	.metrics-iconbtn--small {
-		width: 22px;
-		height: 22px;
+		width: 1.375rem;
+		height: 1.375rem;
 	}
 
 	.metrics-rangelabel {
-		font-size: 0.72rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		font-variant-numeric: tabular-nums;
-		color: var(--text-muted, rgba(140, 140, 150, 0.85));
+		color: var(--text-faint);
 		display: inline-flex;
 		align-items: center;
-		gap: 8px;
+		gap: var(--space-2);
 	}
 	.metrics-rangelabel--modal {
-		margin-top: -2px;
+		margin-top: -0.125rem;
+	}
+
+	@media (max-width: 560px) {
+		.metrics-controls {
+			flex-wrap: nowrap;
+			width: 100%;
+			overflow-x: auto;
+			scrollbar-width: none;
+		}
+		.metrics-controls::-webkit-scrollbar {
+			display: none;
+		}
 	}
 
 	.metrics-grid {
@@ -1042,8 +1501,8 @@
 		display: flex;
 		flex-direction: column;
 		gap: 8px;
-		padding: 12px 14px 10px;
-		border-radius: 10px;
+		padding: 12px 16px 12px;
+		border-radius: var(--radius-md);
 		background: var(--surface, white);
 		border: 1px solid rgba(120, 120, 128, 0.12);
 		min-width: 0;
@@ -1057,7 +1516,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 10px;
+		gap: 12px;
 	}
 	.metrics-card-head-right {
 		display: inline-flex;
@@ -1067,8 +1526,9 @@
 	.metrics-card-label {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
-		font-size: 0.78rem;
+		gap: 8px;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--text-muted, rgba(140, 140, 150, 0.95));
 	}
 	.metrics-card-label :global(svg) {
@@ -1077,7 +1537,8 @@
 	.metrics-card-now {
 		font-variant-numeric: tabular-nums;
 		font-weight: 600;
-		font-size: 1.15rem;
+		font-size: var(--text-title-3);
+		line-height: var(--lh-title-3);
 		color: var(--accent);
 		letter-spacing: -0.01em;
 	}
@@ -1090,7 +1551,7 @@
 	.metrics-card-skeleton {
 		width: 100%;
 		height: 100%;
-		border-radius: 6px;
+		border-radius: var(--radius-xs);
 		background: linear-gradient(
 			90deg,
 			rgba(120, 120, 128, 0.06) 0%,
@@ -1114,7 +1575,7 @@
 		grid-template-columns: repeat(3, minmax(0, 1fr));
 		gap: 8px;
 		margin: 0;
-		padding-top: 6px;
+		padding-top: 8px;
 		border-top: 1px dashed rgba(120, 120, 128, 0.18);
 	}
 	.metrics-card-stats > div {
@@ -1124,7 +1585,8 @@
 		min-width: 0;
 	}
 	.metrics-card-stats dt {
-		font-size: 0.65rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
 		color: var(--text-muted, rgba(140, 140, 150, 0.95));
@@ -1132,21 +1594,24 @@
 	.metrics-card-stats dd {
 		margin: 0;
 		font-variant-numeric: tabular-nums;
-		font-size: 0.85rem;
-		font-weight: 500;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		font-weight: 600;
 		color: var(--text-primary, inherit);
 	}
 
 	.metrics-foot {
 		margin: 4px 0 0;
-		font-size: 0.72rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--text-muted, rgba(140, 140, 150, 0.85));
 	}
 	.metrics-foot code {
-		padding: 1px 5px;
-		border-radius: 3px;
+		padding: 1px 4px;
+		border-radius: var(--radius-xs);
 		background: rgba(120, 120, 128, 0.1);
-		font-size: 0.7rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 	}
 	.metrics-foot-err {
 		color: #d04a4a;
@@ -1177,13 +1642,13 @@
 		max-height: calc(100vh - 48px);
 		overflow: auto;
 		background: var(--surface, white);
-		border-radius: 14px;
+		border-radius: var(--radius-lg);
 		border: 1px solid rgba(120, 120, 128, 0.18);
 		box-shadow: 0 20px 60px rgba(0, 0, 0, 0.25);
 		padding: 18px 20px 20px;
 		display: flex;
 		flex-direction: column;
-		gap: 14px;
+		gap: 16px;
 		animation: metrics-pop 180ms cubic-bezier(0.22, 1, 0.36, 1);
 	}
 	:global(:root.dark) .metrics-modal {
@@ -1211,15 +1676,25 @@
 		display: flex;
 		flex-direction: column;
 		gap: 12px;
+		flex: 1 1 auto;
+		min-height: 0;
+	}
+	.metrics-modal-body :global(.metrics-card) {
+		flex: 1 1 auto;
+		min-height: 0;
+	}
+	.metrics-modal-body :global(.metrics-card-chart) {
+		flex: 1 1 auto;
+		min-height: 12rem;
 	}
 
 	.metrics-custompanel {
 		display: flex;
 		align-items: flex-end;
-		gap: 10px;
+		gap: 12px;
 		flex-wrap: wrap;
-		padding: 10px 12px;
-		border-radius: 8px;
+		padding: 12px 12px;
+		border-radius: var(--radius-sm);
 		background: rgba(120, 120, 128, 0.06);
 		border: 1px solid rgba(120, 120, 128, 0.12);
 	}
@@ -1227,13 +1702,14 @@
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
-		font-size: 0.72rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--text-muted, rgba(140, 140, 150, 0.95));
 	}
 	.metrics-custompanel input[type='datetime-local'] {
 		font: inherit;
-		padding: 5px 8px;
-		border-radius: 6px;
+		padding: 4px 8px;
+		border-radius: var(--radius-xs);
 		border: 1px solid rgba(120, 120, 128, 0.25);
 		background: var(--surface, white);
 		color: var(--text-primary, inherit);
@@ -1244,20 +1720,22 @@
 	}
 	.metrics-custompanel-actions {
 		display: inline-flex;
-		gap: 6px;
+		gap: 8px;
 	}
 	.metrics-custompanel-error {
 		flex-basis: 100%;
-		font-size: 0.72rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: #d04a4a;
 	}
 
 	.btn-mini {
 		font: inherit;
-		font-size: 0.72rem;
-		font-weight: 500;
-		padding: 5px 10px;
-		border-radius: 6px;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+		padding: 4px 12px;
+		border-radius: var(--radius-xs);
 		cursor: pointer;
 		border: 1px solid rgba(120, 120, 128, 0.2);
 		background: transparent;
@@ -1278,7 +1756,7 @@
 	.mtx-chip {
 		width: 8px;
 		height: 8px;
-		border-radius: 2px;
+		border-radius: var(--radius-xs);
 		flex-shrink: 0;
 		display: inline-block;
 	}
@@ -1290,13 +1768,14 @@
 		pointer-events: none;
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
-		padding: 6px 9px;
-		border-radius: 6px;
+		gap: 4px;
+		padding: 8px 9px;
+		border-radius: var(--radius-xs);
 		background: var(--surface, white);
 		border: 1px solid rgba(120, 120, 128, 0.25);
-		box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
-		font-size: 0.72rem;
+		box-shadow: var(--elev-3);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		white-space: nowrap;
 	}
 	:global(:root.dark) .mtx-tip {
@@ -1313,7 +1792,7 @@
 	.mtx-tip-val {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
+		gap: 8px;
 		font-weight: 600;
 		font-variant-numeric: tabular-nums;
 	}
@@ -1321,7 +1800,7 @@
 	.mtx-board {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 10px;
+		gap: 12px;
 	}
 	@media (max-width: 720px) {
 		.mtx-board {
@@ -1332,8 +1811,8 @@
 		display: flex;
 		flex-direction: column;
 		gap: 4px;
-		padding: 10px 12px 8px;
-		border-radius: 8px;
+		padding: 12px 12px 8px;
+		border-radius: var(--radius-sm);
 		background: var(--surface, white);
 		border: 1px solid rgba(120, 120, 128, 0.14);
 		min-width: 0;
@@ -1345,21 +1824,23 @@
 	.mtx-cell-head {
 		display: flex;
 		align-items: center;
-		gap: 7px;
+		gap: 8px;
 		min-width: 0;
 	}
 	.mtx-cell-label {
 		flex: 1;
-		font-size: 0.75rem;
-		font-weight: 500;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		color: var(--text-muted, rgba(140, 140, 150, 0.95));
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
 	.mtx-cell-now {
-		font-size: 0.95rem;
-		font-weight: 650;
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
+		font-weight: 600;
 		font-variant-numeric: tabular-nums;
 		letter-spacing: -0.01em;
 		color: var(--text-primary, inherit);
@@ -1372,11 +1853,12 @@
 	}
 	.mtx-cell-foot {
 		display: flex;
-		gap: 14px;
-		font-size: 0.68rem;
+		gap: 16px;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--text-muted, rgba(140, 140, 150, 0.9));
 		font-variant-numeric: tabular-nums;
-		padding-top: 2px;
+		padding-top: 4px;
 	}
 	.mtx-cell-foot b {
 		font-weight: 600;
@@ -1390,9 +1872,9 @@
 	.mtx-band {
 		display: grid;
 		grid-template-columns: 9.5rem minmax(0, 1fr);
-		gap: 14px;
+		gap: 16px;
 		align-items: stretch;
-		padding: 10px 0;
+		padding: 12px 0;
 	}
 	.mtx-band + .mtx-band {
 		border-top: 1px solid rgba(120, 120, 128, 0.14);
@@ -1400,21 +1882,23 @@
 	.mtx-band-gutter {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
+		gap: 4px;
 		min-width: 0;
-		padding-top: 2px;
+		padding-top: 4px;
 	}
 	.mtx-band-label {
 		display: inline-flex;
 		align-items: center;
-		gap: 6px;
-		font-size: 0.72rem;
-		font-weight: 500;
+		gap: 8px;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		color: var(--text-muted, rgba(140, 140, 150, 0.95));
 	}
 	.mtx-band-now {
-		font-size: 1.25rem;
-		font-weight: 650;
+		font-size: var(--text-title-3);
+		line-height: var(--lh-title-3);
+		font-weight: 600;
 		font-variant-numeric: tabular-nums;
 		letter-spacing: -0.015em;
 		color: var(--text-primary, inherit);
@@ -1423,7 +1907,8 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1px;
-		font-size: 0.66rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--text-muted, rgba(140, 140, 150, 0.9));
 		font-variant-numeric: tabular-nums;
 	}
@@ -1435,12 +1920,12 @@
 	@media (max-width: 720px) {
 		.mtx-band {
 			grid-template-columns: 1fr;
-			gap: 6px;
+			gap: 8px;
 		}
 		.mtx-band-gutter {
 			flex-direction: row;
 			align-items: baseline;
-			gap: 10px;
+			gap: 12px;
 		}
 		.mtx-band-stats {
 			flex-direction: row;
@@ -1451,7 +1936,130 @@
 
 	.btn-mini--ghost {
 		border: 0;
-		padding: 3px 8px;
+		padding: 4px 8px;
 		color: var(--text-muted, rgba(140, 140, 150, 0.95));
+	}
+
+	.mtx-brush {
+		flex: 0 0 auto;
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		padding-top: var(--space-3);
+		border-top: 1px solid var(--border-subtle, var(--surface-border));
+	}
+	.mtx-brush-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-3);
+	}
+	.mtx-brush-label {
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-faint);
+		font-variant-numeric: tabular-nums;
+	}
+	.mtx-brush-reset {
+		border: none;
+		background: none;
+		padding: 0;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+		color: var(--accent);
+		cursor: pointer;
+	}
+	.mtx-brush-reset:hover {
+		opacity: 0.75;
+	}
+	.mtx-brush-track {
+		position: relative;
+		height: 3.25rem;
+		border-radius: var(--radius-sm);
+		background-color: var(--fill-quiet);
+		overflow: hidden;
+		cursor: crosshair;
+		touch-action: none;
+	}
+	.mtx-brush-mask {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		background-color: color-mix(in srgb, var(--bg-app) 62%, transparent);
+		pointer-events: none;
+	}
+	.mtx-brush-window {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		border-left: 1px solid var(--accent);
+		border-right: 1px solid var(--accent);
+		background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+		cursor: grab;
+		touch-action: none;
+	}
+	.mtx-brush-window:active {
+		cursor: grabbing;
+	}
+	.mtx-brush-handle {
+		position: absolute;
+		top: 0;
+		bottom: 0;
+		width: 0.625rem;
+		cursor: ew-resize;
+		touch-action: none;
+	}
+	.mtx-brush-handle::after {
+		content: '';
+		position: absolute;
+		top: 50%;
+		left: 50%;
+		width: 0.125rem;
+		height: 1.25rem;
+		transform: translate(-50%, -50%);
+		border-radius: var(--radius-pill);
+		background-color: var(--accent);
+	}
+	.mtx-brush-handle--from {
+		left: -0.3125rem;
+	}
+	.mtx-brush-handle--to {
+		right: -0.3125rem;
+	}
+
+	.mtx-legend {
+		flex: 0 0 auto;
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2) var(--space-4);
+	}
+	.mtx-legend-item {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
+		min-width: 0;
+	}
+	.mtx-legend-swatch {
+		width: 0.625rem;
+		height: 0.625rem;
+		border-radius: var(--radius-xs);
+		flex-shrink: 0;
+	}
+	.mtx-legend-name {
+		font-family: var(--font-mono, ui-monospace, monospace);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-muted);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+	}
+
+	.mtx-tip-key {
+		font-family: var(--font-mono, ui-monospace, monospace);
+		color: var(--text-muted);
+		margin-right: var(--space-2);
 	}
 </style>

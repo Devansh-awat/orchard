@@ -15,7 +15,7 @@
 	import { untrack } from 'svelte';
 	import { page } from '$app/stores';
 	import { SquareArrowOutUpRight } from 'lucide-svelte';
-	import { formatCpu, formatMemory, formatRelativeTime } from '$lib/utils/format';
+	import { formatCpu, formatMemory, formatRelativeTime, explainExitCode } from '$lib/utils/format';
 	import {
 		Button,
 		Menu,
@@ -25,6 +25,8 @@
 		podStatus,
 		LogViewer
 	} from '$lib/components/ui';
+	import { animate } from 'motion';
+	import { decorativeMotion } from '$lib/utils/motion.svelte';
 	import { PodLogSource } from '$lib/utils/log-sources.svelte';
 	import PodTerminal from '$lib/components/PodTerminal.svelte';
 	import type { Pod, TerminalTabInfo } from '$lib/types/deployment';
@@ -32,6 +34,7 @@
 	let {
 		deployment,
 		activePods,
+		resourcePressure,
 		selectedPod = $bindable(),
 		selectedContainer = $bindable(),
 		scaleReplicas = $bindable(),
@@ -63,6 +66,12 @@
 	}: {
 		deployment: any;
 		activePods: Pod[];
+		resourcePressure: {
+			cpuLimit: number | null;
+			memLimit: number | null;
+			cpuRatio: number | null;
+			memRatio: number | null;
+		};
 		selectedPod: string;
 		selectedContainer: string;
 		scaleReplicas: number;
@@ -93,6 +102,18 @@
 		podLabel: (podName: string) => string;
 	} = $props();
 
+	function meterFor(ratio: number | null | undefined) {
+		if (ratio == null) return null;
+		const pct = Math.min(Math.max(ratio, 0), 1) * 100;
+		return {
+			pct,
+			level: ratio >= 0.95 ? 'error' : ratio >= 0.85 ? 'warning' : 'normal'
+		};
+	}
+
+	const cpuMeter = $derived(meterFor(resourcePressure?.cpuRatio));
+	const memMeter = $derived(meterFor(resourcePressure?.memRatio));
+
 	let showPreviousLogs = $state(false);
 	let liveLogs = $state(false);
 	let logsScrolledUp = $state(false);
@@ -104,12 +125,16 @@
 		previous: () => showPreviousLogs
 	});
 
+	let crashLogsFor: string | null = null;
+
 	$effect(() => {
 		const pod = selectedPod;
 		const container = selectedContainer;
 		if (!pod || !container) return;
+		const wantsCrash = crashLogsFor === `${pod}/${container}`;
+		crashLogsFor = null;
 		untrack(() => {
-			showPreviousLogs = false;
+			showPreviousLogs = wantsCrash;
 			logsScrolledUp = false;
 			logSource.clear();
 			logSource.refresh();
@@ -126,18 +151,6 @@
 		return () => clearInterval(handle);
 	});
 
-	function togglePreviousLogs() {
-		showPreviousLogs = !showPreviousLogs;
-		logSource.resetPagination();
-		logSource.refresh();
-	}
-
-	const selectedContainerHasPrevious = $derived.by(() => {
-		const pod = ((deployment?.pods ?? []) as Pod[]).find((p) => p.name === selectedPod);
-		const cont = pod?.containers?.find((c) => c.name === selectedContainer);
-		return !!cont?.lastTermination || (cont?.restartCount ?? 0) > 0;
-	});
-
 	const shellCombos = $derived(
 		((deployment.pods ?? []) as Pod[]).flatMap((pod) =>
 			(pod.containers ?? []).map((c) => ({ podName: pod.name, container: c.name }))
@@ -152,7 +165,74 @@
 		}
 		return null;
 	}
+
+	function selectPod(pod: Pod) {
+		selectedPod = pod.name;
+		if (pod.containers?.length) selectedContainer = pod.containers[0].name;
+	}
+
+	function restartPhrase(restarts: number, exitCode?: number | null) {
+		const after = exitCode != null ? ` after exit ${exitCode}` : '';
+		if (restarts === 0) return `Crashed once${after}`;
+		if (restarts === 1) return `Restarted once${after}`;
+		return `Restarted ${restarts} times${after}`;
+	}
+
+	function revealConsole() {
+		const el = consoleRef;
+		if (!el) return;
+		const r = el.getBoundingClientRect();
+		const offscreen = r.top < 0 || r.bottom > window.innerHeight;
+		if (offscreen) {
+			el.scrollIntoView({
+				behavior: decorativeMotion() ? 'smooth' : 'auto',
+				block: 'nearest'
+			});
+		}
+		if (!decorativeMotion()) return;
+		animate(el, { '--console-flash': [0, 1, 0] }, { duration: 1.1, ease: 'easeOut' });
+	}
+
+	function openCurrentLogs(pod: Pod, containerName?: string) {
+		const container = containerName ?? pod.containers?.[0]?.name ?? selectedContainer;
+		crashLogsFor = null;
+		activeConsoleTab = 'logs';
+		onSelectLogsPod(pod.name, container);
+		showPreviousLogs = false;
+		logSource.resetPagination();
+		logSource.refresh();
+		revealConsole();
+	}
+
+	function openCrashLogs(pod: Pod, containerName?: string) {
+		const crashed = (pod.containers ?? []).find(
+			(c) => c.lastTermination?.reason || (c.restartCount ?? 0) > 0
+		);
+		const container =
+			containerName ?? crashed?.name ?? pod.containers?.[0]?.name ?? selectedContainer;
+		crashLogsFor = `${pod.name}/${container}`;
+		activeConsoleTab = 'logs';
+		selectedPod = pod.name;
+		selectedContainer = container;
+		showPreviousLogs = true;
+		logSource.resetPagination();
+		logSource.refresh();
+		revealConsole();
+	}
 </script>
+
+{#snippet podHead(pod: Pod, meta: ReturnType<typeof podStatus>)}
+	<span class="pod-item-top">
+		<StatusDot {meta} size={6} />
+		<span class="pod-item-name">{podLabel(pod.name)}</span>
+		{#if pod.startTime}
+			<span class="pod-item-age">{formatRelativeTime(new Date(pod.startTime))}</span>
+		{/if}
+	</span>
+	<span class="pod-item-sub">
+		<span class="pod-item-status status--{meta.kind}">{meta.label}</span>
+	</span>
+{/snippet}
 
 <div class="grid gap-5 items-stretch overview-grid">
 	<!-- Left: Console (hero) -->
@@ -215,41 +295,42 @@
 							{#snippet trigger(attrs, _open)}
 								<button class="console-btn" {...attrs}>
 									<Boxes size={12} class="h-3 w-3 opacity-40" />
-									<span
+									<span class="console-src-label"
 										>{podLabel(selectedPod)}{selectedContainer
 											? ` / ${selectedContainer}`
 											: ''}</span
 									>
+									{#if showPreviousLogs}
+										<span class="console-src-tag">crashed</span>
+									{/if}
 									<ChevronDown size={10} class="h-2.5 w-2.5 opacity-40" />
 								</button>
 							{/snippet}
 							{#each deployment.pods ?? [] as pod (pod.name)}
 								{#each pod.containers ?? [] as cont (cont.name)}
-									<MenuItem onclick={() => onSelectLogsPod(pod.name, cont.name)}>
+									{@const isCur =
+										selectedPod === pod.name &&
+										selectedContainer === cont.name &&
+										!showPreviousLogs}
+									{@const isCrash =
+										selectedPod === pod.name && selectedContainer === cont.name && showPreviousLogs}
+									{@const crashed = !!cont.lastTermination?.reason || (cont.restartCount ?? 0) > 0}
+									<MenuItem onclick={() => openCurrentLogs(pod, cont.name)}>
 										<Boxes size={14} class="shrink-0 opacity-40" />
-										<span
-											class:font-semibold={selectedPod === pod.name &&
-												selectedContainer === cont.name}>{podLabel(pod.name)} / {cont.name}</span
-										>
+										<span class:font-semibold={isCur}>{podLabel(pod.name)} / {cont.name}</span>
 									</MenuItem>
+									{#if crashed}
+										<MenuItem onclick={() => openCrashLogs(pod, cont.name)}>
+											<Terminal size={14} class="shrink-0 opacity-40" />
+											<span class:font-semibold={isCrash}
+												>{podLabel(pod.name)} / {cont.name}
+												<span class="console-src-tag">crashed</span></span
+											>
+										</MenuItem>
+									{/if}
 								{/each}
 							{/each}
 						</Menu>
-
-						<button
-							onclick={togglePreviousLogs}
-							disabled={!selectedContainerHasPrevious && !showPreviousLogs}
-							class="console-btn"
-							class:console-btn--warn={showPreviousLogs}
-							class:console-btn--active={showPreviousLogs}
-							title={showPreviousLogs
-								? 'Showing logs from the previous (terminated) container. Click for current.'
-								: selectedContainerHasPrevious
-									? 'Show logs from the previous (terminated) container'
-									: 'No previous container logs available'}
-						>
-							{showPreviousLogs ? 'Previous' : 'Current'}
-						</button>
 
 						<button
 							onclick={() => logSource.refresh()}
@@ -372,7 +453,26 @@
 					<Activity size={12} class="h-3 w-3" />
 				</span>
 			</div>
-			<p class="stat-card-value">{formatCpu(deployment.totalCpuUsage)}</p>
+			<p class="stat-card-value">
+				{formatCpu(deployment.totalCpuUsage)}{#if resourcePressure?.cpuLimit != null}<span
+						class="stat-card-limit">/ {formatCpu(resourcePressure.cpuLimit)}</span
+					>{/if}
+			</p>
+			{#if cpuMeter}
+				<div
+					class="stat-card-meter"
+					role="progressbar"
+					aria-label="CPU used"
+					aria-valuemin={0}
+					aria-valuemax={100}
+					aria-valuenow={Math.round(cpuMeter.pct)}
+				>
+					<span
+						class="stat-card-meter-fill stat-card-meter-fill--{cpuMeter.level}"
+						style="width: {cpuMeter.pct}%"
+					></span>
+				</div>
+			{/if}
 		</button>
 
 		<button
@@ -388,7 +488,26 @@
 					<Activity size={12} class="h-3 w-3" />
 				</span>
 			</div>
-			<p class="stat-card-value">{formatMemory(deployment.totalMemoryUsage)}</p>
+			<p class="stat-card-value">
+				{formatMemory(deployment.totalMemoryUsage)}{#if resourcePressure?.memLimit != null}<span
+						class="stat-card-limit">/ {formatMemory(resourcePressure.memLimit)}</span
+					>{/if}
+			</p>
+			{#if memMeter}
+				<div
+					class="stat-card-meter"
+					role="progressbar"
+					aria-label="Memory used"
+					aria-valuemin={0}
+					aria-valuemax={100}
+					aria-valuenow={Math.round(memMeter.pct)}
+				>
+					<span
+						class="stat-card-meter-fill stat-card-meter-fill--{memMeter.level}"
+						style="width: {memMeter.pct}%"
+					></span>
+				</div>
+			{/if}
 		</button>
 
 		<!-- Scale -->
@@ -493,64 +612,64 @@
 					<div class="space-y-1 overview-pods-scroll">
 						{#each activePods as pod (pod.name)}
 							{@const term = podTermination(pod)}
-							<div class="console-pod-row-wrap">
-								<button
-									class="console-pod-row console-pod-row--compact"
-									class:console-pod-row--active={selectedPod === pod.name}
-									onclick={() => {
-										selectedPod = pod.name;
-										if (pod.containers?.length) selectedContainer = pod.containers[0].name;
-									}}
-								>
-									<div class="flex items-center gap-2 min-w-0">
-										<StatusDot meta={podStatus(pod.status)} size={6} />
-										<span class="font-mono text-xs truncate">{podLabel(pod.name)}</span>
-									</div>
-									<div
-										class="flex items-center gap-2 shrink-0 text-[10px] font-mono"
-										style="color: var(--surface-muted);"
-									>
-										{#if pod.startTime}<span>{formatRelativeTime(new Date(pod.startTime))}</span
-											>{/if}
-										{#if term}
-											<span
-												class="badge text-[9px] px-1 py-0.5"
-												style="background-color: color-mix(in srgb, var(--status-error) 15%, transparent); color: var(--status-error);"
-												title="Last terminated: {term.reason}{term.exitCode != null
-													? ` (exit ${term.exitCode})`
-													: ''}">{term.reason}</span
-											>
-										{:else if (pod.restartCount ?? 0) > 0}
-											<span
-												class="badge text-[9px] px-1 py-0.5"
-												style="background-color: color-mix(in srgb, var(--status-warning) 15%, transparent); color: var(--status-warning);"
-												title="{pod.restartCount} restart(s)">↻ {pod.restartCount}</span
-											>
-										{/if}
-										<StatusBadge meta={podStatus(pod.status)} />
-									</div>
-								</button>
-								<a
-									class="pod-delete-btn"
-									title="Open pod details"
-									aria-label="Open pod details"
-									href="/{$page.params.orgSlug}/pods/{pod.name}?namespace={deployment?.namespace ??
-										'default'}"
-								>
-									<SquareArrowOutUpRight size={12} class="h-3 w-3" />
-								</a>
-								<button
-									class="pod-delete-btn"
-									title="Delete pod"
-									onclick={() => onDeletePod(pod.name)}
-									disabled={deletingPod === pod.name}
-								>
-									{#if deletingPod === pod.name}
-										<Loader2 class="h-3 w-3 animate-spin" />
-									{:else}
-										<Trash2 size={12} class="h-3 w-3" />
+							{@const meta = podStatus(pod.status)}
+							<div
+								class="pod-item"
+								class:pod-item--active={selectedPod === pod.name}
+								class:pod-item--crashed={!!term}
+							>
+								<button class="pv-b" onclick={() => selectPod(pod)}>
+									<span class="pv-b-row">
+										<span class="pv-b-name">{podLabel(pod.name)}</span>
+										<StatusBadge {meta} />
+									</span>
+									{#if pod.startTime}
+										<span class="pv-b-age"
+											>Started {formatRelativeTime(new Date(pod.startTime))}</span
+										>
+									{/if}
+									{#if term}
+										{@const why = explainExitCode(term.exitCode, term.reason)}
+										<span class="pv-b-crash"
+											>{restartPhrase(pod.restartCount ?? 0, term.exitCode)}</span
+										>
+										{#if why}<span class="pv-b-why">{why.short}</span>{/if}
 									{/if}
 								</button>
+								{#if term}
+									<button
+										class="pv-b-act"
+										aria-label="View crash logs for {pod.name}"
+										onclick={() => openCrashLogs(pod)}
+									>
+										<Terminal size={12} class="h-3 w-3" />
+										<span>View crash logs</span>
+									</button>
+								{/if}
+								<span class="pod-item-actions">
+									<a
+										class="pod-item-btn"
+										title="Open pod details"
+										aria-label="Open pod details"
+										href="/{$page.params
+											.orgSlug}/pods/{pod.name}?namespace={deployment?.namespace ?? 'default'}"
+									>
+										<SquareArrowOutUpRight size={12} class="h-3 w-3" />
+									</a>
+									<button
+										class="pod-item-btn pod-item-btn--danger"
+										title="Delete pod"
+										aria-label="Delete pod"
+										onclick={() => onDeletePod(pod.name)}
+										disabled={deletingPod === pod.name}
+									>
+										{#if deletingPod === pod.name}
+											<Loader2 class="h-3 w-3 animate-spin" />
+										{:else}
+											<Trash2 size={12} class="h-3 w-3" />
+										{/if}
+									</button>
+								</span>
 							</div>
 						{/each}
 					</div>

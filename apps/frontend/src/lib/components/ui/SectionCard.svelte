@@ -6,13 +6,13 @@
 		description = undefined,
 		actions = undefined,
 		class: className = '',
-		children
+		children = undefined
 	}: {
 		title?: string;
 		description?: string;
 		actions?: Snippet;
 		class?: string;
-		children: Snippet;
+		children?: Snippet;
 	} = $props();
 </script>
 
@@ -28,5 +28,5 @@
 			{/if}
 		</div>
 	{/if}
-	{@render children()}
+	{@render children?.()}
 </section>

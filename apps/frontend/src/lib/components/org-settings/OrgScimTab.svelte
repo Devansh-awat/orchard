@@ -68,7 +68,6 @@
 	<SettingsSection
 		title="SCIM Provisioning"
 		description="Sync members automatically from your identity provider"
-		iconColor="amber"
 		{index}
 	>
 		{#snippet icon(hovered)}<UserCog size={18} animate={hovered} />{/snippet}
@@ -194,7 +193,6 @@
 	<SettingsSection
 		title="SCIM Provisioning"
 		description="Sync members automatically from your identity provider"
-		iconColor="amber"
 		{index}
 	>
 		{#snippet icon(hovered)}<UserCog size={18} animate={hovered} />{/snippet}
@@ -222,7 +220,8 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		font-size: 0.8rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		color: var(--center-channel-color);
 		margin: 0;
@@ -237,7 +236,8 @@
 	.scim-endpoint-row :global(.scim-endpoint-input) {
 		flex: 1;
 		font-family: var(--font-mono, ui-monospace, monospace);
-		font-size: 0.8rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 	}
 
 	.scim-endpoint-row :global(.scim-token-value) {
@@ -245,7 +245,7 @@
 	}
 
 	.scim-hint {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
 		color: var(--surface-muted);
 		margin: 0;
 		line-height: 1.5;
@@ -254,9 +254,9 @@
 	.scim-reveal {
 		display: flex;
 		flex-direction: column;
-		gap: 0.625rem;
+		gap: 0.75rem;
 		padding: 0.875rem 1rem;
-		border-radius: 0.625rem;
+		border-radius: var(--radius-md);
 		background: color-mix(in srgb, var(--away-indicator) 8%, transparent);
 		border: 1px solid color-mix(in srgb, var(--away-indicator) 25%, transparent);
 	}
@@ -265,8 +265,9 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		font-size: 0.78rem;
-		font-weight: 500;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		color: var(--away-indicator);
 	}
 
@@ -275,7 +276,8 @@
 	}
 
 	.scim-empty {
-		font-size: 0.8rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 		margin: 0;
 	}
@@ -292,7 +294,7 @@
 		justify-content: space-between;
 		gap: 1rem;
 		padding: 0.75rem 0.875rem;
-		border-radius: 0.625rem;
+		border-radius: var(--radius-md);
 		border: 1px solid var(--surface-border);
 		background: color-mix(in srgb, var(--center-channel-color) 2%, transparent);
 	}
@@ -302,14 +304,16 @@
 	}
 
 	.scim-token-name {
-		font-size: 0.82rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		color: var(--center-channel-color);
 		margin: 0;
 	}
 
 	.scim-token-sub {
-		font-size: 0.7rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 		margin: 0.15rem 0 0;
 	}
@@ -329,7 +333,8 @@
 	}
 
 	.scim-no-access {
-		font-size: 0.8rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 		margin: 0;
 	}

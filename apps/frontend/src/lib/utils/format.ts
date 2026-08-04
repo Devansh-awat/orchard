@@ -100,31 +100,43 @@ function timestampPill(ts: string): string {
 const lineCache = new Map<string, string>();
 const LINE_CACHE_MAX = 30_000;
 
-function ansiLineToHtml(line: string): string {
-	const cached = lineCache.get(line);
+// The ANSI palette assumes a dark terminal, so its greyscale "dim" colours
+// are baked as inline rgb() and stay put when the surface is light. On an
+// adaptive surface we swap greys for tokens so they follow the theme.
+function adaptGreys(html: string): string {
+	return html.replace(/color:\s*rgb\((\d+),\s*(\d+),\s*(\d+)\)/g, (m, r, g, b) => {
+		if (r !== g || g !== b) return m;
+		return `color:var(${Number(r) < 128 ? '--text-faint' : '--text-muted'})`;
+	});
+}
+
+function ansiLineToHtml(line: string, adaptive = false): string {
+	const key = adaptive ? `a:${line}` : line;
+	const cached = lineCache.get(key);
 	if (cached !== undefined) return cached;
-	const html = ansi.ansi_to_html(line).replace(ISO_TS_RE, timestampPill);
+	let html = ansi.ansi_to_html(line).replace(ISO_TS_RE, timestampPill);
+	if (adaptive) html = adaptGreys(html);
 	if (lineCache.size >= LINE_CACHE_MAX) lineCache.clear();
-	lineCache.set(line, html);
+	lineCache.set(key, html);
 	return html;
 }
 
 /** Convert ANSI log text to per-line HTML fragments, skipping empty lines. */
-export function ansiToHtmlLines(text: string): string[] {
+export function ansiToHtmlLines(text: string, adaptive = false): string[] {
 	if (!text) return [];
 
 	const out: string[] = [];
 	for (const line of text.replace(/\r/g, '').split('\n')) {
 		const stripped = line.replace(ANSI_CODE_RE, '').replace(ISO_TS_RE, '').trim();
 		if (!stripped) continue;
-		out.push(ansiLineToHtml(line));
+		out.push(ansiLineToHtml(line, adaptive));
 	}
 	return out;
 }
 
 /** Convert ANSI escape codes to HTML with color spans and formatted timestamps */
-export function ansiToHtml(text: string): string {
-	return ansiToHtmlLines(text).join('\n');
+export function ansiToHtml(text: string, adaptive = false): string {
+	return ansiToHtmlLines(text, adaptive).join('\n');
 }
 
 /** Redact sensitive tokens from log output */
@@ -161,6 +173,50 @@ export interface HumanizedWarning {
 	hint: string;
 	severity: WarningSeverity;
 	action?: string;
+}
+
+export interface ExplainedExit {
+	short: string;
+	severity: WarningSeverity;
+}
+
+export function explainExitCode(
+	code: number | null | undefined,
+	reason?: string | null
+): ExplainedExit | null {
+	if (/oomkilled/i.test(reason ?? '') || code === 137)
+		return { short: 'Killed for going over its memory limit', severity: 'critical' };
+
+	if (code == null) {
+		if (!reason) return null;
+		return { short: reason, severity: 'error' };
+	}
+
+	switch (code) {
+		case 0:
+			return { short: 'Exited on its own with no error', severity: 'warning' };
+		case 1:
+			return { short: 'Threw an unhandled error on startup', severity: 'error' };
+		case 2:
+			return { short: 'Start command was rejected as malformed', severity: 'error' };
+		case 126:
+			return { short: 'Start command is not executable', severity: 'error' };
+		case 127:
+			return { short: 'Start command was not found in the image', severity: 'error' };
+		case 139:
+			return { short: 'Segfaulted on invalid memory access', severity: 'critical' };
+		case 143:
+			return { short: 'Stopped normally on a shutdown request', severity: 'info' };
+		case 255:
+			return { short: 'Died during startup without reporting a reason', severity: 'error' };
+		default:
+			break;
+	}
+
+	if (code > 128 && code < 165)
+		return { short: `Killed by signal ${code - 128}`, severity: 'error' };
+
+	return { short: `Stopped with exit code ${code}`, severity: 'error' };
 }
 
 export function humanizeWarning(msg: string): HumanizedWarning | null {

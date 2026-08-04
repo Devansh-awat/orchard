@@ -404,7 +404,7 @@
 		<div class="ws-header">
 			<div class="ws-header-top">
 				<div class="ws-header-info">
-					<div class="skeleton" style="height: 1.5rem; width: 40%; margin-bottom: 0.375rem;"></div>
+					<div class="skeleton" style="height: 1.5rem; width: 40%; margin-bottom: 0.5rem;"></div>
 					<div class="skeleton" style="height: 0.875rem; width: 60%;"></div>
 				</div>
 			</div>
@@ -412,7 +412,10 @@
 		<!-- Skeleton: Stats -->
 		<div class="ws-stats">
 			{#each Array(3) as _, i (i)}
-				<div class="skeleton" style="height: 1.75rem; width: 5.5rem; border-radius: 0.5rem;"></div>
+				<div
+					class="skeleton"
+					style="height: 1.75rem; width: 5.5rem; border-radius: var(--radius-sm);"
+				></div>
 			{/each}
 		</div>
 		<!-- Skeleton: Projects header -->
@@ -441,7 +444,10 @@
 			</div>
 			<div class="ws-team-avatars">
 				{#each Array(3) as _, i (i)}
-					<div class="skeleton" style="width: 5rem; height: 1.875rem; border-radius: 9999px;"></div>
+					<div
+						class="skeleton"
+						style="width: 5rem; height: 1.875rem; border-radius: var(--radius-pill);"
+					></div>
 				{/each}
 			</div>
 		</div>
@@ -794,13 +800,15 @@
 		gap: 0.75rem;
 		padding: 3rem 0;
 		color: var(--surface-muted);
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 	}
 
 	.ws-error {
 		padding: 0.75rem 1rem;
-		border-radius: 0.75rem;
-		font-size: 0.875rem;
+		border-radius: var(--radius-md);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
 		color: var(--error-text-color);
 		border: 1px solid color-mix(in srgb, var(--error-text-color) 25%, transparent);
@@ -825,7 +833,8 @@
 	}
 
 	.ws-title {
-		font-size: 1.25rem;
+		font-size: var(--text-title-3);
+		line-height: var(--lh-title-3);
 		font-weight: 700;
 		letter-spacing: -0.02em;
 		color: var(--center-channel-color);
@@ -833,7 +842,8 @@
 	}
 
 	.ws-description {
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		color: var(--surface-muted);
 		margin: 0.25rem 0 0;
 	}
@@ -849,10 +859,11 @@
 	.ws-stat {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
-		padding: 0.375rem 0.75rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
+		gap: 0.5rem;
+		padding: 0.5rem 0.75rem;
+		border-radius: var(--radius-sm);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);
 	}
@@ -872,7 +883,8 @@
 	}
 
 	.ws-section-title {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -892,12 +904,13 @@
 
 	.ws-search-input {
 		width: 100%;
-		padding: 0.4375rem 0.75rem;
-		border-radius: 0.5rem;
+		padding: 0.5rem 0.75rem;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--surface-border);
 		background-color: var(--center-channel-bg);
 		color: var(--center-channel-color);
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 	}
 
 	.ws-search-input::placeholder {
@@ -923,13 +936,13 @@
 		gap: 0.875rem;
 		padding: 1.125rem;
 		border: 1px solid var(--surface-border);
-		border-radius: 1rem;
+		border-radius: var(--radius-lg);
 		background-color: var(--surface-bg);
 		text-decoration: none;
 		color: var(--center-channel-color);
 		transition:
-			border-color 0.15s,
-			box-shadow 0.15s;
+			border-color var(--dur-fast),
+			box-shadow var(--dur-fast);
 		box-shadow:
 			0 1px 3px rgb(0 0 0 / 0.03),
 			0 1px 2px rgb(0 0 0 / 0.02);
@@ -954,7 +967,7 @@
 		justify-content: center;
 		width: 3rem;
 		height: 3rem;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
 		color: var(--sidebar-text-active-border);
 		flex-shrink: 0;
@@ -964,10 +977,11 @@
 		display: flex;
 		align-items: center;
 		gap: 0.25rem;
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--surface-muted);
 		padding: 0.25rem 0.5rem;
-		border-radius: 9999px;
+		border-radius: var(--radius-pill);
 		background-color: color-mix(in srgb, var(--surface-border) 40%, transparent);
 	}
 
@@ -983,13 +997,15 @@
 	}
 
 	.ws-project-name {
-		font-size: 0.9375rem;
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
 		font-weight: 600;
 		color: var(--center-channel-color);
 	}
 
 	.ws-project-desc {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 		display: -webkit-box;
 		-webkit-line-clamp: 2;
@@ -1005,9 +1021,10 @@
 		gap: 0.5rem;
 		padding: 3rem 1rem;
 		color: var(--surface-muted);
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		border: 1px dashed var(--surface-border);
-		border-radius: 1rem;
+		border-radius: var(--radius-lg);
 		margin-bottom: 1.5rem;
 	}
 
@@ -1016,7 +1033,7 @@
 		margin-top: 0.5rem;
 		padding: 0.875rem 1rem;
 		border: 1px solid color-mix(in srgb, var(--surface-border) 60%, transparent);
-		border-radius: 1rem;
+		border-radius: var(--radius-lg);
 		background-color: color-mix(in srgb, var(--surface-bg) 50%, transparent);
 	}
 
@@ -1024,14 +1041,15 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		margin-bottom: 0.625rem;
+		margin-bottom: 0.75rem;
 	}
 
 	.ws-team-title {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
-		font-size: 0.75rem;
+		gap: 0.5rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		font-weight: 600;
 		color: var(--surface-muted);
 		text-transform: uppercase;
@@ -1042,7 +1060,7 @@
 	.ws-team-actions {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 	}
 
 	.ws-team-avatars {
@@ -1054,11 +1072,11 @@
 	.ws-team-member {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		padding: 0.25rem 0.5rem 0.25rem 0.25rem;
-		border-radius: 9999px;
+		border-radius: var(--radius-pill);
 		background-color: color-mix(in srgb, var(--surface-border) 35%, transparent);
-		transition: background-color 0.15s;
+		transition: background-color var(--dur-fast);
 		cursor: default;
 	}
 
@@ -1081,7 +1099,8 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		font-size: 0.625rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		background-color: color-mix(in srgb, var(--surface-border) 80%, var(--center-channel-bg));
 		color: var(--center-channel-color);
@@ -1089,19 +1108,22 @@
 	}
 
 	.ws-team-name {
-		font-size: 0.75rem;
-		font-weight: 500;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		color: var(--center-channel-color);
 	}
 
 	.ws-team-role {
-		font-size: 0.625rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 		text-transform: capitalize;
 	}
 
 	.ws-team-empty {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--surface-muted);
 		margin: 0;
 	}
@@ -1110,15 +1132,16 @@
 	.ws-btn {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
-		padding: 0.4375rem 0.875rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		font-weight: 500;
+		gap: 0.5rem;
+		padding: 0.5rem 0.875rem;
+		border-radius: var(--radius-sm);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
 		border: none;
 		cursor: pointer;
 		text-decoration: none;
-		transition: opacity 0.15s;
+		transition: opacity var(--dur-fast);
 		white-space: nowrap;
 	}
 
@@ -1168,8 +1191,8 @@
 	.ws-btn-ghost {
 		background: none;
 		color: var(--surface-muted);
-		padding: 0.375rem;
-		border-radius: 0.375rem;
+		padding: 0.5rem;
+		border-radius: var(--radius-xs);
 	}
 
 	.ws-btn-ghost:hover {
@@ -1177,8 +1200,9 @@
 	}
 
 	.ws-btn-sm {
-		padding: 0.3125rem 0.625rem;
-		font-size: 0.75rem;
+		padding: 0.3125rem 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		gap: 0.25rem;
 	}
 
@@ -1202,7 +1226,7 @@
 	.ws-dialog {
 		width: 100%;
 		max-width: 28rem;
-		border-radius: 1rem;
+		border-radius: var(--radius-lg);
 		border: 1px solid var(--surface-border);
 		background-color: var(--surface-bg);
 		color: var(--center-channel-color);
@@ -1235,28 +1259,31 @@
 	.ws-field {
 		display: flex;
 		flex-direction: column;
-		gap: 0.375rem;
+		gap: 0.5rem;
 	}
 
 	.ws-label {
-		font-size: 0.8125rem;
-		font-weight: 500;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
 		color: var(--center-channel-color);
 	}
 
 	.ws-field-hint {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 	}
 
 	.ws-select {
 		width: 100%;
 		padding: 0.5rem 0.75rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--surface-border);
 		background-color: var(--center-channel-bg);
 		color: var(--center-channel-color);
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 	}
 
 	.ws-select:focus {

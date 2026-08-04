@@ -23,7 +23,7 @@
 	class="cp-root"
 	onmouseenter={() => (hovered = true)}
 	onmouseleave={() => (hovered = false)}
-	{@attach springHover({ lift: -2, stiffness: 340, damping: 24 })}
+	{@attach springHover({ lift: -2 })}
 >
 	{#if icon}
 		<div class="cp-icon">
@@ -47,22 +47,24 @@
 		align-items: center;
 		gap: 0.875rem;
 		width: 100%;
-		padding: 0.875rem 1rem;
-		border-radius: 0.75rem;
-		border: 1px dashed color-mix(in srgb, var(--surface-border) 80%, transparent);
+		padding: 0.875rem var(--space-4);
+		border-radius: var(--radius-md);
+		border: 1px dashed color-mix(in srgb, var(--border-default) 80%, transparent);
 		background: none;
 		cursor: pointer;
-		color: var(--center-channel-color);
+		color: var(--text-default);
 		text-align: left;
-		transition: all 150ms;
+		transition:
+			border-color var(--dur-base),
+			background-color var(--dur-base);
 	}
 	.cp-root:hover {
-		border-color: var(--button-bg);
+		border-color: var(--accent);
 		border-style: solid;
-		background-color: color-mix(in srgb, var(--button-bg) 4%, transparent);
+		background-color: color-mix(in srgb, var(--accent) 4%, transparent);
 	}
 	.cp-root:hover .cp-arrow {
-		color: var(--button-bg);
+		color: var(--accent);
 		transform: translateX(2px);
 	}
 	.cp-icon {
@@ -71,9 +73,9 @@
 		justify-content: center;
 		width: 2.25rem;
 		height: 2.25rem;
-		border-radius: 0.625rem;
-		background-color: color-mix(in srgb, var(--center-channel-color) 7%, transparent);
-		color: var(--center-channel-color);
+		border-radius: var(--radius-md);
+		background-color: var(--fill-soft);
+		color: var(--text-default);
 		flex-shrink: 0;
 	}
 	.cp-text {
@@ -83,16 +85,20 @@
 		gap: 0.0625rem;
 	}
 	.cp-label {
-		font-size: 0.875rem;
-		font-weight: 550;
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
+		font-weight: 600;
 	}
 	.cp-hint {
-		font-size: 0.75rem;
-		color: var(--surface-muted);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		color: var(--text-muted);
 	}
 	.cp-arrow {
-		color: var(--surface-muted);
+		color: var(--text-muted);
 		flex-shrink: 0;
-		transition: all 150ms;
+		transition:
+			color var(--dur-base),
+			transform var(--dur-base);
 	}
 </style>

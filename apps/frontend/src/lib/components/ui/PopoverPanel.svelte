@@ -2,6 +2,7 @@
 	import { Popover } from 'melt/builders';
 	import type { Snippet } from 'svelte';
 	import type { Placement } from '@floating-ui/dom';
+	import { overlayMotion } from '$lib/utils/motion.svelte';
 
 	let {
 		placement = 'bottom-start',
@@ -31,6 +32,12 @@
 </script>
 
 {@render trigger(popover.trigger, open)}
-<div {...popover.content} class="ui-popover{className ? ` ${className}` : ''}">
+<div
+	{...popover.content}
+	class="ui-popover{className ? ` ${className}` : ''}"
+	{@attach overlayMotion(() => open, {
+		origin: placement.startsWith('top') ? 'bottom center' : 'top center'
+	})}
+>
 	{@render children({ close: () => (open = false) })}
 </div>

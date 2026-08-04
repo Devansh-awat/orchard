@@ -1,10 +1,19 @@
 <script lang="ts">
 	import { onDestroy, untrack, tick } from 'svelte';
 	import { browser } from '$app/environment';
+	import { page } from '$app/stores';
 	import { apiFetch, toasts } from '$lib/stores';
-	import { formatRelativeTime, ansiToHtml } from '$lib/utils/format';
-	import { Button, Select } from '$lib/components/ui';
+	import {
+		demoHttpMetrics,
+		demoOverview,
+		demoErrors,
+		demoKilled,
+		DEMO_KILLED_LOGS
+	} from '$lib/utils/observe-demo';
+	import { formatRelativeTime, ansiToHtml, explainExitCode, podLabel } from '$lib/utils/format';
+	import { Button, Select, SegmentedControl, Menu, MenuItem } from '$lib/components/ui';
 	import DeploymentMetrics from '$lib/components/DeploymentMetrics.svelte';
+	import { slide } from '$lib/utils/transitions';
 	import { motionStagger, springHover } from '$lib/utils/motion.svelte';
 	import {
 		Clock,
@@ -16,8 +25,8 @@
 		Search,
 		Loader2,
 		ChevronDown,
+		UserPlus,
 		ChevronRight,
-		Package,
 		CheckCircle2,
 		Terminal as TerminalIcon,
 		Copy,
@@ -29,16 +38,14 @@
 	let {
 		deployment,
 		active = true,
-		metricsOnly = false,
 		activeTab = $bindable('metrics')
 	}: {
 		deployment: any;
 		active?: boolean;
-		metricsOnly?: boolean;
 		activeTab?: SubTab;
 	} = $props();
 
-	type SubTab = 'metrics' | 'logs' | 'http' | 'traces' | 'errors' | 'killed';
+	type SubTab = 'metrics' | 'logs' | 'http' | 'errors' | 'killed';
 
 	type KilledContainer = {
 		entryId: string;
@@ -50,7 +57,6 @@
 		capturedAt: string;
 	};
 	type LogLevel = 'all' | 'debug' | 'info' | 'warn' | 'error';
-	type TimeRange = '5m' | '15m' | '30m' | '1h';
 	type ErrorTimeWindow = '15m' | '1h' | '6h' | '24h';
 
 	type DetectedRuntime = {
@@ -61,15 +67,32 @@
 		detectedFrom: string;
 	};
 
+	type ErrorAssignee = { id: string; username: string; imageUrl?: string | null };
+	type ErrorDeploy = {
+		commitSha: string | null;
+		commitMessage: string | null;
+		branch: string | null;
+		triggerType: string | null;
+		triggeredBy: string | null;
+		at: string;
+		count?: number;
+	};
 	type ErrorGroup = {
 		fingerprint: string;
 		type: string;
 		message: string;
 		count: number;
+		status?: 'unresolved' | 'resolved' | 'ignored';
 		firstSeen: string;
 		lastSeen: string;
-		samples: Array<{ timestamp?: string; message: string; stackTrace?: string }>;
-		trend: 'rising' | 'stable' | 'falling';
+		assignee?: ErrorAssignee | null;
+		githubIssueUrl?: string | null;
+		stackTrace?: string | null;
+		firstDeploy?: ErrorDeploy | null;
+		deployCount?: number;
+		deploys?: ErrorDeploy[];
+		samples?: Array<{ timestamp?: string; message: string; stackTrace?: string }>;
+		trend?: 'rising' | 'stable' | 'falling';
 	};
 
 	const LANGUAGE_COLORS: Record<string, string> = {
@@ -123,13 +146,6 @@
 		{ id: '24h', label: '24h', minutes: 1440 }
 	];
 
-	const TIME_RANGES: { id: TimeRange; label: string; ms: number }[] = [
-		{ id: '5m', label: '5m', ms: 5 * 60 * 1000 },
-		{ id: '15m', label: '15m', ms: 15 * 60 * 1000 },
-		{ id: '30m', label: '30m', ms: 30 * 60 * 1000 },
-		{ id: '1h', label: '1h', ms: 60 * 60 * 1000 }
-	];
-
 	// Incremental log loading: start with a small tail, grow it as the user
 	// scrolls up. LOG_MAX_LINES matches the backend cap and bounds search too.
 	const LOG_INITIAL_LINES = 1000;
@@ -141,9 +157,37 @@
 		return 30_000;
 	}
 
-	let timeRange = $state<TimeRange>('1h');
 	let logSearch = $state('');
 	let logLevel = $state<LogLevel>('all');
+	let logLevelSet = $state<Set<string>>(new Set());
+	let showLogFilters = $state(false);
+	const LOG_LEVELS = ['error', 'warn', 'info', 'debug', 'log'];
+	let logSince = $state<number>(0);
+	const LOG_WINDOWS = [
+		{ label: 'Any time', ms: 0 },
+		{ label: '5m', ms: 5 * 60_000 },
+		{ label: '15m', ms: 15 * 60_000 },
+		{ label: '1h', ms: 60 * 60_000 },
+		{ label: '6h', ms: 6 * 60 * 60_000 },
+		{ label: '24h', ms: 24 * 60 * 60_000 }
+	];
+
+	// Search grammar: bare terms must all match, -term excludes, "quoted phrase"
+	// matches literally. Everything is case-insensitive.
+	function parseQuery(raw: string) {
+		const include: string[] = [];
+		const exclude: string[] = [];
+		const re = /-?"[^"]*"|-?\S+/g;
+		for (const tokenRaw of raw.match(re) ?? []) {
+			let t = tokenRaw;
+			const neg = t.startsWith('-');
+			if (neg) t = t.slice(1);
+			t = t.replace(/^"|"$/g, '').toLowerCase();
+			if (!t) continue;
+			(neg ? exclude : include).push(t);
+		}
+		return { include, exclude };
+	}
 	let liveTail = $state(false);
 	let logTail = $state(1000);
 	let logsAtMax = $state(false);
@@ -156,18 +200,83 @@
 	let overview = $state<any>(null);
 	let overviewLoading = $state(false);
 	let capabilities = $state<any>(null);
-	let httpMetrics = $state<any>(null);
-	let httpLoading = $state(false);
-	let httpError = $state<string | null>(null);
 	let errorGroups = $state<ErrorGroup[]>([]);
+	let errorStatusFilter = $state<'unresolved' | 'resolved' | 'ignored' | 'all'>('unresolved');
+	let updatingError = $state<string | null>(null);
+	let orgMembers = $state<ErrorAssignee[]>([]);
+	let errorRepoUrl = $state<string | null>(null);
+
+	const visibleErrors = $derived(
+		errorStatusFilter === 'all'
+			? errorGroups
+			: errorGroups.filter((g) => (g.status ?? 'unresolved') === errorStatusFilter)
+	);
+
+	async function setErrorStatus(g: ErrorGroup, status: 'unresolved' | 'resolved' | 'ignored') {
+		if (!deployment?.id) return;
+		updatingError = g.fingerprint;
+		const prev = g.status;
+		g.status = status;
+		try {
+			const res = await apiFetch(
+				`/apiv1/observe/deployments/${encodeURIComponent(deployment.id)}/errors/${encodeURIComponent(g.fingerprint)}`,
+				{
+					method: 'PATCH',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ status })
+				}
+			);
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+		} catch (err) {
+			g.status = prev;
+			toasts.error(`Could not update error: ${(err as Error).message}`);
+		} finally {
+			updatingError = null;
+		}
+	}
+
+	async function assignError(g: ErrorGroup, assigneeId: string | null) {
+		if (!deployment?.id) return;
+		updatingError = g.fingerprint;
+		const prev = g.assignee;
+		g.assignee = assigneeId ? (orgMembers.find((m) => m.id === assigneeId) ?? null) : null;
+		try {
+			const res = await apiFetch(
+				`/apiv1/observe/deployments/${encodeURIComponent(deployment.id)}/errors/${encodeURIComponent(g.fingerprint)}`,
+				{
+					method: 'PATCH',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({ assigneeId })
+				}
+			);
+			if (!res.ok) throw new Error(`HTTP ${res.status}`);
+		} catch (err) {
+			g.assignee = prev;
+			toasts.error(`Could not assign error: ${(err as Error).message}`);
+		} finally {
+			updatingError = null;
+		}
+	}
+
 	let errorsLoading = $state(false);
 	let errorsError = $state<string | null>(null);
 	let errorWindow = $state<ErrorTimeWindow>('1h');
+	let metricsWindowMs = $state(60 * 60 * 1000);
+	let metricsPaused = $state(false);
+	let metricsGroupBy = $state<'none' | 'pod'>('none');
+	const METRIC_RANGES = [
+		{ id: '5m', ms: 5 * 60 * 1000 },
+		{ id: '15m', ms: 15 * 60 * 1000 },
+		{ id: '30m', ms: 30 * 60 * 1000 },
+		{ id: '1h', ms: 60 * 60 * 1000 },
+		{ id: '6h', ms: 6 * 60 * 60 * 1000 },
+		{ id: '24h', ms: 24 * 60 * 60 * 1000 },
+		{ id: '7d', ms: 7 * 24 * 60 * 60 * 1000 }
+	];
 	let expandedErrors = $state(new Set<string>());
 	let Line: any = $state(null);
 	let chartReady = $state(false);
 	let logsFetchSeq = 0;
-	let httpFetchSeq = 0;
 	let errorsFetchSeq = 0;
 	let liveTailHandle: ReturnType<typeof setInterval> | null = null;
 	let logViewerEl = $state<HTMLDivElement | null>(null);
@@ -175,27 +284,78 @@
 	let copiedId = $state<string | null>(null);
 	let prevLogCount = 0;
 
-	const hasIngress = $derived((deployment?.ingresses?.length ?? 0) > 0);
-	const timeRangeMs = $derived(TIME_RANGES.find((r) => r.id === timeRange)?.ms ?? 60 * 60 * 1000);
+	const demo = $derived($page.url.searchParams.has('demo'));
+	const hasIngress = $derived(demo || (deployment?.ingresses?.length ?? 0) > 0);
 
 	const filteredLogs = $derived.by(() => {
 		let entries = logEntries;
-		if (logLevel !== 'all') {
+		if (logLevelSet.size > 0) {
+			entries = entries.filter((e: any) => logLevelSet.has((e.level ?? 'log').toLowerCase()));
+		} else if (logLevel !== 'all') {
 			entries = entries.filter((e: any) => (e.level ?? '').toLowerCase() === logLevel);
 		}
-		if (logSearch.trim()) {
-			const q = logSearch.toLowerCase();
-			entries = entries.filter((e: any) =>
-				((e.raw ?? e.message ?? '') as string).toLowerCase().includes(q)
-			);
+		if (logSince > 0) {
+			const cutoff = Date.now() - logSince;
+			entries = entries.filter((e: any) => {
+				if (!e.timestamp) return false;
+				const t = new Date(e.timestamp).getTime();
+				return Number.isFinite(t) && t >= cutoff;
+			});
+		}
+		const q = logSearch.trim();
+		if (q) {
+			const { include, exclude } = parseQuery(q);
+			entries = entries.filter((e: any) => {
+				const hay = ((e.raw ?? e.message ?? '') as string).toLowerCase();
+				return include.every((t) => hay.includes(t)) && !exclude.some((t) => hay.includes(t));
+			});
 		}
 		return entries;
 	});
 
+	function stripLeadingTime(line: string): string {
+		// The Time column already shows this, and ansiToHtml would otherwise
+		// render the same stamp again as an inline pill. Mirrors ISO_TS_RE.
+		return line
+			.replace(/\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d+)?Z\s*/g, '')
+			.replace(/^(?:\x1b\[[0-9;]*m|\s)*\d{1,2}:\d{2}:\d{2}(?:[.,]\d{1,6})?\s+/, '');
+	}
+
+	function deployLabel(d: ErrorDeploy): string {
+		if (d.triggerType === 'manual' || d.triggeredBy) {
+			return d.triggeredBy ? `Deployed by @${d.triggeredBy}` : 'Deployed manually';
+		}
+		if (d.branch) return `Pushed to ${d.branch}`;
+		return 'Deployed';
+	}
+
+	function fmtLogTime(ts?: string): string {
+		if (!ts) return '';
+		const d = new Date(ts);
+		if (Number.isNaN(d.getTime())) return '';
+		const p = (n: number, w = 2) => String(n).padStart(w, '0');
+		return `${p(d.getHours())}:${p(d.getMinutes())}:${p(d.getSeconds())}.${p(d.getMilliseconds(), 3)}`;
+	}
+
+	function toggleLogLevel(level: string) {
+		const next = new Set(logLevelSet);
+		if (next.has(level)) next.delete(level);
+		else next.add(level);
+		logLevelSet = next;
+	}
+
+	function clearLogFilters() {
+		logLevelSet = new Set();
+		logSearch = '';
+		logSince = 0;
+	}
+
 	const RENDER_WINDOW_STEP = 1000;
 	let renderWindow = $state(RENDER_WINDOW_STEP);
 	const visibleLogs = $derived(
-		filteredLogs.length > renderWindow ? filteredLogs.slice(-renderWindow) : filteredLogs
+		(filteredLogs.length > renderWindow ? filteredLogs.slice(-renderWindow) : filteredLogs)
+			.slice()
+			.reverse()
 	);
 	const hiddenLogCount = $derived(filteredLogs.length - visibleLogs.length);
 
@@ -230,7 +390,7 @@
 	}
 
 	const visibleTabs = $derived(
-		(['metrics', 'logs', 'http', 'traces', 'errors', 'killed'] as SubTab[]).filter(
+		(['metrics', 'logs', 'http', 'errors', 'killed'] as SubTab[]).filter(
 			(t) => t !== 'http' || hasIngress
 		)
 	);
@@ -249,6 +409,13 @@
 
 	async function fetchKilled() {
 		if (!deployment?.id) return;
+		if (demo) {
+			killedList = demoKilled();
+			killedFetched = true;
+			killedError = null;
+			killedLoading = false;
+			return;
+		}
 		killedLoading = true;
 		killedError = null;
 		try {
@@ -270,6 +437,10 @@
 		}
 		expandedKilled = entryId;
 		if (killedLogs[entryId] !== undefined || !deployment?.id) return;
+		if (demo) {
+			killedLogs = { ...killedLogs, [entryId]: DEMO_KILLED_LOGS[entryId] ?? '' };
+			return;
+		}
 		killedLogsLoading = entryId;
 		try {
 			const res = await apiFetch(
@@ -310,9 +481,11 @@
 	function handleLogScroll() {
 		if (!logViewerEl) return;
 		const { scrollTop, scrollHeight, clientHeight } = logViewerEl;
-		userScrolledUp = scrollHeight - scrollTop - clientHeight > 60;
+		// Newest sits at the top, so "away from live" means scrolled down and
+		// older lines load as you approach the bottom.
+		userScrolledUp = scrollTop > 60;
 
-		if (scrollTop > 80) return;
+		if (scrollHeight - scrollTop - clientHeight > 80) return;
 		const now = Date.now();
 		if (now - lastLoadMoreAt < 400) return;
 		lastLoadMoreAt = now;
@@ -320,14 +493,7 @@
 		// First reveal already-loaded rows hidden by the render window, then fall
 		// back to fetching earlier lines from the server.
 		if (hiddenLogCount > 0) {
-			const el = logViewerEl;
-			const prevHeight = el.scrollHeight;
-			const prevTop = el.scrollTop;
 			renderWindow += RENDER_WINDOW_STEP;
-			tick().then(() => {
-				if (!logViewerEl) return;
-				logViewerEl.scrollTop = prevTop + (logViewerEl.scrollHeight - prevHeight);
-			});
 			return;
 		}
 
@@ -344,26 +510,18 @@
 
 	function scrollToBottom() {
 		if (!logViewerEl) return;
-		logViewerEl.scrollTo({ top: logViewerEl.scrollHeight, behavior: 'smooth' });
+		logViewerEl.scrollTo({ top: 0, behavior: 'smooth' });
 	}
 
 	$effect(() => {
 		const count = filteredLogs.length;
 		if (count > prevLogCount && liveTail && logViewerEl && !userScrolledUp) {
 			tick().then(() => {
-				if (logViewerEl) logViewerEl.scrollTop = logViewerEl.scrollHeight;
+				if (logViewerEl) logViewerEl.scrollTop = 0;
 			});
 		}
 		prevLogCount = count;
 	});
-
-	function latestValue(series: any[]): number | null {
-		if (!series?.length) return null;
-		for (let i = series.length - 1; i >= 0; i--) {
-			if (series[i]?.y != null) return series[i].y;
-		}
-		return null;
-	}
 
 	if (browser) {
 		Promise.all([import('chart.js'), import('svelte5-chartjs')])
@@ -387,6 +545,11 @@
 
 	async function fetchOverview() {
 		if (!deployment?.id) return;
+		if (demo) {
+			overview = demoOverview();
+			overviewLoading = false;
+			return;
+		}
 		overviewLoading = true;
 		try {
 			const res = await apiFetch(
@@ -405,7 +568,7 @@
 		if (!logEntries.length) logsLoading = true;
 		logsError = null;
 		const q = logSearch.trim();
-		const filtering = q.length > 0 || logLevel !== 'all';
+		const filtering = q.length > 0 || logLevel !== 'all' || logLevelSet.size > 0 || logSince > 0;
 		const params = new URLSearchParams();
 		// When filtering, scan the whole retained window server-side so matches
 		// aren't limited to the lines currently loaded in the browser. Otherwise
@@ -448,29 +611,6 @@
 		}
 	}
 
-	async function fetchHttpMetrics() {
-		if (!deployment?.id || !hasIngress) return;
-		const seq = ++httpFetchSeq;
-		httpLoading = true;
-		httpError = null;
-		const now = Date.now();
-		const start = now - timeRangeMs;
-		const step = chooseStep(timeRangeMs);
-		try {
-			const res = await apiFetch(
-				`/apiv1/observe/deployments/${encodeURIComponent(deployment.id)}/http-metrics?start=${start}&end=${now}&step=${step}`
-			);
-			if (seq !== httpFetchSeq) return;
-			if (!res.ok) throw new Error(`HTTP ${res.status}`);
-			httpMetrics = await res.json();
-		} catch (err) {
-			if (seq !== httpFetchSeq) return;
-			httpError = (err as Error).message;
-		} finally {
-			if (seq === httpFetchSeq) httpLoading = false;
-		}
-	}
-
 	const detectedRuntime = $derived<DetectedRuntime | null>(capabilities?.runtime ?? null);
 
 	const runtimeDisplay = $derived.by(() => {
@@ -494,6 +634,12 @@
 
 	async function fetchErrors() {
 		if (!deployment?.id) return;
+		if (demo) {
+			errorGroups = demoErrors(errorWindowMinutes);
+			errorsError = null;
+			errorsLoading = false;
+			return;
+		}
 		const seq = ++errorsFetchSeq;
 		if (!errorGroups.length) errorsLoading = true;
 		errorsError = null;
@@ -505,6 +651,8 @@
 			if (!res.ok) throw new Error(`HTTP ${res.status}`);
 			const body = await res.json();
 			errorGroups = body?.errors ?? [];
+			errorRepoUrl = body?.repoUrl ?? null;
+			if (Array.isArray(body?.assignable)) orgMembers = body.assignable;
 		} catch (err) {
 			if (seq !== errorsFetchSeq) return;
 			errorsError = (err as Error).message;
@@ -529,15 +677,6 @@
 			fetchCapabilities();
 			fetchOverview();
 			fetchLogs();
-		});
-	});
-
-	$effect(() => {
-		const tab = activeTab;
-		const range = timeRange;
-		if (tab !== 'http' || !hasIngress) return;
-		untrack(() => {
-			fetchHttpMetrics();
 		});
 	});
 
@@ -650,67 +789,6 @@
 		return `${h}:${m}`;
 	}
 
-	function makeChartData(series: any[], color: string) {
-		return {
-			datasets: [
-				{
-					data: series ?? [],
-					borderColor: color,
-					backgroundColor: color + '18',
-					borderWidth: 2,
-					pointRadius: 0,
-					pointHoverRadius: 0,
-					fill: true,
-					tension: 0.25,
-					spanGaps: true,
-					borderCapStyle: 'round' as const,
-					borderJoinStyle: 'round' as const
-				}
-			]
-		};
-	}
-
-	function makeChartOptions(formatter: (v: number) => string) {
-		const now = Date.now();
-		return {
-			responsive: true,
-			maintainAspectRatio: false,
-			animation: false as const,
-			parsing: false as const,
-			normalized: true,
-			events: [] as any,
-			plugins: {
-				legend: { display: false },
-				tooltip: { enabled: false },
-				decimation: { enabled: true, algorithm: 'lttb' as const, samples: 200 }
-			},
-			scales: {
-				x: {
-					type: 'linear' as const,
-					min: now - timeRangeMs,
-					max: now,
-					ticks: {
-						color: 'rgba(140,140,150,0.85)',
-						maxRotation: 0,
-						autoSkip: true,
-						maxTicksLimit: 6,
-						callback: (v: any) => formatTick(v as number)
-					},
-					grid: { color: 'rgba(120,120,128,0.08)' }
-				},
-				y: {
-					beginAtZero: true,
-					ticks: {
-						color: 'rgba(140,140,150,0.85)',
-						maxTicksLimit: 4,
-						callback: (v: any) => formatter(v as number)
-					},
-					grid: { color: 'rgba(120,120,128,0.08)' }
-				}
-			}
-		};
-	}
-
 	const fmtReqRate = (v: number) =>
 		v >= 1000 ? `${(v / 1000).toFixed(1)}k/s` : `${v.toFixed(1)}/s`;
 	const fmtPercent = (v: number) => `${v.toFixed(2)}%`;
@@ -759,17 +837,17 @@
 			},
 			hasIngress && {
 				label: 'Req/s',
-				value: overviewStats.reqRate != null ? fmtReqRate(overviewStats.reqRate) : '--',
+				value: overviewStats.reqRate != null ? fmtReqRate(overviewStats.reqRate) : '–',
 				sub: null
 			},
 			hasIngress && {
 				label: 'Error rate',
-				value: overviewStats.errorRate != null ? fmtPercent(overviewStats.errorRate) : '--',
+				value: overviewStats.errorRate != null ? fmtPercent(overviewStats.errorRate) : '–',
 				sub: null
 			},
 			hasIngress && {
 				label: 'Avg latency',
-				value: overviewStats.avgLatency != null ? fmtLatency(overviewStats.avgLatency) : '--',
+				value: overviewStats.avgLatency != null ? fmtLatency(overviewStats.avgLatency) : '–',
 				sub: null
 			}
 		].filter(Boolean) as { label: string; value: string; sub: string | null }[]
@@ -779,7 +857,6 @@
 		metrics: 'Metrics',
 		logs: 'Logs',
 		http: 'HTTP',
-		traces: 'Traces',
 		errors: 'Errors',
 		killed: 'Killed'
 	};
@@ -798,7 +875,7 @@
 	}
 
 	function formatUptime(seconds: number | null): string {
-		if (seconds == null) return '--';
+		if (seconds == null) return '–';
 		if (seconds < 60) return `${Math.floor(seconds)}s`;
 		if (seconds < 3600) return `${Math.floor(seconds / 60)}m`;
 		if (seconds < 86400) return `${Math.floor(seconds / 3600)}h`;
@@ -806,16 +883,11 @@
 	}
 </script>
 
-{#if metricsOnly}
-	<DeploymentMetrics kind="deployment" id={deployment?.id ?? null} {active} />
-{:else}
-	<div class="observe-root">
+<div class="observe-root">
+	<div class="ov-vitals">
 		<div class="ov-statrow">
 			{#each stripStats as stat, i (stat.label)}
-				<div
-					class="ov-statcell"
-					{@attach motionStagger({ index: i, stride: 0.04, from: { y: 8, opacity: 0 } })}
-				>
+				<div class="ov-statcell" {@attach motionStagger({ index: i, from: { y: 8, opacity: 0 } })}>
 					<span class="ov-statcell-label">{stat.label}</span>
 					<span class="ov-statcell-value"
 						>{stat.value}{#if stat.sub}<span class="ov-statcell-sub">{stat.sub}</span>{/if}</span
@@ -823,788 +895,769 @@
 				</div>
 			{/each}
 		</div>
+	</div>
 
-		<div class="ov-ultabs" role="tablist">
-			{#each visibleTabs as tab (tab)}
-				<button
-					class="ov-ultab"
-					class:ov-ultab--active={activeTab === tab}
-					aria-selected={activeTab === tab}
-					role="tab"
-					onclick={() => (activeTab = tab)}
-					type="button"
-				>
-					{TAB_LABELS[tab]}{#if tab === 'traces'}<span class="ov-ultab-soon">Soon</span>{/if}
-				</button>
-			{/each}
+	<div class="ov-viewbar">
+		<div class="ov-seg-scroll">
+			<SegmentedControl
+				label="Observability view"
+				bind:value={activeTab}
+				options={visibleTabs.map((tab) => ({ value: tab, label: TAB_LABELS[tab] }))}
+			/>
 		</div>
 
-		<div class="observe-body">
-			{#if activeTab === 'metrics'}
-				<DeploymentMetrics
-					kind="deployment"
-					id={deployment?.id ?? null}
-					active={active && activeTab === 'metrics'}
-				/>
+		<div class="ov-viewbar-controls">
+			{#if activeTab === 'metrics' || (activeTab === 'http' && hasIngress)}
+				{#if activeTab === 'metrics'}
+					<SegmentedControl
+						label="Group metrics by"
+						bind:value={metricsGroupBy}
+						options={[
+							{ value: 'none', label: 'Total' },
+							{ value: 'pod', label: 'By pod' }
+						]}
+					/>
+				{/if}
+				<Select
+					value={String(metricsWindowMs)}
+					class="ov-range-select"
+					aria-label="Metrics time range"
+					onchange={(e) => (metricsWindowMs = Number((e.currentTarget as HTMLSelectElement).value))}
+				>
+					{#each METRIC_RANGES as r (r.id)}
+						<option value={String(r.ms)}>Last {r.id}</option>
+					{/each}
+				</Select>
+				<Button
+					size="sm"
+					variant="secondary"
+					onclick={() => (metricsPaused = !metricsPaused)}
+					aria-label={metricsPaused ? 'Resume live metrics' : 'Pause live metrics'}
+				>
+					{metricsPaused ? 'Paused' : 'Live'}
+				</Button>
 			{:else if activeTab === 'logs'}
-				<div class="observe-log-toolbar">
-					<div class="observe-log-search">
-						<span class="observe-log-search-icon"><Search class="h-3.5 w-3.5" /></span>
-						<input
-							type="text"
-							class="observe-log-search-input"
-							placeholder="Search logs..."
-							bind:value={logSearch}
-						/>
-					</div>
-
-					<Select bind:value={logLevel} aria-label="Log level">
-						<option value="all">All levels</option>
-						<option value="debug">Debug</option>
-						<option value="info">Info</option>
-						<option value="warn">Warn</option>
-						<option value="error">Error</option>
-					</Select>
-
-					<Button
-						size="sm"
-						variant={liveTail ? 'primary' : 'secondary'}
-						onclick={() => (liveTail = !liveTail)}
-					>
-						{#if liveTail}
-							<span class="observe-tail-dot"></span>
-						{/if}
-						Live
-					</Button>
+				<div class="observe-log-search">
+					<span class="observe-log-search-icon"><Search class="h-3.5 w-3.5" /></span>
+					<input
+						type="text"
+						class="observe-log-search-input"
+						placeholder="Search logs..."
+						bind:value={logSearch}
+					/>
 				</div>
 
-				<div class="observe-log-viewer" bind:this={logViewerEl} onscroll={handleLogScroll}>
-					{#if logsLoading && !logEntries.length}
-						<div class="observe-log-skeleton">
-							{#each Array(12) as _, i (i)}
-								<div class="observe-skeleton-line" style="animation-delay: {i * 60}ms;">
-									<div class="observe-skeleton-num"></div>
-									<div class="observe-skeleton-ts"></div>
-									<div class="observe-skeleton-badge"></div>
-									<div
-										class="observe-skeleton-msg"
-										style="width: {40 + Math.random() * 45}%;"
-									></div>
-								</div>
-							{/each}
-						</div>
-					{:else if logsError}
-						<div class="observe-empty">
-							<AlertTriangle class="h-5 w-5" style="color: var(--error-text-color);" />
-							<span>Failed to load logs: {logsError}</span>
-						</div>
-					{:else if filteredLogs.length === 0}
-						<div class="observe-empty">
-							<div class="observe-empty-icon-ring">
-								<TerminalIcon class="h-5 w-5" style="color: var(--surface-muted);" />
-							</div>
-							<span>No log entries{logSearch || logLevel !== 'all' ? ' matching filters' : ''}</span
-							>
-						</div>
-					{:else}
-						{#if !logSearch.trim() && logLevel === 'all'}
-							{#if loadingMoreLogs}
-								<div class="observe-log-loadmore">
-									<Loader2 class="h-3.5 w-3.5 animate-spin" /> Loading earlier logs…
-								</div>
-							{:else if logsAtMax || logTail >= LOG_MAX_LINES}
-								<div class="observe-log-loadmore observe-log-loadmore--end">
-									Start of available logs
-								</div>
-							{:else}
-								<div class="observe-log-loadmore observe-log-loadmore--hint">
-									Scroll up to load earlier logs
-								</div>
-							{/if}
-						{/if}
-						{#each visibleLogs as entry, i (entry._key)}
-							{@const detail = (entry.lines?.length ?? 0) > 1 ? entry.lines.slice(1) : []}
-							{@const key = entry._key}
-							{@const open = expandedLogs.has(key)}
-							{@const headline = ansiToHtml(entry.lines?.[0] ?? entry.message ?? '')}
-							<div
-								class="observe-log-entry"
-								class:observe-log-entry--alt={i % 2 === 1}
-								class:observe-log-entry--group={detail.length > 0}
-							>
-								<span class="observe-log-num">{hiddenLogCount + i + 1}</span>
-								<span
-									class="observe-log-level-badge"
-									style="color: {levelColor(entry.level)}; background: {levelBg(entry.level)};"
-								>
-									{(entry.level ?? 'log').toUpperCase()}
-								</span>
-								<div class="observe-log-body">
-									<button
-										type="button"
-										class="observe-log-headline"
-										class:observe-log-headline--btn={detail.length > 0}
-										onclick={() => detail.length > 0 && toggleLog(key)}
-									>
-										{#if detail.length > 0}
-											<ChevronRight
-												class="observe-log-caret"
-												style="transform: rotate({open ? 90 : 0}deg);"
-											/>
-										{/if}
-										<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-										<span class="observe-log-msg">{@html headline}</span>
-										{#if detail.length > 0 && !open}
-											<span class="observe-log-more">+{detail.length}</span>
-										{/if}
-									</button>
-									{#if detail.length > 0 && open}
-										<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-										<pre class="observe-log-detail">{@html ansiToHtml(detail.join('\n'))}</pre>
-									{/if}
-								</div>
-							</div>
-						{/each}
-					{/if}
-					{#if userScrolledUp && filteredLogs.length > 0}
-						<button class="observe-scroll-bottom" onclick={scrollToBottom} type="button">
-							<ArrowDown class="h-3.5 w-3.5" />
-						</button>
-					{/if}
-				</div>
-			{:else if activeTab === 'http'}
-				{#if !hasIngress}
-					<div class="observe-empty-state">
-						<div class="observe-empty-icon-ring">
-							<Activity class="h-8 w-8" style="color: var(--surface-muted);" />
-						</div>
-						<p class="observe-empty-title">No ingress configured</p>
-						<p class="observe-empty-desc">Add a domain to see HTTP metrics</p>
-					</div>
-				{:else}
-					<div class="observe-http-toolbar">
-						<div class="observe-rangepick">
-							{#each TIME_RANGES as r (r.id)}
-								<button
-									class="observe-rangebtn"
-									class:active={timeRange === r.id}
-									onclick={() => (timeRange = r.id)}
-									type="button">{r.label}</button
-								>
-							{/each}
-						</div>
-						{#if httpLoading}
-							<Loader2 class="h-3.5 w-3.5 animate-spin" style="color: var(--surface-muted);" />
-						{/if}
-					</div>
+				<Button
+					size="sm"
+					variant={showLogFilters ? 'primary' : 'secondary'}
+					onclick={() => (showLogFilters = !showLogFilters)}
+				>
+					Filters{logLevelSet.size ? ` (${logLevelSet.size})` : ''}
+				</Button>
 
-					{#if httpError}
-						<div class="observe-empty">
-							<AlertTriangle class="h-5 w-5" style="color: var(--error-text-color);" />
-							<span>Failed to load HTTP metrics: {httpError}</span>
-						</div>
-					{:else if httpLoading && !httpMetrics}
-						<div class="observe-chart-grid">
-							{#each Array(4) as _, i (i)}
-								<div
-									class="observe-chart-card"
-									{@attach motionStagger({
-										index: i,
-										stride: 0.05,
-										from: { y: 10, opacity: 0, scale: 0.98 }
-									})}
-								>
-									<div class="observe-chart-header">
-										<div class="observe-skeleton-label"></div>
-									</div>
-									<div class="observe-chart-area">
-										<div class="observe-chart-skeleton"></div>
-									</div>
-								</div>
-							{/each}
-						</div>
-					{:else}
-						<div class="observe-chart-grid">
-							{#each [{ label: 'Request rate', series: httpMetrics?.requestRate ?? [], color: '#7c5cff', formatter: fmtReqRate }, { label: 'Error rate', series: httpMetrics?.errorRate ?? [], color: '#d04a4a', formatter: fmtPercent }, { label: 'Avg latency', series: httpMetrics?.latencyAvg ?? [], color: '#22c0a8', formatter: fmtLatency }, { label: 'Max latency', series: httpMetrics?.latencyMax ?? [], color: '#ff7e6b', formatter: fmtLatency }] as chart, i (chart.label)}
-								{@const latest = latestValue(chart.series)}
-								<div
-									class="observe-chart-card"
-									{@attach motionStagger({
-										index: i,
-										stride: 0.05,
-										from: { y: 10, opacity: 0, scale: 0.98 }
-									})}
-								>
-									<div class="observe-chart-header">
-										<span class="observe-chart-label">{chart.label}</span>
-										{#if latest != null}
-											<span class="observe-chart-current" style="color: {chart.color};"
-												>{chart.formatter(latest)}</span
-											>
-										{/if}
-									</div>
-									<div class="observe-chart-area">
-										{#if chartReady && Line}
-											<svelte:component
-												this={Line}
-												data={makeChartData(chart.series, chart.color)}
-												options={makeChartOptions(chart.formatter)}
-											/>
-										{:else}
-											<div class="observe-chart-skeleton"></div>
-										{/if}
-									</div>
-								</div>
-							{/each}
-						</div>
+				<Button
+					size="sm"
+					variant={liveTail ? 'primary' : 'secondary'}
+					onclick={() => (liveTail = !liveTail)}
+				>
+					{#if liveTail}
+						<span class="observe-tail-dot"></span>
 					{/if}
-				{/if}
-			{:else if activeTab === 'traces'}
-				<div class="observe-traces-disabled">
-					<div class="observe-traces-disabled-icon"><Package class="h-5 w-5" /></div>
-					<p class="observe-traces-disabled-title">Traces are coming soon</p>
-					<p class="observe-traces-disabled-desc">
-						Distributed tracing is being built into the platform. When it lands, your app will be
-						instrumented automatically. There is nothing to install or configure.
-					</p>
-				</div>
+					Live
+				</Button>
 			{:else if activeTab === 'errors'}
-				<div class="observe-errors-toolbar">
-					<div class="observe-rangepick">
-						{#each ERROR_WINDOWS as w (w.id)}
-							<button
-								class="observe-rangebtn"
-								class:active={errorWindow === w.id}
-								onclick={() => (errorWindow = w.id)}
-								type="button">{w.label}</button
-							>
-						{/each}
-					</div>
-					{#if errorsLoading}
-						<Loader2 class="h-3.5 w-3.5 animate-spin" style="color: var(--surface-muted);" />
-					{/if}
-				</div>
-
-				{#if errorsError}
-					<div class="observe-empty">
-						<AlertTriangle class="h-5 w-5" style="color: var(--error-text-color);" />
-						<span>Failed to load errors: {errorsError}</span>
-					</div>
-				{:else if errorsLoading && !errorGroups.length}
-					<div class="observe-empty">
-						<Loader2 class="h-5 w-5 animate-spin" />
-						<span>Loading errors...</span>
-					</div>
-				{:else if errorGroups.length === 0}
-					<div class="observe-empty-state">
-						<div class="observe-empty-icon-ring observe-empty-icon-ring--celebrate">
-							<PartyPopper class="h-10 w-10" style="color: var(--online-indicator);" />
-						</div>
-						<p class="observe-empty-title">All clear</p>
-						<p class="observe-empty-desc">
-							No errors in the selected time window. Your app is running clean.
-						</p>
-					</div>
-				{:else}
-					<div class="observe-errors-summary">
-						<div class="observe-errors-summary-stat">
-							<span class="observe-errors-summary-value">{totalErrorCount.toLocaleString()}</span>
-							<span class="observe-errors-summary-label">total errors</span>
-						</div>
-						<div class="observe-errors-summary-stat">
-							<span class="observe-errors-summary-value">{uniqueErrorTypes}</span>
-							<span class="observe-errors-summary-label">unique types</span>
-						</div>
-					</div>
-
-					<div class="observe-errors-list">
-						{#each errorGroups as group, i (group.fingerprint)}
-							{@const isExpanded = expandedErrors.has(group.fingerprint)}
-							<div
-								class="observe-error-card"
-								{@attach motionStagger({
-									index: i,
-									stride: 0.03,
-									from: { y: 6, opacity: 0 }
-								})}
-							>
-								<button
-									class="observe-error-header"
-									onclick={() => toggleError(group.fingerprint)}
-									type="button"
-								>
-									<ChevronRight
-										class="h-3.5 w-3.5 observe-error-chevron"
-										style="transform: rotate({isExpanded
-											? 90
-											: 0}deg); transition: transform 150ms ease; flex-shrink: 0;"
-									/>
-									<div class="observe-error-main">
-										<div class="observe-error-titlerow">
-											<span class="observe-error-type">{group.type}</span>
-											<span class="observe-error-fp">{group.fingerprint.slice(0, 8)}</span>
-										</div>
-										<div class="observe-error-message-line">{group.message}</div>
-										<div class="observe-error-meta">
-											<Clock class="h-3 w-3" />
-											{formatRelativeTime(new Date(group.lastSeen))}
-											<span class="observe-error-meta-sep">&middot;</span>
-											first seen {formatRelativeTime(new Date(group.firstSeen))}
-										</div>
-									</div>
-									<div class="observe-error-stats">
-										<span class="observe-error-count-num">{group.count.toLocaleString()}</span>
-										<span class="observe-error-count-label"
-											>{group.count === 1 ? 'event' : 'events'}</span
-										>
-									</div>
-								</button>
-
-								{#if isExpanded}
-									<div class="observe-error-detail">
-										<p class="observe-error-full-msg">{group.message}</p>
-
-										{#if group.samples.length > 0}
-											<div class="observe-error-samples-label">
-												Recent occurrences ({group.samples.length})
-											</div>
-											{#each group.samples as sample, si (si)}
-												<div class="observe-error-sample">
-													{#if sample.timestamp}
-														<div
-															class="observe-error-sample-ts"
-															title={fullTimestamp(sample.timestamp)}
-														>
-															<Clock class="h-3 w-3" />
-															{formatRelativeTime(new Date(sample.timestamp))}
-														</div>
-													{/if}
-													{#if sample.stackTrace}
-														<div class="observe-stack-wrapper">
-															<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-															<pre class="observe-error-stack">{@html highlightStack(
-																	sample.stackTrace
-																)}</pre>
-															<button
-																class="observe-stack-copy"
-																onclick={() =>
-																	copyToClipboard(
-																		sample.stackTrace ?? '',
-																		`stack-${group.fingerprint}-${si}`
-																	)}
-																type="button"
-															>
-																{#if copiedId === `stack-${group.fingerprint}-${si}`}<Check
-																		class="h-3 w-3"
-																	/>{:else}<Copy class="h-3 w-3" />{/if}
-															</button>
-														</div>
-													{/if}
-												</div>
-											{/each}
-										{/if}
-									</div>
-								{/if}
-							</div>
-						{/each}
-					</div>
+				<SegmentedControl
+					label="Error status"
+					bind:value={errorStatusFilter}
+					options={[
+						{ value: 'unresolved', label: 'Open' },
+						{ value: 'resolved', label: 'Resolved' },
+						{ value: 'ignored', label: 'Ignored' },
+						{ value: 'all', label: 'All' }
+					]}
+				/>
+				{#if errorsLoading}
+					<Loader2 class="h-3.5 w-3.5 animate-spin text-faint" />
 				{/if}
+				<SegmentedControl
+					label="Error time window"
+					bind:value={errorWindow}
+					options={ERROR_WINDOWS.map((w) => ({ value: w.id, label: w.label }))}
+				/>
 			{:else if activeTab === 'killed'}
-				<div class="observe-errors-toolbar">
-					<span class="observe-killed-hint">
-						Containers terminated in the last 24h, with the logs they printed before dying
-					</span>
-					<Button size="sm" loading={killedLoading} onclick={() => fetchKilled()}>Refresh</Button>
-				</div>
-
-				{#if killedError}
-					<div class="observe-empty">
-						<AlertTriangle class="h-5 w-5" style="color: var(--error-text-color);" />
-						<span>Failed to load killed containers: {killedError}</span>
-					</div>
-				{:else if killedLoading && !killedList.length}
-					<div class="observe-empty">
-						<Loader2 class="h-5 w-5 animate-spin" />
-						<span>Loading...</span>
-					</div>
-				{:else if killedList.length === 0}
-					<div class="observe-empty-state">
-						<div class="observe-empty-icon-ring observe-empty-icon-ring--celebrate">
-							<PartyPopper class="h-10 w-10" style="color: var(--online-indicator);" />
-						</div>
-						<p class="observe-empty-title">No recently killed containers</p>
-						<p class="observe-empty-desc">
-							Nothing has crashed or been OOMKilled in the last 24 hours
-						</p>
-					</div>
-				{:else}
-					<div class="observe-errors-list">
-						{#each killedList as k, i (k.entryId)}
-							{@const isExpanded = expandedKilled === k.entryId}
-							<div
-								class="observe-error-card"
-								{@attach motionStagger({
-									index: i,
-									stride: 0.03,
-									from: { y: 6, opacity: 0 }
-								})}
-							>
-								<button
-									class="observe-error-header"
-									onclick={() => toggleKilled(k.entryId)}
-									type="button"
-								>
-									<ChevronRight
-										class="h-3.5 w-3.5 observe-error-chevron"
-										style="transform: rotate({isExpanded
-											? 90
-											: 0}deg); transition: transform 150ms ease; flex-shrink: 0;"
-									/>
-									<div class="observe-error-main">
-										<div class="observe-error-titlerow">
-											<span class="observe-error-type">{k.reason}</span>
-											{#if k.exitCode != null}
-												<span class="observe-error-fp">exit {k.exitCode}</span>
-											{/if}
-										</div>
-										<div class="observe-error-message-line">{k.pod} / {k.container}</div>
-										{#if k.finishedAt}
-											<div class="observe-error-meta">
-												<Clock class="h-3 w-3" />
-												{formatRelativeTime(new Date(k.finishedAt))}
-											</div>
-										{/if}
-									</div>
-								</button>
-
-								{#if isExpanded}
-									<div class="observe-error-detail">
-										{#if killedLogsLoading === k.entryId}
-											<div class="observe-empty">
-												<Loader2 class="h-4 w-4 animate-spin" />
-												<span>Loading captured logs...</span>
-											</div>
-										{:else if killedLogs[k.entryId]}
-											<div class="observe-stack-wrapper">
-												<!-- eslint-disable-next-line svelte/no-at-html-tags -->
-												<pre class="observe-error-stack observe-killed-logs">{@html ansiToHtml(
-														killedLogs[k.entryId]
-													)}</pre>
-												<button
-													class="observe-stack-copy"
-													onclick={() =>
-														copyToClipboard(killedLogs[k.entryId], `killed-${k.entryId}`)}
-													type="button"
-												>
-													{#if copiedId === `killed-${k.entryId}`}<Check
-															class="h-3 w-3"
-														/>{:else}<Copy class="h-3 w-3" />{/if}
-												</button>
-											</div>
-										{:else}
-											<p class="observe-empty-desc">
-												No logs were captured for this container before it died
-											</p>
-										{/if}
-									</div>
-								{/if}
-							</div>
-						{/each}
-					</div>
-				{/if}
+				<span class="kc-hint">Terminated in the last 24h</span>
+				<Button size="sm" variant="secondary" loading={killedLoading} onclick={() => fetchKilled()}
+					>Refresh</Button
+				>
 			{/if}
 		</div>
 	</div>
-{/if}
+
+	<div class="observe-body">
+		{#if activeTab === 'metrics'}
+			<DeploymentMetrics
+				kind="deployment"
+				id={deployment?.id ?? null}
+				active={active && activeTab === 'metrics'}
+				showTitle={false}
+				showHeader={false}
+				bind:windowMs={metricsWindowMs}
+				bind:paused={metricsPaused}
+				bind:groupBy={metricsGroupBy}
+			/>
+		{:else if activeTab === 'logs'}
+			{#if showLogFilters}
+				<div class="lg-filters" transition:slide={{ duration: 150 }}>
+					<div class="lg-filter-group">
+						<span class="lg-filter-label">Level</span>
+						{#each LOG_LEVELS as lvl (lvl)}
+							<button
+								type="button"
+								class="lg-chip"
+								class:lg-chip--on={logLevelSet.has(lvl)}
+								aria-pressed={logLevelSet.has(lvl)}
+								onclick={() => toggleLogLevel(lvl)}
+								style={logLevelSet.has(lvl)
+									? `color:${levelColor(lvl)}; background:${levelBg(lvl)};`
+									: ''}
+							>
+								{lvl.toUpperCase()}
+							</button>
+						{/each}
+					</div>
+					<div class="lg-filter-group">
+						<span class="lg-filter-label">Since</span>
+						{#each LOG_WINDOWS as w (w.label)}
+							<button
+								type="button"
+								class="lg-chip"
+								class:lg-chip--time={logSince === w.ms}
+								aria-pressed={logSince === w.ms}
+								onclick={() => (logSince = w.ms)}
+							>
+								{w.label}
+							</button>
+						{/each}
+					</div>
+
+					{#if logLevelSet.size || logSearch || logSince}
+						<button type="button" class="lg-filter-clear" onclick={clearLogFilters}>
+							Clear filters
+						</button>
+					{/if}
+				</div>
+			{/if}
+
+			<div class="observe-log-viewer" bind:this={logViewerEl} onscroll={handleLogScroll}>
+				<div class="lg-head" aria-hidden="true">
+					<span>Time</span>
+					<span>Level</span>
+					<span>Message</span>
+				</div>
+				{#if logsLoading && !logEntries.length}
+					<div class="observe-log-skeleton">
+						{#each Array(12) as _, i (i)}
+							<div class="observe-skeleton-line" style="animation-delay: {i * 60}ms;">
+								<div class="observe-skeleton-num"></div>
+								<div class="observe-skeleton-ts"></div>
+								<div class="observe-skeleton-badge"></div>
+								<div class="observe-skeleton-msg" style="width: {40 + Math.random() * 45}%;"></div>
+							</div>
+						{/each}
+					</div>
+				{:else if logsError}
+					<div class="observe-empty">
+						<AlertTriangle class="h-5 w-5" style="color: var(--error-text-color);" />
+						<span>Failed to load logs: {logsError}</span>
+					</div>
+				{:else if filteredLogs.length === 0}
+					<div class="observe-empty">
+						<div class="observe-empty-icon-ring">
+							<TerminalIcon class="h-5 w-5" style="color: var(--surface-muted);" />
+						</div>
+						<span>No log entries{logSearch || logLevel !== 'all' ? ' matching filters' : ''}</span>
+					</div>
+				{:else}
+					{#each visibleLogs as entry, i (entry._key)}
+						{@const detail = (entry.lines?.length ?? 0) > 1 ? entry.lines.slice(1) : []}
+						{@const key = entry._key}
+						{@const open = expandedLogs.has(key)}
+						{@const headline = ansiToHtml(
+							stripLeadingTime(entry.lines?.[0] ?? entry.message ?? '')
+						)}
+						<div class="lg-row" class:lg-row--alt={i % 2 === 1} class:lg-row--open={open}>
+							<span class="lg-time">{fmtLogTime(entry.timestamp)}</span>
+							<span
+								class="lg-level"
+								style="color: {levelColor(entry.level)}; background: {levelBg(entry.level)};"
+							>
+								{(entry.level ?? 'log').toUpperCase()}
+							</span>
+							<div class="lg-msg-cell">
+								<button
+									type="button"
+									class="lg-msg-btn"
+									class:lg-msg-btn--expandable={detail.length > 0}
+									onclick={() => detail.length > 0 && toggleLog(key)}
+								>
+									{#if detail.length > 0}
+										<ChevronRight
+											class="observe-log-caret"
+											style="transform: rotate({open ? 90 : 0}deg);"
+										/>
+									{/if}
+									<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+									<span class="lg-msg">{@html headline}</span>
+									{#if detail.length > 0 && !open}
+										<span class="lg-more">+{detail.length}</span>
+									{/if}
+								</button>
+								{#if detail.length > 0 && open}
+									<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+									<pre class="observe-log-detail">{@html ansiToHtml(detail.join('\n'), true)}</pre>
+								{/if}
+							</div>
+						</div>
+					{/each}
+					{#if !logSearch.trim() && logLevel === 'all'}
+						{#if loadingMoreLogs}
+							<div class="observe-log-loadmore">
+								<Loader2 class="h-3.5 w-3.5 animate-spin" /> Loading earlier logs…
+							</div>
+						{:else if logsAtMax || logTail >= LOG_MAX_LINES}
+							<div class="observe-log-loadmore observe-log-loadmore--end">
+								Start of available logs
+							</div>
+						{:else}
+							<div class="observe-log-loadmore observe-log-loadmore--hint">
+								Scroll down to load earlier logs
+							</div>
+						{/if}
+					{/if}
+				{/if}
+				{#if userScrolledUp && filteredLogs.length > 0}
+					<button class="observe-scroll-bottom" onclick={scrollToBottom} type="button">
+						<ArrowDown class="h-3.5 w-3.5" />
+					</button>
+				{/if}
+			</div>
+		{:else if activeTab === 'http'}
+			{#if !hasIngress}
+				<div class="observe-empty-state">
+					<div class="observe-empty-icon-ring">
+						<Activity class="h-8 w-8" style="color: var(--surface-muted);" />
+					</div>
+					<p class="observe-empty-title">No ingress configured</p>
+					<p class="observe-empty-desc">Add a domain to see HTTP metrics</p>
+				</div>
+			{:else}
+				<DeploymentMetrics
+					kind="deployment"
+					source="http"
+					id={deployment?.id ?? null}
+					active={active && activeTab === 'http'}
+					showTitle={false}
+					showHeader={false}
+					bind:windowMs={metricsWindowMs}
+					bind:paused={metricsPaused}
+				/>
+			{/if}
+		{:else if activeTab === 'errors'}
+			{#if errorsError}
+				<div class="observe-empty">
+					<AlertTriangle class="h-5 w-5" style="color: var(--error-text-color);" />
+					<span>Failed to load errors: {errorsError}</span>
+				</div>
+			{:else if errorsLoading && !errorGroups.length}
+				<div class="observe-empty">
+					<Loader2 class="h-5 w-5 animate-spin" />
+					<span>Loading errors...</span>
+				</div>
+			{:else if errorGroups.length === 0}
+				<div class="observe-empty-state">
+					<div class="observe-empty-icon-ring observe-empty-icon-ring--celebrate">
+						<PartyPopper class="h-10 w-10" style="color: var(--online-indicator);" />
+					</div>
+					<p class="observe-empty-title">All clear</p>
+					<p class="observe-empty-desc">
+						No errors in the selected time window. Your app is running clean.
+					</p>
+				</div>
+			{:else}
+				<div class="observe-errors-summary">
+					<div class="observe-errors-summary-stat">
+						<span class="observe-errors-summary-value">{totalErrorCount.toLocaleString()}</span>
+						<span class="observe-errors-summary-label">total errors</span>
+					</div>
+					<div class="observe-errors-summary-stat">
+						<span class="observe-errors-summary-value">{uniqueErrorTypes}</span>
+						<span class="observe-errors-summary-label">unique types</span>
+					</div>
+				</div>
+
+				<div class="observe-errors-list">
+					{#each visibleErrors as group, i (group.fingerprint)}
+						{@const isExpanded = expandedErrors.has(group.fingerprint)}
+						{@const status = group.status ?? 'unresolved'}
+						<div
+							class="observe-error-card"
+							class:eg-card--done={status !== 'unresolved'}
+							{@attach motionStagger({
+								index: i,
+								from: { y: 6, opacity: 0 }
+							})}
+						>
+							<button
+								class="observe-error-header"
+								onclick={() => toggleError(group.fingerprint)}
+								type="button"
+							>
+								<ChevronRight
+									class="h-3.5 w-3.5 observe-error-chevron"
+									style="transform: rotate({isExpanded
+										? 90
+										: 0}deg); transition: transform var(--dur-fast) ease; flex-shrink: 0;"
+								/>
+								<div class="observe-error-main">
+									<div class="eg-headline">{group.message}</div>
+									<div class="observe-error-titlerow">
+										<span class="observe-error-type">{group.type}</span>
+										{#if status !== 'unresolved'}
+											<span class="eg-status eg-status--{status}">{status}</span>
+										{/if}
+										<span class="observe-error-fp">{group.fingerprint.slice(0, 8)}</span>
+										{#if group.assignee}
+											<span class="eg-chip">@{group.assignee.username}</span>
+										{/if}
+									</div>
+									<div class="observe-error-meta">
+										<Clock class="h-3 w-3" />
+										Last seen {formatRelativeTime(new Date(group.lastSeen))}
+										<span class="observe-error-meta-sep">&middot;</span>
+										{group.deployCount ?? 0} deploy{(group.deployCount ?? 0) === 1 ? '' : 's'}
+									</div>
+									{#if group.firstDeploy}
+										{@const d = group.firstDeploy}
+										<div class="eg-origin">
+											<span class="eg-origin-label">First seen after</span>
+											{#if d.commitSha && errorRepoUrl}
+												<a
+													class="eg-sha"
+													href={`${errorRepoUrl}/commit/${d.commitSha}`}
+													target="_blank"
+													rel="noopener noreferrer"
+													onclick={(e) => e.stopPropagation()}>{d.commitSha.slice(0, 7)}</a
+												>
+											{:else if d.commitSha}
+												<span class="eg-sha">{d.commitSha.slice(0, 7)}</span>
+											{/if}
+											{#if d.commitMessage}
+												<span class="eg-origin-msg">{d.commitMessage}</span>
+											{/if}
+											<span class="eg-origin-by">{deployLabel(d)}</span>
+										</div>
+									{/if}
+								</div>
+								<div class="observe-error-stats">
+									<span class="observe-error-count-num">{group.count.toLocaleString()}</span>
+									<span class="observe-error-count-label"
+										>{group.count === 1 ? 'event' : 'events'}</span
+									>
+								</div>
+							</button>
+
+							<div class="eg-actions">
+								{#if status === 'unresolved'}
+									<Button
+										size="sm"
+										variant="secondary"
+										disabled={updatingError === group.fingerprint}
+										onclick={() => setErrorStatus(group, 'resolved')}>Resolve</Button
+									>
+									<Button
+										size="sm"
+										variant="ghost"
+										disabled={updatingError === group.fingerprint}
+										onclick={() => setErrorStatus(group, 'ignored')}>Ignore</Button
+									>
+								{:else}
+									<Button
+										size="sm"
+										variant="secondary"
+										disabled={updatingError === group.fingerprint}
+										onclick={() => setErrorStatus(group, 'unresolved')}>Reopen</Button
+									>
+								{/if}
+
+								<Menu placement="bottom-start">
+									{#snippet trigger(attrs, _open)}
+										<button class="eg-assign" type="button" {...attrs}>
+											{#if group.assignee}
+												<span class="eg-avatar">
+													{#if group.assignee.imageUrl}
+														<img src={group.assignee.imageUrl} alt="" />
+													{:else}
+														{group.assignee.username.slice(0, 1).toUpperCase()}
+													{/if}
+												</span>
+												<span>@{group.assignee.username}</span>
+											{:else}
+												<UserPlus class="h-3 w-3" />
+												<span>Assign</span>
+											{/if}
+											<ChevronDown class="h-3 w-3 eg-assign-caret" />
+										</button>
+									{/snippet}
+									<MenuItem onclick={() => assignError(group, null)}>
+										<span class="eg-menu-row">Unassigned</span>
+									</MenuItem>
+									{#each orgMembers as m (m.id)}
+										<MenuItem onclick={() => assignError(group, m.id)}>
+											<span class="eg-avatar">
+												{#if m.imageUrl}
+													<img src={m.imageUrl} alt="" />
+												{:else}
+													{m.username.slice(0, 1).toUpperCase()}
+												{/if}
+											</span>
+											<span class="eg-menu-row">@{m.username}</span>
+										</MenuItem>
+									{/each}
+								</Menu>
+
+								{#if group.githubIssueUrl}
+									<a
+										class="eg-issue-link"
+										href={group.githubIssueUrl}
+										target="_blank"
+										rel="noopener noreferrer">GitHub issue</a
+									>
+								{/if}
+							</div>
+
+							{#if isExpanded}
+								<div class="observe-error-detail">
+									<dl class="eg-facts">
+										<div class="eg-fact">
+											<dt>First seen</dt>
+											<dd title={fullTimestamp(group.firstSeen)}>
+												{formatRelativeTime(new Date(group.firstSeen))}
+											</dd>
+										</div>
+										<div class="eg-fact">
+											<dt>Last seen</dt>
+											<dd title={fullTimestamp(group.lastSeen)}>
+												{formatRelativeTime(new Date(group.lastSeen))}
+											</dd>
+										</div>
+										<div class="eg-fact">
+											<dt>Events</dt>
+											<dd>{group.count.toLocaleString()}</dd>
+										</div>
+										<div class="eg-fact">
+											<dt>Assigned</dt>
+											<dd>{group.assignee ? `@${group.assignee.username}` : 'Nobody'}</dd>
+										</div>
+									</dl>
+
+									{#if group.deploys?.length}
+										<h4 class="eg-section">Deploys affected</h4>
+										<div class="eg-table" role="table">
+											<div class="eg-trow eg-trow--head" role="row">
+												<span role="columnheader">Commit</span>
+												<span role="columnheader">Change</span>
+												<span role="columnheader" class="eg-num">Events</span>
+												<span role="columnheader" class="eg-num">Deployed</span>
+											</div>
+											{#each group.deploys as d, di (d.commitSha ?? di)}
+												<div class="eg-trow" role="row">
+													{#if d.commitSha && errorRepoUrl}
+														<a
+															class="eg-sha"
+															role="cell"
+															href={`${errorRepoUrl}/commit/${d.commitSha}`}
+															target="_blank"
+															rel="noopener noreferrer">{d.commitSha.slice(0, 7)}</a
+														>
+													{:else}
+														<span class="eg-sha" role="cell"
+															>{d.commitSha ? d.commitSha.slice(0, 7) : 'none'}</span
+														>
+													{/if}
+													<span class="eg-deploy-msg" role="cell"
+														>{d.commitMessage ?? deployLabel(d)}</span
+													>
+													<span class="eg-num" role="cell">{d.count}</span>
+													<span class="eg-num eg-muted" role="cell"
+														>{formatRelativeTime(new Date(d.at))}</span
+													>
+												</div>
+											{/each}
+										</div>
+									{/if}
+
+									{#if group.stackTrace}
+										<h4 class="eg-section">Stack trace</h4>
+										<div class="observe-stack-wrapper">
+											<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+											<pre class="observe-error-stack">{@html highlightStack(
+													group.stackTrace
+												)}</pre>
+											<button
+												class="observe-stack-copy"
+												onclick={() =>
+													copyToClipboard(group.stackTrace ?? '', `stack-${group.fingerprint}`)}
+												type="button"
+											>
+												{#if copiedId === `stack-${group.fingerprint}`}<Check
+														class="h-3 w-3"
+													/>{:else}<Copy class="h-3 w-3" />{/if}
+											</button>
+										</div>
+									{/if}
+								</div>
+							{/if}
+						</div>
+					{/each}
+				</div>
+			{/if}
+		{:else if activeTab === 'killed'}
+			{#if killedError}
+				<div class="observe-empty">
+					<AlertTriangle class="h-5 w-5" style="color: var(--error-text-color);" />
+					<span>Failed to load killed containers: {killedError}</span>
+				</div>
+			{:else if killedLoading && !killedList.length}
+				<div class="observe-empty">
+					<Loader2 class="h-5 w-5 animate-spin" />
+					<span>Loading...</span>
+				</div>
+			{:else if killedList.length === 0}
+				<div class="observe-empty-state">
+					<div class="observe-empty-icon-ring observe-empty-icon-ring--celebrate">
+						<PartyPopper class="h-10 w-10" style="color: var(--online-indicator);" />
+					</div>
+					<p class="observe-empty-title">No recently killed containers</p>
+					<p class="observe-empty-desc">
+						Nothing has crashed or been OOMKilled in the last 24 hours
+					</p>
+				</div>
+			{:else}
+				<div class="observe-errors-list">
+					{#each killedList as k, i (k.entryId)}
+						{@const isExpanded = expandedKilled === k.entryId}
+						{@const why = explainExitCode(k.exitCode, k.reason)}
+						<div
+							class="observe-error-card"
+							{@attach motionStagger({
+								index: i,
+								from: { y: 6, opacity: 0 }
+							})}
+						>
+							<button
+								class="observe-error-header"
+								onclick={() => toggleKilled(k.entryId)}
+								type="button"
+							>
+								<ChevronRight
+									class="h-3.5 w-3.5 observe-error-chevron"
+									style="transform: rotate({isExpanded
+										? 90
+										: 0}deg); transition: transform var(--dur-fast) ease; flex-shrink: 0;"
+								/>
+								<div class="observe-error-main">
+									<div class="eg-headline">{why?.short ?? k.reason}</div>
+									<div class="observe-error-titlerow">
+										<span class="kc-reason kc-reason--{why?.severity ?? 'error'}">{k.reason}</span>
+										{#if k.exitCode != null}
+											<span class="observe-error-fp">exit {k.exitCode}</span>
+										{/if}
+										<span class="kc-pod">{podLabel(k.pod)} / {k.container}</span>
+									</div>
+									{#if k.finishedAt}
+										<div class="observe-error-meta">
+											<Clock class="h-3 w-3" />
+											{formatRelativeTime(new Date(k.finishedAt))}
+											<span class="observe-error-meta-sep">&middot;</span>
+											<span title={fullTimestamp(k.finishedAt)}
+												>{new Date(k.finishedAt).toLocaleTimeString()}</span
+											>
+										</div>
+									{/if}
+								</div>
+							</button>
+
+							{#if isExpanded}
+								<div class="observe-error-detail">
+									{#if killedLogsLoading === k.entryId}
+										<div class="observe-empty">
+											<Loader2 class="h-4 w-4 animate-spin" />
+											<span>Loading captured logs...</span>
+										</div>
+									{:else if killedLogs[k.entryId]}
+										<div class="observe-stack-wrapper">
+											<!-- eslint-disable-next-line svelte/no-at-html-tags -->
+											<pre class="observe-error-stack observe-killed-logs">{@html ansiToHtml(
+													killedLogs[k.entryId]
+												)}</pre>
+											<button
+												class="observe-stack-copy"
+												onclick={() =>
+													copyToClipboard(killedLogs[k.entryId], `killed-${k.entryId}`)}
+												type="button"
+											>
+												{#if copiedId === `killed-${k.entryId}`}<Check
+														class="h-3 w-3"
+													/>{:else}<Copy class="h-3 w-3" />{/if}
+											</button>
+										</div>
+									{:else}
+										<p class="observe-empty-desc">
+											No logs were captured for this container before it died
+										</p>
+									{/if}
+								</div>
+							{/if}
+						</div>
+					{/each}
+				</div>
+			{/if}
+		{/if}
+	</div>
+</div>
 
 <style>
 	.observe-root {
 		display: flex;
 		flex-direction: column;
-		gap: 16px;
+		gap: var(--space-4);
 	}
 
+	.ov-vitals {
+		padding: 0 var(--space-1);
+		overflow-x: auto;
+		scrollbar-width: none;
+	}
+	.ov-vitals::-webkit-scrollbar {
+		display: none;
+	}
 	.ov-statrow {
 		display: flex;
 		align-items: stretch;
-		flex-wrap: wrap;
+		min-width: min-content;
 	}
 	.ov-statcell {
 		display: flex;
 		flex-direction: column;
-		gap: 2px;
-		padding: 4px 20px 6px 0;
+		gap: 0.125rem;
+		padding-right: var(--space-5);
 		min-width: 0;
 	}
 	.ov-statcell + .ov-statcell {
-		padding-left: 20px;
-		border-left: 1px solid color-mix(in srgb, var(--text-default) 10%, transparent);
+		padding-left: var(--space-5);
+		border-left: 1px solid var(--rule);
 	}
 	.ov-statcell-label {
-		font-size: 0.6875rem;
-		font-weight: 500;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		color: var(--text-faint);
 		white-space: nowrap;
 	}
 	.ov-statcell-value {
-		font-size: 1.0625rem;
-		font-weight: 650;
+		font-size: var(--text-headline);
+		line-height: var(--lh-headline);
+		font-weight: 600;
 		font-variant-numeric: tabular-nums;
 		letter-spacing: -0.01em;
 		color: var(--text-default);
 		white-space: nowrap;
 	}
 	.ov-statcell-sub {
-		font-size: 0.6875rem;
-		font-weight: 500;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		color: var(--text-muted);
-		margin-left: 5px;
+		margin-left: 0.3125rem;
 	}
 
-	.ov-ultabs {
+	.ov-viewbar {
 		display: flex;
-		gap: 2px;
-		border-bottom: 1px solid color-mix(in srgb, var(--text-default) 10%, transparent);
-		overflow-x: auto;
-	}
-	.ov-ultab {
-		padding: 7px 12px 9px;
-		font-size: 0.8125rem;
-		font-weight: 500;
-		color: var(--text-muted);
-		background: none;
-		border: none;
-		border-bottom: 2px solid transparent;
-		margin-bottom: -1px;
-		cursor: pointer;
-		white-space: nowrap;
-		transition:
-			color 120ms,
-			border-color 120ms;
-	}
-	.ov-ultab:hover {
-		color: var(--text-default);
-	}
-	.ov-ultab--active {
-		color: var(--text-default);
-		border-bottom-color: var(--accent);
-	}
-
-	.observe-strip {
-		display: flex;
-		gap: 10px;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-3);
 		flex-wrap: wrap;
 	}
-
-	.observe-stat {
+	.ov-viewbar-controls {
 		display: flex;
 		align-items: center;
-		gap: 10px;
-		padding: 10px 14px;
-		border-radius: 0.875rem;
-		background: var(--surface-bg);
-		border: 1px solid var(--surface-border);
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.03),
-			0 1px 2px rgb(0 0 0 / 0.02);
-		min-width: 120px;
-		flex: 1;
-		transition: box-shadow 150ms ease;
+		gap: var(--space-2);
+		margin-left: auto;
+	}
+	.ov-viewbar-controls :global(.ov-level-select) {
+		width: auto;
+		flex: none;
+	}
+	.ov-viewbar-controls :global(.ov-level-select .ui-select) {
+		width: 9.5rem;
+		padding-top: 0.5rem;
+		padding-bottom: 0.5rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 	}
 
-	.observe-stat:hover {
-		box-shadow:
-			0 2px 8px rgb(0 0 0 / 0.06),
-			0 1px 3px rgb(0 0 0 / 0.04);
+	.ov-seg-scroll {
+		overflow-x: auto;
+		overflow-y: hidden;
+		scrollbar-width: none;
 	}
-
-	.observe-stat--runtime {
-		padding-left: 12px;
-	}
-
-	.observe-stat-icon {
-		display: flex;
-		align-items: center;
-		justify-content: center;
-		width: 28px;
-		height: 28px;
-		border-radius: 8px;
-		background: rgba(120, 120, 128, 0.08);
-		color: var(--surface-muted);
-		flex-shrink: 0;
-	}
-
-	.observe-stat-content {
-		display: flex;
-		flex-direction: column;
-		gap: 1px;
-		min-width: 0;
-	}
-
-	.observe-stat-label {
-		font-size: 0.68rem;
-		font-weight: 500;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-		color: var(--surface-muted);
-	}
-
-	.observe-stat-value {
-		font-size: 1.05rem;
-		font-weight: 600;
-		font-variant-numeric: tabular-nums;
-		color: var(--center-channel-color);
-		letter-spacing: -0.01em;
-	}
-
-	.observe-stat-sub {
-		font-size: 0.65rem;
-		color: var(--surface-muted);
-		font-weight: 400;
-	}
-
-	.observe-tabs {
-		padding: 2px;
-		border-radius: 10px;
-		background: rgba(120, 120, 128, 0.08);
-		width: fit-content;
-	}
-
-	.observe-tabs-track {
-		position: relative;
-		display: flex;
-		gap: 2px;
-	}
-
-	.observe-tab-indicator {
-		position: absolute;
-		top: 0;
-		left: 0;
-		height: 100%;
-		border-radius: 8px;
-		background: var(--surface-bg);
-		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
-		transition: transform 200ms cubic-bezier(0.4, 0, 0.2, 1);
-		pointer-events: none;
-		z-index: 0;
-	}
-
-	:global(:root.dark) .observe-tab-indicator {
-		background: rgba(255, 255, 255, 0.08);
-	}
-
-	.observe-tab {
-		position: relative;
-		z-index: 1;
-		padding: 6px 16px;
-		font-size: 0.8rem;
-		font-weight: 500;
-		border: 0;
-		background: transparent;
-		color: var(--surface-muted);
-		border-radius: 8px;
-		cursor: pointer;
-		transition: color 80ms ease;
-	}
-
-	.observe-tab:hover {
-		color: var(--center-channel-color);
-	}
-
-	.observe-tab--active {
-		color: var(--center-channel-color);
+	.ov-seg-scroll::-webkit-scrollbar {
+		display: none;
 	}
 
 	.observe-body {
 		display: flex;
 		flex-direction: column;
-		gap: 12px;
-	}
-
-	.observe-log-toolbar {
-		display: flex;
-		align-items: center;
-		gap: 8px;
-		flex-wrap: wrap;
-		padding-bottom: 10px;
-		border-bottom: 1px solid var(--surface-border);
+		gap: var(--space-3);
 	}
 
 	.observe-log-search {
 		position: relative;
-		flex: 1;
-		min-width: 180px;
-		max-width: 320px;
+		width: 14rem;
+		flex: none;
 	}
 
 	.observe-log-search-icon {
 		position: absolute;
-		left: 10px;
+		left: 0.625rem;
 		top: 0;
 		bottom: 0;
 		display: flex;
 		align-items: center;
-		color: var(--surface-muted);
+		color: var(--text-faint);
 		pointer-events: none;
 	}
 
 	.observe-log-search-input {
 		width: 100%;
-		padding: 6px 10px 6px 30px;
-		border-radius: 8px;
-		border: 1px solid var(--surface-border);
-		background: var(--surface-bg);
-		color: var(--center-channel-color);
-		font-size: 0.8rem;
+		padding: 0.5rem 0.75rem 0.5rem 1.875rem;
+		border-radius: var(--radius-md);
+		border: 1px solid var(--border-default);
+		background-color: var(--bg-surface);
+		color: var(--text-default);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-family: inherit;
 		outline: none;
-		transition: border-color 100ms ease;
+		transition: border-color var(--dur-fast) var(--ease-out);
 	}
 
 	.observe-log-search-input:focus {
-		border-color: var(--button-bg);
+		border-color: var(--accent);
 	}
 
 	.observe-log-search-input::placeholder {
-		color: var(--surface-muted);
-	}
-
-	.observe-rangepick {
-		display: inline-flex;
-		padding: 2px;
-		gap: 2px;
-		border-radius: 8px;
-		background: rgba(120, 120, 128, 0.08);
-	}
-
-	.observe-rangebtn {
-		padding: 4px 10px;
-		font-size: 0.78rem;
-		font-weight: 500;
-		border: 0;
-		background: transparent;
-		color: var(--surface-muted);
-		border-radius: 6px;
-		cursor: pointer;
-		transition:
-			background 80ms ease,
-			color 80ms ease;
-	}
-
-	.observe-rangebtn:hover {
-		color: var(--center-channel-color);
-	}
-
-	.observe-rangebtn.active {
-		background: var(--surface-bg);
-		color: var(--center-channel-color);
-		box-shadow: 0 1px 2px rgba(0, 0, 0, 0.06);
-	}
-
-	:global(:root.dark) .observe-rangebtn.active {
-		background: rgba(255, 255, 255, 0.08);
+		color: var(--text-faint);
 	}
 
 	.observe-tail-dot {
@@ -1629,18 +1682,15 @@
 
 	.observe-log-viewer {
 		position: relative;
-		border: 1px solid rgba(255, 255, 255, 0.08);
-		border-radius: 0.875rem;
-		background: #0d1117;
-		color: #c9d1d9;
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.18),
-			inset 0 0 0 1px rgba(255, 255, 255, 0.02);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-lg);
+		background-color: var(--bg-raised);
+		color: var(--text-default);
 		min-height: 300px;
-		max-height: 520px;
+		max-height: 620px;
 		overflow-y: auto;
 		font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
 		line-height: 1.65;
 	}
 
@@ -1648,26 +1698,23 @@
 		display: flex;
 		align-items: baseline;
 		gap: 8px;
-		padding: 3px 14px;
+		padding: 4px 16px;
 		border-bottom: 1px solid rgba(120, 120, 128, 0.06);
 		min-width: 0;
 	}
 
-	.observe-log-entry {
-		border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-	}
-
 	.observe-log-entry--alt {
-		background: rgba(255, 255, 255, 0.018);
+		background-color: var(--fill-quiet);
 	}
 
 	.observe-log-entry:hover {
-		background: rgba(255, 255, 255, 0.045);
+		background-color: var(--fill-quiet);
 	}
 
 	.observe-log-num {
-		color: rgba(255, 255, 255, 0.22);
-		font-size: 0.65rem;
+		color: var(--text-muted);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-variant-numeric: tabular-nums;
 		min-width: 28px;
 		text-align: right;
@@ -1677,9 +1724,10 @@
 
 	.observe-log-level-badge {
 		display: inline-block;
-		padding: 0px 5px;
-		border-radius: 4px;
-		font-size: 0.62rem;
+		padding: 0px 4px;
+		border-radius: var(--radius-xs);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		letter-spacing: 0.03em;
 		white-space: nowrap;
@@ -1703,7 +1751,7 @@
 	.observe-log-headline {
 		display: flex;
 		align-items: baseline;
-		gap: 6px;
+		gap: 8px;
 		width: 100%;
 		min-width: 0;
 		padding: 0;
@@ -1725,28 +1773,29 @@
 		flex-shrink: 0;
 		color: var(--surface-muted);
 		align-self: center;
-		transition: transform 120ms ease;
+		transition: transform var(--dur-fast) ease;
 	}
 
 	.observe-log-more {
 		flex-shrink: 0;
-		font-size: 0.62rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		color: #8b949e;
-		background: rgba(255, 255, 255, 0.08);
-		border-radius: 4px;
-		padding: 0 5px;
+		background-color: var(--fill-quiet);
+		border-radius: var(--radius-xs);
+		padding: 0 4px;
 		align-self: center;
 	}
 
 	.observe-log-detail {
-		margin: 4px 0 6px 18px;
-		padding: 8px 10px;
-		background: rgba(255, 255, 255, 0.03);
-		border-left: 2px solid rgba(255, 255, 255, 0.15);
-		border-radius: 4px;
-		color: #c9d1d9;
-		font-size: 0.72rem;
+		margin: var(--space-1) 0 var(--space-2) var(--space-5);
+		padding: var(--space-2) var(--space-3);
+		background-color: var(--fill-quiet);
+		border: 1px solid var(--rule);
+		border-radius: var(--radius-xs);
+		color: var(--text-default);
+		font-size: var(--text-caption);
 		line-height: 1.5;
 		white-space: pre-wrap;
 		word-break: break-word;
@@ -1757,37 +1806,38 @@
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		gap: 6px;
+		gap: 8px;
 		padding: 8px 0;
-		font-size: 0.7rem;
-		color: rgba(255, 255, 255, 0.45);
-		border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		color: var(--text-faint);
+		border-bottom: 1px solid var(--rule);
 	}
 
 	.observe-log-loadmore--end {
 		font-style: italic;
-		color: rgba(255, 255, 255, 0.3);
+		color: var(--text-faint);
 	}
 
 	.observe-log-loadmore--hint {
-		color: rgba(255, 255, 255, 0.3);
+		color: var(--text-muted);
 	}
 
 	.observe-log-skeleton {
-		padding: 6px 0;
+		padding: 8px 0;
 	}
 
 	.observe-skeleton-line {
 		display: flex;
 		align-items: center;
 		gap: 8px;
-		padding: 5px 14px;
+		padding: 4px 16px;
 	}
 
 	.observe-skeleton-num {
 		width: 28px;
 		height: 10px;
-		border-radius: 3px;
+		border-radius: var(--radius-xs);
 		background: rgba(120, 120, 128, 0.06);
 		animation: observe-shimmer 1.4s linear infinite;
 		background-size: 200% 100%;
@@ -1803,7 +1853,7 @@
 	.observe-skeleton-ts {
 		width: 72px;
 		height: 10px;
-		border-radius: 3px;
+		border-radius: var(--radius-xs);
 		background: rgba(120, 120, 128, 0.06);
 		animation: observe-shimmer 1.4s linear infinite;
 		background-size: 200% 100%;
@@ -1819,7 +1869,7 @@
 	.observe-skeleton-badge {
 		width: 40px;
 		height: 14px;
-		border-radius: 4px;
+		border-radius: var(--radius-xs);
 		background: rgba(120, 120, 128, 0.06);
 		animation: observe-shimmer 1.4s linear infinite;
 		background-size: 200% 100%;
@@ -1834,7 +1884,7 @@
 
 	.observe-skeleton-msg {
 		height: 10px;
-		border-radius: 3px;
+		border-radius: var(--radius-xs);
 		background: rgba(120, 120, 128, 0.06);
 		animation: observe-shimmer 1.4s linear infinite;
 		background-size: 200% 100%;
@@ -1849,7 +1899,7 @@
 	.observe-skeleton-label {
 		width: 80px;
 		height: 12px;
-		border-radius: 4px;
+		border-radius: var(--radius-xs);
 		background: rgba(120, 120, 128, 0.06);
 		animation: observe-shimmer 1.4s linear infinite;
 		background-size: 200% 100%;
@@ -1875,11 +1925,11 @@
 		border: 1px solid var(--surface-border);
 		background: var(--surface-bg);
 		color: var(--surface-muted);
-		box-shadow: 0 2px 8px rgb(0 0 0 / 0.1);
+		box-shadow: var(--elev-2);
 		cursor: pointer;
 		transition:
-			color 80ms ease,
-			background 80ms ease;
+			color var(--dur-fast) ease,
+			background var(--dur-fast) ease;
 		margin: 0 auto;
 		z-index: 2;
 	}
@@ -1894,10 +1944,11 @@
 		flex-direction: column;
 		align-items: center;
 		justify-content: center;
-		gap: 10px;
+		gap: 12px;
 		padding: 48px 24px;
 		color: var(--surface-muted);
-		font-size: 0.85rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 	}
 
 	.observe-empty-state {
@@ -1927,42 +1978,35 @@
 	}
 
 	.observe-empty-title {
-		font-size: 0.95rem;
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
 		font-weight: 600;
 		color: var(--center-channel-color);
 		margin: 0;
 	}
 
 	.observe-empty-desc {
-		font-size: 0.8rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 		margin: 0;
 		max-width: 360px;
 	}
 
-	.observe-http-toolbar {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-	}
-
 	.observe-chart-grid {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
-		gap: 12px;
+		gap: var(--space-3);
 	}
 
 	.observe-chart-card {
 		display: flex;
 		flex-direction: column;
-		gap: 8px;
-		padding: 14px 16px 12px;
-		border-radius: 0.875rem;
-		background: var(--surface-bg);
-		border: 1px solid var(--surface-border);
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.03),
-			0 1px 2px rgb(0 0 0 / 0.02);
+		gap: var(--space-2);
+		padding: var(--space-4) var(--space-4) var(--space-3);
+		border-radius: var(--radius-lg);
+		background-color: var(--bg-raised);
+		box-shadow: var(--elev-1);
 		min-width: 0;
 	}
 
@@ -1970,17 +2014,19 @@
 		display: flex;
 		align-items: baseline;
 		justify-content: space-between;
-		gap: 8px;
+		gap: var(--space-2);
 	}
 
 	.observe-chart-label {
-		font-size: 0.78rem;
-		font-weight: 500;
-		color: var(--surface-muted);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
+		color: var(--text-muted);
 	}
 
 	.observe-chart-current {
-		font-size: 0.85rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		font-weight: 600;
 		font-variant-numeric: tabular-nums;
 	}
@@ -1994,7 +2040,7 @@
 	.observe-chart-skeleton {
 		width: 100%;
 		height: 100%;
-		border-radius: 6px;
+		border-radius: var(--radius-xs);
 		background: linear-gradient(
 			90deg,
 			rgba(120, 120, 128, 0.06) 0%,
@@ -2014,20 +2060,11 @@
 		}
 	}
 
-	:global(:root.dark) .observe-guide-snippet {
-		background: rgba(255, 255, 255, 0.04);
-	}
-
-	.observe-errors-toolbar {
-		display: flex;
-		align-items: center;
-		gap: 10px;
-	}
-
 	.observe-killed-hint {
-		font-size: 0.75rem;
-		color: var(--surface-muted);
-		flex: 1;
+		margin: 0;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		color: var(--text-muted);
 	}
 
 	.observe-killed-logs {
@@ -2038,63 +2075,55 @@
 
 	.observe-errors-summary {
 		display: flex;
-		gap: 20px;
-		padding: 12px 16px;
-		border-radius: 0.875rem;
-		background: var(--surface-bg);
-		border: 1px solid var(--surface-border);
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.03),
-			0 1px 2px rgb(0 0 0 / 0.02);
+		align-items: baseline;
+		gap: var(--space-4);
+		padding: 0 var(--space-1);
 	}
 
 	.observe-errors-summary-stat {
 		display: flex;
 		align-items: baseline;
-		gap: 6px;
+		gap: 0.5rem;
 	}
 
 	.observe-errors-summary-value {
-		font-size: 1.1rem;
+		font-size: var(--text-headline);
+		line-height: var(--lh-headline);
 		font-weight: 600;
 		font-variant-numeric: tabular-nums;
-		color: var(--center-channel-color);
+		color: var(--text-default);
 	}
 
 	.observe-errors-summary-label {
-		font-size: 0.75rem;
-		color: var(--surface-muted);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		color: var(--text-muted);
 	}
 
 	.observe-errors-list {
 		display: flex;
 		flex-direction: column;
-		gap: 6px;
+		gap: var(--space-2);
 	}
 
 	.observe-error-card {
-		border: 1px solid var(--surface-border);
-		border-radius: 0.875rem;
-		background: var(--surface-bg);
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.03),
-			0 1px 2px rgb(0 0 0 / 0.02);
+		border-radius: var(--radius-lg);
+		background-color: var(--bg-raised);
+		box-shadow: var(--elev-1);
 		overflow: hidden;
-		transition: box-shadow 150ms ease;
+		transition: box-shadow var(--dur-base) var(--ease-out);
 	}
 
 	.observe-error-card:hover {
-		box-shadow:
-			0 2px 8px rgb(0 0 0 / 0.06),
-			0 1px 3px rgb(0 0 0 / 0.04);
+		box-shadow: var(--elev-2);
 	}
 
 	.observe-error-header {
 		position: relative;
 		display: flex;
 		align-items: flex-start;
-		gap: 10px;
-		padding: 12px 14px;
+		gap: 12px;
+		padding: 12px 16px;
 		width: 100%;
 		border: 0;
 		background: transparent;
@@ -2102,7 +2131,7 @@
 		cursor: pointer;
 		color: var(--center-channel-color);
 		font-family: inherit;
-		transition: background 80ms ease;
+		transition: background var(--dur-fast) ease;
 	}
 
 	.observe-error-header:hover {
@@ -2110,7 +2139,7 @@
 	}
 
 	:global(.observe-error-chevron) {
-		margin-top: 3px;
+		margin-top: 4px;
 		color: var(--surface-muted);
 		flex-shrink: 0;
 	}
@@ -2120,7 +2149,7 @@
 		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 3px;
+		gap: 4px;
 	}
 
 	.observe-error-titlerow {
@@ -2131,8 +2160,9 @@
 	}
 
 	.observe-error-type {
-		font-size: 0.85rem;
-		font-weight: 650;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		font-weight: 600;
 		color: var(--center-channel-color);
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -2142,11 +2172,12 @@
 
 	.observe-error-fp {
 		font-family: 'SF Mono', 'Cascadia Code', monospace;
-		font-size: 0.64rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 		background: rgba(120, 120, 128, 0.1);
-		padding: 1px 6px;
-		border-radius: 4px;
+		padding: 1px 8px;
+		border-radius: var(--radius-xs);
 		flex-shrink: 0;
 	}
 
@@ -2159,21 +2190,24 @@
 	}
 
 	.observe-error-count-num {
-		font-size: 1.15rem;
+		font-size: var(--text-title-3);
+		line-height: var(--lh-title-3);
 		font-weight: 700;
 		color: var(--center-channel-color);
 		font-variant-numeric: tabular-nums;
 	}
 
 	.observe-error-count-label {
-		font-size: 0.58rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 		color: var(--surface-muted);
 	}
 
 	.observe-error-message-line {
-		font-size: 0.76rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		font-family: 'SF Mono', 'Cascadia Code', monospace;
 		color: var(--surface-muted);
 		overflow: hidden;
@@ -2184,8 +2218,9 @@
 	.observe-error-meta {
 		display: flex;
 		align-items: center;
-		gap: 5px;
-		font-size: 0.68rem;
+		gap: 4px;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 	}
 
@@ -2193,32 +2228,10 @@
 		opacity: 0.5;
 	}
 
-	.observe-error-detail {
-		padding: 12px 16px 16px;
-		display: flex;
-		flex-direction: column;
-		gap: 12px;
-		border-top: 1px solid var(--surface-border);
-		background: rgba(120, 120, 128, 0.025);
-	}
-
-	.observe-error-full-msg {
-		font-size: 0.8rem;
-		color: var(--center-channel-color);
-		margin: 0;
-		line-height: 1.55;
-		white-space: pre-wrap;
-		word-break: break-word;
-		padding: 10px 12px;
-		background: var(--surface-bg);
-		border: 1px solid var(--surface-border);
-		border-radius: 8px;
-	}
-
 	.observe-error-sample {
 		display: flex;
 		flex-direction: column;
-		gap: 5px;
+		gap: 4px;
 	}
 
 	.observe-stack-wrapper {
@@ -2227,12 +2240,12 @@
 
 	.observe-error-stack {
 		font-family: 'SF Mono', 'Cascadia Code', 'Fira Code', 'JetBrains Mono', monospace;
-		font-size: 0.7rem;
+		font-size: var(--text-micro);
 		line-height: 1.6;
 		background: #1a1a1e;
 		color: #c8c8cc;
-		border-radius: 8px;
-		padding: 12px 14px;
+		border-radius: var(--radius-sm);
+		padding: 12px 16px;
 		padding-right: 40px;
 		margin: 0;
 		overflow-x: auto;
@@ -2252,19 +2265,19 @@
 		justify-content: center;
 		width: 26px;
 		height: 26px;
-		border-radius: 6px;
-		border: 1px solid rgba(255, 255, 255, 0.1);
-		background: rgba(255, 255, 255, 0.06);
-		color: rgba(255, 255, 255, 0.5);
+		border-radius: var(--radius-xs);
+		border: 1px solid var(--border-default);
+		background-color: var(--fill-quiet);
+		color: var(--text-muted);
 		cursor: pointer;
 		transition:
-			color 80ms ease,
-			background 80ms ease;
+			color var(--dur-fast) ease,
+			background var(--dur-fast) ease;
 	}
 
 	.observe-stack-copy:hover {
-		color: rgba(255, 255, 255, 0.85);
-		background: rgba(255, 255, 255, 0.12);
+		color: var(--text-default);
+		background-color: var(--fill-soft);
 	}
 
 	.observe-error-sample-ts {
@@ -2272,19 +2285,21 @@
 		align-items: center;
 		gap: 4px;
 		align-self: flex-start;
-		font-size: 0.66rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-variant-numeric: tabular-nums;
 		color: var(--surface-muted);
 		cursor: help;
 	}
 
 	.observe-error-samples-label {
-		font-size: 0.64rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 		color: var(--surface-muted);
-		margin: 4px 0 2px;
+		margin: 4px 0 4px;
 	}
 
 	@media (max-width: 720px) {
@@ -2294,78 +2309,458 @@
 	}
 
 	@media (max-width: 640px) {
-		.observe-strip {
-			gap: 8px;
-		}
-
-		.observe-stat {
-			min-width: 100px;
-			padding: 8px 10px;
-		}
-
-		.observe-log-toolbar {
-			flex-direction: column;
-			align-items: stretch;
+		.ov-viewbar-controls {
+			margin-left: 0;
+			width: 100%;
+			flex-wrap: wrap;
 		}
 
 		.observe-log-search {
-			max-width: none;
+			width: 100%;
 		}
 
 		.observe-chart-grid {
 			grid-template-columns: 1fr;
 		}
 
-		.observe-errors-summary {
-			flex-direction: column;
-			gap: 10px;
-		}
-
 		.observe-error-card {
-			border-radius: 0.75rem;
+			border-radius: var(--radius-md);
 		}
 	}
-	.observe-traces-disabled {
+
+	:global(.ov-range-select) {
+		width: auto;
+		flex: none;
+	}
+	:global(.ov-range-select .ui-select) {
+		height: 2.4375rem;
+		padding: 0 2rem 0 0.75rem;
+		border-radius: var(--radius-md);
+		border-color: var(--border-default);
+		background-color: var(--bg-sunken);
+		color: var(--text-default);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 550;
+	}
+	:global(.ov-range-select .ui-select:hover) {
+		color: var(--text-default);
+		border-color: var(--rule-strong, var(--border-default));
+	}
+	:global(.ov-range-select .ui-select-chevron) {
+		color: var(--text-muted);
+	}
+
+	.lg-filters {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2) var(--space-4);
+		padding: var(--space-3);
+		border-radius: var(--radius-md);
+		background-color: var(--fill-quiet);
+	}
+	.lg-filter-group {
+		display: flex;
+		align-items: center;
+		gap: var(--space-2);
+		flex-wrap: wrap;
+	}
+	.lg-filter-label,
+	.lg-filter-hint {
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-faint);
+		margin: 0;
+	}
+	.lg-chip {
+		border: 1px solid var(--border-default);
+		background: none;
+		color: var(--text-muted);
+		border-radius: var(--radius-pill);
+		padding: 0.125rem var(--space-2);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
+		font-family: var(--font-mono, ui-monospace, monospace);
+		cursor: pointer;
+		min-height: 1.5rem;
+	}
+	.lg-chip--on {
+		border-color: transparent;
+	}
+	.lg-filter-clear {
+		border: none;
+		background: none;
+		padding: 0;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+		color: var(--accent);
+		cursor: pointer;
+	}
+	.lg-head,
+	.lg-row {
+		display: grid;
+		grid-template-columns: 7rem 4.75rem minmax(0, 1fr);
+		gap: var(--space-3);
+		align-items: baseline;
+	}
+	.lg-head {
+		position: sticky;
+		top: 0;
+		z-index: 1;
+		background-color: var(--bg-raised);
+		padding: var(--space-2) var(--space-3);
+		border-bottom: 1px solid var(--rule);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+		color: var(--text-faint);
+	}
+	.lg-row {
+		padding: 0.1875rem var(--space-3);
+		border-bottom: 1px solid color-mix(in srgb, var(--rule) 55%, transparent);
+	}
+	.lg-row--alt {
+		background-color: color-mix(in srgb, var(--fill-quiet) 55%, transparent);
+	}
+	.lg-row--open {
+		background-color: var(--fill-quiet);
+	}
+	.lg-time {
+		font-family: var(--font-mono, ui-monospace, monospace);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-variant-numeric: tabular-nums;
+		color: var(--text-faint);
+		white-space: nowrap;
+	}
+	.lg-level {
+		justify-self: start;
+		border-radius: var(--radius-xs);
+		padding: 0 0.375rem;
+		font-family: var(--font-mono, ui-monospace, monospace);
+		font-size: var(--text-micro);
+		line-height: 1.4;
+		font-weight: 700;
+		letter-spacing: 0.02em;
+	}
+	.lg-msg-cell {
+		min-width: 0;
+	}
+	.lg-msg-btn {
+		display: flex;
+		align-items: flex-start;
+		gap: var(--space-1);
+		width: 100%;
+		border: none;
+		background: none;
+		padding: 0;
+		text-align: left;
+		color: inherit;
+		cursor: default;
+	}
+	.lg-msg-btn--expandable {
+		cursor: pointer;
+	}
+	.lg-msg {
+		font-family: var(--font-mono, ui-monospace, monospace);
+		font-size: var(--text-micro);
+		line-height: 1.55;
+		white-space: pre-wrap;
+		word-break: break-word;
+		min-width: 0;
+	}
+	.lg-more {
+		flex-shrink: 0;
+		align-self: center;
+		border-radius: var(--radius-pill);
+		background-color: var(--fill-soft);
+		color: var(--text-muted);
+		padding: 0 0.375rem;
+		font-size: var(--text-micro);
+		line-height: 1.5;
+	}
+
+	.lg-chip--time {
+		border-color: transparent;
+		background-color: var(--fill-soft);
+		color: var(--text-default);
+	}
+
+	.eg-card--done {
+		opacity: 0.62;
+	}
+	.eg-status {
+		border-radius: var(--radius-pill);
+		padding: 0 0.4375rem;
+		font-size: var(--text-micro);
+		line-height: 1.5;
+		font-weight: 600;
+		text-transform: capitalize;
+	}
+	.eg-status--resolved {
+		background-color: var(--status-success-bg);
+		color: var(--status-success);
+	}
+	.eg-status--ignored {
+		background-color: var(--fill-soft);
+		color: var(--text-muted);
+	}
+	.eg-chip {
+		border-radius: var(--radius-pill);
+		background-color: var(--fill-quiet);
+		color: var(--text-muted);
+		padding: 0 0.375rem;
+		font-size: var(--text-micro);
+		line-height: 1.5;
+	}
+	.eg-chip--mono {
+		font-family: var(--font-mono, ui-monospace, monospace);
+	}
+	.eg-actions {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: var(--space-2);
+		padding: 0 var(--space-4) var(--space-3) 2.25rem;
+	}
+
+	.eg-headline {
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		font-weight: 600;
+		color: var(--text-default);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		display: -webkit-box;
+		-webkit-line-clamp: 2;
+		line-clamp: 2;
+		-webkit-box-orient: vertical;
+	}
+	.eg-origin {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: baseline;
+		gap: var(--space-2);
+		margin-top: var(--space-1);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-faint);
+		min-width: 0;
+	}
+	.eg-origin-label {
+		color: var(--text-faint);
+	}
+	.eg-sha {
+		font-family: var(--font-mono, ui-monospace, monospace);
+		color: var(--accent);
+		text-decoration: none;
+		flex-shrink: 0;
+	}
+	.eg-sha:hover {
+		text-decoration: underline;
+	}
+	.eg-origin-msg {
+		color: var(--text-muted);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		min-width: 0;
+		max-width: 22rem;
+	}
+	.eg-origin-by {
+		color: var(--text-faint);
+	}
+	.eg-deploy-msg {
+		flex: 1;
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: var(--text-muted);
+	}
+
+	.observe-error-detail {
+		border-top: 1px solid var(--rule);
+		padding: var(--space-4);
+		background-color: var(--fill-quiet);
+	}
+	.eg-facts {
+		display: flex;
+		flex-wrap: wrap;
+		gap: var(--space-2) var(--space-6);
+		margin: 0 0 var(--space-4);
+	}
+	.eg-fact {
 		display: flex;
 		flex-direction: column;
-		align-items: center;
-		text-align: center;
-		gap: 0.375rem;
-		padding: 3rem 1.5rem;
+		gap: 0.125rem;
+		min-width: 0;
 	}
-	.observe-traces-disabled-icon {
+	.eg-fact dt {
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-faint);
+	}
+	.eg-fact dd {
+		margin: 0;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
+		color: var(--text-default);
+		font-variant-numeric: tabular-nums;
+	}
+	.eg-section {
+		margin: 0 0 var(--space-2);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+		color: var(--text-muted);
+	}
+	.eg-table {
 		display: flex;
+		flex-direction: column;
+		margin-bottom: var(--space-4);
+		border: 1px solid var(--rule);
+		border-radius: var(--radius-sm);
+		background-color: var(--bg-raised);
+		overflow: hidden;
+	}
+	.eg-trow {
+		display: grid;
+		grid-template-columns: 5rem minmax(0, 1fr) 4rem 6rem;
+		gap: var(--space-3);
+		align-items: baseline;
+		padding: var(--space-2) var(--space-3);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+	}
+	.eg-trow + .eg-trow {
+		border-top: 1px solid color-mix(in srgb, var(--rule) 60%, transparent);
+	}
+	.eg-trow--head {
+		background-color: var(--fill-quiet);
+		color: var(--text-faint);
+		font-weight: 600;
+	}
+	.eg-num {
+		text-align: right;
+		font-variant-numeric: tabular-nums;
+	}
+	.eg-muted {
+		color: var(--text-faint);
+	}
+	.eg-deploy-msg {
+		min-width: 0;
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		color: var(--text-muted);
+	}
+
+	.eg-assign {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-2);
+		min-height: 1.75rem;
+		padding: 0 var(--space-2) 0 var(--space-3);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-sm);
+		background-color: var(--bg-raised);
+		color: var(--text-muted);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+		cursor: pointer;
+		transition:
+			background-color var(--dur-fast) var(--ease-out),
+			color var(--dur-fast) var(--ease-out);
+	}
+	.eg-assign:hover {
+		background-color: var(--fill-quiet);
+		color: var(--text-default);
+	}
+	.eg-assign:focus-visible {
+		outline: 2px solid var(--focus-ring, var(--accent));
+		outline-offset: 1px;
+	}
+	.eg-assign-caret {
+		opacity: 0.5;
+	}
+	.eg-avatar {
+		display: inline-flex;
 		align-items: center;
 		justify-content: center;
-		width: 2.5rem;
-		height: 2.5rem;
-		border-radius: 0.75rem;
-		background-color: color-mix(in srgb, var(--text-default) 6%, transparent);
+		width: 1.125rem;
+		height: 1.125rem;
+		flex-shrink: 0;
+		border-radius: var(--radius-pill);
+		overflow: hidden;
+		background-color: var(--fill-soft);
 		color: var(--text-muted);
-		margin-bottom: 0.375rem;
+		font-size: var(--text-micro);
+		line-height: 1;
+		font-weight: 600;
 	}
-	.observe-traces-disabled-title {
-		font-size: 0.9375rem;
-		font-weight: 650;
-		color: var(--text-default);
-		margin: 0;
+	.eg-avatar img {
+		width: 100%;
+		height: 100%;
+		object-fit: cover;
 	}
-	.observe-traces-disabled-desc {
-		font-size: 0.8125rem;
-		color: var(--text-muted);
-		max-width: 26rem;
+	.eg-menu-row {
+		white-space: nowrap;
+	}
+	.eg-issue-link {
+		display: inline-flex;
+		align-items: center;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+		color: var(--accent);
+		text-decoration: none;
+	}
+	.eg-issue-link:hover {
+		text-decoration: underline;
+	}
+
+	.kc-hint {
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-faint);
+	}
+	.kc-reason {
+		border-radius: var(--radius-pill);
+		padding: 0 0.4375rem;
+		font-size: var(--text-micro);
 		line-height: 1.5;
-		margin: 0;
+		font-weight: 600;
 	}
-	.ov-ultab-soon {
-		font-size: 0.5625rem;
-		font-weight: 650;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		padding: 0.125rem 0.3125rem;
-		border-radius: 999px;
-		background-color: color-mix(in srgb, var(--text-default) 8%, transparent);
+	.kc-reason--critical {
+		background-color: var(--status-error-bg);
+		color: var(--status-error);
+	}
+	.kc-reason--error {
+		background-color: var(--status-warning-bg);
+		color: var(--status-warning);
+	}
+	.kc-reason--warning {
+		background-color: var(--status-warning-bg);
+		color: var(--status-warning);
+	}
+	.kc-reason--info {
+		background-color: var(--fill-soft);
 		color: var(--text-muted);
-		margin-left: 0.3125rem;
+	}
+	.kc-pod {
+		font-family: var(--font-mono, ui-monospace, monospace);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		color: var(--text-faint);
+		overflow: hidden;
+		text-overflow: ellipsis;
+		white-space: nowrap;
+		min-width: 0;
 	}
 </style>

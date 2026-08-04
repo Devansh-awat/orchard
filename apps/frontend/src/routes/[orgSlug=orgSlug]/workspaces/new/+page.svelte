@@ -204,14 +204,14 @@
 		justify-content: center;
 		width: 3rem;
 		height: 3rem;
-		border-radius: 0.875rem;
+		border-radius: var(--radius-lg);
 		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 10%, transparent);
 		color: var(--sidebar-text-active-border);
 		flex-shrink: 0;
 	}
 
 	.nw-title {
-		font-size: 1.25rem;
+		font-size: var(--text-title-3);
 		font-weight: 700;
 		color: var(--center-channel-color);
 		margin: 0;
@@ -220,7 +220,7 @@
 	}
 
 	.nw-subtitle {
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
 		color: var(--surface-muted);
 		margin: 0.25rem 0 0;
 		line-height: 1.4;
@@ -229,7 +229,7 @@
 	/* Card */
 	.nw-card {
 		border: 1px solid var(--surface-border);
-		border-radius: 1rem;
+		border-radius: var(--radius-lg);
 		background-color: var(--surface-bg);
 		padding: 1.75rem;
 		box-shadow:
@@ -240,8 +240,9 @@
 	/* Error */
 	.nw-error {
 		padding: 0.75rem 1rem;
-		border-radius: 0.75rem;
-		font-size: 0.875rem;
+		border-radius: var(--radius-md);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
 		color: var(--error-text-color);
 		border: 1px solid color-mix(in srgb, var(--error-text-color) 25%, transparent);
@@ -259,27 +260,29 @@
 	.nw-field {
 		display: flex;
 		flex-direction: column;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		position: relative;
 	}
 
 	.nw-label {
-		font-size: 0.8125rem;
-		font-weight: 500;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
 		color: var(--surface-muted);
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 	}
 
 	.nw-optional {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 400;
 		color: color-mix(in srgb, var(--surface-muted) 60%, transparent);
 	}
 
 	.nw-hint {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
 		color: color-mix(in srgb, var(--surface-muted) 75%, transparent);
 		margin: 0;
 		line-height: 1.4;
@@ -289,12 +292,13 @@
 	.nw-input {
 		width: 100%;
 		padding: 0.5rem 0.75rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--surface-border);
 		background-color: var(--center-channel-bg);
 		color: var(--center-channel-color);
-		font-size: 0.8125rem;
-		transition: border-color 0.15s;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		transition: border-color var(--dur-fast);
 		resize: none;
 	}
 
@@ -317,31 +321,34 @@
 		align-items: center;
 		gap: 0.5rem;
 		padding: 0.5rem 0.75rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		background-color: color-mix(in srgb, var(--surface-border) 30%, transparent);
 		color: var(--center-channel-color);
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 	}
 
 	/* Preview */
 	.nw-preview {
 		display: flex;
 		align-items: center;
-		gap: 0.625rem;
-		padding: 0.625rem 0.75rem;
-		border-radius: 0.5rem;
+		gap: 0.75rem;
+		padding: 0.75rem 0.75rem;
+		border-radius: var(--radius-sm);
 		background-color: color-mix(in srgb, var(--surface-border) 30%, transparent);
 	}
 
 	.nw-preview-label {
-		font-size: 0.75rem;
-		font-weight: 500;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		color: var(--surface-muted);
 		white-space: nowrap;
 	}
 
 	.nw-preview-value {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-family: var(--font-mono);
 		color: var(--sidebar-text-active-border);
 	}
@@ -350,7 +357,7 @@
 	.nw-actions {
 		display: flex;
 		justify-content: flex-end;
-		gap: 0.625rem;
+		gap: 0.75rem;
 		margin-top: 1.75rem;
 		padding-top: 1.5rem;
 		border-top: 1px solid color-mix(in srgb, var(--surface-border) 60%, transparent);
@@ -362,12 +369,13 @@
 		align-items: center;
 		gap: 0.5rem;
 		padding: 0.5rem 1rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
+		border-radius: var(--radius-sm);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		border: none;
 		cursor: pointer;
-		transition: all 0.2s ease;
+		transition: all var(--dur-base) ease;
 		white-space: nowrap;
 	}
 

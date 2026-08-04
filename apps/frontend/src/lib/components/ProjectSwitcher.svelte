@@ -266,13 +266,14 @@
 	.ps-trigger {
 		display: inline-flex;
 		align-items: stretch;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--surface-border);
 		background: var(--center-channel-bg);
 		transition:
-			border-color 0.15s,
-			background-color 0.15s;
-		font-size: 0.75rem;
+			border-color var(--dur-fast),
+			background-color var(--dur-fast);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		overflow: hidden;
 	}
 
@@ -288,8 +289,8 @@
 	.ps-trigger-main {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
-		padding: 0.3125rem 0.625rem;
+		gap: 0.5rem;
+		padding: 0.3125rem 0.75rem;
 		background: transparent;
 		border: none;
 		cursor: pointer;
@@ -309,8 +310,8 @@
 		color: var(--surface-muted);
 		cursor: pointer;
 		transition:
-			color 0.1s,
-			background-color 0.1s;
+			color var(--dur-fast),
+			background-color var(--dur-fast);
 	}
 
 	.ps-pending-clear:hover {
@@ -320,7 +321,7 @@
 
 	.ps-label {
 		color: var(--surface-muted);
-		font-weight: 500;
+		font-weight: 600;
 	}
 
 	.ps-value {
@@ -352,13 +353,13 @@
 		max-width: 18rem;
 		max-height: 16rem;
 		overflow-y: auto;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		border: 1px solid var(--surface-border);
-		padding: 0.375rem;
+		padding: 0.5rem;
 		background-color: var(--surface-bg);
-		box-shadow: 0 4px 16px rgb(0 0 0 / 0.12);
+		box-shadow: var(--elev-3);
 		transform-origin: top left;
-		transition: min-width 180ms cubic-bezier(0.22, 1, 0.36, 1);
+		transition: min-width var(--dur-fast) cubic-bezier(0.22, 1, 0.36, 1);
 	}
 
 	.ps-menu-creating {
@@ -370,15 +371,16 @@
 		align-items: center;
 		justify-content: space-between;
 		width: 100%;
-		border-radius: 0.375rem;
-		padding: 0.4375rem 0.625rem;
+		border-radius: var(--radius-xs);
+		padding: 0.5rem 0.75rem;
 		text-align: left;
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		border: none;
 		background: none;
 		color: var(--center-channel-color);
 		cursor: pointer;
-		transition: background-color 0.1s;
+		transition: background-color var(--dur-fast);
 	}
 
 	.ps-option:hover {
@@ -397,7 +399,7 @@
 
 	.ps-divider {
 		height: 1px;
-		margin: 0.375rem 0.25rem;
+		margin: 0.5rem 0.25rem;
 		background-color: var(--surface-border);
 		opacity: 0.6;
 	}
@@ -415,20 +417,21 @@
 	.ps-create {
 		display: flex;
 		flex-direction: column;
-		gap: 0.375rem;
-		padding: 0.375rem 0.5rem 0.5rem;
+		gap: 0.5rem;
+		padding: 0.5rem 0.5rem 0.5rem;
 	}
 
 	.ps-create-input {
 		width: 100%;
-		padding: 0.375rem 0.5rem;
-		border-radius: 0.375rem;
+		padding: 0.5rem 0.5rem;
+		border-radius: var(--radius-xs);
 		border: 1px solid var(--surface-border);
 		background-color: var(--center-channel-bg);
 		color: var(--center-channel-color);
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		outline: none;
-		transition: border-color 0.15s;
+		transition: border-color var(--dur-fast);
 	}
 
 	.ps-create-input:focus {
@@ -470,16 +473,16 @@
 		width: 1.75rem;
 		height: 1.75rem;
 		flex-shrink: 0;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		border: 1px solid var(--surface-border);
 		background: var(--center-channel-bg);
 		color: var(--surface-muted);
 		cursor: pointer;
 		transition:
-			background-color 0.1s,
-			border-color 0.1s,
-			color 0.1s,
-			opacity 0.1s;
+			background-color var(--dur-fast),
+			border-color var(--dur-fast),
+			color var(--dur-fast),
+			opacity var(--dur-fast);
 	}
 
 	.ps-create-icon:disabled {
@@ -504,7 +507,8 @@
 
 	.ps-create-error {
 		margin: 0;
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--error-text, #e03e3e);
 	}
 </style>

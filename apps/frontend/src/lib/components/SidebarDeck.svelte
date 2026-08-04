@@ -14,17 +14,24 @@
 		Moon,
 		Monitor,
 		PanelLeftClose,
-		PanelLeftOpen
+		PanelLeftOpen,
+		TriangleAlert,
+		Search,
+		Activity,
+		Settings,
+		LogOut,
+		KeyRound,
+		Sun
 	} from 'lucide-svelte';
-	import { Search, Activity, Settings, LogOut, KeyRound, Sun } from '@jis3r/icons';
 	import { createQuery } from '@tanstack/svelte-query';
 	import { overviewQueryOptions } from '$lib/queries/overview';
-	import { StatusDot, resourceStatus, PopoverPanel } from '$lib/components/ui';
+	import { StatusDot, resourceStatus, PopoverPanel, RemoteImg } from '$lib/components/ui';
 	import {
-		springHover as motionSpringHover,
 		springRotate,
 		springCollapse,
-		decorativeMotion
+		motionStagger,
+		motionEnabled,
+		transition
 	} from '$lib/utils/motion.svelte';
 	import { animate } from 'motion';
 	import {
@@ -33,6 +40,8 @@
 		selectedOrganization,
 		pinnedItems,
 		pendingInvitations,
+		mobileNavOpen,
+		MOBILE_NAV_QUERY,
 		type Organization
 	} from '$lib/stores';
 	import { themeStore } from '$lib/stores/theme';
@@ -130,11 +139,40 @@
 
 	const EXPANDED_W = 280;
 	const COLLAPSED_W = 88;
+	const RAIL_SWAP_T = 0.45;
 	const COLLAPSE_KEY = 'sidebar-collapsed';
 
 	let collapsed = $state(browser && localStorage.getItem(COLLAPSE_KEY) === '1');
 	let asideEl: HTMLElement | undefined = $state();
 	let visible = $state(true);
+	let isMobile = $state(false);
+	let railed = $state(browser && localStorage.getItem(COLLAPSE_KEY) === '1');
+
+	$effect(() => {
+		const path = $page.url.pathname;
+		if (path) mobileNavOpen.close();
+	});
+
+	$effect(() => {
+		if (!browser) return;
+		const mq = window.matchMedia(MOBILE_NAV_QUERY);
+		const sync = () => {
+			isMobile = mq.matches;
+			if (!mq.matches) mobileNavOpen.close();
+		};
+		sync();
+		mq.addEventListener('change', sync);
+		return () => mq.removeEventListener('change', sync);
+	});
+
+	$effect(() => {
+		if (!browser) return;
+		const locked = isMobile && $mobileNavOpen;
+		document.body.style.overflow = locked ? 'hidden' : '';
+		return () => {
+			document.body.style.overflow = '';
+		};
+	});
 
 	function toggleCollapsed() {
 		collapsed = !collapsed;
@@ -144,21 +182,38 @@
 	let widthInitialized = false;
 	$effect(() => {
 		const el = asideEl;
-		const width = `${collapsed ? COLLAPSED_W : EXPANDED_W}px`;
+		const mobile = isMobile;
+		const target = collapsed;
 		if (!el) return;
-		if (!widthInitialized || !decorativeMotion()) {
-			widthInitialized = true;
-			el.style.width = width;
+		if (mobile) {
+			el.style.width = '';
+			widthInitialized = false;
+			railed = false;
 			return;
 		}
+		const toW = target ? COLLAPSED_W : EXPANDED_W;
+		if (!widthInitialized || !motionEnabled()) {
+			widthInitialized = true;
+			el.style.width = `${toW}px`;
+			el.style.setProperty('--rail-t', target ? '0' : '1');
+			railed = target;
+			return;
+		}
+		const fromW = el.getBoundingClientRect().width || toW;
 		document.documentElement.dataset.sidebarAnimating = 'true';
 		const done = () => {
 			delete document.documentElement.dataset.sidebarAnimating;
 		};
-		animate(el, { width }, { type: 'spring', stiffness: 240, damping: 26, mass: 1 }).finished.then(
-			done,
-			done
-		);
+		animate(fromW, toW, {
+			...transition('smooth'),
+			onUpdate: (v) => {
+				el.style.width = `${v}px`;
+				const t = Math.max(0, Math.min(1, (v - COLLAPSED_W) / (EXPANDED_W - COLLAPSED_W)));
+				el.style.setProperty('--rail-t', String(t));
+				const wantRail = t <= RAIL_SWAP_T;
+				if (wantRail !== railed) railed = wantRail;
+			}
+		}).finished.then(done, done);
 	});
 
 	function onWindowKeydown(e: KeyboardEvent) {
@@ -172,12 +227,7 @@
 	}
 
 	function onStripClick() {
-		if (collapsed) {
-			toggleCollapsed();
-			attentionOpen = true;
-		} else {
-			attentionOpen = !attentionOpen;
-		}
+		attentionOpen = !attentionOpen;
 	}
 
 	$effect(() => {
@@ -217,19 +267,8 @@
 		return activeThemeId === mode;
 	}
 
-	function navStagger(index: number, stride = 0.04) {
-		return (el: Element) => {
-			if (!decorativeMotion()) return;
-			animate(
-				el as HTMLElement,
-				{ opacity: [0, 1], y: [6, 0] },
-				{ type: 'spring', stiffness: 300, damping: 25, mass: 0.75, delay: index * stride }
-			);
-		};
-	}
-
-	function springHover(opts: { lift?: number } = {}) {
-		return motionSpringHover({ lift: -1, forwardIconHover: true, ...opts });
+	function navStagger(index: number, stride?: number) {
+		return motionStagger({ index, stride, from: { y: 6 } });
 	}
 
 	function depName(pin: { name: string; live: OverviewDep | null }) {
@@ -247,7 +286,7 @@
 {#snippet orgAvatar(org: Organization | null, size: 'md' | 'sm')}
 	<span class="deck-org-avatar" class:deck-org-avatar--sm={size === 'sm'}>
 		{#if org?.avatarUrl}
-			<img src={org.avatarUrl} alt="" />
+			<RemoteImg src={org.avatarUrl} />
 		{:else}
 			{(org?.name ?? '?').charAt(0)}
 		{/if}
@@ -255,12 +294,7 @@
 {/snippet}
 
 {#snippet failingRow(dep: OverviewDep, i: number)}
-	<a
-		href="/{orgSlug}/deployments/{dep.id}"
-		class="deck-attention-row"
-		{@attach navStagger(i)}
-		{@attach springHover()}
-	>
+	<a href="/{orgSlug}/deployments/{dep.id}" class="deck-attention-row" {@attach navStagger(i)}>
 		<StatusDot meta={resourceStatus(dep.status, dep.buildStatus)} size={7} />
 		<span class="deck-row-label">{dep.displayName || dep.name}</span>
 	</a>
@@ -269,7 +303,7 @@
 {#snippet userAvatarEl()}
 	<span class="deck-user-avatar">
 		{#if $user?.imageUrl}
-			<img src={$user.imageUrl} alt="" />
+			<RemoteImg src={$user.imageUrl} />
 		{:else}
 			{userName.charAt(0)}
 		{/if}
@@ -278,30 +312,42 @@
 
 <svelte:window onkeydown={onWindowKeydown} />
 
-<aside bind:this={asideEl} class="sidebar deck-host" class:deck-host--collapsed={collapsed}>
+{#if isMobile && $mobileNavOpen}
+	<div
+		class="deck-scrim"
+		role="presentation"
+		onclick={() => mobileNavOpen.close()}
+		transition:fade={{ duration: 160 }}
+	></div>
+{/if}
+
+<aside
+	bind:this={asideEl}
+	class="sidebar deck-host"
+	class:deck-host--collapsed={railed}
+	class:deck-host--drawer={isMobile}
+	class:deck-host--drawer-open={isMobile && $mobileNavOpen}
+	inert={isMobile && !$mobileNavOpen}
+>
 	<div class="deck-panel">
-		<PopoverPanel placement="bottom-start" sameWidth={!collapsed}>
+		<PopoverPanel placement="bottom-start" sameWidth={!railed}>
 			{#snippet trigger(attrs, open)}
 				<button
 					type="button"
 					class="deck-org-trigger"
-					class:deck-org-trigger--collapsed={collapsed}
-					title={collapsed ? ($selectedOrganization?.name ?? 'Select org') : undefined}
+					class:deck-org-trigger--collapsed={railed}
+					title={railed ? ($selectedOrganization?.name ?? 'Select org') : undefined}
 					{...attrs}
-					{@attach springHover()}
 				>
 					{@render orgAvatar($selectedOrganization, 'md')}
-					{#if !collapsed}
-						<span class="deck-org-text" transition:fade={{ duration: 120 }}>
+					{#if !railed}
+						<span class="deck-org-text">
 							<span class="deck-org-name">{$selectedOrganization?.name ?? 'Select org'}</span>
 							{#if $selectedOrganization?.plan}
 								<span class="deck-org-plan">{$selectedOrganization.plan}</span>
 							{/if}
 						</span>
-						<span
-							transition:fade={{ duration: 120 }}
-							{@attach springRotate(() => open, { rest: 0, on: 180 })}
-						>
+						<span {@attach springRotate(() => open, { rest: 0, on: 180 })}>
 							<ChevronDown size={15} class="deck-org-chevron" />
 						</span>
 					{/if}
@@ -341,54 +387,85 @@
 		<button
 			type="button"
 			class="deck-search"
-			class:deck-search--collapsed={collapsed}
-			title={collapsed ? `Search (${isMac ? '⌘' : 'Ctrl+'}K)` : undefined}
+			class:deck-search--collapsed={railed}
+			title={railed ? `Search (${isMac ? '⌘' : 'Ctrl+'}K)` : undefined}
 			onclick={() => window.dispatchEvent(new CustomEvent('open-quick-search'))}
-			{@attach springHover()}
 		>
 			<Search size={14} />
-			{#if !collapsed}
-				<span class="deck-search-label" transition:fade={{ duration: 120 }}>Search</span>
-				<kbd class="deck-kbd" transition:fade={{ duration: 120 }}>{isMac ? '⌘' : 'Ctrl'}K</kbd>
+			{#if !railed}
+				<span class="deck-search-label">Search</span>
+				<kbd class="deck-kbd">{isMac ? '⌘' : 'Ctrl'}K</kbd>
 			{/if}
 		</button>
 
 		{#if orgSlug}
 			<div class="deck-scroll">
 				{#if failingDeps.length > 0}
-					<button
-						type="button"
-						class="deck-strip"
-						aria-expanded={!collapsed && attentionOpen}
-						title={collapsed ? `${failingDeps.length} failing` : undefined}
-						onclick={onStripClick}
-					>
-						<span class="deck-strip-dot"></span>
-						<span>{failingDeps.length}</span>
-						{#if !collapsed}
-							<span transition:fade={{ duration: 120 }}>failing</span>
+					{#if railed}
+						<PopoverPanel placement="right-start">
+							{#snippet trigger(attrs)}
+								<button
+									type="button"
+									class="deck-strip deck-strip--collapsed"
+									title="{failingDeps.length} failing"
+									{...attrs}
+								>
+									<span class="deck-tile deck-tile--alert">
+										<TriangleAlert size={15} />
+										<span class="deck-tile-badge">{failingDeps.length}</span>
+									</span>
+								</button>
+							{/snippet}
+							{#snippet children({ close })}
+								<div class="deck-menu deck-menu--attention">
+									<p class="deck-menu-title">{failingDeps.length} failing</p>
+									{#each failingDeps as dep, i (dep.id)}
+										<a
+											href="/{orgSlug}/deployments/{dep.id}"
+											class="deck-attention-row"
+											onclick={close}
+											{@attach navStagger(i)}
+										>
+											<StatusDot meta={resourceStatus(dep.status, dep.buildStatus)} size={7} />
+											<span class="deck-row-label">{dep.displayName || dep.name}</span>
+										</a>
+									{/each}
+								</div>
+							{/snippet}
+						</PopoverPanel>
+					{:else}
+						<button
+							type="button"
+							class="deck-strip"
+							aria-expanded={attentionOpen}
+							onclick={onStripClick}
+						>
+							<span class="deck-tile deck-tile--alert">
+								<TriangleAlert size={15} />
+							</span>
+							<span class="deck-row-label">Failing</span>
+							<span class="deck-strip-count">{failingDeps.length}</span>
 							<span
 								class="deck-strip-chevron"
-								transition:fade={{ duration: 120 }}
 								{@attach springRotate(() => attentionOpen, { rest: 0, on: 90 })}
 							>
-								<ChevronRight size={12} />
+								<ChevronRight size={13} />
 							</span>
-						{/if}
-					</button>
-					<div {@attach springCollapse(() => !attentionOpen || collapsed)}>
-						<div class="deck-strip-body">
-							{#each failingDeps as dep, i (dep.id)}
-								{@render failingRow(dep, i)}
-							{/each}
+						</button>
+						<div {@attach springCollapse(() => !attentionOpen)}>
+							<div class="deck-strip-body">
+								{#each failingDeps as dep, i (dep.id)}
+									{@render failingRow(dep, i)}
+								{/each}
+							</div>
 						</div>
-					</div>
+					{/if}
 					<div class="deck-gap"></div>
 				{/if}
 
-				<div class="deck-section-head" class:deck-section-head--collapsed={collapsed}>
-					{#if !collapsed}
-						<span transition:fade={{ duration: 120 }}>Platform</span>
+				<div class="deck-section-head">
+					{#if !railed}
+						<span>Platform</span>
 					{/if}
 				</div>
 				{#each nav as item, i (item.id)}
@@ -396,41 +473,34 @@
 						href={item.href}
 						class="deck-row"
 						class:deck-row--active={item.active}
-						title={collapsed ? item.label : undefined}
+						title={railed ? item.label : undefined}
 						{@attach navStagger(i)}
-						{@attach springHover()}
 					>
 						<span class="deck-tile" class:deck-tile--active={item.active}>
 							<item.icon size={15} />
 						</span>
-						{#if !collapsed}
-							<span class="deck-row-label" transition:fly={{ x: -6, duration: 160 }}
-								>{item.label}</span
-							>
+						{#if !railed}
+							<span class="deck-row-label">{item.label}</span>
 						{/if}
 					</a>
 				{/each}
 
 				{#if pinnedDeps.length > 0}
-					<div
-						class="deck-section-head deck-section-head--spaced"
-						class:deck-section-head--collapsed={collapsed}
-					>
-						{#if !collapsed}
-							<span transition:fade={{ duration: 120 }}>Pinned</span>
+					<div class="deck-section-head deck-section-head--spaced">
+						{#if !railed}
+							<span>Pinned</span>
 						{/if}
 					</div>
 					{#each pinnedDeps as pin, i (pin.id)}
 						<a
 							href={pin.href}
 							class="deck-row"
-							title={collapsed ? depName(pin) : undefined}
+							title={railed ? depName(pin) : undefined}
 							{@attach navStagger(nav.length + i)}
-							{@attach springHover()}
 						>
 							<span class="deck-tile deck-tile--fav">
 								{#if pin.live?.faviconUrl}
-									<img src={pin.live.faviconUrl} alt="" loading="lazy" />
+									<RemoteImg src={pin.live.faviconUrl} />
 								{:else}
 									{depName(pin).charAt(0).toUpperCase()}
 								{/if}
@@ -443,10 +513,8 @@
 									</span>
 								{/if}
 							</span>
-							{#if !collapsed}
-								<span class="deck-row-label" transition:fly={{ x: -6, duration: 160 }}
-									>{depName(pin)}</span
-								>
+							{#if !railed}
+								<span class="deck-row-label">{depName(pin)}</span>
 							{/if}
 						</a>
 					{/each}
@@ -456,26 +524,23 @@
 
 		<div class="deck-spacer"></div>
 
-		<div class="deck-split" class:deck-split--collapsed={collapsed}>
+		<div class="deck-split">
 			<PopoverPanel placement="top-start">
 				{#snippet trigger(attrs)}
 					<button
 						type="button"
 						class="deck-split-id"
-						class:deck-split-id--collapsed={collapsed}
-						title={collapsed ? `@${$user?.username ?? 'you'}` : undefined}
+						class:deck-split-id--collapsed={railed}
+						title={railed ? `@${$user?.username ?? 'you'}` : undefined}
 						{...attrs}
-						{@attach springHover()}
 					>
 						{@render userAvatarEl()}
-						{#if !collapsed}
-							<span class="deck-user-name deck-user-name--mono" transition:fade={{ duration: 120 }}>
+						{#if !railed}
+							<span class="deck-user-name deck-user-name--mono">
 								@{$user?.username ?? 'you'}
 							</span>
 							{#if invitationCount > 0}
-								<span class="deck-user-badge" transition:fade={{ duration: 120 }}
-									>{invitationCount}</span
-								>
+								<span class="deck-user-badge">{invitationCount}</span>
 							{/if}
 						{/if}
 					</button>
@@ -542,38 +607,15 @@
 					</div>
 				{/snippet}
 			</PopoverPanel>
-			{#if !collapsed}
-				<a
-					class="deck-split-action"
-					href="/user/settings"
-					aria-label="Your settings"
-					title="Settings"
-					transition:fade={{ duration: 140 }}
-					{@attach springHover()}
-				>
-					<Settings size={15} />
-				</a>
-				<button
-					type="button"
-					class="deck-split-action deck-split-action--danger"
-					aria-label="Sign out"
-					title="Sign out"
-					transition:fade={{ duration: 140 }}
-					onclick={() => user.signOut()}
-					{@attach springHover()}
-				>
-					<LogOut size={15} />
-				</button>
-			{/if}
 			<button
 				type="button"
 				class="deck-split-action"
-				aria-label={collapsed ? 'Expand sidebar' : 'Collapse sidebar'}
-				title="{collapsed ? 'Expand' : 'Collapse'} sidebar ({isMac ? '⌘' : 'Ctrl+'}B)"
+				class:deck-split-action--hidden={isMobile}
+				aria-label={railed ? 'Expand sidebar' : 'Collapse sidebar'}
+				title="{railed ? 'Expand' : 'Collapse'} sidebar ({isMac ? '⌘' : 'Ctrl+'}B)"
 				onclick={toggleCollapsed}
-				{@attach springHover()}
 			>
-				{#if collapsed}
+				{#if railed}
 					<PanelLeftOpen size={15} />
 				{:else}
 					<PanelLeftClose size={15} />
@@ -585,57 +627,90 @@
 
 <style>
 	.deck-host {
+		--rail-t: 1;
+		--rail-text: clamp(0, calc((var(--rail-t) - 0.45) * 4), 1);
 		width: 17.5rem;
 		flex-shrink: 0;
 		padding: 0.75rem;
 		border-right: none;
 		background-color: var(--bg-app);
 	}
+
+	.deck-scrim {
+		position: fixed;
+		inset: 0;
+		z-index: 40;
+		background-color: rgb(0 0 0 / 0.32);
+		backdrop-filter: blur(2px);
+	}
+	.deck-host--drawer {
+		position: fixed;
+		top: 0;
+		left: 0;
+		bottom: 0;
+		z-index: 50;
+		width: min(19rem, 84vw);
+		padding: 0.75rem;
+		transform: translate3d(-102%, 0, 0);
+		transition: transform var(--dur-base) cubic-bezier(0.32, 0.72, 0, 1);
+		will-change: transform;
+	}
+	.deck-host--drawer-open {
+		transform: translate3d(0, 0, 0);
+		box-shadow: 0 0 60px rgb(0 0 0 / 0.24);
+	}
+	@media (prefers-reduced-motion: reduce) {
+		.deck-host--drawer {
+			transition: none;
+		}
+	}
 	.deck-host--collapsed .deck-panel {
 		padding: 0.5rem;
 	}
-	.deck-org-trigger--collapsed {
-		padding: 0.25rem;
-	}
-	.deck-search--collapsed {
-		padding: 0.5rem 0 0.5rem 1rem;
-	}
-	.deck-split--collapsed {
-		flex-direction: column;
-		gap: 0.375rem;
-	}
-	.deck-split-id--collapsed {
+
+	.deck-host--collapsed .deck-org-trigger,
+	.deck-host--collapsed .deck-search,
+	.deck-host--collapsed .deck-strip,
+	.deck-host--collapsed .deck-row,
+	.deck-host--collapsed .deck-split-id,
+	.deck-host--collapsed .deck-split-action {
+		width: 2.75rem;
+		height: 2.75rem;
+		margin-inline: auto;
+		padding: 0;
+		gap: 0;
 		flex: none;
 		justify-content: center;
-		padding: 0.25rem;
+	}
+	.deck-split-id {
+		min-width: 2.5rem;
 	}
 	.deck-panel {
 		display: flex;
 		flex-direction: column;
 		height: 100%;
-		border-radius: 1rem;
-		border: 1px solid var(--border-default);
+		min-width: 0;
+		border-radius: var(--radius-xl);
+		border: none;
 		background-color: var(--bg-raised);
 		color: var(--text-default);
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.04),
-			0 4px 16px rgb(0 0 0 / 0.03);
-		padding: 0.75rem;
+		box-shadow: var(--elev-1);
+		padding: var(--space-2);
 		overflow: hidden;
 	}
 	.deck-org-trigger {
 		display: flex;
 		align-items: center;
-		gap: 0.625rem;
+		gap: 0.75rem;
 		width: 100%;
 		padding: 0.5rem;
 		border: none;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		background: none;
 		color: currentColor;
 		cursor: pointer;
 		text-align: left;
-		transition: background-color 120ms;
+		transition: background-color var(--dur-fast);
 	}
 	.deck-org-trigger:hover {
 		background-color: color-mix(in srgb, currentColor 7%, transparent);
@@ -646,11 +721,12 @@
 		justify-content: center;
 		width: 2.25rem;
 		height: 2.25rem;
-		border-radius: 0.625rem;
+		border-radius: var(--radius-md);
 		overflow: hidden;
 		flex-shrink: 0;
 		font-weight: 700;
-		font-size: 1rem;
+		font-size: var(--text-headline);
+		line-height: var(--lh-headline);
 		background: linear-gradient(
 			135deg,
 			color-mix(in srgb, var(--accent) 22%, transparent),
@@ -658,7 +734,7 @@
 		);
 		color: var(--accent);
 	}
-	.deck-org-avatar img {
+	.deck-org-avatar :global(img) {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
@@ -666,25 +742,28 @@
 	.deck-org-avatar--sm {
 		width: 1.5rem;
 		height: 1.5rem;
-		border-radius: 0.45rem;
-		font-size: 0.6875rem;
+		border-radius: var(--radius-sm);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 	}
 	.deck-org-text {
+		opacity: var(--rail-text);
 		display: flex;
 		flex-direction: column;
 		flex: 1;
 		min-width: 0;
 	}
 	.deck-org-name {
-		font-size: 0.9375rem;
-		font-weight: 650;
+		font-size: var(--text-body);
+		font-weight: 600;
 		line-height: 1.2;
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
 	.deck-org-plan {
-		font-size: 0.625rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
@@ -692,7 +771,7 @@
 		margin-top: 0.0625rem;
 	}
 	:global(.deck-org-chevron) {
-		opacity: 0.5;
+		opacity: calc(0.5 * var(--rail-text));
 		flex-shrink: 0;
 	}
 	.deck-org-row-name {
@@ -704,33 +783,41 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		margin: 0.5rem 0 0.75rem;
-		padding: 0.5rem 0.625rem;
-		border: 1px solid color-mix(in srgb, currentColor 12%, transparent);
-		border-radius: 0.625rem;
-		background: none;
-		color: color-mix(in srgb, currentColor 60%, transparent);
-		font-size: 0.8125rem;
+		height: 2.25rem;
+		margin: var(--space-2) 0 var(--space-3);
+		padding: 0 var(--space-3);
+		border: none;
+		border-radius: var(--radius-md);
+		box-shadow: inset 0 0 0 1px var(--rule);
+		background: var(--fill-quiet);
+		color: var(--text-muted);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		cursor: pointer;
+		box-sizing: border-box;
 		transition:
-			color 120ms,
-			border-color 120ms;
+			color var(--dur-fast),
+			background-color var(--dur-fast);
 	}
 	.deck-search:hover {
-		color: currentColor;
-		border-color: color-mix(in srgb, currentColor 25%, transparent);
+		color: var(--text-default);
+		background: var(--fill-soft);
 	}
 	.deck-search-label {
+		opacity: var(--rail-text);
 		flex: 1;
 		text-align: left;
 		white-space: nowrap;
 	}
 	.deck-kbd {
-		font-size: 0.625rem;
+		opacity: var(--rail-text);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		font-family: var(--font-mono, monospace);
-		padding: 0.125rem 0.3rem;
-		border-radius: 0.3rem;
-		background-color: color-mix(in srgb, currentColor 8%, transparent);
+		padding: 0.125rem 0.25rem;
+		border-radius: var(--radius-xs);
+		color: var(--text-muted);
+		background-color: var(--fill-soft);
 	}
 	.deck-scroll {
 		overflow-y: auto;
@@ -743,68 +830,102 @@
 		display: flex;
 		align-items: center;
 		white-space: nowrap;
-		gap: 0.5rem;
+		gap: 0.75rem;
 		width: 100%;
-		padding: 0.375rem 0.5rem;
+		height: 2.25rem;
+		padding: 0 var(--space-2);
+		margin: 0.0625rem 0;
 		border: none;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-md);
 		background: none;
-		color: var(--status-error);
-		font-size: 0.75rem;
+		color: var(--text-muted);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		font-weight: 600;
 		cursor: pointer;
 		text-align: left;
-		transition: background-color 120ms;
+		transition: background-color var(--dur-fast);
+		box-sizing: border-box;
 	}
 	.deck-strip:hover {
-		background-color: var(--status-error-bg);
+		background-color: var(--fill-soft);
+		color: var(--text-default);
 	}
-	.deck-strip-dot {
-		width: 7px;
-		height: 7px;
-		border-radius: 999px;
+
+	.deck-strip--collapsed {
+		color: var(--status-error);
+	}
+	.deck-strip-count {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 1.25rem;
+		height: 1.25rem;
+		margin-left: auto;
+		padding: 0 0.5rem;
+		border-radius: var(--radius-pill);
 		background-color: var(--status-error);
-		flex-shrink: 0;
+		color: #fff;
+		font-size: var(--text-caption);
+		font-weight: 700;
+		font-variant-numeric: tabular-nums;
+		line-height: 1;
+	}
+	.deck-menu--attention {
+		min-width: 13rem;
+	}
+	.deck-menu-title {
+		margin: 0 0 0.25rem;
+		padding: 0 0.5rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--status-error);
 	}
 	.deck-strip-chevron {
+		opacity: var(--rail-text);
 		display: inline-flex;
-		margin-left: auto;
-		opacity: 0.7;
+		color: var(--text-faint);
 	}
 	.deck-strip-body {
-		padding: 0.125rem 0.25rem 0.25rem;
+		opacity: var(--rail-text);
+		padding: 0 0 var(--space-1) 2.25rem;
 	}
 	.deck-attention-row {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.3125rem 0.375rem;
-		border-radius: 0.45rem;
-		color: color-mix(in srgb, currentColor 85%, transparent);
+		height: 2rem;
+		padding: 0 var(--space-2);
+		border-radius: var(--radius-sm);
+		color: var(--text-muted);
 		text-decoration: none;
-		transition: background-color 120ms;
+		transition: background-color var(--dur-fast);
 	}
 	.deck-attention-row:hover {
-		background-color: color-mix(in srgb, currentColor 7%, transparent);
+		background-color: var(--fill-soft);
+		color: var(--text-default);
 	}
 	.deck-section-head {
 		position: relative;
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		height: 1.625rem;
-		font-size: 0.6875rem;
+		height: 1.75rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		opacity: 0.45;
-		padding: 0 0.5rem;
+		letter-spacing: var(--track-body);
+		color: var(--text-faint);
+		padding: 0 var(--space-3);
 		user-select: none;
 	}
 	.deck-section-head--spaced {
 		margin-top: 1rem;
 	}
-	.deck-section-head--collapsed::before {
+	.deck-section-head::before {
 		content: '';
 		position: absolute;
 		left: 50%;
@@ -813,58 +934,93 @@
 		width: 1.25rem;
 		height: 1px;
 		background-color: currentColor;
-		opacity: 0.6;
+		opacity: calc(0.6 * (1 - var(--rail-text)));
+	}
+	.deck-section-head > span {
+		opacity: var(--rail-text);
 	}
 	.deck-row {
 		display: flex;
 		align-items: center;
-		gap: 0.625rem;
-		padding: 0.375rem 0.5rem;
-		margin: 0.125rem 0;
-		border-radius: 0.625rem;
-		color: color-mix(in srgb, currentColor 78%, transparent);
+		gap: 0.75rem;
+		height: 2.25rem;
+		padding: 0 var(--space-2);
+		margin: 0.0625rem 0;
+		border-radius: var(--radius-md);
+		color: var(--text-muted);
 		text-decoration: none;
 		cursor: pointer;
 		transition:
-			background-color 120ms,
-			color 120ms;
+			background-color var(--dur-fast),
+			color var(--dur-fast);
 		min-width: 0;
 	}
 	.deck-row:hover {
-		background-color: color-mix(in srgb, currentColor 7%, transparent);
-		color: currentColor;
+		background-color: var(--fill-soft);
+		color: var(--text-default);
 	}
 	.deck-row--active {
-		background-color: color-mix(in srgb, var(--accent) 10%, transparent);
-		color: currentColor;
+		background-color: var(--fill-soft);
+		color: var(--text-default);
 	}
 	.deck-tile {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		width: 1.75rem;
-		height: 1.75rem;
-		border-radius: 0.5rem;
+		width: 1.625rem;
+		height: 1.625rem;
+		border-radius: var(--radius-xs);
 		flex-shrink: 0;
 		position: relative;
-		background-color: color-mix(in srgb, currentColor 8%, transparent);
+		color: var(--text-muted);
+		background-color: var(--fill-soft);
 		transition:
-			background-color 120ms,
-			color 120ms;
+			background-color var(--dur-fast),
+			color var(--dur-fast);
 	}
-	.deck-tile--active {
-		background-color: color-mix(in srgb, var(--accent) 18%, transparent);
-		color: var(--accent);
+	.deck-row:hover .deck-tile {
+		color: var(--text-default);
+	}
+	.deck-tile--active,
+	.deck-row--active:hover .deck-tile--active {
+		background-color: var(--accent);
+		color: var(--text-on-accent);
+		box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 45%, transparent);
+	}
+	.deck-tile--alert {
+		background-color: var(--status-error-bg);
+		color: var(--status-error);
+		overflow: visible;
+	}
+	.deck-tile-badge {
+		position: absolute;
+		top: -0.3125rem;
+		right: -0.3125rem;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 0.9375rem;
+		height: 0.9375rem;
+		padding: 0 0.25rem;
+		border-radius: var(--radius-pill);
+		background-color: var(--status-error);
+		color: #fff;
+		font-size: var(--text-micro);
+		font-weight: 700;
+		line-height: 1;
+		font-variant-numeric: tabular-nums;
+		box-shadow: 0 0 0 2px var(--bg-raised);
 	}
 	.deck-tile--fav {
 		overflow: visible;
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 700;
 	}
-	.deck-tile--fav img {
+	.deck-tile--fav :global(img) {
 		width: 100%;
 		height: 100%;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		object-fit: cover;
 	}
 	.deck-fav-dot {
@@ -872,11 +1028,14 @@
 		bottom: -2px;
 		right: -2px;
 		display: flex;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 	}
 	.deck-row-label {
-		font-size: 0.875rem;
-		font-weight: 500;
+		opacity: var(--rail-text);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		font-weight: 600;
+		letter-spacing: var(--track-body);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
@@ -892,20 +1051,22 @@
 		justify-content: center;
 		width: 2rem;
 		height: 2rem;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		overflow: hidden;
 		flex-shrink: 0;
 		font-weight: 700;
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		background-color: color-mix(in srgb, currentColor 10%, transparent);
 	}
-	.deck-user-avatar img {
+	.deck-user-avatar :global(img) {
 		width: 100%;
 		height: 100%;
 		object-fit: cover;
 	}
 	.deck-user-name {
-		font-size: 0.8125rem;
+		opacity: var(--rail-text);
+		font-size: var(--text-footnote);
 		font-weight: 600;
 		line-height: 1.2;
 		white-space: nowrap;
@@ -914,21 +1075,26 @@
 	}
 	.deck-user-name--mono {
 		font-family: var(--font-mono, monospace);
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 	}
 	.deck-user-badge {
-		font-size: 0.625rem;
-		font-weight: 650;
+		font-size: var(--text-micro);
+		font-weight: 600;
 		line-height: 1;
-		padding: 0.1875rem 0.375rem;
-		border-radius: 999px;
+		padding: 0.25rem 0.5rem;
+		border-radius: var(--radius-pill);
 		background-color: color-mix(in srgb, var(--accent) 18%, transparent);
 		color: var(--accent);
 	}
 	.deck-split {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		justify-content: center;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		padding-top: var(--space-2);
+		box-shadow: inset 0 1px 0 var(--rule);
 	}
 	.deck-split-id {
 		display: flex;
@@ -936,17 +1102,18 @@
 		gap: 0.5rem;
 		flex: 1;
 		min-width: 0;
-		padding: 0.375rem 0.5rem;
+		height: 2.5rem;
+		padding: 0 var(--space-2);
 		border: none;
-		border-radius: 0.625rem;
+		border-radius: var(--radius-md);
 		background: none;
 		color: currentColor;
 		cursor: pointer;
 		text-align: left;
-		transition: background-color 120ms;
+		transition: background-color var(--dur-fast);
 	}
 	.deck-split-id:hover {
-		background-color: color-mix(in srgb, currentColor 7%, transparent);
+		background-color: var(--fill-soft);
 	}
 	.deck-split-action {
 		display: inline-flex;
@@ -954,7 +1121,7 @@
 		justify-content: center;
 		width: 2rem;
 		height: 2rem;
-		border-radius: 0.625rem;
+		border-radius: var(--radius-sm);
 		border: none;
 		background: none;
 		color: color-mix(in srgb, currentColor 65%, transparent);
@@ -962,12 +1129,15 @@
 		padding: 0;
 		flex-shrink: 0;
 		transition:
-			background-color 120ms,
-			color 120ms;
+			background-color var(--dur-fast),
+			color var(--dur-fast);
 	}
 	.deck-split-action:hover {
 		background-color: color-mix(in srgb, currentColor 8%, transparent);
 		color: currentColor;
+	}
+	.deck-split-action--hidden {
+		display: none;
 	}
 	.deck-split-action--danger:hover {
 		background-color: var(--status-error-bg);
@@ -980,13 +1150,13 @@
 	}
 	.deck-menu-divider {
 		height: 1px;
-		margin: 0.375rem 0.25rem;
+		margin: 0.5rem 0.25rem;
 		background-color: var(--border-default);
 	}
 	.deck-theme-trio {
 		display: flex;
 		gap: 0.25rem;
-		padding: 0.125rem 0.5rem 0.375rem;
+		padding: 0.125rem 0.5rem 0.5rem;
 	}
 	.deck-theme-btn {
 		display: inline-flex;
@@ -994,15 +1164,15 @@
 		justify-content: center;
 		flex: 1;
 		height: 1.75rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--border-default);
 		background: none;
 		color: var(--text-muted);
 		cursor: pointer;
 		padding: 0;
 		transition:
-			background-color 120ms,
-			color 120ms;
+			background-color var(--dur-fast),
+			color var(--dur-fast);
 	}
 	.deck-theme-btn:hover {
 		background-color: var(--bg-hover);
@@ -1017,17 +1187,18 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.4375rem 0.625rem;
+		padding: 0.5rem 0.75rem;
 		border: none;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		background: none;
 		color: var(--text-default);
-		font-size: 0.8125rem;
-		font-weight: 500;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
 		cursor: pointer;
 		text-align: left;
 		text-decoration: none;
-		transition: background-color 120ms;
+		transition: background-color var(--dur-fast);
 	}
 	.deck-menu-item:hover {
 		background-color: var(--bg-hover);

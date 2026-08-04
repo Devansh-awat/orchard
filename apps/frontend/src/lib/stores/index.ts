@@ -8,7 +8,7 @@ export {
 	type Organization
 } from './organizations';
 export { pinnedItems, type PinnedItem } from './pinnedItems';
-export { sidebarCollapsed } from './sidebarState';
+export { sidebarCollapsed, mobileNavOpen, MOBILE_NAV_QUERY } from './sidebarState';
 export {
 	projectGradientEnabled,
 	animationLevel,

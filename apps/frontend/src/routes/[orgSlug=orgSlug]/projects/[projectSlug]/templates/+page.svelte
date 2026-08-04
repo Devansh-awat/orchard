@@ -329,15 +329,16 @@
 	.tpl-back {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
-		font-size: 0.8125rem;
+		gap: 0.5rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 		background: none;
 		border: none;
 		cursor: pointer;
 		padding: 0;
 		margin-bottom: 1rem;
-		transition: color 0.15s;
+		transition: color var(--dur-fast);
 	}
 
 	.tpl-back:hover {
@@ -348,11 +349,11 @@
 		margin-bottom: 1rem;
 	}
 	.tpl-skel-title {
-		margin-bottom: 0.375rem;
+		margin-bottom: 0.5rem;
 	}
 	.tpl-skel-chips {
 		display: flex;
-		gap: 0.375rem;
+		gap: 0.5rem;
 	}
 
 	.tpl-header {
@@ -375,7 +376,8 @@
 	}
 
 	.tpl-title {
-		font-size: 1.25rem;
+		font-size: var(--text-title-3);
+		line-height: var(--lh-title-3);
 		font-weight: 700;
 		letter-spacing: -0.02em;
 		color: var(--center-channel-color);
@@ -383,7 +385,8 @@
 	}
 
 	.tpl-subtitle {
-		font-size: 0.875rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		color: var(--surface-muted);
 		margin: 0.25rem 0 0;
 	}
@@ -398,7 +401,8 @@
 	}
 
 	.tpl-section-title {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -414,8 +418,9 @@
 
 	.tpl-error {
 		padding: 0.75rem 1rem;
-		border-radius: 0.75rem;
-		font-size: 0.875rem;
+		border-radius: var(--radius-md);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
 		color: var(--error-text-color);
 		border: 1px solid color-mix(in srgb, var(--error-text-color) 25%, transparent);
@@ -445,29 +450,31 @@
 	}
 
 	.tpl-search-wrap :global(.tpl-search) {
-		padding: 0.4375rem 0.75rem 0.4375rem 2.25rem;
-		font-size: 0.8125rem;
-		border-radius: 0.5rem;
+		padding: 0.5rem 0.75rem 0.5rem 2.25rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		border-radius: var(--radius-sm);
 	}
 
 	.tpl-categories {
 		display: flex;
 		flex-wrap: wrap;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		margin-bottom: 1rem;
 	}
 
 	.tpl-cat-btn {
 		padding: 0.25rem 0.75rem;
-		border-radius: 9999px;
-		font-size: 0.75rem;
-		font-weight: 500;
+		border-radius: var(--radius-pill);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
 		border: 1px solid var(--surface-border);
 		background: transparent;
 		color: var(--surface-muted);
 		cursor: pointer;
 		text-transform: capitalize;
-		transition: all 0.15s;
+		transition: all var(--dur-fast);
 	}
 
 	.tpl-cat-btn:hover {
@@ -497,13 +504,13 @@
 		gap: 0.875rem;
 		padding: 1.25rem;
 		border: 1px solid var(--surface-border);
-		border-radius: 1rem;
+		border-radius: var(--radius-lg);
 		background-color: var(--surface-bg);
 		text-decoration: none;
 		color: var(--center-channel-color);
 		transition:
-			border-color 0.15s,
-			box-shadow 0.15s;
+			border-color var(--dur-fast),
+			box-shadow var(--dur-fast);
 		cursor: pointer;
 		box-shadow:
 			0 1px 3px rgb(0 0 0 / 0.03),
@@ -531,7 +538,7 @@
 		justify-content: center;
 		width: 2.75rem;
 		height: 2.75rem;
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		flex-shrink: 0;
 		background-color: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
 		color: var(--sidebar-text-active-border);
@@ -544,7 +551,8 @@
 	}
 
 	.tpl-card-name {
-		font-size: 0.9375rem;
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
 		font-weight: 600;
 		color: var(--center-channel-color);
 	}
@@ -552,7 +560,7 @@
 	.tpl-card-top-right {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 	}
 
 	.tpl-card-delete {
@@ -561,16 +569,16 @@
 		justify-content: center;
 		width: 1.75rem;
 		height: 1.75rem;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		border: none;
 		background: none;
 		color: var(--surface-muted);
 		cursor: pointer;
 		opacity: 0;
 		transition:
-			opacity 0.15s,
-			color 0.15s,
-			background-color 0.15s;
+			opacity var(--dur-fast),
+			color var(--dur-fast),
+			background-color var(--dur-fast);
 	}
 
 	.tpl-card:hover .tpl-card-delete {
@@ -583,7 +591,8 @@
 	}
 
 	.tpl-card-desc {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--surface-muted);
 		margin: 0;
 		display: -webkit-box;
@@ -600,9 +609,10 @@
 	}
 
 	.tpl-card-tag {
-		font-size: 0.6875rem;
-		padding: 0.0625rem 0.375rem;
-		border-radius: 0.25rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		padding: 0.0625rem 0.5rem;
+		border-radius: var(--radius-xs);
 		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
 		color: var(--surface-muted);
 	}

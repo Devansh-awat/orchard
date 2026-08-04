@@ -87,15 +87,16 @@
 		gap: 0.5rem;
 		width: 100%;
 		height: 2.25rem;
-		padding: 0 0.625rem;
-		border-radius: 0.5rem;
+		padding: 0 0.75rem;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--border-default);
 		background: var(--bg-raised);
 		color: var(--text-default);
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		cursor: pointer;
-		transition: border-color 0.15s;
+		transition: border-color var(--dur-fast);
 	}
 
 	.acct-trigger:hover {
@@ -105,7 +106,7 @@
 	.acct-avatar {
 		width: 1.125rem;
 		height: 1.125rem;
-		border-radius: 0.25rem;
+		border-radius: var(--radius-xs);
 		flex-shrink: 0;
 	}
 
@@ -121,14 +122,14 @@
 	.acct-placeholder {
 		flex: 1;
 		color: var(--text-faint);
-		font-weight: 500;
+		font-weight: 600;
 		text-align: left;
 	}
 
 	.acct-chevron {
 		display: inline-flex;
 		color: var(--text-muted);
-		transition: transform 0.15s ease;
+		transition: transform var(--dur-fast) ease;
 	}
 
 	.acct-chevron--open {
@@ -145,13 +146,14 @@
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.4375rem 0.5rem;
+		padding: 0.5rem 0.5rem;
 		border: none;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		background: transparent;
 		color: var(--text-default);
-		font-size: 0.8125rem;
-		font-weight: 500;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
 		cursor: pointer;
 		text-decoration: none;
 		text-align: left;
@@ -166,14 +168,16 @@
 	}
 
 	.acct-count {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--text-faint);
 		font-variant-numeric: tabular-nums;
 	}
 
 	.acct-empty {
 		padding: 0.5rem;
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--text-muted);
 	}
 
@@ -200,5 +204,4 @@
 		color: var(--text-muted);
 		flex-shrink: 0;
 	}
-
 </style>

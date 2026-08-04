@@ -233,7 +233,7 @@
 		display: grid;
 		grid-template-columns: minmax(0, 1fr) 4.5rem 5.5rem 5rem 5rem 4.5rem 4.5rem;
 		gap: 0.5rem;
-		padding: 0.25rem 0.5rem 0.375rem;
+		padding: 0.25rem 0.5rem 0.5rem;
 		border-bottom: 1px solid var(--border-default);
 	}
 	.qs-head-cell {
@@ -241,7 +241,8 @@
 		align-items: center;
 		justify-content: flex-end;
 		gap: 0.125rem;
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
@@ -269,12 +270,12 @@
 		gap: 0.5rem;
 		align-items: center;
 		width: 100%;
-		padding: 0.4375rem 0.5rem;
+		padding: 0.5rem 0.5rem;
 		background: none;
 		border: none;
 		cursor: pointer;
 		text-align: left;
-		transition: background-color 120ms;
+		transition: background-color var(--dur-fast);
 	}
 	.qs-row:hover {
 		background-color: color-mix(in srgb, var(--text-default) 4%, transparent);
@@ -283,7 +284,8 @@
 		background-color: color-mix(in srgb, var(--text-default) 4%, transparent);
 	}
 	.qs-cell {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		font-variant-numeric: tabular-nums;
 		color: var(--text-muted);
 		text-align: right;
@@ -305,7 +307,8 @@
 	.qs-query-text {
 		display: block;
 		font-family: var(--font-mono, monospace);
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--text-default);
 		white-space: nowrap;
 		overflow: hidden;
@@ -316,22 +319,24 @@
 		bottom: 0;
 		left: 0;
 		height: 2px;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		background-color: color-mix(in srgb, var(--accent) 55%, transparent);
 	}
 	.qs-full {
 		margin: 0 0 0.5rem;
 		padding: 0.75rem 0.875rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		background-color: var(--bg-sunken);
 		font-family: var(--font-mono, monospace);
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--text-default);
 		white-space: pre-wrap;
 		word-break: break-word;
 	}
 	.qs-foot {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--text-faint);
 		margin: 0.75rem 0 0;
 	}

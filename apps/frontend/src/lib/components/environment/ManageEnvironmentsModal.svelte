@@ -205,40 +205,43 @@
 		display: flex;
 		align-items: center;
 		gap: 0.6rem;
-		padding: 0.55rem 0.7rem;
+		padding: 0.5rem 0.7rem;
 		border: 1px solid var(--surface-border);
-		border-radius: 0.65rem;
+		border-radius: var(--radius-md);
 	}
 	.env-dot {
 		width: 9px;
 		height: 9px;
-		border-radius: 9999px;
+		border-radius: var(--radius-pill);
 		flex-shrink: 0;
 	}
 	.env-row-name {
-		font-size: 0.85rem;
-		font-weight: 550;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		font-weight: 600;
 		color: var(--center-channel-color);
 	}
 	.env-default-pill {
-		font-size: 0.62rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: var(--surface-muted);
 		background: var(--control-bg);
 		padding: 0.1rem 0.4rem;
-		border-radius: 9999px;
+		border-radius: var(--radius-pill);
 	}
 	.env-row-ns {
 		font-family: var(--font-mono, ui-monospace, monospace);
-		font-size: 0.68rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 		margin-left: auto;
 	}
 	.env-row-actions {
 		display: flex;
-		gap: 0.2rem;
+		gap: 0.25rem;
 		margin-left: auto;
 	}
 	.env-rename-input {
@@ -251,7 +254,7 @@
 		height: 28px;
 		align-items: center;
 		justify-content: center;
-		border-radius: 0.45rem;
+		border-radius: var(--radius-sm);
 		color: var(--surface-muted);
 	}
 	.env-icon-btn:hover {

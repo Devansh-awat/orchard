@@ -14,6 +14,7 @@ export interface User {
 	primaryEmailAddress?: { emailAddress: string };
 	isSuperAdmin?: boolean;
 	setupCompleted?: boolean;
+	seenUpdates?: string[];
 }
 
 function createAuthStore() {

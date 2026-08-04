@@ -1,4 +1,5 @@
 import { writable } from 'svelte/store';
+import { MotionGlobalConfig } from 'motion';
 import { browser } from '$app/environment';
 
 const PROJECT_GRADIENT_KEY = 'project-gradient-enabled';
@@ -87,9 +88,13 @@ const animationStore = writable<AnimationLevel>(loadAnimationLevel());
 
 let currentEffective: EffectiveAnimationLevel = 'full';
 
+const effectiveStore = writable<EffectiveAnimationLevel>(currentEffective);
+
 export function effectiveAnimationLevel(): EffectiveAnimationLevel {
 	return currentEffective;
 }
+
+export const effectiveAnimation = { subscribe: effectiveStore.subscribe };
 
 export const animationLevel = {
 	subscribe: animationStore.subscribe,
@@ -112,6 +117,10 @@ if (browser) {
 		currentEffective = level === 'system' ? (systemReduced ? 'reduced' : 'full') : level;
 		document.documentElement.classList.toggle('motion-reduce', currentEffective !== 'full');
 		document.documentElement.classList.toggle('motion-off', currentEffective === 'off');
+		// CSS !important cannot reach Motion's WAAPI/JS animations, so `off` has
+		// to be enforced in the library too or unguarded animate() calls survive.
+		MotionGlobalConfig.skipAnimations = currentEffective === 'off';
+		effectiveStore.set(currentEffective);
 	};
 	animationStore.subscribe((l) => {
 		level = l;

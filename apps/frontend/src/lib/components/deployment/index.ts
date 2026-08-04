@@ -10,6 +10,6 @@ export { default as DeploymentHeader } from './DeploymentHeader.svelte';
 export { default as BuildProgressModal } from './BuildProgressModal.svelte';
 export { default as DeploymentAlerts } from './DeploymentAlerts.svelte';
 export { default as DeploysTab } from './DeploysTab.svelte';
-export { default as SettingsTab } from './SettingsTab.svelte';
 export { default as ObserveTab } from './ObserveTab.svelte';
 export { default as BuildTab } from './BuildTab.svelte';
+export { default as AppSettings } from './AppSettings.svelte';

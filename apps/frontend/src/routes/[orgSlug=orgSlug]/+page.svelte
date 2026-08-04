@@ -11,10 +11,10 @@
 	} from '$lib/stores';
 	import { queryClient } from '$lib/query';
 	import { overviewQueryOptions, buildsQueryOptions } from '$lib/queries/overview';
-	import { Plus, Star, ChevronDown } from 'lucide-svelte';
+	import { Plus, Star, ChevronDown, Rocket, FolderPlus } from 'lucide-svelte';
 	import { onDestroy, untrack } from 'svelte';
 	import { SvelteMap, SvelteSet } from 'svelte/reactivity';
-	import { springHover, motionStagger } from '$lib/utils/motion.svelte';
+	import { springHover, motionStagger, springRotate } from '$lib/utils/motion.svelte';
 	import type { PageData } from './$types';
 	import {
 		SkeletonGrid,
@@ -27,6 +27,7 @@
 		CompactList
 	} from '$lib/components/org-dashboard';
 	import { dashboardDensity, type DashboardDensity } from '$lib/stores';
+	import { Menu, MenuItem } from '$lib/components/ui';
 	import { Rows3, Rows4 } from 'lucide-svelte';
 	import type {
 		DeploymentSummary,
@@ -335,13 +336,17 @@
 		if (buildsInvalidateTimer) clearTimeout(buildsInvalidateTimer);
 	});
 
-	// ── Expand state (persisted) ──
-	const EXPAND_KEY = 'overview-expanded-projects';
-	let expandedProjects = $state<Set<string>>(
-		typeof localStorage !== 'undefined'
-			? new Set(JSON.parse(localStorage.getItem(EXPAND_KEY) ?? '[]'))
-			: new Set()
-	);
+	// ── Expand state (persisted, scoped per density) ──
+	const expandKeyFor = (d: DashboardDensity) => `overview-expanded-projects:${d}`;
+	const readExpanded = (d: DashboardDensity): Set<string> => {
+		if (typeof localStorage === 'undefined') return new Set();
+		try {
+			return new Set(JSON.parse(localStorage.getItem(expandKeyFor(d)) ?? '[]'));
+		} catch {
+			return new Set();
+		}
+	};
+	let expandedProjects = $state<Set<string>>(readExpanded($dashboardDensity));
 	const projectBodyEls = new Map<string, HTMLElement>();
 	let renderedProjectBodies = $state<Set<string>>(new Set());
 	$effect(() => {
@@ -365,10 +370,7 @@
 		const next = new Set(expandedProjects);
 		if (next.has(id)) next.delete(id);
 		else next.add(id);
-		expandedProjects = next;
-		if (typeof localStorage !== 'undefined') {
-			localStorage.setItem(EXPAND_KEY, JSON.stringify([...next]));
-		}
+		persistExpanded(next);
 	}
 
 	const DENSITY_OPTIONS: { value: DashboardDensity; icon: typeof Rows3; label: string }[] = [
@@ -379,13 +381,17 @@
 	function persistExpanded(next: Set<string>) {
 		expandedProjects = next;
 		if (typeof localStorage !== 'undefined') {
-			localStorage.setItem(EXPAND_KEY, JSON.stringify([...next]));
+			localStorage.setItem(expandKeyFor($dashboardDensity), JSON.stringify([...next]));
 		}
 	}
 
 	function setDensity(value: DashboardDensity) {
+		if (value === $dashboardDensity) return;
 		dashboardDensity.set(value);
+		expandedProjects = readExpanded(value);
 	}
+
+	let newOpen = $state(false);
 
 	// ── Filtering ──
 	let searchQuery = $state('');
@@ -567,23 +573,51 @@
 	<!-- Header -->
 	<header class="header" {@attach motionStagger({ index: 0, from: { y: -6 } })}>
 		<h1 class="title">Your Apps</h1>
-		<div style="display: flex; gap: 8px; align-items: center;">
+		<div class="header-actions">
 			{#if $isSuperAdmin && isSyntheticMembership}
 				<button
 					class="btn-secondary"
 					onclick={joinOrganization}
 					disabled={joiningOrg}
-					{@attach springHover({ lift: -1, stiffness: 480, damping: 26 })}
+					{@attach springHover({ lift: -1 })}
 					>{joiningOrg ? 'Joining...' : 'Join Organization'}</button
 				>
 			{/if}
 			{#if canCreateProjects}
-				<a
-					href="/{orgSlug}/projects/new"
-					class="btn-primary"
-					{@attach springHover({ lift: -1, stiffness: 480, damping: 26 })}
-					><Plus size={15} /> New Project</a
-				>
+				<Menu placement="bottom-end" bind:open={newOpen}>
+					{#snippet trigger(attrs, open)}
+						<button
+							type="button"
+							class="btn-primary"
+							aria-haspopup="menu"
+							aria-expanded={open}
+							{...attrs}
+						>
+							<Plus size={15} />
+							New
+							<span
+								class="btn-primary-caret"
+								{@attach springRotate(() => open, { rest: 0, on: 180 })}
+							>
+								<ChevronDown size={13} />
+							</span>
+						</button>
+					{/snippet}
+					<MenuItem href="/{orgSlug}/new">
+						<Rocket size={14} />
+						<span class="new-menu-text">
+							App
+							<span class="new-menu-desc">Deploy a repo, image, or database</span>
+						</span>
+					</MenuItem>
+					<MenuItem href="/{orgSlug}/projects/new">
+						<FolderPlus size={14} />
+						<span class="new-menu-text">
+							Project
+							<span class="new-menu-desc">A group to hold related apps</span>
+						</span>
+					</MenuItem>
+				</Menu>
 			{/if}
 		</div>
 	</header>
@@ -641,7 +675,7 @@
 							<h2 class="label"><Star size={11} /> Favourites</h2>
 							<div class="od-grid">
 								{#each favDeps as dep, i (dep.id)}
-									<div {@attach motionStagger({ index: i, stride: 0.04, from: { y: 10 } })}>
+									<div {@attach motionStagger({ index: i, from: { y: 10 } })}>
 										<DeploymentCard
 											{dep}
 											isFav={true}
@@ -664,10 +698,7 @@
 					<!-- Project Groups -->
 					{#if projectGroups.length > 0}
 						{#each visibleProjectGroups as group, gi (group.id)}
-							<section
-								class="section"
-								{@attach motionStagger({ index: gi, stride: 0.05, from: { y: 14 } })}
-							>
+							<section class="section" {@attach motionStagger({ index: gi, from: { y: 14 } })}>
 								<ProjectCard
 									{group}
 									meta={projectMetas.get(group.id)}

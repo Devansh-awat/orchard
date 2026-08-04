@@ -83,11 +83,17 @@ Render with `<StatusBadge meta={...} />` (tinted pill, dot + label) or
 See CLAUDE.md Motion System. One canonical implementation per utility in
 `$lib/utils/motion.svelte.ts`; never redefine locally.
 
-Every animation must respect the user animation level (Settings → Accessibility):
-the motion utilities gate themselves; svelte transitions come from
-`$lib/utils/transitions` (never `svelte/transition` directly); one-off `animate()`
-calls guard with `decorativeMotion()`/`functionalMotion()`; looping css keyframes
-join the `html.motion-reduce` kill list in `tokens.css`.
+Timing is never written at a call site. Pick one of four named springs
+(`smooth`, `snappy`, `bouncy`, `interactive`) and let `transition()` resolve it
+against the user animation level (Settings → Accessibility). No `stiffness`,
+`damping`, or `mass` in components.
+
+Every animation must respect the animation level: the motion utilities gate
+themselves; svelte transitions come from `$lib/utils/transitions` (never
+`svelte/transition` directly); one-off `animate()` calls take `transition(name)`
+as their options, or go through `motion()` to also drop transforms at `reduced`.
+CSS keyframes are killed below `full` by default, so a progress indicator that
+must keep spinning needs `data-motion="progress"`.
 
 ## Guardrail
 

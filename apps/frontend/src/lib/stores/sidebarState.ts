@@ -23,6 +23,17 @@ function saveToStorage(value: boolean) {
 
 const store = writable<boolean>(loadFromStorage());
 
+export const MOBILE_NAV_QUERY = '(max-width: 899px)';
+
+const mobileNav = writable<boolean>(false);
+
+export const mobileNavOpen = {
+	subscribe: mobileNav.subscribe,
+	open: () => mobileNav.set(true),
+	close: () => mobileNav.set(false),
+	toggle: () => mobileNav.update((v) => !v)
+};
+
 export const sidebarCollapsed = {
 	subscribe: store.subscribe,
 	set(value: boolean) {

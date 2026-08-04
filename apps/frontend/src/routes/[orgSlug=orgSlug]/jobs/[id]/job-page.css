@@ -25,13 +25,15 @@
 }
 
 .job-page-title {
-	font-size: 1.4rem;
+	font-size: var(--text-title-2);
+	line-height: var(--lh-title-2);
 	font-weight: 700;
 	color: var(--center-channel-color);
 }
 
 .job-page-subtitle {
-	font-size: 0.82rem;
+	font-size: var(--text-footnote);
+	line-height: var(--lh-footnote);
 	color: var(--surface-muted);
 	margin-top: 0.25rem;
 }
@@ -68,8 +70,9 @@
 .job-overview-link {
 	display: inline-block;
 	margin-top: 0.6rem;
-	font-size: 0.8rem;
-	font-weight: 500;
+	font-size: var(--text-footnote);
+	line-height: var(--lh-footnote);
+	font-weight: 600;
 	color: var(--center-channel-color);
 }
 
@@ -78,7 +81,8 @@
 }
 
 .job-overview-muted {
-	font-size: 0.8rem;
+	font-size: var(--text-footnote);
+	line-height: var(--lh-footnote);
 	color: var(--surface-muted);
 }
 
@@ -86,7 +90,8 @@
 	display: flex;
 	align-items: center;
 	gap: 0.45rem;
-	font-size: 0.85rem;
+	font-size: var(--text-callout);
+	line-height: var(--lh-callout);
 	color: var(--center-channel-color);
 }
 
@@ -95,12 +100,14 @@
 .job-runs-table {
 	width: 100%;
 	border-collapse: collapse;
-	font-size: 0.82rem;
+	font-size: var(--text-footnote);
+	line-height: var(--lh-footnote);
 }
 
 .job-runs-table th {
 	text-align: left;
-	font-size: 0.7rem;
+	font-size: var(--text-micro);
+	line-height: var(--lh-micro);
 	font-weight: 600;
 	text-transform: uppercase;
 	letter-spacing: 0.04em;
@@ -121,7 +128,7 @@
 
 .job-runs-row {
 	cursor: pointer;
-	transition: background-color 100ms ease;
+	transition: background-color var(--dur-fast) ease;
 }
 
 .job-runs-row:hover {
@@ -153,14 +160,15 @@
 	gap: 1.5rem;
 	flex-wrap: wrap;
 	padding: 1.25rem 1.5rem;
-	border-radius: 1rem;
+	border-radius: var(--radius-lg);
 	border: 1px solid color-mix(in srgb, var(--error-text-color) 22%, var(--surface-border));
 	background: color-mix(in srgb, var(--error-text-color) 3%, var(--surface-bg));
 }
 
 .job-danger-zone-name {
-	font-size: 0.9rem;
-	font-weight: 650;
+	font-size: var(--text-callout);
+	line-height: var(--lh-callout);
+	font-weight: 600;
 	color: var(--center-channel-color);
 	letter-spacing: -0.01em;
 }
@@ -189,7 +197,8 @@
 	gap: 0.9rem;
 	flex-wrap: wrap;
 	margin-top: 0.35rem;
-	font-size: 0.78rem;
+	font-size: var(--text-caption);
+	line-height: var(--lh-caption);
 	color: var(--surface-muted);
 }
 

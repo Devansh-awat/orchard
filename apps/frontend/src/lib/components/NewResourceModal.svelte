@@ -247,7 +247,7 @@
 								<div class="nr-tpl-card nr-tpl-skeleton">
 									<div
 										class="skeleton"
-										style="width: 2.25rem; height: 2.25rem; border-radius: 0.625rem; flex-shrink: 0;"
+										style="width: 2.25rem; height: 2.25rem; border-radius: var(--radius-md); flex-shrink: 0;"
 									></div>
 									<div style="flex: 1; display: flex; flex-direction: column; gap: 0.25rem;">
 										<div class="skeleton" style="height: 0.8125rem; width: 60%;"></div>
@@ -317,7 +317,7 @@
 	.nr-modal {
 		background-color: var(--center-channel-bg);
 		border: 1px solid var(--surface-border);
-		border-radius: 1rem;
+		border-radius: var(--radius-lg);
 		width: 100%;
 		max-width: 38rem;
 		max-height: 80vh;
@@ -334,7 +334,8 @@
 	}
 
 	.nr-title {
-		font-size: 1rem;
+		font-size: var(--text-headline);
+		line-height: var(--lh-headline);
 		font-weight: 600;
 		color: var(--center-channel-color);
 		margin: 0;
@@ -346,14 +347,14 @@
 		justify-content: center;
 		width: 1.75rem;
 		height: 1.75rem;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		border: none;
 		background: none;
 		color: var(--surface-muted);
 		cursor: pointer;
 		transition:
-			color 0.15s,
-			background-color 0.15s;
+			color var(--dur-fast),
+			background-color var(--dur-fast);
 	}
 
 	.nr-close:hover {
@@ -379,11 +380,12 @@
 	.nr-search {
 		width: 100%;
 		padding: 0.5rem 0.75rem 0.5rem 2.25rem;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		border: 1px solid var(--surface-border);
 		background-color: var(--center-channel-bg);
 		color: var(--center-channel-color);
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 	}
 
 	.nr-search::placeholder {
@@ -412,22 +414,24 @@
 	}
 
 	.nr-section-title {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.05em;
 		color: var(--surface-muted);
-		margin: 0 0 0.625rem;
+		margin: 0 0 0.75rem;
 	}
 
 	.nr-browse-link {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--sidebar-text-active-border);
 		background: none;
 		border: none;
 		cursor: pointer;
 		padding: 0;
-		margin-bottom: 0.625rem;
+		margin-bottom: 0.75rem;
 	}
 
 	.nr-browse-link:hover {
@@ -447,12 +451,12 @@
 		gap: 0.75rem;
 		padding: 0.875rem 1rem;
 		border: 1px solid var(--surface-border);
-		border-radius: 0.75rem;
+		border-radius: var(--radius-md);
 		background-color: var(--surface-bg);
 		cursor: pointer;
 		transition:
-			border-color 0.15s,
-			box-shadow 0.15s;
+			border-color var(--dur-fast),
+			box-shadow var(--dur-fast);
 		text-align: left;
 	}
 
@@ -467,7 +471,7 @@
 		justify-content: center;
 		width: 2.5rem;
 		height: 2.5rem;
-		border-radius: 0.625rem;
+		border-radius: var(--radius-md);
 		flex-shrink: 0;
 	}
 
@@ -478,13 +482,15 @@
 	}
 
 	.nr-quick-label {
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		font-weight: 600;
 		color: var(--center-channel-color);
 	}
 
 	.nr-quick-desc {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 	}
 
@@ -499,14 +505,14 @@
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
-		padding: 0.625rem 0.75rem;
+		padding: 0.75rem 0.75rem;
 		border: 1px solid transparent;
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		background: none;
 		cursor: pointer;
 		transition:
-			background-color 0.15s,
-			border-color 0.15s;
+			background-color var(--dur-fast),
+			border-color var(--dur-fast);
 		text-align: left;
 		width: 100%;
 	}
@@ -526,7 +532,7 @@
 		justify-content: center;
 		width: 2.25rem;
 		height: 2.25rem;
-		border-radius: 0.625rem;
+		border-radius: var(--radius-md);
 		flex-shrink: 0;
 	}
 
@@ -539,13 +545,15 @@
 	}
 
 	.nr-tpl-name {
-		font-size: 0.8125rem;
-		font-weight: 500;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
 		color: var(--center-channel-color);
 	}
 
 	.nr-tpl-desc {
-		font-size: 0.6875rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 		white-space: nowrap;
 		overflow: hidden;
@@ -553,10 +561,11 @@
 	}
 
 	.nr-tpl-badge {
-		font-size: 0.625rem;
-		font-weight: 500;
-		padding: 0.0625rem 0.375rem;
-		border-radius: 9999px;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
+		padding: 0.0625rem 0.5rem;
+		border-radius: var(--radius-pill);
 		text-transform: capitalize;
 		flex-shrink: 0;
 	}
@@ -568,6 +577,7 @@
 		padding: 1.5rem;
 		justify-content: center;
 		color: var(--surface-muted);
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 	}
 </style>

@@ -268,8 +268,19 @@ export class OAuthController {
       externalAuthId: req.user.externalAuthId || user.externalAuthId,
       hackClubId: req.user.externalAuthId || user.externalAuthId,
       setupCompleted: user.setupCompleted,
+      seenUpdates: user.seenUpdates ?? [],
     };
     return user.isSuperAdmin ? { ...base, isSuperAdmin: true } : base;
+  }
+
+  @Auth()
+  @Post('me/seen-updates')
+  async markUpdateSeen(@Req() req: any, @Body() body: { id?: string }) {
+    if (!body?.id) {
+      throw new HttpException('id is required', HttpStatus.BAD_REQUEST);
+    }
+    const user = await this.resolveUser(req);
+    return this.usersService.markUpdateSeen(user.id, body.id);
   }
 
   @Auth()

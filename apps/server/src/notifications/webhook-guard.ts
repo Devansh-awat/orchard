@@ -1,0 +1,158 @@
+import { BadRequestException } from '@nestjs/common';
+import { lookup as dnsLookup } from 'dns';
+import { lookup as dnsLookupAsync } from 'dns/promises';
+import { isIP } from 'net';
+
+const BLOCKED_HOST_SUFFIXES = ['.svc', '.cluster.local', '.internal', '.local', '.localhost'];
+
+export function defaultPort(protocol: string): number {
+  return protocol === 'https:' ? 443 : 80;
+}
+
+export async function assertSafeWebhookUrl(raw: string): Promise<void> {
+  let url: URL;
+  try {
+    url = new URL(raw);
+  } catch {
+    throw new BadRequestException('Invalid webhook URL');
+  }
+  if (url.protocol !== 'https:' && url.protocol !== 'http:') {
+    throw new BadRequestException('Webhook URL must use http or https');
+  }
+  const port = url.port ? Number(url.port) : defaultPort(url.protocol);
+  if (port !== 80 && port !== 443 && port < 1024) {
+    throw new BadRequestException('Webhook URL port must be 80, 443, or 1024+');
+  }
+  const host = url.hostname.toLowerCase().replace(/\.$/, '').replace(/^\[|\]$/g, '');
+  if (isIP(host)) {
+    if (!isPublicAddress(host)) {
+      throw new BadRequestException('Webhook URL must resolve to a public address');
+    }
+    return;
+  }
+  if (!host.includes('.') || BLOCKED_HOST_SUFFIXES.some((s) => host.endsWith(s))) {
+    throw new BadRequestException('Webhook URL must be a public hostname');
+  }
+  let addresses: { address: string }[];
+  try {
+    addresses = await dnsLookupAsync(host, { all: true, verbatim: true });
+  } catch {
+    throw new BadRequestException(`Could not resolve webhook host "${host}"`);
+  }
+  if (addresses.length === 0 || addresses.some((a) => !isPublicAddress(a.address))) {
+    throw new BadRequestException('Webhook URL must resolve to a public address');
+  }
+}
+
+// Re-checked at connect time, not just at save time: DNS can be re-pointed at a
+// private address between the two.
+export function guardedLookup(
+  hostname: string,
+  options: any,
+  callback: (err: NodeJS.ErrnoException | null, address?: any, family?: number) => void,
+) {
+  dnsLookup(hostname, { ...options, all: true }, (err, addresses) => {
+    if (err) {
+      callback(err);
+      return;
+    }
+    const list = Array.isArray(addresses) ? addresses : [];
+    if (list.length === 0 || list.some((a) => !isPublicAddress(a.address))) {
+      callback(Object.assign(new Error('Destination resolves to a non-public address'), { code: 'EBLOCKED' }));
+      return;
+    }
+    if (options?.all) callback(null, list);
+    else callback(null, list[0].address, list[0].family);
+  });
+}
+
+export function isPublicAddress(ip: string): boolean {
+  const version = isIP(ip);
+  if (version === 4) return isPublicIpv4(ip);
+  if (version === 6) return isPublicIpv6(ip);
+  return false;
+}
+
+function isPublicIpv4(ip: string): boolean {
+  const parts = ip.split('.').map(Number);
+  if (parts.length !== 4 || parts.some((p) => Number.isNaN(p) || p < 0 || p > 255)) return false;
+  const [a, b, c] = parts;
+  if (a === 0 || a === 10 || a === 127) return false;
+  if (a === 100 && b >= 64 && b <= 127) return false;
+  if (a === 169 && b === 254) return false;
+  if (a === 172 && b >= 16 && b <= 31) return false;
+  if (a === 192 && b === 0 && (c === 0 || c === 2)) return false;
+  if (a === 192 && b === 88 && c === 99) return false;
+  if (a === 192 && b === 168) return false;
+  if (a === 198 && (b === 18 || b === 19)) return false;
+  if (a === 198 && b === 51 && c === 100) return false;
+  if (a === 203 && b === 0 && c === 113) return false;
+  if (a >= 224) return false;
+  return true;
+}
+
+function isPublicIpv6(ip: string): boolean {
+  const groups = expandIpv6(ip.toLowerCase());
+  if (!groups) return false;
+  const [g0, g1] = groups;
+
+  const embedded = extractEmbeddedIpv4(groups);
+  if (embedded) return isPublicIpv4(embedded);
+
+  const allZero = groups.every((g) => g === 0);
+  if (allZero) return false;
+  if (groups.slice(0, 7).every((g) => g === 0) && groups[7] === 1) return false;
+  if ((g0 & 0xfe00) === 0xfc00) return false;
+  if ((g0 & 0xffc0) === 0xfe80) return false;
+  if ((g0 & 0xffc0) === 0xfec0) return false;
+  if ((g0 & 0xff00) === 0xff00) return false;
+  if (g0 === 0x2001 && g1 === 0x0db8) return false;
+  if (g0 === 0x2001 && g1 === 0x0000) return false;
+  if (g0 === 0x2002) return false;
+  return true;
+}
+
+function extractEmbeddedIpv4(groups: number[]): string | null {
+  const toV4 = (hi: number, lo: number) => `${hi >> 8}.${hi & 0xff}.${lo >> 8}.${lo & 0xff}`;
+  if (groups.slice(0, 5).every((g) => g === 0) && groups[5] === 0xffff) {
+    return toV4(groups[6], groups[7]);
+  }
+  if (groups[0] === 0x0064 && groups[1] === 0xff9b && groups.slice(2, 6).every((g) => g === 0)) {
+    return toV4(groups[6], groups[7]);
+  }
+  return null;
+}
+
+function expandIpv6(ip: string): number[] | null {
+  const stripped = ip.replace(/%.+$/, '');
+  let head = stripped;
+  let tail = '';
+  const dc = stripped.indexOf('::');
+  if (dc >= 0) {
+    head = stripped.slice(0, dc);
+    tail = stripped.slice(dc + 2);
+  }
+  const parse = (s: string): number[] | null => {
+    if (!s) return [];
+    const out: number[] = [];
+    for (const part of s.split(':')) {
+      if (part.includes('.')) {
+        const v4 = part.split('.').map(Number);
+        if (v4.length !== 4 || v4.some((n) => Number.isNaN(n) || n < 0 || n > 255)) return null;
+        out.push((v4[0] << 8) | v4[1], (v4[2] << 8) | v4[3]);
+      } else {
+        const n = parseInt(part, 16);
+        if (Number.isNaN(n) || n < 0 || n > 0xffff) return null;
+        out.push(n);
+      }
+    }
+    return out;
+  };
+  const headGroups = parse(head);
+  const tailGroups = parse(tail);
+  if (!headGroups || !tailGroups) return null;
+  const missing = 8 - headGroups.length - tailGroups.length;
+  if (dc < 0 && headGroups.length !== 8) return null;
+  if (dc >= 0 && missing < 0) return null;
+  return [...headGroups, ...(dc >= 0 ? Array(missing).fill(0) : []), ...tailGroups];
+}

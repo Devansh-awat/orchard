@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { Accessibility } from 'lucide-svelte';
 	import SettingsSection from './SettingsSection.svelte';
+	import { SegmentedControl } from '$lib/components/ui';
 	import {
 		animationLevel,
 		contrastLevel,
@@ -19,9 +20,9 @@
 		{
 			value: 'reduced',
 			label: 'Reduced',
-			hint: 'Keeps state transitions, drops decorative motion'
+			hint: 'Quick fades only, nothing slides or scales'
 		},
-		{ value: 'off', label: 'Off', hint: 'No animation, everything changes instantly' }
+		{ value: 'off', label: 'Off', hint: 'Nothing animates, including background gradients' }
 	];
 
 	const CONTRAST_OPTIONS: { value: ContrastLevel; label: string; hint: string }[] = [
@@ -29,11 +30,16 @@
 		{ value: 'high', label: 'High', hint: 'Darker text and visible borders on everything' }
 	];
 
-	const TEXT_OPTIONS: { value: TextScale; label: string; hint: string }[] = [
-		{ value: 'sm', label: 'A', hint: 'Smaller text and interface' },
-		{ value: 'md', label: 'A', hint: 'Default size' },
-		{ value: 'lg', label: 'A', hint: 'Larger text and interface' },
-		{ value: 'xl', label: 'A', hint: 'Largest text and interface' }
+	const TEXT_OPTIONS: { value: TextScale; label: string; hint: string; optionClass: string }[] = [
+		{ value: 'sm', label: 'A', hint: 'Smaller text and interface', optionClass: 'ua-a0' },
+		{ value: 'md', label: 'A', hint: 'Default size', optionClass: 'ua-a1' },
+		{ value: 'lg', label: 'A', hint: 'Larger text and interface', optionClass: 'ua-a2' },
+		{ value: 'xl', label: 'A', hint: 'Largest text and interface', optionClass: 'ua-a3' }
+	];
+
+	const TRANSPARENCY_OPTIONS = [
+		{ value: 'off', label: 'Off' },
+		{ value: 'on', label: 'On' }
 	];
 
 	const animationHint = $derived(
@@ -54,20 +60,12 @@
 				<span class="ua-title">Animation level</span>
 				<span class="ua-hint">{animationHint}</span>
 			</div>
-			<div class="ua-seg" role="radiogroup" aria-label="Animation level">
-				{#each ANIMATION_OPTIONS as opt (opt.value)}
-					<button
-						type="button"
-						role="radio"
-						aria-checked={$animationLevel === opt.value}
-						class="ua-seg-btn"
-						class:ua-seg-btn--active={$animationLevel === opt.value}
-						onclick={() => animationLevel.set(opt.value)}
-					>
-						{opt.label}
-					</button>
-				{/each}
-			</div>
+			<SegmentedControl
+				options={ANIMATION_OPTIONS}
+				value={$animationLevel}
+				label="Animation level"
+				onchange={(v) => animationLevel.set(v as AnimationLevel)}
+			/>
 		</div>
 
 		<div class="ua-row">
@@ -75,20 +73,12 @@
 				<span class="ua-title">Contrast</span>
 				<span class="ua-hint">{contrastHint}</span>
 			</div>
-			<div class="ua-seg" role="radiogroup" aria-label="Contrast">
-				{#each CONTRAST_OPTIONS as opt (opt.value)}
-					<button
-						type="button"
-						role="radio"
-						aria-checked={$contrastLevel === opt.value}
-						class="ua-seg-btn"
-						class:ua-seg-btn--active={$contrastLevel === opt.value}
-						onclick={() => contrastLevel.set(opt.value)}
-					>
-						{opt.label}
-					</button>
-				{/each}
-			</div>
+			<SegmentedControl
+				options={CONTRAST_OPTIONS}
+				value={$contrastLevel}
+				label="Contrast"
+				onchange={(v) => contrastLevel.set(v as ContrastLevel)}
+			/>
 		</div>
 
 		<div class="ua-row">
@@ -96,21 +86,12 @@
 				<span class="ua-title">Text size</span>
 				<span class="ua-hint">{textHint}</span>
 			</div>
-			<div class="ua-seg" role="radiogroup" aria-label="Text size">
-				{#each TEXT_OPTIONS as opt, i (opt.value)}
-					<button
-						type="button"
-						role="radio"
-						aria-checked={$textScale === opt.value}
-						aria-label={opt.hint}
-						class="ua-seg-btn ua-seg-btn--a{i}"
-						class:ua-seg-btn--active={$textScale === opt.value}
-						onclick={() => textScale.set(opt.value)}
-					>
-						{opt.label}
-					</button>
-				{/each}
-			</div>
+			<SegmentedControl
+				options={TEXT_OPTIONS}
+				value={$textScale}
+				label="Text size"
+				onchange={(v) => textScale.set(v as TextScale)}
+			/>
 		</div>
 
 		<div class="ua-row">
@@ -118,28 +99,12 @@
 				<span class="ua-title">Reduce transparency</span>
 				<span class="ua-hint">Solid panels instead of glass and blur effects</span>
 			</div>
-			<div class="ua-seg" role="radiogroup" aria-label="Reduce transparency">
-				<button
-					type="button"
-					role="radio"
-					aria-checked={!$reduceTransparency}
-					class="ua-seg-btn"
-					class:ua-seg-btn--active={!$reduceTransparency}
-					onclick={() => reduceTransparency.set(false)}
-				>
-					Off
-				</button>
-				<button
-					type="button"
-					role="radio"
-					aria-checked={$reduceTransparency}
-					class="ua-seg-btn"
-					class:ua-seg-btn--active={$reduceTransparency}
-					onclick={() => reduceTransparency.set(true)}
-				>
-					On
-				</button>
-			</div>
+			<SegmentedControl
+				options={TRANSPARENCY_OPTIONS}
+				value={$reduceTransparency ? 'on' : 'off'}
+				label="Reduce transparency"
+				onchange={(v) => reduceTransparency.set(v === 'on')}
+			/>
 		</div>
 	</div>
 </SettingsSection>
@@ -155,7 +120,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 1rem;
+		gap: var(--space-4);
 		flex-wrap: wrap;
 	}
 
@@ -167,68 +132,36 @@
 	}
 
 	.ua-title {
-		font-size: 0.8125rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
 		font-weight: 600;
+		letter-spacing: var(--track-body);
 		color: var(--text-default);
 	}
 
 	.ua-hint {
-		font-size: 0.75rem;
+		font-size: var(--text-footnote);
+		line-height: 1.4;
 		color: var(--text-muted);
 	}
 
-	.ua-seg {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.125rem;
-		padding: 0.1875rem;
-		border-radius: 0.625rem;
-		background-color: var(--bg-sunken);
-		border: 1px solid var(--border-default);
-		flex-shrink: 0;
+	:global(.ui-seg-btn.ua-a0) {
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 	}
 
-	.ua-seg-btn {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		min-width: 2rem;
-		border: none;
-		background: none;
-		padding: 0.3125rem 0.75rem;
-		border-radius: 0.4375rem;
-		font-size: 0.75rem;
-		font-weight: 550;
-		color: var(--text-muted);
-		cursor: pointer;
-		transition:
-			color 120ms ease,
-			background-color 120ms ease;
+	:global(.ui-seg-btn.ua-a1) {
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 	}
 
-	.ua-seg-btn--a0 {
-		font-size: 0.6875rem;
+	:global(.ui-seg-btn.ua-a2) {
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
 	}
 
-	.ua-seg-btn--a1 {
-		font-size: 0.78125rem;
-	}
-
-	.ua-seg-btn--a2 {
-		font-size: 0.875rem;
-	}
-
-	.ua-seg-btn--a3 {
-		font-size: 0.96875rem;
-	}
-
-	.ua-seg-btn:hover {
-		color: var(--text-default);
-	}
-
-	.ua-seg-btn--active {
-		background-color: var(--bg-surface);
-		color: var(--text-default);
-		box-shadow: 0 1px 2px rgb(0 0 0 / 0.08);
+	:global(.ui-seg-btn.ua-a3) {
+		font-size: var(--text-headline);
+		line-height: var(--lh-headline);
 	}
 </style>

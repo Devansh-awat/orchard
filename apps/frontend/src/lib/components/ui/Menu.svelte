@@ -2,6 +2,7 @@
 	import { Popover } from 'melt/builders';
 	import { setContext, type Snippet } from 'svelte';
 	import type { Placement } from '@floating-ui/dom';
+	import { overlayMotion } from '$lib/utils/motion.svelte';
 
 	let {
 		placement = 'bottom-end',
@@ -41,6 +42,9 @@
 	class="ui-menu"
 	role="menu"
 	onclick={(e: MouseEvent) => e.stopPropagation()}
+	{@attach overlayMotion(() => open, {
+		origin: `${placement.startsWith('top') ? 'bottom' : 'top'} ${placement.endsWith('end') ? 'right' : 'left'}`
+	})}
 >
 	{@render children()}
 </div>

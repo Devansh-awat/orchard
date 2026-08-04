@@ -103,7 +103,7 @@
 	   bordered table of borderless inputs rather than separate input boxes. */
 	.envgrid {
 		border: 1px solid var(--surface-border);
-		border-radius: 0.625rem;
+		border-radius: var(--radius-md);
 		overflow: hidden;
 		background-color: var(--surface-bg);
 	}
@@ -112,7 +112,7 @@
 		align-items: center;
 		min-height: 2.75rem;
 		border-bottom: 1px solid var(--surface-border);
-		transition: background-color 0.12s;
+		transition: background-color var(--dur-fast);
 	}
 	.envgrid-row:hover,
 	.envgrid-row:focus-within {
@@ -131,7 +131,8 @@
 		width: 100%;
 		padding: 0.5rem 0.75rem;
 		font-family: ui-monospace, SFMono-Regular, 'SF Mono', Menlo, monospace;
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		background: transparent;
 		border: none;
 		outline: none;
@@ -155,7 +156,7 @@
 		flex-shrink: 0;
 		padding-right: 0.25rem;
 		opacity: 0;
-		transition: opacity 0.15s;
+		transition: opacity var(--dur-fast);
 	}
 	.envgrid-row:hover .envgrid-actions,
 	.envgrid-row:focus-within .envgrid-actions {
@@ -167,14 +168,14 @@
 		justify-content: center;
 		width: 2rem;
 		height: 2rem;
-		border-radius: 0.375rem;
+		border-radius: var(--radius-xs);
 		background: transparent;
 		border: none;
 		color: var(--surface-muted);
 		cursor: pointer;
 		transition:
-			color 0.15s,
-			background-color 0.15s;
+			color var(--dur-fast),
+			background-color var(--dur-fast);
 	}
 	.envgrid-action:hover {
 		background-color: color-mix(in srgb, var(--surface-border) 50%, transparent);
@@ -193,17 +194,18 @@
 		align-items: center;
 		gap: 0.5rem;
 		width: 100%;
-		padding: 0.625rem 0.75rem;
-		font-size: 0.8125rem;
-		font-weight: 500;
+		padding: 0.75rem 0.75rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
 		color: var(--surface-muted);
 		background: transparent;
 		border: none;
 		border-top: 1px dashed var(--surface-border);
 		cursor: pointer;
 		transition:
-			color 0.15s,
-			background-color 0.15s;
+			color var(--dur-fast),
+			background-color var(--dur-fast);
 	}
 	.envgrid-add:hover {
 		color: var(--sidebar-text-active-border);

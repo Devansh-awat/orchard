@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { isPublicAddress } from '../src/notifications/notifications.service';
+import { isPublicAddress } from '../src/notifications/webhook-guard';
 
 const PUBLIC = [
   '8.8.8.8',

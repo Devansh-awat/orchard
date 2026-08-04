@@ -98,6 +98,7 @@ export interface Theme {
 	colors: ThemeColors;
 	simpleColors: SimpleThemeColors;
 	isBuiltIn?: boolean;
+	isDraft?: boolean;
 }
 
 // Color utility functions
@@ -314,32 +315,32 @@ export function generateThemeColors(simple: SimpleThemeColors, isDark: boolean):
 const defaultLightSimple: SimpleThemeColors = {
 	accent: '#d53044',
 	accentForeground: '#ffffff',
-	background: '#ffffff',
-	foreground: '#302627',
-	muted: '#80696b',
-	border: '#efdddf',
+	background: '#f6f5f6',
+	foreground: '#241d1e',
+	muted: '#7a6f70',
+	border: '#e6e2e3',
 	card: '#ffffff',
-	sidebarBackground: '#ffffff',
-	sidebarForeground: '#302627',
+	sidebarBackground: '#f6f5f6',
+	sidebarForeground: '#241d1e',
 	error: '#d53044',
-	success: '#33d6a6',
-	warning: '#ff8c37'
+	success: '#12b886',
+	warning: '#e8820c'
 };
 
 // Default simple colors for dark theme
 const defaultDarkSimple: SimpleThemeColors = {
-	accent: '#d53044',
-	accentForeground: '#efdddf',
-	background: '#161314',
-	foreground: '#efdddf',
-	muted: '#ba9da0',
-	border: '#302627',
-	card: '#251e1f',
-	sidebarBackground: '#251e1f',
-	sidebarForeground: '#efdddf',
-	error: '#fb5e71',
+	accent: '#e5455a',
+	accentForeground: '#ffffff',
+	background: '#0a0a0b',
+	foreground: '#ededef',
+	muted: '#8f8f96',
+	border: '#242427',
+	card: '#121214',
+	sidebarBackground: '#0a0a0b',
+	sidebarForeground: '#ededef',
+	error: '#ff6b7d',
 	success: '#33d6a6',
-	warning: '#f1c40f'
+	warning: '#f5b544'
 };
 
 // Hand-tuned Orchard primary ramp; overrides the HSL-generated approximations
@@ -369,19 +370,20 @@ export const defaultLightTheme: Theme = {
 		...generateThemeColors(defaultLightSimple, false),
 		...orchardPrimaryPalette,
 		sidebarUnreadText: '#161314',
-		sidebarTextHoverBg: '#efdddf',
+		sidebarTextHoverBg: '#ebe9ea',
 		sidebarTextActiveColor: '#8a2c37',
-		sidebarTextActiveBg: '#efdddf',
-		mentionHighlightBg: '#efdddf',
+		sidebarTextActiveBg: '#f7e4e6',
+		mentionHighlightBg: '#f7e4e6',
 		mentionHighlightLink: '#8a2c37',
 		newMessageSeparator: '#ea485c',
 		linkColor: '#8a2c37',
-		buttonBg: '#ae2a3a',
-		controlBg: '#ffffff',
-		controlHoverBg: '#efdddf',
-		dropdownHoverBg: '#efdddf',
+		buttonBg: '#c02a3e',
+		controlBg: '#f0eeef',
+		controlHoverBg: '#e9e6e7',
+		dropdownBg: '#ffffff',
+		dropdownHoverBg: '#f0eeef',
 		orgTriggerBg: '#ffffff',
-		orgTriggerHoverBg: '#efdddf'
+		orgTriggerHoverBg: '#ebe9ea'
 	}
 };
 
@@ -395,18 +397,30 @@ export const defaultDarkTheme: Theme = {
 	colors: {
 		...generateThemeColors(defaultDarkSimple, true),
 		...orchardPrimaryPalette,
-		sidebarTextHoverBg: '#161314',
-		sidebarTextActiveBg: '#302627',
-		sidebarHeaderBg: '#161314',
-		sidebarTeamBarBg: '#161314',
-		mentionHighlightBg: '#302627',
-		mentionHighlightLink: '#fb5e71',
-		newMessageSeparator: '#ea485c',
-		linkColor: '#fb5e71',
-		buttonBg: '#ae2a3a',
-		controlHoverBg: '#302627',
-		dropdownHoverBg: '#161314',
-		orgTriggerHoverBg: '#302627'
+		primary50: '#ffe9ec',
+		primary100: '#ffd3d8',
+		primary200: '#ff9daa',
+		primary300: '#ff7787',
+		primary400: '#f4596d',
+		primary500: '#e5455a',
+		primary600: '#cf3348',
+		primary700: '#a8283a',
+		sidebarTextHoverBg: '#161618',
+		sidebarTextActiveBg: '#1e1e21',
+		sidebarHeaderBg: '#0a0a0b',
+		sidebarTeamBarBg: '#0a0a0b',
+		sidebarTextActiveColor: '#ffffff',
+		mentionHighlightBg: '#1e1e21',
+		mentionHighlightLink: '#ff7787',
+		newMessageSeparator: '#e5455a',
+		linkColor: '#ff8f9c',
+		buttonBg: '#cf3348',
+		controlBg: '#121214',
+		controlHoverBg: '#1c1c1f',
+		dropdownBg: '#141416',
+		dropdownHoverBg: '#1c1c1f',
+		orgTriggerBg: '#121214',
+		orgTriggerHoverBg: '#1c1c1f'
 	}
 };
 
@@ -453,18 +467,18 @@ export const creamTheme: Theme = {
 };
 
 const midnightSimple: SimpleThemeColors = {
-	accent: '#4d8dff',
+	accent: '#3d7bfd',
 	accentForeground: '#ffffff',
-	background: '#0e1420',
-	foreground: '#e2e8f6',
-	muted: '#93a0bd',
-	border: '#273250',
-	card: '#161e30',
-	sidebarBackground: '#0b101a',
-	sidebarForeground: '#e2e8f6',
-	error: '#fb5e71',
+	background: '#06070a',
+	foreground: '#e8eaf0',
+	muted: '#8b90a0',
+	border: '#1c1f28',
+	card: '#0d0f14',
+	sidebarBackground: '#06070a',
+	sidebarForeground: '#e8eaf0',
+	error: '#ff6b7d',
 	success: '#33d6a6',
-	warning: '#f1c40f'
+	warning: '#f5b544'
 };
 
 export const midnightTheme: Theme = {
@@ -475,18 +489,31 @@ export const midnightTheme: Theme = {
 	simpleColors: midnightSimple,
 	colors: {
 		...generateThemeColors(midnightSimple, true),
-		sidebarTextHoverBg: '#0e1420',
-		sidebarTextActiveBg: '#273250',
-		sidebarHeaderBg: '#0e1420',
-		sidebarTeamBarBg: '#0e1420',
-		mentionHighlightBg: '#273250',
-		mentionHighlightLink: '#7caeff',
-		newMessageSeparator: '#4d8dff',
-		linkColor: '#7caeff',
-		buttonBg: '#3b7ceb',
-		controlHoverBg: '#273250',
-		dropdownHoverBg: '#0e1420',
-		orgTriggerHoverBg: '#273250'
+		primary50: '#eef4ff',
+		primary100: '#d8e5ff',
+		primary200: '#a9c6ff',
+		primary300: '#7fabff',
+		primary400: '#5b92fe',
+		primary500: '#3d7bfd',
+		primary600: '#2563eb',
+		primary700: '#1d4fc4',
+		sidebarTextHoverBg: '#101319',
+		sidebarTextActiveBg: '#151a24',
+		sidebarHeaderBg: '#06070a',
+		sidebarTeamBarBg: '#06070a',
+		sidebarTextActiveColor: '#ffffff',
+		sidebarTextActiveBorder: '#3d7bfd',
+		mentionHighlightBg: '#151a24',
+		mentionHighlightLink: '#7fabff',
+		newMessageSeparator: '#3d7bfd',
+		linkColor: '#7fabff',
+		buttonBg: '#2563eb',
+		controlBg: '#0d0f14',
+		controlHoverBg: '#151a24',
+		dropdownBg: '#0d1016',
+		dropdownHoverBg: '#151a24',
+		orgTriggerBg: '#0d0f14',
+		orgTriggerHoverBg: '#151a24'
 	}
 };
 
@@ -646,8 +673,9 @@ function createThemeStore() {
 		}
 	}
 
-	function applyTheme(theme: Theme) {
+	function applyTheme(theme: Theme, options?: { persist?: boolean }) {
 		if (!browser) return;
+		const persist = options?.persist !== false;
 
 		const root = document.documentElement;
 		const colors = theme.colors;
@@ -717,6 +745,7 @@ function createThemeStore() {
 
 		root.classList.toggle('dark', theme.isDark);
 
+		if (!persist) return;
 		localStorage.setItem(ACTIVE_THEME_KEY, theme.id);
 		localStorage.setItem(THEME_MODE_KEY, theme.isDark ? 'dark' : 'light');
 	}

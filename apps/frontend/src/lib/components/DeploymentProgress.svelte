@@ -351,19 +351,21 @@
 	}
 
 	.step-row {
-		padding: 0.3rem 0.6rem;
-		font-size: 0.8125rem;
+		padding: 0.25rem 0.6rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		opacity: 0.55;
 		transition:
-			padding 360ms cubic-bezier(0.34, 1.56, 0.64, 1),
-			font-size 360ms cubic-bezier(0.34, 1.56, 0.64, 1),
-			opacity 280ms ease,
-			background-color 220ms ease;
+			padding var(--dur-base) cubic-bezier(0.34, 1.56, 0.64, 1),
+			font-size var(--dur-base) cubic-bezier(0.34, 1.56, 0.64, 1),
+			opacity var(--dur-base) ease,
+			background-color var(--dur-base) ease;
 	}
 
 	.step-row-active {
 		padding: 0.75rem 0.9rem;
-		font-size: 1rem;
+		font-size: var(--text-headline);
+		line-height: var(--lh-headline);
 		font-weight: 600;
 		opacity: 1;
 		background-color: color-mix(in srgb, var(--button-bg) 12%, transparent);
@@ -372,7 +374,7 @@
 
 	.step-label {
 		font-size: inherit;
-		transition: font-size 360ms cubic-bezier(0.34, 1.56, 0.64, 1);
+		transition: font-size var(--dur-base) cubic-bezier(0.34, 1.56, 0.64, 1);
 	}
 
 	/* Grow icons with width/height — don't touch `transform` or the
@@ -381,8 +383,8 @@
 		width: 1.15rem;
 		height: 1.15rem;
 		transition:
-			width 360ms cubic-bezier(0.34, 1.56, 0.64, 1),
-			height 360ms cubic-bezier(0.34, 1.56, 0.64, 1);
+			width var(--dur-base) cubic-bezier(0.34, 1.56, 0.64, 1),
+			height var(--dur-base) cubic-bezier(0.34, 1.56, 0.64, 1);
 	}
 
 	.step-current {

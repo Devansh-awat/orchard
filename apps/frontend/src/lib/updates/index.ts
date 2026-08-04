@@ -1,0 +1,99 @@
+import { marked } from 'marked';
+
+export interface UpdateSection {
+	icon: string;
+	title: string;
+	html: string;
+}
+
+export interface Update {
+	id: string;
+	title: string;
+	date: string;
+	tag: string;
+	summary: string;
+	intro: string;
+	sections: UpdateSection[];
+}
+
+const FRONTMATTER = /^---\r?\n([\s\S]*?)\r?\n---\r?\n?/;
+const HEADING = /^###\s+(?:\[([\w-]+)\]\s*)?(.+)$/;
+
+function parseFrontmatter(raw: string): { meta: Record<string, string>; body: string } {
+	const match = raw.match(FRONTMATTER);
+	if (!match) return { meta: {}, body: raw };
+
+	const meta: Record<string, string> = {};
+	for (const line of match[1].split(/\r?\n/)) {
+		const sep = line.indexOf(':');
+		if (sep === -1) continue;
+		meta[line.slice(0, sep).trim()] = line
+			.slice(sep + 1)
+			.trim()
+			.replace(/^['"]|['"]$/g, '');
+	}
+
+	return { meta, body: raw.slice(match[0].length) };
+}
+
+function render(markdown: string): string {
+	const trimmed = markdown.trim();
+	return trimmed ? (marked.parse(trimmed, { async: false }) as string) : '';
+}
+
+function parseSections(body: string): { intro: string; sections: UpdateSection[] } {
+	const lines = body.split(/\r?\n/);
+	const introLines: string[] = [];
+	const sections: UpdateSection[] = [];
+	let current: { icon: string; title: string; lines: string[] } | null = null;
+
+	for (const line of lines) {
+		const heading = line.match(HEADING);
+		if (heading) {
+			if (current) {
+				sections.push({
+					icon: current.icon,
+					title: current.title,
+					html: render(current.lines.join('\n'))
+				});
+			}
+			current = { icon: heading[1] ?? '', title: heading[2].trim(), lines: [] };
+			continue;
+		}
+		if (current) current.lines.push(line);
+		else introLines.push(line);
+	}
+
+	if (current) {
+		sections.push({
+			icon: current.icon,
+			title: current.title,
+			html: render(current.lines.join('\n'))
+		});
+	}
+
+	return { intro: render(introLines.join('\n')), sections };
+}
+
+const files = import.meta.glob('./*.md', {
+	query: '?raw',
+	import: 'default',
+	eager: true
+}) as Record<string, string>;
+
+export const updates: Update[] = Object.values(files)
+	.map((raw) => parseFrontmatter(raw))
+	.filter(({ meta }) => meta.id && meta.date)
+	.map(({ meta, body }) => {
+		const { intro, sections } = parseSections(body);
+		return {
+			id: meta.id,
+			title: meta.title || meta.id,
+			date: meta.date,
+			tag: meta.tag || 'New',
+			summary: meta.summary || '',
+			intro,
+			sections
+		};
+	})
+	.sort((a, b) => b.date.localeCompare(a.date));

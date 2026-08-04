@@ -12,6 +12,7 @@
 	} from '$lib/stores';
 	import { ArrowLeft } from 'lucide-svelte';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import { SettingsRail } from '$lib/components/ui';
 	import {
 		loadEarlyAccessFeatures,
 		setEarlyAccessFeatureEnrollment,
@@ -31,7 +32,8 @@
 		UserAccessibility,
 		UserApiTokens,
 		UserMcp,
-		UserAppearance
+		UserAppearance,
+		UserNotifications
 	} from '$lib/components/user-settings';
 
 	let githubLinked = $state(false);
@@ -81,9 +83,11 @@
 	let showDeletePasskeyModal = $state(false);
 	let passkeyToDelete = $state<PasskeyRecord | null>(null);
 
-	let editingField = $state<string | null>(null);
-	let editValue = $state('');
-	let savingField = $state(false);
+	let isEditingProfile = $state(false);
+	let editFirstName = $state('');
+	let editLastName = $state('');
+	let editUsername = $state('');
+	let savingProfile = $state(false);
 	let emailRevealed = $state(false);
 	let uploadingAvatar = $state(false);
 	let deletingAvatar = $state(false);
@@ -121,33 +125,40 @@
 	const frontendVersion = __APP_VERSION__;
 
 	const tailscaleEnabled = featureFlag('tailscale-integration');
+	const notificationsEnabled = featureFlag('notifications');
 
 	const activeTab = $derived.by(() => {
 		const t = $page.url.searchParams.get('tab');
 		return !t || t === 'profile' ? 'connections' : t;
 	});
-	const RAIL_GROUPS = $derived([
-		{
-			label: 'Connections',
-			items: [
-				{ id: 'connections', label: 'GitHub and Tailscale' },
-				{ id: 'tokens', label: 'API tokens' },
-				{ id: 'mcp', label: 'MCP' }
-			]
-		},
-		{
-			label: 'Security',
-			items: [{ id: 'security', label: 'Passkeys and devices' }]
-		},
-		{
-			label: 'Preferences',
-			items: [
-				{ id: 'appearance', label: 'Appearance' },
-				{ id: 'accessibility', label: 'Accessibility' },
-				{ id: 'early-access', label: 'Early access' }
-			]
-		}
-	]);
+	const RAIL_GROUPS = $derived(
+		[
+			{
+				label: 'Connections',
+				items: [
+					{ id: 'connections', label: 'GitHub and Tailscale' },
+					{ id: 'tokens', label: 'API tokens' },
+					{ id: 'mcp', label: 'MCP' }
+				]
+			},
+			{
+				label: 'Security',
+				items: [{ id: 'security', label: 'Passkeys and devices' }]
+			},
+			{
+				label: 'Preferences',
+				items: [
+					...($notificationsEnabled ? [{ id: 'notifications', label: 'Notifications' }] : []),
+					{ id: 'appearance', label: 'Appearance' },
+					{ id: 'accessibility', label: 'Accessibility' },
+					{ id: 'early-access', label: 'Early access' }
+				]
+			}
+		].map((group) => ({
+			...group,
+			items: group.items.map((item) => ({ ...item, href: `/user/settings?tab=${item.id}` }))
+		}))
+	);
 
 	function censorEmail(email: string): string {
 		const [local, domain] = email.split('@');
@@ -160,42 +171,47 @@
 		return emailRevealed ? email : censorEmail(email);
 	});
 
-	function startEditField(field: string) {
-		if (field === 'firstName') editValue = $user?.firstName || '';
-		else if (field === 'lastName') editValue = $user?.lastName || '';
-		else if (field === 'username') editValue = $user?.username || '';
-		editingField = field;
+	function startEditProfile() {
+		editFirstName = $user?.firstName || '';
+		editLastName = $user?.lastName || '';
+		editUsername = $user?.username || '';
+		isEditingProfile = true;
 	}
-	function cancelEditField() {
-		editingField = null;
-		editValue = '';
+	function cancelEditProfile() {
+		isEditingProfile = false;
 	}
-	async function saveField() {
-		if (savingField || !editingField) return;
-		let trimmed = editValue.trim();
-		if (editingField === 'username' && trimmed) {
-			trimmed = trimmed.normalize('NFKC').replace(/[\u200B-\u200D\u2060\uFEFF]/g, '');
-			const bad = [...new Set([...trimmed].filter((ch) => !/[a-zA-Z0-9_-]/.test(ch)))];
-			if (bad.length) {
-				const shown = bad
-					.map((ch) =>
-						ch.codePointAt(0)! > 126
-							? `"${ch}" (U+${ch.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')})`
-							: `"${ch}"`
-					)
-					.join(', ');
-				toasts.add({
-					title: 'Invalid username',
-					description: `Not allowed: ${shown}. Use letters, numbers, underscores, and hyphens.`,
-					color: 'error'
-				});
-				return;
-			}
+	function invalidUsernameChars(value: string) {
+		return [...new Set([...value].filter((ch) => !/[a-zA-Z0-9_-]/.test(ch)))];
+	}
+	async function saveProfile() {
+		if (savingProfile) return;
+		const username = editUsername
+			.trim()
+			.normalize('NFKC')
+			.replace(/[\u200B-\u200D\u2060\uFEFF]/g, '');
+		const bad = invalidUsernameChars(username);
+		if (bad.length) {
+			const shown = bad
+				.map((ch) =>
+					ch.codePointAt(0)! > 126
+						? `"${ch}" (U+${ch.codePointAt(0)!.toString(16).toUpperCase().padStart(4, '0')})`
+						: `"${ch}"`
+				)
+				.join(', ');
+			toasts.add({
+				title: 'Invalid username',
+				description: `Not allowed: ${shown}. Use letters, numbers, underscores, and hyphens.`,
+				color: 'error'
+			});
+			return;
 		}
-		savingField = true;
+		savingProfile = true;
 		try {
-			const body: Record<string, string | undefined> = {};
-			body[editingField] = trimmed || undefined;
+			const body: Record<string, string | null> = {
+				firstName: editFirstName.trim() || null,
+				lastName: editLastName.trim() || null
+			};
+			if (username) body.username = username;
 			const response = await apiFetch('/apiv1/auth/me', {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
@@ -207,9 +223,8 @@
 			}
 			const updatedUser = await response.json();
 			user.set({ ...$user, ...updatedUser });
-			toasts.add({ title: 'Updated', color: 'success' });
-			editingField = null;
-			editValue = '';
+			toasts.add({ title: 'Profile updated', color: 'success' });
+			isEditingProfile = false;
 		} catch (e) {
 			toasts.add({
 				title: 'Error',
@@ -217,12 +232,8 @@
 				color: 'error'
 			});
 		} finally {
-			savingField = false;
+			savingProfile = false;
 		}
-	}
-	function handleFieldKeydown(e: KeyboardEvent) {
-		if (e.key === 'Enter') saveField();
-		else if (e.key === 'Escape') cancelEditField();
 	}
 
 	async function uploadAvatar(event: Event) {
@@ -283,16 +294,6 @@
 		} finally {
 			deletingAvatar = false;
 		}
-	}
-
-	const SECTION_TABS: Record<string, string> = {
-		'b-passkeys': 'security',
-		'b-sessions': 'security',
-		'b-github': 'connections'
-	};
-
-	function jumpToSection(id: string) {
-		goto(`/user/settings?tab=${SECTION_TABS[id] ?? id}`, { keepFocus: true });
 	}
 
 	async function handleAcceptInvitation(invitation: PendingInvitation) {
@@ -750,39 +751,38 @@
 	});
 </script>
 
-<div class="us-page">
-	<div class="us-grid-fade"></div>
-	<div class="us-content">
-		<button onclick={() => window.history.back()} class="us-back"
-			><ArrowLeft class="h-3.5 w-3.5" /> Back</button
-		>
+<div class="usp-page">
+	<a href="/" class="usp-back">
+		<ArrowLeft class="h-3.5 w-3.5" />
+		Your Apps
+	</a>
+	<h1 class="usp-title">Settings</h1>
 
-		<div class="usb-hero-fixed">
-			<UserIdentityHero
-				index={0}
-				user={$user}
-				{displayEmail}
-				bind:emailRevealed
-				bind:editingField
-				bind:editValue
-				{savingField}
-				{uploadingAvatar}
-				{deletingAvatar}
-				onStartEditField={startEditField}
-				onCancelEditField={cancelEditField}
-				onSaveField={saveField}
-				onFieldKeydown={handleFieldKeydown}
-				onUploadAvatar={uploadAvatar}
-				onDeleteAvatar={deleteAvatar}
-				bind:avatarInputRef={avatarInput}
-				passkeyCount={passkeysLoading ? null : passkeys.length}
-				sessionCount={sessionsLoading ? null : sessions.length}
-				{githubLinked}
-				onJump={jumpToSection}
-			/>
-		</div>
+	<UserIdentityHero
+		index={0}
+		user={$user}
+		{displayEmail}
+		bind:emailRevealed
+		bind:isEditing={isEditingProfile}
+		bind:editFirstName
+		bind:editLastName
+		bind:editUsername
+		saving={savingProfile}
+		{uploadingAvatar}
+		{deletingAvatar}
+		onStartEditing={startEditProfile}
+		onCancelEditing={cancelEditProfile}
+		onSave={saveProfile}
+		onUploadAvatar={uploadAvatar}
+		onDeleteAvatar={deleteAvatar}
+		bind:avatarInputRef={avatarInput}
+		passkeyCount={passkeysLoading ? null : passkeys.length}
+		sessionCount={sessionsLoading ? null : sessions.length}
+		{githubLinked}
+	/>
 
-		{#if invitations.length}
+	{#if invitations.length}
+		<div class="usp-invites">
 			<UserInvitations
 				index={0}
 				{invitations}
@@ -791,122 +791,110 @@
 				onAccept={handleAcceptInvitation}
 				onDecline={handleDeclineInvitation}
 			/>
-		{/if}
-
-		<div class="usb-grid">
-			<aside class="usb-rail" aria-label="Settings sections">
-				{#each RAIL_GROUPS as group (group.label)}
-					<div class="usb-rail-group">
-						<p class="usb-rail-eyebrow">{group.label}</p>
-						{#each group.items as item (item.id)}
-							<a
-								href={`/user/settings?tab=${item.id}`}
-								class="usb-rail-link"
-								class:usb-rail-link--active={activeTab === item.id}
-								aria-current={activeTab === item.id ? 'page' : undefined}
-							>
-								{item.label}
-							</a>
-						{/each}
-					</div>
-				{/each}
-			</aside>
-
-			<div class="usb-sections">
-				{#if activeTab === 'connections'}
-					<UserGitHub
-						index={0}
-						{loading}
-						{githubLinked}
-						{githubUsername}
-						{githubInstallations}
-						{githubAppInstallUrl}
-						{githubTokenExpired}
-						{unlinking}
-						onLink={linkGitHub}
-						onUnlink={unlinkGitHub}
-					/>
-					{#if $tailscaleEnabled}
-						<UserTailscale
-							index={1}
-							{tailscaleLoading}
-							{tailscaleLinked}
-							{tailscaleTailnet}
-							{unlinkingTailscale}
-							bind:showTailscaleForm
-							bind:tailscaleApiKey
-							{linkingTailscale}
-							onLink={linkTailscale}
-							onUnlink={unlinkTailscale}
-						/>
-					{/if}
-				{/if}
-
-				{#if activeTab === 'tokens'}
-					<UserApiTokens />
-				{/if}
-
-				{#if activeTab === 'mcp'}
-					<UserMcp />
-				{/if}
-
-				{#if activeTab === 'security'}
-					<UserPasskeys
-						index={0}
-						{passkeys}
-						{passkeysLoading}
-						{passkeyListError}
-						{passkeyEnvWarning}
-						{registerLoading}
-						bind:showAddPasskey
-						bind:newPasskeyName
-						bind:editingPasskeyId
-						bind:renameValue
-						{renaming}
-						{deletingPasskeyId}
-						onRegister={registerPasskey}
-						onStartRenaming={startRenaming}
-						onCancelRenaming={cancelRenaming}
-						onSavePasskeyName={savePasskeyName}
-						onConfirmDelete={confirmDeletePasskey}
-						{formatTimestamp}
-					/>
-					<UserSessions
-						index={1}
-						{sessions}
-						{sessionsLoading}
-						{sessionsError}
-						{revokingSessionId}
-						onConfirmRevokeSession={confirmRevokeSession}
-						onShowRevokeAll={() => (showRevokeAllModal = true)}
-					/>
-				{/if}
-
-				{#if activeTab === 'appearance'}
-					<UserAppearance />
-				{/if}
-
-				{#if activeTab === 'accessibility'}
-					<UserAccessibility index={0} />
-				{/if}
-
-				{#if activeTab === 'early-access'}
-					<UserEarlyAccess
-						index={0}
-						{earlyAccessFeatures}
-						{earlyAccessLoading}
-						{earlyAccessEnrollment}
-						{togglingFeature}
-						onToggleFeature={toggleEarlyAccessFeature}
-					/>
-				{/if}
-			</div>
 		</div>
+	{/if}
 
-		<p class="us-version">
-			{frontendVersion}{backendVersion ? `+${backendVersion}` : ''}
-		</p>
+	<div class="usp-grid">
+		<SettingsRail groups={RAIL_GROUPS} activeId={activeTab} label="Account settings sections" />
+
+		<div class="usp-stack">
+			{#if activeTab === 'connections'}
+				<UserGitHub
+					index={0}
+					{loading}
+					{githubLinked}
+					{githubUsername}
+					{githubInstallations}
+					{githubAppInstallUrl}
+					{githubTokenExpired}
+					{unlinking}
+					onLink={linkGitHub}
+					onUnlink={unlinkGitHub}
+				/>
+				{#if $tailscaleEnabled}
+					<UserTailscale
+						index={1}
+						{tailscaleLoading}
+						{tailscaleLinked}
+						{tailscaleTailnet}
+						{unlinkingTailscale}
+						bind:showTailscaleForm
+						bind:tailscaleApiKey
+						{linkingTailscale}
+						onLink={linkTailscale}
+						onUnlink={unlinkTailscale}
+					/>
+				{/if}
+			{/if}
+
+			{#if activeTab === 'tokens'}
+				<UserApiTokens />
+			{/if}
+
+			{#if activeTab === 'mcp'}
+				<UserMcp />
+			{/if}
+
+			{#if activeTab === 'security'}
+				<UserPasskeys
+					index={0}
+					{passkeys}
+					{passkeysLoading}
+					{passkeyListError}
+					{passkeyEnvWarning}
+					{registerLoading}
+					bind:showAddPasskey
+					bind:newPasskeyName
+					bind:editingPasskeyId
+					bind:renameValue
+					{renaming}
+					{deletingPasskeyId}
+					onRegister={registerPasskey}
+					onStartRenaming={startRenaming}
+					onCancelRenaming={cancelRenaming}
+					onSavePasskeyName={savePasskeyName}
+					onConfirmDelete={confirmDeletePasskey}
+					{formatTimestamp}
+				/>
+				<UserSessions
+					index={1}
+					{sessions}
+					{sessionsLoading}
+					{sessionsError}
+					{revokingSessionId}
+					onConfirmRevokeSession={confirmRevokeSession}
+					onShowRevokeAll={() => (showRevokeAllModal = true)}
+				/>
+			{/if}
+
+			{#if activeTab === 'notifications' && $notificationsEnabled}
+				<UserNotifications index={0} />
+			{/if}
+
+			{#if activeTab === 'appearance'}
+				<UserAppearance />
+			{/if}
+
+			{#if activeTab === 'accessibility'}
+				<UserAccessibility index={0} />
+			{/if}
+
+			{#if activeTab === 'early-access'}
+				<UserEarlyAccess
+					index={0}
+					{earlyAccessFeatures}
+					{earlyAccessLoading}
+					{earlyAccessEnrollment}
+					{togglingFeature}
+					onToggleFeature={toggleEarlyAccessFeature}
+				/>
+			{/if}
+		</div>
 	</div>
+
+	<p class="usp-version">
+		{frontendVersion}{backendVersion ? `+${backendVersion}` : ''}
+	</p>
 </div>
 
 {#if sessionToRevoke}
@@ -949,150 +937,75 @@
 {/if}
 
 <style>
-	.us-page {
-		position: relative;
-		height: 100%;
-		overflow: hidden;
-	}
-	.us-grid-fade {
-		position: fixed;
-		inset: 0;
-		pointer-events: none;
-		z-index: 0;
-		background-image:
-			linear-gradient(
-				color-mix(in srgb, var(--surface-border) 50%, transparent) 1px,
-				transparent 1px
-			),
-			linear-gradient(
-				90deg,
-				color-mix(in srgb, var(--surface-border) 50%, transparent) 1px,
-				transparent 1px
-			);
-		background-size: 80px 80px;
-		opacity: 0.35;
-		mask-image: radial-gradient(ellipse 70% 40% at 50% 0%, black 0%, transparent 100%);
-		-webkit-mask-image: radial-gradient(ellipse 70% 40% at 50% 0%, black 0%, transparent 100%);
-	}
-	.us-content {
-		position: relative;
-		z-index: 1;
-		max-width: 64rem;
+	.usp-page {
+		padding: var(--space-8) var(--space-8) var(--space-12);
+		max-width: 84rem;
 		margin: 0 auto;
-		padding: 2.5rem 2rem 1.5rem;
-		display: flex;
-		flex-direction: column;
-		height: 100%;
-		min-height: 0;
 	}
-	.usb-grid {
-		display: grid;
-		grid-template-columns: 10.5rem minmax(0, 1fr);
-		gap: 2rem;
-		align-items: stretch;
-		margin-top: 1.25rem;
-		flex: 1;
-		min-height: 0;
-	}
-
-	.usb-hero-fixed {
-		flex-shrink: 0;
-	}
-
-	.usb-rail {
-		display: flex;
-		flex-direction: column;
-		gap: 1.125rem;
-		overflow-y: auto;
-		padding-bottom: 1rem;
-	}
-	.usb-rail-group {
-		display: flex;
-		flex-direction: column;
-		gap: 0.125rem;
-	}
-	.usb-rail-eyebrow {
-		font-size: 0.625rem;
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.08em;
-		color: var(--text-faint);
-		margin: 0 0 0.25rem;
-		padding-left: 0.625rem;
-	}
-	.usb-rail-link {
-		text-align: left;
-		font-size: 0.8125rem;
-		color: var(--text-muted);
-		background: none;
-		border: none;
-		border-radius: 0.5rem;
-		padding: 0.3rem 0.625rem;
-		cursor: pointer;
-		transition:
-			color 120ms,
-			background-color 120ms;
-	}
-	.usb-rail-link:hover,
-	.usb-rail-link--active {
-		color: var(--text-default);
-		background-color: var(--bg-hover);
-	}
-	.usb-sections {
-		display: flex;
-		flex-direction: column;
-		gap: 1rem;
-		min-width: 0;
-		min-height: 0;
-		overflow-y: auto;
-		padding-right: 0.25rem;
-		padding-bottom: 1.5rem;
-	}
-	.usb-anchor {
-		scroll-margin-top: 1.25rem;
-	}
-	.usb-links {
-		display: flex;
-		flex-direction: column;
-		gap: 0.5rem;
-	}
-	@media (max-width: 900px) {
-		.usb-grid {
-			grid-template-columns: 1fr;
-		}
-		.usb-rail {
-			display: none;
-		}
-	}
-	.us-back {
+	.usp-back {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
-		font-size: 0.8125rem;
-		font-weight: 450;
-		color: var(--surface-muted);
-		background: none;
-		border: none;
-		cursor: pointer;
-		padding: 0;
-		margin-bottom: 2rem;
-		transition: color 120ms;
+		gap: 0.25rem;
+		height: 1.75rem;
+		padding: 0 0.75rem 0 0.5rem;
+		border-radius: var(--radius-pill);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		font-weight: 600;
+		letter-spacing: var(--track-body);
+		color: var(--text-muted);
+		text-decoration: none;
+		margin-bottom: var(--space-3);
+		transition:
+			color var(--dur-fast),
+			background-color var(--dur-fast);
 	}
-	.us-back:hover {
-		color: var(--center-channel-color);
+	.usp-back:hover {
+		color: var(--text-default);
+		background-color: var(--fill-soft);
 	}
-	.us-version {
+	.usp-title {
+		margin: 0 0 var(--space-5);
+		font-size: var(--text-title-1);
+		font-weight: 600;
+		line-height: 1.15;
+		letter-spacing: var(--track-title);
+		color: var(--text-default);
+	}
+	.usp-invites {
+		margin-top: var(--space-4);
+	}
+	.usp-grid {
+		display: grid;
+		grid-template-columns: 12rem minmax(0, 1fr);
+		gap: var(--space-6);
+		align-items: start;
+		margin-top: var(--space-5);
+	}
+	.usp-stack {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-4);
+		min-width: 0;
+	}
+	.usp-version {
 		text-align: center;
-		font-size: 0.6875rem;
-		color: var(--surface-muted);
-		opacity: 0.6;
-		margin-top: 1.5rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-faint);
+		margin: var(--space-8) 0 0;
 		font-variant-numeric: tabular-nums;
-		letter-spacing: 0.01em;
+		letter-spacing: var(--track-body);
+	}
+	@media (max-width: 900px) {
+		.usp-grid {
+			grid-template-columns: 1fr;
+			gap: var(--space-4);
+		}
 	}
 	@media (max-width: 640px) {
-		.us-content {
-			padding: 1.5rem 1rem 3rem;
+		.usp-page {
+			padding: var(--space-6) var(--space-4) var(--space-12);
 		}
 	}
 </style>

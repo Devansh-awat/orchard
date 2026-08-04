@@ -132,23 +132,27 @@
 				{:else}
 					<div class="cm-hero-placeholder" aria-hidden="true"></div>
 				{/if}
+				<span class="cm-hero-eyebrow">Preview</span>
 				<div class="cm-hero-content">
-					<div
-						class="cm-hero-icon"
-						class:cm-hero-icon--empty={!(iconMode === 'emoji' ? emojiValue.trim() : iconPreview)}
-					>
-						{#if iconMode === 'emoji' && emojiValue.trim()}
-							<span class="cm-hero-emoji">{emojiValue.trim()}</span>
-						{:else if iconMode === 'image' && iconPreview}
-							<img src={iconPreview} alt="" />
-						{:else}
-							<Smile class="h-5 w-5" />
-						{/if}
-					</div>
-					<div class="cm-hero-meta">
-						<span class="cm-hero-eyebrow">Preview</span>
-						<span class="cm-hero-name">{nameValue.trim() || project?.name || 'Project'}</span>
-					</div>
+					<h2 class="cm-hero-title">
+						<span
+							class="cm-hero-icon"
+							class:cm-hero-icon--empty={!(iconMode === 'emoji' ? emojiValue.trim() : iconPreview)}
+						>
+							{#if iconMode === 'emoji' && emojiValue.trim()}
+								<span class="cm-hero-emoji">{emojiValue.trim()}</span>
+							{:else if iconMode === 'image' && iconPreview}
+								<img src={iconPreview} alt="" />
+							{:else}
+								<Smile class="h-4 w-4" />
+							{/if}
+						</span>
+						<span class="cm-hero-label"
+							>{#if project?.owner?.username}<span class="cm-hero-owner"
+									>{project.owner.username}@</span
+								>{/if}{nameValue.trim() || project?.name || 'Project'}</span
+						>
+					</h2>
 				</div>
 			</div>
 

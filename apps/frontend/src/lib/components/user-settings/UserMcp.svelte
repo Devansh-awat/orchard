@@ -1,7 +1,18 @@
 <script lang="ts">
-	import { Copy, Check } from 'lucide-svelte';
+	import {
+		Copy,
+		Check,
+		Plug,
+		Sparkles,
+		Terminal,
+		CodeXml,
+		MousePointer2,
+		KeyRound
+	} from 'lucide-svelte';
 	import { env } from '$env/dynamic/public';
 	import { toasts } from '$lib/stores';
+	import SettingsSection from './SettingsSection.svelte';
+	import IconButton from './IconButton.svelte';
 
 	const MCP_URL = env.PUBLIC_MCP_URL || 'https://mcp.orchard.my';
 
@@ -19,73 +30,59 @@
 </script>
 
 <div class="settings-body">
-	<section class="settings-section">
-		<div class="settings-section-trigger" style="cursor: default;">
-			<div class="settings-section-trigger-left">
-				<div>
-					<p class="settings-section-label">What is MCP?</p>
-					<p class="settings-section-desc">
-						Model Context Protocol lets AI tools manage your infrastructure
-					</p>
-				</div>
-			</div>
-		</div>
-
-		<div class="settings-section-content">
+	<SettingsSection
+		index={0}
+		title="What is MCP?"
+		description="Model Context Protocol lets AI tools manage your infrastructure"
+	>
+		{#snippet icon(_hovered)}<Plug class="h-[18px] w-[18px]" />{/snippet}
+		<div class="mcp-body">
 			<p class="mcp-desc">
 				The Orchard MCP server allows AI assistants like Claude to manage your apps, databases,
 				environment variables, networking, and more
 			</p>
 		</div>
-	</section>
+	</SettingsSection>
 
-	<section class="settings-section">
-		<div class="settings-section-trigger" style="cursor: default;">
-			<div class="settings-section-trigger-left">
-				<div>
-					<p class="settings-section-label">Claude.ai</p>
-					<p class="settings-section-desc">Add as a remote MCP server in Claude.ai settings</p>
-				</div>
-			</div>
-		</div>
-
-		<div class="settings-section-content">
-			<p class="settings-hint">
+	<SettingsSection
+		index={1}
+		title="Claude.ai"
+		description="Add as a remote MCP server in Claude.ai settings"
+	>
+		{#snippet icon(_hovered)}<Sparkles class="h-[18px] w-[18px]" />{/snippet}
+		<div class="mcp-body">
+			<p class="mcp-hint">
 				Go to <strong>Settings &rarr; Connectors</strong>, scroll to the bottom and click
 				<strong>Add custom connector</strong>, then enter the URL below. You'll be prompted to sign
 				in with your Orchard account to authorize access.
 			</p>
 
 			<div class="mcp-field">
-				<p class="settings-field-label">Server URL</p>
+				<p class="mcp-label">Server URL</p>
 				<div class="mcp-copy-row">
 					<code class="mcp-value">{MCP_URL}</code>
-					<button class="btn btn-ghost btn-sm" onclick={() => copy(MCP_URL, 'claude-url')}>
-						{#if copiedId === 'claude-url'}
-							<Check class="h-3.5 w-3.5" />
-						{:else}
-							<Copy class="h-3.5 w-3.5" />
-						{/if}
-					</button>
+					<IconButton title="Copy server URL" onclick={() => copy(MCP_URL, 'claude-url')}>
+						{#snippet children(_hovered)}
+							{#if copiedId === 'claude-url'}
+								<Check class="h-3.5 w-3.5" />
+							{:else}
+								<Copy class="h-3.5 w-3.5" />
+							{/if}
+						{/snippet}
+					</IconButton>
 				</div>
 			</div>
 		</div>
-	</section>
+	</SettingsSection>
 
-	<section class="settings-section">
-		<div class="settings-section-trigger" style="cursor: default;">
-			<div class="settings-section-trigger-left">
-				<div>
-					<p class="settings-section-label">Claude Code</p>
-					<p class="settings-section-desc">
-						Add to your project's .mcp.json or Claude Code settings
-					</p>
-				</div>
-			</div>
-		</div>
-
-		<div class="settings-section-content">
-			<p class="settings-hint">
+	<SettingsSection
+		index={2}
+		title="Claude Code"
+		description="Add to your project's .mcp.json or Claude Code settings"
+	>
+		{#snippet icon(_hovered)}<Terminal class="h-[18px] w-[18px]" />{/snippet}
+		<div class="mcp-body">
+			<p class="mcp-hint">
 				Claude Code supports remote MCP servers with OAuth. Add the following to <code
 					>.mcp.json</code
 				> in your project root, or to your global Claude Code settings. You'll be prompted to authorize
@@ -93,10 +90,10 @@
 			</p>
 
 			<div class="mcp-field">
-				<div class="mcp-copy-row" style="justify-content: space-between;">
-					<p class="settings-field-label">.mcp.json</p>
-					<button
-						class="btn btn-ghost btn-sm"
+				<div class="mcp-block-head">
+					<p class="mcp-label">.mcp.json</p>
+					<IconButton
+						title="Copy configuration"
 						onclick={() =>
 							copy(
 								`{
@@ -110,14 +107,16 @@
 								'claude-code'
 							)}
 					>
-						{#if copiedId === 'claude-code'}
-							<Check class="h-3.5 w-3.5" />
-						{:else}
-							<Copy class="h-3.5 w-3.5" />
-						{/if}
-					</button>
+						{#snippet children(_hovered)}
+							{#if copiedId === 'claude-code'}
+								<Check class="h-3.5 w-3.5" />
+							{:else}
+								<Copy class="h-3.5 w-3.5" />
+							{/if}
+						{/snippet}
+					</IconButton>
 				</div>
-				<pre class="usage-code">{`{
+				<pre class="mcp-code">{`{
   "mcpServers": {
     "orchard": {
       "type": "http",
@@ -127,36 +126,32 @@
 }`}</pre>
 			</div>
 
-			<p class="settings-hint">
+			<p class="mcp-hint">
 				Or add it from the terminal with
 				<code>claude mcp add --transport http orchard {MCP_URL}</code>, then run
 				<code>/mcp</code> inside Claude Code to authenticate.
 			</p>
 		</div>
-	</section>
+	</SettingsSection>
 
-	<section class="settings-section">
-		<div class="settings-section-trigger" style="cursor: default;">
-			<div class="settings-section-trigger-left">
-				<div>
-					<p class="settings-section-label">VS Code</p>
-					<p class="settings-section-desc">Add to your workspace or user MCP configuration</p>
-				</div>
-			</div>
-		</div>
-
-		<div class="settings-section-content">
-			<p class="settings-hint">
+	<SettingsSection
+		index={3}
+		title="VS Code"
+		description="Add to your workspace or user MCP configuration"
+	>
+		{#snippet icon(_hovered)}<CodeXml class="h-[18px] w-[18px]" />{/snippet}
+		<div class="mcp-body">
+			<p class="mcp-hint">
 				Open the Command Palette (<kbd>Shift+Cmd+P</kbd>) and run
 				<strong>MCP: Add Server</strong>, or create <code>.vscode/mcp.json</code> in your project. VS
 				Code will handle OAuth automatically.
 			</p>
 
 			<div class="mcp-field">
-				<div class="mcp-copy-row" style="justify-content: space-between;">
-					<p class="settings-field-label">.vscode/mcp.json</p>
-					<button
-						class="btn btn-ghost btn-sm"
+				<div class="mcp-block-head">
+					<p class="mcp-label">.vscode/mcp.json</p>
+					<IconButton
+						title="Copy configuration"
 						onclick={() =>
 							copy(
 								`{
@@ -170,14 +165,16 @@
 								'vscode'
 							)}
 					>
-						{#if copiedId === 'vscode'}
-							<Check class="h-3.5 w-3.5" />
-						{:else}
-							<Copy class="h-3.5 w-3.5" />
-						{/if}
-					</button>
+						{#snippet children(_hovered)}
+							{#if copiedId === 'vscode'}
+								<Check class="h-3.5 w-3.5" />
+							{:else}
+								<Copy class="h-3.5 w-3.5" />
+							{/if}
+						{/snippet}
+					</IconButton>
 				</div>
-				<pre class="usage-code">{`{
+				<pre class="mcp-code">{`{
   "servers": {
     "orchard": {
       "type": "http",
@@ -187,37 +184,31 @@
 }`}</pre>
 			</div>
 
-			<p class="settings-hint">
+			<p class="mcp-hint">
 				You can also add it to your user profile by running <strong
 					>MCP: Open User Configuration</strong
 				> from the Command Palette.
 			</p>
 		</div>
-	</section>
+	</SettingsSection>
 
-	<section class="settings-section">
-		<div class="settings-section-trigger" style="cursor: default;">
-			<div class="settings-section-trigger-left">
-				<div>
-					<p class="settings-section-label">Cursor</p>
-					<p class="settings-section-desc">
-						Add to your project or global Cursor MCP configuration
-					</p>
-				</div>
-			</div>
-		</div>
-
-		<div class="settings-section-content">
-			<p class="settings-hint">
+	<SettingsSection
+		index={4}
+		title="Cursor"
+		description="Add to your project or global Cursor MCP configuration"
+	>
+		{#snippet icon(_hovered)}<MousePointer2 class="h-[18px] w-[18px]" />{/snippet}
+		<div class="mcp-body">
+			<p class="mcp-hint">
 				Create <code>.cursor/mcp.json</code> in your project root for project-specific access, or
 				<code>~/.cursor/mcp.json</code> for global access across all projects.
 			</p>
 
 			<div class="mcp-field">
-				<div class="mcp-copy-row" style="justify-content: space-between;">
-					<p class="settings-field-label">.cursor/mcp.json</p>
-					<button
-						class="btn btn-ghost btn-sm"
+				<div class="mcp-block-head">
+					<p class="mcp-label">.cursor/mcp.json</p>
+					<IconButton
+						title="Copy configuration"
 						onclick={() =>
 							copy(
 								`{
@@ -230,14 +221,16 @@
 								'cursor'
 							)}
 					>
-						{#if copiedId === 'cursor'}
-							<Check class="h-3.5 w-3.5" />
-						{:else}
-							<Copy class="h-3.5 w-3.5" />
-						{/if}
-					</button>
+						{#snippet children(_hovered)}
+							{#if copiedId === 'cursor'}
+								<Check class="h-3.5 w-3.5" />
+							{:else}
+								<Copy class="h-3.5 w-3.5" />
+							{/if}
+						{/snippet}
+					</IconButton>
 				</div>
-				<pre class="usage-code">{`{
+				<pre class="mcp-code">{`{
   "mcpServers": {
     "orchard": {
       "url": "${MCP_URL}"
@@ -246,34 +239,30 @@
 }`}</pre>
 			</div>
 
-			<p class="settings-hint">
+			<p class="mcp-hint">
 				Cursor handles OAuth automatically. You'll be redirected to sign in on first use.
 			</p>
 		</div>
-	</section>
+	</SettingsSection>
 
-	<section class="settings-section">
-		<div class="settings-section-trigger" style="cursor: default;">
-			<div class="settings-section-trigger-left">
-				<div>
-					<p class="settings-section-label">Token Authentication</p>
-					<p class="settings-section-desc">For tools that don't support OAuth</p>
-				</div>
-			</div>
-		</div>
-
-		<div class="settings-section-content">
-			<p class="settings-hint">
+	<SettingsSection
+		index={5}
+		title="Token Authentication"
+		description="For tools that don't support OAuth"
+	>
+		{#snippet icon(_hovered)}<KeyRound class="h-[18px] w-[18px]" />{/snippet}
+		<div class="mcp-body">
+			<p class="mcp-hint">
 				If your MCP client doesn't support OAuth, you can authenticate with an API token instead.
 				Create one in <a href="/user/api-tokens">API Tokens</a>, then pass it as a Bearer token in
 				the Authorization header.
 			</p>
 
 			<div class="mcp-field">
-				<div class="mcp-copy-row" style="justify-content: space-between;">
-					<p class="settings-field-label">Configuration with token</p>
-					<button
-						class="btn btn-ghost btn-sm"
+				<div class="mcp-block-head">
+					<p class="mcp-label">Configuration with token</p>
+					<IconButton
+						title="Copy configuration"
 						onclick={() =>
 							copy(
 								`{
@@ -290,14 +279,16 @@
 								'token-config'
 							)}
 					>
-						{#if copiedId === 'token-config'}
-							<Check class="h-3.5 w-3.5" />
-						{:else}
-							<Copy class="h-3.5 w-3.5" />
-						{/if}
-					</button>
+						{#snippet children(_hovered)}
+							{#if copiedId === 'token-config'}
+								<Check class="h-3.5 w-3.5" />
+							{:else}
+								<Copy class="h-3.5 w-3.5" />
+							{/if}
+						{/snippet}
+					</IconButton>
 				</div>
-				<pre class="usage-code">{`{
+				<pre class="mcp-code">{`{
   "mcpServers": {
     "orchard": {
       "type": "http",
@@ -310,134 +301,114 @@
 }`}</pre>
 			</div>
 		</div>
-	</section>
+	</SettingsSection>
 </div>
 
 <style>
 	.settings-body {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: var(--space-4);
 	}
 
-	.settings-section {
-		border: 1px solid var(--surface-border);
-		border-radius: 1rem;
-		overflow: hidden;
-		background-color: var(--surface-bg);
-		margin-bottom: 0.5rem;
-		box-shadow:
-			0 1px 3px rgb(0 0 0 / 0.03),
-			0 1px 2px rgb(0 0 0 / 0.02);
-	}
-
-	.settings-section-trigger {
-		display: flex;
-		align-items: center;
-		justify-content: space-between;
-		width: 100%;
-		padding: 1.125rem 1.375rem;
-		background: transparent;
-		color: var(--center-channel-color);
-	}
-
-	.settings-section-trigger-left {
-		display: flex;
-		align-items: center;
-		gap: 0.75rem;
-	}
-
-	.settings-section-label {
-		font-size: 0.875rem;
-		font-weight: 600;
-		color: var(--center-channel-color);
-		text-align: left;
-		letter-spacing: -0.01em;
-	}
-
-	.settings-section-desc {
-		font-size: 0.75rem;
-		color: var(--surface-muted);
-		text-align: left;
-	}
-
-	.settings-section-content {
-		padding: 0 1.375rem 1.375rem;
+	.mcp-body {
 		display: flex;
 		flex-direction: column;
 		gap: 0.875rem;
-		border-top: 1px solid var(--surface-border);
-		padding-top: 1.125rem;
-	}
-
-	.settings-field-label {
-		font-size: 0.6875rem;
-		font-weight: 500;
-		text-transform: uppercase;
-		letter-spacing: 0.05em;
-		color: var(--surface-muted);
-	}
-
-	.settings-hint {
-		font-size: 0.8125rem;
-		color: var(--surface-muted);
-		line-height: 1.55;
-	}
-
-	.settings-hint a {
-		color: var(--link-color);
-		text-decoration: none;
-	}
-
-	.settings-hint a:hover {
-		text-decoration: underline;
-	}
-
-	.settings-hint code {
-		font-size: 0.75rem;
-		font-family: var(--font-mono);
-		padding: 0.125rem 0.375rem;
-		border-radius: 0.25rem;
-		background-color: color-mix(in srgb, var(--surface-border) 30%, var(--center-channel-bg));
 	}
 
 	.mcp-desc {
-		font-size: 0.8125rem;
-		color: var(--surface-muted);
+		font-size: var(--text-callout);
+		color: var(--text-muted);
 		line-height: 1.6;
+		margin: 0;
+	}
+
+	.mcp-hint {
+		font-size: var(--text-callout);
+		color: var(--text-muted);
+		line-height: 1.55;
+		margin: 0;
+	}
+
+	.mcp-hint a {
+		color: var(--text-link);
+		text-decoration: none;
+	}
+
+	.mcp-hint a:hover {
+		text-decoration: underline;
+	}
+
+	.mcp-hint code,
+	.mcp-hint kbd {
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-family: var(--font-mono);
+		padding: 0.125rem 0.5rem;
+		border-radius: var(--radius-xs);
+		background-color: var(--bg-sunken);
+		border: 1px solid var(--border-default);
+		color: var(--text-default);
 	}
 
 	.mcp-field {
 		display: flex;
 		flex-direction: column;
-		gap: 0.5rem;
+		gap: var(--space-2);
+		min-width: 0;
+	}
+
+	.mcp-label {
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		font-weight: 600;
+		color: var(--text-muted);
+		margin: 0;
 	}
 
 	.mcp-copy-row {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--space-2);
+		min-width: 0;
+	}
+
+	.mcp-copy-row :global(.ib-root) {
+		flex-shrink: 0;
+	}
+
+	.mcp-block-head {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-2);
+		min-width: 0;
 	}
 
 	.mcp-value {
-		font-size: 0.8125rem;
+		flex: 1;
+		min-width: 0;
+		font-size: var(--text-callout);
 		font-family: var(--font-mono);
-		padding: 0.5rem 0.75rem;
-		border-radius: 0.5rem;
-		background-color: color-mix(in srgb, var(--surface-border) 30%, var(--center-channel-bg));
-		border: 1px solid var(--surface-border);
-		color: var(--center-channel-color);
+		padding: var(--space-2) var(--space-3);
+		border-radius: var(--radius-sm);
+		background-color: var(--bg-sunken);
+		border: 1px solid var(--border-default);
+		color: var(--text-default);
+		line-height: 1.5;
+		overflow-wrap: anywhere;
 		user-select: all;
 	}
 
-	.usage-code {
-		font-size: 0.75rem;
+	.mcp-code {
+		font-size: var(--text-callout);
 		font-family: var(--font-mono);
 		padding: 0.875rem 1.125rem;
-		border-radius: 0.625rem;
-		background-color: color-mix(in srgb, var(--surface-border) 30%, var(--center-channel-bg));
-		border: 1px solid var(--surface-border);
-		color: var(--center-channel-color);
+		border-radius: var(--radius-sm);
+		background-color: var(--bg-sunken);
+		border: 1px solid var(--border-default);
+		color: var(--text-default);
 		overflow-x: auto;
 		white-space: pre;
 		line-height: 1.6;

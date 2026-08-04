@@ -14,7 +14,8 @@
 }
 
 .jobs-page-title {
-	font-size: 1.5rem;
+	font-size: var(--text-title-2);
+	line-height: var(--lh-title-2);
 	font-weight: 700;
 	color: var(--center-channel-color);
 }
@@ -41,19 +42,21 @@
 	align-items: center;
 	gap: 0.5rem;
 	padding: 4rem 1.5rem 4.5rem;
-	border-radius: 1rem;
+	border-radius: var(--radius-lg);
 	border: 1px dashed var(--surface-border);
 }
 
 .jobs-empty-title {
-	font-size: 1rem;
-	font-weight: 650;
+	font-size: var(--text-headline);
+	line-height: var(--lh-headline);
+	font-weight: 600;
 	color: var(--center-channel-color);
 	margin-top: 1.5rem;
 }
 
 .jobs-empty-desc {
-	font-size: 0.82rem;
+	font-size: var(--text-footnote);
+	line-height: var(--lh-footnote);
 	color: var(--surface-muted);
 	margin-bottom: 1rem;
 }
@@ -83,7 +86,7 @@
 	gap: 0.6rem;
 	padding: 0.7rem 0.9rem;
 	border: 1px solid var(--surface-border);
-	border-radius: 0.75rem;
+	border-radius: var(--radius-md);
 	border-top-left-radius: 0;
 	background: var(--surface-bg);
 	box-shadow:
@@ -94,14 +97,14 @@
 .jobs-ghost-ring {
 	width: 18px;
 	height: 18px;
-	border-radius: 9999px;
+	border-radius: var(--radius-pill);
 	border: 1.5px solid var(--surface-border);
 	flex-shrink: 0;
 }
 
 .jobs-ghost-line {
 	height: 7px;
-	border-radius: 9999px;
+	border-radius: var(--radius-pill);
 	background: var(--control-bg);
 }
 

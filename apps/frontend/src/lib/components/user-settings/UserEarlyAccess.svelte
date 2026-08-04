@@ -26,7 +26,6 @@
 		{index}
 		title="Early access"
 		description="Try features still in development. Expect rough edges."
-		iconColor="amber"
 	>
 		{#snippet icon(hovered)}<Sparkles size={18} animate={hovered} />{/snippet}
 		{#snippet badge()}
@@ -88,33 +87,34 @@
 		justify-content: center;
 		min-width: 1.25rem;
 		height: 1.25rem;
-		padding: 0 0.375rem;
-		border-radius: 2rem;
-		font-size: 0.6875rem;
-		font-weight: 650;
-		background-color: color-mix(in srgb, var(--button-bg) 10%, transparent);
-		color: var(--button-bg);
+		padding: 0 0.5rem;
+		border-radius: var(--radius-pill);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+		background-color: var(--accent-subtle);
+		color: var(--accent);
 	}
 	.ea-loading {
 		display: flex;
 		align-items: center;
 		justify-content: center;
-		padding: 1.5rem 0;
-		color: var(--surface-muted);
+		padding: var(--space-6) 0;
+		color: var(--text-muted);
 	}
 	.ea-list {
 		display: flex;
 		flex-direction: column;
-		gap: 0.75rem;
+		gap: var(--space-3);
 	}
 	.ea-item {
 		display: flex;
 		align-items: flex-start;
-		gap: 1rem;
-		padding: 0.75rem 0;
+		gap: var(--space-4);
+		padding: var(--space-3) 0;
 	}
 	.ea-item + .ea-item {
-		border-top: 1px solid color-mix(in srgb, var(--center-channel-color) 8%, transparent);
+		border-top: 1px solid var(--rule);
 	}
 	.ea-item-body {
 		flex: 1;
@@ -123,34 +123,40 @@
 	.ea-item-top {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-		margin-bottom: 0.25rem;
+		gap: var(--space-2);
+		margin-bottom: var(--space-1);
 	}
 	.ea-item-name {
+		font-size: var(--text-body);
+		line-height: var(--lh-body);
 		font-weight: 600;
-		color: var(--center-channel-color);
+		letter-spacing: var(--track-body);
+		color: var(--text-default);
 	}
 	.ea-stage {
-		font-size: 0.7rem;
-		text-transform: uppercase;
-		letter-spacing: 0.04em;
-		padding: 0.125rem 0.5rem;
-		border-radius: 999px;
-		background-color: color-mix(in srgb, var(--away-indicator) 14%, transparent);
-		color: var(--away-indicator);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+		text-transform: capitalize;
+		padding: 0.125rem var(--space-2);
+		border-radius: var(--radius-pill);
+		background-color: color-mix(in srgb, var(--status-warning) 14%, transparent);
+		color: var(--status-warning);
 	}
 	.ea-desc {
-		font-size: 0.85rem;
-		color: color-mix(in srgb, var(--center-channel-color) 70%, transparent);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		color: var(--text-muted);
 		margin: 0;
 	}
 	.ea-doc-link {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.25rem;
-		margin-top: 0.375rem;
-		font-size: 0.8rem;
-		color: var(--link-color);
+		gap: var(--space-1);
+		margin-top: 0.5rem;
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		color: var(--text-link);
 		text-decoration: none;
 	}
 	.ea-doc-link:hover {
@@ -159,18 +165,22 @@
 	.ea-toggle {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
-		padding: 0.4375rem 0.875rem;
-		border-radius: 0.5rem;
-		font-size: 0.8125rem;
-		font-weight: 550;
+		gap: 0.5rem;
+		padding: 0.5rem 0.875rem;
+		border-radius: var(--radius-sm);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		font-weight: 600;
 		border: none;
 		cursor: pointer;
-		transition: all 120ms;
+		transition:
+			background-color var(--dur-fast),
+			color var(--dur-fast),
+			opacity var(--dur-fast);
 		white-space: nowrap;
 		flex-shrink: 0;
-		background-color: var(--button-bg);
-		color: var(--button-color);
+		background-color: var(--accent);
+		color: var(--text-on-accent);
 	}
 	.ea-toggle:hover:not(:disabled) {
 		opacity: 0.9;
@@ -180,11 +190,11 @@
 		cursor: not-allowed;
 	}
 	.ea-toggle--leave {
-		background-color: color-mix(in srgb, var(--error-text-color) 10%, transparent);
-		color: var(--error-text-color);
+		background-color: color-mix(in srgb, var(--status-error) 10%, transparent);
+		color: var(--status-error);
 	}
 	.ea-toggle--leave:hover:not(:disabled) {
-		background-color: color-mix(in srgb, var(--error-text-color) 16%, transparent);
+		background-color: color-mix(in srgb, var(--status-error) 16%, transparent);
 		opacity: 1;
 	}
 </style>

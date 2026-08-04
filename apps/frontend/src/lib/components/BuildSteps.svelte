@@ -9,6 +9,7 @@
 		type ParsedBuildLogs
 	} from '$lib/utils/buildkitParser';
 	import AnimatedNumber from './AnimatedNumber.svelte';
+	import { stateEcho } from '$lib/utils/motion.svelte';
 
 	interface Props {
 		logs: string | null | undefined;
@@ -101,9 +102,13 @@
 				{@const isOpen = expanded[step.id]}
 				{@const hasOutput = step.output.length > 0 || !!step.error}
 				<div
-					class="bs-row"
+					class="bs-row motion-echo"
 					class:bs-row-running={step.status === 'running'}
 					class:bs-row-error={step.status === 'error'}
+					style:--echo-color={step.status === 'error'
+						? 'var(--status-error)'
+						: 'var(--status-progress)'}
+					{@attach stateEcho(() => step.status)}
 				>
 					<button
 						type="button"
@@ -205,10 +210,11 @@
 		display: flex;
 		flex-direction: column;
 		border: 1px solid var(--surface-border);
-		border-radius: 0.5rem;
+		border-radius: var(--radius-sm);
 		background-color: var(--control-bg);
 		overflow: hidden;
-		font-size: 0.8125rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 	}
 
 	/* When rendered inside another container (e.g. the log modal), drop the
@@ -235,7 +241,7 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		padding: 0.625rem 0.875rem;
+		padding: 0.75rem 0.875rem;
 		border-bottom: 1px solid var(--surface-border);
 		background-color: color-mix(in srgb, var(--surface-border) 25%, transparent);
 	}
@@ -252,7 +258,8 @@
 	}
 
 	.bs-step-count {
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--surface-muted);
 	}
 
@@ -267,9 +274,10 @@
 		align-items: center;
 		gap: 0.25rem;
 		padding: 0.125rem 0.5rem;
-		border-radius: 999px;
-		font-size: 0.7rem;
-		font-weight: 500;
+		border-radius: var(--radius-pill);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
 	}
 
 	.bs-summary-cached {
@@ -278,16 +286,17 @@
 	}
 
 	.bs-raw-toggle {
-		font-size: 0.7rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 		background: transparent;
 		border: 1px solid var(--surface-border);
-		border-radius: 0.375rem;
-		padding: 0.2rem 0.5rem;
+		border-radius: var(--radius-xs);
+		padding: 0.25rem 0.5rem;
 		cursor: pointer;
 		transition:
-			color 150ms,
-			border-color 150ms;
+			color var(--dur-fast),
+			border-color var(--dur-fast);
 	}
 
 	.bs-raw-toggle:hover {
@@ -304,9 +313,10 @@
 		width: 100%;
 		background-color: transparent;
 		border: 1px solid var(--surface-border);
-		border-radius: 0.375rem;
-		padding: 0.375rem 0.625rem;
-		font-size: 0.8rem;
+		border-radius: var(--radius-xs);
+		padding: 0.5rem 0.75rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 		color: var(--center-channel-color);
 		outline: none;
 	}
@@ -351,7 +361,7 @@
 		display: grid;
 		grid-template-columns: auto auto auto 1fr auto;
 		align-items: center;
-		gap: 0.625rem;
+		gap: 0.75rem;
 		width: 100%;
 		padding: 0.5rem 0.875rem;
 		background: transparent;
@@ -376,7 +386,7 @@
 		justify-content: center;
 		width: 1rem;
 		height: 1rem;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 	}
 
 	.bs-status[data-status='done'] {
@@ -407,14 +417,15 @@
 	.bs-dot {
 		width: 0.5rem;
 		height: 0.5rem;
-		border-radius: 999px;
+		border-radius: var(--radius-pill);
 		background-color: var(--surface-muted);
 		opacity: 0.6;
 	}
 
 	.bs-timestamp {
 		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-		font-size: 0.7rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		color: var(--surface-muted);
 		white-space: nowrap;
 	}
@@ -428,10 +439,11 @@
 
 	.bs-badge {
 		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-		font-size: 0.7rem;
-		font-weight: 500;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
 		padding: 0.1rem 0.4rem;
-		border-radius: 0.25rem;
+		border-radius: var(--radius-xs);
 		white-space: nowrap;
 	}
 
@@ -464,7 +476,8 @@
 
 	.bs-command {
 		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-		font-size: 0.78rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--center-channel-color);
 		white-space: nowrap;
 		overflow: hidden;
@@ -481,22 +494,24 @@
 
 	.bs-duration {
 		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-		font-size: 0.72rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--surface-muted);
 	}
 
 	.bs-cached-pill {
 		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-		font-size: 0.7rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		padding: 0.1rem 0.4rem;
-		border-radius: 0.25rem;
+		border-radius: var(--radius-xs);
 		background-color: rgba(34, 197, 94, 0.15);
 		color: rgb(34, 197, 94);
 	}
 
 	.bs-chevron {
 		color: var(--surface-muted);
-		transition: transform 150ms;
+		transition: transform var(--dur-fast);
 	}
 
 	:global(.bs-chevron-open) {
@@ -505,9 +520,9 @@
 
 	.bs-output {
 		margin: 0;
-		padding: 0.625rem 0.875rem 0.875rem 3.5rem;
+		padding: 0.75rem 0.875rem 0.875rem 3.5rem;
 		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-		font-size: 0.72rem;
+		font-size: var(--text-caption);
 		line-height: 1.5;
 		color: var(--center-channel-color);
 		background-color: color-mix(in srgb, var(--surface-border) 30%, transparent);
@@ -526,7 +541,8 @@
 		padding: 1.5rem;
 		text-align: center;
 		color: var(--surface-muted);
-		font-size: 0.8rem;
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
 	}
 
 	.bs-messages {
@@ -536,9 +552,10 @@
 	.bs-messages-summary {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: 0.5rem;
 		padding: 0.5rem 0.875rem;
-		font-size: 0.75rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--surface-muted);
 		cursor: pointer;
 		user-select: none;
@@ -549,10 +566,10 @@
 	}
 
 	.bs-messages-list {
-		padding: 0 0.875rem 0.625rem;
+		padding: 0 0.875rem 0.75rem;
 		display: flex;
 		flex-direction: column;
-		gap: 0.2rem;
+		gap: 0.25rem;
 	}
 
 	.bs-message {
@@ -560,15 +577,17 @@
 		gap: 0.5rem;
 		align-items: baseline;
 		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-		font-size: 0.72rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 	}
 
 	.bs-message-level {
 		flex-shrink: 0;
-		font-size: 0.65rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
 		font-weight: 600;
 		padding: 0.05rem 0.35rem;
-		border-radius: 0.2rem;
+		border-radius: var(--radius-xs);
 		text-transform: uppercase;
 		letter-spacing: 0.04em;
 	}
@@ -613,7 +632,7 @@
 		max-height: 28rem;
 		overflow-y: auto;
 		font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
-		font-size: 0.72rem;
+		font-size: var(--text-caption);
 		line-height: 1.5;
 		color: var(--center-channel-color);
 		white-space: pre-wrap;
