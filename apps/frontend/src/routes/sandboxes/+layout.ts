@@ -1,6 +1,6 @@
 import { redirect } from '@sveltejs/kit';
-import { env } from '$env/dynamic/public';
+import { sandboxEnabled } from '$lib/flags';
 
 export function load() {
-	if (env.PUBLIC_SANDBOX_ENABLED !== 'true') redirect(302, '/');
+	if (!sandboxEnabled()) redirect(302, '/');
 }

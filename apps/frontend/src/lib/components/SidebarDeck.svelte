@@ -3,6 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { browser } from '$app/environment';
 	import { env as publicEnv } from '$env/dynamic/public';
+	import { sandboxEnabled } from '$lib/flags';
 	import {
 		Leaf,
 		Zap,
@@ -104,7 +105,7 @@
 			icon: Activity,
 			active: $page.url.pathname.startsWith('/' + orgSlug + '/usage')
 		},
-		...(publicEnv.PUBLIC_SANDBOX_ENABLED === 'true'
+		...(sandboxEnabled()
 			? [
 					{
 						id: 'sandboxes',

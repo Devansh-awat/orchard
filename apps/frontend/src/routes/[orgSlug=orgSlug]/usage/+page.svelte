@@ -10,7 +10,7 @@
 	import HorizontalBars from '$lib/components/HorizontalBars.svelte';
 	import { Loader2, Activity, Gauge, Users, BarChart3, Pencil, Check, X, Sprout } from 'lucide-svelte';
 	import { TabBar } from '$lib/components/ui';
-	import { env as publicEnv } from '$env/dynamic/public';
+	import { sandboxEnabled } from '$lib/flags';
 	import { SandboxUsageTab } from '$lib/components/sandbox';
 
 	const formatPods = (n: number) => `${n}`;
@@ -130,7 +130,7 @@
 			{ id: 'overview', label: 'Overview', icon: Activity },
 			{ id: 'me', label: 'My usage', icon: Gauge }
 		];
-		if (publicEnv.PUBLIC_SANDBOX_ENABLED === 'true') {
+		if (sandboxEnabled()) {
 			tabs.push({ id: 'sandbox', label: 'Sandboxes', icon: Sprout });
 		}
 		if (isAdmin) {
