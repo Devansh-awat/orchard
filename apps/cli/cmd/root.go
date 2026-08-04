@@ -105,6 +105,7 @@ func rootCmd() *cobra.Command {
 		dbCmd(),
 		podCmd(),
 		sandboxCmd(),
+		sshIdentityCmd(),
 		serviceCmd(),
 		domainCmd(),
 		jobCmd(),

@@ -1,20 +1,18 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
+	import { goto } from '$app/navigation';
 	import { Plus, Sprout } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
 	import { queryClient } from '$lib/query';
 	import { Alert, Button, PageHeader, Skeleton } from '$lib/components/ui';
 	import {
-		SandboxConnectPanel,
+		SandboxCard,
 		SandboxCreateModal,
-		SandboxCredentialsPanel,
-		SandboxEmptyState,
-		SandboxList
+		SandboxEmptyState
 	} from '$lib/components/sandbox';
 	import { SandboxDisabledError, sandboxesQueryOptions } from '$lib/queries/sandboxes';
 	import {
 		isSandboxTransitional,
-		type Sandbox,
 		type SandboxCreateInput,
 		type SandboxListResponse
 	} from '$lib/types/sandbox';
@@ -34,11 +32,6 @@
 
 	let createOpen = $state(false);
 	let creating = $state(false);
-	let busyId = $state<string | null>(null);
-
-	function invalidate() {
-		queryClient.invalidateQueries({ queryKey: ['sandboxes'] });
-	}
 
 	async function createSandbox(input: SandboxCreateInput) {
 		if (creating) return;
@@ -54,7 +47,7 @@
 				throw new Error(data?.message || 'Failed to create sandbox');
 			}
 			createOpen = false;
-			invalidate();
+			queryClient.invalidateQueries({ queryKey: ['sandboxes'] });
 			toasts.add({ title: 'Sandbox creating', color: 'success' });
 		} catch (e) {
 			toasts.add({
@@ -64,33 +57,6 @@
 			});
 		} finally {
 			creating = false;
-		}
-	}
-
-	async function lifecycle(sandbox: Sandbox, action: 'start' | 'stop' | 'delete') {
-		if (busyId) return;
-		busyId = sandbox.id;
-		try {
-			const res = await apiFetch(
-				action === 'delete'
-					? `/apiv1/sandboxes/${sandbox.id}`
-					: `/apiv1/sandboxes/${sandbox.id}/${action}`,
-				{ method: action === 'delete' ? 'DELETE' : 'POST' }
-			);
-			if (!res.ok) {
-				const data = await res.json().catch(() => ({}));
-				throw new Error(data?.message || `Failed to ${action} sandbox`);
-			}
-			invalidate();
-			if (action === 'delete') toasts.add({ title: 'Sandbox deleting', color: 'success' });
-		} catch (e) {
-			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : `Failed to ${action} sandbox`,
-				color: 'error'
-			});
-		} finally {
-			busyId = null;
 		}
 	}
 </script>
@@ -121,9 +87,9 @@
 	</PageHeader>
 
 	{#if sandboxesQuery.isPending}
-		<div class="sbx-stack">
-			<Skeleton height="10rem" />
-			<Skeleton height="10rem" />
+		<div class="sbx-grid">
+			<Skeleton height="7.5rem" />
+			<Skeleton height="7.5rem" />
 		</div>
 	{:else if disabled}
 		<Alert tone="info" title="Sandboxes are not enabled on this server">
@@ -138,16 +104,18 @@
 			{#if sandboxes.length === 0}
 				<SandboxEmptyState oncreate={() => (createOpen = true)} />
 			{:else}
-				<SandboxList
-					{sandboxes}
-					{busyId}
-					onstart={(s) => lifecycle(s, 'start')}
-					onstop={(s) => lifecycle(s, 'stop')}
-					ondelete={(s) => lifecycle(s, 'delete')}
-				/>
-				<SandboxConnectPanel name={sandboxes[0].name} />
+				<div class="sbx-grid">
+					{#each sandboxes as sandbox (sandbox.id)}
+						<SandboxCard {sandbox} />
+					{/each}
+				</div>
 			{/if}
-			<SandboxCredentialsPanel />
+			<div class="sbx-user-note">
+				<span>Agent credentials and SSH identities are attached to your user account.</span>
+				<Button size="sm" variant="secondary" onclick={() => goto('/user/settings?tab=sandbox')}>
+					Open user settings
+				</Button>
+			</div>
 		</div>
 	{/if}
 </div>
@@ -170,5 +138,36 @@
 		display: flex;
 		flex-direction: column;
 		gap: 1.25rem;
+	}
+
+	.sbx-grid {
+		display: grid;
+		grid-template-columns: repeat(2, minmax(0, 1fr));
+		gap: var(--space-3);
+	}
+
+	.sbx-grid > :global(*) {
+		min-width: 0;
+	}
+
+	@media (max-width: 640px) {
+		.sbx-grid {
+			grid-template-columns: 1fr;
+		}
+	}
+
+	.sbx-user-note {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		flex-wrap: wrap;
+		padding: 0.75rem 1rem;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-md);
+		background: var(--bg-surface);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		color: var(--text-muted);
 	}
 </style>

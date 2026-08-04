@@ -5,6 +5,7 @@ import { attachments as deployments } from './deployments';
 import { attachments as events } from './events';
 import { attachments as jobs } from './jobs';
 import { attachments as sandboxes } from './sandboxes';
+import { attachments as sshIdentities } from './ssh-identities';
 
 export const attachments: Record<string, RouteAttachment> = {
   ...common,
@@ -13,4 +14,5 @@ export const attachments: Record<string, RouteAttachment> = {
   ...events,
   ...jobs,
   ...sandboxes,
+  ...sshIdentities,
 };

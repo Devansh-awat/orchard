@@ -7,13 +7,18 @@ export type SandboxStatus =
 	| 'deleting'
 	| 'error';
 
+export interface SandboxSshIdentityRef {
+	id: string;
+	name: string;
+}
+
 export interface Sandbox {
 	id: string;
 	name: string;
 	status: SandboxStatus;
 	statusMessage: string | null;
 	repoUrl: string | null;
-	sshPublicKeys: string[];
+	sshIdentity: SandboxSshIdentityRef | null;
 	setupScript: string | null;
 	image: string;
 	createdAt: string;
@@ -34,9 +39,25 @@ export interface SandboxCredentials {
 export interface SandboxCreateInput {
 	name?: string;
 	repoUrl?: string;
-	sshPublicKeys?: string[];
-	importGithubKeys?: boolean;
+	sshIdentityId?: string;
 	setupScript?: string;
+}
+
+export interface SandboxPatchInput {
+	name?: string;
+	sshIdentityId?: string;
+	setupScript?: string | null;
+}
+
+export interface SshIdentity {
+	id: string;
+	name: string;
+	publicKey: string;
+	createdAt: string;
+}
+
+export interface SshIdentitiesResponse {
+	identities: SshIdentity[];
 }
 
 const TRANSITIONAL = new Set<SandboxStatus>(['creating', 'starting', 'stopping', 'deleting']);

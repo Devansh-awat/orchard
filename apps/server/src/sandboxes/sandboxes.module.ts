@@ -7,6 +7,7 @@ import { AuditModule } from '../audit/audit.module';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { SandboxesController } from './sandboxes.controller';
 import { SandboxesService } from './sandboxes.service';
+import { SandboxChatService } from './sandbox-chat.service';
 import { SandboxK8sService } from './sandbox-k8s.service';
 import { SandboxReaperService } from './sandbox-reaper.service';
 import { SandboxEnabledGuard, sandboxFeatureEnabled } from './sandbox-enabled.guard';
@@ -16,7 +17,7 @@ const REAPER_INTERVAL_MS = 60_000;
 @Module({
   imports: [AuthModule, PrismaModule, KubernetesModule, UsersModule, AuditModule],
   controllers: [SandboxesController],
-  providers: [SandboxesService, SandboxK8sService, SandboxReaperService, SandboxEnabledGuard],
+  providers: [SandboxesService, SandboxK8sService, SandboxChatService, SandboxReaperService, SandboxEnabledGuard],
   exports: [SandboxesService, SandboxK8sService],
 })
 export class SandboxesModule implements OnModuleInit, OnModuleDestroy {

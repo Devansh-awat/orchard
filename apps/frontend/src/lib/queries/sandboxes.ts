@@ -1,5 +1,12 @@
 import { apiFetch } from '$lib/stores';
-import type { SandboxCredentials, SandboxListResponse } from '$lib/types/sandbox';
+import { isSandboxTransitional } from '$lib/types/sandbox';
+import type {
+	Sandbox,
+	SandboxCredentials,
+	SandboxListResponse,
+	SshIdentitiesResponse,
+	SshIdentity
+} from '$lib/types/sandbox';
 
 export class SandboxDisabledError extends Error {
 	constructor() {
@@ -25,6 +32,24 @@ export function sandboxesQueryOptions() {
 	};
 }
 
+export function sandboxQueryOptions(id: string) {
+	return {
+		queryKey: ['sandboxes', id],
+		queryFn: async (): Promise<Sandbox> => {
+			const res = await apiFetch(`/apiv1/sandboxes/${id}`);
+			if (res.status === 404) throw new Error('Sandbox not found');
+			if (!res.ok) throw new Error('Failed to fetch sandbox');
+			const data = await res.json();
+			return (data?.sandbox ?? data) as Sandbox;
+		},
+		refetchInterval: (query: { state: { data?: Sandbox } }) => {
+			const sandbox = query.state.data;
+			return sandbox && isSandboxTransitional(sandbox.status) ? 5_000 : 30_000;
+		},
+		retry: sandboxRetry
+	};
+}
+
 export function sandboxCredentialsQueryOptions() {
 	return {
 		queryKey: ['sandbox-credentials'],
@@ -33,6 +58,20 @@ export function sandboxCredentialsQueryOptions() {
 			if (res.status === 404) throw new SandboxDisabledError();
 			if (!res.ok) throw new Error('Failed to fetch sandbox credentials');
 			return res.json();
+		},
+		retry: sandboxRetry
+	};
+}
+
+export function sshIdentitiesQueryOptions() {
+	return {
+		queryKey: ['ssh-identities'],
+		queryFn: async (): Promise<SshIdentity[]> => {
+			const res = await apiFetch('/apiv1/ssh-identities');
+			if (res.status === 404) throw new SandboxDisabledError();
+			if (!res.ok) throw new Error('Failed to fetch SSH identities');
+			const data: SshIdentitiesResponse = await res.json();
+			return data.identities ?? [];
 		},
 		retry: sandboxRetry
 	};

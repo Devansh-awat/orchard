@@ -144,7 +144,8 @@ orchard db          list | get | create | delete | connection | metrics |
                     backup list|create|restore | backup-schedule get|set|clear
 orchard pod         list | get | logs | delete | exec | shell
 orchard sandbox     create | list | get | update | start | stop | delete |
-                    ssh | ssh-config | credentials set|clear|status
+                    ssh | ssh-config | chat | credentials set|clear|status
+orchard ssh-identity list | add | remove | import-github
 orchard service     list | create | update | delete | exposure set |
                     port public enable|disable
 orchard domain      list | get | create | update | delete |

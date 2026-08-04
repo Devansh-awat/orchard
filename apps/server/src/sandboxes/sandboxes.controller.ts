@@ -10,12 +10,15 @@ import {
   Post,
   Put,
   Req,
+  Res,
   UseGuards,
 } from '@nestjs/common';
+import type { Response } from 'express';
 import { Auth, RequireScope } from '../auth/decorators';
 import { UsersService } from '../users/users.service';
 import { SandboxEnabledGuard } from './sandbox-enabled.guard';
 import { SandboxesService, toSandboxDto } from './sandboxes.service';
+import { SandboxChatService } from './sandbox-chat.service';
 
 @Auth()
 @UseGuards(SandboxEnabledGuard)
@@ -23,6 +26,7 @@ import { SandboxesService, toSandboxDto } from './sandboxes.service';
 export class SandboxesController {
   constructor(
     private readonly sandboxes: SandboxesService,
+    private readonly chat: SandboxChatService,
     private readonly usersService: UsersService,
   ) {}
 
@@ -46,8 +50,7 @@ export class SandboxesController {
     body: {
       name?: string;
       repoUrl?: string;
-      sshPublicKeys?: string[];
-      importGithubKeys?: boolean;
+      sshIdentityId?: string;
       setupScript?: string | null;
     },
   ) {
@@ -68,6 +71,19 @@ export class SandboxesController {
   ) {
     const user = await this.resolveUser(req);
     return this.sandboxes.setCredentials(user.id, user.email, body || {});
+  }
+
+  @Post(':id/chat')
+  @RequireScope('exec')
+  async chatStream(
+    @Req() req: any,
+    @Res() res: Response,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { message?: string },
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await this.sandboxes.getOwned(id, user.id);
+    await this.chat.stream(row, body?.message ?? '', res);
   }
 
   @Get(':id/ssh')
@@ -91,8 +107,7 @@ export class SandboxesController {
     @Body()
     body: {
       name?: string;
-      sshPublicKeys?: string[];
-      importGithubKeys?: boolean;
+      sshIdentityId?: string;
       setupScript?: string | null;
     },
   ) {

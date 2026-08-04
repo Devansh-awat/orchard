@@ -33,6 +33,7 @@ import { NotificationsModule } from './notifications/notifications.module';
 import { JobsModule } from './jobs/jobs.module';
 import { ForumModule } from './forum/forum.module';
 import { SandboxesModule } from './sandboxes/sandboxes.module';
+import { SshIdentitiesModule } from './ssh-identities/ssh-identities.module';
 
 @Module({
   imports: [
@@ -72,6 +73,7 @@ import { SandboxesModule } from './sandboxes/sandboxes.module';
     JobsModule,
     ForumModule,
     SandboxesModule,
+    SshIdentitiesModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ApiThrottlerGuard }],
 })

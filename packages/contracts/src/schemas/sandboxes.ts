@@ -11,11 +11,6 @@ const sandboxStatus = z.enum([
   'error',
 ]);
 
-const sshPublicKey = z
-  .string()
-  .max(4096)
-  .regex(/^(ssh-(rsa|ed25519)|ecdsa-sha2-\S+)\s+\S+/, 'OpenSSH public key');
-
 const sandboxName = z
   .string()
   .min(1)
@@ -28,7 +23,7 @@ const sandbox = z.object({
   status: sandboxStatus,
   statusMessage: z.string().nullable(),
   repoUrl: z.string().nullable(),
-  sshPublicKeys: z.array(z.string()),
+  sshIdentity: z.object({ id: z.string().uuid(), name: z.string() }).nullable(),
   setupScript: z.string().nullable(),
   image: z.string(),
   createdAt: z.string(),
@@ -52,11 +47,11 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     request: z.object({
       name: sandboxName.optional().describe('Defaults to "sandbox" (or a suffixed variant)'),
       repoUrl: z.string().url().optional().describe('https git URL cloned into the sandbox on boot'),
-      sshPublicKeys: z.array(sshPublicKey).max(10).optional(),
-      importGithubKeys: z
-        .boolean()
+      sshIdentityId: z
+        .string()
+        .uuid()
         .optional()
-        .describe('Merge public keys from github.com/<your-username>.keys'),
+        .describe('SSH identity to attach; defaults to your only identity when you have exactly one'),
       setupScript: z
         .string()
         .max(65536)
@@ -90,8 +85,7 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     summary: "Rename a sandbox or replace its SSH public key set",
     request: z.object({
       name: sandboxName.optional(),
-      sshPublicKeys: z.array(sshPublicKey).max(10).optional(),
-      importGithubKeys: z.boolean().optional(),
+      sshIdentityId: z.string().uuid().optional(),
       setupScript: z.string().max(65536).nullable().optional(),
     }),
     response: sandbox,
@@ -111,6 +105,12 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     summary: 'Delete a sandbox and its persistent workspace',
     response: z.object({ success: z.boolean() }),
     scope: 'deploy',
+  },
+  'POST /sandboxes/:id/chat': {
+    summary:
+      'Cloud Code: send a message to the claude agent inside the sandbox; responds with an SSE stream of claude stream-json events plus a final {type: "done"|"error"} frame',
+    request: z.object({ message: z.string().min(1).max(32768) }),
+    scope: 'exec',
   },
   'GET /sandboxes/:id/ssh': {
     summary:

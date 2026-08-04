@@ -21,6 +21,8 @@
 		type EarlyAccessFeature
 	} from '$lib/posthog';
 	import { page } from '$app/stores';
+	import { sandboxEnabled } from '$lib/flags';
+	import { SandboxCredentialsPanel } from '$lib/components/sandbox';
 	import {
 		UserIdentityHero,
 		UserInvitations,
@@ -33,8 +35,11 @@
 		UserApiTokens,
 		UserMcp,
 		UserAppearance,
-		UserNotifications
+		UserNotifications,
+		UserSshIdentities
 	} from '$lib/components/user-settings';
+
+	const sandboxOn = sandboxEnabled();
 
 	let githubLinked = $state(false);
 	let githubUsername = $state<string | null>(null);
@@ -145,6 +150,14 @@
 				label: 'Security',
 				items: [{ id: 'security', label: 'Passkeys and devices' }]
 			},
+			...(sandboxOn
+				? [
+						{
+							label: 'Greenhouse',
+							items: [{ id: 'sandbox', label: 'Sandbox' }]
+						}
+					]
+				: []),
 			{
 				label: 'Preferences',
 				items: [
@@ -865,6 +878,11 @@
 					onConfirmRevokeSession={confirmRevokeSession}
 					onShowRevokeAll={() => (showRevokeAllModal = true)}
 				/>
+			{/if}
+
+			{#if activeTab === 'sandbox' && sandboxOn}
+				<UserSshIdentities index={0} />
+				<SandboxCredentialsPanel index={1} />
 			{/if}
 
 			{#if activeTab === 'notifications' && $notificationsEnabled}

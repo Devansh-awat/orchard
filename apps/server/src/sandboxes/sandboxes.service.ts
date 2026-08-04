@@ -15,9 +15,6 @@ import { SandboxK8sService, k8sErrorMessage } from './sandbox-k8s.service';
 
 const DEFAULT_SANDBOX_IMAGE = 'debian:bookworm';
 const NAME_RE = /^[a-z0-9]([a-z0-9-]*[a-z0-9])?$/;
-const SSH_KEY_RE = /^(ssh-(rsa|ed25519)|ecdsa-sha2-\S+)\s+\S+/;
-const MAX_KEYS = 10;
-const MAX_KEY_LENGTH = 4096;
 const MAX_SETUP_SCRIPT_LENGTH = 65536;
 
 export interface SandboxDto {
@@ -26,7 +23,7 @@ export interface SandboxDto {
   status: SandboxStatus;
   statusMessage: string | null;
   repoUrl: string | null;
-  sshPublicKeys: string[];
+  sshIdentity: { id: string; name: string } | null;
   setupScript: string | null;
   image: string;
   createdAt: Date;
@@ -34,19 +31,21 @@ export interface SandboxDto {
   lastActiveAt: Date | null;
 }
 
+type SandboxWithIdentity = Sandbox & { sshIdentity: { id: string; name: string } | null };
+
 export function defaultMaxSandboxes(): number {
   const parsed = Number(process.env.SANDBOX_MAX_PER_USER);
   return Number.isInteger(parsed) && parsed >= 0 ? parsed : 1;
 }
 
-export function toSandboxDto(row: Sandbox): SandboxDto {
+export function toSandboxDto(row: SandboxWithIdentity): SandboxDto {
   return {
     id: row.id,
     name: row.name,
     status: row.status,
     statusMessage: row.statusMessage,
     repoUrl: row.repoUrl,
-    sshPublicKeys: row.sshPublicKeys,
+    sshIdentity: row.sshIdentity ? { id: row.sshIdentity.id, name: row.sshIdentity.name } : null,
     setupScript: row.setupScript,
     image: row.image,
     createdAt: row.createdAt,
@@ -69,7 +68,11 @@ export class SandboxesService {
 
   async list(userId: string): Promise<{ sandboxes: SandboxDto[]; maxSandboxes: number }> {
     const [rows, user] = await Promise.all([
-      this.prisma.sandbox.findMany({ where: { userId }, orderBy: { createdAt: 'asc' } }),
+      this.prisma.sandbox.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'asc' },
+        include: { sshIdentity: { select: { id: true, name: true } } },
+      }),
       this.prisma.user.findUnique({ where: { id: userId }, select: { maxSandboxes: true } }),
     ]);
     return {
@@ -78,8 +81,11 @@ export class SandboxesService {
     };
   }
 
-  async getOwned(id: string, userId: string): Promise<Sandbox> {
-    const row = await this.prisma.sandbox.findUnique({ where: { id } });
+  async getOwned(id: string, userId: string): Promise<SandboxWithIdentity> {
+    const row = await this.prisma.sandbox.findUnique({
+      where: { id },
+      include: { sshIdentity: { select: { id: true, name: true } } },
+    });
     if (!row) throw new NotFoundException('Sandbox not found');
     if (row.userId !== userId && !(await this.authz.isSuperAdmin(userId))) {
       throw new NotFoundException('Sandbox not found');
@@ -95,54 +101,26 @@ export class SandboxesService {
     }
   }
 
-  private validateKeys(keys: string[]): string[] {
-    const cleaned = keys.map((k) => k.trim()).filter(Boolean);
-    if (cleaned.length > MAX_KEYS) {
-      throw new BadRequestException(`At most ${MAX_KEYS} SSH public keys are allowed`);
-    }
-    for (const key of cleaned) {
-      if (key.length > MAX_KEY_LENGTH || !SSH_KEY_RE.test(key)) {
-        throw new BadRequestException(`Invalid SSH public key: ${key.slice(0, 40)}...`);
-      }
-    }
-    return [...new Set(cleaned)];
-  }
-
-  private async fetchGithubKeys(userId: string): Promise<string[]> {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { githubUsername: true },
-    });
-    if (!user?.githubUsername) return [];
-    try {
-      const controller = new AbortController();
-      const timer = setTimeout(() => controller.abort(), 5000);
-      const res = await fetch(`https://github.com/${user.githubUsername}.keys`, {
-        signal: controller.signal,
-      });
-      clearTimeout(timer);
-      if (!res.ok) return [];
-      const text = await res.text();
-      return text.split('\n').map((l) => l.trim()).filter((l) => SSH_KEY_RE.test(l));
-    } catch {
-      return [];
-    }
-  }
-
-  private async resolveKeys(
+  private async resolveIdentity(
     userId: string,
-    provided: string[] | undefined,
-    importGithubKeys: boolean | undefined,
-  ): Promise<string[]> {
-    const keys = this.validateKeys(provided ?? []);
-    if (importGithubKeys) {
-      const githubKeys = await this.fetchGithubKeys(userId);
-      for (const key of githubKeys) {
-        if (!keys.includes(key)) keys.push(key);
+    sshIdentityId: string | undefined,
+  ): Promise<{ id: string; publicKey: string }> {
+    if (sshIdentityId) {
+      const identity = await this.prisma.sshIdentity.findUnique({ where: { id: sshIdentityId } });
+      if (!identity || identity.userId !== userId) {
+        throw new BadRequestException('SSH identity not found');
       }
+      return { id: identity.id, publicKey: identity.publicKey };
     }
-    if (keys.length > MAX_KEYS) keys.length = MAX_KEYS;
-    return keys;
+    const identities = await this.prisma.sshIdentity.findMany({ where: { userId }, take: 2 });
+    if (identities.length === 1) {
+      return { id: identities[0].id, publicKey: identities[0].publicKey };
+    }
+    throw new BadRequestException(
+      identities.length === 0
+        ? 'You have no SSH identities yet; add one in user settings first'
+        : 'You have multiple SSH identities; pass sshIdentityId to pick one',
+    );
   }
 
   private validateSetupScript(script: string | null | undefined): string | null {
@@ -178,12 +156,12 @@ export class SandboxesService {
     body: {
       name?: string;
       repoUrl?: string;
-      sshPublicKeys?: string[];
-      importGithubKeys?: boolean;
+      sshIdentityId?: string;
       setupScript?: string | null;
     },
   ): Promise<SandboxDto> {
     const setupScript = this.validateSetupScript(body.setupScript);
+    const identity = await this.resolveIdentity(userId, body.sshIdentityId);
     const [count, user] = await Promise.all([
       this.prisma.sandbox.count({ where: { userId } }),
       this.prisma.user.findUnique({ where: { id: userId }, select: { maxSandboxes: true } }),
@@ -216,13 +194,6 @@ export class SandboxesService {
       });
       if (existing) name = `sandbox-${Math.random().toString(36).slice(2, 6)}`;
     }
-    const keys = await this.resolveKeys(userId, body.sshPublicKeys, body.importGithubKeys);
-    if (!keys.length) {
-      throw new BadRequestException(
-        'At least one SSH public key is required (provide sshPublicKeys or set importGithubKeys)',
-      );
-    }
-
     const row = await this.prisma.sandbox
       .create({
         data: {
@@ -233,7 +204,7 @@ export class SandboxesService {
           namespace: this.k8s.namespace,
           image: process.env.SANDBOX_IMAGE || DEFAULT_SANDBOX_IMAGE,
           repoUrl: body.repoUrl || null,
-          sshPublicKeys: keys,
+          sshIdentityId: identity.id,
           setupScript,
           cpuLimit: process.env.SANDBOX_CPU_LIMIT || '2',
           memoryLimit: process.env.SANDBOX_MEMORY_LIMIT || '4Gi',
@@ -247,7 +218,11 @@ export class SandboxesService {
         throw e;
       });
     const podName = `sbx-${row.id}`;
-    const updated = await this.prisma.sandbox.update({ where: { id: row.id }, data: { podName } });
+    const updated = await this.prisma.sandbox.update({
+      where: { id: row.id },
+      data: { podName },
+      include: { sshIdentity: { select: { id: true, name: true } } },
+    });
 
     this.audit
       .log({
@@ -262,7 +237,7 @@ export class SandboxesService {
       .catch(() => {});
 
     try {
-      const secret = await this.buildSecretInput(userId, keys, setupScript);
+      const secret = await this.buildSecretInput(userId, [identity.publicKey], setupScript);
       await this.k8s.createSandbox(
         {
           id: row.id,
@@ -282,6 +257,7 @@ export class SandboxesService {
       const failed = await this.prisma.sandbox.update({
         where: { id: row.id },
         data: { status: 'error', statusMessage: `Failed to create sandbox: ${k8sErrorMessage(e)}` },
+        include: { sshIdentity: { select: { id: true, name: true } } },
       });
       return toSandboxDto(failed);
     }
@@ -294,13 +270,13 @@ export class SandboxesService {
     actorEmail: string | null,
     body: {
       name?: string;
-      sshPublicKeys?: string[];
-      importGithubKeys?: boolean;
+      sshIdentityId?: string;
       setupScript?: string | null;
     },
   ): Promise<SandboxDto> {
     const row = await this.getOwned(id, userId);
-    const data: { name?: string; sshPublicKeys?: string[]; setupScript?: string | null } = {};
+    const data: { name?: string; sshIdentityId?: string; setupScript?: string | null } = {};
+    let identityKey: string | null = null;
     if (body.setupScript !== undefined) {
       data.setupScript = this.validateSetupScript(body.setupScript);
     }
@@ -309,29 +285,28 @@ export class SandboxesService {
       this.validateName(name);
       data.name = name;
     }
-    if (body.sshPublicKeys !== undefined || body.importGithubKeys) {
-      const keys = await this.resolveKeys(
-        row.userId,
-        body.sshPublicKeys ?? row.sshPublicKeys,
-        body.importGithubKeys,
-      );
-      if (!keys.length) {
-        throw new BadRequestException('A sandbox must keep at least one SSH public key');
-      }
-      data.sshPublicKeys = keys;
+    if (body.sshIdentityId !== undefined) {
+      const identity = await this.resolveIdentity(row.userId, body.sshIdentityId);
+      data.sshIdentityId = identity.id;
+      identityKey = identity.publicKey;
     }
     const updated = await this.prisma.sandbox
-      .update({ where: { id: row.id }, data })
+      .update({
+        where: { id: row.id },
+        data,
+        include: { sshIdentity: { select: { id: true, name: true, publicKey: true } } },
+      })
       .catch((e) => {
         if (e?.code === 'P2002') {
           throw new BadRequestException(`You already have a sandbox named "${data.name}"`);
         }
         throw e;
       });
-    if (data.sshPublicKeys !== undefined || data.setupScript !== undefined) {
+    if (data.sshIdentityId !== undefined || data.setupScript !== undefined) {
+      const key = identityKey ?? updated.sshIdentity?.publicKey ?? null;
       const secret = await this.buildSecretInput(
         row.userId,
-        updated.sshPublicKeys,
+        key ? [key] : [],
         updated.setupScript,
       );
       await this.k8s.ensureAuthSecret(
@@ -357,7 +332,7 @@ export class SandboxesService {
           targetId: updated.id,
           targetLabel: updated.name,
           metadata: {
-            keyCount: updated.sshPublicKeys.length,
+            sshIdentity: updated.sshIdentity?.name ?? null,
             setupScript: data.setupScript === undefined ? 'unchanged' : data.setupScript ? 'set' : 'cleared',
           },
         })
@@ -374,6 +349,7 @@ export class SandboxesService {
     const updated = await this.prisma.sandbox.update({
       where: { id: row.id },
       data: { status: 'starting', statusMessage: null, lastActiveAt: new Date() },
+      include: { sshIdentity: { select: { id: true, name: true } } },
     });
     this.audit
       .log({
@@ -396,6 +372,7 @@ export class SandboxesService {
     const updated = await this.prisma.sandbox.update({
       where: { id: row.id },
       data: { status: 'stopping' },
+      include: { sshIdentity: { select: { id: true, name: true } } },
     });
     this.audit
       .log({

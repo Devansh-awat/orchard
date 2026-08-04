@@ -6,7 +6,6 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"os"
-	"path/filepath"
 	"strings"
 	"testing"
 
@@ -62,40 +61,38 @@ func sandboxCaptureStdout(t *testing.T, fn func()) string {
 	return <-done
 }
 
-const sandboxListJSON = `{"sandboxes":[{"id":"11111111-1111-1111-1111-111111111111","name":"box","status":"running","repoUrl":"https://github.com/o/r","createdAt":"2026-08-01T00:00:00Z","lastActiveAt":"2026-08-02T00:00:00Z"}],"maxSandboxes":3}`
+const sandboxListJSON = `{"sandboxes":[{"id":"11111111-1111-1111-1111-111111111111","name":"box","status":"running","repoUrl":"https://github.com/o/r","sshIdentity":{"id":"id-1","name":"laptop"},"createdAt":"2026-08-01T00:00:00Z","lastActiveAt":"2026-08-02T00:00:00Z"}],"maxSandboxes":3}`
 
-func TestSandboxCreateKeyFile(t *testing.T) {
+func TestSandboxCreateWithIdentity(t *testing.T) {
 	var gotBody map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.Method != http.MethodPost || r.URL.Path != "/apiv1/sandboxes" {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/apiv1/ssh-identities":
+			io.WriteString(w, `{"identities":[{"id":"id-1","name":"laptop","publicKey":"ssh-ed25519 AAAA me@host"}]}`)
+		case r.Method == http.MethodPost && r.URL.Path == "/apiv1/sandboxes":
+			gotBody = sandboxDecodeBody(t, r)
+			io.WriteString(w, `{"id":"sb-1","name":"box","status":"creating"}`)
+		default:
 			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
 			w.WriteHeader(404)
-			return
 		}
-		gotBody = sandboxDecodeBody(t, r)
-		io.WriteString(w, `{"id":"sb-1","name":"box","status":"creating"}`)
 	}))
 	defer srv.Close()
 
-	keyPath := filepath.Join(t.TempDir(), "key.pub")
-	if err := os.WriteFile(keyPath, []byte("ssh-ed25519 AAAAtest user@host\n"), 0o600); err != nil {
-		t.Fatalf("write key file: %v", err)
-	}
 	root := sandboxTestRoot(t, srv.URL)
-	root.SetArgs([]string{"sandbox", "create", "box", "--repo", "https://github.com/o/r", "--key", "@" + keyPath})
+	root.SetArgs([]string{"sandbox", "create", "box", "--repo", "https://github.com/o/r", "--identity", "laptop"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("sandbox create: %v", err)
 	}
 	if gotBody["name"] != "box" || gotBody["repoUrl"] != "https://github.com/o/r" {
 		t.Errorf("name/repoUrl = %v/%v", gotBody["name"], gotBody["repoUrl"])
 	}
-	keys, ok := gotBody["sshPublicKeys"].([]any)
-	if !ok || len(keys) != 1 || keys[0] != "ssh-ed25519 AAAAtest user@host" {
-		t.Errorf("sshPublicKeys = %v, want the trimmed file content", gotBody["sshPublicKeys"])
+	if gotBody["sshIdentityId"] != "id-1" {
+		t.Errorf("sshIdentityId = %v, want the resolved identity id", gotBody["sshIdentityId"])
 	}
 }
 
-func TestSandboxCreateDefaultKeyDiscovery(t *testing.T) {
+func TestSandboxCreateWithoutIdentityOmitsField(t *testing.T) {
 	var gotBody map[string]any
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		gotBody = sandboxDecodeBody(t, r)
@@ -104,20 +101,27 @@ func TestSandboxCreateDefaultKeyDiscovery(t *testing.T) {
 	defer srv.Close()
 
 	root := sandboxTestRoot(t, srv.URL)
-	home := os.Getenv("HOME")
-	if err := os.MkdirAll(filepath.Join(home, ".ssh"), 0o700); err != nil {
-		t.Fatalf("mkdir .ssh: %v", err)
-	}
-	if err := os.WriteFile(filepath.Join(home, ".ssh", "id_ed25519.pub"), []byte("ssh-ed25519 AAAAdefault me@here\n"), 0o600); err != nil {
-		t.Fatalf("write default key: %v", err)
-	}
 	root.SetArgs([]string{"sandbox", "create", "box"})
 	if err := root.Execute(); err != nil {
 		t.Fatalf("sandbox create: %v", err)
 	}
-	keys, ok := gotBody["sshPublicKeys"].([]any)
-	if !ok || len(keys) != 1 || keys[0] != "ssh-ed25519 AAAAdefault me@here" {
-		t.Errorf("sshPublicKeys = %v, want the auto-loaded ~/.ssh/id_ed25519.pub", gotBody["sshPublicKeys"])
+	if _, present := gotBody["sshIdentityId"]; present {
+		t.Errorf("body = %v, want sshIdentityId omitted so the server auto-picks", gotBody)
+	}
+}
+
+func TestSandboxCreateNoIdentitiesHint(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.WriteHeader(400)
+		io.WriteString(w, `{"message":"You have no SSH identities; add one in user settings"}`)
+	}))
+	defer srv.Close()
+
+	root := sandboxTestRoot(t, srv.URL)
+	root.SetArgs([]string{"sandbox", "create", "box"})
+	err := root.Execute()
+	if err == nil || !strings.Contains(err.Error(), "orchard ssh-identity add") || !strings.Contains(err.Error(), "import-github") {
+		t.Fatalf("want the no-identities hint, got %v", err)
 	}
 }
 
@@ -139,7 +143,7 @@ func TestSandboxListTableAndFooter(t *testing.T) {
 			t.Errorf("sandbox list: %v", err)
 		}
 	})
-	for _, want := range []string{"NAME", "STATUS", "REPO", "CREATED", "LAST ACTIVE", "box", "1 of 3 sandboxes used"} {
+	for _, want := range []string{"NAME", "STATUS", "REPO", "IDENTITY", "CREATED", "LAST ACTIVE", "box", "laptop", "1 of 3 sandboxes used"} {
 		if !strings.Contains(out, want) {
 			t.Errorf("table output missing %q:\n%s", want, out)
 		}
@@ -336,6 +340,57 @@ func TestSandboxCredentialsSetStdin(t *testing.T) {
 	}
 	if _, present := gotBody["openaiToken"]; present {
 		t.Errorf("body = %v, want openaiToken omitted", gotBody)
+	}
+}
+
+func TestSandboxChatStreamsText(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		switch {
+		case r.Method == http.MethodGet && r.URL.Path == "/apiv1/sandboxes":
+			io.WriteString(w, sandboxListJSON)
+		case r.Method == http.MethodPost && r.URL.Path == "/apiv1/sandboxes/11111111-1111-1111-1111-111111111111/chat":
+			body := sandboxDecodeBody(t, r)
+			if body["message"] != "hi there" {
+				t.Errorf("message = %v, want the joined args", body["message"])
+			}
+			w.Header().Set("Content-Type", "text/event-stream")
+			io.WriteString(w, "data: {\"type\":\"assistant\",\"message\":{\"content\":[{\"type\":\"text\",\"text\":\"hello from claude\"}]}}\n\n")
+			io.WriteString(w, "data: {\"type\":\"done\"}\n\n")
+		default:
+			t.Errorf("unexpected request %s %s", r.Method, r.URL.Path)
+			w.WriteHeader(404)
+		}
+	}))
+	defer srv.Close()
+
+	root := sandboxTestRoot(t, srv.URL)
+	root.SetArgs([]string{"sandbox", "chat", "box", "hi", "there"})
+	out := sandboxCaptureStdout(t, func() {
+		if err := root.Execute(); err != nil {
+			t.Errorf("sandbox chat: %v", err)
+		}
+	})
+	if !strings.Contains(out, "hello from claude") {
+		t.Errorf("chat stdout missing the assistant text:\n%s", out)
+	}
+}
+
+func TestSandboxChatErrorEvent(t *testing.T) {
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if r.Method == http.MethodGet && r.URL.Path == "/apiv1/sandboxes" {
+			io.WriteString(w, sandboxListJSON)
+			return
+		}
+		w.Header().Set("Content-Type", "text/event-stream")
+		io.WriteString(w, "data: {\"type\":\"error\",\"detail\":\"agent crashed\"}\n\n")
+	}))
+	defer srv.Close()
+
+	root := sandboxTestRoot(t, srv.URL)
+	root.SetArgs([]string{"sandbox", "chat", "box", "-m", "hi"})
+	err := root.Execute()
+	if err == nil || !strings.Contains(err.Error(), "agent crashed") {
+		t.Fatalf("want the error event detail, got %v", err)
 	}
 }
 

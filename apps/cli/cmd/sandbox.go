@@ -2,6 +2,7 @@ package cmd
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
@@ -9,8 +10,6 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
-	"path/filepath"
-	"strconv"
 	"strings"
 	"time"
 
@@ -37,6 +36,7 @@ func sandboxCmd() *cobra.Command {
 		sandboxStopCmd(),
 		sandboxDeleteCmd(),
 		sandboxSSHCmd(),
+		sandboxChatCmd(),
 		sandboxProxyCmd(),
 		sandboxSSHConfigCmd(),
 		sandboxCredentialsCmd(),
@@ -122,57 +122,24 @@ func sandboxWaitSpec(id, target string) api.WaitSpec {
 	}
 }
 
-// sandboxKeyValue resolves one --key value: @file reads the file, a bare
-// value that is not a public key but exists on disk is read as a file, and
-// anything else is taken literally.
-func sandboxKeyValue(v string) (string, error) {
-	if path, ok := strings.CutPrefix(v, "@"); ok {
-		data, err := os.ReadFile(path)
-		if err != nil {
-			return "", err
-		}
-		return strings.TrimSpace(string(data)), nil
-	}
-	if !strings.HasPrefix(v, "ssh-") && !strings.HasPrefix(v, "ecdsa-") {
-		if data, err := os.ReadFile(v); err == nil {
-			return strings.TrimSpace(string(data)), nil
+// sandboxIdentityName renders a sandbox's attached ssh identity for tables.
+func sandboxIdentityName(s map[string]any) string {
+	if ident, ok := s["sshIdentity"].(map[string]any); ok {
+		if n := str(ident["name"]); n != "" {
+			return n
 		}
 	}
-	return strings.TrimSpace(v), nil
+	return "-"
 }
 
-func sandboxKeys(values []string) ([]string, error) {
-	keys := []string{}
-	for _, v := range values {
-		key, err := sandboxKeyValue(v)
-		if err != nil {
-			return nil, err
-		}
-		keys = append(keys, key)
+// sandboxIdentityError maps the 400 the server returns when the user has no
+// ssh identities to register into an actionable message.
+func sandboxIdentityError(err error) error {
+	var apiErr *api.APIError
+	if errors.As(err, &apiErr) && apiErr.Status == http.StatusBadRequest && strings.Contains(strings.ToLower(apiErr.Message), "identit") {
+		return errors.New("you have no ssh identities: add one with `orchard ssh-identity add <name> --key <key>` or `orchard ssh-identity import-github`")
 	}
-	return keys, nil
-}
-
-// defaultSSHKeys auto-loads the user's public key when create gets no --key.
-func defaultSSHKeys() []string {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return nil
-	}
-	for _, name := range []string{"id_ed25519.pub", "id_rsa.pub"} {
-		path := filepath.Join(home, ".ssh", name)
-		data, err := os.ReadFile(path)
-		if err != nil {
-			continue
-		}
-		key := strings.TrimSpace(string(data))
-		if key == "" {
-			continue
-		}
-		output.Warnf("no --key given: using %s", path)
-		return []string{key}
-	}
-	return nil
+	return sandboxFeatureError(err)
 }
 
 func readSetupScript(v string) (string, error) {
@@ -192,9 +159,8 @@ func readSetupScript(v string) (string, error) {
 
 func sandboxCreateCmd() *cobra.Command {
 	var repo string
-	var keyValues []string
+	var identity string
 	var setupFile string
-	var githubKeys bool
 	var wait *bool
 	var timeout *time.Duration
 	c := &cobra.Command{
@@ -202,13 +168,6 @@ func sandboxCreateCmd() *cobra.Command {
 		Short: "Create a cloud dev sandbox",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			keys, err := sandboxKeys(keyValues)
-			if err != nil {
-				return err
-			}
-			if len(keys) == 0 && !githubKeys {
-				keys = defaultSSHKeys()
-			}
 			cl, _, err := client()
 			if err != nil {
 				return err
@@ -220,11 +179,12 @@ func sandboxCreateCmd() *cobra.Command {
 			if repo != "" {
 				body["repoUrl"] = repo
 			}
-			if len(keys) > 0 {
-				body["sshPublicKeys"] = keys
-			}
-			if githubKeys {
-				body["importGithubKeys"] = true
+			if identity != "" {
+				ident, err := resolveSSHIdentity(cmd.Context(), cl, identity)
+				if err != nil {
+					return err
+				}
+				body["sshIdentityId"] = str(ident["id"])
 			}
 			if setupFile != "" {
 				script, err := readSetupScript(setupFile)
@@ -235,7 +195,7 @@ func sandboxCreateCmd() *cobra.Command {
 			}
 			var raw map[string]any
 			if err := cl.Send(cmd.Context(), http.MethodPost, "/sandboxes", body, &raw); err != nil {
-				return sandboxFeatureError(err)
+				return sandboxIdentityError(err)
 			}
 			output.Successf("created sandbox %s (%s)", pick(raw, "name"), str(raw["id"]))
 			if fmtFlag() == output.FormatJSON {
@@ -250,8 +210,7 @@ func sandboxCreateCmd() *cobra.Command {
 		},
 	}
 	c.Flags().StringVar(&repo, "repo", "", "git repository URL to clone into the sandbox")
-	c.Flags().StringArrayVar(&keyValues, "key", nil, "ssh public key: literal, @file, or a file path (repeatable; default: ~/.ssh/id_ed25519.pub then id_rsa.pub)")
-	c.Flags().BoolVar(&githubKeys, "github-keys", false, "import your public ssh keys from GitHub")
+	c.Flags().StringVar(&identity, "identity", "", "ssh identity name or id (default: your only identity)")
 	c.Flags().StringVar(&setupFile, "setup", "", "setup script file run once on first boot (- reads stdin)")
 	wait, timeout = addWaitFlags(c)
 	return c
@@ -282,11 +241,12 @@ func sandboxListCmd() *cobra.Command {
 					pick(s, "name"),
 					output.Status(pick(s, "status")),
 					pick(s, "repoUrl"),
+					sandboxIdentityName(s),
 					pick(s, "createdAt"),
 					pick(s, "lastActiveAt"),
 				})
 			}
-			output.Table([]string{"name", "status", "repo", "created", "last active"}, rows)
+			output.Table([]string{"name", "status", "repo", "identity", "created", "last active"}, rows)
 			if max := pick(raw, "maxSandboxes"); max != "" {
 				fmt.Println(output.Dim(fmt.Sprintf("%d of %s sandboxes used", len(items), max)))
 			}
@@ -316,7 +276,10 @@ func sandboxGetCmd() *cobra.Command {
 			if fmtFlag() == output.FormatJSON {
 				return output.JSON(raw)
 			}
-			keys, _ := raw["sshPublicKeys"].([]any)
+			var identity string
+			if ident, ok := raw["sshIdentity"].(map[string]any); ok {
+				identity = pick(ident, "name")
+			}
 			pairs := [][2]string{
 				{"id", pick(raw, "id")},
 				{"name", pick(raw, "name")},
@@ -326,7 +289,7 @@ func sandboxGetCmd() *cobra.Command {
 				{"status message", pick(raw, "statusMessage")},
 				{"repo", pick(raw, "repoUrl")},
 				{"image", pick(raw, "image")},
-				{"ssh keys", strconv.Itoa(len(keys))},
+				{"ssh identity", identity},
 				{"created", pick(raw, "createdAt")},
 				{"last active", pick(raw, "lastActiveAt")},
 			} {
@@ -342,28 +305,17 @@ func sandboxGetCmd() *cobra.Command {
 
 func sandboxUpdateCmd() *cobra.Command {
 	var name string
-	var keyValues []string
+	var identity string
 	var setupFile string
 	var noSetup bool
-	var githubKeys bool
 	c := &cobra.Command{
 		Use:   "update <name>",
-		Short: "Rename a sandbox or replace its ssh keys",
+		Short: "Rename a sandbox or switch its ssh identity",
 		Args:  cobra.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			body := map[string]any{}
 			if cmd.Flags().Changed("name") {
 				body["name"] = name
-			}
-			if cmd.Flags().Changed("key") {
-				keys, err := sandboxKeys(keyValues)
-				if err != nil {
-					return err
-				}
-				body["sshPublicKeys"] = keys
-			}
-			if githubKeys {
-				body["importGithubKeys"] = true
 			}
 			if noSetup {
 				body["setupScript"] = nil
@@ -374,12 +326,19 @@ func sandboxUpdateCmd() *cobra.Command {
 				}
 				body["setupScript"] = script
 			}
-			if len(body) == 0 {
-				return errors.New("nothing to update: pass --name, --key, --github-keys, --setup or --no-setup")
+			if len(body) == 0 && identity == "" {
+				return errors.New("nothing to update: pass --name, --identity, --setup or --no-setup")
 			}
 			cl, _, err := client()
 			if err != nil {
 				return err
+			}
+			if identity != "" {
+				ident, err := resolveSSHIdentity(cmd.Context(), cl, identity)
+				if err != nil {
+					return err
+				}
+				body["sshIdentityId"] = str(ident["id"])
 			}
 			sb, err := resolveSandbox(cmd.Context(), cl, args[0])
 			if err != nil {
@@ -397,8 +356,7 @@ func sandboxUpdateCmd() *cobra.Command {
 		},
 	}
 	c.Flags().StringVar(&name, "name", "", "new sandbox name")
-	c.Flags().StringArrayVar(&keyValues, "key", nil, "ssh public key: literal, @file, or a file path (repeatable; replaces all keys)")
-	c.Flags().BoolVar(&githubKeys, "github-keys", false, "import your public ssh keys from GitHub")
+	c.Flags().StringVar(&identity, "identity", "", "ssh identity name or id to switch to")
 	c.Flags().StringVar(&setupFile, "setup", "", "setup script file run once on first boot (- reads stdin)")
 	c.Flags().BoolVar(&noSetup, "no-setup", false, "remove the setup script")
 	return c
@@ -573,6 +531,97 @@ func sandboxSSHCmd() *cobra.Command {
 	}
 	c.Flags().BoolVar(&start, "start", false, "start the sandbox first if it is stopped")
 	c.Flags().StringVar(&user, "user", "dev", "ssh user")
+	return c
+}
+
+// sandboxChatEvent covers the stream-json shapes the chat stream can carry.
+type sandboxChatEvent struct {
+	Type    string `json:"type"`
+	Detail  string `json:"detail"`
+	Text    string `json:"text"`
+	Message struct {
+		Content []struct {
+			Type string `json:"type"`
+			Text string `json:"text"`
+			Name string `json:"name"`
+		} `json:"content"`
+	} `json:"message"`
+}
+
+func sandboxChatCmd() *cobra.Command {
+	var message string
+	c := &cobra.Command{
+		Use:   "chat <name> [message...]",
+		Short: "Send a message to the claude agent in a sandbox",
+		Args:  cobra.MinimumNArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			msg := strings.Join(args[1:], " ")
+			if cmd.Flags().Changed("message") {
+				msg = message
+			}
+			if msg == "" && !term.IsTerminal(int(os.Stdin.Fd())) {
+				data, err := io.ReadAll(os.Stdin)
+				if err != nil {
+					return err
+				}
+				msg = strings.TrimSpace(string(data))
+			}
+			if msg == "" {
+				return errors.New("no message: pass it as arguments, with -m, or on stdin")
+			}
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			sb, err := resolveSandbox(cmd.Context(), cl, args[0])
+			if err != nil {
+				return err
+			}
+			events, errs := cl.StreamChat(cmd.Context(), sandboxPath(str(sb["id"]), "chat"), map[string]any{"message": msg})
+			needNewline := false
+			for raw := range events {
+				var ev sandboxChatEvent
+				if json.Unmarshal(raw, &ev) != nil {
+					continue
+				}
+				switch ev.Type {
+				case "assistant":
+					for _, block := range ev.Message.Content {
+						switch block.Type {
+						case "text":
+							fmt.Print(block.Text)
+							needNewline = !strings.HasSuffix(block.Text, "\n")
+						case "tool_use":
+							fmt.Fprintf(os.Stderr, "[tool] %s\n", block.Name)
+						}
+					}
+				case "result":
+					if fmtFlag() == output.FormatJSON {
+						if needNewline {
+							fmt.Println()
+							needNewline = false
+						}
+						fmt.Println(string(raw))
+					}
+				case "error":
+					if needNewline {
+						fmt.Println()
+					}
+					return errors.New(ev.Detail)
+				case "raw":
+					fmt.Fprint(os.Stderr, ev.Text)
+				}
+			}
+			if needNewline {
+				fmt.Println()
+			}
+			if err := <-errs; err != nil {
+				return sandboxDialError(err)
+			}
+			return nil
+		},
+	}
+	c.Flags().StringVarP(&message, "message", "m", "", "message to send (default: the remaining args, or stdin)")
 	return c
 }
 

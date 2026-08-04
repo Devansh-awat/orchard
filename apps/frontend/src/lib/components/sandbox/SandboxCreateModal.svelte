@@ -1,7 +1,10 @@
 <script lang="ts">
+	import { createQuery } from '@tanstack/svelte-query';
+	import { goto } from '$app/navigation';
 	import { Github, Loader2 } from 'lucide-svelte';
 	import { apiFetch } from '$lib/stores';
-	import { Button, Field, Input, Modal, ToggleRow } from '$lib/components/ui';
+	import { Button, Field, Input, Modal, Select } from '$lib/components/ui';
+	import { sshIdentitiesQueryOptions } from '$lib/queries/sandboxes';
 	import type { SandboxCreateInput } from '$lib/types/sandbox';
 
 	interface Repository {
@@ -20,11 +23,17 @@
 		oncreate: (input: SandboxCreateInput) => void;
 	} = $props();
 
+	const identitiesQuery = createQuery(() => ({
+		...sshIdentitiesQueryOptions(),
+		enabled: open
+	}));
+	const identities = $derived(identitiesQuery.data ?? []);
+	const noIdentities = $derived(identitiesQuery.isSuccess && identities.length === 0);
+
 	let name = $state('');
 	let repoUrl = $state('');
-	let sshKeysText = $state('');
+	let sshIdentityId = $state('');
 	let setupScript = $state('');
-	let importGithubKeys = $state(true);
 
 	let repositories = $state<Repository[]>([]);
 	let loadingRepos = $state(false);
@@ -37,11 +46,23 @@
 		if (open && !wasOpen) {
 			name = '';
 			repoUrl = '';
-			sshKeysText = '';
-			importGithubKeys = true;
+			sshIdentityId = '';
+			setupScript = '';
 			pickerOpen = false;
 		}
 		wasOpen = open;
+	});
+
+	let autoPicked = false;
+	$effect(() => {
+		if (!open) {
+			autoPicked = false;
+			return;
+		}
+		if (!autoPicked && identities.length === 1) {
+			autoPicked = true;
+			sshIdentityId = identities[0].id;
+		}
 	});
 
 	async function fetchRepositories() {
@@ -82,17 +103,18 @@
 		fetchRepositories();
 	}
 
-	const canCreate = $derived(!creating);
+	const canCreate = $derived(!creating && !noIdentities);
+
+	function openIdentitySettings() {
+		open = false;
+		goto('/user/settings?tab=sandbox');
+	}
 
 	function submit() {
-		const keys = sshKeysText
-			.split('\n')
-			.map((k) => k.trim())
-			.filter(Boolean);
-		const input: SandboxCreateInput = { importGithubKeys };
+		const input: SandboxCreateInput = {};
 		if (name.trim()) input.name = name.trim();
 		if (repoUrl.trim()) input.repoUrl = repoUrl.trim();
-		if (keys.length > 0) input.sshPublicKeys = keys;
+		if (sshIdentityId) input.sshIdentityId = sshIdentityId;
 		if (setupScript.trim()) input.setupScript = setupScript;
 		oncreate(input);
 	}
@@ -143,25 +165,25 @@
 				{/if}
 			</div>
 		</Field>
-		<Field
-			label="SSH public keys"
-			hint="One key per line, used to log into the sandbox"
-			for="sbx-keys"
-		>
-			<textarea
-				id="sbx-keys"
-				class="scm-keys"
-				bind:value={sshKeysText}
-				rows="3"
-				placeholder="ssh-ed25519 AAAA..."
-				spellcheck="false"
-			></textarea>
+		<Field label="SSH identity" hint="The key used to log into the sandbox" for="sbx-identity">
+			{#if noIdentities}
+				<div class="scm-no-identities">
+					<span>You have no SSH identities yet. Add one in user settings first.</span>
+					<Button size="sm" variant="secondary" onclick={openIdentitySettings}>
+						Set up SSH identities
+					</Button>
+				</div>
+			{:else}
+				<Select id="sbx-identity" bind:value={sshIdentityId}>
+					{#if identities.length !== 1}
+						<option value="">Pick an identity</option>
+					{/if}
+					{#each identities as identity (identity.id)}
+						<option value={identity.id}>{identity.name}</option>
+					{/each}
+				</Select>
+			{/if}
 		</Field>
-		<ToggleRow
-			bind:checked={importGithubKeys}
-			label="Import GitHub keys"
-			hint="Fetch the public keys on your GitHub profile"
-		/>
 		<Field
 			label="Setup script"
 			hint="Optional, runs once as the dev user on first boot (logged to ~/.setup.log)"
@@ -169,7 +191,7 @@
 		>
 			<textarea
 				id="sbx-setup"
-				class="scm-keys"
+				class="scm-script"
 				bind:value={setupScript}
 				rows="4"
 				placeholder="#!/bin/bash&#10;sudo apt-get install -y postgresql-client"
@@ -253,7 +275,22 @@
 		color: var(--text-faint);
 	}
 
-	.scm-keys {
+	.scm-no-identities {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: 0.75rem;
+		flex-wrap: wrap;
+		padding: 0.625rem 0.875rem;
+		border: 1px solid var(--status-info-border);
+		border-radius: var(--radius-sm);
+		background: var(--status-info-bg);
+		font-size: var(--text-footnote);
+		line-height: var(--lh-footnote);
+		color: var(--text-default);
+	}
+
+	.scm-script {
 		width: 100%;
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-sm);
@@ -266,7 +303,7 @@
 		resize: vertical;
 	}
 
-	.scm-keys:focus-visible {
+	.scm-script:focus-visible {
 		outline: 2px solid var(--focus-ring-color);
 		outline-offset: -1px;
 	}

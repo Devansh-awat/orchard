@@ -119,16 +119,23 @@ All routes are user-scoped: you see and touch only your own sandboxes
 
 | Route | Scope | Notes |
 | --- | --- | --- |
-| `POST /sandboxes` | deploy | create; optional name, repoUrl, sshPublicKeys, importGithubKeys |
+| `POST /sandboxes` | deploy | create; optional name, repoUrl, sshIdentityId, setupScript |
 | `GET /sandboxes` | read | returns `{ sandboxes, maxSandboxes }` |
 | `GET /sandboxes/:id` | read | |
-| `PATCH /sandboxes/:id` | deploy | rename, replace keys |
+| `PATCH /sandboxes/:id` | deploy | rename, switch SSH identity, edit setup script |
 | `POST /sandboxes/:id/start` | deploy | resume a suspended sandbox |
 | `POST /sandboxes/:id/stop` | deploy | suspend; home volume persists |
 | `DELETE /sandboxes/:id` | deploy | removes CR, secret, and volumes |
 | `GET /sandboxes/:id/ssh` | exec | websocket upgrade; raw SSH bytes |
+| `POST /sandboxes/:id/chat` | exec | Cloud Code: SSE stream of the in-sandbox claude agent |
 | `GET /sandboxes/credentials` | read | `{ claude: boolean, openai: boolean }` |
 | `PUT /sandboxes/credentials` | deploy | set or clear agent tokens (null clears) |
+| `GET /ssh-identities` | read | named public keys attached to your user |
+| `POST /ssh-identities` | deploy | add an identity `{ name, publicKey }` |
+| `POST /ssh-identities/import-github` | deploy | import your GitHub public keys |
+| `DELETE /ssh-identities/:id` | deploy | fails while attached to a sandbox |
+
+SSH identities and agent credentials are user-level resources managed from user settings. A sandbox attaches one identity by reference; rotating the identity updates the sandbox's authorized_keys live. Cloud Code chat runs `claude` inside the sandbox as the dev user, streams stream-json events over SSE, and resumes the same claude session across messages (the session lives on the sandbox's persistent home volume).
 
 ## CLI walkthrough
 

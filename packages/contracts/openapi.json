@@ -39211,11 +39211,24 @@
                               "null"
                             ]
                           },
-                          "sshPublicKeys": {
-                            "items": {
-                              "type": "string"
+                          "sshIdentity": {
+                            "properties": {
+                              "id": {
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "name": {
+                                "type": "string"
+                              }
                             },
-                            "type": "array"
+                            "required": [
+                              "id",
+                              "name"
+                            ],
+                            "type": [
+                              "object",
+                              "null"
+                            ]
                           },
                           "status": {
                             "enum": [
@@ -39245,7 +39258,7 @@
                           "status",
                           "statusMessage",
                           "repoUrl",
-                          "sshPublicKeys",
+                          "sshIdentity",
                           "setupScript",
                           "image",
                           "createdAt",
@@ -39288,10 +39301,6 @@
             "application/json": {
               "schema": {
                 "properties": {
-                  "importGithubKeys": {
-                    "description": "Merge public keys from github.com/<your-username>.keys",
-                    "type": "boolean"
-                  },
                   "name": {
                     "description": "Defaults to \"sandbox\" (or a suffixed variant)",
                     "maxLength": 63,
@@ -39312,14 +39321,10 @@
                       "null"
                     ]
                   },
-                  "sshPublicKeys": {
-                    "items": {
-                      "maxLength": 4096,
-                      "pattern": "^(ssh-(rsa|ed25519)|ecdsa-sha2-\\S+)\\s+\\S+",
-                      "type": "string"
-                    },
-                    "maxItems": 10,
-                    "type": "array"
+                  "sshIdentityId": {
+                    "description": "SSH identity to attach; defaults to your only identity when you have exactly one",
+                    "format": "uuid",
+                    "type": "string"
                   }
                 },
                 "type": "object"
@@ -39364,11 +39369,24 @@
                         "null"
                       ]
                     },
-                    "sshPublicKeys": {
-                      "items": {
-                        "type": "string"
+                    "sshIdentity": {
+                      "properties": {
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
                       },
-                      "type": "array"
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
                     },
                     "status": {
                       "enum": [
@@ -39398,7 +39416,7 @@
                     "status",
                     "statusMessage",
                     "repoUrl",
-                    "sshPublicKeys",
+                    "sshIdentity",
                     "setupScript",
                     "image",
                     "createdAt",
@@ -39521,11 +39539,24 @@
                         "null"
                       ]
                     },
-                    "sshPublicKeys": {
-                      "items": {
-                        "type": "string"
+                    "sshIdentity": {
+                      "properties": {
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
                       },
-                      "type": "array"
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
                     },
                     "status": {
                       "enum": [
@@ -39555,7 +39586,7 @@
                     "status",
                     "statusMessage",
                     "repoUrl",
-                    "sshPublicKeys",
+                    "sshIdentity",
                     "setupScript",
                     "image",
                     "createdAt",
@@ -39599,9 +39630,6 @@
             "application/json": {
               "schema": {
                 "properties": {
-                  "importGithubKeys": {
-                    "type": "boolean"
-                  },
                   "name": {
                     "maxLength": 63,
                     "minLength": 1,
@@ -39615,14 +39643,9 @@
                       "null"
                     ]
                   },
-                  "sshPublicKeys": {
-                    "items": {
-                      "maxLength": 4096,
-                      "pattern": "^(ssh-(rsa|ed25519)|ecdsa-sha2-\\S+)\\s+\\S+",
-                      "type": "string"
-                    },
-                    "maxItems": 10,
-                    "type": "array"
+                  "sshIdentityId": {
+                    "format": "uuid",
+                    "type": "string"
                   }
                 },
                 "type": "object"
@@ -39667,11 +39690,24 @@
                         "null"
                       ]
                     },
-                    "sshPublicKeys": {
-                      "items": {
-                        "type": "string"
+                    "sshIdentity": {
+                      "properties": {
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
                       },
-                      "type": "array"
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
                     },
                     "status": {
                       "enum": [
@@ -39701,7 +39737,7 @@
                     "status",
                     "statusMessage",
                     "repoUrl",
-                    "sshPublicKeys",
+                    "sshIdentity",
                     "setupScript",
                     "image",
                     "createdAt",
@@ -39724,6 +39760,65 @@
           }
         ],
         "summary": "Rename a sandbox or replace its SSH public key set",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/chat": {
+      "post": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "message": {
+                    "maxLength": 32768,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "message"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Cloud Code: send a message to the claude agent inside the sandbox; responds with an SSE stream of claude stream-json events plus a final {type: \"done\"|\"error\"} frame",
         "tags": [
           "sandboxes"
         ]
@@ -39829,11 +39924,24 @@
                         "null"
                       ]
                     },
-                    "sshPublicKeys": {
-                      "items": {
-                        "type": "string"
+                    "sshIdentity": {
+                      "properties": {
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
                       },
-                      "type": "array"
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
                     },
                     "status": {
                       "enum": [
@@ -39863,7 +39971,7 @@
                     "status",
                     "statusMessage",
                     "repoUrl",
-                    "sshPublicKeys",
+                    "sshIdentity",
                     "setupScript",
                     "image",
                     "createdAt",
@@ -39951,11 +40059,24 @@
                         "null"
                       ]
                     },
-                    "sshPublicKeys": {
-                      "items": {
-                        "type": "string"
+                    "sshIdentity": {
+                      "properties": {
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "name": {
+                          "type": "string"
+                        }
                       },
-                      "type": "array"
+                      "required": [
+                        "id",
+                        "name"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
                     },
                     "status": {
                       "enum": [
@@ -39985,7 +40106,7 @@
                     "status",
                     "statusMessage",
                     "repoUrl",
-                    "sshPublicKeys",
+                    "sshIdentity",
                     "setupScript",
                     "image",
                     "createdAt",
@@ -40497,6 +40618,258 @@
         "summary": "PUT /scim/v2/Users/:id",
         "tags": [
           "scim"
+        ]
+      }
+    },
+    "/ssh-identities": {
+      "get": {
+        "description": "Auth: authenticated (scope: read)",
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "identities": {
+                      "items": {
+                        "properties": {
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "publicKey": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "publicKey",
+                          "createdAt"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "identities"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "List your SSH identities (named public keys attachable to sandboxes)",
+        "tags": [
+          "ssh-identities"
+        ]
+      },
+      "post": {
+        "description": "Auth: authenticated (scope: deploy)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "name": {
+                    "maxLength": 100,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "publicKey": {
+                    "maxLength": 4096,
+                    "pattern": "^(ssh-(rsa|ed25519)|ecdsa-sha2-\\S+)\\s+\\S+",
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "name",
+                  "publicKey"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "createdAt": {
+                      "type": "string"
+                    },
+                    "id": {
+                      "format": "uuid",
+                      "type": "string"
+                    },
+                    "name": {
+                      "type": "string"
+                    },
+                    "publicKey": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "id",
+                    "name",
+                    "publicKey",
+                    "createdAt"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Add an SSH identity",
+        "tags": [
+          "ssh-identities"
+        ]
+      }
+    },
+    "/ssh-identities/{id}": {
+      "delete": {
+        "description": "Auth: authenticated (scope: deploy)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "success": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "success"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Delete an SSH identity (fails while attached to a sandbox)",
+        "tags": [
+          "ssh-identities"
+        ]
+      }
+    },
+    "/ssh-identities/import-github": {
+      "post": {
+        "description": "Auth: authenticated (scope: deploy)",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "identities": {
+                      "items": {
+                        "properties": {
+                          "createdAt": {
+                            "type": "string"
+                          },
+                          "id": {
+                            "format": "uuid",
+                            "type": "string"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "publicKey": {
+                            "type": "string"
+                          }
+                        },
+                        "required": [
+                          "id",
+                          "name",
+                          "publicKey",
+                          "createdAt"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "identities"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Import your public keys from github.com/<username>.keys as identities",
+        "tags": [
+          "ssh-identities"
         ]
       }
     },

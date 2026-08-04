@@ -64,6 +64,7 @@ model User {
   createdNotificationRules   NotificationRule[]       @relation("NotificationRuleCreator")
   sandboxes                  Sandbox[]
   sandboxCredential          SandboxCredential?
+  sshIdentities              SshIdentity[]
 
   @@map("users")
 }
@@ -1680,7 +1681,8 @@ model Sandbox {
   namespace     String        @db.VarChar(253)
   image         String        @db.VarChar(500)
   repoUrl       String?       @map("repo_url") @db.VarChar(500)
-  sshPublicKeys String[]      @default([]) @map("ssh_public_keys")
+  sshIdentityId String?       @map("ssh_identity_id") @db.Uuid
+  chatSessionId String?       @map("chat_session_id") @db.VarChar(255)
   setupScript   String?       @map("setup_script") @db.Text
   cpuLimit      String        @map("cpu_limit") @db.VarChar(20)
   memoryLimit   String        @map("memory_limit") @db.VarChar(20)
@@ -1689,11 +1691,27 @@ model Sandbox {
   createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sshIdentity SshIdentity? @relation(fields: [sshIdentityId], references: [id], onDelete: Restrict)
 
   @@unique([userId, name])
   @@index([status, lastActiveAt], map: "idx_sandboxes_status_active")
   @@map("sandboxes")
+}
+
+model SshIdentity {
+  id        String   @id @default(uuid()) @db.Uuid
+  userId    String   @map("user_id") @db.Uuid
+  name      String   @db.VarChar(100)
+  publicKey String   @map("public_key") @db.Text
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sandboxes Sandbox[]
+
+  @@unique([userId, name])
+  @@map("ssh_identities")
 }
 
 model SandboxCredential {

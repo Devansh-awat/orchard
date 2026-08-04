@@ -184,8 +184,15 @@ var routeCoverage = map[string]string{
 	"POST /sandboxes/:id/stop":   "sandbox stop",
 	"DELETE /sandboxes/:id":      "sandbox delete",
 	"GET /sandboxes/:id/ssh":     "sandbox ssh / sandbox proxy",
+	"POST /sandboxes/:id/chat":   "sandbox chat",
 	"GET /sandboxes/credentials": "sandbox credentials status",
 	"PUT /sandboxes/credentials": "sandbox credentials set",
+
+	// ssh identities
+	"GET /ssh-identities":                "ssh-identity list",
+	"POST /ssh-identities":               "ssh-identity add",
+	"POST /ssh-identities/import-github": "ssh-identity import-github",
+	"DELETE /ssh-identities/:id":         "ssh-identity remove",
 
 	// jobs + runs
 	"GET /organizations/:orgId/jobs":         "job list (org scope)",

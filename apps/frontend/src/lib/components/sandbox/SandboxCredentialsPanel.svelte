@@ -1,9 +1,13 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
+	import { Bot } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
 	import { queryClient } from '$lib/query';
-	import { Badge, Button, Input, SectionCard } from '$lib/components/ui';
+	import { Badge, Button, Input } from '$lib/components/ui';
+	import SettingsSection from '$lib/components/user-settings/SettingsSection.svelte';
 	import { sandboxCredentialsQueryOptions } from '$lib/queries/sandboxes';
+
+	let { index = 0 }: { index?: number } = $props();
 
 	const credentialsQuery = createQuery(() => sandboxCredentialsQueryOptions());
 	const credentials = $derived(credentialsQuery.data ?? null);
@@ -40,10 +44,12 @@
 	}
 </script>
 
-<SectionCard
+<SettingsSection
+	{index}
 	title="Agent credentials"
 	description="Tokens are injected into your sandboxes so claude and codex run headlessly. Values are stored encrypted and never shown again."
 >
+	{#snippet icon(_hovered)}<Bot class="h-[18px] w-[18px]" />{/snippet}
 	<div class="cred-body">
 		<div class="cred-row">
 			<div class="cred-head">
@@ -126,7 +132,7 @@
 			</div>
 		</div>
 	</div>
-</SectionCard>
+</SettingsSection>
 
 <style>
 	.cred-body {
