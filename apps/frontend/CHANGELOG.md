@@ -1,5 +1,16 @@
 # Changelog
 
+## [1.0.0](https://github.com/LeafdTK/leaf/compare/frontend/v0.32.1...frontend/v1.0.0) (2026-08-04)
+
+
+### ⚠ BREAKING CHANGES
+
+* ui version 2.0 ([#150](https://github.com/LeafdTK/leaf/issues/150))
+
+### Features
+
+* ui version 2.0 ([#150](https://github.com/LeafdTK/leaf/issues/150)) ([12878ec](https://github.com/LeafdTK/leaf/commit/12878ec3e5987942f20bebc64bea06a56a189857))
+
 ## [0.32.1](https://github.com/LeafdTK/leaf/compare/frontend/v0.32.0...frontend/v0.32.1) (2026-07-29)
 
 

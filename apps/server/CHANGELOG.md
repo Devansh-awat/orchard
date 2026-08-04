@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.0.0](https://github.com/LeafdTK/leaf/compare/server/v1.37.0...server/v2.0.0) (2026-08-04)
+
+
+### ⚠ BREAKING CHANGES
+
+* ui version 2.0 ([#150](https://github.com/LeafdTK/leaf/issues/150))
+
+### Features
+
+* ui version 2.0 ([#150](https://github.com/LeafdTK/leaf/issues/150)) ([12878ec](https://github.com/LeafdTK/leaf/commit/12878ec3e5987942f20bebc64bea06a56a189857))
+
 ## [1.37.0](https://github.com/LeafdTK/leaf/compare/server/v1.36.0...server/v1.37.0) (2026-07-30)
 
 
