@@ -106,6 +106,25 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     response: z.object({ success: z.boolean() }),
     scope: 'deploy',
   },
+  'GET /sandboxes/:id/repos': {
+    summary: 'List git repositories cloned into the sandbox (one sandbox holds many repos)',
+    response: z.object({
+      repos: z.array(
+        z.object({
+          name: z.string(),
+          branch: z.string().nullable(),
+          dirtyFiles: z.number().int(),
+        }),
+      ),
+    }),
+    scope: 'exec',
+  },
+  'POST /sandboxes/:id/repos': {
+    summary: 'Clone another repository into the sandbox (background, uses your GitHub token)',
+    request: z.object({ repoUrl: z.string().url() }),
+    response: z.object({ name: z.string() }),
+    scope: 'deploy',
+  },
   'GET /sandboxes/:id/changes': {
     summary: 'Git working-tree changes inside the sandbox workspace',
     response: z.object({

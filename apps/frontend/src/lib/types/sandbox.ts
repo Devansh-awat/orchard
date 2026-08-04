@@ -60,6 +60,16 @@ export interface SshIdentitiesResponse {
 	identities: SshIdentity[];
 }
 
+export interface SandboxRepo {
+	name: string;
+	branch: string;
+	dirtyFiles: number;
+}
+
+export interface SandboxReposResponse {
+	repos: SandboxRepo[];
+}
+
 const TRANSITIONAL = new Set<SandboxStatus>(['creating', 'starting', 'stopping', 'deleting']);
 
 export function isSandboxTransitional(status: SandboxStatus): boolean {

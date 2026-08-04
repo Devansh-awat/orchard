@@ -1,12 +1,11 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
-	import { goto } from '$app/navigation';
 	import { ArrowDown, Loader2, Play, Send } from 'lucide-svelte';
 	import { apiFetch } from '$lib/stores';
 	import { Button } from '$lib/components/ui';
 	import { fade, slide } from '$lib/utils/transitions';
 	import { sandboxCredentialsQueryOptions } from '$lib/queries/sandboxes';
-	import type { Sandbox } from '$lib/types/sandbox';
+	import type { Sandbox, SandboxRepo } from '$lib/types/sandbox';
 
 	type ToolEntry = {
 		kind: 'tool';
@@ -30,11 +29,15 @@
 
 	let {
 		sandbox,
+		repos = [],
+		selectedRepo = $bindable(null),
 		starting = false,
 		onstart,
 		onturndone
 	}: {
 		sandbox: Sandbox;
+		repos?: SandboxRepo[];
+		selectedRepo?: string | null;
 		starting?: boolean;
 		onstart: () => void;
 		onturndone?: () => void;
@@ -219,7 +222,7 @@
 			const res = await apiFetch(`/apiv1/sandboxes/${sandbox.id}/chat`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ message })
+				body: JSON.stringify(selectedRepo ? { message, repo: selectedRepo } : { message })
 			});
 			if (!res.ok || !res.body) {
 				const data = await res.json().catch(() => ({}));
@@ -302,75 +305,75 @@
 		</div>
 	{:else}
 		{#if missingClaude}
-			<div class="chat-note">
-				<span>Claude credentials are attached to your user account.</span>
-				<Button size="sm" variant="secondary" onclick={() => goto('/user/settings?tab=sandbox')}>
-					Open user settings
-				</Button>
+			<div class="chat-cred">
+				<span>No Claude credentials on your account.</span>
+				<a href="/user/settings?tab=sandbox">Open user settings</a>
 			</div>
 		{/if}
 		<div class="chat-scroll-wrap">
 			<div class="chat-log" bind:this={listEl} onscroll={onScroll}>
-				{#if entries.length === 0}
-					<p class="chat-empty">
-						Ask the agent to explore the repo, run tests, or make a change. The transcript clears on
-						refresh, but the agent's own session persists inside the sandbox.
-					</p>
-				{/if}
-				{#each entries as entry, i (i)}
-					{#if entry.kind === 'user'}
-						<div class="tr-user">
-							<span class="tr-user-dot" aria-hidden="true"></span>
-							<div class="tr-user-text">{entry.text}</div>
-						</div>
-					{:else if entry.kind === 'thinking'}
-						<div class="tr-thinking" title={entry.text}>{firstLine(entry.text)}</div>
-					{:else if entry.kind === 'text'}
-						<div class="tr-text">{entry.text}</div>
-					{:else if entry.kind === 'tool'}
-						<div class="tr-tool" class:tr-tool--failed={entry.failed}>
-							<button
-								type="button"
-								class="tr-tool-row"
-								aria-expanded={entry.expanded}
-								onclick={() => (entry.expanded = !entry.expanded)}
-							>
-								<span class="tr-tool-glyph" aria-hidden="true">{toolGlyph(entry.name)}</span>
-								<span class="tr-tool-name">{entry.name}</span>
-								{#if entry.summary}
-									<span class="tr-tool-arg" title={entry.title ?? undefined}>{entry.summary}</span>
-								{/if}
-								{#if entry.diff}
-									<span class="tr-diffstat">
-										{#if entry.diff.add > 0}<span class="tr-diff-add">+{entry.diff.add}</span>{/if}
-										{#if entry.diff.del > 0}<span class="tr-diff-del">-{entry.diff.del}</span>{/if}
-									</span>
-								{/if}
-								{#if entry.failed}<span class="tr-tool-failed">failed</span>{/if}
-							</button>
-							{#if entry.expanded}
-								<pre class="tr-tool-detail" transition:slide>{pretty(entry.input)}</pre>
-							{/if}
-						</div>
-					{:else if entry.kind === 'result'}
-						<div class="tr-turn">
-							<span class="tr-turn-rule" aria-hidden="true"></span>
-							<span class="tr-turn-label">
-								turn complete{#if entry.duration !== null}
-									· {fmtDuration(entry.duration)}{/if}{#if entry.cost !== null}
-									· {fmtCost(entry.cost)}{/if}
-							</span>
-							<span class="tr-turn-rule" aria-hidden="true"></span>
-						</div>
-					{:else}
-						<div class="tr-error">{entry.detail}</div>
+				<div class="chat-col">
+					{#if entries.length === 0}
+						<p class="chat-empty-title">Ask the agent to build something.</p>
+						<p class="chat-empty-sub">
+							The transcript clears on refresh; the agent session persists in the sandbox.
+						</p>
 					{/if}
-				{/each}
-				{#if streaming}
-					<div class="tr-working">
-						<Loader2 class="h-3.5 w-3.5 animate-spin" /> Working
-					</div>
-				{/if}
+					{#each entries as entry, i (i)}
+						{#if entry.kind === 'user'}
+							<div class="tr-user">
+								<span class="tr-user-dot" aria-hidden="true"></span>
+								<div class="tr-user-text">{entry.text}</div>
+							</div>
+						{:else if entry.kind === 'thinking'}
+							<div class="tr-thinking" title={entry.text}>{firstLine(entry.text)}</div>
+						{:else if entry.kind === 'text'}
+							<div class="tr-text">{entry.text}</div>
+						{:else if entry.kind === 'tool'}
+							<div class="tr-tool" class:tr-tool--failed={entry.failed}>
+								<button
+									type="button"
+									class="tr-tool-row"
+									aria-expanded={entry.expanded}
+									onclick={() => (entry.expanded = !entry.expanded)}
+								>
+									<span class="tr-tool-glyph" aria-hidden="true">{toolGlyph(entry.name)}</span>
+									<span class="tr-tool-name">{entry.name}</span>
+									{#if entry.summary}
+										<span class="tr-tool-arg" title={entry.title ?? undefined}>{entry.summary}</span>
+									{/if}
+									{#if entry.diff}
+										<span class="tr-diffstat">
+											{#if entry.diff.add > 0}<span class="tr-diff-add">+{entry.diff.add}</span>{/if}
+											{#if entry.diff.del > 0}<span class="tr-diff-del">-{entry.diff.del}</span>{/if}
+										</span>
+									{/if}
+									{#if entry.failed}<span class="tr-tool-failed">failed</span>{/if}
+								</button>
+								{#if entry.expanded}
+									<pre class="tr-tool-detail" transition:slide>{pretty(entry.input)}</pre>
+								{/if}
+							</div>
+						{:else if entry.kind === 'result'}
+							<div class="tr-turn">
+								<span class="tr-turn-rule" aria-hidden="true"></span>
+								<span class="tr-turn-label">
+									turn complete{#if entry.duration !== null}
+										· {fmtDuration(entry.duration)}{/if}{#if entry.cost !== null}
+										· {fmtCost(entry.cost)}{/if}
+								</span>
+								<span class="tr-turn-rule" aria-hidden="true"></span>
+							</div>
+						{:else}
+							<div class="tr-error">{entry.detail}</div>
+						{/if}
+					{/each}
+					{#if streaming}
+						<div class="tr-working">
+							<Loader2 class="h-3.5 w-3.5 animate-spin" /> Working
+						</div>
+					{/if}
+				</div>
 			</div>
 			{#if !atBottom}
 				<button type="button" class="tr-jump" transition:fade onclick={jumpToLatest}>
@@ -385,33 +388,49 @@
 				submitMessage();
 			}}
 		>
-			<textarea
-				bind:this={inputEl}
-				bind:value={input}
-				class="chat-composer-input"
-				rows="1"
-				placeholder="Ask the agent to build something"
-				aria-label="Message the agent"
-				oninput={autosize}
-				onkeydown={onComposerKey}
-			></textarea>
-			<div class="chat-composer-foot">
-				{#if streaming}
-					<span class="chat-composer-working">
-						<Loader2 class="h-3 w-3 animate-spin" /> Working, the agent is still on the last message
-					</span>
-				{:else}
-					<span class="chat-composer-hint">Enter sends · Shift+Enter for a newline</span>
-				{/if}
-				<Button
-					type="submit"
-					size="sm"
-					variant="primary"
-					disabled={streaming || !input.trim()}
-					aria-label="Send message"
-				>
-					<Send class="h-3.5 w-3.5" />
-				</Button>
+			<div class="chat-composer-col">
+				<textarea
+					bind:this={inputEl}
+					bind:value={input}
+					class="chat-composer-input"
+					rows="1"
+					placeholder="Ask the agent to build something"
+					aria-label="Message the agent"
+					oninput={autosize}
+					onkeydown={onComposerKey}
+				></textarea>
+				<div class="chat-composer-foot">
+					{#if streaming}
+						<span class="chat-composer-working">
+							<Loader2 class="h-3 w-3 animate-spin" /> Working
+						</span>
+					{:else}
+						<span class="chat-composer-hint">Enter sends · Shift+Enter for a newline</span>
+					{/if}
+					<div class="chat-composer-tools">
+						{#if repos.length > 0}
+							<select
+								class="chat-repo-select"
+								bind:value={selectedRepo}
+								aria-label="Working repository"
+							>
+								{#each repos as repo (repo.name)}
+									<option value={repo.name}>{repo.name}</option>
+								{/each}
+							</select>
+						{:else}
+							<span class="chat-repo-select chat-repo-select--static">home</span>
+						{/if}
+						<button
+							type="submit"
+							class="chat-send"
+							disabled={streaming || !input.trim()}
+							aria-label="Send message"
+						>
+							<Send class="h-3.5 w-3.5" />
+						</button>
+					</div>
+				</div>
 			</div>
 		</form>
 	{/if}
@@ -448,20 +467,25 @@
 		color: var(--text-muted);
 	}
 
-	.chat-note {
+	.chat-cred {
 		display: flex;
 		align-items: center;
-		justify-content: space-between;
-		gap: 0.75rem;
-		flex-wrap: wrap;
-		padding: 0.625rem 0.875rem;
-		margin-bottom: 0.75rem;
-		border: 1px solid var(--status-info-border);
-		border-radius: var(--radius-sm);
-		background: var(--status-info-bg);
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		color: var(--text-default);
+		gap: 0.5rem;
+		flex-shrink: 0;
+		padding: 0.375rem 1rem;
+		border-bottom: 1px solid var(--border-default);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-muted);
+	}
+
+	.chat-cred a {
+		color: var(--text-link);
+		text-decoration: none;
+	}
+
+	.chat-cred a:hover {
+		text-decoration: underline;
 	}
 
 	.chat-scroll-wrap {
@@ -476,18 +500,28 @@
 		flex: 1;
 		min-height: 0;
 		overflow-y: auto;
-		display: flex;
-		flex-direction: column;
-		gap: 0.375rem;
-		padding: 0.25rem 0.25rem 1rem;
+		padding: 0.75rem 1rem 1rem;
 	}
 
-	.chat-empty {
-		margin: auto;
-		max-width: 26rem;
-		text-align: center;
+	.chat-col {
+		display: flex;
+		flex-direction: column;
+		align-items: stretch;
+		gap: 0.375rem;
+		max-width: 52rem;
+		margin: 0 auto;
+	}
+
+	.chat-empty-title {
 		font-size: var(--text-footnote);
-		line-height: 1.5;
+		line-height: var(--lh-footnote);
+		font-weight: 600;
+		color: var(--text-muted);
+	}
+
+	.chat-empty-sub {
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 		color: var(--text-faint);
 	}
 
@@ -705,15 +739,13 @@
 
 	.chat-composer {
 		flex-shrink: 0;
-		margin-top: 0.5rem;
-		border: 1px solid var(--border-default);
-		border-radius: var(--radius-md);
-		background: var(--bg-raised);
-		padding: 0.5rem 0.625rem 0.375rem;
+		border-top: 1px solid var(--border-default);
+		padding: 0.5rem 1rem 0.625rem;
 	}
 
-	.chat-composer:focus-within {
-		border-color: var(--border-strong);
+	.chat-composer-col {
+		max-width: 52rem;
+		margin: 0 auto;
 	}
 
 	.chat-composer-input {
@@ -740,7 +772,7 @@
 		align-items: center;
 		justify-content: space-between;
 		gap: 0.5rem;
-		margin-top: 0.25rem;
+		margin-top: 0.375rem;
 	}
 
 	.chat-composer-hint {
@@ -756,5 +788,60 @@
 		font-size: var(--text-micro);
 		line-height: var(--lh-micro);
 		color: var(--text-muted);
+	}
+
+	.chat-composer-tools {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+	}
+
+	.chat-repo-select {
+		border: none;
+		background: none;
+		padding: 0.125rem 0.25rem;
+		font-family: var(--font-mono, monospace);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-muted);
+		cursor: pointer;
+		border-radius: var(--radius-xs);
+		transition:
+			color var(--dur-fast),
+			background-color var(--dur-fast);
+	}
+
+	.chat-repo-select:hover {
+		color: var(--text-default);
+		background: var(--bg-hover);
+	}
+
+	.chat-repo-select--static {
+		cursor: default;
+	}
+
+	.chat-repo-select--static:hover {
+		color: var(--text-muted);
+		background: none;
+	}
+
+	.chat-send {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		border: none;
+		border-radius: var(--radius-sm);
+		background: var(--accent);
+		color: var(--text-on-accent);
+		cursor: pointer;
+		transition: opacity var(--dur-fast);
+	}
+
+	.chat-send:disabled {
+		background: var(--bg-sunken);
+		color: var(--text-faint);
+		cursor: default;
 	}
 </style>

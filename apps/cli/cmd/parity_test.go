@@ -187,6 +187,8 @@ var routeCoverage = map[string]string{
 	"POST /sandboxes/:id/chat":   "sandbox chat",
 	"GET /sandboxes/:id/changes": "sandbox diff --stat",
 	"GET /sandboxes/:id/diff":    "sandbox diff",
+	"GET /sandboxes/:id/repos":   "sandbox repo list",
+	"POST /sandboxes/:id/repos":  "sandbox repo add",
 	"GET /sandboxes/credentials": "sandbox credentials status",
 	"PUT /sandboxes/credentials": "sandbox credentials set",
 

@@ -128,8 +128,12 @@ All routes are user-scoped: you see and touch only your own sandboxes
 | `DELETE /sandboxes/:id` | deploy | removes CR, secret, and volumes |
 | `GET /sandboxes/:id/ssh` | exec | websocket upgrade; raw SSH bytes |
 | `POST /sandboxes/:id/chat` | exec | Cloud Code: SSE stream of the in-sandbox claude agent |
-| `GET /sandboxes/:id/changes` | exec | git status and diffstat of the sandbox workspace |
-| `GET /sandboxes/:id/diff` | exec | git diff, whole tree or one file via `?file=` |
+| `GET /sandboxes/:id/changes` | exec | git status and diffstat, scoped with `?repo=` |
+| `GET /sandboxes/:id/diff` | exec | git diff, whole tree or one file via `?file=`, scoped with `?repo=` |
+| `GET /sandboxes/:id/repos` | exec | list git repositories cloned into the sandbox |
+| `POST /sandboxes/:id/repos` | deploy | clone another repository into the sandbox |
+
+A sandbox is a computer, not a repo checkout: clone as many repositories into it as you like (each lands in `/persist/home/<name>` on the persistent volume) and point the agent's working directory at any of them per message.
 | `GET /sandboxes/credentials` | read | `{ claude: boolean, openai: boolean }` |
 | `PUT /sandboxes/credentials` | deploy | set or clear agent tokens (null clears) |
 | `GET /ssh-identities` | read | named public keys attached to your user |

@@ -38,6 +38,7 @@ func sandboxCmd() *cobra.Command {
 		sandboxSSHCmd(),
 		sandboxChatCmd(),
 		sandboxDiffCmd(),
+		sandboxRepoCmd(),
 		sandboxProxyCmd(),
 		sandboxSSHConfigCmd(),
 		sandboxCredentialsCmd(),
@@ -428,6 +429,75 @@ func sandboxDiffCmd() *cobra.Command {
 	c.Flags().StringVar(&file, "file", "", "limit the diff to one file")
 	c.Flags().BoolVar(&stat, "stat", false, "list changed files instead of the diff")
 	return c
+}
+
+func sandboxRepoCmd() *cobra.Command {
+	c := &cobra.Command{
+		Use:   "repo",
+		Short: "Manage git repositories inside a sandbox",
+	}
+	c.AddCommand(sandboxRepoListCmd(), sandboxRepoAddCmd())
+	return c
+}
+
+func sandboxRepoListCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:     "list <sandbox>",
+		Aliases: []string{"ls"},
+		Short:   "List repositories cloned into a sandbox",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			sb, err := resolveSandbox(cmd.Context(), cl, args[0])
+			if err != nil {
+				return err
+			}
+			var raw map[string]any
+			if err := cl.GetJSON(cmd.Context(), sandboxPath(str(sb["id"]), "repos"), &raw); err != nil {
+				return sandboxDialError(err)
+			}
+			if fmtFlag() == output.FormatJSON {
+				return output.JSON(raw)
+			}
+			rows := [][]string{}
+			for _, r := range asList(raw["repos"]) {
+				rows = append(rows, []string{pick(r, "name"), pick(r, "branch"), pick(r, "dirtyFiles")})
+			}
+			if len(rows) == 0 {
+				fmt.Println(output.Dim("no repositories cloned yet"))
+				return nil
+			}
+			output.Table([]string{"name", "branch", "dirty"}, rows)
+			return nil
+		},
+	}
+}
+
+func sandboxRepoAddCmd() *cobra.Command {
+	return &cobra.Command{
+		Use:   "add <sandbox> <repo-url>",
+		Short: "Clone another repository into a sandbox",
+		Args:  cobra.ExactArgs(2),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			sb, err := resolveSandbox(cmd.Context(), cl, args[0])
+			if err != nil {
+				return err
+			}
+			var raw map[string]any
+			if err := cl.Send(cmd.Context(), http.MethodPost, sandboxPath(str(sb["id"]), "repos"), map[string]any{"repoUrl": args[1]}, &raw); err != nil {
+				return sandboxFeatureError(err)
+			}
+			output.Successf("cloning %s in the background (see ~/.clone.log in the sandbox)", pick(raw, "name"))
+			return nil
+		},
+	}
 }
 
 func sandboxStartCmd() *cobra.Command {

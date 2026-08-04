@@ -4,7 +4,8 @@ import { PassThrough } from 'stream';
 import type { Response } from 'express';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
-import { SandboxK8sService, sandboxWorkdir } from './sandbox-k8s.service';
+import { SandboxK8sService } from './sandbox-k8s.service';
+import { SandboxWorkspaceService } from './sandbox-workspace.service';
 
 const MAX_MESSAGE_LENGTH = 32768;
 const CHAT_TIMEOUT_MS = 10 * 60 * 1000;
@@ -17,6 +18,7 @@ export class SandboxChatService {
     private readonly prisma: PrismaService,
     private readonly kubernetes: KubernetesService,
     private readonly sandboxK8s: SandboxK8sService,
+    private readonly workspace: SandboxWorkspaceService,
   ) {}
 
   async stream(
@@ -28,6 +30,7 @@ export class SandboxChatService {
       status: string;
     },
     message: string,
+    repo: string | undefined,
     res: Response,
   ): Promise<void> {
     if (typeof message !== 'string' || !message.trim() || message.length > MAX_MESSAGE_LENGTH) {
@@ -66,7 +69,7 @@ export class SandboxChatService {
         .catch(() => {});
     touch();
 
-    const workdir = sandboxWorkdir(sandbox.repoUrl);
+    const workdir = this.workspace.resolveWorkdir(sandbox, repo);
     const resume = sandbox.chatSessionId ? ` --resume '${sandbox.chatSessionId.replace(/[^a-zA-Z0-9_-]/g, '')}'` : '';
     const command = [
       'su',

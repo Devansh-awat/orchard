@@ -78,10 +78,14 @@ export class SandboxesController {
 
   @Get(':id/changes')
   @RequireScope('exec')
-  async changes(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+  async changes(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('repo') repo?: string,
+  ) {
     const user = await this.resolveUser(req);
     const row = await this.sandboxes.getOwned(id, user.id);
-    return this.workspace.changes(row);
+    return this.workspace.changes(row, repo || undefined);
   }
 
   @Get(':id/diff')
@@ -90,10 +94,31 @@ export class SandboxesController {
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
     @Query('file') file?: string,
+    @Query('repo') repo?: string,
   ) {
     const user = await this.resolveUser(req);
     const row = await this.sandboxes.getOwned(id, user.id);
-    return this.workspace.diff(row, file || undefined);
+    return this.workspace.diff(row, file || undefined, repo || undefined);
+  }
+
+  @Get(':id/repos')
+  @RequireScope('exec')
+  async listRepos(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    const user = await this.resolveUser(req);
+    const row = await this.sandboxes.getOwned(id, user.id);
+    return this.workspace.listRepos(row);
+  }
+
+  @Post(':id/repos')
+  @RequireScope('deploy')
+  async addRepo(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { repoUrl?: string },
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await this.sandboxes.getOwned(id, user.id);
+    return this.workspace.addRepo(row, body?.repoUrl || '');
   }
 
   @Post(':id/chat')
@@ -102,11 +127,11 @@ export class SandboxesController {
     @Req() req: any,
     @Res() res: Response,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { message?: string },
+    @Body() body: { message?: string; repo?: string },
   ) {
     const user = await this.resolveUser(req);
     const row = await this.sandboxes.getOwned(id, user.id);
-    await this.chat.stream(row, body?.message ?? '', res);
+    await this.chat.stream(row, body?.message ?? '', body?.repo || undefined, res);
   }
 
   @Get(':id/ssh')

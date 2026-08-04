@@ -302,6 +302,8 @@ export const routes: GeneratedRoute[] = [
   { method: 'GET', path: '/sandboxes/:id/changes', auth: 'authenticated' },
   { method: 'POST', path: '/sandboxes/:id/chat', auth: 'authenticated' },
   { method: 'GET', path: '/sandboxes/:id/diff', auth: 'authenticated' },
+  { method: 'GET', path: '/sandboxes/:id/repos', auth: 'authenticated' },
+  { method: 'POST', path: '/sandboxes/:id/repos', auth: 'authenticated' },
   { method: 'GET', path: '/sandboxes/:id/ssh', auth: 'authenticated' },
   { method: 'POST', path: '/sandboxes/:id/start', auth: 'authenticated' },
   { method: 'POST', path: '/sandboxes/:id/stop', auth: 'authenticated' },

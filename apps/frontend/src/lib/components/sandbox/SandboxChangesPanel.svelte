@@ -11,11 +11,13 @@
 	let {
 		sandboxId,
 		running,
-		refreshKey = 0
+		refreshKey = 0,
+		repo = null
 	}: {
 		sandboxId: string;
 		running: boolean;
 		refreshKey?: number;
+		repo?: string | null;
 	} = $props();
 
 	let loading = $state(false);
@@ -34,7 +36,8 @@
 		loading = true;
 		error = null;
 		try {
-			const res = await apiFetch(`/apiv1/sandboxes/${sandboxId}/changes`);
+			const qs = repo ? `?repo=${encodeURIComponent(repo)}` : '';
+			const res = await apiFetch(`/apiv1/sandboxes/${sandboxId}/changes${qs}`);
 			if (!res.ok) {
 				const data = await res.json().catch(() => ({}));
 				throw new Error(data?.message || 'Failed to load changes');
@@ -55,10 +58,11 @@
 		diffError = null;
 		diffLoading = true;
 		try {
-			const url = file
-				? `/apiv1/sandboxes/${sandboxId}/diff?file=${encodeURIComponent(file)}`
-				: `/apiv1/sandboxes/${sandboxId}/diff`;
-			const res = await apiFetch(url);
+			const params = new URLSearchParams();
+			if (file) params.set('file', file);
+			if (repo) params.set('repo', repo);
+			const qs = params.size > 0 ? `?${params.toString()}` : '';
+			const res = await apiFetch(`/apiv1/sandboxes/${sandboxId}/diff${qs}`);
 			if (!res.ok) {
 				const data = await res.json().catch(() => ({}));
 				throw new Error(data?.message || 'Failed to load diff');
@@ -79,9 +83,16 @@
 		diffError = null;
 	}
 
+	let lastRepo: string | null = null;
 	$effect(() => {
 		void refreshKey;
 		void sandboxId;
+		if (repo !== lastRepo) {
+			lastRepo = repo;
+			view = 'list';
+			diffText = null;
+			diffError = null;
+		}
 		if (running) load();
 	});
 
