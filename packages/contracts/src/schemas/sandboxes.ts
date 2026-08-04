@@ -149,7 +149,53 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
   'POST /sandboxes/:id/chat': {
     summary:
       'Cloud Code: send a message to the claude agent inside the sandbox; responds with an SSE stream of claude stream-json events plus a final {type: "done"|"error"} frame',
-    request: z.object({ message: z.string().min(1).max(32768) }),
+    request: z.object({
+      message: z.string().min(1).max(32768),
+      conversationId: z.string().uuid().optional(),
+      repo: z.string().optional().describe('Working directory repo for a new conversation'),
+    }),
+    scope: 'exec',
+  },
+  'GET /sandboxes/:id/conversations': {
+    summary: 'List conversations (metadata only; transcripts live on the sandbox disk)',
+    response: z.object({
+      conversations: z.array(
+        z.object({
+          id: z.string().uuid(),
+          title: z.string(),
+          repo: z.string().nullable(),
+          hasSession: z.boolean(),
+          createdAt: z.string(),
+          updatedAt: z.string(),
+        }),
+      ),
+    }),
+    scope: 'read',
+  },
+  'POST /sandboxes/:id/conversations': {
+    summary: 'Create a conversation with an optional working-directory repo',
+    request: z.object({
+      title: z.string().max(120).optional(),
+      repo: z.string().nullable().optional(),
+    }),
+    scope: 'deploy',
+  },
+  'PATCH /sandboxes/:id/conversations/:cid': {
+    summary: 'Rename a conversation (repo changeable only before its first message)',
+    request: z.object({
+      title: z.string().max(120).optional(),
+      repo: z.string().nullable().optional(),
+    }),
+    scope: 'deploy',
+  },
+  'DELETE /sandboxes/:id/conversations/:cid': {
+    summary: 'Delete a conversation record (the session file stays on the sandbox disk)',
+    response: z.object({ success: z.boolean() }),
+    scope: 'deploy',
+  },
+  'GET /sandboxes/:id/conversations/:cid/history': {
+    summary: 'Replay a conversation transcript from the claude session file on the sandbox disk',
+    response: z.object({ events: z.array(z.unknown()), truncated: z.boolean() }),
     scope: 'exec',
   },
   'GET /sandboxes/:id/ssh': {

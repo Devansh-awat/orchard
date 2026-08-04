@@ -1,11 +1,15 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
-	import { ArrowDown, Loader2, Play, Send } from 'lucide-svelte';
-	import { apiFetch } from '$lib/stores';
+	import { marked } from 'marked';
+	import { ArrowDown, Brain, Check, Copy, Loader2, Play, Plus, Send, X } from 'lucide-svelte';
+	import { apiFetch, toasts } from '$lib/stores';
 	import { Button } from '$lib/components/ui';
+	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import { fade, slide } from '$lib/utils/transitions';
 	import { sandboxCredentialsQueryOptions } from '$lib/queries/sandboxes';
 	import type { Sandbox, SandboxRepo } from '$lib/types/sandbox';
+
+	type TurnFile = { name: string; path: string; add: number; del: number };
 
 	type ToolEntry = {
 		kind: 'tool';
@@ -24,8 +28,17 @@
 		| { kind: 'thinking'; text: string }
 		| { kind: 'text'; text: string }
 		| ToolEntry
-		| { kind: 'result'; cost: number | null; duration: number | null }
+		| { kind: 'result'; cost: number | null; duration: number | null; files: TurnFile[] }
 		| { kind: 'error'; detail: string };
+
+	type Conversation = {
+		id: string;
+		title: string;
+		repo: string | null;
+		hasSession: boolean;
+		createdAt: string;
+		updatedAt: string;
+	};
 
 	let {
 		sandbox,
@@ -52,8 +65,158 @@
 	let atBottom = $state(true);
 	let listEl = $state<HTMLDivElement | undefined>(undefined);
 	let inputEl = $state<HTMLTextAreaElement | undefined>(undefined);
+	let copiedIdx = $state<number | null>(null);
+	let copyTimer: ReturnType<typeof setTimeout> | null = null;
+	let sawTerminal = false;
+
+	let conversations = $state<Conversation[]>([]);
+	let convosSupported = $state(false);
+	let activeId = $state<string | null>(null);
+	let historyLoading = $state(false);
+	let historyTruncated = $state(false);
+	let renamingId = $state<string | null>(null);
+	let renameText = $state('');
+	let deleteOpen = $state(false);
+	let deleteTarget = $state<Conversation | null>(null);
 
 	const canStart = $derived(sandbox.status === 'stopped' || sandbox.status === 'error');
+	const activeConvo = $derived(conversations.find((c) => c.id === activeId) ?? null);
+	const repoLocked = $derived(convosSupported && activeConvo?.hasSession === true);
+
+	let convosInit = false;
+	$effect(() => {
+		if (sandbox.status === 'running' && !convosInit) {
+			convosInit = true;
+			loadConversations();
+		}
+	});
+
+	async function loadConversations() {
+		try {
+			const res = await apiFetch(`/apiv1/sandboxes/${sandbox.id}/conversations`);
+			if (!res.ok) return;
+			const data = await res.json();
+			conversations = data.conversations ?? [];
+			convosSupported = true;
+			if (conversations.length === 0) {
+				await createConversation();
+			} else {
+				activeId = conversations[0].id;
+				if (conversations[0].repo) selectedRepo = conversations[0].repo;
+				await loadHistory(conversations[0].id);
+			}
+		} catch {
+			return;
+		}
+	}
+
+	async function refreshConversations() {
+		try {
+			const res = await apiFetch(`/apiv1/sandboxes/${sandbox.id}/conversations`);
+			if (!res.ok) return;
+			const data = await res.json();
+			if (Array.isArray(data.conversations)) conversations = data.conversations;
+		} catch {
+			return;
+		}
+	}
+
+	async function createConversation() {
+		try {
+			const res = await apiFetch(`/apiv1/sandboxes/${sandbox.id}/conversations`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify(selectedRepo ? { repo: selectedRepo } : {})
+			});
+			if (!res.ok) return;
+			const convo = (await res.json()) as Conversation;
+			conversations.push(convo);
+			activeId = convo.id;
+			entries = [];
+			historyTruncated = false;
+		} catch {
+			return;
+		}
+	}
+
+	async function switchConversation(id: string) {
+		if (id === activeId || streaming) return;
+		activeId = id;
+		const convo = conversations.find((c) => c.id === id);
+		if (convo?.repo) selectedRepo = convo.repo;
+		await loadHistory(id);
+	}
+
+	async function loadHistory(id: string) {
+		entries = [];
+		historyTruncated = false;
+		if (sandbox.status !== 'running') return;
+		historyLoading = true;
+		try {
+			const res = await apiFetch(`/apiv1/sandboxes/${sandbox.id}/conversations/${id}/history`);
+			if (!res.ok) return;
+			const data = await res.json();
+			for (const event of data.events ?? []) {
+				handleEvent(event as Record<string, unknown>);
+			}
+			historyTruncated = data.truncated === true;
+		} catch {
+			return;
+		} finally {
+			historyLoading = false;
+		}
+	}
+
+	function startRename(convo: Conversation) {
+		renamingId = convo.id;
+		renameText = convo.title;
+	}
+
+	async function commitRename() {
+		const id = renamingId;
+		const title = renameText.trim();
+		renamingId = null;
+		if (!id || !title) return;
+		const convo = conversations.find((c) => c.id === id);
+		if (!convo || convo.title === title) return;
+		convo.title = title;
+		try {
+			await apiFetch(`/apiv1/sandboxes/${sandbox.id}/conversations/${id}`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ title })
+			});
+		} catch {
+			return;
+		}
+	}
+
+	async function deleteConversation() {
+		const target = deleteTarget;
+		deleteTarget = null;
+		if (!target) return;
+		try {
+			const res = await apiFetch(`/apiv1/sandboxes/${sandbox.id}/conversations/${target.id}`, {
+				method: 'DELETE'
+			});
+			if (!res.ok) throw new Error('Failed to delete conversation');
+			conversations = conversations.filter((c) => c.id !== target.id);
+			if (activeId === target.id) {
+				if (conversations.length > 0) {
+					activeId = conversations[0].id;
+					await loadHistory(conversations[0].id);
+				} else {
+					await createConversation();
+				}
+			}
+		} catch (e) {
+			toasts.add({
+				title: 'Error',
+				description: e instanceof Error ? e.message : 'Failed to delete conversation',
+				color: 'error'
+			});
+		}
+	}
 
 	$effect(() => {
 		const tail = entries.at(-1);
@@ -73,6 +236,11 @@
 		listEl?.scrollTo({ top: listEl.scrollHeight, behavior: 'smooth' });
 	}
 
+	function renderMd(text: string): string {
+		const trimmed = text.trim();
+		return trimmed ? (marked.parse(trimmed, { async: false }) as string) : '';
+	}
+
 	function appendText(text: string) {
 		const tail = entries.at(-1);
 		if (tail && tail.kind === 'text') tail.text += text;
@@ -86,11 +254,11 @@
 	}
 
 	const FILE_TOOLS = new Set(['Edit', 'Write', 'Read', 'NotebookEdit', 'MultiEdit']);
+	const EDIT_TOOLS = new Set(['Edit', 'Write', 'NotebookEdit', 'MultiEdit']);
 
 	function toolGlyph(name: string): string {
 		if (name === 'Bash') return '$';
-		if (name === 'Edit' || name === 'Write' || name === 'NotebookEdit' || name === 'MultiEdit')
-			return '±';
+		if (EDIT_TOOLS.has(name)) return '±';
 		if (name === 'Read') return '≡';
 		if (name === 'Grep' || name === 'Glob' || name.includes('Search')) return '⌕';
 		return '⏺';
@@ -99,6 +267,13 @@
 	function truncate(text: string, max = 80): string {
 		const flat = text.replace(/\s+/g, ' ').trim();
 		return flat.length > max ? `${flat.slice(0, max)}…` : flat;
+	}
+
+	function midTruncate(text: string, max = 72): string {
+		const flat = text.replace(/\s+/g, ' ').trim();
+		if (flat.length <= max) return flat;
+		const head = Math.ceil((max - 1) * 0.6);
+		return `${flat.slice(0, head)}…${flat.slice(flat.length - (max - 1 - head))}`;
 	}
 
 	function countLines(text: string): number {
@@ -111,7 +286,8 @@
 		let summary = '';
 		let title: string | null = null;
 		if (name === 'Bash' && typeof record.command === 'string') {
-			summary = truncate(record.command);
+			summary = midTruncate(record.command);
+			title = record.command;
 		} else if (FILE_TOOLS.has(name) && typeof record.file_path === 'string') {
 			summary = record.file_path.split('/').pop() ?? record.file_path;
 			title = record.file_path;
@@ -159,6 +335,30 @@
 		}
 	}
 
+	function turnFiles(): TurnFile[] {
+		const byPath = new Map<string, TurnFile>();
+		for (let i = entries.length - 1; i >= 0; i -= 1) {
+			const entry = entries[i];
+			if (entry.kind === 'user' || entry.kind === 'result') break;
+			if (entry.kind !== 'tool' || !EDIT_TOOLS.has(entry.name) || !entry.title) continue;
+			const existing = byPath.get(entry.title);
+			const add = entry.diff?.add ?? 0;
+			const del = entry.diff?.del ?? 0;
+			if (existing) {
+				existing.add += add;
+				existing.del += del;
+			} else {
+				byPath.set(entry.title, {
+					name: entry.title.split('/').pop() ?? entry.title,
+					path: entry.title,
+					add,
+					del
+				});
+			}
+		}
+		return [...byPath.values()].reverse();
+	}
+
 	function handleEvent(event: Record<string, unknown>) {
 		if (event.type === 'assistant') {
 			const message = event.message as { content?: unknown[] } | undefined;
@@ -178,15 +378,28 @@
 				}
 			}
 		} else if (event.type === 'user') {
-			const message = event.message as { content?: unknown[] } | undefined;
-			if (Array.isArray(message?.content)) markToolResults(message.content);
+			const message = event.message as { content?: unknown } | undefined;
+			if (typeof message?.content === 'string' && message.content.trim()) {
+				entries.push({ kind: 'user', text: message.content });
+			} else if (Array.isArray(message?.content)) {
+				for (const block of message.content) {
+					const b = block as Record<string, unknown>;
+					if (b.type === 'text' && typeof b.text === 'string' && b.text.trim()) {
+						entries.push({ kind: 'user', text: b.text });
+					}
+				}
+				markToolResults(message.content);
+			}
 		} else if (event.type === 'result') {
+			sawTerminal = true;
 			entries.push({
 				kind: 'result',
 				cost: typeof event.total_cost_usd === 'number' ? event.total_cost_usd : null,
-				duration: typeof event.duration_ms === 'number' ? event.duration_ms : null
+				duration: typeof event.duration_ms === 'number' ? event.duration_ms : null,
+				files: turnFiles()
 			});
 		} else if (event.type === 'error') {
+			sawTerminal = true;
 			entries.push({
 				kind: 'error',
 				detail: typeof event.detail === 'string' ? event.detail : 'The agent hit an error'
@@ -218,11 +431,15 @@
 		entries.push({ kind: 'user', text: message });
 		atBottom = true;
 		streaming = true;
+		sawTerminal = false;
 		try {
+			const body: Record<string, string> = { message };
+			if (activeId) body.conversationId = activeId;
+			if (selectedRepo) body.repo = selectedRepo;
 			const res = await apiFetch(`/apiv1/sandboxes/${sandbox.id}/chat`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(selectedRepo ? { message, repo: selectedRepo } : { message })
+				body: JSON.stringify(body)
 			});
 			if (!res.ok || !res.body) {
 				const data = await res.json().catch(() => ({}));
@@ -241,8 +458,16 @@
 					buffer = buffer.slice(boundary + 2);
 					boundary = buffer.indexOf('\n\n');
 				}
+				if (sawTerminal) {
+					await reader.cancel().catch(() => {});
+					break;
+				}
 			}
 			if (buffer.trim()) handleFrame(buffer);
+			if (activeConvo && !activeConvo.hasSession) {
+				activeConvo.hasSession = true;
+				activeConvo.repo = selectedRepo;
+			}
 		} catch (err) {
 			entries.push({
 				kind: 'error',
@@ -250,6 +475,7 @@
 			});
 		} finally {
 			streaming = false;
+			if (convosSupported) refreshConversations();
 			onturndone?.();
 		}
 	}
@@ -276,7 +502,8 @@
 	}
 
 	function firstLine(text: string): string {
-		return truncate(text.split('\n')[0] ?? '', 100);
+		const line = text.split('\n').find((l) => l.trim()) ?? '';
+		return truncate(line, 90);
 	}
 
 	function fmtCost(cost: number): string {
@@ -288,6 +515,28 @@
 		const s = ms / 1000;
 		if (s < 60) return `${s.toFixed(1)}s`;
 		return `${Math.floor(s / 60)}m ${Math.round(s % 60)}s`;
+	}
+
+	function transcriptText(): string {
+		const lines: string[] = [];
+		for (const entry of entries) {
+			if (entry.kind === 'user') lines.push(`> ${entry.text}`);
+			else if (entry.kind === 'text') lines.push(entry.text);
+			else if (entry.kind === 'tool') lines.push(`[${entry.name}] ${entry.summary}`);
+			else if (entry.kind === 'result') {
+				lines.push(
+					`-- ${entry.duration !== null ? fmtDuration(entry.duration) : 'turn complete'}${entry.cost !== null ? ` · ${fmtCost(entry.cost)}` : ''}`
+				);
+			} else if (entry.kind === 'error') lines.push(`! ${entry.detail}`);
+		}
+		return lines.join('\n');
+	}
+
+	async function copyTranscript(idx: number) {
+		await navigator.clipboard.writeText(transcriptText());
+		copiedIdx = idx;
+		if (copyTimer) clearTimeout(copyTimer);
+		copyTimer = setTimeout(() => (copiedIdx = null), 1500);
 	}
 </script>
 
@@ -304,6 +553,63 @@
 			{/if}
 		</div>
 	{:else}
+		{#if convosSupported}
+			<div class="conv-bar">
+				<div class="conv-tabs" role="tablist" aria-label="Conversations">
+					{#each conversations as convo (convo.id)}
+						<div
+							class="conv-tab"
+							class:conv-tab--active={convo.id === activeId}
+							role="tab"
+							aria-selected={convo.id === activeId}
+						>
+							{#if renamingId === convo.id}
+								<input
+									class="conv-rename"
+									bind:value={renameText}
+									aria-label="Conversation title"
+									onkeydown={(e) => {
+										if (e.key === 'Enter') commitRename();
+										else if (e.key === 'Escape') renamingId = null;
+									}}
+									onblur={commitRename}
+									{@attach (el) => (el as HTMLInputElement).focus()}
+								/>
+							{:else}
+								<button
+									type="button"
+									class="conv-tab-btn"
+									title={convo.title}
+									onclick={() => switchConversation(convo.id)}
+									ondblclick={() => startRename(convo)}
+								>
+									{truncate(convo.title, 24) || 'Untitled'}
+								</button>
+								<button
+									type="button"
+									class="conv-close"
+									aria-label={`Delete ${convo.title}`}
+									onclick={() => {
+										deleteTarget = convo;
+										deleteOpen = true;
+									}}
+								>
+									<X class="h-3 w-3" />
+								</button>
+							{/if}
+						</div>
+					{/each}
+				</div>
+				<button
+					type="button"
+					class="conv-add"
+					aria-label="New conversation"
+					onclick={createConversation}
+				>
+					<Plus class="h-3.5 w-3.5" />
+				</button>
+			</div>
+		{/if}
 		{#if missingClaude}
 			<div class="chat-cred">
 				<span>No Claude credentials on your account.</span>
@@ -312,12 +618,22 @@
 		{/if}
 		<div class="chat-scroll-wrap">
 			<div class="chat-log" bind:this={listEl} onscroll={onScroll}>
-				<div class="chat-col">
-					{#if entries.length === 0}
+				{#if entries.length === 0 && !historyLoading}
+					<div class="chat-col">
 						<p class="chat-empty-title">Ask the agent to build something.</p>
 						<p class="chat-empty-sub">
-							The transcript clears on refresh; the agent session persists in the sandbox.
+							The agent works directly in the sandbox filesystem; sessions persist on its disk.
 						</p>
+					</div>
+				{/if}
+				<div class="chat-col chat-col--feed">
+					{#if historyLoading}
+						<div class="tr-working">
+							<Loader2 class="h-3.5 w-3.5 animate-spin" /> Loading history
+						</div>
+					{/if}
+					{#if historyTruncated}
+						<p class="chat-truncated">Older messages were truncated.</p>
 					{/if}
 					{#each entries as entry, i (i)}
 						{#if entry.kind === 'user'}
@@ -326,21 +642,28 @@
 								<div class="tr-user-text">{entry.text}</div>
 							</div>
 						{:else if entry.kind === 'thinking'}
-							<div class="tr-thinking" title={entry.text}>{firstLine(entry.text)}</div>
+							{@const thought = firstLine(entry.text)}
+							<div class="tr-row" title={entry.text}>
+								<span class="tr-row-icon"><Brain class="h-3 w-3" /></span>
+								<span class="tr-row-label">Thinking</span>
+								{#if thought}<span class="tr-chip">{thought}</span>{/if}
+							</div>
 						{:else if entry.kind === 'text'}
-							<div class="tr-text">{entry.text}</div>
+							<div class="tr-md">{@html renderMd(entry.text)}</div>
 						{:else if entry.kind === 'tool'}
 							<div class="tr-tool" class:tr-tool--failed={entry.failed}>
 								<button
 									type="button"
-									class="tr-tool-row"
+									class="tr-row tr-row-btn"
 									aria-expanded={entry.expanded}
 									onclick={() => (entry.expanded = !entry.expanded)}
 								>
-									<span class="tr-tool-glyph" aria-hidden="true">{toolGlyph(entry.name)}</span>
-									<span class="tr-tool-name">{entry.name}</span>
+									<span class="tr-row-icon tr-row-glyph" aria-hidden="true">
+										{toolGlyph(entry.name)}
+									</span>
+									<span class="tr-row-label">{entry.name}</span>
 									{#if entry.summary}
-										<span class="tr-tool-arg" title={entry.title ?? undefined}>{entry.summary}</span>
+										<span class="tr-chip" title={entry.title ?? undefined}>{entry.summary}</span>
 									{/if}
 									{#if entry.diff}
 										<span class="tr-diffstat">
@@ -356,13 +679,29 @@
 							</div>
 						{:else if entry.kind === 'result'}
 							<div class="tr-turn">
-								<span class="tr-turn-rule" aria-hidden="true"></span>
-								<span class="tr-turn-label">
-									turn complete{#if entry.duration !== null}
-										· {fmtDuration(entry.duration)}{/if}{#if entry.cost !== null}
-										· {fmtCost(entry.cost)}{/if}
-								</span>
-								<span class="tr-turn-rule" aria-hidden="true"></span>
+								{#if entry.duration !== null}
+									<span class="tr-turn-meta">{fmtDuration(entry.duration)}</span>
+								{/if}
+								<button
+									type="button"
+									class="tr-turn-copy"
+									aria-label="Copy transcript"
+									onclick={() => copyTranscript(i)}
+								>
+									{#if copiedIdx === i}<Check class="h-3 w-3" />{:else}<Copy class="h-3 w-3" />{/if}
+								</button>
+								<div class="tr-turn-files">
+									{#each entry.files as file (file.path)}
+										<span class="tr-file-chip" title={file.path}>
+											{file.name}
+											{#if file.add > 0}<span class="tr-diff-add">+{file.add}</span>{/if}
+											{#if file.del > 0}<span class="tr-diff-del">-{file.del}</span>{/if}
+										</span>
+									{/each}
+								</div>
+								{#if entry.cost !== null}
+									<span class="tr-turn-cost">{fmtCost(entry.cost)}</span>
+								{/if}
 							</div>
 						{:else}
 							<div class="tr-error">{entry.detail}</div>
@@ -408,7 +747,11 @@
 						<span class="chat-composer-hint">Enter sends · Shift+Enter for a newline</span>
 					{/if}
 					<div class="chat-composer-tools">
-						{#if repos.length > 0}
+						{#if repoLocked}
+							<span class="chat-repo-select chat-repo-select--static">
+								{activeConvo?.repo ?? 'home'}
+							</span>
+						{:else if repos.length > 0}
 							<select
 								class="chat-repo-select"
 								bind:value={selectedRepo}
@@ -435,6 +778,15 @@
 		</form>
 	{/if}
 </div>
+
+<ConfirmModal
+	bind:open={deleteOpen}
+	title="Delete conversation?"
+	description={`This deletes ${deleteTarget?.title ?? 'this conversation'} and its transcript from the sandbox.`}
+	confirmLabel="Delete"
+	onconfirm={deleteConversation}
+	oncancel={() => (deleteTarget = null)}
+/>
 
 <style>
 	.chat-root {
@@ -465,6 +817,128 @@
 		font-size: var(--text-footnote);
 		line-height: var(--lh-footnote);
 		color: var(--text-muted);
+	}
+
+	.conv-bar {
+		display: flex;
+		align-items: center;
+		gap: 0.25rem;
+		flex-shrink: 0;
+		padding: 0 0.5rem;
+		border-bottom: 1px solid var(--border-default);
+	}
+
+	.conv-tabs {
+		display: flex;
+		align-items: stretch;
+		min-width: 0;
+		overflow-x: auto;
+		scrollbar-width: none;
+	}
+
+	.conv-tabs::-webkit-scrollbar {
+		display: none;
+	}
+
+	.conv-tab {
+		display: flex;
+		align-items: center;
+		gap: 0.125rem;
+		flex-shrink: 0;
+		border-bottom: 2px solid transparent;
+		margin-bottom: -1px;
+		padding-right: 0.25rem;
+	}
+
+	.conv-tab--active {
+		border-bottom-color: var(--accent);
+	}
+
+	.conv-tab-btn {
+		border: none;
+		background: none;
+		padding: 0.4375rem 0.125rem 0.4375rem 0.5rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		font-weight: 600;
+		color: var(--text-muted);
+		cursor: pointer;
+		white-space: nowrap;
+		transition: color var(--dur-fast);
+	}
+
+	.conv-tab--active .conv-tab-btn {
+		color: var(--text-default);
+	}
+
+	.conv-tab-btn:hover {
+		color: var(--text-default);
+	}
+
+	.conv-close {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.125rem;
+		height: 1.125rem;
+		border: none;
+		border-radius: var(--radius-xs);
+		background: none;
+		color: var(--text-faint);
+		cursor: pointer;
+		opacity: 0;
+		transition:
+			opacity var(--dur-fast),
+			background-color var(--dur-fast),
+			color var(--dur-fast);
+	}
+
+	.conv-tab:hover .conv-close,
+	.conv-close:focus-visible {
+		opacity: 1;
+	}
+
+	.conv-close:hover {
+		background: var(--bg-hover);
+		color: var(--text-default);
+	}
+
+	.conv-rename {
+		width: 9rem;
+		margin: 0.25rem 0;
+		padding: 0.125rem 0.375rem;
+		border: 1px solid var(--border-strong);
+		border-radius: var(--radius-xs);
+		background: var(--bg-sunken);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-default);
+	}
+
+	.conv-rename:focus-visible {
+		outline: none;
+	}
+
+	.conv-add {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.5rem;
+		height: 1.5rem;
+		flex-shrink: 0;
+		border: none;
+		border-radius: var(--radius-xs);
+		background: none;
+		color: var(--text-muted);
+		cursor: pointer;
+		transition:
+			background-color var(--dur-fast),
+			color var(--dur-fast);
+	}
+
+	.conv-add:hover {
+		background: var(--bg-hover);
+		color: var(--text-default);
 	}
 
 	.chat-cred {
@@ -500,6 +974,8 @@
 		flex: 1;
 		min-height: 0;
 		overflow-y: auto;
+		display: flex;
+		flex-direction: column;
 		padding: 0.75rem 1rem 1rem;
 	}
 
@@ -508,8 +984,15 @@
 		flex-direction: column;
 		align-items: stretch;
 		gap: 0.375rem;
+		width: 100%;
 		max-width: 52rem;
 		margin: 0 auto;
+	}
+
+	.chat-col--feed {
+		margin-top: auto;
+		margin-left: auto;
+		margin-right: auto;
 	}
 
 	.chat-empty-title {
@@ -525,11 +1008,18 @@
 		color: var(--text-faint);
 	}
 
+	.chat-truncated {
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		color: var(--text-faint);
+		text-align: center;
+	}
+
 	.tr-user {
 		display: flex;
 		align-items: baseline;
 		gap: 0.5rem;
-		margin-top: 0.625rem;
+		margin-top: 0.75rem;
 	}
 
 	.tr-user-dot {
@@ -550,77 +1040,144 @@
 		overflow-wrap: anywhere;
 	}
 
-	.tr-thinking {
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-style: italic;
-		color: var(--text-faint);
-		padding-left: 1rem;
-		white-space: nowrap;
-		overflow: hidden;
-		text-overflow: ellipsis;
-	}
-
-	.tr-text {
+	.tr-md {
 		max-width: 70ch;
 		font-size: var(--text-footnote);
-		line-height: 1.6;
+		line-height: 1.65;
 		color: var(--text-default);
-		white-space: pre-wrap;
 		overflow-wrap: anywhere;
 	}
 
-	.tr-tool {
-		display: flex;
-		flex-direction: column;
-		min-width: 0;
+	.tr-md :global(p) {
+		margin: 0.5rem 0;
 	}
 
-	.tr-tool-row {
+	.tr-md :global(p:first-child) {
+		margin-top: 0.25rem;
+	}
+
+	.tr-md :global(ul),
+	.tr-md :global(ol) {
+		margin: 0.5rem 0;
+		padding-left: 1.375rem;
+	}
+
+	.tr-md :global(ul) {
+		list-style: disc;
+	}
+
+	.tr-md :global(ol) {
+		list-style: decimal;
+	}
+
+	.tr-md :global(li) {
+		margin: 0.1875rem 0;
+	}
+
+	.tr-md :global(li::marker) {
+		color: var(--text-faint);
+	}
+
+	.tr-md :global(code) {
+		font-family: var(--font-mono, monospace);
+		font-size: var(--text-caption);
+		padding: 1px 6px;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-xs);
+		background: var(--bg-raised);
+	}
+
+	.tr-md :global(pre) {
+		margin: 0.5rem 0;
+		padding: 0.625rem 0.75rem;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-sm);
+		background: var(--bg-sunken);
+		overflow-x: auto;
+	}
+
+	.tr-md :global(pre code) {
+		padding: 0;
+		border: none;
+		border-radius: 0;
+		background: none;
+		font-size: var(--text-caption);
+		line-height: 1.55;
+	}
+
+	.tr-md :global(h1),
+	.tr-md :global(h2),
+	.tr-md :global(h3),
+	.tr-md :global(h4) {
+		margin: 0.75rem 0 0.25rem;
+		font-size: var(--text-footnote);
+		font-weight: 700;
+		color: var(--text-default);
+	}
+
+	.tr-md :global(a) {
+		color: var(--text-link);
+		text-decoration: none;
+	}
+
+	.tr-md :global(a:hover) {
+		text-decoration: underline;
+	}
+
+	.tr-md :global(blockquote) {
+		margin: 0.5rem 0;
+		padding: 0.25rem 0.75rem;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-sm);
+		background: var(--bg-surface);
+		color: var(--text-muted);
+	}
+
+	.tr-row {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
 		min-width: 0;
 		width: 100%;
 		padding: 0.1875rem 0.375rem;
-		border: none;
 		border-radius: var(--radius-xs);
-		background: none;
-		text-align: left;
-		cursor: pointer;
 		font-size: var(--text-caption);
 		line-height: var(--lh-caption);
 		color: var(--text-muted);
+	}
+
+	.tr-row-btn {
+		border: none;
+		background: none;
+		text-align: left;
+		cursor: pointer;
 		transition: background-color var(--dur-fast);
 	}
 
-	.tr-tool-row:hover {
+	.tr-row-btn:hover {
 		background: var(--bg-hover);
 	}
 
-	.tr-tool-glyph {
-		flex-shrink: 0;
+	.tr-row-icon {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
 		width: 1rem;
-		text-align: center;
-		font-family: var(--font-mono, monospace);
+		flex-shrink: 0;
 		color: var(--text-faint);
 	}
 
-	.tr-tool--failed .tr-tool-glyph {
-		color: var(--status-error);
+	.tr-row-glyph {
+		font-family: var(--font-mono, monospace);
 	}
 
-	.tr-tool-name {
+	.tr-row-label {
 		flex-shrink: 0;
 		font-weight: 600;
 		color: var(--text-default);
 	}
 
-	.tr-tool--failed .tr-tool-name {
-		color: var(--status-error);
-	}
-
-	.tr-tool-arg {
+	.tr-chip {
 		min-width: 0;
 		font-family: var(--font-mono, monospace);
 		color: var(--text-muted);
@@ -630,6 +1187,17 @@
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
+	}
+
+	.tr-tool {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+
+	.tr-tool--failed .tr-row-icon,
+	.tr-tool--failed .tr-row-label {
+		color: var(--status-error);
 	}
 
 	.tr-diffstat {
@@ -679,17 +1247,66 @@
 	.tr-turn {
 		display: flex;
 		align-items: center;
-		gap: 0.625rem;
-		margin: 0.375rem 0;
+		gap: 0.5rem;
+		min-width: 0;
+		margin: 0.375rem 0 0.5rem;
+		padding: 0.25rem 0.375rem;
 	}
 
-	.tr-turn-rule {
-		flex: 1;
-		height: 1px;
-		background: var(--border-default);
+	.tr-turn-meta {
+		flex-shrink: 0;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		color: var(--text-faint);
 	}
 
-	.tr-turn-label {
+	.tr-turn-copy {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.25rem;
+		height: 1.25rem;
+		flex-shrink: 0;
+		border: none;
+		border-radius: var(--radius-xs);
+		background: none;
+		color: var(--text-faint);
+		cursor: pointer;
+		transition:
+			background-color var(--dur-fast),
+			color var(--dur-fast);
+	}
+
+	.tr-turn-copy:hover {
+		background: var(--bg-hover);
+		color: var(--text-default);
+	}
+
+	.tr-turn-files {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		min-width: 0;
+		flex-wrap: wrap;
+	}
+
+	.tr-file-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 0.0625rem 0.375rem;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-xs);
+		background: var(--bg-raised);
+		font-family: var(--font-mono, monospace);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		color: var(--text-muted);
+		white-space: nowrap;
+	}
+
+	.tr-turn-cost {
+		margin-left: auto;
 		flex-shrink: 0;
 		font-size: var(--text-micro);
 		line-height: var(--lh-micro);

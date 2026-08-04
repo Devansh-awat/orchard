@@ -39,6 +39,7 @@ func sandboxCmd() *cobra.Command {
 		sandboxChatCmd(),
 		sandboxDiffCmd(),
 		sandboxRepoCmd(),
+		sandboxConversationsCmd(),
 		sandboxProxyCmd(),
 		sandboxSSHConfigCmd(),
 		sandboxCredentialsCmd(),
@@ -498,6 +499,87 @@ func sandboxRepoAddCmd() *cobra.Command {
 			return nil
 		},
 	}
+}
+
+func sandboxConversationsCmd() *cobra.Command {
+	var history string
+	var newTitle string
+	var rename string
+	var remove string
+	c := &cobra.Command{
+		Use:     "conversations <sandbox>",
+		Aliases: []string{"convos"},
+		Short:   "List and manage Cloud Code conversations in a sandbox",
+		Args:    cobra.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			cl, _, err := client()
+			if err != nil {
+				return err
+			}
+			sb, err := resolveSandbox(cmd.Context(), cl, args[0])
+			if err != nil {
+				return err
+			}
+			id := str(sb["id"])
+			if newTitle != "" {
+				var raw map[string]any
+				if err := cl.Send(cmd.Context(), http.MethodPost, sandboxPath(id, "conversations"), map[string]any{"title": newTitle}, &raw); err != nil {
+					return sandboxFeatureError(err)
+				}
+				output.Successf("created conversation %s (%s)", pick(raw, "title"), str(raw["id"]))
+				return nil
+			}
+			if rename != "" {
+				parts := strings.SplitN(rename, "=", 2)
+				if len(parts) != 2 {
+					return errors.New("--rename takes <conversation-id>=<new title>")
+				}
+				var raw map[string]any
+				if err := cl.Send(cmd.Context(), http.MethodPatch, sandboxPath(id, "conversations", parts[0]), map[string]any{"title": parts[1]}, &raw); err != nil {
+					return sandboxFeatureError(err)
+				}
+				output.Successf("renamed conversation to %s", pick(raw, "title"))
+				return nil
+			}
+			if remove != "" {
+				var raw map[string]any
+				if err := cl.Send(cmd.Context(), http.MethodDelete, sandboxPath(id, "conversations", remove), nil, &raw); err != nil {
+					return sandboxFeatureError(err)
+				}
+				output.Successf("deleted conversation %s", remove)
+				return nil
+			}
+			if history != "" {
+				var raw map[string]any
+				if err := cl.GetJSON(cmd.Context(), sandboxPath(id, "conversations", history, "history"), &raw); err != nil {
+					return sandboxDialError(err)
+				}
+				return output.JSON(raw)
+			}
+			var raw map[string]any
+			if err := cl.GetJSON(cmd.Context(), sandboxPath(id, "conversations"), &raw); err != nil {
+				return sandboxFeatureError(err)
+			}
+			if fmtFlag() == output.FormatJSON {
+				return output.JSON(raw)
+			}
+			rows := [][]string{}
+			for _, cv := range asList(raw["conversations"]) {
+				rows = append(rows, []string{str(cv["id"]), pick(cv, "title"), pick(cv, "repo"), pick(cv, "updatedAt")})
+			}
+			if len(rows) == 0 {
+				fmt.Println(output.Dim("no conversations yet"))
+				return nil
+			}
+			output.Table([]string{"id", "title", "repo", "updated"}, rows)
+			return nil
+		},
+	}
+	c.Flags().StringVar(&history, "history", "", "print a conversation transcript as json by conversation id")
+	c.Flags().StringVar(&newTitle, "new", "", "create a conversation with this title")
+	c.Flags().StringVar(&rename, "rename", "", "rename: <conversation-id>=<new title>")
+	c.Flags().StringVar(&remove, "delete", "", "delete a conversation by id")
+	return c
 }
 
 func sandboxStartCmd() *cobra.Command {

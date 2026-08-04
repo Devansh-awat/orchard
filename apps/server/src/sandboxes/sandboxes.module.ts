@@ -10,6 +10,7 @@ import { SandboxesController } from './sandboxes.controller';
 import { SandboxesService } from './sandboxes.service';
 import { SandboxChatService } from './sandbox-chat.service';
 import { SandboxWorkspaceService } from './sandbox-workspace.service';
+import { SandboxConversationsService } from './sandbox-conversations.service';
 import { SandboxK8sService } from './sandbox-k8s.service';
 import { SandboxReaperService } from './sandbox-reaper.service';
 import { SandboxEnabledGuard, sandboxFeatureEnabled } from './sandbox-enabled.guard';
@@ -19,7 +20,7 @@ const REAPER_INTERVAL_MS = 60_000;
 @Module({
   imports: [AuthModule, PrismaModule, KubernetesModule, UsersModule, AuditModule, AnalyticsModule],
   controllers: [SandboxesController],
-  providers: [SandboxesService, SandboxK8sService, SandboxChatService, SandboxWorkspaceService, SandboxReaperService, SandboxEnabledGuard],
+  providers: [SandboxesService, SandboxK8sService, SandboxChatService, SandboxWorkspaceService, SandboxConversationsService, SandboxReaperService, SandboxEnabledGuard],
   exports: [SandboxesService, SandboxK8sService],
 })
 export class SandboxesModule implements OnModuleInit, OnModuleDestroy {

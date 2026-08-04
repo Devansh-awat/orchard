@@ -23,6 +23,7 @@ import { SandboxEnabledGuard } from './sandbox-enabled.guard';
 import { SandboxesService, toSandboxDto } from './sandboxes.service';
 import { SandboxChatService } from './sandbox-chat.service';
 import { SandboxWorkspaceService } from './sandbox-workspace.service';
+import { SandboxConversationsService } from './sandbox-conversations.service';
 
 @Auth()
 @UseGuards(SandboxEnabledGuard)
@@ -32,6 +33,7 @@ export class SandboxesController {
     private readonly sandboxes: SandboxesService,
     private readonly chat: SandboxChatService,
     private readonly workspace: SandboxWorkspaceService,
+    private readonly convos: SandboxConversationsService,
     private readonly usersService: UsersService,
     private readonly analytics: AnalyticsService,
   ) {}
@@ -127,17 +129,76 @@ export class SandboxesController {
     return this.workspace.addRepo(row, body?.repoUrl || '');
   }
 
+  @Get(':id/conversations')
+  async listConversations(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    const user = await this.resolveUser(req);
+    const row = await this.sandboxes.getOwned(id, user.id);
+    return { conversations: await this.convos.list(row.id) };
+  }
+
+  @Post(':id/conversations')
+  async createConversation(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { title?: string; repo?: string | null },
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await this.sandboxes.getOwned(id, user.id);
+    return this.convos.create(row, body || {});
+  }
+
+  @Patch(':id/conversations/:cid')
+  async updateConversation(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('cid', ParseUUIDPipe) cid: string,
+    @Body() body: { title?: string; repo?: string | null },
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await this.sandboxes.getOwned(id, user.id);
+    return this.convos.update(row.id, cid, body || {});
+  }
+
+  @Delete(':id/conversations/:cid')
+  async removeConversation(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('cid', ParseUUIDPipe) cid: string,
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await this.sandboxes.getOwned(id, user.id);
+    await this.convos.remove(row.id, cid);
+    return { success: true };
+  }
+
+  @Get(':id/conversations/:cid/history')
+  @RequireScope('exec')
+  async conversationHistory(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Param('cid', ParseUUIDPipe) cid: string,
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await this.sandboxes.getOwned(id, user.id);
+    return this.convos.history(row, cid);
+  }
+
   @Post(':id/chat')
   @RequireScope('exec')
   async chatStream(
     @Req() req: any,
     @Res() res: Response,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { message?: string; repo?: string },
+    @Body() body: { message?: string; conversationId?: string; repo?: string },
   ) {
     const user = await this.resolveUser(req);
     const row = await this.sandboxes.getOwned(id, user.id);
-    await this.chat.stream(row, body?.message ?? '', body?.repo || undefined, res);
+    await this.chat.stream(
+      row,
+      body?.message ?? '',
+      { conversationId: body?.conversationId || undefined, repo: body?.repo || undefined },
+      res,
+    );
   }
 
   @Get(':id/ssh')

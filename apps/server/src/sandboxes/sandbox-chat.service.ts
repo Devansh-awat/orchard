@@ -7,6 +7,7 @@ import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { SandboxK8sService } from './sandbox-k8s.service';
 import { SandboxWorkspaceService } from './sandbox-workspace.service';
+import { SandboxConversationsService } from './sandbox-conversations.service';
 
 const MAX_MESSAGE_LENGTH = 32768;
 const CHAT_TIMEOUT_MS = 10 * 60 * 1000;
@@ -21,6 +22,7 @@ export class SandboxChatService {
     private readonly kubernetes: KubernetesService,
     private readonly sandboxK8s: SandboxK8sService,
     private readonly workspace: SandboxWorkspaceService,
+    private readonly conversations: SandboxConversationsService,
   ) {}
 
   async stream(
@@ -29,11 +31,10 @@ export class SandboxChatService {
       userId: string;
       podName: string;
       repoUrl: string | null;
-      chatSessionId: string | null;
       status: string;
     },
     message: string,
-    repo: string | undefined,
+    opts: { conversationId?: string; repo?: string },
     res: Response,
   ): Promise<void> {
     if (typeof message !== 'string' || !message.trim() || message.length > MAX_MESSAGE_LENGTH) {
@@ -66,6 +67,27 @@ export class SandboxChatService {
       throw new BadRequestException('Sandbox pod is not running');
     }
 
+    let conversation = opts.conversationId
+      ? await this.conversations.getOwned(sandbox.id, opts.conversationId)
+      : await this.prisma.sandboxConversation.findFirst({
+          where: { sandboxId: sandbox.id },
+          orderBy: { updatedAt: 'desc' },
+        });
+    if (!conversation) {
+      conversation = await this.prisma.sandboxConversation.create({
+        data: {
+          sandboxId: sandbox.id,
+          title: 'New conversation',
+          repo: opts.repo || null,
+        },
+      });
+    } else if (opts.repo && !conversation.claudeSessionId && conversation.repo !== opts.repo) {
+      conversation = await this.prisma.sandboxConversation.update({
+        where: { id: conversation.id },
+        data: { repo: opts.repo },
+      });
+    }
+
     res.status(200);
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
@@ -83,8 +105,10 @@ export class SandboxChatService {
         .catch(() => {});
     touch();
 
-    const workdir = this.workspace.resolveWorkdir(sandbox, repo);
-    const resume = sandbox.chatSessionId ? ` --resume '${sandbox.chatSessionId.replace(/[^a-zA-Z0-9_-]/g, '')}'` : '';
+    const workdir = this.workspace.resolveWorkdir(sandbox, conversation.repo || undefined);
+    const resume = conversation.claudeSessionId
+      ? ` --resume '${conversation.claudeSessionId.replace(/[^a-zA-Z0-9_-]/g, '')}'`
+      : '';
     const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
     const command = [
       'su',
@@ -110,10 +134,17 @@ export class SandboxChatService {
         if (!line) continue;
         try {
           const event = JSON.parse(line);
-          if (event.session_id && event.session_id !== sandbox.chatSessionId) {
-            sandbox.chatSessionId = event.session_id;
-            this.prisma.sandbox
-              .update({ where: { id: sandbox.id }, data: { chatSessionId: event.session_id } })
+          if (event.session_id && event.session_id !== conversation.claudeSessionId) {
+            conversation.claudeSessionId = event.session_id;
+            const autoTitle =
+              conversation.title === 'New conversation'
+                ? { title: message.trim().slice(0, 60) }
+                : {};
+            this.prisma.sandboxConversation
+              .update({
+                where: { id: conversation.id },
+                data: { claudeSessionId: event.session_id, ...autoTitle },
+              })
               .catch(() => {});
           }
           send(event);
@@ -136,8 +167,8 @@ export class SandboxChatService {
       clearTimeout(timeout);
       clearInterval(touchTimer);
       if (sawSessionNotFound) {
-        await this.prisma.sandbox
-          .update({ where: { id: sandbox.id }, data: { chatSessionId: null } })
+        await this.prisma.sandboxConversation
+          .update({ where: { id: conversation.id }, data: { claudeSessionId: null } })
           .catch(() => {});
       }
       touch();

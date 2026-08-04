@@ -1682,7 +1682,6 @@ model Sandbox {
   image         String        @db.VarChar(500)
   repoUrl       String?       @map("repo_url") @db.VarChar(500)
   sshIdentityId String?       @map("ssh_identity_id") @db.Uuid
-  chatSessionId String?       @map("chat_session_id") @db.VarChar(255)
   setupScript   String?       @map("setup_script") @db.Text
   cpuLimit      String        @map("cpu_limit") @db.VarChar(20)
   memoryLimit   String        @map("memory_limit") @db.VarChar(20)
@@ -1691,12 +1690,28 @@ model Sandbox {
   createdAt     DateTime      @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamp(6)
 
-  user        User         @relation(fields: [userId], references: [id], onDelete: Cascade)
-  sshIdentity SshIdentity? @relation(fields: [sshIdentityId], references: [id], onDelete: Restrict)
+  user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  sshIdentity   SshIdentity?          @relation(fields: [sshIdentityId], references: [id], onDelete: Restrict)
+  conversations SandboxConversation[]
 
   @@unique([userId, name])
   @@index([status, lastActiveAt], map: "idx_sandboxes_status_active")
   @@map("sandboxes")
+}
+
+model SandboxConversation {
+  id              String   @id @default(uuid()) @db.Uuid
+  sandboxId       String   @map("sandbox_id") @db.Uuid
+  title           String   @db.VarChar(120)
+  repo            String?  @db.VarChar(120)
+  claudeSessionId String?  @map("claude_session_id") @db.VarChar(255)
+  createdAt       DateTime @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt       DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  sandbox Sandbox @relation(fields: [sandboxId], references: [id], onDelete: Cascade)
+
+  @@index([sandboxId], map: "idx_sandbox_conversations_sandbox")
+  @@map("sandbox_conversations")
 }
 
 model SshIdentity {
