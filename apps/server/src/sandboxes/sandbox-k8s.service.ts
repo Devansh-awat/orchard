@@ -413,6 +413,19 @@ export class SandboxK8sService {
     );
   }
 
+  // A sandbox created before a platform change keeps the pod template it was
+  // born with, so new secret volume items and env never appear. Re-render the
+  // template from current code before resuming.
+  async refreshSpec(spec: SandboxSpecInput): Promise<void> {
+    const desired = this.buildCr(spec);
+    await this.custom().patchNamespacedCustomObject(
+      CRD_GROUP, CRD_VERSION, this.namespace, CRD_PLURAL, spec.podName,
+      { spec: { podTemplate: desired.spec.podTemplate } },
+      undefined, undefined, undefined,
+      { headers: { 'Content-Type': 'application/merge-patch+json' } },
+    );
+  }
+
   async suspend(podName: string): Promise<void> {
     await this.patchOperatingMode(podName, 'Suspended');
   }

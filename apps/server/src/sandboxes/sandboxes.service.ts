@@ -122,6 +122,37 @@ export class SandboxesService {
     throw new NotFoundException('Sandbox not found');
   }
 
+  // The pod mounts bootstrap.sh, agent tokens and the opencode config from its
+  // Secret, so a sandbox created before a platform change keeps booting the old
+  // script forever. Rewrite the Secret on every start to pick those up.
+  private async refreshSecret(row: SandboxWithIdentity): Promise<void> {
+    try {
+      const identity = row.sshIdentityId
+        ? await this.prisma.sshIdentity.findUnique({ where: { id: row.sshIdentityId } })
+        : null;
+      const secret = await this.buildSecretInput(
+        row.userId,
+        identity ? [identity.publicKey] : [],
+        row.setupScript,
+      );
+      const spec = {
+        id: row.id,
+        podName: row.podName,
+        userId: row.userId,
+        repoUrl: row.repoUrl,
+        image: row.image,
+        cpuLimit: row.cpuLimit,
+        memoryLimit: row.memoryLimit,
+        diskSize: row.diskSize,
+        setupScript: row.setupScript,
+      };
+      await this.k8s.ensureAuthSecret(spec, secret);
+      await this.k8s.refreshSpec(spec);
+    } catch (e: any) {
+      this.logger.warn(`secret refresh failed for sandbox ${row.id}: ${e?.message}`);
+    }
+  }
+
   // Org admins can see and stop a member's sandbox, but never reach inside it:
   // the VM holds that member's Claude and GitHub credentials, so chat, shell,
   // files and git stay owner-only (platform superadmins excepted).
@@ -459,6 +490,7 @@ export class SandboxesService {
     const row = await this.getOwned(id, userId);
     if (row.status === 'running' || row.status === 'starting') return toSandboxDto(row);
     if (row.status === 'deleting') throw new BadRequestException('Sandbox is being deleted');
+    await this.refreshSecret(row);
     await this.k8s.resume(row.podName);
     const updated = await this.prisma.sandbox.update({
       where: { id: row.id },
