@@ -279,13 +279,13 @@ export class SandboxWorkspaceService {
     }
     const script = [
       'for d in /persist/home/*/.git; do',
-      '[ -e "$d" ] || continue',
-      'r="${d%/.git}"',
-      'b=$(git -C "$r" rev-parse --abbrev-ref HEAD 2>/dev/null)',
-      'n=$(git -C "$r" status --porcelain 2>/dev/null | wc -l)',
-      'echo "${r##*/}|$b|$n"',
+      '  [ -e "$d" ] || continue',
+      '  r="${d%/.git}"',
+      '  b=$(git -C "$r" rev-parse --abbrev-ref HEAD 2>/dev/null)',
+      '  n=$(git -C "$r" status --porcelain 2>/dev/null | wc -l)',
+      '  echo "${r##*/}|$b|$n"',
       'done',
-    ].join('; ');
+    ].join('\n');
     const result = await this.k8s.execCapture(sandbox.id, ['su', '-l', 'dev', '-c', script]);
     const repos: SandboxRepo[] = [];
     for (const line of result.stdout.split('\n')) {
@@ -325,7 +325,7 @@ export class SandboxWorkspaceService {
       `[ -e '${target}' ] && exit 4`,
       `nohup git clone '${parsed.href}' '${target}' >> /persist/home/.clone.log 2>&1 &`,
       'exit 0',
-    ].join('; ');
+    ].join('\n');
     const result = await this.k8s.execCapture(sandbox.id, ['su', '-l', 'dev', '-c', script]);
     if (!result.ok) {
       throw new BadRequestException(`A directory named "${name}" already exists in the sandbox`);
