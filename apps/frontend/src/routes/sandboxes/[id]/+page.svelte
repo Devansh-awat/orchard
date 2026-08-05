@@ -24,7 +24,8 @@
 		SandboxGitPanel,
 		SandboxMcpPanel,
 		SandboxReposPanel,
-		SandboxSettingsCard
+		SandboxSettingsCard,
+		SandboxTerminalPanel
 	} from '$lib/components/sandbox';
 	import { SandboxIde } from '$lib/components/sandbox/ide.svelte';
 	import type { IdeChangedFile } from '$lib/components/sandbox/ide';
@@ -51,6 +52,130 @@
 	const ide = new SandboxIde('');
 	ide.onsaved = () => (changesTick += 1);
 	let explorerOpen = $state(true);
+
+	const EXPLORER_MIN = 180;
+	const EXPLORER_MAX = 420;
+	const EXPLORER_DEFAULT = 240;
+	const INSPECTOR_MIN = 300;
+	const INSPECTOR_MAX = 560;
+	const INSPECTOR_DEFAULT = 380;
+	const CENTER_MIN = 360;
+
+	let explorerWidth = $state(EXPLORER_DEFAULT);
+	let inspectorWidth = $state(INSPECTOR_DEFAULT);
+	let bodyEl = $state<HTMLDivElement | undefined>(undefined);
+	let dragging = $state<'explorer' | 'inspector' | null>(null);
+
+	function clamp(value: number, min: number, max: number): number {
+		return Math.min(max, Math.max(min, value));
+	}
+
+	function paneKey(sandboxId: string): string {
+		return `sandbox-panes:${sandboxId}`;
+	}
+
+	function readPanes(sandboxId: string) {
+		if (!sandboxId || typeof localStorage === 'undefined') return;
+		try {
+			const raw = localStorage.getItem(paneKey(sandboxId));
+			if (!raw) {
+				explorerWidth = EXPLORER_DEFAULT;
+				inspectorWidth = INSPECTOR_DEFAULT;
+				return;
+			}
+			const saved = JSON.parse(raw) as { explorer?: number; inspector?: number };
+			explorerWidth = clamp(saved.explorer ?? EXPLORER_DEFAULT, EXPLORER_MIN, EXPLORER_MAX);
+			inspectorWidth = clamp(saved.inspector ?? INSPECTOR_DEFAULT, INSPECTOR_MIN, INSPECTOR_MAX);
+		} catch {
+			explorerWidth = EXPLORER_DEFAULT;
+			inspectorWidth = INSPECTOR_DEFAULT;
+		}
+	}
+
+	function writePanes() {
+		if (!id || typeof localStorage === 'undefined') return;
+		try {
+			localStorage.setItem(
+				paneKey(id),
+				JSON.stringify({ explorer: explorerWidth, inspector: inspectorWidth })
+			);
+		} catch {
+			return;
+		}
+	}
+
+	function maxExplorer(): number {
+		const total = bodyEl?.clientWidth ?? 0;
+		if (total === 0) return EXPLORER_MAX;
+		return clamp(total - inspectorWidth - CENTER_MIN, EXPLORER_MIN, EXPLORER_MAX);
+	}
+
+	function maxInspector(): number {
+		const total = bodyEl?.clientWidth ?? 0;
+		if (total === 0) return INSPECTOR_MAX;
+		const explorer = explorerOpen ? explorerWidth : 0;
+		return clamp(total - explorer - CENTER_MIN, INSPECTOR_MIN, INSPECTOR_MAX);
+	}
+
+	function startDrag(which: 'explorer' | 'inspector', event: PointerEvent) {
+		if (event.button !== 0) return;
+		event.preventDefault();
+		const handle = event.currentTarget as HTMLElement;
+		handle.setPointerCapture(event.pointerId);
+		dragging = which;
+		const startX = event.clientX;
+		const startExplorer = explorerWidth;
+		const startInspector = inspectorWidth;
+
+		function onMove(move: PointerEvent) {
+			const delta = move.clientX - startX;
+			if (which === 'explorer') {
+				explorerWidth = clamp(startExplorer + delta, EXPLORER_MIN, maxExplorer());
+			} else {
+				inspectorWidth = clamp(startInspector - delta, INSPECTOR_MIN, maxInspector());
+			}
+		}
+
+		function onUp(up: PointerEvent) {
+			handle.releasePointerCapture(up.pointerId);
+			handle.removeEventListener('pointermove', onMove);
+			handle.removeEventListener('pointerup', onUp);
+			dragging = null;
+			writePanes();
+		}
+
+		handle.addEventListener('pointermove', onMove);
+		handle.addEventListener('pointerup', onUp);
+	}
+
+	function resetPane(which: 'explorer' | 'inspector') {
+		if (which === 'explorer') explorerWidth = EXPLORER_DEFAULT;
+		else inspectorWidth = INSPECTOR_DEFAULT;
+		writePanes();
+	}
+
+	function nudgePane(which: 'explorer' | 'inspector', delta: number) {
+		if (which === 'explorer') {
+			explorerWidth = clamp(explorerWidth + delta, EXPLORER_MIN, maxExplorer());
+		} else {
+			inspectorWidth = clamp(inspectorWidth + delta, INSPECTOR_MIN, maxInspector());
+		}
+		writePanes();
+	}
+
+	function onHandleKey(which: 'explorer' | 'inspector', event: KeyboardEvent) {
+		const step = event.shiftKey ? 40 : 12;
+		if (event.key === 'ArrowLeft') {
+			event.preventDefault();
+			nudgePane(which, which === 'explorer' ? -step : step);
+		} else if (event.key === 'ArrowRight') {
+			event.preventDefault();
+			nudgePane(which, which === 'explorer' ? step : -step);
+		} else if (event.key === 'Enter' || event.key === ' ') {
+			event.preventDefault();
+			resetPane(which);
+		}
+	}
 	let mainView = $state('chat');
 	let changedFiles = $state<IdeChangedFile[]>([]);
 
@@ -62,6 +187,7 @@
 		ide.closeAll();
 		changedFiles = [];
 		mainView = 'chat';
+		readPanes(id);
 	});
 
 	let lastIdeRepo: string | null = null;
@@ -108,6 +234,7 @@
 
 	const sideTabs = [
 		{ id: 'git', label: 'Git' },
+		{ id: 'terminal', label: 'Terminal' },
 		{ id: 'repos', label: 'Repos' },
 		{ id: 'mcp', label: 'MCP' },
 		{ id: 'settings', label: 'Settings' },
@@ -221,11 +348,11 @@
 			</div>
 		{/if}
 
-		<div class="sbw-body">
+		<div class="sbw-body" class:sbw-body--dragging={dragging !== null} bind:this={bodyEl}>
 			<aside
 				class="sbw-explorer"
 				aria-label="Files"
-				{@attach springWidth(() => explorerOpen, { rest: 0, on: 240 })}
+				{@attach springWidth(() => explorerOpen, { rest: 0, on: explorerWidth })}
 			>
 				<SandboxFileTree
 					sandboxId={sandbox.id}
@@ -236,6 +363,22 @@
 					onopen={openFile}
 				/>
 			</aside>
+			{#if explorerOpen}
+				<div
+					class="sbw-grip"
+					class:sbw-grip--active={dragging === 'explorer'}
+					role="separator"
+					aria-label="Resize file explorer"
+					aria-orientation="vertical"
+					aria-valuenow={explorerWidth}
+					aria-valuemin={EXPLORER_MIN}
+					aria-valuemax={EXPLORER_MAX}
+					tabindex="0"
+					onpointerdown={(e) => startDrag('explorer', e)}
+					ondblclick={() => resetPane('explorer')}
+					onkeydown={(e) => onHandleKey('explorer', e)}
+				></div>
+			{/if}
 			<section class="sbw-main" aria-label="Agent workspace">
 				{#if ide.tabs.length > 0}
 					<div class="sbw-switch">
@@ -268,7 +411,21 @@
 					{/if}
 				</div>
 			</section>
-			<aside class="sbw-side" aria-label="Inspector">
+			<div
+				class="sbw-grip"
+				class:sbw-grip--active={dragging === 'inspector'}
+				role="separator"
+				aria-label="Resize inspector"
+				aria-orientation="vertical"
+				aria-valuenow={inspectorWidth}
+				aria-valuemin={INSPECTOR_MIN}
+				aria-valuemax={INSPECTOR_MAX}
+				tabindex="0"
+				onpointerdown={(e) => startDrag('inspector', e)}
+				ondblclick={() => resetPane('inspector')}
+				onkeydown={(e) => onHandleKey('inspector', e)}
+			></div>
+			<aside class="sbw-side" aria-label="Inspector" style="width: {inspectorWidth}px">
 				<div class="sbw-side-tabs">
 					<UnderlineTabs tabs={sideTabs} bind:value={sideTab} label="Inspector" />
 				</div>
@@ -285,6 +442,13 @@
 							repo={selectedRepo}
 							onchanges={(files) => (changedFiles = files)}
 						/>
+					</div>
+					<div
+						class="sbw-pane sbw-pane--fill"
+						class:sbw-pane--hidden={sideTab !== 'terminal'}
+						{@attach motionPanel(() => sideTab === 'terminal')}
+					>
+						<SandboxTerminalPanel name={sandbox.name} {running} />
 					</div>
 					<div
 						class="sbw-pane"
@@ -501,8 +665,30 @@
 		display: none;
 	}
 
+	.sbw-grip {
+		position: relative;
+		width: 4px;
+		flex-shrink: 0;
+		cursor: col-resize;
+		background: var(--border-default);
+		transition: background-color var(--dur-fast);
+		touch-action: none;
+		user-select: none;
+	}
+
+	.sbw-grip:hover,
+	.sbw-grip:focus-visible,
+	.sbw-grip--active {
+		background: var(--accent);
+		outline: none;
+	}
+
+	.sbw-body--dragging {
+		cursor: col-resize;
+		user-select: none;
+	}
+
 	.sbw-side {
-		width: 380px;
 		flex-shrink: 0;
 		min-width: 0;
 		min-height: 0;
@@ -527,6 +713,9 @@
 		border-radius: 0;
 		background: none;
 		box-shadow: none;
+		padding-inline: 0.25rem;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
 	}
 
 	.sbw-side-tabs :global(.ui-tab:hover),

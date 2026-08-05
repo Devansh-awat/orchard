@@ -25,6 +25,25 @@ export type IdeChangedFile = {
 
 export type IdeChanges = { isRepo: boolean; branch: string | null; files: IdeChangedFile[] };
 
+export type IdeBranch = {
+	name: string;
+	upstream: string | null;
+	ahead: number;
+	behind: number;
+};
+
+export type IdeBranches = { current: string | null; local: IdeBranch[]; remote: string[] };
+
+export type IdeGitOutput = { ok: boolean; output: string };
+
+export type IdeCommitOptions = {
+	message: string;
+	files?: string[];
+	amend?: boolean;
+	signoff?: boolean;
+	trackedOnly?: boolean;
+};
+
 export type IdeResult<T> = { ok: boolean; status: number; data: T | null; message: string | null };
 
 const IDE_HOME = '/persist/home';
@@ -211,21 +230,109 @@ export function ideWriteFile(
 export function ideGitCommit(
 	sandboxId: string,
 	repo: string,
-	message: string,
-	files?: string[]
-): Promise<IdeResult<{ ok: boolean; output: string }>> {
+	options: IdeCommitOptions
+): Promise<IdeResult<IdeGitOutput>> {
 	return ideSend(`/apiv1/sandboxes/${sandboxId}/git/commit`, 'POST', {
 		repo,
-		message,
-		...(files?.length ? { files } : {})
+		message: options.message,
+		...(options.files?.length ? { files: options.files } : {}),
+		...(options.amend ? { amend: true } : {}),
+		...(options.signoff ? { signoff: true } : {}),
+		...(options.trackedOnly ? { trackedOnly: true } : {})
 	});
 }
 
 export function ideGitPush(
 	sandboxId: string,
+	repo: string,
+	force = false
+): Promise<IdeResult<IdeGitOutput>> {
+	return ideSend(`/apiv1/sandboxes/${sandboxId}/git/push`, 'POST', {
+		repo,
+		...(force ? { force: true } : {})
+	});
+}
+
+export function ideGitFetch(sandboxId: string, repo: string): Promise<IdeResult<IdeGitOutput>> {
+	return ideSend(`/apiv1/sandboxes/${sandboxId}/git/fetch`, 'POST', { repo });
+}
+
+export function ideGitPull(
+	sandboxId: string,
+	repo: string,
+	rebase = false
+): Promise<IdeResult<IdeGitOutput>> {
+	return ideSend(`/apiv1/sandboxes/${sandboxId}/git/pull`, 'POST', {
+		repo,
+		...(rebase ? { rebase: true } : {})
+	});
+}
+
+export function ideGitUncommit(sandboxId: string, repo: string): Promise<IdeResult<IdeGitOutput>> {
+	return ideSend(`/apiv1/sandboxes/${sandboxId}/git/uncommit`, 'POST', { repo });
+}
+
+export function ideGitCheckout(
+	sandboxId: string,
+	repo: string,
+	branch: string,
+	options?: { create?: boolean; from?: string }
+): Promise<IdeResult<IdeGitOutput>> {
+	return ideSend(`/apiv1/sandboxes/${sandboxId}/git/checkout`, 'POST', {
+		repo,
+		branch,
+		...(options?.create ? { create: true } : {}),
+		...(options?.from ? { from: options.from } : {})
+	});
+}
+
+export function ideGitDeleteBranch(
+	sandboxId: string,
+	repo: string,
+	branch: string,
+	options?: { remote?: boolean; force?: boolean }
+): Promise<IdeResult<IdeGitOutput>> {
+	return ideSend(`/apiv1/sandboxes/${sandboxId}/git/branch/delete`, 'POST', {
+		repo,
+		branch,
+		...(options?.remote ? { remote: true } : {}),
+		...(options?.force ? { force: true } : {})
+	});
+}
+
+export async function ideGitBranches(
+	sandboxId: string,
 	repo: string
-): Promise<IdeResult<{ ok: boolean; output: string }>> {
-	return ideSend(`/apiv1/sandboxes/${sandboxId}/git/push`, 'POST', { repo });
+): Promise<IdeResult<IdeBranches>> {
+	const qs = `?repo=${encodeURIComponent(repo)}`;
+	try {
+		const res = await apiFetch(`/apiv1/sandboxes/${sandboxId}/git/branches${qs}`);
+		const data = (await res.json().catch(() => null)) as (IdeBranches & { message?: string }) | null;
+		return {
+			ok: res.ok,
+			status: res.status,
+			data: res.ok
+				? {
+						current: data?.current ?? null,
+						local: data?.local ?? [],
+						remote: data?.remote ?? []
+					}
+				: null,
+			message: res.ok ? null : (data?.message ?? 'Failed to load branches')
+		};
+	} catch (e) {
+		return {
+			ok: false,
+			status: 0,
+			data: null,
+			message: e instanceof Error ? e.message : 'Failed to load branches'
+		};
+	}
+}
+
+export function ideRemoteBranchName(ref: string): string {
+	const slash = ref.indexOf('/');
+	return slash === -1 ? ref : ref.slice(slash + 1);
 }
 
 export function ideGitPr(

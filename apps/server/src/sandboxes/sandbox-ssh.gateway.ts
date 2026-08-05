@@ -13,7 +13,7 @@ import { AnalyticsService } from '../analytics/analytics.service';
 import { SandboxK8sService } from './sandbox-k8s.service';
 import { sandboxFeatureEnabled } from './sandbox-enabled.guard';
 
-const ROUTE_RE = /^\/apiv1\/sandboxes\/([0-9a-f-]{36})\/ssh$/;
+const ROUTE_RE = /^\/apiv1\/sandboxes\/([0-9a-f-]{36})\/(ssh|terminal)$/;
 const RECHECK_INTERVAL_MS = 15_000;
 const ACTIVITY_INTERVAL_MS = 60_000;
 const WS_HIGH_WATER = 4 * 1024 * 1024;
@@ -101,6 +101,7 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
     }
 
     const sandboxId = match[1];
+    const kind = match[2];
     const authorize = async (): Promise<{ ok: boolean; podName?: string }> => {
       const row = await prisma.sandbox.findUnique({
         where: { id: sandboxId },
@@ -122,13 +123,15 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
     if (!authzResult.ok) return reject(404, 'Not Found');
 
     let podIp: string | null = null;
-    try {
-      podIp = await sandboxK8s.resolvePodIp(sandboxId, authzResult.podName!);
-    } catch {
-      podIp = null;
+    if (kind === 'ssh') {
+      try {
+        podIp = await sandboxK8s.resolvePodIp(sandboxId, authzResult.podName!);
+      } catch {
+        podIp = null;
+      }
     }
     const tunnelMode = process.env.SANDBOX_TUNNEL_MODE === 'portforward' ? 'portforward' : 'direct';
-    if (tunnelMode === 'direct' && !podIp) return reject(502, 'Bad Gateway');
+    if (kind === 'ssh' && tunnelMode === 'direct' && !podIp) return reject(502, 'Bad Gateway');
 
     audit
       .log({
@@ -155,7 +158,11 @@ export function attachSandboxSshWebSocket(server: http.Server, app: INestApplica
 
     wss.handleUpgrade(req, socket, head, (ws) => {
       wss.emit('connection', ws, req);
-      if (tunnelMode === 'portforward') {
+      if (kind === 'terminal') {
+        handleShellSession(
+          ws, kubernetes, sandboxK8s.namespace, sandboxId, prisma, recheckAuth,
+        );
+      } else if (tunnelMode === 'portforward') {
         handlePortForwardTunnel(
           ws, kubernetes, sandboxK8s.namespace, sandboxId, prisma, recheckAuth,
         );
@@ -194,6 +201,78 @@ function attachLifecycle(
   };
   ws.on('close', stop);
   ws.on('error', stop);
+}
+
+function handleShellSession(
+  ws: WebSocket,
+  kubernetes: KubernetesService,
+  namespace: string,
+  sandboxId: string,
+  prisma: PrismaService,
+  recheckAuth: () => Promise<boolean>,
+) {
+  void (async () => {
+    if (!kubernetes.kc) {
+      ws.close(1011, 'kubernetes unavailable');
+      return;
+    }
+    const core = kubernetes.kc.makeApiClient(k8s.CoreV1Api);
+    const pods = await core.listNamespacedPod(
+      namespace, undefined, undefined, undefined, undefined,
+      `orchard.my/sandbox-id=${sandboxId}`,
+    );
+    const pod = pods.body.items.find((p) => p.status?.phase === 'Running');
+    if (!pod?.metadata?.name) {
+      ws.close(1011, 'sandbox pod not found');
+      return;
+    }
+    const { PassThrough } = await import('stream');
+    const stdin = new PassThrough();
+    const stdout = new PassThrough();
+    const stderr = new PassThrough();
+
+    attachLifecycle(ws, sandboxId, prisma, recheckAuth, () => stdin.end());
+
+    const forward = (chunk: Buffer) => {
+      if (ws.readyState === WebSocket.OPEN) ws.send(chunk);
+    };
+    stdout.on('data', forward);
+    stderr.on('data', forward);
+
+    ws.on('message', (data: WebSocket.Data) => {
+      const text = typeof data === 'string' ? data : data.toString();
+      try {
+        const parsed = JSON.parse(text);
+        if (parsed?.type === 'resize') return;
+      } catch {}
+      stdin.write(text);
+    });
+    ws.on('close', () => stdin.end());
+
+    try {
+      const exec = new k8s.Exec(kubernetes.kc);
+      await exec.exec(
+        namespace,
+        pod.metadata.name,
+        'sandbox',
+        ['/bin/sh', '-c', 'cd /persist/home; exec su -l dev'],
+        stdout,
+        stderr,
+        stdin,
+        true,
+        (status) => {
+          if (ws.readyState === WebSocket.OPEN) {
+            ws.close(1000, status.status === 'Success' ? 'exited' : 'shell closed');
+          }
+        },
+      );
+    } catch (e: any) {
+      if (ws.readyState === WebSocket.OPEN) {
+        ws.send(`\r\nFailed to open a shell: ${e?.message}\r\n`);
+        ws.close(1011, 'shell error');
+      }
+    }
+  })();
 }
 
 function handleDirectTunnel(

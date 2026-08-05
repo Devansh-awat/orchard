@@ -11,4 +11,5 @@ export { default as SandboxGitPanel } from './SandboxGitPanel.svelte';
 export { default as SandboxMcpPanel } from './SandboxMcpPanel.svelte';
 export { default as SandboxReposPanel } from './SandboxReposPanel.svelte';
 export { default as SandboxSettingsCard } from './SandboxSettingsCard.svelte';
+export { default as SandboxTerminalPanel } from './SandboxTerminalPanel.svelte';
 export { default as SandboxUsageTab } from './SandboxUsageTab.svelte';

@@ -8,8 +8,10 @@
 		Check,
 		ChevronDown,
 		Copy,
+		FileText,
 		GitFork,
 		Loader2,
+		Paperclip,
 		Play,
 		Plus,
 		Send,
@@ -23,16 +25,23 @@
 	import { fade, slide } from '$lib/utils/transitions';
 	import { sandboxCredentialsQueryOptions } from '$lib/queries/sandboxes';
 	import {
+		OC_ATTACH_MAX_BYTES,
+		OC_ATTACH_MAX_COUNT,
 		OC_MODEL,
 		ocBase,
 		ocDirectory,
 		ocErrorMessage,
+		ocFilePart,
+		ocFmtBytes,
 		ocFmtTokens,
 		ocModels,
 		ocNormalizeTool,
+		ocPartAttachment,
 		ocProbe,
+		ocReadAttachment,
 		ocRepo,
 		ocShortModelName,
+		type OcAttachment,
 		type OcEvent,
 		type OcMessage,
 		type OcMessageInfo,
@@ -71,7 +80,7 @@
 	};
 
 	type ChatEntry =
-		| { kind: 'user'; text: string; messageID?: string }
+		| { kind: 'user'; text: string; messageID?: string; attachments?: OcAttachment[] }
 		| { kind: 'thinking'; text: string; done?: boolean; expanded?: boolean }
 		| { kind: 'text'; text: string }
 		| ToolEntry
@@ -116,6 +125,9 @@
 	let copiedIdx = $state<number | null>(null);
 	let copyTimer: ReturnType<typeof setTimeout> | null = null;
 	let sawTerminal = false;
+	let attachments = $state<OcAttachment[]>([]);
+	let fileInputEl = $state<HTMLInputElement | undefined>(undefined);
+	let dropActive = $state(false);
 
 	let conversations = $state<Conversation[]>([]);
 	let convosSupported = $state(false);
@@ -880,10 +892,25 @@
 		for (let i = 0; i < messages.length; i += 1) {
 			const { info, parts } = messages[i];
 			if (info.role === 'user') {
+				const files: OcAttachment[] = [];
+				for (const part of parts) {
+					const attachment = ocPartAttachment(part);
+					if (attachment) files.push(attachment);
+				}
+				let carried = false;
 				for (const part of parts) {
 					if (part.type === 'text' && part.text?.trim() && !part.synthetic && !part.ignored) {
-						entries.push({ kind: 'user', text: part.text, messageID: info.id });
+						entries.push({
+							kind: 'user',
+							text: part.text,
+							messageID: info.id,
+							...(carried || files.length === 0 ? {} : { attachments: files })
+						});
+						carried = true;
 					}
+				}
+				if (!carried && files.length > 0) {
+					entries.push({ kind: 'user', text: '', messageID: info.id, attachments: files });
 				}
 				runStart = null;
 				runCost = 0;
@@ -1077,7 +1104,102 @@
 		}
 	}
 
-	async function submitOc(message: string) {
+	async function addFiles(files: FileList | File[] | null | undefined) {
+		if (!files) return;
+		const incoming = Array.from(files);
+		if (incoming.length === 0) return;
+		const accepted: File[] = [];
+		let oversized = 0;
+		let overflow = 0;
+		for (const file of incoming) {
+			if (file.size > OC_ATTACH_MAX_BYTES) {
+				oversized += 1;
+				continue;
+			}
+			if (attachments.length + accepted.length >= OC_ATTACH_MAX_COUNT) {
+				overflow += 1;
+				continue;
+			}
+			accepted.push(file);
+		}
+		if (oversized > 0) {
+			toasts.add({
+				title: 'File is too large',
+				description: `Attachments are limited to ${ocFmtBytes(OC_ATTACH_MAX_BYTES)} each`,
+				color: 'error'
+			});
+		}
+		if (overflow > 0) {
+			toasts.add({
+				title: 'Too many attachments',
+				description: `You can attach up to ${OC_ATTACH_MAX_COUNT} files`,
+				color: 'error'
+			});
+		}
+		for (const file of accepted) {
+			try {
+				attachments.push(await ocReadAttachment(file));
+			} catch {
+				toasts.add({ title: 'Could not read file', description: file.name, color: 'error' });
+			}
+		}
+	}
+
+	function removeAttachment(id: string) {
+		attachments = attachments.filter((a) => a.id !== id);
+	}
+
+	function openFilePicker() {
+		fileInputEl?.click();
+	}
+
+	function onFilePicked(e: Event) {
+		const target = e.currentTarget as HTMLInputElement;
+		addFiles(target.files);
+		target.value = '';
+	}
+
+	function dragHasFiles(e: DragEvent): boolean {
+		const types = e.dataTransfer?.types;
+		return !!types && Array.from(types).includes('Files');
+	}
+
+	function onComposerDragOver(e: DragEvent) {
+		if (!ocMode || !dragHasFiles(e)) return;
+		e.preventDefault();
+		dropActive = true;
+	}
+
+	function onComposerDragLeave(e: DragEvent) {
+		const root = e.currentTarget;
+		const next = e.relatedTarget;
+		if (root instanceof Node && next instanceof Node && root.contains(next)) return;
+		dropActive = false;
+	}
+
+	function onComposerDrop(e: DragEvent) {
+		if (!ocMode || !dragHasFiles(e)) return;
+		e.preventDefault();
+		dropActive = false;
+		addFiles(e.dataTransfer?.files);
+	}
+
+	function onComposerPaste(e: ClipboardEvent) {
+		if (!ocMode) return;
+		const items = e.clipboardData?.items;
+		if (!items) return;
+		const files: File[] = [];
+		for (const item of Array.from(items)) {
+			if (item.kind !== 'file') continue;
+			const file = item.getAsFile();
+			if (file) files.push(file);
+		}
+		if (files.length === 0) return;
+		e.preventDefault();
+		addFiles(files);
+	}
+
+	async function submitOc(message: string, files: OcAttachment[]): Promise<boolean> {
 		turnStart = Date.now();
 		ocTurnCosts.clear();
 		try {
@@ -1091,13 +1213,14 @@
 					model: { providerID: selProvider, modelID: selModelID },
 					...(selVariant ? { variant: selVariant } : {}),
 					agent: planMode ? 'plan' : 'build',
-					parts: [{ type: 'text', text: message }]
+					parts: [...files.map(ocFilePart), { type: 'text', text: message }]
 				})
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => ({}));
 				throw new Error(data?.message || 'Chat request failed');
 			}
+			return true;
 		} catch (err) {
 			entries.push({
 				kind: 'error',
@@ -1107,20 +1230,29 @@
 			ocTurnSession = null;
 			turnStart = 0;
 			onturndone?.();
+			return false;
 		}
 	}
 
 	async function submitMessage() {
 		const message = input.trim();
-		if (!message || streaming) return;
+		const files = ocMode ? [...attachments] : [];
+		if (streaming) return;
+		if (!message && files.length === 0) return;
 		input = '';
 		if (inputEl) inputEl.style.height = 'auto';
-		entries.push({ kind: 'user', text: message });
+		entries.push({
+			kind: 'user',
+			text: message,
+			...(files.length > 0 ? { attachments: files } : {})
+		});
 		atBottom = true;
 		streaming = true;
 		sawTerminal = false;
 		if (ocMode) {
-			await submitOc(message);
+			attachments = [];
+			const sent = await submitOc(message, files);
+			if (!sent) attachments = files;
 			return;
 		}
 		try {
@@ -1408,12 +1540,40 @@
 		<form
 			class="chat-composer"
 			class:chat-composer--plan={ocMode && planMode}
+			class:chat-composer--drop={dropActive}
+			ondragover={onComposerDragOver}
+			ondragleave={onComposerDragLeave}
+			ondrop={onComposerDrop}
 			onsubmit={(e) => {
 				e.preventDefault();
 				submitMessage();
 			}}
 		>
 			<div class="chat-composer-col">
+				{#if ocMode && attachments.length > 0}
+					<div class="chat-attach-row" transition:slide>
+						{#each attachments as file (file.id)}
+							<div class="chat-attach" title="{file.name} · {ocFmtBytes(file.size)}">
+								{#if file.isImage}
+									<img class="chat-attach-thumb" src={file.dataUrl} alt={file.name} />
+								{:else}
+									<span class="chat-attach-doc">
+										<FileText class="h-3.5 w-3.5" />
+										<span class="chat-attach-name">{file.name}</span>
+									</span>
+								{/if}
+								<button
+									type="button"
+									class="chat-attach-remove"
+									aria-label="Remove {file.name}"
+									onclick={() => removeAttachment(file.id)}
+								>
+									<X class="h-3 w-3" />
+								</button>
+							</div>
+						{/each}
+					</div>
+				{/if}
 				<textarea
 					bind:this={inputEl}
 					bind:value={input}
@@ -1423,6 +1583,7 @@
 					aria-label="Message the agent"
 					oninput={autosize}
 					onkeydown={onComposerKey}
+					onpaste={onComposerPaste}
 				></textarea>
 				<div class="chat-composer-foot">
 					{#if ocMode}
@@ -1531,6 +1692,27 @@
 						{:else}
 							<span class="chat-repo-select chat-repo-select--static">home</span>
 						{/if}
+						{#if ocMode}
+							<input
+								bind:this={fileInputEl}
+								class="chat-file-input"
+								type="file"
+								multiple
+								accept="image/*,text/*,application/pdf"
+								tabindex="-1"
+								aria-hidden="true"
+								onchange={onFilePicked}
+							/>
+							<button
+								type="button"
+								class="chat-attach-btn"
+								aria-label="Attach files"
+								disabled={attachments.length >= OC_ATTACH_MAX_COUNT}
+								onclick={openFilePicker}
+							>
+								<Paperclip class="h-3.5 w-3.5" />
+							</button>
+						{/if}
 						{#if ocMode && streaming}
 							<button
 								type="button"
@@ -1545,7 +1727,7 @@
 							<button
 								type="submit"
 								class="chat-send"
-								disabled={streaming || !input.trim()}
+								disabled={streaming || (!input.trim() && attachments.length === 0)}
 								aria-label="Send message"
 							>
 								<Send class="h-3.5 w-3.5" />
@@ -1564,7 +1746,25 @@
 			{@const messageID = entry.messageID}
 			<div class="tr-user" class:tr-user--reverted={!!messageID && messageID === revertedMessageID}>
 				<span class="tr-user-dot" aria-hidden="true"></span>
-				<div class="tr-user-text">{entry.text}</div>
+				<div class="tr-user-body">
+					{#if entry.text}
+						<div class="tr-user-text">{entry.text}</div>
+					{/if}
+					{#if entry.attachments && entry.attachments.length > 0}
+						<div class="tr-user-attach">
+							{#each entry.attachments as file (file.id)}
+								{#if file.isImage}
+									<img class="tr-attach-thumb" src={file.dataUrl} alt={file.name} />
+								{:else}
+									<span class="tr-attach-doc">
+										<FileText class="h-3.5 w-3.5" />
+										<span class="tr-attach-name">{file.name}</span>
+									</span>
+								{/if}
+							{/each}
+						</div>
+					{/if}
+				</div>
 				{#if ocMode && messageID && !streaming}
 					<div class="tr-user-actions">
 						<button
@@ -2138,6 +2338,46 @@
 		color: var(--text-default);
 		white-space: pre-wrap;
 		overflow-wrap: anywhere;
+	}
+
+	.tr-user-body {
+		min-width: 0;
+	}
+
+	.tr-user-attach {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.375rem;
+		margin-top: 0.375rem;
+	}
+
+	.tr-attach-thumb {
+		width: 3rem;
+		height: 3rem;
+		object-fit: cover;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-xs);
+	}
+
+	.tr-attach-doc {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		max-width: 14rem;
+		padding: 0.1875rem 0.375rem;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-xs);
+		background: var(--bg-sunken);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		color: var(--text-muted);
+	}
+
+	.tr-attach-name {
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.tr-md {
@@ -2748,5 +2988,110 @@
 		font-weight: 600;
 		color: var(--accent);
 		white-space: nowrap;
+	}
+
+	.chat-composer--drop {
+		border-top-color: var(--accent);
+		background: var(--accent-subtle);
+		outline: 1px dashed var(--accent);
+		outline-offset: -2px;
+	}
+
+	.chat-attach-row {
+		display: flex;
+		flex-wrap: wrap;
+		align-items: center;
+		gap: 0.5rem;
+		margin-bottom: 0.5rem;
+	}
+
+	.chat-attach {
+		position: relative;
+		display: inline-flex;
+		align-items: center;
+	}
+
+	.chat-attach-thumb {
+		width: 2.5rem;
+		height: 2.5rem;
+		object-fit: cover;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-xs);
+	}
+
+	.chat-attach-doc {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		max-width: 12rem;
+		height: 2.5rem;
+		padding: 0 0.5rem;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-xs);
+		background: var(--bg-sunken);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		color: var(--text-muted);
+	}
+
+	.chat-attach-name {
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.chat-attach-remove {
+		position: absolute;
+		top: -0.3125rem;
+		right: -0.3125rem;
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1rem;
+		height: 1rem;
+		padding: 0;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-pill);
+		background: var(--bg-raised);
+		color: var(--text-muted);
+		cursor: pointer;
+		transition:
+			color var(--dur-fast),
+			background-color var(--dur-fast);
+	}
+
+	.chat-attach-remove:hover {
+		background: var(--bg-hover);
+		color: var(--text-default);
+	}
+
+	.chat-file-input {
+		display: none;
+	}
+
+	.chat-attach-btn {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.75rem;
+		height: 1.75rem;
+		border: none;
+		border-radius: var(--radius-sm);
+		background: none;
+		color: var(--text-faint);
+		cursor: pointer;
+		transition:
+			color var(--dur-fast),
+			background-color var(--dur-fast);
+	}
+
+	.chat-attach-btn:hover:not(:disabled) {
+		background: var(--bg-hover);
+		color: var(--text-default);
+	}
+
+	.chat-attach-btn:disabled {
+		cursor: default;
+		opacity: 0.5;
 	}
 </style>

@@ -30,7 +30,26 @@ export type OcPart = {
 	tool?: string;
 	callID?: string;
 	state?: OcToolState;
+	mime?: string;
+	url?: string;
+	filename?: string;
 	time?: { start: number; end?: number };
+};
+
+export type OcAttachment = {
+	id: string;
+	name: string;
+	mime: string;
+	size: number;
+	dataUrl: string;
+	isImage: boolean;
+};
+
+export type OcFilePart = {
+	type: 'file';
+	mime: string;
+	filename: string;
+	url: string;
 };
 
 export type OcTokens = {
@@ -189,6 +208,60 @@ export function ocNormalizeTool(
 		out[OC_INPUT_KEYS[key] ?? key] = value;
 	}
 	return { name, input: out };
+}
+
+export const OC_ATTACH_MAX_BYTES = 5 * 1024 * 1024;
+export const OC_ATTACH_MAX_COUNT = 10;
+
+export function ocIsImageMime(mime: string): boolean {
+	return mime.startsWith('image/');
+}
+
+export function ocFmtBytes(bytes: number): string {
+	if (bytes < 1024) return `${bytes} B`;
+	if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+	return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+export function ocReadAttachment(file: File): Promise<OcAttachment> {
+	return new Promise((resolve, reject) => {
+		const reader = new FileReader();
+		reader.onerror = () => reject(new Error('Could not read file'));
+		reader.onload = () => {
+			const mime = file.type || 'application/octet-stream';
+			resolve({
+				id: crypto.randomUUID(),
+				name: file.name || 'attachment',
+				mime,
+				size: file.size,
+				dataUrl: typeof reader.result === 'string' ? reader.result : '',
+				isImage: ocIsImageMime(mime)
+			});
+		};
+		reader.readAsDataURL(file);
+	});
+}
+
+export function ocFilePart(attachment: OcAttachment): OcFilePart {
+	return {
+		type: 'file',
+		mime: attachment.mime,
+		filename: attachment.name,
+		url: attachment.dataUrl
+	};
+}
+
+export function ocPartAttachment(part: OcPart): OcAttachment | null {
+	if (part.type !== 'file' || !part.url) return null;
+	const mime = part.mime || 'application/octet-stream';
+	return {
+		id: part.id,
+		name: part.filename || 'attachment',
+		mime,
+		size: 0,
+		dataUrl: part.url,
+		isImage: ocIsImageMime(mime)
+	};
 }
 
 export function ocErrorMessage(error: unknown): string {
