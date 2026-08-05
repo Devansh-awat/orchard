@@ -127,11 +127,17 @@ export class SandboxK8sService {
 
   private async ensureNetworkPolicy(): Promise<void> {
     const net = this.kc.makeApiClient(k8s.NetworkingV1Api);
+    let existing: k8s.V1NetworkPolicy | null = null;
     try {
-      await net.readNamespacedNetworkPolicy('sandbox-isolation', this.namespace);
-      return;
+      const res = await net.readNamespacedNetworkPolicy('sandbox-isolation', this.namespace);
+      existing = res.body;
     } catch (e: any) {
       if (e.response?.statusCode !== 404) throw e;
+    }
+    if (existing) {
+      const ports = existing.spec?.ingress?.[0]?.ports?.map((p) => String(p.port)) ?? [];
+      if (ports.includes('4096')) return;
+      await net.deleteNamespacedNetworkPolicy('sandbox-isolation', this.namespace);
     }
     const serverNamespace = process.env.ORCHARD_SERVER_NAMESPACE || 'orchard';
     const policy: k8s.V1NetworkPolicy = {
@@ -159,7 +165,10 @@ export class SandboxK8sService {
                 },
               },
             ],
-            ports: [{ protocol: 'TCP', port: 22 as any }],
+            ports: [
+              { protocol: 'TCP', port: 22 as any },
+              { protocol: 'TCP', port: 4096 as any },
+            ],
           },
         ],
         egress: [
@@ -215,6 +224,16 @@ export class SandboxK8sService {
     if (input.claudeToken) stringData['claude-token'] = input.claudeToken;
     if (input.openaiToken) stringData['openai-token'] = input.openaiToken;
     stringData['setup.sh'] = input.setupScript || '';
+    stringData['opencode-auth.json'] = input.claudeToken
+      ? JSON.stringify({
+          anthropic: {
+            type: 'oauth',
+            refresh: '',
+            access: input.claudeToken,
+            expires: 99999999999999,
+          },
+        })
+      : '{}';
     const body: k8s.V1Secret = {
       metadata: {
         name,
@@ -331,6 +350,7 @@ export class SandboxK8sService {
                   items: [
                     { key: 'bootstrap.sh', path: 'bootstrap.sh' },
                     { key: 'setup.sh', path: 'setup.sh' },
+                    { key: 'opencode-auth.json', path: 'opencode-auth.json' },
                   ],
                   defaultMode: 0o644,
                   optional: false,

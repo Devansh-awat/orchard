@@ -98,6 +98,14 @@ if [ -s /orchard-init/setup.sh ] && [ ! -f /persist/.setup-done ]; then
   ) &
 fi
 
+mkdir -p /persist/home/.config/opencode /persist/home/.local/share/opencode
+[ -f /persist/home/.config/opencode/opencode.json ] || printf '%s' '{"plugin":["@cortexkit/opencode-anthropic-auth"]}' > /persist/home/.config/opencode/opencode.json
+ln -sfn /orchard-init/opencode-auth.json /persist/home/.local/share/opencode/auth.json
+chown -R dev:dev /persist/home/.config /persist/home/.local
+if command -v opencode >/dev/null 2>&1; then
+  su - dev -c 'nohup opencode serve --hostname 0.0.0.0 --port 4096 >> /persist/home/.opencode-serve.log 2>&1 &'
+fi
+
 mkdir -p /run/sshd
 exec /usr/sbin/sshd -D -e
 `;

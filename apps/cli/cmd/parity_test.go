@@ -194,6 +194,7 @@ var routeCoverage = map[string]string{
 	"PATCH /sandboxes/:id/conversations/:cid":       "sandbox conversations --rename",
 	"DELETE /sandboxes/:id/conversations/:cid":      "sandbox conversations --delete",
 	"GET /sandboxes/:id/conversations/:cid/history": "sandbox conversations --history",
+	"ALL /sandboxes/:id/opencode/*":                 "sandbox chat (opencode workspace proxy, web UI)",
 	"GET /sandboxes/credentials":                    "sandbox credentials status",
 	"PUT /sandboxes/credentials":                    "sandbox credentials set",
 

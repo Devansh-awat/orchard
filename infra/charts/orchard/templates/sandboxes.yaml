@@ -68,6 +68,8 @@ spec:
       ports:
         - port: 22
           protocol: TCP
+        - port: 4096
+          protocol: TCP
   egress:
     - to:
         - namespaceSelector:

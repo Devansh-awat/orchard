@@ -1,4 +1,5 @@
 {
+  "ALL /sandboxes/:id/opencode/*": "authenticated",
   "DELETE /": "superadmin",
   "DELETE /admin/nodes/:id/assignments/:orgId": "superadmin",
   "DELETE /admin/organizations/:id": "superadmin",

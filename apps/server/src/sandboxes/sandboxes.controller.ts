@@ -1,4 +1,5 @@
 import {
+  All,
   Body,
   Controller,
   Delete,
@@ -199,6 +200,18 @@ export class SandboxesController {
       { conversationId: body?.conversationId || undefined, repo: body?.repo || undefined },
       res,
     );
+  }
+
+  @All(':id/opencode/*')
+  @RequireScope('exec')
+  async opencodeProxy(
+    @Req() req: any,
+    @Res() res: Response,
+    @Param('id', ParseUUIDPipe) id: string,
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await this.sandboxes.getOwned(id, user.id);
+    await this.workspace.proxyOpencode(row, req, res);
   }
 
   @Get(':id/ssh')

@@ -1,5 +1,13 @@
-import { BadRequestException, Injectable } from '@nestjs/common';
+import * as http from 'http';
+import * as k8s from '@kubernetes/client-node';
+import { PassThrough } from 'stream';
+import { BadRequestException, Injectable, Logger } from '@nestjs/common';
+import type { Request, Response } from 'express';
+import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { SandboxK8sService, sandboxWorkdir } from './sandbox-k8s.service';
+
+const OPENCODE_PORT = 4096;
+const PROXY_TIMEOUT_MS = 120000;
 
 const FILE_RE = /^[A-Za-z0-9][A-Za-z0-9._/ @-]*$/;
 const REPO_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
@@ -26,7 +34,82 @@ export interface SandboxChanges {
 
 @Injectable()
 export class SandboxWorkspaceService {
-  constructor(private readonly k8s: SandboxK8sService) {}
+  private readonly logger = new Logger(SandboxWorkspaceService.name);
+
+  constructor(
+    private readonly k8s: SandboxK8sService,
+    private readonly kubernetes: KubernetesService,
+  ) {}
+
+  async proxyOpencode(
+    sandbox: { id: string; podName: string; status: string },
+    req: Request,
+    res: Response,
+  ): Promise<void> {
+    if (sandbox.status !== 'running') {
+      res.status(400).json({ message: 'Sandbox is not running' });
+      return;
+    }
+    const suffix = (req.params as Record<string, string>)['0'] || '';
+    const query = req.originalUrl.includes('?')
+      ? req.originalUrl.slice(req.originalUrl.indexOf('?'))
+      : '';
+    const hasBody = !['GET', 'HEAD'].includes(req.method) && req.body !== undefined;
+    const payload = hasBody ? JSON.stringify(req.body) : null;
+    if (process.env.SANDBOX_TUNNEL_MODE === 'portforward') {
+      await this.proxyOpencodeViaExec(sandbox, req, res, suffix, query, payload);
+      return;
+    }
+    const podIp = await this.k8s.resolvePodIp(sandbox.id, sandbox.podName);
+    if (!podIp) {
+      res.status(502).json({ message: 'Sandbox pod has no address' });
+      return;
+    }
+    await new Promise<void>((resolve) => {
+      const proxyReq = http.request(
+        {
+          host: podIp,
+          port: OPENCODE_PORT,
+          method: req.method,
+          path: `/${suffix}${query}`,
+          headers: {
+            accept: req.headers.accept || 'application/json',
+            ...(payload
+              ? {
+                  'content-type': 'application/json',
+                  'content-length': Buffer.byteLength(payload),
+                }
+              : {}),
+          },
+          timeout: PROXY_TIMEOUT_MS,
+        },
+        (proxyRes) => {
+          res.status(proxyRes.statusCode || 502);
+          for (const header of ['content-type', 'cache-control']) {
+            const value = proxyRes.headers[header];
+            if (value) res.setHeader(header, value);
+          }
+          res.flushHeaders?.();
+          proxyRes.pipe(res);
+          proxyRes.on('end', resolve);
+          proxyRes.on('error', () => {
+            res.end();
+            resolve();
+          });
+        },
+      );
+      proxyReq.on('timeout', () => proxyReq.destroy(new Error('opencode proxy timeout')));
+      proxyReq.on('error', (e) => {
+        this.logger.warn(`opencode proxy failed for ${sandbox.id}: ${e.message}`);
+        if (!res.headersSent) res.status(502).json({ message: 'opencode is not reachable in this sandbox' });
+        else res.end();
+        resolve();
+      });
+      res.on('close', () => proxyReq.destroy());
+      if (payload) proxyReq.write(payload);
+      proxyReq.end();
+    });
+  }
 
   resolveWorkdir(
     sandbox: { repoUrl: string | null },
@@ -121,6 +204,93 @@ export class SandboxWorkspaceService {
       throw new BadRequestException(`A directory named "${name}" already exists in the sandbox`);
     }
     return { name };
+  }
+
+  private async proxyOpencodeViaExec(
+    sandbox: { id: string },
+    req: Request,
+    res: Response,
+    suffix: string,
+    query: string,
+    payload: string | null,
+  ): Promise<void> {
+    if (!this.kubernetes.kc) {
+      res.status(502).json({ message: 'Kubernetes is not configured' });
+      return;
+    }
+    const core = this.kubernetes.kc.makeApiClient(k8s.CoreV1Api);
+    const pods = await core.listNamespacedPod(
+      this.k8s.namespace, undefined, undefined, undefined, undefined,
+      `orchard.my/sandbox-id=${sandbox.id}`,
+    );
+    const pod = pods.body.items.find((p) => p.status?.phase === 'Running');
+    if (!pod?.metadata?.name) {
+      res.status(502).json({ message: 'Sandbox pod is not running' });
+      return;
+    }
+    const q = (s: string) => `'${s.replace(/'/g, `'\\''`)}'`;
+    const isSse = String(req.headers.accept || '').includes('text/event-stream');
+    let curl = `curl -si -N -X ${req.method} ${q(`http://127.0.0.1:4096/${suffix}${query}`)} -H ${q(`accept: ${req.headers.accept || 'application/json'}`)}`;
+    if (payload) curl += ` -H 'content-type: application/json' --data-binary ${q(payload)}`;
+    if (!isSse) curl += ' -m 110';
+    const stdout = new PassThrough();
+    let headerBuffer = '';
+    let headersDone = false;
+    stdout.on('data', (chunk: Buffer) => {
+      if (headersDone) {
+        if (!res.writableEnded) res.write(chunk);
+        return;
+      }
+      headerBuffer += chunk.toString('latin1');
+      const sep = headerBuffer.indexOf('\r\n\r\n');
+      if (sep < 0) return;
+      const head = headerBuffer.slice(0, sep);
+      const rest = Buffer.from(headerBuffer.slice(sep + 4), 'latin1');
+      const statusMatch = head.match(/^HTTP\/[\d.]+ (\d{3})/);
+      const typeMatch = head.match(/^content-type:\s*(.+)$/im);
+      res.status(statusMatch ? Number(statusMatch[1]) : 200);
+      res.setHeader('content-type', typeMatch ? typeMatch[1].trim() : 'application/json');
+      if (isSse) {
+        res.setHeader('cache-control', 'no-cache');
+        res.setHeader('x-accel-buffering', 'no');
+      }
+      res.flushHeaders?.();
+      headersDone = true;
+      if (rest.length && !res.writableEnded) res.write(rest);
+    });
+    const exec = new k8s.Exec(this.kubernetes.kc);
+    let execWs: any = null;
+    let finished = false;
+    const finish = () => {
+      if (finished) return;
+      finished = true;
+      if (!headersDone && !res.headersSent) {
+        res.status(502).json({ message: 'opencode is not reachable in this sandbox' });
+        return;
+      }
+      res.end();
+    };
+    res.on('close', () => {
+      try {
+        execWs?.close();
+      } catch {}
+    });
+    try {
+      execWs = await exec.exec(
+        this.k8s.namespace,
+        pod.metadata.name,
+        'sandbox',
+        ['su', '-l', 'dev', '-c', curl],
+        stdout,
+        null,
+        null,
+        false,
+        () => finish(),
+      );
+    } catch (e: any) {
+      this.logger.warn(`opencode exec proxy failed for ${sandbox.id}: ${e?.message}`);
+      finish();
+    }
   }
 
   async changes(

@@ -7,6 +7,20 @@
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import { fade, slide } from '$lib/utils/transitions';
 	import { sandboxCredentialsQueryOptions } from '$lib/queries/sandboxes';
+	import {
+		OC_MODEL,
+		ocBase,
+		ocDirectory,
+		ocErrorMessage,
+		ocNormalizeTool,
+		ocProbe,
+		ocRepo,
+		type OcEvent,
+		type OcMessage,
+		type OcMessageInfo,
+		type OcPart,
+		type OcSession
+	} from './opencode';
 	import type { Sandbox, SandboxRepo } from '$lib/types/sandbox';
 
 	type TurnFile = { name: string; path: string; add: number; del: number };
@@ -79,6 +93,13 @@
 	let deleteOpen = $state(false);
 	let deleteTarget = $state<Conversation | null>(null);
 
+	let ocMode = $state(false);
+	const ocParts = new Map<string, ChatEntry>();
+	const ocRoles = new Map<string, string>();
+	const ocTurnCosts = new Map<string, number>();
+	let ocTurnSession: string | null = null;
+	let turnStart = 0;
+
 	const canStart = $derived(sandbox.status === 'stopped' || sandbox.status === 'error');
 	const activeConvo = $derived(conversations.find((c) => c.id === activeId) ?? null);
 	const repoLocked = $derived(convosSupported && activeConvo?.hasSession === true);
@@ -87,9 +108,54 @@
 	$effect(() => {
 		if (sandbox.status === 'running' && !convosInit) {
 			convosInit = true;
-			loadConversations();
+			init();
 		}
 	});
+
+	async function init() {
+		ocMode = await ocProbe(sandbox.id);
+		if (ocMode) await loadSessions();
+		else await loadConversations();
+	}
+
+	$effect(() => {
+		if (!ocMode || sandbox.status !== 'running') return;
+		const ctrl = new AbortController();
+		ocEventLoop(ctrl.signal);
+		return () => ctrl.abort();
+	});
+
+	function sessionToConvo(session: OcSession): Conversation {
+		return {
+			id: session.id,
+			title: session.title,
+			repo: ocRepo(session.directory),
+			hasSession: true,
+			createdAt: new Date(session.time.created).toISOString(),
+			updatedAt: new Date(session.time.updated).toISOString()
+		};
+	}
+
+	async function loadSessions() {
+		try {
+			const res = await apiFetch(`${ocBase(sandbox.id)}/session?roots=true&limit=20`);
+			if (!res.ok) return;
+			const sessions = (await res.json()) as OcSession[];
+			conversations = sessions
+				.filter((s) => !s.parentID && !s.time.archived)
+				.map(sessionToConvo);
+			convosSupported = true;
+			if (conversations.length === 0) {
+				await createConversation();
+			} else {
+				activeId = conversations[0].id;
+				if (conversations[0].repo) selectedRepo = conversations[0].repo;
+				await loadHistory(conversations[0].id);
+			}
+		} catch {
+			return;
+		}
+	}
 
 	async function loadConversations() {
 		try {
@@ -122,6 +188,29 @@
 	}
 
 	async function createConversation() {
+		if (ocMode) {
+			try {
+				const dir = ocDirectory(selectedRepo);
+				const query = dir ? `?directory=${encodeURIComponent(dir)}` : '';
+				const res = await apiFetch(`${ocBase(sandbox.id)}/session${query}`, {
+					method: 'POST',
+					headers: { 'Content-Type': 'application/json' },
+					body: JSON.stringify({})
+				});
+				if (!res.ok) return;
+				const session = (await res.json()) as OcSession;
+				if (!conversations.some((c) => c.id === session.id)) {
+					conversations.unshift(sessionToConvo(session));
+				}
+				activeId = session.id;
+				entries = [];
+				ocParts.clear();
+				historyTruncated = false;
+			} catch {
+				return;
+			}
+			return;
+		}
 		try {
 			const res = await apiFetch(`/apiv1/sandboxes/${sandbox.id}/conversations`, {
 				method: 'POST',
@@ -149,10 +238,17 @@
 
 	async function loadHistory(id: string) {
 		entries = [];
+		ocParts.clear();
 		historyTruncated = false;
 		if (sandbox.status !== 'running') return;
 		historyLoading = true;
 		try {
+			if (ocMode) {
+				const res = await apiFetch(`${ocBase(sandbox.id)}/session/${id}/message?limit=100`);
+				if (!res.ok) return;
+				hydrateOc((await res.json()) as OcMessage[]);
+				return;
+			}
 			const res = await apiFetch(`/apiv1/sandboxes/${sandbox.id}/conversations/${id}/history`);
 			if (!res.ok) return;
 			const data = await res.json();
@@ -181,7 +277,10 @@
 		if (!convo || convo.title === title) return;
 		convo.title = title;
 		try {
-			await apiFetch(`/apiv1/sandboxes/${sandbox.id}/conversations/${id}`, {
+			const path = ocMode
+				? `${ocBase(sandbox.id)}/session/${id}`
+				: `/apiv1/sandboxes/${sandbox.id}/conversations/${id}`;
+			await apiFetch(path, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
 				body: JSON.stringify({ title })
@@ -196,9 +295,10 @@
 		deleteTarget = null;
 		if (!target) return;
 		try {
-			const res = await apiFetch(`/apiv1/sandboxes/${sandbox.id}/conversations/${target.id}`, {
-				method: 'DELETE'
-			});
+			const path = ocMode
+				? `${ocBase(sandbox.id)}/session/${target.id}`
+				: `/apiv1/sandboxes/${sandbox.id}/conversations/${target.id}`;
+			const res = await apiFetch(path, { method: 'DELETE' });
 			if (!res.ok) throw new Error('Failed to delete conversation');
 			conversations = conversations.filter((c) => c.id !== target.id);
 			if (activeId === target.id) {
@@ -409,17 +509,261 @@
 		}
 	}
 
-	function handleFrame(frame: string) {
-		const payload = frame
+	function framePayload(frame: string): string {
+		return frame
 			.split('\n')
 			.filter((line) => line.startsWith('data:'))
 			.map((line) => line.slice(5).trim())
 			.join('');
+	}
+
+	function handleFrame(frame: string) {
+		const payload = framePayload(frame);
 		if (!payload) return;
 		try {
 			handleEvent(JSON.parse(payload) as Record<string, unknown>);
 		} catch {
 			appendText(payload);
+		}
+	}
+
+	const OC_SKIP_PARTS = new Set([
+		'step-start',
+		'step-finish',
+		'snapshot',
+		'patch',
+		'agent',
+		'retry',
+		'compaction',
+		'subtask',
+		'file'
+	]);
+
+	function ocToolEntry(part: OcPart): ToolEntry {
+		const norm = ocNormalizeTool(part.tool ?? 'tool', part.state?.input);
+		const entry = makeToolEntry(part.id, norm.name, norm.input);
+		if (!entry.summary && typeof part.state?.title === 'string') {
+			entry.summary = midTruncate(part.state.title);
+		}
+		if (part.state?.status === 'error') entry.failed = true;
+		return entry;
+	}
+
+	function appendOcPart(part: OcPart) {
+		if (OC_SKIP_PARTS.has(part.type)) return;
+		const existing = ocParts.get(part.id);
+		if (part.type === 'text' || part.type === 'reasoning') {
+			if (existing) {
+				if (existing.kind === 'text' || existing.kind === 'thinking') {
+					existing.text = part.text ?? '';
+				}
+				return;
+			}
+			const entry: ChatEntry =
+				part.type === 'text'
+					? { kind: 'text', text: part.text ?? '' }
+					: { kind: 'thinking', text: part.text ?? '' };
+			entries.push(entry);
+			ocParts.set(part.id, entries[entries.length - 1]);
+			return;
+		}
+		const entry = part.type === 'tool' ? ocToolEntry(part) : makeToolEntry(part.id, part.type, part);
+		if (existing && existing.kind === 'tool') {
+			Object.assign(existing, { ...entry, expanded: existing.expanded });
+			return;
+		}
+		entries.push(entry);
+		ocParts.set(part.id, entries[entries.length - 1]);
+	}
+
+	function hydrateOc(messages: OcMessage[]) {
+		let runStart: number | null = null;
+		let runCost = 0;
+		for (let i = 0; i < messages.length; i += 1) {
+			const { info, parts } = messages[i];
+			if (info.role === 'user') {
+				for (const part of parts) {
+					if (part.type === 'text' && part.text?.trim() && !part.synthetic && !part.ignored) {
+						entries.push({ kind: 'user', text: part.text });
+					}
+				}
+				runStart = null;
+				runCost = 0;
+				continue;
+			}
+			if (runStart === null) runStart = info.time.created;
+			runCost += info.cost ?? 0;
+			for (const part of parts) appendOcPart(part);
+			const next = messages[i + 1];
+			if (info.time.completed && (!next || next.info.role === 'user')) {
+				entries.push({
+					kind: 'result',
+					cost: runCost > 0 ? runCost : null,
+					duration: info.time.completed - runStart,
+					files: turnFiles()
+				});
+			}
+		}
+	}
+
+	function finishOcTurn() {
+		const total = [...ocTurnCosts.values()].reduce((sum, cost) => sum + cost, 0);
+		if (ocTurnSession === activeId) {
+			entries.push({
+				kind: 'result',
+				cost: total > 0 ? total : null,
+				duration: turnStart > 0 ? Date.now() - turnStart : null,
+				files: turnFiles()
+			});
+		}
+		streaming = false;
+		ocTurnSession = null;
+		ocTurnCosts.clear();
+		turnStart = 0;
+		onturndone?.();
+	}
+
+	function handleOcEvent(event: OcEvent) {
+		const props = event.properties ?? {};
+		const sessionID = typeof props.sessionID === 'string' ? props.sessionID : null;
+		if (event.type === 'session.updated' || event.type === 'session.created') {
+			const info = props.info as OcSession | undefined;
+			if (!info || info.parentID || info.time.archived) return;
+			const convo = conversations.find((c) => c.id === info.id);
+			if (convo) {
+				convo.title = info.title;
+				convo.updatedAt = new Date(info.time.updated).toISOString();
+			} else if (event.type === 'session.created') {
+				conversations.unshift(sessionToConvo(info));
+			}
+		} else if (event.type === 'session.deleted') {
+			if (!sessionID || !conversations.some((c) => c.id === sessionID)) return;
+			conversations = conversations.filter((c) => c.id !== sessionID);
+			if (activeId === sessionID) {
+				activeId = conversations[0]?.id ?? null;
+				if (activeId) loadHistory(activeId);
+				else createConversation();
+			}
+		} else if (event.type === 'message.updated') {
+			const info = props.info as OcMessageInfo | undefined;
+			if (!info) return;
+			ocRoles.set(info.id, info.role);
+			if (
+				info.role === 'assistant' &&
+				info.sessionID === ocTurnSession &&
+				typeof info.cost === 'number'
+			) {
+				ocTurnCosts.set(info.id, info.cost);
+			}
+		} else if (event.type === 'message.part.updated') {
+			const part = props.part as OcPart | undefined;
+			if (!part || part.sessionID !== activeId) return;
+			if (ocRoles.get(part.messageID) === 'user') return;
+			appendOcPart(part);
+		} else if (event.type === 'message.part.delta') {
+			if (props.sessionID !== activeId || props.field !== 'text') return;
+			const entry = ocParts.get(String(props.partID));
+			if (entry && (entry.kind === 'text' || entry.kind === 'thinking')) {
+				entry.text += String(props.delta ?? '');
+			}
+		} else if (event.type === 'session.idle') {
+			if (streaming && sessionID === ocTurnSession) finishOcTurn();
+		} else if (event.type === 'session.error') {
+			if (sessionID === activeId || !sessionID) {
+				entries.push({ kind: 'error', detail: ocErrorMessage(props.error) });
+			}
+			if (streaming && (!sessionID || sessionID === ocTurnSession)) {
+				streaming = false;
+				ocTurnSession = null;
+				ocTurnCosts.clear();
+				turnStart = 0;
+				onturndone?.();
+			}
+		}
+	}
+
+	function handleOcFrame(frame: string) {
+		const payload = framePayload(frame);
+		if (!payload) return;
+		try {
+			handleOcEvent(JSON.parse(payload) as OcEvent);
+		} catch {
+			return;
+		}
+	}
+
+	async function ocSyncAfterConnect() {
+		if (!streaming || !ocTurnSession) return;
+		try {
+			const res = await apiFetch(`${ocBase(sandbox.id)}/session/status`);
+			if (!res.ok) return;
+			const status = (await res.json()) as Record<string, { type?: string }>;
+			const current = status[ocTurnSession]?.type;
+			if (current === 'busy' || current === 'retry') return;
+			streaming = false;
+			ocTurnSession = null;
+			ocTurnCosts.clear();
+			turnStart = 0;
+			if (activeId) await loadHistory(activeId);
+			onturndone?.();
+		} catch {
+			return;
+		}
+	}
+
+	async function ocEventLoop(signal: AbortSignal) {
+		for (;;) {
+			try {
+				const res = await apiFetch(`${ocBase(sandbox.id)}/event`, { signal });
+				if (!res.ok || !res.body) throw new Error('event stream unavailable');
+				await ocSyncAfterConnect();
+				const reader = res.body.getReader();
+				const decoder = new TextDecoder();
+				let buffer = '';
+				for (;;) {
+					const { done, value } = await reader.read();
+					if (done) break;
+					buffer += decoder.decode(value, { stream: true });
+					let boundary = buffer.indexOf('\n\n');
+					while (boundary !== -1) {
+						handleOcFrame(buffer.slice(0, boundary));
+						buffer = buffer.slice(boundary + 2);
+						boundary = buffer.indexOf('\n\n');
+					}
+				}
+			} catch {
+				if (signal.aborted) return;
+			}
+			if (signal.aborted) return;
+			await new Promise((resolve) => setTimeout(resolve, 2000));
+		}
+	}
+
+	async function submitOc(message: string) {
+		turnStart = Date.now();
+		ocTurnCosts.clear();
+		try {
+			if (!activeId) await createConversation();
+			if (!activeId) throw new Error('No session available');
+			ocTurnSession = activeId;
+			const res = await apiFetch(`${ocBase(sandbox.id)}/session/${activeId}/prompt_async`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ model: OC_MODEL, parts: [{ type: 'text', text: message }] })
+			});
+			if (!res.ok) {
+				const data = await res.json().catch(() => ({}));
+				throw new Error(data?.message || 'Chat request failed');
+			}
+		} catch (err) {
+			entries.push({
+				kind: 'error',
+				detail: err instanceof Error ? err.message : 'Chat request failed'
+			});
+			streaming = false;
+			ocTurnSession = null;
+			turnStart = 0;
+			onturndone?.();
 		}
 	}
 
@@ -432,6 +776,10 @@
 		atBottom = true;
 		streaming = true;
 		sawTerminal = false;
+		if (ocMode) {
+			await submitOc(message);
+			return;
+		}
 		try {
 			const body: Record<string, string> = { message };
 			if (activeId) body.conversationId = activeId;
@@ -475,7 +823,7 @@
 			});
 		} finally {
 			streaming = false;
-			if (convosSupported) refreshConversations();
+			if (convosSupported && !ocMode) refreshConversations();
 			onturndone?.();
 		}
 	}
@@ -589,6 +937,7 @@
 									type="button"
 									class="conv-close"
 									aria-label={`Delete ${convo.title}`}
+									disabled={ocMode && streaming}
 									onclick={() => {
 										deleteTarget = convo;
 										deleteOpen = true;
@@ -604,10 +953,14 @@
 					type="button"
 					class="conv-add"
 					aria-label="New conversation"
+					disabled={ocMode && streaming}
 					onclick={createConversation}
 				>
 					<Plus class="h-3.5 w-3.5" />
 				</button>
+				{#if ocMode}
+					<span class="conv-engine">opencode</span>
+				{/if}
 			</div>
 		{/if}
 		{#if missingClaude}
@@ -939,6 +1292,23 @@
 	.conv-add:hover {
 		background: var(--bg-hover);
 		color: var(--text-default);
+	}
+
+	.conv-add:disabled,
+	.conv-close:disabled {
+		color: var(--text-faint);
+		cursor: default;
+		background: none;
+	}
+
+	.conv-engine {
+		margin-left: auto;
+		flex-shrink: 0;
+		padding-right: 0.25rem;
+		font-family: var(--font-mono, monospace);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		color: var(--text-faint);
 	}
 
 	.chat-cred {
