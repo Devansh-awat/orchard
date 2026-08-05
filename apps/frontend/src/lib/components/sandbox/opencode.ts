@@ -182,7 +182,9 @@ export function ocShortModelName(name: string): string {
 	return name.replace(/^Claude\s+/i, '').replace(/\s*\(latest\)$/i, '');
 }
 
-export function ocMcpServers(map: Record<string, { status: string; error?: string }>): OcMcpServer[] {
+export function ocMcpServers(
+	map: Record<string, { status: string; error?: string }>
+): OcMcpServer[] {
 	return Object.entries(map)
 		.map(([name, s]) => ({ name, status: s.status as OcMcpState, error: s.error }))
 		.sort((a, b) => a.name.localeCompare(b.name));
@@ -197,10 +199,7 @@ export function ocFmtTokens(n: number): string {
 	return `${n}`;
 }
 
-export function ocNormalizeTool(
-	tool: string,
-	input: unknown
-): { name: string; input: unknown } {
+export function ocNormalizeTool(tool: string, input: unknown): { name: string; input: unknown } {
 	const name = OC_TOOL_NAMES[tool] ?? tool;
 	if (!input || typeof input !== 'object') return { name, input };
 	const out: Record<string, unknown> = {};

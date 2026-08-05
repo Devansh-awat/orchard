@@ -22,41 +22,41 @@
 
 <div class="scp-body">
 	<p class="scp-lede">SSH into your sandbox with the Orchard CLI.</p>
-		<div class="scp-block">
-			<div class="scp-code-row">
-				<code class="scp-code">{sshCommand}</code>
-				<button
-					type="button"
-					class="scp-copy"
-					aria-label="Copy SSH command"
-					onclick={() => copy('ssh', sshCommand)}
-				>
-					{#if copiedKey === 'ssh'}<Check size={14} />{:else}<Copy size={14} />{/if}
-				</button>
-			</div>
-			<p class="scp-hint">
-				Starts a stopped sandbox on demand. Needs the <a href="/cli" class="scp-link">Orchard CLI</a> signed
-				in.
-			</p>
+	<div class="scp-block">
+		<div class="scp-code-row">
+			<code class="scp-code">{sshCommand}</code>
+			<button
+				type="button"
+				class="scp-copy"
+				aria-label="Copy SSH command"
+				onclick={() => copy('ssh', sshCommand)}
+			>
+				{#if copiedKey === 'ssh'}<Check size={14} />{:else}<Copy size={14} />{/if}
+			</button>
 		</div>
-		<div class="scp-block">
-			<p class="scp-label">SSH config</p>
-			<div class="scp-code-row scp-code-row--multi">
-				<pre class="scp-code scp-code--multi">{sshConfig}</pre>
-				<button
-					type="button"
-					class="scp-copy"
-					aria-label="Copy SSH config"
-					onclick={() => copy('config', sshConfig)}
-				>
-					{#if copiedKey === 'config'}<Check size={14} />{:else}<Copy size={14} />{/if}
-				</button>
-			</div>
-			<p class="scp-hint">
-				Add this to ~/.ssh/config, then plain ssh, scp, and VS Code Remote-SSH can reach
-				orchard-sandbox-{name}. In VS Code, run "Remote-SSH: Connect to Host" and pick it from the
-				list.
-			</p>
+		<p class="scp-hint">
+			Starts a stopped sandbox on demand. Needs the <a href="/cli" class="scp-link">Orchard CLI</a> signed
+			in.
+		</p>
+	</div>
+	<div class="scp-block">
+		<p class="scp-label">SSH config</p>
+		<div class="scp-code-row scp-code-row--multi">
+			<pre class="scp-code scp-code--multi">{sshConfig}</pre>
+			<button
+				type="button"
+				class="scp-copy"
+				aria-label="Copy SSH config"
+				onclick={() => copy('config', sshConfig)}
+			>
+				{#if copiedKey === 'config'}<Check size={14} />{:else}<Copy size={14} />{/if}
+			</button>
+		</div>
+		<p class="scp-hint">
+			Add this to ~/.ssh/config, then plain ssh, scp, and VS Code Remote-SSH can reach
+			orchard-sandbox-{name}. In VS Code, run "Remote-SSH: Connect to Host" and pick it from the
+			list.
+		</p>
 	</div>
 </div>
 

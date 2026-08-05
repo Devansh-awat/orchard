@@ -76,7 +76,8 @@
 			const count = data?.identities?.length ?? 0;
 			invalidate();
 			toasts.add({
-				title: count > 0 ? `Imported ${count} ${count === 1 ? 'key' : 'keys'}` : 'No new keys found',
+				title:
+					count > 0 ? `Imported ${count} ${count === 1 ? 'key' : 'keys'}` : 'No new keys found',
 				color: 'success'
 			});
 		} catch (e) {

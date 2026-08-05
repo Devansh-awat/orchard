@@ -126,11 +126,7 @@
 		<Field label="Name" hint="Optional, one is generated when empty" for="sbx-name">
 			<Input id="sbx-name" bind:value={name} placeholder="my-sandbox" maxlength={63} />
 		</Field>
-		<Field
-			label="Repository"
-			hint="Optional, cloned into the sandbox on first boot"
-			for="sbx-repo"
-		>
+		<Field label="Repository" hint="Optional, cloned into the sandbox on first boot" for="sbx-repo">
 			<div class="scm-repo">
 				<Input
 					id="sbx-repo"

@@ -100,8 +100,14 @@ const orchardHighlight = HighlightStyle.define([
 	{ tag: [tags.string, tags.special(tags.string)], color: 'var(--hue-green)' },
 	{ tag: [tags.number, tags.bool, tags.null, tags.atom], color: 'var(--hue-amber)' },
 	{ tag: [tags.comment, tags.lineComment, tags.blockComment], color: 'var(--text-faint)' },
-	{ tag: [tags.function(tags.variableName), tags.function(tags.propertyName)], color: 'var(--hue-blue)' },
-	{ tag: [tags.definition(tags.variableName), tags.definition(tags.propertyName)], color: 'var(--text-default)' },
+	{
+		tag: [tags.function(tags.variableName), tags.function(tags.propertyName)],
+		color: 'var(--hue-blue)'
+	},
+	{
+		tag: [tags.definition(tags.variableName), tags.definition(tags.propertyName)],
+		color: 'var(--text-default)'
+	},
 	{ tag: [tags.propertyName, tags.attributeName], color: 'var(--hue-blue)' },
 	{ tag: [tags.typeName, tags.className, tags.namespace], color: 'var(--hue-emerald)' },
 	{ tag: [tags.tagName], color: 'var(--hue-pink)' },

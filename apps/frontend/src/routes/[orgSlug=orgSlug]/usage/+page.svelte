@@ -8,7 +8,17 @@
 	import Speedometer from '$lib/components/Speedometer.svelte';
 	import DonutChart from '$lib/components/DonutChart.svelte';
 	import HorizontalBars from '$lib/components/HorizontalBars.svelte';
-	import { Loader2, Activity, Gauge, Users, BarChart3, Pencil, Check, X, Sprout } from 'lucide-svelte';
+	import {
+		Loader2,
+		Activity,
+		Gauge,
+		Users,
+		BarChart3,
+		Pencil,
+		Check,
+		X,
+		Sprout
+	} from 'lucide-svelte';
 	import { TabBar } from '$lib/components/ui';
 	import { greenhouseFlag, sandboxEnabled } from '$lib/flags';
 	import { SandboxUsageTab } from '$lib/components/sandbox';

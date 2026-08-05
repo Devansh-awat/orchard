@@ -74,72 +74,72 @@
 </script>
 
 <div class="sbs-body">
-		<Field label="Name" for="sbs-name">
-			<div class="sbs-row">
-				<Input id="sbs-name" bind:value={name} maxlength={63} />
-				<Button
-					size="sm"
-					variant="secondary"
-					disabled={!name.trim() || name.trim() === sandbox.name}
-					loading={saving === 'name'}
-					onclick={() => patch({ name: name.trim() }, 'name')}
-				>
-					Save
-				</Button>
-			</div>
-		</Field>
-		<Field label="SSH identity" for="sbs-identity">
-			<Select
-				id="sbs-identity"
-				bind:value={identityId}
-				disabled={identities.length === 0}
-				onchange={() => {
-					if (identityId && identityId !== (sandbox.sshIdentity?.id ?? '')) {
-						patch({ sshIdentityId: identityId }, 'identity');
-					}
-				}}
+	<Field label="Name" for="sbs-name">
+		<div class="sbs-row">
+			<Input id="sbs-name" bind:value={name} maxlength={63} />
+			<Button
+				size="sm"
+				variant="secondary"
+				disabled={!name.trim() || name.trim() === sandbox.name}
+				loading={saving === 'name'}
+				onclick={() => patch({ name: name.trim() }, 'name')}
 			>
-				{#if !sandbox.sshIdentity}
-					<option value="">None</option>
-				{/if}
-				{#each identities as identity (identity.id)}
-					<option value={identity.id}>{identity.name}</option>
-				{/each}
-			</Select>
-			<a class="sbs-link" href="/user/settings?tab=sandbox">Manage identities in user settings</a>
-		</Field>
-		<Field
-			label="Setup script"
-			hint="Runs once as the dev user on first boot (logged to ~/.setup.log)"
-			for="sbs-setup"
+				Save
+			</Button>
+		</div>
+	</Field>
+	<Field label="SSH identity" for="sbs-identity">
+		<Select
+			id="sbs-identity"
+			bind:value={identityId}
+			disabled={identities.length === 0}
+			onchange={() => {
+				if (identityId && identityId !== (sandbox.sshIdentity?.id ?? '')) {
+					patch({ sshIdentityId: identityId }, 'identity');
+				}
+			}}
 		>
-			<textarea
-				id="sbs-setup"
-				class="sbs-script"
-				bind:value={setupScript}
-				rows="4"
-				placeholder="#!/bin/bash&#10;sudo apt-get install -y postgresql-client"
-				spellcheck="false"
-			></textarea>
-			<div class="sbs-script-actions">
-				<Button
-					size="sm"
-					variant="secondary"
-					disabled={setupScript === (sandbox.setupScript ?? '')}
-					loading={saving === 'setup'}
-					onclick={saveSetupScript}
-				>
-					Save script
-				</Button>
-			</div>
-		</Field>
-		<div class="sbs-repo">
-			{#if repoLabel}
-				<span class="sbs-repo-value">{repoLabel}</span>
-				<span class="sbs-repo-note">cloned on first boot</span>
-			{:else}
-				<span class="sbs-repo-note">No repository linked</span>
+			{#if !sandbox.sshIdentity}
+				<option value="">None</option>
 			{/if}
+			{#each identities as identity (identity.id)}
+				<option value={identity.id}>{identity.name}</option>
+			{/each}
+		</Select>
+		<a class="sbs-link" href="/user/settings?tab=sandbox">Manage identities in user settings</a>
+	</Field>
+	<Field
+		label="Setup script"
+		hint="Runs once as the dev user on first boot (logged to ~/.setup.log)"
+		for="sbs-setup"
+	>
+		<textarea
+			id="sbs-setup"
+			class="sbs-script"
+			bind:value={setupScript}
+			rows="4"
+			placeholder="#!/bin/bash&#10;sudo apt-get install -y postgresql-client"
+			spellcheck="false"
+		></textarea>
+		<div class="sbs-script-actions">
+			<Button
+				size="sm"
+				variant="secondary"
+				disabled={setupScript === (sandbox.setupScript ?? '')}
+				loading={saving === 'setup'}
+				onclick={saveSetupScript}
+			>
+				Save script
+			</Button>
+		</div>
+	</Field>
+	<div class="sbs-repo">
+		{#if repoLabel}
+			<span class="sbs-repo-value">{repoLabel}</span>
+			<span class="sbs-repo-note">cloned on first boot</span>
+		{:else}
+			<span class="sbs-repo-note">No repository linked</span>
+		{/if}
 	</div>
 </div>
 

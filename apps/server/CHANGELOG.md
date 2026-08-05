@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.0](https://github.com/LeafdTK/leaf/compare/server/v2.1.0...server/v2.2.0) (2026-08-05)
+
+
+### Features
+
+* scope sandboxes to organizations with role based access ([7ae69e6](https://github.com/LeafdTK/leaf/commit/7ae69e67cbbf8b5d708b6e1a04f042d55975fabe))
+
 ## [2.1.0](https://github.com/LeafdTK/leaf/compare/server/v2.0.0...server/v2.1.0) (2026-08-05)
 
 

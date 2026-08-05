@@ -5,11 +5,7 @@
 	import { apiFetch, selectedOrganization, toasts } from '$lib/stores';
 	import { queryClient } from '$lib/query';
 	import { Alert, Button, PageHeader, Skeleton } from '$lib/components/ui';
-	import {
-		SandboxCard,
-		SandboxCreateModal,
-		SandboxEmptyState
-	} from '$lib/components/sandbox';
+	import { SandboxCard, SandboxCreateModal, SandboxEmptyState } from '$lib/components/sandbox';
 	import { SandboxDisabledError, sandboxesQueryOptions } from '$lib/queries/sandboxes';
 	import {
 		isSandboxTransitional,

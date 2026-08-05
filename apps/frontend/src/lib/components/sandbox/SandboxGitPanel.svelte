@@ -100,10 +100,7 @@
 	const someSelected = $derived(selectedFiles.length > 0 && !allSelected);
 	const current = $derived(branches?.local.find((b) => b.name === branches?.current) ?? null);
 	const canCommit = $derived(
-		running &&
-			!!repo &&
-			busy === null &&
-			(amend || (message.trim().length > 0 && files.length > 0))
+		running && !!repo && busy === null && (amend || (message.trim().length > 0 && files.length > 0))
 	);
 	const commitLabel = $derived(amend ? 'Amend commit' : 'Commit');
 
@@ -523,7 +520,9 @@
 								title={file.path}
 								onclick={() => openDiff(file.path)}
 							>
-								<span class="git-status git-status--{ideStatusKind(file.status)}">{file.status}</span>
+								<span class="git-status git-status--{ideStatusKind(file.status)}"
+									>{file.status}</span
+								>
 								<span class="git-path">{ideMidTruncate(file.path, 34)}</span>
 								<span class="git-stat">
 									{#if file.additions}<span class="git-add">+{file.additions}</span>{/if}
@@ -553,7 +552,12 @@
 				<pre class="git-result-out">{result.output ||
 						(result.ok ? 'Done' : 'That git command failed')}</pre>
 				{#if result.ok && result.kind === 'commit'}
-					<button type="button" class="git-result-action" disabled={busy !== null} onclick={uncommit}>
+					<button
+						type="button"
+						class="git-result-action"
+						disabled={busy !== null}
+						onclick={uncommit}
+					>
 						<Undo2 class="h-3 w-3" /> Uncommit
 					</button>
 				{/if}

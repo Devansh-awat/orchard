@@ -329,7 +329,11 @@
 					<Input id="edit-user-last-name" bind:value={editLastName} class="w-full" />
 				</Field>
 			</div>
-			<Field label="Max sandboxes" hint="Empty uses the server default" for="edit-user-max-sandboxes">
+			<Field
+				label="Max sandboxes"
+				hint="Empty uses the server default"
+				for="edit-user-max-sandboxes"
+			>
 				<Input
 					id="edit-user-max-sandboxes"
 					type="number"

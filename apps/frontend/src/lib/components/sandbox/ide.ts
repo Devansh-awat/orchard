@@ -137,9 +137,7 @@ export async function ideChanges(
 	const qs = repo ? `?repo=${encodeURIComponent(repo)}` : '';
 	try {
 		const res = await apiFetch(`/apiv1/sandboxes/${sandboxId}/changes${qs}`);
-		const data = (await res.json().catch(() => null)) as
-			| (IdeChanges & { message?: string })
-			| null;
+		const data = (await res.json().catch(() => null)) as (IdeChanges & { message?: string }) | null;
 		return {
 			ok: res.ok,
 			status: res.status,
@@ -307,7 +305,9 @@ export async function ideGitBranches(
 	const qs = `?repo=${encodeURIComponent(repo)}`;
 	try {
 		const res = await apiFetch(`/apiv1/sandboxes/${sandboxId}/git/branches${qs}`);
-		const data = (await res.json().catch(() => null)) as (IdeBranches & { message?: string }) | null;
+		const data = (await res.json().catch(() => null)) as
+			| (IdeBranches & { message?: string })
+			| null;
 		return {
 			ok: res.ok,
 			status: res.status,

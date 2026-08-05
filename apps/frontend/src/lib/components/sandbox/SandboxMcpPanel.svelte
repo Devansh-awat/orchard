@@ -150,10 +150,7 @@
 
 <div class="mcp-root">
 	{#if !running}
-		<EmptyState
-			title="Sandbox is stopped"
-			description="Start the sandbox to manage MCP servers."
-		/>
+		<EmptyState title="Sandbox is stopped" description="Start the sandbox to manage MCP servers." />
 	{:else if ocMode === null}
 		<div class="mcp-loading">
 			<Loader2 class="h-3.5 w-3.5 animate-spin" /> Checking the agent

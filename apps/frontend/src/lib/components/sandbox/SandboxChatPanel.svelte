@@ -178,17 +178,15 @@
 	const ctxUsed = $derived(
 		ctxTokens
 			? (ctxTokens.total ??
-				ctxTokens.input +
-					ctxTokens.output +
-					ctxTokens.reasoning +
-					ctxTokens.cache.read +
-					ctxTokens.cache.write)
+					ctxTokens.input +
+						ctxTokens.output +
+						ctxTokens.reasoning +
+						ctxTokens.cache.read +
+						ctxTokens.cache.write)
 			: 0
 	);
 	const ctxLimit = $derived(selModel?.context ?? null);
-	const ctxPct = $derived(
-		ctxLimit && ctxUsed > 0 ? Math.min(100, (ctxUsed / ctxLimit) * 100) : 0
-	);
+	const ctxPct = $derived(ctxLimit && ctxUsed > 0 ? Math.min(100, (ctxUsed / ctxLimit) * 100) : 0);
 	const ctxTooltip = $derived(
 		ctxTokens
 			? [
@@ -285,9 +283,7 @@
 			const res = await apiFetch(`${ocBase(sandbox.id)}/session?roots=true&limit=20`);
 			if (!res.ok) return;
 			const sessions = (await res.json()) as OcSession[];
-			conversations = sessions
-				.filter((s) => !s.parentID && !s.time.archived)
-				.map(sessionToConvo);
+			conversations = sessions.filter((s) => !s.parentID && !s.time.archived).map(sessionToConvo);
 			convosSupported = true;
 			if (conversations.length === 0) {
 				await createConversation();
@@ -845,7 +841,8 @@
 			ocParts.set(part.id, target[target.length - 1]);
 			return;
 		}
-		const entry = part.type === 'tool' ? ocToolEntry(part) : makeToolEntry(part.id, part.type, part);
+		const entry =
+			part.type === 'tool' ? ocToolEntry(part) : makeToolEntry(part.id, part.type, part);
 		if (existing && existing.kind === 'tool') {
 			Object.assign(existing, { ...entry, expanded: existing.expanded });
 			return;
