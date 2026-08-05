@@ -1,5 +1,37 @@
 # Changelog
 
+## [2.1.0](https://github.com/LeafdTK/leaf/compare/server/v2.0.0...server/v2.1.0) (2026-08-05)
+
+
+### Features
+
+* auto-create sandbox namespace and isolation policy ([938e989](https://github.com/LeafdTK/leaf/commit/938e989bb0a5b1179ee639354fefe15267204241))
+* bootstrap sandboxes from stock debian with setup scripts ([05a266a](https://github.com/LeafdTK/leaf/commit/05a266a1bbfbb66bebfc6204e5088306112d898b))
+* build worker kill switch for shared infra dev servers ([3f0c075](https://github.com/LeafdTK/leaf/commit/3f0c07521b95fc7de0529c6656256c15ac5aa5ab))
+* conductor style workspace and multi repo sandboxes ([96d1dd4](https://github.com/LeafdTK/leaf/commit/96d1dd49925225dc902afb0332cbdde973a6fbd5))
+* default sandbox image from ghcr with publish workflow ([b3561b9](https://github.com/LeafdTK/leaf/commit/b3561b9b40712a78ff4cba4c799976bdc8ea63ba))
+* enable sandboxes by default in dev ([25b367f](https://github.com/LeafdTK/leaf/commit/25b367fd8872f89ee2ec6e858b5a40a5b44d526b))
+* full git operations for sandbox workspace ([c7f2b75](https://github.com/LeafdTK/leaf/commit/c7f2b754822fe2f46660823ae482a39c7c95d095))
+* greenhouse ai sandboxes ([31e2325](https://github.com/LeafdTK/leaf/commit/31e23252b882f05daba9740df85bc621c8c93002))
+* ide style cloud code workspace with live git changes ([0126efa](https://github.com/LeafdTK/leaf/commit/0126efa1eab06f9b5509912afc45725a6f68b967))
+* opencode serve harness with proxy and native chat sessions ([e520d80](https://github.com/LeafdTK/leaf/commit/e520d80bf85c3c830b4b1653745f5d9f01334c6e))
+* orchard mcp by default plus git and file endpoints ([9396499](https://github.com/LeafdTK/leaf/commit/93964994070821a51e61e6e7674b9ef87befbb71))
+* sandbox cards, ssh identities, and cloud code chat ([e09fa8e](https://github.com/LeafdTK/leaf/commit/e09fa8ea3ae7d18ab405f53e0f1e80f38405901c))
+* sandbox conversations with disk backed history and markdown transcript ([1032977](https://github.com/LeafdTK/leaf/commit/10329772860dbc5d9f5da9d7b11243bcb0c7a622))
+* sandbox terminal websocket over pod exec ([5ae3a2c](https://github.com/LeafdTK/leaf/commit/5ae3a2cdbfbe6458616dd8beb873feeede2d67b1))
+
+
+### Bug Fixes
+
+* argv chat prompt and gate greenhouse behind posthog flag ([3fc34d5](https://github.com/LeafdTK/leaf/commit/3fc34d596aa51af7742370f8c3f215514355bd53))
+* idle busy check understands opencode sessions ([1a142c0](https://github.com/LeafdTK/leaf/commit/1a142c04bb4206c46663044ef43debf1688fca0b))
+* inject agent token per chat exec instead of boot env ([57afb77](https://github.com/LeafdTK/leaf/commit/57afb77f59b67301fe2739538f4db5112016a373))
+* purge orphaned R2 backup objects when a database is deleted ([#153](https://github.com/LeafdTK/leaf/issues/153)) ([7b0285a](https://github.com/LeafdTK/leaf/commit/7b0285a81bf87b39ef203e197c3002e28042cf92))
+* sandbox storage class falls back to cluster default ([aa335fe](https://github.com/LeafdTK/leaf/commit/aa335fe49633c138e5fb204d0d52338f2ae792f7))
+* shell syntax in repo listing and clone scripts ([32e707b](https://github.com/LeafdTK/leaf/commit/32e707b8a67409bd371e7e2eac32ebdddd18be5c))
+* strip whitespace from pasted agent tokens ([43381f8](https://github.com/LeafdTK/leaf/commit/43381f8c8901204edf5a4929d64ca1f06ebf2f3c))
+* surface sandbox k8s errors and show status message in list ([a31e74e](https://github.com/LeafdTK/leaf/commit/a31e74e2aea830f0824a86518ace9505ce98289c))
+
 ## [2.0.0](https://github.com/LeafdTK/leaf/compare/server/v1.37.0...server/v2.0.0) (2026-08-04)
 
 
