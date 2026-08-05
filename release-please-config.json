@@ -4,6 +4,7 @@
   "include-component-in-tag": true,
   "include-v-in-tag": true,
   "tag-separator": "/",
+  "commit-search-depth": 100,
   "packages": {
     "apps/server": {
       "release-type": "node",
