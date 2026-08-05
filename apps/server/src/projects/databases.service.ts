@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { S3Client, ListObjectsV2Command, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { Client } from 'pg';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
@@ -848,6 +849,82 @@ export class DatabasesService {
     return enriched.map((d) => stripR2ProxyCreds(d as any));
   }
 
+  private async purgeBackupObjects(database: {
+    namespace: string | null;
+    clusterName: string | null;
+    r2ProxyAccessKey: string | null;
+    r2ProxySecret: string | null;
+    project?: {
+      organization?: {
+        backupR2Endpoint: string | null;
+        backupR2Bucket: string | null;
+        backupR2Region: string | null;
+        backupR2AccessKey: string | null;
+        backupR2SecretKey: string | null;
+      } | null;
+    } | null;
+  }): Promise<void> {
+    const org = database.project?.organization;
+    const bucket = org?.backupR2Bucket;
+    if (!database.namespace || !database.clusterName || !bucket) return;
+
+    try {
+      let endpoint: string | undefined;
+      let accessKeyId: string | undefined;
+      let secretAccessKey: string | undefined;
+      if (this.r2Proxy.isEnabled() && database.r2ProxyAccessKey && database.r2ProxySecret) {
+        endpoint = this.r2Proxy.getEndpoint();
+        accessKeyId = database.r2ProxyAccessKey;
+        secretAccessKey = database.r2ProxySecret;
+      } else if (
+        org?.backupR2Endpoint &&
+        org.backupR2AccessKey &&
+        org.backupR2SecretKey &&
+        org.backupR2AccessKey !== 'proxy-managed'
+      ) {
+        endpoint = org.backupR2Endpoint;
+        accessKeyId = org.backupR2AccessKey;
+        secretAccessKey = org.backupR2SecretKey;
+      }
+      if (!endpoint || !accessKeyId || !secretAccessKey) return;
+
+      const prefix = `${database.namespace}/${database.clusterName}/`;
+      const s3 = new S3Client({
+        endpoint,
+        region: org?.backupR2Region || 'auto',
+        credentials: { accessKeyId, secretAccessKey },
+        forcePathStyle: true,
+      });
+
+      try {
+        let continuationToken: string | undefined;
+        let deleted = 0;
+        do {
+          const listed = await s3.send(
+            new ListObjectsV2Command({ Bucket: bucket, Prefix: prefix, ContinuationToken: continuationToken }),
+          );
+          const keys = (listed.Contents ?? [])
+            .map((o) => o.Key)
+            .filter((k): k is string => !!k);
+          for (const Key of keys) {
+            await s3.send(new DeleteObjectCommand({ Bucket: bucket, Key }));
+            deleted += 1;
+          }
+          continuationToken = listed.IsTruncated ? listed.NextContinuationToken : undefined;
+        } while (continuationToken);
+        if (deleted > 0) {
+          this.logger.log(`[R2] Purged ${deleted} orphaned backup object(s) under ${bucket}/${prefix}`);
+        }
+      } finally {
+        s3.destroy();
+      }
+    } catch (e: any) {
+      this.logger.warn(
+        `[R2] Failed to purge backup objects for ${database.namespace}/${database.clusterName}: ${e?.message ?? e}`,
+      );
+    }
+  }
+
   async deleteDatabase(
     databaseId: string,
     clerkId: string,
@@ -879,6 +956,8 @@ export class DatabasesService {
     } else {
       await this.k8sCnpg.deletePostgresDatabase(database.dbName, database.dbUser);
     }
+
+    await this.purgeBackupObjects(database);
 
     if (database.r2ProxyAccessKey) {
       try {
