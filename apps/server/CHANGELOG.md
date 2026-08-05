@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.2.1](https://github.com/LeafdTK/leaf/compare/server/v2.2.0...server/v2.2.1) (2026-08-05)
+
+
+### Bug Fixes
+
+* refresh sandbox secret and pod spec on start ([a5af781](https://github.com/LeafdTK/leaf/commit/a5af781ab3faa5b163dac8f7b806a25a95540072))
+
 ## [2.2.0](https://github.com/LeafdTK/leaf/compare/server/v2.1.0...server/v2.2.0) (2026-08-05)
 
 
