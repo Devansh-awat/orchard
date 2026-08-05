@@ -202,6 +202,86 @@ export class SandboxesController {
     );
   }
 
+  @Post(':id/git/commit')
+  @RequireScope('exec')
+  async gitCommit(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { repo?: string; message?: string; files?: string[] },
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await this.sandboxes.getOwned(id, user.id);
+    const identity = await this.usersService.findOrCreateByClerkId(req.user.sub, {
+      email: req.user.email,
+    });
+    return this.workspace.gitCommit(row, body?.repo || '', body?.message || '', body?.files, {
+      name: identity.username || 'orchard',
+      email: identity.email || 'sandbox@orchard.dev',
+    });
+  }
+
+  @Post(':id/git/push')
+  @RequireScope('exec')
+  async gitPush(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { repo?: string },
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await this.sandboxes.getOwned(id, user.id);
+    return this.workspace.gitPush(row, body?.repo || '');
+  }
+
+  @Post(':id/git/pr')
+  @RequireScope('exec')
+  async gitPr(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { repo?: string; title?: string; body?: string; base?: string },
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await this.sandboxes.getOwned(id, user.id);
+    const identity = await this.usersService.findOrCreateByClerkId(req.user.sub, {
+      email: req.user.email,
+    });
+    return this.workspace.createPullRequest(
+      row,
+      body?.repo || '',
+      identity.githubAccessToken || null,
+      body || {},
+    );
+  }
+
+  @Get(':id/file')
+  @RequireScope('exec')
+  async readFile(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('path') path?: string,
+    @Query('repo') repo?: string,
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await this.sandboxes.getOwned(id, user.id);
+    return this.workspace.readFile(row, repo || undefined, path || '');
+  }
+
+  @Put(':id/file')
+  @RequireScope('exec')
+  async writeFile(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { repo?: string; path?: string; content?: string },
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await this.sandboxes.getOwned(id, user.id);
+    return this.workspace.writeFile(
+      row,
+      body?.repo || undefined,
+      body?.path || '',
+      body?.content ?? '',
+    );
+  }
+
   @All(':id/opencode/*')
   @RequireScope('exec')
   async opencodeProxy(

@@ -195,6 +195,11 @@ var routeCoverage = map[string]string{
 	"DELETE /sandboxes/:id/conversations/:cid":      "sandbox conversations --delete",
 	"GET /sandboxes/:id/conversations/:cid/history": "sandbox conversations --history",
 	"ALL /sandboxes/:id/opencode/*":                 "sandbox chat (opencode workspace proxy, web UI)",
+	"POST /sandboxes/:id/git/commit":                "sandbox git commit (web workspace)",
+	"POST /sandboxes/:id/git/push":                  "sandbox git push (web workspace)",
+	"POST /sandboxes/:id/git/pr":                    "sandbox git pr (web workspace)",
+	"GET /sandboxes/:id/file":                       "sandbox file read (web workspace editor)",
+	"PUT /sandboxes/:id/file":                       "sandbox file write (web workspace editor)",
 	"GET /sandboxes/credentials":                    "sandbox credentials status",
 	"PUT /sandboxes/credentials":                    "sandbox credentials set",
 

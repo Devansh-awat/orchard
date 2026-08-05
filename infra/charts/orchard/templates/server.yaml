@@ -92,6 +92,10 @@ spec:
             {{- with .Values.sandbox }}
             {{- if .enabled }}
             - { name: SANDBOX_ENABLED, value: "true" }
+            {{- if $.Values.mcp.enabled }}
+            - name: SANDBOX_MCP_URL
+              value: {{ printf "%s://%s" (ternary "https" "http" $.Values.mcp.ingress.tls.enabled) $.Values.mcp.ingress.host | quote }}
+            {{- end }}
             - { name: SANDBOX_NAMESPACE, value: {{ .namespace | quote }} }
             - { name: SANDBOX_IMAGE, value: {{ .image | quote }} }
             {{- if .runtimeClassName }}

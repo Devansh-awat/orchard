@@ -106,6 +106,48 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     response: z.object({ success: z.boolean() }),
     scope: 'deploy',
   },
+  'POST /sandboxes/:id/git/commit': {
+    summary: 'Stage and commit inside a sandbox repo (all changes, or listed files)',
+    request: z.object({
+      repo: z.string(),
+      message: z.string().min(1).max(2000),
+      files: z.array(z.string()).optional(),
+    }),
+    response: z.object({ ok: z.boolean(), output: z.string() }),
+    scope: 'exec',
+  },
+  'POST /sandboxes/:id/git/push': {
+    summary: 'Push the current branch of a sandbox repo to origin',
+    request: z.object({ repo: z.string() }),
+    response: z.object({ ok: z.boolean(), output: z.string() }),
+    scope: 'exec',
+  },
+  'POST /sandboxes/:id/git/pr': {
+    summary: 'Open a GitHub pull request from the current branch of a sandbox repo',
+    request: z.object({
+      repo: z.string(),
+      title: z.string().min(1).max(300),
+      body: z.string().max(20000).optional(),
+      base: z.string().max(200).optional(),
+    }),
+    response: z.object({ url: z.string() }),
+    scope: 'exec',
+  },
+  'GET /sandboxes/:id/file': {
+    summary: 'Read a file from the sandbox workspace (?path= and optional ?repo=)',
+    response: z.object({ content: z.string(), truncated: z.boolean() }),
+    scope: 'exec',
+  },
+  'PUT /sandboxes/:id/file': {
+    summary: 'Write a file in the sandbox workspace',
+    request: z.object({
+      repo: z.string().optional(),
+      path: z.string(),
+      content: z.string().max(512000),
+    }),
+    response: z.object({ ok: z.boolean() }),
+    scope: 'exec',
+  },
   'GET /sandboxes/:id/repos': {
     summary: 'List git repositories cloned into the sandbox (one sandbox holds many repos)',
     response: z.object({

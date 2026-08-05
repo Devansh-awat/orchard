@@ -15,6 +15,7 @@ export type OcToolState = {
 	input?: Record<string, unknown>;
 	title?: string;
 	error?: string;
+	metadata?: Record<string, unknown>;
 };
 
 export type OcPart = {
@@ -28,6 +29,15 @@ export type OcPart = {
 	tool?: string;
 	callID?: string;
 	state?: OcToolState;
+	time?: { start: number; end?: number };
+};
+
+export type OcTokens = {
+	total?: number;
+	input: number;
+	output: number;
+	reasoning: number;
+	cache: { read: number; write: number };
 };
 
 export type OcMessageInfo = {
@@ -35,8 +45,31 @@ export type OcMessageInfo = {
 	sessionID: string;
 	role: 'user' | 'assistant';
 	cost?: number;
+	providerID?: string;
+	modelID?: string;
+	variant?: string | null;
+	agent?: string;
+	tokens?: OcTokens | null;
 	time: { created: number; completed?: number };
 };
+
+export type OcModel = {
+	providerID: string;
+	providerName: string;
+	modelID: string;
+	name: string;
+	context: number | null;
+	variants: string[];
+};
+
+export type OcMcpState =
+	| 'connected'
+	| 'disabled'
+	| 'failed'
+	| 'needs_auth'
+	| 'needs_client_registration';
+
+export type OcMcpServer = { name: string; status: OcMcpState; error?: string };
 
 export type OcMessage = { info: OcMessageInfo; parts: OcPart[] };
 
@@ -90,6 +123,58 @@ export async function ocProbe(sandboxId: string): Promise<boolean> {
 	} catch {
 		return false;
 	}
+}
+
+export async function ocModels(sandboxId: string): Promise<OcModel[]> {
+	const res = await apiFetch(`${ocBase(sandboxId)}/config/providers`);
+	if (!res.ok) return [];
+	const data = (await res.json()) as {
+		providers?: {
+			id: string;
+			name: string;
+			models?: Record<
+				string,
+				{
+					name?: string;
+					limit?: { context?: number };
+					variants?: Record<string, unknown> | null;
+				}
+			>;
+		}[];
+	};
+	const models: OcModel[] = [];
+	for (const provider of data.providers ?? []) {
+		for (const [modelID, model] of Object.entries(provider.models ?? {})) {
+			models.push({
+				providerID: provider.id,
+				providerName: provider.name,
+				modelID,
+				name: model.name ?? modelID,
+				context: model.limit?.context ?? null,
+				variants: model.variants ? Object.keys(model.variants) : []
+			});
+		}
+	}
+	return models;
+}
+
+export function ocShortModelName(name: string): string {
+	return name.replace(/^Claude\s+/i, '').replace(/\s*\(latest\)$/i, '');
+}
+
+export function ocMcpServers(map: Record<string, { status: string; error?: string }>): OcMcpServer[] {
+	return Object.entries(map)
+		.map(([name, s]) => ({ name, status: s.status as OcMcpState, error: s.error }))
+		.sort((a, b) => a.name.localeCompare(b.name));
+}
+
+export function ocFmtTokens(n: number): string {
+	if (n >= 1_000_000) {
+		const m = n / 1_000_000;
+		return `${Number.isInteger(m) ? m : m.toFixed(1)}m`;
+	}
+	if (n >= 1000) return `${Math.round(n / 1000)}k`;
+	return `${n}`;
 }
 
 export function ocNormalizeTool(

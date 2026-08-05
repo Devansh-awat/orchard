@@ -19,6 +19,7 @@
 		SandboxChangesPanel,
 		SandboxChatPanel,
 		SandboxConnectPanel,
+		SandboxMcpPanel,
 		SandboxReposPanel,
 		SandboxSettingsCard
 	} from '$lib/components/sandbox';
@@ -69,6 +70,7 @@
 	const sideTabs = [
 		{ id: 'changes', label: 'Changes' },
 		{ id: 'repos', label: 'Repos' },
+		{ id: 'mcp', label: 'MCP' },
 		{ id: 'settings', label: 'Settings' },
 		{ id: 'connect', label: 'Connect' }
 	];
@@ -213,6 +215,13 @@
 							onselect={(name) => (selectedRepo = name)}
 							onrefresh={loadRepos}
 						/>
+					</div>
+					<div
+						class="sbw-pane"
+						class:sbw-pane--hidden={sideTab !== 'mcp'}
+						{@attach motionPanel(() => sideTab === 'mcp')}
+					>
+						<SandboxMcpPanel sandboxId={sandbox.id} {running} />
 					</div>
 					<div
 						class="sbw-pane"

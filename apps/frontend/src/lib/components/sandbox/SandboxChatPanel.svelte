@@ -1,9 +1,22 @@
 <script lang="ts">
 	import { createQuery } from '@tanstack/svelte-query';
 	import { marked } from 'marked';
-	import { ArrowDown, Brain, Check, Copy, Loader2, Play, Plus, Send, X } from 'lucide-svelte';
+	import {
+		ArrowDown,
+		Bot,
+		Brain,
+		Check,
+		ChevronDown,
+		Copy,
+		Loader2,
+		Play,
+		Plus,
+		Send,
+		Square,
+		X
+	} from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
-	import { Button } from '$lib/components/ui';
+	import { Button, Menu, MenuItem } from '$lib/components/ui';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import { fade, slide } from '$lib/utils/transitions';
 	import { sandboxCredentialsQueryOptions } from '$lib/queries/sandboxes';
@@ -12,14 +25,19 @@
 		ocBase,
 		ocDirectory,
 		ocErrorMessage,
+		ocFmtTokens,
+		ocModels,
 		ocNormalizeTool,
 		ocProbe,
 		ocRepo,
+		ocShortModelName,
 		type OcEvent,
 		type OcMessage,
 		type OcMessageInfo,
+		type OcModel,
 		type OcPart,
-		type OcSession
+		type OcSession,
+		type OcTokens
 	} from './opencode';
 	import type { Sandbox, SandboxRepo } from '$lib/types/sandbox';
 
@@ -37,11 +55,25 @@
 		expanded: boolean;
 	};
 
+	type AgentEntry = {
+		kind: 'agent';
+		id: string;
+		childID: string | null;
+		description: string;
+		agentType: string;
+		status: 'pending' | 'running' | 'completed' | 'error';
+		expanded: boolean;
+		loaded: boolean;
+		loading: boolean;
+		entries: ChatEntry[];
+	};
+
 	type ChatEntry =
 		| { kind: 'user'; text: string }
-		| { kind: 'thinking'; text: string }
+		| { kind: 'thinking'; text: string; done?: boolean; expanded?: boolean }
 		| { kind: 'text'; text: string }
 		| ToolEntry
+		| AgentEntry
 		| { kind: 'result'; cost: number | null; duration: number | null; files: TurnFile[] }
 		| { kind: 'error'; detail: string };
 
@@ -97,8 +129,61 @@
 	const ocParts = new Map<string, ChatEntry>();
 	const ocRoles = new Map<string, string>();
 	const ocTurnCosts = new Map<string, number>();
+	const ocAgents = new Map<string, AgentEntry>();
 	let ocTurnSession: string | null = null;
 	let turnStart = 0;
+
+	let modelList = $state<OcModel[]>([]);
+	let selProvider = $state(OC_MODEL.providerID);
+	let selModelID = $state(OC_MODEL.modelID);
+	let selVariant = $state<string | null>(null);
+	let planMode = $state(false);
+	let stopping = $state(false);
+	let ctxTokens = $state<OcTokens | null>(null);
+	const sessionPrefs = new Map<
+		string,
+		{ providerID: string; modelID: string; variant: string | null; plan: boolean }
+	>();
+
+	const selModel = $derived(
+		modelList.find((m) => m.providerID === selProvider && m.modelID === selModelID) ?? null
+	);
+	const modelChipLabel = $derived(ocShortModelName(selModel?.name ?? selModelID));
+	const variantOptions = $derived(selModel?.variants ?? []);
+	const modelGroups = $derived.by(() => {
+		const groups: { name: string; models: OcModel[] }[] = [];
+		for (const model of modelList) {
+			const group = groups.find((g) => g.name === model.providerName);
+			if (group) group.models.push(model);
+			else groups.push({ name: model.providerName, models: [model] });
+		}
+		return groups;
+	});
+	const ctxUsed = $derived(
+		ctxTokens
+			? (ctxTokens.total ??
+				ctxTokens.input +
+					ctxTokens.output +
+					ctxTokens.reasoning +
+					ctxTokens.cache.read +
+					ctxTokens.cache.write)
+			: 0
+	);
+	const ctxLimit = $derived(selModel?.context ?? null);
+	const ctxPct = $derived(
+		ctxLimit && ctxUsed > 0 ? Math.min(100, (ctxUsed / ctxLimit) * 100) : 0
+	);
+	const ctxTooltip = $derived(
+		ctxTokens
+			? [
+					`input ${ocFmtTokens(ctxTokens.input)}`,
+					`output ${ocFmtTokens(ctxTokens.output)}`,
+					`reasoning ${ocFmtTokens(ctxTokens.reasoning)}`,
+					`cache read ${ocFmtTokens(ctxTokens.cache.read)}`,
+					`cache write ${ocFmtTokens(ctxTokens.cache.write)}`
+				].join('\n')
+			: ''
+	);
 
 	const canStart = $derived(sandbox.status === 'stopped' || sandbox.status === 'error');
 	const activeConvo = $derived(conversations.find((c) => c.id === activeId) ?? null);
@@ -114,8 +199,51 @@
 
 	async function init() {
 		ocMode = await ocProbe(sandbox.id);
-		if (ocMode) await loadSessions();
-		else await loadConversations();
+		if (ocMode) {
+			ocModels(sandbox.id)
+				.then((models) => (modelList = models))
+				.catch(() => {});
+			await loadSessions();
+		} else {
+			await loadConversations();
+		}
+	}
+
+	function savePrefs() {
+		if (!ocMode || !activeId) return;
+		sessionPrefs.set(activeId, {
+			providerID: selProvider,
+			modelID: selModelID,
+			variant: selVariant,
+			plan: planMode
+		});
+	}
+
+	function restorePrefs(id: string) {
+		const prefs = sessionPrefs.get(id);
+		if (!prefs) return false;
+		selProvider = prefs.providerID;
+		selModelID = prefs.modelID;
+		selVariant = prefs.variant;
+		planMode = prefs.plan;
+		return true;
+	}
+
+	function pickModel(model: OcModel) {
+		selProvider = model.providerID;
+		selModelID = model.modelID;
+		if (selVariant && !model.variants.includes(selVariant)) selVariant = null;
+		savePrefs();
+	}
+
+	function pickVariant(variant: string | null) {
+		selVariant = variant;
+		savePrefs();
+	}
+
+	function setPlanMode(plan: boolean) {
+		planMode = plan;
+		savePrefs();
 	}
 
 	$effect(() => {
@@ -190,6 +318,7 @@
 	async function createConversation() {
 		if (ocMode) {
 			try {
+				savePrefs();
 				const dir = ocDirectory(selectedRepo);
 				const query = dir ? `?directory=${encodeURIComponent(dir)}` : '';
 				const res = await apiFetch(`${ocBase(sandbox.id)}/session${query}`, {
@@ -205,6 +334,8 @@
 				activeId = session.id;
 				entries = [];
 				ocParts.clear();
+				ocAgents.clear();
+				ctxTokens = null;
 				historyTruncated = false;
 			} catch {
 				return;
@@ -230,6 +361,7 @@
 
 	async function switchConversation(id: string) {
 		if (id === activeId || streaming) return;
+		savePrefs();
 		activeId = id;
 		const convo = conversations.find((c) => c.id === id);
 		if (convo?.repo) selectedRepo = convo.repo;
@@ -239,6 +371,8 @@
 	async function loadHistory(id: string) {
 		entries = [];
 		ocParts.clear();
+		ocAgents.clear();
+		ctxTokens = null;
 		historyTruncated = false;
 		if (sandbox.status !== 'running') return;
 		historyLoading = true;
@@ -549,7 +683,24 @@
 		return entry;
 	}
 
-	function appendOcPart(part: OcPart) {
+	function ocAgentFields(part: OcPart) {
+		const meta = part.state?.metadata ?? {};
+		const input = part.state?.input ?? {};
+		const childID =
+			typeof meta.sessionId === 'string'
+				? meta.sessionId
+				: typeof meta.sessionID === 'string'
+					? meta.sessionID
+					: null;
+		const description =
+			typeof input.description === 'string'
+				? input.description
+				: (part.state?.title ?? 'Sub-agent');
+		const agentType = typeof input.subagent_type === 'string' ? input.subagent_type : 'agent';
+		return { childID, description, agentType, status: part.state?.status ?? 'pending' };
+	}
+
+	function appendOcPart(part: OcPart, target: ChatEntry[] = entries) {
 		if (OC_SKIP_PARTS.has(part.type)) return;
 		const existing = ocParts.get(part.id);
 		if (part.type === 'text' || part.type === 'reasoning') {
@@ -557,14 +708,34 @@
 				if (existing.kind === 'text' || existing.kind === 'thinking') {
 					existing.text = part.text ?? '';
 				}
+				if (existing.kind === 'thinking' && part.time?.end) existing.done = true;
 				return;
 			}
 			const entry: ChatEntry =
 				part.type === 'text'
 					? { kind: 'text', text: part.text ?? '' }
-					: { kind: 'thinking', text: part.text ?? '' };
-			entries.push(entry);
-			ocParts.set(part.id, entries[entries.length - 1]);
+					: { kind: 'thinking', text: part.text ?? '', done: Boolean(part.time?.end) };
+			target.push(entry);
+			ocParts.set(part.id, target[target.length - 1]);
+			return;
+		}
+		if (part.type === 'tool' && part.tool === 'task') {
+			const fields = ocAgentFields(part);
+			if (existing && existing.kind === 'agent') {
+				Object.assign(existing, fields);
+				if (existing.loaded && fields.childID) ocAgents.set(fields.childID, existing);
+				return;
+			}
+			target.push({
+				kind: 'agent',
+				id: part.id,
+				...fields,
+				expanded: false,
+				loaded: false,
+				loading: false,
+				entries: []
+			});
+			ocParts.set(part.id, target[target.length - 1]);
 			return;
 		}
 		const entry = part.type === 'tool' ? ocToolEntry(part) : makeToolEntry(part.id, part.type, part);
@@ -572,13 +743,45 @@
 			Object.assign(existing, { ...entry, expanded: existing.expanded });
 			return;
 		}
-		entries.push(entry);
-		ocParts.set(part.id, entries[entries.length - 1]);
+		target.push(entry);
+		ocParts.set(part.id, target[target.length - 1]);
+	}
+
+	async function toggleAgent(agent: AgentEntry) {
+		agent.expanded = !agent.expanded;
+		if (!agent.expanded || agent.loaded || agent.loading || !agent.childID) return;
+		agent.loading = true;
+		try {
+			const res = await apiFetch(
+				`${ocBase(sandbox.id)}/session/${agent.childID}/message?limit=100`
+			);
+			if (!res.ok) return;
+			const messages = (await res.json()) as OcMessage[];
+			agent.entries.length = 0;
+			for (const { info, parts } of messages) {
+				if (info.role === 'user') {
+					for (const part of parts) {
+						if (part.type === 'text' && part.text?.trim() && !part.synthetic && !part.ignored) {
+							agent.entries.push({ kind: 'user', text: part.text });
+						}
+					}
+					continue;
+				}
+				for (const part of parts) appendOcPart(part, agent.entries);
+			}
+			agent.loaded = true;
+			ocAgents.set(agent.childID, agent);
+		} catch {
+			return;
+		} finally {
+			agent.loading = false;
+		}
 	}
 
 	function hydrateOc(messages: OcMessage[]) {
 		let runStart: number | null = null;
 		let runCost = 0;
+		let lastAssistant: OcMessageInfo | null = null;
 		for (let i = 0; i < messages.length; i += 1) {
 			const { info, parts } = messages[i];
 			if (info.role === 'user') {
@@ -591,6 +794,7 @@
 				runCost = 0;
 				continue;
 			}
+			lastAssistant = info;
 			if (runStart === null) runStart = info.time.created;
 			runCost += info.cost ?? 0;
 			for (const part of parts) appendOcPart(part);
@@ -604,9 +808,24 @@
 				});
 			}
 		}
+		if (!lastAssistant) {
+			restorePrefs(activeId ?? '');
+			return;
+		}
+		ctxTokens = lastAssistant.tokens ?? null;
+		if (activeId && restorePrefs(activeId)) return;
+		if (lastAssistant.providerID && lastAssistant.modelID) {
+			selProvider = lastAssistant.providerID;
+			selModelID = lastAssistant.modelID;
+		}
+		selVariant = typeof lastAssistant.variant === 'string' ? lastAssistant.variant : null;
+		planMode = lastAssistant.agent === 'plan';
 	}
 
 	function finishOcTurn() {
+		for (const entry of entries) {
+			if (entry.kind === 'thinking') entry.done = true;
+		}
 		const total = [...ocTurnCosts.values()].reduce((sum, cost) => sum + cost, 0);
 		if (ocTurnSession === activeId) {
 			entries.push({
@@ -648,20 +867,25 @@
 			const info = props.info as OcMessageInfo | undefined;
 			if (!info) return;
 			ocRoles.set(info.id, info.role);
-			if (
-				info.role === 'assistant' &&
-				info.sessionID === ocTurnSession &&
-				typeof info.cost === 'number'
-			) {
+			if (info.role !== 'assistant') return;
+			if (info.sessionID === ocTurnSession && typeof info.cost === 'number') {
 				ocTurnCosts.set(info.id, info.cost);
+			}
+			if (info.sessionID === activeId && info.tokens && (info.tokens.total ?? 0) > 0) {
+				ctxTokens = info.tokens;
 			}
 		} else if (event.type === 'message.part.updated') {
 			const part = props.part as OcPart | undefined;
-			if (!part || part.sessionID !== activeId) return;
+			if (!part) return;
 			if (ocRoles.get(part.messageID) === 'user') return;
-			appendOcPart(part);
+			if (part.sessionID === activeId) {
+				appendOcPart(part);
+				return;
+			}
+			const agent = ocAgents.get(part.sessionID);
+			if (agent) appendOcPart(part, agent.entries);
 		} else if (event.type === 'message.part.delta') {
-			if (props.sessionID !== activeId || props.field !== 'text') return;
+			if (props.field !== 'text') return;
 			const entry = ocParts.get(String(props.partID));
 			if (entry && (entry.kind === 'text' || entry.kind === 'thinking')) {
 				entry.text += String(props.delta ?? '');
@@ -669,6 +893,14 @@
 		} else if (event.type === 'session.idle') {
 			if (streaming && sessionID === ocTurnSession) finishOcTurn();
 		} else if (event.type === 'session.error') {
+			const aborted =
+				props.error &&
+				typeof props.error === 'object' &&
+				(props.error as { name?: string }).name === 'MessageAbortedError';
+			if (aborted) {
+				if (streaming && (!sessionID || sessionID === ocTurnSession)) finishOcTurn();
+				return;
+			}
 			if (sessionID === activeId || !sessionID) {
 				entries.push({ kind: 'error', detail: ocErrorMessage(props.error) });
 			}
@@ -749,7 +981,12 @@
 			const res = await apiFetch(`${ocBase(sandbox.id)}/session/${activeId}/prompt_async`, {
 				method: 'POST',
 				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify({ model: OC_MODEL, parts: [{ type: 'text', text: message }] })
+				body: JSON.stringify({
+					model: { providerID: selProvider, modelID: selModelID },
+					...(selVariant ? { variant: selVariant } : {}),
+					agent: planMode ? 'plan' : 'build',
+					parts: [{ type: 'text', text: message }]
+				})
 			});
 			if (!res.ok) {
 				const data = await res.json().catch(() => ({}));
@@ -828,6 +1065,18 @@
 		}
 	}
 
+	async function stopOc() {
+		if (!ocTurnSession || stopping) return;
+		stopping = true;
+		try {
+			await apiFetch(`${ocBase(sandbox.id)}/session/${ocTurnSession}/abort`, { method: 'POST' });
+		} catch {
+			return;
+		} finally {
+			stopping = false;
+		}
+	}
+
 	function onComposerKey(e: KeyboardEvent) {
 		if (e.key === 'Enter' && !e.shiftKey) {
 			e.preventDefault();
@@ -871,6 +1120,7 @@
 			if (entry.kind === 'user') lines.push(`> ${entry.text}`);
 			else if (entry.kind === 'text') lines.push(entry.text);
 			else if (entry.kind === 'tool') lines.push(`[${entry.name}] ${entry.summary}`);
+			else if (entry.kind === 'agent') lines.push(`[${entry.agentType}] ${entry.description}`);
 			else if (entry.kind === 'result') {
 				lines.push(
 					`-- ${entry.duration !== null ? fmtDuration(entry.duration) : 'turn complete'}${entry.cost !== null ? ` · ${fmtCost(entry.cost)}` : ''}`
@@ -880,11 +1130,31 @@
 		return lines.join('\n');
 	}
 
-	async function copyTranscript(idx: number) {
-		await navigator.clipboard.writeText(transcriptText());
+	function turnText(idx: number): string {
+		const chunks: string[] = [];
+		for (let i = idx - 1; i >= 0; i -= 1) {
+			const entry = entries[i];
+			if (entry.kind === 'user' || entry.kind === 'result') break;
+			if (entry.kind === 'text') chunks.unshift(entry.text);
+		}
+		return chunks.join('\n\n');
+	}
+
+	async function copyTurn(idx: number) {
+		await navigator.clipboard.writeText(turnText(idx));
 		copiedIdx = idx;
 		if (copyTimer) clearTimeout(copyTimer);
 		copyTimer = setTimeout(() => (copiedIdx = null), 1500);
+	}
+
+	let copiedAll = $state(false);
+	let copyAllTimer: ReturnType<typeof setTimeout> | null = null;
+
+	async function copyTranscript() {
+		await navigator.clipboard.writeText(transcriptText());
+		copiedAll = true;
+		if (copyAllTimer) clearTimeout(copyAllTimer);
+		copyAllTimer = setTimeout(() => (copiedAll = false), 1500);
 	}
 </script>
 
@@ -958,9 +1228,34 @@
 				>
 					<Plus class="h-3.5 w-3.5" />
 				</button>
-				{#if ocMode}
-					<span class="conv-engine">opencode</span>
-				{/if}
+				<div class="conv-right">
+					{#if ocMode && ctxUsed > 0}
+						<span class="conv-ctx" title={ctxTooltip}>
+							{#if ctxLimit}
+								<span class="conv-ctx-bar" aria-hidden="true">
+									<span class="conv-ctx-fill" style:width="{ctxPct}%"></span>
+								</span>
+							{/if}
+							<span class="conv-ctx-text">
+								{ocFmtTokens(ctxUsed)}{ctxLimit ? ` / ${ocFmtTokens(ctxLimit)}` : ''}
+							</span>
+						</span>
+					{/if}
+					{#if entries.length > 0}
+						<button
+							type="button"
+							class="conv-copy"
+							aria-label="Copy transcript"
+							title="Copy transcript"
+							onclick={copyTranscript}
+						>
+							{#if copiedAll}<Check class="h-3 w-3" />{:else}<Copy class="h-3 w-3" />{/if}
+						</button>
+					{/if}
+					{#if ocMode}
+						<span class="conv-engine">opencode</span>
+					{/if}
+				</div>
 			</div>
 		{/if}
 		{#if missingClaude}
@@ -989,76 +1284,7 @@
 						<p class="chat-truncated">Older messages were truncated.</p>
 					{/if}
 					{#each entries as entry, i (i)}
-						{#if entry.kind === 'user'}
-							<div class="tr-user">
-								<span class="tr-user-dot" aria-hidden="true"></span>
-								<div class="tr-user-text">{entry.text}</div>
-							</div>
-						{:else if entry.kind === 'thinking'}
-							{@const thought = firstLine(entry.text)}
-							<div class="tr-row" title={entry.text}>
-								<span class="tr-row-icon"><Brain class="h-3 w-3" /></span>
-								<span class="tr-row-label">Thinking</span>
-								{#if thought}<span class="tr-chip">{thought}</span>{/if}
-							</div>
-						{:else if entry.kind === 'text'}
-							<div class="tr-md">{@html renderMd(entry.text)}</div>
-						{:else if entry.kind === 'tool'}
-							<div class="tr-tool" class:tr-tool--failed={entry.failed}>
-								<button
-									type="button"
-									class="tr-row tr-row-btn"
-									aria-expanded={entry.expanded}
-									onclick={() => (entry.expanded = !entry.expanded)}
-								>
-									<span class="tr-row-icon tr-row-glyph" aria-hidden="true">
-										{toolGlyph(entry.name)}
-									</span>
-									<span class="tr-row-label">{entry.name}</span>
-									{#if entry.summary}
-										<span class="tr-chip" title={entry.title ?? undefined}>{entry.summary}</span>
-									{/if}
-									{#if entry.diff}
-										<span class="tr-diffstat">
-											{#if entry.diff.add > 0}<span class="tr-diff-add">+{entry.diff.add}</span>{/if}
-											{#if entry.diff.del > 0}<span class="tr-diff-del">-{entry.diff.del}</span>{/if}
-										</span>
-									{/if}
-									{#if entry.failed}<span class="tr-tool-failed">failed</span>{/if}
-								</button>
-								{#if entry.expanded}
-									<pre class="tr-tool-detail" transition:slide>{pretty(entry.input)}</pre>
-								{/if}
-							</div>
-						{:else if entry.kind === 'result'}
-							<div class="tr-turn">
-								{#if entry.duration !== null}
-									<span class="tr-turn-meta">{fmtDuration(entry.duration)}</span>
-								{/if}
-								<button
-									type="button"
-									class="tr-turn-copy"
-									aria-label="Copy transcript"
-									onclick={() => copyTranscript(i)}
-								>
-									{#if copiedIdx === i}<Check class="h-3 w-3" />{:else}<Copy class="h-3 w-3" />{/if}
-								</button>
-								<div class="tr-turn-files">
-									{#each entry.files as file (file.path)}
-										<span class="tr-file-chip" title={file.path}>
-											{file.name}
-											{#if file.add > 0}<span class="tr-diff-add">+{file.add}</span>{/if}
-											{#if file.del > 0}<span class="tr-diff-del">-{file.del}</span>{/if}
-										</span>
-									{/each}
-								</div>
-								{#if entry.cost !== null}
-									<span class="tr-turn-cost">{fmtCost(entry.cost)}</span>
-								{/if}
-							</div>
-						{:else}
-							<div class="tr-error">{entry.detail}</div>
-						{/if}
+						{@render row(entry, i, 0)}
 					{/each}
 					{#if streaming}
 						<div class="tr-working">
@@ -1075,6 +1301,7 @@
 		</div>
 		<form
 			class="chat-composer"
+			class:chat-composer--plan={ocMode && planMode}
 			onsubmit={(e) => {
 				e.preventDefault();
 				submitMessage();
@@ -1092,7 +1319,88 @@
 					onkeydown={onComposerKey}
 				></textarea>
 				<div class="chat-composer-foot">
-					{#if streaming}
+					{#if ocMode}
+						<div class="chat-chips">
+							<Menu placement="top-start">
+								{#snippet trigger(props, open)}
+									<button
+										type="button"
+										class="chat-chip"
+										class:chat-chip--open={open}
+										aria-label="Model"
+										{...props}
+									>
+										{modelChipLabel}
+										<ChevronDown class="h-3 w-3" />
+									</button>
+								{/snippet}
+								<div class="chat-menu-scroll">
+									{#each modelGroups as group (group.name)}
+										<div class="chat-menu-group">{group.name}</div>
+										{#each group.models as m (m.providerID + m.modelID)}
+											<MenuItem onclick={() => pickModel(m)}>
+												<span class="chat-menu-label">{ocShortModelName(m.name)}</span>
+												{#if m.providerID === selProvider && m.modelID === selModelID}
+													<Check class="h-3 w-3" />
+												{/if}
+											</MenuItem>
+										{/each}
+									{/each}
+								</div>
+							</Menu>
+							{#if variantOptions.length > 0}
+								<Menu placement="top-start">
+									{#snippet trigger(props, open)}
+										<button
+											type="button"
+											class="chat-chip"
+											class:chat-chip--open={open}
+											aria-label="Reasoning effort"
+											{...props}
+										>
+											{selVariant ?? 'effort'}
+											<ChevronDown class="h-3 w-3" />
+										</button>
+									{/snippet}
+									<MenuItem onclick={() => pickVariant(null)}>
+										<span class="chat-menu-label">default</span>
+										{#if !selVariant}<Check class="h-3 w-3" />{/if}
+									</MenuItem>
+									{#each variantOptions as v (v)}
+										<MenuItem onclick={() => pickVariant(v)}>
+											<span class="chat-menu-label">{v}</span>
+											{#if selVariant === v}<Check class="h-3 w-3" />{/if}
+										</MenuItem>
+									{/each}
+								</Menu>
+							{/if}
+							<div class="chat-mode" role="radiogroup" aria-label="Agent mode">
+								<button
+									type="button"
+									role="radio"
+									aria-checked={!planMode}
+									class="chat-mode-btn"
+									class:chat-mode-btn--active={!planMode}
+									onclick={() => setPlanMode(false)}
+								>
+									Build
+								</button>
+								<button
+									type="button"
+									role="radio"
+									aria-checked={planMode}
+									class="chat-mode-btn chat-mode-btn--plan"
+									class:chat-mode-btn--active={planMode}
+									onclick={() => setPlanMode(true)}
+								>
+									Plan
+								</button>
+							</div>
+							{#if planMode}
+								<span class="chat-plan-badge">read only</span>
+							{/if}
+						</div>
+					{:else if streaming}
 						<span class="chat-composer-working">
 							<Loader2 class="h-3 w-3 animate-spin" /> Working
 						</span>
@@ -1117,20 +1425,184 @@
 						{:else}
 							<span class="chat-repo-select chat-repo-select--static">home</span>
 						{/if}
-						<button
-							type="submit"
-							class="chat-send"
-							disabled={streaming || !input.trim()}
-							aria-label="Send message"
-						>
-							<Send class="h-3.5 w-3.5" />
-						</button>
+						{#if ocMode && streaming}
+							<button
+								type="button"
+								class="chat-send chat-send--stop"
+								disabled={stopping}
+								aria-label="Stop the agent"
+								onclick={stopOc}
+							>
+								<Square class="h-3 w-3" fill="currentColor" />
+							</button>
+						{:else}
+							<button
+								type="submit"
+								class="chat-send"
+								disabled={streaming || !input.trim()}
+								aria-label="Send message"
+							>
+								<Send class="h-3.5 w-3.5" />
+							</button>
+						{/if}
 					</div>
 				</div>
 			</div>
 		</form>
 	{/if}
 </div>
+
+{#snippet row(entry: ChatEntry, i: number, depth: number)}
+	{#if entry.kind === 'user'}
+		{#if depth === 0}
+			<div class="tr-user">
+				<span class="tr-user-dot" aria-hidden="true"></span>
+				<div class="tr-user-text">{entry.text}</div>
+			</div>
+		{:else}
+			<div class="tr-sub-prompt">{entry.text}</div>
+		{/if}
+	{:else if entry.kind === 'thinking'}
+		{@const live = depth === 0 && streaming && entry === entries[entries.length - 1] && !entry.done}
+		{#if live || entry.expanded}
+			<div class="tr-think" class:tr-think--live={live}>
+				<button
+					type="button"
+					class="tr-row tr-row-btn"
+					aria-expanded="true"
+					onclick={() => (entry.expanded = false)}
+				>
+					<span class="tr-row-icon"><Brain class="h-3 w-3" /></span>
+					<span class="tr-row-label">Thinking</span>
+				</button>
+				<pre
+					class="tr-think-body"
+					{@attach (el) => {
+						void entry.text;
+						if (live) el.scrollTop = el.scrollHeight;
+					}}>{entry.text}</pre>
+			</div>
+		{:else}
+			{@const thought = firstLine(entry.text)}
+			<button
+				type="button"
+				class="tr-row tr-row-btn"
+				title={entry.text}
+				aria-expanded="false"
+				onclick={() => (entry.expanded = true)}
+			>
+				<span class="tr-row-icon"><Brain class="h-3 w-3" /></span>
+				<span class="tr-row-label">Thinking</span>
+				{#if thought}<span class="tr-chip">{thought}</span>{/if}
+			</button>
+		{/if}
+	{:else if entry.kind === 'text'}
+		<div class="tr-md">{@html renderMd(entry.text)}</div>
+	{:else if entry.kind === 'tool'}
+		<div class="tr-tool" class:tr-tool--failed={entry.failed}>
+			<button
+				type="button"
+				class="tr-row tr-row-btn"
+				aria-expanded={entry.expanded}
+				onclick={() => (entry.expanded = !entry.expanded)}
+			>
+				<span class="tr-row-icon tr-row-glyph" aria-hidden="true">
+					{toolGlyph(entry.name)}
+				</span>
+				<span class="tr-row-label">{entry.name}</span>
+				{#if entry.summary}
+					<span class="tr-chip" title={entry.title ?? undefined}>{entry.summary}</span>
+				{/if}
+				{#if entry.diff}
+					<span class="tr-diffstat">
+						{#if entry.diff.add > 0}<span class="tr-diff-add">+{entry.diff.add}</span>{/if}
+						{#if entry.diff.del > 0}<span class="tr-diff-del">-{entry.diff.del}</span>{/if}
+					</span>
+				{/if}
+				{#if entry.failed}<span class="tr-tool-failed">failed</span>{/if}
+			</button>
+			{#if entry.expanded}
+				<pre class="tr-tool-detail" transition:slide>{pretty(entry.input)}</pre>
+			{/if}
+		</div>
+	{:else if entry.kind === 'agent'}
+		{#if depth === 0}
+			<div class="tr-agent">
+				<button
+					type="button"
+					class="tr-row tr-row-btn"
+					aria-expanded={entry.expanded}
+					onclick={() => toggleAgent(entry)}
+				>
+					<span class="tr-row-icon"><Bot class="h-3 w-3" /></span>
+					<span class="tr-row-label">{entry.agentType}</span>
+					<span class="tr-chip">{entry.description}</span>
+					{#if entry.status === 'running' || entry.status === 'pending'}
+						<span class="tr-agent-state">
+							<Loader2 class="h-3 w-3 animate-spin" data-motion="progress" /> running
+						</span>
+					{:else if entry.status === 'error'}
+						<span class="tr-tool-failed">failed</span>
+					{:else}
+						<span class="tr-agent-state">done</span>
+					{/if}
+				</button>
+				{#if entry.expanded}
+					<div class="tr-agent-body" transition:slide>
+						{#if entry.loading}
+							<div class="tr-working">
+								<Loader2 class="h-3.5 w-3.5 animate-spin" /> Loading sub-agent
+							</div>
+						{:else if !entry.childID}
+							<p class="tr-agent-empty">No transcript yet.</p>
+						{:else if entry.entries.length === 0}
+							<p class="tr-agent-empty">The sub-agent has not produced output yet.</p>
+						{:else}
+							{#each entry.entries as child, ci (ci)}
+								{@render row(child, ci, 1)}
+							{/each}
+						{/if}
+					</div>
+				{/if}
+			</div>
+		{:else}
+			<div class="tr-row">
+				<span class="tr-row-icon"><Bot class="h-3 w-3" /></span>
+				<span class="tr-row-label">{entry.agentType}</span>
+				<span class="tr-chip">{entry.description}</span>
+			</div>
+		{/if}
+	{:else if entry.kind === 'result'}
+		<div class="tr-turn">
+			{#if entry.duration !== null}
+				<span class="tr-turn-meta">{fmtDuration(entry.duration)}</span>
+			{/if}
+			<button
+				type="button"
+				class="tr-turn-copy"
+				aria-label="Copy this reply"
+				title="Copy this reply"
+				onclick={() => copyTurn(i)}
+			>
+				{#if copiedIdx === i}<Check class="h-3 w-3" />{:else}<Copy class="h-3 w-3" />{/if}
+			</button>
+			<div class="tr-turn-files">
+				{#each entry.files as file (file.path)}
+					<span class="tr-file-chip" title={file.path}>
+						{file.name}
+						{#if file.add > 0}<span class="tr-diff-add">+{file.add}</span>{/if}
+						{#if file.del > 0}<span class="tr-diff-del">-{file.del}</span>{/if}
+					</span>
+				{/each}
+			</div>
+			{#if entry.cost !== null}
+				<span class="tr-turn-cost">{fmtCost(entry.cost)}</span>
+			{/if}
+		</div>
+	{:else}
+		<div class="tr-error">{entry.detail}</div>
+	{/if}
+{/snippet}
 
 <ConfirmModal
 	bind:open={deleteOpen}
@@ -1301,14 +1773,74 @@
 		background: none;
 	}
 
-	.conv-engine {
-		margin-left: auto;
+	.conv-right {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
 		flex-shrink: 0;
+		margin-left: auto;
 		padding-right: 0.25rem;
+	}
+
+	.conv-engine {
+		flex-shrink: 0;
 		font-family: var(--font-mono, monospace);
 		font-size: var(--text-micro);
 		line-height: var(--lh-micro);
 		color: var(--text-faint);
+	}
+
+	.conv-ctx {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.375rem;
+		flex-shrink: 0;
+	}
+
+	.conv-ctx-bar {
+		width: 3.5rem;
+		height: 0.25rem;
+		border-radius: var(--radius-pill);
+		background: var(--bg-sunken);
+		overflow: hidden;
+	}
+
+	.conv-ctx-fill {
+		display: block;
+		height: 100%;
+		border-radius: var(--radius-pill);
+		background: var(--accent);
+		transition: width var(--dur-fast);
+	}
+
+	.conv-ctx-text {
+		font-family: var(--font-mono, monospace);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		color: var(--text-faint);
+		white-space: nowrap;
+	}
+
+	.conv-copy {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.25rem;
+		height: 1.25rem;
+		flex-shrink: 0;
+		border: none;
+		border-radius: var(--radius-xs);
+		background: none;
+		color: var(--text-faint);
+		cursor: pointer;
+		transition:
+			background-color var(--dur-fast),
+			color var(--dur-fast);
+	}
+
+	.conv-copy:hover {
+		background: var(--bg-hover);
+		color: var(--text-default);
 	}
 
 	.chat-cred {
@@ -1614,6 +2146,76 @@
 		white-space: pre;
 	}
 
+	.tr-think {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+
+	.tr-think-body {
+		margin: 0.125rem 0 0.25rem 1.375rem;
+		padding: 0.375rem 0.625rem;
+		max-height: 12.5em;
+		overflow-y: auto;
+		font-family: var(--font-mono, monospace);
+		font-size: var(--text-micro);
+		line-height: 1.5;
+		color: var(--text-faint);
+		background: var(--bg-sunken);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-sm);
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+
+	.tr-think--live .tr-think-body {
+		color: var(--text-muted);
+	}
+
+	.tr-sub-prompt {
+		font-size: var(--text-caption);
+		line-height: 1.5;
+		font-weight: 600;
+		color: var(--text-muted);
+		white-space: pre-wrap;
+		overflow-wrap: anywhere;
+	}
+
+	.tr-agent {
+		display: flex;
+		flex-direction: column;
+		min-width: 0;
+	}
+
+	.tr-agent-state {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		flex-shrink: 0;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		color: var(--text-faint);
+	}
+
+	.tr-agent-body {
+		display: flex;
+		flex-direction: column;
+		gap: 0.375rem;
+		margin: 0.25rem 0 0.25rem 1.375rem;
+		padding: 0.5rem 0.625rem;
+		max-height: 24rem;
+		overflow-y: auto;
+		background: var(--bg-sunken);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-sm);
+	}
+
+	.tr-agent-empty {
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-faint);
+	}
+
 	.tr-turn {
 		display: flex;
 		align-items: center;
@@ -1830,5 +2432,123 @@
 		background: var(--bg-sunken);
 		color: var(--text-faint);
 		cursor: default;
+	}
+
+	.chat-send--stop {
+		background: var(--status-error-bg);
+		color: var(--status-error);
+		border: 1px solid var(--status-error-border);
+	}
+
+	.chat-send--stop:disabled {
+		border: 1px solid var(--status-error-border);
+		background: var(--status-error-bg);
+		color: var(--status-error);
+		opacity: 0.6;
+	}
+
+	.chat-composer--plan {
+		border-top-color: var(--accent);
+		background: var(--accent-subtle);
+	}
+
+	.chat-chips {
+		display: flex;
+		align-items: center;
+		gap: 0.375rem;
+		min-width: 0;
+	}
+
+	.chat-chip {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		max-width: 12rem;
+		padding: 0.125rem 0.375rem;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-pill);
+		background: var(--bg-raised);
+		font-family: var(--font-mono, monospace);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		color: var(--text-muted);
+		cursor: pointer;
+		white-space: nowrap;
+		overflow: hidden;
+		transition:
+			color var(--dur-fast),
+			background-color var(--dur-fast);
+	}
+
+	.chat-chip:hover,
+	.chat-chip--open {
+		background: var(--bg-hover);
+		color: var(--text-default);
+	}
+
+	.chat-menu-scroll {
+		max-height: 20rem;
+		overflow-y: auto;
+	}
+
+	.chat-menu-group {
+		padding: 0.375rem 0.75rem 0.125rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.04em;
+		color: var(--text-faint);
+	}
+
+	.chat-menu-label {
+		flex: 1;
+		min-width: 0;
+		text-align: left;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.chat-mode {
+		display: inline-flex;
+		align-items: center;
+		padding: 0.125rem;
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-pill);
+		background: var(--bg-sunken);
+	}
+
+	.chat-mode-btn {
+		border: none;
+		background: none;
+		padding: 0.0625rem 0.5rem;
+		border-radius: var(--radius-pill);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
+		color: var(--text-faint);
+		cursor: pointer;
+		transition:
+			color var(--dur-fast),
+			background-color var(--dur-fast);
+	}
+
+	.chat-mode-btn--active {
+		background: var(--bg-raised);
+		color: var(--text-default);
+	}
+
+	.chat-mode-btn--plan.chat-mode-btn--active {
+		background: var(--accent);
+		color: var(--text-on-accent);
+	}
+
+	.chat-plan-badge {
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 600;
+		color: var(--accent);
+		white-space: nowrap;
 	}
 </style>

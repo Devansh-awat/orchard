@@ -6,6 +6,7 @@ import {
   NotFoundException,
   ServiceUnavailableException,
 } from '@nestjs/common';
+import { SignJWT } from 'jose';
 import { Sandbox, SandboxStatus } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuthorizationService } from '../auth/authorization.service';
@@ -133,13 +134,53 @@ export class SandboxesService {
     return script;
   }
 
+  private async mintMcpToken(userId: string): Promise<string | null> {
+    if (!process.env.SANDBOX_MCP_URL || !process.env.JWT_SECRET) return null;
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { email: true, username: true, externalAuthId: true },
+    });
+    if (!user) return null;
+    let session = await this.prisma.session.findFirst({
+      where: {
+        userId,
+        deviceName: 'sandbox-mcp',
+        expiresAt: { gt: new Date(Date.now() + 7 * 86400000) },
+      },
+    });
+    if (!session) {
+      session = await this.prisma.session.create({
+        data: {
+          userId,
+          authMethod: 'otp',
+          deviceName: 'sandbox-mcp',
+          expiresAt: new Date(Date.now() + 60 * 86400000),
+        },
+      });
+    }
+    return new SignJWT({
+      type: 'mcp',
+      email: user.email,
+      name: user.username,
+      externalAuthId: user.externalAuthId,
+      authMethod: 'otp',
+      sessionId: session.id,
+    })
+      .setProtectedHeader({ alg: 'HS256' })
+      .setSubject(userId)
+      .setIssuedAt()
+      .setExpirationTime('60d')
+      .sign(new TextEncoder().encode(process.env.JWT_SECRET));
+  }
+
   private async buildSecretInput(userId: string, keys: string[], setupScript: string | null) {
-    const [user, credential] = await Promise.all([
+    const [user, credential, mcpToken] = await Promise.all([
       this.prisma.user.findUnique({
         where: { id: userId },
         select: { githubAccessToken: true },
       }),
       this.prisma.sandboxCredential.findUnique({ where: { userId } }),
+      this.mintMcpToken(userId).catch(() => null),
     ]);
     return {
       authorizedKeys: keys,
@@ -147,6 +188,7 @@ export class SandboxesService {
       claudeToken: credential?.claudeToken ? this.crypto.decrypt(credential.claudeToken) : null,
       openaiToken: credential?.openaiToken ? this.crypto.decrypt(credential.openaiToken) : null,
       setupScript,
+      mcpToken,
     };
   }
 

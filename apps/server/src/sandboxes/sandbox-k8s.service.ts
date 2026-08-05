@@ -27,6 +27,7 @@ export interface SandboxSecretInput {
   claudeToken?: string | null;
   openaiToken?: string | null;
   setupScript?: string | null;
+  mcpToken?: string | null;
 }
 
 export interface SandboxCrStatus {
@@ -234,6 +235,20 @@ export class SandboxK8sService {
           },
         })
       : '{}';
+    const opencodeConfig: Record<string, any> = {
+      plugin: ['@cortexkit/opencode-anthropic-auth'],
+    };
+    if (input.mcpToken && process.env.SANDBOX_MCP_URL) {
+      opencodeConfig.mcp = {
+        orchard: {
+          type: 'remote',
+          url: process.env.SANDBOX_MCP_URL,
+          headers: { Authorization: `Bearer ${input.mcpToken}` },
+          enabled: true,
+        },
+      };
+    }
+    stringData['opencode-config.json'] = JSON.stringify(opencodeConfig);
     const body: k8s.V1Secret = {
       metadata: {
         name,
@@ -351,6 +366,7 @@ export class SandboxK8sService {
                     { key: 'bootstrap.sh', path: 'bootstrap.sh' },
                     { key: 'setup.sh', path: 'setup.sh' },
                     { key: 'opencode-auth.json', path: 'opencode-auth.json' },
+                    { key: 'opencode-config.json', path: 'opencode-config.json' },
                   ],
                   defaultMode: 0o644,
                   optional: false,

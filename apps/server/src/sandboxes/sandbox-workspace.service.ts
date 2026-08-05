@@ -142,6 +142,133 @@ export class SandboxWorkspaceService {
     ]);
   }
 
+  private q(s: string): string {
+    return `'${s.replace(/'/g, `'\\''`)}'`;
+  }
+
+  private validateFile(file: string): string {
+    if (!FILE_RE.test(file) || file.includes('..')) {
+      throw new BadRequestException('Invalid file path');
+    }
+    return file;
+  }
+
+  async gitCommit(
+    sandbox: { id: string; status: string; repoUrl: string | null },
+    repo: string,
+    message: string,
+    files: string[] | undefined,
+    author: { name: string; email: string },
+  ): Promise<{ ok: boolean; output: string }> {
+    if (!message?.trim() || message.length > 2000) {
+      throw new BadRequestException('A commit message is required');
+    }
+    const add = files?.length
+      ? files.map((f) => `git add -- ${this.q(this.validateFile(f))}`).join('; ')
+      : 'git add -A';
+    const script = `${add}; git -c user.name=${this.q(author.name)} -c user.email=${this.q(author.email)} commit -m ${this.q(message)} 2>&1`;
+    const result = await this.run(sandbox, script, repo);
+    return { ok: result.ok, output: result.stdout.slice(-2000) };
+  }
+
+  async gitPush(
+    sandbox: { id: string; status: string; repoUrl: string | null },
+    repo: string,
+  ): Promise<{ ok: boolean; output: string }> {
+    const result = await this.run(sandbox, 'git push origin HEAD 2>&1', repo);
+    return { ok: result.ok, output: result.stdout.slice(-2000) };
+  }
+
+  async createPullRequest(
+    sandbox: { id: string; status: string; repoUrl: string | null },
+    repo: string,
+    githubToken: string | null,
+    body: { title?: string; body?: string; base?: string },
+  ): Promise<{ url: string }> {
+    if (!body.title?.trim()) throw new BadRequestException('A PR title is required');
+    if (!githubToken) {
+      throw new BadRequestException('No GitHub account is linked to your user');
+    }
+    const info = await this.run(
+      sandbox,
+      "git remote get-url origin; git rev-parse --abbrev-ref HEAD",
+      repo,
+    );
+    const [remoteUrl, branch] = info.stdout.trim().split('\n').map((l) => l.trim());
+    const match = remoteUrl?.match(/github\.com[/:]([^/]+)\/([^/.]+)/);
+    if (!match || !branch) {
+      throw new BadRequestException('Could not determine the GitHub repository or branch');
+    }
+    const [, owner, name] = match;
+    const headers = {
+      authorization: `Bearer ${githubToken}`,
+      accept: 'application/vnd.github+json',
+      'content-type': 'application/json',
+      'user-agent': 'orchard-greenhouse',
+    };
+    let base = body.base;
+    if (!base) {
+      const repoRes = await fetch(`https://api.github.com/repos/${owner}/${name}`, { headers });
+      if (repoRes.ok) base = ((await repoRes.json()) as any).default_branch;
+    }
+    const prRes = await fetch(`https://api.github.com/repos/${owner}/${name}/pulls`, {
+      method: 'POST',
+      headers,
+      body: JSON.stringify({
+        title: body.title,
+        head: branch,
+        base: base || 'main',
+        ...(body.body ? { body: body.body } : {}),
+      }),
+    });
+    const pr = (await prRes.json()) as any;
+    if (!prRes.ok) {
+      throw new BadRequestException(
+        pr?.errors?.[0]?.message || pr?.message || 'GitHub rejected the pull request',
+      );
+    }
+    return { url: pr.html_url };
+  }
+
+  async readFile(
+    sandbox: { id: string; status: string; repoUrl: string | null },
+    repo: string | undefined,
+    file: string,
+  ): Promise<{ content: string; truncated: boolean }> {
+    this.validateFile(file);
+    const result = await this.run(
+      sandbox,
+      `head -c 512001 -- ${this.q(file)} | base64 -w0`,
+      repo,
+    );
+    if (!result.ok) throw new BadRequestException('Could not read that file');
+    const content = Buffer.from(result.stdout.trim(), 'base64').toString('utf8');
+    return {
+      content: content.slice(0, 512000),
+      truncated: content.length > 512000,
+    };
+  }
+
+  async writeFile(
+    sandbox: { id: string; status: string; repoUrl: string | null },
+    repo: string | undefined,
+    file: string,
+    content: string,
+  ): Promise<{ ok: boolean }> {
+    this.validateFile(file);
+    if (typeof content !== 'string' || content.length > 512000) {
+      throw new BadRequestException('File content must be a string up to 500KB');
+    }
+    const b64 = Buffer.from(content, 'utf8').toString('base64');
+    const result = await this.run(
+      sandbox,
+      `mkdir -p "$(dirname ${this.q(file)})"; printf '%s' ${this.q(b64)} | base64 -d > ${this.q(file)}`,
+      repo,
+    );
+    if (!result.ok) throw new BadRequestException('Could not write that file');
+    return { ok: true };
+  }
+
   async listRepos(sandbox: {
     id: string;
     status: string;
