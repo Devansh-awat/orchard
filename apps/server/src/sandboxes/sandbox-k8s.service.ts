@@ -559,7 +559,11 @@ export class SandboxK8sService {
             this.namespace,
             pod.metadata!.name!,
             'sandbox',
-            ['/bin/sh', '-c', "pgrep -f 'claude|codex' | grep -v pgrep | head -1"],
+            [
+              '/bin/sh',
+              '-c',
+              "pgrep -af 'claude|codex' | grep -vE 'pgrep|opencode serve' | head -1; curl -s -m 3 http://127.0.0.1:4096/session/status | grep -o '\"type\":\"busy\"' | head -1",
+            ],
             stdout,
             null,
             null,
