@@ -299,6 +299,7 @@ export const routes: GeneratedRoute[] = [
   { method: 'DELETE', path: '/sandboxes/:id', auth: 'authenticated' },
   { method: 'GET', path: '/sandboxes/:id', auth: 'authenticated' },
   { method: 'PATCH', path: '/sandboxes/:id', auth: 'authenticated' },
+  { method: 'GET', path: '/sandboxes/:id/boot', auth: 'authenticated' },
   { method: 'GET', path: '/sandboxes/:id/changes', auth: 'authenticated' },
   { method: 'POST', path: '/sandboxes/:id/chat', auth: 'authenticated' },
   { method: 'GET', path: '/sandboxes/:id/conversations', auth: 'authenticated' },

@@ -86,6 +86,14 @@ export class SandboxesController {
     return this.sandboxes.setCredentials(user.id, user.email, body || {});
   }
 
+  @Get(':id/boot')
+  @RequireScope('exec')
+  async bootStatus(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
+    const user = await this.resolveUser(req);
+    const row = await this.sandboxes.getOwnedStrict(id, user.id);
+    return this.workspace.bootStatus(row);
+  }
+
   @Get(':id/changes')
   @RequireScope('exec')
   async changes(

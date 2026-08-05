@@ -39926,6 +39926,61 @@
         ]
       }
     },
+    "/sandboxes/{id}/boot": {
+      "get": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "label": {
+                      "type": "string"
+                    },
+                    "phase": {
+                      "type": "string"
+                    },
+                    "ready": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "phase",
+                    "ready",
+                    "label"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Boot progress of a starting sandbox, for a setup progress indicator",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
     "/sandboxes/{id}/changes": {
       "get": {
         "description": "Auth: authenticated (scope: exec)",
@@ -41952,9 +42007,101 @@
         "tags": [
           "scim"
         ]
+      },
+      "post": {
+        "description": "Auth: public",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "POST /scim/v2/Groups",
+        "tags": [
+          "scim"
+        ]
+      }
+    },
+    "/scim/v2/Groups/.search": {
+      "post": {
+        "description": "Auth: public",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "POST /scim/v2/Groups/.search",
+        "tags": [
+          "scim"
+        ]
       }
     },
     "/scim/v2/Groups/{id}": {
+      "delete": {
+        "description": "Auth: public",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "DELETE /scim/v2/Groups/:id",
+        "tags": [
+          "scim"
+        ]
+      },
       "get": {
         "description": "Auth: public",
         "parameters": [
@@ -41981,6 +42128,86 @@
           }
         },
         "summary": "GET /scim/v2/Groups/:id",
+        "tags": [
+          "scim"
+        ]
+      },
+      "patch": {
+        "description": "Auth: public",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "PATCH /scim/v2/Groups/:id",
+        "tags": [
+          "scim"
+        ]
+      },
+      "put": {
+        "description": "Auth: public",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "PUT /scim/v2/Groups/:id",
         "tags": [
           "scim"
         ]
@@ -42163,6 +42390,38 @@
           }
         },
         "summary": "POST /scim/v2/Users",
+        "tags": [
+          "scim"
+        ]
+      }
+    },
+    "/scim/v2/Users/.search": {
+      "post": {
+        "description": "Auth: public",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {},
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "summary": "POST /scim/v2/Users/.search",
         "tags": [
           "scim"
         ]

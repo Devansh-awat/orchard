@@ -1,8 +1,25 @@
+export const SANDBOX_PHASES = [
+  'starting',
+  'packages',
+  'runtime',
+  'agents',
+  'storage',
+  'account',
+  'services',
+  'ready',
+] as const;
+
+export const SANDBOX_PHASE_FILE = '/tmp/orchard-boot-phase';
+
 export const SANDBOX_BOOTSTRAP_SCRIPT = `#!/bin/bash
 set -uo pipefail
 export DEBIAN_FRONTEND=noninteractive
 
+phase() { printf '%s' "$1" > ${SANDBOX_PHASE_FILE}; }
+phase starting
+
 if ! command -v sshd >/dev/null 2>&1 && [ ! -x /usr/sbin/sshd ]; then
+  phase packages
   apt-get update -qq
   apt-get install -y -qq --no-install-recommends \\
     openssh-server git curl ca-certificates sudo procps e2fsprogs util-linux \\
@@ -10,12 +27,15 @@ if ! command -v sshd >/dev/null 2>&1 && [ ! -x /usr/sbin/sshd ]; then
 fi
 
 if ! command -v node >/dev/null 2>&1; then
+  phase runtime
   curl -fsSL https://deb.nodesource.com/setup_22.x | bash - >/dev/null 2>&1
   apt-get install -y -qq nodejs >/dev/null
 fi
+phase agents
 command -v claude >/dev/null 2>&1 || npm install -g @anthropic-ai/claude-code >/dev/null 2>&1
 command -v codex >/dev/null 2>&1 || npm install -g @openai/codex >/dev/null 2>&1
 command -v opencode >/dev/null 2>&1 || npm install -g opencode-ai >/dev/null 2>&1
+phase storage
 
 if [ "\${SANDBOX_HOME_MODE:-filesystem}" = "block" ] && [ -b /dev/sandboxhome ]; then
   if ! blkid /dev/sandboxhome >/dev/null 2>&1; then
@@ -26,6 +46,7 @@ if [ "\${SANDBOX_HOME_MODE:-filesystem}" = "block" ] && [ -b /dev/sandboxhome ];
 fi
 mkdir -p /persist/home /persist/hostkeys
 
+phase account
 if ! id dev >/dev/null 2>&1; then
   useradd -u 1000 -d /persist/home -s /bin/bash dev 2>/dev/null || useradd -d /persist/home -s /bin/bash dev
 fi
@@ -102,10 +123,12 @@ mkdir -p /persist/home/.config/opencode /persist/home/.local/share/opencode
 ln -sfn /orchard-init/opencode-config.json /persist/home/.config/opencode/opencode.json
 ln -sfn /orchard-init/opencode-auth.json /persist/home/.local/share/opencode/auth.json
 chown -R dev:dev /persist/home/.config /persist/home/.local
+phase services
 if command -v opencode >/dev/null 2>&1; then
   su - dev -c 'nohup opencode serve --hostname 0.0.0.0 --port 4096 >> /persist/home/.opencode-serve.log 2>&1 &'
 fi
 
 mkdir -p /run/sshd
+phase ready
 exec /usr/sbin/sshd -D -e
 `;

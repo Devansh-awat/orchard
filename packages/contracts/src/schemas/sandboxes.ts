@@ -222,6 +222,15 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     response: z.object({ ok: z.boolean() }),
     scope: 'exec',
   },
+  'GET /sandboxes/:id/boot': {
+    summary: 'Boot progress of a starting sandbox, for a setup progress indicator',
+    response: z.object({
+      phase: z.string(),
+      ready: z.boolean(),
+      label: z.string(),
+    }),
+    scope: 'exec',
+  },
   'GET /sandboxes/:id/repos': {
     summary: 'List git repositories cloned into the sandbox (one sandbox holds many repos)',
     response: z.object({

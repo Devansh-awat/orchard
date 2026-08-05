@@ -249,13 +249,23 @@ function handleShellSession(
     });
     ws.on('close', () => stdin.end());
 
+    if (ws.readyState === WebSocket.OPEN) {
+      ws.send('\x1b[2J\x1b[H\x1b[90mConnecting to the sandbox...\x1b[0m\r\n');
+    }
+
     try {
       const exec = new k8s.Exec(kubernetes.kc);
       await exec.exec(
         namespace,
         pod.metadata.name,
         'sandbox',
-        ['/bin/sh', '-c', 'cd /persist/home; exec su -l dev'],
+        [
+          '/bin/sh',
+          '-c',
+          'n=0; while ! id dev >/dev/null 2>&1 && [ $n -lt 300 ]; do sleep 1; n=$((n+1)); done; ' +
+            'if ! id dev >/dev/null 2>&1; then echo "The sandbox is still setting up. Try again in a moment."; exit 1; fi; ' +
+            'printf "\\033[2J\\033[H"; cd /persist/home; exec su -l dev',
+        ],
         stdout,
         stderr,
         stdin,

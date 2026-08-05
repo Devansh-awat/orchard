@@ -5,6 +5,7 @@ import { BadRequestException, Injectable, Logger } from '@nestjs/common';
 import type { Request, Response } from 'express';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { SandboxK8sService, sandboxWorkdir } from './sandbox-k8s.service';
+import { SANDBOX_PHASE_FILE } from './sandbox-bootstrap';
 
 const OPENCODE_PORT = 4096;
 const PROXY_TIMEOUT_MS = 120000;
@@ -377,6 +378,38 @@ export class SandboxWorkspaceService {
     );
     if (!result.ok) throw new BadRequestException('Could not write that file');
     return { ok: true };
+  }
+
+  async bootStatus(sandbox: {
+    id: string;
+    status: string;
+  }): Promise<{ phase: string; ready: boolean; label: string }> {
+    const labels: Record<string, string> = {
+      starting: 'Starting the virtual machine',
+      packages: 'Installing system packages',
+      runtime: 'Installing Node.js',
+      agents: 'Installing coding agents',
+      storage: 'Preparing persistent storage',
+      account: 'Creating your user account',
+      services: 'Starting SSH and the agent server',
+      ready: 'Ready',
+    };
+    if (sandbox.status !== 'running') {
+      return { phase: sandbox.status, ready: false, label: 'Sandbox is not running' };
+    }
+    let phase = 'starting';
+    try {
+      const result = await this.k8s.execCapture(
+        sandbox.id,
+        ['/bin/sh', '-c', `cat ${SANDBOX_PHASE_FILE} 2>/dev/null`],
+        8000,
+      );
+      const value = result.stdout.trim();
+      if (value) phase = value;
+    } catch {
+      return { phase: 'starting', ready: false, label: labels.starting };
+    }
+    return { phase, ready: phase === 'ready', label: labels[phase] || 'Setting up' };
   }
 
   async listRepos(sandbox: {
