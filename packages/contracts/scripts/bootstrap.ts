@@ -18,7 +18,7 @@ const entries = Object.entries(snapshot)
     const spaceIndex = key.indexOf(' ');
     const method = key.slice(0, spaceIndex);
     const path = key.slice(spaceIndex + 1);
-    if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE'].includes(method)) {
+    if (!['GET', 'POST', 'PUT', 'PATCH', 'DELETE', 'ALL'].includes(method)) {
       throw new Error(`unexpected method in snapshot: ${key}`);
     }
     if (!['public', 'authenticated', 'superadmin'].includes(auth)) {

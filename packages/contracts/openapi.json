@@ -40293,6 +40293,393 @@
         ]
       }
     },
+    "/sandboxes/{id}/file": {
+      "get": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "content": {
+                      "type": "string"
+                    },
+                    "truncated": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "content",
+                    "truncated"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Read a file from the sandbox workspace (?path= and optional ?repo=)",
+        "tags": [
+          "sandboxes"
+        ]
+      },
+      "put": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "content": {
+                    "maxLength": 512000,
+                    "type": "string"
+                  },
+                  "path": {
+                    "type": "string"
+                  },
+                  "repo": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "path",
+                  "content"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    }
+                  },
+                  "required": [
+                    "ok"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Write a file in the sandbox workspace",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/git/commit": {
+      "post": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "files": {
+                    "items": {
+                      "type": "string"
+                    },
+                    "type": "array"
+                  },
+                  "message": {
+                    "maxLength": 2000,
+                    "minLength": 1,
+                    "type": "string"
+                  },
+                  "repo": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "repo",
+                  "message"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "output": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "output"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Stage and commit inside a sandbox repo (all changes, or listed files)",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/git/pr": {
+      "post": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "base": {
+                    "maxLength": 200,
+                    "type": "string"
+                  },
+                  "body": {
+                    "maxLength": 20000,
+                    "type": "string"
+                  },
+                  "repo": {
+                    "type": "string"
+                  },
+                  "title": {
+                    "maxLength": 300,
+                    "minLength": 1,
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "repo",
+                  "title"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "url": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "url"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Open a GitHub pull request from the current branch of a sandbox repo",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/git/push": {
+      "post": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "repo": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "repo"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "output": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "output"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Push the current branch of a sandbox repo to origin",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/opencode/*": {
+      "all": {
+        "description": "Auth: authenticated",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {},
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "ALL /sandboxes/:id/opencode/*",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
     "/sandboxes/{id}/repos": {
       "get": {
         "description": "Auth: authenticated (scope: exec)",

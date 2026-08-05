@@ -1,6 +1,6 @@
 import type { ZodTypeAny } from 'zod';
 
-export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE';
+export type Method = 'GET' | 'POST' | 'PUT' | 'PATCH' | 'DELETE' | 'ALL';
 
 export type Auth = 'public' | 'authenticated' | 'superadmin';
 
