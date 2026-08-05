@@ -17,7 +17,7 @@
 		X
 	} from 'lucide-svelte';
 	import { toasts } from '$lib/stores';
-	import { Button, Menu, MenuItem, Modal } from '$lib/components/ui';
+	import { Button, Menu, MenuItem, Modal, Skeleton } from '$lib/components/ui';
 	import { slide } from '$lib/utils/transitions';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import SandboxDiffView from './SandboxDiffView.svelte';
@@ -46,12 +46,14 @@
 	let {
 		sandboxId,
 		running,
+		booting = false,
 		repo = null,
 		refreshKey = 0,
 		onchanges
 	}: {
 		sandboxId: string;
 		running: boolean;
+		booting?: boolean;
 		repo?: string | null;
 		refreshKey?: number;
 		onchanges?: (files: IdeChangedFile[]) => void;
@@ -61,6 +63,7 @@
 	let branches = $state<IdeBranches | null>(null);
 	let branch = $state<string | null>(null);
 	let loading = $state(false);
+	let settled = $state(false);
 	let error = $state<string | null>(null);
 	let selected = $state<Record<string, boolean>>({});
 
@@ -110,6 +113,7 @@
 		error = null;
 		const res = await ideChanges(sandboxId, repo);
 		loading = false;
+		settled = true;
 		if (!res.ok || !res.data) {
 			error = res.message ?? 'Failed to load changes';
 			return;
@@ -270,6 +274,7 @@
 		void sandboxId;
 		if (repo !== lastRepo) {
 			lastRepo = repo;
+			settled = false;
 			view = 'list';
 			diffText = null;
 			diffError = null;
@@ -288,7 +293,15 @@
 
 <div class="git-root">
 	{#if !running}
-		<p class="git-note">Start the sandbox to work with git.</p>
+		<div class="git-gate">
+			{#if booting}
+				<Skeleton height="0.75rem" width="70%" />
+				<Skeleton height="0.75rem" width="45%" />
+				<p class="git-note">Git opens once the sandbox has finished setting up.</p>
+			{:else}
+				<p class="git-note">Start the sandbox to work with git.</p>
+			{/if}
+		</div>
 	{:else if view === 'diff'}
 		<div class="git-head">
 			<button
@@ -303,7 +316,11 @@
 		</div>
 		<div class="git-diff-wrap">
 			{#if diffLoading}
-				<p class="git-note">Loading diff…</p>
+				<div class="git-skeletons" aria-hidden="true">
+					{#each [88, 64, 92, 54, 76] as w, i (i)}
+						<div class="git-skeleton-row"><Skeleton height="0.6875rem" width="{w}%" /></div>
+					{/each}
+				</div>
 			{:else if diffError}
 				<p class="git-note git-note--error">{diffError}</p>
 			{:else if diffText !== null}
@@ -498,8 +515,12 @@
 		<div class="git-list-wrap">
 			{#if error}
 				<p class="git-note git-note--error">{error}</p>
-			{:else if !changes && loading}
-				<p class="git-note">Loading changes…</p>
+			{:else if !settled}
+				<div class="git-skeletons" aria-hidden="true">
+					{#each [70, 52, 84, 46] as w, i (i)}
+						<div class="git-skeleton-row"><Skeleton height="0.6875rem" width="{w}%" /></div>
+					{/each}
+				</div>
 			{:else if changes && !changes.isRepo}
 				<p class="git-note">Pick a repo in the Repos tab to use git here.</p>
 			{:else if files.length === 0}
@@ -702,25 +723,55 @@
 		min-height: 0;
 	}
 
+	.git-gate {
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		justify-content: center;
+		gap: var(--space-2);
+		flex: 1;
+		min-height: 0;
+		padding: var(--space-6) var(--space-4);
+		text-align: center;
+	}
+
 	.git-note {
-		padding: 1.25rem 0.75rem;
+		margin: 0 auto;
+		max-width: 20rem;
+		padding: var(--space-5) var(--space-3);
 		text-align: center;
 		font-size: var(--text-footnote);
-		line-height: 1.5;
+		line-height: var(--lh-footnote);
 		color: var(--text-faint);
+	}
+
+	.git-gate .git-note {
+		padding: 0;
 	}
 
 	.git-note--error {
 		color: var(--status-error);
 	}
 
+	.git-skeletons {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.git-skeleton-row {
+		display: flex;
+		align-items: center;
+		height: 1.5rem;
+		padding: 0 var(--space-3);
+	}
+
 	.git-head {
 		display: flex;
 		align-items: center;
-		gap: 0.25rem;
+		gap: var(--space-1);
 		flex-shrink: 0;
-		height: 2rem;
-		padding: 0 0.375rem 0 0.5rem;
+		height: var(--sbw-row, 2.25rem);
+		padding: 0 var(--space-1) 0 var(--space-2);
 		border-bottom: 1px solid var(--border-default);
 	}
 
@@ -881,8 +932,8 @@
 		align-items: center;
 		gap: 0.125rem;
 		flex-shrink: 0;
-		height: 1.875rem;
-		padding: 0 0.375rem 0 0.5rem;
+		height: 2rem;
+		padding: 0 var(--space-1) 0 var(--space-2);
 		border-bottom: 1px solid var(--border-default);
 	}
 
@@ -964,10 +1015,10 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 0.5rem;
+		gap: var(--space-2);
 		flex-shrink: 0;
-		min-height: 1.875rem;
-		padding: 0 0.375rem 0 0.75rem;
+		height: 2rem;
+		padding: 0 var(--space-1) 0 var(--space-3);
 		border-bottom: 1px solid var(--border-default);
 	}
 
@@ -998,7 +1049,7 @@
 		flex: 1;
 		min-height: 0;
 		overflow-y: auto;
-		padding: 0.25rem 0;
+		padding: var(--space-1) 0;
 	}
 
 	.git-diff-wrap {
@@ -1006,7 +1057,7 @@
 		flex-direction: column;
 		flex: 1;
 		min-height: 0;
-		padding: 0.5rem 0.75rem 0.75rem;
+		padding: var(--space-2) var(--space-3) var(--space-3);
 	}
 
 	.git-list {
@@ -1020,9 +1071,10 @@
 	.git-row {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--space-2);
 		min-width: 0;
-		padding-left: 0.75rem;
+		height: 1.5rem;
+		padding-left: var(--space-3);
 		transition: background-color var(--dur-fast);
 	}
 
@@ -1033,10 +1085,11 @@
 	.git-file {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--space-2);
 		flex: 1;
 		min-width: 0;
-		padding: 0.25rem 0.75rem 0.25rem 0;
+		height: 100%;
+		padding: 0 var(--space-3) 0 0;
 		border: none;
 		background: none;
 		text-align: left;

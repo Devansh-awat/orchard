@@ -84,3 +84,35 @@ const TRANSITIONAL = new Set<SandboxStatus>(['creating', 'starting', 'stopping',
 export function isSandboxTransitional(status: SandboxStatus): boolean {
 	return TRANSITIONAL.has(status);
 }
+
+export type SandboxBootPhase =
+	| 'starting'
+	| 'packages'
+	| 'runtime'
+	| 'agents'
+	| 'storage'
+	| 'account'
+	| 'services'
+	| 'ready';
+
+export interface SandboxBoot {
+	phase: SandboxBootPhase;
+	ready: boolean;
+	label: string;
+}
+
+export const SANDBOX_BOOT_PHASES: { id: SandboxBootPhase; label: string }[] = [
+	{ id: 'starting', label: 'Starting the machine' },
+	{ id: 'packages', label: 'Installing packages' },
+	{ id: 'runtime', label: 'Installing the runtime' },
+	{ id: 'agents', label: 'Installing coding agents' },
+	{ id: 'storage', label: 'Preparing storage' },
+	{ id: 'account', label: 'Setting up your account' },
+	{ id: 'services', label: 'Starting services' },
+	{ id: 'ready', label: 'Ready' }
+];
+
+export function sandboxBootIndex(phase: SandboxBootPhase): number {
+	const index = SANDBOX_BOOT_PHASES.findIndex((p) => p.id === phase);
+	return index === -1 ? 0 : index;
+}

@@ -1,9 +1,12 @@
+import type { QueryClient } from '@tanstack/svelte-query';
 import { apiFetch } from '$lib/stores';
 import { isSandboxTransitional } from '$lib/types/sandbox';
 import type {
 	Sandbox,
+	SandboxBoot,
 	SandboxCredentials,
 	SandboxListResponse,
+	SandboxStatus,
 	SshIdentitiesResponse,
 	SshIdentity
 } from '$lib/types/sandbox';
@@ -48,10 +51,45 @@ export function sandboxQueryOptions(id: string) {
 		},
 		refetchInterval: (query: { state: { data?: Sandbox } }) => {
 			const sandbox = query.state.data;
-			return sandbox && isSandboxTransitional(sandbox.status) ? 5_000 : 30_000;
+			return sandbox && isSandboxTransitional(sandbox.status) ? 3_000 : 30_000;
 		},
 		retry: sandboxRetry
 	};
+}
+
+export function sandboxBootQueryOptions(id: string, enabled: boolean) {
+	return {
+		queryKey: ['sandbox-boot', id],
+		enabled: enabled && !!id,
+		queryFn: async (): Promise<SandboxBoot> => {
+			const res = await apiFetch(`/apiv1/sandboxes/${id}/boot`);
+			if (!res.ok) throw new Error('Failed to fetch boot progress');
+			return res.json();
+		},
+		refetchInterval: (query: { state: { data?: SandboxBoot } }) =>
+			query.state.data?.ready ? (false as const) : 3_000,
+		retry: false,
+		gcTime: 60_000
+	};
+}
+
+function isSandboxList(value: unknown): value is SandboxListResponse {
+	return (
+		!!value && typeof value === 'object' && Array.isArray((value as SandboxListResponse).sandboxes)
+	);
+}
+
+export function optimisticSandboxStatus(client: QueryClient, id: string, status: SandboxStatus) {
+	client.setQueryData(['sandboxes', id], (old: Sandbox | undefined) =>
+		old ? { ...old, status } : old
+	);
+	client.setQueriesData({ queryKey: ['sandboxes'] }, (old: unknown) => {
+		if (!isSandboxList(old)) return old;
+		return {
+			...old,
+			sandboxes: old.sandboxes.map((s) => (s.id === id ? { ...s, status } : s))
+		};
+	});
 }
 
 export function sandboxCredentialsQueryOptions() {

@@ -3,7 +3,7 @@
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
 	import { ArrowLeft, PanelLeft, Play, Square, Trash2 } from 'lucide-svelte';
-	import { apiFetch, toasts } from '$lib/stores';
+	import { apiFetch, toasts, user } from '$lib/stores';
 	import { queryClient } from '$lib/query';
 	import {
 		Alert,
@@ -17,6 +17,7 @@
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import { timeAgo } from '$lib/components/org-dashboard/helpers.svelte';
 	import {
+		SandboxBootProgress,
 		SandboxChatPanel,
 		SandboxConnectPanel,
 		SandboxEditorPane,
@@ -30,7 +31,11 @@
 	import { SandboxIde } from '$lib/components/sandbox/ide.svelte';
 	import type { IdeChangedFile } from '$lib/components/sandbox/ide';
 	import { motionPanel, springWidth } from '$lib/utils/motion.svelte';
-	import { sandboxQueryOptions } from '$lib/queries/sandboxes';
+	import {
+		optimisticSandboxStatus,
+		sandboxBootQueryOptions,
+		sandboxQueryOptions
+	} from '$lib/queries/sandboxes';
 	import type { SandboxRepo, SandboxReposResponse } from '$lib/types/sandbox';
 
 	const id = $derived($page.params.id ?? '');
@@ -38,7 +43,20 @@
 	const sandbox = $derived(sandboxQuery.data ?? null);
 	const m = $derived(sandbox ? sandboxStatus(sandbox.status) : null);
 	const imageTag = $derived(sandbox ? (sandbox.image.split('/').pop() ?? sandbox.image) : '');
-	const running = $derived(sandbox?.status === 'running');
+	const owned = $derived(!sandbox?.owner || sandbox.owner.id === $user?.id);
+	const live = $derived(sandbox?.status === 'running');
+
+	const bootQuery = createQuery(() =>
+		sandboxBootQueryOptions(id, owned && !!sandbox && sandbox.status !== 'stopped')
+	);
+	const boot = $derived(bootQuery.data ?? null);
+	const bootSettled = $derived(bootQuery.isFetched);
+	const bootPending = $derived(live && owned && !bootSettled);
+	const ready = $derived(
+		live && !bootPending && (!bootSettled || bootQuery.isError || boot?.ready === true)
+	);
+	const booting = $derived(!ready && sandbox?.status !== 'stopped' && sandbox?.status !== 'error');
+	const running = $derived(ready && owned);
 
 	let busyAction = $state<string | null>(null);
 	let deleteOpen = $state(false);
@@ -47,6 +65,7 @@
 
 	let repos = $state<SandboxRepo[]>([]);
 	let reposLoading = $state(false);
+	let reposLoaded = $state(false);
 	let selectedRepo = $state<string | null>(null);
 
 	const ide = new SandboxIde('');
@@ -186,6 +205,8 @@
 		ide.sandboxId = id;
 		ide.closeAll();
 		changedFiles = [];
+		repos = [];
+		reposLoaded = false;
 		mainView = 'chat';
 		readPanes(id);
 	});
@@ -216,6 +237,7 @@
 			if (!res.ok) return;
 			const data = (await res.json()) as SandboxReposResponse;
 			repos = data.repos ?? [];
+			reposLoaded = true;
 			if (selectedRepo === null || !repos.some((r) => r.name === selectedRepo)) {
 				selectedRepo = repos[0]?.name ?? null;
 			}
@@ -232,18 +254,38 @@
 		if (running) loadRepos();
 	});
 
-	const sideTabs = [
-		{ id: 'git', label: 'Git' },
-		{ id: 'terminal', label: 'Terminal' },
-		{ id: 'repos', label: 'Repos' },
-		{ id: 'mcp', label: 'MCP' },
-		{ id: 'settings', label: 'Settings' },
-		{ id: 'connect', label: 'Connect' }
-	];
+	const sideTabs = $derived(
+		owned
+			? [
+					{ id: 'git', label: 'Git' },
+					{ id: 'terminal', label: 'Terminal' },
+					{ id: 'repos', label: 'Repos' },
+					{ id: 'mcp', label: 'MCP' },
+					{ id: 'settings', label: 'Settings' },
+					{ id: 'connect', label: 'Connect' }
+				]
+			: [{ id: 'settings', label: 'Settings' }]
+	);
+
+	let lastOwned = true;
+	$effect(() => {
+		if (owned === lastOwned) return;
+		lastOwned = owned;
+		if (!owned) sideTab = 'settings';
+	});
+
+	const NEXT_STATUS = {
+		start: 'starting',
+		stop: 'stopping',
+		delete: 'deleting'
+	} as const;
 
 	async function lifecycle(action: 'start' | 'stop' | 'delete') {
 		if (busyAction || !sandbox) return;
 		busyAction = action;
+		const previous = sandbox.status;
+		optimisticSandboxStatus(queryClient, id, NEXT_STATUS[action]);
+		queryClient.removeQueries({ queryKey: ['sandbox-boot', id] });
 		try {
 			const res = await apiFetch(
 				action === 'delete' ? `/apiv1/sandboxes/${id}` : `/apiv1/sandboxes/${id}/${action}`,
@@ -259,6 +301,7 @@
 				goto('/sandboxes');
 			}
 		} catch (e) {
+			optimisticSandboxStatus(queryClient, id, previous);
 			toasts.add({
 				title: 'Error',
 				description: e instanceof Error ? e.message : `Failed to ${action} sandbox`,
@@ -308,8 +351,18 @@
 					? `active ${timeAgo(sandbox.lastActiveAt)}`
 					: 'never active'}
 			</span>
+			{#if !owned && sandbox.owner}
+				<span class="sbw-owner">
+					<span class="sbw-owner-av" aria-hidden="true">
+						{(sandbox.owner.username ?? sandbox.owner.email ?? '?').charAt(0).toUpperCase()}
+					</span>
+					{sandbox.owner.username ?? sandbox.owner.email ?? 'another member'}
+				</span>
+			{/if}
 			<div class="sbw-actions">
-				{#if sandbox.status === 'stopped' || sandbox.status === 'error'}
+				{#if !owned}
+					<span class="sbw-readonly">View only</span>
+				{:else if sandbox.status === 'stopped' || sandbox.status === 'error'}
 					<Button
 						size="sm"
 						variant="ghost"
@@ -328,7 +381,7 @@
 						<Square class="h-3.5 w-3.5" /> Stop
 					</Button>
 				{/if}
-				{#if sandbox.status !== 'deleting'}
+				{#if owned && sandbox.status !== 'deleting'}
 					<button
 						type="button"
 						class="sbw-delete"
@@ -358,6 +411,7 @@
 					sandboxId={sandbox.id}
 					repo={selectedRepo}
 					{running}
+					{booting}
 					changed={changedFiles}
 					activePath={ide.active?.path ?? null}
 					onopen={openFile}
@@ -380,11 +434,13 @@
 				></div>
 			{/if}
 			<section class="sbw-main" aria-label="Agent workspace">
-				{#if ide.tabs.length > 0}
-					<div class="sbw-switch">
+				<div class="sbw-switch">
+					{#if ide.tabs.length > 0}
 						<SegmentedControl options={mainViews} bind:value={mainView} label="Workspace view" />
-					</div>
-				{/if}
+					{:else}
+						<span class="sbw-context">{selectedRepo ?? 'home'}</span>
+					{/if}
+				</div>
 				<div class="sbw-main-body">
 					<div
 						class="sbw-view"
@@ -394,6 +450,11 @@
 						<SandboxChatPanel
 							{sandbox}
 							{repos}
+							{owned}
+							{ready}
+							{booting}
+							{bootPending}
+							{boot}
 							bind:selectedRepo
 							starting={busyAction === 'start'}
 							onstart={() => lifecycle('start')}
@@ -438,6 +499,7 @@
 						<SandboxGitPanel
 							sandboxId={sandbox.id}
 							{running}
+							{booting}
 							refreshKey={changesTick}
 							repo={selectedRepo}
 							onchanges={(files) => (changedFiles = files)}
@@ -452,6 +514,7 @@
 							sandboxId={sandbox.id}
 							name={sandbox.name}
 							{running}
+							{booting}
 							active={sideTab === 'terminal'}
 						/>
 					</div>
@@ -463,8 +526,10 @@
 						<SandboxReposPanel
 							sandboxId={sandbox.id}
 							{running}
+							{booting}
 							{repos}
 							loading={reposLoading}
+							loaded={reposLoaded}
 							{selectedRepo}
 							onselect={(name) => (selectedRepo = name)}
 							onrefresh={loadRepos}
@@ -475,7 +540,7 @@
 						class:sbw-pane--hidden={sideTab !== 'mcp'}
 						{@attach motionPanel(() => sideTab === 'mcp')}
 					>
-						<SandboxMcpPanel sandboxId={sandbox.id} {running} />
+						<SandboxMcpPanel sandboxId={sandbox.id} {running} {booting} />
 					</div>
 					<div
 						class="sbw-pane"
@@ -527,10 +592,10 @@
 	.sbw-head {
 		display: flex;
 		align-items: center;
-		gap: 0.625rem;
+		gap: var(--space-2);
 		flex-shrink: 0;
 		height: 3rem;
-		padding: 0 0.75rem 0 0.5rem;
+		padding: 0 var(--space-2);
 		border-bottom: 1px solid var(--border-default);
 	}
 
@@ -567,7 +632,7 @@
 	.sbw-status {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: var(--space-1);
 		flex-shrink: 0;
 		font-size: var(--text-caption);
 		line-height: var(--lh-caption);
@@ -587,10 +652,40 @@
 		text-overflow: ellipsis;
 	}
 
+	.sbw-owner {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
+		flex-shrink: 0;
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-muted);
+	}
+
+	.sbw-owner-av {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.125rem;
+		height: 1.125rem;
+		border-radius: var(--radius-pill);
+		background: var(--bg-sunken);
+		color: var(--text-muted);
+		font-size: var(--text-micro);
+		line-height: 1;
+		font-weight: 700;
+	}
+
+	.sbw-readonly {
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-faint);
+	}
+
 	.sbw-actions {
 		display: flex;
 		align-items: center;
-		gap: 0.25rem;
+		gap: var(--space-1);
 		flex-shrink: 0;
 	}
 
@@ -622,10 +717,11 @@
 
 	.sbw-alert {
 		flex-shrink: 0;
-		padding: 0.5rem 0.75rem 0;
+		padding: var(--space-2) var(--space-3) 0;
 	}
 
 	.sbw-body {
+		--sbw-row: 2.25rem;
 		display: flex;
 		flex: 1;
 		min-height: 0;
@@ -643,13 +739,26 @@
 		min-height: 0;
 		display: flex;
 		flex-direction: column;
-		border-left: 1px solid var(--border-default);
 	}
 
 	.sbw-switch {
+		display: flex;
+		align-items: center;
 		flex-shrink: 0;
-		padding: 0.375rem 0.75rem;
+		height: var(--sbw-row);
+		padding: 0 var(--space-2);
 		border-bottom: 1px solid var(--border-default);
+	}
+
+	.sbw-context {
+		min-width: 0;
+		font-family: var(--font-mono, monospace);
+		font-size: var(--text-caption);
+		line-height: var(--lh-caption);
+		color: var(--text-faint);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
 	.sbw-main-body {
@@ -672,19 +781,30 @@
 
 	.sbw-grip {
 		position: relative;
-		width: 4px;
+		width: 5px;
 		flex-shrink: 0;
+		margin: 0 -2px;
+		z-index: 1;
 		cursor: col-resize;
-		background: var(--border-default);
-		transition: background-color var(--dur-fast);
 		touch-action: none;
 		user-select: none;
 	}
 
-	.sbw-grip:hover,
-	.sbw-grip:focus-visible,
-	.sbw-grip--active {
+	.sbw-grip::before {
+		content: '';
+		position: absolute;
+		inset: 0 2px;
+		background: var(--border-default);
+		transition: background-color var(--dur-fast);
+	}
+
+	.sbw-grip:hover::before,
+	.sbw-grip:focus-visible::before,
+	.sbw-grip--active::before {
 		background: var(--accent);
+	}
+
+	.sbw-grip:focus-visible {
 		outline: none;
 	}
 
@@ -699,12 +819,13 @@
 		min-height: 0;
 		display: flex;
 		flex-direction: column;
-		border-left: 1px solid var(--border-default);
 	}
 
 	.sbw-side-tabs {
+		display: flex;
+		align-items: stretch;
 		flex-shrink: 0;
-		padding: 0 0.75rem;
+		height: var(--sbw-row);
 	}
 
 	.sbw-side-tabs :global(.ui-tabs) {
@@ -714,11 +835,17 @@
 		width: 100%;
 	}
 
+	.sbw-side-tabs :global(.ui-tabs-track) {
+		height: 100%;
+		padding-block: 0;
+	}
+
 	.sbw-side-tabs :global(.ui-tab) {
 		border-radius: 0;
 		background: none;
 		box-shadow: none;
-		padding-inline: 0.25rem;
+		padding-block: 0;
+		padding-inline: var(--space-2);
 		font-size: var(--text-caption);
 		line-height: var(--lh-caption);
 	}
@@ -740,7 +867,7 @@
 		min-width: 0;
 		min-height: 0;
 		overflow-y: auto;
-		padding: 0.625rem 0.75rem 0.75rem;
+		padding: var(--space-3);
 	}
 
 	.sbw-pane--fill {
@@ -766,17 +893,19 @@
 			display: none;
 		}
 
+		.sbw-grip {
+			display: none;
+		}
+
 		.sbw-main {
 			height: 65dvh;
 			min-height: 24rem;
-			border-left: none;
 		}
 
 		.sbw-side {
 			flex: none;
 			width: auto;
 			height: 32rem;
-			border-left: none;
 			border-top: 1px solid var(--border-default);
 		}
 	}

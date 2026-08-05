@@ -84,8 +84,21 @@
 
 	{#if sandboxesQuery.isPending}
 		<div class="sbx-grid">
-			<Skeleton height="7.5rem" />
-			<Skeleton height="7.5rem" />
+			{#each [0, 1, 2, 3] as i (i)}
+				<div class="sbx-skel">
+					<div class="sbx-skel-top">
+						<Skeleton width="2.25rem" height="2.25rem" rounded="var(--radius-sm)" />
+						<div class="sbx-skel-text">
+							<Skeleton width="7rem" height="0.8125rem" rounded="0.25rem" />
+							<Skeleton width="10rem" height="0.625rem" rounded="0.25rem" />
+						</div>
+					</div>
+					<div class="sbx-skel-bot">
+						<Skeleton width="4.5rem" height="0.625rem" rounded="0.25rem" />
+						<Skeleton width="3.5rem" height="0.625rem" rounded="0.25rem" />
+					</div>
+				</div>
+			{/each}
 		</div>
 	{:else if disabled}
 		<Alert tone="info" title="Sandboxes are not enabled on this server">
@@ -122,7 +135,7 @@
 	.sbx-page {
 		max-width: 56rem;
 		margin: 0 auto;
-		padding: 2rem 1.5rem 4rem;
+		padding: var(--space-8) var(--space-6) var(--space-12);
 	}
 
 	.sbx-count {
@@ -133,13 +146,48 @@
 	.sbx-stack {
 		display: flex;
 		flex-direction: column;
-		gap: 1.25rem;
+		gap: var(--space-5);
 	}
 
 	.sbx-grid {
 		display: grid;
 		grid-template-columns: repeat(2, minmax(0, 1fr));
 		gap: var(--space-3);
+	}
+
+	.sbx-skel {
+		display: flex;
+		flex-direction: column;
+		justify-content: space-between;
+		gap: var(--space-3);
+		min-height: 7.5rem;
+		padding: var(--space-4);
+		border-radius: var(--radius-lg);
+		background: var(--bg-raised);
+		box-shadow: var(--elev-1);
+	}
+
+	.sbx-skel-top {
+		display: flex;
+		align-items: center;
+		gap: var(--space-3);
+	}
+
+	.sbx-skel-text {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		flex: 1;
+		min-width: 0;
+	}
+
+	.sbx-skel-bot {
+		display: flex;
+		align-items: center;
+		justify-content: space-between;
+		gap: var(--space-2);
+		padding-top: var(--space-3);
+		box-shadow: inset 0 1px 0 var(--rule);
 	}
 
 	.sbx-grid > :global(*) {
@@ -156,9 +204,9 @@
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 0.75rem;
+		gap: var(--space-3);
 		flex-wrap: wrap;
-		padding: 0.75rem 1rem;
+		padding: var(--space-3) var(--space-4);
 		border: 1px solid var(--border-default);
 		border-radius: var(--radius-md);
 		background: var(--bg-surface);

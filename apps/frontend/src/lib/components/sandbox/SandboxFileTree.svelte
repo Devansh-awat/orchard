@@ -1,5 +1,6 @@
 <script lang="ts">
 	import { ChevronRight, RefreshCw, Search, X } from 'lucide-svelte';
+	import { Skeleton } from '$lib/components/ui';
 	import { springRotate } from '$lib/utils/motion.svelte';
 	import { fade } from '$lib/utils/transitions';
 	import {
@@ -16,6 +17,7 @@
 		sandboxId,
 		repo = null,
 		running,
+		booting = false,
 		changed = [],
 		activePath = null,
 		onopen
@@ -23,6 +25,7 @@
 		sandboxId: string;
 		repo?: string | null;
 		running: boolean;
+		booting?: boolean;
 		changed?: IdeChangedFile[];
 		activePath?: string | null;
 		onopen: (path: string) => void;
@@ -189,10 +192,14 @@
 
 	<div class="ft-body">
 		{#if !running}
-			<p class="ft-note">Start the sandbox to browse files.</p>
+			{#if booting}
+				{@render skeletonRows()}
+			{:else}
+				<p class="ft-note">Start the sandbox to browse files.</p>
+			{/if}
 		{:else if query.trim()}
 			{#if searching}
-				<p class="ft-note">Searching…</p>
+				{@render skeletonRows()}
 			{:else if results.length === 0}
 				<p class="ft-note">No files match.</p>
 			{:else}
@@ -215,7 +222,7 @@
 				</ul>
 			{/if}
 		{:else if !rootLoaded}
-			<p class="ft-note">Loading files…</p>
+			{@render skeletonRows()}
 		{:else if rootNodes.length === 0}
 			<p class="ft-note">Nothing here yet.</p>
 		{:else}
@@ -240,6 +247,14 @@
 		{/if}
 	</div>
 </div>
+
+{#snippet skeletonRows()}
+	<div class="ft-skeletons" aria-hidden="true">
+		{#each [64, 82, 48, 74, 58, 88, 42] as w, i (i)}
+			<div class="ft-skeleton-row"><Skeleton height="0.625rem" width="{w}%" /></div>
+		{/each}
+	</div>
+{/snippet}
 
 {#snippet level(nodes: IdeFileNode[], depth: number)}
 	{#each nodes as node (node.path)}
@@ -306,10 +321,10 @@
 	.ft-head {
 		display: flex;
 		align-items: center;
-		gap: 0.25rem;
+		gap: var(--space-1);
 		flex-shrink: 0;
-		height: 2rem;
-		padding: 0 0.375rem 0 0.625rem;
+		height: var(--sbw-row, 2.25rem);
+		padding: 0 var(--space-1) 0 var(--space-2);
 		border-bottom: 1px solid var(--border-default);
 	}
 
@@ -356,10 +371,10 @@
 	.ft-search {
 		display: flex;
 		align-items: center;
-		gap: 0.375rem;
+		gap: var(--space-2);
 		flex-shrink: 0;
-		height: 1.875rem;
-		padding: 0 0.375rem 0 0.625rem;
+		height: var(--sbw-row, 2.25rem);
+		padding: 0 var(--space-1) 0 var(--space-2);
 		border-bottom: 1px solid var(--border-default);
 	}
 
@@ -390,7 +405,19 @@
 		flex: 1;
 		min-height: 0;
 		overflow: auto;
-		padding: 0.25rem 0;
+		padding: var(--space-1) 0;
+	}
+
+	.ft-skeletons {
+		display: flex;
+		flex-direction: column;
+	}
+
+	.ft-skeleton-row {
+		display: flex;
+		align-items: center;
+		height: 1.375rem;
+		padding: 0 var(--space-2);
 	}
 
 	.ft-list {
@@ -402,11 +429,11 @@
 	.ft-row {
 		display: flex;
 		align-items: center;
-		gap: 0.25rem;
+		gap: var(--space-1);
 		width: 100%;
 		min-width: 0;
 		height: 1.375rem;
-		padding-right: 0.5rem;
+		padding-right: var(--space-2);
 		border: none;
 		background: none;
 		text-align: left;
@@ -510,14 +537,15 @@
 	}
 
 	.ft-note {
-		padding: 0.75rem 0.625rem;
+		margin: 0;
+		padding: var(--space-3) var(--space-2);
 		font-size: var(--text-micro);
 		line-height: var(--lh-micro);
 		color: var(--text-faint);
 	}
 
 	.ft-note--tight {
-		padding: 0.125rem 0.625rem;
+		padding: 0.125rem var(--space-2);
 	}
 
 	.ft-lsp {
@@ -525,7 +553,7 @@
 		flex-direction: column;
 		gap: 0.1875rem;
 		flex-shrink: 0;
-		padding: 0.5rem 0.625rem;
+		padding: var(--space-2);
 		border-top: 1px solid var(--border-default);
 	}
 

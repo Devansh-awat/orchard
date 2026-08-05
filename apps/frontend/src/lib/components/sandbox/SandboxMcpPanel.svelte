@@ -6,6 +6,7 @@
 		EmptyState,
 		Input,
 		SegmentedControl,
+		Skeleton,
 		StatusBadge,
 		statusMeta,
 		type StatusMeta
@@ -13,7 +14,11 @@
 	import { slide } from '$lib/utils/transitions';
 	import { ocBase, ocMcpServers, ocProbe, type OcMcpServer, type OcMcpState } from './opencode';
 
-	let { sandboxId, running }: { sandboxId: string; running: boolean } = $props();
+	let {
+		sandboxId,
+		running,
+		booting = false
+	}: { sandboxId: string; running: boolean; booting?: boolean } = $props();
 
 	type Server = OcMcpServer & { busy: boolean; authUrl: string | null; actionError: string | null };
 
@@ -150,10 +155,21 @@
 
 <div class="mcp-root">
 	{#if !running}
-		<EmptyState title="Sandbox is stopped" description="Start the sandbox to manage MCP servers." />
+		{#if booting}
+			<EmptyState
+				title="Still setting up"
+				description="MCP servers appear once the sandbox has finished setting up."
+			/>
+		{:else}
+			<EmptyState
+				title="Sandbox is stopped"
+				description="Start the sandbox to manage MCP servers."
+			/>
+		{/if}
 	{:else if ocMode === null}
-		<div class="mcp-loading">
-			<Loader2 class="h-3.5 w-3.5 animate-spin" /> Checking the agent
+		<div class="mcp-skeletons" aria-hidden="true">
+			<Skeleton height="0.75rem" width="58%" />
+			<Skeleton height="0.75rem" width="76%" />
 		</div>
 	{:else if ocMode === false}
 		<EmptyState
@@ -265,14 +281,11 @@
 		gap: 0.625rem;
 	}
 
-	.mcp-loading {
-		display: inline-flex;
-		align-items: center;
-		gap: 0.5rem;
-		padding: 1rem 0;
-		font-size: var(--text-footnote);
-		line-height: var(--lh-footnote);
-		color: var(--text-muted);
+	.mcp-skeletons {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		padding: var(--space-2) 0;
 	}
 
 	.mcp-head {

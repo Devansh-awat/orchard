@@ -1,3 +1,4 @@
+export { default as SandboxBootProgress } from './SandboxBootProgress.svelte';
 export { default as SandboxCard } from './SandboxCard.svelte';
 export { default as SandboxChatPanel } from './SandboxChatPanel.svelte';
 export { default as SandboxCreateModal } from './SandboxCreateModal.svelte';

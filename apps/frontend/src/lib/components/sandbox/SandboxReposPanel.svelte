@@ -1,7 +1,7 @@
 <script lang="ts">
 	import { Github, Loader2, Plus, RefreshCw } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
-	import { Button, Input } from '$lib/components/ui';
+	import { Button, Input, Skeleton } from '$lib/components/ui';
 	import { slide } from '$lib/utils/transitions';
 	import type { SandboxRepo } from '$lib/types/sandbox';
 
@@ -14,16 +14,20 @@
 	let {
 		sandboxId,
 		running,
+		booting = false,
 		repos,
 		loading = false,
+		loaded = false,
 		selectedRepo = null,
 		onselect,
 		onrefresh
 	}: {
 		sandboxId: string;
 		running: boolean;
+		booting?: boolean;
 		repos: SandboxRepo[];
 		loading?: boolean;
+		loaded?: boolean;
 		selectedRepo?: string | null;
 		onselect: (name: string) => void;
 		onrefresh: () => void;
@@ -109,11 +113,23 @@
 
 <div class="rp-root">
 	{#if !running}
-		<p class="rp-note">Start the sandbox to manage repositories.</p>
+		{#if booting}
+			<div class="rp-skeletons" aria-hidden="true">
+				<Skeleton height="0.75rem" width="55%" />
+				<Skeleton height="0.75rem" width="72%" />
+			</div>
+			<p class="rp-note">Repositories load once the sandbox has finished setting up.</p>
+		{:else}
+			<p class="rp-note">Start the sandbox to manage repositories.</p>
+		{/if}
 	{:else}
 		<div class="rp-head">
 			<span class="rp-count">
-				{repos.length === 1 ? '1 repository' : `${repos.length} repositories`}
+				{loaded
+					? repos.length === 1
+						? '1 repository'
+						: `${repos.length} repositories`
+					: 'Repositories'}
 			</span>
 			<button
 				type="button"
@@ -125,7 +141,13 @@
 				<RefreshCw class={loading ? 'h-3.5 w-3.5 animate-spin' : 'h-3.5 w-3.5'} />
 			</button>
 		</div>
-		{#if repos.length === 0}
+		{#if !loaded}
+			<div class="rp-skeletons" aria-hidden="true">
+				<Skeleton height="0.75rem" width="62%" />
+				<Skeleton height="0.75rem" width="48%" />
+				<Skeleton height="0.75rem" width="70%" />
+			</div>
+		{:else if repos.length === 0}
 			<p class="rp-note">No repositories yet. Add one to give the agent code to work on.</p>
 		{:else}
 			<ul class="rp-list">
@@ -207,23 +229,31 @@
 	.rp-root {
 		display: flex;
 		flex-direction: column;
-		gap: 0.375rem;
+		gap: var(--space-2);
 		min-height: 0;
 	}
 
 	.rp-note {
-		padding: 1rem 0.375rem;
+		margin: 0;
+		padding: var(--space-2) var(--space-1);
 		font-size: var(--text-footnote);
-		line-height: 1.5;
+		line-height: var(--lh-footnote);
 		color: var(--text-faint);
+	}
+
+	.rp-skeletons {
+		display: flex;
+		flex-direction: column;
+		gap: var(--space-2);
+		padding: var(--space-2) var(--space-1);
 	}
 
 	.rp-head {
 		display: flex;
 		align-items: center;
 		justify-content: space-between;
-		gap: 0.5rem;
-		min-height: 1.75rem;
+		gap: var(--space-2);
+		height: 1.75rem;
 	}
 
 	.rp-count {
@@ -269,11 +299,12 @@
 
 	.rp-repo {
 		display: flex;
-		align-items: baseline;
-		gap: 0.5rem;
+		align-items: center;
+		gap: var(--space-2);
 		width: 100%;
 		min-width: 0;
-		padding: 0.375rem 0.5rem;
+		height: 1.75rem;
+		padding: 0 var(--space-2);
 		border: none;
 		border-radius: var(--radius-xs);
 		background: none;
@@ -323,9 +354,10 @@
 	.rp-add-row {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--space-2);
 		width: 100%;
-		padding: 0.375rem 0.5rem;
+		height: 1.75rem;
+		padding: 0 var(--space-2);
 		border: none;
 		border-radius: var(--radius-xs);
 		background: none;

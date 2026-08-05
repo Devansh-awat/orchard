@@ -20,8 +20,9 @@
 		X
 	} from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
-	import { Button, Menu, MenuItem } from '$lib/components/ui';
+	import { Button, Menu, MenuItem, Skeleton } from '$lib/components/ui';
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
+	import SandboxBootProgress from './SandboxBootProgress.svelte';
 	import { fade, slide } from '$lib/utils/transitions';
 	import { sandboxCredentialsQueryOptions } from '$lib/queries/sandboxes';
 	import {
@@ -50,7 +51,7 @@
 		type OcSession,
 		type OcTokens
 	} from './opencode';
-	import type { Sandbox, SandboxRepo } from '$lib/types/sandbox';
+	import type { Sandbox, SandboxBoot, SandboxRepo } from '$lib/types/sandbox';
 
 	type TurnFile = { name: string; path: string; add: number; del: number };
 
@@ -102,6 +103,11 @@
 		repos = [],
 		selectedRepo = $bindable(null),
 		starting = false,
+		owned = true,
+		ready = false,
+		booting = false,
+		bootPending = false,
+		boot = null,
 		onstart,
 		onturndone
 	}: {
@@ -109,6 +115,11 @@
 		repos?: SandboxRepo[];
 		selectedRepo?: string | null;
 		starting?: boolean;
+		owned?: boolean;
+		ready?: boolean;
+		booting?: boolean;
+		bootPending?: boolean;
+		boot?: SandboxBoot | null;
 		onstart: () => void;
 		onturndone?: () => void;
 	} = $props();
@@ -129,10 +140,14 @@
 	let fileInputEl = $state<HTMLInputElement | undefined>(undefined);
 	let dropActive = $state(false);
 
+	const TEMP_PREFIX = 'pending-';
+
 	let conversations = $state<Conversation[]>([]);
 	let convosSupported = $state(false);
 	let activeId = $state<string | null>(null);
+	let chatSettled = $state(false);
 	let historyLoading = $state(false);
+	let convoWork: Promise<void> | null = null;
 	let historyTruncated = $state(false);
 	let renamingId = $state<string | null>(null);
 	let renameText = $state('');
@@ -205,21 +220,25 @@
 
 	let convosInit = false;
 	$effect(() => {
-		if (sandbox.status === 'running' && !convosInit) {
+		if (ready && !convosInit) {
 			convosInit = true;
 			init();
 		}
 	});
 
 	async function init() {
-		ocMode = await ocProbe(sandbox.id);
-		if (ocMode) {
-			ocModels(sandbox.id)
-				.then((models) => (modelList = models))
-				.catch(() => {});
-			await loadSessions();
-		} else {
-			await loadConversations();
+		try {
+			ocMode = await ocProbe(sandbox.id);
+			if (ocMode) {
+				ocModels(sandbox.id)
+					.then((models) => (modelList = models))
+					.catch(() => {});
+				await loadSessions();
+			} else {
+				await loadConversations();
+			}
+		} finally {
+			chatSettled = true;
 		}
 	}
 
@@ -261,7 +280,7 @@
 	}
 
 	$effect(() => {
-		if (!ocMode || sandbox.status !== 'running') return;
+		if (!ocMode || !ready) return;
 		const ctrl = new AbortController();
 		ocEventLoop(ctrl.signal);
 		return () => ctrl.abort();
@@ -327,48 +346,78 @@
 		}
 	}
 
+	function resetTranscript() {
+		entries = [];
+		ocParts.clear();
+		ocAgents.clear();
+		ctxTokens = null;
+		historyTruncated = false;
+		revertedMessageID = null;
+	}
+
+	async function createOcSession(): Promise<Conversation> {
+		const dir = ocDirectory(selectedRepo);
+		const query = dir ? `?directory=${encodeURIComponent(dir)}` : '';
+		const res = await apiFetch(`${ocBase(sandbox.id)}/session${query}`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify({})
+		});
+		if (!res.ok) throw new Error('Could not start a new session');
+		return sessionToConvo((await res.json()) as OcSession);
+	}
+
+	async function createLocalConversation(): Promise<Conversation> {
+		const res = await apiFetch(`/apiv1/sandboxes/${sandbox.id}/conversations`, {
+			method: 'POST',
+			headers: { 'Content-Type': 'application/json' },
+			body: JSON.stringify(selectedRepo ? { repo: selectedRepo } : {})
+		});
+		if (!res.ok) throw new Error('Could not start a new conversation');
+		return (await res.json()) as Conversation;
+	}
+
 	async function createConversation() {
-		if (ocMode) {
+		savePrefs();
+		const temp: Conversation = {
+			id: `${TEMP_PREFIX}${Date.now().toString(36)}`,
+			title: 'New chat',
+			repo: selectedRepo,
+			hasSession: false,
+			createdAt: new Date().toISOString(),
+			updatedAt: new Date().toISOString()
+		};
+		conversations = ocMode ? [temp, ...conversations] : [...conversations, temp];
+		activeId = temp.id;
+		convosSupported = true;
+		resetTranscript();
+
+		const work = (async () => {
 			try {
-				savePrefs();
-				const dir = ocDirectory(selectedRepo);
-				const query = dir ? `?directory=${encodeURIComponent(dir)}` : '';
-				const res = await apiFetch(`${ocBase(sandbox.id)}/session${query}`, {
-					method: 'POST',
-					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({})
-				});
-				if (!res.ok) return;
-				const session = (await res.json()) as OcSession;
-				if (!conversations.some((c) => c.id === session.id)) {
-					conversations.unshift(sessionToConvo(session));
+				const created = ocMode ? await createOcSession() : await createLocalConversation();
+				const index = conversations.findIndex((c) => c.id === temp.id);
+				if (index === -1) return;
+				conversations[index] = created;
+				if (activeId === temp.id) activeId = created.id;
+				const prefs = sessionPrefs.get(temp.id);
+				if (prefs) {
+					sessionPrefs.set(created.id, prefs);
+					sessionPrefs.delete(temp.id);
 				}
-				activeId = session.id;
-				entries = [];
-				ocParts.clear();
-				ocAgents.clear();
-				ctxTokens = null;
-				historyTruncated = false;
-			} catch {
-				return;
+			} catch (e) {
+				conversations = conversations.filter((c) => c.id !== temp.id);
+				if (activeId === temp.id) activeId = conversations[0]?.id ?? null;
+				toasts.add({
+					title: 'Could not start a conversation',
+					description: e instanceof Error ? e.message : 'Try again shortly.',
+					color: 'error'
+				});
 			}
-			return;
-		}
-		try {
-			const res = await apiFetch(`/apiv1/sandboxes/${sandbox.id}/conversations`, {
-				method: 'POST',
-				headers: { 'Content-Type': 'application/json' },
-				body: JSON.stringify(selectedRepo ? { repo: selectedRepo } : {})
-			});
-			if (!res.ok) return;
-			const convo = (await res.json()) as Conversation;
-			conversations.push(convo);
-			activeId = convo.id;
-			entries = [];
-			historyTruncated = false;
-		} catch {
-			return;
-		}
+		})();
+
+		convoWork = work;
+		await work;
+		if (convoWork === work) convoWork = null;
 	}
 
 	async function switchConversation(id: string) {
@@ -377,6 +426,10 @@
 		activeId = id;
 		const convo = conversations.find((c) => c.id === id);
 		if (convo?.repo) selectedRepo = convo.repo;
+		if (id.startsWith(TEMP_PREFIX)) {
+			resetTranscript();
+			return;
+		}
 		await loadHistory(id);
 	}
 
@@ -467,12 +520,8 @@
 	}
 
 	async function loadHistory(id: string) {
-		entries = [];
-		ocParts.clear();
-		ocAgents.clear();
-		ctxTokens = null;
-		historyTruncated = false;
-		if (sandbox.status !== 'running') return;
+		resetTranscript();
+		if (!ready || id.startsWith(TEMP_PREFIX)) return;
 		historyLoading = true;
 		try {
 			if (ocMode) {
@@ -531,25 +580,41 @@
 		const target = deleteTarget;
 		deleteTarget = null;
 		if (!target) return;
+		const index = conversations.findIndex((c) => c.id === target.id);
+		if (index === -1) return;
+
+		const restore = [...conversations];
+		const wasActive = activeId === target.id;
+		conversations = conversations.filter((c) => c.id !== target.id);
+		if (wasActive) {
+			activeId = (conversations[Math.min(index, conversations.length - 1)] ?? null)?.id ?? null;
+			resetTranscript();
+		}
+
+		if (target.id.startsWith(TEMP_PREFIX)) {
+			if (wasActive && !activeId) await createConversation();
+			return;
+		}
+
 		try {
 			const path = ocMode
 				? `${ocBase(sandbox.id)}/session/${target.id}`
 				: `/apiv1/sandboxes/${sandbox.id}/conversations/${target.id}`;
 			const res = await apiFetch(path, { method: 'DELETE' });
 			if (!res.ok) throw new Error('Failed to delete conversation');
-			conversations = conversations.filter((c) => c.id !== target.id);
-			if (activeId === target.id) {
-				if (conversations.length > 0) {
-					activeId = conversations[0].id;
-					await loadHistory(conversations[0].id);
-				} else {
-					await createConversation();
-				}
+			if (wasActive) {
+				if (activeId) await loadHistory(activeId);
+				else await createConversation();
 			}
 		} catch (e) {
+			conversations = restore;
+			if (wasActive) {
+				activeId = target.id;
+				await loadHistory(target.id);
+			}
 			toasts.add({
-				title: 'Error',
-				description: e instanceof Error ? e.message : 'Failed to delete conversation',
+				title: 'Could not delete the conversation',
+				description: e instanceof Error ? e.message : 'Try again shortly.',
 				color: 'error'
 			});
 		}
@@ -1200,8 +1265,9 @@
 		turnStart = Date.now();
 		ocTurnCosts.clear();
 		try {
+			if (convoWork) await convoWork;
 			if (!activeId) await createConversation();
-			if (!activeId) throw new Error('No session available');
+			if (!activeId || activeId.startsWith(TEMP_PREFIX)) throw new Error('No session available');
 			ocTurnSession = activeId;
 			const res = await apiFetch(`${ocBase(sandbox.id)}/session/${activeId}/prompt_async`, {
 				method: 'POST',
@@ -1253,8 +1319,9 @@
 			return;
 		}
 		try {
+			if (convoWork) await convoWork;
 			const body: Record<string, string> = { message };
-			if (activeId) body.conversationId = activeId;
+			if (activeId && !activeId.startsWith(TEMP_PREFIX)) body.conversationId = activeId;
 			if (selectedRepo) body.repo = selectedRepo;
 			const res = await apiFetch(`/apiv1/sandboxes/${sandbox.id}/chat`, {
 				method: 'POST',
@@ -1394,15 +1461,32 @@
 </script>
 
 <div class="chat-root">
-	{#if sandbox.status !== 'running'}
+	{#if !owned}
 		<div class="chat-gate">
-			<p class="chat-gate-text">Start the sandbox to chat.</p>
-			{#if canStart}
-				<Button variant="primary" loading={starting} onclick={onstart}>
-					<Play class="h-4 w-4" /> Start sandbox
-				</Button>
+			<p class="chat-gate-text">This sandbox belongs to someone else.</p>
+			<p class="chat-gate-sub">Chat, terminal, editor, and git are limited to the sandbox owner.</p>
+		</div>
+	{:else if bootPending}
+		<div class="chat-log">
+			<div class="chat-col chat-skeletons" aria-hidden="true">
+				<Skeleton height="0.75rem" width="45%" />
+				<Skeleton height="0.75rem" width="82%" />
+				<Skeleton height="0.75rem" width="68%" />
+			</div>
+		</div>
+	{:else if !ready}
+		<div class="chat-gate">
+			{#if booting}
+				<SandboxBootProgress {boot} status={sandbox.status} />
 			{:else}
-				<p class="chat-gate-sub">Waiting for the sandbox to be ready.</p>
+				<p class="chat-gate-text">Start the sandbox to chat.</p>
+				{#if canStart}
+					<Button variant="primary" loading={starting} onclick={onstart}>
+						<Play class="h-4 w-4" /> Start sandbox
+					</Button>
+				{:else}
+					<p class="chat-gate-sub">Waiting for the sandbox to be ready.</p>
+				{/if}
 			{/if}
 		</div>
 	{:else}
@@ -1501,7 +1585,14 @@
 		{/if}
 		<div class="chat-scroll-wrap">
 			<div class="chat-log" bind:this={listEl} onscroll={onScroll}>
-				{#if entries.length === 0 && !historyLoading}
+				{#if !chatSettled || historyLoading}
+					<div class="chat-col chat-skeletons" aria-hidden="true">
+						<Skeleton height="0.75rem" width="45%" />
+						<Skeleton height="0.75rem" width="82%" />
+						<Skeleton height="0.75rem" width="68%" />
+						<Skeleton height="0.75rem" width="34%" />
+					</div>
+				{:else if entries.length === 0}
 					<div class="chat-col">
 						<p class="chat-empty-title">Ask the agent to build something.</p>
 						<p class="chat-empty-sub">
@@ -1510,11 +1601,6 @@
 					</div>
 				{/if}
 				<div class="chat-col chat-col--feed">
-					{#if historyLoading}
-						<div class="tr-working">
-							<Loader2 class="h-3.5 w-3.5 animate-spin" /> Loading history
-						</div>
-					{/if}
 					{#if historyTruncated}
 						<p class="chat-truncated">Older messages were truncated.</p>
 					{/if}
@@ -1983,10 +2069,11 @@
 
 	.conv-bar {
 		display: flex;
-		align-items: center;
-		gap: 0.25rem;
+		align-items: stretch;
+		gap: var(--space-1);
 		flex-shrink: 0;
-		padding: 0 0.5rem;
+		height: var(--sbw-row, 2.25rem);
+		padding: 0 var(--space-2);
 		border-bottom: 1px solid var(--border-default);
 	}
 
@@ -2019,7 +2106,7 @@
 	.conv-tab-btn {
 		border: none;
 		background: none;
-		padding: 0.4375rem 0.125rem 0.4375rem 0.5rem;
+		padding: 0 0.125rem 0 var(--space-2);
 		font-size: var(--text-caption);
 		line-height: var(--lh-caption);
 		font-weight: 600;
@@ -2067,7 +2154,7 @@
 
 	.conv-rename {
 		width: 9rem;
-		margin: 0.25rem 0;
+		align-self: center;
 		padding: 0.125rem 0.375rem;
 		border: 1px solid var(--border-strong);
 		border-radius: var(--radius-xs);
@@ -2088,6 +2175,7 @@
 		width: 1.5rem;
 		height: 1.5rem;
 		flex-shrink: 0;
+		align-self: center;
 		border: none;
 		border-radius: var(--radius-xs);
 		background: none;
@@ -2113,10 +2201,9 @@
 	.conv-right {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--space-2);
 		flex-shrink: 0;
 		margin-left: auto;
-		padding-right: 0.25rem;
 	}
 
 	.conv-engine {
@@ -2183,9 +2270,9 @@
 	.chat-cred {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--space-2);
 		flex-shrink: 0;
-		padding: 0.375rem 1rem;
+		padding: var(--space-2) var(--space-4);
 		border-bottom: 1px solid var(--border-default);
 		font-size: var(--text-caption);
 		line-height: var(--lh-caption);
@@ -2215,17 +2302,22 @@
 		overflow-y: auto;
 		display: flex;
 		flex-direction: column;
-		padding: 0.75rem 1rem 1rem;
+		padding: var(--space-3) var(--space-4) var(--space-4);
 	}
 
 	.chat-col {
 		display: flex;
 		flex-direction: column;
 		align-items: stretch;
-		gap: 0.375rem;
+		gap: var(--space-1);
 		width: 100%;
 		max-width: 52rem;
 		margin: 0 auto;
+	}
+
+	.chat-skeletons {
+		gap: var(--space-2);
+		margin-top: auto;
 	}
 
 	.chat-col--feed {

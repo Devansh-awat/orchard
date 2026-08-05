@@ -1,12 +1,25 @@
 <script lang="ts">
+	import { createQuery } from '@tanstack/svelte-query';
 	import { springHover, stateEcho } from '$lib/utils/motion.svelte';
 	import { StatusDot, sandboxStatus } from '$lib/components/ui';
 	import { timeAgo } from '$lib/components/org-dashboard/helpers.svelte';
-	import type { Sandbox } from '$lib/types/sandbox';
+	import { user } from '$lib/stores';
+	import { sandboxBootQueryOptions } from '$lib/queries/sandboxes';
+	import { isSandboxTransitional, type Sandbox } from '$lib/types/sandbox';
+	import SandboxBootProgress from './SandboxBootProgress.svelte';
 
 	let { sandbox }: { sandbox: Sandbox } = $props();
 
 	const m = $derived(sandboxStatus(sandbox.status));
+	const owned = $derived(!sandbox.owner || sandbox.owner.id === $user?.id);
+	const ownerName = $derived(sandbox.owner?.username ?? sandbox.owner?.email ?? 'another member');
+	const settingUp = $derived(
+		isSandboxTransitional(sandbox.status) && sandbox.status !== 'deleting' && owned
+	);
+
+	const bootQuery = createQuery(() => sandboxBootQueryOptions(sandbox.id, settingUp));
+	const boot = $derived(bootQuery.data ?? null);
+
 	const repo = $derived(
 		sandbox.repoUrl
 			? sandbox.repoUrl.replace(/^https?:\/\/(www\.)?github\.com\//, '').replace(/\.git$/, '')
@@ -26,13 +39,24 @@
 		<div class="sbx-card-av">{sandbox.name.charAt(0).toUpperCase()}</div>
 		<div class="sbx-card-text">
 			<span class="sbx-card-name">{sandbox.name}</span>
-			{#if repo}
-				<span class="sbx-card-sub">{repo}</span>
-			{:else}
-				<span class="sbx-card-sub">{imageTag}</span>
-			{/if}
+			<span class="sbx-card-sub">{repo ?? imageTag}</span>
 		</div>
+		{#if !owned}
+			<span class="sbx-card-owner" title={ownerName}>
+				<span class="sbx-card-owner-av" aria-hidden="true">
+					{ownerName.charAt(0).toUpperCase()}
+				</span>
+				<span class="sbx-card-owner-name">{ownerName}</span>
+			</span>
+		{/if}
 	</div>
+
+	{#if settingUp}
+		<div class="sbx-card-boot">
+			<SandboxBootProgress {boot} status={sandbox.status} compact />
+		</div>
+	{/if}
+
 	<div class="sbx-card-bot">
 		<span class="sbx-card-status">
 			<StatusDot meta={m} size={7} />
@@ -68,9 +92,7 @@
 		position: absolute;
 		inset: 0;
 		border-radius: inherit;
-		box-shadow:
-			0 2px 4px rgba(0, 0, 0, 0.06),
-			0 8px 22px rgba(0, 0, 0, 0.09);
+		box-shadow: var(--elev-3);
 		opacity: 0;
 		transition: opacity var(--dur-fast) ease;
 		pointer-events: none;
@@ -84,6 +106,7 @@
 		display: flex;
 		align-items: center;
 		gap: var(--space-3);
+		min-width: 0;
 	}
 
 	.sbx-card-av {
@@ -133,6 +156,45 @@
 		margin-top: 0.125rem;
 	}
 
+	.sbx-card-owner {
+		display: inline-flex;
+		align-items: center;
+		gap: var(--space-1);
+		flex-shrink: 0;
+		max-width: 8rem;
+		height: 1.5rem;
+		padding: 0 var(--space-2) 0 0.1875rem;
+		border-radius: var(--radius-pill);
+		background: var(--bg-sunken);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		color: var(--text-muted);
+	}
+
+	.sbx-card-owner-av {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		width: 1.125rem;
+		height: 1.125rem;
+		flex-shrink: 0;
+		border-radius: var(--radius-pill);
+		background: var(--bg-raised);
+		color: var(--text-muted);
+		font-weight: 700;
+	}
+
+	.sbx-card-owner-name {
+		min-width: 0;
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
+	}
+
+	.sbx-card-boot {
+		min-width: 0;
+	}
+
 	.sbx-card-bot {
 		display: flex;
 		align-items: center;
@@ -146,7 +208,7 @@
 	.sbx-card-status {
 		display: inline-flex;
 		align-items: center;
-		gap: 0.5rem;
+		gap: var(--space-2);
 		font-size: var(--text-caption);
 		line-height: var(--lh-caption);
 		color: var(--text-muted);
