@@ -1,5 +1,9 @@
 import { ScimError } from './scim-error';
 
+// Advertised as filter.maxResults in ServiceProviderConfig, so it has to be
+// the number we actually honour — clients page against totalResults.
+export const SCIM_MAX_RESULTS = 200;
+
 export interface ScimQuery {
   filter?: string;
   attributes?: string;
@@ -31,6 +35,10 @@ export function parseScimQuery(q: Record<string, any>): ScimQuery {
     }
     query[key] = value;
   }
+
+  // RFC 7644 §3.4.2.4: a count above the provider's maximum is capped, not an
+  // error, and an unbounded list is capped the same way.
+  query.count = Math.min(query.count ?? SCIM_MAX_RESULTS, SCIM_MAX_RESULTS);
   return query;
 }
 

@@ -1,5 +1,7 @@
 {
   "ALL /sandboxes/:id/opencode/*": "authenticated",
+  "ALL /scim/v2/*": "public",
+  "ALL /scim/v2/Me": "public",
   "DELETE /": "superadmin",
   "DELETE /admin/nodes/:id/assignments/:orgId": "superadmin",
   "DELETE /admin/organizations/:id": "superadmin",

@@ -4,7 +4,7 @@ import SCIMMY from 'scimmy';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 import { ScimError } from './scim-error';
-import { ScimQuery } from './scim-query';
+import { ScimQuery, SCIM_MAX_RESULTS } from './scim-query';
 
 interface Ctx { organizationId: string }
 
@@ -15,6 +15,7 @@ interface ScimMemberView {
   userId: string;
   externalId: string | null;
   role: string;
+  enterprise: any;
   active: boolean;
   created: Date;
   lastModified: Date;
@@ -23,12 +24,62 @@ interface ScimMemberView {
 
 const SCIM_BASEPATH = '/apiv1/scim/v2';
 
-// The org roles SCIM Groups project onto. Group membership is read-only for
-// now (see egressGroups); role changes are made in-app.
+const ENTERPRISE_SCHEMA = 'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User';
+
+// The org roles SCIM Groups project onto, and the set an IdP may provision
+// into via `roles` / `userType`.
 const ROLE_GROUPS = ['owner', 'admin', 'member', 'guest'] as const;
+
+const DEFAULT_ROLE = 'member';
 
 function groupDisplayName(role: string) {
   return role.charAt(0).toUpperCase() + role.slice(1);
+}
+
+function normalizeRole(raw: any): string | null {
+  if (raw === undefined || raw === null || String(raw).trim() === '') return null;
+  const role = String(raw).trim().toLowerCase();
+  if (!ROLE_GROUPS.includes(role as any)) {
+    throw ScimError(
+      400,
+      'invalidValue',
+      `Unknown role "${raw}"; expected one of ${ROLE_GROUPS.join(', ')}`,
+    );
+  }
+  return role;
+}
+
+// RFC 7643 §4.1.2 `roles` is the standard place to carry an application role,
+// and it's what Entra populates from app-role assignments. Okta setups more
+// often map to `userType`, so both are accepted.
+//
+// currentRole disambiguates PATCH. SCIMMY applies the operation to the whole
+// resource and hands the merged result back, so the attribute the client didn't
+// touch still echoes the role we last sent it — and a pathless `replace` on a
+// multi-valued attribute *appends*, leaving the old role sitting in front of
+// the new one in `roles`. Either way the value that already matches the current
+// role carries no instruction, and the one that differs is the request.
+function roleFromInstance(instance: any, currentRole?: string | null): string | null {
+  const roles = Array.isArray(instance?.roles) ? instance.roles : [];
+  // Primary first, so the fallback picks the preferred value when nothing changed.
+  const ordered = [...roles].sort((a, b) => Number(!!b?.primary) - Number(!!a?.primary));
+  const candidates = [
+    ...ordered.map((r: any) => normalizeRole(r?.value)),
+    normalizeRole(instance?.userType),
+  ].filter((r): r is string => r !== null);
+
+  if (!candidates.length) return null;
+  return candidates.find((r) => r !== currentRole) ?? candidates[0];
+}
+
+function enterpriseFromInstance(instance: any) {
+  const payload = instance?.[ENTERPRISE_SCHEMA];
+  if (Object(payload) !== payload || Array.isArray(payload)) return null;
+  // SCIMMY hands back a schema instance with undefined-valued keys for every
+  // unset attribute; strip them so an omitted extension stores as null rather
+  // than a bag of nulls.
+  const entries = Object.entries(payload).filter(([, v]) => v !== undefined && v !== null);
+  return entries.length ? Object.fromEntries(entries) : null;
 }
 
 @Injectable()
@@ -66,7 +117,7 @@ export class ScimService implements OnModuleInit {
     SCIMMY.Config.set({
       patch: { supported: true },
       bulk: { supported: false },
-      filter: { supported: true, maxResults: 200 },
+      filter: { supported: true, maxResults: SCIM_MAX_RESULTS },
       changePassword: { supported: false },
       sort: { supported: true },
       etag: { supported: false },
@@ -78,6 +129,9 @@ export class ScimService implements OnModuleInit {
         },
       ],
     });
+
+    // Optional (not required) so an IdP that never sends it still validates.
+    SCIMMY.Resources.User.extend(SCIMMY.Schemas.EnterpriseUser, false);
 
     SCIMMY.Resources.User
       .ingress((resource, instance, ctx: Ctx) => this.ingressUser(resource, instance, ctx))
@@ -113,6 +167,7 @@ export class ScimService implements OnModuleInit {
     id: string;
     role: string;
     scimExternalId: string | null;
+    scimEnterprise?: any;
     addedAt: Date;
     userId: string;
     user: any;
@@ -122,6 +177,7 @@ export class ScimService implements OnModuleInit {
       userId: member.userId,
       externalId: member.scimExternalId,
       role: member.role,
+      enterprise: member.scimEnterprise ?? null,
       active: true,
       created: member.addedAt,
       lastModified: member.addedAt,
@@ -133,6 +189,7 @@ export class ScimService implements OnModuleInit {
     id: string;
     role: string;
     externalId: string | null;
+    enterprise?: any;
     deactivatedAt: Date;
     userId: string;
     user: any;
@@ -142,6 +199,7 @@ export class ScimService implements OnModuleInit {
       userId: row.userId,
       externalId: row.externalId,
       role: row.role,
+      enterprise: row.enterprise ?? null,
       active: false,
       created: row.deactivatedAt,
       lastModified: row.deactivatedAt,
@@ -163,17 +221,38 @@ export class ScimService implements OnModuleInit {
         [user.firstName, user.lastName].filter(Boolean).join(' ') || user.username || user.email,
       emails: [{ value: user.email, primary: true, type: 'work' }],
       active: view.active,
-      // `groups` is the read-only mirror of the Group resource, so an IdP that
-      // reads a user can see which role group it lands in without a second call.
+      // The org role, surfaced three ways so an IdP can round-trip it however
+      // it's wired: `roles` is the RFC 7643 home for it, `userType` is what
+      // most Okta profile mappings reach for, and `groups` mirrors the
+      // read-only Group projection.
+      roles: [{ value: view.role, display: groupDisplayName(view.role), primary: true }],
+      userType: view.role,
       groups: view.active
         ? [{ value: `role:${view.role}`, display: groupDisplayName(view.role), type: 'direct' }]
         : [],
+      ...(view.enterprise ? { [ENTERPRISE_SCHEMA]: view.enterprise } : {}),
       meta: {
         resourceType: 'User',
         created: view.created,
         lastModified: view.lastModified,
       },
     };
+  }
+
+  // An org with no owner can't be administered back into shape, so SCIM is not
+  // allowed to remove the last one — by deactivation, deletion, or demotion.
+  private async assertNotLastOwner(view: ScimMemberView, ctx: Ctx, action: string) {
+    if (view.role !== 'owner') return;
+    const owners = await this.prisma.organizationMember.count({
+      where: { organizationId: ctx.organizationId, role: 'owner' },
+    });
+    if (owners <= 1) {
+      throw ScimError(
+        400,
+        'invalidValue',
+        `Refusing to ${action} the organization's last owner; promote another owner first`,
+      );
+    }
   }
 
   // A SCIM user is either a live membership or a deactivated tombstone. Both
@@ -246,7 +325,14 @@ export class ScimService implements OnModuleInit {
   // SCIM identity in a tombstone under the same id so the resource stays
   // readable and reactivatable. The global account is untouched — the person
   // may belong to other orgs.
-  private async deactivate(view: ScimMemberView, externalId: string | null, ctx: Ctx) {
+  private async deactivate(
+    view: ScimMemberView,
+    externalId: string | null,
+    enterprise: any,
+    ctx: Ctx,
+  ) {
+    await this.assertNotLastOwner(view, ctx, 'deactivate');
+
     await this.prisma.$transaction(async (tx) => {
       await tx.organizationMember.delete({ where: { id: view.id } });
       await tx.scimDeprovisionedMember.upsert({
@@ -258,9 +344,10 @@ export class ScimService implements OnModuleInit {
           organizationId: ctx.organizationId,
           userId: view.userId,
           externalId,
+          enterprise,
           role: view.role as any,
         },
-        update: { externalId, role: view.role as any },
+        update: { externalId, enterprise, role: view.role as any },
       });
     });
 
@@ -272,12 +359,19 @@ export class ScimService implements OnModuleInit {
       targetLabel: view.user.email,
     });
 
-    return { ...view, active: false, lastModified: new Date(), externalId };
+    return { ...view, active: false, lastModified: new Date(), externalId, enterprise };
   }
 
   // Reactivate: restore the membership under the tombstone's id (and its old
-  // role) so the IdP's resource id survives a deactivate/reactivate round trip.
-  private async reactivate(view: ScimMemberView, externalId: string | null, ctx: Ctx) {
+  // role, unless the write names a new one) so the IdP's resource id survives a
+  // deactivate/reactivate round trip.
+  private async reactivate(
+    view: ScimMemberView,
+    externalId: string | null,
+    enterprise: any,
+    role: string,
+    ctx: Ctx,
+  ) {
     const member = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.organizationMember.findUnique({
         where: {
@@ -293,9 +387,10 @@ export class ScimService implements OnModuleInit {
           id: view.id,
           organizationId: ctx.organizationId,
           userId: view.userId,
-          role: view.role as any,
+          role: role as any,
           scimManaged: true,
           scimExternalId: externalId,
+          scimEnterprise: enterprise,
         },
         include: { user: true },
       });
@@ -321,15 +416,21 @@ export class ScimService implements OnModuleInit {
       if (!view) {
         throw ScimError(404, null, `User ${resource.id} not found`);
       }
-      const externalId = instance.externalId ?? view.externalId ?? null;
+      // externalId and the enterprise extension are SCIM's own fields on the
+      // membership, so a PUT that omits them clears them — RFC 7644 §3.5.1
+      // replace semantics. Name and email live on the shared user account,
+      // which other orgs also read, so those stay preserve-on-omit.
+      const externalId = instance.externalId ?? null;
+      const enterprise = enterpriseFromInstance(instance);
+      const requestedRole = roleFromInstance(instance, view.role);
 
       if (instance.active === false) {
         // Already deactivated — RFC 7644 writes are idempotent, so this is a
         // no-op rather than an error.
         if (!view.active) {
-          return this.toScimUser({ ...view, externalId });
+          return this.toScimUser({ ...view, externalId, enterprise });
         }
-        return this.toScimUser(await this.deactivate(view, externalId, ctx));
+        return this.toScimUser(await this.deactivate(view, externalId, enterprise, ctx));
       }
 
       // Reactivation has to be asked for. A write that just updates a name on a
@@ -347,13 +448,29 @@ export class ScimService implements OnModuleInit {
           }),
           this.prisma.scimDeprovisionedMember.update({
             where: { id: view.id },
-            data: { externalId },
+            data: { externalId, enterprise, role: (requestedRole ?? view.role) as any },
           }),
         ]);
-        return this.toScimUser({ ...view, externalId, user: updated });
+        return this.toScimUser({
+          ...view,
+          externalId,
+          enterprise,
+          role: requestedRole ?? view.role,
+          user: updated,
+        });
       }
 
-      const target = view.active ? view : await this.reactivate(view, externalId, ctx);
+      const target = view.active
+        ? view
+        : await this.reactivate(view, externalId, enterprise, requestedRole ?? view.role, ctx);
+
+      // An omitted role means "unchanged", not "reset to member". Clearing it
+      // the way replace semantics imply would silently demote every user on any
+      // PUT from an IdP that doesn't map roles, which is most of them.
+      const role = requestedRole ?? target.role;
+      if (role !== target.role) {
+        await this.assertNotLastOwner(target, ctx, 'demote');
+      }
 
       const updatedUser = await this.prisma.user.update({
         where: { id: target.userId },
@@ -365,9 +482,25 @@ export class ScimService implements OnModuleInit {
       });
       const updatedMember = await this.prisma.organizationMember.update({
         where: { id: target.id },
-        data: { scimManaged: true, scimExternalId: externalId },
+        data: {
+          scimManaged: true,
+          scimExternalId: externalId,
+          scimEnterprise: enterprise,
+          role: role as any,
+        },
         include: { user: true },
       });
+
+      if (role !== view.role) {
+        void this.audit.log({
+          action: 'scim.user.role_changed',
+          organizationId: ctx.organizationId,
+          targetType: 'user',
+          targetId: target.userId,
+          targetLabel: `${updatedUser.email}: ${view.role} -> ${role}`,
+        });
+      }
+
       return this.toScimUser(this.viewFromMember({ ...updatedMember, user: updatedUser }));
     }
 
@@ -377,6 +510,8 @@ export class ScimService implements OnModuleInit {
     }
 
     const externalId = instance.externalId ?? null;
+    const enterprise = enterpriseFromInstance(instance);
+    const role = roleFromInstance(instance) ?? DEFAULT_ROLE;
     const existingUser = await this.prisma.user.findUnique({ where: { email } });
 
     if (existingUser) {
@@ -400,7 +535,13 @@ export class ScimService implements OnModuleInit {
         include: { user: true },
       });
       if (tombstone) {
-        const revived = await this.reactivate(this.viewFromTombstone(tombstone), externalId, ctx);
+        const revived = await this.reactivate(
+          this.viewFromTombstone(tombstone),
+          externalId,
+          enterprise,
+          roleFromInstance(instance, tombstone.role) ?? tombstone.role,
+          ctx,
+        );
         return this.toScimUser(revived);
       }
     }
@@ -423,9 +564,10 @@ export class ScimService implements OnModuleInit {
         data: {
           organizationId: ctx.organizationId,
           userId: user.id,
-          role: 'member',
+          role: role as any,
           scimManaged: true,
           scimExternalId: externalId,
+          scimEnterprise: enterprise,
         },
         include: { user: true },
       });
@@ -436,7 +578,7 @@ export class ScimService implements OnModuleInit {
       organizationId: ctx.organizationId,
       targetType: 'user',
       targetId: result.userId,
-      targetLabel: result.user.email,
+      targetLabel: `${result.user.email} as ${role}`,
     });
 
     return this.toScimUser(this.viewFromMember(result));
@@ -450,6 +592,8 @@ export class ScimService implements OnModuleInit {
     if (!view) {
       throw ScimError(404, null, `User ${resource.id} not found`);
     }
+
+    await this.assertNotLastOwner(view, ctx, 'delete');
 
     // DELETE is the real removal: clear the membership and the tombstone, so
     // the id stops resolving entirely.

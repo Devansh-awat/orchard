@@ -333,6 +333,10 @@ model OrganizationMember {
   // so deprovisioning (active:false / DELETE) only removes IdP-owned memberships.
   scimExternalId String? @map("scim_external_id") @db.VarChar(255)
   scimManaged    Boolean @default(false) @map("scim_managed")
+  // Raw enterprise-extension payload (department, manager, costCenter, …). We
+  // have no column for any of it, so it round-trips verbatim: an IdP that
+  // writes it reads the same thing back.
+  scimEnterprise Json?   @map("scim_enterprise")
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -1472,6 +1476,7 @@ model ScimDeprovisionedMember {
   userId         String           @map("user_id") @db.Uuid
   externalId     String?          @map("external_id") @db.VarChar(255)
   role           OrganizationRole @default(member)
+  enterprise     Json?            @map("enterprise")
   deactivatedAt  DateTime         @default(now()) @map("deactivated_at") @db.Timestamp(6)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

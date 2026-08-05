@@ -1,4 +1,5 @@
 import {
+  All,
   Body,
   Controller,
   Delete,
@@ -152,5 +153,21 @@ export class ScimController {
   @Get('Schemas/:id')
   async schema(@Param('id') id: string, @Res() res: Response) {
     this.send(res, await this.scim.schemas(id));
+  }
+
+  // RFC 7644 §3.11: /Me is optional, and a provider that doesn't implement it
+  // says so with a 501 rather than an unexplained 404. A SCIM bearer token
+  // authenticates an org, not a person, so there's no "me" to resolve.
+  @All('Me')
+  me(): never {
+    throw ScimError(501, null, '/Me is not supported; SCIM tokens authenticate an organization');
+  }
+
+  // Anything else under /scim/v2 would otherwise fall through to the global
+  // handler and answer with a non-SCIM body. Declared last so it only catches
+  // what nothing above matched.
+  @All('*')
+  notFound(@Req() req: Request): never {
+    throw ScimError(404, null, `No SCIM endpoint at ${req.path}`);
   }
 }

@@ -128,18 +128,23 @@ function makeDb() {
         users.find((u) => (where.email ? u.email === where.email : u.id === where.id)
           || (where.username && u.username === where.username)) ?? null,
     },
-    organizationMember: collection(members, () => ({
-      id: randomUUID(),
-      role: 'member',
-      addedAt: new Date(),
-      scimExternalId: null,
-      scimManaged: false,
-    })),
+    organizationMember: {
+      ...collection(members, () => ({
+        id: randomUUID(),
+        role: 'member',
+        addedAt: new Date(),
+        scimExternalId: null,
+        scimEnterprise: null,
+        scimManaged: false,
+      })),
+      count: async ({ where }: any) => members.filter((m) => matches(m, where)).length,
+    },
     scimDeprovisionedMember: collection(tombstones, () => ({
       id: randomUUID(),
       role: 'member',
       deactivatedAt: new Date(),
       externalId: null,
+      enterprise: null,
     })),
   };
   db.$transaction = async (fn: any) => fn(db);
@@ -158,6 +163,8 @@ const patchOp = (value: any) => ({
   schemas: ['urn:ietf:params:scim:api:messages:2.0:PatchOp'],
   Operations: [{ op: 'replace', value }],
 });
+
+const ENTERPRISE = 'urn:ietf:params:scim:schemas:extension:enterprise:2.0:User';
 
 test('provisioning, deactivating and reactivating keeps one stable resource id', async () => {
   const { service, members, tombstones } = makeService();
@@ -261,6 +268,125 @@ test('DELETE clears the membership and the tombstone for good', async () => {
   );
 });
 
+// ---- Role provisioning -----------------------------------------------------
+
+test('a user can be provisioned straight in as an admin via roles', async () => {
+  const { service, members } = makeService();
+  const created: any = await service.createUser(
+    { userName: 'ada@example.com', roles: [{ value: 'admin', primary: true }] },
+    ctx,
+  );
+  assert.equal(created.roles[0].value, 'admin');
+  assert.equal(created.userType, 'admin');
+  assert.equal(created.groups[0].value, 'role:admin');
+  assert.equal(members[0].role, 'admin');
+});
+
+test('userType is accepted as the role when roles is absent', async () => {
+  const { service, members } = makeService();
+  await service.createUser({ userName: 'grace@example.com', userType: 'owner' }, ctx);
+  assert.equal(members[0].role, 'owner');
+});
+
+test('an unknown role is rejected rather than silently downgraded', async () => {
+  const { service } = makeService();
+  await assert.rejects(
+    () => service.createUser({ userName: 'x@example.com', userType: 'superuser' }, ctx),
+    (err: any) => err.name === 'SCIMError' && err.status === 400 && err.scimType === 'invalidValue',
+  );
+});
+
+test('no role supplied means member', async () => {
+  const { service, members } = makeService();
+  await service.createUser({ userName: 'plain@example.com' }, ctx);
+  assert.equal(members[0].role, 'member');
+});
+
+test('a role change on an existing user is applied', async () => {
+  const { service, members } = makeService();
+  const created: any = await service.createUser({ userName: 'linus@example.com' }, ctx);
+
+  const promoted: any = await service.patchUser(
+    created.id,
+    patchOp({ roles: [{ value: 'admin', primary: true }] }),
+    ctx,
+  );
+  assert.equal(promoted.roles[0].value, 'admin');
+  assert.equal(members[0].role, 'admin');
+});
+
+// A pathless replace on a multi-valued attribute appends rather than replaces,
+// so the merged `roles` still leads with the old value. Both shapes must land
+// on the same role.
+test('a role change lands whether the patch is pathed or not', async () => {
+  for (const operation of [
+    { op: 'replace', value: { roles: [{ value: 'admin', primary: true }] } },
+    { op: 'replace', path: 'roles', value: [{ value: 'admin', primary: true }] },
+    { op: 'replace', value: { userType: 'admin' } },
+  ]) {
+    const { service, members } = makeService();
+    const created: any = await service.createUser({ userName: 'linus@example.com' }, ctx);
+    const promoted: any = await service.patchUser(
+      created.id,
+      { schemas: ['urn:ietf:params:scim:api:messages:2.0:PatchOp'], Operations: [operation] },
+      ctx,
+    );
+    assert.equal(members[0].role, 'admin', `role not applied for ${JSON.stringify(operation)}`);
+    assert.equal(promoted.roles[0].value, 'admin');
+    assert.equal(promoted.userType, 'admin');
+  }
+});
+
+test('a write that omits roles leaves the role alone', async () => {
+  const { service, members } = makeService();
+  const created: any = await service.createUser({ userName: 'edsger@example.com', userType: 'admin' }, ctx);
+
+  await service.replaceUser(created.id, { userName: 'edsger@example.com' }, ctx);
+  assert.equal(members[0].role, 'admin', 'an omitted role must not demote to member');
+});
+
+test('the last owner cannot be demoted, deactivated or deleted', async () => {
+  const { service } = makeService();
+  const owner: any = await service.createUser({ userName: 'boss@example.com', userType: 'owner' }, ctx);
+
+  const lastOwner = (err: any) => err.name === 'SCIMError' && err.status === 400;
+  await assert.rejects(() => service.patchUser(owner.id, patchOp({ userType: 'member' }), ctx), lastOwner);
+  await assert.rejects(() => service.patchUser(owner.id, patchOp({ active: false }), ctx), lastOwner);
+  await assert.rejects(() => service.deleteUser(owner.id, ctx), lastOwner);
+
+  // With a second owner in place the guard lifts.
+  await service.createUser({ userName: 'cofounder@example.com', userType: 'owner' }, ctx);
+  const demoted: any = await service.patchUser(owner.id, patchOp({ userType: 'member' }), ctx);
+  assert.equal(demoted.roles[0].value, 'member');
+});
+
+// ---- Enterprise extension --------------------------------------------------
+
+test('enterprise extension attributes round-trip', async () => {
+  const { service } = makeService();
+  const created: any = await service.createUser(
+    {
+      userName: 'katherine@example.com',
+      [ENTERPRISE]: { department: 'Flight Research', employeeNumber: '1953' },
+    },
+    ctx,
+  );
+  assert.equal(created[ENTERPRISE].department, 'Flight Research');
+
+  const reread: any = await service.getUser(created.id, {}, ctx);
+  assert.equal(reread[ENTERPRISE].department, 'Flight Research');
+  assert.equal(reread[ENTERPRISE].employeeNumber, '1953');
+});
+
+test('the enterprise extension is declared on the User schema', async () => {
+  const { service } = makeService();
+  const resourceTypes: any = await service.resourceTypes('User');
+  assert.ok(
+    resourceTypes.schemaExtensions?.some((e: any) => e.schema === ENTERPRISE),
+    'ResourceTypes must advertise the enterprise extension',
+  );
+});
+
 test('a filtered list finds the user by userName', async () => {
   const { service } = makeService();
   await service.createUser({ userName: 'katherine@example.com' }, ctx);
@@ -272,4 +398,59 @@ test('a filtered list finds the user by userName', async () => {
   );
   assert.equal(found.Resources.length, 1);
   assert.equal(found.Resources[0].userName, 'dorothy@example.com');
+});
+
+// ---- Routing ---------------------------------------------------------------
+
+// The catch-all is only safe if Express registers it behind every real route,
+// since it matches in registration order. This boots the real controller and
+// reads back the router table. (Requests aren't driven here: tsx compiles with
+// esbuild, which doesn't emit the decorator metadata Nest's DI needs.)
+test('the SCIM catch-all registers behind every real endpoint', async () => {
+  const { NestFactory } = await import('@nestjs/core');
+  const { Module } = await import('@nestjs/common');
+  const { ScimController } = await import('../src/scim/scim.controller');
+  const { ScimTokensService } = await import('../src/scim/scim-tokens.service');
+
+  @Module({
+    controllers: [ScimController],
+    providers: [
+      { provide: ScimService, useValue: {} },
+      { provide: ScimTokensService, useValue: {} },
+    ],
+  })
+  class TestScimModule {}
+
+  const app = await NestFactory.create(TestScimModule, { logger: false });
+  app.setGlobalPrefix('apiv1');
+  await app.init();
+
+  try {
+    const router = (app.getHttpAdapter().getInstance() as any)._router;
+    const paths: string[] = router.stack.filter((l: any) => l.route).map((l: any) => l.route.path);
+
+    const catchAll = paths.indexOf('/apiv1/scim/v2/*');
+    assert.ok(catchAll >= 0, 'the catch-all must be registered');
+    assert.equal(catchAll, paths.length - 1, 'the catch-all must be registered last');
+    assert.ok(paths.indexOf('/apiv1/scim/v2/Me') < catchAll);
+
+    for (const route of [
+      '/apiv1/scim/v2/Users',
+      '/apiv1/scim/v2/Users/:id',
+      '/apiv1/scim/v2/Users/.search',
+      '/apiv1/scim/v2/Groups',
+      '/apiv1/scim/v2/Groups/:id',
+      '/apiv1/scim/v2/ServiceProviderConfig',
+      '/apiv1/scim/v2/ResourceTypes',
+      '/apiv1/scim/v2/ResourceTypes/:id',
+      '/apiv1/scim/v2/Schemas',
+      '/apiv1/scim/v2/Schemas/:id',
+    ]) {
+      const at = paths.indexOf(route);
+      assert.ok(at >= 0, `${route} must be registered`);
+      assert.ok(at < catchAll, `${route} must be registered before the catch-all`);
+    }
+  } finally {
+    await app.close();
+  }
 });
