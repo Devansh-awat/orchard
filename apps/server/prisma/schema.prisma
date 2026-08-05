@@ -40,6 +40,7 @@ model User {
   createdDeployments         Deployment[]             @relation("DeploymentCreator")
   createdOrganizations       Organization[]           @relation("OrganizationCreator")
   organizationMembers        OrganizationMember[]
+  scimDeprovisionedMembers   ScimDeprovisionedMember[]
   orgInvitationsSent         OrganizationInvitation[] @relation("OrgInvitationInviter")
   passkeys                   Passkey[]
   sessions                   Session[]
@@ -293,6 +294,7 @@ model Organization {
   ssoConfig            SsoConfig?
   nodeAssignments      OrgNodeAssignment[]
   scimTokens           ScimToken[]
+  scimDeprovisioned    ScimDeprovisionedMember[]
   notificationChannels NotificationChannel[]
   notificationRules    NotificationRule[]
   notificationEvents   NotificationEvent[]
@@ -1456,6 +1458,28 @@ model ScimToken {
 
   @@index([organizationId], map: "idx_scim_tokens_org")
   @@map("scim_tokens")
+}
+
+// A membership an IdP has deactivated with `active: false`. RFC 7644 treats
+// deactivation as a state change, not a delete: the resource stays readable and
+// the same id has to come back to life on `active: true`. We still drop the
+// organization_members row so access is genuinely revoked, and park the SCIM
+// identity here — reusing the old membership id as the primary key keeps the
+// SCIM resource id stable across deactivate/reactivate. DELETE clears both.
+model ScimDeprovisionedMember {
+  id             String           @id @db.Uuid
+  organizationId String           @map("organization_id") @db.Uuid
+  userId         String           @map("user_id") @db.Uuid
+  externalId     String?          @map("external_id") @db.VarChar(255)
+  role           OrganizationRole @default(member)
+  deactivatedAt  DateTime         @default(now()) @map("deactivated_at") @db.Timestamp(6)
+
+  organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([organizationId, userId])
+  @@index([organizationId], map: "idx_scim_deprovisioned_org")
+  @@map("scim_deprovisioned_members")
 }
 
 // Append-only audit ledger. Pruned at 180 days by AuditService.

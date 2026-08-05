@@ -62,7 +62,14 @@ async function bootstrap() {
   // marked the delivery failed. With bodyParser disabled at create() these
   // are the only json/urlencoded parsers; Nest still applies rawBody capture
   // (verify hook) so webhook HMAC verification keeps working.
-  app.useBodyParser('json', { limit: '25mb' });
+  // The type list matters for SCIM: RFC 7644 puts request bodies on
+  // application/scim+json, which every IdP sends. Express's json parser only
+  // claims application/json by default, so those bodies arrived unparsed and
+  // POST /scim/v2/Users saw an empty object.
+  app.useBodyParser('json', {
+    limit: '25mb',
+    type: ['application/json', 'application/scim+json'],
+  });
   app.useBodyParser('urlencoded', { limit: '25mb', extended: true });
 
   app.setGlobalPrefix('apiv1');

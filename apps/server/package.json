@@ -20,6 +20,7 @@
     "test:build-config": "tsx --test test/build-config.test.ts",
     "test:github-access": "tsx --test test/github-repo-access.test.ts",
     "test:mcp-token": "tsx --test test/mcp-token-type.test.ts",
+    "test:scim": "tsx --test test/scim.test.ts",
     "test:notifications": "tsx --test test/notification-routing.test.ts test/notification-url-guard.test.ts",
     "mcp": "tsx src/mcp/index.ts",
     "mcp:remote": "ts-node --swc src/mcp/main.ts"
