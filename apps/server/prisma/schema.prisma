@@ -296,6 +296,7 @@ model Organization {
   notificationChannels NotificationChannel[]
   notificationRules    NotificationRule[]
   notificationEvents   NotificationEvent[]
+  sandboxes            Sandbox[]
 
   @@index([quotaGroupId], map: "idx_organizations_quota_group")
   @@map("organizations")
@@ -1672,8 +1673,9 @@ enum SandboxStatus {
 }
 
 model Sandbox {
-  id            String        @id @default(uuid()) @db.Uuid
-  userId        String        @map("user_id") @db.Uuid
+  id             String       @id @default(uuid()) @db.Uuid
+  userId         String       @map("user_id") @db.Uuid
+  organizationId String?      @map("organization_id") @db.Uuid
   name          String        @db.VarChar(63)
   status        SandboxStatus @default(creating)
   statusMessage String?       @map("status_message") @db.Text
@@ -1691,11 +1693,13 @@ model Sandbox {
   updatedAt     DateTime      @updatedAt @map("updated_at") @db.Timestamp(6)
 
   user          User                  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  organization  Organization?         @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   sshIdentity   SshIdentity?          @relation(fields: [sshIdentityId], references: [id], onDelete: Restrict)
   conversations SandboxConversation[]
 
   @@unique([userId, name])
   @@index([status, lastActiveAt], map: "idx_sandboxes_status_active")
+  @@index([organizationId], map: "idx_sandboxes_organization")
   @@map("sandboxes")
 }
 

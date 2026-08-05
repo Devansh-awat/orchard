@@ -2,7 +2,7 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { goto } from '$app/navigation';
 	import { Plus, Sprout } from 'lucide-svelte';
-	import { apiFetch, toasts } from '$lib/stores';
+	import { apiFetch, selectedOrganization, toasts } from '$lib/stores';
 	import { queryClient } from '$lib/query';
 	import { Alert, Button, PageHeader, Skeleton } from '$lib/components/ui';
 	import {
@@ -18,7 +18,7 @@
 	} from '$lib/types/sandbox';
 
 	const sandboxesQuery = createQuery(() => ({
-		...sandboxesQueryOptions(),
+		...sandboxesQueryOptions($selectedOrganization?.id),
 		refetchInterval: (query: { state: { data?: SandboxListResponse } }) => {
 			const list = query.state.data?.sandboxes ?? [];
 			return list.some((s) => isSandboxTransitional(s.status)) ? 5_000 : 30_000;

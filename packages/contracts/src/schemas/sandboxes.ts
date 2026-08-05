@@ -26,6 +26,15 @@ const sandbox = z.object({
   sshIdentity: z.object({ id: z.string().uuid(), name: z.string() }).nullable(),
   setupScript: z.string().nullable(),
   image: z.string(),
+  organizationId: z.string().uuid().nullable(),
+  owner: z
+    .object({
+      id: z.string().uuid(),
+      username: z.string().nullable(),
+      email: z.string().nullable(),
+    })
+    .nullable()
+    .describe('Populated when listing an organization as an owner or admin'),
   createdAt: z.string(),
   updatedAt: z.string(),
   lastActiveAt: z.string().nullable(),
@@ -38,7 +47,8 @@ const credentialPresence = z.object({
 
 export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
   'GET /sandboxes': {
-    summary: 'List your sandboxes with your effective sandbox limit',
+    summary:
+      'List your sandboxes; with ?organizationId= org owners and admins see every sandbox in that organization',
     response: z.object({ sandboxes: z.array(sandbox), maxSandboxes: z.number().int() }),
     scope: 'read',
   },
@@ -47,6 +57,11 @@ export const attachments: Record<`${string} /${string}`, RouteAttachment> = {
     request: z.object({
       name: sandboxName.optional().describe('Defaults to "sandbox" (or a suffixed variant)'),
       repoUrl: z.string().url().optional().describe('https git URL cloned into the sandbox on boot'),
+      organizationId: z
+        .string()
+        .uuid()
+        .optional()
+        .describe('Owning organization; required when you belong to more than one. Guests cannot create sandboxes.'),
       sshIdentityId: z
         .string()
         .uuid()

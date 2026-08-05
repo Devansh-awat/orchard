@@ -50,9 +50,9 @@ export class SandboxesController {
   }
 
   @Get()
-  async list(@Req() req: any) {
+  async list(@Req() req: any, @Query('organizationId') organizationId?: string) {
     const user = await this.resolveUser(req);
-    return this.sandboxes.list(user.id);
+    return this.sandboxes.list(user.id, organizationId || undefined);
   }
 
   @Post()
@@ -64,6 +64,7 @@ export class SandboxesController {
       repoUrl?: string;
       sshIdentityId?: string;
       setupScript?: string | null;
+      organizationId?: string;
     },
   ) {
     const user = await this.resolveUser(req);
@@ -93,7 +94,7 @@ export class SandboxesController {
     @Query('repo') repo?: string,
   ) {
     const user = await this.resolveUser(req);
-    const row = await this.sandboxes.getOwned(id, user.id);
+    const row = await this.sandboxes.getOwnedStrict(id, user.id);
     return this.workspace.changes(row, repo || undefined);
   }
 
@@ -106,7 +107,7 @@ export class SandboxesController {
     @Query('repo') repo?: string,
   ) {
     const user = await this.resolveUser(req);
-    const row = await this.sandboxes.getOwned(id, user.id);
+    const row = await this.sandboxes.getOwnedStrict(id, user.id);
     return this.workspace.diff(row, file || undefined, repo || undefined);
   }
 
@@ -114,7 +115,7 @@ export class SandboxesController {
   @RequireScope('exec')
   async listRepos(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     const user = await this.resolveUser(req);
-    const row = await this.sandboxes.getOwned(id, user.id);
+    const row = await this.sandboxes.getOwnedStrict(id, user.id);
     return this.workspace.listRepos(row);
   }
 
@@ -126,14 +127,14 @@ export class SandboxesController {
     @Body() body: { repoUrl?: string },
   ) {
     const user = await this.resolveUser(req);
-    const row = await this.sandboxes.getOwned(id, user.id);
+    const row = await this.sandboxes.getOwnedStrict(id, user.id);
     return this.workspace.addRepo(row, body?.repoUrl || '');
   }
 
   @Get(':id/conversations')
   async listConversations(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     const user = await this.resolveUser(req);
-    const row = await this.sandboxes.getOwned(id, user.id);
+    const row = await this.sandboxes.getOwnedStrict(id, user.id);
     return { conversations: await this.convos.list(row.id) };
   }
 
@@ -144,7 +145,7 @@ export class SandboxesController {
     @Body() body: { title?: string; repo?: string | null },
   ) {
     const user = await this.resolveUser(req);
-    const row = await this.sandboxes.getOwned(id, user.id);
+    const row = await this.sandboxes.getOwnedStrict(id, user.id);
     return this.convos.create(row, body || {});
   }
 
@@ -156,7 +157,7 @@ export class SandboxesController {
     @Body() body: { title?: string; repo?: string | null },
   ) {
     const user = await this.resolveUser(req);
-    const row = await this.sandboxes.getOwned(id, user.id);
+    const row = await this.sandboxes.getOwnedStrict(id, user.id);
     return this.convos.update(row.id, cid, body || {});
   }
 
@@ -167,7 +168,7 @@ export class SandboxesController {
     @Param('cid', ParseUUIDPipe) cid: string,
   ) {
     const user = await this.resolveUser(req);
-    const row = await this.sandboxes.getOwned(id, user.id);
+    const row = await this.sandboxes.getOwnedStrict(id, user.id);
     await this.convos.remove(row.id, cid);
     return { success: true };
   }
@@ -180,7 +181,7 @@ export class SandboxesController {
     @Param('cid', ParseUUIDPipe) cid: string,
   ) {
     const user = await this.resolveUser(req);
-    const row = await this.sandboxes.getOwned(id, user.id);
+    const row = await this.sandboxes.getOwnedStrict(id, user.id);
     return this.convos.history(row, cid);
   }
 
@@ -193,7 +194,7 @@ export class SandboxesController {
     @Body() body: { message?: string; conversationId?: string; repo?: string },
   ) {
     const user = await this.resolveUser(req);
-    const row = await this.sandboxes.getOwned(id, user.id);
+    const row = await this.sandboxes.getOwnedStrict(id, user.id);
     await this.chat.stream(
       row,
       body?.message ?? '',
@@ -218,7 +219,7 @@ export class SandboxesController {
     },
   ) {
     const user = await this.resolveUser(req);
-    const row = await this.sandboxes.getOwned(id, user.id);
+    const row = await this.sandboxes.getOwnedStrict(id, user.id);
     const identity = await this.usersService.findOrCreateByClerkId(req.user.sub, {
       email: req.user.email,
     });
@@ -243,7 +244,7 @@ export class SandboxesController {
     @Body() body: { repo?: string },
   ) {
     const user = await this.resolveUser(req);
-    const row = await this.sandboxes.getOwned(id, user.id);
+    const row = await this.sandboxes.getOwnedStrict(id, user.id);
     return this.workspace.gitUncommit(row, body?.repo || '');
   }
 
@@ -255,7 +256,7 @@ export class SandboxesController {
     @Body() body: { repo?: string; force?: boolean },
   ) {
     const user = await this.resolveUser(req);
-    const row = await this.sandboxes.getOwned(id, user.id);
+    const row = await this.sandboxes.getOwnedStrict(id, user.id);
     return this.workspace.gitPush(row, body?.repo || '', { force: body?.force });
   }
 
@@ -267,7 +268,7 @@ export class SandboxesController {
     @Body() body: { repo?: string },
   ) {
     const user = await this.resolveUser(req);
-    const row = await this.sandboxes.getOwned(id, user.id);
+    const row = await this.sandboxes.getOwnedStrict(id, user.id);
     return this.workspace.gitFetch(row, body?.repo || '');
   }
 
@@ -279,7 +280,7 @@ export class SandboxesController {
     @Body() body: { repo?: string; rebase?: boolean },
   ) {
     const user = await this.resolveUser(req);
-    const row = await this.sandboxes.getOwned(id, user.id);
+    const row = await this.sandboxes.getOwnedStrict(id, user.id);
     return this.workspace.gitPull(row, body?.repo || '', { rebase: body?.rebase });
   }
 
@@ -291,7 +292,7 @@ export class SandboxesController {
     @Query('repo') repo?: string,
   ) {
     const user = await this.resolveUser(req);
-    const row = await this.sandboxes.getOwned(id, user.id);
+    const row = await this.sandboxes.getOwnedStrict(id, user.id);
     return this.workspace.gitBranches(row, repo || '');
   }
 
@@ -303,7 +304,7 @@ export class SandboxesController {
     @Body() body: { repo?: string; branch?: string; create?: boolean; from?: string },
   ) {
     const user = await this.resolveUser(req);
-    const row = await this.sandboxes.getOwned(id, user.id);
+    const row = await this.sandboxes.getOwnedStrict(id, user.id);
     return this.workspace.gitCheckout(row, body?.repo || '', body?.branch || '', {
       create: body?.create,
       from: body?.from,
@@ -318,7 +319,7 @@ export class SandboxesController {
     @Body() body: { repo?: string; branch?: string; remote?: boolean; force?: boolean },
   ) {
     const user = await this.resolveUser(req);
-    const row = await this.sandboxes.getOwned(id, user.id);
+    const row = await this.sandboxes.getOwnedStrict(id, user.id);
     return this.workspace.gitDeleteBranch(row, body?.repo || '', body?.branch || '', {
       remote: body?.remote,
       force: body?.force,
@@ -333,7 +334,7 @@ export class SandboxesController {
     @Body() body: { repo?: string; title?: string; body?: string; base?: string },
   ) {
     const user = await this.resolveUser(req);
-    const row = await this.sandboxes.getOwned(id, user.id);
+    const row = await this.sandboxes.getOwnedStrict(id, user.id);
     const identity = await this.usersService.findOrCreateByClerkId(req.user.sub, {
       email: req.user.email,
     });
@@ -354,7 +355,7 @@ export class SandboxesController {
     @Query('repo') repo?: string,
   ) {
     const user = await this.resolveUser(req);
-    const row = await this.sandboxes.getOwned(id, user.id);
+    const row = await this.sandboxes.getOwnedStrict(id, user.id);
     return this.workspace.readFile(row, repo || undefined, path || '');
   }
 
@@ -366,7 +367,7 @@ export class SandboxesController {
     @Body() body: { repo?: string; path?: string; content?: string },
   ) {
     const user = await this.resolveUser(req);
-    const row = await this.sandboxes.getOwned(id, user.id);
+    const row = await this.sandboxes.getOwnedStrict(id, user.id);
     return this.workspace.writeFile(
       row,
       body?.repo || undefined,
@@ -383,7 +384,7 @@ export class SandboxesController {
     @Param('id', ParseUUIDPipe) id: string,
   ) {
     const user = await this.resolveUser(req);
-    const row = await this.sandboxes.getOwned(id, user.id);
+    const row = await this.sandboxes.getOwnedStrict(id, user.id);
     await this.workspace.proxyOpencode(row, req, res);
   }
 
@@ -391,7 +392,7 @@ export class SandboxesController {
   @RequireScope('exec')
   async ssh(@Req() req: any, @Param('id', ParseUUIDPipe) id: string) {
     const user = await this.resolveUser(req);
-    await this.sandboxes.getOwned(id, user.id);
+    await this.sandboxes.getOwnedStrict(id, user.id);
     throw new HttpException('This endpoint requires a WebSocket upgrade', 426);
   }
 

@@ -2,7 +2,7 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { goto } from '$app/navigation';
 	import { Github, Loader2 } from 'lucide-svelte';
-	import { apiFetch } from '$lib/stores';
+	import { apiFetch, selectedOrganization } from '$lib/stores';
 	import { Button, Field, Input, Modal, Select } from '$lib/components/ui';
 	import { sshIdentitiesQueryOptions } from '$lib/queries/sandboxes';
 	import type { SandboxCreateInput } from '$lib/types/sandbox';
@@ -112,6 +112,7 @@
 
 	function submit() {
 		const input: SandboxCreateInput = {};
+		if ($selectedOrganization?.id) input.organizationId = $selectedOrganization.id;
 		if (name.trim()) input.name = name.trim();
 		if (repoUrl.trim()) input.repoUrl = repoUrl.trim();
 		if (sshIdentityId) input.sshIdentityId = sshIdentityId;

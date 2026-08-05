@@ -19,11 +19,15 @@ function sandboxRetry(failureCount: number, error: Error) {
 	return !(error instanceof SandboxDisabledError) && failureCount < 1;
 }
 
-export function sandboxesQueryOptions() {
+export function sandboxesQueryOptions(organizationId?: string) {
 	return {
-		queryKey: ['sandboxes'],
+		queryKey: ['sandboxes', organizationId ?? null],
 		queryFn: async (): Promise<SandboxListResponse> => {
-			const res = await apiFetch('/apiv1/sandboxes');
+			const res = await apiFetch(
+				organizationId
+					? `/apiv1/sandboxes?organizationId=${encodeURIComponent(organizationId)}`
+					: '/apiv1/sandboxes'
+			);
 			if (res.status === 404) throw new SandboxDisabledError();
 			if (!res.ok) throw new Error('Failed to fetch sandboxes');
 			return res.json();

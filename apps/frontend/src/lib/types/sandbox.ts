@@ -21,6 +21,8 @@ export interface Sandbox {
 	sshIdentity: SandboxSshIdentityRef | null;
 	setupScript: string | null;
 	image: string;
+	organizationId: string | null;
+	owner: SandboxOwnerRef | null;
 	createdAt: string;
 	updatedAt: string;
 	lastActiveAt: string | null;
@@ -36,7 +38,14 @@ export interface SandboxCredentials {
 	openai: boolean;
 }
 
+export interface SandboxOwnerRef {
+	id: string;
+	username: string | null;
+	email: string | null;
+}
+
 export interface SandboxCreateInput {
+	organizationId?: string;
 	name?: string;
 	repoUrl?: string;
 	sshIdentityId?: string;

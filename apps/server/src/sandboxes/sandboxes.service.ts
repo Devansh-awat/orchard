@@ -27,12 +27,17 @@ export interface SandboxDto {
   sshIdentity: { id: string; name: string } | null;
   setupScript: string | null;
   image: string;
+  organizationId: string | null;
+  owner: { id: string; username: string | null; email: string | null } | null;
   createdAt: Date;
   updatedAt: Date;
   lastActiveAt: Date | null;
 }
 
-type SandboxWithIdentity = Sandbox & { sshIdentity: { id: string; name: string } | null };
+type SandboxWithIdentity = Sandbox & {
+  sshIdentity: { id: string; name: string } | null;
+  user?: { id: string; username: string | null; email: string | null } | null;
+};
 
 export function defaultMaxSandboxes(): number {
   const parsed = Number(process.env.SANDBOX_MAX_PER_USER);
@@ -49,6 +54,10 @@ export function toSandboxDto(row: SandboxWithIdentity): SandboxDto {
     sshIdentity: row.sshIdentity ? { id: row.sshIdentity.id, name: row.sshIdentity.name } : null,
     setupScript: row.setupScript,
     image: row.image,
+    organizationId: row.organizationId,
+    owner: row.user
+      ? { id: row.user.id, username: row.user.username, email: row.user.email }
+      : null,
     createdAt: row.createdAt,
     updatedAt: row.updatedAt,
     lastActiveAt: row.lastActiveAt,
@@ -67,12 +76,23 @@ export class SandboxesService {
     private readonly k8s: SandboxK8sService,
   ) {}
 
-  async list(userId: string): Promise<{ sandboxes: SandboxDto[]; maxSandboxes: number }> {
+  async list(
+    userId: string,
+    organizationId?: string,
+  ): Promise<{ sandboxes: SandboxDto[]; maxSandboxes: number }> {
+    let where: Record<string, unknown> = { userId };
+    if (organizationId) {
+      const access = await this.authz.requireOrgMember(organizationId, userId);
+      where = access.isAdmin ? { organizationId } : { organizationId, userId };
+    }
     const [rows, user] = await Promise.all([
       this.prisma.sandbox.findMany({
-        where: { userId },
+        where,
         orderBy: { createdAt: 'asc' },
-        include: { sshIdentity: { select: { id: true, name: true } } },
+        include: {
+          sshIdentity: { select: { id: true, name: true } },
+          user: { select: { id: true, username: true, email: true } },
+        },
       }),
       this.prisma.user.findUnique({ where: { id: userId }, select: { maxSandboxes: true } }),
     ]);
@@ -85,11 +105,30 @@ export class SandboxesService {
   async getOwned(id: string, userId: string): Promise<SandboxWithIdentity> {
     const row = await this.prisma.sandbox.findUnique({
       where: { id },
-      include: { sshIdentity: { select: { id: true, name: true } } },
+      include: {
+        sshIdentity: { select: { id: true, name: true } },
+        user: { select: { id: true, username: true, email: true } },
+      },
     });
     if (!row) throw new NotFoundException('Sandbox not found');
+    if (row.userId === userId) return row;
+    if (await this.authz.isSuperAdmin(userId)) return row;
+    if (row.organizationId) {
+      const access = await this.authz
+        .requireOrgMember(row.organizationId, userId)
+        .catch(() => null);
+      if (access?.isAdmin) return row;
+    }
+    throw new NotFoundException('Sandbox not found');
+  }
+
+  // Org admins can see and stop a member's sandbox, but never reach inside it:
+  // the VM holds that member's Claude and GitHub credentials, so chat, shell,
+  // files and git stay owner-only (platform superadmins excepted).
+  async getOwnedStrict(id: string, userId: string): Promise<SandboxWithIdentity> {
+    const row = await this.getOwned(id, userId);
     if (row.userId !== userId && !(await this.authz.isSuperAdmin(userId))) {
-      throw new NotFoundException('Sandbox not found');
+      throw new ForbiddenException('Only the sandbox owner can use this sandbox');
     }
     return row;
   }
@@ -100,6 +139,36 @@ export class SandboxesService {
         'Sandbox name must be a lowercase DNS label (a-z, 0-9, hyphens, max 63 chars)',
       );
     }
+  }
+
+  private async resolveOrganization(
+    userId: string,
+    organizationId: string | undefined,
+  ): Promise<string> {
+    if (organizationId) {
+      await this.authz.requireOrgCanCreateProjects(organizationId, userId);
+      return organizationId;
+    }
+    const memberships = await this.prisma.organizationMember.findMany({
+      where: { userId },
+      orderBy: { addedAt: 'asc' },
+      select: { organizationId: true, role: true },
+    });
+    const eligible = memberships.filter((m) => m.role !== 'guest');
+    if (eligible.length === 0) {
+      throw new ForbiddenException(
+        memberships.length
+          ? 'Guests cannot create sandboxes in this organization'
+          : 'You must belong to an organization to create a sandbox',
+      );
+    }
+    if (eligible.length > 1) {
+      throw new BadRequestException(
+        'You belong to multiple organizations; pass organizationId to pick one',
+      );
+    }
+    await this.authz.requireOrgCanCreateProjects(eligible[0].organizationId, userId);
+    return eligible[0].organizationId;
   }
 
   private async resolveIdentity(
@@ -200,8 +269,10 @@ export class SandboxesService {
       repoUrl?: string;
       sshIdentityId?: string;
       setupScript?: string | null;
+      organizationId?: string;
     },
   ): Promise<SandboxDto> {
+    const organizationId = await this.resolveOrganization(userId, body.organizationId);
     const setupScript = this.validateSetupScript(body.setupScript);
     const identity = await this.resolveIdentity(userId, body.sshIdentityId);
     const [count, user] = await Promise.all([
@@ -240,6 +311,7 @@ export class SandboxesService {
       .create({
         data: {
           userId,
+          organizationId,
           name,
           status: 'creating',
           podName: '',
@@ -316,7 +388,7 @@ export class SandboxesService {
       setupScript?: string | null;
     },
   ): Promise<SandboxDto> {
-    const row = await this.getOwned(id, userId);
+    const row = await this.getOwnedStrict(id, userId);
     const data: { name?: string; sshIdentityId?: string; setupScript?: string | null } = {};
     let identityKey: string | null = null;
     if (body.setupScript !== undefined) {

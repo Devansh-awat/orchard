@@ -39199,6 +39199,43 @@
                           "name": {
                             "type": "string"
                           },
+                          "organizationId": {
+                            "format": "uuid",
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          },
+                          "owner": {
+                            "description": "Populated when listing an organization as an owner or admin",
+                            "properties": {
+                              "email": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              },
+                              "id": {
+                                "format": "uuid",
+                                "type": "string"
+                              },
+                              "username": {
+                                "type": [
+                                  "string",
+                                  "null"
+                                ]
+                              }
+                            },
+                            "required": [
+                              "id",
+                              "username",
+                              "email"
+                            ],
+                            "type": [
+                              "object",
+                              "null"
+                            ]
+                          },
                           "repoUrl": {
                             "type": [
                               "string",
@@ -39261,6 +39298,8 @@
                           "sshIdentity",
                           "setupScript",
                           "image",
+                          "organizationId",
+                          "owner",
                           "createdAt",
                           "updatedAt",
                           "lastActiveAt"
@@ -39289,7 +39328,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "List your sandboxes with your effective sandbox limit",
+        "summary": "List your sandboxes; with ?organizationId= org owners and admins see every sandbox in that organization",
         "tags": [
           "sandboxes"
         ]
@@ -39306,6 +39345,11 @@
                     "maxLength": 63,
                     "minLength": 1,
                     "pattern": "^[a-z0-9]([a-z0-9-]*[a-z0-9])?$",
+                    "type": "string"
+                  },
+                  "organizationId": {
+                    "description": "Owning organization; required when you belong to more than one. Guests cannot create sandboxes.",
+                    "format": "uuid",
                     "type": "string"
                   },
                   "repoUrl": {
@@ -39356,6 +39400,43 @@
                     },
                     "name": {
                       "type": "string"
+                    },
+                    "organizationId": {
+                      "format": "uuid",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "owner": {
+                      "description": "Populated when listing an organization as an owner or admin",
+                      "properties": {
+                        "email": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "username",
+                        "email"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
                     },
                     "repoUrl": {
                       "type": [
@@ -39419,6 +39500,8 @@
                     "sshIdentity",
                     "setupScript",
                     "image",
+                    "organizationId",
+                    "owner",
                     "createdAt",
                     "updatedAt",
                     "lastActiveAt"
@@ -39527,6 +39610,43 @@
                     "name": {
                       "type": "string"
                     },
+                    "organizationId": {
+                      "format": "uuid",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "owner": {
+                      "description": "Populated when listing an organization as an owner or admin",
+                      "properties": {
+                        "email": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "username",
+                        "email"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "repoUrl": {
                       "type": [
                         "string",
@@ -39589,6 +39709,8 @@
                     "sshIdentity",
                     "setupScript",
                     "image",
+                    "organizationId",
+                    "owner",
                     "createdAt",
                     "updatedAt",
                     "lastActiveAt"
@@ -39678,6 +39800,43 @@
                     "name": {
                       "type": "string"
                     },
+                    "organizationId": {
+                      "format": "uuid",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "owner": {
+                      "description": "Populated when listing an organization as an owner or admin",
+                      "properties": {
+                        "email": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "username",
+                        "email"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "repoUrl": {
                       "type": [
                         "string",
@@ -39740,6 +39899,8 @@
                     "sshIdentity",
                     "setupScript",
                     "image",
+                    "organizationId",
+                    "owner",
                     "createdAt",
                     "updatedAt",
                     "lastActiveAt"
@@ -41362,6 +41523,43 @@
                     "name": {
                       "type": "string"
                     },
+                    "organizationId": {
+                      "format": "uuid",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "owner": {
+                      "description": "Populated when listing an organization as an owner or admin",
+                      "properties": {
+                        "email": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "username",
+                        "email"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "repoUrl": {
                       "type": [
                         "string",
@@ -41424,6 +41622,8 @@
                     "sshIdentity",
                     "setupScript",
                     "image",
+                    "organizationId",
+                    "owner",
                     "createdAt",
                     "updatedAt",
                     "lastActiveAt"
@@ -41497,6 +41697,43 @@
                     "name": {
                       "type": "string"
                     },
+                    "organizationId": {
+                      "format": "uuid",
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "owner": {
+                      "description": "Populated when listing an organization as an owner or admin",
+                      "properties": {
+                        "email": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        },
+                        "id": {
+                          "format": "uuid",
+                          "type": "string"
+                        },
+                        "username": {
+                          "type": [
+                            "string",
+                            "null"
+                          ]
+                        }
+                      },
+                      "required": [
+                        "id",
+                        "username",
+                        "email"
+                      ],
+                      "type": [
+                        "object",
+                        "null"
+                      ]
+                    },
                     "repoUrl": {
                       "type": [
                         "string",
@@ -41559,6 +41796,8 @@
                     "sshIdentity",
                     "setupScript",
                     "image",
+                    "organizationId",
+                    "owner",
                     "createdAt",
                     "updatedAt",
                     "lastActiveAt"
