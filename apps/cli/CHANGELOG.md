@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.8.0](https://github.com/LeafdTK/leaf/compare/cli/v0.7.0...cli/v0.8.0) (2026-08-05)
+
+
+### Features
+
+* sandbox boot phases and terminal readiness gate ([9f95737](https://github.com/LeafdTK/leaf/commit/9f95737e55b3ef9a5e8629c75e8fe75c72291d14))
+
+
+### Bug Fixes
+
+* scope scim-managed profiles to the provisioning org ([5588231](https://github.com/LeafdTK/leaf/commit/55882318fc0b22931a0aa51d2fe16afa40b5bc35))
+
 ## [0.7.0](https://github.com/LeafdTK/leaf/compare/cli/v0.6.0...cli/v0.7.0) (2026-08-05)
 
 

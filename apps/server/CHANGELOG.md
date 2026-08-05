@@ -1,5 +1,19 @@
 # Changelog
 
+## [2.3.0](https://github.com/LeafdTK/leaf/compare/server/v2.2.1...server/v2.3.0) (2026-08-05)
+
+
+### Features
+
+* sandbox boot phases and terminal readiness gate ([9f95737](https://github.com/LeafdTK/leaf/commit/9f95737e55b3ef9a5e8629c75e8fe75c72291d14))
+* scim role provisioning and enterprise extension ([6902152](https://github.com/LeafdTK/leaf/commit/6902152f1347b84dd58891ff196361fd63722b46))
+
+
+### Bug Fixes
+
+* make scim provisioning rfc 7644 compliant ([56ab24a](https://github.com/LeafdTK/leaf/commit/56ab24a7c25cab878dcaefe7c333447bad88d51e))
+* scope scim-managed profiles to the provisioning org ([5588231](https://github.com/LeafdTK/leaf/commit/55882318fc0b22931a0aa51d2fe16afa40b5bc35))
+
 ## [2.2.1](https://github.com/LeafdTK/leaf/compare/server/v2.2.0...server/v2.2.1) (2026-08-05)
 
 
