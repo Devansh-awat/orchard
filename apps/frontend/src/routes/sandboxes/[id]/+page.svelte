@@ -2,12 +2,13 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { goto } from '$app/navigation';
 	import { page } from '$app/stores';
-	import { ArrowLeft, Play, Square, Trash2 } from 'lucide-svelte';
+	import { ArrowLeft, PanelLeft, Play, Square, Trash2 } from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
 	import { queryClient } from '$lib/query';
 	import {
 		Alert,
 		Button,
+		SegmentedControl,
 		Skeleton,
 		StatusDot,
 		UnderlineTabs,
@@ -16,14 +17,18 @@
 	import ConfirmModal from '$lib/components/ConfirmModal.svelte';
 	import { timeAgo } from '$lib/components/org-dashboard/helpers.svelte';
 	import {
-		SandboxChangesPanel,
 		SandboxChatPanel,
 		SandboxConnectPanel,
+		SandboxEditorPane,
+		SandboxFileTree,
+		SandboxGitPanel,
 		SandboxMcpPanel,
 		SandboxReposPanel,
 		SandboxSettingsCard
 	} from '$lib/components/sandbox';
-	import { motionPanel } from '$lib/utils/motion.svelte';
+	import { SandboxIde } from '$lib/components/sandbox/ide.svelte';
+	import type { IdeChangedFile } from '$lib/components/sandbox/ide';
+	import { motionPanel, springWidth } from '$lib/utils/motion.svelte';
 	import { sandboxQueryOptions } from '$lib/queries/sandboxes';
 	import type { SandboxRepo, SandboxReposResponse } from '$lib/types/sandbox';
 
@@ -36,12 +41,45 @@
 
 	let busyAction = $state<string | null>(null);
 	let deleteOpen = $state(false);
-	let sideTab = $state('changes');
+	let sideTab = $state('git');
 	let changesTick = $state(0);
 
 	let repos = $state<SandboxRepo[]>([]);
 	let reposLoading = $state(false);
 	let selectedRepo = $state<string | null>(null);
+
+	const ide = new SandboxIde('');
+	let explorerOpen = $state(true);
+	let mainView = $state('chat');
+	let changedFiles = $state<IdeChangedFile[]>([]);
+
+	let lastIdeId = '';
+	$effect(() => {
+		if (id === lastIdeId) return;
+		lastIdeId = id;
+		ide.sandboxId = id;
+		ide.closeAll();
+		changedFiles = [];
+		mainView = 'chat';
+	});
+
+	let lastIdeRepo: string | null = null;
+	$effect(() => {
+		if (selectedRepo === lastIdeRepo) return;
+		lastIdeRepo = selectedRepo;
+		ide.closeAll();
+		mainView = 'chat';
+	});
+
+	const mainViews = $derived([
+		{ id: 'chat', label: 'Chat' },
+		{ id: 'editor', label: ide.dirtyCount > 0 ? `Editor (${ide.dirtyCount})` : 'Editor' }
+	]);
+
+	function openFile(path: string) {
+		ide.open(selectedRepo, path);
+		mainView = 'editor';
+	}
 
 	async function loadRepos() {
 		if (!running || reposLoading) return;
@@ -68,7 +106,7 @@
 	});
 
 	const sideTabs = [
-		{ id: 'changes', label: 'Changes' },
+		{ id: 'git', label: 'Git' },
 		{ id: 'repos', label: 'Repos' },
 		{ id: 'mcp', label: 'MCP' },
 		{ id: 'settings', label: 'Settings' },
@@ -123,6 +161,15 @@
 			<a href="/sandboxes" class="sbw-back" aria-label="Back to Greenhouse">
 				<ArrowLeft class="h-4 w-4" />
 			</a>
+			<button
+				type="button"
+				class="sbw-back"
+				aria-label="Toggle file explorer"
+				aria-pressed={explorerOpen}
+				onclick={() => (explorerOpen = !explorerOpen)}
+			>
+				<PanelLeft class="h-4 w-4" />
+			</button>
 			<h1 class="sbw-title">{sandbox.name}</h1>
 			<span class="sbw-status">
 				<StatusDot meta={m} size={8} />
@@ -174,15 +221,51 @@
 		{/if}
 
 		<div class="sbw-body">
-			<section class="sbw-main" aria-label="Agent transcript">
-				<SandboxChatPanel
-					{sandbox}
-					{repos}
-					bind:selectedRepo
-					starting={busyAction === 'start'}
-					onstart={() => lifecycle('start')}
-					onturndone={() => (changesTick += 1)}
+			<aside
+				class="sbw-explorer"
+				aria-label="Files"
+				{@attach springWidth(() => explorerOpen, { rest: 0, on: 240 })}
+			>
+				<SandboxFileTree
+					sandboxId={sandbox.id}
+					repo={selectedRepo}
+					{running}
+					changed={changedFiles}
+					activePath={ide.active?.path ?? null}
+					onopen={openFile}
 				/>
+			</aside>
+			<section class="sbw-main" aria-label="Agent workspace">
+				{#if ide.tabs.length > 0}
+					<div class="sbw-switch">
+						<SegmentedControl options={mainViews} bind:value={mainView} label="Workspace view" />
+					</div>
+				{/if}
+				<div class="sbw-main-body">
+					<div
+						class="sbw-view"
+						class:sbw-view--hidden={ide.tabs.length > 0 && mainView !== 'chat'}
+						{@attach motionPanel(() => mainView === 'chat')}
+					>
+						<SandboxChatPanel
+							{sandbox}
+							{repos}
+							bind:selectedRepo
+							starting={busyAction === 'start'}
+							onstart={() => lifecycle('start')}
+							onturndone={() => (changesTick += 1)}
+						/>
+					</div>
+					{#if ide.tabs.length > 0}
+						<div
+							class="sbw-view"
+							class:sbw-view--hidden={mainView !== 'editor'}
+							{@attach motionPanel(() => mainView === 'editor')}
+						>
+							<SandboxEditorPane {ide} />
+						</div>
+					{/if}
+				</div>
 			</section>
 			<aside class="sbw-side" aria-label="Inspector">
 				<div class="sbw-side-tabs">
@@ -190,15 +273,16 @@
 				</div>
 				<div class="sbw-side-body">
 					<div
-						class="sbw-pane"
-						class:sbw-pane--hidden={sideTab !== 'changes'}
-						{@attach motionPanel(() => sideTab === 'changes')}
+						class="sbw-pane sbw-pane--fill"
+						class:sbw-pane--hidden={sideTab !== 'git'}
+						{@attach motionPanel(() => sideTab === 'git')}
 					>
-						<SandboxChangesPanel
+						<SandboxGitPanel
 							sandboxId={sandbox.id}
 							{running}
 							refreshKey={changesTick}
 							repo={selectedRepo}
+							onchanges={(files) => (changedFiles = files)}
 						/>
 					</div>
 					<div
@@ -372,20 +456,53 @@
 	}
 
 	.sbw-body {
-		display: grid;
-		grid-template-columns: minmax(0, 1fr) 380px;
+		display: flex;
 		flex: 1;
 		min-height: 0;
 	}
 
+	.sbw-explorer {
+		flex-shrink: 0;
+		min-height: 0;
+		overflow: hidden;
+	}
+
 	.sbw-main {
+		flex: 1;
 		min-width: 0;
 		min-height: 0;
 		display: flex;
 		flex-direction: column;
+		border-left: 1px solid var(--border-default);
+	}
+
+	.sbw-switch {
+		flex-shrink: 0;
+		padding: 0.375rem 0.75rem;
+		border-bottom: 1px solid var(--border-default);
+	}
+
+	.sbw-main-body {
+		display: flex;
+		flex: 1;
+		min-height: 0;
+	}
+
+	.sbw-view {
+		display: flex;
+		flex-direction: column;
+		flex: 1;
+		min-width: 0;
+		min-height: 0;
+	}
+
+	.sbw-view--hidden {
+		display: none;
 	}
 
 	.sbw-side {
+		width: 380px;
+		flex-shrink: 0;
 		min-width: 0;
 		min-height: 0;
 		display: flex;
@@ -417,10 +534,23 @@
 	}
 
 	.sbw-side-body {
+		display: flex;
 		flex: 1;
+		min-height: 0;
+		overflow: hidden;
+	}
+
+	.sbw-pane {
+		flex: 1;
+		min-width: 0;
 		min-height: 0;
 		overflow-y: auto;
 		padding: 0.625rem 0.75rem 0.75rem;
+	}
+
+	.sbw-pane--fill {
+		overflow: hidden;
+		padding: 0;
 	}
 
 	.sbw-pane--hidden {
@@ -434,23 +564,25 @@
 		}
 
 		.sbw-body {
-			display: flex;
 			flex-direction: column;
+		}
+
+		.sbw-explorer {
+			display: none;
 		}
 
 		.sbw-main {
 			height: 65dvh;
 			min-height: 24rem;
+			border-left: none;
 		}
 
 		.sbw-side {
 			flex: none;
+			width: auto;
+			height: 32rem;
 			border-left: none;
 			border-top: 1px solid var(--border-default);
-		}
-
-		.sbw-side-body {
-			overflow-y: visible;
 		}
 	}
 </style>

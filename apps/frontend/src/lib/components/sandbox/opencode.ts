@@ -7,6 +7,7 @@ export type OcSession = {
 	title: string;
 	directory: string;
 	parentID?: string;
+	revert?: { messageID: string; partID?: string };
 	time: { created: number; updated: number; archived?: number };
 };
 

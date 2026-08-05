@@ -8,11 +8,13 @@
 		Check,
 		ChevronDown,
 		Copy,
+		GitFork,
 		Loader2,
 		Play,
 		Plus,
 		Send,
 		Square,
+		Undo2,
 		X
 	} from 'lucide-svelte';
 	import { apiFetch, toasts } from '$lib/stores';
@@ -69,7 +71,7 @@
 	};
 
 	type ChatEntry =
-		| { kind: 'user'; text: string }
+		| { kind: 'user'; text: string; messageID?: string }
 		| { kind: 'thinking'; text: string; done?: boolean; expanded?: boolean }
 		| { kind: 'text'; text: string }
 		| ToolEntry
@@ -140,6 +142,8 @@
 	let planMode = $state(false);
 	let stopping = $state(false);
 	let ctxTokens = $state<OcTokens | null>(null);
+	let revertedMessageID = $state<string | null>(null);
+	let revertBusy = $state<string | null>(null);
 	const sessionPrefs = new Map<
 		string,
 		{ providerID: string; modelID: string; variant: string | null; plan: boolean }
@@ -368,6 +372,92 @@
 		await loadHistory(id);
 	}
 
+	async function forkFrom(messageID: string) {
+		if (!ocMode || !activeId || revertBusy) return;
+		revertBusy = messageID;
+		try {
+			const res = await apiFetch(`${ocBase(sandbox.id)}/session/${activeId}/fork`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ messageID })
+			});
+			if (!res.ok) {
+				const data = await res.json().catch(() => ({}));
+				throw new Error(data?.data?.message || data?.message || 'Could not fork this session');
+			}
+			const session = (await res.json()) as OcSession;
+			if (!conversations.some((c) => c.id === session.id)) {
+				conversations.unshift(sessionToConvo(session));
+			}
+			savePrefs();
+			activeId = session.id;
+			revertedMessageID = session.revert?.messageID ?? null;
+			await loadHistory(session.id);
+			toasts.add({ title: 'Forked into a new session', color: 'success' });
+		} catch (e) {
+			toasts.add({
+				title: 'Fork failed',
+				description: e instanceof Error ? e.message : 'Could not fork this session',
+				color: 'error'
+			});
+		} finally {
+			revertBusy = null;
+		}
+	}
+
+	async function revertTo(messageID: string) {
+		if (!ocMode || !activeId || revertBusy) return;
+		revertBusy = messageID;
+		try {
+			const res = await apiFetch(`${ocBase(sandbox.id)}/session/${activeId}/revert`, {
+				method: 'POST',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ messageID })
+			});
+			if (!res.ok) {
+				const data = await res.json().catch(() => ({}));
+				throw new Error(data?.data?.message || data?.message || 'Could not revert to this point');
+			}
+			const session = (await res.json()) as OcSession;
+			revertedMessageID = session.revert?.messageID ?? messageID;
+			await loadHistory(activeId);
+			onturndone?.();
+		} catch (e) {
+			toasts.add({
+				title: 'Revert failed',
+				description: e instanceof Error ? e.message : 'Could not revert to this point',
+				color: 'error'
+			});
+		} finally {
+			revertBusy = null;
+		}
+	}
+
+	async function undoRevert() {
+		if (!ocMode || !activeId || revertBusy) return;
+		revertBusy = 'undo';
+		try {
+			const res = await apiFetch(`${ocBase(sandbox.id)}/session/${activeId}/unrevert`, {
+				method: 'POST'
+			});
+			if (!res.ok) {
+				const data = await res.json().catch(() => ({}));
+				throw new Error(data?.data?.message || data?.message || 'Could not undo the revert');
+			}
+			revertedMessageID = null;
+			await loadHistory(activeId);
+			onturndone?.();
+		} catch (e) {
+			toasts.add({
+				title: 'Undo failed',
+				description: e instanceof Error ? e.message : 'Could not undo the revert',
+				color: 'error'
+			});
+		} finally {
+			revertBusy = null;
+		}
+	}
+
 	async function loadHistory(id: string) {
 		entries = [];
 		ocParts.clear();
@@ -381,6 +471,11 @@
 				const res = await apiFetch(`${ocBase(sandbox.id)}/session/${id}/message?limit=100`);
 				if (!res.ok) return;
 				hydrateOc((await res.json()) as OcMessage[]);
+				const sres = await apiFetch(`${ocBase(sandbox.id)}/session/${id}`);
+				if (sres.ok) {
+					const session = (await sres.json()) as OcSession;
+					revertedMessageID = session.revert?.messageID ?? null;
+				}
 				return;
 			}
 			const res = await apiFetch(`/apiv1/sandboxes/${sandbox.id}/conversations/${id}/history`);
@@ -787,7 +882,7 @@
 			if (info.role === 'user') {
 				for (const part of parts) {
 					if (part.type === 'text' && part.text?.trim() && !part.synthetic && !part.ignored) {
-						entries.push({ kind: 'user', text: part.text });
+						entries.push({ kind: 'user', text: part.text, messageID: info.id });
 					}
 				}
 				runStart = null;
@@ -848,6 +943,7 @@
 		if (event.type === 'session.updated' || event.type === 'session.created') {
 			const info = props.info as OcSession | undefined;
 			if (!info || info.parentID || info.time.archived) return;
+			if (info.id === activeId) revertedMessageID = info.revert?.messageID ?? null;
 			const convo = conversations.find((c) => c.id === info.id);
 			if (convo) {
 				convo.title = info.title;
@@ -867,6 +963,16 @@
 			const info = props.info as OcMessageInfo | undefined;
 			if (!info) return;
 			ocRoles.set(info.id, info.role);
+			if (info.role === 'user') {
+				if (info.sessionID !== activeId) return;
+				for (let i = entries.length - 1; i >= 0; i -= 1) {
+					const entry = entries[i];
+					if (entry.kind !== 'user') continue;
+					if (!entry.messageID) entry.messageID = info.id;
+					break;
+				}
+				return;
+			}
 			if (info.role !== 'assistant') return;
 			if (info.sessionID === ocTurnSession && typeof info.cost === 'number') {
 				ocTurnCosts.set(info.id, info.cost);
@@ -1455,10 +1561,44 @@
 {#snippet row(entry: ChatEntry, i: number, depth: number)}
 	{#if entry.kind === 'user'}
 		{#if depth === 0}
-			<div class="tr-user">
+			{@const messageID = entry.messageID}
+			<div class="tr-user" class:tr-user--reverted={!!messageID && messageID === revertedMessageID}>
 				<span class="tr-user-dot" aria-hidden="true"></span>
 				<div class="tr-user-text">{entry.text}</div>
+				{#if ocMode && messageID && !streaming}
+					<div class="tr-user-actions">
+						<button
+							type="button"
+							class="tr-user-action"
+							disabled={revertBusy !== null}
+							onclick={() => forkFrom(messageID)}
+						>
+							<GitFork class="h-3 w-3" /> Fork
+						</button>
+						<button
+							type="button"
+							class="tr-user-action"
+							disabled={revertBusy !== null}
+							onclick={() => revertTo(messageID)}
+						>
+							<Undo2 class="h-3 w-3" /> Revert
+						</button>
+					</div>
+				{/if}
 			</div>
+			{#if messageID && messageID === revertedMessageID}
+				<div class="tr-reverted" transition:slide>
+					<span>Reverted from here</span>
+					<button
+						type="button"
+						class="tr-user-action"
+						disabled={revertBusy !== null}
+						onclick={undoRevert}
+					>
+						Undo
+					</button>
+				</div>
+			{/if}
 		{:else}
 			<div class="tr-sub-prompt">{entry.text}</div>
 		{/if}
@@ -1922,6 +2062,64 @@
 		align-items: baseline;
 		gap: 0.5rem;
 		margin-top: 0.75rem;
+	}
+
+	.tr-user--reverted .tr-user-text {
+		color: var(--text-faint);
+		text-decoration: line-through;
+	}
+
+	.tr-user-actions {
+		display: flex;
+		align-items: center;
+		gap: 0.125rem;
+		flex-shrink: 0;
+		margin-left: auto;
+		opacity: 0;
+		transition: opacity var(--dur-fast);
+	}
+
+	.tr-user:hover .tr-user-actions,
+	.tr-user:focus-within .tr-user-actions {
+		opacity: 1;
+	}
+
+	.tr-user-action {
+		display: inline-flex;
+		align-items: center;
+		gap: 0.25rem;
+		padding: 0.125rem 0.375rem;
+		border: none;
+		border-radius: var(--radius-xs);
+		background: none;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		color: var(--text-faint);
+		cursor: pointer;
+		transition:
+			background-color var(--dur-fast),
+			color var(--dur-fast);
+	}
+
+	.tr-user-action:hover:not(:disabled) {
+		background: var(--bg-hover);
+		color: var(--text-default);
+	}
+
+	.tr-user-action:disabled {
+		cursor: default;
+		opacity: 0.5;
+	}
+
+	.tr-reverted {
+		display: flex;
+		align-items: center;
+		gap: 0.5rem;
+		margin-top: 0.25rem;
+		padding-left: 1rem;
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		color: var(--text-faint);
 	}
 
 	.tr-user-dot {
