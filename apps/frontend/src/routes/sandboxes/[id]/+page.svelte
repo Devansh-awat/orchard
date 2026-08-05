@@ -448,7 +448,12 @@
 						class:sbw-pane--hidden={sideTab !== 'terminal'}
 						{@attach motionPanel(() => sideTab === 'terminal')}
 					>
-						<SandboxTerminalPanel name={sandbox.name} {running} />
+						<SandboxTerminalPanel
+							sandboxId={sandbox.id}
+							name={sandbox.name}
+							{running}
+							active={sideTab === 'terminal'}
+						/>
 					</div>
 					<div
 						class="sbw-pane"
