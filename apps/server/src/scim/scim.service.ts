@@ -16,10 +16,25 @@ interface ScimMemberView {
   externalId: string | null;
   role: string;
   enterprise: any;
+  userName: string;
+  givenName: string | null;
+  familyName: string | null;
+  displayName: string | null;
   active: boolean;
   created: Date;
   lastModified: Date;
   user: any;
+}
+
+// The attributes SCIM owns outright, all of them on the membership. Assembled
+// once per write so replace semantics are applied in exactly one place.
+interface ScimWrite {
+  externalId: string | null;
+  enterprise: any;
+  userName: string;
+  givenName: string | null;
+  familyName: string | null;
+  displayName: string | null;
 }
 
 const SCIM_BASEPATH = '/apiv1/scim/v2';
@@ -70,6 +85,21 @@ function roleFromInstance(instance: any, currentRole?: string | null): string | 
 
   if (!candidates.length) return null;
   return candidates.find((r) => r !== currentRole) ?? candidates[0];
+}
+
+// RFC 7644 §3.5.1: a PUT replaces the resource, so an attribute the client
+// omitted is cleared. Safe to do literally here because these live on the
+// membership, not on the account the user shares with other orgs.
+function profileFromInstance(instance: any, fallbackUserName: string) {
+  const trim = (v: any) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  return {
+    // userName is required by the schema, so an absent one means "unchanged"
+    // rather than "clear" — there's no valid empty state to replace it with.
+    userName: trim(instance?.userName)?.toLowerCase() ?? fallbackUserName,
+    givenName: trim(instance?.name?.givenName),
+    familyName: trim(instance?.name?.familyName),
+    displayName: trim(instance?.displayName),
+  };
 }
 
 function enterpriseFromInstance(instance: any) {
@@ -168,16 +198,29 @@ export class ScimService implements OnModuleInit {
     role: string;
     scimExternalId: string | null;
     scimEnterprise?: any;
+    scimManaged?: boolean;
+    scimUserName?: string | null;
+    scimGivenName?: string | null;
+    scimFamilyName?: string | null;
+    scimDisplayName?: string | null;
     addedAt: Date;
     userId: string;
     user: any;
   }): ScimMemberView {
+    // A membership added in-app has no IdP profile of its own, so it reads
+    // through to the account. Once SCIM owns it, the per-org profile is the
+    // whole truth — that's what makes replace-on-omit safe.
+    const owned = member.scimManaged === true;
     return {
       id: member.id,
       userId: member.userId,
       externalId: member.scimExternalId,
       role: member.role,
       enterprise: member.scimEnterprise ?? null,
+      userName: (owned ? member.scimUserName : null) ?? member.user?.email,
+      givenName: owned ? member.scimGivenName ?? null : member.user?.firstName ?? null,
+      familyName: owned ? member.scimFamilyName ?? null : member.user?.lastName ?? null,
+      displayName: owned ? member.scimDisplayName ?? null : null,
       active: true,
       created: member.addedAt,
       lastModified: member.addedAt,
@@ -190,6 +233,10 @@ export class ScimService implements OnModuleInit {
     role: string;
     externalId: string | null;
     enterprise?: any;
+    userName?: string | null;
+    givenName?: string | null;
+    familyName?: string | null;
+    displayName?: string | null;
     deactivatedAt: Date;
     userId: string;
     user: any;
@@ -200,6 +247,10 @@ export class ScimService implements OnModuleInit {
       externalId: row.externalId,
       role: row.role,
       enterprise: row.enterprise ?? null,
+      userName: row.userName ?? row.user?.email,
+      givenName: row.givenName ?? null,
+      familyName: row.familyName ?? null,
+      displayName: row.displayName ?? null,
       active: false,
       created: row.deactivatedAt,
       lastModified: row.deactivatedAt,
@@ -209,17 +260,17 @@ export class ScimService implements OnModuleInit {
 
   private toScimUser(view: ScimMemberView) {
     const { user } = view;
+    const fullName = [view.givenName, view.familyName].filter(Boolean).join(' ');
     return {
       id: view.id,
       ...(view.externalId ? { externalId: view.externalId } : {}),
-      userName: user.email,
+      userName: view.userName,
       name: {
-        givenName: user.firstName ?? undefined,
-        familyName: user.lastName ?? undefined,
+        givenName: view.givenName ?? undefined,
+        familyName: view.familyName ?? undefined,
       },
-      displayName:
-        [user.firstName, user.lastName].filter(Boolean).join(' ') || user.username || user.email,
-      emails: [{ value: user.email, primary: true, type: 'work' }],
+      displayName: view.displayName || fullName || user.username || view.userName,
+      emails: [{ value: view.userName, primary: true, type: 'work' }],
       active: view.active,
       // The org role, surfaced three ways so an IdP can round-trip it however
       // it's wired: `roles` is the RFC 7643 home for it, `userType` is what
@@ -325,13 +376,10 @@ export class ScimService implements OnModuleInit {
   // SCIM identity in a tombstone under the same id so the resource stays
   // readable and reactivatable. The global account is untouched — the person
   // may belong to other orgs.
-  private async deactivate(
-    view: ScimMemberView,
-    externalId: string | null,
-    enterprise: any,
-    ctx: Ctx,
-  ) {
+  private async deactivate(view: ScimMemberView, write: ScimWrite, ctx: Ctx) {
     await this.assertNotLastOwner(view, ctx, 'deactivate');
+
+    const fields = { ...write, role: view.role as any };
 
     await this.prisma.$transaction(async (tx) => {
       await tx.organizationMember.delete({ where: { id: view.id } });
@@ -343,11 +391,9 @@ export class ScimService implements OnModuleInit {
           id: view.id,
           organizationId: ctx.organizationId,
           userId: view.userId,
-          externalId,
-          enterprise,
-          role: view.role as any,
+          ...fields,
         },
-        update: { externalId, enterprise, role: view.role as any },
+        update: fields,
       });
     });
 
@@ -359,19 +405,13 @@ export class ScimService implements OnModuleInit {
       targetLabel: view.user.email,
     });
 
-    return { ...view, active: false, lastModified: new Date(), externalId, enterprise };
+    return { ...view, ...write, active: false, lastModified: new Date() };
   }
 
   // Reactivate: restore the membership under the tombstone's id (and its old
   // role, unless the write names a new one) so the IdP's resource id survives a
   // deactivate/reactivate round trip.
-  private async reactivate(
-    view: ScimMemberView,
-    externalId: string | null,
-    enterprise: any,
-    role: string,
-    ctx: Ctx,
-  ) {
+  private async reactivate(view: ScimMemberView, write: ScimWrite, role: string, ctx: Ctx) {
     const member = await this.prisma.$transaction(async (tx) => {
       const existing = await tx.organizationMember.findUnique({
         where: {
@@ -389,8 +429,11 @@ export class ScimService implements OnModuleInit {
           userId: view.userId,
           role: role as any,
           scimManaged: true,
-          scimExternalId: externalId,
-          scimEnterprise: enterprise,
+          scimExternalId: write.externalId,
+          scimEnterprise: write.enterprise,
+          scimGivenName: write.givenName,
+          scimFamilyName: write.familyName,
+          scimDisplayName: write.displayName,
         },
         include: { user: true },
       });
@@ -416,53 +459,39 @@ export class ScimService implements OnModuleInit {
       if (!view) {
         throw ScimError(404, null, `User ${resource.id} not found`);
       }
-      // externalId and the enterprise extension are SCIM's own fields on the
-      // membership, so a PUT that omits them clears them — RFC 7644 §3.5.1
-      // replace semantics. Name and email live on the shared user account,
-      // which other orgs also read, so those stay preserve-on-omit.
-      const externalId = instance.externalId ?? null;
-      const enterprise = enterpriseFromInstance(instance);
+      // Everything SCIM owns lives on the membership, so a PUT that omits any
+      // of it clears it — RFC 7644 §3.5.1 replace semantics, applied literally.
+      // Nothing here touches the shared account.
+      const write: ScimWrite = {
+        externalId: instance.externalId ?? null,
+        enterprise: enterpriseFromInstance(instance),
+        ...profileFromInstance(instance, email ?? view.userName),
+      };
       const requestedRole = roleFromInstance(instance, view.role);
 
       if (instance.active === false) {
         // Already deactivated — RFC 7644 writes are idempotent, so this is a
         // no-op rather than an error.
         if (!view.active) {
-          return this.toScimUser({ ...view, externalId, enterprise });
+          return this.toScimUser({ ...view, ...write });
         }
-        return this.toScimUser(await this.deactivate(view, externalId, enterprise, ctx));
+        return this.toScimUser(await this.deactivate(view, write, ctx));
       }
 
       // Reactivation has to be asked for. A write that just updates a name on a
       // deactivated user must not hand back org access as a side effect, so
       // anything short of an explicit `active: true` leaves the tombstone alone.
       if (!view.active && instance.active !== true) {
-        const [updated] = await Promise.all([
-          this.prisma.user.update({
-            where: { id: view.userId },
-            data: {
-              email: email ?? view.user.email,
-              firstName: instance.name?.givenName ?? view.user.firstName,
-              lastName: instance.name?.familyName ?? view.user.lastName,
-            },
-          }),
-          this.prisma.scimDeprovisionedMember.update({
-            where: { id: view.id },
-            data: { externalId, enterprise, role: (requestedRole ?? view.role) as any },
-          }),
-        ]);
-        return this.toScimUser({
-          ...view,
-          externalId,
-          enterprise,
-          role: requestedRole ?? view.role,
-          user: updated,
+        await this.prisma.scimDeprovisionedMember.update({
+          where: { id: view.id },
+          data: { ...write, role: (requestedRole ?? view.role) as any },
         });
+        return this.toScimUser({ ...view, ...write, role: requestedRole ?? view.role });
       }
 
       const target = view.active
         ? view
-        : await this.reactivate(view, externalId, enterprise, requestedRole ?? view.role, ctx);
+        : await this.reactivate(view, write, requestedRole ?? view.role, ctx);
 
       // An omitted role means "unchanged", not "reset to member". Clearing it
       // the way replace semantics imply would silently demote every user on any
@@ -472,20 +501,16 @@ export class ScimService implements OnModuleInit {
         await this.assertNotLastOwner(target, ctx, 'demote');
       }
 
-      const updatedUser = await this.prisma.user.update({
-        where: { id: target.userId },
-        data: {
-          email: email ?? target.user.email,
-          firstName: instance.name?.givenName ?? target.user.firstName,
-          lastName: instance.name?.familyName ?? target.user.lastName,
-        },
-      });
       const updatedMember = await this.prisma.organizationMember.update({
         where: { id: target.id },
         data: {
           scimManaged: true,
-          scimExternalId: externalId,
-          scimEnterprise: enterprise,
+          scimExternalId: write.externalId,
+          scimEnterprise: write.enterprise,
+          scimUserName: write.userName,
+          scimGivenName: write.givenName,
+          scimFamilyName: write.familyName,
+          scimDisplayName: write.displayName,
           role: role as any,
         },
         include: { user: true },
@@ -497,11 +522,11 @@ export class ScimService implements OnModuleInit {
           organizationId: ctx.organizationId,
           targetType: 'user',
           targetId: target.userId,
-          targetLabel: `${updatedUser.email}: ${view.role} -> ${role}`,
+          targetLabel: `${write.userName}: ${view.role} -> ${role}`,
         });
       }
 
-      return this.toScimUser(this.viewFromMember({ ...updatedMember, user: updatedUser }));
+      return this.toScimUser(this.viewFromMember(updatedMember));
     }
 
     // Create (POST).
@@ -509,8 +534,11 @@ export class ScimService implements OnModuleInit {
       throw ScimError(400, 'invalidValue', 'A primary email or email-shaped userName is required');
     }
 
-    const externalId = instance.externalId ?? null;
-    const enterprise = enterpriseFromInstance(instance);
+    const write: ScimWrite = {
+      externalId: instance.externalId ?? null,
+      enterprise: enterpriseFromInstance(instance),
+      ...profileFromInstance(instance, email),
+    };
     const role = roleFromInstance(instance) ?? DEFAULT_ROLE;
     const existingUser = await this.prisma.user.findUnique({ where: { email } });
 
@@ -537,8 +565,7 @@ export class ScimService implements OnModuleInit {
       if (tombstone) {
         const revived = await this.reactivate(
           this.viewFromTombstone(tombstone),
-          externalId,
-          enterprise,
+          write,
           roleFromInstance(instance, tombstone.role) ?? tombstone.role,
           ctx,
         );
@@ -547,14 +574,17 @@ export class ScimService implements OnModuleInit {
     }
 
     const result = await this.prisma.$transaction(async (tx) => {
+      // Creating the account is the one and only time SCIM writes to `users`.
+      // An account that already exists is linked as-is: this org's IdP has no
+      // business editing a profile that other orgs also see.
       const user =
         existingUser ??
         (await tx.user.create({
           data: {
             email,
             username: await this.ensureUniqueUsername(email),
-            firstName: instance.name?.givenName ?? null,
-            lastName: instance.name?.familyName ?? null,
+            firstName: write.givenName,
+            lastName: write.familyName,
             emailVerified: true,
             emailVerifiedAt: new Date(),
           },
@@ -566,8 +596,12 @@ export class ScimService implements OnModuleInit {
           userId: user.id,
           role: role as any,
           scimManaged: true,
-          scimExternalId: externalId,
-          scimEnterprise: enterprise,
+          scimExternalId: write.externalId,
+          scimEnterprise: write.enterprise,
+          scimUserName: write.userName,
+          scimGivenName: write.givenName,
+          scimFamilyName: write.familyName,
+          scimDisplayName: write.displayName,
         },
         include: { user: true },
       });

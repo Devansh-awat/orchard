@@ -338,6 +338,16 @@ model OrganizationMember {
   // writes it reads the same thing back.
   scimEnterprise Json?   @map("scim_enterprise")
 
+  // Per-org profile the IdP owns. The SCIM resource is this membership, but
+  // userName/firstName/lastName live on the shared User row that every other
+  // org also reads — writing there let one org's IdP rename someone everywhere,
+  // and made RFC 7644 replace-on-omit unsafe to implement. SCIM writes the User
+  // row only when it creates the account; after that it owns these instead.
+  scimUserName    String? @map("scim_user_name") @db.VarChar(255)
+  scimGivenName   String? @map("scim_given_name") @db.VarChar(255)
+  scimFamilyName  String? @map("scim_family_name") @db.VarChar(255)
+  scimDisplayName String? @map("scim_display_name") @db.VarChar(255)
+
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)
   user         User         @relation(fields: [userId], references: [id], onDelete: Cascade)
 
@@ -1477,6 +1487,10 @@ model ScimDeprovisionedMember {
   externalId     String?          @map("external_id") @db.VarChar(255)
   role           OrganizationRole @default(member)
   enterprise     Json?            @map("enterprise")
+  userName       String?          @map("user_name") @db.VarChar(255)
+  givenName      String?          @map("given_name") @db.VarChar(255)
+  familyName     String?          @map("family_name") @db.VarChar(255)
+  displayName    String?          @map("display_name") @db.VarChar(255)
   deactivatedAt  DateTime         @default(now()) @map("deactivated_at") @db.Timestamp(6)
 
   organization Organization @relation(fields: [organizationId], references: [id], onDelete: Cascade)

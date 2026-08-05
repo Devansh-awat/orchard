@@ -362,6 +362,8 @@ var routeExclusions = map[string]string{
 	"GET /scim/v2/Schemas":                           "SCIM protocol endpoint for IdPs",
 	"GET /scim/v2/Schemas/:id":                       "SCIM protocol endpoint for IdPs",
 	"GET /scim/v2/ServiceProviderConfig":             "SCIM protocol endpoint for IdPs",
+	"ALL /scim/v2/Me":                                "SCIM protocol endpoint for IdPs",
+	"ALL /scim/v2/*":                                 "SCIM protocol endpoint for IdPs",
 
 	// github plumbing
 	"GET /github/callback":     "GitHub OAuth callback, browser only",

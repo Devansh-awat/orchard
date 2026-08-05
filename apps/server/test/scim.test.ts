@@ -135,6 +135,10 @@ function makeDb() {
         addedAt: new Date(),
         scimExternalId: null,
         scimEnterprise: null,
+        scimUserName: null,
+        scimGivenName: null,
+        scimFamilyName: null,
+        scimDisplayName: null,
         scimManaged: false,
       })),
       count: async ({ where }: any) => members.filter((m) => matches(m, where)).length,
@@ -145,18 +149,22 @@ function makeDb() {
       deactivatedAt: new Date(),
       externalId: null,
       enterprise: null,
+      userName: null,
+      givenName: null,
+      familyName: null,
+      displayName: null,
     })),
   };
   db.$transaction = async (fn: any) => fn(db);
-  return { db, members, tombstones };
+  return { db, members, tombstones, users };
 }
 
 function makeService() {
-  const { db, members, tombstones } = makeDb();
+  const { db, members, tombstones, users } = makeDb();
   const audit = { log: async () => {} };
   const service = new ScimService(db as any, audit as any);
   service.onModuleInit();
-  return { service, members, tombstones };
+  return { service, members, tombstones, users };
 }
 
 const patchOp = (value: any) => ({
@@ -358,6 +366,124 @@ test('the last owner cannot be demoted, deactivated or deleted', async () => {
   await service.createUser({ userName: 'cofounder@example.com', userType: 'owner' }, ctx);
   const demoted: any = await service.patchUser(owner.id, patchOp({ userType: 'member' }), ctx);
   assert.equal(demoted.roles[0].value, 'member');
+});
+
+// ---- Account isolation -----------------------------------------------------
+//
+// The SCIM resource is a membership, so everything the IdP writes belongs to
+// this org. One org's IdP must never edit the shared account another org reads.
+
+test('an update never writes to the shared user account', async () => {
+  const { service, users } = makeService();
+  const created: any = await service.createUser(
+    { userName: 'grace@example.com', name: { givenName: 'Grace', familyName: 'Hopper' } },
+    ctx,
+  );
+  const account = { ...users[0] };
+
+  await service.replaceUser(
+    created.id,
+    {
+      userName: 'grace.hopper@newcorp.com',
+      name: { givenName: 'Rear Admiral', familyName: 'Hopper' },
+      displayName: 'Amazing Grace',
+    },
+    ctx,
+  );
+
+  assert.deepEqual(users[0], account, 'the users row must be untouched by a SCIM update');
+});
+
+test('the per-org profile is what SCIM reads back', async () => {
+  const { service } = makeService();
+  const created: any = await service.createUser(
+    { userName: 'katherine@example.com', name: { givenName: 'Katherine' } },
+    ctx,
+  );
+
+  const renamed: any = await service.replaceUser(
+    created.id,
+    { userName: 'kj@nasa.gov', name: { givenName: 'K', familyName: 'Johnson' }, displayName: 'KJ' },
+    ctx,
+  );
+  assert.equal(renamed.userName, 'kj@nasa.gov');
+  assert.equal(renamed.name.givenName, 'K');
+  assert.equal(renamed.name.familyName, 'Johnson');
+  assert.equal(renamed.displayName, 'KJ');
+  assert.equal(renamed.emails[0].value, 'kj@nasa.gov');
+
+  const reread: any = await service.getUser(created.id, {}, ctx);
+  assert.equal(reread.userName, 'kj@nasa.gov');
+  assert.equal(reread.displayName, 'KJ');
+});
+
+test('PUT clears the attributes it omits', async () => {
+  const { service } = makeService();
+  const created: any = await service.createUser(
+    {
+      userName: 'ada@example.com',
+      externalId: 'idp-1',
+      name: { givenName: 'Ada', familyName: 'Lovelace' },
+      displayName: 'Ada L',
+      [ENTERPRISE]: { department: 'Analytical Engines' },
+    },
+    ctx,
+  );
+  assert.equal(created.name.familyName, 'Lovelace');
+
+  const replaced: any = await service.replaceUser(created.id, { userName: 'ada@example.com' }, ctx);
+  assert.equal(replaced.name.givenName, undefined);
+  assert.equal(replaced.name.familyName, undefined);
+  assert.equal(replaced.externalId, undefined);
+  assert.equal(replaced[ENTERPRISE], undefined);
+  // displayName has no empty state to replace it with, so it re-derives down
+  // the fallback chain: name -> orchard handle -> userName.
+  assert.equal(replaced.displayName, 'ada');
+});
+
+test('an existing account joining a second org is linked, not rewritten', async () => {
+  const { service, users } = makeService();
+  await service.createUser(
+    { userName: 'shared@example.com', name: { givenName: 'Real', familyName: 'Name' } },
+    ctx,
+  );
+  const account = { ...users[0] };
+
+  // Same person, different org, IdP calls them something else entirely.
+  const otherOrg = { organizationId: '22222222-2222-4222-8222-222222222222' };
+  const linked: any = await service.createUser(
+    { userName: 'shared@example.com', name: { givenName: 'Contractor' } },
+    otherOrg,
+  );
+
+  assert.equal(users.length, 1, 'the same account must be reused');
+  assert.deepEqual(users[0], account, 'the second org must not rewrite the account');
+  assert.equal(linked.name.givenName, 'Contractor', "but it does get its own view");
+});
+
+test('a brand-new account is seeded from the provisioning payload', async () => {
+  const { service, users } = makeService();
+  await service.createUser(
+    { userName: 'newbie@example.com', name: { givenName: 'New', familyName: 'Bie' } },
+    ctx,
+  );
+  assert.equal(users[0].firstName, 'New');
+  assert.equal(users[0].lastName, 'Bie');
+});
+
+test('a membership added in-app reads through to the account', async () => {
+  const { service, users, members } = makeService();
+  users.push({ id: 'u-1', email: 'inapp@example.com', firstName: 'In', lastName: 'App' });
+  members.push({
+    id: 'm-1', organizationId: ORG, userId: 'u-1', role: 'admin', addedAt: new Date(),
+    scimManaged: false, scimExternalId: null, scimUserName: null,
+    scimGivenName: null, scimFamilyName: null, scimDisplayName: null, scimEnterprise: null,
+  });
+
+  const read: any = await service.getUser('m-1', {}, ctx);
+  assert.equal(read.userName, 'inapp@example.com');
+  assert.equal(read.name.givenName, 'In');
+  assert.equal(read.roles[0].value, 'admin');
 });
 
 // ---- Enterprise extension --------------------------------------------------
