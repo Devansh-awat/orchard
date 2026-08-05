@@ -11,6 +11,7 @@ const PROXY_TIMEOUT_MS = 120000;
 
 const FILE_RE = /^[A-Za-z0-9][A-Za-z0-9._/ @-]*$/;
 const REPO_RE = /^[A-Za-z0-9][A-Za-z0-9._-]*$/;
+const BRANCH_RE = /^[A-Za-z0-9][A-Za-z0-9._/-]*$/;
 const MAX_DIFF_BYTES = 200000;
 
 export interface SandboxRepo {
@@ -153,29 +154,138 @@ export class SandboxWorkspaceService {
     return file;
   }
 
+  private validateBranch(branch: string): string {
+    if (!BRANCH_RE.test(branch) || branch.includes('..') || branch.length > 200) {
+      throw new BadRequestException('Invalid branch name');
+    }
+    return branch;
+  }
+
   async gitCommit(
     sandbox: { id: string; status: string; repoUrl: string | null },
     repo: string,
     message: string,
     files: string[] | undefined,
     author: { name: string; email: string },
+    opts: { amend?: boolean; signoff?: boolean; trackedOnly?: boolean } = {},
   ): Promise<{ ok: boolean; output: string }> {
-    if (!message?.trim() || message.length > 2000) {
+    if (!opts.amend && (!message?.trim() || message.length > 2000)) {
       throw new BadRequestException('A commit message is required');
     }
-    const add = files?.length
-      ? files.map((f) => `git add -- ${this.q(this.validateFile(f))}`).join('; ')
-      : 'git add -A';
-    const script = `${add}; git -c user.name=${this.q(author.name)} -c user.email=${this.q(author.email)} commit -m ${this.q(message)} 2>&1`;
+    const stage = files?.length
+      ? files.map((f) => `git add -- ${this.q(this.validateFile(f))}`).join('\n')
+      : opts.trackedOnly
+        ? 'git add -u'
+        : 'git add -A';
+    const flags = [
+      opts.amend ? '--amend' : '',
+      opts.signoff ? '--signoff' : '',
+      message?.trim() ? `-m ${this.q(message)}` : '--no-edit',
+    ]
+      .filter(Boolean)
+      .join(' ');
+    const script = `${stage}\ngit -c user.name=${this.q(author.name)} -c user.email=${this.q(author.email)} commit ${flags} 2>&1`;
     const result = await this.run(sandbox, script, repo);
+    return { ok: result.ok, output: result.stdout.slice(-2000) };
+  }
+
+  async gitUncommit(
+    sandbox: { id: string; status: string; repoUrl: string | null },
+    repo: string,
+  ): Promise<{ ok: boolean; output: string }> {
+    const result = await this.run(sandbox, 'git reset --soft HEAD~1 2>&1 && git log -1 --oneline 2>&1', repo);
     return { ok: result.ok, output: result.stdout.slice(-2000) };
   }
 
   async gitPush(
     sandbox: { id: string; status: string; repoUrl: string | null },
     repo: string,
+    opts: { force?: boolean } = {},
   ): Promise<{ ok: boolean; output: string }> {
-    const result = await this.run(sandbox, 'git push origin HEAD 2>&1', repo);
+    const flags = opts.force ? ' --force-with-lease' : '';
+    const result = await this.run(sandbox, `git push${flags} origin HEAD 2>&1`, repo);
+    return { ok: result.ok, output: result.stdout.slice(-2000) };
+  }
+
+  async gitFetch(
+    sandbox: { id: string; status: string; repoUrl: string | null },
+    repo: string,
+  ): Promise<{ ok: boolean; output: string }> {
+    const result = await this.run(sandbox, 'git fetch --all --prune 2>&1', repo);
+    return { ok: result.ok, output: result.stdout.slice(-2000) || 'up to date' };
+  }
+
+  async gitPull(
+    sandbox: { id: string; status: string; repoUrl: string | null },
+    repo: string,
+    opts: { rebase?: boolean } = {},
+  ): Promise<{ ok: boolean; output: string }> {
+    const flags = opts.rebase ? ' --rebase' : '';
+    const result = await this.run(sandbox, `git pull${flags} 2>&1`, repo);
+    return { ok: result.ok, output: result.stdout.slice(-2000) };
+  }
+
+  async gitBranches(
+    sandbox: { id: string; status: string; repoUrl: string | null },
+    repo: string,
+  ): Promise<{
+    current: string | null;
+    local: Array<{ name: string; upstream: string | null; ahead: number; behind: number }>;
+    remote: string[];
+  }> {
+    const script = [
+      'git rev-parse --abbrev-ref HEAD',
+      "echo '@@local@@'",
+      "git for-each-ref --format='%(refname:short)|%(upstream:short)|%(upstream:track)' refs/heads",
+      "echo '@@remote@@'",
+      "git for-each-ref --format='%(refname:short)' refs/remotes",
+    ].join('\n');
+    const result = await this.run(sandbox, script, repo);
+    const [head = '', rest = ''] = result.stdout.split('@@local@@');
+    const [localPart = '', remotePart = ''] = rest.split('@@remote@@');
+    const local = localPart
+      .split('\n')
+      .map((l) => l.trim())
+      .filter(Boolean)
+      .map((line) => {
+        const [name, upstream, track] = line.split('|');
+        const ahead = Number(track?.match(/ahead (\d+)/)?.[1] || 0);
+        const behind = Number(track?.match(/behind (\d+)/)?.[1] || 0);
+        return { name, upstream: upstream || null, ahead, behind };
+      });
+    const remote = remotePart
+      .split('\n')
+      .map((l) => l.trim())
+      .filter((l) => l && !l.endsWith('/HEAD'));
+    return { current: head.trim() || null, local, remote };
+  }
+
+  async gitCheckout(
+    sandbox: { id: string; status: string; repoUrl: string | null },
+    repo: string,
+    branch: string,
+    opts: { create?: boolean; from?: string } = {},
+  ): Promise<{ ok: boolean; output: string }> {
+    this.validateBranch(branch);
+    const from = opts.from ? ` ${this.q(this.validateBranch(opts.from))}` : '';
+    const script = opts.create
+      ? `git checkout -b ${this.q(branch)}${from} 2>&1`
+      : `git checkout ${this.q(branch)} 2>&1`;
+    const result = await this.run(sandbox, script, repo);
+    return { ok: result.ok, output: result.stdout.slice(-2000) };
+  }
+
+  async gitDeleteBranch(
+    sandbox: { id: string; status: string; repoUrl: string | null },
+    repo: string,
+    branch: string,
+    opts: { remote?: boolean; force?: boolean } = {},
+  ): Promise<{ ok: boolean; output: string }> {
+    this.validateBranch(branch);
+    const script = opts.remote
+      ? `git push origin --delete ${this.q(branch)} 2>&1`
+      : `git branch ${opts.force ? '-D' : '-d'} ${this.q(branch)} 2>&1`;
+    const result = await this.run(sandbox, script, repo);
     return { ok: result.ok, output: result.stdout.slice(-2000) };
   }
 

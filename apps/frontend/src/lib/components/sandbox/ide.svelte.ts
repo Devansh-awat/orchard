@@ -24,6 +24,7 @@ export class SandboxIde {
 	sandboxId = $state('');
 	tabs = $state<EditorTab[]>([]);
 	activeKey = $state<string | null>(null);
+	onsaved: (() => void) | null = null;
 
 	constructor(sandboxId: string) {
 		this.sandboxId = sandboxId;
@@ -112,6 +113,7 @@ export class SandboxIde {
 			live.saved = pending;
 			live.error = null;
 			toasts.add({ title: 'Saved', description: live.path, color: 'success' });
+			this.onsaved?.();
 			return true;
 		}
 		if (result.status === 404) {

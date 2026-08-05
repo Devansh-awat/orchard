@@ -207,17 +207,44 @@ export class SandboxesController {
   async gitCommit(
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
-    @Body() body: { repo?: string; message?: string; files?: string[] },
+    @Body()
+    body: {
+      repo?: string;
+      message?: string;
+      files?: string[];
+      amend?: boolean;
+      signoff?: boolean;
+      trackedOnly?: boolean;
+    },
   ) {
     const user = await this.resolveUser(req);
     const row = await this.sandboxes.getOwned(id, user.id);
     const identity = await this.usersService.findOrCreateByClerkId(req.user.sub, {
       email: req.user.email,
     });
-    return this.workspace.gitCommit(row, body?.repo || '', body?.message || '', body?.files, {
-      name: identity.username || 'orchard',
-      email: identity.email || 'sandbox@orchard.dev',
-    });
+    return this.workspace.gitCommit(
+      row,
+      body?.repo || '',
+      body?.message || '',
+      body?.files,
+      {
+        name: identity.username || 'orchard',
+        email: identity.email || 'sandbox@orchard.dev',
+      },
+      { amend: body?.amend, signoff: body?.signoff, trackedOnly: body?.trackedOnly },
+    );
+  }
+
+  @Post(':id/git/uncommit')
+  @RequireScope('exec')
+  async gitUncommit(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { repo?: string },
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await this.sandboxes.getOwned(id, user.id);
+    return this.workspace.gitUncommit(row, body?.repo || '');
   }
 
   @Post(':id/git/push')
@@ -225,11 +252,77 @@ export class SandboxesController {
   async gitPush(
     @Req() req: any,
     @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { repo?: string; force?: boolean },
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await this.sandboxes.getOwned(id, user.id);
+    return this.workspace.gitPush(row, body?.repo || '', { force: body?.force });
+  }
+
+  @Post(':id/git/fetch')
+  @RequireScope('exec')
+  async gitFetch(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
     @Body() body: { repo?: string },
   ) {
     const user = await this.resolveUser(req);
     const row = await this.sandboxes.getOwned(id, user.id);
-    return this.workspace.gitPush(row, body?.repo || '');
+    return this.workspace.gitFetch(row, body?.repo || '');
+  }
+
+  @Post(':id/git/pull')
+  @RequireScope('exec')
+  async gitPull(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { repo?: string; rebase?: boolean },
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await this.sandboxes.getOwned(id, user.id);
+    return this.workspace.gitPull(row, body?.repo || '', { rebase: body?.rebase });
+  }
+
+  @Get(':id/git/branches')
+  @RequireScope('exec')
+  async gitBranches(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Query('repo') repo?: string,
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await this.sandboxes.getOwned(id, user.id);
+    return this.workspace.gitBranches(row, repo || '');
+  }
+
+  @Post(':id/git/checkout')
+  @RequireScope('exec')
+  async gitCheckout(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { repo?: string; branch?: string; create?: boolean; from?: string },
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await this.sandboxes.getOwned(id, user.id);
+    return this.workspace.gitCheckout(row, body?.repo || '', body?.branch || '', {
+      create: body?.create,
+      from: body?.from,
+    });
+  }
+
+  @Post(':id/git/branch/delete')
+  @RequireScope('exec')
+  async gitDeleteBranch(
+    @Req() req: any,
+    @Param('id', ParseUUIDPipe) id: string,
+    @Body() body: { repo?: string; branch?: string; remote?: boolean; force?: boolean },
+  ) {
+    const user = await this.resolveUser(req);
+    const row = await this.sandboxes.getOwned(id, user.id);
+    return this.workspace.gitDeleteBranch(row, body?.repo || '', body?.branch || '', {
+      remote: body?.remote,
+      force: body?.force,
+    });
   }
 
   @Post(':id/git/pr')

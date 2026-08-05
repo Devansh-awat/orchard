@@ -40414,6 +40414,249 @@
         ]
       }
     },
+    "/sandboxes/{id}/git/branch/delete": {
+      "post": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "force": {
+                    "type": "boolean"
+                  },
+                  "remote": {
+                    "type": "boolean"
+                  },
+                  "repo": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "repo",
+                  "branch"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "output": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "output"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Delete a local branch, or a remote branch with remote:true",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/git/branches": {
+      "get": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "current": {
+                      "type": [
+                        "string",
+                        "null"
+                      ]
+                    },
+                    "local": {
+                      "items": {
+                        "properties": {
+                          "ahead": {
+                            "type": "integer"
+                          },
+                          "behind": {
+                            "type": "integer"
+                          },
+                          "name": {
+                            "type": "string"
+                          },
+                          "upstream": {
+                            "type": [
+                              "string",
+                              "null"
+                            ]
+                          }
+                        },
+                        "required": [
+                          "name",
+                          "upstream",
+                          "ahead",
+                          "behind"
+                        ],
+                        "type": "object"
+                      },
+                      "type": "array"
+                    },
+                    "remote": {
+                      "items": {
+                        "type": "string"
+                      },
+                      "type": "array"
+                    }
+                  },
+                  "required": [
+                    "current",
+                    "local",
+                    "remote"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "List local branches with tracking info and remote branches",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/git/checkout": {
+      "post": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "branch": {
+                    "type": "string"
+                  },
+                  "create": {
+                    "type": "boolean"
+                  },
+                  "from": {
+                    "type": "string"
+                  },
+                  "repo": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "repo",
+                  "branch"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "output": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "output"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Switch branches, or create one with create:true (optionally from a base ref)",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
     "/sandboxes/{id}/git/commit": {
       "post": {
         "description": "Auth: authenticated (scope: exec)",
@@ -40432,6 +40675,9 @@
             "application/json": {
               "schema": {
                 "properties": {
+                  "amend": {
+                    "type": "boolean"
+                  },
                   "files": {
                     "items": {
                       "type": "string"
@@ -40440,11 +40686,17 @@
                   },
                   "message": {
                     "maxLength": 2000,
-                    "minLength": 1,
                     "type": "string"
                   },
                   "repo": {
                     "type": "string"
+                  },
+                  "signoff": {
+                    "type": "boolean"
+                  },
+                  "trackedOnly": {
+                    "description": "Stage tracked files only (git add -u)",
+                    "type": "boolean"
                   }
                 },
                 "required": [
@@ -40489,6 +40741,74 @@
           }
         ],
         "summary": "Stage and commit inside a sandbox repo (all changes, or listed files)",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/git/fetch": {
+      "post": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "repo": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "repo"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "output": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "output"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Fetch all remotes and prune deleted branches",
         "tags": [
           "sandboxes"
         ]
@@ -40572,7 +40892,149 @@
         ]
       }
     },
+    "/sandboxes/{id}/git/pull": {
+      "post": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "rebase": {
+                    "type": "boolean"
+                  },
+                  "repo": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "repo"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "output": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "output"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Pull the current branch, optionally with rebase",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
     "/sandboxes/{id}/git/push": {
+      "post": {
+        "description": "Auth: authenticated (scope: exec)",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "properties": {
+                  "force": {
+                    "type": "boolean"
+                  },
+                  "repo": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "repo"
+                ],
+                "type": "object"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "content": {
+              "application/json": {
+                "schema": {
+                  "properties": {
+                    "ok": {
+                      "type": "boolean"
+                    },
+                    "output": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "ok",
+                    "output"
+                  ],
+                  "type": "object"
+                }
+              }
+            },
+            "description": "OK"
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          },
+          {
+            "cookieAuth": []
+          }
+        ],
+        "summary": "Push the current branch to origin (force uses --force-with-lease)",
+        "tags": [
+          "sandboxes"
+        ]
+      }
+    },
+    "/sandboxes/{id}/git/uncommit": {
       "post": {
         "description": "Auth: authenticated (scope: exec)",
         "parameters": [
@@ -40634,7 +41096,7 @@
             "cookieAuth": []
           }
         ],
-        "summary": "Push the current branch of a sandbox repo to origin",
+        "summary": "Soft reset the last commit, keeping its changes staged",
         "tags": [
           "sandboxes"
         ]

@@ -49,6 +49,7 @@
 	let selectedRepo = $state<string | null>(null);
 
 	const ide = new SandboxIde('');
+	ide.onsaved = () => (changesTick += 1);
 	let explorerOpen = $state(true);
 	let mainView = $state('chat');
 	let changedFiles = $state<IdeChangedFile[]>([]);
@@ -72,8 +73,8 @@
 	});
 
 	const mainViews = $derived([
-		{ id: 'chat', label: 'Chat' },
-		{ id: 'editor', label: ide.dirtyCount > 0 ? `Editor (${ide.dirtyCount})` : 'Editor' }
+		{ value: 'chat', label: 'Chat' },
+		{ value: 'editor', label: ide.dirtyCount > 0 ? `Editor (${ide.dirtyCount})` : 'Editor' }
 	]);
 
 	function openFile(path: string) {

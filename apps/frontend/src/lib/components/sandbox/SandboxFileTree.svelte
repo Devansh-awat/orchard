@@ -53,14 +53,18 @@
 		return changedPaths.some((p) => p.startsWith(prefix)) ? 'M' : null;
 	}
 
+	let gen = 0;
+
 	async function loadDir(path: string) {
 		if (busy[path]) return;
+		const mine = gen;
 		busy[path] = true;
 		try {
 			const nodes = await ideListFiles(sandboxId, repo, path || '.');
+			if (mine !== gen) return;
 			children[path] = nodes.filter((n) => n.name !== '.git');
 		} finally {
-			busy[path] = false;
+			if (mine === gen) busy[path] = false;
 		}
 	}
 
@@ -71,13 +75,18 @@
 	}
 
 	async function reload() {
+		gen += 1;
+		const mine = gen;
 		children = {};
+		busy = {};
 		rootLoaded = false;
 		await loadDir('');
+		if (mine !== gen) return;
 		rootLoaded = true;
 		const open = Object.keys(expanded).filter((k) => expanded[k]);
 		for (const path of open) loadDir(path);
-		lsp = await ideLspStatus(sandboxId, repo);
+		const servers = await ideLspStatus(sandboxId, repo);
+		if (mine === gen) lsp = servers;
 	}
 
 	let lastKey = '';
