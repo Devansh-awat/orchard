@@ -65,6 +65,26 @@ spec:
             - { name: BUILDKIT_LOCAL_CACHE_ENABLED, value: "true" }
             - { name: BUILDKIT_LOCAL_CACHE_PATH, value: {{ .Values.builders.localCache.path | quote }} }
             - { name: BUILDKIT_LOCAL_CACHE_PVC,  value: {{ .Values.builders.localCache.pvcName | quote }} }
+            {{- with .Values.builders.localCache.gcKeepBytes }}
+            - { name: BUILDKIT_GC_KEEP_BYTES, value: {{ . | quote }} }
+            {{- end }}
+            {{- with .Values.builders.localCache.gcEphemeralKeepBytes }}
+            - { name: BUILDKIT_GC_EPHEMERAL_KEEP_BYTES, value: {{ . | quote }} }
+            {{- end }}
+            {{- with .Values.builders.localCache.evict }}
+            {{- with .highPct }}
+            - { name: BUILDKIT_CACHE_HIGH_PCT, value: {{ . | quote }} }
+            {{- end }}
+            {{- with .targetPct }}
+            - { name: BUILDKIT_CACHE_TARGET_PCT, value: {{ . | quote }} }
+            {{- end }}
+            {{- with .maxAgeDays }}
+            - { name: BUILDKIT_CACHE_MAX_AGE_DAYS, value: {{ . | quote }} }
+            {{- end }}
+            {{- with .idleMinutes }}
+            - { name: BUILDKIT_CACHE_IDLE_MINUTES, value: {{ . | quote }} }
+            {{- end }}
+            {{- end }}
             {{- end }}
             {{- if .Values.tenantSandbox.enabled }}
             - { name: TENANT_RUNTIME_CLASS, value: {{ .Values.tenantSandbox.runtimeClassName | quote }} }

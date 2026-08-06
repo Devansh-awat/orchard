@@ -12,6 +12,7 @@ import {
   parseRailpackInfo,
   railpackConfigOverride,
 } from './build-config';
+import { cacheEvictInitContainer } from './cache-evict';
 
 interface BuildJobOptions {
   repoUrl: string;
@@ -61,6 +62,8 @@ interface BuildJobStatus {
   railpackInfoLog?: string;
   /** Scheduler's reason when the pod could not be placed, e.g. an unbound PVC. */
   schedulingMessage?: string;
+  /** Kubelet's reason when a scheduled pod's containers cannot be created. */
+  startupMessage?: string;
 }
 
 const BUILDKIT_PUSH_PHASE_RE =
@@ -138,6 +141,31 @@ export class ImageBuilderService {
   private readonly localCachePath = process.env.BUILDKIT_LOCAL_CACHE_PATH || '/cache/buildkit';
 
   private readonly localCachePvc = process.env.BUILDKIT_LOCAL_CACHE_PVC;
+
+  // Mirrors builders.localCache.gcKeepBytes / gcEphemeralKeepBytes in the
+  // chart. The chart renders a buildkit-config ConfigMap carrying these too,
+  // but ensureBuildkitConfig replaces that ConfigMap wholesale at runtime — so
+  // they have to be threaded through here as well or the chart's GC policy is
+  // silently dropped on the first build.
+  private readonly gcKeepBytes = process.env.BUILDKIT_GC_KEEP_BYTES || '18GB';
+
+  private readonly gcEphemeralKeepBytes = process.env.BUILDKIT_GC_EPHEMERAL_KEEP_BYTES || '1GB';
+
+  // BuildKit's GC only bounds a single worker's root, and every build gets its
+  // own worker rooted in its own subPath of the shared PVC — nothing in
+  // BuildKit bounds the *sum* across tenants. So the volume fills, kubelet can
+  // no longer mkdir the next tenant's subPath, and the build dies with an
+  // opaque CreateContainerConfigError. These knobs drive the tenant-level
+  // sweep in cacheEvictInitContainer, which is what actually bounds the total.
+  private readonly cacheEvictHighPct = Number(process.env.BUILDKIT_CACHE_HIGH_PCT || 80);
+
+  private readonly cacheEvictTargetPct = Number(process.env.BUILDKIT_CACHE_TARGET_PCT || 60);
+
+  private readonly cacheEvictMaxAgeDays = Number(process.env.BUILDKIT_CACHE_MAX_AGE_DAYS || 14);
+
+  // A tenant whose cache was touched more recently than this is assumed to have
+  // a build in flight and is never evicted under pressure.
+  private readonly cacheEvictIdleMinutes = Number(process.env.BUILDKIT_CACHE_IDLE_MINUTES || 60);
 
   // When enabled, build jobs are pinned to nodes labelled `orchard-builder=true`
   // (and tolerate a matching `orchard-builder` NoSchedule taint if present).
@@ -671,7 +699,18 @@ debug = true
 [worker.oci]
   max-parallelism = 4
   gc = true
-  gckeepstorage = 35000000000
+
+  # This is a *per-tenant* ceiling: every build runs its own buildkitd rooted
+  # in its own subPath, so N tenants can hold N x gcKeepBytes on one PVC. The
+  # total is bounded by the cache-evict init container, not here. Keep this
+  # well under the PVC size so a single tenant can't fill it alone.
+  [[worker.oci.gcpolicy]]
+    keepBytes = "${this.gcEphemeralKeepBytes}"
+    filters = ["type==source.local", "type==exec.cachemount", "type==source.git.checkout"]
+
+  [[worker.oci.gcpolicy]]
+    all = true
+    keepBytes = "${this.gcKeepBytes}"
 
   [[worker.oci.rlimits]]
     type = "RLIMIT_NOFILE"
@@ -926,9 +965,12 @@ fi
 
 
   /**
-   * Generate a shell snippet that prunes the local cache directory when disk
-   * usage exceeds 80%. Removes the oldest idle subdirectories (by mtime) until
-   * usage drops below 70%.
+   * Generate a shell snippet that prunes *this tenant's own* per-image cache
+   * directories when disk usage exceeds 80%, oldest-idle first, until usage
+   * drops below 70%. It runs inside the buildkit container, whose cache mount
+   * is the tenant's subPath — so `df` reports the whole shared PVC but the
+   * loop can only ever delete our own entries. Cross-tenant eviction is
+   * `cacheEvictInitContainer`'s job.
    */
   private cachePrunePreamble(selfCacheDir = ''): string {
     if (!this.localCacheEnabled) return '';
@@ -961,6 +1003,15 @@ fi
 # --- End cache prune ---
 `;
   }
+
+  // Waiting reasons kubelet retries forever without the pod ever leaving
+  // Pending. ImagePullBackOff is deliberately absent — a registry blip does
+  // recover on its own.
+  private static readonly FATAL_WAITING_REASONS = new Set([
+    'CreateContainerConfigError',
+    'CreateContainerError',
+    'InvalidImageName',
+  ]);
 
   private static readonly GIT_SHA_PREAMBLE =
     'GIT_SHA=$(git -C /workspace rev-parse HEAD 2>/dev/null || echo unknown)\n';
@@ -1484,6 +1535,23 @@ fi
         console.warn(`[ImageBuilder] Failed to get daemon, falling back to daemonless:`, err.message);
         await this.appendLog(deploymentId, `Persistent daemon unavailable, using standard builder`, 'WARNING');
       }
+    }
+
+    // Runs first, and only when the cache volume is the real shared PVC — the
+    // disableSharedCache fallback swaps in an emptyDir with nothing to evict,
+    // and daemon mode keeps its cache in the daemon pod.
+    const sharedCacheVolume = !daemonIp
+      && this.localCacheEnabled
+      && !!this.localCachePvc
+      && !options.disableSharedCache;
+    if (sharedCacheVolume) {
+      initContainers.unshift(cacheEvictInitContainer({
+        cacheSubPath,
+        maxAgeDays: this.cacheEvictMaxAgeDays,
+        highPct: this.cacheEvictHighPct,
+        targetPct: this.cacheEvictTargetPct,
+        idleMinutes: this.cacheEvictIdleMinutes,
+      }) as k8s.V1Container);
     }
 
     // Build the BuildKit container spec.
@@ -2230,6 +2298,7 @@ exit $rc`,
       let pusherLogs = '';
       let railpackInfoLog: string | undefined;
       let schedulingMessage: string | undefined;
+      let startupMessage: string | undefined;
 
       if (jobSpec.status?.succeeded && jobSpec.status.succeeded > 0) {
         status = 'succeeded';
@@ -2273,6 +2342,19 @@ exit $rc`,
             schedulingMessage = [scheduled.reason, scheduled.message]
               .filter(Boolean)
               .join(': ') || 'pod is not schedulable';
+          }
+
+          // A pod that scheduled fine but whose container config kubelet keeps
+          // rejecting never leaves Pending and never writes a log line, so it
+          // burns the entire build timeout in silence. Surface the waiting
+          // reason so the caller can fail fast with something actionable.
+          if (!schedulingMessage && podPhase === 'Pending') {
+            const blocked = [...(initContainerStatuses ?? []), ...(containerStatuses ?? [])]
+              .find(cs => ImageBuilderService.FATAL_WAITING_REASONS.has(cs.state?.waiting?.reason ?? ''));
+            const waiting = blocked?.state?.waiting;
+            if (waiting) {
+              startupMessage = `container ${blocked?.name}: ${waiting.reason}${waiting.message ? ` - ${waiting.message}` : ''}`;
+            }
           }
 
           railpackInfoLog = await this.readRailpackInfoLog(
@@ -2426,6 +2508,7 @@ exit $rc`,
         imageRef,
         railpackInfoLog,
         schedulingMessage,
+        startupMessage,
       };
     } catch (error) {
       if (error.statusCode === 404) {
@@ -2524,6 +2607,12 @@ exit $rc`,
           this.prisma.$executeRaw`
             UPDATE "deployments" SET "updated_at" = NOW() WHERE "id" = ${deploymentId}::uuid
           `.catch(() => {});
+        }
+
+        if (status.status === 'pending' && status.startupMessage && elapsedSeconds > 60) {
+          await this.appendLog(deploymentId, `Build pod could not start: ${status.startupMessage}`, 'ERROR');
+          await this.deleteBuildJob(jobName).catch(() => {});
+          throw new BadRequestException(`Build failed: ${status.startupMessage}`);
         }
 
         if (status.status === 'pending' && elapsedSeconds > 60) {
@@ -2789,11 +2878,24 @@ exit $rc`,
             .catch(() => null);
           logTail = (dep?.buildLogs ?? '').slice(-20000);
         }
-        if (/no space left on device|ENOSPC/i.test(`${error?.message ?? ''}\n${logTail}`)) {
-          console.warn(`[ImageBuilder] Cache-full failure for ${imageName}:${tag}, retrying without shared cache`);
+        // The shared cache is an optimisation, never a dependency: any fault
+        // that is *specifically* the cache's gets one retry without it rather
+        // than failing the user's build. Three shapes reach us:
+        //   - ENOSPC, straight from buildctl or from cache-evict's mkdir.
+        //   - kubelet refusing to leak the errno behind a failed subPath mkdir,
+        //     which arrives as a bare CreateContainerConfigError with no build
+        //     logs at all — matchable only by shape.
+        //   - cache-evict exiting non-zero. That container touches nothing but
+        //     the shared cache, so its failure can't mean anything else.
+        const message = error?.message ?? '';
+        const cacheUnusable = /no space left on device|ENOSPC/i.test(`${message}\n${logTail}`)
+          || /failed to create subPath directory for volumeMount "buildkit-cache"/i.test(message)
+          || /init container cache-evict failed/i.test(message);
+        if (cacheUnusable) {
+          console.warn(`[ImageBuilder] Shared cache unusable for ${imageName}:${tag}, retrying without it`);
           await this.appendLog(
             deploymentId,
-            'Shared build cache ran out of space. Retrying the build without it.',
+            'The shared build cache is unavailable. Retrying the build without it.',
           ).catch(() => {});
           return this.buildAndPush({ ...options, disableSharedCache: true });
         }

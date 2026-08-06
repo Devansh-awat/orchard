@@ -165,17 +165,33 @@ builders:
     enabled: false
   localCache:
     enabled: true
-    size: 25Gi
+    size: 100Gi
     storageClass: longhorn
     path: /cache/buildkit
     pvcName: buildkit-cache
     accessMode: ReadWriteOnce
-    # BuildKit GC ceilings — keep cache well below `size` so the PVC
-    # never fills. gcEphemeralKeepBytes caps high-churn types (local
-    # source, RUN cache mounts, git checkouts); gcKeepBytes is the
-    # total cap across everything. Both must be < `size`.
+    # BuildKit GC ceilings. These are PER TENANT, not per volume: every build
+    # runs its own buildkitd rooted in its own subPath of this PVC, so BuildKit
+    # has no idea the other tenants exist and N of them can hold N x
+    # gcKeepBytes. Keeping the total under `size` is `evict`'s job below; these
+    # only stop one tenant hogging the volume on its own.
+    # gcEphemeralKeepBytes caps high-churn types (local source, RUN cache
+    # mounts, git checkouts); gcKeepBytes is the total cap across everything.
     gcKeepBytes: 18GB
     gcEphemeralKeepBytes: 1GB
+    # Tenant-level eviction, run by the `cache-evict` init container before
+    # every build. It mounts this PVC at its root (no subPath) so it still
+    # starts when the volume is 100% full — which is exactly when the build
+    # container cannot start, because kubelet can no longer mkdir its subPath.
+    evict:
+      # Evict any tenant untouched for this long, pressure or not.
+      maxAgeDays: 14
+      # Above highPct, evict least-recently-used tenants until under targetPct.
+      highPct: 80
+      targetPct: 60
+      # Never evict a tenant whose cache moved this recently — assume a build
+      # is in flight.
+      idleMinutes: 60
   quota:
     requestsCpu: "16"
     requestsMemory: "32Gi"

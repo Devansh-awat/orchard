@@ -84,11 +84,15 @@ data:
 
     [worker.oci]
       max-parallelism = 4
-      # Garbage-collect the shared local cache so it never fills the PVC.
-      # The cache PVC is sized at .Values.builders.localCache.size (25Gi by
-      # default); we keep the cache under {{ .Values.builders.localCache.gcKeepBytes | default "18GB" }}
-      # so there's always headroom for the in-flight build's intermediate
-      # state and metadata.
+      # Garbage-collect one tenant's slice of the shared cache. This bounds a
+      # single buildkitd root, NOT the PVC — each build gets its own worker in
+      # its own subPath, so the cross-tenant total is bounded by the
+      # cache-evict init container instead. Keep this under
+      # .Values.builders.localCache.size so no one tenant can fill the volume.
+      #
+      # NOTE: the server replaces this ConfigMap at runtime (see
+      # ensureBuildkitConfig in image-builder.service.ts) — the same values are
+      # passed to it as BUILDKIT_GC_* env, so keep the two in sync.
       #
       # Two policies, evaluated top-to-bottom:
       #   1. Ephemeral entries (local source uploads, RUN --mount=cache
