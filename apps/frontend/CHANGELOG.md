@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.2.1](https://github.com/LeafdTK/leaf/compare/frontend/v1.2.0...frontend/v1.2.1) (2026-08-06)
+
+
+### Bug Fixes
+
+* sandbox boot progress, optimistic actions, terminal tabs, and layout polish ([0820116](https://github.com/LeafdTK/leaf/commit/0820116267467cc07a1e14bb1980bcf1f3b007d4))
+
 ## [1.2.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.1.0...frontend/v1.2.0) (2026-08-05)
 
 

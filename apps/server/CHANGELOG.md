@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.3.1](https://github.com/LeafdTK/leaf/compare/server/v2.3.0...server/v2.3.1) (2026-08-06)
+
+
+### Bug Fixes
+
+* bound shared buildkit cache with tenant eviction ([5c34368](https://github.com/LeafdTK/leaf/commit/5c34368be478bed853393fddd73aef0ee410eaf1))
+
 ## [2.3.0](https://github.com/LeafdTK/leaf/compare/server/v2.2.1...server/v2.3.0) (2026-08-05)
 
 
