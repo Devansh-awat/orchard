@@ -16,6 +16,7 @@
 		bodyAttach,
 		knownIcon,
 		projectSwatch,
+		iconTint,
 		timeAgo
 	} from './helpers.svelte';
 	import { Menu, MenuItem, RemoteImg } from '$lib/components/ui';
@@ -72,16 +73,16 @@
 	});
 
 	const depIcons = $derived.by(() => {
-		const icons: { id: string; src: string }[] = [];
+		const icons: { id: string; src: string; known: boolean }[] = [];
 		for (const dep of group.deps) {
 			if (icons.length >= 3) break;
 			const known = knownIcon(dep.image);
 			if (known) {
-				icons.push({ id: dep.id, src: known });
+				icons.push({ id: dep.id, src: known, known: true });
 				continue;
 			}
 			if (!failedFav.has(dep.id) && dep.faviconUrl) {
-				icons.push({ id: dep.id, src: dep.faviconUrl });
+				icons.push({ id: dep.id, src: dep.faviconUrl, known: false });
 			}
 		}
 		return icons;
@@ -143,14 +144,19 @@
 		>
 			{#if meta?.icon}
 				{#if /^https?:\/\//.test(meta.icon)}
-					<RemoteImg src={meta.icon} class="proj-av-img" />
+					<RemoteImg src={meta.icon} class="proj-av-img" style="background: {iconTint(group.id)}" />
 				{:else}
 					<span class="proj-av-emoji">{meta.icon}</span>
 				{/if}
 			{:else if depIcons.length > 0}
 				<div class="proj-av-cluster proj-av-cluster--{depIcons.length}">
 					{#each depIcons as ic (ic.id)}
-						<RemoteImg src={ic.src} class="proj-av-mini" onerror={() => onFavErr(ic.id)} />
+						<RemoteImg
+							src={ic.src}
+							class="proj-av-mini"
+							style={ic.known ? undefined : `background: ${iconTint(ic.id)}`}
+							onerror={() => onFavErr(ic.id)}
+						/>
 					{/each}
 				</div>
 			{:else}

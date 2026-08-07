@@ -27,6 +27,7 @@ export { default as SectionCard } from './SectionCard.svelte';
 export { default as Alert } from './Alert.svelte';
 export { default as Skeleton } from './Skeleton.svelte';
 export { default as RemoteImg } from './RemoteImg.svelte';
+export { default as IconTile } from './IconTile.svelte';
 export { default as SectionHeader } from './SectionHeader.svelte';
 export { default as Dropdown } from './Dropdown.svelte';
 export type { DropdownOption } from './Dropdown.svelte';

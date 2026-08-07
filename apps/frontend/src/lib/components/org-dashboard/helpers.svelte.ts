@@ -58,6 +58,20 @@ const swatchCache = new Map<string, string>();
 
 const ORCHARD_HUES = [352, 335, 24, 38, 88, 130, 288, 220];
 
+/**
+ * A deterministic tinted plate behind a favicon, so a logo with transparency
+ * fills the tile with colour instead of sitting on a flat/empty square. The hue
+ * comes from the same curated Orchard palette the pixel swatches use, and the
+ * gradient stays analogous (hue → hue+22) so it reads as one cohesive tile
+ * rather than a random neon. Stable per seed, so an app's colour never changes.
+ */
+export function iconTint(seed: string): string {
+	let hash = 0;
+	for (let i = 0; i < seed.length; i++) hash = (hash * 31 + seed.charCodeAt(i)) >>> 0;
+	const hue = ORCHARD_HUES[hash % ORCHARD_HUES.length];
+	return `linear-gradient(140deg, hsl(${hue} 60% 53%), hsl(${(hue + 22) % 360} 56% 42%))`;
+}
+
 export function projectSwatch(slug: string): string {
 	const cached = swatchCache.get(slug);
 	if (cached) return cached;

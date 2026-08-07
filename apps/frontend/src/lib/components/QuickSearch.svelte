@@ -4,12 +4,15 @@
 	import { createQuery } from '@tanstack/svelte-query';
 	import { selectedOrganization } from '$lib/stores';
 	import { overviewQueryOptions } from '$lib/queries/overview';
-	import { Package, Rocket, Search, X, Database, LayoutTemplate } from 'lucide-svelte';
+	import { Search, CornerDownLeft, Database, LayoutTemplate, X } from 'lucide-svelte';
 	import { onMount } from 'svelte';
+	import { IconTile } from '$lib/components/ui';
+	import { knownIcon, favUrl, iconTint, projectSwatch } from './org-dashboard/helpers.svelte';
 	import {
 		motionPopover as motionPopoverBase,
 		motionBackdrop as motionBackdropBase,
-		motionStagger as motionStaggerBase
+		motionStagger as motionStaggerBase,
+		magneticHighlight
 	} from '$lib/utils/motion.svelte';
 
 	let open = $state(false);
@@ -28,6 +31,10 @@
 		name: string;
 		type: 'project' | 'deployment' | 'ingress' | 'database' | 'templateInstance';
 		href: string;
+		slug?: string;
+		image?: string;
+		faviconUrl?: string | null;
+		ingressHost?: string;
 		children?: TreeItem[];
 	}
 
@@ -37,6 +44,9 @@
 			id: string;
 			name: string;
 			displayName?: string | null;
+			image?: string;
+			faviconUrl?: string | null;
+			ingresses?: Array<{ host: string }>;
 			project?: ProjectRef;
 		}>;
 		databases?: Array<{ id: string; name: string; project?: ProjectRef }>;
@@ -55,6 +65,7 @@
 					name: p.name,
 					type: 'project',
 					href: `/${orgSlug}/projects/${p.slug}`,
+					slug: p.slug,
 					children: []
 				};
 				projects.set(p.id, node);
@@ -67,7 +78,10 @@
 				id: d.id,
 				name: d.displayName || d.name,
 				type: 'deployment',
-				href: `/${orgSlug}/deployments/${d.id}`
+				href: `/${orgSlug}/deployments/${d.id}`,
+				image: d.image,
+				faviconUrl: d.faviconUrl,
+				ingressHost: d.ingresses?.[0]?.host.split('/')[0]
 			});
 		}
 		for (const db of data.databases ?? []) {
@@ -89,21 +103,6 @@
 			const input = document.querySelector('.quick-search-input') as HTMLInputElement;
 			input?.focus();
 		}, 0);
-	}
-
-	function getIcon(type: TreeItem['type']) {
-		switch (type) {
-			case 'project':
-				return Package;
-			case 'deployment':
-				return Rocket;
-			case 'database':
-				return Database;
-			case 'templateInstance':
-				return LayoutTemplate;
-			default:
-				return Package;
-		}
 	}
 
 	function typeLabel(type: TreeItem['type']) {
@@ -377,6 +376,25 @@
 	$effect(() => {
 		if (open) render = true;
 	});
+
+	// The selection is one pill that springs between rows (iOS-pointer style)
+	// rather than each row swapping its own background. Track the live selected
+	// element so `magneticHighlight` can chase it.
+	let selectedEl = $state<HTMLElement | null>(null);
+	$effect(() => {
+		selectedIndex;
+		result.flat.length;
+		// Clear synchronously when there is nothing to point at, so the cursor
+		// disappears the instant the query is emptied instead of lingering.
+		if (!open || !query.trim() || totalCount === 0) {
+			selectedEl = null;
+			return;
+		}
+		queueMicrotask(() => {
+			if (!open) return;
+			selectedEl = document.querySelector<HTMLElement>('.quick-search-item.is-selected');
+		});
+	});
 </script>
 
 {#if render}
@@ -396,107 +414,127 @@
 				}
 			)}
 		>
+			{#snippet itemVisual(item: TreeItem)}
+				{#if item.type === 'project'}
+					<span class="qs-ic qs-ic--swatch" style={projectSwatch(item.slug ?? item.id)}></span>
+				{:else if item.type === 'deployment'}
+					{@const known = knownIcon(item.image)}
+					{@const src = known ?? item.faviconUrl ?? (item.ingressHost ? favUrl(item.ingressHost) : null)}
+					<IconTile class="qs-ic" {src} tint={!known && src ? iconTint(item.id) : undefined}>
+						{#snippet fallback()}
+							<span class="qs-ic-letter">{item.name.charAt(0).toUpperCase()}</span>
+						{/snippet}
+					</IconTile>
+				{:else if item.type === 'database'}
+					<span class="qs-ic qs-ic--glyph"><Database size={15} /></span>
+				{:else}
+					<span class="qs-ic qs-ic--glyph"><LayoutTemplate size={15} /></span>
+				{/if}
+			{/snippet}
+
 			<div class="quick-search-header">
-				<div class="quick-search-input-wrapper">
-					<Search class="quick-search-icon" />
-					<input
-						type="text"
-						class="quick-search-input"
-						placeholder="Search projects, apps, databases…"
-						bind:value={query}
-					/>
-					{#if query}
-						<button
-							type="button"
-							class="quick-search-clear"
-							onclick={() => {
-								query = '';
-							}}
-							aria-label="Clear"
-						>
-							<X class="h-4 w-4" />
-						</button>
+				<Search class="quick-search-icon" />
+				<input
+					type="text"
+					class="quick-search-input"
+					placeholder="Search projects, apps and databases"
+					bind:value={query}
+				/>
+				{#if query}
+					<button
+						type="button"
+						class="quick-search-clear"
+						onclick={() => {
+							query = '';
+						}}
+						aria-label="Clear"
+					>
+						<X size={14} />
+					</button>
+				{:else}
+					<kbd class="qs-kbd">esc</kbd>
+				{/if}
+			</div>
+
+			<div class="quick-search-results">
+				<div class="quick-search-list">
+					<div class="qs-pill" {@attach magneticHighlight(() => selectedEl)}>
+						<CornerDownLeft class="qs-pill-enter" size={14} />
+					</div>
+					{#if !query.trim()}
+						<div class="quick-search-empty">
+							<span class="quick-search-empty-glyph"><Search size={18} /></span>
+							<p class="quick-search-empty-text">Search everything in this org</p>
+							<p class="quick-search-empty-hint">
+								Type a project, app or database. A project name reveals everything inside it.
+							</p>
+						</div>
+					{:else if totalCount === 0}
+						<div class="quick-search-empty">
+							<p class="quick-search-empty-text">No matches for “{query}”</p>
+						</div>
+					{:else}
+						{@const flat = result.flat}
+						{#each result.groups as group (group.key)}
+							{#if group.project && (group.items.length > 1 || group.items[0].item.id !== group.project.id)}
+								<div class="quick-search-group-header">
+									<span class="quick-search-group-label">
+										{#each segments(group.project.name, group.projectSpans) as seg, si (si)}
+											<span class:hl={seg.hit}>{seg.text}</span>
+										{/each}
+									</span>
+									{#if group.projectMatched}
+										<span class="quick-search-group-pill">project</span>
+									{/if}
+								</div>
+							{/if}
+							{#each group.items as hit (hit.item.id)}
+								{@const flatIndex = flat.indexOf(hit)}
+								{@const isSelected = flatIndex === selectedIndex}
+								<button
+									type="button"
+									class="quick-search-item"
+									class:is-selected={isSelected}
+									class:is-nested={!!group.project && hit.item.id !== group.project.id}
+									onclick={() => handleSelect(hit.item)}
+									onmouseenter={(e) => {
+										selectedIndex = flatIndex;
+										selectedEl = e.currentTarget;
+									}}
+									{@attach rowStagger(flatIndex)}
+								>
+									{@render itemVisual(hit.item)}
+									<div class="quick-search-item-content">
+										<div class="quick-search-item-name">
+											{#each segments(hit.item.name, hit.spans) as seg, si (si)}
+												<span class:hl={seg.hit}>{seg.text}</span>
+											{/each}
+										</div>
+										{#if hit.via === 'project' && hit.project}
+											<div class="quick-search-item-sub">in {hit.project.name}</div>
+										{/if}
+									</div>
+									<span class="quick-search-item-tag">{typeLabel(hit.item.type)}</span>
+								</button>
+							{/each}
+						{/each}
 					{/if}
 				</div>
 			</div>
 
-			<div class="quick-search-results">
-				{#if !query.trim()}
-					<div class="quick-search-empty">
-						<p class="quick-search-empty-text">
-							Type to search across every project and its contents.
-						</p>
-						<p class="quick-search-empty-hint">
-							Tip: typing a project name reveals everything inside it.
-						</p>
-					</div>
-				{:else if totalCount === 0}
-					<div class="quick-search-empty">
-						<p class="quick-search-empty-text">No matches for "{query}"</p>
-					</div>
-				{:else}
-					{@const flat = result.flat}
-					{#each result.groups as group (group.key)}
-						{#if group.project && (group.items.length > 1 || group.items[0].item.id !== group.project.id)}
-							<div class="quick-search-group-header">
-								<span class="quick-search-group-label">
-									{#each segments(group.project.name, group.projectSpans) as seg, si (si)}
-										<span class:hl={seg.hit}>{seg.text}</span>
-									{/each}
-								</span>
-								{#if group.projectMatched}
-									<span class="quick-search-group-pill">project match</span>
-								{/if}
-							</div>
-						{/if}
-						{#each group.items as hit, j (hit.item.id)}
-							{@const Icon = getIcon(hit.item.type)}
-							{@const flatIndex = flat.indexOf(hit)}
-							{@const isSelected = flatIndex === selectedIndex}
-							<button
-								type="button"
-								class="quick-search-item"
-								class:is-selected={isSelected}
-								class:is-nested={!!group.project && hit.item.id !== group.project.id}
-								onclick={() => handleSelect(hit.item)}
-								onmouseenter={() => (selectedIndex = flatIndex)}
-								{@attach rowStagger(flatIndex)}
-							>
-								<Icon class="quick-search-item-icon" />
-								<div class="quick-search-item-content">
-									<div class="quick-search-item-name">
-										{#each segments(hit.item.name, hit.spans) as seg, si (si)}
-											<span class:hl={seg.hit}>{seg.text}</span>
-										{/each}
-									</div>
-									<div class="quick-search-item-meta">
-										<span class="quick-search-item-type">{typeLabel(hit.item.type)}</span>
-										{#if hit.via === 'project' && hit.project}
-											<span class="quick-search-item-context">in {hit.project.name}</span>
-										{/if}
-									</div>
-								</div>
-							</button>
-						{/each}
-					{/each}
-				{/if}
-			</div>
-
 			<div class="quick-search-footer">
 				<div class="quick-search-hint">
-					<span class="quick-search-hint-key">↑↓</span>
-					<span class="quick-search-hint-text">Navigate</span>
+					<kbd class="qs-kbd">↑</kbd><kbd class="qs-kbd">↓</kbd>
+					<span class="quick-search-hint-text">navigate</span>
 				</div>
 				<div class="quick-search-hint">
-					<span class="quick-search-hint-key">↵</span>
-					<span class="quick-search-hint-text">Open</span>
-				</div>
-				<div class="quick-search-hint">
-					<span class="quick-search-hint-key">Esc</span>
-					<span class="quick-search-hint-text">Close</span>
+					<kbd class="qs-kbd"><CornerDownLeft size={11} /></kbd>
+					<span class="quick-search-hint-text">open</span>
 				</div>
 				{#if totalCount > 0}
-					<div class="quick-search-count">{totalCount} result{totalCount === 1 ? '' : 's'}</div>
+					<div class="quick-search-count">
+						{totalCount} result{totalCount === 1 ? '' : 's'}
+					</div>
 				{/if}
 			</div>
 		</div>
@@ -508,96 +546,76 @@
 		position: fixed;
 		inset: 0;
 		z-index: 1000;
-		background-color: rgba(0, 0, 0, 0.5);
-		backdrop-filter: blur(4px);
+		background: rgba(0, 0, 0, 0.5);
+		backdrop-filter: blur(6px) saturate(120%);
+		-webkit-backdrop-filter: blur(6px) saturate(120%);
 		display: flex;
 		align-items: flex-start;
 		justify-content: center;
-		padding-top: 10vh;
+		padding: 12vh 1rem 1rem;
 	}
 
 	.quick-search-modal {
 		width: 100%;
-		max-width: 36rem;
-		max-height: 80vh;
+		max-width: 40rem;
+		max-height: 76vh;
 		display: flex;
 		flex-direction: column;
-		background-color: var(--surface-bg);
-		border: 1px solid var(--surface-border);
-		border-radius: var(--radius-lg);
+		background: var(--bg-raised);
+		border: 1px solid var(--border-default);
+		border-radius: var(--radius-xl);
 		box-shadow:
-			0 20px 25px -5px rgba(0, 0, 0, 0.1),
-			0 10px 10px -5px rgba(0, 0, 0, 0.04);
+			var(--elev-4),
+			inset 0 1px 0 0 rgba(255, 255, 255, 0.06);
 		overflow: hidden;
 		transform-origin: center top;
 	}
 
-	:root.dark .quick-search-modal {
-		box-shadow:
-			0 20px 25px -5px rgba(0, 0, 0, 0.5),
-			0 10px 10px -5px rgba(0, 0, 0, 0.3);
-	}
-
 	.quick-search-header {
-		padding: 1rem;
-		border-bottom: 1px solid var(--surface-border);
-	}
-
-	.quick-search-input-wrapper {
-		position: relative;
 		display: flex;
 		align-items: center;
 		gap: 0.75rem;
+		padding: 0.875rem 1rem;
+		border-bottom: 1px solid var(--rule);
 	}
 
 	.quick-search-icon {
-		position: absolute;
-		left: 0.75rem;
-		width: 1.25rem;
-		height: 1.25rem;
-		color: var(--surface-muted);
-		pointer-events: none;
-		z-index: 1;
+		width: 1.15rem;
+		height: 1.15rem;
+		flex-shrink: 0;
+		color: var(--text-faint);
 	}
 
 	.quick-search-input {
-		width: 100%;
+		flex: 1;
+		min-width: 0;
 		margin: 0;
-		padding: 0.75rem 0.75rem 0.75rem 2.4rem;
-		font-size: var(--text-body);
-		line-height: var(--lh-body);
-		background-color: var(--control-bg);
-		border: 1px solid var(--surface-border);
-		border-radius: var(--radius-sm);
-		color: var(--center-channel-color);
+		padding: 0;
+		background: none;
+		border: none;
 		outline: none;
-		transition:
-			border-color var(--dur-fast) ease,
-			box-shadow var(--dur-fast) ease;
-	}
-
-	.quick-search-input:focus {
-		border-color: var(--sidebar-text-active-border);
-		box-shadow: 0 0 0 3px color-mix(in srgb, var(--sidebar-text-active-border) 20%, transparent);
+		font-size: var(--text-headline);
+		line-height: var(--lh-headline);
+		letter-spacing: var(--track-headline);
+		color: var(--text-default);
 	}
 
 	.quick-search-input::placeholder {
-		color: var(--surface-muted);
+		color: var(--text-faint);
 	}
 
 	.quick-search-clear {
-		position: absolute;
-		right: 0.75rem;
 		display: flex;
 		align-items: center;
 		justify-content: center;
 		width: 1.5rem;
 		height: 1.5rem;
 		padding: 0;
-		background-color: transparent;
+		flex-shrink: 0;
+		background: none;
 		border: none;
 		border-radius: var(--radius-xs);
-		color: var(--surface-muted);
+		color: var(--text-faint);
 		cursor: pointer;
 		transition:
 			background-color var(--dur-fast) ease,
@@ -605,193 +623,250 @@
 	}
 
 	.quick-search-clear:hover {
-		background-color: var(--control-hover-bg);
-		color: var(--center-channel-color);
+		background: var(--fill-soft);
+		color: var(--text-default);
+	}
+
+	.qs-kbd {
+		display: inline-flex;
+		align-items: center;
+		justify-content: center;
+		min-width: 1.25rem;
+		height: 1.25rem;
+		padding: 0 0.3125rem;
+		font-family: inherit;
+		font-size: var(--text-micro);
+		font-weight: 600;
+		line-height: 1;
+		color: var(--text-muted);
+		background: var(--fill-soft);
+		border: 1px solid var(--rule);
+		border-radius: var(--radius-xs);
 	}
 
 	.quick-search-results {
 		flex: 1;
 		overflow-y: auto;
-		max-height: 26rem;
-		padding: 0.5rem;
+		max-height: 24rem;
+		padding: 0.375rem;
+	}
+
+	.quick-search-list {
+		position: relative;
+	}
+
+	.qs-pill {
+		position: absolute;
+		left: 0;
+		top: 0;
+		z-index: 2;
+		border-radius: var(--radius-md);
+		background: transparent;
+		box-shadow: inset 0 0 0 1.5px var(--border-strong);
+		pointer-events: none;
+	}
+
+	.qs-pill :global(.qs-pill-enter) {
+		position: absolute;
+		right: 0.625rem;
+		top: 50%;
+		transform: translateY(-50%);
+		color: var(--text-muted);
 	}
 
 	.quick-search-group-header {
 		display: flex;
 		align-items: center;
 		gap: 0.5rem;
-		padding: 0.75rem 0.75rem 0.25rem;
-		font-size: var(--text-micro);
-		line-height: var(--lh-micro);
-		font-weight: 600;
-		text-transform: uppercase;
-		letter-spacing: 0.06em;
-		color: var(--surface-muted);
+		padding: 0.75rem 0.625rem 0.25rem;
 	}
 
 	.quick-search-group-label {
-		text-transform: none;
-		letter-spacing: 0;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		color: color-mix(in srgb, var(--center-channel-color) 75%, transparent);
+		font-size: var(--text-micro);
+		line-height: var(--lh-micro);
+		font-weight: 700;
+		text-transform: uppercase;
+		letter-spacing: 0.07em;
+		color: var(--text-faint);
+	}
+
+	.quick-search-group-label :global(.hl) {
+		color: var(--accent);
 	}
 
 	.quick-search-group-pill {
-		display: inline-flex;
-		align-items: center;
-		padding: 0.0625rem 0.5rem;
 		font-size: var(--text-micro);
 		line-height: var(--lh-micro);
 		font-weight: 600;
 		text-transform: uppercase;
 		letter-spacing: 0.06em;
-		color: var(--sidebar-text-active-border);
-		background: color-mix(in srgb, var(--sidebar-text-active-border) 12%, transparent);
+		color: var(--accent);
+		background: var(--accent-subtle);
+		padding: 0.0625rem 0.375rem;
 		border-radius: var(--radius-pill);
 	}
 
 	.quick-search-item {
+		position: relative;
+		z-index: 1;
 		width: 100%;
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
-		padding: 0.75rem 0.75rem;
+		gap: 0.625rem;
+		padding: 0.4375rem 0.625rem;
 		text-align: left;
-		background-color: transparent;
+		background: none;
 		border: none;
-		border-radius: var(--radius-sm);
-		color: var(--center-channel-color);
+		border-radius: var(--radius-md);
+		color: var(--text-default);
 		cursor: pointer;
-		transition: background-color var(--dur-fast) ease;
 	}
 
 	.quick-search-item.is-nested {
-		padding-left: 1.5rem;
+		padding-left: 1.625rem;
 	}
 
-	.quick-search-item.is-selected {
-		background-color: var(--dropdown-hover-bg);
-	}
-
-	.quick-search-item-icon {
-		width: 1.125rem;
-		height: 1.125rem;
+	.quick-search-list :global(.qs-ic) {
+		width: 1.75rem;
+		height: 1.75rem;
 		flex-shrink: 0;
-		color: var(--surface-muted);
+		border-radius: var(--radius-sm);
+		background: var(--fill-soft);
+		box-shadow: inset 0 0 0 1px var(--rule);
 	}
 
-	.quick-search-item.is-selected .quick-search-item-icon {
-		color: var(--sidebar-text-active-border);
+	.quick-search-list :global(.qs-ic--glyph) {
+		display: grid;
+		place-items: center;
+		color: var(--text-muted);
+	}
+
+	.quick-search-list :global(.qs-ic-letter) {
+		display: grid;
+		place-items: center;
+		width: 100%;
+		height: 100%;
+		font-size: var(--text-caption);
+		font-weight: 700;
+		color: var(--accent);
+		background: linear-gradient(
+			135deg,
+			color-mix(in srgb, var(--accent) 16%, transparent),
+			color-mix(in srgb, var(--accent) 4%, transparent)
+		);
 	}
 
 	.quick-search-item-content {
 		flex: 1;
+		min-width: 0;
 		display: flex;
 		flex-direction: column;
-		gap: 0.125rem;
-		min-width: 0;
+		gap: 0.0625rem;
 	}
 
 	.quick-search-item-name {
-		font-size: var(--text-body);
-		line-height: var(--lh-body);
-		font-weight: 600;
-		color: var(--center-channel-color);
+		font-size: var(--text-callout);
+		line-height: var(--lh-callout);
+		font-weight: 550;
+		color: var(--text-default);
 		white-space: nowrap;
 		overflow: hidden;
 		text-overflow: ellipsis;
 	}
 
 	.quick-search-item-name :global(.hl) {
-		color: var(--sidebar-text-active-border);
-		font-weight: 600;
+		color: var(--accent);
+		font-weight: 700;
 	}
 
-	.quick-search-group-label :global(.hl) {
-		color: var(--sidebar-text-active-border);
-	}
-
-	.quick-search-item-meta {
-		display: flex;
-		align-items: center;
-		gap: 0.5rem;
+	.quick-search-item-sub {
 		font-size: var(--text-caption);
 		line-height: var(--lh-caption);
-		color: var(--surface-muted);
+		color: var(--text-muted);
+		white-space: nowrap;
+		overflow: hidden;
+		text-overflow: ellipsis;
 	}
 
-	.quick-search-item-type {
-		text-transform: capitalize;
+	.quick-search-item-tag {
+		flex-shrink: 0;
+		margin-left: auto;
+		font-size: var(--text-micro);
+		line-height: 1;
+		font-weight: 600;
+		text-transform: uppercase;
+		letter-spacing: 0.06em;
+		color: var(--text-faint);
+		transition: opacity var(--dur-fast) ease;
 	}
 
-	.quick-search-item-context::before {
-		content: '·';
-		margin-right: 0.5rem;
-		opacity: 0.6;
+	/* The single travelling enter glyph rides the cursor to this row's right
+	   edge, so the row's own tag steps aside for it. */
+	.quick-search-item.is-selected .quick-search-item-tag {
+		opacity: 0;
 	}
 
 	.quick-search-empty {
-		padding: 3rem 1rem;
+		display: flex;
+		flex-direction: column;
+		align-items: center;
+		gap: 0.375rem;
+		padding: 2.75rem 1rem;
 		text-align: center;
 	}
 
+	.quick-search-empty-glyph {
+		display: grid;
+		place-items: center;
+		width: 2.5rem;
+		height: 2.5rem;
+		margin-bottom: 0.25rem;
+		border-radius: var(--radius-md);
+		background: var(--fill-soft);
+		color: var(--text-faint);
+	}
+
 	.quick-search-empty-text {
+		margin: 0;
 		font-size: var(--text-callout);
 		line-height: var(--lh-callout);
-		color: var(--center-channel-color);
-		margin: 0;
+		font-weight: 600;
+		color: var(--text-default);
 	}
 
 	.quick-search-empty-hint {
+		margin: 0;
+		max-width: 22rem;
 		font-size: var(--text-caption);
 		line-height: var(--lh-caption);
-		color: var(--surface-muted);
-		margin: 0.5rem 0 0;
+		color: var(--text-muted);
 	}
 
 	.quick-search-footer {
 		display: flex;
 		align-items: center;
 		gap: 1rem;
-		padding: 0.75rem 1rem;
-		border-top: 1px solid var(--surface-border);
-		background-color: var(--control-bg);
+		padding: 0.5625rem 0.875rem;
+		border-top: 1px solid var(--rule);
+		background: var(--bg-sunken);
 	}
 
 	.quick-search-hint {
 		display: flex;
 		align-items: center;
-		gap: 0.5rem;
-	}
-
-	.quick-search-hint-key {
-		display: inline-flex;
-		align-items: center;
-		justify-content: center;
-		min-width: 1.5rem;
-		height: 1.5rem;
-		padding: 0 0.5rem;
-		font-size: var(--text-caption);
-		line-height: var(--lh-caption);
-		font-weight: 600;
-		background-color: var(--surface-bg);
-		border: 1px solid var(--surface-border);
-		border-radius: var(--radius-xs);
-		color: var(--center-channel-color);
+		gap: 0.375rem;
 	}
 
 	.quick-search-hint-text {
 		font-size: var(--text-caption);
 		line-height: var(--lh-caption);
-		color: var(--surface-muted);
+		color: var(--text-muted);
 	}
 
 	.quick-search-count {
 		margin-left: auto;
 		font-size: var(--text-caption);
 		line-height: var(--lh-caption);
-		color: var(--surface-muted);
+		color: var(--text-faint);
 	}
 </style>

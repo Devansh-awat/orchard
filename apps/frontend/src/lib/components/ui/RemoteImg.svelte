@@ -11,12 +11,14 @@
 		src,
 		alt = '',
 		class: className = '',
+		style,
 		eager = true,
 		onerror
 	}: {
 		src: string;
 		alt?: string;
 		class?: string;
+		style?: string;
 		eager?: boolean;
 		onerror?: () => void;
 	} = $props();
@@ -51,6 +53,7 @@
 		{src}
 		{alt}
 		class="ui-remote-img{className ? ` ${className}` : ''}"
+		{style}
 		class:is-ready={ready}
 		loading={eager ? 'eager' : 'lazy'}
 		fetchpriority={eager ? 'high' : 'auto'}

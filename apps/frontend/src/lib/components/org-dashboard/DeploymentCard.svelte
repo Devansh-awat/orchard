@@ -1,8 +1,8 @@
 <script lang="ts">
 	import { Star, MoreVertical, ExternalLink, RefreshCw, Pin, PinOff, Copy } from 'lucide-svelte';
 	import { springHover, springPop, stateEcho } from '$lib/utils/motion.svelte';
-	import { knownIcon, favUrl, timeAgo } from './helpers.svelte';
-	import { Menu, MenuItem, resourceStatus, RemoteImg } from '$lib/components/ui';
+	import { knownIcon, favUrl, timeAgo, iconTint } from './helpers.svelte';
+	import { Menu, MenuItem, resourceStatus, IconTile } from '$lib/components/ui';
 	import type { DeploymentSummary, LiveMetricsEntry } from './types';
 
 	let {
@@ -32,6 +32,12 @@
 	} = $props();
 
 	const icon = $derived(knownIcon(dep.image));
+	const favSrc = $derived(
+		dep.faviconUrl ?? (dep.ingresses.length > 0 ? favUrl(dep.ingresses[0].host.split('/')[0]) : null)
+	);
+	// Known tech icon wins; else the favicon (unless it already failed). Null
+	// leaves just the instant letter fallback.
+	const imgSrc = $derived(icon ?? (favSrc && !failedFav.has(dep.id) ? favSrc : null));
 	const metrics = $derived(liveMetrics?.get(dep.id));
 	const m = $derived(resourceStatus(dep.status, dep.buildStatus));
 
@@ -55,17 +61,16 @@
 	{@attach stateEcho(() => m.kind)}
 >
 	<div class="card-top">
-		{#if icon}
-			<RemoteImg src={icon} class="card-ic" />
-		{:else if (dep.faviconUrl || dep.ingresses.length > 0) && !failedFav.has(dep.id)}
-			<RemoteImg
-				src={dep.faviconUrl ?? favUrl(dep.ingresses[0].host.split('/')[0])}
-				class="card-ic"
-				onerror={() => onFavErr(dep.id)}
-			/>
-		{:else}
-			<div class="card-av">{(dep.displayName || dep.name).charAt(0).toUpperCase()}</div>
-		{/if}
+		<IconTile
+			src={imgSrc}
+			tint={!icon && imgSrc ? iconTint(dep.id) : undefined}
+			class="card-ic"
+			onerror={() => onFavErr(dep.id)}
+		>
+			{#snippet fallback()}
+				<span class="card-av">{(dep.displayName || dep.name).charAt(0).toUpperCase()}</span>
+			{/snippet}
+		</IconTile>
 		<div class="card-text">
 			<span class="card-name">{dep.displayName || dep.name}</span>
 			{#if dep.ingresses.length > 0}

@@ -843,11 +843,11 @@
 		display: flex;
 		align-items: center;
 		white-space: nowrap;
-		gap: 0.75rem;
+		gap: 0.5rem;
 		width: 100%;
 		height: 2.25rem;
-		padding: 0 var(--space-2);
-		margin: 0.0625rem 0;
+		padding: 0 0.4375rem;
+		margin: 0.125rem 0;
 		border: none;
 		border-radius: var(--radius-md);
 		background: none;
@@ -877,8 +877,8 @@
 		margin-left: auto;
 		padding: 0 0.5rem;
 		border-radius: var(--radius-pill);
-		background-color: var(--status-error);
-		color: #fff;
+		background-color: var(--status-error-bg);
+		color: var(--status-error);
 		font-size: var(--text-caption);
 		font-weight: 700;
 		font-variant-numeric: tabular-nums;
@@ -955,10 +955,12 @@
 	.deck-row {
 		display: flex;
 		align-items: center;
-		gap: 0.75rem;
+		gap: 0.5rem;
 		height: 2.25rem;
-		padding: 0 var(--space-2);
-		margin: 0.0625rem 0;
+		padding: 0 0.4375rem;
+		/* A clear 4px trough between rows so an active pill and a hovered
+		   neighbour never touch — Apple's sidebars keep this breathing room. */
+		margin: 0.125rem 0;
 		border-radius: var(--radius-md);
 		color: var(--text-muted);
 		text-decoration: none;
@@ -973,8 +975,8 @@
 		color: var(--text-default);
 	}
 	.deck-row--active {
-		background-color: var(--fill-soft);
-		color: var(--text-default);
+		background-color: var(--accent-subtle);
+		color: var(--accent);
 	}
 	.deck-tile {
 		display: flex;
@@ -986,22 +988,16 @@
 		flex-shrink: 0;
 		position: relative;
 		color: var(--text-muted);
-		background-color: var(--fill-soft);
-		transition:
-			background-color var(--dur-fast),
-			color var(--dur-fast);
+		transition: color var(--dur-fast);
 	}
 	.deck-row:hover .deck-tile {
 		color: var(--text-default);
 	}
 	.deck-tile--active,
 	.deck-row--active:hover .deck-tile--active {
-		background-color: var(--accent);
-		color: var(--text-on-accent);
-		box-shadow: 0 1px 2px color-mix(in srgb, var(--accent) 45%, transparent);
+		color: var(--accent);
 	}
 	.deck-tile--alert {
-		background-color: var(--status-error-bg);
 		color: var(--status-error);
 		overflow: visible;
 	}
@@ -1026,6 +1022,7 @@
 	}
 	.deck-tile--fav {
 		overflow: visible;
+		background: var(--fill-soft);
 		font-size: var(--text-micro);
 		line-height: var(--lh-micro);
 		font-weight: 700;
