@@ -10,7 +10,7 @@ import {
   LABEL_JOB_ID,
   runScriptsConfigMapName,
 } from './jobs-orchestrator.service';
-import { K8sJobInformerService, jobTerminalOutcome } from './k8s-job-informer.service';
+import { JobMirrorConsumer, jobTerminalOutcome } from '../mirror/consumers/job-mirror.consumer';
 import { RUN_ACTIVE_STATUSES } from './jobs.service';
 
 const SWEEP_INTERVAL_MS = 60_000;
@@ -29,7 +29,7 @@ export class JobsSyncService {
     private readonly kubernetes: KubernetesService,
     private readonly leader: LeaderElectionService,
     private readonly orchestrator: JobsOrchestratorService,
-    private readonly informer: K8sJobInformerService,
+    private readonly informer: JobMirrorConsumer,
   ) {}
 
   private batchApi() {

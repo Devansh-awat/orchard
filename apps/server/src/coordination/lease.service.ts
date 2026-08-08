@@ -22,11 +22,6 @@ export class LeaseService implements OnApplicationShutdown {
     this.namespace = LeaseService.resolveNamespace();
   }
 
-  // Real election requires an unambiguous installation boundary. In-cluster
-  // that's our own namespace; out-of-cluster it must be opted into via
-  // ORCHARD_CONTROL_NAMESPACE. Defaulting out-of-cluster processes into a
-  // shared lease would let a laptop dev server (which points its kubeconfig
-  // at the same cluster prod manages) steal leadership from prod replicas.
   private static resolveNamespace(): string | null {
     if (process.env.ORCHARD_CONTROL_NAMESPACE) return process.env.ORCHARD_CONTROL_NAMESPACE;
     try {
@@ -36,9 +31,18 @@ export class LeaseService implements OnApplicationShutdown {
     return null;
   }
 
+  get replicaIdentity(): string {
+    return this.identity;
+  }
+
   register(
     name: string,
-    opts?: { leaseDurationSeconds?: number; renewIntervalMs?: number; autoStart?: boolean },
+    opts?: {
+      leaseDurationSeconds?: number;
+      renewIntervalMs?: number;
+      autoStart?: boolean;
+      shouldAcquire?: () => boolean;
+    },
   ): Elector {
     const existing = this.electors.get(name);
     if (existing) return existing;
@@ -60,6 +64,7 @@ export class LeaseService implements OnApplicationShutdown {
         identity: this.identity,
         leaseDurationSeconds: opts?.leaseDurationSeconds,
         renewIntervalMs: opts?.renewIntervalMs,
+        shouldAcquire: opts?.shouldAcquire,
       });
     }
     this.electors.set(name, elector);

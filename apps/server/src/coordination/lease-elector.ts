@@ -8,16 +8,17 @@ export interface LeaseElectorOptions {
   identity: string;
   leaseDurationSeconds?: number;
   renewIntervalMs?: number;
+  shouldAcquire?: () => boolean;
 }
 
 export interface Elector {
   isHolder(): boolean;
   start(): void;
   stop(): Promise<void>;
+  resign(): Promise<void>;
   on(event: 'acquired' | 'lost', listener: () => void): this;
 }
 
-// Dev fallback when no kubeconfig is available: a fixed answer, no API calls.
 export class StaticElector extends EventEmitter implements Elector {
   constructor(private readonly holder: boolean) {
     super();
@@ -34,15 +35,12 @@ export class StaticElector extends EventEmitter implements Elector {
   async stop(): Promise<void> {
     this.removeAllListeners();
   }
+
+  async resign(): Promise<void> {
+    return undefined;
+  }
 }
 
-/**
- * Leader election on a coordination.k8s.io/v1 Lease, mirroring client-go's
- * semantics: renew while holding, take over only once the current holder's
- * renewTime is older than leaseDurationSeconds, and rely on the apiserver's
- * optimistic concurrency (resourceVersion carried through replace) so two
- * replicas can never both win a takeover race — the loser gets a 409.
- */
 export class LeaseElector extends EventEmitter implements Elector {
   private readonly logger: Logger;
 
@@ -57,6 +55,8 @@ export class LeaseElector extends EventEmitter implements Elector {
   private readonly leaseDurationSeconds: number;
 
   private readonly renewIntervalMs: number;
+
+  private readonly shouldAcquire?: () => boolean;
 
   private timer?: ReturnType<typeof setInterval>;
 
@@ -74,6 +74,7 @@ export class LeaseElector extends EventEmitter implements Elector {
     this.identity = opts.identity;
     this.leaseDurationSeconds = opts.leaseDurationSeconds ?? 15;
     this.renewIntervalMs = opts.renewIntervalMs ?? 5_000;
+    this.shouldAcquire = opts.shouldAcquire;
     this.logger = new Logger(`LeaseElector:${opts.name}`);
   }
 
@@ -101,8 +102,12 @@ export class LeaseElector extends EventEmitter implements Elector {
     }
   }
 
-  // Explicit release makes rollout handoff near-instant: the next replica's
-  // tick sees an empty holderIdentity instead of waiting out the TTL.
+  async resign(): Promise<void> {
+    if (!this.holding) return;
+    await this.release();
+    this.setHolding(false);
+  }
+
   private async release(): Promise<void> {
     try {
       const { body: lease } = await this.api.readNamespacedLease(this.name, this.namespace);
@@ -121,6 +126,10 @@ export class LeaseElector extends EventEmitter implements Elector {
     try {
       const lease = await this.readLease();
       if (!lease) {
+        if (this.shouldAcquire && !this.shouldAcquire()) {
+          this.setHolding(false);
+          return;
+        }
         await this.createLease();
         this.onRenewed(true);
         return;
@@ -134,6 +143,10 @@ export class LeaseElector extends EventEmitter implements Elector {
         return;
       }
       if (!holder || this.isExpired(lease)) {
+        if (this.shouldAcquire && !this.shouldAcquire()) {
+          this.setHolding(false);
+          return;
+        }
         lease.spec = {
           holderIdentity: this.identity,
           leaseDurationSeconds: this.leaseDurationSeconds,

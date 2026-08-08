@@ -12,6 +12,9 @@ import { JobsOrchestratorService } from './jobs-orchestrator.service';
 import { K8sJobInformerService } from './k8s-job-informer.service';
 import { JobsSyncService } from './jobs-sync.service';
 import { JobsController } from './jobs.controller';
+import { JobMirrorConsumer } from '../mirror/consumers/job-mirror.consumer';
+
+const legacyInformers = process.env.MIRROR_DISABLED === 'true' ? [K8sJobInformerService] : [];
 
 @Module({
   imports: [
@@ -24,8 +27,14 @@ import { JobsController } from './jobs.controller';
     EventsModule,
     AuditModule,
   ],
-  providers: [JobsService, JobsOrchestratorService, K8sJobInformerService, JobsSyncService],
+  providers: [
+    JobsService,
+    JobsOrchestratorService,
+    JobMirrorConsumer,
+    JobsSyncService,
+    ...legacyInformers,
+  ],
   controllers: [JobsController],
-  exports: [JobsService, JobsOrchestratorService],
+  exports: [JobsService, JobsOrchestratorService, JobMirrorConsumer],
 })
 export class JobsModule {}

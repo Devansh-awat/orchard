@@ -36,6 +36,7 @@ import { ForumModule } from './forum/forum.module';
 import { SandboxesModule } from './sandboxes/sandboxes.module';
 import { SshIdentitiesModule } from './ssh-identities/ssh-identities.module';
 import { CoordinationModule } from './coordination/coordination.module';
+import { MirrorModule } from './mirror/mirror.module';
 
 @Module({
   imports: [
@@ -78,6 +79,7 @@ import { CoordinationModule } from './coordination/coordination.module';
     ForumModule,
     SandboxesModule,
     SshIdentitiesModule,
+    MirrorModule,
   ],
   providers: [{ provide: APP_GUARD, useClass: ApiThrottlerGuard }],
 })

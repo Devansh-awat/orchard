@@ -13,6 +13,9 @@ import { K8sCnpgInformerService } from '../kubernetes/k8s-cnpg-informer.service'
 import { K8sNodeInformerService } from '../kubernetes/k8s-node-informer.service';
 import { PodLogCaptureService } from '../kubernetes/pod-log-capture.service';
 
+const legacyInformers =
+  process.env.MIRROR_DISABLED === 'true' ? [K8sPodInformerService, K8sCnpgInformerService] : [];
+
 @Global()
 @Module({
   imports: [AuthModule, KubernetesModule, NodesModule],
@@ -21,11 +24,10 @@ import { PodLogCaptureService } from '../kubernetes/pod-log-capture.service';
     LeaderElectionService,
     OrgEventsService,
     PrismaEventsBridge,
-    K8sPodInformerService,
-    K8sCnpgInformerService,
     K8sNodeInformerService,
     PodLogCaptureService,
     MetricsPusherService,
+    ...legacyInformers,
   ],
   controllers: [EventsController],
   exports: [OrgEventsService, LeaderElectionService, PodLogCaptureService],

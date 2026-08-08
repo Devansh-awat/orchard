@@ -107,6 +107,7 @@
   "GET /deployments/favicon": "authenticated",
   "GET /deployments/recent-builds": "authenticated",
   "GET /endpoints": "authenticated",
+  "GET /engine/health": "authenticated",
   "GET /environments/:id/shared-vars": "authenticated",
   "GET /events/orgs/:orgId": "authenticated",
   "GET /forum/categories": "authenticated",

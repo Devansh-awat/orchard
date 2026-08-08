@@ -843,6 +843,70 @@ model Pod {
   @@map("pods")
 }
 
+model K8sObject {
+  uid             String   @id @db.VarChar(64)
+  apiVersion      String   @map("api_version") @db.VarChar(100)
+  kind            String   @db.VarChar(60)
+  namespace       String   @db.VarChar(100)
+  name            String   @db.VarChar(255)
+  resourceVersion String   @map("resource_version") @db.VarChar(30)
+  shard           String   @db.VarChar(40)
+  manifest        Json     @db.JsonB
+  deploymentId    String?  @map("deployment_id") @db.Uuid
+  projectId       String?  @map("project_id") @db.Uuid
+  databaseId      String?  @map("database_id") @db.Uuid
+  jobId           String?  @map("job_id") @db.Uuid
+  syncedAt        DateTime @updatedAt @map("synced_at") @db.Timestamp(6)
+
+  @@unique([kind, namespace, name, apiVersion])
+  @@index([shard], map: "idx_k8s_objects_shard")
+  @@index([kind, namespace], map: "idx_k8s_objects_kind_namespace")
+  @@index([deploymentId], map: "idx_k8s_objects_deployment")
+  @@index([projectId], map: "idx_k8s_objects_project")
+  @@index([databaseId], map: "idx_k8s_objects_database")
+  @@map("k8s_objects")
+}
+
+model K8sMirrorHeartbeat {
+  shard           String    @id @db.VarChar(40)
+  holder          String?   @db.VarChar(120)
+  lastListAt      DateTime? @map("last_list_at") @db.Timestamp(6)
+  lastEventAt     DateTime? @map("last_event_at") @db.Timestamp(6)
+  lastResyncAt    DateTime? @map("last_resync_at") @db.Timestamp(6)
+  resyncRepairs   Int       @default(0) @map("resync_repairs")
+  resourceVersion String?   @map("resource_version") @db.VarChar(30)
+  updatedAt       DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@map("k8s_mirror_heartbeats")
+}
+
+model PodTransition {
+  id           String   @id @default(uuid()) @db.Uuid
+  deploymentId String   @map("deployment_id") @db.Uuid
+  podName     String   @map("pod_name") @db.VarChar(255)
+  fromStatus  String?  @map("from_status") @db.VarChar(50)
+  toStatus    String   @map("to_status") @db.VarChar(50)
+  reason      String?  @db.VarChar(100)
+  exitCode    Int?     @map("exit_code")
+  at          DateTime @default(now()) @db.Timestamp(6)
+
+  @@index([deploymentId, at(sort: Desc)], map: "idx_pod_transitions_deployment_at")
+  @@map("pod_transitions")
+}
+
+model K8sWorkload {
+  deploymentId      String   @id @map("deployment_id") @db.Uuid
+  specReplicas      Int?     @map("spec_replicas")
+  readyReplicas     Int      @default(0) @map("ready_replicas")
+  availableReplicas Int      @default(0) @map("available_replicas")
+  updatedReplicas   Int      @default(0) @map("updated_replicas")
+  observedImage     String?  @map("observed_image") @db.VarChar(500)
+  conditions        Json?    @db.JsonB
+  updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@map("k8s_workloads")
+}
+
 enum ServiceType {
   internal
   external

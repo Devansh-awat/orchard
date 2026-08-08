@@ -1,14 +1,6 @@
 import { Injectable, Logger, OnModuleDestroy, OnModuleInit } from '@nestjs/common';
 import Redis from 'ioredis';
 
-// M-3: OIDC state lives behind a tiny store interface so the implementation
-// can be swapped without touching SsoService. With REDIS_URL set the state is
-// shared across replicas (the /authorize and /callback legs of an SSO login
-// routinely land on different pods behind the Service); without it we fall
-// back to the original per-pod Map for single-process dev. `consume` is
-// atomic in both paths (GETDEL / get+delete) so a captured callback URL
-// cannot be replayed even within the TTL window.
-
 export interface OidcState {
   orgId: string;
   codeVerifier: string;
@@ -57,10 +49,6 @@ export class OidcStateStore implements OnModuleInit, OnModuleDestroy {
     this.memory.set(state, { value, expiresAt: Date.now() + TTL_MS });
   }
 
-  /**
-   * Single-use lookup: returns the state and atomically removes it so a
-   * captured callback URL cannot be replayed even within the TTL window.
-   */
   async consume(state: string): Promise<OidcState | null> {
     if (this.redis) {
       try {
