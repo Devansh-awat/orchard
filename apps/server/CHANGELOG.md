@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.3.3](https://github.com/LeafdTK/leaf/compare/server/v2.3.2...server/v2.3.3) (2026-08-08)
+
+
+### Bug Fixes
+
+* deny unresolvable hosts at the protection wall instead of allowing them ([26f62e2](https://github.com/LeafdTK/leaf/commit/26f62e221b52e974a6c913d4d5b2e8860bf008e7))
+* ingress rows cascade with their deployment and protection verifies it applied ([66862ae](https://github.com/LeafdTK/leaf/commit/66862ae4db1c225f8e34d15bc18d45e7315622e5))
+
 ## [2.3.2](https://github.com/LeafdTK/leaf/compare/server/v2.3.1...server/v2.3.2) (2026-08-08)
 
 
