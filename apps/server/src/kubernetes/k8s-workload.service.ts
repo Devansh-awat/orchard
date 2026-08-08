@@ -8,7 +8,7 @@ import {
   KubernetesService,
   CreateDeploymentOptions,
   DeploymentPortInput,
-  UpdateDeploymentEnvOptions, buildNodeAffinity
+  UpdateDeploymentEnvOptions, buildPlacement
 } from './kubernetes.service';
 import {
   sanitizePortEntries,
@@ -796,7 +796,13 @@ export class K8sWorkloadService {
         if (hc.startupEnabled) container.startupProbe = buildProbe(hc.startupFailureThreshold);
       }
 
-      const affinity = buildNodeAffinity(options.allowedNodes, options.deniedNodes);
+      const placement = buildPlacement({
+        allowedNodes: options.allowedNodes,
+        deniedNodes: options.deniedNodes,
+        pool: options.pool,
+        override: options.placementOverride,
+      });
+      const affinity = placement.affinity ?? null;
 
       // PVC volumes can't be held by two pods at once on most CSI drivers
       // (ReadWriteOnce), so a rolling cutover would deadlock waiting for the
@@ -843,6 +849,7 @@ export class K8sWorkloadService {
               containers: [container],
               volumes: k8sVolumes.length > 0 ? k8sVolumes : undefined,
               affinity: affinity || undefined,
+              tolerations: placement.tolerations,
             }
           }
         }

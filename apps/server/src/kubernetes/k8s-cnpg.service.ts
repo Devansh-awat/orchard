@@ -3,7 +3,7 @@ import * as k8s from '@kubernetes/client-node';
 import { PassThrough } from 'stream';
 import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { KubernetesService } from './kubernetes.service';
+import { KubernetesService, ResolvedPlacement } from './kubernetes.service';
 import { cpuMilliToK8s, memoryBytesToK8s, parseMemory } from './quantity';
 
 /**
@@ -1003,6 +1003,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     imageName?: string;
     r2?: { endpoint: string; bucket: string; region?: string; accessKey: string; secretKey: string };
     resources?: { cpuMilli: number; memoryBytes: number };
+    placement?: ResolvedPlacement;
     importFrom?: {
       host: string;
       port?: number;
@@ -1125,6 +1126,20 @@ export class K8sCnpgService implements OnApplicationBootstrap {
 
     if (options.r2 && r2SecretName) {
       clusterSpec.backup = this.buildBackupSpec(ns, name, options.r2, r2SecretName);
+    }
+
+    // CNPG places its instance pods; feed the resolved placement into
+    // spec.affinity (standard nodeAffinity + tolerations) so DB pods honor node
+    // pools / taints the same way app and job pods do.
+    const cnpgAffinity: any = {};
+    if (options.placement?.affinity?.nodeAffinity) {
+      cnpgAffinity.nodeAffinity = options.placement.affinity.nodeAffinity;
+    }
+    if (options.placement?.tolerations?.length) {
+      cnpgAffinity.tolerations = options.placement.tolerations;
+    }
+    if (Object.keys(cnpgAffinity).length > 0) {
+      clusterSpec.affinity = cnpgAffinity;
     }
 
     const clusterBody: any = {

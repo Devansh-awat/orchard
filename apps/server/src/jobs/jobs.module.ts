@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { KubernetesModule } from '../kubernetes/kubernetes.module';
+import { NodesModule } from '../nodes/nodes.module';
 import { UsersModule } from '../users/users.module';
 import { ProjectsModule } from '../projects/projects.module';
 import { QuotasModule } from '../quotas/quotas.module';
@@ -15,6 +16,7 @@ import { JobsController } from './jobs.controller';
 @Module({
   imports: [
     KubernetesModule,
+    NodesModule,
     UsersModule,
     ProjectsModule,
     QuotasModule,

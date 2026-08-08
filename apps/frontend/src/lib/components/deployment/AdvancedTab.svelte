@@ -13,6 +13,7 @@
 	import { isSuperAdmin } from '$lib/stores';
 	import { SectionCard, StatusBadge, statusMeta, Button, Input } from '$lib/components/ui';
 	import GitHubSourceCard from './GitHubSourceCard.svelte';
+	import NodePoolPicker from './NodePoolPicker.svelte';
 	import type { AutoDeployStatus, GitHubDeploymentRecord } from '$lib/types/deployment';
 
 	let {
@@ -61,7 +62,7 @@
 		savingHealthCheck,
 		isEditingHealthCheck = $bindable(),
 		onSaveHealthCheck,
-		sections = ['source', 'strategy', 'build', 'autodeploy', 'health']
+		sections = ['source', 'strategy', 'nodepool', 'build', 'autodeploy', 'health']
 	}: {
 		deployment: any;
 		onSourceUpdated: (updated: any) => void;
@@ -190,6 +191,10 @@
 				</div>
 			{/if}
 		</SectionCard>
+	{/if}
+
+	{#if sections.includes('nodepool')}
+		<NodePoolPicker deploymentId={deployment.id} nodePoolId={deployment.nodePoolId} />
 	{/if}
 
 	{#if sections.includes('build')}

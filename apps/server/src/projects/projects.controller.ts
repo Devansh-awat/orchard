@@ -492,6 +492,8 @@ export class ProjectsController {
       memoryRequestBytes?: number | null;
       restoreFromUrl?: string;
       pgMajor?: number;
+      nodePoolId?: string | null;
+      placementOverride?: unknown;
     },
     @Request() req
   ) {
@@ -651,13 +653,15 @@ export class ProjectsController {
       cpuRequestMilli?: number | null;
       memoryRequestBytes?: number | null;
       autoUrl?: boolean;
+      nodePoolId?: string | null;
+      placementOverride?: unknown;
     },
     @Request() req
   ) {
-    const { name, image, port, ports, replicas, env, exposePublic, volumes, cpuRequestMilli, memoryRequestBytes } = body;
+    const { name, image, port, ports, replicas, env, exposePublic, volumes, cpuRequestMilli, memoryRequestBytes, nodePoolId, placementOverride } = body;
     const result = await this.deployments.createDeployment(
       id,
-      { name, image, port, ports, replicas, env, exposePublic, volumes, cpuRequestMilli, memoryRequestBytes },
+      { name, image, port, ports, replicas, env, exposePublic, volumes, cpuRequestMilli, memoryRequestBytes, nodePoolId, placementOverride },
       req.user.sub,
       {
         email: req.user.email,
@@ -1151,6 +1155,26 @@ export class DeploymentsController {
   ) {
     return this.deployments.restartDeployment(
       id,
+      req.user.sub,
+      {
+        email: req.user.email,
+        username: req.user.username,
+        firstName: req.user.firstName,
+        lastName: req.user.lastName,
+        imageUrl: req.user.imageUrl,
+      }
+    );
+  }
+
+  @Patch(':id/placement')
+  async updateDeploymentPlacement(
+    @Param('id') id: string,
+    @Body() body: { nodePoolId?: string | null; placementOverride?: unknown },
+    @Request() req
+  ) {
+    return this.deployments.updateDeploymentPlacement(
+      id,
+      { nodePoolId: body.nodePoolId, placementOverride: body.placementOverride },
       req.user.sub,
       {
         email: req.user.email,

@@ -2,8 +2,15 @@
 	import { onMount } from 'svelte';
 	import { apiFetch, toasts } from '$lib/stores';
 	import { formatCpuMilli, formatMemoryBytes } from '$lib/quantity';
-	import { Loader2, RefreshCw, Server, X, Trash2 } from 'lucide-svelte';
+	import { Loader2, RefreshCw, Server, X, Trash2, Plus } from 'lucide-svelte';
 	import { Button, Badge, Field, Input, Select, EmptyState } from '$lib/components/ui';
+	import NodePoolsPanel from '$lib/components/admin/NodePoolsPanel.svelte';
+
+	interface Taint {
+		key: string;
+		value: string | null;
+		effect: string;
+	}
 
 	interface NodeItem {
 		id: string;
@@ -13,6 +20,7 @@
 		cpuCapacity: string | null;
 		memoryCapacity: string | null;
 		labels: Record<string, string> | null;
+		taints: Taint[] | null;
 		lastSeenAt: string | null;
 		_count: { assignments: number };
 		usage: { cpuMilli: number; memoryBytes: number; pods: number };
@@ -54,6 +62,14 @@
 	let addMemoryLimit = $state('');
 	let addMaxServices = $state('');
 	let savingAssignment = $state(false);
+
+	// Taint editor (drawer)
+	let taintRows = $state<Taint[]>([]);
+	let savingTaints = $state(false);
+	// Label add form (drawer)
+	let newLabelKey = $state('');
+	let newLabelValue = $state('');
+	let savingLabels = $state(false);
 
 	async function loadNodes() {
 		loading = true;
@@ -98,6 +114,11 @@
 			const res = await apiFetch(`/apiv1/admin/nodes/${id}`);
 			if (!res.ok) throw new Error('Failed to load node');
 			selectedNode = await res.json();
+			taintRows = (selectedNode?.taints ?? []).map((t) => ({
+				key: t.key,
+				value: t.value ?? '',
+				effect: t.effect || 'NoSchedule'
+			}));
 		} catch (e) {
 			toasts.add({ title: e instanceof Error ? e.message : 'Request failed', color: 'error' });
 		} finally {
@@ -171,6 +192,63 @@
 		} catch (e) {
 			toasts.add({ title: e instanceof Error ? e.message : 'Request failed', color: 'error' });
 		}
+	}
+
+	function addTaintRow() {
+		taintRows = [...taintRows, { key: '', value: '', effect: 'NoSchedule' }];
+	}
+	function removeTaintRow(i: number) {
+		taintRows = taintRows.filter((_, idx) => idx !== i);
+	}
+
+	async function saveTaints() {
+		if (!selectedNode) return;
+		savingTaints = true;
+		try {
+			const taints = taintRows
+				.filter((t) => t.key.trim())
+				.map((t) => ({ key: t.key.trim(), value: (t.value ?? '').trim() || null, effect: t.effect }));
+			const res = await apiFetch(`/apiv1/admin/nodes/${selectedNode.id}/taints`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ taints })
+			});
+			if (!res.ok) {
+				const err = await res.json().catch(() => ({}));
+				throw new Error(err.message || 'Failed to save taints');
+			}
+			await openNode(selectedNode.id);
+			toasts.add({ title: 'Taints updated', color: 'success' });
+		} catch (e) {
+			toasts.add({ title: e instanceof Error ? e.message : 'Request failed', color: 'error' });
+		} finally {
+			savingTaints = false;
+		}
+	}
+
+	async function patchLabels(labels: Record<string, string | null>) {
+		if (!selectedNode) return;
+		savingLabels = true;
+		try {
+			const res = await apiFetch(`/apiv1/admin/nodes/${selectedNode.id}/labels`, {
+				method: 'PATCH',
+				headers: { 'Content-Type': 'application/json' },
+				body: JSON.stringify({ labels })
+			});
+			if (!res.ok) throw new Error('Failed to update labels');
+			await openNode(selectedNode.id);
+		} catch (e) {
+			toasts.add({ title: e instanceof Error ? e.message : 'Request failed', color: 'error' });
+		} finally {
+			savingLabels = false;
+		}
+	}
+
+	async function addLabel() {
+		if (!newLabelKey.trim()) return;
+		await patchLabels({ [newLabelKey.trim()]: newLabelValue.trim() });
+		newLabelKey = '';
+		newLabelValue = '';
 	}
 
 	const assignableOrgs = $derived(
@@ -254,6 +332,8 @@
 	</div>
 {/if}
 
+<NodePoolsPanel />
+
 {#if selectedNode || detailLoading}
 	<div
 		class="fixed inset-0 bg-black/40 flex justify-end"
@@ -291,6 +371,59 @@
 				<div class="flex gap-2 mb-6">
 					<Button variant="secondary" size="sm" onclick={() => toggleSchedulable(selectedNode!)}>
 						{selectedNode.schedulable ? 'Cordon' : 'Uncordon'}
+					</Button>
+				</div>
+
+				<h3 class="text-sm font-semibold mb-2">Taints</h3>
+				<p class="text-xs mb-2 text-muted">
+					A tainted node repels workloads that don't tolerate it. Build a node pool that tolerates
+					these taints to route specific workloads here.
+				</p>
+				<div class="space-y-2 mb-2">
+					{#each taintRows as taint, i (i)}
+						<div class="flex items-center gap-2">
+							<Input bind:value={taint.key} placeholder="orchard.io/pool" class="flex-1" />
+							<Input bind:value={taint.value} placeholder="background" class="flex-1" />
+							<Select bind:value={taint.effect} class="w-44">
+								<option value="NoSchedule">NoSchedule</option>
+								<option value="PreferNoSchedule">PreferNoSchedule</option>
+								<option value="NoExecute">NoExecute</option>
+							</Select>
+							<Button variant="ghost" size="sm" onclick={() => removeTaintRow(i)} aria-label="Remove taint">
+								<X class="h-4 w-4" />
+							</Button>
+						</div>
+					{/each}
+				</div>
+				<div class="flex gap-2 mb-6">
+					<Button variant="ghost" size="sm" onclick={addTaintRow}><Plus class="h-4 w-4" /> Add taint</Button>
+					<Button variant="secondary" size="sm" loading={savingTaints} onclick={saveTaints}>Save taints</Button>
+				</div>
+
+				<h3 class="text-sm font-semibold mb-2">Labels</h3>
+				{#if selectedNode.labels && Object.keys(selectedNode.labels).length > 0}
+					<div class="flex flex-wrap gap-1.5 mb-2">
+						{#each Object.entries(selectedNode.labels) as [k, v] (k)}
+							<span class="inline-flex items-center gap-1 rounded-md border border-edge bg-surface px-2 py-0.5 text-xs text-muted">
+								<span class="font-mono">{k}{v ? `=${v}` : ''}</span>
+								<button
+									type="button"
+									class="text-faint hover:text-fg"
+									aria-label="Remove label {k}"
+									onclick={() => patchLabels({ [k]: null })}
+									disabled={savingLabels}
+								>
+									<X class="h-3 w-3" />
+								</button>
+							</span>
+						{/each}
+					</div>
+				{/if}
+				<div class="flex items-center gap-2 mb-6">
+					<Input bind:value={newLabelKey} placeholder="orchard.io/pool" class="flex-1" />
+					<Input bind:value={newLabelValue} placeholder="background" class="flex-1" />
+					<Button variant="secondary" size="sm" loading={savingLabels} disabled={!newLabelKey.trim()} onclick={addLabel}>
+						Add label
 					</Button>
 				</div>
 

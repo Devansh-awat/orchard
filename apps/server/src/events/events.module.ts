@@ -1,6 +1,7 @@
 import { Global, Module } from '@nestjs/common';
 import { AuthModule } from '../auth/auth.module';
 import { KubernetesModule } from '../kubernetes/kubernetes.module';
+import { NodesModule } from '../nodes/nodes.module';
 import { OrgEventsService } from './org-events.service';
 import { EventBusService } from './event-bus.service';
 import { LeaderElectionService } from './leader-election.service';
@@ -9,11 +10,12 @@ import { PrismaEventsBridge } from './prisma-events.bridge';
 import { MetricsPusherService } from './metrics-pusher.service';
 import { K8sPodInformerService } from '../kubernetes/k8s-pod-informer.service';
 import { K8sCnpgInformerService } from '../kubernetes/k8s-cnpg-informer.service';
+import { K8sNodeInformerService } from '../kubernetes/k8s-node-informer.service';
 import { PodLogCaptureService } from '../kubernetes/pod-log-capture.service';
 
 @Global()
 @Module({
-  imports: [AuthModule, KubernetesModule],
+  imports: [AuthModule, KubernetesModule, NodesModule],
   providers: [
     EventBusService,
     LeaderElectionService,
@@ -21,6 +23,7 @@ import { PodLogCaptureService } from '../kubernetes/pod-log-capture.service';
     PrismaEventsBridge,
     K8sPodInformerService,
     K8sCnpgInformerService,
+    K8sNodeInformerService,
     PodLogCaptureService,
     MetricsPusherService,
   ],

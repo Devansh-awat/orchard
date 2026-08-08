@@ -3891,6 +3891,36 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }));
   }
 
+  // Assign/clear a deployment's node pool (or superadmin raw override). Persists
+  // only; the new placement lands on the next deploy/rebuild since scheduling
+  // changes require pod recreation.
+  async updateDeploymentPlacement(
+    deploymentId: string,
+    data: { nodePoolId?: string | null; placementOverride?: unknown },
+    clerkId: string,
+    userData?: { email?: string; username?: string; firstName?: string; lastName?: string; imageUrl?: string },
+  ) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId, userData);
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      include: { project: true },
+    });
+    if (!deployment) throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    await this.authz.requireProjectEdit(deployment.project.id, user.id, 'update deployment placement');
+    await this.nodesService.assertPoolAssignable({
+      nodePoolId: data.nodePoolId,
+      placementOverride: data.placementOverride,
+      userId: user.id,
+    });
+    return this.prisma.deployment.update({
+      where: { id: deploymentId },
+      data: {
+        nodePoolId: data.nodePoolId ?? null,
+        placementOverride: (data.placementOverride ?? Prisma.DbNull) as Prisma.InputJsonValue | typeof Prisma.DbNull,
+      },
+    });
+  }
+
   async resolvePlacementForProject(projectId: string): Promise<{
     allowedNodes: string[] | null;
     deniedNodes: string[];
@@ -4353,6 +4383,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       cpuRequestMilli?: number | null;
       memoryRequestBytes?: number | null;
       environmentId?: string;
+      nodePoolId?: string | null;
+      placementOverride?: unknown;
     },
     clerkId: string,
     userData?: {
@@ -4482,7 +4514,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       console.error('[Projects] applyProjectQuota failed:', err);
     });
 
+    await this.nodesService.assertPoolAssignable({
+      nodePoolId: data.nodePoolId,
+      placementOverride: data.placementOverride,
+      userId: user.id,
+    });
     const placement = await this.resolvePlacementForProject(project.id);
+    const pool = await this.nodesService.resolvePool(data.nodePoolId ?? null);
+    const placementOverride = this.nodesService.toPlacementOverride(data.placementOverride ?? null);
     // PVC volumes force the Recreate update strategy on k8s; mirror that in
     // the DB so the UI shows the truth from the moment the deployment exists.
     const hasPvcOnCreate = (volumes ?? []).some((v) => v.type === 'pvc');
@@ -4498,6 +4537,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       volumes,
       allowedNodes: placement.allowedNodes,
       deniedNodes: placement.deniedNodes,
+      pool,
+      placementOverride,
       resources: podResources,
       deployStrategy: initialStrategy,
     });
@@ -4519,6 +4560,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
           composeStackId: data.composeStackId ?? null,
           composeServiceName: data.composeServiceName ?? null,
           deployStrategy: initialStrategy,
+          nodePoolId: data.nodePoolId ?? null,
+          placementOverride: (placementOverride ?? undefined) as Prisma.InputJsonValue | undefined,
           cpuRequestMilli: data.cpuRequestMilli ?? null,
           memoryRequestBytes: data.memoryRequestBytes != null ? BigInt(data.memoryRequestBytes) : null,
         },
@@ -5765,6 +5808,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             cpuRequestMilli: true,
             memoryRequestBytes: true,
             deployStrategy: true,
+            nodePoolId: true,
+            placementOverride: true,
             project: { select: { organizationId: true, ownerId: true } },
           },
         });
@@ -5773,6 +5818,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         const deployPlacement = deploymentRow
           ? await this.resolvePlacementForProject(deploymentRow.projectId)
           : { allowedNodes: null as string[] | null, deniedNodes: [] as string[] };
+        const deployPool = await this.nodesService.resolvePool(deploymentRow?.nodePoolId ?? null);
+        const deployOverride = this.nodesService.toPlacementOverride(
+          deploymentRow?.placementOverride ?? null,
+        );
 
         let rebuildResources: { cpuMilli: number; memoryBytes: number } | undefined;
         const isUnlimitedDeploy = deploymentRow?.cpuRequestMilli === 0 &&
@@ -5827,6 +5876,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
             volumes: data.volumes || [],
             allowedNodes: deployPlacement.allowedNodes,
             deniedNodes: deployPlacement.deniedNodes,
+            pool: deployPool,
+            placementOverride: deployOverride,
             resources: rebuildResources,
             deployStrategy: buildStrategy,
             healthCheck,

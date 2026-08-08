@@ -5,6 +5,7 @@ import {
   NotFoundException,
 } from '@nestjs/common';
 import { CronTime } from 'cron';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrgEventsService } from '../events/org-events.service';
 import { SCRIPT_RUNTIMES, ScriptRuntime } from './script-runtimes';
@@ -56,6 +57,8 @@ export interface JobInput {
   enabled?: boolean;
   concurrencyPolicy?: 'allow' | 'forbid';
   runTimeoutSeconds?: number | null;
+  nodePoolId?: string | null;
+  placementOverride?: unknown;
   steps: JobStepInput[];
 }
 
@@ -67,6 +70,8 @@ export interface JobPatchInput {
   enabled?: boolean;
   concurrencyPolicy?: 'allow' | 'forbid';
   runTimeoutSeconds?: number | null;
+  nodePoolId?: string | null;
+  placementOverride?: unknown;
 }
 
 export function isValidK8sCron(expr: string): boolean {
@@ -226,6 +231,8 @@ export class JobsService {
         enabled: data.enabled ?? true,
         concurrencyPolicy: data.concurrencyPolicy ?? 'forbid',
         runTimeoutSeconds: data.runTimeoutSeconds ?? MAX_RUN_TIMEOUT,
+        nodePoolId: input.nodePoolId ?? null,
+        placementOverride: (input.placementOverride ?? undefined) as Prisma.InputJsonValue | undefined,
         createdBy: userId,
         steps: { create: steps },
       },
@@ -263,6 +270,10 @@ export class JobsService {
         ...(input.enabled !== undefined ? { enabled: input.enabled } : {}),
         ...(input.concurrencyPolicy !== undefined ? { concurrencyPolicy: input.concurrencyPolicy } : {}),
         ...(input.runTimeoutSeconds !== undefined ? { runTimeoutSeconds: data.runTimeoutSeconds ?? MAX_RUN_TIMEOUT } : {}),
+        ...(input.nodePoolId !== undefined ? { nodePoolId: input.nodePoolId ?? null } : {}),
+        ...(input.placementOverride !== undefined
+          ? { placementOverride: (input.placementOverride ?? Prisma.DbNull) as Prisma.InputJsonValue | typeof Prisma.DbNull }
+          : {}),
       },
       include: {
         project: { select: { id: true, name: true, slug: true, organizationId: true } },

@@ -42,6 +42,25 @@ export class NodesController {
     return this.nodes.updateNode(id, body);
   }
 
+  @Patch('nodes/:id/taints')
+  async setTaints(
+    @Param('id') id: string,
+    @Body() body: { taints: { key: string; value?: string | null; effect: string }[] },
+  ) {
+    return this.nodes.setNodeTaints(
+      id,
+      (body.taints ?? []).map((t) => ({ key: t.key, value: t.value ?? null, effect: t.effect })),
+    );
+  }
+
+  @Patch('nodes/:id/labels')
+  async setLabels(
+    @Param('id') id: string,
+    @Body() body: { labels: Record<string, string | null> },
+  ) {
+    return this.nodes.setNodeLabels(id, body.labels ?? {});
+  }
+
   @Post('nodes/:id/assignments/:orgId')
   async upsertAssignment(
     @Param('id') id: string,

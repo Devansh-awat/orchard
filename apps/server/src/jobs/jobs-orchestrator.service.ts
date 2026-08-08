@@ -2,7 +2,11 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
-import { KubernetesService } from '../kubernetes/kubernetes.service';
+import {
+  KubernetesService,
+  buildPlacement,
+  ResolvedPlacement,
+} from '../kubernetes/kubernetes.service';
 import {
   isTrustedImage,
   trustedSecurityContext,
@@ -11,6 +15,7 @@ import {
 import { cpuMilliToK8s, memoryBytesToK8s } from '../kubernetes/quantity';
 import { QuotasService } from '../quotas/quotas.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { NodesService } from '../nodes/nodes.service';
 import { JobsService, RUN_ACTIVE_STATUSES } from './jobs.service';
 import { scriptRuntimeSpec, scriptFileName, ScriptRuntime } from './script-runtimes';
 
@@ -46,6 +51,9 @@ export interface RunContext {
   projectId: string;
   organizationId: string;
   namespace: string;
+  // Resolved scheduling for this job's step pods (org allow/deny + node pool +
+  // superadmin override). Undefined = no placement constraints.
+  placement?: ResolvedPlacement;
 }
 
 const short = (id: string) => id.replace(/-/g, '').slice(0, 8);
@@ -64,8 +72,26 @@ export class JobsOrchestratorService {
     private readonly kubernetes: KubernetesService,
     private readonly quotas: QuotasService,
     private readonly notifications: NotificationsService,
+    private readonly nodes: NodesService,
     private readonly jobsService: JobsService,
   ) {}
+
+  // Resolve a job's step-pod scheduling: org hostname allow/deny + assigned
+  // node pool + superadmin raw override, merged into affinity + tolerations.
+  private async resolveJobPlacement(
+    job: { nodePoolId?: string | null; placementOverride?: unknown },
+    organizationId: string,
+  ): Promise<ResolvedPlacement> {
+    const org = await this.nodes.getPlacementForOrg(organizationId);
+    const pool = await this.nodes.resolvePool(job.nodePoolId ?? null);
+    const override = this.nodes.toPlacementOverride(job.placementOverride ?? null);
+    return buildPlacement({
+      allowedNodes: org.allowedNodes,
+      deniedNodes: org.deniedNodes,
+      pool,
+      override,
+    });
+  }
 
   private get kc(): k8s.KubeConfig | null {
     return this.kubernetes.kc;
@@ -243,6 +269,8 @@ export class JobsOrchestratorService {
             runtimeClassName: trusted
               ? undefined
               : process.env.TENANT_RUNTIME_CLASS || undefined,
+            affinity: ctx.placement?.affinity,
+            tolerations: ctx.placement?.tolerations,
             containers: [
               {
                 name: 'step',
@@ -302,6 +330,7 @@ export class JobsOrchestratorService {
       projectId: job.project.id,
       organizationId: job.project.organizationId,
       namespace,
+      placement: await this.resolveJobPlacement(job, job.project.organizationId),
     };
 
     const labels = {
@@ -441,6 +470,7 @@ export class JobsOrchestratorService {
       projectId: job.project.id,
       organizationId: job.project.organizationId,
       namespace: job.project.namespace,
+      placement: await this.resolveJobPlacement(job, job.project.organizationId),
     };
 
     const resolved: ResolvedStep[] = [];
@@ -579,6 +609,7 @@ export class JobsOrchestratorService {
       projectId: job.project.id,
       organizationId: job.project.organizationId,
       namespace: job.project.namespace,
+      placement: await this.resolveJobPlacement(job, job.project.organizationId),
     };
 
     const scheduledForRaw =
@@ -966,6 +997,7 @@ export class JobsOrchestratorService {
       projectId: run.job.project.id,
       organizationId: run.job.project.organizationId,
       namespace: run.job.project.namespace,
+      placement: await this.resolveJobPlacement(run.job, run.job.project.organizationId),
     };
 
     if (!RUN_ACTIVE_STATUSES.includes(run.status as any)) {

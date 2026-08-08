@@ -7,6 +7,7 @@ import {
   Logger,
 } from '@nestjs/common';
 import { randomBytes } from 'crypto';
+import { Prisma } from '@prisma/client';
 import { S3Client, ListObjectsV2Command, DeleteObjectCommand } from '@aws-sdk/client-s3';
 import { Client } from 'pg';
 import { PrismaService } from '../prisma/prisma.service';
@@ -20,6 +21,8 @@ import { UsersService } from '../users/users.service';
 import { AuthorizationService } from '../auth/authorization.service';
 import { AuditService } from '../audit/audit.service';
 import { QuotasService } from '../quotas/quotas.service';
+import { NodesService } from '../nodes/nodes.service';
+import { buildPlacement } from '../kubernetes/kubernetes.service';
 import { ProjectAccessService } from './project-access.service';
 import { BackupSyncService } from './backup-sync.service';
 import { formatSlug, redactDatabaseForViewer, stripR2ProxyCreds, truncateK8sName, parseStorageSize, formatBytes, toQuartzCron, DEFAULT_BACKUP_CRON, GIB } from './projects.utils';
@@ -51,8 +54,29 @@ export class DatabasesService {
     private readonly access: ProjectAccessService,
     @Inject(forwardRef(() => QuotasService))
     private readonly quotasService: QuotasService,
+    @Inject(forwardRef(() => NodesService))
+    private readonly nodesService: NodesService,
     private readonly backupSync: BackupSyncService,
   ) {}
+
+  // Resolve a database cluster's placement: org hostname allow/deny + assigned
+  // node pool + superadmin override, merged into affinity + tolerations that
+  // createCnpgCluster feeds into spec.affinity.
+  private async resolveDatabasePlacement(
+    organizationId: string,
+    nodePoolId: string | null | undefined,
+    placementOverride: unknown,
+  ) {
+    const org = await this.nodesService.getPlacementForOrg(organizationId);
+    const pool = await this.nodesService.resolvePool(nodePoolId ?? null);
+    const override = this.nodesService.toPlacementOverride(placementOverride ?? null);
+    return buildPlacement({
+      allowedNodes: org.allowedNodes,
+      deniedNodes: org.deniedNodes,
+      pool,
+      override,
+    });
+  }
 
   // ── Database (PostgreSQL) Management ──
 
@@ -239,6 +263,8 @@ export class DatabasesService {
       memoryRequestBytes?: number | null;
       restoreFromUrl?: string;
       pgMajor?: number;
+      nodePoolId?: string | null;
+      placementOverride?: unknown;
     },
     clerkId: string,
     userData?: {
@@ -403,6 +429,17 @@ export class DatabasesService {
       console.error('[Projects] applyProjectQuota (db) failed:', err);
     });
 
+    await this.nodesService.assertPoolAssignable({
+      nodePoolId: data.nodePoolId,
+      placementOverride: data.placementOverride,
+      userId: user.id,
+    });
+    const dbPlacement = await this.resolveDatabasePlacement(
+      project.organizationId,
+      data.nodePoolId ?? null,
+      data.placementOverride ?? null,
+    );
+
     let host: string;
     let port: number;
     try {
@@ -415,6 +452,7 @@ export class DatabasesService {
         storageSize,
         r2,
         resources: provisionResources,
+        placement: dbPlacement,
         importFrom,
         imageName: `ghcr.io/cloudnative-pg/postgresql:${pgMajor}`,
       }));
@@ -451,6 +489,8 @@ export class DatabasesService {
           createdBy: user.id,
           templateInstanceId: data.templateInstanceId ?? null,
           backupScheduleCron: r2 ? DEFAULT_BACKUP_CRON : null,
+          nodePoolId: data.nodePoolId ?? null,
+          placementOverride: (data.placementOverride ?? undefined) as Prisma.InputJsonValue | undefined,
           r2ProxyAccessKey: r2ProxyAccessKey ?? null,
           r2ProxySecret: r2ProxySecret ?? null,
         },

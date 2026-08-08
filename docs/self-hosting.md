@@ -92,6 +92,25 @@ works with Keycloak, Authentik, Dex, Google, ...), and
 for the login button. Hack Club OAuth is the `hackclub` preset. Enterprise
 SSO/SCIM is additionally configurable per organization in the UI.
 
+## Node scheduling
+
+Superadmins manage cluster nodes under Admin -> Nodes: cordon, set taints and
+labels (Orchard patches the live node; a node informer mirrors state back into
+the DB so reads never hit the kube-apiserver), and define **node pools**. A
+pool maps a friendly name to a node label selector plus tolerations to inject,
+so a workload assigned to it lands on (and tolerates) the intended nodes. Example:
+taint a cheap background box `orchard.io/pool=background:NoSchedule`, label it
+`orchard.io/pool=background`, create a "Background" pool that selects that label
+and tolerates that taint, then assign your queue runner to it. Web workloads left
+unassigned carry no toleration and never schedule there.
+
+By default only superadmins assign pools. A superadmin can flip "Userspace
+scheduling" under Admin -> Nodes to let normal users pick a pool that was marked
+user-selectable. The `USERSPACE_NODE_SCHEDULING` env var overrides that toggle
+when set (`true` forces it on, `false` forces it off and locks the switch);
+leave it unset to control the feature from the UI. Pool placement applies to app
+deployments, jobs, and CNPG databases.
+
 ## What is not included
 
 - Cluster bootstrap (nodes, CNI, operator installation): bring your own or

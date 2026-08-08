@@ -547,6 +547,10 @@ model Deployment {
   cpuRequestMilli      Int?               @map("cpu_request_milli")
   memoryRequestBytes   BigInt?            @map("memory_request_bytes")
   status               String             @default("pending") @db.VarChar(50)
+  // Scheduling: friendly node pool + superadmin-only raw placement escape hatch
+  // ({ nodeSelector?, tolerations?, affinity? } deep-merged over the resolved placement).
+  nodePoolId           String?            @map("node_pool_id") @db.Uuid
+  placementOverride    Json?              @map("placement_override") @db.JsonB
   buildStatus          String             @default("none") @map("build_status") @db.VarChar(50)
   buildStep            String?            @map("build_step") @db.VarChar(50)
   buildType            BuildType          @default(dockerfile) @map("build_type")
@@ -639,6 +643,7 @@ model Deployment {
   creator           User?                    @relation("DeploymentCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   templateInstance  TemplateInstance?        @relation(fields: [templateInstanceId], references: [id], onDelete: SetNull)
   composeStack      ComposeStack?            @relation(fields: [composeStackId], references: [id], onDelete: SetNull)
+  nodePool          NodePool?                @relation(fields: [nodePoolId], references: [id], onDelete: SetNull)
   pods              Pod[]
   services          Service[]
   envVars           DeploymentEnvVar[]
@@ -655,6 +660,7 @@ model Deployment {
   @@index([projectId], map: "idx_deployments_project")
   @@index([environmentId], map: "idx_deployments_environment")
   @@index([buildStatus, updatedAt(sort: Desc)], map: "idx_deployments_build_status_updated")
+  @@index([nodePoolId], map: "idx_deployments_node_pool")
   @@index([templateInstanceId], map: "idx_deployments_template_instance")
   @@index([composeStackId], map: "idx_deployments_compose_stack")
   @@index([tailscaleExposedBy], map: "idx_deployments_tailscale_exposed_by")
@@ -995,6 +1001,10 @@ model Database {
   port                Int     @default(5432)
   mode                String  @default("shared") @db.VarChar(20)
   namespace           String? @db.VarChar(100)
+  // Scheduling: friendly node pool + superadmin-only raw placement escape hatch.
+  // Injected into the CNPG Cluster CR's spec.affinity at reconcile time.
+  nodePoolId          String? @map("node_pool_id") @db.Uuid
+  placementOverride   Json?   @map("placement_override") @db.JsonB
   containerName       String? @map("container_name") @db.VarChar(100)
   storageSize         String? @map("storage_size") @db.VarChar(20)
   clusterName         String? @map("cluster_name") @db.VarChar(100)
@@ -1027,6 +1037,7 @@ model Database {
   environment      Environment?      @relation(fields: [environmentId], references: [id], onDelete: Cascade)
   creator          User?             @relation("DatabaseCreator", fields: [createdBy], references: [id], onDelete: SetNull)
   templateInstance TemplateInstance? @relation(fields: [templateInstanceId], references: [id], onDelete: SetNull)
+  nodePool         NodePool?         @relation(fields: [nodePoolId], references: [id], onDelete: SetNull)
   backups          DatabaseBackup[]
 
   @@unique([environmentId, name])
@@ -1035,6 +1046,7 @@ model Database {
   @@index([environmentId], map: "idx_databases_environment")
   @@index([templateInstanceId], map: "idx_databases_template_instance")
   @@index([publicIp, publicPort], map: "idx_databases_public_endpoint")
+  @@index([nodePoolId], map: "idx_databases_node_pool")
   @@map("databases")
 }
 
@@ -1070,6 +1082,10 @@ model Job {
   runTimeoutSeconds Int      @default(21600) @map("run_timeout_seconds")
   cronJobName       String?  @map("cronjob_name") @db.VarChar(63)
   runCounter        Int      @default(0) @map("run_counter")
+  // Scheduling: friendly node pool + superadmin-only raw placement escape hatch.
+  // Applied to every step Job's pod spec (affinity + tolerations).
+  nodePoolId        String?  @map("node_pool_id") @db.Uuid
+  placementOverride Json?    @map("placement_override") @db.JsonB
   createdBy         String?  @map("created_by") @db.Uuid
   environmentId     String?  @map("environment_id") @db.Uuid
   createdAt         DateTime @default(now()) @map("created_at") @db.Timestamp(6)
@@ -1078,12 +1094,14 @@ model Job {
   project     Project      @relation(fields: [projectId], references: [id], onDelete: Cascade)
   environment Environment? @relation(fields: [environmentId], references: [id], onDelete: Cascade)
   creator     User?        @relation("JobCreator", fields: [createdBy], references: [id], onDelete: SetNull)
+  nodePool    NodePool?    @relation(fields: [nodePoolId], references: [id], onDelete: SetNull)
   steps       JobStep[]
   runs        JobRun[]
 
   @@unique([environmentId, name])
   @@index([projectId], map: "idx_jobs_project")
   @@index([environmentId], map: "idx_jobs_environment")
+  @@index([nodePoolId], map: "idx_jobs_node_pool")
   @@map("jobs")
 }
 
@@ -1535,6 +1553,9 @@ model Node {
   id             String    @id @default(uuid()) @db.Uuid
   name           String    @unique @db.VarChar(255)
   labels         Json?     @db.JsonB
+  // Live node taints (`spec.taints`): array of { key, value?, effect }.
+  // Reflected from the cluster by the node informer; edited via patchNode.
+  taints         Json?     @db.JsonB
   schedulable    Boolean   @default(true)
   notes          String?   @db.Text
   // Optional admin-set caps (overrides measured capacity when enforcing quotas)
@@ -1547,6 +1568,38 @@ model Node {
   assignments OrgNodeAssignment[]
 
   @@map("nodes")
+}
+
+enum NodePoolAffinityMode {
+  required
+  preferred
+}
+
+// A superadmin-defined scheduling lane. Maps a friendly name to a node
+// label selector plus optional tolerations to inject, so a workload can be
+// assigned to the pool without ever seeing raw taints/labels. `userSelectable`
+// lets tenants pick it (only when USERSPACE_NODE_SCHEDULING is enabled).
+model NodePool {
+  id             String               @id @default(uuid()) @db.Uuid
+  name           String               @db.VarChar(255)
+  slug           String               @unique @db.VarChar(255)
+  description    String?              @db.Text
+  // nodeSelector: array of { key, operator, values? } matchExpressions
+  // (kubernetes.io/hostname is reserved for org allow/deny; use custom labels).
+  nodeSelector   Json                 @default("[]") @db.JsonB
+  // tolerations: array of { key, operator?, value?, effect? } injected into
+  // every pod assigned to this pool, so it can land on tainted nodes.
+  tolerations    Json                 @default("[]") @db.JsonB
+  affinityMode   NodePoolAffinityMode @default(preferred)
+  userSelectable Boolean              @default(false) @map("user_selectable")
+  createdAt      DateTime             @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt      DateTime             @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  deployments Deployment[]
+  jobs        Job[]
+  databases   Database[]
+
+  @@map("node_pools")
 }
 
 enum NodeAssignmentMode {
@@ -1575,6 +1628,17 @@ model OrgNodeAssignment {
   @@index([nodeId], map: "idx_org_node_assignments_node")
   @@index([organizationId], map: "idx_org_node_assignments_org")
   @@map("org_node_assignments")
+}
+
+// Generic instance-level (self-host) settings, keyed by a stable string.
+// Superadmin-managed from the admin panel; a matching env var overrides the
+// stored value at read time (see InstanceSettingsService).
+model InstanceSetting {
+  key       String   @id @db.VarChar(191)
+  value     String   @db.Text
+  updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@map("instance_settings")
 }
 
 model McpOauthClient {

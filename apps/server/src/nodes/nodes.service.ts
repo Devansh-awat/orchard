@@ -1,7 +1,18 @@
-import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
+import {
+  Injectable,
+  NotFoundException,
+  BadRequestException,
+  ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
+import { AuthorizationService } from '../auth/authorization.service';
+import { InstanceSettingsService } from '../instance-settings/instance-settings.service';
 import { parseCpu, parseMemory } from '../kubernetes/quantity';
+import { mapNodeToRow, NodeTaint } from './node-mapping';
+import type { PoolPlacement, PlacementOverride } from '../kubernetes/kubernetes.service';
+
+const TAINT_EFFECTS = new Set(['NoSchedule', 'PreferNoSchedule', 'NoExecute']);
 
 interface AssignmentInput {
   mode?: 'allow' | 'deny';
@@ -15,45 +26,57 @@ export class NodesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly k8s: KubernetesService,
+    private readonly authz: AuthorizationService,
+    private readonly settings: InstanceSettingsService,
   ) {}
 
-  // Sync the Node table with the live cluster: upsert each, mark last_seen_at.
+  // Full reconcile against the live cluster. The node informer keeps the table
+  // fresh in the steady state; this is the manual/forced-refresh path (and the
+  // cold-start fallback when no informer is running).
   async syncFromCluster() {
     const live = await this.k8s.listClusterNodes();
-    const now = new Date();
     for (const n of live) {
-      const name = n.metadata?.name;
-      if (!name) continue;
-      const labels = (n.metadata?.labels || {}) as Record<string, string>;
-      const capacity = n.status?.capacity || {};
-      const schedulable = !(n.spec?.unschedulable);
-      await this.prisma.node.upsert({
-        where: { name },
-        create: {
-          name,
-          labels,
-          schedulable,
-          cpuCapacity: typeof capacity.cpu === 'string' ? capacity.cpu : undefined,
-          memoryCapacity: typeof capacity.memory === 'string' ? capacity.memory : undefined,
-          lastSeenAt: now,
-        },
-        update: {
-          labels,
-          schedulable,
-          // Only overwrite capacity fields if admin hasn't explicitly set them.
-          // Here we overwrite always — admin override lives in a separate concept if needed.
-          cpuCapacity: typeof capacity.cpu === 'string' ? capacity.cpu : undefined,
-          memoryCapacity: typeof capacity.memory === 'string' ? capacity.memory : undefined,
-          lastSeenAt: now,
-        },
-      });
+      const row = mapNodeToRow(n);
+      if (row) await this.upsertNodeRow(row, new Date());
     }
     return { synced: live.length };
   }
 
+  // Upsert a single node snapshot. Shared with the node informer so live-watch
+  // events and manual reconcile write identical rows. Capacity is always
+  // overwritten from the cluster (measured); admin caps live in updateNode.
+  async upsertNodeRow(row: ReturnType<typeof mapNodeToRow>, seenAt = new Date()) {
+    if (!row) return;
+    await this.prisma.node.upsert({
+      where: { name: row.name },
+      create: {
+        name: row.name,
+        labels: row.labels,
+        taints: row.taints,
+        schedulable: row.schedulable,
+        cpuCapacity: row.cpuCapacity,
+        memoryCapacity: row.memoryCapacity,
+        lastSeenAt: seenAt,
+      },
+      update: {
+        labels: row.labels,
+        taints: row.taints,
+        schedulable: row.schedulable,
+        cpuCapacity: row.cpuCapacity,
+        memoryCapacity: row.memoryCapacity,
+        lastSeenAt: seenAt,
+      },
+    });
+  }
+
+  // A node object was removed from the cluster. Drop the row; its per-org
+  // assignments cascade away (schema onDelete: Cascade).
+  async removeNodeByName(name: string) {
+    await this.prisma.node.deleteMany({ where: { name } });
+  }
+
   async listNodes() {
-    // Auto-sync on list — small clusters, keeps UI fresh.
-    await this.syncFromCluster().catch(() => {});
+    // Reads come straight from the DB — the node informer keeps it current.
     const nodes = await this.prisma.node.findMany({
       orderBy: { name: 'asc' },
       include: {
@@ -268,5 +291,77 @@ export class NodesService {
         maxServices: a.maxServices,
       })),
     };
+  }
+
+  // Resolve an assigned node pool into the placement primitives buildPlacement
+  // consumes. Null pool id (or a deleted pool) yields null → no pool placement.
+  async resolvePool(nodePoolId: string | null | undefined): Promise<PoolPlacement | null> {
+    if (!nodePoolId) return null;
+    const pool = await this.prisma.nodePool.findUnique({ where: { id: nodePoolId } });
+    if (!pool) return null;
+    return {
+      nodeSelector: (pool.nodeSelector as PoolPlacement['nodeSelector']) ?? [],
+      tolerations: (pool.tolerations as PoolPlacement['tolerations']) ?? [],
+      affinityMode: pool.affinityMode,
+    };
+  }
+
+  // Normalize a stored placementOverride JSON blob into a typed override.
+  toPlacementOverride(raw: unknown): PlacementOverride | null {
+    if (!raw || typeof raw !== 'object') return null;
+    return raw as PlacementOverride;
+  }
+
+  // Replace a node's taints (spec.taints). The informer reflects the result
+  // back into the DB, so we don't dual-write the row here.
+  async setNodeTaints(id: string, taints: NodeTaint[]) {
+    const node = await this.prisma.node.findUnique({ where: { id } });
+    if (!node) throw new NotFoundException('Node not found');
+    if (!Array.isArray(taints)) throw new BadRequestException('taints must be an array');
+    const clean = taints.map((t) => {
+      if (!t?.key) throw new BadRequestException('each taint needs a key');
+      if (!t.effect || !TAINT_EFFECTS.has(t.effect)) {
+        throw new BadRequestException(`taint effect must be one of ${[...TAINT_EFFECTS].join(', ')}`);
+      }
+      return { key: t.key, ...(t.value ? { value: t.value } : {}), effect: t.effect };
+    });
+    await this.k8s.patchNode(node.name, { spec: { taints: clean } });
+    return { success: true };
+  }
+
+  // Merge-patch node labels. A null value removes that label key.
+  async setNodeLabels(id: string, labels: Record<string, string | null>) {
+    const node = await this.prisma.node.findUnique({ where: { id } });
+    if (!node) throw new NotFoundException('Node not found');
+    if (!labels || typeof labels !== 'object') throw new BadRequestException('labels must be an object');
+    await this.k8s.patchNode(node.name, { metadata: { labels } });
+    return { success: true };
+  }
+
+  // Authorization gate for assigning a node pool / raw override to a workload.
+  // Superadmins may set anything; tenants may only pick a userSelectable pool,
+  // and only when the instance opted into userspace scheduling.
+  async assertPoolAssignable(input: {
+    nodePoolId?: string | null;
+    placementOverride?: unknown;
+    userId: string;
+  }) {
+    const { nodePoolId, placementOverride, userId } = input;
+    if (await this.authz.isSuperAdmin(userId)) return;
+    if (placementOverride != null) {
+      throw new ForbiddenException('placementOverride can only be set by superadmins');
+    }
+    if (!nodePoolId) return;
+    if (!(await this.settings.isUserspaceSchedulingEnabled())) {
+      throw new ForbiddenException('Node pool selection is not enabled on this instance');
+    }
+    const pool = await this.prisma.nodePool.findUnique({
+      where: { id: nodePoolId },
+      select: { userSelectable: true },
+    });
+    if (!pool) throw new NotFoundException('Node pool not found');
+    if (!pool.userSelectable) {
+      throw new ForbiddenException('That node pool is not available for selection');
+    }
   }
 }

@@ -18,6 +18,7 @@ import { UsersService } from '../users/users.service';
 import { AuditService } from '../audit/audit.service';
 import { JobsService, JobInput, JobPatchInput, JobStepInput } from './jobs.service';
 import { JobsOrchestratorService } from './jobs-orchestrator.service';
+import { NodesService } from '../nodes/nodes.service';
 
 function userData(req: any) {
   return {
@@ -38,6 +39,7 @@ export class JobsController {
     private readonly projectAccess: ProjectAccessService,
     private readonly usersService: UsersService,
     private readonly audit: AuditService,
+    private readonly nodes: NodesService,
   ) {}
 
   private async assertJobView(jobId: string, req: any) {
@@ -98,6 +100,11 @@ export class JobsController {
       userData(req),
       'create jobs',
     );
+    await this.nodes.assertPoolAssignable({
+      nodePoolId: body?.nodePoolId,
+      placementOverride: body?.placementOverride,
+      userId: user.id,
+    });
     const job = await this.jobs.createJob(projectId, body ?? ({} as JobInput), user.id);
     await this.orchestrator.syncCronJob(job.id).catch(() => {});
     await this.audit.log({
@@ -121,6 +128,11 @@ export class JobsController {
   @Patch('jobs/:id')
   async updateJob(@Param('id') id: string, @Body() body: JobPatchInput, @Request() req) {
     const { job, user } = await this.assertJobEdit(id, req, 'update jobs');
+    await this.nodes.assertPoolAssignable({
+      nodePoolId: body?.nodePoolId,
+      placementOverride: body?.placementOverride,
+      userId: user.id,
+    });
     const updated = await this.jobs.updateJob(id, body ?? {});
     await this.orchestrator.syncCronJob(id).catch(() => {});
     await this.audit.log({

@@ -21,6 +21,7 @@ import { ComposeStacksModule } from './compose-stacks/compose-stacks.module';
 import { SsoModule } from './sso/sso.module';
 import { ScimModule } from './scim/scim.module';
 import { NodesModule } from './nodes/nodes.module';
+import { InstanceSettingsModule } from './instance-settings/instance-settings.module';
 import { QuotasModule } from './quotas/quotas.module';
 import { TailscaleModule } from './tailscale/tailscale.module';
 import { EventsModule } from './events/events.module';
@@ -55,6 +56,7 @@ import { SshIdentitiesModule } from './ssh-identities/ssh-identities.module';
     DockerModule,
     EmailModule,
     AdminModule,
+    InstanceSettingsModule,
     WebhooksModule,
     TemplatesModule,
     ComposeStacksModule,

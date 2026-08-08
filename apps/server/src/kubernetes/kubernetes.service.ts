@@ -11,25 +11,94 @@ export const ALLOWED_INGRESS_ANNOTATION_KEYS = new Set<string>([
   'orchard.my/basic-auth',
 ]);
 
+// A resolved node pool: the label selector to match, tolerations to inject so
+// the workload can land on tainted nodes, and whether membership is a hard
+// requirement (`required`) or a soft preference (`preferred`).
+export interface PoolPlacement {
+  nodeSelector: k8s.V1NodeSelectorRequirement[];
+  tolerations: k8s.V1Toleration[];
+  affinityMode: 'required' | 'preferred';
+}
+
+// Superadmin-only raw escape hatch stored on a workload as `placementOverride`.
+export interface PlacementOverride {
+  nodeSelector?: k8s.V1NodeSelectorRequirement[];
+  tolerations?: k8s.V1Toleration[];
+  affinity?: k8s.V1Affinity;
+}
+
+export interface PlacementInput {
+  allowedNodes?: string[] | null;
+  deniedNodes?: string[];
+  pool?: PoolPlacement | null;
+  override?: PlacementOverride | null;
+}
+
+export interface ResolvedPlacement {
+  affinity?: k8s.V1Affinity;
+  tolerations?: k8s.V1Toleration[];
+}
+
+// Merge every placement lever into a single { affinity, tolerations } applied to
+// a pod spec: org hostname allow/deny (hard), the assigned node pool's selector
+// (hard or soft) + tolerations, and the superadmin raw override (wins last).
+export function buildPlacement(input: PlacementInput): ResolvedPlacement {
+  const { allowedNodes, deniedNodes, pool, override } = input;
+  const requiredExprs: k8s.V1NodeSelectorRequirement[] = [];
+  const preferred: k8s.V1PreferredSchedulingTerm[] = [];
+
+  if (allowedNodes && allowedNodes.length > 0) {
+    requiredExprs.push({ key: 'kubernetes.io/hostname', operator: 'In', values: allowedNodes });
+  }
+  if (deniedNodes && deniedNodes.length > 0) {
+    requiredExprs.push({ key: 'kubernetes.io/hostname', operator: 'NotIn', values: deniedNodes });
+  }
+
+  if (pool && pool.nodeSelector.length > 0) {
+    if (pool.affinityMode === 'required') {
+      requiredExprs.push(...pool.nodeSelector);
+    } else {
+      preferred.push({ weight: 100, preference: { matchExpressions: pool.nodeSelector } });
+    }
+  }
+  if (override?.nodeSelector && override.nodeSelector.length > 0) {
+    requiredExprs.push(...override.nodeSelector);
+  }
+
+  let nodeAffinity: k8s.V1NodeAffinity | undefined;
+  if (requiredExprs.length > 0 || preferred.length > 0) {
+    nodeAffinity = {};
+    if (requiredExprs.length > 0) {
+      nodeAffinity.requiredDuringSchedulingIgnoredDuringExecution = {
+        nodeSelectorTerms: [{ matchExpressions: requiredExprs }],
+      };
+    }
+    if (preferred.length > 0) {
+      nodeAffinity.preferredDuringSchedulingIgnoredDuringExecution = preferred;
+    }
+  }
+
+  let affinity = nodeAffinity ? { nodeAffinity } : undefined;
+  // Raw override deep-merges over the computed affinity, per top-level key
+  // (nodeAffinity / podAffinity / podAntiAffinity), so a superadmin can add
+  // pod (anti-)affinity or fully replace nodeAffinity.
+  if (override?.affinity) {
+    affinity = { ...(affinity ?? {}), ...override.affinity };
+  }
+
+  const tolerations = [...(pool?.tolerations ?? []), ...(override?.tolerations ?? [])];
+  return {
+    affinity,
+    tolerations: tolerations.length > 0 ? tolerations : undefined,
+  };
+}
+
+// Back-compat shim: org hostname allow/deny only (no pool/override).
 export function buildNodeAffinity(
   allowedNodes: string[] | null | undefined,
   deniedNodes: string[] | undefined,
 ): k8s.V1Affinity | null {
-  const terms: k8s.V1NodeSelectorRequirement[] = [];
-  if (allowedNodes && allowedNodes.length > 0) {
-    terms.push({ key: 'kubernetes.io/hostname', operator: 'In', values: allowedNodes });
-  }
-  if (deniedNodes && deniedNodes.length > 0) {
-    terms.push({ key: 'kubernetes.io/hostname', operator: 'NotIn', values: deniedNodes });
-  }
-  if (terms.length === 0) return null;
-  return {
-    nodeAffinity: {
-      requiredDuringSchedulingIgnoredDuringExecution: {
-        nodeSelectorTerms: [{ matchExpressions: terms }],
-      },
-    },
-  };
+  return buildPlacement({ allowedNodes, deniedNodes }).affinity ?? null;
 }
 
 export interface DeploymentEnvVarInput {
@@ -64,6 +133,10 @@ export interface CreateDeploymentOptions {
   serviceType?: 'ClusterIP' | 'LoadBalancer' | 'NodePort';
   allowedNodes?: string[] | null;
   deniedNodes?: string[];
+  // Resolved node-pool placement + superadmin raw override (merged with the
+  // org allow/deny above via buildPlacement into affinity + tolerations).
+  pool?: PoolPlacement | null;
+  placementOverride?: PlacementOverride | null;
   resources?: {
     cpuMilli: number;
     memoryBytes: number;
@@ -289,6 +362,24 @@ export class KubernetesService {
       console.error('[K8s] listClusterNodes failed:', message);
       return [];
     }
+  }
+
+  // Merge-patch a node's metadata/spec (labels, taints). The node informer
+  // reflects the result back into the DB, so callers should not dual-write.
+  async patchNode(name: string, patch: object): Promise<k8s.V1Node> {
+    this.ensureKubeConfig();
+    const api = this.kc!.makeApiClient(k8s.CoreV1Api);
+    const res = await api.patchNode(
+      name,
+      patch,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      undefined,
+      { headers: { 'Content-Type': 'application/merge-patch+json' } },
+    );
+    return res.body;
   }
 
   // Returns per-node aggregated requests for all pods in the cluster.
