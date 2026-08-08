@@ -1235,7 +1235,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       this.storage.deleteBuildContext(deployment.buildContextKey).catch(() => {});
     }
 
-    // Delete the DB record (cascades to pods, services, envVars, ingresses, volumes, imageHistory)
+    // Delete the DB record (cascades to pods, services, envVars, ingresses, volumes, imageHistory).
+    // ingresses only started cascading in 20260808060000; before that the FK was
+    // SET NULL and every delete left a protected orphan row behind.
     await this.prisma.deployment.delete({
       where: { id: deploymentId },
     });

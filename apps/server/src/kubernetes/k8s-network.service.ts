@@ -15,6 +15,8 @@ import { mapServicePorts, ensureUniqueServicePorts, sanitizePortEntries } from '
 import { truncateK8sName } from '../projects/projects.utils';
 import { k8sErrorMessage } from './k8s-error';
 
+export type ProtectionProxyResult = 'applied' | 'ingress-missing' | 'failed';
+
 /**
  * All Kubernetes network/edge resources: Services, Ingress (Cilium),
  * basic-auth (CiliumEnvoyConfig), public exposure (Cilium LB IPAM
@@ -54,18 +56,44 @@ export class K8sNetworkService implements OnModuleInit {
       return;
     }
 
+    let applied = 0;
+    const orphaned: string[] = [];
+    const failed: string[] = [];
+
     for (const ingress of protectedIngresses) {
+      const key = `${ingress.namespace}/${ingress.name}`;
+      let result: ProtectionProxyResult;
       try {
-        await this.enableProtectionProxy(ingress.namespace, ingress.name);
+        result = await this.enableProtectionProxy(ingress.namespace, ingress.name);
       } catch (error) {
-        this.logger.warn(
-          `Failed to reconcile protection proxy for ${ingress.namespace}/${ingress.name}: ${error.message}`,
-        );
+        this.logger.error(`Failed to reconcile protection proxy for ${key}: ${k8sErrorMessage(error)}`);
+        result = 'failed';
       }
+      if (result === 'applied') applied += 1;
+      else if (result === 'ingress-missing') orphaned.push(key);
+      else failed.push(key);
     }
 
+    // A row whose Ingress is gone has nothing to protect, so it is a cleanup
+    // problem rather than an auth problem — summarise it once instead of once
+    // per row per pass. A real failure means a reachable app is not behind the
+    // wall, so that one stays loud.
+    if (failed.length > 0) {
+      this.logger.error(
+        `Protection proxy NOT applied to ${failed.length} ingress(es): ${failed.join(', ')}`,
+      );
+    }
+    if (orphaned.length > 0) {
+      const shown = orphaned.slice(0, 10).join(', ');
+      const more = orphaned.length > 10 ? ` (+${orphaned.length - 10} more)` : '';
+      this.logger.warn(
+        `${orphaned.length} protected ingress row(s) have no Ingress in the cluster and were skipped: ${shown}${more}`,
+      );
+    }
     if (protectedIngresses.length > 0) {
-      this.logger.log(`Reconciled protection proxies for ${protectedIngresses.length} ingress(es)`);
+      this.logger.log(
+        `Reconciled protection proxies: ${applied} applied, ${orphaned.length} orphaned rows, ${failed.length} failed`,
+      );
     }
 
     try {
@@ -468,12 +496,19 @@ export class K8sNetworkService implements OnModuleInit {
   }
 
 
-  async enableProtectionProxy(namespace: string, ingressName: string): Promise<void> {
+  // Reports what actually happened rather than swallowing it. 'ingress-missing'
+  // means the row outlived its Ingress and there is nothing to protect;
+  // 'failed' means an Ingress exists and is NOT behind the auth wall, which is
+  // the case that has to be loud.
+  async enableProtectionProxy(
+    namespace: string,
+    ingressName: string,
+  ): Promise<ProtectionProxyResult> {
     this.ensureKubeConfig();
 
     const cleanNamespace = String(namespace || '').trim();
     const cleanName = String(ingressName || '').trim();
-    if (!cleanNamespace || !cleanName) return;
+    if (!cleanNamespace || !cleanName) return 'failed';
 
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
     const authServerNamespace = process.env.ORCHARD_NAMESPACE || 'orchard';
@@ -484,7 +519,7 @@ export class K8sNetworkService implements OnModuleInit {
     const clusterIP = serverService.body.spec?.clusterIP;
     if (!clusterIP || clusterIP === 'None') {
       this.logger.error('No stable ClusterIP on server service for protection proxy');
-      return;
+      return 'failed';
     }
     const addresses = [clusterIP];
 
@@ -506,8 +541,8 @@ export class K8sNetworkService implements OnModuleInit {
       if (error.response?.statusCode === 409) {
         await coreApi.replaceNamespacedService(proxyServiceName, cleanNamespace, svcBody);
       } else {
-        console.error(`Failed to create protection proxy service: ${error.message}`);
-        return;
+        console.error(`Failed to create protection proxy service: ${k8sErrorMessage(error)}`);
+        return 'failed';
       }
     }
 
@@ -548,9 +583,38 @@ export class K8sNetworkService implements OnModuleInit {
           };
         }
       }
-      await networkingApi.replaceNamespacedIngress(cleanName, cleanNamespace, ingress.body);
+      const updated = await networkingApi.replaceNamespacedIngress(
+        cleanName,
+        cleanNamespace,
+        ingress.body,
+      );
+      // The API returns the persisted object, so this confirms the auth wall is
+      // really in front of every path instead of assuming the write took.
+      const paths = (updated.body.spec?.rules || []).flatMap((rule) => rule.http?.paths || []);
+      // Nothing to repoint is not the same as protected. An Ingress shaped
+      // some other way (a bare defaultBackend, say) would sail through an
+      // emptiness check while still serving the app.
+      if (paths.length === 0) {
+        this.logger.error(
+          `Protection proxy NOT applied to ${cleanNamespace}/${cleanName}: no rule paths to repoint`,
+        );
+        return 'failed';
+      }
+      const stillDirect = paths.filter((path) => path.backend?.service?.name !== proxyServiceName);
+      if (stillDirect.length > 0) {
+        this.logger.error(
+          `Protection proxy NOT applied to ${cleanNamespace}/${cleanName}: `
+          + `${stillDirect.length} path(s) still serve the app directly`,
+        );
+        return 'failed';
+      }
+      return 'applied';
     } catch (error) {
-      console.error(`Failed to update ingress backend for protection: ${k8sErrorMessage(error)}`);
+      if (error.response?.statusCode === 404) return 'ingress-missing';
+      this.logger.error(
+        `Failed to put ${cleanNamespace}/${cleanName} behind the protection proxy: ${k8sErrorMessage(error)}`,
+      );
+      return 'failed';
     }
   }
 

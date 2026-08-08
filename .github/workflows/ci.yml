@@ -176,6 +176,8 @@ jobs:
         run: pnpm --filter server test:auth-coverage
       - name: SCIM protocol test
         run: pnpm --filter server test:scim
+      - name: Ingress protection proxy test
+        run: pnpm --filter server test:protection
 
   e2e:
     needs: changes

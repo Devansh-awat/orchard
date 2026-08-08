@@ -539,9 +539,15 @@ export class IngressService {
       // Reconciler re-applies protection every 10 minutes, so a failure here
       // only delays the auth wall — it must not fail ingress creation.
       try {
-        await this.k8sNetwork.enableProtectionProxy(deployment.namespace, ingressName);
+        const result = await this.k8sNetwork.enableProtectionProxy(deployment.namespace, ingressName);
+        if (result !== 'applied') {
+          this.logger.error(
+            `Protection proxy not applied to ${deployment.namespace}/${ingressName} (${result}); `
+            + 'the reconciler will retry within 10 minutes',
+          );
+        }
       } catch (error) {
-        this.logger.warn(
+        this.logger.error(
           `Failed to enable protection proxy for ${deployment.namespace}/${ingressName}: ${error.message}`,
         );
       }
@@ -2214,7 +2220,16 @@ export class IngressService {
     }
 
     if (willProtect) {
-      await this.k8sNetwork.enableProtectionProxy(ingress.namespace, ingress.name);
+      const result = await this.k8sNetwork.enableProtectionProxy(ingress.namespace, ingress.name);
+      if (result === 'failed') {
+        // Saying "protected" while the app is still served directly is the one
+        // outcome worth failing the request over. The 10-minute reconciler
+        // would eventually fix it, but the user should not be told it is done.
+        throw new BadRequestException(
+          'Could not put this domain behind the auth wall, so it is still served directly. '
+          + 'The protection setting was not saved; try again in a moment.',
+        );
+      }
     }
 
     const annotations = (ingress.annotations as Record<string, string>) || {};
