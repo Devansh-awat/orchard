@@ -262,17 +262,49 @@ test('a protected host with a valid cookie is proxied upstream', async () => {
   assert.equal(target, 'app.ns.svc.cluster.local:3000');
 });
 
-test('TRIPWIRE: checkProtection fails OPEN for an unknown host', async () => {
-  // Documenting this deliberately rather than asserting it is fine.
-  //
-  // checkProtection returns allow for a host it cannot resolve. Today nothing
-  // reaches it that way: handleProxyRequest bails before calling it, and the
-  // only other caller is GET /apiv1/auth/protect/check, which nothing uses —
-  // no ingress carries an auth-url annotation and no infra references it.
-  //
-  // If that endpoint is ever wired up as an auth subrequest, an unresolvable
-  // host becomes a bypass. Change this test the day you change that.
+test('an unresolvable host is denied, not allowed', async () => {
+  // Was fail-open. handleProxyRequest resolves the ingress itself and then
+  // calls this, so an allow here proxied to an upstream with nothing checked.
   const svc = buildService(null);
   const d = await svc.checkProtection('unknown.example.test', '/', undefined, undefined);
-  assert.equal(d.allow, true, 'if this now denies, the fail-open was fixed — update the comment above');
+  assert.equal(d.allow, false);
+  assert.equal(d.status, 404);
+});
+
+test('a second lookup returning nothing cannot slip past the wall', async () => {
+  // handleProxyRequest resolves the ingress and checkProtection resolves it
+  // again. In practice the 5s ingressCache serves the second lookup, so the
+  // two agree. This pins the behaviour when it does not — a cold or disabled
+  // cache, or any future caller reaching checkProtection on its own.
+  const svc = buildService(protectedRow());
+  let calls = 0;
+  (svc as any).prisma = {
+    ingress: {
+      findFirst: async () => {
+        calls += 1;
+        return calls === 1 ? protectedRow() : null;
+      },
+    },
+  };
+  // A cache that forgets immediately, so both lookups reach the database.
+  (svc as any).ingressCache = { get: () => undefined, set: () => {} };
+  (svc as any).negativeCache = { get: () => undefined, set: () => {} };
+
+  let proxied = false;
+  (svc as any).proxyToUpstream = async () => { proxied = true; };
+  const sent: any = {};
+  const res: any = {
+    status(code: number) { sent.status = code; return res; },
+    send() { return res; },
+    setHeader() {},
+  };
+
+  const handled = await svc.handleProxyRequest(
+    { hostname: HOST, headers: {}, url: '/secret', originalUrl: '/secret' } as any,
+    res,
+  );
+  assert.equal(calls, 2, 'both lookups should have hit the database');
+  assert.equal(handled, true);
+  assert.equal(proxied, false, 'a request must never reach the upstream unauthenticated');
+  assert.equal(sent.status, 404);
 });

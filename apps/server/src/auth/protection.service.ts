@@ -94,7 +94,12 @@ export class ProtectionService {
     bypassHeader: string | undefined,
   ): Promise<ProtectionDecision> {
     const ingress = await this.resolveIngressFromHost(host);
-    if (!ingress) return { allow: true };
+    // Fail closed. A host we cannot resolve is not a host we can vouch for,
+    // and handleProxyRequest resolves the ingress separately before calling
+    // this — so returning allow here would proxy to an upstream we just
+    // decided we know nothing about, with no credentials checked, whenever a
+    // row disappears between the two lookups.
+    if (!ingress) return { allow: false, status: 404 };
 
     if (bypassHeader && ingress.protectionBypassSecret) {
       const a = Buffer.from(bypassHeader);
