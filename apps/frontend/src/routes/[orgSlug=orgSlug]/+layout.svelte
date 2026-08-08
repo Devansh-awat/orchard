@@ -2,6 +2,7 @@
 	import { page } from '$app/stores';
 	import { organizations, selectedOrganization, isSignedIn } from '$lib/stores';
 	import ErrorPage from '$lib/components/ErrorPage.svelte';
+	import EngineBanner from '$lib/components/EngineBanner.svelte';
 
 	let { children } = $props();
 
@@ -26,5 +27,6 @@
 {#if notFound}
 	<ErrorPage status={404} />
 {:else}
+	<EngineBanner />
 	{@render children()}
 {/if}

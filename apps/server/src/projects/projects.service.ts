@@ -1302,36 +1302,43 @@ export class ProjectsService {
       throw e;
     }
 
-    // Batch-fetch pods for every deployment by namespace: one listNamespacedPod
-    // call per unique namespace, grouped by `app` label. Replaces N+1 K8s reads.
-    const namespaces = Array.from(
-      new Set(
-        project.deployments
-          .map((d) => d.namespace)
-          .filter((ns): ns is string => !!ns),
-      ),
-    );
-    const podsByNsByApp = new Map<string, Map<string, { pods: any[]; warnings: any[] }> | null>();
-    await Promise.all(
-      namespaces.map(async (ns) => {
-        const map = await this.k8sWorkload.listNamespacePodsByApp(ns);
-        podsByNsByApp.set(ns, map);
+    // Statuses come from the pods/workloads projections the mirror maintains.
+    // Synced/imported deployments can use selectors whose pods never carry the
+    // app.kubernetes.io/name label, so an empty pod bucket falls back to the
+    // mirrored apps/v1 Deployment readiness instead of reporting 'pending'.
+    const deploymentIds = project.deployments.map((d) => d.id);
+    const [storedPods, workloads] = await Promise.all([
+      this.prisma.pod.findMany({
+        where: { deploymentId: { in: deploymentIds } },
+        select: {
+          deploymentId: true,
+          name: true,
+          status: true,
+          restartCount: true,
+          lastTerminationReason: true,
+        },
       }),
-    );
+      this.prisma.k8sWorkload.findMany({ where: { deploymentId: { in: deploymentIds } } }),
+    ]);
+    const podsByDeployment = new Map<string, typeof storedPods>();
+    for (const pod of storedPods) {
+      const bucket = podsByDeployment.get(pod.deploymentId);
+      if (bucket) bucket.push(pod);
+      else podsByDeployment.set(pod.deploymentId, [pod]);
+    }
+    const workloadByDeployment = new Map(workloads.map((w) => [w.deploymentId, w]));
 
     const deploymentsWithComputedStatus = await Promise.all(
       project.deployments.map(async (deployment) => {
-        const ns = deployment.namespace;
-        const nsMap = ns ? podsByNsByApp.get(ns) : undefined;
-        // The batch map is keyed by the pods' `app` label, which only matches
-        // deployments whose selector is `app=<name>` (leaf-created ones).
-        // Synced/imported deployments can use arbitrary selectors, so a miss
-        // means "unknown", NOT "no pods" — fall back to the per-deployment
-        // fetch (which reads the real selector) instead of reporting
-        // 'pending' for a healthy deployment. null = batch fetch failed →
-        // same fallback.
-        const prefetched = nsMap?.get(deployment.name) ?? undefined;
-        const computedStatus = await this.deployments.computeDeploymentStatus(deployment, prefetched);
+        const bucket = podsByDeployment.get(deployment.id) ?? [];
+        let computedStatus = await this.deployments.computeDeploymentStatus(deployment, {
+          pods: bucket,
+          warnings: this.deployments.synthesizePodWarnings(bucket),
+        });
+        if (computedStatus === 'pending' && bucket.length === 0) {
+          const workload = workloadByDeployment.get(deployment.id);
+          if (workload && workload.readyReplicas > 0) computedStatus = 'running';
+        }
         const merged = {
           ...deployment,
           ingresses: deployment.ingresses.map((ing) => scrubIngress(ing)),
@@ -1341,31 +1348,9 @@ export class ProjectsService {
       }),
     );
 
-    // Reconcile DB status with live CNPG state for any DB that isn't already
-    // 'ready'. Without this, the project page status pill stays stuck on
-    // 'provisioning' until the user opens the DB detail page.
-    const reconciledDatabases = await Promise.all(
-      (project.databases as any[]).map(async (db) => {
-        if (db.mode !== 'cnpg' || !db.namespace || !db.clusterName) return db;
-        if (db.status === 'ready') return db;
-        try {
-          const live = await this.k8sCnpg.getCnpgClusterStatus(db.namespace, db.clusterName);
-          let next = db.status as string;
-          if (live.ready && db.status !== 'ready' && db.status !== 'restoring') {
-            next = 'ready';
-          } else if (!live.exists && db.status !== 'error' && db.status !== 'provisioning') {
-            next = 'error';
-          }
-          if (next !== db.status) {
-            try {
-              await this.prisma.database.update({ where: { id: db.id }, data: { status: next } });
-            } catch { /* ignore */ }
-            return { ...db, status: next };
-          }
-        } catch { /* ignore — keep stored status */ }
-        return db;
-      }),
-    );
+    // The cnpg mirror consumer keeps database.status in sync with the watched
+    // Cluster CRs, so the stored status is current.
+    const reconciledDatabases = project.databases as any[];
 
     const icon = project.icon ?? (await this.resolveProjectIconFallback(project.deployments));
     const backgroundImage =

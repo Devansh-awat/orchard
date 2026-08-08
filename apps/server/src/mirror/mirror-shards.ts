@@ -56,6 +56,7 @@ export function buildMirrorShards(deps: MirrorShardDeps): MirrorShardDef[] {
             ),
           mapRefs: (obj) => deps.pods.mapRefs(obj),
           onEvent: (type, obj) => deps.pods.onEvent(type, obj),
+          onListComplete: (items) => deps.pods.pruneStalePods(items),
         },
       ],
     },

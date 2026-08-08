@@ -62,6 +62,19 @@ export class PodMirrorConsumer implements OnModuleDestroy {
     this.crashTracks.clear();
   }
 
+  async pruneStalePods(listed: k8s.V1Pod[]): Promise<void> {
+    const liveNames = listed
+      .map((pod) => pod.metadata?.name)
+      .filter((name): name is string => !!name);
+    if (liveNames.length === 0) return;
+    const result = await this.prisma.pod.deleteMany({
+      where: { name: { notIn: liveNames } },
+    });
+    if (result.count > 0) {
+      this.logger.log(`pruned ${result.count} stale pod rows not present in the cluster`);
+    }
+  }
+
   async mapRefs(pod: k8s.V1Pod): Promise<MirrorRefs> {
     const ns = pod.metadata?.namespace;
     const depName = pod.metadata?.labels?.['app.kubernetes.io/name'];

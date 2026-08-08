@@ -15,6 +15,7 @@ export type OrgEventType =
 	| 'jobrun.changed'
 	| 'environment.changed'
 	| 'sharedvars.changed'
+	| 'engine.changed'
 	| 'heartbeat';
 
 export interface OrgEvent {
@@ -107,6 +108,9 @@ function applyEventToCache(sub: Subscription, ev: OrgEvent) {
 			break;
 		case 'sharedvars.changed':
 			if (ev.id) qc.invalidateQueries({ queryKey: ['shared-vars', ev.id] });
+			break;
+		case 'engine.changed':
+			qc.invalidateQueries({ queryKey: ['engine-health'] });
 			break;
 		default:
 			break;

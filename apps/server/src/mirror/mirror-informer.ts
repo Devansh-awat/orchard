@@ -19,6 +19,7 @@ export interface MirrorResourceConfig {
   list(kc: k8s.KubeConfig): Promise<{ items: any[]; resourceVersion: string }>;
   mapRefs?(obj: any): Promise<MirrorRefs>;
   onEvent?(type: MirrorEventType, obj: any): void | Promise<void>;
+  onListComplete?(items: any[]): Promise<void>;
 }
 
 export interface MirrorInformerHooks {
@@ -122,6 +123,12 @@ export class MirrorInformer {
       repairs += countRepairs ? 1 : 0;
       await this.prisma.k8sObject.delete({ where: { uid: row.uid } }).catch(() => {});
       if (this.config.onEvent) await this.config.onEvent('delete', row.manifest);
+    }
+
+    if (this.config.onListComplete) {
+      await this.config.onListComplete(items).catch((err) => {
+        this.logger.warn(`onListComplete failed: ${(err as Error)?.message ?? err}`);
+      });
     }
 
     return { resourceVersion, repairs };

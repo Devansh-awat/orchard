@@ -1045,11 +1045,15 @@ export class DeploymentsController {
 
   @Get(':id/pods')
 
-  async getDeploymentPods(@Param('id') id: string, @Request() req) {
+  async getDeploymentPods(@Param('id') id: string, @Request() req, @Query('live') live?: string) {
     const { user } = await this.projectAccess.assertDeploymentView(id, req.user.sub, {
       email: req.user.email, username: req.user.username,
       firstName: req.user.firstName, lastName: req.user.lastName, imageUrl: req.user.imageUrl,
     });
+    if (live === '1' || live === 'true') {
+      const result = await this.deployments.getDeploymentPodsLive(id, user.id);
+      return result.pods ?? result;
+    }
     return this.deployments.getDeploymentPods(id, user.id);
   }
 

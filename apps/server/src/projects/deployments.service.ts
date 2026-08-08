@@ -654,33 +654,26 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       orderBy: { updatedAt: 'desc' },
     });
 
-    // Reconcile DB status with live pod state so the home page doesn't show
-    // "running" while every pod is still Scheduled / not Ready. Previously this
-    // fired 2 K8s API calls per deployment (readNamespacedDeployment +
-    // listNamespacedPod via getDeploymentPods → 2*N round-trips). Now we list
-    // pods ONCE per namespace and bucket by the app.kubernetes.io/name label,
-    // collapsing it to M (unique namespaces) calls.
-    const uniqueNamespaces = Array.from(
-      new Set(deployments.map((d) => d.namespace).filter((n): n is string => !!n)),
-    );
-    const namespacePodMaps = new Map<
-      string,
-      Map<string, { pods: { status: string; restartCount: number }[]; warnings: { message: string }[] }>
-    >();
-    await Promise.all(
-      uniqueNamespaces.map(async (ns) => {
-        const m = await this.k8sWorkload.listPodStatusesByDeploymentInNamespace(ns);
-        namespacePodMaps.set(ns, m);
-      }),
-    );
+    // Statuses come from the pods table the mirror informers maintain, so the
+    // home page reflects live cluster state without touching the apiserver.
+    const storedPods = await this.prisma.pod.findMany({
+      where: { deploymentId: { in: deployments.map((d) => d.id) } },
+      select: { deploymentId: true, status: true, restartCount: true },
+    });
+    const podsByDeployment = new Map<string, { status: string; restartCount: number }[]>();
+    for (const pod of storedPods) {
+      const bucket = podsByDeployment.get(pod.deploymentId);
+      if (bucket) bucket.push(pod);
+      else podsByDeployment.set(pod.deploymentId, [pod]);
+    }
 
     const computedStatuses = await Promise.all(
-      deployments.map((d) => {
-        const bucket = d.namespace
-          ? namespacePodMaps.get(d.namespace)?.get(d.name) ?? { pods: [], warnings: [] }
-          : { pods: [], warnings: [] };
-        return this.computeDeploymentStatus(d, bucket);
-      }),
+      deployments.map((d) =>
+        this.computeDeploymentStatus(d, {
+          pods: podsByDeployment.get(d.id) ?? [],
+          warnings: [],
+        }),
+      ),
     );
 
     // Merge direct ingresses and service-linked ingresses, deduplicating by id
@@ -805,28 +798,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
 
     const deploymentsWithComputedStatus = await Promise.all(
       deployments.map(async (deployment) => {
-        let pods: any = deployment.pods;
-        let warnings: any[] = [];
+        const pods = this.formatStoredPods(deployment.pods);
+        const warnings = this.synthesizePodWarnings(deployment.pods);
 
-        if (deployment.name && deployment.namespace) {
-          try {
-            const livePods = await this.k8sWorkload.getDeploymentPods(
-              deployment.name,
-              deployment.namespace
-            );
-            pods = this.formatLivePods(livePods?.pods);
-            warnings = livePods?.warnings || [];
-          } catch (error) {
-            console.error(
-              `[ProjectsService] Failed to fetch live pods for deployment ${deployment.id}:`,
-              error instanceof Error ? error.message : error
-            );
-          }
-        }
-
-        // Hand the already-fetched pods to computeDeploymentStatus so it doesn't
-        // re-issue the same readNamespacedDeployment + listNamespacedPod calls
-        // we just made above — that doubled the K8s round-trips per deployment.
         const computedStatus = await this.computeDeploymentStatus(deployment, {
           pods,
           warnings,
@@ -909,52 +883,25 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       await this.authz.requireProjectView(deployment.projectId, userId);
     }
 
-    let pods: any = [];
-    let availableReplicas = 0;
-    let warnings: any[] = [];
-    let totalCpuUsage: number | null = null;
-    let totalMemoryUsage: number | null = null;
+    const storedPods = await this.prisma.pod.findMany({
+      where: { deploymentId },
+    });
+    const pods = this.formatStoredPods(storedPods);
+    const warnings = this.synthesizePodWarnings(storedPods);
+    const totalCpuUsage: number | null = null;
+    const totalMemoryUsage: number | null = null;
 
-    if (deployment.name && deployment.namespace) {
-      try {
-        const livePods = await this.k8sWorkload.getDeploymentPods(
-          deployment.name,
-          deployment.namespace
-        );
-        pods = this.formatLivePods(livePods?.pods);
-        warnings = livePods?.warnings || [];
-        totalCpuUsage = livePods?.totalCpuUsage ?? null;
-        totalMemoryUsage = livePods?.totalMemoryUsage ?? null;
-
-        try {
-          const k8sDeployment = await this.k8sWorkload.getKubernetesDeployment(
-            deployment.name,
-            deployment.namespace
-          );
-          availableReplicas = k8sDeployment?.status?.availableReplicas ?? 0;
-        } catch (k8sError) {
-          console.error(
-            `[ProjectsService] Failed to fetch deployment status for ${deploymentId}:`,
-            k8sError instanceof Error ? k8sError.message : k8sError
-          );
-          availableReplicas = pods?.filter((pod: any) => pod.status?.toLowerCase() === 'ready').length ?? 0;
-        }
-      } catch (error) {
-        console.error(
-          `[ProjectsService] Failed to fetch live pods for deployment ${deploymentId}:`,
-          error instanceof Error ? error.message : error
-        );
-        availableReplicas = pods?.filter((pod: any) => pod.status?.toLowerCase() === 'running').length ?? 0;
-      }
-    } else {
-      availableReplicas = pods?.filter((pod: any) => pod.status?.toLowerCase() === 'running').length ?? 0;
-    }
+    const workload = await this.prisma.k8sWorkload.findUnique({
+      where: { deploymentId },
+    });
+    const availableReplicas =
+      workload?.availableReplicas ??
+      pods.filter((pod) => pod.status?.toLowerCase() === 'ready').length;
 
     const deploymentWithInternalUrls = this.addInternalUrlsToDeployment(deployment);
 
     // Discover project-level ingresses that route to this deployment's services,
-    // and enrich every ingress with K8s routes — all in a single parallel pass.
-    // Each unique ingress name is read from K8s exactly once.
+    // enriched with routes from the mirrored Ingress manifests.
     if (deployment.namespace) {
       const namespace = deployment.namespace;
       const directIngresses: any[] = deploymentWithInternalUrls.ingresses ?? [];
@@ -968,18 +915,15 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         : [];
 
       const candidateIngresses = [...directIngresses, ...projectIngresses];
-      const k8sByName = new Map<string, any>();
-      await Promise.all(
-        candidateIngresses.map(async (ing: any) => {
-          if (k8sByName.has(ing.name)) return;
-          try {
-            const k8sIngress = await this.k8sNetwork.readIngress(namespace, ing.name);
-            k8sByName.set(ing.name, k8sIngress);
-          } catch {
-            k8sByName.set(ing.name, null);
-          }
-        }),
-      );
+      const mirrored = await this.prisma.k8sObject.findMany({
+        where: {
+          kind: 'Ingress',
+          namespace,
+          name: { in: [...new Set(candidateIngresses.map((i: any) => i.name))] },
+        },
+        select: { name: true, manifest: true },
+      });
+      const k8sByName = new Map<string, any>(mirrored.map((m) => [m.name, m.manifest]));
 
       const serviceNames = new Set((deployment.services ?? []).map((s: any) => s.name));
       const enrich = (ing: any) => {
@@ -1016,7 +960,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       deploymentWithInternalUrls.ingresses = [...directEnriched, ...projectExtras];
     }
 
-    const computedStatus = await this.computeDeploymentStatus(deployment);
+    const computedStatus = await this.computeDeploymentStatus(deployment, { pods, warnings });
 
     const result: any = {
       ...deploymentWithInternalUrls,
@@ -1045,37 +989,11 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       await this.authz.requireProjectView(deployment.projectId, userId);
     }
 
-    if (deployment.name && deployment.namespace) {
-      try {
-        const livePods = await this.k8sWorkload.getDeploymentPods(
-          deployment.name,
-          deployment.namespace
-        );
-        return this.formatLivePods(livePods?.pods);
-      } catch (error) {
-        console.error(
-          `[ProjectsService] Failed to fetch live pods for deployment ${deploymentId}:`,
-          error instanceof Error ? error.message : error
-        );
-      }
-    }
-
     const storedPods = await this.prisma.pod.findMany({
       where: { deploymentId },
     });
 
-    return storedPods.map((pod) => ({
-      id: pod.id,
-      name: pod.name,
-      status: pod.status,
-      ip: pod.podIp,
-      podIp: pod.podIp,
-      nodeName: pod.nodeName,
-      restartCount: pod.restartCount,
-      startTime: pod.createdAt,
-      createdAt: pod.createdAt,
-      containers: [],
-    }));
+    return this.formatStoredPods(storedPods);
   }
 
   async getDeploymentPodsLive(deploymentId: string, userId?: string) {
@@ -4037,6 +3955,63 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         `This deployment is managed by a Compose file. ${action} via its parent compose stack.`,
       );
     }
+  }
+
+  formatStoredPods(
+    pods: {
+      id: string;
+      name: string;
+      status: string;
+      podIp: string | null;
+      nodeName: string | null;
+      restartCount: number;
+      lastTerminationReason?: string | null;
+      lastExitCode?: number | null;
+      lastTerminatedAt?: Date | null;
+      createdAt: Date;
+    }[] = [],
+  ) {
+    return pods.map((pod) => ({
+      id: pod.id,
+      name: pod.name,
+      status: pod.status,
+      ip: pod.podIp,
+      podIp: pod.podIp,
+      nodeName: pod.nodeName,
+      restartCount: pod.restartCount,
+      startTime: pod.createdAt,
+      createdAt: pod.createdAt,
+      cpuUsage: null,
+      memoryUsage: null,
+      containers: pod.lastTerminationReason
+        ? [
+            {
+              name: pod.name,
+              image: null,
+              ready: pod.status === 'ready',
+              restartCount: pod.restartCount,
+              lastTermination: {
+                reason: pod.lastTerminationReason,
+                exitCode: pod.lastExitCode ?? null,
+                finishedAt: pod.lastTerminatedAt ?? null,
+              },
+            },
+          ]
+        : [],
+    }));
+  }
+
+  synthesizePodWarnings(
+    pods: { name: string; status: string; lastTerminationReason?: string | null }[],
+  ) {
+    return pods
+      .filter((pod) => pod.status === 'crashing')
+      .map((pod) => ({
+        podName: pod.name,
+        message: pod.lastTerminationReason
+          ? `Back-off restarting failed container (${pod.lastTerminationReason})`
+          : 'Back-off restarting failed container',
+      }));
   }
 
   formatLivePods(pods: any[] = []) {

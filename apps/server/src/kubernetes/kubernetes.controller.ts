@@ -52,9 +52,41 @@ export class KubernetesController {
   }
 
   @Get('pods')
-  async listPods(@Query('namespace') namespace: string, @Req() req: any) {
+  async listPods(
+    @Query('namespace') namespace: string,
+    @Req() req: any,
+    @Query('live') live?: string,
+  ) {
     await this.resolveNamespace(namespace, req, 'view');
-    return this.k8sWorkload.listPods(namespace);
+    if (live === '1' || live === 'true') {
+      return this.k8sWorkload.listPods(namespace);
+    }
+    const objects = await this.prisma.k8sObject.findMany({
+      where: { kind: 'Pod', namespace },
+      select: { manifest: true },
+    });
+    const pods = objects.map((o) => {
+      const pod = o.manifest as any;
+      return {
+        name: pod.metadata?.name,
+        namespace: pod.metadata?.namespace,
+        status: pod.status?.phase,
+        podIP: pod.status?.podIP,
+        hostIP: pod.status?.hostIP,
+        startTime: pod.status?.startTime,
+        conditions: pod.status?.conditions,
+        containerStatuses: pod.status?.containerStatuses?.map((container: any) => ({
+          name: container.name,
+          ready: container.ready,
+          restartCount: container.restartCount,
+          image: container.image,
+          state: container.state,
+        })),
+        labels: pod.metadata?.labels,
+        annotations: pod.metadata?.annotations,
+      };
+    });
+    return { namespace, podCount: pods.length, pods };
   }
 
   @Get('pods/:podName')
@@ -62,9 +94,18 @@ export class KubernetesController {
     @Param('podName') podName: string,
     @Req() req: any,
     @Query('namespace') namespace?: string,
+    @Query('live') live?: string,
   ) {
     await this.resolveNamespace(namespace, req, 'view');
-    return this.k8sWorkload.getPod(podName, namespace);
+    if (live === '1' || live === 'true') {
+      return this.k8sWorkload.getPod(podName, namespace);
+    }
+    const object = await this.prisma.k8sObject.findFirst({
+      where: { kind: 'Pod', namespace, name: podName },
+      select: { manifest: true },
+    });
+    if (!object) return this.k8sWorkload.getPod(podName, namespace);
+    return object.manifest;
   }
 
   @Delete('pods/:podName')
