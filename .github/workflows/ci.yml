@@ -176,7 +176,10 @@ jobs:
         run: pnpm --filter server test:auth-coverage
       - name: SCIM protocol test
         run: pnpm --filter server test:scim
-      - name: Ingress protection proxy test
+      # The auth wall in front of every private domain. Covers the routing
+      # layer (is the Ingress actually behind the proxy) and the decision layer
+      # (token audience, type, expiry, bypass secret, redirect targets).
+      - name: Ingress protection + auth gate tests
         run: pnpm --filter server test:protection
 
   e2e:

@@ -125,3 +125,85 @@ test('failed when the ingress has no rule paths to repoint', async () => {
   });
   assert.equal(await svc.enableProtectionProxy('ns', 'app-ing'), 'failed');
 });
+
+// ── restoreOrphanedProtectionBackends ──
+//
+// This is the one function that can take a domain OUT from behind the auth
+// wall. It exists to undo the proxy after protection is switched off, but the
+// same code path would strip a live protected domain if its guards ever
+// loosened. Each of these pins one guard.
+
+const PROXIED_INGRESS = {
+  metadata: { name: 'app-ing', namespace: 'ns' },
+  spec: {
+    rules: [{ http: { paths: [{ path: '/', backend: { service: { name: PROXY, port: { number: 3001 } } } }] } }],
+  },
+};
+
+function buildRestoreService(opts: { rows: any[]; proxyServiceExists: boolean }) {
+  const svc = Object.create(K8sNetworkService.prototype) as any;
+  const writes: any[] = [];
+  svc.logger = { error() {}, warn() {}, log() {} };
+  svc.prisma = { ingress: { findMany: async () => opts.rows } };
+  svc.kubernetes = { ensureKubeConfig() {}, kc: {
+    makeApiClient(api: any) {
+      if (api === k8s.CoreV1Api) {
+        return {
+          readNamespacedService: async () => {
+            if (opts.proxyServiceExists) return { body: {} };
+            const e: any = new Error('not found');
+            e.response = { statusCode: 404 };
+            throw e;
+          },
+        };
+      }
+      return {
+        listIngressForAllNamespaces: async () => ({
+          body: { items: [JSON.parse(JSON.stringify(PROXIED_INGRESS))] },
+        }),
+        replaceNamespacedIngress: async (_n: string, _ns: string, body: any) => {
+          writes.push(body); return { body };
+        },
+      };
+    },
+  } };
+  return { svc: svc as any, writes };
+}
+
+const unprotectedRow = { protectionMode: 'none', path: '/', service: { name: 'app', port: 3000, ports: [{ port: 3000 }] } };
+
+test('restore leaves a PROTECTED domain behind the proxy', async () => {
+  const { svc, writes } = buildRestoreService({
+    rows: [{ ...unprotectedRow, protectionMode: 'orchard' }],
+    proxyServiceExists: false,
+  });
+  await svc.restoreOrphanedProtectionBackends(new Set<string>());
+  assert.equal(writes.length, 0, 'a protected ingress must never be repointed at the app');
+});
+
+test('restore leaves a domain alone when no DB row explains it', async () => {
+  // A deleted row must not be read as "unprotected". This is what makes
+  // cascading ingress deletes safe.
+  const { svc, writes } = buildRestoreService({ rows: [], proxyServiceExists: false });
+  await svc.restoreOrphanedProtectionBackends(new Set<string>());
+  assert.equal(writes.length, 0, 'a missing row must not strip the auth wall');
+});
+
+test('restore leaves a domain alone while the proxy service still exists', async () => {
+  const { svc, writes } = buildRestoreService({ rows: [unprotectedRow], proxyServiceExists: true });
+  await svc.restoreOrphanedProtectionBackends(new Set<string>());
+  assert.equal(writes.length, 0);
+});
+
+test('restore skips anything still in the protected set', async () => {
+  const { svc, writes } = buildRestoreService({ rows: [unprotectedRow], proxyServiceExists: false });
+  await svc.restoreOrphanedProtectionBackends(new Set(['ns/app-ing']));
+  assert.equal(writes.length, 0);
+});
+
+test('restore does repoint a genuinely unprotected, orphaned ingress', async () => {
+  const { svc, writes } = buildRestoreService({ rows: [unprotectedRow], proxyServiceExists: false });
+  await svc.restoreOrphanedProtectionBackends(new Set<string>());
+  assert.equal(writes.length, 1);
+  assert.equal(writes[0].spec.rules[0].http.paths[0].backend.service.name, 'app');
+});
