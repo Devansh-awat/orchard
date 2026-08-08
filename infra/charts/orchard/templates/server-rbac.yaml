@@ -1,0 +1,33 @@
+{{- if .Values.server.enabled }}
+# Lease-based leader election (coordination.k8s.io) for informer shards and
+# leader-guarded sweeps. Namespaced on purpose: the server only ever holds
+# leases in its own namespace. The orchard-server ServiceAccount itself (and
+# its cluster-wide read permissions) is managed out-of-band of this chart.
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ .Release.Name }}-server-leases
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "server") | nindent 4 }}
+rules:
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ .Release.Name }}-server-leases
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "server") | nindent 4 }}
+subjects:
+  - kind: ServiceAccount
+    name: orchard-server
+    namespace: {{ .Values.namespace }}
+roleRef:
+  kind: Role
+  name: {{ .Release.Name }}-server-leases
+  apiGroup: rbac.authorization.k8s.io
+{{- end }}

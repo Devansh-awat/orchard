@@ -44,6 +44,11 @@ BigInt.prototype.toJSON = function() {
 async function bootstrap() {
   const app = await NestFactory.create<NestExpressApplication>(AppModule, { rawBody: true, bodyParser: false, logger: new OtelConsoleLogger() });
 
+  // Without this, Nest never runs OnModuleDestroy/OnApplicationShutdown on
+  // SIGTERM, so pods rolling out would hold their Leases until TTL expiry
+  // instead of releasing them for instant failover.
+  app.enableShutdownHooks();
+
   const protectionService = app.get(ProtectionService);
   app.use(async (req, res, next) => {
     try {

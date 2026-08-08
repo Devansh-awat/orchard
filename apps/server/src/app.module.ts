@@ -35,6 +35,7 @@ import { JobsModule } from './jobs/jobs.module';
 import { ForumModule } from './forum/forum.module';
 import { SandboxesModule } from './sandboxes/sandboxes.module';
 import { SshIdentitiesModule } from './ssh-identities/ssh-identities.module';
+import { CoordinationModule } from './coordination/coordination.module';
 
 @Module({
   imports: [
@@ -50,6 +51,7 @@ import { SshIdentitiesModule } from './ssh-identities/ssh-identities.module';
     UsersModule,
     HealthModule,
     KubernetesModule,
+    CoordinationModule,
     ProjectsModule,
     OrganizationsModule,
     GitHubModule,

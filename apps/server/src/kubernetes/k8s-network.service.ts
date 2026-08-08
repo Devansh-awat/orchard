@@ -14,6 +14,7 @@ import {
 import { mapServicePorts, ensureUniqueServicePorts, sanitizePortEntries } from './port-utils';
 import { truncateK8sName } from '../projects/projects.utils';
 import { k8sErrorMessage } from './k8s-error';
+import { LeaderElectionService } from '../events/leader-election.service';
 
 export type ProtectionProxyResult = 'applied' | 'ingress-missing' | 'failed';
 
@@ -30,6 +31,7 @@ export class K8sNetworkService implements OnModuleInit {
   constructor(
     private readonly prisma: PrismaService,
     private readonly kubernetes: KubernetesService,
+    private readonly leaderElection: LeaderElectionService,
   ) {}
 
   onModuleInit() {
@@ -43,6 +45,7 @@ export class K8sNetworkService implements OnModuleInit {
 
   async reconcileProtectionProxies(): Promise<void> {
     if (!this.kc) return;
+    if (!this.leaderElection.isLeader()) return;
 
     let protectedIngresses: { namespace: string; name: string }[];
     try {
