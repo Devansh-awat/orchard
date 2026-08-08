@@ -13,6 +13,7 @@ import {
 } from './kubernetes.service';
 import { mapServicePorts, ensureUniqueServicePorts, sanitizePortEntries } from './port-utils';
 import { truncateK8sName } from '../projects/projects.utils';
+import { k8sErrorMessage } from './k8s-error';
 
 /**
  * All Kubernetes network/edge resources: Services, Ingress (Cilium),
@@ -530,7 +531,7 @@ export class K8sNetworkService implements OnModuleInit {
       if (error.response?.statusCode === 409) {
         await customApi.replaceNamespacedCustomObject('discovery.k8s.io', 'v1', cleanNamespace, 'endpointslices', `${proxyServiceName}-1`, endpointSlice);
       } else {
-        console.error(`Failed to create protection proxy endpoint slice: ${error.message}`);
+        console.error(`Failed to create protection proxy endpoint slice: ${k8sErrorMessage(error)}`);
       }
     }
 
@@ -549,7 +550,7 @@ export class K8sNetworkService implements OnModuleInit {
       }
       await networkingApi.replaceNamespacedIngress(cleanName, cleanNamespace, ingress.body);
     } catch (error) {
-      console.error(`Failed to update ingress backend for protection: ${error.message}`);
+      console.error(`Failed to update ingress backend for protection: ${k8sErrorMessage(error)}`);
     }
   }
 

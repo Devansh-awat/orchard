@@ -19,6 +19,7 @@ import {
 import { PrismaService } from '../prisma/prisma.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { OrgEventsService } from '../events/org-events.service';
+import { k8sErrorMessage } from '../kubernetes/k8s-error';
 
 interface BuildLogMessage {
   id?: string;
@@ -424,7 +425,7 @@ export class ObservabilityService {
         // object dumps) stay together and keep their original order.
         allEntries.push(...groupLines(lines));
       } catch (err) {
-        this.logger.warn(`failed to fetch logs for pod ${pod.name}: ${(err as Error).message}`);
+        this.logger.warn(`failed to fetch logs for pod ${pod.name}: ${k8sErrorMessage(err)}`);
       }
     }
 

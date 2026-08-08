@@ -11,6 +11,7 @@ import { Request, Response } from 'express';
 import { AnalyticsService } from './analytics.service';
 import { markSpanError } from './datadog';
 import { getClientIp } from '../auth/client-ip';
+import { k8sHttpException } from '../kubernetes/k8s-error';
 
 /**
  * Global filter that forwards every unhandled error to PostHog Error
@@ -32,14 +33,21 @@ export class AnalyticsExceptionFilter extends BaseExceptionFilter implements Exc
   }
 
   catch(exception: unknown, host: ArgumentsHost): void {
+    // The k8s client's opaque 'HTTP request failed' would otherwise be what the
+    // caller sees. Report the original (it carries the stack), respond with the
+    // unwrapped one.
+    const normalized = k8sHttpException(exception) ?? exception;
+
     try {
       if (host.getType() === 'http') {
         const ctx = host.switchToHttp();
         const req = ctx.getRequest<Request & { auth?: { userId?: string }; user?: { sub?: string } }>();
         const res = ctx.getResponse<Response>();
         const status =
-          exception instanceof HttpException ? exception.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
-        if (status >= 500) {
+          normalized instanceof HttpException ? normalized.getStatus() : HttpStatus.INTERNAL_SERVER_ERROR;
+        // An unwrapped k8s error can land on a 4xx, but it is still a bug we
+        // never handled, so it stays in Error Tracking.
+        if (status >= 500 || !(exception instanceof HttpException)) {
           // Nest swallows the exception before express sees it, so without
           // this Datadog Error Tracking only gets a bare 500 status.
           markSpanError(exception);
@@ -62,6 +70,6 @@ export class AnalyticsExceptionFilter extends BaseExceptionFilter implements Exc
       this.logger.warn(`forward to analytics failed: ${(e as Error).message}`);
     }
 
-    super.catch(exception, host);
+    super.catch(normalized, host);
   }
 }
