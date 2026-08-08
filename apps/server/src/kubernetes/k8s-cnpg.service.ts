@@ -1124,25 +1124,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     }
 
     if (options.r2 && r2SecretName) {
-      // Preserve the scheme from the configured endpoint — when r2-proxy is
-      // enabled the endpoint is http:// (plaintext, in-cluster); when going
-      // direct to R2 it's https://. Stripping then re-prefixing https broke
-      // the proxy path.
-      const endpointRaw = options.r2.endpoint.replace(/\/$/, '');
-      const endpointURL = /^https?:\/\//.test(endpointRaw) ? endpointRaw : `https://${endpointRaw}`;
-      clusterSpec.backup = {
-        barmanObjectStore: {
-          destinationPath: `s3://${options.r2.bucket}/${ns}/${name}`,
-          endpointURL,
-          s3Credentials: {
-            accessKeyId: { name: r2SecretName, key: 'ACCESS_KEY_ID' },
-            secretAccessKey: { name: r2SecretName, key: 'ACCESS_SECRET_KEY' },
-          },
-          wal: { compression: 'gzip' },
-          data: { compression: 'gzip' },
-        },
-        retentionPolicy: '30d',
-      };
+      clusterSpec.backup = this.buildBackupSpec(ns, name, options.r2, r2SecretName);
     }
 
     const clusterBody: any = {
@@ -1709,22 +1691,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     };
 
     if (options.r2 && r2SecretName) {
-      // Preserve scheme (http for in-cluster r2-proxy, https for direct R2).
-      const endpointRaw = options.r2.endpoint.replace(/\/$/, '');
-      const endpointURL = /^https?:\/\//.test(endpointRaw) ? endpointRaw : `https://${endpointRaw}`;
-      spec.backup = {
-        barmanObjectStore: {
-          destinationPath: `s3://${options.r2.bucket}/${namespace}/${newName}`,
-          endpointURL,
-          s3Credentials: {
-            accessKeyId: { name: r2SecretName, key: 'ACCESS_KEY_ID' },
-            secretAccessKey: { name: r2SecretName, key: 'ACCESS_SECRET_KEY' },
-          },
-          wal: { compression: 'gzip' },
-          data: { compression: 'gzip' },
-        },
-        retentionPolicy: '30d',
-      };
+      spec.backup = this.buildBackupSpec(namespace, newName, options.r2, r2SecretName);
     }
 
     const body = {
@@ -1904,10 +1871,109 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     return `${clusterName}-schedule`.substring(0, 63);
   }
 
+  private r2SecretName(clusterName: string): string {
+    return `${clusterName}-r2`;
+  }
+
+  private buildBackupSpec(
+    namespace: string,
+    clusterName: string,
+    r2: { endpoint: string; bucket: string },
+    r2SecretName: string,
+  ): any {
+    // Preserve the scheme from the configured endpoint — when r2-proxy is
+    // enabled the endpoint is http:// (plaintext, in-cluster); when going
+    // direct to R2 it's https://. Stripping then re-prefixing https broke
+    // the proxy path.
+    const endpointRaw = r2.endpoint.replace(/\/$/, '');
+    const endpointURL = /^https?:\/\//.test(endpointRaw) ? endpointRaw : `https://${endpointRaw}`;
+    return {
+      barmanObjectStore: {
+        destinationPath: `s3://${r2.bucket}/${namespace}/${clusterName}`,
+        endpointURL,
+        s3Credentials: {
+          accessKeyId: { name: r2SecretName, key: 'ACCESS_KEY_ID' },
+          secretAccessKey: { name: r2SecretName, key: 'ACCESS_SECRET_KEY' },
+        },
+        wal: { compression: 'gzip' },
+        data: { compression: 'gzip' },
+      },
+      retentionPolicy: '30d',
+    };
+  }
+
+  // Continuous WAL archiving. A cluster provisioned before its org had backup
+  // storage has no `spec.backup` at all, and CNPG rejects a ScheduledBackup or
+  // Backup against such a cluster, so every backup entry point turns this on
+  // first rather than handing the user a validation error.
+  async isCnpgBackupConfigured(namespace: string, clusterName: string): Promise<boolean> {
+    this.ensureKubeConfig();
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    const cluster: any = await customApi.getNamespacedCustomObject(
+      this.CNPG_GROUP, this.CNPG_VERSION, namespace, this.CNPG_PLURAL, clusterName,
+    );
+    return Boolean(cluster?.body?.spec?.backup?.barmanObjectStore);
+  }
+
+  async enableCnpgBackup(
+    namespace: string,
+    clusterName: string,
+    r2: { endpoint: string; bucket: string; accessKey: string; secretKey: string },
+  ): Promise<void> {
+    this.ensureKubeConfig();
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
+    const secretName = this.r2SecretName(clusterName);
+    await this.upsertSecret(coreApi, namespace, secretName, 'Opaque', {
+      ACCESS_KEY_ID: Buffer.from(r2.accessKey).toString('base64'),
+      ACCESS_SECRET_KEY: Buffer.from(r2.secretKey).toString('base64'),
+    }, {
+      'app.kubernetes.io/managed-by': 'orchard',
+      'cnpg.io/cluster': clusterName,
+    });
+    await customApi.patchNamespacedCustomObject(
+      this.CNPG_GROUP, this.CNPG_VERSION, namespace, this.CNPG_PLURAL, clusterName,
+      { spec: { backup: this.buildBackupSpec(namespace, clusterName, r2, secretName) } },
+      undefined, undefined, undefined,
+      { headers: { 'Content-Type': 'application/merge-patch+json' } },
+    );
+  }
+
+  async disableCnpgBackup(namespace: string, clusterName: string): Promise<void> {
+    this.ensureKubeConfig();
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    await customApi.patchNamespacedCustomObject(
+      this.CNPG_GROUP, this.CNPG_VERSION, namespace, this.CNPG_PLURAL, clusterName,
+      { spec: { backup: null } },
+      undefined, undefined, undefined,
+      { headers: { 'Content-Type': 'application/merge-patch+json' } },
+    );
+  }
+
+  async hasScheduledBackup(namespace: string, clusterName: string): Promise<boolean> {
+    this.ensureKubeConfig();
+    const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
+    try {
+      await customApi.getNamespacedCustomObject(
+        this.CNPG_GROUP, this.CNPG_VERSION, namespace,
+        this.CNPG_SCHEDULED_BACKUP_PLURAL, this.scheduledBackupName(clusterName),
+      );
+      return true;
+    } catch (e: any) {
+      if (e.response?.statusCode === 404) return false;
+      throw e;
+    }
+  }
+
+  // `immediate` anchors retention: barman can only expire WAL that sits behind
+  // a base backup, so a cluster that archives without one grows forever.
+  // CNPG only honours the flag on a schedule that has never run, so passing it
+  // on an update is a no-op rather than a surprise extra backup.
   async upsertScheduledBackup(
     namespace: string,
     clusterName: string,
     cronSchedule: string,
+    opts: { immediate?: boolean } = {},
   ): Promise<void> {
     this.ensureKubeConfig();
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
@@ -1926,6 +1992,7 @@ export class K8sCnpgService implements OnApplicationBootstrap {
       spec: {
         schedule: cronSchedule,
         backupOwnerReference: 'self',
+        immediate: opts.immediate === true,
         cluster: { name: clusterName },
       },
     };

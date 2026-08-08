@@ -103,7 +103,12 @@
 					5 fields: <code class="db-inline-code">min hour day month weekday</code>. Interpreted in
 					UTC.
 				</p>
-			{:else if schedulePreset !== 'none'}
+			{:else if schedulePreset === 'none'}
+				<p class="text-xs mt-2" style="color: var(--surface-muted);">
+					Turns off continuous archiving as well, so point-in-time recovery stops here. Taking a
+					backup by hand switches it back on.
+				</p>
+			{:else}
 				{@const active = schedulePresets.find((p) => p.id === schedulePreset)}
 				{#if active}
 					<p class="text-xs mt-2" style="color: var(--surface-muted);">

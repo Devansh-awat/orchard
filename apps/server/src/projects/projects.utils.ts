@@ -102,3 +102,17 @@ export function formatBytes(bytes: number): string {
   if (bytes >= GIB) return `${(bytes / GIB).toFixed(bytes % GIB === 0 ? 0 : 1)}GiB`;
   return `${Math.max(1, Math.round(bytes / (1024 * 1024)))}MiB`;
 }
+
+// Every database with backup storage gets this schedule unless the user picks
+// another one. Backups you have to remember to switch on are backups nobody
+// has, and an archiving cluster with no base backup grows without bound
+// because retention has nothing to expire against.
+export const DEFAULT_BACKUP_CRON = process.env.DEFAULT_DB_BACKUP_CRON || '0 3 * * *';
+
+// CNPG schedules are quartz-style: the leading field is seconds, not minutes.
+// A plain 5-field cron pasted from anywhere else has to grow one.
+export function toQuartzCron(expr: string): string {
+  const parts = expr.trim().split(/\s+/);
+  if (parts.length === 5) return `0 ${parts.join(' ')}`;
+  return expr.trim();
+}

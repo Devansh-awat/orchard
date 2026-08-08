@@ -14,6 +14,7 @@ import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { K8sCnpgService } from '../kubernetes/k8s-cnpg.service';
+import { k8sErrorMessage } from '../kubernetes/k8s-error';
 import { R2ProxyService } from '../kubernetes/r2-proxy.service';
 import { UsersService } from '../users/users.service';
 import { AuthorizationService } from '../auth/authorization.service';
@@ -21,7 +22,7 @@ import { AuditService } from '../audit/audit.service';
 import { QuotasService } from '../quotas/quotas.service';
 import { ProjectAccessService } from './project-access.service';
 import { BackupSyncService } from './backup-sync.service';
-import { formatSlug, redactDatabaseForViewer, stripR2ProxyCreds, truncateK8sName, parseStorageSize, formatBytes, GIB } from './projects.utils';
+import { formatSlug, redactDatabaseForViewer, stripR2ProxyCreds, truncateK8sName, parseStorageSize, formatBytes, toQuartzCron, DEFAULT_BACKUP_CRON, GIB } from './projects.utils';
 
 @Injectable()
 export class DatabasesService {
@@ -439,6 +440,7 @@ export class DatabasesService {
           port,
           createdBy: user.id,
           templateInstanceId: data.templateInstanceId ?? null,
+          backupScheduleCron: r2 ? DEFAULT_BACKUP_CRON : null,
           r2ProxyAccessKey: r2ProxyAccessKey ?? null,
           r2ProxySecret: r2ProxySecret ?? null,
         },
@@ -458,6 +460,19 @@ export class DatabasesService {
         }
       }
       throw e;
+    }
+
+    // Not immediate: the cluster is still bootstrapping, and a base backup
+    // fired against a primary that has not come up yet just fails. The first
+    // scheduled run is well inside the retention window.
+    if (r2) {
+      this.k8sCnpg.upsertScheduledBackup(
+        namespace,
+        clusterName,
+        toQuartzCron(DEFAULT_BACKUP_CRON),
+      ).catch((e) => {
+        this.logger.warn(`[DB/backup] default schedule for ${namespace}/${clusterName} failed: ${k8sErrorMessage(e)}`);
+      });
     }
 
     void this.audit.log({
@@ -1123,6 +1138,62 @@ export class DatabasesService {
     return org;
   }
 
+  /**
+   * Make sure the cluster is actually archiving before anything tries to back
+   * it up. Clusters provisioned before their org had backup storage carry no
+   * `spec.backup`, and CNPG answers a ScheduledBackup or Backup against one of
+   * those with a validation error, which is how "set a schedule" used to fail
+   * for a third of the fleet. Returns true when archiving was just turned on.
+   */
+  private async ensureBackupsConfigured(database: {
+    id: string;
+    namespace: string | null;
+    clusterName: string | null;
+    r2ProxyAccessKey: string | null;
+    project: { organizationId: string };
+  }): Promise<boolean> {
+    if (!database.namespace || !database.clusterName) {
+      throw new BadRequestException('Database is missing cluster metadata');
+    }
+    const org = await this.getOrgR2Config(database.project.organizationId);
+
+    if (await this.k8sCnpg.isCnpgBackupConfigured(database.namespace, database.clusterName)) {
+      return false;
+    }
+
+    const { r2, r2ProxyAccessKey, r2ProxySecret } = await this.buildBackupR2Config(
+      org,
+      database.namespace,
+      database.clusterName,
+    );
+    if (!r2) {
+      throw new BadRequestException('R2 backup storage is not configured for this organization');
+    }
+
+    try {
+      await this.k8sCnpg.enableCnpgBackup(database.namespace, database.clusterName, r2);
+    } catch (e) {
+      if (r2ProxyAccessKey) {
+        await this.r2Proxy.removeBinding(r2ProxyAccessKey).catch(() => {});
+      }
+      throw e;
+    }
+
+    if (r2ProxyAccessKey) {
+      const previous = database.r2ProxyAccessKey;
+      await this.prisma.database.update({
+        where: { id: database.id },
+        data: { r2ProxyAccessKey, r2ProxySecret },
+      });
+      if (previous && previous !== r2ProxyAccessKey) {
+        await this.r2Proxy.removeBinding(previous).catch(() => {});
+      }
+    }
+
+    this.logger.log(`[DB/backup] enabled WAL archiving for ${database.namespace}/${database.clusterName}`);
+    return true;
+  }
+
   async listDatabaseBackups(databaseId: string, clerkId: string, userData?: any) {
     const { database } = await this.access.assertDatabaseEditorOrViewer(databaseId, clerkId, userData, { allowViewer: true });
 
@@ -1152,7 +1223,7 @@ export class DatabasesService {
     if (!database.namespace || !database.clusterName) {
       throw new BadRequestException('Database is missing cluster metadata');
     }
-    await this.getOrgR2Config(database.project.organizationId);
+    await this.ensureBackupsConfigured(database);
 
     await this.backupSync.pruneOldBackups({ id: database.id, namespace: database.namespace, clusterName: database.clusterName });
 
@@ -1214,12 +1285,6 @@ export class DatabasesService {
     return parts.every((p) => /^[\d*/,\-?LW#]+$/.test(p));
   }
 
-  private toQuartzCron(expr: string): string {
-    const parts = expr.trim().split(/\s+/);
-    if (parts.length === 5) return `0 ${parts.join(' ')}`;
-    return expr.trim();
-  }
-
   async getBackupSchedule(databaseId: string, clerkId: string, userData?: any) {
     const { database } = await this.access.assertDatabaseEditorOrViewer(databaseId, clerkId, userData, { allowViewer: true });
     return { cron: database.backupScheduleCron || null };
@@ -1235,15 +1300,20 @@ export class DatabasesService {
     if (database.mode !== 'cnpg' || !database.namespace || !database.clusterName) {
       throw new BadRequestException('Scheduled backups require a CNPG-backed database');
     }
-    await this.getOrgR2Config(database.project.organizationId);
-
     const cron = (data.cron || '').trim();
     if (!this.isValidCron(cron)) {
       throw new BadRequestException('Invalid cron expression. Expected 5 or 6 space-separated fields.');
     }
 
-    const quartz = this.toQuartzCron(cron);
-    await this.k8sCnpg.upsertScheduledBackup(database.namespace, database.clusterName, quartz);
+    // Turning archiving on and waiting until 3am for the first base backup
+    // would leave a window with WAL in the bucket and nothing to restore from,
+    // so the first run happens now.
+    const justEnabled = await this.ensureBackupsConfigured(database);
+
+    const quartz = toQuartzCron(cron);
+    await this.k8sCnpg.upsertScheduledBackup(database.namespace, database.clusterName, quartz, {
+      immediate: justEnabled,
+    });
     await this.prisma.database.update({
       where: { id: database.id },
       data: { backupScheduleCron: cron },
@@ -1259,7 +1329,15 @@ export class DatabasesService {
     try {
       await this.k8sCnpg.deleteScheduledBackup(database.namespace, database.clusterName);
     } catch (e: any) {
-      console.error(`[DB/schedule] Failed to delete ScheduledBackup: ${e?.message}`);
+      console.error(`[DB/schedule] Failed to delete ScheduledBackup: ${k8sErrorMessage(e)}`);
+    }
+    // Stop archiving too. WAL keeps being shipped for as long as the backup
+    // stanza is there, and with no base backup left to expire against, barman
+    // can never prune any of it — that is the pile-up that filled the bucket.
+    try {
+      await this.k8sCnpg.disableCnpgBackup(database.namespace, database.clusterName);
+    } catch (e: any) {
+      console.error(`[DB/schedule] Failed to disable WAL archiving: ${k8sErrorMessage(e)}`);
     }
     await this.prisma.database.update({
       where: { id: database.id },

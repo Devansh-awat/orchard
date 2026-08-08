@@ -4,12 +4,16 @@ import { PrismaService } from '../prisma/prisma.service';
 import { K8sCnpgService } from '../kubernetes/k8s-cnpg.service';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { k8sErrorMessage } from '../kubernetes/k8s-error';
+import { DEFAULT_BACKUP_CRON, toQuartzCron } from './projects.utils';
 
 const MISSING_CR_GRACE_MS = 10 * 60 * 1000;
 const BACKUP_TIMEOUT_MS = 6 * 60 * 60 * 1000;
 const NOTIFY_MAX_AGE_MS = 6 * 60 * 60 * 1000;
 const INGEST_EVERY_N_TICKS = 5;
 const MAX_COMPLETED_BACKUPS = 10;
+const SCHEDULE_SWEEP_EVERY_N_TICKS = 30;
+const MAX_SCHEDULES_PER_SWEEP = 5;
 
 interface DatabaseRef {
   id: string;
@@ -60,10 +64,75 @@ export class BackupSyncService {
           await this.pruneOldBackups(db).catch(() => {});
         }
       }
+      if (this.tickCount % SCHEDULE_SWEEP_EVERY_N_TICKS === 1) {
+        await this.ensureBackupSchedules().catch((e) => {
+          this.logger.warn(`schedule sweep failed: ${e?.message ?? e}`);
+        });
+      }
     } catch (e: any) {
       this.logger.warn(`backup sync tick failed: ${e?.message ?? e}`);
     } finally {
       this.ticking = false;
+    }
+  }
+
+  /**
+   * Keeps archiving anchored to a base backup. Barman can only expire WAL that
+   * sits behind a backup, so a cluster shipping WAL with no backup at all is
+   * one that grows forever and cannot be restored from either. Two repairs:
+   *
+   *   - our row names a schedule but the ScheduledBackup is not in the cluster
+   *     (the k8s call failed at some point, which used to happen a lot)
+   *   - the cluster archives, has no schedule, and has never produced a single
+   *     backup, which is the state that fills the bucket
+   *
+   * A database that has taken backups and then had its schedule cleared is
+   * someone choosing manual backups, so it is left alone.
+   */
+  private async ensureBackupSchedules(): Promise<void> {
+    const databases = await this.prisma.database.findMany({
+      where: {
+        mode: 'cnpg',
+        namespace: { not: null },
+        clusterName: { not: null },
+        status: { notIn: ['deleting', 'restoring', 'error'] },
+      },
+      select: {
+        id: true,
+        namespace: true,
+        clusterName: true,
+        backupScheduleCron: true,
+        _count: { select: { backups: true } },
+      },
+    });
+
+    let repaired = 0;
+    for (const db of databases) {
+      if (repaired >= MAX_SCHEDULES_PER_SWEEP) break;
+      if (!db.backupScheduleCron && db._count.backups > 0) continue;
+      const namespace = db.namespace!;
+      const clusterName = db.clusterName!;
+      try {
+        // Not archiving means backups are off, or the org has no storage.
+        // Nothing accumulates, so there is nothing to anchor.
+        if (!(await this.k8sCnpg.isCnpgBackupConfigured(namespace, clusterName))) continue;
+        if (await this.k8sCnpg.hasScheduledBackup(namespace, clusterName)) continue;
+
+        const cron = db.backupScheduleCron || DEFAULT_BACKUP_CRON;
+        await this.k8sCnpg.upsertScheduledBackup(namespace, clusterName, toQuartzCron(cron), {
+          immediate: true,
+        });
+        if (!db.backupScheduleCron) {
+          await this.prisma.database.update({
+            where: { id: db.id },
+            data: { backupScheduleCron: cron },
+          });
+        }
+        repaired += 1;
+        this.logger.log(`[DB/backup] restored backup schedule ${cron} for ${namespace}/${clusterName}`);
+      } catch (e: any) {
+        this.logger.warn(`schedule sweep failed for ${namespace}/${clusterName}: ${k8sErrorMessage(e)}`);
+      }
     }
   }
 
