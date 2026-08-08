@@ -382,13 +382,15 @@
 				<div class="space-y-2 mb-2">
 					{#each taintRows as taint, i (i)}
 						<div class="flex items-center gap-2">
-							<Input bind:value={taint.key} placeholder="orchard.io/pool" class="flex-1" />
-							<Input bind:value={taint.value} placeholder="background" class="flex-1" />
-							<Select bind:value={taint.effect} class="w-44">
-								<option value="NoSchedule">NoSchedule</option>
-								<option value="PreferNoSchedule">PreferNoSchedule</option>
-								<option value="NoExecute">NoExecute</option>
-							</Select>
+							<Input bind:value={taint.key} placeholder="orchard.io/pool" class="flex-1 min-w-0" />
+							<Input bind:value={taint.value} placeholder="background" class="flex-1 min-w-0" />
+							<div class="w-44 shrink-0">
+								<Select bind:value={taint.effect}>
+									<option value="NoSchedule">NoSchedule</option>
+									<option value="PreferNoSchedule">PreferNoSchedule</option>
+									<option value="NoExecute">NoExecute</option>
+								</Select>
+							</div>
 							<Button variant="ghost" size="sm" onclick={() => removeTaintRow(i)} aria-label="Remove taint">
 								<X class="h-4 w-4" />
 							</Button>

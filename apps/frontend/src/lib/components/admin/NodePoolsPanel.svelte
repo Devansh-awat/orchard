@@ -264,17 +264,19 @@
 			</div>
 			{#each fSelectors as sel, i (i)}
 				<div class="flex items-center gap-2 mb-2">
-					<Input bind:value={sel.key} placeholder="orchard.io/pool" class="flex-1" />
-					<Select bind:value={sel.operator} class="w-32">
-						<option value="In">In</option>
-						<option value="NotIn">NotIn</option>
-						<option value="Exists">Exists</option>
-						<option value="DoesNotExist">DoesNotExist</option>
-					</Select>
+					<Input bind:value={sel.key} placeholder="orchard.io/pool" class="flex-1 min-w-0" />
+					<div class="w-32 shrink-0">
+						<Select bind:value={sel.operator}>
+							<option value="In">In</option>
+							<option value="NotIn">NotIn</option>
+							<option value="Exists">Exists</option>
+							<option value="DoesNotExist">DoesNotExist</option>
+						</Select>
+					</div>
 					<Input
 						bind:value={sel.values}
 						placeholder="background"
-						class="flex-1"
+						class="flex-1 min-w-0"
 						disabled={sel.operator === 'Exists' || sel.operator === 'DoesNotExist'}
 					/>
 					<Button variant="ghost" size="sm" onclick={() => removeSelector(i)} aria-label="Remove">
@@ -292,18 +294,22 @@
 			</div>
 			{#each fTolerations as tol, i (i)}
 				<div class="flex items-center gap-2 mb-2">
-					<Input bind:value={tol.key} placeholder="orchard.io/pool" class="flex-1" />
-					<Select bind:value={tol.operator} class="w-28">
-						<option value="Exists">Exists</option>
-						<option value="Equal">Equal</option>
-					</Select>
-					<Input bind:value={tol.value} placeholder="background" class="flex-1" disabled={tol.operator !== 'Equal'} />
-					<Select bind:value={tol.effect} class="w-40">
-						<option value="">Any effect</option>
-						<option value="NoSchedule">NoSchedule</option>
-						<option value="PreferNoSchedule">PreferNoSchedule</option>
-						<option value="NoExecute">NoExecute</option>
-					</Select>
+					<Input bind:value={tol.key} placeholder="orchard.io/pool" class="flex-1 min-w-0" />
+					<div class="w-28 shrink-0">
+						<Select bind:value={tol.operator}>
+							<option value="Exists">Exists</option>
+							<option value="Equal">Equal</option>
+						</Select>
+					</div>
+					<Input bind:value={tol.value} placeholder="background" class="flex-1 min-w-0" disabled={tol.operator !== 'Equal'} />
+					<div class="w-40 shrink-0">
+						<Select bind:value={tol.effect}>
+							<option value="">Any effect</option>
+							<option value="NoSchedule">NoSchedule</option>
+							<option value="PreferNoSchedule">PreferNoSchedule</option>
+							<option value="NoExecute">NoExecute</option>
+						</Select>
+					</div>
 					<Button variant="ghost" size="sm" onclick={() => removeToleration(i)} aria-label="Remove">
 						<X class="h-4 w-4" />
 					</Button>
