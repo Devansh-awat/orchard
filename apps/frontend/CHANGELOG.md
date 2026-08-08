@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.1](https://github.com/LeafdTK/leaf/compare/frontend/v1.4.0...frontend/v1.4.1) (2026-08-08)
+
+
+### Bug Fixes
+
+* node pool selector inputs collapsed to zero width in flex rows ([058179d](https://github.com/LeafdTK/leaf/commit/058179d1e1b204ab55458f2d35fc3326098d288e))
+
 ## [1.4.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.3.0...frontend/v1.4.0) (2026-08-08)
 
 
