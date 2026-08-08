@@ -461,7 +461,7 @@ export class FaviconService {
 
   /** Download + store the page's og:image banner. Keyed banners/<domain>.png */
   private async storeBanner(domain: string, html: string): Promise<void> {
-    const setNull = () => this.bannerCache.set(domain, { url: null, ts: Date.now() });
+    const setNull = () => { this.bannerCache.set(domain, { url: null, ts: Date.now() }); };
     try {
       const bannerUrl = html ? this.parseBannerFromHtml(html, domain) : null;
       if (!bannerUrl) return setNull();

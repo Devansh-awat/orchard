@@ -141,7 +141,7 @@ export class StorageService {
   async signBuildContextGet(key: string, expiresInSeconds = 900): Promise<string> {
     const bucket = this.contextBucket();
     return getSignedUrl(
-      this.s3Client!,
+      this.s3Client! as any,
       new GetObjectCommand({ Bucket: bucket, Key: key }),
       { expiresIn: expiresInSeconds },
     );

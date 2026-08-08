@@ -2,14 +2,9 @@
 	import type { Snippet } from 'svelte';
 	import { Check, ChevronDown } from 'lucide-svelte';
 	import PopoverPanel from './PopoverPanel.svelte';
+	import type { DropdownOption } from './dropdown';
 	import { springRotate } from '$lib/utils/motion.svelte';
 
-	export interface DropdownOption {
-		value: string;
-		label: string;
-		description?: string;
-		mono?: boolean;
-	}
 
 	let {
 		value = $bindable(''),

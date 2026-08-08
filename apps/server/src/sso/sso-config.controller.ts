@@ -163,7 +163,7 @@ export class SsoConfigController {
     });
 
     const config = await this.ssoService.getSsoConfig(organizationId);
-    if (!config || config.configured === false) {
+    if (!config || !config.enabled) {
       throw new NotFoundException('SSO is not configured');
     }
 

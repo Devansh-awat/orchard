@@ -17,7 +17,7 @@ export interface KilledContainerMeta {
   capturedAt: string;
 }
 
-interface KilledEntry extends KilledContainerMeta {
+export interface KilledEntry extends KilledContainerMeta {
   logs: string;
 }
 

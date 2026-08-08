@@ -1,5 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
-import UAParser from 'ua-parser-js';
+import { UAParser } from 'ua-parser-js';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
 

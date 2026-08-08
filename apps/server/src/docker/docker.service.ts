@@ -1089,7 +1089,7 @@ export class DockerService {
             stderr += message;
             console.error('[Docker Push Error]', message.trim());
             const lowerMessage = message.toLowerCase();
-            let logLevel = 'INFO';
+            let logLevel: 'ERROR' | 'INFO' | 'WARNING' = 'INFO';
             if (lowerMessage.includes('error') || lowerMessage.includes('failed')) {
               logLevel = 'ERROR';
             } else if (lowerMessage.includes('warn')) {

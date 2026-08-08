@@ -210,7 +210,7 @@ export function springToFloor(
 			exit: opts.exit,
 			delay: opts.delay,
 			distance: from
-		}) as never),
+		}) as object),
 		onUpdate: (v: number) => {
 			const clamped = Math.max(0, v);
 			el.style[prop] = `${clamped}px`;
@@ -797,7 +797,7 @@ export function springCollapse(collapsed: () => boolean) {
 			const toH = isCollapsed ? 0 : naturalHeight();
 			animate(target, { opacity: isCollapsed ? 0 : 1 }, transition('smooth') as never);
 			heightAnim = animate(fromH, toH, {
-				...(transition('smooth') as never),
+				...(transition('smooth') as object),
 				onUpdate: (v: number) => {
 					target.style.height = `${Math.max(0, v)}px`;
 				}

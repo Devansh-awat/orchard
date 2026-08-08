@@ -114,13 +114,15 @@ export function loadEarlyAccessFeatures(): Promise<EarlyAccessFeature[]> {
 		}
 		posthog.getEarlyAccessFeatures((features) => {
 			resolve(
-				(features ?? []).map((f) => ({
-					name: f.name,
-					description: f.description,
-					stage: f.stage,
-					documentationUrl: f.documentationUrl ?? null,
-					flagKey: f.flagKey
-				}))
+				(features ?? [])
+					.filter((f): f is typeof f & { flagKey: string } => Boolean(f.flagKey))
+					.map((f) => ({
+						name: f.name,
+						description: f.description,
+						stage: f.stage,
+						documentationUrl: f.documentationUrl ?? null,
+						flagKey: f.flagKey
+					}))
 			);
 		}, true);
 	});

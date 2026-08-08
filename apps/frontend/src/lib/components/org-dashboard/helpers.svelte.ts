@@ -244,7 +244,7 @@ export function bodyAttach(
 		// The height/padding animation has to be cancellable: reversing direction
 		// mid-flight otherwise leaves the old run still driving padding back to 0,
 		// which fights the new one and lands the content 16px out of place.
-		let bodyAnim: { stop: () => void } | null = null;
+		let bodyAnim: ReturnType<typeof animate> | null = null;
 		const stopBodyAnim = () => {
 			bodyAnim?.stop();
 			bodyAnim = null;

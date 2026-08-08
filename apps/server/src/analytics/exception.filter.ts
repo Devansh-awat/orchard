@@ -3,10 +3,11 @@ import {
   Catch,
   ExceptionFilter,
   HttpException,
+  HttpServer,
   HttpStatus,
   Logger,
 } from '@nestjs/common';
-import { BaseExceptionFilter, HttpServer } from '@nestjs/core';
+import { BaseExceptionFilter } from '@nestjs/core';
 import { Request, Response } from 'express';
 import { AnalyticsService } from './analytics.service';
 import { markSpanError } from './datadog';

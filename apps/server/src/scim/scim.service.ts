@@ -681,7 +681,7 @@ export class ScimService implements OnModuleInit {
   // ---- Protocol entry points used by the controller ----------------------
 
   async listUsers(query: ScimQuery, ctx: Ctx) {
-    return new SCIMMY.Resources.User(query).read(ctx);
+    return new SCIMMY.Resources.User(query as any).read(ctx);
   }
 
   async getUser(id: string, query: ScimQuery, ctx: Ctx) {
@@ -705,7 +705,7 @@ export class ScimService implements OnModuleInit {
   }
 
   async listGroups(query: ScimQuery, ctx: Ctx) {
-    return new SCIMMY.Resources.Group(query).read(ctx);
+    return new SCIMMY.Resources.Group(query as any).read(ctx);
   }
 
   async getGroup(id: string, query: ScimQuery, ctx: Ctx) {

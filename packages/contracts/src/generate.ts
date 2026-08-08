@@ -72,7 +72,10 @@ openApiRegistry.registerComponent('securitySchemes', 'cookieAuth', {
 
 for (const route of routeRegistry) {
   openApiRegistry.registerPath({
-    method: route.method.toLowerCase() as Lowercase<Route['method']>,
+    // OpenAPI has no 'all' verb, but the wildcard passthrough routes genuinely
+    // accept every method and the generated document has always carried them
+    // that way. Keep the shape, drop the type error.
+    method: route.method.toLowerCase() as Parameters<typeof openApiRegistry.registerPath>[0]['method'],
     path: toOpenApiPath(route.path),
     summary: route.summary ?? `${route.method} ${route.path}`,
     description: descriptionFor(route),

@@ -4650,8 +4650,9 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     projectId: string,
     data: {
       name: string;
-      repoUrl: string;
-      branch: string;
+      repoUrl?: string;
+      githubRepo?: string;
+      branch?: string;
       dockerfilePath?: string;
       target?: string;
       tag?: string;
@@ -5755,6 +5756,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         const deploymentRow = await this.prisma.deployment.findUnique({
           where: { id: deploymentId },
           select: {
+            id: true,
+            image: true,
             projectId: true,
             replicas: true,
             cpuRequestMilli: true,

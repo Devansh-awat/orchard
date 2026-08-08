@@ -134,7 +134,7 @@ export class K8sNamespaceService {
             type: 'Container',
             default: defaultLim,
             defaultRequest: defaultReq,
-          },
+          } as k8s.V1LimitRangeItem,
         ],
       },
     };

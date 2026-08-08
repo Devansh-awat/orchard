@@ -24,6 +24,16 @@ import { ProjectAccessService } from './project-access.service';
 import { BackupSyncService } from './backup-sync.service';
 import { formatSlug, redactDatabaseForViewer, stripR2ProxyCreds, truncateK8sName, parseStorageSize, formatBytes, toQuartzCron, DEFAULT_BACKUP_CRON, GIB } from './projects.utils';
 
+export type ProvisioningStepStatus = 'pending' | 'running' | 'done' | 'error';
+
+export interface ProvisioningStep {
+  id: string;
+  label: string;
+  description: string;
+  status: ProvisioningStepStatus;
+  detail?: string;
+}
+
 @Injectable()
 export class DatabasesService {
   private readonly logger = new Logger(DatabasesService.name);
@@ -696,22 +706,13 @@ export class DatabasesService {
       } catch { /* ignore */ }
     }
 
-    type StepStatus = 'pending' | 'running' | 'done' | 'error';
-    interface Step {
-      id: string;
-      label: string;
-      description: string;
-      status: StepStatus;
-      detail?: string;
-    }
-
     const podWaiting = k.instancePod?.waiting;
     const podStuck =
       podWaiting && /(Err|BackOff|Failed|InvalidImage)/i.test(podWaiting.reason || '');
 
-    const steps: Step[] = [];
+    const steps: ProvisioningStep[] = [];
 
-    let clusterStatus: StepStatus = 'running';
+    let clusterStatus: ProvisioningStepStatus = 'running';
     if (k.exists) clusterStatus = 'done';
     else if (database.status === 'error') clusterStatus = 'error';
 
@@ -722,7 +723,7 @@ export class DatabasesService {
       status: clusterStatus,
     });
 
-    let storageStatus: StepStatus = 'pending';
+    let storageStatus: ProvisioningStepStatus = 'pending';
     if (k.pvc.bound) storageStatus = 'done';
     else if (k.pvc.exists || k.exists) storageStatus = 'running';
 
@@ -734,7 +735,7 @@ export class DatabasesService {
       detail: k.pvc.exists && !k.pvc.bound ? `PVC ${k.pvc.phase || 'Pending'}` : undefined,
     });
 
-    let podScheduledStatus: StepStatus = 'pending';
+    let podScheduledStatus: ProvisioningStepStatus = 'pending';
     if (k.instancePod?.scheduled) podScheduledStatus = 'done';
     else if (k.instancePod) podScheduledStatus = 'running';
 
@@ -746,7 +747,7 @@ export class DatabasesService {
       detail: k.instancePod?.nodeName ? `Scheduled on ${k.instancePod.nodeName}` : undefined,
     });
 
-    let podRunningStatus: StepStatus = 'pending';
+    let podRunningStatus: ProvisioningStepStatus = 'pending';
     if (k.instancePod?.running) podRunningStatus = 'done';
     else if (podStuck) podRunningStatus = 'error';
     else if (k.instancePod?.scheduled) podRunningStatus = 'running';
@@ -762,7 +763,7 @@ export class DatabasesService {
     });
 
     if (k.hasImport) {
-      let importStatus: StepStatus = 'pending';
+      let importStatus: ProvisioningStepStatus = 'pending';
       if (k.importStatus === 'completed') importStatus = 'done';
       else if (k.importStatus === 'failed') importStatus = 'error';
       else if (k.importStatus === 'running') importStatus = 'running';
@@ -778,7 +779,7 @@ export class DatabasesService {
       });
     }
 
-    let readyStatus: StepStatus = 'pending';
+    let readyStatus: ProvisioningStepStatus = 'pending';
     if (k.ready) readyStatus = 'done';
     else if (k.instancePod?.ready) readyStatus = 'running';
 

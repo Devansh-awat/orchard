@@ -96,7 +96,7 @@ export class AnalyticsService implements OnModuleDestroy {
   ): Promise<boolean> {
     if (!this.client) return false;
     try {
-      const result = await this.client.isFeatureEnabled(key, distinctId, options);
+      const result = await this.client.isFeatureEnabled(key, distinctId, options as any);
       return Boolean(result);
     } catch (err) {
       this.logger.warn(`isFeatureEnabled(${key}) failed: ${(err as Error).message}`);
@@ -115,7 +115,7 @@ export class AnalyticsService implements OnModuleDestroy {
   ): Promise<string | boolean | undefined> {
     if (!this.client) return undefined;
     try {
-      return await this.client.getFeatureFlag(key, distinctId, options);
+      return await this.client.getFeatureFlag(key, distinctId, options as any);
     } catch (err) {
       this.logger.warn(`getFeatureFlag(${key}) failed: ${(err as Error).message}`);
       return undefined;

@@ -1,6 +1,6 @@
 import * as http from 'http';
 import * as net from 'net';
-import * as WebSocket from 'ws';
+import WebSocket from 'ws';
 import * as k8s from '@kubernetes/client-node';
 import { jwtVerify } from 'jose';
 import { INestApplication } from '@nestjs/common';

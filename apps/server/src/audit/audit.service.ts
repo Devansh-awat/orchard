@@ -5,7 +5,7 @@ import { PrismaService } from '../prisma/prisma.service';
 import { LeaderElectionService } from '../events/leader-election.service';
 import { AnalyticsService } from '../analytics/analytics.service';
 
-export type AuditMetadataValue = string | number | boolean | null | [unknown, unknown];
+export type AuditMetadataValue = string | number | boolean | null | readonly unknown[];
 
 export interface AuditLogInput {
   action: string;

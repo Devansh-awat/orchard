@@ -6,7 +6,7 @@ export { default as EnvVarsEditor } from './EnvVarsEditor.svelte';
 export { default as ScriptEditor } from './ScriptEditor.svelte';
 export { default as StepEditor } from './StepEditor.svelte';
 export { default as StepList } from './StepList.svelte';
-export { emptyStepDraft, stepToDraft, draftError, draftToPayload } from './StepList.svelte';
+export { emptyStepDraft, stepToDraft, draftError, draftToPayload } from './steps';
 export { default as JobForm } from './JobForm.svelte';
 export { default as StepPipeline } from './StepPipeline.svelte';
 export { default as RunStepLogs } from './RunStepLogs.svelte';

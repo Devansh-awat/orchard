@@ -1,6 +1,8 @@
 import { Injectable, NotFoundException, BadRequestException, ConflictException, UnauthorizedException, Logger } from '@nestjs/common';
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'crypto';
-import * as openidClient from 'openid-client';
+// openid-client is ESM only. Loading it lazily keeps this file a CommonJS
+// module rather than forcing a require() of an ES module at import time.
+import type * as OpenIdClient from 'openid-client' with { 'resolution-mode': 'import' };
 import { SAML } from '@node-saml/node-saml';
 import { PrismaService } from '../prisma/prisma.service';
 import { OAuthService } from '../auth/oauth.service';
@@ -19,6 +21,13 @@ const RESERVED_SUBDOMAINS = new Set([
 
 @Injectable()
 export class SsoService {
+  private openidClient: Promise<typeof OpenIdClient> | null = null;
+
+  private loadOpenIdClient(): Promise<typeof OpenIdClient> {
+    this.openidClient ??= import('openid-client');
+    return this.openidClient;
+  }
+
   private readonly logger = new Logger(SsoService.name);
 
   private readonly encryptionKey: Buffer | null;
@@ -401,6 +410,7 @@ export class SsoService {
     const clientId = config.oidcClientId;
     const clientSecret = config.oidcClientSecret ? this.decrypt(config.oidcClientSecret) : undefined;
 
+    const openidClient = await this.loadOpenIdClient();
     const oidcConfig = await openidClient.discovery(
       new URL(issuerUrl),
       clientId,
@@ -460,6 +470,7 @@ export class SsoService {
     const clientId = config.oidcClientId;
     const clientSecret = config.oidcClientSecret ? this.decrypt(config.oidcClientSecret) : undefined;
 
+    const openidClient = await this.loadOpenIdClient();
     const oidcConfig = await openidClient.discovery(
       new URL(config.oidcIssuerUrl),
       clientId,
@@ -506,7 +517,7 @@ export class SsoService {
     const saml = this.buildSamlClient(config, organizationId);
     const loginUrl = await saml.getAuthorizeUrlAsync(
       `${this.backendUrl}/apiv1/sso/${organizationId}/callback/saml`,
-      {},
+      undefined,
       {},
     );
 
@@ -562,7 +573,7 @@ export class SsoService {
       entryPoint: config.samlEntryPoint,
       issuer: audience,
       audience,
-      cert: config.samlCertificate ? this.decrypt(config.samlCertificate) : '',
+      idpCert: config.samlCertificate ? this.decrypt(config.samlCertificate) : '',
       wantAuthnResponseSigned: true,
       wantAssertionsSigned: true,
     });

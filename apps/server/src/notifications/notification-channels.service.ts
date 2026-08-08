@@ -236,7 +236,7 @@ export class NotificationChannelsService {
     const stamp = Date.now();
     let queued = 0;
     for (const event of events) {
-      const payload = event.payload as NotificationMessage;
+      const payload = event.payload as unknown as NotificationMessage;
       const inserted = await this.prisma.$executeRaw`
         INSERT INTO "notification_deliveries" (
           "id", "event_id", "destination_key", "channel_id", "event", "target_id",

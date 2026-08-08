@@ -183,7 +183,7 @@ export class BackupSyncService {
               : {}),
           },
         });
-        if (terminal && claimed.count > 0) {
+        if ((newStatus === 'completed' || newStatus === 'failed') && claimed.count > 0) {
           if (newStatus === 'completed') anyNewlyCompleted = true;
           this.maybeNotify(row.id, newStatus, row.createdAt);
         }

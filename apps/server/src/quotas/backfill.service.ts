@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
-import { KubernetesService } from '../kubernetes/kubernetes.service';
+import { K8sWorkloadService } from '../kubernetes/k8s-workload.service';
+import { K8sCnpgService } from '../kubernetes/k8s-cnpg.service';
 import { RESOURCE_PRESETS, type ResourcePreset } from '../kubernetes/presets';
 
 export interface BackfillRow {
@@ -30,7 +31,8 @@ function recommendFromUsage(observed: { cpuMilli: number; memoryBytes: number })
 export class QuotaBackfillService {
   constructor(
     private readonly prisma: PrismaService,
-    private readonly k8s: KubernetesService,
+    private readonly k8sWorkload: K8sWorkloadService,
+    private readonly k8sCnpg: K8sCnpgService,
   ) {}
 
   // List every Deployment and Database that has no cpuRequestMilli set,
@@ -65,8 +67,8 @@ export class QuotaBackfillService {
         },
         orderBy: { createdAt: 'asc' },
       }),
-      this.k8s.getAllPodMetrics(),
-      this.k8s.getAllPodLabels(),
+      this.k8sWorkload.getAllPodMetrics(),
+      this.k8sWorkload.getAllPodLabels(),
     ]);
 
     const rows: BackfillRow[] = [];
@@ -155,7 +157,7 @@ export class QuotaBackfillService {
     if (target.kind === 'deployment') {
       const d = await this.prisma.deployment.findUnique({ where: { id: target.id } });
       if (!d) throw new Error('Deployment not found');
-      await this.k8s.updateDeploymentResources(d.namespace, d.name, values);
+      await this.k8sWorkload.updateDeploymentResources(d.namespace, d.name, values);
       await this.prisma.deployment.update({
         where: { id: target.id },
         data: {
@@ -167,7 +169,7 @@ export class QuotaBackfillService {
       const db = await this.prisma.database.findUnique({ where: { id: target.id } });
       if (!db) throw new Error('Database not found');
       if (!db.namespace || !db.clusterName) throw new Error('Database not on CNPG');
-      await this.k8s.updateCnpgClusterResources(db.namespace, db.clusterName, values);
+      await this.k8sCnpg.updateCnpgClusterResources(db.namespace, db.clusterName, values);
       await this.prisma.database.update({
         where: { id: target.id },
         data: {

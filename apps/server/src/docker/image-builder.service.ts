@@ -52,7 +52,7 @@ interface BuildJobOptions {
   disableSharedCache?: boolean;
 }
 
-interface BuildJobStatus {
+export interface BuildJobStatus {
   jobName: string;
   status: 'pending' | 'running' | 'succeeded' | 'failed' | 'unknown';
   logs?: string;

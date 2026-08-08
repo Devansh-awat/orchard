@@ -30,7 +30,7 @@ export { default as RemoteImg } from './RemoteImg.svelte';
 export { default as IconTile } from './IconTile.svelte';
 export { default as SectionHeader } from './SectionHeader.svelte';
 export { default as Dropdown } from './Dropdown.svelte';
-export type { DropdownOption } from './Dropdown.svelte';
+export type { DropdownOption } from './dropdown';
 export { default as LogViewer } from './LogViewer.svelte';
 export { default as PageHeader } from './PageHeader.svelte';
 export { default as Table } from './Table.svelte';
