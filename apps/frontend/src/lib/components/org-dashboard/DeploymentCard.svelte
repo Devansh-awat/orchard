@@ -33,7 +33,8 @@
 
 	const icon = $derived(knownIcon(dep.image));
 	const favSrc = $derived(
-		dep.faviconUrl ?? (dep.ingresses.length > 0 ? favUrl(dep.ingresses[0].host.split('/')[0]) : null)
+		dep.faviconUrl ??
+			(dep.ingresses.length > 0 ? favUrl(dep.ingresses[0].host.split('/')[0]) : null)
 	);
 	// Known tech icon wins; else the favicon (unless it already failed). Null
 	// leaves just the instant letter fallback.

@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.3.2](https://github.com/LeafdTK/leaf/compare/server/v2.3.1...server/v2.3.2) (2026-08-08)
+
+
+### Bug Fixes
+
+* never ship wal without a backup schedule behind it ([a74fe22](https://github.com/LeafdTK/leaf/commit/a74fe22d85d3438bc06f6d92970b0f76b37847cb))
+* surface real kubernetes errors instead of http request failed ([0b833f0](https://github.com/LeafdTK/leaf/commit/0b833f0d769753f30bc5e3001997a0a94613f545))
+
 ## [2.3.1](https://github.com/LeafdTK/leaf/compare/server/v2.3.0...server/v2.3.1) (2026-08-06)
 
 

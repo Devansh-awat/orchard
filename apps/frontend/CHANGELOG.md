@@ -1,5 +1,18 @@
 # Changelog
 
+## [1.3.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.2.1...frontend/v1.3.0) (2026-08-08)
+
+
+### Features
+
+* apply apple design polish to icons, cmd+k, and sidebar ([a1d0e8d](https://github.com/LeafdTK/leaf/commit/a1d0e8daadf97c90a5cbc8e21f592d9d2f35e5fd))
+
+
+### Bug Fixes
+
+* allow fractional cpu and memory in the resource picker ([63ef2d6](https://github.com/LeafdTK/leaf/commit/63ef2d6f328c6d463034837fd23539f62f458158))
+* never ship wal without a backup schedule behind it ([a74fe22](https://github.com/LeafdTK/leaf/commit/a74fe22d85d3438bc06f6d92970b0f76b37847cb))
+
 ## [1.2.1](https://github.com/LeafdTK/leaf/compare/frontend/v1.2.0...frontend/v1.2.1) (2026-08-06)
 
 

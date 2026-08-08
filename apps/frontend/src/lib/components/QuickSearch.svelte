@@ -419,7 +419,8 @@
 					<span class="qs-ic qs-ic--swatch" style={projectSwatch(item.slug ?? item.id)}></span>
 				{:else if item.type === 'deployment'}
 					{@const known = knownIcon(item.image)}
-					{@const src = known ?? item.faviconUrl ?? (item.ingressHost ? favUrl(item.ingressHost) : null)}
+					{@const src =
+						known ?? item.faviconUrl ?? (item.ingressHost ? favUrl(item.ingressHost) : null)}
 					<IconTile class="qs-ic" {src} tint={!known && src ? iconTint(item.id) : undefined}>
 						{#snippet fallback()}
 							<span class="qs-ic-letter">{item.name.charAt(0).toUpperCase()}</span>
