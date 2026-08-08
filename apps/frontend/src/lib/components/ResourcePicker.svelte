@@ -127,8 +127,8 @@
 				<div class="rp-input-wrap">
 					<input
 						type="number"
-						min="1"
-						step={cpuUnit === 'cores' ? '0.1' : '1'}
+						min={cpuUnit === 'cores' ? '0.01' : '1'}
+						step={cpuUnit === 'cores' ? '0.01' : '1'}
 						bind:value={cpuInput}
 						oninput={applyCpu}
 						placeholder={cpuUnit === 'cores' ? '0.25' : '250'}
@@ -186,7 +186,7 @@
 				<div class="rp-input-wrap">
 					<input
 						type="number"
-						min="1"
+						min={memUnit === 'GiB' ? '0.25' : '1'}
 						step={memUnit === 'GiB' ? '0.25' : '1'}
 						bind:value={memInput}
 						oninput={applyMem}
