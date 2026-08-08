@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.4.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.3.0...frontend/v1.4.0) (2026-08-08)
+
+
+### Features
+
+* node pools, taints, and workflow affinity scheduling ([a96caf3](https://github.com/LeafdTK/leaf/commit/a96caf3b8b1d7aa3d7d7116b8361cf2628dc3b83))
+
 ## [1.3.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.2.1...frontend/v1.3.0) (2026-08-08)
 
 

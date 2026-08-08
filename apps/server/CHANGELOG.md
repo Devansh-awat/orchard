@@ -1,5 +1,17 @@
 # Changelog
 
+## [2.4.0](https://github.com/LeafdTK/leaf/compare/server/v2.3.3...server/v2.4.0) (2026-08-08)
+
+
+### Features
+
+* node pools, taints, and workflow affinity scheduling ([a96caf3](https://github.com/LeafdTK/leaf/commit/a96caf3b8b1d7aa3d7d7116b8361cf2628dc3b83))
+
+
+### Bug Fixes
+
+* node pool placement type errors ([9c447e2](https://github.com/LeafdTK/leaf/commit/9c447e2638bf013cb1637cf6a160531d42e8754e))
+
 ## [2.3.3](https://github.com/LeafdTK/leaf/compare/server/v2.3.2...server/v2.3.3) (2026-08-08)
 
 
