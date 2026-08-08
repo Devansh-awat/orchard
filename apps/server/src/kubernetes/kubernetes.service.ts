@@ -78,7 +78,7 @@ export function buildPlacement(input: PlacementInput): ResolvedPlacement {
     }
   }
 
-  let affinity = nodeAffinity ? { nodeAffinity } : undefined;
+  let affinity: k8s.V1Affinity | undefined = nodeAffinity ? { nodeAffinity } : undefined;
   // Raw override deep-merges over the computed affinity, per top-level key
   // (nodeAffinity / podAffinity / podAntiAffinity), so a superadmin can add
   // pod (anti-)affinity or fully replace nodeAffinity.

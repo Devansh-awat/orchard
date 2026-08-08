@@ -4,6 +4,7 @@ import {
   BadRequestException,
   ForbiddenException,
 } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { AuthorizationService } from '../auth/authorization.service';
@@ -52,7 +53,7 @@ export class NodesService {
       create: {
         name: row.name,
         labels: row.labels,
-        taints: row.taints,
+        taints: row.taints as unknown as Prisma.InputJsonValue,
         schedulable: row.schedulable,
         cpuCapacity: row.cpuCapacity,
         memoryCapacity: row.memoryCapacity,
@@ -60,7 +61,7 @@ export class NodesService {
       },
       update: {
         labels: row.labels,
-        taints: row.taints,
+        taints: row.taints as unknown as Prisma.InputJsonValue,
         schedulable: row.schedulable,
         cpuCapacity: row.cpuCapacity,
         memoryCapacity: row.memoryCapacity,
@@ -300,8 +301,8 @@ export class NodesService {
     const pool = await this.prisma.nodePool.findUnique({ where: { id: nodePoolId } });
     if (!pool) return null;
     return {
-      nodeSelector: (pool.nodeSelector as PoolPlacement['nodeSelector']) ?? [],
-      tolerations: (pool.tolerations as PoolPlacement['tolerations']) ?? [],
+      nodeSelector: (pool.nodeSelector as unknown as PoolPlacement['nodeSelector']) ?? [],
+      tolerations: (pool.tolerations as unknown as PoolPlacement['tolerations']) ?? [],
       affinityMode: pool.affinityMode,
     };
   }
