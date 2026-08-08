@@ -29,6 +29,16 @@ chart with dev values.
 | gVisor / Kata RuntimeClasses | Sandboxed tenant/builder pods | Optional; Talos-specific setup in `values.yaml` |
 | Datadog agent | APM/tracing | Optional; `datadog.enabled: false` turns it all off |
 
+## ServiceAccount permissions
+
+The chart references an `orchard-server` ServiceAccount but does not create it
+or its cluster-wide RBAC; provision those out of band. Beyond create/delete on
+the tenant resources it manages, the server's mirror informers need cluster-wide
+`list` + `watch` on: `pods`, `apps/deployments`, `batch/jobs`, `batch/cronjobs`,
+`services`, `networking.k8s.io/ingresses`, `persistentvolumeclaims`, and
+`postgresql.cnpg.io/clusters` + `backups`. Leases for leader election are
+covered by a namespaced Role the chart installs.
+
 ## DNS
 
 You need domains you control:

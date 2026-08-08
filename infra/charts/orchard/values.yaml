@@ -53,6 +53,14 @@ server:
   # Extra env vars (DATABASE_URL is injected automatically from the CNPG secret)
   env: []
   envFrom: []
+  # Dedicated worker pods run builds, notifications and the k8s apply queue,
+  # leaving api pods enqueue-only. They share the server image and env.
+  workers:
+    enabled: false
+    replicas: 2
+    resources:
+      requests: { cpu: "200m", memory: "512Mi" }
+      limits: { cpu: "2", memory: "2Gi" }
 
 # Signup policy for the platform: open | invite_only | closed.
 signupMode: invite_only

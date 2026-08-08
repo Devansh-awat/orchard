@@ -1,0 +1,61 @@
+{{- if and .Values.server.enabled .Values.server.workers.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: server-worker
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "server-worker") | nindent 4 }}
+spec:
+  replicas: {{ .Values.server.workers.replicas }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: server-worker
+      app.kubernetes.io/instance: {{ .Release.Name }}
+  template:
+    metadata:
+      labels:
+        {{- include "orchard.labels" (dict "root" . "name" "server-worker") | nindent 8 }}
+    spec:
+      serviceAccountName: orchard-server
+      {{- include "orchard.pullSecrets" . | nindent 6 }}
+      containers:
+        - name: server-worker
+          image: {{ include "orchard.image" (list . .Values.server.image.name .Values.server.image.tag) }}
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          ports:
+            - name: http
+              containerPort: 3001
+          env:{{ include "orchard.serverEnv" . }}
+          {{- with .Values.server.envFrom }}
+          envFrom:
+            {{- toYaml . | nindent 12 }}
+          {{- end }}
+          readinessProbe:
+            httpGet: { path: /apiv1/health, port: http }
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet: { path: /apiv1/health, port: http }
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            failureThreshold: 3
+          resources:
+            {{- toYaml .Values.server.workers.resources | nindent 12 }}
+{{- if gt (int .Values.server.workers.replicas) 1 }}
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: server-worker
+  namespace: {{ .Values.namespace }}
+  labels:
+    {{- include "orchard.labels" (dict "root" . "name" "server-worker") | nindent 4 }}
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: server-worker
+      app.kubernetes.io/instance: {{ .Release.Name }}
+{{- end }}
+{{- end }}
