@@ -2710,6 +2710,13 @@
 
 			<!-- Unified alerts -->
 			<DeploymentAlerts
+				applyError={deployment?.applyError ?? ''}
+				onRetryApply={async () => {
+					try {
+						await apiFetch(`/apiv1/deployments/${deploymentId}/retry-apply`, { method: 'POST' });
+						queryClient.invalidateQueries({ queryKey: ['deployment', deploymentId] });
+					} catch {}
+				}}
 				buildFailed={buildFailedActive}
 				buildError={debugAlerts
 					? $page.url.searchParams.get('debugAlerts') === 'github'

@@ -296,6 +296,7 @@
   "POST /deployments/:id/ingresses": "authenticated",
   "POST /deployments/:id/rebuild": "authenticated",
   "POST /deployments/:id/restart": "authenticated",
+  "POST /deployments/:id/retry-apply": "authenticated",
   "POST /deployments/:id/rollback/:imageHistoryId": "authenticated",
   "POST /deployments/:id/scale": "authenticated",
   "POST /deployments/:id/webhook-tokens": "authenticated",

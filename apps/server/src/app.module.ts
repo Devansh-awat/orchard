@@ -37,6 +37,7 @@ import { SandboxesModule } from './sandboxes/sandboxes.module';
 import { SshIdentitiesModule } from './ssh-identities/ssh-identities.module';
 import { CoordinationModule } from './coordination/coordination.module';
 import { MirrorModule } from './mirror/mirror.module';
+import { ApplyModule } from './apply/apply.module';
 
 @Module({
   imports: [
@@ -53,6 +54,7 @@ import { MirrorModule } from './mirror/mirror.module';
     HealthModule,
     KubernetesModule,
     CoordinationModule,
+    ApplyModule,
     ProjectsModule,
     OrganizationsModule,
     GitHubModule,

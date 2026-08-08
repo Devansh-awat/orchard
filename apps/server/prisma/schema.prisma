@@ -591,6 +591,8 @@ model Deployment {
   buildError           String?            @map("build_error") @db.Text
   buildStepTimestamps  Json?              @map("build_step_timestamps") @db.JsonB
   createdBy            String?            @map("created_by") @db.Uuid
+  applyStatus          String             @default("synced") @map("apply_status") @db.VarChar(20)
+  applyError           String?            @map("apply_error") @db.Text
   createdAt            DateTime           @default(now()) @map("created_at") @db.Timestamp(6)
   updatedAt            DateTime           @updatedAt @map("updated_at") @db.Timestamp(6)
 
@@ -905,6 +907,28 @@ model K8sWorkload {
   updatedAt         DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
   @@map("k8s_workloads")
+}
+
+model K8sApplyItem {
+  id            String    @id @default(uuid()) @db.Uuid
+  dedupeKey     String    @unique @map("dedupe_key") @db.VarChar(300)
+  opType        String    @map("op_type") @db.VarChar(40)
+  manifest      Json?     @db.JsonB
+  generation    Int       @default(1)
+  status        String    @default("pending") @db.VarChar(20)
+  attempts      Int       @default(0)
+  notBefore     DateTime  @default(now()) @map("not_before") @db.Timestamp(6)
+  claimedBy     String?   @map("claimed_by") @db.VarChar(120)
+  claimedAt     DateTime? @map("claimed_at") @db.Timestamp(6)
+  lastError     String?   @map("last_error") @db.Text
+  deploymentId  String?   @map("deployment_id") @db.Uuid
+  requestedById String?   @map("requested_by_id") @db.Uuid
+  createdAt     DateTime  @default(now()) @map("created_at") @db.Timestamp(6)
+  updatedAt     DateTime  @updatedAt @map("updated_at") @db.Timestamp(6)
+
+  @@index([status, notBefore], map: "idx_k8s_apply_queue_status_not_before")
+  @@index([deploymentId], map: "idx_k8s_apply_queue_deployment")
+  @@map("k8s_apply_queue")
 }
 
 enum ServiceType {

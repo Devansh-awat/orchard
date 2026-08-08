@@ -33,6 +33,8 @@ import { normalizeRootDirectory } from '../docker/build-config';
 import { SecretCryptoService } from '../crypto/secret-crypto.service';
 import { NodesService } from '../nodes/nodes.service';
 import { StorageService } from '../organizations/storage.service';
+import { ApplyQueueService } from '../apply/apply-queue.service';
+import { ApplyExecutorService } from '../apply/apply-executor.service';
 import { formatSlug, scrubIngress } from './projects.utils';
 import { startBuildTrace } from '../analytics/datadog';
 import { createHash, randomUUID } from 'crypto';
@@ -71,6 +73,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     @Inject(forwardRef(() => BuildQueueService))
     private readonly buildQueue: BuildQueueService,
     private readonly storage: StorageService,
+    private readonly applyQueue: ApplyQueueService,
+    private readonly applyExecutor: ApplyExecutorService,
   ) {}
 
   async runQueuedBuild(run: {
@@ -100,6 +104,75 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   onModuleInit() {
     setTimeout(() => this.recoverStuckBuilds(), 5_000);
     this.buildReconcileInterval = setInterval(() => this.recoverStuckBuilds(), 15_000);
+    this.applyExecutor.registerHandler('deployment.scale', async (item) => {
+      await this.applyScaleToCluster(item.deploymentId!);
+    });
+    this.applyExecutor.registerHandler('deployment.updateEnv', async (item) => {
+      await this.applyEnvToCluster(item.deploymentId!);
+    });
+  }
+
+  private applyPipelineEnabled(): boolean {
+    return process.env.APPLY_PIPELINE_ENABLED === 'true';
+  }
+
+  async retryApply(deploymentId: string, clerkId: string) {
+    const user = await this.usersService.findOrCreateByClerkId(clerkId);
+    if (!user) throw new NotFoundException('User not found');
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { projectId: true },
+    });
+    if (!deployment) throw new NotFoundException(`Deployment ${deploymentId} not found`);
+    await this.authz.requireProjectEdit(deployment.projectId, user.id, 'retry apply');
+    const retried = await this.applyQueue.retryForDeployment(deploymentId);
+    return { success: true, retried };
+  }
+
+  private async applyScaleToCluster(deploymentId: string): Promise<void> {
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { name: true, namespace: true, replicas: true },
+    });
+    if (!deployment) return;
+    const exists = await this.k8sWorkload
+      .getKubernetesDeployment(deployment.name, deployment.namespace)
+      .then((d) => d !== null)
+      .catch(() => false);
+    if (!exists) return;
+    await this.applyExecutor.ssaApply({
+      apiVersion: 'apps/v1',
+      kind: 'Deployment',
+      metadata: { name: deployment.name, namespace: deployment.namespace },
+      spec: { replicas: deployment.replicas },
+    } as never);
+  }
+
+  private async applyEnvToCluster(deploymentId: string): Promise<void> {
+    const deployment = await this.prisma.deployment.findUnique({
+      where: { id: deploymentId },
+      select: { id: true, name: true, namespace: true, environmentId: true },
+    });
+    if (!deployment) return;
+    const exists = await this.k8sWorkload
+      .getKubernetesDeployment(deployment.name, deployment.namespace)
+      .then((d) => d !== null)
+      .catch(() => false);
+    if (!exists) return;
+    const envVars = await this.prisma.deploymentEnvVar.findMany({
+      where: { deploymentId: deployment.id },
+      select: { key: true, value: true, secret: true },
+    });
+    const sharedVars = await this.loadSharedVarsForDeployment(deployment.id, deployment.environmentId);
+    const { resolved } = resolveEnvVars(
+      envVars.map((e) => ({ key: e.key, value: e.value, secret: e.secret })),
+      sharedVars,
+    );
+    await this.k8sWorkload.updateDeploymentEnv({
+      namespace: deployment.namespace,
+      deploymentName: deployment.name,
+      env: resolved,
+    });
   }
 
   onModuleDestroy() {
@@ -1332,23 +1405,36 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       );
     }
 
-    // Only push to K8s if the deployment exists in the cluster.
-    const k8sExistsScale = await this.k8sWorkload.getKubernetesDeployment(
-      deployment.name, deployment.namespace,
-    ).then((d) => d !== null).catch(() => false);
+    if (this.applyPipelineEnabled()) {
+      await this.prisma.deployment.update({
+        where: { id: deploymentId },
+        data: { replicas },
+      });
+      await this.applyQueue.enqueue({
+        dedupeKey: `op:deployment.scale:${deploymentId}`,
+        opType: 'deployment.scale',
+        deploymentId,
+        requestedById: user.id,
+      });
+    } else {
+      // Only push to K8s if the deployment exists in the cluster.
+      const k8sExistsScale = await this.k8sWorkload.getKubernetesDeployment(
+        deployment.name, deployment.namespace,
+      ).then((d) => d !== null).catch(() => false);
 
-    if (k8sExistsScale) {
-      await this.k8sWorkload.scaleDeployment(
-        deployment.name,
-        deployment.namespace,
-        replicas
-      );
+      if (k8sExistsScale) {
+        await this.k8sWorkload.scaleDeployment(
+          deployment.name,
+          deployment.namespace,
+          replicas
+        );
+      }
+
+      await this.prisma.deployment.update({
+        where: { id: deploymentId },
+        data: { replicas },
+      });
     }
-
-    await this.prisma.deployment.update({
-      where: { id: deploymentId },
-      data: { replicas },
-    });
 
     void this.audit.log({
       action: 'deployment.scaled',
@@ -1496,23 +1582,25 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       secret: e.secret,
     }));
 
-    // Only push to K8s if the deployment actually exists in the cluster.
-    // If the build hasn't succeeded yet, just persist to DB — the env vars
-    // will be applied when the build completes and creates the K8s deployment.
-    const k8sExists = await this.k8sWorkload.getKubernetesDeployment(
-      deployment.name, deployment.namespace,
-    ).then((d) => d !== null).catch(() => false);
+    if (!this.applyPipelineEnabled()) {
+      // Only push to K8s if the deployment actually exists in the cluster.
+      // If the build hasn't succeeded yet, just persist to DB — the env vars
+      // will be applied when the build completes and creates the K8s deployment.
+      const k8sExists = await this.k8sWorkload.getKubernetesDeployment(
+        deployment.name, deployment.namespace,
+      ).then((d) => d !== null).catch(() => false);
 
-    if (k8sExists) {
-      // Resolve ${{shared.KEY}} against the environment's shared vars, then
-      // push the resolved values (secrets routed to a k8s Secret) to the pod.
-      const sharedVars = await this.loadSharedVarsForDeployment(deployment.id, deployment.environmentId);
-      const { resolved } = resolveEnvVars(envList, sharedVars);
-      await this.k8sWorkload.updateDeploymentEnv({
-        namespace: deployment.namespace,
-        deploymentName: deployment.name,
-        env: resolved,
-      });
+      if (k8sExists) {
+        // Resolve ${{shared.KEY}} against the environment's shared vars, then
+        // push the resolved values (secrets routed to a k8s Secret) to the pod.
+        const sharedVars = await this.loadSharedVarsForDeployment(deployment.id, deployment.environmentId);
+        const { resolved } = resolveEnvVars(envList, sharedVars);
+        await this.k8sWorkload.updateDeploymentEnv({
+          namespace: deployment.namespace,
+          deploymentName: deployment.name,
+          env: resolved,
+        });
+      }
     }
 
     const previousEnvVars = await this.prisma.deploymentEnvVar.findMany({
@@ -1571,6 +1659,15 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         },
       });
     });
+
+    if (this.applyPipelineEnabled()) {
+      await this.applyQueue.enqueue({
+        dedupeKey: `op:deployment.updateEnv:${deployment.id}`,
+        opType: 'deployment.updateEnv',
+        deploymentId: deployment.id,
+        requestedById: user.id,
+      });
+    }
 
     if (added.length || removed.length || changed.length) {
       void this.audit.log({

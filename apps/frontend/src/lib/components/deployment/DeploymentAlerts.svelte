@@ -24,6 +24,8 @@
 	let {
 		buildFailed = false,
 		buildError = '',
+		applyError = '',
+		onRetryApply,
 		noPodsReady = false,
 		podWarnings = [],
 		resourcePressure = {
@@ -41,6 +43,8 @@
 	}: {
 		buildFailed?: boolean;
 		buildError?: string;
+		applyError?: string;
+		onRetryApply?: () => void;
 		noPodsReady?: boolean;
 		podWarnings?: Warning[];
 		resourcePressure?: ResourcePressure;
@@ -163,6 +167,18 @@
 					animateIcon: true
 				});
 			}
+		}
+
+		if (applyError) {
+			items.push({
+				id: 'apply-error',
+				severity: 'error',
+				title: 'Change not applied to the cluster',
+				hint: applyError.split('\n')[0].slice(0, 200),
+				action: onRetryApply ? 'Retry' : undefined,
+				onAction: onRetryApply,
+				animateIcon: true
+			});
 		}
 
 		if (noPodsReady) {

@@ -1166,6 +1166,14 @@ export class DeploymentsController {
     );
   }
 
+  @Post(':id/retry-apply')
+  async retryApply(
+    @Param('id') id: string,
+    @Request() req
+  ) {
+    return this.deployments.retryApply(id, req.user.sub);
+  }
+
   @Patch(':id/placement')
   async updateDeploymentPlacement(
     @Param('id') id: string,
