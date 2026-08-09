@@ -762,6 +762,52 @@ export class GitHubService {
     { at: number; value: Promise<RepoConfigDetection> }
   >();
 
+  /**
+   * One cache per detection run: several presets read the same package.json,
+   * and a missing file is a legitimate (cached) answer, not an error.
+   */
+  private repoFileReader(
+    accessToken: string,
+    owner: string,
+    repo: string,
+    branch?: string
+  ): FileReader {
+    const fileCache = new Map<string, Promise<string | null>>();
+    return (path) => {
+      if (!fileCache.has(path)) {
+        fileCache.set(
+          path,
+          this.getFileContent(accessToken, owner, repo, path, branch).catch(() => null)
+        );
+      }
+      return fileCache.get(path)!;
+    };
+  }
+
+  /**
+   * Describe the deployable apps in a repo, skipping the Dockerfile
+   * short-circuit that detectRepoConfig applies.
+   *
+   * detectRepoConfig answers "how should the create form be filled in", so a
+   * repo containing a Dockerfile stops right there — there is nothing left to
+   * suggest. This answers "what is this app", which a Railpack deployment still
+   * needs even when the repo also happens to carry a Dockerfile it is not
+   * building from. Those two questions look the same until a repo adds a
+   * Dockerfile it never wired up, which is common enough to matter.
+   */
+  async detectRepoApps(
+    accessToken: string,
+    owner: string,
+    repo: string,
+    branch?: string
+  ): Promise<DetectedApp[]> {
+    const tree = await this.getRepoTree(accessToken, owner, repo, branch).catch(() => null);
+    if (!tree) return [];
+
+    const { apps } = await detectApps(tree, this.repoFileReader(accessToken, owner, repo, branch));
+    return apps;
+  }
+
   private async computeRepoConfig(
     accessToken: string,
     owner: string,
@@ -827,20 +873,10 @@ export class GitHubService {
       };
     }
 
-    // One cache per detection run: several presets read the same package.json,
-    // and a missing file is a legitimate (cached) answer, not an error.
-    const fileCache = new Map<string, Promise<string | null>>();
-    const read: FileReader = (path) => {
-      if (!fileCache.has(path)) {
-        fileCache.set(
-          path,
-          this.getFileContent(accessToken, owner, repo, path, branch).catch(() => null)
-        );
-      }
-      return fileCache.get(path)!;
-    };
-
-    const { apps, workspace, repoConfig } = await detectApps(tree, read);
+    const { apps, workspace, repoConfig } = await detectApps(
+      tree,
+      this.repoFileReader(accessToken, owner, repo, branch),
+    );
     // An orchard.json naming a directory picks the app; otherwise the usual
     // "recognised root app, else shallowest" rule applies.
     const primary = (repoConfig?.rootDirectory

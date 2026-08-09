@@ -1482,7 +1482,18 @@ echo "$ORCHARD_BUILD_DIR" > /workspace/.orchard-build-dir
 cd "$ORCHARD_BUILD_DIR"
 ${configOverrideBlock}
 echo "=== Running Railpack prepare ==="
-railpack prepare . --plan-out railpack-plan.json --info-out railpack-info.json ${envArgs}${configFileArg}
+# xtrace is off for exactly this command: --env carries every build-time
+# variable, secrets included, and this container's log is both shown to the user
+# and dumped verbatim into the build log when a build fails.
+set +x
+# --error-missing-start turns "no start command detected" from a warning
+# (validate.go:71) into a hard failure. Without it Railpack still writes a plan,
+# and buildkit/convert.go:65 bakes CMD ["/bin/bash"] into the image: the build
+# reports success and ships a container that exits 0 with no output at all.
+# Failing here costs a build and hands the user Railpack's own explanation of
+# what to set; the alternative is a green build and a silent CrashLoopBackOff.
+railpack prepare . --plan-out railpack-plan.json --info-out railpack-info.json --error-missing-start ${envArgs}${configFileArg}
+set -x
 
 echo "=== Railpack prepare completed ==="
 echo "Generated files:"
@@ -2264,14 +2275,60 @@ exit $rc`,
         this.builderNamespace,
         'railpack-prepare',
         undefined, undefined, undefined, undefined, undefined, undefined,
-        // The marker is the final line; a small tail keeps this cheap even
-        // though railpack's own output can be long.
-        50,
+        // The marker is the final line, so the tail only has to be long enough
+        // to reach it. It is generous because the same read is what gets shown
+        // to the user: Railpack's detection summary, resolved package versions
+        // and any warnings all print above the railpack-info.json dump, and
+        // that is the only place a warning like "no start command detected"
+        // ever appears.
+        400,
       );
       return typeof res.body === 'string' ? res.body : undefined;
     } catch (error) {
       console.warn(`[ImageBuilder] Could not read railpack-prepare logs for ${podName}:`, error.message);
       return undefined;
+    }
+  }
+
+  /**
+   * Put Railpack's own prepare output into the build log.
+   *
+   * Until this existed the build log for a Railpack build started at the
+   * buildkit container, so everything Railpack said about the repo — which
+   * provider it picked, which versions it resolved, and every warning it
+   * raised — was thrown away on success and only survived when the build
+   * happened to fail. That is precisely backwards: a warning matters most on
+   * the builds that go green.
+   *
+   * The read is guarded to once per job, so this appends once.
+   */
+  private async appendRailpackPrepareLog(deploymentId: string | undefined, prepareLog: string) {
+    if (!deploymentId) return;
+
+    const body = prepareLog
+      // Everything from here down is the pretty-printed copy of
+      // railpack-info.json plus the machine-readable marker line — the same
+      // detection that already lands on the deployment as a label.
+      .split(`=== Build Info ===`)[0]
+      .split('\n')
+      // Shell xtrace from the installer steps above; noise, not build output.
+      .filter((line) => !line.startsWith('+ '))
+      .join('\n')
+      .trim();
+
+    if (!body) return;
+
+    const block = `\n=== Railpack ===\n${this.sanitizeLogMessage(body)}\n\n`;
+
+    try {
+      await this.prisma.$executeRaw`
+        UPDATE "deployments"
+        SET "build_logs" = COALESCE("build_logs", '') || ${block},
+            "updated_at" = NOW()
+        WHERE "id" = ${deploymentId}::uuid
+      `;
+    } catch (error) {
+      console.warn(`[ImageBuilder] Could not append railpack-prepare log for ${deploymentId}:`, error.message);
     }
   }
 
@@ -2553,6 +2610,7 @@ exit $rc`,
 
         if (status.railpackInfoLog) {
           await this.persistRailpackDetection(deploymentId, status.railpackInfoLog);
+          await this.appendRailpackPrepareLog(deploymentId, status.railpackInfoLog);
         }
 
         if (status.status !== 'pending' && status.status !== 'unknown') {

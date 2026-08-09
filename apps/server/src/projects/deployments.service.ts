@@ -5505,6 +5505,70 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       : `${frontendUrl}/deployments/${deploymentId}/progress`;
   }
 
+  /**
+   * Give a Railpack deployment a start command when it has none and we know it.
+   *
+   * Railpack does not fail when it cannot work out how to start an app — it
+   * warns, and buildkit bakes `CMD ["/bin/bash"]` into the image
+   * (convert.go:65), which exits 0 the moment it starts and then
+   * CrashLoopBackOffs without ever writing a log line. The builder now passes
+   * --error-missing-start so that becomes a build failure instead of a silent
+   * one, but failing a build we could have completed is no kind of fix: for
+   * the frameworks detection recognises, the answer is already known, and a
+   * deployment created before detection knew it should not have to be
+   * repaired by hand.
+   *
+   * The command is written to the deployment rather than passed into this one
+   * build, so it lands in the build settings as an ordinary editable value
+   * instead of materialising out of nowhere on every build. Every failure here
+   * is swallowed: this is an improvement to a build, never a precondition for
+   * one.
+   */
+  private async backfillRailpackStartCommand(
+    deploymentId: string,
+    repoUrl: string,
+    branch: string,
+    accessToken: string | null | undefined,
+  ) {
+    if (!accessToken) return;
+
+    try {
+      const deployment = await this.prisma.deployment.findUnique({
+        where: { id: deploymentId },
+        select: { startCommand: true, outputDirectory: true, rootDirectory: true },
+      });
+      if (!deployment) return;
+      // Already answered — by the user, by detection at create time, or by an
+      // earlier backfill.
+      if (deployment.startCommand) return;
+      // A static site is served by Caddy, which supplies its own start command.
+      if (deployment.outputDirectory) return;
+
+      const repo = this.githubService.parseRepoUrl(repoUrl);
+      if (!repo) return;
+
+      const apps = await this.githubService.detectRepoApps(
+        accessToken, repo.owner, repo.repo, branch,
+      );
+      const app = apps.find((a) => a.dir === (deployment.rootDirectory ?? ''));
+      if (!app?.startCommand) return;
+
+      await this.prisma.deployment.update({
+        where: { id: deploymentId },
+        data: { startCommand: app.startCommand },
+      });
+
+      const note = `[${Date.now()}] [WARNING] Railpack cannot detect a start command for a ${app.framework} app, so this build uses \`${app.startCommand}\`. Change it in the deployment's build settings.`;
+      await this.prisma.$executeRaw`
+        UPDATE "deployments"
+        SET "build_logs" = COALESCE("build_logs", '') || ${`${note}\n`}
+        WHERE "id" = ${deploymentId}::uuid
+      `.catch(() => {});
+    } catch (error) {
+      console.warn(`[Projects] Start command backfill failed for ${deploymentId}:`, error.message);
+    }
+  }
+
   async buildAndDeployAsync(
     deploymentId: string,
     data: {
@@ -5626,6 +5690,19 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         hasAccessToken: !!githubAccessToken,
         isRebuild: data.isRebuild,
       });
+
+      // Before the builder reads the deployment row, not after: docker.service
+      // assembles the RAILPACK_* overrides from that row on every trigger
+      // (loadBuildEnv), so writing the start command here is all it takes for
+      // this build to use it.
+      if (data.buildType === 'railpack' && !data.localContextKey) {
+        await this.backfillRailpackStartCommand(
+          deploymentId,
+          data.repoUrl,
+          data.branch,
+          githubAccessToken ?? data.githubAccessToken,
+        );
+      }
 
       const buildStartTime = Date.now();
 

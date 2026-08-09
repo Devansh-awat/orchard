@@ -86,6 +86,161 @@ test('SvelteKit shipping adapter-static but configuring adapter-node is a server
   assert.equal(app.outputDirectory, null, 'an adapter-node build must not be served as static');
 });
 
+// Railpack only emits `node build` for SvelteKit when the repo depends on
+// @sveltejs/adapter-auto (svelte.go:18). Naming adapter-node directly — what
+// the SvelteKit docs tell you to do — leaves its plan with no start command at
+// all, and buildkit then bakes CMD ["/bin/bash"] into the image
+// (convert.go:65): the build goes green and the container exits 0 on boot.
+test('SvelteKit on adapter-node gets the start command railpack will not emit', async () => {
+  const { paths, read } = repo({
+    'package.json': pkg({
+      scripts: { build: 'vite build' },
+      dependencies: { '@sveltejs/adapter-node': '^5' },
+      devDependencies: { '@sveltejs/kit': '^2' },
+    }),
+    'svelte.config.js': "import adapter from '@sveltejs/adapter-node';\nexport default { kit: { adapter: adapter() } };",
+  });
+  const { apps } = await detectApps(paths, read);
+  const app = primaryApp(apps)!;
+  assert.equal(app.startCommand, 'node build');
+  assert.equal(app.outputDirectory, null);
+});
+
+test('a SvelteKit adapter-node out directory is respected', async () => {
+  const { paths, read } = repo({
+    'package.json': pkg({
+      dependencies: { '@sveltejs/adapter-node': '^5' },
+      devDependencies: { '@sveltejs/kit': '^2' },
+    }),
+    'svelte.config.js': "import adapter from '@sveltejs/adapter-node';\nexport default { kit: { adapter: adapter({ out: './server/' }) } };",
+  });
+  const { apps } = await detectApps(paths, read);
+  assert.equal(primaryApp(apps)!.startCommand, 'node server');
+});
+
+test('`output:` in a SvelteKit config is not mistaken for the adapter out dir', async () => {
+  const { paths, read } = repo({
+    'package.json': pkg({
+      dependencies: { '@sveltejs/adapter-node': '^5' },
+      devDependencies: { '@sveltejs/kit': '^2' },
+    }),
+    'svelte.config.js': "import adapter from '@sveltejs/adapter-node';\nexport default { kit: { output: 'nope', adapter: adapter() } };",
+  });
+  const { apps } = await detectApps(paths, read);
+  assert.equal(primaryApp(apps)!.startCommand, 'node build');
+});
+
+test('SvelteKit on adapter-auto is left to railpack', async () => {
+  const { paths, read } = repo({
+    'package.json': pkg({
+      devDependencies: { '@sveltejs/kit': '^2', '@sveltejs/adapter-auto': '^7' },
+    }),
+    'svelte.config.js': "import adapter from '@sveltejs/adapter-auto';\nexport default { kit: { adapter: adapter() } };",
+  });
+  const { apps } = await detectApps(paths, read);
+  assert.equal(
+    primaryApp(apps)!.startCommand,
+    null,
+    'railpack emits `node build` itself, and also sets GCP_BUILDPACKS so the build produces one',
+  );
+});
+
+// The three checks railpack runs before any framework preset (node.go:189-194).
+test('a start command railpack can already find is left alone', async () => {
+  for (const [label, files] of [
+    ['start script', { 'package.json': pkg({ scripts: { start: 'node build' }, dependencies: { '@sveltejs/adapter-node': '^5' }, devDependencies: { '@sveltejs/kit': '^2' } }) }],
+    ['main field', { 'package.json': pkg({ main: 'server.js', dependencies: { '@sveltejs/adapter-node': '^5' }, devDependencies: { '@sveltejs/kit': '^2' } }) }],
+    ['root index.js', {
+      'package.json': pkg({ dependencies: { '@sveltejs/adapter-node': '^5' }, devDependencies: { '@sveltejs/kit': '^2' } }),
+      'index.js': '',
+    }],
+  ] as [string, Record<string, string>][]) {
+    const { paths, read } = repo(files);
+    const { apps } = await detectApps(paths, read);
+    assert.equal(primaryApp(apps)!.startCommand, null, label);
+  }
+});
+
+test('a nested index.js does not count — railpack only globs the app root', async () => {
+  // node.go:193 globs `{index.js,index.ts}` with no `**`, so src/index.js is
+  // invisible to it and the app would ship unstartable.
+  const { paths, read } = repo({
+    'package.json': pkg({
+      dependencies: { '@sveltejs/adapter-node': '^5' },
+      devDependencies: { '@sveltejs/kit': '^2' },
+    }),
+    'src/index.js': '',
+  });
+  const { apps } = await detectApps(paths, read);
+  assert.equal(primaryApp(apps)!.startCommand, 'node build');
+});
+
+test('a workspace SvelteKit app starts from the repo root', async () => {
+  // The build runs at the repo root, so a bare `node build` would look in the
+  // wrong directory — and `pnpm --filter start`, the usual workspace fallback,
+  // would run a script the package does not have.
+  const { paths, read } = repo({
+    'package.json': pkg({ name: 'root', workspaces: ['apps/*'] }),
+    'pnpm-lock.yaml': '',
+    'apps/web/package.json': pkg({
+      name: '@acme/web',
+      scripts: { build: 'vite build' },
+      dependencies: { '@sveltejs/adapter-node': '^5' },
+      devDependencies: { '@sveltejs/kit': '^2' },
+    }),
+    'apps/web/svelte.config.js': "import adapter from '@sveltejs/adapter-node';\nexport default { kit: { adapter: adapter() } };",
+  });
+  const { apps } = await detectApps(paths, read);
+  const web = apps.find((a) => a.dir === 'apps/web')!;
+  assert.equal(web.startCommand, 'node apps/web/build');
+  assert.equal(web.buildCommand, 'pnpm --filter @acme/web build');
+});
+
+test('Astro on the node adapter gets a start command, middleware mode does not', async () => {
+  const standalone = repo({
+    'package.json': pkg({ dependencies: { astro: '^5', '@astrojs/node': '^9' } }),
+    'astro.config.mjs': "import node from '@astrojs/node';\nexport default { output: 'server', adapter: node({ mode: 'standalone' }) };",
+  });
+  const { apps: standaloneApps } = await detectApps(standalone.paths, standalone.read);
+  assert.equal(primaryApp(standaloneApps)!.startCommand, 'node dist/server/entry.mjs');
+  assert.equal(primaryApp(standaloneApps)!.outputDirectory, null);
+
+  // Middleware mode emits a handler, not a server: there is no entrypoint to
+  // guess, and a wrong guess is worse than the build failing with railpack's
+  // own explanation.
+  const middleware = repo({
+    'package.json': pkg({ dependencies: { astro: '^5', '@astrojs/node': '^9' } }),
+    'astro.config.mjs': "import node from '@astrojs/node';\nexport default { output: 'server', adapter: node({ mode: 'middleware' }) };",
+  });
+  const { apps: middlewareApps } = await detectApps(middleware.paths, middleware.read);
+  assert.equal(primaryApp(middlewareApps)!.startCommand, null);
+});
+
+test('a static Astro site is still static', async () => {
+  const { paths, read } = repo({
+    'package.json': pkg({ dependencies: { astro: '^5' } }),
+    'astro.config.mjs': 'export default {};',
+  });
+  const { apps } = await detectApps(paths, read);
+  const app = primaryApp(apps)!;
+  assert.equal(app.outputDirectory, 'dist');
+  assert.equal(app.startCommand, null, 'Caddy supplies the start command for a static site');
+});
+
+test('an explicit start command in orchard.json retires the detected entry', async () => {
+  const { paths, read } = repo({
+    'package.json': pkg({
+      dependencies: { '@sveltejs/adapter-node': '^5' },
+      devDependencies: { '@sveltejs/kit': '^2' },
+    }),
+    'orchard.json': JSON.stringify({ startCommand: 'node ./custom.js' }),
+  });
+  const { apps } = await detectApps(paths, read);
+  const app = primaryApp(apps)!;
+  assert.equal(app.startCommand, 'node ./custom.js');
+  assert.equal(app.serverEntry, null, 'a stale entry would describe a command nobody runs');
+});
+
 test('Next.js is a server app unless output: export is configured', async () => {
   const ssr = repo({
     'package.json': pkg({ dependencies: { next: '^15' } }),

@@ -29,6 +29,14 @@ export interface DetectedApp {
   port: number;
   /** package.json "name", needed to scope commands inside a workspace. */
   packageName: string | null;
+  /**
+   * Built server entry the start command runs, relative to the app directory.
+   * Kept next to startCommand rather than folded into it because a workspace
+   * build runs from the repo root, where a bare `node build` would look in the
+   * wrong place — scopeToWorkspace re-roots this the way it re-roots
+   * outputDirectory.
+   */
+  serverEntry: string | null;
 }
 
 export interface WorkspaceInfo {
@@ -94,6 +102,9 @@ export function applyRepoConfig(app: DetectedApp, config: RepoBuildConfig | null
     installCommand: config.installCommand ?? app.installCommand,
     buildCommand: config.buildCommand ?? app.buildCommand,
     startCommand: config.startCommand ?? app.startCommand,
+    // An explicit start command retires whatever entry we detected; leaving it
+    // set would describe a command that is no longer the one being run.
+    serverEntry: config.startCommand ? null : app.serverEntry,
     outputDirectory: config.outputDirectory ?? app.outputDirectory,
     port: config.port ?? app.port,
   };
@@ -192,6 +203,7 @@ export function workspaceScriptCommand(
 
 interface PackageJson {
   name?: string;
+  main?: string;
   scripts?: Record<string, string>;
   dependencies?: Record<string, string>;
   devDependencies?: Record<string, string>;
@@ -211,6 +223,36 @@ function outDirFromConfig(contents: string | null): string | null {
   if (!contents) return null;
   const m = /outDir:\s*['"](.+?)['"]/.exec(contents);
   return m ? m[1].replace(/^\.\//, '').replace(/\/+$/, '') : null;
+}
+
+/**
+ * `out: 'somewhere'` in a SvelteKit adapter-node call. `\bout:` cannot match
+ * `output:`, so the sibling option in the same object is not a false positive.
+ */
+function adapterOutFromConfig(contents: string | null): string | null {
+  if (!contents) return null;
+  const m = /\bout:\s*['"](.+?)['"]/.exec(contents);
+  return m ? m[1].replace(/^\.\//, '').replace(/\/+$/, '') : null;
+}
+
+/**
+ * Whether Railpack will find a start command on its own.
+ *
+ * Mirrors node.go:188 exactly: a `start` script, a `main` field, or an
+ * index.js/index.ts in the *app root* (railpack globs `{index.js,index.ts}`
+ * with no `**`, so it never recurses). Everything past that point in its
+ * checklist is framework-specific and handled by the presets below.
+ *
+ * This matters more than it looks. When Railpack finds nothing it does not
+ * fail — validate.go:71 downgrades to a warning unless --error-missing-start
+ * is set, and buildkit/convert.go:65 then bakes `CMD ["/bin/bash"]` into the
+ * image. The build goes green and ships a container that exits 0 with no
+ * output. So a preset that knows the answer has to say so here.
+ */
+function railpackFindsStartCommand(pkg: PackageJson, dir: string, paths: Set<string>): boolean {
+  if (scriptOf(pkg, 'start')) return true;
+  if (typeof pkg.main === 'string' && pkg.main.trim()) return true;
+  return paths.has(join(dir, 'index.js')) || paths.has(join(dir, 'index.ts'));
 }
 
 /**
@@ -242,6 +284,7 @@ async function classify(
     outputDirectory: null,
     port: 3000,
     packageName: null,
+    serverEntry: null,
   };
 
   if (has('package.json')) {
@@ -254,6 +297,8 @@ async function classify(
     const deps = allDeps(pkg);
     const buildScript = scriptOf(pkg, 'build').toLowerCase();
     const app: DetectedApp = { ...base, framework: 'node', packageName: pkg.name ?? null };
+    // Only fill a start command in when Railpack would otherwise come up empty.
+    const needsStart = !railpackFindsStartCommand(pkg, dir, paths);
 
     // Order mirrors spa.go:getOutputDirectory — the first match wins.
     if (deps['@sveltejs/kit']) {
@@ -267,6 +312,14 @@ async function classify(
       );
       if (svelteConfig && /@sveltejs\/adapter-static/.test(svelteConfig)) {
         app.outputDirectory = 'build';
+      } else if (needsStart && !deps['@sveltejs/adapter-auto']) {
+        // adapter-node emits a Node server at `out` (default `build`), and
+        // `node build` is what SvelteKit documents. Railpack knows this command
+        // but gates it behind adapter-auto (svelte.go:18), so naming
+        // adapter-node explicitly — the thing the docs tell you to do — is
+        // exactly the case it drops on the floor.
+        app.serverEntry = adapterOutFromConfig(svelteConfig) ?? 'build';
+        app.startCommand = `node ${app.serverEntry}`;
       }
     } else if (deps['react-router'] && buildScript.includes('react-router build')) {
       app.framework = 'react-router';
@@ -284,7 +337,17 @@ async function classify(
       const hasAdapter = ['@astrojs/node', '@astrojs/vercel', '@astrojs/cloudflare', '@astrojs/netlify']
         .some((d) => deps[d]);
       const serverOutput = cfg ? /output:\s*['"]server['"]/.test(cfg) : false;
-      if (!hasAdapter && !serverOutput) app.outputDirectory = outDirFromConfig(cfg) ?? 'dist';
+      if (!hasAdapter && !serverOutput) {
+        app.outputDirectory = outDirFromConfig(cfg) ?? 'dist';
+      } else if (needsStart && deps['@astrojs/node'] && !/mode:\s*['"]middleware['"]/.test(cfg ?? '')) {
+        // Same gap as SvelteKit: Railpack has no Astro entry in its
+        // start-command checklist at all. Standalone is the only mode that
+        // produces a server we can start — middleware mode expects the user to
+        // bring their own entrypoint, and guessing one would be worse than the
+        // build failing with Railpack's own explanation.
+        app.serverEntry = 'dist/server/entry.mjs';
+        app.startCommand = `node ${app.serverEntry}`;
+      }
     } else if (deps.nuxt) {
       app.framework = 'nuxt';
     } else if (deps['react-scripts'] && buildScript.includes('react-scripts build')) {
@@ -425,13 +488,21 @@ function scopeToWorkspace(app: DetectedApp, workspace: WorkspaceInfo): DetectedA
   if (!workspace.isWorkspace || !app.dir || !app.packageName) return app;
 
   const pm = workspace.packageManager;
+
+  // A detected server entry is a path, so it moves with the app the same way
+  // the output directory does. `pnpm --filter <pkg> start` is only the right
+  // answer when the package actually has a start script to run.
+  const startCommand = (() => {
+    if (app.outputDirectory) return app.startCommand;
+    if (app.serverEntry) return `node ${app.dir}/${app.serverEntry}`;
+    return app.startCommand ?? workspaceScriptCommand(pm, app.packageName, 'start');
+  })();
+
   return {
     ...app,
     // Install stays unscoped: Railpack already installs a workspace correctly.
     buildCommand: app.buildCommand ?? workspaceScriptCommand(pm, app.packageName, 'build'),
-    startCommand: app.outputDirectory
-      ? app.startCommand
-      : app.startCommand ?? workspaceScriptCommand(pm, app.packageName, 'start'),
+    startCommand,
     outputDirectory: app.outputDirectory ? `${app.dir}/${app.outputDirectory}` : null,
   };
 }
