@@ -40,6 +40,20 @@ export function cpuMilliToK8s(milli: number): string {
   return `${Math.max(1, Math.round(milli))}m`;
 }
 
+// The CPU a workload *reserves* on its node, derived from the CPU it's allowed
+// to burst to. CPU is compressible — a container over its request is throttled,
+// never killed — so reserving the full limit buys nothing at runtime and costs
+// the scheduler the whole difference on every idle workload. Memory gets no
+// equivalent: it's incompressible, and an over-committed node reclaims it by
+// OOM-killing, so memory requests stay pinned to the limit.
+export function cpuRequestFromLimitMilli(limitMilli: number): number {
+  const ratio = Number(process.env.CPU_REQUEST_RATIO);
+  const floor = Number(process.env.CPU_REQUEST_MIN_MILLI);
+  const safeRatio = Number.isFinite(ratio) && ratio > 0 && ratio <= 1 ? ratio : 0.1;
+  const safeFloor = Number.isFinite(floor) && floor > 0 ? floor : 50;
+  return Math.min(limitMilli, Math.max(safeFloor, Math.round(limitMilli * safeRatio)));
+}
+
 export function memoryBytesToK8s(bytes: number): string {
   // Prefer Mi if it divides cleanly, else raw bytes.
   if (bytes % (1024 * 1024) === 0) return `${bytes / (1024 * 1024)}Mi`;

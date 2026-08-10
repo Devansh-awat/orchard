@@ -169,9 +169,15 @@ export class K8sNamespaceService {
         if (phase === 'Succeeded' || phase === 'Failed') continue;
         pods += 1;
         for (const c of pod.spec?.containers || []) {
+          // Quota bills what the workload is allowed to consume, not what it
+          // reserves — CPU requests are a fraction of the limit (see
+          // cpuRequestFromLimitMilli), so summing requests would under-bill.
           const req = c.resources?.requests || {};
-          if (req.cpu) cpuMilli += parseCpu(String(req.cpu));
-          if (req.memory) memoryBytes += parseMemory(String(req.memory));
+          const lim = c.resources?.limits || {};
+          const cpu = lim.cpu ?? req.cpu;
+          const memory = lim.memory ?? req.memory;
+          if (cpu) cpuMilli += parseCpu(String(cpu));
+          if (memory) memoryBytes += parseMemory(String(memory));
         }
       }
       const svcRes = await api.listServiceForAllNamespaces();

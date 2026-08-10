@@ -16,7 +16,7 @@ import {
   snapshotPublicPortState,
   publicPortKey,
 } from './port-utils';
-import { cpuMilliToK8s, memoryBytesToK8s } from './quantity';
+import { cpuMilliToK8s, cpuRequestFromLimitMilli, memoryBytesToK8s } from './quantity';
 import { isTrustedImage, trustedSecurityContext, hardenedSecurityContext } from './trusted-images';
 
 /**
@@ -93,6 +93,7 @@ export class K8sWorkloadService {
     if (!this.kc) return;
     const appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
     const cpuStr = cpuMilliToK8s(resources.cpuMilli);
+    const cpuReqStr = cpuMilliToK8s(cpuRequestFromLimitMilli(resources.cpuMilli));
     const memStr = memoryBytesToK8s(resources.memoryBytes);
     const existing = await appsApi.readNamespacedDeployment(deploymentName, namespace);
     const containers = existing.body.spec?.template?.spec?.containers;
@@ -108,7 +109,7 @@ export class K8sWorkloadService {
               {
                 name: containerName,
                 resources: {
-                  requests: { cpu: cpuStr, memory: memStr },
+                  requests: { cpu: cpuReqStr, memory: memStr },
                   limits: { cpu: cpuStr, memory: memStr },
                 },
               },
@@ -763,12 +764,14 @@ export class K8sWorkloadService {
           : hardenedSecurityContext(),
       };
 
-      // requests == limits → Guaranteed QoS. Quota usage matches real-world usage.
+      // Burstable QoS: memory requests == limits, CPU requests a fraction of
+      // them. Org quota still bills the limit — see getOrgUsage.
       if (options.resources) {
         const cpuStr = cpuMilliToK8s(options.resources.cpuMilli);
+        const cpuReqStr = cpuMilliToK8s(cpuRequestFromLimitMilli(options.resources.cpuMilli));
         const memStr = memoryBytesToK8s(options.resources.memoryBytes);
         container.resources = {
-          requests: { cpu: cpuStr, memory: memStr },
+          requests: { cpu: cpuReqStr, memory: memStr },
           limits: { cpu: cpuStr, memory: memStr },
         };
       }

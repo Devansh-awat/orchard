@@ -12,7 +12,7 @@ import {
   trustedSecurityContext,
   hardenedSecurityContext,
 } from '../kubernetes/trusted-images';
-import { cpuMilliToK8s, memoryBytesToK8s } from '../kubernetes/quantity';
+import { cpuMilliToK8s, cpuRequestFromLimitMilli, memoryBytesToK8s } from '../kubernetes/quantity';
 import { QuotasService } from '../quotas/quotas.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { NodesService } from '../nodes/nodes.service';
@@ -250,6 +250,7 @@ export class JobsOrchestratorService {
 
     const trusted = step.type === 'app' && isTrustedImage(step.image);
     const cpuStr = cpuMilliToK8s(step.cpuMilli);
+    const cpuReqStr = cpuMilliToK8s(cpuRequestFromLimitMilli(step.cpuMilli));
     const memStr = memoryBytesToK8s(step.memoryBytes);
 
     return {
@@ -281,7 +282,7 @@ export class JobsOrchestratorService {
                 env,
                 volumeMounts: volumeMounts.length ? volumeMounts : undefined,
                 resources: {
-                  requests: { cpu: cpuStr, memory: memStr },
+                  requests: { cpu: cpuReqStr, memory: memStr },
                   limits: { cpu: cpuStr, memory: memStr },
                 },
                 securityContext: trusted

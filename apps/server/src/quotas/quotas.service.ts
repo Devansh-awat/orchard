@@ -838,8 +838,8 @@ export class QuotasService {
     for (const p of pods) {
       if (!p.namespace) continue;
       const cur = perNs.get(p.namespace) || { cpuMilli: 0, memoryBytes: 0, pods: 0 };
-      cur.cpuMilli += p.cpuRequestMilli;
-      cur.memoryBytes += p.memoryRequestBytes;
+      cur.cpuMilli += p.cpuLimitMilli;
+      cur.memoryBytes += p.memoryLimitBytes;
       cur.pods += 1;
       perNs.set(p.namespace, cur);
     }

@@ -390,6 +390,8 @@ export class KubernetesService {
       podName: string;
       cpuRequestMilli: number;
       memoryRequestBytes: number;
+      cpuLimitMilli: number;
+      memoryLimitBytes: number;
       labels: Record<string, string>;
     }[]
   > {
@@ -404,6 +406,8 @@ export class KubernetesService {
         podName: string;
         cpuRequestMilli: number;
         memoryRequestBytes: number;
+        cpuLimitMilli: number;
+        memoryLimitBytes: number;
         labels: Record<string, string>;
       }[] = [];
       for (const pod of res.body.items) {
@@ -412,10 +416,20 @@ export class KubernetesService {
         const containers = pod.spec?.containers || [];
         let cpuMilli = 0;
         let memBytes = 0;
+        let cpuLimitMilli = 0;
+        let memLimitBytes = 0;
         for (const c of containers) {
+          // Requests are what the scheduler packs by; limits are what quota
+          // bills. CPU requests are a fraction of the limit, so the two now
+          // diverge — callers pick whichever question they're asking.
           const req = c.resources?.requests || {};
+          const lim = c.resources?.limits || {};
           if (req.cpu) cpuMilli += parseCpu(String(req.cpu));
           if (req.memory) memBytes += parseMemory(String(req.memory));
+          const cpuLim = lim.cpu ?? req.cpu;
+          const memLim = lim.memory ?? req.memory;
+          if (cpuLim) cpuLimitMilli += parseCpu(String(cpuLim));
+          if (memLim) memLimitBytes += parseMemory(String(memLim));
         }
         out.push({
           nodeName: pod.spec?.nodeName || null,
@@ -423,6 +437,8 @@ export class KubernetesService {
           podName: pod.metadata?.name || '',
           cpuRequestMilli: cpuMilli,
           memoryRequestBytes: memBytes,
+          cpuLimitMilli,
+          memoryLimitBytes: memLimitBytes,
           labels: pod.metadata?.labels || {},
         });
       }

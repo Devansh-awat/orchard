@@ -4,7 +4,7 @@ import { PassThrough } from 'stream';
 import { createHash } from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { KubernetesService, ResolvedPlacement } from './kubernetes.service';
-import { cpuMilliToK8s, memoryBytesToK8s, parseMemory } from './quantity';
+import { cpuMilliToK8s, cpuRequestFromLimitMilli, memoryBytesToK8s, parseMemory } from './quantity';
 
 /**
  * All PostgreSQL flows: legacy single-pod Postgres (exec into shared cluster
@@ -149,13 +149,14 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     const customApi = this.kc.makeApiClient(k8s.CustomObjectsApi);
     const coreApi = this.kc.makeApiClient(k8s.CoreV1Api);
     const cpuStr = cpuMilliToK8s(resources.cpuMilli);
+    const cpuReqStr = cpuMilliToK8s(cpuRequestFromLimitMilli(resources.cpuMilli));
     const memStr = memoryBytesToK8s(resources.memoryBytes);
     const patch = [
       {
         op: 'replace',
         path: '/spec/resources',
         value: {
-          requests: { cpu: cpuStr, memory: memStr },
+          requests: { cpu: cpuReqStr, memory: memStr },
           limits: { cpu: cpuStr, memory: memStr },
         },
       },
@@ -626,9 +627,10 @@ export class K8sCnpgService implements OnApplicationBootstrap {
 
     if (options.resources) {
       const cpuStr = cpuMilliToK8s(options.resources.cpuMilli);
+      const cpuReqStr = cpuMilliToK8s(cpuRequestFromLimitMilli(options.resources.cpuMilli));
       const memStr = memoryBytesToK8s(options.resources.memoryBytes);
       postgresContainer.resources = {
-        requests: { cpu: cpuStr, memory: memStr },
+        requests: { cpu: cpuReqStr, memory: memStr },
         limits: { cpu: cpuStr, memory: memStr },
       };
     }
@@ -1081,9 +1083,10 @@ export class K8sCnpgService implements OnApplicationBootstrap {
 
     if (options.resources) {
       const cpuStr = cpuMilliToK8s(options.resources.cpuMilli);
+      const cpuReqStr = cpuMilliToK8s(cpuRequestFromLimitMilli(options.resources.cpuMilli));
       const memStr = memoryBytesToK8s(options.resources.memoryBytes);
       clusterSpec.resources = {
-        requests: { cpu: cpuStr, memory: memStr },
+        requests: { cpu: cpuReqStr, memory: memStr },
         limits: { cpu: cpuStr, memory: memStr },
       };
     }
