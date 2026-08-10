@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.4.1](https://github.com/LeafdTK/leaf/compare/server/v2.4.0...server/v2.4.1) (2026-08-10)
+
+
+### Bug Fixes
+
+* railpack builds shipping a bash container when no start command is detected ([a5b210b](https://github.com/LeafdTK/leaf/commit/a5b210b3478ecd190173f604e89088131d328044))
+* tenant workloads reserving their full cpu limit on the node ([b0cb9b7](https://github.com/LeafdTK/leaf/commit/b0cb9b7670197dd93ea220e9d6369c8cae391597))
+
 ## [2.4.0](https://github.com/LeafdTK/leaf/compare/server/v2.3.3...server/v2.4.0) (2026-08-08)
 
 
