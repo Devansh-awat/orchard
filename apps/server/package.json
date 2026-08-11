@@ -20,6 +20,7 @@
     "test:build-config": "tsx --test test/build-config.test.ts",
     "test:cpu-requests": "tsx --test test/cpu-requests.test.ts",
     "test:env-removal": "tsx --test test/env-removal.test.ts",
+    "test:build-args": "tsx --test test/build-arg-injection.test.ts",
     "test:github-access": "tsx --test test/github-repo-access.test.ts",
     "test:mcp-token": "tsx --test test/mcp-token-type.test.ts",
     "test:scim": "tsx --test test/scim.test.ts",

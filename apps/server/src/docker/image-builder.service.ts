@@ -13,6 +13,7 @@ import {
   railpackConfigOverride,
 } from './build-config';
 import { cacheEvictInitContainer } from './cache-evict';
+import { injectBuildArgsScript } from './build-args';
 
 interface BuildJobOptions {
   repoUrl: string;
@@ -1327,41 +1328,15 @@ ls -la /workspace
       }
     }
 
-    // For Dockerfile builds with env vars, prepend ARG/ENV declarations
-    // This makes build-args available as environment variables in RUN commands
+    // For Dockerfile builds with env vars, declare them as ARG so RUN steps can
+    // read them. Deliberately not ENV — see build-args.ts.
     if (buildType === 'dockerfile' && Object.keys(envVars).length > 0) {
-      const argDeclarations = Object.keys(envVars).map(key => `ARG ${key}\nENV ${key}=\${${key}}`).join('\n');
-      
       initContainers.push({
         name: 'inject-build-args',
         image: 'alpine:latest',
         command: ['/bin/sh', '-c'],
         args: [
-          `set -ex
-echo "=== Injecting ARG/ENV declarations into Dockerfile ==="
-
-DOCKERFILE_PATH="${dockerfilePath}"
-DOCKERFILE="/workspace/\${DOCKERFILE_PATH}"
-
-if [ ! -f "\${DOCKERFILE}" ]; then
-  echo "Error: Dockerfile not found at \${DOCKERFILE}"
-  ls -la /workspace
-  exit 1
-fi
-
-# Create temp file with ARG/ENV declarations
-cat > /tmp/args.txt << 'EOF'
-# Auto-injected build arguments and environment variables
-${argDeclarations}
-
-EOF
-
-# Prepend to Dockerfile (after FROM line to respect multi-stage builds)
-awk 'NR==FNR {a[NR]=$0; next} /^FROM / && !done {print; system("cat /tmp/args.txt"); done=1; next} 1' /tmp/args.txt "\${DOCKERFILE}" > /tmp/dockerfile.new && mv /tmp/dockerfile.new "\${DOCKERFILE}"
-
-echo "=== Dockerfile updated with build args ==="
-head -n 20 "\${DOCKERFILE}"
-`,
+          injectBuildArgsScript({ dockerfilePath, keys: Object.keys(envVars) }),
         ],
         workingDir: '/workspace',
         volumeMounts: [
