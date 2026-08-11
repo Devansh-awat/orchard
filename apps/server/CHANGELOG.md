@@ -1,5 +1,13 @@
 # Changelog
 
+## [2.4.2](https://github.com/LeafdTK/leaf/compare/server/v2.4.1...server/v2.4.2) (2026-08-11)
+
+
+### Bug Fixes
+
+* build args baked into image layers as ENV directives ([23ca1a6](https://github.com/LeafdTK/leaf/commit/23ca1a654217e782b84b744780efcfc4bcf1a1c6))
+* env vars removed from a config surviving in the running container ([8c62a39](https://github.com/LeafdTK/leaf/commit/8c62a3947c9bbedbb8f5c4b788e3bbd61053d369))
+
 ## [2.4.1](https://github.com/LeafdTK/leaf/compare/server/v2.4.0...server/v2.4.1) (2026-08-10)
 
 
