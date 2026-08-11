@@ -5829,7 +5829,27 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
         }
 
         // Image-only rebuild keeps the existing spec, so re-apply the stored
-        // health-check config to heal deployments whose probes were dropped.
+        // env to heal deployments whose pod spec drifted from the config —
+        // every removal made before env updates replaced (rather than merged)
+        // the container's env list is still sitting on the live object.
+        const rebuildDeployment = await this.prisma.deployment.findUnique({
+          where: { id: deploymentId },
+          select: { environmentId: true },
+        });
+        const { resolved: rebuildEnv } = await this.loadResolvedEnvForDeployment(
+          deploymentId,
+          rebuildDeployment?.environmentId ?? null,
+        );
+        await this.k8sWorkload.updateDeploymentEnv({
+          namespace: data.namespace,
+          deploymentName: data.name,
+          env: rebuildEnv,
+        }).catch((err) => {
+          console.error('[Projects] re-applying env on rebuild failed:', err.message);
+        });
+
+        // Same reasoning for probes: heal deployments whose health checks were
+        // dropped from the live spec.
         const hc = await this.loadHealthCheckOptions(deploymentId);
         if (hc) {
           await this.k8sWorkload.updateDeploymentHealthCheck({

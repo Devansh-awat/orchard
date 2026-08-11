@@ -18,6 +18,7 @@ import {
 } from './port-utils';
 import { cpuMilliToK8s, cpuRequestFromLimitMilli, memoryBytesToK8s } from './quantity';
 import { isTrustedImage, trustedSecurityContext, hardenedSecurityContext } from './trusted-images';
+import { buildEnvReplacePatch, envListsEqual, secretDataEquals } from './env-patch';
 
 /**
  * Workloads + pods + tailscale sidecar: Deployments and Pods CRUD, env/
@@ -1015,17 +1016,21 @@ export class K8sWorkloadService {
     return { envList, secretData: secret.size > 0 ? Object.fromEntries(secret) : null };
   }
 
-  /** Upsert (or delete when null) the per-deployment env Secret. */
+  /**
+   * Upsert (or delete when null) the per-deployment env Secret. Returns whether
+   * the stored values actually changed — secret entries reach the container
+   * through secretKeyRef, so their contents are invisible to the pod spec and
+   * only a changed Secret justifies forcing a rollout.
+   */
   private async upsertEnvSecret(
     namespace: string,
     deploymentName: string,
     secretData: Record<string, string> | null,
-  ): Promise<void> {
+  ): Promise<boolean> {
     const name = `${deploymentName}-env`;
     const coreApi = this.kc!.makeApiClient(k8s.CoreV1Api);
     if (!secretData) {
-      await coreApi.deleteNamespacedSecret(name, namespace).catch(() => {});
-      return;
+      return coreApi.deleteNamespacedSecret(name, namespace).then(() => true).catch(() => false);
     }
     const body: k8s.V1Secret = {
       metadata: {
@@ -1042,10 +1047,14 @@ export class K8sWorkloadService {
       const existing = await coreApi.readNamespacedSecret(name, namespace);
       body.metadata!.resourceVersion = existing.body.metadata?.resourceVersion;
       await coreApi.replaceNamespacedSecret(name, namespace, body);
+      return !secretDataEquals(existing.body.data, secretData);
     } catch (err: any) {
       const code = err?.statusCode ?? err?.response?.statusCode;
-      if (code === 404) await coreApi.createNamespacedSecret(namespace, body);
-      else throw err;
+      if (code === 404) {
+        await coreApi.createNamespacedSecret(namespace, body);
+        return true;
+      }
+      throw err;
     }
   }
 
@@ -1069,7 +1078,7 @@ export class K8sWorkloadService {
     });
     // Upsert (or clear) the per-deployment env Secret before patching so the
     // secretKeyRef entries resolve. An empty secret set removes the Secret.
-    await this.upsertEnvSecret(cleanNamespace, cleanName, secretData);
+    const secretChanged = await this.upsertEnvSecret(cleanNamespace, cleanName, secretData);
 
     try {
       const appsApi = this.kc.makeApiClient(k8s.AppsV1Api);
@@ -1085,27 +1094,34 @@ export class K8sWorkloadService {
         });
       }
 
-      const containerName = containers[0].name;
+      // Target the app container the way updateDeploymentImage does, by name,
+      // so env and image can never land on different containers. Falls back to
+      // the first container for deployments imported from outside Orchard.
+      const namedIndex = containers.findIndex((c) => c.name === cleanName);
+      const containerIndex = namedIndex === -1 ? 0 : namedIndex;
 
-      const patch = {
-        spec: {
-          template: {
-            metadata: {
-              annotations: {
-                'orchard.my/env-updated-at': new Date().toISOString()
-              }
-            },
-            spec: {
-              containers: [
-                {
-                  name: containerName,
-                  env: envList
-                }
-              ]
-            }
-          }
-        }
-      };
+      // The patch below stamps an annotation, which rewrites the pod template
+      // and rolls the deployment. Callers that re-assert the stored env on
+      // every rebuild would otherwise restart pods a second time for nothing,
+      // so a genuinely unchanged env is a no-op.
+      if (envListsEqual(containers[containerIndex].env ?? [], envList) && !secretChanged) {
+        return {
+          success: true,
+          deployment: cleanName,
+          namespace: cleanNamespace,
+          env: envList,
+          unchanged: true,
+        };
+      }
+
+      // JSON Patch, not strategic merge: a merge patch unions env by name and
+      // can never remove a key. See buildEnvReplacePatch.
+      const patch = buildEnvReplacePatch({
+        containerIndex,
+        env: envList,
+        stamp: new Date().toISOString(),
+        templateMetadata: existing.body.spec?.template?.metadata,
+      });
 
       await appsApi.patchNamespacedDeployment(
         cleanName,
@@ -1117,7 +1133,7 @@ export class K8sWorkloadService {
         undefined,
         undefined,
         {
-          headers: { 'Content-Type': 'application/strategic-merge-patch+json' }
+          headers: { 'Content-Type': 'application/json-patch+json' }
         }
       );
 

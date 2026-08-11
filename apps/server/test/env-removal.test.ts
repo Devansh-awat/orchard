@@ -1,0 +1,373 @@
+import test from 'node:test';
+import assert from 'node:assert/strict';
+import * as k8s from '@kubernetes/client-node';
+import { K8sWorkloadService } from '../src/kubernetes/k8s-workload.service';
+import { buildEnvReplacePatch, ENV_UPDATED_ANNOTATION } from '../src/kubernetes/env-patch';
+
+/**
+ * Removing an env var in Orchard used to update the database and nothing else:
+ * the pod spec was patched with application/strategic-merge-patch+json, and
+ * `containers[].env` merges by name, so the apiserver kept every key the patch
+ * left out. Containers went on serving variables their owner had deleted, and a
+ * rebuild didn't help because it only patches the image.
+ */
+
+const NAMESPACE = 'ysws-demo';
+const NAME = 'demo';
+
+/**
+ * The half of strategic-merge-patch semantics this bug lives in: containers and
+ * env both carry patchMergeKey "name", so the apiserver unions the patch's
+ * entries with the ones already present. Modelled here so that reverting the
+ * fix reproduces the bug instead of merely skipping the assertion.
+ */
+function applyStrategicMerge(doc: any, patch: any): any {
+  const next = structuredClone(doc);
+  const container = patch?.spec?.template?.spec?.containers?.[0];
+  const annotations = patch?.spec?.template?.metadata?.annotations;
+  if (annotations) {
+    const meta = (next.spec.template.metadata ??= {});
+    meta.annotations = { ...(meta.annotations ?? {}), ...annotations };
+  }
+  if (container) {
+    const live = next.spec.template.spec.containers.find((c: any) => c.name === container.name);
+    assert.ok(live, `merge patch named a container that does not exist: ${container.name}`);
+    for (const [key, value] of Object.entries(container)) {
+      if (key === 'name') continue;
+      if (key !== 'env') {
+        live[key] = value;
+        continue;
+      }
+      const merged = new Map((live.env ?? []).map((e: any) => [e.name, e]));
+      for (const entry of value as any[]) merged.set(entry.name, entry);
+      live.env = Array.from(merged.values());
+    }
+  }
+  return next;
+}
+
+/** Minimal RFC 6902 applier — only the ops buildEnvReplacePatch emits. */
+function applyJsonPatch(doc: any, ops: any[]): any {
+  const next = structuredClone(doc);
+  for (const op of ops) {
+    assert.equal(op.op, 'add', `unexpected op ${op.op}`);
+    const segments = op.path.split('/').slice(1).map((s: string) => s.replace(/~1/g, '/').replace(/~0/g, '~'));
+    const leaf = segments.pop()!;
+    let cursor = next;
+    for (const segment of segments) {
+      cursor = Array.isArray(cursor) ? cursor[Number(segment)] : cursor[segment];
+      assert.ok(cursor !== undefined, `path ${op.path} has no parent at ${segment}`);
+    }
+    if (Array.isArray(cursor)) cursor[Number(leaf)] = op.value;
+    else cursor[leaf] = op.value;
+  }
+  return next;
+}
+
+function liveDeployment(env: k8s.V1EnvVar[]): k8s.V1Deployment {
+  return {
+    metadata: { name: NAME, namespace: NAMESPACE },
+    spec: {
+      selector: { matchLabels: { 'app.kubernetes.io/name': NAME } },
+      template: {
+        metadata: { labels: { 'app.kubernetes.io/name': NAME }, annotations: { 'kept/by': 'someone-else' } },
+        spec: { containers: [{ name: NAME, image: 'registry.example/demo:v1', env }] },
+      },
+    },
+  };
+}
+
+/** Stands in for the cluster: records patches and replays them onto the object. */
+function fakeCluster(deployment: k8s.V1Deployment) {
+  const state = { deployment, secrets: new Map<string, Record<string, string>>() };
+  const calls: { body: any; contentType: string }[] = [];
+
+  const appsApi = {
+    async readNamespacedDeployment() {
+      return { body: state.deployment };
+    },
+    async patchNamespacedDeployment(
+      _name: string,
+      _ns: string,
+      body: any,
+      ..._rest: any[]
+    ) {
+      const options = _rest[_rest.length - 1];
+      const contentType = options?.headers?.['Content-Type'] ?? '';
+      calls.push({ body, contentType });
+      if (contentType === 'application/json-patch+json') {
+        state.deployment = applyJsonPatch(state.deployment, body);
+      } else if (contentType === 'application/strategic-merge-patch+json') {
+        state.deployment = applyStrategicMerge(state.deployment, body);
+      } else {
+        assert.fail(`unexpected patch content type: ${contentType}`);
+      }
+      return { body: state.deployment };
+    },
+  };
+
+  const coreApi = {
+    async readNamespacedSecret(name: string) {
+      const stored = state.secrets.get(name);
+      if (!stored) {
+        throw Object.assign(new Error('not found'), { statusCode: 404 });
+      }
+      // The apiserver hands back base64 `data`, never the `stringData` we wrote.
+      const data = Object.fromEntries(
+        Object.entries(stored).map(([k, v]) => [k, Buffer.from(v, 'utf8').toString('base64')]),
+      );
+      return { body: { metadata: { name, resourceVersion: '1' }, data } };
+    },
+    async replaceNamespacedSecret(name: string, _ns: string, body: any) {
+      state.secrets.set(name, body.stringData);
+      return { body };
+    },
+    async createNamespacedSecret(_ns: string, body: any) {
+      state.secrets.set(body.metadata.name, body.stringData);
+      return { body };
+    },
+    async deleteNamespacedSecret(name: string) {
+      if (!state.secrets.delete(name)) {
+        throw Object.assign(new Error('not found'), { statusCode: 404 });
+      }
+      return { body: {} };
+    },
+  };
+
+  const kubernetes = {
+    kc: {
+      makeApiClient(type: any) {
+        return type === k8s.CoreV1Api ? coreApi : appsApi;
+      },
+    },
+    ensureKubeConfig() {},
+  };
+
+  const service = new K8sWorkloadService({} as any, kubernetes as any);
+  return { service, state, calls };
+}
+
+function containerEnv(deployment: k8s.V1Deployment): k8s.V1EnvVar[] {
+  return deployment.spec!.template.spec!.containers[0].env ?? [];
+}
+
+test('a variable removed from the config leaves the pod spec', async () => {
+  const { service, state } = fakeCluster(
+    liveDeployment([
+      { name: 'HOST', value: '0.0.0.0' },
+      { name: 'FORCE_COLOR', value: '1' },
+      { name: 'REVIEW_IDS', value: '42,43' },
+      { name: 'OPENAI_API_KEY', value: 'sk-proj-secret' },
+    ]),
+  );
+
+  await service.updateDeploymentEnv({
+    namespace: NAMESPACE,
+    deploymentName: NAME,
+    env: [{ key: 'JOBS', value: '1' }],
+  });
+
+  const names = containerEnv(state.deployment).map((e) => e.name).sort();
+  assert.deepEqual(names, ['FORCE_COLOR', 'HOST', 'JOBS']);
+  assert.ok(!names.includes('REVIEW_IDS'), 'REVIEW_IDS survived the update');
+  assert.ok(!names.includes('OPENAI_API_KEY'), 'OPENAI_API_KEY survived the update');
+});
+
+test('the env update goes out as a JSON patch, never a strategic merge', async () => {
+  const { service, calls } = fakeCluster(liveDeployment([{ name: 'GONE', value: 'x' }]));
+
+  await service.updateDeploymentEnv({ namespace: NAMESPACE, deploymentName: NAME, env: [] });
+
+  assert.equal(calls.length, 1);
+  assert.equal(calls[0].contentType, 'application/json-patch+json');
+});
+
+test('clearing every variable empties the list instead of leaving it alone', async () => {
+  const { service, state } = fakeCluster(
+    liveDeployment([
+      { name: 'REVIEW_IDS', value: '42' },
+      { name: 'HOST', value: '0.0.0.0' },
+    ]),
+  );
+
+  await service.updateDeploymentEnv({ namespace: NAMESPACE, deploymentName: NAME, env: [] });
+
+  // HOST/FORCE_COLOR are injected defaults, so "empty" means only those.
+  assert.deepEqual(
+    containerEnv(state.deployment).map((e) => e.name).sort(),
+    ['FORCE_COLOR', 'HOST'],
+  );
+});
+
+test('a secret dropped from the config loses both its env entry and its Secret', async () => {
+  const { service, state } = fakeCluster(liveDeployment([]));
+
+  await service.updateDeploymentEnv({
+    namespace: NAMESPACE,
+    deploymentName: NAME,
+    env: [{ key: 'TOKEN', value: 'shhh', secret: true }],
+  });
+  assert.deepEqual(state.secrets.get(`${NAME}-env`), { TOKEN: 'shhh' });
+  assert.ok(
+    containerEnv(state.deployment).some((e) => e.name === 'TOKEN' && e.valueFrom?.secretKeyRef),
+    'secret should be referenced via secretKeyRef, not inline',
+  );
+
+  await service.updateDeploymentEnv({ namespace: NAMESPACE, deploymentName: NAME, env: [] });
+  assert.equal(state.secrets.has(`${NAME}-env`), false, 'stale env Secret was left behind');
+  assert.ok(!containerEnv(state.deployment).some((e) => e.name === 'TOKEN'));
+});
+
+test('values still update in place', async () => {
+  const { service, state } = fakeCluster(liveDeployment([{ name: 'JOBS', value: '1' }]));
+
+  await service.updateDeploymentEnv({
+    namespace: NAMESPACE,
+    deploymentName: NAME,
+    env: [{ key: 'JOBS', value: '2' }],
+  });
+
+  assert.equal(containerEnv(state.deployment).find((e) => e.name === 'JOBS')?.value, '2');
+});
+
+test('re-asserting the same env does not roll the pods', async () => {
+  const { service, calls } = fakeCluster(
+    liveDeployment([
+      { name: 'HOST', value: '0.0.0.0' },
+      { name: 'FORCE_COLOR', value: '1' },
+      { name: 'JOBS', value: '1' },
+    ]),
+  );
+
+  // What a rebuild now does: push the stored config back at the live object.
+  await service.updateDeploymentEnv({
+    namespace: NAMESPACE,
+    deploymentName: NAME,
+    env: [{ key: 'JOBS', value: '1' }],
+  });
+
+  assert.equal(calls.length, 0, 'an unchanged env must not patch the pod template');
+});
+
+test('ordering alone is not a change, but a changed value is', async () => {
+  const { service, calls } = fakeCluster(
+    liveDeployment([
+      { name: 'JOBS', value: '1' },
+      { name: 'FORCE_COLOR', value: '1' },
+      { name: 'HOST', value: '0.0.0.0' },
+    ]),
+  );
+
+  await service.updateDeploymentEnv({
+    namespace: NAMESPACE,
+    deploymentName: NAME,
+    env: [{ key: 'JOBS', value: '1' }],
+  });
+  assert.equal(calls.length, 0, 'reordering is not a change');
+
+  await service.updateDeploymentEnv({
+    namespace: NAMESPACE,
+    deploymentName: NAME,
+    env: [{ key: 'JOBS', value: '2' }],
+  });
+  assert.equal(calls.length, 1, 'a changed value must roll the pods');
+});
+
+test('a rotated secret rolls the pods even though the pod spec is identical', async () => {
+  const { service, calls } = fakeCluster(liveDeployment([]));
+
+  await service.updateDeploymentEnv({
+    namespace: NAMESPACE,
+    deploymentName: NAME,
+    env: [{ key: 'TOKEN', value: 'old', secret: true }],
+  });
+  const afterFirst = calls.length;
+
+  // Same key, same secretKeyRef in the spec — only the Secret's contents move.
+  await service.updateDeploymentEnv({
+    namespace: NAMESPACE,
+    deploymentName: NAME,
+    env: [{ key: 'TOKEN', value: 'rotated', secret: true }],
+  });
+  assert.equal(calls.length, afterFirst + 1, 'a rotated secret must still roll the pods');
+
+  await service.updateDeploymentEnv({
+    namespace: NAMESPACE,
+    deploymentName: NAME,
+    env: [{ key: 'TOKEN', value: 'rotated', secret: true }],
+  });
+  assert.equal(calls.length, afterFirst + 1, 'an unchanged secret must not');
+});
+
+test('env lands on the app container, not on a sidecar that happens to be first', async () => {
+  const deployment = liveDeployment([{ name: 'REVIEW_IDS', value: '42' }]);
+  const app = deployment.spec!.template.spec!.containers[0];
+  deployment.spec!.template.spec!.containers = [
+    { name: 'logging-sidecar', image: 'sidecar:v1', env: [{ name: 'SIDECAR_ONLY', value: 'keep' }] },
+    app,
+  ];
+  const { service, state } = fakeCluster(deployment);
+
+  await service.updateDeploymentEnv({
+    namespace: NAMESPACE,
+    deploymentName: NAME,
+    env: [{ key: 'JOBS', value: '1' }],
+  });
+
+  const containers = state.deployment.spec!.template.spec!.containers;
+  assert.deepEqual(
+    containers[0].env,
+    [{ name: 'SIDECAR_ONLY', value: 'keep' }],
+    'the sidecar env must be left alone',
+  );
+  assert.deepEqual(
+    containers[1].env!.map((e) => e.name).sort(),
+    ['FORCE_COLOR', 'HOST', 'JOBS'],
+  );
+});
+
+test('the rollout annotation is bumped without clobbering the others', () => {
+  const ops = buildEnvReplacePatch({
+    containerIndex: 0,
+    env: [],
+    stamp: '2026-08-11T19:41:56.000Z',
+    templateMetadata: { annotations: { 'kept/by': 'someone-else' } },
+  });
+
+  assert.deepEqual(ops[0], {
+    op: 'add',
+    path: '/spec/template/metadata/annotations',
+    value: { 'kept/by': 'someone-else', [ENV_UPDATED_ANNOTATION]: '2026-08-11T19:41:56.000Z' },
+  });
+});
+
+test('a pod template with no metadata gets one seeded rather than a broken path', () => {
+  const ops = buildEnvReplacePatch({
+    containerIndex: 0,
+    env: [],
+    stamp: 'now',
+    templateMetadata: null,
+  });
+
+  assert.deepEqual(ops[0], {
+    op: 'add',
+    path: '/spec/template/metadata',
+    value: { annotations: { [ENV_UPDATED_ANNOTATION]: 'now' } },
+  });
+});
+
+test('the container env op targets the container by index and replaces the whole list', () => {
+  const ops = buildEnvReplacePatch({
+    containerIndex: 0,
+    env: [{ name: 'A', value: '1' }],
+    stamp: 'now',
+    templateMetadata: {},
+  });
+
+  const envOp = ops.find((o) => o.path.endsWith('/env'));
+  assert.deepEqual(envOp, {
+    op: 'add',
+    path: '/spec/template/spec/containers/0/env',
+    value: [{ name: 'A', value: '1' }],
+  });
+});
