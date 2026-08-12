@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.5.1](https://github.com/LeafdTK/leaf/compare/server/v2.5.0...server/v2.5.1) (2026-08-12)
+
+
+### Bug Fixes
+
+* pod lists serve real containers from mirrored manifests ([5b37f27](https://github.com/LeafdTK/leaf/commit/5b37f277d4c2e9f3b87bfe703973c45e0212a15f))
+
 ## [2.5.0](https://github.com/LeafdTK/leaf/compare/server/v2.4.2...server/v2.5.0) (2026-08-12)
 
 
