@@ -2,7 +2,10 @@ import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrgEventsService } from '../../events/org-events.service';
-import { parseCpu, parseMemory } from '../../kubernetes/quantity';
+import {
+  cpuLimitMilliFromResources,
+  memoryLimitBytesFromResources,
+} from '../../kubernetes/quantity';
 import { MirrorEventType, MirrorRefs } from '../mirror-informer';
 
 const POSITIVE_TTL_MS = 10 * 60 * 1000;
@@ -134,23 +137,18 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
       adopted.push(`image=${image}`);
     }
 
-    const requests = container?.resources?.requests;
-    if (requests?.cpu) {
-      const cpuMilli = parseCpu(String(requests.cpu));
-      if (cpuMilli > 0 && cpuMilli !== row.cpuRequestMilli) {
-        changes.cpuRequestMilli = cpuMilli;
-        adopted.push(`cpu=${cpuMilli}m`);
-      }
+    const cpuMilli = cpuLimitMilliFromResources(container?.resources);
+    if (cpuMilli > 0 && cpuMilli !== row.cpuRequestMilli) {
+      changes.cpuRequestMilli = cpuMilli;
+      adopted.push(`cpu=${cpuMilli}m`);
     }
-    if (requests?.memory) {
-      const memoryBytes = parseMemory(String(requests.memory));
-      if (
-        memoryBytes > 0 &&
-        (row.memoryRequestBytes == null || BigInt(memoryBytes) !== row.memoryRequestBytes)
-      ) {
-        changes.memoryRequestBytes = BigInt(memoryBytes);
-        adopted.push(`memory=${memoryBytes}`);
-      }
+    const memoryBytes = memoryLimitBytesFromResources(container?.resources);
+    if (
+      memoryBytes > 0 &&
+      (row.memoryRequestBytes == null || BigInt(memoryBytes) !== row.memoryRequestBytes)
+    ) {
+      changes.memoryRequestBytes = BigInt(memoryBytes);
+      adopted.push(`memory=${memoryBytes}`);
     }
 
     const strategy = dep.spec?.strategy?.type === 'Recreate' ? 'recreate' : 'rollingUpdate';

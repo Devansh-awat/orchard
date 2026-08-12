@@ -54,6 +54,21 @@ export function cpuRequestFromLimitMilli(limitMilli: number): number {
   return Math.min(limitMilli, Math.max(safeFloor, Math.round(limitMilli * safeRatio)));
 }
 
+interface ResourceQuantities {
+  limits?: { [key: string]: string };
+  requests?: { [key: string]: string };
+}
+
+export function cpuLimitMilliFromResources(resources?: ResourceQuantities | null): number {
+  const raw = resources?.limits?.cpu ?? resources?.requests?.cpu;
+  return raw ? parseCpu(String(raw)) : 0;
+}
+
+export function memoryLimitBytesFromResources(resources?: ResourceQuantities | null): number {
+  const raw = resources?.limits?.memory ?? resources?.requests?.memory;
+  return raw ? parseMemory(String(raw)) : 0;
+}
+
 export function memoryBytesToK8s(bytes: number): string {
   // Prefer Mi if it divides cleanly, else raw bytes.
   if (bytes % (1024 * 1024) === 0) return `${bytes / (1024 * 1024)}Mi`;

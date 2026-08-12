@@ -1,6 +1,18 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { cpuRequestFromLimitMilli, cpuMilliToK8s } from '../src/kubernetes/quantity';
+import {
+  cpuRequestFromLimitMilli,
+  cpuMilliToK8s,
+  cpuLimitMilliFromResources,
+  memoryLimitBytesFromResources,
+} from '../src/kubernetes/quantity';
+
+function render(limitMilli: number) {
+  return {
+    limits: { cpu: cpuMilliToK8s(limitMilli), memory: '1Gi' },
+    requests: { cpu: cpuMilliToK8s(cpuRequestFromLimitMilli(limitMilli)), memory: '1Gi' },
+  };
+}
 
 function withEnv(env: Record<string, string | undefined>, fn: () => void) {
   const saved: Record<string, string | undefined> = {};
@@ -65,6 +77,31 @@ test('nonsense config falls back to the defaults rather than throwing', () => {
       assert.equal(cpuRequestFromLimitMilli(250), 50, `floor=${JSON.stringify(floor)}`);
     });
   }
+});
+
+test('reading back a rendered spec recovers the limit, not the derived request', () => {
+  withEnv(DEFAULTS, () => {
+    for (const limit of [50, 100, 200, 250, 500, 750, 1000, 1500, 4000]) {
+      assert.equal(cpuLimitMilliFromResources(render(limit)), limit, `limit=${limit}`);
+      assert.equal(memoryLimitBytesFromResources(render(limit)), 1024 ** 3);
+    }
+  });
+});
+
+test('repeated render/read-back passes never shrink the workload', () => {
+  withEnv(DEFAULTS, () => {
+    let stored = 1500;
+    for (let pass = 0; pass < 5; pass += 1) stored = cpuLimitMilliFromResources(render(stored));
+    assert.equal(stored, 1500);
+  });
+});
+
+test('reads the request only when a spec carries no limit', () => {
+  assert.equal(cpuLimitMilliFromResources({ requests: { cpu: '250m' } }), 250);
+  assert.equal(memoryLimitBytesFromResources({ requests: { memory: '512Mi' } }), 512 * 1024 ** 2);
+  assert.equal(cpuLimitMilliFromResources({}), 0);
+  assert.equal(cpuLimitMilliFromResources(undefined), 0);
+  assert.equal(memoryLimitBytesFromResources(null), 0);
 });
 
 test('always emits a quantity the apiserver accepts', () => {
