@@ -35,6 +35,7 @@ import { NodesService } from '../nodes/nodes.service';
 import { StorageService } from '../organizations/storage.service';
 import { ApplyQueueService } from '../apply/apply-queue.service';
 import { ApplyExecutorService } from '../apply/apply-executor.service';
+import { computePodStatus } from '../mirror/consumers/pod-mirror.consumer';
 import { formatSlug, scrubIngress } from './projects.utils';
 import { startBuildTrace } from '../analytics/datadog';
 import { createHash, randomUUID } from 'crypto';
@@ -796,10 +797,18 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       },
     });
 
+    const mirroredPods = await this.fetchMirroredPods(deployments.map((d) => d.id));
+    const podsByDeployment = new Map<string, typeof mirroredPods>();
+    for (const pod of mirroredPods) {
+      const bucket = podsByDeployment.get(pod.deploymentId);
+      if (bucket) bucket.push(pod);
+      else podsByDeployment.set(pod.deploymentId, [pod]);
+    }
+
     const deploymentsWithComputedStatus = await Promise.all(
       deployments.map(async (deployment) => {
-        const pods = this.formatStoredPods(deployment.pods);
-        const warnings = this.synthesizePodWarnings(deployment.pods);
+        const pods = podsByDeployment.get(deployment.id) ?? [];
+        const warnings = this.synthesizePodWarnings(pods);
 
         const computedStatus = await this.computeDeploymentStatus(deployment, {
           pods,
@@ -883,11 +892,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       await this.authz.requireProjectView(deployment.projectId, userId);
     }
 
-    const storedPods = await this.prisma.pod.findMany({
-      where: { deploymentId },
-    });
-    const pods = this.formatStoredPods(storedPods);
-    const warnings = this.synthesizePodWarnings(storedPods);
+    const pods = await this.fetchMirroredPods([deploymentId]);
+    const warnings = this.synthesizePodWarnings(pods);
     const totalCpuUsage: number | null = null;
     const totalMemoryUsage: number | null = null;
 
@@ -989,11 +995,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       await this.authz.requireProjectView(deployment.projectId, userId);
     }
 
-    const storedPods = await this.prisma.pod.findMany({
-      where: { deploymentId },
-    });
-
-    return this.formatStoredPods(storedPods);
+    return this.fetchMirroredPods([deploymentId]);
   }
 
   async getDeploymentPodsLive(deploymentId: string, userId?: string) {
@@ -3957,61 +3959,66 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     }
   }
 
-  formatStoredPods(
-    pods: {
-      id: string;
-      name: string;
-      status: string;
-      podIp: string | null;
-      nodeName: string | null;
-      restartCount: number;
-      lastTerminationReason?: string | null;
-      lastExitCode?: number | null;
-      lastTerminatedAt?: Date | null;
-      createdAt: Date;
-    }[] = [],
-  ) {
-    return pods.map((pod) => ({
-      id: pod.id,
-      name: pod.name,
-      status: pod.status,
-      ip: pod.podIp,
-      podIp: pod.podIp,
-      nodeName: pod.nodeName,
-      restartCount: pod.restartCount,
-      startTime: pod.createdAt,
-      createdAt: pod.createdAt,
-      cpuUsage: null,
-      memoryUsage: null,
-      containers: pod.lastTerminationReason
-        ? [
-            {
-              name: pod.name,
-              image: null,
-              ready: pod.status === 'ready',
-              restartCount: pod.restartCount,
-              lastTermination: {
-                reason: pod.lastTerminationReason,
-                exitCode: pod.lastExitCode ?? null,
-                finishedAt: pod.lastTerminatedAt ?? null,
-              },
-            },
-          ]
-        : [],
-    }));
+  async fetchMirroredPods(deploymentIds: string[]) {
+    if (deploymentIds.length === 0) return [];
+    const objects = await this.prisma.k8sObject.findMany({
+      where: { kind: 'Pod', deploymentId: { in: deploymentIds } },
+      select: { deploymentId: true, manifest: true },
+    });
+    return objects.map((o) => {
+      const pod = o.manifest as any;
+      const containerStatuses: any[] = pod.status?.containerStatuses ?? [];
+      const restartCount = containerStatuses.reduce(
+        (sum: number, c: any) => sum + (c.restartCount ?? 0),
+        0,
+      );
+      const createdAt = pod.status?.startTime ?? pod.metadata?.creationTimestamp ?? null;
+      return {
+        deploymentId: o.deploymentId as string,
+        id: pod.metadata?.name,
+        name: pod.metadata?.name,
+        status: computePodStatus(pod),
+        ip: pod.status?.podIP ?? null,
+        podIp: pod.status?.podIP ?? null,
+        nodeName: pod.spec?.nodeName ?? null,
+        restartCount,
+        startTime: createdAt,
+        createdAt,
+        cpuUsage: null,
+        memoryUsage: null,
+        containers: containerStatuses.map((cs: any) => {
+          const term = cs.state?.terminated ?? cs.lastState?.terminated ?? null;
+          return {
+            name: cs.name,
+            image: cs.image ?? null,
+            ready: cs.ready ?? false,
+            restartCount: cs.restartCount ?? 0,
+            lastTermination: term?.reason
+              ? {
+                  reason: term.reason,
+                  exitCode: term.exitCode ?? null,
+                  finishedAt: term.finishedAt ?? null,
+                }
+              : null,
+          };
+        }),
+      };
+    });
   }
 
-  synthesizePodWarnings(
-    pods: { name: string; status: string; lastTerminationReason?: string | null }[],
-  ) {
+  synthesizePodWarnings(pods: { name: string; status: string; containers?: any[] }[]) {
     return pods
       .filter((pod) => pod.status === 'crashing')
-      .map((pod) => ({
-        podName: pod.name,
-        message: pod.lastTerminationReason
-          ? `Back-off restarting failed container (${pod.lastTerminationReason})`
-          : 'Back-off restarting failed container',
-      }));
+      .map((pod) => {
+        const reason = pod.containers?.find((c) => c.lastTermination?.reason)?.lastTermination
+          ?.reason;
+        return {
+          podName: pod.name,
+          message: reason
+            ? `Back-off restarting failed container (${reason})`
+            : 'Back-off restarting failed container',
+        };
+      });
   }
 
   formatLivePods(pods: any[] = []) {
