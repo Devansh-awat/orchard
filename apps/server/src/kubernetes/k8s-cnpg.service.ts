@@ -2016,9 +2016,10 @@ export class K8sCnpgService implements OnApplicationBootstrap {
     };
 
     try {
-      await customApi.getNamespacedCustomObject(
+      const { body: existing } = await customApi.getNamespacedCustomObject(
         this.CNPG_GROUP, this.CNPG_VERSION, namespace, this.CNPG_SCHEDULED_BACKUP_PLURAL, name,
       );
+      (body.metadata as any).resourceVersion = (existing as any).metadata?.resourceVersion;
       await customApi.replaceNamespacedCustomObject(
         this.CNPG_GROUP, this.CNPG_VERSION, namespace, this.CNPG_SCHEDULED_BACKUP_PLURAL, name, body,
       );
