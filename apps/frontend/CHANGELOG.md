@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.5.1](https://github.com/LeafdTK/leaf/compare/frontend/v1.5.0...frontend/v1.5.1) (2026-08-12)
+
+
+### Bug Fixes
+
+* relative timestamps tick in realtime ([7f3859b](https://github.com/LeafdTK/leaf/commit/7f3859b15d5a84073ea62e53f68778b839d7c27d))
+
 ## [1.5.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.4.1...frontend/v1.5.0) (2026-08-12)
 
 

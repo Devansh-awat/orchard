@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.5.2](https://github.com/LeafdTK/leaf/compare/server/v2.5.1...server/v2.5.2) (2026-08-12)
+
+
+### Bug Fixes
+
+* mirror adopts the cpu limit instead of the derived request ([e428cc0](https://github.com/LeafdTK/leaf/commit/e428cc01b5f2586b5fcea4a79350d325fd24d476))
+
 ## [2.5.1](https://github.com/LeafdTK/leaf/compare/server/v2.5.0...server/v2.5.1) (2026-08-12)
 
 
