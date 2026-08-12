@@ -2,6 +2,7 @@ import { Injectable, Logger, OnModuleDestroy } from '@nestjs/common';
 import * as k8s from '@kubernetes/client-node';
 import { PrismaService } from '../../prisma/prisma.service';
 import { OrgEventsService } from '../../events/org-events.service';
+import { parseCpu, parseMemory } from '../../kubernetes/quantity';
 import { MirrorEventType, MirrorRefs } from '../mirror-informer';
 
 const POSITIVE_TTL_MS = 10 * 60 * 1000;
@@ -75,7 +76,7 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
         update: data,
       });
 
-      await this.adoptReplicas(ctx.deploymentId, specReplicas);
+      await this.adoptWorkloadSpec(ctx.deploymentId, dep);
 
       const changed =
         !existing ||
@@ -94,19 +95,76 @@ export class WorkloadMirrorConsumer implements OnModuleDestroy {
     }
   }
 
-  private async adoptReplicas(deploymentId: string, specReplicas: number | null): Promise<void> {
-    if (specReplicas == null) return;
-    const dep = await this.prisma.deployment.findUnique({
+  // Kubernetes is truth: unambiguous spec fields edited outside Orchard
+  // (kubectl scale / set image / resources patch) are adopted into the
+  // deployments row. Env is deliberately excluded — Orchard env carries
+  // ${{shared.*}} references and encrypted secrets that a raw k8s env list
+  // cannot round-trip.
+  private async adoptWorkloadSpec(deploymentId: string, dep: k8s.V1Deployment): Promise<void> {
+    const row = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },
-      select: { replicas: true, buildStatus: true },
+      select: {
+        replicas: true,
+        image: true,
+        cpuRequestMilli: true,
+        memoryRequestBytes: true,
+        deployStrategy: true,
+        buildStatus: true,
+      },
     });
-    if (!dep || dep.replicas === specReplicas) return;
-    if (dep.buildStatus === 'building') return;
+    if (!row || row.buildStatus === 'building') return;
+    const pendingApply = await this.prisma.k8sApplyItem.count({
+      where: { deploymentId, status: { in: ['pending', 'applying'] } },
+    });
+    if (pendingApply > 0) return;
+
+    const changes: Record<string, unknown> = {};
+    const adopted: string[] = [];
+
+    const specReplicas = dep.spec?.replicas;
+    if (specReplicas != null && specReplicas !== row.replicas) {
+      changes.replicas = specReplicas;
+      adopted.push(`replicas=${specReplicas}`);
+    }
+
+    const container = dep.spec?.template?.spec?.containers?.[0];
+    const image = container?.image;
+    if (image && row.image && image !== row.image) {
+      changes.image = image;
+      adopted.push(`image=${image}`);
+    }
+
+    const requests = container?.resources?.requests;
+    if (requests?.cpu) {
+      const cpuMilli = parseCpu(String(requests.cpu));
+      if (cpuMilli > 0 && cpuMilli !== row.cpuRequestMilli) {
+        changes.cpuRequestMilli = cpuMilli;
+        adopted.push(`cpu=${cpuMilli}m`);
+      }
+    }
+    if (requests?.memory) {
+      const memoryBytes = parseMemory(String(requests.memory));
+      if (
+        memoryBytes > 0 &&
+        (row.memoryRequestBytes == null || BigInt(memoryBytes) !== row.memoryRequestBytes)
+      ) {
+        changes.memoryRequestBytes = BigInt(memoryBytes);
+        adopted.push(`memory=${memoryBytes}`);
+      }
+    }
+
+    const strategy = dep.spec?.strategy?.type === 'Recreate' ? 'recreate' : 'rollingUpdate';
+    if (dep.spec?.strategy?.type && strategy !== row.deployStrategy) {
+      changes.deployStrategy = strategy;
+      adopted.push(`strategy=${strategy}`);
+    }
+
+    if (Object.keys(changes).length === 0) return;
     await this.prisma.deployment.update({
       where: { id: deploymentId },
-      data: { replicas: specReplicas },
+      data: changes,
     });
-    this.logger.log(`adopted external scale for ${deploymentId}: replicas=${specReplicas}`);
+    this.logger.log(`adopted external spec for ${deploymentId}: ${adopted.join(', ')}`);
   }
 
   private scheduleEmit(ctx: Ctx, payload: unknown) {
