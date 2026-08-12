@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.5.3](https://github.com/LeafdTK/leaf/compare/server/v2.5.2...server/v2.5.3) (2026-08-12)
+
+
+### Bug Fixes
+
+* backup schedule updates carry the resourceversion ([0276b22](https://github.com/LeafdTK/leaf/commit/0276b22c122f9f7ff0bd4c36944e658ecef22142))
+
 ## [2.5.2](https://github.com/LeafdTK/leaf/compare/server/v2.5.1...server/v2.5.2) (2026-08-12)
 
 
