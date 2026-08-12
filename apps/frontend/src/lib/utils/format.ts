@@ -1,4 +1,5 @@
 import { AnsiUp } from 'ansi_up';
+import { clock } from './clock.svelte';
 
 const ansi = new AnsiUp();
 ansi.use_classes = false;
@@ -18,8 +19,7 @@ export function formatMemory(bytes: number | null | undefined): string {
 }
 
 export function formatRelativeTime(date: Date): string {
-	const now = Date.now();
-	const diffMs = now - date.getTime();
+	const diffMs = clock.now - date.getTime();
 	const diffS = Math.floor(diffMs / 1000);
 	if (diffS < 5) return 'just now';
 	if (diffS < 60) return `${diffS}s ago`;

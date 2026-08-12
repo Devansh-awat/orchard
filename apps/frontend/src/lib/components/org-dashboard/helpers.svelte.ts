@@ -1,5 +1,6 @@
 import { animate } from 'motion';
 import { motionEnabled, motion, transition, springToFloor } from '$lib/utils/motion.svelte';
+import { clock } from '$lib/utils/clock.svelte';
 import { resourceStatus } from '$lib/components/ui';
 import type { StatusKind } from '$lib/components/ui';
 import type { ProjectGroup } from './types';
@@ -39,7 +40,7 @@ export function knownIcon(img?: string): string | null {
 
 export function timeAgo(d?: string): string {
 	if (!d) return '';
-	const s = Math.floor((Date.now() - new Date(d).getTime()) / 1000);
+	const s = Math.floor((clock.now - new Date(d).getTime()) / 1000);
 	if (s < 60) return 'just now';
 	const m = Math.floor(s / 60);
 	if (m < 60) return `${m}m ago`;
