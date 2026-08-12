@@ -31,13 +31,11 @@ chart with dev values.
 
 ## ServiceAccount permissions
 
-The chart references an `orchard-server` ServiceAccount but does not create it
-or its cluster-wide RBAC; provision those out of band. Beyond create/delete on
-the tenant resources it manages, the server's mirror informers need cluster-wide
-`list` + `watch` on: `pods`, `apps/deployments`, `batch/jobs`, `batch/cronjobs`,
-`services`, `networking.k8s.io/ingresses`, `persistentvolumeclaims`, and
-`postgresql.cnpg.io/clusters` + `backups`. Leases for leader election are
-covered by a namespaced Role the chart installs.
+The chart creates the `orchard-server` ServiceAccount plus the ClusterRole its
+mirror informers need (cluster-wide read/watch on pods, deployments, jobs,
+cronjobs, services, ingresses, PVCs and CNPG clusters) and a namespaced Role
+for the leader-election Leases. Per-tenant write access is bootstrapped by the
+server itself when it creates a namespace.
 
 ## DNS
 
