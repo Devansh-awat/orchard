@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.5.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.4.1...frontend/v1.5.0) (2026-08-12)
+
+
+### Features
+
+* reads served from the postgres mirror with live escape hatches ([a2b60b5](https://github.com/LeafdTK/leaf/commit/a2b60b5878933a8c19a5e3bd34b25e8f834c200d))
+* retrying apply queue takes kubernetes writes out of the request path ([6860c1b](https://github.com/LeafdTK/leaf/commit/6860c1b275dffc5776e90d35a55fec6e044af8c4))
+
 ## [1.4.1](https://github.com/LeafdTK/leaf/compare/frontend/v1.4.0...frontend/v1.4.1) (2026-08-08)
 
 

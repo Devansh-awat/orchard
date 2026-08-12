@@ -1,7 +1,16 @@
 <script lang="ts">
 	import { onMount } from 'svelte';
 	import { apiFetch, toasts } from '$lib/stores';
-	import { Button, Badge, Field, Input, Select, Modal, EmptyState, ToggleRow } from '$lib/components/ui';
+	import {
+		Button,
+		Badge,
+		Field,
+		Input,
+		Select,
+		Modal,
+		EmptyState,
+		ToggleRow
+	} from '$lib/components/ui';
 	import { Layers, Plus, Pencil, Trash2, X } from 'lucide-svelte';
 	import UserspaceSchedulingToggle from './UserspaceSchedulingToggle.svelte';
 
@@ -94,7 +103,10 @@
 		fSelectors = fSelectors.filter((_, idx) => idx !== i);
 	}
 	function addToleration() {
-		fTolerations = [...fTolerations, { key: '', operator: 'Exists', value: '', effect: 'NoSchedule' }];
+		fTolerations = [
+			...fTolerations,
+			{ key: '', operator: 'Exists', value: '', effect: 'NoSchedule' }
+		];
 	}
 	function removeToleration(i: number) {
 		fTolerations = fTolerations.filter((_, idx) => idx !== i);
@@ -109,7 +121,12 @@
 					key: s.key.trim(),
 					operator: s.operator,
 					...(needsValues
-						? { values: s.values.split(',').map((v) => v.trim()).filter(Boolean) }
+						? {
+								values: s.values
+									.split(',')
+									.map((v) => v.trim())
+									.filter(Boolean)
+							}
 						: {})
 				};
 			});
@@ -191,15 +208,18 @@
 		</Button>
 	</div>
 	<p class="text-xs text-muted mb-4">
-		A pool maps a friendly name to a node label selector plus tolerations, so a workload assigned
-		to it lands on (and tolerates) the intended nodes.
+		A pool maps a friendly name to a node label selector plus tolerations, so a workload assigned to
+		it lands on (and tolerates) the intended nodes.
 	</p>
 
 	{#if loading}
 		<div class="text-xs text-faint py-6">Loading pools…</div>
 	{:else if pools.length === 0}
 		<div class="rounded-2xl border border-edge">
-			<EmptyState title="No node pools yet" description="Create one to route workloads onto specific nodes.">
+			<EmptyState
+				title="No node pools yet"
+				description="Create one to route workloads onto specific nodes."
+			>
 				{#snippet icon()}<Layers class="h-10 w-10" />{/snippet}
 			</EmptyState>
 		</div>
@@ -223,10 +243,20 @@
 							</div>
 						</div>
 						<div class="flex items-center gap-1 shrink-0">
-							<Button variant="ghost" size="sm" onclick={() => openEdit(pool)} aria-label="Edit pool">
+							<Button
+								variant="ghost"
+								size="sm"
+								onclick={() => openEdit(pool)}
+								aria-label="Edit pool"
+							>
 								<Pencil class="h-4 w-4" />
 							</Button>
-							<Button variant="ghost" size="sm" onclick={() => remove(pool)} aria-label="Delete pool">
+							<Button
+								variant="ghost"
+								size="sm"
+								onclick={() => remove(pool)}
+								aria-label="Delete pool"
+							>
 								<Trash2 class="h-4 w-4" />
 							</Button>
 						</div>
@@ -243,7 +273,12 @@
 			<Input id="pool-name" bind:value={fName} placeholder="Background" class="w-full" />
 		</Field>
 		<Field label="Description" for="pool-desc">
-			<Input id="pool-desc" bind:value={fDescription} placeholder="Old but fast box for background work" class="w-full" />
+			<Input
+				id="pool-desc"
+				bind:value={fDescription}
+				placeholder="Old but fast box for background work"
+				class="w-full"
+			/>
 		</Field>
 		<div class="grid grid-cols-2 gap-3">
 			<Field label="Affinity" for="pool-mode">
@@ -260,7 +295,9 @@
 		<div>
 			<div class="flex items-center justify-between mb-2">
 				<span class="text-xs font-semibold text-fg">Node selector</span>
-				<Button variant="ghost" size="sm" onclick={addSelector}><Plus class="h-3.5 w-3.5" /> Add</Button>
+				<Button variant="ghost" size="sm" onclick={addSelector}
+					><Plus class="h-3.5 w-3.5" /> Add</Button
+				>
 			</div>
 			{#each fSelectors as sel, i (i)}
 				<div class="flex items-center gap-2 mb-2">
@@ -284,13 +321,17 @@
 					</Button>
 				</div>
 			{/each}
-			<p class="text-xs text-faint">Comma-separate multiple values. Labels are set on nodes under Admin -> Nodes.</p>
+			<p class="text-xs text-faint">
+				Comma-separate multiple values. Labels are set on nodes under Admin -> Nodes.
+			</p>
 		</div>
 
 		<div>
 			<div class="flex items-center justify-between mb-2">
 				<span class="text-xs font-semibold text-fg">Tolerations</span>
-				<Button variant="ghost" size="sm" onclick={addToleration}><Plus class="h-3.5 w-3.5" /> Add</Button>
+				<Button variant="ghost" size="sm" onclick={addToleration}
+					><Plus class="h-3.5 w-3.5" /> Add</Button
+				>
 			</div>
 			{#each fTolerations as tol, i (i)}
 				<div class="flex items-center gap-2 mb-2">
@@ -301,7 +342,12 @@
 							<option value="Equal">Equal</option>
 						</Select>
 					</div>
-					<Input bind:value={tol.value} placeholder="background" class="flex-1 min-w-0" disabled={tol.operator !== 'Equal'} />
+					<Input
+						bind:value={tol.value}
+						placeholder="background"
+						class="flex-1 min-w-0"
+						disabled={tol.operator !== 'Equal'}
+					/>
 					<div class="w-40 shrink-0">
 						<Select bind:value={tol.effect}>
 							<option value="">Any effect</option>
@@ -315,7 +361,9 @@
 					</Button>
 				</div>
 			{/each}
-			<p class="text-xs text-faint">A toleration lets pods in this pool land on a matching tainted node.</p>
+			<p class="text-xs text-faint">
+				A toleration lets pods in this pool land on a matching tainted node.
+			</p>
 		</div>
 	</div>
 

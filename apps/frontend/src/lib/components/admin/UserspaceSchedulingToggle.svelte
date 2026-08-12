@@ -34,7 +34,10 @@
 			});
 			if (!res.ok) throw new Error('Failed to save');
 			state = await res.json();
-			toasts.add({ title: next ? 'Userspace scheduling on' : 'Userspace scheduling off', color: 'success' });
+			toasts.add({
+				title: next ? 'Userspace scheduling on' : 'Userspace scheduling off',
+				color: 'success'
+			});
 		} catch (e) {
 			toasts.add({ title: e instanceof Error ? e.message : 'Request failed', color: 'error' });
 		} finally {

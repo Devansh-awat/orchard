@@ -1,5 +1,16 @@
 # Changelog
 
+## [2.5.0](https://github.com/LeafdTK/leaf/compare/server/v2.4.2...server/v2.5.0) (2026-08-12)
+
+
+### Features
+
+* external kubectl spec changes adopted into orchard state ([5e1ab22](https://github.com/LeafdTK/leaf/commit/5e1ab22da67364ab7f21d70aedcd4c0456765432))
+* lease-based leader election with multi-replica sso state and protection proxy guard ([a7e7c8e](https://github.com/LeafdTK/leaf/commit/a7e7c8e7c60775a8f9bd8e9c169ac66b0e750be2))
+* postgres cluster mirror with lease-sharded informers ([2242d46](https://github.com/LeafdTK/leaf/commit/2242d463d9b4ce6ccaee0bdbfe125713ca2f39d0))
+* reads served from the postgres mirror with live escape hatches ([a2b60b5](https://github.com/LeafdTK/leaf/commit/a2b60b5878933a8c19a5e3bd34b25e8f834c200d))
+* retrying apply queue takes kubernetes writes out of the request path ([6860c1b](https://github.com/LeafdTK/leaf/commit/6860c1b275dffc5776e90d35a55fec6e044af8c4))
+
 ## [2.4.2](https://github.com/LeafdTK/leaf/compare/server/v2.4.1...server/v2.4.2) (2026-08-11)
 
 

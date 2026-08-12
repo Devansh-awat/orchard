@@ -207,7 +207,11 @@
 		try {
 			const taints = taintRows
 				.filter((t) => t.key.trim())
-				.map((t) => ({ key: t.key.trim(), value: (t.value ?? '').trim() || null, effect: t.effect }));
+				.map((t) => ({
+					key: t.key.trim(),
+					value: (t.value ?? '').trim() || null,
+					effect: t.effect
+				}));
 			const res = await apiFetch(`/apiv1/admin/nodes/${selectedNode.id}/taints`, {
 				method: 'PATCH',
 				headers: { 'Content-Type': 'application/json' },
@@ -391,22 +395,33 @@
 									<option value="NoExecute">NoExecute</option>
 								</Select>
 							</div>
-							<Button variant="ghost" size="sm" onclick={() => removeTaintRow(i)} aria-label="Remove taint">
+							<Button
+								variant="ghost"
+								size="sm"
+								onclick={() => removeTaintRow(i)}
+								aria-label="Remove taint"
+							>
 								<X class="h-4 w-4" />
 							</Button>
 						</div>
 					{/each}
 				</div>
 				<div class="flex gap-2 mb-6">
-					<Button variant="ghost" size="sm" onclick={addTaintRow}><Plus class="h-4 w-4" /> Add taint</Button>
-					<Button variant="secondary" size="sm" loading={savingTaints} onclick={saveTaints}>Save taints</Button>
+					<Button variant="ghost" size="sm" onclick={addTaintRow}
+						><Plus class="h-4 w-4" /> Add taint</Button
+					>
+					<Button variant="secondary" size="sm" loading={savingTaints} onclick={saveTaints}
+						>Save taints</Button
+					>
 				</div>
 
 				<h3 class="text-sm font-semibold mb-2">Labels</h3>
 				{#if selectedNode.labels && Object.keys(selectedNode.labels).length > 0}
 					<div class="flex flex-wrap gap-1.5 mb-2">
 						{#each Object.entries(selectedNode.labels) as [k, v] (k)}
-							<span class="inline-flex items-center gap-1 rounded-md border border-edge bg-surface px-2 py-0.5 text-xs text-muted">
+							<span
+								class="inline-flex items-center gap-1 rounded-md border border-edge bg-surface px-2 py-0.5 text-xs text-muted"
+							>
 								<span class="font-mono">{k}{v ? `=${v}` : ''}</span>
 								<button
 									type="button"
@@ -424,7 +439,13 @@
 				<div class="flex items-center gap-2 mb-6">
 					<Input bind:value={newLabelKey} placeholder="orchard.io/pool" class="flex-1" />
 					<Input bind:value={newLabelValue} placeholder="background" class="flex-1" />
-					<Button variant="secondary" size="sm" loading={savingLabels} disabled={!newLabelKey.trim()} onclick={addLabel}>
+					<Button
+						variant="secondary"
+						size="sm"
+						loading={savingLabels}
+						disabled={!newLabelKey.trim()}
+						onclick={addLabel}
+					>
 						Add label
 					</Button>
 				</div>

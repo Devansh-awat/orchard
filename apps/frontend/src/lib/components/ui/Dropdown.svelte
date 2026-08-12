@@ -5,7 +5,6 @@
 	import type { DropdownOption } from './dropdown';
 	import { springRotate } from '$lib/utils/motion.svelte';
 
-
 	let {
 		value = $bindable(''),
 		options,
