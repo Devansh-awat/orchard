@@ -4,7 +4,7 @@ import * as crypto from 'crypto';
 import { PrismaService } from '../prisma/prisma.service';
 import { BuildKitPoolService } from './buildkit-pool.service';
 import { OrgEventsService } from '../events/org-events.service';
-import { startPhaseSpan, recordPhaseSpan } from '../analytics/datadog';
+import { startPhaseSpan, recordPhaseSpan, recordBuildOutcome } from '../analytics/datadog';
 import { truncateK8sName } from '../projects/projects.utils';
 import {
   RAILPACK_INFO_MARKER,
@@ -14,6 +14,7 @@ import {
 } from './build-config';
 import { cacheEvictInitContainer } from './cache-evict';
 import { injectBuildArgsScript } from './build-args';
+import { BuildJobInformerService, BuildJobObservation } from './build-job-informer.service';
 
 interface BuildJobOptions {
   repoUrl: string;
@@ -226,6 +227,7 @@ export class ImageBuilderService {
     private readonly prisma: PrismaService,
     private readonly orgEvents: OrgEventsService,
     @Optional() private readonly buildKitPool?: BuildKitPoolService,
+    @Optional() private readonly jobInformer?: BuildJobInformerService,
   ) {
     this.initKubeConfig();
   }
@@ -2559,11 +2561,46 @@ exit $rc`,
     }
   }
 
-  async waitForBuildJob(jobName: string, deploymentId?: string, timeoutMs = 1800000): Promise<BuildJobStatus> {
+  private async resolveVanishedJob(
+    jobName: string,
+    deploymentId: string | undefined,
+    expectedImage: string | null | undefined,
+    reason: string,
+  ): Promise<BuildJobStatus> {
+    if (expectedImage) {
+      const pushed = await this.imageExistsInRegistry(expectedImage);
+      if (pushed === true) {
+        await this.appendLog(
+          deploymentId,
+          `Build job ${jobName} is gone but ${expectedImage} is in the registry; treating the build as successful.`,
+        );
+        return { jobName, status: 'succeeded', imageRef: expectedImage };
+      }
+    }
+    await this.appendLog(
+      deploymentId,
+      `Build job ${jobName} disappeared before reporting a result (${reason}).`,
+      'ERROR',
+    );
+    throw new BadRequestException(
+      `Build failed: the build job disappeared before it reported a result (${reason}). This is an Orchard-side fault, not a problem with your code - retry the build.`,
+    );
+  }
+
+  async waitForBuildJob(
+    jobName: string,
+    deploymentId?: string,
+    timeoutMs = 1800000,
+    opts?: { expectedImage?: string | null },
+  ): Promise<BuildJobStatus> {
     const startTime = Date.now();
     const pollInterval = 3000;
+    const missingGraceMs = 15000;
+    const expectedImage = opts?.expectedImage ?? null;
     let lastLoggedStatus = '';
+    let lastKnownPhase = 'unknown';
     let pollCount = 0;
+    let missingSince: number | null = null;
 
     console.log(`[ImageBuilder] Starting to wait for build job ${jobName} (timeout: ${timeoutMs / 1000}s, deploymentId: ${deploymentId})`);
     await this.seedLogOffsets(jobName, deploymentId);
@@ -2592,6 +2629,56 @@ exit $rc`,
           scheduleSpan.finish({ 'build.schedule_outcome': status.status });
         }
 
+        if (status.status === 'unknown') {
+          const observed = this.jobInformer?.get(jobName) ?? null;
+          if (observed?.phase === 'succeeded' || observed?.phase === 'failed') {
+            lastKnownPhase = observed.phase;
+          }
+          missingSince ??= Date.now();
+          const missingFor = Date.now() - missingSince;
+          if (missingFor >= missingGraceMs) {
+            lastKnownPhase = 'gone';
+            scheduleSpan.finish({ 'build.schedule_outcome': 'gone' });
+            this.clearBuildkitOffset(jobName);
+            this.buildkitPushDetected.delete(jobName);
+            this.buildkitBuildingDetected.delete(jobName);
+            this.jobInformer?.release(jobName);
+            try {
+              const resolved = await this.resolveVanishedJob(
+                jobName,
+                deploymentId,
+                expectedImage ?? observed?.image ?? null,
+                observed?.reason ?? 'not found',
+              );
+              recordBuildOutcome({
+                outcome: 'succeeded',
+                source: 'watch',
+                reason: 'job_missing',
+                deploymentId: deploymentId ?? 'unknown',
+                jobName,
+                durationMs: Date.now() - startTime,
+                lastPhase: 'gone',
+              });
+              return resolved;
+            } catch (vanished) {
+              recordBuildOutcome({
+                outcome: 'failed',
+                source: 'watch',
+                reason: observed?.reason === 'JobDeleted' ? 'job_deleted' : 'job_missing',
+                deploymentId: deploymentId ?? 'unknown',
+                jobName,
+                durationMs: Date.now() - startTime,
+                lastPhase: 'gone',
+                detail: (vanished as Error)?.message,
+              });
+              throw vanished;
+            }
+          }
+        } else {
+          missingSince = null;
+          lastKnownPhase = status.status;
+        }
+
         if (status.status !== lastLoggedStatus) {
           console.log(`[ImageBuilder] Job ${jobName} status changed: ${lastLoggedStatus} -> ${status.status} (poll #${pollCount}, elapsed: ${elapsedSeconds}s)`);
           lastLoggedStatus = status.status;
@@ -2604,6 +2691,15 @@ exit $rc`,
           this.appendLog(deploymentId, `Build job ${jobName} completed successfully`).catch(() => {});
           this.clearBuildkitOffset(jobName);
           this.emitBuildPhaseSpans(jobName, deploymentId).catch(() => {});
+          this.jobInformer?.release(jobName);
+          recordBuildOutcome({
+            outcome: 'succeeded',
+            source: 'watch',
+            deploymentId: deploymentId ?? 'unknown',
+            jobName,
+            durationMs: Date.now() - startTime,
+            lastPhase: 'succeeded',
+          });
           return status;
         }
 
@@ -2623,7 +2719,18 @@ exit $rc`,
           this.buildkitBuildingDetected.delete(jobName);
           await this.emitBuildPhaseSpans(jobName, deploymentId);
 
+          this.jobInformer?.release(jobName);
           const summary = this.summarizeBuildFailure(status.logs, status.pusherLogs);
+          recordBuildOutcome({
+            outcome: 'failed',
+            source: 'watch',
+            reason: 'build_error',
+            deploymentId: deploymentId ?? 'unknown',
+            jobName,
+            durationMs: Date.now() - startTime,
+            lastPhase: 'failed',
+            detail: summary || errorMsg,
+          });
           throw new BadRequestException(
             summary
               ? `Build failed: ${summary}`
@@ -2645,6 +2752,17 @@ exit $rc`,
         if (status.status === 'pending' && status.startupMessage && elapsedSeconds > 60) {
           await this.appendLog(deploymentId, `Build pod could not start: ${status.startupMessage}`, 'ERROR');
           await this.deleteBuildJob(jobName).catch(() => {});
+          this.jobInformer?.release(jobName);
+          recordBuildOutcome({
+            outcome: 'failed',
+            source: 'watch',
+            reason: 'pod_start_failed',
+            deploymentId: deploymentId ?? 'unknown',
+            jobName,
+            durationMs: Date.now() - startTime,
+            lastPhase: 'pending',
+            detail: status.startupMessage,
+          });
           throw new BadRequestException(`Build failed: ${status.startupMessage}`);
         }
 
@@ -2658,6 +2776,17 @@ exit $rc`,
           if (status.schedulingMessage && elapsedSeconds > this.pendingScheduleTimeoutSeconds) {
             await this.appendLog(deploymentId, `Build job could not be scheduled after ${elapsedSeconds}s: ${status.schedulingMessage}`, 'ERROR');
             await this.deleteBuildJob(jobName).catch(() => {});
+            this.jobInformer?.release(jobName);
+            recordBuildOutcome({
+              outcome: 'failed',
+              source: 'watch',
+              reason: 'unschedulable',
+              deploymentId: deploymentId ?? 'unknown',
+              jobName,
+              durationMs: Date.now() - startTime,
+              lastPhase: 'pending',
+              detail: status.schedulingMessage,
+            });
             throw new BadRequestException(
               `Build failed: could not schedule build pod after ${elapsedSeconds}s - ${status.schedulingMessage}`,
             );
@@ -2681,15 +2810,24 @@ exit $rc`,
         await this.appendLog(deploymentId, `Warning: Error checking build status: ${error.message}`, 'WARNING');
       }
 
-      await new Promise(resolve => { setTimeout(resolve, pollInterval); });
+      const terminal = this.jobInformer
+        ? await this.jobInformer.waitForTerminal(jobName, pollInterval)
+        : await new Promise<BuildJobObservation | null>((resolve) => {
+          setTimeout(() => resolve(null), pollInterval);
+        });
+      if (terminal) {
+        console.log(`[ImageBuilder] Job ${jobName} reached ${terminal.phase} via watch after ${Math.floor((Date.now() - startTime) / 1000)}s`);
+      }
     }
 
     const finalElapsed = Math.floor((Date.now() - startTime) / 1000);
     console.error(`[ImageBuilder] Build job ${jobName} timed out after ${finalElapsed}s (${pollCount} polls)`);
     await this.appendLog(deploymentId, `Build job ${jobName} timed out after ${finalElapsed}s`, 'ERROR');
-    
+
+    let finalPhase = lastKnownPhase;
     try {
       const finalStatus = await this.getBuildJobStatus(jobName);
+      finalPhase = finalStatus.status;
       await this.streamBuildkitOutput(deploymentId, jobName, finalStatus.logs);
       await this.streamPusherOutput(deploymentId, jobName, finalStatus.pusherLogs);
       await this.appendLog(deploymentId, `Final status: ${finalStatus.status}`, 'ERROR');
@@ -2700,7 +2838,18 @@ exit $rc`,
     this.clearBuildkitOffset(jobName);
     this.buildkitPushDetected.delete(jobName);
     this.buildkitBuildingDetected.delete(jobName);
+    this.jobInformer?.release(jobName);
     scheduleSpan.finish({ 'build.schedule_outcome': 'timeout' });
+    recordBuildOutcome({
+      outcome: 'timeout',
+      source: 'watch',
+      reason: 'watch_timeout',
+      deploymentId: deploymentId ?? 'unknown',
+      jobName,
+      durationMs: Date.now() - startTime,
+      lastPhase: finalPhase,
+      detail: `timed out after ${finalElapsed}s; last status ${lastLoggedStatus || 'none'}`,
+    });
     throw new BadRequestException(`Build job timed out after ${finalElapsed} seconds (last status: ${lastLoggedStatus})`);
   }
 
@@ -2875,7 +3024,9 @@ exit $rc`,
       const jobName = await this.createBuildJob(options);
       console.log(`[ImageBuilder] Created build job: ${jobName}`);
 
-      await this.waitForBuildJob(jobName, deploymentId);
+      await this.waitForBuildJob(jobName, deploymentId, undefined, {
+        expectedImage: `${this.harborRegistryPull}/${this.harborProject}/${imageName}:${tag}`,
+      });
 
       if (deploymentId && !this.buildkitPushDetected.has(jobName)) {
         this.prisma.$executeRaw`

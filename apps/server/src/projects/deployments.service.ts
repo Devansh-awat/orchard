@@ -6,6 +6,7 @@ import {
   Inject,
   forwardRef,
   Logger,
+  Optional,
   OnModuleInit,
   OnModuleDestroy,
 } from '@nestjs/common';
@@ -17,6 +18,7 @@ import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { snapshotPublicPortState, publicPortKey } from '../kubernetes/port-utils';
 import { UsersService } from '../users/users.service';
 import { DockerService } from '../docker/docker.service';
+import { BuildJobInformerService } from '../docker/build-job-informer.service';
 import { GitHubService } from '../github/github.service';
 import { QuotasService } from '../quotas/quotas.service';
 import { TailscaleService } from '../tailscale/tailscale.service';
@@ -37,7 +39,7 @@ import { StorageService } from '../organizations/storage.service';
 import { ApplyQueueService } from '../apply/apply-queue.service';
 import { ApplyExecutorService } from '../apply/apply-executor.service';
 import { formatSlug, scrubIngress } from './projects.utils';
-import { startBuildTrace } from '../analytics/datadog';
+import { startBuildTrace, recordBuildOutcome } from '../analytics/datadog';
 import { createHash, randomUUID } from 'crypto';
 
 @Injectable()
@@ -47,6 +49,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   private buildReconcileInterval: NodeJS.Timeout | null = null;
 
   private activeRecoveries = new Set<string>();
+
+  private adoptedLogPumps = new Set<string>();
+
+  private unsubscribeBuildJobs: (() => void) | undefined;
 
   constructor(
     private readonly prisma: PrismaService,
@@ -76,6 +82,7 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     private readonly storage: StorageService,
     private readonly applyQueue: ApplyQueueService,
     private readonly applyExecutor: ApplyExecutorService,
+    @Optional() private readonly buildJobInformer?: BuildJobInformerService,
   ) {}
 
   async runQueuedBuild(run: {
@@ -105,6 +112,14 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   onModuleInit() {
     setTimeout(() => this.recoverStuckBuilds(), 5_000);
     this.buildReconcileInterval = setInterval(() => this.recoverStuckBuilds(), 15_000);
+    this.unsubscribeBuildJobs = this.buildJobInformer?.onTerminal((event) => {
+      if (!event.deploymentId) return;
+      this.reconcileBuild(event.deploymentId).catch((error) => {
+        this.logger.warn(
+          `[BuildRecovery] Event-driven reconcile of ${event.deploymentId} failed: ${error.message}`,
+        );
+      });
+    });
     this.applyExecutor.registerHandler('deployment.scale', async (item) => {
       await this.applyScaleToCluster(item.deploymentId!);
     });
@@ -177,6 +192,8 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   }
 
   onModuleDestroy() {
+    this.unsubscribeBuildJobs?.();
+    this.unsubscribeBuildJobs = undefined;
     if (this.buildReconcileInterval) {
       clearInterval(this.buildReconcileInterval);
       this.buildReconcileInterval = null;
@@ -216,6 +233,25 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     } catch (error) {
       this.logger.error(`[BuildRecovery] Recovery scan failed: ${error.message}`);
     }
+  }
+
+  private async reconcileBuild(deploymentId: string) {
+    if (!this.leaderElection.isLeader()) return;
+    const deployment = await this.prisma.deployment.findFirst({
+      where: { id: deploymentId, buildStatus: 'building' },
+      select: {
+        id: true,
+        name: true,
+        namespace: true,
+        image: true,
+        replicas: true,
+        buildStep: true,
+        buildStepTimestamps: true,
+        projectId: true,
+      },
+    });
+    if (!deployment) return;
+    await this.recoverStuckBuild(deployment);
   }
 
   private async recoverStuckBuild(deployment: {
@@ -343,8 +379,18 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       this.activeRecoveries.delete(deployment.id);
     } else if (foundJob.status === 'running' || foundJob.status === 'pending') {
       await this.buildQueue.adoptRun(deployment.id);
-      this.resumeBuildWatch(deployment, foundJob.name, foundJob.image || expectedImage);
+      this.streamAdoptedBuildLogs(deployment.id, foundJob.name);
+      this.activeRecoveries.delete(deployment.id);
     }
+  }
+
+  private streamAdoptedBuildLogs(deploymentId: string, jobName: string) {
+    if (this.adoptedLogPumps.has(deploymentId)) return;
+    this.adoptedLogPumps.add(deploymentId);
+    this.dockerService
+      .waitForBuildJob(jobName, deploymentId)
+      .catch(() => {})
+      .finally(() => this.adoptedLogPumps.delete(deploymentId));
   }
 
   private async isWorkerPodAlive(workerId: string): Promise<boolean | null> {
@@ -452,40 +498,6 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
     });
   }
 
-  private resumeBuildWatch(
-    deployment: { id: string; name: string; namespace: string; image: string | null; replicas: number },
-    jobName: string,
-    expectedImage: string | null,
-  ) {
-    this.logger.log(`[BuildRecovery] Resuming watch for ${deployment.id} (job: ${jobName})`);
-    (async () => {
-      try {
-        const status = await this.dockerService.waitForBuildJob(jobName, deployment.id);
-        if (!status || status.status !== 'succeeded') {
-          await this.markBuildFailed(deployment.id, status?.logs || 'Build failed');
-          return;
-        }
-        let resolvedImage = expectedImage;
-        if (!resolvedImage) {
-          const jobs = await this.dockerService.findBuildJobsForDeployment(deployment.id);
-          resolvedImage = jobs?.find(j => j.name === jobName)?.image || null;
-        }
-        if (!resolvedImage) {
-          await this.markBuildFailed(deployment.id, 'Build succeeded but image path unknown');
-          return;
-        }
-
-        await this.finishRecoveredBuild(deployment, resolvedImage);
-      } catch (error) {
-        await this.markBuildFailed(deployment.id, `Build failed after resume: ${error.message}`).catch(() => {});
-        this.logger.error(`[BuildRecovery] Resumed build failed for ${deployment.id}: ${error.message}`);
-      } finally {
-        this.dockerService.deleteBuildJob(jobName).catch(() => {});
-        this.activeRecoveries.delete(deployment.id);
-      }
-    })();
-  }
-
   // Recovery finalizer companion: conclude the GitHub check run and
   // deployment marker that the dead process left open. The ids live on the
   // BuildRun row (persisted at check creation) precisely so a different
@@ -571,10 +583,24 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
   }
 
   private async markBuildFailed(deploymentId: string, reason: string) {
-    await this.prisma.deployment.update({
-      where: { id: deploymentId },
+    const { count } = await this.prisma.deployment.updateMany({
+      where: { id: deploymentId, buildStatus: { not: 'succeeded' } },
       data: { buildStatus: 'failed', buildStep: 'failed', buildError: reason },
     });
+    if (count === 0) {
+      this.logger.warn(
+        `[BuildRecovery] Refusing to fail ${deploymentId} ("${reason}") - the build already succeeded`,
+      );
+      recordBuildOutcome({
+        outcome: 'failed',
+        source: 'recovery',
+        reason: 'internal',
+        deploymentId,
+        suppressed: true,
+        detail: reason,
+      });
+      return;
+    }
     await this.prisma.$executeRaw`
       UPDATE "deployments"
       SET "build_logs" = COALESCE("build_logs", '') || ${`\n[ERROR] ${reason}\n`}

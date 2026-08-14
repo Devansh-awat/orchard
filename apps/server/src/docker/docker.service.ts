@@ -1473,9 +1473,14 @@ export class DockerService {
     }
   }
 
-  async waitForBuildJob(jobName: string, deploymentId?: string, timeoutMs?: number) {
+  async waitForBuildJob(
+    jobName: string,
+    deploymentId?: string,
+    timeoutMs?: number,
+    opts?: { expectedImage?: string | null },
+  ) {
     if (!this.imageBuilderService) return null;
-    return this.imageBuilderService.waitForBuildJob(jobName, deploymentId, timeoutMs);
+    return this.imageBuilderService.waitForBuildJob(jobName, deploymentId, timeoutMs, opts);
   }
 
   async deleteBuildJob(jobName: string): Promise<void> {

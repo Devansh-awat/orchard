@@ -3,6 +3,7 @@ import { DockerController } from './docker.controller';
 import { DockerService } from './docker.service';
 import { ImageBuilderService } from './image-builder.service';
 import { BuildKitPoolService } from './buildkit-pool.service';
+import { BuildJobInformerService } from './build-job-informer.service';
 import { AuthModule } from '../auth/auth.module';
 import { PrismaModule } from '../prisma/prisma.module';
 import { LeaderElectionService } from '../events/leader-election.service';
@@ -10,8 +11,8 @@ import { LeaderElectionService } from '../events/leader-election.service';
 @Module({
   imports: [AuthModule, PrismaModule],
   controllers: [DockerController],
-  providers: [DockerService, ImageBuilderService, BuildKitPoolService],
-  exports: [DockerService, ImageBuilderService, BuildKitPoolService],
+  providers: [DockerService, ImageBuilderService, BuildKitPoolService, BuildJobInformerService],
+  exports: [DockerService, ImageBuilderService, BuildKitPoolService, BuildJobInformerService],
 })
 export class DockerModule implements OnModuleInit, OnModuleDestroy {
   private reaperInterval: ReturnType<typeof setInterval> | null = null;

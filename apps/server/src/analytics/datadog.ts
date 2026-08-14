@@ -180,6 +180,84 @@ export function recordPhaseSpan(
   } catch { /* telemetry must never break builds */ }
 }
 
+export type BuildOutcomeSource = 'watch' | 'resume' | 'recovery' | 'queue';
+
+export type BuildOutcomeReason =
+  | 'build_error'
+  | 'unschedulable'
+  | 'pod_start_failed'
+  | 'job_missing'
+  | 'job_deleted'
+  | 'watch_timeout'
+  | 'image_unknown'
+  | 'k8s_missing'
+  | 'internal'
+  | 'none';
+
+export function recordBuildOutcome(meta: {
+  outcome: 'succeeded' | 'failed' | 'timeout';
+  source: BuildOutcomeSource;
+  reason?: BuildOutcomeReason;
+  deploymentId: string;
+  deploymentName?: string;
+  projectId?: string;
+  namespace?: string;
+  jobName?: string;
+  buildType?: string;
+  durationMs?: number;
+  lastPhase?: string;
+  suppressed?: boolean;
+  detail?: string;
+}): void {
+  const reason = meta.reason ?? 'none';
+  const lastPhase = meta.lastPhase ?? 'unknown';
+  try {
+    const metricTags = [
+      `outcome:${meta.outcome}`,
+      `source:${meta.source}`,
+      `reason:${reason}`,
+      `last_phase:${lastPhase}`,
+      `build_type:${meta.buildType ?? 'dockerfile'}`,
+      `suppressed:${!!meta.suppressed}`,
+    ];
+    const statsd = (tracer as unknown as { dogstatsd?: {
+      increment(name: string, value?: number, tags?: string[]): void;
+      distribution(name: string, value: number, tags?: string[]): void;
+    } }).dogstatsd;
+    statsd?.increment('orchard.build.outcome', 1, metricTags);
+    if (typeof meta.durationMs === 'number' && Number.isFinite(meta.durationMs)) {
+      statsd?.distribution('orchard.build.duration_ms', meta.durationMs, metricTags);
+    }
+  } catch { /* telemetry must never break builds */ }
+
+  try {
+    const span = tracer.startSpan('build.outcome', {
+      childOf: tracer.scope().active() ?? undefined,
+      tags: {
+        'service.name': 'orchard-builds',
+        'resource.name': `build.outcome.${meta.outcome}`,
+        'build.outcome': meta.outcome,
+        'build.outcome_source': meta.source,
+        'build.outcome_reason': reason,
+        'build.last_phase': lastPhase,
+        'build.suppressed': !!meta.suppressed,
+        'build.deployment_id': meta.deploymentId,
+        'build.deployment_name': meta.deploymentName,
+        'build.project_id': meta.projectId,
+        'build.namespace': meta.namespace,
+        'build.job_name': meta.jobName,
+        'build.type': meta.buildType,
+        'build.duration_ms': meta.durationMs,
+        'build.detail': meta.detail?.slice(0, 4000),
+      },
+    });
+    if (meta.outcome !== 'succeeded' && !meta.suppressed) {
+      span.setTag('error', new Error(meta.detail?.slice(0, 500) || `build ${meta.outcome}: ${reason}`));
+    }
+    span.finish();
+  } catch { /* telemetry must never break builds */ }
+}
+
 /**
  * Attach an exception to the active APM span so Datadog Error Tracking gets
  * the real error type/message/stack instead of a bare HTTP 500. Safe to call
