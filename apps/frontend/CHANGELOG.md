@@ -1,5 +1,17 @@
 # Changelog
 
+## [1.6.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.5.1...frontend/v1.6.0) (2026-08-14)
+
+
+### Features
+
+* public paths skip the domain auth wall ([6b5283b](https://github.com/LeafdTK/leaf/commit/6b5283b24dcd766551a0162576e7e88224490ad6))
+
+
+### Bug Fixes
+
+* marking an env var secret needs tenant secrets rbac ([e6cb59b](https://github.com/LeafdTK/leaf/commit/e6cb59b315ecaa95a923d6631042b7671f6274cc))
+
 ## [1.5.1](https://github.com/LeafdTK/leaf/compare/frontend/v1.5.0...frontend/v1.5.1) (2026-08-12)
 
 

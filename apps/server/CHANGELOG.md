@@ -1,5 +1,18 @@
 # Changelog
 
+## [2.6.0](https://github.com/LeafdTK/leaf/compare/server/v2.5.3...server/v2.6.0) (2026-08-14)
+
+
+### Features
+
+* public paths skip the domain auth wall ([6b5283b](https://github.com/LeafdTK/leaf/commit/6b5283b24dcd766551a0162576e7e88224490ad6))
+
+
+### Bug Fixes
+
+* build job status tracking is level-triggered off a k8s informer ([3a14452](https://github.com/LeafdTK/leaf/commit/3a144524b3212f61019bcac8ade6aa66c93553ef))
+* marking an env var secret needs tenant secrets rbac ([e6cb59b](https://github.com/LeafdTK/leaf/commit/e6cb59b315ecaa95a923d6631042b7671f6274cc))
+
 ## [2.5.3](https://github.com/LeafdTK/leaf/compare/server/v2.5.2...server/v2.5.3) (2026-08-12)
 
 
