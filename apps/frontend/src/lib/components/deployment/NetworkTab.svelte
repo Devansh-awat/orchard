@@ -119,7 +119,12 @@
 		onResetDomainForm: () => void;
 		onGenerateRandomDomain: () => void;
 		onCheckDns?: (domain: string) => Promise<{ valid: boolean; message: string }>;
-		onUpdateProtection?: (ingressId: string, mode: string, password?: string) => void;
+		onUpdateProtection?: (
+			ingressId: string,
+			mode: string,
+			password?: string,
+			bypassPaths?: string[]
+		) => void;
 		protectionUpdatingId?: string | null;
 		toasts: any;
 	} = $props();
@@ -127,6 +132,7 @@
 	let protectionExpandedId = $state<string | null>(null);
 	let protectionMode = $state<string>('none');
 	let protectionPassword = $state('');
+	let protectionBypassPaths = $state('');
 	let copiedBypass = $state(false);
 
 	let domainMode = $state<'orchard' | 'custom'>('orchard');
@@ -198,6 +204,7 @@
 			protectionExpandedId = ingress.id;
 			protectionMode = ingress.protectionMode || 'none';
 			protectionPassword = '';
+			protectionBypassPaths = (ingress.protectionBypassPaths || []).join('\n');
 		}
 	}
 
@@ -205,7 +212,11 @@
 		onUpdateProtection?.(
 			ingressId,
 			protectionMode,
-			protectionMode === 'password' ? protectionPassword : undefined
+			protectionMode === 'password' ? protectionPassword : undefined,
+			protectionBypassPaths
+				.split('\n')
+				.map((line) => line.trim())
+				.filter(Boolean)
 		);
 	}
 
@@ -577,6 +588,23 @@
 											placeholder="Enter password"
 											bind:value={protectionPassword}
 										/>
+									</div>
+								{/if}
+
+								{#if protectionMode !== 'none'}
+									<div class="mt-3">
+										<p class="text-xs mb-1 text-muted">Public paths</p>
+										<textarea
+											class="w-full text-xs rounded px-2 py-1.5 bg-surface text-fg border border-edge font-mono"
+											rows="3"
+											placeholder={'/api\n/webhooks/stripe'}
+											bind:value={protectionBypassPaths}
+										></textarea>
+										<p class="text-xs mt-1 text-muted">
+											One per line. These paths and everything under them skip the login wall, so
+											APIs and webhooks keep working. Matching is on whole segments, so
+											<code>/api</code> covers <code>/api/v1</code> but not <code>/apikeys</code>.
+										</p>
 									</div>
 								{/if}
 

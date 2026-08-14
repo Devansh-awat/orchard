@@ -617,10 +617,21 @@ export class ProjectsController {
   async updateIngressProtection(
     @Param('id') id: string,
     @Param('ingressId') ingressId: string,
-    @Body() body: { mode: 'none' | 'password' | 'orchard'; password?: string },
+    @Body() body: {
+      mode: 'none' | 'password' | 'orchard';
+      password?: string;
+      bypassPaths?: string[];
+    },
     @Request() req,
   ) {
-    return this.ingress.updateIngressProtection(id, ingressId, req.user.sub, body.mode, body.password);
+    return this.ingress.updateIngressProtection(
+      id,
+      ingressId,
+      req.user.sub,
+      body.mode,
+      body.password,
+      body.bypassPaths,
+    );
   }
 
   @Post(':id/deployments')

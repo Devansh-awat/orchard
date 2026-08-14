@@ -16,6 +16,7 @@ import { KubernetesService } from '../kubernetes/kubernetes.service';
 import { K8sNetworkService } from '../kubernetes/k8s-network.service';
 import { UsersService } from '../users/users.service';
 import { AuthorizationService } from '../auth/authorization.service';
+import { normalizeBypassPath } from '../auth/protection.service';
 import { AuditService } from '../audit/audit.service';
 import { ProjectAccessService } from './project-access.service';
 import { DeploymentsService } from './deployments.service';
@@ -1387,6 +1388,9 @@ export class IngressService {
       routes: k8sRoutes,
       basicAuthEnabled: hasBasicAuth,
       protectionMode: ingress.protectionMode,
+      protectionBypassSecret:
+        ingress.protectionMode !== 'none' ? ingress.protectionBypassSecret : null,
+      protectionBypassPaths: ingress.protectionBypassPaths ?? [],
       project: ingress.project,
     };
   }
@@ -2173,6 +2177,7 @@ export class IngressService {
     userId: string,
     mode: IngressProtectionMode,
     password?: string,
+    bypassPaths?: string[],
   ) {
     await this.authz.requireProjectEdit(projectId, userId, 'manage ingress protection');
 
@@ -2204,6 +2209,30 @@ export class IngressService {
     if (!willProtect) {
       protectionBypassSecret = null;
       protectionPasswordHash = null;
+    }
+
+    let normalizedBypassPaths = ingress.protectionBypassPaths;
+    if (bypassPaths !== undefined) {
+      if (!Array.isArray(bypassPaths)) {
+        throw new BadRequestException('Bypass paths must be a list');
+      }
+      if (bypassPaths.length > 20) {
+        throw new BadRequestException('At most 20 bypass paths are allowed');
+      }
+      const seen = new Set<string>();
+      for (const raw of bypassPaths) {
+        const normalized = normalizeBypassPath(raw);
+        if (!normalized) {
+          throw new BadRequestException(
+            `Invalid bypass path: ${String(raw)}. Paths must start with / and cannot be / itself.`,
+          );
+        }
+        seen.add(normalized);
+      }
+      normalizedBypassPaths = Array.from(seen);
+    }
+    if (!willProtect) {
+      normalizedBypassPaths = [];
     }
 
     if (wasProtected && !willProtect) {
@@ -2245,6 +2274,7 @@ export class IngressService {
         protectionMode: mode,
         protectionPasswordHash,
         protectionBypassSecret,
+        protectionBypassPaths: normalizedBypassPaths,
         annotations: annotations as Prisma.JsonObject,
       },
     });
@@ -2263,6 +2293,7 @@ export class IngressService {
     return {
       protectionMode: mode,
       protectionBypassSecret: willProtect ? protectionBypassSecret : null,
+      protectionBypassPaths: normalizedBypassPaths,
     };
   }
 

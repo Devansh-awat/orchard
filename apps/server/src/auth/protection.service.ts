@@ -21,11 +21,54 @@ interface CachedIngress {
   protectionMode: string;
   protectionPasswordHash: string | null;
   protectionBypassSecret: string | null;
+  protectionBypassPaths: string[];
   project: { organizationId: string; name: string };
   host: string;
   upstreamHost: string | null;
   upstreamPort: number | null;
   expiresAt: number;
+}
+
+export function normalizeRequestPath(originalUrl: string): string {
+  const withoutQuery = (originalUrl || '/').split('?')[0].split('#')[0];
+  let decoded = withoutQuery;
+  try {
+    decoded = decodeURIComponent(withoutQuery);
+  } catch {
+    decoded = withoutQuery;
+  }
+  const segments: string[] = [];
+  for (const segment of decoded.split('/')) {
+    if (!segment || segment === '.') continue;
+    if (segment === '..') {
+      segments.pop();
+      continue;
+    }
+    segments.push(segment);
+  }
+  return `/${segments.join('/')}`;
+}
+
+export function normalizeBypassPath(input: string): string | null {
+  if (typeof input !== 'string') return null;
+  let value = input.trim();
+  if (!value) return null;
+  if (/\s/.test(value)) return null;
+  if (value.length > 200) return null;
+  value = value.replace(/\*+$/, '');
+  if (!value.startsWith('/')) return null;
+  const normalized = normalizeRequestPath(value);
+  return normalized === '/' ? null : normalized;
+}
+
+export function pathMatchesBypass(requestPath: string, patterns: string[]): boolean {
+  if (!patterns?.length) return false;
+  for (const pattern of patterns) {
+    if (!pattern || pattern === '/') continue;
+    if (requestPath === pattern) return true;
+    if (requestPath.startsWith(`${pattern}/`)) return true;
+  }
+  return false;
 }
 
 @Injectable()
@@ -66,6 +109,7 @@ export class ProtectionService {
         protectionMode: true,
         protectionPasswordHash: true,
         protectionBypassSecret: true,
+        protectionBypassPaths: true,
         host: true,
         project: { select: { organizationId: true, name: true } },
         service: { select: { name: true, port: true } },
@@ -100,6 +144,10 @@ export class ProtectionService {
     // decided we know nothing about, with no credentials checked, whenever a
     // row disappears between the two lookups.
     if (!ingress) return { allow: false, status: 404 };
+
+    if (pathMatchesBypass(normalizeRequestPath(originalPath), ingress.protectionBypassPaths)) {
+      return { allow: true };
+    }
 
     if (bypassHeader && ingress.protectionBypassSecret) {
       const a = Buffer.from(bypassHeader);
@@ -295,9 +343,12 @@ export class ProtectionService {
       socket.destroy();
     };
 
-    let allowed = false;
+    let allowed = pathMatchesBypass(
+      normalizeRequestPath(req.url || '/'),
+      ingress.protectionBypassPaths,
+    );
     const bypassHeader = req.headers['x-orchard-protection-bypass']?.toString();
-    if (bypassHeader && ingress.protectionBypassSecret) {
+    if (!allowed && bypassHeader && ingress.protectionBypassSecret) {
       const a = Buffer.from(bypassHeader);
       const b = Buffer.from(ingress.protectionBypassSecret);
       allowed = a.length === b.length && crypto.timingSafeEqual(a, b);
