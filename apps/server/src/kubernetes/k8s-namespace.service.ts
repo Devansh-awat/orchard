@@ -257,6 +257,11 @@ export class K8sNamespaceService {
       };
     } catch (error) {
       if (error.response?.statusCode === 409) {
+        try {
+          await this.bootstrapTenantSecretsRbac(cleanNamespace);
+        } catch (rbacErr) {
+          console.error(`[K8s] Failed to bootstrap tenant secrets RBAC for ${cleanNamespace}:`, rbacErr);
+        }
         return {
           success: true,
           namespace: cleanNamespace,

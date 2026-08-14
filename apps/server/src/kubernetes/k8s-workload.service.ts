@@ -10,6 +10,7 @@ import {
   DeploymentPortInput,
   UpdateDeploymentEnvOptions, buildPlacement
 } from './kubernetes.service';
+import { K8sNamespaceService } from './k8s-namespace.service';
 import {
   sanitizePortEntries,
   mapServicePorts,
@@ -67,6 +68,7 @@ export class K8sWorkloadService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly kubernetes: KubernetesService,
+    private readonly namespaces: K8sNamespaceService,
   ) {}
 
   private get kc(): k8s.KubeConfig | null {
@@ -1043,6 +1045,26 @@ export class K8sWorkloadService {
       type: 'Opaque',
       stringData: secretData,
     };
+    try {
+      return await this.writeEnvSecret(coreApi, namespace, name, body, secretData);
+    } catch (err: any) {
+      const code = err?.statusCode ?? err?.response?.statusCode;
+      if (code !== 403) throw err;
+      this.logger.warn(
+        `[K8s] Namespace ${namespace} is missing the tenant secrets Role; bootstrapping it and retrying`,
+      );
+      await this.namespaces.bootstrapTenantSecretsRbac(namespace);
+      return this.writeEnvSecret(coreApi, namespace, name, body, secretData);
+    }
+  }
+
+  private async writeEnvSecret(
+    coreApi: k8s.CoreV1Api,
+    namespace: string,
+    name: string,
+    body: k8s.V1Secret,
+    secretData: Record<string, string>,
+  ): Promise<boolean> {
     try {
       const existing = await coreApi.readNamespacedSecret(name, namespace);
       body.metadata!.resourceVersion = existing.body.metadata?.resourceVersion;

@@ -1462,7 +1462,8 @@
 				body: JSON.stringify({ env: filteredEnv })
 			});
 			if (!response.ok) {
-				throw new Error('Failed to update environment variables');
+				const data = await response.json().catch(() => ({}));
+				throw new Error(data.message || 'Failed to update environment variables');
 			}
 			toasts.add({
 				title: 'Environment updated',
@@ -1531,7 +1532,12 @@
 		}
 	}
 
-	async function updateProtection(ingressId: string, mode: string, password?: string) {
+	async function updateProtection(
+		ingressId: string,
+		mode: string,
+		password?: string,
+		bypassPaths?: string[]
+	) {
 		if (!deployment?.project?.id) return;
 		protectionUpdatingId = ingressId;
 		try {
@@ -1540,7 +1546,7 @@
 				{
 					method: 'PUT',
 					headers: { 'Content-Type': 'application/json' },
-					body: JSON.stringify({ mode, password })
+					body: JSON.stringify({ mode, password, bypassPaths })
 				}
 			);
 			if (!response.ok) {
