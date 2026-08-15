@@ -7,8 +7,11 @@ import { NotificationDeliveryService } from './notification-delivery.service';
 import { assertSafeWebhookUrl } from './webhook-guard';
 import { NOTIFICATION_CHANNEL_TYPES, NotificationMessage } from './notification-events';
 import { replayKey } from './dedupe-keys';
+import type { ResolvedScope } from './notification-scope';
+import { ownsChannel, scopeChain } from './notification-scope';
 
 const MAX_CHANNELS_PER_ORG = 20;
+const MAX_CHANNELS_PER_SCOPE = 5;
 const MAX_EMAIL_RECIPIENTS = 10;
 const EMAIL_REGEX = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 const MAX_REPLAY_HOURS = 72;
@@ -19,6 +22,8 @@ export interface ChannelInput {
   type?: string;
   config?: { url?: string; recipients?: string[] };
   enabled?: boolean;
+  scopeType?: string;
+  scopeId?: string | null;
 }
 
 interface Actor {
@@ -59,29 +64,98 @@ export class NotificationChannelsService {
         _count: { select: { rules: true } },
       },
     });
+    const labels = await this.scopeLabels(channels);
     return channels.map(({ deliveries, _count, ...ch }) => ({
       ...sanitizeChannel(ch),
       ruleCount: _count.rules,
       health: healthOf(ch),
       lastDelivery: deliveries[0] ?? null,
+      scopeLabel: labels.get(`${ch.scopeType}:${ch.scopeId ?? ''}`) ?? null,
     }));
   }
 
-  async createChannel(organizationId: string, input: ChannelInput, actor: Actor) {
-    const existing = await this.prisma.notificationChannel.count({ where: { organizationId } });
-    if (existing >= MAX_CHANNELS_PER_ORG) {
-      throw new BadRequestException(
-        `Organizations are limited to ${MAX_CHANNELS_PER_ORG} notification channels`,
-      );
+  // Org admins see every destination the org sends to, including the ones an
+  // app owns, so each one says where it lives. A label can be missing: nothing
+  // deletes a destination when the resource it was scoped to goes away.
+  private async scopeLabels(rows: { scopeType: string; scopeId: string | null }[]) {
+    const idsByType = new Map<string, string[]>();
+    for (const row of rows) {
+      if (row.scopeType === 'org' || !row.scopeId) continue;
+      idsByType.set(row.scopeType, [...(idsByType.get(row.scopeType) ?? []), row.scopeId]);
     }
-    const data = await this.validateInput(organizationId, input, { isCreate: true });
+    const finders: Record<string, (ids: string[]) => Promise<{ id: string; name: string; displayName?: string | null }[]>> = {
+      project: (ids) => this.prisma.project.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
+      deployment: (ids) =>
+        this.prisma.deployment.findMany({
+          where: { id: { in: ids } },
+          select: { id: true, name: true, displayName: true },
+        }),
+      database: (ids) => this.prisma.database.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
+      job: (ids) => this.prisma.job.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } }),
+    };
+    const labels = new Map<string, string>();
+    for (const [scopeType, ids] of idsByType) {
+      const found = await finders[scopeType]?.(ids);
+      for (const row of found ?? []) {
+        labels.set(`${scopeType}:${row.id}`, row.displayName || row.name);
+      }
+    }
+    return labels;
+  }
+
+  // What a scope may route to: its own destinations plus everything it inherits
+  // from the project and the org. Deliberately thinner than listChannels, since
+  // anyone who can read the scope sees this and a webhook URL preview is not
+  // theirs to read.
+  async listChannelsForScope(organizationId: string, scope: ResolvedScope) {
+    const channels = await this.prisma.notificationChannel.findMany({
+      where: {
+        organizationId,
+        OR: scopeChain(scope).map((link) => ({ scopeType: link.scopeType, scopeId: link.scopeId })),
+      },
+      orderBy: { createdAt: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        type: true,
+        enabled: true,
+        scopeType: true,
+        scopeId: true,
+        autoDisabledAt: true,
+        circuitOpenUntil: true,
+        consecutiveFailures: true,
+        lastErrorAt: true,
+      },
+    });
+    return channels.map(({ autoDisabledAt, circuitOpenUntil, consecutiveFailures, lastErrorAt, ...ch }) => ({
+      ...ch,
+      own: ownsChannel(scope, ch),
+      health: healthOf({
+        enabled: ch.enabled,
+        autoDisabledAt,
+        circuitOpenUntil,
+        consecutiveFailures,
+        lastErrorAt,
+      }),
+    }));
+  }
+
+  async createChannel(organizationId: string, input: ChannelInput, actor: Actor, scope: ResolvedScope) {
+    await this.assertRoom(organizationId, scope);
+    const data = await this.validateInput(organizationId, input, scope, { isCreate: true });
     let webhookSecret: string | undefined;
     if (input.type === 'webhook') {
       webhookSecret = randomBytes(24).toString('hex');
       (data.config as ChannelConfig).secret = webhookSecret;
     }
     const channel = await this.prisma.notificationChannel.create({
-      data: { organizationId, ...data } as any,
+      data: {
+        organizationId,
+        scopeType: scope.scopeType,
+        scopeId: scope.scopeId,
+        createdById: actor.id,
+        ...data,
+      } as any,
     });
     void this.audit.log({
       action: 'notification_channel.created',
@@ -91,12 +165,52 @@ export class NotificationChannelsService {
       targetType: 'notification_channel',
       targetId: channel.id,
       targetLabel: channel.name,
-      metadata: { type: channel.type },
+      metadata: { type: channel.type, scopeType: scope.scopeType, scopeId: scope.scopeId },
     });
     return { ...sanitizeChannel(channel), ...(webhookSecret ? { webhookSecret } : {}) };
   }
 
-  async updateChannel(organizationId: string, channelId: string, input: ChannelInput, actor: Actor) {
+  // Org-wide destinations share one allowance, and every narrower scope gets its
+  // own small one, so a busy project cannot eat the org's budget and no one can
+  // deny the rest of the org a destination by filling the table.
+  private async assertRoom(organizationId: string, scope: ResolvedScope) {
+    if (scope.scopeType === 'org') {
+      const existing = await this.prisma.notificationChannel.count({
+        where: { organizationId, scopeType: 'org' },
+      });
+      if (existing >= MAX_CHANNELS_PER_ORG) {
+        throw new BadRequestException(
+          `Organizations are limited to ${MAX_CHANNELS_PER_ORG} notification channels`,
+        );
+      }
+      return;
+    }
+    const existing = await this.prisma.notificationChannel.count({
+      where: { organizationId, scopeType: scope.scopeType, scopeId: scope.scopeId },
+    });
+    if (existing >= MAX_CHANNELS_PER_SCOPE) {
+      throw new BadRequestException(
+        `A ${scope.scopeType} is limited to ${MAX_CHANNELS_PER_SCOPE} notification channels`,
+      );
+    }
+  }
+
+  async findChannelScope(organizationId: string, channelId: string) {
+    const channel = await this.prisma.notificationChannel.findFirst({
+      where: { id: channelId, organizationId },
+      select: { id: true, scopeType: true, scopeId: true },
+    });
+    if (!channel) throw new NotFoundException('Notification channel not found');
+    return channel;
+  }
+
+  async updateChannel(
+    organizationId: string,
+    channelId: string,
+    input: ChannelInput,
+    actor: Actor,
+    scope: ResolvedScope,
+  ) {
     const existing = await this.prisma.notificationChannel.findFirst({
       where: { id: channelId, organizationId },
     });
@@ -104,6 +218,7 @@ export class NotificationChannelsService {
     const data = await this.validateInput(
       organizationId,
       { ...input, type: existing.type },
+      scope,
       { isCreate: false, existingConfig: (existing.config ?? {}) as ChannelConfig },
     );
     // Re-enabling by hand is the operator saying the endpoint is fixed, so give
@@ -274,6 +389,7 @@ export class NotificationChannelsService {
   private async validateInput(
     organizationId: string,
     input: ChannelInput,
+    scope: ResolvedScope,
     opts: { isCreate: boolean; existingConfig?: ChannelConfig },
   ) {
     const { isCreate, existingConfig } = opts;
@@ -306,11 +422,13 @@ export class NotificationChannelsService {
         }
         const bad = recipients.filter((r) => !EMAIL_REGEX.test(r));
         if (bad.length > 0) throw new BadRequestException(`Invalid emails: ${bad.join(', ')}`);
-        const memberEmails = await this.memberEmails(organizationId);
-        const outside = recipients.filter((r) => !memberEmails.has(r));
+        const allowed = await this.allowedRecipients(organizationId, scope);
+        const outside = recipients.filter((r) => !allowed.has(r));
         if (outside.length > 0) {
+          const audience =
+            scope.scopeType === 'org' ? 'this organization' : `the ${scope.scopeType}'s project`;
           throw new BadRequestException(
-            `Recipients must be members of this organization: ${outside.join(', ')}`,
+            `Recipients must be members of ${audience}: ${outside.join(', ')}`,
           );
         }
         out.config = { recipients };
@@ -334,12 +452,34 @@ export class NotificationChannelsService {
     return out;
   }
 
-  private async memberEmails(organizationId: string): Promise<Set<string>> {
-    const members = await this.prisma.organizationMember.findMany({
-      where: { organizationId },
-      select: { user: { select: { email: true } } },
+  // An org-wide destination may mail anyone in the org. One owned by a project
+  // may only mail that project's people, so admining a single app is not a way
+  // to put yourself in front of every inbox in the organization.
+  private async allowedRecipients(
+    organizationId: string,
+    scope: ResolvedScope,
+  ): Promise<Set<string>> {
+    if (scope.scopeType === 'org' || !scope.projectId) {
+      const members = await this.prisma.organizationMember.findMany({
+        where: { organizationId },
+        select: { user: { select: { email: true } } },
+      });
+      return new Set(members.map((m) => m.user.email?.toLowerCase()).filter(Boolean) as string[]);
+    }
+    const project = await this.prisma.project.findFirst({
+      where: { id: scope.projectId, organizationId },
+      select: {
+        owner: { select: { email: true } },
+        creator: { select: { email: true } },
+        members: { select: { user: { select: { email: true } } } },
+      },
     });
-    return new Set(members.map((m) => m.user.email?.toLowerCase()).filter(Boolean) as string[]);
+    const emails = [
+      project?.owner?.email,
+      project?.creator?.email,
+      ...(project?.members ?? []).map((m) => m.user.email),
+    ];
+    return new Set(emails.filter(Boolean).map((e) => (e as string).toLowerCase()));
   }
 }
 

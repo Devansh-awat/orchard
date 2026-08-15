@@ -11,9 +11,29 @@ import {
   eventsForScopeType,
 } from '../src/notifications/notification-events';
 import { backupKey, deployKey, jobRunKey, podKey } from '../src/notifications/dedupe-keys';
+import type { ResolvedScope } from '../src/notifications/notification-scope';
+import {
+  isChannelVisibleAt,
+  ownsChannel,
+  scopeChain,
+} from '../src/notifications/notification-scope';
 import { readFile } from 'node:fs/promises';
 
 const DEPLOY = 'deploy.failed';
+
+const ORG_SCOPE: ResolvedScope = { scopeType: 'org', scopeId: null, projectId: null, label: 'org' };
+const PROJECT_SCOPE: ResolvedScope = {
+  scopeType: 'project',
+  scopeId: 'p1',
+  projectId: 'p1',
+  label: 'project',
+};
+const DEPLOYMENT_SCOPE: ResolvedScope = {
+  scopeType: 'deployment',
+  scopeId: 'd1',
+  projectId: 'p1',
+  label: 'app',
+};
 
 test('an org rule delivers to its channel', () => {
   const channels = resolveRuleLane(
@@ -196,5 +216,89 @@ test('fanout only ever delivers to destinations that are enabled', async () => {
     src,
     /userNotificationDestination\.findMany\(\{\s*where:\s*\{\s*userId:\s*\{\s*in:\s*wanted\s*\},\s*enabled:\s*true\s*\}/,
     'the personal lane must filter on enabled: true',
+  );
+});
+
+// Scoped destinations. An app admin can now create the webhook their app sends
+// to, so the tests below pin the two things that keeps honest: what a scope may
+// route to, and what it may edit.
+test('a scope inherits from the org and its project, outermost first', () => {
+  assert.deepEqual(scopeChain(ORG_SCOPE), [{ scopeType: 'org', scopeId: null }]);
+  assert.deepEqual(scopeChain(PROJECT_SCOPE), [
+    { scopeType: 'org', scopeId: null },
+    { scopeType: 'project', scopeId: 'p1' },
+  ]);
+  assert.deepEqual(scopeChain(DEPLOYMENT_SCOPE), [
+    { scopeType: 'org', scopeId: null },
+    { scopeType: 'project', scopeId: 'p1' },
+    { scopeType: 'deployment', scopeId: 'd1' },
+  ]);
+});
+
+test('an app can route to the org and project destinations it inherits', () => {
+  assert.ok(isChannelVisibleAt(DEPLOYMENT_SCOPE, { scopeType: 'org', scopeId: null }));
+  assert.ok(isChannelVisibleAt(DEPLOYMENT_SCOPE, { scopeType: 'project', scopeId: 'p1' }));
+  assert.ok(isChannelVisibleAt(DEPLOYMENT_SCOPE, { scopeType: 'deployment', scopeId: 'd1' }));
+});
+
+test("an app cannot route to another app's private destination", () => {
+  assert.ok(!isChannelVisibleAt(DEPLOYMENT_SCOPE, { scopeType: 'deployment', scopeId: 'd2' }));
+  assert.ok(!isChannelVisibleAt(DEPLOYMENT_SCOPE, { scopeType: 'project', scopeId: 'p2' }));
+  // Ownership does not flow upwards: the project is not entitled to what one of
+  // its deployments made, or the org-wide picker would fill with app webhooks.
+  assert.ok(!isChannelVisibleAt(PROJECT_SCOPE, { scopeType: 'deployment', scopeId: 'd1' }));
+  assert.ok(!isChannelVisibleAt(ORG_SCOPE, { scopeType: 'project', scopeId: 'p1' }));
+});
+
+test('only the owning scope may edit a destination', () => {
+  assert.ok(ownsChannel(DEPLOYMENT_SCOPE, { scopeType: 'deployment', scopeId: 'd1' }));
+  assert.ok(!ownsChannel(DEPLOYMENT_SCOPE, { scopeType: 'org', scopeId: null }));
+  assert.ok(!ownsChannel(DEPLOYMENT_SCOPE, { scopeType: 'project', scopeId: 'p1' }));
+  assert.ok(ownsChannel(ORG_SCOPE, { scopeType: 'org', scopeId: null }));
+});
+
+test('a rule may not point at a destination its scope cannot see', async () => {
+  const src = await readFile(
+    new URL('../src/notifications/notification-rules.service.ts', import.meta.url),
+    'utf8',
+  );
+  assert.match(
+    src,
+    /if \(!isChannelVisibleAt\(scope, channel\)\) \{\s*throw new NotFoundException/,
+    'createRule must reject a channel that is not visible at the rule scope',
+  );
+});
+
+test('the scoped destination list never hands out a webhook url', async () => {
+  const src = await readFile(
+    new URL('../src/notifications/notification-channels.service.ts', import.meta.url),
+    'utf8',
+  );
+  const method = src.slice(src.indexOf('async listChannelsForScope'));
+  const body = method.slice(0, method.indexOf('\n  async ', 1));
+  assert.ok(!/config/.test(body), 'listChannelsForScope must not select or return channel config');
+});
+
+test('writing to a destination is gated by the scope that owns it', async () => {
+  const src = await readFile(
+    new URL('../src/notifications/notification-channels.controller.ts', import.meta.url),
+    'utf8',
+  );
+  for (const handler of ['updateChannel', 'deleteChannel', 'testChannel', 'replayChannel', 'listDeliveries']) {
+    const rest = src.slice(src.indexOf(`async ${handler}(`));
+    const end = rest.indexOf('\n  @');
+    const body = end === -1 ? rest : rest.slice(0, end);
+    assert.ok(body.length > 0 && body.length < 1200, `could not isolate ${handler}`);
+    assert.match(
+      body,
+      /requireChannelScope\(/,
+      `${handler} must authorize against the channel's own scope`,
+    );
+    assert.ok(!/requireAdmin\(/.test(body), `${handler} must not fall back to an org-wide admin check`);
+  }
+  assert.match(
+    src.slice(src.indexOf('async createChannel(')),
+    /assertCanEditScope\(organizationId, scope, user\)/,
+    'creating a destination must check admin on the scope it is being attached to',
   );
 });

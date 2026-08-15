@@ -35,6 +35,15 @@ export class NotificationsService {
     private readonly fanout: NotificationFanoutService,
   ) {}
 
+  // scopeId is not a foreign key, so nothing here goes when the resource does.
+  // That mattered little for rules, which simply stop matching, but a
+  // destination owned by a deleted app would sit on a webhook URL forever.
+  async purgeScope(scopeType: string, scopeId: string) {
+    await this.prisma.notificationRule.deleteMany({ where: { scopeType, scopeId } });
+    await this.prisma.notificationChannel.deleteMany({ where: { scopeType, scopeId } });
+    await this.prisma.userNotificationSetting.deleteMany({ where: { scopeType, scopeId } });
+  }
+
   async notifyDeploy(deploymentId: string, status: 'succeeded' | 'failed') {
     const dep = await this.prisma.deployment.findUnique({
       where: { id: deploymentId },

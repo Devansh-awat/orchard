@@ -9,6 +9,7 @@ import { Prisma } from '@prisma/client';
 import { PrismaService } from '../prisma/prisma.service';
 import { OrgEventsService } from '../events/org-events.service';
 import { SCRIPT_RUNTIMES, ScriptRuntime } from './script-runtimes';
+import { NotificationsService } from '../notifications/notifications.service';
 
 export const JOB_STEP_TYPES = ['app', 'image', 'script'] as const;
 export type JobStepType = (typeof JOB_STEP_TYPES)[number];
@@ -101,6 +102,7 @@ export class JobsService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly orgEvents: OrgEventsService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   async getJobOrThrow(jobId: string) {
@@ -308,6 +310,9 @@ export class JobsService {
   async deleteJob(jobId: string) {
     const job = await this.getJobOrThrow(jobId);
     await this.prisma.job.delete({ where: { id: jobId } });
+    this.notifications
+      .purgeScope('job', jobId)
+      .catch((err) => console.error(`[Jobs] Failed to purge notification scope for ${jobId}:`, err));
     this.emitJobChanged(job.project.organizationId, jobId, job.projectId);
     return job;
   }

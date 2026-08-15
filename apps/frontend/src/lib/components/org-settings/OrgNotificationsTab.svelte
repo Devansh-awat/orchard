@@ -1,23 +1,9 @@
 <script lang="ts">
-	import {
-		Check,
-		Copy,
-		History,
-		Loader2,
-		Mail,
-		MessageSquare,
-		Pencil,
-		Plus,
-		Send,
-		Slack,
-		Trash2,
-		TriangleAlert,
-		Webhook
-	} from 'lucide-svelte';
+	import { Check, Copy, History, Loader2, Pencil, Plus, Send, Trash2, TriangleAlert } from 'lucide-svelte';
 	import { Bell } from '@jis3r/icons';
 	import { Button, Field, Input, Badge, EmptyState } from '$lib/components/ui';
 	import SettingsSection from '$lib/components/user-settings/SettingsSection.svelte';
-	import { NotificationRules, replayChannel } from '$lib/components/notifications';
+	import { CHANNEL_TYPE_META, NotificationRules, replayChannel } from '$lib/components/notifications';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import { formatRelativeTime } from '$lib/utils/format';
 	import { toasts } from '$lib/stores';
@@ -57,40 +43,6 @@
 		onDismissSecret: () => void;
 		index?: number;
 	} = $props();
-
-	const TYPE_META: Record<
-		string,
-		{ label: string; icon: typeof Webhook; placeholder: string; hue: string; hint: string }
-	> = {
-		discord: {
-			label: 'Discord',
-			icon: MessageSquare,
-			placeholder: 'https://discord.com/api/webhooks/…',
-			hue: 'var(--hue-violet)',
-			hint: 'Channel settings → Integrations → Webhooks'
-		},
-		slack: {
-			label: 'Slack',
-			icon: Slack,
-			placeholder: 'https://hooks.slack.com/services/…',
-			hue: 'var(--hue-green)',
-			hint: 'Slack app → Incoming Webhooks'
-		},
-		webhook: {
-			label: 'Webhook',
-			icon: Webhook,
-			placeholder: 'https://example.com/orchard-hook',
-			hue: 'var(--hue-slate)',
-			hint: 'Signed JSON POST to any HTTPS endpoint'
-		},
-		email: {
-			label: 'Email',
-			icon: Mail,
-			placeholder: 'alerts@example.com, oncall@example.com',
-			hue: 'var(--hue-amber)',
-			hint: 'Sent to org members only'
-		}
-	};
 
 	let formOpen = $state(false);
 	let editingId = $state<string | null>(null);
@@ -277,7 +229,7 @@
 		{#if channels.length > 0}
 			<div class="nc-list">
 				{#each channels as channel, i (channel.id)}
-					{@const meta = TYPE_META[channel.type]}
+					{@const meta = CHANNEL_TYPE_META[channel.type]}
 					{@const tone = healthTone(channel)}
 					{@const summary = healthSummary(channel)}
 					<div
@@ -293,6 +245,9 @@
 							<div class="nc-item-title">
 								<span class="nc-item-name">{channel.name}</span>
 								<Badge>{meta.label}</Badge>
+								{#if channel.scopeLabel}
+									<Badge>{channel.scopeLabel}</Badge>
+								{/if}
 								{#if channel.health?.state === 'auto_disabled'}
 									<Badge>Turned off</Badge>
 								{:else if !channel.enabled}
@@ -392,7 +347,7 @@
 				<div class="nc-form-group">
 					<span class="nc-form-label">Send to</span>
 					<div class="nc-type-grid" role="radiogroup" aria-label="Destination type">
-						{#each Object.entries(TYPE_META) as [value, meta] (value)}
+						{#each Object.entries(CHANNEL_TYPE_META) as [value, meta] (value)}
 							<button
 								type="button"
 								role="radio"
@@ -422,7 +377,7 @@
 						<Input
 							id="nc-recipients"
 							bind:value={formRecipients}
-							placeholder={TYPE_META.email.placeholder}
+							placeholder={CHANNEL_TYPE_META.email.placeholder}
 						/>
 					</Field>
 					<p class="nc-hint">Recipients must be members of this organization.</p>
@@ -433,7 +388,7 @@
 							bind:value={formUrl}
 							placeholder={editingId && editingChannel?.config.urlConfigured
 								? `${editingChannel.config.urlPreview ?? 'configured'} (leave blank to keep)`
-								: TYPE_META[formType].placeholder}
+								: CHANNEL_TYPE_META[formType].placeholder}
 						/>
 					</Field>
 				{/if}

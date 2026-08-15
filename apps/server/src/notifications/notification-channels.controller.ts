@@ -55,6 +55,16 @@ export class NotificationChannelsController {
     return user;
   }
 
+  // A destination is gated by the scope that owns it: the org's shared webhook
+  // still needs an org admin, one an app owns needs admin on that app's project.
+  private async requireChannelScope(organizationId: string, channelId: string, req: any) {
+    const user = await this.requireMember(organizationId, req);
+    const channel = await this.channels.findChannelScope(organizationId, channelId);
+    const scope = await this.rules.resolveScope(organizationId, channel.scopeType, channel.scopeId);
+    await this.rules.assertCanEditScope(organizationId, scope, user);
+    return { user, scope };
+  }
+
   private async requireNotificationsFeature(userId: string): Promise<void> {
     const enabled = await this.analytics.isFeatureEnabled('notifications', userId);
     if (!enabled) {
@@ -62,8 +72,21 @@ export class NotificationChannelsController {
     }
   }
 
+  // Without a scope this is the org admin's inventory, webhook previews and all.
+  // With one it answers the narrower question the app settings page asks: what
+  // may this app route to, and which of those does it own.
   @Get(':id/notification-channels')
-  async listChannels(@Param('id') organizationId: string, @Request() req) {
+  async listChannels(
+    @Param('id') organizationId: string,
+    @Query('scopeType') scopeType: string,
+    @Query('scopeId') scopeId: string,
+    @Request() req,
+  ) {
+    if (scopeType) {
+      await this.requireMember(organizationId, req);
+      const scope = await this.rules.resolveScope(organizationId, scopeType, scopeId ?? null);
+      return this.channels.listChannelsForScope(organizationId, scope);
+    }
     await this.requireAdmin(organizationId, req);
     return this.channels.listChannels(organizationId);
   }
@@ -74,9 +97,15 @@ export class NotificationChannelsController {
     @Body() body: ChannelInput,
     @Request() req,
   ) {
-    const user = await this.requireAdmin(organizationId, req);
+    const user = await this.requireMember(organizationId, req);
     await this.requireNotificationsFeature(user.id);
-    return this.channels.createChannel(organizationId, body ?? {}, user);
+    const scope = await this.rules.resolveScope(
+      organizationId,
+      body?.scopeType ?? 'org',
+      body?.scopeId ?? null,
+    );
+    await this.rules.assertCanEditScope(organizationId, scope, user);
+    return this.channels.createChannel(organizationId, body ?? {}, user, scope);
   }
 
   @Patch(':id/notification-channels/:channelId')
@@ -86,9 +115,9 @@ export class NotificationChannelsController {
     @Body() body: ChannelInput,
     @Request() req,
   ) {
-    const user = await this.requireAdmin(organizationId, req);
+    const { user, scope } = await this.requireChannelScope(organizationId, channelId, req);
     await this.requireNotificationsFeature(user.id);
-    return this.channels.updateChannel(organizationId, channelId, body ?? {}, user);
+    return this.channels.updateChannel(organizationId, channelId, body ?? {}, user, scope);
   }
 
   @Delete(':id/notification-channels/:channelId')
@@ -97,7 +126,7 @@ export class NotificationChannelsController {
     @Param('channelId') channelId: string,
     @Request() req,
   ) {
-    const user = await this.requireAdmin(organizationId, req);
+    const { user } = await this.requireChannelScope(organizationId, channelId, req);
     return this.channels.deleteChannel(organizationId, channelId, user);
   }
 
@@ -107,7 +136,7 @@ export class NotificationChannelsController {
     @Param('channelId') channelId: string,
     @Request() req,
   ) {
-    await this.requireAdmin(organizationId, req);
+    await this.requireChannelScope(organizationId, channelId, req);
     return this.channels.listDeliveries(organizationId, channelId);
   }
 
@@ -118,7 +147,7 @@ export class NotificationChannelsController {
     @Param('channelId') channelId: string,
     @Request() req,
   ) {
-    const user = await this.requireAdmin(organizationId, req);
+    const { user } = await this.requireChannelScope(organizationId, channelId, req);
     await this.requireNotificationsFeature(user.id);
     return this.channels.testChannel(organizationId, channelId);
   }
@@ -131,7 +160,7 @@ export class NotificationChannelsController {
     @Body() body: { sinceHours?: number },
     @Request() req,
   ) {
-    const user = await this.requireAdmin(organizationId, req);
+    const { user } = await this.requireChannelScope(organizationId, channelId, req);
     await this.requireNotificationsFeature(user.id);
     return this.channels.replay(organizationId, channelId, body?.sinceHours ?? 24, user);
   }

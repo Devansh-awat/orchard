@@ -1261,6 +1261,10 @@ export class DeploymentsService implements OnModuleInit, OnModuleDestroy {
       where: { id: deploymentId },
     });
 
+    this.notifications
+      .purgeScope('deployment', deploymentId)
+      .catch((err) => console.error(`[Projects] Failed to purge notification scope for ${deploymentId}:`, err));
+
     // Delete all associated repositories from Harbor in the background
     if (imageHistoryEntries.length > 0) {
       const imageRefs = imageHistoryEntries.map((entry) => entry.image);

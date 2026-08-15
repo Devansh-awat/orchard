@@ -179,7 +179,7 @@ export function registerDangerousTools(server: McpServer, client: OrchardClient)
   server.registerTool(
     'delete_notification_channel',
     {
-      description: `DANGEROUS: Permanently delete a notification channel, along with every rule that routes to it. Alerts stop immediately and a webhook channel's signing secret is lost. Requires org admin.`,
+      description: `DANGEROUS: Permanently delete a notification channel, along with every rule that routes to it. Alerts stop immediately and a webhook channel's signing secret is lost. Requires admin on the scope that owns the channel: org admin for org-wide destinations, project admin for one an app owns.`,
       annotations: { destructiveHint: true, readOnlyHint: false },
       inputSchema: {
         organizationId: z.string().describe('The organization UUID'),

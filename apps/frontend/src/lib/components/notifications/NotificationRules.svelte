@@ -1,17 +1,27 @@
 <script lang="ts">
 	import { BellOff, Loader2, Plus, Trash2, VolumeX } from 'lucide-svelte';
-	import { Badge, Button, EmptyState, Field, Select } from '$lib/components/ui';
+	import { Badge, Button, EmptyState, Field, Input, Select } from '$lib/components/ui';
 	import { motionStagger } from '$lib/utils/motion.svelte';
 	import { toasts } from '$lib/stores';
-	import { createRule, deleteRule as deleteRuleRequest, fetchChannels, fetchRules } from './api';
+	import {
+		createChannel,
+		createRule,
+		deleteRule as deleteRuleRequest,
+		fetchScopeChannels,
+		fetchRules
+	} from './api';
+	import { CHANNEL_TYPE_META } from './channel-types';
 	import {
 		defaultEventsForScope,
 		eventGroupsForScope,
 		scopeNoun,
-		type NotificationChannel,
+		type ChannelType,
 		type NotificationRule,
-		type NotificationScopeType
+		type NotificationScopeType,
+		type ScopedChannel
 	} from './types';
+
+	const NEW_CHANNEL = '__new__';
 
 	let {
 		organizationId,
@@ -27,23 +37,37 @@
 
 	let loading = $state(true);
 	let rules = $state<NotificationRule[]>([]);
-	let channels = $state<NotificationChannel[]>([]);
-	let channelsDenied = $state(false);
+	let channels = $state<ScopedChannel[]>([]);
 	let busyId = $state<string | null>(null);
 	let formOpen = $state(false);
 	let saving = $state(false);
-	let formChannelId = $state('');
+	let formChannelId = $state(NEW_CHANNEL);
 	let formEvents = $state<string[]>([]);
 	let formMute = $state(false);
+	let formType = $state<ChannelType>('discord');
+	let formName = $state('');
+	let formUrl = $state('');
+	let formRecipients = $state('');
+	let webhookSecret = $state<string | null>(null);
 
 	const groups = $derived(eventGroupsForScope(scopeType));
 	const own = $derived(rules.filter((r) => !r.inherited));
 	const inherited = $derived(rules.filter((r) => r.inherited));
+	const creatingChannel = $derived(formChannelId === NEW_CHANNEL);
+	const typeMeta = $derived(CHANNEL_TYPE_META[formType]);
+	const canSubmit = $derived(
+		formEvents.length > 0 &&
+			(creatingChannel
+				? formName.trim().length > 0 &&
+					(formType === 'email' ? formRecipients.trim().length > 0 : formUrl.trim().length > 0)
+				: formChannelId.length > 0)
+	);
 
 	async function load() {
 		loading = true;
 		try {
 			rules = await fetchRules(organizationId, scopeType, scopeId);
+			channels = await fetchScopeChannels(organizationId, scopeType, scopeId);
 		} catch (e) {
 			toasts.add({
 				title: 'Could not load notification rules',
@@ -53,15 +77,6 @@
 		} finally {
 			loading = false;
 		}
-		if (!canEdit) return;
-		try {
-			channels = await fetchChannels(organizationId);
-		} catch {
-			// Listing destinations is org-admin only. A project admin can still
-			// manage rules for channels that already exist here, so this is a
-			// missing capability rather than an error worth shouting about.
-			channelsDenied = true;
-		}
 	}
 
 	$effect(() => {
@@ -69,9 +84,13 @@
 	});
 
 	function openCreate() {
-		formChannelId = channels[0]?.id ?? '';
+		formChannelId = channels[0]?.id ?? NEW_CHANNEL;
 		formEvents = defaultEventsForScope(scopeType);
 		formMute = false;
+		formType = 'discord';
+		formName = '';
+		formUrl = '';
+		formRecipients = '';
 		formOpen = true;
 	}
 
@@ -90,12 +109,30 @@
 		formOpen = true;
 	}
 
+	// A destination created here belongs to this scope, so someone who admins one
+	// app can wire it to their own Discord without an organization admin adding
+	// it first. Existing org and project destinations stay in the same picker.
 	async function submit() {
-		if (!formChannelId || formEvents.length === 0 || saving) return;
+		if (!canSubmit || saving) return;
 		saving = true;
 		try {
+			let channelId = formChannelId;
+			if (creatingChannel) {
+				const created = await createChannel(organizationId, {
+					name: formName.trim(),
+					type: formType,
+					config:
+						formType === 'email'
+							? { recipients: formRecipients.split(',').map((r) => r.trim()).filter(Boolean) }
+							: { url: formUrl.trim() },
+					scopeType,
+					scopeId
+				});
+				channelId = created.id;
+				webhookSecret = created.webhookSecret ?? null;
+			}
 			await createRule(organizationId, {
-				channelId: formChannelId,
+				channelId,
 				scopeType,
 				scopeId,
 				events: formEvents,
@@ -155,7 +192,7 @@
 				live in your account settings.
 			</p>
 		</div>
-		{#if canEdit && !loading && channels.length > 0}
+		{#if canEdit && !loading && !formOpen}
 			<Button variant="secondary" size="sm" onclick={openCreate}>
 				<Plus class="h-4 w-4" />
 				Add channel
@@ -163,17 +200,24 @@
 		{/if}
 	</div>
 
+	{#if webhookSecret}
+		<p class="nr-secret">
+			Signing secret, shown once: <code>{webhookSecret}</code>
+			<button type="button" class="nr-secret-dismiss" onclick={() => (webhookSecret = null)}>
+				Dismiss
+			</button>
+		</p>
+	{/if}
+
 	{#if loading}
 		<div class="nr-skeleton"></div>
 	{:else if rules.length === 0 && !formOpen}
 		<EmptyState
 			title="No channels are watching this"
-			description={channels.length === 0 && !channelsDenied
-				? 'An organization admin needs to add a destination first.'
-				: 'Route deploy failures and crashes to a Slack or Discord channel.'}
+			description="Route deploy failures and crashes to a Slack or Discord channel."
 		>
 			{#snippet icon()}<BellOff size={22} />{/snippet}
-			{#if canEdit && channels.length > 0}
+			{#if canEdit}
 				<Button variant="secondary" size="sm" onclick={openCreate}>
 					<Plus class="h-4 w-4" />
 					Add channel
@@ -246,10 +290,45 @@
 			<Field label="Channel" for="nr-channel">
 				<Select id="nr-channel" bind:value={formChannelId} disabled={formMute}>
 					{#each channels as channel (channel.id)}
-						<option value={channel.id}>{channel.name} ({channel.type})</option>
+						<option value={channel.id}>
+							{channel.name} ({CHANNEL_TYPE_META[channel.type].label}){channel.own
+								? ''
+								: ` from ${scopeNoun(channel.scopeType)}`}
+						</option>
 					{/each}
+					<option value={NEW_CHANNEL}>New destination…</option>
 				</Select>
 			</Field>
+
+			{#if creatingChannel}
+				<div class="nr-new">
+					<div class="nr-new-row">
+						<Field label="Type" for="nr-type">
+							<Select id="nr-type" bind:value={formType}>
+								{#each Object.entries(CHANNEL_TYPE_META) as [value, meta] (value)}
+									<option {value}>{meta.label}</option>
+								{/each}
+							</Select>
+						</Field>
+						<Field label="Name" for="nr-name">
+							<Input id="nr-name" bind:value={formName} placeholder="#deploys" maxlength={100} />
+						</Field>
+					</div>
+					{#if formType === 'email'}
+						<Field label="Recipients" for="nr-recipients" hint="Members of this project only">
+							<Input
+								id="nr-recipients"
+								bind:value={formRecipients}
+								placeholder={typeMeta.placeholder}
+							/>
+						</Field>
+					{:else}
+						<Field label="Webhook URL" for="nr-url" hint={typeMeta.hint}>
+							<Input id="nr-url" bind:value={formUrl} placeholder={typeMeta.placeholder} />
+						</Field>
+					{/if}
+				</div>
+			{/if}
 			<div class="nr-form-group">
 				<span class="nr-form-label">Events</span>
 				<div class="nr-event-groups">
@@ -279,14 +358,8 @@
 				<Button variant="ghost" size="sm" onclick={() => (formOpen = false)} disabled={saving}>
 					Cancel
 				</Button>
-				<Button
-					variant="primary"
-					size="sm"
-					onclick={submit}
-					loading={saving}
-					disabled={!formChannelId || formEvents.length === 0}
-				>
-					{formMute ? 'Mute here' : 'Add rule'}
+				<Button variant="primary" size="sm" onclick={submit} loading={saving} disabled={!canSubmit}>
+					{formMute ? 'Mute here' : creatingChannel ? 'Add destination' : 'Add rule'}
 				</Button>
 			</div>
 		</div>
@@ -404,6 +477,54 @@
 		font-size: 0.75rem;
 		color: var(--text-muted);
 		margin: 0;
+	}
+
+	.nr-new {
+		display: flex;
+		flex-direction: column;
+		gap: 0.75rem;
+	}
+
+	.nr-new-row {
+		display: grid;
+		grid-template-columns: minmax(0, 9rem) minmax(0, 1fr);
+		gap: 0.75rem;
+	}
+
+	@media (max-width: 640px) {
+		.nr-new-row {
+			grid-template-columns: minmax(0, 1fr);
+		}
+	}
+
+	.nr-secret {
+		display: flex;
+		align-items: center;
+		flex-wrap: wrap;
+		gap: 0.5rem;
+		margin: 0;
+		padding: 0.6rem 0.75rem;
+		border-radius: var(--radius-md);
+		border: 1px solid var(--border-default);
+		background: color-mix(in srgb, var(--status-warning) 8%, transparent);
+		font-size: 0.75rem;
+		color: var(--text-muted);
+	}
+
+	.nr-secret code {
+		font-family: var(--font-mono);
+		color: var(--text-fg);
+		word-break: break-all;
+	}
+
+	.nr-secret-dismiss {
+		margin-left: auto;
+		background: none;
+		border: none;
+		padding: 0;
+		color: var(--text-muted);
+		cursor: pointer;
+		text-decoration: underline;
 	}
 
 	.nr-form-group {

@@ -1,6 +1,7 @@
 import { BadRequestException, ForbiddenException, Injectable, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import { AuditService } from '../audit/audit.service';
+import { AuthorizationService } from '../auth/authorization.service';
 import {
   NOTIFICATION_EVENTS,
   NotificationEventName,
@@ -8,6 +9,8 @@ import {
   RuleScopeType,
   eventsForScopeType,
 } from './notification-events';
+import type { ResolvedScope } from './notification-scope';
+import { isChannelVisibleAt, ownsChannel, scopeChain } from './notification-scope';
 
 const MAX_RULES_PER_SCOPE = 25;
 
@@ -25,12 +28,7 @@ interface Actor {
   email?: string | null;
 }
 
-export interface ResolvedScope {
-  scopeType: RuleScopeType;
-  scopeId: string | null;
-  projectId: string | null;
-  label: string;
-}
+export type { ResolvedScope };
 
 // Team routing. Everything here is org-visible state: who else on the team gets
 // told about what. Personal preference lives in UserNotificationsService and the
@@ -40,6 +38,7 @@ export class NotificationRulesService {
   constructor(
     private readonly prisma: PrismaService,
     private readonly audit: AuditService,
+    private readonly authz: AuthorizationService,
   ) {}
 
   // Lists the rules that actually apply at a scope, including the ones
@@ -56,11 +55,7 @@ export class NotificationRulesService {
     }
 
     const scope = await this.resolveScope(organizationId, scopeType, scopeId ?? null);
-    const chain: { scopeType: string; scopeId: string | null }[] = [{ scopeType: 'org', scopeId: null }];
-    if (scope.projectId) chain.push({ scopeType: 'project', scopeId: scope.projectId });
-    if (scope.scopeType !== 'org' && scope.scopeType !== 'project') {
-      chain.push({ scopeType: scope.scopeType, scopeId: scope.scopeId });
-    }
+    const chain = scopeChain(scope);
 
     const rules = await this.prisma.notificationRule.findMany({
       where: {
@@ -83,9 +78,15 @@ export class NotificationRulesService {
 
     const channel = await this.prisma.notificationChannel.findFirst({
       where: { id: input.channelId ?? '', organizationId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, scopeType: true, scopeId: true },
     });
     if (!channel) throw new NotFoundException('Notification channel not found');
+    // A destination owned by one project is not a thing another project's admin
+    // may route to, so an unreachable channel is a 404 rather than a hint that
+    // it exists somewhere else in the org.
+    if (!isChannelVisibleAt(scope, channel)) {
+      throw new NotFoundException('Notification channel not found');
+    }
 
     const events = this.validateEvents(input.events, scope.scopeType);
     const mode = input.mode === 'mute' ? 'mute' : 'deliver';
@@ -160,13 +161,23 @@ export class NotificationRulesService {
   async deleteRule(organizationId: string, ruleId: string, actor: Actor) {
     const existing = await this.prisma.notificationRule.findFirst({
       where: { id: ruleId, organizationId },
-      include: { channel: { select: { name: true } } },
+      include: { channel: { select: { name: true, scopeType: true, scopeId: true } } },
     });
     if (!existing) throw new NotFoundException('Notification rule not found');
     const scope = await this.resolveScope(organizationId, existing.scopeType, existing.scopeId);
     await this.assertCanEditScope(organizationId, scope, actor);
 
     await this.prisma.notificationRule.delete({ where: { id: ruleId } });
+    // A destination this scope owns exists only to serve its rules, and with the
+    // last one gone it is invisible in the UI while still counting against the
+    // scope's allowance. Shared destinations from the org or the project are
+    // never touched.
+    const orphaned =
+      ownsChannel(scope, existing.channel) &&
+      (await this.prisma.notificationRule.count({ where: { channelId: existing.channelId } })) === 0;
+    if (orphaned) {
+      await this.prisma.notificationChannel.delete({ where: { id: existing.channelId } });
+    }
     void this.audit.log({
       action: 'notification_rule.deleted',
       actorUserId: actor.id,
@@ -175,7 +186,7 @@ export class NotificationRulesService {
       targetType: 'notification_rule',
       targetId: ruleId,
       targetLabel: `${existing.channel.name} @ ${scope.label}`,
-      metadata: { scopeType: existing.scopeType, scopeId: existing.scopeId },
+      metadata: { scopeType: existing.scopeType, scopeId: existing.scopeId, removedChannel: orphaned },
     });
     return { success: true };
   }
@@ -248,15 +259,11 @@ export class NotificationRulesService {
   }
 
   // Org scope needs an org admin; anything narrower is enough to be an admin of
-  // the owning project. The channel itself still requires org admin to create,
-  // which is where the webhook URL actually lives.
-  private async assertCanEditScope(organizationId: string, scope: ResolvedScope, actor: Actor) {
-    const orgMember = await this.prisma.organizationMember.findFirst({
-      where: { organizationId, userId: actor.id },
-      select: { role: true },
-    });
-    const isOrgAdmin = orgMember?.role === 'owner' || orgMember?.role === 'admin';
-    if (isOrgAdmin) return;
+  // the owning project. Destinations owned by a scope are gated the same way,
+  // which is what lets a project admin point their own app at their own webhook.
+  async assertCanEditScope(organizationId: string, scope: ResolvedScope, actor: Actor) {
+    const access = await this.authz.getOrgAccess(organizationId, actor.id);
+    if (access?.isAdmin) return;
     if (scope.scopeType === 'org' || !scope.projectId) {
       throw new ForbiddenException('Only organization admins can manage org-wide notification rules');
     }

@@ -1,10 +1,12 @@
 import { apiFetch } from '$lib/stores';
 import type {
+	ChannelPayload,
 	NotificationChannel,
 	NotificationRule,
 	NotificationScopeType,
 	RulePayload,
 	ScopeSettings,
+	ScopedChannel,
 	SettingValue,
 	UserDestination,
 	UserSettings
@@ -19,6 +21,31 @@ async function json<T>(res: Response, fallback: string): Promise<T> {
 export async function fetchChannels(organizationId: string): Promise<NotificationChannel[]> {
 	const res = await apiFetch(`/apiv1/organizations/${organizationId}/notification-channels`);
 	return json<NotificationChannel[]>(res, 'Could not load notification channels');
+}
+
+export async function fetchScopeChannels(
+	organizationId: string,
+	scopeType: NotificationScopeType,
+	scopeId: string | null
+): Promise<ScopedChannel[]> {
+	const params = new URLSearchParams({ scopeType });
+	if (scopeId) params.set('scopeId', scopeId);
+	const res = await apiFetch(
+		`/apiv1/organizations/${organizationId}/notification-channels?${params}`
+	);
+	return json<ScopedChannel[]>(res, 'Could not load notification channels');
+}
+
+export async function createChannel(
+	organizationId: string,
+	payload: ChannelPayload
+): Promise<NotificationChannel & { webhookSecret?: string }> {
+	const res = await apiFetch(`/apiv1/organizations/${organizationId}/notification-channels`, {
+		method: 'POST',
+		headers: { 'Content-Type': 'application/json' },
+		body: JSON.stringify(payload)
+	});
+	return json(res, 'Could not create the destination');
 }
 
 export async function fetchRules(

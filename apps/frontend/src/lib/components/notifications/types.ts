@@ -19,21 +19,41 @@ export interface ChannelHealth {
 	since?: string;
 }
 
+export type ChannelType = 'discord' | 'slack' | 'webhook' | 'email';
+
 export interface NotificationChannel {
 	id: string;
 	name: string;
-	type: 'discord' | 'slack' | 'webhook' | 'email';
+	type: ChannelType;
 	config: NotificationChannelConfig;
 	enabled: boolean;
 	ruleCount: number;
 	health: ChannelHealth;
 	lastDelivery: { status: string; error: string | null; event: string; createdAt: string } | null;
+	scopeType: NotificationScopeType;
+	scopeId: string | null;
+	scopeLabel: string | null;
+}
+
+// What a scope may route to. Thinner than the org admin's view on purpose: no
+// webhook preview, plus whether this scope owns the destination or inherits it.
+export interface ScopedChannel {
+	id: string;
+	name: string;
+	type: ChannelType;
+	enabled: boolean;
+	scopeType: NotificationScopeType;
+	scopeId: string | null;
+	own: boolean;
+	health: ChannelHealth;
 }
 
 export interface ChannelPayload {
 	name: string;
 	type: string;
 	config: { url?: string; recipients?: string[] };
+	scopeType?: NotificationScopeType;
+	scopeId?: string | null;
 }
 
 export interface NotificationRule {

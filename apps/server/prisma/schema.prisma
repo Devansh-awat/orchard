@@ -63,6 +63,7 @@ model User {
   notificationSettings       UserNotificationSetting[]
   notificationDestinations   UserNotificationDestination[]
   createdNotificationRules   NotificationRule[]       @relation("NotificationRuleCreator")
+  createdChannels            NotificationChannel[]    @relation("NotificationChannelCreator")
   sandboxes                  Sandbox[]
   sandboxCredential          SandboxCredential?
   sshIdentities              SshIdentity[]
@@ -1394,13 +1395,22 @@ model SsoConfig {
 // NotificationRule, personal preference in UserNotificationSetting. The breaker
 // fields are owned by the delivery worker: five consecutive failures parks the
 // destination until circuitOpenUntil so one dead webhook can't starve the pool.
+//
+// A destination belongs to a scope the same way a rule does. scopeType 'org'
+// (scopeId null) is the shared org-wide destination only an org admin can
+// touch; anything narrower belongs to a project or one of its resources, so
+// whoever admins that project can wire up their own webhook without waiting on
+// an org admin. Only rules at or below the owning scope may point at it.
 model NotificationChannel {
   id             String   @id @default(uuid()) @db.Uuid
   organizationId String   @map("organization_id") @db.Uuid
+  scopeType      String   @default("org") @map("scope_type") @db.VarChar(20)
+  scopeId        String?  @map("scope_id") @db.Uuid
   name           String   @db.VarChar(100)
   type           String   @db.VarChar(20)
   config         Json     @default("{}") @db.JsonB
   enabled        Boolean  @default(true)
+  createdById    String?  @map("created_by") @db.Uuid
 
   consecutiveFailures Int       @default(0) @map("consecutive_failures")
   circuitOpenUntil    DateTime? @map("circuit_open_until") @db.Timestamp(6)
@@ -1413,10 +1423,12 @@ model NotificationChannel {
   updatedAt DateTime @updatedAt @map("updated_at") @db.Timestamp(6)
 
   organization Organization           @relation(fields: [organizationId], references: [id], onDelete: Cascade)
+  creator      User?                 @relation("NotificationChannelCreator", fields: [createdById], references: [id], onDelete: SetNull)
   deliveries   NotificationDelivery[]
   rules        NotificationRule[]
 
   @@index([organizationId], map: "idx_notification_channels_org")
+  @@index([organizationId, scopeType, scopeId], map: "idx_notification_channels_scope")
   @@map("notification_channels")
 }
 

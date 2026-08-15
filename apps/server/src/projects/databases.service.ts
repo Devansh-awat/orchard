@@ -26,6 +26,7 @@ import { buildPlacement } from '../kubernetes/kubernetes.service';
 import { ProjectAccessService } from './project-access.service';
 import { BackupSyncService } from './backup-sync.service';
 import { formatSlug, redactDatabaseForViewer, stripR2ProxyCreds, truncateK8sName, parseStorageSize, formatBytes, toQuartzCron, DEFAULT_BACKUP_CRON, GIB } from './projects.utils';
+import { NotificationsService } from '../notifications/notifications.service';
 
 export type ProvisioningStepStatus = 'pending' | 'running' | 'done' | 'error';
 
@@ -57,6 +58,7 @@ export class DatabasesService {
     @Inject(forwardRef(() => NodesService))
     private readonly nodesService: NodesService,
     private readonly backupSync: BackupSyncService,
+    private readonly notifications: NotificationsService,
   ) {}
 
   // Resolve a database cluster's placement: org hostname allow/deny + assigned
@@ -1024,6 +1026,10 @@ export class DatabasesService {
     }
 
     await this.prisma.database.delete({ where: { id: databaseId } });
+
+    this.notifications
+      .purgeScope('database', databaseId)
+      .catch((err) => console.error(`[Projects] Failed to purge notification scope for ${databaseId}:`, err));
 
     void this.audit.log({
       action: 'database.deleted',
