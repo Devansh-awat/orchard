@@ -1140,6 +1140,7 @@
 
 	// Apply query data to local state. This replaces the old fetchDeployment() body.
 	let lastQueryData: any = null;
+	let formSeeded = false;
 	$effect(() => {
 		const qData = deploymentQuery.data;
 		const qError = deploymentQuery.error;
@@ -1184,10 +1185,15 @@
 		tailscale.syncFromDeployment(data);
 
 		// Skip overwriting form state while a build is in progress so the user can
-		// keep editing settings. Form state will refresh when the build finishes.
-		const buildActive = showBuildModal || showBuildCard;
+		// keep editing settings. Two things this must not do: skip the very first
+		// payload, which is the one that fills the form at all, and key off the
+		// build card being on screen rather than a build actually running. The
+		// card outlives a failed build, so both together left a page opened
+		// mid-build showing no env vars, no volumes, and a scale of 1.
+		const buildActive = formSeeded && (data.buildStatus ?? '').toLowerCase() === 'building';
 
 		if (!buildActive) {
+			formSeeded = true;
 			if (!isDragging && !scaling && !scaleDirty) {
 				if (data.replicas !== undefined && data.replicas !== null) {
 					scaleReplicas = data.replicas;
