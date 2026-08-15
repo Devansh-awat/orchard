@@ -373,15 +373,21 @@ export class ProtectionService {
     upstream.on('connect', () => {
       const lines = [`${req.method} ${req.url} HTTP/1.1`];
       const raw = req.rawHeaders;
+      let sawForwardedFor = false;
       for (let i = 0; i < raw.length; i += 2) {
         const key = raw[i];
         const lower = key.toLowerCase();
-        if (lower === 'host') {
-          lines.push(`Host: ${ingress.upstreamHost}:${ingress.upstreamPort}`);
+        if (lower === 'x-orchard-protection-bypass') continue;
+        if (lower === 'x-forwarded-for') {
+          sawForwardedFor = true;
+          const peer = req.socket?.remoteAddress;
+          lines.push(`${key}: ${[raw[i + 1], peer].filter(Boolean).join(', ')}`);
           continue;
         }
-        if (lower === 'x-orchard-protection-bypass') continue;
         lines.push(`${key}: ${raw[i + 1]}`);
+      }
+      if (!sawForwardedFor && req.socket?.remoteAddress) {
+        lines.push(`X-Forwarded-For: ${req.socket.remoteAddress}`);
       }
       upstream.write(`${lines.join('\r\n')}\r\n\r\n`);
       if (head && head.length > 0) upstream.write(head);
@@ -398,11 +404,20 @@ export class ProtectionService {
   private proxyToUpstream(req: Request, res: Response, upstreamHost: string, upstreamPort: number): Promise<void> {
     return new Promise((resolve) => {
       const headers = { ...req.headers };
-      delete headers['host'];
-      headers['host'] = `${upstreamHost}:${upstreamPort}`;
       delete headers['connection'];
       delete headers['x-orchard-protection-bypass'];
       delete headers['transfer-encoding'];
+
+      const priorFor = req.headers['x-forwarded-for'];
+      const peer = req.socket?.remoteAddress;
+      const forwardedFor = [
+        Array.isArray(priorFor) ? priorFor.join(', ') : priorFor,
+        peer,
+      ].filter(Boolean).join(', ');
+      if (forwardedFor) headers['x-forwarded-for'] = forwardedFor;
+      headers['x-forwarded-proto'] =
+        (req.headers['x-forwarded-proto'] as string) || (req.secure ? 'https' : 'http');
+      if (req.headers.host) headers['x-forwarded-host'] = req.headers.host;
 
       const proxyReq = http.request(
         {
