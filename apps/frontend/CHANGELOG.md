@@ -1,5 +1,12 @@
 # Changelog
 
+## [1.7.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.6.0...frontend/v1.7.0) (2026-08-15)
+
+
+### Features
+
+* notification channels can belong to one app instead of the whole org ([0ce6747](https://github.com/LeafdTK/leaf/commit/0ce6747bf35e020a73e5e4a77bb9781172349df1))
+
 ## [1.6.0](https://github.com/LeafdTK/leaf/compare/frontend/v1.5.1...frontend/v1.6.0) (2026-08-14)
 
 

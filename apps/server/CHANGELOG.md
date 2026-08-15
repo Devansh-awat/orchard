@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.7.0](https://github.com/LeafdTK/leaf/compare/server/v2.6.1...server/v2.7.0) (2026-08-15)
+
+
+### Features
+
+* notification channels can belong to one app instead of the whole org ([0ce6747](https://github.com/LeafdTK/leaf/commit/0ce6747bf35e020a73e5e4a77bb9781172349df1))
+
 ## [2.6.1](https://github.com/LeafdTK/leaf/compare/server/v2.6.0...server/v2.6.1) (2026-08-15)
 
 
