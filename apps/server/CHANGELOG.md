@@ -1,5 +1,12 @@
 # Changelog
 
+## [2.6.1](https://github.com/LeafdTK/leaf/compare/server/v2.6.0...server/v2.6.1) (2026-08-15)
+
+
+### Bug Fixes
+
+* the auth wall proxy kept the app's own host header ([488fac3](https://github.com/LeafdTK/leaf/commit/488fac3a2cff4bb1cbb1b50aa42327909c8c2d9c))
+
 ## [2.6.0](https://github.com/LeafdTK/leaf/compare/server/v2.5.3...server/v2.6.0) (2026-08-14)
 
 
